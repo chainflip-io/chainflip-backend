@@ -1,5 +1,7 @@
+use std::sync::Arc;
+
 use futures::{future::Fuse, Future, FutureExt};
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Mutex};
 use tracing::info;
 
 use crate::task_scope::{task_scope, ScopedJoinHandle};
@@ -7,11 +9,11 @@ use crate::task_scope::{task_scope, ScopedJoinHandle};
 use super::{ChainBlockNumber, EpochStart};
 
 pub async fn start<G, F, Fut, FutErr, State, Chain>(
-	mut epoch_start_receiver: async_broadcast::Receiver<EpochStart<Chain>>,
+	epoch_start_receiver: Arc<Mutex<async_broadcast::Receiver<EpochStart<Chain>>>>,
 	mut should_epoch_participant_witness: G,
 	initial_state: State,
 	mut epoch_witnesser_generator: F,
-) -> Result<(), (async_broadcast::Receiver<EpochStart<Chain>>, FutErr)>
+) -> Result<(), FutErr>
 where
 	Chain: cf_chains::Chain,
 	F: FnMut(Fuse<oneshot::Receiver<ChainBlockNumber<Chain>>>, EpochStart<Chain>, State) -> Fut
@@ -32,6 +34,9 @@ where
 					oneshot::Sender<ChainBlockNumber<Chain>>,
 					ScopedJoinHandle<State>,
 				)> = None;
+
+				let mut epoch_start_receiver =
+					epoch_start_receiver.try_lock().expect("should have exclusive ownership");
 
 				loop {
 					let epoch_start = epoch_start_receiver.recv().await.expect("Sender closed");
@@ -64,5 +69,4 @@ where
 		.boxed()
 	})
 	.await
-	.map_err(|e| (epoch_start_receiver, e))
 }

@@ -24,7 +24,7 @@ pub use weights::WeightInfo;
 
 const BASIS_POINTS_PER_MILLION: u32 = 100;
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct Swap {
 	pub swap_id: u64,
 	pub from: Asset,
@@ -183,7 +183,7 @@ pub mod pallet {
 			let relayer = T::AccountRoleRegistry::ensure_relayer(origin)?;
 
 			ensure!(
-				ForeignChain::from(egress_address) == ForeignChain::from(egress_asset),
+				ForeignChain::from(egress_address.clone()) == ForeignChain::from(egress_asset),
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 
@@ -216,7 +216,7 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_relayer(origin)?;
 
 			ensure!(
-				ForeignChain::from(egress_address) == ForeignChain::from(asset),
+				ForeignChain::from(egress_address.clone()) == ForeignChain::from(asset),
 				Error::<T>::InvalidEgressAddress
 			);
 
@@ -225,7 +225,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
 				amount,
-				address: egress_address,
+				address: egress_address.clone(),
 				egress_id: T::EgressHandler::schedule_egress_swap(asset, amount, egress_address),
 			});
 
@@ -248,7 +248,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let swap_id = Self::schedule_swap(from, to, ingress_amount, egress_address);
+			let swap_id = Self::schedule_swap(from, to, ingress_amount, egress_address.clone());
 
 			Self::deposit_event(Event::<T>::SwapScheduledByWitnesser {
 				swap_id,
@@ -292,7 +292,7 @@ pub mod pallet {
 					let egress_id = T::EgressHandler::schedule_egress_swap(
 						swap.to,
 						swap_output,
-						swap.egress_address,
+						swap.clone().egress_address,
 					);
 
 					Self::deposit_event(Event::<T>::SwapEgressScheduled {
@@ -329,7 +329,7 @@ pub mod pallet {
 			egress_address: ForeignChainAddress,
 		) -> u64 {
 			// The caller should ensure that the egress details are consistent.
-			debug_assert_eq!(ForeignChain::from(egress_address), ForeignChain::from(to));
+			debug_assert_eq!(ForeignChain::from(egress_address.clone()), ForeignChain::from(to));
 
 			let swap_id = SwapIdCounter::<T>::mutate(|id| {
 				id.saturating_accrue(1);

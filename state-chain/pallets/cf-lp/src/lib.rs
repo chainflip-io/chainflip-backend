@@ -136,7 +136,7 @@ pub mod pallet {
 
 				// Check validity of Chain and Asset
 				ensure!(
-					ForeignChain::from(egress_address) == ForeignChain::from(asset),
+					ForeignChain::from(egress_address.clone()) == ForeignChain::from(asset),
 					Error::<T>::InvalidEgressAddress
 				);
 

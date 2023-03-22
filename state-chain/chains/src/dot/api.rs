@@ -195,3 +195,32 @@ impl<E> ApiCall<Polkadot> for PolkadotApi<E> {
 pub trait CreatePolkadotVault: ApiCall<Polkadot> {
 	fn new_unsigned(proxy_key: PolkadotPublicKey) -> Self;
 }
+
+#[macro_export]
+macro_rules! impl_api_call_dot {
+	($call:ident) => {
+		impl ApiCall<Polkadot> for $call {
+			fn threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
+				self
+				.extrinsic_builder
+				.signature_payload
+				.clone()
+				.expect("This should never fail since the apicall created above with new_unsigned() ensures it exists")
+			}
+
+			fn signed(mut self, signature: &<Polkadot as ChainCrypto>::ThresholdSignature) -> Self {
+				self.extrinsic_builder
+					.insert_signature_and_get_signed_unchecked_extrinsic(signature.clone());
+				self
+			}
+
+			fn chain_encoded(&self) -> Vec<u8> {
+				self.extrinsic_builder.signed_extrinsic.clone().unwrap().encode()
+			}
+
+			fn is_signed(&self) -> bool {
+				self.extrinsic_builder.is_signed().unwrap_or(false)
+			}
+		}
+	}
+}

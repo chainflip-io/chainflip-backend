@@ -3,7 +3,7 @@ use cf_chains::{
 	mocks::MockEthereum, AnyChain, ApiCall, ChainAbi, ChainCrypto, ReplayProtectionProvider,
 	UpdateFlipSupply,
 };
-use cf_traits::mocks::egress_handler::MockEgressHandler;
+use cf_traits::{impl_mock_callback, mocks::egress_handler::MockEgressHandler};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	parameter_types, storage,
@@ -102,18 +102,7 @@ impl Chainflip for Test {
 	type SystemState = MockSystemStateInfo;
 }
 
-pub struct MockCallback;
-
-impl UnfilteredDispatchable for MockCallback {
-	type RuntimeOrigin = RuntimeOrigin;
-
-	fn dispatch_bypass_filter(
-		self,
-		_origin: Self::RuntimeOrigin,
-	) -> frame_support::dispatch::DispatchResultWithPostInfo {
-		Ok(().into())
-	}
-}
+impl_mock_callback!(RuntimeOrigin);
 
 parameter_types! {
 	pub const ExistentialDeposit: u128 = 10;
@@ -224,9 +213,17 @@ impl MockBroadcast {
 
 impl Broadcaster<MockEthereum> for MockBroadcast {
 	type ApiCall = MockUpdateFlipSupply;
+	type Callback = MockCallback;
 
 	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
 		Self::call(api_call)
+	}
+
+	fn threshold_sign_and_broadcast_with_callback(
+		_api_call: Self::ApiCall,
+		_callback: Self::Callback,
+	) -> BroadcastId {
+		unimplemented!()
 	}
 }
 

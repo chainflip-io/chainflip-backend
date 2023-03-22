@@ -5,8 +5,9 @@
 //! Primitive types to be used across Chainflip's various crates
 
 use codec::{Decode, Encode, MaxEncodedLen};
+use frame_support::BoundedVec;
 use scale_info::TypeInfo;
-use sp_core::{crypto::AccountId32, H160};
+use sp_core::{crypto::AccountId32, Get, H160};
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
 	FixedU128, MultiSignature, RuntimeDebug,
@@ -70,6 +71,10 @@ pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = [0xEE; 20];
 
 /// The very first epoch number
 pub const GENESIS_EPOCH: u32 = 1;
+
+//Addresses can have all kinds of different lengths in bitcoin but we would support upto 100 since
+// we dont expect addresses higher than 100
+pub const MAX_BTC_ADDRESS_LENGTH: usize = 100;
 
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
@@ -194,13 +199,22 @@ fn test_key_id_to_and_from_bytes() {
 	assert_eq!(key_id, KeyId::from_bytes(&expected_bytes));
 }
 
-#[derive(
-	Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy, PartialOrd, Ord,
-)]
+#[derive(Clone, Copy)]
+pub struct MaxBitcoinAddressLength;
+impl Get<u32> for MaxBitcoinAddressLength {
+	fn get() -> u32 {
+		MAX_BTC_ADDRESS_LENGTH as u32
+	}
+}
+
+pub type BitcoinAddress = BoundedVec<u8, MaxBitcoinAddressLength>;
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ForeignChainAddress {
 	Eth(EthereumAddress),
 	Dot([u8; 32]),
+	Btc(BitcoinAddress),
 }
 
 #[cfg(feature = "std")]
@@ -213,6 +227,8 @@ impl core::fmt::Display for ForeignChainAddress {
 			ForeignChainAddress::Dot(addr) => {
 				write!(f, "Dot(0x{})", hex::encode(addr))
 			},
+			ForeignChainAddress::Btc(addr) =>
+				write!(f, "Btc({})", &std::str::from_utf8(&addr[..]).map_err(|_| core::fmt::Error)?),
 		}
 	}
 }
@@ -227,6 +243,7 @@ impl AsRef<[u8]> for ForeignChainAddress {
 		match self {
 			ForeignChainAddress::Eth(address) => address.as_slice(),
 			ForeignChainAddress::Dot(address) => address.as_slice(),
+			ForeignChainAddress::Btc(address) => address.as_slice(),
 		}
 	}
 }
@@ -275,6 +292,17 @@ impl TryFrom<ForeignChainAddress> for PolkadotAccountId {
 	}
 }
 
+impl TryFrom<ForeignChainAddress> for BitcoinAddress {
+	type Error = AddressError;
+
+	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
+		match address {
+			ForeignChainAddress::Btc(addr) => Ok(addr),
+			_ => Err(AddressError::InvalidAddress),
+		}
+	}
+}
+
 // For MockEthereum
 impl TryFrom<ForeignChainAddress> for u64 {
 	type Error = AddressError;
@@ -316,11 +344,18 @@ impl From<PolkadotAccountId> for ForeignChainAddress {
 	}
 }
 
+impl From<BitcoinAddress> for ForeignChainAddress {
+	fn from(address: BitcoinAddress) -> ForeignChainAddress {
+		ForeignChainAddress::Btc(address)
+	}
+}
+
 impl From<ForeignChainAddress> for ForeignChain {
 	fn from(address: ForeignChainAddress) -> ForeignChain {
 		match address {
 			ForeignChainAddress::Eth(_) => ForeignChain::Ethereum,
 			ForeignChainAddress::Dot(_) => ForeignChain::Polkadot,
+			ForeignChainAddress::Btc(_) => ForeignChain::Bitcoin,
 		}
 	}
 }

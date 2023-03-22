@@ -1,17 +1,18 @@
 use crate::{self as pallet_cf_environment, cfe};
 use cf_chains::{
 	btc::BitcoinNetwork,
-	dot::{api::CreatePolkadotVault, PolkadotHash, TEST_RUNTIME_VERSION},
-	ApiCall, Chain, ChainCrypto, Polkadot,
+	dot::{api::CreatePolkadotVault, TEST_RUNTIME_VERSION},
+	ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
 
 use cf_primitives::{AuthorityCount, BroadcastId};
 use cf_traits::{
+	impl_mock_callback,
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	BroadcastCleanup, Broadcaster, Chainflip, VaultKeyWitnessedHandler,
 };
 
-use frame_support::parameter_types;
+use frame_support::{parameter_types, traits::UnfilteredDispatchable};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -95,11 +96,22 @@ impl ApiCall<Polkadot> for MockCreatePolkadotVault {
 		unimplemented!()
 	}
 }
+
+impl_mock_callback!(RuntimeOrigin);
+
 pub struct MockPolkadotBroadcaster;
 impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 	type ApiCall = MockCreatePolkadotVault;
+	type Callback = MockCallback;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
+		unimplemented!()
+	}
+
+	fn threshold_sign_and_broadcast_with_callback(
+		_api_call: Self::ApiCall,
+		_callback: Self::Callback,
+	) -> BroadcastId {
 		unimplemented!()
 	}
 }
@@ -119,6 +131,16 @@ impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler
 		unimplemented!()
 	}
 }
+pub struct MockBitcoinVaultKeyWitnessedHandler;
+impl VaultKeyWitnessedHandler<Bitcoin> for MockBitcoinVaultKeyWitnessedHandler {
+	fn on_new_key_activated(
+		_new_public_key: <Bitcoin as ChainCrypto>::AggKey,
+		_block_number: <Bitcoin as Chain>::ChainBlockNumber,
+		_tx_id: <Bitcoin as ChainCrypto>::TransactionId,
+	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
+		unimplemented!()
+	}
+}
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
@@ -134,7 +156,6 @@ impl Chainflip for Test {
 }
 
 parameter_types! {
-	pub const PolkadotGenesisHash: PolkadotHash = H256([0u8; 32]);
 	pub const BitcoinNetworkParam: BitcoinNetwork = BitcoinNetwork::Testnet;
 }
 
@@ -143,9 +164,9 @@ impl pallet_cf_environment::Config for Test {
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type CreatePolkadotVault = MockCreatePolkadotVault;
 	type PolkadotBroadcaster = MockPolkadotBroadcaster;
-	type PolkadotGenesisHash = PolkadotGenesisHash;
 	type BitcoinNetwork = BitcoinNetworkParam;
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
+	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 	type WeightInfo = ();
 }
 
@@ -153,6 +174,7 @@ pub const STAKE_MANAGER_ADDRESS: [u8; 20] = [0u8; 20];
 pub const KEY_MANAGER_ADDRESS: [u8; 20] = [1u8; 20];
 pub const VAULT_ADDRESS: [u8; 20] = [2u8; 20];
 pub const ETH_CHAIN_ID: u64 = 1;
+pub const MOCK_FEE_PER_UTXO: u64 = 10;
 
 pub const CFE_SETTINGS: cfe::CfeSettings = cfe::CfeSettings {
 	eth_block_safety_margin: 1,
@@ -172,8 +194,11 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			cfe_settings: CFE_SETTINGS,
 			flip_token_address: [0u8; 20],
 			eth_usdc_address: [0x2; 20],
+			polkadot_genesis_hash: H256([0u8; 32]),
 			polkadot_vault_account_id: None,
 			polkadot_runtime_version: TEST_RUNTIME_VERSION,
+			bitcoin_network: Default::default(),
+			bitcoin_fee_per_utxo: MOCK_FEE_PER_UTXO,
 		},
 	};
 

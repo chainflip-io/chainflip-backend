@@ -10,7 +10,10 @@ use super::rpc::EthRpcApi;
 use cf_chains::{eth::Ethereum, TrackedData};
 
 use state_chain_runtime::CfeSettings;
-use tokio::{select, sync::watch};
+use tokio::{
+	select,
+	sync::{watch, Mutex},
+};
 use tracing::{error, info_span, Instrument};
 use utilities::{context, make_periodic_tick};
 use web3::types::{BlockNumber, U256};
@@ -22,13 +25,13 @@ pub async fn start<StateChainClient, EthRpcClient>(
 	state_chain_client: Arc<StateChainClient>,
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
 	cfe_settings_update_receiver: watch::Receiver<CfeSettings>,
-) -> anyhow::Result<(), (async_broadcast::Receiver<EpochStart<Ethereum>>, ())>
+) -> anyhow::Result<(), ()>
 where
 	EthRpcClient: 'static + EthRpcApi + Clone + Send + Sync,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
 	epoch_witnesser::start(
-		epoch_start_receiver,
+		Arc::new(Mutex::new(epoch_start_receiver)),
 		|epoch_start| epoch_start.current,
 		TrackedData::<Ethereum>::default(),
 		move |mut end_witnessing_receiver, epoch_start, mut last_witnessed_data| {

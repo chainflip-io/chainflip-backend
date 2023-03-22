@@ -294,3 +294,27 @@ fn ethabi_function(name: &'static str, params: Vec<ethabi::Param>) -> ethabi::Fu
 fn ethabi_param(name: &'static str, param_type: ethabi::ParamType) -> ethabi::Param {
 	ethabi::Param { name: name.into(), kind: param_type, internal_type: None }
 }
+
+#[macro_export]
+macro_rules! impl_api_call_eth {
+	($call:ident) => {
+		impl ApiCall<Ethereum> for $call {
+			fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+				self.sig_data.msg_hash
+			}
+
+			fn signed(mut self, signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
+				self.sig_data.insert_signature(signature);
+				self
+			}
+
+			fn chain_encoded(&self) -> Vec<u8> {
+				self.abi_encoded()
+			}
+
+			fn is_signed(&self) -> bool {
+				self.sig_data.is_signed()
+			}
+		}
+	};
+}

@@ -7,19 +7,11 @@ use cf_primitives::ForeignChain;
 use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_support::traits::Hooks;
 
-fn setup_expired_intents<T: Config<I>, I: 'static>(time: T::BlockNumber, number_of_intents: u64) {
-	let mut intent_vec = vec![];
-	for _i in 0..number_of_intents {
-		intent_vec.push(TargetChainAccount::<T, I>::benchmark_value());
-	}
-	IntentExpiries::<T, I>::insert(time, intent_vec);
-}
-
 benchmarks_instance_pallet! {
 	on_initialize {
 		let n in 1u32 .. 254u32;
 		let origin = T::EnsureGovernance::successful_origin();
-		setup_expired_intents::<T, I>(T::BlockNumber::from(1_u32), n.into());
+		IntentExpiries::<T, I>::insert(T::BlockNumber::from(1_u32), (0..n as u64).map(|i| (i, TargetChainAccount::<T, I>::benchmark_value())).collect::<Vec<_>>());
 		assert!(!IntentExpiries::<T, I>::get(T::BlockNumber::from(1_u32)).expect("to be in the storage").is_empty());
 	} : { let _ = Pallet::<T, I>::on_initialize(T::BlockNumber::from(1_u32)); }
 	verify {
@@ -40,14 +32,14 @@ benchmarks_instance_pallet! {
 		// We combine fetch and egress into a single variable, assuming the weight cost is similar.
 		for i in 0..n {
 			if i % 2 == 0 {
-				FetchParamDetails::<T, I>::insert(1, (ingress_fetch_id, egress_address.clone()));
+				FetchParamDetails::<T, I>::insert(i as u64, (ingress_fetch_id, egress_address.clone()));
 				batch.push(FetchOrTransfer::Fetch {
-					intent_id: 1,
+					intent_id: i as u64,
 					asset: egress_asset,
 				});
 			} else {
 				batch.push(FetchOrTransfer::Transfer {
-					egress_id: (ForeignChain::Ethereum, 1),
+					egress_id: (ForeignChain::Ethereum, i as u64),
 					asset: egress_asset,
 					amount: 1_000,
 					egress_address: egress_address.clone(),
