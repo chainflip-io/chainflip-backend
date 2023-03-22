@@ -1,10 +1,10 @@
 use crate::{
 	mock::*, AddressPool, AddressStatus, DeploymentStatus, DisabledEgressAssets, FetchOrTransfer,
-	IntentActions, IntentExpiries, IntentIngressDetails, ScheduledEgressFetchOrTransfer,
-	WeightInfo,
+	IntentActions, IntentExpiries, IntentIngressDetails, ScheduledEgressCcm,
+	ScheduledEgressFetchOrTransfer, WeightInfo,
 };
 
-use cf_primitives::{chains::assets::eth, ForeignChain};
+use cf_primitives::{chains::assets::eth, ForeignChain, ForeignChainAddress};
 use cf_traits::{EgressApi, IngressApi};
 
 use frame_support::{assert_ok, instances::Instance1, traits::Hooks, weights::Weight};
@@ -344,7 +344,8 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 		// Does not panic if request queue is empty.
 		assert_eq!(
 			IngressEgress::on_idle(1, Weight::from_ref_time(1_000_000_000_000_000u64)),
-			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(0)
+			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(0) +
+				<Test as crate::Config<Instance1>>::WeightInfo::egress_ccm(0)
 		);
 
 		// Blacklist Eth for Ethereum.
@@ -355,12 +356,21 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 		IngressEgress::schedule_egress_swap(asset, 2_000, ALICE_ETH_ADDRESS.into());
 		IngressEgress::schedule_egress_swap(asset, 3_000, ALICE_ETH_ADDRESS.into());
 		IngressEgress::schedule_egress_swap(asset, 4_000, ALICE_ETH_ADDRESS.into());
+		IngressEgress::schedule_egress_ccm(
+			asset,
+			1_000,
+			ALICE_ETH_ADDRESS.into(),
+			vec![],
+			ForeignChainAddress::Eth(Default::default()),
+		);
 		assert_eq!(
 			IngressEgress::on_idle(1, Weight::from_ref_time(1_000_000_000_000_000u64)),
-			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(0)
+			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(0) +
+				<Test as crate::Config<Instance1>>::WeightInfo::egress_ccm(0)
 		);
 
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, Instance1>::decode_len(), Some(4));
+		assert_eq!(ScheduledEgressCcm::<Test, Instance1>::decode_len(), Some(1));
 	});
 }
 

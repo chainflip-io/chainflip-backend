@@ -16,8 +16,8 @@ use cf_primitives::{
 		assets::{any, eth},
 		Ethereum,
 	},
-	AccountId, AccountRole, AmmRange, Asset, AssetAmount, CcmIngressMetadata, ForeignChain,
-	ForeignChainAddress, PoolAssetMap,
+	AccountId, AccountRole, AmmRange, Asset, AssetAmount, ForeignChain, ForeignChainAddress,
+	PoolAssetMap,
 };
 use cf_traits::{AddressDerivationApi, LiquidityPoolApi, LpProvisioningApi, SwappingApi};
 use pallet_cf_ingress_egress::IngressWitness;

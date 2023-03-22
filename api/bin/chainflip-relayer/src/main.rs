@@ -1,7 +1,9 @@
 use anyhow::anyhow;
 use chainflip_api::{
 	self,
-	primitives::{AccountRole, Asset, BasisPoints, ForeignChain, ForeignChainAddress},
+	primitives::{
+		AccountRole, Asset, BasisPoints, CcmIngressMetadata, ForeignChain, ForeignChainAddress,
+	},
 	settings::StateChain,
 };
 use clap::Parser;

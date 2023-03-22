@@ -22,6 +22,7 @@ impl Tokenizable for Vec<u8> {
 impl Tokenizable for ForeignChain {
 	fn tokenize(self) -> Token {
 		match self {
+			// TODO: Confirm integer representaiton of foreign chains.
 			ForeignChain::Ethereum => Token::Uint(1.into()),
 			ForeignChain::Polkadot => Token::Uint(2.into()),
 			ForeignChain::Bitcoin => Token::Uint(3.into()),
@@ -40,7 +41,7 @@ impl Tokenizable for ForeignChainAddress {
 	}
 }
 
-/// Represents all the arguments required to build the call to Vault's 'allBatch'
+/// Represents all the arguments required to build the call to Vault's 'ExecutexSwapAndCall'
 /// function.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct ExecutexSwapAndCall {
@@ -103,7 +104,7 @@ impl ExecutexSwapAndCall {
 						ParamType::Uint(256),
 					]),
 				),
-				ethabi_param("srcChain", ParamType::Uint(256)),
+				ethabi_param("srcChain", ParamType::Uint(32)),
 				ethabi_param("srcAddress", ParamType::Bytes),
 				ethabi_param("message", ParamType::Bytes),
 			],
