@@ -84,6 +84,11 @@ impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 	}
 }
 
+#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
+pub struct EpochStartData {
+	pub change_address: BitcoinAddress,
+}
+
 impl Chain for Bitcoin {
 	type ChainBlockNumber = BlockNumber;
 
@@ -97,7 +102,7 @@ impl Chain for Bitcoin {
 
 	type ChainAccount = BitcoinAddress;
 
-	type EpochStartData = ();
+	type EpochStartData = EpochStartData;
 
 	type IngressFetchId = BitcoinFetchId;
 }
