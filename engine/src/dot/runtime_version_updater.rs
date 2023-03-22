@@ -42,7 +42,7 @@ where
 		on_chain_runtime_version,
 		move |mut end_witnessing_receiver, epoch_start, mut last_version_witnessed| {
 			let state_chain_client = state_chain_client.clone();
-			let dot_client = dot_client.clone();
+			let mut dot_client = dot_client.clone();
 			async move {
 				// NB: The first item of this stream is the current runtime version.
 				let mut runtime_version_subscription =
