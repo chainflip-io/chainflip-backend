@@ -47,7 +47,7 @@ pub trait LatestBlockNumber {
 }
 
 #[derive(Debug)]
-pub enum WitnessAddress<Address> {
+pub enum AddressMonitorCommand<Address> {
 	Start(Address),
 	Stop(Address),
 }
@@ -57,13 +57,13 @@ pub enum WitnessAddress<Address> {
 /// [AddressMonitor::sync_addresses].
 pub struct AddressMonitor<A> {
 	addresses: BTreeSet<A>,
-	address_receiver: tokio::sync::mpsc::UnboundedReceiver<WitnessAddress<A>>,
+	address_receiver: tokio::sync::mpsc::UnboundedReceiver<AddressMonitorCommand<A>>,
 }
 
-impl<A: std::cmp::Ord> AddressMonitor<A> {
+impl<A: std::cmp::Ord + std::fmt::Debug + Clone> AddressMonitor<A> {
 	pub fn new(
 		addresses: BTreeSet<A>,
-		address_receiver: tokio::sync::mpsc::UnboundedReceiver<WitnessAddress<A>>,
+		address_receiver: tokio::sync::mpsc::UnboundedReceiver<AddressMonitorCommand<A>>,
 	) -> Self {
 		Self { addresses, address_receiver }
 	}
@@ -80,12 +80,14 @@ impl<A: std::cmp::Ord> AddressMonitor<A> {
 	pub fn sync_addresses(&mut self) {
 		while let Ok(address) = self.address_receiver.try_recv() {
 			match address {
-				WitnessAddress::Start(address) => {
-					self.addresses.insert(address);
-				},
-				WitnessAddress::Stop(address) => {
-					self.addresses.remove(&address);
-				},
+				AddressMonitorCommand::Start(address) =>
+					if !self.addresses.insert(address.clone()) {
+						tracing::warn!("Address {:?} already being monitored", address);
+					},
+				AddressMonitorCommand::Stop(address) =>
+					if !self.addresses.remove(&address) {
+						tracing::warn!("Address {:?} already not being monitored", address);
+					},
 			}
 		}
 	}

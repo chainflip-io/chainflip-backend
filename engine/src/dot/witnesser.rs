@@ -493,7 +493,7 @@ mod tests {
 
 	use crate::{
 		dot::rpc::DotRpcClient, state_chain_observer::client::mocks::MockStateChainClient,
-		witnesser::WitnessAddress,
+		witnesser::AddressMonitorCommand,
 	};
 
 	fn mock_proxy_added(
@@ -609,7 +609,7 @@ mod tests {
 			tokio::sync::mpsc::unbounded_channel();
 
 		monitor_ingress_sender
-			.send(WitnessAddress::Start(transfer_2_ingress_addr))
+			.send(AddressMonitorCommand::Start(transfer_2_ingress_addr))
 			.unwrap();
 
 		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls) =

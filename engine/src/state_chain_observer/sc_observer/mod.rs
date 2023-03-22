@@ -28,10 +28,10 @@ use crate::{
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	task_scope::{task_scope, Scope},
-	witnesser::{EpochStart, WitnessAddress},
+	witnesser::{AddressMonitorCommand, EpochStart},
 };
 
-pub type EthAddressSender = UnboundedSender<WitnessAddress<H160>>;
+pub type EthAddressSender = UnboundedSender<AddressMonitorCommand<H160>>;
 
 pub struct EthAddressToMonitorSender {
 	pub eth: EthAddressSender,
@@ -177,7 +177,7 @@ pub async fn start<
 	eth_address_to_monitor_sender: EthAddressToMonitorSender,
 	dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
 	dot_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<
-		WitnessAddress<PolkadotAccountId>,
+		AddressMonitorCommand<PolkadotAccountId>,
 	>,
 	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<[u8; 64]>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
@@ -517,7 +517,7 @@ where
                                             eth::Asset::Usdc => {
                                                 &eth_address_to_monitor_sender.usdc
                                             }
-                                        }.send(WitnessAddress::Start(ingress_address)).unwrap();
+                                        }.send(AddressMonitorCommand::Start(ingress_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumIngressEgress(
                                         pallet_cf_ingress_egress::Event::StopWitnessing {
@@ -536,7 +536,7 @@ where
                                             eth::Asset::Usdc => {
                                                 &eth_address_to_monitor_sender.usdc
                                             }
-                                        }.send(WitnessAddress::Stop(ingress_address)).unwrap();
+                                        }.send(AddressMonitorCommand::Stop(ingress_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
@@ -545,7 +545,7 @@ where
                                         }
                                     ) => {
                                         assert_eq!(ingress_asset, cf_primitives::chains::assets::dot::Asset::Dot);
-                                        dot_monitor_ingress_sender.send(WitnessAddress::Start(ingress_address)).unwrap();
+                                        dot_monitor_ingress_sender.send(AddressMonitorCommand::Start(ingress_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
                                         pallet_cf_ingress_egress::Event::StopWitnessing {
@@ -554,7 +554,7 @@ where
                                         }
                                     ) => {
                                         assert_eq!(ingress_asset, cf_primitives::chains::assets::dot::Asset::Dot);
-                                        dot_monitor_ingress_sender.send(WitnessAddress::Stop(ingress_address)).unwrap();
+                                        dot_monitor_ingress_sender.send(AddressMonitorCommand::Stop(ingress_address)).unwrap();
                                     }
                                 }}}}
                                 Err(error) => {
