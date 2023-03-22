@@ -2,24 +2,22 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use cf_chains::eth::Ethereum;
+use sp_core::H160;
 use state_chain_runtime::EthereumInstance;
 use tokio::sync::Mutex;
 
 use crate::{
 	eth::{core_h160, core_h256},
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
-	witnesser::EpochStart,
+	witnesser::{AddressMonitor, EpochStart},
 };
 
-use super::{
-	eth_block_witnessing::BlockProcessor, rpc::EthDualRpcClient, witnessing::AddressMonitor,
-	EthNumberBloom,
-};
+use super::{eth_block_witnessing::BlockProcessor, rpc::EthDualRpcClient, EthNumberBloom};
 
 pub struct IngressWitnesser<StateChainClient> {
 	rpc: EthDualRpcClient,
 	state_chain_client: Arc<StateChainClient>,
-	address_monitor: Arc<Mutex<AddressMonitor>>,
+	address_monitor: Arc<Mutex<AddressMonitor<H160>>>,
 }
 
 impl<StateChainClient> IngressWitnesser<StateChainClient>
@@ -29,9 +27,9 @@ where
 	pub fn new(
 		state_chain_client: Arc<StateChainClient>,
 		rpc: EthDualRpcClient,
-		address_pair: Arc<Mutex<AddressMonitor>>,
+		address_monitor: Arc<Mutex<AddressMonitor<H160>>>,
 	) -> Self {
-		Self { rpc, state_chain_client, address_monitor: address_pair }
+		Self { rpc, state_chain_client, address_monitor }
 	}
 }
 
@@ -56,7 +54,7 @@ where
 
 		// Before we process the transactions, check if
 		// we have any new addresses to monitor
-		address_monitor.fetch_addresses();
+		address_monitor.sync_addresses();
 
 		let ingress_witnesses = txs
 			.iter()
