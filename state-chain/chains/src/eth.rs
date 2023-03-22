@@ -89,6 +89,22 @@ pub trait Tokenizable {
 	fn tokenize(self) -> Token;
 }
 
+#[derive(
+	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
+)]
+#[codec(mel_bound())]
+pub struct TrackedData<C: Chain> {
+	pub block_height: C::ChainBlockNumber,
+	pub base_fee: C::ChainAmount,
+	pub priority_fee: C::ChainAmount,
+}
+
+impl<C: Chain> Age<C> for TrackedData<C> {
+	fn birth_block(&self) -> <C as Chain>::ChainBlockNumber {
+		self.block_height
+	}
+}
+
 /// The `SigData` struct used for threshold signatures in the smart contracts.
 /// See [here](https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol).
 #[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]

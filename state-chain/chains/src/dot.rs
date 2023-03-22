@@ -104,7 +104,7 @@ pub struct EpochStartData {
 impl Chain for Polkadot {
 	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = DotAmount;
-	type TrackedData = TrackedData<Self>;
+	type TrackedData = ();
 	type ChainAccount = PolkadotAccountId;
 	type TransactionFee = Self::ChainAmount;
 	type ChainAsset = assets::dot::Asset;

@@ -7,7 +7,7 @@ use crate::{
 
 use super::rpc::EthRpcApi;
 
-use cf_chains::{eth::Ethereum, TrackedData};
+use cf_chains::eth::{Ethereum, TrackedData};
 
 use state_chain_runtime::CfeSettings;
 use tokio::{
