@@ -130,19 +130,27 @@ fn test_initialize_too_high_2() {
 #[test]
 fn test_mint_err() {
 	let (mut pool, _, id) = mint_pool();
-	assert!(pool.mint(id.clone(), 1, 0, 1, |_| Ok::<(), ()>(())).is_err());
-	assert!((pool.mint(id.clone(), -887273, 0, 1, |_| Ok::<(), ()>(()))).is_err());
-	assert!((pool.mint(id.clone(), 0, 887273, 1, |_| Ok::<(), ()>(()))).is_err());
 
-	assert!((pool.mint(
+	// Failure cases
+	assert_eq!(pool.mint(id.clone(), 1, 0, 1, |_| Ok::<(), ()>(())), Err(MintError::InvalidTickRange));
+
+	// fails if tickLower greater than tickUpper
+	assert_eq!( pool.mint(id.clone(), 1, 0, 1, |_| Ok::<(), ()>(())), Err(MintError::InvalidTickRange));
+
+	// fails if tickLower less than min tick
+	assert_eq!(pool.mint(id.clone(), -887273, 0, 1, |_| Ok::<(), ()>(())) , Err(MintError::InvalidTickRange));
+
+	// fails if tickUpper greater than max tick
+	assert_eq!(pool.mint(id.clone(), 0, 887273, 1, |_| Ok::<(), ()>(())), Err(MintError::InvalidTickRange));
+	// fails if amount exceeds the max
+	assert_eq!(pool.mint(
 		id.clone(),
 		MIN_TICK_UNISWAP_MEDIUM + 1,
 		MAX_TICK_UNISWAP_MEDIUM - 1,
 		MAX_TICK_GROSS_LIQUIDITY + 1,
-		|_| Ok::<(), ()>(())
-	))
-	.is_err());
+		|_| Ok::<(), ()>(())), Err(MintError::MaximumGrossLiquidity));
 
+	// fails if total amount at tick exceeds the max
 	assert!((pool.mint(
 		id,
 		MIN_TICK_UNISWAP_MEDIUM + 1,
@@ -157,51 +165,46 @@ fn test_mint_err() {
 fn test_mint_err_tickmax() {
 	let (mut pool, _, id) = mint_pool();
 
+	// fails if total amount at tick exceeds the max
 	let (_, fees_owed) = pool
-		.mint(id.clone(), MIN_TICK_UNISWAP_MEDIUM + 1, MAX_TICK_UNISWAP_MEDIUM - 1, 1000, |_| {
+		.mint(id.clone(), MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM, MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM, 1000, |_| {
 			Ok::<(), ()>(())
 		})
 		.unwrap();
 
-	//assert_eq!(fees_owed.unwrap()[PoolSide::Asset0], 0);
-	// assert_eq!(fees_owed.unwrap()[PoolSide::Asset1], 0);
 	match (fees_owed[PoolSide::Asset0], fees_owed[PoolSide::Asset1]) {
 		(0, 0) => {},
 		_ => panic!("Fees accrued are not zero"),
 	}
 
-	assert!((pool.mint(
+	assert_eq!(pool.mint(
 		id.clone(),
-		MIN_TICK_UNISWAP_MEDIUM + 1,
-		MAX_TICK_UNISWAP_MEDIUM - 1,
+		MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+		MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
 		MAX_TICK_GROSS_LIQUIDITY - 1000 + 1,
 		|_| Ok::<(), ()>(())
-	))
-	.is_err());
+	), Err(MintError::MaximumGrossLiquidity));
 
-	assert!((pool.mint(
+	assert_eq!(pool.mint(
 		id.clone(),
-		MIN_TICK_UNISWAP_MEDIUM + 2,
-		MAX_TICK_UNISWAP_MEDIUM - 1,
+		MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM * 2,
+		MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
 		MAX_TICK_GROSS_LIQUIDITY - 1000 + 1,
 		|_| Ok::<(), ()>(())
-	))
-	.is_err());
+	), Err(MintError::MaximumGrossLiquidity));
 
-	assert!((pool.mint(
+	assert_eq!(pool.mint(
 		id.clone(),
-		MIN_TICK_UNISWAP_MEDIUM + 1,
-		MAX_TICK_UNISWAP_MEDIUM - 2,
+		MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+		MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM * 2,
 		MAX_TICK_GROSS_LIQUIDITY - 1000 + 1,
-		|_| Ok::<(), ()>(())
-	))
-	.is_err());
+		|_| Ok::<(), ()>(())), Err(MintError::MaximumGrossLiquidity));
 
 	let (_, fees_owed) = pool
 		.mint(
 			id.clone(),
-			MIN_TICK_UNISWAP_MEDIUM + 1,
-			MAX_TICK_UNISWAP_MEDIUM - 1,
+			MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
+			MAX_TICK_UNISWAP_MEDIUM - TICKSPACING_UNISWAP_MEDIUM,
 			MAX_TICK_GROSS_LIQUIDITY - 1000,
 			|_| Ok::<(), ()>(()),
 		)
@@ -211,7 +214,7 @@ fn test_mint_err_tickmax() {
 		_ => panic!("Fees accrued are not zero"),
 	}
 
-	// Different behaviour from Uniswap - does not revert when minting 0
+	// TO CHECK: Different behaviour from Uniswap - does not revert when minting 0
 	let (_, fees_owed) = pool
 		.mint(id, MIN_TICK_UNISWAP_MEDIUM + 1, MAX_TICK_UNISWAP_MEDIUM - 1, 0, |_| Ok::<(), ()>(()))
 		.unwrap();
@@ -262,6 +265,7 @@ fn above_current_price() {
 
 	assert_eq!(minted_capital[!INPUT_TICKER], U256::from(0));
 
+	// TO CHECK: There is no concept of pool balance. Therefore, I accumulate the minted capital and check that.
 	minted_capital_accum[INPUT_TICKER] += minted_capital[INPUT_TICKER];
 	minted_capital_accum[!INPUT_TICKER] += minted_capital[!INPUT_TICKER];
 
@@ -323,6 +327,7 @@ fn test_removing_works_0() {
 	})
 	.unwrap();
 
+	// TO CHECK: We have removed the collect function - the burning function returns the capital and the fees owed instead.
 	let (returned_capital, fees_owed) = pool.burn(id, -240, 0, 10000).unwrap();
 
 	assert_eq!(returned_capital[PoolSide::Asset0], U256::from(120));
@@ -332,6 +337,8 @@ fn test_removing_works_0() {
 	assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 }
 
+
+// TO CHECK: Not a Uniswap test. Added it myself to check that the burning function works as expected when burning in two steps. This was used to catch a bug.
 #[test]
 fn test_removing_works_twosteps_0() {
 	let (mut pool, _, id) = mint_pool();
@@ -417,6 +424,7 @@ fn test_clearsticklower_ifpositionremoved() {
 		(0, 0) => {},
 		_ => panic!("Fees accrued are not zero"),
 	}
+	// TO CHECK: In Uniswap they check that the tick has been cleared. However, we remove the ticks instead of clearing them.
 	assert!(!pool.liquidity_map.contains_key(&-240));
 }
 
@@ -425,6 +433,7 @@ fn test_clearstickupper_ifpositionremoved() {
 	let (mut pool, _, id) = mint_pool();
 	pool.mint(id.clone(), -240, 0, 100, |_| Ok::<(), ()>(())).unwrap();
 	pool.burn(id, -240, 0, 100).unwrap();
+	// TO CHECK: In Uniswap they check that the tick has been cleared. However, we remove the ticks instead of clearing them.
 	assert!(!pool.liquidity_map.contains_key(&0));
 }
 
@@ -566,7 +575,7 @@ fn test_removing() {
 	assert_eq!(amounts_owed[PoolSide::Asset0], U256::from(316));
 	assert_eq!(amounts_owed[!PoolSide::Asset0], U256::from(31));
 
-	// DIFF: Burn will have burnt the entire position so it will be deleted.
+	// TO CHECK: Just health checking that the position is removed. Different from Uniswap
 	match pool.burn(
 		id,
 		MIN_TICK_UNISWAP_MEDIUM + TICKSPACING_UNISWAP_MEDIUM,
@@ -670,13 +679,14 @@ fn test_removing_works_1() {
 
 	let (returned_capital, fees_owed) = pool.burn(id.clone(), -46080, -46020, 10000).unwrap();
 
-	// DIFF: Burn will have burnt the entire position so it will be deleted.
+	// TO CHECK: Uniswap test checks the collect outputs, but we don't have that - we collect automatically with a burn
 	assert_eq!(returned_capital[PoolSide::Asset0], U256::from(0));
 	assert_eq!(returned_capital[!PoolSide::Asset0], U256::from(3));
 
 	assert_eq!(fees_owed[PoolSide::Asset0], 0);
 	assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 
+	// TO CHECK: Just health checking that the position is removed. Different from Uniswap
 	match pool.burn(id, -46080, -46020, 1) {
 		Err(PositionError::NonExistent) => {},
 		_ => panic!("Expected NonExistent"),
@@ -744,8 +754,6 @@ fn test_poke_uninitialized_position() {
 		tick.last_fee_growth_inside[!PoolSide::Asset0],
 		U256::from_dec_str("10208471007628121634924383110460558").unwrap()
 	);
-	// assert_eq!(tick.fees_owed[PoolSide::Asset0], 0);
-	// assert_eq!(tick.fees_owed[!PoolSide::Asset0], 0);
 
 	let (returned_capital, fees_owed) = pool
 		.burn(
@@ -756,7 +764,8 @@ fn test_poke_uninitialized_position() {
 		)
 		.unwrap();
 
-	// DIFF: Burn will have burnt the entire position so it will be deleted.
+	// TO CHECK: Uniswap tests check the feeGrowthInside0LastX128 but we have removed the tick
+	// as it doesn't have more liquidity. We check the remaining values.
 	assert_eq!(fees_owed[PoolSide::Asset0], 0);
 	assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 
@@ -774,7 +783,7 @@ fn test_poke_uninitialized_position() {
 	}
 }
 
-// Own test
+// TO CHECK: Not a Uniswap test. Added it myself. This was used to catch a bug.
 #[test]
 fn test_multiple_burns() {
 	let (mut pool, _, _id) = mediumpool_initialized_zerotick();
@@ -828,7 +837,9 @@ fn test_notclearposition_ifnomoreliquidity() {
 	assert!(pool.swap::<Asset0ToAsset1>(expandto18decimals(1), None).is_ok());
 	assert!(pool.swap::<Asset1ToAsset0>(expandto18decimals(1), None).is_ok());
 
-	// Add a poke to update the fee growth and check it's value
+	// TO CHECK: Added a poke to update the fee growth and check it's value. Without this, a full burn of the position
+	// will clear it and we won't be able to check the values. Doing a poke and then checking the output amounts should
+	// be the same
 	let (returned_capital, fees_owed) = pool
 		.burn(AccountId::from([0xce; 32]), MIN_TICK_UNISWAP_MEDIUM, MAX_TICK_UNISWAP_MEDIUM, 0)
 		.unwrap();
@@ -860,12 +871,10 @@ fn test_notclearposition_ifnomoreliquidity() {
 		)
 		.unwrap();
 
-	// DIFF: Burn will have burnt the entire position so it will be deleted.
 	// Also, fees will already have been collected in the first burn.
 	assert_eq!(fees_owed[PoolSide::Asset0], 0);
 	assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 
-	// This could be missing + fees_owed[PoolSide::Asset0]
 	assert_ne!(returned_capital[PoolSide::Asset0], U256::from(0));
 	assert_ne!(returned_capital[!PoolSide::Asset0], U256::from(0));
 
@@ -1089,14 +1098,28 @@ fn test_collectfees_withincurrentprice() {
 
 	// Poke
 	let (returned_capital, fees_owed) = pool
+		.burn(id.clone(), -TICKSPACING_UNISWAP_LOW * 100, TICKSPACING_UNISWAP_LOW * 100, 0)
+		.unwrap();
+
+	assert_eq!(returned_capital[PoolSide::Asset0], U256::from(0));
+	assert_eq!(returned_capital[!PoolSide::Asset0], U256::from(0));
+
+	// TO CHECK: The poke automatically returns the fees - equivalent to poke + collect
+	assert!(fees_owed[PoolSide::Asset0] > 0);
+	assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+
+	// Second poke
+	let (returned_capital, fees_owed) = pool
 		.burn(id, -TICKSPACING_UNISWAP_LOW * 100, TICKSPACING_UNISWAP_LOW * 100, 0)
 		.unwrap();
 
 	assert_eq!(returned_capital[PoolSide::Asset0], U256::from(0));
 	assert_eq!(returned_capital[!PoolSide::Asset0], U256::from(0));
 
-	assert!(fees_owed[PoolSide::Asset0] > 0);
+	// TO CHECK: The poke automatically returns the fees - equivalent to poke + collect
+	assert_eq!(fees_owed[PoolSide::Asset0], 0);
 	assert_eq!(fees_owed[!PoolSide::Asset0], 0);
+
 }
 
 // Post initialize at medium fee
@@ -1206,6 +1229,7 @@ fn test_limitselling_asset_0_to_asset1_tick0thru1() {
 		.swap::<Asset1ToAsset0>(U256::from_dec_str("2000000000000000000").unwrap(), None)
 		.is_ok());
 
+	// TO CHECK: The burn function is equivalent to burn+collect
 	let (burned, fees_owed) =
 		pool.burn(id.clone(), 0, 120, expandto18decimals(1).as_u128()).unwrap();
 	assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
@@ -1242,11 +1266,11 @@ fn test_limitselling_asset_0_to_asset_1_tick0thru1_poke() {
 		.swap::<Asset1ToAsset0>(U256::from_dec_str("2000000000000000000").unwrap(), None)
 		.is_ok());
 
+	// TO CHECK: Same test as before but checking that doing an intermediate poke issues the same results
 	let (burned, fees_owed) = pool.burn(id.clone(), 0, 120, 0).unwrap();
 	assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
 	assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
 
-	// DIFF: position fully burnt
 	assert_eq!(fees_owed[PoolSide::Asset0], 0);
 	assert_eq!(fees_owed[!PoolSide::Asset0], 18107525382602);
 
@@ -1254,7 +1278,6 @@ fn test_limitselling_asset_0_to_asset_1_tick0thru1_poke() {
 	assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
 	assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("6017734268818165").unwrap());
 
-	// DIFF: position fully burnt
 	assert_eq!(fees_owed[PoolSide::Asset0], 0);
 	assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 
@@ -1316,6 +1339,7 @@ fn test_limitselling_asset_1_to_asset_0_tick1thru0_poke() {
 		.swap::<Asset0ToAsset1>(U256::from_dec_str("2000000000000000000").unwrap(), None)
 		.is_ok());
 
+	// TO CHECK: Same test as before but checking that doing an intermediate poke issues the same results
 	let (burned, fees_owed) = pool.burn(id.clone(), -120, 0, 0).unwrap();
 	assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
 	assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
@@ -1328,7 +1352,6 @@ fn test_limitselling_asset_1_to_asset_0_tick1thru0_poke() {
 	assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
 	assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("6017734268818165").unwrap());
 
-	// DIFF: position fully burnt
 	assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 	assert_eq!(fees_owed[PoolSide::Asset0], 0);
 
@@ -1379,9 +1402,13 @@ fn test_multiplelps() {
 
 	assert_eq!(burned[PoolSide::Asset0], U256::from_dec_str("0").unwrap());
 	assert_eq!(burned[!PoolSide::Asset0], U256::from_dec_str("0").unwrap());
-	// NOTE: Fee_owed value 1 unit different than Uniswap because uniswap requires 4 loops to do
-	// the swap instead of 1 causing the rounding to be different
-	assert_eq!(fees_owed[PoolSide::Asset0], 166666666666666u128);
+
+	// TO CHECK: Fee_owed value 1 unit different than Uniswap. My understanding is that it's because uniswap 
+	// requires 4 loops to do the swap, since it can cross a limited amount of ticks.
+	// assert_eq!(fees_owed[PoolSide::Asset0], 166666666666666u128);
+	
+	// Original Uniswap test:
+	assert_eq!(fees_owed[PoolSide::Asset0], 166666666666667u128);
 	assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 
 	let (_, fees_owed) = pool
@@ -1392,9 +1419,13 @@ fn test_multiplelps() {
 			0,
 		)
 		.unwrap();
-	// NOTE: Fee_owed value 1 unit different than Uniswap because uniswap requires 4 loops to do
-	// the swap instead of 1 causing the rounding to be different
-	assert_eq!(fees_owed[PoolSide::Asset0], 333333333333333);
+	
+	// TO CHECK: Fee_owed value 1 unit different than Uniswap. My understanding is that it's because uniswap 
+	// requires 4 loops to do the swap, since it can cross a limited amount of ticks.
+	// assert_eq!(fees_owed[PoolSide::Asset0], 333333333333333);
+	
+	// Original Uniswap test:
+	assert_eq!(fees_owed[PoolSide::Asset0], 333333333333334);
 	assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 }
 
@@ -1470,7 +1501,8 @@ fn test_wellafter_capbidn() {
 	assert_eq!(fees_owed[!PoolSide::Asset0], 0);
 }
 
-// DIFF: pool.global_fee_growth won't overflow. We make it saturate.
+// TO CHECK: pool.global_fee_growth won't overflow. We make it saturate. Therefore, in Uniswap tests they accrue fees
+// but in out case they don't. This is because we don't have a cap on the fee growth.
 
 fn lowpool_initialized_setfees() -> (PoolState, PoolAssetMap<AmountU256>, AccountId) {
 	let (mut pool, mut minted_amounts_accum, id) = lowpool_initialized_one();
@@ -1533,7 +1565,7 @@ fn test_pair() {
 ///                  ADDED TESTS                       ////
 ///////////////////////////////////////////////////////////
 
-// Add some more tests for fees_owed collecting
+// TO CHECK: These are not Uniswap tests. Added it for our own sanity check and debug purposes
 
 // Previous tests using mint as a poke and to collect fees.
 
