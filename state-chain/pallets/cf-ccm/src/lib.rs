@@ -104,7 +104,7 @@ pub mod pallet {
 			message_metadata: CcmIngressMetadata,
 		) -> DispatchResult {
 			ensure!(
-				ForeignChain::from(egress_address) == ForeignChain::from(egress_asset),
+				ForeignChain::from(egress_address.clone()) == ForeignChain::from(egress_asset),
 				Error::<T>::IncompatibleEgressAndReturnAddress
 			);
 
@@ -134,9 +134,9 @@ pub mod pallet {
 			let _egress_id = T::EgressHandler::schedule_egress_ccm(
 				egress_asset,
 				egress_amount,
-				egress_address,
+				egress_address.clone(),
 				message_metadata.message.clone(),
-				message_metadata.caller_address,
+				message_metadata.caller_address.clone(),
 			);
 
 			// TODO: Store swapped gas with a generated EgressId.

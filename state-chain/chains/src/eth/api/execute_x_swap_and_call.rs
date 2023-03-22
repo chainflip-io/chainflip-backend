@@ -6,7 +6,7 @@ use sp_std::{vec, vec::Vec};
 
 use crate::{
 	eth::{api::all_batch::EncodableTransferAssetParams, Ethereum, SigData, Tokenizable},
-	ApiCall, ChainCrypto,
+	impl_api_call_eth, ApiCall, ChainCrypto,
 };
 
 use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
@@ -37,6 +37,8 @@ impl Tokenizable for ForeignChainAddress {
 				Token::Tuple(vec![ForeignChain::Ethereum.tokenize(), addr.to_vec().tokenize()]),
 			ForeignChainAddress::Dot(addr) =>
 				Token::Tuple(vec![ForeignChain::Polkadot.tokenize(), addr.to_vec().tokenize()]),
+			ForeignChainAddress::Btc(addr) =>
+				Token::Tuple(vec![ForeignChain::Bitcoin.tokenize(), addr.to_vec().tokenize()]),
 		}
 	}
 }
@@ -113,7 +115,7 @@ impl ExecutexSwapAndCall {
 
 	fn abi_encoded(&self) -> Vec<u8> {
 		let tokenized_address =
-			self.from.tokenize().into_tuple().expect(
+			self.from.clone().tokenize().into_tuple().expect(
 				"The ForeignChainAddress should always return a Tuple(vec![Chain, Address])",
 			);
 
@@ -134,24 +136,7 @@ impl ExecutexSwapAndCall {
 	}
 }
 
-impl ApiCall<Ethereum> for ExecutexSwapAndCall {
-	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
-		self.sig_data.msg_hash
-	}
-
-	fn signed(mut self, signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
-		self.sig_data.insert_signature(signature);
-		self
-	}
-
-	fn chain_encoded(&self) -> Vec<u8> {
-		self.abi_encoded()
-	}
-
-	fn is_signed(&self) -> bool {
-		self.sig_data.is_signed()
-	}
-}
+impl_api_call_eth!(ExecutexSwapAndCall);
 
 #[cfg(test)]
 mod test_execute_x_swap_and_execute {
@@ -166,7 +151,7 @@ mod test_execute_x_swap_and_execute {
 	// It uses a different ethabi to the CFE, so we test separately
 	fn just_load_the_contract() {
 		assert_ok!(ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/IVault.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/Vault.json").as_ref(),
 		));
 	}
 
@@ -185,17 +170,17 @@ mod test_execute_x_swap_and_execute {
 		};
 
 		let dummy_src_address = ForeignChainAddress::Dot([0xff; 32]);
-		let tokenized_address = dummy_src_address
-			.tokenize()
-			.into_tuple()
-			.expect("The ForeignChainAddress should always return a Tuple(vec![Chain, Address])");
+		let tokenized_address =
+			dummy_src_address.clone().tokenize().into_tuple().expect(
+				"The ForeignChainAddress should always return a Tuple(vec![Chain, Address])",
+			);
 		let dummy_message = vec![0x00, 0x01, 0x02, 0x03, 0x04];
 
 		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = asymmetrise([0x7f; 20]);
 		const FAKE_SIG: [u8; 32] = asymmetrise([0xe1; 32]);
 
 		let eth_vault = ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/IVault.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/Vault.json").as_ref(),
 		)
 		.unwrap();
 

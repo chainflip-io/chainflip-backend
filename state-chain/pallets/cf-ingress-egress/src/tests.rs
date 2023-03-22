@@ -1,12 +1,10 @@
 use crate::{
 	mock::*, AddressPool, AddressStatus, DeploymentStatus, DisabledEgressAssets, FetchOrTransfer,
-	ScheduledEgressCcm,
-	ScheduledEgressFetchOrTransfer,
-	IntentAction, IntentActions, IntentExpiries, IntentIngressDetails, ScheduledEgressRequests,
-	WeightInfo,
+	IntentAction, IntentActions, IntentExpiries, IntentIngressDetails, ScheduledEgressCcm,
+	ScheduledEgressFetchOrTransfer, WeightInfo,
 };
 
-use cf_primitives::{chains::assets::eth, ForeignChain, IntentId, ForeignChainAddress};
+use cf_primitives::{chains::assets::eth, ForeignChain, ForeignChainAddress, IntentId};
 use cf_traits::{AddressDerivationApi, EgressApi, IngressApi};
 
 use frame_support::{assert_ok, instances::Instance1, traits::Hooks, weights::Weight};

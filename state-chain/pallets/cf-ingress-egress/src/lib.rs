@@ -173,7 +173,7 @@ pub mod pallet {
 
 		/// The type of the chain-native transaction.
 		type ChainApiCall: AllBatch<Self::TargetChain> + ExecutexSwapAndCall<Self::TargetChain>;
-		
+
 		/// A broadcaster instance.
 		type Broadcaster: Broadcaster<
 			Self::TargetChain,

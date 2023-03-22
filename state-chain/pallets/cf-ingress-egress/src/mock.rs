@@ -12,8 +12,8 @@ pub use cf_primitives::{
 use frame_support::traits::UnfilteredDispatchable;
 
 use cf_traits::{
-	mocks::api_call::{MockEthEnvironment, MockEthereumApiCall},
 	impl_mock_callback,
+	mocks::api_call::{MockEthEnvironment, MockEthereumApiCall},
 	IngressHandler,
 };
 

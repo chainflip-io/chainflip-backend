@@ -328,12 +328,13 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type LpProvisioning = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
-	type AllBatch = cf_chains::btc::api::BitcoinApi<chainflip::BtcEnvironment>;
+	type ChainApiCall = cf_chains::btc::api::BitcoinApi<chainflip::BtcEnvironment>;
 	type Broadcaster = BitcoinBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type IntentTTL = ConstU32<1200>;
 	type IngressHandler = chainflip::BtcIngressHandler;
+	type CcmHandler = CrossChainMessaging;
 }
 
 parameter_types! {
@@ -1283,7 +1284,7 @@ mod test {
 
 	const CALL_ENUM_MAX_SIZE: usize = 320;
 
-	// Introduced from polkdadot
+	// Introduced from polkadot
 	#[test]
 	fn call_size() {
 		assert!(

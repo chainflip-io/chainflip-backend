@@ -14,6 +14,8 @@ use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 
 extern crate alloc;
+#[cfg(feature = "runtime-benchmarks")]
+use crate::BenchmarkValue;
 use crate::{Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor, TrackedData};
 use alloc::string::String;
 pub use cf_primitives::chains::Bitcoin;
