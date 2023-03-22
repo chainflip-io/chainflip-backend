@@ -4,12 +4,13 @@ pub mod benchmarking;
 pub mod ingress_address;
 pub mod utxo_selection;
 
+use arrayref::array_ref;
 use base58::FromBase58;
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::{borrow::Borrow, iter};
 use frame_support::{sp_io::hashing::sha2_256, BoundedVec, RuntimeDebug};
-use libsecp256k1::{PublicKey, SecretKey};
+use libsecp256k1::{curve::*, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 
@@ -120,11 +121,13 @@ impl ChainCrypto for Bitcoin {
 	type GovKey = Self::AggKey;
 
 	fn verify_threshold_signature(
-		_agg_key: &Self::AggKey,
-		_payload: &Self::Payload,
-		_signature: &Self::ThresholdSignature,
+		agg_key: &Self::AggKey,
+		payloads: &Self::Payload,
+		signatures: &Self::ThresholdSignature,
 	) -> bool {
-		todo!()
+		payloads.iter().zip(signatures).all(|(payload, signature)| {
+			verify_single_threshold_signature(agg_key, payload, signature)
+		})
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
@@ -134,6 +137,49 @@ impl ChainCrypto for Bitcoin {
 	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
 		KeyId { epoch_index, public_key_bytes: agg_key.into() }
 	}
+}
+fn verify_single_threshold_signature(
+	agg_key: &AggKey,
+	payload: &[u8; 32],
+	signature: &[u8; 64],
+) -> bool {
+	// SHA256("BIP0340/challenge")
+	const CHALLENGE_TAG: &[u8] =
+		&hex_literal::hex!("7bb52d7a9fef58323eb1bf7a407db382d2f3f2d81bb1224f49fe518f6d48d37c");
+	let mut rx = Field::default();
+	if !rx.set_b32(array_ref!(signature, 0, 32)) {
+		return false
+	}
+	let mut pubx = Field::default();
+	if !pubx.set_b32(&agg_key.0) {
+		return false
+	}
+	let mut pubkey = Affine::default();
+	if !pubkey.set_xo_var(&pubx, false) {
+		return false
+	}
+
+	let mut challenge = Scalar::default();
+	let _unused = challenge.set_b32(&sha2_256(
+		&[CHALLENGE_TAG, CHALLENGE_TAG, &rx.b32(), &agg_key.0, payload].concat(),
+	));
+	challenge.cond_neg_assign(1.into());
+
+	let mut s = Scalar::default();
+	let _unused = s.set_b32(array_ref!(signature, 32, 32));
+
+	let mut temp_r = Jacobian::default();
+	libsecp256k1::ECMULT_CONTEXT.ecmult(&mut temp_r, &Jacobian::from_ge(&pubkey), &challenge, &s);
+	let mut recovered_r = Affine::from_gej(&temp_r);
+	if recovered_r.is_infinity() {
+		return false
+	}
+	recovered_r.y.normalize();
+	if recovered_r.y.is_odd() {
+		return false
+	}
+	recovered_r.x.normalize();
+	recovered_r.x.eq_var(&rx)
 }
 
 impl ChainAbi for Bitcoin {
@@ -606,6 +652,75 @@ impl BitcoinScript {
 #[cfg(test)]
 mod test {
 	use super::*;
+
+	#[test]
+	fn test_verify_signature() {
+		// test cases from https://github.com/bitcoin/bips/blob/master/bip-0340/test-vectors.csv
+		assert!(verify_single_threshold_signature(
+			&AggKey(hex_literal::hex!("3913CC82D3CE5A22409E61D1E42E7C60435A3DDCB9192CFDCF7D67C3F520EDAB")),
+			&hex_literal::hex!("461E208488056167B18085A0B5CC62464BA8D854540D1BCC7AB987AB8F64FA53"),
+			&hex_literal::hex!("719B74CE347D7CDA876C39DDEAB89EE750AC24091835300FD27E7783EC336232626EEAA1500F84326F4144F453FFE5AE44D35C503B36AD68C00C3A4AB12C3CFB")));
+		assert!(verify_single_threshold_signature(
+			&AggKey(hex_literal::hex!("F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9")),
+			&hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000000"),
+			&hex_literal::hex!("E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA821525F66A4A85EA8B71E482A74F382D2CE5EBEEE8FDB2172F477DF4900D310536C0")));
+		assert!(verify_single_threshold_signature(
+			&AggKey(hex_literal::hex!("DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659")),
+			&hex_literal::hex!("243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89"),
+			&hex_literal::hex!("6896BD60EEAE296DB48A229FF71DFE071BDE413E6D43F917DC8DCF8C78DE33418906D11AC976ABCCB20B091292BFF4EA897EFCB639EA871CFA95F6DE339E4B0A")));
+		assert!(verify_single_threshold_signature(
+			&AggKey(hex_literal::hex!("DD308AFEC5777E13121FA72B9CC1B7CC0139715309B086C960E18FD969774EB8")),
+			&hex_literal::hex!("7E2D58D8B3BCDF1ABADEC7829054F90DDA9805AAB56C77333024B9D0A508B75C"),
+			&hex_literal::hex!("5831AAEED7B44BB74E5EAB94BA9D4294C49BCF2A60728D8B4C200F50DD313C1BAB745879A5AD954A72C45A91C3A51D3C7ADEA98D82F8481E0E1E03674A6F3FB7")));
+		assert!(verify_single_threshold_signature(
+			&AggKey(hex_literal::hex!("25D1DFF95105F5253C4022F628A996AD3A0D95FBF21D468A1B33F8C160D8F517")),
+			&hex_literal::hex!("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"),
+			&hex_literal::hex!("7EB0509757E246F19449885651611CB965ECC1A187DD51B64FDA1EDC9637D5EC97582B9CB13DB3933705B32BA982AF5AF25FD78881EBB32771FC5922EFC66EA3")));
+		assert!(verify_single_threshold_signature(
+			&AggKey(hex_literal::hex!("D69C3509BB99E412E68B0FE8544E72837DFA30746D8BE2AA65975F29D22DC7B9")),
+			&hex_literal::hex!("4DF3C3F68FCC83B27E9D42C90431A72499F17875C81A599B566C9889B9696703"),
+			&hex_literal::hex!("00000000000000000000003B78CE563F89A0ED9414F5AA28AD0D96D6795F9C6376AFB1548AF603B3EB45C9F8207DEE1060CB71C04E80F593060B07D28308D7F4")));
+		assert!(!verify_single_threshold_signature(
+			&AggKey(hex_literal::hex!("EEFDEA4CDB677750A420FEE807EACF21EB9898AE79B9768766E4FAA04A2D4A34")),
+			&hex_literal::hex!("243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89"),
+			&hex_literal::hex!("6CFF5C3BA86C69EA4B7376F31A9BCB4F74C1976089B2D9963DA2E5543E17776969E89B4C5564D00349106B8497785DD7D1D713A8AE82B32FA79D5F7FC407D39B")));
+		assert!(!verify_single_threshold_signature(
+			&AggKey(hex_literal::hex!("DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659")),
+			&hex_literal::hex!("243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89"),
+			&hex_literal::hex!("FFF97BD5755EEEA420453A14355235D382F6472F8568A18B2F057A14602975563CC27944640AC607CD107AE10923D9EF7A73C643E166BE5EBEAFA34B1AC553E2")));
+		assert!(!verify_single_threshold_signature(
+			&AggKey(hex_literal::hex!("DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659")),
+			&hex_literal::hex!("243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89"),
+			&hex_literal::hex!("1FA62E331EDBC21C394792D2AB1100A7B432B013DF3F6FF4F99FCB33E0E1515F28890B3EDB6E7189B630448B515CE4F8622A954CFE545735AAEA5134FCCDB2BD")));
+		assert!(!verify_single_threshold_signature(
+			&AggKey(hex_literal::hex!("DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659")),
+			&hex_literal::hex!("243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89"),
+			&hex_literal::hex!("6CFF5C3BA86C69EA4B7376F31A9BCB4F74C1976089B2D9963DA2E5543E177769961764B3AA9B2FFCB6EF947B6887A226E8D7C93E00C5ED0C1834FF0D0C2E6DA6")));
+		assert!(!verify_single_threshold_signature(
+			&AggKey(hex_literal::hex!("DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659")),
+			&hex_literal::hex!("243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89"),
+			&hex_literal::hex!("0000000000000000000000000000000000000000000000000000000000000000123DDA8328AF9C23A94C1FEECFD123BA4FB73476F0D594DCB65C6425BD186051")));
+		assert!(!verify_single_threshold_signature(
+			&AggKey(hex_literal::hex!("DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659")),
+			&hex_literal::hex!("243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89"),
+			&hex_literal::hex!("00000000000000000000000000000000000000000000000000000000000000017615FBAF5AE28864013C099742DEADB4DBA87F11AC6754F93780D5A1837CF197")));
+		assert!(!verify_single_threshold_signature(
+			&AggKey(hex_literal::hex!("DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659")),
+			&hex_literal::hex!("243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89"),
+			&hex_literal::hex!("4A298DACAE57395A15D0795DDBFD1DCB564DA82B0F269BC70A74F8220429BA1D69E89B4C5564D00349106B8497785DD7D1D713A8AE82B32FA79D5F7FC407D39B")));
+		assert!(!verify_single_threshold_signature(
+			&AggKey(hex_literal::hex!("DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659")),
+			&hex_literal::hex!("243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89"),
+			&hex_literal::hex!("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F69E89B4C5564D00349106B8497785DD7D1D713A8AE82B32FA79D5F7FC407D39B")));
+		assert!(!verify_single_threshold_signature(
+			&AggKey(hex_literal::hex!("DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659")),
+			&hex_literal::hex!("243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89"),
+			&hex_literal::hex!("6CFF5C3BA86C69EA4B7376F31A9BCB4F74C1976089B2D9963DA2E5543E177769FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141")));
+		assert!(!verify_single_threshold_signature(
+			&AggKey(hex_literal::hex!("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC30")),
+			&hex_literal::hex!("243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89"),
+			&hex_literal::hex!("6CFF5C3BA86C69EA4B7376F31A9BCB4F74C1976089B2D9963DA2E5543E17776969E89B4C5564D00349106B8497785DD7D1D713A8AE82B32FA79D5F7FC407D39B")));
+	}
 
 	#[test]
 	fn test_scriptpubkey_from_address() {
