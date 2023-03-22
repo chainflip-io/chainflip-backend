@@ -9,7 +9,7 @@ use base58::FromBase58;
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::{borrow::Borrow, iter};
-use frame_support::{sp_io::hashing::sha2_256, BoundedVec, RuntimeDebug};
+use frame_support::{sp_io::hashing::sha2_256, RuntimeDebug};
 use libsecp256k1::{curve::*, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
@@ -18,9 +18,7 @@ extern crate alloc;
 use crate::{Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
 use alloc::string::String;
 pub use cf_primitives::chains::Bitcoin;
-use cf_primitives::{
-	chains::assets, EpochIndex, IntentId, KeyId, MaxBitcoinAddressLength, PublicKeyBytes,
-};
+use cf_primitives::{chains::assets, BitcoinAddress, EpochIndex, IntentId, KeyId, PublicKeyBytes};
 use itertools;
 
 pub type BlockNumber = u64;
@@ -35,8 +33,6 @@ pub type BtcAmount = u128;
 pub type SigningPayload = [u8; 32];
 
 pub type Signature = [u8; 64];
-
-pub type BitcoinAddress = BoundedVec<u8, MaxBitcoinAddressLength>;
 
 pub type Hash = [u8; 32];
 
@@ -396,61 +392,63 @@ pub struct BitcoinTransaction {
 	inputs: Vec<Utxo>,
 	outputs: Vec<BitcoinOutput>,
 	signatures: Vec<Signature>,
+	transaction_bytes: Vec<u8>,
 }
 
 impl BitcoinTransaction {
 	pub fn create_new_unsigned(inputs: Vec<Utxo>, outputs: Vec<BitcoinOutput>) -> Self {
-		Self { inputs, outputs, signatures: vec![] }
+		const VERSION: [u8; 4] = 2u32.to_le_bytes();
+		const SEGWIT_MARKER: u8 = 0u8;
+		const SEGWIT_FLAG: u8 = 1u8;
+		const SEQUENCE_NUMBER: [u8; 4] = (u32::MAX - 2).to_le_bytes();
+
+		let mut transaction_bytes = Vec::default();
+		transaction_bytes.extend(VERSION);
+		transaction_bytes.push(SEGWIT_MARKER);
+		transaction_bytes.push(SEGWIT_FLAG);
+		transaction_bytes.extend(to_varint(inputs.len() as u64));
+		transaction_bytes.extend(inputs.iter().fold(Vec::<u8>::default(), |mut acc, input| {
+			acc.extend(input.txid.iter().rev());
+			acc.extend(input.vout.to_le_bytes());
+			acc.push(0);
+			acc.extend(SEQUENCE_NUMBER);
+			acc
+		}));
+		transaction_bytes.extend(to_varint(outputs.len() as u64));
+		transaction_bytes.extend(outputs.iter().fold(Vec::<u8>::default(), |mut acc, output| {
+			acc.extend(output.amount.to_le_bytes());
+			acc.extend(output.script_pubkey.serialize());
+			acc
+		}));
+		Self { inputs, outputs, signatures: vec![], transaction_bytes }
 	}
-	pub fn add_signature(&mut self, index: u32, signature: Signature) {
-		if self.signatures.len() != self.inputs.len() {
-			self.signatures.resize(self.inputs.len(), [0u8; 64]);
-		}
-		self.signatures[index as usize] = signature;
+	pub fn add_signatures(&mut self, signatures: Vec<Signature>) {
+		debug_assert_eq!(signatures.len(), self.inputs.len());
+		self.signatures = signatures;
 	}
 	pub fn is_signed(&self) -> bool {
 		self.signatures.len() == self.inputs.len() &&
 			!self.signatures.iter().any(|signature| signature == &[0u8; 64])
 	}
 	pub fn finalize(self) -> Vec<u8> {
-		let mut transaction_bytes = Vec::default();
-		let version = 2u32.to_le_bytes();
-		let segwit_marker = 0u8;
-		let segwit_flag = 1u8;
-		let locktime = 0u32.to_le_bytes();
-		// signal to allow replacing this transaction by setting sequence number according to BIP
-		// 125
-		let sequence_number = (u32::MAX - 2).to_le_bytes();
-		transaction_bytes.extend(version);
-		transaction_bytes.push(segwit_marker);
-		transaction_bytes.push(segwit_flag);
-		transaction_bytes.extend(to_varint(self.inputs.len() as u64));
-		transaction_bytes.extend(self.inputs.iter().fold(Vec::<u8>::default(), |mut acc, x| {
-			acc.extend(x.txid.iter().rev());
-			acc.extend(x.vout.to_le_bytes());
-			acc.push(0);
-			acc.extend(sequence_number);
-			acc
-		}));
-		transaction_bytes.extend(to_varint(self.outputs.len() as u64));
-		transaction_bytes.extend(self.outputs.iter().fold(Vec::<u8>::default(), |mut acc, x| {
-			acc.extend(x.amount.to_le_bytes());
-			acc.extend(x.script_pubkey.serialize());
-			acc
-		}));
+		const LOCKTIME: [u8; 4] = 0u32.to_le_bytes();
+		const NUM_WITNESSES: u8 = 3u8;
+		const LEN_SIGNATURE: u8 = 64u8;
+
+		let mut transaction_bytes = self.transaction_bytes;
+
 		for i in 0..self.inputs.len() {
-			let num_witnesses = 3u8;
-			let len_signature = 64u8;
-			transaction_bytes.push(num_witnesses);
-			transaction_bytes.push(len_signature);
+			transaction_bytes.push(NUM_WITNESSES);
+			transaction_bytes.push(LEN_SIGNATURE);
 			transaction_bytes.extend(self.signatures[i]);
-			let script = BitcoinScript::default()
-				.push_uint(self.inputs[i].salt)
-				.op_drop()
-				.push_bytes(self.inputs[i].pubkey_x)
-				.op_checksig()
-				.serialize();
-			transaction_bytes.extend(script);
+			transaction_bytes.extend(
+				BitcoinScript::default()
+					.push_uint(self.inputs[i].salt)
+					.op_drop()
+					.push_bytes(self.inputs[i].pubkey_x)
+					.op_checksig()
+					.serialize(),
+			);
 			transaction_bytes.push(0x21u8); // Length of tweaked pubkey + leaf version
 			let tweaked = tweaked_pubkey(self.inputs[i].pubkey_x, self.inputs[i].salt);
 			// push correct leaf version depending on evenness of public key
@@ -461,20 +459,29 @@ impl BitcoinTransaction {
 			}
 			transaction_bytes.extend(INTERNAL_PUBKEY[1..33].iter());
 		}
-		transaction_bytes.extend(locktime);
+		transaction_bytes.extend(LOCKTIME);
 		transaction_bytes
 	}
 
-	pub fn get_signing_payload(&self, input_index: u32) -> SigningPayload {
+	pub fn get_signing_payloads(&self) -> Vec<SigningPayload> {
 		// SHA256("TapSighash")
 		const TAPSIG_HASH: &[u8] =
 			&hex_literal::hex!("f40a48df4b2a70c8b4924bf2654661ed3d95fd66a313eb87237597c628e4a031");
+		const EPOCH: u8 = 0u8;
+		const HASHTYPE: u8 = 0u8;
+		const VERSION: [u8; 4] = 2u32.to_le_bytes();
+		const LOCKTIME: [u8; 4] = 0u32.to_le_bytes();
+		const SPENDTYPE: u8 = 2u8;
+		const KEYVERSION: u8 = 0u8;
+		const CODESEPARATOR: [u8; 4] = u32::MAX.to_le_bytes();
+		const SEQUENCE_NUMBER: [u8; 4] = (u32::MAX - 2).to_le_bytes();
+
 		let prevouts = sha2_256(
 			self.inputs
 				.iter()
-				.fold(Vec::<u8>::default(), |mut acc, x| {
-					acc.extend(x.txid.iter().rev());
-					acc.extend(x.vout.to_le_bytes());
+				.fold(Vec::<u8>::default(), |mut acc, input| {
+					acc.extend(input.txid.iter().rev());
+					acc.extend(input.vout.to_le_bytes());
 					acc
 				})
 				.as_slice(),
@@ -482,8 +489,8 @@ impl BitcoinTransaction {
 		let amounts = sha2_256(
 			self.inputs
 				.iter()
-				.fold(Vec::<u8>::default(), |mut acc, x| {
-					acc.extend(x.amount.to_le_bytes());
+				.fold(Vec::<u8>::default(), |mut acc, input| {
+					acc.extend(input.amount.to_le_bytes());
 					acc
 				})
 				.as_slice(),
@@ -491,11 +498,12 @@ impl BitcoinTransaction {
 		let scriptpubkeys = sha2_256(
 			self.inputs
 				.iter()
-				.fold(Vec::<u8>::default(), |mut acc, x| {
+				.fold(Vec::<u8>::default(), |mut acc, input| {
 					let script = BitcoinScript::default()
 						.push_uint(SEGWIT_VERSION as u32)
 						.push_bytes(
-							&tweaked_pubkey(x.pubkey_x, x.salt).serialize_compressed()[1..33],
+							&tweaked_pubkey(input.pubkey_x, input.salt).serialize_compressed()
+								[1..33],
 						)
 						.serialize();
 					acc.extend(script);
@@ -504,7 +512,7 @@ impl BitcoinTransaction {
 				.as_slice(),
 		);
 		let sequences = sha2_256(
-			&core::iter::repeat((u32::MAX - 2).to_le_bytes())
+			&core::iter::repeat(SEQUENCE_NUMBER)
 				.take(self.inputs.len())
 				.collect::<Vec<_>>()
 				.concat(),
@@ -512,48 +520,44 @@ impl BitcoinTransaction {
 		let outputs = sha2_256(
 			self.outputs
 				.iter()
-				.fold(Vec::<u8>::default(), |mut acc, x| {
-					acc.extend(x.amount.to_le_bytes());
-					acc.extend(x.script_pubkey.serialize());
+				.fold(Vec::<u8>::default(), |mut acc, output| {
+					acc.extend(output.amount.to_le_bytes());
+					acc.extend(output.script_pubkey.serialize());
 					acc
 				})
 				.as_slice(),
 		);
-		let epoch = 0u8;
-		let hashtype = 0u8;
-		let version = 2u32.to_le_bytes();
-		let locktime = 0u32.to_le_bytes();
-		let spendtype = 2u8;
-		let keyversion = 0u8;
-		let codeseparator = u32::MAX.to_le_bytes();
-		sha2_256(
-			&[
-				// Tagged Hash according to BIP 340
-				TAPSIG_HASH,
-				TAPSIG_HASH,
-				// Epoch according to footnote 20 in BIP 341
-				&[epoch],
-				// "Common signature message" according to BIP 341
-				&[hashtype],
-				&version,
-				&locktime,
-				&prevouts,
-				&amounts,
-				&scriptpubkeys,
-				&sequences,
-				&outputs,
-				&[spendtype],
-				&input_index.to_le_bytes(),
-				// "Common signature message extension" according to BIP 342
-				&get_tapleaf_hash(
-					self.inputs[input_index as usize].pubkey_x,
-					self.inputs[input_index as usize].salt,
-				),
-				&[keyversion],
-				&codeseparator,
-			]
-			.concat(),
-		)
+
+		(0u32..)
+			.zip(&self.inputs)
+			.map(|(input_index, input)| {
+				sha2_256(
+					&[
+						// Tagged Hash according to BIP 340
+						TAPSIG_HASH,
+						TAPSIG_HASH,
+						// Epoch according to footnote 20 in BIP 341
+						&[EPOCH],
+						// "Common signature message" according to BIP 341
+						&[HASHTYPE],
+						&VERSION,
+						&LOCKTIME,
+						&prevouts,
+						&amounts,
+						&scriptpubkeys,
+						&sequences,
+						&outputs,
+						&[SPENDTYPE],
+						&input_index.to_le_bytes(),
+						// "Common signature message extension" according to BIP 342
+						&get_tapleaf_hash(input.pubkey_x, input.salt),
+						&[KEYVERSION],
+						&CODESEPARATOR,
+					]
+					.concat(),
+				)
+			})
+			.collect()
 	}
 }
 
@@ -864,12 +868,8 @@ mod test {
 			)
 			.unwrap(),
 		};
-		let mut tx = BitcoinTransaction {
-			inputs: vec![input],
-			outputs: vec![output],
-			signatures: Default::default(),
-		};
-		tx.add_signature(0, [0u8; 64]);
+		let mut tx = BitcoinTransaction::create_new_unsigned(vec![input], vec![output]);
+		tx.add_signatures(vec![[0u8; 64]]);
 		assert_eq!(tx.finalize(), hex_literal::hex!("020000000001014C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB50100000000FDFFFFFF0100E1F5050000000022512042E4F4C78A1D8F936AD7FC2C2F028F9BB1538CFC9A509B985031457C367815C003400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000025017B752078C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDBAC21C0EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE00000000"));
 	}
 
@@ -894,14 +894,12 @@ mod test {
 			)
 			.unwrap(),
 		};
-		let tx = BitcoinTransaction {
-			inputs: vec![input],
-			outputs: vec![output],
-			signatures: Default::default(),
-		};
+		let tx = BitcoinTransaction::create_new_unsigned(vec![input], vec![output]);
 		assert_eq!(
-			tx.get_signing_payload(0),
-			hex_literal::hex!("E16117C6CD69142E41736CE2882F0E697FF4369A2CBCEE9D92FC0346C6774FB4")
+			tx.get_signing_payloads(),
+			vec![hex_literal::hex!(
+				"E16117C6CD69142E41736CE2882F0E697FF4369A2CBCEE9D92FC0346C6774FB4"
+			)]
 		);
 	}
 

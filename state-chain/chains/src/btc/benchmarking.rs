@@ -51,7 +51,7 @@ impl BenchmarkValue for SigningPayload {
 // Bitcoin address
 impl BenchmarkValue for BitcoinAddress {
 	fn benchmark_value() -> Self {
-		BoundedVec::try_from([1u8; MAX_BTC_ADDRESS_LENGTH].to_vec())
+		BoundedVec::try_from([1u8; MAX_BTC_ADDRESS_LENGTH as usize].to_vec())
 			.expect("we created a vec that is in the bounds of bounded vec")
 	}
 }

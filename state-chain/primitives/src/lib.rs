@@ -7,7 +7,7 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::BoundedVec;
 use scale_info::TypeInfo;
-use sp_core::{crypto::AccountId32, Get, H160};
+use sp_core::{crypto::AccountId32, ConstU32, H160};
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
 	FixedU128, MultiSignature, RuntimeDebug,
@@ -74,7 +74,7 @@ pub const GENESIS_EPOCH: u32 = 1;
 
 //Addresses can have all kinds of different lengths in bitcoin but we would support upto 100 since
 // we dont expect addresses higher than 100
-pub const MAX_BTC_ADDRESS_LENGTH: usize = 100;
+pub const MAX_BTC_ADDRESS_LENGTH: u32 = 100;
 
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
@@ -199,15 +199,7 @@ fn test_key_id_to_and_from_bytes() {
 	assert_eq!(key_id, KeyId::from_bytes(&expected_bytes));
 }
 
-#[derive(Clone, Copy)]
-pub struct MaxBitcoinAddressLength;
-impl Get<u32> for MaxBitcoinAddressLength {
-	fn get() -> u32 {
-		MAX_BTC_ADDRESS_LENGTH as u32
-	}
-}
-
-pub type BitcoinAddress = BoundedVec<u8, MaxBitcoinAddressLength>;
+pub type BitcoinAddress = BoundedVec<u8, ConstU32<MAX_BTC_ADDRESS_LENGTH>>;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
