@@ -18,7 +18,10 @@ extern crate alloc;
 use crate::{Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
 use alloc::string::String;
 pub use cf_primitives::chains::Bitcoin;
-use cf_primitives::{chains::assets, BitcoinAddress, EpochIndex, IntentId, KeyId, PublicKeyBytes};
+use cf_primitives::{
+	chains::assets, BitcoinAddress, EpochIndex, IntentId, KeyId,
+	PublicKeyBytes,
+};
 use itertools;
 
 pub type BlockNumber = u64;

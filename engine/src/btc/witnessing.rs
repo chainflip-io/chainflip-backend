@@ -2,6 +2,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use anyhow::{Context, Result};
 use cf_chains::Bitcoin;
+use cf_primitives::BitcoinAddress;
 use futures::TryFutureExt;
 
 use crate::{
@@ -11,14 +12,14 @@ use crate::{
 	witnesser::{EpochStart, LatestBlockNumber},
 };
 
-use super::{rpc::BtcRpcClient, ScriptPubKey};
+use super::rpc::BtcRpcClient;
 
 pub async fn start(
 	scope: &Scope<'_, anyhow::Error>,
 	btc_settings: settings::Btc,
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Bitcoin>>,
 	db: Arc<PersistentKeyDB>,
-) -> Result<tokio::sync::mpsc::UnboundedSender<ScriptPubKey>> {
+) -> Result<tokio::sync::mpsc::UnboundedSender<BitcoinAddress>> {
 	let (script_pubkeys_sender, script_pubkeys_receiver) = tokio::sync::mpsc::unbounded_channel();
 
 	let btc_rpc = BtcRpcClient::new(&btc_settings)?;

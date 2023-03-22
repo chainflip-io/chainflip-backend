@@ -3,6 +3,7 @@ use std::{collections::BTreeSet, sync::Arc};
 use crate::constants::BTC_INGRESS_BLOCK_SAFETY_MARGIN;
 use bitcoincore_rpc::bitcoin::{Transaction, TxOut};
 use cf_chains::Bitcoin;
+use cf_primitives::BitcoinAddress;
 use futures::StreamExt;
 use tokio::{select, sync::Mutex};
 use tracing::{info, info_span, trace, Instrument};
@@ -20,24 +21,29 @@ use crate::{
 	},
 };
 
-use super::{
-	rpc::{BtcRpcApi, BtcRpcClient},
-	ScriptPubKey,
-};
+use super::rpc::{BtcRpcApi, BtcRpcClient};
 
 // Takes txs and list of monitored addresses. Returns a list of txs that are relevant to the
 // monitored addresses.
 pub fn filter_interesting_utxos(
 	txs: Vec<Transaction>,
-	monitored_script_pubkeys: &BTreeSet<ScriptPubKey>,
+	monitored_script_pubkeys: &BTreeSet<BitcoinAddress>,
 ) -> Vec<TxOut> {
 	let mut interesting_utxos = vec![];
 	for tx in txs {
 		for tx_out in &tx.output {
 			if tx_out.value > 0 {
-				let script_pubkey_bytes = tx_out.script_pubkey.to_bytes();
-				if monitored_script_pubkeys.contains(&script_pubkey_bytes) {
-					interesting_utxos.push(tx_out.clone());
+				match tx_out.script_pubkey.to_bytes().try_into() {
+					Ok(address) =>
+						if monitored_script_pubkeys.contains(&address) {
+							interesting_utxos.push(tx_out.clone());
+						},
+					Err(error) => {
+						// This can happen, however, if it does, it won't be for one of our
+						// addresses, since we can effectivley control how long the script pubkeys
+						// are for our addresses. So we can log and ignore.
+						tracing::warn!("Failed to convert script pubkey to bytes: {:?}", error);
+					},
 				}
 			}
 		}
@@ -48,8 +54,8 @@ pub fn filter_interesting_utxos(
 pub async fn start(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Bitcoin>>,
 	btc_rpc: BtcRpcClient,
-	script_pubkeys_receiver: tokio::sync::mpsc::UnboundedReceiver<ScriptPubKey>,
-	monitored_script_pubkeys: BTreeSet<ScriptPubKey>,
+	script_pubkeys_receiver: tokio::sync::mpsc::UnboundedReceiver<BitcoinAddress>,
+	monitored_script_pubkeys: BTreeSet<BitcoinAddress>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<(), anyhow::Error> {
 	epoch_witnesser::start(
@@ -153,6 +159,8 @@ pub async fn start(
 
 #[cfg(test)]
 mod tests {
+	use cf_chains::btc;
+
 	use crate::settings;
 
 	use super::*;
@@ -183,7 +191,7 @@ mod tests {
 				block_number: 56,
 				current: true,
 				participant: true,
-				data: (),
+				data: btc::EpochStartData { change_address: Default::default() },
 			})
 			.await
 			.unwrap();
@@ -207,8 +215,7 @@ mod test_utxo_filtering {
 	#[test]
 	fn filter_interesting_utxos_no_utxos() {
 		let txs = vec![fake_transaction(vec![]), fake_transaction(vec![])];
-		let monitored_script_pubkeys = BTreeSet::new();
-		assert!(filter_interesting_utxos(txs, &monitored_script_pubkeys).is_empty());
+		assert!(filter_interesting_utxos(txs, &BTreeSet::new()).is_empty());
 	}
 
 	#[test]
@@ -222,8 +229,10 @@ mod test_utxo_filtering {
 			]),
 			fake_transaction(vec![]),
 		];
-		let monitored_script_pubkeys = BTreeSet::from([monitored_pubkey]);
-		let interesting_utxos = filter_interesting_utxos(txs, &monitored_script_pubkeys);
+		let interesting_utxos = filter_interesting_utxos(
+			txs,
+			&BTreeSet::from([BitcoinAddress::try_from(monitored_pubkey).unwrap()]),
+		);
 		assert_eq!(interesting_utxos.len(), 2);
 		assert_eq!(interesting_utxos[0].value, 2324);
 		assert_eq!(interesting_utxos[1].value, 1234);
@@ -242,7 +251,8 @@ mod test_utxo_filtering {
 				script_pubkey: Script::from(monitored_pubkey.clone()),
 			}]),
 		];
-		let monitored_script_pubkeys = BTreeSet::from([monitored_pubkey]);
+		let monitored_script_pubkeys =
+			BTreeSet::from([BitcoinAddress::try_from(monitored_pubkey).unwrap()]);
 		let interesting_utxos = filter_interesting_utxos(txs, &monitored_script_pubkeys);
 		assert_eq!(interesting_utxos.len(), 2);
 		assert_eq!(interesting_utxos[0].value, 2324);
@@ -256,7 +266,8 @@ mod test_utxo_filtering {
 			TxOut { value: 2324, script_pubkey: Script::from(monitored_pubkey.clone()) },
 			TxOut { value: 0, script_pubkey: Script::from(monitored_pubkey.clone()) },
 		])];
-		let monitored_script_pubkeys = BTreeSet::from([monitored_pubkey]);
+		let monitored_script_pubkeys =
+			BTreeSet::from([BitcoinAddress::try_from(monitored_pubkey).unwrap()]);
 		let interesting_utxos = filter_interesting_utxos(txs, &monitored_script_pubkeys);
 		assert_eq!(interesting_utxos.len(), 1);
 		assert_eq!(interesting_utxos[0].value, 2324);
