@@ -1646,3 +1646,43 @@ fn test_limit_selling_paior_tick1thru0_mint() {
 
 	assert!(pool.current_tick < -120)
 }
+
+// Failing tests that puts the pool outside the tick boundaries. This only happens in Asset0ToAsset1. Most certainly related
+// to current_tick_after_crossing_target_tick, which substracts an extra tick only in Asset0ToAsset1 but not vice versa.
+#[test]
+fn test_tick_boundaries_low() {
+	let mut pool = PoolState::new(3000, encodedprice1_1()).unwrap();
+
+	let id: AccountId = AccountId::from([0xcf; 32]);
+	let mut minted_capital = None;
+
+	// This will mint INITIALIZE_LIQUIDITY_AMOUNT for both assets
+	pool.mint(
+		id.clone(),
+		MIN_TICK,
+		MAX_TICK,
+		INITIALIZE_LIQUIDITY_AMOUNT,
+		|minted| {
+			minted_capital.replace(minted);
+			Ok::<(), ()>(())
+		},
+	)
+	.unwrap();
+	
+	// Amount calculated by the pool's math
+	let amount_required_to_reach_target = U256::from_dec_str("36892101414734492124497328878318401436").unwrap();
+	// Calculate amount required to swap (before fees)
+	let amount_to_swap = mul_div_floor(
+		amount_required_to_reach_target,
+		U256::from(ONE_IN_HUNDREDTH_BIPS),
+		U256::from(ONE_IN_HUNDREDTH_BIPS - 3000),
+	);
+	// Adding +1 to amount to swap causes the tick to end up at -887273 (instead of -887272) even though we have enough liquidity
+	let swap_result = pool.swap::<Asset0ToAsset1>(amount_to_swap+1, None);
+
+	assert!(swap_result.is_ok());
+	println!("current_tick: {}", pool.current_tick);
+	assert!(pool.current_tick >= MIN_TICK);
+
+	
+}
