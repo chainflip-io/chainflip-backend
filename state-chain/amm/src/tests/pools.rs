@@ -699,8 +699,8 @@ fn test_poke_uninitialized_position() {
 
 	let swap_input: u128 = expandto18decimals(1).as_u128();
 
-	assert!(pool.swap::<Asset0ToAsset1>((swap_input / 10).into()).is_ok());
-	assert!(pool.swap::<Asset1ToAsset0>((swap_input / 100).into()).is_ok());
+	assert!(pool.swap::<Asset0ToAsset1>((swap_input / 10).into(), None).is_ok());
+	assert!(pool.swap::<Asset1ToAsset0>((swap_input / 100).into(), None).is_ok());
 
 	match pool.burn(
 		id.clone(),
@@ -788,8 +788,8 @@ fn test_multiple_burns() {
 	)
 	.unwrap();
 
-	assert!(pool.swap::<Asset0ToAsset1>(expandto18decimals(1)).is_ok());
-	assert!(pool.swap::<Asset1ToAsset0>(expandto18decimals(1)).is_ok());
+	assert!(pool.swap::<Asset0ToAsset1>(expandto18decimals(1), None).is_ok());
+	assert!(pool.swap::<Asset1ToAsset0>(expandto18decimals(1), None).is_ok());
 
 	// Should be able to do only 1 burn (1000000000000000000 / 987654321000000000)
 
@@ -825,8 +825,8 @@ fn test_notclearposition_ifnomoreliquidity() {
 	)
 	.unwrap();
 
-	assert!(pool.swap::<Asset0ToAsset1>(expandto18decimals(1)).is_ok());
-	assert!(pool.swap::<Asset1ToAsset0>(expandto18decimals(1)).is_ok());
+	assert!(pool.swap::<Asset0ToAsset1>(expandto18decimals(1), None).is_ok());
+	assert!(pool.swap::<Asset1ToAsset0>(expandto18decimals(1), None).is_ok());
 
 	// Add a poke to update the fee growth and check it's value
 	let (returned_capital, fees_owed) = pool
@@ -892,7 +892,7 @@ fn test_clearstick_iflastposition() {
 	)
 	.unwrap();
 
-	assert!(pool.swap::<Asset0ToAsset1>(expandto18decimals(1)).is_ok());
+	assert!(pool.swap::<Asset0ToAsset1>(expandto18decimals(1), None).is_ok());
 
 	pool.burn(
 		id,
@@ -926,7 +926,7 @@ fn test_clearlower_ifupperused() {
 		|_| Ok::<(), ()>(()),
 	)
 	.unwrap();
-	assert!(pool.swap::<Asset0ToAsset1>(expandto18decimals(1)).is_ok());
+	assert!(pool.swap::<Asset0ToAsset1>(expandto18decimals(1), None).is_ok());
 
 	pool.burn(
 		id,
@@ -960,7 +960,7 @@ fn test_clearupper_iflowerused() {
 		|_| Ok::<(), ()>(()),
 	)
 	.unwrap();
-	assert!(pool.swap::<Asset0ToAsset1>(expandto18decimals(1)).is_ok());
+	assert!(pool.swap::<Asset0ToAsset1>(expandto18decimals(1), None).is_ok());
 
 	pool.burn(
 		id,
@@ -1083,7 +1083,7 @@ fn test_collectfees_withincurrentprice() {
 	.unwrap();
 
 	let liquiditybefore = pool.current_liquidity;
-	assert!(pool.swap::<Asset0ToAsset1>(expandto18decimals(1)).is_ok());
+	assert!(pool.swap::<Asset0ToAsset1>(expandto18decimals(1), None).is_ok());
 
 	assert!(pool.current_liquidity >= liquiditybefore);
 
@@ -1161,7 +1161,7 @@ fn test_updates_exiting() {
 	assert_eq!(pool.current_liquidity, expandto18decimals(3).as_u128());
 
 	// swap toward the left (just enough for the tick transition function to trigger)
-	assert!(pool.swap::<Asset0ToAsset1>((1).into()).is_ok());
+	assert!(pool.swap::<Asset0ToAsset1>((1).into(), None).is_ok());
 
 	assert_eq!(pool.current_tick, -1);
 	assert_eq!(pool.current_liquidity, expandto18decimals(2).as_u128());
@@ -1179,7 +1179,7 @@ fn test_updates_entering() {
 	assert_eq!(pool.current_liquidity, expandto18decimals(2).as_u128());
 
 	// swap toward the left (just enough for the tick transition function to trigger)
-	assert!(pool.swap::<Asset0ToAsset1>((1).into()).is_ok());
+	assert!(pool.swap::<Asset0ToAsset1>((1).into(), None).is_ok());
 
 	assert_eq!(pool.current_tick, -1);
 	assert_eq!(pool.current_liquidity, expandto18decimals(3).as_u128());
@@ -1203,7 +1203,7 @@ fn test_limitselling_asset_0_to_asset1_tick0thru1() {
 
 	// somebody takes the limit order
 	assert!(pool
-		.swap::<Asset1ToAsset0>(U256::from_dec_str("2000000000000000000").unwrap())
+		.swap::<Asset1ToAsset0>(U256::from_dec_str("2000000000000000000").unwrap(), None)
 		.is_ok());
 
 	let (burned, fees_owed) =
@@ -1239,7 +1239,7 @@ fn test_limitselling_asset_0_to_asset_1_tick0thru1_poke() {
 
 	// somebody takes the limit order
 	assert!(pool
-		.swap::<Asset1ToAsset0>(U256::from_dec_str("2000000000000000000").unwrap())
+		.swap::<Asset1ToAsset0>(U256::from_dec_str("2000000000000000000").unwrap(), None)
 		.is_ok());
 
 	let (burned, fees_owed) = pool.burn(id.clone(), 0, 120, 0).unwrap();
@@ -1277,7 +1277,7 @@ fn test_limitselling_asset_1_to_asset_0_tick1thru0() {
 
 	// somebody takes the limit order
 	assert!(pool
-		.swap::<Asset0ToAsset1>(U256::from_dec_str("2000000000000000000").unwrap())
+		.swap::<Asset0ToAsset1>(U256::from_dec_str("2000000000000000000").unwrap(), None)
 		.is_ok());
 
 	let (burned, fees_owed) =
@@ -1313,7 +1313,7 @@ fn test_limitselling_asset_1_to_asset_0_tick1thru0_poke() {
 
 	// somebody takes the limit order
 	assert!(pool
-		.swap::<Asset0ToAsset1>(U256::from_dec_str("2000000000000000000").unwrap())
+		.swap::<Asset0ToAsset1>(U256::from_dec_str("2000000000000000000").unwrap(), None)
 		.is_ok());
 
 	let (burned, fees_owed) = pool.burn(id.clone(), -120, 0, 0).unwrap();
@@ -1371,7 +1371,7 @@ fn test_multiplelps() {
 	)
 	.unwrap();
 
-	assert!(pool.swap::<Asset0ToAsset1>(expandto18decimals(1)).is_ok());
+	assert!(pool.swap::<Asset0ToAsset1>(expandto18decimals(1), None).is_ok());
 
 	// poke positions
 	let (burned, fees_owed) =
@@ -1501,7 +1501,7 @@ fn lowpool_initialized_setfees() -> (PoolState, PoolAssetMap<AmountU256>, Accoun
 fn test_base() {
 	let (mut pool, _, id) = lowpool_initialized_setfees();
 
-	assert!(pool.swap::<Asset0ToAsset1>(expandto18decimals(1)).is_ok());
+	assert!(pool.swap::<Asset0ToAsset1>(expandto18decimals(1), None).is_ok());
 
 	assert_eq!(pool.global_fee_growth[PoolSide::Asset0], U256::MAX);
 	assert_eq!(pool.global_fee_growth[!PoolSide::Asset0], U256::MAX);
@@ -1517,7 +1517,7 @@ fn test_base() {
 fn test_pair() {
 	let (mut pool, _, id) = lowpool_initialized_setfees();
 
-	assert!(pool.swap::<Asset1ToAsset0>(expandto18decimals(1)).is_ok());
+	assert!(pool.swap::<Asset1ToAsset0>(expandto18decimals(1), None).is_ok());
 
 	assert_eq!(pool.global_fee_growth[PoolSide::Asset0], U256::MAX);
 	assert_eq!(pool.global_fee_growth[!PoolSide::Asset0], U256::MAX);
@@ -1553,7 +1553,7 @@ fn test_limit_selling_asset_0_to_asset_1_tick0thru1_mint() {
 
 	// somebody takes the limit order
 	assert!(pool
-		.swap::<Asset1ToAsset0>(U256::from_dec_str("2000000000000000000").unwrap())
+		.swap::<Asset1ToAsset0>(U256::from_dec_str("2000000000000000000").unwrap(), None)
 		.is_ok());
 
 	let (_, fees_owed) = pool.mint(id.clone(), 0, 120, 1, |_| Ok::<(), ()>(())).unwrap();
@@ -1592,7 +1592,7 @@ fn test_limit_selling_paior_tick1thru0_mint() {
 
 	// somebody takes the limit order
 	assert!(pool
-		.swap::<Asset0ToAsset1>(U256::from_dec_str("2000000000000000000").unwrap())
+		.swap::<Asset0ToAsset1>(U256::from_dec_str("2000000000000000000").unwrap(), None)
 		.is_ok());
 
 	let (_, fees_owed) = pool.mint(id.clone(), -120, 0, 1, |_| Ok::<(), ()>(())).unwrap();

@@ -13,6 +13,19 @@ fn encodedprice2_1() -> U256 {
 fn encodedprice121_100() -> U256 {
 	U256::from_dec_str("87150978765690771352898345369").unwrap()
 }
+
+fn encodedprice50_100() -> U256 {
+	U256::from_dec_str("56022770974786139918665040969").unwrap()
+}
+fn encodedprice200_100() -> U256 {
+	U256::from_dec_str("112045541949572279837330081938").unwrap()
+}
+fn encodedprice2_5() -> U256 {
+	U256::from_dec_str("50108289675009586237300292802").unwrap()
+}
+fn encodedprice5_2() -> U256 {
+	U256::from_dec_str("125270724187523965593250732005").unwrap()
+}
 fn expandto18decimals(amount: u128) -> U256 {
 	U256::from(amount) * U256::from(10).pow(U256::from_dec_str("18").unwrap())
 }
@@ -489,7 +502,7 @@ fn test_returns_error_asset_1_to_asset_0_fail() {
 	let _minted_capital = minted_capital.unwrap();
 	// Swap to the right towards price target
 	assert_eq!(
-		pool.swap::<Asset1ToAsset0>(expandto18decimals(1)),
+		pool.swap::<Asset1ToAsset0>(expandto18decimals(1), None),
 		Err(SwapError::InsufficientLiquidity)
 	);
 }

@@ -306,6 +306,7 @@ pub enum MintError<E> {
 #[derive(Debug, PartialEq, Eq)]
 pub enum SwapError {
 	InsufficientLiquidity,
+	SqrtPriceLimit,
 }
 
 #[derive(Debug)]
@@ -609,8 +610,9 @@ impl PoolState {
 	pub fn swap_from_asset_0_to_asset_1(
 		&mut self,
 		amount: AmountU256,
+		sqrt_price_limit: Option<SqrtPriceQ64F96>,
 	) -> Result<(AmountU256, AmountU256), SwapError> {
-		self.swap::<Asset0ToAsset1>(amount)
+		self.swap::<Asset0ToAsset1>(amount, sqrt_price_limit)
 	}
 
 	/// Swaps the specified Amount of Asset 1 into Asset 0. Returns the Output and Fee amount.
@@ -619,8 +621,9 @@ impl PoolState {
 	pub fn swap_from_asset_1_to_asset_0(
 		&mut self,
 		amount: AmountU256,
+		sqrt_price_limit: Option<SqrtPriceQ64F96>,
 	) -> Result<(AmountU256, AmountU256), SwapError> {
-		self.swap::<Asset1ToAsset0>(amount)
+		self.swap::<Asset1ToAsset0>(amount, sqrt_price_limit)
 	}
 
 	/// Swaps the specified Amount into the other currency. Returns the Output and Fees amount. The
@@ -631,6 +634,7 @@ impl PoolState {
 	fn swap<SD: SwapDirection>(
 		&mut self,
 		mut amount: AmountU256,
+		sqrt_price_limit: Option<SqrtPriceQ64F96>,
 	) -> Result<(AmountU256, AmountU256), SwapError> {
 		let mut total_amount_out = AmountU256::zero();
 		let mut total_fee_paid = AmountU256::zero();

@@ -25,7 +25,7 @@ fn test_swapping_gaps_asset_1_to_asset_0() {
 	let (mut pool, _, id) = mediumpool_initialized_nomint();
 	pool.mint(id.clone(), 120000, 121200, 250000000000000000, |_| Ok::<(), ()>(()))
 		.unwrap();
-	assert!(pool.swap::<Asset1ToAsset0>(expandto18decimals(1)).is_ok());
+	assert!(pool.swap::<Asset1ToAsset0>(expandto18decimals(1), None).is_ok());
 	let (returned_capital, fees_owed) = pool.burn(id, 120000, 121200, 250000000000000000).unwrap();
 
 	assert_eq!(returned_capital[PoolSide::Asset0], U256::from_dec_str("30027458295511").unwrap());
@@ -45,7 +45,7 @@ fn test_swapping_gaps_asset_0_to_asset_1() {
 	let (mut pool, _, id) = mediumpool_initialized_nomint();
 	pool.mint(id.clone(), -121200, -120000, 250000000000000000, |_| Ok::<(), ()>(()))
 		.unwrap();
-	assert!(pool.swap::<Asset0ToAsset1>(expandto18decimals(1)).is_ok());
+	assert!(pool.swap::<Asset0ToAsset1>(expandto18decimals(1), None).is_ok());
 	let (returned_capital, fees_owed) =
 		pool.burn(id, -121200, -120000, 250000000000000000).unwrap();
 
@@ -82,7 +82,7 @@ fn test_cannot_run_ticktransition_twice() {
 	// check the math works out to moving the price down 1, sending no amount out, and having
 	// some amount remaining
 	let (amount_swapped, _) =
-		pool.swap::<Asset0ToAsset1>(U256::from_dec_str("3").unwrap()).unwrap();
+		pool.swap::<Asset0ToAsset1>(U256::from_dec_str("3").unwrap(), None).unwrap();
 	assert_eq!(amount_swapped, U256::from_dec_str("0").unwrap());
 
 	assert_eq!(pool.current_tick, -24082);
