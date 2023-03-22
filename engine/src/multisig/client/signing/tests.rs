@@ -96,22 +96,12 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
 		.await;
 }
 
-#[ignore = "Only works if V2 is enabled (by setting CURRENT_PROTOCOL_VERSION = 2)"]
-#[tokio::test]
-async fn should_sign_multiple_payloads() {
-	use crate::multisig::eth::SigningPayload;
-	type Point = <EthSigning as CryptoScheme>::Point;
-
+async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayload]) {
 	let mut rng = Rng::from_seed([0; 32]);
 	let (key_id, key_data) =
-		generate_key_data::<EthSigning>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()), &mut rng);
+		generate_key_data::<C>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()), &mut rng);
 
-	let payloads: [SigningPayload; 2] = [
-		SigningPayload("Chainflip:Chainflip:Chainflip:01".as_bytes().try_into().unwrap()),
-		SigningPayload("Chainflip:Chainflip:Chainflip:02".as_bytes().try_into().unwrap()),
-	];
-
-	let mut signing_ceremony = SigningCeremonyRunner::<EthSigning>::new_with_all_signers(
+	let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
 		new_nodes(ACCOUNT_IDS.clone()),
 		DEFAULT_SIGNING_CEREMONY_ID,
 		key_id.clone(),
@@ -124,9 +114,9 @@ async fn should_sign_multiple_payloads() {
 	let messages = run_stages!(
 		signing_ceremony,
 		messages,
-		signing_data::VerifyComm2<Point>,
-		signing_data::LocalSig3<Point>,
-		signing_data::VerifyLocalSig4<Point>
+		signing_data::VerifyComm2<C::Point>,
+		signing_data::LocalSig3<C::Point>,
+		signing_data::VerifyLocalSig4<C::Point>
 	);
 	signing_ceremony.distribute_messages(messages).await;
 	let signature = signing_ceremony
@@ -135,7 +125,34 @@ async fn should_sign_multiple_payloads() {
 		.into_iter()
 		.next()
 		.expect("should have exactly one signature");
-	assert!(EthSigning::verify_signature(&signature, &key_id, &payloads[0]).is_ok());
+	assert!(C::verify_signature(&signature, &key_id, &payloads[0]).is_ok());
+}
+
+#[ignore = "Only works if V2 is enabled (by setting CURRENT_PROTOCOL_VERSION = 2)"]
+#[tokio::test]
+async fn should_sign_multiple_payloads() {
+	use crate::multisig::crypto::{
+		bitcoin::SigningPayload as BtcPayload, eth::SigningPayload as EthPayload,
+		polkadot::SigningPayload as DotPayload,
+	};
+
+	test_sign_multiple_payloads::<EthSigning>(&[
+		EthPayload(*b"Chainflip:Chainflip:Chainflip:01"),
+		EthPayload(*b"Chainflip:Chainflip:Chainflip:02"),
+	])
+	.await;
+
+	test_sign_multiple_payloads::<BtcSigning>(&[
+		BtcPayload(*b"Chainflip:Chainflip:Chainflip:01"),
+		BtcPayload(*b"Chainflip:Chainflip:Chainflip:02"),
+	])
+	.await;
+
+	test_sign_multiple_payloads::<PolkadotSigning>(&[
+		DotPayload::new(b"Chainflip:Chainflip:Chainflip:01".to_vec()).unwrap(),
+		DotPayload::new(b"Chainflip:Chainflip:Chainflip:02".to_vec()).unwrap(),
+	])
+	.await;
 }
 
 async fn should_sign_with_all_parties<C: CryptoScheme>() {
