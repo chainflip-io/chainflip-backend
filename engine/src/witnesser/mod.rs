@@ -48,8 +48,8 @@ pub trait LatestBlockNumber {
 
 #[derive(Debug)]
 pub enum AddressMonitorCommand<Address> {
-	Start(Address),
-	Stop(Address),
+	Add(Address),
+	Remove(Address),
 }
 
 /// This stores addresses we are interested in. New addresses
@@ -80,11 +80,11 @@ impl<A: std::cmp::Ord + std::fmt::Debug + Clone> AddressMonitor<A> {
 	pub fn sync_addresses(&mut self) {
 		while let Ok(address) = self.address_receiver.try_recv() {
 			match address {
-				AddressMonitorCommand::Start(address) =>
+				AddressMonitorCommand::Add(address) =>
 					if !self.addresses.insert(address.clone()) {
 						tracing::warn!("Address {:?} already being monitored", address);
 					},
-				AddressMonitorCommand::Stop(address) =>
+				AddressMonitorCommand::Remove(address) =>
 					if !self.addresses.remove(&address) {
 						tracing::warn!("Address {:?} already not being monitored", address);
 					},

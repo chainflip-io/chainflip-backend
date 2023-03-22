@@ -517,7 +517,7 @@ where
                                             eth::Asset::Usdc => {
                                                 &eth_address_to_monitor_sender.usdc
                                             }
-                                        }.send(AddressMonitorCommand::Start(ingress_address)).unwrap();
+                                        }.send(AddressMonitorCommand::Add(ingress_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumIngressEgress(
                                         pallet_cf_ingress_egress::Event::StopWitnessing {
@@ -536,7 +536,7 @@ where
                                             eth::Asset::Usdc => {
                                                 &eth_address_to_monitor_sender.usdc
                                             }
-                                        }.send(AddressMonitorCommand::Stop(ingress_address)).unwrap();
+                                        }.send(AddressMonitorCommand::Remove(ingress_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
@@ -545,7 +545,7 @@ where
                                         }
                                     ) => {
                                         assert_eq!(ingress_asset, cf_primitives::chains::assets::dot::Asset::Dot);
-                                        dot_monitor_ingress_sender.send(AddressMonitorCommand::Start(ingress_address)).unwrap();
+                                        dot_monitor_ingress_sender.send(AddressMonitorCommand::Add(ingress_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
                                         pallet_cf_ingress_egress::Event::StopWitnessing {
@@ -554,7 +554,7 @@ where
                                         }
                                     ) => {
                                         assert_eq!(ingress_asset, cf_primitives::chains::assets::dot::Asset::Dot);
-                                        dot_monitor_ingress_sender.send(AddressMonitorCommand::Stop(ingress_address)).unwrap();
+                                        dot_monitor_ingress_sender.send(AddressMonitorCommand::Remove(ingress_address)).unwrap();
                                     }
                                 }}}}
                                 Err(error) => {

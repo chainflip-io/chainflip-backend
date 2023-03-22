@@ -609,7 +609,7 @@ mod tests {
 			tokio::sync::mpsc::unbounded_channel();
 
 		monitor_ingress_sender
-			.send(AddressMonitorCommand::Start(transfer_2_ingress_addr))
+			.send(AddressMonitorCommand::Add(transfer_2_ingress_addr))
 			.unwrap();
 
 		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls) =
