@@ -4,7 +4,7 @@ use crate::{
 	constants::BTC_INGRESS_BLOCK_SAFETY_MARGIN,
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi, witnesser::AddressMonitor,
 };
-use bitcoincore_rpc::bitcoin::Transaction;
+use bitcoincore_rpc::bitcoin::{hashes::Hash, Transaction};
 use cf_chains::{
 	btc::{Utxo, UtxoId},
 	Bitcoin,
@@ -46,6 +46,7 @@ pub fn filter_interesting_utxos(
 	for tx in txs {
 		for (vout, tx_out) in tx.output.iter().enumerate() {
 			if tx_out.value > 0 {
+				let tx_hash = tx.txid().as_hash().into_inner();
 				match tx_out.script_pubkey.to_bytes().try_into() {
 					Ok(script_pubkey_bytes) =>
 						if let Some(bitcoin_address_seed) =
@@ -57,12 +58,7 @@ pub fn filter_interesting_utxos(
 									seed: bitcoin_address_seed.clone(),
 								},
 								UtxoId {
-									tx_hash: tx
-										.txid()
-										.as_hash()
-										.as_ref()
-										.try_into()
-										.expect("Is a hash"),
+									tx_hash,
 									vout_index: vout as u32,
 									pubkey_x: bitcoin_address_seed.pubkey_x,
 									salt: bitcoin_address_seed.salt.into(),
@@ -72,7 +68,7 @@ pub fn filter_interesting_utxos(
 						} else if script_pubkey_bytes == change_address.script_pubkey_bytes {
 							change_utxos.push(Utxo {
 								amount: tx_out.value,
-								txid: tx.txid().as_hash().as_ref().try_into().expect("Is a hash"),
+								txid: tx_hash,
 								vout: vout as u32,
 								pubkey_x: change_address.seed.pubkey_x,
 								salt: change_address.seed.salt,
