@@ -77,7 +77,7 @@ impl<A: std::cmp::Ord + std::fmt::Debug + Clone, D: Clone> AddressMonitor<A, D> 
 	}
 
 	pub fn contains(&self, address: &A) -> bool {
-		self.addresses.get(address).is_some()
+		self.addresses.contains_key(address)
 	}
 
 	/// Ensure the list of interesting addresses is up to date
