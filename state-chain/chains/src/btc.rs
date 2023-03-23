@@ -23,6 +23,9 @@ use cf_primitives::{
 };
 use itertools;
 
+/// This salt is used to derive the change address for every vault. i.e. for every epoch.
+pub const CHANGE_ADDRESS_SALT: u32 = 0;
+
 pub type BlockNumber = u64;
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Copy)]
@@ -52,6 +55,8 @@ pub type Hash = [u8; 32];
 	Ord,
 	PartialOrd,
 )]
+
+/// The public key x-coordinate
 pub struct AggKey(pub [u8; 32]);
 
 impl From<KeyId> for AggKey {
@@ -190,10 +195,13 @@ impl ChainAbi for Bitcoin {
 
 	type ReplayProtection = ();
 }
+
+// TODO: Look at moving this into Utxo. They're exactly the same apart from the IntentId
+// which could be made generic, if even necessary at all.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct UtxoId {
 	// Tx hash of the transaction this utxo was a part of
-	pub tx_hash: [u8; 32],
+	pub tx_hash: Hash,
 	// The index of the output for this utxo
 	pub vout_index: u32,
 	// The public key of the account that can spend this utxo
@@ -236,6 +244,7 @@ pub struct Utxo {
 	// Salt used to create the address that this utxo was sent to.
 	pub salt: u32,
 }
+
 pub trait GetUtxoAmount {
 	fn amount(&self) -> u64;
 }

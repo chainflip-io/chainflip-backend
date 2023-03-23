@@ -450,6 +450,20 @@ pub mod pallet {
 
 			Ok(().into())
 		}
+
+		#[pallet::weight(0)]
+		pub fn add_btc_change_utxos(
+			origin: OriginFor<T>,
+			utxos: Vec<cf_chains::btc::Utxo>,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			for utxo in utxos {
+				Self::add_bitcoin_utxo_to_list(utxo);
+			}
+
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]

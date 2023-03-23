@@ -199,7 +199,7 @@ fn test_key_id_to_and_from_bytes() {
 	assert_eq!(key_id, KeyId::from_bytes(&expected_bytes));
 }
 
-pub type BitcoinAddress = BoundedVec<u8, ConstU32<MAX_BTC_ADDRESS_LENGTH>>;
+pub type ScriptPubkeyBytes = BoundedVec<u8, ConstU32<MAX_BTC_ADDRESS_LENGTH>>;
 
 /// The seed data required to generate a Bitcoin address. We don't pass in network
 /// here, as we assume the same network for all addresses.
@@ -218,7 +218,7 @@ pub struct BitcoinAddressSeed {
 )]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BitcoinAddressFull {
-	pub script_pubkey: BitcoinAddress,
+	pub script_pubkey_bytes: ScriptPubkeyBytes,
 	pub seed: BitcoinAddressSeed,
 }
 
@@ -243,7 +243,8 @@ impl core::fmt::Display for ForeignChainAddress {
 			ForeignChainAddress::Btc(addr) => write!(
 				f,
 				"Btc({})",
-				&std::str::from_utf8(&addr.script_pubkey[..]).map_err(|_| core::fmt::Error)?
+				&std::str::from_utf8(&addr.script_pubkey_bytes[..])
+					.map_err(|_| core::fmt::Error)?
 			),
 		}
 	}
@@ -259,7 +260,7 @@ impl AsRef<[u8]> for ForeignChainAddress {
 		match self {
 			ForeignChainAddress::Eth(address) => address.as_slice(),
 			ForeignChainAddress::Dot(address) => address.as_slice(),
-			ForeignChainAddress::Btc(address) => address.script_pubkey.as_slice(),
+			ForeignChainAddress::Btc(address) => address.script_pubkey_bytes.as_slice(),
 		}
 	}
 }

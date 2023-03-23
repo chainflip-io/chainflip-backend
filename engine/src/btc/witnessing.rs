@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{Context, Result};
 use cf_chains::Bitcoin;
-use cf_primitives::{BitcoinAddress, BitcoinAddressSeed};
+use cf_primitives::{BitcoinAddressSeed, ScriptPubkeyBytes};
 use futures::TryFutureExt;
 
 use crate::{
@@ -22,7 +22,9 @@ pub async fn start(
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Bitcoin>>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<
-	tokio::sync::mpsc::UnboundedSender<AddressMonitorCommand<BitcoinAddress, BitcoinAddressSeed>>,
+	tokio::sync::mpsc::UnboundedSender<
+		AddressMonitorCommand<ScriptPubkeyBytes, BitcoinAddressSeed>,
+	>,
 > {
 	let (script_pubkeys_sender, script_pubkeys_receiver) = tokio::sync::mpsc::unbounded_channel();
 

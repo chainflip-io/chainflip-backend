@@ -1,5 +1,5 @@
 use cf_primitives::{
-	BitcoinAddress, BitcoinAddressFull, BitcoinAddressSeed, MAX_BTC_ADDRESS_LENGTH,
+	BitcoinAddressFull, BitcoinAddressSeed, ScriptPubkeyBytes, MAX_BTC_ADDRESS_LENGTH,
 };
 use frame_support::BoundedVec;
 use sp_std::{vec, vec::Vec};
@@ -51,7 +51,7 @@ impl BenchmarkValue for SigningPayload {
 }
 
 // Bitcoin address
-impl BenchmarkValue for BitcoinAddress {
+impl BenchmarkValue for ScriptPubkeyBytes {
 	fn benchmark_value() -> Self {
 		BoundedVec::try_from([1u8; MAX_BTC_ADDRESS_LENGTH as usize].to_vec())
 			.expect("we created a vec that is in the bounds of bounded vec")
@@ -61,7 +61,7 @@ impl BenchmarkValue for BitcoinAddress {
 impl BenchmarkValue for BitcoinAddressFull {
 	fn benchmark_value() -> Self {
 		BitcoinAddressFull {
-			script_pubkey: BitcoinAddress::benchmark_value(),
+			script_pubkey_bytes: ScriptPubkeyBytes::benchmark_value(),
 			seed: BitcoinAddressSeed { pubkey_x: [2u8; 32], salt: 7 },
 		}
 	}

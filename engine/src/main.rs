@@ -86,8 +86,7 @@ async fn main() -> anyhow::Result<()> {
 			let (dot_epoch_start_sender, [dot_epoch_start_receiver_1, dot_epoch_start_receiver_2]) =
 				build_broadcast_channel(10);
 
-			// TODO: Link this up to the SC
-			let (_btc_epoch_start_sender, [btc_epoch_start_receiver]) = build_broadcast_channel(10);
+			let (btc_epoch_start_sender, [btc_epoch_start_receiver]) = build_broadcast_channel(10);
 
 			let cfe_settings = state_chain_client
 				.storage_value::<pallet_cf_environment::CfeSettings<state_chain_runtime::Runtime>>(
@@ -198,6 +197,7 @@ async fn main() -> anyhow::Result<()> {
 				dot_epoch_start_sender,
 				dot_monitor_ingress_sender,
 				dot_monitor_signature_sender,
+				btc_epoch_start_sender,
 				btc_monitor_ingress_sender,
 				cfe_settings_update_sender,
 				latest_block_hash,

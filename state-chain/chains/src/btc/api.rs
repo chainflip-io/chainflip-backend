@@ -2,7 +2,7 @@ pub mod batch_transfer;
 
 use super::{
 	ingress_address::derive_btc_ingress_address, scriptpubkey_from_address, AggKey, Bitcoin,
-	BitcoinNetwork, BitcoinOutput, BtcAmount, Utxo,
+	BitcoinNetwork, BitcoinOutput, BtcAmount, Utxo, CHANGE_ADDRESS_SALT,
 };
 use crate::*;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
@@ -33,7 +33,7 @@ where
 			.expect("Since the lookup function always returns a some");
 		let bitcoin_return_address = derive_btc_ingress_address(
 			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(())?.0,
-			0,
+			CHANGE_ADDRESS_SALT,
 			bitcoin_network,
 		);
 		let mut total_output_amount: u64 = 0;
@@ -42,7 +42,7 @@ where
 			btc_outputs.push(BitcoinOutput {
 				amount: transfer_param.clone().amount.try_into().expect("Since this output comes from the AMM and if AMM math works correctly, this should be a valid bitcoin amount which should be less than u64::max"),
 				script_pubkey: scriptpubkey_from_address(
-					sp_std::str::from_utf8(&transfer_param.to.script_pubkey[..]).map_err(|_| ())?,
+					sp_std::str::from_utf8(&transfer_param.to.script_pubkey_bytes[..]).map_err(|_| ())?,
 					bitcoin_network,
 				).map_err(|_|())?,
 			});
@@ -84,7 +84,8 @@ where
 
 		// We will use the bitcoin address derived with the salt of 0 as the vault address where we
 		// collect unspent amounts in btc transactions and consolidate funds when rotating epoch.
-		let new_vault_return_address = derive_btc_ingress_address(new_key.0, 0, bitcoin_network);
+		let new_vault_return_address =
+			derive_btc_ingress_address(new_key.0, CHANGE_ADDRESS_SALT, bitcoin_network);
 
 		//max possible btc value to get all available utxos
 		let (all_input_utxos, total_spendable_amount_in_vault) =
