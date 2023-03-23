@@ -148,9 +148,6 @@ async fn main() -> anyhow::Result<()> {
 
 			scope.spawn(dot_multisig_client_backend_future);
 
-			let (dot_monitor_ingress_sender, dot_monitor_ingress_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
 			let (dot_monitor_signature_sender, dot_monitor_signature_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
@@ -178,6 +175,26 @@ async fn main() -> anyhow::Result<()> {
 			.await
 			.unwrap();
 
+			let (dot_ingress_sender, dot_address_monitor) = AddressMonitor::new(
+				state_chain_client
+					.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<
+						state_chain_runtime::Runtime,
+						state_chain_runtime::PolkadotInstance,
+					>>(latest_block_hash)
+					.await
+					.context("Failed to get initial ingress details")?
+					.into_iter()
+					.filter_map(|(address, intent)| {
+						if intent.ingress_asset == cf_primitives::chains::assets::dot::Asset::Dot {
+							Some(address)
+						} else {
+							None
+						}
+					})
+					.map(|address| (address, ()))
+					.collect(),
+			);
+
 			scope.spawn(state_chain_observer::start(
 				state_chain_client.clone(),
 				state_chain_block_stream,
@@ -195,7 +212,7 @@ async fn main() -> anyhow::Result<()> {
 				epoch_start_sender,
 				eth_address_to_monitor,
 				dot_epoch_start_sender,
-				dot_monitor_ingress_sender,
+				dot_ingress_sender,
 				dot_monitor_signature_sender,
 				btc_epoch_start_sender,
 				btc_monitor_ingress_sender,
@@ -207,28 +224,7 @@ async fn main() -> anyhow::Result<()> {
 				dot_witnesser::start(
 					dot_epoch_start_receiver_1,
 					dot_rpc_client.clone(),
-					AddressMonitor::new(
-						state_chain_client
-							.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<
-								state_chain_runtime::Runtime,
-								state_chain_runtime::PolkadotInstance,
-							>>(latest_block_hash)
-							.await
-							.context("Failed to get initial ingress details")?
-							.into_iter()
-							.filter_map(|(address, intent)| {
-								if intent.ingress_asset ==
-									cf_primitives::chains::assets::dot::Asset::Dot
-								{
-									Some(address)
-								} else {
-									None
-								}
-							})
-							.map(|address| (address, ()))
-							.collect(),
-						dot_monitor_ingress_receiver,
-					),
+					dot_address_monitor,
 					dot_monitor_signature_receiver,
 					// NB: We don't need to monitor Ethereum signatures because we already monitor
 					// signature accepted events from the KeyManager contract on Ethereum.

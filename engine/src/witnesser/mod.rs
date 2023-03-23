@@ -52,8 +52,6 @@ pub enum AddressMonitorCommand<Address, Data> {
 	Remove(Address),
 }
 
-// TODO: We should probably move the channel initialisation into the AddressMonitor
-
 /// This stores addresses we are interested in. New addresses
 /// come through a channel which can be polled by calling
 /// [AddressMonitor::sync_addresses].
@@ -65,9 +63,9 @@ pub struct AddressMonitor<A, D> {
 impl<A: std::cmp::Ord + std::fmt::Debug + Clone, D: Clone> AddressMonitor<A, D> {
 	pub fn new(
 		addresses: BTreeMap<A, D>,
-		address_receiver: tokio::sync::mpsc::UnboundedReceiver<AddressMonitorCommand<A, D>>,
-	) -> Self {
-		Self { addresses, address_receiver }
+	) -> (tokio::sync::mpsc::UnboundedSender<AddressMonitorCommand<A, D>>, Self) {
+		let (address_sender, address_receiver) = tokio::sync::mpsc::unbounded_channel();
+		(address_sender, Self { addresses, address_receiver })
 	}
 
 	/// Check if we are interested in the address. [AddressMonitor::sync_addresses]

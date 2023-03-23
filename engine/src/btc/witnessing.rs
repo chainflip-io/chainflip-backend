@@ -26,8 +26,6 @@ pub async fn start(
 		AddressMonitorCommand<ScriptPubkeyBytes, BitcoinAddressSeed>,
 	>,
 > {
-	let (script_pubkeys_sender, script_pubkeys_receiver) = tokio::sync::mpsc::unbounded_channel();
-
 	let btc_rpc = BtcRpcClient::new(btc_settings)?;
 
 	// We do a simple initial query here to test the connection. Else it's possible the connection
@@ -36,20 +34,22 @@ pub async fn start(
 	btc_rpc
 		.latest_block_number()
 		.await
-		.context("Initial query for BTC latest block number")?;
+		.context("Initial query for BTC latest block number failed.")?;
 
 	// TODO: query state chain for the script pubkeys to monitor and pass them into the witnesser
+
+	let (ingress_sender, address_monitor) = AddressMonitor::new(BTreeMap::default());
 
 	scope.spawn(
 		super::witnesser::start(
 			epoch_start_receiver,
 			state_chain_client,
 			btc_rpc,
-			AddressMonitor::new(BTreeMap::default(), script_pubkeys_receiver),
+			address_monitor,
 			db,
 		)
 		.map_err(|_| anyhow::anyhow!("btc::witnesser::start failed")),
 	);
 
-	Ok(script_pubkeys_sender)
+	Ok(ingress_sender)
 }
