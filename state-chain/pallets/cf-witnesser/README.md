@@ -6,11 +6,11 @@ Based loosely on parity's own [`pallet_multisig`](https://github.com/paritytech/
 
 ## Overview
 
-Validators on the Chainflip network need to agree on external events such as blockchain transactions or staking events.
+Validators on the Chainflip network need to jointly witness external events such as blockchain transactions or staking events. Consensus is reached by voting on the action to be taken as a result of the witnessed event. Actions are represented by dispatchable calls.
 
-In order to do so they can use the `witness_at_epoch` extrinsic on this pallet to vote for some action to be taken. The action is represented by another extrinsic call. Once some voting threshold is passed, the action is called using this pallet's custom origin.
+The `witness_at_epoch` extrinsic represents a vote for some call. Once the voting threshold is passed (2/3 supermajority), the call is dispatched using this pallet's custom origin.
 
-It's possible to witness an event either as a current authority or as an authority from a previous (but not expired) epoch. The threshold applies withing an authority set, that is a supermajority vote us required from one of the sets, there is no overlap between sets.
+It's possible to witness an event either as a current authority or as an authority from a previous (but not expired) epoch. The threshold applies within an authority set, that is a supermajority vote is required from one of the sets, there is no overlap between sets.
 
 This pallet defines `EnsureWitnessed` and `EnsureWitnessedAtCurrentEpoch`, implementations of`EnsureOrigin` that can be used to restrict an extrinsic such that it can only be called from this pallet. The former is more lenient and requires a witness vote from any epoch. The latter requires that the vote passed threshold with the authority set of the current epoch.
 
@@ -24,7 +24,7 @@ Sometimes it's impossible for voters to agree on the exact information to be wit
 
 `WitnessDataExtraction` can remove the contentious data from the call such that all calls will have a matching hash to be voted on. The data can then be arbitrarily aggregated and then injected back into the call when it is dispatched.
 
-An example of this is price data: the price can be removed from the call, and then the median price of all votes can be injected when the vote threshold is reached.
+An example of this is witnessing gas prices: the price can be removed from the call, and then the median price of all votes can be injected when the vote threshold is reached.
 
 ## Vote Pruning
 
