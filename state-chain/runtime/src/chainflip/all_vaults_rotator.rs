@@ -6,25 +6,27 @@ use cf_primitives::EpochIndex;
 use cf_traits::{AsyncResult, VaultRotator, VaultStatus};
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
-pub struct AllVaultRotator<A, B> {
-	_phantom: PhantomData<(A, B)>,
+pub struct AllVaultRotator<A, B, C> {
+	_phantom: PhantomData<(A, B, C)>,
 }
 
-impl<A, B> VaultRotator for AllVaultRotator<A, B>
+impl<A, B, C> VaultRotator for AllVaultRotator<A, B, C>
 where
 	A: VaultRotator,
 	B: VaultRotator<ValidatorId = A::ValidatorId>,
+	C: VaultRotator<ValidatorId = A::ValidatorId>,
 {
 	type ValidatorId = A::ValidatorId;
 
 	/// Start all vault rotations with the provided `candidates`.
 	fn keygen(candidates: BTreeSet<Self::ValidatorId>, epoch_index: EpochIndex) {
 		A::keygen(candidates.clone(), epoch_index);
-		B::keygen(candidates, epoch_index);
+		B::keygen(candidates.clone(), epoch_index);
+		C::keygen(candidates, epoch_index);
 	}
 
 	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>> {
-		let async_results = [A::status(), B::status()];
+		let async_results = [A::status(), B::status(), C::status()];
 
 		// if any of the inner rotations are void, then the overall vault rotation result is void.
 		if async_results.iter().any(|item| matches!(item, AsyncResult::Void)) {
@@ -66,11 +68,13 @@ where
 	fn activate() {
 		A::activate();
 		B::activate();
+		C::activate();
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
 		A::set_status(outcome.clone());
+		B::set_status(outcome.clone());
 		B::set_status(outcome);
 	}
 }
@@ -78,7 +82,7 @@ where
 #[cfg(test)]
 mod tests {
 	use cf_traits::{
-		mocks::vault_rotator::{MockVaultRotatorA, MockVaultRotatorB},
+		mocks::vault_rotator::{MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC},
 		AsyncResult, VaultRotator,
 	};
 
@@ -89,9 +93,11 @@ mod tests {
 		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::keygen_success();
 			MockVaultRotatorB::keygen_success();
+			MockVaultRotatorC::keygen_success();
 
 			assert_eq!(
-				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB>::status(),
+				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
+				),
 				AsyncResult::Ready(VaultStatus::KeygenComplete)
 			);
 		});
@@ -102,9 +108,11 @@ mod tests {
 		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::keys_activated();
 			MockVaultRotatorB::keys_activated();
+			MockVaultRotatorC::keys_activated();
 
 			assert_eq!(
-				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB>::status(),
+				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
+				),
 				AsyncResult::Ready(VaultStatus::RotationComplete)
 			);
 		});
@@ -118,9 +126,11 @@ mod tests {
 		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::keys_activated();
 			MockVaultRotatorB::keygen_success();
+			MockVaultRotatorC::keygen_success();
 
 			assert_eq!(
-				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB>::status(),
+				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
+				),
 				AsyncResult::Ready(VaultStatus::Failed(BTreeSet::default()))
 			);
 		});
@@ -131,9 +141,11 @@ mod tests {
 		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::failed([1, 2, 3, 4]);
 			MockVaultRotatorB::keygen_success();
+			MockVaultRotatorC::keygen_success();
 
 			assert_eq!(
-				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB>::status(),
+				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
+				),
 				AsyncResult::Ready(VaultStatus::Failed(BTreeSet::from([1, 2, 3, 4])))
 			);
 		});
@@ -144,10 +156,12 @@ mod tests {
 		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::failed([1, 2, 3, 4]);
 			MockVaultRotatorB::failed([2, 4, 5]);
+			MockVaultRotatorC::failed([4, 5, 6]);
 
 			assert_eq!(
-				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB>::status(),
-				AsyncResult::Ready(VaultStatus::Failed(BTreeSet::from([1, 2, 3, 4, 5])))
+				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
+				),
+				AsyncResult::Ready(VaultStatus::Failed(BTreeSet::from([1, 2, 3, 4, 5, 6])))
 			);
 		});
 	}
@@ -157,9 +171,11 @@ mod tests {
 		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::pending();
 			MockVaultRotatorB::pending();
+			MockVaultRotatorC::pending();
 
 			assert_eq!(
-				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB>::status(),
+				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
+				),
 				AsyncResult::Pending
 			);
 		});
@@ -170,9 +186,11 @@ mod tests {
 		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::keygen_success();
 			MockVaultRotatorB::pending();
+			MockVaultRotatorC::keygen_success();
 
 			assert_eq!(
-				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB>::status(),
+				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
+				),
 				AsyncResult::Pending
 			);
 		});
@@ -186,9 +204,11 @@ mod tests {
 		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::failed([1, 2, 3]);
 			MockVaultRotatorB::pending();
+			MockVaultRotatorC::failed([4, 5, 6]);
 
 			assert_eq!(
-				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB>::status(),
+				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
+				),
 				AsyncResult::Pending
 			);
 		});
