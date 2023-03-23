@@ -301,7 +301,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type IntentTTL = ConstU32<1200>;
 	type IngressHandler = chainflip::EthIngressHandler;
-	type CcmHandler = CrossChainMessaging;
+	type CcmHandler = Swapping;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
 
@@ -318,7 +318,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type IntentTTL = ConstU32<1200>;
 	type IngressHandler = chainflip::DotIngressHandler;
-	type CcmHandler = CrossChainMessaging;
+	type CcmHandler = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
@@ -334,7 +334,7 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type IntentTTL = ConstU32<1200>;
 	type IngressHandler = chainflip::BtcIngressHandler;
-	type CcmHandler = CrossChainMessaging;
+	type CcmHandler = Swapping;
 }
 
 parameter_types! {
@@ -758,12 +758,6 @@ impl pallet_cf_chain_tracking::Config<PolkadotInstance> for Runtime {
 	type AgeLimit = ConstU32<1>;
 }
 
-impl pallet_cf_ccm::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type SwappingApi = LiquidityPools;
-	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
-}
-
 impl pallet_cf_chain_tracking::Config<BitcoinInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Bitcoin;
@@ -824,7 +818,6 @@ construct_runtime!(
 		BitcoinIngressEgress: pallet_cf_ingress_egress::<Instance3>,
 
 		LiquidityPools: pallet_cf_pools,
-		CrossChainMessaging: pallet_cf_ccm,
 	}
 );
 

@@ -67,7 +67,7 @@ pub struct SwapIntentParams {
 	pub egress_address: String,
 	/// Commission to the relayer in base points
 	pub relayer_commission: u16,
-	/// Optional: Any additional cross-chain message to be executed after swap egress.
+	/// Optional: Additional cross-chain message attached as part of the swap intent.
 	pub message_metadata: Option<CcmIngressMetadata>,
 }
 
