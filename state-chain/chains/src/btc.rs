@@ -203,7 +203,7 @@ pub struct UtxoId {
 	// Tx hash of the transaction this utxo was a part of
 	pub tx_hash: Hash,
 	// The index of the output for this utxo
-	pub vout_index: u32,
+	pub vout: u32,
 	// The public key of the account that can spend this utxo
 	pub pubkey_x: [u8; 32],
 	// Salt used to generate an address from the public key. In our case its the intent id of the

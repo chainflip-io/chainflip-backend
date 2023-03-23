@@ -44,7 +44,7 @@ pub fn filter_interesting_utxos(
 	let mut ingress_utxos = vec![];
 	let mut change_utxos = vec![];
 	for tx in txs {
-		for (vout, tx_out) in tx.output.iter().enumerate() {
+		for (vout, tx_out) in (0u32..).zip(tx.output.clone()) {
 			if tx_out.value > 0 {
 				let tx_hash = tx.txid().as_hash().into_inner();
 				match tx_out.script_pubkey.to_bytes().try_into() {
@@ -59,7 +59,7 @@ pub fn filter_interesting_utxos(
 								},
 								UtxoId {
 									tx_hash,
-									vout_index: vout as u32,
+									vout,
 									pubkey_x: bitcoin_address_seed.pubkey_x,
 									salt: bitcoin_address_seed.salt.into(),
 								},
@@ -69,7 +69,7 @@ pub fn filter_interesting_utxos(
 							change_utxos.push(Utxo {
 								amount: tx_out.value,
 								txid: tx_hash,
-								vout: vout as u32,
+								vout,
 								pubkey_x: change_address.seed.pubkey_x,
 								salt: change_address.seed.salt,
 							});

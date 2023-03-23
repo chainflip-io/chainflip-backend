@@ -419,7 +419,7 @@ pub mod pallet {
 				block_number,
 				UtxoId {
 					tx_hash: Default::default(),
-					vout_index: Default::default(),
+					vout: Default::default(),
 					pubkey_x: Default::default(),
 					salt: Default::default(),
 				},

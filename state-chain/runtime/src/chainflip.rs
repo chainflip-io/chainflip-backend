@@ -510,7 +510,7 @@ impl IngressHandler<Bitcoin> for BtcIngressHandler {
 				.try_into()
 				.expect("the amount witnessed should not exceed u64 max for btc"),
 			txid: utxo_id.tx_hash,
-			vout: utxo_id.vout_index,
+			vout: utxo_id.vout,
 			pubkey_x: utxo_id.pubkey_x,
 			salt: utxo_id
 				.salt
