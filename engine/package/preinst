@@ -29,7 +29,7 @@ echo "chainflip-engine: Beginning setup and migration of engine config"
 
 # Find the engine config file. If missing, assume that the user has already set up the
 # node in the new way. Shouldn't happen.
-ENGINE_CONFIG_LOCATION=$(grep -srl --include "Default.toml" "state_chain" /etc/* ~)
+ENGINE_CONFIG_LOCATION=$(grep -srl --include "Default.toml" "state_chain" /etc/* ~ || true)
 if [ -z "$ENGINE_CONFIG_LOCATION" ]; then
   echo "chainflip-engine: No Default.toml file found. Exiting"
   exit 0
