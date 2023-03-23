@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use futures::FutureExt;
 use std::{
 	collections::{hash_map, BTreeSet, HashMap},
@@ -23,7 +23,7 @@ use crate::{
 		},
 		crypto::{generate_single_party_signature, CryptoScheme, Rng},
 	},
-	p2p::OutgoingMultisigStageMessages,
+	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage},
 	task_scope::{task_scope, Scope, ScopedJoinHandle},
 };
 use cf_primitives::{AuthorityCount, CeremonyId};
@@ -43,6 +43,7 @@ use super::{
 		SigningStageName,
 	},
 	keygen::{HashCommitments1, HashContext, KeygenData},
+	legacy::MultisigMessageV1,
 	signing::SigningData,
 	CeremonyRequest, MultisigData, MultisigMessage,
 };
@@ -97,7 +98,7 @@ impl<C: CryptoScheme> CeremonyTrait for SigningCeremony<C> {
 	type Crypto = C;
 	type Data = SigningData<<C as CryptoScheme>::Point>;
 	type Request = CeremonyRequest<C>;
-	type Output = <C as CryptoScheme>::Signature;
+	type Output = Vec<<C as CryptoScheme>::Signature>;
 	type FailureReason = SigningFailureReason;
 	type CeremonyStageName = SigningStageName;
 }
@@ -126,7 +127,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 	own_account_id: &AccountId,
 	signers: BTreeSet<AccountId>,
 	key_info: KeygenResultInfo<Crypto>,
-	payload: Crypto::SigningPayload,
+	payloads: Vec<Crypto::SigningPayload>,
 	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
 	rng: Rng,
 ) -> Result<PreparedRequest<SigningCeremony<Crypto>>, SigningFailureReason> {
@@ -167,7 +168,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 
 		let processor = AwaitCommitments1::<Crypto>::new(
 			common.clone(),
-			SigningStateCommonInfo { payload, key: key_info.key },
+			SigningStateCommonInfo { payloads, key: key_info.key },
 		);
 
 		Box::new(BroadcastStage::new(processor, common))
@@ -239,6 +240,29 @@ fn map_ceremony_parties(
 	Ok((our_idx, signer_idxs))
 }
 
+pub fn deserialize_from_v1<C: CryptoScheme>(payload: &[u8]) -> Result<MultisigMessage<C::Point>> {
+	let message: MultisigMessageV1<C::Point> = bincode::deserialize(payload)
+		.map_err(|e| anyhow!("Failed to deserialize message (version: 1): {:?}", e))?;
+	Ok(MultisigMessage { ceremony_id: message.ceremony_id, data: message.data.into() })
+}
+
+pub fn deserialize_for_version<C: CryptoScheme>(
+	message: VersionedCeremonyMessage,
+) -> Result<MultisigMessage<C::Point>> {
+	match message.version {
+		1 => {
+			// NOTE: version 1 did not expect signing over multiple payloads,
+			// so we need to parse them using the old format and transform to the new
+			// format:
+			deserialize_from_v1::<C>(&message.payload)
+		},
+		2 => bincode::deserialize::<'_, MultisigMessage<C::Point>>(&message.payload).map_err(|e| {
+			anyhow!("Failed to deserialize message (version: {}): {:?}", message.version, e)
+		}),
+		_ => Err(anyhow!("Unsupported message version: {}", message.version)),
+	}
+}
+
 impl<C: CryptoScheme> CeremonyManager<C> {
 	pub fn new(
 		my_account_id: AccountId,
@@ -296,7 +320,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	pub async fn run(
 		mut self,
 		mut ceremony_request_receiver: UnboundedReceiver<CeremonyRequest<C>>,
-		mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
+		mut incoming_p2p_message_receiver: UnboundedReceiver<(AccountId, VersionedCeremonyMessage)>,
 	) -> Result<()> {
 		task_scope(|scope| {
 			async {
@@ -309,7 +333,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 							// At this point we know the messages to be for the
 							// appropriate curve (as defined by `C`)
-							match bincode::deserialize(&data) {
+							match deserialize_for_version::<C>(data) {
 								Ok(message) => self.process_p2p_message(sender_id, message, scope),
 								Err(_) => {
 									warn!("Failed to deserialize message from: {sender_id}");
@@ -388,7 +412,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		&mut self,
 		ceremony_id: CeremonyId,
 		signers: BTreeSet<AccountId>,
-		payload: C::SigningPayload,
+		payloads: Vec<C::SigningPayload>,
 		key_info: KeygenResultInfo<C>,
 		rng: Rng,
 		result_sender: CeremonyResultSender<SigningCeremony<C>>,
@@ -402,7 +426,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		debug!("Processing a request to sign");
 
 		if signers.len() == 1 {
-			let _result = result_sender.send(Ok(self.single_party_signing(payload, key_info, rng)));
+			let _result =
+				result_sender.send(Ok(self.single_party_signing(payloads, key_info, rng)));
 			return
 		}
 
@@ -411,7 +436,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 			&self.my_account_id,
 			signers,
 			key_info,
-			payload,
+			payloads,
 			&self.outgoing_p2p_message_sender,
 			rng,
 		) {
@@ -489,15 +514,18 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 	fn single_party_signing(
 		&self,
-		payload: C::SigningPayload,
+		payloads: Vec<C::SigningPayload>,
 		keygen_result_info: KeygenResultInfo<C>,
 		mut rng: Rng,
-	) -> C::Signature {
+	) -> Vec<C::Signature> {
 		info!("Performing solo signing");
 
 		let key = &keygen_result_info.key.key_share;
 
-		generate_single_party_signature::<C>(&key.x_i, &payload, &mut rng)
+		payloads
+			.iter()
+			.map(|payload| generate_single_party_signature::<C>(&key.x_i, payload, &mut rng))
+			.collect()
 	}
 }
 

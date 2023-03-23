@@ -87,7 +87,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	ceremony_id: CeremonyId,
 	key_id: KeyId,
 	signers: BTreeSet<AccountId>,
-	payload: C::SigningPayload,
+	payloads: Vec<C::SigningPayload>,
 ) where
 	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
@@ -100,17 +100,21 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	if signers.contains(&state_chain_client.account_id()) {
 		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
 		let signing_result_future =
-			multisig_client.initiate_signing(ceremony_id, key_id, signers, payload);
+			multisig_client.initiate_signing(ceremony_id, key_id, signers, payloads);
 		scope.spawn(async move {
 			match signing_result_future.await {
-				Ok(signature) => {
+				Ok(signatures) => {
 					let _result = state_chain_client
 						.submit_unsigned_extrinsic(pallet_cf_threshold_signature::Call::<
 							state_chain_runtime::Runtime,
 							I,
 						>::signature_success {
 							ceremony_id,
-							signature: signature.into(),
+							signature: signatures
+								.into_iter()
+								.next()
+								.expect("must have at least one signature")
+								.into(),
 						})
 						.await;
 				},
@@ -397,7 +401,7 @@ where
                                             ceremony_id,
                                             key_id,
                                             signatories,
-                                            crate::multisig::eth::SigningPayload(payload.0),
+                                            vec![crate::multisig::eth::SigningPayload(payload.0)],
                                         ).await;
                                     }
 
@@ -420,8 +424,8 @@ where
                                             ceremony_id,
                                             key_id,
                                             signatories,
-                                            crate::multisig::polkadot::SigningPayload::new(payload.0)
-                                                .expect("Payload should be correct size"),
+                                            vec![crate::multisig::polkadot::SigningPayload::new(payload.0)
+                                                .expect("Payload should be correct size")],
                                         ).await;
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumBroadcaster(

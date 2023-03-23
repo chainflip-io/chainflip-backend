@@ -1,12 +1,15 @@
 use std::{collections::BTreeMap, fmt::Display};
 
 use async_trait::async_trait;
-use cf_primitives::AuthorityCount;
+use cf_primitives::{AuthorityCount, CeremonyId};
 use tracing::warn;
 
 use crate::{
-	multisig::client::{ceremony_manager::CeremonyTrait, MultisigMessage},
-	p2p::OutgoingMultisigStageMessages,
+	multisig::{
+		client::{ceremony_manager::CeremonyTrait, legacy::MultisigMessageV1, MultisigMessage},
+		CryptoScheme,
+	},
+	p2p::{OutgoingMultisigStageMessages, ProtocolVersion, CURRENT_PROTOCOL_VERSION},
 };
 
 use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
@@ -78,6 +81,26 @@ where
 	}
 }
 
+fn serialize_for_version<C: CeremonyTrait>(
+	ceremony_id: CeremonyId,
+	data: C::Data,
+	version: ProtocolVersion,
+) -> Vec<u8> {
+	let message = MultisigMessage { ceremony_id, data: data.into() };
+	match version {
+		1 => {
+			// NOTE: For compatibility we convert to MultisigMessageV1 first
+			// (will remove this after all nodes support multiple payloads)
+			let message_v1: MultisigMessageV1<<C::Crypto as CryptoScheme>::Point> = message
+				.try_into()
+				.expect("should be compatible as long as we sign single payload");
+			bincode::serialize(&message_v1).unwrap()
+		},
+		2 => bincode::serialize(&message).unwrap(),
+		_ => panic!("Unsupported protocol version"),
+	}
+}
+
 #[async_trait]
 impl<C: CeremonyTrait, Stage> CeremonyStage<C> for BroadcastStage<C, Stage>
 where
@@ -100,11 +123,11 @@ where
 							.filter(|idx| **idx != common.own_idx)
 							.map(idx_to_id)
 							.collect(),
-						bincode::serialize(&MultisigMessage {
-							ceremony_id: common.ceremony_id,
-							data: ceremony_data.into(),
-						})
-						.unwrap(),
+						serialize_for_version::<C>(
+							common.ceremony_id,
+							ceremony_data,
+							CURRENT_PROTOCOL_VERSION,
+						),
 					),
 				)
 			},
@@ -117,11 +140,11 @@ where
 							let ceremony_data: C::Data = stage_data.into();
 							(
 								idx_to_id(&idx),
-								bincode::serialize(&MultisigMessage {
-									ceremony_id: common.ceremony_id,
-									data: ceremony_data.into(),
-								})
-								.unwrap(),
+								serialize_for_version::<C>(
+									common.ceremony_id,
+									ceremony_data,
+									CURRENT_PROTOCOL_VERSION,
+								),
 							)
 						})
 						.collect(),

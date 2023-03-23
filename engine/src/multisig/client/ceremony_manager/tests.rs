@@ -22,7 +22,7 @@ use crate::{
 		crypto::{CryptoScheme, Rng},
 		eth::{EthSchnorrSignature, EthSigning},
 	},
-	p2p::OutgoingMultisigStageMessages,
+	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
 	task_scope::task_scope,
 };
 use anyhow::Result;
@@ -40,7 +40,7 @@ async fn run_on_request_to_sign<C: CryptoScheme>(
 	participants: BTreeSet<sp_runtime::AccountId32>,
 	ceremony_id: CeremonyId,
 ) -> oneshot::Receiver<
-	Result<<C as CryptoScheme>::Signature, (BTreeSet<AccountId32>, SigningFailureReason)>,
+	Result<Vec<<C as CryptoScheme>::Signature>, (BTreeSet<AccountId32>, SigningFailureReason)>,
 > {
 	let (result_sender, result_receiver) = oneshot::channel();
 	task_scope(|scope| {
@@ -48,7 +48,7 @@ async fn run_on_request_to_sign<C: CryptoScheme>(
 			ceremony_manager.on_request_to_sign(
 				ceremony_id,
 				participants,
-				C::signing_payload_for_test(),
+				vec![C::signing_payload_for_test()],
 				get_key_data_for_test::<C>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned())),
 				Rng::from_seed(DEFAULT_SIGNING_SEED),
 				result_sender,
@@ -82,7 +82,7 @@ fn send_signing_request(
 	participants: BTreeSet<AccountId32>,
 	ceremony_id: CeremonyId,
 ) -> tokio::sync::oneshot::Receiver<
-	Result<EthSchnorrSignature, (BTreeSet<AccountId32>, SigningFailureReason)>,
+	Result<Vec<EthSchnorrSignature>, (BTreeSet<AccountId32>, SigningFailureReason)>,
 > {
 	let (result_sender, result_receiver) = oneshot::channel();
 
@@ -90,7 +90,7 @@ fn send_signing_request(
 		ceremony_id,
 		details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails::<EthSigning> {
 			participants,
-			payload: EthSigning::signing_payload_for_test(),
+			payload: vec![EthSigning::signing_payload_for_test()],
 			keygen_result_info: get_key_data_for_test::<EthSigning>(BTreeSet::from_iter(
 				ACCOUNT_IDS.iter().cloned(),
 			)),
@@ -109,7 +109,7 @@ fn spawn_ceremony_manager(
 	latest_ceremony_id: CeremonyId,
 ) -> (
 	mpsc::UnboundedSender<CeremonyRequest<EthSigning>>,
-	mpsc::UnboundedSender<(AccountId32, Vec<u8>)>,
+	mpsc::UnboundedSender<(AccountId32, VersionedCeremonyMessage)>,
 	mpsc::UnboundedReceiver<OutgoingMultisigStageMessages>,
 ) {
 	let (ceremony_request_sender, ceremony_request_receiver) = mpsc::unbounded_channel();
@@ -430,13 +430,18 @@ async fn should_route_p2p_message() {
 	let _stage_1_broadcast = outgoing_p2p_receiver.try_recv().unwrap();
 
 	// Send a stage 1 p2p message
-	let message = bincode::serialize(&MultisigMessage {
+	let payload = bincode::serialize(&MultisigMessage {
 		ceremony_id,
 		data: MultisigData::Keygen(gen_keygen_data_hash_comm1()),
 	})
 	.unwrap();
 
-	incoming_p2p_sender.send((sender_account_id, message)).unwrap();
+	incoming_p2p_sender
+		.send((
+			sender_account_id,
+			VersionedCeremonyMessage { version: CURRENT_PROTOCOL_VERSION, payload },
+		))
+		.unwrap();
 
 	// Small delay to let the ceremony manager process the message
 	tokio::time::sleep(Duration::from_millis(50)).await;
