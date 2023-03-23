@@ -12,7 +12,7 @@ CF_BIN_ROOT=$(which chainflip-engine | xargs dirname)
 
 # Print the stdout (hiding stderr) and grep the version. This is rather ugly as the
 # --version does not yet exist, but the build information contains the version.
-CF_VERSION=$(chainflip-engine --version 2> /dev/null | grep -Po '(?<=v)[^\ (]+')
+CF_VERSION=$(chainflip-engine --version 2> /dev/null | grep -Po '\d+\.\d+\.\d+'
 MAJOR=$(echo "$CF_VERSION" | awk -F. '{print $1}')
 MINOR=$(echo "$CF_VERSION" | awk -F. '{print $2}')
 
