@@ -762,56 +762,31 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 
 /// API that allows other pallets to Egress assets out of the State Chain.
 pub trait EgressApi<C: Chain> {
-	fn schedule_egress_swap(
+	fn schedule_egress(
 		asset: C::ChainAsset,
 		amount: AssetAmount,
 		egress_address: C::ChainAccount,
-	) -> EgressId;
-
-	fn schedule_egress_ccm(
-		asset: C::ChainAsset,
-		amount: AssetAmount,
-		egress_address: C::ChainAccount,
-		message: Vec<u8>,
-		caller_address: ForeignChainAddress,
+		maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId;
 }
 
 impl<T: frame_system::Config> EgressApi<Ethereum> for T {
-	fn schedule_egress_swap(
+	fn schedule_egress(
 		_asset: assets::eth::Asset,
 		_amount: AssetAmount,
 		_egress_address: <Ethereum as Chain>::ChainAccount,
-	) -> EgressId {
-		(ForeignChain::Ethereum, 0)
-	}
-
-	fn schedule_egress_ccm(
-		_asset: assets::eth::Asset,
-		_amount: AssetAmount,
-		_egress_address: <Ethereum as Chain>::ChainAccount,
-		_message: Vec<u8>,
-		_caller_address: ForeignChainAddress,
+		_maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId {
 		(ForeignChain::Ethereum, 0)
 	}
 }
 
 impl<T: frame_system::Config> EgressApi<Polkadot> for T {
-	fn schedule_egress_swap(
+	fn schedule_egress(
 		_asset: assets::dot::Asset,
 		_amount: AssetAmount,
 		_egress_address: <Polkadot as Chain>::ChainAccount,
-	) -> EgressId {
-		(ForeignChain::Polkadot, 0)
-	}
-
-	fn schedule_egress_ccm(
-		_asset: assets::dot::Asset,
-		_amount: AssetAmount,
-		_egress_address: <Polkadot as Chain>::ChainAccount,
-		_message: Vec<u8>,
-		_caller_address: ForeignChainAddress,
+		_maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId {
 		(ForeignChain::Polkadot, 0)
 	}
@@ -867,7 +842,10 @@ pub trait IngressHandler<C: ChainCrypto> {
 	}
 }
 
+/// Trait for handling cross chain messages.
 pub trait CcmHandler {
+	/// On the ingress of a cross-chain message, swap the asset into egress asset,
+	/// subtract the gas budge from it, then egress the message to the target chain.
 	fn on_ccm_ingress(
 		ingress_asset: Asset,
 		ingress_amount: AssetAmount,

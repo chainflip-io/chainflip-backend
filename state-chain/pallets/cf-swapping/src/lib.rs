@@ -226,7 +226,7 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
 				amount,
 				address: egress_address.clone(),
-				egress_id: T::EgressHandler::schedule_egress_swap(asset, amount, egress_address),
+				egress_id: T::EgressHandler::schedule_egress(asset, amount, egress_address, None),
 			});
 
 			Ok(())
@@ -289,10 +289,11 @@ pub mod pallet {
 				.expect("bundle_input >= swap_amount ∴ result can't overflow");
 
 				if swap_output > 0 {
-					let egress_id = T::EgressHandler::schedule_egress_swap(
+					let egress_id = T::EgressHandler::schedule_egress(
 						swap.to,
 						swap_output,
 						swap.clone().egress_address,
+						None,
 					);
 
 					Self::deposit_event(Event::<T>::SwapEgressScheduled {

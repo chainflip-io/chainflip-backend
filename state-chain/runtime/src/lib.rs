@@ -893,7 +893,6 @@ mod benches {
 		[pallet_cf_ingress_egress, EthereumIngressEgress]
 		[pallet_cf_lp, LiquidityProvider]
 		[pallet_cf_pools, LiquidityPools]
-		[pallet_cf_ccm, CrossChainMessaging]
 	);
 }
 

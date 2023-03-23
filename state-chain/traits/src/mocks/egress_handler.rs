@@ -1,7 +1,7 @@
 use super::{MockPallet, MockPalletStorage};
 use crate::EgressApi;
 use cf_chains::Chain;
-use cf_primitives::{AssetAmount, EgressId, ForeignChain, ForeignChainAddress};
+use cf_primitives::{AssetAmount, CcmIngressMetadata, EgressId, ForeignChain, ForeignChainAddress};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_std::marker::PhantomData;
@@ -55,40 +55,26 @@ impl<C: Chain> MockEgressHandler<C> {
 }
 
 impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
-	fn schedule_egress_swap(
+	fn schedule_egress(
 		asset: <C as Chain>::ChainAsset,
 		amount: AssetAmount,
 		egress_address: <C as Chain>::ChainAccount,
+		maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId {
 		<Self as MockPalletStorage>::mutate_value(b"SCHEDULED_EGRESSES", |storage| {
 			if storage.is_none() {
 				*storage = Some(vec![]);
 			}
 			storage.as_mut().map(|v| {
-				v.push(MockEgressParameter::<C>::Swap { asset, amount, egress_address });
-			})
-		});
-		(ForeignChain::Ethereum, 1)
-	}
-
-	fn schedule_egress_ccm(
-		asset: C::ChainAsset,
-		amount: AssetAmount,
-		egress_address: C::ChainAccount,
-		message: Vec<u8>,
-		caller_address: ForeignChainAddress,
-	) -> EgressId {
-		<Self as MockPalletStorage>::mutate_value(b"SCHEDULED_EGRESSES", |storage| {
-			if storage.is_none() {
-				*storage = Some(vec![]);
-			}
-			storage.as_mut().map(|v| {
-				v.push(MockEgressParameter::<C>::Ccm {
-					asset,
-					amount,
-					egress_address,
-					message,
-					caller_address,
+				v.push(match maybe_message {
+					Some(message) => MockEgressParameter::<C>::Ccm {
+						asset,
+						amount,
+						egress_address,
+						message: message.message,
+						caller_address: message.caller_address,
+					},
+					None => MockEgressParameter::<C>::Swap { asset, amount, egress_address },
 				});
 			})
 		});

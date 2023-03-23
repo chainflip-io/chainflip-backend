@@ -67,7 +67,7 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Register a new Cross-chain-message. The fund is swapped into the target
+		/// Process the ingress of a Cross-chain-message. The fund is swapped into the target
 		/// chain's native asset, with appropriate fees and gas deducted, and the
 		/// message is egressed to the target chain.
 		///
@@ -75,7 +75,7 @@ pub mod pallet {
 		///
 		/// - [NewCcmIntent](Event::NewCcmIntent)
 		#[pallet::weight(0)]
-		pub fn register_ccm_intent(
+		pub fn ccm_ingress(
 			origin: OriginFor<T>,
 			ingress_asset: Asset,
 			ingress_amount: AssetAmount,
@@ -131,12 +131,11 @@ pub mod pallet {
 			};
 
 			// Send CCM via egress
-			let _egress_id = T::EgressHandler::schedule_egress_ccm(
+			let _egress_id = T::EgressHandler::schedule_egress(
 				egress_asset,
 				egress_amount,
 				egress_address.clone(),
-				message_metadata.message.clone(),
-				message_metadata.caller_address.clone(),
+				Some(message_metadata.clone()),
 			);
 
 			// TODO: Store swapped gas with a generated EgressId.

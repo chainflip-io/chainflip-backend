@@ -455,42 +455,23 @@ macro_rules! impl_ingress_api_for_anychain {
 macro_rules! impl_egress_api_for_anychain {
 	( $anychain: ident, $(($chain: ident, $ingress_egress: ident)),+ ) => {
 		impl EgressApi<AnyChain> for $anychain {
-			fn schedule_egress_swap(
+			fn schedule_egress(
 				asset: Asset,
 				amount: AssetAmount,
 				egress_address: <AnyChain as Chain>::ChainAccount,
+				maybe_message: Option<CcmIngressMetadata>,
 			) -> EgressId {
 				match asset.into() {
 					$(
-						ForeignChain::$chain => $ingress_egress::schedule_egress_swap(
-						asset.try_into().expect("Checked for asset compatibility"),
-						amount,
-						egress_address
-							.try_into()
-							.expect("Caller must ensure for account is of the compatible type."),
+						ForeignChain::$chain => $ingress_egress::schedule_egress(
+							asset.try_into().expect("Checked for asset compatibility"),
+							amount,
+							egress_address
+								.try_into()
+								.expect("Caller must ensure for account is of the compatible type."),
+							maybe_message,
 						),
-					)+
-				}
-			}
 
-			fn schedule_egress_ccm(
-				asset: Asset,
-				amount: AssetAmount,
-				egress_address: <AnyChain as Chain>::ChainAccount,
-				message: Vec<u8>,
-				caller_address: ForeignChainAddress,
-			) -> EgressId {
-				match asset.into() {
-					$(
-						ForeignChain::$chain => $ingress_egress::schedule_egress_ccm(
-						asset.try_into().expect("Checked for asset compatibility"),
-						amount,
-						egress_address
-							.try_into()
-							.expect("Caller must ensure for account is of the compatible type."),
-						message,
-						caller_address,
-						),
 					)+
 				}
 			}

@@ -720,49 +720,33 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
-	fn schedule_egress_swap(
+	fn schedule_egress(
 		asset: TargetChainAsset<T, I>,
 		amount: AssetAmount,
 		egress_address: TargetChainAccount<T, I>,
+		maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId {
 		let egress_counter = EgressIdCounter::<T, I>::get().saturating_add(1);
 		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
-		ScheduledEgressFetchOrTransfer::<T, I>::append(
-			FetchOrTransfer::<T::TargetChain>::Transfer {
+		match maybe_message {
+			Some(message) => ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
+				egress_id,
+				asset,
+				amount,
+				egress_address: egress_address.clone(),
+				message: message.message,
+				caller_address: message.caller_address,
+			}),
+			None => ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<
+				T::TargetChain,
+			>::Transfer {
 				asset,
 				egress_address: egress_address.clone(),
 				amount,
 				egress_id,
-			},
-		);
-		EgressIdCounter::<T, I>::put(egress_counter);
-		Self::deposit_event(Event::<T, I>::EgressScheduled {
-			id: egress_id,
-			asset,
-			amount,
-			egress_address,
-		});
+			}),
+		}
 
-		egress_id
-	}
-
-	fn schedule_egress_ccm(
-		asset: TargetChainAsset<T, I>,
-		amount: AssetAmount,
-		egress_address: TargetChainAccount<T, I>,
-		message: Vec<u8>,
-		caller_address: ForeignChainAddress,
-	) -> EgressId {
-		let egress_counter = EgressIdCounter::<T, I>::get().saturating_add(1);
-		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
-		ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
-			egress_id,
-			asset,
-			amount,
-			egress_address: egress_address.clone(),
-			message,
-			caller_address,
-		});
 		EgressIdCounter::<T, I>::put(egress_counter);
 		Self::deposit_event(Event::<T, I>::EgressScheduled {
 			id: egress_id,
