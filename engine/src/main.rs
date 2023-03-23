@@ -170,6 +170,7 @@ async fn main() -> anyhow::Result<()> {
 				state_chain_client.clone(),
 				&settings.btc,
 				btc_epoch_start_receiver,
+				latest_block_hash,
 				db.clone(),
 			)
 			.await

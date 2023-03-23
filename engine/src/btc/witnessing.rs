@@ -1,17 +1,17 @@
-use std::{collections::BTreeMap, sync::Arc};
-
-use anyhow::{Context, Result};
-use cf_chains::Bitcoin;
-use cf_primitives::{BitcoinAddressSeed, ScriptPubkeyBytes};
-use futures::TryFutureExt;
+use std::sync::Arc;
 
 use crate::{
 	multisig::PersistentKeyDB,
 	settings,
-	state_chain_observer::client::StateChainClient,
+	state_chain_observer::client::{storage_api::StorageApi, StateChainClient},
 	task_scope::Scope,
 	witnesser::{AddressMonitor, AddressMonitorCommand, EpochStart, LatestBlockNumber},
 };
+use anyhow::{Context, Result};
+use cf_chains::Bitcoin;
+use cf_primitives::{BitcoinAddressFull, BitcoinAddressSeed, ScriptPubkeyBytes};
+use futures::TryFutureExt;
+use sp_core::H256;
 
 use super::rpc::BtcRpcClient;
 
@@ -20,6 +20,7 @@ pub async fn start(
 	state_chain_client: Arc<StateChainClient>,
 	btc_settings: &settings::Btc,
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Bitcoin>>,
+	initial_block_hash: H256,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<
 	tokio::sync::mpsc::UnboundedSender<
@@ -36,9 +37,25 @@ pub async fn start(
 		.await
 		.context("Initial query for BTC latest block number failed.")?;
 
-	// TODO: query state chain for the script pubkeys to monitor and pass them into the witnesser
-
-	let (ingress_sender, address_monitor) = AddressMonitor::new(BTreeMap::default());
+	let (ingress_sender, address_monitor) = AddressMonitor::new(
+		state_chain_client
+			.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<
+				state_chain_runtime::Runtime,
+				state_chain_runtime::BitcoinInstance,
+			>>(initial_block_hash)
+			.await
+			.context("Failed to get initial BTC ingress details")?
+			.into_iter()
+			.filter_map(|(address, intent)| {
+				if intent.ingress_asset == cf_primitives::chains::assets::btc::Asset::Btc {
+					Some(address)
+				} else {
+					None
+				}
+			})
+			.map(|BitcoinAddressFull { script_pubkey_bytes, seed }| (script_pubkey_bytes, seed))
+			.collect(),
+	);
 
 	scope.spawn(
 		super::witnesser::start(
