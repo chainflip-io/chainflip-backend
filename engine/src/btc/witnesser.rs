@@ -298,12 +298,20 @@ mod test_utxo_filtering {
 
 	#[test]
 	fn filter_interesting_utxos_several_same_tx() {
+		const UTXO_WITNESSED_1: u64 = 2324;
+		const UTXO_WITNESSED_2: u64 = 1234;
 		let monitored_pubkey = vec![0, 1, 2, 3];
 		let txs = vec![
 			fake_transaction(vec![
-				TxOut { value: 2324, script_pubkey: Script::from(monitored_pubkey.clone()) },
+				TxOut {
+					value: UTXO_WITNESSED_1,
+					script_pubkey: Script::from(monitored_pubkey.clone()),
+				},
 				TxOut { value: 12223, script_pubkey: Script::from(vec![0, 32, 121, 9]) },
-				TxOut { value: 1234, script_pubkey: Script::from(monitored_pubkey.clone()) },
+				TxOut {
+					value: UTXO_WITNESSED_2,
+					script_pubkey: Script::from(monitored_pubkey.clone()),
+				},
 			]),
 			fake_transaction(vec![]),
 		];
@@ -318,13 +326,15 @@ mod test_utxo_filtering {
 			&Default::default(),
 		);
 		assert_eq!(ingress_witnesses.len(), 2);
-		assert_eq!(ingress_witnesses[0].amount, 2324);
-		assert_eq!(ingress_witnesses[1].amount, 1234);
+		assert_eq!(ingress_witnesses[0].amount, UTXO_WITNESSED_1.into());
+		assert_eq!(ingress_witnesses[1].amount, UTXO_WITNESSED_2.into());
 	}
 
 	#[test]
 	fn filter_interesting_utxos_several_diff_tx() {
 		let monitored_pubkey = vec![0, 1, 2, 3];
+		const UTXO_WITNESSED_1: u64 = 2324;
+		const UTXO_WITNESSED_2: u64 = 1234;
 		let txs = vec![
 			fake_transaction(vec![
 				TxOut { value: 2324, script_pubkey: Script::from(monitored_pubkey.clone()) },
@@ -346,13 +356,14 @@ mod test_utxo_filtering {
 			&Default::default(),
 		);
 		assert_eq!(ingress_witnesses.len(), 2);
-		assert_eq!(ingress_witnesses[0].amount, 2324);
-		assert_eq!(ingress_witnesses[1].amount, 1234);
+		assert_eq!(ingress_witnesses[0].amount, UTXO_WITNESSED_1.into());
+		assert_eq!(ingress_witnesses[1].amount, UTXO_WITNESSED_2.into());
 	}
 
 	#[test]
 	fn filter_out_value_0() {
 		let monitored_pubkey = vec![0, 1, 2, 3];
+		const UTXO_WITNESSED_1: u64 = 2324;
 		let txs = vec![fake_transaction(vec![
 			TxOut { value: 2324, script_pubkey: Script::from(monitored_pubkey.clone()) },
 			TxOut { value: 0, script_pubkey: Script::from(monitored_pubkey.clone()) },
@@ -368,6 +379,6 @@ mod test_utxo_filtering {
 			&Default::default(),
 		);
 		assert_eq!(ingress_witnesses.len(), 1);
-		assert_eq!(ingress_witnesses[0].amount, 2324);
+		assert_eq!(ingress_witnesses[0].amount, UTXO_WITNESSED_1.into());
 	}
 }
