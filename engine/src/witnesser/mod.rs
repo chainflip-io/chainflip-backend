@@ -72,9 +72,12 @@ impl<A: std::cmp::Ord + std::fmt::Debug + Clone, D: Clone> AddressMonitor<A, D> 
 	/// should be called first to ensure we check against recently added addresses.
 	/// (We keep it as a separate function to make it possible to check multiple
 	/// addresses in a tight loop without having to fetch addresses on every item)
-	// TODO: Look at naming here. Maybe a version that does return bool for simplicity.
-	pub fn contains(&self, address: &A) -> Option<D> {
+	pub fn get(&self, address: &A) -> Option<D> {
 		self.addresses.get(address).cloned()
+	}
+
+	pub fn contains(&self, address: &A) -> bool {
+		self.addresses.get(address).is_some()
 	}
 
 	/// Ensure the list of interesting addresses is up to date

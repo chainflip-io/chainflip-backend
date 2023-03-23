@@ -86,7 +86,7 @@ impl EthContractWitnesser for Erc20Witnesser {
 			.into_iter()
 			.filter_map(|event| match event.event_parameters {
 				Erc20Event::Transfer { to, value, from: _ }
-					if address_monitor.contains(&core_h160(to)).is_some() =>
+					if address_monitor.contains(&core_h160(to)) =>
 					Some(IngressWitness {
 						ingress_address: core_h160(to),
 						amount: value,

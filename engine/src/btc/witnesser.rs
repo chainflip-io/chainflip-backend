@@ -49,7 +49,7 @@ pub fn filter_interesting_utxos(
 				match tx_out.script_pubkey.to_bytes().try_into() {
 					Ok(script_pubkey_bytes) =>
 						if let Some(bitcoin_address_seed) =
-							address_monitor.contains(&script_pubkey_bytes)
+							address_monitor.get(&script_pubkey_bytes)
 						{
 							ingress_utxos.push((
 								BitcoinAddressFull {

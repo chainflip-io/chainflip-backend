@@ -182,7 +182,7 @@ fn check_for_interesting_events_in_block(
 					// pulled the latest addresses to monitor from the chain first
 					address_monitor.sync_addresses();
 
-					if address_monitor.contains(to).is_some() {
+					if address_monitor.contains(to) {
 						info!("Witnessing DOT Ingress {{ amount: {amount:?}, to: {to:?} }}");
 						ingress_witnesses.push(IngressWitness {
 							ingress_address: to.clone(),

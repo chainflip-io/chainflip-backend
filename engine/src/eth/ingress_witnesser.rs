@@ -60,7 +60,7 @@ where
 			.iter()
 			.filter_map(|tx| {
 				let to_addr = core_h160(tx.to?);
-				if address_monitor.contains(&to_addr).is_some() {
+				if address_monitor.contains(&to_addr) {
 					Some((tx, to_addr))
 				} else {
 					None
