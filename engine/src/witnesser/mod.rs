@@ -1,6 +1,6 @@
 //! Common Witnesser functionality
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 
 use async_trait::async_trait;
 use cf_primitives::EpochIndex;
@@ -47,23 +47,25 @@ pub trait LatestBlockNumber {
 }
 
 #[derive(Debug)]
-pub enum AddressMonitorCommand<Address> {
-	Add(Address),
+pub enum AddressMonitorCommand<Address, Data> {
+	Add((Address, Data)),
 	Remove(Address),
 }
+
+// TODO: We should probably move the channel initialisation into the AddressMonitor
 
 /// This stores addresses we are interested in. New addresses
 /// come through a channel which can be polled by calling
 /// [AddressMonitor::sync_addresses].
-pub struct AddressMonitor<A> {
-	addresses: BTreeSet<A>,
-	address_receiver: tokio::sync::mpsc::UnboundedReceiver<AddressMonitorCommand<A>>,
+pub struct AddressMonitor<A, D> {
+	addresses: BTreeMap<A, D>,
+	address_receiver: tokio::sync::mpsc::UnboundedReceiver<AddressMonitorCommand<A, D>>,
 }
 
-impl<A: std::cmp::Ord + std::fmt::Debug + Clone> AddressMonitor<A> {
+impl<A: std::cmp::Ord + std::fmt::Debug + Clone, D: Clone> AddressMonitor<A, D> {
 	pub fn new(
-		addresses: BTreeSet<A>,
-		address_receiver: tokio::sync::mpsc::UnboundedReceiver<AddressMonitorCommand<A>>,
+		addresses: BTreeMap<A, D>,
+		address_receiver: tokio::sync::mpsc::UnboundedReceiver<AddressMonitorCommand<A, D>>,
 	) -> Self {
 		Self { addresses, address_receiver }
 	}
@@ -72,20 +74,21 @@ impl<A: std::cmp::Ord + std::fmt::Debug + Clone> AddressMonitor<A> {
 	/// should be called first to ensure we check against recently added addresses.
 	/// (We keep it as a separate function to make it possible to check multiple
 	/// addresses in a tight loop without having to fetch addresses on every item)
-	pub fn contains(&self, address: &A) -> bool {
-		self.addresses.contains(address)
+	// TODO: Look at naming here. Maybe a version that does return bool for simplicity.
+	pub fn contains(&self, address: &A) -> Option<D> {
+		self.addresses.get(address).cloned()
 	}
 
 	/// Ensure the list of interesting addresses is up to date
 	pub fn sync_addresses(&mut self) {
 		while let Ok(address) = self.address_receiver.try_recv() {
 			match address {
-				AddressMonitorCommand::Add(address) =>
-					if !self.addresses.insert(address.clone()) {
+				AddressMonitorCommand::Add((address, data)) =>
+					if self.addresses.insert(address.clone(), data).is_some() {
 						tracing::warn!("Address {:?} already being monitored", address);
 					},
 				AddressMonitorCommand::Remove(address) =>
-					if !self.addresses.remove(&address) {
+					if self.addresses.remove(&address).is_none() {
 						tracing::warn!("Address {:?} already not being monitored", address);
 					},
 			}

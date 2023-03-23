@@ -137,6 +137,9 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -154,6 +157,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -304,6 +308,9 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -321,6 +328,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -435,6 +443,9 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -452,6 +463,7 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -627,6 +639,9 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -644,6 +659,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -823,6 +839,9 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -840,6 +859,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -1020,6 +1040,9 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -1037,6 +1060,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -1212,6 +1236,9 @@ async fn only_encodes_and_signs_when_specified() {
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -1229,6 +1256,7 @@ async fn only_encodes_and_signs_when_specified() {
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -1489,6 +1517,9 @@ async fn run_the_sc_observer() {
 			let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
+			let (btc_monitor_ingress_sender, _btc_monitor_ingress_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+
 			sc_observer::start(
 				state_chain_client,
 				sc_block_stream,
@@ -1506,6 +1537,7 @@ async fn run_the_sc_observer() {
 				dot_epoch_start_sender,
 				dot_monitor_ingress_sender,
 				dot_monitor_signature_sender,
+				btc_monitor_ingress_sender,
 				cfe_settings_update_sender,
 				initial_block_hash,
 			)

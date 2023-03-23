@@ -1,10 +1,18 @@
-use std::{collections::BTreeSet, sync::Arc};
+use std::sync::Arc;
 
-use crate::constants::BTC_INGRESS_BLOCK_SAFETY_MARGIN;
-use bitcoincore_rpc::bitcoin::{Transaction, TxOut};
-use cf_chains::Bitcoin;
-use cf_primitives::BitcoinAddress;
+use crate::{
+	constants::BTC_INGRESS_BLOCK_SAFETY_MARGIN,
+	state_chain_observer::client::extrinsic_api::ExtrinsicApi, witnesser::AddressMonitor,
+};
+use bitcoincore_rpc::bitcoin::Transaction;
+use cf_chains::{
+	btc::{Utxo, UtxoId},
+	Bitcoin,
+};
+use cf_primitives::{chains::assets::btc, BitcoinAddress, BitcoinAddressFull, BitcoinAddressSeed};
 use futures::StreamExt;
+use pallet_cf_ingress_egress::IngressWitness;
+use state_chain_runtime::BitcoinInstance;
 use tokio::{select, sync::Mutex};
 use tracing::{info, info_span, trace, Instrument};
 
@@ -27,16 +35,34 @@ use super::rpc::{BtcRpcApi, BtcRpcClient};
 // monitored addresses.
 pub fn filter_interesting_utxos(
 	txs: Vec<Transaction>,
-	monitored_script_pubkeys: &BTreeSet<BitcoinAddress>,
-) -> Vec<TxOut> {
+	address_monitor: &mut AddressMonitor<BitcoinAddress, BitcoinAddressSeed>,
+) -> Vec<(BitcoinAddressFull, Utxo)> {
+	address_monitor.sync_addresses();
 	let mut interesting_utxos = vec![];
 	for tx in txs {
-		for tx_out in &tx.output {
+		for (vout, tx_out) in tx.output.iter().enumerate() {
 			if tx_out.value > 0 {
 				match tx_out.script_pubkey.to_bytes().try_into() {
 					Ok(address) =>
-						if monitored_script_pubkeys.contains(&address) {
-							interesting_utxos.push(tx_out.clone());
+						if let Some(bitcoin_address_seed) = address_monitor.contains(&address) {
+							interesting_utxos.push((
+								BitcoinAddressFull {
+									script_pubkey: address,
+									seed: bitcoin_address_seed.clone(),
+								},
+								Utxo {
+									amount: tx_out.value,
+									txid: tx
+										.txid()
+										.as_hash()
+										.as_ref()
+										.try_into()
+										.expect("Is a hash"),
+									vout: vout as u32,
+									pubkey_x: bitcoin_address_seed.pubkey_x,
+									salt: bitcoin_address_seed.salt,
+								},
+							));
 						},
 					Err(error) => {
 						// This can happen, however, if it does, it won't be for one of our
@@ -51,22 +77,24 @@ pub fn filter_interesting_utxos(
 	interesting_utxos
 }
 
-pub async fn start(
+pub async fn start<StateChainClient>(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Bitcoin>>,
+	state_chain_client: Arc<StateChainClient>,
 	btc_rpc: BtcRpcClient,
-	script_pubkeys_receiver: tokio::sync::mpsc::UnboundedReceiver<BitcoinAddress>,
-	monitored_script_pubkeys: BTreeSet<BitcoinAddress>,
+	address_monitor: AddressMonitor<BitcoinAddress, BitcoinAddressSeed>,
 	db: Arc<PersistentKeyDB>,
-) -> Result<(), anyhow::Error> {
+) -> Result<(), anyhow::Error>
+where
+	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+{
 	epoch_witnesser::start(
 		Arc::new(Mutex::new(epoch_starts_receiver)),
 		|_epoch_start| true,
-		(script_pubkeys_receiver, monitored_script_pubkeys),
-		move |mut end_witnessing_receiver,
-		      epoch_start,
-		      (mut script_pubkeys_receiver, mut monitored_script_pubkeys)| {
+		address_monitor,
+		move |mut end_witnessing_receiver, epoch_start, mut address_monitor| {
 			let db = db.clone();
 			let btc_rpc = btc_rpc.clone();
+			let state_chain_client = state_chain_client.clone();
 			async move {
 				// TODO: Look at deduplicating this
 				let (from_block, witnessed_until_sender) =
@@ -82,10 +110,7 @@ pub async fn start(
 						StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
 							(from_block, witnessed_until_sender),
 						StartCheckpointing::AlreadyWitnessedEpoch =>
-							return Result::<_, anyhow::Error>::Ok((
-								script_pubkeys_receiver,
-								monitored_script_pubkeys,
-							)),
+							return Result::<_, anyhow::Error>::Ok(address_monitor),
 					};
 
 				let mut block_number_stream_from = block_head_stream_from(
@@ -125,19 +150,42 @@ pub async fn start(
 					if let Some(block_number) = block_number {
 						let block = btc_rpc.block(btc_rpc.block_hash(block_number)?)?;
 
-						while let Ok(script_pubkey) = script_pubkeys_receiver.try_recv() {
-							monitored_script_pubkeys.insert(script_pubkey);
-						}
-
 						trace!("Checking BTC block: {block_number} for interesting UTXOs");
 
-						let interesting_utxos =
-							filter_interesting_utxos(block.txdata, &monitored_script_pubkeys);
+						let ingress_witnesses =
+							filter_interesting_utxos(block.txdata, &mut address_monitor)
+								.into_iter()
+								.map(|(ingress_address, utxo)| IngressWitness::<Bitcoin> {
+									ingress_address,
+									amount: utxo.amount.into(),
+									asset: btc::Asset::Btc,
+									tx_id: UtxoId {
+										tx_hash: utxo.txid,
+										vout_index: utxo.vout,
+										pubkey_x: utxo.pubkey_x,
+										salt: utxo.salt.into(),
+									},
+								})
+								.collect();
 
-						for utxo in interesting_utxos {
-							info!("Witnessing BTC ingress UTXO: {:?}", utxo);
-							todo!("Witness BTC utxo to SC: {:?}", utxo);
-						}
+						let _result =
+							state_chain_client
+								.submit_signed_extrinsic(
+									pallet_cf_witnesser::Call::witness_at_epoch {
+										call:
+											Box::new(
+												pallet_cf_ingress_egress::Call::<
+													_,
+													BitcoinInstance,
+												>::do_ingress {
+													ingress_witnesses,
+												}
+												.into(),
+											),
+										epoch_index: epoch_start.epoch_index,
+									},
+								)
+								.await;
 
 						witnessed_until_sender
 							.send(WitnessedUntil {
@@ -149,7 +197,7 @@ pub async fn start(
 					}
 				}
 
-				Ok((script_pubkeys_receiver, monitored_script_pubkeys))
+				Ok(address_monitor)
 			}
 		},
 	)
@@ -159,9 +207,11 @@ pub async fn start(
 
 #[cfg(test)]
 mod tests {
+	use std::collections::BTreeMap;
+
 	use cf_chains::btc;
 
-	use crate::settings;
+	use crate::{settings, state_chain_observer::client::mocks::MockStateChainClient};
 
 	use super::*;
 
@@ -176,6 +226,8 @@ mod tests {
 			rpc_password: "password".to_string(),
 		})
 		.unwrap();
+
+		let state_chain_client = Arc::new(MockStateChainClient::new());
 
 		let (_script_pubkeys_sender, script_pubkeys_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
@@ -196,14 +248,22 @@ mod tests {
 			.await
 			.unwrap();
 
-		start(epoch_starts_receiver, rpc, script_pubkeys_receiver, BTreeSet::new(), Arc::new(db))
-			.await
-			.unwrap();
+		start(
+			epoch_starts_receiver,
+			state_chain_client,
+			rpc,
+			AddressMonitor::new(BTreeMap::new(), script_pubkeys_receiver),
+			Arc::new(db),
+		)
+		.await
+		.unwrap();
 	}
 }
 
 #[cfg(test)]
 mod test_utxo_filtering {
+	use std::collections::BTreeMap;
+
 	use bitcoincore_rpc::bitcoin::{PackedLockTime, Script, Transaction, TxOut};
 
 	use super::*;
@@ -215,7 +275,13 @@ mod test_utxo_filtering {
 	#[test]
 	fn filter_interesting_utxos_no_utxos() {
 		let txs = vec![fake_transaction(vec![]), fake_transaction(vec![])];
-		assert!(filter_interesting_utxos(txs, &BTreeSet::new()).is_empty());
+		let (_monitor_ingress_sender, monitor_ingress_receiver) =
+			tokio::sync::mpsc::unbounded_channel();
+		assert!(filter_interesting_utxos(
+			txs,
+			&mut AddressMonitor::new(BTreeMap::new(), monitor_ingress_receiver)
+		)
+		.is_empty());
 	}
 
 	#[test]
@@ -229,13 +295,22 @@ mod test_utxo_filtering {
 			]),
 			fake_transaction(vec![]),
 		];
+		let (_monitor_ingress_sender, monitor_ingress_receiver) =
+			tokio::sync::mpsc::unbounded_channel();
+
 		let interesting_utxos = filter_interesting_utxos(
 			txs,
-			&BTreeSet::from([BitcoinAddress::try_from(monitored_pubkey).unwrap()]),
+			&mut AddressMonitor::new(
+				BTreeMap::from([(
+					BitcoinAddress::try_from(monitored_pubkey).unwrap(),
+					BitcoinAddressSeed { salt: 9, pubkey_x: [0; 32] },
+				)]),
+				monitor_ingress_receiver,
+			),
 		);
 		assert_eq!(interesting_utxos.len(), 2);
-		assert_eq!(interesting_utxos[0].value, 2324);
-		assert_eq!(interesting_utxos[1].value, 1234);
+		assert_eq!(interesting_utxos[0].1.amount, 2324);
+		assert_eq!(interesting_utxos[1].1.amount, 1234);
 	}
 
 	#[test]
@@ -251,12 +326,22 @@ mod test_utxo_filtering {
 				script_pubkey: Script::from(monitored_pubkey.clone()),
 			}]),
 		];
-		let monitored_script_pubkeys =
-			BTreeSet::from([BitcoinAddress::try_from(monitored_pubkey).unwrap()]);
-		let interesting_utxos = filter_interesting_utxos(txs, &monitored_script_pubkeys);
+		let (_monitor_ingress_sender, monitor_ingress_receiver) =
+			tokio::sync::mpsc::unbounded_channel();
+
+		let interesting_utxos = filter_interesting_utxos(
+			txs,
+			&mut AddressMonitor::new(
+				BTreeMap::from([(
+					BitcoinAddress::try_from(monitored_pubkey).unwrap(),
+					BitcoinAddressSeed { salt: 9, pubkey_x: [0; 32] },
+				)]),
+				monitor_ingress_receiver,
+			),
+		);
 		assert_eq!(interesting_utxos.len(), 2);
-		assert_eq!(interesting_utxos[0].value, 2324);
-		assert_eq!(interesting_utxos[1].value, 1234);
+		assert_eq!(interesting_utxos[0].1.amount, 2324);
+		assert_eq!(interesting_utxos[1].1.amount, 1234);
 	}
 
 	#[test]
@@ -266,10 +351,20 @@ mod test_utxo_filtering {
 			TxOut { value: 2324, script_pubkey: Script::from(monitored_pubkey.clone()) },
 			TxOut { value: 0, script_pubkey: Script::from(monitored_pubkey.clone()) },
 		])];
-		let monitored_script_pubkeys =
-			BTreeSet::from([BitcoinAddress::try_from(monitored_pubkey).unwrap()]);
-		let interesting_utxos = filter_interesting_utxos(txs, &monitored_script_pubkeys);
+		let (_monitor_ingress_sender, monitor_ingress_receiver) =
+			tokio::sync::mpsc::unbounded_channel();
+
+		let interesting_utxos = filter_interesting_utxos(
+			txs,
+			&mut AddressMonitor::new(
+				BTreeMap::from([(
+					BitcoinAddress::try_from(monitored_pubkey).unwrap(),
+					BitcoinAddressSeed { salt: 9, pubkey_x: [0; 32] },
+				)]),
+				monitor_ingress_receiver,
+			),
+		);
 		assert_eq!(interesting_utxos.len(), 1);
-		assert_eq!(interesting_utxos[0].value, 2324);
+		assert_eq!(interesting_utxos[0].1.amount, 2324);
 	}
 }

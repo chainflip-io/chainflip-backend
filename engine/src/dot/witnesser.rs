@@ -137,7 +137,7 @@ fn check_for_interesting_events_in_block(
 	block_events: Vec<(Phase, EventWrapper)>,
 	block_number: PolkadotBlockNumber,
 	our_vault: &PolkadotAccountId,
-	address_monitor: &mut AddressMonitor<PolkadotAccountId>,
+	address_monitor: &mut AddressMonitor<PolkadotAccountId, ()>,
 ) -> (
 	Vec<(PolkadotExtrinsicIndex, PolkadotBalance)>,
 	Vec<IngressWitness<Polkadot>>,
@@ -182,7 +182,7 @@ fn check_for_interesting_events_in_block(
 					// pulled the latest addresses to monitor from the chain first
 					address_monitor.sync_addresses();
 
-					if address_monitor.contains(to) {
+					if address_monitor.contains(to).is_some() {
 						info!("Witnessing DOT Ingress {{ amount: {amount:?}, to: {to:?} }}");
 						ingress_witnesses.push(IngressWitness {
 							ingress_address: to.clone(),
@@ -226,7 +226,7 @@ fn check_for_interesting_events_in_block(
 pub async fn start<StateChainClient, DotRpc>(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Polkadot>>,
 	dot_client: DotRpc,
-	address_monitor: AddressMonitor<PolkadotAccountId>,
+	address_monitor: AddressMonitor<PolkadotAccountId, ()>,
 	signature_receiver: tokio::sync::mpsc::UnboundedReceiver<[u8; 64]>,
 	monitored_signatures: BTreeSet<[u8; 64]>,
 	state_chain_client: Arc<StateChainClient>,
@@ -485,7 +485,7 @@ where
 #[cfg(test)]
 mod tests {
 
-	use std::str::FromStr;
+	use std::{collections::BTreeMap, str::FromStr};
 
 	use super::*;
 
@@ -610,7 +610,7 @@ mod tests {
 			tokio::sync::mpsc::unbounded_channel();
 
 		monitor_ingress_sender
-			.send(AddressMonitorCommand::Add(transfer_2_ingress_addr))
+			.send(AddressMonitorCommand::Add((transfer_2_ingress_addr, ())))
 			.unwrap();
 
 		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls) =
@@ -620,7 +620,7 @@ mod tests {
 				// arbitrary, not focus of the test
 				&PolkadotAccountId::from([0xda; 32]),
 				&mut AddressMonitor::new(
-					BTreeSet::from([transfer_1_ingress_addr]),
+					BTreeMap::from([(transfer_1_ingress_addr, ())]),
 					monitor_ingress_receiver,
 				),
 			);
@@ -679,7 +679,7 @@ mod tests {
 				20,
 				// arbitrary, not focus of the test
 				&our_vault,
-				&mut AddressMonitor::new(BTreeSet::default(), monitor_ingress_receiver),
+				&mut AddressMonitor::new(BTreeMap::default(), monitor_ingress_receiver),
 			);
 
 		assert!(
@@ -761,7 +761,7 @@ mod tests {
 		start(
 			epoch_starts_receiver,
 			dot_rpc_client,
-			AddressMonitor::new(BTreeSet::default(), ingress_address_receiver),
+			AddressMonitor::new(BTreeMap::default(), ingress_address_receiver),
 			signature_receiver,
 			BTreeSet::default(),
 			state_chain_client,

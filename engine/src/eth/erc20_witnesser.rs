@@ -36,7 +36,7 @@ pub struct Erc20Witnesser {
 	pub deployed_address: H160,
 	asset: eth::Asset,
 	contract: ethabi::Contract,
-	address_monitor: Arc<Mutex<AddressMonitor<sp_core::H160>>>,
+	address_monitor: Arc<Mutex<AddressMonitor<sp_core::H160, ()>>>,
 }
 
 impl Erc20Witnesser {
@@ -44,7 +44,7 @@ impl Erc20Witnesser {
 	pub fn new(
 		deployed_address: H160,
 		asset: eth::Asset,
-		address_monitor: Arc<Mutex<AddressMonitor<sp_core::H160>>>,
+		address_monitor: Arc<Mutex<AddressMonitor<sp_core::H160, ()>>>,
 	) -> Self {
 		Self {
 			deployed_address,
@@ -86,7 +86,7 @@ impl EthContractWitnesser for Erc20Witnesser {
 			.into_iter()
 			.filter_map(|event| match event.event_parameters {
 				Erc20Event::Transfer { to, value, from: _ }
-					if address_monitor.contains(&core_h160(to)) =>
+					if address_monitor.contains(&core_h160(to)).is_some() =>
 					Some(IngressWitness {
 						ingress_address: core_h160(to),
 						amount: value,

@@ -42,7 +42,7 @@ where
 			btc_outputs.push(BitcoinOutput {
 				amount: transfer_param.clone().amount.try_into().expect("Since this output comes from the AMM and if AMM math works correctly, this should be a valid bitcoin amount which should be less than u64::max"),
 				script_pubkey: scriptpubkey_from_address(
-					sp_std::str::from_utf8(&transfer_param.to[..]).map_err(|_| ())?,
+					sp_std::str::from_utf8(&transfer_param.to.script_pubkey[..]).map_err(|_| ())?,
 					bitcoin_network,
 				).map_err(|_|())?,
 			});

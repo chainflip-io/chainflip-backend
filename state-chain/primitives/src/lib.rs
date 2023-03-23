@@ -201,12 +201,33 @@ fn test_key_id_to_and_from_bytes() {
 
 pub type BitcoinAddress = BoundedVec<u8, ConstU32<MAX_BTC_ADDRESS_LENGTH>>;
 
+/// The seed data required to generate a Bitcoin address. We don't pass in network
+/// here, as we assume the same network for all addresses.
+#[derive(
+	Default, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord,
+)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct BitcoinAddressSeed {
+	pub pubkey_x: [u8; 32],
+	pub salt: u32,
+}
+
+/// Contains all the consituent parts of a Bitcoin address.
+#[derive(
+	Default, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord,
+)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct BitcoinAddressFull {
+	pub script_pubkey: BitcoinAddress,
+	pub seed: BitcoinAddressSeed,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ForeignChainAddress {
 	Eth(EthereumAddress),
 	Dot([u8; 32]),
-	Btc(BitcoinAddress),
+	Btc(BitcoinAddressFull),
 }
 
 #[cfg(feature = "std")]
@@ -219,8 +240,11 @@ impl core::fmt::Display for ForeignChainAddress {
 			ForeignChainAddress::Dot(addr) => {
 				write!(f, "Dot(0x{})", hex::encode(addr))
 			},
-			ForeignChainAddress::Btc(addr) =>
-				write!(f, "Btc({})", &std::str::from_utf8(&addr[..]).map_err(|_| core::fmt::Error)?),
+			ForeignChainAddress::Btc(addr) => write!(
+				f,
+				"Btc({})",
+				&std::str::from_utf8(&addr.script_pubkey[..]).map_err(|_| core::fmt::Error)?
+			),
 		}
 	}
 }
@@ -235,7 +259,7 @@ impl AsRef<[u8]> for ForeignChainAddress {
 		match self {
 			ForeignChainAddress::Eth(address) => address.as_slice(),
 			ForeignChainAddress::Dot(address) => address.as_slice(),
-			ForeignChainAddress::Btc(address) => address.as_slice(),
+			ForeignChainAddress::Btc(address) => address.script_pubkey.as_slice(),
 		}
 	}
 }
@@ -284,12 +308,12 @@ impl TryFrom<ForeignChainAddress> for PolkadotAccountId {
 	}
 }
 
-impl TryFrom<ForeignChainAddress> for BitcoinAddress {
+impl TryFrom<ForeignChainAddress> for BitcoinAddressFull {
 	type Error = AddressError;
 
 	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
 		match address {
-			ForeignChainAddress::Btc(addr) => Ok(addr),
+			ForeignChainAddress::Btc(address) => Ok(address),
 			_ => Err(AddressError::InvalidAddress),
 		}
 	}
@@ -336,8 +360,8 @@ impl From<PolkadotAccountId> for ForeignChainAddress {
 	}
 }
 
-impl From<BitcoinAddress> for ForeignChainAddress {
-	fn from(address: BitcoinAddress) -> ForeignChainAddress {
+impl From<BitcoinAddressFull> for ForeignChainAddress {
+	fn from(address: BitcoinAddressFull) -> ForeignChainAddress {
 		ForeignChainAddress::Btc(address)
 	}
 }

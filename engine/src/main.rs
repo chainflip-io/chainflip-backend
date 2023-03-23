@@ -169,6 +169,16 @@ async fn main() -> anyhow::Result<()> {
 			.await
 			.unwrap();
 
+			let btc_monitor_ingress_sender = btc::witnessing::start(
+				scope,
+				state_chain_client.clone(),
+				&settings.btc,
+				btc_epoch_start_receiver,
+				db.clone(),
+			)
+			.await
+			.unwrap();
+
 			scope.spawn(state_chain_observer::start(
 				state_chain_client.clone(),
 				state_chain_block_stream,
@@ -188,6 +198,7 @@ async fn main() -> anyhow::Result<()> {
 				dot_epoch_start_sender,
 				dot_monitor_ingress_sender,
 				dot_monitor_signature_sender,
+				btc_monitor_ingress_sender,
 				cfe_settings_update_sender,
 				latest_block_hash,
 			));
@@ -214,6 +225,7 @@ async fn main() -> anyhow::Result<()> {
 									None
 								}
 							})
+							.map(|address| (address, ()))
 							.collect(),
 						dot_monitor_ingress_receiver,
 					),
@@ -231,7 +243,7 @@ async fn main() -> anyhow::Result<()> {
 						.map(|(signature, _)| signature.0)
 						.collect(),
 					state_chain_client.clone(),
-					db.clone(),
+					db,
 				)
 				.map_err(|_r| anyhow::anyhow!("DOT witnesser failed")),
 			);
@@ -245,12 +257,6 @@ async fn main() -> anyhow::Result<()> {
 				)
 				.map_err(|_| anyhow::anyhow!("DOT runtime version updater failed")),
 			);
-
-			if let Some(btc_settings) = settings.btc {
-				btc::witnessing::start(scope, btc_settings, btc_epoch_start_receiver, db)
-					.await
-					.unwrap();
-			}
 
 			Ok(())
 		}

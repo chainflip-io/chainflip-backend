@@ -42,6 +42,10 @@ pub const ETH_HTTP_NODE_ENDPOINT: &str = "ETH__HTTP_NODE_ENDPOINT";
 /// A WebSocket node endpoint for Ethereum
 pub const ETH_WS_NODE_ENDPOINT: &str = "ETH__WS_NODE_ENDPOINT";
 
+pub const BTC_HTTP_NODE_ENDPOINT: &str = "BTC__HTTP_NODE_ENDPOINT";
+pub const BTC_RPC_USER: &str = "BTC__RPC_USER";
+pub const BTC_RPC_PASSWORD: &str = "BTC__RPC_PASSWORD";
+
 /// IP Address and port on which we listen for incoming p2p connections
 pub const NODE_P2P_IP_ADDRESS: &str = "NODE_P2P__IP_ADDRESS";
 pub const NODE_P2P_PORT: &str = "NODE_P2P__PORT";

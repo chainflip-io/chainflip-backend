@@ -19,8 +19,7 @@ use crate::{Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstruc
 use alloc::string::String;
 pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{
-	chains::assets, BitcoinAddress, EpochIndex, IntentId, KeyId,
-	PublicKeyBytes,
+	chains::assets, BitcoinAddressFull, EpochIndex, IntentId, KeyId, PublicKeyBytes,
 };
 use itertools;
 
@@ -89,7 +88,7 @@ impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
 pub struct EpochStartData {
-	pub change_address: BitcoinAddress,
+	pub change_address: BitcoinAddressFull,
 }
 
 impl Chain for Bitcoin {
@@ -103,7 +102,7 @@ impl Chain for Bitcoin {
 
 	type ChainAsset = assets::btc::Asset;
 
-	type ChainAccount = BitcoinAddress;
+	type ChainAccount = BitcoinAddressFull;
 
 	type EpochStartData = EpochStartData;
 
@@ -205,7 +204,7 @@ pub struct UtxoId {
 }
 
 impl IngressIdConstructor for BitcoinFetchId {
-	type Address = BitcoinAddress;
+	type Address = BitcoinAddressFull;
 
 	fn deployed(_intent_id: u64, _address: Self::Address) -> Self {
 		todo!()
@@ -234,6 +233,7 @@ pub struct Utxo {
 	pub txid: Hash,
 	pub vout: u32,
 	pub pubkey_x: [u8; 32],
+	// Salt used to create the address that this utxo was sent to.
 	pub salt: u32,
 }
 pub trait GetUtxoAmount {
