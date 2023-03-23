@@ -39,7 +39,7 @@ pub fn filter_interesting_utxos(
 	txs: Vec<Transaction>,
 	address_monitor: &mut AddressMonitor<ScriptPubkeyBytes, BitcoinAddressSeed>,
 	change_address: &BitcoinAddressFull,
-) -> (Vec<(BitcoinAddressFull, UtxoId, u64)>, Vec<Utxo>) {
+) -> (Vec<IngressWitness<Bitcoin>>, Vec<Utxo>) {
 	address_monitor.sync_addresses();
 	let mut ingress_utxos = vec![];
 	let mut change_utxos = vec![];
@@ -52,19 +52,20 @@ pub fn filter_interesting_utxos(
 						if let Some(bitcoin_address_seed) =
 							address_monitor.get(&script_pubkey_bytes)
 						{
-							ingress_utxos.push((
-								BitcoinAddressFull {
+							ingress_utxos.push(IngressWitness {
+								ingress_address: BitcoinAddressFull {
 									script_pubkey_bytes,
 									seed: bitcoin_address_seed.clone(),
 								},
-								UtxoId {
+								asset: btc::Asset::Btc,
+								amount: tx_out.value.into(),
+								tx_id: UtxoId {
 									tx_hash,
 									vout,
 									pubkey_x: bitcoin_address_seed.pubkey_x,
 									salt: bitcoin_address_seed.salt.into(),
 								},
-								tx_out.value,
-							));
+							});
 						} else if script_pubkey_bytes == change_address.script_pubkey_bytes {
 							change_utxos.push(Utxo {
 								amount: tx_out.value,
@@ -167,16 +168,6 @@ where
 							&mut address_monitor,
 							&epoch_start.data.change_address,
 						);
-
-						let ingress_witnesses = ingress_witnesses
-							.into_iter()
-							.map(|(ingress_address, utxo_id, amount)| IngressWitness::<Bitcoin> {
-								ingress_address,
-								amount: amount.into(),
-								asset: btc::Asset::Btc,
-								tx_id: utxo_id,
-							})
-							.collect();
 
 						let _result =
 							state_chain_client
@@ -327,8 +318,8 @@ mod test_utxo_filtering {
 			&Default::default(),
 		);
 		assert_eq!(ingress_witnesses.len(), 2);
-		assert_eq!(ingress_witnesses[0].2, 2324);
-		assert_eq!(ingress_witnesses[1].2, 1234);
+		assert_eq!(ingress_witnesses[0].amount, 2324);
+		assert_eq!(ingress_witnesses[1].amount, 1234);
 	}
 
 	#[test]
@@ -355,8 +346,8 @@ mod test_utxo_filtering {
 			&Default::default(),
 		);
 		assert_eq!(ingress_witnesses.len(), 2);
-		assert_eq!(ingress_witnesses[0].2, 2324);
-		assert_eq!(ingress_witnesses[1].2, 1234);
+		assert_eq!(ingress_witnesses[0].amount, 2324);
+		assert_eq!(ingress_witnesses[1].amount, 1234);
 	}
 
 	#[test]
@@ -377,6 +368,6 @@ mod test_utxo_filtering {
 			&Default::default(),
 		);
 		assert_eq!(ingress_witnesses.len(), 1);
-		assert_eq!(ingress_witnesses[0].2, 2324);
+		assert_eq!(ingress_witnesses[0].amount, 2324);
 	}
 }
