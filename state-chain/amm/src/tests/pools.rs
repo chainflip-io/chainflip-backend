@@ -1647,12 +1647,18 @@ fn test_limit_selling_paior_tick1thru0_mint() {
 	assert!(pool.current_tick < -120)
 }
 
-// Failing tests that puts the pool outside the tick boundaries. This only happens in Asset0ToAsset1. Most certainly related
-// to current_tick_after_crossing_target_tick, which substracts an extra tick only in Asset0ToAsset1 but not vice versa.
+// Tests to ensure the pool doesn't end up below the MIN_TICK. We perform a swap with the amount required to reach
+// the end of the pool (MIN_TICK). Currently, we end up in MIN_TICK - 1 while we should end in MIN_TICK.
+// I have reproduced this behaviour in Uniswap and the pool math has this behaviour but the slippage limits act
+// as a boundary safeguard. This is done by ensuring:
+// require (sqrtPriceLimitX96 > TickMath.MIN_SQRT_RATIO && sqrtPriceLimitX96 < TickMath.MAX_SQRT_RATIO)
+// In the Uniswap tests, by default swaps are performed wit sqrtPriceLimitX96 set to MIN_SQRT_RATIO+1 or MAX_SQRT_RATIO-1.
+// That prevents this behaviour from happening. Therefore, I am doing a test here that is failing right now but should
+// pass once the slippage limits are implemented. Passing None as a slippage parameter to make sure the default value
+// used as slippage limit in the pool is correct (MIN_SQRT_RATIO+1).
 #[test]
 fn test_tick_boundaries_low() {
 	let mut pool = PoolState::new(3000, encodedprice1_1()).unwrap();
-
 	let id: AccountId = AccountId::from([0xcf; 32]);
 	let mut minted_capital = None;
 
@@ -1677,12 +1683,56 @@ fn test_tick_boundaries_low() {
 		U256::from(ONE_IN_HUNDREDTH_BIPS),
 		U256::from(ONE_IN_HUNDREDTH_BIPS - 3000),
 	);
-	// Adding +1 to amount to swap causes the tick to end up at -887273 (instead of -887272) even though we have enough liquidity
+	// Adding +1 to amount to swap causes the tick to end up at -887273 (instead of -887272).
+	// What changes is the sqrt_ratio_next calculated, which depends on whether amount_minus_fees >= amount_required_to_reach_target.
+	// That causes that we enter or not in the sqrt_ratio_next == sqrt_ratio_target branch. When the slippage limit is set it
+	// prevents it from entering the sqrt_ratio_next == sqrt_ratio_target branch.
 	let swap_result = pool.swap::<Asset0ToAsset1>(amount_to_swap+1, None);
 
 	assert!(swap_result.is_ok());
-	println!("current_tick: {}", pool.current_tick);
-	assert!(pool.current_tick >= MIN_TICK);
+	assert_eq!(pool.current_tick, MIN_TICK);
+
+	
+}
+
+// Since Uniswap uses TickBitmap, in order to reproduce the same scenario we need to swap in way smaller tick ranges. Modifying the
+// previous test to have a test that is can be reproduced exactly in Uniswap.
+#[test]
+fn test_tick_boundaries_low_uniswap() {
+	let ini_tick = PoolState::sqrt_price_at_tick(MIN_TICK+100);
+	// Set initial sqrtPrice close to the min tick
+	let mut pool = PoolState::new(3000, ini_tick).unwrap();
+
+	let id: AccountId = AccountId::from([0xcf; 32]);
+	let mut minted_capital = None;
+
+	// This will mint INITIALIZE_LIQUIDITY_AMOUNT for both assets
+	pool.mint(
+		id.clone(),
+		MIN_TICK,
+		MIN_TICK+200,
+		INITIALIZE_LIQUIDITY_AMOUNT,
+		|minted| {
+			minted_capital.replace(minted);
+			Ok::<(), ()>(())
+		},
+	)
+	.unwrap();
+
+	
+	// Amount calculated by the pool's math
+	let amount_required_to_reach_target = U256::from_dec_str("183990944418315367222407009044005366").unwrap();
+	// Calculate amount required to swap (before fees)
+	let amount_to_swap = mul_div_floor(
+		amount_required_to_reach_target,
+		U256::from(ONE_IN_HUNDREDTH_BIPS),
+		U256::from(ONE_IN_HUNDREDTH_BIPS - pool.fee_100th_bips),
+	);
+
+	let swap_result = pool.swap::<Asset0ToAsset1>(amount_to_swap + 1, None);
+
+	assert!(swap_result.is_ok());
+	assert_eq!(pool.current_tick, MIN_TICK);
 
 	
 }
