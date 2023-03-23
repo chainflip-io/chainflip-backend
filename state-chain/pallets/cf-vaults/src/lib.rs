@@ -862,13 +862,13 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				new_public_key,
 			) {
 				Ok(rotate_tx) => {
+					T::Broadcaster::threshold_sign_and_broadcast(rotate_tx);
 					if KeyState::Active == current_vault_epoch_and_state.key_state {
 						CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
 							epoch_index: current_vault_epoch_and_state.epoch_index,
 							key_state: KeyState::Unavailable,
 						});
 					}
-					T::Broadcaster::threshold_sign_and_broadcast(rotate_tx);
 				},
 				Err(_) => {
 					// The block number value 1, which the vault is being set with is a dummy value
