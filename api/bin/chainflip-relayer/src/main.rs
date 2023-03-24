@@ -15,7 +15,7 @@ use std::path::PathBuf;
 #[rpc(server, client, namespace = "relayer")]
 pub trait Rpc {
 	#[method(name = "registerAccount")]
-	async fn register_account(&self) -> Result<(), Error>;
+	async fn register_account(&self) -> Result<String, Error>;
 
 	#[method(name = "newSwapIngressAddress")]
 	async fn request_swap_ingress_address(
@@ -39,9 +39,10 @@ impl RpcServerImpl {
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-	async fn register_account(&self) -> Result<(), Error> {
+	async fn register_account(&self) -> Result<String, Error> {
 		Ok(chainflip_api::register_account_role(AccountRole::Relayer, &self.state_chain_settings)
-			.await?)
+			.await
+			.map(|tx_hash| format!("{tx_hash:#x}"))?)
 	}
 	async fn request_swap_ingress_address(
 		&self,
@@ -77,7 +78,7 @@ pub struct RelayerOptions {
 	#[clap(
 		long = "port",
 		default_value = "80",
-		help = "The port number on which the relayer will listen for connections. Use 0 to assing a random port."
+		help = "The port number on which the relayer will listen for connections. Use 0 to assign a random port."
 	)]
 	pub port: u16,
 	#[clap(

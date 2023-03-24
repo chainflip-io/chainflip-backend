@@ -9,6 +9,7 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
+use zeroize::Zeroize;
 
 pub mod primitives {
 	pub use cf_primitives::*;
@@ -16,6 +17,8 @@ pub mod primitives {
 	pub use state_chain_runtime::Hash;
 	pub type ClaimAmount = pallet_cf_staking::ClaimAmount<FlipBalance>;
 }
+
+pub mod lp;
 
 pub use chainflip_engine::settings;
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
@@ -77,8 +80,6 @@ pub async fn request_block(
 		.ok_or_else(|| anyhow!("unknown block hash"))
 }
 
-pub type ClaimCertificate = Vec<u8>;
-
 async fn submit_and_ensure_success<Call, BlockStream>(
 	client: &StateChainClient,
 	block_stream: &mut BlockStream,
@@ -107,6 +108,7 @@ where
 async fn connect_submit_and_get_events<Call>(
 	state_chain_settings: &settings::StateChain,
 	call: Call,
+	required_role: AccountRole,
 ) -> Result<Vec<state_chain_runtime::RuntimeEvent>>
 where
 	Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static,
@@ -114,8 +116,7 @@ where
 	task_scope(|scope| {
 		async {
 			let (_, block_stream, state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
-					.await?;
+				StateChainClient::new(scope, state_chain_settings, required_role, false).await?;
 
 			let mut block_stream = Box::new(block_stream);
 
@@ -166,7 +167,7 @@ pub async fn request_claim(
 pub async fn register_account_role(
 	role: AccountRole,
 	state_chain_settings: &settings::StateChain,
-) -> Result<()> {
+) -> Result<H256> {
 	task_scope(|scope| {
 		async {
 			let (_, _, state_chain_client) =
@@ -179,8 +180,7 @@ pub async fn register_account_role(
 				})
 				.await
 				.expect("Could not set register account role for account");
-			println!("Account role set at tx {tx_hash:#x}.");
-			Ok(())
+			Ok(tx_hash)
 		}
 		.boxed()
 	})
@@ -340,6 +340,7 @@ pub async fn register_swap_intent(
 			egress_address,
 			relayer_commission_bps,
 		},
+		AccountRole::None,
 	)
 	.await?;
 
@@ -358,34 +359,6 @@ pub async fn register_swap_intent(
 		panic!("NewSwapIntent must have been generated");
 	}
 }
-
-pub async fn liquidity_deposit(
-	state_chain_settings: &settings::StateChain,
-	asset: Asset,
-) -> Result<ForeignChainAddress> {
-	let events = connect_submit_and_get_events(
-		state_chain_settings,
-		pallet_cf_lp::Call::request_deposit_address { asset },
-	)
-	.await?;
-
-	if let Some(state_chain_runtime::RuntimeEvent::LiquidityProvider(
-		pallet_cf_lp::Event::DepositAddressReady { ingress_address, intent_id: _ },
-	)) = events.iter().find(|event| {
-		matches!(
-			event,
-			state_chain_runtime::RuntimeEvent::LiquidityProvider(
-				pallet_cf_lp::Event::DepositAddressReady { .. }
-			)
-		)
-	}) {
-		Ok((*ingress_address).clone())
-	} else {
-		panic!("DepositAddressReady must have been generated");
-	}
-}
-
-use zeroize::Zeroize;
 
 #[derive(Debug, Zeroize)]
 /// Public and Secret keys as bytes

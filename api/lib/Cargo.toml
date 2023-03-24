@@ -18,6 +18,7 @@ tiny-bip39 = "1.0.0"
 secp256k1 = {version = "0.20"}
 rand_legacy = { package = "rand", version = "0.6" }
 zeroize = "1.5.4"
+serde = { version = "1.0", features = ["derive"] }
 
 # State Chain
 cf-chains = {path = "../../state-chain/chains"}
@@ -28,6 +29,7 @@ pallet-cf-account-roles = { path = '../../state-chain/pallets/cf-account-roles' 
 pallet-cf-environment = {path = "../../state-chain/pallets/cf-environment"}
 pallet-cf-governance = {path = "../../state-chain/pallets/cf-governance"}
 pallet-cf-lp = { path = '../../state-chain/pallets/cf-lp' }
+pallet-cf-pools = { path = '../../state-chain/pallets/cf-pools' }
 pallet-cf-staking = {path = "../../state-chain/pallets/cf-staking"}
 pallet-cf-swapping = { path = '../../state-chain/pallets/cf-swapping' }
 pallet-cf-threshold-signature = {path = "../../state-chain/pallets/cf-threshold-signature"}

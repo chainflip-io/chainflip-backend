@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 
 use anyhow::Context;
+use cf_primitives::{Asset, Liquidity, Tick};
 use jsonrpsee::{
 	core::{
 		client::{ClientT, SubscriptionClientT},
@@ -12,12 +13,12 @@ use sp_core::{
 	storage::{StorageData, StorageKey},
 	Bytes,
 };
-use sp_runtime::traits::BlakeTwo256;
+use sp_runtime::{traits::BlakeTwo256, AccountId32};
 use sp_version::RuntimeVersion;
 use state_chain_runtime::SignedBlock;
 
 use codec::Encode;
-use custom_rpc::CustomApiClient;
+use custom_rpc::{CustomApiClient, PoolsApiClient};
 use sc_rpc_api::{
 	author::AuthorApiClient, chain::ChainApiClient, state::StateApiClient, system::SystemApiClient,
 };
@@ -29,6 +30,7 @@ use crate::settings;
 
 pub trait RawRpcApi:
 	CustomApiClient
+	+ PoolsApiClient
 	+ SystemApiClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>
 	+ StateApiClient<state_chain_runtime::Hash>
 	+ AuthorApiClient<
@@ -47,6 +49,7 @@ impl<
 		T: SubscriptionClientT
 			+ ClientT
 			+ CustomApiClient
+			+ PoolsApiClient
 			+ SystemApiClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>
 			+ StateApiClient<state_chain_runtime::Hash>
 			+ AuthorApiClient<
@@ -109,6 +112,13 @@ pub trait BaseRpcApi {
 	>;
 
 	async fn runtime_version(&self) -> RpcResult<RuntimeVersion>;
+
+	async fn pool_minted_positions(
+		&self,
+		lp: AccountId32,
+		asset: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<(Tick, Tick, Liquidity)>>;
 }
 
 pub struct BaseRpcClient<RawRpcClient> {
@@ -197,5 +207,14 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 
 	async fn runtime_version(&self) -> RpcResult<RuntimeVersion> {
 		self.raw_rpc_client.runtime_version(None).await
+	}
+
+	async fn pool_minted_positions(
+		&self,
+		lp: AccountId32,
+		asset: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Vec<(Tick, Tick, Liquidity)>> {
+		self.raw_rpc_client.cf_pool_minted_positions(lp, asset, at).await
 	}
 }

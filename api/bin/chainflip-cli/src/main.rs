@@ -96,7 +96,7 @@ pub async fn liquidity_deposit(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 ) -> Result<()> {
-	let address = api::liquidity_deposit(state_chain_settings, asset).await?;
+	let address = api::lp::liquidity_deposit(state_chain_settings, asset).await?;
 	println!("Ingress address: {address}");
 	Ok(())
 }
@@ -126,7 +126,10 @@ async fn register_account_role(role: AccountRole, settings: &settings::CLISettin
 		return Ok(())
 	}
 
-	api::register_account_role(role, &settings.state_chain).await
+	let tx_hash = api::register_account_role(role, &settings.state_chain).await?;
+	println!("Account role set at tx {tx_hash:#x}.");
+
+	Ok(())
 }
 
 pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<()> {
