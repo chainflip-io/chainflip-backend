@@ -66,7 +66,7 @@ impl Position {
 				// DIFF: This behaviour is different than Uniswap's. We use U256 instead of u128 to calculate fees, therefore it is not possible to overflow the fees here.
 
 				/*
-					Proof that `mul_div` does not overflow:
+					Proof that `mul_div_floor` does not overflow:
 					Note position.liqiudity: u128
 					U512::one() << 128 > u128::MAX
 				*/
@@ -767,7 +767,7 @@ impl PoolState {
 		assert!(from <= to);
 
 		/*
-			Proof that `mul_div` does not overflow:
+			Proof that `mul_div_floor` does not overflow:
 			If A ∈ ℕ, B ∈ ℕ, A > 0, B >= A
 			Then A * B >= B and B - A < B
 			Then A * B > B - A
@@ -784,7 +784,7 @@ impl PoolState {
 		assert!(from <= to);
 
 		/*
-			Proof that `mul_div` does not overflow:
+			Proof that `mul_div_ceil` does not overflow:
 			If A ∈ ℕ, B ∈ ℕ, A > 0, B >= A
 			Then A * B >= B and B - A < B
 			Then A * B > B - A
@@ -800,7 +800,7 @@ impl PoolState {
 		assert!(from <= to);
 
 		/*
-			Proof that `mul_div` does not overflow:
+			Proof that `mul_div_floor` does not overflow:
 			If A ∈ u160, B ∈ u160, A <= B, L ∈ u128
 			Then B - A ∈ u160
 			Then (B - A) / (1<<96) <= u64::MAX (160 - 96 = 64)
@@ -817,7 +817,7 @@ impl PoolState {
 		assert!(from <= to);
 
 		/*
-			Proof that `mul_div` does not overflow:
+			Proof that `mul_div_ceil` does not overflow:
 			If A ∈ u160, B ∈ u160, A <= B, L ∈ u128
 			Then B - A ∈ u160
 			Then (B - A) / (1<<96) <= u64::MAX (160 - 96 = 64)
@@ -837,7 +837,7 @@ impl PoolState {
 		let liquidity = U256::from(liquidity) << 96u32;
 
 		/*
-			Proof that `mul_div` does not overflow:
+			Proof that `mul_div_ceil` does not overflow:
 			If L ∈ u256, R ∈ u256, A ∈ u256
 			Then L <= L + R * A
 			Then L / (L + R * A) <= 1
