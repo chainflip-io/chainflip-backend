@@ -2,7 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::UpdateFlipSupply;
+use cf_chains::{address::ForeignChainAddress, UpdateFlipSupply};
 use cf_traits::{
 	BlockEmissions, Broadcaster, EgressApi, EthEnvironmentProvider, FlipBurnInfo, Issuance,
 	RewardsDistribution,
@@ -178,9 +178,7 @@ pub mod pallet {
 					T::EgressHandler::schedule_egress(
 						Asset::Flip,
 						flip_to_burn,
-						cf_primitives::ForeignChainAddress::Eth(
-							T::EthEnvironmentProvider::stake_manager_address(),
-						),
+						ForeignChainAddress::Eth(T::EthEnvironmentProvider::stake_manager_address()),
 					);
 					T::Issuance::burn(flip_to_burn.into());
 					Self::broadcast_update_total_supply(

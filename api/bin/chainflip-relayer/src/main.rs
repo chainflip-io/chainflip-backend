@@ -67,7 +67,7 @@ impl RpcServer for RpcServerImpl {
 			relayer_commission_bps,
 		)
 		.await
-		.map(|address| ["0x", &hex::encode(address.as_ref())].concat())
+		.map(|address| address.to_string())
 		.map_err(|e| anyhow!("{}:{}", e, e.root_cause()))?)
 	}
 }

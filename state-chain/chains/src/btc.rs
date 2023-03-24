@@ -15,12 +15,13 @@ use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 
 extern crate alloc;
-use crate::{Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
+use crate::{
+	address::BitcoinAddressData, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator,
+	IngressIdConstructor,
+};
 use alloc::string::String;
 pub use cf_primitives::chains::Bitcoin;
-use cf_primitives::{
-	chains::assets, BitcoinAddressFull, EpochIndex, IntentId, KeyId, PublicKeyBytes,
-};
+use cf_primitives::{chains::assets, EpochIndex, IntentId, KeyId, PublicKeyBytes};
 use itertools;
 
 /// This salt is used to derive the change address for every vault. i.e. for every epoch.
@@ -93,7 +94,7 @@ impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
 pub struct EpochStartData {
-	pub change_address: BitcoinAddressFull,
+	pub change_address: BitcoinAddressData,
 }
 
 impl Chain for Bitcoin {
@@ -107,7 +108,7 @@ impl Chain for Bitcoin {
 
 	type ChainAsset = assets::btc::Asset;
 
-	type ChainAccount = BitcoinAddressFull;
+	type ChainAccount = BitcoinAddressData;
 
 	type EpochStartData = EpochStartData;
 
@@ -212,7 +213,7 @@ pub struct UtxoId {
 }
 
 impl IngressIdConstructor for BitcoinFetchId {
-	type Address = BitcoinAddressFull;
+	type Address = BitcoinAddressData;
 
 	fn deployed(_intent_id: u64, _address: Self::Address) -> Self {
 		todo!()
@@ -665,7 +666,7 @@ impl BitcoinScript {
 	}
 	/// Serializes the script by returning a single byte for the length
 	/// of the script and then the script itself
-	fn serialize(&self) -> Vec<u8> {
+	pub fn serialize(&self) -> Vec<u8> {
 		itertools::chain!(to_varint(self.data.len() as u64), self.data.iter().cloned()).collect()
 	}
 }

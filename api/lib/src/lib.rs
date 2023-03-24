@@ -1,7 +1,7 @@
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
-use cf_chains::eth::H256;
-use cf_primitives::{AccountRole, Asset, ForeignChainAddress};
+use cf_chains::{address::ForeignChainAddress, eth::H256};
+use cf_primitives::{AccountRole, Asset};
 use futures::{FutureExt, Stream};
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use rand_legacy::FromEntropy;
@@ -15,6 +15,7 @@ pub mod primitives {
 	pub use pallet_cf_governance::ProposalId;
 	pub use state_chain_runtime::Hash;
 	pub type ClaimAmount = pallet_cf_staking::ClaimAmount<FlipBalance>;
+	pub use cf_chains::ForeignChainAddress;
 }
 
 pub use chainflip_engine::settings;

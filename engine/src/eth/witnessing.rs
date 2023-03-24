@@ -1,5 +1,5 @@
 use std::{
-	collections::{BTreeMap, HashMap},
+	collections::{BTreeSet, HashMap},
 	sync::Arc,
 };
 
@@ -119,9 +119,9 @@ pub async fn start(
 	fn monitored_addresses_from_all_eth(
 		eth_chain_ingress_addresses: &HashMap<assets::eth::Asset, Vec<H160>>,
 		asset: assets::eth::Asset,
-	) -> BTreeMap<H160, ()> {
+	) -> BTreeSet<H160> {
 		if let Some(eth_ingress_addresses) = eth_chain_ingress_addresses.get(&asset) {
-			eth_ingress_addresses.clone().into_iter().map(|a| (a, ())).collect()
+			eth_ingress_addresses.clone().into_iter().collect()
 		} else {
 			Default::default()
 		}

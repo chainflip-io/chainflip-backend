@@ -137,7 +137,7 @@ fn check_for_interesting_events_in_block(
 	block_events: Vec<(Phase, EventWrapper)>,
 	block_number: PolkadotBlockNumber,
 	our_vault: &PolkadotAccountId,
-	address_monitor: &mut AddressMonitor<PolkadotAccountId, ()>,
+	address_monitor: &mut AddressMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
 ) -> (
 	Vec<(PolkadotExtrinsicIndex, PolkadotBalance)>,
 	Vec<IngressWitness<Polkadot>>,
@@ -226,7 +226,7 @@ fn check_for_interesting_events_in_block(
 pub async fn start<StateChainClient, DotRpc>(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Polkadot>>,
 	dot_client: DotRpc,
-	address_monitor: AddressMonitor<PolkadotAccountId, ()>,
+	address_monitor: AddressMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
 	signature_receiver: tokio::sync::mpsc::UnboundedReceiver<[u8; 64]>,
 	monitored_signatures: BTreeSet<[u8; 64]>,
 	state_chain_client: Arc<StateChainClient>,
@@ -485,7 +485,7 @@ where
 #[cfg(test)]
 mod tests {
 
-	use std::{collections::BTreeMap, str::FromStr};
+	use std::str::FromStr;
 
 	use super::*;
 
@@ -604,10 +604,10 @@ mod tests {
 		]);
 
 		let (monitor_ingress_sender, mut address_monitor) =
-			AddressMonitor::new(BTreeMap::from([(transfer_1_ingress_addr, ())]));
+			AddressMonitor::new(BTreeSet::from([transfer_1_ingress_addr]));
 
 		monitor_ingress_sender
-			.send(AddressMonitorCommand::Add((transfer_2_ingress_addr, ())))
+			.send(AddressMonitorCommand::Add(transfer_2_ingress_addr))
 			.unwrap();
 
 		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls) =
@@ -670,7 +670,7 @@ mod tests {
 				20,
 				// arbitrary, not focus of the test
 				&our_vault,
-				&mut AddressMonitor::new(BTreeMap::default()).1,
+				&mut AddressMonitor::new(BTreeSet::default()).1,
 			);
 
 		assert!(
@@ -749,7 +749,7 @@ mod tests {
 		start(
 			epoch_starts_receiver,
 			dot_rpc_client,
-			AddressMonitor::new(BTreeMap::default()).1,
+			AddressMonitor::new(Default::default()).1,
 			signature_receiver,
 			BTreeSet::default(),
 			state_chain_client,

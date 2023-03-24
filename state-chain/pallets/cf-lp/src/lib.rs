@@ -7,10 +7,8 @@ pub use pallet::*;
 use sp_runtime::DispatchResult;
 use sp_std::cmp::{Ord, Ordering};
 
-use cf_chains::AnyChain;
-use cf_primitives::{
-	AmmRange, Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId, Liquidity, PoolSide,
-};
+use cf_chains::{address::ForeignChainAddress, AnyChain};
+use cf_primitives::{AmmRange, Asset, AssetAmount, ForeignChain, IntentId, Liquidity, PoolSide};
 use cf_traits::{
 	liquidity::LpProvisioningApi, AccountRoleRegistry, Chainflip, EgressApi, IngressApi,
 	LiquidityPoolApi, SystemStateInfo,

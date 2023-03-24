@@ -3,15 +3,13 @@ mod tests;
 
 use anyhow::{anyhow, Context};
 use cf_chains::{
-	btc::{self, ingress_address::derive_btc_ingress_address, CHANGE_ADDRESS_SALT},
+	address::{BitcoinAddressData, BitcoinAddressFor, BitcoinAddressSeed},
+	btc::{self, CHANGE_ADDRESS_SALT},
 	dot,
 	eth::Ethereum,
 	Bitcoin, ChainCrypto, Polkadot,
 };
-use cf_primitives::{
-	BitcoinAddressFull, BitcoinAddressSeed, BlockNumber, CeremonyId, EpochIndex, KeyId,
-	PolkadotAccountId, ScriptPubkeyBytes,
-};
+use cf_primitives::{BlockNumber, CeremonyId, EpochIndex, KeyId, PolkadotAccountId};
 use futures::{FutureExt, Stream, StreamExt};
 use sp_core::{Hasher, H160, H256};
 use sp_runtime::{traits::Keccak256, AccountId32};
@@ -41,7 +39,7 @@ use crate::{
 	witnesser::{AddressMonitorCommand, EpochStart},
 };
 
-pub type EthAddressSender = UnboundedSender<AddressMonitorCommand<H160, ()>>;
+pub type EthAddressSender = UnboundedSender<AddressMonitorCommand<H160>>;
 
 pub struct EthAddressToMonitorSender {
 	pub eth: EthAddressSender,
@@ -191,12 +189,12 @@ pub async fn start<
 	eth_address_to_monitor_sender: EthAddressToMonitorSender,
 	dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
 	dot_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<
-		AddressMonitorCommand<PolkadotAccountId, ()>,
+		AddressMonitorCommand<PolkadotAccountId>,
 	>,
 	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<[u8; 64]>,
 	btc_epoch_start_sender: async_broadcast::Sender<EpochStart<Bitcoin>>,
 	btc_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<
-		AddressMonitorCommand<ScriptPubkeyBytes, BitcoinAddressSeed>,
+		AddressMonitorCommand<BitcoinAddressData>,
 	>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
 	initial_block_hash: H256,
@@ -278,12 +276,12 @@ where
                 .await
                 .unwrap() {
 
-                    let change_address = BitcoinAddressFull {
-                        script_pubkey_bytes: derive_btc_ingress_address(vault.public_key.0, CHANGE_ADDRESS_SALT, btc_network).as_bytes().to_vec().try_into().unwrap(),
-                        seed: BitcoinAddressSeed {
+                    let change_address = BitcoinAddressData {
+                        address_for: BitcoinAddressFor::Ingress(BitcoinAddressSeed {
                             pubkey_x: vault.public_key.0,
                             salt: CHANGE_ADDRESS_SALT,
-                        }
+                        }),
+                        network: btc_network,
                     };
 
                     btc_epoch_start_sender.broadcast(EpochStart::<Bitcoin> {
@@ -572,7 +570,7 @@ where
                                             eth::Asset::Usdc => {
                                                 &eth_address_to_monitor_sender.usdc
                                             }
-                                        }.send(AddressMonitorCommand::Add((ingress_address, ()))).unwrap();
+                                        }.send(AddressMonitorCommand::Add(ingress_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumIngressEgress(
                                         pallet_cf_ingress_egress::Event::StopWitnessing {
@@ -600,7 +598,7 @@ where
                                         }
                                     ) => {
                                         assert_eq!(ingress_asset, cf_primitives::chains::assets::dot::Asset::Dot);
-                                        dot_monitor_ingress_sender.send(AddressMonitorCommand::Add((ingress_address, ()))).unwrap();
+                                        dot_monitor_ingress_sender.send(AddressMonitorCommand::Add(ingress_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
                                         pallet_cf_ingress_egress::Event::StopWitnessing {
@@ -618,7 +616,7 @@ where
                                         }
                                     ) => {
                                         assert_eq!(ingress_asset, cf_primitives::chains::assets::btc::Asset::Btc);
-                                        btc_monitor_ingress_sender.send(AddressMonitorCommand::Add((ingress_address.script_pubkey_bytes, ingress_address.seed))).unwrap();
+                                        btc_monitor_ingress_sender.send(AddressMonitorCommand::Add(ingress_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::BitcoinIngressEgress(
                                         pallet_cf_ingress_egress::Event::StopWitnessing {
@@ -627,7 +625,7 @@ where
                                         }
                                     ) => {
                                         assert_eq!(ingress_asset, cf_primitives::chains::assets::btc::Asset::Btc);
-                                        btc_monitor_ingress_sender.send(AddressMonitorCommand::Remove(ingress_address.script_pubkey_bytes)).unwrap();
+                                        btc_monitor_ingress_sender.send(AddressMonitorCommand::Remove(ingress_address)).unwrap();
                                     }
                                 }}}}
                                 Err(error) => {

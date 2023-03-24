@@ -36,7 +36,7 @@ pub struct Erc20Witnesser {
 	pub deployed_address: H160,
 	asset: eth::Asset,
 	contract: ethabi::Contract,
-	address_monitor: Arc<Mutex<AddressMonitor<sp_core::H160, ()>>>,
+	address_monitor: Arc<Mutex<AddressMonitor<sp_core::H160, sp_core::H160, ()>>>,
 }
 
 impl Erc20Witnesser {
@@ -44,7 +44,7 @@ impl Erc20Witnesser {
 	pub fn new(
 		deployed_address: H160,
 		asset: eth::Asset,
-		address_monitor: Arc<Mutex<AddressMonitor<sp_core::H160, ()>>>,
+		address_monitor: Arc<Mutex<AddressMonitor<sp_core::H160, sp_core::H160, ()>>>,
 	) -> Self {
 		Self {
 			deployed_address,

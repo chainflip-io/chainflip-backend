@@ -1,8 +1,9 @@
 //! Common Witnesser functionality
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use async_trait::async_trait;
+use cf_chains::address::{BitcoinAddressData, ScriptPubkeyBytes};
 use cf_primitives::EpochIndex;
 
 pub mod block_head_stream_from;
@@ -47,23 +48,37 @@ pub trait LatestBlockNumber {
 }
 
 #[derive(Debug)]
-pub enum AddressMonitorCommand<Address, Data> {
-	Add((Address, Data)),
-	Remove(Address),
+pub enum AddressMonitorCommand<AddressData> {
+	Add(AddressData),
+	Remove(AddressData),
 }
 
 /// This stores addresses we are interested in. New addresses
 /// come through a channel which can be polled by calling
 /// [AddressMonitor::sync_addresses].
-pub struct AddressMonitor<A, D> {
-	addresses: BTreeMap<A, D>,
-	address_receiver: tokio::sync::mpsc::UnboundedReceiver<AddressMonitorCommand<A, D>>,
+pub struct AddressMonitor<A, K, V> {
+	addresses: BTreeMap<K, V>,
+	address_receiver: tokio::sync::mpsc::UnboundedReceiver<AddressMonitorCommand<A>>,
 }
 
-impl<A: std::cmp::Ord + std::fmt::Debug + Clone, D: Clone> AddressMonitor<A, D> {
+// Some addresses act as key value pairs.
+pub trait AddressKeyValue {
+	type Key;
+	type Value;
+
+	fn key_value(&self) -> (Self::Key, Self::Value);
+}
+
+impl<
+		A: std::fmt::Debug + AddressKeyValue<Key = K, Value = V>,
+		K: std::cmp::Ord + Clone,
+		V: Clone,
+	> AddressMonitor<A, K, V>
+{
 	pub fn new(
-		addresses: BTreeMap<A, D>,
-	) -> (tokio::sync::mpsc::UnboundedSender<AddressMonitorCommand<A, D>>, Self) {
+		addresses: BTreeSet<A>,
+	) -> (tokio::sync::mpsc::UnboundedSender<AddressMonitorCommand<A>>, Self) {
+		let addresses = addresses.into_iter().map(|a| a.key_value()).collect();
 		let (address_sender, address_receiver) = tokio::sync::mpsc::unbounded_channel();
 		(address_sender, Self { addresses, address_receiver })
 	}
@@ -72,11 +87,10 @@ impl<A: std::cmp::Ord + std::fmt::Debug + Clone, D: Clone> AddressMonitor<A, D> 
 	/// should be called first to ensure we check against recently added addresses.
 	/// (We keep it as a separate function to make it possible to check multiple
 	/// addresses in a tight loop without having to fetch addresses on every item)
-	pub fn get(&self, address: &A) -> Option<D> {
+	pub fn get(&self, address: &K) -> Option<V> {
 		self.addresses.get(address).cloned()
 	}
-
-	pub fn contains(&self, address: &A) -> bool {
+	pub fn contains(&self, address: &K) -> bool {
 		self.addresses.contains_key(address)
 	}
 
@@ -84,15 +98,44 @@ impl<A: std::cmp::Ord + std::fmt::Debug + Clone, D: Clone> AddressMonitor<A, D> 
 	pub fn sync_addresses(&mut self) {
 		while let Ok(address) = self.address_receiver.try_recv() {
 			match address {
-				AddressMonitorCommand::Add((address, data)) =>
-					if self.addresses.insert(address.clone(), data).is_some() {
+				AddressMonitorCommand::Add(address) => {
+					let (k, v) = address.key_value();
+					if self.addresses.insert(k, v).is_some() {
 						tracing::warn!("Address {:?} already being monitored", address);
-					},
+					}
+				},
 				AddressMonitorCommand::Remove(address) =>
-					if self.addresses.remove(&address).is_none() {
+					if self.addresses.remove(&address.key_value().0).is_none() {
 						tracing::warn!("Address {:?} already not being monitored", address);
 					},
 			}
 		}
+	}
+}
+
+impl AddressKeyValue for sp_core::H160 {
+	type Key = Self;
+	type Value = ();
+
+	fn key_value(&self) -> (Self::Key, Self::Value) {
+		(*self, ())
+	}
+}
+
+impl AddressKeyValue for BitcoinAddressData {
+	type Key = ScriptPubkeyBytes;
+	type Value = Self;
+
+	fn key_value(&self) -> (Self::Key, Self::Value) {
+		(self.to_scriptpubkey().unwrap().serialize(), self.clone())
+	}
+}
+
+impl AddressKeyValue for sp_runtime::AccountId32 {
+	type Key = Self;
+	type Value = ();
+
+	fn key_value(&self) -> (Self::Key, Self::Value) {
+		(self.clone(), ())
 	}
 }

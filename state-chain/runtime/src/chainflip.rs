@@ -16,6 +16,7 @@ use crate::{
 };
 
 use cf_chains::{
+	address::ForeignChainAddress,
 	btc::{
 		api::{BitcoinApi, SelectedUtxos},
 		Bitcoin, BitcoinNetwork, BitcoinTransactionData, BtcAmount, Utxo,
@@ -33,8 +34,7 @@ use cf_chains::{
 	ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
 };
 use cf_primitives::{
-	chains::assets, liquidity::U256, Asset, AssetAmount, ForeignChainAddress, IntentId,
-	ETHEREUM_ETH_ADDRESS,
+	chains::assets, liquidity::U256, Asset, AssetAmount, IntentId, ETHEREUM_ETH_ADDRESS,
 };
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, EgressApi,

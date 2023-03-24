@@ -1,6 +1,6 @@
 use crate::{mock::*, EarnedRelayerFees, Error, Pallet, Swap, SwapQueue, WeightInfo};
-use cf_chains::AnyChain;
-use cf_primitives::{Asset, ForeignChain, ForeignChainAddress};
+use cf_chains::{address::ForeignChainAddress, AnyChain};
+use cf_primitives::{Asset, ForeignChain};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{mocks::egress_handler::MockEgressHandler, SwapIntentHandler};
 use frame_support::{assert_noop, assert_ok, sp_std::iter, weights::Weight};

@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_primitives::{Asset, AssetAmount, ForeignChain, ForeignChainAddress};
+use cf_chains::address::ForeignChainAddress;
+use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use cf_traits::{liquidity::SwappingApi, IngressApi, SystemStateInfo};
 use frame_support::{
 	pallet_prelude::*,

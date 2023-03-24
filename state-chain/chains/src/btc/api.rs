@@ -41,10 +41,7 @@ where
 		for transfer_param in transfer_params {
 			btc_outputs.push(BitcoinOutput {
 				amount: transfer_param.clone().amount.try_into().expect("Since this output comes from the AMM and if AMM math works correctly, this should be a valid bitcoin amount which should be less than u64::max"),
-				script_pubkey: scriptpubkey_from_address(
-					sp_std::str::from_utf8(&transfer_param.to.script_pubkey_bytes[..]).map_err(|_| ())?,
-					bitcoin_network,
-				).map_err(|_|())?,
+				script_pubkey: transfer_param.to.to_scriptpubkey().map_err(|_| ())?,
 			});
 			total_output_amount += <u128 as TryInto<u64>>::try_into(transfer_param.amount)
 				.expect("BTC amounts are never more than u64 max");

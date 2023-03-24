@@ -1,15 +1,16 @@
-use cf_primitives::{
-	BitcoinAddressFull, BitcoinAddressSeed, ScriptPubkeyBytes, MAX_BTC_ADDRESS_LENGTH,
-};
+use cf_primitives::MAX_BTC_ADDRESS_LENGTH;
 use frame_support::BoundedVec;
 use sp_std::{vec, vec::Vec};
 
-use crate::benchmarking_value::BenchmarkValue;
+use crate::{
+	address::{BitcoinAddress, BitcoinAddressData, BitcoinAddressFor, BitcoinAddressSeed},
+	benchmarking_value::BenchmarkValue,
+};
 
 use super::{
 	api::{batch_transfer::BatchTransfer, BitcoinApi},
-	AggKey, BitcoinFetchId, BitcoinOutput, BitcoinTransactionData, Signature, SigningPayload, Utxo,
-	UtxoId,
+	AggKey, BitcoinFetchId, BitcoinNetwork, BitcoinOutput, BitcoinTransactionData, Signature,
+	SigningPayload, Utxo, UtxoId,
 };
 
 impl BenchmarkValue for AggKey {
@@ -51,18 +52,21 @@ impl BenchmarkValue for SigningPayload {
 }
 
 // Bitcoin address
-impl BenchmarkValue for ScriptPubkeyBytes {
+impl BenchmarkValue for BitcoinAddress {
 	fn benchmark_value() -> Self {
 		BoundedVec::try_from([1u8; MAX_BTC_ADDRESS_LENGTH as usize].to_vec())
 			.expect("we created a vec that is in the bounds of bounded vec")
 	}
 }
 
-impl BenchmarkValue for BitcoinAddressFull {
+impl BenchmarkValue for BitcoinAddressData {
 	fn benchmark_value() -> Self {
-		BitcoinAddressFull {
-			script_pubkey_bytes: ScriptPubkeyBytes::benchmark_value(),
-			seed: BitcoinAddressSeed { pubkey_x: [2u8; 32], salt: 7 },
+		BitcoinAddressData {
+			address_for: BitcoinAddressFor::Ingress(BitcoinAddressSeed {
+				pubkey_x: [2u8; 32],
+				salt: 7,
+			}),
+			network: BitcoinNetwork::Testnet,
 		}
 	}
 }

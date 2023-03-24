@@ -192,7 +192,6 @@ async fn main() -> anyhow::Result<()> {
 							None
 						}
 					})
-					.map(|address| (address, ()))
 					.collect(),
 			);
 
