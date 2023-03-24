@@ -286,7 +286,7 @@ pub fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
 
 	if tick_low == tick_high {
 		tick_low
-	} else if Self::sqrt_price_at_tick(tick_high) <= sqrt_price {
+	} else if sqrt_price_at_tick(tick_high) <= sqrt_price {
 		tick_high
 	} else {
 		tick_low
@@ -299,189 +299,189 @@ mod test {
 		
 	#[test]
 	fn test_sqrt_price_at_tick() {
-		assert_eq!(PoolState::sqrt_price_at_tick(MIN_TICK), MIN_SQRT_PRICE);
+		assert_eq!(sqrt_price_at_tick(MIN_TICK), MIN_SQRT_PRICE);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(-738203),
+			sqrt_price_at_tick(-738203),
 			U256::from_dec_str("7409801140451").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(-500000),
+			sqrt_price_at_tick(-500000),
 			U256::from_dec_str("1101692437043807371").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(-250000),
+			sqrt_price_at_tick(-250000),
 			U256::from_dec_str("295440463448801648376846").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(-150000),
+			sqrt_price_at_tick(-150000),
 			U256::from_dec_str("43836292794701720435367485").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(-50000),
+			sqrt_price_at_tick(-50000),
 			U256::from_dec_str("6504256538020985011912221507").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(-5000),
+			sqrt_price_at_tick(-5000),
 			U256::from_dec_str("61703726247759831737814779831").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(-4000),
+			sqrt_price_at_tick(-4000),
 			U256::from_dec_str("64867181785621769311890333195").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(-3000),
+			sqrt_price_at_tick(-3000),
 			U256::from_dec_str("68192822843687888778582228483").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(-2500),
+			sqrt_price_at_tick(-2500),
 			U256::from_dec_str("69919044979842180277688105136").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(-1000),
+			sqrt_price_at_tick(-1000),
 			U256::from_dec_str("75364347830767020784054125655").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(-500),
+			sqrt_price_at_tick(-500),
 			U256::from_dec_str("77272108795590369356373805297").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(-250),
+			sqrt_price_at_tick(-250),
 			U256::from_dec_str("78244023372248365697264290337").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(-100),
+			sqrt_price_at_tick(-100),
 			U256::from_dec_str("78833030112140176575862854579").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(-50),
+			sqrt_price_at_tick(-50),
 			U256::from_dec_str("79030349367926598376800521322").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(50),
+			sqrt_price_at_tick(50),
 			U256::from_dec_str("79426470787362580746886972461").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(100),
+			sqrt_price_at_tick(100),
 			U256::from_dec_str("79625275426524748796330556128").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(250),
+			sqrt_price_at_tick(250),
 			U256::from_dec_str("80224679980005306637834519095").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(500),
+			sqrt_price_at_tick(500),
 			U256::from_dec_str("81233731461783161732293370115").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(1000),
+			sqrt_price_at_tick(1000),
 			U256::from_dec_str("83290069058676223003182343270").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(2500),
+			sqrt_price_at_tick(2500),
 			U256::from_dec_str("89776708723587163891445672585").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(3000),
+			sqrt_price_at_tick(3000),
 			U256::from_dec_str("92049301871182272007977902845").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(4000),
+			sqrt_price_at_tick(4000),
 			U256::from_dec_str("96768528593268422080558758223").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(5000),
+			sqrt_price_at_tick(5000),
 			U256::from_dec_str("101729702841318637793976746270").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(50000),
+			sqrt_price_at_tick(50000),
 			U256::from_dec_str("965075977353221155028623082916").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(150000),
+			sqrt_price_at_tick(150000),
 			U256::from_dec_str("143194173941309278083010301478497").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(250000),
+			sqrt_price_at_tick(250000),
 			U256::from_dec_str("21246587762933397357449903968194344").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(500000),
+			sqrt_price_at_tick(500000),
 			U256::from_dec_str("5697689776495288729098254600827762987878").unwrap()
 		);
 		assert_eq!(
-			PoolState::sqrt_price_at_tick(738203),
+			sqrt_price_at_tick(738203),
 			U256::from_dec_str("847134979253254120489401328389043031315994541").unwrap()
 		);
-		assert_eq!(PoolState::sqrt_price_at_tick(MAX_TICK), MAX_SQRT_PRICE);
+		assert_eq!(sqrt_price_at_tick(MAX_TICK), MAX_SQRT_PRICE);
 	}
 
 	#[test]
 	fn test_tick_at_sqrt_price() {
-		assert_eq!(PoolState::tick_at_sqrt_price(MIN_SQRT_PRICE), MIN_TICK);
+		assert_eq!(tick_at_sqrt_price(MIN_SQRT_PRICE), MIN_TICK);
 		assert_eq!(
-			PoolState::tick_at_sqrt_price(U256::from_dec_str("79228162514264337593543").unwrap()),
+			tick_at_sqrt_price(U256::from_dec_str("79228162514264337593543").unwrap()),
 			-276325
 		);
 		assert_eq!(
-			PoolState::tick_at_sqrt_price(
+			tick_at_sqrt_price(
 				U256::from_dec_str("79228162514264337593543950").unwrap()
 			),
 			-138163
 		);
 		assert_eq!(
-			PoolState::tick_at_sqrt_price(
+			tick_at_sqrt_price(
 				U256::from_dec_str("9903520314283042199192993792").unwrap()
 			),
 			-41591
 		);
 		assert_eq!(
-			PoolState::tick_at_sqrt_price(
+			tick_at_sqrt_price(
 				U256::from_dec_str("28011385487393069959365969113").unwrap()
 			),
 			-20796
 		);
 		assert_eq!(
-			PoolState::tick_at_sqrt_price(
+			tick_at_sqrt_price(
 				U256::from_dec_str("56022770974786139918731938227").unwrap()
 			),
 			-6932
 		);
 		assert_eq!(
-			PoolState::tick_at_sqrt_price(
+			tick_at_sqrt_price(
 				U256::from_dec_str("79228162514264337593543950336").unwrap()
 			),
 			0
 		);
 		assert_eq!(
-			PoolState::tick_at_sqrt_price(
+			tick_at_sqrt_price(
 				U256::from_dec_str("112045541949572279837463876454").unwrap()
 			),
 			6931
 		);
 		assert_eq!(
-			PoolState::tick_at_sqrt_price(
+			tick_at_sqrt_price(
 				U256::from_dec_str("224091083899144559674927752909").unwrap()
 			),
 			20795
 		);
 		assert_eq!(
-			PoolState::tick_at_sqrt_price(
+			tick_at_sqrt_price(
 				U256::from_dec_str("633825300114114700748351602688").unwrap()
 			),
 			41590
 		);
 		assert_eq!(
-			PoolState::tick_at_sqrt_price(
+			tick_at_sqrt_price(
 				U256::from_dec_str("79228162514264337593543950336000").unwrap()
 			),
 			138162
 		);
 		assert_eq!(
-			PoolState::tick_at_sqrt_price(
+			tick_at_sqrt_price(
 				U256::from_dec_str("79228162514264337593543950336000000").unwrap()
 			),
 			276324
 		);
-		assert_eq!(PoolState::tick_at_sqrt_price(MAX_SQRT_PRICE - 1), MAX_TICK - 1);
+		assert_eq!(tick_at_sqrt_price(MAX_SQRT_PRICE - 1), MAX_TICK - 1);
 	}
 }

@@ -915,15 +915,15 @@ mod test {
 	fn output_amounts_bounded() {
 		// Note these values are significant over-estimates of the maximum output amount
 		OneToZero::output_amount_delta_floor(
-			PoolState::sqrt_price_at_tick(MIN_TICK),
-			PoolState::sqrt_price_at_tick(MAX_TICK),
+			sqrt_price_at_tick(MIN_TICK),
+			sqrt_price_at_tick(MAX_TICK),
 			MAX_TICK_GROSS_LIQUIDITY,
 		)
 		.checked_mul((1 + MAX_TICK - MIN_TICK).into())
 		.unwrap();
 		ZeroToOne::output_amount_delta_floor(
-			PoolState::sqrt_price_at_tick(MAX_TICK),
-			PoolState::sqrt_price_at_tick(MIN_TICK),
+			sqrt_price_at_tick(MAX_TICK),
+			sqrt_price_at_tick(MIN_TICK),
 			MAX_TICK_GROSS_LIQUIDITY,
 		)
 		.checked_mul((1 + MAX_TICK - MIN_TICK).into())
