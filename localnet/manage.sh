@@ -66,7 +66,7 @@ build-localnet() {
     exit 1
   fi
   for binary in $REQUIRED_BINARIES; do
-    if [ -f $LOCALNET_INIT_DIR/$binary ]; then
+    if [ -f $BINARIES_LOCATION/$binary ]; then
       continue
     else
       echo "❌ Couldn't find $binary at $BINARIES_LOCATION"
