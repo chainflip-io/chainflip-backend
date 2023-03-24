@@ -79,11 +79,11 @@ build-localnet() {
   ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
   while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null 2>&1 ; do
     echo "🚧 Waiting for chainflip-node to start"
-    sleep 3
+    sleep 5
   done
   while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9945' > /dev/null 2>&1 ; do
     echo "🚦 Waiting for polkadot node to start"
-    sleep 3
+    sleep 5
   done
   ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
 
