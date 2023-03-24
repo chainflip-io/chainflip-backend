@@ -30,7 +30,7 @@ benchmarks! {
 	register_lp_account {
 		let caller: T::AccountId = whitelisted_caller();
 		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::None);
-	}:  _(RawOrigin::Signed(caller.clone()))
+	}: _(RawOrigin::Signed(caller.clone()))
 	verify {
 		assert_eq!(T::AccountRoleRegistry::get_account_role(caller), AccountRole::LiquidityProvider);
 	}

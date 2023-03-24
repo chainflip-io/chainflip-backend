@@ -5,7 +5,7 @@ use super::*;
 
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
 use cf_primitives::AccountRole;
-use cf_traits::AccountRoleRegistry;
+use cf_traits::{AccountRoleRegistry, Chainflip};
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::dispatch::UnfilteredDispatchable;
 use frame_system::RawOrigin;
@@ -59,6 +59,14 @@ benchmarks! {
 		Asset::Eth,
 		EncodedAddress::benchmark_value()
 	)
+
+	register_as_relayer {
+		let caller: T::AccountId = whitelisted_caller();
+		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::None);
+	}: _(RawOrigin::Signed(caller.clone()))
+	verify {
+		assert_eq!(T::AccountRoleRegistry::get_account_role(caller), AccountRole::Relayer);
+	}
 
 	schedule_swap_by_witnesser {
 		let origin = T::EnsureWitnessed::successful_origin();
@@ -145,7 +153,7 @@ benchmarks! {
 			ttl
 		};
 	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+		let _ = call.dispatch_bypass_filter(<T as Chainflip>::EnsureGovernance::successful_origin());
 	} verify {
 		assert_eq!(crate::SwapTTL::<T>::get(), ttl);
 	}

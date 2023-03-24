@@ -6,18 +6,15 @@ use pallet_cf_reputation::Config as ReputationConfig;
 use pallet_cf_staking::Config as StakingConfig;
 use pallet_session::Config as SessionConfig;
 
-use cf_primitives::AccountRole;
-use cf_traits::{AccountRoleRegistry, VaultStatus};
-
+use cf_traits::{AccountRoleRegistry, AuctionOutcome, VaultStatus};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
+use frame_support::{
+	assert_ok, dispatch::UnfilteredDispatchable, storage_alias, traits::OnNewAccount,
+};
+use frame_system::{pallet_prelude::OriginFor, Pallet as SystemPallet, RawOrigin};
 use sp_application_crypto::RuntimeAppPublic;
 use sp_runtime::{Digest, DigestItem};
 use sp_std::vec;
-
-use cf_traits::AuctionOutcome;
-
-use frame_benchmarking::{account, benchmarks, whitelisted_caller};
-use frame_support::{assert_ok, dispatch::UnfilteredDispatchable, storage_alias};
-use frame_system::{pallet_prelude::OriginFor, Pallet as SystemPallet, RawOrigin};
 
 mod p2p_crypto {
 	use sp_application_crypto::{app_crypto, ed25519, KeyTypeId};
@@ -54,10 +51,7 @@ pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_staked: u128) {
 			pallet_cf_staking::ETH_ZERO_ADDRESS,
 			Default::default()
 		));
-		<T as Config>::AccountRoleRegistry::register_account(
-			bidder.clone(),
-			AccountRole::Validator,
-		);
+		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&bidder));
 		assert_ok!(pallet_cf_staking::Pallet::<T>::start_bidding(bidder_origin.clone(),));
 
 		let public_key: p2p_crypto::Public = RuntimeAppPublic::generate_pair(None);
@@ -142,7 +136,7 @@ benchmarks! {
 	set_blocks_for_epoch {
 		let b = 2_u32;
 		let call = Call::<T>::set_blocks_for_epoch { number_of_blocks: b.into() };
-		let o = <T as Config>::EnsureGovernance::successful_origin();
+		let o = T::EnsureGovernance::successful_origin();
 	}: {
 		call.dispatch_bypass_filter(o)?
 	}
@@ -151,7 +145,7 @@ benchmarks! {
 	}
 	set_backup_reward_node_percentage {
 		let call = Call::<T>::set_backup_reward_node_percentage { percentage: 20 };
-		let o = <T as Config>::EnsureGovernance::successful_origin();
+		let o = T::EnsureGovernance::successful_origin();
 	}: {
 		call.dispatch_bypass_filter(o)?
 	}
@@ -160,7 +154,7 @@ benchmarks! {
 	}
 	set_authority_set_min_size {
 		let call = Call::<T>::set_authority_set_min_size { min_size: 1 };
-		let o = <T as Config>::EnsureGovernance::successful_origin();
+		let o = T::EnsureGovernance::successful_origin();
 	}: {
 		call.dispatch_bypass_filter(o)?
 	}
@@ -169,7 +163,7 @@ benchmarks! {
 	}
 	cfe_version {
 		let caller: T::AccountId = whitelisted_caller();
-		<T as pallet::Config>::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
+		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&caller));
 		let version = SemVer {
 			major: 1,
 			minor: 2,
@@ -182,7 +176,7 @@ benchmarks! {
 	}
 	register_peer_id {
 		let caller: T::AccountId = account("doogle", 0, 0);
-		<T as pallet::Config>::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
+		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&caller));
 		let pair: p2p_crypto::Public = RuntimeAppPublic::generate_pair(None);
 		let signature: Ed25519Signature = pair.sign(&caller.encode()).unwrap().try_into().unwrap();
 		let public_key: Ed25519PublicKey = pair.try_into().unwrap();
@@ -346,7 +340,7 @@ benchmarks! {
 	}
 
 	set_auction_parameters {
-		let origin = <T as Config>::EnsureGovernance::successful_origin();
+		let origin = T::EnsureGovernance::successful_origin();
 		let params = SetSizeParameters {
 			min_size: 3,
 			max_size: 150,
@@ -361,4 +355,11 @@ benchmarks! {
 		);
 	}
 
+	register_as_validator {
+		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+	}: _(RawOrigin::Signed(caller.clone()))
+	verify {
+		assert_ok!(<T as Chainflip>::AccountRoleRegistry::ensure_validator(RawOrigin::Signed(caller).into()));
+	}
 }

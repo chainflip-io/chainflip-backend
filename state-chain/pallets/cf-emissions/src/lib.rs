@@ -95,9 +95,6 @@ pub mod pallet {
 		/// Something that can provide the stake manager address.
 		type EthEnvironmentProvider: EthEnvironmentProvider;
 
-		/// For governance checks.
-		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
-
 		/// The interface for accessing the amount of Flip we want burn.
 		type FlipToBurn: FlipBurnInfo;
 

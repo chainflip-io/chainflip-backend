@@ -139,9 +139,6 @@ pub mod pallet {
 			+ Parameter
 			+ UnfilteredDispatchable<RuntimeOrigin = <Self as frame_system::Config>::RuntimeOrigin>;
 
-		/// For registering and verifying the account role.
-		type AccountRoleRegistry: AccountRoleRegistry<Self>;
-
 		/// Offences that can be reported in this runtime.
 		type Offence: From<PalletOffence>;
 

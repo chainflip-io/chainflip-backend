@@ -39,9 +39,6 @@ pub mod pallet {
 		/// an runtime upgrade
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// For registering and verifying the account role.
-		type AccountRoleRegistry: AccountRoleRegistry<Self>;
-
 		/// API for handling asset ingress.
 		type IngressHandler: IngressApi<
 			AnyChain,
@@ -50,9 +47,6 @@ pub mod pallet {
 
 		/// API for handling asset egress.
 		type EgressHandler: EgressApi<AnyChain>;
-
-		/// For governance checks.
-		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// A converter to convert address to and from human readable to internal address
 		/// representation.

@@ -1,6 +1,21 @@
 use std::cell::RefCell;
 
+use super::*;
+use crate as pallet_cf_vaults;
+use cf_chains::{
+	eth,
+	mocks::{MockAggKey, MockEthereum},
+	ApiCall, ChainCrypto, ReplayProtectionProvider,
+};
 use cf_primitives::BroadcastId;
+use cf_traits::{
+	impl_mock_callback, impl_mock_chainflip,
+	mocks::{
+		ceremony_id_provider::MockCeremonyIdProvider,
+		eth_replay_protection_provider::MockEthReplayProtectionProvider,
+		threshold_signer::MockThresholdSigner,
+	},
+};
 use frame_support::{
 	construct_runtime, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
 };
@@ -9,24 +24,6 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
-};
-
-use crate as pallet_cf_vaults;
-
-use super::*;
-use cf_chains::{
-	eth,
-	mocks::{MockAggKey, MockEthereum},
-	ApiCall, ChainCrypto, ReplayProtectionProvider,
-};
-use cf_traits::{
-	impl_mock_callback,
-	mocks::{
-		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
-		epoch_info::MockEpochInfo, eth_replay_protection_provider::MockEthReplayProtectionProvider,
-		system_state_info::MockSystemStateInfo, threshold_signer::MockThresholdSigner,
-	},
-	Chainflip,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
@@ -114,19 +111,7 @@ impl frame_system::Config for MockRuntime {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-parameter_types! {}
-
-impl Chainflip for MockRuntime {
-	type ValidatorId = ValidatorId;
-	type Amount = u128;
-	type RuntimeCall = RuntimeCall;
-	type EnsureWitnessed = cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck<Self>;
-	type EnsureWitnessedAtCurrentEpoch =
-		cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck<Self>;
-	type EpochInfo = MockEpochInfo;
-	type SystemState = MockSystemStateInfo;
-}
-
+impl_mock_chainflip!(MockRuntime);
 impl_mock_callback!(RuntimeOrigin);
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -225,8 +210,6 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type Offence = PalletOffence;
 	type Chain = MockEthereum;
 	type RuntimeCall = RuntimeCall;
-	type AccountRoleRegistry = ();
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type ThresholdSigner = MockThresholdSigner<MockEthereum, RuntimeCall>;
 	type OffenceReporter = MockOffenceReporter;

@@ -51,11 +51,6 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Burns the proposal fee from the accounts.
 		type FeePayment: FeePayment<Amount = Self::Amount, AccountId = Self::AccountId>;
-		/// Provides information about the current distribution of on-chain stake.
-		type StakingInfo: StakingInfo<
-			AccountId = <Self as frame_system::Config>::AccountId,
-			Balance = Self::Amount,
-		>;
 		/// Broadcasts the community key.
 		type CommKeyBroadcaster: CommKeyBroadcaster;
 		/// Broadcasts the gov key to any supported chain.

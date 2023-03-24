@@ -2,7 +2,7 @@
 
 use super::*;
 use cf_amm::common::sqrt_price_at_tick;
-use cf_primitives::{AccountRole, Asset};
+use cf_primitives::Asset;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{assert_ok, dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
@@ -21,7 +21,7 @@ benchmarks! {
 	}
 
 	update_pool_enabled {
-		let origin = <T as Config>::EnsureGovernance::successful_origin();
+		let origin = T::EnsureGovernance::successful_origin();
 		let _ = Pallet::<T>::new_pool(origin, Asset::Eth, 0, sqrt_price_at_tick(0));
 		let call =  Call::<T>::update_pool_enabled{
 			unstable_asset: Asset::Eth,
@@ -47,8 +47,8 @@ benchmarks! {
 
 	collect_and_mint_range_order {
 		let caller: T::AccountId = whitelisted_caller();
-		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::LiquidityProvider);
-		assert_ok!(Pallet::<T>::new_pool(<T as Config>::EnsureGovernance::successful_origin(), Asset::Eth, 0, sqrt_price_at_tick(0)));
+		T::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
+		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::successful_origin(), Asset::Eth, 0, sqrt_price_at_tick(0)));
 		assert_ok!(T::LpBalance::try_credit_account(
 			&caller,
 			Asset::Eth,
@@ -64,8 +64,8 @@ benchmarks! {
 
 	collect_and_burn_range_order {
 		let caller: T::AccountId = whitelisted_caller();
-		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::LiquidityProvider);
-		assert_ok!(Pallet::<T>::new_pool(<T as Config>::EnsureGovernance::successful_origin(), Asset::Eth, 0, sqrt_price_at_tick(0)));
+		T::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
+		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::successful_origin(), Asset::Eth, 0, sqrt_price_at_tick(0)));
 		assert_ok!(T::LpBalance::try_credit_account(
 			&caller,
 			Asset::Eth,
@@ -82,8 +82,8 @@ benchmarks! {
 
 	collect_and_mint_limit_order {
 		let caller: T::AccountId = whitelisted_caller();
-		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::LiquidityProvider);
-		assert_ok!(Pallet::<T>::new_pool(<T as Config>::EnsureGovernance::successful_origin(), Asset::Eth, 0, sqrt_price_at_tick(0)));
+		T::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
+		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::successful_origin(), Asset::Eth, 0, sqrt_price_at_tick(0)));
 		assert_ok!(T::LpBalance::try_credit_account(
 			&caller,
 			Asset::Eth,
@@ -99,8 +99,8 @@ benchmarks! {
 
 	collect_and_burn_limit_order {
 		let caller: T::AccountId = whitelisted_caller();
-		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::LiquidityProvider);
-		assert_ok!(Pallet::<T>::new_pool(<T as Config>::EnsureGovernance::successful_origin(), Asset::Eth, 0, sqrt_price_at_tick(0)));
+		T::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
+		assert_ok!(Pallet::<T>::new_pool(T::EnsureGovernance::successful_origin(), Asset::Eth, 0, sqrt_price_at_tick(0)));
 		assert_ok!(T::LpBalance::try_credit_account(
 			&caller,
 			Asset::Eth,

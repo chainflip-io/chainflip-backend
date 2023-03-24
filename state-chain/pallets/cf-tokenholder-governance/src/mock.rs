@@ -1,12 +1,8 @@
 use crate::{self as pallet_cf_tokenholder_governance};
 use cf_chains::{ChainCrypto, Ethereum, ForeignChain};
 use cf_traits::{
-	impl_mock_stake_transfer, impl_mock_waived_fees,
-	mocks::{
-		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
-		system_state_info::MockSystemStateInfo,
-	},
-	BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, StakeTransfer, WaivedFees,
+	impl_mock_chainflip, impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer,
+	impl_mock_waived_fees, BroadcastAnyChainGovKey, CommKeyBroadcaster, StakeTransfer, WaivedFees,
 };
 use codec::{Decode, Encode};
 use frame_support::{parameter_types, traits::HandleLifetime};
@@ -73,17 +69,8 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
-
-impl Chainflip for Test {
-	type ValidatorId = u64;
-	type Amount = u128;
-	type RuntimeCall = RuntimeCall;
-	type EnsureWitnessed = MockEnsureWitnessed;
-	type EnsureWitnessedAtCurrentEpoch = MockEnsureWitnessed;
-	type EpochInfo = MockEpochInfo;
-	type SystemState = MockSystemStateInfo;
-}
+impl_mock_chainflip!(Test);
+impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 
 parameter_types! {
 	pub const ExistentialDeposit: u128 = 10;
@@ -164,7 +151,6 @@ impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = MockStakeHandler;
 	type WeightInfo = ();
@@ -174,7 +160,6 @@ impl pallet_cf_flip::Config for Test {
 impl pallet_cf_tokenholder_governance::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type FeePayment = Flip;
-	type StakingInfo = Flip;
 	type CommKeyBroadcaster = MockBroadcaster;
 	type AnyChainGovKeyBroadcaster = MockBroadcaster;
 	type WeightInfo = ();

@@ -1,5 +1,5 @@
 use crate::{self as pallet_cf_witness, WitnessDataExtraction};
-use cf_traits::mocks::{self, epoch_info::MockEpochInfo};
+use cf_traits::impl_mock_chainflip;
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -63,13 +63,11 @@ impl system::Config for Test {
 impl pallet_cf_witness::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeOrigin = RuntimeOrigin;
-	type AccountRoleRegistry = ();
 	type RuntimeCall = RuntimeCall;
-	type ValidatorId = AccountId;
-	type EpochInfo = mocks::epoch_info::Mock;
-	type Amount = u64;
 	type WeightInfo = ();
 }
+
+impl_mock_chainflip!(Test);
 
 impl dummy::Config for Test {
 	type RuntimeEvent = RuntimeEvent;

@@ -185,9 +185,6 @@ pub mod pallet {
 			Callback = <Self as Config<I>>::RuntimeCall,
 		>;
 
-		/// Governance origin to manage allowed assets
-		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
-
 		/// Ingress Handler for performing action items on ingress needed elsewhere
 		type IngressHandler: IngressHandler<Self::TargetChain>;
 

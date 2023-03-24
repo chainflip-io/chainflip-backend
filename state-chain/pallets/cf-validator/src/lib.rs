@@ -20,10 +20,10 @@ mod rotation_state;
 pub use auction_resolver::*;
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidInfo, BidderProvider,
-	Bonding, Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, ExecutionCondition,
+	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidderProvider, Bonding,
+	Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, ExecutionCondition,
 	HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter, StakeHandler,
-	SystemStateInfo, VaultRotator,
+	StakingInfo, SystemStateInfo, VaultRotator,
 };
 use cf_utilities::Port;
 use frame_support::{
@@ -133,9 +133,6 @@ pub mod pallet {
 		/// The top-level offence type must support this pallet's offence type.
 		type Offence: From<PalletOffence>;
 
-		/// For registering and verifying the account role.
-		type AccountRoleRegistry: AccountRoleRegistry<Self>;
-
 		/// A handler for epoch lifecycle events
 		type EpochTransitionHandler: EpochTransitionHandler;
 
@@ -144,9 +141,6 @@ pub mod pallet {
 		type MinEpoch: Get<<Self as frame_system::Config>::BlockNumber>;
 
 		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
-
-		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// For retrieving missed authorship slots.
 		type MissedAuthorshipSlots: MissedAuthorshipSlots;
@@ -368,6 +362,8 @@ pub mod pallet {
 		InconsistentRanges,
 		/// Not enough bidders were available to resolve the auction.
 		NotEnoughBidders,
+		/// Not enough stake to register as a validator.
+		NotEnoughStake,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -806,6 +802,22 @@ pub mod pallet {
 			Self::deposit_event(Event::AuctionParametersChanged(parameters));
 			Ok(().into())
 		}
+
+		#[pallet::weight(T::ValidatorWeightInfo::register_as_validator())]
+		pub fn register_as_validator(origin: OriginFor<T>) -> DispatchResult {
+			let account_id: T::AccountId = ensure_signed(origin)?;
+			ensure!(
+				T::StakingInfo::total_stake_of(&account_id) >=
+					Backups::<T>::get()
+						.into_values()
+						.min()
+						.unwrap_or_else(|| T::Amount::from(0_u32))
+						.checked_div(&T::Amount::from(2_u32))
+						.expect("Division by 2 can't fail."),
+				Error::<T>::NotEnoughStake
+			);
+			T::AccountRoleRegistry::register_as_validator(&account_id)
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -1197,18 +1209,6 @@ impl<T: Config> Pallet<T> {
 }
 
 pub struct EpochHistory<T>(PhantomData<T>);
-
-pub struct BidInfoProvider<T>(PhantomData<T>);
-
-impl<T: Config> BidInfo for BidInfoProvider<T> {
-	type Balance = T::Amount;
-	fn get_min_backup_bid() -> Self::Balance {
-		Backups::<T>::get()
-			.into_values()
-			.min()
-			.unwrap_or_else(|| Self::Balance::from(0_u32))
-	}
-}
 
 impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 	type ValidatorId = ValidatorIdOf<T>;

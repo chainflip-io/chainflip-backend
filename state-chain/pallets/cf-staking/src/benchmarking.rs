@@ -4,17 +4,12 @@
 use super::*;
 
 use cf_primitives::AccountRole;
-use cf_traits::AccountRoleRegistry;
+use cf_traits::{AccountRoleRegistry, Chainflip};
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
 use frame_system::RawOrigin;
 
 benchmarks! {
-
-	where_clause {
-		where
-			T: pallet_cf_account_roles::Config,
-	}
 
 	staked {
 		let amount: T::Balance = T::Balance::from(100u32);
@@ -167,7 +162,7 @@ benchmarks! {
 			minimum_stake: MinimumStake::<T>::get(),
 		};
 
-		let origin = <T as pallet::Config>::EnsureGovernance::successful_origin();
+		let origin = <T as Chainflip>::EnsureGovernance::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(MinimumStake::<T>::get(), MinimumStake::<T>::get());

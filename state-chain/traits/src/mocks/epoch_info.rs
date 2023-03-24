@@ -3,22 +3,20 @@ crate::impl_mock_epoch_info!(u64, u128, u32, u32);
 
 #[macro_export]
 macro_rules! impl_mock_epoch_info {
-	($account_id:ty, $balance:ty, $epoch_index:ty, $authority_count:ty) => {
-		use std::cell::RefCell;
+	($account_id:ty, $balance:ty, $epoch_index:ty, $authority_count:ty $(,)? ) => {
 		use $crate::EpochInfo;
 
 		pub struct MockEpochInfo;
-		use std::collections::HashMap;
 		use sp_std::collections::btree_set::BTreeSet;
 
 		thread_local! {
-			pub static CURRENT_AUTHORITIES: RefCell<BTreeSet<$account_id>> = RefCell::new(BTreeSet::default());
-			pub static AUTHORITY_INDEX: RefCell<HashMap<$epoch_index, HashMap<$account_id, $authority_count>>> = RefCell::new(HashMap::new());
-			pub static BOND: RefCell<$balance> = RefCell::new(0);
-			pub static EPOCH: RefCell<$epoch_index> = RefCell::new(0);
-			pub static LAST_EXPIRED_EPOCH: RefCell<$epoch_index> = RefCell::new(Default::default());
-			pub static AUCTION_PHASE: RefCell<bool> = RefCell::new(false);
-			pub static EPOCH_AUTHORITY_COUNT: RefCell<HashMap<$epoch_index, $authority_count>> = RefCell::new(Default::default());
+			pub static CURRENT_AUTHORITIES: std::cell::RefCell<BTreeSet<$account_id>> = std::cell::RefCell::new(BTreeSet::default());
+			pub static AUTHORITY_INDEX: std::cell::RefCell<std::collections::HashMap<$epoch_index, std::collections::HashMap<$account_id, $authority_count>>> = std::cell::RefCell::new(std::collections::HashMap::new());
+			pub static BOND: std::cell::RefCell<$balance> = std::cell::RefCell::new(0);
+			pub static EPOCH: std::cell::RefCell<$epoch_index> = std::cell::RefCell::new(0);
+			pub static LAST_EXPIRED_EPOCH: std::cell::RefCell<$epoch_index> = std::cell::RefCell::new(Default::default());
+			pub static AUCTION_PHASE: std::cell::RefCell<bool> = std::cell::RefCell::new(false);
+			pub static EPOCH_AUTHORITY_COUNT: std::cell::RefCell<std::collections::HashMap<$epoch_index, $authority_count>> = std::cell::RefCell::new(Default::default());
 		}
 
 		impl MockEpochInfo {
@@ -62,7 +60,7 @@ macro_rules! impl_mock_epoch_info {
 			pub fn set_authority_indices(epoch_index: $epoch_index, account_ids: BTreeSet<$account_id>) {
 				AUTHORITY_INDEX.with(|cell| {
 					let mut map = cell.borrow_mut();
-					let authority_index = map.entry(epoch_index).or_insert(HashMap::new());
+					let authority_index = map.entry(epoch_index).or_insert(std::collections::HashMap::new());
 					for (i, account_id) in account_ids.iter().enumerate() {
 						authority_index.insert(account_id.clone(), i as $authority_count);
 					}

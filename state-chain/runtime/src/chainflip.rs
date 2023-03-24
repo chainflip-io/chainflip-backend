@@ -9,7 +9,7 @@ mod missed_authorship_slots;
 mod offences;
 mod signer_nomination;
 use crate::{
-	AccountId, Authorship, BitcoinIngressEgress, BitcoinVault, BlockNumber,
+	AccountId, AccountRoles, Authorship, BitcoinIngressEgress, BitcoinVault, BlockNumber,
 	EmergencyRotationPercentageRange, Emissions, Environment, EthereumBroadcaster,
 	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster,
 	PolkadotIngressEgress, Reputation, Runtime, RuntimeCall, System, Validator,
@@ -65,8 +65,11 @@ impl Chainflip for Runtime {
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type EnsureWitnessedAtCurrentEpoch = pallet_cf_witnesser::EnsureWitnessedAtCurrentEpoch;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type EpochInfo = Validator;
 	type SystemState = pallet_cf_environment::SystemStateProvider<Runtime>;
+	type AccountRoleRegistry = AccountRoles;
+	type StakingInfo = Flip;
 }
 
 struct BackupNodeEmissions;

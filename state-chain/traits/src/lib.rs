@@ -10,13 +10,11 @@ pub mod offence_reporting;
 use core::fmt::Debug;
 
 pub use async_result::AsyncResult;
-use sp_std::collections::btree_set::BTreeSet;
 
 use cf_chains::{
 	address::ForeignChainAddress, eth::H256, ApiCall, CcmIngressMetadata, Chain, ChainAbi,
 	ChainCrypto, Ethereum, Polkadot,
 };
-
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
 	CeremonyId, EgressId, EpochIndex, EthereumAddress, ForeignChain, IntentId, KeyId,
@@ -35,11 +33,11 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
 	DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 };
-use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
+use sp_std::{collections::btree_set::BTreeSet, iter::Sum, marker::PhantomData, prelude::*};
 
 /// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {
-	/// An amount for a bid
+	/// The type used for Flip balances and auction bids.
 	type Amount: Member
 		+ Parameter
 		+ MaxEncodedLen
@@ -62,19 +60,27 @@ pub trait Chainflip: frame_system::Config {
 		+ IsType<<Self as frame_system::Config>::AccountId>
 		+ MaybeSerializeDeserialize;
 
-	/// The overarching call type.
+	/// The overarching call type, with some added constraints.
 	type RuntimeCall: Member
 		+ Parameter
-		+ UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>;
+		+ UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>
+		+ IsType<<Self as frame_system::Config>::RuntimeCall>;
+
 	/// A type that allows us to check if a call was a result of witness consensus.
 	type EnsureWitnessed: EnsureOrigin<Self::RuntimeOrigin>;
 	/// A type that allows us to check if a call was a result of witness consensus by the current
 	/// epoch.
 	type EnsureWitnessedAtCurrentEpoch: EnsureOrigin<Self::RuntimeOrigin>;
+	/// Allows us to check for the governance origin.
+	type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 	/// Information about the current Epoch.
 	type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 	/// Access to information about the current system state
 	type SystemState: SystemStateInfo;
+	/// For registering and checking account roles.
+	type AccountRoleRegistry: AccountRoleRegistry<Self>;
+	/// For checking nodes' current balances.
+	type StakingInfo: StakingInfo<AccountId = Self::AccountId, Balance = Self::Amount>;
 }
 
 pub trait EpochInfo {
@@ -772,14 +778,6 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 pub trait VaultTransitionHandler<C: ChainCrypto> {
 	fn on_new_vault() {}
 }
-
-/// Provides information about current bids.
-pub trait BidInfo {
-	type Balance;
-	/// Returns the smallest of all backup validator bids.
-	fn get_min_backup_bid() -> Self::Balance;
-}
-
 pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
 	fn on_new_key_activated(
 		new_public_key: C::AggKey,

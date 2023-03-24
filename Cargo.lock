@@ -5707,7 +5707,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log",
- "pallet-cf-account-roles",
  "pallet-cf-flip",
  "parity-scale-codec",
  "scale-info",
