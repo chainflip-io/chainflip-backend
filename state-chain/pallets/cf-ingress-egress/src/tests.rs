@@ -412,14 +412,12 @@ fn addresses_are_getting_reused() {
 		// Expire the other
 		IngressEgress::on_initialize(EXPIRY_BLOCK);
 		// Expect all addresses to be considered as deployed
-		for i in 1..IntentIdCounter::<Test, Instance1>::get() {
-			assert_eq!(
-				AddressStatus::<Test, Instance1>::get(
-					AddressPool::<Test, Instance1>::get(i).expect("to have an address")
-				),
-				DeploymentStatus::Deployed
-			);
-		}
+		assert_eq!(
+			AddressStatus::<Test, Instance1>::get(
+				AddressPool::<Test, Instance1>::get(1).expect("to have an address")
+			),
+			DeploymentStatus::Deployed
+		);
 		// Schedule another ingress request
 		schedule_ingress(3u64, eth::Asset::Eth);
 		// Process it

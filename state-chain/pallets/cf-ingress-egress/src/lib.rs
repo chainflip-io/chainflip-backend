@@ -318,8 +318,8 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Callback for when a signature is accepted by the chain.
-		#[pallet::weight(T::WeightInfo::on_signature_accepted(addresses.len() as u32))]
-		pub fn on_signature_accepted(
+		#[pallet::weight(T::WeightInfo::finalise_ingress(addresses.len() as u32))]
+		pub fn finalise_ingress(
 			origin: OriginFor<T>,
 			addresses: Vec<(IntentId, TargetChainAccount<T, I>)>,
 		) -> DispatchResult {
@@ -459,7 +459,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok(egress_transaction) => {
 				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
 					egress_transaction,
-					Call::on_signature_accepted { addresses }.into(),
+					Call::finalise_ingress { addresses }.into(),
 				);
 				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
 					broadcast_id,

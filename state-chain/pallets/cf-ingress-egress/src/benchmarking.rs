@@ -79,7 +79,7 @@ benchmarks_instance_pallet! {
 		Pallet::<T, I>::do_single_ingress(ingress_address, ingress_asset, 100, BenchmarkValue::benchmark_value()).unwrap()
 	}
 
-	on_signature_accepted {
+	finalise_ingress {
 		let a in 1 .. 100;
 		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
 		let address = TargetChainAccount::<T, I>::benchmark_value();
@@ -94,5 +94,5 @@ benchmarks_instance_pallet! {
 			});
 			addresses.push((i as u64, address.clone()));
 		}
-	} : { let _ = Pallet::<T, I>::on_signature_accepted(origin, addresses);  }
+	} : { let _ = Pallet::<T, I>::finalise_ingress(origin, addresses);  }
 }
