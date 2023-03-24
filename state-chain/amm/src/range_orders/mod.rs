@@ -259,7 +259,7 @@ pub enum NewError {
 
 #[derive(Debug)]
 pub enum MintError<E> {
-	/// One of the start/end ticks of the range reached its maximm gross liquidity
+	/// One of the start/end ticks of the range reached its maximum gross liquidity
 	MaximumGrossLiquidity,
 	/// Callback failed
 	CallbackFailed(E),
