@@ -867,7 +867,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 						CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
 							epoch_index: current_vault_epoch_and_state.epoch_index,
 							key_state: KeyState::Unavailable,
-						})
+						});
 					}
 				},
 				Err(_) => {

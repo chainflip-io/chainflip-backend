@@ -9,18 +9,26 @@ use crate::{
 	p2p::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages},
 };
 
+pub type ProtocolVersion = u16;
+
+#[derive(Debug)]
+pub struct VersionedCeremonyMessage {
+	pub version: ProtocolVersion,
+	pub payload: Vec<u8>,
+}
+
 pub struct P2PMuxer {
 	all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
 	all_outgoing_sender: UnboundedSender<OutgoingMultisigStageMessages>,
-	eth_incoming_sender: UnboundedSender<(AccountId, Vec<u8>)>,
+	eth_incoming_sender: UnboundedSender<(AccountId, VersionedCeremonyMessage)>,
 	eth_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
-	dot_incoming_sender: UnboundedSender<(AccountId, Vec<u8>)>,
+	dot_incoming_sender: UnboundedSender<(AccountId, VersionedCeremonyMessage)>,
 	dot_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
 }
 
 /// Top-level protocol message, encapsulates all others
 struct VersionedMessage<'a> {
-	version: u16,
+	version: ProtocolVersion,
 	payload: &'a [u8],
 }
 
@@ -40,11 +48,11 @@ impl<'a> VersionedMessage<'a> {
 	}
 
 	fn deserialize(bytes: &'a [u8]) -> Result<Self> {
-		const VERSION_LEN: usize = std::mem::size_of::<u16>();
+		const VERSION_LEN: usize = std::mem::size_of::<ProtocolVersion>();
 
 		let (version, payload) = split_header::<VERSION_LEN>(bytes)?;
 
-		Ok(VersionedMessage { version: u16::from_be_bytes(*version), payload })
+		Ok(VersionedMessage { version: ProtocolVersion::from_be_bytes(*version), payload })
 	}
 }
 
@@ -73,13 +81,13 @@ impl<'a> TagPlusMessage<'a> {
 	}
 }
 
-/// The most recent (current) wire protocol version
-const PROTOCOL_VERSION: u16 = 1;
+/// Currently active wire protocol version
+pub const CURRENT_PROTOCOL_VERSION: ProtocolVersion = 1;
 
 fn add_tag_and_current_version(data: &[u8], tag: ChainTag) -> Vec<u8> {
 	let with_tag = TagPlusMessage { tag, payload: data }.serialize();
 
-	VersionedMessage { version: PROTOCOL_VERSION, payload: &with_tag }.serialize()
+	VersionedMessage { version: CURRENT_PROTOCOL_VERSION, payload: &with_tag }.serialize()
 }
 
 impl P2PMuxer {
@@ -122,25 +130,29 @@ impl P2PMuxer {
 	async fn process_incoming(&mut self, account_id: AccountId, data: Vec<u8>) {
 		if let Ok(VersionedMessage { version, payload }) = VersionedMessage::deserialize(&data) {
 			// only version 1 is expected/supported
-			if version == PROTOCOL_VERSION {
+			if version == CURRENT_PROTOCOL_VERSION {
 				match TagPlusMessage::deserialize(payload) {
-					Ok(TagPlusMessage { tag, payload }) => match tag {
-						ChainTag::Ethereum => {
-							self.eth_incoming_sender
-								.send((account_id, payload.to_owned()))
-								.expect("eth receiver dropped");
-						},
-						ChainTag::Polkadot => {
-							self.dot_incoming_sender
-								.send((account_id, payload.to_owned()))
-								.expect("polkadot receiver dropped");
-						},
-						ChainTag::Sui => {
-							warn!("Sui chain tag is not supported yet")
-						},
-						ChainTag::Bitcoin => {
-							warn!("Bitcoin chain tag is not supported yet")
-						},
+					Ok(TagPlusMessage { tag, payload }) => {
+						let message =
+							VersionedCeremonyMessage { version, payload: payload.to_vec() };
+						match tag {
+							ChainTag::Ethereum => {
+								self.eth_incoming_sender
+									.send((account_id, message))
+									.expect("eth receiver dropped");
+							},
+							ChainTag::Polkadot => {
+								self.dot_incoming_sender
+									.send((account_id, message))
+									.expect("polkadot receiver dropped");
+							},
+							ChainTag::Sui => {
+								warn!("Sui chain tag is not supported yet")
+							},
+							ChainTag::Bitcoin => {
+								warn!("Bitcoin chain tag is not supported yet")
+							},
+						}
 					},
 					Err(e) => {
 						trace!("Could not deserialize tagged p2p message: {e:?}",);
@@ -201,7 +213,7 @@ mod tests {
 	const DATA_2: &[u8] = &[3, 4, 5];
 
 	const ETH_TAG_PREFIX: &[u8] = &ChainTag::Ethereum.to_bytes();
-	const VERSION_PREFIX: &[u8] = &PROTOCOL_VERSION.to_be_bytes();
+	const VERSION_PREFIX: &[u8] = &CURRENT_PROTOCOL_VERSION.to_be_bytes();
 
 	#[tokio::test]
 	async fn correctly_prepends_chain_tag_broadcast() {
@@ -263,7 +275,7 @@ mod tests {
 	async fn check_tag_and_version_serialization() {
 		let res = add_tag_and_current_version(DATA_1, ChainTag::Ethereum);
 
-		let version_bytes = [0x00, 0x01];
+		let version_bytes: [u8; 2] = CURRENT_PROTOCOL_VERSION.to_be_bytes();
 		let tag_bytes = [0x00, 0x00];
 
 		assert_eq!(res, [&version_bytes, &tag_bytes, DATA_1].concat());
@@ -285,6 +297,7 @@ mod tests {
 
 		let received = expect_recv_with_timeout(&mut eth_incoming_receiver.0).await;
 
-		assert_eq!(received, (ACC_1, DATA_1.to_vec()));
+		assert_eq!(received.0, ACC_1);
+		assert_eq!(received.1.payload, DATA_1.to_vec());
 	}
 }

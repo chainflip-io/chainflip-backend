@@ -28,15 +28,16 @@ use crate::{
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	task_scope::{task_scope, Scope},
-	witnesser::EpochStart,
+	witnesser::{AddressMonitorCommand, EpochStart},
 };
 
-pub struct EthAddressToMonitorSender {
-	pub eth: UnboundedSender<H160>,
-	pub flip: UnboundedSender<H160>,
-	pub usdc: UnboundedSender<H160>,
-}
+pub type EthAddressSender = UnboundedSender<AddressMonitorCommand<H160>>;
 
+pub struct EthAddressToMonitorSender {
+	pub eth: EthAddressSender,
+	pub flip: EthAddressSender,
+	pub usdc: EthAddressSender,
+}
 
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,
@@ -86,7 +87,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	ceremony_id: CeremonyId,
 	key_id: KeyId,
 	signers: BTreeSet<AccountId>,
-	payload: C::SigningPayload,
+	payloads: Vec<C::SigningPayload>,
 ) where
 	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
@@ -99,17 +100,21 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	if signers.contains(&state_chain_client.account_id()) {
 		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
 		let signing_result_future =
-			multisig_client.initiate_signing(ceremony_id, key_id, signers, payload);
+			multisig_client.initiate_signing(ceremony_id, key_id, signers, payloads);
 		scope.spawn(async move {
 			match signing_result_future.await {
-				Ok(signature) => {
+				Ok(signatures) => {
 					let _result = state_chain_client
 						.submit_unsigned_extrinsic(pallet_cf_threshold_signature::Call::<
 							state_chain_runtime::Runtime,
 							I,
 						>::signature_success {
 							ceremony_id,
-							signature: signature.into(),
+							signature: signatures
+								.into_iter()
+								.next()
+								.expect("must have at least one signature")
+								.into(),
 						})
 						.await;
 				},
@@ -168,14 +173,16 @@ pub async fn start<
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	eth_broadcaster: EthBroadcaster<EthRpc>,
-	dot_broadcaster: DotBroadcaster<DotRpc>,
+	mut dot_broadcaster: DotBroadcaster<DotRpc>,
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
 	eth_epoch_start_sender: async_broadcast::Sender<EpochStart<Ethereum>>,
 	eth_address_to_monitor_sender: EthAddressToMonitorSender,
 	dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
-	dot_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<PolkadotAccountId>,
+	dot_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<
+		AddressMonitorCommand<PolkadotAccountId>,
+	>,
 	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<[u8; 64]>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
 	initial_block_hash: H256,
@@ -394,7 +401,7 @@ where
                                             ceremony_id,
                                             key_id,
                                             signatories,
-                                            crate::multisig::eth::SigningPayload(payload.0),
+                                            vec![crate::multisig::eth::SigningPayload(payload.0)],
                                         ).await;
                                     }
 
@@ -417,8 +424,8 @@ where
                                             ceremony_id,
                                             key_id,
                                             signatories,
-                                            crate::multisig::polkadot::SigningPayload::new(payload.0)
-                                                .expect("Payload should be correct size"),
+                                            vec![crate::multisig::polkadot::SigningPayload::new(payload.0)
+                                                .expect("Payload should be correct size")],
                                         ).await;
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumBroadcaster(
@@ -467,7 +474,6 @@ where
                                             }
                                         }
                                     }
-
                                     state_chain_runtime::RuntimeEvent::PolkadotBroadcaster(
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
                                             broadcast_attempt_id,
@@ -498,7 +504,6 @@ where
                                         }) => {
                                             cfe_settings_update_sender.send(new_cfe_settings).unwrap();
                                     }
-
                                     state_chain_runtime::RuntimeEvent::EthereumIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
                                             ingress_address,
@@ -508,17 +513,35 @@ where
                                         use cf_primitives::chains::assets::eth;
                                         match ingress_asset {
                                             eth::Asset::Eth => {
-                                                eth_address_to_monitor_sender.eth.send(ingress_address).unwrap();
+                                                &eth_address_to_monitor_sender.eth
                                             }
                                             eth::Asset::Flip => {
-                                                eth_address_to_monitor_sender.flip.send(ingress_address).unwrap();
+                                                &eth_address_to_monitor_sender.flip
                                             }
                                             eth::Asset::Usdc => {
-                                                eth_address_to_monitor_sender.usdc.send(ingress_address).unwrap();
+                                                &eth_address_to_monitor_sender.usdc
                                             }
-                                        }
+                                        }.send(AddressMonitorCommand::Add(ingress_address)).unwrap();
                                     }
-
+                                    state_chain_runtime::RuntimeEvent::EthereumIngressEgress(
+                                        pallet_cf_ingress_egress::Event::StopWitnessing {
+                                            ingress_address,
+                                            ingress_asset
+                                        }
+                                    ) => {
+                                        use cf_primitives::chains::assets::eth;
+                                        match ingress_asset {
+                                            eth::Asset::Eth => {
+                                                &eth_address_to_monitor_sender.eth
+                                            }
+                                            eth::Asset::Flip => {
+                                                &eth_address_to_monitor_sender.flip
+                                            }
+                                            eth::Asset::Usdc => {
+                                                &eth_address_to_monitor_sender.usdc
+                                            }
+                                        }.send(AddressMonitorCommand::Remove(ingress_address)).unwrap();
+                                    }
                                     state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
                                             ingress_address,
@@ -526,7 +549,16 @@ where
                                         }
                                     ) => {
                                         assert_eq!(ingress_asset, cf_primitives::chains::assets::dot::Asset::Dot);
-                                        dot_monitor_ingress_sender.send(ingress_address).unwrap();
+                                        dot_monitor_ingress_sender.send(AddressMonitorCommand::Add(ingress_address)).unwrap();
+                                    }
+                                    state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
+                                        pallet_cf_ingress_egress::Event::StopWitnessing {
+                                            ingress_address,
+                                            ingress_asset
+                                        }
+                                    ) => {
+                                        assert_eq!(ingress_asset, cf_primitives::chains::assets::dot::Asset::Dot);
+                                        dot_monitor_ingress_sender.send(AddressMonitorCommand::Remove(ingress_address)).unwrap();
                                     }
                                 }}}}
                                 Err(error) => {

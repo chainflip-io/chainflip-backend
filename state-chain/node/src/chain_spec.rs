@@ -1,4 +1,7 @@
-use cf_chains::dot::{PolkadotHash, RuntimeVersion};
+use cf_chains::{
+	btc::BitcoinNetwork,
+	dot::{PolkadotHash, RuntimeVersion},
+};
 use cf_primitives::{AccountRole, AuthorityCount, PolkadotAccountId};
 
 use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
@@ -8,10 +11,11 @@ use sp_core::crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{
 	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
-	BlockNumber, CfeSettings, EmissionsConfig, EnvironmentConfig, EthereumThresholdSignerConfig,
-	EthereumVaultConfig, FlipBalance, FlipConfig, GenesisConfig, GovernanceConfig, GrandpaConfig,
-	PolkadotThresholdSignerConfig, PolkadotVaultConfig, ReputationConfig, SessionConfig, Signature,
-	StakingConfig, SystemConfig, ValidatorConfig, WASM_BINARY,
+	BitcoinThresholdSignerConfig, BitcoinVaultConfig, BlockNumber, CfeSettings, EmissionsConfig,
+	EnvironmentConfig, EthereumThresholdSignerConfig, EthereumVaultConfig, FlipBalance, FlipConfig,
+	GenesisConfig, GovernanceConfig, GrandpaConfig, PolkadotThresholdSignerConfig,
+	PolkadotVaultConfig, ReputationConfig, SessionConfig, Signature, StakingConfig, SystemConfig,
+	ValidatorConfig, WASM_BINARY,
 };
 
 use common::FLIPPERINOS_PER_FLIP;
@@ -54,6 +58,8 @@ const ETH_VAULT_ADDRESS_DEFAULT: &str = "e7f1725E7734CE288F8367e1Bb143E90bb3F051
 const ETHEREUM_CHAIN_ID_DEFAULT: u64 = cf_chains::eth::CHAIN_ID_GOERLI;
 const ETH_INIT_AGG_KEY_DEFAULT: &str =
 	"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6";
+
+const BITCOIN_FEE_PER_UTXO: u64 = 1000; // Todo: what value to put here?
 
 const DOT_GENESIS_HASH: &str = "5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5";
 const DOT_SPEC_VERSION: u32 = 9320;
@@ -273,9 +279,12 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 						max_ceremony_stage_duration,
 						eth_priority_fee_percentile: common::ETH_PRIORITY_FEE_PERCENTILE,
 					},
+
 					polkadot_genesis_hash: dot_genesis_hash,
 					polkadot_vault_account_id: dot_vault_account_id.clone(),
 					polkadot_runtime_version: dot_runtime_version,
+					bitcoin_network: BitcoinNetwork::Regtest,
+					bitcoin_fee_per_utxo: BITCOIN_FEE_PER_UTXO,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -402,9 +411,12 @@ macro_rules! network_spec {
 									max_ceremony_stage_duration,
 									eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE,
 								},
+
 								polkadot_genesis_hash: dot_genesis_hash,
 								polkadot_vault_account_id: dot_vault_account_id.clone(),
 								polkadot_runtime_version: dot_runtime_version,
+								bitcoin_network: BitcoinNetwork::Regtest,
+								bitcoin_fee_per_utxo: BITCOIN_FEE_PER_UTXO,
 							},
 							eth_init_agg_key,
 							ethereum_deployment_block,
@@ -565,12 +577,21 @@ fn testnet_genesis(
 			deployment_block: 0,
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 		},
+		bitcoin_vault: BitcoinVaultConfig {
+			vault_key: None,
+			deployment_block: 0,
+			keygen_response_timeout: keygen_ceremony_timeout_blocks,
+		},
 		ethereum_threshold_signer: EthereumThresholdSignerConfig {
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
 			_instance: PhantomData,
 		},
 
 		polkadot_threshold_signer: PolkadotThresholdSignerConfig {
+			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
+			_instance: PhantomData,
+		},
+		bitcoin_threshold_signer: BitcoinThresholdSignerConfig {
 			threshold_signature_response_timeout: threshold_signature_ceremony_timeout_blocks,
 			_instance: PhantomData,
 		},

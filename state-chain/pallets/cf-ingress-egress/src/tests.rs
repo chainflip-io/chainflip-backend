@@ -386,6 +386,7 @@ fn intent_expires() {
 			.is_some());
 		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::StopWitnessing {
 			ingress_address: address,
+			ingress_asset: ETH_ETH,
 		}));
 	});
 }

@@ -4,6 +4,7 @@ mod ceremony_runner;
 mod common;
 pub mod key_store;
 pub mod keygen;
+pub mod legacy;
 pub mod signing;
 
 #[cfg(test)]
@@ -126,8 +127,8 @@ pub trait MultisigClientApi<C: CryptoScheme> {
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
 		signers: BTreeSet<AccountId>,
-		payload: C::SigningPayload,
-	) -> BoxFuture<'_, Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>>;
+		payload: Vec<C::SigningPayload>,
+	) -> BoxFuture<'_, Result<Vec<C::Signature>, (BTreeSet<AccountId>, SigningFailureReason)>>;
 
 	fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId);
 }
@@ -160,7 +161,7 @@ where
 	C: CryptoScheme,
 {
 	pub participants: BTreeSet<AccountId>,
-	pub payload: C::SigningPayload,
+	pub payload: Vec<C::SigningPayload>,
 	pub keygen_result_info: KeygenResultInfo<C>,
 	pub rng: Rng,
 	pub result_sender: CeremonyResultSender<SigningCeremony<C>>,
@@ -258,15 +259,15 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
 		signers: BTreeSet<AccountId>,
-		payload: C::SigningPayload,
-	) -> BoxFuture<'_, Result<C::Signature, (BTreeSet<AccountId>, SigningFailureReason)>> {
+		payload: Vec<C::SigningPayload>,
+	) -> BoxFuture<'_, Result<Vec<C::Signature>, (BTreeSet<AccountId>, SigningFailureReason)>> {
 		let span = info_span!("Signing Ceremony", ceremony_id = ceremony_id);
 		let _entered = span.enter();
 
 		assert!(signers.contains(&self.my_account_id));
 
 		debug!(
-			payload = payload.to_string(),
+			payload_count = payload.len(),
 			signers = format_iterator(&signers).to_string(),
 			"Received a request to sign",
 		);
