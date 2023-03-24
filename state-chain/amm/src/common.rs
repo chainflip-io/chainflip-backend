@@ -93,6 +93,10 @@ pub const MIN_SQRT_PRICE: SqrtPriceQ64F96 = U256([0x1000276a3u64, 0x0, 0x0, 0x0]
 pub const MAX_SQRT_PRICE: SqrtPriceQ64F96 =
 	U256([0x5d951d5263988d26u64, 0xefd1fc6a50648849u64, 0xfffd8963u64, 0x0u64]);
 
+pub fn is_sqrt_price_valid(sqrt_price: SqrtPriceQ64F96) -> bool {
+	(MIN_SQRT_PRICE..MAX_SQRT_PRICE).contains(&sqrt_price)
+}
+
 pub fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
 	assert!((MIN_TICK..=MAX_TICK).contains(&tick));
 
@@ -170,8 +174,7 @@ pub fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
 
 /// Calculates the greatest tick value such that `sqrt_price_at_tick(tick) <= sqrt_price`
 pub fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
-	// Note the price can never actually reach MAX_SQRT_PRICE
-	assert!((MIN_SQRT_PRICE..MAX_SQRT_PRICE).contains(&sqrt_price));
+	assert!(is_sqrt_price_valid(sqrt_price));
 
 	let sqrt_price_q64f128 = sqrt_price << 32u128;
 

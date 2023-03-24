@@ -24,7 +24,7 @@ use std::{collections::BTreeMap, u128};
 use primitive_types::{U256, U512};
 
 use crate::common::{
-	mul_div_ceil, mul_div_floor, Amount, LiquidityProvider, OneToZero, Side, ZeroToOne, ONE_IN_PIPS, SqrtPriceQ64F96, Tick, sqrt_price_at_tick, MAX_TICK, MIN_TICK, tick_at_sqrt_price,
+	mul_div_ceil, mul_div_floor, Amount, LiquidityProvider, OneToZero, Side, ZeroToOne, ONE_IN_PIPS, SqrtPriceQ64F96, Tick, sqrt_price_at_tick, MAX_TICK, MIN_TICK, tick_at_sqrt_price, is_sqrt_price_valid,
 };
 
 pub type Liquidity = u128;
@@ -107,6 +107,7 @@ struct TickDelta {
 #[derive(Clone, Debug)]
 pub struct PoolState {
 	fee_pips: u32,
+	// Note the current_sqrt_price can reach MAX_SQRT_PRICE, but only if the tick is MAX_TICK
 	current_sqrt_price: SqrtPriceQ64F96,
 	current_tick: Tick,
 	current_liquidity: Liquidity,
@@ -294,8 +295,7 @@ impl PoolState {
 	/// This function never panics
 	pub fn new(fee_pips: u32, initial_sqrt_price: U256) -> Result<Self, NewError> {
 		(fee_pips <= ONE_IN_PIPS / 2).then_some(()).ok_or(NewError::InvalidFeeAmount)?;
-		(MIN_SQRT_PRICE..MAX_SQRT_PRICE)
-			.contains(&initial_sqrt_price)
+		is_sqrt_price_valid(initial_sqrt_price)
 			.then_some(())
 			.ok_or(NewError::InvalidInitialPrice)?;
 		let initial_sqrt_price: SqrtPriceQ64F96 = initial_sqrt_price;
