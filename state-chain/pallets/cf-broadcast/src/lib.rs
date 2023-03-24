@@ -605,38 +605,42 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
 			let EpochKey { key, .. } = T::KeyProvider::current_epoch_key();
 
-			if T::TransactionBuilder::is_valid_for_rebroadcast(&api_call) &&
-				<T::TargetChain as ChainCrypto>::verify_threshold_signature(
+			if T::TransactionBuilder::is_valid_for_rebroadcast(&api_call) {
+				if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
 					&key,
 					&api_call.threshold_signature_payload(),
 					&signature,
 				) {
-				let next_broadcast_attempt_id =
-					broadcast_attempt.broadcast_attempt_id.next_attempt();
+					let next_broadcast_attempt_id =
+						broadcast_attempt.broadcast_attempt_id.next_attempt();
 
-				BroadcastAttemptCount::<T, I>::mutate(broadcast_id, |attempt_count| {
-					*attempt_count += 1;
-					*attempt_count
-				});
+					BroadcastAttemptCount::<T, I>::mutate(broadcast_id, |attempt_count| {
+						*attempt_count += 1;
+						*attempt_count
+					});
 
-				Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
-					broadcast_attempt_id: next_broadcast_attempt_id,
-					..broadcast_attempt
-				});
+					Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
+						broadcast_attempt_id: next_broadcast_attempt_id,
+						..broadcast_attempt
+					});
+				} else {
+					Self::clean_up_broadcast_storage(broadcast_id);
+					Self::threshold_sign_and_broadcast(
+						api_call,
+						RequestCallbacks::<T, I>::take(broadcast_id),
+					);
+					log::info!(
+						"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
+						broadcast_id
+					);
+					Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid { broadcast_id });
+				}
 			}
 			// If the signature verification fails, we want
 			// to retry from the threshold signing stage.
 			else {
+				// TODO: Reconstruct the api call from the unsigned tx
 				Self::clean_up_broadcast_storage(broadcast_id);
-				Self::threshold_sign_and_broadcast(
-					api_call,
-					RequestCallbacks::<T, I>::take(broadcast_id),
-				);
-				log::info!(
-					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
-					broadcast_id
-				);
-				Self::deposit_event(Event::<T, I>::ThresholdSignatureInvalid { broadcast_id });
 			}
 		} else {
 			log::error!("No threshold signature data is available.");
