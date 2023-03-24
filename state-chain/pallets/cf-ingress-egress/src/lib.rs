@@ -198,7 +198,7 @@ pub mod pallet {
 	/// Stores a pool of addresses that is available for use together with the intent id.
 	#[pallet::storage]
 	pub(crate) type AddressPool<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Blake2_128Concat, IntentId, TargetChainAccount<T, I>>;
+		StorageMap<_, Twox64Concat, IntentId, TargetChainAccount<T, I>>;
 
 	/// Stores the status of an address.
 	#[pallet::storage]
