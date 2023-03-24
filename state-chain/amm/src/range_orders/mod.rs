@@ -585,6 +585,8 @@ impl PoolState {
 		.then_some(())
 		.and_then(|()| SD::next_liquidity_delta(self.current_tick, &mut self.liquidity_map))
 		{
+			// TODO Comment on increased change between ticks
+
 			let sqrt_price_at_delta = sqrt_price_at_tick(*tick_at_delta);
 
 			let sqrt_price_target = if let Some(sqrt_price_limit) = sqrt_price_limit {
@@ -659,7 +661,7 @@ impl PoolState {
 				};
 
 				// TODO: Prove this does not underflow
-				amount -= amount_swapped + fees;
+				amount -= amount_swapped + fees; //TODO
 
 				// DIFF: This behaviour is different to Uniswap's, we saturate instead of
 				// overflowing/bricking the pool. This means we just stop giving LPs fees, but
@@ -678,6 +680,7 @@ impl PoolState {
 			};
 
 			if sqrt_price_next == sqrt_price_at_delta {
+				// TODO else assert less than
 				delta.fee_growth_outside = enum_map::EnumMap::default()
 					.map(|side, ()| self.global_fee_growth[side] - delta.fee_growth_outside[side]);
 				self.current_sqrt_price = sqrt_price_next;
