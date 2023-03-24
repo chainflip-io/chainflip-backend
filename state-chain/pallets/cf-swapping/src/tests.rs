@@ -1,4 +1,4 @@
-use crate::{mock::*, EarnedRelayerFees, Error, Pallet, Swap, SwapQueue, WeightInfo};
+use crate::{mock::*, EarnedRelayerFees, Error, Pallet, Swap, SwapQueue, SwapType, WeightInfo};
 use cf_chains::AnyChain;
 use cf_primitives::{Asset, ForeignChain, ForeignChainAddress};
 use cf_test_utilities::assert_event_sequence;
@@ -19,7 +19,7 @@ fn generate_test_swaps() -> Vec<Swap> {
 			from: Asset::Flip,
 			to: Asset::Usdc,
 			amount: 100,
-			egress_address: ForeignChainAddress::Eth([2; 20]),
+			swap_type: SwapType::Swap(ForeignChainAddress::Eth([2; 20])),
 		},
 		// USDC -> asset
 		Swap {
@@ -27,7 +27,7 @@ fn generate_test_swaps() -> Vec<Swap> {
 			from: Asset::Eth,
 			to: Asset::Usdc,
 			amount: 40,
-			egress_address: ForeignChainAddress::Eth([9; 20]),
+			swap_type: SwapType::Swap(ForeignChainAddress::Eth([9; 20])),
 		},
 		// Both assets are on the Eth chain
 		Swap {
@@ -35,7 +35,7 @@ fn generate_test_swaps() -> Vec<Swap> {
 			from: Asset::Flip,
 			to: Asset::Eth,
 			amount: 500,
-			egress_address: ForeignChainAddress::Eth([2; 20]),
+			swap_type: SwapType::Swap(ForeignChainAddress::Eth([2; 20])),
 		},
 		// Cross chain
 		Swap {
@@ -43,22 +43,24 @@ fn generate_test_swaps() -> Vec<Swap> {
 			from: Asset::Flip,
 			to: Asset::Dot,
 			amount: 600,
-			egress_address: ForeignChainAddress::Dot([4; 32]),
+			swap_type: SwapType::Swap(ForeignChainAddress::Dot([4; 32])),
 		},
 	]
 }
 
 fn insert_swaps(swaps: &[Swap]) {
 	for (relayer_id, swap) in swaps.iter().enumerate() {
-		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
-			ForeignChainAddress::Eth([2; 20]),
-			swap.from,
-			swap.to,
-			swap.amount,
-			swap.egress_address.clone(),
-			relayer_id as u64,
-			2,
-		);
+		if let SwapType::Swap(egress_address) = &swap.swap_type {
+			<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
+				ForeignChainAddress::Eth([2; 20]),
+				swap.from,
+				swap.to,
+				swap.amount,
+				egress_address.clone(),
+				relayer_id as u64,
+				2,
+			);
+		}
 	}
 }
 
@@ -92,7 +94,11 @@ fn process_all_swaps() {
 			.map(|swap| MockEgressParameter::<AnyChain>::Swap {
 				asset: swap.to,
 				amount: swap.amount,
-				egress_address: swap.egress_address,
+				egress_address: if let SwapType::Swap(egress_address) = swap.swap_type {
+					egress_address
+				} else {
+					ForeignChainAddress::Eth(Default::default())
+				},
 			})
 			.collect::<Vec<_>>();
 		expected.sort();

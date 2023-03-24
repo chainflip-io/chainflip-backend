@@ -16,7 +16,7 @@ fn generate_swaps<T: Config>(amount: u32, from: Asset, to: Asset) -> Vec<Swap> {
 			from,
 			to,
 			amount: 3,
-			egress_address: ForeignChainAddress::Eth(Default::default()),
+			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 		});
 	}
 	swaps

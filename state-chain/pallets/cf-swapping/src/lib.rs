@@ -25,12 +25,39 @@ pub use weights::WeightInfo;
 const BASIS_POINTS_PER_MILLION: u32 = 100;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum SwapType {
+	Swap(ForeignChainAddress),
+	Ccm(u64),
+}
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct Swap {
 	pub swap_id: u64,
 	pub from: Asset,
 	pub to: Asset,
 	pub amount: AssetAmount,
-	pub egress_address: ForeignChainAddress,
+	pub swap_type: SwapType,
+}
+
+/// Enum denoting different stages of a cross-chain message.
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub(crate) enum CcmStage {
+	// The assets are ingressed. Should swap assets next
+	Ingressed,
+	// All assets are swapped. Either swap gas, or egress the assets
+	AssetSwapped { output_amount: AssetAmount },
+	// Both assets and gas have been swapped. Should egress now.
+	AssetAndGasSwapped { output_amount: AssetAmount, gas_budget: (Asset, AssetAmount) },
+}
+
+// Enum representing Cross chain message at its different stages
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub(crate) struct CcmWithStages {
+	ingress_asset: Asset,
+	ingress_amount: AssetAmount,
+	egress_asset: Asset,
+	egress_address: ForeignChainAddress,
+	message_metadata: CcmIngressMetadata,
+	stage: CcmStage,
 }
 
 #[frame_support::pallet]
@@ -84,8 +111,13 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type CcmIdCounter<T: Config> = StorageValue<_, u64, ValueQuery>;
 
+	/// Storage for storing gas budget for each CCM.
 	#[pallet::storage]
 	pub type CcmGasBudget<T: Config> = StorageMap<_, Identity, u64, (Asset, AssetAmount)>;
+
+	/// Storage for storing CCMs pending assets to be swapped.
+	#[pallet::storage]
+	pub(super) type PendingCcms<T: Config> = StorageMap<_, Identity, u64, CcmWithStages>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -126,15 +158,8 @@ pub mod pallet {
 			asset_pair: (Asset, Asset),
 		},
 		CcmEgressScheduled {
-			ingress_asset: Asset,
-			ingress_amount: AssetAmount,
-			caller_address: ForeignChainAddress,
-			egress_asset: Asset,
-			egress_amount: AssetAmount,
-			egress_address: ForeignChainAddress,
-			output_gas_asset: Asset,
-			output_gas_amount: AssetAmount,
-			message: Vec<u8>,
+			ccm_id: u64,
+			egress_id: EgressId,
 		},
 	}
 	#[pallet::error]
@@ -266,7 +291,12 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let swap_id = Self::schedule_swap(from, to, ingress_amount, egress_address.clone());
+			let swap_id = Self::schedule_swap(
+				from,
+				to,
+				ingress_amount,
+				SwapType::Swap(egress_address.clone()),
+			);
 
 			Self::deposit_event(Event::<T>::SwapScheduledByWitnesser {
 				swap_id,
@@ -330,19 +360,24 @@ pub mod pallet {
 				.expect("bundle_input >= swap_amount ∴ result can't overflow");
 
 				if swap_output > 0 {
-					let egress_id = T::EgressHandler::schedule_egress(
-						swap.to,
-						swap_output,
-						swap.clone().egress_address,
-						None,
-					);
+					match &swap.swap_type {
+						SwapType::Swap(egress_address) => {
+							let egress_id = T::EgressHandler::schedule_egress(
+								swap.to,
+								swap_output,
+								egress_address.clone(),
+								None,
+							);
 
-					Self::deposit_event(Event::<T>::SwapEgressScheduled {
-						swap_id: swap.swap_id,
-						egress_id,
-						asset: to,
-						amount: swap_output,
-					});
+							Self::deposit_event(Event::<T>::SwapEgressScheduled {
+								swap_id: swap.swap_id,
+								egress_id,
+								asset: to,
+								amount: swap_output,
+							});
+						},
+						SwapType::Ccm(ccm_id) => Self::ccm_swap_callback(*ccm_id, to, swap_output),
+					};
 				} else {
 					// This is unlikely but theoretically possible if, for example, the initial swap
 					// input is so small compared to the total bundle size that it rounds down to
@@ -364,23 +399,130 @@ pub mod pallet {
 			grouped_swaps
 		}
 
-		fn schedule_swap(
-			from: Asset,
-			to: Asset,
-			amount: AssetAmount,
-			egress_address: ForeignChainAddress,
-		) -> u64 {
-			// The caller should ensure that the egress details are consistent.
-			debug_assert_eq!(ForeignChain::from(egress_address.clone()), ForeignChain::from(to));
-
+		fn schedule_swap(from: Asset, to: Asset, amount: AssetAmount, swap_type: SwapType) -> u64 {
 			let swap_id = SwapIdCounter::<T>::mutate(|id| {
 				id.saturating_accrue(1);
 				*id
 			});
 
-			SwapQueue::<T>::append(Swap { swap_id, from, to, amount, egress_address });
+			SwapQueue::<T>::append(Swap { swap_id, from, to, amount, swap_type });
 
 			swap_id
+		}
+
+		/// Callback used after swap completed for a ccm. Handles CCM specific logic.
+		fn ccm_swap_callback(ccm_id: u64, output_asset: Asset, output_amount: AssetAmount) {
+			// Advance the srage of given CCM.
+			PendingCcms::<T>::mutate(ccm_id, |maybe_ccm| {
+				match maybe_ccm.as_mut() {
+					Some(ccm) => {
+						match ccm.stage.clone() {
+							CcmStage::Ingressed => {
+								debug_assert!(ccm.egress_asset == output_asset, "CCM egress asset and swapped output asset should always match.");
+								ccm.stage = CcmStage::AssetSwapped { output_amount };
+							},
+							CcmStage::AssetSwapped { output_amount } => {
+								// Swap output is for Gas asset
+								ccm.stage = CcmStage::AssetAndGasSwapped {
+									output_amount,
+									gas_budget: (output_asset, output_amount),
+								};
+							},
+							_ => (),
+						}
+					},
+					None => debug_assert!(false, "Swap callback triggered with an invalid CCM ID."),
+				}
+			});
+
+			// call the function to process the current stage of the ccm.
+			Self::process_ccm_with_stages(ccm_id);
+		}
+
+		/// Process Cross chain messages across different stages. Mutate the given
+		/// message by reference in-place, and perform actions required to move the
+		/// message into its next stage.
+		fn process_ccm_with_stages(ccm_id: u64) {
+			PendingCcms::<T>::mutate_exists(ccm_id, |maybe_ccm| {
+				let should_remove = match maybe_ccm.as_mut() {
+					Some(ccm) => {
+						match ccm.stage {
+							CcmStage::Ingressed => {
+								// Schedule incoming assets to be swapped.
+								let _ = Self::schedule_swap(
+									ccm.ingress_asset,
+									ccm.egress_asset,
+									ccm.ingress_amount,
+									SwapType::Ccm(ccm_id),
+								);
+								false
+							},
+							CcmStage::AssetSwapped { output_amount } => {
+								// Check if gas needs to be swapped
+								let output_gas_asset =
+									ForeignChain::from(ccm.egress_asset).gas_asset();
+								// Calculate expected amount of gas from target chain's current gas
+								// price. TODO: Add gas query from chian-tracking trait/pallet
+								let expected_output_gas = ccm.message_metadata.gas_budget;
+								if ccm.egress_asset != output_gas_asset {
+									// Gas asset is different from the egress asset. Another swap is
+									// required. Calculate input required for the gas amount
+
+									// TODO add interface to estimate input required for an output
+									// amount
+
+									// Subtract output_amount by amount used to swap gas.
+
+									// TODO: schedule the swap
+									false
+								} else {
+									// Split the gas amount from the egress amount.
+									let remaining =
+										output_amount.saturating_sub(expected_output_gas);
+
+									// Insert gas budget into storage.
+									CcmGasBudget::<T>::insert(
+										ccm_id,
+										(output_gas_asset, expected_output_gas),
+									);
+
+									// Schedule the ccm to be egressed
+									Self::schedule_ccm_egress(ccm_id, ccm, remaining);
+									true
+								}
+							},
+							CcmStage::AssetAndGasSwapped { output_amount, gas_budget } => {
+								// Insert gas budget into storage.
+								CcmGasBudget::<T>::insert(ccm_id, gas_budget);
+
+								// Schedule the ccm to be egressed
+								Self::schedule_ccm_egress(ccm_id, ccm, output_amount);
+								true
+							},
+						}
+					},
+					None => {
+						debug_assert!(false, "The ccm does not exist.");
+						false
+					},
+				};
+
+				// Clear the storage of any CCM already egressed
+				if should_remove {
+					*maybe_ccm = None;
+				}
+			});
+		}
+
+		// Schedule the give nccm to be egressed and deposit a event. Does not alter storage.
+		fn schedule_ccm_egress(ccm_id: u64, ccm: &CcmWithStages, egress_amount: AssetAmount) {
+			let egress_id = T::EgressHandler::schedule_egress(
+				ccm.egress_asset,
+				egress_amount,
+				ccm.egress_address.clone(),
+				Some(ccm.message_metadata.clone()),
+			);
+			Self::deposit_event(Event::<T>::CcmEgressScheduled { ccm_id, egress_id });
 		}
 	}
 
@@ -404,7 +546,12 @@ pub mod pallet {
 				earned_fees.saturating_accrue(fee)
 			});
 
-			let swap_id = Self::schedule_swap(from, to, amount.saturating_sub(fee), egress_address);
+			let swap_id = Self::schedule_swap(
+				from,
+				to,
+				amount.saturating_sub(fee),
+				SwapType::Swap(egress_address),
+			);
 
 			Self::deposit_event(Event::<T>::SwapIngressReceived {
 				swap_id,
@@ -427,55 +574,24 @@ pub mod pallet {
 				ForeignChain::from(egress_address.clone()) == ForeignChain::from(egress_asset)
 			);
 
-			// Swap all funds into egress chain's native currency.
-			let swapped_output = T::SwappingApi::swap(ingress_asset, egress_asset, ingress_amount)?;
-
-			let output_gas_asset = ForeignChain::from(egress_asset).gas_asset();
-			// Calculate expected amount of gas from target chain's current gas price.
-			// TODO: Add gas query from chian-tracking trait/pallet
-			let expected_output_gas = message_metadata.gas_budget;
-
-			// schedule egress that contains the message and refund address
-			let (egress_amount, output_gas_amount) = if egress_asset != output_gas_asset {
-				// Gas asset is different from the egress asset. Another swap is required.
-				// Calculate input required for the gas amount
-				// TODO add interface to estimate input required for an output amount
-
-				// TODO: perform the swap
-				(0, 0)
-			} else {
-				// Split the gas amount from the egress amount.
-				let remaining = swapped_output.saturating_sub(expected_output_gas);
-				(remaining, expected_output_gas)
-			};
-
-			// Send CCM via egress
-			let _egress_id = T::EgressHandler::schedule_egress(
-				egress_asset,
-				egress_amount,
-				egress_address.clone(),
-				Some(message_metadata.clone()),
-			);
-
-			// Store swapped gas with a generated EgressId.
 			let ccm_id = CcmIdCounter::<T>::mutate(|id| {
 				id.saturating_accrue(1);
 				*id
 			});
-			CcmGasBudget::<T>::insert(ccm_id, (output_gas_asset, output_gas_amount));
 
-			// Deposit event
-			Self::deposit_event(Event::<T>::CcmEgressScheduled {
-				ingress_asset,
-				ingress_amount,
-				caller_address: message_metadata.caller_address,
-				egress_asset,
-				egress_amount,
-				egress_address,
-				output_gas_asset,
-				output_gas_amount,
-				message: message_metadata.message,
-			});
+			PendingCcms::<T>::insert(
+				ccm_id,
+				CcmWithStages {
+					ingress_asset,
+					ingress_amount,
+					egress_asset,
+					egress_address,
+					message_metadata,
+					stage: CcmStage::Ingressed,
+				},
+			);
+
+			Self::process_ccm_with_stages(ccm_id);
 
 			Ok(())
 		}
