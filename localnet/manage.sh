@@ -2,7 +2,7 @@
 
 LOCALNET_INIT_DIR=localnet/init
 WORKFLOW=build-localnet
-
+REQUIRED_BINARIES="chainflip-engine chainflip-node"
 set -euo pipefail
 setup() {
   echo "🤗 Welcome to Localnet manager"
@@ -59,8 +59,22 @@ build-localnet() {
   echo "💻 Please provide the location to the binaries you would like to use."
   read -p "(default: ./target/release/) " BINARIES_LOCATION
   echo
-  echo "🏗 Building network"
   BINARIES_LOCATION=${BINARIES_LOCATION:-"./target/release/"}
+
+  if [ ! -d $BINARIES_LOCATION ]; then
+    echo "❌  Couldn't find directory at $BINARIES_LOCATION"
+    exit 1
+  fi
+  for binary in $REQUIRED_BINARIES; do
+    if [ -f $LOCALNET_INIT_DIR/$binary ]; then
+      continue
+    else
+      echo "❌ Couldn't find $binary at $BINARIES_LOCATION"
+      exit 1
+    fi
+  done
+
+  echo "🏗 Building network"
   docker-compose -f localnet/docker-compose.yml up -d
   ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
   while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null 2>&1 ; do
