@@ -59,8 +59,16 @@ build-localnet() {
   echo "💻 Please provide the location to the binaries you would like to use."
   read -p "(default: ./target/release/) " BINARIES_LOCATION
   echo
-  echo "🏗 Building network"
   BINARIES_LOCATION=${BINARIES_LOCATION:-"./target/release/"}
+  if [ ! -d $BINARIES_LOCATION ]; then
+    echo "❌  Couldn't find directory $BINARIES_LOCATION"
+    exit 1
+  fi
+  if [ ! $(ls $BINARIES_LOCATION | grep chainflip-) ]; then
+    echo "❌  Couldn't find binaries at $BINARIES_LOCATION"
+    exit 1
+  fi
+  echo "🏗 Building network"
   docker-compose -f localnet/docker-compose.yml up -d
   ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
   while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null 2>&1 ; do
