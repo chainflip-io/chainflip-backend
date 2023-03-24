@@ -24,6 +24,7 @@ use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, GetDispatchInfo, UnfilteredDispatchable},
 	ensure,
 	pallet_prelude::Member,
+	storage::with_storage_layer,
 	traits::EnsureOrigin,
 	Hashable,
 };
@@ -45,9 +46,8 @@ pub trait WitnessDataExtraction {
 pub mod pallet {
 	use super::*;
 	use cf_traits::AccountRoleRegistry;
-	use frame_support::{pallet_prelude::*, storage::with_transaction};
+	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::TransactionOutcome;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
@@ -319,31 +319,35 @@ pub mod pallet {
 				(last_expired_epoch..=current_epoch)
 					.all(|epoch| CallHashExecuted::<T>::get(epoch, call_hash).is_none())
 			{
-				if let Some(mut extra_data) = ExtraCallData::<T>::get(epoch_index, call_hash) {
-					call.combine_and_inject(&mut extra_data)
-				}
-				let _result = with_transaction(move || {
-					match call.dispatch_bypass_filter(
-						(if epoch_index == current_epoch {
-							RawOrigin::CurrentEpochWitnessThreshold
-						} else {
-							RawOrigin::HistoricalActiveEpochWitnessThreshold
-						})
-						.into(),
-					) {
-						r @ Ok(_) => TransactionOutcome::Commit(r),
-						r @ Err(_) => TransactionOutcome::Rollback(r),
-					}
-				})
-				.map_err(|e| {
-					Self::deposit_event(Event::<T>::WitnessExecutionFailed {
-						call_hash,
-						error: e.error,
-					});
-				});
-				CallHashExecuted::<T>::insert(epoch_index, call_hash, ());
+				Self::dispatch_call(epoch_index, current_epoch, *call, call_hash);
 			}
 			Ok(().into())
+		}
+
+		/// This allows the root user to force through a witness call.
+		///
+		/// This can be useful when votes haven't reached the threshold because of witnesser
+		/// checkpointing issues or similar.
+		///
+		/// Note this does not protect against replays, so should be used with care.
+		#[pallet::weight(0)]
+		pub fn force_witness(
+			origin: OriginFor<T>,
+			mut call: Box<<T as Config>::RuntimeCall>,
+			epoch_index: EpochIndex,
+		) -> DispatchResult {
+			ensure_root(origin)?;
+
+			ensure!(epoch_index > T::EpochInfo::last_expired_epoch(), Error::<T>::EpochExpired);
+
+			let (extra_data, call_hash) = Self::split_calldata(&mut call);
+			ensure!(Votes::<T>::contains_key(epoch_index, call_hash), Error::<T>::InvalidEpoch);
+
+			if let Some(extra_data) = extra_data {
+				ExtraCallData::<T>::append(epoch_index, call_hash, extra_data);
+			}
+			Self::dispatch_call(epoch_index, T::EpochInfo::epoch_index(), *call, call_hash);
+			Ok(())
 		}
 	}
 
@@ -356,6 +360,38 @@ pub mod pallet {
 	pub enum RawOrigin {
 		HistoricalActiveEpochWitnessThreshold,
 		CurrentEpochWitnessThreshold,
+	}
+}
+
+impl<T: Config> Pallet<T> {
+	fn split_calldata(call: &mut <T as Config>::RuntimeCall) -> (Option<Vec<u8>>, CallHash) {
+		let extra_data = call.extract();
+		(extra_data, CallHash(call.blake2_256()))
+	}
+
+	fn dispatch_call(
+		witnessed_at_epoch: EpochIndex,
+		current_epoch: EpochIndex,
+		mut call: <T as Config>::RuntimeCall,
+		call_hash: CallHash,
+	) {
+		if let Some(mut extra_data) = ExtraCallData::<T>::get(witnessed_at_epoch, call_hash) {
+			call.combine_and_inject(&mut extra_data)
+		}
+		let _result = with_storage_layer(move || {
+			call.dispatch_bypass_filter(
+				(if witnessed_at_epoch == current_epoch {
+					RawOrigin::CurrentEpochWitnessThreshold
+				} else {
+					RawOrigin::HistoricalActiveEpochWitnessThreshold
+				})
+				.into(),
+			)
+		})
+		.map_err(|e| {
+			Self::deposit_event(Event::<T>::WitnessExecutionFailed { call_hash, error: e.error });
+		});
+		CallHashExecuted::<T>::insert(witnessed_at_epoch, call_hash, ());
 	}
 }
 
