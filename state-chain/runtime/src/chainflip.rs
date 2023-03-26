@@ -298,7 +298,7 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 				}
 			},
 
-			cf_chains::dot::api::SystemAccounts::Vault => Environment::get_polkadot_vault_account(),
+			cf_chains::dot::api::SystemAccounts::Vault => Environment::polkadot_vault_account(),
 		}
 	}
 }

@@ -22,7 +22,7 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 		const RAW_PUBLIC_KEY_SIZE: usize = 32;
 		const PAYLOAD_LENGTH: usize = PREFIX.len() + RAW_PUBLIC_KEY_SIZE + size_of::<u16>();
 
-		let master_account = Environment::get_polkadot_vault_account()
+		let master_account = Environment::polkadot_vault_account()
 			.ok_or(DispatchError::Other("Vault Account does not exist."))?;
 
 		// Because we re-use addresses, we don't expect to hit this case in the wild.

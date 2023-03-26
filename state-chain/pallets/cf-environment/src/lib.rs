@@ -177,7 +177,7 @@ pub mod pallet {
 	pub type PolkadotGenesisHash<T> = StorageValue<_, PolkadotHash, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn polkadot_vault_account_id)]
+	#[pallet::getter(fn polkadot_vault_account)]
 	/// The Polkadot Vault Anonymous Account
 	pub type PolkadotVaultAccountId<T> = StorageValue<_, PolkadotAccountId, OptionQuery>;
 
@@ -572,10 +572,6 @@ impl<T: Config> Pallet<T> {
 			*nonce += 1;
 			*nonce - 1
 		})
-	}
-
-	pub fn get_polkadot_vault_account() -> Option<PolkadotAccountId> {
-		PolkadotVaultAccountId::<T>::get()
 	}
 
 	pub fn reset_polkadot_proxy_account_nonce() {
