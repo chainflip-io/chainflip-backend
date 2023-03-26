@@ -92,7 +92,7 @@ pub mod pallet {
 	}
 
 	/// Convenience alias for a collection of bits representing the votes of each authority.
-	pub(super) type VoteMask = BitSlice<Msb0, u8>;
+	pub(super) type VoteMask = BitSlice<u8, Msb0>;
 
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
@@ -281,19 +281,12 @@ pub mod pallet {
 				&call_hash,
 				|buffer| {
 					// If there is no storage item, create an empty one.
-					if buffer.is_none() {
-						let empty_mask =
-							BitVec::<Msb0, u8>::repeat(false, num_authorities as usize);
-						*buffer = Some(empty_mask.into_vec())
-					}
-
-					let bytes = buffer
-						.as_mut()
-						.expect("Checked for none condition above, this will never panic;");
+					let bytes = buffer.get_or_insert_with(|| {
+						BitVec::<u8, Msb0>::repeat(false, num_authorities as usize).into_vec()
+					});
 
 					// Convert to an addressable bitmask
-					let bits = VoteMask::from_slice_mut(bytes)
-					.expect("Only panics if the slice size exceeds the max; The number of authorities should never exceed this;");
+					let bits = VoteMask::from_slice_mut(bytes);
 
 					let mut vote_count = bits.count_ones();
 
