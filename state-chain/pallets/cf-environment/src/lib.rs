@@ -195,6 +195,7 @@ pub mod pallet {
 	pub type BitcoinAvailableUtxos<T> = StorageValue<_, Vec<Utxo>, ValueQuery>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn bitcoin_network)]
 	/// Selection of the bitcoin network (mainnet, testnet or regtest) that the state chain
 	/// currently supports.
 	pub type BitcoinNetworkSelection<T> = StorageValue<_, BitcoinNetwork, ValueQuery>;
@@ -583,10 +584,6 @@ impl<T: Config> Pallet<T> {
 
 	pub fn add_bitcoin_utxo_to_list(utxo: Utxo) {
 		BitcoinAvailableUtxos::<T>::append(utxo);
-	}
-
-	pub fn get_bitcoin_network() -> BitcoinNetwork {
-		BitcoinNetworkSelection::<T>::get()
 	}
 
 	// Calculate the selection of utxos, return them and remove them from the list. If the

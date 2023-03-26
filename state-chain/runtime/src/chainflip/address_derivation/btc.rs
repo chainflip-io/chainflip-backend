@@ -26,7 +26,7 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 					.0,
 				salt: intent_id.try_into().unwrap(),
 			}),
-			network: Environment::get_bitcoin_network(),
+			network: Environment::bitcoin_network(),
 		})
 	}
 }
