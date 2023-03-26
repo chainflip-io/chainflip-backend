@@ -230,15 +230,11 @@ mod tests {
 		crate::logging::init_json_logger();
 
 		let rpc = BtcRpcClient::new(&settings::Btc {
-			http_node_endpoint: "https://bitcoin-rpc-testnet.chainflip.xyz".to_string(),
-			rpc_user: "flip".to_string(),
-			rpc_password: "ZmxpcDphcVBvOUw0ZGtxSFVBaWprZGRGQlJLVkhrcTRoODI3Ug==".to_string(),
+			http_node_endpoint: "http://127.0.0.1:18443".to_string(),
+			rpc_user: "user".to_string(),
+			rpc_password: "password".to_string(),
 		})
 		.unwrap();
-
-		let best_hash = rpc.best_block_hash().unwrap();
-
-		println!("Best block hash: {}", best_hash);
 
 		let state_chain_client = Arc::new(MockStateChainClient::new());
 
