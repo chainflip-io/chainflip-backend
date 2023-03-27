@@ -66,9 +66,7 @@ build-localnet() {
     exit 1
   fi
   for binary in $REQUIRED_BINARIES; do
-    if [ -f $BINARIES_LOCATION/$binary ]; then
-      continue
-    else
+    if [ ! -f $BINARIES_LOCATION/$binary ]; then
       echo "❌ Couldn't find $binary at $BINARIES_LOCATION"
       exit 1
     fi
@@ -77,12 +75,20 @@ build-localnet() {
   echo "🏗 Building network"
   docker-compose -f localnet/docker-compose.yml up -d
   ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
-  while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null 2>&1 ; do
-    echo "🚧 Waiting for chainflip-node to start"
+  while ! curl --user flip:flip -H 'Content-Type: text/plain;' -d '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' -v http://127.0.0.1:8332 > /dev/null 2>&1 ; do
+    echo "🪙 Waiting for Bitcoin node to start"
+    sleep 5
+  done
+  while ! curl -H "Content-Type: application/json" --data "{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}" http://localhost:8545 > /dev/null 2>&1 ; do
+    echo "💎 Waiting for ETH node to start"
     sleep 5
   done
   while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9945' > /dev/null 2>&1 ; do
     echo "🚦 Waiting for polkadot node to start"
+    sleep 5
+  done
+  while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null 2>&1 ; do
+    echo "🚧 Waiting for chainflip-node to start"
     sleep 5
   done
   ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
