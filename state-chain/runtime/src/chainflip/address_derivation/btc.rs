@@ -21,7 +21,7 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 		Ok(BitcoinAddressData {
 			address_for: BitcoinAddressFor::Ingress(BitcoinAddressSeed {
 				pubkey_x: BitcoinVault::vaults(Validator::epoch_index())
-					.unwrap_or_default()
+					.unwrap_or(Err(DispatchError::Other("No vault for epoch"))?)
 					.public_key
 					.0,
 				salt: intent_id.try_into().unwrap(),
