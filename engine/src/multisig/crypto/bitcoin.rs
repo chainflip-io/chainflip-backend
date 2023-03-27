@@ -33,7 +33,7 @@ impl BtcSchnorrSignature {
 
 impl SignatureToThresholdSignature<Bitcoin> for Vec<BtcSchnorrSignature> {
 	fn to_threshold_signature(&self) -> <Bitcoin as cf_chains::ChainCrypto>::ThresholdSignature {
-		self.into_iter().map(|s| s.to_raw()).collect()
+		self.iter().map(|s| s.to_raw()).collect()
 	}
 }
 

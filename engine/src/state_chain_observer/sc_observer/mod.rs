@@ -530,7 +530,7 @@ where
                                             ceremony_id,
                                             key_id,
                                             signatories,
-                                            payloads.into_iter().map(|payload| crate::multisig::bitcoin::SigningPayload(payload)).collect(),
+                                            payloads.into_iter().map(crate::multisig::bitcoin::SigningPayload).collect(),
                                         ).await;
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumBroadcaster(
