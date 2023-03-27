@@ -448,7 +448,7 @@ fn proof_address_pool_integrity() {
 		schedule_ingress(1u64, eth::Asset::Eth);
 		schedule_ingress(2u64, eth::Asset::Eth);
 		schedule_ingress(3u64, eth::Asset::Eth);
-		// All address in use
+		// All addresses in use
 		expect_size_of_address_pool(0);
 		// Process all intents
 		IngressEgress::on_idle(
@@ -456,9 +456,10 @@ fn proof_address_pool_integrity() {
 			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(3) +
 				Weight::from_ref_time(1),
 		);
-		//
+		// Expect all addresses to be available
 		expect_size_of_address_pool(3);
 		schedule_ingress(4u64, eth::Asset::Eth);
+		// Expect one address to be in use
 		expect_size_of_address_pool(2);
 	});
 }
