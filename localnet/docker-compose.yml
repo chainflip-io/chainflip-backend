@@ -77,3 +77,21 @@ services:
         "--state-pruning=archive",
         "--blocks-pruning=archive"
       ]
+
+  bitcoin:
+    image: ghcr.io/chainflip-io/chainflip-bitcoin-regtest
+    platform: linux/amd64
+    pull_policy: if_not_present
+    container_name: bitcoin
+    restart: unless-stopped
+    ports:
+      - 18443:18443
+      - 18444:18444
+      - 18445:18445
+    stop_signal: SIGINT
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "echo hi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
