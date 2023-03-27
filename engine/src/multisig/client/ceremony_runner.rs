@@ -265,22 +265,24 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
 	/// Delay message to be processed in the next stage
 	fn add_delayed(&mut self, id: AccountId, m: Ceremony::Data) {
-		let delayed_messages_count = self.delayed_messages.len() + 1;
-		match &self.stage {
-			Some(stage) => {
-				debug!(
-					"Delaying message {m} from party [{id}] during stage {}. (Total: {delayed_messages_count})",
-					stage.get_stage_name(),
-				);
-			},
-			None => {
-				debug!(
-					"Delaying message {m} from party [{id}] for unauthorised ceremony. (Total: {delayed_messages_count})",
-				)
-			},
+		if self.delayed_messages.contains_key(&id) {
+			warn!(
+				"Ignoring a redundant delayed message from party [{id}] for {}",
+				self.get_readable_stage_string()
+			);
+			return
 		}
 
-		self.delayed_messages.insert(id, m);
+		debug!(
+			"Delaying message {m} from party [{id}] for {}. (Total: {})",
+			self.get_readable_stage_string(),
+			self.delayed_messages.len() + 1
+		);
+
+		assert!(
+			self.delayed_messages.insert(id, m).is_none(),
+			"Should not have an existing message due to redundant message check above"
+		);
 	}
 
 	async fn on_timeout(&mut self) -> OptionalCeremonyReturn<Ceremony> {
@@ -312,6 +314,13 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 			self.finalize_current_stage().await
 		} else {
 			panic!("Unauthorised ceremonies cannot timeout");
+		}
+	}
+
+	fn get_readable_stage_string(&self) -> String {
+		match &self.stage {
+			Some(stage) => format!("stage {}", stage.get_stage_name()),
+			None => "unauthorised ceremony".to_string(),
 		}
 	}
 }

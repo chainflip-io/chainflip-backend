@@ -189,7 +189,10 @@ where
 			return ProcessMessageResult::NotReady
 		}
 
-		self.messages.insert(signer_idx, m);
+		assert!(
+			self.messages.insert(signer_idx, m).is_none(),
+			"Should not have an existing message due to the redundant message check above"
+		);
 
 		if self.messages.len() == self.common.all_idxs.len() {
 			ProcessMessageResult::Ready
