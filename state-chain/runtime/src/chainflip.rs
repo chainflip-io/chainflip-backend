@@ -298,7 +298,7 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 				}
 			},
 
-			cf_chains::dot::api::SystemAccounts::Vault => Environment::get_polkadot_vault_account(),
+			cf_chains::dot::api::SystemAccounts::Vault => Environment::polkadot_vault_account(),
 		}
 	}
 }
@@ -313,7 +313,7 @@ impl ChainEnvironment<BtcAmount, SelectedUtxos> for BtcEnvironment {
 
 impl ChainEnvironment<(), BitcoinNetwork> for BtcEnvironment {
 	fn lookup(_: ()) -> Option<BitcoinNetwork> {
-		Some(Environment::get_bitcoin_network())
+		Some(Environment::bitcoin_network())
 	}
 }
 impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
