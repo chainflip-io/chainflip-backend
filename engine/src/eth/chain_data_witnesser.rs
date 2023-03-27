@@ -7,7 +7,7 @@ use crate::{
 
 use super::rpc::EthRpcApi;
 
-use cf_chains::eth::{Ethereum, TrackedData};
+use cf_chains::eth::{Ethereum, EthereumTrackedData};
 
 use state_chain_runtime::CfeSettings;
 use tokio::{
@@ -33,7 +33,7 @@ where
 	epoch_witnesser::start(
 		Arc::new(Mutex::new(epoch_start_receiver)),
 		|epoch_start| epoch_start.current,
-		TrackedData::<Ethereum>::default(),
+		EthereumTrackedData::default(),
 		move |mut end_witnessing_receiver, epoch_start, mut last_witnessed_data| {
 			let eth_rpc = eth_rpc.clone();
 			let cfe_settings_update_receiver = cfe_settings_update_receiver.clone();
@@ -93,7 +93,7 @@ where
 async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
 	rpc: &EthRpcClient,
 	priority_fee_percentile: u8,
-) -> anyhow::Result<TrackedData<Ethereum>> {
+) -> anyhow::Result<EthereumTrackedData> {
 	let fee_history = rpc
 		.fee_history(
 			U256::one(),
@@ -103,7 +103,7 @@ async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
 		.await?;
 
 	if let BlockNumber::Number(block_number) = fee_history.oldest_block {
-		Ok(TrackedData::<Ethereum> {
+		Ok(EthereumTrackedData {
 			block_height: block_number.as_u64(),
 			base_fee: (*context!(fee_history.base_fee_per_gas.first())?)
 				.try_into()
@@ -146,7 +146,7 @@ mod tests {
 
 		assert_eq!(
 			get_tracked_data(&rpc, 50).await.unwrap(),
-			TrackedData {
+			EthereumTrackedData {
 				block_height: BLOCK_HEIGHT,
 				base_fee: BASE_FEE,
 				priority_fee: PRIORITY_FEE,

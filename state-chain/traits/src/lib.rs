@@ -866,3 +866,13 @@ impl CcmHandler for () {
 		Ok(())
 	}
 }
+
+pub trait GasPriceProviderAnychain {
+	fn gas_price(chain: ForeignChain) -> Option<AssetAmount>;
+}
+
+impl GasPriceProviderAnychain for () {
+	fn gas_price(_chain: ForeignChain) -> Option<AssetAmount> {
+		None
+	}
+}

@@ -1,6 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_primitives::{Asset, AssetAmount, CcmIngressMetadata, ForeignChain, ForeignChainAddress};
-use cf_traits::{liquidity::SwappingApi, CcmHandler, IngressApi, SystemStateInfo};
+use cf_traits::{
+	liquidity::SwappingApi, CcmHandler, GasPriceProviderAnychain, IngressApi, SystemStateInfo,
+};
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{traits::Saturating, Permill},
@@ -85,6 +87,8 @@ pub mod pallet {
 		type EgressHandler: EgressApi<AnyChain>;
 		/// An interface to the AMM api implementation.
 		type SwappingApi: SwappingApi;
+		/// Provider of gas price for foreign chains.
+		type GasPriceProvider: GasPriceProviderAnychain;
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
 	}
@@ -170,6 +174,8 @@ pub mod pallet {
 		InvalidEgressAddress,
 		/// The withdrawal is not possible because not enough funds are available.
 		NoFundsAvailable,
+		/// The target chain does not support CCM.
+		CcmUnsupportedForTargetChain,
 	}
 
 	#[pallet::hooks]
@@ -224,6 +230,14 @@ pub mod pallet {
 			message_metadata: Option<CcmIngressMetadata>,
 		) -> DispatchResult {
 			let relayer = T::AccountRoleRegistry::ensure_relayer(origin)?;
+
+			if message_metadata.is_some() {
+				// Currently only Ethereum supports CCM.
+				ensure!(
+					ForeignChain::Ethereum == egress_asset.into(),
+					Error::<T>::CcmUnsupportedForTargetChain
+				);
+			}
 
 			ensure!(
 				ForeignChain::from(egress_address.clone()) == ForeignChain::from(egress_asset),
@@ -281,7 +295,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [SwapScheduled](Event::SwapIngressReceived)
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::schedule_swap_by_witnesser())]
 		pub fn schedule_swap_by_witnesser(
 			origin: OriginFor<T>,
 			from: Asset,
@@ -310,7 +324,7 @@ pub mod pallet {
 		/// Process the ingress of a Cross-chain-message. The fund is swapped into the target
 		/// chain's native asset, with appropriate fees and gas deducted, and the
 		/// message is egressed to the target chain.
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::ccm_ingress())]
 		pub fn ccm_ingress(
 			origin: OriginFor<T>,
 			ingress_asset: Asset,
@@ -320,6 +334,16 @@ pub mod pallet {
 			message_metadata: CcmIngressMetadata,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			// Currently only Ethereum supports CCM.
+			ensure!(
+				ForeignChain::Ethereum == egress_asset.into(),
+				Error::<T>::CcmUnsupportedForTargetChain
+			);
+			ensure!(
+				ForeignChain::from(egress_asset) == ForeignChain::from(egress_address.clone()),
+				Error::<T>::IncompatibleAssetAndAddress
+			);
 
 			Self::on_ccm_ingress(
 				ingress_asset,
@@ -457,23 +481,29 @@ pub mod pallet {
 								);
 								false
 							},
-							CcmStage::AssetSwapped { output_amount } => {
+							CcmStage::AssetSwapped { ref mut output_amount } => {
 								// Check if gas needs to be swapped
-								let output_gas_asset =
-									ForeignChain::from(ccm.egress_asset).gas_asset();
-								// Calculate expected amount of gas from target chain's current gas
-								// price. TODO: Add gas query from chian-tracking trait/pallet
-								let expected_output_gas = ccm.message_metadata.gas_budget;
+								let target_chain = ForeignChain::from(ccm.egress_asset);
+								let output_gas_asset = target_chain.gas_asset();
+								// Calculate expected amount of gas.
+								let expected_output_gas =
+									ccm.message_metadata.gas_budget.saturating_mul(
+										T::GasPriceProvider::gas_price(target_chain)
+											.expect("Target chain's gas price must be set."),
+									);
 								if ccm.egress_asset != output_gas_asset {
 									// Gas asset is different from the egress asset. Another swap is
 									// required. Calculate input required for the gas amount
 
-									// TODO add interface to estimate input required for an output
-									// amount
-
-									// Subtract output_amount by amount used to swap gas.
-
-									// TODO: schedule the swap
+									// TODO add interface to estimate input required
+									let swap_input = sp_std::cmp::min(0, *output_amount);
+									*output_amount = output_amount.saturating_sub(swap_input);
+									let _ = Self::schedule_swap(
+										ccm.egress_asset,
+										output_gas_asset,
+										swap_input,
+										SwapType::Ccm(ccm_id),
+									);
 									false
 								} else {
 									// Split the gas amount from the egress amount.

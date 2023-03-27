@@ -6,6 +6,7 @@ use super::*;
 use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
+use frame_support::dispatch::UnfilteredDispatchable;
 use frame_system::RawOrigin;
 
 fn generate_swaps<T: Config>(amount: u32, from: Asset, to: Asset) -> Vec<Swap> {
@@ -53,4 +54,50 @@ benchmarks! {
 		Asset::Eth,
 		ForeignChainAddress::Eth(Default::default())
 	)
+	schedule_swap_by_witnesser {
+		let origin = T::EnsureWitnessed::successful_origin();
+		let call = Call::<T>::schedule_swap_by_witnesser{
+			from: Asset::Usdc,
+			to: Asset::Eth,
+			ingress_amount: 1_000,
+			egress_address: ForeignChainAddress::Eth(Default::default())
+		};
+	}: {
+		call.dispatch_bypass_filter(origin)?;
+	}
+	verify {
+		assert_eq!(SwapQueue::<T>::get(), vec![Swap{
+			swap_id: 1,
+			from: Asset::Usdc,
+			to: Asset::Eth,
+			amount:1_000,
+			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default()))
+		}])
+	}
+	ccm_ingress {
+		let origin = T::EnsureWitnessed::successful_origin();
+		let metadata = CcmIngressMetadata::new(
+			vec![0x00],
+			1,
+			ForeignChainAddress::Eth(Default::default())
+		);
+		let call = Call::<T>::ccm_ingress{
+			ingress_asset: Asset::Usdc,
+			ingress_amount: 1_000,
+			egress_asset: Asset::Eth,
+			egress_address: ForeignChainAddress::Eth(Default::default()),
+			message_metadata: metadata,
+		};
+	}: {
+		call.dispatch_bypass_filter(origin)?;
+	}
+	verify {
+		assert_eq!(SwapQueue::<T>::get(), vec![Swap{
+			swap_id: 1,
+			from: Asset::Usdc,
+			to: Asset::Eth,
+			amount:1_000,
+			swap_type: SwapType::Ccm(1)
+		}])
+	}
 }

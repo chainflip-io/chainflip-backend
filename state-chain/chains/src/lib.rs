@@ -63,7 +63,13 @@ pub trait Chain: Member + Parameter {
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
-	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Age<Self> + BenchmarkValue;
+	type TrackedData: Member
+		+ Parameter
+		+ MaxEncodedLen
+		+ Clone
+		+ Age<Self>
+		+ BenchmarkValue
+		+ GasPriceProvider;
 
 	type ChainAsset: Member
 		+ Parameter
@@ -291,29 +297,17 @@ pub trait IngressIdConstructor {
 
 // Trait for basic chain information.
 pub trait GasPriceProvider {
-	fn base_fee(&self) -> AssetAmount;
-	fn priority_fee(&self) -> AssetAmount;
-	fn gas_fee(&self) -> AssetAmount {
-		self.base_fee().saturating_add(self.priority_fee())
-	}
+	fn gas_fee(&self) -> Option<AssetAmount>;
 }
 
-impl GasPriceProvider for crate::eth::TrackedData<Ethereum> {
-	fn base_fee(&self) -> AssetAmount {
-		self.base_fee
-	}
-
-	fn priority_fee(&self) -> AssetAmount {
-		self.priority_fee
+impl GasPriceProvider for crate::eth::EthereumTrackedData {
+	fn gas_fee(&self) -> Option<AssetAmount> {
+		Some(self.base_fee.saturating_add(self.priority_fee))
 	}
 }
 
 impl GasPriceProvider for () {
-	fn base_fee(&self) -> AssetAmount {
-		0
-	}
-
-	fn priority_fee(&self) -> AssetAmount {
-		0
+	fn gas_fee(&self) -> Option<AssetAmount> {
+		None
 	}
 }

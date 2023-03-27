@@ -39,9 +39,9 @@ use cf_primitives::{
 };
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, EgressApi,
-	EmergencyRotation, EpochInfo, EpochKey, EthEnvironmentProvider, Heartbeat, IngressApi,
-	IngressHandler, Issuance, KeyProvider, KeyState, NetworkState, RewardsDistribution,
-	RuntimeUpgrade, VaultTransitionHandler,
+	EmergencyRotation, EpochInfo, EpochKey, EthEnvironmentProvider, GasPriceProviderAnychain,
+	Heartbeat, IngressApi, IngressHandler, Issuance, KeyProvider, KeyState, NetworkState,
+	RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use ethabi::Address as EthAbiAddress;
@@ -524,5 +524,16 @@ impl IngressHandler<Bitcoin> for BtcIngressHandler {
 			                                                                   * conjunction with
 			                                                                   * #2354 */
 		})
+	}
+}
+
+pub struct AnyChainGasPriceProvider;
+impl GasPriceProviderAnychain for AnyChainGasPriceProvider {
+	fn gas_price(chain: ForeignChain) -> Option<AssetAmount> {
+		match chain {
+			ForeignChain::Ethereum => crate::EthereumChainTracking::gas_fee(),
+			ForeignChain::Polkadot => crate::PolkadotChainTracking::gas_fee(),
+			ForeignChain::Bitcoin => crate::BitcoinChainTracking::gas_fee(),
+		}
 	}
 }
