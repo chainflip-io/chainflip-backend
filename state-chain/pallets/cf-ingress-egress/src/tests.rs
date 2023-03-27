@@ -14,6 +14,14 @@ const ETH_ETH: eth::Asset = eth::Asset::Eth;
 const ETH_FLIP: eth::Asset = eth::Asset::Flip;
 const EXPIRY_BLOCK: u64 = 6;
 
+fn expect_size_of_address_pool(size: usize) {
+	assert_eq!(
+		AddressPool::<Test, Instance1>::iter_keys().into_iter().count(),
+		size,
+		"Address pool size is incorrect!"
+	);
+}
+
 #[test]
 fn disallowed_asset_will_not_be_batch_sent() {
 	new_test_ext().execute_with(|| {
@@ -405,21 +413,23 @@ fn addresses_are_getting_reused() {
 			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(1) +
 				Weight::from_ref_time(1),
 		);
+		expect_size_of_address_pool(1);
 		// Address 1 is free to use and in the pool of available addresses
 		assert!(AddressPool::<Test, Instance1>::get(1).is_some());
 		// Address 2 not
 		assert!(AddressPool::<Test, Instance1>::get(2).is_none());
 		// Expire the other
 		IngressEgress::on_initialize(EXPIRY_BLOCK);
-		// Expect all addresses to be considered as deployed
 		assert_eq!(
 			AddressStatus::<Test, Instance1>::get(
 				AddressPool::<Test, Instance1>::get(1).expect("to have an address")
 			),
 			DeploymentStatus::Deployed
 		);
+		expect_size_of_address_pool(1);
 		// Schedule another ingress request
 		schedule_ingress(3u64, eth::Asset::Eth);
+		expect_size_of_address_pool(0);
 		// Process it
 		IngressEgress::on_idle(
 			1,
@@ -428,6 +438,28 @@ fn addresses_are_getting_reused() {
 		);
 		// Expect the address to be reused which is indicate by the counter not being incremented
 		assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
+		expect_size_of_address_pool(1);
+	});
+}
+
+#[test]
+fn proof_address_pool_integrity() {
+	new_test_ext().execute_with(|| {
+		schedule_ingress(1u64, eth::Asset::Eth);
+		schedule_ingress(2u64, eth::Asset::Eth);
+		schedule_ingress(3u64, eth::Asset::Eth);
+		// All address in use
+		expect_size_of_address_pool(0);
+		// Process all intents
+		IngressEgress::on_idle(
+			1,
+			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(3) +
+				Weight::from_ref_time(1),
+		);
+		//
+		expect_size_of_address_pool(3);
+		schedule_ingress(4u64, eth::Asset::Eth);
+		expect_size_of_address_pool(2);
 	});
 }
 

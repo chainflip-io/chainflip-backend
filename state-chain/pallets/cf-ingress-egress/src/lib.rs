@@ -536,18 +536,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<(IntentId, TargetChainAccount<T, I>), DispatchError> {
 		let intent_ttl = frame_system::Pallet::<T>::current_block_number() + T::IntentTTL::get();
 		// We have an address available, so we can just use it.
-		let (address, intent_id) = if let Some(intent_id) =
-			AddressPool::<T, I>::iter_keys().into_iter().last()
+
+		let (address, intent_id) = if let Some((intent_id, address)) =
+			AddressPool::<T, I>::drain().next()
 		{
-			let address =
-				AddressPool::<T, I>::take(intent_id).expect("to have the address in the pool");
 			FetchParamDetails::<T, I>::insert(
 				intent_id,
 				(IngressFetchIdOf::<T, I>::deployed(intent_id, address.clone()), address.clone()),
 			);
 			IntentExpiries::<T, I>::append(intent_ttl, (intent_id, address.clone()));
 			(address, intent_id)
-		// We have to generate a new address.
 		} else {
 			let next_intent_id = IntentIdCounter::<T, I>::get()
 				.checked_add(1)
@@ -566,6 +564,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			IntentIdCounter::<T, I>::put(next_intent_id);
 			(new_address, next_intent_id)
 		};
+
 		IntentIngressDetails::<T, I>::insert(&address, IngressDetails { intent_id, ingress_asset });
 		IntentActions::<T, I>::insert(&address, intent_action);
 		Ok((intent_id, address))
