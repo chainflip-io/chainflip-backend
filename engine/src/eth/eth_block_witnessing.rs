@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use cf_chains::Ethereum;
@@ -11,6 +11,8 @@ use super::{
 	EthNumberBloom,
 };
 use crate::{
+	common::EngineStreamExt,
+	constants::{BLOCK_PULL_TIMEOUT_MULTIPLIER, ETH_AVERAGE_BLOCK_TIME_SECONDS},
 	multisig::{ChainTag, PersistentKeyDB},
 	witnesser::{
 		checkpointing::{
@@ -59,11 +61,14 @@ pub async fn start(
 					};
 
 				let mut block_stream =
-					safe_dual_block_subscription_from(from_block, eth_rpc.clone()).await.map_err(
-						|err| {
+					safe_dual_block_subscription_from(from_block, eth_rpc.clone())
+						.await
+						.map_err(|err| {
 							tracing::error!("Subscription error: {err}");
-						},
-					)?;
+						})?
+						.timeout_after(Duration::from_secs(
+							ETH_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER,
+						));
 
 				let mut end_at_block = None;
 				let mut current_block = from_block;
@@ -75,6 +80,9 @@ pub async fn start(
 							None
 						}
 						Some(block) = block_stream.next() => {
+							// This will be an error if the stream times out. When it does, we return
+							// an error so that we restart the witnesser.
+							let block = block.map_err(|err |tracing::error!("{err}"))?;
 							current_block = block.block_number.as_u64();
 							Some(block)
 						}

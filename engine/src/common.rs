@@ -6,7 +6,7 @@ use std::{
 };
 
 use anyhow::Context;
-use futures::{Future, TryStream};
+use futures::{Future, Stream, TryStream};
 use itertools::Itertools;
 
 struct MutexStateAndPoisonFlag<T> {
@@ -261,6 +261,7 @@ pub trait EngineTryStreamExt: TryStream + Sized {
 		end_after_error::EndAfterError::new(self)
 	}
 }
+
 impl<St: TryStream + Sized> EngineTryStreamExt for St {}
 
 mod end_after_error {
@@ -370,6 +371,122 @@ mod end_after_error {
 					.collect::<Vec<_>>()
 					.await[..]
 			);
+		}
+	}
+}
+
+pub trait EngineStreamExt: Stream + Sized {
+	fn timeout_after(self, duration: Duration) -> timeout_stream::TimeoutStream<Self> {
+		timeout_stream::TimeoutStream::new(self, duration)
+	}
+}
+
+impl<St: Stream + Sized> EngineStreamExt for St {}
+
+mod timeout_stream {
+	use std::{pin::Pin, task::Poll, time::Duration};
+
+	use futures::{FutureExt, Stream, StreamExt};
+	use pin_project::pin_project;
+	use tokio::time::timeout;
+
+	/// Stream for the [`timeout_after`](super::EngineStreamExt::timeout_after) method.
+	#[must_use = "streams do nothing unless polled"]
+	#[pin_project]
+	pub struct TimeoutStream<S> {
+		#[pin]
+		stream: S,
+		timeout: Duration,
+	}
+
+	impl<S> TimeoutStream<S> {
+		pub fn new(stream: S, timeout: Duration) -> Self {
+			Self { stream, timeout }
+		}
+	}
+
+	impl<S> Stream for TimeoutStream<S>
+	where
+		S: StreamExt + Unpin,
+	{
+		type Item = Result<S::Item, anyhow::Error>;
+
+		fn poll_next(
+			mut self: Pin<&mut Self>,
+			cx: &mut std::task::Context<'_>,
+		) -> Poll<Option<Self::Item>> {
+			let mut fut = Box::pin(timeout(self.timeout, self.stream.next()));
+			fut.poll_unpin(cx)
+				.map(|res| res.transpose())
+				.map_err(|e| anyhow::anyhow!("Stream timed out waiting for item: {e}"))
+		}
+	}
+
+	#[cfg(test)]
+	mod tests {
+
+		use futures::stream;
+
+		use super::*;
+
+		#[tokio::test]
+		async fn stream_returns_none_on_no_items() {
+			let mut stream =
+				TimeoutStream::new(futures::stream::empty::<u64>(), Duration::from_secs(1));
+			assert!(stream.next().await.is_none());
+		}
+
+		#[tokio::test]
+		async fn test_timeout_stream_ok() {
+			// There is no delay here, so we should get all the items.
+			let stream = stream::iter([1, 2, 3]);
+
+			let mut timeout_stream = TimeoutStream::new(stream, Duration::from_millis(50));
+
+			assert_eq!(timeout_stream.next().await.unwrap().unwrap(), 1);
+			assert_eq!(timeout_stream.next().await.unwrap().unwrap(), 2);
+			assert_eq!(timeout_stream.next().await.unwrap().unwrap(), 3);
+			assert!(timeout_stream.next().await.is_none());
+		}
+
+		#[tokio::test(start_paused = true)]
+		async fn test_timeout_stream_timeout() {
+			const DELAY_DURATION_MILLIS: u64 = 100;
+
+			let delayed_stream = |items: Vec<i32>| {
+				let items = items.into_iter();
+				Box::pin(stream::unfold(items, |mut items| async move {
+					if let Some(i) = items.next() {
+						tokio::time::sleep(Duration::from_millis(DELAY_DURATION_MILLIS)).await;
+						Some((i, items))
+					} else {
+						None
+					}
+				}))
+			};
+
+			// We should get the items from this one, since the timeout is double the delay.
+			let mut timeout_stream = TimeoutStream::new(
+				delayed_stream(vec![1, 2, 3]),
+				Duration::from_millis(DELAY_DURATION_MILLIS + DELAY_DURATION_MILLIS),
+			);
+
+			assert_eq!(timeout_stream.next().await.unwrap().unwrap(), 1);
+			assert_eq!(timeout_stream.next().await.unwrap().unwrap(), 2);
+			assert_eq!(timeout_stream.next().await.unwrap().unwrap(), 3);
+			assert!(timeout_stream.next().await.is_none());
+
+			// We should get a timeout error from this one, since the timeout is less than the
+			// delay.
+			let mut timeout_stream =
+				TimeoutStream::new(delayed_stream(vec![1, 2, 3]), Duration::default());
+
+			assert!(timeout_stream.next().await.unwrap().is_err());
+			assert!(timeout_stream.next().await.unwrap().is_err());
+			assert!(timeout_stream.next().await.unwrap().is_err());
+			// We haven't actually pulled an item off the stream, and we never will, so we should
+			// get errors indefinitely.
+			assert!(timeout_stream.next().await.unwrap().is_err());
 		}
 	}
 }
