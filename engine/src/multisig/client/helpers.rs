@@ -117,7 +117,7 @@ pub struct SigningCeremonyDetails<C: CryptoScheme> {
 pub struct KeygenCeremonyDetails {
 	pub rng: Rng,
 	pub ceremony_id: CeremonyId,
-	pub signers: BTreeSet<AccountId>,
+	pub participants: BTreeSet<AccountId>,
 }
 
 impl<C: CeremonyTrait> Node<C> {
@@ -185,12 +185,12 @@ impl Node<KeygenCeremonyEth> {
 		keygen_ceremony_details: KeygenCeremonyDetails,
 		resharing_context: Option<ResharingContext<EthSigning>>,
 	) {
-		let KeygenCeremonyDetails { ceremony_id, rng, signers } = keygen_ceremony_details;
+		let KeygenCeremonyDetails { ceremony_id, rng, participants } = keygen_ceremony_details;
 
 		let request = prepare_keygen_request::<EthSigning>(
 			ceremony_id,
 			&self.own_account_id,
-			signers,
+			participants,
 			&self.outgoing_p2p_message_sender,
 			resharing_context,
 			rng,
@@ -611,7 +611,7 @@ impl KeygenCeremonyRunner {
 		KeygenCeremonyDetails {
 			ceremony_id: self.ceremony_id,
 			rng: Rng::from_seed(self.rng.gen()),
-			signers: self.nodes.keys().cloned().collect(),
+			participants: self.nodes.keys().cloned().collect(),
 		}
 	}
 
