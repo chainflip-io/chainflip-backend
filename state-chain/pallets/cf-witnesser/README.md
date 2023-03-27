@@ -6,89 +6,26 @@ Based loosely on parity's own [`pallet_multisig`](https://github.com/paritytech/
 
 ## Overview
 
-Validators on the Chainflip network need to agree on external events such as blockchain transactions or staking events.
+Validators on the Chainflip network need to jointly witness external events such as blockchain transactions or staking events. Consensus is reached by voting on the action to be taken as a result of the witnessed event. Actions are represented by dispatchable calls.
 
-In order to do so they can use the `witness` extrinsic on this pallet to vote for some action to be taken. The action is represented by another extrinsic call. Once some voting threshold is passed, the action is called using this pallet's custom origin.
+The `witness_at_epoch` extrinsic represents a vote for some call. Once the voting threshold is passed (2/3 supermajority), the call is dispatched using this pallet's custom origin.
 
-## Dependencies
+It's possible to witness an event either as a current authority or as an authority from a previous (but not expired) epoch. The threshold applies within an authority set, that is a supermajority vote is required from one of the sets, there is no overlap between sets.
 
-### Traits
+This pallet defines `EnsureWitnessed` and `EnsureWitnessedAtCurrentEpoch`, implementations of`EnsureOrigin` that can be used to restrict an extrinsic such that it can only be called from this pallet. The former is more lenient and requires a witness vote from any epoch. The latter requires that the vote passed threshold with the authority set of the current epoch.
 
-This pallet does not depend on any externally defined traits.
+On dispatch, the hash of the call is marked as executed to prevent the call from being replayed.
 
-### Pallets
+> Note that each witnessable call dispatch *must* be uniquely defined. Imagine you want to witness a staking event `stake(Id, Amount)`. Now imagine that ALICE stakes the same amount twice. Clearly we need to be able to distinguish between both events, so the witnessed call for this will need to incorporate, for example, the transaction hash of the event that triggered it.
 
-This pallet does not depend on any other FRAME pallet or externally developed modules.
+## Extra Calldata
 
-### Genesis Configuration
+Sometimes it's impossible for voters to agree on the exact information to be witnessed. For example when witnessing price data, rounding errors and latency can cause different voters to see different versions of the truth. In this case, we can attach this as extra data to be handled in the implementation of the `WitnessDataExtraction` trait.
 
-This template pallet does not have any genesis configuration.
+`WitnessDataExtraction` can remove the contentious data from the call such that all calls will have a matching hash to be voted on. The data can then be arbitrarily aggregated and then injected back into the call when it is dispatched.
 
-## Usage
+An example of this is witnessing gas prices: the price can be removed from the call, and then the median price of all votes can be injected when the vote threshold is reached.
 
-This pallet implements the `Witnesser` trait as defined [here](../../traits). It also defines `EnsureWitnessed`, a type that
-can be used to restrict an extrinsic such that it can only be called from this pallet. In order to do so follow these
-steps (also, see the [mock::dummy](./mock/dummy.rs) pallet):
+## Vote Pruning
 
-1. Make sure to include the `Origin` of this pallet in the `construct_runtime!` macro call:
-
-    ```rust
-    construct_runtime!(
-        // ...
-        Witness: pallet_cf_witness,
-        //...
-    )
-    ```
-
-2. Reference both the `Witnesser` trait and `EnsureWitnessed` in the `Config` for the pallet where you want to define the witnessable
-    extrinsic:
-
-    ```rust
-    #[pallet::config]
-    pub trait Config: frame_system::Config
-    {
-        type EnsureWitnessed: EnsureOrigin<Self::Origin>;
-
-        type Witnesser: cf_traits::Witnesser<
-            Call=<Self as Config>::Call,
-            AccountId=<Self as frame_system::Config>::AccountId>;
-    }
-    ```
-
-3. Tie this to the witness pallet in the runtime:
-
-    ```rust
-    impl my_witnessable_pallet::Config for Runtime {
-        type EnsureWitnessed = pallet_cf_witness::EnsureWitnessed;
-        type Witnesser = pallet_cf_witness::Pallet<Runtime>;
-    }
-    ```
-
-4. In the consuming pallet you can now restrict extrinsics like so:
-
-    ```rust
-    #[pallet::weight(10_000)]
-    pub fn my_extrinsic(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-        // Make sure this call was witnessed by a threshold number of validators.
-        T::EnsureWitnessed::ensure_origin(origin)?;
-        // Do something awesome.
-    }
-    ```
-
-5. The above extrinsic can be called using the `witness` extrinsic from this pallet (or you can define another extrinsic
-in your pallet that delegates to the witness pallet).
-
-    ```rust
-    let call = Call::my_extrinsic(some_arg);
-    T::Witnesser::witness(who, call.into())?;
-    ```
-
-## TODO
-
-Some ideas for future improvements:
-
-- Wrap the VoteMask operations in a nicer api that provides transparent Encode/Decode and methods for eg. vote counts.
-- Make the consensus threshold configurable by sudo (and/or update it during session rotations depending on the number
-  of validators)
-- Pruning of old witness votes (could be implemented in a hook or sth.)
-- Supporting witnessing during transition periods (ie. witnessing with the incoming and outgoing validator sets).
+We periodically prune votes to prevent storage bloat. When an epoch expires, it's no longer possible for the events that occured during that epoch to be witnessed, so the associated storage is deleted.

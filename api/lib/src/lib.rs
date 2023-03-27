@@ -61,8 +61,7 @@ impl<RawRpcClient: RawRpcApi + Send + Sync + 'static> RotateSessionKeysApi
 	for StateChainClient<BaseRpcClient<RawRpcClient>>
 {
 	async fn rotate_session_keys(&self) -> Result<Bytes> {
-		let session_key_bytes: Bytes = self.base_rpc_client.raw_rpc_client.rotate_keys().await?;
-		Ok(session_key_bytes)
+		Ok(self.base_rpc_client.raw_rpc_client.rotate_keys().await?)
 	}
 }
 
@@ -72,9 +71,8 @@ pub async fn request_block(
 ) -> Result<state_chain_runtime::SignedBlock> {
 	println!("Querying the state chain for the block with hash {block_hash:x?}.");
 
-	let state_chain_rpc_client = BaseRpcClient::new(state_chain_settings).await?;
-
-	state_chain_rpc_client
+	BaseRpcClient::new(state_chain_settings)
+		.await?
 		.block(block_hash)
 		.await?
 		.ok_or_else(|| anyhow!("unknown block hash"))
@@ -90,19 +88,20 @@ where
 	BlockStream: Stream<Item = state_chain_runtime::Header> + Unpin + Send + 'static,
 {
 	let tx_hash = client.submit_signed_extrinsic(call).await?;
-
 	let events = client.watch_submitted_extrinsic(tx_hash, block_stream).await?;
 
-	if let Some(_failure) = events.iter().find(|event| {
-		matches!(
-			event,
-			state_chain_runtime::RuntimeEvent::System(frame_system::Event::ExtrinsicFailed { .. })
-		)
-	}) {
-		Err(anyhow!("extrinsic execution failed"))
-	} else {
-		Ok((tx_hash, events))
-	}
+	events
+		.iter()
+		.find(|event| {
+			matches!(
+				event,
+				state_chain_runtime::RuntimeEvent::System(
+					frame_system::Event::ExtrinsicFailed { .. }
+				)
+			)
+		})
+		.map(|_| Err(anyhow!("extrinsic execution failed")))
+		.unwrap_or(Ok((tx_hash, events)))
 }
 
 async fn connect_submit_and_get_events<Call>(
@@ -115,15 +114,12 @@ where
 {
 	task_scope(|scope| {
 		async {
-			let (_, block_stream, state_chain_client) =
+			let (_, mut block_stream, state_chain_client) =
 				StateChainClient::new(scope, state_chain_settings, required_role, false).await?;
 
-			let mut block_stream = Box::new(block_stream);
-
-			let (_tx_hash, events) =
-				submit_and_ensure_success(&state_chain_client, block_stream.as_mut(), call).await?;
-
-			Ok(events)
+			submit_and_ensure_success(&state_chain_client, &mut block_stream, call)
+				.await
+				.map(|(_, events)| events)
 		}
 		.boxed()
 	})
