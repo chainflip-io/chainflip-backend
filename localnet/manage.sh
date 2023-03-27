@@ -74,7 +74,6 @@ build-localnet() {
 
   echo "🏗 Building network"
   docker-compose -f localnet/docker-compose.yml up -d
-  ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
   while ! curl --user flip:flip -H 'Content-Type: text/plain;' -d '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' -v http://127.0.0.1:8332 > /dev/null 2>&1 ; do
     echo "🪙 Waiting for Bitcoin node to start"
     sleep 5
@@ -83,10 +82,11 @@ build-localnet() {
     echo "💎 Waiting for ETH node to start"
     sleep 5
   done
-  while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9945' > /dev/null 2>&1 ; do
+  while ! REPLY=$(curl -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9945') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]; do
     echo "🚦 Waiting for polkadot node to start"
     sleep 5
   done
+  DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
   while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null 2>&1 ; do
     echo "🚧 Waiting for chainflip-node to start"
     sleep 5
