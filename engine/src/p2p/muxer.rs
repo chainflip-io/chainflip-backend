@@ -5,7 +5,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, trace, warn, Instrument};
 
 use crate::{
-	multisig::{eth::EthSigning, polkadot::PolkadotSigning, ChainTag},
+	multisig::{bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, ChainTag},
 	p2p::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages},
 };
 
@@ -24,6 +24,8 @@ pub struct P2PMuxer {
 	eth_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
 	dot_incoming_sender: UnboundedSender<(AccountId, VersionedCeremonyMessage)>,
 	dot_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
+	btc_incoming_sender: UnboundedSender<(AccountId, VersionedCeremonyMessage)>,
+	btc_outgoing_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
 }
 
 /// Top-level protocol message, encapsulates all others
@@ -99,6 +101,8 @@ impl P2PMuxer {
 		MultisigMessageReceiver<EthSigning>,
 		MultisigMessageSender<PolkadotSigning>,
 		MultisigMessageReceiver<PolkadotSigning>,
+		MultisigMessageSender<BtcSigning>,
+		MultisigMessageReceiver<BtcSigning>,
 		impl Future<Output = ()>,
 	) {
 		let (eth_outgoing_sender, eth_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -107,6 +111,9 @@ impl P2PMuxer {
 		let (dot_outgoing_sender, dot_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
 		let (dot_incoming_sender, dot_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
 
+		let (btc_outgoing_sender, btc_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
+		let (btc_incoming_sender, btc_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
+
 		let muxer = P2PMuxer {
 			all_incoming_receiver,
 			all_outgoing_sender,
@@ -114,6 +121,8 @@ impl P2PMuxer {
 			eth_incoming_sender,
 			dot_outgoing_receiver,
 			dot_incoming_sender,
+			btc_outgoing_receiver,
+			btc_incoming_sender,
 		};
 
 		let muxer_fut = muxer.run().instrument(info_span!("P2PMuxer"));
@@ -123,6 +132,8 @@ impl P2PMuxer {
 			MultisigMessageReceiver::<EthSigning>::new(eth_incoming_receiver),
 			MultisigMessageSender::<PolkadotSigning>::new(dot_outgoing_sender),
 			MultisigMessageReceiver::<PolkadotSigning>::new(dot_incoming_receiver),
+			MultisigMessageSender::<BtcSigning>::new(btc_outgoing_sender),
+			MultisigMessageReceiver::<BtcSigning>::new(btc_incoming_receiver),
 			muxer_fut,
 		)
 	}
@@ -146,11 +157,13 @@ impl P2PMuxer {
 									.send((account_id, message))
 									.expect("polkadot receiver dropped");
 							},
+							ChainTag::Bitcoin => {
+								self.btc_incoming_sender
+									.send((account_id, message))
+									.expect("bitcoin receiver dropped");
+							},
 							ChainTag::Sui => {
 								warn!("Sui chain tag is not supported yet")
-							},
-							ChainTag::Bitcoin => {
-								warn!("Bitcoin chain tag is not supported yet")
 							},
 						}
 					},
@@ -194,6 +207,9 @@ impl P2PMuxer {
 				Some(data) = self.dot_outgoing_receiver.recv() => {
 					self.process_outgoing(ChainTag::Polkadot, data).await;
 				}
+				Some(data) = self.btc_outgoing_receiver.recv() => {
+					self.process_outgoing(ChainTag::Bitcoin, data).await;
+				}
 			}
 		}
 	}
@@ -221,7 +237,7 @@ mod tests {
 			tokio::sync::mpsc::unbounded_channel();
 		let (_, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
 
-		let (eth_outgoing_sender, _, _, _, muxer_future) =
+		let (eth_outgoing_sender, .., muxer_future) =
 			P2PMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender);
 
 		let _jh = tokio::task::spawn(muxer_future);
@@ -247,7 +263,7 @@ mod tests {
 			tokio::sync::mpsc::unbounded_channel();
 		let (_, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
 
-		let (eth_outgoing_sender, _, _, _, muxer_future) =
+		let (eth_outgoing_sender, .., muxer_future) =
 			P2PMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender);
 
 		let _jh = tokio::task::spawn(muxer_future);
@@ -286,7 +302,7 @@ mod tests {
 		let (p2p_outgoing_sender, _p2p_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
 		let (p2p_incoming_sender, p2p_incoming_receiver) = tokio::sync::mpsc::unbounded_channel();
 
-		let (_eth_outgoing_sender, mut eth_incoming_receiver, _, _, muxer_future) =
+		let (_eth_outgoing_sender, mut eth_incoming_receiver, .., muxer_future) =
 			P2PMuxer::start(p2p_incoming_receiver, p2p_outgoing_sender);
 
 		tokio::spawn(muxer_future);

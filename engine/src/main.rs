@@ -4,14 +4,14 @@ use anyhow::Context;
 
 use cf_primitives::AccountRole;
 use chainflip_engine::{
-	btc,
+	btc::{self, rpc::BtcRpcClient, BtcBroadcaster},
 	dot::{self, rpc::DotRpcClient, witnesser as dot_witnesser, DotBroadcaster},
 	eth::{self, build_broadcast_channel, rpc::EthDualRpcClient, EthBroadcaster},
 	health::HealthChecker,
 	logging,
 	multisig::{
-		self, client::key_store::KeyStore, eth::EthSigning, polkadot::PolkadotSigning,
-		PersistentKeyDB,
+		self, bitcoin::BtcSigning, client::key_store::KeyStore, eth::EthSigning,
+		polkadot::PolkadotSigning, PersistentKeyDB,
 	},
 	p2p,
 	settings::{CommandLineOptions, Settings},
@@ -69,6 +69,9 @@ async fn main() -> anyhow::Result<()> {
 				.await
 				.context("Failed to create Polkadot Client")?;
 
+			let btc_rpc_client =
+				BtcRpcClient::new(&settings.btc).context("Failed to create Bitcoin Client")?;
+
 			state_chain_client
 				.submit_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
 					new_version: SemVer {
@@ -118,6 +121,8 @@ async fn main() -> anyhow::Result<()> {
 				eth_incoming_receiver,
 				dot_outgoing_sender,
 				dot_incoming_receiver,
+				btc_outgoing_sender,
+				btc_incoming_receiver,
 				peer_update_sender,
 				p2p_fut,
 			) = p2p::start(state_chain_client.clone(), settings.node_p2p, latest_block_hash)
@@ -147,6 +152,17 @@ async fn main() -> anyhow::Result<()> {
 				);
 
 			scope.spawn(dot_multisig_client_backend_future);
+
+			let (btc_multisig_client, btc_multisig_client_backend_future) =
+				multisig::start_client::<BtcSigning>(
+					state_chain_client.account_id(),
+					KeyStore::new(db.clone()),
+					btc_incoming_receiver,
+					btc_outgoing_sender,
+					latest_ceremony_id,
+				);
+
+			scope.spawn(btc_multisig_client_backend_future);
 
 			let (dot_monitor_signature_sender, dot_monitor_signature_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
@@ -206,8 +222,10 @@ async fn main() -> anyhow::Result<()> {
 				)
 				.context("Failed to create ETH broadcaster")?,
 				DotBroadcaster::new(dot_rpc_client.clone()),
+				BtcBroadcaster::new(btc_rpc_client.clone()),
 				eth_multisig_client,
 				dot_multisig_client,
+				btc_multisig_client,
 				peer_update_sender,
 				epoch_start_sender,
 				eth_address_to_monitor,
