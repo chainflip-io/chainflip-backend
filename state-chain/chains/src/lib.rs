@@ -2,6 +2,7 @@
 use core::fmt::Display;
 
 use crate::benchmarking_value::BenchmarkValue;
+pub use address::ForeignChainAddress;
 use cf_primitives::{
 	chains::assets, AssetAmount, EpochIndex, EthAmount, IntentId, KeyId, PublicKeyBytes,
 };
@@ -27,6 +28,8 @@ pub mod any;
 pub mod btc;
 pub mod dot;
 pub mod eth;
+
+pub mod address;
 
 #[cfg(feature = "std")]
 pub mod mocks;
@@ -73,8 +76,8 @@ pub trait Chain: Member + Parameter {
 		+ MaxEncodedLen
 		+ BenchmarkValue
 		+ Debug
-		+ TryFrom<cf_primitives::ForeignChainAddress>
-		+ Into<cf_primitives::ForeignChainAddress>;
+		+ TryFrom<ForeignChainAddress>
+		+ Into<ForeignChainAddress>;
 
 	type EpochStartData: Member + Parameter + MaxEncodedLen;
 

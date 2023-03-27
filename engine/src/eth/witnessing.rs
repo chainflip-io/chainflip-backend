@@ -121,13 +121,10 @@ pub async fn start(
 		asset: assets::eth::Asset,
 	) -> BTreeSet<H160> {
 		if let Some(eth_ingress_addresses) = eth_chain_ingress_addresses.get(&asset) {
-			eth_ingress_addresses.clone()
+			eth_ingress_addresses.clone().into_iter().collect()
 		} else {
 			Default::default()
 		}
-		.iter()
-		.cloned()
-		.collect()
 	}
 
 	let eth_addresses =
@@ -139,19 +136,16 @@ pub async fn start(
 	let flip_addresses =
 		monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Flip);
 
-	let (eth_ingress_sender, eth_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
+	let (eth_ingress_sender, eth_address_monitor) = AddressMonitor::new(eth_addresses);
 
-	let (flip_ingress_sender, flip_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
+	let (usdc_ingress_sender, usdc_address_monitor) = AddressMonitor::new(usdc_addresses);
 
-	let (usdc_ingress_sender, usdc_ingress_receiver) = tokio::sync::mpsc::unbounded_channel();
+	let (flip_ingress_sender, flip_address_monitor) = AddressMonitor::new(flip_addresses);
 
 	let epoch_start_receiver = Arc::new(Mutex::new(epoch_start_receiver));
-	let eth_address_monitor =
-		Arc::new(Mutex::new(AddressMonitor::new(eth_addresses, eth_ingress_receiver)));
-	let flip_address_monitor =
-		Arc::new(Mutex::new(AddressMonitor::new(flip_addresses, flip_ingress_receiver)));
-	let usdc_address_monitor =
-		Arc::new(Mutex::new(AddressMonitor::new(usdc_addresses, usdc_ingress_receiver)));
+	let eth_address_monitor = Arc::new(Mutex::new(eth_address_monitor));
+	let usdc_address_monitor = Arc::new(Mutex::new(usdc_address_monitor));
+	let flip_address_monitor = Arc::new(Mutex::new(flip_address_monitor));
 
 	let eth_settings = eth_settings.clone();
 

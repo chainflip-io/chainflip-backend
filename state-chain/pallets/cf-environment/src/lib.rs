@@ -419,7 +419,7 @@ pub mod pallet {
 				block_number,
 				UtxoId {
 					tx_hash: Default::default(),
-					vout_index: Default::default(),
+					vout: Default::default(),
 					pubkey_x: Default::default(),
 					salt: Default::default(),
 				},
@@ -447,6 +447,20 @@ pub mod pallet {
 
 			PolkadotRuntimeVersion::<T>::put(runtime_version);
 			Self::deposit_event(Event::<T>::PolkadotRuntimeVersionUpdated { runtime_version });
+
+			Ok(().into())
+		}
+
+		#[pallet::weight(0)]
+		pub fn add_btc_change_utxos(
+			origin: OriginFor<T>,
+			utxos: Vec<cf_chains::btc::Utxo>,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			for utxo in utxos {
+				Self::add_bitcoin_utxo_to_list(utxo);
+			}
 
 			Ok(().into())
 		}

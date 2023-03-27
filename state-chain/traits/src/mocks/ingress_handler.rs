@@ -1,6 +1,6 @@
 use crate::{Chainflip, IngressApi};
-use cf_chains::{eth::assets::any, Chain, ForeignChain};
-use cf_primitives::{ForeignChainAddress, IntentId};
+use cf_chains::{address::ForeignChainAddress, eth::assets::any, Chain, ForeignChain};
+use cf_primitives::IntentId;
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_std::marker::PhantomData;
@@ -78,10 +78,7 @@ impl<C: Chain, T: Chainflip> IngressApi<C> for MockIngressHandler<C, T> {
 	fn register_liquidity_ingress_intent(
 		lp_account: Self::AccountId,
 		ingress_asset: <C as cf_chains::Chain>::ChainAsset,
-	) -> Result<
-		(cf_primitives::IntentId, cf_primitives::ForeignChainAddress),
-		sp_runtime::DispatchError,
-	> {
+	) -> Result<(cf_primitives::IntentId, ForeignChainAddress), sp_runtime::DispatchError> {
 		let (intent_id, ingress_address) = Self::get_new_intent(SwapOrLp::Lp, ingress_asset);
 		<Self as MockPalletStorage>::mutate_value(b"LP_INGRESS_INTENTS", |storage| {
 			storage.as_mut().unwrap_or(&mut vec![]).push(LpIntent::<C, T> {
@@ -96,13 +93,10 @@ impl<C: Chain, T: Chainflip> IngressApi<C> for MockIngressHandler<C, T> {
 	fn register_swap_intent(
 		ingress_asset: <C as Chain>::ChainAsset,
 		egress_asset: cf_primitives::Asset,
-		egress_address: cf_primitives::ForeignChainAddress,
+		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
 		relayer_id: Self::AccountId,
-	) -> Result<
-		(cf_primitives::IntentId, cf_primitives::ForeignChainAddress),
-		sp_runtime::DispatchError,
-	> {
+	) -> Result<(cf_primitives::IntentId, ForeignChainAddress), sp_runtime::DispatchError> {
 		let (intent_id, ingress_address) = Self::get_new_intent(SwapOrLp::Swap, ingress_asset);
 		<Self as MockPalletStorage>::mutate_value(b"SWAP_INGRESS_INTENTS", |storage| {
 			storage.as_mut().unwrap_or(&mut vec![]).push(SwapIntent::<C, T> {

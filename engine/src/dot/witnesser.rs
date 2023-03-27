@@ -137,7 +137,7 @@ fn check_for_interesting_events_in_block(
 	block_events: Vec<(Phase, EventWrapper)>,
 	block_number: PolkadotBlockNumber,
 	our_vault: &PolkadotAccountId,
-	address_monitor: &mut AddressMonitor<PolkadotAccountId>,
+	address_monitor: &mut AddressMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
 ) -> (
 	Vec<(PolkadotExtrinsicIndex, PolkadotBalance)>,
 	Vec<IngressWitness<Polkadot>>,
@@ -226,7 +226,7 @@ fn check_for_interesting_events_in_block(
 pub async fn start<StateChainClient, DotRpc>(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Polkadot>>,
 	dot_client: DotRpc,
-	address_monitor: AddressMonitor<PolkadotAccountId>,
+	address_monitor: AddressMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
 	signature_receiver: tokio::sync::mpsc::UnboundedReceiver<[u8; 64]>,
 	monitored_signatures: BTreeSet<[u8; 64]>,
 	state_chain_client: Arc<StateChainClient>,
@@ -549,15 +549,12 @@ mod tests {
 			(3u32, mock_tx_fee_paid(20000)),
 		]);
 
-		let (_monitor_ingress_sender, monitor_ingress_receiver) =
-			tokio::sync::mpsc::unbounded_channel();
-
 		let (mut interesting_indices, ingress_witnesses, vault_key_rotated_calls) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				Default::default(),
 				&our_vault,
-				&mut AddressMonitor::new(Default::default(), monitor_ingress_receiver),
+				&mut AddressMonitor::new(Default::default()).1,
 			);
 
 		assert_eq!(vault_key_rotated_calls.len(), 1);
@@ -606,8 +603,8 @@ mod tests {
 			),
 		]);
 
-		let (monitor_ingress_sender, monitor_ingress_receiver) =
-			tokio::sync::mpsc::unbounded_channel();
+		let (monitor_ingress_sender, mut address_monitor) =
+			AddressMonitor::new(BTreeSet::from([transfer_1_ingress_addr]));
 
 		monitor_ingress_sender
 			.send(AddressMonitorCommand::Add(transfer_2_ingress_addr))
@@ -619,10 +616,7 @@ mod tests {
 				20,
 				// arbitrary, not focus of the test
 				&PolkadotAccountId::from([0xda; 32]),
-				&mut AddressMonitor::new(
-					BTreeSet::from([transfer_1_ingress_addr]),
-					monitor_ingress_receiver,
-				),
+				&mut address_monitor,
 			);
 
 		assert_eq!(ingress_witnesses.len(), 2);
@@ -670,16 +664,13 @@ mod tests {
 			),
 		]);
 
-		let (_monitor_ingress_sender, monitor_ingress_receiver) =
-			tokio::sync::mpsc::unbounded_channel();
-
 		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				20,
 				// arbitrary, not focus of the test
 				&our_vault,
-				&mut AddressMonitor::new(BTreeSet::default(), monitor_ingress_receiver),
+				&mut AddressMonitor::new(BTreeSet::default()).1,
 			);
 
 		assert!(
@@ -700,9 +691,6 @@ mod tests {
 		let dot_rpc_client = DotRpcClient::new(url).await.unwrap();
 
 		let (epoch_starts_sender, epoch_starts_receiver) = async_broadcast::broadcast(10);
-
-		let (_dot_monitor_ingress_sender, ingress_address_receiver) =
-			tokio::sync::mpsc::unbounded_channel();
 
 		let (dot_monitor_signature_sender, signature_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
@@ -761,7 +749,7 @@ mod tests {
 		start(
 			epoch_starts_receiver,
 			dot_rpc_client,
-			AddressMonitor::new(BTreeSet::default(), ingress_address_receiver),
+			AddressMonitor::new(Default::default()).1,
 			signature_receiver,
 			BTreeSet::default(),
 			state_chain_client,

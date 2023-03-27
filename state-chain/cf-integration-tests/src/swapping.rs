@@ -1,4 +1,5 @@
 //! Contains tests related to liquidity, pools and swapping
+use cf_chains::address::ForeignChainAddress;
 use cf_test_utilities::{assert_has_event_pattern, extract_from_event};
 use frame_support::{
 	assert_noop, assert_ok,
@@ -16,8 +17,7 @@ use cf_primitives::{
 		assets::{any, eth},
 		Ethereum,
 	},
-	AccountId, AccountRole, AmmRange, Asset, AssetAmount, ForeignChain, ForeignChainAddress,
-	PoolAssetMap,
+	AccountId, AccountRole, AmmRange, Asset, AssetAmount, ForeignChain, PoolAssetMap,
 };
 use cf_traits::{AddressDerivationApi, LiquidityPoolApi, LpProvisioningApi, SwappingApi};
 use pallet_cf_ingress_egress::IngressWitness;

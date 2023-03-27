@@ -15,11 +15,17 @@ use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 
 extern crate alloc;
-use crate::{Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
+use crate::{
+	address::BitcoinAddressData, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator,
+	IngressIdConstructor,
+};
 use alloc::string::String;
 pub use cf_primitives::chains::Bitcoin;
-use cf_primitives::{chains::assets, BitcoinAddress, EpochIndex, IntentId, KeyId, PublicKeyBytes};
+use cf_primitives::{chains::assets, EpochIndex, IntentId, KeyId, PublicKeyBytes};
 use itertools;
+
+/// This salt is used to derive the change address for every vault. i.e. for every epoch.
+pub const CHANGE_ADDRESS_SALT: u32 = 0;
 
 pub type BlockNumber = u64;
 
@@ -50,6 +56,8 @@ pub type Hash = [u8; 32];
 	Ord,
 	PartialOrd,
 )]
+
+/// The public key x-coordinate
 pub struct AggKey(pub [u8; 32]);
 
 impl From<KeyId> for AggKey {
@@ -84,6 +92,11 @@ impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 	}
 }
 
+#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
+pub struct EpochStartData {
+	pub change_address: BitcoinAddressData,
+}
+
 impl Chain for Bitcoin {
 	type ChainBlockNumber = BlockNumber;
 
@@ -95,9 +108,9 @@ impl Chain for Bitcoin {
 
 	type ChainAsset = assets::btc::Asset;
 
-	type ChainAccount = BitcoinAddress;
+	type ChainAccount = BitcoinAddressData;
 
-	type EpochStartData = ();
+	type EpochStartData = EpochStartData;
 
 	type IngressFetchId = BitcoinFetchId;
 }
@@ -183,12 +196,15 @@ impl ChainAbi for Bitcoin {
 
 	type ReplayProtection = ();
 }
+
+// TODO: Look at moving this into Utxo. They're exactly the same apart from the IntentId
+// which could be made generic, if even necessary at all.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct UtxoId {
 	// Tx hash of the transaction this utxo was a part of
-	pub tx_hash: [u8; 32],
+	pub tx_hash: Hash,
 	// The index of the output for this utxo
-	pub vout_index: u32,
+	pub vout: u32,
 	// The public key of the account that can spend this utxo
 	pub pubkey_x: [u8; 32],
 	// Salt used to generate an address from the public key. In our case its the intent id of the
@@ -197,7 +213,7 @@ pub struct UtxoId {
 }
 
 impl IngressIdConstructor for BitcoinFetchId {
-	type Address = BitcoinAddress;
+	type Address = BitcoinAddressData;
 
 	fn deployed(_intent_id: u64, _address: Self::Address) -> Self {
 		todo!()
@@ -226,8 +242,10 @@ pub struct Utxo {
 	pub txid: Hash,
 	pub vout: u32,
 	pub pubkey_x: [u8; 32],
+	// Salt used to create the address that this utxo was sent to.
 	pub salt: u32,
 }
+
 pub trait GetUtxoAmount {
 	fn amount(&self) -> u64;
 }
@@ -648,7 +666,7 @@ impl BitcoinScript {
 	}
 	/// Serializes the script by returning a single byte for the length
 	/// of the script and then the script itself
-	fn serialize(&self) -> Vec<u8> {
+	pub fn serialize(&self) -> Vec<u8> {
 		itertools::chain!(to_varint(self.data.len() as u64), self.data.iter().cloned()).collect()
 	}
 }

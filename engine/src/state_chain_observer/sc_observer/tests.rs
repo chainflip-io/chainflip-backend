@@ -1,6 +1,7 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use cf_chains::{
+	btc::BitcoinNetwork,
 	eth::{Ethereum, Transaction},
 	ChainCrypto,
 };
@@ -96,6 +97,23 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
+
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(initial_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 98 }))
+		});
+
+	state_chain_client
 			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
 				state_chain_runtime::Runtime,
 			>>()
@@ -137,6 +155,11 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -154,6 +177,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_epoch_start_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -179,6 +204,9 @@ async fn starts_witnessing_when_historic_on_startup() {
 	let current_epoch_from_block_eth = 40;
 
 	let current_epoch_from_block_dot = 80;
+
+	let current_epoch_from_block_btc = 100;
+
 	let initial_block_hash = H256::default();
 	let account_id = AccountId::new([0; 32]);
 
@@ -236,6 +264,23 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
 	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
+
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(active_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 98 }))
+		});
+
+	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
@@ -261,6 +306,17 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 				public_key: Default::default(),
 				active_from_block: current_epoch_from_block_dot,
 			}))
+		});
+
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(current_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: current_epoch_from_block_btc }))
 		});
 
 	state_chain_client
@@ -304,6 +360,11 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -321,6 +382,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_epoch_start_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -404,6 +467,23 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
+	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
+
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(initial_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 98 }))
+		});
+
 	let sc_block_stream = tokio_stream::iter(vec![]);
 
 	let eth_rpc_mock = MockEthRpcApi::new();
@@ -435,6 +515,11 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -452,6 +537,8 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_epoch_start_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -476,6 +563,9 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 	let initial_epoch_from_block_eth = 40;
 
 	let initial_epoch_from_block_dot = 72;
+
+	let initial_epoch_from_block_btc = 98;
+
 	let new_epoch = 5;
 	let new_epoch_from_block = 50;
 	let initial_block_hash = H256::default();
@@ -534,6 +624,23 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
+	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
+
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(initial_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: initial_epoch_from_block_btc }))
+		});
+
 	let empty_block_header = test_header(20);
 	let new_epoch_block_header = test_header(21);
 	let new_epoch_block_header_hash = new_epoch_block_header.hash();
@@ -585,6 +692,18 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 				active_from_block: initial_epoch_from_block_dot,
 			}))
 		});
+
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: initial_epoch_from_block_btc }))
+		});
+
 	state_chain_client
 	.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
 		state_chain_runtime::Runtime,
@@ -627,6 +746,11 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -644,6 +768,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_epoch_start_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -730,6 +856,23 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
+	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
+
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(initial_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 89 }))
+		});
+
 	let empty_block_header = test_header(20);
 	let new_epoch_block_header = test_header(21);
 	let new_epoch_block_header_hash = new_epoch_block_header.hash();
@@ -787,6 +930,17 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 120 }))
+		});
+
 	state_chain_client.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(new_epoch), eq(account_id.clone()))
 		.once()
@@ -823,6 +977,11 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -840,6 +999,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_epoch_start_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -926,6 +1087,23 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
+	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
+
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(initial_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 120 }))
+		});
+
 	let empty_block_header = test_header(20);
 	let new_epoch_block_header = test_header(21);
 	let new_epoch_block_header_hash = new_epoch_block_header.hash();
@@ -984,6 +1162,17 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.once()
 			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
+	state_chain_client
+			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+				state_chain_runtime::Runtime,
+				state_chain_runtime::BitcoinInstance,
+			>>()
+			.with(eq(new_epoch_block_header_hash), eq(new_epoch))
+			.once()
+			.return_once(move |_, _| {
+				Ok(Some(Vault { public_key: Default::default(), active_from_block: 120 }))
+			});
+
 	state_chain_client.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(4), eq(account_id.clone()))
 		.once()
@@ -1020,6 +1209,11 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -1037,6 +1231,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_epoch_start_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -1122,6 +1318,23 @@ async fn only_encodes_and_signs_when_specified() {
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
+
+	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
+
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(initial_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 98 }))
+		});
 
 	let block_header = test_header(21);
 	let sc_block_stream = tokio_stream::iter([block_header.clone()]);
@@ -1212,6 +1425,11 @@ async fn only_encodes_and_signs_when_specified() {
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
+	let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -1229,6 +1447,8 @@ async fn only_encodes_and_signs_when_specified() {
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_epoch_start_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -1489,6 +1709,12 @@ async fn run_the_sc_observer() {
 			let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
+			let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) =
+				async_broadcast::broadcast(10);
+
+			let (btc_monitor_ingress_sender, _btc_monitor_ingress_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+
 			sc_observer::start(
 				state_chain_client,
 				sc_block_stream,
@@ -1506,6 +1732,8 @@ async fn run_the_sc_observer() {
 				dot_epoch_start_sender,
 				dot_monitor_ingress_sender,
 				dot_monitor_signature_sender,
+				btc_epoch_start_sender,
+				btc_monitor_ingress_sender,
 				cfe_settings_update_sender,
 				initial_block_hash,
 			)

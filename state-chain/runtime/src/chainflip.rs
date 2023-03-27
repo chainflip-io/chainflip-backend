@@ -16,6 +16,7 @@ use crate::{
 };
 
 use cf_chains::{
+	address::ForeignChainAddress,
 	btc::{
 		api::{BitcoinApi, SelectedUtxos},
 		Bitcoin, BitcoinNetwork, BitcoinTransactionData, BtcAmount, Utxo,
@@ -33,8 +34,7 @@ use cf_chains::{
 	ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
 };
 use cf_primitives::{
-	chains::assets, liquidity::U256, Asset, AssetAmount, ForeignChainAddress, IntentId,
-	ETHEREUM_ETH_ADDRESS,
+	chains::assets, liquidity::U256, Asset, AssetAmount, IntentId, ETHEREUM_ETH_ADDRESS,
 };
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, EgressApi,
@@ -510,7 +510,7 @@ impl IngressHandler<Bitcoin> for BtcIngressHandler {
 				.try_into()
 				.expect("the amount witnessed should not exceed u64 max for btc"),
 			txid: utxo_id.tx_hash,
-			vout: utxo_id.vout_index,
+			vout: utxo_id.vout,
 			pubkey_x: utxo_id.pubkey_x,
 			salt: utxo_id
 				.salt

@@ -13,13 +13,13 @@ pub use async_result::AsyncResult;
 use sp_std::collections::btree_set::BTreeSet;
 
 use cf_chains::{
-	benchmarking_value::BenchmarkValue, eth::H256, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum,
-	Polkadot,
+	address::ForeignChainAddress, benchmarking_value::BenchmarkValue, eth::H256, ApiCall, Chain,
+	ChainAbi, ChainCrypto, Ethereum, Polkadot,
 };
 
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BroadcastId, CeremonyId,
-	EgressId, EpochIndex, EthereumAddress, ForeignChain, ForeignChainAddress, IntentId, KeyId,
+	EgressId, EpochIndex, EthereumAddress, ForeignChain, IntentId, KeyId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{

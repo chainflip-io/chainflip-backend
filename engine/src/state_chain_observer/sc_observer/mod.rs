@@ -2,12 +2,20 @@
 mod tests;
 
 use anyhow::{anyhow, Context};
-use cf_chains::{dot, eth::Ethereum, ChainCrypto, Polkadot};
+use cf_chains::{
+	address::{BitcoinAddressData, BitcoinAddressFor, BitcoinAddressSeed},
+	btc::{self, CHANGE_ADDRESS_SALT},
+	dot,
+	eth::Ethereum,
+	Bitcoin, ChainCrypto, Polkadot,
+};
 use cf_primitives::{BlockNumber, CeremonyId, EpochIndex, KeyId, PolkadotAccountId};
 use futures::{FutureExt, Stream, StreamExt};
 use sp_core::{Hasher, H160, H256};
 use sp_runtime::{traits::Keccak256, AccountId32};
-use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance, PolkadotInstance};
+use state_chain_runtime::{
+	AccountId, BitcoinInstance, CfeSettings, EthereumInstance, PolkadotInstance,
+};
 use std::{
 	collections::BTreeSet,
 	sync::{
@@ -184,6 +192,10 @@ pub async fn start<
 		AddressMonitorCommand<PolkadotAccountId>,
 	>,
 	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<[u8; 64]>,
+	btc_epoch_start_sender: async_broadcast::Sender<EpochStart<Bitcoin>>,
+	btc_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<
+		AddressMonitorCommand<BitcoinAddressData>,
+	>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
 	initial_block_hash: H256,
 ) -> Result<(), anyhow::Error>
@@ -202,10 +214,17 @@ where
             <state_chain_runtime::Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval::get()
         };
 
+        let btc_network = state_chain_client
+            .storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>(
+                initial_block_hash,
+            )
+            .await
+            .unwrap();
+
         let start_epoch = |block_hash: H256, index: u32, current: bool, participant: bool| {
             let eth_epoch_start_sender = &eth_epoch_start_sender;
-
             let dot_epoch_start_sender = &dot_epoch_start_sender;
+            let btc_epoch_start_sender = &btc_epoch_start_sender;
             let state_chain_client = &state_chain_client;
 
             async move {
@@ -243,6 +262,36 @@ where
                         data: dot::EpochStartData {
                             vault_account: state_chain_client.storage_value::<pallet_cf_environment::PolkadotVaultAccountId<state_chain_runtime::Runtime>>(block_hash).await.unwrap().unwrap()
                         }
+                    }).await.unwrap();
+                }
+
+                // It is possible for there not to be a Bitcoin vault.
+                // At genesis there is no Bitcoin vault, so we want to check that the vault exists
+                // before we start witnessing.
+                if let Some(vault) = state_chain_client
+                .storage_map_entry::<pallet_cf_vaults::Vaults<
+                    state_chain_runtime::Runtime,
+                    BitcoinInstance,
+                >>(block_hash, &index)
+                .await
+                .unwrap() {
+
+                    let change_address = BitcoinAddressData {
+                        address_for: BitcoinAddressFor::Ingress(BitcoinAddressSeed {
+                            pubkey_x: vault.public_key.0,
+                            salt: CHANGE_ADDRESS_SALT,
+                        }),
+                        network: btc_network,
+                    };
+
+                    btc_epoch_start_sender.broadcast(EpochStart::<Bitcoin> {
+                        epoch_index: index,
+                        block_number: vault.active_from_block,
+                        current,
+                        participant,
+                        data: btc::EpochStartData {
+                            change_address
+                        },
                     }).await.unwrap();
                 }
             }
@@ -559,6 +608,24 @@ where
                                     ) => {
                                         assert_eq!(ingress_asset, cf_primitives::chains::assets::dot::Asset::Dot);
                                         dot_monitor_ingress_sender.send(AddressMonitorCommand::Remove(ingress_address)).unwrap();
+                                    }
+                                    state_chain_runtime::RuntimeEvent::BitcoinIngressEgress(
+                                        pallet_cf_ingress_egress::Event::StartWitnessing {
+                                            ingress_address,
+                                            ingress_asset
+                                        }
+                                    ) => {
+                                        assert_eq!(ingress_asset, cf_primitives::chains::assets::btc::Asset::Btc);
+                                        btc_monitor_ingress_sender.send(AddressMonitorCommand::Add(ingress_address)).unwrap();
+                                    }
+                                    state_chain_runtime::RuntimeEvent::BitcoinIngressEgress(
+                                        pallet_cf_ingress_egress::Event::StopWitnessing {
+                                            ingress_address,
+                                            ingress_asset
+                                        }
+                                    ) => {
+                                        assert_eq!(ingress_asset, cf_primitives::chains::assets::btc::Asset::Btc);
+                                        btc_monitor_ingress_sender.send(AddressMonitorCommand::Remove(ingress_address)).unwrap();
                                     }
                                 }}}}
                                 Err(error) => {
