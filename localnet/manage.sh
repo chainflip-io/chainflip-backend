@@ -62,13 +62,13 @@ build-localnet() {
   echo "🏗 Building network"
   BINARIES_LOCATION=${BINARIES_LOCATION:-"./target/release/"}
   docker-compose -f localnet/docker-compose.yml up -d
-  ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
-  while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null 2>&1 ; do
-    echo "🚧 Waiting for chainflip-node to start"
+  while ! REPLY=$(curl -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9945') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]; do
+    echo "🚦 Waiting for polkadot node to start"
     sleep 3
   done
-  while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9945' > /dev/null 2>&1 ; do
-    echo "🚦 Waiting for polkadot node to start"
+  DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
+  while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null 2>&1 ; do
+    echo "🚧 Waiting for chainflip-node to start"
     sleep 3
   done
   ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
