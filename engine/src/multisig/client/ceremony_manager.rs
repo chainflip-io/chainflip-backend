@@ -42,7 +42,7 @@ use super::{
 		CeremonyStage, KeygenStageName, PreProcessStageDataCheck, ResharingContext,
 		SigningStageName,
 	},
-	keygen::{HashCommitments1, HashContext, KeygenData},
+	keygen::{HashCommitments1, HashContext, KeygenData, PubkeySharesStage0},
 	legacy::MultisigMessageV1,
 	signing::SigningData,
 	CeremonyRequest, MultisigData, MultisigMessage,
@@ -169,6 +169,48 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 		let processor = AwaitCommitments1::<Crypto>::new(
 			common.clone(),
 			SigningStateCommonInfo { payloads, key: key_info.key },
+		);
+
+		Box::new(BroadcastStage::new(processor, common))
+	};
+
+	Ok(PreparedRequest { initial_stage })
+}
+
+pub fn prepare_key_handover_request<Crypto: CryptoScheme>(
+	ceremony_id: CeremonyId,
+	own_account_id: &AccountId,
+	participants: BTreeSet<AccountId>,
+	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
+	resharing_context: ResharingContext<Crypto>,
+	rng: Rng,
+) -> Result<PreparedRequest<KeygenCeremony<Crypto>>, KeygenFailureReason> {
+	let validator_mapping = Arc::new(PartyIdxMapping::from_participants(participants.clone()));
+
+	let (our_idx, signer_idxs) =
+		match map_ceremony_parties(own_account_id, &participants, &validator_mapping) {
+			Ok(res) => res,
+			Err(reason) => {
+				debug!("Key Handover request invalid: {reason}");
+
+				return Err(KeygenFailureReason::InvalidParticipants)
+			},
+		};
+
+	let initial_stage = {
+		let common = CeremonyCommon {
+			ceremony_id,
+			outgoing_p2p_message_sender: outgoing_p2p_message_sender.clone(),
+			validator_mapping,
+			own_idx: our_idx,
+			all_idxs: signer_idxs,
+			rng,
+		};
+
+		let processor = PubkeySharesStage0::new(
+			common.clone(),
+			generate_keygen_context(ceremony_id, participants),
+			resharing_context,
 		);
 
 		Box::new(BroadcastStage::new(processor, common))

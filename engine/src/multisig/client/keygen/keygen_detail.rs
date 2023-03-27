@@ -11,7 +11,7 @@ use zeroize::Zeroize;
 
 use crate::multisig::{
 	client::{
-		common::{KeygenFailureReason, ResharingContext},
+		common::{KeygenFailureReason, ParticipantStatus, ResharingContext},
 		KeygenResult, KeygenResultInfo, PartyIdxMapping, ThresholdParameters,
 	},
 	crypto::{ECPoint, ECScalar, KeyShare, Rng},
@@ -129,6 +129,26 @@ pub struct OutgoingShares<P: ECPoint>(pub BTreeMap<AuthorityCount, ShamirShare<P
 
 pub struct IncomingShares<P: ECPoint>(pub BTreeMap<AuthorityCount, ShamirShare<P>>);
 
+pub struct SharingParameters {
+	pub indexes_to_share_at: BTreeSet<AuthorityCount>,
+	pub threshold: AuthorityCount,
+}
+
+impl SharingParameters {
+	pub fn for_key_handover(
+		indexes_to_share_at: BTreeSet<AuthorityCount>,
+		threshold: AuthorityCount,
+	) -> Self {
+		Self { indexes_to_share_at, threshold }
+	}
+
+	pub fn for_keygen(share_count: AuthorityCount, threshold: AuthorityCount) -> Self {
+		// In regular keygen, all parties receive shares
+		let indexes_to_share_at = (1..=share_count).collect();
+		Self { indexes_to_share_at, threshold }
+	}
+}
+
 /// Generate a secret and derive shares and commitments from it.
 /// (The secret will never be needed again, so it is not exposed
 /// to the caller.)
@@ -136,11 +156,11 @@ pub fn generate_shares_and_commitment<P: ECPoint>(
 	rng: &mut Rng,
 	context: &HashContext,
 	index: AuthorityCount,
-	params: ThresholdParameters,
+	sharing_parameters: &SharingParameters,
 	existing_secret: Option<&P::Scalar>,
 ) -> (OutgoingShares<P>, DKGUnverifiedCommitment<P>) {
 	let (secret, commitments, shares) =
-		generate_secret_and_shares(rng, params.share_count, params.threshold, existing_secret);
+		generate_secret_and_shares(rng, sharing_parameters, existing_secret);
 
 	// Zero-knowledge proof of `secret`
 	let zkp = generate_zkp_of_secret(rng, secret, context, index);
@@ -153,8 +173,7 @@ pub fn generate_shares_and_commitment<P: ECPoint>(
 // NOTE: shares should be sent after participants have exchanged commitments
 fn generate_secret_and_shares<P: ECPoint>(
 	rng: &mut Rng,
-	n: AuthorityCount,
-	t: AuthorityCount,
+	sharing_parameters: &SharingParameters,
 	existing_secret: Option<&P::Scalar>,
 ) -> (P::Scalar, CoefficientCommitments<P>, BTreeMap<AuthorityCount, ShamirShare<P>>) {
 	// Our secret contribution to the aggregate key
@@ -162,7 +181,10 @@ fn generate_secret_and_shares<P: ECPoint>(
 
 	// Coefficients for the sharing polynomial used to share `secret` via the Shamir Secret Sharing
 	// scheme (Figure 1: Round 1, Step 1)
-	let coefficients: Vec<_> = (0..t).into_iter().map(|_| P::Scalar::random(rng)).collect();
+	let coefficients: Vec<_> = (0..sharing_parameters.threshold)
+		.into_iter()
+		.map(|_| P::Scalar::random(rng))
+		.collect();
 
 	// (Figure 1: Round 1, Step 3)
 	let commitments: Vec<_> =
@@ -170,15 +192,19 @@ fn generate_secret_and_shares<P: ECPoint>(
 
 	// Generate shares
 	// (Figure 1: Round 2, Step 1)
-	let shares = (1..=n)
+	// NOTE: we only generate shares for the parties that need to receive them
+	// (mostly relevant for Key Handover where some parties don't receive shares)
+	let shares = sharing_parameters
+		.indexes_to_share_at
+		.iter()
 		.map(|index| {
 			(
-				index,
+				*index,
 				ShamirShare {
 					// TODO: Make this work on references
 					value: evaluate_polynomial::<_, _, P::Scalar>(
 						[secret.clone()].iter().chain(coefficients.iter()),
-						index,
+						*index,
 					),
 				},
 			)
@@ -255,22 +281,31 @@ pub fn validate_commitments<C: CryptoScheme>(
 	BTreeMap<AuthorityCount, DKGCommitment<C::Point>>,
 	(BTreeSet<AuthorityCount>, KeygenFailureReason),
 > {
+	// TODO: in the case of key handover, remove data from all non-sharing
+	// parties so we don't accidentally use it
 	let invalid_idxs: BTreeSet<_> = public_coefficients
 		.iter()
 		.filter_map(|(idx, c)| {
 			if let Some(context) = resharing_context {
-				// If we are re-sharing, check that the commitment to the
-				// first coefficient corresponds to the party's original
-				// pubkey share (scaled by lagrange coefficient)
+				let expected_public_keys = match &context.party_status {
+					ParticipantStatus::Sharing(_, pubkeys) => pubkeys,
+					ParticipantStatus::NonSharing => panic!("invalid state for the stage"),
+					ParticipantStatus::NonSharingReceivedKeys(pubkeys) => pubkeys,
+				};
 
-				let first_commitment = c.commitments.0[0];
+				// In a key handover ceremony, we check for each sharing party
+				// that the commitment to their first coefficient corresponds
+				// to the party's original pubkey share (scaled by lagrange coefficient).
+				if context.sharing_participants.contains(idx) {
+					let id = validator_mapping.get_id(*idx);
+					let expected_pubkey = expected_public_keys
+						.get(id)
+						.expect("must have keys for all sharing parties");
 
-				let id = validator_mapping.get_id(*idx);
-				let expected_pubkey = context.party_public_keys.get(id).unwrap();
-
-				if expected_pubkey != &first_commitment {
-					warn!(from_id = id.to_string(), "Invalid first commitment");
-					return Some(*idx)
+					if expected_pubkey != &c.commitments.0[0] {
+						warn!(from_id = id.to_string(), "Invalid first commitment");
+						return Some(*idx)
+					}
 				}
 			}
 
@@ -428,8 +463,11 @@ mod tests {
 		use rand_legacy::SeedableRng;
 		let mut rng = Rng::from_seed([0; 32]);
 
-		let (secret, _commitments, shares) =
-			generate_secret_and_shares::<Point>(&mut rng, n, threshold, None);
+		let (secret, _commitments, shares) = generate_secret_and_shares::<Point>(
+			&mut rng,
+			&SharingParameters::for_keygen(n, threshold),
+			None,
+		);
 
 		assert_eq!(secret, reconstruct_secret(&shares));
 	}
@@ -453,7 +491,7 @@ mod tests {
 			BTreeMap<_, _>,
 		) = itertools::multiunzip((1..=n).map(|idx| {
 			let (secret, shares_commitments, shares) =
-				generate_secret_and_shares(&mut rng, n, t, None);
+				generate_secret_and_shares(&mut rng, &SharingParameters::for_keygen(n, t), None);
 			// Zero-knowledge proof of `secret`
 			let zkp = generate_zkp_of_secret(&mut rng, secret, &context, idx);
 
@@ -520,8 +558,11 @@ pub mod genesis {
 		let (commitments, outgoing_secret_shares, agg_pubkey) = loop {
 			let (commitments, outgoing_secret_shares): (BTreeMap<_, _>, BTreeMap<_, _>) = (1..=n)
 				.map(|idx| {
-					let (_secret, commitments, shares) =
-						generate_secret_and_shares::<C::Point>(rng, n, t, None);
+					let (_secret, commitments, shares) = generate_secret_and_shares::<C::Point>(
+						rng,
+						&SharingParameters::for_keygen(n, t),
+						None,
+					);
 					((idx, DKGCommitment { commitments }), (idx, shares))
 				})
 				.unzip();

@@ -4,7 +4,10 @@ use std::collections::BTreeSet;
 
 use crate::multisig::{
 	client::{
-		common::{BroadcastFailureReason, KeygenFailureReason, KeygenStageName, ResharingContext},
+		common::{
+			BroadcastFailureReason, KeygenFailureReason, KeygenStageName, ParticipantStatus,
+			ResharingContext,
+		},
 		helpers::{
 			gen_invalid_keygen_comm1, get_invalid_hash_comm, new_nodes, run_keygen, run_stages,
 			standard_signing, KeygenCeremonyRunner, SigningCeremonyRunner, ACCOUNT_IDS,
@@ -937,7 +940,7 @@ async fn key_resharing_happy_path() {
 		let key_info = key_infos.remove(id).unwrap();
 		node.request_keygen(
 			ceremony_details.clone(),
-			Some(ResharingContext::from_key(&key_info, id, &participants)),
+			Some(ResharingContext::from_key(&key_info, id, &participants, &participants)),
 		)
 		.await;
 	}
@@ -987,11 +990,16 @@ async fn key_resharing_with_incorrect_commitment() {
 	for (id, node) in &mut ceremony.nodes {
 		let key_info = key_infos.remove(id).unwrap();
 
-		let mut context = ResharingContext::from_key(&key_info, id, &participants);
+		let mut context = ResharingContext::from_key(&key_info, id, &participants, &participants);
 
 		if id == &bad_account_id {
 			// Adding a small tweak to the share to make it incorrect
-			context.secret_share = context.secret_share + Scalar::from(1);
+			match &mut context.party_status {
+				ParticipantStatus::Sharing(secret_share, _) => {
+					*secret_share = &*secret_share + &Scalar::from(1);
+				},
+				_ => panic!("Unexpected status"),
+			}
 		}
 
 		node.request_keygen(ceremony_details.clone(), Some(context)).await;
@@ -1007,4 +1015,82 @@ async fn key_resharing_with_incorrect_commitment() {
 	ceremony
 		.complete_with_error(&[bad_account_id], KeygenFailureReason::InvalidCommitment)
 		.await;
+}
+
+#[tokio::test]
+async fn key_handover() {
+	// The high level idea of this test is to generate some key with some
+	// nodes, then introduce new nodes who the key will be handed over to.
+	// There is an overlap between the two sets of nodes, which is going
+	// to be common in practice. The resulting aggregate keys should match.
+
+	let all_account_ids: Vec<AccountId> =
+		[1, 2, 3, 4, 5].iter().map(|i| AccountId::new([*i; 32])).collect();
+
+	// Accounts (1), (2) and (3) will hold the original key
+	let original_set: Vec<AccountId> = all_account_ids.iter().take(3).cloned().collect();
+
+	// Accounts (3), (4) and (5) will receive the key as the result of this ceremony.
+	// (Note that (3) appears in both sets.)
+	let new_set: Vec<AccountId> = all_account_ids.iter().skip(2).take(3).cloned().collect();
+
+	// Perform a regular keygen to generate initial keys:
+	let (initial_key, mut key_infos) = keygen::generate_key_data::<EthSigning>(
+		original_set.clone().into_iter().collect(),
+		&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
+	);
+
+	// Accounts (2), (3), (4) and (5) will participate, with (2) and (3)
+	// re-sharing their key to (3), (4) and (5)
+	let all_participants: BTreeSet<AccountId> =
+		all_account_ids.iter().skip(1).take(4).cloned().collect();
+
+	let mut ceremony = KeygenCeremonyRunner::new(
+		new_nodes(all_participants),
+		DEFAULT_KEYGEN_CEREMONY_ID,
+		Rng::from_seed(DEFAULT_KEYGEN_SEED),
+	);
+
+	let ceremony_details = ceremony.keygen_ceremony_details();
+
+	// Only 2 and 3 will contribute their secret shares
+	let sharing_participants: BTreeSet<AccountId> =
+		original_set.clone().into_iter().skip(1).collect();
+
+	let receiving_participants: BTreeSet<AccountId> = new_set.clone().into_iter().collect();
+
+	for (id, node) in &mut ceremony.nodes {
+		// Give the right context type depending on whether they have keys
+		let context = if sharing_participants.contains(id) {
+			let key_info = key_infos.remove(id).unwrap();
+			ResharingContext::from_key(
+				&key_info,
+				id,
+				&sharing_participants,
+				&receiving_participants,
+			)
+		} else {
+			ResharingContext::without_key(&sharing_participants, &receiving_participants)
+		};
+		node.request_key_handover(ceremony_details.clone(), context).await;
+	}
+
+	let messages = ceremony.gather_outgoing_messages::<keygen::PubkeyShares0<Point>, _>().await;
+
+	let messages = run_stages!(
+		ceremony,
+		messages,
+		keygen::HashComm1,
+		keygen::VerifyHashComm2,
+		CoeffComm3,
+		VerifyCoeffComm4,
+		SecretShare5,
+		Complaints6,
+		VerifyComplaints7
+	);
+
+	ceremony.distribute_messages(messages).await;
+	let (new_key, _new_shares) = ceremony.complete().await;
+
+	assert_eq!(new_key, initial_key);
 }

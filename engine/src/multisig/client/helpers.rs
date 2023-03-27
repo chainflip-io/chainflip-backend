@@ -29,7 +29,7 @@ use crate::{
 			ceremony_runner::CeremonyRunner,
 			common::{broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason},
 			keygen::{generate_key_data, HashComm1, HashContext, VerifyHashCommitmentsBroadcast2},
-			signing, KeygenResultInfo, PartyIdxMapping, ThresholdParameters,
+			signing, KeygenResultInfo, PartyIdxMapping,
 		},
 		crypto::{ECPoint, Rng},
 		CryptoScheme,
@@ -180,6 +180,33 @@ impl<C: CryptoScheme> Node<SigningCeremony<C>> {
 }
 
 impl Node<KeygenCeremonyEth> {
+	pub async fn request_key_handover(
+		&mut self,
+		keygen_ceremony_details: KeygenCeremonyDetails,
+		resharing_context: ResharingContext<EthSigning>,
+	) {
+		let KeygenCeremonyDetails { ceremony_id, rng, participants } = keygen_ceremony_details;
+
+		let request = prepare_key_handover_request(
+			ceremony_id,
+			&self.own_account_id,
+			participants,
+			&self.outgoing_p2p_message_sender,
+			resharing_context,
+			rng,
+		)
+		.expect("invalid request");
+
+		if let Some(outcome) = self
+			.ceremony_runner
+			.on_ceremony_request(request.initial_stage)
+			.instrument(debug_span!("Node", account_id = self.own_account_id.to_string()))
+			.await
+		{
+			self.on_ceremony_outcome(outcome)
+		}
+	}
+
 	pub async fn request_keygen(
 		&mut self,
 		keygen_ceremony_details: KeygenCeremonyDetails,
@@ -563,7 +590,12 @@ macro_rules! run_stages {
 }
 pub(crate) use run_stages;
 
-use super::{ceremony_manager::deserialize_for_version, common::ResharingContext, signing::Comm1};
+use super::{
+	ceremony_manager::{deserialize_for_version, prepare_key_handover_request},
+	common::ResharingContext,
+	keygen::SharingParameters,
+	signing::Comm1,
+};
 
 pub type KeygenCeremonyRunner = CeremonyTestRunner<(), KeygenCeremony<EthSigning>>;
 
@@ -810,10 +842,10 @@ pub fn gen_invalid_keygen_comm1<P: ECPoint>(
 		// The commitment is only invalid because of the invalid context
 		&HashContext([0; 32]),
 		0,
-		ThresholdParameters {
+		&SharingParameters::for_keygen(
 			share_count,
-			threshold: threshold_from_share_count(share_count) as AuthorityCount,
-		},
+			threshold_from_share_count(share_count) as AuthorityCount,
+		),
 		None,
 	);
 	fake_comm1

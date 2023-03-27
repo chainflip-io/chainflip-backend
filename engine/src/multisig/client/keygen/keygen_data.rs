@@ -20,6 +20,8 @@ pub use tests::{gen_keygen_data_hash_comm1, gen_keygen_data_verify_hash_comm2};
 /// Data sent between parties over p2p for a keygen ceremony
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum KeygenData<P: ECPoint> {
+	#[serde(bound = "")]
+	DummyMessage0(PubkeyShares0<P>),
 	HashComm1(HashComm1),
 	VerifyHashComm2(VerifyHashComm2),
 	#[serde(bound = "")] // see https://github.com/serde-rs/serde/issues/1296
@@ -39,6 +41,7 @@ pub enum KeygenData<P: ECPoint> {
 impl<P: ECPoint> std::fmt::Display for KeygenData<P> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		let inner = match self {
+			KeygenData::DummyMessage0(inner) => inner.to_string(),
 			KeygenData::HashComm1(inner) => inner.to_string(),
 			KeygenData::VerifyHashComm2(inner) => inner.to_string(),
 			KeygenData::CoeffComm3(inner) => inner.to_string(),
@@ -60,6 +63,7 @@ impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
 		match self {
 			// For messages that don't contain a collection (eg. HashComm1), we don't need to check
 			// the size.
+			KeygenData::DummyMessage0(_) => true,
 			KeygenData::HashComm1(_) => true,
 			KeygenData::VerifyHashComm2(message) => message.data.len() == num_of_parties,
 			KeygenData::CoeffComm3(message) => {
@@ -155,6 +159,9 @@ impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct HashComm1(pub sp_core::H256);
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PubkeyShares0<P: ECPoint>(#[serde(bound = "")] pub BTreeMap<AuthorityCount, P>);
+
 pub type VerifyHashComm2 = BroadcastVerificationMessage<HashComm1>;
 
 pub type CoeffComm3<P> = super::keygen_detail::DKGUnverifiedCommitment<P>;
@@ -186,6 +193,7 @@ pub struct BlameResponse8<P: ECPoint>(
 
 pub type VerifyBlameResponses9<P> = BroadcastVerificationMessage<BlameResponse8<P>>;
 
+derive_impls_for_enum_variants!(impl<P: ECPoint> for PubkeyShares0<P>, KeygenData::DummyMessage0, KeygenData<P>);
 derive_impls_for_enum_variants!(impl<P: ECPoint> for HashComm1, KeygenData::HashComm1, KeygenData<P>);
 derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyHashComm2, KeygenData::VerifyHashComm2, KeygenData<P>);
 derive_impls_for_enum_variants!(impl<P: ECPoint> for CoeffComm3<P>, KeygenData::CoeffComm3, KeygenData<P>);
@@ -196,6 +204,7 @@ derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyComplaints7, KeygenDa
 derive_impls_for_enum_variants!(impl<P: ECPoint> for BlameResponse8<P>, KeygenData::BlameResponse8, KeygenData<P>);
 derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyBlameResponses9<P>, KeygenData::VerifyBlameResponses9, KeygenData<P>);
 
+derive_display_as_type_name!(PubkeyShares0<P: ECPoint>);
 derive_display_as_type_name!(HashComm1);
 derive_display_as_type_name!(VerifyHashComm2);
 derive_display_as_type_name!(CoeffComm3<P: ECPoint>);
