@@ -112,16 +112,13 @@ where
 {
 	task_scope(|scope| {
 		async {
-			let (_, block_stream, state_chain_client) =
+			let (_, mut block_stream, state_chain_client) =
 				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
 					.await?;
 
-			let mut block_stream = Box::new(block_stream);
-
-			let (_tx_hash, events) =
-				submit_and_ensure_success(&state_chain_client, block_stream.as_mut(), call).await?;
-
-			Ok(events)
+			submit_and_ensure_success(&state_chain_client, &mut block_stream, call)
+				.await
+				.map(|(_, events)| events)
 		}
 		.boxed()
 	})
