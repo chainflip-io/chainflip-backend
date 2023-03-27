@@ -51,7 +51,7 @@ impl MockCfe {
 				BroadcastEvent::TransactionBroadcastRequest {
 					broadcast_attempt_id,
 					nominee,
-					unsigned_tx: _,
+					transaction_payload: _,
 				} => {
 					match scenario {
 						Scenario::SigningFailure => {
@@ -141,8 +141,10 @@ fn signature_accepted_results_in_refund_for_signer() {
 			ETH_TX_FEE,
 		));
 
-		let expected_refund =
-			tx_sig_request.broadcast_attempt.unsigned_tx.return_fee_refund(ETH_TX_FEE);
+		let expected_refund = tx_sig_request
+			.broadcast_attempt
+			.transaction_payload
+			.return_fee_refund(ETH_TX_FEE);
 
 		assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
 

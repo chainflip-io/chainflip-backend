@@ -537,11 +537,11 @@ where
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
                                             broadcast_attempt_id,
                                             nominee,
-                                            unsigned_tx,
+                                            transaction_payload,
                                         },
                                     ) if nominee == account_id => {
-                                        debug!("Received signing request with broadcast_attempt_id {broadcast_attempt_id} for transaction: {unsigned_tx:?}");
-                                        match eth_broadcaster.encode_and_sign_tx(unsigned_tx).await {
+                                        debug!("Received signing request with broadcast_attempt_id {broadcast_attempt_id} for transaction: {transaction_payload:?}");
+                                        match eth_broadcaster.encode_and_sign_tx(transaction_payload).await {
                                             Ok(raw_signed_tx) => {
                                                 // We want to transmit here to decrease the delay between getting a gas price estimate
                                                 // and transmitting it to the Ethereum network
@@ -583,7 +583,7 @@ where
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
                                             broadcast_attempt_id,
                                             nominee,
-                                            unsigned_tx,
+                                            transaction_payload,
                                         },
                                     ) => {
                                         // we want to monitor for this new broadcast
@@ -596,7 +596,7 @@ where
                                         // get the threhsold signature, and we want the raw bytes inside the signature
                                         dot_monitor_signature_sender.send(signature.0).unwrap();
                                         if nominee == account_id {
-                                            let _result = dot_broadcaster.send(unsigned_tx.encoded_extrinsic).await
+                                            let _result = dot_broadcaster.send(transaction_payload.encoded_extrinsic).await
                                             .map(|_| info!("Polkadot transmission successful: {broadcast_attempt_id}"))
                                             .map_err(|error| {
                                                 error!("Error: {error:?}");
@@ -607,12 +607,12 @@ where
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
                                             broadcast_attempt_id,
                                             nominee,
-                                            unsigned_tx,
+                                            transaction_payload,
                                         },
                                     ) => {
                                         // TODO: monitor for broadcast completion?
                                         if nominee == account_id {
-                                            let _result = btc_broadcaster.send(unsigned_tx.encoded_transaction).await
+                                            let _result = btc_broadcaster.send(transaction_payload.encoded_transaction).await
                                             .map(|_| info!("Bitcoin transmission successful: {broadcast_attempt_id}"))
                                             .map_err(|error| {
                                                 error!("Error: {error:?}");

@@ -1353,7 +1353,7 @@ async fn only_encodes_and_signs_when_specified() {
 						pallet_cf_broadcast::Event::TransactionBroadcastRequest {
 							broadcast_attempt_id: BroadcastAttemptId::default(),
 							nominee: account_id,
-							unsigned_tx: Transaction::default(),
+							transaction_payload: Transaction::default(),
 						},
 					),
 					topics: vec![H256::default()],
@@ -1364,7 +1364,7 @@ async fn only_encodes_and_signs_when_specified() {
 						pallet_cf_broadcast::Event::TransactionBroadcastRequest {
 							broadcast_attempt_id: BroadcastAttemptId::default(),
 							nominee: AccountId32::new([1; 32]), // NOT OUR ACCOUNT ID
-							unsigned_tx: Transaction::default(),
+							transaction_payload: Transaction::default(),
 						},
 					),
 					topics: vec![H256::default()],
