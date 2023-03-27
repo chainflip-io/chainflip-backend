@@ -84,7 +84,7 @@ pub struct RelayerOptions {
 	#[clap(
 		long = "state_chain.ws_endpoint",
 		default_value = "ws://localhost:9944",
-		help = "The state chain node's rpc endpoint."
+		help = "The state chain node's RPC endpoint."
 	)]
 	pub ws_endpoint: String,
 	#[clap(
