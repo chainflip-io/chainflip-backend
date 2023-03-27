@@ -88,7 +88,7 @@ services:
       ]
 
   bitcoin:
-    image: ghcr.io/chainflip-io/chainflip-bitcoin-regtest
+    image: ghcr.io/chainflip-io/chainflip-bitcoin-regtest:v24.0.1
     platform: linux/amd64
     pull_policy: if_not_present
     container_name: bitcoin
