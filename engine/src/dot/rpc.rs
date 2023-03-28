@@ -2,13 +2,16 @@ use std::pin::Pin;
 
 use crate::dot::safe_runtime_version_stream::safe_runtime_version_stream;
 use async_trait::async_trait;
-use cf_chains::dot::{PolkadotHash, RuntimeVersion};
+use cf_chains::dot::{PolkadotBalance, PolkadotHash, RuntimeVersion};
 use cf_primitives::PolkadotBlockNumber;
 use futures::{Stream, StreamExt, TryStreamExt};
 use subxt::{
 	events::{Events, EventsClient},
+	ext::scale_value::ValueDef,
 	rpc::types::{Bytes, ChainBlock},
-	rpc_params, Config, OnlineClient, PolkadotConfig,
+	rpc_params,
+	storage::dynamic_root,
+	Config, OnlineClient, PolkadotConfig,
 };
 
 use anyhow::{anyhow, Result};
@@ -56,6 +59,31 @@ impl DotRpcClient {
 
 	async fn metadata(&mut self, block_hash: PolkadotHash) -> Result<subxt::Metadata> {
 		refresh_connection_on_error!(self, rpc, metadata, Some(block_hash))
+	}
+
+	async fn next_fee_multiplier(&mut self, block_hash: PolkadotHash) -> Result<PolkadotBalance> {
+		Ok(
+			match self
+				.online_client
+				.storage()
+				.at(Some(block_hash))
+				.await?
+				.fetch(&dynamic_root("TransactionPayment", "NextFeeMultiplier"))
+				.await?
+				.expect("Is a value query. We should get a value.")
+				.to_value()
+				.expect("We know this decodes to a ValueDef::Composite")
+				.value
+			{
+				ValueDef::Composite(c) => c
+					.into_values()
+					.into_iter()
+					.map(|v| v.as_u128().unwrap())
+					.next()
+					.expect("We know it's a u128"),
+				_ => return Err(anyhow::anyhow!("Expected composite type")),
+			},
+		)
 	}
 }
 
