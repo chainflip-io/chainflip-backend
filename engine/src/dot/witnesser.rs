@@ -35,8 +35,7 @@ use crate::{
 		checkpointing::{
 			get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
 		},
-		epoch_witnesser::{self},
-		AddressMonitor, BlockNumberable, EpochStart,
+		epoch_witnesser, AddressMonitor, BlockNumberable, EpochStart,
 	},
 };
 
@@ -46,7 +45,7 @@ use super::rpc::DotRpcApi;
 
 #[derive(Debug, Clone, Copy)]
 pub struct MiniHeader {
-	pub block_number: PolkadotBlockNumber,
+	block_number: PolkadotBlockNumber,
 	block_hash: PolkadotHash,
 }
 
