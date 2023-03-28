@@ -472,61 +472,52 @@ pub mod pallet {
 					Some(ccm) => {
 						match ccm.stage {
 							CcmStage::Ingressed => {
-								// Schedule incoming assets to be swapped.
+								// Subtract the gas budge from ingress and swap the rest.
+								ccm.message_metadata.gas_budget = sp_std::cmp::min(
+									ccm.ingress_amount,
+									ccm.message_metadata.gas_budget,
+								);
+								let remaining = ccm
+									.ingress_amount
+									.saturating_sub(ccm.message_metadata.gas_budget);
+
+								// Schedule ingressed assets to be swapped.
 								let _ = Self::schedule_swap(
 									ccm.ingress_asset,
 									ccm.egress_asset,
-									ccm.ingress_amount,
+									remaining,
 									SwapType::Ccm(ccm_id),
 								);
 								false
 							},
-							CcmStage::AssetSwapped { ref mut output_amount } => {
-								// Check if gas needs to be swapped
+							CcmStage::AssetSwapped { .. } => {
 								let target_chain = ForeignChain::from(ccm.egress_asset);
 								let output_gas_asset = target_chain.gas_asset();
-								// Calculate expected amount of gas.
-								let expected_output_gas =
-									ccm.message_metadata.gas_budget.saturating_mul(
-										T::GasPriceProvider::gas_price(target_chain)
-											.expect("Target chain's gas price must be set."),
-									);
-								if ccm.egress_asset != output_gas_asset {
-									// Gas asset is different from the egress asset. Another swap is
-									// required. Calculate input required for the gas amount
 
-									// TODO add interface to estimate input required
-									let swap_input = sp_std::cmp::min(0, *output_amount);
-									*output_amount = output_amount.saturating_sub(swap_input);
-									let _ = Self::schedule_swap(
-										ccm.egress_asset,
-										output_gas_asset,
-										swap_input,
-										SwapType::Ccm(ccm_id),
-									);
-									false
-								} else {
-									// Split the gas amount from the egress amount.
-									let remaining =
-										output_amount.saturating_sub(expected_output_gas);
-
-									// Insert gas budget into storage.
-									CcmGasBudget::<T>::insert(
-										ccm_id,
-										(output_gas_asset, expected_output_gas),
-									);
-
-									// Schedule the ccm to be egressed
-									Self::schedule_ccm_egress(ccm_id, ccm, remaining);
-									true
-								}
+								// Schedule swap for gas.
+								let _ = Self::schedule_swap(
+									ccm.ingress_asset,
+									output_gas_asset,
+									ccm.message_metadata.gas_budget,
+									SwapType::Ccm(ccm_id),
+								);
+								false
 							},
 							CcmStage::AssetAndGasSwapped { output_amount, gas_budget } => {
 								// Insert gas budget into storage.
 								CcmGasBudget::<T>::insert(ccm_id, gas_budget);
 
-								// Schedule the ccm to be egressed
-								Self::schedule_ccm_egress(ccm_id, ccm, output_amount);
+								// Schedule the given ccm to be egressed and deposit a event.
+								let egress_id = T::EgressHandler::schedule_egress(
+									ccm.egress_asset,
+									output_amount,
+									ccm.egress_address.clone(),
+									Some(ccm.message_metadata.clone()),
+								);
+								Self::deposit_event(Event::<T>::CcmEgressScheduled {
+									ccm_id,
+									egress_id,
+								});
 								true
 							},
 						}
@@ -542,17 +533,6 @@ pub mod pallet {
 					*maybe_ccm = None;
 				}
 			});
-		}
-
-		// Schedule the give nccm to be egressed and deposit a event. Does not alter storage.
-		fn schedule_ccm_egress(ccm_id: u64, ccm: &CcmWithStages, egress_amount: AssetAmount) {
-			let egress_id = T::EgressHandler::schedule_egress(
-				ccm.egress_asset,
-				egress_amount,
-				ccm.egress_address.clone(),
-				Some(ccm.message_metadata.clone()),
-			);
-			Self::deposit_event(Event::<T>::CcmEgressScheduled { ccm_id, egress_id });
 		}
 	}
 

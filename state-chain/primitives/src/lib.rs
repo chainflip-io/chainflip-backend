@@ -362,11 +362,15 @@ impl From<ForeignChainAddress> for ForeignChain {
 
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
 
+/// Metadata as part of a Cross Chain Message.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct CcmIngressMetadata {
+	// Call data used after the message is egressed.
 	pub message: Vec<u8>,
+	// Amount of ingress funds to be used for gas.
 	pub gas_budget: AssetAmount,
+	// The address of the original caller.
 	pub caller_address: ForeignChainAddress,
 }
 
