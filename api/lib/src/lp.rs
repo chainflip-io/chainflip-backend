@@ -29,20 +29,15 @@ pub async fn liquidity_deposit(
 	)
 	.await?;
 
-	if let Some(state_chain_runtime::RuntimeEvent::LiquidityProvider(
-		pallet_cf_lp::Event::DepositAddressReady { ingress_address, intent_id: _ },
-	)) = events.iter().find(|event| {
-		matches!(
-			event,
+	Ok(events
+		.into_iter()
+		.find_map(|event| match event {
 			state_chain_runtime::RuntimeEvent::LiquidityProvider(
-				pallet_cf_lp::Event::DepositAddressReady { .. }
-			)
-		)
-	}) {
-		Ok((*ingress_address).clone())
-	} else {
-		panic!("DepositAddressReady must have been generated");
-	}
+				pallet_cf_lp::Event::DepositAddressReady { ingress_address, .. },
+			) => Some(ingress_address),
+			_ => None,
+		})
+		.expect("DepositAddressReady must have been generated"))
 }
 
 pub async fn withdraw_asset(
@@ -58,25 +53,15 @@ pub async fn withdraw_asset(
 	)
 	.await?;
 
-	if let Some(state_chain_runtime::RuntimeEvent::LiquidityProvider(
-		pallet_cf_lp::Event::WithdrawalEgressScheduled {
-			egress_id,
-			asset: _,
-			amount: _,
-			egress_address: _,
-		},
-	)) = events.iter().find(|event| {
-		matches!(
-			event,
+	Ok(events
+		.into_iter()
+		.find_map(|event| match event {
 			state_chain_runtime::RuntimeEvent::LiquidityProvider(
-				pallet_cf_lp::Event::WithdrawalEgressScheduled { .. }
-			)
-		)
-	}) {
-		Ok(*egress_id)
-	} else {
-		panic!("WithdrawalEgressScheduled must have been generated");
-	}
+				pallet_cf_lp::Event::WithdrawalEgressScheduled { egress_id, .. },
+			) => Some(egress_id),
+			_ => None,
+		})
+		.expect("WithdrawalEgressScheduled must have been generated"))
 }
 
 pub async fn get_balances(
@@ -210,30 +195,19 @@ pub async fn mint_position(
 			let (_tx_hash, events) =
 				submit_and_ensure_success(&state_chain_client, block_stream.as_mut(), call).await?;
 
-			if let Some(state_chain_runtime::RuntimeEvent::LiquidityPools(
-				pallet_cf_pools::Event::LiquidityMinted {
-					lp: _,
-					asset: _,
-					range: _,
-					minted_liquidity: _,
-					assets_debited,
-					fees_harvested,
-				},
-			)) = events.iter().find(|event| {
-				matches!(
-					event,
+			Ok(events
+				.into_iter()
+				.find_map(|event| match event {
 					state_chain_runtime::RuntimeEvent::LiquidityPools(
-						pallet_cf_pools::Event::LiquidityMinted { .. }
-					)
-				)
-			}) {
-				Ok(MintPositionReturn {
-					assets_debited: *assets_debited,
-					fees_harvested: *fees_harvested,
+						pallet_cf_pools::Event::LiquidityMinted {
+							assets_debited,
+							fees_harvested,
+							..
+						},
+					) => Some(MintPositionReturn { assets_debited, fees_harvested }),
+					_ => None,
 				})
-			} else {
-				panic!("LiquidityMinted must have been generated");
-			}
+				.expect("LiquidityMinted must have been generated"))
 		}
 		.boxed()
 	})
@@ -291,30 +265,19 @@ pub async fn burn_position(
 			let (_tx_hash, events) =
 				submit_and_ensure_success(&state_chain_client, block_stream.as_mut(), call).await?;
 
-			if let Some(state_chain_runtime::RuntimeEvent::LiquidityPools(
-				pallet_cf_pools::Event::LiquidityBurned {
-					lp: _,
-					asset: _,
-					range: _,
-					burnt_liquidity: _,
-					assets_returned,
-					fees_harvested,
-				},
-			)) = events.iter().find(|event| {
-				matches!(
-					event,
+			Ok(events
+				.into_iter()
+				.find_map(|event| match event {
 					state_chain_runtime::RuntimeEvent::LiquidityPools(
-						pallet_cf_pools::Event::LiquidityBurned { .. }
-					)
-				)
-			}) {
-				Ok(BurnPositionReturn {
-					assets_returned: *assets_returned,
-					fees_harvested: *fees_harvested,
+						pallet_cf_pools::Event::LiquidityBurned {
+							assets_returned,
+							fees_harvested,
+							..
+						},
+					) => Some(BurnPositionReturn { assets_returned, fees_harvested }),
+					_ => None,
 				})
-			} else {
-				panic!("LiquidityBurned must have been generated");
-			}
+				.expect("LiquidityBurned must have been generated"))
 		}
 		.boxed()
 	})
