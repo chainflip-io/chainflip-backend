@@ -195,6 +195,7 @@ impl<C: ChainAbi> ApiCall<C> for MockApiCall<C> {
 
 thread_local! {
 	pub static IS_VALID_BROADCAST: std::cell::RefCell<bool> = RefCell::new(true);
+	pub static API_CALL_UPDATED: std::cell::RefCell<bool> = RefCell::new(false);
 }
 
 pub struct MockTransactionBuilder<Abi, Call>(PhantomData<(Abi, Call)>);
@@ -220,5 +221,7 @@ impl<Abi: ChainAbi<Transaction = MockTransaction>, Call: ApiCall<Abi>> Transacti
 		IS_VALID_BROADCAST.with(|is_valid| *is_valid.borrow())
 	}
 
-	fn update_api_call(_call: &mut Call) {}
+	fn update_api_call(_call: &mut Call) {
+		API_CALL_UPDATED.with(|updated| *updated.borrow_mut() = true)
+	}
 }

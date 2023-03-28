@@ -222,7 +222,7 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 					Environment::polkadot_runtime_version();
 			},
 			_ => unimplemented!(),
-		}
+		};
 	}
 }
 

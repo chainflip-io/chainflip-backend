@@ -274,6 +274,8 @@ pub mod pallet {
 		BroadcastSuccess { broadcast_id: BroadcastId },
 		/// A broadcast's threshold signature is invalid, we will attempt to re-sign it.
 		ThresholdSignatureInvalid { broadcast_id: BroadcastId },
+		/// A broadcast has become invalid and will be manipulated and re-broadcasted.
+		TransactionInvalid { broadcast_id: BroadcastId },
 		/// A signature accepted event on the target chain has been witnessed and the callback was
 		/// executed.
 		BroadcastCallbackExecuted { broadcast_id: BroadcastId, result: DispatchResult },
@@ -644,8 +646,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let callback = RequestCallbacks::<T, I>::get(broadcast_id);
 				Self::clean_up_broadcast_storage(broadcast_id);
 				Self::threshold_sign_and_broadcast(api_call, callback);
+				Self::deposit_event(Event::<T, I>::TransactionInvalid { broadcast_id });
 				log::info!(
-					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
+					"Transaction is invalid -> rescheduled threshold signature for broadcast id {}.",
 					broadcast_id
 				);
 			}

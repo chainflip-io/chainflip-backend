@@ -7,7 +7,8 @@ use crate::{
 use cf_chains::{mocks::MockTransactionBuilder, FeeRefundCalculator};
 
 use cf_chains::mocks::{
-	MockApiCall, MockEthereum, MockThresholdSignature, MockTransaction, ETH_TX_FEE,
+	MockApiCall, MockEthereum, MockThresholdSignature, MockTransaction, API_CALL_UPDATED,
+	ETH_TX_FEE,
 };
 use cf_traits::{
 	mocks::{
@@ -100,6 +101,7 @@ impl MockCfe {
 				BroadcastEvent::__Ignore(_, _) => unreachable!(),
 				BroadcastEvent::ThresholdSignatureInvalid { .. } => {},
 				BroadcastEvent::BroadcastCallbackExecuted { .. } => {},
+				BroadcastEvent::TransactionInvalid { .. } => {},
 			},
 			_ => panic!("Unexpected event"),
 		};
@@ -526,6 +528,7 @@ fn re_request_threshold_signature_on_invalid_tx_params() {
 		// If invalid on retry then we should re-threshold sign
 		Broadcaster::on_initialize(BROADCAST_EXPIRY_BLOCKS + 1);
 		threshold_signature_rerequested(broadcast_attempt_id);
+		assert!(API_CALL_UPDATED.with(|cell| *cell.borrow()));
 	});
 }
 
