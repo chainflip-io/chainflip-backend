@@ -101,9 +101,11 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 
 	fn threshold_sign_and_broadcast_with_callback(
 		_api_call: Self::ApiCall,
-		_callback: Self::Callback,
+		callback: Self::Callback,
 	) -> BroadcastId {
-		unimplemented!()
+		// TODO: Call the callback.
+		let _ = callback.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
+		1
 	}
 }
 

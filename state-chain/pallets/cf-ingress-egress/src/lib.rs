@@ -198,7 +198,7 @@ pub mod pallet {
 	/// Stores a pool of addresses that is available for use together with the intent id.
 	#[pallet::storage]
 	pub(crate) type AddressPool<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, Vec<(IntentId, TargetChainAccount<T, I>)>, ValueQuery>;
+		StorageMap<_, Twox64Concat, IntentId, TargetChainAccount<T, I>>;
 
 	/// Stores the status of an address.
 	#[pallet::storage]
@@ -290,7 +290,7 @@ pub mod pallet {
 				for (intent_id, address) in expired.clone() {
 					IntentActions::<T, I>::remove(&address);
 					if AddressStatus::<T, I>::get(&address) == DeploymentStatus::Deployed {
-						AddressPool::<T, I>::append((intent_id, address.clone()));
+						AddressPool::<T, I>::insert(intent_id, address.clone());
 					}
 					if let Some(intent_ingress_details) =
 						IntentIngressDetails::<T, I>::take(&address)
@@ -317,6 +317,26 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		/// Callback for when a signature is accepted by the chain.
+		#[pallet::weight(T::WeightInfo::finalise_ingress(addresses.len() as u32))]
+		pub fn finalise_ingress(
+			origin: OriginFor<T>,
+			addresses: Vec<(IntentId, TargetChainAccount<T, I>)>,
+		) -> DispatchResult {
+			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
+			for (intent_id, address) in addresses {
+				IntentActions::<T, I>::remove(&address);
+				AddressPool::<T, I>::insert(intent_id, address.clone());
+				AddressStatus::<T, I>::insert(address.clone(), DeploymentStatus::Deployed);
+				if let Some(intent_ingress_details) = IntentIngressDetails::<T, I>::take(&address) {
+					Self::deposit_event(Event::<T, I>::StopWitnessing {
+						ingress_address: address.clone(),
+						ingress_asset: intent_ingress_details.ingress_asset,
+					});
+				}
+			}
+			Ok(())
+		}
 		/// Sets if an asset is not allowed to be sent out of the chain via Egress.
 		/// Requires Governance
 		///
@@ -341,7 +361,6 @@ pub mod pallet {
 
 			Ok(())
 		}
-
 		/// Send up to `maybe_size` number of scheduled transactions out for a specific chain.
 		/// If None is set for `maybe_size`, send all scheduled transactions.
 		/// Requires governance
@@ -358,7 +377,6 @@ pub mod pallet {
 			with_transaction(|| Self::egress_scheduled_assets(maybe_size))?;
 			Ok(())
 		}
-
 		/// Complete an ingress request. Called when funds have been deposited into the given
 		/// address. Requires `EnsureWitnessed` origin.
 		#[pallet::weight(T::WeightInfo::do_single_ingress().saturating_mul(ingress_witnesses.len() as u64))]
@@ -416,6 +434,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let mut fetch_params = vec![];
 		let mut egress_params = vec![];
 		let mut egress_ids = vec![];
+		let mut addresses = vec![];
 
 		for request in batch_to_send {
 			match request {
@@ -423,10 +442,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					let (ingress_id, ingress_address) = FetchParamDetails::<T, I>::take(intent_id)
 						.expect("to have fetch param details available");
 					fetch_params.push(FetchAssetParams { ingress_fetch_id: ingress_id, asset });
-					AddressStatus::<T, I>::insert(
-						ingress_address.clone(),
-						DeploymentStatus::Deployed,
-					);
+					addresses.push((intent_id, ingress_address.clone()));
 				},
 				FetchOrTransfer::<T::TargetChain>::Transfer { asset, to, amount, egress_id } => {
 					egress_ids.push(egress_id);
@@ -441,7 +457,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		#[allow(clippy::unit_arg)]
 		match T::AllBatch::new_unsigned(fetch_params, egress_params) {
 			Ok(egress_transaction) => {
-				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
+				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
+					egress_transaction,
+					Call::finalise_ingress { addresses }.into(),
+				);
 				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
 					broadcast_id,
 					egress_ids,
@@ -515,46 +534,37 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ingress_asset: TargetChainAsset<T, I>,
 		intent_action: IntentAction<T::AccountId>,
 	) -> Result<(IntentId, TargetChainAccount<T, I>), DispatchError> {
-		let (address, intent_id) = AddressPool::<T, I>::mutate(
-			|pool| -> Result<(TargetChainAccount<T, I>, IntentId), DispatchError> {
-				if let Some((intent_id, address)) = pool.pop() {
-					FetchParamDetails::<T, I>::insert(
-						intent_id,
-						(
-							IngressFetchIdOf::<T, I>::deployed(intent_id, address.clone()),
-							address.clone(),
-						),
-					);
-					Ok((address, intent_id))
-				} else {
-					let next_intent_id = IntentIdCounter::<T, I>::get()
-						.checked_add(1)
-						.ok_or(Error::<T, I>::IntentIdsExhausted)?;
-					let new_address: TargetChainAccount<T, I> =
-						T::AddressDerivation::generate_address(ingress_asset, next_intent_id)?;
-					AddressStatus::<T, I>::insert(
-						new_address.clone(),
-						DeploymentStatus::Undeployed,
-					);
-					FetchParamDetails::<T, I>::insert(
-						next_intent_id,
-						(
-							IngressFetchIdOf::<T, I>::undeployed(
-								next_intent_id,
-								new_address.clone(),
-							),
-							new_address.clone(),
-						),
-					);
-					IntentIdCounter::<T, I>::put(next_intent_id);
-					Ok((new_address, next_intent_id))
-				}
-			},
-		)?;
-		IntentExpiries::<T, I>::append(
-			frame_system::Pallet::<T>::current_block_number() + T::IntentTTL::get(),
-			(intent_id, address.clone()),
-		);
+		let intent_ttl = frame_system::Pallet::<T>::current_block_number() + T::IntentTTL::get();
+		// We have an address available, so we can just use it.
+
+		let (address, intent_id) = if let Some((intent_id, address)) =
+			AddressPool::<T, I>::drain().next()
+		{
+			FetchParamDetails::<T, I>::insert(
+				intent_id,
+				(IngressFetchIdOf::<T, I>::deployed(intent_id, address.clone()), address.clone()),
+			);
+			IntentExpiries::<T, I>::append(intent_ttl, (intent_id, address.clone()));
+			(address, intent_id)
+		} else {
+			let next_intent_id = IntentIdCounter::<T, I>::get()
+				.checked_add(1)
+				.ok_or(Error::<T, I>::IntentIdsExhausted)?;
+			let new_address: TargetChainAccount<T, I> =
+				T::AddressDerivation::generate_address(ingress_asset, next_intent_id)?;
+			AddressStatus::<T, I>::insert(new_address.clone(), DeploymentStatus::Undeployed);
+			FetchParamDetails::<T, I>::insert(
+				next_intent_id,
+				(
+					IngressFetchIdOf::<T, I>::undeployed(next_intent_id, new_address.clone()),
+					new_address.clone(),
+				),
+			);
+			IntentExpiries::<T, I>::append(intent_ttl, (next_intent_id, new_address.clone()));
+			IntentIdCounter::<T, I>::put(next_intent_id);
+			(new_address, next_intent_id)
+		};
+
 		IntentIngressDetails::<T, I>::insert(&address, IngressDetails { intent_id, ingress_asset });
 		IntentActions::<T, I>::insert(&address, intent_action);
 		Ok((intent_id, address))
