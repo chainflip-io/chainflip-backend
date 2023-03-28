@@ -177,7 +177,7 @@ pub mod pallet {
 	pub type PolkadotGenesisHash<T> = StorageValue<_, PolkadotHash, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn polkadot_vault_account_id)]
+	#[pallet::getter(fn polkadot_vault_account)]
 	/// The Polkadot Vault Anonymous Account
 	pub type PolkadotVaultAccountId<T> = StorageValue<_, PolkadotAccountId, OptionQuery>;
 
@@ -195,6 +195,7 @@ pub mod pallet {
 	pub type BitcoinAvailableUtxos<T> = StorageValue<_, Vec<Utxo>, ValueQuery>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn bitcoin_network)]
 	/// Selection of the bitcoin network (mainnet, testnet or regtest) that the state chain
 	/// currently supports.
 	pub type BitcoinNetworkSelection<T> = StorageValue<_, BitcoinNetwork, ValueQuery>;
@@ -419,7 +420,7 @@ pub mod pallet {
 				block_number,
 				UtxoId {
 					tx_hash: Default::default(),
-					vout_index: Default::default(),
+					vout: Default::default(),
 					pubkey_x: Default::default(),
 					salt: Default::default(),
 				},
@@ -447,6 +448,20 @@ pub mod pallet {
 
 			PolkadotRuntimeVersion::<T>::put(runtime_version);
 			Self::deposit_event(Event::<T>::PolkadotRuntimeVersionUpdated { runtime_version });
+
+			Ok(().into())
+		}
+
+		#[pallet::weight(0)]
+		pub fn add_btc_change_utxos(
+			origin: OriginFor<T>,
+			utxos: Vec<cf_chains::btc::Utxo>,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			for utxo in utxos {
+				Self::add_bitcoin_utxo_to_list(utxo);
+			}
 
 			Ok(().into())
 		}
@@ -559,20 +574,12 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	pub fn get_polkadot_vault_account() -> Option<PolkadotAccountId> {
-		PolkadotVaultAccountId::<T>::get()
-	}
-
 	pub fn reset_polkadot_proxy_account_nonce() {
 		PolkadotProxyAccountNonce::<T>::set(0);
 	}
 
 	pub fn add_bitcoin_utxo_to_list(utxo: Utxo) {
 		BitcoinAvailableUtxos::<T>::append(utxo);
-	}
-
-	pub fn get_bitcoin_network() -> BitcoinNetwork {
-		BitcoinNetworkSelection::<T>::get()
 	}
 
 	// Calculate the selection of utxos, return them and remove them from the list. If the

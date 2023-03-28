@@ -2,9 +2,9 @@
 use core::fmt::Display;
 
 use crate::benchmarking_value::BenchmarkValue;
+pub use address::ForeignChainAddress;
 use cf_primitives::{
-	chains::assets, AssetAmount, EgressId, EpochIndex, EthAmount, ForeignChainAddress, IntentId,
-	KeyId, PublicKeyBytes,
+	chains::assets, AssetAmount, EgressId, EpochIndex, EthAmount, IntentId, KeyId, PublicKeyBytes,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -12,6 +12,8 @@ use frame_support::{
 	Blake2_256, Parameter, RuntimeDebug, StorageHasher,
 };
 use scale_info::TypeInfo;
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Saturating},
 	DispatchError,
@@ -32,6 +34,8 @@ pub mod any;
 pub mod btc;
 pub mod dot;
 pub mod eth;
+
+pub mod address;
 
 #[cfg(feature = "std")]
 pub mod mocks;
@@ -84,8 +88,8 @@ pub trait Chain: Member + Parameter {
 		+ MaxEncodedLen
 		+ BenchmarkValue
 		+ Debug
-		+ TryFrom<cf_primitives::ForeignChainAddress>
-		+ Into<cf_primitives::ForeignChainAddress>;
+		+ TryFrom<ForeignChainAddress>
+		+ Into<ForeignChainAddress>;
 
 	type EpochStartData: Member + Parameter + MaxEncodedLen;
 
@@ -309,5 +313,27 @@ impl GasPriceProvider for crate::eth::EthereumTrackedData {
 impl GasPriceProvider for () {
 	fn gas_fee(&self) -> Option<AssetAmount> {
 		None
+	}
+}
+
+/// Metadata as part of a Cross Chain Message.
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct CcmIngressMetadata {
+	// Call data used after the message is egressed.
+	pub message: Vec<u8>,
+	// Amount of ingress funds to be used for gas.
+	pub gas_budget: AssetAmount,
+	// The address refunds will go to.
+	pub refund_address: ForeignChainAddress,
+}
+
+#[cfg(feature = "std")]
+impl std::str::FromStr for CcmIngressMetadata {
+	type Err = String;
+
+	fn from_str(_s: &str) -> Result<Self, Self::Err> {
+		// TODO: check how from_str is used / should be implemented
+		todo!()
 	}
 }

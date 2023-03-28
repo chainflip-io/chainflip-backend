@@ -3,10 +3,8 @@ use crate::{
 	IntentAction, IntentActions, IntentExpiries, IntentIngressDetails, ScheduledEgressCcm,
 	ScheduledEgressFetchOrTransfer, WeightInfo,
 };
-
-use cf_primitives::{
-	chains::assets::eth, CcmIngressMetadata, ForeignChain, ForeignChainAddress, IntentId,
-};
+use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata};
+use cf_primitives::{chains::assets::eth, ForeignChain, IntentId};
 use cf_traits::{AddressDerivationApi, EgressApi, IngressApi};
 
 use frame_support::{assert_ok, instances::Instance1, traits::Hooks, weights::Weight};

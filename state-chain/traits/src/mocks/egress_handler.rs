@@ -1,7 +1,7 @@
 use super::{MockPallet, MockPalletStorage};
 use crate::EgressApi;
-use cf_chains::Chain;
-use cf_primitives::{AssetAmount, CcmIngressMetadata, EgressId, ForeignChain, ForeignChainAddress};
+use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata, Chain};
+use cf_primitives::{AssetAmount, EgressId, ForeignChain};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_std::marker::PhantomData;

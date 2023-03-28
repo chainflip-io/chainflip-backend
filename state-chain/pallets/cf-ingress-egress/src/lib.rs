@@ -13,16 +13,16 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_primitives::{CcmIngressMetadata, EgressCounter, EgressId, ForeignChain};
+use cf_primitives::{EgressCounter, EgressId, ForeignChain};
 use sp_runtime::traits::BlockNumberProvider;
 
-use cf_chains::IngressIdConstructor;
+use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata, IngressIdConstructor};
 
 use cf_chains::{
 	AllBatch, Chain, ChainAbi, ChainCrypto, ExecutexSwapAndCall, FetchAssetParams,
 	TransferAssetParams,
 };
-use cf_primitives::{Asset, AssetAmount, ForeignChainAddress, IntentId};
+use cf_primitives::{Asset, AssetAmount, IntentId};
 use cf_traits::{
 	liquidity::LpProvisioningApi, AddressDerivationApi, Broadcaster, CcmHandler, Chainflip,
 	EgressApi, IngressApi, IngressHandler, SwapIntentHandler,

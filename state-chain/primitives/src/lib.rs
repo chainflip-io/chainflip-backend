@@ -5,9 +5,8 @@
 //! Primitive types to be used across Chainflip's various crates
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::BoundedVec;
 use scale_info::TypeInfo;
-use sp_core::{crypto::AccountId32, Get, H160};
+use sp_core::crypto::AccountId32;
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
 	FixedU128, MultiSignature, RuntimeDebug,
@@ -74,7 +73,7 @@ pub const GENESIS_EPOCH: u32 = 1;
 
 //Addresses can have all kinds of different lengths in bitcoin but we would support upto 100 since
 // we dont expect addresses higher than 100
-pub const MAX_BTC_ADDRESS_LENGTH: usize = 100;
+pub const MAX_BTC_ADDRESS_LENGTH: u32 = 100;
 
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
@@ -199,187 +198,4 @@ fn test_key_id_to_and_from_bytes() {
 	assert_eq!(key_id, KeyId::from_bytes(&expected_bytes));
 }
 
-#[derive(Clone, Copy)]
-pub struct MaxBitcoinAddressLength;
-impl Get<u32> for MaxBitcoinAddressLength {
-	fn get() -> u32 {
-		MAX_BTC_ADDRESS_LENGTH as u32
-	}
-}
-
-pub type BitcoinAddress = BoundedVec<u8, MaxBitcoinAddressLength>;
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum ForeignChainAddress {
-	Eth(EthereumAddress),
-	Dot([u8; 32]),
-	Btc(BitcoinAddress),
-}
-
-#[cfg(feature = "std")]
-impl core::fmt::Display for ForeignChainAddress {
-	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		match self {
-			ForeignChainAddress::Eth(addr) => {
-				write!(f, "Eth(0x{})", hex::encode(addr))
-			},
-			ForeignChainAddress::Dot(addr) => {
-				write!(f, "Dot(0x{})", hex::encode(addr))
-			},
-			ForeignChainAddress::Btc(addr) =>
-				write!(f, "Btc({})", &std::str::from_utf8(&addr[..]).map_err(|_| core::fmt::Error)?),
-		}
-	}
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum AddressError {
-	InvalidAddress,
-}
-
-impl AsRef<[u8]> for ForeignChainAddress {
-	fn as_ref(&self) -> &[u8] {
-		match self {
-			ForeignChainAddress::Eth(address) => address.as_slice(),
-			ForeignChainAddress::Dot(address) => address.as_slice(),
-			ForeignChainAddress::Btc(address) => address.as_slice(),
-		}
-	}
-}
-
-impl TryFrom<ForeignChainAddress> for EthereumAddress {
-	type Error = AddressError;
-
-	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
-		match address {
-			ForeignChainAddress::Eth(addr) => Ok(addr),
-			_ => Err(AddressError::InvalidAddress),
-		}
-	}
-}
-
-impl TryFrom<ForeignChainAddress> for H160 {
-	type Error = AddressError;
-
-	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
-		match address {
-			ForeignChainAddress::Eth(addr) => Ok(addr.into()),
-			_ => Err(AddressError::InvalidAddress),
-		}
-	}
-}
-
-impl TryFrom<ForeignChainAddress> for [u8; 32] {
-	type Error = AddressError;
-
-	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
-		match address {
-			ForeignChainAddress::Dot(addr) => Ok(addr),
-			_ => Err(AddressError::InvalidAddress),
-		}
-	}
-}
-
-impl TryFrom<ForeignChainAddress> for PolkadotAccountId {
-	type Error = AddressError;
-
-	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
-		match address {
-			ForeignChainAddress::Dot(addr) => Ok(addr.into()),
-			_ => Err(AddressError::InvalidAddress),
-		}
-	}
-}
-
-impl TryFrom<ForeignChainAddress> for BitcoinAddress {
-	type Error = AddressError;
-
-	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
-		match address {
-			ForeignChainAddress::Btc(addr) => Ok(addr),
-			_ => Err(AddressError::InvalidAddress),
-		}
-	}
-}
-
-// For MockEthereum
-impl TryFrom<ForeignChainAddress> for u64 {
-	type Error = AddressError;
-
-	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
-		match address {
-			ForeignChainAddress::Eth(addr) => Ok(addr[0] as u64),
-			_ => Err(AddressError::InvalidAddress),
-		}
-	}
-}
-impl From<u64> for ForeignChainAddress {
-	fn from(address: u64) -> ForeignChainAddress {
-		ForeignChainAddress::Eth([address as u8; 20])
-	}
-}
-
-impl From<EthereumAddress> for ForeignChainAddress {
-	fn from(address: EthereumAddress) -> ForeignChainAddress {
-		ForeignChainAddress::Eth(address)
-	}
-}
-
-impl From<H160> for ForeignChainAddress {
-	fn from(address: H160) -> ForeignChainAddress {
-		ForeignChainAddress::Eth(address.to_fixed_bytes())
-	}
-}
-
-impl From<[u8; 32]> for ForeignChainAddress {
-	fn from(address: [u8; 32]) -> ForeignChainAddress {
-		ForeignChainAddress::Dot(address)
-	}
-}
-
-impl From<PolkadotAccountId> for ForeignChainAddress {
-	fn from(address: PolkadotAccountId) -> ForeignChainAddress {
-		ForeignChainAddress::Dot(address.into())
-	}
-}
-
-impl From<BitcoinAddress> for ForeignChainAddress {
-	fn from(address: BitcoinAddress) -> ForeignChainAddress {
-		ForeignChainAddress::Btc(address)
-	}
-}
-
-impl From<ForeignChainAddress> for ForeignChain {
-	fn from(address: ForeignChainAddress) -> ForeignChain {
-		match address {
-			ForeignChainAddress::Eth(_) => ForeignChain::Ethereum,
-			ForeignChainAddress::Dot(_) => ForeignChain::Polkadot,
-			ForeignChainAddress::Btc(_) => ForeignChain::Bitcoin,
-		}
-	}
-}
-
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
-
-/// Metadata as part of a Cross Chain Message.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct CcmIngressMetadata {
-	// Call data used after the message is egressed.
-	pub message: Vec<u8>,
-	// Amount of ingress funds to be used for gas.
-	pub gas_budget: AssetAmount,
-	// The address refunds will go to.
-	pub refund_address: ForeignChainAddress,
-}
-
-#[cfg(feature = "std")]
-impl std::str::FromStr for CcmIngressMetadata {
-	type Err = String;
-
-	fn from_str(_s: &str) -> Result<Self, Self::Err> {
-		// TODO: check how from_str is used / should be implemented
-		todo!()
-	}
-}

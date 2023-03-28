@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_primitives::{Asset, AssetAmount, CcmIngressMetadata, ForeignChain, ForeignChainAddress};
+use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata};
+use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use cf_traits::{
 	liquidity::SwappingApi, CcmHandler, GasPriceProviderAnychain, IngressApi, SystemStateInfo,
 };

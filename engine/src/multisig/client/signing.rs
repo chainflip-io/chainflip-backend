@@ -27,6 +27,6 @@ pub use signing_detail::get_lagrange_coeff;
 /// Data common for signing stages
 #[derive(Clone)]
 pub struct SigningStateCommonInfo<C: CryptoScheme> {
-	pub payload: C::SigningPayload,
+	pub payloads: Vec<C::SigningPayload>,
 	pub key: Arc<KeygenResult<C>>,
 }

@@ -1,7 +1,8 @@
 use crate::multisig::crypto::ECScalar;
 
 pub use super::secp256k1::{Point, Scalar};
-use super::{ChainTag, CryptoScheme, ECPoint};
+use super::{ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature};
+use cf_chains::Bitcoin;
 use cf_primitives::PublicKeyBytes;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -30,6 +31,12 @@ impl BtcSchnorrSignature {
 	}
 }
 
+impl SignatureToThresholdSignature<Bitcoin> for Vec<BtcSchnorrSignature> {
+	fn to_threshold_signature(&self) -> <Bitcoin as cf_chains::ChainCrypto>::ThresholdSignature {
+		self.iter().map(|s| s.to_raw()).collect()
+	}
+}
+
 /// Bitcoin crypto scheme (as defined by BIP 340)
 #[derive(Clone, Debug, PartialEq)]
 pub struct BtcSigning {}
@@ -46,6 +53,12 @@ impl std::fmt::Display for SigningPayload {
 impl AsRef<[u8]> for SigningPayload {
 	fn as_ref(&self) -> &[u8] {
 		&self.0
+	}
+}
+
+impl From<Point> for cf_chains::btc::AggKey {
+	fn from(p: Point) -> Self {
+		Self(p.x_bytes())
 	}
 }
 

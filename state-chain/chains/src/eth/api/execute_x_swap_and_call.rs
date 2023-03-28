@@ -1,10 +1,11 @@
-use cf_primitives::{EgressId, ForeignChain, ForeignChainAddress};
+use cf_primitives::{EgressId, ForeignChain};
 use codec::{Decode, Encode};
 use ethabi::{ParamType, Token};
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 
 use crate::{
+	address::ForeignChainAddress,
 	eth::{api::all_batch::EncodableTransferAssetParams, Ethereum, SigData, Tokenizable},
 	impl_api_call_eth, ApiCall, ChainCrypto,
 };
@@ -38,7 +39,7 @@ impl Tokenizable for ForeignChainAddress {
 			ForeignChainAddress::Dot(addr) =>
 				Token::Tuple(vec![ForeignChain::Polkadot.tokenize(), addr.to_vec().tokenize()]),
 			ForeignChainAddress::Btc(addr) =>
-				Token::Tuple(vec![ForeignChain::Bitcoin.tokenize(), addr.to_vec().tokenize()]),
+				Token::Tuple(vec![ForeignChain::Bitcoin.tokenize(), addr.encode().tokenize()]),
 		}
 	}
 }

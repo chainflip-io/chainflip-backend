@@ -27,24 +27,28 @@ benchmarks! {
 	register_swap_intent {
 		let caller: T::AccountId = whitelisted_caller();
 		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Relayer);
-	}: _(
-		RawOrigin::Signed(caller.clone()),
-		Asset::Eth,
-		Asset::Usdc,
-		ForeignChainAddress::Eth(Default::default()),
-		0,
-		None
-	)
+		let origin = RawOrigin::Signed(caller);
+		let call = Call::<T>::register_swap_intent {
+			ingress_asset: Asset::Eth,
+			egress_asset: Asset::Usdc,
+			egress_address: ForeignChainAddress::Eth(Default::default()),
+			relayer_commission_bps: 0,
+			message_metadata: None,
+		};
+	} : { call.dispatch_bypass_filter(origin.into())?; }
+
 	on_idle {}: {
 		Pallet::<T>::on_idle(T::BlockNumber::from(1u32), Weight::from_ref_time(1));
 	}
+
 	execute_group_of_swaps {
 		// Generate swaps
-		let a in 1..150;
+		let a in 2..150;
 		let swaps = generate_swaps::<T>(a, Asset::Eth, Asset::Flip);
 	} : {
 		let _ = Pallet::<T>::execute_group_of_swaps(&swaps[..], Asset::Eth, Asset::Flip);
 	}
+
 	withdraw {
 		let caller: T::AccountId = whitelisted_caller();
 		EarnedRelayerFees::<T>::insert(caller.clone(), Asset::Eth, 200);
@@ -54,6 +58,7 @@ benchmarks! {
 		Asset::Eth,
 		ForeignChainAddress::Eth(Default::default())
 	)
+
 	schedule_swap_by_witnesser {
 		let origin = T::EnsureWitnessed::successful_origin();
 		let call = Call::<T>::schedule_swap_by_witnesser{
@@ -72,15 +77,15 @@ benchmarks! {
 			to: Asset::Eth,
 			amount:1_000,
 			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default()))
-		}])
+		}]);
 	}
+
 	ccm_ingress {
 		let origin = T::EnsureWitnessed::successful_origin();
 		let metadata = CcmIngressMetadata {
 			message: vec![0x00],
 			gas_budget: 1,
 			refund_address: ForeignChainAddress::Eth(Default::default())
-
 		};
 		let call = Call::<T>::ccm_ingress{
 			ingress_asset: Asset::Usdc,
@@ -99,6 +104,12 @@ benchmarks! {
 			to: Asset::Eth,
 			amount:(1_000 - 1),
 			swap_type: SwapType::Ccm(1)
-		}])
+		}]);
 	}
+
+	impl_benchmark_test_suite!(
+		Pallet,
+		crate::mock::new_test_ext(),
+		crate::mock::Test,
+	);
 }

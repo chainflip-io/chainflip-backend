@@ -1,6 +1,5 @@
-use cf_primitives::{
-	AmmRange, Asset, AssetAmount, BurnResult, ForeignChainAddress, Liquidity, PoolAssetMap, Tick,
-};
+use cf_chains::address::ForeignChainAddress;
+use cf_primitives::{AmmRange, Asset, AssetAmount, BurnResult, Liquidity, PoolAssetMap, Tick};
 use frame_support::dispatch::DispatchError;
 use sp_runtime::DispatchResult;
 use sp_std::vec::Vec;

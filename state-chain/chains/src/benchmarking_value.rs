@@ -1,9 +1,11 @@
 #[cfg(feature = "runtime-benchmarks")]
 use cf_primitives::{
 	chains::assets::{btc, dot, eth},
-	Asset, ForeignChainAddress, KeyId,
+	Asset, KeyId,
 };
 
+#[cfg(feature = "runtime-benchmarks")]
+use crate::address::ForeignChainAddress;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::eth::EthereumIngressId;
 

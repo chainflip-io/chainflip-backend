@@ -73,8 +73,7 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{
-	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, ForeignChainAddress, Liquidity,
-	Tick,
+	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, Liquidity, Tick,
 };
 pub use cf_traits::{
 	EpochInfo, EthEnvironmentProvider, LiquidityPoolApi, QualifyNode, SessionKeysRegistered,

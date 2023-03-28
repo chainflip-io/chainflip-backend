@@ -1,7 +1,7 @@
-use crate::{Chain, IngressIdConstructor};
+use crate::{address::ForeignChainAddress, Chain, IngressIdConstructor};
 use cf_primitives::{
 	chains::{assets, AnyChain},
-	AssetAmount, ForeignChainAddress,
+	AssetAmount,
 };
 
 impl Chain for AnyChain {

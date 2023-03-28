@@ -9,6 +9,7 @@ pub mod secp256k1;
 #[cfg(test)]
 mod tests;
 
+use cf_chains::ChainCrypto;
 use cf_primitives::PublicKeyBytes;
 use generic_array::{typenum::Unsigned, ArrayLength};
 
@@ -208,4 +209,8 @@ pub fn generate_single_party_signature<C: CryptoScheme>(
 	let sigma = generate_schnorr_response::<C>(secret_key, public_key, r, nonce, payload);
 
 	C::build_signature(sigma, r)
+}
+
+pub trait SignatureToThresholdSignature<C: ChainCrypto> {
+	fn to_threshold_signature(&self) -> C::ThresholdSignature;
 }
