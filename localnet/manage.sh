@@ -57,9 +57,9 @@ build-localnet() {
   cp -R $LOCALNET_INIT_DIR/keyshare /tmp/chainflip/
   echo
   echo "💻 Please provide the location to the binaries you would like to use."
-  read -p "(default: ./target/release/) " BINARIES_LOCATION
+  read -p "(default: ./target/debug/) " BINARIES_LOCATION
   echo
-  BINARIES_LOCATION=${BINARIES_LOCATION:-"./target/release/"}
+  BINARIES_LOCATION=${BINARIES_LOCATION:-"./target/debug/"}
 
   if [ ! -d $BINARIES_LOCATION ]; then
     echo "❌  Couldn't find directory at $BINARIES_LOCATION"
@@ -106,7 +106,7 @@ build-localnet() {
 
 destroy() {
   echo "💣 Destroying network"
-  docker-compose -f localnet/docker-compose.yml down
+  docker-compose -f localnet/docker-compose.yml down --remove-orphans
   rm -rf /tmp/chainflip
 }
 
