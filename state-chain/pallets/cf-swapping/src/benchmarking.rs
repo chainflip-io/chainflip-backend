@@ -76,11 +76,12 @@ benchmarks! {
 	}
 	ccm_ingress {
 		let origin = T::EnsureWitnessed::successful_origin();
-		let metadata = CcmIngressMetadata::new(
-			vec![0x00],
-			1,
-			ForeignChainAddress::Eth(Default::default())
-		);
+		let metadata = CcmIngressMetadata {
+			message: vec![0x00],
+			gas_budget: 1,
+			refund_address: ForeignChainAddress::Eth(Default::default())
+
+		};
 		let call = Call::<T>::ccm_ingress{
 			ingress_asset: Asset::Usdc,
 			ingress_amount: 1_000,
@@ -96,7 +97,7 @@ benchmarks! {
 			swap_id: 1,
 			from: Asset::Usdc,
 			to: Asset::Eth,
-			amount:1_000,
+			amount:(1_000 - 1),
 			swap_type: SwapType::Ccm(1)
 		}])
 	}

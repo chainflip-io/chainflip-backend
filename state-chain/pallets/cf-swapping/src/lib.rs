@@ -51,7 +51,7 @@ pub(crate) enum CcmStage {
 	AssetAndGasSwapped { output_amount: AssetAmount, gas_budget: (Asset, AssetAmount) },
 }
 
-// Enum representing Cross chain message at its different stages
+// Cross chain message, including information at different stages.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub(crate) struct CcmWithStages {
 	ingress_asset: Asset,
@@ -117,11 +117,11 @@ pub mod pallet {
 
 	/// Storage for storing gas budget for each CCM.
 	#[pallet::storage]
-	pub type CcmGasBudget<T: Config> = StorageMap<_, Identity, u64, (Asset, AssetAmount)>;
+	pub type CcmGasBudget<T: Config> = StorageMap<_, Twox64Concat, u64, (Asset, AssetAmount)>;
 
 	/// Storage for storing CCMs pending assets to be swapped.
 	#[pallet::storage]
-	pub(super) type PendingCcms<T: Config> = StorageMap<_, Identity, u64, CcmWithStages>;
+	pub(super) type PendingCcms<T: Config> = StorageMap<_, Twox64Concat, u64, CcmWithStages>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]

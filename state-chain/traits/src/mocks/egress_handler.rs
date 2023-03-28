@@ -24,7 +24,7 @@ pub enum MockEgressParameter<C: Chain> {
 		amount: AssetAmount,
 		egress_address: C::ChainAccount,
 		message: Vec<u8>,
-		caller_address: ForeignChainAddress,
+		refund_address: ForeignChainAddress,
 	},
 }
 
@@ -72,7 +72,7 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 						amount,
 						egress_address,
 						message: message.message,
-						caller_address: message.caller_address,
+						refund_address: message.refund_address,
 					},
 					None => MockEgressParameter::<C>::Swap { asset, amount, egress_address },
 				});

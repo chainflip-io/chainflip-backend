@@ -370,8 +370,8 @@ pub struct CcmIngressMetadata {
 	pub message: Vec<u8>,
 	// Amount of ingress funds to be used for gas.
 	pub gas_budget: AssetAmount,
-	// The address of the original caller.
-	pub caller_address: ForeignChainAddress,
+	// The address refunds will go to.
+	pub refund_address: ForeignChainAddress,
 }
 
 #[cfg(feature = "std")]
@@ -381,15 +381,5 @@ impl std::str::FromStr for CcmIngressMetadata {
 	fn from_str(_s: &str) -> Result<Self, Self::Err> {
 		// TODO: check how from_str is used / should be implemented
 		todo!()
-	}
-}
-
-impl CcmIngressMetadata {
-	pub fn new(
-		message: Vec<u8>,
-		gas_budget: AssetAmount,
-		caller_address: ForeignChainAddress,
-	) -> Self {
-		Self { message, gas_budget, caller_address }
 	}
 }

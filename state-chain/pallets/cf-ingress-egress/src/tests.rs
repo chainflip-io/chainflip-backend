@@ -362,7 +362,11 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 			asset,
 			1_000,
 			ALICE_ETH_ADDRESS.into(),
-			Some(CcmIngressMetadata::new(vec![], 0, ForeignChainAddress::Eth(Default::default()))),
+			Some(CcmIngressMetadata {
+				message: vec![],
+				gas_budget: 0,
+				refund_address: ForeignChainAddress::Eth(Default::default()),
+			}),
 		);
 		assert_eq!(
 			IngressEgress::on_idle(1, Weight::from_ref_time(1_000_000_000_000_000u64)),

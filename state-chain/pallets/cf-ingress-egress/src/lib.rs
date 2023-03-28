@@ -64,7 +64,7 @@ pub(crate) struct CrossChainMessage<C: Chain> {
 	pub amount: AssetAmount,
 	pub egress_address: C::ChainAccount,
 	pub message: Vec<u8>,
-	pub caller_address: ForeignChainAddress,
+	pub refund_address: ForeignChainAddress,
 }
 
 impl<C: Chain> CrossChainMessage<C> {
@@ -585,7 +585,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					amount: ccm.amount,
 					to: ccm.egress_address,
 				},
-				ccm.caller_address,
+				ccm.refund_address,
 				ccm.message,
 			) {
 				Ok(api_call) => {
@@ -735,7 +735,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 				amount,
 				egress_address: egress_address.clone(),
 				message: message.message,
-				caller_address: message.caller_address,
+				refund_address: message.refund_address,
 			}),
 			None => ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<
 				T::TargetChain,

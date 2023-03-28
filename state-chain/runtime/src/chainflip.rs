@@ -468,7 +468,7 @@ macro_rules! impl_egress_api_for_anychain {
 							amount,
 							egress_address
 								.try_into()
-								.expect("Caller must ensure for account is of the compatible type."),
+								.expect("This address cast is ensured to succeed."),
 							maybe_message,
 						),
 
