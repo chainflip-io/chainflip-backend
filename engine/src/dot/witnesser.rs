@@ -142,6 +142,8 @@ fn check_for_interesting_events_in_block(
 	Vec<(PolkadotExtrinsicIndex, PolkadotBalance)>,
 	Vec<IngressWitness<Polkadot>>,
 	Vec<Box<state_chain_runtime::RuntimeCall>>,
+	// Median tip of all extrinsics in this block
+	u128,
 ) {
 	// to contain all the ingress witnessse for this block
 	let mut ingress_witnesses = Vec::new();
@@ -152,6 +154,7 @@ fn check_for_interesting_events_in_block(
 	let mut vault_key_rotated_calls: Vec<Box<_>> = Vec::new();
 	let mut fee_paid_for_xt_at_index = HashMap::new();
 	let events_iter = block_events.iter();
+	let mut tips = Vec::<PolkadotBalance>::new();
 	for (phase, wrapped_event) in events_iter {
 		if let Phase::ApplyExtrinsic(extrinsic_index) = *phase {
 			match wrapped_event {
@@ -199,8 +202,11 @@ fn check_for_interesting_events_in_block(
 						interesting_indices.push(extrinsic_index);
 					}
 				},
-				EventWrapper::TransactionFeePaid(TransactionFeePaid { actual_fee, .. }) => {
+				EventWrapper::TransactionFeePaid(TransactionFeePaid {
+					actual_fee, tip, ..
+				}) => {
 					fee_paid_for_xt_at_index.insert(extrinsic_index, *actual_fee);
+					tips.push(*tip);
 				},
 			}
 		}
@@ -213,6 +219,8 @@ fn check_for_interesting_events_in_block(
 			.collect(),
 		ingress_witnesses,
 		vault_key_rotated_calls,
+		// take the median
+		tips.get(tips.len() / 2).cloned().unwrap_or_default(),
 	)
 }
 
@@ -373,6 +381,7 @@ where
 								interesting_indices,
 								ingress_witnesses,
 								vault_key_rotated_calls,
+								median_tip,
 							) = check_for_interesting_events_in_block(
 									block_event_details,
 									block_number,
@@ -517,6 +526,14 @@ mod tests {
 		})
 	}
 
+	fn mock_tx_fee_paid_tip(tip: PolkadotBalance) -> EventWrapper {
+		EventWrapper::TransactionFeePaid(TransactionFeePaid {
+			actual_fee: Default::default(),
+			who: PolkadotAccountId::from([0xab; 32]),
+			tip,
+		})
+	}
+
 	fn mock_transfer(
 		from: &PolkadotAccountId,
 		to: &PolkadotAccountId,
@@ -549,7 +566,7 @@ mod tests {
 			(3u32, mock_tx_fee_paid(20000)),
 		]);
 
-		let (mut interesting_indices, ingress_witnesses, vault_key_rotated_calls) =
+		let (mut interesting_indices, ingress_witnesses, vault_key_rotated_calls, _) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				Default::default(),
@@ -610,7 +627,7 @@ mod tests {
 			.send(AddressMonitorCommand::Add(transfer_2_ingress_addr))
 			.unwrap();
 
-		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls) =
+		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls, _) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				20,
@@ -664,7 +681,7 @@ mod tests {
 			),
 		]);
 
-		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls) =
+		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls, _) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				20,
@@ -680,6 +697,32 @@ mod tests {
 
 		assert!(vault_key_rotated_calls.is_empty());
 		assert!(ingress_witnesses.is_empty());
+	}
+
+	#[test]
+	fn test_median_tip_calculated_from_events_correctly() {
+		const LOWER_TIP: PolkadotBalance = 10;
+		const MEDIAN_TIP: PolkadotBalance = 100;
+		const HIGHER_TIP: PolkadotBalance = 1000;
+
+		// ensure we don't accidentally have values that check it's the mean, and not median
+		assert_ne!(LOWER_TIP + MEDIAN_TIP + HIGHER_TIP / 3, MEDIAN_TIP);
+
+		let block_event_details = phase_and_events(&[
+			(1, mock_tx_fee_paid_tip(LOWER_TIP)),
+			(2, mock_tx_fee_paid_tip(MEDIAN_TIP)),
+			(3, mock_tx_fee_paid_tip(HIGHER_TIP)),
+		]);
+
+		let (.., median_tip) = check_for_interesting_events_in_block(
+			block_event_details,
+			20,
+			// arbitrary, not focus of the test
+			&PolkadotAccountId::from([0xda; 32]),
+			&mut AddressMonitor::new(BTreeSet::default()).1,
+		);
+
+		assert_eq!(median_tip, MEDIAN_TIP);
 	}
 
 	#[ignore = "This test is helpful for local testing. Requires connection to westend"]
