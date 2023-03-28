@@ -26,10 +26,10 @@ use tokio::{select, sync::Mutex};
 use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
-	common::EngineStreamExt,
 	constants::{BLOCK_PULL_TIMEOUT_MULTIPLIER, DOT_AVERAGE_BLOCK_TIME_SECONDS},
 	multisig::{ChainTag, PersistentKeyDB},
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
+	stream_utils::EngineStreamExt,
 	witnesser::{
 		block_head_stream_from::block_head_stream_from,
 		checkpointing::{

@@ -11,9 +11,9 @@ use super::{
 	EthNumberBloom,
 };
 use crate::{
-	common::EngineStreamExt,
 	constants::{BLOCK_PULL_TIMEOUT_MULTIPLIER, ETH_AVERAGE_BLOCK_TIME_SECONDS},
 	multisig::{ChainTag, PersistentKeyDB},
+	stream_utils::EngineStreamExt,
 	witnesser::{
 		checkpointing::{
 			get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
