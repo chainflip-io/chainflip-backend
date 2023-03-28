@@ -24,4 +24,9 @@ port = 5555
 db_file = "/tmp/chainflip/bashful.db"
 
 [dot]
-ws_node_endpoint = "ws://localhost:9944"
+ws_node_endpoint = "ws://localhost:9945"
+
+[btc]
+http_node_endpoint = "http://localhost:8332"
+rpc_user = "flip"
+rpc_password = "flip"

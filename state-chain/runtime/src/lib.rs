@@ -22,7 +22,7 @@ use cf_chains::{
 	dot::{api::PolkadotApi, PolkadotHash},
 	eth,
 	eth::{api::EthereumApi, Ethereum},
-	Polkadot,
+	Bitcoin, Polkadot,
 };
 use pallet_transaction_payment::Multiplier;
 
@@ -73,8 +73,7 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{
-	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, ForeignChainAddress, Liquidity,
-	Tick,
+	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, Liquidity, Tick,
 };
 pub use cf_traits::{
 	EpochInfo, EthEnvironmentProvider, LiquidityPoolApi, QualifyNode, SessionKeysRegistered,
@@ -82,8 +81,9 @@ pub use cf_traits::{
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
-	epoch_transition::ChainflipEpochTransitions, ChainflipHeartbeat, DotIngressHandler,
-	EthEnvironment, EthIngressHandler, EthVaultTransitionHandler, TokenholderGovernanceBroadcaster,
+	epoch_transition::ChainflipEpochTransitions, BtcEnvironment, BtcVaultTransitionHandler,
+	ChainflipHeartbeat, EthEnvironment, EthVaultTransitionHandler,
+	TokenholderGovernanceBroadcaster,
 };
 
 use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
@@ -212,7 +212,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type CreatePolkadotVault = PolkadotApi<DotEnvironment>;
 	type PolkadotBroadcaster = PolkadotBroadcaster;
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
-	type PolkadotGenesisHash = PolkadotGenesisHash;
+	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type BitcoinNetwork = BitcoinNetworkParam;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
@@ -266,6 +266,26 @@ impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
 	type Slasher = FlipSlasher<Self>;
 }
 
+impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type EnsureThresholdSigned =
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, BitcoinInstance>;
+	type AccountRoleRegistry = AccountRoles;
+	type ThresholdSigner = BitcoinThresholdSigner;
+	type Offence = chainflip::Offence;
+	type Chain = Bitcoin;
+	type SetAggKeyWithAggKey = cf_chains::btc::api::BitcoinApi<BtcEnvironment>;
+	type VaultTransitionHandler = BtcVaultTransitionHandler;
+	type Broadcaster = BitcoinBroadcaster;
+	type OffenceReporter = Reputation;
+	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
+	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
+	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
+	type Slasher = FlipSlasher<Self>;
+}
+
 use chainflip::address_derivation::AddressDerivation;
 
 impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
@@ -279,7 +299,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type Broadcaster = EthereumBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type IntentTTL = ConstU32<1200>;
-	type IngressHandler = EthIngressHandler;
+	type IngressHandler = chainflip::EthIngressHandler;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
 
@@ -293,9 +313,24 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type AllBatch = dot::api::PolkadotApi<chainflip::DotEnvironment>;
 	type Broadcaster = PolkadotBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type IntentTTL = ConstU32<1200>;
-	type IngressHandler = DotIngressHandler;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
+	type IntentTTL = ConstU32<1200>;
+	type IngressHandler = chainflip::DotIngressHandler;
+}
+
+impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type TargetChain = Bitcoin;
+	type AddressDerivation = AddressDerivation;
+	type LpProvisioning = LiquidityProvider;
+	type SwapIntentHandler = Swapping;
+	type AllBatch = cf_chains::btc::api::BitcoinApi<chainflip::BtcEnvironment>;
+	type Broadcaster = BitcoinBroadcaster;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
+	type IntentTTL = ConstU32<1200>;
+	type IngressHandler = chainflip::BtcIngressHandler;
 }
 
 parameter_types! {
@@ -628,6 +663,22 @@ impl pallet_cf_threshold_signature::Config<PolkadotInstance> for Runtime {
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
 
+impl pallet_cf_threshold_signature::Config<BitcoinInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Offence = chainflip::Offence;
+	type RuntimeOrigin = RuntimeOrigin;
+	type AccountRoleRegistry = AccountRoles;
+	type ThresholdCallable = RuntimeCall;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type ThresholdSignerNomination = chainflip::RandomSignerNomination;
+	type TargetChain = Bitcoin;
+	type KeyProvider = BitcoinVault;
+	type OffenceReporter = Reputation;
+	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
+	type CeremonyRetryDelay = ConstU32<1>;
+	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
+}
+
 impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
@@ -668,6 +719,26 @@ impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 	type KeyProvider = PolkadotVault;
 }
 
+impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type RuntimeCall = RuntimeCall;
+	type RuntimeOrigin = RuntimeOrigin;
+	type BroadcastCallable = RuntimeCall;
+	type Offence = chainflip::Offence;
+	type AccountRoleRegistry = AccountRoles;
+	type TargetChain = Bitcoin;
+	type ApiCall = cf_chains::btc::api::BitcoinApi<BtcEnvironment>;
+	type ThresholdSigner = BitcoinThresholdSigner;
+	type TransactionBuilder = chainflip::BtcTransactionBuilder;
+	type BroadcastSignerNomination = chainflip::RandomSignerNomination;
+	type OffenceReporter = Reputation;
+	type EnsureThresholdSigned =
+		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, BitcoinInstance>;
+	type BroadcastTimeout = ConstU32<{ 10 * MINUTES }>;
+	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
+	type KeyProvider = BitcoinVault;
+}
+
 impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Ethereum;
@@ -681,6 +752,14 @@ impl pallet_cf_chain_tracking::Config<PolkadotInstance> for Runtime {
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
 	// TODO: Set good limit
 	type AgeLimit = ConstU32<1>;
+}
+
+impl pallet_cf_chain_tracking::Config<BitcoinInstance> for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type TargetChain = Bitcoin;
+	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
+	// TODO: Set good limit
+	type AgeLimit = ConstU64<1>;
 }
 
 construct_runtime!(
@@ -710,18 +789,30 @@ construct_runtime!(
 		Governance: pallet_cf_governance,
 		TokenholderGovernance: pallet_cf_tokenholder_governance,
 		Reputation: pallet_cf_reputation,
+
 		EthereumChainTracking: pallet_cf_chain_tracking::<Instance1>,
 		PolkadotChainTracking: pallet_cf_chain_tracking::<Instance2>,
+		BitcoinChainTracking: pallet_cf_chain_tracking::<Instance3>,
+
 		EthereumVault: pallet_cf_vaults::<Instance1>,
 		PolkadotVault: pallet_cf_vaults::<Instance2>,
+		BitcoinVault: pallet_cf_vaults::<Instance3>,
+
 		EthereumThresholdSigner: pallet_cf_threshold_signature::<Instance1>,
 		PolkadotThresholdSigner: pallet_cf_threshold_signature::<Instance2>,
+		BitcoinThresholdSigner: pallet_cf_threshold_signature::<Instance3>,
+
 		EthereumBroadcaster: pallet_cf_broadcast::<Instance1>,
 		PolkadotBroadcaster: pallet_cf_broadcast::<Instance2>,
+		BitcoinBroadcaster: pallet_cf_broadcast::<Instance3>,
+
 		Swapping: pallet_cf_swapping,
 		LiquidityProvider: pallet_cf_lp,
+
 		EthereumIngressEgress: pallet_cf_ingress_egress::<Instance1>,
 		PolkadotIngressEgress: pallet_cf_ingress_egress::<Instance2>,
+		BitcoinIngressEgress: pallet_cf_ingress_egress::<Instance3>,
+
 		LiquidityPools: pallet_cf_pools,
 	}
 );

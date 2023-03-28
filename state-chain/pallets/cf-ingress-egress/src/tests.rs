@@ -1,10 +1,11 @@
 use crate::{
 	mock::*, AddressPool, AddressStatus, DeploymentStatus, DisabledEgressAssets, FetchOrTransfer,
-	IntentActions, IntentExpiries, IntentIngressDetails, ScheduledEgressRequests, WeightInfo,
+	IntentAction, IntentActions, IntentExpiries, IntentIngressDetails, ScheduledEgressRequests,
+	WeightInfo,
 };
 
-use cf_primitives::{chains::assets::eth, ForeignChain};
-use cf_traits::{EgressApi, IngressApi};
+use cf_primitives::{chains::assets::eth, ForeignChain, IntentId};
+use cf_traits::{AddressDerivationApi, EgressApi, IngressApi};
 
 use frame_support::{assert_ok, instances::Instance1, traits::Hooks, weights::Weight};
 const ALICE_ETH_ADDRESS: EthereumAddress = [100u8; 20];
@@ -388,6 +389,7 @@ fn intent_expires() {
 		);
 		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::StopWitnessing {
 			ingress_address: address,
+			ingress_asset: ETH_ETH,
 		}));
 	});
 }
@@ -441,5 +443,28 @@ fn create_new_address_while_pool_is_empty() {
 		);
 		IngressEgress::on_initialize(EXPIRY_BLOCK);
 		assert_eq!(AddressPool::<Test, Instance1>::get().len(), 2);
+	});
+}
+
+#[test]
+fn reused_address_intent_id_matches() {
+	new_test_ext().execute_with(|| {
+		const INTENT_ID: IntentId = 0;
+		let eth_address =
+			<<Test as crate::Config<Instance1>>::AddressDerivation as AddressDerivationApi<
+				Ethereum,
+			>>::generate_address(eth::Asset::Eth, INTENT_ID)
+			.unwrap();
+		AddressPool::<Test, _>::append((INTENT_ID, eth_address));
+
+		let (reused_intent_id, reused_address) = IngressEgress::register_ingress_intent(
+			eth::Asset::Eth,
+			IntentAction::LiquidityProvision { lp_account: 0 },
+		)
+		.unwrap();
+
+		// The reused details should be the same as before.
+		assert_eq!(reused_intent_id, INTENT_ID);
+		assert_eq!(eth_address, reused_address);
 	});
 }

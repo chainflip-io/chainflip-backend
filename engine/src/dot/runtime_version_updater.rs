@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
+use anyhow::bail;
 use cf_chains::Polkadot;
 use futures::StreamExt;
 use sp_core::H256;
-use tokio::select;
+use tokio::{select, sync::Mutex};
 use tracing::{info, info_span, Instrument};
 
 use crate::{
@@ -17,7 +18,7 @@ pub async fn start<StateChainClient, DotRpc>(
 	dot_client: DotRpc,
 	state_chain_client: Arc<StateChainClient>,
 	latest_block_hash: H256,
-) -> Result<(), (async_broadcast::Receiver<EpochStart<Polkadot>>, anyhow::Error)>
+) -> Result<(), anyhow::Error>
 where
 	StateChainClient: ExtrinsicApi + StorageApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
@@ -32,20 +33,16 @@ where
 		.await
 	{
 		Ok(version) => version,
-		Err(e) =>
-			return Err((
-				epoch_starts_receiver,
-				anyhow::anyhow!("Failed to get PolkadotRuntimeVersion from SC: {:?}", e),
-			)),
+		Err(e) => bail!("Failed to get PolkadotRuntimeVersion from SC: {:?}", e),
 	};
 
 	epoch_witnesser::start(
-		epoch_starts_receiver,
+		Arc::new(Mutex::new(epoch_starts_receiver)),
 		|epoch_start| epoch_start.current,
 		on_chain_runtime_version,
 		move |mut end_witnessing_receiver, epoch_start, mut last_version_witnessed| {
 			let state_chain_client = state_chain_client.clone();
-			let dot_client = dot_client.clone();
+			let mut dot_client = dot_client.clone();
 			async move {
 				// NB: The first item of this stream is the current runtime version.
 				let mut runtime_version_subscription =

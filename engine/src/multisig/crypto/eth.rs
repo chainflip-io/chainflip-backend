@@ -1,12 +1,13 @@
 use crate::multisig::crypto::ECScalar;
 
-use super::{ChainTag, CryptoScheme, ECPoint};
+use super::{ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature};
 
 // NOTE: for now, we re-export these to make it
 // clear that these a the primitives used by ethereum.
 // TODO: we probably want to change the "clients" to
 // solely use "CryptoScheme" as generic parameter instead.
 pub use super::secp256k1::{Point, Scalar};
+use cf_chains::{ChainCrypto, Ethereum};
 use cf_primitives::PublicKeyBytes;
 use num_bigint::BigUint;
 use secp256k1::constants::CURVE_ORDER;
@@ -25,6 +26,15 @@ impl From<EthSchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents
 		use crate::eth::utils::pubkey_to_eth_addr;
 
 		Self { s: cfe_sig.s, k_times_g_address: pubkey_to_eth_addr(cfe_sig.r) }
+	}
+}
+
+impl SignatureToThresholdSignature<Ethereum> for Vec<EthSchnorrSignature> {
+	fn to_threshold_signature(&self) -> <Ethereum as ChainCrypto>::ThresholdSignature {
+		self.iter()
+			.map(|s| s.clone().into())
+			.next()
+			.expect("Exactly one signature for Ethereum")
 	}
 }
 

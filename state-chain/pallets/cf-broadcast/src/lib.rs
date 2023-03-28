@@ -106,7 +106,7 @@ pub mod pallet {
 	#[scale_info(skip_type_params(T, I))]
 	pub struct BroadcastAttempt<T: Config<I>, I: 'static> {
 		pub broadcast_attempt_id: BroadcastAttemptId,
-		pub unsigned_tx: TransactionFor<T, I>,
+		pub transaction_payload: TransactionFor<T, I>,
 	}
 
 	// TODO: Rename
@@ -261,7 +261,7 @@ pub mod pallet {
 		TransactionBroadcastRequest {
 			broadcast_attempt_id: BroadcastAttemptId,
 			nominee: T::ValidatorId,
-			unsigned_tx: TransactionFor<T, I>,
+			transaction_payload: TransactionFor<T, I>,
 		},
 		/// A failed broadcast attempt has been scheduled for retry.
 		BroadcastRetryScheduled { broadcast_attempt_id: BroadcastAttemptId },
@@ -476,7 +476,7 @@ pub mod pallet {
 			})
 			.ok_or(Error::<T, I>::InvalidBroadcastAttemptId)?
 			.broadcast_attempt
-			.unsigned_tx
+			.transaction_payload
 			.return_fee_refund(tx_fee);
 
 			TransactionFeeDeficit::<T, I>::mutate(signer_id, |fee_deficit| {
@@ -491,7 +491,7 @@ pub mod pallet {
 				);
 			}
 
-			if let Some(callback) = RequestCallbacks::<T, I>::take(broadcast_id) {
+			if let Some(callback) = RequestCallbacks::<T, I>::get(broadcast_id) {
 				Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
 					broadcast_id,
 					result: callback.dispatch_bypass_filter(origin).map(|_| ()).map_err(|e| {
@@ -530,6 +530,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			AwaitingBroadcast::<T, I>::remove(BroadcastAttemptId { broadcast_id, attempt_count });
 		}
 		FailedBroadcasters::<T, I>::remove(broadcast_id);
+		RequestCallbacks::<T, I>::remove(broadcast_id);
 
 		if let Some((_, signature)) = ThresholdSignatureData::<T, I>::take(broadcast_id) {
 			SignatureToBroadcastIdLookup::<T, I>::remove(signature);
@@ -584,7 +585,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// - [TransactionBroadcastRequest](Event::TransactionBroadcastRequest)
 	fn start_broadcast(
 		signature: &ThresholdSignatureFor<T, I>,
-		unsigned_tx: TransactionFor<T, I>,
+		transaction_payload: TransactionFor<T, I>,
 		api_call: <T as Config<I>>::ApiCall,
 		broadcast_id: BroadcastId,
 	) -> BroadcastAttemptId {
@@ -595,7 +596,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let broadcast_attempt_id = BroadcastAttemptId { broadcast_id, attempt_count: 0 };
 		Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
 			broadcast_attempt_id,
-			unsigned_tx,
+			transaction_payload,
 		});
 		broadcast_attempt_id
 	}
@@ -640,10 +641,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// to retry from the threshold signing stage.
 			else {
 				T::TransactionBuilder::update_api_call(&mut api_call);
+				let callback = RequestCallbacks::<T, I>::get(broadcast_id);
 				Self::clean_up_broadcast_storage(broadcast_id);
-				Self::threshold_sign_and_broadcast(
-					api_call,
-					RequestCallbacks::<T, I>::take(broadcast_id),
+				Self::threshold_sign_and_broadcast(api_call, callback);
+				log::info!(
+					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
+					broadcast_id
 				);
 			}
 		} else {
@@ -652,10 +655,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn start_broadcast_attempt(mut broadcast_attempt: BroadcastAttempt<T, I>) {
-		T::TransactionBuilder::refresh_unsigned_transaction(&mut broadcast_attempt.unsigned_tx);
+		T::TransactionBuilder::refresh_unsigned_transaction(
+			&mut broadcast_attempt.transaction_payload,
+		);
 
-		let seed = (broadcast_attempt.broadcast_attempt_id, broadcast_attempt.unsigned_tx.clone())
-			.encode();
+		let seed =
+			(broadcast_attempt.broadcast_attempt_id, broadcast_attempt.transaction_payload.clone())
+				.encode();
 		if let Some(nominated_signer) = T::BroadcastSignerNomination::nomination_with_seed(
 			seed,
 			&FailedBroadcasters::<T, I>::get(broadcast_attempt.broadcast_attempt_id.broadcast_id)
@@ -666,7 +672,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				broadcast_attempt.broadcast_attempt_id,
 				TransactionSigningAttempt {
 					broadcast_attempt: BroadcastAttempt::<T, I> {
-						unsigned_tx: broadcast_attempt.unsigned_tx.clone(),
+						transaction_payload: broadcast_attempt.transaction_payload.clone(),
 						..broadcast_attempt
 					},
 					nominee: nominated_signer.clone(),
@@ -681,7 +687,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Self::deposit_event(Event::<T, I>::TransactionBroadcastRequest {
 				broadcast_attempt_id: broadcast_attempt.broadcast_attempt_id,
 				nominee: nominated_signer,
-				unsigned_tx: broadcast_attempt.unsigned_tx,
+				transaction_payload: broadcast_attempt.transaction_payload,
 			});
 		} else {
 			const FAILED_SIGNER_SELECTION: &str = "Failed to select signer: We should either: a) have a signer eligible for nomination b) already have aborted this broadcast when scheduling the retry";

@@ -10,6 +10,9 @@ use cf_chains::btc::BlockNumber;
 
 use crate::{settings, witnesser::LatestBlockNumber};
 
+#[cfg(test)]
+use mockall::automock;
+
 #[derive(Clone)]
 pub struct BtcRpcClient {
 	client: Arc<Client>,
@@ -26,6 +29,7 @@ impl BtcRpcClient {
 	}
 }
 
+#[cfg_attr(test, automock)]
 pub trait BtcRpcApi: Send + Sync {
 	fn best_block_hash(&self) -> Result<BlockHash>;
 

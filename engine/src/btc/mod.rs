@@ -4,8 +4,6 @@ pub mod rpc;
 pub mod witnesser;
 pub mod witnessing;
 
-pub type ScriptPubKey = Vec<u8>;
-
 use anyhow::Result;
 use bitcoincore_rpc::bitcoin::Txid;
 pub struct BtcBroadcaster<BtcRpc>

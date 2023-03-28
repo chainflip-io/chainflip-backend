@@ -373,7 +373,7 @@
   },
   {
     "inputs": [],
-    "name": "govWithdrawEth",
+    "name": "govWithdrawNative",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

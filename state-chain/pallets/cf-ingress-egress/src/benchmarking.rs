@@ -31,14 +31,14 @@ benchmarks_instance_pallet! {
 		// We combine fetch and egress into a single variable, assuming the weight cost is similar.
 		for i in 0..n {
 			if i % 2 == 0 {
-				FetchParamDetails::<T, I>::insert(1, (ingress_fetch_id, egress_address.clone()));
+				FetchParamDetails::<T, I>::insert(i as u64, (ingress_fetch_id, egress_address.clone()));
 				batch.push(FetchOrTransfer::Fetch {
-					intent_id: 1,
+					intent_id: i as u64,
 					asset: egress_asset,
 				});
 			} else {
 				batch.push(FetchOrTransfer::Transfer {
-					egress_id: (ForeignChain::Ethereum, 1),
+					egress_id: (ForeignChain::Ethereum, i as u64),
 					asset: egress_asset,
 					to: egress_address.clone(),
 					amount: 1_000,

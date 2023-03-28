@@ -96,6 +96,65 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
 		.await;
 }
 
+async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayload]) {
+	let mut rng = Rng::from_seed([0; 32]);
+	let (key_id, key_data) =
+		generate_key_data::<C>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()), &mut rng);
+
+	let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
+		new_nodes(ACCOUNT_IDS.clone()),
+		DEFAULT_SIGNING_CEREMONY_ID,
+		key_id.clone(),
+		key_data,
+		payloads.to_vec(),
+		rng,
+	);
+
+	let messages = signing_ceremony.request().await;
+	let messages = run_stages!(
+		signing_ceremony,
+		messages,
+		signing_data::VerifyComm2<C::Point>,
+		signing_data::LocalSig3<C::Point>,
+		signing_data::VerifyLocalSig4<C::Point>
+	);
+	signing_ceremony.distribute_messages(messages).await;
+	let signature = signing_ceremony
+		.complete()
+		.await
+		.into_iter()
+		.next()
+		.expect("should have exactly one signature");
+	assert!(C::verify_signature(&signature, &key_id, &payloads[0]).is_ok());
+}
+
+#[ignore = "Only works if V2 is enabled (by setting CURRENT_PROTOCOL_VERSION = 2)"]
+#[tokio::test]
+async fn should_sign_multiple_payloads() {
+	use crate::multisig::crypto::{
+		bitcoin::SigningPayload as BtcPayload, eth::SigningPayload as EthPayload,
+		polkadot::SigningPayload as DotPayload,
+	};
+
+	test_sign_multiple_payloads::<EthSigning>(&[
+		EthPayload(*b"Chainflip:Chainflip:Chainflip:01"),
+		EthPayload(*b"Chainflip:Chainflip:Chainflip:02"),
+	])
+	.await;
+
+	test_sign_multiple_payloads::<BtcSigning>(&[
+		BtcPayload(*b"Chainflip:Chainflip:Chainflip:01"),
+		BtcPayload(*b"Chainflip:Chainflip:Chainflip:02"),
+	])
+	.await;
+
+	test_sign_multiple_payloads::<PolkadotSigning>(&[
+		DotPayload::new(b"Chainflip:Chainflip:Chainflip:01".to_vec()).unwrap(),
+		DotPayload::new(b"Chainflip:Chainflip:Chainflip:02".to_vec()).unwrap(),
+	])
+	.await;
+}
+
 async fn should_sign_with_all_parties<C: CryptoScheme>() {
 	// This seed ensures that the initially
 	// generated key is incompatible to increase
@@ -113,7 +172,7 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 			DEFAULT_SIGNING_CEREMONY_ID,
 			key_id.clone(),
 			key_data,
-			C::signing_payload_for_test(),
+			vec![C::signing_payload_for_test()],
 			Rng::from_seed(nonceseed),
 		);
 
@@ -126,7 +185,12 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 			signing_data::VerifyLocalSig4<C::Point>
 		);
 		signing_ceremony.distribute_messages(messages).await;
-		let signature = signing_ceremony.complete().await;
+		let signature = signing_ceremony
+			.complete()
+			.await
+			.into_iter()
+			.next()
+			.expect("should have exactly one signature");
 		assert!(C::verify_signature(&signature, &key_id, &C::signing_payload_for_test()).is_ok());
 	}
 }

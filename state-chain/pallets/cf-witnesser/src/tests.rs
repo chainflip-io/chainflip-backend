@@ -42,7 +42,7 @@ fn call_on_threshold() {
 		let call_hash = CallHash(frame_support::Hashable::blake2_256(&*call));
 		let stored_vec =
 			Votes::<Test>::get(MockEpochInfo::epoch_index(), call_hash).unwrap_or_default();
-		let votes = VoteMask::from_slice(stored_vec.as_slice()).unwrap();
+		let votes = VoteMask::from_slice(stored_vec.as_slice());
 		assert_eq!(votes.count_ones(), 3);
 
 		assert_event_sequence!(

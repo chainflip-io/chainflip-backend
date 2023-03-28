@@ -7,10 +7,8 @@ pub use pallet::*;
 use sp_runtime::DispatchResult;
 use sp_std::cmp::{Ord, Ordering};
 
-use cf_chains::AnyChain;
-use cf_primitives::{
-	AmmRange, Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId, Liquidity, PoolSide,
-};
+use cf_chains::{address::ForeignChainAddress, AnyChain};
+use cf_primitives::{AmmRange, Asset, AssetAmount, ForeignChain, IntentId, Liquidity, PoolSide};
 use cf_traits::{
 	liquidity::LpProvisioningApi, AccountRoleRegistry, Chainflip, EgressApi, IngressApi,
 	LiquidityPoolApi, SystemStateInfo,
@@ -136,14 +134,15 @@ pub mod pallet {
 
 				// Check validity of Chain and Asset
 				ensure!(
-					ForeignChain::from(egress_address) == ForeignChain::from(asset),
+					ForeignChain::from(egress_address.clone()) == ForeignChain::from(asset),
 					Error::<T>::InvalidEgressAddress
 				);
 
 				// Debit the asset from the account.
 				Self::try_debit(&account_id, asset, amount)?;
 
-				let egress_id = T::EgressHandler::schedule_egress(asset, amount, egress_address);
+				let egress_id =
+					T::EgressHandler::schedule_egress(asset, amount, egress_address.clone());
 
 				Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
 					egress_id,

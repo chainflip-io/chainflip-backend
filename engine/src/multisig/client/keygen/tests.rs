@@ -882,7 +882,7 @@ async fn genesis_keys_can_sign() {
 			DEFAULT_SIGNING_CEREMONY_ID,
 			public_key_bytes,
 			key_data.clone(),
-			EthSigning::signing_payload_for_test(),
+			vec![EthSigning::signing_payload_for_test()],
 			Rng::from_entropy(),
 		);
 	standard_signing(&mut signing_ceremony).await;
@@ -907,7 +907,7 @@ async fn initially_incompatible_keys_can_sign() {
 			DEFAULT_SIGNING_CEREMONY_ID,
 			public_key_bytes,
 			key_data.clone(),
-			EthSigning::signing_payload_for_test(),
+			vec![EthSigning::signing_payload_for_test()],
 			Rng::from_entropy(),
 		);
 	standard_signing(&mut signing_ceremony).await;

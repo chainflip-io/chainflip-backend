@@ -1,14 +1,15 @@
-use std::{collections::BTreeSet, sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use cf_primitives::{chains::assets::eth, EpochIndex, EthAmount};
 use state_chain_runtime::EthereumInstance;
+use tokio::sync::Mutex;
 use web3::{
 	ethabi::{self, RawLog},
 	types::H160,
 };
 
-use crate::state_chain_observer::client::extrinsic_api::ExtrinsicApi;
+use crate::{state_chain_observer::client::extrinsic_api::ExtrinsicApi, witnesser::AddressMonitor};
 
 use super::{
 	core_h160, core_h256, event::Event, rpc::EthRpcApi, utils, BlockWithItems, DecodeLogClosure,
@@ -35,8 +36,7 @@ pub struct Erc20Witnesser {
 	pub deployed_address: H160,
 	asset: eth::Asset,
 	contract: ethabi::Contract,
-	pub monitored_addresses: BTreeSet<sp_core::H160>,
-	pub monitored_address_receiver: tokio::sync::mpsc::UnboundedReceiver<sp_core::H160>,
+	address_monitor: Arc<Mutex<AddressMonitor<sp_core::H160, sp_core::H160, ()>>>,
 }
 
 impl Erc20Witnesser {
@@ -44,16 +44,14 @@ impl Erc20Witnesser {
 	pub fn new(
 		deployed_address: H160,
 		asset: eth::Asset,
-		monitored_addresses: BTreeSet<sp_core::H160>,
-		monitored_address_receiver: tokio::sync::mpsc::UnboundedReceiver<sp_core::H160>,
+		address_monitor: Arc<Mutex<AddressMonitor<sp_core::H160, sp_core::H160, ()>>>,
 	) -> Self {
 		Self {
 			deployed_address,
 			asset,
 			contract: ethabi::Contract::load(std::include_bytes!("abis/ERC20.json").as_ref())
 				.unwrap(),
-			monitored_addresses,
-			monitored_address_receiver,
+			address_monitor,
 		}
 	}
 }
@@ -78,16 +76,17 @@ impl EthContractWitnesser for Erc20Witnesser {
 		EthRpcClient: EthRpcApi + Sync + Send,
 		StateChainClient: ExtrinsicApi + Send + Sync,
 	{
-		while let Ok(address) = self.monitored_address_receiver.try_recv() {
-			self.monitored_addresses.insert(address);
-		}
+		let mut address_monitor =
+			self.address_monitor.try_lock().expect("should have exclusive ownership");
+
+		address_monitor.sync_addresses();
 
 		let ingress_witnesses: Vec<_> = block
 			.block_items
 			.into_iter()
 			.filter_map(|event| match event.event_parameters {
 				Erc20Event::Transfer { to, value, from: _ }
-					if self.monitored_addresses.contains(&core_h160(to)) =>
+					if address_monitor.contains(&core_h160(to)) =>
 					Some(IngressWitness {
 						ingress_address: core_h160(to),
 						amount: value,
@@ -168,13 +167,10 @@ mod tests {
 	// approval: 0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925
 	#[test]
 	fn generate_signatures() {
-		let (_eth_monitor_erc20_ingress_sender, eth_monitor_erc20_ingress_receiver) =
-			tokio::sync::mpsc::unbounded_channel();
 		let contract = Erc20Witnesser::new(
 			H160::default(),
 			eth::Asset::Flip,
-			Default::default(),
-			eth_monitor_erc20_ingress_receiver,
+			Arc::new(Mutex::new(AddressMonitor::new(Default::default()).1)),
 		)
 		.contract;
 
@@ -186,25 +182,19 @@ mod tests {
 
 	#[test]
 	fn test_load_contract() {
-		let (_eth_monitor_erc20_ingress_sender, eth_monitor_erc20_ingress_receiver) =
-			tokio::sync::mpsc::unbounded_channel();
 		Erc20Witnesser::new(
 			H160::default(),
 			eth::Asset::Flip,
-			Default::default(),
-			eth_monitor_erc20_ingress_receiver,
+			Arc::new(Mutex::new(AddressMonitor::new(Default::default()).1)),
 		);
 	}
 
 	#[test]
 	fn test_transfer_log_parsing() {
-		let (_eth_monitor_erc20_ingress_sender, eth_monitor_erc20_ingress_receiver) =
-			tokio::sync::mpsc::unbounded_channel();
 		let erc20_witnesser = Erc20Witnesser::new(
 			H160::default(),
 			eth::Asset::Flip,
-			Default::default(),
-			eth_monitor_erc20_ingress_receiver,
+			Arc::new(Mutex::new(AddressMonitor::new(Default::default()).1)),
 		);
 		let decode_log = erc20_witnesser.decode_log_closure().unwrap();
 
@@ -256,13 +246,10 @@ mod tests {
 
 	#[test]
 	fn test_approval_log_parsing() {
-		let (_eth_monitor_erc20_ingress_sender, eth_monitor_erc20_ingress_receiver) =
-			tokio::sync::mpsc::unbounded_channel();
 		let erc20_witnesser = Erc20Witnesser::new(
 			H160::default(),
 			eth::Asset::Flip,
-			Default::default(),
-			eth_monitor_erc20_ingress_receiver,
+			Arc::new(Mutex::new(AddressMonitor::new(Default::default()).1)),
 		);
 		let decode_log = erc20_witnesser.decode_log_closure().unwrap();
 

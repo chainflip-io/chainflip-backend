@@ -19,3 +19,8 @@ ws_node_endpoint = "wss://my_fake_polkadot_rpc:443/<secret_key>"
 [health_check]
 hostname = "127.0.0.1"
 port = 5555
+
+[btc]
+http_node_endpoint = "http://localhost:18443"
+rpc_user = "username"
+rpc_password = "password"
