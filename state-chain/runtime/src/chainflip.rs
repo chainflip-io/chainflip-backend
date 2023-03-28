@@ -175,6 +175,10 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 		// Nothing to validate for Ethereum
 		true
 	}
+
+	fn update_api_call(_call: &mut EthereumApi<EthEnvironment>) {
+		unreachable!("Ethereum transactions are not updated")
+	}
 }
 
 pub struct DotTransactionBuilder;
@@ -193,6 +197,28 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 		// If we know the Polkadot runtime has been upgraded then we know this transaction will
 		// fail.
 		call.runtime_version_used() == Environment::polkadot_runtime_version()
+	}
+
+	fn update_api_call(call: &mut PolkadotApi<DotEnvironment>) {
+		match call {
+			PolkadotApi::BatchFetchAndTransfer(the_call) => {
+				the_call.extrinsic_builder.replay_protection.runtime_version =
+					Environment::polkadot_runtime_version();
+			},
+			PolkadotApi::RotateVaultProxy(the_call) => {
+				the_call.extrinsic_builder.replay_protection.runtime_version =
+					Environment::polkadot_runtime_version();
+			},
+			PolkadotApi::CreateAnonymousVault(the_call) => {
+				the_call.extrinsic_builder.replay_protection.runtime_version =
+					Environment::polkadot_runtime_version();
+			},
+			PolkadotApi::ChangeGovKey(the_call) => {
+				the_call.extrinsic_builder.replay_protection.runtime_version =
+					Environment::polkadot_runtime_version();
+			},
+			_ => unimplemented!(),
+		}
 	}
 }
 

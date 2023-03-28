@@ -176,7 +176,7 @@ pub struct PolkadotExtrinsicBuilder {
 	extrinsic_origin: PolkadotAccountId,
 	extrinsic_call: Option<PolkadotRuntimeCall>,
 	signed_extrinsic: Option<PolkadotUncheckedExtrinsic>,
-	replay_protection: PolkadotReplayProtection,
+	pub replay_protection: PolkadotReplayProtection,
 	extra: Option<PolkadotSignedExtra>,
 	signature_payload: Option<EncodedPolkadotPayload>,
 }

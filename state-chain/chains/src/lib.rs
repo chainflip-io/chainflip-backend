@@ -174,6 +174,9 @@ where
 
 	/// Checks if the transaction is still valid.
 	fn is_valid_for_rebroadcast(call: &Call) -> bool;
+
+	/// Updates the given api call.
+	fn update_api_call(call: &mut Call);
 }
 
 /// Contains all the parameters required to fetch incoming transactions on an external chain.

@@ -602,7 +602,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
 		let broadcast_id = broadcast_attempt.broadcast_attempt_id.broadcast_id;
-		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
+		if let Some((mut api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
 			let EpochKey { key, .. } = T::KeyProvider::current_epoch_key();
 
 			if T::TransactionBuilder::is_valid_for_rebroadcast(&api_call) {
@@ -639,8 +639,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			// If the signature verification fails, we want
 			// to retry from the threshold signing stage.
 			else {
-				// TODO: Reconstruct the api call from the unsigned tx
+				T::TransactionBuilder::update_api_call(&mut api_call);
 				Self::clean_up_broadcast_storage(broadcast_id);
+				Self::threshold_sign_and_broadcast(
+					api_call,
+					RequestCallbacks::<T, I>::take(broadcast_id),
+				);
 			}
 		} else {
 			log::error!("No threshold signature data is available.");

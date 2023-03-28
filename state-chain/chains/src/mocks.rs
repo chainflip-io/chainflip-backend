@@ -219,4 +219,6 @@ impl<Abi: ChainAbi<Transaction = MockTransaction>, Call: ApiCall<Abi>> Transacti
 	fn is_valid_for_rebroadcast(_call: &Call) -> bool {
 		IS_VALID_BROADCAST.with(|is_valid| *is_valid.borrow())
 	}
+
+	fn update_api_call(_call: &mut Call) {}
 }
