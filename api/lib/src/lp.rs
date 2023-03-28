@@ -69,19 +69,15 @@ pub async fn get_balances(
 ) -> Result<HashMap<Asset, AssetAmount>> {
 	task_scope(|scope| {
 		async {
-			let (latest_block_hash, _, state_chain_client) = StateChainClient::new(
-				scope,
-				state_chain_settings,
-				AccountRole::LiquidityProvider,
-				false,
-			)
-			.await?;
+			let (latest_block_hash, _, state_chain_client) =
+				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
+					.await?;
 
 			let asset_list = vec![Asset::Eth, Asset::Flip, Asset::Usdc, Asset::Dot, Asset::Btc];
 
-			let balances: HashMap<Asset, AssetAmount> =
+			let balances: Result<HashMap<Asset, AssetAmount>> =
 				futures::future::join_all(asset_list.iter().map(|asset| async {
-					(
+					Ok((
 						*asset,
 						state_chain_client
 							.storage_double_map_entry::<pallet_cf_lp::FreeBalances<state_chain_runtime::Runtime>>(
@@ -89,16 +85,15 @@ pub async fn get_balances(
 								&state_chain_client.account_id(),
 								asset,
 							)
-							.await
-							.expect("Failed to request free balance")
-							.unwrap_or(0),
-					)
+							.await?
+							.unwrap_or_default(),
+					))
 				}))
 				.await
 				.into_iter()
 				.collect();
 
-			Ok(balances)
+			balances
 		}
 		.boxed()
 	})
@@ -120,26 +115,22 @@ pub async fn get_positions(
 
 			let asset_list = vec![Asset::Eth, Asset::Flip, Asset::Usdc, Asset::Dot, Asset::Btc];
 
-			let positions: HashMap<Asset, Vec<(Tick, Tick, Liquidity)>> =
-				futures::future::join_all(asset_list.iter().map(|asset| async {
-					(
-						*asset,
-						state_chain_client
-							.base_rpc_client
-							.pool_minted_positions(
-								state_chain_client.account_id(),
-								*asset,
-								Some(latest_block_hash),
-							)
-							.await
-							.expect("Failed to request minted positions"),
-					)
-				}))
-				.await
-				.into_iter()
-				.collect();
-
-			Ok(positions)
+			futures::future::join_all(asset_list.iter().map(|asset| async {
+				Ok((
+					*asset,
+					state_chain_client
+						.base_rpc_client
+						.pool_minted_positions(
+							state_chain_client.account_id(),
+							*asset,
+							latest_block_hash,
+						)
+						.await?,
+				))
+			}))
+			.await
+			.into_iter()
+			.collect()
 		}
 		.boxed()
 	})
@@ -148,8 +139,8 @@ pub async fn get_positions(
 
 #[derive(Serialize)]
 pub struct MintPositionReturn {
-	assets_debited: PoolAssetMap<u128>,
-	fees_harvested: PoolAssetMap<u128>,
+	assets_debited: PoolAssetMap<AssetAmount>,
+	fees_harvested: PoolAssetMap<AssetAmount>,
 }
 
 pub async fn mint_position(
@@ -170,30 +161,29 @@ pub async fn mint_position(
 
 			let asset_positions = state_chain_client
 				.base_rpc_client
-				.pool_minted_positions(
-					state_chain_client.account_id(),
-					asset,
-					Some(latest_block_hash),
-				)
+				.pool_minted_positions(state_chain_client.account_id(), asset, latest_block_hash)
 				.await
 				.expect("Failed to request minted positions");
 
-			let liquidity_target = if let Some((_, _, current_amount)) = asset_positions
+			let liquidity_target = asset_positions
 				.iter()
-				.find(|(lower, upper, _)| lower == &range.lower && upper == &range.upper)
-			{
-				// Calculate the new target
-				amount.saturating_add(*current_amount)
-			} else {
-				// Mint a new position
-				amount
-			};
-
-			let mut block_stream = Box::new(block_stream);
+				.find_map(|(lower, upper, current_amount)| {
+					if lower == &range.lower && upper == &range.upper {
+						Some(*current_amount)
+					} else {
+						None
+					}
+				})
+				.unwrap_or_default()
+				.saturating_add(amount);
 
 			let call = pallet_cf_lp::Call::update_position { asset, range, liquidity_target };
-			let (_tx_hash, events) =
-				submit_and_ensure_success(&state_chain_client, block_stream.as_mut(), call).await?;
+			let (_tx_hash, events) = submit_and_ensure_success(
+				&state_chain_client,
+				Box::new(block_stream).as_mut(),
+				call,
+			)
+			.await?;
 
 			Ok(events
 				.into_iter()
@@ -216,8 +206,8 @@ pub async fn mint_position(
 
 #[derive(Serialize)]
 pub struct BurnPositionReturn {
-	assets_returned: PoolAssetMap<u128>,
-	fees_harvested: PoolAssetMap<u128>,
+	assets_returned: PoolAssetMap<AssetAmount>,
+	fees_harvested: PoolAssetMap<AssetAmount>,
 }
 
 pub async fn burn_position(
@@ -238,11 +228,7 @@ pub async fn burn_position(
 
 			let asset_positions = state_chain_client
 				.base_rpc_client
-				.pool_minted_positions(
-					state_chain_client.account_id(),
-					asset,
-					Some(latest_block_hash),
-				)
+				.pool_minted_positions(state_chain_client.account_id(), asset, latest_block_hash)
 				.await
 				.expect("Failed to request minted positions");
 
@@ -259,11 +245,13 @@ pub async fn burn_position(
 				bail!("No position found");
 			};
 
-			let mut block_stream = Box::new(block_stream);
-
 			let call = pallet_cf_lp::Call::update_position { asset, range, liquidity_target };
-			let (_tx_hash, events) =
-				submit_and_ensure_success(&state_chain_client, block_stream.as_mut(), call).await?;
+			let (_tx_hash, events) = submit_and_ensure_success(
+				&state_chain_client,
+				Box::new(block_stream).as_mut(),
+				call,
+			)
+			.await?;
 
 			Ok(events
 				.into_iter()

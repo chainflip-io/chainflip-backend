@@ -117,7 +117,7 @@ pub trait BaseRpcApi {
 		&self,
 		lp: AccountId32,
 		asset: Asset,
-		at: Option<state_chain_runtime::Hash>,
+		at: state_chain_runtime::Hash,
 	) -> RpcResult<Vec<(Tick, Tick, Liquidity)>>;
 }
 
@@ -213,8 +213,8 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		&self,
 		lp: AccountId32,
 		asset: Asset,
-		at: Option<state_chain_runtime::Hash>,
+		at: state_chain_runtime::Hash,
 	) -> RpcResult<Vec<(Tick, Tick, Liquidity)>> {
-		self.raw_rpc_client.cf_pool_minted_positions(lp, asset, at).await
+		self.raw_rpc_client.cf_pool_minted_positions(lp, asset, Some(at)).await
 	}
 }

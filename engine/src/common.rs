@@ -5,7 +5,7 @@ use std::{
 	time::Duration,
 };
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use futures::{Future, TryStream};
 use itertools::Itertools;
 
@@ -159,9 +159,7 @@ pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow
 	t: T,
 ) -> Result<V, anyhow::Error> {
 	std::fs::read_to_string(file)
-		.map_err(|e| {
-			anyhow::Error::msg(format!("Failed to read {context} file at {}: {e}", file.display()))
-		})
+		.map_err(|e| anyhow!("Failed to read {context} file at {}: {e}", file.display()))
 		.and_then(|string| {
 			let mut str = string.as_str();
 			str = str.trim();

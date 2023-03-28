@@ -71,7 +71,7 @@ impl RpcServer for RpcServerImpl {
 		lp::liquidity_deposit(&self.state_chain_settings, asset)
 			.await
 			.map(|address| ["0x", &hex::encode(address.as_ref())].concat())
-			.map_err(|e| Error::Custom(format!("{e}")))
+			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
 	/// Returns an egress id
@@ -93,13 +93,14 @@ impl RpcServer for RpcServerImpl {
 			Asset::Dot => clean_dot_address(egress_address)
 				.map(ForeignChainAddress::from)
 				.map_err(|e| Error::Custom(format!("Invalid egress_address: {e}"))),
+			// TODO: add BTC support
 			_ => return Err(Error::Custom(format!("{asset:?} not supported"))),
 		}?;
 
 		lp::withdraw_asset(&self.state_chain_settings, amount, asset, egress_address)
 			.await
 			.map(|(_, id)| id.to_string())
-			.map_err(|e| Error::Custom(format!("{e}")))
+			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
 	/// Returns a list of all assets and their free balance in json format
@@ -109,7 +110,7 @@ impl RpcServer for RpcServerImpl {
 			.map(|balances| {
 				serde_json::to_string(&balances).expect("Should output balances as json")
 			})
-			.map_err(|e| Error::Custom(format!("{e}")))
+			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
 	/// Returns a list of all assets and their positions in json format
@@ -119,7 +120,7 @@ impl RpcServer for RpcServerImpl {
 			.map(|positions| {
 				serde_json::to_string(&positions).expect("Should output positions as json")
 			})
-			.map_err(|e| Error::Custom(format!("{e}")))
+			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
 	/// Creates or adds liquidity to a position.
@@ -132,13 +133,13 @@ impl RpcServer for RpcServerImpl {
 		amount: Liquidity,
 	) -> Result<String, Error> {
 		if lower >= upper {
-			return Err(Error::Custom(format!("Invalid tick range")))
+			return Err(Error::Custom("Invalid tick range".to_string()))
 		}
 
 		lp::mint_position(&self.state_chain_settings, asset, AmmRange { lower, upper }, amount)
 			.await
 			.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
-			.map_err(|e| Error::Custom(format!("{e}")))
+			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
 	/// Removes liquidity from a position.
@@ -151,13 +152,13 @@ impl RpcServer for RpcServerImpl {
 		amount: Liquidity,
 	) -> Result<String, Error> {
 		if lower >= upper {
-			return Err(Error::Custom(format!("Invalid tick range")))
+			return Err(Error::Custom("Invalid tick range".to_string()))
 		}
 
 		lp::burn_position(&self.state_chain_settings, asset, AmmRange { lower, upper }, amount)
 			.await
 			.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
-			.map_err(|e| Error::Custom(format!("{e}")))
+			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
 	/// Returns the tx hash that the account role was set
@@ -168,7 +169,7 @@ impl RpcServer for RpcServerImpl {
 		)
 		.await
 		.map(|tx_hash| format!("{tx_hash:#x}"))
-		.map_err(|e| Error::Custom(format!("{e}")))
+		.map_err(|e| Error::Custom(e.to_string()))
 	}
 }
 
