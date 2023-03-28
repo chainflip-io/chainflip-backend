@@ -37,7 +37,7 @@ mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
-const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
+const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT: u32 = 90;
 
 pub type PayloadFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::Payload;
 pub type KeygenOutcomeFor<T, I = ()> =
