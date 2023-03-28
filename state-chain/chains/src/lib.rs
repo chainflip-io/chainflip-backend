@@ -67,7 +67,12 @@ pub trait Chain: Member + Parameter {
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
-	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Age<Self> + BenchmarkValue;
+	type TrackedData: Member
+		+ Parameter
+		+ MaxEncodedLen
+		+ Clone
+		+ Age<BlockNumber = Self::ChainBlockNumber>
+		+ BenchmarkValue;
 
 	type ChainAsset: Member
 		+ Parameter
@@ -95,13 +100,17 @@ pub trait Chain: Member + Parameter {
 }
 
 /// Measures the age of items associated with the Chain.
-pub trait Age<C: Chain> {
+pub trait Age {
+	type BlockNumber;
+
 	/// The creation block of this item.
-	fn birth_block(&self) -> C::ChainBlockNumber;
+	fn birth_block(&self) -> Self::BlockNumber;
 }
 
-impl<C: Chain> Age<C> for () {
-	fn birth_block(&self) -> C::ChainBlockNumber {
+impl Age for () {
+	type BlockNumber = u64;
+
+	fn birth_block(&self) -> Self::BlockNumber {
 		unimplemented!()
 	}
 }

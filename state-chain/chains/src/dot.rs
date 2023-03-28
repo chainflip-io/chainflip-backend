@@ -91,8 +91,6 @@ pub enum PolkadotProxyType {
 	Auction = 7,
 }
 
-type DotAmount = u128;
-
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct EncodedPolkadotPayload(pub Vec<u8>);
 
@@ -101,10 +99,25 @@ pub struct EpochStartData {
 	pub vault_account: PolkadotAccountId,
 }
 
+#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
+pub struct TrackedData {
+	block_height: PolkadotBlockNumber,
+	median_tip: PolkadotBalance,
+	next_fee_multiplier: PolkadotBalance,
+}
+
+impl Age for TrackedData {
+	type BlockNumber = PolkadotBlockNumber;
+
+	fn birth_block(&self) -> PolkadotBlockNumber {
+		self.block_height
+	}
+}
+
 impl Chain for Polkadot {
 	type ChainBlockNumber = PolkadotBlockNumber;
-	type ChainAmount = DotAmount;
-	type TrackedData = ();
+	type ChainAmount = PolkadotBalance;
+	type TrackedData = TrackedData;
 	type ChainAccount = PolkadotAccountId;
 	type TransactionFee = Self::ChainAmount;
 	type ChainAsset = assets::dot::Asset;
