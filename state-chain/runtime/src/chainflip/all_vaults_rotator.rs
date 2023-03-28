@@ -75,7 +75,7 @@ where
 	fn set_status(outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
 		A::set_status(outcome.clone());
 		B::set_status(outcome.clone());
-		B::set_status(outcome);
+		C::set_status(outcome);
 	}
 }
 
