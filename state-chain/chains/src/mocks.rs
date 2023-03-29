@@ -59,12 +59,6 @@ impl Age<MockEthereum> for MockTrackedData {
 	}
 }
 
-impl GasPriceProvider for MockTrackedData {
-	fn gas_fee(&self) -> Option<AssetAmount> {
-		Some(self.base_fee.saturating_add(self.priority_fee))
-	}
-}
-
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for MockTrackedData {
 	fn benchmark_value() -> Self {

@@ -1,12 +1,12 @@
 use crate::{self as pallet_cf_swapping, WeightInfo};
 use cf_chains::AnyChain;
-use cf_primitives::{Asset, AssetAmount, ForeignChain};
+use cf_primitives::{Asset, AssetAmount};
 use cf_traits::{
 	mocks::{
 		egress_handler::MockEgressHandler, ensure_origin_mock::NeverFailingOriginCheck,
 		ingress_handler::MockIngressHandler, system_state_info::MockSystemStateInfo,
 	},
-	Chainflip, GasPriceProviderAnychain, SwappingApi,
+	Chainflip, SwappingApi,
 };
 use frame_support::{dispatch::DispatchError, parameter_types, weights::Weight};
 use frame_system as system;
@@ -115,12 +115,6 @@ impl WeightInfo for MockWeightInfo {
 parameter_types! {
 	pub GasPrice: AssetAmount = 1_000;
 }
-pub struct MockGasPriceProvider;
-impl GasPriceProviderAnychain for MockGasPriceProvider {
-	fn gas_price(_chain: ForeignChain) -> Option<AssetAmount> {
-		Some(GasPrice::get())
-	}
-}
 
 impl pallet_cf_swapping::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -129,7 +123,6 @@ impl pallet_cf_swapping::Config for Test {
 	type EgressHandler = MockEgressHandler<AnyChain>;
 	type WeightInfo = MockWeightInfo;
 	type SwappingApi = MockSwappingApi;
-	type GasPriceProvider = MockGasPriceProvider;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

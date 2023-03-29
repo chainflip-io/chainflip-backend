@@ -67,13 +67,7 @@ pub trait Chain: Member + Parameter {
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
-	type TrackedData: Member
-		+ Parameter
-		+ MaxEncodedLen
-		+ Clone
-		+ Age<Self>
-		+ BenchmarkValue
-		+ GasPriceProvider;
+	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Age<Self> + BenchmarkValue;
 
 	type ChainAsset: Member
 		+ Parameter
@@ -297,23 +291,6 @@ pub trait IngressIdConstructor {
 	fn deployed(intent_id: u64, address: Self::Address) -> Self;
 	/// Constructs the IngressId for the undeployed case.
 	fn undeployed(intent_id: u64, address: Self::Address) -> Self;
-}
-
-// Trait for basic chain information.
-pub trait GasPriceProvider {
-	fn gas_fee(&self) -> Option<AssetAmount>;
-}
-
-impl GasPriceProvider for crate::eth::EthereumTrackedData {
-	fn gas_fee(&self) -> Option<AssetAmount> {
-		Some(self.base_fee.saturating_add(self.priority_fee))
-	}
-}
-
-impl GasPriceProvider for () {
-	fn gas_fee(&self) -> Option<AssetAmount> {
-		None
-	}
 }
 
 /// Metadata as part of a Cross Chain Message.
