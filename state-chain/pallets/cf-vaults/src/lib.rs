@@ -340,7 +340,9 @@ pub mod pallet {
 		fn on_runtime_upgrade() -> Weight {
 			// For new pallet instances, genesis items need to be set.
 			if !KeygenResponseTimeout::<T, I>::exists() {
-				KeygenResponseTimeout::<T, I>::set(KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT.into());
+				KeygenResponseTimeout::<T, I>::set(
+					KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT.into(),
+				);
 			}
 			if !CurrentVaultEpochAndState::<T, I>::exists() {
 				CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
