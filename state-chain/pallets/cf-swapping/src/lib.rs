@@ -177,6 +177,8 @@ pub mod pallet {
 		NoFundsAvailable,
 		/// The target chain does not support CCM.
 		CcmUnsupportedForTargetChain,
+		/// The gas budget is higher than the ingressed amount.
+		CcmGasBudgetTooHigh,
 	}
 
 	#[pallet::hooks]
@@ -474,11 +476,7 @@ pub mod pallet {
 						match ccm.stage {
 							CcmStage::Ingressed => {
 								// Subtract the gas budge from ingress and swap the rest.
-								ccm.message_metadata.gas_budget = sp_std::cmp::min(
-									ccm.ingress_amount,
-									ccm.message_metadata.gas_budget,
-								);
-								let remaining = ccm
+								let swap_amount = ccm
 									.ingress_amount
 									.saturating_sub(ccm.message_metadata.gas_budget);
 
@@ -486,7 +484,7 @@ pub mod pallet {
 								let _ = Self::schedule_swap(
 									ccm.ingress_asset,
 									ccm.egress_asset,
-									remaining,
+									swap_amount,
 									SwapType::Ccm(ccm_id),
 								);
 								false
@@ -584,6 +582,7 @@ pub mod pallet {
 			debug_assert!(
 				ForeignChain::from(egress_address.clone()) == ForeignChain::from(egress_asset)
 			);
+			ensure!(ingress_amount > message_metadata.gas_budget, Error::<T>::CcmGasBudgetTooHigh);
 
 			let ccm_id = CcmIdCounter::<T>::mutate(|id| {
 				id.saturating_accrue(1);

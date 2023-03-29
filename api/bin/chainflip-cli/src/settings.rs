@@ -1,4 +1,4 @@
-use chainflip_api::primitives::{AccountRole, Asset, CcmIngressMetadata, Hash};
+use chainflip_api::primitives::{AccountRole, Asset, Hash};
 pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
 	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
@@ -67,8 +67,6 @@ pub struct SwapIntentParams {
 	pub egress_address: String,
 	/// Commission to the relayer in base points
 	pub relayer_commission: u16,
-	/// Optional: Additional cross-chain message attached as part of the swap intent.
-	pub message_metadata: Option<CcmIngressMetadata>,
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
