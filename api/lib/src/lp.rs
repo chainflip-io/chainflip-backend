@@ -162,8 +162,7 @@ pub async fn mint_position(
 			let asset_positions = state_chain_client
 				.base_rpc_client
 				.pool_minted_positions(state_chain_client.account_id(), asset, latest_block_hash)
-				.await
-				.expect("Failed to request minted positions");
+				.await?;
 
 			let liquidity_target = asset_positions
 				.iter()
@@ -229,21 +228,20 @@ pub async fn burn_position(
 			let asset_positions = state_chain_client
 				.base_rpc_client
 				.pool_minted_positions(state_chain_client.account_id(), asset, latest_block_hash)
-				.await
-				.expect("Failed to request minted positions");
+				.await?;
 
-			let liquidity_target = if let Some((_, _, current_amount)) = asset_positions
+			let liquidity_target = asset_positions
 				.iter()
-				.find(|(lower, upper, _)| lower == &range.lower && upper == &range.upper)
-			{
-				// Calculate the new target
-				current_amount
+				.find_map(|(lower, upper, current_amount)| {
+					if lower == &range.lower && upper == &range.upper {
+						Some(current_amount)
+					} else {
+						None
+					}
+				})
+				.ok_or(anyhow!("No position found"))?
 					.checked_sub(amount)
-					.ok_or("Insufficient minted liquidity at position")
-					.map_err(|e| anyhow!("{e}"))?
-			} else {
-				bail!("No position found");
-			};
+				.ok_or(anyhow!("Insufficient minted liquidity at position"))?;
 
 			let call = pallet_cf_lp::Call::update_position { asset, range, liquidity_target };
 			let (_tx_hash, events) = submit_and_ensure_success(
