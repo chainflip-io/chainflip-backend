@@ -10,9 +10,9 @@ mod offences;
 mod signer_nomination;
 use crate::{
 	AccountId, Authorship, BitcoinIngressEgress, BlockNumber, EmergencyRotationPercentageRange,
-	Emissions, Environment, EthereumBroadcaster, EthereumIngressEgress, EthereumInstance, Flip,
-	FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress, Reputation, Runtime, RuntimeCall,
-	System, Validator,
+	Emissions, Environment, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
+	Flip, FlipBalance, PolkadotBroadcaster, PolkadotChainTracking, PolkadotIngressEgress,
+	Reputation, Runtime, RuntimeCall, System, Validator,
 };
 
 use cf_chains::{
