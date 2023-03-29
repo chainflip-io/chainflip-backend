@@ -37,7 +37,7 @@ mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
-const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT: u32 = 90;
+const KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT: u32 = 90;
 
 pub type PayloadFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::Payload;
 pub type KeygenOutcomeFor<T, I = ()> =
@@ -340,7 +340,7 @@ pub mod pallet {
 		fn on_runtime_upgrade() -> Weight {
 			// For new pallet instances, genesis items need to be set.
 			if !KeygenResponseTimeout::<T, I>::exists() {
-				KeygenResponseTimeout::<T, I>::set(KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT.into());
+				KeygenResponseTimeout::<T, I>::set(KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT.into());
 			}
 			if !CurrentVaultEpochAndState::<T, I>::exists() {
 				CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
@@ -684,7 +684,7 @@ pub mod pallet {
 			Self {
 				vault_key: None,
 				deployment_block: Zero::zero(),
-				keygen_response_timeout: KEYGEN_CEREMONY_RESPONSE_TIMEOUT_DEFAULT.into(),
+				keygen_response_timeout: KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT.into(),
 			}
 		}
 	}
