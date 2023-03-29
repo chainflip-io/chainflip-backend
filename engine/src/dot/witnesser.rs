@@ -5,7 +5,7 @@ use std::{
 
 use cf_chains::{
 	dot::{
-		Polkadot, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotProxyType,
+		self, Polkadot, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotProxyType,
 		PolkadotPublicKey, PolkadotUncheckedExtrinsic,
 	},
 	eth::assets,
@@ -388,6 +388,23 @@ where
 									&our_vault,
 									&mut address_monitor,
 									);
+
+									let _result = state_chain_client
+									.submit_signed_extrinsic(
+										state_chain_runtime::RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
+											call: Box::new(state_chain_runtime::RuntimeCall::PolkadotChainTracking(
+												pallet_cf_chain_tracking::Call::update_chain_state {
+													state: dot::TrackedData {
+														block_height: block_number,
+														median_tip,
+														next_fee_multiplier: dot_client.next_fee_multiplier(block_hash).await?,
+													},
+												},
+											)),
+											epoch_index: epoch_start.epoch_index
+										}),
+									)
+									.await;
 
 							for call in vault_key_rotated_calls {
 								let _result = state_chain_client

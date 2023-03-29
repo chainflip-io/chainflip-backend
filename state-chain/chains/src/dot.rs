@@ -101,9 +101,9 @@ pub struct EpochStartData {
 
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
 pub struct TrackedData {
-	block_height: PolkadotBlockNumber,
-	median_tip: PolkadotBalance,
-	next_fee_multiplier: PolkadotBalance,
+	pub block_height: PolkadotBlockNumber,
+	pub median_tip: PolkadotBalance,
+	pub next_fee_multiplier: PolkadotBalance,
 }
 
 impl Age for TrackedData {
