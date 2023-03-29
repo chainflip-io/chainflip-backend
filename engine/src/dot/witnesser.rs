@@ -394,7 +394,7 @@ where
 										state_chain_runtime::RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
 											call: Box::new(state_chain_runtime::RuntimeCall::PolkadotChainTracking(
 												pallet_cf_chain_tracking::Call::update_chain_state {
-													state: dot::TrackedData {
+													state: dot::PolkadotTrackedData {
 														block_height: block_number,
 														median_tip,
 														next_fee_multiplier: dot_client.next_fee_multiplier(block_hash).await?,

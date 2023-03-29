@@ -100,13 +100,13 @@ pub struct EpochStartData {
 }
 
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
-pub struct TrackedData {
+pub struct PolkadotTrackedData {
 	pub block_height: PolkadotBlockNumber,
 	pub median_tip: PolkadotBalance,
 	pub next_fee_multiplier: PolkadotBalance,
 }
 
-impl Age for TrackedData {
+impl Age for PolkadotTrackedData {
 	type BlockNumber = PolkadotBlockNumber;
 
 	fn birth_block(&self) -> PolkadotBlockNumber {
@@ -117,7 +117,7 @@ impl Age for TrackedData {
 impl Chain for Polkadot {
 	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = PolkadotBalance;
-	type TrackedData = TrackedData;
+	type TrackedData = PolkadotTrackedData;
 	type ChainAccount = PolkadotAccountId;
 	type TransactionFee = Self::ChainAmount;
 	type ChainAsset = assets::dot::Asset;

@@ -13,7 +13,7 @@ use sp_runtime::{generic::Era, traits::IdentifyAccount, MultiSignature, MultiSig
 
 use super::{
 	api::{create_anonymous_vault::CreateAnonymousVault, PolkadotApi},
-	EncodedPolkadotPayload, PolkadotAccountId, PolkadotReplayProtection, TrackedData, TxId,
+	EncodedPolkadotPayload, PolkadotAccountId, PolkadotReplayProtection, PolkadotTrackedData, TxId,
 };
 
 const SIGNATURE: [u8; 64] = [1u8; 64];
@@ -100,8 +100,8 @@ impl BenchmarkValue for TxId {
 	}
 }
 
-impl BenchmarkValue for TrackedData {
+impl BenchmarkValue for PolkadotTrackedData {
 	fn benchmark_value() -> Self {
-		TrackedData { median_tip: 2, next_fee_multiplier: 10000000, block_height: 20 }
+		PolkadotTrackedData { median_tip: 2, next_fee_multiplier: 10000000, block_height: 20 }
 	}
 }
