@@ -13,7 +13,14 @@ pub const CEREMONY_ID_WINDOW: u64 = 6000;
 /// Number of times to retry after incrementing the nonce on a nonce error
 pub const MAX_EXTRINSIC_RETRY_ATTEMPTS: usize = 10;
 
+// ======= Rpc Client Settings =======
+
+pub const BLOCK_PULL_TIMEOUT_MULTIPLIER: u64 = 3;
+
 // ======= Eth Rpc Client =======
+
+/// Average time it takes to mine a block on Ethereum.
+pub const ETH_AVERAGE_BLOCK_TIME_SECONDS: u64 = 14;
 
 /// Duration before we give up waiting on a response for a web3 request
 pub const ETH_LOG_REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
@@ -33,6 +40,10 @@ pub const ETH_STILL_BEHIND_LOG_INTERVAL: Duration = Duration::from_secs(180);
 
 /// Number of blocks before logging that a stream is behind again
 pub const ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL: u64 = 10;
+
+// ======= Dot Rpc Client =======
+
+pub const DOT_AVERAGE_BLOCK_TIME_SECONDS: u64 = 6;
 
 // ======= Settings environment variables =======
 

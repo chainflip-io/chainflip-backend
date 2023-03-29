@@ -1,6 +1,7 @@
 use std::{
 	collections::{BTreeSet, HashMap},
 	sync::Arc,
+	time::Duration,
 };
 
 use cf_chains::{
@@ -25,15 +26,16 @@ use tokio::{select, sync::Mutex};
 use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
+	constants::{BLOCK_PULL_TIMEOUT_MULTIPLIER, DOT_AVERAGE_BLOCK_TIME_SECONDS},
 	multisig::{ChainTag, PersistentKeyDB},
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
+	stream_utils::EngineStreamExt,
 	witnesser::{
 		block_head_stream_from::block_head_stream_from,
 		checkpointing::{
 			get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
 		},
-		epoch_witnesser::{self},
-		AddressMonitor, BlockNumberable, EpochStart,
+		epoch_witnesser, AddressMonitor, BlockNumberable, EpochStart,
 	},
 };
 
@@ -43,7 +45,7 @@ use super::rpc::DotRpcApi;
 
 #[derive(Debug, Clone, Copy)]
 pub struct MiniHeader {
-	pub block_number: PolkadotBlockNumber,
+	block_number: PolkadotBlockNumber,
 	block_hash: PolkadotHash,
 }
 
@@ -343,7 +345,7 @@ where
 							}
 						}).collect())
 					}),
-				);
+				).timeout_after(Duration::from_secs(DOT_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER));
 
 				let mut end_at_block = None;
 				let mut current_block = from_block;
@@ -354,7 +356,11 @@ where
 							end_at_block = Some(end_block.expect("end witnessing channel was dropped unexpectedly"));
 							None
 						}
-						Some((block_hash, block_number, block_event_details)) =	block_events_stream.next() => {
+						Some(res) =	block_events_stream.next() => {
+							let (block_hash, block_number, block_event_details) = res.map_err(|e| {
+								error!("{e}");
+								e
+							})?;
 							current_block = block_number;
 							Some((block_hash, block_number, block_event_details))
 						}
