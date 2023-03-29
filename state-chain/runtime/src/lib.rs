@@ -223,6 +223,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type SwappingApi = LiquidityPools;
 	type AccountRoleRegistry = AccountRoles;
+	type GasPriceProvider = chainflip::AnyChainGasPriceProvider;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }
 
@@ -295,11 +296,12 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type LpProvisioning = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
-	type AllBatch = eth::api::EthereumApi<EthEnvironment>;
+	type ChainApiCall = eth::api::EthereumApi<EthEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type IntentTTL = ConstU32<1200>;
 	type IngressHandler = chainflip::EthIngressHandler;
+	type CcmHandler = Swapping;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
 
@@ -310,12 +312,13 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type LpProvisioning = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
-	type AllBatch = dot::api::PolkadotApi<chainflip::DotEnvironment>;
+	type ChainApiCall = dot::api::PolkadotApi<chainflip::DotEnvironment>;
 	type Broadcaster = PolkadotBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type IntentTTL = ConstU32<1200>;
 	type IngressHandler = chainflip::DotIngressHandler;
+	type CcmHandler = Swapping;
 }
 
 impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
@@ -325,12 +328,13 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type AddressDerivation = AddressDerivation;
 	type LpProvisioning = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
-	type AllBatch = cf_chains::btc::api::BitcoinApi<chainflip::BtcEnvironment>;
+	type ChainApiCall = cf_chains::btc::api::BitcoinApi<chainflip::BtcEnvironment>;
 	type Broadcaster = BitcoinBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type IntentTTL = ConstU32<1200>;
 	type IngressHandler = chainflip::BtcIngressHandler;
+	type CcmHandler = Swapping;
 }
 
 parameter_types! {
@@ -1273,7 +1277,7 @@ mod test {
 
 	const CALL_ENUM_MAX_SIZE: usize = 320;
 
-	// Introduced from polkdadot
+	// Introduced from polkadot
 	#[test]
 	fn call_size() {
 		assert!(

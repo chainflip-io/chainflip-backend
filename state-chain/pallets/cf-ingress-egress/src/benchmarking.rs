@@ -1,7 +1,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use crate::{DisabledEgressAssets, FetchOrTransfer, ScheduledEgressRequests};
+use crate::{DisabledEgressAssets, ScheduledEgressFetchOrTransfer};
 use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_primitives::ForeignChain;
 use frame_benchmarking::{account, benchmarks_instance_pallet};
@@ -17,6 +17,7 @@ benchmarks_instance_pallet! {
 	verify {
 		assert!(IntentExpiries::<T, I>::get(T::BlockNumber::from(1_u32)).is_none());
 	}
+
 	on_initialize_has_no_expired {
 		let origin = T::EnsureGovernance::successful_origin();
 	} : { let _ = Pallet::<T, I>::on_initialize(T::BlockNumber::from(1_u32)); }
@@ -40,16 +41,38 @@ benchmarks_instance_pallet! {
 				batch.push(FetchOrTransfer::Transfer {
 					egress_id: (ForeignChain::Ethereum, i as u64),
 					asset: egress_asset,
-					to: egress_address.clone(),
 					amount: 1_000,
+					egress_address: egress_address.clone(),
 				});
 			}
 		}
 
-		ScheduledEgressRequests::<T, I>::put(batch);
+		ScheduledEgressFetchOrTransfer::<T, I>::put(batch);
 	} : { let _ = Pallet::<T, I>::on_idle(Default::default(), Weight::from_ref_time(1_000_000_000_000_000)); }
 	verify {
-		assert!(ScheduledEgressRequests::<T, I>::get().is_empty());
+		assert!(ScheduledEgressFetchOrTransfer::<T, I>::get().is_empty());
+	}
+
+	egress_ccm {
+		let n in 1u32 .. 254u32;
+		let mut ccms = vec![];
+
+		let egress_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
+		let egress_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
+		for i in 0..n {
+			ccms.push(CrossChainMessage {
+				egress_id: (ForeignChain::Ethereum, 1),
+				asset: egress_asset,
+				amount: 1_000,
+				egress_address: egress_address.clone(),
+				message: vec![0x00, 0x01, 0x02, 0x03],
+				refund_address: ForeignChainAddress::Eth(Default::default()),
+			});
+		}
+		ScheduledEgressCcm::<T, I>::put(ccms);
+	} : { let _ = Pallet::<T, I>::on_idle(Default::default(), Weight::from_ref_time(1_000_000_000_000_000)); }
+	verify {
+		assert!(ScheduledEgressCcm::<T, I>::get().is_empty());
 	}
 
 	disable_asset_egress {

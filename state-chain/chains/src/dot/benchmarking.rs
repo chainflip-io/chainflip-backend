@@ -1,12 +1,11 @@
 use crate::{
 	benchmarking_value::BenchmarkValue,
 	dot::{
-		BalancesCall, Polkadot, PolkadotAccountIdLookup, PolkadotAddress,
-		PolkadotChargeTransactionPayment, PolkadotCheckMortality, PolkadotCheckNonce,
-		PolkadotPublicKey, PolkadotRuntimeCall, PolkadotSignature, PolkadotSignedExtra,
-		PolkadotTransactionData, PolkadotUncheckedExtrinsic,
+		BalancesCall, PolkadotAccountIdLookup, PolkadotAddress, PolkadotChargeTransactionPayment,
+		PolkadotCheckMortality, PolkadotCheckNonce, PolkadotPublicKey, PolkadotRuntimeCall,
+		PolkadotSignature, PolkadotSignedExtra, PolkadotTransactionData,
+		PolkadotUncheckedExtrinsic,
 	},
-	eth::TrackedData,
 };
 
 use sp_core::{crypto::AccountId32, sr25519};
@@ -57,12 +56,6 @@ impl BenchmarkValue for PolkadotSignature {
 impl BenchmarkValue for PolkadotPublicKey {
 	fn benchmark_value() -> Self {
 		PolkadotPublicKey(sr25519::Public(PUBLIC_KEY))
-	}
-}
-
-impl BenchmarkValue for TrackedData<Polkadot> {
-	fn benchmark_value() -> Self {
-		Self { block_height: 1000, base_fee: 10_000_000_000, priority_fee: 2_000_000_000 }
 	}
 }
 

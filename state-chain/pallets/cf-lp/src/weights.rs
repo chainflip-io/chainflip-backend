@@ -55,7 +55,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
 	// Storage: EthereumIngressEgress EgressIdCounter (r:1 w:1)
-	// Storage: EthereumIngressEgress ScheduledEgressRequests (r:1 w:1)
+	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
 	fn withdraw_asset() -> Weight {
 		// Minimum execution time: 42_000 nanoseconds.
 		Weight::from_ref_time(45_000_000)
@@ -100,7 +100,7 @@ impl WeightInfo for () {
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
 	// Storage: EthereumIngressEgress EgressIdCounter (r:1 w:1)
-	// Storage: EthereumIngressEgress ScheduledEgressRequests (r:1 w:1)
+	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
 	fn withdraw_asset() -> Weight {
 		// Minimum execution time: 42_000 nanoseconds.
 		Weight::from_ref_time(45_000_000)

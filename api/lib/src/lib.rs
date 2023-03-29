@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
-use cf_chains::{address::ForeignChainAddress, eth::H256};
+use cf_chains::{address::ForeignChainAddress, eth::H256, CcmIngressMetadata};
 use cf_primitives::{AccountRole, Asset};
 use futures::{FutureExt, Stream};
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
@@ -15,7 +15,7 @@ pub mod primitives {
 	pub use pallet_cf_governance::ProposalId;
 	pub use state_chain_runtime::Hash;
 	pub type ClaimAmount = pallet_cf_staking::ClaimAmount<FlipBalance>;
-	pub use cf_chains::ForeignChainAddress;
+	pub use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata};
 }
 
 pub use chainflip_engine::settings;
@@ -328,6 +328,7 @@ pub async fn register_swap_intent(
 	egress_asset: Asset,
 	egress_address: ForeignChainAddress,
 	relayer_commission_bps: u16,
+	message_metadata: Option<CcmIngressMetadata>,
 ) -> Result<ForeignChainAddress> {
 	let events = connect_submit_and_get_events(
 		state_chain_settings,
@@ -336,6 +337,7 @@ pub async fn register_swap_intent(
 			egress_asset,
 			egress_address,
 			relayer_commission_bps,
+			message_metadata,
 		},
 	)
 	.await?;

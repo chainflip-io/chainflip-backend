@@ -107,6 +107,18 @@ impl<E> From<batch_transfer::BatchTransfer> for BitcoinApi<E> {
 	}
 }
 
+// TODO: Implement transfer / transfer and call for Bitcoin.
+impl<E: ReplayProtectionProvider<Bitcoin>> ExecutexSwapAndCall<Bitcoin> for BitcoinApi<E> {
+	fn new_unsigned(
+		_egress_id: EgressId,
+		_transfer_param: TransferAssetParams<Bitcoin>,
+		_from: ForeignChainAddress,
+		_message: Vec<u8>,
+	) -> Result<Self, DispatchError> {
+		Err(DispatchError::Other("Bitcoin's ExecutexSwapAndCall is not supported."))
+	}
+}
+
 impl<E> ApiCall<Bitcoin> for BitcoinApi<E> {
 	fn threshold_signature_payload(&self) -> <Bitcoin as ChainCrypto>::Payload {
 		match self {
