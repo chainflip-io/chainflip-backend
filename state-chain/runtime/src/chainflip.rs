@@ -8,7 +8,6 @@ pub mod epoch_transition;
 mod missed_authorship_slots;
 mod offences;
 mod signer_nomination;
-
 use crate::{
 	AccountId, Authorship, BitcoinIngressEgress, BlockNumber, EmergencyRotationPercentageRange,
 	Emissions, Environment, EthereumBroadcaster, EthereumIngressEgress, EthereumInstance, Flip,
@@ -52,7 +51,6 @@ use frame_support::{
 };
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
-use pallet_cf_chain_tracking::ChainState;
 use pallet_cf_validator::PercentageRange;
 use scale_info::TypeInfo;
 pub use signer_nomination::RandomSignerNomination;
@@ -167,7 +165,7 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 	}
 
 	fn refresh_unsigned_transaction(unsigned_tx: &mut <Ethereum as ChainAbi>::Transaction) {
-		if let Some(chain_state) = ChainState::<Runtime, EthereumInstance>::get() {
+		if let Some(chain_state) = EthereumChainTracking::chain_state() {
 			// double the last block's base fee. This way we know it'll be selectable for at least 6
 			// blocks (12.5% increase on each block)
 			let max_fee_per_gas =
@@ -280,8 +278,9 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 	fn replay_protection() -> PolkadotReplayProtection {
 		PolkadotReplayProtection::new(
 			Environment::next_polkadot_proxy_account_nonce(),
-			// TODO: Instead of 0, tip needs to be set here
-			0,
+			PolkadotChainTracking::chain_state()
+				.map(|state| state.median_tip)
+				.unwrap_or_default(),
 			Environment::polkadot_runtime_version(),
 			Environment::polkadot_genesis_hash(),
 		)
