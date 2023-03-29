@@ -1,9 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata};
 use cf_primitives::{Asset, AssetAmount, ForeignChain};
-use cf_traits::{
-	liquidity::SwappingApi, CcmHandler, GasPriceProviderAnychain, IngressApi, SystemStateInfo,
-};
+use cf_traits::{liquidity::SwappingApi, CcmHandler, IngressApi, SystemStateInfo};
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{traits::Saturating, Permill},
@@ -88,8 +86,6 @@ pub mod pallet {
 		type EgressHandler: EgressApi<AnyChain>;
 		/// An interface to the AMM api implementation.
 		type SwappingApi: SwappingApi;
-		/// Provider of gas price for foreign chains.
-		type GasPriceProvider: GasPriceProviderAnychain;
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
 	}
