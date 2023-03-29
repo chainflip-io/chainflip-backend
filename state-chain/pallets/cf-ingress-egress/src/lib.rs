@@ -353,7 +353,10 @@ pub mod pallet {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			let mut total_weight: Weight = Weight::zero();
 			if let Some(expired) = IntentExpiries::<T, I>::take(n) {
-				for (intent_id, address) in expired.clone() {
+				total_weight =
+					total_weight.saturating_add(T::WeightInfo::on_initialize(expired.len() as u32));
+
+				for (intent_id, address) in expired {
 					IntentActions::<T, I>::remove(&address);
 					if AddressStatus::<T, I>::get(&address) == DeploymentStatus::Deployed {
 						AddressPool::<T, I>::insert(intent_id, address.clone());
@@ -366,9 +369,6 @@ pub mod pallet {
 							ingress_asset: intent_ingress_details.ingress_asset,
 						});
 					}
-
-					total_weight = total_weight
-						.saturating_add(T::WeightInfo::on_initialize(expired.len() as u32));
 				}
 			}
 			total_weight.saturating_add(T::WeightInfo::on_initialize_has_no_expired())
