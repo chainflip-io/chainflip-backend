@@ -237,7 +237,6 @@ impl PolkadotExtrinsicBuilder {
 			(),
 			(),
 		);
-		//assert_eq!(extra.additional_signed().unwrap().3, additional_signed.3);
 		let raw_payload =
 			PolkadotPayload::from_raw(self.extrinsic_call.clone()?, extra, additional_signed);
 		self.signature_payload = raw_payload.using_encoded(|encoded_payload| {
