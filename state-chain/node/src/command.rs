@@ -1,6 +1,6 @@
 use crate::{
 	benchmarking::{inherent_benchmark_data, RemarkBuilder},
-	chain_spec::{self, use_chainflip_account_id_encoding},
+	chain_spec::{self, testnet, use_chainflip_account_id_encoding},
 	cli::{Cli, Subcommand},
 	service,
 };
@@ -38,7 +38,7 @@ impl SubstrateCli for Cli {
 		Ok(match id {
 			"dev" => Box::new(chain_spec::cf_development_config()?),
 			"test" => Box::new(chain_spec::testnet::Config::build_spec(Some(
-				chain_spec::get_environment(),
+				chain_spec::get_environment_or_defaults(testnet::ENV),
 			))?),
 			"sisyphos-new" => Box::new(chain_spec::sisyphos::Config::build_spec(None)?),
 			"sisyphos" => Box::new(chain_spec::ChainSpec::from_json_bytes(
