@@ -148,7 +148,7 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 
 	fn verify_signature(
 		signature: &Self::Signature,
-		key_id: &PublicKeyBytes,
+		public_key_bytes: &PublicKeyBytes,
 		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()>;
 
