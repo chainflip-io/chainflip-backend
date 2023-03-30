@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 use cf_primitives::{
 	AccountRole, AmmRange, Asset, AssetAmount, EgressId, ForeignChainAddress, Liquidity,
 	PoolAssetMap, Tick,
@@ -152,6 +152,7 @@ pub async fn mint_position(
 ) -> Result<MintPositionReturn> {
 	task_scope(|scope| {
 		async {
+			// Connect to State Chain
 			let (latest_block_hash, block_stream, state_chain_client) = StateChainClient::new(
 				scope,
 				state_chain_settings,
@@ -160,23 +161,14 @@ pub async fn mint_position(
 			)
 			.await?;
 
-			let asset_positions = state_chain_client
-				.base_rpc_client
-				.pool_minted_positions(state_chain_client.account_id(), asset, latest_block_hash)
-				.await?;
+			// Find the current position and calculate new target amount
+			let liquidity_target =
+				get_liquidity_at_position(&state_chain_client, asset, range, latest_block_hash)
+					.await
+					.unwrap_or_default()
+					.saturating_add(amount);
 
-			let liquidity_target = asset_positions
-				.iter()
-				.find_map(|(lower, upper, current_amount)| {
-					if lower == &range.lower && upper == &range.upper {
-						Some(*current_amount)
-					} else {
-						None
-					}
-				})
-				.unwrap_or_default()
-				.saturating_add(amount);
-
+			// Submit the update of the position
 			let call = pallet_cf_lp::Call::update_position { asset, range, liquidity_target };
 			let (_tx_hash, events) = submit_and_ensure_success(
 				&state_chain_client,
@@ -185,6 +177,7 @@ pub async fn mint_position(
 			)
 			.await?;
 
+			// Get some details from the emitted event
 			Ok(events
 				.into_iter()
 				.find_map(|event| match event {
@@ -218,6 +211,7 @@ pub async fn burn_position(
 ) -> Result<BurnPositionReturn> {
 	task_scope(|scope| {
 		async {
+			// Connect to State Chain
 			let (latest_block_hash, block_stream, state_chain_client) = StateChainClient::new(
 				scope,
 				state_chain_settings,
@@ -226,24 +220,14 @@ pub async fn burn_position(
 			)
 			.await?;
 
-			let asset_positions = state_chain_client
-				.base_rpc_client
-				.pool_minted_positions(state_chain_client.account_id(), asset, latest_block_hash)
-				.await?;
-
-			let liquidity_target = asset_positions
-				.iter()
-				.find_map(|(lower, upper, current_amount)| {
-					if lower == &range.lower && upper == &range.upper {
-						Some(current_amount)
-					} else {
-						None
-					}
-				})
-				.ok_or(anyhow!("No position found"))?
+			// Find the current position and calculate new target amount
+			let liquidity_target =
+				get_liquidity_at_position(&state_chain_client, asset, range, latest_block_hash)
+					.await?
 					.checked_sub(amount)
-				.ok_or(anyhow!("Insufficient minted liquidity at position"))?;
+					.ok_or(anyhow!("Insufficient minted liquidity at position"))?;
 
+			// Submit the update of the position
 			let call = pallet_cf_lp::Call::update_position { asset, range, liquidity_target };
 			let (_tx_hash, events) = submit_and_ensure_success(
 				&state_chain_client,
@@ -252,6 +236,7 @@ pub async fn burn_position(
 			)
 			.await?;
 
+			// Get some details from the emitted event
 			Ok(events
 				.into_iter()
 				.find_map(|event| match event {
@@ -269,4 +254,25 @@ pub async fn burn_position(
 		.boxed()
 	})
 	.await
+}
+
+async fn get_liquidity_at_position(
+	state_chain_client: &Arc<StateChainClient>,
+	asset: Asset,
+	range: AmmRange,
+	at: state_chain_runtime::Hash,
+) -> Result<AssetAmount> {
+	state_chain_client
+		.base_rpc_client
+		.pool_minted_positions(state_chain_client.account_id(), asset, at)
+		.await?
+		.iter()
+		.find_map(|(lower, upper, current_amount)| {
+			if lower == &range.lower && upper == &range.upper {
+				Some(*current_amount)
+			} else {
+				None
+			}
+		})
+		.ok_or(anyhow!("No position found"))
 }
