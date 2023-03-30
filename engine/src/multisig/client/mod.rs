@@ -232,7 +232,7 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 				.await
 				.expect("Keygen result channel dropped before receiving a result")
 				.map(|keygen_result_info| {
-					let agg_key = C::agg_key(&keygen_result_info.key.get_public_key());
+					let agg_key = keygen_result_info.key.agg_key();
 
 					self.key_store.lock().unwrap().set_key(
 						KeyId { epoch_index, public_key_bytes: agg_key.clone().into() },

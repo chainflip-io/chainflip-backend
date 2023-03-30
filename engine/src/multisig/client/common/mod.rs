@@ -79,6 +79,10 @@ impl<C: CryptoScheme> KeygenResult<C> {
 	pub fn get_public_key(&self) -> C::Point {
 		self.key_share.y
 	}
+
+	pub fn agg_key(&self) -> C::AggKey {
+		C::agg_key(&self.get_public_key())
+	}
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

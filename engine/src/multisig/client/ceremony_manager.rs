@@ -729,14 +729,14 @@ mod key_id_agg_key_match {
 		CC::AggKey: From<CScheme::AggKey>,
 	{
 		let rng = crate::multisig::crypto::Rng::from_seed([0u8; 32]);
-		let kgr = CeremonyManager::<CScheme>::new(
+		let agg_key = CeremonyManager::<CScheme>::new(
 			[4u8; 32].into(),
 			tokio::sync::mpsc::unbounded_channel().0,
 			0,
 		)
-		.single_party_keygen(rng.clone());
-
-		let agg_key = CScheme::agg_key(&kgr.key.get_public_key());
+		.single_party_keygen(rng.clone())
+		.key
+		.agg_key();
 
 		let public_key_bytes: Vec<u8> = agg_key.clone().into();
 
