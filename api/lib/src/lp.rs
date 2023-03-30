@@ -1,9 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Result};
+use cf_chains::ForeignChainAddress;
 use cf_primitives::{
-	AccountRole, AmmRange, Asset, AssetAmount, EgressId, ForeignChainAddress, Liquidity,
-	PoolAssetMap, Tick,
+	AccountRole, AmmRange, Asset, AssetAmount, EgressId, Liquidity, PoolAssetMap, Tick,
 };
 use chainflip_engine::{
 	settings,

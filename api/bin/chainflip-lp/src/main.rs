@@ -70,7 +70,7 @@ impl RpcServer for RpcServerImpl {
 	async fn liquidity_deposit(&self, asset: Asset) -> Result<String, Error> {
 		lp::liquidity_deposit(&self.state_chain_settings, asset)
 			.await
-			.map(|address| ["0x", &hex::encode(address.as_ref())].concat())
+			.map(|address| address.to_string())
 			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
