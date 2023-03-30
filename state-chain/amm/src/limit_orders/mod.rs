@@ -103,10 +103,12 @@ impl FloatBetweenZeroAndOne {
 		{
 			Self { normalised_mantissa: mul_div_normalised_mantissa, negative_exponent }
 		} else {
-			// This bounding will cause swaps to get bad prices, but this case will never happen, as
-			// atleast (U256::MAX / 256) (~10^74) swaps would have to happen to get into this
-			// situation and we disable minting for pools that are within reach of this minimum such
-			// that this minimum case cannot be reached before the fixed pool runs out of liquidity.
+			// This bounding will cause swaps to get bad prices, but this case will effectively
+			// never happen, as atleast (U256::MAX / 256) (~10^74) swaps would have to happen to get
+			// into this situation. TODO: A possible solution is disabling minting for pools "close"
+			// to this minimum. With a small change to the swapping logic it would be possible to
+			// guarantee that the pool would be emptied before percent_remaining could reach this
+			// min bound.
 			Self { normalised_mantissa: U256::one() << 255, negative_exponent: U256::MAX }
 		}
 	}
