@@ -290,7 +290,7 @@ pub struct CollectedFees {
 
 impl PoolState {
 	/// Creates a new pool with the specified fee and initial price. The pool is created with no
-	/// liquidity, it must be added using the `PoolState::mint` function.
+	/// liquidity, it must be added using the `PoolState::collect_and_mint` function.
 	///
 	/// This function never panics
 	pub fn new(fee_pips: u32, initial_sqrt_price: U256) -> Result<Self, NewError> {
