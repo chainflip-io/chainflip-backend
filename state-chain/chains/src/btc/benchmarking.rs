@@ -15,7 +15,7 @@ use super::{
 
 impl BenchmarkValue for AggKey {
 	fn benchmark_value() -> Self {
-		AggKey([1u8; 32])
+		AggKey { pubkey_x: [1u8; 32] }
 	}
 }
 

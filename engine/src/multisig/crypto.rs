@@ -105,7 +105,8 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 
 	type Signature: Debug + Clone + PartialEq + Sync + Send;
 
-	type AggKey;
+	type AggKey: Into<PublicKeyBytes> + Clone;
+
 	type SigningPayload: Display + Debug + Sync + Send + Clone + PartialEq + Eq + AsRef<[u8]>;
 
 	/// Friendly name of the scheme used for logging
@@ -148,7 +149,7 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 
 	fn verify_signature(
 		signature: &Self::Signature,
-		key_id: &PublicKeyBytes,
+		public_key_bytes: &PublicKeyBytes,
 		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()>;
 

@@ -32,7 +32,7 @@ where
 		let bitcoin_network = <E as ChainEnvironment<(), BitcoinNetwork>>::lookup(())
 			.expect("Since the lookup function always returns a some");
 		let bitcoin_return_address = derive_btc_ingress_address(
-			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(())?.0,
+			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(())?.pubkey_x,
 			CHANGE_ADDRESS_SALT,
 			bitcoin_network,
 		);
@@ -81,7 +81,7 @@ where
 		// We will use the bitcoin address derived with the salt of 0 as the vault address where we
 		// collect unspent amounts in btc transactions and consolidate funds when rotating epoch.
 		let new_vault_return_address =
-			derive_btc_ingress_address(new_key.0, CHANGE_ADDRESS_SALT, bitcoin_network);
+			derive_btc_ingress_address(new_key.pubkey_x, CHANGE_ADDRESS_SALT, bitcoin_network);
 
 		//max possible btc value to get all available utxos
 		let (all_input_utxos, total_spendable_amount_in_vault) =
