@@ -5,9 +5,9 @@ use codec::{Decode, Encode};
 use common::{Amount, SqrtPriceQ64F96};
 use scale_info::TypeInfo;
 
-mod common;
-mod limit_orders;
-mod range_orders;
+pub mod common;
+pub mod limit_orders;
+pub mod range_orders;
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
 pub struct PoolState {
