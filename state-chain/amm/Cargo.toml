@@ -6,13 +6,26 @@ edition = '2021'
 description = "Chainflip's AMM Logic"
 
 [dependencies]
-primitive-types = "0.11.1"
-enum-map = "2.1.0"
+primitive-types = { version = "0.11.1", default-features = false, features = ['scale-info'] }
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
+
+# Parity deps
+codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
+scale-info = { version = '2.1.1', default-features = false, features = ['derive'] }
+
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
+sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
 
 [dev-dependencies]
 rand = "0.7"
 
 [features]
 default = ['std']
-std = ['cf-utilities/std']
+std = [
+	'primitive-types/std',
+	'cf-utilities/std',
+	'codec/std',
+	'scale-info/std',
+	'sp-core/std',
+	'sp-std/std',
+]

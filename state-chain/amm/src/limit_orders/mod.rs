@@ -3,12 +3,14 @@ mod tests;
 
 use std::collections::BTreeMap;
 
+use codec::{Decode, Encode, MaxEncodedLen};
 use primitive_types::{U256, U512};
+use scale_info::TypeInfo;
 
 use crate::common::{
 	is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, Amount, LiquidityProvider,
-	OneToZero, Side, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_SQRT_PRICE, MIN_SQRT_PRICE, ONE_IN_PIPS,
-	SQRT_PRICE_FRACTIONAL_BITS,
+	OneToZero, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_SQRT_PRICE, MIN_SQRT_PRICE,
+	ONE_IN_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
 };
 
 const MAX_FIXED_POOL_LIQUIDITY: Amount = U256([u64::MAX, u64::MAX, 0, 0]);
@@ -27,7 +29,7 @@ fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
 }
 
 /// Represents a number exclusively between 0 and 1.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
 struct FloatBetweenZeroAndOne {
 	normalised_mantissa: U256,
 	negative_exponent: U256,
@@ -238,32 +240,32 @@ pub enum BurnError {
 #[derive(Debug)]
 pub enum CollectError {}
 
-#[derive(Default, Debug, PartialEq, Eq)]
+#[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct CollectedAmounts {
 	pub fees: Amount,
 	pub swapped_liquidity: Amount,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 struct Position {
 	pool_instance: u128,
 	amount: Amount,
 	last_percent_remaining: FloatBetweenZeroAndOne,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct FixedPool {
 	pool_instance: u128,
 	available: Amount,
 	percent_remaining: FloatBetweenZeroAndOne,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, TypeInfo, Encode, Decode)]
 pub struct PoolState {
 	fee_pips: u32,
 	next_pool_instance: u128,
-	fixed_pools: enum_map::EnumMap<Side, BTreeMap<SqrtPriceQ64F96, FixedPool>>,
-	positions: enum_map::EnumMap<Side, BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
+	fixed_pools: SideMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
+	positions: SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
 }
 
 impl PoolState {
@@ -289,7 +291,7 @@ impl PoolState {
 		&mut self,
 		fee_pips: u32,
 	) -> Result<
-		enum_map::EnumMap<Side, BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), CollectedAmounts>>,
+		SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), CollectedAmounts>>,
 		SetFeesError,
 	> {
 		(fee_pips <= ONE_IN_PIPS / 2)
@@ -319,7 +321,7 @@ impl PoolState {
 
 		self.fee_pips = fee_pips;
 
-		Ok(enum_map::EnumMap::from_array(collected_amounts))
+		Ok(SideMap::from_array(collected_amounts))
 	}
 
 	/// Returns the current price of the pool, if some liquidity exists.

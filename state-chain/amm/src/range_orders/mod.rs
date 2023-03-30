@@ -25,11 +25,13 @@ mod tests;
 use std::{collections::BTreeMap, convert::Infallible, u128};
 
 use cf_utilities::assert_ok;
+use codec::{Decode, Encode, MaxEncodedLen};
 use primitive_types::{U256, U512};
+use scale_info::TypeInfo;
 
 use crate::common::{
 	is_sqrt_price_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, tick_at_sqrt_price,
-	Amount, LiquidityProvider, OneToZero, Side, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_TICK,
+	Amount, LiquidityProvider, OneToZero, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_TICK,
 	MIN_TICK, ONE_IN_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
 };
 
@@ -38,10 +40,10 @@ type FeeGrowthQ128F128 = U256;
 
 const MAX_TICK_GROSS_LIQUIDITY: Liquidity = Liquidity::MAX / ((1 + MAX_TICK - MIN_TICK) as u128);
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 struct Position {
 	liquidity: Liquidity,
-	last_fee_growth_inside: enum_map::EnumMap<Side, FeeGrowthQ128F128>,
+	last_fee_growth_inside: SideMap<FeeGrowthQ128F128>,
 }
 impl Position {
 	fn collect_fees(
@@ -52,7 +54,7 @@ impl Position {
 		upper_tick: Tick,
 		upper_delta: &TickDelta,
 	) -> CollectedFees {
-		let fee_growth_inside = enum_map::EnumMap::default().map(|side, ()| {
+		let fee_growth_inside = SideMap::default().map(|side, ()| {
 			let fee_growth_below = if pool_state.current_tick < lower_tick {
 				pool_state.global_fee_growth[side] - lower_delta.fee_growth_outside[side]
 			} else {
@@ -68,7 +70,7 @@ impl Position {
 			pool_state.global_fee_growth[side] - fee_growth_below - fee_growth_above
 		});
 		let collected_fees = CollectedFees {
-			fees: enum_map::EnumMap::default().map(|side, ()| {
+			fees: SideMap::default().map(|side, ()| {
 				// DIFF: This behaviour is different than Uniswap's. We use U256 instead of u128 to
 				// calculate fees, therefore it is not possible to overflow the fees here.
 
@@ -104,21 +106,21 @@ impl Position {
 	}
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct TickDelta {
 	liquidity_delta: i128,
 	liquidity_gross: u128,
-	fee_growth_outside: enum_map::EnumMap<Side, FeeGrowthQ128F128>,
+	fee_growth_outside: SideMap<FeeGrowthQ128F128>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, TypeInfo, Encode, Decode)]
 pub struct PoolState {
 	fee_pips: u32,
 	// Note the current_sqrt_price can reach MAX_SQRT_PRICE, but only if the tick is MAX_TICK
 	current_sqrt_price: SqrtPriceQ64F96,
 	current_tick: Tick,
 	current_liquidity: Liquidity,
-	global_fee_growth: enum_map::EnumMap<Side, FeeGrowthQ128F128>,
+	global_fee_growth: SideMap<FeeGrowthQ128F128>,
 	liquidity_map: BTreeMap<Tick, TickDelta>,
 	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
 }
@@ -308,9 +310,9 @@ pub enum BurnError {
 #[derive(Debug)]
 pub enum CollectError {}
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct CollectedFees {
-	pub fees: enum_map::EnumMap<Side, Amount>,
+	pub fees: SideMap<Amount>,
 }
 
 impl PoolState {
@@ -384,11 +386,7 @@ impl PoolState {
 	/// This function never panics
 	///
 	/// If this function returns an `Err(_)` no state changes have occurred
-	pub fn collect_and_mint<
-		T,
-		E,
-		TryDebit: FnOnce(enum_map::EnumMap<Side, Amount>) -> Result<T, E>,
-	>(
+	pub fn collect_and_mint<T, E, TryDebit: FnOnce(SideMap<Amount>) -> Result<T, E>>(
 		&mut self,
 		lp: LiquidityProvider,
 		lower_tick: Tick,
@@ -480,7 +478,7 @@ impl PoolState {
 		lower_tick: Tick,
 		upper_tick: Tick,
 		burnt_liquidity: Liquidity,
-	) -> Result<(enum_map::EnumMap<Side, Amount>, CollectedFees), PositionError<BurnError>> {
+	) -> Result<(SideMap<Amount>, CollectedFees), PositionError<BurnError>> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
 		if let Some(mut position) = self.positions.get(&(lp, lower_tick, upper_tick)).cloned() {
 			assert!(position.liquidity != 0);
@@ -691,7 +689,7 @@ impl PoolState {
 			assert!(!SD::sqrt_price_op_more_than(sqrt_price_next, sqrt_price_at_delta));
 
 			if sqrt_price_next == sqrt_price_at_delta {
-				delta.fee_growth_outside = enum_map::EnumMap::default()
+				delta.fee_growth_outside = SideMap::default()
 					.map(|side, ()| self.global_fee_growth[side] - delta.fee_growth_outside[side]);
 				self.current_sqrt_price = sqrt_price_next;
 				self.current_tick = SD::current_tick_after_crossing_tick(*tick_at_delta);
@@ -728,48 +726,48 @@ impl PoolState {
 		liquidity: Liquidity,
 		lower_tick: Tick,
 		upper_tick: Tick,
-	) -> (enum_map::EnumMap<Side, Amount>, Liquidity) {
+	) -> (SideMap<Amount>, Liquidity) {
 		assert!(liquidity <= MAX_TICK_GROSS_LIQUIDITY);
 		assert_ok!(Self::validate_position_range::<Infallible>(lower_tick, upper_tick));
 
 		if self.current_tick < lower_tick {
 			(
-				enum_map::enum_map! {
-					Side::Zero => (if ROUND_UP { Self::zero_amount_delta_ceil } else { Self::zero_amount_delta_floor })(
-						sqrt_price_at_tick(lower_tick),
-						sqrt_price_at_tick(upper_tick),
-						liquidity
-					),
-					Side::One => 0.into()
-				},
+				SideMap::from_array([
+					(if ROUND_UP {
+						Self::zero_amount_delta_ceil
+					} else {
+						Self::zero_amount_delta_floor
+					})(sqrt_price_at_tick(lower_tick), sqrt_price_at_tick(upper_tick), liquidity),
+					0.into(),
+				]),
 				0,
 			)
 		} else if self.current_tick < upper_tick {
 			(
-				enum_map::enum_map! {
-					Side::Zero => (if ROUND_UP { Self::zero_amount_delta_ceil } else { Self::zero_amount_delta_floor })(
-						self.current_sqrt_price,
-						sqrt_price_at_tick(upper_tick),
-						liquidity
-					),
-					Side::One => (if ROUND_UP { Self::one_amount_delta_ceil } else { Self::one_amount_delta_floor })(
-						sqrt_price_at_tick(lower_tick),
-						self.current_sqrt_price,
-						liquidity
-					)
-				},
+				SideMap::from_array([
+					(if ROUND_UP {
+						Self::zero_amount_delta_ceil
+					} else {
+						Self::zero_amount_delta_floor
+					})(self.current_sqrt_price, sqrt_price_at_tick(upper_tick), liquidity),
+					(if ROUND_UP {
+						Self::one_amount_delta_ceil
+					} else {
+						Self::one_amount_delta_floor
+					})(sqrt_price_at_tick(lower_tick), self.current_sqrt_price, liquidity),
+				]),
 				liquidity,
 			)
 		} else {
 			(
-				enum_map::enum_map! {
-					Side::Zero => 0.into(),
-					Side::One => (if ROUND_UP { Self::one_amount_delta_ceil } else { Self::one_amount_delta_floor })(
-						sqrt_price_at_tick(lower_tick),
-						sqrt_price_at_tick(upper_tick),
-						liquidity
-					)
-				},
+				SideMap::from_array([
+					0.into(),
+					(if ROUND_UP {
+						Self::one_amount_delta_ceil
+					} else {
+						Self::one_amount_delta_floor
+					})(sqrt_price_at_tick(lower_tick), sqrt_price_at_tick(upper_tick), liquidity),
+				]),
 				0,
 			)
 		}

@@ -1,5 +1,6 @@
-use enum_map::Enum;
+use codec::{Decode, Encode, MaxEncodedLen};
 use primitive_types::{H256, U256, U512};
+use scale_info::TypeInfo;
 
 pub const ONE_IN_PIPS: u32 = 1000000;
 
@@ -9,7 +10,7 @@ pub type Tick = i32;
 pub type SqrtPriceQ64F96 = U256;
 pub const SQRT_PRICE_FRACTIONAL_BITS: u32 = 96;
 
-#[derive(Debug, Enum, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub enum Side {
 	Zero,
 	One,
@@ -22,6 +23,39 @@ impl std::ops::Not for Side {
 		match self {
 			Side::Zero => Side::One,
 			Side::One => Side::Zero,
+		}
+	}
+}
+
+#[derive(Copy, Clone, Default, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+pub struct SideMap<T> {
+	zero: T,
+	one: T,
+}
+impl<T> SideMap<T> {
+	pub fn from_array(array: [T; 2]) -> Self {
+		let [zero, one] = array;
+		Self { zero, one }
+	}
+
+	pub fn map<R>(self, mut f: impl FnMut(Side, T) -> R) -> SideMap<R> {
+		SideMap { zero: f(Side::Zero, self.zero), one: f(Side::One, self.one) }
+	}
+}
+impl<T> std::ops::Index<Side> for SideMap<T> {
+	type Output = T;
+	fn index(&self, side: Side) -> &T {
+		match side {
+			Side::Zero => &self.zero,
+			Side::One => &self.one,
+		}
+	}
+}
+impl<T> std::ops::IndexMut<Side> for SideMap<T> {
+	fn index_mut(&mut self, side: Side) -> &mut T {
+		match side {
+			Side::Zero => &mut self.zero,
+			Side::One => &mut self.one,
 		}
 	}
 }

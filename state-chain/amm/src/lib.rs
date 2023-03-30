@@ -1,12 +1,15 @@
 #[cfg(test)]
 mod tests;
 
+use codec::{Decode, Encode};
 use common::{Amount, SqrtPriceQ64F96};
+use scale_info::TypeInfo;
 
 mod common;
 mod limit_orders;
 mod range_orders;
 
+#[derive(Clone, Debug, TypeInfo, Encode, Decode)]
 pub struct PoolState {
 	pub limit_orders: limit_orders::PoolState,
 	pub range_orders: range_orders::PoolState,
