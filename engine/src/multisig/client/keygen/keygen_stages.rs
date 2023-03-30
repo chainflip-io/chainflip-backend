@@ -47,7 +47,7 @@ use super::{
 	keygen_data::{HashComm1, PubkeyShares0, VerifyBlameResponses9, VerifyHashComm2},
 	keygen_detail::{
 		compute_secret_key_share, derive_local_pubkeys_for_parties, generate_hash_commitment,
-		IndexPair, ShamirShare, SharingParameters, ValidAggregateKey,
+		ShamirShare, SharingParameters, ValidAggregateKey,
 	},
 	HashContext,
 };
@@ -100,7 +100,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 					.map(|idx| {
 						let id = self.common.validator_mapping.get_id(idx);
 						let pubkey = public_key_shares.get(id).unwrap();
-						(idx, pubkey.clone())
+						(idx, *pubkey)
 					})
 					.collect()
 			} else {
@@ -767,7 +767,7 @@ async fn finalize_keygen<Crypto: CryptoScheme>(
 ) -> StageResult<KeygenCeremony<Crypto>> {
 	let future_index_mapping = keygen_common
 		.resharing_context
-		.map(|c| Arc::new(c.future_index_mapping.clone()))
+		.map(|c| Arc::new(c.future_index_mapping))
 		.unwrap_or_else(|| common.validator_mapping.clone());
 
 	let party_public_keys = tokio::task::spawn_blocking(move || {

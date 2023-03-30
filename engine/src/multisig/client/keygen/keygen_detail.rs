@@ -157,7 +157,7 @@ impl SharingParameters {
 				let id = current_party_mapping.get_id(*idx);
 				let future_index = context
 					.future_index_mapping
-					.get_idx(&id)
+					.get_idx(id)
 					.expect("receiving party must have a future index");
 				IndexPair { current_index: *idx, future_index }
 			})

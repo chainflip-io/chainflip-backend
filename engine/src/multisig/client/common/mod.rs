@@ -182,7 +182,7 @@ impl<C: CryptoScheme> ResharingContext<C> {
 		// different ceremonies will have different idx/id mappings. In this case
 		// we want indexes for upcoming handover ceremony (rather than the one
 		// that generated the key to be re-shared).
-		let all_ids = receiving_participants.union(&sharing_participants).cloned().collect();
+		let all_ids = receiving_participants.union(sharing_participants).cloned().collect();
 		let party_idx_mapping = PartyIdxMapping::from_participants(all_ids);
 		let future_index_mapping =
 			PartyIdxMapping::from_participants(receiving_participants.clone());
@@ -206,8 +206,8 @@ impl<C: CryptoScheme> ResharingContext<C> {
 			.collect();
 
 		ResharingContext {
-			sharing_participants: sharing_participants.clone(),
-			receiving_participants: receiving_participants.clone(),
+			sharing_participants,
+			receiving_participants,
 			party_status: ParticipantStatus::NonSharing,
 			future_index_mapping,
 		}
