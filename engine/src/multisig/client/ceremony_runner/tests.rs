@@ -288,7 +288,7 @@ async fn should_ignore_duplicate_delayed_message() {
 		None
 	);
 
-	// The message should of been ignored and not added to the delayed messages
+	// The message should have been ignored and not added to the delayed messages
 	assert_eq!(stage_1_state.delayed_messages.len(), 1);
 }
 
