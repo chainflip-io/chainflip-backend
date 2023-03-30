@@ -1,108 +1,65 @@
-use codec::{Decode, Encode};
-use scale_info::TypeInfo;
 use sp_std::{boxed::Box, vec};
 
-use crate::{
-	dot::{
-		BalancesCall, Polkadot, PolkadotAccountId, PolkadotAccountIdLookup,
-		PolkadotExtrinsicBuilder, PolkadotProxyType, PolkadotPublicKey, PolkadotReplayProtection,
-		PolkadotRuntimeCall, ProxyCall, UtilityCall,
-	},
-	impl_api_call_dot,
+use crate::dot::{
+	BalancesCall, PolkadotAccountId, PolkadotAccountIdLookup, PolkadotExtrinsicBuilder,
+	PolkadotProxyType, PolkadotReplayProtection, PolkadotRuntimeCall, ProxyCall, UtilityCall,
 };
 
-use crate::{ApiCall, ChainCrypto};
-use sp_std::vec::Vec;
-
-use sp_runtime::{traits::IdentifyAccount, MultiSigner, RuntimeDebug};
-
-/// Represents all the arguments required to build the call to fetch assets for all given intent
-/// ids.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
-pub struct RotateVaultProxy {
-	/// The handler for creating and signing polkadot extrinsics
-	pub extrinsic_builder: PolkadotExtrinsicBuilder,
-	/// The current proxy AccountId
-	pub old_proxy: PolkadotPublicKey,
-	/// The new proxy account public key
-	pub new_proxy: PolkadotPublicKey,
-	/// The vault anonymous Polkadot AccountId
-	pub vault_account: PolkadotAccountId,
-}
-
-impl RotateVaultProxy {
-	pub fn new_unsigned(
-		replay_protection: PolkadotReplayProtection,
-		old_proxy: PolkadotPublicKey,
-		new_proxy: PolkadotPublicKey,
-		vault_account: PolkadotAccountId,
-	) -> Self {
-		let mut calldata = Self {
-			extrinsic_builder: PolkadotExtrinsicBuilder::new_empty(
-				replay_protection,
-				MultiSigner::Sr25519(old_proxy.0).into_account(),
-			),
-			old_proxy,
-			new_proxy,
-			vault_account,
-		};
-		// create and insert polkadot runtime call
-		calldata
-			.extrinsic_builder
-			.insert_extrinsic_call(calldata.extrinsic_call_polkadot());
-		// compute and insert the threshold signature payload
-		calldata.extrinsic_builder.insert_threshold_signature_payload().expect(
-			"This should not fail since SignedExtension of the SignedExtra type is implemented",
-		);
-
-		calldata
-	}
-
-	fn extrinsic_call_polkadot(&self) -> PolkadotRuntimeCall {
+pub fn extrinsic_builder(
+	replay_protection: PolkadotReplayProtection,
+	maybe_old_proxy: Option<PolkadotAccountId>,
+	new_proxy: PolkadotAccountId,
+	vault_account: PolkadotAccountId,
+) -> PolkadotExtrinsicBuilder {
+	PolkadotExtrinsicBuilder::new(
+		replay_protection,
 		PolkadotRuntimeCall::Utility(UtilityCall::batch_all {
 			calls: vec![
 				PolkadotRuntimeCall::Proxy(ProxyCall::proxy {
-					real: PolkadotAccountIdLookup::from(self.vault_account.clone()),
+					real: PolkadotAccountIdLookup::from(vault_account),
 					force_proxy_type: Some(PolkadotProxyType::Any),
 					call: Box::new(PolkadotRuntimeCall::Utility(UtilityCall::batch_all {
-						calls: vec![
-							PolkadotRuntimeCall::Proxy(ProxyCall::add_proxy {
-								delegate: PolkadotAccountIdLookup::from(
-									MultiSigner::Sr25519(self.new_proxy.0).into_account(),
-								),
+						calls: [
+							Some(PolkadotRuntimeCall::Proxy(ProxyCall::add_proxy {
+								delegate: new_proxy.clone().into(),
 								proxy_type: PolkadotProxyType::Any,
 								delay: 0,
+							})),
+							maybe_old_proxy.map(|old_proxy| {
+								PolkadotRuntimeCall::Proxy(ProxyCall::remove_proxy {
+									delegate: old_proxy.into(),
+									proxy_type: PolkadotProxyType::Any,
+									delay: 0,
+								})
 							}),
-							PolkadotRuntimeCall::Proxy(ProxyCall::remove_proxy {
-								delegate: PolkadotAccountIdLookup::from(
-									MultiSigner::Sr25519(self.old_proxy.0).into_account(),
-								),
-								proxy_type: PolkadotProxyType::Any,
-								delay: 0,
-							}),
-						],
+						]
+						.into_iter()
+						.flatten()
+						.collect(),
 					})),
 				}),
 				PolkadotRuntimeCall::Balances(BalancesCall::transfer_all {
-					dest: PolkadotAccountIdLookup::from(
-						MultiSigner::Sr25519(self.new_proxy.0).into_account(),
-					),
+					dest: new_proxy.into(),
 					keep_alive: false,
 				}),
 			],
-		})
-	}
+		}),
+	)
 }
-
-impl_api_call_dot!(RotateVaultProxy);
 
 #[cfg(test)]
 mod test_rotate_vault_proxy {
 
 	use super::*;
-	use crate::dot::{
-		sr25519::Pair, NONCE_2, RAW_SEED_1, RAW_SEED_2, RAW_SEED_3, TEST_RUNTIME_VERSION,
+	use crate::{
+		dot::{
+			api::{mocks::MockEnv, WithEnvironment},
+			sr25519::Pair,
+			NONCE_2, RAW_SEED_1, RAW_SEED_2, RAW_SEED_3, TEST_RUNTIME_VERSION,
+		},
+		ApiCall,
 	};
+	use codec::Encode;
 	use sp_core::{
 		crypto::{AccountId32, Pair as TraitPair},
 		Hasher,
@@ -128,40 +85,31 @@ mod test_rotate_vault_proxy {
 		let _account_id_new_proxy: AccountId32 =
 			MultiSigner::Sr25519(keypair_new_proxy.public()).into_account();
 
-		let rotate_vault_proxy_api = RotateVaultProxy::new_unsigned(
-			PolkadotReplayProtection::new(NONCE_2, 0, TEST_RUNTIME_VERSION, Default::default()),
-			PolkadotPublicKey(keypair_old_proxy.public()),
-			PolkadotPublicKey(keypair_new_proxy.public()),
+		let mut builder = super::extrinsic_builder(
+			PolkadotReplayProtection { nonce: NONCE_2, genesis_hash: Default::default() },
+			Some(keypair_old_proxy.public().into()),
+			keypair_new_proxy.public().into(),
 			AccountId32::from_ss58check("5D58KA25o2KcL9EiBJckjScGzvH5nUEiKJBrgAjsSfRuGJkc")
 				.unwrap(),
 		);
 
-		println!(
-			"CallHash: 0x{}",
-			rotate_vault_proxy_api
-				.extrinsic_builder
-				.extrinsic_call
-				.clone()
-				.unwrap()
-				.using_encoded(|encoded| hex::encode(BlakeTwo256::hash(encoded)))
-		);
-		println!(
-			"Encoded Call: 0x{}",
-			hex::encode(
-				rotate_vault_proxy_api
-					.extrinsic_builder
-					.extrinsic_call
-					.clone()
-					.unwrap()
-					.encode()
-			)
-		);
+		let encoded_call = builder.extrinsic_call.encode();
+		println!("CallHash: 0x{}", hex::encode(BlakeTwo256::hash(&encoded_call[..])));
+		println!("Encoded Call: 0x{}", hex::encode(encoded_call));
 
-		let rotate_vault_proxy_api = rotate_vault_proxy_api.clone().signed(
-			&keypair_old_proxy.sign(&rotate_vault_proxy_api.threshold_signature_payload().0),
+		let payload = builder.get_signature_payload(
+			TEST_RUNTIME_VERSION.spec_version,
+			TEST_RUNTIME_VERSION.transaction_version,
 		);
-		assert!(rotate_vault_proxy_api.is_signed());
+		builder.insert_signature(
+			keypair_old_proxy.public().into(),
+			keypair_old_proxy.sign(&payload.0[..]),
+		);
+		assert!(builder.is_signed());
 
-		println!("encoded extrinsic: 0x{}", hex::encode(rotate_vault_proxy_api.chain_encoded()));
+		println!(
+			"encoded extrinsic: 0x{}",
+			hex::encode(builder.with_environment::<MockEnv>().chain_encoded())
+		);
 	}
 }

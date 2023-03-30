@@ -23,7 +23,7 @@ use cf_chains::{
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
-		PolkadotTransactionData,
+		PolkadotTransactionData, RuntimeVersion,
 	},
 	eth::{
 		self,
@@ -164,7 +164,7 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 		}
 	}
 
-	fn refresh_unsigned_transaction(unsigned_tx: &mut <Ethereum as ChainAbi>::Transaction) {
+	fn refresh_unsigned_data(unsigned_tx: &mut <Ethereum as ChainAbi>::Transaction) {
 		if let Some(chain_state) = EthereumChainTracking::chain_state() {
 			// double the last block's base fee. This way we know it'll be selectable for at least 6
 			// blocks (12.5% increase on each block)
@@ -176,7 +176,10 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 		// if we don't have ChainState, we leave it unmodified
 	}
 
-	fn is_valid_for_rebroadcast(_call: &EthereumApi<EthEnvironment>) -> bool {
+	fn is_valid_for_rebroadcast(
+		_call: &EthereumApi<EthEnvironment>,
+		_payload: &<Ethereum as ChainCrypto>::Payload,
+	) -> bool {
 		// Nothing to validate for Ethereum
 		true
 	}
@@ -190,14 +193,15 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 		PolkadotTransactionData { encoded_extrinsic: signed_call.chain_encoded() }
 	}
 
-	fn refresh_unsigned_transaction(_unsigned_tx: &mut <Polkadot as ChainAbi>::Transaction) {
+	fn refresh_unsigned_data(_unsigned_tx: &mut <Polkadot as ChainAbi>::Transaction) {
 		// TODO: For now this is a noop until we actually have dot chain tracking
 	}
 
-	fn is_valid_for_rebroadcast(call: &PolkadotApi<DotEnvironment>) -> bool {
-		// If we know the Polkadot runtime has been upgraded then we know this transaction will
-		// fail.
-		call.runtime_version_used() == Environment::polkadot_runtime_version()
+	fn is_valid_for_rebroadcast(
+		call: &PolkadotApi<DotEnvironment>,
+		payload: &<Polkadot as ChainCrypto>::Payload,
+	) -> bool {
+		&call.threshold_signature_payload() == payload
 	}
 }
 
@@ -209,12 +213,15 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 		BitcoinTransactionData { encoded_transaction: signed_call.chain_encoded() }
 	}
 
-	fn refresh_unsigned_transaction(_unsigned_tx: &mut <Bitcoin as ChainAbi>::Transaction) {
+	fn refresh_unsigned_data(_unsigned_tx: &mut <Bitcoin as ChainAbi>::Transaction) {
 		// We might need to restructure the tx depending on the current fee per utxo. no-op until we
 		// have chain tracking
 	}
 
-	fn is_valid_for_rebroadcast(_call: &BitcoinApi<BtcEnvironment>) -> bool {
+	fn is_valid_for_rebroadcast(
+		_call: &BitcoinApi<BtcEnvironment>,
+		_payload: &<Bitcoin as ChainCrypto>::Payload,
+	) -> bool {
 		// Todo: The transaction wont be valid for rebroadcast as soon as we transition to new epoch
 		// since the input utxo set will change and the whole apicall would be invalid. This case
 		// will be handled later
@@ -276,14 +283,16 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 	// Get the Environment values for vault_account, NetworkChoice and the next nonce for the
 	// proxy_account
 	fn replay_protection() -> PolkadotReplayProtection {
-		PolkadotReplayProtection::new(
-			Environment::next_polkadot_proxy_account_nonce(),
-			PolkadotChainTracking::chain_state()
-				.map(|state| state.median_tip)
-				.unwrap_or_default(),
-			Environment::polkadot_runtime_version(),
-			Environment::polkadot_genesis_hash(),
-		)
+		PolkadotReplayProtection {
+			genesis_hash: Environment::polkadot_genesis_hash(),
+			nonce: Environment::next_polkadot_proxy_account_nonce(),
+		}
+	}
+}
+
+impl Get<RuntimeVersion> for DotEnvironment {
+	fn get() -> RuntimeVersion {
+		Environment::polkadot_runtime_version()
 	}
 }
 
@@ -299,7 +308,6 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 					_ => None,
 				}
 			},
-
 			cf_chains::dot::api::SystemAccounts::Vault => Environment::polkadot_vault_account(),
 		}
 	}

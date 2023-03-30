@@ -337,7 +337,7 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			T::PolkadotBroadcaster::threshold_sign_and_broadcast(
-				T::CreatePolkadotVault::new_unsigned(dot_aggkey),
+				T::CreatePolkadotVault::new_unsigned(),
 			);
 			Self::deposit_event(Event::<T>::PolkadotVaultCreationCallInitiated {
 				agg_key: dot_aggkey,
