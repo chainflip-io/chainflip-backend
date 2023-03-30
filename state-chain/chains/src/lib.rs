@@ -198,13 +198,6 @@ pub struct TransferAssetParams<C: Chain> {
 	pub amount: <C as Chain>::ChainAmount,
 	pub to: <C as Chain>::ChainAccount,
 }
-
-pub trait IngressAddress {
-	type AddressType;
-	/// Returns an ingress address
-	fn derive_address(self, vault_address: Self::AddressType, intent_id: u32) -> Self::AddressType;
-}
-
 /// Similar to [frame_support::StaticLookup] but with the `Key` as a type parameter instead of an
 /// associated type.
 ///
