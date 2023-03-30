@@ -137,61 +137,72 @@ impl CryptoScheme for BtcSigning {
 
 	#[cfg(test)]
 	fn signing_payload_for_test() -> Self::SigningPayload {
-		SigningPayload("Chainflip:Chainflip:Chainflip:01".as_bytes().try_into().unwrap())
+		SigningPayload(Sha256::digest(b"Chainflip:Chainflip:Chainflip:01").into())
 	}
 }
 
-#[test]
-fn test_sig_verification() {
-	// These are some random values fed through a reference implementation for bitcoin signing
-	// to test that our verification works correctly
-	let r = Point::from_scalar(&Scalar::from_hex(
-		"8F78522655F02F46F55103BC6EE2242E04553DAA65BF18D0E329EC6B49FD3788",
-	));
-	let s = Scalar::from_hex("ED7A468DBE45823D91CC1276F9E9F1DD3A1DB8E4C9EFE8F5DBA43B63E4C02FAD");
-	let signature = BtcSigning::build_signature(s, r);
-	let pubkey_x =
-		hex::decode("59B2B46FB182A6D4B39FFB7A29D0B67851DDE2433683BE6D46623A7960D2799E").unwrap();
-	let mut hasher = Sha256::new();
-	hasher.update(BtcSigning::signing_payload_for_test());
-	let payload = SigningPayload(hasher.finalize().into());
-	assert!(BtcSigning::verify_signature(&signature, &pubkey_x, &payload).is_ok());
-}
+#[cfg(test)]
+mod test {
+	use super::*;
 
-#[test]
-fn test_btcsig_to_raw() {
-	// These are some random values that we can use to see that the "sig.to_raw()" function
-	// works as expected
-	let s = Scalar::from_hex("626FC96FF3678D4FA2DE960B2C39D199747D3F47F01508FBBE24825C4D11B543");
-	let r = Point::from_scalar(&s);
-	let sig = BtcSigning::build_signature(s, r);
-	assert_eq!(
-		sig.to_raw(),
-		[
-			0x59, 0xb2, 0xb4, 0x6f, 0xb1, 0x82, 0xa6, 0xd4, 0xb3, 0x9f, 0xfb, 0x7a, 0x29, 0xd0,
-			0xb6, 0x78, 0x51, 0xdd, 0xe2, 0x43, 0x36, 0x83, 0xbe, 0x6d, 0x46, 0x62, 0x3a, 0x79,
-			0x60, 0xd2, 0x79, 0x9e, 0x62, 0x6f, 0xc9, 0x6f, 0xf3, 0x67, 0x8d, 0x4f, 0xa2, 0xde,
-			0x96, 0x0b, 0x2c, 0x39, 0xd1, 0x99, 0x74, 0x7d, 0x3f, 0x47, 0xf0, 0x15, 0x08, 0xfb,
-			0xbe, 0x24, 0x82, 0x5c, 0x4d, 0x11, 0xb5, 0x43
-		]
-	);
-}
+	#[test]
+	fn test_sig_verification() {
+		// These are some random values fed through a reference implementation for bitcoin signing
+		// to test that our verification works correctly
+		let r = Point::from_scalar(&Scalar::from_hex(
+			"8F78522655F02F46F55103BC6EE2242E04553DAA65BF18D0E329EC6B49FD3788",
+		));
+		let s =
+			Scalar::from_hex("ED7A468DBE45823D91CC1276F9E9F1DD3A1DB8E4C9EFE8F5DBA43B63E4C02FAD");
+		let signature = BtcSigning::build_signature(s, r);
+		let pubkey_x =
+			hex::decode("59B2B46FB182A6D4B39FFB7A29D0B67851DDE2433683BE6D46623A7960D2799E")
+				.unwrap();
+		assert!(BtcSigning::verify_signature(
+			&signature,
+			&pubkey_x,
+			&BtcSigning::signing_payload_for_test()
+		)
+		.is_ok());
+	}
 
-#[test]
-fn test_challenge() {
-	// Again some random values that were used in a reference implementation
-	// so that we can be sure the build_challenge method works as expected
-	let public = Point::from_scalar(&Scalar::from_hex(
-		"626FC96FF3678D4FA2DE960B2C39D199747D3F47F01508FBBE24825C4D11B543",
-	));
-	let commitment = Point::from_scalar(&Scalar::from_hex(
-		"EB3F18E13AEFBF7AC9347F38B6E5D5576848B4E7927F6233222BA9286BB24F31",
-	));
-	let mut hasher = Sha256::new();
-	hasher.update(BtcSigning::signing_payload_for_test());
-	let payload = SigningPayload(hasher.finalize().into());
-	assert_eq!(
-		BtcSigning::build_challenge(public, commitment, &payload),
-		Scalar::from_hex("1FCA6ED81348426626DA247A3B0810F61EA46C592442F81FC9DFFDB43ABBE439")
-	);
+	#[test]
+	fn test_btcsig_to_raw() {
+		// These are some random values that we can use to see that the "sig.to_raw()" function
+		// works as expected
+		let s =
+			Scalar::from_hex("626FC96FF3678D4FA2DE960B2C39D199747D3F47F01508FBBE24825C4D11B543");
+		let r = Point::from_scalar(&s);
+		let sig = BtcSigning::build_signature(s, r);
+		assert_eq!(
+			sig.to_raw(),
+			[
+				0x59, 0xb2, 0xb4, 0x6f, 0xb1, 0x82, 0xa6, 0xd4, 0xb3, 0x9f, 0xfb, 0x7a, 0x29, 0xd0,
+				0xb6, 0x78, 0x51, 0xdd, 0xe2, 0x43, 0x36, 0x83, 0xbe, 0x6d, 0x46, 0x62, 0x3a, 0x79,
+				0x60, 0xd2, 0x79, 0x9e, 0x62, 0x6f, 0xc9, 0x6f, 0xf3, 0x67, 0x8d, 0x4f, 0xa2, 0xde,
+				0x96, 0x0b, 0x2c, 0x39, 0xd1, 0x99, 0x74, 0x7d, 0x3f, 0x47, 0xf0, 0x15, 0x08, 0xfb,
+				0xbe, 0x24, 0x82, 0x5c, 0x4d, 0x11, 0xb5, 0x43
+			]
+		);
+	}
+
+	#[test]
+	fn test_challenge() {
+		// Again some random values that were used in a reference implementation
+		// so that we can be sure the build_challenge method works as expected
+		let public = Point::from_scalar(&Scalar::from_hex(
+			"626FC96FF3678D4FA2DE960B2C39D199747D3F47F01508FBBE24825C4D11B543",
+		));
+		let commitment = Point::from_scalar(&Scalar::from_hex(
+			"EB3F18E13AEFBF7AC9347F38B6E5D5576848B4E7927F6233222BA9286BB24F31",
+		));
+		assert_eq!(
+			BtcSigning::build_challenge(
+				public,
+				commitment,
+				&BtcSigning::signing_payload_for_test()
+			),
+			Scalar::from_hex("1FCA6ED81348426626DA247A3B0810F61EA46C592442F81FC9DFFDB43ABBE439")
+		);
+	}
 }
