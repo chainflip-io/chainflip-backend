@@ -179,8 +179,8 @@ pub mod pallet {
 		NoFundsAvailable,
 		/// The target chain does not support CCM.
 		CcmUnsupportedForTargetChain,
-		/// The gas budget is higher than the ingressed amount.
-		CcmGasBudgetTooHigh,
+		/// The ingressed amount is insufficient to pay for the gas budget.
+		CcmInsufficientIngressAmount,
 	}
 
 	#[pallet::hooks]
@@ -339,15 +339,9 @@ pub mod pallet {
 			message_metadata: CcmIngressMetadata,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			// Currently only Ethereum supports CCM.
 			ensure!(
-				ForeignChain::Ethereum == egress_asset.into(),
-				Error::<T>::CcmUnsupportedForTargetChain
-			);
-			ensure!(
-				ForeignChain::from(egress_asset) == ForeignChain::from(egress_address.clone()),
-				Error::<T>::IncompatibleAssetAndAddress
+				ForeignChain::from(egress_address.clone()) == ForeignChain::from(egress_asset),
+				Error::<T>::IncompatibleAssetAndAddress,
 			);
 
 			Self::on_ccm_ingress(
@@ -578,7 +572,18 @@ pub mod pallet {
 			debug_assert!(
 				ForeignChain::from(egress_address.clone()) == ForeignChain::from(egress_asset)
 			);
-			ensure!(ingress_amount > message_metadata.gas_budget, Error::<T>::CcmGasBudgetTooHigh);
+
+			// Currently only Ethereum supports CCM.
+			ensure!(
+				ForeignChain::Ethereum == egress_asset.into(),
+				Error::<T>::CcmUnsupportedForTargetChain
+			);
+
+			// Ingressed amount should be enough to pay for gas.
+			ensure!(
+				ingress_amount > message_metadata.gas_budget,
+				Error::<T>::CcmInsufficientIngressAmount
+			);
 
 			let ccm_id = CcmIdCounter::<T>::mutate(|id| {
 				id.saturating_accrue(1);
