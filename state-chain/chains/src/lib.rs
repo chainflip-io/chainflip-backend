@@ -60,7 +60,7 @@ pub trait Chain: Member + Parameter {
 		+ Copy
 		+ Default
 		+ Saturating
-		+ Into<u128>
+		+ Into<AssetAmount>
 		+ FullCodec
 		+ MaxEncodedLen
 		+ BenchmarkValue;
