@@ -2,7 +2,6 @@ use std::collections::BTreeSet;
 
 use cf_primitives::AuthorityCount;
 use rand_legacy::SeedableRng;
-use utilities::threshold_from_share_count;
 
 use crate::multisig::{
 	client::{
