@@ -25,7 +25,7 @@ use cf_utilities::assert_ok;
 use primitive_types::{U256, U512};
 
 use crate::common::{
-	mul_div_ceil, mul_div_floor, Amount, LiquidityProvider, OneToZero, Side, ZeroToOne, ONE_IN_PIPS, SqrtPriceQ64F96, Tick, sqrt_price_at_tick, MAX_TICK, MIN_TICK, tick_at_sqrt_price, is_sqrt_price_valid,
+	mul_div_ceil, mul_div_floor, Amount, LiquidityProvider, OneToZero, Side, ZeroToOne, ONE_IN_PIPS, SqrtPriceQ64F96, Tick, sqrt_price_at_tick, MAX_TICK, MIN_TICK, tick_at_sqrt_price, is_sqrt_price_valid, SQRT_PRICE_FRACTIONAL_BITS,
 };
 
 pub type Liquidity = u128;
@@ -99,7 +99,7 @@ impl Position {
 }
 
 #[derive(Clone, Debug)]
-struct TickDelta {
+pub struct TickDelta {
 	liquidity_delta: i128,
 	liquidity_gross: u128,
 	fee_growth_outside: enum_map::EnumMap<Side, FeeGrowthQ128F128>,
@@ -117,12 +117,15 @@ pub struct PoolState {
 	positions: BTreeMap<(LiquidityProvider, Tick, Tick), Position>,
 }
 
-trait SwapDirection: crate::common::SwapDirection {
+pub trait SwapDirection: crate::common::SwapDirection {
+	/// Given the current_tick determines if the current price can increase further i.e. that there is possibly liquidity past the current price 
+	fn further_liquidity(current_tick: Tick) -> bool;
+
 	/// The xy=k maths only works while the liquidity is constant, so this function returns the
 	/// closest (to the current) next tick/price where liquidity possibly changes. Note the
 	/// direction of `next` is implied by the swapping direction.
 	fn next_liquidity_delta(
-		tick: Tick,
+		current_tick: Tick,
 		liquidity_map: &mut BTreeMap<Tick, TickDelta>,
 	) -> Option<(&Tick, &mut TickDelta)>;
 
@@ -157,12 +160,16 @@ trait SwapDirection: crate::common::SwapDirection {
 }
 
 impl SwapDirection for ZeroToOne {
+	fn further_liquidity(current_tick: Tick) -> bool {
+		current_tick >= MIN_TICK
+	}
+
 	fn next_liquidity_delta(
 		current_tick: Tick,
 		liquidity_map: &mut BTreeMap<Tick, TickDelta>,
 	) -> Option<(&Tick, &mut TickDelta)> {
 		assert!(liquidity_map.contains_key(&MIN_TICK));
-		if current_tick >= MIN_TICK {
+		if Self::further_liquidity(current_tick) {
 			Some(liquidity_map.range_mut(..=current_tick).next_back().unwrap())
 		} else {
 			assert_eq!(current_tick, Self::current_tick_after_crossing_tick(MIN_TICK));
@@ -204,12 +211,16 @@ impl SwapDirection for ZeroToOne {
 }
 
 impl SwapDirection for OneToZero {
+	fn further_liquidity(current_tick: Tick) -> bool {
+		current_tick < MAX_TICK
+	}
+
 	fn next_liquidity_delta(
 		current_tick: Tick,
 		liquidity_map: &mut BTreeMap<Tick, TickDelta>,
 	) -> Option<(&Tick, &mut TickDelta)> {
 		assert!(liquidity_map.contains_key(&MAX_TICK));
-		if current_tick < MAX_TICK {
+		if Self::further_liquidity(current_tick) {
 			Some(liquidity_map.range_mut(current_tick + 1..).next().unwrap())
 		} else {
 			assert_eq!(current_tick, Self::current_tick_after_crossing_tick(MAX_TICK));
@@ -330,6 +341,10 @@ impl PoolState {
 			.into(),
 			positions: Default::default(),
 		})
+	}
+
+	pub fn current_sqrt_price<SD: SwapDirection>(&self) -> Option<SqrtPriceQ64F96> {
+		SD::further_liquidity(self.current_tick).then_some(self.current_sqrt_price)
 	}
 
 	/// Calculates the fees owed to the specified position, resets the fees owed for that position
@@ -538,37 +553,13 @@ impl PoolState {
 		}
 	}
 
-	/// Swaps the specified Amount of Zero into One until sqrt_price_limit is reached (If Some), and
-	/// returns the One Amount and the Remaining input Zero Amount.
-	///
-	/// This function never panics
-	pub fn swap_from_zero_to_one(
-		&mut self,
-		amount: Amount,
-		sqrt_price_limit: Option<U256>,
-	) -> (Amount, Amount) {
-		self.swap::<ZeroToOne>(amount, sqrt_price_limit)
-	}
-
-	/// Swaps the specified Amount of One into Zero until sqrt_price_limit is reached (If Some), and
-	/// returns the Zero Amount and the Remaining input One Amount.
-	///
-	/// This function never panics
-	pub fn swap_from_one_to_zero(
-		&mut self,
-		amount: Amount,
-		sqrt_price_limit: Option<U256>,
-	) -> (Amount, Amount) {
-		self.swap::<OneToZero>(amount, sqrt_price_limit)
-	}
-
 	/// Swaps the specified Amount into the other currency until sqrt_price_limit is reached (If
 	/// Some), and returns the resulting Amount and the remaining input Amount. The direction of the
 	/// swap is controlled by the generic type parameter `SD`, by setting it to `ZeroToOne` or
 	/// `OneToZero`.
 	///
 	/// This function never panics
-	fn swap<SD: SwapDirection>(
+	pub fn swap<SD: SwapDirection>(
 		&mut self,
 		mut amount: Amount,
 		sqrt_price_limit: Option<U256>,
@@ -775,7 +766,7 @@ impl PoolState {
 			Then A * B >= B and B - A < B
 			Then A * B > B - A
 		*/
-		mul_div_floor(U256::from(liquidity) << 96u32, to - from, U256::full_mul(to, from))
+		mul_div_floor(U256::from(liquidity) << SQRT_PRICE_FRACTIONAL_BITS, to - from, U256::full_mul(to, from))
 	}
 
 	fn zero_amount_delta_ceil(
@@ -792,7 +783,7 @@ impl PoolState {
 			Then A * B >= B and B - A < B
 			Then A * B > B - A
 		*/
-		mul_div_ceil(U256::from(liquidity) << 96u32, to - from, U256::full_mul(to, from))
+		mul_div_ceil(U256::from(liquidity) << SQRT_PRICE_FRACTIONAL_BITS, to - from, U256::full_mul(to, from))
 	}
 
 	fn one_amount_delta_floor(
@@ -809,7 +800,7 @@ impl PoolState {
 			Then (B - A) / (1<<96) <= u64::MAX (160 - 96 = 64)
 			Then L * ((B - A) / (1<<96)) <= u192::MAX < u256::MAX
 		*/
-		mul_div_floor(liquidity.into(), to - from, U512::from(1) << 96u32)
+		mul_div_floor(liquidity.into(), to - from, U512::from(1) << SQRT_PRICE_FRACTIONAL_BITS)
 	}
 
 	fn one_amount_delta_ceil(
@@ -826,7 +817,7 @@ impl PoolState {
 			Then (B - A) / (1<<96) <= u64::MAX (160 - 96 = 64)
 			Then L * ((B - A) / (1<<96)) <= u192::MAX < u256::MAX
 		*/
-		mul_div_ceil(liquidity.into(), to - from, U512::from(1u32) << 96u32)
+		mul_div_ceil(liquidity.into(), to - from, U512::from(1u32) << SQRT_PRICE_FRACTIONAL_BITS)
 	}
 
 	fn next_sqrt_price_from_zero_input(
@@ -837,7 +828,7 @@ impl PoolState {
 		assert!(0 < liquidity);
 		assert!(SqrtPriceQ64F96::zero() < sqrt_price_current);
 
-		let liquidity = U256::from(liquidity) << 96u32;
+		let liquidity = U256::from(liquidity) << SQRT_PRICE_FRACTIONAL_BITS;
 
 		/*
 			Proof that `mul_div_ceil` does not overflow:
@@ -864,7 +855,7 @@ impl PoolState {
 
 		// Will not overflow as function is not called if amount >= amount_required_to_reach_target,
 		// therefore bounding the function output to approximately <= MAX_SQRT_PRICE
-		sqrt_price_current + mul_div_floor(amount, U256::one() << 96u32, liquidity)
+		sqrt_price_current + mul_div_floor(amount, U256::one() << SQRT_PRICE_FRACTIONAL_BITS, liquidity)
 	}
 }
 

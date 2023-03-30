@@ -7,6 +7,7 @@ pub type LiquidityProvider = H256;
 pub type Amount = U256;
 pub type Tick = i32;
 pub type SqrtPriceQ64F96 = U256;
+pub const SQRT_PRICE_FRACTIONAL_BITS: u32 = 96;
 
 #[derive(Debug, Enum, Clone, Copy)]
 pub enum Side {
@@ -31,19 +32,26 @@ pub fn mul_div_floor<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
 }
 
 pub fn mul_div_ceil<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
+	mul_div(a, b, c).1
+}
+
+pub fn mul_div<C: Into<U512>>(a: U256, b: U256, c: C) -> (U256, U256) {
 	let c: U512 = c.into();
 
 	let (d, m) = U512::div_mod(U256::full_mul(a, b), c);
 
-	if m > U512::from(0) {
-		// cannot overflow as for m > 0, c must be > 1, and as (a*b) < U512::MAX, therefore a*b/c <
-		// U512::MAX
-		d + 1
-	} else {
-		d
-	}
-	.try_into()
-	.unwrap()
+	(
+		d.try_into().unwrap(),
+		if m > U512::from(0) {
+			// cannot overflow as for m > 0, c must be > 1, and as (a*b) < U512::MAX, therefore
+			// a*b/c < U512::MAX
+			d + 1
+		} else {
+			d
+		}
+		.try_into()
+		.unwrap(),
+	)
 }
 
 pub struct ZeroToOne {}
@@ -97,8 +105,12 @@ pub fn is_sqrt_price_valid(sqrt_price: SqrtPriceQ64F96) -> bool {
 	(MIN_SQRT_PRICE..MAX_SQRT_PRICE).contains(&sqrt_price)
 }
 
+pub fn is_tick_valid(tick: Tick) -> bool {
+	(MIN_TICK..=MAX_TICK).contains(&tick)
+}
+
 pub fn sqrt_price_at_tick(tick: Tick) -> SqrtPriceQ64F96 {
-	assert!((MIN_TICK..=MAX_TICK).contains(&tick));
+	assert!(is_tick_valid(tick));
 
 	let abs_tick = tick.unsigned_abs();
 
