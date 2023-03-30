@@ -36,7 +36,7 @@ use cf_chains::{
 	TransactionBuilder,
 };
 use cf_primitives::{
-	chains::assets, liquidity::U256, Asset, AssetAmount, EgressId, IntentId, ETHEREUM_ETH_ADDRESS,
+	chains::assets, liquidity::U256, Asset, EgressId, IntentId, ETHEREUM_ETH_ADDRESS,
 };
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, EgressApi,
@@ -458,7 +458,7 @@ macro_rules! impl_egress_api_for_anychain {
 		impl EgressApi<AnyChain> for $anychain {
 			fn schedule_egress(
 				asset: Asset,
-				amount: AssetAmount,
+				amount: <AnyChain as Chain>::ChainAmount,
 				egress_address: <AnyChain as Chain>::ChainAccount,
 				maybe_message: Option<CcmIngressMetadata>,
 			) -> EgressId {
@@ -466,7 +466,7 @@ macro_rules! impl_egress_api_for_anychain {
 					$(
 						ForeignChain::$chain => $ingress_egress::schedule_egress(
 							asset.try_into().expect("Checked for asset compatibility"),
-							amount,
+							amount.try_into().expect("Checked for amount compatibility"),
 							egress_address
 								.try_into()
 								.expect("This address cast is ensured to succeed."),
@@ -510,9 +510,7 @@ impl IngressHandler<Bitcoin> for BtcIngressHandler {
 		_asset: <Bitcoin as Chain>::ChainAsset,
 	) {
 		Environment::add_bitcoin_utxo_to_list(Utxo {
-			amount: amount
-				.try_into()
-				.expect("the amount witnessed should not exceed u64 max for btc"),
+			amount,
 			txid: utxo_id.tx_hash,
 			vout: utxo_id.vout,
 			pubkey_x: utxo_id.pubkey_x,

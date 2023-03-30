@@ -61,9 +61,9 @@ pub trait Chain: Member + Parameter {
 		+ Default
 		+ Saturating
 		+ Into<u128>
-		+ From<u128>
 		+ FullCodec
-		+ MaxEncodedLen;
+		+ MaxEncodedLen
+		+ BenchmarkValue;
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
@@ -195,7 +195,7 @@ pub struct FetchAssetParams<C: Chain> {
 #[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct TransferAssetParams<C: Chain> {
 	pub asset: <C as Chain>::ChainAsset,
-	pub amount: AssetAmount,
+	pub amount: <C as Chain>::ChainAmount,
 	pub to: <C as Chain>::ChainAccount,
 }
 

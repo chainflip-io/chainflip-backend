@@ -40,16 +40,15 @@ where
 		let mut btc_outputs = vec![];
 		for transfer_param in transfer_params {
 			btc_outputs.push(BitcoinOutput {
-				amount: transfer_param.clone().amount.try_into().expect("Since this output comes from the AMM and if AMM math works correctly, this should be a valid bitcoin amount which should be less than u64::max"),
+				amount: transfer_param.amount,
 				script_pubkey: transfer_param.to.to_scriptpubkey().map_err(|_| ())?,
 			});
-			total_output_amount += <u128 as TryInto<u64>>::try_into(transfer_param.amount)
-				.expect("BTC amounts are never more than u64 max");
+			total_output_amount += transfer_param.amount;
 		}
 		// Looks up all available Utxos and selects and takes them for the transaction depending on
 		// the amount that needs to be output.
 		let (selected_input_utxos, total_input_amount_available) =
-			<E as ChainEnvironment<BtcAmount, SelectedUtxos>>::lookup(total_output_amount.into())
+			<E as ChainEnvironment<BtcAmount, SelectedUtxos>>::lookup(total_output_amount)
 				.ok_or(())?;
 
 		btc_outputs.push(BitcoinOutput {
@@ -86,7 +85,7 @@ where
 
 		//max possible btc value to get all available utxos
 		let (all_input_utxos, total_spendable_amount_in_vault) =
-			<E as ChainEnvironment<BtcAmount, SelectedUtxos>>::lookup(u64::MAX.into()).ok_or(())?;
+			<E as ChainEnvironment<BtcAmount, SelectedUtxos>>::lookup(u64::MAX).ok_or(())?;
 
 		Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
 			all_input_utxos,
