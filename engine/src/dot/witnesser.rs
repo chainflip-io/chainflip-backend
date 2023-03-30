@@ -212,6 +212,19 @@ fn check_for_interesting_events_in_block(
 		}
 	}
 
+	tips.sort();
+	let median_tip = tips
+		.get({
+			let len = tips.len();
+			if len % 2 == 0 {
+				len / 2 - 1
+			} else {
+				len / 2
+			}
+		})
+		.cloned()
+		.unwrap_or_default();
+
 	(
 		interesting_indices
 			.into_iter()
@@ -219,8 +232,7 @@ fn check_for_interesting_events_in_block(
 			.collect(),
 		ingress_witnesses,
 		vault_key_rotated_calls,
-		// take the median
-		tips.get(tips.len() / 2).cloned().unwrap_or_default(),
+		median_tip,
 	)
 }
 
@@ -726,8 +738,8 @@ mod tests {
 		assert_ne!(LOWER_TIP + MEDIAN_TIP + HIGHER_TIP / 3, MEDIAN_TIP);
 
 		let block_event_details = phase_and_events(&[
-			(1, mock_tx_fee_paid_tip(LOWER_TIP)),
-			(2, mock_tx_fee_paid_tip(MEDIAN_TIP)),
+			(1, mock_tx_fee_paid_tip(MEDIAN_TIP)),
+			(2, mock_tx_fee_paid_tip(LOWER_TIP)),
 			(3, mock_tx_fee_paid_tip(HIGHER_TIP)),
 		]);
 
@@ -739,6 +751,24 @@ mod tests {
 			&mut AddressMonitor::new(BTreeSet::default()).1,
 		);
 
+		assert_eq!(median_tip, MEDIAN_TIP);
+
+		let block_event_details = phase_and_events(&[
+			(1, mock_tx_fee_paid_tip(HIGHER_TIP)),
+			(2, mock_tx_fee_paid_tip(MEDIAN_TIP)),
+			(3, mock_tx_fee_paid_tip(LOWER_TIP)),
+			(4, mock_tx_fee_paid_tip(HIGHER_TIP)),
+		]);
+
+		let (.., median_tip) = check_for_interesting_events_in_block(
+			block_event_details,
+			20,
+			// arbitrary, not focus of the test
+			&PolkadotAccountId::from([0xda; 32]),
+			&mut AddressMonitor::new(BTreeSet::default()).1,
+		);
+
+		// When there's only two events, the median is the lower of the two
 		assert_eq!(median_tip, MEDIAN_TIP);
 	}
 
