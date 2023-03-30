@@ -283,8 +283,8 @@ impl PoolState {
 		})
 	}
 
-	/// Sets the fee for the pool. This function will fail if the fee is greater than 50%.
-	/// Also runs collect for all positions in the pool.
+	/// Sets the fee for the pool. This will apply to future swaps. This function will fail if the
+	/// fee is greater than 50%. Also runs collect for all positions in the pool.
 	///
 	/// This function never panics.
 	#[allow(clippy::type_complexity)]

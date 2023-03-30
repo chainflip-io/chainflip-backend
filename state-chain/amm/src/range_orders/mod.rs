@@ -358,6 +358,10 @@ impl PoolState {
 		})
 	}
 
+	/// Sets the fee for the pool. This will apply to future swaps. This function will fail if the
+	/// fee is greater than 50%.
+	///
+	/// This function never panics
 	pub fn set_fees(&mut self, fee_pips: u32) -> Result<(), SetFeesError> {
 		Self::validate_fees(fee_pips)
 			.then_some(())
@@ -370,6 +374,10 @@ impl PoolState {
 		fee_pips <= ONE_IN_PIPS / 2
 	}
 
+	/// Returns the current sqrt price of the pool. None if the pool has no more liquidity and the
+	/// price cannot get worse.
+	///
+	/// This function never panics
 	pub fn current_sqrt_price<SD: SwapDirection>(&self) -> Option<SqrtPriceQ64F96> {
 		SD::further_liquidity(self.current_tick).then_some(self.current_sqrt_price)
 	}
