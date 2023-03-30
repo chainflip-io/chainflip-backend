@@ -56,26 +56,14 @@ pub fn extrinsic_builder(
 mod test_batch_fetch {
 
 	use super::*;
-	use crate::{
-		dot::{
-			api::{mocks::*, WithEnvironment},
-			sr25519::Pair,
-			NONCE_1, RAW_SEED_1, RAW_SEED_2, TEST_RUNTIME_VERSION,
-		},
-		ApiCall,
-	};
+	use crate::dot::{sr25519::Pair, NONCE_1, RAW_SEED_1, RAW_SEED_2, TEST_RUNTIME_VERSION};
 	use cf_primitives::chains::assets;
-	use codec::Encode;
 	use sp_core::{
 		crypto::{AccountId32, Pair as TraitPair},
-		sr25519, Hasher,
+		sr25519,
 	};
-	use sp_runtime::{
-		traits::{BlakeTwo256, IdentifyAccount},
-		MultiSigner,
-	};
+	use sp_runtime::{traits::IdentifyAccount, MultiSigner};
 
-	#[ignore]
 	#[test]
 	fn create_test_api_call() {
 		let keypair_vault: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_1);
@@ -115,20 +103,15 @@ mod test_batch_fetch {
 			account_id_vault,
 		);
 
-		let encoded_call = builder.extrinsic_call.encode();
-		println!("CallHash: 0x{}", hex::encode(BlakeTwo256::hash(&encoded_call[..])));
-		println!("Encoded Call: 0x{}", hex::encode(encoded_call));
-
 		let payload = builder.get_signature_payload(
 			TEST_RUNTIME_VERSION.spec_version,
 			TEST_RUNTIME_VERSION.transaction_version,
 		);
+		assert_eq!(
+			hex::encode(&payload.0),
+			"fefffc6f6999882f0481ac2a5c5df813b53adf448a478fb1420f89df84455df3"
+		);
 		builder.insert_signature(keypair_proxy.public().into(), keypair_proxy.sign(&payload.0[..]));
 		assert!(builder.is_signed());
-
-		println!(
-			"encoded extrinsic: 0x{}",
-			hex::encode(builder.with_environment::<MockEnv>().chain_encoded())
-		);
 	}
 }

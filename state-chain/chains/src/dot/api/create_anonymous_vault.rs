@@ -18,19 +18,9 @@ pub fn extrinsic_builder(replay_protection: PolkadotReplayProtection) -> Polkado
 mod test_create_anonymous_vault {
 
 	use super::*;
-	use crate::{
-		dot::{
-			api::{mocks::MockEnv, WithEnvironment},
-			sr25519::Pair,
-			NONCE_2, RAW_SEED_2, TEST_RUNTIME_VERSION,
-		},
-		ApiCall,
-	};
-	use codec::Encode;
-	use sp_core::{crypto::Pair as TraitPair, Hasher};
-	use sp_runtime::traits::BlakeTwo256;
+	use crate::dot::{sr25519::Pair, NONCE_2, RAW_SEED_2, TEST_RUNTIME_VERSION};
+	use sp_core::crypto::Pair as TraitPair;
 
-	#[ignore]
 	#[test]
 	fn create_test_api_call() {
 		let keypair_proxy: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_2);
@@ -40,20 +30,21 @@ mod test_create_anonymous_vault {
 			genesis_hash: Default::default(),
 		});
 
-		let encoded_call = builder.extrinsic_call.encode();
-		println!("CallHash: 0x{}", hex::encode(BlakeTwo256::hash(&encoded_call[..])));
-		println!("Encoded Call: 0x{}", hex::encode(encoded_call));
-
 		let payload = builder.get_signature_payload(
 			TEST_RUNTIME_VERSION.spec_version,
 			TEST_RUNTIME_VERSION.transaction_version,
 		);
+		assert_eq!(
+			hex::encode(&payload.0),
+			"
+			1d04000000000000000048007c24000010000000000000000000000000000000
+			0000000000000000000000000000000000000000000000000000000000000000
+			0000000000000000000000000000000000000000
+			"
+			.split_whitespace()
+			.collect::<String>()
+		);
 		builder.insert_signature(keypair_proxy.public().into(), keypair_proxy.sign(&payload.0[..]));
 		assert!(builder.is_signed());
-
-		println!(
-			"encoded extrinsic: 0x{}",
-			hex::encode(builder.with_environment::<MockEnv>().chain_encoded())
-		);
 	}
 }

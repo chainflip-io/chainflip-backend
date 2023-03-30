@@ -51,26 +51,12 @@ pub fn extrinsic_builder(
 mod test_rotate_vault_proxy {
 
 	use super::*;
-	use crate::{
-		dot::{
-			api::{mocks::MockEnv, WithEnvironment},
-			sr25519::Pair,
-			NONCE_2, RAW_SEED_1, RAW_SEED_2, RAW_SEED_3, TEST_RUNTIME_VERSION,
-		},
-		ApiCall,
+	use crate::dot::{
+		sr25519::Pair, NONCE_2, RAW_SEED_1, RAW_SEED_2, RAW_SEED_3, TEST_RUNTIME_VERSION,
 	};
-	use codec::Encode;
-	use sp_core::{
-		crypto::{AccountId32, Pair as TraitPair},
-		Hasher,
-	};
-	use sp_runtime::{
-		app_crypto::Ss58Codec,
-		traits::{BlakeTwo256, IdentifyAccount},
-		MultiSigner,
-	};
+	use sp_core::crypto::{AccountId32, Pair as TraitPair};
+	use sp_runtime::{app_crypto::Ss58Codec, traits::IdentifyAccount, MultiSigner};
 
-	#[ignore]
 	#[test]
 	fn create_test_api_call() {
 		let keypair_vault: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_1);
@@ -93,23 +79,29 @@ mod test_rotate_vault_proxy {
 				.unwrap(),
 		);
 
-		let encoded_call = builder.extrinsic_call.encode();
-		println!("CallHash: 0x{}", hex::encode(BlakeTwo256::hash(&encoded_call[..])));
-		println!("Encoded Call: 0x{}", hex::encode(encoded_call));
-
 		let payload = builder.get_signature_payload(
 			TEST_RUNTIME_VERSION.spec_version,
 			TEST_RUNTIME_VERSION.transaction_version,
+		);
+		assert_eq!(
+			hex::encode(&payload.0),
+			"
+			1a02081d00002c8e8fde289aa5739f1b5a390404a4bdbc6a0588dce3f329d
+			16f8a0ef6fa6bb701001a02081d01000c494f3eaa2263d95759e336c1090c
+			e8710d25426e741cf9a3a218c93b14184700000000001d0200beb9c3f0ae5
+			bda798dd3b65fe345fdf9031946849d8925ae7be73ee9407c673700000000
+			000504000c494f3eaa2263d95759e336c10 90ce8710d25426e741cf9a3a2
+			18c93b141847000048007c240000100000000000000000000000000000000
+			0000000000000000000000000000000000000000000000000000000000000
+			000000000000000000000000000000000000000000
+			"
+			.split_whitespace()
+			.collect::<String>()
 		);
 		builder.insert_signature(
 			keypair_old_proxy.public().into(),
 			keypair_old_proxy.sign(&payload.0[..]),
 		);
 		assert!(builder.is_signed());
-
-		println!(
-			"encoded extrinsic: 0x{}",
-			hex::encode(builder.with_environment::<MockEnv>().chain_encoded())
-		);
 	}
 }
