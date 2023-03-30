@@ -166,7 +166,7 @@ impl SwapDirection for ZeroToOne {
 	}
 
 	fn output_amount_floor(input: Amount, price: Price) -> Amount {
-		mul_div_floor(input, price, U256::one() << 128)
+		mul_div_floor(input, price, U256::one() << PRICE_FRACTIONAL_BITS)
 	}
 
 	fn best_priced_fixed_pool(
@@ -177,7 +177,7 @@ impl SwapDirection for ZeroToOne {
 }
 impl SwapDirection for OneToZero {
 	fn input_amount_ceil(output: Amount, price: Price) -> Amount {
-		mul_div_ceil(output, price, U256::one() << 128)
+		mul_div_ceil(output, price, U256::one() << PRICE_FRACTIONAL_BITS)
 	}
 
 	fn input_amount_floor(output: Amount, price: Price) -> Amount {
@@ -185,7 +185,7 @@ impl SwapDirection for OneToZero {
 	}
 
 	fn output_amount_floor(input: Amount, price: Price) -> Amount {
-		mul_div_floor(input, U256::one() << 128, price)
+		mul_div_floor(input, U256::one() << PRICE_FRACTIONAL_BITS, price)
 	}
 
 	fn best_priced_fixed_pool(
