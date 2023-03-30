@@ -81,13 +81,11 @@ impl CryptoScheme for BtcSigning {
 		payload: &Self::SigningPayload,
 	) -> Scalar {
 		let mut hasher = Sha256::new();
-		hasher.update(payload.0);
-		let sighash = hasher.finalize_reset();
 		hasher.update(CHALLENGE_TAG);
 		hasher.update(CHALLENGE_TAG);
 		hasher.update(nonce_commitment.x_bytes());
 		hasher.update(pubkey.x_bytes());
-		hasher.update(sighash);
+		hasher.update(payload.0);
 		ECScalar::from_bytes_mod_order(&hasher.finalize().into())
 	}
 
@@ -124,12 +122,9 @@ impl CryptoScheme for BtcSigning {
 		public_key_bytes: &PublicKeyBytes,
 		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()> {
-		let mut hasher = Sha256::new();
-		hasher.update(payload.0);
-		let hash = hasher.finalize();
 		let secp = secp256k1::Secp256k1::new();
 		let raw_sig = secp256k1::schnorrsig::Signature::from_slice(&signature.to_raw()).unwrap();
-		let raw_msg = secp256k1::Message::from_slice(&hash).unwrap();
+		let raw_msg = secp256k1::Message::from_slice(&payload.0).unwrap();
 		let raw_pubkey =
 			secp256k1::schnorrsig::PublicKey::from_slice(&public_key_bytes[1..33]).unwrap();
 
@@ -163,7 +158,9 @@ fn test_sig_verification() {
 	let signature = BtcSigning::build_signature(s, r);
 	let public_key_bytes =
 		hex::decode("0259B2B46FB182A6D4B39FFB7A29D0B67851DDE2433683BE6D46623A7960D2799E").unwrap();
-	let payload = BtcSigning::signing_payload_for_test();
+	let mut hasher = Sha256::new();
+	hasher.update(BtcSigning::signing_payload_for_test());
+	let payload = SigningPayload(hasher.finalize().into());
 	assert!(BtcSigning::verify_signature(&signature, &public_key_bytes, &payload).is_ok());
 }
 
@@ -196,8 +193,11 @@ fn test_challenge() {
 	let commitment = Point::from_scalar(&Scalar::from_hex(
 		"EB3F18E13AEFBF7AC9347F38B6E5D5576848B4E7927F6233222BA9286BB24F31",
 	));
+	let mut hasher = Sha256::new();
+	hasher.update(BtcSigning::signing_payload_for_test());
+	let payload = SigningPayload(hasher.finalize().into());
 	assert_eq!(
-		BtcSigning::build_challenge(public, commitment, &BtcSigning::signing_payload_for_test()),
+		BtcSigning::build_challenge(public, commitment, &payload),
 		Scalar::from_hex("1FCA6ED81348426626DA247A3B0810F61EA46C592442F81FC9DFFDB43ABBE439")
 	);
 }
