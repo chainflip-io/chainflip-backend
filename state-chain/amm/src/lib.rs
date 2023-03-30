@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use common::{Amount, SqrtPriceQ64F96};
 
 mod common;
