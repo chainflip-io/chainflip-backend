@@ -1,10 +1,10 @@
 use codec::{Decode, Encode, MaxEncodedLen};
-use primitive_types::{H256, U256, U512};
+use primitive_types::{U256, U512};
 use scale_info::TypeInfo;
 
 pub const ONE_IN_PIPS: u32 = 1000000;
 
-pub type LiquidityProvider = H256;
+pub type LiquidityProvider = cf_primitives::AccountId;
 pub type Amount = U256;
 pub type Tick = i32;
 pub type SqrtPriceQ64F96 = U256;

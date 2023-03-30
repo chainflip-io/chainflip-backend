@@ -388,14 +388,14 @@ impl PoolState {
 	/// If this function returns an `Err(_)` no state changes have occurred
 	pub fn collect_and_mint<T, E, TryDebit: FnOnce(SideMap<Amount>) -> Result<T, E>>(
 		&mut self,
-		lp: LiquidityProvider,
+		lp: &LiquidityProvider,
 		lower_tick: Tick,
 		upper_tick: Tick,
 		minted_liquidity: Liquidity,
 		try_debit: TryDebit,
 	) -> Result<(T, CollectedFees), PositionError<MintError<E>>> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
-		let option_position = self.positions.get(&(lp, lower_tick, upper_tick));
+		let option_position = self.positions.get(&(lp.clone(), lower_tick, upper_tick));
 		if option_position.is_some() || minted_liquidity != 0 {
 			let mut position = option_position.cloned().unwrap_or_else(|| Position {
 				liquidity: 0,
@@ -452,7 +452,7 @@ impl PoolState {
 				.map_err(|err| PositionError::Other(MintError::CallbackFailed(err)))?;
 
 			self.current_liquidity += current_liquidity_delta;
-			self.positions.insert((lp, lower_tick, upper_tick), position);
+			self.positions.insert((lp.clone(), lower_tick, upper_tick), position);
 			self.liquidity_map.insert(lower_tick, lower_delta);
 			self.liquidity_map.insert(upper_tick, upper_delta);
 
@@ -474,13 +474,15 @@ impl PoolState {
 	#[allow(clippy::type_complexity)]
 	pub fn collect_and_burn(
 		&mut self,
-		lp: LiquidityProvider,
+		lp: &LiquidityProvider,
 		lower_tick: Tick,
 		upper_tick: Tick,
 		burnt_liquidity: Liquidity,
 	) -> Result<(SideMap<Amount>, CollectedFees), PositionError<BurnError>> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
-		if let Some(mut position) = self.positions.get(&(lp, lower_tick, upper_tick)).cloned() {
+		if let Some(mut position) =
+			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
+		{
 			assert!(position.liquidity != 0);
 			if burnt_liquidity <= position.liquidity {
 				let mut lower_delta = self.liquidity_map.get(&lower_tick).unwrap().clone();
@@ -528,9 +530,10 @@ impl PoolState {
 					// DIFF: This behaviour is different than Uniswap's to ensure if a position
 					// exists its ticks also exist in the liquidity_map, by removing zero liquidity
 					// positions
-					self.positions.remove(&(lp, lower_tick, upper_tick));
+					self.positions.remove(&(lp.clone(), lower_tick, upper_tick));
 				} else {
-					*self.positions.get_mut(&(lp, lower_tick, upper_tick)).unwrap() = position;
+					*self.positions.get_mut(&(lp.clone(), lower_tick, upper_tick)).unwrap() =
+						position;
 				}
 
 				// DIFF: This behaviour is different than Uniswap's. We don't accumulated tokens
@@ -552,12 +555,14 @@ impl PoolState {
 	/// If this function returns an `Err(_)` no state changes have occurred
 	pub fn collect(
 		&mut self,
-		lp: LiquidityProvider,
+		lp: &LiquidityProvider,
 		lower_tick: Tick,
 		upper_tick: Tick,
 	) -> Result<CollectedFees, PositionError<CollectError>> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
-		if let Some(mut position) = self.positions.get(&(lp, lower_tick, upper_tick)).cloned() {
+		if let Some(mut position) =
+			self.positions.get(&(lp.clone(), lower_tick, upper_tick)).cloned()
+		{
 			assert!(position.liquidity != 0);
 			let lower_delta = self.liquidity_map.get(&lower_tick).unwrap();
 			let upper_delta = self.liquidity_map.get(&upper_tick).unwrap();
@@ -565,7 +570,7 @@ impl PoolState {
 			let collected_fees =
 				position.collect_fees(self, lower_tick, lower_delta, upper_tick, upper_delta);
 
-			self.positions.insert((lp, lower_tick, upper_tick), position);
+			self.positions.insert((lp.clone(), lower_tick, upper_tick), position);
 
 			Ok(collected_fees)
 		} else {

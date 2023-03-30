@@ -305,7 +305,10 @@ impl PoolState {
 				.collect::<Vec<_>>()
 				.into_iter()
 				.map(|(sqrt_price, lp)| {
-					((sqrt_price, lp), self.inner_collect::<OneToZero>(lp, sqrt_price).unwrap())
+					(
+						(sqrt_price, lp.clone()),
+						self.inner_collect::<OneToZero>(&lp, sqrt_price).unwrap(),
+					)
 				})
 				.collect(),
 			self.positions[!<ZeroToOne as crate::common::SwapDirection>::INPUT_SIDE]
@@ -314,7 +317,10 @@ impl PoolState {
 				.collect::<Vec<_>>()
 				.into_iter()
 				.map(|(sqrt_price, lp)| {
-					((sqrt_price, lp), self.inner_collect::<ZeroToOne>(lp, sqrt_price).unwrap())
+					(
+						(sqrt_price, lp.clone()),
+						self.inner_collect::<ZeroToOne>(&lp, sqrt_price).unwrap(),
+					)
 				})
 				.collect(),
 		];
@@ -475,7 +481,7 @@ impl PoolState {
 	/// This function never panics.
 	pub fn collect_and_mint<SD: SwapDirection>(
 		&mut self,
-		lp: LiquidityProvider,
+		lp: &LiquidityProvider,
 		tick: Tick,
 		amount: Amount,
 	) -> Result<CollectedAmounts, PositionError<MintError>> {
@@ -491,7 +497,7 @@ impl PoolState {
 
 			let option_fixed_pool = fixed_pools.get(&sqrt_price);
 			let (collected_amounts, option_position) = if let Some(position) =
-				positions.get(&(sqrt_price, lp)).cloned()
+				positions.get(&(sqrt_price, lp.clone())).cloned()
 			{
 				Self::collect_from_position::<SD>(position, option_fixed_pool, price, self.fee_pips)
 			} else {
@@ -542,7 +548,7 @@ impl PoolState {
 
 				self.next_pool_instance = next_pool_instance;
 				fixed_pools.insert(sqrt_price, fixed_pool);
-				positions.insert((sqrt_price, lp), position);
+				positions.insert((sqrt_price, lp.clone()), position);
 
 				Ok(collected_amounts)
 			}
@@ -561,7 +567,7 @@ impl PoolState {
 	/// This function never panics.
 	pub fn collect_and_burn<SD: SwapDirection>(
 		&mut self,
-		lp: LiquidityProvider,
+		lp: &LiquidityProvider,
 		tick: Tick,
 		amount: Amount,
 	) -> Result<(Amount, CollectedAmounts), PositionError<BurnError>> {
@@ -576,8 +582,10 @@ impl PoolState {
 			let positions = &mut self.positions[!SD::INPUT_SIDE];
 			let fixed_pools = &mut self.fixed_pools[!SD::INPUT_SIDE];
 
-			let position =
-				positions.get(&(sqrt_price, lp)).ok_or(PositionError::NonExistent)?.clone();
+			let position = positions
+				.get(&(sqrt_price, lp.clone()))
+				.ok_or(PositionError::NonExistent)?
+				.clone();
 			let option_fixed_pool = fixed_pools.get(&sqrt_price);
 
 			let (collected_amounts, option_position) = Self::collect_from_position::<SD>(
@@ -597,10 +605,10 @@ impl PoolState {
 			fixed_pool.available = fixed_pool.available - amount;
 
 			if position.amount.is_zero() {
-				positions.remove(&(sqrt_price, lp));
+				positions.remove(&(sqrt_price, lp.clone()));
 			} else {
 				assert!(!fixed_pool.available.is_zero());
-				positions.insert((sqrt_price, lp), position);
+				positions.insert((sqrt_price, lp.clone()), position);
 			}
 			if fixed_pool.available.is_zero() {
 				fixed_pools.remove(&sqrt_price);
@@ -617,7 +625,7 @@ impl PoolState {
 	/// This function never panics.
 	pub fn collect<SD: SwapDirection>(
 		&mut self,
-		lp: LiquidityProvider,
+		lp: &LiquidityProvider,
 		tick: Tick,
 	) -> Result<CollectedAmounts, PositionError<CollectError>> {
 		let sqrt_price = Self::validate_tick(tick)?;
@@ -626,7 +634,7 @@ impl PoolState {
 
 	pub fn inner_collect<SD: SwapDirection>(
 		&mut self,
-		lp: LiquidityProvider,
+		lp: &LiquidityProvider,
 		sqrt_price: SqrtPriceQ64F96,
 	) -> Result<CollectedAmounts, PositionError<CollectError>> {
 		let price = sqrt_price_to_price(sqrt_price);
@@ -635,15 +643,18 @@ impl PoolState {
 		let fixed_pools = &mut self.fixed_pools[!SD::INPUT_SIDE];
 
 		let (collected_amounts, option_position) = Self::collect_from_position::<SD>(
-			positions.get(&(sqrt_price, lp)).ok_or(PositionError::NonExistent)?.clone(),
+			positions
+				.get(&(sqrt_price, lp.clone()))
+				.ok_or(PositionError::NonExistent)?
+				.clone(),
 			fixed_pools.get(&sqrt_price),
 			price,
 			self.fee_pips,
 		);
 		if let Some(position) = option_position {
-			positions.insert((sqrt_price, lp), position);
+			positions.insert((sqrt_price, lp.clone()), position);
 		} else {
-			positions.remove(&(sqrt_price, lp));
+			positions.remove(&(sqrt_price, lp.clone()));
 		};
 
 		Ok(collected_amounts)
