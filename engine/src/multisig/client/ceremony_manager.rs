@@ -250,11 +250,13 @@ pub fn prepare_keygen_request<Crypto: CryptoScheme>(
 			rng,
 		};
 
-		let processor = HashCommitments1::new(
-			common.clone(),
+		let keygen_common = client::keygen::KeygenCommon::new(
+			&common,
 			generate_keygen_context(ceremony_id, participants),
 			resharing_context,
 		);
+
+		let processor = HashCommitments1::new(common.clone(), keygen_common);
 
 		Box::new(BroadcastStage::new(processor, common))
 	};

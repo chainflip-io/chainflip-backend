@@ -593,7 +593,7 @@ pub(crate) use run_stages;
 use super::{
 	ceremony_manager::{deserialize_for_version, prepare_key_handover_request},
 	common::ResharingContext,
-	keygen::SharingParameters,
+	keygen::{KeygenCommon, SharingParameters},
 	signing::Comm1,
 };
 
@@ -873,10 +873,10 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 	let commitment = gen_invalid_keygen_comm1(&mut rng, account_ids.len() as u32);
 	let processor = VerifyHashCommitmentsBroadcast2::new(
 		common.clone(),
+		KeygenCommon::new(&common, HashContext([0; 32]), None),
 		commitment,
 		account_ids.iter().map(|_| (0, None)).collect(),
 		keygen::OutgoingShares(BTreeMap::new()),
-		HashContext([0; 32]),
 	);
 
 	let stage = Box::new(BroadcastStage::new(processor, common));

@@ -67,24 +67,25 @@ impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
 			KeygenData::HashComm1(_) => true,
 			KeygenData::VerifyHashComm2(message) => message.data.len() == num_of_parties,
 			KeygenData::CoeffComm3(message) => {
-				let coefficient_count =
-					threshold_from_share_count(num_of_parties as u32) as usize + 1;
-				message.get_commitments_len() == coefficient_count
+				// NOTE: the number of commitments may be different depending on whether
+				// we are doing keygen vs key handover, but it should never exceed the
+				// number of parties
+				message.get_commitments_len() <= num_of_parties
 			},
 			KeygenData::VerifyCoeffComm4(message) => {
-				let coefficient_count =
-					threshold_from_share_count(num_of_parties as u32) as usize + 1;
-
+				// NOTE: the number of commitments may be different depending on whether
+				// we are doing keygen vs key handover, but it should never exceed the
+				// number of parties
 				if message
 					.data
 					.values()
 					.flatten()
-					.any(|commitments| commitments.get_commitments_len() != coefficient_count)
+					.any(|commitments| commitments.get_commitments_len() > num_of_parties)
 				{
 					return false
 				}
 
-				message.data.len() == num_of_parties
+				message.data.len() <= num_of_parties
 			},
 			KeygenData::SecretShares5(_) => true,
 			KeygenData::Complaints6(complaints) => {

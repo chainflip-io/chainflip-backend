@@ -23,4 +23,6 @@ pub use keygen_detail::{
 	HashContext,
 };
 
-pub use keygen_stages::{HashCommitments1, PubkeySharesStage0, VerifyHashCommitmentsBroadcast2};
+pub use keygen_stages::{
+	HashCommitments1, KeygenCommon, PubkeySharesStage0, VerifyHashCommitmentsBroadcast2,
+};

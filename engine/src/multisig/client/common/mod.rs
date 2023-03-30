@@ -113,6 +113,8 @@ pub struct ResharingContext<C: CryptoScheme> {
 	pub receiving_participants: BTreeSet<AuthorityCount>,
 	/// Whether our node is sharing and the corresponding state
 	pub party_status: ParticipantStatus<C>,
+	/// Indexes in future signing ceremonies (i.e. for the new set of validators)
+	pub future_index_mapping: PartyIdxMapping,
 }
 
 impl<C: CryptoScheme> ResharingContext<C> {
@@ -182,6 +184,8 @@ impl<C: CryptoScheme> ResharingContext<C> {
 		// that generated the key to be re-shared).
 		let all_ids = receiving_participants.union(&sharing_participants).cloned().collect();
 		let party_idx_mapping = PartyIdxMapping::from_participants(all_ids);
+		let future_index_mapping =
+			PartyIdxMapping::from_participants(receiving_participants.clone());
 
 		let sharing_participants: BTreeSet<_> = sharing_participants
 			.iter()
@@ -205,6 +209,7 @@ impl<C: CryptoScheme> ResharingContext<C> {
 			sharing_participants: sharing_participants.clone(),
 			receiving_participants: receiving_participants.clone(),
 			party_status: ParticipantStatus::NonSharing,
+			future_index_mapping,
 		}
 	}
 }
