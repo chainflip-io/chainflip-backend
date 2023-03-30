@@ -150,9 +150,9 @@ pub trait SwapDirection: crate::common::SwapDirection {
 	fn output_amount_floor(input: Amount, price: Price) -> Amount;
 
 	/// Gets entry for best prices pool
-	fn best_priced_fixed_pool<'a>(
-		pools: &'a mut BTreeMap<SqrtPriceQ64F96, FixedPool>,
-	) -> Option<std::collections::btree_map::OccupiedEntry<'a, SqrtPriceQ64F96, FixedPool>>;
+	fn best_priced_fixed_pool(
+		pools: &'_ mut BTreeMap<SqrtPriceQ64F96, FixedPool>,
+	) -> Option<std::collections::btree_map::OccupiedEntry<'_, SqrtPriceQ64F96, FixedPool>>;
 }
 impl SwapDirection for ZeroToOne {
 	fn input_amount_ceil(output: Amount, price: Price) -> Amount {
@@ -167,9 +167,9 @@ impl SwapDirection for ZeroToOne {
 		mul_div_floor(input, price, U256::one() << 128)
 	}
 
-	fn best_priced_fixed_pool<'a>(
-		pools: &'a mut BTreeMap<SqrtPriceQ64F96, FixedPool>,
-	) -> Option<std::collections::btree_map::OccupiedEntry<'a, SqrtPriceQ64F96, FixedPool>> {
+	fn best_priced_fixed_pool(
+		pools: &'_ mut BTreeMap<SqrtPriceQ64F96, FixedPool>,
+	) -> Option<std::collections::btree_map::OccupiedEntry<'_, SqrtPriceQ64F96, FixedPool>> {
 		pools.last_entry()
 	}
 }
@@ -186,9 +186,9 @@ impl SwapDirection for OneToZero {
 		mul_div_floor(input, U256::one() << 128, price)
 	}
 
-	fn best_priced_fixed_pool<'a>(
-		pools: &'a mut BTreeMap<SqrtPriceQ64F96, FixedPool>,
-	) -> Option<std::collections::btree_map::OccupiedEntry<'a, SqrtPriceQ64F96, FixedPool>> {
+	fn best_priced_fixed_pool(
+		pools: &'_ mut BTreeMap<SqrtPriceQ64F96, FixedPool>,
+	) -> Option<std::collections::btree_map::OccupiedEntry<'_, SqrtPriceQ64F96, FixedPool>> {
 		pools.first_entry()
 	}
 }
@@ -287,6 +287,7 @@ impl PoolState {
 	/// Also runs collect for all positions in the pool.
 	///
 	/// This function never panics.
+	#[allow(clippy::type_complexity)]
 	pub fn set_fees(
 		&mut self,
 		fee_pips: u32,
@@ -602,7 +603,7 @@ impl PoolState {
 				.amount
 				.checked_sub(amount)
 				.ok_or(PositionError::Other(BurnError::PositionLacksLiquidity))?;
-			fixed_pool.available = fixed_pool.available - amount;
+			fixed_pool.available -= amount;
 
 			if position.amount.is_zero() {
 				positions.remove(&(sqrt_price, lp.clone()));
