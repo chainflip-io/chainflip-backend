@@ -2,7 +2,7 @@ use crate::multisig::crypto::ECScalar;
 
 pub use super::secp256k1::{Point, Scalar};
 use super::{ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature};
-use cf_chains::Bitcoin;
+use cf_chains::{btc::AggKey, Bitcoin};
 use cf_primitives::PublicKeyBytes;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -56,16 +56,10 @@ impl AsRef<[u8]> for SigningPayload {
 	}
 }
 
-impl From<Point> for cf_chains::btc::AggKey {
-	fn from(p: Point) -> Self {
-		Self(p.x_bytes())
-	}
-}
-
 impl CryptoScheme for BtcSigning {
 	type Point = Point;
 	type Signature = BtcSchnorrSignature;
-	type AggKey = Point;
+	type AggKey = AggKey;
 	type SigningPayload = SigningPayload;
 
 	const NAME: &'static str = "Bitcoin";
@@ -131,7 +125,7 @@ impl CryptoScheme for BtcSigning {
 		let raw_sig = secp256k1::schnorrsig::Signature::from_slice(&signature.to_raw()).unwrap();
 		let raw_msg = secp256k1::Message::from_slice(&hash).unwrap();
 		let raw_pubkey =
-			secp256k1::schnorrsig::PublicKey::from_slice(&public_key_bytes[1..33]).unwrap();
+			secp256k1::schnorrsig::PublicKey::from_slice(&public_key_bytes[..]).unwrap();
 
 		secp.schnorrsig_verify(&raw_sig, &raw_msg, &raw_pubkey)
 			.map_err(|e| anyhow::anyhow!("Failed to verify signature: {:?}", e))?;
@@ -139,7 +133,7 @@ impl CryptoScheme for BtcSigning {
 	}
 
 	fn agg_key(pubkey: &Self::Point) -> Self::AggKey {
-		*pubkey
+		AggKey { pubkey_x: pubkey.x_bytes() }
 	}
 
 	fn is_pubkey_compatible(pubkey: &Self::Point) -> bool {
@@ -161,10 +155,10 @@ fn test_sig_verification() {
 	));
 	let s = Scalar::from_hex("ED7A468DBE45823D91CC1276F9E9F1DD3A1DB8E4C9EFE8F5DBA43B63E4C02FAD");
 	let signature = BtcSigning::build_signature(s, r);
-	let public_key_bytes =
-		hex::decode("0259B2B46FB182A6D4B39FFB7A29D0B67851DDE2433683BE6D46623A7960D2799E").unwrap();
+	let pubkey_x =
+		hex::decode("59B2B46FB182A6D4B39FFB7A29D0B67851DDE2433683BE6D46623A7960D2799E").unwrap();
 	let payload = BtcSigning::signing_payload_for_test();
-	assert!(BtcSigning::verify_signature(&signature, &public_key_bytes, &payload).is_ok());
+	assert!(BtcSigning::verify_signature(&signature, &pubkey_x, &payload).is_ok());
 }
 
 #[test]

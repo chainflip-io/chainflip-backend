@@ -21,7 +21,14 @@ impl Signature {
 	}
 }
 
+#[derive(Clone)]
 pub struct AggKey(VerificationKeyBytes);
+
+impl From<AggKey> for PublicKeyBytes {
+	fn from(agg_key: AggKey) -> Self {
+		agg_key.0.to_bytes().to_vec()
+	}
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
 pub struct SigningPayload(Vec<u8>);
