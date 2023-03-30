@@ -19,8 +19,9 @@
 //! doesn't exist we use U256 of SqrtPriceQ64F96. It is relatively simply to verify that all
 //! instances of SqrtPriceQ64F96 are <=U160::MAX.
 
-use std::{collections::BTreeMap, u128};
+use std::{collections::BTreeMap, u128, convert::Infallible};
 
+use cf_utilities::assert_ok;
 use primitive_types::{U256, U512};
 
 use crate::common::{
@@ -709,12 +710,18 @@ impl PoolState {
 			.ok_or(PositionError::InvalidTickRange)
 	}
 
-	fn liquidity_to_amounts<const ROUND_UP: bool>(
+	/// Returns the value of a range order, and the liquidity that would contribute to the current liquidity level given the current price.
+	/// 
+	/// This function will panic if the tick range or liquidity are out of bounds.
+	pub fn liquidity_to_amounts<const ROUND_UP: bool>(
 		&self,
 		liquidity: Liquidity,
 		lower_tick: Tick,
 		upper_tick: Tick,
 	) -> (enum_map::EnumMap<Side, Amount>, Liquidity) {
+		assert!(liquidity <= MAX_TICK_GROSS_LIQUIDITY);
+		assert_ok!(Self::validate_position_range::<Infallible>(lower_tick, upper_tick));
+
 		if self.current_tick < lower_tick {
 			(
 				enum_map::enum_map! {
