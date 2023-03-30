@@ -273,6 +273,12 @@ pub enum NewError {
 }
 
 #[derive(Debug)]
+pub enum SetFeesError {
+	/// Fee must be between 0 - 50%
+	InvalidFeeAmount,
+}
+
+#[derive(Debug)]
 pub enum MintError<E> {
 	/// One of the start/end ticks of the range reached its maximum gross liquidity
 	MaximumGrossLiquidity,
@@ -309,7 +315,7 @@ impl PoolState {
 	///
 	/// This function never panics
 	pub fn new(fee_pips: u32, initial_sqrt_price: U256) -> Result<Self, NewError> {
-		(fee_pips <= ONE_IN_PIPS / 2).then_some(()).ok_or(NewError::InvalidFeeAmount)?;
+		Self::validate_fees(fee_pips).then_some(()).ok_or(NewError::InvalidFeeAmount)?;
 		is_sqrt_price_valid(initial_sqrt_price)
 			.then_some(())
 			.ok_or(NewError::InvalidInitialPrice)?;
@@ -344,6 +350,16 @@ impl PoolState {
 			.into(),
 			positions: Default::default(),
 		})
+	}
+
+	pub fn set_fees(&mut self, fee_pips: u32) -> Result<(), SetFeesError> {
+		Self::validate_fees(fee_pips).then_some(()).ok_or(SetFeesError::InvalidFeeAmount)?;
+		self.fee_pips = fee_pips;
+		Ok(())
+	}
+
+	fn validate_fees(fee_pips: u32) -> bool {
+		fee_pips <= ONE_IN_PIPS / 2
 	}
 
 	pub fn current_sqrt_price<SD: SwapDirection>(&self) -> Option<SqrtPriceQ64F96> {

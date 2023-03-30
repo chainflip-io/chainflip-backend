@@ -192,6 +192,12 @@ pub enum NewError {
 }
 
 #[derive(Debug)]
+pub enum SetFeesError {
+	/// Fee must be between 0 - 50%
+	InvalidFeeAmount,
+}
+
+#[derive(Debug)]
 pub enum MintError {
 	/// One of the start/end ticks of the range reached its maximum gross liquidity
 	MaximumLiquidity,
@@ -267,6 +273,33 @@ impl PoolState {
 			fixed_pools: Default::default(),
 			positions: Default::default(),
 		})
+	}
+
+	/// Sets the fee for the pool. This function will fail if the fee is greater than 50%.
+	/// Also runs collect for all positions in the pool. 
+	///
+	/// This function never panics.
+	pub fn set_fees(&mut self, fee_pips: u32) -> Result<enum_map::EnumMap<Side, BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), CollectedAmounts>>, SetFeesError> {
+		(fee_pips <= ONE_IN_PIPS / 2).then_some(()).ok_or(SetFeesError::InvalidFeeAmount)?;
+
+		let collected_amounts = [
+			self.positions[!<OneToZero as crate::common::SwapDirection>::INPUT_SIDE].keys().cloned().collect::<Vec<_>>().into_iter().map(|(sqrt_price, lp)| {
+				(
+					(sqrt_price, lp),
+					self.inner_collect::<OneToZero>(lp, sqrt_price).unwrap(),
+				)
+			}).collect(),
+			self.positions[!<ZeroToOne as crate::common::SwapDirection>::INPUT_SIDE].keys().cloned().collect::<Vec<_>>().into_iter().map(|(sqrt_price, lp)| {
+				(
+					(sqrt_price, lp),
+					self.inner_collect::<ZeroToOne>(lp, sqrt_price).unwrap(),
+				)
+			}).collect()
+		];
+
+		self.fee_pips = fee_pips;
+
+		Ok(enum_map::EnumMap::from_array(collected_amounts))
 	}
 
 	/// Returns the current price of the pool, if some liquidity exists.
@@ -545,6 +578,14 @@ impl PoolState {
 		tick: Tick,
 	) -> Result<CollectedAmounts, PositionError<CollectError>> {
 		let sqrt_price = Self::validate_tick(tick)?;
+		self.inner_collect::<SD>(lp, sqrt_price)
+	}
+
+	pub fn inner_collect<SD: SwapDirection>(
+		&mut self,
+		lp: LiquidityProvider,
+		sqrt_price: SqrtPriceQ64F96,
+	) -> Result<CollectedAmounts, PositionError<CollectError>> {
 		let price = sqrt_price_to_price(sqrt_price);
 
 		let positions = &mut self.positions[!SD::INPUT_SIDE];
