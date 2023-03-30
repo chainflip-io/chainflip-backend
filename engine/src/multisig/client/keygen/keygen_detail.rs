@@ -594,12 +594,11 @@ pub mod genesis {
 	/// Generate keys for all participants in a centralised manner.
 	/// (Useful for testing and genesis keygen)
 	fn generate_key_data_detail<C: CryptoScheme>(
-		signers: BTreeSet<AccountId>,
+		participants: BTreeSet<AccountId>,
 		initial_key_must_be_incompatible: bool,
 		rng: &mut Rng,
 	) -> (PublicKeyBytes, HashMap<AccountId, KeygenResultInfo<C>>) {
-		// TODO: rename signers to participants?
-		let params = ThresholdParameters::from_share_count(signers.len() as AuthorityCount);
+		let params = ThresholdParameters::from_share_count(participants.len() as AuthorityCount);
 		let n = params.share_count;
 		let t = params.threshold;
 
@@ -622,7 +621,7 @@ pub mod genesis {
 			}
 		};
 
-		let validator_mapping = PartyIdxMapping::from_participants(signers);
+		let validator_mapping = PartyIdxMapping::from_participants(participants);
 
 		let keygen_result_infos: HashMap<_, _> = (1..=n)
 			.map(|idx| {
