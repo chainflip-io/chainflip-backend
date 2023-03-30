@@ -420,11 +420,7 @@ impl PoolState {
 
 			Ok((t, collected_fees))
 		} else {
-			Ok((
-				try_debit(Default::default())
-					.map_err(|err| PositionError::Other(MintError::CallbackFailed(err)))?,
-				Default::default(),
-			))
+			Err(PositionError::NonExistent)
 		}
 	}
 
