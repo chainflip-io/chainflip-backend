@@ -67,7 +67,7 @@ services:
     volumes:
       - ./init/polkadot/chainspec.json:/chainspec.json
     healthcheck:
-      test: ["CMD-SHELL", "curl", "-H 'Content-Type: application/json;'", "-d '{\"id\":1, \"jsonrpc\":\"2.0\", \"method\": \"chain_getBlock\"}'", "http://localhost:9945"]
+      test: ["CMD-SHELL", "curl", "-H 'Content-Type: application/json;'", "-d '{\"id\":1, \"jsonrpc\":\"2.0\", \"method\": \"chain_getBlockHash\", \"params\" : [0]}'", "http://localhost:9945"]
       interval: 10s
       timeout: 5s
       retries: 5
