@@ -1,20 +1,24 @@
-use crate::{common::{sqrt_price_at_tick, MIN_TICK, MAX_TICK, tick_at_sqrt_price, mul_div}, limit_orders, range_orders};
+use crate::{
+	common::{mul_div, sqrt_price_at_tick, tick_at_sqrt_price, MAX_TICK, MIN_TICK},
+	limit_orders, range_orders,
+};
 
 use super::*;
 
 use cf_utilities::assert_ok;
-use rand::{SeedableRng, prelude::Distribution, Rng};
+use rand::{prelude::Distribution, Rng, SeedableRng};
 
-/// The amounts used as parameters to input_amount_floor, input_amount_ceil, output_amount_floor are guaranteed to be <= MAX_FIXED_POOL_LIQUIDITY.
-/// This test checks that MAX_FIXED_POOL_LIQUIDITY is set low enough that those calculations don't overflow.
+/// The amounts used as parameters to input_amount_floor, input_amount_ceil, output_amount_floor are
+/// guaranteed to be <= MAX_FIXED_POOL_LIQUIDITY. This test checks that MAX_FIXED_POOL_LIQUIDITY is
+/// set low enough that those calculations don't overflow.
 #[test]
 fn max_liquidity() {
 	macro_rules! checks {
 		($t:ty, $price:ident) => {
 			<$t>::input_amount_floor(MAX_FIXED_POOL_LIQUIDITY, $price);
 			<$t>::input_amount_ceil(MAX_FIXED_POOL_LIQUIDITY, $price);
-			<$t>::output_amount_floor(MAX_FIXED_POOL_LIQUIDITY, $price);	
-		}
+			<$t>::output_amount_floor(MAX_FIXED_POOL_LIQUIDITY, $price);
+		};
 	}
 
 	for price in [MIN_SQRT_PRICE, MAX_SQRT_PRICE].map(sqrt_price_to_price) {
@@ -25,7 +29,10 @@ fn max_liquidity() {
 
 #[test]
 fn test_sqrt_price_to_price() {
-	assert_eq!(sqrt_price_to_price(SqrtPriceQ64F96::from(1) << 96), Price::from(1) << PRICE_FRACTIONAL_BITS);
+	assert_eq!(
+		sqrt_price_to_price(SqrtPriceQ64F96::from(1) << 96),
+		Price::from(1) << PRICE_FRACTIONAL_BITS
+	);
 	assert!(sqrt_price_to_price(MIN_SQRT_PRICE) < sqrt_price_to_price(MAX_SQRT_PRICE));
 }
 
@@ -37,7 +44,10 @@ fn test_float() {
 		U256([(); 4].map(|()| rng.gen()))
 	}
 
-	fn rng_u256_inclusive_bound(rng: &mut impl rand::Rng, bound: std::ops::RangeInclusive<U256>) -> U256 {
+	fn rng_u256_inclusive_bound(
+		rng: &mut impl rand::Rng,
+		bound: std::ops::RangeInclusive<U256>,
+	) -> U256 {
 		let start = bound.start();
 		let end = bound.end();
 
@@ -48,7 +58,8 @@ fn test_float() {
 		let lower = if upper_start < upper && upper < upper_end {
 			rng.gen()
 		} else {
-			rand::distributions::Uniform::new_inclusive(start.low_u128(), end.low_u128()).sample(rng)
+			rand::distributions::Uniform::new_inclusive(start.low_u128(), end.low_u128())
+				.sample(rng)
 		};
 
 		(U256::from(upper) << 128) + U256::from(lower)
@@ -60,22 +71,23 @@ fn test_float() {
 	}
 
 	for x in std::iter::repeat(()).take(16).into_iter().map(|_| rng_u256(&mut rng)) {
-		assert_eq!(
-			FloatBetweenZeroAndOne::max(),
-			FloatBetweenZeroAndOne::max().mul_div_ceil(x, x)
-		);
+		assert_eq!(FloatBetweenZeroAndOne::max(), FloatBetweenZeroAndOne::max().mul_div_ceil(x, x));
 	}
 
-	for ((x, y), z) in std::iter::repeat(()).take(16).into_iter().map(|_| (
-		rng_u256_numerator_denominator(&mut rng),
-		rng_u256(&mut rng),
-	)) {
+	for ((x, y), z) in std::iter::repeat(())
+		.take(16)
+		.into_iter()
+		.map(|_| (rng_u256_numerator_denominator(&mut rng), rng_u256(&mut rng)))
+	{
 		let f = FloatBetweenZeroAndOne::max().mul_div_ceil(x, y);
 
 		assert_eq!((z, z), FloatBetweenZeroAndOne::integer_mul_div(z, &f, &f));
 	}
 
-	for ((x, y), z) in (0..16).into_iter().map(|_| (rng_u256_numerator_denominator(&mut rng), rng_u256(&mut rng))) {
+	for ((x, y), z) in (0..16)
+		.into_iter()
+		.map(|_| (rng_u256_numerator_denominator(&mut rng), rng_u256(&mut rng)))
+	{
 		let (floor, ceil) = FloatBetweenZeroAndOne::integer_mul_div(
 			z,
 			&FloatBetweenZeroAndOne::max().mul_div_ceil(x, y),
@@ -90,31 +102,42 @@ fn test_float() {
 		let initial_value = rng_u256(&mut rng);
 		let initial_float = FloatBetweenZeroAndOne::max();
 
-		let (final_value_floor, final_value_ceil, final_float) = (0..rng.gen_range(8, 256)).into_iter().map(|_| rng_u256_numerator_denominator(&mut rng)).fold((initial_value, initial_value, initial_float.clone()), |(value_floor, value_ceil, float), (n, d)| {
-			
-			(
-				mul_div_floor(value_floor, n, d),
-				mul_div_ceil(value_ceil, n, d),
-				float.mul_div_ceil(n, d),
-			)
-		});
-	
-		let final_value_via_float = FloatBetweenZeroAndOne::integer_mul_div(initial_value, &final_float, &initial_float).0;
+		let (final_value_floor, final_value_ceil, final_float) = (0..rng.gen_range(8, 256))
+			.into_iter()
+			.map(|_| rng_u256_numerator_denominator(&mut rng))
+			.fold(
+				(initial_value, initial_value, initial_float.clone()),
+				|(value_floor, value_ceil, float), (n, d)| {
+					(
+						mul_div_floor(value_floor, n, d),
+						mul_div_ceil(value_ceil, n, d),
+						float.mul_div_ceil(n, d),
+					)
+				},
+			);
+
+		let final_value_via_float =
+			FloatBetweenZeroAndOne::integer_mul_div(initial_value, &final_float, &initial_float).0;
 
 		assert!(final_value_ceil >= final_value_via_float);
 		assert!(final_value_floor <= final_value_via_float);
 	}
 
 	{
-		let low_mantissa = FloatBetweenZeroAndOne::max().mul_div_ceil(U256::one() << 255, U256::MAX);
+		let low_mantissa =
+			FloatBetweenZeroAndOne::max().mul_div_ceil(U256::one() << 255, U256::MAX);
 		let high_mantissa = low_mantissa.mul_div_ceil(U256::MAX >> 1, U256::one() << 255);
 
 		assert!(low_mantissa.normalised_mantissa < high_mantissa.normalised_mantissa);
-		assert_eq!(FloatBetweenZeroAndOne::integer_mul_div(U256::MAX, &high_mantissa, &low_mantissa), (U256::MAX - 2, U256::MAX - 1));
+		assert_eq!(
+			FloatBetweenZeroAndOne::integer_mul_div(U256::MAX, &high_mantissa, &low_mantissa),
+			(U256::MAX - 2, U256::MAX - 1)
+		);
 	}
 
 	{
-		let min_mantissa = FloatBetweenZeroAndOne::max().mul_div_ceil(U256::one() << 255, U256::MAX);
+		let min_mantissa =
+			FloatBetweenZeroAndOne::max().mul_div_ceil(U256::one() << 255, U256::MAX);
 
 		assert_eq!(min_mantissa.normalised_mantissa, U256::one() << 255);
 
@@ -141,22 +164,38 @@ fn mint() {
 	fn inner<SD: SwapDirection + limit_orders::SwapDirection + range_orders::SwapDirection>() {
 		for good in [MIN_TICK, MAX_TICK] {
 			let mut pool_state = PoolState::new(0).unwrap();
-			assert_eq!(assert_ok!(pool_state.collect_and_mint::<SD>(Default::default(), good, 1000.into())), CollectedAmounts::default());
+			assert_eq!(
+				assert_ok!(pool_state.collect_and_mint::<SD>(
+					Default::default(),
+					good,
+					1000.into()
+				)),
+				CollectedAmounts::default()
+			);
 		}
 
 		for bad in [MIN_TICK - 1, MAX_TICK + 1] {
 			let mut pool_state = PoolState::new(0).unwrap();
-			assert!(matches!(pool_state.collect_and_mint::<SD>(Default::default(), bad, 1000.into()), Err(PositionError::InvalidPrice)));
+			assert!(matches!(
+				pool_state.collect_and_mint::<SD>(Default::default(), bad, 1000.into()),
+				Err(PositionError::InvalidPrice)
+			));
 		}
 
 		for good in [MAX_FIXED_POOL_LIQUIDITY, MAX_FIXED_POOL_LIQUIDITY - 1, 1.into()] {
 			let mut pool_state = PoolState::new(0).unwrap();
-			assert_eq!(assert_ok!(pool_state.collect_and_mint::<SD>(Default::default(), 0, good)), CollectedAmounts::default());
+			assert_eq!(
+				assert_ok!(pool_state.collect_and_mint::<SD>(Default::default(), 0, good)),
+				CollectedAmounts::default()
+			);
 		}
 
 		for bad in [MAX_FIXED_POOL_LIQUIDITY + 1, MAX_FIXED_POOL_LIQUIDITY + 2] {
 			let mut pool_state = PoolState::new(0).unwrap();
-			assert!(matches!(pool_state.collect_and_mint::<SD>(Default::default(), 0, bad), Err(PositionError::Other(MintError::MaximumLiquidity))));
+			assert!(matches!(
+				pool_state.collect_and_mint::<SD>(Default::default(), 0, bad),
+				Err(PositionError::Other(MintError::MaximumLiquidity))
+			));
 		}
 	}
 
@@ -169,39 +208,69 @@ fn burn() {
 	fn inner<SD: SwapDirection + limit_orders::SwapDirection + range_orders::SwapDirection>() {
 		{
 			let mut pool_state = PoolState::new(0).unwrap();
-			assert!(matches!(pool_state.collect_and_burn::<SD>(Default::default(), MIN_TICK - 1, 1000.into()), Err(PositionError::InvalidPrice)));
-			assert!(matches!(pool_state.collect_and_burn::<SD>(Default::default(), MAX_TICK + 1, 1000.into()), Err(PositionError::InvalidPrice)));
+			assert!(matches!(
+				pool_state.collect_and_burn::<SD>(Default::default(), MIN_TICK - 1, 1000.into()),
+				Err(PositionError::InvalidPrice)
+			));
+			assert!(matches!(
+				pool_state.collect_and_burn::<SD>(Default::default(), MAX_TICK + 1, 1000.into()),
+				Err(PositionError::InvalidPrice)
+			));
 		}
 		{
 			let mut pool_state = PoolState::new(0).unwrap();
-			assert!(matches!(pool_state.collect_and_burn::<SD>(Default::default(), 120, 1000.into()), Err(PositionError::NonExistent)));
+			assert!(matches!(
+				pool_state.collect_and_burn::<SD>(Default::default(), 120, 1000.into()),
+				Err(PositionError::NonExistent)
+			));
 		}
 		{
 			let mut pool_state = PoolState::new(0).unwrap();
 			let tick = 120;
 			let amount = U256::from(1000);
-			assert_eq!(assert_ok!(pool_state.collect_and_mint::<SD>(Default::default(), tick, amount)), CollectedAmounts::default());
-			assert_eq!(assert_ok!(pool_state.collect_and_burn::<SD>(Default::default(), tick, amount)), (amount, CollectedAmounts::default()));
+			assert_eq!(
+				assert_ok!(pool_state.collect_and_mint::<SD>(Default::default(), tick, amount)),
+				CollectedAmounts::default()
+			);
+			assert_eq!(
+				assert_ok!(pool_state.collect_and_burn::<SD>(Default::default(), tick, amount)),
+				(amount, CollectedAmounts::default())
+			);
 		}
 		{
 			let mut pool_state = PoolState::new(0).unwrap();
 			let tick = 120;
 			let amount = U256::from(1000);
-			assert_eq!(assert_ok!(pool_state.collect_and_mint::<SD>([1u8; 32].into(), tick, 56.into())), CollectedAmounts::default());
-			assert_eq!(assert_ok!(pool_state.collect_and_mint::<SD>(Default::default(), tick, amount)), CollectedAmounts::default());
-			assert_eq!(assert_ok!(pool_state.collect_and_mint::<SD>([2u8; 32].into(), tick, 16.into())), CollectedAmounts::default());
-			assert_eq!(assert_ok!(pool_state.collect_and_burn::<SD>(Default::default(), tick, amount)), (amount, CollectedAmounts::default()));
+			assert_eq!(
+				assert_ok!(pool_state.collect_and_mint::<SD>([1u8; 32].into(), tick, 56.into())),
+				CollectedAmounts::default()
+			);
+			assert_eq!(
+				assert_ok!(pool_state.collect_and_mint::<SD>(Default::default(), tick, amount)),
+				CollectedAmounts::default()
+			);
+			assert_eq!(
+				assert_ok!(pool_state.collect_and_mint::<SD>([2u8; 32].into(), tick, 16.into())),
+				CollectedAmounts::default()
+			);
+			assert_eq!(
+				assert_ok!(pool_state.collect_and_burn::<SD>(Default::default(), tick, amount)),
+				(amount, CollectedAmounts::default())
+			);
 		}
 		{
 			let mut pool_state = PoolState::new(0).unwrap();
 			let tick = 0;
 			let amount = U256::from(1000);
-			assert_eq!(assert_ok!(pool_state.collect_and_mint::<SD>(Default::default(), tick, amount)), CollectedAmounts::default());
+			assert_eq!(
+				assert_ok!(pool_state.collect_and_mint::<SD>(Default::default(), tick, amount)),
+				CollectedAmounts::default()
+			);
 			assert_eq!(pool_state.swap::<SD>(amount, None), (amount, 0.into()));
-			assert_eq!(assert_ok!(pool_state.collect_and_burn::<SD>(Default::default(), tick, 0.into())), (0.into(), CollectedAmounts {
-				fees: 0.into(),
-				swapped_liquidity: amount,
-			}));
+			assert_eq!(
+				assert_ok!(pool_state.collect_and_burn::<SD>(Default::default(), tick, 0.into())),
+				(0.into(), CollectedAmounts { fees: 0.into(), swapped_liquidity: amount })
+			);
 		}
 		{
 			let mut pool_state = PoolState::new(0).unwrap();
@@ -209,12 +278,22 @@ fn burn() {
 			let amount = U256::from(1000);
 			let swap = U256::from(500);
 			let expected_output = U256::from(500);
-			assert_eq!(assert_ok!(pool_state.collect_and_mint::<SD>(Default::default(), tick, amount)), CollectedAmounts::default());
+			assert_eq!(
+				assert_ok!(pool_state.collect_and_mint::<SD>(Default::default(), tick, amount)),
+				CollectedAmounts::default()
+			);
 			assert_eq!(pool_state.swap::<SD>(swap, None), (expected_output, 0.into()));
-			assert_eq!(assert_ok!(pool_state.collect_and_burn::<SD>(Default::default(), tick, amount - swap)), (amount - swap, CollectedAmounts {
-				fees: 0.into(),
-				swapped_liquidity: expected_output,
-			}));
+			assert_eq!(
+				assert_ok!(pool_state.collect_and_burn::<SD>(
+					Default::default(),
+					tick,
+					amount - swap
+				)),
+				(
+					amount - swap,
+					CollectedAmounts { fees: 0.into(), swapped_liquidity: expected_output }
+				)
+			);
 		}
 	}
 
@@ -228,7 +307,10 @@ fn swap() {
 		{
 			let mut pool_state = PoolState::new(0).unwrap();
 			let swap = U256::from(20);
-			assert_eq!(assert_ok!(pool_state.collect_and_mint::<SD>(Default::default(), 0, 1000.into())), CollectedAmounts::default());
+			assert_eq!(
+				assert_ok!(pool_state.collect_and_mint::<SD>(Default::default(), 0, 1000.into())),
+				CollectedAmounts::default()
+			);
 			assert_eq!(pool_state.swap::<SD>(swap, None), (swap - 1, 0.into()));
 		}
 		{
@@ -236,27 +318,65 @@ fn swap() {
 			let output = swap - 1;
 			{
 				let mut pool_state = PoolState::new(0).unwrap();
-				assert_eq!(assert_ok!(pool_state.collect_and_mint::<SD>(Default::default(), 0, 1000.into())), CollectedAmounts::default());
+				assert_eq!(
+					assert_ok!(pool_state.collect_and_mint::<SD>(
+						Default::default(),
+						0,
+						1000.into()
+					)),
+					CollectedAmounts::default()
+				);
 				assert_eq!(pool_state.swap::<SD>(swap, None), (output, 0.into()));
 			}
 			{
 				let mut pool_state = PoolState::new(0).unwrap();
 				let tick = 0;
-				assert_eq!(assert_ok!(pool_state.collect_and_mint::<SD>(Default::default(), tick, 500.into())), CollectedAmounts::default());
-				assert_eq!(assert_ok!(pool_state.collect_and_mint::<SD>(Default::default(), tick, 500.into())), CollectedAmounts::default());
+				assert_eq!(
+					assert_ok!(pool_state.collect_and_mint::<SD>(
+						Default::default(),
+						tick,
+						500.into()
+					)),
+					CollectedAmounts::default()
+				);
+				assert_eq!(
+					assert_ok!(pool_state.collect_and_mint::<SD>(
+						Default::default(),
+						tick,
+						500.into()
+					)),
+					CollectedAmounts::default()
+				);
 				assert_eq!(pool_state.swap::<SD>(swap, None), (output, 0.into()));
 			}
 			{
 				let mut pool_state = PoolState::new(0).unwrap();
-				let tick = 0;	
-				assert_eq!(assert_ok!(pool_state.collect_and_mint::<SD>([1u8; 32].into(), tick, 500.into())), CollectedAmounts::default());
-				assert_eq!(assert_ok!(pool_state.collect_and_mint::<SD>([2u8; 32].into(), tick, 500.into())), CollectedAmounts::default());
+				let tick = 0;
+				assert_eq!(
+					assert_ok!(pool_state.collect_and_mint::<SD>(
+						[1u8; 32].into(),
+						tick,
+						500.into()
+					)),
+					CollectedAmounts::default()
+				);
+				assert_eq!(
+					assert_ok!(pool_state.collect_and_mint::<SD>(
+						[2u8; 32].into(),
+						tick,
+						500.into()
+					)),
+					CollectedAmounts::default()
+				);
 				assert_eq!(pool_state.swap::<SD>(swap, None), (output, 0.into()));
 			}
 		}
 		{
 			let mut pool_state = PoolState::new(100000).unwrap();
-			assert_eq!(assert_ok!(pool_state.collect_and_mint::<SD>(Default::default(), 0, 1000.into())), CollectedAmounts::default());
+			assert_eq!(
+				assert_ok!(pool_state.collect_and_mint::<SD>(Default::default(), 0, 1000.into())),
+				CollectedAmounts::default()
+			);
 			assert_eq!(pool_state.swap::<SD>(1000.into(), None), (900.into(), 0.into()));
 		}
 	}
@@ -267,10 +387,30 @@ fn swap() {
 	// Partial liquidity, multiple prices
 	{
 		let tick = 0;
-		for (range, offset) in [(U256::from(149990000)..=U256::from(150000000), 0), (U256::from(150000000)..=U256::from(150010000), 1)] {
+		for (range, offset) in [
+			(U256::from(149990000)..=U256::from(150000000), 0),
+			(U256::from(150000000)..=U256::from(150010000), 1),
+		] {
 			let mut pool_state = PoolState::new(0).unwrap();
-			assert_eq!(assert_ok!(pool_state.collect_and_mint::<ZeroToOne>(Default::default(), tick, 100000000.into())), CollectedAmounts::default());
-			assert_eq!(assert_ok!(pool_state.collect_and_mint::<ZeroToOne>(Default::default(), offset + tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()), 100000000.into())), CollectedAmounts::default());
+			assert_eq!(
+				assert_ok!(pool_state.collect_and_mint::<ZeroToOne>(
+					Default::default(),
+					tick,
+					100000000.into()
+				)),
+				CollectedAmounts::default()
+			);
+			assert_eq!(
+				assert_ok!(pool_state.collect_and_mint::<ZeroToOne>(
+					Default::default(),
+					offset +
+						tick_at_sqrt_price(
+							sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()
+						),
+					100000000.into()
+				)),
+				CollectedAmounts::default()
+			);
 			let (output, remaining) = pool_state.swap::<ZeroToOne>(75000000.into(), None);
 			assert!(range.contains(&output));
 			assert_eq!(remaining, Amount::zero());
@@ -278,10 +418,30 @@ fn swap() {
 	}
 	{
 		let tick = 0;
-		for (range, offset) in [(U256::from(120000000)..=U256::from(120002000), 0), (U256::from(119998000)..=U256::from(120000000), 1)] {
+		for (range, offset) in [
+			(U256::from(120000000)..=U256::from(120002000), 0),
+			(U256::from(119998000)..=U256::from(120000000), 1),
+		] {
 			let mut pool_state = PoolState::new(0).unwrap();
-			assert_eq!(assert_ok!(pool_state.collect_and_mint::<OneToZero>(Default::default(), tick, 100000000.into())), CollectedAmounts::default());
-			assert_eq!(assert_ok!(pool_state.collect_and_mint::<OneToZero>(Default::default(), offset + tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()), 100000000.into())), CollectedAmounts::default());
+			assert_eq!(
+				assert_ok!(pool_state.collect_and_mint::<OneToZero>(
+					Default::default(),
+					tick,
+					100000000.into()
+				)),
+				CollectedAmounts::default()
+			);
+			assert_eq!(
+				assert_ok!(pool_state.collect_and_mint::<OneToZero>(
+					Default::default(),
+					offset +
+						tick_at_sqrt_price(
+							sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()
+						),
+					100000000.into()
+				)),
+				CollectedAmounts::default()
+			);
 			let (output, remaining) = pool_state.swap::<OneToZero>(180000000.into(), None);
 			assert!(range.contains(&output));
 			assert_eq!(remaining, Amount::zero());
@@ -292,15 +452,43 @@ fn swap() {
 	{
 		let mut pool_state = PoolState::new(0).unwrap();
 		let tick = 0;
-		assert_eq!(assert_ok!(pool_state.collect_and_mint::<ZeroToOne>(Default::default(), tick, 100.into())), CollectedAmounts::default());
-		assert_eq!(assert_ok!(pool_state.collect_and_mint::<ZeroToOne>(Default::default(), tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()), 100.into())), CollectedAmounts::default());
+		assert_eq!(
+			assert_ok!(pool_state.collect_and_mint::<ZeroToOne>(
+				Default::default(),
+				tick,
+				100.into()
+			)),
+			CollectedAmounts::default()
+		);
+		assert_eq!(
+			assert_ok!(pool_state.collect_and_mint::<ZeroToOne>(
+				Default::default(),
+				tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()),
+				100.into()
+			)),
+			CollectedAmounts::default()
+		);
 		assert_eq!(pool_state.swap::<ZeroToOne>(150.into(), None), (200.into(), 24.into()));
 	}
 	{
 		let mut pool_state = PoolState::new(0).unwrap();
 		let tick = 0;
-		assert_eq!(assert_ok!(pool_state.collect_and_mint::<OneToZero>(Default::default(), tick, 100.into())), CollectedAmounts::default());
-		assert_eq!(assert_ok!(pool_state.collect_and_mint::<OneToZero>(Default::default(), tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()), 100.into())), CollectedAmounts::default());
+		assert_eq!(
+			assert_ok!(pool_state.collect_and_mint::<OneToZero>(
+				Default::default(),
+				tick,
+				100.into()
+			)),
+			CollectedAmounts::default()
+		);
+		assert_eq!(
+			assert_ok!(pool_state.collect_and_mint::<OneToZero>(
+				Default::default(),
+				tick_at_sqrt_price(sqrt_price_at_tick(tick) * U256::from(4).integer_sqrt()),
+				100.into()
+			)),
+			CollectedAmounts::default()
+		);
 		assert_eq!(pool_state.swap::<OneToZero>(550.into(), None), (200.into(), 50.into()));
 	}
 }

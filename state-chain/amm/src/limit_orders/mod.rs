@@ -6,8 +6,9 @@ use std::collections::BTreeMap;
 use primitive_types::{U256, U512};
 
 use crate::common::{
-	mul_div_ceil, mul_div_floor, Amount, LiquidityProvider, OneToZero, Side, ZeroToOne,
-	ONE_IN_PIPS, SqrtPriceQ64F96, MIN_SQRT_PRICE, MAX_SQRT_PRICE, Tick, sqrt_price_at_tick, is_tick_valid, SQRT_PRICE_FRACTIONAL_BITS,
+	is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, Amount, LiquidityProvider,
+	OneToZero, Side, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_SQRT_PRICE, MIN_SQRT_PRICE, ONE_IN_PIPS,
+	SQRT_PRICE_FRACTIONAL_BITS,
 };
 
 const MAX_FIXED_POOL_LIQUIDITY: Amount = U256([u64::MAX, u64::MAX, 0, 0]);
@@ -18,7 +19,11 @@ const PRICE_FRACTIONAL_BITS: u32 = 128;
 fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
 	assert!((MIN_SQRT_PRICE..=MAX_SQRT_PRICE).contains(&sqrt_price));
 
-	mul_div_floor(sqrt_price, sqrt_price, SqrtPriceQ64F96::one() << (2*SQRT_PRICE_FRACTIONAL_BITS - PRICE_FRACTIONAL_BITS))
+	mul_div_floor(
+		sqrt_price,
+		sqrt_price,
+		SqrtPriceQ64F96::one() << (2 * SQRT_PRICE_FRACTIONAL_BITS - PRICE_FRACTIONAL_BITS),
+	)
 }
 
 /// Represents a number exclusively between 0 and 1.
@@ -28,14 +33,17 @@ struct FloatBetweenZeroAndOne {
 	negative_exponent: U256,
 }
 impl Ord for FloatBetweenZeroAndOne {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other.negative_exponent.cmp(&self.negative_exponent).then_with(|| self.normalised_mantissa.cmp(&other.normalised_mantissa))
-    }
+	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+		other
+			.negative_exponent
+			.cmp(&self.negative_exponent)
+			.then_with(|| self.normalised_mantissa.cmp(&other.normalised_mantissa))
+	}
 }
 impl PartialOrd for FloatBetweenZeroAndOne {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
+	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+		Some(self.cmp(other))
+	}
 }
 impl FloatBetweenZeroAndOne {
 	/// Returns the largest possible value.
@@ -43,7 +51,8 @@ impl FloatBetweenZeroAndOne {
 		Self { normalised_mantissa: U256::max_value(), negative_exponent: U256::zero() }
 	}
 
-	/// Rights shifts x by shift_bits bits, returning the result and the bits that were shifted out/remainder.
+	/// Rights shifts x by shift_bits bits, returning the result and the bits that were shifted
+	/// out/remainder.
 	fn shift_mod(x: U512, shift_bits: U256) -> (U512, U512) {
 		if shift_bits >= U256::from(512) {
 			(U512::zero(), x)
@@ -55,7 +64,8 @@ impl FloatBetweenZeroAndOne {
 
 	/// Returns the result of `self * numerator / denominator` with the result rounded up.
 	fn mul_div_ceil(&self, numerator: U256, denominator: U256) -> Self {
-		// We cannot use the `mul_div_ceil` function here (and then right-shift the result) to calculate the normalised_mantissa as the low zero bits (where we shifted) could be wrong.
+		// We cannot use the `mul_div_ceil` function here (and then right-shift the result) to
+		// calculate the normalised_mantissa as the low zero bits (where we shifted) could be wrong.
 
 		assert!(!numerator.is_zero());
 		assert!(numerator <= denominator);
@@ -63,31 +73,24 @@ impl FloatBetweenZeroAndOne {
 		let (mul_normalised_mantissa, mul_normalise_shift) = {
 			let unnormalised_mantissa = U256::full_mul(self.normalised_mantissa, numerator);
 			let normalize_shift = unnormalised_mantissa.leading_zeros();
-			(unnormalised_mantissa << normalize_shift, 256 - normalize_shift /* Cannot underflow as numerator != 0 */)
+			(
+				unnormalised_mantissa << normalize_shift,
+				256 - normalize_shift, /* Cannot underflow as numerator != 0 */
+			)
 		};
 
 		let (mul_div_normalised_mantissa, div_normalise_shift) = {
-			// As the denominator <= U256::MAX, this div will not right-shift the mantissa more than 256 bits, so we maintain atleast 256 accurate bits in the result.
+			// As the denominator <= U256::MAX, this div will not right-shift the mantissa more than
+			// 256 bits, so we maintain atleast 256 accurate bits in the result.
 			let (d, div_remainder) =
 				U512::div_mod(mul_normalised_mantissa, U512::from(denominator));
-			let d = if div_remainder.is_zero() {
-				d
-			} else {
-				d + U512::one()
-			};
+			let d = if div_remainder.is_zero() { d } else { d + U512::one() };
 			let normalise_shift = d.leading_zeros();
 			let shift_bits = 256 - normalise_shift;
 			let (d, shift_remainder) = Self::shift_mod(d, shift_bits.into());
 			let d = U256::try_from(d).unwrap();
 
-			(
-				if shift_remainder.is_zero() {
-					d
-				} else {
-					d + U256::one()
-				},
-				normalise_shift,
-			)
+			(if shift_remainder.is_zero() { d } else { d + U256::one() }, normalise_shift)
 		};
 
 		assert!(!mul_div_normalised_mantissa.is_zero());
@@ -96,16 +99,13 @@ impl FloatBetweenZeroAndOne {
 			.negative_exponent
 			.checked_add(U256::from(div_normalise_shift - mul_normalise_shift))
 		{
-			Self {
-				normalised_mantissa: mul_div_normalised_mantissa,
-				negative_exponent,
-			}
+			Self { normalised_mantissa: mul_div_normalised_mantissa, negative_exponent }
 		} else {
-			// This bounding will cause swaps to get bad prices, but this case will never happen, as atleast (U256::MAX / 256) (~10^74) swaps would have to happen to get into this situation and we disable minting for pools that are within reach of this minimum such that this minimum case cannot be reached before the fixed pool runs out of liquidity.
-			Self {
-				normalised_mantissa: U256::one() << 255,
-				negative_exponent: U256::MAX
-			}
+			// This bounding will cause swaps to get bad prices, but this case will never happen, as
+			// atleast (U256::MAX / 256) (~10^74) swaps would have to happen to get into this
+			// situation and we disable minting for pools that are within reach of this minimum such
+			// that this minimum case cannot be reached before the fixed pool runs out of liquidity.
+			Self { normalised_mantissa: U256::one() << 255, negative_exponent: U256::MAX }
 		}
 	}
 
@@ -114,7 +114,10 @@ impl FloatBetweenZeroAndOne {
 		// Note this does not imply numerator.normalised_mantissa <= denominator.normalised_mantissa
 		assert!(numerator <= denominator);
 
-		let (y_shifted_floor, div_remainder) = U512::div_mod(U256::full_mul(x, numerator.normalised_mantissa), denominator.normalised_mantissa.into());
+		let (y_shifted_floor, div_remainder) = U512::div_mod(
+			U256::full_mul(x, numerator.normalised_mantissa),
+			denominator.normalised_mantissa.into(),
+		);
 
 		let negative_exponent =
 			numerator.negative_exponent.checked_sub(denominator.negative_exponent).unwrap();
@@ -123,11 +126,14 @@ impl FloatBetweenZeroAndOne {
 
 		let y_floor = y_floor.try_into().unwrap();
 
-		(y_floor, if div_remainder.is_zero() && shift_remainder.is_zero() {
-			y_floor
-		} else {
-			y_floor + 1
-		})
+		(
+			y_floor,
+			if div_remainder.is_zero() && shift_remainder.is_zero() {
+				y_floor
+			} else {
+				y_floor + 1
+			},
+		)
 	}
 }
 
@@ -262,7 +268,7 @@ pub struct PoolState {
 
 impl PoolState {
 	/// Creates a new pool state with the given fee. The pool is created with no liquidity.
-	/// 
+	///
 	/// This function never panics.
 	pub fn new(fee_pips: u32) -> Result<Self, NewError> {
 		(fee_pips <= ONE_IN_PIPS / 2).then_some(()).ok_or(NewError::InvalidFeeAmount)?;
@@ -276,25 +282,39 @@ impl PoolState {
 	}
 
 	/// Sets the fee for the pool. This function will fail if the fee is greater than 50%.
-	/// Also runs collect for all positions in the pool. 
+	/// Also runs collect for all positions in the pool.
 	///
 	/// This function never panics.
-	pub fn set_fees(&mut self, fee_pips: u32) -> Result<enum_map::EnumMap<Side, BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), CollectedAmounts>>, SetFeesError> {
-		(fee_pips <= ONE_IN_PIPS / 2).then_some(()).ok_or(SetFeesError::InvalidFeeAmount)?;
+	pub fn set_fees(
+		&mut self,
+		fee_pips: u32,
+	) -> Result<
+		enum_map::EnumMap<Side, BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), CollectedAmounts>>,
+		SetFeesError,
+	> {
+		(fee_pips <= ONE_IN_PIPS / 2)
+			.then_some(())
+			.ok_or(SetFeesError::InvalidFeeAmount)?;
 
 		let collected_amounts = [
-			self.positions[!<OneToZero as crate::common::SwapDirection>::INPUT_SIDE].keys().cloned().collect::<Vec<_>>().into_iter().map(|(sqrt_price, lp)| {
-				(
-					(sqrt_price, lp),
-					self.inner_collect::<OneToZero>(lp, sqrt_price).unwrap(),
-				)
-			}).collect(),
-			self.positions[!<ZeroToOne as crate::common::SwapDirection>::INPUT_SIDE].keys().cloned().collect::<Vec<_>>().into_iter().map(|(sqrt_price, lp)| {
-				(
-					(sqrt_price, lp),
-					self.inner_collect::<ZeroToOne>(lp, sqrt_price).unwrap(),
-				)
-			}).collect()
+			self.positions[!<OneToZero as crate::common::SwapDirection>::INPUT_SIDE]
+				.keys()
+				.cloned()
+				.collect::<Vec<_>>()
+				.into_iter()
+				.map(|(sqrt_price, lp)| {
+					((sqrt_price, lp), self.inner_collect::<OneToZero>(lp, sqrt_price).unwrap())
+				})
+				.collect(),
+			self.positions[!<ZeroToOne as crate::common::SwapDirection>::INPUT_SIDE]
+				.keys()
+				.cloned()
+				.collect::<Vec<_>>()
+				.into_iter()
+				.map(|(sqrt_price, lp)| {
+					((sqrt_price, lp), self.inner_collect::<ZeroToOne>(lp, sqrt_price).unwrap())
+				})
+				.collect(),
 		];
 
 		self.fee_pips = fee_pips;
@@ -303,7 +323,7 @@ impl PoolState {
 	}
 
 	/// Returns the current price of the pool, if some liquidity exists.
-	/// 
+	///
 	/// This function never panics.
 	pub fn current_sqrt_price<SD: SwapDirection>(&mut self) -> Option<SqrtPriceQ64F96> {
 		SD::best_priced_fixed_pool(&mut self.fixed_pools[!SD::INPUT_SIDE]).map(|entry| *entry.key())
@@ -332,7 +352,7 @@ impl PoolState {
 				})
 			}) {
 			let fixed_pool = fixed_pool_entry.get_mut();
-				
+
 			let amount_minus_fees = mul_div_floor(
 				amount,
 				U256::from(ONE_IN_PIPS - self.fee_pips),
@@ -398,8 +418,15 @@ impl PoolState {
 		(total_output_amount, amount)
 	}
 
-	fn collect_from_position<SD: SwapDirection>(mut position: Position, fixed_pool: Option<&FixedPool>, price: Price, fee_pips: u32) -> (CollectedAmounts, Option<Position>) {
-		let (used_liquidity, option_position) = if let Some(fixed_pool) = fixed_pool.filter(|fixed_pool| fixed_pool.pool_instance == position.pool_instance) {
+	fn collect_from_position<SD: SwapDirection>(
+		mut position: Position,
+		fixed_pool: Option<&FixedPool>,
+		price: Price,
+		fee_pips: u32,
+	) -> (CollectedAmounts, Option<Position>) {
+		let (used_liquidity, option_position) = if let Some(fixed_pool) =
+			fixed_pool.filter(|fixed_pool| fixed_pool.pool_instance == position.pool_instance)
+		{
 			let (remaining_amount_floor, remaining_amount_ceil) =
 				FloatBetweenZeroAndOne::integer_mul_div(
 					position.amount,
@@ -424,10 +451,7 @@ impl PoolState {
 				},
 			)
 		} else {
-			(
-				position.amount,
-				None
-			)
+			(position.amount, None)
 		};
 
 		let swapped_liquidity = SD::input_amount_floor(used_liquidity, price);
@@ -445,7 +469,7 @@ impl PoolState {
 	}
 
 	/// Collects any earnings from the specified position, and then adds additional liquidity to it.
-	/// 
+	///
 	/// This function never panics.
 	pub fn collect_and_mint<SD: SwapDirection>(
 		&mut self,
@@ -464,14 +488,23 @@ impl PoolState {
 			let fixed_pools = &mut self.fixed_pools[!SD::INPUT_SIDE];
 
 			let option_fixed_pool = fixed_pools.get(&sqrt_price);
-			let (collected_amounts, option_position) = if let Some(position) = positions.get(&(sqrt_price, lp)).cloned() {
+			let (collected_amounts, option_position) = if let Some(position) =
+				positions.get(&(sqrt_price, lp)).cloned()
+			{
 				Self::collect_from_position::<SD>(position, option_fixed_pool, price, self.fee_pips)
 			} else {
 				(Default::default(), None)
 			};
 
-			let (mut position, mut fixed_pool, next_pool_instance) = if let Some(position) = option_position {
-				(position, option_fixed_pool.unwrap().clone() /* Position having liquidity implies fixed pool existing. */, self.next_pool_instance)
+			let (mut position, mut fixed_pool, next_pool_instance) = if let Some(position) =
+				option_position
+			{
+				(
+					position,
+					option_fixed_pool.unwrap().clone(), /* Position having liquidity implies
+					                                     * fixed pool existing. */
+					self.next_pool_instance,
+				)
 			} else {
 				let (fixed_pool, next_pool_instance) = if let Some(fixed_pool) = option_fixed_pool {
 					(fixed_pool.clone(), self.next_pool_instance)
@@ -482,7 +515,9 @@ impl PoolState {
 							available: U256::zero(),
 							percent_remaining: FloatBetweenZeroAndOne::max(),
 						},
-						self.next_pool_instance.checked_add(1).ok_or(PositionError::Other(MintError::MaximumPoolInstances))?,
+						self.next_pool_instance
+							.checked_add(1)
+							.ok_or(PositionError::Other(MintError::MaximumPoolInstances))?,
 					)
 				};
 
@@ -506,22 +541,21 @@ impl PoolState {
 				self.next_pool_instance = next_pool_instance;
 				fixed_pools.insert(sqrt_price, fixed_pool);
 				positions.insert((sqrt_price, lp), position);
-				
+
 				Ok(collected_amounts)
 			}
 		}
 	}
 
-	fn validate_tick<T>(
-		tick: Tick,
-	) -> Result<SqrtPriceQ64F96, PositionError<T>> {
+	fn validate_tick<T>(tick: Tick) -> Result<SqrtPriceQ64F96, PositionError<T>> {
 		is_tick_valid(tick)
 			.then(|| sqrt_price_at_tick(tick))
 			.ok_or(PositionError::InvalidPrice)
 	}
 
-	/// Collects any earnings from the specified position, and then removes the requested amount of liquidity from it.
-	/// 
+	/// Collects any earnings from the specified position, and then removes the requested amount of
+	/// liquidity from it.
+	///
 	/// This function never panics.
 	pub fn collect_and_burn<SD: SwapDirection>(
 		&mut self,
@@ -536,18 +570,28 @@ impl PoolState {
 		} else {
 			let sqrt_price = Self::validate_tick(tick)?;
 			let price = sqrt_price_to_price(sqrt_price);
-	
+
 			let positions = &mut self.positions[!SD::INPUT_SIDE];
 			let fixed_pools = &mut self.fixed_pools[!SD::INPUT_SIDE];
-	
-			let position = positions.get(&(sqrt_price, lp)).ok_or(PositionError::NonExistent)?.clone();
+
+			let position =
+				positions.get(&(sqrt_price, lp)).ok_or(PositionError::NonExistent)?.clone();
 			let option_fixed_pool = fixed_pools.get(&sqrt_price);
-	
-			let (collected_amounts, option_position) = Self::collect_from_position::<SD>(position, option_fixed_pool, price, self.fee_pips);
-			let mut position = option_position.ok_or(PositionError::Other(BurnError::PositionLacksLiquidity))?;
+
+			let (collected_amounts, option_position) = Self::collect_from_position::<SD>(
+				position,
+				option_fixed_pool,
+				price,
+				self.fee_pips,
+			);
+			let mut position =
+				option_position.ok_or(PositionError::Other(BurnError::PositionLacksLiquidity))?;
 			let mut fixed_pool = option_fixed_pool.unwrap().clone(); // Position having liquidity remaining implies fixed pool existing.
 
-			position.amount = position.amount.checked_sub(amount).ok_or(PositionError::Other(BurnError::PositionLacksLiquidity))?;
+			position.amount = position
+				.amount
+				.checked_sub(amount)
+				.ok_or(PositionError::Other(BurnError::PositionLacksLiquidity))?;
 			fixed_pool.available = fixed_pool.available - amount;
 
 			if position.amount.is_zero() {
@@ -562,15 +606,12 @@ impl PoolState {
 				fixed_pools.insert(sqrt_price, fixed_pool);
 			}
 
-			Ok((
-				amount,
-				collected_amounts,
-			))
+			Ok((amount, collected_amounts))
 		}
 	}
 
 	/// Collects any earnings from the specified position.
-	/// 
+	///
 	/// This function never panics.
 	pub fn collect<SD: SwapDirection>(
 		&mut self,
@@ -591,11 +632,16 @@ impl PoolState {
 		let positions = &mut self.positions[!SD::INPUT_SIDE];
 		let fixed_pools = &mut self.fixed_pools[!SD::INPUT_SIDE];
 
-		let (collected_amounts, option_position) = Self::collect_from_position::<SD>(positions.get(&(sqrt_price, lp)).ok_or(PositionError::NonExistent)?.clone(), fixed_pools.get(&sqrt_price), price, self.fee_pips);
+		let (collected_amounts, option_position) = Self::collect_from_position::<SD>(
+			positions.get(&(sqrt_price, lp)).ok_or(PositionError::NonExistent)?.clone(),
+			fixed_pools.get(&sqrt_price),
+			price,
+			self.fee_pips,
+		);
 		if let Some(position) = option_position {
 			positions.insert((sqrt_price, lp), position);
 		} else {
-			positions.remove(&(sqrt_price, lp));	
+			positions.remove(&(sqrt_price, lp));
 		};
 
 		Ok(collected_amounts)

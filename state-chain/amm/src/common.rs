@@ -311,18 +311,12 @@ pub fn tick_at_sqrt_price(sqrt_price: SqrtPriceQ64F96) -> Tick {
 #[cfg(test)]
 mod test {
 	use super::*;
-		
+
 	#[test]
 	fn test_sqrt_price_at_tick() {
 		assert_eq!(sqrt_price_at_tick(MIN_TICK), MIN_SQRT_PRICE);
-		assert_eq!(
-			sqrt_price_at_tick(-738203),
-			U256::from_dec_str("7409801140451").unwrap()
-		);
-		assert_eq!(
-			sqrt_price_at_tick(-500000),
-			U256::from_dec_str("1101692437043807371").unwrap()
-		);
+		assert_eq!(sqrt_price_at_tick(-738203), U256::from_dec_str("7409801140451").unwrap());
+		assert_eq!(sqrt_price_at_tick(-500000), U256::from_dec_str("1101692437043807371").unwrap());
 		assert_eq!(
 			sqrt_price_at_tick(-250000),
 			U256::from_dec_str("295440463448801648376846").unwrap()
@@ -438,63 +432,43 @@ mod test {
 			-276325
 		);
 		assert_eq!(
-			tick_at_sqrt_price(
-				U256::from_dec_str("79228162514264337593543950").unwrap()
-			),
+			tick_at_sqrt_price(U256::from_dec_str("79228162514264337593543950").unwrap()),
 			-138163
 		);
 		assert_eq!(
-			tick_at_sqrt_price(
-				U256::from_dec_str("9903520314283042199192993792").unwrap()
-			),
+			tick_at_sqrt_price(U256::from_dec_str("9903520314283042199192993792").unwrap()),
 			-41591
 		);
 		assert_eq!(
-			tick_at_sqrt_price(
-				U256::from_dec_str("28011385487393069959365969113").unwrap()
-			),
+			tick_at_sqrt_price(U256::from_dec_str("28011385487393069959365969113").unwrap()),
 			-20796
 		);
 		assert_eq!(
-			tick_at_sqrt_price(
-				U256::from_dec_str("56022770974786139918731938227").unwrap()
-			),
+			tick_at_sqrt_price(U256::from_dec_str("56022770974786139918731938227").unwrap()),
 			-6932
 		);
 		assert_eq!(
-			tick_at_sqrt_price(
-				U256::from_dec_str("79228162514264337593543950336").unwrap()
-			),
+			tick_at_sqrt_price(U256::from_dec_str("79228162514264337593543950336").unwrap()),
 			0
 		);
 		assert_eq!(
-			tick_at_sqrt_price(
-				U256::from_dec_str("112045541949572279837463876454").unwrap()
-			),
+			tick_at_sqrt_price(U256::from_dec_str("112045541949572279837463876454").unwrap()),
 			6931
 		);
 		assert_eq!(
-			tick_at_sqrt_price(
-				U256::from_dec_str("224091083899144559674927752909").unwrap()
-			),
+			tick_at_sqrt_price(U256::from_dec_str("224091083899144559674927752909").unwrap()),
 			20795
 		);
 		assert_eq!(
-			tick_at_sqrt_price(
-				U256::from_dec_str("633825300114114700748351602688").unwrap()
-			),
+			tick_at_sqrt_price(U256::from_dec_str("633825300114114700748351602688").unwrap()),
 			41590
 		);
 		assert_eq!(
-			tick_at_sqrt_price(
-				U256::from_dec_str("79228162514264337593543950336000").unwrap()
-			),
+			tick_at_sqrt_price(U256::from_dec_str("79228162514264337593543950336000").unwrap()),
 			138162
 		);
 		assert_eq!(
-			tick_at_sqrt_price(
-				U256::from_dec_str("79228162514264337593543950336000000").unwrap()
-			),
+			tick_at_sqrt_price(U256::from_dec_str("79228162514264337593543950336000000").unwrap()),
 			276324
 		);
 		assert_eq!(tick_at_sqrt_price(MAX_SQRT_PRICE - 1), MAX_TICK - 1);

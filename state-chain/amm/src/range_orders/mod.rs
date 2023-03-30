@@ -22,13 +22,15 @@
 #[cfg(test)]
 mod tests;
 
-use std::{collections::BTreeMap, u128, convert::Infallible};
+use std::{collections::BTreeMap, convert::Infallible, u128};
 
 use cf_utilities::assert_ok;
 use primitive_types::{U256, U512};
 
 use crate::common::{
-	mul_div_ceil, mul_div_floor, Amount, LiquidityProvider, OneToZero, Side, ZeroToOne, ONE_IN_PIPS, SqrtPriceQ64F96, Tick, sqrt_price_at_tick, MAX_TICK, MIN_TICK, tick_at_sqrt_price, is_sqrt_price_valid, SQRT_PRICE_FRACTIONAL_BITS,
+	is_sqrt_price_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, tick_at_sqrt_price,
+	Amount, LiquidityProvider, OneToZero, Side, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_TICK,
+	MIN_TICK, ONE_IN_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
 };
 
 pub type Liquidity = u128;
@@ -67,7 +69,8 @@ impl Position {
 		});
 		let collected_fees = CollectedFees {
 			fees: enum_map::EnumMap::default().map(|side, ()| {
-				// DIFF: This behaviour is different than Uniswap's. We use U256 instead of u128 to calculate fees, therefore it is not possible to overflow the fees here.
+				// DIFF: This behaviour is different than Uniswap's. We use U256 instead of u128 to
+				// calculate fees, therefore it is not possible to overflow the fees here.
 
 				/*
 					Proof that `mul_div_floor` does not overflow:
@@ -79,7 +82,7 @@ impl Position {
 					self.liquidity.into(),
 					U512::one() << 128,
 				)
-			})
+			}),
 		};
 		self.last_fee_growth_inside = fee_growth_inside;
 		collected_fees
@@ -121,7 +124,8 @@ pub struct PoolState {
 }
 
 pub trait SwapDirection: crate::common::SwapDirection {
-	/// Given the current_tick determines if the current price can increase further i.e. that there is possibly liquidity past the current price 
+	/// Given the current_tick determines if the current price can increase further i.e. that there
+	/// is possibly liquidity past the current price
 	fn further_liquidity(current_tick: Tick) -> bool;
 
 	/// The xy=k maths only works while the liquidity is constant, so this function returns the
@@ -353,7 +357,9 @@ impl PoolState {
 	}
 
 	pub fn set_fees(&mut self, fee_pips: u32) -> Result<(), SetFeesError> {
-		Self::validate_fees(fee_pips).then_some(()).ok_or(SetFeesError::InvalidFeeAmount)?;
+		Self::validate_fees(fee_pips)
+			.then_some(())
+			.ok_or(SetFeesError::InvalidFeeAmount)?;
 		self.fee_pips = fee_pips;
 		Ok(())
 	}
@@ -474,10 +480,7 @@ impl PoolState {
 		lower_tick: Tick,
 		upper_tick: Tick,
 		burnt_liquidity: Liquidity,
-	) -> Result<
-		(enum_map::EnumMap<Side, Amount>, CollectedFees),
-		PositionError<BurnError>,
-	> {
+	) -> Result<(enum_map::EnumMap<Side, Amount>, CollectedFees), PositionError<BurnError>> {
 		Self::validate_position_range(lower_tick, upper_tick)?;
 		if let Some(mut position) = self.positions.get(&(lp, lower_tick, upper_tick)).cloned() {
 			assert!(position.liquidity != 0);
@@ -586,8 +589,8 @@ impl PoolState {
 		let mut total_output_amount = Amount::zero();
 
 		// DIFF: This behaviour is different than Uniswap's. As Solidity doesn't have an ordered map
-		// container, there is a fixed limit to how far the price can move in one iteration of the loop,
-		// we don't have this restriction here.
+		// container, there is a fixed limit to how far the price can move in one iteration of the
+		// loop, we don't have this restriction here.
 		while let Some((tick_at_delta, delta)) = (Amount::zero() != amount &&
 			sqrt_price_limit.map_or(true, |sqrt_price_limit| {
 				SD::sqrt_price_op_more_than(sqrt_price_limit, self.current_sqrt_price)
@@ -716,8 +719,9 @@ impl PoolState {
 			.ok_or(PositionError::InvalidTickRange)
 	}
 
-	/// Returns the value of a range order, and the liquidity that would contribute to the current liquidity level given the current price.
-	/// 
+	/// Returns the value of a range order, and the liquidity that would contribute to the current
+	/// liquidity level given the current price.
+	///
 	/// This function will panic if the tick range or liquidity are out of bounds.
 	pub fn liquidity_to_amounts<const ROUND_UP: bool>(
 		&self,
@@ -785,7 +789,11 @@ impl PoolState {
 			Then A * B >= B and B - A < B
 			Then A * B > B - A
 		*/
-		mul_div_floor(U256::from(liquidity) << SQRT_PRICE_FRACTIONAL_BITS, to - from, U256::full_mul(to, from))
+		mul_div_floor(
+			U256::from(liquidity) << SQRT_PRICE_FRACTIONAL_BITS,
+			to - from,
+			U256::full_mul(to, from),
+		)
 	}
 
 	fn zero_amount_delta_ceil(
@@ -802,7 +810,11 @@ impl PoolState {
 			Then A * B >= B and B - A < B
 			Then A * B > B - A
 		*/
-		mul_div_ceil(U256::from(liquidity) << SQRT_PRICE_FRACTIONAL_BITS, to - from, U256::full_mul(to, from))
+		mul_div_ceil(
+			U256::from(liquidity) << SQRT_PRICE_FRACTIONAL_BITS,
+			to - from,
+			U256::full_mul(to, from),
+		)
 	}
 
 	fn one_amount_delta_floor(
@@ -874,6 +886,7 @@ impl PoolState {
 
 		// Will not overflow as function is not called if amount >= amount_required_to_reach_target,
 		// therefore bounding the function output to approximately <= MAX_SQRT_PRICE
-		sqrt_price_current + mul_div_floor(amount, U256::one() << SQRT_PRICE_FRACTIONAL_BITS, liquidity)
+		sqrt_price_current +
+			mul_div_floor(amount, U256::one() << SQRT_PRICE_FRACTIONAL_BITS, liquidity)
 	}
 }
