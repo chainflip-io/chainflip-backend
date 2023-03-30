@@ -228,26 +228,22 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 			.expect("Should send keygen request");
 
 		async move {
-			// Can use a map here
-			match result_receiver
+			result_receiver
 				.await
 				.expect("Keygen result channel dropped before receiving a result")
-			{
-				Ok(keygen_result_info) => {
+				.map(|keygen_result_info| {
 					let agg_key = C::agg_key(&keygen_result_info.key.get_public_key());
 
 					self.key_store.lock().unwrap().set_key(
 						KeyId { epoch_index, public_key_bytes: agg_key.clone().into() },
 						keygen_result_info.clone(),
 					);
-					Ok(agg_key)
-				},
-				Err((reported_parties, failure_reason)) => {
+					agg_key
+				})
+				.map_err(|(reported_parties, failure_reason)| {
 					failure_reason.log(&reported_parties);
-
-					Err((reported_parties, failure_reason))
-				},
-			}
+					(reported_parties, failure_reason)
+				})
 		}
 		.instrument(span.clone())
 		.boxed()
