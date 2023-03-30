@@ -10,7 +10,6 @@ use jsonrpsee::{
 	server::ServerBuilder,
 };
 use std::path::PathBuf;
-use tracing::warn;
 use utilities::{clean_dot_address, clean_eth_address};
 
 #[rpc(server, client, namespace = "lp")]
@@ -204,9 +203,11 @@ async fn main() -> anyhow::Result<()> {
 		.try_init()
 		.expect("setting default subscriber failed");
 
-	if !opts.signing_key_file.exists() {
-		warn!("No signing_key_file found at {}", opts.signing_key_file.to_string_lossy())
-	}
+	assert!(
+		opts.signing_key_file.exists(),
+		"No signing_key_file found at {}",
+		opts.signing_key_file.to_string_lossy()
+	);
 
 	let server = ServerBuilder::default().build(format!("0.0.0.0:{}", opts.port)).await?;
 	let server_addr = server.local_addr()?;
