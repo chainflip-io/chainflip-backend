@@ -10,7 +10,7 @@ use std::{
 
 use crate::{
 	common::read_clean_and_decode_hex_str_file,
-	multisig::{eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme},
+	multisig::{bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme},
 	settings::P2P as P2PSettings,
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 };
@@ -68,6 +68,8 @@ pub async fn start<StateChainClient>(
 	MultisigMessageReceiver<EthSigning>,
 	MultisigMessageSender<PolkadotSigning>,
 	MultisigMessageReceiver<PolkadotSigning>,
+	MultisigMessageSender<BtcSigning>,
+	MultisigMessageReceiver<BtcSigning>,
 	UnboundedSender<PeerUpdate>,
 	impl Future<Output = anyhow::Result<()>>,
 )>
@@ -116,6 +118,8 @@ where
 		eth_incoming_receiver,
 		dot_outgoing_sender,
 		dot_incoming_receiver,
+		btc_outgoing_sender,
+		btc_incoming_receiver,
 		muxer_future,
 	) = P2PMuxer::start(incoming_message_receiver, outgoing_message_sender);
 
@@ -153,6 +157,8 @@ where
 		eth_incoming_receiver,
 		dot_outgoing_sender,
 		dot_incoming_receiver,
+		btc_outgoing_sender,
+		btc_incoming_receiver,
 		peer_update_sender,
 		fut,
 	))

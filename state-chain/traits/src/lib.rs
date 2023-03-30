@@ -13,13 +13,13 @@ pub use async_result::AsyncResult;
 use sp_std::collections::btree_set::BTreeSet;
 
 use cf_chains::{
-	benchmarking_value::BenchmarkValue, eth::H256, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum,
-	Polkadot,
+	address::ForeignChainAddress, benchmarking_value::BenchmarkValue, eth::H256, ApiCall,
+	CcmIngressMetadata, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot,
 };
 
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BroadcastId, CeremonyId,
-	EgressId, EpochIndex, EthereumAddress, ForeignChain, ForeignChainAddress, IntentId, KeyId,
+	EgressId, EpochIndex, EthereumAddress, ForeignChain, IntentId, KeyId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -649,6 +649,7 @@ pub trait IngressApi<C: Chain> {
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
 		relayer_id: Self::AccountId,
+		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
 }
 
@@ -666,6 +667,7 @@ impl<T: frame_system::Config> IngressApi<Ethereum> for T {
 		_egress_address: ForeignChainAddress,
 		_relayer_commission_bps: u16,
 		_relayer_id: T::AccountId,
+		_message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
 	}
@@ -685,6 +687,7 @@ impl<T: frame_system::Config> IngressApi<Polkadot> for T {
 		_egress_address: ForeignChainAddress,
 		_relayer_commission_bps: u16,
 		_relayer_id: T::AccountId,
+		_message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
 	}
@@ -759,17 +762,19 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 /// API that allows other pallets to Egress assets out of the State Chain.
 pub trait EgressApi<C: Chain> {
 	fn schedule_egress(
-		foreign_asset: C::ChainAsset,
+		asset: C::ChainAsset,
 		amount: AssetAmount,
 		egress_address: C::ChainAccount,
+		maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId;
 }
 
 impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 	fn schedule_egress(
-		_foreign_asset: assets::eth::Asset,
+		_asset: assets::eth::Asset,
 		_amount: AssetAmount,
 		_egress_address: <Ethereum as Chain>::ChainAccount,
+		_maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId {
 		(ForeignChain::Ethereum, 0)
 	}
@@ -777,11 +782,12 @@ impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 
 impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 	fn schedule_egress(
-		_foreign_asset: assets::dot::Asset,
+		_asset: assets::dot::Asset,
 		_amount: AssetAmount,
 		_egress_address: <Polkadot as Chain>::ChainAccount,
+		_maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId {
-		(ForeignChain::Ethereum, 0)
+		(ForeignChain::Polkadot, 0)
 	}
 }
 
@@ -832,5 +838,30 @@ pub trait IngressHandler<C: ChainCrypto> {
 		_address: <C as Chain>::ChainAccount,
 		_asset: <C as Chain>::ChainAsset,
 	) {
+	}
+}
+
+/// Trait for handling cross chain messages.
+pub trait CcmHandler {
+	/// On the ingress of a cross-chain message, swap the asset into egress asset,
+	/// subtract the gas budge from it, then egress the message to the target chain.
+	fn on_ccm_ingress(
+		ingress_asset: Asset,
+		ingress_amount: AssetAmount,
+		egress_asset: Asset,
+		egress_address: ForeignChainAddress,
+		message_metadata: CcmIngressMetadata,
+	) -> DispatchResult;
+}
+
+impl CcmHandler for () {
+	fn on_ccm_ingress(
+		_ingress_asset: Asset,
+		_ingress_amount: AssetAmount,
+		_egress_asset: Asset,
+		_egress_address: ForeignChainAddress,
+		_message_metadata: CcmIngressMetadata,
+	) -> DispatchResult {
+		Ok(())
 	}
 }

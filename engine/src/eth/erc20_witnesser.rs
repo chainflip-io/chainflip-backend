@@ -36,7 +36,7 @@ pub struct Erc20Witnesser {
 	pub deployed_address: H160,
 	asset: eth::Asset,
 	contract: ethabi::Contract,
-	address_monitor: Arc<Mutex<AddressMonitor<sp_core::H160>>>,
+	address_monitor: Arc<Mutex<AddressMonitor<sp_core::H160, sp_core::H160, ()>>>,
 }
 
 impl Erc20Witnesser {
@@ -44,7 +44,7 @@ impl Erc20Witnesser {
 	pub fn new(
 		deployed_address: H160,
 		asset: eth::Asset,
-		address_monitor: Arc<Mutex<AddressMonitor<sp_core::H160>>>,
+		address_monitor: Arc<Mutex<AddressMonitor<sp_core::H160, sp_core::H160, ()>>>,
 	) -> Self {
 		Self {
 			deployed_address,
@@ -167,15 +167,10 @@ mod tests {
 	// approval: 0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925
 	#[test]
 	fn generate_signatures() {
-		let (_eth_monitor_erc20_ingress_sender, eth_monitor_erc20_ingress_receiver) =
-			tokio::sync::mpsc::unbounded_channel();
 		let contract = Erc20Witnesser::new(
 			H160::default(),
 			eth::Asset::Flip,
-			Arc::new(Mutex::new(AddressMonitor::new(
-				Default::default(),
-				eth_monitor_erc20_ingress_receiver,
-			))),
+			Arc::new(Mutex::new(AddressMonitor::new(Default::default()).1)),
 		)
 		.contract;
 
@@ -187,29 +182,19 @@ mod tests {
 
 	#[test]
 	fn test_load_contract() {
-		let (_eth_monitor_erc20_ingress_sender, eth_monitor_erc20_ingress_receiver) =
-			tokio::sync::mpsc::unbounded_channel();
 		Erc20Witnesser::new(
 			H160::default(),
 			eth::Asset::Flip,
-			Arc::new(Mutex::new(AddressMonitor::new(
-				Default::default(),
-				eth_monitor_erc20_ingress_receiver,
-			))),
+			Arc::new(Mutex::new(AddressMonitor::new(Default::default()).1)),
 		);
 	}
 
 	#[test]
 	fn test_transfer_log_parsing() {
-		let (_eth_monitor_erc20_ingress_sender, eth_monitor_erc20_ingress_receiver) =
-			tokio::sync::mpsc::unbounded_channel();
 		let erc20_witnesser = Erc20Witnesser::new(
 			H160::default(),
 			eth::Asset::Flip,
-			Arc::new(Mutex::new(AddressMonitor::new(
-				Default::default(),
-				eth_monitor_erc20_ingress_receiver,
-			))),
+			Arc::new(Mutex::new(AddressMonitor::new(Default::default()).1)),
 		);
 		let decode_log = erc20_witnesser.decode_log_closure().unwrap();
 
@@ -261,15 +246,10 @@ mod tests {
 
 	#[test]
 	fn test_approval_log_parsing() {
-		let (_eth_monitor_erc20_ingress_sender, eth_monitor_erc20_ingress_receiver) =
-			tokio::sync::mpsc::unbounded_channel();
 		let erc20_witnesser = Erc20Witnesser::new(
 			H160::default(),
 			eth::Asset::Flip,
-			Arc::new(Mutex::new(AddressMonitor::new(
-				Default::default(),
-				eth_monitor_erc20_ingress_receiver,
-			))),
+			Arc::new(Mutex::new(AddressMonitor::new(Default::default()).1)),
 		);
 		let decode_log = erc20_witnesser.decode_log_closure().unwrap();
 

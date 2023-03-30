@@ -58,7 +58,7 @@ mod tests {
 	use super::*;
 	use crate::{RuntimeOrigin, Validator, Witnesser};
 	use cf_chains::{
-		eth::{Ethereum, TrackedData},
+		eth::{Ethereum, EthereumTrackedData},
 		Chain,
 	};
 	use cf_primitives::AccountRole;
@@ -77,7 +77,11 @@ mod tests {
 			Runtime,
 			EthereumInstance,
 		>::update_chain_state {
-			state: TrackedData { block_height: BLOCK_HEIGHT, base_fee: BASE_FEE, priority_fee },
+			state: EthereumTrackedData {
+				block_height: BLOCK_HEIGHT,
+				base_fee: BASE_FEE,
+				priority_fee,
+			},
 		})
 	}
 
@@ -145,7 +149,11 @@ mod tests {
 
 			assert_eq!(
 				pallet_cf_chain_tracking::ChainState::<Runtime, EthereumInstance>::get().unwrap(),
-				TrackedData { block_height: BLOCK_HEIGHT, base_fee: BASE_FEE, priority_fee: 10 }
+				EthereumTrackedData {
+					block_height: BLOCK_HEIGHT,
+					base_fee: BASE_FEE,
+					priority_fee: 10
+				}
 			);
 		})
 	}

@@ -1,8 +1,10 @@
 use anyhow::Result;
 use cf_primitives::PublicKeyBytes;
 
-use super::{curve25519::ristretto::Point, ChainTag, CryptoScheme, ECPoint};
-use cf_chains::dot::PolkadotPublicKey;
+use super::{
+	curve25519::ristretto::Point, ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature,
+};
+use cf_chains::{dot::PolkadotPublicKey, ChainCrypto, Polkadot};
 use schnorrkel::context::{SigningContext, SigningTranscript};
 use serde::{Deserialize, Serialize};
 
@@ -14,6 +16,15 @@ const SIGNING_CTX: &[u8] = b"substrate";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PolkadotSignature(schnorrkel::Signature);
+
+impl SignatureToThresholdSignature<Polkadot> for Vec<PolkadotSignature> {
+	fn to_threshold_signature(&self) -> <Polkadot as ChainCrypto>::ThresholdSignature {
+		self.iter()
+			.map(|s| s.clone().into())
+			.next()
+			.expect("Exactly one signature for Polkadot")
+	}
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Hash, Eq)]
 pub struct SigningPayload(Vec<u8>);

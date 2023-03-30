@@ -2,8 +2,8 @@ use crate::{
 	benchmarking_value::BenchmarkValue,
 	eth::{
 		api::{update_flip_supply::UpdateFlipSupply, EthereumApi},
-		to_ethereum_address, Address, AggKey, EthereumReplayProtection,
-		SchnorrVerificationComponents, TrackedData, Transaction, H256, U256,
+		to_ethereum_address, Address, AggKey, EthereumReplayProtection, EthereumTrackedData,
+		SchnorrVerificationComponents, Transaction, H256, U256,
 	},
 	ApiCall,
 };
@@ -14,7 +14,7 @@ const PRIVATE_KEY: [u8; 32] = [2u8; 32];
 use cf_primitives::EthAmount;
 use libsecp256k1::{PublicKey, SecretKey};
 
-use super::{Ethereum, TransactionFee};
+use super::TransactionFee;
 
 impl BenchmarkValue for SchnorrVerificationComponents {
 	fn benchmark_value() -> Self {
@@ -84,7 +84,7 @@ impl BenchmarkValue for Transaction {
 	}
 }
 
-impl BenchmarkValue for TrackedData<Ethereum> {
+impl BenchmarkValue for EthereumTrackedData {
 	fn benchmark_value() -> Self {
 		Self { block_height: 1000, base_fee: 10_000_000_000, priority_fee: 2_000_000_000 }
 	}

@@ -1,6 +1,8 @@
 use std::{collections::BTreeSet, sync::Arc};
 
+use crate::{btc::rpc::MockBtcRpcApi, multisig::SignatureToThresholdSignature};
 use cf_chains::{
+	btc::BitcoinNetwork,
 	eth::{Ethereum, Transaction},
 	ChainCrypto,
 };
@@ -18,6 +20,7 @@ use tokio::sync::watch;
 use web3::types::{Bytes, SignedTransaction};
 
 use crate::{
+	btc::BtcBroadcaster,
 	dot::{rpc::MockDotRpcApi, DotBroadcaster},
 	eth::{
 		rpc::{EthWsRpcClient, MockEthRpcApi},
@@ -96,6 +99,23 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
+
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(initial_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 98 }))
+		});
+
+	state_chain_client
 			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
 				state_chain_runtime::Runtime,
 			>>()
@@ -103,15 +123,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.once()
 			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
-	let eth_multisig_client = MockMultisigClientApi::new();
-	let dot_multisig_client = MockMultisigClientApi::new();
-
 	// No blocks in the stream
 	let sc_block_stream = tokio_stream::iter(vec![]);
-
-	let eth_rpc_mock = MockEthRpcApi::new();
-
-	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock);
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -137,13 +150,20 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
-		eth_broadcaster,
+		EthBroadcaster::new_test(MockEthRpcApi::new()),
 		DotBroadcaster::new(MockDotRpcApi::new()),
-		eth_multisig_client,
-		dot_multisig_client,
+		BtcBroadcaster::new(MockBtcRpcApi::new()),
+		MockMultisigClientApi::new(),
+		MockMultisigClientApi::new(),
+		MockMultisigClientApi::new(),
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		EthAddressToMonitorSender {
@@ -154,6 +174,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_epoch_start_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -179,6 +201,9 @@ async fn starts_witnessing_when_historic_on_startup() {
 	let current_epoch_from_block_eth = 40;
 
 	let current_epoch_from_block_dot = 80;
+
+	let current_epoch_from_block_btc = 100;
+
 	let initial_block_hash = H256::default();
 	let account_id = AccountId::new([0; 32]);
 
@@ -236,6 +261,23 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
 	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
+
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(active_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 98 }))
+		});
+
+	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
@@ -264,6 +306,17 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(current_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: current_epoch_from_block_btc }))
+		});
+
+	state_chain_client
 		.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
 			state_chain_runtime::Runtime,
 		>>()
@@ -273,12 +326,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 
 	// No blocks in the stream
 	let sc_block_stream = tokio_stream::iter(vec![]);
-
-	let eth_rpc_mock = MockEthRpcApi::new();
-	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock);
-
-	let eth_multisig_client = MockMultisigClientApi::new();
-	let dot_multisig_client = MockMultisigClientApi::new();
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -304,13 +351,20 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
-		eth_broadcaster,
+		EthBroadcaster::new_test(MockEthRpcApi::new()),
 		DotBroadcaster::new(MockDotRpcApi::new()),
-		eth_multisig_client,
-		dot_multisig_client,
+		BtcBroadcaster::new(MockBtcRpcApi::new()),
+		MockMultisigClientApi::new(),
+		MockMultisigClientApi::new(),
+		MockMultisigClientApi::new(),
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		EthAddressToMonitorSender {
@@ -321,6 +375,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_epoch_start_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -404,13 +460,24 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
+	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
+
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(initial_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 98 }))
+		});
+
 	let sc_block_stream = tokio_stream::iter(vec![]);
-
-	let eth_rpc_mock = MockEthRpcApi::new();
-	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock);
-
-	let eth_multisig_client = MockMultisigClientApi::new();
-	let dot_multisig_client = MockMultisigClientApi::new();
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -435,13 +502,20 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
-		eth_broadcaster,
+		EthBroadcaster::new_test(MockEthRpcApi::new()),
 		DotBroadcaster::new(MockDotRpcApi::new()),
-		eth_multisig_client,
-		dot_multisig_client,
+		BtcBroadcaster::new(MockBtcRpcApi::new()),
+		MockMultisigClientApi::new(),
+		MockMultisigClientApi::new(),
+		MockMultisigClientApi::new(),
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		EthAddressToMonitorSender {
@@ -452,6 +526,8 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_epoch_start_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -476,6 +552,9 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 	let initial_epoch_from_block_eth = 40;
 
 	let initial_epoch_from_block_dot = 72;
+
+	let initial_epoch_from_block_btc = 98;
+
 	let new_epoch = 5;
 	let new_epoch_from_block = 50;
 	let initial_block_hash = H256::default();
@@ -534,6 +613,23 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
+	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
+
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(initial_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: initial_epoch_from_block_btc }))
+		});
+
 	let empty_block_header = test_header(20);
 	let new_epoch_block_header = test_header(21);
 	let new_epoch_block_header_hash = new_epoch_block_header.hash();
@@ -585,6 +681,18 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 				active_from_block: initial_epoch_from_block_dot,
 			}))
 		});
+
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: initial_epoch_from_block_btc }))
+		});
+
 	state_chain_client
 	.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
 		state_chain_runtime::Runtime,
@@ -597,11 +705,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.with(eq(new_epoch_block_header_hash), eq(5), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _, _| Ok(Some(1)));
-
-	let eth_broadcaster = EthBroadcaster::new_test(MockEthRpcApi::new());
-
-	let eth_multisig_client = MockMultisigClientApi::new();
-	let dot_multisig_client = MockMultisigClientApi::new();
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -627,13 +730,20 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
-		eth_broadcaster,
+		EthBroadcaster::new_test(MockEthRpcApi::new()),
 		DotBroadcaster::new(MockDotRpcApi::new()),
-		eth_multisig_client,
-		dot_multisig_client,
+		BtcBroadcaster::new(MockBtcRpcApi::new()),
+		MockMultisigClientApi::new(),
+		MockMultisigClientApi::new(),
+		MockMultisigClientApi::new(),
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		EthAddressToMonitorSender {
@@ -644,6 +754,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_epoch_start_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -730,6 +842,23 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
+	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
+
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(initial_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 89 }))
+		});
+
 	let empty_block_header = test_header(20);
 	let new_epoch_block_header = test_header(21);
 	let new_epoch_block_header_hash = new_epoch_block_header.hash();
@@ -787,17 +916,21 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 120 }))
+		});
+
 	state_chain_client.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(new_epoch), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _, _| Ok(Some(1)));
-
-	let eth_rpc_mock = MockEthRpcApi::new();
-
-	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock);
-
-	let eth_multisig_client = MockMultisigClientApi::new();
-	let dot_multisig_client = MockMultisigClientApi::new();
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -823,13 +956,20 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
-		eth_broadcaster,
+		EthBroadcaster::new_test(MockEthRpcApi::new()),
 		DotBroadcaster::new(MockDotRpcApi::new()),
-		eth_multisig_client,
-		dot_multisig_client,
+		BtcBroadcaster::new(MockBtcRpcApi::new()),
+		MockMultisigClientApi::new(),
+		MockMultisigClientApi::new(),
+		MockMultisigClientApi::new(),
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		EthAddressToMonitorSender {
@@ -840,6 +980,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_epoch_start_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -926,6 +1068,23 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
+	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
+
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(initial_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 120 }))
+		});
+
 	let empty_block_header = test_header(20);
 	let new_epoch_block_header = test_header(21);
 	let new_epoch_block_header_hash = new_epoch_block_header.hash();
@@ -984,17 +1143,21 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.once()
 			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
+	state_chain_client
+			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+				state_chain_runtime::Runtime,
+				state_chain_runtime::BitcoinInstance,
+			>>()
+			.with(eq(new_epoch_block_header_hash), eq(new_epoch))
+			.once()
+			.return_once(move |_, _| {
+				Ok(Some(Vault { public_key: Default::default(), active_from_block: 120 }))
+			});
+
 	state_chain_client.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(4), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _, _| Ok(None));
-
-	let eth_rpc_mock = MockEthRpcApi::new();
-
-	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock);
-
-	let eth_multisig_client = MockMultisigClientApi::new();
-	let dot_multisig_client = MockMultisigClientApi::new();
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -1020,13 +1183,20 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
-		eth_broadcaster,
+		EthBroadcaster::new_test(MockEthRpcApi::new()),
 		DotBroadcaster::new(MockDotRpcApi::new()),
-		eth_multisig_client,
-		dot_multisig_client,
+		BtcBroadcaster::new(MockBtcRpcApi::new()),
+		MockMultisigClientApi::new(),
+		MockMultisigClientApi::new(),
+		MockMultisigClientApi::new(),
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		EthAddressToMonitorSender {
@@ -1037,6 +1207,8 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_epoch_start_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -1123,6 +1295,23 @@ async fn only_encodes_and_signs_when_specified() {
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
+	state_chain_client
+		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
+
+	state_chain_client
+		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
+			state_chain_runtime::Runtime,
+			state_chain_runtime::BitcoinInstance,
+		>>()
+		.with(eq(initial_block_hash), eq(initial_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 98 }))
+		});
+
 	let block_header = test_header(21);
 	let sc_block_stream = tokio_stream::iter([block_header.clone()]);
 
@@ -1164,7 +1353,7 @@ async fn only_encodes_and_signs_when_specified() {
 						pallet_cf_broadcast::Event::TransactionBroadcastRequest {
 							broadcast_attempt_id: BroadcastAttemptId::default(),
 							nominee: account_id,
-							unsigned_tx: Transaction::default(),
+							transaction_payload: Transaction::default(),
 						},
 					),
 					topics: vec![H256::default()],
@@ -1175,18 +1364,13 @@ async fn only_encodes_and_signs_when_specified() {
 						pallet_cf_broadcast::Event::TransactionBroadcastRequest {
 							broadcast_attempt_id: BroadcastAttemptId::default(),
 							nominee: AccountId32::new([1; 32]), // NOT OUR ACCOUNT ID
-							unsigned_tx: Transaction::default(),
+							transaction_payload: Transaction::default(),
 						},
 					),
 					topics: vec![H256::default()],
 				}),
 			])
 		});
-
-	let eth_broadcaster = EthBroadcaster::new_test(eth_rpc_mock);
-
-	let eth_multisig_client = MockMultisigClientApi::new();
-	let dot_multisig_client = MockMultisigClientApi::new();
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -1212,13 +1396,20 @@ async fn only_encodes_and_signs_when_specified() {
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
+	let (btc_monitor_signature_sender, _btc_monitor_signature_receiver) =
+		tokio::sync::mpsc::unbounded_channel();
+
+	let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) = async_broadcast::broadcast(10);
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
-		eth_broadcaster,
+		EthBroadcaster::new_test(eth_rpc_mock),
 		DotBroadcaster::new(MockDotRpcApi::new()),
-		eth_multisig_client,
-		dot_multisig_client,
+		BtcBroadcaster::new(MockBtcRpcApi::new()),
+		MockMultisigClientApi::new(),
+		MockMultisigClientApi::new(),
+		MockMultisigClientApi::new(),
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		EthAddressToMonitorSender {
@@ -1229,6 +1420,8 @@ async fn only_encodes_and_signs_when_specified() {
 		dot_epoch_start_sender,
 		dot_monitor_ingress_sender,
 		dot_monitor_signature_sender,
+		btc_epoch_start_sender,
+		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
 		initial_block_hash,
 	)
@@ -1247,6 +1440,9 @@ where
 	state_chain_runtime::RuntimeCall:
 		std::convert::From<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>,
 	<<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain as ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signature>,
+	Vec<C::Signature>: SignatureToThresholdSignature<
+		<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain
+	>,
 {
 	let first_ceremony_id = 1;
 	let key_id = KeyId { epoch_index: 1, public_key_bytes: vec![0u8; 32] };
@@ -1459,13 +1655,6 @@ async fn run_the_sc_observer() {
 			let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
-			let eth_ws_rpc_client = EthWsRpcClient::new(&settings.eth).await.unwrap();
-			let eth_broadcaster =
-				EthBroadcaster::new(&settings.eth, eth_ws_rpc_client.clone()).unwrap();
-
-			let eth_multisig_client = MockMultisigClientApi::new();
-			let dot_multisig_client = MockMultisigClientApi::new();
-
 			let (epoch_start_sender, _epoch_start_receiver) = async_broadcast::broadcast(10);
 
 			let (cfe_settings_update_sender, _) =
@@ -1489,13 +1678,25 @@ async fn run_the_sc_observer() {
 			let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
+			let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) =
+				async_broadcast::broadcast(10);
+
+			let (btc_monitor_ingress_sender, _btc_monitor_ingress_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+
 			sc_observer::start(
 				state_chain_client,
 				sc_block_stream,
-				eth_broadcaster,
+				EthBroadcaster::new(
+					&settings.eth,
+					EthWsRpcClient::new(&settings.eth).await.unwrap().clone(),
+				)
+				.unwrap(),
 				DotBroadcaster::new(MockDotRpcApi::new()),
-				eth_multisig_client,
-				dot_multisig_client,
+				BtcBroadcaster::new(MockBtcRpcApi::new()),
+				MockMultisigClientApi::new(),
+				MockMultisigClientApi::new(),
+				MockMultisigClientApi::new(),
 				account_peer_mapping_change_sender,
 				epoch_start_sender,
 				EthAddressToMonitorSender {
@@ -1506,6 +1707,8 @@ async fn run_the_sc_observer() {
 				dot_epoch_start_sender,
 				dot_monitor_ingress_sender,
 				dot_monitor_signature_sender,
+				btc_epoch_start_sender,
+				btc_monitor_ingress_sender,
 				cfe_settings_update_sender,
 				initial_block_hash,
 			)

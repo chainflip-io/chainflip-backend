@@ -108,7 +108,7 @@ pub struct Settings {
 	// External Chain settings
 	pub eth: Eth,
 	pub dot: Dot,
-	pub btc: Option<Btc>,
+	pub btc: Btc,
 
 	pub health_check: Option<HealthCheck>,
 	pub signing: Signing,
@@ -292,7 +292,7 @@ where
 				ConfigError::Message(if file_present {
 					e.to_string()
 				} else {
-					format!("Config file is missing {}: {}", settings_file.to_string_lossy(), e)
+					format!("Error in {}: {}", settings_file.to_string_lossy(), e)
 				})
 			})?;
 
@@ -324,9 +324,7 @@ impl CfSettings for Settings {
 
 		self.dot.validate_settings()?;
 
-		if let Some(btc) = &self.btc {
-			btc.validate_settings()?;
-		}
+		self.btc.validate_settings()?;
 
 		self.state_chain.validate_settings()?;
 
@@ -530,6 +528,8 @@ mod tests {
 
 	use utilities::assert_ok;
 
+	use crate::constants::{BTC_HTTP_NODE_ENDPOINT, BTC_RPC_PASSWORD, BTC_RPC_USER};
+
 	use super::*;
 	use std::env;
 
@@ -540,6 +540,10 @@ mod tests {
 		env::set_var(ETH_WS_NODE_ENDPOINT, "ws://localhost:8545");
 		env::set_var(NODE_P2P_IP_ADDRESS, "1.1.1.1");
 
+		env::set_var(BTC_HTTP_NODE_ENDPOINT, "http://localhost:18443");
+		env::set_var(BTC_RPC_USER, "user");
+		env::set_var(BTC_RPC_PASSWORD, "password");
+
 		env::set_var("DOT__WS_NODE_ENDPOINT", "wss://my_fake_polkadot_rpc:443/<secret_key>");
 	}
 
@@ -547,14 +551,7 @@ mod tests {
 	fn init_default_config() {
 		set_test_env();
 
-		let settings = Settings::new(CommandLineOptions {
-			state_chain_opts: StateChainOptions {
-				state_chain_ws_endpoint: None,
-				state_chain_signing_key_file: Some(PathBuf::from("")),
-			},
-			..Default::default()
-		})
-		.unwrap();
+		let settings = Settings::new(CommandLineOptions::default()).unwrap();
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
 		assert_eq!(settings.eth.http_node_endpoint, "http://localhost:8545");
 	}
@@ -691,11 +688,9 @@ mod tests {
 
 		assert_eq!(opts.dot_opts.dot_ws_node_endpoint.unwrap(), settings.dot.ws_node_endpoint);
 
-		let btc_settings =
-			settings.btc.expect("option provided in CLI settings, so should override");
-		assert_eq!(opts.btc_opts.btc_http_node_endpoint.unwrap(), btc_settings.http_node_endpoint);
-		assert_eq!(opts.btc_opts.btc_rpc_user.unwrap(), btc_settings.rpc_user);
-		assert_eq!(opts.btc_opts.btc_rpc_password.unwrap(), btc_settings.rpc_password);
+		assert_eq!(opts.btc_opts.btc_http_node_endpoint.unwrap(), settings.btc.http_node_endpoint);
+		assert_eq!(opts.btc_opts.btc_rpc_user.unwrap(), settings.btc.rpc_user);
+		assert_eq!(opts.btc_opts.btc_rpc_password.unwrap(), settings.btc.rpc_password);
 
 		assert_eq!(
 			opts.health_check_hostname.unwrap(),

@@ -13,7 +13,7 @@ use frame_support::traits::UnfilteredDispatchable;
 
 use cf_traits::{
 	impl_mock_callback,
-	mocks::all_batch::{MockAllBatch, MockEthEnvironment},
+	mocks::api_call::{MockEthEnvironment, MockEthereumApiCall},
 	IngressHandler,
 };
 
@@ -92,7 +92,7 @@ impl_mock_callback!(RuntimeOrigin);
 
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
-	type ApiCall = MockAllBatch<MockEthEnvironment>;
+	type ApiCall = MockEthereumApiCall<MockEthEnvironment>;
 	type Callback = RuntimeCall;
 
 	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
@@ -101,9 +101,11 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 
 	fn threshold_sign_and_broadcast_with_callback(
 		_api_call: Self::ApiCall,
-		_callback: Self::Callback,
+		callback: Self::Callback,
 	) -> BroadcastId {
-		unimplemented!()
+		// TODO: Call the callback.
+		let _ = callback.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
+		1
 	}
 }
 
@@ -117,12 +119,13 @@ impl crate::Config<Instance1> for Test {
 	type AddressDerivation = ();
 	type LpProvisioning = Self;
 	type SwapIntentHandler = Self;
-	type AllBatch = MockAllBatch<MockEthEnvironment>;
+	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;
 	type Broadcaster = MockBroadcast;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type IntentTTL = ConstU64<5_u64>;
 	type IngressHandler = MockIngressHandler;
 	type WeightInfo = ();
+	type CcmHandler = ();
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

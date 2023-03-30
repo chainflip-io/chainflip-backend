@@ -10,12 +10,14 @@ mod offences;
 mod signer_nomination;
 
 use crate::{
-	AccountId, Authorship, BlockNumber, EmergencyRotationPercentageRange, Emissions, Environment,
-	EthereumBroadcaster, EthereumInstance, Flip, FlipBalance, PolkadotBroadcaster, Reputation,
-	Runtime, RuntimeCall, System, Validator,
+	AccountId, Authorship, BitcoinIngressEgress, BlockNumber, EmergencyRotationPercentageRange,
+	Emissions, Environment, EthereumBroadcaster, EthereumIngressEgress, EthereumInstance, Flip,
+	FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress, Reputation, Runtime, RuntimeCall,
+	System, Validator,
 };
 
 use cf_chains::{
+	address::ForeignChainAddress,
 	btc::{
 		api::{BitcoinApi, SelectedUtxos},
 		Bitcoin, BitcoinNetwork, BitcoinTransactionData, BtcAmount, Utxo,
@@ -29,12 +31,12 @@ use cf_chains::{
 		api::{EthereumApi, EthereumReplayProtection},
 		Ethereum,
 	},
-	AnyChain, ApiCall, Chain, ChainAbi, ChainCrypto, ChainEnvironment, ForeignChain,
-	ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey, TransactionBuilder,
+	AnyChain, ApiCall, CcmIngressMetadata, Chain, ChainAbi, ChainCrypto, ChainEnvironment,
+	ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
+	TransactionBuilder,
 };
 use cf_primitives::{
-	chains::assets, liquidity::U256, Asset, AssetAmount, ForeignChainAddress, IntentId,
-	ETHEREUM_ETH_ADDRESS,
+	chains::assets, liquidity::U256, Asset, AssetAmount, EgressId, IntentId, ETHEREUM_ETH_ADDRESS,
 };
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, EgressApi,
@@ -156,6 +158,7 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 				EthereumApi::SetGovKeyWithAggKey(_) => Environment::key_manager_address().into(),
 				EthereumApi::SetCommKeyWithAggKey(_) => Environment::key_manager_address().into(),
 				EthereumApi::AllBatch(_) => Environment::eth_vault_address().into(),
+				EthereumApi::ExecutexSwapAndCall(_) => Environment::eth_vault_address().into(),
 				EthereumApi::_Phantom(..) => unreachable!(),
 			},
 			data: signed_call.chain_encoded(),
@@ -298,12 +301,17 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 				}
 			},
 
-			cf_chains::dot::api::SystemAccounts::Vault => Environment::get_polkadot_vault_account(),
+			cf_chains::dot::api::SystemAccounts::Vault => Environment::polkadot_vault_account(),
 		}
 	}
 }
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct BtcEnvironment;
+
+impl ReplayProtectionProvider<Bitcoin> for BtcEnvironment {
+	// TODO: Implement replay protection for Bitcoin.
+	fn replay_protection() {}
+}
 
 impl ChainEnvironment<BtcAmount, SelectedUtxos> for BtcEnvironment {
 	fn lookup(output_amount: BtcAmount) -> Option<SelectedUtxos> {
@@ -313,7 +321,7 @@ impl ChainEnvironment<BtcAmount, SelectedUtxos> for BtcEnvironment {
 
 impl ChainEnvironment<(), BitcoinNetwork> for BtcEnvironment {
 	fn lookup(_: ()) -> Option<BitcoinNetwork> {
-		Some(Environment::get_bitcoin_network())
+		Some(Environment::bitcoin_network())
 	}
 }
 impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
@@ -337,40 +345,6 @@ impl VaultTransitionHandler<Polkadot> for DotVaultTransitionHandler {
 }
 pub struct BtcVaultTransitionHandler;
 impl VaultTransitionHandler<Bitcoin> for BtcVaultTransitionHandler {}
-
-pub struct AnyChainIngressEgressHandler;
-
-impl EgressApi<AnyChain> for AnyChainIngressEgressHandler {
-	fn schedule_egress(
-		asset: Asset,
-		amount: AssetAmount,
-		egress_address: <AnyChain as Chain>::ChainAccount,
-	) -> cf_primitives::EgressId {
-		match asset.into() {
-			ForeignChain::Ethereum => crate::EthereumIngressEgress::schedule_egress(
-				asset.try_into().expect("Checked for asset compatibility"),
-				amount,
-				egress_address
-					.try_into()
-					.expect("Caller must ensure for account is of the compatible type."),
-			),
-			ForeignChain::Polkadot => crate::PolkadotIngressEgress::schedule_egress(
-				asset.try_into().expect("Checked for asset compatibility"),
-				amount,
-				egress_address
-					.try_into()
-					.expect("Caller must ensure for account is of the compatible type."),
-			),
-			ForeignChain::Bitcoin => crate::BitcoinIngressEgress::schedule_egress(
-				asset.try_into().expect("Checked for asset compatibility"),
-				amount,
-				egress_address
-					.try_into()
-					.expect("Caller must ensure for account is of the compatible type."),
-			),
-		}
-	}
-}
 
 pub struct TokenholderGovernanceBroadcaster;
 
@@ -432,64 +406,94 @@ impl CommKeyBroadcaster for TokenholderGovernanceBroadcaster {
 	}
 }
 
-impl IngressApi<AnyChain> for AnyChainIngressEgressHandler {
-	type AccountId = <Runtime as frame_system::Config>::AccountId;
+#[macro_export]
+macro_rules! impl_ingress_api_for_anychain {
+	( $anychain: ident, $(($chain: ident, $ingress_egress: ident)),+ ) => {
+		impl IngressApi<AnyChain> for $anychain {
+			type AccountId = <Runtime as frame_system::Config>::AccountId;
 
-	fn register_liquidity_ingress_intent(
-		lp_account: Self::AccountId,
-		ingress_asset: Asset,
-	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
-		match ingress_asset.into() {
-			ForeignChain::Ethereum =>
-				crate::EthereumIngressEgress::register_liquidity_ingress_intent(
-					lp_account,
-					ingress_asset.try_into().unwrap(),
-				),
-			ForeignChain::Polkadot =>
-				crate::PolkadotIngressEgress::register_liquidity_ingress_intent(
-					lp_account,
-					ingress_asset.try_into().unwrap(),
-				),
-			ForeignChain::Bitcoin =>
-				crate::BitcoinIngressEgress::register_liquidity_ingress_intent(
-					lp_account,
-					ingress_asset.try_into().unwrap(),
-				),
-		}
-	}
+			fn register_liquidity_ingress_intent(
+				lp_account: Self::AccountId,
+				ingress_asset: Asset,
+			) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+				match ingress_asset.into() {
+					$(
+						ForeignChain::$chain =>
+							$ingress_egress::register_liquidity_ingress_intent(
+								lp_account,
+								ingress_asset.try_into().unwrap(),
+							),
+					)+
+				}
+			}
 
-	fn register_swap_intent(
-		ingress_asset: Asset,
-		egress_asset: Asset,
-		egress_address: ForeignChainAddress,
-		relayer_commission_bps: u16,
-		relayer_id: Self::AccountId,
-	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
-		match ingress_asset.into() {
-			ForeignChain::Ethereum => crate::EthereumIngressEgress::register_swap_intent(
-				ingress_asset.try_into().unwrap(),
-				egress_asset,
-				egress_address,
-				relayer_commission_bps,
-				relayer_id,
-			),
-			ForeignChain::Polkadot => crate::PolkadotIngressEgress::register_swap_intent(
-				ingress_asset.try_into().unwrap(),
-				egress_asset,
-				egress_address,
-				relayer_commission_bps,
-				relayer_id,
-			),
-			ForeignChain::Bitcoin => crate::BitcoinIngressEgress::register_swap_intent(
-				ingress_asset.try_into().unwrap(),
-				egress_asset,
-				egress_address,
-				relayer_commission_bps,
-				relayer_id,
-			),
+			fn register_swap_intent(
+				ingress_asset: Asset,
+				egress_asset: Asset,
+				egress_address: ForeignChainAddress,
+				relayer_commission_bps: u16,
+				relayer_id: Self::AccountId,
+				message_metadata: Option<CcmIngressMetadata>,
+			) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+				match ingress_asset.into() {
+					$(
+						ForeignChain::$chain => $ingress_egress::register_swap_intent(
+							ingress_asset.try_into().unwrap(),
+							egress_asset,
+							egress_address,
+							relayer_commission_bps,
+							relayer_id,
+							message_metadata,
+						),
+					)+
+				}
+			}
 		}
 	}
 }
+
+#[macro_export]
+macro_rules! impl_egress_api_for_anychain {
+	( $anychain: ident, $(($chain: ident, $ingress_egress: ident)),+ ) => {
+		impl EgressApi<AnyChain> for $anychain {
+			fn schedule_egress(
+				asset: Asset,
+				amount: AssetAmount,
+				egress_address: <AnyChain as Chain>::ChainAccount,
+				maybe_message: Option<CcmIngressMetadata>,
+			) -> EgressId {
+				match asset.into() {
+					$(
+						ForeignChain::$chain => $ingress_egress::schedule_egress(
+							asset.try_into().expect("Checked for asset compatibility"),
+							amount,
+							egress_address
+								.try_into()
+								.expect("This address cast is ensured to succeed."),
+							maybe_message,
+						),
+
+					)+
+				}
+			}
+		}
+	}
+}
+
+// impl ingress and egress any for AnyChain.
+pub struct AnyChainIngressEgressHandler;
+impl_ingress_api_for_anychain!(
+	AnyChainIngressEgressHandler,
+	(Ethereum, EthereumIngressEgress),
+	(Polkadot, PolkadotIngressEgress),
+	(Bitcoin, BitcoinIngressEgress)
+);
+impl_egress_api_for_anychain!(
+	AnyChainIngressEgressHandler,
+	(Ethereum, EthereumIngressEgress),
+	(Polkadot, PolkadotIngressEgress),
+	(Bitcoin, BitcoinIngressEgress)
+);
 
 pub struct EthIngressHandler;
 impl IngressHandler<Ethereum> for EthIngressHandler {}
@@ -510,7 +514,7 @@ impl IngressHandler<Bitcoin> for BtcIngressHandler {
 				.try_into()
 				.expect("the amount witnessed should not exceed u64 max for btc"),
 			txid: utxo_id.tx_hash,
-			vout: utxo_id.vout_index,
+			vout: utxo_id.vout,
 			pubkey_x: utxo_id.pubkey_x,
 			salt: utxo_id
 				.salt
