@@ -1028,11 +1028,11 @@ async fn key_handover() {
 		[1, 2, 3, 4, 5].iter().map(|i| AccountId::new([*i; 32])).collect();
 
 	// Accounts (1), (2) and (3) will hold the original key
-	let original_set: Vec<AccountId> = all_account_ids.iter().take(3).cloned().collect();
+	let original_set: BTreeSet<_> = all_account_ids.iter().take(3).cloned().collect();
 
 	// Accounts (3), (4) and (5) will receive the key as the result of this ceremony.
 	// (Note that (3) appears in both sets.)
-	let new_set: Vec<AccountId> = all_account_ids.iter().skip(2).take(3).cloned().collect();
+	let new_set: BTreeSet<_> = all_account_ids.iter().skip(2).take(3).cloned().collect();
 
 	// Perform a regular keygen to generate initial keys:
 	let (initial_key, mut key_infos) = keygen::generate_key_data::<EthSigning>(
@@ -1040,10 +1040,15 @@ async fn key_handover() {
 		&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
 	);
 
+	// Only 2 and 3 will contribute their secret shares
+	let sharing_participants: BTreeSet<AccountId> =
+		original_set.clone().into_iter().skip(1).collect();
+
+	let receiving_participants: BTreeSet<AccountId> = new_set.clone().into_iter().collect();
 	// Accounts (2), (3), (4) and (5) will participate, with (2) and (3)
 	// re-sharing their key to (3), (4) and (5)
-	let all_participants: BTreeSet<AccountId> =
-		all_account_ids.iter().skip(1).take(4).cloned().collect();
+	let all_participants: BTreeSet<_> =
+		sharing_participants.union(&receiving_participants).cloned().collect();
 
 	let mut ceremony = KeygenCeremonyRunner::new(
 		new_nodes(all_participants),
@@ -1052,12 +1057,6 @@ async fn key_handover() {
 	);
 
 	let ceremony_details = ceremony.keygen_ceremony_details();
-
-	// Only 2 and 3 will contribute their secret shares
-	let sharing_participants: BTreeSet<AccountId> =
-		original_set.clone().into_iter().skip(1).collect();
-
-	let receiving_participants: BTreeSet<AccountId> = new_set.clone().into_iter().collect();
 
 	for (id, node) in &mut ceremony.nodes {
 		// Give the right context type depending on whether they have keys
@@ -1090,7 +1089,18 @@ async fn key_handover() {
 	);
 
 	ceremony.distribute_messages(messages).await;
-	let (new_key, _new_shares) = ceremony.complete().await;
+	let (new_key, new_shares) = ceremony.complete().await;
 
 	assert_eq!(new_key, initial_key);
+
+	// Ensure that the new key shares can be used for signing:
+	let mut signing_ceremony = SigningCeremonyRunner::<EthSigning>::new_with_all_signers(
+		new_nodes(receiving_participants),
+		DEFAULT_SIGNING_CEREMONY_ID,
+		new_key,
+		new_shares,
+		vec![EthSigning::signing_payload_for_test()],
+		Rng::from_entropy(),
+	);
+	standard_signing(&mut signing_ceremony).await;
 }
