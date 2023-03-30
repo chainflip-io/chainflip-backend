@@ -286,7 +286,7 @@ pub enum CollectError {}
 
 #[derive(Default, Debug)]
 pub struct CollectedFees {
-	fees: enum_map::EnumMap<Side, Amount>,
+	pub fees: enum_map::EnumMap<Side, Amount>,
 }
 
 impl PoolState {
