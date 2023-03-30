@@ -60,10 +60,10 @@ pub trait Chain: Member + Parameter {
 		+ Copy
 		+ Default
 		+ Saturating
-		+ Into<u128>
-		+ From<u128>
+		+ Into<AssetAmount>
 		+ FullCodec
-		+ MaxEncodedLen;
+		+ MaxEncodedLen
+		+ BenchmarkValue;
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
@@ -195,16 +195,9 @@ pub struct FetchAssetParams<C: Chain> {
 #[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct TransferAssetParams<C: Chain> {
 	pub asset: <C as Chain>::ChainAsset,
-	pub amount: AssetAmount,
+	pub amount: <C as Chain>::ChainAmount,
 	pub to: <C as Chain>::ChainAccount,
 }
-
-pub trait IngressAddress {
-	type AddressType;
-	/// Returns an ingress address
-	fn derive_address(self, vault_address: Self::AddressType, intent_id: u32) -> Self::AddressType;
-}
-
 /// Similar to [frame_support::StaticLookup] but with the `Key` as a type parameter instead of an
 /// associated type.
 ///

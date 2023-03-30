@@ -786,7 +786,7 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 pub trait EgressApi<C: Chain> {
 	fn schedule_egress(
 		asset: C::ChainAsset,
-		amount: AssetAmount,
+		amount: C::ChainAmount,
 		egress_address: C::ChainAccount,
 		maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId;
@@ -795,7 +795,7 @@ pub trait EgressApi<C: Chain> {
 impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 	fn schedule_egress(
 		_asset: assets::eth::Asset,
-		_amount: AssetAmount,
+		_amount: <Ethereum as Chain>::ChainAmount,
 		_egress_address: <Ethereum as Chain>::ChainAccount,
 		_maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId {
@@ -806,7 +806,7 @@ impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 	fn schedule_egress(
 		_asset: assets::dot::Asset,
-		_amount: AssetAmount,
+		_amount: <Polkadot as Chain>::ChainAmount,
 		_egress_address: <Polkadot as Chain>::ChainAccount,
 		_maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId {

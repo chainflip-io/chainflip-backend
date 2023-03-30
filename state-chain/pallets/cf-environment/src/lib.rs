@@ -598,7 +598,7 @@ impl<T: Config> Pallet<T> {
 			select_utxos_from_pool(
 				available_utxos,
 				BitcoinFeePerUtxo::<T>::get(),
-				total_output_amount.try_into().expect("Btc amounts never exceed u64 max, this is made shure elsewhere by the AMM when it calculates how much amounts to output"),
+				total_output_amount,
 			)
 		})
 	}

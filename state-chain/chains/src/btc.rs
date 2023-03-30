@@ -32,9 +32,7 @@ pub type BlockNumber = u64;
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Copy)]
 pub struct BitcoinFetchId(u64);
 
-// TODO: Come back to this. in BTC u64 works, but the trait has from u128 required, so we do this
-// for now
-pub type BtcAmount = u128;
+pub type BtcAmount = u64;
 
 pub type SigningPayload = [u8; 32];
 
