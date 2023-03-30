@@ -102,6 +102,6 @@ impl BenchmarkValue for TxId {
 
 impl BenchmarkValue for PolkadotTrackedData {
 	fn benchmark_value() -> Self {
-		PolkadotTrackedData { median_tip: 2, next_fee_multiplier: 10000000, block_height: 20 }
+		PolkadotTrackedData { median_tip: 2, block_height: 20 }
 	}
 }

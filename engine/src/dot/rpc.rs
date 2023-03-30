@@ -2,16 +2,13 @@ use std::pin::Pin;
 
 use crate::dot::safe_runtime_version_stream::safe_runtime_version_stream;
 use async_trait::async_trait;
-use cf_chains::dot::{PolkadotBalance, PolkadotHash, RuntimeVersion};
+use cf_chains::dot::{PolkadotHash, RuntimeVersion};
 use cf_primitives::PolkadotBlockNumber;
 use futures::{Stream, StreamExt, TryStreamExt};
 use subxt::{
 	events::{Events, EventsClient},
-	ext::scale_value::ValueDef,
 	rpc::types::{Bytes, ChainBlock},
-	rpc_params,
-	storage::dynamic_root,
-	Config, OnlineClient, PolkadotConfig,
+	rpc_params, Config, OnlineClient, PolkadotConfig,
 };
 
 use anyhow::{anyhow, Result};
@@ -91,10 +88,6 @@ pub trait DotRpcApi: Send + Sync {
 		&mut self,
 		encoded_bytes: Vec<u8>,
 	) -> Result<PolkadotHash>;
-
-	/// Get the `NextFeeMultiplier` from the transaction payment pallet. This is used to calculate
-	/// required fees more accurately.
-	async fn next_fee_multiplier(&mut self, block_hash: PolkadotHash) -> Result<PolkadotBalance>;
 }
 
 #[async_trait]
@@ -190,31 +183,6 @@ impl DotRpcApi for DotRpcClient {
 			request,
 			"author_submitExtrinsic",
 			rpc_params![encoded_bytes.clone()]
-		)
-	}
-
-	async fn next_fee_multiplier(&mut self, block_hash: PolkadotHash) -> Result<PolkadotBalance> {
-		Ok(
-			match self
-				.online_client
-				.storage()
-				.at(Some(block_hash))
-				.await?
-				.fetch(&dynamic_root("TransactionPayment", "NextFeeMultiplier"))
-				.await?
-				.expect("Is a value query. We should get a value.")
-				.to_value()
-				.expect("We know this decodes to a ValueDef::Composite")
-				.value
-			{
-				ValueDef::Composite(c) => c
-					.into_values()
-					.into_iter()
-					.map(|v| v.as_u128().expect("we know it's a u128"))
-					.next()
-					.expect("We know there's a value in the composite"),
-				_ => return Err(anyhow::anyhow!("Expected composite type")),
-			},
 		)
 	}
 }

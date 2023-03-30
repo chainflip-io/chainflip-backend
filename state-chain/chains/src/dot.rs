@@ -103,7 +103,6 @@ pub struct EpochStartData {
 pub struct PolkadotTrackedData {
 	pub block_height: PolkadotBlockNumber,
 	pub median_tip: PolkadotBalance,
-	pub next_fee_multiplier: PolkadotBalance,
 }
 
 impl Age for PolkadotTrackedData {

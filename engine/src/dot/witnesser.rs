@@ -409,7 +409,6 @@ where
 													state: dot::PolkadotTrackedData {
 														block_height: block_number,
 														median_tip,
-														next_fee_multiplier: dot_client.next_fee_multiplier(block_hash).await?,
 													},
 												},
 											)),
