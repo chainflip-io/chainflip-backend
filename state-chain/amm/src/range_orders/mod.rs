@@ -579,6 +579,9 @@ impl PoolState {
 	) -> (Amount, Amount) {
 		let mut total_output_amount = Amount::zero();
 
+		// DIFF: This behaviour is different than Uniswap's. As Solidity doesn't have an ordered map
+		// container, there is a fixed limit to how far the price can move in one iteration of the loop,
+		// we don't have this restriction here.
 		while let Some((tick_at_delta, delta)) = (Amount::zero() != amount &&
 			sqrt_price_limit.map_or(true, |sqrt_price_limit| {
 				SD::sqrt_price_op_more_than(sqrt_price_limit, self.current_sqrt_price)
@@ -586,8 +589,6 @@ impl PoolState {
 		.then_some(())
 		.and_then(|()| SD::next_liquidity_delta(self.current_tick, &mut self.liquidity_map))
 		{
-			// TODO Comment on increased change between ticks
-
 			let sqrt_price_at_delta = sqrt_price_at_tick(*tick_at_delta);
 
 			let sqrt_price_target = if let Some(sqrt_price_limit) = sqrt_price_limit {
@@ -607,7 +608,7 @@ impl PoolState {
 					amount,
 					U256::from(ONE_IN_PIPS - self.fee_pips),
 					U256::from(ONE_IN_PIPS),
-				); // This cannot overflow as we bound fee_pips to <= ONE_IN_PIPS/2 (TODO)
+				); // This cannot overflow as we bound fee_pips to <= ONE_IN_PIPS/2
 
 				let amount_required_to_reach_target = SD::input_amount_delta_ceil(
 					self.current_sqrt_price,
@@ -634,8 +635,6 @@ impl PoolState {
 					self.current_liquidity,
 				);
 
-				// next_sqrt_price_from_input_amount rounds so this maybe true even though
-				// amount_minus_fees < amount_required_to_reach_target (TODO Prove)
 				let (amount_swapped, fees) = if sqrt_price_next == sqrt_price_target {
 					(
 						amount_required_to_reach_target,
@@ -656,13 +655,13 @@ impl PoolState {
 					(
 						amount_swapped,
 						/* Will not underflow due to rounding in flavor of the pool of
-						 * sqrt_price_next. (TODO: Prove) */
+						 * sqrt_price_next. */
 						amount - amount_swapped,
 					)
 				};
 
 				// TODO: Prove this does not underflow
-				amount -= amount_swapped + fees; //TODO
+				amount -= amount_swapped + fees;
 
 				// DIFF: This behaviour is different to Uniswap's, we saturate instead of
 				// overflowing/bricking the pool. This means we just stop giving LPs fees, but
@@ -680,8 +679,9 @@ impl PoolState {
 				sqrt_price_next
 			};
 
+			assert!(!SD::sqrt_price_op_more_than(sqrt_price_next, sqrt_price_at_delta));
+
 			if sqrt_price_next == sqrt_price_at_delta {
-				// TODO else assert less than
 				delta.fee_growth_outside = enum_map::EnumMap::default()
 					.map(|side, ()| self.global_fee_growth[side] - delta.fee_growth_outside[side]);
 				self.current_sqrt_price = sqrt_price_next;
