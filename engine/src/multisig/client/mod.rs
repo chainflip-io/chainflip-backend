@@ -236,7 +236,7 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 
 					self.key_store.lock().unwrap().set_key(
 						KeyId { epoch_index, public_key_bytes: agg_key.clone().into() },
-						keygen_result_info.clone(),
+						keygen_result_info,
 					);
 					agg_key
 				})

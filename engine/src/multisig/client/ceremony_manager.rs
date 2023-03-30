@@ -734,7 +734,7 @@ mod key_id_agg_key_match {
 			tokio::sync::mpsc::unbounded_channel().0,
 			0,
 		)
-		.single_party_keygen(rng.clone())
+		.single_party_keygen(rng)
 		.key
 		.agg_key();
 
