@@ -114,6 +114,8 @@ fn generate_and_save_keys<Crypto: CryptoScheme>(
 #[cfg(test)]
 #[test]
 fn should_generate_and_save_all_keys() {
+	use chainflip_engine::multisig::bitcoin::BtcSigning;
+
 	let tempdir = tempfile::TempDir::new().unwrap();
 	let db_path = tempdir.path().to_owned().join("test");
 
@@ -123,6 +125,7 @@ fn should_generate_and_save_all_keys() {
 
 	generate_and_save_keys::<EthSigning>(&node_id_to_name_map);
 	generate_and_save_keys::<PolkadotSigning>(&node_id_to_name_map);
+	generate_and_save_keys::<BtcSigning>(&node_id_to_name_map);
 
 	// Open the db and check the keys
 	let db =
@@ -131,4 +134,5 @@ fn should_generate_and_save_all_keys() {
 
 	assert_eq!(db.load_keys::<EthSigning>().len(), 1);
 	assert_eq!(db.load_keys::<PolkadotSigning>().len(), 1);
+	assert_eq!(db.load_keys::<BtcSigning>().len(), 1);
 }

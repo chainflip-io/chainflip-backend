@@ -105,7 +105,8 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 
 	type Signature: Debug + Clone + PartialEq + Sync + Send;
 
-	type AggKey;
+	type AggKey: Into<PublicKeyBytes> + Clone;
+
 	type SigningPayload: Display + Debug + Sync + Send + Clone + PartialEq + Eq + AsRef<[u8]>;
 
 	/// Friendly name of the scheme used for logging

@@ -561,7 +561,7 @@ pub mod genesis {
 			.collect();
 
 		(
-			keygen_result_infos.values().next().unwrap().key.get_public_key_bytes(),
+			C::agg_key(&keygen_result_infos.values().next().unwrap().key.get_public_key()).into(),
 			keygen_result_infos,
 		)
 	}

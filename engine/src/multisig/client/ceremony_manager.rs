@@ -712,3 +712,34 @@ impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
 		Ok(())
 	}
 }
+
+#[cfg(test)]
+mod testing {
+	use cf_chains::ChainCrypto;
+	use rand_legacy::SeedableRng;
+
+	use crate::multisig::bitcoin::BtcSigning;
+
+	use super::*;
+
+	#[test]
+	fn test() {
+		let mut rng = crate::multisig::crypto::Rng::from_seed([0u8; 32]);
+
+		let kgr = CeremonyManager::<BtcSigning>::new(
+			[4u8; 32].into(),
+			tokio::sync::mpsc::unbounded_channel().0,
+			0,
+		)
+		.single_party_keygen(rng);
+
+		let agg_key = BtcSigning::agg_key(&kgr.key.get_public_key());
+
+		let public_key_bytes: Vec<u8> = agg_key.into();
+
+		assert_eq!(
+			cf_chains::Bitcoin::agg_key_to_key_id(agg_key.into(), 9).public_key_bytes,
+			public_key_bytes
+		);
+	}
+}

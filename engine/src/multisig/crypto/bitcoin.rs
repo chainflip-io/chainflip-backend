@@ -2,7 +2,7 @@ use crate::multisig::crypto::ECScalar;
 
 pub use super::secp256k1::{Point, Scalar};
 use super::{ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature};
-use cf_chains::Bitcoin;
+use cf_chains::{btc::AggKey, Bitcoin};
 use cf_primitives::PublicKeyBytes;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -56,16 +56,10 @@ impl AsRef<[u8]> for SigningPayload {
 	}
 }
 
-impl From<Point> for cf_chains::btc::AggKey {
-	fn from(p: Point) -> Self {
-		Self(p.x_bytes())
-	}
-}
-
 impl CryptoScheme for BtcSigning {
 	type Point = Point;
 	type Signature = BtcSchnorrSignature;
-	type AggKey = Point;
+	type AggKey = AggKey;
 	type SigningPayload = SigningPayload;
 
 	const NAME: &'static str = "Bitcoin";
@@ -139,7 +133,7 @@ impl CryptoScheme for BtcSigning {
 	}
 
 	fn agg_key(pubkey: &Self::Point) -> Self::AggKey {
-		*pubkey
+		AggKey { pubkey_x: pubkey.x_bytes() }
 	}
 
 	fn is_pubkey_compatible(pubkey: &Self::Point) -> bool {
