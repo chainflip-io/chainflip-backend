@@ -69,7 +69,7 @@ impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
 				// NOTE: the number of commitments may be different depending on whether
 				// we are doing keygen vs key handover, but it should never exceed the
 				// number of parties
-				dbg!(message.get_commitments_len()) <= dbg!(num_of_parties)
+				message.get_commitments_len() <= num_of_parties
 			},
 			KeygenData::VerifyCoeffComm4(message) => {
 				// NOTE: the number of commitments may be different depending on whether

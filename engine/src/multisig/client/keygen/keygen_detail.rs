@@ -155,8 +155,6 @@ impl SharingParameters {
 			.iter()
 			.map(|idx| {
 				let id = current_party_mapping.get_id(*idx);
-				dbg!(&id);
-				dbg!(&context.future_index_mapping);
 				let future_index = context
 					.future_index_mapping
 					.get_idx(id)
