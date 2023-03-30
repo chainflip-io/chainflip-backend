@@ -347,6 +347,52 @@ mod test {
 	use super::*;
 
 	#[test]
+	fn test_mul_div_floor() {
+		assert_eq!(mul_div_floor(1.into(), 1.into(), 1), 1.into());
+		assert_eq!(mul_div_floor(1.into(), 1.into(), 2), 0.into());
+		assert_eq!(mul_div_floor(1.into(), 2.into(), 1), 2.into());
+		assert_eq!(mul_div_floor(1.into(), 2.into(), 2), 1.into());
+		assert_eq!(mul_div_floor(1.into(), 2.into(), 3), 0.into());
+		assert_eq!(mul_div_floor(1.into(), 3.into(), 2), 1.into());
+		assert_eq!(mul_div_floor(1.into(), 3.into(), 3), 1.into());
+		assert_eq!(mul_div_floor(1.into(), 3.into(), 4), 0.into());
+		assert_eq!(mul_div_floor(1.into(), 4.into(), 3), 1.into());
+		assert_eq!(mul_div_floor(1.into(), 4.into(), 4), 1.into());
+		assert_eq!(mul_div_floor(1.into(), 4.into(), 5), 0.into());
+		assert_eq!(mul_div_floor(1.into(), 5.into(), 4), 1.into());
+		assert_eq!(mul_div_floor(1.into(), 5.into(), 5), 1.into());
+		assert_eq!(mul_div_floor(1.into(), 5.into(), 6), 0.into());
+
+		assert_eq!(mul_div_floor(2.into(), 1.into(), 2), 1.into());
+		assert_eq!(mul_div_floor(2.into(), 1.into(), 3), 0.into());
+		assert_eq!(mul_div_floor(3.into(), 1.into(), 2), 1.into());
+		assert_eq!(mul_div_floor(3.into(), 1.into(), 3), 1.into());
+		assert_eq!(mul_div_floor(3.into(), 1.into(), 4), 0.into());
+		assert_eq!(mul_div_floor(4.into(), 1.into(), 3), 1.into());
+		assert_eq!(mul_div_floor(4.into(), 1.into(), 4), 1.into());
+		assert_eq!(mul_div_floor(4.into(), 1.into(), 5), 0.into());
+		assert_eq!(mul_div_floor(5.into(), 1.into(), 4), 1.into());
+		assert_eq!(mul_div_floor(5.into(), 1.into(), 5), 1.into());
+		assert_eq!(mul_div_floor(5.into(), 1.into(), 6), 0.into());
+
+		assert_eq!(mul_div_floor(2.into(), 1.into(), 1), 2.into());
+		assert_eq!(mul_div_floor(2.into(), 1.into(), 2), 1.into());
+
+		assert_eq!(mul_div_floor(U256::MAX, U256::MAX, U256::MAX), U256::MAX);
+		assert_eq!(mul_div_floor(U256::MAX, U256::MAX - 1, U256::MAX), U256::MAX - 1);
+	}
+
+	#[test]
+	fn test_mul_div() {
+		assert_eq!(mul_div(U256::MAX, U256::MAX, U256::MAX), (U256::MAX, U256::MAX));
+		assert_eq!(mul_div(U256::MAX, U256::MAX - 1, U256::MAX), (U256::MAX - 1, U256::MAX - 1));
+		assert_eq!(mul_div(2.into(), 2.into(), 3), (1.into(), 2.into()));
+		assert_eq!(mul_div(2.into(), 2.into(), 4), (1.into(), 1.into()));
+		assert_eq!(mul_div(2.into(), 2.into(), 5), (0.into(), 1.into()));
+		assert_eq!(mul_div(2.into(), 2.into(), 6), (0.into(), 1.into()));
+	}
+
+	#[test]
 	fn test_sqrt_price_at_tick() {
 		assert_eq!(sqrt_price_at_tick(MIN_TICK), MIN_SQRT_PRICE);
 		assert_eq!(sqrt_price_at_tick(-738203), U256::from_dec_str("7409801140451").unwrap());
