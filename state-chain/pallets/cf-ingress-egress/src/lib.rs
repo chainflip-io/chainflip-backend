@@ -549,7 +549,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			egress_params,
 		) {
 			Ok(egress_transaction) => {
-				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
+				let (broadcast_id, _) = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
 					egress_transaction,
 					Call::finalise_ingress { addresses }.into(),
 				);
@@ -608,7 +608,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ccm.message,
 			) {
 				Ok(api_call) => {
-					let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast(api_call);
+					let (broadcast_id, _) = T::Broadcaster::threshold_sign_and_broadcast(api_call);
 					Self::deposit_event(Event::<T, I>::CcmBroadcastRequested {
 						broadcast_id,
 						egress_id: ccm.egress_id,

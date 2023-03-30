@@ -10,10 +10,10 @@ use cf_chains::{
 };
 use cf_traits::{
 	mocks::{
-		ceremony_id_provider::MockCeremonyIdProvider, signer_nomination::MockNominator,
-		system_state_info::MockSystemStateInfo,
+		ceremony_id_provider::MockCeremonyIdProvider, key_provider::MockKeyProvider,
+		signer_nomination::MockNominator, system_state_info::MockSystemStateInfo,
 	},
-	AsyncResult, Chainflip, EpochKey, KeyState, ThresholdSigner,
+	AsyncResult, Chainflip, KeyProvider, ThresholdSigner,
 };
 use codec::{Decode, Encode};
 pub use frame_support::{
@@ -134,14 +134,8 @@ impl UnfilteredDispatchable for MockCallback<MockEthereum> {
 	}
 }
 
-pub const MOCK_AGG_KEY: MockAggKey = MockAggKey(*b"AKEY");
-
-pub struct MockKeyProvider;
-
-impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
-	fn current_epoch_key() -> EpochKey<<MockEthereum as ChainCrypto>::AggKey> {
-		EpochKey { key: MOCK_AGG_KEY, epoch_index: Default::default(), key_state: KeyState::Active }
-	}
+pub fn current_agg_key() -> <MockEthereum as ChainCrypto>::AggKey {
+	<Test as crate::Config<_>>::KeyProvider::current_epoch_key().key
 }
 
 pub fn sign(
@@ -150,7 +144,7 @@ pub fn sign(
 	<MockEthereum as ChainCrypto>::AggKey,
 	<MockEthereum as ChainCrypto>::Payload,
 > {
-	MockThresholdSignature::<_, _> { signing_key: MOCK_AGG_KEY, signed_payload: payload }
+	MockThresholdSignature::<_, _> { signing_key: current_agg_key(), signed_payload: payload }
 }
 
 pub const INVALID_SIGNATURE: <MockEthereum as ChainCrypto>::ThresholdSignature =
@@ -171,7 +165,7 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type ThresholdCallable = MockCallback<MockEthereum>;
 	type TargetChain = MockEthereum;
 	type ThresholdSignerNomination = MockNominator;
-	type KeyProvider = MockKeyProvider;
+	type KeyProvider = MockKeyProvider<MockEthereum>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type OffenceReporter = MockOffenceReporter;
 	type CeremonyIdProvider = MockCeremonyIdProvider;
@@ -184,10 +178,13 @@ pub struct ExtBuilder {
 	ext: sp_io::TestExternalities,
 }
 
+pub const AGG_KEY: [u8; 4] = *b"AKEY";
+
 impl ExtBuilder {
 	#[allow(clippy::new_without_default)]
 	pub fn new() -> Self {
-		let ext = new_test_ext();
+		let mut ext = new_test_ext();
+		ext.execute_with(|| MockKeyProvider::<MockEthereum>::add_key(MockAggKey(AGG_KEY)));
 		Self { ext }
 	}
 

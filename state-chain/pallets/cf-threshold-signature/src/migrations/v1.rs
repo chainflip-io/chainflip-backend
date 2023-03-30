@@ -149,10 +149,9 @@ impl<T: Config<I>, I: 'static> OnRuntimeUpgrade for Migration<T, I> {
 
 #[cfg(test)]
 mod migration_tests {
-
-	use crate::mock::MockKeyProvider;
-
 	use super::*;
+	use cf_chains::mocks::MockEthereum;
+	use cf_traits::mocks::key_provider::MockKeyProvider;
 
 	#[test]
 	fn migration_successful_with_retry_queue_and_pending_ceremony_items() {
@@ -163,7 +162,7 @@ mod migration_tests {
 				retry_queue.push(i);
 			}
 
-			let key_id = MockKeyProvider::current_epoch_key().key;
+			let key_id = MockKeyProvider::<MockEthereum>::current_epoch_key();
 
 			const BLOCK_NUMBER: u64 = 4;
 
@@ -190,7 +189,7 @@ mod migration_tests {
 				remaining_respondents: BTreeSet::default(),
 				blame_counts: BTreeMap::from(BLAME_COUNTS),
 				participant_count: PARTICIPANT_COUNT,
-				key_id: key_id.0.to_vec(),
+				key_id: key_id.key.0.to_vec(),
 				_phantom: PhantomData,
 			};
 
@@ -231,7 +230,7 @@ mod migration_tests {
 					remaining_respondents: BTreeSet::default(),
 					blame_counts: BTreeMap::from(BLAME_COUNTS),
 					participant_count: PARTICIPANT_COUNT,
-					key_id: key_id.0.to_vec(),
+					key_id: key_id.key.0.to_vec(),
 					threshold_ceremony_type: ThresholdCeremonyType::Standard,
 				}
 			);
