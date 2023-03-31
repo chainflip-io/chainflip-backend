@@ -1,8 +1,8 @@
 use super::*;
 
 use crate::threshold_signing::{
-	DotKeyComponents, DotThresholdSigner, EthKeyComponents, EthThresholdSigner, KeyUtils,
-	ThresholdSigner,
+	BtcKeyComponents, DotKeyComponents, DotThresholdSigner, EthKeyComponents, EthThresholdSigner,
+	KeyUtils, ThresholdSigner,
 };
 use cf_chains::{dot::PolkadotSignature, eth::SchnorrVerificationComponents, ChainCrypto};
 
@@ -15,8 +15,8 @@ use pallet_cf_staking::{ClaimAmount, MinimumStake};
 use pallet_cf_validator::RotationPhase;
 use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
-	AccountRoles, Authorship, EthereumInstance, PolkadotInstance, RuntimeEvent, RuntimeOrigin,
-	Weight,
+	AccountRoles, Authorship, BitcoinInstance, EthereumInstance, PolkadotInstance, RuntimeEvent,
+	RuntimeOrigin, Weight,
 };
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
@@ -301,6 +301,11 @@ impl Engine {
 				RuntimeEvent::PolkadotVault(
 					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, epoch_index: _ }) => {
 						report_keygen_outcome_for_chain::<DotKeyComponents, PolkadotSignature, state_chain_runtime::Runtime, PolkadotInstance>(*ceremony_id, participants, self.dot_threshold_signer.clone(), self.node_id.clone());
+				}
+
+				RuntimeEvent::BitcoinVault(
+					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, epoch_index: _ }) => {
+						report_keygen_outcome_for_chain::<BtcKeyComponents, cf_chains::btc::Signature, state_chain_runtime::Runtime, BitcoinInstance>(*ceremony_id, participants, self.btc_threshold_signer.clone(), self.node_id.clone());
 				}
 			);
 		}
