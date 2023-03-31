@@ -217,7 +217,7 @@ fn check_for_interesting_events_in_block(
 		.get({
 			let len = tips.len();
 			if len % 2 == 0 {
-				len / 2 - 1
+				(len / 2).saturating_sub(1)
 			} else {
 				len / 2
 			}
