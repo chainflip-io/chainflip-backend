@@ -668,7 +668,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				intent_id,
 				(IngressFetchIdOf::<T, I>::deployed(intent_id, address.clone()), address.clone()),
 			);
-			// IntentExpiries::<T, I>::append(intent_ttl, (intent_id, address.clone()));
 			(address, intent_id)
 		} else {
 			let next_intent_id = IntentIdCounter::<T, I>::get()
@@ -684,7 +683,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					new_address.clone(),
 				),
 			);
-			// IntentExpiries::<T, I>::append(intent_ttl, (next_intent_id, new_address.clone()));
 			IntentIdCounter::<T, I>::put(next_intent_id);
 			(new_address, next_intent_id)
 		};
