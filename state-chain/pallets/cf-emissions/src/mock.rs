@@ -28,7 +28,7 @@ use cf_traits::{
 	Broadcaster, FlipBurnInfo, Issuance, WaivedFees,
 };
 
-use cf_primitives::{BroadcastId, FlipBalance};
+use cf_primitives::{BroadcastId, FlipBalance, ThresholdSignatureRequestId};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -201,9 +201,8 @@ impl FlipBurnInfo for MockFlipToBurn {
 }
 
 impl MockBroadcast {
-	pub fn call(outgoing: MockUpdateFlipSupply) -> u32 {
+	pub fn call(outgoing: MockUpdateFlipSupply) {
 		storage::hashed::put(&<Twox64Concat as StorageHasher>::hash, b"MockBroadcast", &outgoing);
-		1
 	}
 
 	pub fn get_called() -> Option<MockUpdateFlipSupply> {
@@ -215,14 +214,17 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 	type ApiCall = MockUpdateFlipSupply;
 	type Callback = MockCallback;
 
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
-		Self::call(api_call)
+	fn threshold_sign_and_broadcast(
+		api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
+		Self::call(api_call);
+		(1, 2)
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
 		_api_call: Self::ApiCall,
 		_callback: Self::Callback,
-	) -> BroadcastId {
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		unimplemented!()
 	}
 }

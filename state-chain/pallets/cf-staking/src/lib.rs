@@ -403,7 +403,7 @@ pub mod pallet {
 			Self::deposit_event(Event::ClaimRequested {
 				account_id,
 				amount,
-				broadcast_id: T::Broadcaster::threshold_sign_and_broadcast(call),
+				broadcast_id: T::Broadcaster::threshold_sign_and_broadcast(call).0,
 				expiry_time: contract_expiry,
 			});
 

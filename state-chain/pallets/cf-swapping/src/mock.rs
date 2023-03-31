@@ -105,6 +105,15 @@ impl WeightInfo for MockWeightInfo {
 	fn withdraw() -> Weight {
 		Weight::from_ref_time(100)
 	}
+	fn schedule_swap_by_witnesser() -> Weight {
+		Weight::from_ref_time(100)
+	}
+	fn ccm_ingress() -> Weight {
+		Weight::from_ref_time(100)
+	}
+}
+parameter_types! {
+	pub GasPrice: AssetAmount = 1_000;
 }
 
 impl pallet_cf_swapping::Config for Test {

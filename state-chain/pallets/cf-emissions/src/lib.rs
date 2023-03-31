@@ -179,6 +179,7 @@ pub mod pallet {
 						Asset::Flip,
 						flip_to_burn,
 						ForeignChainAddress::Eth(T::EthEnvironmentProvider::stake_manager_address()),
+						None,
 					);
 					T::Issuance::burn(flip_to_burn.into());
 					Self::broadcast_update_total_supply(

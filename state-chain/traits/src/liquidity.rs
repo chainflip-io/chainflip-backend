@@ -6,6 +6,7 @@ use sp_std::vec::Vec;
 
 pub trait SwapIntentHandler {
 	type AccountId;
+
 	fn on_swap_ingress(
 		ingress_address: ForeignChainAddress,
 		from: Asset,

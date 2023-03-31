@@ -1,15 +1,18 @@
 use ethabi::Address;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
-use sp_runtime::traits::UniqueSaturatedInto;
+use sp_runtime::{traits::UniqueSaturatedInto, DispatchError};
 use sp_std::marker::PhantomData;
 
 use crate::*;
 
-use self::all_batch::{EncodableFetchAssetParams, EncodableFetchDeployAssetParams};
+use self::all_batch::{
+	EncodableFetchAssetParams, EncodableFetchDeployAssetParams, EncodableTransferAssetParams,
+};
 
 use super::{Ethereum, EthereumIngressId};
 
 pub mod all_batch;
+pub mod execute_x_swap_and_call;
 pub mod register_claim;
 pub mod set_agg_key_with_agg_key;
 pub mod set_comm_key_with_agg_key;
@@ -26,6 +29,7 @@ pub enum EthereumApi<Environment: 'static> {
 	SetGovKeyWithAggKey(set_gov_key_with_agg_key::SetGovKeyWithAggKey),
 	SetCommKeyWithAggKey(set_comm_key_with_agg_key::SetCommKeyWithAggKey),
 	AllBatch(all_batch::AllBatch),
+	ExecutexSwapAndCall(execute_x_swap_and_call::ExecutexSwapAndCall),
 	#[doc(hidden)]
 	#[codec(skip)]
 	_Phantom(PhantomData<Environment>, Never),
@@ -153,6 +157,33 @@ where
 	}
 }
 
+impl<E> ExecutexSwapAndCall<Ethereum> for EthereumApi<E>
+where
+	E: ChainEnvironment<assets::eth::Asset, Address>,
+	E: ReplayProtectionProvider<Ethereum>,
+{
+	fn new_unsigned(
+		egress_id: EgressId,
+		transfer_param: TransferAssetParams<Ethereum>,
+		from: ForeignChainAddress,
+		message: Vec<u8>,
+	) -> Result<Self, DispatchError> {
+		let transfer_param = EncodableTransferAssetParams {
+			asset: E::lookup(transfer_param.asset).ok_or(DispatchError::CannotLookup)?,
+			to: transfer_param.to,
+			amount: transfer_param.amount,
+		};
+
+		Ok(Self::ExecutexSwapAndCall(execute_x_swap_and_call::ExecutexSwapAndCall::new_unsigned(
+			E::replay_protection(),
+			egress_id,
+			transfer_param,
+			from,
+			message,
+		)))
+	}
+}
+
 impl<E> From<set_agg_key_with_agg_key::SetAggKeyWithAggKey> for EthereumApi<E> {
 	fn from(tx: set_agg_key_with_agg_key::SetAggKeyWithAggKey) -> Self {
 		Self::SetAggKeyWithAggKey(tx)
@@ -189,6 +220,12 @@ impl<E> From<all_batch::AllBatch> for EthereumApi<E> {
 	}
 }
 
+impl<E> From<execute_x_swap_and_call::ExecutexSwapAndCall> for EthereumApi<E> {
+	fn from(tx: execute_x_swap_and_call::ExecutexSwapAndCall) -> Self {
+		Self::ExecutexSwapAndCall(tx)
+	}
+}
+
 impl<E> ApiCall<Ethereum> for EthereumApi<E> {
 	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
 		match self {
@@ -198,6 +235,7 @@ impl<E> ApiCall<Ethereum> for EthereumApi<E> {
 			EthereumApi::SetGovKeyWithAggKey(tx) => tx.threshold_signature_payload(),
 			EthereumApi::SetCommKeyWithAggKey(tx) => tx.threshold_signature_payload(),
 			EthereumApi::AllBatch(tx) => tx.threshold_signature_payload(),
+			EthereumApi::ExecutexSwapAndCall(tx) => tx.threshold_signature_payload(),
 			EthereumApi::_Phantom(..) => unreachable!(),
 		}
 	}
@@ -210,6 +248,7 @@ impl<E> ApiCall<Ethereum> for EthereumApi<E> {
 			EthereumApi::SetGovKeyWithAggKey(call) => call.signed(threshold_signature).into(),
 			EthereumApi::SetCommKeyWithAggKey(call) => call.signed(threshold_signature).into(),
 			EthereumApi::AllBatch(call) => call.signed(threshold_signature).into(),
+			EthereumApi::ExecutexSwapAndCall(call) => call.signed(threshold_signature).into(),
 			EthereumApi::_Phantom(..) => unreachable!(),
 		}
 	}
@@ -222,6 +261,7 @@ impl<E> ApiCall<Ethereum> for EthereumApi<E> {
 			EthereumApi::SetGovKeyWithAggKey(call) => call.chain_encoded(),
 			EthereumApi::SetCommKeyWithAggKey(call) => call.chain_encoded(),
 			EthereumApi::AllBatch(call) => call.chain_encoded(),
+			EthereumApi::ExecutexSwapAndCall(call) => call.chain_encoded(),
 			EthereumApi::_Phantom(..) => unreachable!(),
 		}
 	}
@@ -234,6 +274,7 @@ impl<E> ApiCall<Ethereum> for EthereumApi<E> {
 			EthereumApi::SetGovKeyWithAggKey(call) => call.is_signed(),
 			EthereumApi::SetCommKeyWithAggKey(call) => call.is_signed(),
 			EthereumApi::AllBatch(call) => call.is_signed(),
+			EthereumApi::ExecutexSwapAndCall(call) => call.is_signed(),
 			EthereumApi::_Phantom(..) => unreachable!(),
 		}
 	}

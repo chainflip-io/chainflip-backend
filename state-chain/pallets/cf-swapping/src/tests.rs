@@ -1,8 +1,11 @@
-use crate::{mock::*, EarnedRelayerFees, Error, Pallet, Swap, SwapQueue, WeightInfo};
+use crate::{mock::*, EarnedRelayerFees, Error, Pallet, Swap, SwapQueue, SwapType, WeightInfo};
 use cf_chains::{address::ForeignChainAddress, AnyChain};
 use cf_primitives::{Asset, ForeignChain};
 use cf_test_utilities::assert_event_sequence;
-use cf_traits::{mocks::egress_handler::MockEgressHandler, SwapIntentHandler};
+use cf_traits::{
+	mocks::egress_handler::{MockEgressHandler, MockEgressParameter},
+	SwapIntentHandler,
+};
 use frame_support::{assert_noop, assert_ok, sp_std::iter, weights::Weight};
 
 use frame_support::traits::Hooks;
@@ -16,7 +19,7 @@ fn generate_test_swaps() -> Vec<Swap> {
 			from: Asset::Flip,
 			to: Asset::Usdc,
 			amount: 100,
-			egress_address: ForeignChainAddress::Eth([2; 20]),
+			swap_type: SwapType::Swap(ForeignChainAddress::Eth([2; 20])),
 		},
 		// USDC -> asset
 		Swap {
@@ -24,7 +27,7 @@ fn generate_test_swaps() -> Vec<Swap> {
 			from: Asset::Eth,
 			to: Asset::Usdc,
 			amount: 40,
-			egress_address: ForeignChainAddress::Eth([9; 20]),
+			swap_type: SwapType::Swap(ForeignChainAddress::Eth([9; 20])),
 		},
 		// Both assets are on the Eth chain
 		Swap {
@@ -32,7 +35,7 @@ fn generate_test_swaps() -> Vec<Swap> {
 			from: Asset::Flip,
 			to: Asset::Eth,
 			amount: 500,
-			egress_address: ForeignChainAddress::Eth([2; 20]),
+			swap_type: SwapType::Swap(ForeignChainAddress::Eth([2; 20])),
 		},
 		// Cross chain
 		Swap {
@@ -40,22 +43,24 @@ fn generate_test_swaps() -> Vec<Swap> {
 			from: Asset::Flip,
 			to: Asset::Dot,
 			amount: 600,
-			egress_address: ForeignChainAddress::Dot([4; 32]),
+			swap_type: SwapType::Swap(ForeignChainAddress::Dot([4; 32])),
 		},
 	]
 }
 
 fn insert_swaps(swaps: &[Swap]) {
 	for (relayer_id, swap) in swaps.iter().enumerate() {
-		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
-			ForeignChainAddress::Eth([2; 20]),
-			swap.from,
-			swap.to,
-			swap.amount,
-			swap.egress_address.clone(),
-			relayer_id as u64,
-			2,
-		);
+		if let SwapType::Swap(egress_address) = &swap.swap_type {
+			<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
+				ForeignChainAddress::Eth([2; 20]),
+				swap.from,
+				swap.to,
+				swap.amount,
+				egress_address.clone(),
+				relayer_id as u64,
+				2,
+			);
+		}
 	}
 }
 
@@ -68,6 +73,7 @@ fn register_swap_intent_success_with_valid_parameters() {
 			Asset::Usdc,
 			ForeignChainAddress::Eth(Default::default()),
 			0,
+			None
 		));
 	});
 }
@@ -85,7 +91,15 @@ fn process_all_swaps() {
 		let mut expected = swaps
 			.iter()
 			.cloned()
-			.map(|swap| (swap.to, swap.amount, swap.egress_address))
+			.map(|swap| MockEgressParameter::<AnyChain>::Swap {
+				asset: swap.to,
+				amount: swap.amount,
+				egress_address: if let SwapType::Swap(egress_address) = swap.swap_type {
+					egress_address
+				} else {
+					ForeignChainAddress::Eth(Default::default())
+				},
+			})
 			.collect::<Vec<_>>();
 		expected.sort();
 		let mut egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
@@ -163,11 +177,12 @@ fn expect_swap_id_to_be_emitted() {
 			Asset::Usdc,
 			ForeignChainAddress::Eth(Default::default()),
 			0,
+			None
 		));
 		// 2. Schedule the swap -> SwapIngressReceived
 		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
 			ForeignChainAddress::Eth(Default::default()),
-			Asset::Flip,
+			Asset::Eth,
 			Asset::Usdc,
 			500,
 			ForeignChainAddress::Eth(Default::default()),
@@ -184,7 +199,7 @@ fn expect_swap_id_to_be_emitted() {
 			crate::mock::RuntimeEvent::Swapping(crate::Event::SwapIngressReceived {
 				ingress_address: ForeignChainAddress::Eth(Default::default()),
 				swap_id: 1,
-				ingress_amount: 500
+				ingress_amount: 500,
 			}),
 			crate::mock::RuntimeEvent::Swapping(crate::Event::SwapExecuted { swap_id: 1 }),
 			crate::mock::RuntimeEvent::Swapping(crate::Event::SwapEgressScheduled {
@@ -216,7 +231,7 @@ fn withdraw_relayer_fees() {
 		));
 		let mut egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
 		assert!(egresses.len() == 1);
-		assert_eq!(egresses.pop().expect("must exist").1, 200);
+		assert_eq!(egresses.pop().expect("must exist").amount(), 200);
 		System::assert_last_event(RuntimeEvent::Swapping(
 			crate::Event::<Test>::WithdrawalRequested {
 				egress_id: (ForeignChain::Ethereum, 1),

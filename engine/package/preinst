@@ -12,7 +12,7 @@ CF_BIN_ROOT=$(which chainflip-engine | xargs dirname)
 
 # Print the stdout (hiding stderr) and grep the version. This is rather ugly as the
 # --version does not yet exist, but the build information contains the version.
-CF_VERSION=$(chainflip-engine --version 2> /dev/null | grep -Po '(?<=v)[^\ (]+')
+CF_VERSION=$(chainflip-engine --version 2> /dev/null | grep -Po '\d+\.\d+\.\d+')
 MAJOR=$(echo "$CF_VERSION" | awk -F. '{print $1}')
 MINOR=$(echo "$CF_VERSION" | awk -F. '{print $2}')
 
@@ -29,7 +29,7 @@ echo "chainflip-engine: Beginning setup and migration of engine config"
 
 # Find the engine config file. If missing, assume that the user has already set up the
 # node in the new way. Shouldn't happen.
-ENGINE_CONFIG_LOCATION=$(grep -srl --include "Default.toml" "state_chain" /etc/* ~)
+ENGINE_CONFIG_LOCATION=$(grep -srl --include "Default.toml" "state_chain" /etc/* ~ || true)
 if [ -z "$ENGINE_CONFIG_LOCATION" ]; then
   echo "chainflip-engine: No Default.toml file found. Exiting"
   exit 0

@@ -8,15 +8,15 @@ fn test_update_chain_state_within_age_limit() {
 		const LATEST_BLOCK: u64 = 1000;
 		assert_ok!(MockChainTracking::update_chain_state(
 			RuntimeOrigin::signed(0),
-			MockTrackedData(LATEST_BLOCK)
+			MockTrackedData::from_age(LATEST_BLOCK)
 		));
 		assert_ok!(MockChainTracking::update_chain_state(
 			RuntimeOrigin::signed(0),
-			MockTrackedData(LATEST_BLOCK - AGE_LIMIT + 1)
+			MockTrackedData::from_age(LATEST_BLOCK - AGE_LIMIT + 1)
 		));
 		assert_ok!(MockChainTracking::update_chain_state(
 			RuntimeOrigin::signed(0),
-			MockTrackedData(LATEST_BLOCK + AGE_LIMIT * 100)
+			MockTrackedData::from_age(LATEST_BLOCK + AGE_LIMIT * 100)
 		));
 	})
 }
@@ -27,17 +27,20 @@ fn test_update_chain_state_outside_of_age_limit() {
 		const LATEST_BLOCK: u64 = 1000;
 		assert_ok!(MockChainTracking::update_chain_state(
 			RuntimeOrigin::signed(0),
-			MockTrackedData(LATEST_BLOCK)
+			MockTrackedData::from_age(LATEST_BLOCK)
 		));
 		assert_noop!(
 			MockChainTracking::update_chain_state(
 				RuntimeOrigin::signed(0),
-				MockTrackedData(LATEST_BLOCK - AGE_LIMIT)
+				MockTrackedData::from_age(LATEST_BLOCK - AGE_LIMIT)
 			),
 			Error::<Test>::StaleDataSubmitted
 		);
 		assert_noop!(
-			MockChainTracking::update_chain_state(RuntimeOrigin::signed(0), MockTrackedData(0)),
+			MockChainTracking::update_chain_state(
+				RuntimeOrigin::signed(0),
+				MockTrackedData::from_age(0)
+			),
 			Error::<Test>::StaleDataSubmitted
 		);
 	})
