@@ -99,7 +99,9 @@ pub struct EthereumTrackedData {
 	pub priority_fee: <Ethereum as Chain>::ChainAmount,
 }
 
-impl Age<Ethereum> for EthereumTrackedData {
+impl Age for EthereumTrackedData {
+	type BlockNumber = <Ethereum as Chain>::ChainBlockNumber;
+
 	fn birth_block(&self) -> <Ethereum as Chain>::ChainBlockNumber {
 		self.block_height
 	}
