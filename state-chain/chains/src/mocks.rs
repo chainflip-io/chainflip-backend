@@ -53,8 +53,10 @@ impl MockTrackedData {
 	}
 }
 
-impl Age<MockEthereum> for MockTrackedData {
-	fn birth_block(&self) -> u64 {
+impl Age for MockTrackedData {
+	type BlockNumber = u64;
+
+	fn birth_block(&self) -> Self::BlockNumber {
 		self.age
 	}
 }
