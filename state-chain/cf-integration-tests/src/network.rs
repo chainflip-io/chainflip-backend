@@ -1,13 +1,13 @@
 use super::*;
 
 use crate::threshold_signing::{
-	BtcKeyComponents, BtcThresholdSigner, DotKeyComponents, DotThresholdSigner, EthKeyComponents, EthThresholdSigner,
-	KeyUtils, ThresholdSigner,
+	BtcKeyComponents, BtcThresholdSigner, DotKeyComponents, DotThresholdSigner, EthKeyComponents,
+	EthThresholdSigner, KeyUtils, ThresholdSigner,
 };
 use cf_chains::{dot::PolkadotSignature, eth::SchnorrVerificationComponents, ChainCrypto};
 
-use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
 use cf_chains::btc::UtxoId;
+use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
 use cf_traits::{AccountRoleRegistry, EpochInfo};
 use codec::Encode;
 use frame_support::traits::{OnFinalize, OnIdle};
@@ -138,7 +138,13 @@ impl Engine {
 		dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
 		btc_threshold_signer: Rc<RefCell<BtcThresholdSigner>>,
 	) -> Self {
-		Engine { node_id, live: true, eth_threshold_signer, dot_threshold_signer, btc_threshold_signer }
+		Engine {
+			node_id,
+			live: true,
+			eth_threshold_signer,
+			dot_threshold_signer,
+			btc_threshold_signer,
+		}
 	}
 
 	fn state(&self) -> ChainflipAccountState {
@@ -283,7 +289,7 @@ impl Engine {
 										block_number: 100,
 										tx_id: UtxoId {
 											pubkey_x: btc_public_key.pubkey_x,
-											tx_hash: [2u8; 32].into(),
+											tx_hash: [2u8; 32],
 											vout: 1,
 											salt: 0,
 										},

@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use arrayref::array_ref;
 use cf_chains::{
 	btc,
@@ -12,6 +11,7 @@ use sp_core::{
 	crypto::Pair as TraitPair,
 	sr25519::{self, Pair},
 };
+use std::marker::PhantomData;
 
 use crate::GENESIS_KEY_SEED;
 
@@ -210,7 +210,8 @@ impl KeyUtils for BtcKeyComponents {
 
 	fn sign(&self, message: &[u8]) -> Self::SigVerification {
 		let secp = secp256k1::Secp256k1::new();
-		let signature = secp.schnorrsig_sign(&secp256k1::Message::from_slice(message).unwrap(), &self.secret);
+		let signature =
+			secp.schnorrsig_sign(&secp256k1::Message::from_slice(message).unwrap(), &self.secret);
 		*array_ref!(signature[..], 0, 64)
 	}
 
@@ -226,7 +227,7 @@ impl KeyUtils for BtcKeyComponents {
 		let secp = secp256k1::Secp256k1::new();
 		let keypair = secp256k1::schnorrsig::KeyPair::from_seckey_slice(&secp, &priv_seed).unwrap();
 		let pubkey_x = secp256k1::schnorrsig::PublicKey::from_keypair(&secp, &keypair).serialize();
-		let agg_key = btc::AggKey{pubkey_x: *array_ref!(pubkey_x, 0, 32)};
+		let agg_key = btc::AggKey { pubkey_x: *array_ref!(pubkey_x, 0, 32) };
 
 		KeyComponents { seed, secret: keypair, agg_key, epoch_index }
 	}
