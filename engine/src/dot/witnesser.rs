@@ -748,7 +748,7 @@ mod tests {
 		expected_median: PolkadotBalance,
 	) {
 		let num_permutations = if test_case.is_empty() { 1 } else { test_case.len() };
-		for tips in test_case.into_iter().permutations(num_permutations) {
+		for tips in test_case.iter().permutations(num_permutations) {
 			let block_event_details = phase_and_events(
 				(1..)
 					.zip(&tips)
@@ -767,8 +767,7 @@ mod tests {
 
 			assert_eq!(
 				median_tip, expected_median,
-				"Incorrect median value for input {:?}. Expected {:?}",
-				tips, expected_median
+				"Incorrect median value for input {tips:?}. Expected {expected_median:?}",
 			);
 		}
 	}
