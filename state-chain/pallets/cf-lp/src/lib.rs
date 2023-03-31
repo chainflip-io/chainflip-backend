@@ -13,6 +13,7 @@ use cf_traits::{
 	liquidity::LpProvisioningApi, AccountRoleRegistry, Chainflip, EgressApi, IngressApi,
 	LiquidityPoolApi, SystemStateInfo,
 };
+use sp_runtime::traits::BlockNumberProvider;
 use sp_std::vec::Vec;
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -56,6 +57,10 @@ pub mod pallet {
 
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
+
+		/// Time to life for an intent in blocks.
+		#[pallet::constant]
+		type LpTTL: Get<Self::BlockNumber>;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
@@ -131,8 +136,10 @@ pub mod pallet {
 			let (intent_id, ingress_address) =
 				T::IngressHandler::register_liquidity_ingress_intent(account_id, asset)?;
 
-			let ttl = T::BlockNumber::from(20_u32);
-			Expired::<T>::mutate(ttl, |expired| expired.push((intent_id, asset.into())));
+			Expired::<T>::mutate(
+				frame_system::Pallet::<T>::current_block_number() + T::LpTTL::get(),
+				|expired| expired.push((intent_id, asset.into())),
+			);
 
 			Self::deposit_event(Event::DepositAddressReady { intent_id, ingress_address });
 

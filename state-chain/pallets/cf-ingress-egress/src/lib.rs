@@ -183,10 +183,6 @@ pub mod pallet {
 		/// Governance origin to manage allowed assets
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
-		/// Time to life for an intent in blocks.
-		#[pallet::constant]
-		type IntentTTL: Get<Self::BlockNumber>;
-
 		/// Ingress Handler for performing action items on ingress needed elsewhere
 		type IngressHandler: IngressHandler<Self::TargetChain>;
 
@@ -343,30 +339,6 @@ pub mod pallet {
 
 			remaining_weight.saturating_sub(weights_left)
 		}
-
-		// fn on_initialize(n: BlockNumberFor<T>) -> Weight {
-		// 	let mut total_weight: Weight = Weight::zero();
-		// 	if let Some(expired) = IntentExpiries::<T, I>::take(n) {
-		// 		for (intent_id, address) in expired.clone() {
-		// 			IntentActions::<T, I>::remove(&address);
-		// 			if AddressStatus::<T, I>::get(&address) == DeploymentStatus::Deployed {
-		// 				AddressPool::<T, I>::insert(intent_id, address.clone());
-		// 			}
-		// 			if let Some(intent_ingress_details) =
-		// 				IntentIngressDetails::<T, I>::take(&address)
-		// 			{
-		// 				Self::deposit_event(Event::<T, I>::StopWitnessing {
-		// 					ingress_address: address.clone(),
-		// 					ingress_asset: intent_ingress_details.ingress_asset,
-		// 				});
-		// 			}
-
-		// 			total_weight = total_weight
-		// 				.saturating_add(T::WeightInfo::on_initialize(expired.len() as u32));
-		// 		}
-		// 	}
-		// 	total_weight.saturating_add(T::WeightInfo::on_initialize_has_no_expired())
-		// }
 
 		fn integrity_test() {
 			// Ensures the weights are benchmarked correctly.
@@ -723,14 +695,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub fn expire_intent(intent_id: IntentId) {
-		let address = AddressPool::<T, I>::take(&intent_id).expect("Intent address should exist");
+		let address = AddressPool::<T, I>::take(intent_id).expect("Intent address should exist");
 		IntentActions::<T, I>::remove(&address);
 		if AddressStatus::<T, I>::get(&address) == DeploymentStatus::Deployed {
 			AddressPool::<T, I>::insert(intent_id, address.clone());
 		}
 		if let Some(intent_ingress_details) = IntentIngressDetails::<T, I>::take(&address) {
 			Self::deposit_event(Event::<T, I>::StopWitnessing {
-				ingress_address: address.clone(),
+				ingress_address: address,
 				ingress_asset: intent_ingress_details.ingress_asset,
 			});
 		}

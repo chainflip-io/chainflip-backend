@@ -4,7 +4,10 @@ use cf_primitives::{Asset, AssetAmount, ForeignChain, IntentId};
 use cf_traits::{liquidity::SwappingApi, CcmHandler, IngressApi, SystemStateInfo};
 use frame_support::{
 	pallet_prelude::*,
-	sp_runtime::{traits::Saturating, Permill},
+	sp_runtime::{
+		traits::{BlockNumberProvider, Saturating},
+		Permill,
+	},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -86,6 +89,9 @@ pub mod pallet {
 		type EgressHandler: EgressApi<AnyChain>;
 		/// An interface to the AMM api implementation.
 		type SwappingApi: SwappingApi;
+		/// Time to life for an swap in blocks.
+		#[pallet::constant]
+		type SwapTTL: Get<Self::BlockNumber>;
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
 	}
@@ -167,6 +173,9 @@ pub mod pallet {
 			ccm_id: u64,
 			egress_id: EgressId,
 		},
+		SwapExpired {
+			intent_id: IntentId,
+		},
 	}
 	#[pallet::error]
 	pub enum Error<T> {
@@ -219,6 +228,7 @@ pub mod pallet {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			for (intent_id, chain) in Expired::<T>::take(n) {
 				T::IngressHandler::expire_intent(chain, intent_id);
+				Self::deposit_event(Event::<T>::SwapExpired { intent_id });
 			}
 			T::DbWeight::get().reads(1)
 		}
@@ -250,8 +260,6 @@ pub mod pallet {
 				);
 			}
 
-			let ttl = T::BlockNumber::from(20_u32);
-
 			ensure!(
 				ForeignChain::from(egress_address.clone()) == ForeignChain::from(egress_asset),
 				Error::<T>::IncompatibleAssetAndAddress
@@ -266,7 +274,10 @@ pub mod pallet {
 				message_metadata,
 			)?;
 
-			Expired::<T>::mutate(ttl, |expired| expired.push((intent_id, ingress_asset.into())));
+			Expired::<T>::mutate(
+				frame_system::Pallet::<T>::current_block_number() + T::SwapTTL::get(),
+				|expired| expired.push((intent_id, ingress_asset.into())),
+			);
 
 			Self::deposit_event(Event::<T>::NewSwapIntent { ingress_address });
 

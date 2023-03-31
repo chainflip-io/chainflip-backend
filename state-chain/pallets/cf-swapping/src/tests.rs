@@ -1,4 +1,6 @@
-use crate::{mock::*, EarnedRelayerFees, Error, Pallet, Swap, SwapQueue, SwapType, WeightInfo};
+use crate::{
+	mock::*, EarnedRelayerFees, Error, Expired, Pallet, Swap, SwapQueue, SwapType, WeightInfo,
+};
 use cf_chains::{address::ForeignChainAddress, AnyChain};
 use cf_primitives::{Asset, ForeignChain};
 use cf_test_utilities::assert_event_sequence;
@@ -260,5 +262,25 @@ fn can_swap_using_witness_origin() {
 				egress_address: ForeignChainAddress::Eth([0u8; 20]),
 			},
 		));
+	});
+}
+
+#[test]
+fn swap_expires() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Swapping::register_swap_intent(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Eth,
+			Asset::Usdc,
+			ForeignChainAddress::Eth(Default::default()),
+			0,
+			None
+		));
+		assert_eq!(Expired::<Test>::get(6), vec![(0, ForeignChain::Ethereum)]);
+		Swapping::on_initialize(6);
+		assert_eq!(Expired::<Test>::get(6), vec![]);
+		System::assert_last_event(RuntimeEvent::Swapping(crate::Event::<Test>::SwapExpired {
+			intent_id: 0,
+		}));
 	});
 }

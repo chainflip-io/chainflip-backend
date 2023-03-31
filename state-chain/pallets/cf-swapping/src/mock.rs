@@ -10,7 +10,7 @@ use cf_traits::{
 };
 use frame_support::{dispatch::DispatchError, parameter_types, weights::Weight};
 use frame_system as system;
-use sp_core::H256;
+use sp_core::{ConstU64, H256};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -122,6 +122,7 @@ impl pallet_cf_swapping::Config for Test {
 	type IngressHandler = MockIngressHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;
 	type WeightInfo = MockWeightInfo;
+	type SwapTTL = ConstU64<5_u64>;
 	type SwappingApi = MockSwappingApi;
 }
 

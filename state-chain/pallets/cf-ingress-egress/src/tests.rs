@@ -1,7 +1,6 @@
 use crate::{
 	mock::*, AddressPool, AddressStatus, DeploymentStatus, DisabledEgressAssets, FetchOrTransfer,
-	IntentAction, IntentActions, IntentIdCounter, IntentIngressDetails, ScheduledEgressCcm,
-	ScheduledEgressFetchOrTransfer, WeightInfo,
+	IntentAction, IntentIdCounter, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, WeightInfo,
 };
 use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata};
 use cf_primitives::{chains::assets::eth, ForeignChain, IntentId};
