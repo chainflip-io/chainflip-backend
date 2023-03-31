@@ -26,6 +26,7 @@ sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "cha
 sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
 
 [dev-dependencies]
+hex-literal = { version = '0.3', default-features = false }
 sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
 sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
 

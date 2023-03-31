@@ -1,7 +1,8 @@
 pub use crate::{self as pallet_cf_ingress_egress};
 pub use cf_chains::{
+	address::ForeignChainAddress,
 	eth::api::{EthereumApi, EthereumReplayProtection},
-	Chain, ChainAbi, ChainEnvironment,
+	CcmIngressMetadata, Chain, ChainAbi, ChainEnvironment,
 };
 use cf_primitives::BroadcastId;
 pub use cf_primitives::{
@@ -9,11 +10,18 @@ pub use cf_primitives::{
 	Asset, AssetAmount, EthereumAddress, ExchangeRate, ETHEREUM_ETH_ADDRESS,
 };
 
-use frame_support::traits::UnfilteredDispatchable;
+use frame_support::{
+	instances::Instance1,
+	parameter_types,
+	traits::{ConstU64, UnfilteredDispatchable},
+};
 
 use cf_traits::{
 	impl_mock_callback,
-	mocks::api_call::{MockEthEnvironment, MockEthereumApiCall},
+	mocks::{
+		api_call::{MockEthEnvironment, MockEthereumApiCall},
+		ccm_hanlder::MockCcmHandler,
+	},
 	IngressHandler,
 };
 
@@ -21,7 +29,7 @@ pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Broadcaster,
 };
-use frame_support::{instances::Instance1, parameter_types, traits::ConstU64};
+
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -90,20 +98,25 @@ impl cf_traits::Chainflip for Test {
 
 impl_mock_callback!(RuntimeOrigin);
 
+parameter_types! {
+	pub static EgressedApiCall: Option<MockEthereumApiCall<MockEthEnvironment>> = None;
+}
+
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
 	type ApiCall = MockEthereumApiCall<MockEthEnvironment>;
 	type Callback = RuntimeCall;
 
-	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
+	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
+		EgressedApiCall::set(Some(api_call));
 		1
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
-		_api_call: Self::ApiCall,
+		api_call: Self::ApiCall,
 		callback: Self::Callback,
 	) -> BroadcastId {
-		// TODO: Call the callback.
+		EgressedApiCall::set(Some(api_call));
 		let _ = callback.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 		1
 	}
@@ -125,7 +138,7 @@ impl crate::Config<Instance1> for Test {
 	type IntentTTL = ConstU64<5_u64>;
 	type IngressHandler = MockIngressHandler;
 	type WeightInfo = ();
-	type CcmHandler = ();
+	type CcmHandler = MockCcmHandler;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
