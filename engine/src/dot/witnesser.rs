@@ -528,6 +528,7 @@ mod tests {
 
 	use cf_chains::dot;
 	use cf_primitives::PolkadotAccountId;
+	use itertools::Itertools;
 
 	use crate::{
 		dot::rpc::DotRpcClient, state_chain_observer::client::mocks::MockStateChainClient,
@@ -728,47 +729,42 @@ mod tests {
 	}
 
 	#[test]
-	fn test_median_tip_calculated_from_events_correctly() {
-		const LOWER_TIP: PolkadotBalance = 10;
-		const MEDIAN_TIP: PolkadotBalance = 100;
-		const HIGHER_TIP: PolkadotBalance = 1000;
+	fn test_median_tip_calculation() {
+		test_median_tip_calculated_from_events_correctly(&[], 0);
+		test_median_tip_calculated_from_events_correctly(&[10], 10);
+		test_median_tip_calculated_from_events_correctly(&[10, 100], 10);
+		test_median_tip_calculated_from_events_correctly(&[10, 100, 1000], 100);
+		test_median_tip_calculated_from_events_correctly(&[10, 100, 1000, 1000], 100);
+	}
 
-		// ensure we don't accidentally have values that check it's the mean, and not median
-		assert_ne!(LOWER_TIP + MEDIAN_TIP + HIGHER_TIP / 3, MEDIAN_TIP);
+	fn test_median_tip_calculated_from_events_correctly(
+		test_case: &[PolkadotBalance],
+		expected_median: PolkadotBalance,
+	) {
+		let num_permutations = if test_case.is_empty() { 1 } else { test_case.len() };
+		for tips in test_case.into_iter().permutations(num_permutations) {
+			let block_event_details = phase_and_events(
+				(1..)
+					.zip(&tips)
+					.map(|(i, &&tip)| (i, mock_tx_fee_paid_tip(tip)))
+					.collect::<Vec<_>>()
+					.as_slice(),
+			);
 
-		let block_event_details = phase_and_events(&[
-			(1, mock_tx_fee_paid_tip(MEDIAN_TIP)),
-			(2, mock_tx_fee_paid_tip(LOWER_TIP)),
-			(3, mock_tx_fee_paid_tip(HIGHER_TIP)),
-		]);
+			let (.., median_tip) = check_for_interesting_events_in_block(
+				block_event_details,
+				20,
+				// arbitrary, not focus of the test
+				&PolkadotAccountId::from([0xda; 32]),
+				&mut AddressMonitor::new(BTreeSet::default()).1,
+			);
 
-		let (.., median_tip) = check_for_interesting_events_in_block(
-			block_event_details,
-			20,
-			// arbitrary, not focus of the test
-			&PolkadotAccountId::from([0xda; 32]),
-			&mut AddressMonitor::new(BTreeSet::default()).1,
-		);
-
-		assert_eq!(median_tip, MEDIAN_TIP);
-
-		let block_event_details = phase_and_events(&[
-			(1, mock_tx_fee_paid_tip(HIGHER_TIP)),
-			(2, mock_tx_fee_paid_tip(MEDIAN_TIP)),
-			(3, mock_tx_fee_paid_tip(LOWER_TIP)),
-			(4, mock_tx_fee_paid_tip(HIGHER_TIP)),
-		]);
-
-		let (.., median_tip) = check_for_interesting_events_in_block(
-			block_event_details,
-			20,
-			// arbitrary, not focus of the test
-			&PolkadotAccountId::from([0xda; 32]),
-			&mut AddressMonitor::new(BTreeSet::default()).1,
-		);
-
-		// When there's only two events, the median is the lower of the two
-		assert_eq!(median_tip, MEDIAN_TIP);
+			assert_eq!(
+				median_tip, expected_median,
+				"Incorrect median value for input {:?}. Expected {:?}",
+				tips, expected_median
+			);
+		}
 	}
 
 	#[ignore = "This test is helpful for local testing. Requires connection to westend"]
