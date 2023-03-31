@@ -1,6 +1,6 @@
-use std::marker::PhantomData;
-
+use arrayref::array_ref;
 use cf_chains::{
+	btc,
 	dot::{PolkadotPublicKey, PolkadotSignature},
 	eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents},
 };
@@ -11,6 +11,7 @@ use sp_core::{
 	crypto::Pair as TraitPair,
 	sr25519::{self, Pair},
 };
+use std::marker::PhantomData;
 
 use crate::GENESIS_KEY_SEED;
 
@@ -185,5 +186,57 @@ impl KeyUtils for DotKeyComponents {
 
 	fn agg_key(&self) -> Self::AggKey {
 		cf_chains::dot::PolkadotPublicKey(self.agg_key)
+	}
+}
+
+pub type BtcKeyComponents = KeyComponents<secp256k1::schnorrsig::KeyPair, cf_chains::btc::AggKey>;
+
+pub type BtcThresholdSigner = ThresholdSigner<BtcKeyComponents, btc::Signature>;
+
+impl Default for BtcThresholdSigner {
+	fn default() -> Self {
+		Self {
+			key_components: BtcKeyComponents::generate(GENESIS_KEY_SEED, GENESIS_EPOCH),
+			proposed_key_components: None,
+			_phantom: PhantomData,
+		}
+	}
+}
+
+impl KeyUtils for BtcKeyComponents {
+	type SigVerification = btc::Signature;
+
+	type AggKey = btc::AggKey;
+
+	fn sign(&self, message: &[u8]) -> Self::SigVerification {
+		let secp = secp256k1::Secp256k1::new();
+		let signature =
+			secp.schnorrsig_sign(&secp256k1::Message::from_slice(message).unwrap(), &self.secret);
+		*array_ref!(signature[..], 0, 64)
+	}
+
+	fn key_id(&self) -> KeyId {
+		<cf_chains::Bitcoin as cf_chains::ChainCrypto>::agg_key_to_key_id(
+			self.agg_key,
+			self.epoch_index,
+		)
+	}
+
+	fn generate(seed: u64, epoch_index: EpochIndex) -> Self {
+		let priv_seed: [u8; 32] = StdRng::seed_from_u64(seed).gen();
+		let secp = secp256k1::Secp256k1::new();
+		let keypair = secp256k1::schnorrsig::KeyPair::from_seckey_slice(&secp, &priv_seed).unwrap();
+		let pubkey_x = secp256k1::schnorrsig::PublicKey::from_keypair(&secp, &keypair).serialize();
+		let agg_key = btc::AggKey { pubkey_x: *array_ref!(pubkey_x, 0, 32) };
+
+		KeyComponents { seed, secret: keypair, agg_key, epoch_index }
+	}
+
+	fn generate_next(&self) -> Self {
+		Self::generate(self.seed + 1, self.epoch_index + 1)
+	}
+
+	fn agg_key(&self) -> Self::AggKey {
+		self.agg_key
 	}
 }
