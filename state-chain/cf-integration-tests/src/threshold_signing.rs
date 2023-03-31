@@ -1,5 +1,5 @@
 use std::marker::PhantomData;
-
+use arrayref::array_ref;
 use cf_chains::{
 	btc,
 	dot::{PolkadotPublicKey, PolkadotSignature},
@@ -189,7 +189,7 @@ impl KeyUtils for DotKeyComponents {
 	}
 }
 
-pub type BtcKeyComponents = KeyComponents<(), cf_chains::btc::AggKey>;
+pub type BtcKeyComponents = KeyComponents<secp256k1::schnorrsig::KeyPair, cf_chains::btc::AggKey>;
 
 pub type BtcThresholdSigner = ThresholdSigner<BtcKeyComponents, btc::Signature>;
 
@@ -209,7 +209,9 @@ impl KeyUtils for BtcKeyComponents {
 	type AggKey = btc::AggKey;
 
 	fn sign(&self, message: &[u8]) -> Self::SigVerification {
-		todo!()
+		let secp = secp256k1::Secp256k1::new();
+		let signature = secp.schnorrsig_sign(&secp256k1::Message::from_slice(message).unwrap(), &self.secret);
+		*array_ref!(signature[..], 0, 64)
 	}
 
 	fn key_id(&self) -> KeyId {
@@ -221,8 +223,10 @@ impl KeyUtils for BtcKeyComponents {
 
 	fn generate(seed: u64, epoch_index: EpochIndex) -> Self {
 		let priv_seed: [u8; 32] = StdRng::seed_from_u64(seed).gen();
-		let keypair: Pair = <Pair as TraitPair>::from_seed(&priv_seed);
-		let agg_key = keypair.public();
+		let secp = secp256k1::Secp256k1::new();
+		let keypair = secp256k1::schnorrsig::KeyPair::from_seckey_slice(&secp, &priv_seed).unwrap();
+		let pubkey_x = secp256k1::schnorrsig::PublicKey::from_keypair(&secp, &keypair).serialize();
+		let agg_key = btc::AggKey{pubkey_x: *array_ref!(pubkey_x, 0, 32)};
 
 		KeyComponents { seed, secret: keypair, agg_key, epoch_index }
 	}

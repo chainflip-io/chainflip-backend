@@ -1,13 +1,13 @@
 use super::*;
 
 use crate::threshold_signing::{
-	BtcKeyComponents, DotKeyComponents, DotThresholdSigner, EthKeyComponents, EthThresholdSigner,
+	BtcKeyComponents, BtcThresholdSigner, DotKeyComponents, DotThresholdSigner, EthKeyComponents, EthThresholdSigner,
 	KeyUtils, ThresholdSigner,
 };
 use cf_chains::{dot::PolkadotSignature, eth::SchnorrVerificationComponents, ChainCrypto};
 
 use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
-
+use cf_chains::btc::UtxoId;
 use cf_traits::{AccountRoleRegistry, EpochInfo};
 use codec::Encode;
 use frame_support::traits::{OnFinalize, OnIdle};
@@ -128,6 +128,7 @@ pub struct Engine {
 	// all engines have the same one, so they create the same sig
 	pub eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
 	pub dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
+	pub btc_threshold_signer: Rc<RefCell<BtcThresholdSigner>>,
 }
 
 impl Engine {
@@ -135,8 +136,9 @@ impl Engine {
 		node_id: NodeId,
 		eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
 		dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
+		btc_threshold_signer: Rc<RefCell<BtcThresholdSigner>>,
 	) -> Self {
-		Engine { node_id, live: true, eth_threshold_signer, dot_threshold_signer }
+		Engine { node_id, live: true, eth_threshold_signer, dot_threshold_signer, btc_threshold_signer }
 	}
 
 	fn state(&self) -> ChainflipAccountState {
@@ -194,6 +196,7 @@ impl Engine {
 						pallet_cf_validator::Event::NewEpoch(_epoch_index)) => {
 							self.eth_threshold_signer.borrow_mut().use_proposed_key();
 							self.dot_threshold_signer.borrow_mut().use_proposed_key();
+							self.btc_threshold_signer.borrow_mut().use_proposed_key();
 					}
 					RuntimeEvent::EthereumThresholdSigner(
 						// A signature request
@@ -226,6 +229,20 @@ impl Engine {
 									self.dot_threshold_signer.borrow().sign_with_key(key_id.clone(), &(payload.clone().0)),
 								);
 					}
+
+					RuntimeEvent::BitcoinThresholdSigner(
+						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
+							request_id: _,
+							ceremony_id,
+							key_id,
+							signatories: _signatories,
+							payload}) => {
+								let _result = state_chain_runtime::BitcoinThresholdSigner::signature_success(
+									RuntimeOrigin::none(),
+									*ceremony_id,
+									vec![self.btc_threshold_signer.borrow().sign_with_key(key_id.clone(), &(payload[0].clone()))],
+								);
+					}
 					RuntimeEvent::Validator(
 						// NOTE: This is a little inaccurate a representation of how it actually works. An event is emitted
 						// which contains the transaction to broadcast for the rotation tx, which the CFE then broadcasts.
@@ -253,6 +270,22 @@ impl Engine {
 										tx_id: TxId {
 											block_number: 2,
 											extrinsic_index: 1,
+										},
+									}.into()),
+									Validator::epoch_index()
+								);
+
+								let btc_public_key = self.btc_threshold_signer.borrow_mut().proposed_public_key();
+								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
+									RuntimeOrigin::signed(self.node_id.clone()),
+									Box::new(pallet_cf_vaults::Call::<_, BitcoinInstance>::vault_key_rotated {
+										new_public_key: btc_public_key,
+										block_number: 100,
+										tx_id: UtxoId {
+											pubkey_x: btc_public_key.pubkey_x,
+											tx_hash: [2u8; 32].into(),
+											vout: 1,
+											salt: 0,
 										},
 									}.into()),
 									Validator::epoch_index()
@@ -355,6 +388,7 @@ pub struct Network {
 	// Used to initialised the threshold signers of the engines added
 	pub eth_threshold_signer: Rc<RefCell<EthThresholdSigner>>,
 	pub dot_threshold_signer: Rc<RefCell<DotThresholdSigner>>,
+	pub btc_threshold_signer: Rc<RefCell<BtcThresholdSigner>>,
 }
 
 impl Network {
@@ -409,6 +443,7 @@ impl Network {
 				node_id.clone(),
 				self.eth_threshold_signer.clone(),
 				self.dot_threshold_signer.clone(),
+				self.btc_threshold_signer.clone(),
 			),
 		);
 	}
