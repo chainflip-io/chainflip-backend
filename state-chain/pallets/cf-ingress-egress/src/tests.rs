@@ -1,7 +1,7 @@
 use crate::{
 	mock::*, AddressPool, AddressStatus, DeploymentStatus, DisabledEgressAssets, FetchOrTransfer,
-	IntentAction, IntentActions, IntentExpiries, IntentIdCounter, IntentIngressDetails,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, WeightInfo,
+	IntentAction, IntentActions, IntentIdCounter, IntentIngressDetails, ScheduledEgressCcm,
+	ScheduledEgressFetchOrTransfer, WeightInfo,
 };
 use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata};
 use cf_primitives::{chains::assets::eth, ForeignChain, IntentId};
@@ -385,29 +385,29 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 	});
 }
 
-#[test]
-fn intent_expires() {
-	new_test_ext().execute_with(|| {
-		let _ = IngressEgress::register_liquidity_ingress_intent(ALICE, ETH_ETH);
-		assert!(IntentExpiries::<Test, Instance1>::get(EXPIRY_BLOCK).is_some());
-		let addresses =
-			IntentExpiries::<Test, Instance1>::get(EXPIRY_BLOCK).expect("intent expiry exists");
-		assert!(addresses.len() == 1);
-		let address = addresses.get(0).expect("to have ingress details for that address").1;
-		assert!(IntentIngressDetails::<Test, Instance1>::get(address,).is_some());
-		assert!(IntentActions::<Test, Instance1>::get(address).is_some());
-		AddressStatus::<Test, Instance1>::insert(address, DeploymentStatus::Deployed);
-		IngressEgress::on_initialize(EXPIRY_BLOCK);
-		assert!(IntentExpiries::<Test, Instance1>::get(EXPIRY_BLOCK).is_none());
-		assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 1);
-		assert!(AddressPool::<Test, Instance1>::get(IntentIdCounter::<Test, Instance1>::get())
-			.is_some());
-		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::StopWitnessing {
-			ingress_address: address,
-			ingress_asset: ETH_ETH,
-		}));
-	});
-}
+// #[test]
+// fn intent_expires() {
+// 	new_test_ext().execute_with(|| {
+// 		let _ = IngressEgress::register_liquidity_ingress_intent(ALICE, ETH_ETH);
+// 		assert!(IntentExpiries::<Test, Instance1>::get(EXPIRY_BLOCK).is_some());
+// 		let addresses =
+// 			IntentExpiries::<Test, Instance1>::get(EXPIRY_BLOCK).expect("intent expiry exists");
+// 		assert!(addresses.len() == 1);
+// 		let address = addresses.get(0).expect("to have ingress details for that address").1;
+// 		assert!(IntentIngressDetails::<Test, Instance1>::get(address,).is_some());
+// 		assert!(IntentActions::<Test, Instance1>::get(address).is_some());
+// 		AddressStatus::<Test, Instance1>::insert(address, DeploymentStatus::Deployed);
+// 		IngressEgress::on_initialize(EXPIRY_BLOCK);
+// 		assert!(IntentExpiries::<Test, Instance1>::get(EXPIRY_BLOCK).is_none());
+// 		assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 1);
+// 		assert!(AddressPool::<Test, Instance1>::get(IntentIdCounter::<Test, Instance1>::get())
+// 			.is_some());
+// 		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::StopWitnessing {
+// 			ingress_address: address,
+// 			ingress_asset: ETH_ETH,
+// 		}));
+// 	});
+// }
 
 #[test]
 fn addresses_are_getting_reused() {

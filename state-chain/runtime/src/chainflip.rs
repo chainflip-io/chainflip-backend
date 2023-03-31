@@ -448,6 +448,14 @@ macro_rules! impl_ingress_api_for_anychain {
 					)+
 				}
 			}
+
+			fn expire_intent(chain: ForeignChain, intent_id: IntentId) {
+				match chain {
+					$(
+						ForeignChain::$chain => $ingress_egress::expire_intent(intent_id),
+					)+
+				}
+			}
 		}
 	}
 }

@@ -13,6 +13,7 @@ use cf_traits::{
 	liquidity::LpProvisioningApi, AccountRoleRegistry, Chainflip, EgressApi, IngressApi,
 	LiquidityPoolApi, SystemStateInfo,
 };
+use sp_std::vec::Vec;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -70,6 +71,16 @@ pub mod pallet {
 		InvalidEgressAddress,
 	}
 
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
+			for (intent_id, chain) in Expired::<T>::take(n) {
+				T::IngressHandler::expire_intent(chain, intent_id);
+			}
+			T::DbWeight::get().reads(1)
+		}
+	}
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -96,12 +107,18 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
 
 	#[pallet::storage]
 	/// Storage for user's free balances/ DoubleMap: (AccountId, Asset) => Balance
 	pub type FreeBalances<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
+
+	/// Stores a block for when an intent will expire against the intent infos.
+	#[pallet::storage]
+	pub(super) type Expired<T: Config> =
+		StorageMap<_, Twox64Concat, T::BlockNumber, Vec<(IntentId, ForeignChain)>, ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
@@ -113,6 +130,9 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			let (intent_id, ingress_address) =
 				T::IngressHandler::register_liquidity_ingress_intent(account_id, asset)?;
+
+			let ttl = T::BlockNumber::from(20_u32);
+			Expired::<T>::mutate(ttl, |expired| expired.push((intent_id, asset.into())));
 
 			Self::deposit_event(Event::DepositAddressReady { intent_id, ingress_address });
 

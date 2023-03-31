@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata};
-use cf_primitives::{Asset, AssetAmount, ForeignChain};
+use cf_primitives::{Asset, AssetAmount, ForeignChain, IntentId};
 use cf_traits::{liquidity::SwappingApi, CcmHandler, IngressApi, SystemStateInfo};
 use frame_support::{
 	pallet_prelude::*,
@@ -120,6 +120,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type PendingCcms<T: Config> = StorageMap<_, Twox64Concat, u64, CcmWithStages>;
 
+	/// Stores a block for when an intent will expire against the intent infos.
+	#[pallet::storage]
+	pub(super) type Expired<T: Config> =
+		StorageMap<_, Twox64Concat, T::BlockNumber, Vec<(IntentId, ForeignChain)>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -210,6 +215,13 @@ pub mod pallet {
 			}
 			used_weight
 		}
+
+		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
+			for (intent_id, chain) in Expired::<T>::take(n) {
+				T::IngressHandler::expire_intent(chain, intent_id);
+			}
+			T::DbWeight::get().reads(1)
+		}
 	}
 
 	#[pallet::call]
@@ -238,12 +250,14 @@ pub mod pallet {
 				);
 			}
 
+			let ttl = T::BlockNumber::from(20_u32);
+
 			ensure!(
 				ForeignChain::from(egress_address.clone()) == ForeignChain::from(egress_asset),
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 
-			let (_, ingress_address) = T::IngressHandler::register_swap_intent(
+			let (intent_id, ingress_address) = T::IngressHandler::register_swap_intent(
 				ingress_asset,
 				egress_asset,
 				egress_address,
@@ -251,6 +265,8 @@ pub mod pallet {
 				relayer,
 				message_metadata,
 			)?;
+
+			Expired::<T>::mutate(ttl, |expired| expired.push((intent_id, ingress_asset.into())));
 
 			Self::deposit_event(Event::<T>::NewSwapIntent { ingress_address });
 

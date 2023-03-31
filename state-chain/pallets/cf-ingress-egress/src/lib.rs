@@ -14,7 +14,6 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_primitives::{EgressCounter, EgressId, ForeignChain};
-use sp_runtime::traits::BlockNumberProvider;
 
 use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata, IngressIdConstructor};
 
@@ -247,11 +246,6 @@ pub mod pallet {
 	pub(crate) type AddressStatus<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, TargetChainAccount<T, I>, DeploymentStatus, ValueQuery>;
 
-	/// Stores a block for when an intent will expire against the intent infos.
-	#[pallet::storage]
-	pub(crate) type IntentExpiries<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, T::BlockNumber, Vec<(IntentId, TargetChainAccount<T, I>)>>;
-
 	/// Map of intent id to the ingress id.
 	#[pallet::storage]
 	pub(crate) type FetchParamDetails<T: Config<I>, I: 'static = ()> =
@@ -350,29 +344,29 @@ pub mod pallet {
 			remaining_weight.saturating_sub(weights_left)
 		}
 
-		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
-			let mut total_weight: Weight = Weight::zero();
-			if let Some(expired) = IntentExpiries::<T, I>::take(n) {
-				for (intent_id, address) in expired.clone() {
-					IntentActions::<T, I>::remove(&address);
-					if AddressStatus::<T, I>::get(&address) == DeploymentStatus::Deployed {
-						AddressPool::<T, I>::insert(intent_id, address.clone());
-					}
-					if let Some(intent_ingress_details) =
-						IntentIngressDetails::<T, I>::take(&address)
-					{
-						Self::deposit_event(Event::<T, I>::StopWitnessing {
-							ingress_address: address.clone(),
-							ingress_asset: intent_ingress_details.ingress_asset,
-						});
-					}
+		// fn on_initialize(n: BlockNumberFor<T>) -> Weight {
+		// 	let mut total_weight: Weight = Weight::zero();
+		// 	if let Some(expired) = IntentExpiries::<T, I>::take(n) {
+		// 		for (intent_id, address) in expired.clone() {
+		// 			IntentActions::<T, I>::remove(&address);
+		// 			if AddressStatus::<T, I>::get(&address) == DeploymentStatus::Deployed {
+		// 				AddressPool::<T, I>::insert(intent_id, address.clone());
+		// 			}
+		// 			if let Some(intent_ingress_details) =
+		// 				IntentIngressDetails::<T, I>::take(&address)
+		// 			{
+		// 				Self::deposit_event(Event::<T, I>::StopWitnessing {
+		// 					ingress_address: address.clone(),
+		// 					ingress_asset: intent_ingress_details.ingress_asset,
+		// 				});
+		// 			}
 
-					total_weight = total_weight
-						.saturating_add(T::WeightInfo::on_initialize(expired.len() as u32));
-				}
-			}
-			total_weight.saturating_add(T::WeightInfo::on_initialize_has_no_expired())
-		}
+		// 			total_weight = total_weight
+		// 				.saturating_add(T::WeightInfo::on_initialize(expired.len() as u32));
+		// 		}
+		// 	}
+		// 	total_weight.saturating_add(T::WeightInfo::on_initialize_has_no_expired())
+		// }
 
 		fn integrity_test() {
 			// Ensures the weights are benchmarked correctly.
@@ -692,7 +686,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ingress_asset: TargetChainAsset<T, I>,
 		intent_action: IntentAction<T::AccountId>,
 	) -> Result<(IntentId, TargetChainAccount<T, I>), DispatchError> {
-		let intent_ttl = frame_system::Pallet::<T>::current_block_number() + T::IntentTTL::get();
+		// let intent_ttl = frame_system::Pallet::<T>::current_block_number() + T::IntentTTL::get();
 		// We have an address available, so we can just use it.
 
 		let (address, intent_id) = if let Some((intent_id, address)) =
@@ -702,7 +696,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				intent_id,
 				(IngressFetchIdOf::<T, I>::deployed(intent_id, address.clone()), address.clone()),
 			);
-			IntentExpiries::<T, I>::append(intent_ttl, (intent_id, address.clone()));
+			// IntentExpiries::<T, I>::append(intent_ttl, (intent_id, address.clone()));
 			(address, intent_id)
 		} else {
 			let next_intent_id = IntentIdCounter::<T, I>::get()
@@ -718,7 +712,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					new_address.clone(),
 				),
 			);
-			IntentExpiries::<T, I>::append(intent_ttl, (next_intent_id, new_address.clone()));
+			// IntentExpiries::<T, I>::append(intent_ttl, (next_intent_id, new_address.clone()));
 			IntentIdCounter::<T, I>::put(next_intent_id);
 			(new_address, next_intent_id)
 		};
@@ -726,6 +720,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		IntentIngressDetails::<T, I>::insert(&address, IngressDetails { intent_id, ingress_asset });
 		IntentActions::<T, I>::insert(&address, intent_action);
 		Ok((intent_id, address))
+	}
+
+	pub fn expire_intent(intent_id: IntentId) {
+		let address = AddressPool::<T, I>::take(&intent_id).expect("Intent address should exist");
+		IntentActions::<T, I>::remove(&address);
+		if AddressStatus::<T, I>::get(&address) == DeploymentStatus::Deployed {
+			AddressPool::<T, I>::insert(intent_id, address.clone());
+		}
+		if let Some(intent_ingress_details) = IntentIngressDetails::<T, I>::take(&address) {
+			Self::deposit_event(Event::<T, I>::StopWitnessing {
+				ingress_address: address.clone(),
+				ingress_asset: intent_ingress_details.ingress_asset,
+			});
+		}
 	}
 }
 
@@ -821,5 +829,12 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 		});
 
 		Ok((intent_id, ingress_address.into()))
+	}
+
+	// Note: we expect that the mapping from any instantiable pallet to the instance of this pallet
+	// is matching to the right chain. Because of that we can ignore the chain parameter.
+	fn expire_intent(_chain: ForeignChain, intent_id: IntentId) {
+		// TODO: ensure that the passed chain is compatible with the current instance of the pallet.
+		Self::expire_intent(intent_id);
 	}
 }

@@ -115,4 +115,8 @@ impl<C: Chain, T: Chainflip> IngressApi<C> for MockIngressHandler<C, T> {
 		});
 		Ok((intent_id, ingress_address))
 	}
+
+	fn expire_intent(_chain: ForeignChain, _intent_id: IntentId) {
+		todo!()
+	}
 }
