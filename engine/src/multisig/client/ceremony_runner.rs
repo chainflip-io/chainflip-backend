@@ -2,7 +2,7 @@
 mod tests;
 
 use std::{
-	collections::{BTreeMap, BTreeSet},
+	collections::{btree_map, BTreeMap, BTreeSet},
 	pin::Pin,
 	time::Duration,
 };
@@ -265,22 +265,21 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 
 	/// Delay message to be processed in the next stage
 	fn add_delayed(&mut self, id: AccountId, m: Ceremony::Data) {
-		let delayed_messages_count = self.delayed_messages.len() + 1;
-		match &self.stage {
-			Some(stage) => {
-				debug!(
-					"Delaying message {m} from party [{id}] during stage {}. (Total: {delayed_messages_count})",
-					stage.get_stage_name(),
-				);
+		let party_and_stage = match &self.stage {
+			Some(stage) => format!("party [{id}] during stage {}", stage.get_stage_name()),
+			None => format!("party [{id}] for an unauthorised ceremony"),
+		};
+		let total_delayed = self.delayed_messages.len() + 1;
+
+		match self.delayed_messages.entry(id) {
+			btree_map::Entry::Occupied(_) => {
+				warn!("Ignoring a redundant delayed message from {party_and_stage}");
 			},
-			None => {
-				debug!(
-					"Delaying message {m} from party [{id}] for unauthorised ceremony. (Total: {delayed_messages_count})",
-				)
+			btree_map::Entry::Vacant(entry) => {
+				debug!("Delaying message {m} from {party_and_stage}. (Total: {total_delayed})");
+				entry.insert(m);
 			},
 		}
-
-		self.delayed_messages.insert(id, m);
 	}
 
 	async fn on_timeout(&mut self) -> OptionalCeremonyReturn<Ceremony> {
