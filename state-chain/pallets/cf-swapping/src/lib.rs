@@ -30,7 +30,8 @@ const BASIS_POINTS_PER_MILLION: u32 = 100;
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SwapType {
 	Swap(ForeignChainAddress),
-	Ccm(u64),
+	CcmPrincipal(u64),
+	CcmGas(u64),
 }
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct Swap {
@@ -41,40 +42,38 @@ pub struct Swap {
 	pub swap_type: SwapType,
 }
 
-// Status of scheduled swaps.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum SwapStatus {
-	// The swap is still pending. (swap_id)
-	Pending(u64),
-	// The swap has already completed. (swapped_output)
-	Completed(AssetAmount),
-}
-
 /// Struct denoting swap status of a cross-chain message.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub(crate) struct CcmSwapStatus {
-	asset: SwapStatus,
-	gas: SwapStatus,
+pub(crate) struct CcmSwapOutput {
+	principal: Option<AssetAmount>,
+	gas: Option<AssetAmount>,
 }
 
-impl CcmSwapStatus {
-	fn new(asset_swap_id: u64, gas_swap_id: u64) -> Self {
-		CcmSwapStatus {
-			asset: SwapStatus::Pending(asset_swap_id),
-			gas: SwapStatus::Pending(gas_swap_id),
-		}
+impl CcmSwapOutput {
+	pub fn is_complete(&self) -> bool {
+		self.principal.is_some() && self.gas.is_some()
+	}
+
+	/// Panics if the outputs are not complete.
+	pub fn get_completed(self) -> (AssetAmount, AssetAmount) {
+		(self.principal.unwrap(), self.gas.unwrap())
+	}
+}
+
+impl CcmSwapOutput {
+	pub fn new() -> Self {
+		CcmSwapOutput { principal: None, gas: None }
 	}
 }
 
 // Cross chain message, including information at different stages.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub(crate) struct CcmWithSwapStatus {
+pub(crate) struct CcmSwap {
 	ingress_asset: Asset,
 	ingress_amount: AssetAmount,
 	egress_asset: Asset,
 	egress_address: ForeignChainAddress,
 	message_metadata: CcmIngressMetadata,
-	swap_status: CcmSwapStatus,
 }
 
 #[frame_support::pallet]
@@ -136,7 +135,11 @@ pub mod pallet {
 
 	/// Storage for storing CCMs pending assets to be swapped.
 	#[pallet::storage]
-	pub(super) type PendingCcms<T: Config> = StorageMap<_, Twox64Concat, u64, CcmWithSwapStatus>;
+	pub(super) type PendingCcms<T: Config> = StorageMap<_, Twox64Concat, u64, CcmSwap>;
+
+	/// Tracks the outputs of Ccm swaps.
+	#[pallet::storage]
+	pub(super) type CcmOutputs<T: Config> = StorageMap<_, Twox64Concat, u64, CcmSwapOutput>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -179,6 +182,13 @@ pub mod pallet {
 		CcmEgressScheduled {
 			ccm_id: u64,
 			egress_id: EgressId,
+		},
+		CcmIngressReceived {
+			ccm_id: u64,
+			asset_swap_id: u64,
+			gas_swap_id: u64,
+			ingress_amount: AssetAmount,
+			egress_address: ForeignChainAddress,
 		},
 	}
 	#[pallet::error]
@@ -411,75 +421,26 @@ pub mod pallet {
 								amount: swap_output,
 							});
 						},
-						SwapType::Ccm(ccm_id) =>
-						// Updated the CCM request storage and advance stages as neccesary.
-							PendingCcms::<T>::mutate_exists(ccm_id, |maybe_ccm| {
-								let should_remove = match maybe_ccm.as_mut() {
-									Some(ccm) => {
-										match ccm.swap_status.clone() {
-											CcmSwapStatus {
-												asset: SwapStatus::Pending(asset_swap_id),
-												gas: SwapStatus::Pending(gas_swap_id),
-											} => {
-												if swap.swap_id == asset_swap_id {
-													ccm.swap_status.asset =
-														SwapStatus::Completed(swap_output);
-												} else if swap.swap_id == gas_swap_id {
-													ccm.swap_status.gas =
-														SwapStatus::Completed(swap_output);
-												} else {
-													debug_assert!(
-														false,
-														"CCM: Swap ID should always match!"
-													);
-												}
-												false
-											},
-											CcmSwapStatus {
-												asset: SwapStatus::Completed(_),
-												gas: SwapStatus::Pending(gas_swap_id),
-											} => {
-												// Store swapped gas and egress the CCM.
-												debug_assert!(
-													swap.swap_id == gas_swap_id,
-													"CCM: Gas swap ID should always match!"
-												);
-												ccm.swap_status.gas =
-													SwapStatus::Completed(swap_output);
-												Self::schedule_ccm_egress(*ccm_id, ccm);
-												true
-											},
-											CcmSwapStatus {
-												asset: SwapStatus::Pending(asset_swap_id),
-												gas: SwapStatus::Completed(_),
-											} => {
-												// Store swapped asset and egress the CCM.
-												debug_assert!(
-													swap.swap_id == asset_swap_id,
-													"CCM: Asset swap ID should always match!"
-												);
-												ccm.swap_status.asset =
-													SwapStatus::Completed(swap_output);
-												Self::schedule_ccm_egress(*ccm_id, ccm);
-												true
-											},
-											_ => true,
-										}
-									},
-									None => {
-										debug_assert!(
-											false,
-											"Swap should always find a valid CCM in storage."
-										);
-										true
-									},
-								};
-
-								// Clear the storage of any CCM already egressed.
-								if should_remove {
-									*maybe_ccm = None;
+						SwapType::CcmPrincipal(ccm_id) => {
+							CcmOutputs::<T>::mutate(ccm_id, |maybe_ccm_output| {
+								let ccm_output = maybe_ccm_output.as_mut().expect("TODO: explain");
+								ccm_output.principal = Some(swap_output);
+								if ccm_output.is_complete() {
+									Self::schedule_ccm_egress(*ccm_id, ccm_output.get_completed());
+									*maybe_ccm_output = None;
 								}
-							}),
+							});
+						},
+						SwapType::CcmGas(ccm_id) => {
+							CcmOutputs::<T>::mutate(ccm_id, |maybe_ccm_output| {
+								let ccm_output = maybe_ccm_output.as_mut().expect("TODO: explain");
+								ccm_output.gas = Some(swap_output);
+								if ccm_output.is_complete() {
+									Self::schedule_ccm_egress(*ccm_id, ccm_output.get_completed());
+									*maybe_ccm_output = None;
+								}
+							});
+						},
 					};
 				} else {
 					// This is unlikely but theoretically possible if, for example, the initial swap
@@ -514,22 +475,21 @@ pub mod pallet {
 		}
 
 		/// Schedule the egress of a completed Cross chain message.
-		fn schedule_ccm_egress(ccm_id: u64, ccm: &CcmWithSwapStatus) {
-			if let CcmSwapStatus {
-				asset: SwapStatus::Completed(asset_amount),
-				gas: SwapStatus::Completed(gas_amount),
-			} = ccm.swap_status
-			{
+		fn schedule_ccm_egress(
+			ccm_id: u64,
+			(ccm_output_principal, ccm_output_gas): (AssetAmount, AssetAmount),
+		) {
+			if let Some(ccm) = PendingCcms::<T>::get(ccm_id) {
 				// Insert gas budget into storage.
 				CcmGasBudget::<T>::insert(
 					ccm_id,
-					(ForeignChain::from(ccm.egress_asset).gas_asset(), gas_amount),
+					(ForeignChain::from(ccm.egress_asset).gas_asset(), ccm_output_gas),
 				);
 
 				// Schedule the given ccm to be egressed and deposit a event.
 				let egress_id = T::EgressHandler::schedule_egress(
 					ccm.egress_asset,
-					asset_amount,
+					ccm_output_principal,
 					ccm.egress_address.clone(),
 					Some(ccm.message_metadata.clone()),
 				);
@@ -611,7 +571,7 @@ pub mod pallet {
 				ingress_asset,
 				egress_asset,
 				asset_swap_amount,
-				SwapType::Ccm(ccm_id),
+				SwapType::CcmPrincipal(ccm_id),
 			);
 
 			// Schedule the gas to be swapped.
@@ -622,20 +582,27 @@ pub mod pallet {
 				ingress_asset,
 				output_gas_asset,
 				message_metadata.gas_budget,
-				SwapType::Ccm(ccm_id),
+				SwapType::CcmGas(ccm_id),
 			);
 
 			PendingCcms::<T>::insert(
 				ccm_id,
-				CcmWithSwapStatus {
+				CcmSwap {
 					ingress_asset,
 					ingress_amount,
 					egress_asset,
 					egress_address,
 					message_metadata,
-					swap_status: CcmSwapStatus::new(asset_swap_id, gas_swap_id),
 				},
 			);
+
+			Self::deposit_event(Event::<T>::CcmIngressReceived {
+				ccm_id,
+				asset_swap_id,
+				gas_swap_id,
+				ingress_amount,
+				egress_address,
+			});
 
 			Ok(())
 		}

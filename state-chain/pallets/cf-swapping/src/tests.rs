@@ -1,5 +1,5 @@
 use crate::{
-	mock::*, CcmGasBudget, CcmSwapStatus, CcmWithSwapStatus, EarnedRelayerFees, Error, Pallet,
+	mock::*, CcmGasBudget, CcmSwapOutput, CcmWithSwapStatus, EarnedRelayerFees, Error, Pallet,
 	PendingCcms, Swap, SwapQueue, SwapType, WeightInfo,
 };
 use cf_chains::{address::ForeignChainAddress, AnyChain, CcmIngressMetadata};
@@ -300,7 +300,7 @@ fn can_process_ccms_via_swap_intent() {
 				egress_asset: Asset::Eth,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
-				swap_status: CcmSwapStatus::new(1, 2)
+				swap_status: CcmSwapOutput::new(1, 2)
 			})
 		);
 
@@ -381,7 +381,7 @@ fn can_process_ccms_via_extrinsic() {
 				egress_asset: Asset::Usdc,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
-				swap_status: CcmSwapStatus::new(1, 2)
+				swap_status: CcmSwapOutput::new(1, 2)
 			})
 		);
 
