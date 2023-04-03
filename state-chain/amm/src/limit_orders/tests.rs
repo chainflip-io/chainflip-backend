@@ -1,5 +1,5 @@
 use crate::{
-	common::{mul_div, sqrt_price_at_tick, tick_at_sqrt_price, Side, MAX_TICK, MIN_TICK},
+	common::{mul_div, sqrt_price_at_tick, tick_at_sqrt_price, MAX_TICK, MIN_TICK},
 	limit_orders, range_orders,
 };
 
