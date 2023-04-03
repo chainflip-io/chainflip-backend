@@ -947,6 +947,12 @@ mod key_handover {
 		let sharing_participants: BTreeSet<AccountId> =
 			original_set.clone().into_iter().skip(1).collect();
 
+		// Sanity check: we have (just) enough participants to re-share the key
+		assert_eq!(
+			key_infos.values().next().as_ref().unwrap().params.threshold + 1,
+			sharing_participants.len() as u32
+		);
+
 		let receiving_participants: BTreeSet<AccountId> = new_set.clone().into_iter().collect();
 		// Accounts (2), (3), (4) and (5) will participate, with (2) and (3)
 		// re-sharing their key to (3), (4) and (5)
@@ -1036,6 +1042,12 @@ mod key_handover {
 		// Only 2 and 3 will contribute their secret shares
 		let sharing_participants: BTreeSet<AccountId> =
 			original_set.clone().into_iter().skip(1).collect();
+
+		// Sanity check: we have (just) enough participants to re-share the key
+		assert_eq!(
+			key_infos.values().next().as_ref().unwrap().params.threshold + 1,
+			sharing_participants.len() as u32
+		);
 
 		let receiving_participants: BTreeSet<AccountId> = new_set.clone().into_iter().collect();
 		// Accounts (2), (3), (4) and (5) will participate, with (2) and (3)
