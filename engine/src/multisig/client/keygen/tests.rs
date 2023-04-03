@@ -13,7 +13,7 @@ use crate::multisig::{
 		keygen::{self, Complaints6, VerifyComplaints7, VerifyHashComm2},
 		utils::PartyIdxMapping,
 	},
-	crypto::Rng,
+	crypto::{bitcoin::BtcSigning, ECPoint, Rng},
 	eth::EthSigning,
 	CryptoScheme,
 };
@@ -25,6 +25,7 @@ type SecretShare5 = keygen::SecretShare5<Point>;
 type BlameResponse8 = keygen::BlameResponse8<Point>;
 type VerifyBlameResponses9 = keygen::VerifyBlameResponses9<Point>;
 type KeygenData = keygen::KeygenData<Point>;
+pub type KeygenCeremonyRunnerEth = KeygenCeremonyRunner<EthSigning>;
 
 /// If all nodes are honest and behave as expected we should
 /// generate a key without entering a blaming stage
@@ -38,7 +39,7 @@ async fn happy_path_results_in_valid_key() {
 /// share, so the ceremony should be successful in the end
 #[tokio::test]
 async fn should_enter_blaming_stage_on_invalid_secret_shares() {
-	let mut ceremony = KeygenCeremonyRunner::new_with_default();
+	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let messages = ceremony.request().await;
 
@@ -73,7 +74,7 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
 
 #[tokio::test]
 async fn should_enter_blaming_stage_on_timeout_secret_shares() {
-	let mut ceremony = KeygenCeremonyRunner::new_with_default();
+	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let messages = ceremony.request().await;
 
@@ -109,7 +110,7 @@ async fn should_enter_blaming_stage_on_timeout_secret_shares() {
 /// parties reported
 #[tokio::test]
 async fn should_report_on_invalid_blame_response6() {
-	let mut ceremony = KeygenCeremonyRunner::new_with_default();
+	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 	let party_idx_mapping =
 		PartyIdxMapping::from_participants(BTreeSet::from_iter(ceremony.nodes.keys().cloned()));
 	let [bad_node_id_1, bad_node_id_2, target_node_id] = ceremony.select_account_ids();
@@ -160,7 +161,7 @@ async fn should_report_on_invalid_blame_response6() {
 /// get reported.
 #[tokio::test]
 async fn should_report_on_incomplete_blame_response() {
-	let mut ceremony = KeygenCeremonyRunner::new_with_default();
+	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let [bad_node_id_1, target_node_id] = ceremony.select_account_ids();
 
@@ -199,7 +200,7 @@ async fn should_report_on_incomplete_blame_response() {
 // Fail on `verify_broadcasts` during `VerifyCommitmentsBroadcast2`
 #[tokio::test]
 async fn should_report_on_inconsistent_broadcast_comm1() {
-	let mut ceremony = KeygenCeremonyRunner::new_with_default();
+	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let messages = ceremony.request().await;
 	let mut messages = run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
@@ -229,7 +230,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
 
 #[tokio::test]
 async fn should_report_on_inconsistent_broadcast_hash_comm1a() {
-	let mut ceremony = KeygenCeremonyRunner::new_with_default();
+	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let mut messages = ceremony.request().await;
 
@@ -261,7 +262,7 @@ async fn should_report_on_inconsistent_broadcast_hash_comm1a() {
 // those parties reported.
 #[tokio::test]
 async fn should_report_on_invalid_hash_comm1a() {
-	let mut ceremony = KeygenCeremonyRunner::new_with_default();
+	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let messages = ceremony.request().await;
 	let mut messages = run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
@@ -291,7 +292,7 @@ async fn should_report_on_invalid_hash_comm1a() {
 
 #[tokio::test]
 async fn should_report_on_inconsistent_broadcast_complaints4() {
-	let mut ceremony = KeygenCeremonyRunner::new_with_default();
+	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let messages = ceremony.request().await;
 
@@ -331,7 +332,7 @@ async fn should_report_on_inconsistent_broadcast_complaints4() {
 
 #[tokio::test]
 async fn should_report_on_inconsistent_broadcast_blame_responses6() {
-	let mut ceremony = KeygenCeremonyRunner::new_with_default();
+	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let party_idx_mapping =
 		PartyIdxMapping::from_participants(BTreeSet::from_iter(ceremony.nodes.keys().cloned()));
@@ -392,7 +393,7 @@ async fn should_report_on_inconsistent_broadcast_blame_responses6() {
 // Fail on `validate_commitments` during `VerifyCommitmentsBroadcast2`.
 #[tokio::test]
 async fn should_report_on_invalid_comm1() {
-	let mut ceremony = KeygenCeremonyRunner::new_with_default();
+	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let messages = ceremony.request().await;
 	let mut messages = run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
@@ -422,7 +423,7 @@ async fn should_report_on_invalid_comm1() {
 
 #[tokio::test]
 async fn should_report_on_invalid_complaints4() {
-	let mut ceremony = KeygenCeremonyRunner::new_with_default();
+	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let messages = ceremony.request().await;
 
@@ -456,15 +457,13 @@ mod timeout {
 
 	use super::*;
 
-	use crate::multisig::client::helpers::KeygenCeremonyRunner;
-
 	mod during_regular_stage {
 
 		use super::*;
 
 		#[tokio::test]
 		async fn should_recover_if_party_appears_offline_to_minority_stage1a() {
-			let mut ceremony = KeygenCeremonyRunner::new_with_default();
+			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 			let mut messages = ceremony.request().await;
 
@@ -494,7 +493,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_party_appears_offline_to_minority_stage1() {
-			let mut ceremony = KeygenCeremonyRunner::new_with_default();
+			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 			let messages = ceremony.request().await;
 
@@ -520,7 +519,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_party_appears_offline_to_minority_stage4() {
-			let mut ceremony = KeygenCeremonyRunner::new_with_default();
+			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 			let messages = ceremony.request().await;
 
@@ -552,7 +551,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_party_appears_offline_to_minority_stage6() {
-			let mut ceremony = KeygenCeremonyRunner::new_with_default();
+			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 			let messages = ceremony.request().await;
 
@@ -599,7 +598,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_agree_on_values_stage2a() {
-			let mut ceremony = KeygenCeremonyRunner::new_with_default();
+			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 			let messages = ceremony.request().await;
 
@@ -625,7 +624,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_agree_on_values_stage2() {
-			let mut ceremony = KeygenCeremonyRunner::new_with_default();
+			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 			let messages = ceremony.request().await;
 
@@ -645,7 +644,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_agree_on_values_stage5() {
-			let mut ceremony = KeygenCeremonyRunner::new_with_default();
+			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 			let messages = ceremony.request().await;
 
@@ -668,7 +667,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_recover_if_agree_on_values_stage7() {
-			let mut ceremony = KeygenCeremonyRunner::new_with_default();
+			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 			let messages = ceremony.request().await;
 
@@ -706,7 +705,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_report_if_insufficient_messages_stage2a() {
-			let mut ceremony = KeygenCeremonyRunner::new_with_default();
+			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 			let messages = ceremony.request().await;
 
@@ -738,7 +737,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_report_if_insufficient_messages_stage2() {
-			let mut ceremony = KeygenCeremonyRunner::new_with_default();
+			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 			let messages = ceremony.request().await;
 
@@ -772,7 +771,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_report_if_insufficient_messages_stage5() {
-			let mut ceremony = KeygenCeremonyRunner::new_with_default();
+			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 			let messages = ceremony.request().await;
 
@@ -814,7 +813,7 @@ mod timeout {
 
 		#[tokio::test]
 		async fn should_report_if_insufficient_messages_stage7() {
-			let mut ceremony = KeygenCeremonyRunner::new_with_default();
+			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 			let messages = ceremony.request().await;
 
@@ -920,6 +919,10 @@ async fn key_handover() {
 	// There is an overlap between the two sets of nodes, which is going
 	// to be common in practice. The resulting aggregate keys should match.
 
+	type Scheme = BtcSigning;
+	type Point = <Scheme as CryptoScheme>::Point;
+	type Scalar = <Point as ECPoint>::Scalar;
+
 	let all_account_ids: Vec<AccountId> =
 		[1, 2, 3, 4, 5].iter().map(|i| AccountId::new([*i; 32])).collect();
 
@@ -931,7 +934,7 @@ async fn key_handover() {
 	let new_set: BTreeSet<_> = all_account_ids.iter().skip(2).take(3).cloned().collect();
 
 	// Perform a regular keygen to generate initial keys:
-	let (initial_key, mut key_infos) = keygen::generate_key_data::<EthSigning>(
+	let (initial_key, mut key_infos) = keygen::generate_key_data::<Scheme>(
 		original_set.clone().into_iter().collect(),
 		&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
 	);
@@ -946,7 +949,7 @@ async fn key_handover() {
 	let all_participants: BTreeSet<_> =
 		sharing_participants.union(&receiving_participants).cloned().collect();
 
-	let mut ceremony = KeygenCeremonyRunner::new(
+	let mut ceremony = KeygenCeremonyRunner::<Scheme>::new(
 		new_nodes(all_participants),
 		DEFAULT_KEYGEN_CEREMONY_ID,
 		Rng::from_seed(DEFAULT_KEYGEN_SEED),
@@ -990,12 +993,12 @@ async fn key_handover() {
 	assert_eq!(new_key, initial_key);
 
 	// Ensure that the new key shares can be used for signing:
-	let mut signing_ceremony = SigningCeremonyRunner::<EthSigning>::new_with_all_signers(
+	let mut signing_ceremony = SigningCeremonyRunner::<Scheme>::new_with_all_signers(
 		new_nodes(receiving_participants),
 		DEFAULT_SIGNING_CEREMONY_ID,
 		new_key,
 		new_shares,
-		vec![EthSigning::signing_payload_for_test()],
+		vec![Scheme::signing_payload_for_test()],
 		Rng::from_entropy(),
 	);
 	standard_signing(&mut signing_ceremony).await;
@@ -1005,7 +1008,10 @@ async fn key_handover() {
 // (commits to an unexpected secret) gets reported
 #[tokio::test]
 async fn key_handover_with_incorrect_commitment() {
-	use crate::multisig::{client::common::ParticipantStatus, eth::Scalar};
+	use crate::multisig::client::common::ParticipantStatus;
+	type Scheme = BtcSigning;
+	type Point = <Scheme as CryptoScheme>::Point;
+	type Scalar = <Point as ECPoint>::Scalar;
 
 	let all_account_ids: Vec<AccountId> =
 		[1, 2, 3, 4, 5].iter().map(|i| AccountId::new([*i; 32])).collect();
@@ -1018,7 +1024,7 @@ async fn key_handover_with_incorrect_commitment() {
 	let new_set: BTreeSet<_> = all_account_ids.iter().skip(2).take(3).cloned().collect();
 
 	// Perform a regular keygen to generate initial keys:
-	let (_initial_key, mut key_infos) = keygen::generate_key_data::<EthSigning>(
+	let (_initial_key, mut key_infos) = keygen::generate_key_data::<Scheme>(
 		original_set.clone().into_iter().collect(),
 		&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
 	);
@@ -1039,7 +1045,7 @@ async fn key_handover_with_incorrect_commitment() {
 	// This account id will commit to an unexpected secret
 	let bad_account_id = all_participants.iter().next().unwrap().clone();
 
-	let mut ceremony = KeygenCeremonyRunner::new(
+	let mut ceremony = KeygenCeremonyRunner::<Scheme>::new(
 		new_nodes(all_participants),
 		DEFAULT_KEYGEN_CEREMONY_ID,
 		Rng::from_seed(DEFAULT_KEYGEN_SEED),

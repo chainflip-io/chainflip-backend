@@ -179,11 +179,11 @@ impl<C: CryptoScheme> Node<SigningCeremony<C>> {
 	}
 }
 
-impl Node<KeygenCeremonyEth> {
+impl<C: CryptoScheme> Node<KeygenCeremony<C>> {
 	pub async fn request_key_handover(
 		&mut self,
 		keygen_ceremony_details: KeygenCeremonyDetails,
-		resharing_context: ResharingContext<EthSigning>,
+		resharing_context: ResharingContext<C>,
 	) {
 		let KeygenCeremonyDetails { ceremony_id, rng, participants } = keygen_ceremony_details;
 
@@ -210,11 +210,11 @@ impl Node<KeygenCeremonyEth> {
 	pub async fn request_keygen(
 		&mut self,
 		keygen_ceremony_details: KeygenCeremonyDetails,
-		resharing_context: Option<ResharingContext<EthSigning>>,
+		resharing_context: Option<ResharingContext<C>>,
 	) {
 		let KeygenCeremonyDetails { ceremony_id, rng, participants } = keygen_ceremony_details;
 
-		let request = prepare_keygen_request::<EthSigning>(
+		let request = prepare_keygen_request::<C>(
 			ceremony_id,
 			&self.own_account_id,
 			participants,
@@ -597,11 +597,11 @@ use super::{
 	signing::Comm1,
 };
 
-pub type KeygenCeremonyRunner = CeremonyTestRunner<(), KeygenCeremony<EthSigning>>;
+pub type KeygenCeremonyRunner<C> = CeremonyTestRunner<(), KeygenCeremony<C>>;
 
 #[async_trait]
-impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
-	type CeremonyType = KeygenCeremony<EthSigning>;
+impl<C: CryptoScheme> CeremonyRunnerStrategy for KeygenCeremonyRunner<C> {
+	type CeremonyType = KeygenCeremony<C>;
 	type CheckedOutput =
 		(PublicKeyBytes, HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>);
 	type InitialStageData = keygen::HashComm1;
@@ -611,11 +611,11 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
 		outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
 	) -> Self::CheckedOutput {
 		let (_, public_key) = all_same(outputs.values().map(|keygen_result_info| {
-			(keygen_result_info.params, keygen_result_info.key.get_public_key().get_element())
+			(keygen_result_info.params, keygen_result_info.key.get_public_key())
 		}))
 		.expect("Generated keys don't match");
 
-		(public_key.serialize().into(), outputs)
+		(C::agg_key(&public_key).into(), outputs)
 	}
 
 	async fn request_ceremony(&mut self, node_id: &AccountId) {
@@ -628,9 +628,9 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
 			.await;
 	}
 }
-impl KeygenCeremonyRunner {
+impl<C: CryptoScheme> KeygenCeremonyRunner<C> {
 	pub fn new(
-		nodes: HashMap<AccountId, Node<KeygenCeremonyEth>>,
+		nodes: HashMap<AccountId, Node<KeygenCeremony<C>>>,
 		ceremony_id: CeremonyId,
 		rng: Rng,
 	) -> Self {
@@ -799,8 +799,11 @@ pub async fn run_keygen(
 	nodes: HashMap<AccountId, Node<KeygenCeremonyEth>>,
 	ceremony_id: CeremonyId,
 ) -> (PublicKeyBytes, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
-	let mut keygen_ceremony =
-		KeygenCeremonyRunner::new(nodes, ceremony_id, Rng::from_seed(DEFAULT_KEYGEN_SEED));
+	let mut keygen_ceremony = KeygenCeremonyRunner::<EthSigning>::new(
+		nodes,
+		ceremony_id,
+		Rng::from_seed(DEFAULT_KEYGEN_SEED),
+	);
 	let stage_1_messages = keygen_ceremony.request().await;
 	let messages = run_stages!(
 		keygen_ceremony,
