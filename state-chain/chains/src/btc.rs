@@ -215,12 +215,12 @@ pub struct UtxoId {
 impl IngressIdConstructor for BitcoinFetchId {
 	type Address = BitcoinAddressData;
 
-	fn deployed(_intent_id: u64, _address: Self::Address) -> Self {
-		todo!()
+	fn deployed(intent_id: u64, _address: Self::Address) -> Self {
+		BitcoinFetchId(intent_id)
 	}
 
-	fn undeployed(_intent_id: u64, _address: Self::Address) -> Self {
-		todo!()
+	fn undeployed(intent_id: u64, _address: Self::Address) -> Self {
+		BitcoinFetchId(intent_id)
 	}
 }
 
