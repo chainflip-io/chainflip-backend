@@ -1,4 +1,4 @@
-name: Release production packages
+name: Release production packages - Repository Dispatch
 on:
   workflow_dispatch:
     inputs:
