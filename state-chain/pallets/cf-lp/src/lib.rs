@@ -83,7 +83,7 @@ pub mod pallet {
 			for (intent_id, chain) in expired.clone() {
 				T::IngressHandler::expire_intent(chain, intent_id);
 			}
-			T::DbWeight::get().reads(expired.len() as u64)
+			T::WeightInfo::on_initialize(expired.len() as u32)
 		}
 	}
 

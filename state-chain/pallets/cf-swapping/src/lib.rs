@@ -231,7 +231,7 @@ pub mod pallet {
 				T::IngressHandler::expire_intent(chain, intent_id);
 				Self::deposit_event(Event::<T>::SwapExpired { intent_id });
 			}
-			T::DbWeight::get().reads(expired.len() as u64)
+			T::WeightInfo::on_initialize(expired.len() as u32)
 		}
 	}
 
