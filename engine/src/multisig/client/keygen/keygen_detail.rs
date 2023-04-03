@@ -139,7 +139,9 @@ pub struct IndexPair {
 }
 
 pub struct SharingParameters {
+	// The indexes of the parties that will receive new shares
 	pub indexes_to_share_at: BTreeSet<IndexPair>,
+	// Parameters for the new aggregate key (after resharing)
 	pub key_params: ThresholdParameters,
 }
 
