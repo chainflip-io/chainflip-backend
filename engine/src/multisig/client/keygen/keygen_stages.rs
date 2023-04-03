@@ -464,6 +464,17 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 				),
 		};
 
+		// In the case of key handover, remove data from all non-sharing
+		// parties so we don't accidentally use it
+		let commitments = if let Some(context) = &self.keygen_common.resharing_context {
+			commitments
+				.into_iter()
+				.filter(|(idx, _)| context.sharing_participants.contains(idx))
+				.collect()
+		} else {
+			commitments
+		};
+
 		let commitments = match validate_commitments(
 			commitments,
 			self.hash_commitments,

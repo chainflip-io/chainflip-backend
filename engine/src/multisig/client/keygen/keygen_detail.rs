@@ -313,17 +313,6 @@ pub fn validate_commitments<C: CryptoScheme>(
 	BTreeMap<AuthorityCount, DKGCommitment<C::Point>>,
 	(BTreeSet<AuthorityCount>, KeygenFailureReason),
 > {
-	// In the case of key handover, remove data from all non-sharing
-	// parties so we don't accidentally use it
-	let public_coefficients = if let Some(context) = &resharing_context {
-		public_coefficients
-			.into_iter()
-			.filter(|(idx, _)| context.sharing_participants.contains(idx))
-			.collect()
-	} else {
-		public_coefficients
-	};
-
 	let invalid_idxs: BTreeSet<_> = public_coefficients
 		.iter()
 		.filter_map(|(idx, c)| {
