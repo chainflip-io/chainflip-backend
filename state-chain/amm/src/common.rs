@@ -16,7 +16,7 @@ pub enum Side {
 	One,
 }
 
-impl std::ops::Not for Side {
+impl core::ops::Not for Side {
 	type Output = Self;
 
 	fn not(self) -> Self::Output {
@@ -42,7 +42,7 @@ impl<T> SideMap<T> {
 		SideMap { zero: f(Side::Zero, self.zero), one: f(Side::One, self.one) }
 	}
 }
-impl<T> std::ops::Index<Side> for SideMap<T> {
+impl<T> core::ops::Index<Side> for SideMap<T> {
 	type Output = T;
 	fn index(&self, side: Side) -> &T {
 		match side {
@@ -51,7 +51,7 @@ impl<T> std::ops::Index<Side> for SideMap<T> {
 		}
 	}
 }
-impl<T> std::ops::IndexMut<Side> for SideMap<T> {
+impl<T> core::ops::IndexMut<Side> for SideMap<T> {
 	fn index_mut(&mut self, side: Side) -> &mut T {
 		match side {
 			Side::Zero => &mut self.zero,

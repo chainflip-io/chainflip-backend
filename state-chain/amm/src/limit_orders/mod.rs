@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests;
 
-use std::collections::BTreeMap;
+use sp_std::collections::btree_map::BTreeMap;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use primitive_types::{U256, U512};
@@ -35,7 +35,7 @@ struct FloatBetweenZeroAndOne {
 	negative_exponent: U256,
 }
 impl Ord for FloatBetweenZeroAndOne {
-	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+	fn cmp(&self, other: &Self) -> core::cmp::Ordering {
 		other
 			.negative_exponent
 			.cmp(&self.negative_exponent)
@@ -43,7 +43,7 @@ impl Ord for FloatBetweenZeroAndOne {
 	}
 }
 impl PartialOrd for FloatBetweenZeroAndOne {
-	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+	fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
 		Some(self.cmp(other))
 	}
 }
@@ -154,7 +154,7 @@ pub trait SwapDirection: crate::common::SwapDirection {
 	/// Gets entry for best prices pool
 	fn best_priced_fixed_pool(
 		pools: &'_ mut BTreeMap<SqrtPriceQ64F96, FixedPool>,
-	) -> Option<std::collections::btree_map::OccupiedEntry<'_, SqrtPriceQ64F96, FixedPool>>;
+	) -> Option<sp_std::collections::btree_map::OccupiedEntry<'_, SqrtPriceQ64F96, FixedPool>>;
 }
 impl SwapDirection for ZeroToOne {
 	fn input_amount_ceil(output: Amount, price: Price) -> Amount {
@@ -171,7 +171,7 @@ impl SwapDirection for ZeroToOne {
 
 	fn best_priced_fixed_pool(
 		pools: &'_ mut BTreeMap<SqrtPriceQ64F96, FixedPool>,
-	) -> Option<std::collections::btree_map::OccupiedEntry<'_, SqrtPriceQ64F96, FixedPool>> {
+	) -> Option<sp_std::collections::btree_map::OccupiedEntry<'_, SqrtPriceQ64F96, FixedPool>> {
 		pools.last_entry()
 	}
 }
@@ -190,7 +190,7 @@ impl SwapDirection for OneToZero {
 
 	fn best_priced_fixed_pool(
 		pools: &'_ mut BTreeMap<SqrtPriceQ64F96, FixedPool>,
-	) -> Option<std::collections::btree_map::OccupiedEntry<'_, SqrtPriceQ64F96, FixedPool>> {
+	) -> Option<sp_std::collections::btree_map::OccupiedEntry<'_, SqrtPriceQ64F96, FixedPool>> {
 		pools.first_entry()
 	}
 }
@@ -305,7 +305,7 @@ impl PoolState {
 			self.positions[!<OneToZero as crate::common::SwapDirection>::INPUT_SIDE]
 				.keys()
 				.cloned()
-				.collect::<Vec<_>>()
+				.collect::<sp_std::vec::Vec<_>>()
 				.into_iter()
 				.map(|(sqrt_price, lp)| {
 					(
@@ -317,7 +317,7 @@ impl PoolState {
 			self.positions[!<ZeroToOne as crate::common::SwapDirection>::INPUT_SIDE]
 				.keys()
 				.cloned()
-				.collect::<Vec<_>>()
+				.collect::<sp_std::vec::Vec<_>>()
 				.into_iter()
 				.map(|(sqrt_price, lp)| {
 					(

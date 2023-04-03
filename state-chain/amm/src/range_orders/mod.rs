@@ -22,7 +22,7 @@
 #[cfg(test)]
 mod tests;
 
-use std::{collections::BTreeMap, convert::Infallible, u128};
+use sp_std::{collections::btree_map::BTreeMap, convert::Infallible};
 
 use cf_utilities::assert_ok;
 use codec::{Decode, Encode, MaxEncodedLen};
