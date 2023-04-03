@@ -185,10 +185,11 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 				)
 			}
 
-			let processor = HashCommitments1::new(
+			let processor = HashCommitments1::new(KeygenCommon::new(
 				self.common.clone(),
-				KeygenCommon::new(&self.common, self.keygen_context, Some(resharing_context)),
-			);
+				self.keygen_context,
+				Some(resharing_context),
+			));
 
 			let stage = BroadcastStage::new(processor, self.common);
 
@@ -210,6 +211,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 	}
 }
 pub struct KeygenCommon<Crypto: CryptoScheme> {
+	common: CeremonyCommon,
 	/// Context to prevent replay attacks
 	keygen_context: HashContext,
 	resharing_context: Option<ResharingContext<Crypto>>,
@@ -218,7 +220,7 @@ pub struct KeygenCommon<Crypto: CryptoScheme> {
 
 impl<Crypto: CryptoScheme> KeygenCommon<Crypto> {
 	pub fn new(
-		common: &CeremonyCommon,
+		common: CeremonyCommon,
 		keygen_context: HashContext,
 		resharing_context: Option<ResharingContext<Crypto>>,
 	) -> Self {
@@ -240,12 +242,11 @@ impl<Crypto: CryptoScheme> KeygenCommon<Crypto> {
 			SharingParameters::for_keygen(new_key_params)
 		};
 
-		KeygenCommon { keygen_context, resharing_context, sharing_params }
+		KeygenCommon { common, keygen_context, resharing_context, sharing_params }
 	}
 }
 
 pub struct HashCommitments1<Crypto: CryptoScheme> {
-	common: CeremonyCommon,
 	keygen_common: KeygenCommon<Crypto>,
 	own_commitment: DKGUnverifiedCommitment<Crypto::Point>,
 	hash_commitment: H256,
@@ -255,7 +256,7 @@ pub struct HashCommitments1<Crypto: CryptoScheme> {
 derive_display_as_type_name!(HashCommitments1<Crypto: CryptoScheme>);
 
 impl<Crypto: CryptoScheme> HashCommitments1<Crypto> {
-	pub fn new(mut common: CeremonyCommon, keygen_common: KeygenCommon<Crypto>) -> Self {
+	pub fn new(mut keygen_common: KeygenCommon<Crypto>) -> Self {
 		// Generate the secret polynomial and commit to it by hashing all public coefficients
 
 		let zero_scalar = ECScalar::zero();
@@ -270,6 +271,8 @@ impl<Crypto: CryptoScheme> HashCommitments1<Crypto> {
 					ParticipantStatus::NonSharingReceivedKeys(_) => &zero_scalar,
 				});
 
+		let common = &mut keygen_common.common;
+
 		let (shares, own_commitment) = generate_shares_and_commitment(
 			&mut common.rng,
 			&keygen_common.keygen_context,
@@ -280,7 +283,7 @@ impl<Crypto: CryptoScheme> HashCommitments1<Crypto> {
 
 		let hash_commitment = generate_hash_commitment(&own_commitment);
 
-		HashCommitments1 { common, keygen_common, own_commitment, hash_commitment, shares }
+		HashCommitments1 { keygen_common, own_commitment, hash_commitment, shares }
 	}
 }
 
@@ -301,22 +304,21 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> StageResult<KeygenCeremony<Crypto>> {
 		// Prepare for broadcast verification
+		let common = self.keygen_common.common.clone();
 		let processor = VerifyHashCommitmentsBroadcast2 {
-			common: self.common.clone(),
 			keygen_common: self.keygen_common,
 			own_commitment: self.own_commitment,
 			hash_commitments: messages,
 			shares_to_send: self.shares,
 		};
 
-		let stage = BroadcastStage::new(processor, self.common);
+		let stage = BroadcastStage::new(processor, common);
 
 		StageResult::NextStage(Box::new(stage))
 	}
 }
 
 pub struct VerifyHashCommitmentsBroadcast2<Crypto: CryptoScheme> {
-	common: CeremonyCommon,
 	keygen_common: KeygenCommon<Crypto>,
 	own_commitment: DKGUnverifiedCommitment<Crypto::Point>,
 	hash_commitments: BTreeMap<AuthorityCount, Option<HashComm1>>,
@@ -326,13 +328,12 @@ pub struct VerifyHashCommitmentsBroadcast2<Crypto: CryptoScheme> {
 #[cfg(test)]
 impl<Crypto: CryptoScheme> VerifyHashCommitmentsBroadcast2<Crypto> {
 	pub fn new(
-		common: CeremonyCommon,
 		keygen_common: KeygenCommon<Crypto>,
 		own_commitment: DKGUnverifiedCommitment<Crypto::Point>,
 		hash_commitments: BTreeMap<AuthorityCount, Option<HashComm1>>,
 		shares_to_send: OutgoingShares<Crypto::Point>,
 	) -> Self {
-		Self { common, keygen_common, own_commitment, hash_commitments, shares_to_send }
+		Self { keygen_common, own_commitment, hash_commitments, shares_to_send }
 	}
 }
 
@@ -369,15 +370,15 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		// Just saving hash commitments for now. We will use them
 		// once the parties reveal their public coefficients (next two stages)
 
+		let common = self.keygen_common.common.clone();
 		let processor = CoefficientCommitments3 {
-			common: self.common.clone(),
 			keygen_common: self.keygen_common,
 			hash_commitments,
 			own_commitment: self.own_commitment,
 			shares: self.shares_to_send,
 		};
 
-		let stage = BroadcastStage::new(processor, self.common);
+		let stage = BroadcastStage::new(processor, common);
 
 		StageResult::NextStage(Box::new(stage))
 	}
@@ -386,7 +387,6 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 /// Stage 3: Sample a secret, generate sharing polynomial coefficients for it
 /// and a ZKP of the secret. Broadcast commitments to the coefficients and the ZKP.
 pub struct CoefficientCommitments3<C: CryptoScheme> {
-	common: CeremonyCommon,
 	keygen_common: KeygenCommon<C>,
 	hash_commitments: BTreeMap<AuthorityCount, HashComm1>,
 	own_commitment: DKGUnverifiedCommitment<C::Point>,
@@ -413,16 +413,15 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 	) -> KeygenStageResult<Crypto> {
 		// We have received commitments from everyone, for now just need to
 		// go through another round to verify consistent broadcasts
-
+		let common = self.keygen_common.common.clone();
 		let processor = VerifyCommitmentsBroadcast4 {
-			common: self.common.clone(),
 			keygen_common: self.keygen_common,
 			hash_commitments: self.hash_commitments,
 			commitments: messages,
 			shares_to_send: self.shares,
 		};
 
-		let stage = BroadcastStage::new(processor, self.common);
+		let stage = BroadcastStage::new(processor, common);
 
 		StageResult::NextStage(Box::new(stage))
 	}
@@ -430,7 +429,6 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 
 /// Stage 4: verify broadcasts of Stage 3 data
 struct VerifyCommitmentsBroadcast4<Crypto: CryptoScheme> {
-	common: CeremonyCommon,
 	keygen_common: KeygenCommon<Crypto>,
 	hash_commitments: BTreeMap<AuthorityCount, HashComm1>,
 	commitments: BTreeMap<AuthorityCount, Option<CoeffComm3<Crypto::Point>>>,
@@ -465,9 +463,11 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 				),
 		};
 
+		let KeygenCommon { common, resharing_context, keygen_context, .. } = &self.keygen_common;
+
 		// In the case of key handover, remove data from all non-sharing
 		// parties so we don't accidentally use it
-		let commitments = if let Some(context) = &self.keygen_common.resharing_context {
+		let commitments = if let Some(context) = resharing_context {
 			commitments
 				.into_iter()
 				.filter(|(idx, _)| context.sharing_participants.contains(idx))
@@ -479,9 +479,9 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		let commitments = match validate_commitments(
 			commitments,
 			self.hash_commitments,
-			self.keygen_common.resharing_context.as_ref(),
-			&self.keygen_common.keygen_context,
-			self.common.validator_mapping.clone(),
+			resharing_context.as_ref(),
+			keygen_context,
+			common.validator_mapping.clone(),
 		) {
 			Ok(comms) => comms,
 			Err((blamed_parties, reason)) => return StageResult::Error(blamed_parties, reason),
@@ -493,15 +493,15 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		// used to derive the resulting aggregate public key.
 
 		let agg_pubkey = derive_aggregate_pubkey::<Crypto>(&commitments);
+		let common = self.keygen_common.common.clone();
 		let processor = SecretSharesStage5 {
-			common: self.common.clone(),
 			keygen_common: self.keygen_common,
 			commitments,
 			shares: self.shares_to_send,
 			agg_pubkey,
 		};
 
-		let stage = BroadcastStage::new(processor, self.common);
+		let stage = BroadcastStage::new(processor, common);
 
 		StageResult::NextStage(Box::new(stage))
 	}
@@ -509,7 +509,6 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 
 /// Stage 5: distribute (distinct) secret shares of our secret to each party
 struct SecretSharesStage5<Crypto: CryptoScheme> {
-	common: CeremonyCommon,
 	keygen_common: KeygenCommon<Crypto>,
 	// commitments (verified to have been broadcast correctly)
 	commitments: BTreeMap<AuthorityCount, DKGCommitment<Crypto::Point>>,
@@ -532,7 +531,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		// Insert dummy shares for parties who should not receive anything
 		// (this makes the reset of the code less complex, as currently all
 		// parties expect messages from all other parties)
-		for idx in &self.common.all_idxs {
+		for idx in &self.keygen_common.common.all_idxs {
 			self.shares.0.entry(*idx).or_insert_with(|| {
 				use crate::multisig::crypto::ECScalar;
 				ShamirShare { value: <Crypto::Point as ECPoint>::Scalar::zero() }
@@ -551,10 +550,10 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		// at all) without us being able to prove that. Because of that, we
 		// can't simply terminate our protocol here.
 
-		let resharing_context = &self.keygen_common.resharing_context;
+		let KeygenCommon { common, resharing_context, .. } = &self.keygen_common;
 
 		let should_process_shares = if let Some(context) = resharing_context {
-			context.receiving_participants.contains(&self.common.own_idx)
+			context.receiving_participants.contains(&common.own_idx)
 		} else {
 			true
 		};
@@ -563,10 +562,10 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		let verified_shares = if should_process_shares {
 			// Index at which we should evaluate sharing polynomial
 			let evaluation_index = if let Some(context) = resharing_context {
-				let own_id = self.common.validator_mapping.get_id(self.common.own_idx);
+				let own_id = common.validator_mapping.get_id(common.own_idx);
 				context.future_index_mapping.get_idx(own_id).unwrap()
 			} else {
-				self.common.own_idx
+				common.own_idx
 			};
 
 			incoming_shares
@@ -579,7 +578,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 						}
 
 						// Ignore all shares if we are not the recipient:
-						if !context.receiving_participants.contains(&self.common.own_idx) {
+						if !context.receiving_participants.contains(&common.own_idx) {
 							return None
 						}
 					}
@@ -589,8 +588,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 							Some((sender_idx, share))
 						} else {
 							warn!(
-								from_id =
-									self.common.validator_mapping.get_id(sender_idx).to_string(),
+								from_id = common.validator_mapping.get_id(sender_idx).to_string(),
 								"Received invalid secret share"
 							);
 
@@ -599,7 +597,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 						}
 					} else {
 						warn!(
-							from_id = self.common.validator_mapping.get_id(sender_idx).to_string(),
+							from_id = common.validator_mapping.get_id(sender_idx).to_string(),
 							"Received no secret share",
 						);
 
@@ -612,8 +610,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			Default::default()
 		};
 
+		let common = self.keygen_common.common.clone();
 		let processor = ComplaintsStage6 {
-			common: self.common.clone(),
 			keygen_common: self.keygen_common,
 			commitments: self.commitments,
 			agg_pubkey: self.agg_pubkey,
@@ -621,7 +619,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			outgoing_shares: self.shares,
 			complaints: bad_parties,
 		};
-		let stage = BroadcastStage::new(processor, self.common);
+		let stage = BroadcastStage::new(processor, common);
 
 		StageResult::NextStage(Box::new(stage))
 	}
@@ -631,7 +629,6 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 /// a party sending a secret share that isn't valid when checked
 /// against the commitments
 struct ComplaintsStage6<Crypto: CryptoScheme> {
-	common: CeremonyCommon,
 	keygen_common: KeygenCommon<Crypto>,
 	// commitments (verified to have been broadcast correctly)
 	commitments: BTreeMap<AuthorityCount, DKGCommitment<Crypto::Point>>,
@@ -659,8 +656,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> KeygenStageResult<Crypto> {
+		let common = self.keygen_common.common.clone();
 		let processor = VerifyComplaintsBroadcastStage7 {
-			common: self.common.clone(),
 			keygen_common: self.keygen_common,
 			agg_pubkey: self.agg_pubkey,
 			received_complaints: messages,
@@ -669,14 +666,13 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			outgoing_shares: self.outgoing_shares,
 		};
 
-		let stage = BroadcastStage::new(processor, self.common);
+		let stage = BroadcastStage::new(processor, common);
 
 		StageResult::NextStage(Box::new(stage))
 	}
 }
 
 struct VerifyComplaintsBroadcastStage7<Crypto: CryptoScheme> {
-	common: CeremonyCommon,
 	keygen_common: KeygenCommon<Crypto>,
 	agg_pubkey: ValidAggregateKey<Crypto::Point>,
 	received_complaints: BTreeMap<AuthorityCount, Option<Complaints6>>,
@@ -716,7 +712,6 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		if verified_complaints.iter().all(|(_idx, c)| c.0.is_empty()) {
 			// if all complaints are empty, we can finalize the ceremony
 			return finalize_keygen::<Crypto>(
-				self.common,
 				self.keygen_common,
 				self.agg_pubkey,
 				self.shares,
@@ -727,15 +722,17 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 
 		// Some complaints have been issued, entering the blaming stage
 
+		let common = &self.keygen_common.common;
+
 		let idxs_to_report: BTreeSet<_> = verified_complaints
 			.iter()
 			.filter_map(|(idx_from, Complaints6(blamed_idxs))| {
 				let has_invalid_idxs = !blamed_idxs.iter().all(|idx_blamed| {
-					if self.common.is_idx_valid(*idx_blamed) {
+					if common.is_idx_valid(*idx_blamed) {
 						true
 					} else {
 						warn!(
-							from_id = self.common.validator_mapping.get_id(*idx_from).to_string(),
+							from_id = common.validator_mapping.get_id(*idx_from).to_string(),
 							"Invalid index [{idx_blamed}] in complaint",
 						);
 						false
@@ -751,8 +748,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			.collect();
 
 		if idxs_to_report.is_empty() {
+			let common = self.keygen_common.common.clone();
 			let processor = BlameResponsesStage8 {
-				common: self.common.clone(),
 				keygen_common: self.keygen_common,
 				complaints: verified_complaints,
 				agg_pubkey: self.agg_pubkey,
@@ -761,7 +758,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 				commitments: self.commitments,
 			};
 
-			let stage = BroadcastStage::new(processor, self.common);
+			let stage = BroadcastStage::new(processor, common);
 
 			StageResult::NextStage(Box::new(stage))
 		} else {
@@ -771,7 +768,6 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 }
 
 async fn finalize_keygen<Crypto: CryptoScheme>(
-	common: CeremonyCommon,
 	keygen_common: KeygenCommon<Crypto>,
 	agg_pubkey: ValidAggregateKey<Crypto::Point>,
 	secret_shares: IncomingShares<Crypto::Point>,
@@ -780,7 +776,7 @@ async fn finalize_keygen<Crypto: CryptoScheme>(
 	let future_index_mapping = keygen_common
 		.resharing_context
 		.map(|c| Arc::new(c.future_index_mapping))
-		.unwrap_or_else(|| common.validator_mapping.clone());
+		.unwrap_or_else(|| keygen_common.common.validator_mapping.clone());
 
 	// Making a copy while we still have sharing parameters
 	let key_params = keygen_common.sharing_params.key_params;
@@ -802,7 +798,7 @@ async fn finalize_keygen<Crypto: CryptoScheme>(
 		.map(|(idx, pk)| {
 			(
 				{
-					let id = common.validator_mapping.get_id(idx);
+					let id = keygen_common.common.validator_mapping.get_id(idx);
 					future_index_mapping
 						.get_idx(id)
 						.expect("receiving party must have a future index")
@@ -827,7 +823,6 @@ async fn finalize_keygen<Crypto: CryptoScheme>(
 }
 
 struct BlameResponsesStage8<Crypto: CryptoScheme> {
-	common: CeremonyCommon,
 	keygen_common: KeygenCommon<Crypto>,
 	complaints: BTreeMap<AuthorityCount, Complaints6>,
 	agg_pubkey: ValidAggregateKey<Crypto::Point>,
@@ -846,16 +841,15 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 	const NAME: KeygenStageName = KeygenStageName::BlameResponsesStage8;
 
 	fn init(&mut self) -> DataToSend<Self::Message> {
+		let common = &self.keygen_common.common;
+
 		// Indexes at which to reveal/broadcast secret shares
 		let idxs_to_reveal: Vec<_> = self
 			.complaints
 			.iter()
 			.filter_map(|(idx, complaint)| {
-				if complaint.0.contains(&self.common.own_idx) {
-					warn!(
-						"We are blamed by {}",
-						self.common.validator_mapping.get_id(*idx).to_string()
-					);
+				if complaint.0.contains(&common.own_idx) {
+					warn!("We are blamed by {}", common.validator_mapping.get_id(*idx).to_string());
 
 					Some(*idx)
 				} else {
@@ -871,7 +865,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 				.map(|idx| {
 					debug!(
 						"Revealing share for {}",
-						self.common.validator_mapping.get_id(*idx).to_string()
+						common.validator_mapping.get_id(*idx).to_string()
 					);
 					(*idx, self.outgoing_shares.0[idx].clone())
 				})
@@ -888,8 +882,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		self,
 		blame_responses: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> KeygenStageResult<Crypto> {
+		let common = self.keygen_common.common.clone();
 		let processor = VerifyBlameResponsesBroadcastStage9 {
-			common: self.common.clone(),
 			keygen_common: self.keygen_common,
 			complaints: self.complaints,
 			agg_pubkey: self.agg_pubkey,
@@ -898,14 +892,13 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			commitments: self.commitments,
 		};
 
-		let stage = BroadcastStage::new(processor, self.common);
+		let stage = BroadcastStage::new(processor, common);
 
 		StageResult::NextStage(Box::new(stage))
 	}
 }
 
 struct VerifyBlameResponsesBroadcastStage9<Crypto: CryptoScheme> {
-	common: CeremonyCommon,
 	keygen_common: KeygenCommon<Crypto>,
 	complaints: BTreeMap<AuthorityCount, Complaints6>,
 	agg_pubkey: ValidAggregateKey<Crypto::Point>,
@@ -950,12 +943,13 @@ impl<Crypto: CryptoScheme> VerifyBlameResponsesBroadcastStage9<Crypto> {
 		&self,
 		blame_responses: BTreeMap<AuthorityCount, BlameResponse8<Crypto::Point>>,
 	) -> Result<BTreeMap<AuthorityCount, ShamirShare<Crypto::Point>>, BTreeSet<AuthorityCount>> {
+		let common = &self.keygen_common.common;
 		let (shares_for_us, bad_parties): (Vec<_>, BTreeSet<_>) = blame_responses
 			.iter()
 			.map(|(sender_idx, response)| {
 				if !is_blame_response_complete(*sender_idx, response, &self.complaints) {
 					warn!(
-						from_id = self.common.validator_mapping.get_id(*sender_idx).to_string(),
+						from_id = common.validator_mapping.get_id(*sender_idx).to_string(),
 						"Incomplete blame response",
 					);
 
@@ -966,14 +960,14 @@ impl<Crypto: CryptoScheme> VerifyBlameResponsesBroadcastStage9<Crypto> {
 					verify_share(share, &self.commitments[sender_idx], *dest_idx)
 				}) {
 					warn!(
-						from_id = self.common.validator_mapping.get_id(*sender_idx).to_string(),
+						from_id = common.validator_mapping.get_id(*sender_idx).to_string(),
 						"Invalid secret share in a blame response"
 					);
 
 					return Err(sender_idx)
 				}
 
-				Ok((*sender_idx, response.0.get(&self.common.own_idx)))
+				Ok((*sender_idx, response.0.get(&common.own_idx)))
 			})
 			.partition_result();
 
@@ -1026,14 +1020,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 					self.shares.0.insert(sender_idx, share);
 				}
 
-				finalize_keygen(
-					self.common,
-					self.keygen_common,
-					self.agg_pubkey,
-					self.shares,
-					self.commitments,
-				)
-				.await
+				finalize_keygen(self.keygen_common, self.agg_pubkey, self.shares, self.commitments)
+					.await
 			},
 			Err(bad_parties) =>
 				StageResult::Error(bad_parties, KeygenFailureReason::InvalidBlameResponse),

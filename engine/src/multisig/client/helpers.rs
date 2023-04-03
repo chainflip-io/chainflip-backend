@@ -868,8 +868,7 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 
 	let commitment = gen_invalid_keygen_comm1(&mut rng, account_ids.len() as u32);
 	let processor = VerifyHashCommitmentsBroadcast2::new(
-		common.clone(),
-		KeygenCommon::new(&common, HashContext([0; 32]), None),
+		KeygenCommon::new(common.clone(), HashContext([0; 32]), None),
 		commitment,
 		account_ids.iter().map(|_| (0, None)).collect(),
 		keygen::OutgoingShares(BTreeMap::new()),

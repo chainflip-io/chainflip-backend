@@ -914,6 +914,8 @@ async fn initially_incompatible_keys_can_sign() {
 
 mod key_handover {
 
+	use super::*;
+
 	#[tokio::test]
 	async fn key_handover() {
 		// The high level idea of this test is to generate some key with some
