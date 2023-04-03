@@ -60,14 +60,19 @@ pub trait Chain: Member + Parameter {
 		+ Copy
 		+ Default
 		+ Saturating
-		+ Into<u128>
-		+ From<u128>
+		+ Into<AssetAmount>
 		+ FullCodec
-		+ MaxEncodedLen;
+		+ MaxEncodedLen
+		+ BenchmarkValue;
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
-	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Age<Self> + BenchmarkValue;
+	type TrackedData: Member
+		+ Parameter
+		+ MaxEncodedLen
+		+ Clone
+		+ Age<BlockNumber = Self::ChainBlockNumber>
+		+ BenchmarkValue;
 
 	type ChainAsset: Member
 		+ Parameter
@@ -95,13 +100,17 @@ pub trait Chain: Member + Parameter {
 }
 
 /// Measures the age of items associated with the Chain.
-pub trait Age<C: Chain> {
+pub trait Age {
+	type BlockNumber;
+
 	/// The creation block of this item.
-	fn birth_block(&self) -> C::ChainBlockNumber;
+	fn birth_block(&self) -> Self::BlockNumber;
 }
 
-impl<C: Chain> Age<C> for () {
-	fn birth_block(&self) -> C::ChainBlockNumber {
+impl Age for () {
+	type BlockNumber = u64;
+
+	fn birth_block(&self) -> Self::BlockNumber {
 		unimplemented!()
 	}
 }
@@ -195,16 +204,9 @@ pub struct FetchAssetParams<C: Chain> {
 #[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct TransferAssetParams<C: Chain> {
 	pub asset: <C as Chain>::ChainAsset,
-	pub amount: AssetAmount,
+	pub amount: <C as Chain>::ChainAmount,
 	pub to: <C as Chain>::ChainAccount,
 }
-
-pub trait IngressAddress {
-	type AddressType;
-	/// Returns an ingress address
-	fn derive_address(self, vault_address: Self::AddressType, intent_id: u32) -> Self::AddressType;
-}
-
 /// Similar to [frame_support::StaticLookup] but with the `Key` as a type parameter instead of an
 /// associated type.
 ///

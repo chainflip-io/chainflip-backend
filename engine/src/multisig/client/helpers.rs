@@ -16,7 +16,7 @@ use rand_legacy::{RngCore, SeedableRng};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, debug_span, Instrument};
-use utilities::{assert_ok, success_threshold_from_share_count, threshold_from_share_count};
+use utilities::{assert_ok, success_threshold_from_share_count};
 
 use crate::{
 	common::{all_same, split_at},
@@ -29,7 +29,7 @@ use crate::{
 			ceremony_runner::CeremonyRunner,
 			common::{broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason},
 			keygen::{generate_key_data, HashComm1, HashContext, VerifyHashCommitmentsBroadcast2},
-			signing, KeygenResultInfo, PartyIdxMapping, ThresholdParameters,
+			signing, KeygenResultInfo, PartyIdxMapping,
 		},
 		crypto::{ECPoint, Rng},
 		CryptoScheme,
@@ -117,7 +117,7 @@ pub struct SigningCeremonyDetails<C: CryptoScheme> {
 pub struct KeygenCeremonyDetails {
 	pub rng: Rng,
 	pub ceremony_id: CeremonyId,
-	pub signers: BTreeSet<AccountId>,
+	pub participants: BTreeSet<AccountId>,
 }
 
 impl<C: CeremonyTrait> Node<C> {
@@ -179,20 +179,42 @@ impl<C: CryptoScheme> Node<SigningCeremony<C>> {
 	}
 }
 
-impl Node<KeygenCeremonyEth> {
-	pub async fn request_keygen(
+impl<C: CryptoScheme> Node<KeygenCeremony<C>> {
+	pub async fn request_key_handover(
 		&mut self,
 		keygen_ceremony_details: KeygenCeremonyDetails,
-		resharing_context: Option<ResharingContext<EthSigning>>,
+		resharing_context: ResharingContext<C>,
 	) {
-		let KeygenCeremonyDetails { ceremony_id, rng, signers } = keygen_ceremony_details;
+		let KeygenCeremonyDetails { ceremony_id, rng, participants } = keygen_ceremony_details;
 
-		let request = prepare_keygen_request::<EthSigning>(
+		let request = prepare_key_handover_request(
 			ceremony_id,
 			&self.own_account_id,
-			signers,
+			participants,
 			&self.outgoing_p2p_message_sender,
 			resharing_context,
+			rng,
+		)
+		.expect("invalid request");
+
+		if let Some(outcome) = self
+			.ceremony_runner
+			.on_ceremony_request(request.initial_stage)
+			.instrument(debug_span!("Node", account_id = self.own_account_id.to_string()))
+			.await
+		{
+			self.on_ceremony_outcome(outcome)
+		}
+	}
+
+	pub async fn request_keygen(&mut self, keygen_ceremony_details: KeygenCeremonyDetails) {
+		let KeygenCeremonyDetails { ceremony_id, rng, participants } = keygen_ceremony_details;
+
+		let request = prepare_keygen_request::<C>(
+			ceremony_id,
+			&self.own_account_id,
+			participants,
+			&self.outgoing_p2p_message_sender,
 			rng,
 		)
 		.expect("invalid request");
@@ -563,13 +585,19 @@ macro_rules! run_stages {
 }
 pub(crate) use run_stages;
 
-use super::{ceremony_manager::deserialize_for_version, common::ResharingContext, signing::Comm1};
+use super::{
+	ceremony_manager::{deserialize_for_version, prepare_key_handover_request},
+	common::ResharingContext,
+	keygen::{KeygenCommon, SharingParameters},
+	signing::Comm1,
+	ThresholdParameters,
+};
 
-pub type KeygenCeremonyRunner = CeremonyTestRunner<(), KeygenCeremony<EthSigning>>;
+pub type KeygenCeremonyRunner<C> = CeremonyTestRunner<(), KeygenCeremony<C>>;
 
 #[async_trait]
-impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
-	type CeremonyType = KeygenCeremony<EthSigning>;
+impl<C: CryptoScheme> CeremonyRunnerStrategy for KeygenCeremonyRunner<C> {
+	type CeremonyType = KeygenCeremony<C>;
 	type CheckedOutput =
 		(PublicKeyBytes, HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>);
 	type InitialStageData = keygen::HashComm1;
@@ -579,11 +607,11 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
 		outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
 	) -> Self::CheckedOutput {
 		let (_, public_key) = all_same(outputs.values().map(|keygen_result_info| {
-			(keygen_result_info.params, keygen_result_info.key.get_public_key().get_element())
+			(keygen_result_info.params, keygen_result_info.key.get_public_key())
 		}))
 		.expect("Generated keys don't match");
 
-		(public_key.serialize().into(), outputs)
+		(C::agg_key(&public_key).into(), outputs)
 	}
 
 	async fn request_ceremony(&mut self, node_id: &AccountId) {
@@ -592,13 +620,13 @@ impl CeremonyRunnerStrategy for KeygenCeremonyRunner {
 		self.nodes
 			.get_mut(node_id)
 			.unwrap()
-			.request_keygen(keygen_ceremony_details, None)
+			.request_keygen(keygen_ceremony_details)
 			.await;
 	}
 }
-impl KeygenCeremonyRunner {
+impl<C: CryptoScheme> KeygenCeremonyRunner<C> {
 	pub fn new(
-		nodes: HashMap<AccountId, Node<KeygenCeremonyEth>>,
+		nodes: HashMap<AccountId, Node<KeygenCeremony<C>>>,
 		ceremony_id: CeremonyId,
 		rng: Rng,
 	) -> Self {
@@ -611,7 +639,7 @@ impl KeygenCeremonyRunner {
 		KeygenCeremonyDetails {
 			ceremony_id: self.ceremony_id,
 			rng: Rng::from_seed(self.rng.gen()),
-			signers: self.nodes.keys().cloned().collect(),
+			participants: self.nodes.keys().cloned().collect(),
 		}
 	}
 
@@ -767,8 +795,11 @@ pub async fn run_keygen(
 	nodes: HashMap<AccountId, Node<KeygenCeremonyEth>>,
 	ceremony_id: CeremonyId,
 ) -> (PublicKeyBytes, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
-	let mut keygen_ceremony =
-		KeygenCeremonyRunner::new(nodes, ceremony_id, Rng::from_seed(DEFAULT_KEYGEN_SEED));
+	let mut keygen_ceremony = KeygenCeremonyRunner::<EthSigning>::new(
+		nodes,
+		ceremony_id,
+		Rng::from_seed(DEFAULT_KEYGEN_SEED),
+	);
 	let stage_1_messages = keygen_ceremony.request().await;
 	let messages = run_stages!(
 		keygen_ceremony,
@@ -810,10 +841,7 @@ pub fn gen_invalid_keygen_comm1<P: ECPoint>(
 		// The commitment is only invalid because of the invalid context
 		&HashContext([0; 32]),
 		0,
-		ThresholdParameters {
-			share_count,
-			threshold: threshold_from_share_count(share_count) as AuthorityCount,
-		},
+		&SharingParameters::for_keygen(ThresholdParameters::from_share_count(share_count)),
 		None,
 	);
 	fake_comm1
@@ -840,11 +868,10 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 
 	let commitment = gen_invalid_keygen_comm1(&mut rng, account_ids.len() as u32);
 	let processor = VerifyHashCommitmentsBroadcast2::new(
-		common.clone(),
+		KeygenCommon::new(common.clone(), HashContext([0; 32]), None),
 		commitment,
 		account_ids.iter().map(|_| (0, None)).collect(),
 		keygen::OutgoingShares(BTreeMap::new()),
-		HashContext([0; 32]),
 	);
 
 	let stage = Box::new(BroadcastStage::new(processor, common));

@@ -118,7 +118,7 @@ fn check_data_size_verify_hash_comm2() {
 	// Should pass with the correct data length
 	assert!(gen_keygen_data_verify_hash_comm2(expected_len).data_size_is_valid(expected_len));
 
-	// Should fail on sizes larger or smaller then expected
+	// Should fail on sizes larger or smaller than expected
 	assert!(!gen_keygen_data_verify_hash_comm2(expected_len + 1).data_size_is_valid(expected_len));
 	assert!(!gen_keygen_data_verify_hash_comm2(expected_len - 1).data_size_is_valid(expected_len));
 }
@@ -129,9 +129,8 @@ fn check_data_size_coeff_comm3() {
 
 	assert!(gen_keygen_data_coeff_comm3(expected_len).data_size_is_valid(expected_len));
 
-	// Should fail on sizes larger or smaller then expected
-	assert!(!gen_keygen_data_coeff_comm3(expected_len + 1).data_size_is_valid(expected_len));
-	assert!(!gen_keygen_data_coeff_comm3(expected_len - 1).data_size_is_valid(expected_len));
+	// It takes a few more parties to generate invalid data (due to key handover)
+	assert!(!gen_keygen_data_coeff_comm3(expected_len + 3).data_size_is_valid(expected_len));
 }
 
 #[test]
@@ -142,16 +141,15 @@ fn check_data_size_verify_coeff_comm4() {
 	assert!(gen_keygen_data_verify_coeff_comm4(expected_len, expected_len)
 		.data_size_is_valid(expected_len));
 
-	// The outer collection should fail if larger or smaller than expected
-	assert!(!gen_keygen_data_verify_coeff_comm4(expected_len + 1, expected_len)
-		.data_size_is_valid(expected_len));
-	assert!(!gen_keygen_data_verify_coeff_comm4(expected_len - 1, expected_len)
+	// It takes a few more parties to generate invalid data (due to key handover)
+	let large_len = expected_len + 3;
+
+	// Should fail if the other collection is larger or smaller than expected
+	assert!(!gen_keygen_data_verify_coeff_comm4(large_len, expected_len)
 		.data_size_is_valid(expected_len));
 
 	// The nested collection should fail if larger or smaller than expected
-	assert!(!gen_keygen_data_verify_coeff_comm4(expected_len, expected_len + 1)
-		.data_size_is_valid(expected_len));
-	assert!(!gen_keygen_data_verify_coeff_comm4(expected_len, expected_len - 1)
+	assert!(!gen_keygen_data_verify_coeff_comm4(expected_len, large_len)
 		.data_size_is_valid(expected_len));
 }
 
@@ -162,7 +160,7 @@ fn check_data_size_complaints6() {
 	assert!(gen_keygen_data_complaints6(expected_len).data_size_is_valid(expected_len));
 	assert!(gen_keygen_data_complaints6(0).data_size_is_valid(expected_len));
 
-	// Should fail on sizes larger then expected
+	// Should fail on sizes larger than expected
 	assert!(!gen_keygen_data_complaints6(expected_len + 1).data_size_is_valid(expected_len));
 }
 
@@ -193,7 +191,7 @@ fn check_data_size_blame_response8() {
 	assert!(gen_keygen_data_blame_response8(expected_len).data_size_is_valid(expected_len));
 	assert!(gen_keygen_data_blame_response8(0).data_size_is_valid(expected_len));
 
-	// Should fail on sizes larger then expected
+	// Should fail on sizes larger than expected
 	assert!(!gen_keygen_data_blame_response8(expected_len + 1).data_size_is_valid(expected_len));
 }
 

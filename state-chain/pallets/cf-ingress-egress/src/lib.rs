@@ -42,7 +42,7 @@ pub enum FetchOrTransfer<C: Chain> {
 		egress_id: EgressId,
 		asset: C::ChainAsset,
 		egress_address: C::ChainAccount,
-		amount: AssetAmount,
+		amount: C::ChainAmount,
 	},
 }
 
@@ -60,7 +60,7 @@ impl<C: Chain> FetchOrTransfer<C> {
 pub(crate) struct CrossChainMessage<C: Chain> {
 	pub egress_id: EgressId,
 	pub asset: C::ChainAsset,
-	pub amount: AssetAmount,
+	pub amount: C::ChainAmount,
 	pub egress_address: C::ChainAccount,
 	pub message: Vec<u8>,
 	pub refund_address: ForeignChainAddress,
@@ -103,6 +103,8 @@ pub mod pallet {
 	pub(crate) type TargetChainAccount<T, I> =
 		<<T as Config<I>>::TargetChain as Chain>::ChainAccount;
 
+	pub(crate) type TargetChainAmount<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAmount;
+
 	pub(crate) type IngressFetchIdOf<T, I> =
 		<<T as Config<I>>::TargetChain as Chain>::IngressFetchId;
 
@@ -110,7 +112,7 @@ pub mod pallet {
 	pub struct IngressWitness<C: Chain + ChainCrypto> {
 		pub ingress_address: C::ChainAccount,
 		pub asset: C::ChainAsset,
-		pub amount: AssetAmount,
+		pub amount: C::ChainAmount,
 		pub tx_id: <C as ChainCrypto>::TransactionId,
 	}
 
@@ -261,7 +263,7 @@ pub mod pallet {
 		IngressCompleted {
 			ingress_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
-			amount: AssetAmount,
+			amount: TargetChainAmount<T, I>,
 			tx_id: <T::TargetChain as ChainCrypto>::TransactionId,
 		},
 		AssetEgressDisabled {
@@ -515,7 +517,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			egress_params,
 		) {
 			Ok(egress_transaction) => {
-				let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
+				let (broadcast_id, _) = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
 					egress_transaction,
 					Call::finalise_ingress { addresses }.into(),
 				);
@@ -574,7 +576,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ccm.message,
 			) {
 				Ok(api_call) => {
-					let broadcast_id = T::Broadcaster::threshold_sign_and_broadcast(api_call);
+					let (broadcast_id, _) = T::Broadcaster::threshold_sign_and_broadcast(api_call);
 					Self::deposit_event(Event::<T, I>::CcmBroadcastRequested {
 						broadcast_id,
 						egress_id: ccm.egress_id,
@@ -594,7 +596,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn do_single_ingress(
 		ingress_address: TargetChainAccount<T, I>,
 		asset: TargetChainAsset<T, I>,
-		amount: AssetAmount,
+		amount: TargetChainAmount<T, I>,
 		tx_id: <T::TargetChain as ChainCrypto>::TransactionId,
 	) -> DispatchResult {
 		let ingress = IntentIngressDetails::<T, I>::get(&ingress_address)
@@ -617,7 +619,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
 		match IntentActions::<T, I>::get(&ingress_address).ok_or(Error::<T, I>::InvalidIntent)? {
 			IntentAction::LiquidityProvision { lp_account } =>
-				T::LpProvisioning::provision_account(&lp_account, asset.into(), amount)?,
+				T::LpProvisioning::provision_account(&lp_account, asset.into(), amount.into())?,
 			IntentAction::Swap {
 				egress_address,
 				egress_asset,
@@ -627,7 +629,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ingress_address.clone().into(),
 				asset.into(),
 				egress_asset,
-				amount,
+				amount.into(),
 				egress_address,
 				relayer_id,
 				relayer_commission_bps,
@@ -635,19 +637,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			IntentAction::CcmTransfer { egress_asset, egress_address, message_metadata } =>
 				T::CcmHandler::on_ccm_ingress(
 					asset.into(),
-					amount,
+					amount.into(),
 					egress_asset,
 					egress_address,
 					message_metadata,
 				)?,
 		};
 
-		T::IngressHandler::handle_ingress(
-			tx_id.clone(),
-			amount.into(),
-			ingress_address.clone(),
-			asset,
-		);
+		T::IngressHandler::handle_ingress(tx_id.clone(), amount, ingress_address.clone(), asset);
 
 		Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount, tx_id });
 		Ok(())
@@ -710,7 +707,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 	fn schedule_egress(
 		asset: TargetChainAsset<T, I>,
-		amount: AssetAmount,
+		amount: TargetChainAmount<T, I>,
 		egress_address: TargetChainAccount<T, I>,
 		maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId {
@@ -739,7 +736,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		Self::deposit_event(Event::<T, I>::EgressScheduled {
 			id: egress_id,
 			asset,
-			amount,
+			amount: amount.into(),
 			egress_address,
 		});
 

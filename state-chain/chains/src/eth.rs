@@ -99,7 +99,9 @@ pub struct EthereumTrackedData {
 	pub priority_fee: <Ethereum as Chain>::ChainAmount,
 }
 
-impl Age<Ethereum> for EthereumTrackedData {
+impl Age for EthereumTrackedData {
+	type BlockNumber = <Ethereum as Chain>::ChainBlockNumber;
+
 	fn birth_block(&self) -> <Ethereum as Chain>::ChainBlockNumber {
 		self.block_height
 	}
@@ -567,8 +569,14 @@ impl FeeRefundCalculator<Ethereum> for Transaction {
 		&self,
 		fee_paid: <Ethereum as Chain>::TransactionFee,
 	) -> <Ethereum as Chain>::ChainAmount {
-		min(self.max_fee_per_gas.unwrap_or_default().as_u128(), fee_paid.effective_gas_price)
-			.saturating_mul(fee_paid.gas_used)
+		min(
+			self.max_fee_per_gas
+				.unwrap_or_default()
+				.try_into()
+				.expect("In practice `max_fee_per_gas` is always less than u128::MAX"),
+			fee_paid.effective_gas_price,
+		)
+		.saturating_mul(fee_paid.gas_used)
 	}
 }
 

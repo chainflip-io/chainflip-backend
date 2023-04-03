@@ -23,7 +23,7 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 				pubkey_x: BitcoinVault::vaults(Validator::epoch_index())
 					.unwrap_or(Err(DispatchError::Other("No vault for epoch"))?)
 					.public_key
-					.0,
+					.pubkey_x,
 				salt: intent_id.try_into().unwrap(),
 			}),
 			network: Environment::bitcoin_network(),

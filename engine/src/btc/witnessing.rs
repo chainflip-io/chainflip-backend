@@ -5,7 +5,7 @@ use crate::{
 	settings,
 	state_chain_observer::client::{storage_api::StorageApi, StateChainClient},
 	task_scope::Scope,
-	witnesser::{AddressMonitor, AddressMonitorCommand, EpochStart},
+	witnesser::{AddressMonitor, AddressMonitorCommand, EpochStart, LatestBlockNumber},
 };
 use anyhow::{Context, Result};
 use cf_chains::{address::BitcoinAddressData, Bitcoin};
@@ -28,11 +28,10 @@ pub async fn start(
 	// is bad but then we enter the witnesser loop which will retry until success.
 	// Failing here means we will stop the engine.
 
-	// TODO: Re-instate this once test-single-node is fixed.
-	// btc_rpc
-	// 	.latest_block_number()
-	// 	.await
-	// 	.context("Initial query for BTC latest block number failed.")?;
+	btc_rpc
+		.latest_block_number()
+		.await
+		.context("Initial query for BTC latest block number failed.")?;
 
 	let (ingress_sender, address_monitor) = AddressMonitor::new(
 		state_chain_client

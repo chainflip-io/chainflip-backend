@@ -32,7 +32,7 @@ benchmarks_instance_pallet! {
 				batch.push(FetchOrTransfer::Transfer {
 					egress_id: (ForeignChain::Ethereum, i as u64),
 					asset: egress_asset,
-					amount: 1_000,
+					amount: BenchmarkValue::benchmark_value(),
 					egress_address: egress_address.clone(),
 				});
 			}
@@ -54,7 +54,7 @@ benchmarks_instance_pallet! {
 			ccms.push(CrossChainMessage {
 				egress_id: (ForeignChain::Ethereum, 1),
 				asset: egress_asset,
-				amount: 1_000,
+				amount: BenchmarkValue::benchmark_value(),
 				egress_address: egress_address.clone(),
 				message: vec![0x00, 0x01, 0x02, 0x03],
 				refund_address: ForeignChainAddress::Eth(Default::default()),
@@ -82,6 +82,7 @@ benchmarks_instance_pallet! {
 	do_single_ingress {
 		let ingress_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
 		let ingress_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
+		let ingress_amount: <<T as Config<I>>::TargetChain as Chain>::ChainAmount = BenchmarkValue::benchmark_value();
 		IntentIngressDetails::<T, I>::insert(&ingress_address, IngressDetails {
 				intent_id: 1,
 				ingress_asset,
@@ -90,7 +91,7 @@ benchmarks_instance_pallet! {
 			lp_account: account("doogle", 0, 0)
 		});
 	}: {
-		Pallet::<T, I>::do_single_ingress(ingress_address, ingress_asset, 100, BenchmarkValue::benchmark_value()).unwrap()
+		Pallet::<T, I>::do_single_ingress(ingress_address, ingress_asset, ingress_amount, BenchmarkValue::benchmark_value()).unwrap()
 	}
 
 	finalise_ingress {

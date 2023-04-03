@@ -86,7 +86,8 @@ build-localnet() {
     echo "🚦 Waiting for polkadot node to start"
     sleep 5
   done
-  DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
+  DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
+  DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
   while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null 2>&1 ; do
     echo "🚧 Waiting for chainflip-node to start"
     sleep 5
@@ -112,9 +113,9 @@ destroy() {
 
 yeet() {
     destroy
-    read -p "🚨💣 WARNING 💣🚨 Do you want to delete all Docker images and containers on your machine? [Y/n] " YEET
-    YEET=${YEET:-"n"}
-    if [ $YEET == "Y" ]; then
+    read -p "🚨💣 WARNING 💣🚨 Do you want to delete all Docker images and containers on your machine? [y/N] " YEET
+    YEET=${YEET:-"N"}
+    if [ $YEET == "y" ]; then
       docker system prune -af
     fi
 }
