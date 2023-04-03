@@ -207,11 +207,7 @@ impl<C: CryptoScheme> Node<KeygenCeremony<C>> {
 		}
 	}
 
-	pub async fn request_keygen(
-		&mut self,
-		keygen_ceremony_details: KeygenCeremonyDetails,
-		resharing_context: Option<ResharingContext<C>>,
-	) {
+	pub async fn request_keygen(&mut self, keygen_ceremony_details: KeygenCeremonyDetails) {
 		let KeygenCeremonyDetails { ceremony_id, rng, participants } = keygen_ceremony_details;
 
 		let request = prepare_keygen_request::<C>(
@@ -219,7 +215,6 @@ impl<C: CryptoScheme> Node<KeygenCeremony<C>> {
 			&self.own_account_id,
 			participants,
 			&self.outgoing_p2p_message_sender,
-			resharing_context,
 			rng,
 		)
 		.expect("invalid request");
@@ -624,7 +619,7 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for KeygenCeremonyRunner<C> {
 		self.nodes
 			.get_mut(node_id)
 			.unwrap()
-			.request_keygen(keygen_ceremony_details, None)
+			.request_keygen(keygen_ceremony_details)
 			.await;
 	}
 }

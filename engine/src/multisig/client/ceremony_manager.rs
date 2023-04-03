@@ -225,7 +225,6 @@ pub fn prepare_keygen_request<Crypto: CryptoScheme>(
 	own_account_id: &AccountId,
 	participants: BTreeSet<AccountId>,
 	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
-	resharing_context: Option<ResharingContext<Crypto>>,
 	rng: Rng,
 ) -> Result<PreparedRequest<KeygenCeremony<Crypto>>, KeygenFailureReason> {
 	let validator_mapping = Arc::new(PartyIdxMapping::from_participants(participants.clone()));
@@ -253,7 +252,7 @@ pub fn prepare_keygen_request<Crypto: CryptoScheme>(
 		let keygen_common = client::keygen::KeygenCommon::new(
 			&common,
 			generate_keygen_context(ceremony_id, participants),
-			resharing_context,
+			None,
 		);
 
 		let processor = HashCommitments1::new(common.clone(), keygen_common);
@@ -425,8 +424,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 			&self.my_account_id,
 			participants,
 			&self.outgoing_p2p_message_sender,
-			// For now, we don't expect re-sharing requests
-			None,
 			rng,
 		) {
 			Ok(request) => request,
