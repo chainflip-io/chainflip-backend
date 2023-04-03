@@ -8,6 +8,9 @@ use super::*;
 use cf_utilities::{assert_ok, assert_panics};
 use rand::{prelude::Distribution, Rng, SeedableRng};
 
+type LiquidityProvider = cf_primitives::AccountId;
+type PoolState = super::PoolState<LiquidityProvider>;
+
 /// The amounts used as parameters to input_amount_floor, input_amount_ceil, output_amount_floor are
 /// guaranteed to be <= MAX_FIXED_POOL_LIQUIDITY. This test checks that MAX_FIXED_POOL_LIQUIDITY is
 /// set low enough that those calculations don't overflow.

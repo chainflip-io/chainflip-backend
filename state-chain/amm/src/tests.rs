@@ -1,9 +1,12 @@
 use cf_utilities::assert_ok;
 use sp_core::crypto::Infallible;
 
-use crate::common::{LiquidityProvider, MAX_SQRT_PRICE, MIN_SQRT_PRICE};
+use crate::common::{MAX_SQRT_PRICE, MIN_SQRT_PRICE};
 
 use super::*;
+
+type LiquidityProvider = cf_primitives::AccountId;
+type PoolState = super::PoolState<LiquidityProvider>;
 
 #[test]
 fn test_basic_swaps() {

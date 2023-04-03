@@ -31,8 +31,8 @@ use scale_info::TypeInfo;
 
 use crate::common::{
 	is_sqrt_price_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, tick_at_sqrt_price,
-	Amount, LiquidityProvider, OneToZero, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_TICK,
-	MIN_TICK, ONE_IN_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
+	Amount, OneToZero, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_TICK, MIN_TICK, ONE_IN_PIPS,
+	SQRT_PRICE_FRACTIONAL_BITS,
 };
 
 pub type Liquidity = u128;
@@ -46,9 +46,9 @@ struct Position {
 	last_fee_growth_inside: SideMap<FeeGrowthQ128F128>,
 }
 impl Position {
-	fn collect_fees(
+	fn collect_fees<LiquidityProvider>(
 		&mut self,
-		pool_state: &PoolState,
+		pool_state: &PoolState<LiquidityProvider>,
 		lower_tick: Tick,
 		lower_delta: &TickDelta,
 		upper_tick: Tick,
@@ -90,9 +90,9 @@ impl Position {
 		collected_fees
 	}
 
-	fn set_liquidity(
+	fn set_liquidity<LiquidityProvider>(
 		&mut self,
-		pool_state: &PoolState,
+		pool_state: &PoolState<LiquidityProvider>,
 		new_liquidity: Liquidity,
 		lower_tick: Tick,
 		lower_delta: &TickDelta,
@@ -114,7 +114,7 @@ pub struct TickDelta {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-pub struct PoolState {
+pub struct PoolState<LiquidityProvider> {
 	fee_pips: u32,
 	// Note the current_sqrt_price can reach MAX_SQRT_PRICE, but only if the tick is MAX_TICK
 	current_sqrt_price: SqrtPriceQ64F96,
@@ -191,7 +191,7 @@ impl SwapDirection for ZeroToOne {
 		target: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 	) -> Amount {
-		PoolState::zero_amount_delta_ceil(target, current, liquidity)
+		zero_amount_delta_ceil(target, current, liquidity)
 	}
 
 	fn output_amount_delta_floor(
@@ -199,7 +199,7 @@ impl SwapDirection for ZeroToOne {
 		target: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 	) -> Amount {
-		PoolState::one_amount_delta_floor(target, current, liquidity)
+		one_amount_delta_floor(target, current, liquidity)
 	}
 
 	fn next_sqrt_price_from_input_amount(
@@ -207,7 +207,25 @@ impl SwapDirection for ZeroToOne {
 		liquidity: Liquidity,
 		amount: Amount,
 	) -> SqrtPriceQ64F96 {
-		PoolState::next_sqrt_price_from_zero_input(sqrt_price_current, liquidity, amount)
+		assert!(0 < liquidity);
+		assert!(SqrtPriceQ64F96::zero() < sqrt_price_current);
+
+		let liquidity = U256::from(liquidity) << SQRT_PRICE_FRACTIONAL_BITS;
+
+		/*
+			Proof that `mul_div_ceil` does not overflow:
+			If L ∈ u256, R ∈ u256, A ∈ u256
+			Then L <= L + R * A
+			Then L / (L + R * A) <= 1
+			Then R * L / (L + R * A) <= u256::MAX
+		*/
+		mul_div_ceil(
+			liquidity,
+			sqrt_price_current,
+			// Addition will not overflow as function is not called if amount >=
+			// amount_required_to_reach_target
+			U512::from(liquidity) + U256::full_mul(amount, sqrt_price_current),
+		)
 	}
 
 	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickDelta) -> i128 {
@@ -242,7 +260,7 @@ impl SwapDirection for OneToZero {
 		target: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 	) -> Amount {
-		PoolState::one_amount_delta_ceil(current, target, liquidity)
+		one_amount_delta_ceil(current, target, liquidity)
 	}
 
 	fn output_amount_delta_floor(
@@ -250,7 +268,7 @@ impl SwapDirection for OneToZero {
 		target: SqrtPriceQ64F96,
 		liquidity: Liquidity,
 	) -> Amount {
-		PoolState::zero_amount_delta_floor(current, target, liquidity)
+		zero_amount_delta_floor(current, target, liquidity)
 	}
 
 	fn next_sqrt_price_from_input_amount(
@@ -258,7 +276,12 @@ impl SwapDirection for OneToZero {
 		liquidity: Liquidity,
 		amount: Amount,
 	) -> SqrtPriceQ64F96 {
-		PoolState::next_sqrt_price_from_one_input(sqrt_price_current, liquidity, amount)
+		assert!(0 < liquidity);
+
+		// Will not overflow as function is not called if amount >= amount_required_to_reach_target,
+		// therefore bounding the function output to approximately <= MAX_SQRT_PRICE
+		sqrt_price_current +
+			mul_div_floor(amount, U256::one() << SQRT_PRICE_FRACTIONAL_BITS, liquidity)
 	}
 
 	fn liquidity_delta_on_crossing_tick(tick_liquidity: &TickDelta) -> i128 {
@@ -315,7 +338,7 @@ pub struct CollectedFees {
 	pub fees: SideMap<Amount>,
 }
 
-impl PoolState {
+impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Creates a new pool with the specified fee and initial price. The pool is created with no
 	/// liquidity, it must be added using the `PoolState::collect_and_mint` function.
 	///
@@ -746,11 +769,11 @@ impl PoolState {
 		if self.current_tick < lower_tick {
 			(
 				SideMap::from_array([
-					(if ROUND_UP {
-						Self::zero_amount_delta_ceil
-					} else {
-						Self::zero_amount_delta_floor
-					})(sqrt_price_at_tick(lower_tick), sqrt_price_at_tick(upper_tick), liquidity),
+					(if ROUND_UP { zero_amount_delta_ceil } else { zero_amount_delta_floor })(
+						sqrt_price_at_tick(lower_tick),
+						sqrt_price_at_tick(upper_tick),
+						liquidity,
+					),
 					0.into(),
 				]),
 				0,
@@ -758,16 +781,16 @@ impl PoolState {
 		} else if self.current_tick < upper_tick {
 			(
 				SideMap::from_array([
-					(if ROUND_UP {
-						Self::zero_amount_delta_ceil
-					} else {
-						Self::zero_amount_delta_floor
-					})(self.current_sqrt_price, sqrt_price_at_tick(upper_tick), liquidity),
-					(if ROUND_UP {
-						Self::one_amount_delta_ceil
-					} else {
-						Self::one_amount_delta_floor
-					})(sqrt_price_at_tick(lower_tick), self.current_sqrt_price, liquidity),
+					(if ROUND_UP { zero_amount_delta_ceil } else { zero_amount_delta_floor })(
+						self.current_sqrt_price,
+						sqrt_price_at_tick(upper_tick),
+						liquidity,
+					),
+					(if ROUND_UP { one_amount_delta_ceil } else { one_amount_delta_floor })(
+						sqrt_price_at_tick(lower_tick),
+						self.current_sqrt_price,
+						liquidity,
+					),
 				]),
 				liquidity,
 			)
@@ -775,129 +798,90 @@ impl PoolState {
 			(
 				SideMap::from_array([
 					0.into(),
-					(if ROUND_UP {
-						Self::one_amount_delta_ceil
-					} else {
-						Self::one_amount_delta_floor
-					})(sqrt_price_at_tick(lower_tick), sqrt_price_at_tick(upper_tick), liquidity),
+					(if ROUND_UP { one_amount_delta_ceil } else { one_amount_delta_floor })(
+						sqrt_price_at_tick(lower_tick),
+						sqrt_price_at_tick(upper_tick),
+						liquidity,
+					),
 				]),
 				0,
 			)
 		}
 	}
+}
 
-	fn zero_amount_delta_floor(
-		from: SqrtPriceQ64F96,
-		to: SqrtPriceQ64F96,
-		liquidity: Liquidity,
-	) -> Amount {
-		assert!(SqrtPriceQ64F96::zero() < from);
-		assert!(from <= to);
+fn zero_amount_delta_floor(
+	from: SqrtPriceQ64F96,
+	to: SqrtPriceQ64F96,
+	liquidity: Liquidity,
+) -> Amount {
+	assert!(SqrtPriceQ64F96::zero() < from);
+	assert!(from <= to);
 
-		/*
-			Proof that `mul_div_floor` does not overflow:
-			If A ∈ ℕ, B ∈ ℕ, A > 0, B >= A
-			Then A * B >= B and B - A < B
-			Then A * B > B - A
-		*/
-		mul_div_floor(
-			U256::from(liquidity) << SQRT_PRICE_FRACTIONAL_BITS,
-			to - from,
-			U256::full_mul(to, from),
-		)
-	}
+	/*
+		Proof that `mul_div_floor` does not overflow:
+		If A ∈ ℕ, B ∈ ℕ, A > 0, B >= A
+		Then A * B >= B and B - A < B
+		Then A * B > B - A
+	*/
+	mul_div_floor(
+		U256::from(liquidity) << SQRT_PRICE_FRACTIONAL_BITS,
+		to - from,
+		U256::full_mul(to, from),
+	)
+}
 
-	fn zero_amount_delta_ceil(
-		from: SqrtPriceQ64F96,
-		to: SqrtPriceQ64F96,
-		liquidity: Liquidity,
-	) -> Amount {
-		assert!(SqrtPriceQ64F96::zero() < from);
-		assert!(from <= to);
+fn zero_amount_delta_ceil(
+	from: SqrtPriceQ64F96,
+	to: SqrtPriceQ64F96,
+	liquidity: Liquidity,
+) -> Amount {
+	assert!(SqrtPriceQ64F96::zero() < from);
+	assert!(from <= to);
 
-		/*
-			Proof that `mul_div_ceil` does not overflow:
-			If A ∈ ℕ, B ∈ ℕ, A > 0, B >= A
-			Then A * B >= B and B - A < B
-			Then A * B > B - A
-		*/
-		mul_div_ceil(
-			U256::from(liquidity) << SQRT_PRICE_FRACTIONAL_BITS,
-			to - from,
-			U256::full_mul(to, from),
-		)
-	}
+	/*
+		Proof that `mul_div_ceil` does not overflow:
+		If A ∈ ℕ, B ∈ ℕ, A > 0, B >= A
+		Then A * B >= B and B - A < B
+		Then A * B > B - A
+	*/
+	mul_div_ceil(
+		U256::from(liquidity) << SQRT_PRICE_FRACTIONAL_BITS,
+		to - from,
+		U256::full_mul(to, from),
+	)
+}
 
-	fn one_amount_delta_floor(
-		from: SqrtPriceQ64F96,
-		to: SqrtPriceQ64F96,
-		liquidity: Liquidity,
-	) -> Amount {
-		assert!(from <= to);
+fn one_amount_delta_floor(
+	from: SqrtPriceQ64F96,
+	to: SqrtPriceQ64F96,
+	liquidity: Liquidity,
+) -> Amount {
+	assert!(from <= to);
 
-		/*
-			Proof that `mul_div_floor` does not overflow:
-			If A ∈ u160, B ∈ u160, A <= B, L ∈ u128
-			Then B - A ∈ u160
-			Then (B - A) / (1<<96) <= u64::MAX (160 - 96 = 64)
-			Then L * ((B - A) / (1<<96)) <= u192::MAX < u256::MAX
-		*/
-		mul_div_floor(liquidity.into(), to - from, U512::from(1) << SQRT_PRICE_FRACTIONAL_BITS)
-	}
+	/*
+		Proof that `mul_div_floor` does not overflow:
+		If A ∈ u160, B ∈ u160, A <= B, L ∈ u128
+		Then B - A ∈ u160
+		Then (B - A) / (1<<96) <= u64::MAX (160 - 96 = 64)
+		Then L * ((B - A) / (1<<96)) <= u192::MAX < u256::MAX
+	*/
+	mul_div_floor(liquidity.into(), to - from, U512::from(1) << SQRT_PRICE_FRACTIONAL_BITS)
+}
 
-	fn one_amount_delta_ceil(
-		from: SqrtPriceQ64F96,
-		to: SqrtPriceQ64F96,
-		liquidity: Liquidity,
-	) -> Amount {
-		assert!(from <= to);
+fn one_amount_delta_ceil(
+	from: SqrtPriceQ64F96,
+	to: SqrtPriceQ64F96,
+	liquidity: Liquidity,
+) -> Amount {
+	assert!(from <= to);
 
-		/*
-			Proof that `mul_div_ceil` does not overflow:
-			If A ∈ u160, B ∈ u160, A <= B, L ∈ u128
-			Then B - A ∈ u160
-			Then (B - A) / (1<<96) <= u64::MAX (160 - 96 = 64)
-			Then L * ((B - A) / (1<<96)) <= u192::MAX < u256::MAX
-		*/
-		mul_div_ceil(liquidity.into(), to - from, U512::from(1u32) << SQRT_PRICE_FRACTIONAL_BITS)
-	}
-
-	fn next_sqrt_price_from_zero_input(
-		sqrt_price_current: SqrtPriceQ64F96,
-		liquidity: Liquidity,
-		amount: Amount,
-	) -> SqrtPriceQ64F96 {
-		assert!(0 < liquidity);
-		assert!(SqrtPriceQ64F96::zero() < sqrt_price_current);
-
-		let liquidity = U256::from(liquidity) << SQRT_PRICE_FRACTIONAL_BITS;
-
-		/*
-			Proof that `mul_div_ceil` does not overflow:
-			If L ∈ u256, R ∈ u256, A ∈ u256
-			Then L <= L + R * A
-			Then L / (L + R * A) <= 1
-			Then R * L / (L + R * A) <= u256::MAX
-		*/
-		mul_div_ceil(
-			liquidity,
-			sqrt_price_current,
-			// Addition will not overflow as function is not called if amount >=
-			// amount_required_to_reach_target
-			U512::from(liquidity) + U256::full_mul(amount, sqrt_price_current),
-		)
-	}
-
-	fn next_sqrt_price_from_one_input(
-		sqrt_price_current: SqrtPriceQ64F96,
-		liquidity: Liquidity,
-		amount: Amount,
-	) -> SqrtPriceQ64F96 {
-		assert!(0 < liquidity);
-
-		// Will not overflow as function is not called if amount >= amount_required_to_reach_target,
-		// therefore bounding the function output to approximately <= MAX_SQRT_PRICE
-		sqrt_price_current +
-			mul_div_floor(amount, U256::one() << SQRT_PRICE_FRACTIONAL_BITS, liquidity)
-	}
+	/*
+		Proof that `mul_div_ceil` does not overflow:
+		If A ∈ u160, B ∈ u160, A <= B, L ∈ u128
+		Then B - A ∈ u160
+		Then (B - A) / (1<<96) <= u64::MAX (160 - 96 = 64)
+		Then L * ((B - A) / (1<<96)) <= u192::MAX < u256::MAX
+	*/
+	mul_div_ceil(liquidity.into(), to - from, U512::from(1u32) << SQRT_PRICE_FRACTIONAL_BITS)
 }

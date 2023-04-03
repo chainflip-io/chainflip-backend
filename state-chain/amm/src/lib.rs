@@ -11,11 +11,11 @@ pub mod limit_orders;
 pub mod range_orders;
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-pub struct PoolState {
-	pub limit_orders: limit_orders::PoolState,
-	pub range_orders: range_orders::PoolState,
+pub struct PoolState<LiquidityProvider> {
+	pub limit_orders: limit_orders::PoolState<LiquidityProvider>,
+	pub range_orders: range_orders::PoolState<LiquidityProvider>,
 }
-impl PoolState {
+impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	pub fn swap<
 		SD: common::SwapDirection + limit_orders::SwapDirection + range_orders::SwapDirection,
 	>(

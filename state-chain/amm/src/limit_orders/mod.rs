@@ -8,9 +8,9 @@ use primitive_types::{U256, U512};
 use scale_info::TypeInfo;
 
 use crate::common::{
-	is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, Amount, LiquidityProvider,
-	OneToZero, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_SQRT_PRICE, MIN_SQRT_PRICE,
-	ONE_IN_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
+	is_tick_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, Amount, OneToZero, SideMap,
+	SqrtPriceQ64F96, Tick, ZeroToOne, MAX_SQRT_PRICE, MIN_SQRT_PRICE, ONE_IN_PIPS,
+	SQRT_PRICE_FRACTIONAL_BITS,
 };
 
 const MAX_FIXED_POOL_LIQUIDITY: Amount = U256([u64::MAX, u64::MAX, 0, 0]);
@@ -263,14 +263,14 @@ pub struct FixedPool {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-pub struct PoolState {
+pub struct PoolState<LiquidityProvider> {
 	fee_pips: u32,
 	next_pool_instance: u128,
 	fixed_pools: SideMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,
 	positions: SideMap<BTreeMap<(SqrtPriceQ64F96, LiquidityProvider), Position>>,
 }
 
-impl PoolState {
+impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Creates a new pool state with the given fee. The pool is created with no liquidity.
 	///
 	/// This function never panics.

@@ -4,7 +4,6 @@ use scale_info::TypeInfo;
 
 pub const ONE_IN_PIPS: u32 = 1000000;
 
-pub type LiquidityProvider = cf_primitives::AccountId;
 pub type Amount = U256;
 pub type Tick = i32;
 pub type SqrtPriceQ64F96 = U256;

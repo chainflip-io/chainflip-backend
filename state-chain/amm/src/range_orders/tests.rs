@@ -2,6 +2,9 @@ use crate::common::{Side, MIN_SQRT_PRICE};
 
 use super::*;
 
+type LiquidityProvider = cf_primitives::AccountId;
+type PoolState = super::PoolState<LiquidityProvider>;
+
 #[test]
 fn max_liquidity() {
 	// Note a tick's liquidity_delta.abs() must be less than or equal to its gross liquidity,
