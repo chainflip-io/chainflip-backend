@@ -176,6 +176,7 @@ mod utils_tests {
 	fn check_find_frequent_element() {
 		assert_eq!(find_frequent_element([1, 2, 3, 2, 3, 3].into_iter(), 2), Some(3));
 		assert_eq!(find_frequent_element([1, 2, 3, 2, 3, 3].into_iter(), 3), None);
+		assert_eq!(find_frequent_element::<u32, _>([].into_iter(), 3), None);
 	}
 }
 
