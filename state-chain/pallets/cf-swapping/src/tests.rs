@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, CcmGasBudget, CcmStage, CcmWithStages, EarnedRelayerFees, Error, Pallet, PendingCcms,
-	Swap, SwapQueue, SwapType, WeightInfo,
+	mock::*, CcmGasBudget, CcmSwapStatus, CcmWithSwapStatus, EarnedRelayerFees, Error, Pallet,
+	PendingCcms, Swap, SwapQueue, SwapType, WeightInfo,
 };
 use cf_chains::{address::ForeignChainAddress, AnyChain, CcmIngressMetadata};
 use cf_primitives::{Asset, ForeignChain};
@@ -294,13 +294,13 @@ fn can_process_ccms_via_swap_intent() {
 
 		assert_eq!(
 			PendingCcms::<Test>::get(1),
-			Some(CcmWithStages {
+			Some(CcmWithSwapStatus {
 				ingress_asset: Asset::Dot,
 				ingress_amount: 2_000,
 				egress_asset: Asset::Eth,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
-				stage: CcmStage::Ingressed { asset_swap_id: 1, gas_swap_id: 2 }
+				swap_status: CcmSwapStatus::new(1, 2)
 			})
 		);
 
@@ -375,13 +375,13 @@ fn can_process_ccms_via_extrinsic() {
 
 		assert_eq!(
 			PendingCcms::<Test>::get(1),
-			Some(CcmWithStages {
+			Some(CcmWithSwapStatus {
 				ingress_asset: Asset::Btc,
 				ingress_amount: 1_000_000,
 				egress_asset: Asset::Usdc,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
-				stage: CcmStage::Ingressed { asset_swap_id: 1, gas_swap_id: 2 }
+				swap_status: CcmSwapStatus::new(1, 2)
 			})
 		);
 
