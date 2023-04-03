@@ -87,25 +87,24 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 
 		// If we are a sharing party, we broadcast public key shares.
 		// (Otherwise, broadcast an empty struct.)
-		let pubkey_shares =
-			if self.resharing_context.sharing_participants.contains(&self.common.own_idx) {
-				let public_key_shares = match party_status {
-					ParticipantStatus::Sharing(_, pubkeys) => pubkeys,
-					_ => panic!("must be a sharing party"),
-				};
-
-				sharing_participants
-					.iter()
-					.copied()
-					.map(|idx| {
-						let id = self.common.validator_mapping.get_id(idx);
-						let pubkey = public_key_shares.get(id).unwrap();
-						(idx, *pubkey)
-					})
-					.collect()
-			} else {
-				BTreeMap::new()
+		let pubkey_shares = if sharing_participants.contains(&self.common.own_idx) {
+			let public_key_shares = match party_status {
+				ParticipantStatus::Sharing(_, pubkeys) => pubkeys,
+				_ => panic!("must be a sharing party"),
 			};
+
+			sharing_participants
+				.iter()
+				.copied()
+				.map(|idx| {
+					let id = self.common.validator_mapping.get_id(idx);
+					let pubkey = public_key_shares.get(id).unwrap();
+					(idx, *pubkey)
+				})
+				.collect()
+		} else {
+			BTreeMap::new()
+		};
 
 		DataToSend::Broadcast(PubkeyShares0(pubkey_shares))
 	}
