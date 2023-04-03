@@ -1,3 +1,4 @@
+use chainflip_node::get_from_seed;
 use frame_support::sp_io::TestExternalities;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
@@ -28,7 +29,6 @@ pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 ];
 
 use crate::{
-	get_from_seed,
 	threshold_signing::{EthKeyComponents, KeyUtils},
 	GENESIS_KEY_SEED,
 };

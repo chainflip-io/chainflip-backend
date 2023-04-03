@@ -9,6 +9,7 @@ use cf_chains::{dot::PolkadotSignature, eth::SchnorrVerificationComponents, Chai
 use cf_chains::btc::UtxoId;
 use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
 use cf_traits::{AccountRoleRegistry, EpochInfo};
+use chainflip_node::get_from_seed;
 use codec::Encode;
 use frame_support::traits::{OnFinalize, OnIdle};
 use pallet_cf_staking::{ClaimAmount, MinimumStake};
