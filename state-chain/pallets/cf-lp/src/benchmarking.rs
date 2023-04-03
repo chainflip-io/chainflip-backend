@@ -55,6 +55,16 @@ benchmarks! {
 		assert_eq!(T::LiquidityPoolApi::minted_liquidity(&caller, &Asset::Eth, range), 1_000_000);
 	}
 
+	on_initialize {
+		let a in 1..100;
+		let caller: T::AccountId = whitelisted_caller();
+		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::LiquidityProvider);
+		for i in 1..a {
+			assert_ok!(Pallet::<T>::request_deposit_address(RawOrigin::Signed(caller.clone()).into(), Asset::Eth));
+		}
+	}: {
+		Pallet::<T>::on_initialize(T::BlockNumber::from(1u32));
+	}
 
 	impl_benchmark_test_suite!(
 		Pallet,

@@ -111,7 +111,12 @@ impl WeightInfo for MockWeightInfo {
 	fn ccm_ingress() -> Weight {
 		Weight::from_ref_time(100)
 	}
+
+	fn on_initialize(_a: u32) -> Weight {
+		Weight::from_ref_time(100)
+	}
 }
+
 parameter_types! {
 	pub GasPrice: AssetAmount = 1_000;
 }

@@ -655,7 +655,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ingress_asset: TargetChainAsset<T, I>,
 		intent_action: IntentAction<T::AccountId>,
 	) -> Result<(IntentId, TargetChainAccount<T, I>), DispatchError> {
-		// let intent_ttl = frame_system::Pallet::<T>::current_block_number() + T::IntentTTL::get();
 		// We have an address available, so we can just use it.
 
 		let (address, intent_id) = if let Some((intent_id, address)) =
@@ -800,8 +799,8 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 
 	// Note: we expect that the mapping from any instantiable pallet to the instance of this pallet
 	// is matching to the right chain. Because of that we can ignore the chain parameter.
-	fn expire_intent(_chain: ForeignChain, intent_id: IntentId) {
-		// TODO: ensure that the passed chain is compatible with the current instance of the pallet.
+	fn expire_intent(chain: ForeignChain, intent_id: IntentId) {
+		assert_eq!(<T as Config<I>>::TargetChain::get(), chain, "Incompatible chains!");
 		Self::expire_intent(intent_id);
 	}
 }

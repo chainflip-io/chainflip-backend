@@ -13,7 +13,7 @@ use cf_traits::{
 	liquidity::LpProvisioningApi, AccountRoleRegistry, Chainflip, EgressApi, IngressApi,
 	LiquidityPoolApi, SystemStateInfo,
 };
-use sp_runtime::traits::BlockNumberProvider;
+use sp_runtime::{traits::BlockNumberProvider, Saturating};
 use sp_std::vec::Vec;
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -79,10 +79,11 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
-			for (intent_id, chain) in Expired::<T>::take(n) {
+			let expired = Expired::<T>::take(n);
+			for (intent_id, chain) in expired.clone() {
 				T::IngressHandler::expire_intent(chain, intent_id);
 			}
-			T::DbWeight::get().reads(1)
+			T::DbWeight::get().reads(expired.len() as u64)
 		}
 	}
 
@@ -137,7 +138,7 @@ pub mod pallet {
 				T::IngressHandler::register_liquidity_ingress_intent(account_id, asset)?;
 
 			Expired::<T>::mutate(
-				frame_system::Pallet::<T>::current_block_number() + T::LpTTL::get(),
+				frame_system::Pallet::<T>::current_block_number().saturating_add(T::LpTTL::get()),
 				|expired| expired.push((intent_id, asset.into())),
 			);
 

@@ -107,6 +107,22 @@ benchmarks! {
 		}]);
 	}
 
+	on_initialize {
+		let a in 1..100;
+		let origin = T::EnsureWitnessed::successful_origin();
+		for i in 1..a {
+			let call = Call::<T>::schedule_swap_by_witnesser{
+				from: Asset::Usdc,
+				to: Asset::Eth,
+				ingress_amount: 1_000,
+				egress_address: ForeignChainAddress::Eth(Default::default())
+			};
+			call.dispatch_bypass_filter(origin.clone())?;
+		}
+	}: {
+		Pallet::<T>::on_initialize(T::BlockNumber::from(1u32));
+	}
+
 	impl_benchmark_test_suite!(
 		Pallet,
 		crate::mock::new_test_ext(),

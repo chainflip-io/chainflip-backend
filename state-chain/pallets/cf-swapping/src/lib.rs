@@ -226,11 +226,12 @@ pub mod pallet {
 		}
 
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
-			for (intent_id, chain) in Expired::<T>::take(n) {
+			let expired = Expired::<T>::take(n);
+			for (intent_id, chain) in expired.clone() {
 				T::IngressHandler::expire_intent(chain, intent_id);
 				Self::deposit_event(Event::<T>::SwapExpired { intent_id });
 			}
-			T::DbWeight::get().reads(1)
+			T::DbWeight::get().reads(expired.len() as u64)
 		}
 	}
 
@@ -275,7 +276,7 @@ pub mod pallet {
 			)?;
 
 			Expired::<T>::mutate(
-				frame_system::Pallet::<T>::current_block_number() + T::SwapTTL::get(),
+				frame_system::Pallet::<T>::current_block_number().saturating_add(T::SwapTTL::get()),
 				|expired| expired.push((intent_id, ingress_asset.into())),
 			);
 
