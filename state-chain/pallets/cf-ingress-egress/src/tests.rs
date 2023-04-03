@@ -644,8 +644,6 @@ fn can_egress_ccm() {
 	});
 }
 
-
-
 #[test]
 fn governance_can_manually_egress_ccm() {
 	new_test_ext().execute_with(|| {
