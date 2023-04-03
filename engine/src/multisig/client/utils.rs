@@ -1,9 +1,38 @@
 use std::collections::{BTreeSet, HashMap};
 
 use cf_primitives::AuthorityCount;
+use itertools::Itertools;
 use state_chain_runtime::AccountId;
 
 use serde::{Deserialize, Serialize};
+
+fn hash_serialized<T: Clone + Serialize>(data: &T) -> [u8; 32] {
+	use sha2::{Digest, Sha256};
+
+	let mut hasher = Sha256::new();
+
+	hasher.update(bincode::serialize(data).unwrap());
+
+	*hasher.finalize().as_ref()
+}
+
+/// Find the first element that appears more than `threshold` times
+pub fn find_frequent_element<T, Iter>(iter: Iter, threshold: usize) -> Option<T>
+where
+	T: Serialize + Clone + std::fmt::Debug,
+	Iter: Iterator<Item = T>,
+{
+	iter.map(|x| (x.clone(), hash_serialized(&x)))
+		.sorted_by_key(|(_, hash)| *hash)
+		.group_by(|(_, hash)| *hash)
+		.into_iter()
+		.map(|(_, mut group)| {
+			let first = group.next().expect("must have at least one element").0;
+			(first, group.count() + 1)
+		})
+		.find(|(_, count)| *count > threshold)
+		.map(|(x, _)| x)
+}
 
 /// Mappings from signer_idx to Validator Id and back
 /// for the corresponding ceremony
@@ -142,6 +171,12 @@ mod utils_tests {
 
 		assert_panics!(map.get_id((ACCOUNT_IDS.len() + 1) as u32));
 	}
+
+	#[test]
+	fn check_find_frequent_element() {
+		assert_eq!(find_frequent_element([1, 2, 3, 2, 3, 3].into_iter(), 2), Some(3));
+		assert_eq!(find_frequent_element([1, 2, 3, 2, 3, 3].into_iter(), 3), None);
+	}
 }
 
 #[cfg(test)]
@@ -149,7 +184,6 @@ pub fn ensure_unsorted<T>(mut v: Vec<T>, seed: u64) -> Vec<T>
 where
 	T: Clone + Ord,
 {
-	use itertools::Itertools;
 	use rand::prelude::*;
 
 	assert!(v.len() > 1);

@@ -1,10 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use cf_primitives::AuthorityCount;
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 use utilities::threshold_from_share_count;
+
+use crate::multisig::client::utils::find_frequent_element;
 
 use super::BroadcastFailureReason;
 
@@ -15,16 +16,6 @@ use super::BroadcastFailureReason;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BroadcastVerificationMessage<T: Clone> {
 	pub data: BTreeMap<AuthorityCount, Option<T>>,
-}
-
-fn hash<T: Clone + Serialize>(data: &T) -> [u8; 32] {
-	use sha2::{Digest, Sha256};
-
-	let mut hasher = Sha256::new();
-
-	hasher.update(bincode::serialize(data).unwrap());
-
-	*hasher.finalize().as_ref()
 }
 
 /// Check that the reported indexes match the expected ones exactly
@@ -103,20 +94,11 @@ where
 	let mut reported_parties = BTreeSet::new();
 
 	// Check that the values are agreed on by the threshold majority.
-	// This will find inconsistency within the values
+	// A party is reported if we can't agree on the value they broadcast
+	// or if the agreed upon value is `None` (i.e. they didn't broadcast)
 	for idx in &participating_idxs {
-		if let Some((Some(data), _)) = verification_messages
-			.values()
-			.map(|m| (m.data[idx].clone(), hash::<Option<T>>(&m.data[idx])))
-			.sorted_by_key(|(_, hash)| *hash)
-			.group_by(|(_, hash)| *hash)
-			.into_iter()
-			.map(|(_, mut group)| {
-				let first = group.next().expect("must have at least one element").0;
-				(first, group.count() + 1)
-			})
-			.find(|(_, count)| *count > threshold)
-		{
+		let message_iter = verification_messages.values().map(|m| m.data[idx].clone());
+		if let Some(Some(data)) = find_frequent_element(message_iter, threshold) {
 			agreed_on_values.insert(*idx, data);
 		} else {
 			reported_parties.insert(*idx);
