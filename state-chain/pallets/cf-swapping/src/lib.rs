@@ -400,7 +400,78 @@ pub mod pallet {
 							});
 						},
 						SwapType::Ccm(ccm_id) =>
-							Self::ccm_swap_callback(*ccm_id, swap.swap_id, to, swap_output),
+						// Updated the CCM request storage and advance stages as neccesary.
+							PendingCcms::<T>::mutate_exists(ccm_id, |maybe_ccm| {
+								let should_remove = match maybe_ccm.as_mut() {
+									Some(ccm) => {
+										match ccm.stage.clone() {
+											CcmStage::Ingressed { asset_swap_id, gas_swap_id } => {
+												// Store the swap output and transition into the
+												// correct stage.
+												if swap.swap_id == asset_swap_id {
+													ccm.stage = CcmStage::AssetSwapped {
+														asset_output_amount: swap_output,
+														gas_swap_id,
+													};
+												} else if swap.swap_id == gas_swap_id {
+													ccm.stage = CcmStage::GasSwapped {
+														asset_swap_id,
+														gas_budget: (to, swap_output),
+													};
+												} else {
+													debug_assert!(
+														false,
+														"CCM: Swap ID should always match!"
+													);
+												}
+												false
+											},
+											CcmStage::AssetSwapped {
+												asset_output_amount,
+												gas_swap_id,
+											} => {
+												// Store swapped gas and egress the CCM.
+												debug_assert!(
+													swap.swap_id == gas_swap_id,
+													"CCM: Gas swap ID should never mismatch!"
+												);
+												ccm.stage = CcmStage::AssetAndGasSwapped {
+													asset_output_amount,
+													gas_budget: (to, swap_output),
+												};
+												Self::schedule_ccm_egress(*ccm_id, ccm);
+												true
+											},
+											CcmStage::GasSwapped { asset_swap_id, gas_budget } => {
+												// Store swapped asset and egress the CCM.
+												debug_assert!(
+													swap.swap_id == asset_swap_id,
+													"CCM: Asset swap ID should never mismatch!"
+												);
+												ccm.stage = CcmStage::AssetAndGasSwapped {
+													asset_output_amount: swap_output,
+													gas_budget,
+												};
+												Self::schedule_ccm_egress(*ccm_id, ccm);
+												true
+											},
+											_ => true,
+										}
+									},
+									None => {
+										debug_assert!(
+											false,
+											"Swap should always find a valid CCM in storage."
+										);
+										true
+									},
+								};
+
+								// Clear the storage of any CCM already egressed.
+								if should_remove {
+									*maybe_ccm = None;
+								}
+							}),
 					};
 				} else {
 					// This is unlikely but theoretically possible if, for example, the initial swap
@@ -432,77 +503,6 @@ pub mod pallet {
 			SwapQueue::<T>::append(Swap { swap_id, from, to, amount, swap_type });
 
 			swap_id
-		}
-
-		/// Callback used after swap completed for a ccm. Handles CCM specific logic.
-		fn ccm_swap_callback(
-			ccm_id: u64,
-			swap_id: u64,
-			output_asset: Asset,
-			output_amount: AssetAmount,
-		) {
-			// Advance the srage of given CCM.
-			PendingCcms::<T>::mutate_exists(ccm_id, |maybe_ccm| {
-				let should_remove = match maybe_ccm.as_mut() {
-					Some(ccm) => {
-						match ccm.stage.clone() {
-							CcmStage::Ingressed { asset_swap_id, gas_swap_id } => {
-								// Store the swap output and transition into the correct stage.
-								if swap_id == asset_swap_id {
-									ccm.stage = CcmStage::AssetSwapped {
-										asset_output_amount: output_amount,
-										gas_swap_id,
-									};
-								} else if swap_id == gas_swap_id {
-									ccm.stage = CcmStage::GasSwapped {
-										asset_swap_id,
-										gas_budget: (output_asset, output_amount),
-									};
-								} else {
-									debug_assert!(false, "CCM: Swap ID does not match storage!");
-								}
-								false
-							},
-							CcmStage::AssetSwapped { asset_output_amount, gas_swap_id } => {
-								// Store swapped gas and egress the CCM.
-								debug_assert!(
-									swap_id == gas_swap_id,
-									"CCM: Gas swap ID mismatched!"
-								);
-								ccm.stage = CcmStage::AssetAndGasSwapped {
-									asset_output_amount,
-									gas_budget: (output_asset, output_amount),
-								};
-								Self::schedule_ccm_egress(ccm_id, ccm);
-								true
-							},
-							CcmStage::GasSwapped { asset_swap_id, gas_budget } => {
-								// Store swapped asset and egress the CCM.
-								debug_assert!(
-									swap_id == asset_swap_id,
-									"CCM: Asset swap ID mismatched!"
-								);
-								ccm.stage = CcmStage::AssetAndGasSwapped {
-									asset_output_amount: output_amount,
-									gas_budget,
-								};
-								Self::schedule_ccm_egress(ccm_id, ccm);
-								true
-							},
-							_ => true,
-						}
-					},
-					None => {
-						debug_assert!(false, "Swap callback triggered with an invalid CCM ID.");
-						true
-					},
-				};
-
-				// Clear the storage of any CCM already egressed.
-				if should_remove {
-					*maybe_ccm = None;
-				}
-			});
 		}
 
 		/// Schedule the egress of a completed Cross chain message.
