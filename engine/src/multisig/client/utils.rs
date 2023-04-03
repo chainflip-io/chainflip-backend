@@ -16,7 +16,7 @@ fn hash_serialized<T: Clone + Serialize>(data: &T) -> [u8; 32] {
 	*hasher.finalize().as_ref()
 }
 
-/// Find the first element that appears more than `threshold` times
+/// Find an element that appears more than `threshold` times
 pub fn find_frequent_element<T, Iter>(iter: Iter, threshold: usize) -> Option<T>
 where
 	T: Serialize + Clone + std::fmt::Debug,
