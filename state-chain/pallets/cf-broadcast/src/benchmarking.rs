@@ -24,7 +24,7 @@ fn insert_transaction_broadcast_attempt<T: pallet::Config<I>, I: 'static>(
 		broadcast_attempt_id,
 		TransactionSigningAttempt {
 			broadcast_attempt: BroadcastAttempt::<T, I> {
-				unsigned_tx: TransactionFor::<T, I>::benchmark_value(),
+				transaction_payload: TransactionFor::<T, I>::benchmark_value(),
 				broadcast_attempt_id,
 			},
 			nominee,
@@ -34,8 +34,7 @@ fn insert_transaction_broadcast_attempt<T: pallet::Config<I>, I: 'static>(
 
 // Generates a new signature ready call.
 fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T, I> {
-	let threshold_request_id =
-		<T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId::benchmark_value();
+	let threshold_request_id = 1;
 	T::ThresholdSigner::insert_signature(
 		threshold_request_id,
 		ThresholdSignatureFor::<T, I>::benchmark_value(),
@@ -104,12 +103,12 @@ benchmarks_instance_pallet! {
 		let broadcast_attempt_id = Pallet::<T, I>::start_broadcast(&BenchmarkValue::benchmark_value(), BenchmarkValue::benchmark_value(), BenchmarkValue::benchmark_value(), 1);
 
 		T::KeyProvider::set_key(<<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value());
-		let unsigned_tx = TransactionFor::<T, I>::benchmark_value();
+		let transaction_payload = TransactionFor::<T, I>::benchmark_value();
 
 	} : {
 		Pallet::<T, I>::start_next_broadcast_attempt( BroadcastAttempt::<T, I> {
 			broadcast_attempt_id,
-			unsigned_tx,
+			transaction_payload,
 		})
 	}
 	verify {

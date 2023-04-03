@@ -177,7 +177,7 @@ pub mod pallet {
 	pub type PolkadotGenesisHash<T> = StorageValue<_, PolkadotHash, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn polkadot_vault_account_id)]
+	#[pallet::getter(fn polkadot_vault_account)]
 	/// The Polkadot Vault Anonymous Account
 	pub type PolkadotVaultAccountId<T> = StorageValue<_, PolkadotAccountId, OptionQuery>;
 
@@ -195,6 +195,7 @@ pub mod pallet {
 	pub type BitcoinAvailableUtxos<T> = StorageValue<_, Vec<Utxo>, ValueQuery>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn bitcoin_network)]
 	/// Selection of the bitcoin network (mainnet, testnet or regtest) that the state chain
 	/// currently supports.
 	pub type BitcoinNetworkSelection<T> = StorageValue<_, BitcoinNetwork, ValueQuery>;
@@ -379,6 +380,12 @@ pub mod pallet {
 				polkadot_vault_account_id: dot_pure_proxy_vault_key,
 			});
 
+			// The initial polkadot vault creation is special in that the *new* aggkey submits the
+			// creating transaction. So the aggkey account does not need to be reset.
+			// However, `on_new_key_activated` indirectly resets the nonce. So we get it here and
+			// then we can set it again below.
+			let correct_nonce = PolkadotProxyAccountNonce::<T>::get();
+
 			// Witness the agg_key rotation manually in the vaults pallet for polkadot
 			let dispatch_result = T::PolkadotVaultKeyWitnessedHandler::on_new_key_activated(
 				dot_witnessed_aggkey,
@@ -388,7 +395,7 @@ pub mod pallet {
 			// Clean up the broadcast state.
 			T::PolkadotBroadcaster::clean_up_broadcast(broadcast_id)?;
 
-			Self::next_polkadot_proxy_account_nonce();
+			PolkadotProxyAccountNonce::<T>::set(correct_nonce);
 			Ok(dispatch_result)
 		}
 
@@ -419,7 +426,7 @@ pub mod pallet {
 				block_number,
 				UtxoId {
 					tx_hash: Default::default(),
-					vout_index: Default::default(),
+					vout: Default::default(),
 					pubkey_x: Default::default(),
 					salt: Default::default(),
 				},
@@ -447,6 +454,20 @@ pub mod pallet {
 
 			PolkadotRuntimeVersion::<T>::put(runtime_version);
 			Self::deposit_event(Event::<T>::PolkadotRuntimeVersionUpdated { runtime_version });
+
+			Ok(().into())
+		}
+
+		#[pallet::weight(0)]
+		pub fn add_btc_change_utxos(
+			origin: OriginFor<T>,
+			utxos: Vec<cf_chains::btc::Utxo>,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			for utxo in utxos {
+				Self::add_bitcoin_utxo_to_list(utxo);
+			}
 
 			Ok(().into())
 		}
@@ -559,20 +580,12 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	pub fn get_polkadot_vault_account() -> Option<PolkadotAccountId> {
-		PolkadotVaultAccountId::<T>::get()
-	}
-
 	pub fn reset_polkadot_proxy_account_nonce() {
 		PolkadotProxyAccountNonce::<T>::set(0);
 	}
 
 	pub fn add_bitcoin_utxo_to_list(utxo: Utxo) {
 		BitcoinAvailableUtxos::<T>::append(utxo);
-	}
-
-	pub fn get_bitcoin_network() -> BitcoinNetwork {
-		BitcoinNetworkSelection::<T>::get()
 	}
 
 	// Calculate the selection of utxos, return them and remove them from the list. If the
@@ -585,7 +598,7 @@ impl<T: Config> Pallet<T> {
 			select_utxos_from_pool(
 				available_utxos,
 				BitcoinFeePerUtxo::<T>::get(),
-				total_output_amount.try_into().expect("Btc amounts never exceed u64 max, this is made shure elsewhere by the AMM when it calculates how much amounts to output"),
+				total_output_amount,
 			)
 		})
 	}

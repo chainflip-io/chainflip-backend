@@ -1,11 +1,12 @@
 use std::{
 	collections::{BTreeSet, HashMap},
 	sync::Arc,
+	time::Duration,
 };
 
 use cf_chains::{
 	dot::{
-		Polkadot, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotProxyType,
+		self, Polkadot, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotProxyType,
 		PolkadotPublicKey, PolkadotUncheckedExtrinsic,
 	},
 	eth::assets,
@@ -25,15 +26,16 @@ use tokio::{select, sync::Mutex};
 use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
+	constants::{BLOCK_PULL_TIMEOUT_MULTIPLIER, DOT_AVERAGE_BLOCK_TIME_SECONDS},
 	multisig::{ChainTag, PersistentKeyDB},
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
+	stream_utils::EngineStreamExt,
 	witnesser::{
 		block_head_stream_from::block_head_stream_from,
 		checkpointing::{
 			get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
 		},
-		epoch_witnesser::{self},
-		AddressMonitor, BlockNumberable, EpochStart,
+		epoch_witnesser, AddressMonitor, BlockNumberable, EpochStart,
 	},
 };
 
@@ -43,7 +45,7 @@ use super::rpc::DotRpcApi;
 
 #[derive(Debug, Clone, Copy)]
 pub struct MiniHeader {
-	pub block_number: PolkadotBlockNumber,
+	block_number: PolkadotBlockNumber,
 	block_hash: PolkadotHash,
 }
 
@@ -137,11 +139,13 @@ fn check_for_interesting_events_in_block(
 	block_events: Vec<(Phase, EventWrapper)>,
 	block_number: PolkadotBlockNumber,
 	our_vault: &PolkadotAccountId,
-	address_monitor: &mut AddressMonitor<PolkadotAccountId>,
+	address_monitor: &mut AddressMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
 ) -> (
 	Vec<(PolkadotExtrinsicIndex, PolkadotBalance)>,
 	Vec<IngressWitness<Polkadot>>,
 	Vec<Box<state_chain_runtime::RuntimeCall>>,
+	// Median tip of all extrinsics in this block
+	u128,
 ) {
 	// to contain all the ingress witnessse for this block
 	let mut ingress_witnesses = Vec::new();
@@ -152,6 +156,7 @@ fn check_for_interesting_events_in_block(
 	let mut vault_key_rotated_calls: Vec<Box<_>> = Vec::new();
 	let mut fee_paid_for_xt_at_index = HashMap::new();
 	let events_iter = block_events.iter();
+	let mut tips = Vec::<PolkadotBalance>::new();
 	for (phase, wrapped_event) in events_iter {
 		if let Phase::ApplyExtrinsic(extrinsic_index) = *phase {
 			match wrapped_event {
@@ -199,12 +204,28 @@ fn check_for_interesting_events_in_block(
 						interesting_indices.push(extrinsic_index);
 					}
 				},
-				EventWrapper::TransactionFeePaid(TransactionFeePaid { actual_fee, .. }) => {
+				EventWrapper::TransactionFeePaid(TransactionFeePaid {
+					actual_fee, tip, ..
+				}) => {
 					fee_paid_for_xt_at_index.insert(extrinsic_index, *actual_fee);
+					tips.push(*tip);
 				},
 			}
 		}
 	}
+
+	tips.sort();
+	let median_tip = tips
+		.get({
+			let len = tips.len();
+			if len % 2 == 0 {
+				(len / 2).saturating_sub(1)
+			} else {
+				len / 2
+			}
+		})
+		.cloned()
+		.unwrap_or_default();
 
 	(
 		interesting_indices
@@ -213,6 +234,7 @@ fn check_for_interesting_events_in_block(
 			.collect(),
 		ingress_witnesses,
 		vault_key_rotated_calls,
+		median_tip,
 	)
 }
 
@@ -226,7 +248,7 @@ fn check_for_interesting_events_in_block(
 pub async fn start<StateChainClient, DotRpc>(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Polkadot>>,
 	dot_client: DotRpc,
-	address_monitor: AddressMonitor<PolkadotAccountId>,
+	address_monitor: AddressMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
 	signature_receiver: tokio::sync::mpsc::UnboundedReceiver<[u8; 64]>,
 	monitored_signatures: BTreeSet<[u8; 64]>,
 	state_chain_client: Arc<StateChainClient>,
@@ -343,7 +365,7 @@ where
 							}
 						}).collect())
 					}),
-				);
+				).timeout_after(Duration::from_secs(DOT_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER));
 
 				let mut end_at_block = None;
 				let mut current_block = from_block;
@@ -354,7 +376,11 @@ where
 							end_at_block = Some(end_block.expect("end witnessing channel was dropped unexpectedly"));
 							None
 						}
-						Some((block_hash, block_number, block_event_details)) =	block_events_stream.next() => {
+						Some(res) =	block_events_stream.next() => {
+							let (block_hash, block_number, block_event_details) = res.map_err(|e| {
+								error!("{e}");
+								e
+							})?;
 							current_block = block_number;
 							Some((block_hash, block_number, block_event_details))
 						}
@@ -373,12 +399,29 @@ where
 								interesting_indices,
 								ingress_witnesses,
 								vault_key_rotated_calls,
+								median_tip,
 							) = check_for_interesting_events_in_block(
 									block_event_details,
 									block_number,
 									&our_vault,
 									&mut address_monitor,
 									);
+
+									let _result = state_chain_client
+									.submit_signed_extrinsic(
+										state_chain_runtime::RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
+											call: Box::new(state_chain_runtime::RuntimeCall::PolkadotChainTracking(
+												pallet_cf_chain_tracking::Call::update_chain_state {
+													state: dot::PolkadotTrackedData {
+														block_height: block_number,
+														median_tip,
+													},
+												},
+											)),
+											epoch_index: epoch_start.epoch_index
+										}),
+									)
+									.await;
 
 							for call in vault_key_rotated_calls {
 								let _result = state_chain_client
@@ -491,6 +534,7 @@ mod tests {
 
 	use cf_chains::dot;
 	use cf_primitives::PolkadotAccountId;
+	use itertools::Itertools;
 
 	use crate::{
 		dot::rpc::DotRpcClient, state_chain_observer::client::mocks::MockStateChainClient,
@@ -514,6 +558,14 @@ mod tests {
 			actual_fee,
 			who: PolkadotAccountId::from([0xab; 32]),
 			tip: Default::default(),
+		})
+	}
+
+	fn mock_tx_fee_paid_tip(tip: PolkadotBalance) -> EventWrapper {
+		EventWrapper::TransactionFeePaid(TransactionFeePaid {
+			actual_fee: Default::default(),
+			who: PolkadotAccountId::from([0xab; 32]),
+			tip,
 		})
 	}
 
@@ -549,15 +601,12 @@ mod tests {
 			(3u32, mock_tx_fee_paid(20000)),
 		]);
 
-		let (_monitor_ingress_sender, monitor_ingress_receiver) =
-			tokio::sync::mpsc::unbounded_channel();
-
-		let (mut interesting_indices, ingress_witnesses, vault_key_rotated_calls) =
+		let (mut interesting_indices, ingress_witnesses, vault_key_rotated_calls, _) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				Default::default(),
 				&our_vault,
-				&mut AddressMonitor::new(Default::default(), monitor_ingress_receiver),
+				&mut AddressMonitor::new(Default::default()).1,
 			);
 
 		assert_eq!(vault_key_rotated_calls.len(), 1);
@@ -606,23 +655,20 @@ mod tests {
 			),
 		]);
 
-		let (monitor_ingress_sender, monitor_ingress_receiver) =
-			tokio::sync::mpsc::unbounded_channel();
+		let (monitor_ingress_sender, mut address_monitor) =
+			AddressMonitor::new(BTreeSet::from([transfer_1_ingress_addr]));
 
 		monitor_ingress_sender
 			.send(AddressMonitorCommand::Add(transfer_2_ingress_addr))
 			.unwrap();
 
-		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls) =
+		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls, _) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				20,
 				// arbitrary, not focus of the test
 				&PolkadotAccountId::from([0xda; 32]),
-				&mut AddressMonitor::new(
-					BTreeSet::from([transfer_1_ingress_addr]),
-					monitor_ingress_receiver,
-				),
+				&mut address_monitor,
 			);
 
 		assert_eq!(ingress_witnesses.len(), 2);
@@ -670,16 +716,13 @@ mod tests {
 			),
 		]);
 
-		let (_monitor_ingress_sender, monitor_ingress_receiver) =
-			tokio::sync::mpsc::unbounded_channel();
-
-		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls) =
+		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls, _) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				20,
 				// arbitrary, not focus of the test
 				&our_vault,
-				&mut AddressMonitor::new(BTreeSet::default(), monitor_ingress_receiver),
+				&mut AddressMonitor::new(BTreeSet::default()).1,
 			);
 
 		assert!(
@@ -691,6 +734,44 @@ mod tests {
 		assert!(ingress_witnesses.is_empty());
 	}
 
+	#[test]
+	fn test_median_tip_calculation() {
+		test_median_tip_calculated_from_events_correctly(&[], 0);
+		test_median_tip_calculated_from_events_correctly(&[10], 10);
+		test_median_tip_calculated_from_events_correctly(&[10, 100], 10);
+		test_median_tip_calculated_from_events_correctly(&[10, 100, 1000], 100);
+		test_median_tip_calculated_from_events_correctly(&[10, 100, 1000, 1000], 100);
+	}
+
+	fn test_median_tip_calculated_from_events_correctly(
+		test_case: &[PolkadotBalance],
+		expected_median: PolkadotBalance,
+	) {
+		let num_permutations = if test_case.is_empty() { 1 } else { test_case.len() };
+		for tips in test_case.iter().permutations(num_permutations) {
+			let block_event_details = phase_and_events(
+				(1..)
+					.zip(&tips)
+					.map(|(i, &&tip)| (i, mock_tx_fee_paid_tip(tip)))
+					.collect::<Vec<_>>()
+					.as_slice(),
+			);
+
+			let (.., median_tip) = check_for_interesting_events_in_block(
+				block_event_details,
+				20,
+				// arbitrary, not focus of the test
+				&PolkadotAccountId::from([0xda; 32]),
+				&mut AddressMonitor::new(BTreeSet::default()).1,
+			);
+
+			assert_eq!(
+				median_tip, expected_median,
+				"Incorrect median value for input {tips:?}. Expected {expected_median:?}",
+			);
+		}
+	}
+
 	#[ignore = "This test is helpful for local testing. Requires connection to westend"]
 	#[tokio::test]
 	async fn start_witnessing() {
@@ -700,9 +781,6 @@ mod tests {
 		let dot_rpc_client = DotRpcClient::new(url).await.unwrap();
 
 		let (epoch_starts_sender, epoch_starts_receiver) = async_broadcast::broadcast(10);
-
-		let (_dot_monitor_ingress_sender, ingress_address_receiver) =
-			tokio::sync::mpsc::unbounded_channel();
 
 		let (dot_monitor_signature_sender, signature_receiver) =
 			tokio::sync::mpsc::unbounded_channel();
@@ -761,7 +839,7 @@ mod tests {
 		start(
 			epoch_starts_receiver,
 			dot_rpc_client,
-			AddressMonitor::new(BTreeSet::default(), ingress_address_receiver),
+			AddressMonitor::new(Default::default()).1,
 			signature_receiver,
 			BTreeSet::default(),
 			state_chain_client,

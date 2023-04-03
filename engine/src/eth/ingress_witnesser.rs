@@ -17,7 +17,7 @@ use super::{eth_block_witnessing::BlockProcessor, rpc::EthDualRpcClient, EthNumb
 pub struct IngressWitnesser<StateChainClient> {
 	rpc: EthDualRpcClient,
 	state_chain_client: Arc<StateChainClient>,
-	address_monitor: Arc<Mutex<AddressMonitor<H160>>>,
+	address_monitor: Arc<Mutex<AddressMonitor<H160, H160, ()>>>,
 }
 
 impl<StateChainClient> IngressWitnesser<StateChainClient>
@@ -27,7 +27,7 @@ where
 	pub fn new(
 		state_chain_client: Arc<StateChainClient>,
 		rpc: EthDualRpcClient,
-		address_monitor: Arc<Mutex<AddressMonitor<H160>>>,
+		address_monitor: Arc<Mutex<AddressMonitor<H160, H160, ()>>>,
 	) -> Self {
 		Self { rpc, state_chain_client, address_monitor }
 	}

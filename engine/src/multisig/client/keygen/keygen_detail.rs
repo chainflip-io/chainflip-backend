@@ -653,10 +653,8 @@ pub mod genesis {
 			})
 			.collect();
 
-		(
-			keygen_result_infos.values().next().unwrap().key.get_public_key_bytes(),
-			keygen_result_infos,
-		)
+		let agg_key: C::AggKey = keygen_result_infos.values().next().unwrap().key.agg_key();
+		(agg_key.into(), keygen_result_infos)
 	}
 
 	pub fn generate_key_data<C: CryptoScheme>(

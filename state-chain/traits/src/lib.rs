@@ -13,13 +13,14 @@ pub use async_result::AsyncResult;
 use sp_std::collections::btree_set::BTreeSet;
 
 use cf_chains::{
-	benchmarking_value::BenchmarkValue, eth::H256, ApiCall, Chain, ChainAbi, ChainCrypto, Ethereum,
-	Polkadot,
+	address::ForeignChainAddress, eth::H256, ApiCall, CcmIngressMetadata, Chain, ChainAbi,
+	ChainCrypto, Ethereum, Polkadot,
 };
 
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BroadcastId, CeremonyId,
-	EgressId, EpochIndex, EthereumAddress, ForeignChain, ForeignChainAddress, IntentId, KeyId,
+	EgressId, EpochIndex, EthereumAddress, ForeignChain, IntentId, KeyId,
+	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -365,17 +366,34 @@ pub trait ThresholdSignerNomination {
 #[derive(Default, Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
 pub enum KeyState {
 	Active,
-	// We are currently transitioning to a new key or the key doesn't yet exist.
+	/// The key either hasn't been initialised, or is expired.
 	#[default]
-	Unavailable,
+	Inactive,
+	/// Key is only available to sign this request id.
+	Locked(ThresholdSignatureRequestId),
 }
 
-// TODO: Look at creating a function to convert this to KeyId
+impl KeyState {
+	pub fn is_available_for_request(&self, request_id: ThresholdSignatureRequestId) -> bool {
+		match self {
+			KeyState::Active => true,
+			KeyState::Inactive => false,
+			KeyState::Locked(locked_request_id) => request_id == *locked_request_id,
+		}
+	}
+}
+
 #[derive(Default, Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
 pub struct EpochKey<Key> {
 	pub key: Key,
 	pub epoch_index: EpochIndex,
 	pub key_state: KeyState,
+}
+
+impl<Key> EpochKey<Key> {
+	pub fn lock_for_request(&mut self, request_id: ThresholdSignatureRequestId) {
+		self.key_state = KeyState::Locked(request_id);
+	}
 }
 
 /// Provides the currently valid key for multisig ceremonies.
@@ -395,30 +413,30 @@ pub trait ThresholdSigner<C>
 where
 	C: ChainCrypto,
 {
-	type RequestId: Member + Parameter + Copy + BenchmarkValue;
 	type Error: Into<DispatchError>;
 	type Callback: UnfilteredDispatchable;
 	type ValidatorId: Debug;
 
-	/// Initiate a signing request and return the request id and ceremony id.
-	fn request_signature(payload: C::Payload) -> Self::RequestId;
+	/// Initiate a signing request and return the request id and, if the request was successful, the
+	/// ceremony id.
+	fn request_signature(payload: C::Payload) -> ThresholdSignatureRequestId;
 
 	fn request_keygen_verification_signature(
 		payload: C::Payload,
 		key_id: KeyId,
 		participants: BTreeSet<Self::ValidatorId>,
-	) -> Self::RequestId;
+	) -> ThresholdSignatureRequestId;
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the
 	/// provided request_id does not exist.
 	fn register_callback(
-		request_id: Self::RequestId,
+		request_id: ThresholdSignatureRequestId,
 		on_signature_ready: Self::Callback,
 	) -> Result<(), Self::Error>;
 
 	/// Attempt to retrieve a requested signature.
 	fn signature_result(
-		request_id: Self::RequestId,
+		request_id: ThresholdSignatureRequestId,
 	) -> AsyncResult<Result<C::ThresholdSignature, Vec<Self::ValidatorId>>>;
 
 	/// Request a signature and register a callback for when the signature is available.
@@ -429,8 +447,8 @@ where
 	/// the callback based on the request id.
 	fn request_signature_with_callback(
 		payload: C::Payload,
-		callback_generator: impl FnOnce(Self::RequestId) -> Self::Callback,
-	) -> Self::RequestId {
+		callback_generator: impl FnOnce(ThresholdSignatureRequestId) -> Self::Callback,
+	) -> ThresholdSignatureRequestId {
 		let request_id = Self::request_signature(payload);
 		Self::register_callback(request_id, callback_generator(request_id)).unwrap_or_else(|e| {
 			log::error!(
@@ -443,7 +461,10 @@ where
 
 	/// Helper function to enable benchmarking of the broadcast pallet
 	#[cfg(feature = "runtime-benchmarks")]
-	fn insert_signature(_request_id: Self::RequestId, _signature: C::ThresholdSignature) {
+	fn insert_signature(
+		_request_id: ThresholdSignatureRequestId,
+		_signature: C::ThresholdSignature,
+	) {
 		unimplemented!();
 	}
 }
@@ -458,14 +479,16 @@ pub trait Broadcaster<Api: ChainAbi> {
 	type Callback: UnfilteredDispatchable;
 
 	/// Request a threshold signature and then build and broadcast the outbound api call.
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId;
+	fn threshold_sign_and_broadcast(
+		api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId);
 
 	/// Like `threshold_sign_and_broadcast` but also registers a callback to be dispatched when the
 	/// signature accepted event has been witnessed.
 	fn threshold_sign_and_broadcast_with_callback(
 		api_call: Self::ApiCall,
 		callback: Self::Callback,
-	) -> BroadcastId;
+	) -> (BroadcastId, ThresholdSignatureRequestId);
 }
 
 pub trait BroadcastCleanup<C: Chain> {
@@ -649,6 +672,7 @@ pub trait IngressApi<C: Chain> {
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
 		relayer_id: Self::AccountId,
+		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
 }
 
@@ -666,6 +690,7 @@ impl<T: frame_system::Config> IngressApi<Ethereum> for T {
 		_egress_address: ForeignChainAddress,
 		_relayer_commission_bps: u16,
 		_relayer_id: T::AccountId,
+		_message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
 	}
@@ -685,6 +710,7 @@ impl<T: frame_system::Config> IngressApi<Polkadot> for T {
 		_egress_address: ForeignChainAddress,
 		_relayer_commission_bps: u16,
 		_relayer_id: T::AccountId,
+		_message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
 	}
@@ -759,17 +785,19 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 /// API that allows other pallets to Egress assets out of the State Chain.
 pub trait EgressApi<C: Chain> {
 	fn schedule_egress(
-		foreign_asset: C::ChainAsset,
-		amount: AssetAmount,
+		asset: C::ChainAsset,
+		amount: C::ChainAmount,
 		egress_address: C::ChainAccount,
+		maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId;
 }
 
 impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 	fn schedule_egress(
-		_foreign_asset: assets::eth::Asset,
-		_amount: AssetAmount,
+		_asset: assets::eth::Asset,
+		_amount: <Ethereum as Chain>::ChainAmount,
 		_egress_address: <Ethereum as Chain>::ChainAccount,
+		_maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId {
 		(ForeignChain::Ethereum, 0)
 	}
@@ -777,11 +805,12 @@ impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 
 impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 	fn schedule_egress(
-		_foreign_asset: assets::dot::Asset,
-		_amount: AssetAmount,
+		_asset: assets::dot::Asset,
+		_amount: <Polkadot as Chain>::ChainAmount,
 		_egress_address: <Polkadot as Chain>::ChainAccount,
+		_maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId {
-		(ForeignChain::Ethereum, 0)
+		(ForeignChain::Polkadot, 0)
 	}
 }
 
@@ -832,5 +861,30 @@ pub trait IngressHandler<C: ChainCrypto> {
 		_address: <C as Chain>::ChainAccount,
 		_asset: <C as Chain>::ChainAsset,
 	) {
+	}
+}
+
+/// Trait for handling cross chain messages.
+pub trait CcmHandler {
+	/// On the ingress of a cross-chain message, swap the asset into egress asset,
+	/// subtract the gas budge from it, then egress the message to the target chain.
+	fn on_ccm_ingress(
+		ingress_asset: Asset,
+		ingress_amount: AssetAmount,
+		egress_asset: Asset,
+		egress_address: ForeignChainAddress,
+		message_metadata: CcmIngressMetadata,
+	) -> DispatchResult;
+}
+
+impl CcmHandler for () {
+	fn on_ccm_ingress(
+		_ingress_asset: Asset,
+		_ingress_amount: AssetAmount,
+		_egress_asset: Asset,
+		_egress_address: ForeignChainAddress,
+		_message_metadata: CcmIngressMetadata,
+	) -> DispatchResult {
+		Ok(())
 	}
 }

@@ -23,7 +23,7 @@ cf-primitives = { path ='../../primitives', default-features = false }
 utilities = { path = '../../../utilities', default-features = false }
 
 # Non-substrate external deps
-bitvec = { default-features = false, version = '0.20', features = ['alloc'] }
+bitvec = { default-features = false, version = '1.0', features = ['alloc'] }
 
 # Parity deps
 codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }

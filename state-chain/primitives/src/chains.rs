@@ -43,6 +43,16 @@ chains! {
 	Bitcoin
 }
 
+impl ForeignChain {
+	pub fn gas_asset(self) -> assets::any::Asset {
+		match self {
+			ForeignChain::Ethereum => assets::any::Asset::Eth,
+			ForeignChain::Polkadot => assets::any::Asset::Dot,
+			ForeignChain::Bitcoin => assets::any::Asset::Btc,
+		}
+	}
+}
+
 #[test]
 fn test_chains() {
 	assert_eq!(Ethereum.as_ref(), &ForeignChain::Ethereum);

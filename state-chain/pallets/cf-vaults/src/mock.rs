@@ -187,15 +187,17 @@ impl Broadcaster<MockEthereum> for MockBroadcaster {
 	type ApiCall = MockSetAggKeyWithAggKey;
 	type Callback = MockCallback;
 
-	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
+	fn threshold_sign_and_broadcast(
+		_api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		Self::send_broadcast();
-		1
+		(1, 2)
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
 		_api_call: Self::ApiCall,
 		_callback: Self::Callback,
-	) -> BroadcastId {
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		unimplemented!()
 	}
 }

@@ -7,10 +7,8 @@ pub use pallet::*;
 use sp_runtime::DispatchResult;
 use sp_std::cmp::{Ord, Ordering};
 
-use cf_chains::AnyChain;
-use cf_primitives::{
-	AmmRange, Asset, AssetAmount, ForeignChain, ForeignChainAddress, IntentId, Liquidity, PoolSide,
-};
+use cf_chains::{address::ForeignChainAddress, AnyChain};
+use cf_primitives::{AmmRange, Asset, AssetAmount, ForeignChain, IntentId, Liquidity, PoolSide};
 use cf_traits::{
 	liquidity::LpProvisioningApi, AccountRoleRegistry, Chainflip, EgressApi, IngressApi,
 	LiquidityPoolApi, SystemStateInfo,
@@ -144,7 +142,7 @@ pub mod pallet {
 				Self::try_debit(&account_id, asset, amount)?;
 
 				let egress_id =
-					T::EgressHandler::schedule_egress(asset, amount, egress_address.clone());
+					T::EgressHandler::schedule_egress(asset, amount, egress_address.clone(), None);
 
 				Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
 					egress_id,

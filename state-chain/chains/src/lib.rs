@@ -2,8 +2,9 @@
 use core::fmt::Display;
 
 use crate::benchmarking_value::BenchmarkValue;
+pub use address::ForeignChainAddress;
 use cf_primitives::{
-	chains::assets, AssetAmount, EpochIndex, EthAmount, IntentId, KeyId, PublicKeyBytes,
+	chains::assets, AssetAmount, EgressId, EpochIndex, EthAmount, IntentId, KeyId, PublicKeyBytes,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -11,12 +12,18 @@ use frame_support::{
 	Blake2_256, Parameter, RuntimeDebug, StorageHasher,
 };
 use scale_info::TypeInfo;
-use sp_runtime::traits::{AtLeast32BitUnsigned, Saturating};
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, Saturating},
+	DispatchError,
+};
 use sp_std::{
 	convert::{Into, TryFrom},
 	fmt::Debug,
 	prelude::*,
 	vec,
+	vec::Vec,
 };
 
 pub use cf_primitives::chains::*;
@@ -27,6 +34,8 @@ pub mod any;
 pub mod btc;
 pub mod dot;
 pub mod eth;
+
+pub mod address;
 
 #[cfg(feature = "std")]
 pub mod mocks;
@@ -51,14 +60,19 @@ pub trait Chain: Member + Parameter {
 		+ Copy
 		+ Default
 		+ Saturating
-		+ Into<u128>
-		+ From<u128>
+		+ Into<AssetAmount>
 		+ FullCodec
-		+ MaxEncodedLen;
+		+ MaxEncodedLen
+		+ BenchmarkValue;
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
-	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Age<Self> + BenchmarkValue;
+	type TrackedData: Member
+		+ Parameter
+		+ MaxEncodedLen
+		+ Clone
+		+ Age<BlockNumber = Self::ChainBlockNumber>
+		+ BenchmarkValue;
 
 	type ChainAsset: Member
 		+ Parameter
@@ -73,8 +87,8 @@ pub trait Chain: Member + Parameter {
 		+ MaxEncodedLen
 		+ BenchmarkValue
 		+ Debug
-		+ TryFrom<cf_primitives::ForeignChainAddress>
-		+ Into<cf_primitives::ForeignChainAddress>;
+		+ TryFrom<ForeignChainAddress>
+		+ Into<ForeignChainAddress>;
 
 	type EpochStartData: Member + Parameter + MaxEncodedLen;
 
@@ -86,13 +100,17 @@ pub trait Chain: Member + Parameter {
 }
 
 /// Measures the age of items associated with the Chain.
-pub trait Age<C: Chain> {
+pub trait Age {
+	type BlockNumber;
+
 	/// The creation block of this item.
-	fn birth_block(&self) -> C::ChainBlockNumber;
+	fn birth_block(&self) -> Self::BlockNumber;
 }
 
-impl<C: Chain> Age<C> for () {
-	fn birth_block(&self) -> C::ChainBlockNumber {
+impl Age for () {
+	type BlockNumber = u64;
+
+	fn birth_block(&self) -> Self::BlockNumber {
 		unimplemented!()
 	}
 }
@@ -183,19 +201,12 @@ pub struct FetchAssetParams<C: Chain> {
 }
 
 /// Contains all the parameters required for transferring an asset on an external chain.
-#[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct TransferAssetParams<C: Chain> {
 	pub asset: <C as Chain>::ChainAsset,
+	pub amount: <C as Chain>::ChainAmount,
 	pub to: <C as Chain>::ChainAccount,
-	pub amount: AssetAmount,
 }
-
-pub trait IngressAddress {
-	type AddressType;
-	/// Returns an ingress address
-	fn derive_address(self, vault_address: Self::AddressType, intent_id: u32) -> Self::AddressType;
-}
-
 /// Similar to [frame_support::StaticLookup] but with the `Key` as a type parameter instead of an
 /// associated type.
 ///
@@ -255,6 +266,16 @@ pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	) -> Result<Self, ()>;
 }
 
+#[allow(clippy::result_unit_err)]
+pub trait ExecutexSwapAndCall<Abi: ChainAbi>: ApiCall<Abi> {
+	fn new_unsigned(
+		egress_id: EgressId,
+		transfer_param: TransferAssetParams<Abi>,
+		from: ForeignChainAddress,
+		message: Vec<u8>,
+	) -> Result<Self, DispatchError>;
+}
+
 pub trait FeeRefundCalculator<C: Chain> {
 	/// Takes the generic TransactionFee, allowing us to compare with the fee
 	/// we expected (contained in self) and return the fee we want to refund
@@ -272,4 +293,26 @@ pub trait IngressIdConstructor {
 	fn deployed(intent_id: u64, address: Self::Address) -> Self;
 	/// Constructs the IngressId for the undeployed case.
 	fn undeployed(intent_id: u64, address: Self::Address) -> Self;
+}
+
+/// Metadata as part of a Cross Chain Message.
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct CcmIngressMetadata {
+	// Call data used after the message is egressed.
+	pub message: Vec<u8>,
+	// Amount of ingress funds to be used for gas.
+	pub gas_budget: AssetAmount,
+	// The address refunds will go to.
+	pub refund_address: ForeignChainAddress,
+}
+
+#[cfg(feature = "std")]
+impl std::str::FromStr for CcmIngressMetadata {
+	type Err = String;
+
+	fn from_str(_s: &str) -> Result<Self, Self::Err> {
+		// TODO: check how from_str is used / should be implemented
+		todo!()
+	}
 }

@@ -2,7 +2,7 @@ pub mod batch_transfer;
 
 use super::{
 	ingress_address::derive_btc_ingress_address, scriptpubkey_from_address, AggKey, Bitcoin,
-	BitcoinNetwork, BitcoinOutput, BtcAmount, Utxo,
+	BitcoinNetwork, BitcoinOutput, BtcAmount, Utxo, CHANGE_ADDRESS_SALT,
 };
 use crate::*;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
@@ -32,27 +32,23 @@ where
 		let bitcoin_network = <E as ChainEnvironment<(), BitcoinNetwork>>::lookup(())
 			.expect("Since the lookup function always returns a some");
 		let bitcoin_return_address = derive_btc_ingress_address(
-			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(())?.0,
-			0,
+			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(())?.pubkey_x,
+			CHANGE_ADDRESS_SALT,
 			bitcoin_network,
 		);
 		let mut total_output_amount: u64 = 0;
 		let mut btc_outputs = vec![];
 		for transfer_param in transfer_params {
 			btc_outputs.push(BitcoinOutput {
-				amount: transfer_param.clone().amount.try_into().expect("Since this output comes from the AMM and if AMM math works correctly, this should be a valid bitcoin amount which should be less than u64::max"),
-				script_pubkey: scriptpubkey_from_address(
-					sp_std::str::from_utf8(&transfer_param.to[..]).map_err(|_| ())?,
-					bitcoin_network,
-				).map_err(|_|())?,
+				amount: transfer_param.amount,
+				script_pubkey: transfer_param.to.to_scriptpubkey().map_err(|_| ())?,
 			});
-			total_output_amount += <u128 as TryInto<u64>>::try_into(transfer_param.amount)
-				.expect("BTC amounts are never more than u64 max");
+			total_output_amount += transfer_param.amount;
 		}
 		// Looks up all available Utxos and selects and takes them for the transaction depending on
 		// the amount that needs to be output.
 		let (selected_input_utxos, total_input_amount_available) =
-			<E as ChainEnvironment<BtcAmount, SelectedUtxos>>::lookup(total_output_amount.into())
+			<E as ChainEnvironment<BtcAmount, SelectedUtxos>>::lookup(total_output_amount)
 				.ok_or(())?;
 
 		btc_outputs.push(BitcoinOutput {
@@ -84,11 +80,12 @@ where
 
 		// We will use the bitcoin address derived with the salt of 0 as the vault address where we
 		// collect unspent amounts in btc transactions and consolidate funds when rotating epoch.
-		let new_vault_return_address = derive_btc_ingress_address(new_key.0, 0, bitcoin_network);
+		let new_vault_return_address =
+			derive_btc_ingress_address(new_key.pubkey_x, CHANGE_ADDRESS_SALT, bitcoin_network);
 
 		//max possible btc value to get all available utxos
 		let (all_input_utxos, total_spendable_amount_in_vault) =
-			<E as ChainEnvironment<BtcAmount, SelectedUtxos>>::lookup(u64::MAX.into()).ok_or(())?;
+			<E as ChainEnvironment<BtcAmount, SelectedUtxos>>::lookup(u64::MAX).ok_or(())?;
 
 		Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
 			all_input_utxos,
@@ -106,6 +103,18 @@ where
 impl<E> From<batch_transfer::BatchTransfer> for BitcoinApi<E> {
 	fn from(tx: batch_transfer::BatchTransfer) -> Self {
 		Self::BatchTransfer(tx)
+	}
+}
+
+// TODO: Implement transfer / transfer and call for Bitcoin.
+impl<E: ReplayProtectionProvider<Bitcoin>> ExecutexSwapAndCall<Bitcoin> for BitcoinApi<E> {
+	fn new_unsigned(
+		_egress_id: EgressId,
+		_transfer_param: TransferAssetParams<Bitcoin>,
+		_from: ForeignChainAddress,
+		_message: Vec<u8>,
+	) -> Result<Self, DispatchError> {
+		Err(DispatchError::Other("Bitcoin's ExecutexSwapAndCall is not supported."))
 	}
 }
 

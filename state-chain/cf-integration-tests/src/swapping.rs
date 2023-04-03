@@ -1,4 +1,5 @@
 //! Contains tests related to liquidity, pools and swapping
+use cf_chains::address::ForeignChainAddress;
 use cf_test_utilities::{assert_has_event_pattern, extract_from_event};
 use frame_support::{
 	assert_noop, assert_ok,
@@ -16,8 +17,7 @@ use cf_primitives::{
 		assets::{any, eth},
 		Ethereum,
 	},
-	AccountId, AccountRole, AmmRange, Asset, AssetAmount, ForeignChain, ForeignChainAddress,
-	PoolAssetMap,
+	AccountId, AccountRole, AmmRange, Asset, AssetAmount, ForeignChain, PoolAssetMap,
 };
 use cf_traits::{AddressDerivationApi, LiquidityPoolApi, LpProvisioningApi, SwappingApi};
 use pallet_cf_ingress_egress::IngressWitness;
@@ -134,7 +134,6 @@ fn can_swap_assets() {
 		]);
 
 		let relayer: AccountId = AccountId::from([0xE0; 32]);
-
 		// Test swap
 		assert_ok!(Swapping::register_swap_intent(
 			RuntimeOrigin::signed(relayer),
@@ -142,6 +141,7 @@ fn can_swap_assets() {
 			Asset::Flip,
 			ForeignChainAddress::Eth(EGRESS_ADDRESS),
 			0u16,
+			None,
 		));
 
 		const SWAP_AMOUNT: u128 = 10_000;
@@ -152,6 +152,7 @@ fn can_swap_assets() {
 				swap_id,
 				ingress_address,
 				ingress_amount: SWAP_AMOUNT,
+				..
 			}) => (swap_id, ingress_address)
 		);
 		assert_eq!(ingress_address, expected_ingress_address.into());
@@ -222,6 +223,7 @@ fn swap_can_accrue_fees() {
 			Asset::Flip,
 			ForeignChainAddress::Eth(EGRESS_ADDRESS),
 			0u16,
+			None,
 		));
 
 		const SWAP_AMOUNT: u128 = 10_000u128;
@@ -326,6 +328,7 @@ fn swap_fails_with_insufficient_liquidity() {
 			Asset::Flip,
 			ForeignChainAddress::Eth(EGRESS_ADDRESS),
 			0u16,
+			None,
 		));
 
 		let swap_amount = 10_000u128;

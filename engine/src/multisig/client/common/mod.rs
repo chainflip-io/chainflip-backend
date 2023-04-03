@@ -80,9 +80,8 @@ impl<C: CryptoScheme> KeygenResult<C> {
 		self.key_share.y
 	}
 
-	/// Gets the serialized compressed public key (33 bytes - 32 bytes + a y parity byte)
-	pub fn get_public_key_bytes(&self) -> Vec<u8> {
-		self.key_share.y.as_bytes().as_ref().into()
+	pub fn agg_key(&self) -> C::AggKey {
+		C::agg_key(&self.get_public_key())
 	}
 }
 

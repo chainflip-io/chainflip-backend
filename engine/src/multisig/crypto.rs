@@ -9,6 +9,7 @@ pub mod secp256k1;
 #[cfg(test)]
 mod tests;
 
+use cf_chains::ChainCrypto;
 use cf_primitives::PublicKeyBytes;
 use generic_array::{typenum::Unsigned, ArrayLength};
 
@@ -104,7 +105,8 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 
 	type Signature: Debug + Clone + PartialEq + Sync + Send;
 
-	type AggKey;
+	type AggKey: Into<PublicKeyBytes> + Clone;
+
 	type SigningPayload: Display + Debug + Sync + Send + Clone + PartialEq + Eq + AsRef<[u8]>;
 
 	/// Friendly name of the scheme used for logging
@@ -147,7 +149,7 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 
 	fn verify_signature(
 		signature: &Self::Signature,
-		key_id: &PublicKeyBytes,
+		public_key_bytes: &PublicKeyBytes,
 		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()>;
 
@@ -208,4 +210,8 @@ pub fn generate_single_party_signature<C: CryptoScheme>(
 	let sigma = generate_schnorr_response::<C>(secret_key, public_key, r, nonce, payload);
 
 	C::build_signature(sigma, r)
+}
+
+pub trait SignatureToThresholdSignature<C: ChainCrypto> {
+	fn to_threshold_signature(&self) -> C::ThresholdSignature;
 }

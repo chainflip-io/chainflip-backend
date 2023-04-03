@@ -187,6 +187,14 @@ jobs:
     needs: [build-and-test]
     env:
       RUST_BACKTRACE: 1
+    services:
+      bitcoin:
+        image: ghcr.io/chainflip-io/chainflip-bitcoin-regtest:v24.0.1
+        credentials:
+          username: chainflip-bot
+          password: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+        ports:
+          - 8332:8332
     steps:
       - uses: actions/setup-node@v3
         with:
@@ -224,6 +232,9 @@ jobs:
           ETH__WS_NODE_ENDPOINT: ${{ secrets.ETH__WS_NODE_ENDPOINT }}
           ETH__HTTP_NODE_ENDPOINT: ${{ secrets.ETH__HTTP_NODE_ENDPOINT }}
           DOT__WS_NODE_ENDPOINT: ${{ secrets.DOT__WS_NODE_ENDPOINT }}
+          BTC__HTTP_NODE_ENDPOINT: http://localhost:8332
+          BTC__RPC_USER: flip
+          BTC__RPC_PASSWORD: flip
       - name: Check engine health
         run: >
           curl --url 'http://localhost:5555/health' --connect-timeout 5 --max-time 10 --retry 10 --retry-delay 2 --retry-max-time 20 --retry-connrefused -vv
