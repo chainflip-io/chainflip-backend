@@ -1,6 +1,10 @@
+use base58::FromBase58;
 use chainflip_api::{
 	self, lp,
-	primitives::{AccountRole, AmmRange, Asset, AssetAmount, ForeignChainAddress, Liquidity, Tick},
+	primitives::{
+		AccountRole, AmmRange, Asset, AssetAmount, BitcoinAddress, BitcoinAddressData,
+		BitcoinAddressFor, ForeignChainAddress, Liquidity, Tick,
+	},
 	settings::StateChain,
 };
 use clap::Parser;
@@ -92,7 +96,19 @@ impl RpcServer for RpcServerImpl {
 			Asset::Dot => clean_dot_address(egress_address)
 				.map(ForeignChainAddress::from)
 				.map_err(|e| Error::Custom(format!("Invalid egress_address: {e}"))),
-			// TODO: add BTC support
+			Asset::Btc => {
+				let address: BitcoinAddress = egress_address
+					.from_base58()
+					.map_err(|_| "Invalid base58")
+					.and_then(|a| a.try_into().map_err(|_| "Invalid length"))
+					.map_err(|e| Error::Custom(format!("Invalid egress_address: {e}")))?;
+
+				let address_data = BitcoinAddressData {
+					address_for: BitcoinAddressFor::Egress(address),
+					network: lp::get_btc_network(&self.state_chain_settings).await?,
+				};
+				Ok(ForeignChainAddress::from(address_data))
+			},
 			_ => return Err(Error::Custom(format!("{asset:?} not supported"))),
 		}?;
 

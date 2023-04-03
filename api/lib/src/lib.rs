@@ -16,7 +16,10 @@ pub mod primitives {
 	pub use pallet_cf_governance::ProposalId;
 	pub use state_chain_runtime::Hash;
 	pub type ClaimAmount = pallet_cf_staking::ClaimAmount<FlipBalance>;
-	pub use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata};
+	pub use cf_chains::{
+		address::{BitcoinAddress, BitcoinAddressData, BitcoinAddressFor, ForeignChainAddress},
+		CcmIngressMetadata,
+	};
 }
 
 pub mod lp;
