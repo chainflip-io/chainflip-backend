@@ -433,7 +433,7 @@ pub mod pallet {
 												// Store swapped gas and egress the CCM.
 												debug_assert!(
 													swap.swap_id == gas_swap_id,
-													"CCM: Gas swap ID should never mismatch!"
+													"CCM: Gas swap ID should always match!"
 												);
 												ccm.stage = CcmStage::AssetAndGasSwapped {
 													asset_output_amount,
@@ -446,7 +446,7 @@ pub mod pallet {
 												// Store swapped asset and egress the CCM.
 												debug_assert!(
 													swap.swap_id == asset_swap_id,
-													"CCM: Asset swap ID should never mismatch!"
+													"CCM: Asset swap ID should always match!"
 												);
 												ccm.stage = CcmStage::AssetAndGasSwapped {
 													asset_output_amount: swap_output,
@@ -520,7 +520,7 @@ pub mod pallet {
 				);
 				Self::deposit_event(Event::<T>::CcmEgressScheduled { ccm_id, egress_id });
 			} else {
-				debug_assert!(false, "Only completed CCM can be egressed.");
+				debug_assert!(false, "Incomplete CCM should never be egressed.");
 			};
 		}
 	}
