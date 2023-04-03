@@ -635,7 +635,7 @@ impl PoolState {
 		self.inner_collect::<SD>(lp, sqrt_price)
 	}
 
-	pub fn inner_collect<SD: SwapDirection>(
+	fn inner_collect<SD: SwapDirection>(
 		&mut self,
 		lp: &LiquidityProvider,
 		sqrt_price: SqrtPriceQ64F96,
