@@ -803,6 +803,7 @@ dependencies = [
 name = "cf-integration-tests"
 version = "0.1.0"
 dependencies = [
+ "arrayref",
  "cf-chains",
  "cf-primitives",
  "cf-test-utilities",
@@ -839,6 +840,7 @@ dependencies = [
  "parity-scale-codec",
  "rand 0.8.5",
  "scale-info",
+ "secp256k1 0.20.3",
  "sp-block-builder",
  "sp-consensus-aura",
  "sp-core 7.0.0",
@@ -9986,8 +9988,9 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "subxt"
-version = "0.25.0"
-source = "git+https://github.com/paritytech/subxt.git?rev=4155850#4155850063dbf2ee973e3da778eb988b32d6fa6c"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44ddcf2435955202d5f97934e80eb56bbafc85d31949a857ae77431b19f5eddf"
 dependencies = [
  "base58",
  "blake2",
@@ -10018,8 +10021,9 @@ dependencies = [
 
 [[package]]
 name = "subxt-codegen"
-version = "0.25.0"
-source = "git+https://github.com/paritytech/subxt.git?rev=4155850#4155850063dbf2ee973e3da778eb988b32d6fa6c"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0217ebd818e3d4ff1f56cdba4fcc08ede2b9c8eaf2945ad1b442685f674a465f"
 dependencies = [
  "darling 0.14.2",
  "frame-metadata",
@@ -10038,8 +10042,9 @@ dependencies = [
 
 [[package]]
 name = "subxt-macro"
-version = "0.25.0"
-source = "git+https://github.com/paritytech/subxt.git?rev=4155850#4155850063dbf2ee973e3da778eb988b32d6fa6c"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd0663fedcacc1b3d1430c05e429c2ac40efeab41399efcaaf6ad4070737f3e9"
 dependencies = [
  "darling 0.14.2",
  "proc-macro-error",
@@ -10049,8 +10054,9 @@ dependencies = [
 
 [[package]]
 name = "subxt-metadata"
-version = "0.25.0"
-source = "git+https://github.com/paritytech/subxt.git?rev=4155850#4155850063dbf2ee973e3da778eb988b32d6fa6c"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "419b06bdd1926c3b2c53d5ea4f2c875c29afaede2e5de11346f67199ed180685"
 dependencies = [
  "frame-metadata",
  "parity-scale-codec",

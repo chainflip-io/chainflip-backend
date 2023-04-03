@@ -48,6 +48,7 @@ pub mod pallet {
 
 	/// The tracked state of the external chain.
 	#[pallet::storage]
+	#[pallet::getter(fn chain_state)]
 	pub type ChainState<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, <T::TargetChain as Chain>::TrackedData>;
 
@@ -80,7 +81,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			state: <T::TargetChain as Chain>::TrackedData,
 		) -> DispatchResultWithPostInfo {
-			let _ok = T::EnsureWitnessed::ensure_origin(origin)?;
+			T::EnsureWitnessed::ensure_origin(origin)?;
 
 			ChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|maybe_previous| {
 				if let Some(previous) = maybe_previous.replace(state.clone()) {

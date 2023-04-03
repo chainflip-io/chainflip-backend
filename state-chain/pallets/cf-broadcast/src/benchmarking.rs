@@ -34,8 +34,7 @@ fn insert_transaction_broadcast_attempt<T: pallet::Config<I>, I: 'static>(
 
 // Generates a new signature ready call.
 fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T, I> {
-	let threshold_request_id =
-		<T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId::benchmark_value();
+	let threshold_request_id = 1;
 	T::ThresholdSigner::insert_signature(
 		threshold_request_id,
 		ThresholdSignatureFor::<T, I>::benchmark_value(),

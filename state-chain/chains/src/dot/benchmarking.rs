@@ -1,12 +1,11 @@
 use crate::{
 	benchmarking_value::BenchmarkValue,
 	dot::{
-		BalancesCall, Polkadot, PolkadotAccountIdLookup, PolkadotAddress,
-		PolkadotChargeTransactionPayment, PolkadotCheckMortality, PolkadotCheckNonce,
-		PolkadotPublicKey, PolkadotRuntimeCall, PolkadotSignature, PolkadotSignedExtra,
-		PolkadotTransactionData, PolkadotUncheckedExtrinsic,
+		BalancesCall, PolkadotAccountIdLookup, PolkadotAddress, PolkadotChargeTransactionPayment,
+		PolkadotCheckMortality, PolkadotCheckNonce, PolkadotPublicKey, PolkadotRuntimeCall,
+		PolkadotSignature, PolkadotSignedExtra, PolkadotTransactionData,
+		PolkadotUncheckedExtrinsic,
 	},
-	eth::TrackedData,
 };
 
 use sp_core::{crypto::AccountId32, sr25519};
@@ -14,7 +13,7 @@ use sp_runtime::{generic::Era, traits::IdentifyAccount, MultiSignature, MultiSig
 
 use super::{
 	api::{create_anonymous_vault::CreateAnonymousVault, PolkadotApi},
-	EncodedPolkadotPayload, PolkadotAccountId, PolkadotReplayProtection, TxId,
+	EncodedPolkadotPayload, PolkadotAccountId, PolkadotReplayProtection, PolkadotTrackedData, TxId,
 };
 
 const SIGNATURE: [u8; 64] = [1u8; 64];
@@ -60,12 +59,6 @@ impl BenchmarkValue for PolkadotPublicKey {
 	}
 }
 
-impl BenchmarkValue for TrackedData<Polkadot> {
-	fn benchmark_value() -> Self {
-		Self { block_height: 1000, base_fee: 10_000_000_000, priority_fee: 2_000_000_000 }
-	}
-}
-
 impl BenchmarkValue for PolkadotTransactionData {
 	fn benchmark_value() -> Self {
 		Self { encoded_extrinsic: ENCODED_EXTRINSIC.to_vec() }
@@ -104,5 +97,11 @@ impl BenchmarkValue for EncodedPolkadotPayload {
 impl BenchmarkValue for TxId {
 	fn benchmark_value() -> Self {
 		Self { block_number: 32, extrinsic_index: 7 }
+	}
+}
+
+impl BenchmarkValue for PolkadotTrackedData {
+	fn benchmark_value() -> Self {
+		PolkadotTrackedData { median_tip: 2, block_height: 20 }
 	}
 }

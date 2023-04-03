@@ -91,8 +91,6 @@ pub enum PolkadotProxyType {
 	Auction = 7,
 }
 
-type DotAmount = u128;
-
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct EncodedPolkadotPayload(pub Vec<u8>);
 
@@ -101,10 +99,24 @@ pub struct EpochStartData {
 	pub vault_account: PolkadotAccountId,
 }
 
+#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
+pub struct PolkadotTrackedData {
+	pub block_height: PolkadotBlockNumber,
+	pub median_tip: PolkadotBalance,
+}
+
+impl Age for PolkadotTrackedData {
+	type BlockNumber = PolkadotBlockNumber;
+
+	fn birth_block(&self) -> PolkadotBlockNumber {
+		self.block_height
+	}
+}
+
 impl Chain for Polkadot {
 	type ChainBlockNumber = PolkadotBlockNumber;
-	type ChainAmount = DotAmount;
-	type TrackedData = ();
+	type ChainAmount = PolkadotBalance;
+	type TrackedData = PolkadotTrackedData;
 	type ChainAccount = PolkadotAccountId;
 	type TransactionFee = Self::ChainAmount;
 	type ChainAsset = assets::dot::Asset;
@@ -224,7 +236,6 @@ impl PolkadotExtrinsicBuilder {
 			(),
 			(),
 		);
-		//assert_eq!(extra.additional_signed().unwrap().3, additional_signed.3);
 		let raw_payload =
 			PolkadotPayload::from_raw(self.extrinsic_call.clone()?, extra, additional_signed);
 		self.signature_payload = raw_payload.using_encoded(|encoded_payload| {

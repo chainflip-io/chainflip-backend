@@ -142,7 +142,7 @@ pub mod pallet {
 				Self::try_debit(&account_id, asset, amount)?;
 
 				let egress_id =
-					T::EgressHandler::schedule_egress(asset, amount, egress_address.clone());
+					T::EgressHandler::schedule_egress(asset, amount, egress_address.clone(), None);
 
 				Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
 					egress_id,

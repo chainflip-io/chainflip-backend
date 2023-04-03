@@ -1,5 +1,7 @@
 use crate::{Chainflip, IngressApi};
-use cf_chains::{address::ForeignChainAddress, eth::assets::any, Chain, ForeignChain};
+use cf_chains::{
+	address::ForeignChainAddress, eth::assets::any, CcmIngressMetadata, Chain, ForeignChain,
+};
 use cf_primitives::IntentId;
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
@@ -26,6 +28,7 @@ pub struct SwapIntent<C: Chain, T: Chainflip> {
 	egress_address: ForeignChainAddress,
 	relayer_commission_bps: u16,
 	relayer_id: <T as frame_system::Config>::AccountId,
+	message_metadata: Option<CcmIngressMetadata>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -96,6 +99,7 @@ impl<C: Chain, T: Chainflip> IngressApi<C> for MockIngressHandler<C, T> {
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: u16,
 		relayer_id: Self::AccountId,
+		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(cf_primitives::IntentId, ForeignChainAddress), sp_runtime::DispatchError> {
 		let (intent_id, ingress_address) = Self::get_new_intent(SwapOrLp::Swap, ingress_asset);
 		<Self as MockPalletStorage>::mutate_value(b"SWAP_INGRESS_INTENTS", |storage| {
@@ -106,6 +110,7 @@ impl<C: Chain, T: Chainflip> IngressApi<C> for MockIngressHandler<C, T> {
 				egress_address,
 				relayer_commission_bps,
 				relayer_id,
+				message_metadata,
 			})
 		});
 		Ok((intent_id, ingress_address))

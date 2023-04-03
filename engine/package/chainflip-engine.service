@@ -11,6 +11,8 @@ ExecStart=/etc/chainflip/start-engine.sh
 
 StandardOutput=append:/var/log/chainflip-engine.log
 StandardError=append:/var/log/chainflip-engine.log
+LimitNOFILE=16000
+LimitNOFILESoft=16000
 
 [Install]
 WantedBy=multi-user.target

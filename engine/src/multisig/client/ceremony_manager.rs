@@ -42,7 +42,7 @@ use super::{
 		CeremonyStage, KeygenStageName, PreProcessStageDataCheck, ResharingContext,
 		SigningStageName,
 	},
-	keygen::{HashCommitments1, HashContext, KeygenData},
+	keygen::{HashCommitments1, HashContext, KeygenData, PubkeySharesStage0},
 	legacy::MultisigMessageV1,
 	signing::SigningData,
 	CeremonyRequest, MultisigData, MultisigMessage,
@@ -177,13 +177,54 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 	Ok(PreparedRequest { initial_stage })
 }
 
+pub fn prepare_key_handover_request<Crypto: CryptoScheme>(
+	ceremony_id: CeremonyId,
+	own_account_id: &AccountId,
+	participants: BTreeSet<AccountId>,
+	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
+	resharing_context: ResharingContext<Crypto>,
+	rng: Rng,
+) -> Result<PreparedRequest<KeygenCeremony<Crypto>>, KeygenFailureReason> {
+	let validator_mapping = Arc::new(PartyIdxMapping::from_participants(participants.clone()));
+
+	let (our_idx, signer_idxs) =
+		match map_ceremony_parties(own_account_id, &participants, &validator_mapping) {
+			Ok(res) => res,
+			Err(reason) => {
+				debug!("Key Handover request invalid: {reason}");
+
+				return Err(KeygenFailureReason::InvalidParticipants)
+			},
+		};
+
+	let initial_stage = {
+		let common = CeremonyCommon {
+			ceremony_id,
+			outgoing_p2p_message_sender: outgoing_p2p_message_sender.clone(),
+			validator_mapping,
+			own_idx: our_idx,
+			all_idxs: signer_idxs,
+			rng,
+		};
+
+		let processor = PubkeySharesStage0::new(
+			common.clone(),
+			generate_keygen_context(ceremony_id, participants),
+			resharing_context,
+		);
+
+		Box::new(BroadcastStage::new(processor, common))
+	};
+
+	Ok(PreparedRequest { initial_stage })
+}
+
 // Initial checks and setup before sending the request to the `CeremonyRunner`
 pub fn prepare_keygen_request<Crypto: CryptoScheme>(
 	ceremony_id: CeremonyId,
 	own_account_id: &AccountId,
 	participants: BTreeSet<AccountId>,
 	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
-	resharing_context: Option<ResharingContext<Crypto>>,
 	rng: Rng,
 ) -> Result<PreparedRequest<KeygenCeremony<Crypto>>, KeygenFailureReason> {
 	let validator_mapping = Arc::new(PartyIdxMapping::from_participants(participants.clone()));
@@ -208,11 +249,13 @@ pub fn prepare_keygen_request<Crypto: CryptoScheme>(
 			rng,
 		};
 
-		let processor = HashCommitments1::new(
+		let keygen_common = client::keygen::KeygenCommon::new(
 			common.clone(),
 			generate_keygen_context(ceremony_id, participants),
-			resharing_context,
+			None,
 		);
+
+		let processor = HashCommitments1::new(keygen_common);
 
 		Box::new(BroadcastStage::new(processor, common))
 	};
@@ -381,8 +424,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 			&self.my_account_id,
 			participants,
 			&self.outgoing_p2p_message_sender,
-			// For now, we don't expect re-sharing requests
-			None,
 			rng,
 		) {
 			Ok(request) => request,
@@ -710,5 +751,46 @@ impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
 		}
 
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod key_id_agg_key_match {
+	use cf_chains::ChainCrypto;
+	use rand_legacy::SeedableRng;
+
+	use crate::multisig::{bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
+
+	use super::*;
+
+	fn test_agg_key_key_id_match<CScheme, CC>()
+	where
+		CScheme: CryptoScheme,
+		CC: ChainCrypto,
+		CC::AggKey: From<CScheme::AggKey>,
+	{
+		let rng = crate::multisig::crypto::Rng::from_seed([0u8; 32]);
+		let agg_key = CeremonyManager::<CScheme>::new(
+			[4u8; 32].into(),
+			tokio::sync::mpsc::unbounded_channel().0,
+			0,
+		)
+		.single_party_keygen(rng)
+		.key
+		.agg_key();
+
+		let public_key_bytes: Vec<u8> = agg_key.clone().into();
+
+		assert_eq!(
+			CC::agg_key_to_key_id(CC::AggKey::from(agg_key), 9).public_key_bytes,
+			public_key_bytes
+		);
+	}
+
+	#[test]
+	fn test() {
+		test_agg_key_key_id_match::<BtcSigning, cf_chains::Bitcoin>();
+		test_agg_key_key_id_match::<EthSigning, cf_chains::Ethereum>();
+		test_agg_key_key_id_match::<PolkadotSigning, cf_chains::Polkadot>();
 	}
 }

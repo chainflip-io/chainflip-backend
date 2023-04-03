@@ -15,8 +15,12 @@ priority = "required"
 section = "rust"
 maintainer-scripts = "package/"
 systemd-units = { enable = false }
-pre-depends = "curl"
-assets = [["target/release/chainflip-engine", "usr/bin/", "755"], ["start-engine.sh", "etc/chainflip/", "755"]]
+pre-depends = "curl,logrotate"
+assets = [
+  ["target/release/chainflip-engine", "usr/bin/", "755"],
+  ["start-engine.sh", "etc/chainflip/", "755"],
+  ["logrotate.conf", "etc/logrotate.d/chainflip-engine", "644"]
+  ]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -60,8 +64,7 @@ secp256k1 = { version = "0.20", features = [
 serde = { version = "1.0", features = ["derive", "rc"] }
 serde_json = "1.0"
 sha2 = "0.9.5"
-# TODO: Can use 0.26.0 when it's released
-subxt = {git = 'https://github.com/paritytech/subxt.git', rev = '4155850' }
+subxt = "0.26.0"
 thiserror = "1.0.26"
 tokio = { version = "1.22", features = ["full", "test-util"] }
 tokio-stream = { version = "0.1.5", features = ["sync"] }

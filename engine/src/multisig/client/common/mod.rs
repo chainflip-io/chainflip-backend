@@ -9,7 +9,7 @@ pub use ceremony_stage::{
 
 pub use broadcast_verification::BroadcastVerificationMessage;
 
-use cf_primitives::AccountId;
+use cf_primitives::{AccountId, AuthorityCount};
 pub use failure_reason::{
 	BroadcastFailureReason, CeremonyFailureReason, KeygenFailureReason, SigningFailureReason,
 };
@@ -80,9 +80,8 @@ impl<C: CryptoScheme> KeygenResult<C> {
 		self.key_share.y
 	}
 
-	/// Gets the serialized compressed public key (33 bytes - 32 bytes + a y parity byte)
-	pub fn get_public_key_bytes(&self) -> Vec<u8> {
-		self.key_share.y.as_bytes().as_ref().into()
+	pub fn agg_key(&self) -> C::AggKey {
+		C::agg_key(&self.get_public_key())
 	}
 }
 
@@ -96,9 +95,25 @@ pub struct KeygenResultInfo<C: CryptoScheme> {
 
 /// Our own secret share and the public keys of all other participants
 /// scaled by corresponding lagrange coefficients.
+type SecretShare<C> = <<C as CryptoScheme>::Point as ECPoint>::Scalar;
+type PublicKeyShares<C> = BTreeMap<AccountId, <C as CryptoScheme>::Point>;
+
+/// Holds state relevant to the role in the handover ceremony.
+pub enum ParticipantStatus<C: CryptoScheme> {
+	Sharing(SecretShare<C>, PublicKeyShares<C>),
+	NonSharing,
+	NonSharingReceivedKeys(PublicKeyShares<C>),
+}
+
 pub struct ResharingContext<C: CryptoScheme> {
-	pub secret_share: <C::Point as ECPoint>::Scalar,
-	pub party_public_keys: BTreeMap<AccountId, C::Point>,
+	/// Participants who contribute their (existing) secret shares
+	pub sharing_participants: BTreeSet<AuthorityCount>,
+	/// Participants who receive new shares
+	pub receiving_participants: BTreeSet<AuthorityCount>,
+	/// Whether our node is sharing and the corresponding state
+	pub party_status: ParticipantStatus<C>,
+	/// Indexes in future signing ceremonies (i.e. for the new set of validators)
+	pub future_index_mapping: PartyIdxMapping,
 }
 
 impl<C: CryptoScheme> ResharingContext<C> {
@@ -108,12 +123,13 @@ impl<C: CryptoScheme> ResharingContext<C> {
 	pub fn from_key(
 		key: &KeygenResultInfo<C>,
 		own_id: &AccountId,
-		participants: &BTreeSet<AccountId>,
+		sharing_participants: &BTreeSet<AccountId>,
+		receiving_participants: &BTreeSet<AccountId>,
 	) -> Self {
 		use crate::multisig::crypto::ECScalar;
 		let own_idx = key.validator_mapping.get_idx(own_id).expect("our own id must be present");
 
-		let all_idxs: BTreeSet<_> = participants
+		let all_idxs: BTreeSet<_> = sharing_participants
 			.iter()
 			.map(|id| {
 				key.validator_mapping
@@ -124,7 +140,7 @@ impl<C: CryptoScheme> ResharingContext<C> {
 
 		// If we are not a participant, we simply set our secret to 0, otherwise
 		// we use our key share scaled by the lagrange coefficient:
-		let secret_share = if participants.contains(own_id) {
+		let secret_share = if sharing_participants.contains(own_id) {
 			get_lagrange_coeff::<C::Point>(own_idx, &all_idxs) * &key.key.key_share.x_i
 		} else {
 			<C::Point as ECPoint>::Scalar::zero()
@@ -137,7 +153,7 @@ impl<C: CryptoScheme> ResharingContext<C> {
 			.map(|id| {
 				// Parties that don't "participate", are expected to set their secret to 0,
 				// and thus their public key share should be a point at infinity:
-				let expected_pubkey_share = if participants.contains(id) {
+				let expected_pubkey_share = if sharing_participants.contains(id) {
 					let idx = key.validator_mapping.get_idx(id).expect("id must be present");
 					let coeff = get_lagrange_coeff::<C::Point>(idx, &all_idxs);
 					key.key.party_public_keys[idx as usize - 1] * &coeff
@@ -148,7 +164,52 @@ impl<C: CryptoScheme> ResharingContext<C> {
 				(id.clone(), expected_pubkey_share)
 			})
 			.collect();
-		Self { secret_share, party_public_keys }
+
+		let context = ResharingContext::without_key(sharing_participants, receiving_participants);
+
+		ResharingContext {
+			party_status: ParticipantStatus::Sharing(secret_share, party_public_keys),
+			..context
+		}
+	}
+
+	pub fn without_key(
+		sharing_participants: &BTreeSet<AccountId>,
+		receiving_participants: &BTreeSet<AccountId>,
+	) -> Self {
+		// NOTE: we need to be careful when deriving indices from ids, because
+		// different ceremonies will have different idx/id mappings. In this case
+		// we want indexes for upcoming handover ceremony (rather than the one
+		// that generated the key to be re-shared).
+		let all_ids = receiving_participants.union(sharing_participants).cloned().collect();
+		let party_idx_mapping = PartyIdxMapping::from_participants(all_ids);
+		let future_index_mapping =
+			PartyIdxMapping::from_participants(receiving_participants.clone());
+
+		let sharing_participants: BTreeSet<_> = sharing_participants
+			.iter()
+			.map(|id| {
+				party_idx_mapping
+					.get_idx(id)
+					.expect("participant must be a known key share holder")
+			})
+			.collect();
+
+		let receiving_participants: BTreeSet<_> = receiving_participants
+			.iter()
+			.map(|id| {
+				party_idx_mapping
+					.get_idx(id)
+					.expect("participant must be a known key share holder")
+			})
+			.collect();
+
+		ResharingContext {
+			sharing_participants,
+			receiving_participants,
+			party_status: ParticipantStatus::NonSharing,
+			future_index_mapping,
+		}
 	}
 }
 

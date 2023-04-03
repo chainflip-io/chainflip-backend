@@ -42,7 +42,7 @@ impl Chain for Ethereum {
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
 	type TransactionFee = eth::TransactionFee;
-	type TrackedData = eth::TrackedData<Self>;
+	type TrackedData = EthereumTrackedData;
 	type ChainAccount = eth::Address;
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
@@ -93,14 +93,16 @@ pub trait Tokenizable {
 	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
 #[codec(mel_bound())]
-pub struct TrackedData<C: Chain> {
-	pub block_height: C::ChainBlockNumber,
-	pub base_fee: C::ChainAmount,
-	pub priority_fee: C::ChainAmount,
+pub struct EthereumTrackedData {
+	pub block_height: <Ethereum as Chain>::ChainBlockNumber,
+	pub base_fee: <Ethereum as Chain>::ChainAmount,
+	pub priority_fee: <Ethereum as Chain>::ChainAmount,
 }
 
-impl<C: Chain> Age<C> for TrackedData<C> {
-	fn birth_block(&self) -> <C as Chain>::ChainBlockNumber {
+impl Age for EthereumTrackedData {
+	type BlockNumber = <Ethereum as Chain>::ChainBlockNumber;
+
+	fn birth_block(&self) -> <Ethereum as Chain>::ChainBlockNumber {
 		self.block_height
 	}
 }
@@ -567,8 +569,14 @@ impl FeeRefundCalculator<Ethereum> for Transaction {
 		&self,
 		fee_paid: <Ethereum as Chain>::TransactionFee,
 	) -> <Ethereum as Chain>::ChainAmount {
-		min(self.max_fee_per_gas.unwrap_or_default().as_u128(), fee_paid.effective_gas_price)
-			.saturating_mul(fee_paid.gas_used)
+		min(
+			self.max_fee_per_gas
+				.unwrap_or_default()
+				.try_into()
+				.expect("In practice `max_fee_per_gas` is always less than u128::MAX"),
+			fee_paid.effective_gas_price,
+		)
+		.saturating_mul(fee_paid.gas_used)
 	}
 }
 

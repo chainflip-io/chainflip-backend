@@ -53,7 +53,7 @@ pub fn filter_interesting_utxos(
 					ingress_utxos.push(IngressWitness {
 						ingress_address: bitcoin_address_data,
 						asset: btc::Asset::Btc,
-						amount: tx_out.value.into(),
+						amount: tx_out.value,
 						tx_id: UtxoId {
 							tx_hash,
 							vout,
@@ -332,8 +332,8 @@ mod test_utxo_filtering {
 			&Default::default(),
 		);
 		assert_eq!(ingress_witnesses.len(), 2);
-		assert_eq!(ingress_witnesses[0].amount, UTXO_WITNESSED_1.into());
-		assert_eq!(ingress_witnesses[1].amount, UTXO_WITNESSED_2.into());
+		assert_eq!(ingress_witnesses[0].amount, UTXO_WITNESSED_1);
+		assert_eq!(ingress_witnesses[1].amount, UTXO_WITNESSED_2);
 	}
 
 	#[test]
@@ -371,8 +371,8 @@ mod test_utxo_filtering {
 			&Default::default(),
 		);
 		assert_eq!(ingress_witnesses.len(), 2);
-		assert_eq!(ingress_witnesses[0].amount, UTXO_WITNESSED_1.into());
-		assert_eq!(ingress_witnesses[1].amount, UTXO_WITNESSED_2.into());
+		assert_eq!(ingress_witnesses[0].amount, UTXO_WITNESSED_1);
+		assert_eq!(ingress_witnesses[1].amount, UTXO_WITNESSED_2);
 	}
 
 	#[test]
@@ -403,6 +403,6 @@ mod test_utxo_filtering {
 			&Default::default(),
 		);
 		assert_eq!(ingress_witnesses.len(), 1);
-		assert_eq!(ingress_witnesses[0].amount, UTXO_WITNESSED_1.into());
+		assert_eq!(ingress_witnesses[0].amount, UTXO_WITNESSED_1);
 	}
 }

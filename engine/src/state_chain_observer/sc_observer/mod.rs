@@ -288,7 +288,7 @@ where
 
                     let change_address = BitcoinAddressData {
                         address_for: BitcoinAddressFor::Ingress(BitcoinAddressSeed {
-                            pubkey_x: vault.public_key.0,
+                            pubkey_x: vault.public_key.pubkey_x,
                             salt: CHANGE_ADDRESS_SALT,
                         }),
                         network: btc_network,
