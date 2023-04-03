@@ -214,8 +214,6 @@ pub struct KeygenCommon<Crypto: CryptoScheme> {
 	keygen_context: HashContext,
 	resharing_context: Option<ResharingContext<Crypto>>,
 	sharing_params: SharingParameters,
-	/// Threshold parameters for either the new or re-shared key
-	new_key_params: ThresholdParameters,
 }
 
 impl<Crypto: CryptoScheme> KeygenCommon<Crypto> {
@@ -226,20 +224,23 @@ impl<Crypto: CryptoScheme> KeygenCommon<Crypto> {
 	) -> Self {
 		// NOTE: Threshold parameters for the future key don't always match that
 		// of the current key. They depend on the number of future key holders
-		let (new_key_params, sharing_params) = if let Some(context) = &resharing_context {
-			let params = ThresholdParameters::from_share_count(
-				context.receiving_participants.len().try_into().expect("too many parties"),
-			);
-			(params, SharingParameters::for_key_handover(context, &common.validator_mapping))
+		let share_count = if let Some(context) = &resharing_context {
+			context.receiving_participants.len()
 		} else {
-			// All parties are recipients of the key in a regular keygen
-			let params = ThresholdParameters::from_share_count(
-				common.all_idxs.len().try_into().expect("too many parties"),
-			);
-
-			(params, SharingParameters::for_keygen(params.share_count, params.threshold))
+			common.all_idxs.len()
 		};
-		KeygenCommon { keygen_context, resharing_context, sharing_params, new_key_params }
+
+		let new_key_params = ThresholdParameters::from_share_count(
+			share_count.try_into().expect("too many parties"),
+		);
+
+		let sharing_params = if let Some(context) = &resharing_context {
+			SharingParameters::for_key_handover(new_key_params, context, &common.validator_mapping)
+		} else {
+			SharingParameters::for_keygen(new_key_params)
+		};
+
+		KeygenCommon { keygen_context, resharing_context, sharing_params }
 	}
 }
 
@@ -781,6 +782,9 @@ async fn finalize_keygen<Crypto: CryptoScheme>(
 		.map(|c| Arc::new(c.future_index_mapping))
 		.unwrap_or_else(|| common.validator_mapping.clone());
 
+	// Making a copy while we still have sharing parameters
+	let key_params = keygen_common.sharing_params.key_params;
+
 	let party_public_keys = tokio::task::spawn_blocking(move || {
 		derive_local_pubkeys_for_parties(&keygen_common.sharing_params, &commitments)
 	})
@@ -816,7 +820,7 @@ async fn finalize_keygen<Crypto: CryptoScheme>(
 			party_public_keys,
 		)),
 		validator_mapping: future_index_mapping,
-		params: keygen_common.new_key_params,
+		params: key_params,
 	};
 
 	StageResult::Done(keygen_result_info)

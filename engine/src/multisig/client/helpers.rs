@@ -16,7 +16,7 @@ use rand_legacy::{RngCore, SeedableRng};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, debug_span, Instrument};
-use utilities::{assert_ok, success_threshold_from_share_count, threshold_from_share_count};
+use utilities::{assert_ok, success_threshold_from_share_count};
 
 use crate::{
 	common::{all_same, split_at},
@@ -590,6 +590,7 @@ use super::{
 	common::ResharingContext,
 	keygen::{KeygenCommon, SharingParameters},
 	signing::Comm1,
+	ThresholdParameters,
 };
 
 pub type KeygenCeremonyRunner<C> = CeremonyTestRunner<(), KeygenCeremony<C>>;
@@ -840,10 +841,7 @@ pub fn gen_invalid_keygen_comm1<P: ECPoint>(
 		// The commitment is only invalid because of the invalid context
 		&HashContext([0; 32]),
 		0,
-		&SharingParameters::for_keygen(
-			share_count,
-			threshold_from_share_count(share_count) as AuthorityCount,
-		),
+		&SharingParameters::for_keygen(ThresholdParameters::from_share_count(share_count)),
 		None,
 	);
 	fake_comm1

@@ -140,18 +140,18 @@ pub struct IndexPair {
 
 pub struct SharingParameters {
 	pub indexes_to_share_at: BTreeSet<IndexPair>,
-	pub threshold: AuthorityCount,
+	pub key_params: ThresholdParameters,
 }
 
 impl SharingParameters {
 	pub fn for_key_handover<C: CryptoScheme>(
+		// Parameters for the new key
+		key_params: ThresholdParameters,
 		context: &ResharingContext<C>,
 		// The mapping is for the current ceremony
 		// (the union between old and new nodes)
 		current_party_mapping: &Arc<PartyIdxMapping>,
 	) -> Self {
-		let threshold =
-			utilities::threshold_from_share_count(context.receiving_participants.len() as u32);
 		let indexes_to_share_at = context
 			.receiving_participants
 			.iter()
@@ -165,16 +165,16 @@ impl SharingParameters {
 			})
 			.collect();
 
-		Self { indexes_to_share_at, threshold }
+		Self { indexes_to_share_at, key_params }
 	}
 
-	pub fn for_keygen(share_count: AuthorityCount, threshold: AuthorityCount) -> Self {
+	pub fn for_keygen(key_params: ThresholdParameters) -> Self {
 		// In regular keygen, all parties receive shares; current indices
 		// match future indices
-		let indexes_to_share_at = (1..=share_count)
+		let indexes_to_share_at = (1..=key_params.share_count)
 			.map(|idx| IndexPair { current_index: idx, future_index: idx })
 			.collect();
-		Self { indexes_to_share_at, threshold }
+		Self { indexes_to_share_at, key_params }
 	}
 }
 
@@ -210,7 +210,7 @@ fn generate_secret_and_shares<P: ECPoint>(
 
 	// Coefficients for the sharing polynomial used to share `secret` via the Shamir Secret Sharing
 	// scheme (Figure 1: Round 1, Step 1)
-	let coefficients: Vec<_> = (0..sharing_parameters.threshold)
+	let coefficients: Vec<_> = (0..sharing_parameters.key_params.threshold)
 		.into_iter()
 		.map(|_| P::Scalar::random(rng))
 		.collect();
@@ -419,7 +419,7 @@ pub fn derive_local_pubkeys_for_parties<P: ECPoint>(
 					.values()
 					.map(|party_commitments| {
 						evaluate_polynomial::<_, _, P::Scalar>(
-							(0..=sharing_params.threshold)
+							(0..=sharing_params.key_params.threshold)
 								.map(|k| &party_commitments.commitments.0[k as usize]),
 							*future_index,
 						)
@@ -495,15 +495,14 @@ mod tests {
 	fn basic_sharing() {
 		use crate::multisig::crypto::eth::Point;
 
-		let n = 7;
-		let threshold = 5;
+		let params = ThresholdParameters { share_count: 7, threshold: 5 };
 
 		use rand_legacy::SeedableRng;
 		let mut rng = Rng::from_seed([0; 32]);
 
 		let (secret, _commitments, shares) = generate_secret_and_shares::<Point>(
 			&mut rng,
-			&SharingParameters::for_keygen(n, threshold),
+			&SharingParameters::for_keygen(params),
 			None,
 		);
 
@@ -515,8 +514,7 @@ mod tests {
 		use crate::multisig::crypto::eth::{Point, Scalar};
 		use state_chain_runtime::AccountId;
 
-		let n = 4;
-		let t = 2;
+		let params = ThresholdParameters { share_count: 4, threshold: 2 };
 
 		let context = HashContext([0; 32]);
 
@@ -527,9 +525,9 @@ mod tests {
 			BTreeMap<_, _>,
 			BTreeMap<_, _>,
 			BTreeMap<_, _>,
-		) = itertools::multiunzip((1..=n).map(|idx| {
+		) = itertools::multiunzip((1..=params.share_count).map(|idx| {
 			let (secret, shares_commitments, shares) =
-				generate_secret_and_shares(&mut rng, &SharingParameters::for_keygen(n, t), None);
+				generate_secret_and_shares(&mut rng, &SharingParameters::for_keygen(params), None);
 			// Zero-knowledge proof of `secret`
 			let zkp = generate_zkp_of_secret(&mut rng, secret, &context, idx);
 
@@ -546,7 +544,7 @@ mod tests {
 			None,
 			&context,
 			Arc::new(PartyIdxMapping::from_participants(BTreeSet::from_iter(
-				(1..=n as u8).map(|i| AccountId::new([i; 32]))
+				(1..=params.share_count as u8).map(|i| AccountId::new([i; 32]))
 			))),
 		));
 
@@ -555,7 +553,7 @@ mod tests {
 
 		let mut secret_shares = vec![];
 
-		for receiver_idx in 1..=n {
+		for receiver_idx in 1..=params.share_count {
 			let received_shares: Vec<_> = outgoing_shares
 				.iter()
 				.map(|(idx, shares)| {
@@ -590,15 +588,14 @@ pub mod genesis {
 		rng: &mut Rng,
 	) -> (PublicKeyBytes, HashMap<AccountId, KeygenResultInfo<C>>) {
 		let params = ThresholdParameters::from_share_count(participants.len() as AuthorityCount);
-		let n = params.share_count;
-		let t = params.threshold;
 
 		let (commitments, outgoing_secret_shares, agg_pubkey) = loop {
-			let (commitments, outgoing_secret_shares): (BTreeMap<_, _>, BTreeMap<_, _>) = (1..=n)
+			let (commitments, outgoing_secret_shares): (BTreeMap<_, _>, BTreeMap<_, _>) = (1..=
+				params.share_count)
 				.map(|idx| {
 					let (_secret, commitments, shares) = generate_secret_and_shares::<C::Point>(
 						rng,
-						&SharingParameters::for_keygen(n, t),
+						&SharingParameters::for_keygen(params),
 						None,
 					);
 					((idx, DKGCommitment { commitments }), (idx, shares))
@@ -614,7 +611,7 @@ pub mod genesis {
 
 		let validator_mapping = PartyIdxMapping::from_participants(participants);
 
-		let keygen_result_infos: HashMap<_, _> = (1..=n)
+		let keygen_result_infos: HashMap<_, _> = (1..=params.share_count)
 			.map(|idx| {
 				// Collect shares destined for `idx`
 				let incoming_shares: BTreeMap<_, _> = outgoing_secret_shares
@@ -631,7 +628,7 @@ pub mod genesis {
 								x_i: compute_secret_key_share(IncomingShares(incoming_shares)),
 							},
 							derive_local_pubkeys_for_parties(
-								&SharingParameters::for_keygen(n, params.threshold),
+								&SharingParameters::for_keygen(params),
 								&commitments,
 							)
 							.into_values()
