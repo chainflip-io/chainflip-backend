@@ -643,4 +643,47 @@ fn can_egress_ccm() {
 		assert_eq!(ScheduledEgressCcm::<Test, Instance1>::decode_len(), Some(0));
 	});
 }
-// can manually send ccm messages
+
+
+
+#[test]
+fn governance_can_manually_egress_ccm() {
+	new_test_ext().execute_with(|| {
+		let egress_address: H160 = [0x01; 20].into();
+		let refund_address = ForeignChainAddress::Eth([0x02; 20]);
+		let egress_asset = eth::Asset::Eth;
+		let message = vec![0x00, 0x01, 0x02];
+
+		ScheduledEgressCcm::<Test, Instance1>::append(
+			CrossChainMessage {
+				egress_id: (ForeignChain::Ethereum, 1),
+				asset: egress_asset,
+				amount: 5_000,
+				egress_address,
+				message: message.clone(),
+				refund_address: refund_address.clone(),
+			}
+		);
+
+		// Governance can scheduled ccm egress
+		assert_ok!(IngressEgress::egress_scheduled_ccms(
+			RuntimeOrigin::root(),
+			None,
+		));
+
+		// Check the CCM should be egressed
+		assert_eq!(EgressedApiCall::get(), Some(<MockEthereumApiCall<MockEthEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
+			(ForeignChain::Ethereum, 1),
+			TransferAssetParams {
+				asset: egress_asset,
+				amount: 5_000,
+				to: egress_address
+			},
+			refund_address,
+			message,
+		).unwrap()));
+
+		// Storage should be cleared
+		assert_eq!(ScheduledEgressCcm::<Test, Instance1>::decode_len(), Some(0));
+	});
+}
