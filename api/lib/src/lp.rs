@@ -15,7 +15,6 @@ use chainflip_engine::{
 };
 use futures::FutureExt;
 use serde::Serialize;
-use strum::IntoEnumIterator;
 
 use crate::{connect_submit_and_get_events, submit_and_ensure_success};
 
@@ -74,10 +73,8 @@ pub async fn get_balances(
 				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
 					.await?;
 
-			let asset_list: Vec<Asset> = Asset::iter().collect();
-
 			let balances: Result<HashMap<Asset, AssetAmount>> =
-				futures::future::join_all(asset_list.iter().map(|asset| async {
+				futures::future::join_all(Asset::all().iter().map(|asset| async {
 					Ok((
 						*asset,
 						state_chain_client
@@ -114,9 +111,7 @@ pub async fn get_positions(
 			)
 			.await?;
 
-			let asset_list: Vec<Asset> = Asset::iter().collect();
-
-			futures::future::join_all(asset_list.iter().map(|asset| async {
+			futures::future::join_all(Asset::all().iter().map(|asset| async {
 				Ok((
 					*asset,
 					state_chain_client

@@ -1017,7 +1017,6 @@ dependencies = [
  "sp-core 7.0.0",
  "sp-finality-grandpa",
  "state-chain-runtime",
- "strum",
  "tiny-bip39 1.0.0",
  "zeroize",
 ]

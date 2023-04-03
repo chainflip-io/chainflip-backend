@@ -53,6 +53,13 @@ pub mod any {
 		Btc,
 	}
 
+	impl Asset {
+		pub fn all() -> Vec<Self> {
+			use strum::IntoEnumIterator;
+			Self::iter().collect()
+		}
+	}
+
 	impl From<Asset> for ForeignChain {
 		fn from(asset: Asset) -> Self {
 			match asset {
