@@ -146,6 +146,8 @@ pub struct SharingParameters {
 impl SharingParameters {
 	pub fn for_key_handover<C: CryptoScheme>(
 		context: &ResharingContext<C>,
+		// The mapping is for the current ceremony
+		// (the union between old and new nodes)
 		current_party_mapping: &Arc<PartyIdxMapping>,
 	) -> Self {
 		let threshold =
