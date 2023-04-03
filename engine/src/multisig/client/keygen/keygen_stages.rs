@@ -121,16 +121,10 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		// ignore the messages that haven't been received (i.e. `None`):
 		let pubkey_shares: BTreeMap<_, _> = pubkey_shares
 			.into_iter()
-			.filter_map(|(idx, message)| {
-				if let Some(message) = message {
-					if self.resharing_context.sharing_participants.contains(&idx) {
-						Some((idx, message))
-					} else {
-						None
-					}
-				} else {
-					None
-				}
+			.filter_map(|(idx, message)| match message {
+				Some(message) if self.resharing_context.sharing_participants.contains(&idx) =>
+					Some((idx, message)),
+				_ => None,
 			})
 			.collect();
 
