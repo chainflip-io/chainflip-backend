@@ -105,7 +105,7 @@ impl RpcServer for RpcServerImpl {
 
 				let address_data = BitcoinAddressData {
 					address_for: BitcoinAddressFor::Egress(address),
-					network: lp::get_btc_network(&self.state_chain_settings).await?,
+					network: chainflip_api::get_btc_network(&self.state_chain_settings).await?,
 				};
 				Ok(ForeignChainAddress::from(address_data))
 			},

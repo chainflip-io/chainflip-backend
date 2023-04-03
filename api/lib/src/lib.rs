@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
-use cf_chains::{address::ForeignChainAddress, eth::H256, CcmIngressMetadata};
+use cf_chains::{address::ForeignChainAddress, btc::BitcoinNetwork, eth::H256, CcmIngressMetadata};
 use cf_primitives::{AccountRole, Asset};
 use futures::{FutureExt, Stream};
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
@@ -360,6 +360,29 @@ pub async fn register_swap_intent(
 	} else {
 		panic!("NewSwapIntent must have been generated");
 	}
+}
+
+/// Get the Bitcoin network selection from the state chain.
+// This function can be factored out once we have refactored "BTC UTXO Management #2991".
+pub async fn get_btc_network(
+	state_chain_settings: &settings::StateChain,
+) -> Result<BitcoinNetwork> {
+	task_scope(|scope| {
+		async {
+			let (latest_block_hash, _, state_chain_client) =
+				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
+					.await?;
+
+			state_chain_client
+				.storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>(
+					latest_block_hash,
+				)
+				.await
+				.map_err(|_| anyhow!("Failed to get Bitcoin Network Selection"))
+		}
+		.boxed()
+	})
+	.await
 }
 
 #[derive(Debug, Zeroize)]

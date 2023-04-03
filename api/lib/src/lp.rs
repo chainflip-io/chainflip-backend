@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Result};
-use cf_chains::{btc::BitcoinNetwork, ForeignChainAddress};
+use cf_chains::ForeignChainAddress;
 use cf_primitives::{
 	AccountRole, AmmRange, Asset, AssetAmount, EgressId, Liquidity, PoolAssetMap, Tick,
 };
@@ -270,25 +270,4 @@ async fn get_liquidity_at_position(
 			}
 		})
 		.ok_or(anyhow!("No position found"))
-}
-
-pub async fn get_btc_network(
-	state_chain_settings: &settings::StateChain,
-) -> Result<BitcoinNetwork> {
-	task_scope(|scope| {
-		async {
-			let (latest_block_hash, _, state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
-					.await?;
-
-			state_chain_client
-				.storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>(
-					latest_block_hash,
-				)
-				.await
-				.map_err(|_| anyhow!("Failed to get Bitcoin Network Selection"))
-		}
-		.boxed()
-	})
-	.await
 }
