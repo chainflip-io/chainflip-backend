@@ -4,10 +4,14 @@ use cf_chains::{
 };
 use cf_primitives::{AccountRole, AuthorityCount, PolkadotAccountId};
 
+use common::FLIPPERINOS_PER_FLIP;
 use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto};
+use sp_core::{
+	crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto},
+	sr25519, Pair, Public,
+};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{
 	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
@@ -18,12 +22,9 @@ use state_chain_runtime::{
 	ValidatorConfig, WASM_BINARY,
 };
 
-use common::FLIPPERINOS_PER_FLIP;
-
 use std::{env, marker::PhantomData, str::FromStr};
 use utilities::clean_eth_address;
 
-use sp_core::{sr25519, Pair, Public};
 use sp_runtime::traits::{IdentifyAccount, Verify};
 
 pub mod common;
