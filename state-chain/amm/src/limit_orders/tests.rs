@@ -5,7 +5,7 @@ use crate::{
 
 use super::*;
 
-use cf_utilities::assert_ok;
+use cf_utilities::{assert_ok, assert_panics};
 use rand::{prelude::Distribution, Rng, SeedableRng};
 
 /// The amounts used as parameters to input_amount_floor, input_amount_ceil, output_amount_floor are
@@ -145,6 +145,160 @@ fn test_float() {
 
 		assert_eq!(float.negative_exponent, U256::from(256));
 		assert_eq!(float.normalised_mantissa, (U256::one() << 255) + U256::one());
+	}
+
+	{
+		assert_panics!(FloatBetweenZeroAndOne::max().mul_div_ceil(2.into(), 1.into()));
+		assert_panics!(
+			FloatBetweenZeroAndOne::max().mul_div_ceil(U256::MAX, U256::MAX / U256::from(2))
+		);
+		assert_panics!(FloatBetweenZeroAndOne::max().mul_div_ceil(0.into(), 1.into()));
+	}
+
+	{
+		assert_panics!(FloatBetweenZeroAndOne::integer_mul_div(
+			1.into(),
+			&FloatBetweenZeroAndOne::max(),
+			&FloatBetweenZeroAndOne::max().mul_div_ceil(1.into(), 2.into())
+		));
+		assert_panics!(FloatBetweenZeroAndOne::integer_mul_div(
+			U256::MAX,
+			&FloatBetweenZeroAndOne::max(),
+			&FloatBetweenZeroAndOne::max().mul_div_ceil(1.into(), 2.into())
+		));
+	}
+
+	fn min_float() -> FloatBetweenZeroAndOne {
+		FloatBetweenZeroAndOne {
+			negative_exponent: U256::MAX,
+			normalised_mantissa: U256::one() << 255,
+		}
+	}
+
+	{
+		assert_eq!(min_float(), min_float().mul_div_ceil(U256::one(), U256::from(256)));
+		assert_eq!(min_float(), min_float().mul_div_ceil(U256::MAX - 1, U256::MAX));
+	}
+
+	{
+		assert_eq!(
+			(U256::zero(), U256::one()),
+			FloatBetweenZeroAndOne::integer_mul_div(
+				U256::MAX,
+				&min_float(),
+				&FloatBetweenZeroAndOne::max()
+			)
+		);
+		assert_eq!(
+			(U256::zero(), U256::one()),
+			FloatBetweenZeroAndOne::integer_mul_div(
+				U256::one(),
+				&min_float(),
+				&FloatBetweenZeroAndOne::max()
+			)
+		);
+		assert_eq!(
+			(U256::MAX, U256::MAX),
+			FloatBetweenZeroAndOne::integer_mul_div(U256::MAX, &min_float(), &min_float())
+		);
+		assert_eq!(
+			(U256::one() << 255, U256::one() << 255),
+			FloatBetweenZeroAndOne::integer_mul_div(
+				U256::MAX,
+				&min_float(),
+				&FloatBetweenZeroAndOne {
+					normalised_mantissa: U256::MAX,
+					negative_exponent: U256::MAX
+				}
+			)
+		);
+		assert_eq!(
+			(U256::zero(), U256::zero()),
+			FloatBetweenZeroAndOne::integer_mul_div(
+				U256::zero(),
+				&min_float(),
+				&FloatBetweenZeroAndOne {
+					normalised_mantissa: U256::MAX,
+					negative_exponent: U256::MAX
+				}
+			)
+		);
+		assert_eq!(
+			(U256::zero(), U256::one()),
+			FloatBetweenZeroAndOne::integer_mul_div(
+				U256::one(),
+				&min_float(),
+				&FloatBetweenZeroAndOne {
+					normalised_mantissa: U256::MAX,
+					negative_exponent: U256::MAX
+				}
+			)
+		);
+	}
+
+	{
+		assert!(FloatBetweenZeroAndOne::max() > min_float());
+		assert!(min_float() <= min_float());
+		assert!(FloatBetweenZeroAndOne::max() <= FloatBetweenZeroAndOne::max());
+		assert!(
+			FloatBetweenZeroAndOne { normalised_mantissa: U256::MAX, negative_exponent: U256::MAX } >
+				min_float()
+		);
+		assert!(
+			FloatBetweenZeroAndOne {
+				normalised_mantissa: U256::one() << 255,
+				negative_exponent: U256::MAX
+			} <= min_float()
+		);
+		assert!(
+			FloatBetweenZeroAndOne {
+				normalised_mantissa: U256::one() << 255,
+				negative_exponent: U256::MAX - 1
+			} > min_float()
+		);
+	}
+
+	{
+		assert_eq!(
+			FloatBetweenZeroAndOne::shift_mod(U512::MAX, U256::MAX),
+			(U512::zero(), U512::MAX)
+		);
+		assert_eq!(
+			FloatBetweenZeroAndOne::shift_mod(U512::MAX, 512.into()),
+			(U512::zero(), U512::MAX)
+		);
+		assert_eq!(
+			FloatBetweenZeroAndOne::shift_mod(U512::MAX, 511.into()),
+			(U512::one(), U512::MAX >> 1)
+		);
+		assert_eq!(
+			FloatBetweenZeroAndOne::shift_mod(U512::MAX, 256.into()),
+			(U256::MAX.into(), U256::MAX.into())
+		);
+		assert_eq!(
+			FloatBetweenZeroAndOne::shift_mod(U512::MAX, 255.into()),
+			(U512::MAX >> 255, (U256::MAX >> 1).into())
+		);
+		assert_eq!(
+			FloatBetweenZeroAndOne::shift_mod(U512::zero(), U256::MAX),
+			(U512::zero(), U512::zero())
+		);
+		assert_eq!(
+			FloatBetweenZeroAndOne::shift_mod(U512::zero(), 512.into()),
+			(U512::zero(), U512::zero())
+		);
+		assert_eq!(
+			FloatBetweenZeroAndOne::shift_mod(U512::zero(), 511.into()),
+			(U512::zero(), U512::zero())
+		);
+		assert_eq!(
+			FloatBetweenZeroAndOne::shift_mod(U512::zero(), 255.into()),
+			(U512::zero(), U512::zero())
+		);
+		assert_eq!(
+			FloatBetweenZeroAndOne::shift_mod(U512::zero(), 128.into()),
+			(U512::zero(), U512::zero())
+		);
 	}
 }
 
