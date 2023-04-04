@@ -9,8 +9,7 @@ use sp_runtime::DispatchResult;
 
 use cf_chains::{address::ForeignChainAddress, AnyChain};
 use cf_traits::{
-	liquidity::LpProvisioningApi, AccountRoleRegistry, Chainflip, EgressApi, IngressApi,
-	SystemStateInfo,
+	liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, EgressApi, IngressApi, SystemStateInfo,
 };
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -135,7 +134,7 @@ pub mod pallet {
 				);
 
 				// Debit the asset from the account.
-				Self::try_debit(&account_id, asset, amount)?;
+				Self::try_debit_account(&account_id, asset, amount)?;
 
 				let egress_id =
 					T::EgressHandler::schedule_egress(asset, amount, egress_address.clone(), None);
@@ -163,26 +162,14 @@ pub mod pallet {
 	}
 }
 
-impl<T: Config> Pallet<T> {
-	fn try_debit(account_id: &T::AccountId, asset: Asset, amount: AssetAmount) -> DispatchResult {
-		if amount == 0 {
-			return Ok(())
-		}
+impl<T: Config> LpBalanceApi for Pallet<T> {
+	type AccountId = <T as frame_system::Config>::AccountId;
 
-		let mut balance = FreeBalances::<T>::get(account_id, asset).unwrap_or_default();
-		ensure!(balance >= amount, Error::<T>::InsufficientBalance);
-		balance = balance.saturating_sub(amount);
-		FreeBalances::<T>::insert(account_id, asset, balance);
-
-		Self::deposit_event(Event::AccountDebited {
-			account_id: account_id.clone(),
-			asset,
-			amount_debited: amount,
-		});
-		Ok(())
-	}
-
-	fn credit(account_id: &T::AccountId, asset: Asset, amount: AssetAmount) -> DispatchResult {
+	fn try_credit_account(
+		account_id: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult {
 		if amount == 0 {
 			return Ok(())
 		}
@@ -200,16 +187,26 @@ impl<T: Config> Pallet<T> {
 		});
 		Ok(())
 	}
-}
 
-impl<T: Config> LpProvisioningApi for Pallet<T> {
-	type AccountId = <T as frame_system::Config>::AccountId;
-
-	fn provision_account(
+	fn try_debit_account(
 		account_id: &Self::AccountId,
 		asset: Asset,
 		amount: AssetAmount,
 	) -> DispatchResult {
-		Self::credit(account_id, asset, amount).map_err(Into::into)
+		if amount == 0 {
+			return Ok(())
+		}
+
+		let mut balance = FreeBalances::<T>::get(account_id, asset).unwrap_or_default();
+		ensure!(balance >= amount, Error::<T>::InsufficientBalance);
+		balance = balance.saturating_sub(amount);
+		FreeBalances::<T>::insert(account_id, asset, balance);
+
+		Self::deposit_event(Event::AccountDebited {
+			account_id: account_id.clone(),
+			asset,
+			amount_debited: amount,
+		});
+		Ok(())
 	}
 }

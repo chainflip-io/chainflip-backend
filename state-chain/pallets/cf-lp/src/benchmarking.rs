@@ -16,7 +16,7 @@ benchmarks! {
 	withdraw_asset {
 		let caller: T::AccountId = whitelisted_caller();
 		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::LiquidityProvider);
-		assert_ok!(Pallet::<T>::provision_account(
+		assert_ok!(Pallet::<T>::try_credit_account(
 			&caller,
 			Asset::Eth,
 			1_000_000,

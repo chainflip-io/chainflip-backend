@@ -289,7 +289,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;
 	type AddressDerivation = AddressDerivation;
-	type LpProvisioning = LiquidityProvider;
+	type LpBalance = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
 	type ChainApiCall = eth::api::EthereumApi<EthEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
@@ -305,7 +305,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Polkadot;
 	type AddressDerivation = AddressDerivation;
-	type LpProvisioning = LiquidityProvider;
+	type LpBalance = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
 	type ChainApiCall = dot::api::PolkadotApi<chainflip::DotEnvironment>;
 	type Broadcaster = PolkadotBroadcaster;
@@ -321,7 +321,7 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Bitcoin;
 	type AddressDerivation = AddressDerivation;
-	type LpProvisioning = LiquidityProvider;
+	type LpBalance = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
 	type ChainApiCall = cf_chains::btc::api::BitcoinApi<chainflip::BtcEnvironment>;
 	type Broadcaster = BitcoinBroadcaster;

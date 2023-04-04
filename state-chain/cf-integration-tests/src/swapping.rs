@@ -19,7 +19,7 @@ use cf_primitives::{
 	},
 	AccountId, AccountRole, AmmRange, Asset, AssetAmount, ForeignChain, PoolAssetMap,
 };
-use cf_traits::{AddressDerivationApi, LiquidityPoolApi, LpProvisioningApi, SwappingApi};
+use cf_traits::{AddressDerivationApi, LiquidityPoolApi, LpBalanceApi, SwappingApi};
 use pallet_cf_ingress_egress::IngressWitness;
 
 const RANGE: AmmRange = AmmRange { lower: -100_000, upper: 100_000 };
@@ -45,8 +45,8 @@ fn setup_pool(pools: Vec<(Asset, AssetAmount, AssetAmount, u32, i32)>) {
 	));
 
 	for (asset, liquidity, stable_amount, fee, initial_tick) in pools {
-		assert_ok!(LiquidityProvider::provision_account(&lp, asset, liquidity));
-		assert_ok!(LiquidityProvider::provision_account(&lp, Asset::Usdc, stable_amount));
+		assert_ok!(LiquidityProvider::try_credit_account(&lp, asset, liquidity));
+		assert_ok!(LiquidityProvider::try_credit_account(&lp, Asset::Usdc, stable_amount));
 
 		assert_ok!(LiquidityPools::new_pool(
 			pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
@@ -352,10 +352,10 @@ fn swap_fails_with_insufficient_liquidity() {
 		assert_eq!(LiquidityPools::current_tick(&Asset::Eth), Some(INITIAL_ETH_TICK));
 
 		// Provide more liquidity for the pools
-		assert_ok!(LiquidityProvider::provision_account(&lp, Asset::Eth, 1_000_000));
-		assert_ok!(LiquidityProvider::provision_account(&lp, Asset::Usdc, 10_000_000));
-		assert_ok!(LiquidityProvider::provision_account(&lp, Asset::Flip, 1_000_000));
-		assert_ok!(LiquidityProvider::provision_account(&lp, Asset::Usdc, 2_000_000));
+		assert_ok!(LiquidityProvider::try_credit_account(&lp, Asset::Eth, 1_000_000));
+		assert_ok!(LiquidityProvider::try_credit_account(&lp, Asset::Usdc, 10_000_000));
+		assert_ok!(LiquidityProvider::try_credit_account(&lp, Asset::Flip, 1_000_000));
+		assert_ok!(LiquidityProvider::try_credit_account(&lp, Asset::Usdc, 2_000_000));
 
 		assert_ok!(LiquidityProvider::update_position(
 			RuntimeOrigin::signed(lp.clone()),
