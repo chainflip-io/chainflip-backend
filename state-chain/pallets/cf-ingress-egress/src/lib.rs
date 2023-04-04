@@ -690,31 +690,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		intent_action: IntentAction<T::AccountId>,
 	) -> Result<(IntentId, TargetChainAccount<T, I>), DispatchError> {
 		// We have an address available, so we can just use it.
-		let (address, intent_id) = if let Some((intent_id, address)) =
-			AddressPool::<T, I>::drain().next()
-		{
-			FetchParamDetails::<T, I>::insert(
-				intent_id,
-				(IngressFetchIdOf::<T, I>::deployed(intent_id, address.clone()), address.clone()),
-			);
-			(address, intent_id)
-		} else {
-			let next_intent_id = IntentIdCounter::<T, I>::get()
-				.checked_add(1)
-				.ok_or(Error::<T, I>::IntentIdsExhausted)?;
-			let new_address: TargetChainAccount<T, I> =
-				T::AddressDerivation::generate_address(ingress_asset, next_intent_id)?;
-			AddressStatus::<T, I>::insert(new_address.clone(), DeploymentStatus::Undeployed);
-			FetchParamDetails::<T, I>::insert(
-				next_intent_id,
+		let (address, intent_id, ingress_fetch_id_of) =
+			if let Some((intent_id, address)) = AddressPool::<T, I>::drain().next() {
+				(address.clone(), intent_id, IngressFetchIdOf::<T, I>::deployed(intent_id, address))
+			} else {
+				let next_intent_id = IntentIdCounter::<T, I>::get()
+					.checked_add(1)
+					.ok_or(Error::<T, I>::IntentIdsExhausted)?;
+				let new_address: TargetChainAccount<T, I> =
+					T::AddressDerivation::generate_address(ingress_asset, next_intent_id)?;
+				AddressStatus::<T, I>::insert(new_address.clone(), DeploymentStatus::Undeployed);
+				IntentIdCounter::<T, I>::put(next_intent_id);
 				(
-					IngressFetchIdOf::<T, I>::undeployed(next_intent_id, new_address.clone()),
 					new_address.clone(),
-				),
-			);
-			IntentIdCounter::<T, I>::put(next_intent_id);
-			(new_address, next_intent_id)
-		};
+					next_intent_id,
+					IngressFetchIdOf::<T, I>::undeployed(next_intent_id, new_address),
+				)
+			};
+		FetchParamDetails::<T, I>::insert(intent_id, (ingress_fetch_id_of, address.clone()));
 		IntentExpiries::<T, I>::append(
 			frame_system::Pallet::<T>::current_block_number() + T::IntentTTL::get(),
 			(intent_id, address.clone()),
