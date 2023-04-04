@@ -69,6 +69,12 @@ impl BitcoinAddressData {
 				sp_std::str::from_utf8(&address[..]).unwrap().to_string(),
 		}
 	}
+	// pub fn from_address_string(address_string: String) -> Self {
+
+	// 	BitcoinAddressFor::Egress(sp_std:) =>
+	// 			sp_std::str::from_utf8(&address[..]).unwrap().to_string(),
+	// 	}
+	// }
 }
 
 impl Default for BitcoinAddressData {
@@ -87,6 +93,38 @@ pub enum ForeignChainAddress {
 	Dot([u8; 32]),
 	Btc(BitcoinAddressData),
 }
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
+pub enum EncodedAddress {
+	Eth(ScriptPubkeyBytes),
+	Dot(Vec<u8>),
+	Btc(Vec<u8>),
+}
+
+pub trait AddressConverter {
+	fn to_encoded_address(&self) -> EncodedAddress;
+	//fn from_encoded_address(encoded_address: EncodedAddress) -> Self;
+}
+
+impl AddressConverter for ForeignChainAddress {
+	fn to_encoded_address(&self) -> EncodedAddress {
+		match self {
+			ForeignChainAddress::Eth(address) => EncodedAddress::Eth(address.to_vec()),
+			ForeignChainAddress::Dot(address) => EncodedAddress::Dot(address.to_vec()),
+			ForeignChainAddress::Btc(address) =>
+				EncodedAddress::Btc(address.to_address_string().bytes().collect::<Vec<u8>>()),
+		}
+	}
+
+	// fn from_encoded_address(encoded_address: EncodedAddress) -> Self {
+	// 	match self {
+	// 		EncodedAddress::Eth(address_string) => ForeignChainAddress::Eth(hex::decode(address_string),
+	// 		EncodedAddress::Dot(address_string) => ForeignChainAddress::Dot(hex::decode(address)),
+	// 		EncodedAddress::Btc(address_string) =>
+	// ForeignChainAddress::Btc(from_address_string(address_string)),
+
+	// 	}
+	// }
+}
 
 #[cfg(feature = "std")]
 impl core::fmt::Display for ForeignChainAddress {
@@ -100,6 +138,28 @@ impl core::fmt::Display for ForeignChainAddress {
 			},
 			ForeignChainAddress::Btc(addr) => {
 				write!(f, "Btc({})", addr.to_address_string())
+			},
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl core::fmt::Display for EncodedAddress {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		match self {
+			EncodedAddress::Eth(addr) => {
+				write!(f, "Eth(0x{})", hex::encode(&addr[..]))
+			},
+			EncodedAddress::Dot(addr) => {
+				write!(f, "Dot(0x{})", hex::encode(&addr[..]))
+			},
+			EncodedAddress::Btc(addr) => {
+				write!(
+					f,
+					"Btc({})",
+					std::str::from_utf8(addr)
+						.unwrap_or("The address cant be decoded from the utf8 encoded bytes")
+				)
 			},
 		}
 	}

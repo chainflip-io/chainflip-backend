@@ -1,6 +1,10 @@
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
-use cf_chains::{address::ForeignChainAddress, eth::H256, CcmIngressMetadata};
+use cf_chains::{
+	address::{EncodedAddress, ForeignChainAddress},
+	eth::H256,
+	CcmIngressMetadata,
+};
 use cf_primitives::{AccountRole, Asset};
 use futures::{FutureExt, Stream};
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
@@ -361,7 +365,7 @@ pub async fn register_swap_intent(
 pub async fn liquidity_deposit(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
-) -> Result<ForeignChainAddress> {
+) -> Result<EncodedAddress> {
 	let events = connect_submit_and_get_events(
 		state_chain_settings,
 		pallet_cf_lp::Call::request_deposit_address { asset },

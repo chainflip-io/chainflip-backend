@@ -7,7 +7,10 @@ pub use pallet::*;
 use sp_runtime::DispatchResult;
 use sp_std::cmp::{Ord, Ordering};
 
-use cf_chains::{address::ForeignChainAddress, AnyChain};
+use cf_chains::{
+	address::{AddressConverter, ForeignChainAddress},
+	AnyChain,
+};
 use cf_primitives::{AmmRange, Asset, AssetAmount, ForeignChain, IntentId, Liquidity, PoolSide};
 use cf_traits::{
 	liquidity::LpProvisioningApi, AccountRoleRegistry, Chainflip, EgressApi, IngressApi,
@@ -27,6 +30,7 @@ pub use weights::WeightInfo;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_chains::address::EncodedAddress;
 	use cf_primitives::EgressId;
 
 	use super::*;
@@ -85,7 +89,7 @@ pub mod pallet {
 		},
 		DepositAddressReady {
 			intent_id: IntentId,
-			ingress_address: ForeignChainAddress,
+			ingress_address: EncodedAddress,
 		},
 		WithdrawalEgressScheduled {
 			egress_id: EgressId,
@@ -114,7 +118,10 @@ pub mod pallet {
 			let (intent_id, ingress_address) =
 				T::IngressHandler::register_liquidity_ingress_intent(account_id, asset)?;
 
-			Self::deposit_event(Event::DepositAddressReady { intent_id, ingress_address });
+			Self::deposit_event(Event::DepositAddressReady {
+				intent_id,
+				ingress_address: ingress_address.to_encoded_address(),
+			});
 
 			Ok(())
 		}
