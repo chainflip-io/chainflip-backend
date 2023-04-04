@@ -41,6 +41,8 @@ pub trait BtcRpcApi: Send + Sync {
 	fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> Result<Txid>;
 
 	/// Calculate the approx. fee rate to pay to get into the next block.
+	/// It is possible we don't get a fee rate in times of low Bitcoin network usage (though this is
+	/// very unlikely when using Bitcoin mainnet). In this case we return `None`.
 	fn next_block_fee_rate(&self) -> Result<Option<BtcAmount>>;
 }
 
