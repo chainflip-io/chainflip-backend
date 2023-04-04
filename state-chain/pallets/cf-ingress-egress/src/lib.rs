@@ -545,7 +545,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let egress_batch_size = egress_params.len() as u32;
 
 		// Construct and send the transaction.
-		#[allow(clippy::unit_arg)]
 		match <T::ChainApiCall as AllBatch<T::TargetChain>>::new_unsigned(
 			fetch_params,
 			egress_params,
