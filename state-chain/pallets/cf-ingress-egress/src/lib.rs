@@ -578,13 +578,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	#[allow(clippy::type_complexity)]
 	fn do_egress_scheduled_ccm(maybe_size: Option<u32>) -> Weight {
 		let ccm_to_send: Vec<_> = ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
-			// Take up to batch_size requests to be sent
-			let mut target_size = maybe_size.unwrap_or(ccms.len() as u32);
+			let mut remaining_batch_space = maybe_size.unwrap_or(ccms.len() as u32);
 
-			// Filter out disabled assets
+			// Filter out disabled assets, and take up to batch_size requests to be sent.
 			ccms.drain_filter(|ccm| {
-				if target_size > 0 && !DisabledEgressAssets::<T, I>::contains_key(ccm.asset()) {
-					target_size.saturating_reduce(1);
+				if remaining_batch_space > 0 &&
+					!DisabledEgressAssets::<T, I>::contains_key(ccm.asset())
+				{
+					remaining_batch_space.saturating_reduce(1);
 					true
 				} else {
 					false
