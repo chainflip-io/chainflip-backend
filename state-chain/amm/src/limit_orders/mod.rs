@@ -218,7 +218,7 @@ pub enum MintError {
 #[derive(Debug)]
 pub enum PositionError<T> {
 	/// Invalid Price
-	InvalidPrice,
+	InvalidTick,
 	/// Position referenced does not exist
 	NonExistent,
 	Other(T),
@@ -226,7 +226,7 @@ pub enum PositionError<T> {
 impl<T> PositionError<T> {
 	fn map_other<R>(self, f: impl FnOnce(T) -> R) -> PositionError<R> {
 		match self {
-			PositionError::InvalidPrice => PositionError::InvalidPrice,
+			PositionError::InvalidTick => PositionError::InvalidTick,
 			PositionError::NonExistent => PositionError::NonExistent,
 			PositionError::Other(t) => PositionError::Other(f(t)),
 		}
@@ -561,7 +561,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	fn validate_tick<T>(tick: Tick) -> Result<SqrtPriceQ64F96, PositionError<T>> {
 		is_tick_valid(tick)
 			.then(|| sqrt_price_at_tick(tick))
-			.ok_or(PositionError::InvalidPrice)
+			.ok_or(PositionError::InvalidTick)
 	}
 
 	/// Collects any earnings from the specified position, and then removes the requested amount of

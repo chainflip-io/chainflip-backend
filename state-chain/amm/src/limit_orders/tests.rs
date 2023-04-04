@@ -339,7 +339,7 @@ fn mint() {
 					bad,
 					1000.into()
 				),
-				Err(PositionError::InvalidPrice)
+				Err(PositionError::InvalidTick)
 			));
 		}
 
@@ -379,7 +379,7 @@ fn burn() {
 					MIN_TICK - 1,
 					1000.into()
 				),
-				Err(PositionError::InvalidPrice)
+				Err(PositionError::InvalidTick)
 			));
 			assert!(matches!(
 				pool_state.collect_and_burn::<SD>(
@@ -387,7 +387,7 @@ fn burn() {
 					MAX_TICK + 1,
 					1000.into()
 				),
-				Err(PositionError::InvalidPrice)
+				Err(PositionError::InvalidTick)
 			));
 		}
 		{
