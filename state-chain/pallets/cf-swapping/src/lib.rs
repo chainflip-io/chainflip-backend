@@ -50,14 +50,10 @@ pub(crate) struct CcmSwapOutput {
 }
 
 impl CcmSwapOutput {
-	pub fn is_complete(&self) -> bool {
-		self.principal.is_some() && self.gas.is_some()
-	}
-
-	/// Returns Some of tuple (principle, gas) after swap is completed.
+	/// Returns Some of tuple (principal, gas) after swap is completed.
 	/// else return None
-	pub fn get_completed_result(self) -> Option<(AssetAmount, AssetAmount)> {
-		if self.is_complete() {
+	pub fn completed_result(self) -> Option<(AssetAmount, AssetAmount)> {
+		if self.principal.is_some() && self.gas.is_some() {
 			Some((self.principal.unwrap(), self.gas.unwrap()))
 		} else {
 			None
@@ -184,8 +180,8 @@ pub mod pallet {
 		},
 		CcmIngressReceived {
 			ccm_id: u64,
-			asset_swap_id: u64,
-			gas_swap_id: u64,
+			principal_swap_id: Option<u64>,
+			gas_swap_id: Option<u64>,
 			ingress_amount: AssetAmount,
 			egress_address: ForeignChainAddress,
 		},
@@ -426,13 +422,8 @@ pub mod pallet {
 									.as_mut()
 									.expect("CCM that scheduled Swaps must exist in storage");
 								ccm_output.principal = Some(swap_output);
-								if ccm_output.is_complete() {
-									Self::schedule_ccm_egress(
-										*ccm_id,
-										ccm_output
-											.get_completed_result()
-											.expect("Guaranteed that the CCM is completed"),
-									);
+								if let Some((principal, gas)) = ccm_output.completed_result() {
+									Self::schedule_ccm_egress(*ccm_id, (principal, gas));
 									*maybe_ccm_output = None;
 								}
 							});
@@ -443,13 +434,8 @@ pub mod pallet {
 									.as_mut()
 									.expect("CCM that scheduled Swaps must exist in storage");
 								ccm_output.gas = Some(swap_output);
-								if ccm_output.is_complete() {
-									Self::schedule_ccm_egress(
-										*ccm_id,
-										ccm_output
-											.get_completed_result()
-											.expect("Guaranteed that the CCM is completed"),
-									);
+								if let Some((principal, gas)) = ccm_output.completed_result() {
+									Self::schedule_ccm_egress(*ccm_id, (principal, gas));
 									*maybe_ccm_output = None;
 								}
 							});
@@ -577,26 +563,39 @@ pub mod pallet {
 				id.saturating_accrue(1);
 				*id
 			});
+
 			let asset_swap_amount = ingress_amount.saturating_sub(message_metadata.gas_budget);
 
-			// Schedule ingressed assets to be swapped.
-			let asset_swap_id = Self::schedule_swap(
-				ingress_asset,
-				egress_asset,
-				asset_swap_amount,
-				SwapType::CcmPrincipal(ccm_id),
-			);
+			let mut swap_output = CcmSwapOutput::default();
+			let principal_swap_id = if ingress_asset == egress_asset {
+				swap_output.principal = Some(asset_swap_amount);
+				None
+			} else {
+				// Schedule ingressed assets to be swapped.
+				Some(Self::schedule_swap(
+					ingress_asset,
+					egress_asset,
+					asset_swap_amount,
+					SwapType::CcmPrincipal(ccm_id),
+				))
+			};
 
 			// Schedule the gas to be swapped.
 			let output_gas_asset = ForeignChain::from(egress_asset).gas_asset();
 
-			// Schedule swap for gas.
-			let gas_swap_id = Self::schedule_swap(
-				ingress_asset,
-				output_gas_asset,
-				message_metadata.gas_budget,
-				SwapType::CcmGas(ccm_id),
-			);
+			let gas_swap_id = if ingress_asset == output_gas_asset {
+				// Ingress can be used as gas directly
+				swap_output.gas = Some(message_metadata.gas_budget);
+				None
+			} else {
+				// Schedule swap for gas.
+				Some(Self::schedule_swap(
+					ingress_asset,
+					output_gas_asset,
+					message_metadata.gas_budget,
+					SwapType::CcmGas(ccm_id),
+				))
+			};
 
 			PendingCcms::<T>::insert(
 				ccm_id,
@@ -608,11 +607,17 @@ pub mod pallet {
 					message_metadata,
 				},
 			);
-			CcmOutputs::<T>::insert(ccm_id, CcmSwapOutput::default());
+
+			// If no swap is required, egress the CCM.
+			if let Some((principal, gas)) = swap_output.completed_result() {
+				Self::schedule_ccm_egress(ccm_id, (principal, gas));
+			} else {
+				CcmOutputs::<T>::insert(ccm_id, swap_output);
+			}
 
 			Self::deposit_event(Event::<T>::CcmIngressReceived {
 				ccm_id,
-				asset_swap_id,
+				principal_swap_id,
 				gas_swap_id,
 				ingress_amount,
 				egress_address,
