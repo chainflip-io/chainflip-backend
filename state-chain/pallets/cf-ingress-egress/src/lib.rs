@@ -487,7 +487,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Returns the actual amount of weights used.
 	///
 	/// Egress transactions with Blacklisted assets are not sent, and kept in storage.
-	#[allow(clippy::type_complexity)]
 	fn do_egress_scheduled_fetch_transfer(
 		maybe_size: Option<u32>,
 	) -> TransactionOutcome<Result<Weight, DispatchError>> {
