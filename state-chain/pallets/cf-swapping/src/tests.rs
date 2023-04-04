@@ -1,5 +1,5 @@
 use crate::{
-	mock::*, CcmGasBudget, CcmSwapOutput, CcmWithSwapStatus, EarnedRelayerFees, Error, Pallet,
+	mock::*, CcmGasBudget, CcmOutputs, CcmSwap, CcmSwapOutput, EarnedRelayerFees, Error, Pallet,
 	PendingCcms, Swap, SwapQueue, SwapType, WeightInfo,
 };
 use cf_chains::{address::ForeignChainAddress, AnyChain, CcmIngressMetadata};
@@ -294,13 +294,12 @@ fn can_process_ccms_via_swap_intent() {
 
 		assert_eq!(
 			PendingCcms::<Test>::get(1),
-			Some(CcmWithSwapStatus {
+			Some(CcmSwap {
 				ingress_asset: Asset::Dot,
 				ingress_amount: 2_000,
 				egress_asset: Asset::Eth,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
-				swap_status: CcmSwapOutput::new(1, 2)
 			})
 		);
 
@@ -312,17 +311,19 @@ fn can_process_ccms_via_swap_intent() {
 					from: Asset::Dot,
 					to: Asset::Eth,
 					amount: 1_000,
-					swap_type: SwapType::Ccm(1)
+					swap_type: SwapType::CcmPrincipal(1)
 				},
 				Swap {
 					swap_id: 2,
 					from: Asset::Dot,
 					to: Asset::Eth,
 					amount: 1_000,
-					swap_type: SwapType::Ccm(1)
+					swap_type: SwapType::CcmGas(1)
 				},
 			]
 		);
+
+		assert_eq!(CcmOutputs::<Test>::get(1), Some(CcmSwapOutput { principal: None, gas: None }));
 
 		// Swaps are executed during on_idle
 		Swapping::on_idle(1, Weight::from_ref_time(1_000_000_000_000));
@@ -344,6 +345,7 @@ fn can_process_ccms_via_swap_intent() {
 
 		// Completed CCM is removed from storage
 		assert_eq!(PendingCcms::<Test>::get(1), None);
+		assert_eq!(CcmOutputs::<Test>::get(1), None);
 
 		System::assert_has_event(RuntimeEvent::Swapping(
 			crate::Event::<Test>::CcmEgressScheduled {
@@ -375,13 +377,12 @@ fn can_process_ccms_via_extrinsic() {
 
 		assert_eq!(
 			PendingCcms::<Test>::get(1),
-			Some(CcmWithSwapStatus {
+			Some(CcmSwap {
 				ingress_asset: Asset::Btc,
 				ingress_amount: 1_000_000,
 				egress_asset: Asset::Usdc,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
-				swap_status: CcmSwapOutput::new(1, 2)
 			})
 		);
 
@@ -393,14 +394,14 @@ fn can_process_ccms_via_extrinsic() {
 					from: Asset::Btc,
 					to: Asset::Usdc,
 					amount: 998_000,
-					swap_type: SwapType::Ccm(1)
+					swap_type: SwapType::CcmPrincipal(1)
 				},
 				Swap {
 					swap_id: 2,
 					from: Asset::Btc,
 					to: Asset::Eth,
 					amount: 2_000,
-					swap_type: SwapType::Ccm(1)
+					swap_type: SwapType::CcmGas(1)
 				}
 			]
 		);

@@ -103,14 +103,14 @@ benchmarks! {
 			from: Asset::Usdc,
 			to: Asset::Eth,
 			amount:(1_000 - 1),
-			swap_type: SwapType::Ccm(1)
+			swap_type: SwapType::CcmPrincipal(1)
 		},
 		Swap{
 			swap_id: 2,
 			from: Asset::Usdc,
 			to: Asset::Eth,
 			amount:1,
-			swap_type: SwapType::Ccm(1)
+			swap_type: SwapType::CcmGas(1)
 		}]);
 	}
 

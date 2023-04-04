@@ -43,7 +43,7 @@ pub struct Swap {
 }
 
 /// Struct denoting swap status of a cross-chain message.
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub(crate) struct CcmSwapOutput {
 	principal: Option<AssetAmount>,
 	gas: Option<AssetAmount>,
@@ -54,15 +54,14 @@ impl CcmSwapOutput {
 		self.principal.is_some() && self.gas.is_some()
 	}
 
-	/// Panics if the outputs are not complete.
-	pub fn get_completed(self) -> (AssetAmount, AssetAmount) {
-		(self.principal.unwrap(), self.gas.unwrap())
-	}
-}
-
-impl CcmSwapOutput {
-	pub fn new() -> Self {
-		CcmSwapOutput { principal: None, gas: None }
+	/// Returns Some of tuple (principle, gas) after swap is completed.
+	/// else return None
+	pub fn get_completed_result(self) -> Option<(AssetAmount, AssetAmount)> {
+		if self.is_complete() {
+			Some((self.principal.unwrap(), self.gas.unwrap()))
+		} else {
+			None
+		}
 	}
 }
 
@@ -422,21 +421,35 @@ pub mod pallet {
 							});
 						},
 						SwapType::CcmPrincipal(ccm_id) => {
-							CcmOutputs::<T>::mutate(ccm_id, |maybe_ccm_output| {
-								let ccm_output = maybe_ccm_output.as_mut().expect("TODO: explain");
+							CcmOutputs::<T>::mutate_exists(ccm_id, |maybe_ccm_output| {
+								let ccm_output = maybe_ccm_output
+									.as_mut()
+									.expect("CCM that scheduled Swaps must exist in storage");
 								ccm_output.principal = Some(swap_output);
 								if ccm_output.is_complete() {
-									Self::schedule_ccm_egress(*ccm_id, ccm_output.get_completed());
+									Self::schedule_ccm_egress(
+										*ccm_id,
+										ccm_output
+											.get_completed_result()
+											.expect("Guaranteed that the CCM is completed"),
+									);
 									*maybe_ccm_output = None;
 								}
 							});
 						},
 						SwapType::CcmGas(ccm_id) => {
-							CcmOutputs::<T>::mutate(ccm_id, |maybe_ccm_output| {
-								let ccm_output = maybe_ccm_output.as_mut().expect("TODO: explain");
+							CcmOutputs::<T>::mutate_exists(ccm_id, |maybe_ccm_output| {
+								let ccm_output = maybe_ccm_output
+									.as_mut()
+									.expect("CCM that scheduled Swaps must exist in storage");
 								ccm_output.gas = Some(swap_output);
 								if ccm_output.is_complete() {
-									Self::schedule_ccm_egress(*ccm_id, ccm_output.get_completed());
+									Self::schedule_ccm_egress(
+										*ccm_id,
+										ccm_output
+											.get_completed_result()
+											.expect("Guaranteed that the CCM is completed"),
+									);
 									*maybe_ccm_output = None;
 								}
 							});
@@ -479,7 +492,7 @@ pub mod pallet {
 			ccm_id: u64,
 			(ccm_output_principal, ccm_output_gas): (AssetAmount, AssetAmount),
 		) {
-			if let Some(ccm) = PendingCcms::<T>::get(ccm_id) {
+			if let Some(ccm) = PendingCcms::<T>::take(ccm_id) {
 				// Insert gas budget into storage.
 				CcmGasBudget::<T>::insert(
 					ccm_id,
@@ -491,7 +504,7 @@ pub mod pallet {
 					ccm.egress_asset,
 					ccm_output_principal,
 					ccm.egress_address.clone(),
-					Some(ccm.message_metadata.clone()),
+					Some(ccm.message_metadata),
 				);
 				Self::deposit_event(Event::<T>::CcmEgressScheduled { ccm_id, egress_id });
 			} else {
@@ -591,10 +604,11 @@ pub mod pallet {
 					ingress_asset,
 					ingress_amount,
 					egress_asset,
-					egress_address,
+					egress_address: egress_address.clone(),
 					message_metadata,
 				},
 			);
+			CcmOutputs::<T>::insert(ccm_id, CcmSwapOutput::default());
 
 			Self::deposit_event(Event::<T>::CcmIngressReceived {
 				ccm_id,
