@@ -423,7 +423,12 @@ pub mod pallet {
 									.expect("CCM that scheduled Swaps must exist in storage");
 								ccm_output.principal = Some(swap_output);
 								if let Some((principal, gas)) = ccm_output.completed_result() {
-									Self::schedule_ccm_egress(*ccm_id, (principal, gas));
+									Self::schedule_ccm_egress(
+										*ccm_id,
+										PendingCcms::<T>::get(ccm_id)
+											.expect("Ccm can only be completed once."),
+										(principal, gas),
+									);
 									*maybe_ccm_output = None;
 								}
 							});
@@ -435,7 +440,12 @@ pub mod pallet {
 									.expect("CCM that scheduled Swaps must exist in storage");
 								ccm_output.gas = Some(swap_output);
 								if let Some((principal, gas)) = ccm_output.completed_result() {
-									Self::schedule_ccm_egress(*ccm_id, (principal, gas));
+									Self::schedule_ccm_egress(
+										*ccm_id,
+										PendingCcms::<T>::get(ccm_id)
+											.expect("Ccm can only be completed once."),
+										(principal, gas),
+									);
 									*maybe_ccm_output = None;
 								}
 							});
@@ -476,26 +486,23 @@ pub mod pallet {
 		/// Schedule the egress of a completed Cross chain message.
 		fn schedule_ccm_egress(
 			ccm_id: u64,
+			ccm_swap: CcmSwap,
 			(ccm_output_principal, ccm_output_gas): (AssetAmount, AssetAmount),
 		) {
-			if let Some(ccm) = PendingCcms::<T>::take(ccm_id) {
-				// Insert gas budget into storage.
-				CcmGasBudget::<T>::insert(
-					ccm_id,
-					(ForeignChain::from(ccm.egress_asset).gas_asset(), ccm_output_gas),
-				);
+			// Insert gas budget into storage.
+			CcmGasBudget::<T>::insert(
+				ccm_swap,
+				(ForeignChain::from(ccm_swap.egress_asset).gas_asset(), ccm_output_gas),
+			);
 
-				// Schedule the given ccm to be egressed and deposit a event.
-				let egress_id = T::EgressHandler::schedule_egress(
-					ccm.egress_asset,
-					ccm_output_principal,
-					ccm.egress_address.clone(),
-					Some(ccm.message_metadata),
-				);
-				Self::deposit_event(Event::<T>::CcmEgressScheduled { ccm_id, egress_id });
-			} else {
-				debug_assert!(false, "Incomplete CCM should never be egressed.");
-			};
+			// Schedule the given ccm to be egressed and deposit a event.
+			let egress_id = T::EgressHandler::schedule_egress(
+				ccm_swap.egress_asset,
+				ccm_output_principal,
+				ccm_swap.egress_address.clone(),
+				Some(ccm_swap.message_metadata),
+			);
+			Self::deposit_event(Event::<T>::CcmEgressScheduled { ccm_id, egress_id });
 		}
 	}
 
@@ -564,31 +571,27 @@ pub mod pallet {
 				*id
 			});
 
-			let asset_swap_amount = ingress_amount.saturating_sub(message_metadata.gas_budget);
-
 			let mut swap_output = CcmSwapOutput::default();
+
+			let principal_swap_amount = ingress_amount.saturating_sub(message_metadata.gas_budget);
 			let principal_swap_id = if ingress_asset == egress_asset {
-				swap_output.principal = Some(asset_swap_amount);
+				swap_output.principal = Some(principal_swap_amount);
 				None
 			} else {
-				// Schedule ingressed assets to be swapped.
 				Some(Self::schedule_swap(
 					ingress_asset,
 					egress_asset,
-					asset_swap_amount,
+					principal_swap_amount,
 					SwapType::CcmPrincipal(ccm_id),
 				))
 			};
 
-			// Schedule the gas to be swapped.
 			let output_gas_asset = ForeignChain::from(egress_asset).gas_asset();
-
 			let gas_swap_id = if ingress_asset == output_gas_asset {
 				// Ingress can be used as gas directly
 				swap_output.gas = Some(message_metadata.gas_budget);
 				None
 			} else {
-				// Schedule swap for gas.
 				Some(Self::schedule_swap(
 					ingress_asset,
 					output_gas_asset,
@@ -597,24 +600,6 @@ pub mod pallet {
 				))
 			};
 
-			PendingCcms::<T>::insert(
-				ccm_id,
-				CcmSwap {
-					ingress_asset,
-					ingress_amount,
-					egress_asset,
-					egress_address: egress_address.clone(),
-					message_metadata,
-				},
-			);
-
-			// If no swap is required, egress the CCM.
-			if let Some((principal, gas)) = swap_output.completed_result() {
-				Self::schedule_ccm_egress(ccm_id, (principal, gas));
-			} else {
-				CcmOutputs::<T>::insert(ccm_id, swap_output);
-			}
-
 			Self::deposit_event(Event::<T>::CcmIngressReceived {
 				ccm_id,
 				principal_swap_id,
@@ -622,6 +607,21 @@ pub mod pallet {
 				ingress_amount,
 				egress_address,
 			});
+
+			// If no swap is required, egress the CCM.
+			let ccm_swap = CcmSwap {
+				ingress_asset,
+				ingress_amount,
+				egress_asset,
+				egress_address: egress_address.clone(),
+				message_metadata,
+			};
+			if let Some((principal, gas)) = swap_output.completed_result() {
+				Self::schedule_ccm_egress(ccm_swap, (principal, gas));
+			} else {
+				PendingCcms::<T>::insert(ccm_id, ccm_swap);
+				CcmOutputs::<T>::insert(ccm_id, swap_output);
+			}
 
 			Ok(())
 		}
