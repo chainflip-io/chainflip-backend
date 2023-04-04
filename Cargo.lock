@@ -5647,6 +5647,7 @@ dependencies = [
 name = "pallet-cf-pools-runtime-api"
 version = "0.1.0"
 dependencies = [
+ "cf-amm",
  "cf-primitives",
  "sp-api",
  "sp-runtime 7.0.0",

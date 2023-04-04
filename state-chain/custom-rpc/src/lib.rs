@@ -16,8 +16,6 @@ use std::{marker::PhantomData, sync::Arc};
 #[allow(unused)]
 use state_chain_runtime::{Asset, AssetAmount, ExchangeRate};
 
-use cf_primitives::{Liquidity, Tick};
-
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
 	pub stake: NumberOrHex,
@@ -411,71 +409,5 @@ where
 			min_stake: auction_state.min_stake.into(),
 			auction_size_range: auction_state.auction_size_range,
 		})
-	}
-}
-
-use pallet_cf_pools_runtime_api::PoolsApi;
-
-pub struct PoolsRpc<C, B> {
-	pub client: Arc<C>,
-	pub _phantom: PhantomData<B>,
-}
-
-impl<C, B> PoolsRpc<C, B>
-where
-	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,
-	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
-	C::Api: pallet_cf_pools_runtime_api::PoolsApi<B>,
-{
-	fn query_block_id(&self, from_rpc: Option<<B as BlockT>::Hash>) -> sp_api::BlockId<B> {
-		sp_api::BlockId::hash(from_rpc.unwrap_or_else(|| self.client.info().best_hash))
-	}
-}
-
-#[rpc(server, client, namespace = "cf")]
-pub trait PoolsApi {
-	#[method(name = "pool_tick_price")]
-	fn cf_pool_tick_price(
-		&self,
-		asset: Asset,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Tick>>;
-
-	#[method(name = "pool_minted_positions")]
-	fn cf_pool_minted_positions(
-		&self,
-		lp: AccountId32,
-		asset: Asset,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<(Tick, Tick, Liquidity)>>;
-}
-
-impl<C, B> PoolsApiServer for PoolsRpc<C, B>
-where
-	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,
-	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
-	C::Api: pallet_cf_pools_runtime_api::PoolsApi<B>,
-{
-	fn cf_pool_tick_price(
-		&self,
-		asset: Asset,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Tick>> {
-		self.client
-			.runtime_api()
-			.cf_pool_tick_price(&self.query_block_id(at), asset)
-			.map_err(to_rpc_error)
-	}
-
-	fn cf_pool_minted_positions(
-		&self,
-		lp: AccountId32,
-		asset: Asset,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<(Tick, Tick, Liquidity)>> {
-		self.client
-			.runtime_api()
-			.cf_pool_minted_positions(&self.query_block_id(at), lp, asset)
-			.map_err(to_rpc_error)
 	}
 }

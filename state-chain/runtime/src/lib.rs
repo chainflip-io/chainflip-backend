@@ -72,12 +72,8 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-pub use cf_primitives::{
-	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, Liquidity, Tick,
-};
-pub use cf_traits::{
-	EpochInfo, EthEnvironmentProvider, LiquidityPoolApi, QualifyNode, SessionKeysRegistered,
-};
+pub use cf_primitives::{Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance};
+pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
@@ -1032,19 +1028,6 @@ impl_runtime_apis! {
 				min_stake: MinimumStake::<Runtime>::get().unique_saturated_into(),
 				auction_size_range: (auction_params.min_size, auction_params.max_size)
 			}
-		}
-	}
-
-	impl pallet_cf_pools_runtime_api::PoolsApi<Block> for Runtime {
-		fn cf_pool_tick_price(
-			asset: Asset,
-		) -> Option<Tick> {
-			use cf_traits::LiquidityPoolApi;
-			LiquidityPools::current_tick(&asset)
-		}
-
-		fn cf_pool_minted_positions(lp: AccountId, asset: Asset) -> Vec<(Tick, Tick, Liquidity)> {
-			LiquidityPools::minted_positions(&lp, &asset)
 		}
 	}
 
