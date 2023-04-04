@@ -733,7 +733,10 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		egress_address: TargetChainAccount<T, I>,
 		maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId {
-		let egress_counter = EgressIdCounter::<T, I>::get().saturating_add(1);
+		let egress_counter = EgressIdCounter::<T, I>::mutate(|id| {
+			*id = id.saturating_add(1);
+			*id
+		});
 		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
 		match maybe_message {
 			Some(message) => ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
@@ -754,7 +757,6 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 			}),
 		}
 
-		EgressIdCounter::<T, I>::put(egress_counter);
 		Self::deposit_event(Event::<T, I>::EgressScheduled {
 			id: egress_id,
 			asset,
