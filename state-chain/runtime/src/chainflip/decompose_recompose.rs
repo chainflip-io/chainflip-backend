@@ -1,7 +1,27 @@
-use crate::{EthereumInstance, Runtime, RuntimeCall};
+use crate::{BitcoinInstance, EthereumInstance, Runtime, RuntimeCall};
 use codec::{Decode, Encode};
 use pallet_cf_witnesser::WitnessDataExtraction;
 use sp_std::{mem, prelude::*};
+
+fn select_median<T: Ord + Encode + Decode>(data: &mut [Vec<u8>]) -> Option<T> {
+	if data.is_empty() {
+		return None
+	}
+
+	let len = data.len();
+	let median_index = if len % 2 == 0 { (len - 1) / 2 } else { len / 2 };
+	// Encoding is order-preserving so we can sort the raw encoded bytes and then decode
+	// just the result.
+	let (_, median_bytes, _) = data.select_nth_unstable(median_index);
+
+	match Decode::decode(&mut &median_bytes[..]) {
+		Ok(median) => Some(median),
+		Err(e) => {
+			log::error!("Failed to decode median priority fee: {:?}", e);
+			None
+		},
+	}
+}
 
 impl WitnessDataExtraction for RuntimeCall {
 	fn extract(&mut self) -> Option<Vec<u8>> {
@@ -15,36 +35,39 @@ impl WitnessDataExtraction for RuntimeCall {
 				let priority_fee = mem::take(&mut state.priority_fee);
 				Some(priority_fee.encode())
 			},
+			RuntimeCall::BitcoinChainTracking(pallet_cf_chain_tracking::Call::<
+				Runtime,
+				BitcoinInstance,
+			>::update_chain_state {
+				ref mut state,
+			}) => {
+				let fee_rate = mem::take(&mut state.fee_rate_sats_per_byte);
+				Some(fee_rate.encode())
+			},
 			_ => None,
 		}
 	}
 
 	fn combine_and_inject(&mut self, data: &mut [Vec<u8>]) {
-		if data.is_empty() {
-			return
-		}
-
 		match self {
 			RuntimeCall::EthereumChainTracking(pallet_cf_chain_tracking::Call::<
 				Runtime,
 				EthereumInstance,
 			>::update_chain_state {
 				state,
+			}) =>
+				if let Some(median) = select_median(data) {
+					state.priority_fee = median;
+				},
+			RuntimeCall::BitcoinChainTracking(pallet_cf_chain_tracking::Call::<
+				Runtime,
+				BitcoinInstance,
+			>::update_chain_state {
+				state,
 			}) => {
-				// Encoding is order-preserving so we can sort the raw encoded bytes and then decode
-				// just the result.
-				let len = data.len();
-				let median_index = if len % 2 == 0 { (len - 1) / 2 } else { len / 2 };
-				let (_, median_bytes, _) = data.select_nth_unstable(median_index);
-
-				match Decode::decode(&mut &median_bytes[..]) {
-					Ok(median) => {
-						state.priority_fee = median;
-					},
-					Err(e) => {
-						log::error!("Failed to decode median priority fee: {:?}", e);
-					},
-				}
+				if let Some(median) = select_median(data) {
+					state.fee_rate_sats_per_byte = median;
+				};
 			},
 			_ => {
 				log::warn!("No witness data injection for call {:?}", self);
