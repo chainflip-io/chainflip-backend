@@ -18,8 +18,8 @@ use cf_chains::{
 };
 
 use cf_primitives::{
-	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BroadcastId, CeremonyId,
-	EgressId, EpochIndex, EthereumAddress, ForeignChain, IntentId, KeyId,
+	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
+	CeremonyId, EgressId, EpochIndex, EthereumAddress, ForeignChain, IntentId, KeyId,
 	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -670,7 +670,7 @@ pub trait IngressApi<C: Chain> {
 		ingress_asset: C::ChainAsset,
 		egress_asset: Asset,
 		egress_address: ForeignChainAddress,
-		relayer_commission_bps: u16,
+		relayer_commission_bps: BasisPoints,
 		relayer_id: Self::AccountId,
 		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
@@ -688,7 +688,7 @@ impl<T: frame_system::Config> IngressApi<Ethereum> for T {
 		_ingress_asset: assets::eth::Asset,
 		_egress_asset: Asset,
 		_egress_address: ForeignChainAddress,
-		_relayer_commission_bps: u16,
+		_relayer_commission_bps: BasisPoints,
 		_relayer_id: T::AccountId,
 		_message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
@@ -708,7 +708,7 @@ impl<T: frame_system::Config> IngressApi<Polkadot> for T {
 		_ingress_asset: assets::dot::Asset,
 		_egress_asset: Asset,
 		_egress_address: ForeignChainAddress,
-		_relayer_commission_bps: u16,
+		_relayer_commission_bps: BasisPoints,
 		_relayer_id: T::AccountId,
 		_message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {

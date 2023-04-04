@@ -1,7 +1,7 @@
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use cf_chains::{address::ForeignChainAddress, eth::H256, CcmIngressMetadata};
-use cf_primitives::{AccountRole, Asset};
+use cf_primitives::{AccountRole, Asset, BasisPoints};
 use futures::{FutureExt, Stream};
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use rand_legacy::FromEntropy;
@@ -327,7 +327,7 @@ pub async fn register_swap_intent(
 	ingress_asset: Asset,
 	egress_asset: Asset,
 	egress_address: ForeignChainAddress,
-	relayer_commission_bps: u16,
+	relayer_commission_bps: BasisPoints,
 	message_metadata: Option<CcmIngressMetadata>,
 ) -> Result<ForeignChainAddress> {
 	let events = connect_submit_and_get_events(
