@@ -310,7 +310,7 @@ pub enum BurnError {
 #[derive(Debug)]
 pub enum CollectError {}
 
-#[derive(Default, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct CollectedFees {
 	pub fees: SideMap<Amount>,
 }

@@ -59,6 +59,13 @@ impl<T> std::ops::IndexMut<Side> for SideMap<T> {
 		}
 	}
 }
+#[cfg(test)]
+impl<T: std::ops::Add<R>, R> std::ops::Add<SideMap<R>> for SideMap<T> {
+	type Output = SideMap<<T as std::ops::Add<R>>::Output>;
+	fn add(self, rhs: SideMap<R>) -> Self::Output {
+		SideMap { zero: self.zero + rhs.zero, one: self.one + rhs.one }
+	}
+}
 
 pub fn mul_div_floor<C: Into<U512>>(a: U256, b: U256, c: C) -> U256 {
 	let c: U512 = c.into();
