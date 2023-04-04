@@ -35,7 +35,7 @@ use cf_chains::{
 	TransactionBuilder,
 };
 use cf_primitives::{
-	chains::assets, liquidity::U256, Asset, EgressId, IntentId, ETHEREUM_ETH_ADDRESS,
+	chains::assets, liquidity::U256, Asset, BasisPoints, EgressId, IntentId, ETHEREUM_ETH_ADDRESS,
 };
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, EgressApi,
@@ -430,7 +430,7 @@ macro_rules! impl_ingress_api_for_anychain {
 				ingress_asset: Asset,
 				egress_asset: Asset,
 				egress_address: ForeignChainAddress,
-				relayer_commission_bps: u16,
+				relayer_commission_bps: BasisPoints,
 				relayer_id: Self::AccountId,
 				message_metadata: Option<CcmIngressMetadata>,
 			) -> Result<(IntentId, ForeignChainAddress), DispatchError> {

@@ -1,5 +1,7 @@
 use cf_chains::address::ForeignChainAddress;
-use cf_primitives::{AmmRange, Asset, AssetAmount, BurnResult, Liquidity, PoolAssetMap, Tick};
+use cf_primitives::{
+	AmmRange, Asset, AssetAmount, BasisPoints, BurnResult, Liquidity, PoolAssetMap, Tick,
+};
 use frame_support::dispatch::DispatchError;
 use sp_runtime::DispatchResult;
 use sp_std::vec::Vec;
@@ -14,7 +16,7 @@ pub trait SwapIntentHandler {
 		amount: AssetAmount,
 		egress_address: ForeignChainAddress,
 		relayer_id: Self::AccountId,
-		relayer_commission_bps: u16,
+		relayer_commission_bps: BasisPoints,
 	);
 }
 
@@ -100,7 +102,7 @@ impl<T: frame_system::Config> SwapIntentHandler for T {
 		_amount: AssetAmount,
 		_egress_address: ForeignChainAddress,
 		_relayer_id: Self::AccountId,
-		_relayer_commission_bps: u16,
+		_relayer_commission_bps: BasisPoints,
 	) {
 	}
 }
