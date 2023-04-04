@@ -144,11 +144,11 @@ fn check_data_size_verify_coeff_comm4() {
 	// It takes a few more parties to generate invalid data (due to key handover)
 	let large_len = expected_len + 3;
 
-	// Should fail if the other collection is larger or smaller than expected
+	// Should fail if the other collection is larger than expected
 	assert!(!gen_keygen_data_verify_coeff_comm4(large_len, expected_len)
 		.data_size_is_valid(expected_len));
 
-	// The nested collection should fail if larger or smaller than expected
+	// The nested collection should fail if larger than expected
 	assert!(!gen_keygen_data_verify_coeff_comm4(expected_len, large_len)
 		.data_size_is_valid(expected_len));
 }

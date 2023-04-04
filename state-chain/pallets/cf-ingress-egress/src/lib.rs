@@ -13,7 +13,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_primitives::{EgressCounter, EgressId, ForeignChain};
+use cf_primitives::{BasisPoints, EgressCounter, EgressId, ForeignChain};
 use sp_runtime::traits::BlockNumberProvider;
 
 use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata, IngressIdConstructor};
@@ -131,7 +131,7 @@ pub mod pallet {
 			egress_asset: Asset,
 			egress_address: ForeignChainAddress,
 			relayer_id: AccountId,
-			relayer_commission_bps: u16,
+			relayer_commission_bps: BasisPoints,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
@@ -791,7 +791,7 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 		ingress_asset: TargetChainAsset<T, I>,
 		egress_asset: Asset,
 		egress_address: ForeignChainAddress,
-		relayer_commission_bps: u16,
+		relayer_commission_bps: BasisPoints,
 		relayer_id: T::AccountId,
 		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {

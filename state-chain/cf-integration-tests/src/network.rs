@@ -9,6 +9,7 @@ use cf_chains::{dot::PolkadotSignature, eth::SchnorrVerificationComponents, Chai
 use cf_chains::btc::UtxoId;
 use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
 use cf_traits::{AccountRoleRegistry, EpochInfo};
+use chainflip_node::test_account_from_seed;
 use codec::Encode;
 use frame_support::traits::{OnFinalize, OnIdle};
 use pallet_cf_staking::{ClaimAmount, MinimumStake};
@@ -364,8 +365,8 @@ pub(crate) fn setup_account(node_id: &NodeId) {
 	assert_ok!(state_chain_runtime::Session::set_keys(
 		state_chain_runtime::RuntimeOrigin::signed(node_id.clone()),
 		SessionKeys {
-			aura: get_from_seed::<AuraId>(seed),
-			grandpa: get_from_seed::<GrandpaId>(seed),
+			aura: test_account_from_seed::<AuraId>(seed),
+			grandpa: test_account_from_seed::<GrandpaId>(seed),
 		},
 		vec![]
 	));
