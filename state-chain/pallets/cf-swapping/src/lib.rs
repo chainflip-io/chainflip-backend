@@ -52,7 +52,7 @@ pub(crate) struct CcmSwapOutput {
 impl CcmSwapOutput {
 	/// Returns Some of tuple (principle, gas) after swap is completed.
 	/// else return None
-	pub fn get_completed_result(self) -> Option<(AssetAmount, AssetAmount)> {
+	pub fn completed_result(self) -> Option<(AssetAmount, AssetAmount)> {
 		if self.principal.is_none() || self.gas.is_none() {
 			return None
 		}
@@ -421,7 +421,7 @@ pub mod pallet {
 									.as_mut()
 									.expect("CCM that scheduled Swaps must exist in storage");
 								ccm_output.principal = Some(swap_output);
-								if let Some(ccm_output) = ccm_output.get_completed_result() {
+								if let Some(ccm_output) = ccm_output.completed_result() {
 									Self::schedule_ccm_egress(*ccm_id, ccm_output);
 									*maybe_ccm_output = None;
 								}
@@ -433,7 +433,7 @@ pub mod pallet {
 									.as_mut()
 									.expect("CCM that scheduled Swaps must exist in storage");
 								ccm_output.gas = Some(swap_output);
-								if let Some(ccm_output) = ccm_output.get_completed_result() {
+								if let Some(ccm_output) = ccm_output.completed_result() {
 									Self::schedule_ccm_egress(*ccm_id, ccm_output);
 									*maybe_ccm_output = None;
 								}
