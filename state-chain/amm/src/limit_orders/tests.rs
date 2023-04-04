@@ -1,5 +1,5 @@
 use crate::{
-	common::{mul_div, sqrt_price_at_tick, tick_at_sqrt_price, MAX_TICK, MIN_TICK},
+	common::{mul_div, sqrt_price_at_tick, tick_at_sqrt_price, Side, MAX_TICK, MIN_TICK},
 	limit_orders, range_orders,
 };
 
@@ -701,4 +701,29 @@ fn swap() {
 		);
 		assert_eq!(pool_state.swap::<OneToZero>(550.into(), None), (200.into(), 50.into()));
 	}
+}
+
+#[test]
+fn maximum_liquidity_swap() {
+	let mut pool_state = PoolState::new(0).unwrap();
+
+	for tick in MIN_TICK..=MAX_TICK {
+		assert_eq!(
+			pool_state
+				.collect_and_mint::<ZeroToOne>(
+					&LiquidityProvider::from([0; 32]),
+					tick,
+					MAX_FIXED_POOL_LIQUIDITY
+				)
+				.unwrap(),
+			Default::default()
+		);
+	}
+
+	assert_eq!(
+		MAX_FIXED_POOL_LIQUIDITY * (1 + MAX_TICK - MIN_TICK),
+		std::iter::repeat_with(|| { pool_state.swap::<ZeroToOne>(Amount::MAX, None).0 })
+			.take_while(|x| !x.is_zero())
+			.fold(Amount::zero(), |acc, x| acc + x)
+	);
 }

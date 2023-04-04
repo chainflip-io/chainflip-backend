@@ -1,3 +1,5 @@
+use crate::common::{Side, MIN_SQRT_PRICE};
+
 use super::*;
 
 #[test]
@@ -62,4 +64,30 @@ fn output_amounts_bounded() {
 	)
 	.checked_mul((1 + MAX_TICK - MIN_TICK).into())
 	.unwrap();
+}
+
+#[test]
+fn maximum_liquidity_swap() {
+	let mut pool_state = PoolState::new(0, MIN_SQRT_PRICE).unwrap();
+
+	let minted_amounts: SideMap<Amount> = (MIN_TICK..0)
+		.map(|lower_tick| (lower_tick, -lower_tick))
+		.into_iter()
+		.map(|(lower_tick, upper_tick)| {
+			pool_state
+				.collect_and_mint(
+					&LiquidityProvider::from([0; 32]),
+					lower_tick,
+					upper_tick,
+					MAX_TICK_GROSS_LIQUIDITY,
+					Result::<_, Infallible>::Ok,
+				)
+				.unwrap()
+				.0
+		})
+		.fold(Default::default(), |acc, x| acc + x);
+
+	let (output, _remaining) = pool_state.swap::<OneToZero>(Amount::MAX, None);
+
+	assert!(((minted_amounts[Side::Zero] - (MAX_TICK - MIN_TICK) /* Maximum rounding down by one per swap iteration */)..minted_amounts[Side::Zero]).contains(&output));
 }
