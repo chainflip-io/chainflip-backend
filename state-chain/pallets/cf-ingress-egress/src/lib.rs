@@ -575,7 +575,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Returns the actual weight used to send the transactions.
 	///
 	/// Blacklisted assets are not sent and will remain in storage.
-	#[allow(clippy::type_complexity)]
 	fn do_egress_scheduled_ccm(maybe_size: Option<u32>) -> Weight {
 		let ccm_to_send: Vec<_> = ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
 			let mut remaining_batch_space = maybe_size.unwrap_or(ccms.len() as u32);
