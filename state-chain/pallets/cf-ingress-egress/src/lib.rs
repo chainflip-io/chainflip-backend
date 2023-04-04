@@ -593,10 +593,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			.collect()
 		});
 
-		if ccm_to_send.is_empty() {
-			return T::WeightInfo::egress_ccm(0u32)
-		}
-
 		let ccms_sent = ccm_to_send.len() as u32;
 		for ccm in ccm_to_send {
 			match <T::ChainApiCall as ExecutexSwapAndCall<T::TargetChain>>::new_unsigned(
