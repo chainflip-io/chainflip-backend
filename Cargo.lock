@@ -808,6 +808,7 @@ dependencies = [
  "cf-primitives",
  "cf-test-utilities",
  "cf-traits",
+ "chainflip-node",
  "frame-executive",
  "frame-support",
  "frame-system",

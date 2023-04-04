@@ -18,7 +18,7 @@ mod swapping;
 
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::crypto::{Pair, Public};
+use sp_core::crypto::Pair;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{
 	constants::common::*, opaque::SessionKeys, AccountId, Emissions, Flip, Governance, Reputation,
@@ -43,12 +43,6 @@ pub const BOB: [u8; 32] = [0xbb; 32];
 pub const CHARLIE: [u8; 32] = [0xcc; 32];
 // Root and Gov member
 pub const ERIN: [u8; 32] = [0xee; 32];
-
-pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
-	TPublic::Pair::from_string(&format!("//{seed}"), None)
-		.expect("static values are valid; qed")
-		.public()
-}
 
 pub fn get_validator_state(account_id: &AccountId) -> ChainflipAccountState {
 	if Validator::current_authorities().contains(account_id) {
