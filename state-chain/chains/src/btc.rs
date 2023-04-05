@@ -581,7 +581,7 @@ impl BitcoinTransaction {
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
 pub struct BitcoinScript {
-	data: Vec<u8>,
+	pub data: Vec<u8>,
 }
 
 /// For reference see https://en.bitcoin.it/wiki/Script
@@ -664,7 +664,7 @@ impl BitcoinScript {
 		self.data.push(0x87);
 		self
 	}
-	/// Serializes the script by returning a single byte for the length
+	/// Serializes the script by returning the varint encoded length
 	/// of the script and then the script itself
 	pub fn serialize(&self) -> Vec<u8> {
 		itertools::chain!(to_varint(self.data.len() as u64), self.data.iter().cloned()).collect()
