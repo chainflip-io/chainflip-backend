@@ -309,7 +309,7 @@ mod test_utxo_filtering {
 		};
 
 		let script_pubkey_bytes_to_witness =
-			btc_address_data.to_scriptpubkey().unwrap().serialize();
+			btc_address_data.to_scriptpubkey().unwrap().data;
 
 		let txs = vec![
 			fake_transaction(vec![
@@ -347,7 +347,7 @@ mod test_utxo_filtering {
 		};
 
 		let script_pubkey_bytes_to_witness =
-			btc_address_data.to_scriptpubkey().unwrap().serialize();
+			btc_address_data.to_scriptpubkey().unwrap().data;
 
 		const UTXO_WITNESSED_1: u64 = 2324;
 		const UTXO_WITNESSED_2: u64 = 1234;
@@ -386,7 +386,7 @@ mod test_utxo_filtering {
 		};
 
 		let script_pubkey_bytes_to_witness =
-			btc_address_data.to_scriptpubkey().unwrap().serialize();
+			btc_address_data.to_scriptpubkey().unwrap().data;
 
 		const UTXO_WITNESSED_1: u64 = 2324;
 		let txs = vec![fake_transaction(vec![
