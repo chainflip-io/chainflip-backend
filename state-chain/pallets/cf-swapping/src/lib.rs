@@ -425,7 +425,7 @@ pub mod pallet {
 								if let Some((principal, gas)) = ccm_output.completed_result() {
 									Self::schedule_ccm_egress(
 										*ccm_id,
-										PendingCcms::<T>::get(ccm_id)
+										PendingCcms::<T>::take(ccm_id)
 											.expect("Ccm can only be completed once."),
 										(principal, gas),
 									);
@@ -442,10 +442,11 @@ pub mod pallet {
 								if let Some((principal, gas)) = ccm_output.completed_result() {
 									Self::schedule_ccm_egress(
 										*ccm_id,
-										PendingCcms::<T>::get(ccm_id)
+										PendingCcms::<T>::take(ccm_id)
 											.expect("Ccm can only be completed once."),
 										(principal, gas),
 									);
+
 									*maybe_ccm_output = None;
 								}
 							});
@@ -491,7 +492,7 @@ pub mod pallet {
 		) {
 			// Insert gas budget into storage.
 			CcmGasBudget::<T>::insert(
-				ccm_swap,
+				ccm_id,
 				(ForeignChain::from(ccm_swap.egress_asset).gas_asset(), ccm_output_gas),
 			);
 
@@ -605,7 +606,7 @@ pub mod pallet {
 				principal_swap_id,
 				gas_swap_id,
 				ingress_amount,
-				egress_address,
+				egress_address: egress_address.clone(),
 			});
 
 			// If no swap is required, egress the CCM.
@@ -613,11 +614,11 @@ pub mod pallet {
 				ingress_asset,
 				ingress_amount,
 				egress_asset,
-				egress_address: egress_address.clone(),
+				egress_address,
 				message_metadata,
 			};
 			if let Some((principal, gas)) = swap_output.completed_result() {
-				Self::schedule_ccm_egress(ccm_swap, (principal, gas));
+				Self::schedule_ccm_egress(ccm_id, ccm_swap, (principal, gas));
 			} else {
 				PendingCcms::<T>::insert(ccm_id, ccm_swap);
 				CcmOutputs::<T>::insert(ccm_id, swap_output);
