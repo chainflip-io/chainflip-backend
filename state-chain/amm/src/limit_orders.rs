@@ -456,14 +456,12 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 					&position.last_percent_remaining,
 				);
 
-			// We under-estimate used liquidity so that lp's don't receive more
-			// swapped_liquidity and fees than may exist in the pool
-			let used_liquidity = position.amount - remaining_amount_ceil;
-			// We under-estimate remaining liquidity so that lp's cannot burn more liquidity
-			// than truely exists in the pool
-
 			(
-				used_liquidity,
+				// We under-estimate used liquidity so that lp's don't receive more
+				// swapped_liquidity and fees than may exist in the pool
+				position.amount - remaining_amount_ceil,
+				// We under-estimate remaining liquidity so that lp's cannot burn more liquidity
+				// than truely exists in the pool
 				if remaining_amount_floor.is_zero() {
 					None
 				} else {
