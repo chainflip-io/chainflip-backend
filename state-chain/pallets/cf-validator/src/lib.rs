@@ -576,6 +576,7 @@ pub mod pallet {
 			keys: T::Keys,
 			proof: Vec<u8>,
 		) -> DispatchResultWithPostInfo {
+			T::AccountRoleRegistry::ensure_validator(origin.clone())?;
 			<pallet_session::Pallet<T>>::set_keys(origin, keys, proof)?;
 			Ok(().into())
 		}
