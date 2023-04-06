@@ -355,7 +355,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	) -> (Amount, Amount) {
 		let mut total_output_amount = U256::zero();
 
-		while let Some((sqrt_price, mut fixed_pool_entry)) = (amount != Amount::zero())
+		while let Some((sqrt_price, mut fixed_pool_entry)) = (!amount.is_zero())
 			.then_some(())
 			.and_then(|()| SD::best_priced_fixed_pool(&mut self.fixed_pools[!SD::INPUT_SIDE]))
 			.map(|entry| (*entry.key(), entry))

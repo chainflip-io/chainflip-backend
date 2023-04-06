@@ -25,7 +25,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	) -> (Amount, Amount) {
 		let mut total_output_amount = Amount::zero();
 
-		while amount != Amount::zero() {
+		while !amount.is_zero() {
 			let (output_amount, remaining_amount) = match (
 				self.limit_orders.current_sqrt_price::<SD>().filter(|sqrt_price| {
 					sqrt_price_limit.map_or(true, |sqrt_price_limit| {
