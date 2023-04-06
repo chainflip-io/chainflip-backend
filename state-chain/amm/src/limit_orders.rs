@@ -301,6 +301,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			.then_some(())
 			.ok_or(SetFeesError::InvalidFeeAmount)?;
 
+		// We must collect all positions before we can change the fee, otherwise the fee and swapped
+		// liquidity calculations would be wrong.
 		let collected_amounts = [
 			self.positions[!<OneToZero as crate::common::SwapDirection>::INPUT_SIDE]
 				.keys()
