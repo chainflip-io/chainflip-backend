@@ -489,6 +489,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	}
 
 	/// Collects any earnings from the specified position, and then adds additional liquidity to it.
+	/// The SwapDirection determines which direction of swaps the liquidity/position you're minting
+	/// will be for.
 	///
 	/// This function never panics.
 	pub fn collect_and_mint<SD: SwapDirection>(
@@ -578,7 +580,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	}
 
 	/// Collects any earnings from the specified position, and then removes the requested amount of
-	/// liquidity from it.
+	/// liquidity from it. The SwapDirection determines which direction of swaps the
+	/// liquidity/position you're burning was for.
 	///
 	/// This function never panics.
 	pub fn collect_and_burn<SD: SwapDirection>(
@@ -636,7 +639,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 		}
 	}
 
-	/// Collects any earnings from the specified position.
+	/// Collects any earnings from the specified position. The SwapDirection determines which
+	/// direction of swaps the liquidity/position you're refering to is for.
 	///
 	/// This function never panics.
 	pub fn collect<SD: SwapDirection>(
