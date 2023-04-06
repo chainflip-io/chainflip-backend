@@ -1,17 +1,16 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../../cf-doc-head.md")]
 
+use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use frame_support::pallet_prelude::*;
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::DispatchResult;
-use sp_std::cmp::{Ord, Ordering};
 
 use cf_chains::{address::ForeignChainAddress, AnyChain};
-use cf_primitives::{AmmRange, Asset, AssetAmount, ForeignChain, IntentId, Liquidity, PoolSide};
 use cf_traits::{
 	liquidity::LpProvisioningApi, AccountRoleRegistry, Chainflip, EgressApi, IngressApi,
-	LiquidityPoolApi, SystemStateInfo,
+	SystemStateInfo,
 };
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -27,7 +26,7 @@ pub use weights::WeightInfo;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use cf_primitives::EgressId;
+	use cf_primitives::{EgressId, IntentId};
 
 	use super::*;
 
@@ -49,9 +48,6 @@ pub mod pallet {
 
 		/// API for handling asset egress.
 		type EgressHandler: EgressApi<AnyChain>;
-
-		/// API to interface with exchange Pools
-		type LiquidityPoolApi: LiquidityPoolApi<Self::AccountId>;
 
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
@@ -164,45 +160,6 @@ pub mod pallet {
 
 			Ok(())
 		}
-
-		/// Adjust the current liquidity position for a liquidity pool.
-		/// Compare the current liquidity level for the given pool/position with provided one  
-		/// and automatically mint/burn liquidity to match the target.
-		/// Adding non-zero amount to an non-existant position will create the position.
-		/// Adding Zero amount to an existing position will fully burn all liquidity in the
-		/// position.
-		#[pallet::weight(T::WeightInfo::update_position())]
-		pub fn update_position(
-			origin: OriginFor<T>,
-			asset: Asset,
-			range: AmmRange,
-			liquidity_target: Liquidity,
-		) -> DispatchResult {
-			T::SystemState::ensure_no_maintenance()?;
-			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-
-			let current_liquidity =
-				T::LiquidityPoolApi::minted_liquidity(&account_id, &asset, range);
-
-			match current_liquidity.cmp(&liquidity_target) {
-				// Burn the difference
-				Ordering::Greater => Self::burn_liquidity(
-					account_id,
-					asset,
-					range,
-					current_liquidity.saturating_sub(liquidity_target),
-				),
-				// Mint the difference
-				Ordering::Less => Self::mint_liquidity(
-					account_id,
-					asset,
-					range,
-					liquidity_target.saturating_sub(current_liquidity),
-				),
-				// Do nothing if the liquidity matches.
-				Ordering::Equal => Ok(()),
-			}
-		}
 	}
 }
 
@@ -241,63 +198,6 @@ impl<T: Config> Pallet<T> {
 			asset,
 			amount_credited: amount,
 		});
-		Ok(())
-	}
-
-	pub fn mint_liquidity(
-		account_id: T::AccountId,
-		asset: Asset,
-		range: AmmRange,
-		liquidity_amount: Liquidity,
-	) -> DispatchResult {
-		let fees_harvested = T::LiquidityPoolApi::mint(
-			account_id.clone(),
-			asset,
-			range,
-			liquidity_amount,
-			|amount_to_be_debited| {
-				Self::try_debit(&account_id, asset, amount_to_be_debited[PoolSide::Asset0])?;
-				Self::try_debit(
-					&account_id,
-					T::LiquidityPoolApi::STABLE_ASSET,
-					amount_to_be_debited[PoolSide::Asset1],
-				)?;
-				Ok(())
-			},
-		)?;
-
-		Self::credit(&account_id, asset, fees_harvested[PoolSide::Asset0])?;
-		Self::credit(
-			&account_id,
-			T::LiquidityPoolApi::STABLE_ASSET,
-			fees_harvested[PoolSide::Asset1],
-		)?;
-		Ok(())
-	}
-
-	pub fn burn_liquidity(
-		account_id: T::AccountId,
-		asset: Asset,
-		range: AmmRange,
-		liquidity_amount: Liquidity,
-	) -> DispatchResult {
-		let burn_result =
-			T::LiquidityPoolApi::burn(account_id.clone(), asset, range, liquidity_amount)?;
-
-		// Credit the user's asset into their account.
-		Self::credit(
-			&account_id,
-			asset,
-			burn_result.assets_returned[PoolSide::Asset0]
-				.saturating_add(burn_result.fees_accrued[PoolSide::Asset0]),
-		)?;
-		Self::credit(
-			&account_id,
-			T::LiquidityPoolApi::STABLE_ASSET,
-			burn_result.assets_returned[PoolSide::Asset1]
-				.saturating_add(burn_result.fees_accrued[PoolSide::Asset1]),
-		)?;
-
 		Ok(())
 	}
 }

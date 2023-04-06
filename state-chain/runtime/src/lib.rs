@@ -352,7 +352,6 @@ impl pallet_cf_lp::Config for Runtime {
 	type AccountRoleRegistry = AccountRoles;
 	type IngressHandler = chainflip::AnyChainIngressEgressHandler;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
-	type LiquidityPoolApi = LiquidityPools;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 }
