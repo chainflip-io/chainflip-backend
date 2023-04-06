@@ -55,7 +55,7 @@ impl FloatBetweenZeroAndOne {
 
 	/// Rights shifts x by shift_bits bits, returning the result and the bits that were shifted
 	/// out/remainder.
-	fn shift_mod(x: U512, shift_bits: U256) -> (U512, U512) {
+	fn right_shift_mod(x: U512, shift_bits: U256) -> (U512, U512) {
 		if shift_bits >= U256::from(512) {
 			(U512::zero(), x)
 		} else {
@@ -89,7 +89,7 @@ impl FloatBetweenZeroAndOne {
 			let d = if div_remainder.is_zero() { d } else { d + U512::one() };
 			let normalise_shift = d.leading_zeros();
 			let shift_bits = 256 - normalise_shift;
-			let (d, shift_remainder) = Self::shift_mod(d, shift_bits.into());
+			let (d, shift_remainder) = Self::right_shift_mod(d, shift_bits.into());
 			let d = U256::try_from(d).unwrap();
 
 			(if shift_remainder.is_zero() { d } else { d + U256::one() }, normalise_shift)
@@ -126,7 +126,7 @@ impl FloatBetweenZeroAndOne {
 		let negative_exponent =
 			numerator.negative_exponent.checked_sub(denominator.negative_exponent).unwrap();
 
-		let (y_floor, shift_remainder) = Self::shift_mod(y_shifted_floor, negative_exponent);
+		let (y_floor, shift_remainder) = Self::right_shift_mod(y_shifted_floor, negative_exponent);
 
 		let y_floor = y_floor.try_into().unwrap();
 

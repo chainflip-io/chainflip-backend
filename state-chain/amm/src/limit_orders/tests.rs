@@ -263,43 +263,43 @@ fn test_float() {
 
 	{
 		assert_eq!(
-			FloatBetweenZeroAndOne::shift_mod(U512::MAX, U256::MAX),
+			FloatBetweenZeroAndOne::right_shift_mod(U512::MAX, U256::MAX),
 			(U512::zero(), U512::MAX)
 		);
 		assert_eq!(
-			FloatBetweenZeroAndOne::shift_mod(U512::MAX, 512.into()),
+			FloatBetweenZeroAndOne::right_shift_mod(U512::MAX, 512.into()),
 			(U512::zero(), U512::MAX)
 		);
 		assert_eq!(
-			FloatBetweenZeroAndOne::shift_mod(U512::MAX, 511.into()),
+			FloatBetweenZeroAndOne::right_shift_mod(U512::MAX, 511.into()),
 			(U512::one(), U512::MAX >> 1)
 		);
 		assert_eq!(
-			FloatBetweenZeroAndOne::shift_mod(U512::MAX, 256.into()),
+			FloatBetweenZeroAndOne::right_shift_mod(U512::MAX, 256.into()),
 			(U256::MAX.into(), U256::MAX.into())
 		);
 		assert_eq!(
-			FloatBetweenZeroAndOne::shift_mod(U512::MAX, 255.into()),
+			FloatBetweenZeroAndOne::right_shift_mod(U512::MAX, 255.into()),
 			(U512::MAX >> 255, (U256::MAX >> 1).into())
 		);
 		assert_eq!(
-			FloatBetweenZeroAndOne::shift_mod(U512::zero(), U256::MAX),
+			FloatBetweenZeroAndOne::right_shift_mod(U512::zero(), U256::MAX),
 			(U512::zero(), U512::zero())
 		);
 		assert_eq!(
-			FloatBetweenZeroAndOne::shift_mod(U512::zero(), 512.into()),
+			FloatBetweenZeroAndOne::right_shift_mod(U512::zero(), 512.into()),
 			(U512::zero(), U512::zero())
 		);
 		assert_eq!(
-			FloatBetweenZeroAndOne::shift_mod(U512::zero(), 511.into()),
+			FloatBetweenZeroAndOne::right_shift_mod(U512::zero(), 511.into()),
 			(U512::zero(), U512::zero())
 		);
 		assert_eq!(
-			FloatBetweenZeroAndOne::shift_mod(U512::zero(), 255.into()),
+			FloatBetweenZeroAndOne::right_shift_mod(U512::zero(), 255.into()),
 			(U512::zero(), U512::zero())
 		);
 		assert_eq!(
-			FloatBetweenZeroAndOne::shift_mod(U512::zero(), 128.into()),
+			FloatBetweenZeroAndOne::right_shift_mod(U512::zero(), 128.into()),
 			(U512::zero(), U512::zero())
 		);
 	}
