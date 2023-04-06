@@ -59,6 +59,8 @@ pub mod pallet {
 	pub enum Error<T> {
 		// The user does not have enough fund.
 		InsufficientBalance,
+		// The user has reached the maximum balance.
+		BalanceOverflow,
 		// The caller is not authorized to modify the trading position.
 		UnauthorisedToModify,
 		// The Asset cannot be egressed to the destination chain.
@@ -174,11 +176,9 @@ impl<T: Config> LpBalanceApi for Pallet<T> {
 			return Ok(())
 		}
 
-		FreeBalances::<T>::mutate(account_id, asset, |maybe_balance| {
-			let mut balance = maybe_balance.unwrap_or_default();
-			balance = balance.saturating_add(amount);
-			*maybe_balance = Some(balance);
-		});
+		let mut balance = FreeBalances::<T>::get(account_id, asset).unwrap_or_default();
+		balance = balance.checked_add(amount).ok_or(Error::<T>::BalanceOverflow)?;
+		FreeBalances::<T>::insert(account_id, asset, balance);
 
 		Self::deposit_event(Event::AccountCredited {
 			account_id: account_id.clone(),
