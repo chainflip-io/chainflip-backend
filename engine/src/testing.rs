@@ -34,7 +34,7 @@ pub fn new_temp_directory_with_nonexistent_file() -> (TempDir, PathBuf) {
 	(tempdir, tempfile)
 }
 
-async fn recv_with_timeout<I>(receiver: &mut UnboundedReceiver<I>) -> Option<I> {
+pub async fn recv_with_timeout<I>(receiver: &mut UnboundedReceiver<I>) -> Option<I> {
 	tokio::time::timeout(CHANNEL_TIMEOUT, receiver.recv()).await.ok()?
 }
 
