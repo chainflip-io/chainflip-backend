@@ -1,5 +1,6 @@
 use crate::{
-	mock::*, EarnedRelayerFees, Error, Expired, Pallet, Swap, SwapQueue, SwapType, WeightInfo,
+	mock::*, EarnedRelayerFees, Error, Pallet, Swap, SwapIntentExpiries, SwapQueue, SwapType,
+	WeightInfo,
 };
 use cf_chains::{address::ForeignChainAddress, AnyChain};
 use cf_primitives::{Asset, ForeignChain};
@@ -276,11 +277,16 @@ fn swap_expires() {
 			0,
 			None
 		));
-		assert_eq!(Expired::<Test>::get(6), vec![(0, ForeignChain::Ethereum)]);
+		assert_eq!(
+			SwapIntentExpiries::<Test>::get(6),
+			vec![(0, ForeignChain::Ethereum, ForeignChainAddress::Eth(Default::default()))]
+		);
 		Swapping::on_initialize(6);
-		assert_eq!(Expired::<Test>::get(6), vec![]);
-		System::assert_last_event(RuntimeEvent::Swapping(crate::Event::<Test>::SwapExpired {
-			intent_id: 0,
-		}));
+		assert_eq!(SwapIntentExpiries::<Test>::get(6), vec![]);
+		System::assert_last_event(RuntimeEvent::Swapping(
+			crate::Event::<Test>::SwapIntentExpired {
+				ingress_address: ForeignChainAddress::Eth(Default::default()),
+			},
+		));
 	});
 }

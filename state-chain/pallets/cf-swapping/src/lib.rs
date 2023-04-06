@@ -128,7 +128,7 @@ pub mod pallet {
 
 	/// Stores a block for when an intent will expire against the intent infos.
 	#[pallet::storage]
-	pub(super) type Expired<T: Config> = StorageMap<
+	pub(super) type SwapIntentExpiries<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
 		T::BlockNumber,
@@ -177,9 +177,6 @@ pub mod pallet {
 		CcmEgressScheduled {
 			ccm_id: u64,
 			egress_id: EgressId,
-		},
-		SwapExpired {
-			intent_id: IntentId,
 		},
 		SwapIntentExpired {
 			ingress_address: ForeignChainAddress,
@@ -234,7 +231,7 @@ pub mod pallet {
 		}
 
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
-			let expired = Expired::<T>::take(n);
+			let expired = SwapIntentExpiries::<T>::take(n);
 			for (intent_id, chain, address) in expired.clone() {
 				T::IngressHandler::expire_intent(chain, intent_id, address.clone());
 				Self::deposit_event(Event::<T>::SwapIntentExpired { ingress_address: address });
@@ -283,7 +280,7 @@ pub mod pallet {
 				message_metadata,
 			)?;
 
-			Expired::<T>::mutate(
+			SwapIntentExpiries::<T>::mutate(
 				frame_system::Pallet::<T>::current_block_number().saturating_add(T::SwapTTL::get()),
 				|expired| expired.push((intent_id, ingress_asset.into(), ingress_address.clone())),
 			);
