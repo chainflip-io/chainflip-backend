@@ -46,6 +46,8 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 						// orders as if we do a swap with range_orders where the sqrt_price_limit is
 						// equal to the current sqrt_price then the swap will not change the current
 						// price or use any of the input amount, therefore we would loop forever
+
+						// Also we prefer limit orders as they don't immediately incur slippage
 						self.limit_orders.swap::<SD>(amount, Some(range_order_sqrt_price))
 					}
 				},
