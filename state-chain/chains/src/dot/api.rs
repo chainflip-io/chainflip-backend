@@ -1,35 +1,54 @@
 pub mod batch_fetch_and_transfer;
 pub mod create_anonymous_vault;
 pub mod rotate_vault_proxy;
-pub mod set_gov_key_with_agg_key;
 
-use super::{PolkadotPublicKey, RuntimeVersion};
+use super::{PolkadotExtrinsicBuilder, PolkadotPublicKey, RuntimeVersion};
 use crate::{dot::Polkadot, *};
-use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
+use cf_primitives::PolkadotAccountId;
+use frame_support::{traits::Get, CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::marker::PhantomData;
 
 /// Chainflip api calls available on Polkadot.
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(Environment))]
 pub enum PolkadotApi<Environment: 'static> {
-	BatchFetchAndTransfer(batch_fetch_and_transfer::BatchFetchAndTransfer),
-	RotateVaultProxy(rotate_vault_proxy::RotateVaultProxy),
-	CreateAnonymousVault(create_anonymous_vault::CreateAnonymousVault),
-	ChangeGovKey(set_gov_key_with_agg_key::ChangeGovKey),
+	BatchFetchAndTransfer(PolkadotExtrinsicBuilder),
+	RotateVaultProxy(PolkadotExtrinsicBuilder),
+	CreateAnonymousVault(PolkadotExtrinsicBuilder),
+	ChangeGovKey(PolkadotExtrinsicBuilder),
+	ExecuteXSwapAndCall(PolkadotExtrinsicBuilder),
 	#[doc(hidden)]
 	#[codec(skip)]
 	_Phantom(PhantomData<Environment>, Never),
 }
 
-impl<E> PolkadotApi<E> {
-	pub fn runtime_version_used(&self) -> RuntimeVersion {
-		match self {
-			Self::BatchFetchAndTransfer(tx) => tx.extrinsic_builder.runtime_version(),
-			Self::RotateVaultProxy(tx) => tx.extrinsic_builder.runtime_version(),
-			Self::CreateAnonymousVault(tx) => tx.extrinsic_builder.runtime_version(),
-			Self::ChangeGovKey(tx) => tx.extrinsic_builder.runtime_version(),
-			Self::_Phantom(_, _) => unreachable!(),
-		}
+pub trait PolkadotEnvironment {
+	fn try_vault_account() -> Option<PolkadotAccountId>;
+	fn vault_account() -> PolkadotAccountId {
+		Self::try_vault_account().expect("Vault account must be set")
+	}
+
+	fn try_proxy_account() -> Option<PolkadotAccountId>;
+	fn proxy_account() -> PolkadotAccountId {
+		Self::try_proxy_account().expect("Proxy account must be set")
+	}
+
+	fn runtime_version() -> RuntimeVersion;
+}
+
+impl<T: ChainEnvironment<SystemAccounts, PolkadotAccountId> + Get<RuntimeVersion>>
+	PolkadotEnvironment for T
+{
+	fn try_vault_account() -> Option<PolkadotAccountId> {
+		Self::lookup(SystemAccounts::Vault)
+	}
+
+	fn try_proxy_account() -> Option<PolkadotAccountId> {
+		Self::lookup(SystemAccounts::Proxy)
+	}
+
+	fn runtime_version() -> RuntimeVersion {
+		Self::get()
 	}
 }
 
@@ -41,42 +60,35 @@ pub enum SystemAccounts {
 
 impl<E> AllBatch<Polkadot> for PolkadotApi<E>
 where
-	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
-		+ ReplayProtectionProvider<Polkadot>,
+	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Polkadot>>,
 		transfer_params: Vec<TransferAssetParams<Polkadot>>,
 	) -> Result<Self, ()> {
-		let vault = E::lookup(SystemAccounts::Vault).ok_or(())?;
-		let proxy = E::lookup(SystemAccounts::Proxy).ok_or(())?;
-		Ok(Self::BatchFetchAndTransfer(
-			batch_fetch_and_transfer::BatchFetchAndTransfer::new_unsigned(
-				E::replay_protection(),
-				fetch_params,
-				transfer_params,
-				proxy,
-				vault,
-			),
-		))
+		Ok(Self::BatchFetchAndTransfer(batch_fetch_and_transfer::extrinsic_builder(
+			E::replay_protection(),
+			fetch_params,
+			transfer_params,
+			E::try_vault_account().ok_or(())?,
+		)))
 	}
 }
 
 impl<E> SetGovKeyWithAggKey<Polkadot> for PolkadotApi<E>
 where
-	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
-		+ ReplayProtectionProvider<Polkadot>,
+	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
 	fn new_unsigned(
 		maybe_old_key: Option<PolkadotPublicKey>,
 		new_key: PolkadotPublicKey,
 	) -> Result<Self, ()> {
-		let vault = E::lookup(SystemAccounts::Vault).ok_or(())?;
+		let vault = E::try_vault_account().ok_or(())?;
 
-		Ok(Self::ChangeGovKey(set_gov_key_with_agg_key::ChangeGovKey::new_unsigned(
+		Ok(Self::ChangeGovKey(rotate_vault_proxy::extrinsic_builder(
 			E::replay_protection(),
-			maybe_old_key,
-			new_key,
+			maybe_old_key.map(|key| key.0.into()),
+			new_key.0.into(),
 			vault,
 		)))
 	}
@@ -84,19 +96,18 @@ where
 
 impl<E> SetAggKeyWithAggKey<Polkadot> for PolkadotApi<E>
 where
-	E: ChainEnvironment<SystemAccounts, <Polkadot as Chain>::ChainAccount>
-		+ ReplayProtectionProvider<Polkadot>,
+	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
 	fn new_unsigned(
-		old_key: Option<PolkadotPublicKey>,
+		maybe_old_key: Option<PolkadotPublicKey>,
 		new_key: PolkadotPublicKey,
 	) -> Result<Self, ()> {
-		let vault = E::lookup(SystemAccounts::Vault).ok_or(())?;
+		let vault = E::try_vault_account().ok_or(())?;
 
-		Ok(Self::RotateVaultProxy(rotate_vault_proxy::RotateVaultProxy::new_unsigned(
+		Ok(Self::RotateVaultProxy(rotate_vault_proxy::extrinsic_builder(
 			E::replay_protection(),
-			old_key.ok_or(())?,
-			new_key,
+			maybe_old_key.map(|key| key.0.into()),
+			new_key.0.into(),
 			vault,
 		)))
 	}
@@ -104,123 +115,156 @@ where
 
 impl<E> CreatePolkadotVault for PolkadotApi<E>
 where
-	E: ReplayProtectionProvider<Polkadot>,
+	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
 {
-	fn new_unsigned(proxy_key: PolkadotPublicKey) -> Self {
-		Self::CreateAnonymousVault(create_anonymous_vault::CreateAnonymousVault::new_unsigned(
-			E::replay_protection(),
-			proxy_key,
-		))
+	fn new_unsigned() -> Self {
+		Self::CreateAnonymousVault(
+			create_anonymous_vault::extrinsic_builder(E::replay_protection()),
+		)
 	}
 }
 
-// TODO: Implement transfer / transfer and call for Polkadot.
-impl<E: ReplayProtectionProvider<Polkadot>> ExecutexSwapAndCall<Polkadot> for PolkadotApi<E> {
+impl<E> ExecutexSwapAndCall<Polkadot> for PolkadotApi<E>
+where
+	E: PolkadotEnvironment + ReplayProtectionProvider<Polkadot>,
+{
 	fn new_unsigned(
 		_egress_id: EgressId,
 		_transfer_param: TransferAssetParams<Polkadot>,
 		_from: ForeignChainAddress,
 		_message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
-		Err(DispatchError::Other("Polkadot's ExecutexSwapAndCall is not supported."))
+		Err(DispatchError::Other("Not implemented"))
 	}
 }
 
-impl<E> From<batch_fetch_and_transfer::BatchFetchAndTransfer> for PolkadotApi<E> {
-	fn from(tx: batch_fetch_and_transfer::BatchFetchAndTransfer) -> Self {
-		Self::BatchFetchAndTransfer(tx)
-	}
+macro_rules! map_over_api_variants {
+	( $self:expr, $var:pat_param, $var_method:expr $(,)* ) => {
+		match $self {
+			PolkadotApi::BatchFetchAndTransfer($var) => $var_method,
+			PolkadotApi::RotateVaultProxy($var) => $var_method,
+			PolkadotApi::CreateAnonymousVault($var) => $var_method,
+			PolkadotApi::ChangeGovKey($var) => $var_method,
+			PolkadotApi::ExecuteXSwapAndCall($var) => $var_method,
+			PolkadotApi::_Phantom(..) => unreachable!(),
+		}
+	};
 }
 
-impl<E> From<rotate_vault_proxy::RotateVaultProxy> for PolkadotApi<E> {
-	fn from(tx: rotate_vault_proxy::RotateVaultProxy) -> Self {
-		Self::RotateVaultProxy(tx)
-	}
-}
-
-impl<E> From<create_anonymous_vault::CreateAnonymousVault> for PolkadotApi<E> {
-	fn from(tx: create_anonymous_vault::CreateAnonymousVault) -> Self {
-		Self::CreateAnonymousVault(tx)
-	}
-}
-
-impl<E> From<set_gov_key_with_agg_key::ChangeGovKey> for PolkadotApi<E> {
-	fn from(tx: set_gov_key_with_agg_key::ChangeGovKey) -> Self {
-		Self::ChangeGovKey(tx)
-	}
-}
-
-impl<E> ApiCall<Polkadot> for PolkadotApi<E> {
+impl<E: PolkadotEnvironment> ApiCall<Polkadot> for PolkadotApi<E> {
 	fn threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
-		match self {
-			PolkadotApi::BatchFetchAndTransfer(tx) => tx.threshold_signature_payload(),
-			PolkadotApi::RotateVaultProxy(tx) => tx.threshold_signature_payload(),
-			PolkadotApi::CreateAnonymousVault(tx) => tx.threshold_signature_payload(),
-			PolkadotApi::ChangeGovKey(tx) => tx.threshold_signature_payload(),
-			PolkadotApi::_Phantom(..) => unreachable!(),
-		}
+		let RuntimeVersion { spec_version, transaction_version, .. } = E::runtime_version();
+		map_over_api_variants!(
+			self,
+			call,
+			call.get_signature_payload(spec_version, transaction_version)
+		)
 	}
 
-	fn signed(self, threshold_signature: &<Polkadot as ChainCrypto>::ThresholdSignature) -> Self {
-		match self {
-			PolkadotApi::BatchFetchAndTransfer(call) => call.signed(threshold_signature).into(),
-			PolkadotApi::RotateVaultProxy(call) => call.signed(threshold_signature).into(),
-			PolkadotApi::CreateAnonymousVault(call) => call.signed(threshold_signature).into(),
-			PolkadotApi::ChangeGovKey(call) => call.signed(threshold_signature).into(),
-			PolkadotApi::_Phantom(..) => unreachable!(),
-		}
+	fn signed(
+		mut self,
+		threshold_signature: &<Polkadot as ChainCrypto>::ThresholdSignature,
+	) -> Self {
+		let proxy_account = E::proxy_account();
+		map_over_api_variants!(
+			self,
+			ref mut call,
+			call.insert_signature(proxy_account, threshold_signature.clone())
+		);
+		self
 	}
 
 	fn chain_encoded(&self) -> Vec<u8> {
-		match self {
-			PolkadotApi::BatchFetchAndTransfer(call) => call.chain_encoded(),
-			PolkadotApi::RotateVaultProxy(call) => call.chain_encoded(),
-			PolkadotApi::CreateAnonymousVault(call) => call.chain_encoded(),
-			PolkadotApi::ChangeGovKey(call) => call.chain_encoded(),
-			PolkadotApi::_Phantom(..) => unreachable!(),
-		}
+		map_over_api_variants!(
+			self,
+			call,
+			call.get_signed_unchecked_extrinsic()
+				.expect("Must be called after `signed`")
+				.encode()
+		)
 	}
 
 	fn is_signed(&self) -> bool {
-		match self {
-			PolkadotApi::BatchFetchAndTransfer(call) => call.is_signed(),
-			PolkadotApi::RotateVaultProxy(call) => call.is_signed(),
-			PolkadotApi::CreateAnonymousVault(call) => call.is_signed(),
-			PolkadotApi::ChangeGovKey(call) => call.is_signed(),
-			PolkadotApi::_Phantom(..) => unreachable!(),
-		}
+		map_over_api_variants!(self, call, call.is_signed())
 	}
 }
 
 pub trait CreatePolkadotVault: ApiCall<Polkadot> {
-	fn new_unsigned(proxy_key: PolkadotPublicKey) -> Self;
+	fn new_unsigned() -> Self;
 }
 
-#[macro_export]
-macro_rules! impl_api_call_dot {
-	($call:ident) => {
-		impl ApiCall<Polkadot> for $call {
-			fn threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
-				self
-				.extrinsic_builder
-				.signature_payload
-				.clone()
-				.expect("This should never fail since the apicall created above with new_unsigned() ensures it exists")
-			}
+#[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, TypeInfo, Encode, Decode)]
+#[scale_info(skip_type_params(E))]
+pub struct OpaqueApiCall<E> {
+	builder: PolkadotExtrinsicBuilder,
+	_environment: PhantomData<E>,
+}
 
-			fn signed(mut self, signature: &<Polkadot as ChainCrypto>::ThresholdSignature) -> Self {
-				self.extrinsic_builder
-					.insert_signature_and_get_signed_unchecked_extrinsic(signature.clone());
-				self
-			}
+impl<E> From<OpaqueApiCall<E>> for PolkadotExtrinsicBuilder {
+	fn from(call: OpaqueApiCall<E>) -> Self {
+		call.builder
+	}
+}
 
-			fn chain_encoded(&self) -> Vec<u8> {
-				self.extrinsic_builder.signed_extrinsic.clone().unwrap().encode()
-			}
+trait WithEnvironment {
+	fn with_environment<E>(self) -> OpaqueApiCall<E>;
+}
 
-			fn is_signed(&self) -> bool {
-				self.extrinsic_builder.is_signed().unwrap_or(false)
-			}
+impl WithEnvironment for PolkadotExtrinsicBuilder {
+	fn with_environment<E>(self) -> OpaqueApiCall<E> {
+		OpaqueApiCall { builder: self, _environment: PhantomData }
+	}
+}
+
+impl<E: PolkadotEnvironment + 'static> ApiCall<Polkadot> for OpaqueApiCall<E> {
+	fn threshold_signature_payload(&self) -> <Polkadot as ChainCrypto>::Payload {
+		let RuntimeVersion { spec_version, transaction_version, .. } = E::runtime_version();
+
+		self.builder.get_signature_payload(spec_version, transaction_version)
+	}
+
+	fn signed(mut self, signature: &<Polkadot as ChainCrypto>::ThresholdSignature) -> Self {
+		self.builder.insert_signature(E::proxy_account(), signature.clone());
+		self
+	}
+
+	fn chain_encoded(&self) -> Vec<u8> {
+		self.builder
+			.get_signed_unchecked_extrinsic()
+			.expect("Must be called after `signed`")
+			.encode()
+	}
+
+	fn is_signed(&self) -> bool {
+		self.builder.is_signed()
+	}
+}
+
+#[cfg(test)]
+mod mocks {
+	use super::*;
+	use crate::dot::{PolkadotReplayProtection, NONCE_1, RAW_SEED_1, RAW_SEED_2};
+	use sp_core::{crypto::Pair as PairTrait, sr25519::Pair};
+
+	pub struct MockEnv;
+
+	impl PolkadotEnvironment for MockEnv {
+		fn try_vault_account() -> Option<PolkadotAccountId> {
+			Some(<Pair as PairTrait>::from_seed(&RAW_SEED_1).public().into())
+		}
+
+		fn try_proxy_account() -> Option<PolkadotAccountId> {
+			Some(<Pair as PairTrait>::from_seed(&RAW_SEED_2).public().into())
+		}
+
+		fn runtime_version() -> crate::dot::RuntimeVersion {
+			dot::TEST_RUNTIME_VERSION
+		}
+	}
+
+	impl ReplayProtectionProvider<Polkadot> for MockEnv {
+		fn replay_protection() -> PolkadotReplayProtection {
+			PolkadotReplayProtection { nonce: NONCE_1, genesis_hash: Default::default() }
 		}
 	}
 }
