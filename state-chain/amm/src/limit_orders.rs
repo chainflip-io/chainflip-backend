@@ -71,6 +71,7 @@ impl FloatBetweenZeroAndOne {
 
 		assert!(!numerator.is_zero());
 		assert!(numerator <= denominator);
+		self.assert_valid();
 
 		let (mul_normalised_mantissa, mul_normalise_shift) = {
 			let unnormalised_mantissa = U256::full_mul(self.normalised_mantissa, numerator);
@@ -117,6 +118,8 @@ impl FloatBetweenZeroAndOne {
 	fn integer_mul_div(x: U256, numerator: &Self, denominator: &Self) -> (U256, U256) {
 		// Note this does not imply numerator.normalised_mantissa <= denominator.normalised_mantissa
 		assert!(numerator <= denominator);
+		numerator.assert_valid();
+		denominator.assert_valid();
 
 		let (y_shifted_floor, div_remainder) = U512::div_mod(
 			U256::full_mul(x, numerator.normalised_mantissa),
@@ -138,6 +141,10 @@ impl FloatBetweenZeroAndOne {
 				y_floor + 1
 			},
 		)
+	}
+
+	fn assert_valid(&self) {
+		assert!(self.normalised_mantissa.bit(255));
 	}
 }
 
