@@ -49,6 +49,8 @@ pub trait EpochWitnesserGenerator: Send {
 	fn should_process_historical_epochs() -> bool;
 }
 
+type WitnesserTask<Witnesser> = ScopedJoinHandle<<Witnesser as EpochWitnesser>::StaticState>;
+
 pub async fn start_epoch_witnesser<Generator>(
 	epoch_start_receiver: Arc<
 		Mutex<
@@ -68,7 +70,7 @@ where
 			let mut option_state = Some(initial_state);
 			let mut current_task: Option<(
 				oneshot::Sender<BlockNumber<Generator::Witnesser>>,
-				ScopedJoinHandle<<Generator::Witnesser as EpochWitnesser>::StaticState>,
+				WitnesserTask<Generator::Witnesser>,
 			)> = None;
 
 			let mut epoch_start_receiver =
