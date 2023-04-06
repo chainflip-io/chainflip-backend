@@ -109,7 +109,7 @@ fn mint_range_order(
 				RuntimeEvent::LiquidityProvider(pallet_cf_lp::Event::AccountDebited {
 					account_id: account_id.clone(),
 					asset,
-					amount_debited: unstable_balance - new_unstable_balance,
+					amount_debited: old_balance - new_balance,
 				},)
 			);
 		}
@@ -161,7 +161,7 @@ fn mint_limit_order(
 				RuntimeEvent::LiquidityProvider(pallet_cf_lp::Event::AccountDebited {
 					account_id: account_id.clone(),
 					asset,
-					amount_debited: unstable_balance - new_unstable_balance,
+					amount_debited: old_balance - new_balance,
 				},)
 			);
 		}
