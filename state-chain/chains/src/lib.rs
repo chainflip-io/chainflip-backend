@@ -15,7 +15,7 @@ use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Saturating},
+	traits::{AtLeast32BitUnsigned, CheckedSub, Saturating},
 	DispatchError,
 };
 use sp_std::{
@@ -53,7 +53,8 @@ pub trait Chain: Member + Parameter {
 		// use (and so we can always .into() into a larger type)
 		+ From<u32>
 		+ MaxEncodedLen
-		+ Display;
+		+ Display
+		+ CheckedSub;
 
 	type ChainAmount: Member
 		+ Parameter
