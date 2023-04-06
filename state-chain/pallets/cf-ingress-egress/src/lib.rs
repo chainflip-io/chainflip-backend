@@ -688,8 +688,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok((intent_id, address))
 	}
 
-	pub fn expire_intent(intent_id: IntentId) {
-		let address = AddressPool::<T, I>::take(intent_id).expect("Intent address should exist");
+	pub fn expire_intent(intent_id: IntentId, address: TargetChainAccount<T, I>) {
+		// The address is not in the address pool.
+		// let address = AddressPool::<T, I>::take(intent_id).expect("Intent address should exist");
 		IntentActions::<T, I>::remove(&address);
 		if AddressStatus::<T, I>::get(&address) == DeploymentStatus::Deployed {
 			AddressPool::<T, I>::insert(intent_id, address.clone());
@@ -799,8 +800,8 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 
 	// Note: we expect that the mapping from any instantiable pallet to the instance of this pallet
 	// is matching to the right chain. Because of that we can ignore the chain parameter.
-	fn expire_intent(chain: ForeignChain, intent_id: IntentId) {
+	fn expire_intent(chain: ForeignChain, intent_id: IntentId, address: TargetChainAccount<T, I>) {
 		assert_eq!(<T as Config<I>>::TargetChain::get(), chain, "Incompatible chains!");
-		Self::expire_intent(intent_id);
+		Self::expire_intent(intent_id, address);
 	}
 }

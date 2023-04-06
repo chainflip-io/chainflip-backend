@@ -675,8 +675,8 @@ pub trait IngressApi<C: Chain> {
 		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
 
-	/// Expires an intent in the ingress/egress pallet.
-	fn expire_intent(chain: ForeignChain, intent_id: IntentId);
+	/// Expires an intent.
+	fn expire_intent(chain: ForeignChain, intent_id: IntentId, address: C::ChainAccount);
 }
 
 impl<T: frame_system::Config> IngressApi<Ethereum> for T {
@@ -697,7 +697,12 @@ impl<T: frame_system::Config> IngressApi<Ethereum> for T {
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
 	}
-	fn expire_intent(_chain: ForeignChain, _intent_id: IntentId) {
+
+	fn expire_intent(
+		_chain: ForeignChain,
+		_intent_id: IntentId,
+		_address: <Ethereum as Chain>::ChainAccount,
+	) {
 		todo!()
 	}
 }
@@ -720,7 +725,12 @@ impl<T: frame_system::Config> IngressApi<Polkadot> for T {
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
 		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
 	}
-	fn expire_intent(_chain: ForeignChain, _intent_id: IntentId) {
+
+	fn expire_intent(
+		_chain: ForeignChain,
+		_intent_id: IntentId,
+		_address: <Polkadot as Chain>::ChainAccount,
+	) {
 		todo!()
 	}
 }
