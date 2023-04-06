@@ -16,7 +16,7 @@ use sp_std::{vec, vec::Vec};
 
 extern crate alloc;
 use crate::{
-	address::BitcoinAddressData, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator,
+	address::BitcoinAddressData, Age, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator,
 	IngressIdConstructor,
 };
 use alloc::string::String;
@@ -92,6 +92,23 @@ impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 	}
 }
 
+#[derive(
+	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
+)]
+#[codec(mel_bound())]
+pub struct BitcoinTrackedData {
+	pub block_height: BlockNumber,
+	pub fee_rate_sats_per_byte: BtcAmount,
+}
+
+impl Age for BitcoinTrackedData {
+	type BlockNumber = BlockNumber;
+
+	fn birth_block(&self) -> Self::BlockNumber {
+		self.block_height
+	}
+}
+
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
 pub struct EpochStartData {
 	pub change_address: BitcoinAddressData,
@@ -104,7 +121,7 @@ impl Chain for Bitcoin {
 
 	type TransactionFee = Self::ChainAmount;
 
-	type TrackedData = ();
+	type TrackedData = BitcoinTrackedData;
 
 	type ChainAsset = assets::btc::Asset;
 
