@@ -805,6 +805,7 @@ name = "cf-integration-tests"
 version = "0.1.0"
 dependencies = [
  "arrayref",
+ "cf-amm",
  "cf-chains",
  "cf-primitives",
  "cf-test-utilities",

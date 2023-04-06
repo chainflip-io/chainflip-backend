@@ -40,6 +40,13 @@ impl<T> SideMap<T> {
 	pub fn map<R>(self, mut f: impl FnMut(Side, T) -> R) -> SideMap<R> {
 		SideMap { zero: f(Side::Zero, self.zero), one: f(Side::One, self.one) }
 	}
+
+	pub fn try_map<R, E>(
+		self,
+		mut f: impl FnMut(Side, T) -> Result<R, E>,
+	) -> Result<SideMap<R>, E> {
+		Ok(SideMap { zero: f(Side::Zero, self.zero)?, one: f(Side::One, self.one)? })
+	}
 }
 impl<T> core::ops::Index<Side> for SideMap<T> {
 	type Output = T;

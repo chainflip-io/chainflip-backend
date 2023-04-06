@@ -338,6 +338,8 @@ parameter_types! {
 
 impl pallet_cf_pools::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type AccountRoleRegistry = AccountRoles;
+	type LpBalance = LiquidityProvider;
 	type NetworkFee = NetworkFee;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = ();
