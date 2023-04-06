@@ -79,7 +79,7 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
-			let expired = Expired::<T>::take(n);
+			let expired = CcmIntentExpiries::<T>::take(n);
 			for (intent_id, chain, address) in expired.clone() {
 				T::IngressHandler::expire_intent(chain, intent_id, address);
 			}
@@ -123,7 +123,7 @@ pub mod pallet {
 
 	/// Stores a block for when an intent will expire against the intent infos.
 	#[pallet::storage]
-	pub(super) type Expired<T: Config> = StorageMap<
+	pub(super) type CcmIntentExpiries<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
 		T::BlockNumber,
@@ -142,7 +142,7 @@ pub mod pallet {
 			let (intent_id, ingress_address) =
 				T::IngressHandler::register_liquidity_ingress_intent(account_id, asset)?;
 
-			Expired::<T>::mutate(
+			CcmIntentExpiries::<T>::mutate(
 				frame_system::Pallet::<T>::current_block_number().saturating_add(T::LpTTL::get()),
 				|expired| expired.push((intent_id, asset.into(), ingress_address.clone())),
 			);
