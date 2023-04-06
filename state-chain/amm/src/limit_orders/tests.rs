@@ -306,12 +306,12 @@ fn test_float() {
 }
 
 #[test]
-fn fee_pips() {
-	for bad in [u32::MAX, ONE_IN_PIPS, (ONE_IN_PIPS / 2) + 1] {
+fn fee_hundredth_pips() {
+	for bad in [u32::MAX, ONE_IN_HUNDREDTH_PIPS, (ONE_IN_HUNDREDTH_PIPS / 2) + 1] {
 		assert!(matches!(PoolState::new(bad), Err(NewError::InvalidFeeAmount)));
 	}
 
-	for good in [0, 1, ONE_IN_PIPS / 2] {
+	for good in [0, 1, ONE_IN_HUNDREDTH_PIPS / 2] {
 		assert_ok!(PoolState::new(good));
 	}
 }

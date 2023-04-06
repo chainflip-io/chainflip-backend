@@ -31,8 +31,8 @@ use scale_info::TypeInfo;
 
 use crate::common::{
 	is_sqrt_price_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, tick_at_sqrt_price,
-	Amount, OneToZero, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_TICK, MIN_TICK, ONE_IN_PIPS,
-	SQRT_PRICE_FRACTIONAL_BITS,
+	Amount, OneToZero, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_TICK, MIN_TICK,
+	ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
 };
 
 pub type Liquidity = u128;
@@ -115,7 +115,7 @@ pub struct TickDelta {
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
 pub struct PoolState<LiquidityProvider> {
-	fee_pips: u32,
+	fee_hundredth_pips: u32,
 	// Note the current_sqrt_price can reach MAX_SQRT_PRICE, but only if the tick is MAX_TICK
 	current_sqrt_price: SqrtPriceQ64F96,
 	current_tick: Tick,
@@ -343,8 +343,10 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// liquidity, it must be added using the `PoolState::collect_and_mint` function.
 	///
 	/// This function never panics
-	pub fn new(fee_pips: u32, initial_sqrt_price: U256) -> Result<Self, NewError> {
-		Self::validate_fees(fee_pips).then_some(()).ok_or(NewError::InvalidFeeAmount)?;
+	pub fn new(fee_hundredth_pips: u32, initial_sqrt_price: U256) -> Result<Self, NewError> {
+		Self::validate_fees(fee_hundredth_pips)
+			.then_some(())
+			.ok_or(NewError::InvalidFeeAmount)?;
 		is_sqrt_price_valid(initial_sqrt_price)
 			.then_some(())
 			.ok_or(NewError::InvalidInitialPrice)?;
@@ -352,7 +354,7 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 
 		let initial_tick = tick_at_sqrt_price(initial_sqrt_price);
 		Ok(Self {
-			fee_pips,
+			fee_hundredth_pips,
 			current_sqrt_price: initial_sqrt_price,
 			current_tick: initial_tick,
 			current_liquidity: 0,
@@ -385,16 +387,16 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// fee is greater than 50%.
 	///
 	/// This function never panics
-	pub fn set_fees(&mut self, fee_pips: u32) -> Result<(), SetFeesError> {
-		Self::validate_fees(fee_pips)
+	pub fn set_fees(&mut self, fee_hundredth_pips: u32) -> Result<(), SetFeesError> {
+		Self::validate_fees(fee_hundredth_pips)
 			.then_some(())
 			.ok_or(SetFeesError::InvalidFeeAmount)?;
-		self.fee_pips = fee_pips;
+		self.fee_hundredth_pips = fee_hundredth_pips;
 		Ok(())
 	}
 
-	fn validate_fees(fee_pips: u32) -> bool {
-		fee_pips <= ONE_IN_PIPS / 2
+	fn validate_fees(fee_hundredth_pips: u32) -> bool {
+		fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2
 	}
 
 	/// Returns the current sqrt price of the pool. None if the pool has no more liquidity and the
@@ -649,9 +651,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 			} else {
 				let amount_minus_fees = mul_div_floor(
 					amount,
-					U256::from(ONE_IN_PIPS - self.fee_pips),
-					U256::from(ONE_IN_PIPS),
-				); // This cannot overflow as we bound fee_pips to <= ONE_IN_PIPS/2
+					U256::from(ONE_IN_HUNDREDTH_PIPS - self.fee_hundredth_pips),
+					U256::from(ONE_IN_HUNDREDTH_PIPS),
+				); // This cannot overflow as we bound fee_hundredth_pips to <= ONE_IN_HUNDREDTH_PIPS/2
 
 				let amount_required_to_reach_target = SD::input_amount_delta_ceil(
 					self.current_sqrt_price,
@@ -681,11 +683,11 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				let (amount_swapped, fees) = if sqrt_price_next == sqrt_price_target {
 					(
 						amount_required_to_reach_target,
-						/* Will not overflow as fee_pips <= ONE_IN_PIPS / 2 */
+						/* Will not overflow as fee_hundredth_pips <= ONE_IN_HUNDREDTH_PIPS / 2 */
 						mul_div_ceil(
 							amount_required_to_reach_target,
-							U256::from(self.fee_pips),
-							U256::from(ONE_IN_PIPS - self.fee_pips),
+							U256::from(self.fee_hundredth_pips),
+							U256::from(ONE_IN_HUNDREDTH_PIPS - self.fee_hundredth_pips),
 						),
 					)
 				} else {

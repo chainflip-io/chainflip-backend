@@ -2,7 +2,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use primitive_types::{U256, U512};
 use scale_info::TypeInfo;
 
-pub const ONE_IN_PIPS: u32 = 1000000;
+pub const ONE_IN_HUNDREDTH_PIPS: u32 = 1000000;
 
 pub type Amount = U256;
 pub type Tick = i32;
