@@ -91,7 +91,8 @@ struct EthBlockWitnesserGenerator {
 }
 
 #[async_trait]
-impl EpochWitnesserGenerator<EthBlockWitnesser> for EthBlockWitnesserGenerator {
+impl EpochWitnesserGenerator for EthBlockWitnesserGenerator {
+	type Witnesser = EthBlockWitnesser;
 	async fn init(
 		&mut self,
 		epoch: EpochStart<Ethereum>,

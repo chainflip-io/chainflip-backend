@@ -191,11 +191,11 @@ where
 }
 
 #[async_trait]
-impl<StateChainClient> EpochWitnesserGenerator<BtcWitnesser<StateChainClient>>
-	for BtcWitnesserGenerator<StateChainClient>
+impl<StateChainClient> EpochWitnesserGenerator for BtcWitnesserGenerator<StateChainClient>
 where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
+	type Witnesser = BtcWitnesser<StateChainClient>;
 	async fn init(
 		&mut self,
 		epoch: EpochStart<Bitcoin>,

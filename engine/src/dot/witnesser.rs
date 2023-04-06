@@ -437,12 +437,13 @@ struct DotWitnesserGenerator<StateChainClient, DotRpc> {
 }
 
 #[async_trait]
-impl<StateChainClient, DotRpc> EpochWitnesserGenerator<DotWitnesser<StateChainClient, DotRpc>>
+impl<StateChainClient, DotRpc> EpochWitnesserGenerator
 	for DotWitnesserGenerator<StateChainClient, DotRpc>
 where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
+	type Witnesser = DotWitnesser<StateChainClient, DotRpc>;
 	async fn init(
 		&mut self,
 		epoch: EpochStart<Polkadot>,

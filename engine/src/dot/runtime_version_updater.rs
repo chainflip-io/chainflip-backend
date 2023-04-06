@@ -107,12 +107,13 @@ struct RuntimeVersionUpdaterGenerator<StateChainClient, DotRpc> {
 }
 
 #[async_trait]
-impl<StateChainClient, DotRpc> EpochWitnesserGenerator<RuntimeVersionUpdater<StateChainClient>>
+impl<StateChainClient, DotRpc> EpochWitnesserGenerator
 	for RuntimeVersionUpdaterGenerator<StateChainClient, DotRpc>
 where
 	StateChainClient: ExtrinsicApi + StorageApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
+	type Witnesser = RuntimeVersionUpdater<StateChainClient>;
 	async fn init(
 		&mut self,
 		epoch: EpochStart<Polkadot>,

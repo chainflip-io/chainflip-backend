@@ -108,13 +108,13 @@ struct ChainDataWitnesserGenerator<StateChainClient, EthRpcClient> {
 }
 
 #[async_trait]
-impl<StateChainClient, EthRpcClient>
-	EpochWitnesserGenerator<ChainDataWitnesser<StateChainClient, EthRpcClient>>
+impl<StateChainClient, EthRpcClient> EpochWitnesserGenerator
 	for ChainDataWitnesserGenerator<StateChainClient, EthRpcClient>
 where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 	EthRpcClient: EthRpcApi + 'static + Send + Sync + Clone,
 {
+	type Witnesser = ChainDataWitnesser<StateChainClient, EthRpcClient>;
 	async fn init(
 		&mut self,
 		epoch: EpochStart<Ethereum>,
