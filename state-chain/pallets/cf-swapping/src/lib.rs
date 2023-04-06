@@ -1,5 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata};
+use cf_chains::{
+	address::{AddressConverter, ForeignChainAddress},
+	CcmIngressMetadata,
+};
 use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use cf_traits::{liquidity::SwappingApi, CcmHandler, IngressApi, SystemStateInfo};
 use frame_support::{
@@ -64,7 +67,7 @@ pub(crate) struct CcmWithStages {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_chains::AnyChain;
+	use cf_chains::{address::EncodedAddress, AnyChain};
 	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapIntentHandler};
 
@@ -125,7 +128,7 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// An new swap intent has been registered.
 		NewSwapIntent {
-			ingress_address: ForeignChainAddress,
+			ingress_address: EncodedAddress,
 		},
 		/// The swap ingress was received.
 		SwapIngressReceived {
@@ -252,7 +255,9 @@ pub mod pallet {
 				message_metadata,
 			)?;
 
-			Self::deposit_event(Event::<T>::NewSwapIntent { ingress_address });
+			Self::deposit_event(Event::<T>::NewSwapIntent {
+				ingress_address: ingress_address.to_encoded_address(),
+			});
 
 			Ok(())
 		}

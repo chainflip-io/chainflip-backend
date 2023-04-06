@@ -95,7 +95,7 @@ pub enum ForeignChainAddress {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
 pub enum EncodedAddress {
-	Eth(ScriptPubkeyBytes),
+	Eth(Vec<u8>),
 	Dot(Vec<u8>),
 	Btc(Vec<u8>),
 }

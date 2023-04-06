@@ -333,7 +333,7 @@ pub async fn register_swap_intent(
 	egress_address: ForeignChainAddress,
 	relayer_commission_bps: BasisPoints,
 	message_metadata: Option<CcmIngressMetadata>,
-) -> Result<ForeignChainAddress> {
+) -> Result<EncodedAddress> {
 	let events = connect_submit_and_get_events(
 		state_chain_settings,
 		pallet_cf_swapping::Call::register_swap_intent {
