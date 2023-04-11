@@ -69,6 +69,14 @@ macro_rules! assert_future_panics {
 	};
 }
 
+/// This resolves a compiler bug: https://github.com/rust-lang/rust/issues/102211#issuecomment-1372215393
+/// We should be able to remove this in future versions of the rustc
+pub fn assert_stream_send<'u, R>(
+	stream: impl 'u + Send + Stream<Item = R>,
+) -> impl 'u + Send + Stream<Item = R> {
+	stream
+}
+
 /// Makes a tick that outputs every duration and if ticks are "missed" (as tick() wasn't called for
 /// some time) it will immediately output a single tick on the next call to tick() and resume
 /// ticking every duration.

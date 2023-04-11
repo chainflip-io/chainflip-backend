@@ -57,14 +57,6 @@ fn invalid_err_obj(invalid_reason: InvalidTransaction) -> jsonrpsee::types::Erro
 	)
 }
 
-/// This resolves a compiler bug: https://github.com/rust-lang/rust/issues/102211#issuecomment-1372215393
-/// We should be able to remove this in future versions of the rustc
-fn assert_stream_send<'u, R>(
-	stream: impl 'u + Send + Stream<Item = R>,
-) -> impl 'u + Send + Stream<Item = R> {
-	stream
-}
-
 impl StateChainClient {
 	pub async fn new<'a>(
 		scope: &Scope<'a, anyhow::Error>,
@@ -117,7 +109,7 @@ impl StateChainClient {
 
 			(
 				latest_finalized_header.clone(),
-				assert_stream_send(Box::pin(
+				utilities::assert_stream_send(Box::pin(
 					sparse_finalized_block_header_stream
 						.and_then(move |next_finalized_header| {
 							assert!(latest_finalized_header.number < next_finalized_header.number);
