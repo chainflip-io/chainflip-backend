@@ -94,30 +94,28 @@ where
 					);
 				}
 
-				if !epoch_start.participant ||
-					(!epoch_start.current && !Generator::SHOULD_PROCESS_HISTORICAL_EPOCHS)
+				if epoch_start.participant &&
+					(epoch_start.current || Generator::SHOULD_PROCESS_HISTORICAL_EPOCHS)
 				{
-					continue
+					info!("Start witnessing from block: {}", epoch_start.block_number);
+
+					let (end_witnessing_sender, end_witnessing_receiver) = oneshot::channel();
+
+					if let Some((witnesser, data_stream)) =
+						witnesser_generator.init(epoch_start).await.map_err(|e| {
+							error!("Error while initializing epoch witnesser: {:?}", e);
+						})? {
+						current_task = Some((
+							end_witnessing_sender,
+							scope.spawn_with_handle(run_witnesser(
+								witnesser,
+								data_stream,
+								end_witnessing_receiver,
+								option_state.take().expect("state must be present"),
+							)),
+						));
+					};
 				}
-
-				info!("Start witnessing from block: {}", epoch_start.block_number);
-
-				let (end_witnessing_sender, end_witnessing_receiver) = oneshot::channel();
-
-				if let Some((witnesser, data_stream)) =
-					witnesser_generator.init(epoch_start).await.map_err(|e| {
-						error!("Error while initializing epoch witnesser: {:?}", e);
-					})? {
-					current_task = Some((
-						end_witnessing_sender,
-						scope.spawn_with_handle(run_witnesser(
-							witnesser,
-							data_stream,
-							end_witnessing_receiver,
-							option_state.take().expect("state must be present"),
-						)),
-					));
-				};
 			}
 		}
 		.boxed()
