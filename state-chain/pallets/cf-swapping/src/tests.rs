@@ -198,7 +198,8 @@ fn expect_swap_id_to_be_emitted() {
 			Test,
 			crate::mock::RuntimeEvent::Swapping(crate::Event::NewSwapIntent {
 				ingress_address: ForeignChainAddress::Eth(<EthereumAddress as Default>::default())
-					.to_encoded_address(),
+					.to_encoded_address()
+					.unwrap(),
 			}),
 			crate::mock::RuntimeEvent::Swapping(crate::Event::SwapIngressReceived {
 				ingress_address: ForeignChainAddress::Eth(Default::default()),

@@ -120,7 +120,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::DepositAddressReady {
 				intent_id,
-				ingress_address: ingress_address.to_encoded_address(),
+				ingress_address: ingress_address.to_encoded_address()?,
 			});
 
 			Ok(())

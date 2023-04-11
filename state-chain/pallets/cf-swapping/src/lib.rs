@@ -256,7 +256,7 @@ pub mod pallet {
 			)?;
 
 			Self::deposit_event(Event::<T>::NewSwapIntent {
-				ingress_address: ingress_address.to_encoded_address(),
+				ingress_address: ingress_address.to_encoded_address()?,
 			});
 
 			Ok(())
