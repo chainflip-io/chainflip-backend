@@ -9,8 +9,8 @@ use crate::{
 
 use super::{
 	api::{batch_transfer::BatchTransfer, BitcoinApi},
-	AggKey, BitcoinFetchId, BitcoinNetwork, BitcoinOutput, BitcoinTransactionData, Signature,
-	SigningPayload, Utxo, UtxoId,
+	AggKey, BitcoinFetchId, BitcoinNetwork, BitcoinOutput, BitcoinTrackedData,
+	BitcoinTransactionData, Signature, SigningPayload, Utxo, UtxoId,
 };
 
 impl BenchmarkValue for AggKey {
@@ -89,5 +89,11 @@ impl<E> BenchmarkValue for BitcoinApi<E> {
 			}],
 			vec![BitcoinOutput { amount: Default::default(), script_pubkey: Default::default() }],
 		))
+	}
+}
+
+impl BenchmarkValue for BitcoinTrackedData {
+	fn benchmark_value() -> Self {
+		BitcoinTrackedData { block_height: 120, fee_rate_sats_per_byte: 4321 }
 	}
 }

@@ -116,17 +116,22 @@ fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 	assert!(ThresholdSignatureData::<Test, Instance1>::get(broadcast_id).is_none());
 }
 
+fn start_mock_broadcast() -> BroadcastAttemptId {
+	Broadcaster::start_broadcast(
+		&MockThresholdSignature::default(),
+		MockTransaction,
+		MockApiCall::default(),
+		MockApiCall::<MockEthereum>::default().payload,
+		1,
+	)
+}
+
 // The happy path :)
 #[test]
 fn signature_accepted_results_in_refund_for_signer() {
 	new_test_ext().execute_with(|| {
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
-		let broadcast_attempt_id = Broadcaster::start_broadcast(
-			&MockThresholdSignature::default(),
-			MockTransaction,
-			MockApiCall::default(),
-			1,
-		);
+		let broadcast_attempt_id = start_mock_broadcast();
 		let tx_sig_request =
 			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
 
@@ -159,12 +164,7 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 	new_test_ext().execute_with(|| {
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 
-		let mut broadcast_attempt_id = Broadcaster::start_broadcast(
-			&MockThresholdSignature::default(),
-			MockTransaction,
-			MockApiCall::default(),
-			1,
-		);
+		let mut broadcast_attempt_id = start_mock_broadcast();
 
 		for _ in 0..MockEpochInfo::current_authority_count() {
 			// Nominated signer responds that they can't sign the transaction.
@@ -192,21 +192,11 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 fn on_idle_caps_broadcasts_when_not_enough_weight() {
 	new_test_ext().execute_with(|| {
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
-		let broadcast_attempt_id = Broadcaster::start_broadcast(
-			&MockThresholdSignature::default(),
-			MockTransaction,
-			MockApiCall::default(),
-			1,
-		);
+		let broadcast_attempt_id = start_mock_broadcast();
 
 		MockCfe::respond(Scenario::SigningFailure);
 
-		let broadcast_attempt_id_2 = Broadcaster::start_broadcast(
-			&MockThresholdSignature::default(),
-			MockTransaction,
-			MockApiCall::default(),
-			1,
-		);
+		let broadcast_attempt_id_2 = start_mock_broadcast();
 
 		MockCfe::respond(Scenario::SigningFailure);
 
@@ -233,12 +223,7 @@ fn on_idle_caps_broadcasts_when_not_enough_weight() {
 fn test_transaction_signing_failed() {
 	new_test_ext().execute_with(|| {
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
-		let broadcast_attempt_id = Broadcaster::start_broadcast(
-			&MockThresholdSignature::default(),
-			MockTransaction,
-			MockApiCall::default(),
-			1,
-		);
+		let broadcast_attempt_id = start_mock_broadcast();
 		assert!(
 			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id)
 				.unwrap()
@@ -302,12 +287,7 @@ fn test_invalid_sigdata_is_noop() {
 fn signature_accepted_after_timeout_reports_failed_nodes() {
 	new_test_ext().execute_with(|| {
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
-		Broadcaster::start_broadcast(
-			&MockThresholdSignature::default(),
-			MockTransaction,
-			MockApiCall::default(),
-			1,
-		);
+		start_mock_broadcast();
 
 		let mut failed_authorities = vec![];
 		// The last node succeeds
@@ -339,12 +319,7 @@ fn signature_accepted_after_timeout_reports_failed_nodes() {
 fn test_signature_request_expiry() {
 	new_test_ext().execute_with(|| {
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
-		let broadcast_attempt_id = Broadcaster::start_broadcast(
-			&MockThresholdSignature::default(),
-			MockTransaction,
-			MockApiCall::default(),
-			1,
-		);
+		let broadcast_attempt_id = start_mock_broadcast();
 		let first_broadcast_id = broadcast_attempt_id.broadcast_id;
 		assert!(
 			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id)
@@ -406,12 +381,7 @@ fn test_signature_request_expiry() {
 fn test_transmission_request_expiry() {
 	new_test_ext().execute_with(|| {
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
-		let broadcast_attempt_id = Broadcaster::start_broadcast(
-			&MockThresholdSignature::default(),
-			MockTransaction,
-			MockApiCall::default(),
-			1,
-		);
+		let broadcast_attempt_id = start_mock_broadcast();
 		let first_broadcast_id = broadcast_attempt_id.broadcast_id;
 		MockCfe::respond(Scenario::HappyPath);
 
@@ -474,12 +444,7 @@ fn threshold_signature_rerequested(broadcast_attempt_id: BroadcastAttemptId) {
 fn re_request_threshold_signature_on_invalid_sig() {
 	new_test_ext().execute_with(|| {
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
-		let broadcast_attempt_id = Broadcaster::start_broadcast(
-			&MockThresholdSignature::default(),
-			MockTransaction,
-			MockApiCall::default(),
-			1,
-		);
+		let broadcast_attempt_id = start_mock_broadcast();
 		// Expect the threshold signature pipeline to be empty
 		assert_eq!(
 			MockThresholdSigner::<MockEthereum, RuntimeCall>::signature_result(0),
@@ -504,12 +469,7 @@ fn re_request_threshold_signature_on_invalid_sig() {
 fn re_request_threshold_signature_on_invalid_tx_params() {
 	new_test_ext().execute_with(|| {
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
-		let broadcast_attempt_id = Broadcaster::start_broadcast(
-			&MockThresholdSignature::default(),
-			MockTransaction,
-			MockApiCall::default(),
-			1,
-		);
+		let broadcast_attempt_id = start_mock_broadcast();
 
 		assert_eq!(
 			MockThresholdSigner::<MockEthereum, RuntimeCall>::signature_result(0),
@@ -534,12 +494,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 	new_test_ext().execute_with(|| {
 		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		Broadcaster::threshold_sign_and_broadcast(MockApiCall::default(), Some(MockCallback));
-		let broadcast_attempt_id = Broadcaster::start_broadcast(
-			&MockThresholdSignature::default(),
-			MockTransaction,
-			MockApiCall::default(),
-			1,
-		);
+		let broadcast_attempt_id = start_mock_broadcast();
 		assert_eq!(RequestCallbacks::<Test, Instance1>::get(1), Some(MockCallback));
 		assert_ok!(Broadcaster::signature_accepted(
 			RuntimeOrigin::root(),

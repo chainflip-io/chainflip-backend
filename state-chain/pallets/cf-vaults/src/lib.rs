@@ -859,15 +859,14 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			PendingVaultRotation::<T, I>::get()
 		{
 			let current_vault_epoch_and_state = CurrentVaultEpochAndState::<T, I>::get();
-			match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
-				Vaults::<T, I>::try_get(current_vault_epoch_and_state.epoch_index)
-					.map(|vault| vault.public_key)
-					.ok(),
-				new_public_key,
-			) {
-				Ok(rotate_tx) => {
+			if let Some(vault) = Vaults::<T, I>::get(current_vault_epoch_and_state.epoch_index) {
+				if let Ok(rotation_call) =
+					<T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
+						Some(vault.public_key),
+						new_public_key,
+					) {
 					let (_, threshold_request_id) =
-						T::Broadcaster::threshold_sign_and_broadcast(rotate_tx);
+						T::Broadcaster::threshold_sign_and_broadcast(rotation_call);
 					debug_assert!(
 						matches!(current_vault_epoch_and_state.key_state, KeyState::Active),
 						"Current epoch key must be active to activate next key."
@@ -876,16 +875,19 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 						epoch_index: current_vault_epoch_and_state.epoch_index,
 						key_state: KeyState::Locked(threshold_request_id),
 					});
-				},
-				Err(_) => {
-					// The block number value 1, which the vault is being set with is a dummy value
-					// and doesn't mean anything. It will be later modified to the real value when
-					// we witness the vault rotation manually via governance
-					Self::set_vault_for_next_epoch(new_public_key, 1_u32.into());
-					Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation {
-						new_public_key,
-					})
-				},
+				} else {
+					// TODO: Fix the integration tests and/or SetAggKeyWithAggKey impls so that this
+					// is actually unreachable.
+					log::error!(
+						"Unable to create unsigned transaction to set new vault key. This should not be possible."
+					);
+				}
+			} else {
+				// The block number value 1, which the vault is being set with is a dummy value
+				// and doesn't mean anything. It will be later modified to the real value when
+				// we witness the vault rotation manually via governance
+				Self::set_vault_for_next_epoch(new_public_key, 1_u32.into());
+				Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation { new_public_key })
 			}
 
 			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {

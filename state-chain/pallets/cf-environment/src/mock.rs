@@ -71,12 +71,11 @@ impl frame_system::Config for Test {
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct MockCreatePolkadotVault {
-	agg_key: cf_chains::dot::PolkadotPublicKey,
-}
+pub struct MockCreatePolkadotVault;
+
 impl CreatePolkadotVault for MockCreatePolkadotVault {
-	fn new_unsigned(proxy_key: cf_chains::dot::PolkadotPublicKey) -> Self {
-		Self { agg_key: proxy_key }
+	fn new_unsigned() -> Self {
+		Self
 	}
 }
 impl ApiCall<Polkadot> for MockCreatePolkadotVault {
