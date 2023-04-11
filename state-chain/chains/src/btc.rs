@@ -443,7 +443,7 @@ impl BitcoinTransaction {
 		transaction_bytes.push(SEGWIT_FLAG);
 		transaction_bytes.extend(to_varint(inputs.len() as u64));
 		transaction_bytes.extend(inputs.iter().fold(Vec::<u8>::default(), |mut acc, input| {
-			acc.extend(input.txid.iter().rev());
+			acc.extend(input.txid);
 			acc.extend(input.vout.to_le_bytes());
 			acc.push(0);
 			acc.extend(SEQUENCE_NUMBER);
@@ -515,7 +515,7 @@ impl BitcoinTransaction {
 			self.inputs
 				.iter()
 				.fold(Vec::<u8>::default(), |mut acc, input| {
-					acc.extend(input.txid.iter().rev());
+					acc.extend(input.txid);
 					acc.extend(input.vout.to_le_bytes());
 					acc
 				})
@@ -920,7 +920,7 @@ mod test {
 			amount: 100010000,
 			vout: 1,
 			txid: hex_literal::hex!(
-				"b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"
+				"4C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB5"
 			),
 			pubkey_x: hex_literal::hex!(
 				"78C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDB"
@@ -946,7 +946,7 @@ mod test {
 			amount: 100010000,
 			vout: 1,
 			txid: hex_literal::hex!(
-				"b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"
+				"4C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB5"
 			),
 			pubkey_x: hex_literal::hex!(
 				"78C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDB"
