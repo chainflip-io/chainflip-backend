@@ -422,7 +422,7 @@ where
 			.await
 			.unwrap();
 
-		todo!();
+		Ok(())
 	}
 
 	fn should_finish(&self, last_block_number_for_epoch: ChainBlockNumber<Self::Chain>) -> bool {
