@@ -551,6 +551,8 @@ fn testnet_genesis(
 		},
 		transaction_payment: Default::default(),
 		liquidity_pools: Default::default(),
+		swapping: Default::default(),
+		liquidity_provider: Default::default(),
 	}
 }
 

@@ -58,10 +58,6 @@ pub mod pallet {
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
-		/// Time to life for an intent in blocks.
-		#[pallet::constant]
-		type LpTTL: Get<Self::BlockNumber>;
-
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 	}
@@ -112,6 +108,25 @@ pub mod pallet {
 		},
 	}
 
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub lp_ttl: T::BlockNumber,
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			LpTTL::<T>::put(self.lp_ttl);
+		}
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { lp_ttl: T::BlockNumber::from(1200u32) }
+		}
+	}
+
 	#[pallet::pallet]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
@@ -131,6 +146,10 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+	/// The TTL for liquidity provision intents.
+	#[pallet::storage]
+	pub type LpTTL<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// For when the user wants to deposit assets into the Chain.
@@ -143,7 +162,7 @@ pub mod pallet {
 				T::IngressHandler::register_liquidity_ingress_intent(account_id, asset)?;
 
 			CcmIntentExpiries::<T>::mutate(
-				frame_system::Pallet::<T>::current_block_number().saturating_add(T::LpTTL::get()),
+				frame_system::Pallet::<T>::current_block_number().saturating_add(LpTTL::<T>::get()),
 				|expired| expired.push((intent_id, asset.into(), ingress_address.clone())),
 			);
 

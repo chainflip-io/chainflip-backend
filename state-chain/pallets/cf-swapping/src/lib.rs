@@ -89,9 +89,6 @@ pub mod pallet {
 		type EgressHandler: EgressApi<AnyChain>;
 		/// An interface to the AMM api implementation.
 		type SwappingApi: SwappingApi;
-		/// Time to life for an swap in blocks.
-		#[pallet::constant]
-		type SwapTTL: Get<Self::BlockNumber>;
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
 	}
@@ -121,6 +118,10 @@ pub mod pallet {
 	/// Storage for storing gas budget for each CCM.
 	#[pallet::storage]
 	pub type CcmGasBudget<T: Config> = StorageMap<_, Twox64Concat, u64, (Asset, AssetAmount)>;
+
+	/// Stores the swap TTL in blocks.
+	#[pallet::storage]
+	pub type SwapTTL<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
 	/// Storage for storing CCMs pending assets to be swapped.
 	#[pallet::storage]
@@ -194,6 +195,25 @@ pub mod pallet {
 		CcmUnsupportedForTargetChain,
 		/// The gas budget is higher than the ingressed amount.
 		CcmGasBudgetTooHigh,
+	}
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub swap_ttl: T::BlockNumber,
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			SwapTTL::<T>::put(self.swap_ttl);
+		}
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { swap_ttl: T::BlockNumber::from(1200u32) }
+		}
 	}
 
 	#[pallet::hooks]
@@ -281,7 +301,8 @@ pub mod pallet {
 			)?;
 
 			SwapIntentExpiries::<T>::mutate(
-				frame_system::Pallet::<T>::current_block_number().saturating_add(T::SwapTTL::get()),
+				frame_system::Pallet::<T>::current_block_number()
+					.saturating_add(SwapTTL::<T>::get()),
 				|expired| expired.push((intent_id, ingress_asset.into(), ingress_address.clone())),
 			);
 

@@ -223,7 +223,6 @@ impl pallet_cf_swapping::Config for Runtime {
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type SwappingApi = LiquidityPools;
 	type AccountRoleRegistry = AccountRoles;
-	type SwapTTL = ConstU32<1200>;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }
 
@@ -352,7 +351,6 @@ impl pallet_cf_lp::Config for Runtime {
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type LiquidityPoolApi = LiquidityPools;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type LpTTL = ConstU32<1200>;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 }
 

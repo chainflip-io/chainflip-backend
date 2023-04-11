@@ -11,7 +11,7 @@ use cf_traits::{
 };
 use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
-use sp_core::{ConstU64, H256};
+use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
@@ -117,7 +117,6 @@ impl crate::Config for Test {
 	type EgressHandler = MockEgressHandler<AnyChain>;
 	type LiquidityPoolApi = LiquidityPools;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type LpTTL = ConstU64<5_u64>;
 	type WeightInfo = ();
 }
 
@@ -135,6 +134,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			],
 		},
 		liquidity_pools: Default::default(),
+		liquidity_provider: Default::default(),
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
