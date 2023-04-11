@@ -16,6 +16,7 @@ use crate::{
 		RuntimeApiPenalty,
 	},
 };
+use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::{
 	btc::BitcoinNetwork,
 	dot,
@@ -1030,6 +1031,13 @@ impl_runtime_apis! {
 				min_stake: MinimumStake::<Runtime>::get().unique_saturated_into(),
 				auction_size_range: (auction_params.min_size, auction_params.max_size)
 			}
+		}
+
+		fn cf_pool_sqrt_price(
+			from: Asset,
+			to: Asset,
+		) -> Option<SqrtPriceQ64F96> {
+			LiquidityPools::current_sqrt_price(from, to)
 		}
 	}
 

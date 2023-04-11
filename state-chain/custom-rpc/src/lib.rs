@@ -1,3 +1,4 @@
+use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::eth::SigData;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
@@ -156,6 +157,13 @@ pub trait CustomApi {
 	#[method(name = "auction_state")]
 	fn cf_auction_state(&self, at: Option<state_chain_runtime::Hash>)
 		-> RpcResult<RpcAuctionState>;
+	#[method(name = "pool_sqrt_price")]
+	fn cf_pool_sqrt_price(
+		&self,
+		from: Asset,
+		to: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<SqrtPriceQ64F96>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -409,5 +417,17 @@ where
 			min_stake: auction_state.min_stake.into(),
 			auction_size_range: auction_state.auction_size_range,
 		})
+	}
+
+	fn cf_pool_sqrt_price(
+		&self,
+		from: Asset,
+		to: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<SqrtPriceQ64F96>> {
+		self.client
+			.runtime_api()
+			.cf_pool_sqrt_price(&self.query_block_id(at), from, to)
+			.map_err(to_rpc_error)
 	}
 }

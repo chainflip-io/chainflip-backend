@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_amm::{
-	common::{Side, SideMap},
+	common::{OneToZero, Side, SideMap, SqrtPriceQ64F96, ZeroToOne},
 	PoolState,
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount};
@@ -745,5 +745,21 @@ impl<T: Config> Pallet<T> {
 			Self::deposit_event(Event::<T>::AssetSwapped { from, to, input_amount, output_amount });
 			Ok(output_amount)
 		})
+	}
+
+	pub fn current_sqrt_price(from: Asset, to: Asset) -> Option<SqrtPriceQ64F96> {
+		match (from, to) {
+			(STABLE_ASSET, unstable_asset) => {
+				debug_assert_eq!(Self::side_to_asset(unstable_asset, Side::One), STABLE_ASSET);
+				Pools::<T>::get(unstable_asset)
+					.and_then(|mut pool| pool.pool_state.current_sqrt_price::<OneToZero>())
+			},
+			(unstable_asset, STABLE_ASSET) => {
+				debug_assert_eq!(Self::side_to_asset(unstable_asset, Side::Zero), unstable_asset);
+				Pools::<T>::get(unstable_asset)
+					.and_then(|mut pool| pool.pool_state.current_sqrt_price::<ZeroToOne>())
+			},
+			_ => None,
+		}
 	}
 }

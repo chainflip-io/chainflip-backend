@@ -16,6 +16,27 @@ pub struct PoolState<LiquidityProvider> {
 	pub range_orders: range_orders::PoolState<LiquidityProvider>,
 }
 impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
+	pub fn current_sqrt_price<
+		SD: common::SwapDirection + limit_orders::SwapDirection + range_orders::SwapDirection,
+	>(
+		&mut self,
+	) -> Option<SqrtPriceQ64F96> {
+		match (
+			self.limit_orders.current_sqrt_price::<SD>(),
+			self.range_orders.current_sqrt_price::<SD>(),
+		) {
+			(Some(limit_order_sqrt_price), Some(range_order_sqrt_price)) =>
+				if SD::sqrt_price_op_more_than(limit_order_sqrt_price, range_order_sqrt_price) {
+					Some(range_order_sqrt_price)
+				} else {
+					Some(limit_order_sqrt_price)
+				},
+			(Some(limit_order_sqrt_price), None) => Some(limit_order_sqrt_price),
+			(None, Some(range_order_sqrt_price)) => Some(range_order_sqrt_price),
+			(None, None) => None,
+		}
+	}
+
 	pub fn swap<
 		SD: common::SwapDirection + limit_orders::SwapDirection + range_orders::SwapDirection,
 	>(
