@@ -689,8 +689,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub fn expire_intent(intent_id: IntentId, address: TargetChainAccount<T, I>) {
-		// The address is not in the address pool.
-		// let address = AddressPool::<T, I>::take(intent_id).expect("Intent address should exist");
 		IntentActions::<T, I>::remove(&address);
 		if AddressStatus::<T, I>::get(&address) == DeploymentStatus::Deployed {
 			AddressPool::<T, I>::insert(intent_id, address.clone());

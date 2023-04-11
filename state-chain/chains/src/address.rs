@@ -110,15 +110,6 @@ pub enum AddressError {
 	InvalidAddress,
 }
 
-// impl From<ForeignChainAddress> for BitcoinAddressData {
-// 	fn from(address: ForeignChainAddress) -> Self {
-// 		match address {
-// 			ForeignChainAddress::Btc(addr) => addr,
-// 			_ => BitcoinAddressData::default(),
-// 		}
-// 	}
-// }
-
 impl TryFrom<ForeignChainAddress> for EthereumAddress {
 	type Error = AddressError;
 
