@@ -703,7 +703,7 @@ impl<T: frame_system::Config> IngressApi<Ethereum> for T {
 		_intent_id: IntentId,
 		_address: <Ethereum as Chain>::ChainAccount,
 	) {
-		todo!()
+		unimplemented!()
 	}
 }
 

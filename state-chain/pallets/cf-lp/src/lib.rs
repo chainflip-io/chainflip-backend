@@ -77,7 +77,8 @@ pub mod pallet {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			let expired = CcmIntentExpiries::<T>::take(n);
 			for (intent_id, chain, address) in expired.clone() {
-				T::IngressHandler::expire_intent(chain, intent_id, address);
+				T::IngressHandler::expire_intent(chain, intent_id, address.clone());
+				Self::deposit_event(Event::DepositAddressExpired { address });
 			}
 			T::WeightInfo::on_initialize(expired.len() as u32)
 		}
@@ -99,6 +100,9 @@ pub mod pallet {
 		DepositAddressReady {
 			intent_id: IntentId,
 			ingress_address: ForeignChainAddress,
+		},
+		DepositAddressExpired {
+			address: ForeignChainAddress,
 		},
 		WithdrawalEgressScheduled {
 			egress_id: EgressId,
