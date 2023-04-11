@@ -82,7 +82,7 @@ pub use cf_traits::{
 pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, BtcEnvironment, BtcVaultTransitionHandler,
-	ChainflipHeartbeat, EthEnvironment, EthVaultTransitionHandler,
+	ChainAddressConverter, ChainflipHeartbeat, EthEnvironment, EthVaultTransitionHandler,
 	TokenholderGovernanceBroadcaster,
 };
 
@@ -223,6 +223,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type SwappingApi = LiquidityPools;
 	type AccountRoleRegistry = AccountRoles;
+	type AddressConverter = ChainAddressConverter;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }
 
@@ -354,6 +355,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type LiquidityPoolApi = LiquidityPools;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
+	type AddressConverter = ChainAddressConverter;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 }
 

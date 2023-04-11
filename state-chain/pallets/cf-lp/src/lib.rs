@@ -60,6 +60,10 @@ pub mod pallet {
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
+		/// A converter to convert address to and from human readable to internal address
+		/// representation.
+		type AddressConverter: AddressConverter;
+
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 	}
@@ -120,7 +124,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::DepositAddressReady {
 				intent_id,
-				ingress_address: ingress_address.to_encoded_address()?,
+				ingress_address: T::AddressConverter::to_encoded_address(ingress_address)?,
 			});
 
 			Ok(())

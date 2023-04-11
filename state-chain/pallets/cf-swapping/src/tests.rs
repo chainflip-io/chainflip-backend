@@ -6,7 +6,10 @@ use cf_chains::{
 use cf_primitives::{Asset, EthereumAddress, ForeignChain};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
-	mocks::egress_handler::{MockEgressHandler, MockEgressParameter},
+	mocks::{
+		address_converter::MockAddressConverter,
+		egress_handler::{MockEgressHandler, MockEgressParameter},
+	},
 	SwapIntentHandler,
 };
 use frame_support::{assert_noop, assert_ok, sp_std::iter, weights::Weight};
@@ -197,9 +200,10 @@ fn expect_swap_id_to_be_emitted() {
 		assert_event_sequence!(
 			Test,
 			crate::mock::RuntimeEvent::Swapping(crate::Event::NewSwapIntent {
-				ingress_address: ForeignChainAddress::Eth(<EthereumAddress as Default>::default())
-					.to_encoded_address()
-					.unwrap(),
+				ingress_address: MockAddressConverter::to_encoded_address(
+					ForeignChainAddress::Eth(<EthereumAddress as Default>::default())
+				)
+				.unwrap(),
 			}),
 			crate::mock::RuntimeEvent::Swapping(crate::Event::SwapIngressReceived {
 				ingress_address: ForeignChainAddress::Eth(Default::default()),

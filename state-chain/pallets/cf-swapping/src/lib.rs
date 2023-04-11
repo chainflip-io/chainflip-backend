@@ -89,6 +89,9 @@ pub mod pallet {
 		type EgressHandler: EgressApi<AnyChain>;
 		/// An interface to the AMM api implementation.
 		type SwappingApi: SwappingApi;
+		/// A converter to convert address to and from human readable to internal address
+		/// representation.
+		type AddressConverter: AddressConverter;
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
 	}
@@ -256,7 +259,7 @@ pub mod pallet {
 			)?;
 
 			Self::deposit_event(Event::<T>::NewSwapIntent {
-				ingress_address: ingress_address.to_encoded_address()?,
+				ingress_address: T::AddressConverter::to_encoded_address(ingress_address)?,
 			});
 
 			Ok(())

@@ -16,7 +16,7 @@ use crate::{
 };
 
 use cf_chains::{
-	address::ForeignChainAddress,
+	address::{AddressConverter, BitcoinAddressData, EncodedAddress, ForeignChainAddress},
 	btc::{
 		api::{BitcoinApi, SelectedUtxos},
 		Bitcoin, BitcoinNetwork, BitcoinTransactionData, BtcAmount, Utxo,
@@ -522,5 +522,38 @@ impl IngressHandler<Bitcoin> for BtcIngressHandler {
 			                                                                   * conjunction with
 			                                                                   * #2354 */
 		})
+	}
+}
+
+pub struct ChainAddressConverter;
+impl AddressConverter for ChainAddressConverter {
+	fn to_encoded_address(address: ForeignChainAddress) -> Result<EncodedAddress, DispatchError> {
+		match address {
+			ForeignChainAddress::Eth(address) => Ok(EncodedAddress::Eth(address.to_vec())),
+			ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(address.to_vec())),
+			ForeignChainAddress::Btc(address) => Ok(EncodedAddress::Btc(
+				address
+					.to_address_string()
+					.map_err(|_| {
+						DispatchError::Other("We can only convert an ingress address to a string")
+					})?
+					.bytes()
+					.collect::<Vec<u8>>(),
+			)),
+		}
+	}
+
+	fn from_encoded_address(encoded_address: EncodedAddress) -> Result<ForeignChainAddress, ()> {
+		match encoded_address {
+			EncodedAddress::Eth(address_bytes) =>
+				Ok(ForeignChainAddress::Eth(address_bytes[..].try_into().map_err(|_| ())?)),
+			EncodedAddress::Dot(address_bytes) =>
+				Ok(ForeignChainAddress::Dot(address_bytes[..].try_into().map_err(|_| ())?)),
+			EncodedAddress::Btc(address_bytes) =>
+				Ok(ForeignChainAddress::Btc(BitcoinAddressData::from_address_string(
+					&address_bytes[..],
+					Environment::bitcoin_network(),
+				)?)),
+		}
 	}
 }

@@ -30,6 +30,10 @@ use itertools;
 /// This salt is used to derive the change address for every vault. i.e. for every epoch.
 pub const CHANGE_ADDRESS_SALT: u32 = 0;
 
+//The bitcoin script generated from the bitcoin address should not exceed 128 bytes according to
+// our construction
+pub const MAX_BITCOIN_SCRIPT_LENGTH: u32 = 128;
+
 pub type BlockNumber = u64;
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Copy)]
@@ -597,7 +601,7 @@ impl BitcoinTransaction {
 )]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BitcoinScript {
-	data: BoundedVec<u8, ConstU32<128>>,
+	data: BoundedVec<u8, ConstU32<MAX_BITCOIN_SCRIPT_LENGTH>>,
 }
 
 /// For reference see https://en.bitcoin.it/wiki/Script

@@ -1,13 +1,12 @@
-use cf_primitives::{EthereumAddress, ForeignChain, PolkadotAccountId, MAX_BTC_ADDRESS_LENGTH};
+use cf_primitives::{EthereumAddress, ForeignChain, PolkadotAccountId};
 
 extern crate alloc;
 use alloc::string::String;
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::BoundedVec;
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
-use sp_core::{ConstU32, H160};
+use sp_core::H160;
 
 use sp_runtime::DispatchError;
 use sp_std::vec::Vec;
@@ -18,8 +17,6 @@ use crate::btc::{
 };
 
 pub type ScriptPubkeyBytes = Vec<u8>;
-
-pub type BitcoinAddress = BoundedVec<u8, ConstU32<MAX_BTC_ADDRESS_LENGTH>>;
 
 /// The seed data required to generate a Bitcoin address. We don't pass in network
 /// here, as we assume the same network for all addresses.
@@ -74,7 +71,7 @@ impl BitcoinAddressData {
 		}
 	}
 	#[allow(clippy::result_unit_err)]
-	pub fn from_address_string(address_bytes: &[u8]) -> Result<Self, ()> {
+	pub fn from_address_string(address_bytes: &[u8], network: BitcoinNetwork) -> Result<Self, ()> {
 		Ok(Self {
 			address_for: BitcoinAddressFor::Egress(
 				scriptpubkey_from_address(
@@ -83,7 +80,7 @@ impl BitcoinAddressData {
 				)
 				.map_err(|_| ())?,
 			), //todo: see how to get the mainnet from the env pallet
-			network: BitcoinNetwork::Mainnet,
+			network,
 		})
 	}
 }
@@ -112,39 +109,9 @@ pub enum EncodedAddress {
 }
 
 pub trait AddressConverter: Sized {
-	fn to_encoded_address(&self) -> Result<EncodedAddress, DispatchError>;
+	fn to_encoded_address(address: ForeignChainAddress) -> Result<EncodedAddress, DispatchError>;
 	#[allow(clippy::result_unit_err)]
-	fn from_encoded_address(encoded_address: EncodedAddress) -> Result<Self, ()>;
-}
-
-impl AddressConverter for ForeignChainAddress {
-	fn to_encoded_address(&self) -> Result<EncodedAddress, DispatchError> {
-		match self {
-			ForeignChainAddress::Eth(address) => Ok(EncodedAddress::Eth(address.to_vec())),
-			ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(address.to_vec())),
-			ForeignChainAddress::Btc(address) => Ok(EncodedAddress::Btc(
-				address
-					.to_address_string()
-					.map_err(|_| {
-						DispatchError::Other("We can only convert an ingress address to a string")
-					})?
-					.bytes()
-					.collect::<Vec<u8>>(),
-			)),
-		}
-	}
-
-	fn from_encoded_address(encoded_address: EncodedAddress) -> Result<Self, ()> {
-		match encoded_address {
-			EncodedAddress::Eth(address_bytes) =>
-				Ok(ForeignChainAddress::Eth(address_bytes[..].try_into().map_err(|_| ())?)),
-			EncodedAddress::Dot(address_bytes) =>
-				Ok(ForeignChainAddress::Dot(address_bytes[..].try_into().map_err(|_| ())?)),
-			EncodedAddress::Btc(address_bytes) => Ok(ForeignChainAddress::Btc(
-				BitcoinAddressData::from_address_string(&address_bytes[..])?,
-			)),
-		}
-	}
+	fn from_encoded_address(encoded_address: EncodedAddress) -> Result<ForeignChainAddress, ()>;
 }
 
 // #[cfg(feature = "std")]

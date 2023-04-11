@@ -5,6 +5,7 @@ use frame_support::{storage, StorageHasher, Twox64Concat};
 
 // pub mod broadcaster;
 pub mod account_role_registry;
+pub mod address_converter;
 pub mod api_call;
 pub mod bid_info;
 pub mod callback;
