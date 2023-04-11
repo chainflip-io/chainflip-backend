@@ -763,11 +763,12 @@ version = "0.1.0"
 dependencies = [
  "cf-primitives",
  "parity-scale-codec",
+ "primitive-types 0.11.1",
+ "rand 0.7.3",
  "scale-info",
- "serde",
- "serde_json",
  "sp-core 7.0.0",
  "sp-std 5.0.0",
+ "utilities",
 ]
 
 [[package]]
@@ -804,6 +805,7 @@ name = "cf-integration-tests"
 version = "0.1.0"
 dependencies = [
  "arrayref",
+ "cf-amm",
  "cf-chains",
  "cf-primitives",
  "cf-test-utilities",
@@ -1771,12 +1773,12 @@ dependencies = [
 name = "custom-rpc"
 version = "0.1.0"
 dependencies = [
+ "cf-amm",
  "cf-chains",
  "cf-primitives",
  "hex",
  "jsonrpsee 0.15.1",
  "pallet-cf-governance",
- "pallet-cf-pools-runtime-api",
  "sc-client-api",
  "serde",
  "sp-api",
@@ -5610,7 +5612,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-cf-account-roles",
- "pallet-cf-pools",
  "parity-scale-codec",
  "quickcheck",
  "quickcheck_macros",
@@ -5638,16 +5639,6 @@ dependencies = [
  "sp-arithmetic 6.0.0",
  "sp-core 7.0.0",
  "sp-io 7.0.0",
- "sp-runtime 7.0.0",
- "sp-std 5.0.0",
-]
-
-[[package]]
-name = "pallet-cf-pools-runtime-api"
-version = "0.1.0"
-dependencies = [
- "cf-primitives",
- "sp-api",
  "sp-runtime 7.0.0",
  "sp-std 5.0.0",
 ]
@@ -6364,6 +6355,7 @@ dependencies = [
  "impl-codec",
  "impl-rlp",
  "impl-serde 0.3.2",
+ "scale-info",
  "uint",
 ]
 
@@ -9747,6 +9739,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 name = "state-chain-runtime"
 version = "0.4.2"
 dependencies = [
+ "cf-amm",
  "cf-chains",
  "cf-primitives",
  "cf-session-benchmarking",
@@ -9775,7 +9768,6 @@ dependencies = [
  "pallet-cf-ingress-egress",
  "pallet-cf-lp",
  "pallet-cf-pools",
- "pallet-cf-pools-runtime-api",
  "pallet-cf-reputation",
  "pallet-cf-staking",
  "pallet-cf-swapping",

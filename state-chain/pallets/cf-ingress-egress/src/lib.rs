@@ -24,8 +24,8 @@ use cf_chains::{
 };
 use cf_primitives::{Asset, AssetAmount, IntentId};
 use cf_traits::{
-	liquidity::LpProvisioningApi, AddressDerivationApi, Broadcaster, CcmHandler, Chainflip,
-	EgressApi, IngressApi, IngressHandler, SwapIntentHandler,
+	liquidity::LpBalanceApi, AddressDerivationApi, Broadcaster, CcmHandler, Chainflip, EgressApi,
+	IngressApi, IngressHandler, SwapIntentHandler,
 };
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
 pub use pallet::*;
@@ -165,7 +165,7 @@ pub mod pallet {
 		type AddressDerivation: AddressDerivationApi<Self::TargetChain>;
 
 		/// Pallet responsible for managing Liquidity Providers.
-		type LpProvisioning: LpProvisioningApi<AccountId = Self::AccountId>;
+		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>;
 
 		/// For scheduling swaps.
 		type SwapIntentHandler: SwapIntentHandler<AccountId = Self::AccountId>;
@@ -653,7 +653,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
 		match IntentActions::<T, I>::get(&ingress_address).ok_or(Error::<T, I>::InvalidIntent)? {
 			IntentAction::LiquidityProvision { lp_account } =>
-				T::LpProvisioning::provision_account(&lp_account, asset.into(), amount.into())?,
+				T::LpBalance::try_credit_account(&lp_account, asset.into(), amount.into())?,
 			IntentAction::Swap {
 				egress_address,
 				egress_asset,
