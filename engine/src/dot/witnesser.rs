@@ -24,7 +24,7 @@ use subxt::{
 	config::Header,
 	events::{Phase, StaticEvent},
 };
-use tokio::sync::Mutex;
+use tokio::sync::{oneshot, Mutex};
 use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
@@ -38,7 +38,8 @@ use crate::{
 			get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
 		},
 		epoch_witnesser::{
-			start_epoch_witnesser, EpochWitnesser, EpochWitnesserGenerator, WitnesserAndStream,
+			self, start_epoch_witnesser, EpochWitnesser, EpochWitnesserGenerator,
+			WitnesserAndStream,
 		},
 		AddressMonitor, BlockNumberable, ChainBlockNumber, EpochStart,
 	},
@@ -278,7 +279,14 @@ struct DotWitnesser<StateChainClient, DotRpc> {
 	dot_client: DotRpc,
 	current_epoch: EpochStart<Polkadot>,
 	witnessed_until_sender: tokio::sync::mpsc::Sender<WitnessedUntil>,
-	last_block_processed: u32,
+}
+
+impl BlockNumberable for (H256, PolkadotBlockNumber, Vec<(Phase, EventWrapper)>) {
+	type BlockNumber = PolkadotBlockNumber;
+
+	fn block_number(&self) -> Self::BlockNumber {
+		self.1
+	}
 }
 
 #[async_trait]
@@ -294,6 +302,23 @@ where
 		BTreeSet<[u8; 64]>,
 		tokio::sync::mpsc::UnboundedReceiver<[u8; 64]>,
 	);
+
+	async fn run_witnesser(
+		self,
+		data_stream: std::pin::Pin<
+			Box<dyn futures::Stream<Item = anyhow::Result<Self::Data>> + Send + 'static>,
+		>,
+		end_witnessing_receiver: oneshot::Receiver<ChainBlockNumber<Self::Chain>>,
+		state: Self::StaticState,
+	) -> Result<Self::StaticState, ()> {
+		epoch_witnesser::run_witnesser_block_stream(
+			self,
+			data_stream,
+			end_witnessing_receiver,
+			state,
+		)
+		.await
+	}
 
 	async fn do_witness(
 		&mut self,
@@ -415,18 +440,12 @@ where
 				.await;
 		}
 
-		self.last_block_processed = block_number;
-
 		self.witnessed_until_sender
 			.send(WitnessedUntil { epoch_index, block_number: block_number as u64 })
 			.await
 			.unwrap();
 
 		Ok(())
-	}
-
-	fn should_finish(&self, last_block_number_for_epoch: ChainBlockNumber<Self::Chain>) -> bool {
-		self.last_block_processed >= last_block_number_for_epoch
 	}
 }
 
@@ -547,7 +566,6 @@ where
 			dot_client: self.dot_client.clone(),
 			current_epoch: epoch.clone(),
 			witnessed_until_sender,
-			last_block_processed: from_block - 1,
 		};
 
 		Ok(Some((witnesser, Box::pin(block_events_stream))))

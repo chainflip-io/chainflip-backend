@@ -13,7 +13,7 @@ use tracing::{error, info};
 
 use crate::task_scope::{task_scope, ScopedJoinHandle};
 
-use super::{ChainBlockNumber, EpochStart};
+use super::{BlockNumberable, ChainBlockNumber, EpochStart};
 type BlockNumber<Witnesser> = ChainBlockNumber<<Witnesser as EpochWitnesser>::Chain>;
 
 #[async_trait]
@@ -24,14 +24,20 @@ pub trait EpochWitnesser: Send + Sync + 'static {
 	/// State that persists across epochs
 	type StaticState: Send;
 
+	async fn run_witnesser(
+		self,
+		mut data_stream: std::pin::Pin<
+			Box<dyn futures::Stream<Item = anyhow::Result<Self::Data>> + Send + 'static>,
+		>,
+		end_witnessing_receiver: oneshot::Receiver<BlockNumber<Self>>,
+		mut state: Self::StaticState,
+	) -> Result<Self::StaticState, ()>;
+
 	async fn do_witness(
 		&mut self,
 		data: Self::Data,
 		state: &mut Self::StaticState,
 	) -> anyhow::Result<()>;
-
-	/// Whether the witnesser has any more processing to do for the current epoch
-	fn should_finish(&self, last_block_number_for_epoch: BlockNumber<Self>) -> bool;
 }
 
 pub type WitnesserAndStream<W> =
@@ -41,12 +47,12 @@ pub type WitnesserAndStream<W> =
 pub trait EpochWitnesserGenerator: Send {
 	type Witnesser: EpochWitnesser;
 
+	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool;
+
 	async fn init(
 		&mut self,
 		epoch: EpochStart<<Self::Witnesser as EpochWitnesser>::Chain>,
 	) -> anyhow::Result<Option<WitnesserAndStream<Self::Witnesser>>>;
-
-	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool;
 }
 
 type WitnesserTask<Witnesser> = ScopedJoinHandle<<Witnesser as EpochWitnesser>::StaticState>;
@@ -90,7 +96,7 @@ where
 
 					assert!(
 						option_state.replace(handle.await).is_none(),
-						"state must have been consumed by generator"
+						"state must have been consumed by generator if we have started a new task"
 					);
 				}
 
@@ -107,8 +113,7 @@ where
 						})? {
 						current_task = Some((
 							end_witnessing_sender,
-							scope.spawn_with_handle(run_witnesser(
-								witnesser,
+							scope.spawn_with_handle(witnesser.run_witnesser(
 								data_stream,
 								end_witnessing_receiver,
 								option_state.take().expect("state must be present"),
@@ -123,7 +128,7 @@ where
 	.await
 }
 
-async fn run_witnesser<Witnesser>(
+pub async fn run_witnesser_data_stream<Witnesser>(
 	mut witnesser: Witnesser,
 	mut data_stream: std::pin::Pin<
 		Box<dyn futures::Stream<Item = anyhow::Result<Witnesser::Data>> + Send + 'static>,
@@ -134,6 +139,44 @@ async fn run_witnesser<Witnesser>(
 where
 	Witnesser: EpochWitnesser,
 {
+	let mut end_witnessing_receiver = end_witnessing_receiver.fuse();
+
+	loop {
+		select! {
+			Ok(_) = &mut end_witnessing_receiver => {
+				break;
+			},
+			Some(data) = data_stream.next() => {
+				// This will be an error if the stream times out. When it does, we return
+				// an error so that we restart the witnesser
+
+				witnesser.do_witness(data.map_err(|e| {
+						error!("Error while getting data for witnesser: {:?}", e);
+					})?,
+					&mut state).await.map_err(|_| {
+					error!("Witnesser failed to process data")
+				})?;
+			},
+		}
+	}
+
+	info!("Epoch witnesser finished epoch");
+
+	Ok(state)
+}
+
+pub async fn run_witnesser_block_stream<Witnesser>(
+	mut witnesser: Witnesser,
+	mut data_stream: std::pin::Pin<
+		Box<dyn futures::Stream<Item = anyhow::Result<Witnesser::Data>> + Send + 'static>,
+	>,
+	end_witnessing_receiver: oneshot::Receiver<BlockNumber<Witnesser>>,
+	mut state: Witnesser::StaticState,
+) -> Result<Witnesser::StaticState, ()>
+where
+	Witnesser: EpochWitnesser,
+	Witnesser::Data: BlockNumberable<BlockNumber = BlockNumber<Witnesser>>,
+{
 	// If set, this is the last block to process
 	let mut last_block_number_for_epoch: Option<BlockNumber<Witnesser>> = None;
 
@@ -142,28 +185,24 @@ where
 	loop {
 		select! {
 			Ok(last_block_number) = &mut end_witnessing_receiver => {
-
-				if witnesser.should_finish(last_block_number) {
-					break;
-				}
 				last_block_number_for_epoch = Some(last_block_number);
 			},
 			Some(data) = data_stream.next() => {
 				// This will be an error if the stream times out. When it does, we return
 				// an error so that we restart the witnesser.
-				let data = data.map_err(|e| {
+				let block = data.map_err(|e| {
 					error!("Error while getting data for witnesser: {:?}", e);
 				})?;
 
-				witnesser.do_witness(data, &mut state).await.map_err(|_| {
-					error!("Witnesser failed to process data")
-				})?;
-
-				if let Some(block_number) = last_block_number_for_epoch {
-					if witnesser.should_finish(block_number) {
+				if let Some(last_block_number_for_epoch) = last_block_number_for_epoch {
+					if block.block_number() > last_block_number_for_epoch {
 						break;
 					}
 				}
+
+				witnesser.do_witness(block, &mut state).await.map_err(|_| {
+					error!("Witnesser failed to process block")
+				})?;
 			},
 		}
 	}
@@ -193,14 +232,21 @@ mod epoch_witnesser_testing {
 
 		type StaticState = ();
 
+		async fn run_witnesser(
+			self,
+			data_stream: std::pin::Pin<
+				Box<dyn futures::Stream<Item = anyhow::Result<Self::Data>> + Send + 'static>,
+			>,
+			end_witnessing_receiver: oneshot::Receiver<BlockNumber<Self>>,
+			state: Self::StaticState,
+		) -> Result<Self::StaticState, ()> {
+			run_witnesser_block_stream(self, data_stream, end_witnessing_receiver, state).await
+		}
+
 		async fn do_witness(&mut self, block: u64, _: &mut ()) -> anyhow::Result<()> {
 			self.last_processed_block = block;
 			self.processed_blocks_sender.send(block).unwrap();
 			Ok(())
-		}
-
-		fn should_finish(&self, last_block_in_epoch: BlockNumber<Self>) -> bool {
-			self.last_processed_block >= last_block_in_epoch
 		}
 	}
 
@@ -230,7 +276,10 @@ mod epoch_witnesser_testing {
 
 	#[async_trait]
 	impl EpochWitnesserGenerator for TestEpochWitnesserGenerator {
+		const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = true;
+
 		type Witnesser = TestEpochWitnesser;
+
 		async fn init(
 			&mut self,
 			epoch_start: EpochStart<cf_chains::Ethereum>,
@@ -243,8 +292,6 @@ mod epoch_witnesser_testing {
 				self.block_subscriber.block_stream_from(epoch_start.block_number),
 			)))
 		}
-
-		const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = true;
 	}
 
 	struct BlockSubscriber {
