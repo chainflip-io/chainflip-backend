@@ -46,7 +46,7 @@ pub trait EpochWitnesserGenerator: Send {
 		epoch: EpochStart<<Self::Witnesser as EpochWitnesser>::Chain>,
 	) -> anyhow::Result<Option<WitnesserAndStream<Self::Witnesser>>>;
 
-	fn should_process_historical_epochs() -> bool;
+	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool;
 }
 
 type WitnesserTask<Witnesser> = ScopedJoinHandle<<Witnesser as EpochWitnesser>::StaticState>;
@@ -95,7 +95,7 @@ where
 				}
 
 				if !epoch_start.participant ||
-					(!epoch_start.current && !Generator::should_process_historical_epochs())
+					(!epoch_start.current && !Generator::SHOULD_PROCESS_HISTORICAL_EPOCHS)
 				{
 					continue
 				}
@@ -246,9 +246,7 @@ mod epoch_witnesser_testing {
 			)))
 		}
 
-		fn should_process_historical_epochs() -> bool {
-			true
-		}
+		const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = true;
 	}
 
 	struct BlockSubscriber {

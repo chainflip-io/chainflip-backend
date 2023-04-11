@@ -135,9 +135,7 @@ where
 		Ok(Some((witnesser, Box::pin(poll_interval))))
 	}
 
-	fn should_process_historical_epochs() -> bool {
-		false
-	}
+	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = false;
 }
 
 /// Queries the rpc node for the fee history and builds the `TrackedData` for Ethereum at the latest

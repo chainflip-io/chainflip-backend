@@ -132,9 +132,7 @@ impl EpochWitnesserGenerator for EthBlockWitnesserGenerator {
 		)))
 	}
 
-	fn should_process_historical_epochs() -> bool {
-		true
-	}
+	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = true;
 }
 
 pub async fn start(

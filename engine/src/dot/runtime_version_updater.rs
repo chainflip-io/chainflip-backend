@@ -131,7 +131,5 @@ where
 		Ok(Some((witnesser, Box::pin(stream))))
 	}
 
-	fn should_process_historical_epochs() -> bool {
-		false
-	}
+	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = false;
 }

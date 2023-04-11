@@ -241,9 +241,7 @@ where
 		Ok(Some((witnesser, Box::pin(block_number_stream_from))))
 	}
 
-	fn should_process_historical_epochs() -> bool {
-		true
-	}
+	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = true;
 }
 
 #[cfg(test)]
