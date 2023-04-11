@@ -16,6 +16,7 @@ use crate::{
 		RuntimeApiPenalty,
 	},
 };
+use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::{
 	btc::BitcoinNetwork,
 	dot,
@@ -72,12 +73,8 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-pub use cf_primitives::{
-	Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, Liquidity, Tick,
-};
-pub use cf_traits::{
-	EpochInfo, EthEnvironmentProvider, LiquidityPoolApi, QualifyNode, SessionKeysRegistered,
-};
+pub use cf_primitives::{Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance};
+pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
@@ -293,7 +290,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;
 	type AddressDerivation = AddressDerivation;
-	type LpProvisioning = LiquidityProvider;
+	type LpBalance = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
 	type ChainApiCall = eth::api::EthereumApi<EthEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
@@ -309,7 +306,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Polkadot;
 	type AddressDerivation = AddressDerivation;
-	type LpProvisioning = LiquidityProvider;
+	type LpBalance = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
 	type ChainApiCall = dot::api::PolkadotApi<chainflip::DotEnvironment>;
 	type Broadcaster = PolkadotBroadcaster;
@@ -325,7 +322,7 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Bitcoin;
 	type AddressDerivation = AddressDerivation;
-	type LpProvisioning = LiquidityProvider;
+	type LpBalance = LiquidityProvider;
 	type SwapIntentHandler = Swapping;
 	type ChainApiCall = cf_chains::btc::api::BitcoinApi<chainflip::BtcEnvironment>;
 	type Broadcaster = BitcoinBroadcaster;
@@ -342,6 +339,8 @@ parameter_types! {
 
 impl pallet_cf_pools::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
+	type AccountRoleRegistry = AccountRoles;
+	type LpBalance = LiquidityProvider;
 	type NetworkFee = NetworkFee;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = ();
@@ -352,7 +351,6 @@ impl pallet_cf_lp::Config for Runtime {
 	type AccountRoleRegistry = AccountRoles;
 	type IngressHandler = chainflip::AnyChainIngressEgressHandler;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
-	type LiquidityPoolApi = LiquidityPools;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 }
@@ -1034,18 +1032,12 @@ impl_runtime_apis! {
 				auction_size_range: (auction_params.min_size, auction_params.max_size)
 			}
 		}
-	}
 
-	impl pallet_cf_pools_runtime_api::PoolsApi<Block> for Runtime {
-		fn cf_pool_tick_price(
-			asset: Asset,
-		) -> Option<Tick> {
-			use cf_traits::LiquidityPoolApi;
-			LiquidityPools::current_tick(&asset)
-		}
-
-		fn cf_pool_minted_positions(lp: AccountId, asset: Asset) -> Vec<(Tick, Tick, Liquidity)> {
-			LiquidityPools::minted_positions(&lp, &asset)
+		fn cf_pool_sqrt_price(
+			from: Asset,
+			to: Asset,
+		) -> Option<SqrtPriceQ64F96> {
+			LiquidityPools::current_sqrt_price(from, to)
 		}
 	}
 

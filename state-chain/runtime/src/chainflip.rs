@@ -34,9 +34,7 @@ use cf_chains::{
 	ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
 	TransactionBuilder,
 };
-use cf_primitives::{
-	chains::assets, liquidity::U256, Asset, BasisPoints, EgressId, IntentId, ETHEREUM_ETH_ADDRESS,
-};
+use cf_primitives::{chains::assets, Asset, BasisPoints, EgressId, IntentId, ETHEREUM_ETH_ADDRESS};
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, EgressApi,
 	EmergencyRotation, EpochInfo, EpochKey, EthEnvironmentProvider, Heartbeat, IngressApi,
@@ -54,6 +52,7 @@ pub use offences::*;
 use pallet_cf_validator::PercentageRange;
 use scale_info::TypeInfo;
 pub use signer_nomination::RandomSignerNomination;
+use sp_core::U256;
 use sp_runtime::traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto};
 use sp_std::prelude::*;
 
