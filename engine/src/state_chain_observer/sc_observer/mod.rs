@@ -10,7 +10,7 @@ use cf_chains::{
 	Bitcoin, ChainCrypto, Polkadot,
 };
 use cf_primitives::{BlockNumber, CeremonyId, EpochIndex, KeyId, PolkadotAccountId};
-use futures::{FutureExt, Stream, StreamExt};
+use futures::{FutureExt, Stream, StreamExt, TryFutureExt};
 use sp_core::{Hasher, H160, H256};
 use sp_runtime::{traits::Keccak256, AccountId32};
 use state_chain_runtime::{
@@ -25,7 +25,7 @@ use std::{
 	time::Duration,
 };
 use tokio::sync::{mpsc::UnboundedSender, watch};
-use tracing::{debug, error, info, info_span, trace, Instrument};
+use tracing::{debug, error, info, info_span, trace, warn, Instrument};
 
 use crate::{
 	btc::{rpc::BtcRpcApi, BtcBroadcaster},
@@ -540,44 +540,35 @@ where
                                             transaction_payload,
                                         },
                                     ) if nominee == account_id => {
-                                        debug!("Received signing request with broadcast_attempt_id {broadcast_attempt_id} for transaction: {transaction_payload:?}");
-                                        match eth_broadcaster.encode_and_sign_tx(transaction_payload).await {
-                                            Ok(raw_signed_tx) => {
+                                        match eth_broadcaster.encode_and_sign_tx(transaction_payload)
+                                            .and_then(|raw_signed_tx| {
                                                 // We want to transmit here to decrease the delay between getting a gas price estimate
                                                 // and transmitting it to the Ethereum network
                                                 let expected_broadcast_tx_hash = Keccak256::hash(&raw_signed_tx.0[..]);
-                                                match eth_broadcaster.send(raw_signed_tx.0).await {
-                                                    Ok(tx_hash) => {
-                                                        debug!("Successful TransmissionRequest broadcast_attempt_id {broadcast_attempt_id}, tx_hash: {tx_hash:#x}");
-                                                        assert_eq!(
-                                                            tx_hash.0, expected_broadcast_tx_hash.0,
-                                                            "tx_hash returned from `send` does not match expected hash"
-                                                        );
-                                                    },
-                                                    Err(e) => {
-                                                        info!("TransmissionRequest broadcast_attempt_id {broadcast_attempt_id} failed: {e:?}");
-                                                    },
+                                                eth_broadcaster.send(raw_signed_tx.0).inspect_ok(move |tx_hash| {
+                                                    assert_eq!(
+                                                        tx_hash.0, expected_broadcast_tx_hash.0,
+                                                        "tx_hash returned from `send` does not match expected hash"
+                                                    );
+                                                })
+                                            })
+                                            .await {
+                                                Ok(tx_hash) => debug!("TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                Err(e) => {
+                                                    // Note: this error can indicate that we failed to estimate gas, or that there is
+                                                    // a problem with the ethereum rpc node, or with the configured account. For example
+                                                    // if the account balance is too low to pay for required gas.
+                                                    warn!("TransactionBroadcastRequest {broadcast_attempt_id:?} failed: {e:?}.");
+                                                    let _result = state_chain_client.submit_signed_extrinsic(
+                                                        state_chain_runtime::RuntimeCall::EthereumBroadcaster(
+                                                            pallet_cf_broadcast::Call::transaction_signing_failure {
+                                                                broadcast_attempt_id,
+                                                            },
+                                                        ),
+                                                    )
+                                                    .await;
                                                 }
-                                            }
-                                            Err(e) => {
-                                                // Note: this error case should only occur if there is a problem with the
-                                                // local ethereum node, which would mean the web3 lib is unable to fill in
-                                                // the tranaction params, mainly the gas limit.
-                                                // In the long run all transaction parameters will be provided by the state
-                                                // chain and the above eth_broadcaster.sign_tx method can be made
-                                                // infallible.
-
-                                                error!("TransactionSigningRequest attempt_id {broadcast_attempt_id} failed: {e:?}");
-
-                                                let _result = state_chain_client.submit_signed_extrinsic(
-                                                    state_chain_runtime::RuntimeCall::EthereumBroadcaster(
-                                                        pallet_cf_broadcast::Call::transaction_signing_failure {
-                                                            broadcast_attempt_id,
-                                                        },
-                                                    ),
-                                                ).await;
-                                            }
-                                        }
+                                            };
                                     }
                                     state_chain_runtime::RuntimeEvent::PolkadotBroadcaster(
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
