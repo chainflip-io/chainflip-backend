@@ -36,14 +36,14 @@ pub enum VaultEvent {
 	SwapNative {
 		destination_chain: u32,
 		destination_address: web3::types::Bytes,
-		destination_token: u16,
+		destination_token: u32,
 		amount: u128,
 		sender: ethabi::Address,
 	},
 	SwapToken {
 		destination_chain: u32,
 		destination_address: web3::types::Bytes,
-		destination_token: u16,
+		destination_token: u32,
 		source_token: ethabi::Address,
 		amount: u128,
 		sender: ethabi::Address,
@@ -61,22 +61,22 @@ pub enum VaultEvent {
 	XCallNative {
 		destination_chain: u32,
 		destination_address: web3::types::Bytes,
-		destination_token: u16,
+		destination_token: u32,
 		amount: u128,
 		sender: ethabi::Address,
 		message: web3::types::Bytes,
-		destination_native_budget: u128,
+		native_gas_amount: u128,
 		refund_address: web3::types::Bytes,
 	},
 	XCallToken {
 		destination_chain: u32,
 		destination_address: web3::types::Bytes,
-		destination_token: u16,
+		destination_token: u32,
 		source_token: ethabi::Address,
 		amount: u128,
 		sender: ethabi::Address,
 		message: web3::types::Bytes,
-		destination_native_budget: u128,
+		native_gas_amount: u128,
 		refund_address: web3::types::Bytes,
 	},
 	AddGasNative {
@@ -196,10 +196,7 @@ impl EthContractWitnesser for Vault {
 							.expect("XCallNative amount should fit into u128"),
 						sender: utils::decode_log_param(&log, "sender")?,
 						message: utils::decode_log_param(&log, "message")?,
-						destination_native_budget: utils::decode_log_param(
-							&log,
-							"dstNativeBudget",
-						)?,
+						native_gas_amount: utils::decode_log_param(&log, "gasAmount")?,
 						refund_address: utils::decode_log_param(&log, "refundAddress")?,
 					}
 				} else if event_signature == xcall_token.signature {
@@ -214,10 +211,7 @@ impl EthContractWitnesser for Vault {
 							.expect("XCallToken amount should fit into u128"),
 						sender: utils::decode_log_param(&log, "sender")?,
 						message: utils::decode_log_param(&log, "message")?,
-						destination_native_budget: utils::decode_log_param(
-							&log,
-							"dstNativeBudget",
-						)?,
+						native_gas_amount: utils::decode_log_param(&log, "gasAmount")?,
 						refund_address: utils::decode_log_param(&log, "refundAddress")?,
 					}
 				} else if event_signature == add_gas_token.signature {
