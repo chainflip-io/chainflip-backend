@@ -15,11 +15,6 @@ Exposes relayer functionality via a json api interface.
 🎙 Server is listening on 0.0.0.0:62378.
 ```
 
-Default values  are:
-- `ws://localhost:9944` for `--state_chain.ws_endpoint`
-- `/etc/chainflip/keys/signing_key_file` for `--state_chain.signing_key_file`
-- `80` for `--port`
-
 Then in another terminal:
 
 ```sh
@@ -42,8 +37,9 @@ Then in another terminal:
 
 ## Command line arguments and defaults
 
-The `ws_endpoint` should point at a synced rpc node.
-The `signing_key_file` should be the relayer's private key for their on-chain account. The account should be staked.
+- The `state_chain.ws_endpoint` should point at a synced rpc node. The default is `ws://localhost:9944`.
+- The `state_chain.signing_key_file` should be the relayer's private key for their on-chain account. The account should be staked. The default is `/etc/chainflip/keys/signing_key_file`.
+- The `port` is the port on which the relayer will listen for connections. Use 0 to assign a random port. The default is 80.
 
 ```sh
 > ./target/release/chainflip-relayer --help
