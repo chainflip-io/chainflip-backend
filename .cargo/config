@@ -5,6 +5,8 @@
 # Run unit tests but not integration tests
 cf-test = "test --lib --all-features"
 
+cf-test-no-amm = "test --lib --all-features --workspace --exclude cf-amm"
+
 ci-check = "check --all-targets --all-features --release"
 
 cf-clippy = "clippy --all-targets --all-features"
