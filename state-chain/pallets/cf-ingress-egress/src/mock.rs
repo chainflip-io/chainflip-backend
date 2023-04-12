@@ -4,11 +4,11 @@ pub use cf_chains::{
 	eth::api::{EthereumApi, EthereumReplayProtection},
 	CcmIngressMetadata, Chain, ChainAbi, ChainEnvironment,
 };
-use cf_primitives::BroadcastId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
 	Asset, AssetAmount, EthereumAddress, ExchangeRate, ETHEREUM_ETH_ADDRESS,
 };
+use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 
 use frame_support::{
 	instances::Instance1,
@@ -107,18 +107,30 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 	type ApiCall = MockEthereumApiCall<MockEthEnvironment>;
 	type Callback = RuntimeCall;
 
+<<<<<<< HEAD
 	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
 		EgressedApiCall::set(Some(api_call));
 		1
+=======
+	fn threshold_sign_and_broadcast(
+		_api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
+		(1, 2)
+>>>>>>> origin/main
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
 		api_call: Self::ApiCall,
 		callback: Self::Callback,
+<<<<<<< HEAD
 	) -> BroadcastId {
 		EgressedApiCall::set(Some(api_call));
+=======
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
+		// TODO: Call the callback.
+>>>>>>> origin/main
 		let _ = callback.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
-		1
+		(1, 2)
 	}
 }
 
@@ -130,7 +142,7 @@ impl crate::Config<Instance1> for Test {
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;
 	type AddressDerivation = ();
-	type LpProvisioning = Self;
+	type LpBalance = Self;
 	type SwapIntentHandler = Self;
 	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;
 	type Broadcaster = MockBroadcast;

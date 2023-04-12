@@ -53,15 +53,11 @@ impl MockTrackedData {
 	}
 }
 
-impl Age<MockEthereum> for MockTrackedData {
-	fn birth_block(&self) -> u64 {
-		self.age
-	}
-}
+impl Age for MockTrackedData {
+	type BlockNumber = u64;
 
-impl GasPriceProvider for MockTrackedData {
-	fn gas_fee(&self) -> Option<AssetAmount> {
-		Some(self.base_fee.saturating_add(self.priority_fee))
+	fn birth_block(&self) -> Self::BlockNumber {
+		self.age
 	}
 }
 
@@ -231,11 +227,11 @@ impl<Abi: ChainAbi<Transaction = MockTransaction>, Call: ApiCall<Abi>> Transacti
 		MockTransaction {}
 	}
 
-	fn refresh_unsigned_transaction(_unsigned_tx: &mut <Abi as ChainAbi>::Transaction) {
+	fn refresh_unsigned_data(_unsigned_tx: &mut <Abi as ChainAbi>::Transaction) {
 		// refresh nothing
 	}
 
-	fn is_valid_for_rebroadcast(_call: &Call) -> bool {
+	fn is_valid_for_rebroadcast(_call: &Call, _payload: &<Abi as ChainCrypto>::Payload) -> bool {
 		IS_VALID_BROADCAST.with(|is_valid| *is_valid.borrow())
 	}
 }

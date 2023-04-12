@@ -16,12 +16,12 @@ impl<C> MockPallet for MockEgressHandler<C> {
 pub enum MockEgressParameter<C: Chain> {
 	Swap {
 		asset: C::ChainAsset,
-		amount: AssetAmount,
+		amount: C::ChainAmount,
 		egress_address: C::ChainAccount,
 	},
 	Ccm {
 		asset: C::ChainAsset,
-		amount: AssetAmount,
+		amount: C::ChainAmount,
 		egress_address: C::ChainAccount,
 		message: Vec<u8>,
 		refund_address: ForeignChainAddress,
@@ -34,6 +34,7 @@ impl<C: Chain> MockEgressParameter<C> {
 			Self::Swap { amount, .. } => *amount,
 			Self::Ccm { amount, .. } => *amount,
 		}
+		.into()
 	}
 }
 
@@ -57,7 +58,7 @@ impl<C: Chain> MockEgressHandler<C> {
 impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 	fn schedule_egress(
 		asset: <C as Chain>::ChainAsset,
-		amount: AssetAmount,
+		amount: <C as Chain>::ChainAmount,
 		egress_address: <C as Chain>::ChainAccount,
 		maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId {

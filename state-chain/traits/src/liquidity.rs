@@ -1,8 +1,7 @@
 use cf_chains::address::ForeignChainAddress;
-use cf_primitives::{AmmRange, Asset, AssetAmount, BurnResult, Liquidity, PoolAssetMap, Tick};
+use cf_primitives::{Asset, AssetAmount, BasisPoints};
 use frame_support::dispatch::DispatchError;
 use sp_runtime::DispatchResult;
-use sp_std::vec::Vec;
 
 pub trait SwapIntentHandler {
 	type AccountId;
@@ -14,15 +13,22 @@ pub trait SwapIntentHandler {
 		amount: AssetAmount,
 		egress_address: ForeignChainAddress,
 		relayer_id: Self::AccountId,
-		relayer_commission_bps: u16,
+		relayer_commission_bps: BasisPoints,
 	);
 }
 
-pub trait LpProvisioningApi {
+pub trait LpBalanceApi {
 	type AccountId;
 
-	/// Called when ingress is witnessed.
-	fn provision_account(
+	/// Attempt to credit the account with the given asset and amount.
+	fn try_credit_account(
+		who: &Self::AccountId,
+		asset: Asset,
+		amount: AssetAmount,
+	) -> DispatchResult;
+
+	/// Attempt to debit the account with the given asset and amount.
+	fn try_debit_account(
 		who: &Self::AccountId,
 		asset: Asset,
 		amount: AssetAmount,
@@ -49,46 +55,6 @@ impl SwappingApi for () {
 	}
 }
 
-/// API to interface with the Pools pallet to manage Uniswap v3 style Exchange Pools.
-/// All pools are Asset <-> USDC
-pub trait LiquidityPoolApi<AccountId> {
-	const STABLE_ASSET: Asset;
-
-	/// Deposit up to some amount of assets into an exchange pool.
-	///
-	/// The passed `try_debit` closure should debit the account balance and fail if this
-	/// is not possible.
-	///
-	/// Returns the harvested fees, if any.
-	fn mint(
-		lp: AccountId,
-		asset: Asset,
-		range: AmmRange,
-		liquidity_amount: Liquidity,
-		try_debit: impl FnOnce(PoolAssetMap<AssetAmount>) -> Result<(), DispatchError>,
-	) -> Result<PoolAssetMap<AssetAmount>, DispatchError>;
-
-	/// Burn some liquidity from an exchange pool to withdraw assets and harvest fees.
-	fn burn(
-		lp: AccountId,
-		asset: Asset,
-		range: AmmRange,
-		burnt_liquidity: Liquidity,
-	) -> Result<BurnResult, DispatchError>;
-
-	/// Returns the LP's minted liquidity for a specific position in a pool.
-	fn minted_liquidity(lp: &AccountId, asset: &Asset, range: AmmRange) -> Liquidity;
-
-	/// Returns all the minted position of given user and asset pool.
-	fn minted_positions(lp: &AccountId, asset: &Asset) -> Vec<(Tick, Tick, Liquidity)>;
-
-	/// Gets the current price of the pool in Tick.
-	fn current_tick(asset: &Asset) -> Option<Tick>;
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn new_pool(_asset: Asset) {}
-}
-
 // TODO Remove these in favour of a real mocks.
 impl<T: frame_system::Config> SwapIntentHandler for T {
 	type AccountId = T::AccountId;
@@ -100,15 +66,24 @@ impl<T: frame_system::Config> SwapIntentHandler for T {
 		_amount: AssetAmount,
 		_egress_address: ForeignChainAddress,
 		_relayer_id: Self::AccountId,
-		_relayer_commission_bps: u16,
+		_relayer_commission_bps: BasisPoints,
 	) {
 	}
 }
 
-impl<T: frame_system::Config> LpProvisioningApi for T {
+impl<T: frame_system::Config> LpBalanceApi for T {
 	type AccountId = T::AccountId;
 
-	fn provision_account(
+	fn try_credit_account(
+		_who: &Self::AccountId,
+		_asset: Asset,
+		_amount: AssetAmount,
+	) -> DispatchResult {
+		// TODO
+		Ok(())
+	}
+
+	fn try_debit_account(
 		_who: &Self::AccountId,
 		_asset: Asset,
 		_amount: AssetAmount,

@@ -13,7 +13,6 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_chains::{Age, Chain};
-use cf_primitives::AssetAmount;
 use cf_traits::Chainflip;
 use frame_support::dispatch::DispatchResultWithPostInfo;
 use frame_system::pallet_prelude::OriginFor;
@@ -23,7 +22,6 @@ use sp_std::marker::PhantomData;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::GasPriceProvider;
 	use frame_support::pallet_prelude::*;
 
 	#[pallet::config]
@@ -50,6 +48,7 @@ pub mod pallet {
 
 	/// The tracked state of the external chain.
 	#[pallet::storage]
+	#[pallet::getter(fn chain_state)]
 	pub type ChainState<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, <T::TargetChain as Chain>::TrackedData>;
 
@@ -82,7 +81,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			state: <T::TargetChain as Chain>::TrackedData,
 		) -> DispatchResultWithPostInfo {
-			let _ok = T::EnsureWitnessed::ensure_origin(origin)?;
+			T::EnsureWitnessed::ensure_origin(origin)?;
 
 			ChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|maybe_previous| {
 				if let Some(previous) = maybe_previous.replace(state.clone()) {
@@ -100,16 +99,6 @@ pub mod pallet {
 			Self::deposit_event(Event::<T, I>::ChainStateUpdated { state });
 
 			Ok(().into())
-		}
-	}
-
-	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		pub fn gas_fee() -> Option<AssetAmount> {
-			if let Some(data) = ChainState::<T, I>::get() {
-				data.gas_fee()
-			} else {
-				None
-			}
 		}
 	}
 }

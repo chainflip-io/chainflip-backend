@@ -337,7 +337,7 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			T::PolkadotBroadcaster::threshold_sign_and_broadcast(
-				T::CreatePolkadotVault::new_unsigned(dot_aggkey),
+				T::CreatePolkadotVault::new_unsigned(),
 			);
 			Self::deposit_event(Event::<T>::PolkadotVaultCreationCallInitiated {
 				agg_key: dot_aggkey,
@@ -380,6 +380,12 @@ pub mod pallet {
 				polkadot_vault_account_id: dot_pure_proxy_vault_key,
 			});
 
+			// The initial polkadot vault creation is special in that the *new* aggkey submits the
+			// creating transaction. So the aggkey account does not need to be reset.
+			// However, `on_new_key_activated` indirectly resets the nonce. So we get it here and
+			// then we can set it again below.
+			let correct_nonce = PolkadotProxyAccountNonce::<T>::get();
+
 			// Witness the agg_key rotation manually in the vaults pallet for polkadot
 			let dispatch_result = T::PolkadotVaultKeyWitnessedHandler::on_new_key_activated(
 				dot_witnessed_aggkey,
@@ -389,7 +395,7 @@ pub mod pallet {
 			// Clean up the broadcast state.
 			T::PolkadotBroadcaster::clean_up_broadcast(broadcast_id)?;
 
-			Self::next_polkadot_proxy_account_nonce();
+			PolkadotProxyAccountNonce::<T>::set(correct_nonce);
 			Ok(dispatch_result)
 		}
 
@@ -592,7 +598,7 @@ impl<T: Config> Pallet<T> {
 			select_utxos_from_pool(
 				available_utxos,
 				BitcoinFeePerUtxo::<T>::get(),
-				total_output_amount.try_into().expect("Btc amounts never exceed u64 max, this is made shure elsewhere by the AMM when it calculates how much amounts to output"),
+				total_output_amount,
 			)
 		})
 	}
