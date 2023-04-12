@@ -65,7 +65,7 @@ pub enum VaultEvent {
 		amount: u128,
 		sender: ethabi::Address,
 		message: web3::types::Bytes,
-		native_gas_amount: u128,
+		gas_amount: u128,
 		refund_address: web3::types::Bytes,
 	},
 	XCallToken {
@@ -76,7 +76,7 @@ pub enum VaultEvent {
 		amount: u128,
 		sender: ethabi::Address,
 		message: web3::types::Bytes,
-		native_gas_amount: u128,
+		gas_amount: u128,
 		refund_address: web3::types::Bytes,
 	},
 	AddGasNative {
@@ -196,7 +196,7 @@ impl EthContractWitnesser for Vault {
 							.expect("XCallNative amount should fit into u128"),
 						sender: utils::decode_log_param(&log, "sender")?,
 						message: utils::decode_log_param(&log, "message")?,
-						native_gas_amount: utils::decode_log_param(&log, "gasAmount")?,
+						gas_amount: utils::decode_log_param(&log, "gasAmount")?,
 						refund_address: utils::decode_log_param(&log, "refundAddress")?,
 					}
 				} else if event_signature == xcall_token.signature {
@@ -211,7 +211,7 @@ impl EthContractWitnesser for Vault {
 							.expect("XCallToken amount should fit into u128"),
 						sender: utils::decode_log_param(&log, "sender")?,
 						message: utils::decode_log_param(&log, "message")?,
-						native_gas_amount: utils::decode_log_param(&log, "gasAmount")?,
+						gas_amount: utils::decode_log_param(&log, "gasAmount")?,
 						refund_address: utils::decode_log_param(&log, "refundAddress")?,
 					}
 				} else if event_signature == add_gas_token.signature {
