@@ -15,6 +15,50 @@
     "inputs": [
       {
         "indexed": false,
+        "internalType": "bytes32",
+        "name": "swapID",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "AddGasNative",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "swapID",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      }
+    ],
+    "name": "AddGasToken",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
         "internalType": "bool",
         "name": "communityGuardDisabled",
         "type": "bool"
@@ -41,24 +85,36 @@
     "inputs": [
       {
         "indexed": false,
+        "internalType": "uint32",
+        "name": "dstChain",
+        "type": "uint32"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes",
+        "name": "dstAddress",
+        "type": "bytes"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint32",
+        "name": "dstToken",
+        "type": "uint32"
+      },
+      {
+        "indexed": false,
         "internalType": "uint256",
         "name": "amount",
         "type": "uint256"
       },
       {
-        "indexed": false,
-        "internalType": "string",
-        "name": "egressParams",
-        "type": "string"
-      },
-      {
-        "indexed": false,
-        "internalType": "bytes32",
-        "name": "egressReceiver",
-        "type": "bytes32"
+        "indexed": true,
+        "internalType": "address",
+        "name": "sender",
+        "type": "address"
       }
     ],
-    "name": "SwapETH",
+    "name": "SwapNative",
     "type": "event"
   },
   {
@@ -66,8 +122,26 @@
     "inputs": [
       {
         "indexed": false,
+        "internalType": "uint32",
+        "name": "dstChain",
+        "type": "uint32"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes",
+        "name": "dstAddress",
+        "type": "bytes"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint32",
+        "name": "dstToken",
+        "type": "uint32"
+      },
+      {
+        "indexed": false,
         "internalType": "address",
-        "name": "ingressToken",
+        "name": "srcToken",
         "type": "address"
       },
       {
@@ -77,16 +151,10 @@
         "type": "uint256"
       },
       {
-        "indexed": false,
-        "internalType": "string",
-        "name": "egressParams",
-        "type": "string"
-      },
-      {
-        "indexed": false,
-        "internalType": "bytes32",
-        "name": "egressReceiver",
-        "type": "bytes32"
+        "indexed": true,
+        "internalType": "address",
+        "name": "sender",
+        "type": "address"
       }
     ],
     "name": "SwapToken",
@@ -96,13 +164,19 @@
     "anonymous": false,
     "inputs": [
       {
+        "indexed": true,
+        "internalType": "address payable",
+        "name": "recipient",
+        "type": "address"
+      },
+      {
         "indexed": false,
-        "internalType": "bool",
-        "name": "enabled",
-        "type": "bool"
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
       }
     ],
-    "name": "SwapsEnabled",
+    "name": "TransferNativeFailed",
     "type": "event"
   },
   {
@@ -121,13 +195,19 @@
         "type": "uint256"
       },
       {
+        "indexed": true,
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
         "indexed": false,
         "internalType": "bytes",
-        "name": "lowLevelData",
+        "name": "reason",
         "type": "bytes"
       }
     ],
-    "name": "TransferFailed",
+    "name": "TransferTokenFailed",
     "type": "event"
   },
   {
@@ -142,6 +222,158 @@
     ],
     "name": "UpdatedKeyManager",
     "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint32",
+        "name": "dstChain",
+        "type": "uint32"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes",
+        "name": "dstAddress",
+        "type": "bytes"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint32",
+        "name": "dstToken",
+        "type": "uint32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "sender",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes",
+        "name": "message",
+        "type": "bytes"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "gasAmount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes",
+        "name": "refundAddress",
+        "type": "bytes"
+      }
+    ],
+    "name": "XCallNative",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint32",
+        "name": "dstChain",
+        "type": "uint32"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes",
+        "name": "dstAddress",
+        "type": "bytes"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint32",
+        "name": "dstToken",
+        "type": "uint32"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "srcToken",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "sender",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes",
+        "name": "message",
+        "type": "bytes"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "gasAmount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes",
+        "name": "refundAddress",
+        "type": "bytes"
+      }
+    ],
+    "name": "XCallToken",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "swapID",
+        "type": "bytes32"
+      }
+    ],
+    "name": "addGasNative",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "swapID",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "contract IERC20",
+        "name": "token",
+        "type": "address"
+      }
+    ],
+    "name": "addGasToken",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   },
   {
     "inputs": [
@@ -190,7 +422,24 @@
             "type": "bytes32"
           },
           {
-            "internalType": "contract IERC20",
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.DeployFetchParams[]",
+        "name": "deployFetchParamsArray",
+        "type": "tuple[]"
+      },
+      {
+        "components": [
+          {
+            "internalType": "address payable",
+            "name": "fetchContract",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
             "name": "token",
             "type": "address"
           }
@@ -202,7 +451,7 @@
       {
         "components": [
           {
-            "internalType": "contract IERC20",
+            "internalType": "address",
             "name": "token",
             "type": "address"
           },
@@ -228,15 +477,70 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "disableCommunityGuard",
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "keyManAddr",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "chainID",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "msgHash",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddress",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
+            "internalType": "bytes32",
+            "name": "swapID",
+            "type": "bytes32"
+          },
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.DeployFetchParams[]",
+        "name": "deployFetchParamsArray",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "deployAndFetchBatch",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [],
-    "name": "disableSwaps",
+    "name": "disableCommunityGuard",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -249,13 +553,6 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "enableSwaps",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
     "inputs": [
       {
         "components": [
@@ -295,12 +592,54 @@
         "type": "tuple"
       },
       {
-        "internalType": "bytes32",
-        "name": "swapID",
-        "type": "bytes32"
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address payable",
+        "name": "multicallAddr",
+        "type": "address"
+      },
+      {
+        "components": [
+          {
+            "internalType": "enum IMulticall.CallType",
+            "name": "callType",
+            "type": "uint8"
+          },
+          {
+            "internalType": "address",
+            "name": "target",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "value",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bytes",
+            "name": "callData",
+            "type": "bytes"
+          },
+          {
+            "internalType": "bytes",
+            "name": "payload",
+            "type": "bytes"
+          }
+        ],
+        "internalType": "struct IMulticall.Call[]",
+        "name": "calls",
+        "type": "tuple[]"
       }
     ],
-    "name": "fetchDepositEth",
+    "name": "executeActions",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -345,12 +684,27 @@
         "type": "tuple"
       },
       {
-        "internalType": "bytes32[]",
-        "name": "swapIDs",
-        "type": "bytes32[]"
+        "internalType": "address",
+        "name": "recipient",
+        "type": "address"
+      },
+      {
+        "internalType": "uint32",
+        "name": "srcChain",
+        "type": "uint32"
+      },
+      {
+        "internalType": "bytes",
+        "name": "srcAddress",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "message",
+        "type": "bytes"
       }
     ],
-    "name": "fetchDepositEthBatch",
+    "name": "executexCall",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -397,22 +751,42 @@
       {
         "components": [
           {
-            "internalType": "bytes32",
-            "name": "swapID",
-            "type": "bytes32"
-          },
-          {
-            "internalType": "contract IERC20",
+            "internalType": "address",
             "name": "token",
             "type": "address"
+          },
+          {
+            "internalType": "address payable",
+            "name": "recipient",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
           }
         ],
-        "internalType": "struct IShared.FetchParams",
-        "name": "fetchParams",
+        "internalType": "struct IShared.TransferParams",
+        "name": "transferParams",
         "type": "tuple"
+      },
+      {
+        "internalType": "uint32",
+        "name": "srcChain",
+        "type": "uint32"
+      },
+      {
+        "internalType": "bytes",
+        "name": "srcAddress",
+        "type": "bytes"
+      },
+      {
+        "internalType": "bytes",
+        "name": "message",
+        "type": "bytes"
       }
     ],
-    "name": "fetchDepositToken",
+    "name": "executexSwapAndCall",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -459,12 +833,12 @@
       {
         "components": [
           {
-            "internalType": "bytes32",
-            "name": "swapID",
-            "type": "bytes32"
+            "internalType": "address payable",
+            "name": "fetchContract",
+            "type": "address"
           },
           {
-            "internalType": "contract IERC20",
+            "internalType": "address",
             "name": "token",
             "type": "address"
           }
@@ -474,7 +848,7 @@
         "type": "tuple[]"
       }
     ],
-    "name": "fetchDepositTokenBatch",
+    "name": "fetchBatch",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -545,22 +919,9 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "getSwapsEnabled",
-    "outputs": [
-      {
-        "internalType": "bool",
-        "name": "",
-        "type": "bool"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [
       {
-        "internalType": "contract IERC20[]",
+        "internalType": "address[]",
         "name": "tokens",
         "type": "address[]"
       }
@@ -578,67 +939,8 @@
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "address payable",
-        "name": "recipient",
-        "type": "address"
-      }
-    ],
-    "name": "sendEth",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "suspend",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "egressParams",
-        "type": "string"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "egressReceiver",
-        "type": "bytes32"
-      }
-    ],
-    "name": "swapETH",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "string",
-        "name": "egressParams",
-        "type": "string"
-      },
-      {
-        "internalType": "bytes32",
-        "name": "egressReceiver",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "contract IERC20",
-        "name": "ingressToken",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "swapToken",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -685,7 +987,7 @@
       {
         "components": [
           {
-            "internalType": "contract IERC20",
+            "internalType": "address",
             "name": "token",
             "type": "address"
           },
@@ -752,7 +1054,7 @@
       {
         "components": [
           {
-            "internalType": "contract IERC20",
+            "internalType": "address",
             "name": "token",
             "type": "address"
           },
@@ -823,6 +1125,148 @@
       }
     ],
     "name": "updateKeyManager",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "dstChain",
+        "type": "uint32"
+      },
+      {
+        "internalType": "bytes",
+        "name": "dstAddress",
+        "type": "bytes"
+      },
+      {
+        "internalType": "uint32",
+        "name": "dstToken",
+        "type": "uint32"
+      },
+      {
+        "internalType": "bytes",
+        "name": "message",
+        "type": "bytes"
+      },
+      {
+        "internalType": "uint256",
+        "name": "gasAmount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "refundAddress",
+        "type": "bytes"
+      }
+    ],
+    "name": "xCallNative",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "dstChain",
+        "type": "uint32"
+      },
+      {
+        "internalType": "bytes",
+        "name": "dstAddress",
+        "type": "bytes"
+      },
+      {
+        "internalType": "uint32",
+        "name": "dstToken",
+        "type": "uint32"
+      },
+      {
+        "internalType": "bytes",
+        "name": "message",
+        "type": "bytes"
+      },
+      {
+        "internalType": "uint256",
+        "name": "gasAmount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "contract IERC20",
+        "name": "srcToken",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes",
+        "name": "refundAddress",
+        "type": "bytes"
+      }
+    ],
+    "name": "xCallToken",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "dstChain",
+        "type": "uint32"
+      },
+      {
+        "internalType": "bytes",
+        "name": "dstAddress",
+        "type": "bytes"
+      },
+      {
+        "internalType": "uint32",
+        "name": "dstToken",
+        "type": "uint32"
+      }
+    ],
+    "name": "xSwapNative",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint32",
+        "name": "dstChain",
+        "type": "uint32"
+      },
+      {
+        "internalType": "bytes",
+        "name": "dstAddress",
+        "type": "bytes"
+      },
+      {
+        "internalType": "uint32",
+        "name": "dstToken",
+        "type": "uint32"
+      },
+      {
+        "internalType": "contract IERC20",
+        "name": "srcToken",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "xSwapToken",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
