@@ -72,7 +72,7 @@ pub async fn test_all_vault_events() {
 			sender: web3::types::H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266")
 				.unwrap(),
 			message: Bytes(vec![164, 85]),
-			destination_native_budget: 42069,
+			gas_amount: 42069,
 			refund_address: Bytes(vec![164, 85]),
 		}
 	));
@@ -87,7 +87,7 @@ pub async fn test_all_vault_events() {
 			sender: web3::types::H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266")
 				.unwrap(),
 			message: Bytes(vec![164, 85]),
-			destination_native_budget: 42069,
+			gas_amount: 42069,
 			refund_address: Bytes(vec![164, 85]),
 			source_token: web3::types::H160::from_str("0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9")
 				.unwrap(),

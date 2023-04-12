@@ -97,9 +97,9 @@
       },
       {
         "indexed": false,
-        "internalType": "uint16",
+        "internalType": "uint32",
         "name": "dstToken",
-        "type": "uint16"
+        "type": "uint32"
       },
       {
         "indexed": false,
@@ -134,9 +134,9 @@
       },
       {
         "indexed": false,
-        "internalType": "uint16",
+        "internalType": "uint32",
         "name": "dstToken",
-        "type": "uint16"
+        "type": "uint32"
       },
       {
         "indexed": false,
@@ -240,9 +240,9 @@
       },
       {
         "indexed": false,
-        "internalType": "uint16",
+        "internalType": "uint32",
         "name": "dstToken",
-        "type": "uint16"
+        "type": "uint32"
       },
       {
         "indexed": false,
@@ -265,7 +265,7 @@
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "dstNativeBudget",
+        "name": "gasAmount",
         "type": "uint256"
       },
       {
@@ -295,9 +295,9 @@
       },
       {
         "indexed": false,
-        "internalType": "uint16",
+        "internalType": "uint32",
         "name": "dstToken",
-        "type": "uint16"
+        "type": "uint32"
       },
       {
         "indexed": false,
@@ -326,7 +326,7 @@
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "dstNativeBudget",
+        "name": "gasAmount",
         "type": "uint256"
       },
       {
@@ -338,42 +338,6 @@
     ],
     "name": "XCallToken",
     "type": "event"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "swapID",
-        "type": "bytes32"
-      }
-    ],
-    "name": "addGasNative",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "swapID",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "contract IERC20",
-        "name": "token",
-        "type": "address"
-      }
-    ],
-    "name": "addGasToken",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
   },
   {
     "inputs": [
@@ -584,6 +548,98 @@
   {
     "inputs": [],
     "name": "enableCommunityGuard",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "keyManAddr",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "chainID",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "msgHash",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddress",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "address payable",
+        "name": "multicallAddr",
+        "type": "address"
+      },
+      {
+        "components": [
+          {
+            "internalType": "enum IMulticall.CallType",
+            "name": "callType",
+            "type": "uint8"
+          },
+          {
+            "internalType": "address",
+            "name": "target",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "value",
+            "type": "uint256"
+          },
+          {
+            "internalType": "bytes",
+            "name": "callData",
+            "type": "bytes"
+          },
+          {
+            "internalType": "bytes",
+            "name": "payload",
+            "type": "bytes"
+          }
+        ],
+        "internalType": "struct IMulticall.Call[]",
+        "name": "calls",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "executeActions",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -1086,9 +1142,9 @@
         "type": "bytes"
       },
       {
-        "internalType": "uint16",
+        "internalType": "uint32",
         "name": "dstToken",
-        "type": "uint16"
+        "type": "uint32"
       },
       {
         "internalType": "bytes",
@@ -1097,7 +1153,7 @@
       },
       {
         "internalType": "uint256",
-        "name": "dstNativeBudget",
+        "name": "gasAmount",
         "type": "uint256"
       },
       {
@@ -1124,9 +1180,9 @@
         "type": "bytes"
       },
       {
-        "internalType": "uint16",
+        "internalType": "uint32",
         "name": "dstToken",
-        "type": "uint16"
+        "type": "uint32"
       },
       {
         "internalType": "bytes",
@@ -1135,7 +1191,7 @@
       },
       {
         "internalType": "uint256",
-        "name": "dstNativeBudget",
+        "name": "gasAmount",
         "type": "uint256"
       },
       {
@@ -1172,9 +1228,9 @@
         "type": "bytes"
       },
       {
-        "internalType": "uint16",
+        "internalType": "uint32",
         "name": "dstToken",
-        "type": "uint16"
+        "type": "uint32"
       }
     ],
     "name": "xSwapNative",
@@ -1195,9 +1251,9 @@
         "type": "bytes"
       },
       {
-        "internalType": "uint16",
+        "internalType": "uint32",
         "name": "dstToken",
-        "type": "uint16"
+        "type": "uint32"
       },
       {
         "internalType": "contract IERC20",
