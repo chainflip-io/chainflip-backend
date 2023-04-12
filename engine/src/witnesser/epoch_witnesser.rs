@@ -167,7 +167,7 @@ where
 
 pub async fn run_witnesser_block_stream<Witnesser>(
 	mut witnesser: Witnesser,
-	mut data_stream: std::pin::Pin<
+	mut block_stream: std::pin::Pin<
 		Box<dyn futures::Stream<Item = anyhow::Result<Witnesser::Data>> + Send + 'static>,
 	>,
 	end_witnessing_receiver: oneshot::Receiver<BlockNumber<Witnesser>>,
@@ -187,11 +187,11 @@ where
 			Ok(last_block_number) = &mut end_witnessing_receiver => {
 				last_block_number_for_epoch = Some(last_block_number);
 			},
-			Some(data) = data_stream.next() => {
+			Some(block) = block_stream.next() => {
 				// This will be an error if the stream times out. When it does, we return
 				// an error so that we restart the witnesser.
-				let block = data.map_err(|e| {
-					error!("Error while getting data for witnesser: {:?}", e);
+				let block = block.map_err(|e| {
+					error!("Error while getting block for witnesser: {:?}", e);
 				})?;
 
 				if let Some(last_block_number_for_epoch) = last_block_number_for_epoch {
