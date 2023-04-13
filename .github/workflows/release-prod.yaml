@@ -37,13 +37,13 @@ jobs:
         uses: actions/checkout@v3
       - name: Update APT
         run: apt update
-      - name: cargo ci-build
+      - name: cargo cf-build-ci
         run: |
-          cargo ci-build --locked
+          cargo cf-build-ci --locked
           # sccache --show-stats
-      - name: cargo ci-test --locked
+      - name: cargo cf-test-ci --locked
         run: |
-          cargo ci-test --locked
+          cargo cf-test-ci --locked
           # sccache --show-stats
       - name: Install cargo-deb
         run: cargo install cargo-deb
