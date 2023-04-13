@@ -684,7 +684,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		intent_action: IntentAction<T::AccountId>,
 	) -> Result<(IntentId, TargetChainAccount<T, I>), DispatchError> {
 		// We have an address available, so we can just use it.
-		let (address, intent_id, ingress_fetch_id_of) =
+		let (address, intent_id, ingress_fetch_id) =
 			if let Some((intent_id, address)) = AddressPool::<T, I>::drain().next() {
 				(address.clone(), intent_id, IngressFetchIdOf::<T, I>::deployed(intent_id, address))
 			} else {
@@ -701,7 +701,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					IngressFetchIdOf::<T, I>::undeployed(next_intent_id, new_address),
 				)
 			};
-		FetchParamDetails::<T, I>::insert(intent_id, (ingress_fetch_id_of, address.clone()));
+		FetchParamDetails::<T, I>::insert(intent_id, (ingress_fetch_id, address.clone()));
 		IntentExpiries::<T, I>::append(
 			frame_system::Pallet::<T>::current_block_number() + T::IntentTTL::get(),
 			(intent_id, address.clone()),
