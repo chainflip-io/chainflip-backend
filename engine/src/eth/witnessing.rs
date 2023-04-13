@@ -85,7 +85,7 @@ pub async fn start(
 			initial_block_hash,
 		)
 		.await
-		.context("Failed to get KeyManager address from SC")?;
+		.context("Failed to get Vault contract address from SC")?;
 
 	let usdc_address = state_chain_client
 		.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
