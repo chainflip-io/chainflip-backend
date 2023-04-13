@@ -59,7 +59,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Check Linting
-        run: cargo ci-clippy
+        run: cargo cf-clippy-ci
 
   cargo-doc:
     runs-on: [hetzner]
@@ -118,13 +118,13 @@ jobs:
           tar -xvf sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz
           mv sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl/sccache /usr/local/bin
       - run: sccache --show-stats
-      - name: cargo ci-build
+      - name: cargo cf-build-ci
         run: |
-          cargo ci-build --locked
+          cargo cf-build-ci --locked
           sccache --show-stats
-      - name: cargo ci-test --locked
+      - name: cargo cf-test-ci --locked
         run: |
-          cargo ci-test --locked
+          cargo cf-test-ci --locked
           sccache --show-stats
       - name: Install cargo-deb
         run: cargo install cargo-deb
