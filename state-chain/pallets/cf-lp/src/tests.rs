@@ -1,6 +1,6 @@
 use crate::{mock::*, FreeBalances};
 
-use cf_chains::address::ForeignChainAddress;
+use cf_chains::address::EncodedAddress;
 use cf_primitives::{liquidity::AmmRange, AccountId, Asset, PoolAssetMap};
 use cf_traits::{mocks::system_state_info::MockSystemStateInfo, LiquidityPoolApi, SystemStateInfo};
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
@@ -37,7 +37,7 @@ fn egress_chain_and_asset_must_match() {
 				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				1,
 				Asset::Eth,
-				ForeignChainAddress::Dot([0x00; 32]),
+				EncodedAddress::Dot(Default::default()),
 			),
 			crate::Error::<Test>::InvalidEgressAddress
 		);
@@ -55,7 +55,7 @@ fn liquidity_providers_can_withdraw_asset() {
 				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				100,
 				Asset::Dot,
-				ForeignChainAddress::Eth([0x00; 20]),
+				EncodedAddress::Eth(Default::default()),
 			),
 			crate::Error::<Test>::InvalidEgressAddress
 		);
@@ -65,7 +65,7 @@ fn liquidity_providers_can_withdraw_asset() {
 				RuntimeOrigin::signed(NON_LP_ACCOUNT.into()),
 				100,
 				Asset::Eth,
-				ForeignChainAddress::Eth([0x00; 20]),
+				EncodedAddress::Eth(Default::default()),
 			),
 			BadOrigin
 		);
@@ -74,7 +74,7 @@ fn liquidity_providers_can_withdraw_asset() {
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			100,
 			Asset::Eth,
-			ForeignChainAddress::Eth([0x00; 20]),
+			EncodedAddress::Eth(Default::default()),
 		));
 
 		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth), Some(900));
@@ -105,7 +105,7 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				100,
 				Asset::Eth,
-				ForeignChainAddress::Eth([0x00; 20]),
+				EncodedAddress::Eth(Default::default()),
 			),
 			"We are in maintenance!"
 		);
@@ -124,7 +124,7 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			100,
 			Asset::Eth,
-			ForeignChainAddress::Eth([0x00; 20]),
+			EncodedAddress::Eth(Default::default()),
 		));
 	});
 }

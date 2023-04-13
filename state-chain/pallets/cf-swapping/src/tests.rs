@@ -1,15 +1,12 @@
 use crate::{mock::*, EarnedRelayerFees, Error, Pallet, Swap, SwapQueue, SwapType, WeightInfo};
 use cf_chains::{
-	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
+	address::{EncodedAddress, ForeignChainAddress},
 	AnyChain,
 };
-use cf_primitives::{Asset, EthereumAddress, ForeignChain};
+use cf_primitives::{Asset, ForeignChain};
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
-	mocks::{
-		address_converter::MockAddressConverter,
-		egress_handler::{MockEgressHandler, MockEgressParameter},
-	},
+	mocks::egress_handler::{MockEgressHandler, MockEgressParameter},
 	SwapIntentHandler,
 };
 use frame_support::{assert_noop, assert_ok, sp_std::iter, weights::Weight};
@@ -200,13 +197,10 @@ fn expect_swap_id_to_be_emitted() {
 		assert_event_sequence!(
 			Test,
 			crate::mock::RuntimeEvent::Swapping(crate::Event::NewSwapIntent {
-				ingress_address: MockAddressConverter::to_encoded_address(
-					ForeignChainAddress::Eth(<EthereumAddress as Default>::default())
-				)
-				.unwrap(),
+				ingress_address: EncodedAddress::Eth(Default::default()),
 			}),
 			crate::mock::RuntimeEvent::Swapping(crate::Event::SwapIngressReceived {
-				ingress_address: ForeignChainAddress::Eth(Default::default()),
+				ingress_address: EncodedAddress::Eth(Default::default()),
 				swap_id: 1,
 				ingress_amount: 500,
 			}),
@@ -228,7 +222,7 @@ fn withdraw_relayer_fees() {
 			Swapping::withdraw(
 				RuntimeOrigin::signed(ALICE),
 				Asset::Eth,
-				ForeignChainAddress::Eth(Default::default()),
+				EncodedAddress::Eth(Default::default()),
 			),
 			<Error<Test>>::NoFundsAvailable
 		);
@@ -236,7 +230,7 @@ fn withdraw_relayer_fees() {
 		assert_ok!(Swapping::withdraw(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
-			ForeignChainAddress::Eth(Default::default()),
+			EncodedAddress::Eth(Default::default()),
 		));
 		let mut egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
 		assert!(egresses.len() == 1);
@@ -245,7 +239,7 @@ fn withdraw_relayer_fees() {
 			crate::Event::<Test>::WithdrawalRequested {
 				egress_id: (ForeignChain::Ethereum, 1),
 				amount: 200,
-				address: ForeignChainAddress::Eth(Default::default()),
+				address: EncodedAddress::Eth(Default::default()),
 			},
 		));
 	});
@@ -259,14 +253,14 @@ fn can_swap_using_witness_origin() {
 			Asset::Eth,
 			Asset::Flip,
 			1_000,
-			ForeignChainAddress::Eth([0u8; 20]),
+			EncodedAddress::Eth(Default::default()),
 		));
 
 		System::assert_last_event(RuntimeEvent::Swapping(
 			crate::Event::<Test>::SwapScheduledByWitnesser {
 				swap_id: 1,
 				ingress_amount: 1_000,
-				egress_address: ForeignChainAddress::Eth([0u8; 20]),
+				egress_address: EncodedAddress::Eth(Default::default()),
 			},
 		));
 	});

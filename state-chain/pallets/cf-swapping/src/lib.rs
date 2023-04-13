@@ -136,13 +136,13 @@ pub mod pallet {
 		/// The swap ingress was received.
 		SwapIngressReceived {
 			swap_id: u64,
-			ingress_address: ForeignChainAddress,
+			ingress_address: EncodedAddress,
 			ingress_amount: AssetAmount,
 		},
 		SwapScheduledByWitnesser {
 			swap_id: u64,
 			ingress_amount: AssetAmount,
-			egress_address: ForeignChainAddress,
+			egress_address: EncodedAddress,
 		},
 		/// A swap was executed.
 		SwapExecuted {
@@ -158,7 +158,7 @@ pub mod pallet {
 		/// A withdrawal was requested.
 		WithdrawalRequested {
 			amount: AssetAmount,
-			address: ForeignChainAddress,
+			address: EncodedAddress,
 			egress_id: EgressId,
 		},
 		BatchSwapFailed {
@@ -278,13 +278,18 @@ pub mod pallet {
 		pub fn withdraw(
 			origin: OriginFor<T>,
 			asset: Asset,
-			egress_address: ForeignChainAddress,
+			egress_address: EncodedAddress,
 		) -> DispatchResult {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_relayer(origin)?;
 
+			let egress_address_internal =
+				T::AddressConverter::from_encoded_address(egress_address.clone()).map_err(
+					|_| DispatchError::Other("Invalid Egress Address, cannot decode the address"),
+				)?;
+
 			ensure!(
-				ForeignChain::from(egress_address.clone()) == ForeignChain::from(asset),
+				ForeignChain::from(egress_address_internal.clone()) == ForeignChain::from(asset),
 				Error::<T>::InvalidEgressAddress
 			);
 
@@ -293,8 +298,13 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
 				amount,
-				address: egress_address.clone(),
-				egress_id: T::EgressHandler::schedule_egress(asset, amount, egress_address, None),
+				address: egress_address,
+				egress_id: T::EgressHandler::schedule_egress(
+					asset,
+					amount,
+					egress_address_internal,
+					None,
+				),
 			});
 
 			Ok(())
@@ -312,15 +322,20 @@ pub mod pallet {
 			from: Asset,
 			to: Asset,
 			ingress_amount: AssetAmount,
-			egress_address: ForeignChainAddress,
+			egress_address: EncodedAddress,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			let egress_address_internal =
+				T::AddressConverter::from_encoded_address(egress_address.clone()).map_err(
+					|_| DispatchError::Other("Invalid Egress Address, cannot decode the address"),
+				)?;
 
 			let swap_id = Self::schedule_swap(
 				from,
 				to,
 				ingress_amount,
-				SwapType::Swap(egress_address.clone()),
+				SwapType::Swap(egress_address_internal),
 			);
 
 			Self::deposit_event(Event::<T>::SwapScheduledByWitnesser {
@@ -341,18 +356,24 @@ pub mod pallet {
 			ingress_asset: Asset,
 			ingress_amount: AssetAmount,
 			egress_asset: Asset,
-			egress_address: ForeignChainAddress,
+			egress_address: EncodedAddress,
 			message_metadata: CcmIngressMetadata,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
+			let egress_address_internal = T::AddressConverter::from_encoded_address(egress_address)
+				.map_err(|_| {
+					DispatchError::Other("Invalid Egress Address, cannot decode the address")
+				})?;
+
 			// Currently only Ethereum supports CCM.
 			ensure!(
-				ForeignChain::Ethereum == egress_asset.into(),
+				ForeignChain::Ethereum == egress_address_internal.clone().into(),
 				Error::<T>::CcmUnsupportedForTargetChain
 			);
 			ensure!(
-				ForeignChain::from(egress_asset) == ForeignChain::from(egress_address.clone()),
+				ForeignChain::from(egress_asset) ==
+					ForeignChain::from(egress_address_internal.clone()),
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 
@@ -360,7 +381,7 @@ pub mod pallet {
 				ingress_asset,
 				ingress_amount,
 				egress_asset,
-				egress_address,
+				egress_address_internal,
 				message_metadata,
 			)
 		}
@@ -572,7 +593,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::SwapIngressReceived {
 				swap_id,
-				ingress_address,
+				ingress_address: T::AddressConverter::to_encoded_address(ingress_address).expect("This should not fail since this conversion happens during the pipeline of a swap and ingress address has already been successfully converted in this way at the start of the swap in request_swap_intent"),
 				ingress_amount: amount,
 			});
 		}

@@ -57,7 +57,7 @@ benchmarks! {
 	} : _(
 		RawOrigin::Signed(caller.clone()),
 		Asset::Eth,
-		ForeignChainAddress::Eth(Default::default())
+		EncodedAddress::Eth(Default::default())
 	)
 
 	schedule_swap_by_witnesser {
@@ -66,7 +66,7 @@ benchmarks! {
 			from: Asset::Usdc,
 			to: Asset::Eth,
 			ingress_amount: 1_000,
-			egress_address: ForeignChainAddress::Eth(Default::default())
+			egress_address: EncodedAddress::Eth(Default::default())
 		};
 	}: {
 		call.dispatch_bypass_filter(origin)?;
@@ -92,7 +92,7 @@ benchmarks! {
 			ingress_asset: Asset::Usdc,
 			ingress_amount: 1_000,
 			egress_asset: Asset::Eth,
-			egress_address: ForeignChainAddress::Eth(Default::default()),
+			egress_address: EncodedAddress::Eth(Default::default()),
 			message_metadata: metadata,
 		};
 	}: {

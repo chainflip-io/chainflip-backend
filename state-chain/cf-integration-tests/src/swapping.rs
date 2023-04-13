@@ -1,5 +1,5 @@
 //! Contains tests related to liquidity, pools and swapping
-use cf_chains::address::EncodedAddress;
+use cf_chains::address::{AddressConverter, EncodedAddress};
 use cf_test_utilities::{assert_has_event_pattern, extract_from_event};
 use frame_support::{
 	assert_noop, assert_ok,
@@ -7,9 +7,9 @@ use frame_support::{
 };
 use sp_core::H160;
 use state_chain_runtime::{
-	chainflip::address_derivation::AddressDerivation, AccountRoles, EpochInfo, EthereumInstance,
-	LiquidityPools, LiquidityProvider, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
-	System, Validator, Weight, Witnesser,
+	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter},
+	AccountRoles, EpochInfo, EthereumInstance, LiquidityPools, LiquidityProvider, Runtime,
+	RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping, System, Validator, Weight, Witnesser,
 };
 
 use cf_primitives::{
@@ -155,7 +155,11 @@ fn can_swap_assets() {
 				..
 			}) => (swap_id, ingress_address)
 		);
-		assert_eq!(ingress_address, expected_ingress_address.into());
+		assert_eq!(
+			ingress_address,
+			ChainAddressConverter::to_encoded_address(expected_ingress_address.into())
+				.expect("It is an ingress address because we derived it above")
+		);
 
 		// Performs the actual swap during on_idle hooks.
 		let _ = state_chain_runtime::AllPalletsWithoutSystem::on_idle(

@@ -7,10 +7,7 @@ pub use pallet::*;
 use sp_runtime::DispatchResult;
 use sp_std::cmp::{Ord, Ordering};
 
-use cf_chains::{
-	address::{AddressConverter, ForeignChainAddress},
-	AnyChain,
-};
+use cf_chains::{address::AddressConverter, AnyChain};
 use cf_primitives::{AmmRange, Asset, AssetAmount, ForeignChain, IntentId, Liquidity, PoolSide};
 use cf_traits::{
 	liquidity::LpProvisioningApi, AccountRoleRegistry, Chainflip, EgressApi, IngressApi,
@@ -99,7 +96,7 @@ pub mod pallet {
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
-			egress_address: ForeignChainAddress,
+			egress_address: EncodedAddress,
 		},
 	}
 
@@ -137,15 +134,23 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			amount: AssetAmount,
 			asset: Asset,
-			egress_address: ForeignChainAddress,
+			egress_address: EncodedAddress,
 		) -> DispatchResult {
 			if amount > 0 {
 				T::SystemState::ensure_no_maintenance()?;
 				let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
+				let egress_address_internal = T::AddressConverter::from_encoded_address(
+					egress_address.clone(),
+				)
+				.map_err(|_| {
+					DispatchError::Other("Invalid Egress Address, cannot decode the address")
+				})?;
+
 				// Check validity of Chain and Asset
 				ensure!(
-					ForeignChain::from(egress_address.clone()) == ForeignChain::from(asset),
+					ForeignChain::from(egress_address_internal.clone()) ==
+						ForeignChain::from(asset),
 					Error::<T>::InvalidEgressAddress
 				);
 
@@ -153,7 +158,7 @@ pub mod pallet {
 				Self::try_debit(&account_id, asset, amount)?;
 
 				let egress_id =
-					T::EgressHandler::schedule_egress(asset, amount, egress_address.clone(), None);
+					T::EgressHandler::schedule_egress(asset, amount, egress_address_internal, None);
 
 				Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
 					egress_id,
