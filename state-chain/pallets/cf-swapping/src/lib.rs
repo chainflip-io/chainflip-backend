@@ -230,7 +230,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			ingress_asset: Asset,
 			egress_asset: Asset,
-			egress_address: ForeignChainAddress,
+			egress_address: EncodedAddress,
 			relayer_commission_bps: BasisPoints,
 			message_metadata: Option<CcmIngressMetadata>,
 		) -> DispatchResult {
@@ -243,16 +243,20 @@ pub mod pallet {
 					Error::<T>::CcmUnsupportedForTargetChain
 				);
 			}
-
+			let egress_address_internal = T::AddressConverter::from_encoded_address(egress_address)
+				.map_err(|_| {
+					DispatchError::Other("Invalid Egress Address, cannot decode the address")
+				})?;
 			ensure!(
-				ForeignChain::from(egress_address.clone()) == ForeignChain::from(egress_asset),
+				ForeignChain::from(egress_address_internal.clone()) ==
+					ForeignChain::from(egress_asset),
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 
 			let (_, ingress_address) = T::IngressHandler::register_swap_intent(
 				ingress_asset,
 				egress_asset,
-				egress_address,
+				egress_address_internal,
 				relayer_commission_bps,
 				relayer,
 				message_metadata,

@@ -1,5 +1,5 @@
 //! Contains tests related to liquidity, pools and swapping
-use cf_chains::address::ForeignChainAddress;
+use cf_chains::address::EncodedAddress;
 use cf_test_utilities::{assert_has_event_pattern, extract_from_event};
 use frame_support::{
 	assert_noop, assert_ok,
@@ -139,7 +139,7 @@ fn can_swap_assets() {
 			RuntimeOrigin::signed(relayer),
 			Asset::Eth,
 			Asset::Flip,
-			ForeignChainAddress::Eth(EGRESS_ADDRESS),
+			EncodedAddress::Eth(EGRESS_ADDRESS.to_vec()),
 			0u16,
 			None,
 		));
@@ -221,7 +221,7 @@ fn swap_can_accrue_fees() {
 			RuntimeOrigin::signed(relayer),
 			Asset::Eth,
 			Asset::Flip,
-			ForeignChainAddress::Eth(EGRESS_ADDRESS),
+			EncodedAddress::Eth(EGRESS_ADDRESS.to_vec()),
 			0u16,
 			None,
 		));
@@ -326,7 +326,7 @@ fn swap_fails_with_insufficient_liquidity() {
 			RuntimeOrigin::signed(relayer),
 			Asset::Eth,
 			Asset::Flip,
-			ForeignChainAddress::Eth(EGRESS_ADDRESS),
+			EncodedAddress::Eth(EGRESS_ADDRESS.to_vec()),
 			0u16,
 			None,
 		));

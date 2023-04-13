@@ -76,7 +76,7 @@ impl BitcoinAddressData {
 			address_for: BitcoinAddressFor::Egress(
 				scriptpubkey_from_address(
 					sp_std::str::from_utf8(address_bytes).map_err(|_| ())?,
-					BitcoinNetwork::Mainnet,
+					network,
 				)
 				.map_err(|_| ())?,
 			), //todo: see how to get the mainnet from the env pallet

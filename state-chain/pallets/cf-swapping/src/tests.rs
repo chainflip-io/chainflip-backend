@@ -1,6 +1,6 @@
 use crate::{mock::*, EarnedRelayerFees, Error, Pallet, Swap, SwapQueue, SwapType, WeightInfo};
 use cf_chains::{
-	address::{AddressConverter, ForeignChainAddress},
+	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	AnyChain,
 };
 use cf_primitives::{Asset, EthereumAddress, ForeignChain};
@@ -77,7 +77,7 @@ fn register_swap_intent_success_with_valid_parameters() {
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			Asset::Usdc,
-			ForeignChainAddress::Eth(Default::default()),
+			EncodedAddress::Eth(Default::default()),
 			0,
 			None
 		));
@@ -181,7 +181,7 @@ fn expect_swap_id_to_be_emitted() {
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			Asset::Usdc,
-			ForeignChainAddress::Eth(Default::default()),
+			EncodedAddress::Eth(Default::default()),
 			0,
 			None
 		));

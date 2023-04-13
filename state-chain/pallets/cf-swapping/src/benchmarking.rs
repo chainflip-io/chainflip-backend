@@ -3,6 +3,7 @@
 
 use super::*;
 
+use cf_chains::address::EncodedAddress;
 use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
@@ -31,7 +32,7 @@ benchmarks! {
 		let call = Call::<T>::register_swap_intent {
 			ingress_asset: Asset::Eth,
 			egress_asset: Asset::Usdc,
-			egress_address: ForeignChainAddress::Eth(Default::default()),
+			egress_address: EncodedAddress::Eth(Default::default()),
 			relayer_commission_bps: 0,
 			message_metadata: None,
 		};
