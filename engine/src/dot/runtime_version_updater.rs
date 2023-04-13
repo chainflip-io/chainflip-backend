@@ -5,14 +5,15 @@ use async_trait::async_trait;
 use cf_chains::{dot::RuntimeVersion, Polkadot};
 use futures::StreamExt;
 use sp_core::H256;
-use tokio::sync::Mutex;
+use tokio::sync::{oneshot, Mutex};
 use tracing::{info, info_span, Instrument};
 
 use crate::{
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	witnesser::{
 		epoch_witnesser::{
-			start_epoch_witnesser, EpochWitnesser, EpochWitnesserGenerator, WitnesserAndStream,
+			self, start_epoch_witnesser, EpochWitnesser, EpochWitnesserGenerator,
+			WitnesserAndStream,
 		},
 		ChainBlockNumber, EpochStart,
 	},
@@ -71,6 +72,23 @@ where
 	// Last version witnessed
 	type StaticState = RuntimeVersion;
 
+	async fn run_witnesser(
+		self,
+		data_stream: std::pin::Pin<
+			Box<dyn futures::Stream<Item = anyhow::Result<Self::Data>> + Send + 'static>,
+		>,
+		end_witnessing_receiver: oneshot::Receiver<ChainBlockNumber<Self::Chain>>,
+		state: Self::StaticState,
+	) -> Result<Self::StaticState, ()> {
+		epoch_witnesser::run_witnesser_data_stream(
+			self,
+			data_stream,
+			end_witnessing_receiver,
+			state,
+		)
+		.await
+	}
+
 	async fn do_witness(
 		&mut self,
 		new_runtime_version: RuntimeVersion,
@@ -94,10 +112,6 @@ where
 		}
 
 		Ok(())
-	}
-
-	fn should_finish(&self, _: ChainBlockNumber<Self::Chain>) -> bool {
-		true
 	}
 }
 

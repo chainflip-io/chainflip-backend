@@ -26,7 +26,7 @@ pub struct EpochStart<Chain: cf_chains::Chain> {
 }
 
 pub trait BlockNumberable {
-	type BlockNumber;
+	type BlockNumber: PartialOrd;
 
 	fn block_number(&self) -> Self::BlockNumber;
 }

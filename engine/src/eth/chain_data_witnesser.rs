@@ -7,9 +7,10 @@ use crate::{
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 	witnesser::{
 		epoch_witnesser::{
-			start_epoch_witnesser, EpochWitnesser, EpochWitnesserGenerator, WitnesserAndStream,
+			self, start_epoch_witnesser, EpochWitnesser, EpochWitnesserGenerator,
+			WitnesserAndStream,
 		},
-		ChainBlockNumber, EpochStart,
+		EpochStart,
 	},
 };
 
@@ -18,7 +19,7 @@ use super::rpc::EthRpcApi;
 use cf_chains::eth::{Ethereum, EthereumTrackedData};
 
 use state_chain_runtime::CfeSettings;
-use tokio::sync::{watch, Mutex};
+use tokio::sync::{oneshot, watch, Mutex};
 use tracing::{error, info_span, Instrument};
 use utilities::{context, make_periodic_tick};
 use web3::types::{BlockNumber, U256};
@@ -62,6 +63,25 @@ where
 	type Data = ();
 	type StaticState = EthereumTrackedData;
 
+	async fn run_witnesser(
+		mut self,
+		data_stream: std::pin::Pin<
+			Box<dyn futures::Stream<Item = anyhow::Result<Self::Data>> + Send + 'static>,
+		>,
+		end_witnessing_receiver: oneshot::Receiver<
+			<Ethereum as cf_chains::Chain>::ChainBlockNumber,
+		>,
+		state: Self::StaticState,
+	) -> Result<Self::StaticState, ()> {
+		epoch_witnesser::run_witnesser_data_stream(
+			self,
+			data_stream,
+			end_witnessing_receiver,
+			state,
+		)
+		.await
+	}
+
 	async fn do_witness(
 		&mut self,
 		_data: Self::Data,
@@ -94,10 +114,6 @@ where
 		}
 
 		Ok(())
-	}
-
-	fn should_finish(&self, _: ChainBlockNumber<Ethereum>) -> bool {
-		true
 	}
 }
 

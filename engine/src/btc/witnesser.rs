@@ -6,7 +6,8 @@ use crate::{
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 	witnesser::{
 		epoch_witnesser::{
-			start_epoch_witnesser, EpochWitnesser, EpochWitnesserGenerator, WitnesserAndStream,
+			self, start_epoch_witnesser, EpochWitnesser, EpochWitnesserGenerator,
+			WitnesserAndStream,
 		},
 		AddressMonitor, ChainBlockNumber,
 	},
@@ -21,7 +22,7 @@ use cf_primitives::chains::assets::btc;
 use futures::StreamExt;
 use pallet_cf_ingress_egress::IngressWitness;
 use state_chain_runtime::BitcoinInstance;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, oneshot, Mutex};
 use tracing::{info_span, trace, Instrument};
 
 use crate::{
@@ -115,7 +116,6 @@ struct BtcWitnesser<StateChainClient> {
 	btc_rpc: BtcRpcClient,
 	witnessed_until_sender: mpsc::Sender<WitnessedUntil>,
 	current_epoch: EpochStart<Bitcoin>,
-	last_block_processed: ChainBlockNumber<Bitcoin>,
 }
 
 #[async_trait]
@@ -124,8 +124,25 @@ where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
 	type Chain = Bitcoin;
-	type Data = ChainBlockNumber<Bitcoin>;
+	type Data = ChainBlockNumber<Self::Chain>;
 	type StaticState = AddressMonitor<BitcoinAddressData, ScriptPubkeyBytes, BitcoinAddressData>;
+
+	async fn run_witnesser(
+		self,
+		data_stream: std::pin::Pin<
+			Box<dyn futures::Stream<Item = anyhow::Result<Self::Data>> + Send + 'static>,
+		>,
+		end_witnessing_receiver: oneshot::Receiver<ChainBlockNumber<Self::Chain>>,
+		state: Self::StaticState,
+	) -> Result<Self::StaticState, ()> {
+		epoch_witnesser::run_witnesser_block_stream(
+			self,
+			data_stream,
+			end_witnessing_receiver,
+			state,
+		)
+		.await
+	}
 
 	async fn do_witness(
 		&mut self,
@@ -183,18 +200,12 @@ where
 				.await;
 		}
 
-		self.last_block_processed = block_number;
-
 		self.witnessed_until_sender
 			.send(WitnessedUntil { epoch_index: self.current_epoch.epoch_index, block_number })
 			.await
 			.unwrap();
 
 		Ok(())
-	}
-
-	fn should_finish(&self, last_block_number_for_epoch: ChainBlockNumber<Bitcoin>) -> bool {
-		self.last_block_processed >= last_block_number_for_epoch
 	}
 }
 
@@ -252,7 +263,6 @@ where
 			btc_rpc: self.btc_rpc.clone(),
 			witnessed_until_sender,
 			current_epoch: epoch,
-			last_block_processed: from_block - 1,
 		};
 
 		Ok(Some((witnesser, Box::pin(block_number_stream_from))))
