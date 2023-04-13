@@ -165,6 +165,19 @@ where
 	Ok(state)
 }
 
+fn should_end_witnessing<W: EpochWitnesser>(
+	last_processed_block: Option<BlockNumber<W>>,
+	last_block_in_epoch: Option<BlockNumber<W>>,
+) -> bool {
+	match (last_processed_block, last_block_in_epoch) {
+		(Some(last_processed_block), Some(last_block_in_epoch)) =>
+			last_processed_block >= last_block_in_epoch,
+		// We continue witnessing if we don't know when the epoch ends
+		// or which blocks we have already processed
+		_ => false,
+	}
+}
+
 pub async fn run_witnesser_block_stream<Witnesser>(
 	mut witnesser: Witnesser,
 	mut block_stream: std::pin::Pin<
@@ -179,6 +192,7 @@ where
 {
 	// If set, this is the last block to process
 	let mut last_block_number_for_epoch: Option<BlockNumber<Witnesser>> = None;
+	let mut last_processed_block = None;
 
 	let mut end_witnessing_receiver = end_witnessing_receiver.fuse();
 
@@ -186,6 +200,11 @@ where
 		select! {
 			Ok(last_block_number) = &mut end_witnessing_receiver => {
 				last_block_number_for_epoch = Some(last_block_number);
+
+				if should_end_witnessing::<Witnesser>(last_processed_block, last_block_number_for_epoch) {
+					break;
+				}
+
 			},
 			Some(block) = block_stream.next() => {
 				// This will be an error if the stream times out. When it does, we return
@@ -194,15 +213,18 @@ where
 					error!("Error while getting block for witnesser: {:?}", e);
 				})?;
 
-				if let Some(last_block_number_for_epoch) = last_block_number_for_epoch {
-					if block.block_number() > last_block_number_for_epoch {
-						break;
-					}
-				}
+				let block_number = block.block_number();
 
 				witnesser.do_witness(block, &mut state).await.map_err(|_| {
 					error!("Witnesser failed to process block")
 				})?;
+
+				last_processed_block = Some(block_number);
+
+				if should_end_witnessing::<Witnesser>(last_processed_block, last_block_number_for_epoch) {
+					break;
+				}
+
 			},
 		}
 	}
