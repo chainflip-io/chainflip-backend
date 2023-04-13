@@ -86,8 +86,8 @@ where
 				let epoch_start = epoch_start_receiver.recv().await.expect("Sender closed");
 
 				if let Some((end_witnessing_sender, handle)) = current_task.take() {
-					// Send a signal to the previous epoch to stop at the starting block of the new
-					// epoch
+					// Send a signal to the previous epoch's witnesser process
+					// to stop epoch at the starting block of the new epoch
 					let last_block_number_in_epoch = epoch_start
 						.block_number
 						.checked_sub(&BlockNumber::<Generator::Witnesser>::from(1u32))

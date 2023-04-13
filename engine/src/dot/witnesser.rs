@@ -324,10 +324,10 @@ where
 
 	async fn do_witness(
 		&mut self,
-		work: Self::Data,
+		data: Self::Data,
 		(address_monitor, monitored_signatures, signature_receiver): &mut Self::StaticState,
 	) -> anyhow::Result<()> {
-		let (block_hash, block_number, block_event_details) = work;
+		let (block_hash, block_number, block_event_details) = data;
 		trace!("Checking block: {block_number}, with hash: {block_hash:?} for interesting events");
 
 		let our_vault = &self.current_epoch.data.vault_account;
