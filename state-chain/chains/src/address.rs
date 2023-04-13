@@ -114,23 +114,6 @@ pub trait AddressConverter: Sized {
 	fn from_encoded_address(encoded_address: EncodedAddress) -> Result<ForeignChainAddress, ()>;
 }
 
-// #[cfg(feature = "std")]
-// impl core::fmt::Display for ForeignChainAddress {
-// 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-// 		match self {
-// 			ForeignChainAddress::Eth(addr) => {
-// 				write!(f, "Eth(0x{})", hex::encode(addr))
-// 			},
-// 			ForeignChainAddress::Dot(addr) => {
-// 				write!(f, "Dot(0x{})", hex::encode(addr))
-// 			},
-// 			ForeignChainAddress::Btc(addr) => {
-// 				write!(f, "Btc({})", addr.to_address_string())
-// 			},
-// 		}
-// 	}
-// }
-
 #[cfg(feature = "std")]
 impl core::fmt::Display for EncodedAddress {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
