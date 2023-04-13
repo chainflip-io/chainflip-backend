@@ -107,29 +107,17 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 	type ApiCall = MockEthereumApiCall<MockEthEnvironment>;
 	type Callback = RuntimeCall;
 
-<<<<<<< HEAD
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
-		EgressedApiCall::set(Some(api_call));
-		1
-=======
 	fn threshold_sign_and_broadcast(
 		_api_call: Self::ApiCall,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		(1, 2)
->>>>>>> origin/main
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
 		api_call: Self::ApiCall,
-		callback: Self::Callback,
-<<<<<<< HEAD
-	) -> BroadcastId {
-		EgressedApiCall::set(Some(api_call));
-=======
+		_callback: Self::Callback,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		// TODO: Call the callback.
->>>>>>> origin/main
-		let _ = callback.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
+		EgressedApiCall::set(Some(api_call));
 		(1, 2)
 	}
 }

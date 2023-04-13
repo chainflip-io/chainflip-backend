@@ -1,11 +1,6 @@
 use crate::{
-<<<<<<< HEAD
-	mock::*, CcmGasBudget, CcmStage, CcmWithStages, EarnedRelayerFees, Error, Pallet, PendingCcms,
-	Swap, SwapQueue, SwapType, WeightInfo,
-=======
 	mock::*, CcmGasBudget, CcmOutputs, CcmSwap, CcmSwapOutput, EarnedRelayerFees, Error, Pallet,
 	PendingCcms, Swap, SwapQueue, SwapType, WeightInfo,
->>>>>>> origin/main
 };
 use cf_chains::{address::ForeignChainAddress, AnyChain, CcmIngressMetadata};
 use cf_primitives::{Asset, ForeignChain};
@@ -272,154 +267,6 @@ fn can_swap_using_witness_origin() {
 }
 
 #[test]
-<<<<<<< HEAD
-fn can_process_ccms() {
-	new_test_ext().execute_with(|| {
-		let ccm_1 = CcmIngressMetadata {
-			message: vec![0x01],
-			gas_budget: 1_000,
-			refund_address: ForeignChainAddress::Dot([0x01; 32]),
-		};
-		let ccm_2 = CcmIngressMetadata {
-			message: vec![0x02],
-			gas_budget: 2_000,
-			refund_address: ForeignChainAddress::Dot([0x02; 32]),
-		};
-
-		// Can ingress CCM via Swap Intent
-		assert_ok!(Swapping::register_swap_intent(
-			RuntimeOrigin::signed(ALICE),
-			Asset::Dot,
-			Asset::Eth,
-			ForeignChainAddress::Eth(Default::default()),
-			0,
-			Some(ccm_1.clone())
-		),);
-		assert_ok!(Swapping::on_ccm_ingress(
-			Asset::Dot,
-			2_000,
-			Asset::Eth,
-			ForeignChainAddress::Eth(Default::default()),
-			ccm_1.clone(),
-		));
-
-		// Can ingress CCM directly via Pallet Extrinsic.
-		assert_ok!(Swapping::ccm_ingress(
-			RuntimeOrigin::root(),
-			Asset::Btc,
-			1_000_000,
-			Asset::Usdc,
-			ForeignChainAddress::Eth(Default::default()),
-			ccm_2.clone()
-		));
-
-		assert_eq!(
-			PendingCcms::<Test>::get(1),
-			Some(CcmWithStages {
-				ingress_asset: Asset::Dot,
-				ingress_amount: 2_000,
-				egress_asset: Asset::Eth,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
-				message_metadata: ccm_1,
-				stage: CcmStage::Ingressed { asset_swap_id: 1, gas_swap_id: 2 }
-			})
-		);
-		assert_eq!(
-			PendingCcms::<Test>::get(2),
-			Some(CcmWithStages {
-				ingress_asset: Asset::Btc,
-				ingress_amount: 1_000_000,
-				egress_asset: Asset::Usdc,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
-				message_metadata: ccm_2,
-				stage: CcmStage::Ingressed { asset_swap_id: 3, gas_swap_id: 4 }
-			})
-		);
-
-		assert_eq!(
-			SwapQueue::<Test>::get(),
-			vec![
-				Swap {
-					swap_id: 1,
-					from: Asset::Dot,
-					to: Asset::Eth,
-					amount: 1_000,
-					swap_type: SwapType::Ccm(1)
-				},
-				Swap {
-					swap_id: 2,
-					from: Asset::Dot,
-					to: Asset::Eth,
-					amount: 1_000,
-					swap_type: SwapType::Ccm(1)
-				},
-				Swap {
-					swap_id: 3,
-					from: Asset::Btc,
-					to: Asset::Usdc,
-					amount: 998_000,
-					swap_type: SwapType::Ccm(2)
-				},
-				Swap {
-					swap_id: 4,
-					from: Asset::Btc,
-					to: Asset::Eth,
-					amount: 2_000,
-					swap_type: SwapType::Ccm(2)
-				}
-			]
-		);
-
-		// Swaps are executed during on_idle
-		Swapping::on_idle(1, Weight::from_ref_time(1_000_000_000_000));
-
-		// Both CCMs are scheduled for egress
-		assert_eq!(
-			MockEgressHandler::<AnyChain>::get_scheduled_egresses(),
-			vec![
-				MockEgressParameter::Ccm {
-					asset: Asset::Eth,
-					amount: 1_000,
-					egress_address: ForeignChainAddress::Eth(Default::default()),
-					message: vec![0x01],
-					refund_address: ForeignChainAddress::Dot([0x01; 32]),
-				},
-				MockEgressParameter::Ccm {
-					asset: Asset::Usdc,
-					amount: 998_000,
-					egress_address: ForeignChainAddress::Eth(Default::default()),
-					message: vec![0x02],
-					refund_address: ForeignChainAddress::Dot([0x02; 32]),
-				},
-			]
-		);
-
-		// Gas budgets are stored
-		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, 1_000)));
-		assert_eq!(CcmGasBudget::<Test>::get(2), Some((Asset::Eth, 2_000)));
-
-		// Completed CCMs are removed from storage
-		assert_eq!(PendingCcms::<Test>::get(1), None);
-		assert_eq!(PendingCcms::<Test>::get(2), None);
-
-		System::assert_has_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::CcmEgressScheduled {
-				ccm_id: 1,
-				egress_id: (ForeignChain::Ethereum, 1),
-			},
-		));
-		System::assert_has_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::CcmEgressScheduled {
-				ccm_id: 2,
-				egress_id: (ForeignChain::Ethereum, 1),
-			},
-		));
-	});
-}
-
-#[test]
-=======
->>>>>>> origin/main
 fn can_reject_invalid_ccms() {
 	new_test_ext().execute_with(|| {
 		let ccm = CcmIngressMetadata {
@@ -506,8 +353,6 @@ fn can_reject_invalid_ccms() {
 		);
 	});
 }
-<<<<<<< HEAD
-=======
 
 #[test]
 fn can_process_ccms_via_swap_intent() {
@@ -915,4 +760,3 @@ fn can_handle_ccms_with_no_swaps_needed() {
 		));
 	});
 }
->>>>>>> origin/main
