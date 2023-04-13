@@ -258,7 +258,6 @@ where
 			move |block_number| futures::future::ready(Ok(block_number)),
 		)
 		.await?
-		// TODO: add timeout here instead?
 		.map(Ok);
 
 		let witnesser = BtcWitnesser {

@@ -49,6 +49,7 @@ pub type WitnesserAndStream<W> =
 pub trait EpochWitnesserGenerator: Send {
 	type Witnesser: EpochWitnesser;
 
+	// TODO: use a custom enum instead of Option?
 	async fn init(
 		&mut self,
 		epoch: EpochStart<<Self::Witnesser as EpochWitnesser>::Chain>,
@@ -100,6 +101,8 @@ where
 					);
 				}
 
+				// Must be a current participant in the epoch to witness. Additionally, only
+				// certain witnessers (e.g. ingress) process non-current/historical epochs.
 				if epoch_start.participant &&
 					(epoch_start.current ||
 						<Generator::Witnesser>::SHOULD_PROCESS_HISTORICAL_EPOCHS)
