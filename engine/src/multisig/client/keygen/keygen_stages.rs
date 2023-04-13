@@ -3,18 +3,21 @@ use std::{
 	sync::Arc,
 };
 
-use crate::multisig::{
-	client::{
-		self,
-		ceremony_manager::KeygenCeremony,
-		common::{
-			BroadcastFailureReason, KeygenFailureReason, KeygenStageName, ParticipantStatus,
-			ResharingContext,
+use crate::{
+	multisig::{
+		client::{
+			self,
+			ceremony_manager::KeygenCeremony,
+			common::{
+				BroadcastFailureReason, KeygenFailureReason, KeygenStageName, ParticipantStatus,
+				ResharingContext,
+			},
+			utils::find_frequent_element,
+			KeygenResult, KeygenResultInfo,
 		},
-		utils::find_frequent_element,
-		KeygenResult, KeygenResultInfo,
+		crypto::ECScalar,
 	},
-	crypto::ECScalar,
+	task_scope,
 };
 
 use async_trait::async_trait;
@@ -772,11 +775,10 @@ async fn finalize_keygen<Crypto: CryptoScheme>(
 	// Making a copy while we still have sharing parameters
 	let key_params = keygen_common.sharing_params.key_params;
 
-	let party_public_keys = tokio::task::spawn_blocking(move || {
+	let party_public_keys = task_scope::without_blocking(move || {
 		derive_local_pubkeys_for_parties(&keygen_common.sharing_params, &commitments)
 	})
-	.await
-	.unwrap();
+	.await;
 
 	// `derive_local_pubkeys_for_parties` returns a vector of public keys where
 	// the index corresponds to the party's index in a ceremony. In a key handover
