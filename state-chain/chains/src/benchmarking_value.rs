@@ -4,6 +4,7 @@ use cf_primitives::{
 	Asset, KeyId,
 };
 
+use crate::address::EncodedAddress;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::address::ForeignChainAddress;
 #[cfg(feature = "runtime-benchmarks")]
@@ -75,6 +76,13 @@ impl BenchmarkValue for btc::Asset {
 impl BenchmarkValue for ForeignChainAddress {
 	fn benchmark_value() -> Self {
 		ForeignChainAddress::Eth(Default::default())
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValue for EncodedAddress {
+	fn benchmark_value() -> Self {
+		EncodedAddress::Eth([0_u8; 20].to_vec())
 	}
 }
 

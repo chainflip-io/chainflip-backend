@@ -1,6 +1,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
+use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_primitives::{AccountRole, Asset};
 use cf_traits::{AccountRoleRegistry, LiquidityPoolApi};
 use frame_benchmarking::{benchmarks, whitelisted_caller};
@@ -21,7 +22,7 @@ benchmarks! {
 			Asset::Eth,
 			1_000_000,
 		));
-	}: _(RawOrigin::Signed(caller.clone()), 1_000_000, Asset::Eth, cf_chains::address::EncodedAddress::Eth(Default::default()))
+	}: _(RawOrigin::Signed(caller.clone()), 1_000_000, Asset::Eth, cf_chains::address::EncodedAddress::benchmark_value())
 	verify {
 		assert_eq!(FreeBalances::<T>::get(&caller, Asset::Eth), Some(0));
 	}

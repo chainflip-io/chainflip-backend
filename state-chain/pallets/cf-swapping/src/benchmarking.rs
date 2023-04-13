@@ -3,7 +3,7 @@
 
 use super::*;
 
-use cf_chains::address::EncodedAddress;
+use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
 use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
@@ -32,7 +32,7 @@ benchmarks! {
 		let call = Call::<T>::register_swap_intent {
 			ingress_asset: Asset::Eth,
 			egress_asset: Asset::Usdc,
-			egress_address: EncodedAddress::Eth(Default::default()),
+			egress_address: EncodedAddress::benchmark_value(),
 			relayer_commission_bps: 0,
 			message_metadata: None,
 		};
@@ -57,7 +57,7 @@ benchmarks! {
 	} : _(
 		RawOrigin::Signed(caller.clone()),
 		Asset::Eth,
-		EncodedAddress::Eth(Default::default())
+		EncodedAddress::benchmark_value()
 	)
 
 	schedule_swap_by_witnesser {
@@ -66,7 +66,7 @@ benchmarks! {
 			from: Asset::Usdc,
 			to: Asset::Eth,
 			ingress_amount: 1_000,
-			egress_address: EncodedAddress::Eth(Default::default())
+			egress_address: EncodedAddress::benchmark_value()
 		};
 	}: {
 		call.dispatch_bypass_filter(origin)?;
@@ -92,7 +92,7 @@ benchmarks! {
 			ingress_asset: Asset::Usdc,
 			ingress_amount: 1_000,
 			egress_asset: Asset::Eth,
-			egress_address: EncodedAddress::Eth(Default::default()),
+			egress_address: EncodedAddress::benchmark_value(),
 			message_metadata: metadata,
 		};
 	}: {
