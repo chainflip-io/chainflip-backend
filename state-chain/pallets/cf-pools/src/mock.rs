@@ -1,5 +1,5 @@
 use crate::{self as pallet_cf_pools};
-use cf_primitives::{AccountId, AuthorityCount};
+use cf_primitives::AuthorityCount;
 use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Chainflip,
@@ -13,12 +13,13 @@ use sp_runtime::{
 	BuildStorage, Permill,
 };
 
+type AccountId = u64;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
 
-pub const LP: [u8; 32] = [0u8; 32];
+pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -80,6 +81,8 @@ parameter_types! {
 }
 impl pallet_cf_pools::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
+	type AccountRoleRegistry = ();
+	type LpBalance = Self;
 	type NetworkFee = NetworkFee;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();

@@ -7,7 +7,7 @@ use crate::{
 use bitcoincore_rpc::bitcoin::{hashes::Hash, Transaction};
 use cf_chains::{
 	address::{BitcoinAddressData, ScriptPubkeyBytes},
-	btc::{Utxo, UtxoId},
+	btc::{BitcoinTrackedData, Utxo, UtxoId},
 	Bitcoin,
 };
 use cf_primitives::chains::assets::btc;
@@ -196,6 +196,24 @@ where
 							})
 							.await;
 
+						if let Some(fee_rate_sats_per_byte) = btc_rpc.next_block_fee_rate()? {
+							let _result = state_chain_client
+								.submit_signed_extrinsic(
+									pallet_cf_witnesser::Call::witness_at_epoch {
+										call: Box::new(state_chain_runtime::RuntimeCall::BitcoinChainTracking(
+											pallet_cf_chain_tracking::Call::update_chain_state {
+												state: BitcoinTrackedData {
+													block_height: block_number,
+													fee_rate_sats_per_byte,
+												},
+											},
+										)),
+										epoch_index: epoch_start.epoch_index,
+									},
+								)
+								.await;
+						}
+
 						witnessed_until_sender
 							.send(WitnessedUntil {
 								epoch_index: epoch_start.epoch_index,
@@ -308,8 +326,7 @@ mod test_utxo_filtering {
 			network: BitcoinNetwork::Testnet,
 		};
 
-		let script_pubkey_bytes_to_witness =
-			btc_address_data.to_scriptpubkey().unwrap().serialize();
+		let script_pubkey_bytes_to_witness = btc_address_data.to_scriptpubkey().unwrap().data;
 
 		let txs = vec![
 			fake_transaction(vec![
@@ -346,8 +363,7 @@ mod test_utxo_filtering {
 			network: BitcoinNetwork::Testnet,
 		};
 
-		let script_pubkey_bytes_to_witness =
-			btc_address_data.to_scriptpubkey().unwrap().serialize();
+		let script_pubkey_bytes_to_witness = btc_address_data.to_scriptpubkey().unwrap().data;
 
 		const UTXO_WITNESSED_1: u64 = 2324;
 		const UTXO_WITNESSED_2: u64 = 1234;
@@ -385,8 +401,7 @@ mod test_utxo_filtering {
 			network: BitcoinNetwork::Testnet,
 		};
 
-		let script_pubkey_bytes_to_witness =
-			btc_address_data.to_scriptpubkey().unwrap().serialize();
+		let script_pubkey_bytes_to_witness = btc_address_data.to_scriptpubkey().unwrap().data;
 
 		const UTXO_WITNESSED_1: u64 = 2324;
 		let txs = vec![fake_transaction(vec![

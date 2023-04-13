@@ -45,7 +45,6 @@ frame_support::construct_runtime!(
 		System: frame_system,
 		AccountRoles: pallet_cf_account_roles,
 		LiquidityProvider: pallet_cf_lp,
-		LiquidityPools: pallet_cf_pools,
 	}
 );
 
@@ -104,19 +103,12 @@ impl pallet_cf_account_roles::Config for Test {
 parameter_types! {
 	pub const NetworkFee: Permill = Permill::from_percent(0);
 }
-impl pallet_cf_pools::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
-	type NetworkFee = NetworkFee;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type WeightInfo = ();
-}
 
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type AccountRoleRegistry = AccountRoles;
 	type IngressHandler = MockIngressHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;
-	type LiquidityPoolApi = LiquidityPools;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type AddressConverter = MockAddressConverter;
 	type WeightInfo = ();
@@ -135,7 +127,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 				(NON_LP_ACCOUNT.into(), AccountRole::Validator),
 			],
 		},
-		liquidity_pools: Default::default(),
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

@@ -127,7 +127,7 @@ impl AddressKeyValue for BitcoinAddressData {
 	type Value = Self;
 
 	fn key_value(&self) -> (Self::Key, Self::Value) {
-		(self.to_scriptpubkey().unwrap().serialize(), self.clone())
+		(self.to_scriptpubkey().unwrap().data, self.clone())
 	}
 }
 

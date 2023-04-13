@@ -12,7 +12,7 @@ use sp_core::{crypto::AccountId32, sr25519};
 use sp_runtime::{generic::Era, traits::IdentifyAccount, MultiSignature, MultiSigner};
 
 use super::{
-	api::{create_anonymous_vault::CreateAnonymousVault, PolkadotApi},
+	api::{create_anonymous_vault, PolkadotApi},
 	EncodedPolkadotPayload, PolkadotAccountId, PolkadotReplayProtection, PolkadotTrackedData, TxId,
 };
 
@@ -76,14 +76,11 @@ impl BenchmarkValue for PolkadotAccountId {
 
 impl<E> BenchmarkValue for PolkadotApi<E> {
 	fn benchmark_value() -> Self {
-		PolkadotApi::CreateAnonymousVault(CreateAnonymousVault::new_unsigned(
+		PolkadotApi::CreateAnonymousVault(create_anonymous_vault::extrinsic_builder(
 			PolkadotReplayProtection {
-				runtime_version: Default::default(),
 				genesis_hash: Default::default(),
 				nonce: Default::default(),
-				tip: Default::default(),
 			},
-			PolkadotPublicKey::benchmark_value(),
 		))
 	}
 }

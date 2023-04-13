@@ -119,7 +119,7 @@ impl crate::Config<Instance1> for Test {
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;
 	type AddressDerivation = ();
-	type LpProvisioning = Self;
+	type LpBalance = Self;
 	type SwapIntentHandler = Self;
 	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;
 	type Broadcaster = MockBroadcast;

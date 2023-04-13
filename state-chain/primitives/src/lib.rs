@@ -20,8 +20,6 @@ use serde::{Deserialize, Serialize};
 pub mod chains;
 
 pub use chains::{assets::any::Asset, ForeignChain};
-pub mod liquidity;
-pub use liquidity::*;
 
 /// An index to a block.
 pub type BlockNumber = u32;
