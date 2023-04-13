@@ -79,7 +79,7 @@ impl BitcoinAddressData {
 					network,
 				)
 				.map_err(|_| ())?,
-			), //todo: see how to get the mainnet from the env pallet
+			),
 			network,
 		})
 	}
