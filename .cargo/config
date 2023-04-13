@@ -3,11 +3,11 @@
 
 [alias]
 cf-test =     "test --lib --features runtime-benchmarks,try-runtime,runtime-integration-tests,integration-test,cli"
-cf-test-ci =  "test --lib --features runtime-benchmarks"
+cf-test-ci =  "test --lib --features runtime-benchmarks,slow-tests"
 cf-test-cfe = "test --lib --package chainflip-engine"
 
-cf-clippy =    "clippy           --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,integration-test,cli -- -D warnings"
-cf-clippy-ci = "clippy --release --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,integration-test,cli -- -D warnings"
+cf-clippy =    "clippy           --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,integration-test,cli,slow-tests -- -D warnings"
+cf-clippy-ci = "clippy --release --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,integration-test,cli,slow-tests -- -D warnings"
 
 cf-build =    "build --features runtime-benchmarks"
 cf-build-ci = "build --release --features runtime-benchmarks"
