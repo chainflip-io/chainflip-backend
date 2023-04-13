@@ -24,6 +24,8 @@ pub trait EpochWitnesser: Send + Sync + 'static {
 	/// State that persists across epochs
 	type StaticState: Send;
 
+	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool;
+
 	async fn run_witnesser(
 		self,
 		mut data_stream: std::pin::Pin<
@@ -46,8 +48,6 @@ pub type WitnesserAndStream<W> =
 #[async_trait]
 pub trait EpochWitnesserGenerator: Send {
 	type Witnesser: EpochWitnesser;
-
-	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool;
 
 	async fn init(
 		&mut self,
@@ -101,7 +101,8 @@ where
 				}
 
 				if epoch_start.participant &&
-					(epoch_start.current || Generator::SHOULD_PROCESS_HISTORICAL_EPOCHS)
+					(epoch_start.current ||
+						<Generator::Witnesser>::SHOULD_PROCESS_HISTORICAL_EPOCHS)
 				{
 					info!("Start witnessing from block: {}", epoch_start.block_number);
 
@@ -254,6 +255,8 @@ mod epoch_witnesser_testing {
 
 		type StaticState = ();
 
+		const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = true;
+
 		async fn run_witnesser(
 			self,
 			data_stream: std::pin::Pin<
@@ -298,8 +301,6 @@ mod epoch_witnesser_testing {
 
 	#[async_trait]
 	impl EpochWitnesserGenerator for TestEpochWitnesserGenerator {
-		const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = true;
-
 		type Witnesser = TestEpochWitnesser;
 
 		async fn init(

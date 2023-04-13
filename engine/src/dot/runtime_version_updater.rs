@@ -72,6 +72,8 @@ where
 	// Last version witnessed
 	type StaticState = RuntimeVersion;
 
+	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = false;
+
 	async fn run_witnesser(
 		self,
 		data_stream: std::pin::Pin<
@@ -144,6 +146,4 @@ where
 
 		Ok(Some((witnesser, Box::pin(stream))))
 	}
-
-	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = false;
 }

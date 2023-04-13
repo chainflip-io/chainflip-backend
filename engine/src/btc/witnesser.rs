@@ -127,6 +127,8 @@ where
 	type Data = ChainBlockNumber<Self::Chain>;
 	type StaticState = AddressMonitor<BitcoinAddressData, ScriptPubkeyBytes, BitcoinAddressData>;
 
+	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = true;
+
 	async fn run_witnesser(
 		self,
 		data_stream: std::pin::Pin<
@@ -224,6 +226,7 @@ where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
 	type Witnesser = BtcWitnesser<StateChainClient>;
+
 	async fn init(
 		&mut self,
 		epoch: EpochStart<Bitcoin>,
@@ -267,8 +270,6 @@ where
 
 		Ok(Some((witnesser, Box::pin(block_number_stream_from))))
 	}
-
-	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = true;
 }
 
 #[cfg(test)]

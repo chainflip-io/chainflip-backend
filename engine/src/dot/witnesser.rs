@@ -303,6 +303,8 @@ where
 		tokio::sync::mpsc::UnboundedReceiver<[u8; 64]>,
 	);
 
+	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = true;
+
 	async fn run_witnesser(
 		self,
 		data_stream: std::pin::Pin<
@@ -570,8 +572,6 @@ where
 
 		Ok(Some((witnesser, Box::pin(block_events_stream))))
 	}
-
-	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = true;
 }
 
 #[cfg(test)]

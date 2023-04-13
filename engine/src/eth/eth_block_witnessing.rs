@@ -45,6 +45,8 @@ impl EpochWitnesser for EthBlockWitnesser {
 	type Data = EthNumberBloom;
 	type StaticState = AllWitnessers;
 
+	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = true;
+
 	async fn run_witnesser(
 		self,
 		data_stream: std::pin::Pin<
@@ -136,8 +138,6 @@ impl EpochWitnesserGenerator for EthBlockWitnesserGenerator {
 
 		Ok(Some((EthBlockWitnesser { witnessed_until_sender, epoch }, Box::pin(block_stream))))
 	}
-
-	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = true;
 }
 
 pub async fn start(
