@@ -283,7 +283,7 @@ fn can_reject_invalid_ccms() {
 				RuntimeOrigin::signed(ALICE),
 				Asset::Btc,
 				Asset::Eth,
-				ForeignChainAddress::Dot(Default::default()),
+				EncodedAddress::Dot(Default::default()),
 				0,
 				Some(ccm.clone())
 			),
@@ -295,7 +295,7 @@ fn can_reject_invalid_ccms() {
 				Asset::Btc,
 				1_000_000,
 				Asset::Eth,
-				ForeignChainAddress::Dot(Default::default()),
+				EncodedAddress::Dot(Default::default()),
 				ccm.clone()
 			),
 			Error::<Test>::IncompatibleAssetAndAddress
@@ -306,7 +306,7 @@ fn can_reject_invalid_ccms() {
 				RuntimeOrigin::signed(ALICE),
 				Asset::Eth,
 				Asset::Dot,
-				ForeignChainAddress::Dot(Default::default()),
+				EncodedAddress::Dot(Default::default()),
 				0,
 				Some(ccm.clone())
 			),
@@ -327,7 +327,7 @@ fn can_reject_invalid_ccms() {
 				RuntimeOrigin::signed(ALICE),
 				Asset::Eth,
 				Asset::Btc,
-				ForeignChainAddress::Btc(Default::default()),
+				EncodedAddress::Btc(Default::default()),
 				0,
 				Some(ccm.clone())
 			),
@@ -371,7 +371,7 @@ fn can_process_ccms_via_swap_intent() {
 			RuntimeOrigin::signed(ALICE),
 			Asset::Dot,
 			Asset::Eth,
-			ForeignChainAddress::Eth(Default::default()),
+			EncodedAddress::Eth(Default::default()),
 			0,
 			Some(ccm.clone())
 		),);
@@ -462,7 +462,7 @@ fn can_process_ccms_via_extrinsic() {
 			Asset::Btc,
 			1_000_000,
 			Asset::Usdc,
-			ForeignChainAddress::Eth(Default::default()),
+			EncodedAddress::Eth(Default::default()),
 			ccm.clone()
 		));
 
@@ -551,7 +551,7 @@ fn can_handle_ccms_with_gas_asset_as_ingress() {
 			Asset::Eth,
 			10_000,
 			Asset::Usdc,
-			ForeignChainAddress::Eth(Default::default()),
+			EncodedAddress::Eth(Default::default()),
 			ccm.clone()
 		));
 
@@ -635,7 +635,7 @@ fn can_handle_ccms_with_principal_asset_as_ingress() {
 			Asset::Usdc,
 			10_000,
 			Asset::Usdc,
-			ForeignChainAddress::Eth(Default::default()),
+			EncodedAddress::Eth(Default::default()),
 			ccm.clone()
 		));
 
@@ -720,7 +720,7 @@ fn can_handle_ccms_with_no_swaps_needed() {
 			Asset::Eth,
 			10_000,
 			Asset::Eth,
-			ForeignChainAddress::Eth(Default::default()),
+			EncodedAddress::Eth(Default::default()),
 			ccm
 		));
 

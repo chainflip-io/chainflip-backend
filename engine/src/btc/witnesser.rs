@@ -332,12 +332,12 @@ mod test_utxo_filtering {
 			fake_transaction(vec![
 				TxOut {
 					value: UTXO_WITNESSED_1,
-					script_pubkey: Script::from(script_pubkey_bytes_to_witness.clone()),
+					script_pubkey: Script::from(script_pubkey_bytes_to_witness.to_vec()),
 				},
 				TxOut { value: 12223, script_pubkey: Script::from(vec![0, 32, 121, 9]) },
 				TxOut {
 					value: UTXO_WITNESSED_2,
-					script_pubkey: Script::from(script_pubkey_bytes_to_witness),
+					script_pubkey: Script::from(script_pubkey_bytes_to_witness.to_vec()),
 				},
 			]),
 			fake_transaction(vec![]),
@@ -371,13 +371,13 @@ mod test_utxo_filtering {
 			fake_transaction(vec![
 				TxOut {
 					value: 2324,
-					script_pubkey: Script::from(script_pubkey_bytes_to_witness.clone()),
+					script_pubkey: Script::from(script_pubkey_bytes_to_witness.to_vec()),
 				},
 				TxOut { value: 12223, script_pubkey: Script::from(vec![0, 32, 121, 9]) },
 			]),
 			fake_transaction(vec![TxOut {
 				value: 1234,
-				script_pubkey: Script::from(script_pubkey_bytes_to_witness),
+				script_pubkey: Script::from(script_pubkey_bytes_to_witness.to_vec()),
 			}]),
 		];
 
@@ -407,9 +407,12 @@ mod test_utxo_filtering {
 		let txs = vec![fake_transaction(vec![
 			TxOut {
 				value: 2324,
-				script_pubkey: Script::from(script_pubkey_bytes_to_witness.clone()),
+				script_pubkey: Script::from(script_pubkey_bytes_to_witness.to_vec()),
 			},
-			TxOut { value: 0, script_pubkey: Script::from(script_pubkey_bytes_to_witness) },
+			TxOut {
+				value: 0,
+				script_pubkey: Script::from(script_pubkey_bytes_to_witness.to_vec()),
+			},
 		])];
 
 		let (ingress_witnesses, _change_witnesses) = filter_interesting_utxos(

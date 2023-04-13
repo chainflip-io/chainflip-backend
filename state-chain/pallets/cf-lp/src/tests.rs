@@ -1,8 +1,8 @@
 use crate::{mock::*, FreeBalances};
 
-use cf_chains::address::{EncodedAddress, ForeignChainAddress};
-use cf_primitives::{liquidity::AmmRange, AccountId, Asset, PoolAssetMap};
-use cf_traits::{mocks::system_state_info::MockSystemStateInfo, LiquidityPoolApi, SystemStateInfo};
+use cf_chains::address::EncodedAddress;
+use cf_primitives::{AccountId, Asset};
+use cf_traits::{mocks::system_state_info::MockSystemStateInfo, SystemStateInfo};
 use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 
 #[test]

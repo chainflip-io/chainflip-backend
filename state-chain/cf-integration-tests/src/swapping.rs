@@ -3,7 +3,10 @@ use cf_amm::{
 	common::{sqrt_price_at_tick, Side, SqrtPriceQ64F96, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{Chain, Ethereum, ForeignChain, ForeignChainAddress};
+use cf_chains::{
+	address::{AddressConverter, EncodedAddress},
+	Chain, Ethereum, ForeignChain,
+};
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount};
 use cf_test_utilities::{assert_events_eq, assert_events_match};
 use cf_traits::{AddressDerivationApi, EpochInfo, LpBalanceApi};
@@ -13,9 +16,9 @@ use frame_support::{
 };
 use pallet_cf_ingress_egress::IngressWitness;
 use state_chain_runtime::{
-	chainflip::address_derivation::AddressDerivation, AccountRoles, EthereumInstance,
-	LiquidityPools, LiquidityProvider, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
-	System, Validator, Weight, Witnesser,
+	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter},
+	AccountRoles, EthereumInstance, LiquidityPools, LiquidityProvider, Runtime, RuntimeCall,
+	RuntimeEvent, RuntimeOrigin, Swapping, System, Validator, Weight, Witnesser,
 };
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
@@ -198,7 +201,7 @@ fn basic_pool_setup_provision_and_swap() {
 			RuntimeOrigin::signed(ZION.clone()),
 			Asset::Eth,
 			Asset::Flip,
-			ForeignChainAddress::Eth(egress_address),
+			EncodedAddress::Eth(egress_address.to_vec()),
 			0u16,
 			None,
 		));
@@ -230,10 +233,10 @@ fn basic_pool_setup_provision_and_swap() {
 
 		let swap_id = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapIngressReceived {
 			swap_id,
-			ingress_address: ForeignChainAddress::Eth(events_ingress_address),
+			ingress_address: events_ingress_address,
 			ingress_amount: 50,
 			..
-		}) if <Ethereum as Chain>::ChainAccount::from(events_ingress_address) == ingress_address => swap_id);
+		}) if <Ethereum as Chain>::ChainAccount::try_from(ChainAddressConverter::from_encoded_address(events_ingress_address.clone()).expect("we created the ingress address above so it should be valid")).unwrap() == ingress_address => swap_id);
 
 		let _ = state_chain_runtime::AllPalletsWithoutSystem::on_idle(
 			1,
