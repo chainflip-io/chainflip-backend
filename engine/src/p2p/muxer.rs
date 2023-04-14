@@ -5,7 +5,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, trace, warn, Instrument};
 
 use crate::{
-	multisig::{bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, ChainTag},
+	multisig::ChainTag,
 	p2p::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages},
 };
 
@@ -97,12 +97,12 @@ impl P2PMuxer {
 		all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
 		all_outgoing_sender: UnboundedSender<OutgoingMultisigStageMessages>,
 	) -> (
-		MultisigMessageSender<EthSigning>,
-		MultisigMessageReceiver<EthSigning>,
-		MultisigMessageSender<PolkadotSigning>,
-		MultisigMessageReceiver<PolkadotSigning>,
-		MultisigMessageSender<BtcSigning>,
-		MultisigMessageReceiver<BtcSigning>,
+		MultisigMessageSender<cf_chains::Ethereum>,
+		MultisigMessageReceiver<cf_chains::Ethereum>,
+		MultisigMessageSender<cf_chains::Polkadot>,
+		MultisigMessageReceiver<cf_chains::Polkadot>,
+		MultisigMessageSender<cf_chains::Bitcoin>,
+		MultisigMessageReceiver<cf_chains::Bitcoin>,
 		impl Future<Output = ()>,
 	) {
 		let (eth_outgoing_sender, eth_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -128,12 +128,12 @@ impl P2PMuxer {
 		let muxer_fut = muxer.run().instrument(info_span!("P2PMuxer"));
 
 		(
-			MultisigMessageSender::<EthSigning>::new(eth_outgoing_sender),
-			MultisigMessageReceiver::<EthSigning>::new(eth_incoming_receiver),
-			MultisigMessageSender::<PolkadotSigning>::new(dot_outgoing_sender),
-			MultisigMessageReceiver::<PolkadotSigning>::new(dot_incoming_receiver),
-			MultisigMessageSender::<BtcSigning>::new(btc_outgoing_sender),
-			MultisigMessageReceiver::<BtcSigning>::new(btc_incoming_receiver),
+			MultisigMessageSender::<cf_chains::Ethereum>::new(eth_outgoing_sender),
+			MultisigMessageReceiver::<cf_chains::Ethereum>::new(eth_incoming_receiver),
+			MultisigMessageSender::<cf_chains::Polkadot>::new(dot_outgoing_sender),
+			MultisigMessageReceiver::<cf_chains::Polkadot>::new(dot_incoming_receiver),
+			MultisigMessageSender::<cf_chains::Bitcoin>::new(btc_outgoing_sender),
+			MultisigMessageReceiver::<cf_chains::Bitcoin>::new(btc_incoming_receiver),
 			muxer_fut,
 		)
 	}
