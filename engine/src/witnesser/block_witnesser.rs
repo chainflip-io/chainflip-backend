@@ -10,7 +10,7 @@ use super::{
 	checkpointing::{
 		get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
 	},
-	epoch_witnesser::{self, EpochWitnesser, EpochWitnesserGenerator, WitnesserAndStream},
+	epoch_process_runner::{self, EpochWitnesser, EpochWitnesserGenerator, WitnesserAndStream},
 	ChainBlockNumber, EpochStart, HasBlockNumber,
 };
 
@@ -57,7 +57,7 @@ where
 		end_witnessing_receiver: oneshot::Receiver<ChainBlockNumber<Self::Chain>>,
 		state: Self::StaticState,
 	) -> Result<Self::StaticState, ()> {
-		epoch_witnesser::run_witnesser_block_stream(
+		epoch_process_runner::run_witnesser_block_stream(
 			self,
 			data_stream,
 			end_witnessing_receiver,

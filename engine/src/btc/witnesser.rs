@@ -8,7 +8,7 @@ use crate::{
 		block_witnesser::{
 			BlockStream, BlockWitnesser, BlockWitnesserGenerator, BlockWitnesserGeneratorWrapper,
 		},
-		epoch_witnesser::start_epoch_witnesser,
+		epoch_process_runner::start_epoch_process_runner,
 		AddressMonitor, ChainBlockNumber,
 	},
 };
@@ -98,7 +98,7 @@ pub async fn start<StateChainClient>(
 where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
-	start_epoch_witnesser(
+	start_epoch_process_runner(
 		Arc::new(Mutex::new(epoch_starts_receiver)),
 		BlockWitnesserGeneratorWrapper {
 			db,

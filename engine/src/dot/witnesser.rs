@@ -37,7 +37,7 @@ use crate::{
 		block_witnesser::{
 			BlockStream, BlockWitnesser, BlockWitnesserGenerator, BlockWitnesserGeneratorWrapper,
 		},
-		epoch_witnesser::start_epoch_witnesser,
+		epoch_process_runner::start_epoch_process_runner,
 		AddressMonitor, ChainBlockNumber, EpochStart, HasBlockNumber,
 	},
 };
@@ -261,7 +261,7 @@ where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
-	start_epoch_witnesser(
+	start_epoch_process_runner(
 		Arc::new(Mutex::new(epoch_starts_receiver)),
 		BlockWitnesserGeneratorWrapper {
 			generator: DotWitnesserGenerator { state_chain_client, dot_client },

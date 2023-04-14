@@ -59,7 +59,7 @@ pub trait EpochWitnesserGenerator: Send {
 
 type WitnesserTask<Witnesser> = ScopedJoinHandle<<Witnesser as EpochWitnesser>::StaticState>;
 
-pub async fn start_epoch_witnesser<Generator>(
+pub async fn start_epoch_process_runner<Generator>(
 	epoch_start_receiver: Arc<
 		Mutex<
 			async_broadcast::Receiver<EpochStart<<Generator::Witnesser as EpochWitnesser>::Chain>>,
@@ -371,7 +371,7 @@ mod epoch_witnesser_testing {
 			TestEpochWitnesserGenerator::new();
 		let mut epoch_starter = EpochStarter { epoch_index: 0, epoch_start_sender };
 
-		tokio::spawn(start_epoch_witnesser(
+		tokio::spawn(start_epoch_process_runner(
 			Arc::new(Mutex::new(epoch_start_receiver)),
 			epoch_witnesser_generator,
 			(),
