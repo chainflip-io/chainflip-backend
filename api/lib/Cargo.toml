@@ -19,6 +19,9 @@ secp256k1 = {version = "0.20"}
 rand_legacy = { package = "rand", version = "0.6" }
 zeroize = "1.5.4"
 
+# Local
+utilities = {path = "../../utilities"}
+
 # State Chain
 cf-chains = {path = "../../state-chain/chains"}
 cf-primitives = {path = "../../state-chain/primitives"}

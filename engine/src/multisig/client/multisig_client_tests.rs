@@ -1,22 +1,20 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use super::*;
-use crate::{
-	multisig::{
-		client::{
-			self,
-			common::SigningFailureReason,
-			helpers::{
-				new_nodes, ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_SIGNING_CEREMONY_ID,
-			},
-			key_store::KeyStore,
-			CeremonyRequestDetails,
+use crate::multisig::{
+	client::{
+		self,
+		common::SigningFailureReason,
+		helpers::{
+			new_nodes, ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_SIGNING_CEREMONY_ID,
 		},
-		eth::EthSigning,
-		PersistentKeyDB,
+		key_store::KeyStore,
+		CeremonyRequestDetails,
 	},
-	testing::{assert_future_can_complete, new_temp_directory_with_nonexistent_file},
+	eth::EthSigning,
+	PersistentKeyDB,
 };
+use utilities::testing::{assert_future_can_complete, new_temp_directory_with_nonexistent_file};
 
 use cf_primitives::{KeyId, GENESIS_EPOCH};
 use client::MultisigClient;

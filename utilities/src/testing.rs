@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use std::{
 	io::Write,
 	path::{Path, PathBuf},
@@ -8,9 +6,10 @@ use std::{
 use core::time::Duration;
 use futures::{Future, FutureExt};
 use tempfile::{self, TempDir};
-use utilities::assert_ok;
 
 use tokio::sync::mpsc::UnboundedReceiver;
+
+use crate::assert_ok;
 
 const CHANNEL_TIMEOUT: Duration = Duration::from_millis(10);
 

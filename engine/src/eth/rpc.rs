@@ -20,11 +20,11 @@ use futures::{
 use anyhow::{anyhow, bail, Context, Result};
 
 use crate::{
-	common::format_iterator,
 	constants::{ETH_DUAL_REQUEST_TIMEOUT, ETH_LOG_REQUEST_TIMEOUT, SYNC_POLL_INTERVAL},
 	settings,
 	witnesser::LatestBlockNumber,
 };
+use utilities::format_iterator;
 
 use super::{redact_secret_eth_node_endpoint, TransportProtocol};
 

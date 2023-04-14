@@ -4,6 +4,11 @@
 mod with_std;
 #[cfg(feature = "std")]
 pub use with_std::*;
+#[cfg(feature = "std")]
+pub mod task_scope;
+
+#[cfg(feature = "test-utils")]
+pub mod testing;
 
 pub type Port = u16;
 

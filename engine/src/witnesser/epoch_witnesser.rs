@@ -11,7 +11,7 @@ use tokio::{
 use async_trait::async_trait;
 use tracing::{error, info};
 
-use crate::task_scope::{task_scope, ScopedJoinHandle};
+use utilities::task_scope::{task_scope, ScopedJoinHandle};
 
 use super::{BlockNumberable, ChainBlockNumber, EpochStart};
 type BlockNumber<Witnesser> = ChainBlockNumber<<Witnesser as EpochWitnesser>::Chain>;
@@ -241,7 +241,7 @@ where
 #[cfg(test)]
 mod epoch_witnesser_testing {
 
-	use crate::testing::recv_with_timeout;
+	use utilities::testing::recv_with_timeout;
 
 	use super::*;
 
@@ -376,7 +376,7 @@ mod epoch_witnesser_testing {
 			(),
 		));
 
-		use crate::testing::expect_recv_with_timeout;
+		use utilities::testing::expect_recv_with_timeout;
 
 		// Send start of epoch from block 0
 		epoch_starter.start(0, true).await;

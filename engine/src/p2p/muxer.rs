@@ -218,9 +218,11 @@ impl P2PMuxer {
 #[cfg(test)]
 mod tests {
 
+	use utilities::testing::expect_recv_with_timeout;
+
 	use super::*;
 
-	use crate::{p2p::OutgoingMultisigStageMessages, testing::expect_recv_with_timeout};
+	use crate::p2p::OutgoingMultisigStageMessages;
 
 	const ACC_1: AccountId = AccountId::new([b'A'; 32]);
 	const ACC_2: AccountId = AccountId::new([b'B'; 32]);

@@ -1,7 +1,8 @@
-use core::time::Duration;
+use core::{fmt, time::Duration};
 use futures::{stream, Stream};
 #[doc(hidden)]
 pub use lazy_format::lazy_format as internal_lazy_format;
+use std::path::PathBuf;
 
 pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN], &'static str> {
 	let address_hex_str = match address_str.strip_prefix("0x") {
@@ -271,4 +272,135 @@ macro_rules! print_starting {
 			"
 		);
 	}
+}
+
+// We use PathBuf because the value must be Sized, Path is not Sized
+pub fn deser_path<'de, D>(deserializer: D) -> std::result::Result<PathBuf, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	struct PathVisitor;
+
+	impl<'de> serde::de::Visitor<'de> for PathVisitor {
+		type Value = PathBuf;
+
+		fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+			formatter.write_str("A string containing a path")
+		}
+
+		fn visit_str<E>(self, v: &str) -> std::result::Result<Self::Value, E>
+		where
+			E: serde::de::Error,
+		{
+			Ok(PathBuf::from(v))
+		}
+	}
+
+	// use our visitor to deserialize a `PathBuf`
+	deserializer.deserialize_any(PathVisitor)
+}
+
+pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow::Error>>(
+	file: &std::path::Path,
+	context: &str,
+	t: T,
+) -> Result<V, anyhow::Error> {
+	use anyhow::Context;
+
+	std::fs::read_to_string(file)
+		.map_err(anyhow::Error::new)
+		.with_context(|| format!("Failed to read {} file at {}", context, file.display()))
+		.and_then(|string| {
+			let mut str = string.as_str();
+			str = str.trim();
+			str = str.trim_matches(['"', '\''].as_ref());
+			if let Some(stripped_str) = str.strip_prefix("0x") {
+				str = stripped_str;
+			}
+			// Note if str is valid hex or not is determined by t()
+			t(str)
+		})
+		.with_context(|| format!("Failed to decode {} file at {}", context, file.display()))
+}
+
+#[cfg(test)]
+mod tests_read_clean_and_decode_hex_str_file {
+	use crate::{assert_ok, testing::with_file};
+
+	use super::read_clean_and_decode_hex_str_file;
+
+	#[test]
+	fn load_hex_file() {
+		with_file(b"   \"\'\'\"0xhex\"\'  ", |file_path| {
+			assert_eq!(
+				assert_ok!(read_clean_and_decode_hex_str_file(file_path, "TEST", |str| Ok(
+					str.to_string()
+				))),
+				"hex".to_string()
+			);
+		});
+	}
+
+	#[test]
+	fn load_invalid_hex_file() {
+		with_file(b"   h\" \'ex  ", |file_path| {
+			assert_eq!(
+				assert_ok!(read_clean_and_decode_hex_str_file(file_path, "TEST", |str| Ok(
+					str.to_string()
+				))),
+				"h\" \'ex".to_string()
+			);
+		});
+	}
+}
+
+pub fn format_iterator<'a, It: 'a + IntoIterator>(it: It) -> itertools::Format<'a, It::IntoIter>
+where
+	It::Item: fmt::Display,
+{
+	use itertools::Itertools;
+	it.into_iter().format(", ")
+}
+
+pub fn all_same<Item: PartialEq, It: IntoIterator<Item = Item>>(it: It) -> Option<Item> {
+	let mut it = it.into_iter();
+	let option_item = it.next();
+	match option_item {
+		Some(item) =>
+			if it.all(|other_items| other_items == item) {
+				Some(item)
+			} else {
+				None
+			},
+		None => panic!(),
+	}
+}
+
+pub fn split_at<C: FromIterator<It::Item>, It: IntoIterator>(it: It, index: usize) -> (C, C)
+where
+	It::IntoIter: ExactSizeIterator,
+{
+	struct IteratorRef<'a, T, It: Iterator<Item = T>> {
+		it: &'a mut It,
+	}
+	impl<'a, T, It: Iterator<Item = T>> Iterator for IteratorRef<'a, T, It> {
+		type Item = T;
+
+		fn next(&mut self) -> Option<Self::Item> {
+			self.it.next()
+		}
+	}
+
+	let mut it = it.into_iter();
+	assert!(index < it.len());
+	let wrapped_it = IteratorRef { it: &mut it };
+	(wrapped_it.take(index).collect(), it.collect())
+}
+
+#[test]
+fn test_split_at() {
+	let (left, right) = split_at::<Vec<_>, _>(vec![4, 5, 6, 3, 4, 5], 3);
+
+	assert_eq!(&left[..], &[4, 5, 6]);
+	assert_eq!(&right[..], &[3, 4, 5]);
 }

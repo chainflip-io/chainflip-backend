@@ -7,10 +7,8 @@ use anyhow::Result;
 use itertools::Itertools;
 use tracing::{error, info};
 
-use crate::{
-	multisig::{ChainTag, PersistentKeyDB},
-	task_scope,
-};
+use crate::multisig::{ChainTag, PersistentKeyDB};
+use utilities::task_scope;
 
 use super::WitnessedUntil;
 
@@ -89,7 +87,7 @@ mod tests {
 
 	use utilities::assert_ok;
 
-	use crate::testing::new_temp_directory_with_nonexistent_file;
+	use utilities::testing::new_temp_directory_with_nonexistent_file;
 
 	use super::*;
 

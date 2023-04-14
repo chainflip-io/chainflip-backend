@@ -17,7 +17,7 @@ pub mod ceremony_manager;
 
 use std::collections::BTreeSet;
 
-use crate::common::format_iterator;
+use utilities::format_iterator;
 
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, KeyId};
 use futures::{future::BoxFuture, FutureExt};
