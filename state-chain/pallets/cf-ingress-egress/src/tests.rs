@@ -624,6 +624,7 @@ fn can_egress_ccm() {
 			}
 		));
 
+		EgressedApiCall::set(None);
 		// Send the scheduled ccm in on_idle
 		IngressEgress::on_idle(1, Weight::from_ref_time(1_000_000_000_000u64));
 
@@ -662,7 +663,7 @@ fn governance_can_manually_egress_ccm() {
 				refund_address: refund_address.clone(),
 			}
 		);
-
+		EgressedApiCall::set(None);
 		// Governance can scheduled ccm egress
 		assert_ok!(IngressEgress::egress_scheduled_ccms(
 			RuntimeOrigin::root(),

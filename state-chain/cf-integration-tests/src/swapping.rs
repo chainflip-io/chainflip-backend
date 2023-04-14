@@ -3,7 +3,7 @@ use cf_amm::{
 	common::{sqrt_price_at_tick, Side, SqrtPriceQ64F96, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{Chain, Ethereum, ForeignChain, ForeignChainAddress};
+use cf_chains::{CcmIngressMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress};
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount};
 use cf_test_utilities::{assert_events_eq, assert_events_match};
 use cf_traits::{AddressDerivationApi, EpochInfo, LpBalanceApi};
@@ -278,6 +278,126 @@ fn basic_pool_setup_provision_and_swap() {
 					..
 				},
 			) if egress_ids.contains(&egress_id) => ()
+		);
+	});
+}
+
+#[test]
+fn can_process_ccm_via_swap_intent() {
+	super::genesis::default().build().execute_with(|| {
+		// Setup pool and liquidity
+		new_pool(Asset::Eth, 0u32, sqrt_price_at_tick(0));
+		new_pool(Asset::Flip, 0u32, sqrt_price_at_tick(0));
+
+		new_account(&DORIS, AccountRole::LiquidityProvider);
+		credit_account(&DORIS, Asset::Eth, 1_000_000);
+		credit_account(&DORIS, Asset::Flip, 1_000_000);
+		credit_account(&DORIS, Asset::Usdc, 1_000_000);
+		mint_range_order(&DORIS, Asset::Eth, -1_000..1_000, 1_000_000);
+		mint_range_order(&DORIS, Asset::Flip, -1_000..1_000, 1_000_000);
+
+		new_account(&ZION, AccountRole::Relayer);
+
+		let refund_address = ForeignChainAddress::Eth([1u8; 20]);
+		let message = CcmIngressMetadata {
+			message: vec![0u8, 1u8, 2u8, 3u8, 4u8],
+			gas_budget: 100,
+			refund_address
+		};
+
+		let egress_address = [1u8; 20];
+		assert_ok!(Swapping::register_swap_intent(
+			RuntimeOrigin::signed(ZION.clone()),
+			Asset::Flip,
+			Asset::Usdc,
+			ForeignChainAddress::Eth(egress_address),
+			0u16,
+			Some(message),
+		));
+
+		let ingress_address = <AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
+			cf_chains::eth::assets::eth::Asset::Flip,
+			pallet_cf_ingress_egress::IntentIdCounter::<Runtime, EthereumInstance>::get(),
+		).unwrap();
+		let current_epoch = Validator::current_epoch();
+		for node in Validator::current_authorities() {
+			assert_ok!(Witnesser::witness_at_epoch(
+				RuntimeOrigin::signed(node),
+				Box::new(RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::do_ingress {
+					ingress_witnesses: vec![IngressWitness {
+						ingress_address,
+						asset: cf_chains::eth::assets::eth::Asset::Flip,
+						amount: 1_000,
+						tx_id: Default::default(),
+					}],
+				})),
+				current_epoch
+			));
+		}
+
+		let (principal_swap_id, gas_swap_id) = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::CcmIngressReceived {
+			ccm_id: 1,
+			principal_swap_id: Some(principal_swap_id),
+			gas_swap_id: Some(gas_swap_id),
+			ingress_amount: 1000,
+			..
+		}) => (principal_swap_id, gas_swap_id));
+
+		let _ = state_chain_runtime::AllPalletsWithoutSystem::on_idle(
+			1,
+			Weight::from_ref_time(1_000_000_000_000),
+		);
+
+		let ((), (), (), (), (), egress_id) = assert_events_match!(
+			Runtime,
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from: Asset::Flip,
+					to: Asset::Usdc,
+					input_amount: 100,
+					..
+				},
+			) => (),
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from: Asset::Usdc,
+					to: Asset::Eth,
+					..
+				},
+			) => (),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::SwapExecuted {
+					swap_id,
+				},
+			) if swap_id == gas_swap_id => (),
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from: Asset::Flip,
+					to: Asset::Usdc,
+					..
+				},
+			) => (),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::SwapExecuted {
+					swap_id,
+				},
+			) if swap_id == principal_swap_id => (),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::CcmEgressScheduled {
+					ccm_id: 1,
+					egress_id: egress_id @ (ForeignChain::Ethereum, _),
+				},
+			) => egress_id
+		);
+
+		assert_events_match!(
+			Runtime,
+			RuntimeEvent::EthereumIngressEgress(
+				pallet_cf_ingress_egress::Event::CcmBroadcastRequested {
+					egress_id: actual_egress_id,
+					..
+				},
+			) if actual_egress_id == egress_id => ()
 		);
 	});
 }
