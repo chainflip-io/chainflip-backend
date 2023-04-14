@@ -7,6 +7,7 @@ use cf_chains::address::{BitcoinAddressData, ScriptPubkeyBytes};
 use cf_primitives::EpochIndex;
 
 pub mod block_head_stream_from;
+pub mod block_witnesser;
 pub mod checkpointing;
 pub mod epoch_witnesser;
 pub mod http_safe_stream;

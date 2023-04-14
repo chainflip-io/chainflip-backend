@@ -5,10 +5,8 @@ use crate::{
 	constants::BTC_INGRESS_BLOCK_SAFETY_MARGIN,
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 	witnesser::{
-		epoch_witnesser::{
-			self, start_epoch_witnesser, EpochWitnesser, EpochWitnesserGenerator,
-			WitnesserAndStream,
-		},
+		block_witnesser::{BlockWitnesser, BlockWitnesserWrapper},
+		epoch_witnesser::{start_epoch_witnesser, EpochWitnesserGenerator, WitnesserAndStream},
 		AddressMonitor, ChainBlockNumber,
 	},
 };
@@ -22,16 +20,14 @@ use cf_primitives::chains::assets::btc;
 use futures::StreamExt;
 use pallet_cf_ingress_egress::IngressWitness;
 use state_chain_runtime::BitcoinInstance;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::Mutex;
 use tracing::{info_span, trace, Instrument};
 
 use crate::{
 	multisig::PersistentKeyDB,
 	witnesser::{
 		block_head_stream_from::block_head_stream_from,
-		checkpointing::{
-			get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
-		},
+		checkpointing::{get_witnesser_start_block_with_checkpointing, StartCheckpointing},
 		http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
 		EpochStart,
 	},
@@ -114,39 +110,19 @@ where
 struct BtcWitnesser<StateChainClient> {
 	state_chain_client: Arc<StateChainClient>,
 	btc_rpc: BtcRpcClient,
-	witnessed_until_sender: mpsc::Sender<WitnessedUntil>,
 	current_epoch: EpochStart<Bitcoin>,
 }
 
 #[async_trait]
-impl<StateChainClient> EpochWitnesser for BtcWitnesser<StateChainClient>
+impl<StateChainClient> BlockWitnesser for BtcWitnesser<StateChainClient>
 where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
 	type Chain = Bitcoin;
-	type Data = ChainBlockNumber<Self::Chain>;
+	type Block = ChainBlockNumber<Self::Chain>;
 	type StaticState = AddressMonitor<BitcoinAddressData, ScriptPubkeyBytes, BitcoinAddressData>;
 
-	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = true;
-
-	async fn run_witnesser(
-		self,
-		data_stream: std::pin::Pin<
-			Box<dyn futures::Stream<Item = anyhow::Result<Self::Data>> + Send + 'static>,
-		>,
-		end_witnessing_receiver: oneshot::Receiver<ChainBlockNumber<Self::Chain>>,
-		state: Self::StaticState,
-	) -> Result<Self::StaticState, ()> {
-		epoch_witnesser::run_witnesser_block_stream(
-			self,
-			data_stream,
-			end_witnessing_receiver,
-			state,
-		)
-		.await
-	}
-
-	async fn do_witness(
+	async fn process_block(
 		&mut self,
 		block_number: ChainBlockNumber<Bitcoin>,
 		address_monitor: &mut Self::StaticState,
@@ -202,11 +178,6 @@ where
 				.await;
 		}
 
-		self.witnessed_until_sender
-			.send(WitnessedUntil { epoch_index: self.current_epoch.epoch_index, block_number })
-			.await
-			.unwrap();
-
 		Ok(())
 	}
 }
@@ -225,12 +196,12 @@ impl<StateChainClient> EpochWitnesserGenerator for BtcWitnesserGenerator<StateCh
 where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
-	type Witnesser = BtcWitnesser<StateChainClient>;
+	type Witnesser = BlockWitnesserWrapper<BtcWitnesser<StateChainClient>>;
 
 	async fn init(
 		&mut self,
 		epoch: EpochStart<Bitcoin>,
-	) -> anyhow::Result<Option<WitnesserAndStream<BtcWitnesser<StateChainClient>>>> {
+	) -> anyhow::Result<Option<WitnesserAndStream<Self::Witnesser>>> {
 		// TODO: Look at deduplicating this
 		let (from_block, witnessed_until_sender) =
 			match get_witnesser_start_block_with_checkpointing::<cf_chains::Bitcoin>(
@@ -259,14 +230,18 @@ where
 		.await?
 		.map(Ok);
 
+		let epoch_index = epoch.epoch_index;
+
 		let witnesser = BtcWitnesser {
 			state_chain_client: self.state_chain_client.clone(),
 			btc_rpc: self.btc_rpc.clone(),
-			witnessed_until_sender,
 			current_epoch: epoch,
 		};
 
-		Ok(Some((witnesser, Box::pin(block_number_stream_from))))
+		Ok(Some((
+			BlockWitnesserWrapper { witnesser, epoch_index, witnessed_until_sender },
+			Box::pin(block_number_stream_from),
+		)))
 	}
 }
 

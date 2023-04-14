@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use cf_chains::Ethereum;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::Mutex;
 use tracing::{info_span, Instrument};
 
 use super::{
@@ -14,14 +14,10 @@ use crate::{
 	multisig::PersistentKeyDB,
 	stream_utils::EngineStreamExt,
 	witnesser::{
-		checkpointing::{
-			get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
-		},
-		epoch_witnesser::{
-			self, start_epoch_witnesser, EpochWitnesser, EpochWitnesserGenerator,
-			WitnesserAndStream,
-		},
-		ChainBlockNumber, EpochStart,
+		block_witnesser::{BlockWitnesser, BlockWitnesserWrapper},
+		checkpointing::{get_witnesser_start_block_with_checkpointing, StartCheckpointing},
+		epoch_witnesser::{start_epoch_witnesser, EpochWitnesserGenerator, WitnesserAndStream},
+		EpochStart,
 	},
 };
 
@@ -35,36 +31,16 @@ pub trait BlockProcessor: Send {
 }
 
 struct EthBlockWitnesser {
-	witnessed_until_sender: mpsc::Sender<WitnessedUntil>,
 	epoch: EpochStart<Ethereum>,
 }
 
 #[async_trait]
-impl EpochWitnesser for EthBlockWitnesser {
+impl BlockWitnesser for EthBlockWitnesser {
 	type Chain = Ethereum;
-	type Data = EthNumberBloom;
+	type Block = EthNumberBloom;
 	type StaticState = AllWitnessers;
 
-	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = true;
-
-	async fn run_witnesser(
-		self,
-		data_stream: std::pin::Pin<
-			Box<dyn futures::Stream<Item = anyhow::Result<Self::Data>> + Send + 'static>,
-		>,
-		end_witnessing_receiver: oneshot::Receiver<ChainBlockNumber<Self::Chain>>,
-		state: Self::StaticState,
-	) -> Result<Self::StaticState, ()> {
-		epoch_witnesser::run_witnesser_block_stream(
-			self,
-			data_stream,
-			end_witnessing_receiver,
-			state,
-		)
-		.await
-	}
-
-	async fn do_witness(
+	async fn process_block(
 		&mut self,
 		block: EthNumberBloom,
 		witnessers: &mut AllWitnessers,
@@ -86,14 +62,6 @@ impl EpochWitnesser for EthBlockWitnesser {
 			err
 		})?;
 
-		self.witnessed_until_sender
-			.send(WitnessedUntil {
-				epoch_index: self.epoch.epoch_index,
-				block_number: block.block_number.as_u64(),
-			})
-			.await
-			.unwrap();
-
 		Ok(())
 	}
 }
@@ -105,12 +73,12 @@ struct EthBlockWitnesserGenerator {
 
 #[async_trait]
 impl EpochWitnesserGenerator for EthBlockWitnesserGenerator {
-	type Witnesser = EthBlockWitnesser;
+	type Witnesser = BlockWitnesserWrapper<EthBlockWitnesser>;
 	async fn init(
 		&mut self,
 		epoch: EpochStart<Ethereum>,
 		// Why is this result option
-	) -> anyhow::Result<Option<WitnesserAndStream<EthBlockWitnesser>>> {
+	) -> anyhow::Result<Option<WitnesserAndStream<Self::Witnesser>>> {
 		let (from_block, witnessed_until_sender) =
 			match get_witnesser_start_block_with_checkpointing::<cf_chains::Ethereum>(
 				epoch.epoch_index,
@@ -135,7 +103,14 @@ impl EpochWitnesserGenerator for EthBlockWitnesserGenerator {
 				ETH_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER,
 			));
 
-		Ok(Some((EthBlockWitnesser { witnessed_until_sender, epoch }, Box::pin(block_stream))))
+		Ok(Some((
+			BlockWitnesserWrapper {
+				epoch_index: epoch.epoch_index,
+				witnesser: EthBlockWitnesser { epoch },
+				witnessed_until_sender,
+			},
+			Box::pin(block_stream),
+		)))
 	}
 }
 

@@ -24,7 +24,7 @@ use subxt::{
 	config::Header,
 	events::{Phase, StaticEvent},
 };
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::Mutex;
 use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
@@ -34,14 +34,10 @@ use crate::{
 	stream_utils::EngineStreamExt,
 	witnesser::{
 		block_head_stream_from::block_head_stream_from,
-		checkpointing::{
-			get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
-		},
-		epoch_witnesser::{
-			self, start_epoch_witnesser, EpochWitnesser, EpochWitnesserGenerator,
-			WitnesserAndStream,
-		},
-		AddressMonitor, ChainBlockNumber, EpochStart, HasBlockNumber,
+		block_witnesser::{BlockWitnesser, BlockWitnesserWrapper},
+		checkpointing::{get_witnesser_start_block_with_checkpointing, StartCheckpointing},
+		epoch_witnesser::{start_epoch_witnesser, EpochWitnesserGenerator, WitnesserAndStream},
+		AddressMonitor, EpochStart, HasBlockNumber,
 	},
 };
 
@@ -278,7 +274,6 @@ struct DotWitnesser<StateChainClient, DotRpc> {
 	state_chain_client: Arc<StateChainClient>,
 	dot_client: DotRpc,
 	current_epoch: EpochStart<Polkadot>,
-	witnessed_until_sender: tokio::sync::mpsc::Sender<WitnessedUntil>,
 }
 
 impl HasBlockNumber for (H256, PolkadotBlockNumber, Vec<(Phase, EventWrapper)>) {
@@ -290,41 +285,22 @@ impl HasBlockNumber for (H256, PolkadotBlockNumber, Vec<(Phase, EventWrapper)>) 
 }
 
 #[async_trait]
-impl<StateChainClient, DotRpc> EpochWitnesser for DotWitnesser<StateChainClient, DotRpc>
+impl<StateChainClient, DotRpc> BlockWitnesser for DotWitnesser<StateChainClient, DotRpc>
 where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
 	type Chain = Polkadot;
-	type Data = (H256, u32, Vec<(Phase, EventWrapper)>);
+	type Block = (H256, u32, Vec<(Phase, EventWrapper)>);
 	type StaticState = (
 		AddressMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
 		BTreeSet<[u8; 64]>,
 		tokio::sync::mpsc::UnboundedReceiver<[u8; 64]>,
 	);
 
-	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = true;
-
-	async fn run_witnesser(
-		self,
-		data_stream: std::pin::Pin<
-			Box<dyn futures::Stream<Item = anyhow::Result<Self::Data>> + Send + 'static>,
-		>,
-		end_witnessing_receiver: oneshot::Receiver<ChainBlockNumber<Self::Chain>>,
-		state: Self::StaticState,
-	) -> Result<Self::StaticState, ()> {
-		epoch_witnesser::run_witnesser_block_stream(
-			self,
-			data_stream,
-			end_witnessing_receiver,
-			state,
-		)
-		.await
-	}
-
-	async fn do_witness(
+	async fn process_block(
 		&mut self,
-		data: Self::Data,
+		data: Self::Block,
 		(address_monitor, monitored_signatures, signature_receiver): &mut Self::StaticState,
 	) -> anyhow::Result<()> {
 		let (block_hash, block_number, block_event_details) = data;
@@ -442,11 +418,6 @@ where
 				.await;
 		}
 
-		self.witnessed_until_sender
-			.send(WitnessedUntil { epoch_index, block_number: block_number as u64 })
-			.await
-			.unwrap();
-
 		Ok(())
 	}
 }
@@ -464,11 +435,12 @@ where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
-	type Witnesser = DotWitnesser<StateChainClient, DotRpc>;
+	type Witnesser = BlockWitnesserWrapper<DotWitnesser<StateChainClient, DotRpc>>;
+
 	async fn init(
 		&mut self,
 		epoch: EpochStart<Polkadot>,
-	) -> anyhow::Result<Option<WitnesserAndStream<DotWitnesser<StateChainClient, DotRpc>>>> {
+	) -> anyhow::Result<Option<WitnesserAndStream<Self::Witnesser>>> {
 		let (from_block, witnessed_until_sender) =
 			match get_witnesser_start_block_with_checkpointing::<Polkadot>(
 				epoch.epoch_index,
@@ -566,10 +538,16 @@ where
 			state_chain_client: self.state_chain_client.clone(),
 			dot_client: self.dot_client.clone(),
 			current_epoch: epoch.clone(),
-			witnessed_until_sender,
 		};
 
-		Ok(Some((witnesser, Box::pin(block_events_stream))))
+		Ok(Some((
+			BlockWitnesserWrapper {
+				witnesser,
+				epoch_index: epoch.epoch_index,
+				witnessed_until_sender,
+			},
+			Box::pin(block_events_stream),
+		)))
 	}
 }
 
