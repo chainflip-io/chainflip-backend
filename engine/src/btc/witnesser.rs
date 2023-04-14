@@ -18,7 +18,7 @@ use cf_chains::{
 	btc::{BitcoinTrackedData, Utxo, UtxoId},
 	Bitcoin,
 };
-use cf_primitives::chains::assets::btc;
+use cf_primitives::{chains::assets::btc, EpochIndex};
 use futures::StreamExt;
 use pallet_cf_ingress_egress::IngressWitness;
 use state_chain_runtime::BitcoinInstance;
@@ -114,7 +114,8 @@ where
 struct BtcWitnesser<StateChainClient> {
 	state_chain_client: Arc<StateChainClient>,
 	btc_rpc: BtcRpcClient,
-	current_epoch: EpochStart<Bitcoin>,
+	epoch_index: EpochIndex,
+	change_address: BitcoinAddressData,
 }
 
 #[async_trait]
@@ -135,11 +136,8 @@ where
 
 		trace!("Checking BTC block: {block_number} for interesting UTXOs");
 
-		let (ingress_witnesses, change_witnesses) = filter_interesting_utxos(
-			block.txdata,
-			address_monitor,
-			&self.current_epoch.data.change_address,
-		);
+		let (ingress_witnesses, change_witnesses) =
+			filter_interesting_utxos(block.txdata, address_monitor, &self.change_address);
 
 		let _result = self
 			.state_chain_client
@@ -150,7 +148,7 @@ where
 					}
 					.into(),
 				),
-				epoch_index: self.current_epoch.epoch_index,
+				epoch_index: self.epoch_index,
 			})
 			.await;
 
@@ -161,7 +159,7 @@ where
 					pallet_cf_environment::Call::add_btc_change_utxos { utxos: change_witnesses }
 						.into(),
 				),
-				epoch_index: self.current_epoch.epoch_index,
+				epoch_index: self.epoch_index,
 			})
 			.await;
 
@@ -177,7 +175,7 @@ where
 							},
 						},
 					)),
-					epoch_index: self.current_epoch.epoch_index,
+					epoch_index: self.epoch_index,
 				})
 				.await;
 		}
@@ -208,7 +206,8 @@ where
 		BtcWitnesser {
 			state_chain_client: self.state_chain_client.clone(),
 			btc_rpc: self.btc_rpc.clone(),
-			current_epoch: epoch,
+			epoch_index: epoch.epoch_index,
+			change_address: epoch.data.change_address,
 		}
 	}
 
