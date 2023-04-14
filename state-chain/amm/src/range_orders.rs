@@ -26,8 +26,8 @@ use sp_std::{collections::btree_map::BTreeMap, convert::Infallible};
 
 use cf_utilities::assert_ok;
 use codec::{Decode, Encode, MaxEncodedLen};
-use primitive_types::{U256, U512};
 use scale_info::TypeInfo;
+use sp_core::{U256, U512};
 
 use crate::common::{
 	is_sqrt_price_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, tick_at_sqrt_price,
