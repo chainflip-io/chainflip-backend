@@ -1,6 +1,6 @@
 use codec::{Decode, Encode, MaxEncodedLen};
-use primitive_types::{U256, U512};
 use scale_info::TypeInfo;
+use sp_core::{U256, U512};
 
 pub const ONE_IN_HUNDREDTH_PIPS: u32 = 1000000;
 
