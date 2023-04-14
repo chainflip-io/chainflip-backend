@@ -8,7 +8,7 @@ mod crypto;
 pub mod db;
 
 pub use crypto::{
-	bitcoin, eth, polkadot, ChainTag, CryptoScheme, Rng, SignatureToThresholdSignature,
+	bitcoin, eth, polkadot, ChainTag, CryptoScheme, HasChainTag, Rng, SignatureToThresholdSignature,
 };
 
 use anyhow::Result;

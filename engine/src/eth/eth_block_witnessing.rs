@@ -11,7 +11,7 @@ use super::{
 };
 use crate::{
 	constants::{BLOCK_PULL_TIMEOUT_MULTIPLIER, ETH_AVERAGE_BLOCK_TIME_SECONDS},
-	multisig::{ChainTag, PersistentKeyDB},
+	multisig::PersistentKeyDB,
 	stream_utils::EngineStreamExt,
 	witnesser::{
 		checkpointing::{
@@ -113,7 +113,6 @@ impl EpochWitnesserGenerator for EthBlockWitnesserGenerator {
 	) -> anyhow::Result<Option<WitnesserAndStream<EthBlockWitnesser>>> {
 		let (from_block, witnessed_until_sender) =
 			match get_witnesser_start_block_with_checkpointing::<cf_chains::Ethereum>(
-				ChainTag::Ethereum,
 				epoch.epoch_index,
 				epoch.block_number,
 				self.db.clone(),

@@ -5,7 +5,7 @@ use cf_primitives::EpochIndex;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
-use crate::multisig::{ChainTag, PersistentKeyDB};
+use crate::multisig::{ChainTag, HasChainTag, PersistentKeyDB};
 
 mod migrations;
 
@@ -23,8 +23,7 @@ pub enum StartCheckpointing<Chain: cf_chains::Chain> {
 
 /// Loads the checkpoint from the db then starts checkpointing. Returns the block number at which to
 /// start witnessing unless the epoch has already been witnessed.
-pub async fn get_witnesser_start_block_with_checkpointing<Chain: cf_chains::Chain>(
-	chain_tag: ChainTag,
+pub async fn get_witnesser_start_block_with_checkpointing<Chain: cf_chains::Chain + HasChainTag>(
 	epoch_start_index: EpochIndex,
 	epoch_start_block_number: Chain::ChainBlockNumber,
 	db: Arc<PersistentKeyDB>,
@@ -32,6 +31,7 @@ pub async fn get_witnesser_start_block_with_checkpointing<Chain: cf_chains::Chai
 where
 	<<Chain as cf_chains::Chain>::ChainBlockNumber as TryFrom<u64>>::Error: std::fmt::Debug,
 {
+	let chain_tag = Chain::CHAIN_TAG;
 	let mut loaded_checkpoint = db.load_checkpoint(chain_tag)?;
 
 	// Eth witnessers are the only ones that used the legacy checkpointing files.
@@ -128,7 +128,6 @@ mod tests {
 
 			// Start checkpointing at the same epoch but smaller block number
 			match get_witnesser_start_block_with_checkpointing::<cf_chains::Ethereum>(
-				ChainTag::Ethereum,
 				saved_witnessed_until.epoch_index,
 				saved_witnessed_until
 					.block_number
@@ -201,7 +200,6 @@ mod tests {
 		// Start checkpointing at a smaller epoch and check that it returns `AlreadyWitnessedEpoch`
 		assert!(matches!(
 			get_witnesser_start_block_with_checkpointing::<cf_chains::Ethereum>(
-				ChainTag::Ethereum,
 				saved_witnessed_until
 					.epoch_index
 					.checked_sub(1)

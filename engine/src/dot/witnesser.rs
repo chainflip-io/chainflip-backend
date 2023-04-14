@@ -29,7 +29,7 @@ use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
 	constants::{BLOCK_PULL_TIMEOUT_MULTIPLIER, DOT_AVERAGE_BLOCK_TIME_SECONDS},
-	multisig::{ChainTag, PersistentKeyDB},
+	multisig::PersistentKeyDB,
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 	stream_utils::EngineStreamExt,
 	witnesser::{
@@ -471,7 +471,6 @@ where
 	) -> anyhow::Result<Option<WitnesserAndStream<DotWitnesser<StateChainClient, DotRpc>>>> {
 		let (from_block, witnessed_until_sender) =
 			match get_witnesser_start_block_with_checkpointing::<Polkadot>(
-				ChainTag::Polkadot,
 				epoch.epoch_index,
 				epoch.block_number,
 				self.db.clone(),
