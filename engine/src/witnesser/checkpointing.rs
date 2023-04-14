@@ -32,14 +32,15 @@ pub async fn get_witnesser_start_block_with_checkpointing<Chain: cf_chains::Chai
 where
 	<<Chain as cf_chains::Chain>::ChainBlockNumber as TryFrom<u64>>::Error: std::fmt::Debug,
 {
-	let loaded_checkpoint = db.load_checkpoint(chain_tag)?;
+	let mut loaded_checkpoint = db.load_checkpoint(chain_tag)?;
 
 	// Eth witnessers are the only ones that used the legacy checkpointing files.
 	// Only go ahead with the migration if no checkpoint is found in the db.
 	if matches!(chain_tag, ChainTag::Ethereum) && loaded_checkpoint.is_none() {
 		migrations::run_eth_migration(chain_tag, db.clone(), &std::env::current_dir().unwrap())
 			.await
-			.with_context(|| "Failed to perform Eth witnesser checkpointing migration")?
+			.with_context(|| "Failed to perform Eth witnesser checkpointing migration")?;
+		loaded_checkpoint = db.load_checkpoint(chain_tag)?;
 	}
 
 	// Use the loaded checkpoint or the default if none was found
@@ -80,10 +81,6 @@ where
 		}
 	});
 
-	// We do this because it's possible to witness ahead of the epoch start during the
-	// previous epoch. If we don't start witnessing from the epoch start, when we
-	// receive a new epoch, we won't witness some of the blocks for the particular
-	// epoch, since witness extrinsics are submitted with the epoch number it's for.
 	let start_witnessing_from_block = if witnessed_until.epoch_index == epoch_start_index {
 		witnessed_until
 			.block_number
@@ -92,6 +89,8 @@ where
 			.expect("Should convert block number from u64")
 	} else {
 		// We haven't started witnessing this epoch yet, so start from the beginning
+		// (Note that we do this even if we have already witnessed a few blocks ahead,
+		// as we need to re-witness them for the correct epoch)
 		epoch_start_block_number
 	};
 

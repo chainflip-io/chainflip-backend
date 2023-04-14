@@ -2,17 +2,15 @@
 # `rustup completions --help` to find out how to set this up.
 
 [alias]
-# Run unit tests but not integration tests
-cf-test = "test --lib --all-features"
+cf-test =     "test --lib --features runtime-benchmarks"
+cf-test-ci =  "test --lib --features runtime-benchmarks,slow-tests"
+cf-test-cfe = "test --lib --package chainflip-engine"
 
-ci-check = "check --all-targets --all-features --release"
+cf-clippy =    "clippy           --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings"
+cf-clippy-ci = "clippy --release --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings"
 
-cf-clippy = "clippy --all-targets --all-features"
-
-ci-build = "build --release --features runtime-benchmarks"
-ci-test = "test --lib --features runtime-benchmarks"
-
-ci-clippy = "clippy --all-targets --all-features -- -D warnings"
+cf-build =    "build --features runtime-benchmarks"
+cf-build-ci = "build --release --features runtime-benchmarks"
 
 # Check for feature inconsistencies.
 check-sc-features = '''
@@ -21,6 +19,3 @@ tree --no-default-features --depth 1 --edges=features,normal
     -p pallet-cf-*
     -p cf-*
 '''
-
-# Run just the CFE unit tests
-cfe-test = "test --package chainflip-engine --lib"

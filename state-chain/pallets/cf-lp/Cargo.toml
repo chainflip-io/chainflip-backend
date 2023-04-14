@@ -36,7 +36,6 @@ sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainfli
 quickcheck = '1'
 quickcheck_macros = '1'
 pallet-cf-account-roles = { path = '../cf-account-roles' }
-pallet-cf-pools = { path = '../cf-pools' }
 
 [features]
 default = ['std']

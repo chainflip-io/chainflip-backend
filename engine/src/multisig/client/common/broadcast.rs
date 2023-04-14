@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, fmt::Display};
+use std::{
+	collections::{btree_map, BTreeMap},
+	fmt::Display,
+};
 
 use async_trait::async_trait;
 use cf_primitives::{AuthorityCount, CeremonyId};
@@ -173,14 +176,6 @@ where
 			},
 		};
 
-		if self.messages.contains_key(&signer_idx) {
-			warn!(
-				from_id = self.common.validator_mapping.get_id(signer_idx).to_string(),
-				"Ignoring a redundant message for stage {self}",
-			);
-			return ProcessMessageResult::NotReady
-		}
-
 		if !self.common.all_idxs.contains(&signer_idx) {
 			warn!(
 				from_id = self.common.validator_mapping.get_id(signer_idx).to_string(),
@@ -189,12 +184,23 @@ where
 			return ProcessMessageResult::NotReady
 		}
 
-		self.messages.insert(signer_idx, m);
+		match self.messages.entry(signer_idx) {
+			btree_map::Entry::Occupied(_) => {
+				warn!(
+					from_id = self.common.validator_mapping.get_id(signer_idx).to_string(),
+					"Ignoring a redundant message for stage {self}",
+				);
+				ProcessMessageResult::NotReady
+			},
+			btree_map::Entry::Vacant(entry) => {
+				entry.insert(m);
 
-		if self.messages.len() == self.common.all_idxs.len() {
-			ProcessMessageResult::Ready
-		} else {
-			ProcessMessageResult::NotReady
+				if self.messages.len() == self.common.all_idxs.len() {
+					ProcessMessageResult::Ready
+				} else {
+					ProcessMessageResult::NotReady
+				}
+			},
 		}
 	}
 

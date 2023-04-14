@@ -12,8 +12,8 @@ use sp_core::{crypto::AccountId32, sr25519};
 use sp_runtime::{generic::Era, traits::IdentifyAccount, MultiSignature, MultiSigner};
 
 use super::{
-	api::{create_anonymous_vault::CreateAnonymousVault, PolkadotApi},
-	EncodedPolkadotPayload, PolkadotAccountId, PolkadotReplayProtection, TxId,
+	api::{create_anonymous_vault, PolkadotApi},
+	EncodedPolkadotPayload, PolkadotAccountId, PolkadotReplayProtection, PolkadotTrackedData, TxId,
 };
 
 const SIGNATURE: [u8; 64] = [1u8; 64];
@@ -76,14 +76,11 @@ impl BenchmarkValue for PolkadotAccountId {
 
 impl<E> BenchmarkValue for PolkadotApi<E> {
 	fn benchmark_value() -> Self {
-		PolkadotApi::CreateAnonymousVault(CreateAnonymousVault::new_unsigned(
+		PolkadotApi::CreateAnonymousVault(create_anonymous_vault::extrinsic_builder(
 			PolkadotReplayProtection {
-				runtime_version: Default::default(),
 				genesis_hash: Default::default(),
 				nonce: Default::default(),
-				tip: Default::default(),
 			},
-			PolkadotPublicKey::benchmark_value(),
 		))
 	}
 }
@@ -97,5 +94,11 @@ impl BenchmarkValue for EncodedPolkadotPayload {
 impl BenchmarkValue for TxId {
 	fn benchmark_value() -> Self {
 		Self { block_number: 32, extrinsic_index: 7 }
+	}
+}
+
+impl BenchmarkValue for PolkadotTrackedData {
+	fn benchmark_value() -> Self {
+		PolkadotTrackedData { median_tip: 2, block_height: 20 }
 	}
 }

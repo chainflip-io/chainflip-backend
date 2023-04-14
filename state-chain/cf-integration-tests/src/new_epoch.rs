@@ -241,9 +241,7 @@ fn new_epoch_will_purge_stale_witnesser_storage() {
 		assert_eq!(Validator::epoch_index(), 1);
 
 		let move_forward_by_epochs = |epochs: u32, testnet: &mut Network| {
-			let start = Validator::epoch_index();
-			let finish = start + epochs;
-			for _ in start..finish {
+			for _ in 0..epochs {
 				testnet.move_forward_blocks(EPOCH_BLOCKS + VAULT_ROTATION_BLOCKS + 1);
 				testnet.submit_heartbeat_all_engines();
 			}

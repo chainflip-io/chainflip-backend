@@ -24,8 +24,9 @@ fn insert_transaction_broadcast_attempt<T: pallet::Config<I>, I: 'static>(
 		broadcast_attempt_id,
 		TransactionSigningAttempt {
 			broadcast_attempt: BroadcastAttempt::<T, I> {
-				transaction_payload: TransactionFor::<T, I>::benchmark_value(),
 				broadcast_attempt_id,
+				transaction_payload: TransactionFor::<T, I>::benchmark_value(),
+				threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
 			},
 			nominee,
 		},
@@ -34,14 +35,14 @@ fn insert_transaction_broadcast_attempt<T: pallet::Config<I>, I: 'static>(
 
 // Generates a new signature ready call.
 fn generate_on_signature_ready_call<T: pallet::Config<I>, I>() -> pallet::Call<T, I> {
-	let threshold_request_id =
-		<T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId::benchmark_value();
+	let threshold_request_id = 1;
 	T::ThresholdSigner::insert_signature(
 		threshold_request_id,
 		ThresholdSignatureFor::<T, I>::benchmark_value(),
 	);
 	Call::<T, I>::on_signature_ready {
 		threshold_request_id,
+		threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
 		api_call: Box::new(ApiCallFor::<T, I>::benchmark_value()),
 		broadcast_id: 1,
 	}
@@ -101,7 +102,13 @@ benchmarks_instance_pallet! {
 		assert!(Timeouts::<T, I>::contains_key(timeout_block));
 	}
 	start_next_broadcast_attempt {
-		let broadcast_attempt_id = Pallet::<T, I>::start_broadcast(&BenchmarkValue::benchmark_value(), BenchmarkValue::benchmark_value(), BenchmarkValue::benchmark_value(), 1);
+		let broadcast_attempt_id = Pallet::<T, I>::start_broadcast(
+			&BenchmarkValue::benchmark_value(),
+			BenchmarkValue::benchmark_value(),
+			BenchmarkValue::benchmark_value(),
+			BenchmarkValue::benchmark_value(),
+			1
+		);
 
 		T::KeyProvider::set_key(<<T as Config<I>>::TargetChain as ChainCrypto>::AggKey::benchmark_value());
 		let transaction_payload = TransactionFor::<T, I>::benchmark_value();
@@ -110,6 +117,7 @@ benchmarks_instance_pallet! {
 		Pallet::<T, I>::start_next_broadcast_attempt( BroadcastAttempt::<T, I> {
 			broadcast_attempt_id,
 			transaction_payload,
+			threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
 		})
 	}
 	verify {

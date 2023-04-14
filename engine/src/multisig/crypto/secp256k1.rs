@@ -98,6 +98,9 @@ mod point_impls {
 			*Self::generator() * scalar
 		}
 
+		// One of the issues with this method is that we can't blindly use this for serialization
+		// because the way this should be serialized depends on the Scheme (e.g. BTC does not
+		// encode the parity bit, while ETH does).
 		fn as_bytes(&self) -> generic_array::GenericArray<u8, Self::CompressedPointLength> {
 			match self.0 {
 				Some(pk) => pk.serialize(),

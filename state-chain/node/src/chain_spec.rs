@@ -4,10 +4,14 @@ use cf_chains::{
 };
 use cf_primitives::{AccountRole, AuthorityCount, PolkadotAccountId};
 
+use common::FLIPPERINOS_PER_FLIP;
 use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
 use sc_service::{ChainType, Properties};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto};
+use sp_core::{
+	crypto::{set_default_ss58_version, Ss58AddressFormat, UncheckedInto},
+	sr25519, Pair, Public,
+};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{
 	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
@@ -18,12 +22,9 @@ use state_chain_runtime::{
 	ValidatorConfig, WASM_BINARY,
 };
 
-use common::FLIPPERINOS_PER_FLIP;
-
-use std::{env, marker::PhantomData};
+use std::{env, marker::PhantomData, str::FromStr};
 use utilities::clean_eth_address;
 
-use sp_core::{sr25519, Pair, Public};
 use sp_runtime::traits::{IdentifyAccount, Verify};
 
 pub mod common;
@@ -31,7 +32,7 @@ pub mod sisyphos;
 pub mod testnet;
 
 /// Generate a crypto pair from seed.
-pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
+pub fn test_account_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
 	TPublic::Pair::from_string(&format!("//{seed}"), None)
 		.expect("static values are valid; qed")
 		.public()
@@ -44,28 +45,13 @@ pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId
 where
 	AccountPublic: From<<TPublic::Pair as Pair>::Public>,
 {
-	AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
+	AccountPublic::from(test_account_from_seed::<TPublic>(seed)).into_account()
 }
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
 
-const FLIP_TOKEN_ADDRESS_DEFAULT: &str = "Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9";
-const ETH_USDC_ADDRESS_DEFAULT: &str = "a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
-const STAKE_MANAGER_ADDRESS_DEFAULT: &str = "9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
-const KEY_MANAGER_ADDRESS_DEFAULT: &str = "5FbDB2315678afecb367f032d93F642f64180aa3";
-const ETH_VAULT_ADDRESS_DEFAULT: &str = "e7f1725E7734CE288F8367e1Bb143E90bb3F0512";
-const ETHEREUM_CHAIN_ID_DEFAULT: u64 = cf_chains::eth::CHAIN_ID_GOERLI;
-const ETH_INIT_AGG_KEY_DEFAULT: &str =
-	"02e61afd677cdfbec838c6f309deff0b2c6056f8a27f2c783b68bba6b30f667be6";
-
 const BITCOIN_FEE_PER_UTXO: u64 = 1000; // Todo: what value to put here?
-
-const DOT_GENESIS_HASH: &str = "5f551688012d25a98e729752169f509c6186af8079418c118844cc852b332bf5";
-const DOT_SPEC_VERSION: u32 = 9320;
-const DOT_TRANSACTION_VERSION: u32 = 16;
-pub const DOT_TEST_RUNTIME_VERSION: RuntimeVersion =
-	RuntimeVersion { spec_version: DOT_SPEC_VERSION, transaction_version: DOT_TRANSACTION_VERSION };
 
 /// generate session keys from Aura and Grandpa keys
 pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
@@ -93,89 +79,50 @@ pub struct StateChainEnvironment {
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
-pub fn get_environment() -> StateChainEnvironment {
-	let flip_token_address: [u8; 20] = clean_eth_address(
-		&env::var("FLIP_TOKEN_ADDRESS")
-			.unwrap_or_else(|_| String::from(FLIP_TOKEN_ADDRESS_DEFAULT)),
-	)
-	.unwrap();
-	let eth_usdc_address: [u8; 20] = clean_eth_address(
-		&env::var("ETH_USDC_ADDRESS").unwrap_or_else(|_| String::from(ETH_USDC_ADDRESS_DEFAULT)),
-	)
-	.unwrap();
-	let stake_manager_address: [u8; 20] = clean_eth_address(
-		&env::var("STAKE_MANAGER_ADDRESS")
-			.unwrap_or_else(|_| String::from(STAKE_MANAGER_ADDRESS_DEFAULT)),
-	)
-	.unwrap();
-	let key_manager_address: [u8; 20] = clean_eth_address(
-		&env::var("KEY_MANAGER_ADDRESS")
-			.unwrap_or_else(|_| String::from(KEY_MANAGER_ADDRESS_DEFAULT)),
-	)
-	.unwrap();
-	let eth_vault_address: [u8; 20] = clean_eth_address(
-		&env::var("ETH_VAULT_ADDRESS").unwrap_or_else(|_| String::from(ETH_VAULT_ADDRESS_DEFAULT)),
-	)
-	.unwrap();
-	let ethereum_chain_id = env::var("ETHEREUM_CHAIN_ID")
-		.unwrap_or_else(|_| ETHEREUM_CHAIN_ID_DEFAULT.to_string())
-		.parse::<u64>()
-		.expect("ETHEREUM_CHAIN_ID env var could not be parsed to u64");
-	let eth_init_agg_key = hex::decode(
-		env::var("ETH_INIT_AGG_KEY").unwrap_or_else(|_| String::from(ETH_INIT_AGG_KEY_DEFAULT)),
-	)
-	.unwrap()
-	.try_into()
-	.expect("ETH_INIT_AGG_KEY cast to agg pub key failed");
-	let ethereum_deployment_block = env::var("ETH_DEPLOYMENT_BLOCK")
-		.unwrap_or_else(|_| "0".into())
-		.parse::<u64>()
-		.expect("ETH_DEPLOYMENT_BLOCK env var could not be parsed to u64");
+pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChainEnvironment {
+	macro_rules! from_env_var {
+		( $parse:path, $env_var:ident, $name:ident ) => {
+			let $name = match env::var(stringify!($env_var)) {
+				Ok(s) => $parse(&s)
+					.expect(format!("Unable to parse env var {}.", stringify!($env_var)).as_str()),
+				Err(_) => defaults.$name,
+			};
+		};
+	}
+	fn hex_decode<const S: usize>(s: &str) -> Result<[u8; S], String> {
+		hex::decode(s)
+			.map_err(|e| e.to_string())?
+			.try_into()
+			.map_err(|_| "Incorrect length of hex string.".into())
+	}
+	from_env_var!(clean_eth_address, FLIP_TOKEN_ADDRESS, flip_token_address);
+	from_env_var!(clean_eth_address, ETH_USDC_ADDRESS, eth_usdc_address);
+	from_env_var!(clean_eth_address, STAKE_MANAGER_ADDRESS, stake_manager_address);
+	from_env_var!(clean_eth_address, KEY_MANAGER_ADDRESS, key_manager_address);
+	from_env_var!(clean_eth_address, ETH_VAULT_ADDRESS, eth_vault_address);
+	from_env_var!(hex_decode, ETH_INIT_AGG_KEY, eth_init_agg_key);
+	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
+	from_env_var!(FromStr::from_str, ETH_DEPLOYMENT_BLOCK, ethereum_deployment_block);
+	from_env_var!(FromStr::from_str, GENESIS_STAKE, genesis_stake_amount);
+	from_env_var!(FromStr::from_str, ETH_BLOCK_SAFETY_MARGIN, eth_block_safety_margin);
+	from_env_var!(FromStr::from_str, MAX_CEREMONY_STAGE_DURATION, max_ceremony_stage_duration);
+	from_env_var!(FromStr::from_str, MIN_STAKE, min_stake);
 
-	let genesis_stake_amount = env::var("GENESIS_STAKE")
-		.unwrap_or_else(|_| common::GENESIS_STAKE_AMOUNT.to_string())
-		.parse::<u128>()
-		.expect("GENESIS_STAKE env var could not be parsed to u128");
-
-	let eth_block_safety_margin = env::var("ETH_BLOCK_SAFETY_MARGIN")
-		.unwrap_or_else(|_| CfeSettings::default().eth_block_safety_margin.to_string())
-		.parse::<u32>()
-		.expect("ETH_BLOCK_SAFETY_MARGIN env var could not be parsed to u32");
-
-	let max_ceremony_stage_duration = env::var("MAX_CEREMONY_STAGE_DURATION")
-		.unwrap_or_else(|_| CfeSettings::default().max_ceremony_stage_duration.to_string())
-		.parse::<u32>()
-		.expect("MAX_CEREMONY_STAGE_DURATION env var could not be parsed to u32");
-
-	let min_stake: u128 = env::var("MIN_STAKE")
-		.map(|s| s.parse::<u128>().expect("MIN_STAKE env var could not be parsed to u128"))
-		.unwrap_or(common::MIN_STAKE);
-
-	let dot_genesis_hash: PolkadotHash = env::var("DOT_GENESIS_HASH")
-		.unwrap_or_else(|_| DOT_GENESIS_HASH.to_string())
-		.parse::<PolkadotHash>()
-		.expect("DOT_GENESIS_HASH env var could not be parsed to PolkadotHash");
-
-	let dot_vault_account_id: Option<PolkadotAccountId> = env::var("DOT_VAULT_ACCOUNT_ID")
-		.map(|s| {
-			s.parse::<PolkadotAccountId>()
-				.expect("DOT_VAULT_ACCOUNT_ID env var could not be parsed to PolkadotAccountId")
-		})
-		.ok();
-
-	// dot runtime version
-	let dot_runtime_version = {
-		let spec_version: u32 = env::var("DOT_SPEC_VERSION")
-			.unwrap_or_else(|_| DOT_SPEC_VERSION.to_string())
-			.parse::<u32>()
-			.expect("DOT_SPEC_VERSION env var could not be parsed to u32");
-
-		let transaction_version: u32 = env::var("DOT_TRANSACTION_VERSION")
-			.unwrap_or_else(|_| DOT_TRANSACTION_VERSION.to_string())
-			.parse::<u32>()
-			.expect("DOT_TRANSACTION_VERSION env var could not be parsed to u32");
-
-		RuntimeVersion { spec_version, transaction_version }
+	let dot_genesis_hash = match env::var("DOT_GENESIS_HASH") {
+		Ok(s) => hex_decode::<32>(&s).unwrap().into(),
+		Err(_) => defaults.dot_genesis_hash,
+	};
+	let dot_vault_account_id = match env::var("DOT_VAULT_ACCOUNT_ID") {
+		Ok(s) => Some(hex_decode::<32>(&s).unwrap().into()),
+		Err(_) => defaults.dot_vault_account_id,
+	};
+	let dot_spec_version: u32 = match env::var("DOT_SPEC_VERSION") {
+		Ok(s) => s.parse().unwrap(),
+		Err(_) => defaults.dot_runtime_version.spec_version,
+	};
+	let dot_transaction_version: u32 = match env::var("DOT_TRANSACTION_VERSION") {
+		Ok(s) => s.parse().unwrap(),
+		Err(_) => defaults.dot_runtime_version.transaction_version,
 	};
 
 	StateChainEnvironment {
@@ -193,7 +140,10 @@ pub fn get_environment() -> StateChainEnvironment {
 		min_stake,
 		dot_genesis_hash,
 		dot_vault_account_id,
-		dot_runtime_version,
+		dot_runtime_version: RuntimeVersion {
+			spec_version: dot_spec_version,
+			transaction_version: dot_transaction_version,
+		},
 	}
 }
 
@@ -222,7 +172,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		dot_genesis_hash,
 		dot_vault_account_id,
 		dot_runtime_version,
-	} = get_environment();
+	} = get_environment_or_defaults(testnet::ENV);
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
 		"cf-dev",

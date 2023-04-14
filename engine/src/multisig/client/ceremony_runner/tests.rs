@@ -240,7 +240,7 @@ async fn should_ignore_duplicate_message() {
 	// so we just use a stage 1 state for this test.
 	let (mut stage_1_state, _) = gen_stage_1_signing_state(our_account_id, participants).await;
 
-	// Process a valid message
+	// Process a valid stage 1 message
 	assert_eq!(
 		stage_1_state
 			.process_or_delay_message(sender_account_id.clone(), gen_signing_data_stage1())
@@ -248,9 +248,48 @@ async fn should_ignore_duplicate_message() {
 		None
 	);
 
-	// Process a duplicate of that message
+	// Process another stage 1 message from the same participant
 	ensure_message_is_ignored(&mut stage_1_state, sender_account_id, gen_signing_data_stage1())
 		.await;
+}
+
+#[tokio::test]
+async fn should_ignore_duplicate_delayed_message() {
+	let our_account_id = ACCOUNT_IDS[0].clone();
+	let sender_account_id = ACCOUNT_IDS[1].clone();
+	let participants = BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned());
+
+	// The relevant code path is the same for all stages,
+	// so we just use a stage 1 state for this test.
+	let (mut stage_1_state, _) =
+		gen_stage_1_signing_state(our_account_id, participants.clone()).await;
+
+	// Delay a stage 2 message
+	assert_eq!(
+		stage_1_state
+			.process_or_delay_message(
+				sender_account_id.clone(),
+				gen_signing_data_stage2(participants.len() as u32)
+			)
+			.await,
+		None
+	);
+
+	assert_eq!(stage_1_state.delayed_messages.len(), 1);
+
+	// Give a stage 2 message from the same participant
+	assert_eq!(
+		stage_1_state
+			.process_or_delay_message(
+				sender_account_id.clone(),
+				gen_signing_data_stage2(participants.len() as u32)
+			)
+			.await,
+		None
+	);
+
+	// The message should have been ignored and not added to the delayed messages
+	assert_eq!(stage_1_state.delayed_messages.len(), 1);
 }
 
 #[tokio::test]

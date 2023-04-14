@@ -5,7 +5,7 @@ use cf_chains::{
 	ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
 
-use cf_primitives::{AuthorityCount, BroadcastId};
+use cf_primitives::{AuthorityCount, BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback,
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
@@ -71,12 +71,11 @@ impl frame_system::Config for Test {
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct MockCreatePolkadotVault {
-	agg_key: cf_chains::dot::PolkadotPublicKey,
-}
+pub struct MockCreatePolkadotVault;
+
 impl CreatePolkadotVault for MockCreatePolkadotVault {
-	fn new_unsigned(proxy_key: cf_chains::dot::PolkadotPublicKey) -> Self {
-		Self { agg_key: proxy_key }
+	fn new_unsigned() -> Self {
+		Self
 	}
 }
 impl ApiCall<Polkadot> for MockCreatePolkadotVault {
@@ -104,14 +103,16 @@ impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 	type ApiCall = MockCreatePolkadotVault;
 	type Callback = MockCallback;
 
-	fn threshold_sign_and_broadcast(_api_call: Self::ApiCall) -> BroadcastId {
+	fn threshold_sign_and_broadcast(
+		_api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		unimplemented!()
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
 		_api_call: Self::ApiCall,
 		_callback: Self::Callback,
-	) -> BroadcastId {
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		unimplemented!()
 	}
 }

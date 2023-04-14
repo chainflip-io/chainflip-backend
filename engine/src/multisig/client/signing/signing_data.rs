@@ -150,7 +150,7 @@ mod tests {
 		let test_size = 4;
 		let data_to_check = gen_signing_data_stage2(test_size);
 
-		// Should fail on sizes larger or smaller then expected
+		// Should fail on sizes larger or smaller than expected
 		assert!(data_to_check.data_size_is_valid(test_size));
 		assert!(!data_to_check.data_size_is_valid(test_size - 1));
 		assert!(!data_to_check.data_size_is_valid(test_size + 1));
@@ -161,7 +161,7 @@ mod tests {
 		let test_size = 4;
 		let data_to_check = gen_signing_data_stage4(test_size);
 
-		// Should fail on sizes larger or smaller then expected
+		// Should fail on sizes larger or smaller than expected
 		assert!(data_to_check.data_size_is_valid(test_size));
 		assert!(!data_to_check.data_size_is_valid(test_size - 1));
 		assert!(!data_to_check.data_size_is_valid(test_size + 1));

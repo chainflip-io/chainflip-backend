@@ -4,9 +4,10 @@ use std::{
 	time::Duration,
 };
 
+use async_trait::async_trait;
 use cf_chains::{
 	dot::{
-		Polkadot, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotProxyType,
+		self, Polkadot, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotProxyType,
 		PolkadotPublicKey, PolkadotUncheckedExtrinsic,
 	},
 	eth::assets,
@@ -16,13 +17,14 @@ use codec::{Decode, Encode};
 use frame_support::scale_info::TypeInfo;
 use futures::{stream, Stream, StreamExt};
 use pallet_cf_ingress_egress::IngressWitness;
+use sp_core::H256;
 use sp_runtime::MultiSignature;
 use state_chain_runtime::PolkadotInstance;
 use subxt::{
 	config::Header,
 	events::{Phase, StaticEvent},
 };
-use tokio::{select, sync::Mutex};
+use tokio::sync::{oneshot, Mutex};
 use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
@@ -35,7 +37,11 @@ use crate::{
 		checkpointing::{
 			get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
 		},
-		epoch_witnesser, AddressMonitor, BlockNumberable, EpochStart,
+		epoch_witnesser::{
+			self, start_epoch_witnesser, EpochWitnesser, EpochWitnesserGenerator,
+			WitnesserAndStream,
+		},
+		AddressMonitor, BlockNumberable, ChainBlockNumber, EpochStart,
 	},
 };
 
@@ -144,6 +150,8 @@ fn check_for_interesting_events_in_block(
 	Vec<(PolkadotExtrinsicIndex, PolkadotBalance)>,
 	Vec<IngressWitness<Polkadot>>,
 	Vec<Box<state_chain_runtime::RuntimeCall>>,
+	// Median tip of all extrinsics in this block
+	u128,
 ) {
 	// to contain all the ingress witnessse for this block
 	let mut ingress_witnesses = Vec::new();
@@ -154,6 +162,7 @@ fn check_for_interesting_events_in_block(
 	let mut vault_key_rotated_calls: Vec<Box<_>> = Vec::new();
 	let mut fee_paid_for_xt_at_index = HashMap::new();
 	let events_iter = block_events.iter();
+	let mut tips = Vec::<PolkadotBalance>::new();
 	for (phase, wrapped_event) in events_iter {
 		if let Phase::ApplyExtrinsic(extrinsic_index) = *phase {
 			match wrapped_event {
@@ -201,12 +210,28 @@ fn check_for_interesting_events_in_block(
 						interesting_indices.push(extrinsic_index);
 					}
 				},
-				EventWrapper::TransactionFeePaid(TransactionFeePaid { actual_fee, .. }) => {
+				EventWrapper::TransactionFeePaid(TransactionFeePaid {
+					actual_fee, tip, ..
+				}) => {
 					fee_paid_for_xt_at_index.insert(extrinsic_index, *actual_fee);
+					tips.push(*tip);
 				},
 			}
 		}
 	}
+
+	tips.sort();
+	let median_tip = tips
+		.get({
+			let len = tips.len();
+			if len % 2 == 0 {
+				(len / 2).saturating_sub(1)
+			} else {
+				len / 2
+			}
+		})
+		.cloned()
+		.unwrap_or_default();
 
 	(
 		interesting_indices
@@ -215,6 +240,7 @@ fn check_for_interesting_events_in_block(
 			.collect(),
 		ingress_witnesses,
 		vault_key_rotated_calls,
+		median_tip,
 	)
 }
 
@@ -238,254 +264,314 @@ where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
-	epoch_witnesser::start(
+	start_epoch_witnesser(
 		Arc::new(Mutex::new(epoch_starts_receiver)),
-		|_epoch_start| true,
+		DotWitnesserGenerator { db, state_chain_client, dot_client },
 		(address_monitor, monitored_signatures, signature_receiver),
-		move |
-		mut end_witnessing_receiver,
-			epoch_start,
-			(
-				mut address_monitor,
-				mut monitored_signatures,
-				mut signature_receiver
-			),
-		| {
-			let mut dot_client = dot_client.clone();
-			let state_chain_client = state_chain_client.clone();
-			let db = db.clone();
-			async move {
-				let (from_block, witnessed_until_sender) = match get_witnesser_start_block_with_checkpointing::<Polkadot>(
-					ChainTag::Polkadot,
-					epoch_start.epoch_index,
-					epoch_start.block_number,
-					db,
-				).await
-				.expect("Failed to start Dot witnesser checkpointing")
-				{
-					StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
-						(from_block, witnessed_until_sender),
-					StartCheckpointing::AlreadyWitnessedEpoch =>
-						return Ok((
-							address_monitor,
-							monitored_signatures,
-							signature_receiver
-						)),
-				};
-
-				let safe_head_stream =
-					take_while_ok(dot_client.subscribe_finalized_heads().await?)
-						.map(|header| MiniHeader {
-							block_number: header.number,
-							block_hash: header.hash(),
-						});
-
-				let dot_client_c = dot_client.clone();
-				let block_head_stream_from = block_head_stream_from(from_block, safe_head_stream, move |block_number| {
-					let mut dot_client = dot_client_c.clone();
-					Box::pin(async move {
-						let block_hash = dot_client
-							.block_hash(block_number)
-							.await?
-							.expect("Called on a finalised stream, so the block will exist");
-						Ok(MiniHeader { block_number, block_hash })
-					})
-				})
-				.await?;
-
-				let our_vault = epoch_start.data.vault_account;
-
-				// Stream of Events objects. Each `Events` contains the events for a particular
-				// block
-				let dot_client_c = dot_client.clone();
-				let mut block_events_stream = Box::pin(
-					take_while_ok(
-						block_head_stream_from.then(|mini_header| {
-							let mut dot_client = dot_client_c.clone();
-							debug!(
-								"Fetching Polkadot events for block: {}",
-								mini_header.block_number
-							);
-							// TODO: This will not work if the block we are querying metadata has
-							// different metadata than the latest block since this client fetches
-							// the latest metadata and always uses it.
-							// https://github.com/chainflip-io/chainflip-backend/issues/2542
-							async move {
-								Result::<_, anyhow::Error>::Ok((
-									mini_header.block_hash,
-									mini_header.block_number,
-									dot_client.events(mini_header.block_hash).await?
-								))
-							}
-						}),
-					)
-					.map(|(block_hash, block_number, events)| {
-						(block_hash, block_number, events.iter().filter_map(|event_details| {
-							match event_details {
-								Ok(event_details) => {
-									match (event_details.pallet_name(), event_details.variant_name()) {
-										(ProxyAdded::PALLET, ProxyAdded::EVENT) => {
-											Some(EventWrapper::ProxyAdded(event_details.as_event::<ProxyAdded>().unwrap().unwrap()))
-										},
-										(Transfer::PALLET, Transfer::EVENT) => {
-											Some(EventWrapper::Transfer(event_details.as_event::<Transfer>().unwrap().unwrap()))
-										},
-										(TransactionFeePaid::PALLET, TransactionFeePaid::EVENT) => {
-											Some(EventWrapper::TransactionFeePaid(event_details.as_event::<TransactionFeePaid>().unwrap().unwrap()))
-										},
-										_ => None,
-									}.map(|event| (event_details.phase(), event))
-								}
-								Err(err) => {
-									error!(
-										"Error while parsing event: {:?}", err
-									);
-									None
-								}
-							}
-						}).collect())
-					}),
-				).timeout_after(Duration::from_secs(DOT_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER));
-
-				let mut end_at_block = None;
-				let mut current_block = from_block;
-
-				loop {
-					let block_details = select! {
-						end_block = &mut end_witnessing_receiver => {
-							end_at_block = Some(end_block.expect("end witnessing channel was dropped unexpectedly"));
-							None
-						}
-						Some(res) =	block_events_stream.next() => {
-							let (block_hash, block_number, block_event_details) = res.map_err(|e| {
-								error!("{e}");
-								e
-							})?;
-							current_block = block_number;
-							Some((block_hash, block_number, block_event_details))
-						}
-					};
-
-					if let Some(end_block) = end_at_block {
-						if current_block >= end_block {
-									info!("Polkadot block witnessers unsubscribe at block {end_block}");
-									break
-								}
-							}
-
-					if let Some((block_hash, block_number, block_event_details)) = block_details {
-							trace!( "Checking block: {block_number}, with hash: {block_hash:?} for interesting events");
-							let (
-								interesting_indices,
-								ingress_witnesses,
-								vault_key_rotated_calls,
-							) = check_for_interesting_events_in_block(
-									block_event_details,
-									block_number,
-									&our_vault,
-									&mut address_monitor,
-									);
-
-							for call in vault_key_rotated_calls {
-								let _result = state_chain_client
-										.submit_signed_extrinsic(
-											pallet_cf_witnesser::Call::witness_at_epoch {
-												call,
-												epoch_index: epoch_start.epoch_index,
-											},
-										)
-										.await;
-							}
-
-							if !interesting_indices.is_empty() {
-								info!("We got an interesting block at block: {block_number}, hash: {block_hash:?}");
-
-								let block = dot_client
-								.block(block_hash)
-								.await
-								.context("Failed fetching block from DOT RPC")?
-								.context(format!(
-									"Polkadot block does not exist for block hash: {block_hash:?}",
-								))?;
-
-								while let Ok(sig) = signature_receiver.try_recv()
-								{
-									monitored_signatures.insert(sig);
-								}
-								for (extrinsic_index, tx_fee) in interesting_indices {
-									let xt = block.extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
-									let xt_encoded = xt.0.encode();
-									let mut xt_bytes = xt_encoded.as_slice();
-									let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);
-									if let Ok(unchecked) = unchecked {
-										let signature = unchecked.signature.unwrap().1;
-										if let MultiSignature::Sr25519(sig) = signature {
-											if monitored_signatures.contains(&sig.0) {
-												info!("Witnessing signature_accepted. signature: {sig:?}");
-
-												let _result = state_chain_client
-													.submit_signed_extrinsic(
-														pallet_cf_witnesser::Call::witness_at_epoch {
-															call: Box::new(
-																pallet_cf_broadcast::Call::<_, PolkadotInstance>::signature_accepted {
-																	signature: sig.clone(),
-																	signer_id: our_vault.clone(),
-																	tx_fee
-																}
-																.into(),
-															),
-															epoch_index: epoch_start.epoch_index,
-														},
-													)
-													.await;
-
-											monitored_signatures.remove(&sig.0);
-											}
-										}
-									} else {
-										// We expect this to occur when attempting to decode
-										// a transaction that was not sent by us.
-										// We can safely ignore it, but we log it in case.
-										debug!("Failed to decode UncheckedExtrinsic {unchecked:?}");
-									}
-								}
-							}
-
-							if !ingress_witnesses.is_empty() {
-								let _result =
-									state_chain_client
-										.submit_signed_extrinsic(
-											pallet_cf_witnesser::Call::witness_at_epoch {
-												call:
-													Box::new(
-														pallet_cf_ingress_egress::Call::<
-															_,
-															PolkadotInstance,
-														>::do_ingress {
-															ingress_witnesses,
-														}
-														.into(),
-													),
-												epoch_index: epoch_start.epoch_index,
-											},
-										)
-										.await;
-							}
-
-							witnessed_until_sender
-							.send(WitnessedUntil {
-								epoch_index: epoch_start.epoch_index,
-								block_number: block_number as u64,
-							})
-							.await
-							.unwrap();
-					}
-				}
-				Ok((address_monitor, monitored_signatures, signature_receiver))
-			}
-		},
-	).instrument(info_span!("Dot-Witnesser"))
+	)
+	.instrument(info_span!("Dot-Witnesser"))
 	.await
+	.map_err(|_| anyhow::anyhow!("Dot witnesser failed"))
+}
+
+struct DotWitnesser<StateChainClient, DotRpc> {
+	state_chain_client: Arc<StateChainClient>,
+	dot_client: DotRpc,
+	current_epoch: EpochStart<Polkadot>,
+	witnessed_until_sender: tokio::sync::mpsc::Sender<WitnessedUntil>,
+}
+
+impl BlockNumberable for (H256, PolkadotBlockNumber, Vec<(Phase, EventWrapper)>) {
+	type BlockNumber = PolkadotBlockNumber;
+
+	fn block_number(&self) -> Self::BlockNumber {
+		self.1
+	}
+}
+
+#[async_trait]
+impl<StateChainClient, DotRpc> EpochWitnesser for DotWitnesser<StateChainClient, DotRpc>
+where
+	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
+{
+	type Chain = Polkadot;
+	type Data = (H256, u32, Vec<(Phase, EventWrapper)>);
+	type StaticState = (
+		AddressMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
+		BTreeSet<[u8; 64]>,
+		tokio::sync::mpsc::UnboundedReceiver<[u8; 64]>,
+	);
+
+	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = true;
+
+	async fn run_witnesser(
+		self,
+		data_stream: std::pin::Pin<
+			Box<dyn futures::Stream<Item = anyhow::Result<Self::Data>> + Send + 'static>,
+		>,
+		end_witnessing_receiver: oneshot::Receiver<ChainBlockNumber<Self::Chain>>,
+		state: Self::StaticState,
+	) -> Result<Self::StaticState, ()> {
+		epoch_witnesser::run_witnesser_block_stream(
+			self,
+			data_stream,
+			end_witnessing_receiver,
+			state,
+		)
+		.await
+	}
+
+	async fn do_witness(
+		&mut self,
+		data: Self::Data,
+		(address_monitor, monitored_signatures, signature_receiver): &mut Self::StaticState,
+	) -> anyhow::Result<()> {
+		let (block_hash, block_number, block_event_details) = data;
+		trace!("Checking block: {block_number}, with hash: {block_hash:?} for interesting events");
+
+		let our_vault = &self.current_epoch.data.vault_account;
+		let epoch_index = self.current_epoch.epoch_index;
+
+		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls, median_tip) =
+			check_for_interesting_events_in_block(
+				block_event_details,
+				block_number,
+				our_vault,
+				address_monitor,
+			);
+
+		let _result = self
+			.state_chain_client
+			.submit_signed_extrinsic(state_chain_runtime::RuntimeCall::Witnesser(
+				pallet_cf_witnesser::Call::witness_at_epoch {
+					call: Box::new(state_chain_runtime::RuntimeCall::PolkadotChainTracking(
+						pallet_cf_chain_tracking::Call::update_chain_state {
+							state: dot::PolkadotTrackedData {
+								block_height: block_number,
+								median_tip,
+							},
+						},
+					)),
+					epoch_index,
+				},
+			))
+			.await;
+
+		for call in vault_key_rotated_calls {
+			let _result = self
+				.state_chain_client
+				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+					call,
+					epoch_index,
+				})
+				.await;
+		}
+
+		if !interesting_indices.is_empty() {
+			info!("We got an interesting block at block: {block_number}, hash: {block_hash:?}");
+
+			let block = self
+				.dot_client
+				.block(block_hash)
+				.await
+				.context("Failed fetching block from DOT RPC")?
+				.context(
+					format!("Polkadot block does not exist for block hash: {block_hash:?}",),
+				)?;
+
+			while let Ok(sig) = signature_receiver.try_recv() {
+				monitored_signatures.insert(sig);
+			}
+			for (extrinsic_index, tx_fee) in interesting_indices {
+				let xt = block.extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
+				let xt_encoded = xt.0.encode();
+				let mut xt_bytes = xt_encoded.as_slice();
+				let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);
+				if let Ok(unchecked) = unchecked {
+					let signature = unchecked.signature.unwrap().1;
+					if let MultiSignature::Sr25519(sig) = signature {
+						if monitored_signatures.contains(&sig.0) {
+							info!("Witnessing signature_accepted. signature: {sig:?}");
+
+							let _result =
+								self.state_chain_client
+									.submit_signed_extrinsic(
+										pallet_cf_witnesser::Call::witness_at_epoch {
+											call:
+												Box::new(
+													pallet_cf_broadcast::Call::<
+														_,
+														PolkadotInstance,
+													>::signature_accepted {
+														signature: sig.clone(),
+														signer_id: our_vault.clone(),
+														tx_fee,
+													}
+													.into(),
+												),
+											epoch_index,
+										},
+									)
+									.await;
+
+							monitored_signatures.remove(&sig.0);
+						}
+					}
+				} else {
+					// We expect this to occur when attempting to decode
+					// a transaction that was not sent by us.
+					// We can safely ignore it, but we log it in case.
+					debug!("Failed to decode UncheckedExtrinsic {unchecked:?}");
+				}
+			}
+		}
+
+		if !ingress_witnesses.is_empty() {
+			let _result = self
+				.state_chain_client
+				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+					call: Box::new(
+						pallet_cf_ingress_egress::Call::<_, PolkadotInstance>::do_ingress {
+							ingress_witnesses,
+						}
+						.into(),
+					),
+					epoch_index,
+				})
+				.await;
+		}
+
+		self.witnessed_until_sender
+			.send(WitnessedUntil { epoch_index, block_number: block_number as u64 })
+			.await
+			.unwrap();
+
+		Ok(())
+	}
+}
+
+struct DotWitnesserGenerator<StateChainClient, DotRpc> {
+	db: Arc<PersistentKeyDB>,
+	state_chain_client: Arc<StateChainClient>,
+	dot_client: DotRpc,
+}
+
+#[async_trait]
+impl<StateChainClient, DotRpc> EpochWitnesserGenerator
+	for DotWitnesserGenerator<StateChainClient, DotRpc>
+where
+	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
+{
+	type Witnesser = DotWitnesser<StateChainClient, DotRpc>;
+	async fn init(
+		&mut self,
+		epoch: EpochStart<Polkadot>,
+	) -> anyhow::Result<Option<WitnesserAndStream<DotWitnesser<StateChainClient, DotRpc>>>> {
+		let (from_block, witnessed_until_sender) =
+			match get_witnesser_start_block_with_checkpointing::<Polkadot>(
+				ChainTag::Polkadot,
+				epoch.epoch_index,
+				epoch.block_number,
+				self.db.clone(),
+			)
+			.await
+			.expect("Failed to start Dot witnesser checkpointing")
+			{
+				StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
+					(from_block, witnessed_until_sender),
+				StartCheckpointing::AlreadyWitnessedEpoch => return Ok(None),
+			};
+
+		let safe_head_stream = take_while_ok(self.dot_client.subscribe_finalized_heads().await?)
+			.map(|header| MiniHeader { block_number: header.number, block_hash: header.hash() });
+
+		let dot_client_c = self.dot_client.clone();
+		let block_head_stream_from =
+			block_head_stream_from(from_block, safe_head_stream, move |block_number| {
+				let mut dot_client = dot_client_c.clone();
+				Box::pin(async move {
+					let block_hash = dot_client
+						.block_hash(block_number)
+						.await?
+						.expect("Called on a finalised stream, so the block will exist");
+					Ok(MiniHeader { block_number, block_hash })
+				})
+			})
+			.await?;
+
+		// Stream of Events objects. Each `Events` contains the events for a particular
+		// block
+		let dot_client_c = self.dot_client.clone();
+		let block_events_stream = Box::pin(
+			take_while_ok(block_head_stream_from.then(move |mini_header| {
+				let mut dot_client = dot_client_c.clone();
+				debug!("Fetching Polkadot events for block: {}", mini_header.block_number);
+				// TODO: This will not work if the block we are querying metadata has
+				// different metadata than the latest block since this client fetches
+				// the latest metadata and always uses it.
+				// https://github.com/chainflip-io/chainflip-backend/issues/2542
+				async move {
+					Result::<_, anyhow::Error>::Ok((
+						mini_header.block_hash,
+						mini_header.block_number,
+						dot_client.events(mini_header.block_hash).await?,
+					))
+				}
+			}))
+			.map(|(block_hash, block_number, events)| {
+				(
+					block_hash,
+					block_number,
+					events
+						.iter()
+						.filter_map(|event_details| match event_details {
+							Ok(event_details) =>
+								match (event_details.pallet_name(), event_details.variant_name()) {
+									(ProxyAdded::PALLET, ProxyAdded::EVENT) =>
+										Some(EventWrapper::ProxyAdded(
+											event_details
+												.as_event::<ProxyAdded>()
+												.unwrap()
+												.unwrap(),
+										)),
+									(Transfer::PALLET, Transfer::EVENT) =>
+										Some(EventWrapper::Transfer(
+											event_details.as_event::<Transfer>().unwrap().unwrap(),
+										)),
+									(TransactionFeePaid::PALLET, TransactionFeePaid::EVENT) =>
+										Some(EventWrapper::TransactionFeePaid(
+											event_details
+												.as_event::<TransactionFeePaid>()
+												.unwrap()
+												.unwrap(),
+										)),
+									_ => None,
+								}
+								.map(|event| (event_details.phase(), event)),
+							Err(err) => {
+								error!("Error while parsing event: {:?}", err);
+								None
+							},
+						})
+						.collect(),
+				)
+			}),
+		)
+		.timeout_after(Duration::from_secs(
+			DOT_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER,
+		));
+
+		let witnesser = DotWitnesser {
+			state_chain_client: self.state_chain_client.clone(),
+			dot_client: self.dot_client.clone(),
+			current_epoch: epoch.clone(),
+			witnessed_until_sender,
+		};
+
+		Ok(Some((witnesser, Box::pin(block_events_stream))))
+	}
 }
 
 #[cfg(test)]
@@ -497,6 +583,7 @@ mod tests {
 
 	use cf_chains::dot;
 	use cf_primitives::PolkadotAccountId;
+	use itertools::Itertools;
 
 	use crate::{
 		dot::rpc::DotRpcClient, state_chain_observer::client::mocks::MockStateChainClient,
@@ -520,6 +607,14 @@ mod tests {
 			actual_fee,
 			who: PolkadotAccountId::from([0xab; 32]),
 			tip: Default::default(),
+		})
+	}
+
+	fn mock_tx_fee_paid_tip(tip: PolkadotBalance) -> EventWrapper {
+		EventWrapper::TransactionFeePaid(TransactionFeePaid {
+			actual_fee: Default::default(),
+			who: PolkadotAccountId::from([0xab; 32]),
+			tip,
 		})
 	}
 
@@ -555,7 +650,7 @@ mod tests {
 			(3u32, mock_tx_fee_paid(20000)),
 		]);
 
-		let (mut interesting_indices, ingress_witnesses, vault_key_rotated_calls) =
+		let (mut interesting_indices, ingress_witnesses, vault_key_rotated_calls, _) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				Default::default(),
@@ -616,7 +711,7 @@ mod tests {
 			.send(AddressMonitorCommand::Add(transfer_2_ingress_addr))
 			.unwrap();
 
-		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls) =
+		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls, _) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				20,
@@ -670,7 +765,7 @@ mod tests {
 			),
 		]);
 
-		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls) =
+		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls, _) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				20,
@@ -686,6 +781,44 @@ mod tests {
 
 		assert!(vault_key_rotated_calls.is_empty());
 		assert!(ingress_witnesses.is_empty());
+	}
+
+	#[test]
+	fn test_median_tip_calculation() {
+		test_median_tip_calculated_from_events_correctly(&[], 0);
+		test_median_tip_calculated_from_events_correctly(&[10], 10);
+		test_median_tip_calculated_from_events_correctly(&[10, 100], 10);
+		test_median_tip_calculated_from_events_correctly(&[10, 100, 1000], 100);
+		test_median_tip_calculated_from_events_correctly(&[10, 100, 1000, 1000], 100);
+	}
+
+	fn test_median_tip_calculated_from_events_correctly(
+		test_case: &[PolkadotBalance],
+		expected_median: PolkadotBalance,
+	) {
+		let num_permutations = if test_case.is_empty() { 1 } else { test_case.len() };
+		for tips in test_case.iter().permutations(num_permutations) {
+			let block_event_details = phase_and_events(
+				(1..)
+					.zip(&tips)
+					.map(|(i, &&tip)| (i, mock_tx_fee_paid_tip(tip)))
+					.collect::<Vec<_>>()
+					.as_slice(),
+			);
+
+			let (.., median_tip) = check_for_interesting_events_in_block(
+				block_event_details,
+				20,
+				// arbitrary, not focus of the test
+				&PolkadotAccountId::from([0xda; 32]),
+				&mut AddressMonitor::new(BTreeSet::default()).1,
+			);
+
+			assert_eq!(
+				median_tip, expected_median,
+				"Incorrect median value for input {tips:?}. Expected {expected_median:?}",
+			);
+		}
 	}
 
 	#[ignore = "This test is helpful for local testing. Requires connection to westend"]

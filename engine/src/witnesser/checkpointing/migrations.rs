@@ -7,7 +7,10 @@ use anyhow::Result;
 use itertools::Itertools;
 use tracing::{error, info};
 
-use crate::multisig::{ChainTag, PersistentKeyDB};
+use crate::{
+	multisig::{ChainTag, PersistentKeyDB},
+	task_scope,
+};
 
 use super::WitnessedUntil;
 
@@ -52,23 +55,19 @@ pub async fn run_eth_migration(
 
 async fn load_from_legacy_checkpoint_file(file_path: PathBuf) -> Option<WitnessedUntil> {
 	if file_path.exists() {
-		tokio::task::spawn_blocking({
-			let file_path = file_path.clone();
-			move || {
-				std::fs::read_to_string(file_path)
-					.map_err(anyhow::Error::new)
-					.and_then(|string| {
-						serde_json::from_str::<WitnessedUntil>(&string).map_err(anyhow::Error::new)
-					})
-					.map_err(|e| {
-						error!("Failed to read legacy witnesser checkpoint file: {e}");
-						e
-					})
-					.ok()
-			}
+		task_scope::without_blocking(move || {
+			std::fs::read_to_string(file_path)
+				.map_err(anyhow::Error::new)
+				.and_then(|string| {
+					serde_json::from_str::<WitnessedUntil>(&string).map_err(anyhow::Error::new)
+				})
+				.map_err(|e| {
+					error!("Failed to read legacy witnesser checkpoint file: {e}");
+					e
+				})
+				.ok()
 		})
 		.await
-		.unwrap()
 	} else {
 		None
 	}

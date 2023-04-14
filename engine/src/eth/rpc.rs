@@ -344,11 +344,14 @@ impl EthDualRpcClient {
 			T: Send + Sync + EthTransport,
 			T::Out: Send,
 		{
-			let chain_id = client.chain_id().await.context("Failed to fetch chain id")?;
+			let chain_id = client
+				.chain_id()
+				.await
+				.context(format!("Failed to fetch chain id via {}.", T::transport_protocol()))?;
 
 			if chain_id != expected_chain_id {
 				return Err(anyhow!(
-					"Expected ETH chain id {expected_chain_id}, received {chain_id} through {}.",
+					"Expected chain id {expected_chain_id}, {} client returned {chain_id}.",
 					T::transport_protocol()
 				))
 			}
@@ -356,7 +359,7 @@ impl EthDualRpcClient {
 			Ok(())
 		}
 
-		let mut errors = [
+		let mut validation_errors = [
 			validate_client_chain_id(&dual_rpc.ws_client, expected_chain_id).await,
 			validate_client_chain_id(&dual_rpc.http_client, expected_chain_id).await,
 		]
@@ -364,8 +367,8 @@ impl EthDualRpcClient {
 		.filter_map(|res| res.err())
 		.peekable();
 
-		if errors.peek().is_some() {
-			bail!("Inconsistent chain configuration. Terminating.{}", format_iterator(errors));
+		if validation_errors.peek().is_some() {
+			bail!("{}", format_iterator(validation_errors));
 		}
 
 		Ok(dual_rpc)

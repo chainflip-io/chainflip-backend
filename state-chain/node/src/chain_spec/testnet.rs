@@ -1,6 +1,6 @@
 pub use super::common::*;
 use super::StateChainEnvironment;
-use cf_chains::eth::CHAIN_ID_GOERLI;
+use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
 use sc_service::ChainType;
 use sp_core::H256;
 
@@ -28,7 +28,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		"1eb7cacaa47d19edbd35c578523b2278f9b4d49a4a25318f3fe3a21bf30d769a"
 	)),
 	dot_vault_account_id: None,
-	dot_runtime_version: super::DOT_TEST_RUNTIME_VERSION,
+	dot_runtime_version: RuntimeVersion { spec_version: 9320, transaction_version: 16 },
 };
 
 pub const BASHFUL_SR25519: [u8; 32] =

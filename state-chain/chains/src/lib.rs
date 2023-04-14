@@ -15,7 +15,7 @@ use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Saturating},
+	traits::{AtLeast32BitUnsigned, CheckedSub, Saturating},
 	DispatchError,
 };
 use sp_std::{
@@ -53,21 +53,27 @@ pub trait Chain: Member + Parameter {
 		// use (and so we can always .into() into a larger type)
 		+ From<u32>
 		+ MaxEncodedLen
-		+ Display;
+		+ Display
+		+ CheckedSub;
 
 	type ChainAmount: Member
 		+ Parameter
 		+ Copy
 		+ Default
 		+ Saturating
-		+ Into<u128>
-		+ From<u128>
+		+ Into<AssetAmount>
 		+ FullCodec
-		+ MaxEncodedLen;
+		+ MaxEncodedLen
+		+ BenchmarkValue;
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
-	type TrackedData: Member + Parameter + MaxEncodedLen + Clone + Age<Self> + BenchmarkValue;
+	type TrackedData: Member
+		+ Parameter
+		+ MaxEncodedLen
+		+ Clone
+		+ Age<BlockNumber = Self::ChainBlockNumber>
+		+ BenchmarkValue;
 
 	type ChainAsset: Member
 		+ Parameter
@@ -95,13 +101,17 @@ pub trait Chain: Member + Parameter {
 }
 
 /// Measures the age of items associated with the Chain.
-pub trait Age<C: Chain> {
+pub trait Age {
+	type BlockNumber;
+
 	/// The creation block of this item.
-	fn birth_block(&self) -> C::ChainBlockNumber;
+	fn birth_block(&self) -> Self::BlockNumber;
 }
 
-impl<C: Chain> Age<C> for () {
-	fn birth_block(&self) -> C::ChainBlockNumber {
+impl Age for () {
+	type BlockNumber = u64;
+
+	fn birth_block(&self) -> Self::BlockNumber {
 		unimplemented!()
 	}
 }
@@ -160,7 +170,9 @@ pub trait ApiCall<Abi: ChainAbi>: Parameter {
 	/// Add the threshold signature to the api call.
 	fn signed(self, threshold_signature: &<Abi as ChainCrypto>::ThresholdSignature) -> Self;
 
-	/// The call, encoded according to the chain's native encoding.
+	/// Construct the signed call, encoded according to the chain's native encoding.
+	///
+	/// Must be called after Self[Signed].
 	fn chain_encoded(&self) -> Vec<u8>;
 
 	/// Checks we have updated the sig data to non-default values.
@@ -177,11 +189,15 @@ where
 	/// Doesn't include any time-sensitive data e.g. gas price.
 	fn build_transaction(signed_call: &Call) -> Abi::Transaction;
 
-	/// Refresh any time-sensitive data e.g. gas price.
-	fn refresh_unsigned_transaction(unsigned_tx: &mut Abi::Transaction);
+	/// Refresh any transaction data that is not signed over by the validators.
+	///
+	/// Note that calldata cannot be updated, or it would invalidate the signature.
+	///
+	/// A typical use case would be for updating the gas price on Ethereum transactions.
+	fn refresh_unsigned_data(tx: &mut Abi::Transaction);
 
-	/// Checks if the transaction is still valid.
-	fn is_valid_for_rebroadcast(call: &Call) -> bool;
+	/// Checks if the payload is still valid for the call.
+	fn is_valid_for_rebroadcast(call: &Call, payload: &<Abi as ChainCrypto>::Payload) -> bool;
 }
 
 /// Contains all the parameters required to fetch incoming transactions on an external chain.
@@ -195,16 +211,9 @@ pub struct FetchAssetParams<C: Chain> {
 #[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct TransferAssetParams<C: Chain> {
 	pub asset: <C as Chain>::ChainAsset,
-	pub amount: AssetAmount,
+	pub amount: <C as Chain>::ChainAmount,
 	pub to: <C as Chain>::ChainAccount,
 }
-
-pub trait IngressAddress {
-	type AddressType;
-	/// Returns an ingress address
-	fn derive_address(self, vault_address: Self::AddressType, intent_id: u32) -> Self::AddressType;
-}
-
 /// Similar to [frame_support::StaticLookup] but with the `Key` as a type parameter instead of an
 /// associated type.
 ///

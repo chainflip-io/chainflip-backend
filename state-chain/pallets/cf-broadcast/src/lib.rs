@@ -10,7 +10,7 @@ mod mock;
 mod tests;
 
 pub mod weights;
-use cf_primitives::BroadcastId;
+use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 pub use weights::WeightInfo;
 
 use cf_chains::{ApiCall, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
@@ -107,6 +107,7 @@ pub mod pallet {
 	pub struct BroadcastAttempt<T: Config<I>, I: 'static> {
 		pub broadcast_attempt_id: BroadcastAttemptId,
 		pub transaction_payload: TransactionFor<T, I>,
+		pub threshold_signature_payload: PayloadFor<T, I>,
 	}
 
 	// TODO: Rename
@@ -419,7 +420,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::on_signature_ready())]
 		pub fn on_signature_ready(
 			origin: OriginFor<T>,
-			threshold_request_id: <T::ThresholdSigner as ThresholdSigner<T::TargetChain>>::RequestId,
+			threshold_request_id: ThresholdSignatureRequestId,
+			threshold_signature_payload: PayloadFor<T, I>,
 			api_call: Box<<T as Config<I>>::ApiCall>,
 			broadcast_id: BroadcastId,
 		) -> DispatchResultWithPostInfo {
@@ -440,6 +442,7 @@ pub mod pallet {
 				&signature,
 				T::TransactionBuilder::build_transaction(&api_call.clone().signed(&signature)),
 				*api_call,
+				threshold_signature_payload,
 				broadcast_id,
 			);
 			Ok(().into())
@@ -556,7 +559,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn threshold_sign_and_broadcast(
 		api_call: <T as Config<I>>::ApiCall,
 		maybe_callback: Option<<T as Config<I>>::BroadcastCallable>,
-	) -> BroadcastId {
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
 			*id
@@ -564,18 +567,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some(callback) = maybe_callback {
 			RequestCallbacks::<T, I>::insert(broadcast_id, callback);
 		}
-		T::ThresholdSigner::request_signature_with_callback(
-			api_call.threshold_signature_payload(),
-			|id| {
+		let threshold_signature_payload = api_call.threshold_signature_payload();
+		let signature_request_id = T::ThresholdSigner::request_signature_with_callback(
+			threshold_signature_payload.clone(),
+			|threshold_request_id| {
 				Call::on_signature_ready {
-					threshold_request_id: id,
+					threshold_request_id,
+					threshold_signature_payload,
 					api_call: Box::new(api_call),
 					broadcast_id,
 				}
 				.into()
 			},
 		);
-		broadcast_id
+		(broadcast_id, signature_request_id)
 	}
 
 	/// Begin the process of broadcasting a transaction.
@@ -587,6 +592,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		signature: &ThresholdSignatureFor<T, I>,
 		transaction_payload: TransactionFor<T, I>,
 		api_call: <T as Config<I>>::ApiCall,
+		threshold_signature_payload: <T::TargetChain as ChainCrypto>::Payload,
 		broadcast_id: BroadcastId,
 	) -> BroadcastAttemptId {
 		SignatureToBroadcastIdLookup::<T, I>::insert(signature, broadcast_id);
@@ -597,6 +603,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
 			broadcast_attempt_id,
 			transaction_payload,
+			threshold_signature_payload,
 		});
 		broadcast_attempt_id
 	}
@@ -606,12 +613,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
 			let EpochKey { key, .. } = T::KeyProvider::current_epoch_key();
 
-			if T::TransactionBuilder::is_valid_for_rebroadcast(&api_call) &&
-				<T::TargetChain as ChainCrypto>::verify_threshold_signature(
-					&key,
-					&api_call.threshold_signature_payload(),
-					&signature,
-				) {
+			if T::TransactionBuilder::is_valid_for_rebroadcast(
+				&api_call,
+				&broadcast_attempt.threshold_signature_payload,
+			) && <T::TargetChain as ChainCrypto>::verify_threshold_signature(
+				&key,
+				&api_call.threshold_signature_payload(),
+				&signature,
+			) {
 				let next_broadcast_attempt_id =
 					broadcast_attempt.broadcast_attempt_id.next_attempt();
 
@@ -643,9 +652,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn start_broadcast_attempt(mut broadcast_attempt: BroadcastAttempt<T, I>) {
-		T::TransactionBuilder::refresh_unsigned_transaction(
-			&mut broadcast_attempt.transaction_payload,
-		);
+		T::TransactionBuilder::refresh_unsigned_data(&mut broadcast_attempt.transaction_payload);
 
 		let seed =
 			(broadcast_attempt.broadcast_attempt_id, broadcast_attempt.transaction_payload.clone())
@@ -689,14 +696,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	type ApiCall = T::ApiCall;
 	type Callback = <T as Config<I>>::BroadcastCallable;
-	fn threshold_sign_and_broadcast(api_call: Self::ApiCall) -> BroadcastId {
+
+	fn threshold_sign_and_broadcast(
+		api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		Self::threshold_sign_and_broadcast(api_call, None)
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
 		api_call: Self::ApiCall,
 		callback: Self::Callback,
-	) -> BroadcastId {
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		Self::threshold_sign_and_broadcast(api_call, Some(callback))
 	}
 }

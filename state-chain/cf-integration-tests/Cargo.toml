@@ -15,11 +15,19 @@ targets = ['x86_64-unknown-linux-gnu']
 libsecp256k1 = { version = "0.7", features = ['static-context'] }
 rand = "0.8.4"
 hex-literal = "0.3.1"
+secp256k1 = { version = "0.20", features = [
+  "serde",
+  "rand-std",
+  "global-context",
+] }
+arrayref = '0.3.6'
 
 # Chainflip local dependencies
 state-chain-runtime = { path = '../runtime'}
+chainflip-node = { path = '../node'}
 cf-traits = { path = '../traits'}
 cf-primitives = { path = '../primitives' }
+cf-amm = { path = '../amm' }
 cf-chains = { path = '../chains', features = ['runtime-integration-tests']}
 cf-test-utilities = { path = '../test-utilities' }
 pallet-cf-validator = { path = '../pallets/cf-validator'}

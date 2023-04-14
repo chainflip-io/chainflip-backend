@@ -8,12 +8,11 @@ pub mod epoch_transition;
 mod missed_authorship_slots;
 mod offences;
 mod signer_nomination;
-
 use crate::{
 	AccountId, Authorship, BitcoinIngressEgress, BlockNumber, EmergencyRotationPercentageRange,
-	Emissions, Environment, EthereumBroadcaster, EthereumIngressEgress, EthereumInstance, Flip,
-	FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress, Reputation, Runtime, RuntimeCall,
-	System, Validator,
+	Emissions, Environment, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
+	Flip, FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress, Reputation, Runtime,
+	RuntimeCall, System, Validator,
 };
 
 use cf_chains::{
@@ -24,7 +23,7 @@ use cf_chains::{
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
-		PolkadotTransactionData,
+		PolkadotTransactionData, RuntimeVersion,
 	},
 	eth::{
 		self,
@@ -35,9 +34,7 @@ use cf_chains::{
 	ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
 	TransactionBuilder,
 };
-use cf_primitives::{
-	chains::assets, liquidity::U256, Asset, AssetAmount, EgressId, IntentId, ETHEREUM_ETH_ADDRESS,
-};
+use cf_primitives::{chains::assets, Asset, BasisPoints, EgressId, IntentId, ETHEREUM_ETH_ADDRESS};
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, EgressApi,
 	EmergencyRotation, EpochInfo, EpochKey, EthEnvironmentProvider, Heartbeat, IngressApi,
@@ -52,10 +49,10 @@ use frame_support::{
 };
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
-use pallet_cf_chain_tracking::ChainState;
 use pallet_cf_validator::PercentageRange;
 use scale_info::TypeInfo;
 pub use signer_nomination::RandomSignerNomination;
+use sp_core::U256;
 use sp_runtime::traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto};
 use sp_std::prelude::*;
 
@@ -166,8 +163,8 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 		}
 	}
 
-	fn refresh_unsigned_transaction(unsigned_tx: &mut <Ethereum as ChainAbi>::Transaction) {
-		if let Some(chain_state) = ChainState::<Runtime, EthereumInstance>::get() {
+	fn refresh_unsigned_data(unsigned_tx: &mut <Ethereum as ChainAbi>::Transaction) {
+		if let Some(chain_state) = EthereumChainTracking::chain_state() {
 			// double the last block's base fee. This way we know it'll be selectable for at least 6
 			// blocks (12.5% increase on each block)
 			let max_fee_per_gas =
@@ -178,7 +175,10 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 		// if we don't have ChainState, we leave it unmodified
 	}
 
-	fn is_valid_for_rebroadcast(_call: &EthereumApi<EthEnvironment>) -> bool {
+	fn is_valid_for_rebroadcast(
+		_call: &EthereumApi<EthEnvironment>,
+		_payload: &<Ethereum as ChainCrypto>::Payload,
+	) -> bool {
 		// Nothing to validate for Ethereum
 		true
 	}
@@ -192,14 +192,15 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 		PolkadotTransactionData { encoded_extrinsic: signed_call.chain_encoded() }
 	}
 
-	fn refresh_unsigned_transaction(_unsigned_tx: &mut <Polkadot as ChainAbi>::Transaction) {
+	fn refresh_unsigned_data(_unsigned_tx: &mut <Polkadot as ChainAbi>::Transaction) {
 		// TODO: For now this is a noop until we actually have dot chain tracking
 	}
 
-	fn is_valid_for_rebroadcast(call: &PolkadotApi<DotEnvironment>) -> bool {
-		// If we know the Polkadot runtime has been upgraded then we know this transaction will
-		// fail.
-		call.runtime_version_used() == Environment::polkadot_runtime_version()
+	fn is_valid_for_rebroadcast(
+		call: &PolkadotApi<DotEnvironment>,
+		payload: &<Polkadot as ChainCrypto>::Payload,
+	) -> bool {
+		&call.threshold_signature_payload() == payload
 	}
 }
 
@@ -211,12 +212,15 @@ impl TransactionBuilder<Bitcoin, BitcoinApi<BtcEnvironment>> for BtcTransactionB
 		BitcoinTransactionData { encoded_transaction: signed_call.chain_encoded() }
 	}
 
-	fn refresh_unsigned_transaction(_unsigned_tx: &mut <Bitcoin as ChainAbi>::Transaction) {
+	fn refresh_unsigned_data(_unsigned_tx: &mut <Bitcoin as ChainAbi>::Transaction) {
 		// We might need to restructure the tx depending on the current fee per utxo. no-op until we
 		// have chain tracking
 	}
 
-	fn is_valid_for_rebroadcast(_call: &BitcoinApi<BtcEnvironment>) -> bool {
+	fn is_valid_for_rebroadcast(
+		_call: &BitcoinApi<BtcEnvironment>,
+		_payload: &<Bitcoin as ChainCrypto>::Payload,
+	) -> bool {
 		// Todo: The transaction wont be valid for rebroadcast as soon as we transition to new epoch
 		// since the input utxo set will change and the whole apicall would be invalid. This case
 		// will be handled later
@@ -278,13 +282,16 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 	// Get the Environment values for vault_account, NetworkChoice and the next nonce for the
 	// proxy_account
 	fn replay_protection() -> PolkadotReplayProtection {
-		PolkadotReplayProtection::new(
-			Environment::next_polkadot_proxy_account_nonce(),
-			// TODO: Instead of 0, tip needs to be set here
-			0,
-			Environment::polkadot_runtime_version(),
-			Environment::polkadot_genesis_hash(),
-		)
+		PolkadotReplayProtection {
+			genesis_hash: Environment::polkadot_genesis_hash(),
+			nonce: Environment::next_polkadot_proxy_account_nonce(),
+		}
+	}
+}
+
+impl Get<RuntimeVersion> for DotEnvironment {
+	fn get() -> RuntimeVersion {
+		Environment::polkadot_runtime_version()
 	}
 }
 
@@ -300,7 +307,6 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 					_ => None,
 				}
 			},
-
 			cf_chains::dot::api::SystemAccounts::Vault => Environment::polkadot_vault_account(),
 		}
 	}
@@ -431,7 +437,7 @@ macro_rules! impl_ingress_api_for_anychain {
 				ingress_asset: Asset,
 				egress_asset: Asset,
 				egress_address: ForeignChainAddress,
-				relayer_commission_bps: u16,
+				relayer_commission_bps: BasisPoints,
 				relayer_id: Self::AccountId,
 				message_metadata: Option<CcmIngressMetadata>,
 			) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
@@ -458,7 +464,7 @@ macro_rules! impl_egress_api_for_anychain {
 		impl EgressApi<AnyChain> for $anychain {
 			fn schedule_egress(
 				asset: Asset,
-				amount: AssetAmount,
+				amount: <AnyChain as Chain>::ChainAmount,
 				egress_address: <AnyChain as Chain>::ChainAccount,
 				maybe_message: Option<CcmIngressMetadata>,
 			) -> EgressId {
@@ -466,7 +472,7 @@ macro_rules! impl_egress_api_for_anychain {
 					$(
 						ForeignChain::$chain => $ingress_egress::schedule_egress(
 							asset.try_into().expect("Checked for asset compatibility"),
-							amount,
+							amount.try_into().expect("Checked for amount compatibility"),
 							egress_address
 								.try_into()
 								.expect("This address cast is ensured to succeed."),
@@ -510,9 +516,7 @@ impl IngressHandler<Bitcoin> for BtcIngressHandler {
 		_asset: <Bitcoin as Chain>::ChainAsset,
 	) {
 		Environment::add_bitcoin_utxo_to_list(Utxo {
-			amount: amount
-				.try_into()
-				.expect("the amount witnessed should not exceed u64 max for btc"),
+			amount,
 			txid: utxo_id.tx_hash,
 			vout: utxo_id.vout,
 			pubkey_x: utxo_id.pubkey_x,

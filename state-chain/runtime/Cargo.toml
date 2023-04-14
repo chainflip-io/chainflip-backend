@@ -32,6 +32,7 @@ cf-primitives = { path = '../primitives', default-features = false }
 cf-chains = { path = '../chains', default-features = false }
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
 cf-session-benchmarking = { path = '../cf-session-benchmarking', optional = true, default-features = false }
+cf-amm = { path = '../amm', default-features = false }
 
 pallet-cf-account-roles = { path = '../pallets/cf-account-roles', default-features = false }
 pallet-cf-broadcast = { path = '../pallets/cf-broadcast', default-features = false }
@@ -43,7 +44,6 @@ pallet-cf-governance = { path = '../pallets/cf-governance', default-features = f
 pallet-cf-ingress-egress = { path = '../pallets/cf-ingress-egress', default-features = false }
 pallet-cf-lp =  { path = '../pallets/cf-lp', default-features = false }
 pallet-cf-pools = { path = '../pallets/cf-pools', default-features = false  }
-pallet-cf-pools-runtime-api = {path = "../pallets/cf-pools/runtime-api", default-features = false }
 pallet-cf-reputation = { path = '../pallets/cf-reputation', default-features = false }
 pallet-cf-staking = { path = '../pallets/cf-staking', default-features = false }
 pallet-cf-swapping = { path = '../pallets/cf-swapping', default-features = false  }
@@ -128,6 +128,7 @@ std = [
   'cf-primitives/std',
   'cf-traits/std',
   'cf-utilities/std',
+  'cf-amm/std',
   'codec/std',
   'ethabi/std',
   'frame-benchmarking?/std',
@@ -150,7 +151,6 @@ std = [
   'pallet-cf-governance/std',
   'pallet-cf-ingress-egress/std',
   'pallet-cf-lp/std',
-  'pallet-cf-pools-runtime-api/std',
   'pallet-cf-pools/std',
   'pallet-cf-reputation/std',
   'pallet-cf-staking/std',

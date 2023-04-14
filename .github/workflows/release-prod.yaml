@@ -25,25 +25,30 @@ jobs:
     runs-on: [hetzner]
     needs: [set-variables]
     container:
-      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-08-08-no-sccache'
+      image: 'ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16'
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     env:
       COMMIT_HASH: ${{ needs.set-variables.outputs.commit_hash }}
       BRANCH_NAME: ${{ needs.set-variables.outputs.branch_name }}
+    outputs:
+      binary_version_cli: ${{ steps.set-binary-versions.outputs.binary_version_cli }}
+      binary_version_node: ${{ steps.set-binary-versions.outputs.binary_version_node }}
+      binary_version_engine: ${{ steps.set-binary-versions.outputs.binary_version_engine }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Update APT
         run: apt update
-      - name: cargo ci-build
+      - name: cargo cf-build-ci
         run: |
-          cargo ci-build --locked
+          cargo cf-build-ci --locked
           # sccache --show-stats
-      - name: cargo ci-test --locked
+      - name: cargo cf-test-ci --locked
         run: |
-          cargo ci-test --locked
+          cargo cf-test-ci --locked
           # sccache --show-stats
       - name: Install cargo-deb
         run: cargo install cargo-deb
@@ -73,6 +78,12 @@ jobs:
           git diff --exit-code
           git diff --cached --exit-code
 
+      - name: Set Binary Version Outputs
+        run: |
+          echo "binary_version_cli=$(./target/release/chainflip-cli --version)" >> $GITHUB_OUTPUT
+          echo "binary_version_node=$(./target/release/chainflip-node --version)" >> $GITHUB_OUTPUT
+          echo "binary_version_engine=$(./target/release/chainflip-engine --version)" >> $GITHUB_OUTPUT
+
   deb-publish-prod:
     name: Publish Packages to APT repo
     needs: [set-variables, build-and-test]
@@ -83,3 +94,16 @@ jobs:
       environment: prod
       commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
     secrets: inherit
+
+  build-docker-images:
+    runs-on: ubuntu-latest
+    name: Trigger Public Docker Images Build 🪼
+    needs: [deb-publish-prod, build-and-test]
+    steps:
+      - name: Repository Dispatch to chainflip-dockbeats 🦕
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          repository: chainflip-io/chainflip-dockbeats
+          event-type: publish-docker-images
+          token: ${{ secrets.CF_GITHUB_BOT_TOKEN  }}
+          client-payload: '{"commit_sha": "${{ github.sha }}", "matrix": {"include": [{"binary":"chainflip-cli","version": "${{ needs.build-and-test.outputs.binary_version_cli }}"}, {"binary":"chainflip-node","version": "${{ needs.build-and-test.outputs.binary_version_node }}"}, {"binary":"chainflip-engine","version": "${{ needs.build-and-test.outputs.binary_version_engine }}"}]}}'

@@ -26,14 +26,8 @@ services:
     volumes:
       - ./init/secrets/geth_password:/geth/password
     command:
-      - --datadir=/geth/data
-      - --networkid=10997
       - --allow-insecure-unlock
-      - --unlock=0xa994738936572Fb88564d69134F67Aaa7C7d4A6E
-      - --password=/geth/password
-      - --mine
-      - --miner.threads=1
-      - --nodiscover
+      - --datadir=/geth/data
       - --gcmode=archive
       - --http
       - --http.addr=0.0.0.0
@@ -67,25 +61,23 @@ services:
     volumes:
       - ./init/polkadot/chainspec.json:/chainspec.json
     healthcheck:
-      test: ["CMD-SHELL", "curl", "-H 'Content-Type: application/json;'", "-d '{\"id\":1, \"jsonrpc\":\"2.0\", \"method\": \"chain_getBlock\"}'", "http://localhost:9945"]
+      test: ["CMD-SHELL", "curl", "-H 'Content-Type: application/json;'", "-d '{\"id\":1, \"jsonrpc\":\"2.0\", \"method\": \"chain_getBlockHash\", \"params\" : [0]}'", "http://localhost:9945"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 20s
     command:
-      [
-        "--name=PolkaDocker",
-        "--rpc-methods=unsafe",
-        "--ws-external",
-        "--rpc-external",
-        "--rpc-cors=all",
-        "--chain=/chainspec.json",
-        "--validator",
-        "--force-authoring",
-        "--alice",
-        "--state-pruning=archive",
-        "--blocks-pruning=archive"
-      ]
+      - --alice
+      - --blocks-pruning=archive
+      - --chain=/chainspec.json
+      - --force-authoring
+      - --name=PolkaDocker
+      - --rpc-cors=all
+      - --rpc-external
+      - --rpc-methods=unsafe
+      - --state-pruning=archive
+      - --validator
+      - --ws-external
 
   bitcoin:
     image: ghcr.io/chainflip-io/chainflip-bitcoin-regtest:v24.0.1

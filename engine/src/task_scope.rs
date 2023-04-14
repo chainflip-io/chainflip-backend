@@ -361,6 +361,22 @@ impl<Error: Send + 'static> Drop for ScopeResultStream<Error> {
 	}
 }
 
+/// Allows async code to run sync/blocking code without blocking the runtime.
+pub async fn without_blocking<C: FnOnce() -> R + Send + 'static, R: Send + 'static>(c: C) -> R {
+	match tokio::task::spawn_blocking(c).await {
+		Ok(r) => r,
+		Err(join_error) =>
+			if let Ok(panic) = join_error.try_into_panic() {
+				// Avoids re-printing panics that occur inside the spawned code, which would occur
+				// if unwrap() was used.
+				std::panic::resume_unwind(panic)
+			} else {
+				// Silently wait to be cancelled.
+				futures::future::pending().await
+			},
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use std::{convert::Infallible, sync::atomic::Ordering};
