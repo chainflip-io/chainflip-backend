@@ -14,10 +14,11 @@ use crate::{
 	multisig::PersistentKeyDB,
 	stream_utils::EngineStreamExt,
 	witnesser::{
-		block_witnesser::{BlockWitnesser, BlockWitnesserWrapper},
-		checkpointing::{get_witnesser_start_block_with_checkpointing, StartCheckpointing},
-		epoch_witnesser::{start_epoch_witnesser, EpochWitnesserGenerator, WitnesserAndStream},
-		EpochStart,
+		block_witnesser::{
+			BlockStream, BlockWitnesser, BlockWitnesserGenerator, BlockWitnesserGeneratorWrapper,
+		},
+		epoch_witnesser::start_epoch_witnesser,
+		ChainBlockNumber, EpochStart,
 	},
 };
 
@@ -67,32 +68,24 @@ impl BlockWitnesser for EthBlockWitnesser {
 }
 
 struct EthBlockWitnesserGenerator {
-	db: Arc<PersistentKeyDB>,
 	eth_dual_rpc: EthDualRpcClient,
 }
 
 #[async_trait]
-impl EpochWitnesserGenerator for EthBlockWitnesserGenerator {
-	type Witnesser = BlockWitnesserWrapper<EthBlockWitnesser>;
-	async fn init(
-		&mut self,
-		epoch: EpochStart<Ethereum>,
-		// Why is this result option
-	) -> anyhow::Result<Option<WitnesserAndStream<Self::Witnesser>>> {
-		let (from_block, witnessed_until_sender) =
-			match get_witnesser_start_block_with_checkpointing::<cf_chains::Ethereum>(
-				epoch.epoch_index,
-				epoch.block_number,
-				self.db.clone(),
-			)
-			.await
-			.expect("Failed to start Eth witnesser checkpointing")
-			{
-				StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
-					(from_block, witnessed_until_sender),
-				StartCheckpointing::AlreadyWitnessedEpoch => return Ok(None),
-			};
+impl BlockWitnesserGenerator for EthBlockWitnesserGenerator {
+	type Witnesser = EthBlockWitnesser;
 
+	fn create_witnesser(
+		&self,
+		epoch: EpochStart<<Self::Witnesser as BlockWitnesser>::Chain>,
+	) -> Self::Witnesser {
+		EthBlockWitnesser { epoch }
+	}
+
+	async fn get_block_stream(
+		&mut self,
+		from_block: ChainBlockNumber<Ethereum>,
+	) -> anyhow::Result<BlockStream<EthNumberBloom>> {
 		let block_stream = safe_dual_block_subscription_from(from_block, self.eth_dual_rpc.clone())
 			.await
 			.map_err(|err| {
@@ -103,14 +96,7 @@ impl EpochWitnesserGenerator for EthBlockWitnesserGenerator {
 				ETH_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER,
 			));
 
-		Ok(Some((
-			BlockWitnesserWrapper {
-				epoch_index: epoch.epoch_index,
-				witnesser: EthBlockWitnesser { epoch },
-				witnessed_until_sender,
-			},
-			Box::pin(block_stream),
-		)))
+		Ok(Box::pin(block_stream))
 	}
 }
 
@@ -122,7 +108,10 @@ pub async fn start(
 ) -> Result<(), ()> {
 	start_epoch_witnesser(
 		epoch_start_receiver,
-		EthBlockWitnesserGenerator { db, eth_dual_rpc },
+		BlockWitnesserGeneratorWrapper {
+			db,
+			generator: EthBlockWitnesserGenerator { eth_dual_rpc },
+		},
 		witnessers,
 	)
 	.instrument(info_span!("Eth-Block-Head-Witnesser"))

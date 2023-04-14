@@ -1,13 +1,17 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use cf_primitives::EpochIndex;
 use tokio::sync::oneshot;
 
-use crate::multisig::HasChainTag;
+use crate::multisig::{HasChainTag, PersistentKeyDB};
 
 use super::{
-	checkpointing::WitnessedUntil,
-	epoch_witnesser::{self, EpochWitnesser},
-	ChainBlockNumber, HasBlockNumber,
+	checkpointing::{
+		get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
+	},
+	epoch_witnesser::{self, EpochWitnesser, EpochWitnesserGenerator, WitnesserAndStream},
+	ChainBlockNumber, EpochStart, HasBlockNumber,
 };
 
 #[async_trait]
@@ -81,4 +85,69 @@ where
 
 		Ok(())
 	}
+}
+
+pub type BlockStream<Block> =
+	std::pin::Pin<Box<dyn futures::Stream<Item = anyhow::Result<Block>> + Send + 'static>>;
+
+#[async_trait]
+pub trait BlockWitnesserGenerator: Send {
+	type Witnesser: BlockWitnesser;
+
+	fn create_witnesser(
+		&self,
+		epoch: EpochStart<<Self::Witnesser as BlockWitnesser>::Chain>,
+	) -> Self::Witnesser;
+
+	async fn get_block_stream(
+		&mut self,
+		from_block: ChainBlockNumber<<Self::Witnesser as BlockWitnesser>::Chain>,
+	) -> anyhow::Result<BlockStream<<Self::Witnesser as BlockWitnesser>::Block>>;
+}
+
+pub struct BlockWitnesserGeneratorWrapper<Generator>
+where
+	Generator: BlockWitnesserGenerator,
+{
+	pub generator: Generator,
+	pub db: Arc<PersistentKeyDB>,
+}
+
+#[async_trait]
+impl<Generator> EpochWitnesserGenerator for BlockWitnesserGeneratorWrapper<Generator>
+where
+	Generator: BlockWitnesserGenerator,
+	<<<Generator::Witnesser as BlockWitnesser>::Chain as cf_chains::Chain>::ChainBlockNumber as TryFrom<u64>>::Error: std::fmt::Debug
+{
+	type Witnesser = BlockWitnesserWrapper<Generator::Witnesser>;
+
+	async fn init(
+		&mut self,
+		epoch: EpochStart<<Generator::Witnesser as BlockWitnesser>::Chain>,
+	) -> anyhow::Result<Option<WitnesserAndStream<Self::Witnesser>>> {
+		let (from_block, witnessed_until_sender) =
+			match get_witnesser_start_block_with_checkpointing::<
+				<Generator::Witnesser as BlockWitnesser>::Chain,
+			>(epoch.epoch_index, epoch.block_number, self.db.clone())
+			.await
+			// TODO: print chain name
+			.expect("Failed to start witnesser checkpointing")
+			{
+				StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
+					(from_block, witnessed_until_sender),
+				StartCheckpointing::AlreadyWitnessedEpoch => return Ok(None),
+			};
+
+		let block_stream = self.generator.get_block_stream(from_block).await?;
+
+		let witnesser = BlockWitnesserWrapper {
+			epoch_index: epoch.epoch_index,
+			witnesser: self.generator.create_witnesser(epoch),
+			witnessed_until_sender,
+		};
+
+		Ok(Some((witnesser, block_stream)))
+
+	}
+
 }

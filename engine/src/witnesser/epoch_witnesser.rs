@@ -50,6 +50,7 @@ pub trait EpochWitnesserGenerator: Send {
 	type Witnesser: EpochWitnesser;
 
 	// TODO: use a custom enum instead of Option?
+	// TODO: try to split this method into create_witnesser and get_stream as well
 	async fn init(
 		&mut self,
 		epoch: EpochStart<<Self::Witnesser as EpochWitnesser>::Chain>,

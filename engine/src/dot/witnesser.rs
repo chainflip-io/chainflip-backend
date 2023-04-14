@@ -34,10 +34,11 @@ use crate::{
 	stream_utils::EngineStreamExt,
 	witnesser::{
 		block_head_stream_from::block_head_stream_from,
-		block_witnesser::{BlockWitnesser, BlockWitnesserWrapper},
-		checkpointing::{get_witnesser_start_block_with_checkpointing, StartCheckpointing},
-		epoch_witnesser::{start_epoch_witnesser, EpochWitnesserGenerator, WitnesserAndStream},
-		AddressMonitor, EpochStart, HasBlockNumber,
+		block_witnesser::{
+			BlockStream, BlockWitnesser, BlockWitnesserGenerator, BlockWitnesserGeneratorWrapper,
+		},
+		epoch_witnesser::start_epoch_witnesser,
+		AddressMonitor, ChainBlockNumber, EpochStart, HasBlockNumber,
 	},
 };
 
@@ -262,7 +263,10 @@ where
 {
 	start_epoch_witnesser(
 		Arc::new(Mutex::new(epoch_starts_receiver)),
-		DotWitnesserGenerator { db, state_chain_client, dot_client },
+		BlockWitnesserGeneratorWrapper {
+			generator: DotWitnesserGenerator { state_chain_client, dot_client },
+			db,
+		},
 		(address_monitor, monitored_signatures, signature_receiver),
 	)
 	.instrument(info_span!("Dot-Witnesser"))
@@ -423,38 +427,34 @@ where
 }
 
 struct DotWitnesserGenerator<StateChainClient, DotRpc> {
-	db: Arc<PersistentKeyDB>,
 	state_chain_client: Arc<StateChainClient>,
 	dot_client: DotRpc,
 }
 
 #[async_trait]
-impl<StateChainClient, DotRpc> EpochWitnesserGenerator
+impl<StateChainClient, DotRpc> BlockWitnesserGenerator
 	for DotWitnesserGenerator<StateChainClient, DotRpc>
 where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
-	type Witnesser = BlockWitnesserWrapper<DotWitnesser<StateChainClient, DotRpc>>;
+	type Witnesser = DotWitnesser<StateChainClient, DotRpc>;
 
-	async fn init(
+	fn create_witnesser(
+		&self,
+		epoch: EpochStart<<Self::Witnesser as BlockWitnesser>::Chain>,
+	) -> Self::Witnesser {
+		DotWitnesser {
+			state_chain_client: self.state_chain_client.clone(),
+			dot_client: self.dot_client.clone(),
+			current_epoch: epoch,
+		}
+	}
+
+	async fn get_block_stream(
 		&mut self,
-		epoch: EpochStart<Polkadot>,
-	) -> anyhow::Result<Option<WitnesserAndStream<Self::Witnesser>>> {
-		let (from_block, witnessed_until_sender) =
-			match get_witnesser_start_block_with_checkpointing::<Polkadot>(
-				epoch.epoch_index,
-				epoch.block_number,
-				self.db.clone(),
-			)
-			.await
-			.expect("Failed to start Dot witnesser checkpointing")
-			{
-				StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
-					(from_block, witnessed_until_sender),
-				StartCheckpointing::AlreadyWitnessedEpoch => return Ok(None),
-			};
-
+		from_block: ChainBlockNumber<<Self::Witnesser as BlockWitnesser>::Chain>,
+	) -> anyhow::Result<BlockStream<<Self::Witnesser as BlockWitnesser>::Block>> {
 		let safe_head_stream = take_while_ok(self.dot_client.subscribe_finalized_heads().await?)
 			.map(|header| MiniHeader { block_number: header.number, block_hash: header.hash() });
 
@@ -534,20 +534,7 @@ where
 			DOT_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER,
 		));
 
-		let witnesser = DotWitnesser {
-			state_chain_client: self.state_chain_client.clone(),
-			dot_client: self.dot_client.clone(),
-			current_epoch: epoch.clone(),
-		};
-
-		Ok(Some((
-			BlockWitnesserWrapper {
-				witnesser,
-				epoch_index: epoch.epoch_index,
-				witnessed_until_sender,
-			},
-			Box::pin(block_events_stream),
-		)))
+		Ok(Box::pin(block_events_stream))
 	}
 }
 
