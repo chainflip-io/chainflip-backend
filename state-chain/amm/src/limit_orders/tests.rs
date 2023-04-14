@@ -510,19 +510,6 @@ fn burn() {
 fn swap() {
 	fn inner<SD: SwapDirection + limit_orders::SwapDirection + range_orders::SwapDirection>() {
 		{
-			let mut pool_state = PoolState::new(0).unwrap();
-			let swap = U256::from(20);
-			assert_eq!(
-				assert_ok!(pool_state.collect_and_mint::<SD>(
-					&LiquidityProvider::from([0; 32]),
-					0,
-					1000.into()
-				)),
-				CollectedAmounts::default()
-			);
-			assert_eq!(pool_state.swap::<SD>(swap, None), (swap - 1, 0.into()));
-		}
-		{
 			let swap = U256::from(20);
 			let output = swap - 1;
 			{
