@@ -46,7 +46,7 @@ pub type WitnesserAndStream<W> =
 	(W, Pin<Box<dyn Stream<Item = anyhow::Result<<W as EpochWitnesser>::Data>> + Send + 'static>>);
 
 #[async_trait]
-pub trait EpochWitnesserGenerator: Send {
+pub trait EpochProcessGenerator: Send {
 	type Witnesser: EpochWitnesser;
 
 	// TODO: use a custom enum instead of Option?
@@ -69,7 +69,7 @@ pub async fn start_epoch_process_runner<Generator>(
 	initial_state: <Generator::Witnesser as EpochWitnesser>::StaticState,
 ) -> Result<(), ()>
 where
-	Generator: EpochWitnesserGenerator,
+	Generator: EpochProcessGenerator,
 {
 	task_scope(|scope| {
 		async {
@@ -304,7 +304,7 @@ mod epoch_witnesser_testing {
 	}
 
 	#[async_trait]
-	impl EpochWitnesserGenerator for TestEpochWitnesserGenerator {
+	impl EpochProcessGenerator for TestEpochWitnesserGenerator {
 		type Witnesser = TestEpochWitnesser;
 
 		async fn init(

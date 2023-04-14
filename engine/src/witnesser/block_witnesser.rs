@@ -10,7 +10,7 @@ use super::{
 	checkpointing::{
 		get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
 	},
-	epoch_process_runner::{self, EpochWitnesser, EpochWitnesserGenerator, WitnesserAndStream},
+	epoch_process_runner::{self, EpochProcessGenerator, EpochWitnesser, WitnesserAndStream},
 	ChainBlockNumber, EpochStart, HasBlockNumber,
 };
 
@@ -114,7 +114,7 @@ where
 }
 
 #[async_trait]
-impl<Generator> EpochWitnesserGenerator for BlockWitnesserGeneratorWrapper<Generator>
+impl<Generator> EpochProcessGenerator for BlockWitnesserGeneratorWrapper<Generator>
 where
 	Generator: BlockWitnesserGenerator,
 	<<<Generator::Witnesser as BlockWitnesser>::Chain as cf_chains::Chain>::ChainBlockNumber as TryFrom<u64>>::Error: std::fmt::Debug

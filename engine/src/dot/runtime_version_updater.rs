@@ -12,7 +12,7 @@ use crate::{
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	witnesser::{
 		epoch_process_runner::{
-			self, start_epoch_process_runner, EpochWitnesser, EpochWitnesserGenerator,
+			self, start_epoch_process_runner, EpochProcessGenerator, EpochWitnesser,
 			WitnesserAndStream,
 		},
 		ChainBlockNumber, EpochStart,
@@ -123,7 +123,7 @@ struct RuntimeVersionUpdaterGenerator<StateChainClient, DotRpc> {
 }
 
 #[async_trait]
-impl<StateChainClient, DotRpc> EpochWitnesserGenerator
+impl<StateChainClient, DotRpc> EpochProcessGenerator
 	for RuntimeVersionUpdaterGenerator<StateChainClient, DotRpc>
 where
 	StateChainClient: ExtrinsicApi + StorageApi + 'static + Send + Sync,

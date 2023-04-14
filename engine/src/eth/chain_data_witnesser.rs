@@ -7,7 +7,7 @@ use crate::{
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 	witnesser::{
 		epoch_process_runner::{
-			self, start_epoch_process_runner, EpochWitnesser, EpochWitnesserGenerator,
+			self, start_epoch_process_runner, EpochProcessGenerator, EpochWitnesser,
 			WitnesserAndStream,
 		},
 		EpochStart,
@@ -126,7 +126,7 @@ struct ChainDataWitnesserGenerator<StateChainClient, EthRpcClient> {
 }
 
 #[async_trait]
-impl<StateChainClient, EthRpcClient> EpochWitnesserGenerator
+impl<StateChainClient, EthRpcClient> EpochProcessGenerator
 	for ChainDataWitnesserGenerator<StateChainClient, EthRpcClient>
 where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
