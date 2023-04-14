@@ -1,6 +1,6 @@
 //! Contains tests related to liquidity, pools and swapping
 use cf_amm::{
-	common::{sqrt_price_at_tick, Side, SqrtPriceQ64F96, Tick},
+	common::{sqrt_price_at_tick, SqrtPriceQ64F96, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{Chain, Ethereum, ForeignChain, ForeignChainAddress};
@@ -12,6 +12,7 @@ use frame_support::{
 	traits::{OnIdle, OnNewAccount},
 };
 use pallet_cf_ingress_egress::IngressWitness;
+use pallet_cf_pools::Order;
 use state_chain_runtime::{
 	chainflip::address_derivation::AddressDerivation, AccountRoles, EthereumInstance,
 	LiquidityPools, LiquidityProvider, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
@@ -124,7 +125,7 @@ fn mint_range_order(
 fn mint_limit_order(
 	account_id: &AccountId,
 	unstable_asset: Asset,
-	side: Side,
+	order: Order,
 	tick: Tick,
 	amount: AssetAmount,
 ) {
@@ -136,7 +137,7 @@ fn mint_limit_order(
 	assert_ok!(LiquidityPools::collect_and_mint_limit_order(
 		RuntimeOrigin::signed(account_id.clone()),
 		unstable_asset,
-		side,
+		order,
 		tick,
 		amount,
 	));
@@ -146,7 +147,7 @@ fn mint_limit_order(
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, pallet_cf_pools::STABLE_ASSET)
 			.unwrap_or_default();
 
-	if side == Side::Zero {
+	if order == Order::Sell {
 		assert_eq!(new_unstable_balance, unstable_balance - amount);
 		assert_eq!(new_stable_balance, stable_balance);
 	} else {
@@ -184,10 +185,10 @@ fn basic_pool_setup_provision_and_swap() {
 		credit_account(&DORIS, Asset::Flip, 1_000_000);
 		credit_account(&DORIS, Asset::Usdc, 1_000_000);
 
-		mint_limit_order(&DORIS, Asset::Eth, Side::Zero, 0, 500_000);
+		mint_limit_order(&DORIS, Asset::Eth, Order::Sell, 0, 500_000);
 		mint_range_order(&DORIS, Asset::Eth, -10..10, 1_000_000);
 
-		mint_limit_order(&DORIS, Asset::Flip, Side::Zero, 0, 500_000);
+		mint_limit_order(&DORIS, Asset::Flip, Order::Sell, 0, 500_000);
 		mint_range_order(&DORIS, Asset::Flip, -10..10, 1_000_000);
 
 		new_account(&ZION, AccountRole::Relayer);
