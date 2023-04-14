@@ -25,13 +25,13 @@ pub struct EpochStart<Chain: cf_chains::Chain> {
 	pub data: Chain::EpochStartData,
 }
 
-pub trait BlockNumberable {
+pub trait HasBlockNumber {
 	type BlockNumber: PartialOrd + Into<u64>;
 
 	fn block_number(&self) -> Self::BlockNumber;
 }
 
-impl BlockNumberable for u64 {
+impl HasBlockNumber for u64 {
 	type BlockNumber = Self;
 
 	fn block_number(&self) -> Self::BlockNumber {

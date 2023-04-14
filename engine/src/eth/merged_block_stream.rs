@@ -11,7 +11,7 @@ use crate::{
 	},
 	eth::TransportProtocol,
 	logging::ETH_STREAM_BEHIND,
-	witnesser::BlockNumberable,
+	witnesser::HasBlockNumber,
 };
 
 /// Merges two streams of blocks. The intent of this function is to create
@@ -49,7 +49,7 @@ pub async fn merged_block_stream<'a, Block, BlockHeaderStreamWs, BlockHeaderStre
 	safe_http_block_items_stream: BlockHeaderStreamHttp,
 ) -> impl Stream<Item = (Block, TransportProtocol)> + Send + 'a
 where
-	Block: BlockNumberable + Send + 'a,
+	Block: HasBlockNumber + Send + 'a,
 	BlockHeaderStreamWs: Stream<Item = Block> + Unpin + Send + 'a,
 	BlockHeaderStreamHttp: Stream<Item = Block> + Unpin + Send + 'a,
 {
@@ -127,7 +127,7 @@ where
 
 	// When returning Ok, will return None if the protocol
 	// stream is behind the next block to yield
-	async fn on_block_for_protocol<Block: BlockNumberable>(
+	async fn on_block_for_protocol<Block: HasBlockNumber>(
 		merged_stream_state: &mut MergedStreamState,
 		protocol_state: &mut ProtocolState,
 		other_protocol_state: &ProtocolState,
@@ -208,7 +208,7 @@ mod merged_stream_tests {
 
 	use utilities::assert_future_panics;
 
-	async fn test_merged_stream_interleaving<Block: BlockNumberable + PartialEq + Debug + Send>(
+	async fn test_merged_stream_interleaving<Block: HasBlockNumber + PartialEq + Debug + Send>(
 		interleaved_blocks: Vec<(Block, TransportProtocol)>,
 		expected_blocks: &[(Block, TransportProtocol)],
 	) {

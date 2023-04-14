@@ -13,7 +13,7 @@ use tracing::{error, info};
 
 use crate::task_scope::{task_scope, ScopedJoinHandle};
 
-use super::{BlockNumberable, ChainBlockNumber, EpochStart};
+use super::{ChainBlockNumber, EpochStart, HasBlockNumber};
 type BlockNumber<Witnesser> = ChainBlockNumber<<Witnesser as EpochWitnesser>::Chain>;
 
 #[async_trait]
@@ -192,7 +192,7 @@ pub async fn run_witnesser_block_stream<Witnesser>(
 ) -> Result<Witnesser::StaticState, ()>
 where
 	Witnesser: EpochWitnesser,
-	Witnesser::Data: BlockNumberable<BlockNumber = BlockNumber<Witnesser>>,
+	Witnesser::Data: HasBlockNumber<BlockNumber = BlockNumber<Witnesser>>,
 {
 	// If set, this is the last block to process
 	let mut last_block_number_for_epoch: Option<BlockNumber<Witnesser>> = None;

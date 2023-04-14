@@ -41,7 +41,7 @@ use crate::{
 			self, start_epoch_witnesser, EpochWitnesser, EpochWitnesserGenerator,
 			WitnesserAndStream,
 		},
-		AddressMonitor, BlockNumberable, ChainBlockNumber, EpochStart,
+		AddressMonitor, ChainBlockNumber, EpochStart, HasBlockNumber,
 	},
 };
 
@@ -55,7 +55,7 @@ pub struct MiniHeader {
 	block_hash: PolkadotHash,
 }
 
-impl BlockNumberable for MiniHeader {
+impl HasBlockNumber for MiniHeader {
 	type BlockNumber = PolkadotBlockNumber;
 
 	fn block_number(&self) -> Self::BlockNumber {
@@ -281,7 +281,7 @@ struct DotWitnesser<StateChainClient, DotRpc> {
 	witnessed_until_sender: tokio::sync::mpsc::Sender<WitnessedUntil>,
 }
 
-impl BlockNumberable for (H256, PolkadotBlockNumber, Vec<(Phase, EventWrapper)>) {
+impl HasBlockNumber for (H256, PolkadotBlockNumber, Vec<(Phase, EventWrapper)>) {
 	type BlockNumber = PolkadotBlockNumber;
 
 	fn block_number(&self) -> Self::BlockNumber {
