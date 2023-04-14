@@ -43,6 +43,12 @@ pub mod pallet {
 		pub pool_state: PoolState<LiquidityProvider>,
 	}
 
+	#[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
+	pub enum Order {
+		Buy,
+		Sell,
+	}
+
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
 	pub trait Config: Chainflip {
@@ -190,7 +196,7 @@ pub mod pallet {
 		RangeOrderMinted {
 			lp: T::AccountId,
 			unstable_asset: any::Asset,
-			range: core::ops::Range<Tick>,
+			price_range_in_ticks: core::ops::Range<Tick>,
 			liquidity: Liquidity,
 			assets_debited: SideMap<AssetAmount>,
 			collected_fees: SideMap<AssetAmount>,
@@ -198,7 +204,7 @@ pub mod pallet {
 		RangeOrderBurned {
 			lp: T::AccountId,
 			unstable_asset: any::Asset,
-			range: core::ops::Range<Tick>,
+			price_range_in_ticks: core::ops::Range<Tick>,
 			liquidity: Liquidity,
 			assets_credited: SideMap<AssetAmount>,
 			collected_fees: SideMap<AssetAmount>,
@@ -206,8 +212,8 @@ pub mod pallet {
 		LimitOrderMinted {
 			lp: T::AccountId,
 			unstable_asset: any::Asset,
-			side: Side,
-			tick: Tick,
+			order: Order,
+			price_as_tick: Tick,
 			assets_debited: AssetAmount,
 			collected_fees: AssetAmount,
 			swapped_liquidity: AssetAmount,
@@ -215,8 +221,8 @@ pub mod pallet {
 		LimitOrderBurned {
 			lp: T::AccountId,
 			unstable_asset: any::Asset,
-			side: Side,
-			tick: Tick,
+			order: Order,
+			price_as_tick: Tick,
 			assets_credited: AssetAmount,
 			collected_fees: AssetAmount,
 			swapped_liquidity: AssetAmount,
@@ -366,16 +372,22 @@ pub mod pallet {
 		pub fn collect_and_mint_range_order(
 			origin: OriginFor<T>,
 			unstable_asset: any::Asset,
-			range: core::ops::Range<Tick>,
+			price_range_in_ticks: core::ops::Range<Tick>,
 			liquidity: Liquidity,
 		) -> DispatchResult {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
 				let (assets_debited, range_orders::CollectedFees { fees }) = pool_state
 					.range_orders
-					.collect_and_mint(&lp, range.start, range.end, liquidity, |required_amounts| {
-						Self::try_debit_both_assets(&lp, unstable_asset, required_amounts)
-					})
+					.collect_and_mint(
+						&lp,
+						price_range_in_ticks.start,
+						price_range_in_ticks.end,
+						liquidity,
+						|required_amounts| {
+							Self::try_debit_both_assets(&lp, unstable_asset, required_amounts)
+						},
+					)
 					.map_err(|e| match e {
 						range_orders::PositionError::InvalidTickRange =>
 							Error::<T>::InvalidTickRange.into(),
@@ -394,7 +406,7 @@ pub mod pallet {
 				Self::deposit_event(Event::<T>::RangeOrderMinted {
 					lp,
 					unstable_asset,
-					range,
+					price_range_in_ticks,
 					liquidity,
 					assets_debited,
 					collected_fees,
@@ -423,14 +435,19 @@ pub mod pallet {
 		pub fn collect_and_burn_range_order(
 			origin: OriginFor<T>,
 			unstable_asset: any::Asset,
-			range: core::ops::Range<Tick>,
+			price_range_in_ticks: core::ops::Range<Tick>,
 			liquidity: Liquidity,
 		) -> DispatchResult {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
 				let (assets_withdrawn, range_orders::CollectedFees { fees }) = pool_state
 					.range_orders
-					.collect_and_burn(&lp, range.start, range.end, liquidity)
+					.collect_and_burn(
+						&lp,
+						price_range_in_ticks.start,
+						price_range_in_ticks.end,
+						liquidity,
+					)
 					.map_err(|e| match e {
 						range_orders::PositionError::InvalidTickRange =>
 							Error::<T>::InvalidTickRange,
@@ -448,7 +465,7 @@ pub mod pallet {
 				Self::deposit_event(Event::<T>::RangeOrderBurned {
 					lp,
 					unstable_asset,
-					range,
+					price_range_in_ticks,
 					liquidity,
 					assets_credited,
 					collected_fees,
@@ -478,20 +495,22 @@ pub mod pallet {
 		pub fn collect_and_mint_limit_order(
 			origin: OriginFor<T>,
 			unstable_asset: any::Asset,
-			side: Side,
-			tick: Tick,
-			liquidity: AssetAmount,
+			order: Order,
+			price_as_tick: Tick,
+			amount: AssetAmount,
 		) -> DispatchResult {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
-				Self::try_debit_single_asset(&lp, unstable_asset, side, liquidity)?;
+				let side = Self::order_to_side(order);
+
+				Self::try_debit_single_asset(&lp, unstable_asset, side, amount)?;
 
 				let limit_orders::CollectedAmounts { fees, swapped_liquidity } =
 					(match side {
 						Side::Zero =>
 							cf_amm::limit_orders::PoolState::collect_and_mint::<OneToZero>,
 						Side::One => cf_amm::limit_orders::PoolState::collect_and_mint::<ZeroToOne>,
-					})(&mut pool_state.limit_orders, &lp, tick, liquidity.into())
+					})(&mut pool_state.limit_orders, &lp, price_as_tick, amount.into())
 					.map_err(|e| match e {
 						limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
 						limit_orders::PositionError::NonExistent =>
@@ -512,9 +531,9 @@ pub mod pallet {
 				Self::deposit_event(Event::<T>::LimitOrderMinted {
 					lp,
 					unstable_asset,
-					side,
-					tick,
-					assets_debited: liquidity,
+					order,
+					price_as_tick,
+					assets_debited: amount,
 					collected_fees,
 					swapped_liquidity,
 				});
@@ -543,18 +562,20 @@ pub mod pallet {
 		pub fn collect_and_burn_limit_order(
 			origin: OriginFor<T>,
 			unstable_asset: any::Asset,
-			side: Side,
-			tick: Tick,
-			liquidity: AssetAmount,
+			order: Order,
+			price_as_tick: Tick,
+			amount: AssetAmount,
 		) -> DispatchResult {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
+				let side = Self::order_to_side(order);
+
 				let (assets_credited, limit_orders::CollectedAmounts { fees, swapped_liquidity }) =
 					(match side {
 						Side::Zero =>
 							cf_amm::limit_orders::PoolState::collect_and_burn::<OneToZero>,
 						Side::One => cf_amm::limit_orders::PoolState::collect_and_burn::<ZeroToOne>,
-					})(&mut pool_state.limit_orders, &lp, tick, liquidity.into())
+					})(&mut pool_state.limit_orders, &lp, price_as_tick, amount.into())
 					.map_err(|e| match e {
 						limit_orders::PositionError::InvalidTick => Error::<T>::InvalidTick,
 						limit_orders::PositionError::NonExistent =>
@@ -574,8 +595,8 @@ pub mod pallet {
 				Self::deposit_event(Event::<T>::LimitOrderBurned {
 					lp,
 					unstable_asset,
-					side,
-					tick,
+					order,
+					price_as_tick,
 					assets_credited,
 					collected_fees,
 					swapped_liquidity,
@@ -675,6 +696,13 @@ impl<T: Config> Pallet<T> {
 		match side {
 			Side::Zero => unstable_asset,
 			Side::One => STABLE_ASSET,
+		}
+	}
+
+	fn order_to_side(order: Order) -> Side {
+		match order {
+			Order::Buy => Side::One,
+			Order::Sell => Side::Zero,
 		}
 	}
 
