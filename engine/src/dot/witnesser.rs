@@ -12,13 +12,13 @@ use cf_chains::{
 	},
 	eth::assets,
 };
-use cf_primitives::{PolkadotAccountId, PolkadotBlockNumber, TxId};
+use cf_primitives::{EpochIndex, PolkadotAccountId, PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use frame_support::scale_info::TypeInfo;
 use futures::{stream, Stream, StreamExt};
 use pallet_cf_ingress_egress::IngressWitness;
 use sp_core::H256;
-use sp_runtime::MultiSignature;
+use sp_runtime::{AccountId32, MultiSignature};
 use state_chain_runtime::PolkadotInstance;
 use subxt::{
 	config::Header,
@@ -274,10 +274,13 @@ where
 	.map_err(|_| anyhow::anyhow!("Dot witnesser failed"))
 }
 
+// An instance of a Polkadot Witnesser for a particular epoch.
 struct DotWitnesser<StateChainClient, DotRpc> {
 	state_chain_client: Arc<StateChainClient>,
 	dot_client: DotRpc,
-	current_epoch: EpochStart<Polkadot>,
+	epoch_index: EpochIndex,
+	// The account id of our Polkadot vault.
+	vault_account: AccountId32,
 }
 
 impl HasBlockNumber for (H256, PolkadotBlockNumber, Vec<(Phase, EventWrapper)>) {
@@ -310,14 +313,11 @@ where
 		let (block_hash, block_number, block_event_details) = data;
 		trace!("Checking block: {block_number}, with hash: {block_hash:?} for interesting events");
 
-		let our_vault = &self.current_epoch.data.vault_account;
-		let epoch_index = self.current_epoch.epoch_index;
-
 		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls, median_tip) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				block_number,
-				our_vault,
+				&self.vault_account,
 				address_monitor,
 			);
 
@@ -333,7 +333,7 @@ where
 							},
 						},
 					)),
-					epoch_index,
+					epoch_index: self.epoch_index,
 				},
 			))
 			.await;
@@ -343,7 +343,7 @@ where
 				.state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call,
-					epoch_index,
+					epoch_index: self.epoch_index,
 				})
 				.await;
 		}
@@ -385,12 +385,12 @@ where
 														PolkadotInstance,
 													>::signature_accepted {
 														signature: sig.clone(),
-														signer_id: our_vault.clone(),
+														signer_id: self.vault_account.clone(),
 														tx_fee,
 													}
 													.into(),
 												),
-											epoch_index,
+											epoch_index: self.epoch_index,
 										},
 									)
 									.await;
@@ -417,7 +417,7 @@ where
 						}
 						.into(),
 					),
-					epoch_index,
+					epoch_index: self.epoch_index,
 				})
 				.await;
 		}
@@ -447,7 +447,8 @@ where
 		DotWitnesser {
 			state_chain_client: self.state_chain_client.clone(),
 			dot_client: self.dot_client.clone(),
-			current_epoch: epoch,
+			epoch_index: epoch.epoch_index,
+			vault_account: epoch.data.vault_account,
 		}
 	}
 
