@@ -435,11 +435,6 @@ fn can_process_ccm_via_extrinsic_intent() {
 			egress_address: ForeignChainAddress::Eth(egress_address),
 			message_metadata: message,
 		});
-
-		let ingress_address = <AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
-			cf_chains::eth::assets::eth::Asset::Flip,
-			pallet_cf_ingress_egress::IntentIdCounter::<Runtime, EthereumInstance>::get(),
-		).unwrap();
 		let current_epoch = Validator::current_epoch();
 		for node in Validator::current_authorities() {
 			assert_ok!(Witnesser::witness_at_epoch(
