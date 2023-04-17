@@ -278,7 +278,7 @@ pub trait ExecutexSwapAndCall<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		egress_id: EgressId,
 		transfer_param: TransferAssetParams<Abi>,
-		from: ForeignChainAddress,
+		source_address: ForeignChainAddress,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError>;
 }
