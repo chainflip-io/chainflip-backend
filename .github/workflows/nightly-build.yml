@@ -34,7 +34,7 @@ jobs:
         uses: actions/cache/save@v3
         with:
           name: chainflip-backend-release-bins
-          path: |
+          key: |
             target/debug/chainflip-node
             target/debug/chainflip-engine
   start-localnet:
@@ -52,12 +52,14 @@ jobs:
           token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
           path: bouncer
 
-      - name: Upload binaries
+      - name: Restore binaries
         uses: actions/cache/restore@v3
         with:
-          name: chainflip-backend-release-bins
+          key: chainflip-backend-release-bins
 
       - name: Init localnet
+        env:
+          BINARIES_LOCATION: ./target/debug
         run: ./localnet/manage.sh
 
       - name: Run localnet checks
