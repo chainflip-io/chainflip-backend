@@ -1,5 +1,5 @@
 use tracing::{debug, error, info, info_span, warn, Instrument};
-use utilities::{context, make_periodic_tick};
+use utils::{context, make_periodic_tick};
 use web3::{
 	api::SubscriptionStream,
 	signing::SecretKeyRef,
@@ -24,7 +24,7 @@ use crate::{
 	settings,
 	witnesser::LatestBlockNumber,
 };
-use utilities::format_iterator;
+use utils::format_iterator;
 
 use super::{redact_secret_eth_node_endpoint, TransportProtocol};
 

@@ -23,7 +23,7 @@ use state_chain_runtime::{
 };
 
 use std::{env, marker::PhantomData, str::FromStr};
-use utilities::clean_eth_address;
+use utils::clean_eth_address;
 
 use sp_runtime::traits::{IdentifyAccount, Verify};
 

@@ -16,7 +16,10 @@ use rand_legacy::{RngCore, SeedableRng};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, debug_span, Instrument};
-use utilities::{assert_ok, success_threshold_from_share_count};
+use utils::{
+	all_same, assert_ok, split_at, success_threshold_from_share_count,
+	testing::expect_recv_with_timeout,
+};
 
 use crate::multisig::{
 	client::{keygen, MultisigMessage},
@@ -41,7 +44,6 @@ use crate::{
 	},
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
 };
-use utilities::{all_same, split_at, testing::expect_recv_with_timeout};
 
 use signing::{LocalSig3, SigningCommitment};
 

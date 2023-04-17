@@ -13,7 +13,7 @@ use crate::{
 	settings::P2P as P2PSettings,
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 };
-use utilities::read_clean_and_decode_hex_str_file;
+use utils::read_clean_and_decode_hex_str_file;
 
 pub use self::{
 	core::{PeerInfo, PeerUpdate},
@@ -28,7 +28,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, Instrument};
 use zeroize::Zeroizing;
 
-use utilities::task_scope::task_scope;
+use utils::task_scope::task_scope;
 
 // TODO: Consider if this should be removed, particularly once we no longer use Substrate for
 // peering

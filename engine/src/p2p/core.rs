@@ -17,7 +17,7 @@ use sp_core::ed25519;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, error, info, info_span, trace, warn, Instrument};
-use utilities::Port;
+use utils::Port;
 use x25519_dalek::StaticSecret;
 
 use crate::p2p::OutgoingMultisigStageMessages;

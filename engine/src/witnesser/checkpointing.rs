@@ -109,7 +109,7 @@ mod tests {
 	/// - The checkpointing task panics if send a witness of the same block twice
 	#[tokio::test(start_paused = true)]
 	async fn test_checkpointing() {
-		let (_dir, db_path) = utilities::testing::new_temp_directory_with_nonexistent_file();
+		let (_dir, db_path) = utils::testing::new_temp_directory_with_nonexistent_file();
 
 		let saved_witnessed_until = WitnessedUntil { epoch_index: 1, block_number: 2 };
 		let expected_witnesser_start = WitnessedUntil {
@@ -186,7 +186,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn should_return_already_witnessed() {
-		let (_dir, db_path) = utilities::testing::new_temp_directory_with_nonexistent_file();
+		let (_dir, db_path) = utils::testing::new_temp_directory_with_nonexistent_file();
 
 		let saved_witnessed_until = WitnessedUntil { epoch_index: 2, block_number: 2 };
 

@@ -15,7 +15,7 @@ use tokio::sync::{
 	oneshot,
 };
 use tracing::{debug, warn, Instrument};
-use utilities::format_iterator;
+use utils::format_iterator;
 
 use crate::multisig::client::common::{ProcessMessageResult, StageResult};
 use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};

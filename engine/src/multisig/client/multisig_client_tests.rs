@@ -14,11 +14,11 @@ use crate::multisig::{
 	eth::EthSigning,
 	PersistentKeyDB,
 };
-use utilities::testing::{assert_future_can_complete, new_temp_directory_with_nonexistent_file};
+use ::utils::testing::{assert_future_can_complete, new_temp_directory_with_nonexistent_file};
 
+use ::utils::{assert_err, assert_ok};
 use cf_primitives::{KeyId, GENESIS_EPOCH};
 use client::MultisigClient;
-use utilities::{assert_err, assert_ok};
 
 #[tokio::test]
 async fn should_ignore_rts_for_unknown_key() {

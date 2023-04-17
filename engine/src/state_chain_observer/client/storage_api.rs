@@ -10,7 +10,7 @@ use frame_support::{
 };
 use jsonrpsee::core::RpcResult;
 use sp_core::storage::StorageKey;
-use utilities::context;
+use utils::context;
 
 /// This trait extracts otherwise private type information about Substrate storage double maps
 pub trait StorageDoubleMapAssociatedTypes {

@@ -15,7 +15,7 @@ use sp_runtime::DeserializeOwned;
 use url::Url;
 
 use clap::Parser;
-use utilities::Port;
+use utils::Port;
 
 use crate::constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT};
 
@@ -526,7 +526,7 @@ fn is_valid_db_path(db_file: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
 
-	use utilities::assert_ok;
+	use utils::assert_ok;
 
 	use crate::constants::{BTC_HTTP_NODE_ENDPOINT, BTC_RPC_PASSWORD, BTC_RPC_USER};
 

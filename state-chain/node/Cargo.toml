@@ -23,7 +23,7 @@ state-chain-runtime = { path = "../runtime" }
 
 # Local dependencies
 cf-chains = {path = "../chains"}
-utilities = {path = "../../utilities"}
+utils = {package = "utilities", path = "../../utilities"}
 custom-rpc = {path = "../custom-rpc"}
 cf-primitives = { path = "../primitives" }
 

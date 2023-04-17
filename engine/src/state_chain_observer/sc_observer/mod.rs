@@ -39,7 +39,7 @@ use crate::{
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	witnesser::{AddressMonitorCommand, EpochStart},
 };
-use utilities::task_scope::{task_scope, Scope};
+use utils::task_scope::{task_scope, Scope};
 
 pub type EthAddressSender = UnboundedSender<AddressMonitorCommand<H160>>;
 

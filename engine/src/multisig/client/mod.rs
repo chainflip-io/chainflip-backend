@@ -17,7 +17,7 @@ pub mod ceremony_manager;
 
 use std::collections::BTreeSet;
 
-use utilities::format_iterator;
+use ::utils::format_iterator;
 
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, KeyId};
 use futures::{future::BoxFuture, FutureExt};
@@ -25,20 +25,20 @@ use state_chain_runtime::AccountId;
 
 use serde::{Deserialize, Serialize};
 
+use ::utils::threshold_from_share_count;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, info, info_span, Instrument};
-use utilities::threshold_from_share_count;
 
 use keygen::KeygenData;
 
+pub use crate::multisig::client::utils::PartyIdxMapping;
 pub use common::{
 	CeremonyFailureReason, KeygenFailureReason, KeygenResult, KeygenResultInfo, KeygenStageName,
 	SigningFailureReason,
 };
-pub use utils::PartyIdxMapping;
 
 #[cfg(test)]
-pub use utils::ensure_unsorted;
+pub use crate::multisig::client::utils::ensure_unsorted;
 
 #[cfg(test)]
 pub use helpers::get_key_data_for_test;

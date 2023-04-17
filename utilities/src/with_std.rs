@@ -215,8 +215,8 @@ pub fn repository_link() -> Option<impl core::fmt::Display> {
 #[macro_export]
 macro_rules! here {
 	() => {
-		utilities::internal_lazy_format!(
-			if let Some(repository_link) = utilities::repository_link() => (
+		utils::internal_lazy_format!(
+			if let Some(repository_link) = utils::repository_link() => (
 				"{}/{}#L{}#C{}",
 				repository_link,
 				file!(),
@@ -250,7 +250,7 @@ macro_rules! context {
 			})
 		}
 
-		get_expr_type($e, utilities::here!())
+		get_expr_type($e, utils::here!())
 	}};
 }
 
@@ -261,7 +261,7 @@ macro_rules! print_starting {
 			"Starting {} v{} ({})",
 			env!("CARGO_PKG_NAME"),
 			env!("CARGO_PKG_VERSION"),
-			utilities::internal_lazy_format!(if let Some(repository_link) = utilities::repository_link() => ("CI Build: \"{}\"", repository_link) else => ("Non-CI Build"))
+			utils::internal_lazy_format!(if let Some(repository_link) = utils::repository_link() => ("CI Build: \"{}\"", repository_link) else => ("Non-CI Build"))
 		);
 		println!(
 			"
