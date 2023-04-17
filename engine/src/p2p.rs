@@ -19,7 +19,7 @@ pub use self::{
 	muxer::{ProtocolVersion, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
 };
 use anyhow::Context;
-use cf_chains::Chain;
+use cf_chains::{Bitcoin, Chain, Ethereum, Polkadot};
 use cf_primitives::AccountId;
 use futures::{Future, FutureExt};
 use muxer::P2PMuxer;
@@ -64,12 +64,12 @@ pub async fn start<StateChainClient>(
 	settings: P2PSettings,
 	latest_block_hash: H256,
 ) -> anyhow::Result<(
-	MultisigMessageSender<cf_chains::Ethereum>,
-	MultisigMessageReceiver<cf_chains::Ethereum>,
-	MultisigMessageSender<cf_chains::Polkadot>,
-	MultisigMessageReceiver<cf_chains::Polkadot>,
-	MultisigMessageSender<cf_chains::Bitcoin>,
-	MultisigMessageReceiver<cf_chains::Bitcoin>,
+	MultisigMessageSender<Ethereum>,
+	MultisigMessageReceiver<Ethereum>,
+	MultisigMessageSender<Polkadot>,
+	MultisigMessageReceiver<Polkadot>,
+	MultisigMessageSender<Bitcoin>,
+	MultisigMessageReceiver<Bitcoin>,
 	UnboundedSender<PeerUpdate>,
 	impl Future<Output = anyhow::Result<()>>,
 )>

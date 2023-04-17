@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use cf_chains::{Bitcoin, Ethereum, Polkadot};
 use futures::Future;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -97,12 +98,12 @@ impl P2PMuxer {
 		all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
 		all_outgoing_sender: UnboundedSender<OutgoingMultisigStageMessages>,
 	) -> (
-		MultisigMessageSender<cf_chains::Ethereum>,
-		MultisigMessageReceiver<cf_chains::Ethereum>,
-		MultisigMessageSender<cf_chains::Polkadot>,
-		MultisigMessageReceiver<cf_chains::Polkadot>,
-		MultisigMessageSender<cf_chains::Bitcoin>,
-		MultisigMessageReceiver<cf_chains::Bitcoin>,
+		MultisigMessageSender<Ethereum>,
+		MultisigMessageReceiver<Ethereum>,
+		MultisigMessageSender<Polkadot>,
+		MultisigMessageReceiver<Polkadot>,
+		MultisigMessageSender<Bitcoin>,
+		MultisigMessageReceiver<Bitcoin>,
 		impl Future<Output = ()>,
 	) {
 		let (eth_outgoing_sender, eth_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -128,12 +129,12 @@ impl P2PMuxer {
 		let muxer_fut = muxer.run().instrument(info_span!("P2PMuxer"));
 
 		(
-			MultisigMessageSender::<cf_chains::Ethereum>::new(eth_outgoing_sender),
-			MultisigMessageReceiver::<cf_chains::Ethereum>::new(eth_incoming_receiver),
-			MultisigMessageSender::<cf_chains::Polkadot>::new(dot_outgoing_sender),
-			MultisigMessageReceiver::<cf_chains::Polkadot>::new(dot_incoming_receiver),
-			MultisigMessageSender::<cf_chains::Bitcoin>::new(btc_outgoing_sender),
-			MultisigMessageReceiver::<cf_chains::Bitcoin>::new(btc_incoming_receiver),
+			MultisigMessageSender::<Ethereum>::new(eth_outgoing_sender),
+			MultisigMessageReceiver::<Ethereum>::new(eth_incoming_receiver),
+			MultisigMessageSender::<Polkadot>::new(dot_outgoing_sender),
+			MultisigMessageReceiver::<Polkadot>::new(dot_incoming_receiver),
+			MultisigMessageSender::<Bitcoin>::new(btc_outgoing_sender),
+			MultisigMessageReceiver::<Bitcoin>::new(btc_incoming_receiver),
 			muxer_fut,
 		)
 	}
