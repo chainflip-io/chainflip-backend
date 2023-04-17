@@ -1,13 +1,10 @@
 use sp_std::{vec, vec::Vec};
 
-use crate::{
-	address::{BitcoinAddressData, BitcoinAddressFor, BitcoinAddressSeed},
-	benchmarking_value::BenchmarkValue,
-};
+use crate::benchmarking_value::BenchmarkValue;
 
 use super::{
 	api::{batch_transfer::BatchTransfer, BitcoinApi},
-	AggKey, BitcoinFetchId, BitcoinNetwork, BitcoinOutput, BitcoinTrackedData,
+	AggKey, BitcoinFetchId, BitcoinOutput, BitcoinScriptBounded, BitcoinTrackedData,
 	BitcoinTransactionData, Signature, SigningPayload, Utxo, UtxoId,
 };
 
@@ -49,15 +46,9 @@ impl BenchmarkValue for SigningPayload {
 	}
 }
 
-impl BenchmarkValue for BitcoinAddressData {
+impl BenchmarkValue for BitcoinScriptBounded {
 	fn benchmark_value() -> Self {
-		BitcoinAddressData {
-			address_for: BitcoinAddressFor::Ingress(BitcoinAddressSeed {
-				pubkey_x: [2u8; 32],
-				salt: 7,
-			}),
-			network: BitcoinNetwork::Testnet,
-		}
+		BitcoinScriptBounded { data: [3u8; 100].to_vec().try_into().unwrap() }
 	}
 }
 

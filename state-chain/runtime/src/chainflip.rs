@@ -19,7 +19,9 @@ use cf_chains::{
 	address::{AddressConverter, BitcoinAddressData, EncodedAddress, ForeignChainAddress},
 	btc::{
 		api::{BitcoinApi, SelectedUtxos},
-		Bitcoin, BitcoinNetwork, BitcoinTransactionData, BtcAmount, Utxo,
+		ingress_address::derive_btc_address_from_script,
+		scriptpubkey_from_address, Bitcoin, BitcoinNetwork, BitcoinTransactionData, BtcAmount,
+		Utxo,
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
@@ -539,11 +541,10 @@ impl AddressConverter for ChainAddressConverter {
 			ForeignChainAddress::Eth(address) => Ok(EncodedAddress::Eth(address.to_vec())),
 			ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(address.to_vec())),
 			ForeignChainAddress::Btc(address) => Ok(EncodedAddress::Btc(
-				address
-					.to_address_string()
-					.map_err(|_| {
-						DispatchError::Other("We can only convert an ingress address to a string")
-					})?
+				derive_btc_address_from_script(address.into(), Environment::bitcoin_network())
+					// .map_err(|_| {
+					// 	DispatchError::Other("We can only convert an ingress address to a string")
+					// })?
 					.bytes()
 					.collect::<Vec<u8>>(),
 			)),
@@ -556,11 +557,15 @@ impl AddressConverter for ChainAddressConverter {
 				Ok(ForeignChainAddress::Eth(address_bytes[..].try_into().map_err(|_| ())?)),
 			EncodedAddress::Dot(address_bytes) =>
 				Ok(ForeignChainAddress::Dot(address_bytes[..].try_into().map_err(|_| ())?)),
-			EncodedAddress::Btc(address_bytes) =>
-				Ok(ForeignChainAddress::Btc(BitcoinAddressData::from_address_string(
-					&address_bytes[..],
+			EncodedAddress::Btc(address_bytes) => Ok(ForeignChainAddress::Btc(
+				scriptpubkey_from_address(
+					sp_std::str::from_utf8(&address_bytes[..]).map_err(|_| ())?,
 					Environment::bitcoin_network(),
-				)?)),
+				)
+				.map_err(|_| ())?
+				.try_into()
+				.expect("bitcoin scripts constructed from supported addresses should not exceed 128 bytes"),
+			)),
 		}
 	}
 }

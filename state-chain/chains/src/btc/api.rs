@@ -1,8 +1,8 @@
 pub mod batch_transfer;
 
 use super::{
-	ingress_address::derive_btc_ingress_address, scriptpubkey_from_address, AggKey, Bitcoin,
-	BitcoinNetwork, BitcoinOutput, BtcAmount, Utxo, CHANGE_ADDRESS_SALT,
+	ingress_address::derive_btc_ingress_bitcoin_script, AggKey, Bitcoin, BitcoinNetwork,
+	BitcoinOutput, BtcAmount, Utxo, CHANGE_ADDRESS_SALT,
 };
 use crate::*;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
@@ -31,17 +31,16 @@ where
 	) -> Result<Self, ()> {
 		let bitcoin_network = <E as ChainEnvironment<(), BitcoinNetwork>>::lookup(())
 			.expect("Since the lookup function always returns a some");
-		let bitcoin_return_address = derive_btc_ingress_address(
+		let bitcoin_change_script = derive_btc_ingress_bitcoin_script(
 			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(())?.pubkey_x,
 			CHANGE_ADDRESS_SALT,
-			bitcoin_network,
 		);
 		let mut total_output_amount: u64 = 0;
 		let mut btc_outputs = vec![];
 		for transfer_param in transfer_params {
 			btc_outputs.push(BitcoinOutput {
 				amount: transfer_param.amount,
-				script_pubkey: transfer_param.to.to_scriptpubkey().map_err(|_| ())?,
+				script_pubkey: transfer_param.to.into(),
 			});
 			total_output_amount += transfer_param.amount;
 		}
@@ -53,11 +52,7 @@ where
 
 		btc_outputs.push(BitcoinOutput {
 			amount: total_input_amount_available.checked_sub(total_output_amount).expect("This should never overflow because the total input available was calculated from the total output amount and the algorithm ensures that the total input amount is greater than the total output amount"),
-			script_pubkey: scriptpubkey_from_address(
-				&bitcoin_return_address[..],
-				bitcoin_network,
-			)
-			.map_err(|_| ())?,
+			script_pubkey: bitcoin_change_script,
 		});
 		Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
 			selected_input_utxos,
@@ -80,8 +75,8 @@ where
 
 		// We will use the bitcoin address derived with the salt of 0 as the vault address where we
 		// collect unspent amounts in btc transactions and consolidate funds when rotating epoch.
-		let new_vault_return_address =
-			derive_btc_ingress_address(new_key.pubkey_x, CHANGE_ADDRESS_SALT, bitcoin_network);
+		let new_vault_change_script =
+			derive_btc_ingress_bitcoin_script(new_key.pubkey_x, CHANGE_ADDRESS_SALT);
 
 		//max possible btc value to get all available utxos
 		let (all_input_utxos, total_spendable_amount_in_vault) =
@@ -91,10 +86,7 @@ where
 			all_input_utxos,
 			vec![BitcoinOutput {
 				amount: total_spendable_amount_in_vault,
-				script_pubkey: scriptpubkey_from_address(
-					&new_vault_return_address,
-					bitcoin_network,
-				).expect("This shouldn't error because we generate this address ourselves above, and should be valid"),
+				script_pubkey: new_vault_change_script,
 			}],
 		)))
 	}

@@ -1,7 +1,6 @@
 use cf_primitives::{EthereumAddress, ForeignChain, PolkadotAccountId};
 
 extern crate alloc;
-use alloc::string::String;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -11,10 +10,7 @@ use sp_core::H160;
 use sp_runtime::DispatchError;
 use sp_std::vec::Vec;
 
-use crate::btc::{
-	ingress_address::derive_btc_ingress_address, scriptpubkey_from_address, BitcoinNetwork,
-	BitcoinScript, Error,
-};
+use crate::btc::{BitcoinNetwork, BitcoinScriptBounded};
 
 pub type ScriptPubkeyBytes = Vec<u8>;
 
@@ -44,16 +40,16 @@ pub enum BitcoinAddressFor {
 	Ingress(BitcoinAddressSeed),
 	// When we egress, we are provided with an address from the user.
 	// We then create a lock script over that address.
-	Egress(BitcoinScript),
+	Egress(BitcoinScriptBounded),
 }
 
 impl BitcoinAddressData {
-	pub fn to_scriptpubkey(&self) -> Result<BitcoinScript, Error> {
-		scriptpubkey_from_address(
-			&self.to_address_string().map_err(|_| Error::InvalidAddress)?,
-			self.network,
-		)
-	}
+	// pub fn to_scriptpubkey(&self) -> Result<BitcoinScript, Error> {
+	// 	scriptpubkey_from_address(
+	// 		&self.to_address_string().map_err(|_| Error::InvalidAddress)?,
+	// 		self.network,
+	// 	)
+	// }
 
 	pub fn seed(&self) -> Option<BitcoinAddressSeed> {
 		match &self.address_for {
@@ -62,27 +58,27 @@ impl BitcoinAddressData {
 		}
 	}
 
-	#[allow(clippy::result_unit_err)]
-	pub fn to_address_string(&self) -> Result<String, ()> {
-		match &self.address_for {
-			BitcoinAddressFor::Ingress(seed) =>
-				Ok(derive_btc_ingress_address(seed.pubkey_x, seed.salt, self.network)),
-			BitcoinAddressFor::Egress(_) => Err(()),
-		}
-	}
-	#[allow(clippy::result_unit_err)]
-	pub fn from_address_string(address_bytes: &[u8], network: BitcoinNetwork) -> Result<Self, ()> {
-		Ok(Self {
-			address_for: BitcoinAddressFor::Egress(
-				scriptpubkey_from_address(
-					sp_std::str::from_utf8(address_bytes).map_err(|_| ())?,
-					network,
-				)
-				.map_err(|_| ())?,
-			),
-			network,
-		})
-	}
+	// #[allow(clippy::result_unit_err)]
+	// pub fn to_address_string(&self) -> Result<String, ()> {
+	// 	match &self.address_for {
+	// 		BitcoinAddressFor::Ingress(seed) =>
+	// 			Ok(derive_btc_ingress_address(seed.pubkey_x, seed.salt, self.network)),
+	// 		BitcoinAddressFor::Egress(_) => Err(()),
+	// 	}
+	// }
+	// #[allow(clippy::result_unit_err)]
+	// pub fn from_address_string(address_bytes: &[u8], network: BitcoinNetwork) -> Result<Self, ()>
+	// { 	Ok(Self {
+	// 		address_for: BitcoinAddressFor::Egress(
+	// 			scriptpubkey_from_address(
+	// 				sp_std::str::from_utf8(address_bytes).map_err(|_| ())?,
+	// 				network,
+	// 			)
+	// 			.map_err(|_| ())?,
+	// 		),
+	// 		network,
+	// 	})
+	// }
 }
 
 impl Default for BitcoinAddressData {
@@ -99,7 +95,7 @@ impl Default for BitcoinAddressData {
 pub enum ForeignChainAddress {
 	Eth(EthereumAddress),
 	Dot([u8; 32]),
-	Btc(BitcoinAddressData),
+	Btc(BitcoinScriptBounded),
 }
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
 pub enum EncodedAddress {
@@ -185,12 +181,12 @@ impl TryFrom<ForeignChainAddress> for PolkadotAccountId {
 	}
 }
 
-impl TryFrom<ForeignChainAddress> for BitcoinAddressData {
+impl TryFrom<ForeignChainAddress> for BitcoinScriptBounded {
 	type Error = AddressError;
 
 	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
 		match address {
-			ForeignChainAddress::Btc(address) => Ok(address),
+			ForeignChainAddress::Btc(bitcoin_script) => Ok(bitcoin_script),
 			_ => Err(AddressError::InvalidAddress),
 		}
 	}
@@ -237,9 +233,9 @@ impl From<PolkadotAccountId> for ForeignChainAddress {
 	}
 }
 
-impl From<BitcoinAddressData> for ForeignChainAddress {
-	fn from(address: BitcoinAddressData) -> ForeignChainAddress {
-		ForeignChainAddress::Btc(address)
+impl From<BitcoinScriptBounded> for ForeignChainAddress {
+	fn from(bitcoin_script: BitcoinScriptBounded) -> ForeignChainAddress {
+		ForeignChainAddress::Btc(bitcoin_script)
 	}
 }
 

@@ -132,7 +132,7 @@ impl Chain for Bitcoin {
 
 	type ChainAsset = assets::btc::Asset;
 
-	type ChainAccount = BitcoinAddressData;
+	type ChainAccount = BitcoinScriptBounded;
 
 	type EpochStartData = EpochStartData;
 
@@ -237,7 +237,7 @@ pub struct UtxoId {
 }
 
 impl IngressIdConstructor for BitcoinFetchId {
-	type Address = BitcoinAddressData;
+	type Address = BitcoinScriptBounded;
 
 	fn deployed(intent_id: u64, _address: Self::Address) -> Self {
 		BitcoinFetchId(intent_id)
@@ -617,8 +617,27 @@ impl BitcoinTransaction {
 	Ord,
 )]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct BitcoinScript {
+pub struct BitcoinScriptBounded {
 	pub data: BoundedVec<u8, ConstU32<MAX_BITCOIN_SCRIPT_LENGTH>>,
+}
+
+impl TryFrom<BitcoinScript> for BitcoinScriptBounded {
+	type Error = <Vec<u8> as TryInto<BoundedVec<u8, ConstU32<MAX_BITCOIN_SCRIPT_LENGTH>>>>::Error;
+
+	fn try_from(value: BitcoinScript) -> Result<Self, Self::Error> {
+		Ok(Self { data: value.data.try_into()? })
+	}
+}
+
+impl Into<BitcoinScript> for BitcoinScriptBounded {
+	fn into(self) -> BitcoinScript {
+		BitcoinScript { data: self.data.into() }
+	}
+}
+
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
+pub struct BitcoinScript {
+	pub data: Vec<u8>,
 }
 
 /// For reference see https://en.bitcoin.it/wiki/Script
@@ -626,11 +645,8 @@ impl BitcoinScript {
 	/// Adds an operation to the script that pushes an unsigned integer onto the stack
 	fn push_uint(mut self, value: u32) -> Self {
 		match value {
-			0 => self.data.try_push(0).expect("should not overflow since 128 is the max size"),
-			1..=16 => self
-				.data
-				.try_push(0x50 + value as u8)
-				.expect("should not overflow since 128 is the max size"),
+			0 => self.data.push(0),
+			1..=16 => self.data.push(0x50 + value as u8),
 			_ => {
 				let num_bytes =
 					sp_std::mem::size_of::<u32>() - (value.leading_zeros() / 8) as usize;
@@ -652,64 +668,56 @@ impl BitcoinScript {
 		let num_bytes = bytes.len();
 		assert!(num_bytes <= u32::MAX as usize);
 		let num_bytes = num_bytes as u32;
-		// all the unwrap statements in the following match arm should not panic because we never
-		// push more than 128 bytes which is the bound for the bounded vec
 		match num_bytes {
-			0x0 => self
-				.data
-				.try_extend(iter::once(0x0))
-				.expect("should not overflow since 128 is the max size"),
-			0x1..=0x4B => {
-				self.data.try_extend(iter::once(num_bytes as u8)).unwrap();
-				self.data.try_extend(bytes).unwrap();
-			},
-			0x4C..=0xFF => {
-				self.data.try_extend(iter::once(0x4c)).unwrap();
-				self.data.try_extend((num_bytes as u8).to_le_bytes().into_iter()).unwrap();
-				self.data.try_extend(bytes).unwrap();
-			},
-			0x100..=0xFFFF => {
-				self.data.try_extend(iter::once(0x4d)).unwrap();
-				self.data.try_extend((num_bytes as u16).to_le_bytes().into_iter()).unwrap();
-				self.data.try_extend(bytes).unwrap();
-			},
-			_ => {
-				self.data.try_extend(iter::once(0x4e)).unwrap();
-				self.data.try_extend(num_bytes.to_le_bytes().into_iter()).unwrap();
-				self.data.try_extend(bytes).unwrap();
-			},
+			0x0 => self.data.extend(iter::once(0x0)),
+			0x1..=0x4B => self.data.extend(itertools::chain!(iter::once(num_bytes as u8), bytes)),
+			0x4C..=0xFF => self.data.extend(itertools::chain!(
+				iter::once(0x4c),
+				(num_bytes as u8).to_le_bytes(),
+				bytes
+			)),
+			0x100..=0xFFFF => self.data.extend(itertools::chain!(
+				iter::once(0x4d),
+				(num_bytes as u16).to_le_bytes(),
+				bytes
+			)),
+			_ => self.data.extend(itertools::chain!(
+				iter::once(0x4e),
+				num_bytes.to_le_bytes(),
+				bytes
+			)),
 		}
 		self
 	}
 
 	/// Adds an operation to the script that drops the topmost item from the stack
 	fn op_drop(mut self) -> Self {
-		self.data.try_push(0x75).expect("should not overflow since 128 is the max size");
+		self.data.push(0x75);
 		self
 	}
 	/// Adds the CHECKSIG operation to the script
 	fn op_checksig(mut self) -> Self {
-		self.data.try_push(0xAC).expect("should not overflow since 128 is the max size");
+		self.data.push(0xAC);
 		self
 	}
 	/// Adds the DUP operation to the script
 	fn op_dup(mut self) -> Self {
-		self.data.try_push(0x76).expect("should not overflow since 128 is the max size");
+		self.data.push(0x76);
 		self
 	}
 	/// Adds the HASH160 operation to the script
 	fn op_hash160(mut self) -> Self {
-		self.data.try_push(0xA9).expect("should not overflow since 128 is the max size");
+		self.data.push(0xA9);
 		self
 	}
 	/// Adds the EQUALVERIFY operation to the script
 	fn op_equalverify(mut self) -> Self {
-		self.data.try_push(0x88).expect("should not overflow since 128 is the max size");
+		self.data.push(0x88);
 		self
 	}
 	/// Adds the EQUAL operation to the script
 	fn op_equal(mut self) -> Self {
-		self.data.try_push(0x87).expect("should not overflow since 128 is the max size");
+		self.data.push(0x87);
 		self
 	}
 	/// Serializes the script by returning the varint encoded length
@@ -841,7 +849,7 @@ mod test {
 
 		for (valid_address, intended_btc_net, expected_scriptpubkey) in valid_addresses {
 			assert_eq!(
-				&scriptpubkey_from_address(valid_address, intended_btc_net,).unwrap().data[..],
+				scriptpubkey_from_address(valid_address, intended_btc_net,).unwrap().data,
 				expected_scriptpubkey
 			);
 		}
