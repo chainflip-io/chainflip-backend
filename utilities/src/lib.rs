@@ -236,3 +236,54 @@ fn test_as_array_panics_on_invalid_length() {
 	assert_panics!(a[1..3].as_array::<5>());
 	assert_panics!(a[1..3].as_array::<1>());
 }
+
+pub fn format_iterator<'a, It: 'a + IntoIterator>(it: It) -> itertools::Format<'a, It::IntoIter>
+where
+	It::Item: core::fmt::Display,
+{
+	use itertools::Itertools;
+	it.into_iter().format(", ")
+}
+
+pub fn all_same<Item: PartialEq, It: IntoIterator<Item = Item>>(it: It) -> Option<Item> {
+	let mut it = it.into_iter();
+	let option_item = it.next();
+	match option_item {
+		Some(item) =>
+			if it.all(|other_items| other_items == item) {
+				Some(item)
+			} else {
+				None
+			},
+		None => panic!(),
+	}
+}
+
+pub fn split_at<C: FromIterator<It::Item>, It: IntoIterator>(it: It, index: usize) -> (C, C)
+where
+	It::IntoIter: ExactSizeIterator,
+{
+	struct IteratorRef<'a, T, It: Iterator<Item = T>> {
+		it: &'a mut It,
+	}
+	impl<'a, T, It: Iterator<Item = T>> Iterator for IteratorRef<'a, T, It> {
+		type Item = T;
+
+		fn next(&mut self) -> Option<Self::Item> {
+			self.it.next()
+		}
+	}
+
+	let mut it = it.into_iter();
+	assert!(index < it.len());
+	let wrapped_it = IteratorRef { it: &mut it };
+	(wrapped_it.take(index).collect(), it.collect())
+}
+
+#[test]
+fn test_split_at() {
+	let (left, right) = split_at::<Vec<_>, _>(vec![4, 5, 6, 3, 4, 5], 3);
+
+	assert_eq!(&left[..], &[4, 5, 6]);
+	assert_eq!(&right[..], &[3, 4, 5]);
+}
