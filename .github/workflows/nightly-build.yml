@@ -32,7 +32,13 @@ jobs:
         run: cargo cf-build-ci --locked
       - name: Start localnet
         run: ./bouncer/commands/start_localnet.sh
+      - name: Upload binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-backend-release-bins
+          path: target/release/chainflip-*
       - name: Check blocks produced
         run: |
           cd bouncer
           ./tests/produces_blocks.sh
+          ./tests/stress_test.sh
