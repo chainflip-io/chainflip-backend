@@ -111,7 +111,7 @@ where
 	.map_err(|_| anyhow::anyhow!("Btc witnesser failed"))
 }
 
-struct BtcWitnesser<StateChainClient> {
+struct BtcBlockWitnesser<StateChainClient> {
 	state_chain_client: Arc<StateChainClient>,
 	btc_rpc: BtcRpcClient,
 	epoch_index: EpochIndex,
@@ -119,7 +119,7 @@ struct BtcWitnesser<StateChainClient> {
 }
 
 #[async_trait]
-impl<StateChainClient> BlockWitnesser for BtcWitnesser<StateChainClient>
+impl<StateChainClient> BlockWitnesser for BtcBlockWitnesser<StateChainClient>
 where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
@@ -197,13 +197,13 @@ impl<StateChainClient> BlockWitnesserGenerator for BtcWitnesserGenerator<StateCh
 where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
-	type Witnesser = BtcWitnesser<StateChainClient>;
+	type Witnesser = BtcBlockWitnesser<StateChainClient>;
 
 	fn create_witnesser(
 		&self,
 		epoch: EpochStart<<Self::Witnesser as BlockWitnesser>::Chain>,
 	) -> Self::Witnesser {
-		BtcWitnesser {
+		BtcBlockWitnesser {
 			state_chain_client: self.state_chain_client.clone(),
 			btc_rpc: self.btc_rpc.clone(),
 			epoch_index: epoch.epoch_index,

@@ -275,7 +275,7 @@ where
 }
 
 // An instance of a Polkadot Witnesser for a particular epoch.
-struct DotWitnesser<StateChainClient, DotRpc> {
+struct DotBlockWitnesser<StateChainClient, DotRpc> {
 	state_chain_client: Arc<StateChainClient>,
 	dot_client: DotRpc,
 	epoch_index: EpochIndex,
@@ -292,7 +292,7 @@ impl HasBlockNumber for (H256, PolkadotBlockNumber, Vec<(Phase, EventWrapper)>) 
 }
 
 #[async_trait]
-impl<StateChainClient, DotRpc> BlockWitnesser for DotWitnesser<StateChainClient, DotRpc>
+impl<StateChainClient, DotRpc> BlockWitnesser for DotBlockWitnesser<StateChainClient, DotRpc>
 where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
@@ -438,13 +438,13 @@ where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
-	type Witnesser = DotWitnesser<StateChainClient, DotRpc>;
+	type Witnesser = DotBlockWitnesser<StateChainClient, DotRpc>;
 
 	fn create_witnesser(
 		&self,
 		epoch: EpochStart<<Self::Witnesser as BlockWitnesser>::Chain>,
 	) -> Self::Witnesser {
-		DotWitnesser {
+		DotBlockWitnesser {
 			state_chain_client: self.state_chain_client.clone(),
 			dot_client: self.dot_client.clone(),
 			epoch_index: epoch.epoch_index,
