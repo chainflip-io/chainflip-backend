@@ -64,6 +64,9 @@ pub(crate) struct CrossChainMessage<C: Chain> {
 	pub amount: C::ChainAmount,
 	pub egress_address: C::ChainAccount,
 	pub message: Vec<u8>,
+	// The sender of the ingress transaction.
+	pub source_address: ForeignChainAddress,
+	// Where funds might be returned to if the message fails.
 	pub refund_address: ForeignChainAddress,
 }
 
@@ -600,7 +603,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					amount: ccm.amount,
 					to: ccm.egress_address,
 				},
-				ccm.refund_address,
+				ccm.source_address,
 				ccm.message,
 			) {
 				Ok(api_call) => {
@@ -725,14 +728,16 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		});
 		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
 		match maybe_message {
-			Some(message) => ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
-				egress_id,
-				asset,
-				amount,
-				egress_address: egress_address.clone(),
-				message: message.message,
-				refund_address: message.refund_address,
-			}),
+			Some(CcmIngressMetadata { message, refund_address, source_address, .. }) =>
+				ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
+					egress_id,
+					asset,
+					amount,
+					egress_address: egress_address.clone(),
+					message,
+					refund_address,
+					source_address,
+				}),
 			None => ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<
 				T::TargetChain,
 			>::Transfer {
