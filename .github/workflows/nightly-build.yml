@@ -1,5 +1,8 @@
 name: Nightly build
-on: push
+on:
+  push:
+  schedule:
+    - cron: '0 0 * * *'
 env:
   RUSTC_WRAPPER: sccache
   SCCACHE_CACHE_SIZE: 32G
@@ -32,6 +35,12 @@ jobs:
         run: cargo cf-build-ci --locked
       - name: Start localnet
         run: ./bouncer/commands/start_localnet.sh
+      - name: Run localnet checks
+        run: |
+          docker ps
+          docker logs polkadot
+          docker logs bitcoin
+          tail /tmp/chainflip/chainflip*.log
       - name: Upload binaries
         uses: actions/upload-artifact@v3
         with:
