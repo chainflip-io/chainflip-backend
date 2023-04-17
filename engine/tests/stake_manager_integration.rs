@@ -40,7 +40,7 @@ pub async fn test_all_stake_manager_events() {
 					&web3::types::H160::from_str("0x70997970c51812dc3a010c7d01b50e0d17dc79c8")
 						.unwrap()
 				);
-				assert_eq!(	
+				assert_eq!(
 					return_addr,
 					&web3::types::H160::from_str("0x0000000000000000000000000000000000000001")
 						.unwrap()
