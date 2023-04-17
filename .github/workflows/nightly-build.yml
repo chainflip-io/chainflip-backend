@@ -1,5 +1,9 @@
 name: Nightly build
 on: push
+env:
+  SCCACHE_CACHE_SIZE: 32G
+  SCCACHE_VERSION: v0.4.0-pre.6
+  SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
 jobs:
   build-nightly:
     runs-on: ubuntu-latest
