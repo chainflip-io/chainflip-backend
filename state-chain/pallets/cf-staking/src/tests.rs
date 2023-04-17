@@ -454,11 +454,11 @@ fn test_check_withdrawal_address() {
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Staking(crate::Event::FailedStakeAttempt(
-				ALICE,
-				DIFFERENT_ETH_ADDR,
-				STAKE
-			))
+			RuntimeEvent::Staking(crate::Event::FailedStakeAttempt {
+				account_id: ALICE,
+				withdrawal_address: DIFFERENT_ETH_ADDR,
+				amount: STAKE
+			})
 		);
 		// Case: User stakes again with the same address
 		assert!(Pallet::<Test>::check_withdrawal_address(&ALICE, ETH_DUMMY_ADDR, STAKE).is_ok());
@@ -544,7 +544,11 @@ fn stake_with_provided_withdrawal_only_on_first_attempt() {
 				stake_added: STAKE,
 				total_stake: STAKE
 			}),
-			RuntimeEvent::Staking(crate::Event::FailedStakeAttempt(ALICE, ETH_DUMMY_ADDR, STAKE))
+			RuntimeEvent::Staking(crate::Event::FailedStakeAttempt {
+				account_id: ALICE,
+				withdrawal_address: ETH_DUMMY_ADDR,
+				amount: STAKE
+			})
 		);
 	});
 }

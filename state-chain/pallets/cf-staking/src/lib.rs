@@ -203,19 +203,30 @@ pub mod pallet {
 		ClaimSettled(AccountId<T>, FlipBalance<T>),
 
 		/// An account has stopped bidding and will no longer take part in auctions.
-		StoppedBidding { account_id: AccountId<T> },
+		StoppedBidding {
+			account_id: AccountId<T>,
+		},
 
 		/// A previously non-bidding account has started bidding.
-		StartedBidding { account_id: AccountId<T> },
+		StartedBidding {
+			account_id: AccountId<T>,
+		},
 
 		/// A claim has expired without being executed.
-		ClaimExpired { account_id: AccountId<T> },
+		ClaimExpired {
+			account_id: AccountId<T>,
+		},
 
-		/// A stake attempt has failed. \[account_id, eth_address, amount\]
-		FailedStakeAttempt(AccountId<T>, EthereumAddress, FlipBalance<T>),
+		/// A stake attempt has failed.
+		FailedStakeAttempt {
+			account_id: AccountId<T>,
+			withdrawal_address: EthereumAddress,
+			amount: FlipBalance<T>,
+		},
 
-		/// The minimum stake required has been updated. \[new_amount\]
-		MinimumStakeUpdated(T::Balance),
+		MinimumStakeUpdated {
+			new_minimum: T::Balance,
+		},
 	}
 
 	#[pallet::error]
@@ -521,7 +532,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			MinimumStake::<T>::put(minimum_stake);
-			Self::deposit_event(Event::MinimumStakeUpdated(minimum_stake));
+			Self::deposit_event(Event::MinimumStakeUpdated { new_minimum: minimum_stake });
 			Ok(().into())
 		}
 	}
@@ -593,11 +604,11 @@ impl<T: Config> Pallet<T> {
 				// Instead, we keep a record of the failed attempt so that we can potentially
 				// investigate and / or consider refunding automatically or via governance.
 				FailedStakeAttempts::<T>::append(account_id, (withdrawal_address, amount));
-				Self::deposit_event(Event::FailedStakeAttempt(
-					account_id.clone(),
+				Self::deposit_event(Event::FailedStakeAttempt {
+					account_id: account_id.clone(),
 					withdrawal_address,
 					amount,
-				));
+				});
 				Err(Error::<T>::WithdrawalAddressRestricted)
 			},
 		}
