@@ -14,6 +14,8 @@ pub mod http_safe_stream;
 
 use anyhow::Result;
 
+use crate::multisig::ChainTag;
+
 pub type ChainBlockNumber<Chain> = <Chain as cf_chains::Chain>::ChainBlockNumber;
 
 #[derive(Clone, Debug)]
@@ -38,6 +40,23 @@ impl HasBlockNumber for u64 {
 	fn block_number(&self) -> Self::BlockNumber {
 		*self
 	}
+}
+
+// TODO: implement this directly on cf_chains::Chain?
+pub trait HasChainTag {
+	const CHAIN_TAG: ChainTag;
+}
+
+impl HasChainTag for cf_chains::Ethereum {
+	const CHAIN_TAG: ChainTag = ChainTag::Ethereum;
+}
+
+impl HasChainTag for cf_chains::Bitcoin {
+	const CHAIN_TAG: ChainTag = ChainTag::Bitcoin;
+}
+
+impl HasChainTag for cf_chains::Polkadot {
+	const CHAIN_TAG: ChainTag = ChainTag::Polkadot;
 }
 
 /// General trait for getting the latest/height block number for a particular chain

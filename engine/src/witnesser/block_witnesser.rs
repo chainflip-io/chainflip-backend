@@ -4,14 +4,14 @@ use async_trait::async_trait;
 use cf_primitives::EpochIndex;
 use tokio::sync::oneshot;
 
-use crate::multisig::{HasChainTag, PersistentKeyDB};
+use crate::multisig::PersistentKeyDB;
 
 use super::{
 	checkpointing::{
 		get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
 	},
 	epoch_process_runner::{self, EpochProcessGenerator, EpochWitnesser, WitnesserInitResult},
-	ChainBlockNumber, EpochStart, HasBlockNumber,
+	ChainBlockNumber, EpochStart, HasBlockNumber, HasChainTag,
 };
 
 #[async_trait]
