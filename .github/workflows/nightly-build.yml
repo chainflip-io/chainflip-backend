@@ -34,7 +34,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: chainflip-backend-release-bins
-          path: target/release/chainflip-*
+          path: target/debug/chainflip-*
   start-localnet:
     runs-on: ubuntu-latest
     needs:
