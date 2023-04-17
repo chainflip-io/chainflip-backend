@@ -4,6 +4,8 @@ use futures::{stream, Stream};
 pub use lazy_format::lazy_format as internal_lazy_format;
 use std::path::PathBuf;
 
+pub mod task_scope;
+
 pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN], &'static str> {
 	let address_hex_str = match address_str.strip_prefix("0x") {
 		Some(address_stripped) => address_stripped,
