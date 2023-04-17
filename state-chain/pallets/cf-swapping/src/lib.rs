@@ -567,6 +567,7 @@ pub mod pallet {
 				id.saturating_accrue(1);
 				*id
 			});
+
 			let mut swap_output = CcmSwapOutput::default();
 
 			let principal_swap_amount = ingress_amount.saturating_sub(message_metadata.gas_budget);
@@ -612,7 +613,6 @@ pub mod pallet {
 				egress_address,
 				message_metadata,
 			};
-
 			if let Some((principal, gas)) = swap_output.completed_result() {
 				Self::schedule_ccm_egress(ccm_id, ccm_swap, (principal, gas));
 			} else {
