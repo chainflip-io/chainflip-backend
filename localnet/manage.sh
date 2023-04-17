@@ -3,7 +3,9 @@
 LOCALNET_INIT_DIR=localnet/init
 WORKFLOW=build-localnet
 REQUIRED_BINARIES="chainflip-engine chainflip-node"
-set -euo pipefail
+
+set -eo pipefail
+
 setup() {
   echo "🤗 Welcome to Localnet manager"
   sleep 2
@@ -56,10 +58,12 @@ build-localnet() {
   source $LOCALNET_INIT_DIR/secrets/secrets.env
   cp -R $LOCALNET_INIT_DIR/keyshare /tmp/chainflip/
   echo
-  echo "💻 Please provide the location to the binaries you would like to use."
-  read -p "(default: ./target/debug/) " BINARIES_LOCATION
-  echo
-  BINARIES_LOCATION=${BINARIES_LOCATION:-"./target/debug/"}
+  if [ -z "$CI" ]; then
+    echo "💻 Please provide the location to the binaries you would like to use."
+    read -p "(default: ./target/debug/) " BINARIES_LOCATION
+    echo
+    BINARIES_LOCATION=${BINARIES_LOCATION:-"./target/debug/"}
+  fi
 
   if [ ! -d $BINARIES_LOCATION ]; then
     echo "❌  Couldn't find directory at $BINARIES_LOCATION"
@@ -145,6 +149,18 @@ logs() {
     break
   done
 }
+
+
+if [ $CI == true ]; then
+  echo "CI detected, bypassing setup"
+  mkdir localnet/init/secrets
+  echo "$CF_LOCALNET_ETH_PRIVATE_KEY" > ./localnet/init/secrets/eth_private_key_file
+  echo "$CF_LOCALNET_GETH_PASSWORD" > ./localnet/init/secrets/geth_password
+  echo "$CF_LOCALNET_NODE_KEY" > ./localnet/init/secrets/node_key_file
+  echo "$CF_LOCALNET_SIGNING_KEY" > ./localnet/init/secrets/signing_key_file
+  build-localnet
+  exit 0
+fi
 
 if [ ! -f ./$LOCALNET_INIT_DIR/secrets/.setup_complete ]; then
   setup

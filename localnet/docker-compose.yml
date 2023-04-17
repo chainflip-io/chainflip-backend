@@ -9,8 +9,6 @@ services:
     container_name: geth
     platform: linux/amd64
     restart: unless-stopped
-    env_file:
-      - ./init/secrets/secrets.env
     ports:
       - 30303:30303
       - 30303:30303/udp

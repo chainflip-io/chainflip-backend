@@ -33,19 +33,23 @@ jobs:
       - run: sccache --show-stats
       - name: cargo cf-build-ci
         run: cargo cf-build-ci --locked
-      - name: Start localnet
-        run: ./bouncer/commands/start_localnet.sh
+      - name: Upload binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-backend-release-bins
+          path: target/release/chainflip-*
+  start-localnet:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Init localnet
+        run: ./localnet/manage.sh
+
       - name: Run localnet checks
         run: |
           docker ps
           docker logs polkadot
           docker logs bitcoin
           tail /tmp/chainflip/chainflip*.log
-      - name: Upload binaries
-        uses: actions/upload-artifact@v3
-        with:
-          name: chainflip-backend-release-bins
-          path: target/release/chainflip-*
       - name: Check blocks produced
         run: |
           cd bouncer
