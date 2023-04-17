@@ -130,8 +130,7 @@ where
 				<Generator::Witnesser as BlockWitnesser>::Chain,
 			>(epoch.epoch_index, epoch.block_number, self.db.clone())
 			.await
-			// TODO: print chain name
-			.expect("Failed to start witnesser checkpointing")
+			.unwrap_or_else(|_| panic!("Failed to start {} witnesser checkpointing", <Generator::Witnesser as BlockWitnesser>::Chain::CHAIN_TAG))
 			{
 				StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
 					(from_block, witnessed_until_sender),
