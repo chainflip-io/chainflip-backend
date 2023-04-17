@@ -11,8 +11,8 @@ use tracing::{info, info_span, Instrument};
 use crate::{
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	witnesser::{
-		epoch_witnesser::{
-			self, start_epoch_witnesser, EpochWitnesser, EpochWitnesserGenerator,
+		epoch_process_runner::{
+			self, start_epoch_process_runner, EpochProcessGenerator, EpochWitnesser,
 			WitnesserAndStream,
 		},
 		ChainBlockNumber, EpochStart,
@@ -44,7 +44,7 @@ where
 		Err(e) => bail!("Failed to get PolkadotRuntimeVersion from SC: {:?}", e),
 	};
 
-	start_epoch_witnesser(
+	start_epoch_process_runner(
 		// NOTE: we only use Arc<Mutex> here to
 		// satisfy the interface...
 		Arc::new(Mutex::new(epoch_starts_receiver)),
@@ -82,7 +82,7 @@ where
 		end_witnessing_receiver: oneshot::Receiver<ChainBlockNumber<Self::Chain>>,
 		state: Self::StaticState,
 	) -> Result<Self::StaticState, ()> {
-		epoch_witnesser::run_witnesser_data_stream(
+		epoch_process_runner::run_witnesser_data_stream(
 			self,
 			data_stream,
 			end_witnessing_receiver,
@@ -123,7 +123,7 @@ struct RuntimeVersionUpdaterGenerator<StateChainClient, DotRpc> {
 }
 
 #[async_trait]
-impl<StateChainClient, DotRpc> EpochWitnesserGenerator
+impl<StateChainClient, DotRpc> EpochProcessGenerator
 	for RuntimeVersionUpdaterGenerator<StateChainClient, DotRpc>
 where
 	StateChainClient: ExtrinsicApi + StorageApi + 'static + Send + Sync,
