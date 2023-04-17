@@ -1,0 +1,25 @@
+name: Nightly build
+on: push
+jobs:
+  build-nightly:
+    runs-on: ubuntu-latest
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout chainflip-backend
+        uses: actions/checkout@v3
+      - name: Checkout chainflip-bouncer
+        uses: actions/checkout@v3
+        with:
+          repository: chainflip-io/chainflip-bouncer
+          token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+          path: bouncer
+      - name: cargo cf-build-ci
+        run: cargo cf-build-ci --locked
+      - name: Start localnet
+        run: ./bouncer/commands/start_localnet.sh
+      - name: Check blocks produced
+        run: ./bouncer/tests/produces_blocks.sh
