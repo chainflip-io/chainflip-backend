@@ -273,6 +273,7 @@ fn can_reject_invalid_ccms() {
 			message: vec![0x00],
 			gas_budget: 1_000,
 			refund_address: ForeignChainAddress::Dot(Default::default()),
+			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 
 		assert_noop!(
@@ -361,6 +362,7 @@ fn can_process_ccms_via_swap_intent() {
 			message: vec![0x01],
 			gas_budget: 1_000,
 			refund_address: ForeignChainAddress::Dot([0x01; 32]),
+			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 
 		// Can ingress CCM via Swap Intent
@@ -451,6 +453,7 @@ fn can_process_ccms_via_extrinsic() {
 			message: vec![0x02],
 			gas_budget: 2_000,
 			refund_address: ForeignChainAddress::Dot([0x02; 32]),
+			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 
 		// Can ingress CCM directly via Pallet Extrinsic.
@@ -542,6 +545,7 @@ fn can_handle_ccms_with_gas_asset_as_ingress() {
 			message: vec![0x00],
 			gas_budget: 1_000,
 			refund_address: ForeignChainAddress::Eth([0x01; 20]),
+			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 		assert_ok!(Swapping::ccm_ingress(
 			RuntimeOrigin::root(),
@@ -625,6 +629,7 @@ fn can_handle_ccms_with_principal_asset_as_ingress() {
 			message: vec![0x00],
 			gas_budget: 1_000,
 			refund_address: ForeignChainAddress::Eth([0x01; 20]),
+			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 
 		assert_ok!(Swapping::ccm_ingress(
@@ -709,6 +714,7 @@ fn can_handle_ccms_with_no_swaps_needed() {
 			message: vec![0x00],
 			gas_budget: 1_000,
 			refund_address: ForeignChainAddress::Eth([0x01; 20]),
+			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 
 		// Ccm without need for swapping are egressed directly.
