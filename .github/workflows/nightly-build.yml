@@ -37,6 +37,8 @@ jobs:
           path: target/release/chainflip-*
   start-localnet:
     runs-on: ubuntu-latest
+    needs:
+      - build-nightly
     steps:
       - name: Checkout chainflip-backend
         uses: actions/checkout@v3
