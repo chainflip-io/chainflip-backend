@@ -1,12 +1,13 @@
 name: Nightly build
 on: push
 env:
+  RUSTC_WRAPPER: sccache
   SCCACHE_CACHE_SIZE: 32G
   SCCACHE_VERSION: v0.4.0-pre.6
   SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
 jobs:
   build-nightly:
-    runs-on: ubuntu-latest
+    runs-on: [hetzner]
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
       credentials:
