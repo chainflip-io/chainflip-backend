@@ -31,7 +31,7 @@ jobs:
         run: cargo build
 
       - name: Upload binaries
-        uses: actions/upload-artifact@v3
+        uses: actions/cache/save@v3
         with:
           name: chainflip-backend-release-bins
           path: |
@@ -52,8 +52,8 @@ jobs:
           token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
           path: bouncer
 
-      - name: Download binaries
-        uses: actions/download-artifact@v3
+      - name: Upload binaries
+        uses: actions/cache/restore@v3
         with:
           name: chainflip-backend-release-bins
 
