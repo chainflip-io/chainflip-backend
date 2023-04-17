@@ -306,12 +306,14 @@ pub trait IngressIdConstructor {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct CcmIngressMetadata {
-	// Call data used after the message is egressed.
+	/// Call data used after the message is egressed.
 	pub message: Vec<u8>,
-	// Amount of ingress funds to be used for gas.
+	/// Amount of ingress funds to be used for gas.
 	pub gas_budget: AssetAmount,
-	// The address refunds will go to.
+	/// The address refunds will go to.
 	pub refund_address: ForeignChainAddress,
+	/// The address the ingress was sent from.
+	pub source_address: ForeignChainAddress,
 }
 
 #[cfg(feature = "std")]
