@@ -5,19 +5,9 @@ use super::*;
 
 use cf_primitives::AccountRole;
 use cf_traits::AccountRoleRegistry;
-use frame_benchmarking::{account, benchmarks, whitelisted_caller};
-use frame_support::{
-	dispatch::UnfilteredDispatchable,
-	traits::{EnsureOrigin, OnInitialize},
-};
+use frame_benchmarking::{benchmarks, whitelisted_caller};
+use frame_support::{dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
 use frame_system::RawOrigin;
-use sp_std::vec::Vec;
-
-type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
-
-fn create_accounts<T: Config>(count: u32) -> Vec<AccountIdOf<T>> {
-	(0..=count).map(|i| account("doogle", i, 0)).collect()
-}
 
 benchmarks! {
 
@@ -125,6 +115,36 @@ benchmarks! {
 		assert!(!PendingClaims::<T>::contains_key(&caller));
 	}
 
+	claim_expired {
+		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
+		let withdrawal_address: EthereumAddress = [42u8; 20];
+
+		let caller: T::AccountId = whitelisted_caller();
+		let origin = T::EnsureWitnessed::successful_origin();
+
+		// Stake some funds to claim
+		Call::<T>::staked {
+			account_id: caller.clone(),
+			amount: MinimumStake::<T>::get(),
+			withdrawal_address,
+			tx_hash
+		}.dispatch_bypass_filter(origin.clone())?;
+
+		// Push a claim
+		let claimable = T::Flip::claimable_balance(&caller);
+		Pallet::<T>::claim(RawOrigin::Signed(caller.clone()).into(), ClaimAmount::Max, withdrawal_address)?;
+
+		let call = Call::<T>::claim_expired {
+			account_id: caller.clone(),
+			block_number: 2u32.into(),
+		};
+
+
+	} : { call.dispatch_bypass_filter(origin)? }
+	verify {
+		assert!(!PendingClaims::<T>::contains_key(&caller));
+	}
+
 	stop_bidding {
 		let caller: T::AccountId = whitelisted_caller();
 		ActiveBidder::<T>::insert(caller.clone(), true);
@@ -141,39 +161,6 @@ benchmarks! {
 	}:_(RawOrigin::Signed(caller.clone()))
 	verify {
 		assert!(ActiveBidder::<T>::get(caller));
-	}
-
-	on_initialize_best_case {
-	}: {
-		Pallet::<T>::on_initialize((2u32).into());
-	}
-	verify {
-		assert!(ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0);
-	}
-	expire_pending_claims_at {
-		let b in 0 .. 150_u32;
-		let accounts = create_accounts::<T>(150);
-
-		let eth_base_addr: EthereumAddress = [1u8; 20];
-		for i in 0 .. b {
-			// Stake some funds
-			let staker = &accounts[i as usize];
-			let withdrawal_address = eth_base_addr.map(|x| x + i as u8);
-			Call::<T>::staked {
-				account_id: staker.clone(),
-				amount: MinimumStake::<T>::get(),
-				withdrawal_address,
-				tx_hash: [0; 32]
-			}.dispatch_bypass_filter(T::EnsureWitnessed::successful_origin())?;
-			Pallet::<T>::claim(RawOrigin::Signed(staker.clone()).into(), ClaimAmount::Max, withdrawal_address)?;
-
-			// we're registering the claim to be expired at the unix epoch.
-			// T::TimeSource::now().as_secs() evaulates to 0 in the benchmarks. So this ensures
-			// we hit the most expensive case, all possible expiries expiring.
-			Pallet::<T>::register_claim_expiry(staker.clone(), 0);
-		}
-	}: {
-		Pallet::<T>::expire_pending_claims_at(u64::MAX);
 	}
 	update_minimum_stake {
 		let call = Call::<T>::update_minimum_stake {

@@ -1,17 +1,13 @@
 use crate::{
-	mock::*, pallet, ActiveBidder, ClaimAmount, ClaimExpiries, Error, EthereumAddress,
-	FailedStakeAttempts, Pallet, PendingClaims, WithdrawalAddresses,
+	mock::*, pallet, ActiveBidder, ClaimAmount, Error, EthereumAddress, FailedStakeAttempts,
+	Pallet, PendingClaims, WithdrawalAddresses,
 };
 use cf_test_utilities::assert_event_sequence;
-use cf_traits::{
-	mocks::{system_state_info::MockSystemStateInfo, time_source},
-	Bonding,
-};
+use cf_traits::{mocks::system_state_info::MockSystemStateInfo, Bonding};
 
-use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::Hooks};
+use frame_support::{assert_noop, assert_ok, error::BadOrigin};
 use pallet_cf_flip::Bonder;
 use sp_runtime::DispatchError;
-use std::time::Duration;
 
 type FlipError = pallet_cf_flip::Error<Test>;
 
@@ -179,33 +175,13 @@ fn cannot_double_claim() {
 			<Error<Test>>::PendingClaim
 		);
 
-		assert_eq!(
-			ClaimExpiries::<Test>::get()[0].1,
-			ALICE,
-			"Alice's claim should have an expiry set"
-		);
 		assert_ok!(Staking::claimed(RuntimeOrigin::root(), ALICE, stake_a1, TX_HASH));
-		assert_eq!(
-			ClaimExpiries::<Test>::get().len(),
-			0,
-			"As Alice's claim is claimed it should have no expiry"
-		);
 		assert!(PendingClaims::<Test>::get(&ALICE).is_none());
 
 		// Should now be able to claim the rest.
 		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), stake_a2.into(), ETH_DUMMY_ADDR));
 
-		assert_eq!(
-			ClaimExpiries::<Test>::get()[0].1,
-			ALICE,
-			"Alice's claim should have an expiry set"
-		);
 		assert_ok!(Staking::claimed(RuntimeOrigin::root(), ALICE, stake_a2, TX_HASH));
-		assert_eq!(
-			ClaimExpiries::<Test>::get().len(),
-			0,
-			"As Alice's claim is claimed it should have no expiry"
-		);
 		assert!(PendingClaims::<Test>::get(&ALICE).is_none());
 
 		// Remaining stake should be zero
@@ -392,103 +368,6 @@ fn test_stop_bidding() {
 }
 
 #[test]
-fn claim_expiry() {
-	new_test_ext().execute_with(|| {
-		const STAKE: u128 = 45;
-		const START_TIME_SECS: u64 = 10;
-
-		// Start the time at the 10-second mark.
-		time_source::Mock::reset_to(Duration::from_secs(START_TIME_SECS));
-
-		// Stake some FLIP.
-		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
-		assert_ok!(Staking::staked(RuntimeOrigin::root(), BOB, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
-
-		// Alice claims immediately.
-		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR));
-
-		// Bob claims a little later.
-		const BOB_DELAY_SECS: u64 = 3;
-		time_source::Mock::tick(Duration::from_secs(BOB_DELAY_SECS));
-		assert_ok!(Staking::claim(RuntimeOrigin::signed(BOB), STAKE.into(), ETH_DUMMY_ADDR));
-
-		// If we stay within the defined bounds, we can claim.
-		time_source::Mock::reset_to(Duration::from_secs(START_TIME_SECS));
-		const INIT_TICK: u64 = 4;
-		time_source::Mock::tick(Duration::from_secs(INIT_TICK));
-
-		// Trigger expiry.
-		Pallet::<Test>::on_initialize(0);
-
-		// Nothing should have expired yet.
-		assert!(PendingClaims::<Test>::contains_key(ALICE));
-		assert!(PendingClaims::<Test>::contains_key(BOB));
-
-		// Tick the clock forward and expire.
-		const NEXT_TICK: u64 = 7;
-		time_source::Mock::tick(Duration::from_secs(NEXT_TICK));
-		let total_ticked = NEXT_TICK + INIT_TICK;
-		assert!(total_ticked > CLAIM_TTL_SECS);
-
-		Pallet::<Test>::on_initialize(0);
-
-		// Both claims should still exist. We have only passed the *contract* expiry.
-		// We still need to wait for `ClaimDelayBufferSeconds` until the claim
-		// is expired on the SC.
-
-		assert!(PendingClaims::<Test>::contains_key(ALICE));
-		assert!(PendingClaims::<Test>::contains_key(BOB));
-
-		// Now we let `ClaimDelayBufferSeconds` elapse
-		time_source::Mock::tick(Duration::from_secs(CLAIM_DELAY_BUFFER_SECS));
-		Pallet::<Test>::on_initialize(0);
-
-		// Alice should have expired but not Bob.
-		assert!(!PendingClaims::<Test>::contains_key(ALICE));
-		assert!(PendingClaims::<Test>::contains_key(BOB));
-
-		// Tick forward again and expire.
-		time_source::Mock::tick(Duration::from_secs(10));
-		Pallet::<Test>::on_initialize(0);
-
-		// Bob's (unsigned) claim should now be expired too.
-		assert!(!PendingClaims::<Test>::contains_key(BOB));
-
-		assert_event_sequence!(
-			Test,
-			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Staking(crate::Event::Staked {
-				account_id: ALICE,
-				tx_hash: TX_HASH,
-				stake_added: STAKE,
-				total_stake: STAKE
-			}),
-			RuntimeEvent::System(frame_system::Event::NewAccount { account: BOB }),
-			RuntimeEvent::Staking(crate::Event::Staked {
-				account_id: BOB,
-				tx_hash: TX_HASH,
-				stake_added: STAKE,
-				total_stake: STAKE
-			}),
-			RuntimeEvent::Staking(crate::Event::ClaimRequested {
-				account_id: ALICE,
-				amount: STAKE,
-				broadcast_id: 0,
-				expiry_time: START_TIME_SECS + CLAIM_TTL_SECS,
-			}),
-			RuntimeEvent::Staking(crate::Event::ClaimRequested {
-				account_id: BOB,
-				amount: STAKE,
-				broadcast_id: 0,
-				expiry_time: START_TIME_SECS + BOB_DELAY_SECS + CLAIM_TTL_SECS,
-			}),
-			RuntimeEvent::Staking(crate::Event::ClaimExpired { account_id: ALICE }),
-			RuntimeEvent::Staking(crate::Event::ClaimExpired { account_id: BOB })
-		);
-	});
-}
-
-#[test]
 fn can_only_claim_during_auction_if_not_bidding() {
 	new_test_ext().execute_with(|| {
 		const STAKE: u128 = 45;
@@ -617,6 +496,31 @@ fn cannot_claim_to_zero_address() {
 			<Error<Test>>::InvalidClaim
 		);
 		// Try it again with a non-zero address - expect to succeed
+		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR));
+	});
+}
+
+#[test]
+fn claim_expiry_removes_claim() {
+	new_test_ext().execute_with(|| {
+		const STAKE: u128 = 45;
+
+		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_DUMMY_ADDR, TX_HASH));
+
+		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR));
+		assert_noop!(
+			Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR),
+			Error::<Test>::PendingClaim
+		);
+
+		assert_ok!(Staking::claim_expired(RuntimeOrigin::root(), ALICE, Default::default()));
+
+		assert_noop!(
+			Staking::claimed(RuntimeOrigin::root(), ALICE, STAKE, TX_HASH),
+			Error::<Test>::NoPendingClaim
+		);
+
+		// Success, can request claim again since the last one expired.
 		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR));
 	});
 }

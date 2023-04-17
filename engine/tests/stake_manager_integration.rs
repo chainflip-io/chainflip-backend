@@ -40,7 +40,7 @@ pub async fn test_all_stake_manager_events() {
 					&web3::types::H160::from_str("0x70997970c51812dc3a010c7d01b50e0d17dc79c8")
 						.unwrap()
 				);
-				assert_eq!(
+				assert_eq!(	
 					return_addr,
 					&web3::types::H160::from_str("0x0000000000000000000000000000000000000001")
 						.unwrap()
@@ -99,6 +99,24 @@ pub async fn test_all_stake_manager_events() {
 			_ => false,
 		})
 		.expect("Didn't find the ClaimExecuted event");
+
+	sm_events
+		.iter()
+		.find(|event| match &event.event_parameters {
+			StakeManagerEvent::ClaimExpired { account_id, amount } => {
+				assert_eq!(
+					account_id,
+					&AccountId32::from_str(
+						"000000000000000000000000000000000000000000000000000000000000a455"
+					)
+					.unwrap()
+				);
+				assert_eq!(amount, &333333333333333311488);
+				true
+			},
+			_ => false,
+		})
+		.expect("Didn't find the ClaimExpired event");
 
 	sm_events
 		.iter()

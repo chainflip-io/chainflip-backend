@@ -52,6 +52,11 @@ pub enum StakeManagerEvent {
 		amount: u128,
 	},
 
+	ClaimExpired {
+		account_id: AccountId32,
+		amount: u128,
+	},
+
 	MinStakeChanged {
 		old_min_stake: ethabi::Uint,
 		new_min_stake: ethabi::Uint,
@@ -90,7 +95,7 @@ impl EthContractWitnesser for StakeManager {
 	async fn handle_block_events<StateChainClient, EthRpcClient>(
 		&mut self,
 		epoch: EpochIndex,
-		_block_number: u64,
+		block_number: u64,
 		block: BlockWithItems<Event<Self::EventParameters>>,
 		state_chain_client: Arc<StateChainClient>,
 		_eth_rpc: &EthRpcClient,
@@ -133,6 +138,17 @@ impl EthContractWitnesser for StakeManager {
 						})
 						.await;
 				},
+				StakeManagerEvent::ClaimExpired { account_id, amount: _ } => {
+					let _result = state_chain_client
+						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+							call: Box::new(
+								pallet_cf_staking::Call::claim_expired { account_id, block_number }
+									.into(),
+							),
+							epoch_index: epoch,
+						})
+						.await;
+				},
 				_ => {
 					trace!("Ignoring unused event: {event}");
 				},
@@ -150,6 +166,7 @@ impl EthContractWitnesser for StakeManager {
 		let staked = SignatureAndEvent::new(&self.contract, "Staked")?;
 		let claim_registered = SignatureAndEvent::new(&self.contract, "ClaimRegistered")?;
 		let claim_executed = SignatureAndEvent::new(&self.contract, "ClaimExecuted")?;
+		let claim_expired = SignatureAndEvent::new(&self.contract, "ClaimExpired")?;
 		let min_stake_changed = SignatureAndEvent::new(&self.contract, "MinStakeChanged")?;
 		let gov_withdrawal = SignatureAndEvent::new(&self.contract, "GovernanceWithdrawal")?;
 		let community_guard_disabled =
@@ -200,6 +217,15 @@ impl EthContractWitnesser for StakeManager {
 						amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?
 							.try_into()
 							.expect("ClaimExecuted event amount should fit u128"),
+					}
+				} else if event_signature == claim_expired.signature {
+					let log = claim_expired.event.parse_log(raw_log)?;
+					let account_id = node_id_from_log(&log)?;
+					StakeManagerEvent::ClaimExpired {
+						account_id,
+						amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?
+							.try_into()
+							.expect("ClaimExpired event amount should fit u128"),
 					}
 				} else if event_signature == min_stake_changed.signature {
 					let log = min_stake_changed.event.parse_log(raw_log)?;
@@ -278,6 +304,44 @@ mod tests {
 	fn test_load_contract() {
 		let address = H160::default();
 		StakeManager::new(address);
+	}
+
+	// Convenience test for getting the event signatures for easier searching manually for events
+	// with a get_logs query
+	#[test]
+	fn generate_signatures() {
+		let contract = StakeManager::new(H160::default()).contract;
+
+		let staked = SignatureAndEvent::new(&contract, "Staked").unwrap();
+		println!("staked {:?}", staked.signature);
+
+		let claim_registered = SignatureAndEvent::new(&contract, "ClaimRegistered").unwrap();
+		println!("claim_registered {:?}", claim_registered.signature);
+
+		let claim_executed = SignatureAndEvent::new(&contract, "ClaimExecuted").unwrap();
+		println!("claim_executed {:?}", claim_executed.signature);
+
+		let claim_expired = SignatureAndEvent::new(&contract, "ClaimExpired").unwrap();
+		println!("claim_expired {:?}", claim_expired.signature);
+
+		let min_stake_changed = SignatureAndEvent::new(&contract, "MinStakeChanged").unwrap();
+		println!("min_stake_changed {:?}", min_stake_changed.signature);
+
+		let gov_withdrawal = SignatureAndEvent::new(&contract, "GovernanceWithdrawal").unwrap();
+		println!("gov_withdrawal {:?}", gov_withdrawal.signature);
+
+		let community_guard_disabled =
+			SignatureAndEvent::new(&contract, "CommunityGuardDisabled").unwrap();
+		println!("community_guard_disabled {:?}", community_guard_disabled.signature);
+
+		let flip_set = SignatureAndEvent::new(&contract, "FLIPSet").unwrap();
+		println!("flip_set {:?}", flip_set.signature);
+
+		let suspended = SignatureAndEvent::new(&contract, "Suspended").unwrap();
+		println!("suspended {:?}", suspended.signature);
+
+		let updated_key_manager = SignatureAndEvent::new(&contract, "UpdatedKeyManager").unwrap();
+		println!("updated_key_manager {:?}", updated_key_manager.signature);
 	}
 
 	#[test]
@@ -405,6 +469,46 @@ mod tests {
 				assert_eq!(amount, 13333333333333334032384);
 			},
 			_ => panic!("Expected Staking::ClaimExecuted, got a different variant"),
+		}
+	}
+
+	#[test]
+	fn claim_expired_log_parsing() {
+		let stake_manager = StakeManager::new(H160::default());
+		let decode_log = stake_manager.decode_log_closure().unwrap();
+
+		let claim_expired_event_signature =
+			H256::from_str("0x663304ace90be3e42354c18d4edfd7bf69b1868a8bdba7b9e58de9a997d57714")
+				.unwrap();
+		match decode_log(
+			claim_expired_event_signature,
+			RawLog {
+				topics: vec![
+					claim_expired_event_signature,
+					H256::from_str(
+						"0x000000000000000000000000000000000000000000000000000000000000a455",
+					)
+					.unwrap(),
+				],
+				data: hex::decode(
+					"00000000000000000000000000000000000000000000001211ede4974a350000",
+				)
+				.unwrap(),
+			},
+		)
+		.unwrap()
+		{
+			StakeManagerEvent::ClaimExpired { account_id, amount } => {
+				assert_eq!(
+					account_id,
+					AccountId32::from_str(
+						"000000000000000000000000000000000000000000000000000000000000a455"
+					)
+					.unwrap()
+				);
+				assert_eq!(amount, 333333333333333311488u128);
+			},
+			_ => panic!("Expected Staking::ClaimExpired, got a different variant"),
 		}
 	}
 
