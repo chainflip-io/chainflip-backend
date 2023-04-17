@@ -55,7 +55,7 @@ pub struct ExecutexSwapAndCall {
 	/// A single transfer that need to be made to given addresses.
 	transfer_param: EncodableTransferAssetParams,
 	/// The source of the transfer
-	from: ForeignChainAddress,
+	source_address: ForeignChainAddress,
 	/// Message that needs to be passed through.
 	message: Vec<u8>,
 }
@@ -65,14 +65,14 @@ impl ExecutexSwapAndCall {
 		replay_protection: EthereumReplayProtection,
 		egress_id: EgressId,
 		transfer_param: EncodableTransferAssetParams,
-		from: ForeignChainAddress,
+		source_address: ForeignChainAddress,
 		message: Vec<u8>,
 	) -> Self {
 		let mut calldata = Self {
 			sig_data: SigData::new_empty(replay_protection),
 			egress_id,
 			transfer_param,
-			from,
+			source_address,
 			message,
 		};
 		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
@@ -116,7 +116,7 @@ impl ExecutexSwapAndCall {
 
 	fn abi_encoded(&self) -> Vec<u8> {
 		let tokenized_address =
-			self.from.clone().tokenize().into_tuple().expect(
+			self.source_address.clone().tokenize().into_tuple().expect(
 				"The ForeignChainAddress should always return a Tuple(vec![Chain, Address])",
 			);
 
