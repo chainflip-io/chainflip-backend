@@ -55,7 +55,6 @@ get-workflow() {
 }
 
 build-localnet() {
-  source $LOCALNET_INIT_DIR/secrets/secrets.env
   cp -R $LOCALNET_INIT_DIR/keyshare /tmp/chainflip/
   echo
   if [ -z "$CI" ]; then
