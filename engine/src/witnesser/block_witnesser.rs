@@ -10,7 +10,7 @@ use super::{
 	checkpointing::{
 		get_witnesser_start_block_with_checkpointing, StartCheckpointing, WitnessedUntil,
 	},
-	epoch_process_runner::{self, EpochProcessGenerator, EpochWitnesser, WitnesserAndStream},
+	epoch_process_runner::{self, EpochProcessGenerator, EpochWitnesser, WitnesserInitResult},
 	ChainBlockNumber, EpochStart, HasBlockNumber,
 };
 
@@ -124,7 +124,7 @@ where
 	async fn init(
 		&mut self,
 		epoch: EpochStart<<Generator::Witnesser as BlockWitnesser>::Chain>,
-	) -> anyhow::Result<Option<WitnesserAndStream<Self::Witnesser>>> {
+	) -> anyhow::Result<WitnesserInitResult<Self::Witnesser>> {
 		let (from_block, witnessed_until_sender) =
 			match get_witnesser_start_block_with_checkpointing::<
 				<Generator::Witnesser as BlockWitnesser>::Chain,
@@ -135,7 +135,7 @@ where
 			{
 				StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
 					(from_block, witnessed_until_sender),
-				StartCheckpointing::AlreadyWitnessedEpoch => return Ok(None),
+				StartCheckpointing::AlreadyWitnessedEpoch => return Ok(WitnesserInitResult::EpochSkipped),
 			};
 
 		let block_stream = self.generator.get_block_stream(from_block).await?;
@@ -146,7 +146,7 @@ where
 			witnessed_until_sender,
 		};
 
-		Ok(Some((witnesser, block_stream)))
+		Ok(WitnesserInitResult::Created((witnesser, block_stream)))
 
 	}
 

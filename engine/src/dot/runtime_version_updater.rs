@@ -13,7 +13,7 @@ use crate::{
 	witnesser::{
 		epoch_process_runner::{
 			self, start_epoch_process_runner, EpochProcessGenerator, EpochWitnesser,
-			WitnesserAndStream,
+			WitnesserInitResult,
 		},
 		ChainBlockNumber, EpochStart,
 	},
@@ -133,7 +133,7 @@ where
 	async fn init(
 		&mut self,
 		epoch: EpochStart<Polkadot>,
-	) -> anyhow::Result<Option<WitnesserAndStream<RuntimeVersionUpdater<StateChainClient>>>> {
+	) -> anyhow::Result<WitnesserInitResult<RuntimeVersionUpdater<StateChainClient>>> {
 		// NB: The first item of this stream is the current runtime version.
 		let runtime_version_subscription = self.dot_client.subscribe_runtime_version().await?;
 
@@ -144,6 +144,6 @@ where
 
 		let stream = runtime_version_subscription.map(Ok);
 
-		Ok(Some((witnesser, Box::pin(stream))))
+		Ok(WitnesserInitResult::Created((witnesser, Box::pin(stream))))
 	}
 }

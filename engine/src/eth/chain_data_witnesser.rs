@@ -8,7 +8,7 @@ use crate::{
 	witnesser::{
 		epoch_process_runner::{
 			self, start_epoch_process_runner, EpochProcessGenerator, EpochWitnesser,
-			WitnesserAndStream,
+			WitnesserInitResult,
 		},
 		EpochStart,
 	},
@@ -136,9 +136,7 @@ where
 	async fn init(
 		&mut self,
 		epoch: EpochStart<Ethereum>,
-	) -> anyhow::Result<
-		Option<WitnesserAndStream<ChainDataWitnesser<StateChainClient, EthRpcClient>>>,
-	> {
+	) -> anyhow::Result<WitnesserInitResult<ChainDataWitnesser<StateChainClient, EthRpcClient>>> {
 		let witnesser = ChainDataWitnesser {
 			state_chain_client: self.state_chain_client.clone(),
 			cfe_settings_update_receiver: self.cfe_settings_update_receiver.clone(),
@@ -150,7 +148,7 @@ where
 			IntervalStream::new(make_periodic_tick(ETH_CHAIN_TRACKING_POLL_INTERVAL, true))
 				.map(|_| Ok(()));
 
-		Ok(Some((witnesser, Box::pin(poll_interval))))
+		Ok(WitnesserInitResult::Created((witnesser, Box::pin(poll_interval))))
 	}
 }
 

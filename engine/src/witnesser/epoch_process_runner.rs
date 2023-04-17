@@ -42,19 +42,22 @@ pub trait EpochWitnesser: Send + Sync + 'static {
 	) -> anyhow::Result<()>;
 }
 
-pub type WitnesserAndStream<W> =
-	(W, Pin<Box<dyn Stream<Item = anyhow::Result<<W as EpochWitnesser>::Data>> + Send + 'static>>);
+type StreamToWitness<W> =
+	Pin<Box<dyn Stream<Item = anyhow::Result<<W as EpochWitnesser>::Data>> + Send + 'static>>;
+
+pub enum WitnesserInitResult<W: EpochWitnesser> {
+	Created((W, StreamToWitness<W>)),
+	EpochSkipped,
+}
 
 #[async_trait]
 pub trait EpochProcessGenerator: Send {
 	type Witnesser: EpochWitnesser;
 
-	// TODO: use a custom enum instead of Option?
-	// TODO: try to split this method into create_witnesser and get_stream as well
 	async fn init(
 		&mut self,
 		epoch: EpochStart<<Self::Witnesser as EpochWitnesser>::Chain>,
-	) -> anyhow::Result<Option<WitnesserAndStream<Self::Witnesser>>>;
+	) -> anyhow::Result<WitnesserInitResult<Self::Witnesser>>;
 }
 
 type WitnesserTask<Witnesser> = ScopedJoinHandle<<Witnesser as EpochWitnesser>::StaticState>;
@@ -112,7 +115,7 @@ where
 
 					let (end_witnessing_sender, end_witnessing_receiver) = oneshot::channel();
 
-					if let Some((witnesser, data_stream)) =
+					if let WitnesserInitResult::Created((witnesser, data_stream)) =
 						witnesser_generator.init(epoch_start).await.map_err(|e| {
 							error!("Error while initializing epoch witnesser: {:?}", e);
 						})? {
@@ -310,8 +313,8 @@ mod epoch_witnesser_testing {
 		async fn init(
 			&mut self,
 			epoch_start: EpochStart<cf_chains::Ethereum>,
-		) -> anyhow::Result<Option<WitnesserAndStream<TestEpochWitnesser>>> {
-			Ok(Some((
+		) -> anyhow::Result<WitnesserInitResult<TestEpochWitnesser>> {
+			Ok(WitnesserInitResult::Created((
 				TestEpochWitnesser {
 					last_processed_block: epoch_start.block_number,
 					processed_blocks_sender: self.processed_blocks_sender.clone(),
