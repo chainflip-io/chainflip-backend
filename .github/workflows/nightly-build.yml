@@ -72,7 +72,7 @@ jobs:
           tail /tmp/chainflip/chainflip*.log
 
       - name: Check blocks produced
+        working-directory: bouncer
         run: |
-          cd bouncer
           ./tests/produces_blocks.sh
           ./tests/stress_test.sh

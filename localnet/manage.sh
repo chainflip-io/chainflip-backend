@@ -18,8 +18,8 @@ setup() {
     exit 1
   fi
 
-  if ! which docker-compose >/dev/null 2>&1; then
-    echo "❌  docker-compose CLI not installed."
+  if ! which docker compose >/dev/null 2>&1; then
+    echo "❌  docker compose CLI not installed."
     echo "https://docs.docker.com/get-docker/"
     exit 1
   fi
@@ -76,7 +76,7 @@ build-localnet() {
   done
 
   echo "🏗 Building network"
-  docker-compose -f localnet/docker-compose.yml up -d
+  docker compose -f localnet/docker-compose.yml up -d
   while ! curl --user flip:flip -H 'Content-Type: text/plain;' -d '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' -v http://127.0.0.1:8332 > /dev/null 2>&1 ; do
     echo "🪙 Waiting for Bitcoin node to start"
     sleep 5
@@ -110,7 +110,7 @@ build-localnet() {
 
 destroy() {
   echo "💣 Destroying network"
-  docker-compose -f localnet/docker-compose.yml down --remove-orphans
+  docker compose -f localnet/docker-compose.yml down --remove-orphans
   rm -rf /tmp/chainflip
 }
 
@@ -127,14 +127,14 @@ logs() {
   echo "🤖 Which service would you like to tail?"
   select SERVICE in node engine relayer polkadot geth all; do
     if [ $SERVICE == "all" ]; then
-      docker-compose -f localnet/docker-compose.yml logs --follow &
+      docker compose -f localnet/docker-compose.yml logs --follow &
       tail -f /tmp/chainflip/chainflip-*.log
     fi
     if [ $SERVICE == "polkadot" ]; then
-      docker-compose -f localnet/docker-compose.yml logs --follow polkadot
+      docker compose -f localnet/docker-compose.yml logs --follow polkadot
     fi
     if [ $SERVICE == "geth" ]; then
-      docker-compose -f localnet/docker-compose.yml logs --follow geth
+      docker compose -f localnet/docker-compose.yml logs --follow geth
     fi
     if [ $SERVICE == "node" ]; then
       tail -f /tmp/chainflip/chainflip-node.log
