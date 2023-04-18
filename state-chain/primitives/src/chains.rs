@@ -29,6 +29,19 @@ macro_rules! chains {
 				$chain = $value,
 			)+
 		}
+
+		impl TryFrom<u32> for ForeignChain {
+			type Error = &'static str;
+
+			fn try_from(value: u32) -> Result<Self, Self::Error> {
+				match value {
+					$(
+						x if x == Self::$chain as u32 => Ok(Self::$chain),
+					)+
+					_ => Err("Invalid foreign chain"),
+				}
+			}
+		}
 	}
 }
 
@@ -51,19 +64,6 @@ impl ForeignChain {
 			ForeignChain::Ethereum => assets::any::Asset::Eth,
 			ForeignChain::Polkadot => assets::any::Asset::Dot,
 			ForeignChain::Bitcoin => assets::any::Asset::Btc,
-		}
-	}
-}
-
-impl TryFrom<u32> for ForeignChain {
-	type Error = &'static str;
-
-	fn try_from(value: u32) -> Result<Self, Self::Error> {
-		match value {
-			x if x == Self::Ethereum as u32 => Ok(Self::Ethereum),
-			x if x == Self::Polkadot as u32 => Ok(Self::Polkadot),
-			x if x == Self::Bitcoin as u32 => Ok(Self::Bitcoin),
-			_ => Err("Invalid foreign chain"),
 		}
 	}
 }
