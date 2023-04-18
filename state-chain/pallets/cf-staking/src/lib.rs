@@ -17,6 +17,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::RegisterClaim;
+use cf_primitives::EthereumAddress;
 use cf_traits::{Bid, BidderProvider, EpochInfo, StakeTransfer, SystemStateInfo};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -31,7 +32,6 @@ use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Zero};
 use sp_std::prelude::*;
-use cf_primitives::EthereumAddress;
 
 /// This address is used by the Ethereum contracts to indicate that no withdrawal address was
 /// specified when staking.

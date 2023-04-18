@@ -73,7 +73,9 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-pub use cf_primitives::{Asset, AssetAmount, BlockNumber, ExchangeRate, FlipBalance, EthereumAddress};
+pub use cf_primitives::{
+	Asset, AssetAmount, BlockNumber, EthereumAddress, ExchangeRate, FlipBalance,
+};
 pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
 
 pub use chainflip::chain_instances::*;

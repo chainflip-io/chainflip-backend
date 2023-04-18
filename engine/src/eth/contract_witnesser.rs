@@ -11,7 +11,7 @@ use crate::{
 
 use super::{
 	core_h160, eth_block_witnessing::BlockProcessor, event::Event, rpc::EthDualRpcClient,
-	BlockWithItems, DecodeLogClosure, EthContractWitnesser, EthNumberBloom, vault::EthAssetApi,
+	vault::EthAssetApi, BlockWithItems, DecodeLogClosure, EthContractWitnesser, EthNumberBloom,
 };
 
 pub struct ContractWitnesser<Contract, StateChainClient> {
