@@ -158,7 +158,6 @@ logs() {
 
 if [ $CI == true ]; then
   echo "CI detected, bypassing setup"
-  echo "$CF_LOCALNET_SIGNING_KEY" > ./localnet/init/secrets/signing_key_file
   build-localnet
   exit 0
 fi

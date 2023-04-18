@@ -59,26 +59,12 @@ jobs:
           echo "deb [arch=$(dpkg --print-architecture)] https://download.docker.com/linux/debian $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
           apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Install sccache
         run: |
           curl -fsSL https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz -o /tmp/sccache.tar.gz && \
           tar -xzf /tmp/sccache.tar.gz -C /tmp && \
           cp /tmp/sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl/sccache /usr/local/cargo/bin/sccache && \
           rm -rf /tmp/sccache.tar.gz /tmp/sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl
-
-      - name: Run Checks
-        run: |
-          docker -v
-          node -v
-          cargo -V
-          sccache --show-stats
 
 #      - name: Build binaries
 #        run: cargo build
@@ -111,7 +97,6 @@ jobs:
           chmod +x chainflip-node chainflip-engine
           echo -n ${{ secrets.CF_LOCALNET_SIGNING_KEY }} > ./localnet/init/secrets/signing_key_file
           echo -n ${{ secrets.CF_LOCALNET_NODE_KEY }} > ./localnet/init/secrets/node_key_file
-          sleep 20
           ./localnet/manage.sh
 
       - name: Check blocks produced
