@@ -16,6 +16,34 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
+    services:
+      bitcoin:
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        image: ghcr.io/chainflip-io/chainflip-bitcoin-regtest:v24.0.1
+        ports:
+          - 8332:8332
+      polkadot:
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v0.9.36-ci
+        ports:
+          # - 30333:30333 # p2p port
+          - 9934:9933 # rpc port
+          - 9945:9944 # ws port
+      geth:
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        image: ghcr.io/chainflip-io/geth:perseverance-rc2-12s-ci
+        ports:
+          - 30303:30303
+          - 30303:30303/udp
+          - 8545:8545
+          - 8546:8546
+          - 8551:8551
     steps:
       - name: Checkout chainflip-backend
         uses: actions/checkout@v3
