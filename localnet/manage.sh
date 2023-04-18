@@ -95,9 +95,15 @@ build-localnet() {
   DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
   while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' ; do
     echo "🚧 Waiting for chainflip-node to start"
+    tail /tmp/chainflip/chainflip-node
     sleep 5
   done
   ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
+  while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:5555' ; do
+    echo "🚒 Waiting for chainflip-engine to start"
+    tail /tmp/chainflip/chainflip-engine
+    sleep 5
+  done
 
   echo
   echo "🚀 Network is live"
@@ -151,9 +157,17 @@ build-localnet-in-ci() {
   DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
   while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' ; do
     echo "🚧 Waiting for chainflip-node to start"
+    tail /tmp/chainflip/chainflip-node
     sleep 5
   done
+
   ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
+  while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:5555' ; do
+    echo "🚒 Waiting for chainflip-engine to start"
+    tail /tmp/chainflip/chainflip-engine
+    sleep 5
+  done
+
 }
 
 destroy() {
