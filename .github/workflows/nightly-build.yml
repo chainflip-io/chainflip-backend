@@ -80,7 +80,6 @@ jobs:
         env:
           BINARIES_LOCATION: ./
           CF_LOCALNET_ETH_PRIVATE_KEY: ${{ secrets.CF_LOCALNET_ETH_PRIVATE_KEY }}
-          CF_LOCALNET_GETH_PASSWORD: ${{ secrets.CF_LOCALNET_GETH_PASSWORD }}
           CF_LOCALNET_NODE_KEY: ${{ secrets.CF_LOCALNET_NODE_KEY }}
           CF_LOCALNET_SIGNING_KEY: ${{ secrets.CF_LOCALNET_SIGNING_KEY }}
         run: ./localnet/manage.sh
