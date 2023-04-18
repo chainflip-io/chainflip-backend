@@ -481,15 +481,15 @@ mod tests {
 		let claim_expired_event_signature =
 			H256::from_str("0x663304ace90be3e42354c18d4edfd7bf69b1868a8bdba7b9e58de9a997d57714")
 				.unwrap();
+
+		const ACCOUNT_ID_HEX: &str =
+			"0x000000000000000000000000000000000000000000000000000000000000a455";
 		match decode_log(
 			claim_expired_event_signature,
 			RawLog {
 				topics: vec![
 					claim_expired_event_signature,
-					H256::from_str(
-						"0x000000000000000000000000000000000000000000000000000000000000a455",
-					)
-					.unwrap(),
+					H256::from_str(ACCOUNT_ID_HEX).unwrap(),
 				],
 				data: hex::decode(
 					"00000000000000000000000000000000000000000000001211ede4974a350000",
@@ -500,13 +500,7 @@ mod tests {
 		.unwrap()
 		{
 			StakeManagerEvent::ClaimExpired { account_id, amount } => {
-				assert_eq!(
-					account_id,
-					AccountId32::from_str(
-						"000000000000000000000000000000000000000000000000000000000000a455"
-					)
-					.unwrap()
-				);
+				assert_eq!(account_id, AccountId32::from_str(ACCOUNT_ID_HEX).unwrap());
 				assert_eq!(amount, 333333333333333311488u128);
 			},
 			_ => panic!("Expected Staking::ClaimExpired, got a different variant"),
