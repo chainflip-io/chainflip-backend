@@ -372,6 +372,7 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 				message: vec![],
 				gas_budget: 0,
 				refund_address: ForeignChainAddress::Eth(Default::default()),
+				source_address: ForeignChainAddress::Eth([0xcf; 20]),
 			}),
 		);
 		assert_eq!(
