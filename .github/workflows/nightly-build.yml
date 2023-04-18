@@ -78,7 +78,7 @@ jobs:
 
       - name: Init localnet
         env:
-          BINARIES_LOCATION: ./target/release
+          BINARIES_LOCATION: ./
         run: ./localnet/manage.sh
 
       - name: Run localnet checks
