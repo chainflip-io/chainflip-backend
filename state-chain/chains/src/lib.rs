@@ -43,6 +43,8 @@ pub mod mocks;
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
 pub trait Chain: Member + Parameter {
+	const NAME: &'static str;
+
 	type ChainBlockNumber: FullCodec
 		+ Member
 		+ Parameter
@@ -52,6 +54,7 @@ pub trait Chain: Member + Parameter {
 		// this is used primarily for tests. We use u32 because it's the smallest block number we
 		// use (and so we can always .into() into a larger type)
 		+ From<u32>
+		+ Into<u64>
 		+ MaxEncodedLen
 		+ Display
 		+ CheckedSub;

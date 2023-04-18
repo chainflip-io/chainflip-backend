@@ -3,7 +3,7 @@ use std::{ops::RangeInclusive, pin::Pin};
 use futures::{stream, Future, Stream};
 use tracing::trace;
 
-use crate::witnesser::BlockNumberable;
+use crate::witnesser::HasBlockNumber;
 
 use futures::StreamExt;
 
@@ -33,7 +33,7 @@ where
 	BlockNumber: PartialOrd + Display + Clone + Copy + Send + 'static,
 	RangeInclusive<BlockNumber>: Iterator<Item = BlockNumber>,
 	HeaderStream: Stream<Item = Header> + 'static + Send,
-	Header: BlockNumberable<BlockNumber = BlockNumber> + 'static + Send,
+	Header: HasBlockNumber<BlockNumber = BlockNumber> + 'static + Send,
 	GetHeaderClosure: Fn(BlockNumber) -> HeaderFut + Send + 'static,
 	HeaderFut: Future<Output = Result<Header>> + Send + Unpin + 'static,
 {
@@ -89,7 +89,7 @@ mod tests {
 		block_number: u64,
 	}
 
-	impl BlockNumberable for MockHeader {
+	impl HasBlockNumber for MockHeader {
 		type BlockNumber = u64;
 
 		fn block_number(&self) -> Self::BlockNumber {
