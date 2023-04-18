@@ -13,7 +13,7 @@ use tracing::{error, info};
 
 use utils::task_scope::{task_scope, ScopedJoinHandle};
 
-use super::{BlockNumberable, ChainBlockNumber, EpochStart};
+use super::{ChainBlockNumber, EpochStart, HasBlockNumber};
 type BlockNumber<Witnesser> = ChainBlockNumber<<Witnesser as EpochWitnesser>::Chain>;
 
 #[async_trait]
@@ -42,23 +42,27 @@ pub trait EpochWitnesser: Send + Sync + 'static {
 	) -> anyhow::Result<()>;
 }
 
-pub type WitnesserAndStream<W> =
-	(W, Pin<Box<dyn Stream<Item = anyhow::Result<<W as EpochWitnesser>::Data>> + Send + 'static>>);
+type StreamToWitness<W> =
+	Pin<Box<dyn Stream<Item = anyhow::Result<<W as EpochWitnesser>::Data>> + Send + 'static>>;
+
+pub enum WitnesserInitResult<W: EpochWitnesser> {
+	Created((W, StreamToWitness<W>)),
+	EpochSkipped,
+}
 
 #[async_trait]
-pub trait EpochWitnesserGenerator: Send {
+pub trait EpochProcessGenerator: Send {
 	type Witnesser: EpochWitnesser;
 
-	// TODO: use a custom enum instead of Option?
 	async fn init(
 		&mut self,
 		epoch: EpochStart<<Self::Witnesser as EpochWitnesser>::Chain>,
-	) -> anyhow::Result<Option<WitnesserAndStream<Self::Witnesser>>>;
+	) -> anyhow::Result<WitnesserInitResult<Self::Witnesser>>;
 }
 
 type WitnesserTask<Witnesser> = ScopedJoinHandle<<Witnesser as EpochWitnesser>::StaticState>;
 
-pub async fn start_epoch_witnesser<Generator>(
+pub async fn start_epoch_process_runner<Generator>(
 	epoch_start_receiver: Arc<
 		Mutex<
 			async_broadcast::Receiver<EpochStart<<Generator::Witnesser as EpochWitnesser>::Chain>>,
@@ -68,7 +72,7 @@ pub async fn start_epoch_witnesser<Generator>(
 	initial_state: <Generator::Witnesser as EpochWitnesser>::StaticState,
 ) -> Result<(), ()>
 where
-	Generator: EpochWitnesserGenerator,
+	Generator: EpochProcessGenerator,
 {
 	task_scope(|scope| {
 		async {
@@ -111,7 +115,7 @@ where
 
 					let (end_witnessing_sender, end_witnessing_receiver) = oneshot::channel();
 
-					if let Some((witnesser, data_stream)) =
+					if let WitnesserInitResult::Created((witnesser, data_stream)) =
 						witnesser_generator.init(epoch_start).await.map_err(|e| {
 							error!("Error while initializing epoch witnesser: {:?}", e);
 						})? {
@@ -192,7 +196,7 @@ pub async fn run_witnesser_block_stream<Witnesser>(
 ) -> Result<Witnesser::StaticState, ()>
 where
 	Witnesser: EpochWitnesser,
-	Witnesser::Data: BlockNumberable<BlockNumber = BlockNumber<Witnesser>>,
+	Witnesser::Data: HasBlockNumber<BlockNumber = BlockNumber<Witnesser>>,
 {
 	// If set, this is the last block to process
 	let mut last_block_number_for_epoch: Option<BlockNumber<Witnesser>> = None;
@@ -303,14 +307,14 @@ mod epoch_witnesser_testing {
 	}
 
 	#[async_trait]
-	impl EpochWitnesserGenerator for TestEpochWitnesserGenerator {
+	impl EpochProcessGenerator for TestEpochWitnesserGenerator {
 		type Witnesser = TestEpochWitnesser;
 
 		async fn init(
 			&mut self,
 			epoch_start: EpochStart<cf_chains::Ethereum>,
-		) -> anyhow::Result<Option<WitnesserAndStream<TestEpochWitnesser>>> {
-			Ok(Some((
+		) -> anyhow::Result<WitnesserInitResult<TestEpochWitnesser>> {
+			Ok(WitnesserInitResult::Created((
 				TestEpochWitnesser {
 					last_processed_block: epoch_start.block_number,
 					processed_blocks_sender: self.processed_blocks_sender.clone(),
@@ -370,7 +374,7 @@ mod epoch_witnesser_testing {
 			TestEpochWitnesserGenerator::new();
 		let mut epoch_starter = EpochStarter { epoch_index: 0, epoch_start_sender };
 
-		tokio::spawn(start_epoch_witnesser(
+		tokio::spawn(start_epoch_process_runner(
 			Arc::new(Mutex::new(epoch_start_receiver)),
 			epoch_witnesser_generator,
 			(),

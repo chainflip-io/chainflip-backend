@@ -6,9 +6,9 @@ use tokio_stream::wrappers::IntervalStream;
 use crate::{
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 	witnesser::{
-		epoch_witnesser::{
-			self, start_epoch_witnesser, EpochWitnesser, EpochWitnesserGenerator,
-			WitnesserAndStream,
+		epoch_process_runner::{
+			self, start_epoch_process_runner, EpochProcessGenerator, EpochWitnesser,
+			WitnesserInitResult,
 		},
 		EpochStart,
 	},
@@ -36,7 +36,7 @@ where
 	EthRpcClient: 'static + EthRpcApi + Clone + Send + Sync,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
-	start_epoch_witnesser(
+	start_epoch_process_runner(
 		Arc::new(Mutex::new(epoch_start_receiver)),
 		ChainDataWitnesserGenerator { eth_rpc, state_chain_client, cfe_settings_update_receiver },
 		EthereumTrackedData::default(),
@@ -75,7 +75,7 @@ where
 		>,
 		state: Self::StaticState,
 	) -> Result<Self::StaticState, ()> {
-		epoch_witnesser::run_witnesser_data_stream(
+		epoch_process_runner::run_witnesser_data_stream(
 			self,
 			data_stream,
 			end_witnessing_receiver,
@@ -126,7 +126,7 @@ struct ChainDataWitnesserGenerator<StateChainClient, EthRpcClient> {
 }
 
 #[async_trait]
-impl<StateChainClient, EthRpcClient> EpochWitnesserGenerator
+impl<StateChainClient, EthRpcClient> EpochProcessGenerator
 	for ChainDataWitnesserGenerator<StateChainClient, EthRpcClient>
 where
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
@@ -136,9 +136,7 @@ where
 	async fn init(
 		&mut self,
 		epoch: EpochStart<Ethereum>,
-	) -> anyhow::Result<
-		Option<WitnesserAndStream<ChainDataWitnesser<StateChainClient, EthRpcClient>>>,
-	> {
+	) -> anyhow::Result<WitnesserInitResult<ChainDataWitnesser<StateChainClient, EthRpcClient>>> {
 		let witnesser = ChainDataWitnesser {
 			state_chain_client: self.state_chain_client.clone(),
 			cfe_settings_update_receiver: self.cfe_settings_update_receiver.clone(),
@@ -150,7 +148,7 @@ where
 			IntervalStream::new(make_periodic_tick(ETH_CHAIN_TRACKING_POLL_INTERVAL, true))
 				.map(|_| Ok(()));
 
-		Ok(Some((witnesser, Box::pin(poll_interval))))
+		Ok(WitnesserInitResult::Created((witnesser, Box::pin(poll_interval))))
 	}
 }
 

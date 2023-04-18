@@ -93,9 +93,9 @@ impl cf_traits::ThresholdSignerNomination for RandomSignerNomination {
 	) -> Option<BTreeSet<Self::SignerId>> {
 		try_select_random_subset(
 			seed_from_hashable(seed),
-			cf_utilities::success_threshold_from_share_count(
-				Validator::authority_count_at_epoch(epoch_index).unwrap_or_default(),
-			) as usize,
+			cf_utilities::success_threshold_from_share_count(Validator::authority_count_at_epoch(
+				epoch_index,
+			)?) as usize,
 			eligible_authorities(
 				epoch_index,
 				&Reputation::validators_suspended_for(&[

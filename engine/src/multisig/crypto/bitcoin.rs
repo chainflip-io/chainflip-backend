@@ -61,6 +61,7 @@ impl CryptoScheme for BtcSigning {
 	type Signature = BtcSchnorrSignature;
 	type AggKey = AggKey;
 	type SigningPayload = SigningPayload;
+	type Chain = cf_chains::Bitcoin;
 
 	const NAME: &'static str = "Bitcoin";
 	const CHAIN_TAG: ChainTag = ChainTag::Bitcoin;

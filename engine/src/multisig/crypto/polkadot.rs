@@ -61,6 +61,7 @@ impl CryptoScheme for PolkadotSigning {
 	type Signature = PolkadotSignature;
 	type AggKey = cf_chains::dot::PolkadotPublicKey;
 	type SigningPayload = SigningPayload;
+	type Chain = cf_chains::Polkadot;
 
 	const NAME: &'static str = "Polkadot";
 	const CHAIN_TAG: ChainTag = ChainTag::Polkadot;

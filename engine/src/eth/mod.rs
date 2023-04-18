@@ -36,7 +36,7 @@ use crate::{
 	witnesser::{
 		block_head_stream_from::block_head_stream_from,
 		http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
-		BlockNumberable,
+		HasBlockNumber,
 	},
 };
 
@@ -68,7 +68,7 @@ pub struct EthNumberBloom {
 	pub base_fee_per_gas: U256,
 }
 
-impl BlockNumberable for EthNumberBloom {
+impl HasBlockNumber for EthNumberBloom {
 	type BlockNumber = u64;
 
 	fn block_number(&self) -> Self::BlockNumber {
