@@ -93,6 +93,8 @@ jobs:
           check_artifacts: true
           if_no_artifact_found: fail
 
+      - run: chmod +x chainflip-node chainflip-engine
+      - run: sleep 100
       - name: Checkout chainflip-bouncer
         uses: actions/checkout@v3
         with:
@@ -106,7 +108,7 @@ jobs:
 
       - name: Init localnet
         env:
-          BINARIES_LOCATION: ./
+          BINARIES_LOCATION: .
           CF_LOCALNET_ETH_PRIVATE_KEY: ${{ secrets.CF_LOCALNET_ETH_PRIVATE_KEY }}
           CF_LOCALNET_NODE_KEY: ${{ secrets.CF_LOCALNET_NODE_KEY }}
           CF_LOCALNET_SIGNING_KEY: ${{ secrets.CF_LOCALNET_SIGNING_KEY }}
