@@ -105,3 +105,5 @@ jobs:
         run: |
           ./tests/produces_blocks.sh
           ./tests/stress_test.sh 2
+          ./commands/setup_vaults.sh
+          ./commands/setup_swaps.sh
