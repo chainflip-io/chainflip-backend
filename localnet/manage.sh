@@ -152,11 +152,7 @@ logs() {
 
 if [ $CI == true ]; then
   echo "CI detected, bypassing setup"
-  echo "$CF_LOCALNET_ETH_PRIVATE_KEY" > ./localnet/init/secrets/eth_private_key_file
-  echo "$CF_LOCALNET_NODE_KEY" > ./localnet/init/secrets/node_key_file
   echo "$CF_LOCALNET_SIGNING_KEY" > ./localnet/init/secrets/signing_key_file
-  ls -al ./localnet/init/secrets
-  cat ./localnet/init/secrets/geth_password
   build-localnet
   exit 0
 fi
