@@ -42,14 +42,15 @@ pub mod any {
 		Ord,
 	)]
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[repr(u32)]
 	pub enum Asset {
 		// 0 is reservered for particular cross chain messaging scenarios where we want to pass
 		// through a message without making a swap.
-		Eth = 1,
-		Flip = 2,
-		Usdc = 3,
-		Dot = 4,
-		Btc = 5,
+		Eth = 1u32,
+		Flip = 2u32,
+		Usdc = 3u32,
+		Dot = 4u32,
+		Btc = 5u32,
 	}
 
 	impl TryFrom<u32> for Asset {
