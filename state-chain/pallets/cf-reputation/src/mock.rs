@@ -1,5 +1,6 @@
 use super::*;
 use crate as pallet_cf_reputation;
+use cf_traits::{impl_mock_chainflip, AccountRoleRegistry, Slashing};
 use frame_support::{construct_runtime, parameter_types};
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
@@ -12,8 +13,6 @@ use sp_std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
-
-use cf_traits::{impl_mock_chainflip, Slashing};
 
 type ValidatorId = u64;
 
@@ -180,6 +179,10 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE)
+			.unwrap();
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB)
+			.unwrap();
 		<Test as Chainflip>::EpochInfo::next_epoch(BTreeSet::from([ALICE]));
 	});
 

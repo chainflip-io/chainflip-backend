@@ -7,7 +7,7 @@ use cf_traits::{
 		address_converter::MockAddressConverter, egress_handler::MockEgressHandler,
 		ingress_handler::MockIngressHandler,
 	},
-	SwappingApi,
+	AccountRoleRegistry, SwappingApi,
 };
 use frame_support::{dispatch::DispatchError, parameter_types, weights::Weight};
 use frame_system as system;
@@ -143,6 +143,9 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_relayer(&ALICE)
+			.unwrap();
+		System::set_block_number(1);
 		System::set_block_number(1);
 	});
 

@@ -14,7 +14,7 @@ use cf_traits::{
 		ceremony_id_provider::MockCeremonyIdProvider, key_provider::MockKeyProvider,
 		signer_nomination::MockNominator,
 	},
-	AsyncResult, KeyProvider, ThresholdSigner,
+	AccountRoleRegistry, AsyncResult, KeyProvider, ThresholdSigner,
 };
 use codec::{Decode, Encode};
 pub use frame_support::{
@@ -185,7 +185,12 @@ impl ExtBuilder {
 
 	pub fn with_authorities(mut self, validators: impl IntoIterator<Item = u64>) -> Self {
 		self.ext.execute_with(|| {
-			MockEpochInfo::set_authorities(validators.into_iter().collect());
+			let validators = BTreeSet::from_iter(validators);
+			for id in &validators {
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
+					.unwrap();
+			}
+			MockEpochInfo::set_authorities(validators);
 		});
 		self
 	}

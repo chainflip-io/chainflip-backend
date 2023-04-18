@@ -3,7 +3,7 @@ use cf_chains::{ApiCall, Chain, ChainCrypto, Ethereum};
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_waived_fees, mocks::time_source,
-	Broadcaster, WaivedFees,
+	AccountRoleRegistry, Broadcaster, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::cell::RefCell;
@@ -204,6 +204,10 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {
+		for id in &[ALICE, BOB, CHARLIE] {
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
+				.unwrap();
+		}
 		System::set_block_number(1);
 	});
 

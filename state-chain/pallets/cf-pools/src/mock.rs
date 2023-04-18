@@ -1,5 +1,5 @@
 use crate::{self as pallet_cf_pools};
-use cf_traits::impl_mock_chainflip;
+use cf_traits::{impl_mock_chainflip, AccountRoleRegistry};
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -81,6 +81,10 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+			&ALICE,
+		)
+		.unwrap();
 	});
 
 	ext

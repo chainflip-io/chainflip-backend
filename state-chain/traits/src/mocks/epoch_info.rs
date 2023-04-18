@@ -1,6 +1,3 @@
-pub type Mock = MockEpochInfo;
-crate::impl_mock_epoch_info!(u64, u128, u32, u32);
-
 #[macro_export]
 macro_rules! impl_mock_epoch_info {
 	($account_id:ty, $balance:ty, $epoch_index:ty, $authority_count:ty $(,)? ) => {

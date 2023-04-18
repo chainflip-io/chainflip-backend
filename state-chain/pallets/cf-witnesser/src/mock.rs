@@ -1,5 +1,5 @@
 use crate::{self as pallet_cf_witness, WitnessDataExtraction};
-use cf_traits::impl_mock_chainflip;
+use cf_traits::{impl_mock_chainflip, AccountRoleRegistry};
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -100,6 +100,10 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		// This is required to log events.
 		System::set_block_number(1);
 		MockEpochInfo::next_epoch(BTreeSet::from(GENESIS_AUTHORITIES));
+		for id in GENESIS_AUTHORITIES.iter().chain(&[DEIRDRE]) {
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
+				.unwrap();
+		}
 	});
 
 	ext

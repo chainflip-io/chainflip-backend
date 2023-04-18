@@ -5,7 +5,7 @@ use cf_traits::{
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotator::MockVaultRotatorA,
 	},
-	AuctionOutcome, SystemStateInfo,
+	AccountRoleRegistry, AuctionOutcome, SystemStateInfo,
 };
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;
@@ -281,6 +281,9 @@ fn register_peer_id() {
 	new_test_ext().execute_with(|| {
 		use sp_core::{Encode, Pair};
 
+		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE).unwrap();
+		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB).unwrap();
+
 		let alice_peer_keypair = sp_core::ed25519::Pair::from_legacy_string("alice", None);
 		let alice_peer_public_key = alice_peer_keypair.public();
 
@@ -296,7 +299,7 @@ fn register_peer_id() {
 			Error::<Test>::InvalidAccountPeerMappingSignature
 		);
 
-		// Non-overlaping peer ids and valid signatures
+		// Non-overlapping peer ids and valid signatures
 		assert_ok!(ValidatorPallet::register_peer_id(
 			RuntimeOrigin::signed(ALICE),
 			alice_peer_public_key,

@@ -15,6 +15,7 @@ use cf_traits::{
 		eth_replay_protection_provider::MockEthReplayProtectionProvider,
 		threshold_signer::MockThresholdSigner,
 	},
+	AccountRoleRegistry,
 };
 use frame_support::{
 	construct_runtime, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
@@ -240,15 +241,23 @@ fn test_ext_inner(key: Option<Vec<u8>>) -> sp_io::TestExternalities {
 		},
 	};
 
-	let authorities = BTreeSet::from([ALICE, BOB, CHARLIE]);
-	MockEpochInfo::set_epoch(GENESIS_EPOCH);
-	MockEpochInfo::set_epoch_authority_count(GENESIS_EPOCH, authorities.len() as AuthorityCount);
-	MockEpochInfo::set_authorities(authorities);
-
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
+		let authorities = BTreeSet::from([ALICE, BOB, CHARLIE]);
+		for id in &authorities {
+			<MockAccountRoleRegistry as AccountRoleRegistry<MockRuntime>>::register_as_validator(
+				id,
+			)
+			.unwrap();
+		}
+		MockEpochInfo::set_epoch(GENESIS_EPOCH);
+		MockEpochInfo::set_epoch_authority_count(
+			GENESIS_EPOCH,
+			authorities.len() as AuthorityCount,
+		);
+		MockEpochInfo::set_authorities(authorities);
 	});
 
 	ext

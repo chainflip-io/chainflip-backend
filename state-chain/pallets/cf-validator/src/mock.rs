@@ -6,7 +6,7 @@ use cf_traits::{
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 		vault_rotator::MockVaultRotatorA,
 	},
-	Bid, RuntimeAuctionOutcome,
+	AccountRoleRegistry, Bid, RuntimeAuctionOutcome,
 };
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -286,31 +286,45 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 	log::debug!("Initializing TestExternalitiesWithCheck with GenesisConfig.");
 
 	TestExternalitiesWithCheck {
-		ext: GenesisConfig {
-			system: SystemConfig::default(),
-			session: SessionConfig {
-				keys: [&GENESIS_AUTHORITIES[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
-					.concat()
-					.iter()
-					.map(|&i| (i, i, UintAuthorityId(i).into()))
-					.collect(),
-			},
-			validator_pallet: ValidatorPalletConfig {
-				genesis_authorities: BTreeSet::from(GENESIS_AUTHORITIES),
-				genesis_backups: Default::default(),
-				blocks_per_epoch: EPOCH_DURATION,
-				bond: GENESIS_BOND,
-				claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
-				backup_reward_node_percentage: 34,
-				authority_set_min_size: MIN_AUTHORITY_SIZE,
-				min_size: MIN_AUTHORITY_SIZE,
-				max_size: MAX_AUTHORITY_SIZE,
-				max_expansion: MAX_AUTHORITY_SET_EXPANSION,
-			},
-		}
-		.build_storage()
-		.unwrap()
-		.into(),
+		ext: {
+			let mut ext: sp_io::TestExternalities = GenesisConfig {
+				system: SystemConfig::default(),
+				session: SessionConfig {
+					keys: [&GENESIS_AUTHORITIES[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
+						.concat()
+						.iter()
+						.map(|&i| (i, i, UintAuthorityId(i).into()))
+						.collect(),
+				},
+				validator_pallet: ValidatorPalletConfig {
+					genesis_authorities: BTreeSet::from(GENESIS_AUTHORITIES),
+					genesis_backups: Default::default(),
+					blocks_per_epoch: EPOCH_DURATION,
+					bond: GENESIS_BOND,
+					claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
+					backup_reward_node_percentage: 34,
+					authority_set_min_size: MIN_AUTHORITY_SIZE,
+					min_size: MIN_AUTHORITY_SIZE,
+					max_size: MAX_AUTHORITY_SIZE,
+					max_expansion: MAX_AUTHORITY_SET_EXPANSION,
+				},
+			}
+			.build_storage()
+			.unwrap()
+			.into();
+
+			ext.execute_with(|| {
+				for account_id in
+					[&GENESIS_AUTHORITIES[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
+						.into_iter()
+						.flatten()
+				{
+					<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(account_id).unwrap();
+				}
+			});
+
+			ext
+		},
 	}
 }
 

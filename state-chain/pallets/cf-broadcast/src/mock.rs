@@ -9,7 +9,7 @@ use cf_chains::{
 use cf_traits::{
 	impl_mock_chainflip,
 	mocks::{signer_nomination::MockNominator, threshold_signer::MockThresholdSigner},
-	EpochKey, KeyState,
+	AccountRoleRegistry, EpochKey, KeyState,
 };
 use codec::{Decode, Encode};
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
@@ -148,7 +148,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
-		MockEpochInfo::next_epoch(BTreeSet::from([1, 2, 3]));
+		MockEpochInfo::next_epoch((0..3).collect());
+		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
+		for id in &MockEpochInfo::current_authorities() {
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
+				.unwrap();
+		}
 	});
 
 	ext

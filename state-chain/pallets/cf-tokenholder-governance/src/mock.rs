@@ -2,7 +2,8 @@ use crate::{self as pallet_cf_tokenholder_governance};
 use cf_chains::{ChainCrypto, Ethereum, ForeignChain};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer,
-	impl_mock_waived_fees, BroadcastAnyChainGovKey, CommKeyBroadcaster, StakeTransfer, WaivedFees,
+	impl_mock_waived_fees, mocks::fee_payment::MockFeePayment, BroadcastAnyChainGovKey,
+	CommKeyBroadcaster, WaivedFees,
 };
 use codec::{Decode, Encode};
 use frame_support::{parameter_types, traits::HandleLifetime};
@@ -30,7 +31,6 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system,
 		TokenholderGovernance: pallet_cf_tokenholder_governance,
-		Flip: pallet_cf_flip,
 	}
 );
 
@@ -147,19 +147,9 @@ impl CommKeyBroadcaster for MockBroadcaster {
 	}
 }
 
-impl pallet_cf_flip::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
-	type Balance = u128;
-	type ExistentialDeposit = ExistentialDeposit;
-	type BlocksPerDay = BlocksPerDay;
-	type StakeHandler = MockStakeHandler;
-	type WeightInfo = ();
-	type WaivedFees = WaivedFeesMock;
-}
-
 impl pallet_cf_tokenholder_governance::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type FeePayment = Flip;
+	type FeePayment = MockFeePayment<Self>;
 	type CommKeyBroadcaster = MockBroadcaster;
 	type AnyChainGovKeyBroadcaster = MockBroadcaster;
 	type WeightInfo = ();
@@ -184,18 +174,17 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		(EVE, 200),
 		(BROKE_PAUL, ProposalFee::get() - 1),
 	];
-	let total_issuance = stakes.iter().map(|(_, stake)| stake).sum();
-	let config = GenesisConfig { system: Default::default(), flip: FlipConfig { total_issuance } };
 
-	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
+	let mut ext: sp_io::TestExternalities =
+		GenesisConfig::default().build_storage().unwrap().into();
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
-		for (account, stake) in stakes {
+		for (account, _) in stakes {
 			frame_system::Provider::<Test>::created(&account).unwrap();
 			assert!(frame_system::Pallet::<Test>::account_exists(&account));
-			<Flip as StakeTransfer>::credit_stake(&account, stake);
 		}
+		MockStakingInfo::<Test>::set_stakes(stakes);
 	});
 
 	ext

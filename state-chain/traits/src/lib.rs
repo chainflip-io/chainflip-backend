@@ -640,8 +640,9 @@ pub trait FeePayment {
 	/// Helper function to mint FLIP to an account.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn mint_to_account(_account_id: &Self::AccountId, _amount: Self::Amount) {
-		unreachable!()
+		unimplemented!()
 	}
+
 	/// Burns an amount of tokens, if the account has enough. Otherwise fails.
 	fn try_burn_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult;
 }

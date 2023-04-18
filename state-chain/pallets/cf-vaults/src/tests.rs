@@ -7,7 +7,7 @@ use cf_chains::eth::Ethereum;
 use cf_test_utilities::{last_event, maybe_last_event};
 use cf_traits::{
 	mocks::{ceremony_id_provider::MockCeremonyIdProvider, threshold_signer::MockThresholdSigner},
-	AsyncResult, Chainflip, EpochInfo, VaultRotator, VaultStatus,
+	AccountRoleRegistry, AsyncResult, Chainflip, EpochInfo, VaultRotator, VaultStatus,
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_std::collections::btree_set::BTreeSet;
@@ -280,6 +280,10 @@ fn only_participants_can_report_keygen_outcome() {
 
 		// Only participants can respond.
 		let non_participant = u64::MAX;
+		<<MockRuntime as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<MockRuntime>>::register_as_validator(
+			&non_participant,
+		)
+		.unwrap();
 		assert!(!ALL_CANDIDATES.contains(&non_participant), "Non-participant is a candidate");
 		assert_noop!(
 			VaultsPallet::report_keygen_outcome(

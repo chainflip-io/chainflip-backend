@@ -1,5 +1,5 @@
 use crate::{mock::*, *};
-use cf_traits::{mocks::epoch_info::MockEpochInfo, offence_reporting::*, EpochInfo, QualifyNode};
+use cf_traits::{offence_reporting::*, EpochInfo, QualifyNode};
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
 
 fn reputation_points(who: &<Test as frame_system::Config>::AccountId) -> ReputationPoints {
@@ -382,7 +382,7 @@ fn we_should_see_missing_nodes_when_not_having_submitted_one_interval() {
 }
 
 #[test]
-fn non_validators_should_not_appear_in_network_state() {
+fn only_authorities_should_appear_in_network_state() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(BOB)));
 		assert_ok!(ReputationPallet::heartbeat(RuntimeOrigin::signed(ALICE)));

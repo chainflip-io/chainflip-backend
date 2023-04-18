@@ -10,17 +10,19 @@ impl MockPallet for MockAccountRoleRegistry {
 	const PREFIX: &'static [u8] = b"MockAccountRoleRegistry";
 }
 
+const ACCOUNT_ROLES: &[u8] = b"AccountRoles";
+
 impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
 	fn register_account_role(
 		account_id: &<T as frame_system::Config>::AccountId,
 		role: AccountRole,
 	) -> sp_runtime::DispatchResult {
-		if <Self as MockPalletStorage>::get_storage::<_, AccountRole>(b"Roles", account_id)
+		if <Self as MockPalletStorage>::get_storage::<_, AccountRole>(ACCOUNT_ROLES, account_id)
 			.is_some()
 		{
 			return Err("Account already registered".into())
 		}
-		<Self as MockPalletStorage>::put_storage(b"Roles", account_id, role);
+		<Self as MockPalletStorage>::put_storage(ACCOUNT_ROLES, account_id, role);
 		Ok(())
 	}
 
@@ -31,7 +33,7 @@ impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
 		match ensure_signed(origin) {
 			Ok(account_id) => {
 				let account_role = <Self as MockPalletStorage>::get_storage::<_, AccountRole>(
-					b"Roles",
+					ACCOUNT_ROLES,
 					account_id.clone(),
 				)
 				.unwrap_or(AccountRole::None);
