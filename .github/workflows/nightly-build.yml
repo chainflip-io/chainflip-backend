@@ -103,4 +103,4 @@ jobs:
         working-directory: bouncer
         run: |
           ./tests/produces_blocks.sh
-          ./tests/stress_test.sh
+          ./tests/stress_test.sh 2
