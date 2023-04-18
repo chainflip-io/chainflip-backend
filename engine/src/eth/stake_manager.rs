@@ -309,6 +309,7 @@ mod tests {
 	// Convenience test for getting the event signatures for easier searching manually for events
 	// with a get_logs query
 	#[test]
+	#[ignore = "for manual use only"]
 	fn generate_signatures() {
 		let contract = StakeManager::new(H160::default()).contract;
 
