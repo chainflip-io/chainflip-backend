@@ -7,9 +7,6 @@ impl crate::EthEnvironmentProvider for MockEthEnvironmentProvider {
 	fn token_address(_asset: Asset) -> Option<EthereumAddress> {
 		Some([0xcf; 20])
 	}
-	fn asset(_token_address: EthereumAddress) -> Option<cf_chains::eth::assets::any::Asset> {
-		None
-	}
 	fn key_manager_address() -> EthereumAddress {
 		[0xcf; 20]
 	}

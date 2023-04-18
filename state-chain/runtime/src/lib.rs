@@ -898,7 +898,10 @@ impl_runtime_apis! {
 			Environment::token_address(Asset::Flip).expect("FLIP token address should exist")
 		}
 		fn cf_eth_asset(token_address: EthereumAddress) -> Option<Asset> {
-			Environment::asset(token_address)
+			use pallet_cf_environment::EthereumSupportedAssets;
+			EthereumSupportedAssets::<Runtime>::iter()
+				.find(|(_, address)| *address == token_address)
+				.map(|(asset, _)| asset)
 		}
 		fn cf_eth_stake_manager_address() -> EthereumAddress {
 			Environment::stake_manager_address()
