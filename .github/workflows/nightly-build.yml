@@ -109,8 +109,8 @@ jobs:
           BINARIES_LOCATION: .
         run: |
           chmod +x chainflip-node chainflip-engine
-          echo -n "${{ secrets.CF_LOCALNET_SIGNING_KEY }}" > ./localnet/init/secrets/signing_key_file
-          echo -n "${{ secrets.CF_LOCALNET_NODE_KEY }}" > ./localnet/init/secrets/node_key_file
+          echo -n ${{ secrets.CF_LOCALNET_SIGNING_KEY }} > ./localnet/init/secrets/signing_key_file
+          echo -n ${{ secrets.CF_LOCALNET_NODE_KEY }} > ./localnet/init/secrets/node_key_file
           ./localnet/manage.sh
 
       - name: Check blocks produced
