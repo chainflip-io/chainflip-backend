@@ -152,7 +152,6 @@ logs() {
 
 if [ $CI == true ]; then
   echo "CI detected, bypassing setup"
-  mkdir localnet/init/secrets
   echo "$CF_LOCALNET_ETH_PRIVATE_KEY" > ./localnet/init/secrets/eth_private_key_file
   echo "$CF_LOCALNET_NODE_KEY" > ./localnet/init/secrets/node_key_file
   echo "$CF_LOCALNET_SIGNING_KEY" > ./localnet/init/secrets/signing_key_file
