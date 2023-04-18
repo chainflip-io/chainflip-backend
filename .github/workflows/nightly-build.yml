@@ -52,13 +52,6 @@ jobs:
         with:
           node-version: 16
 
-      - name: Install docker
-        run: |
-          apt-get update && apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
-          curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
-          echo "deb [arch=$(dpkg --print-architecture)] https://download.docker.com/linux/debian $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
-          apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io
-
       - name: Install sccache
         run: |
           curl -fsSL https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz -o /tmp/sccache.tar.gz && \
@@ -100,8 +93,12 @@ jobs:
           echo -n ${{ secrets.CF_LOCALNET_ETH_PRIVATE_KEY }} > ./localnet/init/secrets/eth_private_key_file
           ./localnet/manage.sh
 
-      - name: Check blocks produced
+      - name: Run HeuteLeiderNicht.exe
         working-directory: bouncer
+        env:
+          POLKADOT_ENDPOINT: ws://polkadot:9944
+          BTC_ENDPOINT: http://bitcoin:8332
+          ETH_ENDPOINT: http://geth:8545
         run: |
           ./tests/produces_blocks.sh
           ./tests/stress_test.sh 2
