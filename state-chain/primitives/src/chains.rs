@@ -32,6 +32,8 @@ macro_rules! chains {
 	}
 }
 
+// !!!!! IMPORTANT !!!!!
+// Do not change these indices.
 chains! {
 	Ethereum = 1,
 	Polkadot = 2,

@@ -43,6 +43,8 @@ pub mod any {
 	)]
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	#[repr(u32)]
+	// !!!!!! IMPORTANT !!!!!!
+	// Do not change these indices.
 	pub enum Asset {
 		// 0 is reservered for particular cross chain messaging scenarios where we want to pass
 		// through a message without making a swap.
