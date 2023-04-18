@@ -1,5 +1,5 @@
 use tracing::{debug, error, info, info_span, warn, Instrument};
-use utils::{context, make_periodic_tick};
+use utils::{context, format_iterator, make_periodic_tick};
 use web3::{
 	api::SubscriptionStream,
 	signing::SecretKeyRef,
@@ -19,14 +19,12 @@ use futures::{
 
 use anyhow::{anyhow, bail, Context, Result};
 
+use super::{redact_secret_eth_node_endpoint, TransportProtocol};
 use crate::{
 	constants::{ETH_DUAL_REQUEST_TIMEOUT, ETH_LOG_REQUEST_TIMEOUT, SYNC_POLL_INTERVAL},
 	settings,
 	witnesser::LatestBlockNumber,
 };
-use utils::format_iterator;
-
-use super::{redact_secret_eth_node_endpoint, TransportProtocol};
 
 use async_trait::async_trait;
 

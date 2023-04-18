@@ -16,13 +16,12 @@ use state_chain_runtime::AccountId;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use tracing::{error, info, info_span, trace, warn, Instrument};
-use utils::read_clean_and_decode_hex_str_file;
 
 use crate::{
 	constants::SIGNED_EXTRINSIC_LIFETIME, settings,
 	state_chain_observer::client::storage_api::StorageApi, stream_utils::EngineTryStreamExt,
 };
-use utils::task_scope::{Scope, ScopedJoinHandle};
+use utils::{ read_clean_and_decode_hex_str_file, task_scope::{Scope, ScopedJoinHandle}};
 
 pub struct StateChainClient<
 	BaseRpcClient = base_rpc_api::BaseRpcClient<jsonrpsee::ws_client::WsClient>,

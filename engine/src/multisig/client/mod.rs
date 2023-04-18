@@ -17,7 +17,7 @@ pub mod ceremony_manager;
 
 use std::collections::BTreeSet;
 
-use ::utils::format_iterator;
+use ::utils::{format_iterator, threshold_from_share_count};
 
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, KeyId};
 use futures::{future::BoxFuture, FutureExt};
@@ -25,7 +25,6 @@ use state_chain_runtime::AccountId;
 
 use serde::{Deserialize, Serialize};
 
-use ::utils::threshold_from_share_count;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, info, info_span, Instrument};
 
@@ -38,7 +37,7 @@ pub use common::{
 };
 
 #[cfg(test)]
-pub use crate::multisig::client::utils::ensure_unsorted;
+pub use self::utils::ensure_unsorted;
 
 #[cfg(test)]
 pub use helpers::get_key_data_for_test;
