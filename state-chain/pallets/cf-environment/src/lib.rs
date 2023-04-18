@@ -551,6 +551,11 @@ impl<T: Config> EthEnvironmentProvider for Pallet<T> {
 	fn token_address(asset: Asset) -> Option<EthereumAddress> {
 		EthereumSupportedAssets::<T>::get(asset)
 	}
+	fn asset(token_address: EthereumAddress) -> Option<Asset> {
+		EthereumSupportedAssets::<T>::iter()
+			.find(|(_, address)| *address == token_address)
+			.map(|(asset, _)| asset)
+	}
 	fn key_manager_address() -> EthereumAddress {
 		EthereumKeyManagerAddress::<T>::get()
 	}

@@ -288,6 +288,7 @@ pub trait EmissionsTrigger {
 /// Provides the environment data for ethereum-like chains.
 pub trait EthEnvironmentProvider {
 	fn token_address(asset: assets::any::Asset) -> Option<EthereumAddress>;
+	fn asset(token_address: EthereumAddress) -> Option<assets::any::Asset>;
 	fn key_manager_address() -> EthereumAddress;
 	fn stake_manager_address() -> EthereumAddress;
 	fn vault_address() -> EthereumAddress;
