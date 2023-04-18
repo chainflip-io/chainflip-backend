@@ -5594,6 +5594,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hex-literal",
+ "pallet-cf-governance",
  "parity-scale-codec",
  "scale-info",
  "sp-core 7.0.0",

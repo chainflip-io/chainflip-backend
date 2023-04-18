@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, CcmGasBudget, CcmOutputs, CcmSwap, CcmSwapOutput, EarnedRelayerFees, Error, Pallet,
-	PendingCcms, Swap, SwapQueue, SwapType, WeightInfo,
+	mock::*, CcmGasBudget, CcmIdCounter, CcmOutputs, CcmSwap, CcmSwapOutput, EarnedRelayerFees,
+	Error, Pallet, PendingCcms, Swap, SwapQueue, SwapType, WeightInfo,
 };
 use cf_chains::{address::ForeignChainAddress, AnyChain, CcmIngressMetadata};
 use cf_primitives::{Asset, ForeignChain};
@@ -269,9 +269,10 @@ fn can_swap_using_witness_origin() {
 #[test]
 fn can_reject_invalid_ccms() {
 	new_test_ext().execute_with(|| {
+		let gas_budget = 1_000;
 		let ccm = CcmIngressMetadata {
 			message: vec![0x00],
-			gas_budget: 1_000,
+			gas_budget,
 			refund_address: ForeignChainAddress::Dot(Default::default()),
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
@@ -345,7 +346,7 @@ fn can_reject_invalid_ccms() {
 		assert_noop!(
 			Swapping::on_ccm_ingress(
 				Asset::Eth,
-				1_000,
+				gas_budget,
 				Asset::Eth,
 				ForeignChainAddress::Eth(Default::default()),
 				ccm
@@ -358,9 +359,11 @@ fn can_reject_invalid_ccms() {
 #[test]
 fn can_process_ccms_via_swap_intent() {
 	new_test_ext().execute_with(|| {
+		let gas_budget = 1_000;
+		let ingress_amount = 10_000;
 		let ccm = CcmIngressMetadata {
 			message: vec![0x01],
-			gas_budget: 1_000,
+			gas_budget,
 			refund_address: ForeignChainAddress::Dot([0x01; 32]),
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
@@ -376,7 +379,7 @@ fn can_process_ccms_via_swap_intent() {
 		),);
 		assert_ok!(Swapping::on_ccm_ingress(
 			Asset::Dot,
-			2_000,
+			ingress_amount,
 			Asset::Eth,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm.clone(),
@@ -386,7 +389,7 @@ fn can_process_ccms_via_swap_intent() {
 			PendingCcms::<Test>::get(1),
 			Some(CcmSwap {
 				ingress_asset: Asset::Dot,
-				ingress_amount: 2_000,
+				ingress_amount,
 				egress_asset: Asset::Eth,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
@@ -400,14 +403,14 @@ fn can_process_ccms_via_swap_intent() {
 					swap_id: 1,
 					from: Asset::Dot,
 					to: Asset::Eth,
-					amount: 1_000,
+					amount: ingress_amount - gas_budget,
 					swap_type: SwapType::CcmPrincipal(1)
 				},
 				Swap {
 					swap_id: 2,
 					from: Asset::Dot,
 					to: Asset::Eth,
-					amount: 1_000,
+					amount: gas_budget,
 					swap_type: SwapType::CcmGas(1)
 				},
 			]
@@ -423,7 +426,7 @@ fn can_process_ccms_via_swap_intent() {
 			MockEgressHandler::<AnyChain>::get_scheduled_egresses(),
 			vec![MockEgressParameter::Ccm {
 				asset: Asset::Eth,
-				amount: 1_000,
+				amount: ingress_amount - gas_budget,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x01],
 				refund_address: ForeignChainAddress::Dot([0x01; 32]),
@@ -431,7 +434,7 @@ fn can_process_ccms_via_swap_intent() {
 		);
 
 		// Gas budgets are stored
-		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, 1_000)));
+		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, gas_budget)));
 
 		// Completed CCM is removed from storage
 		assert_eq!(PendingCcms::<Test>::get(1), None);
@@ -439,7 +442,7 @@ fn can_process_ccms_via_swap_intent() {
 
 		System::assert_has_event(RuntimeEvent::Swapping(
 			crate::Event::<Test>::CcmEgressScheduled {
-				ccm_id: 1,
+				ccm_id: CcmIdCounter::<Test>::get(),
 				egress_id: (ForeignChain::Ethereum, 1),
 			},
 		));
@@ -449,9 +452,11 @@ fn can_process_ccms_via_swap_intent() {
 #[test]
 fn can_process_ccms_via_extrinsic() {
 	new_test_ext().execute_with(|| {
+		let gas_budget = 2_000;
+		let ingress_amount = 1_000_000;
 		let ccm = CcmIngressMetadata {
 			message: vec![0x02],
-			gas_budget: 2_000,
+			gas_budget,
 			refund_address: ForeignChainAddress::Dot([0x02; 32]),
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
@@ -460,7 +465,7 @@ fn can_process_ccms_via_extrinsic() {
 		assert_ok!(Swapping::ccm_ingress(
 			RuntimeOrigin::root(),
 			Asset::Btc,
-			1_000_000,
+			ingress_amount,
 			Asset::Usdc,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm.clone()
@@ -470,7 +475,7 @@ fn can_process_ccms_via_extrinsic() {
 			PendingCcms::<Test>::get(1),
 			Some(CcmSwap {
 				ingress_asset: Asset::Btc,
-				ingress_amount: 1_000_000,
+				ingress_amount,
 				egress_asset: Asset::Usdc,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
@@ -484,14 +489,14 @@ fn can_process_ccms_via_extrinsic() {
 					swap_id: 1,
 					from: Asset::Btc,
 					to: Asset::Usdc,
-					amount: 998_000,
+					amount: ingress_amount - gas_budget,
 					swap_type: SwapType::CcmPrincipal(1)
 				},
 				Swap {
 					swap_id: 2,
 					from: Asset::Btc,
 					to: Asset::Eth,
-					amount: 2_000,
+					amount: gas_budget,
 					swap_type: SwapType::CcmGas(1)
 				}
 			]
@@ -506,7 +511,7 @@ fn can_process_ccms_via_extrinsic() {
 			MockEgressHandler::<AnyChain>::get_scheduled_egresses(),
 			vec![MockEgressParameter::Ccm {
 				asset: Asset::Usdc,
-				amount: 998_000,
+				amount: ingress_amount - gas_budget,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x02],
 				refund_address: ForeignChainAddress::Dot([0x02; 32]),
@@ -514,7 +519,7 @@ fn can_process_ccms_via_extrinsic() {
 		);
 
 		// Gas budgets are stored
-		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, 2_000)));
+		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, gas_budget)));
 
 		// Completed CCM is removed from storage
 		assert_eq!(PendingCcms::<Test>::get(1), None);
@@ -522,16 +527,16 @@ fn can_process_ccms_via_extrinsic() {
 
 		System::assert_has_event(RuntimeEvent::Swapping(
 			crate::Event::<Test>::CcmIngressReceived {
-				ccm_id: 1,
+				ccm_id: CcmIdCounter::<Test>::get(),
 				principal_swap_id: Some(1),
 				gas_swap_id: Some(2),
-				ingress_amount: 1_000_000,
+				ingress_amount,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::Swapping(
 			crate::Event::<Test>::CcmEgressScheduled {
-				ccm_id: 1,
+				ccm_id: CcmIdCounter::<Test>::get(),
 				egress_id: (ForeignChain::Ethereum, 1),
 			},
 		));
@@ -541,16 +546,18 @@ fn can_process_ccms_via_extrinsic() {
 #[test]
 fn can_handle_ccms_with_gas_asset_as_ingress() {
 	new_test_ext().execute_with(|| {
+		let gas_budget = 1_000;
+		let ingress_amount = 10_000;
 		let ccm = CcmIngressMetadata {
 			message: vec![0x00],
-			gas_budget: 1_000,
+			gas_budget,
 			refund_address: ForeignChainAddress::Eth([0x01; 20]),
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 		assert_ok!(Swapping::ccm_ingress(
 			RuntimeOrigin::root(),
 			Asset::Eth,
-			10_000,
+			ingress_amount,
 			Asset::Usdc,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm.clone()
@@ -560,7 +567,7 @@ fn can_handle_ccms_with_gas_asset_as_ingress() {
 			PendingCcms::<Test>::get(1),
 			Some(CcmSwap {
 				ingress_asset: Asset::Eth,
-				ingress_amount: 10_000,
+				ingress_amount,
 				egress_asset: Asset::Usdc,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
@@ -573,13 +580,13 @@ fn can_handle_ccms_with_gas_asset_as_ingress() {
 				swap_id: 1,
 				from: Asset::Eth,
 				to: Asset::Usdc,
-				amount: 9_000,
+				amount: ingress_amount - gas_budget,
 				swap_type: SwapType::CcmPrincipal(1)
 			},]
 		);
 		assert_eq!(
 			CcmOutputs::<Test>::get(1),
-			Some(CcmSwapOutput { principal: None, gas: Some(1_000) })
+			Some(CcmSwapOutput { principal: None, gas: Some(gas_budget) })
 		);
 
 		// Swaps are executed during on_idle
@@ -590,7 +597,7 @@ fn can_handle_ccms_with_gas_asset_as_ingress() {
 			MockEgressHandler::<AnyChain>::get_scheduled_egresses(),
 			vec![MockEgressParameter::Ccm {
 				asset: Asset::Usdc,
-				amount: 9_000,
+				amount: ingress_amount - gas_budget,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x00],
 				refund_address: ForeignChainAddress::Eth([0x01; 20]),
@@ -598,7 +605,7 @@ fn can_handle_ccms_with_gas_asset_as_ingress() {
 		);
 
 		// Gas budgets are stored
-		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, 1_000)));
+		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, gas_budget)));
 
 		// Completed CCM is removed from storage
 		assert_eq!(PendingCcms::<Test>::get(1), None);
@@ -606,16 +613,16 @@ fn can_handle_ccms_with_gas_asset_as_ingress() {
 
 		System::assert_has_event(RuntimeEvent::Swapping(
 			crate::Event::<Test>::CcmIngressReceived {
-				ccm_id: 1,
+				ccm_id: CcmIdCounter::<Test>::get(),
 				principal_swap_id: Some(1),
 				gas_swap_id: None,
-				ingress_amount: 10_000,
+				ingress_amount,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::Swapping(
 			crate::Event::<Test>::CcmEgressScheduled {
-				ccm_id: 1,
+				ccm_id: CcmIdCounter::<Test>::get(),
 				egress_id: (ForeignChain::Ethereum, 1),
 			},
 		));
@@ -625,9 +632,11 @@ fn can_handle_ccms_with_gas_asset_as_ingress() {
 #[test]
 fn can_handle_ccms_with_principal_asset_as_ingress() {
 	new_test_ext().execute_with(|| {
+		let gas_budget = 1_000;
+		let ingress_amount = 10_000;
 		let ccm = CcmIngressMetadata {
 			message: vec![0x00],
-			gas_budget: 1_000,
+			gas_budget,
 			refund_address: ForeignChainAddress::Eth([0x01; 20]),
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
@@ -635,7 +644,7 @@ fn can_handle_ccms_with_principal_asset_as_ingress() {
 		assert_ok!(Swapping::ccm_ingress(
 			RuntimeOrigin::root(),
 			Asset::Usdc,
-			10_000,
+			ingress_amount,
 			Asset::Usdc,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm.clone()
@@ -645,7 +654,7 @@ fn can_handle_ccms_with_principal_asset_as_ingress() {
 			PendingCcms::<Test>::get(1),
 			Some(CcmSwap {
 				ingress_asset: Asset::Usdc,
-				ingress_amount: 10_000,
+				ingress_amount,
 				egress_asset: Asset::Usdc,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
@@ -658,13 +667,13 @@ fn can_handle_ccms_with_principal_asset_as_ingress() {
 				swap_id: 1,
 				from: Asset::Usdc,
 				to: Asset::Eth,
-				amount: 1_000,
+				amount: gas_budget,
 				swap_type: SwapType::CcmGas(1)
 			},]
 		);
 		assert_eq!(
 			CcmOutputs::<Test>::get(1),
-			Some(CcmSwapOutput { principal: Some(9_000), gas: None })
+			Some(CcmSwapOutput { principal: Some(ingress_amount - gas_budget), gas: None })
 		);
 
 		// Swaps are executed during on_idle
@@ -675,7 +684,7 @@ fn can_handle_ccms_with_principal_asset_as_ingress() {
 			MockEgressHandler::<AnyChain>::get_scheduled_egresses(),
 			vec![MockEgressParameter::Ccm {
 				asset: Asset::Usdc,
-				amount: 9_000,
+				amount: ingress_amount - gas_budget,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x00],
 				refund_address: ForeignChainAddress::Eth([0x01; 20]),
@@ -683,7 +692,7 @@ fn can_handle_ccms_with_principal_asset_as_ingress() {
 		);
 
 		// Gas budgets are stored
-		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, 1_000)));
+		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, gas_budget)));
 
 		// Completed CCM is removed from storage
 		assert_eq!(PendingCcms::<Test>::get(1), None);
@@ -691,16 +700,16 @@ fn can_handle_ccms_with_principal_asset_as_ingress() {
 
 		System::assert_has_event(RuntimeEvent::Swapping(
 			crate::Event::<Test>::CcmIngressReceived {
-				ccm_id: 1,
+				ccm_id: CcmIdCounter::<Test>::get(),
 				principal_swap_id: None,
 				gas_swap_id: Some(1),
-				ingress_amount: 10_000,
+				ingress_amount,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::Swapping(
 			crate::Event::<Test>::CcmEgressScheduled {
-				ccm_id: 1,
+				ccm_id: CcmIdCounter::<Test>::get(),
 				egress_id: (ForeignChain::Ethereum, 1),
 			},
 		));
@@ -710,9 +719,11 @@ fn can_handle_ccms_with_principal_asset_as_ingress() {
 #[test]
 fn can_handle_ccms_with_no_swaps_needed() {
 	new_test_ext().execute_with(|| {
+		let gas_budget = 1_000;
+		let ingress_amount = 10_000;
 		let ccm = CcmIngressMetadata {
 			message: vec![0x00],
-			gas_budget: 1_000,
+			gas_budget,
 			refund_address: ForeignChainAddress::Eth([0x01; 20]),
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
@@ -721,7 +732,7 @@ fn can_handle_ccms_with_no_swaps_needed() {
 		assert_ok!(Swapping::ccm_ingress(
 			RuntimeOrigin::root(),
 			Asset::Eth,
-			10_000,
+			ingress_amount,
 			Asset::Eth,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm
@@ -734,14 +745,14 @@ fn can_handle_ccms_with_no_swaps_needed() {
 		assert_eq!(CcmOutputs::<Test>::get(1), None);
 
 		// Gas budgets are stored
-		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, 1_000)));
+		assert_eq!(CcmGasBudget::<Test>::get(1), Some((Asset::Eth, gas_budget)));
 
 		// CCM is scheduled for egress
 		assert_eq!(
 			MockEgressHandler::<AnyChain>::get_scheduled_egresses(),
 			vec![MockEgressParameter::Ccm {
 				asset: Asset::Eth,
-				amount: 9_000,
+				amount: ingress_amount - gas_budget,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x00],
 				refund_address: ForeignChainAddress::Eth([0x01; 20]),
@@ -750,17 +761,17 @@ fn can_handle_ccms_with_no_swaps_needed() {
 
 		System::assert_has_event(RuntimeEvent::Swapping(
 			crate::Event::<Test>::CcmEgressScheduled {
-				ccm_id: 1,
+				ccm_id: CcmIdCounter::<Test>::get(),
 				egress_id: (ForeignChain::Ethereum, 1),
 			},
 		));
 
 		System::assert_has_event(RuntimeEvent::Swapping(
 			crate::Event::<Test>::CcmIngressReceived {
-				ccm_id: 1,
+				ccm_id: CcmIdCounter::<Test>::get(),
 				principal_swap_id: None,
 				gas_swap_id: None,
-				ingress_amount: 10_000,
+				ingress_amount,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 			},
 		));

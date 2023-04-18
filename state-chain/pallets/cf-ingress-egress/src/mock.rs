@@ -20,7 +20,7 @@ use cf_traits::{
 	impl_mock_callback,
 	mocks::{
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
-		ccm_hanlder::MockCcmHandler,
+		ccm_handler::MockCcmHandler,
 	},
 	IngressHandler,
 };

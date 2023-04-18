@@ -1,5 +1,11 @@
 {
     "search.exclude": {
         "**/target": true
-    }
+    },
+    "rust-analyzer.linkedProjects": [
+        "./state-chain/traits/Cargo.toml",
+        "./state-chain/traits/Cargo.toml",
+        "./state-chain/traits/Cargo.toml",
+        "./state-chain/traits/Cargo.toml"
+    ]
 }
