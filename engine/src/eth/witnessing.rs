@@ -16,9 +16,9 @@ use crate::{
 	multisig::PersistentKeyDB,
 	settings,
 	state_chain_observer::{client::StateChainClient, EthAddressToMonitorSender},
-	task_scope::Scope,
 	witnesser::{AddressMonitor, EpochStart},
 };
+use utils::task_scope::Scope;
 
 use super::{
 	chain_data_witnesser,

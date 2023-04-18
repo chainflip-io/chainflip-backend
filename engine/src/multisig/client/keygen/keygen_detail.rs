@@ -487,7 +487,7 @@ impl<P: ECPoint> DKGUnverifiedCommitment<P> {
 #[cfg(test)]
 mod tests {
 
-	use utilities::assert_ok;
+	use utils::assert_ok;
 
 	use crate::multisig::eth::EthSigning;
 

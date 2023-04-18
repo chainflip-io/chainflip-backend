@@ -19,13 +19,12 @@ pub mod witnessing;
 
 use anyhow::{anyhow, Context, Result};
 
+use ::utils::{make_periodic_tick, read_clean_and_decode_hex_str_file};
 use cf_primitives::EpochIndex;
 use regex::Regex;
 use tracing::{debug, info_span, Instrument};
-use utilities::make_periodic_tick;
 
 use crate::{
-	common::read_clean_and_decode_hex_str_file,
 	constants::ETH_BLOCK_SAFETY_MARGIN,
 	eth::{
 		merged_block_stream::merged_block_stream,

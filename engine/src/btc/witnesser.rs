@@ -258,7 +258,7 @@ mod tests {
 
 		let (epoch_starts_sender, epoch_starts_receiver) = async_broadcast::broadcast(1);
 
-		let (_dir, db_path) = crate::testing::new_temp_directory_with_nonexistent_file();
+		let (_dir, db_path) = utils::testing::new_temp_directory_with_nonexistent_file();
 		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
 
 		epoch_starts_sender

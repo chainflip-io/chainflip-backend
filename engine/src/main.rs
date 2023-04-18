@@ -19,9 +19,9 @@ use chainflip_engine::{
 		self,
 		client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	},
-	task_scope::task_scope,
 	witnesser::AddressMonitor,
 };
+use utils::task_scope::task_scope;
 
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
@@ -37,7 +37,7 @@ async fn main() -> anyhow::Result<()> {
 
 	// Note: the greeting should only be printed in normal mode (i.e. not for short-lived commands
 	// like `--version`), so we execute it only after the settings have been parsed.
-	utilities::print_starting!();
+	utils::print_starting!();
 
 	logging::init_json_logger();
 

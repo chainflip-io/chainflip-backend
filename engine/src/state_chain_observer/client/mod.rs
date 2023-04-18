@@ -18,11 +18,11 @@ use tokio::sync::{mpsc, oneshot};
 use tracing::{error, info, info_span, trace, warn, Instrument};
 
 use crate::{
-	common::read_clean_and_decode_hex_str_file,
-	constants::SIGNED_EXTRINSIC_LIFETIME,
-	settings,
-	state_chain_observer::client::storage_api::StorageApi,
-	stream_utils::EngineTryStreamExt,
+	constants::SIGNED_EXTRINSIC_LIFETIME, settings,
+	state_chain_observer::client::storage_api::StorageApi, stream_utils::EngineTryStreamExt,
+};
+use utils::{
+	read_clean_and_decode_hex_str_file,
 	task_scope::{Scope, ScopedJoinHandle},
 };
 

@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use futures::{stream, FutureExt, Stream, StreamExt};
 use tracing::{debug, trace, warn};
-use utilities::make_periodic_tick;
+use utils::make_periodic_tick;
 
 use crate::{
 	constants::{
@@ -206,7 +206,7 @@ mod merged_stream_tests {
 
 	use std::time::Duration;
 
-	use utilities::assert_future_panics;
+	use utils::assert_future_panics;
 
 	async fn test_merged_stream_interleaving<Block: HasBlockNumber + PartialEq + Debug + Send>(
 		interleaved_blocks: Vec<(Block, TransportProtocol)>,

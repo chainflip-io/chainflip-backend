@@ -1018,6 +1018,7 @@ dependencies = [
  "sp-finality-grandpa",
  "state-chain-runtime",
  "tiny-bip39 1.0.0",
+ "utilities",
  "zeroize",
 ]
 
@@ -10838,11 +10839,15 @@ name = "utilities"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-channel",
  "futures",
  "hex",
+ "itertools",
  "lazy_format",
  "mockall",
  "predicates",
+ "serde",
+ "tempfile",
  "tokio",
 ]
 
