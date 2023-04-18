@@ -1,6 +1,8 @@
 use codec::{Decode, Encode, MaxEncodedLen};
 use primitive_types::{U256, U512};
 use scale_info::TypeInfo;
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
 
 pub const ONE_IN_HUNDREDTH_PIPS: u32 = 1000000;
 
@@ -27,6 +29,7 @@ impl core::ops::Not for Side {
 }
 
 #[derive(Copy, Clone, Default, Debug, TypeInfo, PartialEq, Eq, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct SideMap<T> {
 	zero: T,
 	one: T,

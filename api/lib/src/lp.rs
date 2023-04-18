@@ -1,10 +1,12 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Result};
-use cf_chains::ForeignChainAddress;
-use cf_primitives::{
-	AccountRole, AmmRange, Asset, AssetAmount, EgressId, Liquidity, PoolAssetMap, Tick,
+pub use cf_amm::{
+	common::{SideMap, Tick},
+	range_orders::Liquidity,
 };
+use cf_chains::ForeignChainAddress;
+use cf_primitives::{AccountRole, Asset, AssetAmount, EgressId};
 use chainflip_engine::{
 	settings,
 	state_chain_observer::client::{
@@ -13,6 +15,7 @@ use chainflip_engine::{
 	},
 	task_scope::task_scope,
 };
+pub use core::ops::Range;
 use futures::FutureExt;
 use serde::Serialize;
 
@@ -98,7 +101,7 @@ pub async fn get_balances(
 	.await
 }
 
-pub async fn get_positions(
+pub async fn get_range_orders(
 	state_chain_settings: &settings::StateChain,
 ) -> Result<HashMap<Asset, Vec<(Tick, Tick, Liquidity)>>> {
 	task_scope(|scope| {
@@ -135,20 +138,20 @@ pub async fn get_positions(
 
 #[derive(Serialize)]
 pub struct MintPositionReturn {
-	assets_debited: PoolAssetMap<AssetAmount>,
-	fees_harvested: PoolAssetMap<AssetAmount>,
+	assets_debited: SideMap<AssetAmount>,
+	collected_fees: SideMap<AssetAmount>,
 }
 
-pub async fn mint_position(
+pub async fn mint_range_order(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
-	range: AmmRange,
+	range: Range<Tick>,
 	amount: Liquidity,
 ) -> Result<MintPositionReturn> {
 	task_scope(|scope| {
 		async {
 			// Connect to State Chain
-			let (latest_block_hash, block_stream, state_chain_client) = StateChainClient::new(
+			let (_, block_stream, state_chain_client) = StateChainClient::new(
 				scope,
 				state_chain_settings,
 				AccountRole::LiquidityProvider,
@@ -156,15 +159,12 @@ pub async fn mint_position(
 			)
 			.await?;
 
-			// Find the current position and calculate new target amount
-			let liquidity_target =
-				get_liquidity_at_position(&state_chain_client, asset, range, latest_block_hash)
-					.await
-					.unwrap_or_default()
-					.saturating_add(amount);
-
-			// Submit the update of the position
-			let call = pallet_cf_lp::Call::update_position { asset, range, liquidity_target };
+			// Submit the mint order
+			let call = pallet_cf_pools::Call::collect_and_mint_range_order {
+				unstable_asset: asset,
+				range,
+				liquidity: amount,
+			};
 			let (_tx_hash, events) = submit_and_ensure_success(
 				&state_chain_client,
 				Box::new(block_stream).as_mut(),
@@ -177,12 +177,12 @@ pub async fn mint_position(
 				.into_iter()
 				.find_map(|event| match event {
 					state_chain_runtime::RuntimeEvent::LiquidityPools(
-						pallet_cf_pools::Event::LiquidityMinted {
+						pallet_cf_pools::Event::RangeOrderMinted {
 							assets_debited,
-							fees_harvested,
+							collected_fees,
 							..
 						},
-					) => Some(MintPositionReturn { assets_debited, fees_harvested }),
+					) => Some(MintPositionReturn { assets_debited, collected_fees }),
 					_ => None,
 				})
 				.expect("LiquidityMinted must have been generated"))
@@ -194,20 +194,20 @@ pub async fn mint_position(
 
 #[derive(Serialize)]
 pub struct BurnPositionReturn {
-	assets_returned: PoolAssetMap<AssetAmount>,
-	fees_harvested: PoolAssetMap<AssetAmount>,
+	assets_credited: SideMap<AssetAmount>,
+	collected_fees: SideMap<AssetAmount>,
 }
 
-pub async fn burn_position(
+pub async fn burn_range_order(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
-	range: AmmRange,
+	range: Range<Tick>,
 	amount: Liquidity,
 ) -> Result<BurnPositionReturn> {
 	task_scope(|scope| {
 		async {
 			// Connect to State Chain
-			let (latest_block_hash, block_stream, state_chain_client) = StateChainClient::new(
+			let (_latest_block_hash, block_stream, state_chain_client) = StateChainClient::new(
 				scope,
 				state_chain_settings,
 				AccountRole::LiquidityProvider,
@@ -215,15 +215,20 @@ pub async fn burn_position(
 			)
 			.await?;
 
+			// TODO: Re-enable this check after #3082 in implemented
 			// Find the current position and calculate new target amount
-			let liquidity_target =
-				get_liquidity_at_position(&state_chain_client, asset, range, latest_block_hash)
-					.await?
-					.checked_sub(amount)
-					.ok_or(anyhow!("Insufficient minted liquidity at position"))?;
+			// if get_liquidity_at_position(&state_chain_client, asset, range, latest_block_hash)
+			// 	.await? < amount
+			// {
+			// 	bail!("Insufficient minted liquidity at position");
+			// }
 
-			// Submit the update of the position
-			let call = pallet_cf_lp::Call::update_position { asset, range, liquidity_target };
+			// Submit the burn call
+			let call = pallet_cf_pools::Call::collect_and_burn_range_order {
+				unstable_asset: asset,
+				range,
+				liquidity: amount,
+			};
 			let (_tx_hash, events) = submit_and_ensure_success(
 				&state_chain_client,
 				Box::new(block_stream).as_mut(),
@@ -236,12 +241,12 @@ pub async fn burn_position(
 				.into_iter()
 				.find_map(|event| match event {
 					state_chain_runtime::RuntimeEvent::LiquidityPools(
-						pallet_cf_pools::Event::LiquidityBurned {
-							assets_returned,
-							fees_harvested,
+						pallet_cf_pools::Event::RangeOrderBurned {
+							assets_credited,
+							collected_fees,
 							..
 						},
-					) => Some(BurnPositionReturn { assets_returned, fees_harvested }),
+					) => Some(BurnPositionReturn { assets_credited, collected_fees }),
 					_ => None,
 				})
 				.expect("LiquidityBurned must have been generated"))
@@ -251,10 +256,11 @@ pub async fn burn_position(
 	.await
 }
 
+#[allow(dead_code)]
 async fn get_liquidity_at_position(
 	state_chain_client: &Arc<StateChainClient>,
 	asset: Asset,
-	range: AmmRange,
+	range: Range<Tick>,
 	at: state_chain_runtime::Hash,
 ) -> Result<AssetAmount> {
 	state_chain_client
@@ -262,8 +268,8 @@ async fn get_liquidity_at_position(
 		.pool_minted_positions(state_chain_client.account_id(), asset, at)
 		.await?
 		.iter()
-		.find_map(|(lower, upper, current_amount)| {
-			if lower == &range.lower && upper == &range.upper {
+		.find_map(|(start, end, current_amount)| {
+			if start == &range.start && end == &range.end {
 				Some(*current_amount)
 			} else {
 				None

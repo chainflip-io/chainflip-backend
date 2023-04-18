@@ -98,7 +98,7 @@ Return:
 
 - Egress id
 
-### `lp_mintPosition`
+### `lp_mintRangeOrder`
 
 Parameters:
 
@@ -116,7 +116,7 @@ Return:
   - Asset_0
   - Asset_1
 
-### `lp_burnPosition`
+### `lp_burnRangeOrder`
 
 Parameters:
 
@@ -144,7 +144,7 @@ Return:
 
 - A list of all assets and their free balance in json format
 
-### `lp_positions`
+### `lp_getRangeOrders`
 
 Parameters:
 
@@ -152,7 +152,9 @@ None
 
 Return:
 
-- A list of all assets and their positions in json format
+Note: This functionality is not implemented yet.
+
+- A list of all assets and their range order positions in json format
 
 -------------
 

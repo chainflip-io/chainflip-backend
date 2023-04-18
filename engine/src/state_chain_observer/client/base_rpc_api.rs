@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 
 use anyhow::Context;
-use cf_primitives::{Asset, Liquidity, Tick};
+use cf_amm::{common::Tick, range_orders::Liquidity};
+use cf_primitives::Asset;
 use jsonrpsee::{
 	core::{
 		client::{ClientT, SubscriptionClientT},
@@ -18,7 +19,7 @@ use sp_version::RuntimeVersion;
 use state_chain_runtime::SignedBlock;
 
 use codec::Encode;
-use custom_rpc::{CustomApiClient, PoolsApiClient};
+use custom_rpc::CustomApiClient;
 use sc_rpc_api::{
 	author::AuthorApiClient, chain::ChainApiClient, state::StateApiClient, system::SystemApiClient,
 };
@@ -30,7 +31,6 @@ use crate::settings;
 
 pub trait RawRpcApi:
 	CustomApiClient
-	+ PoolsApiClient
 	+ SystemApiClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>
 	+ StateApiClient<state_chain_runtime::Hash>
 	+ AuthorApiClient<
@@ -49,7 +49,6 @@ impl<
 		T: SubscriptionClientT
 			+ ClientT
 			+ CustomApiClient
-			+ PoolsApiClient
 			+ SystemApiClient<state_chain_runtime::Hash, state_chain_runtime::BlockNumber>
 			+ StateApiClient<state_chain_runtime::Hash>
 			+ AuthorApiClient<
@@ -211,10 +210,12 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 
 	async fn pool_minted_positions(
 		&self,
-		lp: AccountId32,
-		asset: Asset,
-		at: state_chain_runtime::Hash,
+		_lp: AccountId32,
+		_asset: Asset,
+		_at: state_chain_runtime::Hash,
 	) -> RpcResult<Vec<(Tick, Tick, Liquidity)>> {
-		self.raw_rpc_client.cf_pool_minted_positions(lp, asset, Some(at)).await
+		// TODO: Add function that gets minted range and limit orders #3082
+		//self.raw_rpc_client.cf_pool_minted_positions(lp, asset, Some(at)).await
+		Err(jsonrpsee::core::Error::Custom("Not implemented".to_string()))
 	}
 }

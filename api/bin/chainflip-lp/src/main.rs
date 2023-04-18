@@ -1,9 +1,10 @@
 use base58::FromBase58;
 use chainflip_api::{
-	self, lp,
+	self,
+	lp::{self, Liquidity, Tick},
 	primitives::{
-		AccountRole, AmmRange, Asset, AssetAmount, BitcoinAddress, BitcoinAddressData,
-		BitcoinAddressFor, ForeignChainAddress, Liquidity, Tick,
+		AccountRole, Asset, AssetAmount, BitcoinAddress, BitcoinAddressData, BitcoinAddressFor,
+		ForeignChainAddress,
 	},
 	settings::StateChain,
 };
@@ -13,7 +14,7 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	server::ServerBuilder,
 };
-use std::path::PathBuf;
+use std::{ops::Range, path::PathBuf};
 use utilities::{clean_dot_address, clean_eth_address};
 
 #[rpc(server, client, namespace = "lp")]
@@ -32,8 +33,8 @@ pub trait Rpc {
 		egress_address: &str,
 	) -> Result<String, Error>;
 
-	#[method(name = "mintPosition")]
-	async fn mint_position(
+	#[method(name = "mintRangeOrder")]
+	async fn mint_range_order(
 		&self,
 		asset: Asset,
 		lower_tick: Tick,
@@ -41,8 +42,8 @@ pub trait Rpc {
 		amount: Liquidity,
 	) -> Result<String, Error>;
 
-	#[method(name = "burnPosition")]
-	async fn burn_position(
+	#[method(name = "burnRangeOrder")]
+	async fn burn_range_order(
 		&self,
 		asset: Asset,
 		lower_tick: Tick,
@@ -53,8 +54,8 @@ pub trait Rpc {
 	#[method(name = "tokenBalances")]
 	async fn token_balances(&self) -> Result<String, Error>;
 
-	#[method(name = "positions")]
-	async fn positions(&self) -> Result<String, Error>;
+	#[method(name = "getRangeOrders")]
+	async fn get_range_orders(&self) -> Result<String, Error>;
 }
 
 pub struct RpcServerImpl {
@@ -128,49 +129,49 @@ impl RpcServer for RpcServerImpl {
 			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
-	/// Returns a list of all assets and their positions in json format
-	async fn positions(&self) -> Result<String, Error> {
-		lp::get_positions(&self.state_chain_settings)
+	/// Returns a list of all assets and their range order positions in json format
+	async fn get_range_orders(&self) -> Result<String, Error> {
+		lp::get_range_orders(&self.state_chain_settings)
 			.await
 			.map(|positions| {
-				serde_json::to_string(&positions).expect("Should output positions as json")
+				serde_json::to_string(&positions).expect("Should output range orders as json")
 			})
 			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
-	/// Creates or adds liquidity to a position.
+	/// Creates or adds liquidity to a range order.
 	/// Returns the assets debited and fees harvested.
-	async fn mint_position(
+	async fn mint_range_order(
 		&self,
 		asset: Asset,
-		lower: Tick,
-		upper: Tick,
+		start: Tick,
+		end: Tick,
 		amount: Liquidity,
 	) -> Result<String, Error> {
-		if lower >= upper {
+		if start >= end {
 			return Err(Error::Custom("Invalid tick range".to_string()))
 		}
 
-		lp::mint_position(&self.state_chain_settings, asset, AmmRange { lower, upper }, amount)
+		lp::mint_range_order(&self.state_chain_settings, asset, Range { start, end }, amount)
 			.await
 			.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
 			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
-	/// Removes liquidity from a position.
+	/// Removes liquidity from a rage order.
 	/// Returns the assets returned and fees harvested.
-	async fn burn_position(
+	async fn burn_range_order(
 		&self,
 		asset: Asset,
-		lower: Tick,
-		upper: Tick,
+		start: Tick,
+		end: Tick,
 		amount: Liquidity,
 	) -> Result<String, Error> {
-		if lower >= upper {
+		if start >= end {
 			return Err(Error::Custom("Invalid tick range".to_string()))
 		}
 
-		lp::burn_position(&self.state_chain_settings, asset, AmmRange { lower, upper }, amount)
+		lp::burn_range_order(&self.state_chain_settings, asset, Range { start, end }, amount)
 			.await
 			.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
 			.map_err(|e| Error::Custom(e.to_string()))
