@@ -79,6 +79,7 @@ build-localnet() {
   if [ -z $CI ]; then
     docker compose -f localnet/docker-compose.yml up -d
   fi
+  set -x
   while ! curl --user flip:flip -H 'Content-Type: text/plain;' -d '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' -v http://bitcoin:8332 ; do
     echo "🪙 Waiting for Bitcoin node to start"
     docker ps
