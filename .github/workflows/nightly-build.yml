@@ -52,8 +52,18 @@ jobs:
           cargo -V
           sccache --show-stats
 
-      - name: Build binaries
-        run: cargo build
+#      - name: Build binaries
+#        run: cargo build
+      - name: Get Ansible Inventory from Artifacts 📖
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: build-and-test.yaml
+          github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+          run_id: 4730282801
+          name: chainflip-backend-bin
+          search_artifacts: true
+          check_artifacts: true
+          if_no_artifact_found: fail
 
       - name: Checkout chainflip-bouncer
         uses: actions/checkout@v3
@@ -68,7 +78,7 @@ jobs:
 
       - name: Init localnet
         env:
-          BINARIES_LOCATION: ./target/debug
+          BINARIES_LOCATION: ./target/release
         run: ./localnet/manage.sh
 
       - name: Run localnet checks
