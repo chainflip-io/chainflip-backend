@@ -9,9 +9,9 @@ use scale_info::TypeInfo;
 use super::{MockPallet, MockPalletStorage};
 
 pub struct MockCcmHandler;
-
+pub const STORAGE_NAME: &str = "MockCcmHandler";
 impl MockPallet for MockCcmHandler {
-	const PREFIX: &'static [u8] = b"MockCcmHandler";
+	const PREFIX: &'static [u8] = STORAGE_NAME.as_bytes();
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -37,11 +37,11 @@ impl CcmHandler for MockCcmHandler {
 		egress_address: ForeignChainAddress,
 		message_metadata: CcmIngressMetadata,
 	) -> DispatchResult {
-		<Self as MockPalletStorage>::mutate_value(b"MockCcmHandler", |storage| {
-			if storage.is_none() {
-				*storage = Some(vec![]);
+		<Self as MockPalletStorage>::mutate_value(b"MockCcmHandler", |ccm_requests| {
+			if ccm_requests.is_none() {
+				*ccm_requests = Some(vec![]);
 			}
-			storage.as_mut().map(|v| {
+			ccm_requests.as_mut().map(|v| {
 				v.push(CcmRequest {
 					ingress_asset,
 					ingress_amount,
