@@ -26,16 +26,13 @@ pub use db::PersistentKeyDB;
 use self::client::key_store::KeyStore;
 
 /// Start the multisig client, which listens for p2p messages and requests from the SC
-pub fn start_client<C>(
+pub fn start_client<C: CryptoScheme>(
 	my_account_id: AccountId,
 	key_store: KeyStore<C>,
-	incoming_p2p_message_receiver: MultisigMessageReceiver<C>,
-	outgoing_p2p_message_sender: MultisigMessageSender<C>,
+	incoming_p2p_message_receiver: MultisigMessageReceiver<<C as CryptoScheme>::Chain>,
+	outgoing_p2p_message_sender: MultisigMessageSender<<C as CryptoScheme>::Chain>,
 	latest_ceremony_id: CeremonyId,
-) -> (MultisigClient<C>, impl futures::Future<Output = Result<()>> + Send)
-where
-	C: CryptoScheme,
-{
+) -> (MultisigClient<C>, impl futures::Future<Output = Result<()>> + Send) {
 	info!("Starting {} MultisigClient", C::NAME);
 
 	let (ceremony_request_sender, ceremony_request_receiver) =
