@@ -24,6 +24,7 @@ macro_rules! chains {
 
 		#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Copy)]
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+		#[repr(u32)]
 		pub enum ForeignChain {
 			$(
 				$chain = $value,
