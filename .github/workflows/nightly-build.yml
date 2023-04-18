@@ -56,6 +56,9 @@ jobs:
         uses: actions/cache/restore@v3
         with:
           key: chainflip-backend-release-bins
+          path: |
+            target/debug/chainflip-node
+            target/debug/chainflip-engine
 
       - name: Init localnet
         env:
