@@ -1,11 +1,7 @@
-use base58::FromBase58;
 use chainflip_api::{
 	self,
 	lp::{self, Liquidity, Tick},
-	primitives::{
-		AccountRole, Asset, AssetAmount, BitcoinAddress, BitcoinAddressData, BitcoinAddressFor,
-		ForeignChainAddress,
-	},
+	primitives::{AccountRole, Asset, AssetAmount},
 	settings::StateChain,
 };
 use clap::Parser;
@@ -15,7 +11,6 @@ use jsonrpsee::{
 	server::ServerBuilder,
 };
 use std::{ops::Range, path::PathBuf};
-use utilities::{clean_dot_address, clean_eth_address};
 
 #[rpc(server, client, namespace = "lp")]
 pub trait Rpc {
@@ -89,29 +84,13 @@ impl RpcServer for RpcServerImpl {
 			return Err(Error::Custom("Invalid amount".to_string()))
 		}
 
-		// Sanitize the address
-		let egress_address = match asset {
-			Asset::Eth => clean_eth_address(egress_address)
-				.map(ForeignChainAddress::from)
-				.map_err(|e| Error::Custom(format!("Invalid egress_address: {e}"))),
-			Asset::Dot => clean_dot_address(egress_address)
-				.map(ForeignChainAddress::from)
-				.map_err(|e| Error::Custom(format!("Invalid egress_address: {e}"))),
-			Asset::Btc => {
-				let address: BitcoinAddress = egress_address
-					.from_base58()
-					.map_err(|_| "Invalid base58")
-					.and_then(|a| a.try_into().map_err(|_| "Invalid length"))
-					.map_err(|e| Error::Custom(format!("Invalid egress_address: {e}")))?;
-
-				let address_data = BitcoinAddressData {
-					address_for: BitcoinAddressFor::Egress(address),
-					network: chainflip_api::get_btc_network(&self.state_chain_settings).await?,
-				};
-				Ok(ForeignChainAddress::from(address_data))
-			},
-			_ => return Err(Error::Custom(format!("{asset:?} not supported"))),
-		}?;
+		let egress_address = chainflip_api::clean_foreign_chain_address(
+			asset,
+			egress_address,
+			&self.state_chain_settings,
+		)
+		.await
+		.map_err(|e| Error::Custom(e.to_string()))?;
 
 		lp::withdraw_asset(&self.state_chain_settings, amount, asset, egress_address)
 			.await

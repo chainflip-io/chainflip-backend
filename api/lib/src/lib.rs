@@ -9,6 +9,7 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
+use utilities::{clean_dot_address, clean_eth_address};
 use zeroize::Zeroize;
 
 pub mod primitives {
@@ -383,6 +384,39 @@ pub async fn get_btc_network(
 		.boxed()
 	})
 	.await
+}
+
+/// Sanitize the given egress address and turn it into a ForeignChainAddress of the given asset.
+pub async fn clean_foreign_chain_address(
+	asset: Asset,
+	egress_address: &str,
+	state_chain_settings: &settings::StateChain,
+) -> Result<ForeignChainAddress> {
+	use base58::FromBase58;
+	use primitives::{BitcoinAddress, BitcoinAddressData, BitcoinAddressFor};
+
+	match asset {
+		Asset::Eth => clean_eth_address(egress_address)
+			.map(ForeignChainAddress::from)
+			.map_err(|e| anyhow!("Invalid Ethereum egress address: {e}")),
+		Asset::Dot => clean_dot_address(egress_address)
+			.map(ForeignChainAddress::from)
+			.map_err(|e| anyhow!("Invalid Polkadot egress address: {e}")),
+		Asset::Btc => {
+			let address: BitcoinAddress = egress_address
+				.from_base58()
+				.map_err(|_| "Invalid base58 Bitcoin address")
+				.and_then(|a| a.try_into().map_err(|_| "Invalid length"))
+				.map_err(|e| anyhow!("Invalid egress address: {e}"))?;
+
+			let address_data = BitcoinAddressData {
+				address_for: BitcoinAddressFor::Egress(address),
+				network: get_btc_network(state_chain_settings).await?,
+			};
+			Ok(ForeignChainAddress::from(address_data))
+		},
+		_ => return Err(anyhow!("{asset:?} not supported")),
+	}
 }
 
 #[derive(Debug, Zeroize)]

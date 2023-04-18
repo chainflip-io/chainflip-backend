@@ -63,22 +63,12 @@ pub async fn swap_intent(
 	state_chain_settings: &settings::StateChain,
 	params: settings::SwapIntentParams,
 ) -> Result<()> {
-	use api::primitives::{ForeignChain, ForeignChainAddress};
-	use utilities::clean_dot_address;
-
-	let egress_address = match ForeignChain::from(params.egress_asset) {
-		ForeignChain::Ethereum => {
-			let addr = clean_eth_address(&params.egress_address)
-				.map_err(|err| anyhow!("Failed to parse address: {err}"))?;
-			ForeignChainAddress::Eth(addr)
-		},
-		ForeignChain::Polkadot => {
-			let addr = clean_dot_address(&params.egress_address)
-				.map_err(|err| anyhow!("Failed to parse address: {err}"))?;
-			ForeignChainAddress::Dot(addr)
-		},
-		ForeignChain::Bitcoin => todo!("Bitcoin not yet supported for egress address"),
-	};
+	let egress_address = chainflip_api::clean_foreign_chain_address(
+		params.egress_asset,
+		&params.egress_address,
+		state_chain_settings,
+	)
+	.await?;
 
 	let address = api::register_swap_intent(
 		state_chain_settings,

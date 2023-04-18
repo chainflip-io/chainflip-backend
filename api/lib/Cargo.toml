@@ -3,15 +3,11 @@ name = "chainflip-api"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 anyhow = "1.0"
 async-trait = "0.1.49"
 futures = "0.3.14"
 hex = "0.4.3"
-
-chainflip-engine = {path = "../../engine/"}
 ed25519-dalek = "1.0"
 rand = "0.7"
 tiny-bip39 = "1.0.0"
@@ -19,6 +15,11 @@ secp256k1 = {version = "0.20"}
 rand_legacy = { package = "rand", version = "0.6" }
 zeroize = "1.5.4"
 serde = { version = "1.0", features = ["derive"] }
+base58 = '0.2.0'
+
+# Local deps
+chainflip-engine = {path = "../../engine/"}
+utilities = {path = "../../utilities/"}
 
 # State Chain
 cf-chains = {path = "../../state-chain/chains"}
