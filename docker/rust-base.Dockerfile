@@ -1,7 +1,7 @@
 # This Dockfile provides the base image to perform all tasks
 # related to our Rust projects. Our CI needs a properly configured
 # environment so we can guarantee consistancy between projects.
-FROM rust:bullseye as rust-substrate-base
+FROM rust:1.68.2 as rust-substrate-base
 
 # Substrate and rust compiler dependencies.
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
