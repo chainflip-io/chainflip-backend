@@ -162,7 +162,7 @@ pub async fn mint_range_order(
 			// Submit the mint order
 			let call = pallet_cf_pools::Call::collect_and_mint_range_order {
 				unstable_asset: asset,
-				range,
+				price_range_in_ticks: range,
 				liquidity: amount,
 			};
 			let (_tx_hash, events) = submit_and_ensure_success(
@@ -226,7 +226,7 @@ pub async fn burn_range_order(
 			// Submit the burn call
 			let call = pallet_cf_pools::Call::collect_and_burn_range_order {
 				unstable_asset: asset,
-				range,
+				price_range_in_ticks: range,
 				liquidity: amount,
 			};
 			let (_tx_hash, events) = submit_and_ensure_success(

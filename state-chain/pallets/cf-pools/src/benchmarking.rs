@@ -94,7 +94,7 @@ benchmarks! {
 			Asset::Usdc,
 			1_000_000,
 		));
-	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, Side::Zero, 100, 1_000_000)
+	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, Order::Sell, 100, 1_000_000)
 	verify {}
 
 	collect_and_burn_limit_order {
@@ -111,8 +111,8 @@ benchmarks! {
 			Asset::Usdc,
 			1_000_000,
 		));
-		assert_ok!(Pallet::<T>::collect_and_mint_limit_order(RawOrigin::Signed(caller.clone()).into(), Asset::Eth, Side::Zero, 100, 1_000));
-	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, Side::Zero, 100, 1_000)
+		assert_ok!(Pallet::<T>::collect_and_mint_limit_order(RawOrigin::Signed(caller.clone()).into(), Asset::Eth, Order::Sell, 100, 1_000));
+	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, Order::Sell, 100, 1_000)
 	verify {}
 
 	impl_benchmark_test_suite!(

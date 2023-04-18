@@ -1,0 +1,18 @@
+[Unit]
+Description=Chainflip Relayer
+
+[Service]
+Restart=always
+RestartSec=5
+Type=simple
+
+ExecStart=/usr/bin/chainflip-relayer \
+      --state_chain.ws_endpoint=ws://localhost:9944 \
+      --state_chain.signing_key_file /etc/chainflip/keys/signing_key_file \
+      --port 10997
+
+StandardOutput=append:/var/log/chainflip-relayer.log
+StandardError=append:/var/log/chainflip-relayer.log
+
+[Install]
+WantedBy=multi-user.target

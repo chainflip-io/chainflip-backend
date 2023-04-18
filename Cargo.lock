@@ -763,7 +763,6 @@ version = "0.1.0"
 dependencies = [
  "cf-primitives",
  "parity-scale-codec",
- "primitive-types 0.11.1",
  "rand 0.7.3",
  "scale-info",
  "serde",
@@ -6380,7 +6379,6 @@ dependencies = [
  "impl-codec",
  "impl-rlp",
  "impl-serde 0.3.2",
- "scale-info",
  "uint",
 ]
 

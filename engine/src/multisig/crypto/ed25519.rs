@@ -54,6 +54,9 @@ impl CryptoScheme for Ed25519Signing {
 
 	type SigningPayload = SigningPayload;
 
+	// TODO: SUI chain type does not exist yet
+	type Chain = cf_chains::AnyChain;
+
 	const NAME: &'static str = "Ed25519";
 
 	// TODO: Technically the same "scheme" can be used by

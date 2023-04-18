@@ -7,7 +7,6 @@ description = "Chainflip's AMM Logic"
 
 [dependencies]
 cf-primitives = { path = '../primitives', default-features = false }
-primitive-types = { version = "0.11.1", default-features = false, features = ['scale-info'] }
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
 serde = { version = '1.0', default-features = false, features = ['derive'] }
 
@@ -26,7 +25,6 @@ default = ['std']
 slow-tests = []
 std = [
 	'cf-primitives/std',
-	'primitive-types/std',
 	'cf-utilities/std',
 	'codec/std',
 	'scale-info/std',
