@@ -31,6 +31,7 @@ use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Zero};
 use sp_std::prelude::*;
+use cf_primitives::EthereumAddress;
 
 /// This address is used by the Ethereum contracts to indicate that no withdrawal address was
 /// specified when staking.
@@ -55,8 +56,6 @@ pub mod pallet {
 	use sp_std::time::Duration;
 
 	pub type AccountId<T> = <T as frame_system::Config>::AccountId;
-
-	pub type EthereumAddress = [u8; 20];
 
 	pub type StakeAttempt<Amount> = (EthereumAddress, Amount);
 
