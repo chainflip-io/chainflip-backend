@@ -139,29 +139,35 @@ where
 		let (ingress_witnesses, change_witnesses) =
 			filter_interesting_utxos(block.txdata, address_monitor, &self.change_address);
 
-		let _result = self
-			.state_chain_client
-			.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-				call: Box::new(
-					pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::do_ingress {
-						ingress_witnesses,
-					}
-					.into(),
-				),
-				epoch_index: self.epoch_index,
-			})
-			.await;
-
-		let _result = self
-			.state_chain_client
-			.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-				call: Box::new(
-					pallet_cf_environment::Call::add_btc_change_utxos { utxos: change_witnesses }
+		if !ingress_witnesses.is_empty() {
+			let _result = self
+				.state_chain_client
+				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+					call: Box::new(
+						pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::do_ingress {
+							ingress_witnesses,
+						}
 						.into(),
-				),
-				epoch_index: self.epoch_index,
-			})
-			.await;
+					),
+					epoch_index: self.epoch_index,
+				})
+				.await;
+		}
+
+		if !change_witnesses.is_empty() {
+			let _result = self
+				.state_chain_client
+				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+					call: Box::new(
+						pallet_cf_environment::Call::add_btc_change_utxos {
+							utxos: change_witnesses,
+						}
+						.into(),
+					),
+					epoch_index: self.epoch_index,
+				})
+				.await;
+		}
 
 		if let Some(fee_rate_sats_per_byte) = self.btc_rpc.next_block_fee_rate()? {
 			let _result = self
