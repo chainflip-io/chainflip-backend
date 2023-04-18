@@ -157,6 +157,8 @@ if [ $CI == true ]; then
   echo "$CF_LOCALNET_GETH_PASSWORD" > ./localnet/init/secrets/geth_password
   echo "$CF_LOCALNET_NODE_KEY" > ./localnet/init/secrets/node_key_file
   echo "$CF_LOCALNET_SIGNING_KEY" > ./localnet/init/secrets/signing_key_file
+  ls -al ./localnet/init/secrets
+  cat ./localnet/init/secrets/geth_password
   build-localnet
   exit 0
 fi
