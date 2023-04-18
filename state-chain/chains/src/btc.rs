@@ -21,7 +21,7 @@ use crate::{
 };
 use alloc::string::String;
 pub use cf_primitives::chains::Bitcoin;
-use cf_primitives::{chains::assets, EpochIndex, IntentId, KeyId, PublicKeyBytes};
+use cf_primitives::{chains::assets, EpochIndex, IntentId, KeyId, PublicKeyBytes, CeremonyId};
 use itertools;
 
 /// This salt is used to derive the change address for every vault. i.e. for every epoch.
@@ -116,6 +116,8 @@ pub struct EpochStartData {
 
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
+
+	type KeygenRequestId = (CeremonyId, CeremonyId);
 
 	type ChainBlockNumber = BlockNumber;
 

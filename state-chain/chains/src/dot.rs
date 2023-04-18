@@ -6,7 +6,7 @@ pub mod api;
 pub mod benchmarking;
 
 pub use cf_primitives::{chains::Polkadot, PolkadotAccountId};
-use cf_primitives::{KeyId, PolkadotBlockNumber, TxId};
+use cf_primitives::{CeremonyId, KeyId, PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use core::str::FromStr;
 use scale_info::TypeInfo;
@@ -111,6 +111,7 @@ impl Age for PolkadotTrackedData {
 
 impl Chain for Polkadot {
 	const NAME: &'static str = "Polkadot";
+	type KeygenRequestId = CeremonyId;
 	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = PolkadotBalance;
 	type TrackedData = PolkadotTrackedData;

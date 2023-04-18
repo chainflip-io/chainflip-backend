@@ -229,7 +229,7 @@ pub mod pallet {
 		>;
 
 		/// CeremonyId source.
-		type CeremonyIdProvider: CeremonyIdProvider;
+		type CeremonyIdProvider: CeremonyIdProvider<Self::TargetChain>;
 
 		/// In case not enough live nodes were available to begin a threshold signing ceremony: The
 		/// number of blocks to wait before retrying with a new set.
@@ -694,7 +694,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		Self::deposit_event(match maybe_key_id_participants {
 			Ok((key_id, participants)) => {
-				let ceremony_id = T::CeremonyIdProvider::increment_ceremony_id();
+				let ceremony_id = T::CeremonyIdProvider::simple_increment();
 				PendingCeremonies::<T, I>::insert(ceremony_id, {
 					let remaining_respondents: BTreeSet<_> =
 						participants.clone().into_iter().collect();

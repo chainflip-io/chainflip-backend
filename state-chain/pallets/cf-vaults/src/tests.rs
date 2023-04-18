@@ -54,7 +54,7 @@ fn keygen_request_emitted() {
 		assert_eq!(
 			last_event::<MockRuntime>(),
 			PalletEvent::<MockRuntime, _>::KeygenRequest {
-				ceremony_id: current_ceremony_id(),
+				id: current_ceremony_id(),
 				participants: btree_candidates.clone(),
 				epoch_index: next_epoch,
 			}
@@ -143,7 +143,7 @@ fn keygen_called_after_keygen_failure_restarts_rotation_at_keygen() {
 		assert_eq!(
 			last_event::<MockRuntime>(),
 			PalletEvent::KeygenRequest {
-				ceremony_id: current_ceremony_id(),
+				id: current_ceremony_id(),
 				participants: ALL_CANDIDATES.iter().cloned().collect(),
 				epoch_index: next_epoch,
 			}

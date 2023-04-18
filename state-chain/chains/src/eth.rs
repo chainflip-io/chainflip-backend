@@ -9,7 +9,7 @@ pub mod ingress_address;
 use crate::*;
 pub use cf_primitives::chains::{assets, Ethereum};
 
-use cf_primitives::KeyId;
+use cf_primitives::{CeremonyId, KeyId};
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{
 	ethereum_types::{H256, U256},
@@ -40,6 +40,7 @@ pub const CHAIN_ID_KOVAN: u64 = 42;
 
 impl Chain for Ethereum {
 	const NAME: &'static str = "Ethereum";
+	type KeygenRequestId = CeremonyId;
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
 	type TransactionFee = eth::TransactionFee;

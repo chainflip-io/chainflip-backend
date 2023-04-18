@@ -6,6 +6,7 @@ use cf_primitives::{
 
 impl Chain for AnyChain {
 	const NAME: &'static str = "AnyChain";
+	type KeygenRequestId = ();
 	type ChainBlockNumber = u64;
 	type ChainAmount = AssetAmount;
 	type TransactionFee = Self::ChainAmount;

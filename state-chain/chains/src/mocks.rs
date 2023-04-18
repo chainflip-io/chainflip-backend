@@ -2,7 +2,7 @@ use crate::{
 	eth::{api::EthereumReplayProtection, TransactionFee},
 	*,
 };
-use cf_primitives::KeyId;
+use cf_primitives::{CeremonyId, KeyId};
 use sp_std::marker::PhantomData;
 use std::cell::RefCell;
 
@@ -14,6 +14,7 @@ pub type MockEthereumIngressId = u128;
 // Chain implementation used for testing.
 impl Chain for MockEthereum {
 	const NAME: &'static str = "MockEthereum";
+	type KeygenRequestId = CeremonyId;
 	type IngressFetchId = MockEthereumIngressId;
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;

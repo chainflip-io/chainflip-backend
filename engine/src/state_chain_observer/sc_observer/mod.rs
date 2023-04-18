@@ -53,7 +53,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,
 	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
-	ceremony_id: CeremonyId,
+	id: CeremonyId,
     epoch_index: EpochIndex,
 	keygen_participants: BTreeSet<AccountId32>,
 ) where
@@ -68,7 +68,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	if keygen_participants.contains(&state_chain_client.account_id()) {
 		// We initiate keygen outside of the spawn to avoid requesting ceremonies out of order
 		let keygen_result_future =
-			multisig_client.initiate_keygen(ceremony_id, epoch_index, keygen_participants);
+			multisig_client.initiate_keygen(id, epoch_index, keygen_participants);
 		scope.spawn(async move {
 			let _result =
 				state_chain_client
@@ -76,7 +76,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 						state_chain_runtime::Runtime,
 						I,
 					>::report_keygen_outcome {
-						ceremony_id,
+						id,
 						reported_outcome: keygen_result_future
 							.await
 							.map(Into::into)
@@ -88,7 +88,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	} else {
 		// If we are not participating, just send an empty ceremony request (needed for ceremony id
 		// tracking)
-		multisig_client.update_latest_ceremony_id(ceremony_id);
+		multisig_client.update_latest_ceremony_id(id);
 	}
 }
 
@@ -404,60 +404,60 @@ where
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumVault(
                                         pallet_cf_vaults::Event::KeygenRequest {
-                                            ceremony_id,
+                                            id,
                                             participants,
                                             epoch_index
                                         }
                                     ) => {
                                         // Ceremony id tracking is global, so update all other clients
-                                        dot_multisig_client.update_latest_ceremony_id(ceremony_id);
-                                        btc_multisig_client.update_latest_ceremony_id(ceremony_id);
+                                        dot_multisig_client.update_latest_ceremony_id(id);
+                                        btc_multisig_client.update_latest_ceremony_id(id);
 
                                         handle_keygen_request::<_, _, _, EthereumInstance>(
                                             scope,
                                             &eth_multisig_client,
                                             state_chain_client.clone(),
-                                            ceremony_id,
+                                            id,
                                             epoch_index,
                                             participants,
                                         ).await;
                                     }
                                     state_chain_runtime::RuntimeEvent::PolkadotVault(
                                         pallet_cf_vaults::Event::KeygenRequest {
-                                            ceremony_id,
+                                            id,
                                             participants,
                                             epoch_index
                                         }
                                     ) => {
                                         // Ceremony id tracking is global, so update all other clients
-                                        eth_multisig_client.update_latest_ceremony_id(ceremony_id);
-                                        btc_multisig_client.update_latest_ceremony_id(ceremony_id);
+                                        eth_multisig_client.update_latest_ceremony_id(id);
+                                        btc_multisig_client.update_latest_ceremony_id(id);
 
                                         handle_keygen_request::<_, _, _, PolkadotInstance>(
                                             scope,
                                             &dot_multisig_client,
                                             state_chain_client.clone(),
-                                            ceremony_id,
+                                            id,
                                             epoch_index,
                                             participants,
                                         ).await;
                                     }
                                     state_chain_runtime::RuntimeEvent::BitcoinVault(
                                         pallet_cf_vaults::Event::KeygenRequest {
-                                            ceremony_id,
+                                            id,
                                             participants,
                                             epoch_index
                                         }
                                     ) => {
                                         // Ceremony id tracking is global, so update all other clients
-                                        eth_multisig_client.update_latest_ceremony_id(ceremony_id);
-                                        dot_multisig_client.update_latest_ceremony_id(ceremony_id);
+                                        eth_multisig_client.update_latest_ceremony_id(id);
+                                        dot_multisig_client.update_latest_ceremony_id(id);
 
                                         handle_keygen_request::<_, _, _, BitcoinInstance>(
                                             scope,
                                             &btc_multisig_client,
                                             state_chain_client.clone(),
-                                            ceremony_id,
+                                            id,
                                             epoch_index,
                                             participants,
                                         ).await;

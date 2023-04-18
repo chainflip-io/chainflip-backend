@@ -45,6 +45,13 @@ pub mod mocks;
 pub trait Chain: Member + Parameter {
 	const NAME: &'static str;
 
+	type KeygenRequestId: FullCodec
+		+ Member
+		+ Parameter
+		+ Copy
+		+ MaybeSerializeDeserialize
+		+ MaxEncodedLen;
+
 	type ChainBlockNumber: FullCodec
 		+ Member
 		+ Parameter

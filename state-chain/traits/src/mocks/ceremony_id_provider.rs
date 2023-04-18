@@ -1,3 +1,4 @@
+use cf_chains::Ethereum;
 use cf_primitives::CeremonyId;
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
@@ -21,11 +22,15 @@ impl MockCeremonyIdProvider {
 	}
 }
 
-impl CeremonyIdProvider for MockCeremonyIdProvider {
+impl CeremonyIdProvider<Ethereum> for MockCeremonyIdProvider {
 	fn increment_ceremony_id() -> CeremonyId {
 		let mut id = Self::get();
 		id += 1;
 		Self::set(id);
 		id
+	}
+
+	fn simple_increment() -> CeremonyId {
+		todo!()
 	}
 }

@@ -86,17 +86,6 @@ impl<T: Config> Default for RotationPhase<T> {
 	}
 }
 
-pub struct CeremonyIdProvider<T>(PhantomData<T>);
-
-impl<T: Config> cf_traits::CeremonyIdProvider for CeremonyIdProvider<T> {
-	fn increment_ceremony_id() -> CeremonyId {
-		CeremonyIdCounter::<T>::mutate(|id| {
-			*id += 1;
-			*id
-		})
-	}
-}
-
 type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;
 type VanityName = Vec<u8>;
 

@@ -8,6 +8,8 @@ pub mod epoch_transition;
 mod missed_authorship_slots;
 mod offences;
 mod signer_nomination;
+use core::marker::PhantomData;
+
 use crate::{
 	AccountId, Authorship, BitcoinIngressEgress, BlockNumber, EmergencyRotationPercentageRange,
 	Emissions, Environment, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
@@ -34,7 +36,9 @@ use cf_chains::{
 	ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
 	TransactionBuilder,
 };
-use cf_primitives::{chains::assets, Asset, BasisPoints, EgressId, IntentId, ETHEREUM_ETH_ADDRESS};
+use cf_primitives::{
+	chains::assets, Asset, BasisPoints, CeremonyId, EgressId, IntentId, ETHEREUM_ETH_ADDRESS,
+};
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, EgressApi,
 	EmergencyRotation, EpochInfo, EpochKey, EthEnvironmentProvider, Heartbeat, IngressApi,
@@ -529,5 +533,55 @@ impl IngressHandler<Bitcoin> for BtcIngressHandler {
 			                                                                   * conjunction with
 			                                                                   * #2354 */
 		})
+	}
+}
+
+use frame_system::Config;
+use pallet_cf_validator::CeremonyIdCounter;
+pub struct CeremonyIdProvider;
+
+impl cf_traits::CeremonyIdProvider<Ethereum> for CeremonyIdProvider {
+	fn increment_ceremony_id() -> CeremonyId {
+		CeremonyIdCounter::<Runtime>::mutate(|id| {
+			*id += 1;
+			*id
+		})
+	}
+
+	fn simple_increment() -> cf_primitives::CeremonyId {
+		todo!()
+	}
+}
+
+impl cf_traits::CeremonyIdProvider<Polkadot> for CeremonyIdProvider {
+	fn increment_ceremony_id() -> CeremonyId {
+		CeremonyIdCounter::<Runtime>::mutate(|id| {
+			*id += 1;
+			*id
+		})
+	}
+
+	fn simple_increment() -> cf_primitives::CeremonyId {
+		todo!()
+	}
+}
+
+impl cf_traits::CeremonyIdProvider<Bitcoin> for CeremonyIdProvider {
+	fn increment_ceremony_id() -> (CeremonyId, CeremonyId) {
+		let keygen_id = CeremonyIdCounter::<Runtime>::mutate(|id| {
+			*id += 1;
+			*id
+		});
+
+		let key_handover_id = CeremonyIdCounter::<Runtime>::mutate(|id| {
+			*id += 1;
+			*id
+		});
+
+		(keygen_id, key_handover_id)
+	}
+
+	fn simple_increment() -> cf_primitives::CeremonyId {
+		todo!()
 	}
 }
