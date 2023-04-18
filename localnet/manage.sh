@@ -80,19 +80,20 @@ build-localnet() {
     docker compose -f localnet/docker-compose.yml up -d
   fi
   set -x
+  echo "🪙 Waiting for Bitcoin node to start"
   while ! curl --user flip:flip -H 'Content-Type: text/plain;' -d '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' -v http://bitcoin:8332 ; do
     echo "🪙 Waiting for Bitcoin node to start"
-    docker ps
     sleep 5
   done
-  while ! curl -H "Content-Type: application/json" --data "{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}" http://geth:8545 ; do
+  echo "💎 Waiting for ETH node to start"
+  while ! curl -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://geth:8545 ; do
     echo "💎 Waiting for ETH node to start"
-    docker logs geth || true
     sleep 5
   done
+  echo "🚦 Waiting for polkadot node to start"
+  curl -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://polkadot:9945'
   while ! REPLY=$(curl -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://polkadot:9945') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]; do
     echo "🚦 Waiting for polkadot node to start"
-    docker logs polkadot || true
     sleep 5
   done
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
