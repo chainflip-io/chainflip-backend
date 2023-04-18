@@ -11,7 +11,7 @@ use crate::{
 
 use super::{
 	core_h160, eth_block_witnessing::BlockProcessor, event::Event, rpc::EthDualRpcClient,
-	BlockWithItems, DecodeLogClosure, EthContractWitnesser, EthNumberBloom,
+	BlockWithItems, DecodeLogClosure, EthContractWitnesser, EthNumberBloom, vault::EthAssetApi,
 };
 
 pub struct ContractWitnesser<Contract, StateChainClient> {
@@ -40,7 +40,7 @@ where
 impl<Contract, StateChainClient> BlockProcessor for ContractWitnesser<Contract, StateChainClient>
 where
 	Contract: EthContractWitnesser + Send + Sync,
-	StateChainClient: ExtrinsicApi + Send + Sync,
+	StateChainClient: ExtrinsicApi + EthAssetApi + Send + Sync,
 {
 	async fn process_block(
 		&mut self,

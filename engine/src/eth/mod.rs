@@ -61,6 +61,8 @@ use event::Event;
 
 use async_trait::async_trait;
 
+use self::vault::EthAssetApi;
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct EthNumberBloom {
 	pub block_number: U64,
@@ -388,7 +390,7 @@ pub trait EthContractWitnesser {
 	) -> anyhow::Result<()>
 	where
 		EthRpcClient: EthRpcApi + Sync + Send,
-		StateChainClient: ExtrinsicApi + Send + Sync;
+		StateChainClient: ExtrinsicApi + EthAssetApi + Send + Sync;
 
 	fn contract_address(&self) -> H160;
 }

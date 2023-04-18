@@ -116,6 +116,7 @@ pallet-cf-governance = { path = "../state-chain/pallets/cf-governance" }
 pallet-cf-ingress-egress = { path = "../state-chain/pallets/cf-ingress-egress" }
 pallet-cf-reputation = { path = "../state-chain/pallets/cf-reputation" }
 pallet-cf-staking = { path = "../state-chain/pallets/cf-staking" }
+pallet-cf-swapping = { path = "../state-chain/pallets/cf-swapping" }
 pallet-cf-threshold-signature = { path = "../state-chain/pallets/cf-threshold-signature" }
 pallet-cf-validator = { path = "../state-chain/pallets/cf-validator" }
 pallet-cf-vaults = { path = "../state-chain/pallets/cf-vaults" }

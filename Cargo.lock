@@ -1095,6 +1095,7 @@ dependencies = [
  "pallet-cf-ingress-egress",
  "pallet-cf-reputation",
  "pallet-cf-staking",
+ "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
  "pallet-cf-vaults",
