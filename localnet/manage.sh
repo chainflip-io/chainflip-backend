@@ -162,7 +162,7 @@ build-localnet-in-ci() {
   done
 
   ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
-  while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:5555' ; do
+  while ! curl 'http://localhost:5555/health' ; do
     echo "🚒 Waiting for chainflip-engine to start"
     tail /tmp/chainflip/chainflip-engine.log || true
     sleep 5
