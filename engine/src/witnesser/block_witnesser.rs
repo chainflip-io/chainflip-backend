@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use cf_chains::Chain;
 use cf_primitives::EpochIndex;
 use tokio::sync::oneshot;
 
@@ -130,7 +131,7 @@ where
 				<Generator::Witnesser as BlockWitnesser>::Chain,
 			>(epoch.epoch_index, epoch.block_number, self.db.clone())
 			.await
-			.unwrap_or_else(|_| panic!("Failed to start {} witnesser checkpointing", <Generator::Witnesser as BlockWitnesser>::Chain::CHAIN_TAG))
+			.unwrap_or_else(|_| panic!("Failed to start {} witnesser checkpointing", <Generator::Witnesser as BlockWitnesser>::Chain::NAME))
 			{
 				StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
 					(from_block, witnessed_until_sender),

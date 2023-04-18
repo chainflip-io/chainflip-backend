@@ -39,6 +39,7 @@ pub const CHAIN_ID_GOERLI: u64 = 5;
 pub const CHAIN_ID_KOVAN: u64 = 42;
 
 impl Chain for Ethereum {
+	const NAME: &'static str = "Ethereum";
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
 	type TransactionFee = eth::TransactionFee;
