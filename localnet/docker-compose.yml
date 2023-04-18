@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   geth:
-    image: ghcr.io/chainflip-io/geth:perseverance-rc2
+    image: ghcr.io/chainflip-io/geth:perseverance-rc2-12s
     pull_policy: if_not_present
     stop_grace_period: 5s
     stop_signal: SIGINT
@@ -21,8 +21,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    volumes:
-      - ./init/secrets/geth_password:/geth/password
     command:
       - --allow-insecure-unlock
       - --datadir=/geth/data
