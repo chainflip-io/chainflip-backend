@@ -20,14 +20,17 @@ jobs:
       - name: Checkout chainflip-backend
         uses: actions/checkout@v3
 
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16
+          cache: 'npm'
+
       - name: Run Checks
         run: |
-          which docker
-          which cargo 
-          which sccache
-          which node
-
-      - run: sccache --show-stats
+          docker -v
+          node -v
+          cargo -V
+          sccache --show-stats
 
       - name: Build binaries
         run: cargo build

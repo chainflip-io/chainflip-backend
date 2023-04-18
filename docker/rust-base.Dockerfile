@@ -33,9 +33,9 @@ RUN curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
 RUN echo "deb [arch=$(dpkg --print-architecture)] https://download.docker.com/linux/debian $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
 RUN apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io
 
-# Install node
-RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash - &&\
-    apt-get install -y nodejs
+## Install node
+#RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash - &&\
+#    apt-get install -y nodejs
 
 ARG NIGHTLY
 # Download and set nightly as the default Rust compiler
