@@ -31,8 +31,8 @@ jobs:
         image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v0.9.36-ci
         ports:
           # - 30333:30333 # p2p port
-          - 9933:9933 # rpc port
-          - 9944:9944 # ws port
+          - 9934:9933 # rpc port
+          - 9945:9944 # ws port
       geth:
         credentials:
           username: ${{ github.actor }}

@@ -91,7 +91,6 @@ build-localnet() {
     sleep 5
   done
   echo "🚦 Waiting for polkadot node to start"
-  curl -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://polkadot:9945'
   while ! REPLY=$(curl -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://polkadot:9945') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]; do
     echo "🚦 Waiting for polkadot node to start"
     sleep 5
