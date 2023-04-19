@@ -30,9 +30,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
         image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v0.9.36-ci
         ports:
-          # - 30333:30333 # p2p port
-          - 9934:9933 # rpc port
-          - 9945:9944 # ws port
+          - 9934:9933
+          - 9945:9944
       geth:
         credentials:
           username: ${{ github.actor }}
@@ -59,18 +58,8 @@ jobs:
           cp /tmp/sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl/sccache /usr/local/cargo/bin/sccache && \
           rm -rf /tmp/sccache.tar.gz /tmp/sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl
 
-#      - name: Build binaries
-#        run: cargo build
-      - name: Get Ansible Inventory from Artifacts 📖
-        uses: dawidd6/action-download-artifact@v2
-        with:
-          workflow: build-and-test.yaml
-          github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
-          run_id: 4730282801
-          name: chainflip-backend-bin
-          search_artifacts: true
-          check_artifacts: true
-          if_no_artifact_found: fail
+      - name: Build binaries
+        run: cargo build
 
       - name: Checkout chainflip-bouncer
         uses: actions/checkout@v3
@@ -85,7 +74,7 @@ jobs:
 
       - name: Init localnet
         env:
-          BINARIES_LOCATION: .
+          BINARIES_LOCATION: ./target/debug
         run: |
           chmod +x chainflip-node chainflip-engine
           echo -n ${{ secrets.CF_LOCALNET_SIGNING_KEY }} > ./localnet/init/secrets/signing_key_file
@@ -103,4 +92,3 @@ jobs:
           ./tests/produces_blocks.sh
           ./tests/stress_test.sh 2
           ./commands/setup_vaults.sh
-          ./commands/setup_swaps.sh

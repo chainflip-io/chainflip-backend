@@ -28,16 +28,6 @@ RUN curl -fsSL https://github.com/mozilla/sccache/releases/download/${SCCACHE_VE
     cp /tmp/sccache-${SCCACHE_VER}-x86_64-unknown-linux-musl/sccache /usr/local/cargo/bin/sccache && \
     rm -rf /tmp/sccache.tar.gz /tmp/sccache-${SCCACHE_VER}-x86_64-unknown-linux-musl
 
-# Install Docker Engine
-RUN apt-get update && apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release
-RUN curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
-RUN echo "deb [arch=$(dpkg --print-architecture)] https://download.docker.com/linux/debian $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
-RUN apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io
-
-## Install node
-#RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash - &&\
-#    apt-get install -y nodejs
-
 ARG NIGHTLY
 # Download and set nightly as the default Rust compiler
 RUN rustup default ${NIGHTLY} \
