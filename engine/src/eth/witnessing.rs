@@ -18,7 +18,7 @@ use crate::{
 	state_chain_observer::{client::StateChainClient, EthAddressToMonitorSender},
 	witnesser::{AddressMonitor, EpochStart},
 };
-use utils::task_scope::Scope;
+use utilities::task_scope::Scope;
 
 use super::{
 	chain_data_witnesser,

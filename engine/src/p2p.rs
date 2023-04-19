@@ -27,7 +27,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, Instrument};
 use zeroize::Zeroizing;
 
-use utils::{read_clean_and_decode_hex_str_file, task_scope::task_scope};
+use utilities::{read_clean_and_decode_hex_str_file, task_scope::task_scope};
 
 // TODO: Consider if this should be removed, particularly once we no longer use Substrate for
 // peering

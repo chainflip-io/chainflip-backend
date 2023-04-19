@@ -1,5 +1,5 @@
 use tracing::{debug, error, info, info_span, warn, Instrument};
-use utils::{context, format_iterator, make_periodic_tick};
+use utilities::{context, format_iterator, make_periodic_tick};
 use web3::{
 	api::SubscriptionStream,
 	signing::SecretKeyRef,

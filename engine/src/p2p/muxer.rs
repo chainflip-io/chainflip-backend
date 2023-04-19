@@ -219,7 +219,7 @@ impl P2PMuxer {
 #[cfg(test)]
 mod tests {
 
-	use utils::testing::expect_recv_with_timeout;
+	use utilities::testing::expect_recv_with_timeout;
 
 	use super::*;
 

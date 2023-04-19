@@ -16,7 +16,7 @@ use rand_legacy::{RngCore, SeedableRng};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, debug_span, Instrument};
-use utils::{
+use utilities::{
 	all_same, assert_ok, split_at, success_threshold_from_share_count,
 	testing::expect_recv_with_timeout,
 };

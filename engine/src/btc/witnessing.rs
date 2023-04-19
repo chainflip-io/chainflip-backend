@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use cf_chains::{address::BitcoinAddressData, Bitcoin};
 use futures::TryFutureExt;
 use sp_core::H256;
-use utils::task_scope::Scope;
+use utilities::task_scope::Scope;
 
 use super::rpc::BtcRpcClient;
 

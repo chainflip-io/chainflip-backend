@@ -3,7 +3,7 @@ use std::{ops::Add, time::Duration};
 use futures::{stream, Stream};
 use tokio::time::Interval;
 use tracing::{info_span, Instrument};
-use utils::make_periodic_tick;
+use utilities::make_periodic_tick;
 
 pub const HTTP_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
