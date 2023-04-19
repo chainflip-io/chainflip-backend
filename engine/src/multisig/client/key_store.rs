@@ -51,7 +51,7 @@ fn should_return_key_due_to_fallback() {
 	use rand_legacy::FromEntropy;
 
 	// Create a database just so we can pass it to the key store
-	let (_dir, db_file) = utils::testing::new_temp_directory_with_nonexistent_file();
+	let (_dir, db_file) = utilities::testing::new_temp_directory_with_nonexistent_file();
 	let db = PersistentKeyDB::open_and_migrate_to_latest(&db_file, None).unwrap();
 
 	let mut key_store = KeyStore::<EthSigning>::new(Arc::new(db));

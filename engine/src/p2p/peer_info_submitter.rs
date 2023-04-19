@@ -10,7 +10,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 
 use codec::Encode;
 use tracing::{debug, info};
-use utils::{make_periodic_tick, Port};
+use utilities::{make_periodic_tick, Port};
 
 use crate::{
 	p2p::PeerInfo,

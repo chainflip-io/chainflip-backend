@@ -21,7 +21,7 @@ use crate::{
 	constants::SIGNED_EXTRINSIC_LIFETIME, settings,
 	state_chain_observer::client::storage_api::StorageApi, stream_utils::EngineTryStreamExt,
 };
-use utils::{
+use utilities::{
 	read_clean_and_decode_hex_str_file,
 	task_scope::{Scope, ScopedJoinHandle},
 };

@@ -19,10 +19,10 @@ pub mod witnessing;
 
 use anyhow::{anyhow, Context, Result};
 
-use ::utils::{make_periodic_tick, read_clean_and_decode_hex_str_file};
 use cf_primitives::EpochIndex;
 use regex::Regex;
 use tracing::{debug, info_span, Instrument};
+use utilities::{make_periodic_tick, read_clean_and_decode_hex_str_file};
 
 use crate::{
 	constants::ETH_BLOCK_SAFETY_MARGIN,

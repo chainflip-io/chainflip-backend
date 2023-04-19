@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use cf_primitives::AuthorityCount;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
-use utils::threshold_from_share_count;
+use utilities::threshold_from_share_count;
 
 use crate::multisig::client::utils::find_frequent_element;
 

@@ -20,7 +20,7 @@ use cf_primitives::{KeyId, GENESIS_EPOCH};
 use rocksdb::{Options, DB};
 use sp_runtime::AccountId32;
 use tempfile::TempDir;
-use utils::{assert_ok, testing::new_temp_directory_with_nonexistent_file};
+use utilities::{assert_ok, testing::new_temp_directory_with_nonexistent_file};
 
 const COLUMN_FAMILIES: &[&str] = &[DATA_COLUMN, METADATA_COLUMN];
 
@@ -345,7 +345,7 @@ fn should_save_and_load_checkpoint() {
 
 #[test]
 fn test_migration_to_latest_from_0() {
-	let (_dir, db_file) = utils::testing::new_temp_directory_with_nonexistent_file();
+	let (_dir, db_file) = utilities::testing::new_temp_directory_with_nonexistent_file();
 
 	{
 		let db = PersistentKeyDB::open_and_migrate_to_version(&db_file, None, 0).unwrap();
@@ -365,7 +365,7 @@ fn test_migration_to_v1() {
 	use rand_legacy::FromEntropy;
 	use std::collections::BTreeSet;
 
-	let (_dir, db_file) = utils::testing::new_temp_directory_with_nonexistent_file();
+	let (_dir, db_file) = utilities::testing::new_temp_directory_with_nonexistent_file();
 
 	// create db with version 0
 	let db = PersistentKeyDB::open_and_migrate_to_version(&db_file, None, 0).unwrap();

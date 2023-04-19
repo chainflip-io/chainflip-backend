@@ -27,7 +27,7 @@ use crate::{
 };
 use cf_primitives::{AuthorityCount, CeremonyId};
 use state_chain_runtime::AccountId;
-use utils::task_scope::{task_scope, Scope, ScopedJoinHandle};
+use utilities::task_scope::{task_scope, Scope, ScopedJoinHandle};
 
 use client::{ceremony_runner::CeremonyRunner, utils::PartyIdxMapping};
 

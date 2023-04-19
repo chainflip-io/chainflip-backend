@@ -83,7 +83,7 @@ where
 #[cfg(test)]
 mod tests {
 	use futures::stream;
-	use utils::assert_future_panics;
+	use utilities::assert_future_panics;
 
 	use super::*;
 

@@ -7,7 +7,7 @@ use crate::logging::{
 	KEYGEN_CEREMONY_FAILED, KEYGEN_REQUEST_IGNORED, REQUEST_TO_SIGN_IGNORED,
 	SIGNING_CEREMONY_FAILED, UNAUTHORIZED_KEYGEN_ABORTED, UNAUTHORIZED_SIGNING_ABORTED,
 };
-use utils::format_iterator;
+use utilities::format_iterator;
 
 use thiserror::Error;
 

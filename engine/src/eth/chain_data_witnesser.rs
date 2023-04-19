@@ -21,7 +21,7 @@ use cf_chains::eth::{Ethereum, EthereumTrackedData};
 use state_chain_runtime::CfeSettings;
 use tokio::sync::{oneshot, watch, Mutex};
 use tracing::{error, info_span, Instrument};
-use utils::{context, make_periodic_tick};
+use utilities::{context, make_periodic_tick};
 use web3::types::{BlockNumber, U256};
 
 const ETH_CHAIN_TRACKING_POLL_INTERVAL: Duration = Duration::from_secs(4);
