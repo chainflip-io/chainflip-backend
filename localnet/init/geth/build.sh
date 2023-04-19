@@ -10,4 +10,3 @@ fi
 IMAGE=ghcr.io/chainflip-io/geth:${TAG}-ci
 
 docker buildx build --platform linux/amd64 --build-arg TAG -f geth-ci.Dockerfile -t ${IMAGE} .
-#docker push ${IMAGE}

@@ -10,4 +10,3 @@ fi
 IMAGE=ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:${TAG}-ci
 
 docker buildx build --platform linux/amd64 --build-arg TAG -f polkadot-ci.Dockerfile -t ${IMAGE} .
-docker push ${IMAGE}
