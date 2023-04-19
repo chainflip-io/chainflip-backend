@@ -349,7 +349,7 @@ fn can_process_ccm_via_swap_intent() {
 			gas_swap_id: Some(gas_swap_id),
 			ingress_amount: amount,
 			..
-		}) if ccm_id == CcmIdCounter::<Runtime>::get() - 1 && 
+		}) if ccm_id == CcmIdCounter::<Runtime>::get() && 
 			amount == ingress_amount => (principal_swap_id, gas_swap_id));
 
 		// on_idle to perform the swaps and egress CCM.
@@ -397,7 +397,7 @@ fn can_process_ccm_via_swap_intent() {
 					ccm_id,
 					egress_id: egress_id @ (ForeignChain::Ethereum, _),
 				},
-			) if ccm_id == CcmIdCounter::<Runtime>::get() - 1 => egress_id
+			) if ccm_id == CcmIdCounter::<Runtime>::get() => egress_id
 		);
 
 		assert_events_match!(
@@ -447,7 +447,7 @@ fn can_process_ccm_via_extrinsic_intent() {
 			gas_swap_id: Some(gas_swap_id),
 			ingress_amount: amount,
 			..
-		}) if ccm_id == CcmIdCounter::<Runtime>::get() - 1 && 
+		}) if ccm_id == CcmIdCounter::<Runtime>::get() && 
 			amount == ingress_amount => (principal_swap_id, gas_swap_id));
 
 		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
@@ -494,7 +494,7 @@ fn can_process_ccm_via_extrinsic_intent() {
 					ccm_id,
 					egress_id: egress_id @ (ForeignChain::Ethereum, _),
 				},
-			) if ccm_id == CcmIdCounter::<Runtime>::get() - 1 => egress_id
+			) if ccm_id == CcmIdCounter::<Runtime>::get() => egress_id
 		);
 
 		assert_events_match!(
