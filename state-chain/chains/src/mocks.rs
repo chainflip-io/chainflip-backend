@@ -13,6 +13,7 @@ pub type MockEthereumIngressId = u128;
 
 // Chain implementation used for testing.
 impl Chain for MockEthereum {
+	const NAME: &'static str = "MockEthereum";
 	type IngressFetchId = MockEthereumIngressId;
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;

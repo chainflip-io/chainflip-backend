@@ -138,7 +138,7 @@ macro_rules! derive_display_as_type_name {
 
 #[cfg(test)]
 mod utils_tests {
-	use utilities::assert_panics;
+	use utils::assert_panics;
 
 	use crate::multisig::client::helpers::ACCOUNT_IDS;
 

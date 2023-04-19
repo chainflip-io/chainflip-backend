@@ -10,7 +10,8 @@ use web3::{
 use crate::{eth::EventParseError, state_chain_observer::client::extrinsic_api::ExtrinsicApi};
 
 use super::{
-	event::Event, rpc::EthRpcApi, utils, BlockWithItems, EthContractWitnesser, SignatureAndEvent,
+	event::Event, rpc::EthRpcApi, utils::decode_log_param, BlockWithItems, EthContractWitnesser,
+	SignatureAndEvent,
 };
 
 use anyhow::{bail, Result};
@@ -133,101 +134,98 @@ impl EthContractWitnesser for Vault {
 				Ok(if event_signature == community_guard_disabled.signature {
 					let log = community_guard_disabled.event.parse_log(raw_log)?;
 					VaultEvent::CommunityGuardDisabled {
-						community_guard_disabled: utils::decode_log_param(
-							&log,
-							"communityGuardDisabled",
-						)?,
+						community_guard_disabled: decode_log_param(&log, "communityGuardDisabled")?,
 					}
 				} else if event_signature == suspended.signature {
 					let log = suspended.event.parse_log(raw_log)?;
-					VaultEvent::Suspended { suspended: utils::decode_log_param(&log, "suspended")? }
+					VaultEvent::Suspended { suspended: decode_log_param(&log, "suspended")? }
 				} else if event_signature == updated_key_manager.signature {
 					let log = updated_key_manager.event.parse_log(raw_log)?;
 					VaultEvent::UpdatedKeyManager {
-						key_manager: utils::decode_log_param(&log, "keyManager")?,
+						key_manager: decode_log_param(&log, "keyManager")?,
 					}
 				} else if event_signature == swap_native.signature {
 					let log = swap_native.event.parse_log(raw_log)?;
 					VaultEvent::SwapNative {
-						destination_chain: utils::decode_log_param(&log, "dstChain")?,
-						destination_address: utils::decode_log_param(&log, "dstAddress")?,
-						destination_token: utils::decode_log_param(&log, "dstToken")?,
-						amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?
+						destination_chain: decode_log_param(&log, "dstChain")?,
+						destination_address: decode_log_param(&log, "dstAddress")?,
+						destination_token: decode_log_param(&log, "dstToken")?,
+						amount: decode_log_param::<ethabi::Uint>(&log, "amount")?
 							.try_into()
 							.expect("SwapNative amount should fit into u128"),
-						sender: utils::decode_log_param(&log, "sender")?,
+						sender: decode_log_param(&log, "sender")?,
 					}
 				} else if event_signature == swap_token.signature {
 					let log = swap_token.event.parse_log(raw_log)?;
 					VaultEvent::SwapToken {
-						destination_chain: utils::decode_log_param(&log, "dstChain")?,
-						destination_address: utils::decode_log_param(&log, "dstAddress")?,
-						destination_token: utils::decode_log_param(&log, "dstToken")?,
-						source_token: utils::decode_log_param(&log, "srcToken")?,
-						amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?
+						destination_chain: decode_log_param(&log, "dstChain")?,
+						destination_address: decode_log_param(&log, "dstAddress")?,
+						destination_token: decode_log_param(&log, "dstToken")?,
+						source_token: decode_log_param(&log, "srcToken")?,
+						amount: decode_log_param::<ethabi::Uint>(&log, "amount")?
 							.try_into()
 							.expect("SwapToken amount should fit into u128"),
-						sender: utils::decode_log_param(&log, "sender")?,
+						sender: decode_log_param(&log, "sender")?,
 					}
 				} else if event_signature == transfer_native_failed.signature {
 					let log = transfer_native_failed.event.parse_log(raw_log)?;
 					VaultEvent::TransferNativeFailed {
-						recipient: utils::decode_log_param(&log, "recipient")?,
-						amount: utils::decode_log_param(&log, "amount")?,
+						recipient: decode_log_param(&log, "recipient")?,
+						amount: decode_log_param(&log, "amount")?,
 					}
 				} else if event_signature == transfer_token_failed.signature {
 					let log = transfer_token_failed.event.parse_log(raw_log)?;
 					VaultEvent::TransferTokenFailed {
-						recipient: utils::decode_log_param(&log, "recipient")?,
-						amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?
+						recipient: decode_log_param(&log, "recipient")?,
+						amount: decode_log_param::<ethabi::Uint>(&log, "amount")?
 							.try_into()
 							.expect("TransferTokenFailed amount should fit into u128"),
-						token: utils::decode_log_param(&log, "token")?,
-						reason: utils::decode_log_param(&log, "reason")?,
+						token: decode_log_param(&log, "token")?,
+						reason: decode_log_param(&log, "reason")?,
 					}
 				} else if event_signature == xcall_native.signature {
 					let log = xcall_native.event.parse_log(raw_log)?;
 					VaultEvent::XCallNative {
-						destination_chain: utils::decode_log_param(&log, "dstChain")?,
-						destination_address: utils::decode_log_param(&log, "dstAddress")?,
-						destination_token: utils::decode_log_param(&log, "dstToken")?,
-						amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?
+						destination_chain: decode_log_param(&log, "dstChain")?,
+						destination_address: decode_log_param(&log, "dstAddress")?,
+						destination_token: decode_log_param(&log, "dstToken")?,
+						amount: decode_log_param::<ethabi::Uint>(&log, "amount")?
 							.try_into()
 							.expect("XCallNative amount should fit into u128"),
-						sender: utils::decode_log_param(&log, "sender")?,
-						message: utils::decode_log_param(&log, "message")?,
-						gas_amount: utils::decode_log_param(&log, "gasAmount")?,
-						refund_address: utils::decode_log_param(&log, "refundAddress")?,
+						sender: decode_log_param(&log, "sender")?,
+						message: decode_log_param(&log, "message")?,
+						gas_amount: decode_log_param(&log, "gasAmount")?,
+						refund_address: decode_log_param(&log, "refundAddress")?,
 					}
 				} else if event_signature == xcall_token.signature {
 					let log = xcall_token.event.parse_log(raw_log)?;
 					VaultEvent::XCallToken {
-						destination_chain: utils::decode_log_param(&log, "dstChain")?,
-						destination_address: utils::decode_log_param(&log, "dstAddress")?,
-						destination_token: utils::decode_log_param(&log, "dstToken")?,
-						source_token: utils::decode_log_param(&log, "srcToken")?,
-						amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?
+						destination_chain: decode_log_param(&log, "dstChain")?,
+						destination_address: decode_log_param(&log, "dstAddress")?,
+						destination_token: decode_log_param(&log, "dstToken")?,
+						source_token: decode_log_param(&log, "srcToken")?,
+						amount: decode_log_param::<ethabi::Uint>(&log, "amount")?
 							.try_into()
 							.expect("XCallToken amount should fit into u128"),
-						sender: utils::decode_log_param(&log, "sender")?,
-						message: utils::decode_log_param(&log, "message")?,
-						gas_amount: utils::decode_log_param(&log, "gasAmount")?,
-						refund_address: utils::decode_log_param(&log, "refundAddress")?,
+						sender: decode_log_param(&log, "sender")?,
+						message: decode_log_param(&log, "message")?,
+						gas_amount: decode_log_param(&log, "gasAmount")?,
+						refund_address: decode_log_param(&log, "refundAddress")?,
 					}
 				} else if event_signature == add_gas_token.signature {
 					let log = add_gas_token.event.parse_log(raw_log)?;
 					VaultEvent::AddGasToken {
-						swap_id: utils::decode_log_param(&log, "swapID")?,
-						amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?
+						swap_id: decode_log_param(&log, "swapID")?,
+						amount: decode_log_param::<ethabi::Uint>(&log, "amount")?
 							.try_into()
 							.expect("AddGasToken amount should fit into u128"),
-						token: utils::decode_log_param(&log, "token")?,
+						token: decode_log_param(&log, "token")?,
 					}
 				} else if event_signature == add_gas_native.signature {
 					let log = add_gas_native.event.parse_log(raw_log)?;
 					VaultEvent::AddGasNative {
-						swap_id: utils::decode_log_param(&log, "swapID")?,
-						amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?
+						swap_id: decode_log_param(&log, "swapID")?,
+						amount: decode_log_param::<ethabi::Uint>(&log, "amount")?
 							.try_into()
 							.expect("AddGasNative amount should fit into u128"),
 					}

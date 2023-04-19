@@ -1,5 +1,5 @@
 use crate::{
-	eth::{core_h160, core_h256, utils, EthRpcApi, EventParseError, SignatureAndEvent},
+	eth::{core_h160, core_h256, EthRpcApi, EventParseError, SignatureAndEvent},
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
 };
 use cf_chains::eth::{SchnorrVerificationComponents, TransactionFee};
@@ -20,7 +20,9 @@ use std::fmt::Debug;
 
 use async_trait::async_trait;
 
-use super::{event::Event, BlockWithItems, DecodeLogClosure, EthContractWitnesser};
+use super::{
+	event::Event, utils::decode_log_param, BlockWithItems, DecodeLogClosure, EthContractWitnesser,
+};
 
 pub struct KeyManager {
 	pub deployed_address: H160,
@@ -316,61 +318,57 @@ impl EthContractWitnesser for KeyManager {
 		Ok(Box::new(move |event_signature: H256, raw_log: RawLog| -> Result<KeyManagerEvent> {
 			Ok(if event_signature == ak_nonce_consumers_set.signature {
 				let log = ak_nonce_consumers_set.event.parse_log(raw_log)?;
-				KeyManagerEvent::AggKeyNonceConsumersSet {
-					addrs: utils::decode_log_param(&log, "addrs")?,
-				}
+				KeyManagerEvent::AggKeyNonceConsumersSet { addrs: decode_log_param(&log, "addrs")? }
 			} else if event_signature == ak_nonce_consumers_updated.signature {
 				let log = ak_nonce_consumers_updated.event.parse_log(raw_log)?;
 				KeyManagerEvent::AggKeyNonceConsumersUpdated {
-					new_addrs: utils::decode_log_param(&log, "newAddrs")?,
+					new_addrs: decode_log_param(&log, "newAddrs")?,
 				}
 			} else if event_signature == ak_set_by_ak.signature {
 				let log = ak_set_by_ak.event.parse_log(raw_log)?;
 				KeyManagerEvent::AggKeySetByAggKey {
-					old_agg_key: utils::decode_log_param::<ChainflipKey>(&log, "oldAggKey")?,
-					new_agg_key: utils::decode_log_param::<ChainflipKey>(&log, "newAggKey")?,
+					old_agg_key: decode_log_param::<ChainflipKey>(&log, "oldAggKey")?,
+					new_agg_key: decode_log_param::<ChainflipKey>(&log, "newAggKey")?,
 				}
 			} else if event_signature == ak_set_by_gk.signature {
 				let log = ak_set_by_gk.event.parse_log(raw_log)?;
 				KeyManagerEvent::AggKeySetByGovKey {
-					old_agg_key: utils::decode_log_param::<ChainflipKey>(&log, "oldAggKey")?,
-					new_agg_key: utils::decode_log_param::<ChainflipKey>(&log, "newAggKey")?,
+					old_agg_key: decode_log_param::<ChainflipKey>(&log, "oldAggKey")?,
+					new_agg_key: decode_log_param::<ChainflipKey>(&log, "newAggKey")?,
 				}
 			} else if event_signature == ck_set_by_ak.signature {
 				let log = ck_set_by_ak.event.parse_log(raw_log)?;
 				KeyManagerEvent::CommKeySetByAggKey {
-					old_comm_key: utils::decode_log_param::<ethabi::Address>(&log, "oldCommKey")?,
-					new_comm_key: utils::decode_log_param::<ethabi::Address>(&log, "newCommKey")?,
+					old_comm_key: decode_log_param::<ethabi::Address>(&log, "oldCommKey")?,
+					new_comm_key: decode_log_param::<ethabi::Address>(&log, "newCommKey")?,
 				}
 			} else if event_signature == ck_set_by_ck.signature {
 				let log = ck_set_by_ck.event.parse_log(raw_log)?;
 				KeyManagerEvent::CommKeySetByCommKey {
-					old_comm_key: utils::decode_log_param::<ethabi::Address>(&log, "oldCommKey")?,
-					new_comm_key: utils::decode_log_param::<ethabi::Address>(&log, "newCommKey")?,
+					old_comm_key: decode_log_param::<ethabi::Address>(&log, "oldCommKey")?,
+					new_comm_key: decode_log_param::<ethabi::Address>(&log, "newCommKey")?,
 				}
 			} else if event_signature == gk_set_by_ak.signature {
 				let log = gk_set_by_ak.event.parse_log(raw_log)?;
 				KeyManagerEvent::GovKeySetByAggKey {
-					old_gov_key: utils::decode_log_param(&log, "oldGovKey")?,
-					new_gov_key: utils::decode_log_param(&log, "newGovKey")?,
+					old_gov_key: decode_log_param(&log, "oldGovKey")?,
+					new_gov_key: decode_log_param(&log, "newGovKey")?,
 				}
 			} else if event_signature == gk_set_by_gk.signature {
 				let log = gk_set_by_gk.event.parse_log(raw_log)?;
 				KeyManagerEvent::GovKeySetByGovKey {
-					old_gov_key: utils::decode_log_param(&log, "oldGovKey")?,
-					new_gov_key: utils::decode_log_param(&log, "newGovKey")?,
+					old_gov_key: decode_log_param(&log, "oldGovKey")?,
+					new_gov_key: decode_log_param(&log, "newGovKey")?,
 				}
 			} else if event_signature == sig_accepted.signature {
 				let log = sig_accepted.event.parse_log(raw_log)?;
 				KeyManagerEvent::SignatureAccepted {
-					sig_data: utils::decode_log_param::<SigData>(&log, "sigData")?,
-					signer: utils::decode_log_param(&log, "signer")?,
+					sig_data: decode_log_param::<SigData>(&log, "sigData")?,
+					signer: decode_log_param(&log, "signer")?,
 				}
 			} else if event_signature == gov_action.signature {
 				let log = gov_action.event.parse_log(raw_log)?;
-				KeyManagerEvent::GovernanceAction {
-					message: utils::decode_log_param(&log, "message")?,
-				}
+				KeyManagerEvent::GovernanceAction { message: decode_log_param(&log, "message")? }
 			} else {
 				return Err(anyhow!(EventParseError::UnexpectedEvent(event_signature)))
 			})

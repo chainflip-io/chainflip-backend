@@ -24,10 +24,10 @@ use crate::{
 		crypto::{generate_single_party_signature, CryptoScheme, Rng},
 	},
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage},
-	task_scope::{task_scope, Scope, ScopedJoinHandle},
 };
 use cf_primitives::{AuthorityCount, CeremonyId};
 use state_chain_runtime::AccountId;
+use utils::task_scope::{task_scope, Scope, ScopedJoinHandle};
 
 use client::{ceremony_runner::CeremonyRunner, utils::PartyIdxMapping};
 

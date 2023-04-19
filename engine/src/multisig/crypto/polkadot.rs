@@ -61,6 +61,7 @@ impl CryptoScheme for PolkadotSigning {
 	type Signature = PolkadotSignature;
 	type AggKey = cf_chains::dot::PolkadotPublicKey;
 	type SigningPayload = SigningPayload;
+	type Chain = cf_chains::Polkadot;
 
 	const NAME: &'static str = "Polkadot";
 	const CHAIN_TAG: ChainTag = ChainTag::Polkadot;
@@ -156,7 +157,7 @@ fn signature_should_be_valid() {
 	use super::{curve25519::Scalar, ECPoint, ECScalar};
 	use crate::multisig::crypto::Rng;
 	use rand_legacy::SeedableRng;
-	use utilities::assert_ok;
+	use utils::assert_ok;
 
 	let mut rng = Rng::from_seed([0; 32]);
 

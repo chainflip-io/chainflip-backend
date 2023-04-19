@@ -19,13 +19,12 @@ pub mod witnessing;
 
 use anyhow::{anyhow, Context, Result};
 
+use ::utils::{make_periodic_tick, read_clean_and_decode_hex_str_file};
 use cf_primitives::EpochIndex;
 use regex::Regex;
 use tracing::{debug, info_span, Instrument};
-use utilities::make_periodic_tick;
 
 use crate::{
-	common::read_clean_and_decode_hex_str_file,
 	constants::ETH_BLOCK_SAFETY_MARGIN,
 	eth::{
 		merged_block_stream::merged_block_stream,
@@ -37,7 +36,7 @@ use crate::{
 	witnesser::{
 		block_head_stream_from::block_head_stream_from,
 		http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
-		BlockNumberable,
+		HasBlockNumber,
 	},
 };
 
@@ -69,7 +68,7 @@ pub struct EthNumberBloom {
 	pub base_fee_per_gas: U256,
 }
 
-impl BlockNumberable for EthNumberBloom {
+impl HasBlockNumber for EthNumberBloom {
 	type BlockNumber = u64;
 
 	fn block_number(&self) -> Self::BlockNumber {

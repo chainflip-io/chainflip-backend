@@ -12,8 +12,8 @@ use web3::{
 use crate::{state_chain_observer::client::extrinsic_api::ExtrinsicApi, witnesser::AddressMonitor};
 
 use super::{
-	core_h160, core_h256, event::Event, rpc::EthRpcApi, utils, BlockWithItems, DecodeLogClosure,
-	EthContractWitnesser, SignatureAndEvent,
+	core_h160, core_h256, event::Event, rpc::EthRpcApi, utils::decode_log_param, BlockWithItems,
+	DecodeLogClosure, EthContractWitnesser, SignatureAndEvent,
 };
 use pallet_cf_ingress_egress::IngressWitness;
 
@@ -129,18 +129,18 @@ impl EthContractWitnesser for Erc20Witnesser {
 				Ok(if event_signature == transfer.signature {
 					let log = transfer.event.parse_log(raw_log)?;
 					Erc20Event::Transfer {
-						from: utils::decode_log_param(&log, "from")?,
-						to: utils::decode_log_param(&log, "to")?,
-						value: utils::decode_log_param::<ethabi::Uint>(&log, "value")?
+						from: decode_log_param(&log, "from")?,
+						to: decode_log_param(&log, "to")?,
+						value: decode_log_param::<ethabi::Uint>(&log, "value")?
 							.try_into()
 							.expect("Transfer value should fit u128"),
 					}
 				} else if event_signature == approval.signature {
 					let log = approval.event.parse_log(raw_log)?;
 					Erc20Event::Approval {
-						owner: utils::decode_log_param(&log, "owner")?,
-						spender: utils::decode_log_param(&log, "spender")?,
-						value: utils::decode_log_param::<ethabi::Uint>(&log, "value")?
+						owner: decode_log_param(&log, "owner")?,
+						spender: decode_log_param(&log, "spender")?,
+						value: decode_log_param::<ethabi::Uint>(&log, "value")?
 							.try_into()
 							// Approvals can fail to fit in a u128 - it's common to approve
 							// `U256::MAX`. If parsing fails, we saturate.
