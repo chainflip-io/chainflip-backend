@@ -10,9 +10,9 @@ In order to run the integration tests you must go through the following setup pr
 
 ```sh
 # These 3 steps install globally
-sudo apt-getinstall nodejs
+sudo apt-get install nodejs
 sudo apt-get update
-sudo apt-getinstall npm
+sudo apt-get install npm
 
 # Hardhat is used through a local install in your project. So navigate into the `eth-contracts` repo 
 npm install --save-dev hardhat

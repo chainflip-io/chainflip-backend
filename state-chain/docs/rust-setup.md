@@ -25,7 +25,7 @@ Use a terminal shell to execute the following commands:
 ```bash
 sudo apt-get update
 # May prompt for location information
-sudo apt-getinstall -y git clang curl libssl-dev llvm libudev-dev
+sudo apt-get install -y git clang curl libssl-dev llvm libudev-dev
 ```
 
 ### Arch Linux
