@@ -1,11 +1,9 @@
 use crate::{
 	mock::*, AddressPool, AddressStatus, CrossChainMessage, DeploymentStatus, DisabledEgressAssets,
-	FetchOrTransfer, IntentAction, IntentIdCounter, ScheduledEgressCcm,
+	Error, FetchOrTransfer, IntentAction, IntentIdCounter, Pallet, ScheduledEgressCcm,
 	ScheduledEgressFetchOrTransfer, WeightInfo,
 };
-use cf_chains::{
-	address::ForeignChainAddress, CcmIngressMetadata, ExecutexSwapAndCall, TransferAssetParams,
-};
+use cf_chains::{ExecutexSwapAndCall, TransferAssetParams};
 use cf_primitives::{chains::assets::eth, ForeignChain, IntentId};
 use cf_traits::{
 	mocks::{
@@ -14,9 +12,14 @@ use cf_traits::{
 	},
 	AddressDerivationApi, EgressApi, IngressApi,
 };
-
-use frame_support::{assert_ok, instances::Instance1, traits::Hooks, weights::Weight};
+use frame_support::{
+	assert_noop, assert_ok,
+	instances::Instance1,
+	traits::{Hooks, OriginTrait},
+	weights::Weight,
+};
 use sp_core::H160;
+
 const ALICE_ETH_ADDRESS: EthereumAddress = [100u8; 20];
 const BOB_ETH_ADDRESS: EthereumAddress = [101u8; 20];
 const ETH_ETH: eth::Asset = eth::Asset::Eth;
@@ -126,18 +129,14 @@ fn can_schedule_swap_egress_to_batch() {
 	});
 }
 
-fn schedule_ingress(who: u64, asset: eth::Asset) {
-	let res = IngressEgress::register_liquidity_ingress_intent(who, asset);
-	assert!(res.is_ok());
-
-	if let Ok((_, ingress_address)) = res {
-		assert_ok!(IngressEgress::do_single_ingress(
-			ingress_address.try_into().unwrap(),
-			asset,
-			1_000,
-			Default::default(),
-		));
-	}
+fn register_and_do_ingress(
+	who: u64,
+	asset: eth::Asset,
+) -> (IntentId, <Ethereum as Chain>::ChainAccount) {
+	let (id, address) = IngressEgress::register_liquidity_ingress_intent(who, asset).unwrap();
+	let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
+	assert_ok!(IngressEgress::do_single_ingress(address, asset, 1_000, Default::default(),));
+	(id, address)
 }
 
 #[test]
@@ -145,9 +144,9 @@ fn can_schedule_ingress_fetch() {
 	new_test_ext().execute_with(|| {
 		assert!(ScheduledEgressFetchOrTransfer::<Test, Instance1>::get().is_empty());
 
-		schedule_ingress(1u64, eth::Asset::Eth);
-		schedule_ingress(2u64, eth::Asset::Eth);
-		schedule_ingress(3u64, eth::Asset::Flip);
+		register_and_do_ingress(1u64, eth::Asset::Eth);
+		register_and_do_ingress(2u64, eth::Asset::Eth);
+		register_and_do_ingress(3u64, eth::Asset::Flip);
 
 		assert_eq!(
 			ScheduledEgressFetchOrTransfer::<Test, Instance1>::get(),
@@ -162,7 +161,7 @@ fn can_schedule_ingress_fetch() {
 			crate::Event::IngressFetchesScheduled { intent_id: 1, asset: eth::Asset::Eth },
 		));
 
-		schedule_ingress(4u64, eth::Asset::Eth);
+		register_and_do_ingress(4u64, eth::Asset::Eth);
 
 		assert_eq!(
 			ScheduledEgressFetchOrTransfer::<Test, Instance1>::get(),
@@ -183,16 +182,16 @@ fn on_idle_can_send_batch_all() {
 		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_ETH, 3_000, BOB_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_ETH, 4_000, BOB_ETH_ADDRESS.into(), None);
-		schedule_ingress(1u64, eth::Asset::Eth);
-		schedule_ingress(2u64, eth::Asset::Eth);
-		schedule_ingress(3u64, eth::Asset::Eth);
-		schedule_ingress(4u64, eth::Asset::Eth);
+		register_and_do_ingress(1u64, eth::Asset::Eth);
+		register_and_do_ingress(2u64, eth::Asset::Eth);
+		register_and_do_ingress(3u64, eth::Asset::Eth);
+		register_and_do_ingress(4u64, eth::Asset::Eth);
 
 		IngressEgress::schedule_egress(ETH_FLIP, 5_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_FLIP, 6_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_FLIP, 7_000, BOB_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_FLIP, 8_000, BOB_ETH_ADDRESS.into(), None);
-		schedule_ingress(5u64, eth::Asset::Flip);
+		register_and_do_ingress(5u64, eth::Asset::Flip);
 
 		// Take all scheduled Egress and Broadcast as batch
 		IngressEgress::on_idle(1, Weight::from_ref_time(1_000_000_000_000u64));
@@ -224,20 +223,20 @@ fn all_batch_apicall_creation_failure_should_rollback_storage() {
 		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_ETH, 3_000, BOB_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_ETH, 4_000, BOB_ETH_ADDRESS.into(), None);
-		schedule_ingress(1u64, eth::Asset::Eth);
-		schedule_ingress(2u64, eth::Asset::Eth);
-		schedule_ingress(3u64, eth::Asset::Eth);
-		schedule_ingress(4u64, eth::Asset::Eth);
+		register_and_do_ingress(1u64, eth::Asset::Eth);
+		register_and_do_ingress(2u64, eth::Asset::Eth);
+		register_and_do_ingress(3u64, eth::Asset::Eth);
+		register_and_do_ingress(4u64, eth::Asset::Eth);
 
 		IngressEgress::schedule_egress(ETH_FLIP, 5_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_FLIP, 6_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_FLIP, 7_000, BOB_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_FLIP, 8_000, BOB_ETH_ADDRESS.into(), None);
-		schedule_ingress(5u64, eth::Asset::Flip);
+		register_and_do_ingress(5u64, eth::Asset::Flip);
 
 		// This should create a failure since the environment of eth does not have any address
 		// stored for USDC
-		schedule_ingress(4u64, eth::Asset::Usdc);
+		register_and_do_ingress(4u64, eth::Asset::Usdc);
 
 		let scheduled_requests = ScheduledEgressFetchOrTransfer::<Test, Instance1>::get();
 
@@ -253,8 +252,8 @@ fn all_batch_apicall_creation_failure_should_rollback_storage() {
 fn can_manually_send_batch_all() {
 	new_test_ext().execute_with(|| {
 		IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS.into(), None);
-		schedule_ingress(1u64, eth::Asset::Eth);
-		schedule_ingress(2u64, eth::Asset::Flip);
+		register_and_do_ingress(1u64, eth::Asset::Eth);
+		register_and_do_ingress(2u64, eth::Asset::Flip);
 		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_ETH, 3_000, BOB_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_ETH, 4_000, BOB_ETH_ADDRESS.into(), None);
@@ -263,8 +262,8 @@ fn can_manually_send_batch_all() {
 		IngressEgress::schedule_egress(ETH_FLIP, 6_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_FLIP, 7_000, BOB_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_FLIP, 8_000, BOB_ETH_ADDRESS.into(), None);
-		schedule_ingress(3u64, eth::Asset::Eth);
-		schedule_ingress(4u64, eth::Asset::Flip);
+		register_and_do_ingress(3u64, eth::Asset::Eth);
+		register_and_do_ingress(4u64, eth::Asset::Flip);
 
 		// Send only 2 requests
 		assert_ok!(IngressEgress::egress_scheduled_fetch_transfer(RuntimeOrigin::root(), Some(2)));
@@ -303,13 +302,13 @@ fn on_idle_batch_size_is_limited_by_weight() {
 	new_test_ext().execute_with(|| {
 		IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS.into(), None);
-		schedule_ingress(1u64, eth::Asset::Eth);
-		schedule_ingress(2u64, eth::Asset::Eth);
+		register_and_do_ingress(1u64, eth::Asset::Eth);
+		register_and_do_ingress(2u64, eth::Asset::Eth);
 		IngressEgress::schedule_egress(ETH_FLIP, 3_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_FLIP, 4_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_FLIP, 5_000, ALICE_ETH_ADDRESS.into(), None);
-		schedule_ingress(3u64, eth::Asset::Flip);
-		schedule_ingress(4u64, eth::Asset::Flip);
+		register_and_do_ingress(3u64, eth::Asset::Flip);
+		register_and_do_ingress(4u64, eth::Asset::Flip);
 
 		// There's enough weights for 3 transactions, which are taken in FIFO order.
 		IngressEgress::on_idle(
@@ -399,8 +398,9 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 fn addresses_are_getting_reused() {
 	new_test_ext().execute_with(|| {
 		// Schedule 2 ingress requests
-		schedule_ingress(1u64, eth::Asset::Eth);
-		schedule_ingress(2u64, eth::Asset::Eth);
+		let ingresses = (0..2)
+			.map(|id| register_and_do_ingress(id, eth::Asset::Eth))
+			.collect::<Vec<_>>();
 		// Indicates we have already generated 2 addresses
 		assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
 		// Process one
@@ -409,6 +409,7 @@ fn addresses_are_getting_reused() {
 			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(1) +
 				Weight::from_ref_time(1),
 		);
+		IngressEgress::finalise_ingress(OriginTrait::none(), vec![ingresses[0]]).unwrap();
 		expect_size_of_address_pool(1);
 		// Address 1 is free to use and in the pool of available addresses
 		assert!(AddressPool::<Test, Instance1>::get(1).is_some());
@@ -424,7 +425,7 @@ fn addresses_are_getting_reused() {
 		);
 		expect_size_of_address_pool(1);
 		// Schedule another ingress request
-		schedule_ingress(3u64, eth::Asset::Eth);
+		register_and_do_ingress(3u64, eth::Asset::Eth);
 		expect_size_of_address_pool(0);
 		// Process it
 		IngressEgress::on_idle(
@@ -432,6 +433,7 @@ fn addresses_are_getting_reused() {
 			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(1) +
 				Weight::from_ref_time(1),
 		);
+		IngressEgress::finalise_ingress(OriginTrait::none(), vec![ingresses[1]]).unwrap();
 		// Expect the address to be reused which is indicate by the counter not being incremented
 		assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
 		expect_size_of_address_pool(1);
@@ -441,9 +443,9 @@ fn addresses_are_getting_reused() {
 #[test]
 fn proof_address_pool_integrity() {
 	new_test_ext().execute_with(|| {
-		schedule_ingress(1u64, eth::Asset::Eth);
-		schedule_ingress(2u64, eth::Asset::Eth);
-		schedule_ingress(3u64, eth::Asset::Eth);
+		let ingresses = (0..3)
+			.map(|id| register_and_do_ingress(id, eth::Asset::Eth))
+			.collect::<Vec<_>>();
 		// All addresses in use
 		expect_size_of_address_pool(0);
 		// Process all intents
@@ -452,9 +454,10 @@ fn proof_address_pool_integrity() {
 			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(3) +
 				Weight::from_ref_time(1),
 		);
+		IngressEgress::finalise_ingress(OriginTrait::none(), ingresses).unwrap();
 		// Expect all addresses to be available
 		expect_size_of_address_pool(3);
-		schedule_ingress(4u64, eth::Asset::Eth);
+		register_and_do_ingress(4u64, eth::Asset::Eth);
 		// Expect one address to be in use
 		expect_size_of_address_pool(2);
 	});
@@ -463,16 +466,18 @@ fn proof_address_pool_integrity() {
 #[test]
 fn create_new_address_while_pool_is_empty() {
 	new_test_ext().execute_with(|| {
-		schedule_ingress(1u64, eth::Asset::Eth);
-		schedule_ingress(2u64, eth::Asset::Eth);
+		let ingresses = (0..2)
+			.map(|id| register_and_do_ingress(id, eth::Asset::Eth))
+			.collect::<Vec<_>>();
 		IngressEgress::on_idle(
 			1,
 			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(3) +
 				Weight::from_ref_time(1),
 		);
+		IngressEgress::finalise_ingress(OriginTrait::none(), ingresses).unwrap();
 		IngressEgress::on_initialize(EXPIRY_BLOCK);
 		assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
-		schedule_ingress(3u64, eth::Asset::Eth);
+		register_and_do_ingress(3u64, eth::Asset::Eth);
 		assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
 		IngressEgress::on_idle(
 			1,
@@ -664,5 +669,49 @@ fn governance_can_manually_egress_ccm() {
 
 		// Storage should be cleared
 		assert_eq!(ScheduledEgressCcm::<Test, Instance1>::decode_len(), Some(0));
+	});
+}
+
+#[test]
+fn multi_use_ingress_different_blocks() {
+	const ETH: eth::Asset = eth::Asset::Eth;
+	let (mut intent_id, mut ingress_address): (IntentId, <Ethereum as Chain>::ChainAccount) =
+		Default::default();
+
+	new_test_ext()
+		.execute_as_block(1, || {
+			(intent_id, ingress_address) = register_and_do_ingress(ALICE, ETH);
+			IngressEgress::on_idle(0, Weight::MAX);
+		})
+		.execute_as_block(2, || {
+			// Do another, should succeed.
+			assert_ok!(Pallet::<Test, _>::do_single_ingress(
+				ingress_address,
+				ETH,
+				1,
+				Default::default()
+			));
+			IngressEgress::on_idle(0, Weight::MAX);
+		})
+		.execute_as_block(3, || {
+			// Finalising should invalidate the ingress.
+			assert_ok!(Pallet::<Test, _>::finalise_ingress(
+				OriginTrait::none(),
+				vec![(intent_id, ingress_address)],
+			));
+			assert_noop!(
+				Pallet::<Test, _>::do_single_ingress(ingress_address, ETH, 1, Default::default()),
+				Error::<Test, _>::InvalidIntent
+			);
+		});
+}
+
+#[test]
+fn multi_use_ingress_same_block() {
+	const ETH: eth::Asset = eth::Asset::Eth;
+	new_test_ext().execute_as_block(1, || {
+		let (_intent_id, ingress_address) = register_and_do_ingress(ALICE, ETH);
+		Pallet::<Test, _>::do_single_ingress(ingress_address, ETH, 1, Default::default()).unwrap();
+		IngressEgress::on_idle(0, Weight::MAX);
 	});
 }

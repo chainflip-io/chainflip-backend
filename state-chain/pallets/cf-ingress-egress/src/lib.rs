@@ -363,6 +363,7 @@ pub mod pallet {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 			for (intent_id, address) in addresses {
 				IntentActions::<T, I>::remove(&address);
+				FetchParamDetails::<T, I>::remove(intent_id);
 				AddressPool::<T, I>::insert(intent_id, address.clone());
 				AddressStatus::<T, I>::insert(address.clone(), DeploymentStatus::Deployed);
 				if let Some(intent_ingress_details) = IntentIngressDetails::<T, I>::take(&address) {
@@ -493,7 +494,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		for request in batch_to_send {
 			match request {
 				FetchOrTransfer::<T::TargetChain>::Fetch { intent_id, asset } => {
-					let (ingress_id, ingress_address) = FetchParamDetails::<T, I>::take(intent_id)
+					let (ingress_id, ingress_address) = FetchParamDetails::<T, I>::get(intent_id)
 						.expect("to have fetch param details available");
 					fetch_params.push(FetchAssetParams { ingress_fetch_id: ingress_id, asset });
 					addresses.push((intent_id, ingress_address.clone()));

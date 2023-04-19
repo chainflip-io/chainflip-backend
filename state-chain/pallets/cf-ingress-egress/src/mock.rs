@@ -10,7 +10,12 @@ pub use cf_primitives::{
 };
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 
-use frame_support::{instances::Instance1, parameter_types, traits::UnfilteredDispatchable};
+use frame_support::{
+	instances::Instance1,
+	parameter_types,
+	traits::{OnFinalize, OnIdle, OnInitialize, UnfilteredDispatchable},
+	weights::Weight,
+};
 
 use cf_traits::{
 	impl_mock_callback,
@@ -96,6 +101,7 @@ impl_mock_callback!(RuntimeOrigin);
 parameter_types! {
 	pub static EgressedApiCall: Option<MockEthereumApiCall<MockEthEnvironment>> = None;
 }
+
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
 	type ApiCall = MockEthereumApiCall<MockEthEnvironment>;
@@ -110,10 +116,8 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 
 	fn threshold_sign_and_broadcast_with_callback(
 		_api_call: Self::ApiCall,
-		callback: Self::Callback,
+		_callback: Self::Callback,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		// TODO: Call the callback.
-		let _ = callback.dispatch_bypass_filter(frame_system::RawOrigin::Root.into());
 		(1, 2)
 	}
 }
@@ -136,15 +140,35 @@ impl crate::Config<Instance1> for Test {
 	type CcmHandler = MockCcmHandler;
 }
 
+pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
+
+pub struct WrappedExternalites(sp_io::TestExternalities);
+
+impl WrappedExternalites {
+	pub fn new() -> Self {
+		Self(GenesisConfig { system: Default::default() }.build_storage().unwrap().into())
+	}
+
+	pub fn execute_with<R>(&mut self, f: impl FnOnce() -> R) -> R {
+		self.0.execute_with(|| {
+			System::set_block_number(1);
+			f()
+		})
+	}
+
+	pub fn execute_as_block(mut self, block_number: u64, f: impl FnOnce()) -> Self {
+		self.0.execute_with(|| {
+			System::set_block_number(block_number);
+			<AllPalletsWithSystem as OnInitialize<_>>::on_initialize(block_number);
+			f();
+			<AllPalletsWithSystem as OnIdle<_>>::on_idle(block_number, Weight::MAX);
+			<AllPalletsWithSystem as OnFinalize<_>>::on_finalize(block_number);
+		});
+		self
+	}
+}
+
 // Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig { system: Default::default() };
-
-	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
-
-	ext.execute_with(|| {
-		System::set_block_number(1);
-	});
-
-	ext
+pub fn new_test_ext() -> WrappedExternalites {
+	WrappedExternalites::new()
 }
