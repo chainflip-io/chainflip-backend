@@ -709,9 +709,17 @@ fn multi_use_ingress_different_blocks() {
 #[test]
 fn multi_use_ingress_same_block() {
 	const ETH: eth::Asset = eth::Asset::Eth;
-	new_test_ext().execute_as_block(1, || {
-		let (_intent_id, ingress_address) = register_and_do_ingress(ALICE, ETH);
-		Pallet::<Test, _>::do_single_ingress(ingress_address, ETH, 1, Default::default()).unwrap();
-		IngressEgress::on_idle(0, Weight::MAX);
-	});
+	new_test_ext()
+		.execute_as_block(1, || {
+			let (_intent_id, ingress_address) = register_and_do_ingress(ALICE, ETH);
+			// Another ingress to the same address.
+			Pallet::<Test, _>::do_single_ingress(ingress_address, ETH, 1, Default::default())
+				.unwrap();
+		})
+		.execute_with(|| {
+			assert_eq!(
+				ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(),
+				0
+			);
+		});
 }
