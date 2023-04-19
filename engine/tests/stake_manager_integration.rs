@@ -102,6 +102,24 @@ pub async fn test_all_stake_manager_events() {
 
 	sm_events
 		.iter()
+		.find(|event| match &event.event_parameters {
+			StakeManagerEvent::ClaimExpired { account_id, amount } => {
+				assert_eq!(
+					account_id,
+					&AccountId32::from_str(
+						"000000000000000000000000000000000000000000000000000000000000a455"
+					)
+					.unwrap()
+				);
+				assert_eq!(amount, &333333333333333311488);
+				true
+			},
+			_ => false,
+		})
+		.expect("Didn't find the ClaimExpired event");
+
+	sm_events
+		.iter()
 		.find(|event| match event.event_parameters {
 			StakeManagerEvent::MinStakeChanged { old_min_stake, new_min_stake } => {
 				assert_eq!(old_min_stake, U256::from_dec_str("1000000000000000000000").unwrap());

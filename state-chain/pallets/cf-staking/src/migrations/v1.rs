@@ -9,8 +9,19 @@ use codec::{Decode, Encode};
 /// `release/0.6`).
 pub struct Migration<T: Config>(PhantomData<T>);
 
-// Note this is valid only perseverance.
-const CLAIM_DELAY_BUFFER_SECONDS: u64 = 80;
+mod archived {
+
+	use super::*;
+
+	use frame_support::pallet_prelude::ValueQuery;
+
+	// Note this is valid only perseverance.
+	pub const CLAIM_DELAY_BUFFER_SECONDS: u64 = 80;
+
+	// This is added in 0.7 but then removed in 0.8.
+	#[frame_support::storage_alias]
+	pub type ClaimDelayBufferSeconds<T: Config> = StorageValue<Pallet<T>, u64, ValueQuery>;
+}
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
@@ -18,7 +29,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		for account in accounts {
 			PendingClaims::<T>::insert(account, ());
 		}
-		ClaimDelayBufferSeconds::<T>::put(CLAIM_DELAY_BUFFER_SECONDS);
+		archived::ClaimDelayBufferSeconds::<T>::put(archived::CLAIM_DELAY_BUFFER_SECONDS);
 		Weight::zero()
 	}
 
