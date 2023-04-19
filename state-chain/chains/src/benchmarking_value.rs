@@ -4,6 +4,7 @@ use cf_primitives::{
 	Asset, KeyId,
 };
 
+#[cfg(feature = "runtime-benchmarks")]
 use crate::address::EncodedAddress;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::address::ForeignChainAddress;
