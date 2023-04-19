@@ -22,8 +22,6 @@ localnet/init/polkadot/docker-compose.yml
 !localnet/init/keyshare/bashful.db
 !localnet/init/keyshare/bashful.db/*.log
 
-oxen_connection
-
 # Local CFE config
 engine/config/Local.toml
 
@@ -31,6 +29,7 @@ engine/config/Local.toml
 engine/tests/test_keystore/*
 
 .vscode
+.vscode/*
 .idea
 
 # created by cargo-deny check --graph
