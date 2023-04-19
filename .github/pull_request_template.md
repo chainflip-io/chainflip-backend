@@ -4,7 +4,7 @@
 
 Please conduct a through self-review before opening the PR.
 
-- [ ] I am confiddent that the code works.
+- [ ] I am confident that the code works.
 - [ ] I have updated documentation where appropriate.
 
 ## Summary
