@@ -47,7 +47,8 @@ jobs:
       - name: Checkout chainflip-backend
         uses: actions/checkout@v3
 
-      - uses: actions/setup-node@v3
+      - name: Configure NodeJS
+        uses: actions/setup-node@v3
         with:
           node-version: 16
 
@@ -68,11 +69,11 @@ jobs:
           token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
           path: bouncer
 
-      - name: npm install
+      - name: Install node dependencies
         working-directory: bouncer
         run: npm i
 
-      - name: Init localnet
+      - name: Start a localnet
         env:
           BINARIES_LOCATION: ./target/debug
         run: |
@@ -91,3 +92,17 @@ jobs:
           ./tests/produces_blocks.sh
           ./tests/stress_test.sh 2
           ./commands/setup_vaults.sh
+          ./commands/setup_swaps.sh
+
+      - name: Notify on failed build
+        if: failure()
+        env:
+          DISCORD_USERNAME: 'Nightly build'
+          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
+        uses: Ilshidur/action-discord@0.3.2
+        with:
+          args: |
+            ❗️❗️❗️❗️ Nightly Build Failed on `main` ❗️❗️❗️❗️
+            👾 Link to job: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            #️⃣ Tagging: <@&939151218708709416>
+            https://media.giphy.com/media/wHfwCBZzCMhmE/giphy.gif
