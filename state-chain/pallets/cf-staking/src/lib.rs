@@ -17,6 +17,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::RegisterClaim;
+use cf_primitives::EthereumAddress;
 use cf_traits::{Bid, BidderProvider, EpochInfo, StakeTransfer, SystemStateInfo};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -55,8 +56,6 @@ pub mod pallet {
 	use sp_std::time::Duration;
 
 	pub type AccountId<T> = <T as frame_system::Config>::AccountId;
-
-	pub type EthereumAddress = [u8; 20];
 
 	pub type StakeAttempt<Amount> = (EthereumAddress, Amount);
 
