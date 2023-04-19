@@ -222,7 +222,7 @@ impl EthContractWitnesser for StakeManager {
 					let account_id = node_id_from_log(&log)?;
 					StakeManagerEvent::ClaimExpired {
 						account_id,
-						amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?
+						amount: decode_log_param::<ethabi::Uint>(&log, "amount")?
 							.try_into()
 							.expect("ClaimExpired event amount should fit u128"),
 					}
