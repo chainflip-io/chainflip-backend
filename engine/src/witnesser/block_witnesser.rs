@@ -138,6 +138,8 @@ where
 				StartCheckpointing::AlreadyWitnessedEpoch => return Ok(WitnesserInitResult::EpochSkipped),
 			};
 
+		tracing::info!("{} block witnesser is starting from block {}", <Generator::Witnesser as BlockWitnesser>::Chain::NAME, from_block);
+
 		let block_stream = self.generator.get_block_stream(from_block).await?;
 
 		let witnesser = BlockWitnesserWrapper {
