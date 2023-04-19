@@ -9,19 +9,18 @@ mod missed_authorship_slots;
 mod offences;
 mod signer_nomination;
 use crate::{
-	AccountId, Authorship, BitcoinIngressEgress, BlockNumber, EmergencyRotationPercentageRange,
-	Emissions, Environment, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
-	Flip, FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress, Reputation, Runtime,
-	RuntimeCall, System, Validator,
+	AccountId, Authorship, BitcoinIngressEgress, BitcoinVault, BlockNumber,
+	EmergencyRotationPercentageRange, Emissions, Environment, EthereumBroadcaster,
+	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster,
+	PolkadotIngressEgress, Reputation, Runtime, RuntimeCall, System, Validator,
 };
 
 use cf_chains::{
-	address::{AddressConverter, BitcoinAddressData, EncodedAddress, ForeignChainAddress},
+	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	btc::{
 		api::{BitcoinApi, SelectedUtxos},
 		ingress_address::derive_btc_address_from_script,
-		scriptpubkey_from_address, Bitcoin, BitcoinNetwork, BitcoinTransactionData, BtcAmount,
-		Utxo,
+		scriptpubkey_from_address, Bitcoin, BitcoinTransactionData, BtcAmount,
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
@@ -327,14 +326,8 @@ impl ChainEnvironment<BtcAmount, SelectedUtxos> for BtcEnvironment {
 	}
 }
 
-impl ChainEnvironment<(), BitcoinNetwork> for BtcEnvironment {
-	fn lookup(_: ()) -> Option<BitcoinNetwork> {
-		Some(Environment::bitcoin_network())
-	}
-}
 impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 	fn lookup(_: ()) -> Option<cf_chains::btc::AggKey> {
-		use crate::BitcoinVault;
 		match <BitcoinVault as KeyProvider<Bitcoin>>::current_epoch_key() {
 			EpochKey { key, key_state, .. } if key_state == KeyState::Active => Some(key),
 			_ => None,
@@ -511,26 +504,32 @@ impl IngressHandler<Polkadot> for DotIngressHandler {}
 
 pub struct BtcIngressHandler;
 impl IngressHandler<Bitcoin> for BtcIngressHandler {
-	fn handle_ingress(
+	fn on_ingress_completed(
 		utxo_id: <Bitcoin as ChainCrypto>::TransactionId,
 		amount: <Bitcoin as Chain>::ChainAmount,
-		_address: <Bitcoin as Chain>::ChainAccount,
+		address: <Bitcoin as Chain>::ChainAccount,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 	) {
-		Environment::add_bitcoin_utxo_to_list(Utxo {
-			amount,
-			txid: utxo_id.tx_hash,
-			vout: utxo_id.vout,
-			pubkey_x: utxo_id.pubkey_x,
-			salt: utxo_id
-				.salt
-				.try_into()
-				.expect("The salt/intent_id is not expected to exceed u32 max"), /* Todo: Confirm
-			                                                                   * this assumption.
-			                                                                   * Consider this in
-			                                                                   * conjunction with
-			                                                                   * #2354 */
-		})
+		Environment::add_bitcoin_utxo_to_list(amount, utxo_id, address)
+	}
+
+	fn on_ingress_initiated(
+		ingress_script: <Bitcoin as Chain>::ChainAccount,
+		salt: IntentId,
+	) -> Result<(), DispatchError> {
+		Environment::add_details_for_btc_ingress_script(
+			ingress_script,
+			salt.try_into().expect("The salt/intent_id is not expected to exceed u32 max"), /* Todo: Confirm
+			                                                                                 * this assumption.
+			                                                                                 * Consider this in
+			                                                                                 * conjunction with
+			                                                                                 * #2354 */
+			BitcoinVault::vaults(Validator::epoch_index())
+				.ok_or(DispatchError::Other("No vault for epoch"))?
+				.public_key
+				.pubkey_x,
+		);
+		Ok(())
 	}
 }
 

@@ -282,17 +282,15 @@ impl Engine {
 									Validator::epoch_index()
 								);
 
-								let btc_public_key = self.btc_threshold_signer.borrow_mut().proposed_public_key();
+
 								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
 									RuntimeOrigin::signed(self.node_id.clone()),
 									Box::new(pallet_cf_vaults::Call::<_, BitcoinInstance>::vault_key_rotated {
-										new_public_key: btc_public_key,
+										new_public_key: self.btc_threshold_signer.borrow_mut().proposed_public_key(),
 										block_number: 100,
 										tx_id: UtxoId {
-											pubkey_x: btc_public_key.pubkey_x,
 											tx_hash: [2u8; 32],
 											vout: 1,
-											salt: 0,
 										},
 									}.into()),
 									Validator::epoch_index()

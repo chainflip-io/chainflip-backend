@@ -678,7 +678,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				)?,
 		};
 
-		T::IngressHandler::handle_ingress(tx_id.clone(), amount, ingress_address.clone(), asset);
+		T::IngressHandler::on_ingress_completed(
+			tx_id.clone(),
+			amount,
+			ingress_address.clone(),
+			asset,
+		);
 
 		Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount, tx_id });
 		Ok(())
@@ -722,6 +727,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		IntentIngressDetails::<T, I>::insert(&address, IngressDetails { intent_id, ingress_asset });
 		IntentActions::<T, I>::insert(&address, intent_action);
+		T::IngressHandler::on_ingress_initiated(address.clone(), intent_id)?;
 		Ok((intent_id, address))
 	}
 }

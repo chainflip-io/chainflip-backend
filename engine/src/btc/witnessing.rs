@@ -8,7 +8,7 @@ use crate::{
 	witnesser::{AddressMonitor, AddressMonitorCommand, EpochStart, LatestBlockNumber},
 };
 use anyhow::{Context, Result};
-use cf_chains::{address::BitcoinAddressData, Bitcoin};
+use cf_chains::{btc::BitcoinScriptBounded, Bitcoin};
 use futures::TryFutureExt;
 use sp_core::H256;
 
@@ -21,7 +21,7 @@ pub async fn start(
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Bitcoin>>,
 	initial_block_hash: H256,
 	db: Arc<PersistentKeyDB>,
-) -> Result<tokio::sync::mpsc::UnboundedSender<AddressMonitorCommand<BitcoinAddressData>>> {
+) -> Result<tokio::sync::mpsc::UnboundedSender<AddressMonitorCommand<BitcoinScriptBounded>>> {
 	let btc_rpc = BtcRpcClient::new(btc_settings)?;
 
 	// We do a simple initial query here to test the connection. Else it's possible the connection

@@ -1,8 +1,8 @@
 pub mod batch_transfer;
 
 use super::{
-	ingress_address::derive_btc_ingress_bitcoin_script, AggKey, Bitcoin, BitcoinNetwork,
-	BitcoinOutput, BtcAmount, Utxo, CHANGE_ADDRESS_SALT,
+	ingress_address::derive_btc_ingress_bitcoin_script, AggKey, Bitcoin, BitcoinOutput, BtcAmount,
+	Utxo, CHANGE_ADDRESS_SALT,
 };
 use crate::*;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
@@ -22,15 +22,12 @@ pub type SelectedUtxos = (Vec<Utxo>, u64);
 impl<E> AllBatch<Bitcoin> for BitcoinApi<E>
 where
 	E: ChainEnvironment<<Bitcoin as Chain>::ChainAmount, SelectedUtxos>
-		+ ChainEnvironment<(), BitcoinNetwork>
 		+ ChainEnvironment<(), AggKey>,
 {
 	fn new_unsigned(
 		_fetch_params: Vec<FetchAssetParams<Bitcoin>>,
 		transfer_params: Vec<TransferAssetParams<Bitcoin>>,
 	) -> Result<Self, ()> {
-		let bitcoin_network = <E as ChainEnvironment<(), BitcoinNetwork>>::lookup(())
-			.expect("Since the lookup function always returns a some");
 		let bitcoin_change_script = derive_btc_ingress_bitcoin_script(
 			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(())?.pubkey_x,
 			CHANGE_ADDRESS_SALT,
@@ -63,16 +60,12 @@ where
 
 impl<E> SetAggKeyWithAggKey<Bitcoin> for BitcoinApi<E>
 where
-	E: ChainEnvironment<<Bitcoin as Chain>::ChainAmount, SelectedUtxos>
-		+ ChainEnvironment<(), BitcoinNetwork>,
+	E: ChainEnvironment<<Bitcoin as Chain>::ChainAmount, SelectedUtxos>,
 {
 	fn new_unsigned(
 		_maybe_old_key: Option<<Bitcoin as ChainCrypto>::AggKey>,
 		new_key: <Bitcoin as ChainCrypto>::AggKey,
 	) -> Result<Self, ()> {
-		let bitcoin_network = <E as ChainEnvironment<(), BitcoinNetwork>>::lookup(())
-			.expect("Since the lookup function always returns a some");
-
 		// We will use the bitcoin address derived with the salt of 0 as the vault address where we
 		// collect unspent amounts in btc transactions and consolidate funds when rotating epoch.
 		let new_vault_change_script =

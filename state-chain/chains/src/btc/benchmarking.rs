@@ -28,7 +28,7 @@ impl<T: BenchmarkValue> BenchmarkValue for Vec<T> {
 
 impl BenchmarkValue for UtxoId {
 	fn benchmark_value() -> Self {
-		UtxoId { tx_hash: [1u8; 32], vout: 1, pubkey_x: [2u8; 32], salt: 0 }
+		UtxoId { tx_hash: [1u8; 32], vout: 1 }
 	}
 }
 

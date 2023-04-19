@@ -18,13 +18,10 @@ use sp_core::ConstU32;
 use sp_std::{vec, vec::Vec};
 
 extern crate alloc;
-use crate::{
-	address::BitcoinAddressData, Age, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator,
-	IngressIdConstructor,
-};
+use crate::{Age, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
 use alloc::string::String;
 pub use cf_primitives::chains::Bitcoin;
-use cf_primitives::{chains::assets, EpochIndex, IntentId, KeyId, PublicKeyBytes};
+use cf_primitives::{chains::assets, EpochIndex, KeyId, PublicKeyBytes};
 use itertools;
 
 /// This salt is used to derive the change address for every vault. i.e. for every epoch.
@@ -118,7 +115,7 @@ impl Age for BitcoinTrackedData {
 
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
 pub struct EpochStartData {
-	pub change_address: BitcoinAddressData,
+	pub change_pubkey: AggKey,
 }
 
 impl Chain for Bitcoin {
@@ -223,17 +220,12 @@ impl ChainAbi for Bitcoin {
 
 // TODO: Look at moving this into Utxo. They're exactly the same apart from the IntentId
 // which could be made generic, if even necessary at all.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen)]
 pub struct UtxoId {
 	// Tx hash of the transaction this utxo was a part of
 	pub tx_hash: Hash,
 	// The index of the output for this utxo
 	pub vout: u32,
-	// The public key of the account that can spend this utxo
-	pub pubkey_x: [u8; 32],
-	// Salt used to generate an address from the public key. In our case its the intent id of the
-	// swap
-	pub salt: IntentId,
 }
 
 impl IngressIdConstructor for BitcoinFetchId {
@@ -629,9 +621,9 @@ impl TryFrom<BitcoinScript> for BitcoinScriptBounded {
 	}
 }
 
-impl Into<BitcoinScript> for BitcoinScriptBounded {
-	fn into(self) -> BitcoinScript {
-		BitcoinScript { data: self.data.into() }
+impl From<BitcoinScriptBounded> for BitcoinScript {
+	fn from(value: BitcoinScriptBounded) -> Self {
+		Self { data: value.data.into() }
 	}
 }
 

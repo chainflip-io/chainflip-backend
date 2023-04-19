@@ -10,85 +10,9 @@ use sp_core::H160;
 use sp_runtime::DispatchError;
 use sp_std::vec::Vec;
 
-use crate::btc::{BitcoinNetwork, BitcoinScriptBounded};
+use crate::btc::BitcoinScriptBounded;
 
 pub type ScriptPubkeyBytes = Vec<u8>;
-
-/// The seed data required to generate a Bitcoin address. We don't pass in network
-/// here, as we assume the same network for all addresses.
-#[derive(
-	Default, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord,
-)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct BitcoinAddressSeed {
-	pub pubkey_x: [u8; 32],
-	pub salt: u32,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct BitcoinAddressData {
-	pub address_for: BitcoinAddressFor,
-	pub network: BitcoinNetwork,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum BitcoinAddressFor {
-	// When we ingress, we derive an address from our pubkey_x and a salt which creates an address
-	// that can then be used by the user to send BTC to us.
-	Ingress(BitcoinAddressSeed),
-	// When we egress, we are provided with an address from the user.
-	// We then create a lock script over that address.
-	Egress(BitcoinScriptBounded),
-}
-
-impl BitcoinAddressData {
-	// pub fn to_scriptpubkey(&self) -> Result<BitcoinScript, Error> {
-	// 	scriptpubkey_from_address(
-	// 		&self.to_address_string().map_err(|_| Error::InvalidAddress)?,
-	// 		self.network,
-	// 	)
-	// }
-
-	pub fn seed(&self) -> Option<BitcoinAddressSeed> {
-		match &self.address_for {
-			BitcoinAddressFor::Ingress(seed) => Some(seed.clone()),
-			BitcoinAddressFor::Egress(_) => None,
-		}
-	}
-
-	// #[allow(clippy::result_unit_err)]
-	// pub fn to_address_string(&self) -> Result<String, ()> {
-	// 	match &self.address_for {
-	// 		BitcoinAddressFor::Ingress(seed) =>
-	// 			Ok(derive_btc_ingress_address(seed.pubkey_x, seed.salt, self.network)),
-	// 		BitcoinAddressFor::Egress(_) => Err(()),
-	// 	}
-	// }
-	// #[allow(clippy::result_unit_err)]
-	// pub fn from_address_string(address_bytes: &[u8], network: BitcoinNetwork) -> Result<Self, ()>
-	// { 	Ok(Self {
-	// 		address_for: BitcoinAddressFor::Egress(
-	// 			scriptpubkey_from_address(
-	// 				sp_std::str::from_utf8(address_bytes).map_err(|_| ())?,
-	// 				network,
-	// 			)
-	// 			.map_err(|_| ())?,
-	// 		),
-	// 		network,
-	// 	})
-	// }
-}
-
-impl Default for BitcoinAddressData {
-	fn default() -> Self {
-		BitcoinAddressData {
-			address_for: BitcoinAddressFor::Ingress(BitcoinAddressSeed::default()),
-			network: BitcoinNetwork::Mainnet,
-		}
-	}
-}
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]

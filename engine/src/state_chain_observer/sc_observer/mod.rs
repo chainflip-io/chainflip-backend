@@ -3,8 +3,7 @@ mod tests;
 
 use anyhow::{anyhow, Context};
 use cf_chains::{
-	address::{BitcoinAddressData, BitcoinAddressFor, BitcoinAddressSeed},
-	btc::{self, CHANGE_ADDRESS_SALT},
+	btc::{self, BitcoinScriptBounded},
 	dot,
 	eth::Ethereum,
 	Bitcoin, ChainCrypto, Polkadot,
@@ -201,7 +200,7 @@ pub async fn start<
 	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<[u8; 64]>,
 	btc_epoch_start_sender: async_broadcast::Sender<EpochStart<Bitcoin>>,
 	btc_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<
-		AddressMonitorCommand<BitcoinAddressData>,
+		AddressMonitorCommand<BitcoinScriptBounded>,
 	>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
 	initial_block_hash: H256,
@@ -223,13 +222,6 @@ where
             use frame_support::traits::TypedGet;
             <state_chain_runtime::Runtime as pallet_cf_reputation::Config>::HeartbeatBlockInterval::get()
         };
-
-        let btc_network = state_chain_client
-            .storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>(
-                initial_block_hash,
-            )
-            .await
-            .unwrap();
 
         let start_epoch = |block_hash: H256, index: u32, current: bool, participant: bool| {
             let eth_epoch_start_sender = &eth_epoch_start_sender;
@@ -286,13 +278,7 @@ where
                 .await
                 .unwrap() {
 
-                    let change_address = BitcoinAddressData {
-                        address_for: BitcoinAddressFor::Ingress(BitcoinAddressSeed {
-                            pubkey_x: vault.public_key.pubkey_x,
-                            salt: CHANGE_ADDRESS_SALT,
-                        }),
-                        network: btc_network,
-                    };
+                    let change_pubkey = vault.public_key;
 
                     btc_epoch_start_sender.broadcast(EpochStart::<Bitcoin> {
                         epoch_index: index,
@@ -300,7 +286,7 @@ where
                         current,
                         participant,
                         data: btc::EpochStartData {
-                            change_address
+                            change_pubkey
                         },
                     }).await.unwrap();
                 }
