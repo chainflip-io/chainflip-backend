@@ -55,10 +55,7 @@ where
 			checkpoint
 		},
 		None => {
-			info!(
-				"No {chain_tag} witnesser checkpoint found, using default of {:?}",
-				WitnessedUntil::default()
-			);
+			info!("No {chain_tag} witnesser checkpoint found");
 			WitnessedUntil::default()
 		},
 	};
