@@ -1,6 +1,7 @@
 name: Checks
 on:
-  push:
+  workflow_call:
+
 
 env:
   SCCACHE_CACHE_SIZE: 32G
@@ -178,100 +179,6 @@ jobs:
         run: |
           chmod +x ./target/release/chainflip-node
           ./state-chain/scripts/benchmark-all.sh --binary ./target/release/chainflip-node --steps 2 --repetitions 1
-
-  test-single-node:
-    runs-on: [hetzner]
-    concurrency:
-      group: ${{ github.ref }}-test-single-node
-      cancel-in-progress: true
-    needs: [build-and-test]
-    env:
-      RUST_BACKTRACE: 1
-    services:
-      bitcoin:
-        image: ghcr.io/chainflip-io/chainflip-bitcoin-regtest:v24.0.1
-        credentials:
-          username: chainflip-bot
-          password: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
-        ports:
-          - 8332:8332
-    steps:
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 17
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Download previously built binaries
-        uses: actions/download-artifact@v3
-        with:
-          name: chainflip-backend-bin
-          path: ./target/release
-      - name: Setup config and give permissions
-        run: |
-          echo -n ${{ secrets.BASHFUL_SIGNING_KEY }} > signing_key_file
-          echo -n ${{ secrets.ETH_PRIVATE_KEY }} > eth_private_key_file
-          echo -n ${{ secrets.NODE_KEY }} > node_key_file
-          chmod +x ./target/release/chainflip*
-      - name: Run node in background
-        run: |
-          ./target/release/chainflip-node purge-chain --chain="dev" -y
-          ./target/release/chainflip-node key insert --key-type 'aura' --scheme sr25519 --chain dev --suri "${{ secrets.BASHFUL_SECRET_SEED }}"
-          ./target/release/chainflip-node key insert --key-type 'gran' --scheme ed25519 --chain dev --suri "${{ secrets.BASHFUL_SECRET_SEED }}"
-          ./target/release/chainflip-node --chain dev --node-key-file=node_key_file --validator --force-authoring --rpc-cors=all &
-          sleep 10
-      - name: Check node health
-        run: >
-          curl --request POST -L -H "Content-Type:application/json;charset=utf-8" --data '{"id":1, "jsonrpc":"2.0", "method": "system_health"}' --url
-          'http://localhost:9933' --connect-timeout 5 --max-time 10 --retry 3 --retry-delay 1 --retry-max-time 20 --retry-connrefused -vv
-      - name: Run engine in background
-        run: |
-          ./target/release/chainflip-engine --config-root engine/config/CI &
-          sleep 2
-        env:
-          ETH__NODE_ENDPOINT: ${{ secrets.ETH__NODE_ENDPOINT }}
-          ETH__WS_NODE_ENDPOINT: ${{ secrets.ETH__WS_NODE_ENDPOINT }}
-          ETH__HTTP_NODE_ENDPOINT: ${{ secrets.ETH__HTTP_NODE_ENDPOINT }}
-          DOT__WS_NODE_ENDPOINT: ${{ secrets.DOT__WS_NODE_ENDPOINT }}
-          BTC__HTTP_NODE_ENDPOINT: http://localhost:8332
-          BTC__RPC_USER: flip
-          BTC__RPC_PASSWORD: flip
-      - name: Check engine health
-        run: >
-          curl --url 'http://localhost:5555/health' --connect-timeout 5 --max-time 10 --retry 10 --retry-delay 2 --retry-max-time 20 --retry-connrefused -vv
-      - name: Clone docgen
-        uses: actions/checkout@v3
-        with:
-          repository: chainflip-io/chainflip-docgen
-          ref: main
-          token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
-          path: chainflip-docgen
-      - name: npm install
-        run: |
-          cd chainflip-docgen
-          npm install
-      - name: Generate State Chain docs
-        run: |
-          cd chainflip-docgen/
-          npm run generate
-      - name: Install graphviz
-        run: |
-          echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get clean
-          echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get update
-          echo ${{ secrets.CF_RUNNER_SUDO_PASSWORD }} | sudo -S apt-get install -y graphviz
-      - uses: actions/setup-java@v3
-        with:
-          distribution: "zulu"
-          java-version: "17"
-      - name: Generate class diagram
-        run: |
-          cd chainflip-docgen/
-          java -jar plantuml.jar generated/class.puml
-      - name: Upload diagram
-        uses: actions/upload-artifact@v3
-        with:
-          name: generated-diagram
-          path: |
-            chainflip-docgen/generated
 
   deb-publish:
     name: Publish Packages to APT repo

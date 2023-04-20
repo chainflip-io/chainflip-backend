@@ -1,8 +1,10 @@
 name: Nightly build
 on:
-  push:
-  schedule:
-    - cron: '0 0 * * *'
+  workflow_call:
+
+#  push:
+#  schedule:
+#    - cron: '0 0 * * *'
 env:
   RUSTC_WRAPPER: sccache
   SCCACHE_CACHE_SIZE: 32G

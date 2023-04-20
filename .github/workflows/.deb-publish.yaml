@@ -62,7 +62,7 @@ jobs:
       - name: Configure aptly
         run: |
           aptly config show
-          jq --argjson S3PublishEndpoints "$(<.github/workflows/aptly_${{ inputs.environment }}_s3.json)" '.S3PublishEndpoints += $S3PublishEndpoints' ~/.aptly.conf | sponge ~/.aptly.conf
+          jq --argjson S3PublishEndpoints "$(<.github/aptly_${{ inputs.environment }}_s3.json)" '.S3PublishEndpoints += $S3PublishEndpoints' ~/.aptly.conf | sponge ~/.aptly.conf
 
       - name: Import prod GPG package signing key
         id: import_gpg_prod

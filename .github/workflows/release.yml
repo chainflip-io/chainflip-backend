@@ -1,0 +1,15 @@
+name: Release Chainflip
+on:
+  push:
+    branches:
+      - 'release/*'
+      - chore/ci-refactor
+    tags:
+      - 'v*'
+jobs:
+  check:
+    uses: .github/workflow/reuseable/build-and.test.yaml
+#  build-and-test:
+#    uses: .github/workflow/reuseable/build-and.test.yaml
+#  release-sisyphos:
+#  release-perseverance:
