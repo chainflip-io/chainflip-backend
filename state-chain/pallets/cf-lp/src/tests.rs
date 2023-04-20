@@ -1,8 +1,15 @@
-use crate::{mock::*, CcmIntentExpiries, FreeBalances, LpTTL};
+use crate::{mock::*, FreeBalances, IngressIntentExpiries, LpTTL};
 
-use cf_chains::address::ForeignChainAddress;
+use cf_chains::{address::ForeignChainAddress, AnyChain};
 use cf_primitives::{AccountId, Asset, ForeignChain};
-use cf_traits::{mocks::system_state_info::MockSystemStateInfo, SystemStateInfo};
+use cf_test_utilities::assert_events_match;
+use cf_traits::{
+	mocks::{
+		ingress_handler::{LpIntent, MockIngressHandler},
+		system_state_info::MockSystemStateInfo,
+	},
+	SystemStateInfo,
+};
 use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::Hooks};
 
 #[test]
@@ -106,7 +113,7 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 }
 
 #[test]
-fn ccm_intents_expires() {
+fn ingress_intents_expires() {
 	new_test_ext().execute_with(|| {
 		// Expiry = current (1) + ttl
 		let expiry = LpTTL::<Test>::get() + 1;
@@ -115,33 +122,45 @@ fn ccm_intents_expires() {
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			asset,
 		));
-		if let RuntimeEvent::LiquidityProvider(crate::Event::<Test>::DepositAddressReady {
+
+		let (intent_id, ingress_address) = assert_events_match!(Test, RuntimeEvent::LiquidityProvider(crate::Event::DepositAddressReady {
 			intent_id,
 			ingress_address,
-		}) = &System::events().last().unwrap().event
-		{
-			assert_eq!(
-				CcmIntentExpiries::<Test>::get(expiry),
-				vec![(*intent_id, ForeignChain::from(asset), ingress_address.clone())]
-			);
+		}) => (intent_id, ingress_address));
+		let lp_intent = LpIntent {
+			ingress_address: ingress_address.clone(),
+			ingress_asset: asset,
+			lp_account: LP_ACCOUNT.into(),
+		};
 
-			// Does not expire until expiry
-			LiquidityProvider::on_initialize(expiry - 1);
+		assert_eq!(
+			IngressIntentExpiries::<Test>::get(expiry),
+			vec![(intent_id, ForeignChain::from(asset), ingress_address.clone())]
+		);
+		assert_eq!(
+			MockIngressHandler::<AnyChain, Test>::get_liquidity_intents(),
+			vec![lp_intent.clone()]
+		);
 
-			assert_eq!(
-				CcmIntentExpiries::<Test>::get(expiry),
-				vec![(*intent_id, ForeignChain::from(asset), ingress_address.clone())]
-			);
+		// Does not expire until expiry
+		LiquidityProvider::on_initialize(expiry - 1);
+		assert_eq!(
+			IngressIntentExpiries::<Test>::get(expiry),
+			vec![(intent_id, ForeignChain::from(asset), ingress_address.clone())]
+		);
+		assert_eq!(
+			MockIngressHandler::<AnyChain, Test>::get_liquidity_intents(),
+			vec![lp_intent]
+		);
 
-			// Expire the address
-			LiquidityProvider::on_initialize(expiry);
-			assert_eq!(CcmIntentExpiries::<Test>::get(expiry), vec![]);
-			System::assert_last_event(RuntimeEvent::LiquidityProvider(
-				crate::Event::<Test>::DepositAddressExpired { address: ingress_address.clone() },
-			));
-		} else {
-			panic!("Deposit address must be be emited as an event.");
-		}
+		// Expire the address on the expiry block
+		LiquidityProvider::on_initialize(expiry);
+
+		assert_eq!(IngressIntentExpiries::<Test>::get(expiry), vec![]);
+		System::assert_last_event(RuntimeEvent::LiquidityProvider(
+			crate::Event::<Test>::DepositAddressExpired { address: ingress_address },
+		));
+		assert!(MockIngressHandler::<AnyChain, Test>::get_liquidity_intents().is_empty());
 	});
 }
 

@@ -1,12 +1,15 @@
 use crate::{
 	mock::*, CcmGasBudget, CcmIdCounter, CcmOutputs, CcmSwap, CcmSwapOutput, EarnedRelayerFees,
-	Error, Pallet, PendingCcms, Swap, SwapIntentExpiries, SwapQueue, SwapType, WeightInfo,
+	Error, Pallet, PendingCcms, Swap, SwapIntentExpiries, SwapQueue, SwapTTL, SwapType, WeightInfo,
 };
 use cf_chains::{address::ForeignChainAddress, AnyChain, CcmIngressMetadata};
 use cf_primitives::{Asset, ForeignChain};
-use cf_test_utilities::assert_event_sequence;
+use cf_test_utilities::{assert_event_sequence, assert_events_match};
 use cf_traits::{
-	mocks::egress_handler::{MockEgressHandler, MockEgressParameter},
+	mocks::{
+		egress_handler::{MockEgressHandler, MockEgressParameter},
+		ingress_handler::{MockIngressHandler, SwapIntent},
+	},
 	CcmHandler, SwapIntentHandler,
 };
 use frame_support::{assert_noop, assert_ok, sp_std::iter, weights::Weight};
@@ -269,6 +272,8 @@ fn can_swap_using_witness_origin() {
 #[test]
 fn swap_expires() {
 	new_test_ext().execute_with(|| {
+		let expiry = SwapTTL::<Test>::get() + 1;
+		assert_eq!(expiry, 6); // Expiry = current(1) + TTL (5)
 		assert_ok!(Swapping::register_swap_intent(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
@@ -277,10 +282,40 @@ fn swap_expires() {
 			0,
 			None
 		));
+
+		let ingress_address = assert_events_match!(Test, RuntimeEvent::Swapping(crate::Event::NewSwapIntent {
+			ingress_address,
+		}) => (ingress_address));
+		let swap_intent = SwapIntent {
+			ingress_address,
+			ingress_asset: Asset::Eth,
+			egress_asset: Asset::Usdc,
+			egress_address: ForeignChainAddress::Eth(Default::default()),
+			relayer_commission_bps: 0,
+			relayer_id: ALICE,
+			message_metadata: None,
+		};
+
 		assert_eq!(
-			SwapIntentExpiries::<Test>::get(6),
+			SwapIntentExpiries::<Test>::get(expiry),
 			vec![(0, ForeignChain::Ethereum, ForeignChainAddress::Eth(Default::default()))]
 		);
+		assert_eq!(
+			MockIngressHandler::<AnyChain, Test>::get_swap_intents(),
+			vec![swap_intent.clone()]
+		);
+
+		// Does not expire until expiry block.
+		Swapping::on_initialize(expiry - 1);
+		assert_eq!(
+			SwapIntentExpiries::<Test>::get(expiry),
+			vec![(0, ForeignChain::Ethereum, ForeignChainAddress::Eth(Default::default()))]
+		);
+		assert_eq!(
+			MockIngressHandler::<AnyChain, Test>::get_swap_intents(),
+			vec![swap_intent]
+		);
+
 		Swapping::on_initialize(6);
 		assert_eq!(SwapIntentExpiries::<Test>::get(6), vec![]);
 		System::assert_last_event(RuntimeEvent::Swapping(
@@ -288,6 +323,9 @@ fn swap_expires() {
 				ingress_address: ForeignChainAddress::Eth(Default::default()),
 			},
 		));
+		assert!(
+			MockIngressHandler::<AnyChain, Test>::get_swap_intents().is_empty()
+		);
 	});
 }
 
@@ -299,6 +337,7 @@ fn can_set_swap_ttl() {
 		assert_eq!(crate::SwapTTL::<Test>::get(), 10);
 	});
 }
+
 #[test]
 fn can_reject_invalid_ccms() {
 	new_test_ext().execute_with(|| {
