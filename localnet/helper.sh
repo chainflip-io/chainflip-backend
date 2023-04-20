@@ -25,7 +25,6 @@ function print_success() {
 👆 Then select logs (4)
 💚 Head to https://polkadot.js.org/apps/?rpc=ws%3A%2F%2F127.0.0.1%3A9944#/explorer to access PolkadotJS of Chainflip Network
 🧡 Head to https://polkadot.js.org/apps/?rpc=ws%3A%2F%2F127.0.0.1%3A9945#/explorer to access PolkadotJS of the Private Polkadot Network
-
 👮‍ To run the bouncer: ./localnet/manage.sh -> (6)
 EOM
 )

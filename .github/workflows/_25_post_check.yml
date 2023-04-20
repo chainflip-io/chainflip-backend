@@ -73,7 +73,7 @@ jobs:
 
       - name: Run EinfachHeuteLeiderNicht.exe
         if: >
-          github.ref_name != 'main' &&
+          github.ref_name != 'main' ||
           ! contains(github.ref_name, 'release/')
         working-directory: bouncer
         env:
@@ -86,7 +86,7 @@ jobs:
       - name: Run HeuteLeiderNicht.exe
         id: heuteleidernicht
         if: >
-          github.ref_name == 'main' &&
+          github.ref_name == 'main' ||
           contains(github.ref_name, 'release/')
         working-directory: bouncer
         env:

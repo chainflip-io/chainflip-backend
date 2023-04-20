@@ -35,39 +35,6 @@ jobs:
           cargo cf-build-ci --locked
           sccache --show-stats
 
-      - name: Install cargo-deb
-        run: cargo install cargo-deb
-
-      - name: Get date
-        id: get-date
-        run: |
-          echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
-
-      - name: Build packages
-        run: |
-          cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.get-date.outputs.date }}"
-          cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.get-date.outputs.date }}"
-          cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.get-date.outputs.date }}"
-          cargo deb --no-build --no-strip -p chainflip-relayer --deb-revision "${{ steps.get-date.outputs.date }}"
-          cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.get-date.outputs.date }}"
-
-      - name: Upload dev packages
-        uses: actions/upload-artifact@v3
-        with:
-          name: chainflip-backend-packages-dev
-          path: |
-            target/debian/*.deb
-
-      - name: Upload production packages
-        uses: actions/upload-artifact@v3
-        with:
-          name: chainflip-backend-packages-prod
-          path: |
-            target/debian/chainflip-node*.deb
-            target/debian/chainflip-engine*.deb
-            target/debian/chainflip-relayer*.deb
-            target/debian/chainflip-cli*.deb
-
       - name: Upload binary artifacts
         uses: actions/upload-artifact@v3
         with:
@@ -79,6 +46,48 @@ jobs:
             ./target/release/generate-genesis-keys
             ./target/release/chainflip-relayer
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
+
+  packages:
+    runs-on: [hetzner]
+    needs: [compile]
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    strategy:
+      fail-fast: true
+      matrix:
+        network: ["perseverance", "sisyphos"]
+    steps:
+      - name: Download binaries
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-backend-bin
+          path: ./target/release
+
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+
+      - name: Get date
+        id: get-date
+        run: |
+          echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
+
+      - name: Build packages
+        run: |
+          cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ matrix.network }} 
+          cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ matrix.network }}
+          cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ matrix.network }}
+          cargo deb --no-build --no-strip -p chainflip-relayer --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ matrix.network }}
+          cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ matrix.network }}
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-backend-packages-${{ matrix.network }}
+          path: |
+            target/debian/*.deb
 
       - name: Check if building changes any files
         run: |
