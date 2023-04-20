@@ -83,7 +83,6 @@ jobs:
           ./localnet/manage.sh
 
       - name: Run EinfachHeuteLeiderNicht.exe
-        id: heuteleidernicht
         if: github.ref_name != 'main'
         working-directory: bouncer
         env:
