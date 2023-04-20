@@ -679,62 +679,6 @@ pub trait IngressApi<C: Chain> {
 	fn expire_intent(chain: ForeignChain, intent_id: IntentId, address: C::ChainAccount);
 }
 
-impl<T: frame_system::Config> IngressApi<Ethereum> for T {
-	type AccountId = T::AccountId;
-	fn register_liquidity_ingress_intent(
-		_lp_account: T::AccountId,
-		_ingress_asset: assets::eth::Asset,
-	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
-		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
-	}
-	fn register_swap_intent(
-		_ingress_asset: assets::eth::Asset,
-		_egress_asset: Asset,
-		_egress_address: ForeignChainAddress,
-		_relayer_commission_bps: u16,
-		_relayer_id: T::AccountId,
-		_message_metadata: Option<CcmIngressMetadata>,
-	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
-		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
-	}
-
-	fn expire_intent(
-		_chain: ForeignChain,
-		_intent_id: IntentId,
-		_address: <Ethereum as Chain>::ChainAccount,
-	) {
-		unimplemented!()
-	}
-}
-
-impl<T: frame_system::Config> IngressApi<Polkadot> for T {
-	type AccountId = T::AccountId;
-	fn register_liquidity_ingress_intent(
-		_lp_account: T::AccountId,
-		_ingress_asset: assets::dot::Asset,
-	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
-		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
-	}
-	fn register_swap_intent(
-		_ingress_asset: assets::dot::Asset,
-		_egress_asset: Asset,
-		_egress_address: ForeignChainAddress,
-		_relayer_commission_bps: u16,
-		_relayer_id: T::AccountId,
-		_message_metadata: Option<CcmIngressMetadata>,
-	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
-		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
-	}
-
-	fn expire_intent(
-		_chain: ForeignChain,
-		_intent_id: IntentId,
-		_address: <Polkadot as Chain>::ChainAccount,
-	) {
-		todo!()
-	}
-}
-
 /// Generates a deterministic ingress address for some combination of asset, chain and intent id.
 pub trait AddressDerivationApi<C: Chain> {
 	fn generate_address(

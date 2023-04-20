@@ -37,6 +37,7 @@ pub trait WeightInfo {
 	fn schedule_swap_by_witnesser() -> Weight;
 	fn ccm_ingress() -> Weight;
 	fn on_initialize(a: u32, ) -> Weight;
+	fn set_swap_ttl() -> Weight;
 }
 
 /// Weights for pallet_cf_swapping using the Substrate node and recommended hardware.
@@ -110,6 +111,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(Weight::from_ref_time(1_668).saturating_mul(a.into()))
 			.saturating_add(T::DbWeight::get().reads(1))
 	}
+
+	fn set_swap_ttl() -> Weight {
+		Weight::from_ref_time(7_076_467)
+	}
 }
 
 // For backwards compatibility and tests
@@ -181,5 +186,8 @@ impl WeightInfo for () {
 			// Standard Error: 1_140
 			.saturating_add(Weight::from_ref_time(1_668).saturating_mul(a.into()))
 			.saturating_add(RocksDbWeight::get().reads(1))
+	}
+	fn set_swap_ttl() -> Weight {
+		Weight::from_ref_time(7_076_467)
 	}
 }

@@ -290,3 +290,12 @@ fn swap_expires() {
 		));
 	});
 }
+
+#[test]
+fn can_set_swap_ttl() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(crate::SwapTTL::<Test>::get(), 5);
+		assert_ok!(Swapping::set_swap_ttl(RuntimeOrigin::root(), 10));
+		assert_eq!(crate::SwapTTL::<Test>::get(), 10);
+	});
+}

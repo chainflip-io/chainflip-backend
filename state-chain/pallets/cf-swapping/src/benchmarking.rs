@@ -123,6 +123,17 @@ benchmarks! {
 		Pallet::<T>::on_initialize(T::BlockNumber::from(1u32));
 	}
 
+	set_swap_ttl {
+		let ttl = T::BlockNumber::from(1_000u32);
+		let call = Call::<T>::set_swap_ttl {
+			ttl
+		};
+	}: {
+		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+	} verify {
+		assert_eq!(crate::SwapTTL::<T>::get(), ttl);
+	}
+
 	impl_benchmark_test_suite!(
 		Pallet,
 		crate::mock::new_test_ext(),

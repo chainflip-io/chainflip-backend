@@ -111,8 +111,10 @@ impl WeightInfo for MockWeightInfo {
 	fn ccm_ingress() -> Weight {
 		Weight::from_ref_time(100)
 	}
-
 	fn on_initialize(_a: u32) -> Weight {
+		Weight::from_ref_time(100)
+	}
+	fn set_swap_ttl() -> Weight {
 		Weight::from_ref_time(100)
 	}
 }
@@ -128,6 +130,7 @@ impl pallet_cf_swapping::Config for Test {
 	type EgressHandler = MockEgressHandler<AnyChain>;
 	type WeightInfo = MockWeightInfo;
 	type SwappingApi = MockSwappingApi;
+	type EnsureGovernance = NeverFailingOriginCheck<Test>;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

@@ -110,6 +110,9 @@ pub mod pallet {
 			amount: AssetAmount,
 			egress_address: ForeignChainAddress,
 		},
+		LpTtlSet {
+			ttl: T::BlockNumber,
+		},
 	}
 
 	#[pallet::genesis_config]
@@ -165,9 +168,9 @@ pub mod pallet {
 			let (intent_id, ingress_address) =
 				T::IngressHandler::register_liquidity_ingress_intent(account_id, asset)?;
 
-			CcmIntentExpiries::<T>::mutate(
+			CcmIntentExpiries::<T>::append(
 				frame_system::Pallet::<T>::current_block_number().saturating_add(LpTTL::<T>::get()),
-				|expired| expired.push((intent_id, asset.into(), ingress_address.clone())),
+				(intent_id, ForeignChain::from(asset), ingress_address.clone()),
 			);
 
 			Self::deposit_event(Event::DepositAddressReady { intent_id, ingress_address });
@@ -258,6 +261,21 @@ pub mod pallet {
 				// Do nothing if the liquidity matches.
 				Ordering::Equal => Ok(()),
 			}
+		}
+
+		/// Sets the length in which ingress intents are expired in the LP pallet.
+		/// Requires Governance
+		///
+		/// ## Events
+		///
+		/// - [On update](Event::LpTtlSet)
+		#[pallet::weight(T::WeightInfo::set_lp_ttl())]
+		pub fn set_lp_ttl(origin: OriginFor<T>, ttl: T::BlockNumber) -> DispatchResult {
+			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
+			LpTTL::<T>::set(ttl);
+
+			Self::deposit_event(Event::<T>::LpTtlSet { ttl });
+			Ok(())
 		}
 	}
 }

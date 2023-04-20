@@ -5,7 +5,7 @@ use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_primitives::{AccountRole, Asset};
 use cf_traits::{AccountRoleRegistry, LiquidityPoolApi};
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::assert_ok;
+use frame_support::{assert_ok, dispatch::UnfilteredDispatchable};
 use frame_system::RawOrigin;
 
 benchmarks! {
@@ -64,6 +64,17 @@ benchmarks! {
 		}
 	}: {
 		Pallet::<T>::on_initialize(T::BlockNumber::from(1u32));
+	}
+
+	set_lp_ttl {
+		let ttl = T::BlockNumber::from(1_000u32);
+		let call = Call::<T>::set_lp_ttl {
+			ttl,
+		};
+	}: {
+		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+	} verify {
+		assert_eq!(crate::LpTTL::<T>::get(), ttl);
 	}
 
 	impl_benchmark_test_suite!(

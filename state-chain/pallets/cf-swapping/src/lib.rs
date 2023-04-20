@@ -78,17 +78,25 @@ pub mod pallet {
 	pub trait Config: Chainflip {
 		/// Standard Event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
+
 		/// API for handling asset ingress.
 		type IngressHandler: IngressApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
+
 		/// API for handling asset egress.
 		type EgressHandler: EgressApi<AnyChain>;
+
 		/// An interface to the AMM api implementation.
 		type SwappingApi: SwappingApi;
+
+		/// Governance origin to manage allowed assets
+		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
+
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
 	}
@@ -181,6 +189,9 @@ pub mod pallet {
 		},
 		SwapIntentExpired {
 			ingress_address: ForeignChainAddress,
+		},
+		SwapTtlSet {
+			ttl: T::BlockNumber,
 		},
 	}
 	#[pallet::error]
@@ -300,10 +311,10 @@ pub mod pallet {
 				message_metadata,
 			)?;
 
-			SwapIntentExpiries::<T>::mutate(
+			SwapIntentExpiries::<T>::append(
 				frame_system::Pallet::<T>::current_block_number()
 					.saturating_add(SwapTTL::<T>::get()),
-				|expired| expired.push((intent_id, ingress_asset.into(), ingress_address.clone())),
+				(intent_id, ForeignChain::from(ingress_asset), ingress_address.clone()),
 			);
 
 			Self::deposit_event(Event::<T>::NewSwapIntent { ingress_address });
@@ -405,6 +416,21 @@ pub mod pallet {
 				egress_address,
 				message_metadata,
 			)
+		}
+
+		/// Sets the length in which ingress intents are expired in the Swapping pallet.
+		/// Requires Governance
+		///
+		/// ## Events
+		///
+		/// - [On update](Event::SwapTtlSet)
+		#[pallet::weight(T::WeightInfo::set_swap_ttl())]
+		pub fn set_swap_ttl(origin: OriginFor<T>, ttl: T::BlockNumber) -> DispatchResult {
+			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
+			SwapTTL::<T>::set(ttl);
+
+			Self::deposit_event(Event::<T>::SwapTtlSet { ttl });
+			Ok(())
 		}
 	}
 

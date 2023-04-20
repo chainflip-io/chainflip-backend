@@ -31,6 +31,7 @@ engine/config/Local.toml
 engine/tests/test_keystore/*
 
 .vscode
+.vscode/*
 .idea
 
 # created by cargo-deny check --graph

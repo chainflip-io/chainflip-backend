@@ -1,9 +1,9 @@
-use crate::{mock::*, FreeBalances};
+use crate::{mock::*, CcmIntentExpiries, FreeBalances, LpTTL};
 
 use cf_chains::address::ForeignChainAddress;
-use cf_primitives::{liquidity::AmmRange, AccountId, Asset, PoolAssetMap};
+use cf_primitives::{liquidity::AmmRange, AccountId, Asset, ForeignChain, PoolAssetMap};
 use cf_traits::{mocks::system_state_info::MockSystemStateInfo, LiquidityPoolApi, SystemStateInfo};
-use frame_support::{assert_noop, assert_ok, error::BadOrigin};
+use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::Hooks};
 
 fn provision_accounts() {
 	FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000_000);
@@ -377,5 +377,54 @@ fn mint_fails_with_insufficient_balance() {
 			),
 			crate::Error::<Test>::InsufficientBalance
 		);
+	});
+}
+
+#[test]
+fn ccm_intents_expires() {
+	new_test_ext().execute_with(|| {
+		// Expiry = current (1) + ttl
+		let expiry = LpTTL::<Test>::get() + 1;
+		let asset = Asset::Eth;
+		assert_ok!(LiquidityProvider::request_deposit_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			asset,
+		));
+		if let RuntimeEvent::LiquidityProvider(crate::Event::<Test>::DepositAddressReady {
+			intent_id,
+			ingress_address,
+		}) = &System::events().last().unwrap().event
+		{
+			assert_eq!(
+				CcmIntentExpiries::<Test>::get(expiry),
+				vec![(*intent_id, ForeignChain::from(asset), ingress_address.clone())]
+			);
+
+			// Does not expire until expiry
+			LiquidityProvider::on_initialize(expiry - 1);
+
+			assert_eq!(
+				CcmIntentExpiries::<Test>::get(expiry),
+				vec![(*intent_id, ForeignChain::from(asset), ingress_address.clone())]
+			);
+
+			// Expire the address
+			LiquidityProvider::on_initialize(expiry);
+			assert_eq!(CcmIntentExpiries::<Test>::get(expiry), vec![]);
+			System::assert_last_event(RuntimeEvent::LiquidityProvider(
+				crate::Event::<Test>::DepositAddressExpired { address: ingress_address.clone() },
+			));
+		} else {
+			panic!("Deposit address must be be emited as an event.");
+		}
+	});
+}
+
+#[test]
+fn can_set_lp_ttl() {
+	new_test_ext().execute_with(|| {
+		assert_eq!(LpTTL::<Test>::get(), 1_200);
+		assert_ok!(LiquidityProvider::set_lp_ttl(RuntimeOrigin::root(), 10));
+		assert_eq!(LpTTL::<Test>::get(), 10);
 	});
 }
