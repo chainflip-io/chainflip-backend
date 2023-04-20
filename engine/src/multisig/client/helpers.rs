@@ -606,7 +606,7 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for KeygenCeremonyRunner<C> {
 		outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
 	) -> Self::CheckedOutput {
 		let (_, public_key) = all_same(outputs.values().map(|keygen_result_info| {
-			(keygen_result_info.params, keygen_result_info.key.get_public_key())
+			(keygen_result_info.params, keygen_result_info.key.get_agg_public_key())
 		}))
 		.expect("Generated keys don't match");
 

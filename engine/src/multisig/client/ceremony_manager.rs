@@ -19,6 +19,7 @@ use crate::{
 		client::{
 			common::{KeygenFailureReason, SigningFailureReason},
 			keygen::generate_key_data,
+			signing::PayloadAndKey,
 			CeremonyRequestDetails,
 		},
 		crypto::{generate_single_party_signature, CryptoScheme, Rng},
@@ -168,7 +169,14 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 
 		let processor = AwaitCommitments1::<Crypto>::new(
 			common.clone(),
-			SigningStateCommonInfo { payloads, key: key_info.key },
+			SigningStateCommonInfo {
+				payloads_and_keys: payloads
+					.into_iter()
+					// TODO: when SC starts providing multiple keys in the request, we want
+					// to use the correct one (but until then we assume the key is the same)
+					.map(|payload| PayloadAndKey { payload, key: key_info.key.clone() })
+					.collect(),
+			},
 		);
 
 		Box::new(BroadcastStage::new(processor, common))
