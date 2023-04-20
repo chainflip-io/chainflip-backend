@@ -87,19 +87,19 @@ jobs:
 
   build-runtime:
     runs-on: [hetzner]
-    strategy:
-      matrix:
-        chain: ["perseverance", "sisyphos"]
+#    strategy:
+#      matrix:
+#        chain: ["perseverance", "sisyphos"]
     steps:
       - uses: actions/checkout@v3
       - name: Srtool build
         id: srtool_build
         uses: chevdor/srtool-actions@v0.6.0
         with:
-          chain: ${{ matrix.chain }}
+          chain: state-chain
           runtime_dir: state-chain/runtime
       - name: Summary
         run: |
-          echo '${{ steps.srtool_build.outputs.json }}' | jq . > ${{ matrix.chain }}-srtool-digest.json
-          cat ${{ matrix.chain }}-srtool-digest.json
+          echo '${{ steps.srtool_build.outputs.json }}' | jq . > state-chain-runtime-srtool-digest.json
+          cat state-chain-runtime-srtool-digest.json
           echo "Runtime location: ${{ steps.srtool_build.outputs.wasm }}"
