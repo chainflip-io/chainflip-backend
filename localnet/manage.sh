@@ -4,6 +4,8 @@ LOCALNET_INIT_DIR=localnet/init
 WORKFLOW=build-localnet
 REQUIRED_BINARIES="chainflip-engine chainflip-node"
 
+source ./localnet/helper.sh
+
 set -eo pipefail
 
 setup() {
@@ -53,7 +55,6 @@ get-workflow() {
     break
   done
 }
-
 build-localnet() {
   cp -R $LOCALNET_INIT_DIR/keyshare /tmp/chainflip/
   echo
@@ -75,46 +76,26 @@ build-localnet() {
 
   echo "🏗 Building network"
   docker compose -f localnet/docker-compose.yml up -d
+
   echo "🪙 Waiting for Bitcoin node to start"
-  while ! curl --user flip:flip -H 'Content-Type: text/plain;' -d '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' -v http://localhost:8332 > /dev/null 2>&1  ; do
-    echo "🪙 Waiting for Bitcoin node to start"
-    sleep 5
-  done
+  check_endpoint_health --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332
+
   echo "💎 Waiting for ETH node to start"
-  while ! curl -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8545 > /dev/null 2>&1  ; do
-    echo "💎 Waiting for ETH node to start"
-    sleep 5
-  done
+  check_endpoint_health -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8545
+
   echo "🚦 Waiting for polkadot node to start"
-  while ! REPLY=$(curl -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9945') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]; do
-    echo "🚦 Waiting for polkadot node to start"
-    sleep 5
-  done
+  REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9945') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
+
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
   DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
-  while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null 2>&1  ; do
-    echo "🚧 Waiting for chainflip-node to start"
-    tail /tmp/chainflip/chainflip-node.log || true
-    sleep 5
-  done
+  echo "🚧 Waiting for chainflip-node to start"
+  check_endpoint_health -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933'
+
   ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
-  while ! curl 'http://localhost:5555/health' ; do
-    echo "🚒 Waiting for chainflip-engine to start"
-    tail /tmp/chainflip/chainflip-engine.log || true
-    sleep 5
-  done
+  echo "🚗 Waiting for chainflip-engine to start"
+  check_endpoint_health 'http://localhost:5555/health'
 
-  echo
-  echo "🚀 Network is live"
-  echo "🪵 To get logs run: ./localnet/manage.sh"
-  echo "👆 Then select logs (4)"
-  echo
-  echo "💚 Head to https://polkadot.js.org/apps/?rpc=ws%3A%2F%2F127.0.0.1%3A9944#/explorer to access PolkadotJS of Chainflip Network"
-  echo
-  echo "🧡 Head to https://polkadot.js.org/apps/?rpc=ws%3A%2F%2F127.0.0.1%3A9945#/explorer to access PolkadotJS of the Private Polkadot Network"
-
-  echo "👮‍ To run the bouncer: ./localnet/manage.sh -> (6)"
-
+  print_success
 }
 
 build-localnet-in-ci() {
@@ -132,42 +113,28 @@ build-localnet-in-ci() {
   done
 
   echo "🪙 Waiting for Bitcoin node to start"
-  while ! curl --user flip:flip -H 'Content-Type: text/plain;' -d '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' -v http://bitcoin:8332 > /dev/null 2>&1 ; do
-    echo "🪙 Waiting for Bitcoin node to start"
-    sleep 5
-  done
+  check_endpoint_health --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332
+
   echo "Replacing URL in toml file"
   sed -i -e "s|localhost:8332|bitcoin:8332|g" ./localnet/init/config/Settings.toml
 
   echo "💎 Waiting for ETH node to start"
-  while ! curl -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://geth:8545 > /dev/null 2>&1  ; do
-    echo "💎 Waiting for ETH node to start"
-    sleep 5
-  done
+  check_endpoint_health -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8545
   sed -i -e "s|localhost:8545|geth:8545|g" ./localnet/init/config/Settings.toml
   sed -i -e "s|localhost:8546|geth:8546|g" ./localnet/init/config/Settings.toml
 
   echo "🚦 Waiting for polkadot node to start"
-  while ! REPLY=$(curl -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://polkadot:9944') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]; do
-    echo "🚦 Waiting for polkadot node to start"
-    sleep 5
-  done
+  REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9945') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
   sed -i -e "s|localhost:9945|polkadot:9944|g" ./localnet/init/config/Settings.toml
 
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
   DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
-  while ! curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null 2>&1  ; do
-    echo "🚧 Waiting for chainflip-node to start"
-    tail /tmp/chainflip/chainflip-node.log || true
-    sleep 5
-  done
+  echo "🚧 Waiting for chainflip-node to start"
+  check_endpoint_health -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933'
 
   ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
-  while ! curl 'http://localhost:5555/health' ; do
-    echo "🚒 Waiting for chainflip-engine to start"
-    tail /tmp/chainflip/chainflip-engine.log || true
-    sleep 5
-  done
+  echo "🚗 Waiting for chainflip-engine to start"
+  check_endpoint_health 'http://localhost:5555/health'
 
 }
 
@@ -215,13 +182,11 @@ logs() {
 bouncer() {
   (
     cd ../chainflip-bouncer
-    ./tests/produces_blocks.sh
-    ./tests/stress_test.sh 2
-    ./commands/setup_vaults.sh
+    ./run.sh
   )
 }
 
-if [ $CI == true ]; then
+if [[ $CI == true ]]; then
   echo "CI detected, bypassing setup"
   build-localnet-in-ci
   exit 0
