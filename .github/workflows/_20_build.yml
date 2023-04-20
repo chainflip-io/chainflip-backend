@@ -1,6 +1,6 @@
 on: workflow_call
 jobs:
-  build:
+  compile:
     runs-on: [hetzner]
     concurrency:
       group: ${{ github.ref }}-build-and-test

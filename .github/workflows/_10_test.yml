@@ -2,7 +2,7 @@ on: workflow_call
 env:
   SCCACHE_VERSION: v0.4.1
 jobs:
-  test:
+  unit-tests:
     runs-on: [hetzner]
     concurrency:
       group: ${{ github.ref }}-test
