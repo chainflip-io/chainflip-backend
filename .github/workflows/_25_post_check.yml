@@ -71,9 +71,9 @@ jobs:
           ./localnet/manage.sh
 
       - name: Run EinfachHeuteLeiderNicht.exe
-        if:
-          - github.ref_name != 'main'
-          - ! contains(github.ref_name, 'release/')
+        if: >
+          github.ref_name != 'main' &&
+          ! contains(github.ref_name, 'release/')
         working-directory: bouncer
         env:
           POLKADOT_ENDPOINT: ws://polkadot:9944
@@ -84,9 +84,9 @@ jobs:
 
       - name: Run HeuteLeiderNicht.exe
         id: heuteleidernicht
-        if:
-          - github.ref_name == 'main'
-          - contains(github.ref_name, 'release/')
+        if: >
+          github.ref_name == 'main' &&
+          contains(github.ref_name, 'release/')
         working-directory: bouncer
         env:
           POLKADOT_ENDPOINT: ws://polkadot:9944
