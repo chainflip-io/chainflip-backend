@@ -1,4 +1,8 @@
-on: workflow_call
+on:
+  workflow_call:
+    secrets:
+      SCCACHE_REDIS:
+        required: true
 env:
   SCCACHE_CACHE_SIZE: 32G
   SCCACHE_VERSION: v0.4.1
