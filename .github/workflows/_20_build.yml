@@ -1,0 +1,80 @@
+on: workflow_call
+jobs:
+  build:
+    runs-on: [hetzner]
+    concurrency:
+      group: ${{ github.ref }}-build-and-test
+      cancel-in-progress: true
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      COMMIT_HASH: ${{ needs.set-variables.outputs.commit_hash }}
+      BRANCH_NAME: ${{ needs.set-variables.outputs.branch_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup sccache
+        run: |
+          wget https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz
+          tar -xvf sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz
+          mv sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl/sccache /usr/local/bin
+          sccache --show-stats
+
+      - name: cargo cf-build-ci
+        run: |
+          cargo cf-build-ci --locked
+          sccache --show-stats
+
+      - name: Install cargo-deb
+        run: cargo install cargo-deb
+
+      - name: Get date
+        id: get-date
+        run: |
+          echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
+
+      - name: Build packages
+        run: |
+          cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.get-date.outputs.date }}"
+          cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.get-date.outputs.date }}"
+          cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.get-date.outputs.date }}"
+          cargo deb --no-build --no-strip -p chainflip-relayer --deb-revision "${{ steps.get-date.outputs.date }}"
+          cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.get-date.outputs.date }}"
+
+      - name: Upload dev packages
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-backend-packages-dev
+          path: |
+            target/debian/*.deb
+
+      - name: Upload production packages
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-backend-packages-prod
+          path: |
+            target/debian/chainflip-node.deb
+            target/debian/chainflip-engine.deb
+            target/debian/chainflip-relayer.deb
+            target/debian/chainflip-cli.deb
+
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-backend-bin
+          path: |
+            ./target/release/chainflip-node
+            ./target/release/chainflip-engine
+            ./target/release/chainflip-cli
+            ./target/release/generate-genesis-keys
+            ./target/release/chainflip-relayer
+            ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
+
+      - name: Check if building changes any files
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code

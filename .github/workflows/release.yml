@@ -7,9 +7,34 @@ on:
     tags:
       - 'v*'
 jobs:
+  init:
+    uses: ./.github/workflows/_00_init.yml
   check:
-    uses: ./.github/workflows/_check.yml
-#  build-and-test:
-#    uses: .github/workflow/reuseable/build-and.test.yaml
-#  release-sisyphos:
-#  release-perseverance:
+    uses: ./.github/workflows/_01_check.yml
+  test:
+    needs: [check]
+    uses: .github/workflow/_10_test.yaml
+  build:
+    needs: [test]
+    uses: .github/workflow/_20_build.yaml
+  release-sisyphos:
+    needs: [build]
+    name: Publish Packages to APT repo
+    uses: ./.github/workflows/_30_publish.yaml
+    with:
+      artifacts: chainflip-backend-packages-dev
+      version: "sisyphos/"
+      environment: dev
+      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
+    secrets: inherit
+  release-perseverance:
+    if: github.ref_type == 'tag'
+    needs: [build]
+    name: Publish Packages to APT repo
+    uses: ./.github/workflows/_30_publish.yaml
+    with:
+      artifacts: chainflip-backend-packages-prod
+      version: "perseverance/"
+      environment: prod
+      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
+    secrets: inherit

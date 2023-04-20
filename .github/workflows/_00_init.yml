@@ -1,0 +1,21 @@
+on: workflow_call
+jobs:
+  set-variables:
+    runs-on: ubuntu-20.04
+    concurrency:
+      group: ${{ github.ref }}-set-variables
+      cancel-in-progress: true
+    outputs:
+      commit_hash: ${{ steps.commit_hash.outputs.commit_hash }}
+      branch_name: ${{ steps.branch_name.outputs.branch_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - id: commit_hash
+        run: |
+          COMMIT_HASH=$(git rev-parse --verify HEAD)
+          echo "commit_hash=$COMMIT_HASH" >> $GITHUB_OUTPUT
+      - id: branch_name
+        run: |
+          BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
