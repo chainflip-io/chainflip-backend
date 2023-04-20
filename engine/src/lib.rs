@@ -3,6 +3,7 @@
 
 pub mod common;
 pub mod constants;
+pub mod db;
 pub mod health;
 pub mod multisig;
 pub mod p2p;
@@ -10,7 +11,6 @@ pub mod settings;
 pub mod state_chain_observer;
 pub mod stream_utils;
 pub mod witnesser;
-pub mod db;
 
 // Blockchains
 pub mod btc;
