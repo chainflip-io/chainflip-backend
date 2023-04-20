@@ -13,14 +13,14 @@ jobs:
     uses: ./.github/workflows/_01_check.yml
   test:
     needs: [check]
-    uses: ./.github/workflow/_10_test.yaml
+    uses: ./.github/workflow/_10_test.yml
   build:
     needs: [test]
-    uses: ./.github/workflow/_20_build.yaml
+    uses: ./.github/workflow/_20_build.yml
   release-sisyphos:
-    needs: [build]
     name: Publish Packages to APT repo
-    uses: ./.github/workflows/_30_publish.yaml
+    needs: [build]
+    uses: ./.github/workflows/_30_publish.yml
     with:
       artifacts: chainflip-backend-packages-dev
       version: "sisyphos/"
@@ -28,9 +28,9 @@ jobs:
       commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
     secrets: inherit
   release-perseverance:
+    name: Publish Packages to APT repo
     if: github.ref_type == 'tag'
     needs: [build]
-    name: Publish Packages to APT repo
     uses: ./.github/workflows/_30_publish.yaml
     with:
       artifacts: chainflip-backend-packages-prod
