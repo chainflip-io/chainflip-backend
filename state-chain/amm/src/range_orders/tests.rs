@@ -1,8 +1,11 @@
+#[cfg(feature = "slow-tests")]
 use crate::common::{Side, MIN_SQRT_PRICE};
 
 use super::*;
 
+#[cfg(feature = "slow-tests")]
 type LiquidityProvider = cf_primitives::AccountId;
+#[cfg(feature = "slow-tests")]
 type PoolState = super::PoolState<LiquidityProvider>;
 
 #[test]
@@ -69,6 +72,7 @@ fn output_amounts_bounded() {
 	.unwrap();
 }
 
+#[cfg(feature = "slow-tests")]
 #[test]
 fn maximum_liquidity_swap() {
 	let mut pool_state = PoolState::new(0, MIN_SQRT_PRICE).unwrap();

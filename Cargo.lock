@@ -763,7 +763,6 @@ version = "0.1.0"
 dependencies = [
  "cf-primitives",
  "parity-scale-codec",
- "primitive-types 0.11.1",
  "rand 0.7.3",
  "scale-info",
  "sp-core 7.0.0",
@@ -1019,6 +1018,7 @@ dependencies = [
  "sp-finality-grandpa",
  "state-chain-runtime",
  "tiny-bip39 1.0.0",
+ "utilities",
  "zeroize",
 ]
 
@@ -1095,6 +1095,7 @@ dependencies = [
  "pallet-cf-ingress-egress",
  "pallet-cf-reputation",
  "pallet-cf-staking",
+ "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
  "pallet-cf-vaults",
@@ -5594,6 +5595,8 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "hex-literal",
+ "pallet-cf-governance",
  "parity-scale-codec",
  "scale-info",
  "sp-core 7.0.0",
@@ -6356,7 +6359,6 @@ dependencies = [
  "impl-codec",
  "impl-rlp",
  "impl-serde 0.3.2",
- "scale-info",
  "uint",
 ]
 
@@ -10840,11 +10842,15 @@ name = "utilities"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-channel",
  "futures",
  "hex",
+ "itertools",
  "lazy_format",
  "mockall",
  "predicates",
+ "serde",
+ "tempfile",
  "tokio",
 ]
 

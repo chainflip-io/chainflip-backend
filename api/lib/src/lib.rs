@@ -24,15 +24,13 @@ pub mod primitives {
 pub use chainflip_engine::settings;
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
-use chainflip_engine::{
-	state_chain_observer::client::{
-		base_rpc_api::{BaseRpcApi, BaseRpcClient, RawRpcApi},
-		extrinsic_api::ExtrinsicApi,
-		storage_api::StorageApi,
-		StateChainClient,
-	},
-	task_scope::task_scope,
+use chainflip_engine::state_chain_observer::client::{
+	base_rpc_api::{BaseRpcApi, BaseRpcClient, RawRpcApi},
+	extrinsic_api::ExtrinsicApi,
+	storage_api::StorageApi,
+	StateChainClient,
 };
+use utilities::task_scope::task_scope;
 
 #[async_trait]
 trait AuctionPhaseApi {

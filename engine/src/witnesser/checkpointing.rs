@@ -7,6 +7,8 @@ use tracing::info;
 
 use crate::multisig::{ChainTag, PersistentKeyDB};
 
+use super::HasChainTag;
+
 mod migrations;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -23,8 +25,7 @@ pub enum StartCheckpointing<Chain: cf_chains::Chain> {
 
 /// Loads the checkpoint from the db then starts checkpointing. Returns the block number at which to
 /// start witnessing unless the epoch has already been witnessed.
-pub async fn get_witnesser_start_block_with_checkpointing<Chain: cf_chains::Chain>(
-	chain_tag: ChainTag,
+pub async fn get_witnesser_start_block_with_checkpointing<Chain: cf_chains::Chain + HasChainTag>(
 	epoch_start_index: EpochIndex,
 	epoch_start_block_number: Chain::ChainBlockNumber,
 	db: Arc<PersistentKeyDB>,
@@ -32,6 +33,7 @@ pub async fn get_witnesser_start_block_with_checkpointing<Chain: cf_chains::Chai
 where
 	<<Chain as cf_chains::Chain>::ChainBlockNumber as TryFrom<u64>>::Error: std::fmt::Debug,
 {
+	let chain_tag = Chain::CHAIN_TAG;
 	let mut loaded_checkpoint = db.load_checkpoint(chain_tag)?;
 
 	// Eth witnessers are the only ones that used the legacy checkpointing files.
@@ -53,10 +55,7 @@ where
 			checkpoint
 		},
 		None => {
-			info!(
-				"No {chain_tag} witnesser checkpoint found, using default of {:?}",
-				WitnessedUntil::default()
-			);
+			info!("No {chain_tag} witnesser checkpoint found");
 			WitnessedUntil::default()
 		},
 	};
@@ -81,10 +80,6 @@ where
 		}
 	});
 
-	// We do this because it's possible to witness ahead of the epoch start during the
-	// previous epoch. If we don't start witnessing from the epoch start, when we
-	// receive a new epoch, we won't witness some of the blocks for the particular
-	// epoch, since witness extrinsics are submitted with the epoch number it's for.
 	let start_witnessing_from_block = if witnessed_until.epoch_index == epoch_start_index {
 		witnessed_until
 			.block_number
@@ -93,6 +88,8 @@ where
 			.expect("Should convert block number from u64")
 	} else {
 		// We haven't started witnessing this epoch yet, so start from the beginning
+		// (Note that we do this even if we have already witnessed a few blocks ahead,
+		// as we need to re-witness them for the correct epoch)
 		epoch_start_block_number
 	};
 
@@ -111,7 +108,7 @@ mod tests {
 	/// - The checkpointing task panics if send a witness of the same block twice
 	#[tokio::test(start_paused = true)]
 	async fn test_checkpointing() {
-		let (_dir, db_path) = crate::testing::new_temp_directory_with_nonexistent_file();
+		let (_dir, db_path) = utilities::testing::new_temp_directory_with_nonexistent_file();
 
 		let saved_witnessed_until = WitnessedUntil { epoch_index: 1, block_number: 2 };
 		let expected_witnesser_start = WitnessedUntil {
@@ -130,7 +127,6 @@ mod tests {
 
 			// Start checkpointing at the same epoch but smaller block number
 			match get_witnesser_start_block_with_checkpointing::<cf_chains::Ethereum>(
-				ChainTag::Ethereum,
 				saved_witnessed_until.epoch_index,
 				saved_witnessed_until
 					.block_number
@@ -188,7 +184,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn should_return_already_witnessed() {
-		let (_dir, db_path) = crate::testing::new_temp_directory_with_nonexistent_file();
+		let (_dir, db_path) = utilities::testing::new_temp_directory_with_nonexistent_file();
 
 		let saved_witnessed_until = WitnessedUntil { epoch_index: 2, block_number: 2 };
 
@@ -203,7 +199,6 @@ mod tests {
 		// Start checkpointing at a smaller epoch and check that it returns `AlreadyWitnessedEpoch`
 		assert!(matches!(
 			get_witnesser_start_block_with_checkpointing::<cf_chains::Ethereum>(
-				ChainTag::Ethereum,
 				saved_witnessed_until
 					.epoch_index
 					.checked_sub(1)

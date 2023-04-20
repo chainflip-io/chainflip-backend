@@ -1,11 +1,11 @@
 //! Contains tests related to liquidity, pools and swapping
 use cf_amm::{
-	common::{sqrt_price_at_tick, Side, SqrtPriceQ64F96, Tick},
+	common::{sqrt_price_at_tick, SqrtPriceQ64F96, Tick},
 	range_orders::Liquidity,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
-	Chain, Ethereum, ForeignChain,
+	CcmIngressMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress,
 };
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount};
 use cf_test_utilities::{assert_events_eq, assert_events_match};
@@ -15,6 +15,8 @@ use frame_support::{
 	traits::{OnIdle, OnNewAccount},
 };
 use pallet_cf_ingress_egress::IngressWitness;
+use pallet_cf_pools::Order;
+use pallet_cf_swapping::CcmIdCounter;
 use state_chain_runtime::{
 	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter},
 	AccountRoles, EthereumInstance, LiquidityPools, LiquidityProvider, Runtime, RuntimeCall,
@@ -127,7 +129,7 @@ fn mint_range_order(
 fn mint_limit_order(
 	account_id: &AccountId,
 	unstable_asset: Asset,
-	side: Side,
+	order: Order,
 	tick: Tick,
 	amount: AssetAmount,
 ) {
@@ -139,7 +141,7 @@ fn mint_limit_order(
 	assert_ok!(LiquidityPools::collect_and_mint_limit_order(
 		RuntimeOrigin::signed(account_id.clone()),
 		unstable_asset,
-		side,
+		order,
 		tick,
 		amount,
 	));
@@ -149,7 +151,7 @@ fn mint_limit_order(
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, pallet_cf_pools::STABLE_ASSET)
 			.unwrap_or_default();
 
-	if side == Side::Zero {
+	if order == Order::Sell {
 		assert_eq!(new_unstable_balance, unstable_balance - amount);
 		assert_eq!(new_stable_balance, stable_balance);
 	} else {
@@ -176,6 +178,18 @@ fn mint_limit_order(
 	System::reset_events();
 }
 
+fn setup_pool_and_accounts(assets: Vec<Asset>) {
+	new_account(&DORIS, AccountRole::LiquidityProvider);
+	new_account(&ZION, AccountRole::Relayer);
+
+	for asset in assets {
+		new_pool(asset, 0u32, sqrt_price_at_tick(0));
+		credit_account(&DORIS, asset, 1_000_000);
+		credit_account(&DORIS, Asset::Usdc, 1_000_000);
+		mint_range_order(&DORIS, asset, -1_000..1_000, 1_000_000);
+	}
+}
+
 #[test]
 fn basic_pool_setup_provision_and_swap() {
 	super::genesis::default().build().execute_with(|| {
@@ -187,21 +201,19 @@ fn basic_pool_setup_provision_and_swap() {
 		credit_account(&DORIS, Asset::Flip, 1_000_000);
 		credit_account(&DORIS, Asset::Usdc, 1_000_000);
 
-		mint_limit_order(&DORIS, Asset::Eth, Side::Zero, 0, 500_000);
+		mint_limit_order(&DORIS, Asset::Eth, Order::Sell, 0, 500_000);
 		mint_range_order(&DORIS, Asset::Eth, -10..10, 1_000_000);
 
-		mint_limit_order(&DORIS, Asset::Flip, Side::Zero, 0, 500_000);
+		mint_limit_order(&DORIS, Asset::Flip, Order::Sell, 0, 500_000);
 		mint_range_order(&DORIS, Asset::Flip, -10..10, 1_000_000);
 
 		new_account(&ZION, AccountRole::Relayer);
-
-		let egress_address = [1u8; 20];
 
 		assert_ok!(Swapping::register_swap_intent(
 			RuntimeOrigin::signed(ZION.clone()),
 			Asset::Eth,
 			Asset::Flip,
-			EncodedAddress::Eth(egress_address.to_vec()),
+			EncodedAddress::Eth([1u8; 20].to_vec()),
 			0u16,
 			None,
 		));
@@ -238,12 +250,12 @@ fn basic_pool_setup_provision_and_swap() {
 			..
 		}) if <Ethereum as Chain>::ChainAccount::try_from(ChainAddressConverter::from_encoded_address(events_ingress_address.clone()).expect("we created the ingress address above so it should be valid")).unwrap() == ingress_address => swap_id);
 
-		let _ = state_chain_runtime::AllPalletsWithoutSystem::on_idle(
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
 			1,
 			Weight::from_ref_time(1_000_000_000_000),
 		);
 
-		let ((), (), (), egress_id, ..) = assert_events_match!(
+		let (.., egress_id) = assert_events_match!(
 			Runtime,
 			RuntimeEvent::LiquidityPools(
 				pallet_cf_pools::Event::AssetSwapped {
@@ -281,6 +293,221 @@ fn basic_pool_setup_provision_and_swap() {
 					..
 				},
 			) if egress_ids.contains(&egress_id) => ()
+		);
+	});
+}
+
+#[test]
+fn can_process_ccm_via_swap_intent() {
+	super::genesis::default().build().execute_with(|| {
+		// Setup pool and liquidity
+		setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip]);
+
+		let gas_budget = 100;
+		let ingress_amount = 1_000;
+		let message = CcmIngressMetadata {
+			message: vec![0u8, 1u8, 2u8, 3u8, 4u8],
+			gas_budget,
+			refund_address: ForeignChainAddress::Eth([0x01; 20]),
+			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+		};
+
+		// Register CCM via swap intent.
+		assert_ok!(Swapping::register_swap_intent(
+			RuntimeOrigin::signed(ZION.clone()),
+			Asset::Flip,
+			Asset::Usdc,
+			EncodedAddress::Eth([0x02; 20].to_vec()),
+			0u16,
+			Some(message),
+		));
+
+		// Ingress fund for the ccm.
+		let ingress_address =
+			<AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
+				cf_chains::eth::assets::eth::Asset::Flip,
+				pallet_cf_ingress_egress::IntentIdCounter::<Runtime, EthereumInstance>::get(),
+			)
+			.unwrap();
+		let current_epoch = Validator::current_epoch();
+		for node in Validator::current_authorities() {
+			assert_ok!(Witnesser::witness_at_epoch(
+				RuntimeOrigin::signed(node),
+				Box::new(RuntimeCall::EthereumIngressEgress(
+					pallet_cf_ingress_egress::Call::do_ingress {
+						ingress_witnesses: vec![IngressWitness {
+							ingress_address,
+							asset: cf_chains::eth::assets::eth::Asset::Flip,
+							amount: 1_000,
+							tx_id: Default::default(),
+						}],
+					}
+				)),
+				current_epoch
+			));
+		}
+		let (principal_swap_id, gas_swap_id) = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::CcmIngressReceived {
+			ccm_id,
+			principal_swap_id: Some(principal_swap_id),
+			gas_swap_id: Some(gas_swap_id),
+			ingress_amount: amount,
+			..
+		}) if ccm_id == CcmIdCounter::<Runtime>::get() && 
+			amount == ingress_amount => (principal_swap_id, gas_swap_id));
+
+		// on_idle to perform the swaps and egress CCM.
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
+			1,
+			Weight::from_ref_time(1_000_000_000_000),
+		);
+
+		let (.., egress_id) = assert_events_match!(
+			Runtime,
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from: Asset::Flip,
+					to: Asset::Usdc,
+					input_amount: amount,
+					..
+				},
+			) if amount == gas_budget => (),
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from: Asset::Usdc,
+					to: Asset::Eth,
+					..
+				},
+			) => (),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::SwapExecuted {
+					swap_id,
+				},
+			) if swap_id == gas_swap_id => (),
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from: Asset::Flip,
+					to: Asset::Usdc,
+					..
+				},
+			) => (),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::SwapExecuted {
+					swap_id,
+				},
+			) if swap_id == principal_swap_id => (),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::CcmEgressScheduled {
+					ccm_id,
+					egress_id: egress_id @ (ForeignChain::Ethereum, _),
+				},
+			) if ccm_id == CcmIdCounter::<Runtime>::get() => egress_id
+		);
+
+		assert_events_match!(
+			Runtime,
+			RuntimeEvent::EthereumIngressEgress(
+				pallet_cf_ingress_egress::Event::CcmBroadcastRequested {
+					egress_id: actual_egress_id,
+					..
+				},
+			) if actual_egress_id == egress_id => ()
+		);
+	});
+}
+
+#[test]
+fn can_process_ccm_via_extrinsic_intent() {
+	super::genesis::default().build().execute_with(|| {
+		setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip]);
+
+		let gas_budget = 100;
+		let ingress_amount = 1_000;
+		let message = CcmIngressMetadata {
+			message: vec![0u8, 1u8, 2u8, 3u8, 4u8],
+			gas_budget,
+			refund_address: ForeignChainAddress::Eth([0x01; 20]),
+			source_address: ForeignChainAddress::Eth([0xcf; 20])
+		};
+
+		let ccm_call = Box::new(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_ingress{
+			ingress_asset: Asset::Flip,
+			ingress_amount,
+			egress_asset: Asset::Usdc,
+			egress_address: EncodedAddress::Eth([0x02; 20].to_vec()),
+			message_metadata: message,
+		}));
+		let current_epoch = Validator::current_epoch();
+		for node in Validator::current_authorities() {
+			assert_ok!(Witnesser::witness_at_epoch(
+				RuntimeOrigin::signed(node),
+				ccm_call.clone(),
+				current_epoch
+			));
+		}
+		let (principal_swap_id, gas_swap_id) = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::CcmIngressReceived {
+			ccm_id,
+			principal_swap_id: Some(principal_swap_id),
+			gas_swap_id: Some(gas_swap_id),
+			ingress_amount: amount,
+			..
+		}) if ccm_id == CcmIdCounter::<Runtime>::get() && 
+			amount == ingress_amount => (principal_swap_id, gas_swap_id));
+
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
+			1,
+			Weight::from_ref_time(1_000_000_000_000),
+		);
+
+		let (.., egress_id) = assert_events_match!(
+			Runtime,
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from: Asset::Flip,
+					to: Asset::Usdc,
+					input_amount,
+					..
+				},
+			) if input_amount == gas_budget => (),
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from: Asset::Usdc,
+					to: Asset::Eth,
+					..
+				},
+			) => (),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::SwapExecuted {
+					swap_id,
+				},
+			) if swap_id == gas_swap_id => (),
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from: Asset::Flip,
+					to: Asset::Usdc,
+					..
+				},
+			) => (),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::SwapExecuted {
+					swap_id,
+				},
+			) if swap_id == principal_swap_id => (),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::CcmEgressScheduled {
+					ccm_id,
+					egress_id: egress_id @ (ForeignChain::Ethereum, _),
+				},
+			) if ccm_id == CcmIdCounter::<Runtime>::get() => egress_id
+		);
+
+		assert_events_match!(
+			Runtime,
+			RuntimeEvent::EthereumIngressEgress(
+				pallet_cf_ingress_egress::Event::CcmBroadcastRequested {
+					egress_id: actual_egress_id,
+					..
+				},
+			) if actual_egress_id == egress_id => ()
 		);
 	});
 }

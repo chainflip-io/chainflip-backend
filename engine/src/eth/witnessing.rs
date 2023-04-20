@@ -16,9 +16,9 @@ use crate::{
 	multisig::PersistentKeyDB,
 	settings,
 	state_chain_observer::{client::StateChainClient, EthAddressToMonitorSender},
-	task_scope::Scope,
 	witnesser::{AddressMonitor, EpochStart},
 };
+use utilities::task_scope::Scope;
 
 use super::{
 	chain_data_witnesser,
@@ -85,7 +85,7 @@ pub async fn start(
 			initial_block_hash,
 		)
 		.await
-		.context("Failed to get KeyManager address from SC")?;
+		.context("Failed to get Vault contract address from SC")?;
 
 	let usdc_address = state_chain_client
 		.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(

@@ -9,6 +9,7 @@ pub mod address_converter;
 pub mod api_call;
 pub mod bid_info;
 pub mod callback;
+pub mod ccm_handler;
 pub mod ceremony_id_provider;
 pub mod egress_handler;
 pub mod ensure_origin_mock;

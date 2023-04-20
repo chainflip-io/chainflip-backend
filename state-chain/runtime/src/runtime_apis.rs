@@ -1,7 +1,7 @@
 use crate::chainflip::Offence;
 use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::eth::SigData;
-use cf_primitives::{Asset, EpochIndex};
+use cf_primitives::{Asset, EpochIndex, EthereumAddress};
 use codec::{Decode, Encode};
 use pallet_cf_governance::GovCallHash;
 #[cfg(feature = "std")]
@@ -37,7 +37,7 @@ pub struct RuntimeApiAccountInfo {
 	pub is_activated: bool,
 	pub online_credits: u32,
 	pub reputation_points: i32,
-	pub withdrawal_address: [u8; 20],
+	pub withdrawal_address: EthereumAddress,
 	pub state: ChainflipAccountStateWithPassive,
 }
 
@@ -48,7 +48,7 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub last_heartbeat: u32, // can *maybe* remove this - check with Andrew
 	pub online_credits: u32,
 	pub reputation_points: i32,
-	pub withdrawal_address: [u8; 20],
+	pub withdrawal_address: EthereumAddress,
 	pub keyholder_epochs: Vec<EpochIndex>,
 	pub is_current_authority: bool,
 	pub is_current_backup: bool,
@@ -60,7 +60,7 @@ pub struct RuntimeApiAccountInfoV2 {
 #[derive(Encode, Decode, Eq, PartialEq)]
 pub struct RuntimeApiPendingClaim {
 	pub amount: U256,
-	pub address: [u8; 20],
+	pub address: EthereumAddress,
 	pub expiry: U256,
 	pub sig_data: SigData,
 }
@@ -85,9 +85,10 @@ decl_runtime_apis!(
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
-		fn cf_eth_flip_token_address() -> [u8; 20];
-		fn cf_eth_stake_manager_address() -> [u8; 20];
-		fn cf_eth_key_manager_address() -> [u8; 20];
+		fn cf_eth_flip_token_address() -> EthereumAddress;
+		fn cf_eth_stake_manager_address() -> EthereumAddress;
+		fn cf_eth_asset(token_address: EthereumAddress) -> Option<Asset>;
+		fn cf_eth_key_manager_address() -> EthereumAddress;
 		fn cf_eth_chain_id() -> u64;
 		/// Returns the eth vault in the form [agg_key, active_from_eth_block]
 		fn cf_eth_vault() -> ([u8; 33], u32);

@@ -706,6 +706,7 @@ fn swap() {
 	}
 }
 
+#[cfg(feature = "slow-tests")]
 #[test]
 fn maximum_liquidity_swap() {
 	let mut pool_state = PoolState::new(0).unwrap();

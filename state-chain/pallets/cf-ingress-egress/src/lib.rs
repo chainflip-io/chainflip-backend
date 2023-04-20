@@ -64,6 +64,9 @@ pub(crate) struct CrossChainMessage<C: Chain> {
 	pub amount: C::ChainAmount,
 	pub egress_address: C::ChainAccount,
 	pub message: Vec<u8>,
+	// The sender of the ingress transaction.
+	pub source_address: ForeignChainAddress,
+	// Where funds might be returned to if the message fails.
 	pub refund_address: ForeignChainAddress,
 }
 
@@ -487,7 +490,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Returns the actual amount of weights used.
 	///
 	/// Egress transactions with Blacklisted assets are not sent, and kept in storage.
-	#[allow(clippy::type_complexity)]
 	fn do_egress_scheduled_fetch_transfer(
 		maybe_size: Option<u32>,
 	) -> TransactionOutcome<Result<Weight, DispatchError>> {
@@ -545,7 +547,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let egress_batch_size = egress_params.len() as u32;
 
 		// Construct and send the transaction.
-		#[allow(clippy::unit_arg)]
 		match <T::ChainApiCall as AllBatch<T::TargetChain>>::new_unsigned(
 			fetch_params,
 			egress_params,
@@ -575,16 +576,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Returns the actual weight used to send the transactions.
 	///
 	/// Blacklisted assets are not sent and will remain in storage.
-	#[allow(clippy::type_complexity)]
 	fn do_egress_scheduled_ccm(maybe_size: Option<u32>) -> Weight {
 		let ccm_to_send: Vec<_> = ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
-			// Take up to batch_size requests to be sent
-			let mut target_size = maybe_size.unwrap_or(ccms.len() as u32);
+			let mut remaining_batch_space = maybe_size.unwrap_or(ccms.len() as u32);
 
-			// Filter out disabled assets
+			// Filter out disabled assets, and take up to batch_size requests to be sent.
 			ccms.drain_filter(|ccm| {
-				if target_size > 0 && !DisabledEgressAssets::<T, I>::contains_key(ccm.asset()) {
-					target_size.saturating_reduce(1);
+				if remaining_batch_space > 0 &&
+					!DisabledEgressAssets::<T, I>::contains_key(ccm.asset())
+				{
+					remaining_batch_space.saturating_reduce(1);
 					true
 				} else {
 					false
@@ -592,10 +593,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			})
 			.collect()
 		});
-
-		if ccm_to_send.is_empty() {
-			return T::WeightInfo::egress_ccm(0u32)
-		}
 
 		let ccms_sent = ccm_to_send.len() as u32;
 		for ccm in ccm_to_send {
@@ -606,7 +603,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					amount: ccm.amount,
 					to: ccm.egress_address,
 				},
-				ccm.refund_address,
+				ccm.source_address,
 				ccm.message,
 			) {
 				Ok(api_call) => {
@@ -694,37 +691,29 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ingress_asset: TargetChainAsset<T, I>,
 		intent_action: IntentAction<T::AccountId>,
 	) -> Result<(IntentId, TargetChainAccount<T, I>), DispatchError> {
-		let intent_ttl = frame_system::Pallet::<T>::current_block_number() + T::IntentTTL::get();
 		// We have an address available, so we can just use it.
-
-		let (address, intent_id) = if let Some((intent_id, address)) =
-			AddressPool::<T, I>::drain().next()
-		{
-			FetchParamDetails::<T, I>::insert(
-				intent_id,
-				(IngressFetchIdOf::<T, I>::deployed(intent_id, address.clone()), address.clone()),
-			);
-			IntentExpiries::<T, I>::append(intent_ttl, (intent_id, address.clone()));
-			(address, intent_id)
-		} else {
-			let next_intent_id = IntentIdCounter::<T, I>::get()
-				.checked_add(1)
-				.ok_or(Error::<T, I>::IntentIdsExhausted)?;
-			let new_address: TargetChainAccount<T, I> =
-				T::AddressDerivation::generate_address(ingress_asset, next_intent_id)?;
-			AddressStatus::<T, I>::insert(new_address.clone(), DeploymentStatus::Undeployed);
-			FetchParamDetails::<T, I>::insert(
-				next_intent_id,
+		let (address, intent_id, ingress_fetch_id) =
+			if let Some((intent_id, address)) = AddressPool::<T, I>::drain().next() {
+				(address.clone(), intent_id, IngressFetchIdOf::<T, I>::deployed(intent_id, address))
+			} else {
+				let next_intent_id = IntentIdCounter::<T, I>::get()
+					.checked_add(1)
+					.ok_or(Error::<T, I>::IntentIdsExhausted)?;
+				let new_address: TargetChainAccount<T, I> =
+					T::AddressDerivation::generate_address(ingress_asset, next_intent_id)?;
+				AddressStatus::<T, I>::insert(new_address.clone(), DeploymentStatus::Undeployed);
+				IntentIdCounter::<T, I>::put(next_intent_id);
 				(
-					IngressFetchIdOf::<T, I>::undeployed(next_intent_id, new_address.clone()),
 					new_address.clone(),
-				),
-			);
-			IntentExpiries::<T, I>::append(intent_ttl, (next_intent_id, new_address.clone()));
-			IntentIdCounter::<T, I>::put(next_intent_id);
-			(new_address, next_intent_id)
-		};
-
+					next_intent_id,
+					IngressFetchIdOf::<T, I>::undeployed(next_intent_id, new_address),
+				)
+			};
+		FetchParamDetails::<T, I>::insert(intent_id, (ingress_fetch_id, address.clone()));
+		IntentExpiries::<T, I>::append(
+			frame_system::Pallet::<T>::current_block_number() + T::IntentTTL::get(),
+			(intent_id, address.clone()),
+		);
 		IntentIngressDetails::<T, I>::insert(&address, IngressDetails { intent_id, ingress_asset });
 		IntentActions::<T, I>::insert(&address, intent_action);
 		T::IngressHandler::on_ingress_initiated(address.clone(), intent_id)?;
@@ -739,17 +728,22 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		egress_address: TargetChainAccount<T, I>,
 		maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId {
-		let egress_counter = EgressIdCounter::<T, I>::get().saturating_add(1);
+		let egress_counter = EgressIdCounter::<T, I>::mutate(|id| {
+			*id = id.saturating_add(1);
+			*id
+		});
 		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
 		match maybe_message {
-			Some(message) => ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
-				egress_id,
-				asset,
-				amount,
-				egress_address: egress_address.clone(),
-				message: message.message,
-				refund_address: message.refund_address,
-			}),
+			Some(CcmIngressMetadata { message, refund_address, source_address, .. }) =>
+				ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
+					egress_id,
+					asset,
+					amount,
+					egress_address: egress_address.clone(),
+					message,
+					refund_address,
+					source_address,
+				}),
 			None => ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<
 				T::TargetChain,
 			>::Transfer {
@@ -760,7 +754,6 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 			}),
 		}
 
-		EgressIdCounter::<T, I>::put(egress_counter);
 		Self::deposit_event(Event::<T, I>::EgressScheduled {
 			id: egress_id,
 			asset,

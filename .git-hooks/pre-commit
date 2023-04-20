@@ -13,9 +13,9 @@ EOF
 fi
 
 cat <<\EOF
-Running: cargo ci-clippy
+Running: cargo cf-clippy-ci
 EOF
-cargo ci-clippy
+cargo cf-clippy-ci
 result=$?
 
 if [ ${result} -ne 0 ] ; then
@@ -24,7 +24,7 @@ if [ ${result} -ne 0 ] ; then
 -----------------------------
 Clippy encountered warnings which prevent you from committing.
 
-Please check these with `cargo clippy` and solve before retrying the commit.
+Please check these with `cargo cf-clippy-ci` and solve before retrying the commit.
 -----------------------------
 EOF
     exit 1

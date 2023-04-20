@@ -1,7 +1,8 @@
 pub use crate::{self as pallet_cf_ingress_egress};
 pub use cf_chains::{
+	address::ForeignChainAddress,
 	eth::api::{EthereumApi, EthereumReplayProtection},
-	Chain, ChainAbi, ChainEnvironment,
+	CcmIngressMetadata, Chain, ChainAbi, ChainEnvironment,
 };
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
@@ -9,11 +10,18 @@ pub use cf_primitives::{
 };
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 
-use frame_support::traits::UnfilteredDispatchable;
+use frame_support::{
+	instances::Instance1,
+	parameter_types,
+	traits::{ConstU64, UnfilteredDispatchable},
+};
 
 use cf_traits::{
 	impl_mock_callback,
-	mocks::api_call::{MockEthEnvironment, MockEthereumApiCall},
+	mocks::{
+		api_call::{MockEthEnvironment, MockEthereumApiCall},
+		ccm_handler::MockCcmHandler,
+	},
 	IngressHandler,
 };
 
@@ -21,7 +29,7 @@ pub use cf_traits::{
 	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
 	Broadcaster,
 };
-use frame_support::{instances::Instance1, parameter_types, traits::ConstU64};
+
 use frame_system as system;
 use sp_core::H256;
 use sp_runtime::{
@@ -90,14 +98,18 @@ impl cf_traits::Chainflip for Test {
 
 impl_mock_callback!(RuntimeOrigin);
 
+parameter_types! {
+	pub static EgressedApiCall: Option<MockEthereumApiCall<MockEthEnvironment>> = None;
+}
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
 	type ApiCall = MockEthereumApiCall<MockEthEnvironment>;
 	type Callback = RuntimeCall;
 
 	fn threshold_sign_and_broadcast(
-		_api_call: Self::ApiCall,
+		api_call: Self::ApiCall,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
+		EgressedApiCall::set(Some(api_call));
 		(1, 2)
 	}
 
@@ -127,7 +139,7 @@ impl crate::Config<Instance1> for Test {
 	type IntentTTL = ConstU64<5_u64>;
 	type IngressHandler = MockIngressHandler;
 	type WeightInfo = ();
-	type CcmHandler = ();
+	type CcmHandler = MockCcmHandler;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

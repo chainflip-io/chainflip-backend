@@ -23,7 +23,7 @@ state-chain-runtime = { path = "../runtime" }
 
 # Local dependencies
 cf-chains = {path = "../chains"}
-utilities = {path = "../../utilities"}
+utilities = {package = "utilities", path = "../../utilities"}
 custom-rpc = {path = "../custom-rpc"}
 cf-primitives = { path = "../primitives" }
 
@@ -85,9 +85,6 @@ runtime-benchmarks = [
 	"state-chain-runtime/runtime-benchmarks",
 	"frame-benchmarking/runtime-benchmarks",
 	"frame-benchmarking-cli/runtime-benchmarks",
-]
-cli = [
-  'try-runtime-cli',
 ]
 try-runtime = [
   "state-chain-runtime/try-runtime",

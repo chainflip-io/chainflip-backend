@@ -9,8 +9,6 @@ use std::{
 };
 
 use crate::{
-	common::read_clean_and_decode_hex_str_file,
-	multisig::{bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme},
 	settings::P2P as P2PSettings,
 	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 };
@@ -20,6 +18,7 @@ pub use self::{
 	muxer::{ProtocolVersion, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
 };
 use anyhow::Context;
+use cf_chains::{Bitcoin, Chain, Ethereum, Polkadot};
 use cf_primitives::AccountId;
 use futures::{Future, FutureExt};
 use muxer::P2PMuxer;
@@ -28,7 +27,7 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, Instrument};
 use zeroize::Zeroizing;
 
-use crate::task_scope::task_scope;
+use utilities::{read_clean_and_decode_hex_str_file, task_scope::task_scope};
 
 // TODO: Consider if this should be removed, particularly once we no longer use Substrate for
 // peering
@@ -38,22 +37,22 @@ pub enum OutgoingMultisigStageMessages {
 	Private(Vec<(AccountId, Vec<u8>)>),
 }
 
-pub struct MultisigMessageSender<C: CryptoScheme>(
+pub struct MultisigMessageSender<C: Chain>(
 	pub UnboundedSender<OutgoingMultisigStageMessages>,
 	PhantomData<C>,
 );
 
-impl<C: CryptoScheme> MultisigMessageSender<C> {
+impl<C: Chain> MultisigMessageSender<C> {
 	pub fn new(sender: UnboundedSender<OutgoingMultisigStageMessages>) -> Self {
 		MultisigMessageSender(sender, PhantomData)
 	}
 }
-pub struct MultisigMessageReceiver<C: CryptoScheme>(
+pub struct MultisigMessageReceiver<C: Chain>(
 	pub UnboundedReceiver<(AccountId, VersionedCeremonyMessage)>,
 	PhantomData<C>,
 );
 
-impl<C: CryptoScheme> MultisigMessageReceiver<C> {
+impl<C: Chain> MultisigMessageReceiver<C> {
 	pub fn new(receiver: UnboundedReceiver<(AccountId, VersionedCeremonyMessage)>) -> Self {
 		MultisigMessageReceiver(receiver, PhantomData)
 	}
@@ -64,12 +63,12 @@ pub async fn start<StateChainClient>(
 	settings: P2PSettings,
 	latest_block_hash: H256,
 ) -> anyhow::Result<(
-	MultisigMessageSender<EthSigning>,
-	MultisigMessageReceiver<EthSigning>,
-	MultisigMessageSender<PolkadotSigning>,
-	MultisigMessageReceiver<PolkadotSigning>,
-	MultisigMessageSender<BtcSigning>,
-	MultisigMessageReceiver<BtcSigning>,
+	MultisigMessageSender<Ethereum>,
+	MultisigMessageReceiver<Ethereum>,
+	MultisigMessageSender<Polkadot>,
+	MultisigMessageReceiver<Polkadot>,
+	MultisigMessageSender<Bitcoin>,
+	MultisigMessageReceiver<Bitcoin>,
 	UnboundedSender<PeerUpdate>,
 	impl Future<Output = anyhow::Result<()>>,
 )>

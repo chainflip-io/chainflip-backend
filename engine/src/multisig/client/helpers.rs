@@ -16,10 +16,18 @@ use rand_legacy::{RngCore, SeedableRng};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, debug_span, Instrument};
-use utilities::{assert_ok, success_threshold_from_share_count};
+use utilities::{
+	all_same, assert_ok, split_at, success_threshold_from_share_count,
+	testing::expect_recv_with_timeout,
+};
 
+use crate::multisig::{
+	client::{keygen, MultisigMessage},
+	// This determines which crypto scheme will be used in tests
+	// (we make arbitrary choice to use eth)
+	crypto::eth::{EthSigning, Point},
+};
 use crate::{
-	common::{all_same, split_at},
 	multisig::{
 		client::{
 			ceremony_manager::{
@@ -35,15 +43,6 @@ use crate::{
 		CryptoScheme,
 	},
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
-};
-use crate::{
-	multisig::{
-		client::{keygen, MultisigMessage},
-		// This determines which crypto scheme will be used in tests
-		// (we make arbitrary choice to use eth)
-		crypto::eth::{EthSigning, Point},
-	},
-	testing::expect_recv_with_timeout,
 };
 
 use signing::{LocalSig3, SigningCommitment};

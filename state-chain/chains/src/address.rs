@@ -163,6 +163,16 @@ impl From<BitcoinScriptBounded> for ForeignChainAddress {
 	}
 }
 
+impl EncodedAddress {
+	pub fn from_chain_bytes(chain: ForeignChain, bytes: Vec<u8>) -> Self {
+		match chain {
+			ForeignChain::Ethereum => EncodedAddress::Eth(bytes),
+			ForeignChain::Polkadot => EncodedAddress::Dot(bytes),
+			ForeignChain::Bitcoin => EncodedAddress::Btc(bytes),
+		}
+	}
+}
+
 impl From<ForeignChainAddress> for ForeignChain {
 	fn from(address: ForeignChainAddress) -> ForeignChain {
 		match address {

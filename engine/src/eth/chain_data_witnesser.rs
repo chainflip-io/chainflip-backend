@@ -1,8 +1,17 @@
+use async_trait::async_trait;
+use futures::StreamExt;
 use std::{sync::Arc, time::Duration};
+use tokio_stream::wrappers::IntervalStream;
 
 use crate::{
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
-	witnesser::{epoch_witnesser, EpochStart},
+	witnesser::{
+		epoch_process_runner::{
+			self, start_epoch_process_runner, EpochProcessGenerator, EpochWitnesser,
+			WitnesserInitResult,
+		},
+		EpochStart,
+	},
 };
 
 use super::rpc::EthRpcApi;
@@ -10,10 +19,7 @@ use super::rpc::EthRpcApi;
 use cf_chains::eth::{Ethereum, EthereumTrackedData};
 
 use state_chain_runtime::CfeSettings;
-use tokio::{
-	select,
-	sync::{watch, Mutex},
-};
+use tokio::sync::{oneshot, watch, Mutex};
 use tracing::{error, info_span, Instrument};
 use utilities::{context, make_periodic_tick};
 use web3::types::{BlockNumber, U256};
@@ -30,62 +36,120 @@ where
 	EthRpcClient: 'static + EthRpcApi + Clone + Send + Sync,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
 {
-	epoch_witnesser::start(
+	start_epoch_process_runner(
 		Arc::new(Mutex::new(epoch_start_receiver)),
-		|epoch_start| epoch_start.current,
+		ChainDataWitnesserGenerator { eth_rpc, state_chain_client, cfe_settings_update_receiver },
 		EthereumTrackedData::default(),
-		move |mut end_witnessing_receiver, epoch_start, mut last_witnessed_data| {
-			let eth_rpc = eth_rpc.clone();
-			let cfe_settings_update_receiver = cfe_settings_update_receiver.clone();
-
-			let state_chain_client = state_chain_client.clone();
-			async move {
-				let mut poll_interval = make_periodic_tick(ETH_CHAIN_TRACKING_POLL_INTERVAL, true);
-
-				loop {
-					select! {
-						_end_block = &mut end_witnessing_receiver => {
-							break;
-						}
-						_ = poll_interval.tick() => {
-							let priority_fee = cfe_settings_update_receiver
-									.borrow()
-									.eth_priority_fee_percentile;
-							let latest_data = get_tracked_data(
-								&eth_rpc,
-								priority_fee
-							).await.map_err(|e| {
-								error!("Failed to get tracked data: {e:?}");
-							})?;
-
-							if latest_data.block_height > last_witnessed_data.block_height || latest_data.base_fee != last_witnessed_data.base_fee {
-								let _result = state_chain_client
-									.submit_signed_extrinsic(
-										state_chain_runtime::RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
-											call: Box::new(state_chain_runtime::RuntimeCall::EthereumChainTracking(
-												pallet_cf_chain_tracking::Call::update_chain_state {
-													state: latest_data,
-												},
-											)),
-											epoch_index: epoch_start.epoch_index
-										}),
-									)
-									.await;
-
-
-								last_witnessed_data = latest_data;
-
-							}
-						}
-					}
-                }
-
-				Ok(last_witnessed_data)
-			}
-		},
 	)
 	.instrument(info_span!("Eth-Chain-Data-Witnesser"))
 	.await
+}
+
+struct ChainDataWitnesser<StateChainClient, EthRpcClient> {
+	state_chain_client: Arc<StateChainClient>,
+	cfe_settings_update_receiver: watch::Receiver<CfeSettings>,
+	eth_rpc: EthRpcClient,
+	current_epoch: EpochStart<Ethereum>,
+}
+
+#[async_trait]
+impl<StateChainClient, EthRpcClient> EpochWitnesser
+	for ChainDataWitnesser<StateChainClient, EthRpcClient>
+where
+	EthRpcClient: EthRpcApi + 'static + Clone + Send + Sync,
+	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+{
+	type Chain = Ethereum;
+	type Data = ();
+	type StaticState = EthereumTrackedData;
+
+	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = false;
+
+	async fn run_witnesser(
+		mut self,
+		data_stream: std::pin::Pin<
+			Box<dyn futures::Stream<Item = anyhow::Result<Self::Data>> + Send + 'static>,
+		>,
+		end_witnessing_receiver: oneshot::Receiver<
+			<Ethereum as cf_chains::Chain>::ChainBlockNumber,
+		>,
+		state: Self::StaticState,
+	) -> Result<Self::StaticState, ()> {
+		epoch_process_runner::run_witnesser_data_stream(
+			self,
+			data_stream,
+			end_witnessing_receiver,
+			state,
+		)
+		.await
+	}
+
+	async fn do_witness(
+		&mut self,
+		_data: Self::Data,
+		last_witnessed_data: &mut EthereumTrackedData,
+	) -> anyhow::Result<()> {
+		let priority_fee = self.cfe_settings_update_receiver.borrow().eth_priority_fee_percentile;
+		let latest_data = get_tracked_data(&self.eth_rpc, priority_fee).await.map_err(|e| {
+			error!("Failed to get tracked data: {e:?}");
+			e
+		})?;
+
+		if latest_data.block_height > last_witnessed_data.block_height ||
+			latest_data.base_fee != last_witnessed_data.base_fee
+		{
+			let _result = self
+				.state_chain_client
+				.submit_signed_extrinsic(state_chain_runtime::RuntimeCall::Witnesser(
+					pallet_cf_witnesser::Call::witness_at_epoch {
+						call: Box::new(state_chain_runtime::RuntimeCall::EthereumChainTracking(
+							pallet_cf_chain_tracking::Call::update_chain_state {
+								state: latest_data,
+							},
+						)),
+						epoch_index: self.current_epoch.epoch_index,
+					},
+				))
+				.await;
+
+			*last_witnessed_data = latest_data;
+		}
+
+		Ok(())
+	}
+}
+
+struct ChainDataWitnesserGenerator<StateChainClient, EthRpcClient> {
+	state_chain_client: Arc<StateChainClient>,
+	cfe_settings_update_receiver: watch::Receiver<CfeSettings>,
+	eth_rpc: EthRpcClient,
+}
+
+#[async_trait]
+impl<StateChainClient, EthRpcClient> EpochProcessGenerator
+	for ChainDataWitnesserGenerator<StateChainClient, EthRpcClient>
+where
+	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	EthRpcClient: EthRpcApi + 'static + Send + Sync + Clone,
+{
+	type Witnesser = ChainDataWitnesser<StateChainClient, EthRpcClient>;
+	async fn init(
+		&mut self,
+		epoch: EpochStart<Ethereum>,
+	) -> anyhow::Result<WitnesserInitResult<ChainDataWitnesser<StateChainClient, EthRpcClient>>> {
+		let witnesser = ChainDataWitnesser {
+			state_chain_client: self.state_chain_client.clone(),
+			cfe_settings_update_receiver: self.cfe_settings_update_receiver.clone(),
+			eth_rpc: self.eth_rpc.clone(),
+			current_epoch: epoch,
+		};
+
+		let poll_interval =
+			IntervalStream::new(make_periodic_tick(ETH_CHAIN_TRACKING_POLL_INTERVAL, true))
+				.map(|_| Ok(()));
+
+		Ok(WitnesserInitResult::Created((witnesser, Box::pin(poll_interval))))
+	}
 }
 
 /// Queries the rpc node for the fee history and builds the `TrackedData` for Ethereum at the latest
