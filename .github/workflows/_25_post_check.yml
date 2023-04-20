@@ -68,6 +68,7 @@ jobs:
           echo -n ${{ secrets.CF_LOCALNET_SIGNING_KEY }} > ./localnet/init/secrets/signing_key_file
           echo -n ${{ secrets.CF_LOCALNET_NODE_KEY }} > ./localnet/init/secrets/node_key_file
           echo -n ${{ secrets.CF_LOCALNET_ETH_PRIVATE_KEY }} > ./localnet/init/secrets/eth_private_key_file
+          chmod +x ${{ env.BINARIES_LOCATION }}/chainflip-*
           ./localnet/manage.sh
 
       - name: Run EinfachHeuteLeiderNicht.exe
