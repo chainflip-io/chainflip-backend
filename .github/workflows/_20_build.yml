@@ -97,7 +97,7 @@ jobs:
         uses: chevdor/srtool-actions@v0.6.0
         with:
           chain: ${{ matrix.chain }}
-          runtime_dir: polkadot-parachains/${{ matrix.chain }}-runtime
+          runtime_dir: state-chain/runtime
       - name: Summary
         run: |
           echo '${{ steps.srtool_build.outputs.json }}' | jq . > ${{ matrix.chain }}-srtool-digest.json
