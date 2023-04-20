@@ -106,6 +106,6 @@ pre-depends = "logrotate"
 assets = [
   ["target/release/chainflip-node", "usr/bin/", "755"],
   ["chainspecs/perseverance.chainspec.raw.json", "etc/chainflip/chainspecs/perseverance.json", "644"],
-  ["chainspecs/sisyphos.chainspec.raw.json", "etc/chainflip/chainspecs/sisyphos.chainspec.json", "644"],
+  ["chainspecs/sisyphos.chainspec.raw.json", "etc/chainflip/chainspecs/sisyphos.json", "644"],
   ["logrotate.conf", "etc/logrotate.d/chainflip-node", "644"]
 ]
