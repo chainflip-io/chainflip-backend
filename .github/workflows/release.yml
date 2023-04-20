@@ -7,12 +7,6 @@ on:
     tags:
       - 'v*'
 
-env:
-  SCCACHE_CACHE_SIZE: 32G
-  SCCACHE_VERSION: v0.4.1
-  SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
-  CF_RUNNER_SUDO_PASSWORD: ${{ secrets.CF_RUNNER_SUDO_PASSWORD }}
-
 jobs:
   init:
     uses: ./.github/workflows/_00_init.yml
@@ -21,6 +15,7 @@ jobs:
   test:
 #    needs: [check]
     uses: ./.github/workflows/_10_test.yml
+    secrets: inherit
   build:
     needs: [test]
     uses: ./.github/workflows/_20_build.yml
