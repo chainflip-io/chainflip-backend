@@ -77,13 +77,17 @@ jobs:
         run: |
           echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
 
-      - name: Build packages
+      - name: Build global packages packages
         run: |
-          cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ matrix.network }} 
-          cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ matrix.network }}
           cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ matrix.network }}
-          cargo deb --no-build --no-strip -p chainflip-relayer --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ matrix.network }}
-          cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ matrix.network }}
+          cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.get-date.outputs.date }}"  
+          cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.get-date.outputs.date }}" 
+          cargo deb --no-build --no-strip -p chainflip-relayer --deb-revision "${{ steps.get-date.outputs.date }}"
+
+      - name: Build development packages
+        if: matrix.network != 'perseverance'
+        run: |
+          cargo deb --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.get-date.outputs.date }}"
 
       - name: Upload packages
         uses: actions/upload-artifact@v3

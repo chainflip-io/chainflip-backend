@@ -1,4 +1,4 @@
-name: Nightly build
+name: Post build checks
 on:
   workflow_call:
 jobs:
@@ -128,3 +128,27 @@ jobs:
         run: |
           chmod +x ./target/release/chainflip-node
           ./state-chain/scripts/benchmark-all.sh --binary ./target/release/chainflip-node --steps 2 --repetitions 1
+
+  apt:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Configure chainflip-dev APT repo
+        run: |
+          apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 14DFB4CA9296F83A
+          echo "deb https://${{ secrets.CF_APT_REPO_LOGIN }}@apt.aws.chainflip.xyz/sisyphos/ focal main"  | tee /etc/apt/sources.list.d/chainflip.list
+          apt-get update -y
+
+      - name: Download all Chainflip binaries
+        run: >
+          apt-get install -y 
+          chainflip-node 
+          chainflip-engine
+          chainflip-cli
+          chainflip-relayer
+
+      - name: Check versions
+        run: |
+          chainflip-node --version
+          chainflip-engine --version
+          chainflip-cli --version
+          chainflip-relayer --help
