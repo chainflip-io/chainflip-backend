@@ -17,6 +17,7 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::RegisterClaim;
+use cf_primitives::EthereumAddress;
 use cf_traits::{Bid, BidderProvider, EpochInfo, StakeTransfer, SystemStateInfo};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
@@ -55,8 +56,6 @@ pub mod pallet {
 	use sp_std::time::Duration;
 
 	pub type AccountId<T> = <T as frame_system::Config>::AccountId;
-
-	pub type EthereumAddress = [u8; 20];
 
 	pub type StakeAttempt<Amount> = (EthereumAddress, Amount);
 
@@ -134,7 +133,8 @@ pub mod pallet {
 	pub type ActiveBidder<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, bool, ValueQuery>;
 
-	/// PendingClaims stores a () for the account until the claim is executed.
+	/// PendingClaims stores a () for the account until the claim is executed or the claim
+	/// expires.
 	#[pallet::storage]
 	pub type PendingClaims<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, (), OptionQuery>;
@@ -150,11 +150,6 @@ pub mod pallet {
 	pub type FailedStakeAttempts<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, Vec<StakeAttempt<T::Balance>>, ValueQuery>;
 
-	/// List of pairs, mapping the time (in secs since Unix Epoch) at which the PendingClaim of a
-	/// particular AccountId expires.
-	#[pallet::storage]
-	pub type ClaimExpiries<T: Config> = StorageValue<_, Vec<(u64, AccountId<T>)>, ValueQuery>;
-
 	/// The minimum amount a user can stake, and therefore the minimum amount they can have
 	/// remaining after they claim.
 	#[pallet::storage]
@@ -164,23 +159,8 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type ClaimTTLSeconds<T: Config> = StorageValue<_, u64, ValueQuery>;
 
-	/// We must ensure the claim expires on the chain *after* it expires on the contract.
-	/// We should be extra sure that this is the case, else it opens the possibility for double
-	/// claiming.
-	#[pallet::storage]
-	pub type ClaimDelayBufferSeconds<T: Config> = StorageValue<_, u64, ValueQuery>;
-
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// Expires any pending claims that have passed their TTL.
-		fn on_initialize(_n: BlockNumberFor<T>) -> Weight {
-			if ClaimExpiries::<T>::decode_len().unwrap_or_default() == 0 {
-				return T::WeightInfo::on_initialize_best_case()
-			}
-
-			Self::expire_pending_claims_at(T::TimeSource::now().as_secs())
-		}
-
 		fn on_runtime_upgrade() -> Weight {
 			migrations::PalletMigration::<T>::on_runtime_upgrade()
 		}
@@ -222,19 +202,30 @@ pub mod pallet {
 		ClaimSettled(AccountId<T>, FlipBalance<T>),
 
 		/// An account has stopped bidding and will no longer take part in auctions.
-		StoppedBidding { account_id: AccountId<T> },
+		StoppedBidding {
+			account_id: AccountId<T>,
+		},
 
 		/// A previously non-bidding account has started bidding.
-		StartedBidding { account_id: AccountId<T> },
+		StartedBidding {
+			account_id: AccountId<T>,
+		},
 
 		/// A claim has expired without being executed.
-		ClaimExpired { account_id: AccountId<T> },
+		ClaimExpired {
+			account_id: AccountId<T>,
+		},
 
-		/// A stake attempt has failed. \[account_id, eth_address, amount\]
-		FailedStakeAttempt(AccountId<T>, EthereumAddress, FlipBalance<T>),
+		/// A stake attempt has failed.
+		FailedStakeAttempt {
+			account_id: AccountId<T>,
+			withdrawal_address: EthereumAddress,
+			amount: FlipBalance<T>,
+		},
 
-		/// The minimum stake required has been updated. \[new_amount\]
-		MinimumStakeUpdated(T::Balance),
+		MinimumStakeUpdated {
+			new_minimum: T::Balance,
+		},
 	}
 
 	#[pallet::error]
@@ -382,15 +373,6 @@ pub mod pallet {
 
 			let contract_expiry = T::TimeSource::now().as_secs() + ClaimTTLSeconds::<T>::get();
 
-			// IMPORTANT: The claim should *always* expire on the SC *later* than on the contract.
-			// If this does not occur, it means there's a window for a user to execute their claim
-			// on Ethereum after it has been expired on our chain. This means they get their funds
-			// on Ethereum, and the SC will revert the pending claim, giving them back their funds.
-			Self::register_claim_expiry(
-				account_id.clone(),
-				contract_expiry + ClaimDelayBufferSeconds::<T>::get(),
-			);
-
 			let call = T::RegisterClaim::new_unsigned(
 				<T as Config>::StakerId::from_ref(&account_id).as_ref(),
 				amount.into(),
@@ -439,11 +421,6 @@ pub mod pallet {
 
 			PendingClaims::<T>::take(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
 
-			// Assumption: One claim per account here.
-			ClaimExpiries::<T>::mutate(|expiries| {
-				expiries.retain(|(_, expiry_account_id)| expiry_account_id != &account_id);
-			});
-
 			T::Flip::finalize_claim(&account_id).expect("This should never return an error because we already ensured above that the pending claim does indeed exist");
 
 			if T::Flip::staked_balance(&account_id).is_zero() {
@@ -459,6 +436,26 @@ pub mod pallet {
 			}
 
 			Self::deposit_event(Event::ClaimSettled(account_id, claimed_amount));
+
+			Ok(().into())
+		}
+
+		#[pallet::weight(T::WeightInfo::claim_expired())]
+		pub fn claim_expired(
+			origin: OriginFor<T>,
+			account_id: AccountId<T>,
+			// The block number uniquely identifies the claim expiry for a particular account
+			// when witnessing.
+			_block_number: u64,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			PendingClaims::<T>::take(&account_id).ok_or(Error::<T>::NoPendingClaim)?;
+
+			T::Flip::revert_claim(&account_id)
+				.expect("Pending Claim should exist since the corresponding claim existed");
+
+			Self::deposit_event(Event::<T>::ClaimExpired { account_id });
 
 			Ok(().into())
 		}
@@ -534,7 +531,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			MinimumStake::<T>::put(minimum_stake);
-			Self::deposit_event(Event::MinimumStakeUpdated(minimum_stake));
+			Self::deposit_event(Event::MinimumStakeUpdated { new_minimum: minimum_stake });
 			Ok(().into())
 		}
 	}
@@ -564,7 +561,6 @@ pub mod pallet {
 		fn build(&self) {
 			MinimumStake::<T>::set(self.minimum_stake);
 			ClaimTTLSeconds::<T>::set(self.claim_ttl.as_secs());
-			ClaimDelayBufferSeconds::<T>::set(self.claim_delay_buffer_seconds);
 			for (staker, amount) in self.genesis_stakers.iter() {
 				Pallet::<T>::stake_account(staker, *amount);
 				Pallet::<T>::activate_bidding(staker)
@@ -575,35 +571,6 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	fn expire_pending_claims_at(secs_since_unix_epoch: u64) -> Weight {
-		let mut expiries = ClaimExpiries::<T>::get();
-
-		debug_assert!(
-			expiries.iter().is_sorted_by_key(|(expiry_time, _account_id)| expiry_time),
-			"Expiries should be sorted on insertion"
-		);
-
-		ClaimExpiries::<T>::set(
-			expiries.split_off(
-				expiries.partition_point(|(expiry, _)| expiry <= &secs_since_unix_epoch),
-			),
-		);
-
-		// take the len after we've partitioned the expiries.
-		let expiries_len = expiries.len() as u32;
-		for (_, account_id) in expiries {
-			if PendingClaims::<T>::take(&account_id).is_some() {
-				// Re-credit the account
-				T::Flip::revert_claim(&account_id)
-					.expect("Pending Claim should exist since the corresponding expiry exists");
-
-				Self::deposit_event(Event::<T>::ClaimExpired { account_id });
-			}
-		}
-
-		T::WeightInfo::expire_pending_claims_at(expiries_len)
-	}
-
 	/// Checks the withdrawal address requirements and saves the address if provided.
 	///
 	/// If a non-zero address was provided, then it *must* match the address that was
@@ -636,11 +603,11 @@ impl<T: Config> Pallet<T> {
 				// Instead, we keep a record of the failed attempt so that we can potentially
 				// investigate and / or consider refunding automatically or via governance.
 				FailedStakeAttempts::<T>::append(account_id, (withdrawal_address, amount));
-				Self::deposit_event(Event::FailedStakeAttempt(
-					account_id.clone(),
+				Self::deposit_event(Event::FailedStakeAttempt {
+					account_id: account_id.clone(),
 					withdrawal_address,
 					amount,
-				));
+				});
 				Err(Error::<T>::WithdrawalAddressRestricted)
 			},
 		}
@@ -677,25 +644,6 @@ impl<T: Config> Pallet<T> {
 				None => Err(Error::UnknownAccount),
 			}
 		})
-	}
-
-	/// Registers the expiry time for an account's pending claim. At the provided time, any pending
-	/// claims for the account are expired.
-	fn register_claim_expiry(account_id: AccountId<T>, expiry: u64) {
-		ClaimExpiries::<T>::mutate(|expiries| {
-			// We want to ensure this list remains sorted such that the head of the list contains
-			// the oldest pending claim (ie. the first to be expired). This means we put the new
-			// value on the back of the list since it's quite likely this is the most recent. We
-			// then run a stable sort, which is most effient when values are already close to being
-			// sorted. So we need to reverse the list, push the *young* value to the front, reverse
-			// it again, then sort. We could have used a VecDeque here to have a FIFO queue but
-			// VecDeque doesn't support `decode_len` which is used during the expiry check to avoid
-			// decoding the whole list.
-			expiries.reverse();
-			expiries.push((expiry, account_id));
-			expiries.reverse();
-			expiries.sort_by_key(|tup| tup.0);
-		});
 	}
 }
 

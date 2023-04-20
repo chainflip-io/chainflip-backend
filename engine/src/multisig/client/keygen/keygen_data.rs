@@ -204,6 +204,7 @@ derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyComplaints7, KeygenDa
 derive_impls_for_enum_variants!(impl<P: ECPoint> for BlameResponse8<P>, KeygenData::BlameResponse8, KeygenData<P>);
 derive_impls_for_enum_variants!(impl<P: ECPoint> for VerifyBlameResponses9<P>, KeygenData::VerifyBlameResponses9, KeygenData<P>);
 
+// TODO: combine these with derive_impls_for_enum_variants! macro?
 derive_display_as_type_name!(PubkeyShares0<P: ECPoint>);
 derive_display_as_type_name!(HashComm1);
 derive_display_as_type_name!(VerifyHashComm2);

@@ -1,12 +1,22 @@
 use crate::{
-	mock::*, AddressPool, AddressStatus, DeploymentStatus, DisabledEgressAssets, FetchOrTransfer,
-	IntentAction, IntentIdCounter, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, WeightInfo,
+	mock::*, AddressPool, AddressStatus, CrossChainMessage, DeploymentStatus, DisabledEgressAssets,
+	FetchOrTransfer, IntentAction, IntentIdCounter, ScheduledEgressCcm,
+	ScheduledEgressFetchOrTransfer, WeightInfo,
 };
-use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata};
+use cf_chains::{
+	address::ForeignChainAddress, CcmIngressMetadata, ExecutexSwapAndCall, TransferAssetParams,
+};
 use cf_primitives::{chains::assets::eth, ForeignChain, IntentId};
-use cf_traits::{AddressDerivationApi, EgressApi, IngressApi};
+use cf_traits::{
+	mocks::{
+		api_call::{MockEthEnvironment, MockEthereumApiCall},
+		ccm_handler::{CcmRequest, MockCcmHandler},
+	},
+	AddressDerivationApi, EgressApi, IngressApi,
+};
 
 use frame_support::{assert_ok, instances::Instance1, traits::Hooks, weights::Weight};
+use sp_core::H160;
 const ALICE_ETH_ADDRESS: EthereumAddress = [100u8; 20];
 const BOB_ETH_ADDRESS: EthereumAddress = [101u8; 20];
 const ETH_ETH: eth::Asset = eth::Asset::Eth;
@@ -371,6 +381,7 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 				message: vec![],
 				gas_budget: 0,
 				refund_address: ForeignChainAddress::Eth(Default::default()),
+				source_address: ForeignChainAddress::Eth([0xcf; 20]),
 			}),
 		);
 		assert_eq!(
@@ -493,5 +504,165 @@ fn reused_address_intent_id_matches() {
 		// The reused details should be the same as before.
 		assert_eq!(reused_intent_id, INTENT_ID);
 		assert_eq!(eth_address, reused_address);
+	});
+}
+
+#[test]
+fn can_ingress_ccm_swap_intents() {
+	new_test_ext().execute_with(|| {
+		let from_asset = eth::Asset::Flip;
+		let to_asset = Asset::Eth;
+		let egress_address = ForeignChainAddress::Eth(Default::default());
+		let ccm = CcmIngressMetadata {
+			message: vec![0x00, 0x01, 0x02],
+			gas_budget: 1_000,
+			refund_address: ForeignChainAddress::Eth(Default::default()),
+			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+		};
+		let amount = 5_000;
+
+		// Register swap intent with CCM
+		assert_ok!(IngressEgress::register_swap_intent(
+			from_asset,
+			to_asset,
+			egress_address.clone(),
+			0,
+			1,
+			Some(ccm.clone()),
+		));
+
+		// CCM intent is stored.
+		let ingress_address = hex_literal::hex!("bc77955482380836042253381b35a658d87a4842").into();
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test, Instance1>::StartWitnessing {
+				ingress_address,
+				ingress_asset: from_asset,
+			},
+		));
+
+		// Completing the ingress should trigger CcmHandler.
+		assert_ok!(IngressEgress::do_single_ingress(
+			ingress_address,
+			from_asset,
+			amount,
+			Default::default(),
+		));
+		assert_eq!(
+			MockCcmHandler::get_ccm_requests(),
+			vec![CcmRequest {
+				ingress_asset: from_asset.into(),
+				ingress_amount: amount,
+				egress_asset: to_asset,
+				egress_address,
+				message_metadata: ccm
+			}]
+		);
+	});
+}
+
+#[test]
+fn can_egress_ccm() {
+	new_test_ext().execute_with(|| {
+		let egress_address: H160 = [0x01; 20].into();
+		let refund_address = ForeignChainAddress::Eth([0x02; 20]);
+		let egress_asset = eth::Asset::Eth;
+		let source_address = ForeignChainAddress::Eth([0xcf; 20]);
+		let ccm = CcmIngressMetadata {
+			message: vec![0x00, 0x01, 0x02],
+			gas_budget: 1_000,
+			refund_address: refund_address.clone(),
+			source_address: source_address.clone(),
+		};
+		let amount = 5_000;
+		let egress_id = IngressEgress::schedule_egress(
+			egress_asset,
+			amount,
+			egress_address,
+			Some(ccm.clone())
+		);
+
+		assert!(ScheduledEgressFetchOrTransfer::<Test, Instance1>::get().is_empty());
+		assert_eq!(ScheduledEgressCcm::<Test, Instance1>::get(), vec![
+			CrossChainMessage {
+				egress_id,
+				asset: egress_asset,
+				amount,
+				egress_address,
+				message: ccm.message.clone(),
+				refund_address,
+				source_address: source_address.clone(),
+			}
+		]);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test, Instance1>::EgressScheduled {
+				id: egress_id,
+				asset: egress_asset,
+				amount,
+				egress_address,
+			}
+		));
+
+		// Send the scheduled ccm in on_idle
+		IngressEgress::on_idle(1, Weight::from_ref_time(1_000_000_000_000u64));
+
+		// Check the CCM should be egressed
+		assert_eq!(EgressedApiCall::get(), Some(<MockEthereumApiCall<MockEthEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
+			(ForeignChain::Ethereum, 1),
+			TransferAssetParams {
+				asset: egress_asset,
+				amount,
+				to: egress_address
+			},
+			source_address,
+			ccm.message,
+		).unwrap()));
+
+		// Storage should be cleared
+		assert_eq!(ScheduledEgressCcm::<Test, Instance1>::decode_len(), Some(0));
+	});
+}
+
+#[test]
+fn governance_can_manually_egress_ccm() {
+	new_test_ext().execute_with(|| {
+		let egress_address: H160 = [0x01; 20].into();
+		let refund_address = ForeignChainAddress::Eth([0x02; 20]);
+		let source_address = ForeignChainAddress::Eth([0xcf; 20]);
+		let egress_asset = eth::Asset::Eth;
+		let message = vec![0x00, 0x01, 0x02];
+		let amount = 5_000;
+
+		ScheduledEgressCcm::<Test, Instance1>::append(
+			CrossChainMessage {
+				egress_id: (ForeignChain::Ethereum, 1),
+				asset: egress_asset,
+				amount,
+				egress_address,
+				message: message.clone(),
+				refund_address,
+				source_address: source_address.clone(),
+			}
+		);
+
+		// Governance can scheduled ccm egress
+		assert_ok!(IngressEgress::egress_scheduled_ccms(
+			RuntimeOrigin::root(),
+			None,
+		));
+
+		// Check the CCM should be egressed
+		assert_eq!(EgressedApiCall::get(), Some(<MockEthereumApiCall<MockEthEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
+			(ForeignChain::Ethereum, 1),
+			TransferAssetParams {
+				asset: egress_asset,
+				amount,
+				to: egress_address
+			},
+			source_address,
+			message,
+		).unwrap()));
+
+		// Storage should be cleared
+		assert_eq!(ScheduledEgressCcm::<Test, Instance1>::decode_len(), Some(0));
 	});
 }

@@ -16,6 +16,7 @@ maintainer-scripts = "package/"
 systemd-units = {enable = false}
 assets = [
   ["target/release/chainflip-relayer", "usr/bin/", "755"],
+  ["logrotate.conf", "etc/logrotate.d/chainflip-relayer", "644"]
 ]
 
 [[bin]]

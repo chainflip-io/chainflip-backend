@@ -87,25 +87,24 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 
 		// If we are a sharing party, we broadcast public key shares.
 		// (Otherwise, broadcast an empty struct.)
-		let pubkey_shares =
-			if self.resharing_context.sharing_participants.contains(&self.common.own_idx) {
-				let public_key_shares = match party_status {
-					ParticipantStatus::Sharing(_, pubkeys) => pubkeys,
-					_ => panic!("must be a sharing party"),
-				};
-
-				sharing_participants
-					.iter()
-					.copied()
-					.map(|idx| {
-						let id = self.common.validator_mapping.get_id(idx);
-						let pubkey = public_key_shares.get(id).unwrap();
-						(idx, *pubkey)
-					})
-					.collect()
-			} else {
-				BTreeMap::new()
+		let pubkey_shares = if sharing_participants.contains(&self.common.own_idx) {
+			let public_key_shares = match party_status {
+				ParticipantStatus::Sharing(_, pubkeys) => pubkeys,
+				_ => panic!("must be a sharing party"),
 			};
+
+			sharing_participants
+				.iter()
+				.copied()
+				.map(|idx| {
+					let id = self.common.validator_mapping.get_id(idx);
+					let pubkey = public_key_shares.get(id).unwrap();
+					(idx, *pubkey)
+				})
+				.collect()
+		} else {
+			BTreeMap::new()
+		};
 
 		DataToSend::Broadcast(PubkeyShares0(pubkey_shares))
 	}
@@ -122,16 +121,10 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		// ignore the messages that haven't been received (i.e. `None`):
 		let pubkey_shares: BTreeMap<_, _> = pubkey_shares
 			.into_iter()
-			.filter_map(|(idx, message)| {
-				if let Some(message) = message {
-					if self.resharing_context.sharing_participants.contains(&idx) {
-						Some((idx, message))
-					} else {
-						None
-					}
-				} else {
-					None
-				}
+			.filter_map(|(idx, message)| match message {
+				Some(message) if self.resharing_context.sharing_participants.contains(&idx) =>
+					Some((idx, message)),
+				_ => None,
 			})
 			.collect();
 
@@ -552,11 +545,9 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 
 		let KeygenCommon { common, resharing_context, .. } = &self.keygen_common;
 
-		let should_process_shares = if let Some(context) = resharing_context {
-			context.receiving_participants.contains(&common.own_idx)
-		} else {
-			true
-		};
+		let should_process_shares = resharing_context
+			.as_ref()
+			.map_or(true, |context| context.receiving_participants.contains(&common.own_idx));
 
 		let mut bad_parties = BTreeSet::new();
 		let verified_shares = if should_process_shares {
@@ -571,8 +562,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			incoming_shares
 				.into_iter()
 				.filter_map(|(sender_idx, share_opt)| {
-					// Ignore (dummy) shares from non-sharing parties:
 					if let Some(context) = resharing_context {
+						// Ignore (dummy) shares from non-sharing parties:
 						if !context.sharing_participants.contains(&sender_idx) {
 							return None
 						}
@@ -781,11 +772,10 @@ async fn finalize_keygen<Crypto: CryptoScheme>(
 	// Making a copy while we still have sharing parameters
 	let key_params = keygen_common.sharing_params.key_params;
 
-	let party_public_keys = tokio::task::spawn_blocking(move || {
+	let party_public_keys = utilities::task_scope::without_blocking(move || {
 		derive_local_pubkeys_for_parties(&keygen_common.sharing_params, &commitments)
 	})
-	.await
-	.unwrap();
+	.await;
 
 	// `derive_local_pubkeys_for_parties` returns a vector of public keys where
 	// the index corresponds to the party's index in a ceremony. In a key handover

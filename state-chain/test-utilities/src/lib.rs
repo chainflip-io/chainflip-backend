@@ -32,24 +32,40 @@ macro_rules! assert_event_sequence {
 }
 
 #[macro_export]
-macro_rules! assert_has_event_pattern {
-	($( $pattern:pat_param )|+ $( if $guard: expr )? ) => {
-		assert!(
-			System::events().iter().any(|record| matches!(record.event, $( $pattern )|+ $( if $guard )?)),
-			"No event that matches {}. Available events: {:#?}",
-			stringify!($( $pattern )|+ $( if $guard )?),
-			System::events().into_iter().map(|record| record.event).collect::<Vec<_>>()
+macro_rules! assert_events_match {
+	($runtime:ty, $($pattern:pat $(if $guard:expr )? => $bind:expr),+ ) => {{
+		let mut events = frame_system::Pallet::<$runtime>::events();
+
+		(
+			$({
+				let (index, bind) = events
+					.iter()
+					.enumerate()
+					.find_map(|(index, record)| match record.event.clone() {
+						$pattern $(if $guard)? => Some((index, $bind)),
+						_ => None
+					})
+					.unwrap_or_else(|| panic!("No event that matches {}. Available events: {:#?}", stringify!($pattern), events));
+				events.remove(index);
+				bind
+			}),+
 		)
-	};
+	}};
 }
 
 #[macro_export]
-macro_rules! extract_from_event {
-	( $pattern:pat => $bind:expr ) => {
-		System::events()
-			.into_iter()
-			.filter_map(|record| if let $pattern = record.event { Some($bind) } else { None })
-			.next()
-			.expect(&format!("No event that matches {}", stringify!($pattern))[..])
-	};
+macro_rules! assert_events_eq {
+	($runtime:ty, $($event:expr),+ ) => {{
+		let mut events = frame_system::Pallet::<$runtime>::events();
+
+		$({
+			let event = $event;
+			let index = events
+				.iter()
+				.enumerate()
+				.find_map(|(index, record)| (record.event == event).then_some(index))
+				.unwrap_or_else(|| panic!("No event equal to {:?}. Available events: {:#?}", event, events));
+			events.remove(index);
+		});+
+	}};
 }

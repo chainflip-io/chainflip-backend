@@ -1,12 +1,10 @@
-use crate::testing::expect_recv_with_timeout;
-
 use super::{PeerInfo, PeerUpdate};
 use crate::p2p::OutgoingMultisigStageMessages;
 use sp_core::ed25519::Public;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, Instrument};
-use utilities::Port;
+use utilities::{testing::expect_recv_with_timeout, Port};
 
 fn create_node_info(id: AccountId, node_key: &ed25519_dalek::Keypair, port: Port) -> PeerInfo {
 	use std::net::Ipv4Addr;

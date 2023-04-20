@@ -18,8 +18,8 @@ use cf_chains::{
 };
 
 use cf_primitives::{
-	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BroadcastId, CeremonyId,
-	EgressId, EpochIndex, EthereumAddress, ForeignChain, IntentId, KeyId,
+	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
+	CeremonyId, EgressId, EpochIndex, EthereumAddress, ForeignChain, IntentId, KeyId,
 	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -670,7 +670,7 @@ pub trait IngressApi<C: Chain> {
 		ingress_asset: C::ChainAsset,
 		egress_asset: Asset,
 		egress_address: ForeignChainAddress,
-		relayer_commission_bps: u16,
+		relayer_commission_bps: BasisPoints,
 		relayer_id: Self::AccountId,
 		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;

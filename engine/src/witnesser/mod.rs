@@ -7,11 +7,14 @@ use cf_chains::address::{BitcoinAddressData, ScriptPubkeyBytes};
 use cf_primitives::EpochIndex;
 
 pub mod block_head_stream_from;
+pub mod block_witnesser;
 pub mod checkpointing;
-pub mod epoch_witnesser;
+pub mod epoch_process_runner;
 pub mod http_safe_stream;
 
 use anyhow::Result;
+
+use crate::multisig::ChainTag;
 
 pub type ChainBlockNumber<Chain> = <Chain as cf_chains::Chain>::ChainBlockNumber;
 
@@ -25,18 +28,35 @@ pub struct EpochStart<Chain: cf_chains::Chain> {
 	pub data: Chain::EpochStartData,
 }
 
-pub trait BlockNumberable {
-	type BlockNumber;
+pub trait HasBlockNumber {
+	type BlockNumber: PartialOrd + Into<u64>;
 
 	fn block_number(&self) -> Self::BlockNumber;
 }
 
-impl BlockNumberable for u64 {
+impl HasBlockNumber for u64 {
 	type BlockNumber = Self;
 
 	fn block_number(&self) -> Self::BlockNumber {
 		*self
 	}
+}
+
+// TODO: implement this directly on cf_chains::Chain?
+pub trait HasChainTag {
+	const CHAIN_TAG: ChainTag;
+}
+
+impl HasChainTag for cf_chains::Ethereum {
+	const CHAIN_TAG: ChainTag = ChainTag::Ethereum;
+}
+
+impl HasChainTag for cf_chains::Bitcoin {
+	const CHAIN_TAG: ChainTag = ChainTag::Bitcoin;
+}
+
+impl HasChainTag for cf_chains::Polkadot {
+	const CHAIN_TAG: ChainTag = ChainTag::Polkadot;
 }
 
 /// General trait for getting the latest/height block number for a particular chain
@@ -127,7 +147,7 @@ impl AddressKeyValue for BitcoinAddressData {
 	type Value = Self;
 
 	fn key_value(&self) -> (Self::Key, Self::Value) {
-		(self.to_scriptpubkey().unwrap().serialize(), self.clone())
+		(self.to_scriptpubkey().unwrap().data, self.clone())
 	}
 }
 

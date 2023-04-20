@@ -19,9 +19,9 @@ use chainflip_engine::{
 		self,
 		client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
 	},
-	task_scope::task_scope,
 	witnesser::AddressMonitor,
 };
+use utilities::task_scope::task_scope;
 
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;

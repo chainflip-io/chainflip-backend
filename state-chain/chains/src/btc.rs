@@ -16,7 +16,7 @@ use sp_std::{vec, vec::Vec};
 
 extern crate alloc;
 use crate::{
-	address::BitcoinAddressData, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator,
+	address::BitcoinAddressData, Age, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator,
 	IngressIdConstructor,
 };
 use alloc::string::String;
@@ -92,19 +92,38 @@ impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 	}
 }
 
+#[derive(
+	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
+)]
+#[codec(mel_bound())]
+pub struct BitcoinTrackedData {
+	pub block_height: BlockNumber,
+	pub fee_rate_sats_per_byte: BtcAmount,
+}
+
+impl Age for BitcoinTrackedData {
+	type BlockNumber = BlockNumber;
+
+	fn birth_block(&self) -> Self::BlockNumber {
+		self.block_height
+	}
+}
+
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
 pub struct EpochStartData {
 	pub change_address: BitcoinAddressData,
 }
 
 impl Chain for Bitcoin {
+	const NAME: &'static str = "Bitcoin";
+
 	type ChainBlockNumber = BlockNumber;
 
 	type ChainAmount = BtcAmount;
 
 	type TransactionFee = Self::ChainAmount;
 
-	type TrackedData = ();
+	type TrackedData = BitcoinTrackedData;
 
 	type ChainAsset = assets::btc::Asset;
 
@@ -215,12 +234,12 @@ pub struct UtxoId {
 impl IngressIdConstructor for BitcoinFetchId {
 	type Address = BitcoinAddressData;
 
-	fn deployed(_intent_id: u64, _address: Self::Address) -> Self {
-		todo!()
+	fn deployed(intent_id: u64, _address: Self::Address) -> Self {
+		BitcoinFetchId(intent_id)
 	}
 
-	fn undeployed(_intent_id: u64, _address: Self::Address) -> Self {
-		todo!()
+	fn undeployed(intent_id: u64, _address: Self::Address) -> Self {
+		BitcoinFetchId(intent_id)
 	}
 }
 
@@ -426,7 +445,7 @@ impl BitcoinTransaction {
 		transaction_bytes.push(SEGWIT_FLAG);
 		transaction_bytes.extend(to_varint(inputs.len() as u64));
 		transaction_bytes.extend(inputs.iter().fold(Vec::<u8>::default(), |mut acc, input| {
-			acc.extend(input.txid.iter().rev());
+			acc.extend(input.txid);
 			acc.extend(input.vout.to_le_bytes());
 			acc.push(0);
 			acc.extend(SEQUENCE_NUMBER);
@@ -498,7 +517,7 @@ impl BitcoinTransaction {
 			self.inputs
 				.iter()
 				.fold(Vec::<u8>::default(), |mut acc, input| {
-					acc.extend(input.txid.iter().rev());
+					acc.extend(input.txid);
 					acc.extend(input.vout.to_le_bytes());
 					acc
 				})
@@ -581,7 +600,7 @@ impl BitcoinTransaction {
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
 pub struct BitcoinScript {
-	data: Vec<u8>,
+	pub data: Vec<u8>,
 }
 
 /// For reference see https://en.bitcoin.it/wiki/Script
@@ -664,7 +683,7 @@ impl BitcoinScript {
 		self.data.push(0x87);
 		self
 	}
-	/// Serializes the script by returning a single byte for the length
+	/// Serializes the script by returning the varint encoded length
 	/// of the script and then the script itself
 	pub fn serialize(&self) -> Vec<u8> {
 		itertools::chain!(to_varint(self.data.len() as u64), self.data.iter().cloned()).collect()
@@ -903,7 +922,7 @@ mod test {
 			amount: 100010000,
 			vout: 1,
 			txid: hex_literal::hex!(
-				"b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"
+				"4C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB5"
 			),
 			pubkey_x: hex_literal::hex!(
 				"78C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDB"
@@ -929,7 +948,7 @@ mod test {
 			amount: 100010000,
 			vout: 1,
 			txid: hex_literal::hex!(
-				"b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd32812f4850b878ae4944c"
+				"4C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB5"
 			),
 			pubkey_x: hex_literal::hex!(
 				"78C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDB"

@@ -21,10 +21,10 @@ cargo build --release
 To run the test suite execute:
 
 ```bash
-cargo ci-test
+cargo cf-test-ci
 ```
 
-> **_NOTE:_**  ci-test is an alias for cargo test with additional flags.
+> **_NOTE:_**  ci-test-ci is an alias for cargo test with additional flags.
 
 ## Contributing
 
@@ -70,11 +70,9 @@ The following commands should be executed from the repo root directory.
 - Format code:<br>
     - `cargo fmt -- <filename>`
     - `cargo fmt --all` (format all packages)
-- Run clippy with the same settings as the CI:<br>
-  `cargo cf-clippy`
 - Check the state-chain and cfe compile:
-    - `cargo cf-check`
-    - `cargo cf-check-all` (This is used by the CI, but you don't typically need it)
+    - `cargo cf-clippy`
+    - `cargo cf-clippy-ci` (This is used by the CI, but you don't typically need it)
 - Run all unit tests:<br>
   `cargo cf-test`
 - Expand macros for a given part of the code. You'll need to pipe output to a file.<br>
@@ -122,7 +120,7 @@ You can use either release or debug builds.
 From the repo root, run the following:
 
 ```shell
-cargo build # or cargo ci-build
+cargo cf-build # or cargo cf-build-ci
 ./localnet/manage.sh
 ```
 

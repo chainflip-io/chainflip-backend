@@ -1,7 +1,7 @@
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use cf_chains::{address::ForeignChainAddress, eth::H256, CcmIngressMetadata};
-use cf_primitives::{AccountRole, Asset};
+use cf_primitives::{AccountRole, Asset, BasisPoints};
 use futures::{FutureExt, Stream};
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use rand_legacy::FromEntropy;
@@ -21,15 +21,13 @@ pub mod primitives {
 pub use chainflip_engine::settings;
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
-use chainflip_engine::{
-	state_chain_observer::client::{
-		base_rpc_api::{BaseRpcApi, BaseRpcClient, RawRpcApi},
-		extrinsic_api::ExtrinsicApi,
-		storage_api::StorageApi,
-		StateChainClient,
-	},
-	task_scope::task_scope,
+use chainflip_engine::state_chain_observer::client::{
+	base_rpc_api::{BaseRpcApi, BaseRpcClient, RawRpcApi},
+	extrinsic_api::ExtrinsicApi,
+	storage_api::StorageApi,
+	StateChainClient,
 };
+use utilities::task_scope::task_scope;
 
 #[async_trait]
 trait AuctionPhaseApi {
@@ -327,7 +325,7 @@ pub async fn register_swap_intent(
 	ingress_asset: Asset,
 	egress_asset: Asset,
 	egress_address: ForeignChainAddress,
-	relayer_commission_bps: u16,
+	relayer_commission_bps: BasisPoints,
 	message_metadata: Option<CcmIngressMetadata>,
 ) -> Result<ForeignChainAddress> {
 	let events = connect_submit_and_get_events(

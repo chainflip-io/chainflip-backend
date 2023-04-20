@@ -212,6 +212,32 @@ impl From<BitcoinAddressData> for ForeignChainAddress {
 	}
 }
 
+impl ForeignChainAddress {
+	pub fn from_chain_bytes(chain: ForeignChain, bytes: Vec<u8>) -> Result<Self, &'static str> {
+		match chain {
+			ForeignChain::Ethereum => {
+				if bytes.len() != 20 {
+					return Err("Invalid Ethereum address length")
+				}
+				let mut address = [0u8; 20];
+				address.copy_from_slice(&bytes);
+				Ok(ForeignChainAddress::Eth(address))
+			},
+			ForeignChain::Polkadot => {
+				if bytes.len() != 32 {
+					return Err("Invalid Polkadot address length")
+				}
+				let mut address = [0u8; 32];
+				address.copy_from_slice(&bytes);
+				Ok(ForeignChainAddress::Dot(address))
+			},
+			ForeignChain::Bitcoin => {
+				todo!("Bitcoin address deserialization")
+			},
+		}
+	}
+}
+
 impl From<ForeignChainAddress> for ForeignChain {
 	fn from(address: ForeignChainAddress) -> ForeignChain {
 		match address {

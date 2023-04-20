@@ -62,6 +62,7 @@ impl CryptoScheme for EthSigning {
 	type Signature = EthSchnorrSignature;
 	type AggKey = cf_chains::eth::AggKey;
 	type SigningPayload = SigningPayload;
+	type Chain = cf_chains::Ethereum;
 
 	const NAME: &'static str = "Ethereum";
 	const CHAIN_TAG: ChainTag = ChainTag::Ethereum;

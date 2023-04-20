@@ -58,6 +58,7 @@ benchmarks_instance_pallet! {
 				egress_address: egress_address.clone(),
 				message: vec![0x00, 0x01, 0x02, 0x03],
 				refund_address: ForeignChainAddress::Eth(Default::default()),
+				source_address: ForeignChainAddress::Eth([0xcf; 20]),
 			});
 		}
 		ScheduledEgressCcm::<T, I>::put(ccms);

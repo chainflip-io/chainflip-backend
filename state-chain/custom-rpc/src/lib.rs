@@ -1,4 +1,6 @@
+use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::eth::SigData;
+use cf_primitives::EthereumAddress;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
 use sc_client_api::HeaderBackend;
@@ -15,8 +17,6 @@ use std::{marker::PhantomData, sync::Arc};
 
 #[allow(unused)]
 use state_chain_runtime::{Asset, AssetAmount, ExchangeRate};
-
-use cf_primitives::{Liquidity, Tick};
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
@@ -88,6 +88,12 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<String>;
+	#[method(name = "cf_eth_asset")]
+	fn cf_eth_asset(
+		&self,
+		at: Option<state_chain_runtime::Hash>,
+		token_address: EthereumAddress,
+	) -> RpcResult<Option<Asset>>;
 	#[method(name = "eth_flip_token_address")]
 	fn cf_eth_flip_token_address(&self, at: Option<state_chain_runtime::Hash>)
 		-> RpcResult<String>;
@@ -158,6 +164,13 @@ pub trait CustomApi {
 	#[method(name = "auction_state")]
 	fn cf_auction_state(&self, at: Option<state_chain_runtime::Hash>)
 		-> RpcResult<RpcAuctionState>;
+	#[method(name = "pool_sqrt_price")]
+	fn cf_pool_sqrt_price(
+		&self,
+		from: Asset,
+		to: Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<SqrtPriceQ64F96>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -199,6 +212,16 @@ where
 			.cf_eth_flip_token_address(&self.query_block_id(at))
 			.map_err(to_rpc_error)
 			.map(hex::encode)
+	}
+	fn cf_eth_asset(
+		&self,
+		at: Option<<B as BlockT>::Hash>,
+		token_address: EthereumAddress,
+	) -> RpcResult<Option<Asset>> {
+		self.client
+			.runtime_api()
+			.cf_eth_asset(&self.query_block_id(at), token_address)
+			.map_err(to_rpc_error)
 	}
 	fn cf_eth_stake_manager_address(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<String> {
 		self.client
@@ -412,70 +435,16 @@ where
 			auction_size_range: auction_state.auction_size_range,
 		})
 	}
-}
 
-use pallet_cf_pools_runtime_api::PoolsApi;
-
-pub struct PoolsRpc<C, B> {
-	pub client: Arc<C>,
-	pub _phantom: PhantomData<B>,
-}
-
-impl<C, B> PoolsRpc<C, B>
-where
-	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,
-	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
-	C::Api: pallet_cf_pools_runtime_api::PoolsApi<B>,
-{
-	fn query_block_id(&self, from_rpc: Option<<B as BlockT>::Hash>) -> sp_api::BlockId<B> {
-		sp_api::BlockId::hash(from_rpc.unwrap_or_else(|| self.client.info().best_hash))
-	}
-}
-
-#[rpc(server, client, namespace = "cf")]
-pub trait PoolsApi {
-	#[method(name = "pool_tick_price")]
-	fn cf_pool_tick_price(
+	fn cf_pool_sqrt_price(
 		&self,
-		asset: Asset,
+		from: Asset,
+		to: Asset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Tick>>;
-
-	#[method(name = "pool_minted_positions")]
-	fn cf_pool_minted_positions(
-		&self,
-		lp: AccountId32,
-		asset: Asset,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<(Tick, Tick, Liquidity)>>;
-}
-
-impl<C, B> PoolsApiServer for PoolsRpc<C, B>
-where
-	B: sp_runtime::traits::Block<Hash = state_chain_runtime::Hash>,
-	C: sp_api::ProvideRuntimeApi<B> + Send + Sync + 'static + HeaderBackend<B>,
-	C::Api: pallet_cf_pools_runtime_api::PoolsApi<B>,
-{
-	fn cf_pool_tick_price(
-		&self,
-		asset: Asset,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Tick>> {
+	) -> RpcResult<Option<SqrtPriceQ64F96>> {
 		self.client
 			.runtime_api()
-			.cf_pool_tick_price(&self.query_block_id(at), asset)
-			.map_err(to_rpc_error)
-	}
-
-	fn cf_pool_minted_positions(
-		&self,
-		lp: AccountId32,
-		asset: Asset,
-		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Vec<(Tick, Tick, Liquidity)>> {
-		self.client
-			.runtime_api()
-			.cf_pool_minted_positions(&self.query_block_id(at), lp, asset)
+			.cf_pool_sqrt_price(&self.query_block_id(at), from, to)
 			.map_err(to_rpc_error)
 	}
 }

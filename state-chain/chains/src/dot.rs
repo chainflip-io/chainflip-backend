@@ -7,22 +7,18 @@ pub mod benchmarking;
 
 pub use cf_primitives::{chains::Polkadot, PolkadotAccountId};
 use cf_primitives::{KeyId, PolkadotBlockNumber, TxId};
-
-use sp_core::{sr25519, H256};
-use sp_runtime::{
-	generic::{Era, SignedPayload, UncheckedExtrinsic},
-	traits::{BlakeTwo256, DispatchInfoOf, Hash, SignedExtension, StaticLookup},
-	AccountId32, MultiAddress, MultiSignature,
-};
-
-use sp_runtime::{
-	traits::{AccountIdLookup, Verify},
-	transaction_validity::{TransactionValidity, TransactionValidityError, ValidTransaction},
-};
-
 use codec::{Decode, Encode};
 use core::str::FromStr;
 use scale_info::TypeInfo;
+use sp_core::{sr25519, H256};
+use sp_runtime::{
+	generic::{Era, SignedPayload, UncheckedExtrinsic},
+	traits::{
+		AccountIdLookup, BlakeTwo256, DispatchInfoOf, Hash, SignedExtension, StaticLookup, Verify,
+	},
+	transaction_validity::{TransactionValidity, TransactionValidityError, ValidTransaction},
+	AccountId32, MultiAddress, MultiSignature,
+};
 
 pub type PolkadotSignature = sr25519::Signature;
 
@@ -114,6 +110,7 @@ impl Age for PolkadotTrackedData {
 }
 
 impl Chain for Polkadot {
+	const NAME: &'static str = "Polkadot";
 	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = PolkadotBalance;
 	type TrackedData = PolkadotTrackedData;
@@ -180,41 +177,26 @@ pub struct CurrentVaultAndProxy {
 	pub proxy_account: PolkadotAccountId,
 }
 
-/// The handler for creating and signing polkadot extrinsics, and creating signature payload
+/// The builder for creating and signing polkadot extrinsics, and creating signature payload
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 pub struct PolkadotExtrinsicBuilder {
-	extrinsic_origin: PolkadotAccountId,
-	extrinsic_call: Option<PolkadotRuntimeCall>,
-	signed_extrinsic: Option<PolkadotUncheckedExtrinsic>,
+	extrinsic_call: PolkadotRuntimeCall,
 	replay_protection: PolkadotReplayProtection,
-	extra: Option<PolkadotSignedExtra>,
-	signature_payload: Option<EncodedPolkadotPayload>,
+	signer_and_signature: Option<(PolkadotAccountId, PolkadotSignature)>,
 }
 
 impl PolkadotExtrinsicBuilder {
-	pub fn new_empty(
+	pub fn new(
 		replay_protection: PolkadotReplayProtection,
-		extrinsic_origin: PolkadotAccountId,
+		extrinsic_call: PolkadotRuntimeCall,
 	) -> Self {
-		Self {
-			replay_protection,
-			extrinsic_origin,
-			extrinsic_call: None,
-			signed_extrinsic: None,
-			extra: None,
-			signature_payload: None,
-		}
+		Self { extrinsic_call, replay_protection, signer_and_signature: None }
 	}
 
-	pub fn insert_extrinsic_call(&mut self, extrinsic_call: PolkadotRuntimeCall) {
-		self.extrinsic_call = Some(extrinsic_call);
-	}
-
-	pub fn insert_threshold_signature_payload(
-		&mut self,
-	) -> Option<<Polkadot as ChainCrypto>::Payload> {
-		//let tip = 0;
-		let extra: PolkadotSignedExtra = PolkadotSignedExtra((
+	fn extra(&self) -> PolkadotSignedExtra {
+		// TODO: use chain data to estimate fees
+		const TIP: PolkadotBalance = 0;
+		PolkadotSignedExtra((
 			(),
 			(),
 			(),
@@ -222,56 +204,53 @@ impl PolkadotExtrinsicBuilder {
 			PolkadotCheckMortality(Era::Immortal),
 			PolkadotCheckNonce(self.replay_protection.nonce),
 			(),
-			PolkadotChargeTransactionPayment(self.replay_protection.tip),
+			PolkadotChargeTransactionPayment(TIP),
 			(),
-		));
-		let additional_signed: <PolkadotSignedExtra as SignedExtension>::AdditionalSigned = (
-			(),
-			self.replay_protection.runtime_version.spec_version,
-			self.replay_protection.runtime_version.transaction_version,
-			self.replay_protection.genesis_hash,
-			self.replay_protection.genesis_hash,
-			(),
-			(),
-			(),
-			(),
-		);
-		let raw_payload =
-			PolkadotPayload::from_raw(self.extrinsic_call.clone()?, extra, additional_signed);
-		self.signature_payload = raw_payload.using_encoded(|encoded_payload| {
-			Some(EncodedPolkadotPayload(encoded_payload.to_vec()))
-		});
-		self.extra = Some(extra);
-
-		self.signature_payload.clone()
+		))
 	}
 
-	pub fn insert_signature_and_get_signed_unchecked_extrinsic(
-		&mut self,
-		signature: <Polkadot as ChainCrypto>::ThresholdSignature,
-	) -> Option<PolkadotUncheckedExtrinsic> {
-		self.signed_extrinsic = Some(PolkadotUncheckedExtrinsic::new_signed(
-			self.extrinsic_call.clone()?,
-			PolkadotAddress::Id(self.extrinsic_origin.clone()),
-			sp_runtime::MultiSignature::Sr25519(signature),
-			self.extra?,
-		));
-		self.signed_extrinsic.clone()
+	pub fn get_signature_payload(
+		&self,
+		spec_version: u32,
+		transaction_version: u32,
+	) -> <Polkadot as ChainCrypto>::Payload {
+		EncodedPolkadotPayload(
+			PolkadotPayload::from_raw(
+				self.extrinsic_call.clone(),
+				self.extra(),
+				(
+					(),
+					spec_version,
+					transaction_version,
+					self.replay_protection.genesis_hash,
+					self.replay_protection.genesis_hash,
+					(),
+					(),
+					(),
+					(),
+				),
+			)
+			.encode(),
+		)
 	}
 
-	pub fn is_signed(&self) -> Option<bool> {
-		match self.signed_extrinsic.clone()?.signature {
-			Some((_signed, signature, _extra)) => Some(signature.verify(
-				&self.signature_payload.clone().expect("Payload should exist").0[..],
-				&self.extrinsic_origin,
-			)),
-
-			None => Some(false),
-		}
+	pub fn insert_signature(&mut self, signer: PolkadotAccountId, signature: PolkadotSignature) {
+		self.signer_and_signature.replace((signer, signature));
 	}
 
-	pub fn runtime_version(&self) -> RuntimeVersion {
-		self.replay_protection.runtime_version
+	pub fn get_signed_unchecked_extrinsic(&self) -> Option<PolkadotUncheckedExtrinsic> {
+		self.signer_and_signature.as_ref().map(|(signer, signature)| {
+			PolkadotUncheckedExtrinsic::new_signed(
+				self.extrinsic_call.clone(),
+				PolkadotAddress::Id(signer.clone()),
+				sp_runtime::MultiSignature::Sr25519(signature.clone()),
+				self.extra(),
+			)
+		})
+	}
+
+	pub fn is_signed(&self) -> bool {
+		self.signer_and_signature.is_some()
 	}
 }
 
@@ -785,21 +764,8 @@ impl From<PolkadotPublicKey> for Vec<u8> {
 
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 pub struct PolkadotReplayProtection {
-	pub runtime_version: RuntimeVersion,
 	pub genesis_hash: PolkadotHash,
 	pub nonce: PolkadotIndex,
-	pub tip: PolkadotBalance,
-}
-
-impl PolkadotReplayProtection {
-	pub fn new(
-		nonce: PolkadotIndex,
-		tip: PolkadotBalance,
-		runtime_version: RuntimeVersion,
-		genesis_hash: PolkadotHash,
-	) -> Self {
-		Self { runtime_version, genesis_hash, nonce, tip }
-	}
 }
 
 impl IngressIdConstructor for PolkadotIngressId {
@@ -845,23 +811,28 @@ mod test_polkadot_extrinsics {
 		);
 		println!("Encoded Call: 0x{}", hex::encode(test_runtime_call.encode()));
 
-		let mut extrinsic_builder = PolkadotExtrinsicBuilder::new_empty(
-			PolkadotReplayProtection::new(12, 0, TEST_RUNTIME_VERSION, Default::default()),
-			account_id_1,
+		let mut extrinsic_builder = PolkadotExtrinsicBuilder::new(
+			PolkadotReplayProtection { nonce: 12, genesis_hash: Default::default() },
+			test_runtime_call,
 		);
-		extrinsic_builder.insert_extrinsic_call(test_runtime_call);
-		extrinsic_builder
-			.insert_threshold_signature_payload()
-			.expect("This shouldn't fail");
+		extrinsic_builder.insert_signature(
+			account_id_1,
+			keypair_1.sign(
+				&extrinsic_builder
+					.get_signature_payload(
+						TEST_RUNTIME_VERSION.spec_version,
+						TEST_RUNTIME_VERSION.transaction_version,
+					)
+					.0[..],
+			),
+		);
 
-		let signed_extrinsic: Option<PolkadotUncheckedExtrinsic> = extrinsic_builder
-			.insert_signature_and_get_signed_unchecked_extrinsic(keypair_1.sign(
-				&extrinsic_builder.signature_payload.clone().expect("This can't fail").0[..],
-			));
+		assert!(extrinsic_builder.is_signed());
 
-		assert!(extrinsic_builder.is_signed().unwrap_or(false));
-
-		println!("encoded extrinsic: {:?}", signed_extrinsic.unwrap().encode());
+		println!(
+			"encoded extrinsic: {:?}",
+			extrinsic_builder.get_signed_unchecked_extrinsic().unwrap().encode()
+		);
 	}
 
 	#[ignore]

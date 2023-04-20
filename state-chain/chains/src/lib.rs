@@ -15,7 +15,7 @@ use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, Saturating},
+	traits::{AtLeast32BitUnsigned, CheckedSub, Saturating},
 	DispatchError,
 };
 use sp_std::{
@@ -43,6 +43,8 @@ pub mod mocks;
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
 pub trait Chain: Member + Parameter {
+	const NAME: &'static str;
+
 	type ChainBlockNumber: FullCodec
 		+ Member
 		+ Parameter
@@ -52,8 +54,10 @@ pub trait Chain: Member + Parameter {
 		// this is used primarily for tests. We use u32 because it's the smallest block number we
 		// use (and so we can always .into() into a larger type)
 		+ From<u32>
+		+ Into<u64>
 		+ MaxEncodedLen
-		+ Display;
+		+ Display
+		+ CheckedSub;
 
 	type ChainAmount: Member
 		+ Parameter
@@ -169,7 +173,9 @@ pub trait ApiCall<Abi: ChainAbi>: Parameter {
 	/// Add the threshold signature to the api call.
 	fn signed(self, threshold_signature: &<Abi as ChainCrypto>::ThresholdSignature) -> Self;
 
-	/// The call, encoded according to the chain's native encoding.
+	/// Construct the signed call, encoded according to the chain's native encoding.
+	///
+	/// Must be called after Self[Signed].
 	fn chain_encoded(&self) -> Vec<u8>;
 
 	/// Checks we have updated the sig data to non-default values.
@@ -186,11 +192,15 @@ where
 	/// Doesn't include any time-sensitive data e.g. gas price.
 	fn build_transaction(signed_call: &Call) -> Abi::Transaction;
 
-	/// Refresh any time-sensitive data e.g. gas price.
-	fn refresh_unsigned_transaction(unsigned_tx: &mut Abi::Transaction);
+	/// Refresh any transaction data that is not signed over by the validators.
+	///
+	/// Note that calldata cannot be updated, or it would invalidate the signature.
+	///
+	/// A typical use case would be for updating the gas price on Ethereum transactions.
+	fn refresh_unsigned_data(tx: &mut Abi::Transaction);
 
-	/// Checks if the transaction is still valid.
-	fn is_valid_for_rebroadcast(call: &Call) -> bool;
+	/// Checks if the payload is still valid for the call.
+	fn is_valid_for_rebroadcast(call: &Call, payload: &<Abi as ChainCrypto>::Payload) -> bool;
 }
 
 /// Contains all the parameters required to fetch incoming transactions on an external chain.
@@ -271,7 +281,7 @@ pub trait ExecutexSwapAndCall<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		egress_id: EgressId,
 		transfer_param: TransferAssetParams<Abi>,
-		from: ForeignChainAddress,
+		source_address: ForeignChainAddress,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError>;
 }
@@ -299,12 +309,14 @@ pub trait IngressIdConstructor {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct CcmIngressMetadata {
-	// Call data used after the message is egressed.
+	/// Call data used after the message is egressed.
 	pub message: Vec<u8>,
-	// Amount of ingress funds to be used for gas.
+	/// Amount of ingress funds to be used for gas.
 	pub gas_budget: AssetAmount,
-	// The address refunds will go to.
+	/// The address refunds will go to.
 	pub refund_address: ForeignChainAddress,
+	/// The address the ingress was sent from.
+	pub source_address: ForeignChainAddress,
 }
 
 #[cfg(feature = "std")]

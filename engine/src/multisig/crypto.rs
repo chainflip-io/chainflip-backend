@@ -109,6 +109,8 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 
 	type SigningPayload: Display + Debug + Sync + Send + Clone + PartialEq + Eq + AsRef<[u8]>;
 
+	type Chain: cf_chains::Chain;
+
 	/// Friendly name of the scheme used for logging
 	const NAME: &'static str;
 

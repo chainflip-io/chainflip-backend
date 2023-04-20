@@ -101,6 +101,7 @@ type PublicKeyShares<C> = BTreeMap<AccountId, <C as CryptoScheme>::Point>;
 /// Holds state relevant to the role in the handover ceremony.
 pub enum ParticipantStatus<C: CryptoScheme> {
 	Sharing(SecretShare<C>, PublicKeyShares<C>),
+	/// This becomes `NonSharingReceivedKeys` after shares are broadcast
 	NonSharing,
 	NonSharingReceivedKeys(PublicKeyShares<C>),
 }

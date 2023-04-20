@@ -1,11 +1,12 @@
 use anyhow::{anyhow, Result};
+use cf_chains::{Bitcoin, Ethereum, Polkadot};
 use futures::Future;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, trace, warn, Instrument};
 
 use crate::{
-	multisig::{bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, ChainTag},
+	multisig::ChainTag,
 	p2p::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages},
 };
 
@@ -97,12 +98,12 @@ impl P2PMuxer {
 		all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
 		all_outgoing_sender: UnboundedSender<OutgoingMultisigStageMessages>,
 	) -> (
-		MultisigMessageSender<EthSigning>,
-		MultisigMessageReceiver<EthSigning>,
-		MultisigMessageSender<PolkadotSigning>,
-		MultisigMessageReceiver<PolkadotSigning>,
-		MultisigMessageSender<BtcSigning>,
-		MultisigMessageReceiver<BtcSigning>,
+		MultisigMessageSender<Ethereum>,
+		MultisigMessageReceiver<Ethereum>,
+		MultisigMessageSender<Polkadot>,
+		MultisigMessageReceiver<Polkadot>,
+		MultisigMessageSender<Bitcoin>,
+		MultisigMessageReceiver<Bitcoin>,
 		impl Future<Output = ()>,
 	) {
 		let (eth_outgoing_sender, eth_outgoing_receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -128,12 +129,12 @@ impl P2PMuxer {
 		let muxer_fut = muxer.run().instrument(info_span!("P2PMuxer"));
 
 		(
-			MultisigMessageSender::<EthSigning>::new(eth_outgoing_sender),
-			MultisigMessageReceiver::<EthSigning>::new(eth_incoming_receiver),
-			MultisigMessageSender::<PolkadotSigning>::new(dot_outgoing_sender),
-			MultisigMessageReceiver::<PolkadotSigning>::new(dot_incoming_receiver),
-			MultisigMessageSender::<BtcSigning>::new(btc_outgoing_sender),
-			MultisigMessageReceiver::<BtcSigning>::new(btc_incoming_receiver),
+			MultisigMessageSender::<Ethereum>::new(eth_outgoing_sender),
+			MultisigMessageReceiver::<Ethereum>::new(eth_incoming_receiver),
+			MultisigMessageSender::<Polkadot>::new(dot_outgoing_sender),
+			MultisigMessageReceiver::<Polkadot>::new(dot_incoming_receiver),
+			MultisigMessageSender::<Bitcoin>::new(btc_outgoing_sender),
+			MultisigMessageReceiver::<Bitcoin>::new(btc_incoming_receiver),
 			muxer_fut,
 		)
 	}
@@ -218,9 +219,11 @@ impl P2PMuxer {
 #[cfg(test)]
 mod tests {
 
+	use utilities::testing::expect_recv_with_timeout;
+
 	use super::*;
 
-	use crate::{p2p::OutgoingMultisigStageMessages, testing::expect_recv_with_timeout};
+	use crate::p2p::OutgoingMultisigStageMessages;
 
 	const ACC_1: AccountId = AccountId::new([b'A'; 32]);
 	const ACC_2: AccountId = AccountId::new([b'B'; 32]);

@@ -763,11 +763,11 @@ version = "0.1.0"
 dependencies = [
  "cf-primitives",
  "parity-scale-codec",
+ "rand 0.7.3",
  "scale-info",
- "serde",
- "serde_json",
  "sp-core 7.0.0",
  "sp-std 5.0.0",
+ "utilities",
 ]
 
 [[package]]
@@ -804,10 +804,12 @@ name = "cf-integration-tests"
 version = "0.1.0"
 dependencies = [
  "arrayref",
+ "cf-amm",
  "cf-chains",
  "cf-primitives",
  "cf-test-utilities",
  "cf-traits",
+ "chainflip-node",
  "frame-executive",
  "frame-support",
  "frame-system",
@@ -1016,6 +1018,7 @@ dependencies = [
  "sp-finality-grandpa",
  "state-chain-runtime",
  "tiny-bip39 1.0.0",
+ "utilities",
  "zeroize",
 ]
 
@@ -1092,6 +1095,7 @@ dependencies = [
  "pallet-cf-ingress-egress",
  "pallet-cf-reputation",
  "pallet-cf-staking",
+ "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
  "pallet-cf-vaults",
@@ -1771,12 +1775,12 @@ dependencies = [
 name = "custom-rpc"
 version = "0.1.0"
 dependencies = [
+ "cf-amm",
  "cf-chains",
  "cf-primitives",
  "hex",
  "jsonrpsee 0.15.1",
  "pallet-cf-governance",
- "pallet-cf-pools-runtime-api",
  "sc-client-api",
  "serde",
  "sp-api",
@@ -5591,6 +5595,8 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "hex-literal",
+ "pallet-cf-governance",
  "parity-scale-codec",
  "scale-info",
  "sp-core 7.0.0",
@@ -5610,7 +5616,6 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-cf-account-roles",
- "pallet-cf-pools",
  "parity-scale-codec",
  "quickcheck",
  "quickcheck_macros",
@@ -5638,16 +5643,6 @@ dependencies = [
  "sp-arithmetic 6.0.0",
  "sp-core 7.0.0",
  "sp-io 7.0.0",
- "sp-runtime 7.0.0",
- "sp-std 5.0.0",
-]
-
-[[package]]
-name = "pallet-cf-pools-runtime-api"
-version = "0.1.0"
-dependencies = [
- "cf-primitives",
- "sp-api",
  "sp-runtime 7.0.0",
  "sp-std 5.0.0",
 ]
@@ -9747,6 +9742,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 name = "state-chain-runtime"
 version = "0.4.2"
 dependencies = [
+ "cf-amm",
  "cf-chains",
  "cf-primitives",
  "cf-session-benchmarking",
@@ -9775,7 +9771,6 @@ dependencies = [
  "pallet-cf-ingress-egress",
  "pallet-cf-lp",
  "pallet-cf-pools",
- "pallet-cf-pools-runtime-api",
  "pallet-cf-reputation",
  "pallet-cf-staking",
  "pallet-cf-swapping",
@@ -10847,11 +10842,15 @@ name = "utilities"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-channel",
  "futures",
  "hex",
+ "itertools",
  "lazy_format",
  "mockall",
  "predicates",
+ "serde",
+ "tempfile",
  "tokio",
 ]
 

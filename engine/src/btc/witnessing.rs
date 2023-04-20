@@ -4,13 +4,13 @@ use crate::{
 	multisig::PersistentKeyDB,
 	settings,
 	state_chain_observer::client::{storage_api::StorageApi, StateChainClient},
-	task_scope::Scope,
 	witnesser::{AddressMonitor, AddressMonitorCommand, EpochStart, LatestBlockNumber},
 };
 use anyhow::{Context, Result};
 use cf_chains::{address::BitcoinAddressData, Bitcoin};
 use futures::TryFutureExt;
 use sp_core::H256;
+use utilities::task_scope::Scope;
 
 use super::rpc::BtcRpcClient;
 

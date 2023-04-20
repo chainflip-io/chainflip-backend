@@ -85,7 +85,8 @@ benchmarks! {
 		let metadata = CcmIngressMetadata {
 			message: vec![0x00],
 			gas_budget: 1,
-			refund_address: ForeignChainAddress::Eth(Default::default())
+			refund_address: ForeignChainAddress::Eth(Default::default()),
+			source_address: ForeignChainAddress::Eth(Default::default())
 		};
 		let call = Call::<T>::ccm_ingress{
 			ingress_asset: Asset::Usdc,
@@ -103,7 +104,14 @@ benchmarks! {
 			from: Asset::Usdc,
 			to: Asset::Eth,
 			amount:(1_000 - 1),
-			swap_type: SwapType::Ccm(1)
+			swap_type: SwapType::CcmPrincipal(1)
+		},
+		Swap{
+			swap_id: 2,
+			from: Asset::Usdc,
+			to: Asset::Eth,
+			amount:1,
+			swap_type: SwapType::CcmGas(1)
 		}]);
 	}
 

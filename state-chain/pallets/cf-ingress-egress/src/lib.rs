@@ -13,7 +13,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_primitives::{EgressCounter, EgressId, ForeignChain};
+use cf_primitives::{BasisPoints, EgressCounter, EgressId, ForeignChain};
 
 use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata, IngressIdConstructor};
 
@@ -23,8 +23,8 @@ use cf_chains::{
 };
 use cf_primitives::{Asset, AssetAmount, IntentId};
 use cf_traits::{
-	liquidity::LpProvisioningApi, AddressDerivationApi, Broadcaster, CcmHandler, Chainflip,
-	EgressApi, IngressApi, IngressHandler, SwapIntentHandler,
+	liquidity::LpBalanceApi, AddressDerivationApi, Broadcaster, CcmHandler, Chainflip, EgressApi,
+	IngressApi, IngressHandler, SwapIntentHandler,
 };
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
 pub use pallet::*;
@@ -63,6 +63,9 @@ pub(crate) struct CrossChainMessage<C: Chain> {
 	pub amount: C::ChainAmount,
 	pub egress_address: C::ChainAccount,
 	pub message: Vec<u8>,
+	// The sender of the ingress transaction.
+	pub source_address: ForeignChainAddress,
+	// Where funds might be returned to if the message fails.
 	pub refund_address: ForeignChainAddress,
 }
 
@@ -130,7 +133,7 @@ pub mod pallet {
 			egress_asset: Asset,
 			egress_address: ForeignChainAddress,
 			relayer_id: AccountId,
-			relayer_commission_bps: u16,
+			relayer_commission_bps: BasisPoints,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
@@ -164,7 +167,7 @@ pub mod pallet {
 		type AddressDerivation: AddressDerivationApi<Self::TargetChain>;
 
 		/// Pallet responsible for managing Liquidity Providers.
-		type LpProvisioning: LpProvisioningApi<AccountId = Self::AccountId>;
+		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>;
 
 		/// For scheduling swaps.
 		type SwapIntentHandler: SwapIntentHandler<AccountId = Self::AccountId>;
@@ -453,7 +456,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Returns the actual amount of weights used.
 	///
 	/// Egress transactions with Blacklisted assets are not sent, and kept in storage.
-	#[allow(clippy::type_complexity)]
 	fn do_egress_scheduled_fetch_transfer(
 		maybe_size: Option<u32>,
 	) -> TransactionOutcome<Result<Weight, DispatchError>> {
@@ -511,7 +513,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let egress_batch_size = egress_params.len() as u32;
 
 		// Construct and send the transaction.
-		#[allow(clippy::unit_arg)]
 		match <T::ChainApiCall as AllBatch<T::TargetChain>>::new_unsigned(
 			fetch_params,
 			egress_params,
@@ -541,16 +542,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Returns the actual weight used to send the transactions.
 	///
 	/// Blacklisted assets are not sent and will remain in storage.
-	#[allow(clippy::type_complexity)]
 	fn do_egress_scheduled_ccm(maybe_size: Option<u32>) -> Weight {
 		let ccm_to_send: Vec<_> = ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
-			// Take up to batch_size requests to be sent
-			let mut target_size = maybe_size.unwrap_or(ccms.len() as u32);
+			let mut remaining_batch_space = maybe_size.unwrap_or(ccms.len() as u32);
 
-			// Filter out disabled assets
+			// Filter out disabled assets, and take up to batch_size requests to be sent.
 			ccms.drain_filter(|ccm| {
-				if target_size > 0 && !DisabledEgressAssets::<T, I>::contains_key(ccm.asset()) {
-					target_size.saturating_reduce(1);
+				if remaining_batch_space > 0 &&
+					!DisabledEgressAssets::<T, I>::contains_key(ccm.asset())
+				{
+					remaining_batch_space.saturating_reduce(1);
 					true
 				} else {
 					false
@@ -558,10 +559,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			})
 			.collect()
 		});
-
-		if ccm_to_send.is_empty() {
-			return T::WeightInfo::egress_ccm(0u32)
-		}
 
 		let ccms_sent = ccm_to_send.len() as u32;
 		for ccm in ccm_to_send {
@@ -572,7 +569,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					amount: ccm.amount,
 					to: ccm.egress_address,
 				},
-				ccm.refund_address,
+				ccm.source_address,
 				ccm.message,
 			) {
 				Ok(api_call) => {
@@ -619,7 +616,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
 		match IntentActions::<T, I>::get(&ingress_address).ok_or(Error::<T, I>::InvalidIntent)? {
 			IntentAction::LiquidityProvision { lp_account } =>
-				T::LpProvisioning::provision_account(&lp_account, asset.into(), amount.into())?,
+				T::LpBalance::try_credit_account(&lp_account, asset.into(), amount.into())?,
 			IntentAction::Swap {
 				egress_address,
 				egress_asset,
@@ -656,33 +653,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		intent_action: IntentAction<T::AccountId>,
 	) -> Result<(IntentId, TargetChainAccount<T, I>), DispatchError> {
 		// We have an address available, so we can just use it.
-
-		let (address, intent_id) = if let Some((intent_id, address)) =
-			AddressPool::<T, I>::drain().next()
-		{
-			FetchParamDetails::<T, I>::insert(
-				intent_id,
-				(IngressFetchIdOf::<T, I>::deployed(intent_id, address.clone()), address.clone()),
-			);
-			(address, intent_id)
-		} else {
-			let next_intent_id = IntentIdCounter::<T, I>::get()
-				.checked_add(1)
-				.ok_or(Error::<T, I>::IntentIdsExhausted)?;
-			let new_address: TargetChainAccount<T, I> =
-				T::AddressDerivation::generate_address(ingress_asset, next_intent_id)?;
-			AddressStatus::<T, I>::insert(new_address.clone(), DeploymentStatus::Undeployed);
-			FetchParamDetails::<T, I>::insert(
-				next_intent_id,
+		let (address, intent_id, ingress_fetch_id) =
+			if let Some((intent_id, address)) = AddressPool::<T, I>::drain().next() {
+				(address.clone(), intent_id, IngressFetchIdOf::<T, I>::deployed(intent_id, address))
+			} else {
+				let next_intent_id = IntentIdCounter::<T, I>::get()
+					.checked_add(1)
+					.ok_or(Error::<T, I>::IntentIdsExhausted)?;
+				let new_address: TargetChainAccount<T, I> =
+					T::AddressDerivation::generate_address(ingress_asset, next_intent_id)?;
+				AddressStatus::<T, I>::insert(new_address.clone(), DeploymentStatus::Undeployed);
+				IntentIdCounter::<T, I>::put(next_intent_id);
 				(
-					IngressFetchIdOf::<T, I>::undeployed(next_intent_id, new_address.clone()),
 					new_address.clone(),
-				),
-			);
-			IntentIdCounter::<T, I>::put(next_intent_id);
-			(new_address, next_intent_id)
-		};
-
+					next_intent_id,
+					IngressFetchIdOf::<T, I>::undeployed(next_intent_id, new_address),
+				)
+			};
+		FetchParamDetails::<T, I>::insert(intent_id, (ingress_fetch_id, address.clone()));
 		IntentIngressDetails::<T, I>::insert(&address, IngressDetails { intent_id, ingress_asset });
 		IntentActions::<T, I>::insert(&address, intent_action);
 		Ok((intent_id, address))
@@ -709,17 +697,22 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		egress_address: TargetChainAccount<T, I>,
 		maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId {
-		let egress_counter = EgressIdCounter::<T, I>::get().saturating_add(1);
+		let egress_counter = EgressIdCounter::<T, I>::mutate(|id| {
+			*id = id.saturating_add(1);
+			*id
+		});
 		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
 		match maybe_message {
-			Some(message) => ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
-				egress_id,
-				asset,
-				amount,
-				egress_address: egress_address.clone(),
-				message: message.message,
-				refund_address: message.refund_address,
-			}),
+			Some(CcmIngressMetadata { message, refund_address, source_address, .. }) =>
+				ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
+					egress_id,
+					asset,
+					amount,
+					egress_address: egress_address.clone(),
+					message,
+					refund_address,
+					source_address,
+				}),
 			None => ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<
 				T::TargetChain,
 			>::Transfer {
@@ -730,7 +723,6 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 			}),
 		}
 
-		EgressIdCounter::<T, I>::put(egress_counter);
 		Self::deposit_event(Event::<T, I>::EgressScheduled {
 			id: egress_id,
 			asset,
@@ -767,7 +759,7 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 		ingress_asset: TargetChainAsset<T, I>,
 		egress_asset: Asset,
 		egress_address: ForeignChainAddress,
-		relayer_commission_bps: u16,
+		relayer_commission_bps: BasisPoints,
 		relayer_id: T::AccountId,
 		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {

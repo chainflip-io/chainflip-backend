@@ -1,7 +1,7 @@
 use crate::state_chain_observer::client::extrinsic_api::ExtrinsicApi;
 use std::sync::Arc;
 
-use crate::eth::{utils, EthRpcApi, SignatureAndEvent};
+use crate::eth::{EthRpcApi, SignatureAndEvent};
 
 use cf_primitives::EpochIndex;
 use sp_runtime::AccountId32;
@@ -19,7 +19,8 @@ use async_trait::async_trait;
 use anyhow::{anyhow, bail, Result};
 
 use super::{
-	event::Event, BlockWithItems, DecodeLogClosure, EthContractWitnesser, EventParseError,
+	event::Event, utils::decode_log_param, BlockWithItems, DecodeLogClosure, EthContractWitnesser,
+	EventParseError,
 };
 
 pub struct StakeManager {
@@ -48,6 +49,11 @@ pub enum StakeManagerEvent {
 	},
 
 	ClaimExecuted {
+		account_id: AccountId32,
+		amount: u128,
+	},
+
+	ClaimExpired {
 		account_id: AccountId32,
 		amount: u128,
 	},
@@ -90,7 +96,7 @@ impl EthContractWitnesser for StakeManager {
 	async fn handle_block_events<StateChainClient, EthRpcClient>(
 		&mut self,
 		epoch: EpochIndex,
-		_block_number: u64,
+		block_number: u64,
 		block: BlockWithItems<Event<Self::EventParameters>>,
 		state_chain_client: Arc<StateChainClient>,
 		_eth_rpc: &EthRpcClient,
@@ -133,6 +139,17 @@ impl EthContractWitnesser for StakeManager {
 						})
 						.await;
 				},
+				StakeManagerEvent::ClaimExpired { account_id, amount: _ } => {
+					let _result = state_chain_client
+						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+							call: Box::new(
+								pallet_cf_staking::Call::claim_expired { account_id, block_number }
+									.into(),
+							),
+							epoch_index: epoch,
+						})
+						.await;
+				},
 				_ => {
 					trace!("Ignoring unused event: {event}");
 				},
@@ -150,6 +167,7 @@ impl EthContractWitnesser for StakeManager {
 		let staked = SignatureAndEvent::new(&self.contract, "Staked")?;
 		let claim_registered = SignatureAndEvent::new(&self.contract, "ClaimRegistered")?;
 		let claim_executed = SignatureAndEvent::new(&self.contract, "ClaimExecuted")?;
+		let claim_expired = SignatureAndEvent::new(&self.contract, "ClaimExpired")?;
 		let min_stake_changed = SignatureAndEvent::new(&self.contract, "MinStakeChanged")?;
 		let gov_withdrawal = SignatureAndEvent::new(&self.contract, "GovernanceWithdrawal")?;
 		let community_guard_disabled =
@@ -163,11 +181,9 @@ impl EthContractWitnesser for StakeManager {
 				// get the node_id from the log and return as AccountId32
 				let node_id_from_log = |log| {
 					let account_bytes: [u8; 32] =
-						utils::decode_log_param::<ethabi::FixedBytes>(log, "nodeID")?
-							.try_into()
-							.map_err(|_| {
-								anyhow!("Could not cast FixedBytes nodeID into [u8;32]")
-							})?;
+						decode_log_param::<ethabi::FixedBytes>(log, "nodeID")?.try_into().map_err(
+							|_| anyhow!("Could not cast FixedBytes nodeID into [u8;32]"),
+						)?;
 					Result::<_, anyhow::Error>::Ok(AccountId32::new(account_bytes))
 				};
 
@@ -176,65 +192,69 @@ impl EthContractWitnesser for StakeManager {
 					let account_id = node_id_from_log(&log)?;
 					StakeManagerEvent::Staked {
 						account_id,
-						amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?
+						amount: decode_log_param::<ethabi::Uint>(&log, "amount")?
 							.try_into()
 							.expect("Staked event amount should fit u128"),
-						staker: utils::decode_log_param(&log, "staker")?,
-						return_addr: utils::decode_log_param(&log, "returnAddr")?,
+						staker: decode_log_param(&log, "staker")?,
+						return_addr: decode_log_param(&log, "returnAddr")?,
 					}
 				} else if event_signature == claim_registered.signature {
 					let log = claim_registered.event.parse_log(raw_log)?;
 					let account_id = node_id_from_log(&log)?;
 					StakeManagerEvent::ClaimRegistered {
 						account_id,
-						amount: utils::decode_log_param(&log, "amount")?,
-						staker: utils::decode_log_param(&log, "staker")?,
-						start_time: utils::decode_log_param(&log, "startTime")?,
-						expiry_time: utils::decode_log_param(&log, "expiryTime")?,
+						amount: decode_log_param(&log, "amount")?,
+						staker: decode_log_param(&log, "staker")?,
+						start_time: decode_log_param(&log, "startTime")?,
+						expiry_time: decode_log_param(&log, "expiryTime")?,
 					}
 				} else if event_signature == claim_executed.signature {
 					let log = claim_executed.event.parse_log(raw_log)?;
 					let account_id = node_id_from_log(&log)?;
 					StakeManagerEvent::ClaimExecuted {
 						account_id,
-						amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?
+						amount: decode_log_param::<ethabi::Uint>(&log, "amount")?
 							.try_into()
 							.expect("ClaimExecuted event amount should fit u128"),
+					}
+				} else if event_signature == claim_expired.signature {
+					let log = claim_expired.event.parse_log(raw_log)?;
+					let account_id = node_id_from_log(&log)?;
+					StakeManagerEvent::ClaimExpired {
+						account_id,
+						amount: decode_log_param::<ethabi::Uint>(&log, "amount")?
+							.try_into()
+							.expect("ClaimExpired event amount should fit u128"),
 					}
 				} else if event_signature == min_stake_changed.signature {
 					let log = min_stake_changed.event.parse_log(raw_log)?;
 					StakeManagerEvent::MinStakeChanged {
-						old_min_stake: utils::decode_log_param(&log, "oldMinStake")?,
-						new_min_stake: utils::decode_log_param(&log, "newMinStake")?,
+						old_min_stake: decode_log_param(&log, "oldMinStake")?,
+						new_min_stake: decode_log_param(&log, "newMinStake")?,
 					}
 				} else if event_signature == gov_withdrawal.signature {
 					let log = gov_withdrawal.event.parse_log(raw_log)?;
 					StakeManagerEvent::GovernanceWithdrawal {
-						to: utils::decode_log_param(&log, "to")?,
-						amount: utils::decode_log_param::<ethabi::Uint>(&log, "amount")?
+						to: decode_log_param(&log, "to")?,
+						amount: decode_log_param::<ethabi::Uint>(&log, "amount")?
 							.try_into()
 							.expect("GovernanceWithdrawal event amount should fit u128"),
 					}
 				} else if event_signature == community_guard_disabled.signature {
 					let log = community_guard_disabled.event.parse_log(raw_log)?;
 					StakeManagerEvent::CommunityGuardDisabled {
-						community_guard_disabled: utils::decode_log_param(
-							&log,
-							"communityGuardDisabled",
-						)?,
+						community_guard_disabled: decode_log_param(&log, "communityGuardDisabled")?,
 					}
 				} else if event_signature == flip_set.signature {
 					let log = flip_set.event.parse_log(raw_log)?;
-					StakeManagerEvent::FLIPSet { flip: utils::decode_log_param(&log, "flip")? }
+					StakeManagerEvent::FLIPSet { flip: decode_log_param(&log, "flip")? }
 				} else if event_signature == suspended.signature {
 					let log = suspended.event.parse_log(raw_log)?;
-					StakeManagerEvent::Suspended {
-						suspended: utils::decode_log_param(&log, "suspended")?,
-					}
+					StakeManagerEvent::Suspended { suspended: decode_log_param(&log, "suspended")? }
 				} else if event_signature == updated_key_manager.signature {
 					let log = updated_key_manager.event.parse_log(raw_log)?;
 					StakeManagerEvent::UpdatedKeyManager {
-						key_manager: utils::decode_log_param(&log, "keyManager")?,
+						key_manager: decode_log_param(&log, "keyManager")?,
 					}
 				} else {
 					bail!(EventParseError::UnexpectedEvent(event_signature))
@@ -278,6 +298,45 @@ mod tests {
 	fn test_load_contract() {
 		let address = H160::default();
 		StakeManager::new(address);
+	}
+
+	// Convenience test for getting the event signatures for easier searching manually for events
+	// with a get_logs query
+	#[test]
+	#[ignore = "for manual use only"]
+	fn generate_signatures() {
+		let contract = StakeManager::new(H160::default()).contract;
+
+		let staked = SignatureAndEvent::new(&contract, "Staked").unwrap();
+		println!("staked {:?}", staked.signature);
+
+		let claim_registered = SignatureAndEvent::new(&contract, "ClaimRegistered").unwrap();
+		println!("claim_registered {:?}", claim_registered.signature);
+
+		let claim_executed = SignatureAndEvent::new(&contract, "ClaimExecuted").unwrap();
+		println!("claim_executed {:?}", claim_executed.signature);
+
+		let claim_expired = SignatureAndEvent::new(&contract, "ClaimExpired").unwrap();
+		println!("claim_expired {:?}", claim_expired.signature);
+
+		let min_stake_changed = SignatureAndEvent::new(&contract, "MinStakeChanged").unwrap();
+		println!("min_stake_changed {:?}", min_stake_changed.signature);
+
+		let gov_withdrawal = SignatureAndEvent::new(&contract, "GovernanceWithdrawal").unwrap();
+		println!("gov_withdrawal {:?}", gov_withdrawal.signature);
+
+		let community_guard_disabled =
+			SignatureAndEvent::new(&contract, "CommunityGuardDisabled").unwrap();
+		println!("community_guard_disabled {:?}", community_guard_disabled.signature);
+
+		let flip_set = SignatureAndEvent::new(&contract, "FLIPSet").unwrap();
+		println!("flip_set {:?}", flip_set.signature);
+
+		let suspended = SignatureAndEvent::new(&contract, "Suspended").unwrap();
+		println!("suspended {:?}", suspended.signature);
+
+		let updated_key_manager = SignatureAndEvent::new(&contract, "UpdatedKeyManager").unwrap();
+		println!("updated_key_manager {:?}", updated_key_manager.signature);
 	}
 
 	#[test]
@@ -405,6 +464,40 @@ mod tests {
 				assert_eq!(amount, 13333333333333334032384);
 			},
 			_ => panic!("Expected Staking::ClaimExecuted, got a different variant"),
+		}
+	}
+
+	#[test]
+	fn claim_expired_log_parsing() {
+		let stake_manager = StakeManager::new(H160::default());
+		let decode_log = stake_manager.decode_log_closure().unwrap();
+
+		let claim_expired_event_signature =
+			H256::from_str("0x663304ace90be3e42354c18d4edfd7bf69b1868a8bdba7b9e58de9a997d57714")
+				.unwrap();
+
+		const ACCOUNT_ID_HEX: &str =
+			"0x000000000000000000000000000000000000000000000000000000000000a455";
+		match decode_log(
+			claim_expired_event_signature,
+			RawLog {
+				topics: vec![
+					claim_expired_event_signature,
+					H256::from_str(ACCOUNT_ID_HEX).unwrap(),
+				],
+				data: hex::decode(
+					"00000000000000000000000000000000000000000000001211ede4974a350000",
+				)
+				.unwrap(),
+			},
+		)
+		.unwrap()
+		{
+			StakeManagerEvent::ClaimExpired { account_id, amount } => {
+				assert_eq!(account_id, AccountId32::from_str(ACCOUNT_ID_HEX).unwrap());
+				assert_eq!(amount, 333333333333333311488u128);
+			},
+			_ => panic!("Expected Staking::ClaimExpired, got a different variant"),
 		}
 	}
 

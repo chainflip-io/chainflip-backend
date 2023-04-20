@@ -33,7 +33,6 @@ pub trait WeightInfo {
 	fn request_deposit_address() -> Weight;
 	fn withdraw_asset() -> Weight;
 	fn register_lp_account() -> Weight;
-	fn update_position() -> Weight;
 	fn on_initialize(a: u32, ) -> Weight;
 	fn set_lp_ttl() -> Weight;
 }
@@ -75,16 +74,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_ref_time(38_000_000)
 			.saturating_add(T::DbWeight::get().reads(2))
 			.saturating_add(T::DbWeight::get().writes(1))
-	}
-	// Storage: Environment CurrentSystemState (r:1 w:0)
-	// Storage: AccountRoles AccountRoles (r:1 w:0)
-	// Storage: LiquidityPools Pools (r:1 w:1)
-	// Storage: LiquidityProvider FreeBalances (r:2 w:2)
-	fn update_position() -> Weight {
-		// Minimum execution time: 96_000 nanoseconds.
-		Weight::from_ref_time(98_000_000)
-			.saturating_add(T::DbWeight::get().reads(5))
-			.saturating_add(T::DbWeight::get().writes(3))
 	}
 	// Storage: LiquidityProvider Expired (r:1 w:0)
 	/// The range of component `a` is `[1, 100]`.
@@ -136,16 +125,6 @@ impl WeightInfo for () {
 		Weight::from_ref_time(38_000_000)
 			.saturating_add(RocksDbWeight::get().reads(2))
 			.saturating_add(RocksDbWeight::get().writes(1))
-	}
-	// Storage: Environment CurrentSystemState (r:1 w:0)
-	// Storage: AccountRoles AccountRoles (r:1 w:0)
-	// Storage: LiquidityPools Pools (r:1 w:1)
-	// Storage: LiquidityProvider FreeBalances (r:2 w:2)
-	fn update_position() -> Weight {
-		// Minimum execution time: 96_000 nanoseconds.
-		Weight::from_ref_time(98_000_000)
-			.saturating_add(RocksDbWeight::get().reads(5))
-			.saturating_add(RocksDbWeight::get().writes(3))
 	}
 	// Storage: LiquidityProvider Expired (r:1 w:0)
 	/// The range of component `a` is `[1, 100]`.
