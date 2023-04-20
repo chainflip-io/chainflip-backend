@@ -122,18 +122,36 @@ pub struct PreparedRequest<C: CeremonyTrait> {
 	pub initial_stage: DynStage<C>,
 }
 
+// Checks if all keys have the same parameters (including validator indices mapping), which
+// should be the case if they have been generated for the same set of validators
+fn are_key_parameters_same<Crypto: CryptoScheme>(keys: &[KeygenResultInfo<Crypto>]) -> bool {
+	let mut keys = keys.iter();
+	let first = keys.next().expect("must have at least one key");
+
+	keys.all(|key| key.params == first.params && key.validator_mapping == first.validator_mapping)
+}
+
 // Initial checks and setup before sending the request to the `CeremonyRunner`
 pub fn prepare_signing_request<Crypto: CryptoScheme>(
 	ceremony_id: CeremonyId,
 	own_account_id: &AccountId,
 	signers: BTreeSet<AccountId>,
-	key_info: KeygenResultInfo<Crypto>,
+	key_info: Vec<KeygenResultInfo<Crypto>>,
 	payloads: Vec<Crypto::SigningPayload>,
 	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
 	rng: Rng,
 ) -> Result<PreparedRequest<SigningCeremony<Crypto>>, SigningFailureReason> {
+	// Sanity check: all keys must have the same parameters
+	if !are_key_parameters_same(&key_info) {
+		return Err(SigningFailureReason::DeveloperError(
+			"keys have different parameters".to_string(),
+		))
+	}
+
+	let validator_mapping = key_info[0].validator_mapping.clone();
+
 	// Check that we have enough signers
-	let minimum_signers_needed = key_info.params.threshold + 1;
+	let minimum_signers_needed = key_info[0].params.threshold + 1;
 	let signers_len: AuthorityCount = signers.len().try_into().expect("too many signers");
 	if signers_len < minimum_signers_needed {
 		debug!(
@@ -146,7 +164,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 
 	// Generate signer indexes
 	let (own_idx, signer_idxs) =
-		match map_ceremony_parties(own_account_id, &signers, &key_info.validator_mapping) {
+		match map_ceremony_parties(own_account_id, &signers, &validator_mapping) {
 			Ok(result) => result,
 			Err(reason) => {
 				debug!("Request to sign invalid: {reason}");
@@ -161,7 +179,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 		let common = CeremonyCommon {
 			ceremony_id,
 			outgoing_p2p_message_sender: outgoing_p2p_message_sender.clone(),
-			validator_mapping: key_info.validator_mapping,
+			validator_mapping,
 			own_idx,
 			all_idxs: signer_idxs,
 			rng,
@@ -172,9 +190,10 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 			SigningStateCommonInfo {
 				payloads_and_keys: payloads
 					.into_iter()
+					.enumerate()
 					// TODO: when SC starts providing multiple keys in the request, we want
 					// to use the correct one (but until then we assume the key is the same)
-					.map(|payload| PayloadAndKey { payload, key: key_info.key.clone() })
+					.map(|(i, payload)| PayloadAndKey { payload, key: key_info[i].key.clone() })
 					.collect(),
 			},
 		);
@@ -474,6 +493,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 		debug!("Processing a request to sign");
 
+		// TODO: single party signing should support multiple payloads
 		if signers.len() == 1 {
 			let _result =
 				result_sender.send(Ok(self.single_party_signing(payloads, key_info, rng)));
@@ -484,7 +504,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 			ceremony_id,
 			&self.my_account_id,
 			signers,
-			key_info,
+			vec![key_info],
 			payloads,
 			&self.outgoing_p2p_message_sender,
 			rng,

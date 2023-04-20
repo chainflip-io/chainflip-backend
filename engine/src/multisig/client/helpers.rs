@@ -160,7 +160,7 @@ impl<C: CryptoScheme> Node<SigningCeremony<C>> {
 			ceremony_id,
 			&self.own_account_id,
 			signers,
-			keygen_result_info,
+			vec![keygen_result_info],
 			payloads,
 			&self.outgoing_p2p_message_sender,
 			rng,

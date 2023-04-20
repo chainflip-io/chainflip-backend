@@ -29,6 +29,8 @@ pub enum SigningFailureReason {
 	UnknownKey,
 	#[error("Invalid Number of Payloads")]
 	InvalidNumberOfPayloads,
+	#[error("Developer Error: {0}")]
+	DeveloperError(String),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -87,6 +89,7 @@ impl CeremonyFailureReason for SigningFailureReason {
 					"{SIGNING_CEREMONY_FAILED_PREFIX}: {self}",
 				);
 			},
+			SigningFailureReason::DeveloperError(_) |
 			SigningFailureReason::InvalidParticipants |
 			SigningFailureReason::NotEnoughSigners |
 			SigningFailureReason::UnknownKey => {
