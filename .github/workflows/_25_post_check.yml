@@ -63,7 +63,7 @@ jobs:
 
       - name: Start a localnet
         env:
-          BINARIES_LOCATION: ./target/release
+          BINARIES_LOCATION: .
         run: |
           echo -n ${{ secrets.CF_LOCALNET_SIGNING_KEY }} > ./localnet/init/secrets/signing_key_file
           echo -n ${{ secrets.CF_LOCALNET_NODE_KEY }} > ./localnet/init/secrets/node_key_file

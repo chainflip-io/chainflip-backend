@@ -63,10 +63,10 @@ jobs:
         with:
           name: chainflip-backend-packages-prod
           path: |
-            target/debian/chainflip-node.deb
-            target/debian/chainflip-engine.deb
-            target/debian/chainflip-relayer.deb
-            target/debian/chainflip-cli.deb
+            target/debian/chainflip-node*.deb
+            target/debian/chainflip-engine*.deb
+            target/debian/chainflip-relayer*.deb
+            target/debian/chainflip-cli*.deb
 
       - name: Upload binary artifacts
         uses: actions/upload-artifact@v3
