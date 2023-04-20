@@ -84,7 +84,7 @@ jobs:
 
       - name: Run EinfachHeuteLeiderNicht.exe
         id: heuteleidernicht
-        if: github.ref_name != "main"
+        if: github.ref_name != 'main'
         working-directory: bouncer
         env:
           POLKADOT_ENDPOINT: ws://polkadot:9944
@@ -95,7 +95,7 @@ jobs:
 
       - name: Run HeuteLeiderNicht.exe
         id: heuteleidernicht
-        if: github.ref_name == "main"
+        if: github.ref_name == 'main'
         working-directory: bouncer
         env:
           POLKADOT_ENDPOINT: ws://polkadot:9944
@@ -105,7 +105,7 @@ jobs:
           ./run.sh
 
       - name: Notify on failed build
-        if: failure() && github.ref_name == "main"
+        if: failure() && github.ref_name == 'main'
         env:
           DISCORD_USERNAME: 'Nightly build'
           DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
