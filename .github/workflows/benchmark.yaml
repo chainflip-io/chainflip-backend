@@ -62,8 +62,8 @@ jobs:
         run: |
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 14DFB4CA9296F83A
           echo "deb https://${{ env.CF_APT_REPO_BASIC_AUTH_USERNAME }}:${{ env.CF_APT_REPO_BASIC_AUTH_PASSWORD }}@apt.aws.chainflip.xyz/ci/${{ inputs.commit_sha }}/ focal main"  | sudo tee /etc/apt/sources.list.d/chainflip.list
-          sudo apt update
-          sudo apt install chainflip-node
+          sudo apt-get update
+          sudo apt-get install chainflip-node
 
       - name: Run benchmarks
         run: >

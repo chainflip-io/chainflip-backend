@@ -48,8 +48,8 @@ jobs:
 
       - name: Install Aptly and dependencies
         run: |
-          sudo apt update
-          sudo apt install -y --no-install-recommends moreutils
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends moreutils
           wget https://github.com/aptly-dev/aptly/releases/download/v${APTLY_VERSION}/aptly_${APTLY_VERSION}_amd64.deb -O /tmp/aptly_${APTLY_VERSION}_amd64.deb
           sudo dpkg -i /tmp/aptly_${APTLY_VERSION}_amd64.deb
 
@@ -128,13 +128,13 @@ jobs:
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "When importing from the internal dev repo, you can find the basic auth credentials in 1Password under \`apt repo basic auth\` secret" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "After these steps, run *apt update* and install the desired packages" >> $GITHUB_STEP_SUMMARY
+          echo "After these steps, run *apt-get update* and install the desired packages" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "apt update" >> $GITHUB_STEP_SUMMARY
-          echo "apt install chainflip-cli" >> $GITHUB_STEP_SUMMARY
-          echo "apt install chainflip-node" >> $GITHUB_STEP_SUMMARY
-          echo "apt install chainflip-engine" >> $GITHUB_STEP_SUMMARY
-          echo "apt install chainflip-relayer" >> $GITHUB_STEP_SUMMARY
+          echo "apt-get update" >> $GITHUB_STEP_SUMMARY
+          echo "apt-get install chainflip-cli" >> $GITHUB_STEP_SUMMARY
+          echo "apt-get install chainflip-node" >> $GITHUB_STEP_SUMMARY
+          echo "apt-get install chainflip-engine" >> $GITHUB_STEP_SUMMARY
+          echo "apt-get install chainflip-relayer" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Testnet tools summary

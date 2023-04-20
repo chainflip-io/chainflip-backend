@@ -2,15 +2,13 @@ version: "3.8"
 
 services:
   geth:
-    image: ghcr.io/chainflip-io/geth:perseverance-rc2
+    image: ghcr.io/chainflip-io/geth:perseverance-rc2-12s
     pull_policy: if_not_present
     stop_grace_period: 5s
     stop_signal: SIGINT
     container_name: geth
     platform: linux/amd64
     restart: unless-stopped
-    env_file:
-      - ./init/secrets/secrets.env
     ports:
       - 30303:30303
       - 30303:30303/udp
@@ -23,8 +21,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    volumes:
-      - ./init/secrets/geth_password:/geth/password
     command:
       - --allow-insecure-unlock
       - --datadir=/geth/data
