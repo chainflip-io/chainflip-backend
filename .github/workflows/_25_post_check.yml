@@ -2,7 +2,7 @@ name: Nightly build
 on:
   workflow_call:
 jobs:
-  run:
+  bouncer:
     runs-on: [hetzner]
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
@@ -107,3 +107,23 @@ jobs:
             👾 Link to job: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
             #️⃣ Tagging: <@&939151218708709416>
             https://media.giphy.com/media/wHfwCBZzCMhmE/giphy.gif
+
+  benchmarks:
+    runs-on: [hetzner]
+    concurrency:
+      group: ${{ github.ref }}-run-benchmarks
+      cancel-in-progress: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Download previously built binaries
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-backend-bin
+          path: ./target/release
+
+      - name: Run benchmarks
+        run: |
+          chmod +x ./target/release/chainflip-node
+          ./state-chain/scripts/benchmark-all.sh --binary ./target/release/chainflip-node --steps 2 --repetitions 1

@@ -10,15 +10,20 @@ on:
 jobs:
   init:
     uses: ./.github/workflows/_00_init.yml
-#  check:
-#    uses: ./.github/workflows/_01_check.yml
-  test:
+#  pre-check:
+#    uses: ./.github/workflows/_01_pre_check.yml
+#  test:
 #    needs: [check]
-    uses: ./.github/workflows/_10_test.yml
-    secrets: inherit
+#    uses: ./.github/workflows/_10_test.yml
+#    secrets: inherit
   build:
-    needs: [test]
+#    needs: [test]
     uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+  post-check:
+    needs: [test]
+    uses: ./.github/workflows/_25_post_check.yml
+    secrets: inherit
   release-sisyphos:
     name: Publish Packages to APT repo
     needs: [build]
