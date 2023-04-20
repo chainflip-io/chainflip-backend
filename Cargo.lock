@@ -1103,6 +1103,7 @@ dependencies = [
  "pallet-cf-ingress-egress",
  "pallet-cf-reputation",
  "pallet-cf-staking",
+ "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
  "pallet-cf-vaults",
@@ -5617,6 +5618,8 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "hex-literal",
+ "pallet-cf-governance",
  "parity-scale-codec",
  "scale-info",
  "sp-core 7.0.0",
@@ -10862,11 +10865,15 @@ name = "utilities"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-channel",
  "futures",
  "hex",
+ "itertools",
  "lazy_format",
  "mockall",
  "predicates",
+ "serde",
+ "tempfile",
  "tokio",
 ]
 

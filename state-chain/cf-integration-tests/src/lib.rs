@@ -25,9 +25,9 @@ use state_chain_runtime::{
 	Runtime, RuntimeOrigin, Staking, System, Validator, Witnesser,
 };
 
-use cf_primitives::{AuthorityCount, BlockNumber, FlipBalance};
+use cf_primitives::{AuthorityCount, BlockNumber, EthereumAddress, FlipBalance};
 use cf_traits::EpochInfo;
-use pallet_cf_staking::{EthTransactionHash, EthereumAddress};
+use pallet_cf_staking::EthTransactionHash;
 use sp_runtime::AccountId32;
 
 type NodeId = AccountId32;

@@ -43,6 +43,8 @@ pub mod mocks;
 /// A trait representing all the types and constants that need to be implemented for supported
 /// blockchains.
 pub trait Chain: Member + Parameter {
+	const NAME: &'static str;
+
 	type ChainBlockNumber: FullCodec
 		+ Member
 		+ Parameter
@@ -52,6 +54,7 @@ pub trait Chain: Member + Parameter {
 		// this is used primarily for tests. We use u32 because it's the smallest block number we
 		// use (and so we can always .into() into a larger type)
 		+ From<u32>
+		+ Into<u64>
 		+ MaxEncodedLen
 		+ Display
 		+ CheckedSub;
@@ -278,7 +281,7 @@ pub trait ExecutexSwapAndCall<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		egress_id: EgressId,
 		transfer_param: TransferAssetParams<Abi>,
-		from: ForeignChainAddress,
+		source_address: ForeignChainAddress,
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError>;
 }
@@ -306,12 +309,14 @@ pub trait IngressIdConstructor {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct CcmIngressMetadata {
-	// Call data used after the message is egressed.
+	/// Call data used after the message is egressed.
 	pub message: Vec<u8>,
-	// Amount of ingress funds to be used for gas.
+	/// Amount of ingress funds to be used for gas.
 	pub gas_budget: AssetAmount,
-	// The address refunds will go to.
+	/// The address refunds will go to.
 	pub refund_address: ForeignChainAddress,
+	/// The address the ingress was sent from.
+	pub source_address: ForeignChainAddress,
 }
 
 #[cfg(feature = "std")]

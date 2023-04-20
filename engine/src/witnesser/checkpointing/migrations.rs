@@ -7,10 +7,8 @@ use anyhow::Result;
 use itertools::Itertools;
 use tracing::{error, info};
 
-use crate::{
-	multisig::{ChainTag, PersistentKeyDB},
-	task_scope,
-};
+use crate::multisig::{ChainTag, PersistentKeyDB};
+use utilities::task_scope;
 
 use super::WitnessedUntil;
 
@@ -87,9 +85,7 @@ fn delete_legacy_checkpointing_files(legacy_files_path: &Path) -> Result<()> {
 mod tests {
 	use std::{collections::HashMap, io::Write};
 
-	use utilities::assert_ok;
-
-	use crate::testing::new_temp_directory_with_nonexistent_file;
+	use utilities::{assert_ok, testing::new_temp_directory_with_nonexistent_file};
 
 	use super::*;
 

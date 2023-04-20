@@ -17,7 +17,7 @@ zeroize = "1.5.4"
 serde = { version = "1.0", features = ["derive"] }
 base58 = '0.2.0'
 
-# Local deps
+# Local
 chainflip-engine = {path = "../../engine/"}
 utilities = {path = "../../utilities/"}
 

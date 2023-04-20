@@ -45,12 +45,32 @@ pub mod any {
 		EnumIter,
 	)]
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[repr(u32)]
+	// !!!!!! IMPORTANT !!!!!!
+	// Do not change these indices.
 	pub enum Asset {
-		Eth,
-		Flip,
-		Usdc,
-		Dot,
-		Btc,
+		// 0 is reservered for particular cross chain messaging scenarios where we want to pass
+		// through a message without making a swap.
+		Eth = 1u32,
+		Flip = 2u32,
+		Usdc = 3u32,
+		Dot = 4u32,
+		Btc = 5u32,
+	}
+
+	impl TryFrom<u32> for Asset {
+		type Error = &'static str;
+
+		fn try_from(n: u32) -> Result<Self, Self::Error> {
+			match n {
+				x if x == Self::Eth as u32 => Ok(Self::Eth),
+				x if x == Self::Flip as u32 => Ok(Self::Flip),
+				x if x == Self::Usdc as u32 => Ok(Self::Usdc),
+				x if x == Self::Dot as u32 => Ok(Self::Dot),
+				x if x == Self::Btc as u32 => Ok(Self::Btc),
+				_ => Err("Invalid asset id"),
+			}
+		}
 	}
 
 	impl Asset {
@@ -189,6 +209,16 @@ mod test_assets {
 		($mod:ident, $asset:ident) => {
 			assert!($mod::Asset::try_from(any::Asset::$asset).is_err());
 		};
+	}
+
+	#[test]
+	fn asset_id_to_asset() {
+		assert!(Asset::try_from(0).is_err());
+		assert_eq!(Asset::try_from(1).unwrap(), Asset::Eth);
+		assert_eq!(Asset::try_from(2).unwrap(), Asset::Flip);
+		assert_eq!(Asset::try_from(3).unwrap(), Asset::Usdc);
+		assert_eq!(Asset::try_from(4).unwrap(), Asset::Dot);
+		assert_eq!(Asset::try_from(5).unwrap(), Asset::Btc);
 	}
 
 	#[test]

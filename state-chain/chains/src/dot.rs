@@ -110,6 +110,7 @@ impl Age for PolkadotTrackedData {
 }
 
 impl Chain for Polkadot {
+	const NAME: &'static str = "Polkadot";
 	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = PolkadotBalance;
 	type TrackedData = PolkadotTrackedData;

@@ -13,11 +13,11 @@ use chainflip_engine::{
 		base_rpc_api::BaseRpcApi, extrinsic_api::ExtrinsicApi, storage_api::StorageApi,
 		StateChainClient,
 	},
-	task_scope::task_scope,
 };
 pub use core::ops::Range;
 use futures::FutureExt;
 use serde::Serialize;
+use utilities::task_scope::task_scope;
 
 use crate::{connect_submit_and_get_events, submit_and_ensure_success};
 

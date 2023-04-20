@@ -11,26 +11,8 @@ use crate::{
 	},
 	eth::TransportProtocol,
 	logging::ETH_STREAM_BEHIND,
+	witnesser::HasBlockNumber,
 };
-
-use super::EthNumberBloom;
-
-pub trait HasBlockNumber: PartialEq + Debug + Send {
-	fn block_number(&self) -> u64;
-}
-
-#[cfg(test)]
-impl HasBlockNumber for u64 {
-	fn block_number(&self) -> u64 {
-		*self
-	}
-}
-
-impl HasBlockNumber for EthNumberBloom {
-	fn block_number(&self) -> u64 {
-		self.block_number.as_u64()
-	}
-}
 
 /// Merges two streams of blocks. The intent of this function is to create
 /// redundancy for HTTP and WS block item streams.
@@ -151,7 +133,7 @@ where
 		other_protocol_state: &ProtocolState,
 		block: Block,
 	) -> Option<(Block, TransportProtocol)> {
-		let block_number = block.block_number();
+		let block_number: u64 = block.block_number().into();
 
 		if let Some(last_pulled) = protocol_state.last_block_pulled {
 			assert_eq!(
@@ -209,7 +191,8 @@ where
 				}
 				else => break None
 			} {
-				stream_state.merged_stream_state.last_block_yielded = Some(block.block_number());
+				stream_state.merged_stream_state.last_block_yielded =
+					Some(block.block_number().into());
 				break Some(((block, protocol), stream_state))
 			}
 		}
@@ -225,7 +208,7 @@ mod merged_stream_tests {
 
 	use utilities::assert_future_panics;
 
-	async fn test_merged_stream_interleaving<Block: HasBlockNumber>(
+	async fn test_merged_stream_interleaving<Block: HasBlockNumber + PartialEq + Debug + Send>(
 		interleaved_blocks: Vec<(Block, TransportProtocol)>,
 		expected_blocks: &[(Block, TransportProtocol)],
 	) {

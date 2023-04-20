@@ -33,9 +33,9 @@ use crate::{
 	},
 	settings::Settings,
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
-	task_scope::task_scope,
 	witnesser::EpochStart,
 };
+use utilities::task_scope::task_scope;
 
 use super::EthAddressToMonitorSender;
 

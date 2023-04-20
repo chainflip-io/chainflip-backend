@@ -23,7 +23,6 @@ use crate::{
 		eth::{EthSchnorrSignature, EthSigning},
 	},
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
-	task_scope::task_scope,
 };
 use anyhow::Result;
 use cf_primitives::{AccountId, CeremonyId};
@@ -32,7 +31,7 @@ use futures::{Future, FutureExt};
 use rand_legacy::SeedableRng;
 use sp_runtime::AccountId32;
 use tokio::sync::{mpsc, oneshot};
-use utilities::threshold_from_share_count;
+use utilities::{task_scope::task_scope, threshold_from_share_count};
 
 /// Run on_request_to_sign on a ceremony manager, using a junk key and default ceremony id and data.
 async fn run_on_request_to_sign<C: CryptoScheme>(
