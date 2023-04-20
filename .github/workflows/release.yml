@@ -21,7 +21,7 @@ jobs:
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
   post-check:
-    needs: [test]
+#    needs: [test]
     uses: ./.github/workflows/_25_post_check.yml
     secrets: inherit
   release-sisyphos:
