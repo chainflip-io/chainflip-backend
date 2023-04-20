@@ -26,7 +26,7 @@ jobs:
     secrets: inherit
   release-sisyphos:
     name: Publish Packages to APT repo
-    needs: [build]
+    needs: [post-check]
     uses: ./.github/workflows/_30_publish.yml
     with:
       artifacts: chainflip-backend-packages-dev
@@ -37,7 +37,7 @@ jobs:
   release-perseverance:
     name: Publish Packages to APT repo
     if: github.ref_type == 'tag'
-    needs: [build]
+    needs: [post-check]
     uses: ./.github/workflows/_30_publish.yml
     with:
       artifacts: chainflip-backend-packages-prod
