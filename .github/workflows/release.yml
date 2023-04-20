@@ -31,7 +31,7 @@ jobs:
     name: Publish Packages to APT repo
     if: github.ref_type == 'tag'
     needs: [build]
-    uses: ./.github/workflows/_30_publish.yaml
+    uses: ./.github/workflows/_30_publish.yml
     with:
       artifacts: chainflip-backend-packages-prod
       version: "perseverance/"
