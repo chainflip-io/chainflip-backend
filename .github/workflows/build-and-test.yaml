@@ -183,7 +183,7 @@ jobs:
   deb-publish:
     name: Publish Packages to APT repo
     needs: [set-variables, build-and-test]
-    uses: ./.github/workflows/.deb-publish.yaml
+    uses: ./.github/workflows/_deb-publish.yaml
     with:
       artifacts: chainflip-backend-packages
       version: ci/${{ needs.set-variables.outputs.commit_hash }}/

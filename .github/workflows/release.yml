@@ -8,7 +8,7 @@ on:
       - 'v*'
 jobs:
   check:
-    uses: .github/workflows/reuseable/build-and.test.yaml@chore/ci-refactor
+    uses: .github/workflows/build-and.test.yaml@chore/ci-refactor
 #  build-and-test:
 #    uses: .github/workflow/reuseable/build-and.test.yaml
 #  release-sisyphos:
