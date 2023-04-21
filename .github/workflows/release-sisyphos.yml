@@ -1,19 +1,17 @@
-name: Release Chainflip
+name: Release Chainflip Sisyphos
 on:
   push:
     branches:
       - 'release/*'
       - chore/ci-refactor
-    tags:
-      - 'v*'
 
 jobs:
   init:
     uses: ./.github/workflows/_00_init.yml
-#  pre-check:
-#    uses: ./.github/workflows/_01_pre_check.yml
+  pre-check:
+    uses: ./.github/workflows/_01_pre_check.yml
   test:
-#    needs: [check]
+    needs: [pre-check]
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit
   build:
@@ -27,7 +25,6 @@ jobs:
   release-sisyphos:
     name: Publish Packages to APT repo
     needs: [post-check]
-#    needs: [build]
     uses: ./.github/workflows/_30_publish.yml
     with:
       artifacts: chainflip-backend-packages-sisyphos
@@ -39,7 +36,6 @@ jobs:
     name: Publish Packages to APT repo
     if: github.ref_type == 'tag'
     needs: [post-check]
-#    needs: [build]
     uses: ./.github/workflows/_30_publish.yml
     with:
       artifacts: chainflip-backend-packages-perseverance

@@ -1,5 +1,11 @@
 on:
   workflow_call:
+    inputs:
+      network:
+        description: Network being released
+        required: true
+        default: development
+        type: string
 
 env:
   SCCACHE_CACHE_SIZE: 32G
@@ -55,10 +61,6 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    strategy:
-      fail-fast: true
-      matrix:
-        network: ["perseverance", "sisyphos"]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -79,7 +81,7 @@ jobs:
 
       - name: Build global packages packages
         run: |
-          cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ matrix.network }}
+          cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ inputs.network }}
           cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.get-date.outputs.date }}"  
           cargo deb --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.get-date.outputs.date }}" 
           cargo deb --no-build --no-strip -p chainflip-relayer --deb-revision "${{ steps.get-date.outputs.date }}"

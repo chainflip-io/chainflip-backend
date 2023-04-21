@@ -1,0 +1,37 @@
+# This CI runs a lot of the jobs in parallel to speed up development time. We also run a simpler suite of bouncer tests.
+name: Release Chainflip Development
+on:
+  pull_request:
+    branches:
+      - main
+      - 'release/*'
+
+jobs:
+  init:
+    uses: ./.github/workflows/_00_init.yml
+  pre-check:
+    uses: ./.github/workflows/_01_pre_check.yml
+  test:
+    uses: ./.github/workflows/_10_test.yml
+    secrets: inherit
+    with:
+      coverage: false
+  build:
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      network: development
+  post-check:
+    needs: [build,test]
+    uses: ./.github/workflows/_25_post_check.yml
+    secrets: inherit
+  release-development:
+    name: Publish Packages to APT repo
+    needs: [post-check]
+    uses: ./.github/workflows/_30_publish.yml
+    with:
+      artifacts: chainflip-backend-packages
+      version: ci/${{ needs.set-variables.outputs.commit_hash }}/
+      environment: dev
+      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
+    secrets: inherit

@@ -102,6 +102,12 @@ priority = "required"
 section = "rust"
 systemd-units = {enable = false}
 pre-depends = "logrotate"
+[package.metadata.deb.variants.development]
+maintainer-scripts = "package/development"
+assets = [
+  ["target/release/chainflip-node", "usr/bin/", "755"],
+]
+
 [package.metadata.deb.variants.sisyphos]
 maintainer-scripts = "package/sisyphos"
 assets = [
