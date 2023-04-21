@@ -6,6 +6,7 @@ on:
 concurrency:
   group: ${{ github.ref }}-release-development
   cancel-in-progress: true
+
 jobs:
   pre-check:
     uses: ./.github/workflows/_01_pre_check.yml
@@ -20,6 +21,7 @@ jobs:
     secrets: inherit
     with:
       network: perseverance
+      commit_hash: ${{ github.sha }}
   post-check:
     needs: [build]
     uses: ./.github/workflows/_25_post_check.yml
@@ -31,5 +33,5 @@ jobs:
     with:
       version: "perseverance/"
       environment: prod
-      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
+      commit_hash: ${{ github.sha }}
     secrets: inherit

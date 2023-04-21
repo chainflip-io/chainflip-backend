@@ -8,10 +8,8 @@ on:
 concurrency:
   group: ${{ github.ref }}-release-development
   cancel-in-progress: true
+
 jobs:
-  init:
-    uses: ./.github/workflows/_00_init.yml
-    secrets: inherit
   pre-check:
     uses: ./.github/workflows/_01_pre_check.yml
     secrets: inherit
@@ -23,6 +21,7 @@ jobs:
     secrets: inherit
     with:
       network: development
+      commit_hash: ${{ github.event.pull_request.head.sha }} # More info: https://github.com/actions/checkout/issues/426
   post-check:
     needs: [build]
     uses: ./.github/workflows/_25_post_check.yml
@@ -30,10 +29,10 @@ jobs:
     with:
       simple_bouncer: true
   publish:
-    needs: [post-check, init]
+    needs: [post-check]
     uses: ./.github/workflows/_30_publish.yml
     with:
-      version: ci/${{ needs.init.outputs.commit_hash }}/
+      version: ci/${{ github.event.pull_request.head.sha }}
       environment: dev
-      commit_hash: ${{ needs.init.outputs.commit_hash }}
+      commit_hash: ${{ github.event.pull_request.head.sha }}
     secrets: inherit

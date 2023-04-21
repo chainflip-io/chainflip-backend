@@ -100,7 +100,8 @@ maintainer = "Chainflip Labs GmbH <dev@chainflip.io>"
 name = "chainflip-node"
 priority = "required"
 section = "rust"
-systemd-units = {enable = false}
+systemd-units = {unit-name = "chainflip-node", enable = false}
+
 [package.metadata.deb.variants.development]
 maintainer-scripts = "package/development"
 assets = [

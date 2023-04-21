@@ -19,6 +19,7 @@ jobs:
     secrets: inherit
     with:
       network: development
+      commit_hash: ${{ github.sha }}
   post-check:
     needs: [build]
     uses: ./.github/workflows/_25_post_check.yml
@@ -27,7 +28,7 @@ jobs:
     needs: [post-check]
     uses: ./.github/workflows/_30_publish.yml
     with:
-      version: ci/${{ needs.set-variables.outputs.commit_hash }}/
+      version: ci/${{ github.sha }}/
       environment: dev
-      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
+      commit_hash: ${{ github.sha }}
     secrets: inherit
