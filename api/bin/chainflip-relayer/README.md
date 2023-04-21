@@ -31,8 +31,8 @@ Then in another terminal:
     -d '{"id":1, "jsonrpc":"2.0", "method": "relayer_newSwapIngressAddress", "params": ["Eth", "Flip","0xabababababababababababababababababababab", 0]}' \
     http://localhost:62378
 
-# The result is the hex-encoded address.
-{"jsonrpc":"2.0","result":"4ef7608893d5a06c2689b8d15b4dc400be0954f2","id":1}
+# The result is the hex-encoded ingress address.
+{"jsonrpc":"2.0","result":"0x4ef7608893d5a06c2689b8d15b4dc400be0954f2","id":1}
 ```
 
 ## Command line arguments and defaults
@@ -67,20 +67,20 @@ OPTIONS:
 
 ## Rpc Methods
 
-### relayer_newSwapIngressAddress
+### `relayer_newSwapIngressAddress`
 
 Parameters:
 
 - Ingress asset as a camel-case string, eg "Eth" or "Dot".
 - Egress asset as a camel-case string, eg "Eth" or "Dot".
-- Egress Address in hex. Must match the format of the egress asset's chain: 20 bytes for ethereum assets, 32 bytes for pokadot.
+- Egress Address in hex. Must match the format of the egress asset's chain: 20 bytes for ethereum assets, 32 bytes for polkadot.
 - Relayer Commission in basis points (100th of a percent).
 
 Return:
 
 - Hex-encoded ingress address.
 
-### relayer_registerAccount
+### `relayer_registerAccount`
 
 Parameters:
 

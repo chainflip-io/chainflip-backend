@@ -63,28 +63,14 @@ pub async fn swap_intent(
 	state_chain_settings: &settings::StateChain,
 	params: settings::SwapIntentParams,
 ) -> Result<()> {
-	use api::primitives::{ForeignChain, ForeignChainAddress};
-	use utilities::clean_dot_address;
-
-	let egress_address = match ForeignChain::from(params.egress_asset) {
-		ForeignChain::Ethereum => {
-			let addr = clean_eth_address(&params.egress_address)
-				.map_err(|err| anyhow!("Failed to parse address: {err}"))?;
-			ForeignChainAddress::Eth(addr)
-		},
-		ForeignChain::Polkadot => {
-			let addr = clean_dot_address(&params.egress_address)
-				.map_err(|err| anyhow!("Failed to parse address: {err}"))?;
-			ForeignChainAddress::Dot(addr)
-		},
-		ForeignChain::Bitcoin => todo!("Bitcoin not yet supported for egress address"),
-	};
-
 	let address = api::register_swap_intent(
 		state_chain_settings,
 		params.ingress_asset,
 		params.egress_asset,
-		egress_address,
+		chainflip_api::clean_foreign_chain_address(
+			params.egress_asset.into(),
+			&params.egress_address,
+		)?,
 		params.relayer_commission,
 		None,
 	)
@@ -97,7 +83,7 @@ pub async fn liquidity_deposit(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 ) -> Result<()> {
-	let address = api::liquidity_deposit(state_chain_settings, asset).await?;
+	let address = api::lp::liquidity_deposit(state_chain_settings, asset).await?;
 	println!("Ingress address: {address}");
 	Ok(())
 }
@@ -127,7 +113,10 @@ async fn register_account_role(role: AccountRole, settings: &settings::CLISettin
 		return Ok(())
 	}
 
-	api::register_account_role(role, &settings.state_chain).await
+	let tx_hash = api::register_account_role(role, &settings.state_chain).await?;
+	println!("Account role set at tx {tx_hash:#x}.");
+
+	Ok(())
 }
 
 pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<()> {
