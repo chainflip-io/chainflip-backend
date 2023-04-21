@@ -68,9 +68,7 @@ impl<T: Chainflip> StakingInfo for MockStakingInfo<T> {
 
 	fn total_onchain_stake() -> Self::Balance {
 		<Self as MockPalletStorage>::get_value(STAKES)
-			.and_then(|stakes: BTreeMap<Self::AccountId, Self::Balance>| {
-				Some(stakes.values().cloned().sum())
-			})
+			.map(|stakes: BTreeMap<Self::AccountId, Self::Balance>| stakes.values().cloned().sum())
 			.unwrap_or_default()
 	}
 }
