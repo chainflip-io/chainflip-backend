@@ -2,6 +2,7 @@ on:
   workflow_call:
 
 env:
+  RUSTC_WRAPPER: sccache
   SCCACHE_CACHE_SIZE: 32G
   SCCACHE_VERSION: v0.4.1
   SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
@@ -60,4 +61,27 @@ jobs:
         with:
           token: ${{ secrets.CF_BACKEND_CODECOV_TOKEN }} # not required for public repos
           files: lcov.info
+          fail_ci_if_error: false
+  coverage-2:
+    runs-on: [hetzner]
+    container:
+      image: xd009642/tarpaulin:develop-nightly
+      options: --security-opt seccomp=unconfined
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup sccache
+        run: |
+          wget https://github.com/mozilla/sccache/releases/download/${SCCACHE_VERSION}/sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz
+          tar -xvf sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz
+          mv sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl/sccache /usr/local/bin
+          sccache --show-stats
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Generate code coverage
+        run: cargo +nightly tarpaulin --verbose --features runtime-benchmarks,slow-tests --workspace --timeout 120 --out Xml
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CF_BACKEND_CODECOV_TOKEN }} # not required for public repos
           fail_ci_if_error: false
