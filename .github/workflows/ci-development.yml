@@ -9,9 +9,6 @@ concurrency:
   group: ${{ github.ref }}-release-development
   cancel-in-progress: true
 
-env:
-  COMMIT_HASH: ${{ github.event.pull_request.head.sha }} # More info: https://github.com/actions/checkout/issues/426
-
 jobs:
   pre-check:
     uses: ./.github/workflows/_01_pre_check.yml
@@ -24,6 +21,7 @@ jobs:
     secrets: inherit
     with:
       network: development
+      commit_hash: ${{ github.event.pull_request.head.sha }} # More info: https://github.com/actions/checkout/issues/426
   post-check:
     needs: [build]
     uses: ./.github/workflows/_25_post_check.yml
