@@ -9,9 +9,6 @@ concurrency:
   group: ${{ github.ref }}-release-development
   cancel-in-progress: true
 jobs:
-  init:
-    uses: ./.github/workflows/_00_init.yml
-    secrets: inherit
   pre-check:
     uses: ./.github/workflows/_01_pre_check.yml
     secrets: inherit
