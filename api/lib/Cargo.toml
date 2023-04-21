@@ -16,6 +16,7 @@ rand_legacy = { package = "rand", version = "0.6" }
 zeroize = "1.5.4"
 serde = { version = "1.0", features = ["derive"] }
 base58 = '0.2.0'
+tracing = "0.1"
 
 # Local
 chainflip-engine = {path = "../../engine/"}

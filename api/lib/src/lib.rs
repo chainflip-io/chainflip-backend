@@ -9,6 +9,7 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
+use tracing::error;
 use utilities::{clean_dot_address, clean_eth_address};
 use zeroize::Zeroize;
 
@@ -95,15 +96,17 @@ where
 
 	events
 		.iter()
-		.find(|event| {
-			matches!(
-				event,
-				state_chain_runtime::RuntimeEvent::System(
-					frame_system::Event::ExtrinsicFailed { .. }
-				)
-			)
+		.find_map(|event| {
+			if let state_chain_runtime::RuntimeEvent::System(
+				frame_system::Event::ExtrinsicFailed { dispatch_error, dispatch_info: _ },
+			) = event
+			{
+				error!("Extrinsic execution failed: {:?}", dispatch_error);
+				Some(Err(anyhow!("extrinsic execution failed")))
+			} else {
+				None
+			}
 		})
-		.map(|_| Err(anyhow!("extrinsic execution failed")))
 		.unwrap_or(Ok((tx_hash, events)))
 }
 
