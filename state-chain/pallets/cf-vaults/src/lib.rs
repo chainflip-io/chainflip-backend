@@ -27,6 +27,9 @@ mod benchmarking;
 
 mod vault_rotator;
 
+mod keygen_response_status;
+
+use keygen_response_status::KeygenResponseStatus;
 pub mod weights;
 pub use weights::WeightInfo;
 #[cfg(test)]
@@ -46,105 +49,6 @@ pub type ChainBlockNumberFor<T, I = ()> = <<T as Config<I>>::Chain as Chain>::Ch
 pub type TransactionIdFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::TransactionId;
 pub type ThresholdSignatureFor<T, I = ()> =
 	<<T as Config<I>>::Chain as ChainCrypto>::ThresholdSignature;
-
-/// Tracks the current state of the keygen ceremony.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
-#[scale_info(skip_type_params(T, I))]
-pub struct KeygenResponseStatus<T: Config<I>, I: 'static = ()> {
-	/// The total number of candidates participating in the keygen ceremony.
-	candidate_count: AuthorityCount,
-	/// The candidates that have yet to reply.
-	remaining_candidates: BTreeSet<T::ValidatorId>,
-	/// A map of new keys with the number of votes for each key.
-	success_votes: BTreeMap<AggKeyFor<T, I>, AuthorityCount>,
-	/// A map of the number of blame votes that each keygen participant has received.
-	blame_votes: BTreeMap<T::ValidatorId, AuthorityCount>,
-}
-
-impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
-	pub fn new(candidates: BTreeSet<T::ValidatorId>) -> Self {
-		Self {
-			candidate_count: candidates.len() as AuthorityCount,
-			remaining_candidates: candidates,
-			success_votes: Default::default(),
-			blame_votes: Default::default(),
-		}
-	}
-
-	fn super_majority_threshold(&self) -> AuthorityCount {
-		utilities::success_threshold_from_share_count(self.candidate_count)
-	}
-
-	fn add_success_vote(&mut self, voter: &T::ValidatorId, key: AggKeyFor<T, I>) {
-		assert!(self.remaining_candidates.remove(voter));
-		*self.success_votes.entry(key).or_default() += 1;
-
-		SuccessVoters::<T, I>::append(key, voter);
-	}
-
-	fn add_failure_vote(&mut self, voter: &T::ValidatorId, blamed: BTreeSet<T::ValidatorId>) {
-		assert!(self.remaining_candidates.remove(voter));
-		for id in blamed {
-			*self.blame_votes.entry(id).or_default() += 1
-		}
-
-		FailureVoters::<T, I>::append(voter);
-	}
-
-	/// How many candidates are we still awaiting a response from?
-	fn remaining_candidate_count(&self) -> AuthorityCount {
-		self.remaining_candidates.len() as AuthorityCount
-	}
-
-	/// Resolves the keygen outcome as follows:
-	///
-	/// If and only if *all* candidates agree on the same key, return Success.
-	///
-	/// Otherwise, determine unresponsive, dissenting and blamed nodes and return
-	/// `Failure(unresponsive | dissenting | blamed)`
-	fn resolve_keygen_outcome(self) -> KeygenOutcomeFor<T, I> {
-		// If and only if *all* candidates agree on the same key, return success.
-		if let Some((key, votes)) = self.success_votes.iter().next() {
-			if *votes == self.candidate_count {
-				// This *should* be safe since it's bounded by the number of candidates.
-				// We may want to revise.
-				// See https://github.com/paritytech/substrate/pull/11490
-				let _ignored = SuccessVoters::<T, I>::clear(u32::MAX, None);
-				return Ok(*key)
-			}
-		}
-
-		let super_majority_threshold = self.super_majority_threshold() as usize;
-
-		// We remove who we don't want to punish, and then punish the rest
-		if let Some(key) = SuccessVoters::<T, I>::iter_keys().find(|key| {
-			SuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >= super_majority_threshold
-		}) {
-			SuccessVoters::<T, I>::remove(key);
-		} else if FailureVoters::<T, I>::decode_len().unwrap_or_default() >=
-			super_majority_threshold
-		{
-			FailureVoters::<T, I>::kill();
-		} else {
-			let _empty = SuccessVoters::<T, I>::clear(u32::MAX, None);
-			FailureVoters::<T, I>::kill();
-			log::warn!("Unable to determine a consensus outcome for keygen.");
-		}
-
-		Err(SuccessVoters::<T, I>::drain()
-			.flat_map(|(_k, dissenters)| dissenters)
-			.chain(FailureVoters::<T, I>::take())
-			.chain(self.blame_votes.into_iter().filter_map(|(id, vote_count)| {
-				if vote_count >= super_majority_threshold as u32 {
-					Some(id)
-				} else {
-					None
-				}
-			}))
-			.chain(self.remaining_candidates)
-			.collect())
-	}
-}
 
 /// The current status of a vault rotation.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, EnumVariant)]
@@ -294,7 +198,7 @@ pub mod pallet {
 					return weight
 				};
 
-				let candidate_count = response_status.candidate_count;
+				let candidate_count = response_status.candidate_count();
 				match response_status.resolve_keygen_outcome() {
 					Ok(new_public_key) => {
 						debug_assert_eq!(
@@ -481,7 +385,7 @@ pub mod pallet {
 			// Make sure the ceremony id matches
 			ensure!(pending_ceremony_id == ceremony_id, Error::<T, I>::InvalidCeremonyId);
 			ensure!(
-				keygen_status.remaining_candidates.contains(&reporter),
+				keygen_status.remaining_candidates().contains(&reporter),
 				Error::<T, I>::InvalidRespondent
 			);
 
