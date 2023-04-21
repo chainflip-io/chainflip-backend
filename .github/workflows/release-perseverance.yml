@@ -31,5 +31,5 @@ jobs:
     with:
       version: "perseverance/"
       environment: prod
-      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
+      commit_hash: ${{ github.sha }}
     secrets: inherit

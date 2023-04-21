@@ -27,7 +27,7 @@ jobs:
     needs: [post-check]
     uses: ./.github/workflows/_30_publish.yml
     with:
-      version: ci/${{ needs.set-variables.outputs.commit_hash }}/
+      version: ci/${{ github.sha }}/
       environment: dev
-      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
+      commit_hash: ${{ github.sha }}
     secrets: inherit
