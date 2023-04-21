@@ -102,20 +102,20 @@ priority = "required"
 section = "rust"
 systemd-units = {enable = false}
 [package.metadata.deb.variants.development]
-maintainer-scripts = "package/development"
+maintainer-scripts = "package/development/"
 assets = [
   ["target/release/chainflip-node", "usr/bin/", "755"],
 ]
 
 [package.metadata.deb.variants.sisyphos]
-maintainer-scripts = "package/sisyphos"
+maintainer-scripts = "package/sisyphos/"
 assets = [
   ["target/release/chainflip-node", "usr/bin/", "755"],
   ["chainspecs/sisyphos.chainspec.raw.json", "etc/chainflip/sisyphos.chainspec.json", "644"],
 ]
 
 [package.metadata.deb.variants.perseverance]
-maintainer-scripts = "package/perseverance"
+maintainer-scripts = "package/perseverance/"
 assets = [
   ["target/release/chainflip-node", "usr/bin/", "755"],
   ["chainspecs/perseverance.chainspec.raw.json", "etc/chainflip/perseverance.chainspec.json", "644"],
