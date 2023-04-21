@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
-use cf_chains::{address::ForeignChainAddress, btc::BitcoinNetwork, eth::H256, CcmIngressMetadata};
+use cf_chains::{address::ForeignChainAddress, eth::H256, CcmIngressMetadata, ForeignChain};
 use cf_primitives::{AccountRole, Asset, BasisPoints};
 use futures::{FutureExt, Stream};
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
@@ -10,7 +10,6 @@ use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, P
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
 use tracing::error;
-use utilities::{clean_dot_address, clean_eth_address};
 use zeroize::Zeroize;
 
 pub mod primitives {
@@ -364,60 +363,25 @@ pub async fn register_swap_intent(
 	}
 }
 
-/// Get the Bitcoin network selection from the state chain.
-// This function can be factored out once we have refactored "BTC UTXO Management #2991".
-pub async fn get_btc_network(
-	state_chain_settings: &settings::StateChain,
-) -> Result<BitcoinNetwork> {
-	task_scope(|scope| {
-		async {
-			let (latest_block_hash, _, state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
-					.await?;
-
-			state_chain_client
-				.storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>(
-					latest_block_hash,
-				)
-				.await
-				.map_err(|_| anyhow!("Failed to get Bitcoin Network Selection"))
-		}
-		.boxed()
-	})
-	.await
-}
-
-/// Sanitize the given egress address and turn it into a ForeignChainAddress of the given asset.
+/// Sanitize the given address (hex or base58) and turn it into a ForeignChainAddress of the given
+/// chain.
 pub async fn clean_foreign_chain_address(
-	asset: Asset,
-	egress_address: &str,
-	state_chain_settings: &settings::StateChain,
+	chain: ForeignChain,
+	address: &str,
 ) -> Result<ForeignChainAddress> {
-	use base58::FromBase58;
-	use primitives::{BitcoinAddress, BitcoinAddressData, BitcoinAddressFor};
+	let address = match address.strip_prefix("0x") {
+		Some(address_stripped) => address_stripped,
+		None => address,
+	};
 
-	match asset {
-		Asset::Eth => clean_eth_address(egress_address)
-			.map(ForeignChainAddress::from)
-			.map_err(|e| anyhow!("Invalid Ethereum egress address: {e}")),
-		Asset::Dot => clean_dot_address(egress_address)
-			.map(ForeignChainAddress::from)
-			.map_err(|e| anyhow!("Invalid Polkadot egress address: {e}")),
-		Asset::Btc => {
-			let address: BitcoinAddress = egress_address
-				.from_base58()
-				.map_err(|_| "Invalid base58 Bitcoin address")
-				.and_then(|a| a.try_into().map_err(|_| "Invalid length"))
-				.map_err(|e| anyhow!("Invalid egress address: {e}"))?;
+	let address_bytes = match chain {
+		ForeignChain::Ethereum | ForeignChain::Polkadot =>
+			hex::decode(address).map_err(|e| anyhow!("Invalid hex address: {e}")),
+		ForeignChain::Bitcoin => base58::FromBase58::from_base58(address)
+			.map_err(|e| anyhow!("Invalid base58 address: {e:?}")),
+	}?;
 
-			let address_data = BitcoinAddressData {
-				address_for: BitcoinAddressFor::Egress(address),
-				network: get_btc_network(state_chain_settings).await?,
-			};
-			Ok(ForeignChainAddress::from(address_data))
-		},
-		_ => return Err(anyhow!("{asset:?} not supported")),
-	}
+	ForeignChainAddress::from_chain_bytes(chain, address_bytes).map_err(anyhow::Error::msg)
 }
 
 #[derive(Debug, Zeroize)]

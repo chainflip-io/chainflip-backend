@@ -64,9 +64,8 @@ pub async fn swap_intent(
 	params: settings::SwapIntentParams,
 ) -> Result<()> {
 	let egress_address = chainflip_api::clean_foreign_chain_address(
-		params.egress_asset,
+		params.egress_asset.into(),
 		&params.egress_address,
-		state_chain_settings,
 	)
 	.await?;
 
