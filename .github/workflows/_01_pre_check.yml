@@ -22,6 +22,7 @@ jobs:
       - name: Check Format
         run: cargo fmt --all -- --check
       - name: cancelling
+        if: failure()
         uses: andymckay/cancel-action@0.3
 
   cargo-clippy:
@@ -46,4 +47,5 @@ jobs:
       - name: Check Linting
         run: cargo cf-clippy-ci
       - name: cancelling
+        if: failure()
         uses: andymckay/cancel-action@0.3
