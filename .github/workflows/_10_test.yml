@@ -65,8 +65,10 @@ jobs:
   coverage-2:
     runs-on: [hetzner]
     container:
-      image: xd009642/tarpaulin:develop-nightly
-      options: --security-opt seccomp=unconfined
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -76,8 +78,8 @@ jobs:
           tar -xvf sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz
           mv sccache-${SCCACHE_VERSION}-x86_64-unknown-linux-musl/sccache /usr/local/bin
           sccache --show-stats
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Install tarpauline
+        run: cargo install cargo-tarpaulin
       - name: Generate code coverage
         run: cargo +nightly tarpaulin --verbose --features runtime-benchmarks,slow-tests --workspace --timeout 120 --out Xml
       - name: Upload coverage to Codecov
