@@ -46,8 +46,8 @@ pub trait Rpc {
 		amount: Liquidity,
 	) -> Result<String, Error>;
 
-	#[method(name = "tokenBalances")]
-	async fn token_balances(&self) -> Result<String, Error>;
+	#[method(name = "assetBalances")]
+	async fn asset_balances(&self) -> Result<String, Error>;
 
 	#[method(name = "getRangeOrders")]
 	async fn get_range_orders(&self) -> Result<String, Error>;
@@ -99,7 +99,7 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	/// Returns a list of all assets and their free balance in json format
-	async fn token_balances(&self) -> Result<String, Error> {
+	async fn asset_balances(&self) -> Result<String, Error> {
 		lp::get_balances(&self.state_chain_settings)
 			.await
 			.map(|balances| {
