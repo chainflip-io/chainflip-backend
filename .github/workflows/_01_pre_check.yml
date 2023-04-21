@@ -27,9 +27,6 @@ jobs:
 
   cargo-clippy:
     runs-on: [hetzner]
-    concurrency:
-      group: ${{ github.ref }}-cargo-clippy
-      cancel-in-progress: true
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
       credentials:

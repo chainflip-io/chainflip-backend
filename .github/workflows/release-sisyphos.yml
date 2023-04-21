@@ -3,7 +3,9 @@ on:
   push:
     branches:
       - 'release/*'
-
+concurrency:
+  group: ${{ github.ref }}-release-development
+  cancel-in-progress: true
 jobs:
   pre-check:
     uses: ./.github/workflows/_01_pre_check.yml
