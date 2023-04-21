@@ -23,8 +23,6 @@ jobs:
     needs: [build]
     uses: ./.github/workflows/_25_post_check.yml
     secrets: inherit
-    with:
-      simple_bouncer: true
   publish:
     needs: [post-check]
     uses: ./.github/workflows/_30_publish.yml
