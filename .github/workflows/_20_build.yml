@@ -15,7 +15,7 @@ env:
   SCCACHE_CACHE_SIZE: 32G
   SCCACHE_VERSION: v0.4.1
   SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
-  COMMIT_HASH: ${{ github.event.inputs.commit_hash }} # This is used at build time  to add to the start logs of the node and the engine
+  COMMIT_HASH: ${{ inputs.commit_hash }} # This is used at build time  to add to the start logs of the node and the engine
 
 jobs:
   compile:
