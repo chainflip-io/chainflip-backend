@@ -197,6 +197,51 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 	}
 }
 
+#[ignore = "Only works if V2 is enabled (by setting CURRENT_PROTOCOL_VERSION = 2)"]
+#[tokio::test]
+async fn should_sign_with_different_keys() {
+	// The logic for multiple payloads/keys is the same for all crypto
+	// schemes, so we only need to test one of them:
+	type C = EthSigning;
+	type Point = <C as CryptoScheme>::Point;
+
+	let mut rng = Rng::from_seed([1; 32]);
+	let account_ids = BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned());
+
+	// 1. Generate two different keys for the same set of validators.
+	let (key_id_1, key_data_1) = generate_key_data::<C>(account_ids.clone(), &mut rng);
+	let (key_id_2, key_data_2) = generate_key_data::<C>(account_ids.clone(), &mut rng);
+
+	// Ensure we don't accidentally generate the same key (e.g. by using the same seed)
+	assert_ne!(key_id_1, key_id_2);
+
+	let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
+		new_nodes(account_ids),
+		DEFAULT_SIGNING_CEREMONY_ID,
+		vec![
+			PayloadAndKeyData::new(C::signing_payload_for_test(), key_id_1.clone(), key_data_1),
+			PayloadAndKeyData::new(C::signing_payload_for_test(), key_id_2.clone(), key_data_2),
+		],
+		rng,
+	);
+
+	let messages = signing_ceremony.request().await;
+	let messages = run_stages!(
+		signing_ceremony,
+		messages,
+		signing_data::VerifyComm2<Point>,
+		signing_data::LocalSig3<Point>,
+		signing_data::VerifyLocalSig4<Point>
+	);
+	signing_ceremony.distribute_messages(messages).await;
+
+	let signatures: Vec<_> = signing_ceremony.complete().await.into_iter().take(2).collect();
+
+	// Signatures should be correct w.r.t. corresponding keys:
+	assert!(C::verify_signature(&signatures[0], &key_id_1, &C::signing_payload_for_test()).is_ok());
+	assert!(C::verify_signature(&signatures[1], &key_id_2, &C::signing_payload_for_test()).is_ok());
+}
+
 #[tokio::test]
 async fn should_sign_with_all_parties_eth() {
 	should_sign_with_all_parties::<EthSigning>().await;
