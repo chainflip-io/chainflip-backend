@@ -16,3 +16,5 @@ jobs:
         run: |
           COMMIT_HASH=$(git rev-parse --verify HEAD)
           echo "commit_hash=$COMMIT_HASH" >> $GITHUB_OUTPUT
+          echo "GitHub commit hash: $GITHUB_SHA"
+          echo "Our commit hash: $COMMIT_HASH"
