@@ -34,7 +34,7 @@ use chainflip_engine::state_chain_observer::client::{
 	storage_api::StorageApi,
 	StateChainClient,
 };
-use utilities::task_scope::task_scope;
+use utilities::{clean_dot_address, clean_eth_address, task_scope::task_scope};
 
 #[async_trait]
 trait AuctionPhaseApi {
@@ -365,23 +365,17 @@ pub async fn register_swap_intent(
 
 /// Sanitize the given address (hex or base58) and turn it into a ForeignChainAddress of the given
 /// chain.
-pub async fn clean_foreign_chain_address(
+pub fn clean_foreign_chain_address(
 	chain: ForeignChain,
 	address: &str,
 ) -> Result<ForeignChainAddress> {
-	let address = match address.strip_prefix("0x") {
-		Some(address_stripped) => address_stripped,
-		None => address,
-	};
-
-	let address_bytes = match chain {
-		ForeignChain::Ethereum | ForeignChain::Polkadot =>
-			hex::decode(address).map_err(|e| anyhow!("Invalid hex address: {e}")),
-		ForeignChain::Bitcoin => base58::FromBase58::from_base58(address)
-			.map_err(|e| anyhow!("Invalid base58 address: {e:?}")),
-	}?;
-
-	ForeignChainAddress::from_chain_bytes(chain, address_bytes).map_err(anyhow::Error::msg)
+	Ok(match chain {
+		ForeignChain::Ethereum =>
+			ForeignChainAddress::Eth(clean_eth_address(address).map_err(anyhow::Error::msg)?),
+		ForeignChain::Polkadot =>
+			ForeignChainAddress::Dot(clean_dot_address(address).map_err(anyhow::Error::msg)?),
+		ForeignChain::Bitcoin => todo!("Encoded address changes will make this easier"),
+	})
 }
 
 #[derive(Debug, Zeroize)]

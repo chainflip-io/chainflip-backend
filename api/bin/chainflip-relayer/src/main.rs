@@ -1,9 +1,7 @@
 use anyhow::anyhow;
 use chainflip_api::{
-	self,
-	primitives::{
-		AccountRole, Asset, BasisPoints, CcmIngressMetadata, ForeignChain, ForeignChainAddress,
-	},
+	self, clean_foreign_chain_address,
+	primitives::{AccountRole, Asset, BasisPoints, CcmIngressMetadata},
 	settings::StateChain,
 };
 use clap::Parser;
@@ -55,20 +53,11 @@ impl RpcServer for RpcServerImpl {
 		relayer_commission_bps: BasisPoints,
 		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<String, Error> {
-		let clean_egress_address = match ForeignChain::from(egress_asset) {
-			ForeignChain::Ethereum => ForeignChainAddress::Eth(
-				utilities::clean_eth_address(&egress_address).map_err(|e| anyhow!(e))?,
-			),
-			ForeignChain::Polkadot => ForeignChainAddress::Dot(
-				utilities::clean_dot_address(&egress_address).map_err(|e| anyhow!(e))?,
-			),
-			ForeignChain::Bitcoin => todo!("Bitcoin address cleaning not implemented yet."),
-		};
 		Ok(chainflip_api::register_swap_intent(
 			&self.state_chain_settings,
 			ingress_asset,
 			egress_asset,
-			clean_egress_address,
+			clean_foreign_chain_address(egress_asset.into(), &egress_address)?,
 			relayer_commission_bps,
 			message_metadata,
 		)

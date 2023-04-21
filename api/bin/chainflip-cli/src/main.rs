@@ -63,17 +63,14 @@ pub async fn swap_intent(
 	state_chain_settings: &settings::StateChain,
 	params: settings::SwapIntentParams,
 ) -> Result<()> {
-	let egress_address = chainflip_api::clean_foreign_chain_address(
-		params.egress_asset.into(),
-		&params.egress_address,
-	)
-	.await?;
-
 	let address = api::register_swap_intent(
 		state_chain_settings,
 		params.ingress_asset,
 		params.egress_asset,
-		egress_address,
+		chainflip_api::clean_foreign_chain_address(
+			params.egress_asset.into(),
+			&params.egress_address,
+		)?,
 		params.relayer_commission,
 		None,
 	)
