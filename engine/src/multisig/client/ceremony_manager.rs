@@ -125,10 +125,11 @@ pub struct PreparedRequest<C: CeremonyTrait> {
 // Checks if all keys have the same parameters (including validator indices mapping), which
 // should be the case if they have been generated for the same set of validators
 fn are_key_parameters_same<Crypto: CryptoScheme>(keys: &[KeygenResultInfo<Crypto>]) -> bool {
-	let mut keys = keys.iter();
-	let first = keys.next().expect("must have at least one key");
+	let mut keys_iter = keys.iter();
+	let first = keys_iter.next().expect("must have at least one key");
 
-	keys.all(|key| key.params == first.params && key.validator_mapping == first.validator_mapping)
+	keys_iter
+		.all(|key| key.params == first.params && key.validator_mapping == first.validator_mapping)
 }
 
 // Initial checks and setup before sending the request to the `CeremonyRunner`

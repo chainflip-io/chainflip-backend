@@ -24,7 +24,7 @@ pub use signing_data::{gen_signing_data_stage1, gen_signing_data_stage2, gen_sig
 
 pub use signing_detail::get_lagrange_coeff;
 
-/// Payload and the key that should be usedto sign over the payload
+/// Payload and the key that should be used to sign over the payload
 #[derive(Clone)]
 pub struct PayloadAndKey<C: CryptoScheme> {
 	pub payload: C::SigningPayload,

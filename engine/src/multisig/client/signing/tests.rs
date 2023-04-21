@@ -7,7 +7,8 @@ use crate::multisig::{
 		common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
 		helpers::{
 			gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes, new_signing_ceremony,
-			run_stages, SigningCeremonyRunner, ACCOUNT_IDS, DEFAULT_SIGNING_CEREMONY_ID,
+			run_stages, PayloadAndKeyData, SigningCeremonyRunner, ACCOUNT_IDS,
+			DEFAULT_SIGNING_CEREMONY_ID,
 		},
 		keygen::generate_key_data,
 		signing::signing_data,
@@ -101,12 +102,15 @@ async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayl
 	let (key_id, key_data) =
 		generate_key_data::<C>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()), &mut rng);
 
+	let payloads_and_key = payloads
+		.iter()
+		.map(|payload| PayloadAndKeyData::new(payload.clone(), key_id.clone(), key_data.clone()))
+		.collect();
+
 	let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
 		new_nodes(ACCOUNT_IDS.clone()),
 		DEFAULT_SIGNING_CEREMONY_ID,
-		key_id.clone(),
-		key_data,
-		payloads.to_vec(),
+		payloads_and_key,
 		rng,
 	);
 
@@ -160,20 +164,18 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 	// generated key is incompatible to increase
 	// test coverage
 	for i in 0..10 {
-		let keyseed = [i; 32];
-		let nonceseed = [11 * i; 32];
+		let key_seed = [i; 32];
+		let nonce_seed = [11 * i; 32];
 		let (key_id, key_data) = generate_key_data::<C>(
 			BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
-			&mut Rng::from_seed(keyseed),
+			&mut Rng::from_seed(key_seed),
 		);
 
 		let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
 			new_nodes(ACCOUNT_IDS.clone()),
 			DEFAULT_SIGNING_CEREMONY_ID,
-			key_id.clone(),
-			key_data,
-			vec![C::signing_payload_for_test()],
-			Rng::from_seed(nonceseed),
+			vec![PayloadAndKeyData::new(C::signing_payload_for_test(), key_id.clone(), key_data)],
+			Rng::from_seed(nonce_seed),
 		);
 
 		let messages = signing_ceremony.request().await;
