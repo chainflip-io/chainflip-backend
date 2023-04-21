@@ -38,6 +38,9 @@ jobs:
 
   coverage:
     runs-on: [hetzner]
+    concurrency:
+      group: ${{ github.ref }}-test
+      cancel-in-progress: true
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
       credentials:
@@ -64,8 +67,12 @@ jobs:
           fail_ci_if_error: false
   coverage-2:
     runs-on: [hetzner]
+    concurrency:
+      group: ${{ github.ref }}-test
+      cancel-in-progress: true
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
+      options: --security-opt seccomp=unconfined
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
