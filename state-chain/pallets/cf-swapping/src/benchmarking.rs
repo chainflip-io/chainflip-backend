@@ -117,18 +117,25 @@ benchmarks! {
 
 	on_initialize {
 		let a in 1..100;
-		let origin = T::EnsureWitnessed::successful_origin();
-		for i in 1..a {
-			let call = Call::<T>::schedule_swap_by_witnesser{
-				from: Asset::Usdc,
-				to: Asset::Eth,
-				ingress_amount: 1_000,
-				egress_address: ForeignChainAddress::Eth(Default::default())
+		let caller: T::AccountId = whitelisted_caller();
+		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Relayer);
+		let origin = RawOrigin::Signed(caller);
+		for i in 0..a {
+			let call = Call::<T>::register_swap_intent{
+				ingress_asset: Asset::Usdc,
+				egress_asset: Asset::Eth,
+				egress_address: ForeignChainAddress::Eth(Default::default()),
+				relayer_commission_bps: Default::default(),
+				message_metadata: None,
 			};
-			call.dispatch_bypass_filter(origin.clone())?;
+			call.dispatch_bypass_filter(origin.clone().into())?;
 		}
+		let expiry = SwapTTL::<T>::get() + frame_system::Pallet::<T>::current_block_number();
+		assert!(!SwapIntentExpiries::<T>::get(expiry).is_empty());
 	}: {
-		Pallet::<T>::on_initialize(T::BlockNumber::from(1u32));
+		Pallet::<T>::on_initialize(expiry);
+	} verify {
+		assert!(SwapIntentExpiries::<T>::get(expiry).is_empty());
 	}
 
 	set_swap_ttl {

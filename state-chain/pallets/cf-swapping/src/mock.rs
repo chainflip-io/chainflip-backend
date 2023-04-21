@@ -1,13 +1,15 @@
 use crate::{self as pallet_cf_swapping, WeightInfo};
 use cf_chains::AnyChain;
-use cf_primitives::{Asset, AssetAmount};
+use cf_primitives::{AccountRole, Asset, AssetAmount};
 use cf_traits::{
 	mocks::{
-		egress_handler::MockEgressHandler, ensure_origin_mock::NeverFailingOriginCheck,
-		ingress_handler::MockIngressHandler, system_state_info::MockSystemStateInfo,
+		bid_info::MockBidInfo, egress_handler::MockEgressHandler,
+		ensure_origin_mock::NeverFailingOriginCheck, ingress_handler::MockIngressHandler,
+		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
 	},
 	Chainflip, SwappingApi,
 };
+use frame_benchmarking::whitelisted_caller;
 use frame_support::{dispatch::DispatchError, parameter_types, weights::Weight};
 use frame_system as system;
 use sp_core::H256;
@@ -29,6 +31,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
+		AccountRoles: pallet_cf_account_roles,
 		Swapping: pallet_cf_swapping,
 	}
 );
@@ -63,6 +66,14 @@ impl system::Config for Test {
 	type SS58Prefix = SS58Prefix;
 	type OnSetCode = ();
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
+}
+
+impl pallet_cf_account_roles::Config for Test {
+	type RuntimeEvent = RuntimeEvent;
+	type BidInfo = MockBidInfo;
+	type StakeInfo = MockStakingInfo<Self>;
+	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type WeightInfo = ();
 }
 
 pub struct MockSwappingApi;
@@ -125,7 +136,7 @@ parameter_types! {
 
 impl pallet_cf_swapping::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type AccountRoleRegistry = ();
+	type AccountRoleRegistry = AccountRoles;
 	type IngressHandler = MockIngressHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;
 	type WeightInfo = MockWeightInfo;
@@ -137,8 +148,16 @@ pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config =
-		GenesisConfig { system: Default::default(), swapping: { SwappingConfig { swap_ttl: 5 } } };
+	let config = GenesisConfig {
+		system: Default::default(),
+		swapping: SwappingConfig { swap_ttl: 5 },
+		account_roles: AccountRolesConfig {
+			initial_account_roles: vec![
+				(whitelisted_caller(), AccountRole::None),
+				(ALICE, AccountRole::Relayer),
+			],
+		},
+	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 

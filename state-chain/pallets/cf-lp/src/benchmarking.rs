@@ -13,6 +13,7 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::LiquidityProvider);
 	}: _(RawOrigin::Signed(caller), Asset::Eth)
+
 	withdraw_asset {
 		let caller: T::AccountId = whitelisted_caller();
 		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::LiquidityProvider);
@@ -25,6 +26,7 @@ benchmarks! {
 	verify {
 		assert_eq!(FreeBalances::<T>::get(&caller, Asset::Eth), Some(0));
 	}
+
 	register_lp_account {
 		let caller: T::AccountId = whitelisted_caller();
 		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::None);
@@ -37,11 +39,15 @@ benchmarks! {
 		let a in 1..100;
 		let caller: T::AccountId = whitelisted_caller();
 		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::LiquidityProvider);
-		for i in 1..a {
+		for i in 0..a {
 			assert_ok!(Pallet::<T>::request_deposit_address(RawOrigin::Signed(caller.clone()).into(), Asset::Eth));
 		}
+		let expiry = LpTTL::<T>::get() + frame_system::Pallet::<T>::current_block_number();
+		assert!(!IngressIntentExpiries::<T>::get(expiry).is_empty());
 	}: {
-		Pallet::<T>::on_initialize(T::BlockNumber::from(1u32));
+		Pallet::<T>::on_initialize(expiry);
+	} verify {
+		assert!(IngressIntentExpiries::<T>::get(expiry).is_empty());
 	}
 
 	set_lp_ttl {
