@@ -21,6 +21,8 @@ jobs:
         uses: actions/checkout@v3
       - name: Check Format
         run: cargo fmt --all -- --check
+      - name: cancelling
+        uses: andymckay/cancel-action@0.3
 
   cargo-clippy:
     runs-on: [hetzner]
@@ -43,3 +45,5 @@ jobs:
           sccache --show-stats
       - name: Check Linting
         run: cargo cf-clippy-ci
+      - name: cancelling
+        uses: andymckay/cancel-action@0.3

@@ -11,6 +11,7 @@ jobs:
     uses: ./.github/workflows/_00_init.yml
   pre-check:
     uses: ./.github/workflows/_01_pre_check.yml
+    secrets: inherit
   test:
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit
