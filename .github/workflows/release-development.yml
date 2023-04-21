@@ -13,21 +13,18 @@ jobs:
   test:
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit
-    with:
-      coverage: false
   build:
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
       network: development
   post-check:
-    needs: [build,test]
+    needs: [build]
     uses: ./.github/workflows/_25_post_check.yml
     secrets: inherit
     with:
       simple_bouncer: true
   publish:
-    name: Publish Packages to APT repo
     needs: [post-check]
     uses: ./.github/workflows/_30_publish.yml
     with:

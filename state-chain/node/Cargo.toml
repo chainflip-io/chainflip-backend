@@ -101,7 +101,6 @@ name = "chainflip-node"
 priority = "required"
 section = "rust"
 systemd-units = {enable = false}
-pre-depends = "logrotate"
 [package.metadata.deb.variants.development]
 maintainer-scripts = "package/development"
 assets = [

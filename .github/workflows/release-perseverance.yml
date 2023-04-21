@@ -1,4 +1,4 @@
-name: Release Chainflip Sisyphos
+name: Release Chainflip Perseverance
 on:
   push:
     tags:
