@@ -15,12 +15,11 @@ priority = "required"
 section = "rust"
 maintainer-scripts = "package/"
 systemd-units = { enable = false }
-pre-depends = "curl,logrotate"
+pre-depends = "curl"
 assets = [
   ["target/release/chainflip-engine", "usr/bin/", "755"],
   ["start-engine.sh", "etc/chainflip/", "755"],
-  ["logrotate.conf", "etc/logrotate.d/chainflip-engine", "644"]
-  ]
+]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
