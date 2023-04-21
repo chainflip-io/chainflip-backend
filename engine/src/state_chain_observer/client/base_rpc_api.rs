@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 
 use anyhow::Context;
+use cf_amm::{common::Tick, range_orders::Liquidity};
+use cf_primitives::Asset;
 use jsonrpsee::{
 	core::{
 		client::{ClientT, SubscriptionClientT},
@@ -12,7 +14,7 @@ use sp_core::{
 	storage::{StorageData, StorageKey},
 	Bytes,
 };
-use sp_runtime::traits::BlakeTwo256;
+use sp_runtime::{traits::BlakeTwo256, AccountId32};
 use sp_version::RuntimeVersion;
 use state_chain_runtime::SignedBlock;
 
@@ -109,6 +111,13 @@ pub trait BaseRpcApi {
 	>;
 
 	async fn runtime_version(&self) -> RpcResult<RuntimeVersion>;
+
+	async fn pool_minted_positions(
+		&self,
+		lp: AccountId32,
+		asset: Asset,
+		at: state_chain_runtime::Hash,
+	) -> RpcResult<Vec<(Tick, Tick, Liquidity)>>;
 }
 
 pub struct BaseRpcClient<RawRpcClient> {
@@ -197,5 +206,16 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 
 	async fn runtime_version(&self) -> RpcResult<RuntimeVersion> {
 		self.raw_rpc_client.runtime_version(None).await
+	}
+
+	async fn pool_minted_positions(
+		&self,
+		_lp: AccountId32,
+		_asset: Asset,
+		_at: state_chain_runtime::Hash,
+	) -> RpcResult<Vec<(Tick, Tick, Liquidity)>> {
+		// TODO: Add function that gets minted range and limit orders #3082
+		//self.raw_rpc_client.cf_pool_minted_positions(lp, asset, Some(at)).await
+		Err(jsonrpsee::core::Error::Custom("Not implemented".to_string()))
 	}
 }

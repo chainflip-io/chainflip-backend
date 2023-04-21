@@ -3,6 +3,7 @@ members = [
   'api/lib',
   'api/bin/chainflip-cli',
   'api/bin/chainflip-relayer',
+  'api/bin/chainflip-lp',
   'state-chain/chains',
   'state-chain/node',
   'state-chain/amm',
