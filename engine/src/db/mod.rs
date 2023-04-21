@@ -71,7 +71,7 @@ mod tests {
 
 		// Generate a key and save it under epoch 0 (which is what migration
 		// code does for old keys)
-		
+
 		let (key_bytes, key_data) = generate_key_data::<EthSigning>(
 			account_ids.iter().cloned().collect(),
 			&mut Rng::from_entropy(),
