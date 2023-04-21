@@ -8,6 +8,9 @@ env:
   SCCACHE_VERSION: v0.4.1
   SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
 jobs:
+  test:
+    uses: ./.github/workflows/_10_test.yml
+    secrets: inherit
   build:
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit

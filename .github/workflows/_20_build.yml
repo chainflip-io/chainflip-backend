@@ -22,9 +22,6 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    env:
-      COMMIT_HASH: ${{ needs.set-variables.outputs.commit_hash }}
-      BRANCH_NAME: ${{ needs.set-variables.outputs.branch_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -79,7 +76,7 @@ jobs:
         run: |
           echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
 
-      - name: Build global packages packages
+      - name: Build global packages
         run: |
           cargo deb --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ inputs.network }}
           cargo deb --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.get-date.outputs.date }}"  
@@ -102,6 +99,10 @@ jobs:
         run: |
           git diff --exit-code
           git diff --cached --exit-code
+
+      - name: Cancelling entire workflow
+        if: failure()
+        uses: andymckay/cancel-action@0.3
 
 #  build-runtime:
 #    runs-on: [hetzner]

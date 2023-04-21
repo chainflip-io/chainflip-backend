@@ -21,9 +21,6 @@ jobs:
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    env:
-      COMMIT_HASH: ${{ needs.set-variables.outputs.commit_hash }}
-      BRANCH_NAME: ${{ needs.set-variables.outputs.branch_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -39,6 +36,10 @@ jobs:
         run: |
           cargo cf-test-ci --locked
           sccache --show-stats
+
+      - name: Cancelling entire workflow
+        if: failure()
+        uses: andymckay/cancel-action@0.3
 
   coverage:
     if: inputs.coverage
@@ -74,3 +75,7 @@ jobs:
           token: ${{ secrets.CF_BACKEND_CODECOV_TOKEN }} # not required for public repos
           files: lcov.info
           fail_ci_if_error: false
+
+      - name: Cancelling entire workflow
+        if: failure()
+        uses: andymckay/cancel-action@0.3

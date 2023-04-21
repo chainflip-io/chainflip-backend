@@ -7,8 +7,6 @@ on:
       - 'release/*'
 
 jobs:
-  init:
-    uses: ./.github/workflows/_00_init.yml
   pre-check:
     uses: ./.github/workflows/_01_pre_check.yml
     secrets: inherit

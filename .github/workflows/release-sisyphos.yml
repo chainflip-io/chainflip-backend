@@ -3,11 +3,8 @@ on:
   push:
     branches:
       - 'release/*'
-      - chore/ci-refactor
 
 jobs:
-  init:
-    uses: ./.github/workflows/_00_init.yml
   pre-check:
     uses: ./.github/workflows/_01_pre_check.yml
     secrets: inherit
@@ -26,7 +23,6 @@ jobs:
     uses: ./.github/workflows/_25_post_check.yml
     secrets: inherit
   publish:
-    name: Publish Packages to APT repo
     needs: [post-check]
     uses: ./.github/workflows/_30_publish.yml
     with:
