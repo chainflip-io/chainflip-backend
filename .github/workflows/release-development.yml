@@ -25,7 +25,7 @@ jobs:
     needs: [build,test]
     uses: ./.github/workflows/_25_post_check.yml
     secrets: inherit
-  release-development:
+  publish:
     name: Publish Packages to APT repo
     needs: [post-check]
     uses: ./.github/workflows/_30_publish.yml
