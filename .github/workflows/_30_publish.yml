@@ -6,10 +6,6 @@ on:
         description: Release version
         required: true
         type: string
-      artifacts:
-        description: Artifacts to publish
-        required: true
-        type: string
       environment:
         description: prod or dev repo
         required: true
@@ -38,7 +34,7 @@ jobs:
       - name: Download packages
         uses: actions/download-artifact@v3
         with:
-          name: ${{ inputs.artifacts }}
+          name: chainflip-backend-packages
           path: packages
 
       - name: Get commit SHA, distribution codename
