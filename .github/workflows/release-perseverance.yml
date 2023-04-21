@@ -6,6 +6,10 @@ on:
 concurrency:
   group: ${{ github.ref }}-release-development
   cancel-in-progress: true
+
+env:
+  COMMIT_HASH: ${{ github.sha }}
+
 jobs:
   pre-check:
     uses: ./.github/workflows/_01_pre_check.yml

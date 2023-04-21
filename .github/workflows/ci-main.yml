@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+env:
+  COMMIT_HASH: ${{ github.sha }}
+
 jobs:
   pre-check:
     uses: ./.github/workflows/_01_pre_check.yml

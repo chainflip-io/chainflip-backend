@@ -6,6 +6,10 @@ on:
 concurrency:
   group: ${{ github.ref }}-release-development
   cancel-in-progress: true
+
+env:
+  COMMIT_HASH: ${{ github.sha }}
+
 jobs:
   pre-check:
     uses: ./.github/workflows/_01_pre_check.yml
@@ -30,5 +34,5 @@ jobs:
     with:
       version: "sisyphos/"
       environment: dev
-      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
+      commit_hash: ${{ github.sha }}
     secrets: inherit
