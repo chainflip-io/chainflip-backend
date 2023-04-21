@@ -87,7 +87,7 @@ jobs:
 
       - name: Run HeuteLeiderNicht.exe
         id: heuteleidernicht
-        if: ! inputs.simple_bouncer
+        if: ${{ ! inputs.simple_bouncer }}
         working-directory: bouncer
         env:
           POLKADOT_ENDPOINT: ws://polkadot:9944
