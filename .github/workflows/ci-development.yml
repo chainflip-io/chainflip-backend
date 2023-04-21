@@ -9,6 +9,9 @@ concurrency:
   group: ${{ github.ref }}-release-development
   cancel-in-progress: true
 jobs:
+  init:
+    uses: ./.github/workflows/_00_init.yml
+    secrets: inherit
   pre-check:
     uses: ./.github/workflows/_01_pre_check.yml
     secrets: inherit
@@ -27,10 +30,10 @@ jobs:
     with:
       simple_bouncer: true
   publish:
-    needs: [post-check]
+    needs: [post-check, init]
     uses: ./.github/workflows/_30_publish.yml
     with:
-      version: ci/${{ needs.set-variables.outputs.commit_hash }}/
+      version: ci/${{ needs.init.outputs.commit_hash }}/
       environment: dev
-      commit_hash: ${{ needs.set-variables.outputs.commit_hash }}
+      commit_hash: ${{ needs.init.outputs.commit_hash }}
     secrets: inherit
