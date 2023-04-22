@@ -9,6 +9,7 @@ use cf_traits::{
 	},
 	AddressDerivationApi,
 };
+use frame_benchmarking::whitelisted_caller;
 use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
 use sp_core::H256;
@@ -123,8 +124,11 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			initial_account_roles: vec![
 				(LP_ACCOUNT.into(), AccountRole::LiquidityProvider),
 				(NON_LP_ACCOUNT.into(), AccountRole::Validator),
+				// For benchmarking test
+				(whitelisted_caller(), AccountRole::None),
 			],
 		},
+		liquidity_provider: Default::default(),
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

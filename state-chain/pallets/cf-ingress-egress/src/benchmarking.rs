@@ -8,15 +8,6 @@ use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_support::traits::Hooks;
 
 benchmarks_instance_pallet! {
-	on_initialize {
-		let n in 1u32 .. 254u32;
-		let origin = T::EnsureGovernance::successful_origin();
-		IntentExpiries::<T, I>::insert(T::BlockNumber::from(1_u32), (0..n as u64).map(|i| (i, TargetChainAccount::<T, I>::benchmark_value())).collect::<Vec<_>>());
-		assert!(!IntentExpiries::<T, I>::get(T::BlockNumber::from(1_u32)).expect("to be in the storage").is_empty());
-	} : { let _ = Pallet::<T, I>::on_initialize(T::BlockNumber::from(1_u32)); }
-	verify {
-		assert!(IntentExpiries::<T, I>::get(T::BlockNumber::from(1_u32)).is_none());
-	}
 
 	on_initialize_has_no_expired {
 		let origin = T::EnsureGovernance::successful_origin();

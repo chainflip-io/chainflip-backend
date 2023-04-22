@@ -5635,6 +5635,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -5728,6 +5729,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log",
+ "pallet-cf-account-roles",
  "parity-scale-codec",
  "scale-info",
  "sp-arithmetic 6.0.0",
