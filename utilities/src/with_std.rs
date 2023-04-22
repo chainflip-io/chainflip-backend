@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use core::{fmt, time::Duration};
 use futures::{stream, Stream};
 #[doc(hidden)]
@@ -310,8 +311,7 @@ pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow
 	use anyhow::Context;
 
 	std::fs::read_to_string(file)
-		.map_err(anyhow::Error::new)
-		.with_context(|| format!("Failed to read {} file at {}", context, file.display()))
+		.map_err(|e| anyhow!("Failed to read {context} file at {}: {e}", file.display()))
 		.and_then(|string| {
 			let mut str = string.as_str();
 			str = str.trim();

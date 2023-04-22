@@ -1,0 +1,101 @@
+on:
+  workflow_call:
+    inputs:
+      network:
+        description: Network being released
+        required: true
+        default: development
+        type: string
+      commit_hash:
+        description: Commit hash to be released
+        required: true
+        type: string
+
+env:
+  SCCACHE_CACHE_SIZE: 32G
+  SCCACHE_VERSION: v0.4.1
+  SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
+  COMMIT_HASH: ${{ inputs.commit_hash }} # This is used at build time  to add to the start logs of the node and the engine
+
+jobs:
+  compile:
+    runs-on: [hetzner]
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup sccache
+        run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
+
+      - name: cargo cf-build-ci
+        run: |
+          cargo cf-build-ci --locked
+          sccache --show-stats
+
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-backend-bin
+          path: |
+            ./target/release/chainflip-node
+            ./target/release/chainflip-engine
+            ./target/release/chainflip-cli
+            ./target/release/generate-genesis-keys
+            ./target/release/chainflip-relayer
+            ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
+
+  packages:
+    runs-on: [hetzner]
+    needs: [compile]
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Download binaries
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-backend-bin
+          path: ./target/release
+
+      - name: Get date
+        id: get-date
+        run: |
+          echo "date=$(date +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
+
+      - name: Build global packages
+        run: |
+          cargo deb -v --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ inputs.network }}
+          cargo deb -v --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.get-date.outputs.date }}"
+          cargo deb -v --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.get-date.outputs.date }}"
+          cargo deb -v --no-build --no-strip -p chainflip-relayer --deb-revision "${{ steps.get-date.outputs.date }}"
+
+      - name: Build development packages
+        if: inputs.network != 'perseverance'
+        run: |
+          cargo deb -v --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.get-date.outputs.date }}"
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-backend-packages
+          path: |
+            target/debian/*.deb
+
+      - name: Check if building changes any files
+        run: |
+          git diff --exit-code
+          git diff --cached --exit-code
+
+      - name: Cancelling entire workflow
+        if: failure()
+        uses: andymckay/cancel-action@0.3

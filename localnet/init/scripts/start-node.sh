@@ -13,4 +13,6 @@ $binary_location/chainflip-node --chain=dev \
   --ws-external \
   --rpc-methods=Unsafe \
   --name=bashful \
+  --blocks-pruning=archive \
+  --state-pruning=archive \
   --state-cache-size=0 > /tmp/chainflip/chainflip-node.log 2>&1 &
