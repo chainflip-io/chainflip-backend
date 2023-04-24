@@ -300,16 +300,14 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 		use crate::PolkadotVault;
 		use sp_runtime::{traits::IdentifyAccount, MultiSigner};
 		match query {
-			cf_chains::dot::api::SystemAccounts::Proxy => {
-				match <PolkadotVault as KeyProvider<Polkadot>>::current_epoch_key() {
-					Some(EpochKey { key, .. }) => Some(MultiSigner::Sr25519(key.0).into_account()),
-					_ => None,
-				}
-			},
+			cf_chains::dot::api::SystemAccounts::Proxy =>
+				<PolkadotVault as KeyProvider<Polkadot>>::current_epoch_key()
+					.map(|epoch_key| epoch_key.key),
 			cf_chains::dot::api::SystemAccounts::Vault => Environment::polkadot_vault_account(),
 		}
 	}
 }
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct BtcEnvironment;
 
@@ -333,10 +331,7 @@ impl ChainEnvironment<(), BitcoinNetwork> for BtcEnvironment {
 impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 	fn lookup(_: ()) -> Option<cf_chains::btc::AggKey> {
 		use crate::BitcoinVault;
-		match <BitcoinVault as KeyProvider<Bitcoin>>::current_epoch_key() {
-			Some(EpochKey { key, .. }) => Some(key),
-			_ => None,
-		}
+		<BitcoinVault as KeyProvider<Bitcoin>>::current_epoch_key().map(|epoch_key| epoch_key.key)
 	}
 }
 
