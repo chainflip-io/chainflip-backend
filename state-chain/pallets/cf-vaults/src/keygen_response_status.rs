@@ -1,11 +1,11 @@
-use frame_support::StorageValue;
+use frame_support::{StorageMap, StorageValue};
 
 use super::*;
 
 /// Tracks the current state of the keygen ceremony.
 #[derive(PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, TypeInfo, DebugNoBound)]
-#[scale_info(skip_type_params(T, FailureVoters, I))]
-pub struct KeygenResponseStatus<T: Config<I>, FailureVoters, I: 'static = ()> {
+#[scale_info(skip_type_params(T, SuccessVoters, FailureVoters, I))]
+pub struct KeygenResponseStatus<T: Config<I>, SuccessVoters, FailureVoters, I: 'static = ()> {
 	/// The total number of candidates participating in the keygen ceremony.
 	candidate_count: AuthorityCount,
 	/// The candidates that have yet to reply.
@@ -15,15 +15,16 @@ pub struct KeygenResponseStatus<T: Config<I>, FailureVoters, I: 'static = ()> {
 	/// A map of the number of blame votes that each keygen participant has received.
 	blame_votes: BTreeMap<T::ValidatorId, AuthorityCount>,
 
-	_voters: PhantomData<FailureVoters>,
+	_voters: PhantomData<(SuccessVoters, FailureVoters)>,
 }
 
-impl<T, FailureVoters, I> KeygenResponseStatus<T, FailureVoters, I>
+impl<T, SuccessVoters, FailureVoters, I> KeygenResponseStatus<T, SuccessVoters, FailureVoters, I>
 where
 	T: Config<I>,
 	I: 'static,
+	SuccessVoters: StorageMap<AggKeyFor<T, I>, Vec<T::ValidatorId>>,
 	FailureVoters: StorageValue<Vec<T::ValidatorId>>,
-	<FailureVoters as frame_support::StorageValue<Vec<T::ValidatorId>>>::Query:
+	<FailureVoters as StorageValue<Vec<T::ValidatorId>>>::Query:
 		sp_std::iter::IntoIterator<Item = T::ValidatorId>,
 {
 	pub fn new(candidates: BTreeSet<T::ValidatorId>) -> Self {
@@ -32,7 +33,7 @@ where
 			remaining_candidates: candidates,
 			success_votes: Default::default(),
 			blame_votes: Default::default(),
-			_voters: PhantomData::<FailureVoters>,
+			_voters: PhantomData::<(SuccessVoters, FailureVoters)>,
 		}
 	}
 

@@ -50,7 +50,8 @@ pub type TransactionIdFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>:
 pub type ThresholdSignatureFor<T, I = ()> =
 	<<T as Config<I>>::Chain as ChainCrypto>::ThresholdSignature;
 
-pub type KeygenResponseTracker<T, I> = KeygenResponseStatus<T, KeygenFailureVoters<T, I>, I>;
+pub type KeygenResponseTracker<T, I> =
+	KeygenResponseStatus<T, KeygenSuccessVoters<T, I>, KeygenFailureVoters<T, I>, I>;
 
 /// The current status of a vault rotation.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, EnumVariant)]
