@@ -1,0 +1,42 @@
+on:
+  workflow_call:
+
+env:
+  SCCACHE_CACHE_SIZE: 32G
+  SCCACHE_VERSION: v0.4.1
+  SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
+
+jobs:
+  cargo-fmt:
+    runs-on: [hetzner]
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Check Format
+        run: cargo fmt --all -- --check
+      - name: Cancelling entire workflow
+        if: failure()
+        uses: andymckay/cancel-action@0.3
+
+  cargo-clippy:
+    runs-on: [hetzner]
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup sccache
+        run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
+      - name: Check Linting
+        run: cargo cf-clippy-ci
+      - name: cancelling
+        if: failure()
+        uses: andymckay/cancel-action@0.3

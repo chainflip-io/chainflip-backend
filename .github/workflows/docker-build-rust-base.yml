@@ -1,15 +1,15 @@
-name: Build rust-base Docker image
+name: Build rust-base Docker Image
 on:
   workflow_dispatch:
     inputs:
       nightly_version:
         type: string
-        default: nightly-2022-08-08
+        default: nightly-2022-12-16
         description: Toolchain version you want to build
         required: true
       image_tag:
         type: string
-        default: nightly-2022-08-08
+        default: nightly-2022-12-16
         description: Docker Image Tag
         required: true
 
@@ -58,6 +58,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          file: docker/rust-base.Dockerfile
+          file: ci/docker/rust-base.Dockerfile
           build-args: |
             NIGHTLY=${{ env.NIGHTLY_VERSION }}

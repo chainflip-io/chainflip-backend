@@ -18,6 +18,8 @@ use super::*;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
+use strum_macros::EnumIter;
+
 /// Defines all Assets, and the Chain each asset belongs to.
 /// There's a unique 1:1 relationship between an Asset and a Chain.
 pub mod any {
@@ -40,6 +42,7 @@ pub mod any {
 		Hash,
 		PartialOrd,
 		Ord,
+		EnumIter,
 	)]
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	#[repr(u32)]
@@ -67,6 +70,13 @@ pub mod any {
 				x if x == Self::Btc as u32 => Ok(Self::Btc),
 				_ => Err("Invalid asset id"),
 			}
+		}
+	}
+
+	impl Asset {
+		pub fn all() -> Vec<Self> {
+			use strum::IntoEnumIterator;
+			Self::iter().collect()
 		}
 	}
 

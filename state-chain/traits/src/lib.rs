@@ -674,46 +674,9 @@ pub trait IngressApi<C: Chain> {
 		relayer_id: Self::AccountId,
 		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
-}
 
-impl<T: frame_system::Config> IngressApi<Ethereum> for T {
-	type AccountId = T::AccountId;
-	fn register_liquidity_ingress_intent(
-		_lp_account: T::AccountId,
-		_ingress_asset: assets::eth::Asset,
-	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
-		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
-	}
-	fn register_swap_intent(
-		_ingress_asset: assets::eth::Asset,
-		_egress_asset: Asset,
-		_egress_address: ForeignChainAddress,
-		_relayer_commission_bps: BasisPoints,
-		_relayer_id: T::AccountId,
-		_message_metadata: Option<CcmIngressMetadata>,
-	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
-		Ok((0, ForeignChainAddress::Eth([0u8; 20])))
-	}
-}
-
-impl<T: frame_system::Config> IngressApi<Polkadot> for T {
-	type AccountId = T::AccountId;
-	fn register_liquidity_ingress_intent(
-		_lp_account: T::AccountId,
-		_ingress_asset: assets::dot::Asset,
-	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
-		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
-	}
-	fn register_swap_intent(
-		_ingress_asset: assets::dot::Asset,
-		_egress_asset: Asset,
-		_egress_address: ForeignChainAddress,
-		_relayer_commission_bps: BasisPoints,
-		_relayer_id: T::AccountId,
-		_message_metadata: Option<CcmIngressMetadata>,
-	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
-		Ok((0, ForeignChainAddress::Dot([0u8; 32])))
-	}
+	/// Expires an intent.
+	fn expire_intent(chain: ForeignChain, intent_id: IntentId, address: C::ChainAccount);
 }
 
 /// Generates a deterministic ingress address for some combination of asset, chain and intent id.
@@ -774,12 +737,10 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 		Self::ensure_account_role(origin, AccountRole::Validator)
 	}
 	#[cfg(feature = "runtime-benchmarks")]
-	fn register_account(_account_id: T::AccountId, _role: AccountRole) {}
+	fn register_account(account_id: T::AccountId, role: AccountRole);
 
 	#[cfg(feature = "runtime-benchmarks")]
-	fn get_account_role(_account_id: T::AccountId) -> AccountRole {
-		Default::default()
-	}
+	fn get_account_role(account_id: T::AccountId) -> AccountRole;
 }
 
 /// API that allows other pallets to Egress assets out of the State Chain.
