@@ -10,11 +10,8 @@ use tracing::{debug, info, info_span};
 
 use crate::{
 	multisig::{
-		client::KeygenResultInfo,
-		crypto::{CryptoScheme, CHAIN_TAG_SIZE},
-		eth::EthSigning,
-		polkadot::PolkadotSigning,
-		ChainTag,
+		client::KeygenResultInfo, eth::EthSigning, polkadot::PolkadotSigning, ChainTag,
+		CryptoScheme, CHAIN_TAG_SIZE,
 	},
 	witnesser::checkpointing::WitnessedUntil,
 };
