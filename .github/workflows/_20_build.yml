@@ -135,6 +135,8 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: ghcr.io/${{ github.repository }}/${{ matrix.target }}
+          flavor: |
+            latest=true
           tags: ${{ env.COMMIT_HASH }}
 
       - name: Login to DockerHub
