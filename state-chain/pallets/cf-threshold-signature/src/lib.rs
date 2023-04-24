@@ -662,9 +662,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					ThresholdCeremonyType::KeygenVerification,
 				)
 			} else {
-				let EpochKey { key, epoch_index, key_state } = T::KeyProvider::current_epoch_key();
 				(
-					if key_state.is_available_for_request(request_id) {
+					if let Some(EpochKey { key, epoch_index, .. }) =
+						T::KeyProvider::current_epoch_key().filter(
+							|EpochKey { key_state, .. }| {
+								key_state.is_available_for_request(request_id)
+							},
+						) {
 						if let Some(nominees) =
 							T::ThresholdSignerNomination::threshold_nomination_with_seed(
 								(request_id, attempt_count),

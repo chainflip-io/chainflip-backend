@@ -9,9 +9,9 @@ use cf_primitives::{
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochInfo, EpochKey, EpochTransitionHandler, KeyProvider, KeyState,
-	Slashing, SystemStateManager, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator,
-	VaultStatus, VaultTransitionHandler,
+	CurrentEpochIndex, EpochKey, EpochTransitionHandler, KeyProvider, KeyState, Slashing,
+	SystemStateManager, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus,
+	VaultTransitionHandler,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
@@ -189,12 +189,6 @@ pub struct VaultEpochAndState {
 	pub key_state: KeyState,
 }
 
-impl Default for VaultEpochAndState {
-	fn default() -> Self {
-		Self { epoch_index: GENESIS_EPOCH, key_state: KeyState::Inactive }
-	}
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 
@@ -356,7 +350,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn current_keyholders_epoch)]
 	pub type CurrentVaultEpochAndState<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, VaultEpochAndState, ValueQuery>;
+		StorageValue<_, VaultEpochAndState>;
 
 	/// Vault rotation statuses for the current epoch rotation.
 	#[pallet::storage]
@@ -677,7 +671,10 @@ pub mod pallet {
 		fn build(&self) {
 			if let Some(vault_key) = self.vault_key.clone() {
 				Pallet::<T, I>::set_vault_for_epoch(
-					VaultEpochAndState { epoch_index: GENESIS_EPOCH, key_state: KeyState::Active },
+					VaultEpochAndState {
+						epoch_index: GENESIS_EPOCH,
+						key_state: KeyState::Unlocked,
+					},
 					AggKeyFor::<T, I>::try_from(vault_key)
 						// Note: Can't use expect() here without some type shenanigans, but would
 						// give clearer error messages.
@@ -687,10 +684,7 @@ pub mod pallet {
 					self.deployment_block,
 				);
 			} else {
-				CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
-					epoch_index: GENESIS_EPOCH,
-					key_state: KeyState::Inactive,
-				});
+				log::info!("No genesis vault key configured for {}.", Pallet::<T, I>::name());
 			}
 
 			KeygenResponseTimeout::<T, I>::put(self.keygen_response_timeout);
@@ -714,7 +708,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Self::set_vault_for_epoch(
 			VaultEpochAndState {
 				epoch_index: CurrentEpochIndex::<T>::get().saturating_add(1),
-				key_state: KeyState::Active,
+				key_state: KeyState::Unlocked,
 			},
 			new_public_key,
 			rotated_at_block_number.saturating_add(ChainBlockNumberFor::<T, I>::one()),
@@ -837,8 +831,9 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		if let Some(VaultRotationStatus::<T, I>::KeygenVerificationComplete { new_public_key }) =
 			PendingVaultRotation::<T, I>::get()
 		{
-			let current_vault_epoch_and_state = CurrentVaultEpochAndState::<T, I>::get();
-			if let Some(vault) = Vaults::<T, I>::get(current_vault_epoch_and_state.epoch_index) {
+			if let Some(current_vault_epoch_and_state) = CurrentVaultEpochAndState::<T, I>::get() {
+				let vault = Vaults::<T, I>::get(current_vault_epoch_and_state.epoch_index)
+					.expect("Key must exist if CurrentVaultEpochAndState exists since they get set at the same place: set_next_vault()");
 				if let Ok(rotation_call) =
 					<T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
 						Some(vault.public_key),
@@ -847,7 +842,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 					let (_, threshold_request_id) =
 						T::Broadcaster::threshold_sign_and_broadcast(rotation_call);
 					debug_assert!(
-						matches!(current_vault_epoch_and_state.key_state, KeyState::Active),
+						matches!(current_vault_epoch_and_state.key_state, KeyState::Unlocked),
 						"Current epoch key must be active to activate next key."
 					);
 					CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
@@ -918,14 +913,15 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
-	fn current_epoch_key() -> EpochKey<<T::Chain as ChainCrypto>::AggKey> {
-		let current_vault_epoch_and_state = CurrentVaultEpochAndState::<T, I>::get();
-
-		EpochKey {
-				key: Vaults::<T, I>::get(current_vault_epoch_and_state.epoch_index).expect("Key must exist if CurrentVaultEpochAndState exists since they get set at the same place: set_next_vault()").public_key,
+	fn current_epoch_key() -> Option<EpochKey<<T::Chain as ChainCrypto>::AggKey>> {
+		CurrentVaultEpochAndState::<T, I>::get().map(|current_vault_epoch_and_state| {
+			EpochKey {
+				key: Vaults::<T, I>::get(current_vault_epoch_and_state.epoch_index)
+					.expect("Key must exist if CurrentVaultEpochAndState exists since they get set at the same place: set_next_vault()").public_key,
 				epoch_index: current_vault_epoch_and_state.epoch_index,
 				key_state: current_vault_epoch_and_state.key_state,
 			}
+		})
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -967,14 +963,14 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 
 		// Unlock the key that was used to authorise the activation.
 		// TODO: use broadcast callbacks for this.
-		let _ = CurrentVaultEpochAndState::<T, I>::try_mutate(|state: &mut VaultEpochAndState| {
-			if let KeyState::Locked(_) = state.key_state {
-				state.key_state = KeyState::Active;
-				Ok(())
-			} else {
-				Err(())
-			}
-		});
+		let _ = CurrentVaultEpochAndState::<T, I>::try_mutate(
+			|state: &mut Option<VaultEpochAndState>| {
+				state
+					.as_mut()
+					.map(|VaultEpochAndState { key_state, .. }| key_state.unlock())
+					.ok_or(())
+			},
+		);
 
 		Self::set_next_vault(new_public_key, block_number);
 

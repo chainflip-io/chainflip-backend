@@ -135,7 +135,7 @@ impl UnfilteredDispatchable for MockCallback<MockEthereum> {
 }
 
 pub fn current_agg_key() -> <MockEthereum as ChainCrypto>::AggKey {
-	<Test as crate::Config<_>>::KeyProvider::current_epoch_key().key
+	<Test as crate::Config<_>>::KeyProvider::current_epoch_key().unwrap().key
 }
 
 pub fn sign(

@@ -253,7 +253,7 @@ fn keygen_verification_ceremony_calls_callback_on_failure() {
 		.execute_with(|| {
 			const PAYLOAD: &[u8; 4] = b"OHAI";
 			let EpochKey { key: public_key_bytes, epoch_index, .. } =
-				<Test as crate::Config<_>>::KeyProvider::current_epoch_key();
+				<Test as crate::Config<_>>::KeyProvider::current_epoch_key().unwrap();
 			let request_id = EthereumThresholdSigner::request_keygen_verification_signature(
 				*PAYLOAD,
 				KeyId { epoch_index, public_key_bytes: public_key_bytes.0.to_vec() },
@@ -535,7 +535,7 @@ mod unsigned_validation {
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
 				let ceremony_id = MockCeremonyIdProvider::get();
 				let EpochKey { key: current_key, .. } =
-					<Test as crate::Config<_>>::KeyProvider::current_epoch_key();
+					<Test as crate::Config<_>>::KeyProvider::current_epoch_key().unwrap();
 
 				assert!(
 					Test::validate_unsigned(
@@ -553,18 +553,27 @@ mod unsigned_validation {
 
 	#[test]
 	fn reject_invalid_ceremony() {
-		new_test_ext().execute_with(|| {
-			const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
-			assert_eq!(
-				Test::validate_unsigned(
-					TransactionSource::External,
-					&PalletCall::signature_success { ceremony_id: 1234, signature: sign(PAYLOAD) }
+		const NOMINEES: [u64; 3] = [1, 2, 3];
+		const AUTHORITIES: [u64; 5] = [1, 2, 3, 4, 5];
+		ExtBuilder::new()
+			.with_authorities(AUTHORITIES)
+			.with_nominees(NOMINEES)
+			.build()
+			.execute_with(|| {
+				const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
+				assert_eq!(
+					Test::validate_unsigned(
+						TransactionSource::External,
+						&PalletCall::signature_success {
+							ceremony_id: 1234,
+							signature: sign(PAYLOAD)
+						}
 						.into()
-				)
-				.unwrap_err(),
-				InvalidTransaction::Stale.into()
-			);
-		});
+					)
+					.unwrap_err(),
+					InvalidTransaction::Stale.into()
+				);
+			});
 	}
 
 	#[test]

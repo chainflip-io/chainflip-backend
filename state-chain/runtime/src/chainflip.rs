@@ -302,8 +302,7 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 		match query {
 			cf_chains::dot::api::SystemAccounts::Proxy => {
 				match <PolkadotVault as KeyProvider<Polkadot>>::current_epoch_key() {
-					EpochKey { key, key_state, .. } if key_state != KeyState::Inactive =>
-						Some(MultiSigner::Sr25519(key.0).into_account()),
+					Some(EpochKey { key, .. }) => Some(MultiSigner::Sr25519(key.0).into_account()),
 					_ => None,
 				}
 			},
@@ -330,11 +329,12 @@ impl ChainEnvironment<(), BitcoinNetwork> for BtcEnvironment {
 		Some(Environment::bitcoin_network())
 	}
 }
+
 impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 	fn lookup(_: ()) -> Option<cf_chains::btc::AggKey> {
 		use crate::BitcoinVault;
 		match <BitcoinVault as KeyProvider<Bitcoin>>::current_epoch_key() {
-			EpochKey { key, key_state, .. } if key_state == KeyState::Active => Some(key),
+			Some(EpochKey { key, .. }) => Some(key),
 			_ => None,
 		}
 	}
