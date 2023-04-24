@@ -396,48 +396,45 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 
 #[test]
 fn addresses_are_getting_reused() {
-	new_test_ext().execute_with(|| {
-		// Schedule 2 ingress requests
-		let ingresses = (0..2)
-			.map(|id| register_and_do_ingress(id, eth::Asset::Eth))
-			.collect::<Vec<_>>();
-		// Indicates we have already generated 2 addresses
-		assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
-		// Process one
-		IngressEgress::on_idle(
-			1,
-			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(1) +
-				Weight::from_ref_time(1),
-		);
-		IngressEgress::finalise_ingress(OriginTrait::none(), vec![ingresses[0]]).unwrap();
-		expect_size_of_address_pool(1);
-		// Address 1 is free to use and in the pool of available addresses
-		assert!(AddressPool::<Test, Instance1>::get(1).is_some());
-		// Address 2 not
-		assert!(AddressPool::<Test, Instance1>::get(2).is_none());
-		// Expire the other
-		IngressEgress::on_initialize(EXPIRY_BLOCK);
-		assert_eq!(
-			AddressStatus::<Test, Instance1>::get(
-				AddressPool::<Test, Instance1>::get(1).expect("to have an address")
-			),
-			DeploymentStatus::Deployed
-		);
-		expect_size_of_address_pool(1);
-		// Schedule another ingress request
-		register_and_do_ingress(3u64, eth::Asset::Eth);
-		expect_size_of_address_pool(0);
-		// Process it
-		IngressEgress::on_idle(
-			1,
-			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(1) +
-				Weight::from_ref_time(1),
-		);
-		IngressEgress::finalise_ingress(OriginTrait::none(), vec![ingresses[1]]).unwrap();
-		// Expect the address to be reused which is indicate by the counter not being incremented
-		assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
-		expect_size_of_address_pool(1);
-	});
+	let mut ingress_to_finalise: (IntentId, <Ethereum as Chain>::ChainAccount) = Default::default();
+
+	new_test_ext()
+		.execute_as_block(1, || {
+			// Schedule 2 ingress requests but only complete one:
+			ingress_to_finalise = register_and_do_ingress(0u64, eth::Asset::Eth);
+			IngressEgress::register_liquidity_ingress_intent(0u64, eth::Asset::Eth).unwrap();
+			// Indicates we have already generated 2 addresses
+			assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
+		})
+		.execute_as_block(2, || {
+			IngressEgress::finalise_ingress(OriginTrait::none(), vec![ingress_to_finalise])
+				.unwrap();
+			expect_size_of_address_pool(1);
+			// Address 1 is free to use and in the pool of available addresses
+			assert!(AddressPool::<Test, Instance1>::get(1).is_some());
+			// Address 2 not
+			assert!(AddressPool::<Test, Instance1>::get(2).is_none());
+		})
+		.execute_as_block(EXPIRY_BLOCK, || {
+			assert_eq!(
+				AddressStatus::<Test, Instance1>::get(
+					AddressPool::<Test, Instance1>::get(1).expect("to have an address")
+				),
+				DeploymentStatus::Deployed
+			);
+			expect_size_of_address_pool(1);
+			// Schedule another ingress request
+			ingress_to_finalise = register_and_do_ingress(0u64, eth::Asset::Eth);
+			expect_size_of_address_pool(0);
+		})
+		.execute_as_block(EXPIRY_BLOCK + 1, || {
+			IngressEgress::finalise_ingress(OriginTrait::none(), vec![ingress_to_finalise])
+				.unwrap();
+			// Expect the address to be reused which is indicated by the counter not being
+			// incremented
+			assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
+			expect_size_of_address_pool(1);
+		});
 }
 
 #[test]
@@ -681,7 +678,6 @@ fn multi_use_ingress_different_blocks() {
 	new_test_ext()
 		.execute_as_block(1, || {
 			(intent_id, ingress_address) = register_and_do_ingress(ALICE, ETH);
-			IngressEgress::on_idle(0, Weight::MAX);
 		})
 		.execute_as_block(2, || {
 			// Do another, should succeed.
@@ -691,7 +687,6 @@ fn multi_use_ingress_different_blocks() {
 				1,
 				Default::default()
 			));
-			IngressEgress::on_idle(0, Weight::MAX);
 		})
 		.execute_as_block(3, || {
 			// Finalising should invalidate the ingress.
