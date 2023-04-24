@@ -37,8 +37,8 @@ use cf_chains::{
 use cf_primitives::{chains::assets, Asset, BasisPoints, EgressId, IntentId, ETHEREUM_ETH_ADDRESS};
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, EgressApi,
-	EmergencyRotation, EpochInfo, EpochKey, EthEnvironmentProvider, Heartbeat, IngressApi,
-	IngressHandler, Issuance, KeyProvider, NetworkState, RewardsDistribution, RuntimeUpgrade,
+	EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat, IngressApi, IngressHandler,
+	Issuance, KeyProvider, NetworkState, RewardsDistribution, RuntimeUpgrade,
 	VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
@@ -298,11 +298,10 @@ impl Get<RuntimeVersion> for DotEnvironment {
 impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> for DotEnvironment {
 	fn lookup(query: cf_chains::dot::api::SystemAccounts) -> Option<PolkadotAccountId> {
 		use crate::PolkadotVault;
-		use sp_runtime::{traits::IdentifyAccount, MultiSigner};
 		match query {
 			cf_chains::dot::api::SystemAccounts::Proxy =>
 				<PolkadotVault as KeyProvider<Polkadot>>::current_epoch_key()
-					.map(|epoch_key| epoch_key.key),
+					.map(|epoch_key| epoch_key.key.0.into()),
 			cf_chains::dot::api::SystemAccounts::Vault => Environment::polkadot_vault_account(),
 		}
 	}
