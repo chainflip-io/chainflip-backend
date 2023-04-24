@@ -1,7 +1,7 @@
 use crate::{
-	mock::*, CeremonyId, Error, Event as PalletEvent, FailureVoters, KeygenResolutionPendingSince,
-	KeygenResponseTimeout, PalletOffence, PendingVaultRotation, SuccessVoters, Vault,
-	VaultRotationStatus, Vaults,
+	mock::*, CeremonyId, Error, Event as PalletEvent, KeygenFailureVoters,
+	KeygenResolutionPendingSince, KeygenResponseTimeout, KeygenSuccessVoters, PalletOffence,
+	PendingVaultRotation, Vault, VaultRotationStatus, Vaults,
 };
 use cf_chains::eth::Ethereum;
 use cf_test_utilities::{last_event, maybe_last_event};
@@ -433,8 +433,8 @@ fn keygen_report_success() {
 		assert_last_event!(crate::Event::KeygenVerificationSuccess { .. });
 
 		// Voting has been cleared.
-		assert_eq!(SuccessVoters::<MockRuntime, _>::iter_keys().next(), None);
-		assert!(!FailureVoters::<MockRuntime, _>::exists());
+		assert_eq!(KeygenSuccessVoters::<MockRuntime, _>::iter_keys().next(), None);
+		assert!(!KeygenFailureVoters::<MockRuntime, _>::exists());
 	})
 }
 
@@ -496,8 +496,8 @@ fn keygen_report_failure() {
 		assert_last_event!(crate::Event::KeygenFailure(..));
 
 		// Voting has been cleared.
-		assert!(SuccessVoters::<MockRuntime, _>::iter_keys().next().is_none());
-		assert!(!FailureVoters::<MockRuntime, _>::exists());
+		assert!(KeygenSuccessVoters::<MockRuntime, _>::iter_keys().next().is_none());
+		assert!(!KeygenFailureVoters::<MockRuntime, _>::exists());
 	})
 }
 

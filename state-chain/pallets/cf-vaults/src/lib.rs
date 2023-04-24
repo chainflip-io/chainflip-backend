@@ -265,14 +265,14 @@ pub mod pallet {
 
 	/// The voters who voted for success for a particular agg key rotation
 	#[pallet::storage]
-	#[pallet::getter(fn success_voters)]
-	pub type SuccessVoters<T: Config<I>, I: 'static = ()> =
+	#[pallet::getter(fn keygen_success_voters)]
+	pub type KeygenSuccessVoters<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, AggKeyFor<T, I>, Vec<T::ValidatorId>, ValueQuery>;
 
 	/// The voters who voted for failure for a particular agg key rotation
 	#[pallet::storage]
-	#[pallet::getter(fn failure_voters)]
-	pub type FailureVoters<T: Config<I>, I: 'static = ()> =
+	#[pallet::getter(fn keygen_failure_voters)]
+	pub type KeygenFailureVoters<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
 
 	/// The block since which we have been waiting for keygen to be resolved.

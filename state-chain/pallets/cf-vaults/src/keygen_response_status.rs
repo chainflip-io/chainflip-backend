@@ -44,7 +44,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		assert!(self.remaining_candidates.remove(voter));
 		*self.success_votes.entry(key).or_default() += 1;
 
-		SuccessVoters::<T, I>::append(key, voter);
+		KeygenSuccessVoters::<T, I>::append(key, voter);
 	}
 
 	pub fn add_failure_vote(&mut self, voter: &T::ValidatorId, blamed: BTreeSet<T::ValidatorId>) {
@@ -53,7 +53,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 			*self.blame_votes.entry(id).or_default() += 1
 		}
 
-		FailureVoters::<T, I>::append(voter);
+		KeygenFailureVoters::<T, I>::append(voter);
 	}
 
 	/// How many candidates are we still awaiting a response from?
@@ -74,7 +74,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 				// This *should* be safe since it's bounded by the number of candidates.
 				// We may want to revise.
 				// See https://github.com/paritytech/substrate/pull/11490
-				let _ignored = SuccessVoters::<T, I>::clear(u32::MAX, None);
+				let _ignored = KeygenSuccessVoters::<T, I>::clear(u32::MAX, None);
 				return Ok(*key)
 			}
 		}
@@ -82,23 +82,24 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 		let super_majority_threshold = self.super_majority_threshold() as usize;
 
 		// We remove who we don't want to punish, and then punish the rest
-		if let Some(key) = SuccessVoters::<T, I>::iter_keys().find(|key| {
-			SuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >= super_majority_threshold
+		if let Some(key) = KeygenSuccessVoters::<T, I>::iter_keys().find(|key| {
+			KeygenSuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >=
+				super_majority_threshold
 		}) {
-			SuccessVoters::<T, I>::remove(key);
-		} else if FailureVoters::<T, I>::decode_len().unwrap_or_default() >=
+			KeygenSuccessVoters::<T, I>::remove(key);
+		} else if KeygenFailureVoters::<T, I>::decode_len().unwrap_or_default() >=
 			super_majority_threshold
 		{
-			FailureVoters::<T, I>::kill();
+			KeygenFailureVoters::<T, I>::kill();
 		} else {
-			let _empty = SuccessVoters::<T, I>::clear(u32::MAX, None);
-			FailureVoters::<T, I>::kill();
+			let _empty = KeygenSuccessVoters::<T, I>::clear(u32::MAX, None);
+			KeygenFailureVoters::<T, I>::kill();
 			log::warn!("Unable to determine a consensus outcome for keygen.");
 		}
 
-		Err(SuccessVoters::<T, I>::drain()
+		Err(KeygenSuccessVoters::<T, I>::drain()
 			.flat_map(|(_k, dissenters)| dissenters)
-			.chain(FailureVoters::<T, I>::take())
+			.chain(KeygenFailureVoters::<T, I>::take())
 			.chain(self.blame_votes.into_iter().filter_map(|(id, vote_count)| {
 				if vote_count >= super_majority_threshold as u32 {
 					Some(id)
@@ -262,8 +263,8 @@ mod tests {
 		}
 
 		let outcome = status.resolve_keygen_outcome();
-		assert_eq!(SuccessVoters::<MockRuntime, _>::iter_keys().next(), None);
-		assert!(!FailureVoters::<MockRuntime, _>::exists());
+		assert_eq!(KeygenSuccessVoters::<MockRuntime, _>::iter_keys().next(), None);
+		assert!(!KeygenFailureVoters::<MockRuntime, _>::exists());
 		outcome
 	}
 
