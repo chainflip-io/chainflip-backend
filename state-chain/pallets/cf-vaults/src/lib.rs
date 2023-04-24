@@ -831,22 +831,20 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		if let Some(VaultRotationStatus::<T, I>::KeygenVerificationComplete { new_public_key }) =
 			PendingVaultRotation::<T, I>::get()
 		{
-			if let Some(current_vault_epoch_and_state) = CurrentVaultEpochAndState::<T, I>::get() {
-				let vault = Vaults::<T, I>::get(current_vault_epoch_and_state.epoch_index)
-					.expect("Key must exist if CurrentVaultEpochAndState exists since they get set at the same place: set_next_vault()");
+			if let Some(EpochKey { key, epoch_index, key_state }) = Self::current_epoch_key() {
 				if let Ok(rotation_call) =
 					<T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
-						Some(vault.public_key),
+						Some(key),
 						new_public_key,
 					) {
 					let (_, threshold_request_id) =
 						T::Broadcaster::threshold_sign_and_broadcast(rotation_call);
 					debug_assert!(
-						matches!(current_vault_epoch_and_state.key_state, KeyState::Unlocked),
+						matches!(key_state, KeyState::Unlocked),
 						"Current epoch key must be active to activate next key."
 					);
 					CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
-						epoch_index: current_vault_epoch_and_state.epoch_index,
+						epoch_index,
 						key_state: KeyState::Locked(threshold_request_id),
 					});
 				} else {
