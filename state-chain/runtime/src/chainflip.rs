@@ -38,8 +38,8 @@ use cf_primitives::{chains::assets, Asset, BasisPoints, EgressId, IntentId, ETHE
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, EgressApi,
 	EmergencyRotation, EpochInfo, EpochKey, EthEnvironmentProvider, Heartbeat, IngressApi,
-	IngressHandler, Issuance, KeyProvider, KeyState, NetworkState, RewardsDistribution,
-	RuntimeUpgrade, VaultTransitionHandler,
+	IngressHandler, Issuance, KeyProvider, NetworkState, RewardsDistribution, RuntimeUpgrade,
+	VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use ethabi::Address as EthAbiAddress;
