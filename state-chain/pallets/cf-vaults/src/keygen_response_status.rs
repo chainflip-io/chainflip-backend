@@ -1,9 +1,11 @@
+use frame_support::StorageValue;
+
 use super::*;
 
 /// Tracks the current state of the keygen ceremony.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
-#[scale_info(skip_type_params(T, I))]
-pub struct KeygenResponseStatus<T: Config<I>, I: 'static = ()> {
+#[derive(PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, TypeInfo, DebugNoBound)]
+#[scale_info(skip_type_params(T, FailureVoters, I))]
+pub struct KeygenResponseStatus<T: Config<I>, FailureVoters, I: 'static = ()> {
 	/// The total number of candidates participating in the keygen ceremony.
 	candidate_count: AuthorityCount,
 	/// The candidates that have yet to reply.
@@ -12,15 +14,25 @@ pub struct KeygenResponseStatus<T: Config<I>, I: 'static = ()> {
 	success_votes: BTreeMap<AggKeyFor<T, I>, AuthorityCount>,
 	/// A map of the number of blame votes that each keygen participant has received.
 	blame_votes: BTreeMap<T::ValidatorId, AuthorityCount>,
+
+	_voters: PhantomData<FailureVoters>,
 }
 
-impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
+impl<T, FailureVoters, I> KeygenResponseStatus<T, FailureVoters, I>
+where
+	T: Config<I>,
+	I: 'static,
+	FailureVoters: StorageValue<Vec<T::ValidatorId>>,
+	<FailureVoters as frame_support::StorageValue<Vec<T::ValidatorId>>>::Query:
+		sp_std::iter::IntoIterator<Item = T::ValidatorId>,
+{
 	pub fn new(candidates: BTreeSet<T::ValidatorId>) -> Self {
 		Self {
 			candidate_count: candidates.len() as AuthorityCount,
 			remaining_candidates: candidates,
 			success_votes: Default::default(),
 			blame_votes: Default::default(),
+			_voters: PhantomData::<FailureVoters>,
 		}
 	}
 
@@ -53,7 +65,7 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 			*self.blame_votes.entry(id).or_default() += 1
 		}
 
-		KeygenFailureVoters::<T, I>::append(voter);
+		FailureVoters::append(voter);
 	}
 
 	/// How many candidates are we still awaiting a response from?
@@ -87,19 +99,17 @@ impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
 				super_majority_threshold
 		}) {
 			KeygenSuccessVoters::<T, I>::remove(key);
-		} else if KeygenFailureVoters::<T, I>::decode_len().unwrap_or_default() >=
-			super_majority_threshold
-		{
-			KeygenFailureVoters::<T, I>::kill();
+		} else if FailureVoters::decode_len().unwrap_or_default() >= super_majority_threshold {
+			FailureVoters::kill();
 		} else {
 			let _empty = KeygenSuccessVoters::<T, I>::clear(u32::MAX, None);
-			KeygenFailureVoters::<T, I>::kill();
+			FailureVoters::kill();
 			log::warn!("Unable to determine a consensus outcome for keygen.");
 		}
 
 		Err(KeygenSuccessVoters::<T, I>::drain()
 			.flat_map(|(_k, dissenters)| dissenters)
-			.chain(KeygenFailureVoters::<T, I>::take())
+			.chain(FailureVoters::take())
 			.chain(self.blame_votes.into_iter().filter_map(|(id, vote_count)| {
 				if vote_count >= super_majority_threshold as u32 {
 					Some(id)
@@ -117,7 +127,7 @@ mod tests {
 	use super::*;
 	use crate::{
 		mock::{new_test_ext, MockRuntime, NEW_AGG_PUB_KEY},
-		AggKeyFor, KeygenOutcomeFor, KeygenResponseStatus,
+		AggKeyFor, KeygenOutcomeFor,
 	};
 	use cf_chains::mocks::MockAggKey;
 	use frame_support::assert_ok;
@@ -134,42 +144,42 @@ mod tests {
 	fn test_threshold() {
 		// The success threshold is the smallest number of participants that *can* reach consensus.
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..144))
+			KeygenResponseTracker::<MockRuntime, _>::new(BTreeSet::from_iter(0..144))
 				.super_majority_threshold(),
 			96
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..145))
+			KeygenResponseTracker::<MockRuntime, _>::new(BTreeSet::from_iter(0..145))
 				.super_majority_threshold(),
 			97
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..146))
+			KeygenResponseTracker::<MockRuntime, _>::new(BTreeSet::from_iter(0..146))
 				.super_majority_threshold(),
 			98
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..147))
+			KeygenResponseTracker::<MockRuntime, _>::new(BTreeSet::from_iter(0..147))
 				.super_majority_threshold(),
 			98
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..148))
+			KeygenResponseTracker::<MockRuntime, _>::new(BTreeSet::from_iter(0..148))
 				.super_majority_threshold(),
 			99
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..149))
+			KeygenResponseTracker::<MockRuntime, _>::new(BTreeSet::from_iter(0..149))
 				.super_majority_threshold(),
 			100
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..150))
+			KeygenResponseTracker::<MockRuntime, _>::new(BTreeSet::from_iter(0..150))
 				.super_majority_threshold(),
 			100
 		);
 		assert_eq!(
-			KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(0..151))
+			KeygenResponseTracker::<MockRuntime, _>::new(BTreeSet::from_iter(0..151))
 				.super_majority_threshold(),
 			101
 		);
@@ -242,7 +252,7 @@ mod tests {
 		outcomes: &[ReportedOutcome],
 		report_gen: F,
 	) -> Result<AggKeyFor<MockRuntime>, BTreeSet<u64>> {
-		let mut status = KeygenResponseStatus::<MockRuntime, _>::new(BTreeSet::from_iter(
+		let mut status = KeygenResponseTracker::<MockRuntime, _>::new(BTreeSet::from_iter(
 			1..=outcomes.len() as u64,
 		));
 

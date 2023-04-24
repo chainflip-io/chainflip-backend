@@ -50,6 +50,8 @@ pub type TransactionIdFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>:
 pub type ThresholdSignatureFor<T, I = ()> =
 	<<T as Config<I>>::Chain as ChainCrypto>::ThresholdSignature;
 
+pub type KeygenResponseTracker<T, I> = KeygenResponseStatus<T, KeygenFailureVoters<T, I>, I>;
+
 /// The current status of a vault rotation.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, EnumVariant)]
 #[scale_info(skip_type_params(T, I))]
@@ -59,7 +61,7 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 		keygen_ceremony_id: CeremonyId,
 		keygen_participants: BTreeSet<T::ValidatorId>,
 		epoch_index: EpochIndex,
-		response_status: KeygenResponseStatus<T, I>,
+		response_status: KeygenResponseTracker<T, I>,
 	},
 	/// We are waiting for the nodes who generated the new key to complete a signing ceremony to
 	/// verify the new key.
