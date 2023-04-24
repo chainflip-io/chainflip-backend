@@ -28,6 +28,21 @@ jobs:
     secrets: inherit
     with:
       simple_bouncer: true
+  docker:
+    needs: [build]
+    uses: ./.github/workflows/_docker-build.yml
+    strategy:
+      matrix:
+        target:
+          - chainflip-node
+          - chainflip-engine
+          - chainflip-relayer
+          - chainflip-cli
+          - generate-genesis-keys
+    with:
+      image_tag: ${{ github.event.pull_request.head.sha }}
+      target: ${{ matrix.target }}
+    secrets: inherit
   publish:
     needs: [post-check]
     uses: ./.github/workflows/_30_publish.yml
