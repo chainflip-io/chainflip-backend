@@ -2,7 +2,7 @@
 mod utils;
 mod ceremony_runner;
 mod common;
-pub mod key_store;
+pub mod key_store_api;
 pub mod keygen;
 pub mod legacy;
 pub mod signing;
@@ -54,7 +54,7 @@ use mockall::automock;
 use self::{
 	ceremony_manager::{CeremonyResultSender, KeygenCeremony, SigningCeremony},
 	common::ResharingContext,
-	key_store::KeyStore,
+	key_store_api::KeyStoreAPI,
 	signing::SigningData,
 };
 
@@ -169,19 +169,16 @@ where
 /// Multisig client acts as the frontend for the multisig functionality, delegating
 /// the actual signing to "Ceremony Manager". It is additionally responsible for
 /// persistently storing generated keys and providing them to the signing ceremonies.
-pub struct MultisigClient<C: CryptoScheme> {
+pub struct MultisigClient<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> {
 	my_account_id: AccountId,
 	ceremony_request_sender: UnboundedSender<CeremonyRequest<C>>,
-	key_store: std::sync::Mutex<KeyStore<C>>,
+	key_store: std::sync::Mutex<KeyStore>,
 }
 
-impl<C> MultisigClient<C>
-where
-	C: CryptoScheme,
-{
+impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClient<C, KeyStore> {
 	pub fn new(
 		my_account_id: AccountId,
-		key_store: KeyStore<C>,
+		key_store: KeyStore,
 		ceremony_request_sender: UnboundedSender<CeremonyRequest<C>>,
 	) -> Self {
 		MultisigClient {
@@ -192,7 +189,9 @@ where
 	}
 }
 
-impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
+impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
+	for MultisigClient<C, KeyStore>
+{
 	fn initiate_keygen(
 		&self,
 		ceremony_id: CeremonyId,
@@ -270,29 +269,23 @@ impl<C: CryptoScheme> MultisigClientApi<C> for MultisigClient<C> {
 		let rng = Rng::from_entropy();
 
 		// Find the correct key and send the request to sign with that key
-		let request =
-			self.key_store
-				.lock()
-				.unwrap()
-				.get_key(&key_id)
-				.cloned()
-				.map(|keygen_result_info| {
-					let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
-					self.ceremony_request_sender
-						.send(CeremonyRequest {
-							ceremony_id,
-							details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails {
-								participants: signers,
-								payload,
-								keygen_result_info,
-								rng,
-								result_sender,
-							})),
-						})
-						.ok()
-						.expect("Should send signing request");
-					result_receiver
-				});
+		let request = self.key_store.lock().unwrap().get_key(&key_id).map(|keygen_result_info| {
+			let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
+			self.ceremony_request_sender
+				.send(CeremonyRequest {
+					ceremony_id,
+					details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails {
+						participants: signers,
+						payload,
+						keygen_result_info,
+						rng,
+						result_sender,
+					})),
+				})
+				.ok()
+				.expect("Should send signing request");
+			result_receiver
+		});
 
 		async move {
 			// Wait for the request to return a result, then log and return the result

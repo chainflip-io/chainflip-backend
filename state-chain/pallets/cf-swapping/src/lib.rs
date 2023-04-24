@@ -1,10 +1,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata};
-use cf_primitives::{Asset, AssetAmount, ForeignChain};
+use cf_primitives::{Asset, AssetAmount, ForeignChain, IntentId};
 use cf_traits::{liquidity::SwappingApi, CcmHandler, IngressApi, SystemStateInfo};
 use frame_support::{
 	pallet_prelude::*,
-	sp_runtime::{traits::Saturating, Permill},
+	sp_runtime::{
+		traits::{BlockNumberProvider, Saturating},
+		Permill,
+	},
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -83,17 +86,25 @@ pub mod pallet {
 	pub trait Config: Chainflip {
 		/// Standard Event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
 		/// For registering and verifying the account role.
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
+
 		/// API for handling asset ingress.
 		type IngressHandler: IngressApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
+
 		/// API for handling asset egress.
 		type EgressHandler: EgressApi<AnyChain>;
+
 		/// An interface to the AMM api implementation.
 		type SwappingApi: SwappingApi;
+
+		/// Governance origin to manage allowed assets
+		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
+
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
 	}
@@ -124,10 +135,23 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type CcmGasBudget<T: Config> = StorageMap<_, Twox64Concat, u64, (Asset, AssetAmount)>;
 
+	/// Stores the swap TTL in blocks.
+	#[pallet::storage]
+	pub type SwapTTL<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
+
 	/// Storage for storing CCMs pending assets to be swapped.
 	#[pallet::storage]
 	pub(super) type PendingCcms<T: Config> = StorageMap<_, Twox64Concat, u64, CcmSwap>;
 
+	/// Stores a block for when an intent will expire against the intent infos.
+	#[pallet::storage]
+	pub(super) type SwapIntentExpiries<T: Config> = StorageMap<
+		_,
+		Twox64Concat,
+		T::BlockNumber,
+		Vec<(IntentId, ForeignChain, ForeignChainAddress)>,
+		ValueQuery,
+	>;
 	/// Tracks the outputs of Ccm swaps.
 	#[pallet::storage]
 	pub(super) type CcmOutputs<T: Config> = StorageMap<_, Twox64Concat, u64, CcmSwapOutput>;
@@ -174,6 +198,12 @@ pub mod pallet {
 			ccm_id: u64,
 			egress_id: EgressId,
 		},
+		SwapIntentExpired {
+			ingress_address: ForeignChainAddress,
+		},
+		SwapTtlSet {
+			ttl: T::BlockNumber,
+		},
 		CcmIngressReceived {
 			ccm_id: u64,
 			principal_swap_id: Option<u64>,
@@ -194,6 +224,25 @@ pub mod pallet {
 		CcmUnsupportedForTargetChain,
 		/// The ingressed amount is insufficient to pay for the gas budget.
 		CcmInsufficientIngressAmount,
+	}
+
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config> {
+		pub swap_ttl: T::BlockNumber,
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+		fn build(&self) {
+			SwapTTL::<T>::put(self.swap_ttl);
+		}
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config> Default for GenesisConfig<T> {
+		fn default() -> Self {
+			Self { swap_ttl: T::BlockNumber::from(1200u32) }
+		}
 	}
 
 	#[pallet::hooks]
@@ -229,6 +278,15 @@ pub mod pallet {
 			}
 			used_weight
 		}
+
+		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
+			let expired = SwapIntentExpiries::<T>::take(n);
+			for (intent_id, chain, address) in expired.clone() {
+				T::IngressHandler::expire_intent(chain, intent_id, address.clone());
+				Self::deposit_event(Event::<T>::SwapIntentExpired { ingress_address: address });
+			}
+			T::WeightInfo::on_initialize(expired.len() as u32)
+		}
 	}
 
 	#[pallet::call]
@@ -262,7 +320,7 @@ pub mod pallet {
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 
-			let (_, ingress_address) = T::IngressHandler::register_swap_intent(
+			let (intent_id, ingress_address) = T::IngressHandler::register_swap_intent(
 				ingress_asset,
 				egress_asset,
 				egress_address,
@@ -270,6 +328,12 @@ pub mod pallet {
 				relayer,
 				message_metadata,
 			)?;
+
+			SwapIntentExpiries::<T>::append(
+				frame_system::Pallet::<T>::current_block_number()
+					.saturating_add(SwapTTL::<T>::get()),
+				(intent_id, ForeignChain::from(ingress_asset), ingress_address.clone()),
+			);
 
 			Self::deposit_event(Event::<T>::NewSwapIntent { ingress_address });
 
@@ -364,6 +428,21 @@ pub mod pallet {
 				egress_address,
 				message_metadata,
 			)
+		}
+
+		/// Sets the length in which ingress intents are expired in the Swapping pallet.
+		/// Requires Governance
+		///
+		/// ## Events
+		///
+		/// - [On update](Event::SwapTtlSet)
+		#[pallet::weight(T::WeightInfo::set_swap_ttl())]
+		pub fn set_swap_ttl(origin: OriginFor<T>, ttl: T::BlockNumber) -> DispatchResult {
+			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
+			SwapTTL::<T>::set(ttl);
+
+			Self::deposit_event(Event::<T>::SwapTtlSet { ttl });
+			Ok(())
 		}
 	}
 

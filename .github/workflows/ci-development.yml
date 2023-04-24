@@ -1,0 +1,38 @@
+# This CI runs a lot of the jobs in parallel to speed up development time. We also run a simpler suite of bouncer tests.
+name: Release Chainflip Development
+on:
+  pull_request:
+    branches:
+      - main
+      - 'release/*'
+concurrency:
+  group: ${{ github.ref }}-release-development
+  cancel-in-progress: true
+
+jobs:
+  pre-check:
+    uses: ./.github/workflows/_01_pre_check.yml
+    secrets: inherit
+  test:
+    uses: ./.github/workflows/_10_test.yml
+    secrets: inherit
+  build:
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      network: development
+      commit_hash: ${{ github.event.pull_request.head.sha }} # More info: https://github.com/actions/checkout/issues/426
+  post-check:
+    needs: [build]
+    uses: ./.github/workflows/_25_post_check.yml
+    secrets: inherit
+    with:
+      simple_bouncer: true
+  publish:
+    needs: [post-check]
+    uses: ./.github/workflows/_30_publish.yml
+    with:
+      version: ci/${{ github.event.pull_request.head.sha }}/
+      environment: dev
+      commit_hash: ${{ github.event.pull_request.head.sha }}
+    secrets: inherit
