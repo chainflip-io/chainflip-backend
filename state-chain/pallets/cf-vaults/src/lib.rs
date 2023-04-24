@@ -963,14 +963,13 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 
 		// Unlock the key that was used to authorise the activation.
 		// TODO: use broadcast callbacks for this.
-		let _ = CurrentVaultEpochAndState::<T, I>::try_mutate(
-			|state: &mut Option<VaultEpochAndState>| {
-				state
-					.as_mut()
-					.map(|VaultEpochAndState { key_state, .. }| key_state.unlock())
-					.ok_or(())
-			},
-		);
+		CurrentVaultEpochAndState::<T, I>::try_mutate(|state: &mut Option<VaultEpochAndState>| {
+			state
+				.as_mut()
+				.map(|VaultEpochAndState { key_state, .. }| key_state.unlock())
+				.ok_or(())
+		})
+		.expect("CurrentVaultEpochAndState must exist for the locked key, otherwise we couldn't have signed.");
 
 		Self::set_next_vault(new_public_key, block_number);
 
