@@ -106,11 +106,11 @@ jobs:
           aptly publish -gpg-key=${{ steps.import_gpg_dev.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}"
 
       - name: Set Summary Title
-        if: ${{ contains(inputs.artifacts, 'prod') }}
+        if: inputs.environment == 'prod'
         run: echo "### Production Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
 
       - name: Set Summary Title
-        if: ${{ ! contains(inputs.artifacts, 'prod') }}
+        if: inputs.environment != 'prod'
         run: echo "### Packages Published! :rocket:" >> $GITHUB_STEP_SUMMARY
 
       - name: Create Github Summary

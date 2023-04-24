@@ -4,7 +4,6 @@ on:
       network:
         description: Network being released
         required: true
-        default: development
         type: string
       commit_hash:
         description: Commit hash to be released
