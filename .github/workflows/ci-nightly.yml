@@ -8,7 +8,6 @@ env:
   SCCACHE_CACHE_SIZE: 32G
   SCCACHE_VERSION: v0.4.1
   SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
-  COMMIT_HASH: ${{ github.sha }}
 
 jobs:
   test:
@@ -19,7 +18,16 @@ jobs:
     secrets: inherit
     with:
       network: development
+      commit_hash: ${{ github.sha }}
   post-check:
     needs: [build]
     uses: ./.github/workflows/_25_post_check.yml
+    secrets: inherit
+  publish:
+    needs: [post-check]
+    uses: ./.github/workflows/_30_publish.yml
+    with:
+      version: nightly/
+      environment: dev
+      commit_hash: ${{ github.sha }}
     secrets: inherit
