@@ -363,12 +363,9 @@ pub trait ThresholdSignerNomination {
 	) -> Option<BTreeSet<Self::SignerId>>;
 }
 
-#[derive(Default, Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
 pub enum KeyState {
-	Active,
-	/// The key either hasn't been initialised, or is expired.
-	#[default]
-	Inactive,
+	Unlocked,
 	/// Key is only available to sign this request id.
 	Locked(ThresholdSignatureRequestId),
 }
@@ -376,14 +373,17 @@ pub enum KeyState {
 impl KeyState {
 	pub fn is_available_for_request(&self, request_id: ThresholdSignatureRequestId) -> bool {
 		match self {
-			KeyState::Active => true,
-			KeyState::Inactive => false,
+			KeyState::Unlocked => true,
 			KeyState::Locked(locked_request_id) => request_id == *locked_request_id,
 		}
 	}
+
+	pub fn unlock(&mut self) {
+		*self = KeyState::Unlocked;
+	}
 }
 
-#[derive(Default, Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
 pub struct EpochKey<Key> {
 	pub key: Key,
 	pub epoch_index: EpochIndex,
@@ -399,8 +399,8 @@ impl<Key> EpochKey<Key> {
 /// Provides the currently valid key for multisig ceremonies.
 pub trait KeyProvider<C: ChainCrypto> {
 	/// Get the chain's current agg key, the epoch index for the current key and the state of that
-	/// key.
-	fn current_epoch_key() -> EpochKey<C::AggKey>;
+	/// key. If no key has been set, returns None.
+	fn current_epoch_key() -> Option<EpochKey<C::AggKey>>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_key(_key: C::AggKey) {
