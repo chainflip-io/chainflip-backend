@@ -1,4 +1,4 @@
-FROM ubuntu:20.04
+FROM debian:bullseye
 ARG TARGET
 ENV ENTRYPOINT=/usr/local/bin/${TARGET}
 COPY ${TARGET} ${ENTRYPOINT}

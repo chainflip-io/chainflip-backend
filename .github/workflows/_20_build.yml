@@ -100,7 +100,6 @@ jobs:
         uses: andymckay/cancel-action@0.3
 
   docker:
-    name: Build Docker Image
     needs: [compile]
     if: inputs.network == 'development'
     strategy:
