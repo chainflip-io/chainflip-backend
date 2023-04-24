@@ -27,9 +27,10 @@ mod benchmarking;
 
 mod vault_rotator;
 
-mod keygen_response_status;
+mod response_status;
 
-use keygen_response_status::KeygenResponseStatus;
+use response_status::ResponseStatus;
+
 pub mod weights;
 pub use weights::WeightInfo;
 #[cfg(test)]
@@ -50,8 +51,8 @@ pub type TransactionIdFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>:
 pub type ThresholdSignatureFor<T, I = ()> =
 	<<T as Config<I>>::Chain as ChainCrypto>::ThresholdSignature;
 
-pub type KeygenResponseTracker<T, I> =
-	KeygenResponseStatus<T, KeygenSuccessVoters<T, I>, KeygenFailureVoters<T, I>, I>;
+pub type KeygenResponseStatus<T, I> =
+	ResponseStatus<T, KeygenSuccessVoters<T, I>, KeygenFailureVoters<T, I>, I>;
 
 /// The current status of a vault rotation.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, EnumVariant)]
@@ -62,7 +63,7 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 		keygen_ceremony_id: CeremonyId,
 		keygen_participants: BTreeSet<T::ValidatorId>,
 		epoch_index: EpochIndex,
-		response_status: KeygenResponseTracker<T, I>,
+		response_status: KeygenResponseStatus<T, I>,
 	},
 	/// We are waiting for the nodes who generated the new key to complete a signing ceremony to
 	/// verify the new key.

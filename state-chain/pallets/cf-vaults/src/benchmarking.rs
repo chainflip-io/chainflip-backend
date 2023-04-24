@@ -43,7 +43,7 @@ benchmarks_instance_pallet! {
 		let caller: T::AccountId = whitelisted_caller();
 		let keygen_participants: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.clone().into());
 		let blamed: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(b, caller.into());
-		let mut keygen_response_status = KeygenResponseTracker::<T, I>::new(keygen_participants.clone());
+		let mut keygen_response_status = KeygenResponseStatus::<T, I>::new(keygen_participants.clone());
 
 		for validator_id in &keygen_participants {
 			keygen_response_status.add_failure_vote(validator_id, blamed.clone());
@@ -71,7 +71,7 @@ benchmarks_instance_pallet! {
 		KeygenResolutionPendingSince::<T, I>::put(current_block);
 		let caller: T::AccountId = whitelisted_caller();
 		let keygen_participants: BTreeSet<T::ValidatorId> = generate_authority_set::<T, I>(150, caller.into());
-		let mut keygen_response_status = KeygenResponseTracker::<T, I>::new(keygen_participants.clone());
+		let mut keygen_response_status = KeygenResponseStatus::<T, I>::new(keygen_participants.clone());
 
 		for validator_id in &keygen_participants {
 			keygen_response_status.add_success_vote(
@@ -107,7 +107,7 @@ benchmarks_instance_pallet! {
 				keygen_ceremony_id: CEREMONY_ID,
 				keygen_participants: keygen_participants.clone().into_iter().collect(),
 				epoch_index: GENESIS_EPOCH,
-				response_status: KeygenResponseTracker::<T, I>::new(keygen_participants)
+				response_status: KeygenResponseStatus::<T, I>::new(keygen_participants)
 			},
 		);
 		use cf_chains::eth::sig_constants::SIG;
