@@ -8,10 +8,6 @@ use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_support::traits::Hooks;
 
 benchmarks_instance_pallet! {
-
-	on_initialize_has_no_expired {
-		let origin = T::EnsureGovernance::successful_origin();
-	} : { let _ = Pallet::<T, I>::on_initialize(T::BlockNumber::from(1_u32)); }
 	egress_assets {
 		let n in 1u32 .. 254u32;
 		let mut batch = vec![];
