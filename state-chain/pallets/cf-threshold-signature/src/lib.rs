@@ -11,7 +11,6 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-mod migrations;
 pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -27,7 +26,7 @@ use cf_traits::{
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	ensure,
-	traits::{EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion},
+	traits::{EnsureOrigin, Get, StorageVersion},
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
@@ -461,17 +460,7 @@ pub mod pallet {
 					*timeout = THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT.into();
 				}
 			});
-			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-			migrations::PalletMigration::<T, I>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
-			migrations::PalletMigration::<T, I>::post_upgrade(state)
+			Default::default()
 		}
 	}
 

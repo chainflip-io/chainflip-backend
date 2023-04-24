@@ -13,10 +13,7 @@ use cf_traits::{
 	Slashing, SystemStateManager, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator,
 	VaultStatus, VaultTransitionHandler,
 };
-use frame_support::{
-	pallet_prelude::*,
-	traits::{OnRuntimeUpgrade, StorageVersion},
-};
+use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::traits::{BlockNumberProvider, One, Saturating};
@@ -29,7 +26,6 @@ use sp_std::{
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-mod migrations;
 pub mod weights;
 pub use weights::WeightInfo;
 #[cfg(test)]
@@ -346,24 +342,7 @@ pub mod pallet {
 					KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT.into(),
 				);
 			}
-			if !CurrentVaultEpochAndState::<T, I>::exists() {
-				CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
-					epoch_index: T::EpochInfo::epoch_index(),
-					key_state: KeyState::Inactive,
-				});
-			}
-
-			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-			migrations::PalletMigration::<T, I>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
-			migrations::PalletMigration::<T, I>::post_upgrade(state)
+			Weight::zero()
 		}
 	}
 
