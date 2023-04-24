@@ -19,7 +19,7 @@ use cf_chains::{
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	btc::{
 		api::{BitcoinApi, SelectedUtxos},
-		ingress_address::derive_btc_address_from_script,
+		ingress_address::derive_btc_ingress_address_from_script,
 		scriptpubkey_from_address, Bitcoin, BitcoinTransactionData, BtcAmount,
 	},
 	dot::{
@@ -540,12 +540,15 @@ impl AddressConverter for ChainAddressConverter {
 			ForeignChainAddress::Eth(address) => Ok(EncodedAddress::Eth(address.to_vec())),
 			ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(address.to_vec())),
 			ForeignChainAddress::Btc(address) => Ok(EncodedAddress::Btc(
-				derive_btc_address_from_script(address.into(), Environment::bitcoin_network())
-					// .map_err(|_| {
-					// 	DispatchError::Other("We can only convert an ingress address to a string")
-					// })?
-					.bytes()
-					.collect::<Vec<u8>>(),
+				derive_btc_ingress_address_from_script(
+					address.into(),
+					Environment::bitcoin_network(),
+				)
+				// .map_err(|_| {
+				// 	DispatchError::Other("We can only convert an ingress address to a string")
+				// })?
+				.bytes()
+				.collect::<Vec<u8>>(),
 			)),
 		}
 	}
