@@ -32,7 +32,7 @@ jobs:
     needs: [post-check]
     uses: ./.github/workflows/_30_publish.yml
     with:
-      version: ci/${{ github.event.pull_request.head.sha }}
+      version: ci/${{ github.event.pull_request.head.sha }}/
       environment: dev
       commit_hash: ${{ github.event.pull_request.head.sha }}
     secrets: inherit
