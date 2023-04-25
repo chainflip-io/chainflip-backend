@@ -23,15 +23,18 @@ pub enum ForeignChainAddress {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
 pub enum EncodedAddress {
-	Eth(Vec<u8>),
-	Dot(Vec<u8>),
+	Eth([u8; 20]),
+	Dot([u8; 32]),
 	Btc(Vec<u8>),
 }
 
 pub trait AddressConverter: Sized {
-	fn to_encoded_address(address: ForeignChainAddress) -> Result<EncodedAddress, DispatchError>;
+	fn try_to_encoded_address(
+		address: ForeignChainAddress,
+	) -> Result<EncodedAddress, DispatchError>;
 	#[allow(clippy::result_unit_err)]
-	fn from_encoded_address(encoded_address: EncodedAddress) -> Result<ForeignChainAddress, ()>;
+	fn try_from_encoded_address(encoded_address: EncodedAddress)
+		-> Result<ForeignChainAddress, ()>;
 }
 
 #[cfg(feature = "std")]
@@ -164,11 +167,25 @@ impl From<BitcoinScriptBounded> for ForeignChainAddress {
 }
 
 impl EncodedAddress {
-	pub fn from_chain_bytes(chain: ForeignChain, bytes: Vec<u8>) -> Self {
+	pub fn from_chain_bytes(chain: ForeignChain, bytes: Vec<u8>) -> Result<Self, &'static str> {
 		match chain {
-			ForeignChain::Ethereum => EncodedAddress::Eth(bytes),
-			ForeignChain::Polkadot => EncodedAddress::Dot(bytes),
-			ForeignChain::Bitcoin => EncodedAddress::Btc(bytes),
+			ForeignChain::Ethereum => {
+				if bytes.len() != 20 {
+					return Err("Invalid Ethereum address length")
+				}
+				let mut address = [0u8; 20];
+				address.copy_from_slice(&bytes);
+				Ok(EncodedAddress::Eth(address))
+			},
+			ForeignChain::Polkadot => {
+				if bytes.len() != 32 {
+					return Err("Invalid Polkadot address length")
+				}
+				let mut address = [0u8; 32];
+				address.copy_from_slice(&bytes);
+				Ok(EncodedAddress::Dot(address))
+			},
+			ForeignChain::Bitcoin => Ok(EncodedAddress::Btc(bytes)),
 		}
 	}
 }

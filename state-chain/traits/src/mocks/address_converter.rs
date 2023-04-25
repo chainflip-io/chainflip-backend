@@ -2,7 +2,7 @@ use cf_chains::address::{AddressConverter, EncodedAddress, ForeignChainAddress};
 
 pub struct MockAddressConverter;
 impl AddressConverter for MockAddressConverter {
-	fn from_encoded_address(
+	fn try_from_encoded_address(
 		encoded_address: cf_chains::address::EncodedAddress,
 	) -> Result<ForeignChainAddress, ()> {
 		Ok(match encoded_address {
@@ -11,7 +11,7 @@ impl AddressConverter for MockAddressConverter {
 			EncodedAddress::Btc(_) => ForeignChainAddress::Btc(Default::default()),
 		})
 	}
-	fn to_encoded_address(
+	fn try_to_encoded_address(
 		address: ForeignChainAddress,
 	) -> Result<cf_chains::address::EncodedAddress, sp_runtime::DispatchError> {
 		Ok(match address {

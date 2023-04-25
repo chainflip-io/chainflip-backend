@@ -854,6 +854,7 @@ pub trait FlipBurnInfo {
 	fn take_flip_to_burn() -> AssetAmount;
 }
 
+/// The trait implementation is intentionally no-op by default
 pub trait IngressHandler<C: ChainCrypto> {
 	fn on_ingress_completed(
 		_tx_id: <C as ChainCrypto>::TransactionId,

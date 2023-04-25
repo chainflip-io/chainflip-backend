@@ -118,7 +118,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::DepositAddressReady {
 				intent_id,
-				ingress_address: T::AddressConverter::to_encoded_address(ingress_address)?,
+				ingress_address: T::AddressConverter::try_to_encoded_address(ingress_address)?,
 			});
 
 			Ok(())
@@ -137,7 +137,7 @@ pub mod pallet {
 				T::SystemState::ensure_no_maintenance()?;
 				let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-				let egress_address_internal = T::AddressConverter::from_encoded_address(
+				let egress_address_internal = T::AddressConverter::try_from_encoded_address(
 					egress_address.clone(),
 				)
 				.map_err(|_| {

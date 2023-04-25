@@ -70,12 +70,12 @@ pub async fn swap_intent(
 		ForeignChain::Ethereum => {
 			let addr = clean_eth_address(&params.egress_address)
 				.map_err(|err| anyhow!("Failed to parse address: {err}"))?;
-			EncodedAddress::Eth(addr.to_vec())
+			EncodedAddress::Eth(addr)
 		},
 		ForeignChain::Polkadot => {
 			let addr = clean_dot_address(&params.egress_address)
 				.map_err(|err| anyhow!("Failed to parse address: {err}"))?;
-			EncodedAddress::Dot(addr.to_vec())
+			EncodedAddress::Dot(addr)
 		},
 		ForeignChain::Bitcoin => todo!("Bitcoin not yet supported for egress address"),
 	};

@@ -262,8 +262,8 @@ pub mod pallet {
 					Error::<T>::CcmUnsupportedForTargetChain
 				);
 			}
-			let egress_address_internal = T::AddressConverter::from_encoded_address(egress_address)
-				.map_err(|_| {
+			let egress_address_internal =
+				T::AddressConverter::try_from_encoded_address(egress_address).map_err(|_| {
 					DispatchError::Other("Invalid Egress Address, cannot decode the address")
 				})?;
 			ensure!(
@@ -282,7 +282,7 @@ pub mod pallet {
 			)?;
 
 			Self::deposit_event(Event::<T>::NewSwapIntent {
-				ingress_address: T::AddressConverter::to_encoded_address(ingress_address)?,
+				ingress_address: T::AddressConverter::try_to_encoded_address(ingress_address)?,
 			});
 
 			Ok(())
@@ -303,7 +303,7 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_relayer(origin)?;
 
 			let egress_address_internal =
-				T::AddressConverter::from_encoded_address(egress_address.clone()).map_err(
+				T::AddressConverter::try_from_encoded_address(egress_address.clone()).map_err(
 					|_| DispatchError::Other("Invalid Egress Address, cannot decode the address"),
 				)?;
 
@@ -346,7 +346,7 @@ pub mod pallet {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
 			let egress_address_internal =
-				T::AddressConverter::from_encoded_address(egress_address.clone()).map_err(
+				T::AddressConverter::try_from_encoded_address(egress_address.clone()).map_err(
 					|_| DispatchError::Other("Invalid Egress Address, cannot decode the address"),
 				)?;
 
@@ -380,8 +380,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let egress_address_internal = T::AddressConverter::from_encoded_address(egress_address)
-				.map_err(|_| {
+			let egress_address_internal =
+				T::AddressConverter::try_from_encoded_address(egress_address).map_err(|_| {
 					DispatchError::Other("Invalid Egress Address, cannot decode the address")
 				})?;
 
@@ -566,7 +566,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::SwapIngressReceived {
 				swap_id,
-				ingress_address: T::AddressConverter::to_encoded_address(ingress_address).expect("This should not fail since this conversion happens during the pipeline of a swap and ingress address has already been successfully converted in this way at the start of the swap in request_swap_intent"),
+				ingress_address: T::AddressConverter::try_to_encoded_address(ingress_address).expect("This should not fail since this conversion happens during the pipeline of a swap and ingress address has already been successfully converted in this way at the start of the swap in request_swap_intent"),
 				ingress_amount: amount,
 			});
 		}

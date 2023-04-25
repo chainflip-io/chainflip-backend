@@ -469,13 +469,13 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn add_btc_change_utxos(
+		pub fn add_bitcoin_change_utxos(
 			origin: OriginFor<T>,
-			bitcoin_change_witnesses: Vec<ChangeUtxoWitness>,
+			change_witnesses: Vec<ChangeUtxoWitness>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			for ChangeUtxoWitness { amount, change_pubkey, utxo_id } in bitcoin_change_witnesses {
+			for ChangeUtxoWitness { amount, change_pubkey, utxo_id } in change_witnesses {
 				Self::add_bitcoin_utxo_to_list(
 					amount,
 					utxo_id,

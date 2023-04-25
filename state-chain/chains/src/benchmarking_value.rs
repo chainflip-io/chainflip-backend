@@ -83,7 +83,7 @@ impl BenchmarkValue for ForeignChainAddress {
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for EncodedAddress {
 	fn benchmark_value() -> Self {
-		EncodedAddress::Eth([0_u8; 20].to_vec())
+		EncodedAddress::Eth([1_u8; 20])
 	}
 }
 

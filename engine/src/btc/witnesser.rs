@@ -157,10 +157,8 @@ where
 				.state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(
-						pallet_cf_environment::Call::add_btc_change_utxos {
-							bitcoin_change_witnesses: change_witnesses,
-						}
-						.into(),
+						pallet_cf_environment::Call::add_bitcoin_change_utxos { change_witnesses }
+							.into(),
 					),
 					epoch_index: self.epoch_index,
 				})

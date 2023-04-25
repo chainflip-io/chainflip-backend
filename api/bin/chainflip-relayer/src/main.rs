@@ -56,10 +56,10 @@ impl RpcServer for RpcServerImpl {
 	) -> Result<String, Error> {
 		let clean_egress_address = match ForeignChain::from(egress_asset) {
 			ForeignChain::Ethereum => EncodedAddress::Eth(
-				utilities::clean_eth_address(&egress_address).map_err(|e| anyhow!(e))?.to_vec(),
+				utilities::clean_eth_address(&egress_address).map_err(|e| anyhow!(e))?,
 			),
 			ForeignChain::Polkadot => EncodedAddress::Dot(
-				utilities::clean_dot_address(&egress_address).map_err(|e| anyhow!(e))?.to_vec(),
+				utilities::clean_dot_address(&egress_address).map_err(|e| anyhow!(e))?,
 			),
 			ForeignChain::Bitcoin => todo!("Bitcoin address cleaning not implemented yet."),
 		};

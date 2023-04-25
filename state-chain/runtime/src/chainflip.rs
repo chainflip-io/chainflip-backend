@@ -535,30 +535,31 @@ impl IngressHandler<Bitcoin> for BtcIngressHandler {
 
 pub struct ChainAddressConverter;
 impl AddressConverter for ChainAddressConverter {
-	fn to_encoded_address(address: ForeignChainAddress) -> Result<EncodedAddress, DispatchError> {
+	fn try_to_encoded_address(
+		address: ForeignChainAddress,
+	) -> Result<EncodedAddress, DispatchError> {
 		match address {
-			ForeignChainAddress::Eth(address) => Ok(EncodedAddress::Eth(address.to_vec())),
-			ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(address.to_vec())),
+			ForeignChainAddress::Eth(address) => Ok(EncodedAddress::Eth(address)),
+			ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(address)),
 			ForeignChainAddress::Btc(address) => Ok(EncodedAddress::Btc(
 				derive_btc_ingress_address_from_script(
 					address.into(),
 					Environment::bitcoin_network(),
 				)
-				// .map_err(|_| {
-				// 	DispatchError::Other("We can only convert an ingress address to a string")
-				// })?
 				.bytes()
 				.collect::<Vec<u8>>(),
 			)),
 		}
 	}
 
-	fn from_encoded_address(encoded_address: EncodedAddress) -> Result<ForeignChainAddress, ()> {
+	fn try_from_encoded_address(
+		encoded_address: EncodedAddress,
+	) -> Result<ForeignChainAddress, ()> {
 		match encoded_address {
 			EncodedAddress::Eth(address_bytes) =>
-				Ok(ForeignChainAddress::Eth(address_bytes[..].try_into().map_err(|_| ())?)),
+				Ok(ForeignChainAddress::Eth(address_bytes)),
 			EncodedAddress::Dot(address_bytes) =>
-				Ok(ForeignChainAddress::Dot(address_bytes[..].try_into().map_err(|_| ())?)),
+				Ok(ForeignChainAddress::Dot(address_bytes)),
 			EncodedAddress::Btc(address_bytes) => Ok(ForeignChainAddress::Btc(
 				scriptpubkey_from_address(
 					sp_std::str::from_utf8(&address_bytes[..]).map_err(|_| ())?,

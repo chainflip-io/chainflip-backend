@@ -213,7 +213,7 @@ fn basic_pool_setup_provision_and_swap() {
 			RuntimeOrigin::signed(ZION.clone()),
 			Asset::Eth,
 			Asset::Flip,
-			EncodedAddress::Eth([1u8; 20].to_vec()),
+			EncodedAddress::Eth([1u8; 20]),
 			0u16,
 			None,
 		));
@@ -248,7 +248,7 @@ fn basic_pool_setup_provision_and_swap() {
 			ingress_address: events_ingress_address,
 			ingress_amount: 50,
 			..
-		}) if <Ethereum as Chain>::ChainAccount::try_from(ChainAddressConverter::from_encoded_address(events_ingress_address.clone()).expect("we created the ingress address above so it should be valid")).unwrap() == ingress_address => swap_id);
+		}) if <Ethereum as Chain>::ChainAccount::try_from(ChainAddressConverter::try_from_encoded_address(events_ingress_address.clone()).expect("we created the ingress address above so it should be valid")).unwrap() == ingress_address => swap_id);
 
 		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
 			1,
@@ -317,7 +317,7 @@ fn can_process_ccm_via_swap_intent() {
 			RuntimeOrigin::signed(ZION.clone()),
 			Asset::Flip,
 			Asset::Usdc,
-			EncodedAddress::Eth([0x02; 20].to_vec()),
+			EncodedAddress::Eth([0x02; 20]),
 			0u16,
 			Some(message),
 		));
@@ -433,7 +433,7 @@ fn can_process_ccm_via_extrinsic_intent() {
 			ingress_asset: Asset::Flip,
 			ingress_amount,
 			egress_asset: Asset::Usdc,
-			egress_address: EncodedAddress::Eth([0x02; 20].to_vec()),
+			egress_address: EncodedAddress::Eth([0x02; 20]),
 			message_metadata: message,
 		}));
 		let current_epoch = Validator::current_epoch();

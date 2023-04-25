@@ -154,7 +154,8 @@ impl EthContractWitnesser for Vault {
 					egress_address: EncodedAddress::from_chain_bytes(
 						destination_chain.try_into().map_err(anyhow::Error::msg)?,
 						destination_address.0,
-					),
+					)
+					.map_err(anyhow::Error::msg)?,
 				},
 				VaultEvent::SwapToken {
 					destination_chain,
@@ -174,7 +175,8 @@ impl EthContractWitnesser for Vault {
 					egress_address: EncodedAddress::from_chain_bytes(
 						destination_chain.try_into().map_err(anyhow::Error::msg)?,
 						destination_address.0,
-					),
+					)
+					.map_err(anyhow::Error::msg)?,
 				},
 				_ => todo!("handle the rest"),
 			};
