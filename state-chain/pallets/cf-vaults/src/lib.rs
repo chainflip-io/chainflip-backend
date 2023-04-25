@@ -3,9 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
-use cf_primitives::{
-	AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId, GENESIS_EPOCH,
-};
+use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
@@ -671,7 +669,7 @@ pub mod pallet {
 			if let Some(vault_key) = self.vault_key.clone() {
 				Pallet::<T, I>::set_vault_for_epoch(
 					VaultEpochAndState {
-						epoch_index: GENESIS_EPOCH,
+						epoch_index: cf_primitives::GENESIS_EPOCH,
 						key_state: KeyState::Unlocked,
 					},
 					AggKeyFor::<T, I>::try_from(vault_key)
@@ -881,7 +879,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
 					keygen_ceremony_id: Default::default(),
 					keygen_participants: Default::default(),
-					epoch_index: GENESIS_EPOCH,
+					epoch_index: cf_primitives::GENESIS_EPOCH,
 					response_status: KeygenResponseStatus::new(Default::default()),
 				});
 			},

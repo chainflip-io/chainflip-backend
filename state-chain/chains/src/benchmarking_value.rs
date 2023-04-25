@@ -35,6 +35,13 @@ macro_rules! impl_default_benchmark_value {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
+impl<A: BenchmarkValue, B: BenchmarkValue> BenchmarkValue for (A, B) {
+	fn benchmark_value() -> Self {
+		(A::benchmark_value(), B::benchmark_value())
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for KeyId {
 	fn benchmark_value() -> Self {
 		Self {

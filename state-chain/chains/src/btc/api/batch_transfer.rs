@@ -2,7 +2,7 @@ use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
 
-use crate::btc::{Bitcoin, BitcoinOutput, BitcoinTransaction, Utxo};
+use crate::btc::{AggKey, Bitcoin, BitcoinOutput, BitcoinTransaction, Utxo};
 
 use crate::{ApiCall, ChainCrypto};
 
@@ -17,8 +17,18 @@ pub struct BatchTransfer {
 }
 
 impl BatchTransfer {
-	pub fn new_unsigned(input_utxos: Vec<Utxo>, outputs: Vec<BitcoinOutput>) -> Self {
-		Self { bitcoin_transaction: BitcoinTransaction::create_new_unsigned(input_utxos, outputs) }
+	pub fn new_unsigned(
+		agg_key: &AggKey,
+		input_utxos: Vec<Utxo>,
+		outputs: Vec<BitcoinOutput>,
+	) -> Self {
+		Self {
+			bitcoin_transaction: BitcoinTransaction::create_new_unsigned(
+				agg_key,
+				input_utxos,
+				outputs,
+			),
+		}
 	}
 }
 

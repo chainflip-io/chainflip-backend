@@ -530,7 +530,7 @@ impl IngressHandler<Bitcoin> for BtcIngressHandler {
 			BitcoinVault::vaults(Validator::epoch_index())
 				.ok_or(DispatchError::Other("No vault for epoch"))?
 				.public_key
-				.pubkey_x,
+				.current,
 		);
 		Ok(())
 	}

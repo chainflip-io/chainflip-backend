@@ -7,6 +7,7 @@ description = 'Shared Chain-specific functionality for use in the substrate runt
 
 [dependencies]
 cf-primitives = { path = '../primitives', default-features = false }
+utilities = { path = '../../utilities', default-features = false }
 
 # Cryptography
 libsecp256k1 = { default-features = false, version = '0.7', features = ['static-context'] }
@@ -40,7 +41,7 @@ sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainf
 
 [dev-dependencies]
 cf-test-utilities = { path = '../test-utilities' }
-rand = {version='0.8.4'}
+rand = { version = '0.8.4' }
 
 [features]
 default = ['std']
@@ -60,7 +61,7 @@ std = [
   'serde',
   'sp-runtime/std',
   'sp-std/std',
-  'sp-core/std'
+  'sp-core/std',
 ]
 runtime-benchmarks = [
   'frame-support/runtime-benchmarks',

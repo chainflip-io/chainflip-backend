@@ -479,7 +479,7 @@ pub mod pallet {
 				Self::add_bitcoin_utxo_to_list(
 					amount,
 					utxo_id,
-					derive_btc_ingress_bitcoin_script(change_pubkey.pubkey_x, CHANGE_ADDRESS_SALT)
+					derive_btc_ingress_bitcoin_script(change_pubkey.current, CHANGE_ADDRESS_SALT)
 						.try_into()
 						.expect("The script should not exceed 128 bytes"),
 				);

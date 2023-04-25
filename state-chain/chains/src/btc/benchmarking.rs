@@ -5,12 +5,12 @@ use crate::benchmarking_value::BenchmarkValue;
 use super::{
 	api::{batch_transfer::BatchTransfer, BitcoinApi},
 	AggKey, BitcoinFetchId, BitcoinOutput, BitcoinScriptBounded, BitcoinTrackedData,
-	BitcoinTransactionData, Signature, SigningPayload, Utxo, UtxoId,
+	BitcoinTransactionData, PreviousOrCurrent, Signature, SigningPayload, Utxo, UtxoId,
 };
 
 impl BenchmarkValue for AggKey {
 	fn benchmark_value() -> Self {
-		AggKey { pubkey_x: [1u8; 32] }
+		AggKey { previous: [1u8; 32], current: [2u8; 32] }
 	}
 }
 
@@ -61,6 +61,7 @@ impl BenchmarkValue for BitcoinFetchId {
 impl<E> BenchmarkValue for BitcoinApi<E> {
 	fn benchmark_value() -> Self {
 		BitcoinApi::BatchTransfer(BatchTransfer::new_unsigned(
+			&BenchmarkValue::benchmark_value(),
 			vec![Utxo {
 				amount: Default::default(),
 				txid: Default::default(),
@@ -76,5 +77,11 @@ impl<E> BenchmarkValue for BitcoinApi<E> {
 impl BenchmarkValue for BitcoinTrackedData {
 	fn benchmark_value() -> Self {
 		BitcoinTrackedData { block_height: 120, fee_rate_sats_per_byte: 4321 }
+	}
+}
+
+impl BenchmarkValue for PreviousOrCurrent {
+	fn benchmark_value() -> Self {
+		Self::Current
 	}
 }
