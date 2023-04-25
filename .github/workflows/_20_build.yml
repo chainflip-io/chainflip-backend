@@ -14,7 +14,6 @@ env:
   SCCACHE_CACHE_SIZE: 32G
   SCCACHE_VERSION: v0.4.1
   SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
-  COMMIT_HASH: ${{ inputs.commit_hash }} # This is used at build time  to add to the start logs of the node and the engine
 
 jobs:
   compile:
@@ -136,7 +135,10 @@ jobs:
           images: ghcr.io/${{ github.repository }}/${{ matrix.target }}
           flavor: |
             latest=true
-          tags: ${{ env.COMMIT_HASH }}
+          tags: |
+            type=schedule,pattern={{date 'YYYY-MM-DD'}},prefix=nightly-
+            type=semver,pattern={{raw}}
+            type=edge
 
       - name: Login to DockerHub
         uses: docker/login-action@v2
@@ -156,3 +158,7 @@ jobs:
           file: ci/docker/cf.Dockerfile
           build-args: >
             TARGET=${{ matrix.target }}
+
+      - name: Create Github Summary
+        run: |
+          echo "`docker run ghcr.io/${{ github.repository }}/${{ matrix.target }} -h`" >> $GITHUB_STEP_SUMMARY
