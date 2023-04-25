@@ -158,7 +158,3 @@ jobs:
           file: ci/docker/cf.Dockerfile
           build-args: >
             TARGET=${{ matrix.target }}
-
-      - name: Create Github Summary
-        run: |
-          echo "`docker run ghcr.io/${{ github.repository }}/${{ matrix.target }} -h`" >> $GITHUB_STEP_SUMMARY
