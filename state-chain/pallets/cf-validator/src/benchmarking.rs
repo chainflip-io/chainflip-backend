@@ -93,13 +93,19 @@ pub fn start_vault_rotation<T: RuntimeConfig>(
 	init_bidders::<T>(primary_candidates, epoch, 100_000u128);
 	init_bidders::<T>(secondary_candidates, epoch + LARGE_OFFSET, 90_000u128);
 
-	Pallet::<T>::start_vault_rotation(RotationState::from_auction_outcome::<T>(AuctionOutcome {
-		winners: bidder_set::<T, ValidatorIdOf<T>, _>(primary_candidates, epoch).collect(),
-		losers: bidder_set::<T, ValidatorIdOf<T>, _>(secondary_candidates, epoch + LARGE_OFFSET)
+	Pallet::<T>::start_vault_rotation(RotationState::from_auction_outcome::<T>(
+		AuctionOutcome {
+			winners: bidder_set::<T, ValidatorIdOf<T>, _>(primary_candidates, epoch).collect(),
+			losers: bidder_set::<T, ValidatorIdOf<T>, _>(
+				secondary_candidates,
+				epoch + LARGE_OFFSET,
+			)
 			.map(|id| (id, 90_000u32.into()).into())
 			.collect(),
-		bond: 100u32.into(),
-	}));
+			bond: 100u32.into(),
+		},
+		2,
+	));
 
 	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..)));
 }

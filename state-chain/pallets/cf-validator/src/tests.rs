@@ -37,11 +37,14 @@ fn simple_rotation_state(
 	auction_winners: Vec<u64>,
 	bond: Option<u128>,
 ) -> RuntimeRotationState<Test> {
-	RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
-		winners: auction_winners,
-		bond: bond.unwrap_or(100),
-		losers: AUCTION_LOSERS.zip(LOSING_BIDS).map(Into::into).to_vec(),
-	})
+	RuntimeRotationState::<Test>::from_auction_outcome::<Test>(
+		AuctionOutcome {
+			winners: auction_winners,
+			bond: bond.unwrap_or(100),
+			losers: AUCTION_LOSERS.zip(LOSING_BIDS).map(Into::into).to_vec(),
+		},
+		2,
+	)
 }
 
 #[test]

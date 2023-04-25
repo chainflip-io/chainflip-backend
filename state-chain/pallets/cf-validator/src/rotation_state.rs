@@ -11,11 +11,13 @@ pub struct RotationState<Id, Amount> {
 	secondary_candidates: Vec<Id>,
 	banned: BTreeSet<Id>,
 	pub bond: Amount,
+	pub epoch_index: EpochIndex,
 }
 
 impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amount> {
 	pub fn from_auction_outcome<T>(
 		AuctionOutcome { winners, losers, bond }: AuctionOutcome<Id, Amount>,
+		new_epoch_index: EpochIndex,
 	) -> Self
 	where
 		T: Config<Amount = Amount> + Chainflip<ValidatorId = Id>,
@@ -48,6 +50,7 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 				.collect(),
 			banned: Default::default(),
 			bond,
+			epoch_index: new_epoch_index,
 		}
 	}
 
@@ -98,6 +101,7 @@ mod rotation_state_tests {
 			secondary_candidates: (20..30).collect(),
 			banned: Default::default(),
 			bond: 500,
+			epoch_index: 2,
 		};
 
 		let first_ban = BTreeSet::from([8, 9, 7]);
@@ -119,6 +123,7 @@ mod rotation_state_tests {
 			secondary_candidates: (20..30).collect(),
 			banned: BTreeSet::from([1, 2, 4]),
 			bond: 500,
+			epoch_index: 2,
 		};
 
 		let candidates: Vec<_> = rotation_state.authority_candidates();
@@ -134,6 +139,7 @@ mod rotation_state_tests {
 				secondary_candidates: (20..30).collect(),
 				banned: BTreeSet::from([0, 1, 3]),
 				bond: Default::default(),
+				epoch_index: 2,
 			};
 			QualifyAll::<Id>::except([1, 2, 4]);
 			rotation_state.qualify_nodes::<QualifyAll<_>>();
