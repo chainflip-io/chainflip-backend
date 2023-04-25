@@ -18,7 +18,7 @@ fn generate_swaps<T: Config>(amount: u32, from: Asset, to: Asset) -> Vec<Swap> {
 			from,
 			to,
 			amount: 3,
-			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
+			swap_type: SwapType::Swap(ForeignChainAddress::benchmark_value()),
 		});
 	}
 	swaps
@@ -77,7 +77,7 @@ benchmarks! {
 			from: Asset::Usdc,
 			to: Asset::Eth,
 			amount:1_000,
-			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default()))
+			swap_type: SwapType::Swap(ForeignChainAddress::benchmark_value())
 		}]);
 	}
 
@@ -86,8 +86,8 @@ benchmarks! {
 		let metadata = CcmIngressMetadata {
 			message: vec![0x00],
 			gas_budget: 1,
-			refund_address: ForeignChainAddress::Eth(Default::default()),
-			source_address: ForeignChainAddress::Eth(Default::default())
+			refund_address: ForeignChainAddress::benchmark_value(),
+			source_address: ForeignChainAddress::benchmark_value(),
 		};
 		let call = Call::<T>::ccm_ingress{
 			ingress_asset: Asset::Usdc,
