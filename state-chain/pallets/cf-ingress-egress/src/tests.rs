@@ -12,12 +12,7 @@ use cf_traits::{
 	},
 	AddressDerivationApi, EgressApi, IngressApi,
 };
-use frame_support::{
-	assert_noop, assert_ok,
-	instances::Instance1,
-	traits::{Hooks, OriginTrait},
-	weights::Weight,
-};
+use frame_support::{assert_noop, assert_ok, instances::Instance1, traits::Hooks, weights::Weight};
 use sp_core::H160;
 
 const ALICE_ETH_ADDRESS: EthereumAddress = [100u8; 20];
@@ -407,8 +402,11 @@ fn addresses_are_getting_reused() {
 			assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
 		})
 		.execute_as_block(2, || {
-			IngressEgress::finalise_ingress(OriginTrait::none(), vec![ingress_to_finalise])
-				.unwrap();
+			IngressEgress::close_ingress_channel(
+				ingress_to_finalise.0,
+				ingress_to_finalise.1,
+				DeploymentStatus::Deployed,
+			);
 			expect_size_of_address_pool(1);
 			// Address 1 is free to use and in the pool of available addresses
 			assert!(AddressPool::<Test, Instance1>::get(1).is_some());
@@ -428,8 +426,11 @@ fn addresses_are_getting_reused() {
 			expect_size_of_address_pool(0);
 		})
 		.execute_as_block(EXPIRY_BLOCK + 1, || {
-			IngressEgress::finalise_ingress(OriginTrait::none(), vec![ingress_to_finalise])
-				.unwrap();
+			IngressEgress::close_ingress_channel(
+				ingress_to_finalise.0,
+				ingress_to_finalise.1,
+				DeploymentStatus::Deployed,
+			);
 			// Expect the address to be reused which is indicated by the counter not being
 			// incremented
 			assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
@@ -451,7 +452,9 @@ fn proof_address_pool_integrity() {
 			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(3) +
 				Weight::from_ref_time(1),
 		);
-		IngressEgress::finalise_ingress(OriginTrait::none(), ingresses).unwrap();
+		for ingress in ingresses {
+			IngressEgress::close_ingress_channel(ingress.0, ingress.1, DeploymentStatus::Deployed);
+		}
 		// Expect all addresses to be available
 		expect_size_of_address_pool(3);
 		register_and_do_ingress(4u64, eth::Asset::Eth);
@@ -471,7 +474,9 @@ fn create_new_address_while_pool_is_empty() {
 			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(3) +
 				Weight::from_ref_time(1),
 		);
-		IngressEgress::finalise_ingress(OriginTrait::none(), ingresses).unwrap();
+		for ingress in ingresses {
+			IngressEgress::close_ingress_channel(ingress.0, ingress.1, DeploymentStatus::Deployed);
+		}
 		IngressEgress::on_initialize(EXPIRY_BLOCK);
 		assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
 		register_and_do_ingress(3u64, eth::Asset::Eth);
@@ -690,10 +695,11 @@ fn multi_use_ingress_different_blocks() {
 		})
 		.execute_as_block(3, || {
 			// Finalising should invalidate the ingress.
-			assert_ok!(Pallet::<Test, _>::finalise_ingress(
-				OriginTrait::none(),
-				vec![(intent_id, ingress_address)],
-			));
+			IngressEgress::close_ingress_channel(
+				intent_id,
+				ingress_address,
+				DeploymentStatus::Deployed,
+			);
 			assert_noop!(
 				Pallet::<Test, _>::do_single_ingress(ingress_address, ETH, 1, Default::default()),
 				Error::<Test, _>::InvalidIntent

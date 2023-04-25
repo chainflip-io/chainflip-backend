@@ -354,18 +354,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
-		/// Callback for when a signature is accepted by the chain.
-		#[pallet::weight(T::WeightInfo::finalise_ingress(addresses.len() as u32))]
-		pub fn finalise_ingress(
-			origin: OriginFor<T>,
-			addresses: Vec<(IntentId, TargetChainAccount<T, I>)>,
-		) -> DispatchResult {
-			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
-			for (intent_id, address) in addresses {
-				Self::close_ingress_channel(intent_id, address, DeploymentStatus::Deployed);
-			}
-			Ok(())
-		}
 		/// Sets if an asset is not allowed to be sent out of the chain via Egress.
 		/// Requires Governance
 		///
@@ -510,10 +498,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			egress_params,
 		) {
 			Ok(egress_transaction) => {
-				let (broadcast_id, _) = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
-					egress_transaction,
-					Call::finalise_ingress { addresses }.into(),
-				);
+				let (broadcast_id, _) =
+					T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
 				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
 					broadcast_id,
 					egress_ids,
