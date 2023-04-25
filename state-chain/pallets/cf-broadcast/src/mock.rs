@@ -104,12 +104,12 @@ thread_local! {
 pub struct MockKeyProvider;
 
 impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
-	fn current_epoch_key() -> EpochKey<<MockEthereum as ChainCrypto>::AggKey> {
-		EpochKey {
+	fn current_epoch_key() -> Option<EpochKey<<MockEthereum as ChainCrypto>::AggKey>> {
+		Some(EpochKey {
 			key: if VALIDKEY.with(|cell| *cell.borrow()) { VALID_AGG_KEY } else { INVALID_AGG_KEY },
 			epoch_index: Default::default(),
-			key_state: KeyState::Active,
-		}
+			key_state: KeyState::Unlocked,
+		})
 	}
 }
 

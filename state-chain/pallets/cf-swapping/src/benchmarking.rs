@@ -116,6 +116,40 @@ benchmarks! {
 		}]);
 	}
 
+	on_initialize {
+		let a in 1..100;
+		let caller: T::AccountId = whitelisted_caller();
+		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Relayer);
+		let origin = RawOrigin::Signed(caller);
+		for i in 0..a {
+			let call = Call::<T>::register_swap_intent{
+				ingress_asset: Asset::Usdc,
+				egress_asset: Asset::Eth,
+				egress_address: EncodedAddress::Eth(Default::default()),
+				relayer_commission_bps: Default::default(),
+				message_metadata: None,
+			};
+			call.dispatch_bypass_filter(origin.clone().into())?;
+		}
+		let expiry = SwapTTL::<T>::get() + frame_system::Pallet::<T>::current_block_number();
+		assert!(!SwapIntentExpiries::<T>::get(expiry).is_empty());
+	}: {
+		Pallet::<T>::on_initialize(expiry);
+	} verify {
+		assert!(SwapIntentExpiries::<T>::get(expiry).is_empty());
+	}
+
+	set_swap_ttl {
+		let ttl = T::BlockNumber::from(1_000u32);
+		let call = Call::<T>::set_swap_ttl {
+			ttl
+		};
+	}: {
+		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+	} verify {
+		assert_eq!(crate::SwapTTL::<T>::get(), ttl);
+	}
+
 	impl_benchmark_test_suite!(
 		Pallet,
 		crate::mock::new_test_ext(),

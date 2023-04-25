@@ -11,7 +11,6 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-mod migrations;
 pub mod weights;
 
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -27,7 +26,7 @@ use cf_traits::{
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	ensure,
-	traits::{EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion},
+	traits::{EnsureOrigin, Get, StorageVersion},
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
@@ -461,17 +460,7 @@ pub mod pallet {
 					*timeout = THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT.into();
 				}
 			});
-			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-			migrations::PalletMigration::<T, I>::pre_upgrade()
-		}
-
-		#[cfg(feature = "try-runtime")]
-		fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
-			migrations::PalletMigration::<T, I>::post_upgrade(state)
+			Default::default()
 		}
 	}
 
@@ -673,9 +662,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					ThresholdCeremonyType::KeygenVerification,
 				)
 			} else {
-				let EpochKey { key, epoch_index, key_state } = T::KeyProvider::current_epoch_key();
 				(
-					if key_state.is_available_for_request(request_id) {
+					if let Some(EpochKey { key, epoch_index, .. }) =
+						T::KeyProvider::current_epoch_key().filter(
+							|EpochKey { key_state, .. }| {
+								key_state.is_available_for_request(request_id)
+							},
+						) {
 						if let Some(nominees) =
 							T::ThresholdSignerNomination::threshold_nomination_with_seed(
 								(request_id, attempt_count),

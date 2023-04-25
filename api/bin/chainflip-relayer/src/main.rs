@@ -1,9 +1,7 @@
 use anyhow::anyhow;
 use chainflip_api::{
-	self,
-	primitives::{
-		AccountRole, Asset, BasisPoints, CcmIngressMetadata, EncodedAddress, ForeignChain,
-	},
+	self, clean_foreign_chain_address,
+	primitives::{AccountRole, Asset, BasisPoints, CcmIngressMetadata},
 	settings::StateChain,
 };
 use clap::Parser;
@@ -17,7 +15,7 @@ use std::path::PathBuf;
 #[rpc(server, client, namespace = "relayer")]
 pub trait Rpc {
 	#[method(name = "registerAccount")]
-	async fn register_account(&self) -> Result<(), Error>;
+	async fn register_account(&self) -> Result<String, Error>;
 
 	#[method(name = "newSwapIngressAddress")]
 	async fn request_swap_ingress_address(
@@ -42,9 +40,10 @@ impl RpcServerImpl {
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-	async fn register_account(&self) -> Result<(), Error> {
+	async fn register_account(&self) -> Result<String, Error> {
 		Ok(chainflip_api::register_account_role(AccountRole::Relayer, &self.state_chain_settings)
-			.await?)
+			.await
+			.map(|tx_hash| format!("{tx_hash:#x}"))?)
 	}
 	async fn request_swap_ingress_address(
 		&self,
@@ -54,20 +53,11 @@ impl RpcServer for RpcServerImpl {
 		relayer_commission_bps: BasisPoints,
 		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<String, Error> {
-		let clean_egress_address = match ForeignChain::from(egress_asset) {
-			ForeignChain::Ethereum => EncodedAddress::Eth(
-				utilities::clean_eth_address(&egress_address).map_err(|e| anyhow!(e))?,
-			),
-			ForeignChain::Polkadot => EncodedAddress::Dot(
-				utilities::clean_dot_address(&egress_address).map_err(|e| anyhow!(e))?,
-			),
-			ForeignChain::Bitcoin => todo!("Bitcoin address cleaning not implemented yet."),
-		};
 		Ok(chainflip_api::register_swap_intent(
 			&self.state_chain_settings,
 			ingress_asset,
 			egress_asset,
-			clean_egress_address,
+			clean_foreign_chain_address(egress_asset.into(), &egress_address)?,
 			relayer_commission_bps,
 			message_metadata,
 		)
@@ -82,13 +72,13 @@ pub struct RelayerOptions {
 	#[clap(
 		long = "port",
 		default_value = "80",
-		help = "The port number on which the relayer will listen for connections. Use 0 to assing a random port."
+		help = "The port number on which the relayer will listen for connections. Use 0 to assign a random port."
 	)]
 	pub port: u16,
 	#[clap(
 		long = "state_chain.ws_endpoint",
 		default_value = "ws://localhost:9944",
-		help = "The state chain node's rpc endpoint."
+		help = "The state chain node's RPC endpoint."
 	)]
 	pub ws_endpoint: String,
 	#[clap(

@@ -22,20 +22,20 @@ enum SwapOrLp {
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct SwapIntent<C: Chain, T: Chainflip> {
-	ingress_address: ForeignChainAddress,
-	ingress_asset: <C as Chain>::ChainAsset,
-	egress_asset: any::Asset,
-	egress_address: ForeignChainAddress,
-	relayer_commission_bps: BasisPoints,
-	relayer_id: <T as frame_system::Config>::AccountId,
-	message_metadata: Option<CcmIngressMetadata>,
+	pub ingress_address: ForeignChainAddress,
+	pub ingress_asset: <C as Chain>::ChainAsset,
+	pub egress_asset: any::Asset,
+	pub egress_address: ForeignChainAddress,
+	pub relayer_commission_bps: BasisPoints,
+	pub relayer_id: <T as frame_system::Config>::AccountId,
+	pub message_metadata: Option<CcmIngressMetadata>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct LpIntent<C: Chain, T: Chainflip> {
-	ingress_address: ForeignChainAddress,
-	ingress_asset: <C as Chain>::ChainAsset,
-	lp_account: <T as frame_system::Config>::AccountId,
+	pub ingress_address: ForeignChainAddress,
+	pub ingress_asset: <C as Chain>::ChainAsset,
+	pub lp_account: <T as frame_system::Config>::AccountId,
 }
 
 impl<C: Chain, T: Chainflip> MockIngressHandler<C, T> {
@@ -64,9 +64,7 @@ impl<C: Chain, T: Chainflip> MockIngressHandler<C, T> {
 		)
 	}
 
-	pub fn get_liquidity_intents(
-	) -> Vec<(ForeignChainAddress, <C as Chain>::ChainAsset, <T as frame_system::Config>::AccountId)>
-	{
+	pub fn get_liquidity_intents() -> Vec<LpIntent<C, T>> {
 		<Self as MockPalletStorage>::get_value(b"LP_INGRESS_INTENTS").unwrap_or_default()
 	}
 
@@ -83,12 +81,17 @@ impl<C: Chain, T: Chainflip> IngressApi<C> for MockIngressHandler<C, T> {
 		ingress_asset: <C as cf_chains::Chain>::ChainAsset,
 	) -> Result<(cf_primitives::IntentId, ForeignChainAddress), sp_runtime::DispatchError> {
 		let (intent_id, ingress_address) = Self::get_new_intent(SwapOrLp::Lp, ingress_asset);
-		<Self as MockPalletStorage>::mutate_value(b"LP_INGRESS_INTENTS", |storage| {
-			storage.as_mut().unwrap_or(&mut vec![]).push(LpIntent::<C, T> {
-				ingress_address: ingress_address.clone(),
-				ingress_asset,
-				lp_account,
-			});
+		<Self as MockPalletStorage>::mutate_value(b"LP_INGRESS_INTENTS", |lp_intents| {
+			if lp_intents.is_none() {
+				*lp_intents = Some(vec![]);
+			}
+			if let Some(inner) = lp_intents.as_mut() {
+				inner.push(LpIntent::<C, T> {
+					ingress_address: ingress_address.clone(),
+					ingress_asset,
+					lp_account,
+				});
+			}
 		});
 		Ok((intent_id, ingress_address))
 	}
@@ -102,17 +105,45 @@ impl<C: Chain, T: Chainflip> IngressApi<C> for MockIngressHandler<C, T> {
 		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(cf_primitives::IntentId, ForeignChainAddress), sp_runtime::DispatchError> {
 		let (intent_id, ingress_address) = Self::get_new_intent(SwapOrLp::Swap, ingress_asset);
-		<Self as MockPalletStorage>::mutate_value(b"SWAP_INGRESS_INTENTS", |storage| {
-			storage.as_mut().unwrap_or(&mut vec![]).push(SwapIntent::<C, T> {
-				ingress_address: ingress_address.clone(),
-				ingress_asset,
-				egress_asset,
-				egress_address,
-				relayer_commission_bps,
-				relayer_id,
-				message_metadata,
-			})
+		<Self as MockPalletStorage>::mutate_value(b"SWAP_INGRESS_INTENTS", |swap_intents| {
+			if swap_intents.is_none() {
+				*swap_intents = Some(vec![]);
+			}
+			if let Some(inner) = swap_intents.as_mut() {
+				inner.push(SwapIntent::<C, T> {
+					ingress_address: ingress_address.clone(),
+					ingress_asset,
+					egress_asset,
+					egress_address,
+					relayer_commission_bps,
+					relayer_id,
+					message_metadata,
+				});
+			};
 		});
 		Ok((intent_id, ingress_address))
+	}
+
+	fn expire_intent(
+		_chain: ForeignChain,
+		_intent_id: IntentId,
+		address: <C as cf_chains::Chain>::ChainAccount,
+	) {
+		<Self as MockPalletStorage>::mutate_value(
+			b"SWAP_INGRESS_INTENTS",
+			|storage: &mut Option<Vec<SwapIntent<C, T>>>| {
+				if let Some(inner) = storage.as_mut() {
+					inner.retain(|x| x.ingress_address != address.clone().into());
+				}
+			},
+		);
+		<Self as MockPalletStorage>::mutate_value(
+			b"LP_INGRESS_INTENTS",
+			|storage: &mut Option<Vec<LpIntent<C, T>>>| {
+				if let Some(inner) = storage.as_mut() {
+					inner.retain(|x| x.ingress_address != address.clone().into());
+				}
+			},
+		);
 	}
 }

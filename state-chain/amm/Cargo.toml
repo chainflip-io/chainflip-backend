@@ -8,6 +8,7 @@ description = "Chainflip's AMM Logic"
 [dependencies]
 cf-primitives = { path = '../primitives', default-features = false }
 cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
+serde = { version = '1.0', default-features = false, features = ['derive'] }
 
 # Parity deps
 codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
@@ -29,4 +30,5 @@ std = [
 	'scale-info/std',
 	'sp-core/std',
 	'sp-std/std',
+	'serde/std'
 ]

@@ -18,21 +18,21 @@ impl<C: ChainCrypto> MockKeyProvider<C> {
 	pub fn add_key(key: C::AggKey) {
 		Self::put_value(
 			EPOCH_KEY,
-			EpochKey { key, epoch_index: Default::default(), key_state: KeyState::Active },
+			EpochKey { key, epoch_index: Default::default(), key_state: KeyState::Unlocked },
 		);
 	}
 
 	pub fn lock_key(request_id: ThresholdSignatureRequestId) {
-		Self::mutate_value(EPOCH_KEY, |maybe_key| {
-			let mut key: EpochKey<C::AggKey> = maybe_key.unwrap_or_default();
-			key.lock_for_request(request_id);
-			let _ = maybe_key.insert(key);
+		Self::mutate_value::<EpochKey<C::AggKey>, _, _>(EPOCH_KEY, |maybe_key| {
+			if let Some(key) = maybe_key.as_mut() {
+				key.lock_for_request(request_id);
+			}
 		});
 	}
 }
 
 impl<C: ChainCrypto> crate::KeyProvider<C> for MockKeyProvider<C> {
-	fn current_epoch_key() -> EpochKey<C::AggKey> {
-		Self::get_value(EPOCH_KEY).unwrap_or_default()
+	fn current_epoch_key() -> Option<EpochKey<C::AggKey>> {
+		Self::get_value(EPOCH_KEY)
 	}
 }

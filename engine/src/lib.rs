@@ -3,6 +3,7 @@
 
 pub mod common;
 pub mod constants;
+pub mod db;
 pub mod health;
 pub mod multisig;
 pub mod p2p;

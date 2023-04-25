@@ -29,8 +29,10 @@ jobs:
 
       - name: Prepare title and body
         id: prepare
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
         run: |
-          normalised_title=$(echo ${{ github.event.pull_request.title }} | tr -dc '[:alnum:][:space:]')
+          normalised_title=$(echo $TITLE | tr -dc '[:alnum:][:space:]')
           echo "issue_title=🍒 [HOTFIX] cherry-pick '#${{ github.event.pull_request.number }} - $normalised_title' to main" >> $GITHUB_OUTPUT
           echo "issue_body=This is a reminder to merge the hotfix made in PR https://github.com/${{ github.repository }}/pull/${{ github.event.pull_request.number }} into the main branch. Please create a companion PR to cherry-pick the changes to main, if required, and link this issue. If this fix is not relevant to main, add a comment and close as 'wont fix'." >> $GITHUB_OUTPUT
 

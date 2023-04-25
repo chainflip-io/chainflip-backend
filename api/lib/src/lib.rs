@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
-use cf_chains::{address::EncodedAddress, eth::H256, CcmIngressMetadata};
+use cf_chains::{address::EncodedAddress, eth::H256, CcmIngressMetadata, ForeignChain};
 use cf_primitives::{AccountRole, Asset, BasisPoints};
 use futures::{FutureExt, Stream};
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
@@ -9,6 +9,8 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::opaque::SessionKeys;
+use tracing::error;
+use zeroize::Zeroize;
 
 pub mod primitives {
 	pub use cf_primitives::*;
@@ -21,6 +23,8 @@ pub mod primitives {
 	};
 }
 
+pub mod lp;
+
 pub use chainflip_engine::settings;
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
@@ -30,7 +34,7 @@ use chainflip_engine::state_chain_observer::client::{
 	storage_api::StorageApi,
 	StateChainClient,
 };
-use utilities::task_scope::task_scope;
+use utilities::{clean_dot_address, clean_eth_address, task_scope::task_scope};
 
 #[async_trait]
 trait AuctionPhaseApi {
@@ -77,8 +81,6 @@ pub async fn request_block(
 		.ok_or_else(|| anyhow!("unknown block hash"))
 }
 
-pub type ClaimCertificate = Vec<u8>;
-
 async fn submit_and_ensure_success<Call, BlockStream>(
 	client: &StateChainClient,
 	block_stream: &mut BlockStream,
@@ -93,21 +95,24 @@ where
 
 	events
 		.iter()
-		.find(|event| {
-			matches!(
-				event,
-				state_chain_runtime::RuntimeEvent::System(
-					frame_system::Event::ExtrinsicFailed { .. }
-				)
-			)
+		.find_map(|event| {
+			if let state_chain_runtime::RuntimeEvent::System(
+				frame_system::Event::ExtrinsicFailed { dispatch_error, dispatch_info: _ },
+			) = event
+			{
+				error!("Extrinsic execution failed: {:?}", dispatch_error);
+				Some(Err(anyhow!("extrinsic execution failed")))
+			} else {
+				None
+			}
 		})
-		.map(|_| Err(anyhow!("extrinsic execution failed")))
 		.unwrap_or(Ok((tx_hash, events)))
 }
 
 async fn connect_submit_and_get_events<Call>(
 	state_chain_settings: &settings::StateChain,
 	call: Call,
+	required_role: AccountRole,
 ) -> Result<Vec<state_chain_runtime::RuntimeEvent>>
 where
 	Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static,
@@ -115,8 +120,7 @@ where
 	task_scope(|scope| {
 		async {
 			let (_, mut block_stream, state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
-					.await?;
+				StateChainClient::new(scope, state_chain_settings, required_role, false).await?;
 
 			submit_and_ensure_success(&state_chain_client, &mut block_stream, call)
 				.await
@@ -164,7 +168,7 @@ pub async fn request_claim(
 pub async fn register_account_role(
 	role: AccountRole,
 	state_chain_settings: &settings::StateChain,
-) -> Result<()> {
+) -> Result<H256> {
 	task_scope(|scope| {
 		async {
 			let (_, _, state_chain_client) =
@@ -177,8 +181,7 @@ pub async fn register_account_role(
 				})
 				.await
 				.expect("Could not set register account role for account");
-			println!("Account role set at tx {tx_hash:#x}.");
-			Ok(())
+			Ok(tx_hash)
 		}
 		.boxed()
 	})
@@ -340,6 +343,7 @@ pub async fn register_swap_intent(
 			relayer_commission_bps,
 			message_metadata,
 		},
+		AccountRole::None,
 	)
 	.await?;
 
@@ -359,33 +363,17 @@ pub async fn register_swap_intent(
 	}
 }
 
-pub async fn liquidity_deposit(
-	state_chain_settings: &settings::StateChain,
-	asset: Asset,
-) -> Result<EncodedAddress> {
-	let events = connect_submit_and_get_events(
-		state_chain_settings,
-		pallet_cf_lp::Call::request_deposit_address { asset },
-	)
-	.await?;
-
-	if let Some(state_chain_runtime::RuntimeEvent::LiquidityProvider(
-		pallet_cf_lp::Event::DepositAddressReady { ingress_address, intent_id: _ },
-	)) = events.iter().find(|event| {
-		matches!(
-			event,
-			state_chain_runtime::RuntimeEvent::LiquidityProvider(
-				pallet_cf_lp::Event::DepositAddressReady { .. }
-			)
-		)
-	}) {
-		Ok((*ingress_address).clone())
-	} else {
-		panic!("DepositAddressReady must have been generated");
-	}
+/// Sanitize the given address (hex or base58) and turn it into a EncodedAddress of the given
+/// chain.
+pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result<EncodedAddress> {
+	Ok(match chain {
+		ForeignChain::Ethereum =>
+			EncodedAddress::Eth(clean_eth_address(address).map_err(anyhow::Error::msg)?),
+		ForeignChain::Polkadot =>
+			EncodedAddress::Dot(clean_dot_address(address).map_err(anyhow::Error::msg)?),
+		ForeignChain::Bitcoin => todo!("Encoded address changes will make this easier"),
+	})
 }
-
-use zeroize::Zeroize;
 
 #[derive(Debug, Zeroize)]
 /// Public and Secret keys as bytes

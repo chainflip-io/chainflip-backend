@@ -223,6 +223,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type SwappingApi = LiquidityPools;
 	type AccountRoleRegistry = AccountRoles;
 	type AddressConverter = ChainAddressConverter;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }
 
@@ -298,7 +299,6 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type ChainApiCall = eth::api::EthereumApi<EthEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
-	type IntentTTL = ConstU32<1200>;
 	type IngressHandler = chainflip::EthIngressHandler;
 	type CcmHandler = Swapping;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
@@ -315,7 +315,6 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type Broadcaster = PolkadotBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
-	type IntentTTL = ConstU32<1200>;
 	type IngressHandler = chainflip::DotIngressHandler;
 	type CcmHandler = Swapping;
 }
@@ -331,7 +330,6 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type Broadcaster = BitcoinBroadcaster;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
-	type IntentTTL = ConstU32<1200>;
 	type IngressHandler = chainflip::BtcIngressHandler;
 	type CcmHandler = Swapping;
 }
