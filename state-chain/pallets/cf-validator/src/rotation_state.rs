@@ -17,7 +17,6 @@ pub struct RotationState<Id, Amount> {
 impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amount> {
 	pub fn from_auction_outcome<T>(
 		AuctionOutcome { winners, losers, bond }: AuctionOutcome<Id, Amount>,
-		new_epoch_index: EpochIndex,
 	) -> Self
 	where
 		T: Config<Amount = Amount> + Chainflip<ValidatorId = Id>,
@@ -50,7 +49,7 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 				.collect(),
 			banned: Default::default(),
 			bond,
-			epoch_index: new_epoch_index,
+			epoch_index: T::EpochInfo::epoch_index() + 1,
 		}
 	}
 

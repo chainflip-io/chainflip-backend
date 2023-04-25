@@ -1096,10 +1096,8 @@ impl<T: Config> Pallet<T> {
 						10u128.pow(18),
 				);
 
-				let mut rotation_state = RotationState::from_auction_outcome::<T>(
-					auction_outcome.clone(),
-					T::EpochInfo::epoch_index() + 1,
-				);
+				let mut rotation_state =
+					RotationState::from_auction_outcome::<T>(auction_outcome.clone());
 
 				rotation_state.qualify_nodes::<T::KeygenQualification>();
 
