@@ -6,7 +6,7 @@ use super::*;
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
 use cf_traits::{AccountRoleRegistry, Chainflip};
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::dispatch::UnfilteredDispatchable;
+use frame_support::{dispatch::UnfilteredDispatchable, traits::OnNewAccount};
 use frame_system::RawOrigin;
 
 fn generate_swaps<T: Config>(amount: u32, from: Asset, to: Asset) -> Vec<Swap> {
@@ -26,6 +26,7 @@ fn generate_swaps<T: Config>(amount: u32, from: Asset, to: Asset) -> Vec<Swap> {
 benchmarks! {
 	register_swap_intent {
 		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		T::AccountRoleRegistry::register_as_relayer(&caller).unwrap();
 		let origin = RawOrigin::Signed(caller);
 		let call = Call::<T>::register_swap_intent {
@@ -51,8 +52,9 @@ benchmarks! {
 
 	withdraw {
 		let caller: T::AccountId = whitelisted_caller();
-		EarnedRelayerFees::<T>::insert(caller.clone(), Asset::Eth, 200);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		T::AccountRoleRegistry::register_as_relayer(&caller).unwrap();
+		EarnedRelayerFees::<T>::insert(caller.clone(), Asset::Eth, 200);
 	} : _(
 		RawOrigin::Signed(caller.clone()),
 		Asset::Eth,
@@ -61,6 +63,7 @@ benchmarks! {
 
 	register_as_relayer {
 		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 	}: _(RawOrigin::Signed(caller.clone()))
 	verify {
 		T::AccountRoleRegistry::ensure_relayer(RawOrigin::Signed(caller).into())
@@ -126,6 +129,7 @@ benchmarks! {
 	on_initialize {
 		let a in 1..100;
 		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		T::AccountRoleRegistry::register_as_relayer(&caller).unwrap();
 		let origin = RawOrigin::Signed(caller);
 		for i in 0..a {

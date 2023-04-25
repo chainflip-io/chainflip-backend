@@ -8,7 +8,7 @@ use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_traits::{AccountRoleRegistry, EpochInfo};
 use codec::Decode;
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
-use frame_support::dispatch::UnfilteredDispatchable;
+use frame_support::{dispatch::UnfilteredDispatchable, traits::OnNewAccount};
 use frame_system::RawOrigin;
 
 // Note: Currently we only have one chain (ETH) - as soon we've
@@ -96,6 +96,7 @@ benchmarks_instance_pallet! {
 	}
 	report_keygen_outcome {
 		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
 
 		let keygen_participants = generate_authority_set::<T, I>(150, caller.clone().into());

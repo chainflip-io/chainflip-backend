@@ -5,7 +5,10 @@ use super::*;
 
 use cf_traits::{AccountRoleRegistry, Chainflip};
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::{dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
+use frame_support::{
+	dispatch::UnfilteredDispatchable,
+	traits::{EnsureOrigin, OnNewAccount},
+};
 use frame_system::RawOrigin;
 
 benchmarks! {
@@ -141,8 +144,9 @@ benchmarks! {
 
 	stop_bidding {
 		let caller: T::AccountId = whitelisted_caller();
-		ActiveBidder::<T>::insert(caller.clone(), true);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
+		ActiveBidder::<T>::insert(caller.clone(), true);
 	}:_(RawOrigin::Signed(caller.clone()))
 	verify {
 		assert!(!ActiveBidder::<T>::get(caller));
@@ -150,8 +154,9 @@ benchmarks! {
 
 	start_bidding {
 		let caller: T::AccountId = whitelisted_caller();
-		ActiveBidder::<T>::insert(caller.clone(), false);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
+		ActiveBidder::<T>::insert(caller.clone(), false);
 	}:_(RawOrigin::Signed(caller.clone()))
 	verify {
 		assert!(ActiveBidder::<T>::get(caller));

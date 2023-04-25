@@ -9,7 +9,7 @@ use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account}
 use frame_support::{
 	assert_ok,
 	dispatch::UnfilteredDispatchable,
-	traits::{IsType, OnInitialize},
+	traits::{IsType, OnInitialize, OnNewAccount},
 };
 use frame_system::RawOrigin;
 use pallet_cf_validator::CurrentAuthorities;
@@ -25,6 +25,7 @@ where
 {
 	CurrentAuthorities::<T>::put(authorities.clone().collect::<BTreeSet<_>>());
 	for validator_id in authorities {
+		<T as frame_system::Config>::OnNewAccount::on_new_account(validator_id.into_ref());
 		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(
 			&validator_id.clone().into()
 		));
@@ -72,6 +73,7 @@ benchmarks_instance_pallet! {
 
 		let reporter = threshold_set.next().unwrap();
 		let account: T::AccountId = reporter.clone().into();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&account);
 		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&account));
 		let offenders = BTreeSet::from_iter(threshold_set.take(a as usize));
 	} : _(RawOrigin::Signed(reporter.into()), ceremony_id, offenders)

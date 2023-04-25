@@ -322,10 +322,11 @@ pub mod pallet {
 			let request_count = weights_left
 				.saturating_sub(T::WeightInfo::egress_assets(0u32))
 				.ref_time()
-				.saturating_div(single_request_cost.ref_time()) as u32;
+				.checked_div(single_request_cost.ref_time())
+				.map(|x| x as u32);
 
 			weights_left = weights_left.saturating_sub(
-				with_transaction(|| Self::do_egress_scheduled_fetch_transfer(Some(request_count)))
+				with_transaction(|| Self::do_egress_scheduled_fetch_transfer(request_count))
 					.unwrap_or_else(|_| T::WeightInfo::egress_assets(0)),
 			);
 
@@ -335,9 +336,10 @@ pub mod pallet {
 			let ccm_count = weights_left
 				.saturating_sub(T::WeightInfo::egress_ccm(0u32))
 				.ref_time()
-				.saturating_div(single_ccm_cost.ref_time()) as u32;
-			weights_left =
-				weights_left.saturating_sub(Self::do_egress_scheduled_ccm(Some(ccm_count)));
+				.checked_div(single_ccm_cost.ref_time())
+				.map(|x| x as u32);
+
+			weights_left = weights_left.saturating_sub(Self::do_egress_scheduled_ccm(ccm_count));
 
 			remaining_weight.saturating_sub(weights_left)
 		}

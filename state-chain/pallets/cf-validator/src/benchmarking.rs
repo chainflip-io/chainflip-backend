@@ -51,6 +51,7 @@ pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_staked: u128) {
 			pallet_cf_staking::ETH_ZERO_ADDRESS,
 			Default::default()
 		));
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&bidder);
 		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&bidder));
 		assert_ok!(pallet_cf_staking::Pallet::<T>::start_bidding(bidder_origin.clone(),));
 
@@ -163,6 +164,7 @@ benchmarks! {
 	}
 	cfe_version {
 		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&caller));
 		let version = SemVer {
 			major: 1,
@@ -176,6 +178,7 @@ benchmarks! {
 	}
 	register_peer_id {
 		let caller: T::AccountId = account("doogle", 0, 0);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&caller));
 		let pair: p2p_crypto::Public = RuntimeAppPublic::generate_pair(None);
 		let signature: Ed25519Signature = pair.sign(&caller.encode()).unwrap().try_into().unwrap();

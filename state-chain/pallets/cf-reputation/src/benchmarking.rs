@@ -5,7 +5,7 @@ use super::*;
 
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
-use frame_support::dispatch::UnfilteredDispatchable;
+use frame_support::{dispatch::UnfilteredDispatchable, traits::OnNewAccount};
 use frame_system::RawOrigin;
 
 const MAX_VALIDATOR_COUNT: u32 = 150;
@@ -31,8 +31,9 @@ benchmarks! {
 	}
 	heartbeat {
 		let caller: T::AccountId = whitelisted_caller();
-		let validator_id: T::ValidatorId = caller.clone().into();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
+		let validator_id: T::ValidatorId = caller.clone().into();
 	} : _(RawOrigin::Signed(caller))
 	verify {
 		assert_eq!(LastHeartbeat::<T>::get(&validator_id), Some(1u32.into()));

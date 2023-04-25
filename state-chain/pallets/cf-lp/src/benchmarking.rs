@@ -5,18 +5,20 @@ use cf_chains::benchmarking_value::BenchmarkValue;
 use cf_primitives::Asset;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::{assert_ok, dispatch::UnfilteredDispatchable};
+use frame_support::{assert_ok, dispatch::UnfilteredDispatchable, traits::OnNewAccount};
 use frame_system::RawOrigin;
 
 benchmarks! {
 	request_deposit_address {
 		let caller: T::AccountId = whitelisted_caller();
-		let _ = Pallet::<T>::register_lp_account(RawOrigin::Signed(caller.clone()).into());
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
 	}: _(RawOrigin::Signed(caller), Asset::Eth)
 
 	withdraw_asset {
 		let caller: T::AccountId = whitelisted_caller();
-		let _ = Pallet::<T>::register_lp_account(RawOrigin::Signed(caller.clone()).into());
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
 		assert_ok!(Pallet::<T>::try_credit_account(
 			&caller,
 			Asset::Eth,
@@ -29,6 +31,7 @@ benchmarks! {
 
 	register_lp_account {
 		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 	}: _(RawOrigin::Signed(caller.clone()))
 	verify {
 		assert_ok!(T::AccountRoleRegistry::ensure_liquidity_provider(RawOrigin::Signed(caller).into()));
@@ -37,6 +40,7 @@ benchmarks! {
 	on_initialize {
 		let a in 1..100;
 		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		let _ = Pallet::<T>::register_lp_account(RawOrigin::Signed(caller.clone()).into());
 		for i in 0..a {
 			assert_ok!(Pallet::<T>::request_deposit_address(RawOrigin::Signed(caller.clone()).into(), Asset::Eth));
