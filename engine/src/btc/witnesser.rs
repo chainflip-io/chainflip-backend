@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::{
 	constants::BTC_INGRESS_BLOCK_SAFETY_MARGIN,
-	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
+	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
 	witnesser::{
 		block_witnesser::{
 			BlockStream, BlockWitnesser, BlockWitnesserGenerator, BlockWitnesserGeneratorWrapper,
@@ -93,7 +93,7 @@ pub async fn start<StateChainClient>(
 	db: Arc<PersistentKeyDB>,
 ) -> Result<(), anyhow::Error>
 where
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 {
 	start_epoch_process_runner(
 		Arc::new(Mutex::new(epoch_starts_receiver)),
@@ -118,7 +118,7 @@ struct BtcBlockWitnesser<StateChainClient> {
 #[async_trait]
 impl<StateChainClient> BlockWitnesser for BtcBlockWitnesser<StateChainClient>
 where
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 {
 	type Chain = Bitcoin;
 	type Block = ChainBlockNumber<Self::Chain>;
@@ -188,7 +188,7 @@ where
 
 struct BtcWitnesserGenerator<StateChainClient>
 where
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 {
 	state_chain_client: Arc<StateChainClient>,
 	btc_rpc: BtcRpcClient,
@@ -197,7 +197,7 @@ where
 #[async_trait]
 impl<StateChainClient> BlockWitnesserGenerator for BtcWitnesserGenerator<StateChainClient>
 where
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 {
 	type Witnesser = BtcBlockWitnesser<StateChainClient>;
 

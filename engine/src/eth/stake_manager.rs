@@ -1,4 +1,4 @@
-use crate::state_chain_observer::client::extrinsic_api::ExtrinsicApi;
+use crate::state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi;
 use std::sync::Arc;
 
 use crate::eth::{EthRpcApi, SignatureAndEvent};
@@ -103,7 +103,7 @@ impl EthContractWitnesser for StakeManager {
 	) -> anyhow::Result<()>
 	where
 		EthRpcClient: EthRpcApi + Sync + Send,
-		StateChainClient: ExtrinsicApi + Send + Sync,
+		StateChainClient: SignedExtrinsicApi + Send + Sync,
 	{
 		for event in block.block_items {
 			info!("Handling event: {event}");

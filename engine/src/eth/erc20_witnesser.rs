@@ -9,7 +9,10 @@ use web3::{
 	types::H160,
 };
 
-use crate::{state_chain_observer::client::extrinsic_api::ExtrinsicApi, witnesser::AddressMonitor};
+use crate::{
+	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
+	witnesser::AddressMonitor,
+};
 
 use super::{
 	core_h160, core_h256, event::Event, rpc::EthRpcApi, utils::decode_log_param, BlockWithItems,
@@ -74,7 +77,7 @@ impl EthContractWitnesser for Erc20Witnesser {
 	) -> Result<()>
 	where
 		EthRpcClient: EthRpcApi + Sync + Send,
-		StateChainClient: ExtrinsicApi + Send + Sync,
+		StateChainClient: SignedExtrinsicApi + Send + Sync,
 	{
 		let mut address_monitor =
 			self.address_monitor.try_lock().expect("should have exclusive ownership");

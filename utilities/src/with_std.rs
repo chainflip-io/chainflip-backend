@@ -77,6 +77,78 @@ pub fn assert_stream_send<'u, R>(
 	stream
 }
 
+pub trait CachedStream: Stream {
+	type Cache;
+
+	fn cache(&self) -> &Self::Cache;
+}
+
+#[derive(Clone)]
+#[pin_project::pin_project]
+pub struct InnerCachedStream<Stream, Cache, F> {
+	#[pin]
+	stream: Stream,
+	cache: Cache,
+	f: F,
+}
+impl<St, Cache, F> Stream for InnerCachedStream<St, Cache, F>
+where
+	St: Stream,
+	F: FnMut(&St::Item) -> Cache,
+{
+	type Item = St::Item;
+
+	fn poll_next(
+		self: core::pin::Pin<&mut Self>,
+		cx: &mut core::task::Context<'_>,
+	) -> core::task::Poll<Option<Self::Item>> {
+		let this = self.project();
+		let poll = this.stream.poll_next(cx);
+
+		if let core::task::Poll::Ready(Some(item)) = &poll {
+			*this.cache = (this.f)(item);
+		}
+
+		poll
+	}
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		self.stream.size_hint()
+	}
+}
+impl<St, Cache, F> CachedStream for InnerCachedStream<St, Cache, F>
+where
+	St: Stream,
+	F: FnMut(&St::Item) -> Cache,
+{
+	type Cache = Cache;
+
+	fn cache(&self) -> &Self::Cache {
+		&self.cache
+	}
+}
+pub trait MakeCachedStream: Stream {
+	fn make_cached<Cache, F: FnMut(&<Self as Stream>::Item) -> Cache>(
+		self,
+		initial: Cache,
+		f: F,
+	) -> InnerCachedStream<Self, Cache, F>
+	where
+		Self: Sized;
+}
+impl<T: Stream> MakeCachedStream for T {
+	fn make_cached<Cache, F: FnMut(&<Self as Stream>::Item) -> Cache>(
+		self,
+		initial: Cache,
+		f: F,
+	) -> InnerCachedStream<Self, Cache, F>
+	where
+		Self: Sized,
+	{
+		InnerCachedStream { stream: self, cache: initial, f }
+	}
+}
+
 /// Makes a tick that outputs every duration and if ticks are "missed" (as tick() wasn't called for
 /// some time) it will immediately output a single tick on the next call to tick() and resume
 /// ticking every duration.

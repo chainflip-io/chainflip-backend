@@ -9,7 +9,9 @@ use tokio::sync::{oneshot, Mutex};
 use tracing::{info, info_span, Instrument};
 
 use crate::{
-	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
+	state_chain_observer::client::{
+		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+	},
 	witnesser::{
 		epoch_process_runner::{
 			self, start_epoch_process_runner, EpochProcessGenerator, EpochWitnesser,
@@ -28,7 +30,7 @@ pub async fn start<StateChainClient, DotRpc>(
 	latest_block_hash: H256,
 ) -> anyhow::Result<()>
 where
-	StateChainClient: ExtrinsicApi + StorageApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + StorageApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
 	// When this witnesser starts up, we should check that the runtime version is up to
@@ -64,7 +66,7 @@ struct RuntimeVersionUpdater<StateChainClient> {
 #[async_trait]
 impl<StateChainClient> EpochWitnesser for RuntimeVersionUpdater<StateChainClient>
 where
-	StateChainClient: ExtrinsicApi + StorageApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + StorageApi + 'static + Send + Sync,
 {
 	type Data = RuntimeVersion;
 	type Chain = Polkadot;
@@ -126,7 +128,7 @@ struct RuntimeVersionUpdaterGenerator<StateChainClient, DotRpc> {
 impl<StateChainClient, DotRpc> EpochProcessGenerator
 	for RuntimeVersionUpdaterGenerator<StateChainClient, DotRpc>
 where
-	StateChainClient: ExtrinsicApi + StorageApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + StorageApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
 	type Witnesser = RuntimeVersionUpdater<StateChainClient>;

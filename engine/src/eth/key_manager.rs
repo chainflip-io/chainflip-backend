@@ -1,6 +1,6 @@
 use crate::{
 	eth::{core_h160, core_h256, EthRpcApi, EventParseError, SignatureAndEvent},
-	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
+	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
 };
 use cf_chains::eth::{SchnorrVerificationComponents, TransactionFee};
 use cf_primitives::EpochIndex;
@@ -205,7 +205,7 @@ impl EthContractWitnesser for KeyManager {
 	) -> anyhow::Result<()>
 	where
 		EthRpcClient: EthRpcApi + Sync + Send,
-		StateChainClient: ExtrinsicApi + Send + Sync,
+		StateChainClient: SignedExtrinsicApi + Send + Sync,
 	{
 		for event in block.block_items {
 			info!("Handling event: {event}");
