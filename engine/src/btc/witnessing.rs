@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-	multisig::PersistentKeyDB,
+	db::PersistentKeyDB,
 	settings,
 	state_chain_observer::client::{storage_api::StorageApi, StateChainClient},
 	witnesser::{AddressMonitor, AddressMonitorCommand, EpochStart, LatestBlockNumber},

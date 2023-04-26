@@ -3,15 +3,22 @@ use tracing::warn;
 
 use std::collections::BTreeSet;
 
-use crate::logging::{
-	KEYGEN_CEREMONY_FAILED, KEYGEN_REQUEST_IGNORED, REQUEST_TO_SIGN_IGNORED,
-	SIGNING_CEREMONY_FAILED, UNAUTHORIZED_KEYGEN_ABORTED, UNAUTHORIZED_SIGNING_ABORTED,
-};
 use utilities::format_iterator;
 
 use thiserror::Error;
 
 use super::{KeygenStageName, SigningStageName};
+
+// ==== Logging Error/Warning Tag constants ====
+pub const REQUEST_TO_SIGN_IGNORED: &str = "E0";
+pub const SIGNING_CEREMONY_FAILED: &str = "E2";
+pub const KEYGEN_REQUEST_IGNORED: &str = "E3";
+// pub const KEYGEN_REQUEST_EXPIRED: &str = "E4"; // No longer used
+pub const KEYGEN_CEREMONY_FAILED: &str = "E5";
+// pub const KEYGEN_REJECTED_INCOMPATIBLE: &str = "E6"; // No longer used
+// pub const CEREMONY_REQUEST_IGNORED: &str = "E7"; // No longer used
+pub const UNAUTHORIZED_SIGNING_ABORTED: &str = "E8";
+pub const UNAUTHORIZED_KEYGEN_ABORTED: &str = "E9";
 
 #[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SigningFailureReason {

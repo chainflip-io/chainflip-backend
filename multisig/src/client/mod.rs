@@ -39,8 +39,8 @@ pub use common::{
 #[cfg(test)]
 pub use self::utils::ensure_unsorted;
 
-#[cfg(test)]
-pub use helpers::get_key_data_for_test;
+#[cfg(feature = "test")]
+pub use keygen::get_key_data_for_test;
 
 #[cfg(test)]
 pub use signing::{gen_signing_data_stage1, gen_signing_data_stage4};
@@ -48,7 +48,7 @@ pub use signing::{gen_signing_data_stage1, gen_signing_data_stage4};
 #[cfg(test)]
 pub use keygen::{gen_keygen_data_hash_comm1, gen_keygen_data_verify_hash_comm2};
 
-#[cfg(test)]
+#[cfg(feature = "test")]
 use mockall::automock;
 
 use self::{
@@ -112,7 +112,7 @@ pub struct MultisigMessage<P: ECPoint> {
 /// that can be await'ed on for the result of that ceremony. Splitting requesting and waiting for a
 /// ceremony to complete allows the requests to all be sent synchronously which is required as we
 /// expect the requests to be ordered by ceremony_id
-#[cfg_attr(test, automock)]
+#[cfg_attr(feature = "test", automock)]
 pub trait MultisigClientApi<C: CryptoScheme> {
 	fn initiate_keygen(
 		&self,

@@ -1,8 +1,11 @@
 use cf_primitives::{KeyId, GENESIS_EPOCH};
 
-use chainflip_engine::multisig::{
-	client::keygen::generate_key_data, eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme,
-	PersistentKeyDB, Rng,
+use chainflip_engine::{
+	db::PersistentKeyDB,
+	multisig::{
+		client::keygen::generate_key_data, eth::EthSigning, polkadot::PolkadotSigning,
+		CryptoScheme, Rng,
+	},
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use rand_legacy::FromEntropy;

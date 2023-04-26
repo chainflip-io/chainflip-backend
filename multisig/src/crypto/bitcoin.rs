@@ -136,7 +136,7 @@ impl CryptoScheme for BtcSigning {
 		pubkey.is_even_y()
 	}
 
-	#[cfg(test)]
+	#[cfg(feature = "test")]
 	fn signing_payload_for_test() -> Self::SigningPayload {
 		SigningPayload(Sha256::digest(b"Chainflip:Chainflip:Chainflip:01").into())
 	}

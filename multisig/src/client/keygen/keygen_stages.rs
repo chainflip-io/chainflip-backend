@@ -318,7 +318,7 @@ pub struct VerifyHashCommitmentsBroadcast2<Crypto: CryptoScheme> {
 	shares_to_send: OutgoingShares<Crypto::Point>,
 }
 
-#[cfg(test)]
+#[cfg(feature = "test")]
 impl<Crypto: CryptoScheme> VerifyHashCommitmentsBroadcast2<Crypto> {
 	pub fn new(
 		keygen_common: KeygenCommon<Crypto>,

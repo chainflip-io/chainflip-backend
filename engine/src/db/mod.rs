@@ -50,10 +50,13 @@ impl<C: CryptoScheme> KeyStoreAPI<C> for KeyStore<C> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::multisig::{
-		client::{keygen, keygen::generate_key_data},
-		eth::EthSigning,
-		PersistentKeyDB, Rng,
+	use crate::{
+		db::PersistentKeyDB,
+		multisig::{
+			client::{keygen, keygen::generate_key_data},
+			eth::EthSigning,
+			Rng,
+		},
 	};
 	use cf_primitives::AccountId;
 	use rand_legacy::FromEntropy;

@@ -1,6 +1,10 @@
 #[cfg(test)]
 mod tests;
 
+/// The number of ceremonies ahead of the latest authorized ceremony that
+/// are allowed to create unauthorized ceremonies (delayed messages)
+pub const CEREMONY_ID_WINDOW: u64 = 6000;
+
 use anyhow::{anyhow, bail, Context, Result};
 use futures::FutureExt;
 use std::{
@@ -12,18 +16,15 @@ use std::{
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tracing::{debug, info, info_span, trace, warn, Instrument};
 
-use crate::{
-	constants::CEREMONY_ID_WINDOW,
-	multisig::{
-		client,
-		client::{
-			common::{KeygenFailureReason, SigningFailureReason},
-			keygen::generate_key_data,
-			signing::PayloadAndKey,
-			CeremonyRequestDetails,
-		},
-		crypto::{generate_single_party_signature, CryptoScheme, Rng},
+use crate::multisig::{
+	client,
+	client::{
+		common::{KeygenFailureReason, SigningFailureReason},
+		keygen::generate_key_data,
+		signing::PayloadAndKey,
+		CeremonyRequestDetails,
 	},
+	crypto::{generate_single_party_signature, CryptoScheme, Rng},
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage},
 };
 use cf_primitives::{AuthorityCount, CeremonyId};

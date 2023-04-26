@@ -137,7 +137,7 @@ impl CryptoScheme for Ed25519Signing {
 		AggKey(VerificationKeyBytes::from(bytes))
 	}
 
-	#[cfg(test)]
+	#[cfg(feature = "test")]
 	fn signing_payload_for_test() -> Self::SigningPayload {
 		SigningPayload([0u8; 32].to_vec())
 	}

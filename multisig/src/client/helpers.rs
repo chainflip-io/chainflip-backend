@@ -22,26 +22,24 @@ use utilities::{
 };
 
 use crate::multisig::{
+	client::{
+		ceremony_manager::{
+			prepare_keygen_request, prepare_signing_request, CeremonyOutcome, CeremonyTrait,
+			KeygenCeremony, SigningCeremony,
+		},
+		ceremony_runner::CeremonyRunner,
+		common::{broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason},
+		keygen::{generate_key_data, HashComm1, HashContext, VerifyHashCommitmentsBroadcast2},
+		signing, KeygenResultInfo, PartyIdxMapping,
+	},
+	crypto::{ECPoint, Rng},
+	CryptoScheme,
+};
+use crate::multisig::{
 	client::{keygen, MultisigMessage},
 	// This determines which crypto scheme will be used in tests
 	// (we make arbitrary choice to use eth)
 	crypto::eth::{EthSigning, Point},
-};
-use crate::{
-	multisig::{
-		client::{
-			ceremony_manager::{
-				prepare_keygen_request, prepare_signing_request, CeremonyOutcome, CeremonyTrait,
-				KeygenCeremony, SigningCeremony,
-			},
-			ceremony_runner::CeremonyRunner,
-			common::{broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason},
-			keygen::{generate_key_data, HashComm1, HashContext, VerifyHashCommitmentsBroadcast2},
-			signing, KeygenResultInfo, PartyIdxMapping,
-		},
-		crypto::{ECPoint, Rng},
-		CryptoScheme,
-	},
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
 };
 
@@ -884,14 +882,4 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 	let stage = Box::new(BroadcastStage::new(processor, common));
 
 	CeremonyRunner::new_authorised(stage)
-}
-
-/// Generates key data using the DEFAULT_KEYGEN_SEED and returns the KeygenResultInfo for the first
-/// signer.
-pub fn get_key_data_for_test<C: CryptoScheme>(signers: BTreeSet<AccountId>) -> KeygenResultInfo<C> {
-	generate_key_data::<C>(signers.clone(), &mut Rng::from_seed(DEFAULT_KEYGEN_SEED))
-		.1
-		.get(signers.iter().next().unwrap())
-		.expect("should get keygen for an account")
-		.to_owned()
 }

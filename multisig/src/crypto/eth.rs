@@ -23,8 +23,6 @@ pub struct EthSchnorrSignature {
 
 impl From<EthSchnorrSignature> for cf_chains::eth::SchnorrVerificationComponents {
 	fn from(cfe_sig: EthSchnorrSignature) -> Self {
-		use crate::eth::utils::pubkey_to_eth_addr;
-
 		Self { s: cfe_sig.s, k_times_g_address: pubkey_to_eth_addr(cfe_sig.r) }
 	}
 }
@@ -77,7 +75,6 @@ impl CryptoScheme for EthSigning {
 		nonce_commitment: Self::Point,
 		payload: &Self::SigningPayload,
 	) -> Scalar {
-		use crate::eth::utils::pubkey_to_eth_addr;
 		use cf_chains::eth::AggKey;
 
 		let e = AggKey::from_pubkey_compressed(pubkey.get_element().serialize())
@@ -141,8 +138,46 @@ impl CryptoScheme for EthSigning {
 		x < half_order
 	}
 
-	#[cfg(test)]
+	#[cfg(feature = "test")]
 	fn signing_payload_for_test() -> Self::SigningPayload {
 		SigningPayload("Chainflip:Chainflip:Chainflip:01".as_bytes().try_into().unwrap())
 	}
+}
+
+/// Get a eth address from a public key
+pub fn pubkey_to_eth_addr(pubkey: secp256k1::PublicKey) -> [u8; 20] {
+	use sp_core::Hasher;
+
+	let pubkey_bytes: [u8; 64] = pubkey.serialize_uncompressed()[1..]
+		.try_into()
+		.expect("Should be a valid pubkey");
+
+	let pubkey_hash = sp_runtime::traits::Keccak256::hash(&pubkey_bytes);
+
+	// take the last 160bits (20 bytes)
+	let addr: [u8; 20] = pubkey_hash[12..].try_into().expect("Should be exactly 20 bytes long");
+
+	addr
+}
+
+#[test]
+fn test_pubkey_to_eth_addr() {
+	use secp256k1::PublicKey;
+	use std::str::FromStr;
+
+	// The secret key and corresponding eth addr were taken from an example in the "Mastering
+	// Ethereum" Book.
+	let sk = secp256k1::SecretKey::from_str(
+		"f8f8a2f43c8376ccb0871305060d7b27b0554d2cc72bccf41b2705608452f315",
+	)
+	.unwrap();
+
+	let pk = PublicKey::from_secret_key(&secp256k1::Secp256k1::signing_only(), &sk);
+
+	let expected: [u8; 20] = hex::decode("001d3f1ef827552ae1114027bd3ecf1f086ba0f9")
+		.unwrap()
+		.try_into()
+		.unwrap();
+
+	assert_eq!(pubkey_to_eth_addr(pk), expected);
 }

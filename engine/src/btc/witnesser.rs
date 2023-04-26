@@ -30,7 +30,7 @@ use tokio::sync::Mutex;
 use tracing::{info_span, trace, Instrument};
 
 use crate::{
-	multisig::PersistentKeyDB,
+	db::PersistentKeyDB,
 	witnesser::{
 		block_head_stream_from::block_head_stream_from,
 		http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},

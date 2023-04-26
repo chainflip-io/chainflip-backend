@@ -579,7 +579,8 @@ pub mod genesis {
 	use std::collections::HashMap;
 
 	use super::*;
-	use crate::multisig::{client::PartyIdxMapping, eth::EthSigning, PublicKeyBytes};
+	use crate::multisig::{client::PartyIdxMapping, eth::EthSigning};
+	use cf_primitives::PublicKeyBytes;
 	use state_chain_runtime::AccountId;
 
 	/// Generate keys for all participants in a centralised manner.
@@ -660,4 +661,20 @@ pub mod genesis {
 	) -> (PublicKeyBytes, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
 		generate_key_data_detail(signers, true, rng)
 	}
+}
+
+/// Generates key data using a default seed and returns the KeygenResultInfo for the
+/// first signer.
+#[cfg(feature = "test")]
+pub fn get_key_data_for_test<C: CryptoScheme>(
+	signers: BTreeSet<cf_primitives::AccountId>,
+) -> KeygenResultInfo<C> {
+	super::generate_key_data::<C>(
+		signers.clone(),
+		&mut <Rng as rand_legacy::SeedableRng>::from_seed([8; 32]),
+	)
+	.1
+	.get(signers.iter().next().unwrap())
+	.expect("should get keygen for an account")
+	.to_owned()
 }

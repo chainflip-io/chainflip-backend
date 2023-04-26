@@ -163,7 +163,7 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 		true
 	}
 
-	#[cfg(test)]
+	#[cfg(feature = "test")]
 	fn signing_payload_for_test() -> Self::SigningPayload;
 }
 

@@ -9,6 +9,7 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 version = '0.1.0'
 
 [dependencies]
+mockall = { version = "0.11.0", optional = true}
 anyhow = "1.0"
 async-trait = "0.1.49"
 async-channel = "1.7.1"
@@ -136,7 +137,11 @@ csv = "1.1.6"
 tempfile = "3.3.0"
 ethereum = "0.14"
 rlp = "0.5"
+multisig = {path = ".", features = ["test"]}
 
 [build-dependencies]
 substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
 utilities = { package = "utilities", path = "../utilities" , features = ["test-utils"] }
+
+[features]
+test = ['mockall']

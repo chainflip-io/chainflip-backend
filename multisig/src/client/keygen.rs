@@ -5,9 +5,10 @@ mod keygen_stages;
 #[cfg(test)]
 mod tests;
 
-#[cfg(test)]
+#[cfg(feature = "test")]
 pub use keygen_detail::{
-	generate_shares_and_commitment, DKGUnverifiedCommitment, OutgoingShares, SharingParameters,
+	generate_shares_and_commitment, get_key_data_for_test, DKGUnverifiedCommitment, OutgoingShares,
+	SharingParameters,
 };
 
 #[cfg(test)]

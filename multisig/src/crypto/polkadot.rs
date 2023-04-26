@@ -144,7 +144,7 @@ impl CryptoScheme for PolkadotSigning {
 		challenge * private_key + nonce
 	}
 
-	#[cfg(test)]
+	#[cfg(feature = "test")]
 	fn signing_payload_for_test() -> Self::SigningPayload {
 		SigningPayload::new(vec![1_u8; 256]).unwrap()
 	}

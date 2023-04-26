@@ -38,6 +38,7 @@ members = [
   'utilities',
   'state-chain/custom-rpc',
   'state-chain/cf-session-benchmarking',
+  'multisig',
 ]
 
 [profile.release]

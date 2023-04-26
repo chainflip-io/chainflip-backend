@@ -5,8 +5,9 @@ use std::{
 };
 
 use super::*;
-use crate::multisig::{
-	client::get_key_data_for_test, eth::EthSigning, polkadot::PolkadotSigning, PersistentKeyDB,
+use crate::{
+	db::PersistentKeyDB,
+	multisig::{client::get_key_data_for_test, eth::EthSigning, polkadot::PolkadotSigning},
 };
 use cf_primitives::{KeyId, GENESIS_EPOCH};
 use rocksdb::{Options, DB};

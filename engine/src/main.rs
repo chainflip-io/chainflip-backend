@@ -5,14 +5,12 @@ use anyhow::Context;
 use cf_primitives::AccountRole;
 use chainflip_engine::{
 	btc::{self, rpc::BtcRpcClient, BtcBroadcaster},
-	db::KeyStore,
+	db::{KeyStore, PersistentKeyDB},
 	dot::{self, rpc::DotRpcClient, witnesser as dot_witnesser, DotBroadcaster},
 	eth::{self, build_broadcast_channel, rpc::EthDualRpcClient, EthBroadcaster},
 	health::HealthChecker,
 	logging,
-	multisig::{
-		self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, PersistentKeyDB,
-	},
+	multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning},
 	p2p,
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{

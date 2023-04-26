@@ -4,9 +4,7 @@ pub use state_chain_runtime::constants::common::eth::BLOCK_SAFETY_MARGIN as ETH_
 
 pub use state_chain_runtime::constants::common::btc::INGRESS_BLOCK_SAFETY_MARGIN as BTC_INGRESS_BLOCK_SAFETY_MARGIN;
 
-/// The number of ceremonies ahead of the latest authorized ceremony that
-/// are allowed to create unauthorized ceremonies (delayed messages)
-pub const CEREMONY_ID_WINDOW: u64 = 6000;
+pub use multisig::client::ceremony_manager::CEREMONY_ID_WINDOW;
 
 // ======= State chain client =======
 

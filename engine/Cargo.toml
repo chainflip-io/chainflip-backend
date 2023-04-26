@@ -123,7 +123,8 @@ pallet-cf-witnesser = { path = "../state-chain/pallets/cf-witnesser" }
 custom-rpc = { path = "../state-chain/custom-rpc" }
 state-chain-runtime = { path = "../state-chain/runtime" }
 chainflip-node = { path = "../state-chain/node" }
-utilities = {package = "utilities", path = "../utilities" }
+utilities = { path = "../utilities" }
+multisig = { path = "../multisig" }
 
 # substrate deps
 codec = { package = "parity-scale-codec", version = "3.0.0", features = [
@@ -158,6 +159,7 @@ csv = "1.1.6"
 tempfile = "3.3.0"
 ethereum = "0.14"
 rlp = "0.5"
+multisig = { path = "../multisig", features = ["test"] }
 
 [build-dependencies]
 substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }

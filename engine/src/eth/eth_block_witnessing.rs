@@ -11,7 +11,7 @@ use super::{
 };
 use crate::{
 	constants::{BLOCK_PULL_TIMEOUT_MULTIPLIER, ETH_AVERAGE_BLOCK_TIME_SECONDS},
-	multisig::PersistentKeyDB,
+	db::PersistentKeyDB,
 	stream_utils::EngineStreamExt,
 	witnesser::{
 		block_witnesser::{

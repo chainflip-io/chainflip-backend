@@ -5,7 +5,7 @@ use cf_primitives::EpochIndex;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
-use crate::multisig::{ChainTag, PersistentKeyDB};
+use crate::{db::PersistentKeyDB, multisig::ChainTag};
 
 use super::HasChainTag;
 

@@ -12,8 +12,8 @@ use tokio::sync::Mutex;
 
 use crate::{
 	common::start_with_restart_on_failure,
+	db::PersistentKeyDB,
 	eth::ingress_witnesser::IngressWitnesser,
-	multisig::PersistentKeyDB,
 	settings,
 	state_chain_observer::{client::StateChainClient, EthAddressToMonitorSender},
 	witnesser::{AddressMonitor, EpochStart},

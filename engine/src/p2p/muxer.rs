@@ -10,13 +10,7 @@ use crate::{
 	p2p::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages},
 };
 
-pub type ProtocolVersion = u16;
-
-#[derive(Debug)]
-pub struct VersionedCeremonyMessage {
-	pub version: ProtocolVersion,
-	pub payload: Vec<u8>,
-}
+pub use multisig::p2p::{ProtocolVersion, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION};
 
 pub struct P2PMuxer {
 	all_incoming_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
@@ -83,9 +77,6 @@ impl<'a> TagPlusMessage<'a> {
 		Ok(TagPlusMessage { tag, payload })
 	}
 }
-
-/// Currently active wire protocol version
-pub const CURRENT_PROTOCOL_VERSION: ProtocolVersion = 1;
 
 fn add_tag_and_current_version(data: &[u8], tag: ChainTag) -> Vec<u8> {
 	let with_tag = TagPlusMessage { tag, payload: data }.serialize();

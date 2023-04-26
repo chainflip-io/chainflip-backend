@@ -1,7 +1,7 @@
 use std::{collections::BTreeSet, pin::Pin, time::Duration};
 
 use crate::{
-	constants::CEREMONY_ID_WINDOW,
+	client::get_key_data_for_test,
 	multisig::{
 		client::{
 			self,
@@ -10,7 +10,7 @@ use crate::{
 			},
 			ceremony_runner::CeremonyRunner,
 			common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
-			gen_keygen_data_hash_comm1, get_key_data_for_test,
+			gen_keygen_data_hash_comm1,
 			helpers::{
 				ACCOUNT_IDS, CEREMONY_TIMEOUT_DURATION, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
 				INITIAL_LATEST_CEREMONY_ID,
@@ -32,6 +32,8 @@ use rand_legacy::SeedableRng;
 use sp_runtime::AccountId32;
 use tokio::sync::{mpsc, oneshot};
 use utilities::{task_scope::task_scope, threshold_from_share_count};
+
+use super::CEREMONY_ID_WINDOW;
 
 /// Run on_request_to_sign on a ceremony manager, using a junk key and default ceremony id and data.
 async fn run_on_request_to_sign<C: CryptoScheme>(

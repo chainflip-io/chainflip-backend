@@ -7,7 +7,7 @@ use anyhow::Result;
 use itertools::Itertools;
 use tracing::{error, info};
 
-use crate::multisig::{ChainTag, PersistentKeyDB};
+use crate::{db::PersistentKeyDB, multisig::ChainTag};
 use utilities::task_scope;
 
 use super::WitnessedUntil;
