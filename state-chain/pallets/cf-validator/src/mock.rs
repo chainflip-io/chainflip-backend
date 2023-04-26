@@ -121,13 +121,7 @@ impl ValidatorRegistration<ValidatorId> for Test {
 
 pub struct TestEpochTransitionHandler;
 
-impl EpochTransitionHandler for TestEpochTransitionHandler {
-	type ValidatorId = ValidatorId;
-
-	fn on_new_epoch(_epoch_authorities: &[Self::ValidatorId]) {
-		// nothing
-	}
-}
+impl EpochTransitionHandler for TestEpochTransitionHandler {}
 
 thread_local! {
 	pub static MISSED_SLOTS: RefCell<(u64, u64)> = RefCell::new(Default::default());

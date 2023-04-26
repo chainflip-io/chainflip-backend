@@ -9,9 +9,8 @@ use cf_primitives::{
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochKey, EpochTransitionHandler, KeyProvider, KeyState, Slashing,
-	SystemStateManager, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus,
-	VaultTransitionHandler,
+	CurrentEpochIndex, EpochKey, KeyProvider, KeyState, Slashing, SystemStateManager,
+	ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus, VaultTransitionHandler,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
@@ -928,14 +927,6 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 			CurrentEpochIndex::<T>::get(),
 			Vault { public_key: key, active_from_block: ChainBlockNumberFor::<T, I>::from(0u32) },
 		);
-	}
-}
-
-impl<T: Config<I>, I: 'static> EpochTransitionHandler for Pallet<T, I> {
-	type ValidatorId = <T as Chainflip>::ValidatorId;
-
-	fn on_new_epoch(_epoch_authorities: &[Self::ValidatorId]) {
-		PendingVaultRotation::<T, I>::kill();
 	}
 }
 

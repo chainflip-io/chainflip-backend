@@ -396,8 +396,6 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: pallet::Config> cf_traits::EpochTransitionHandler for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
-
 	/// Add the expired epoch to the queue to have its data culled. This is prevent the storage from
 	/// growing indefinitely.
 	fn on_expired_epoch(expired: EpochIndex) {
