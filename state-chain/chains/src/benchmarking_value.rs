@@ -76,14 +76,14 @@ impl BenchmarkValue for btc::Asset {
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for ForeignChainAddress {
 	fn benchmark_value() -> Self {
-		ForeignChainAddress::Eth([1_u8; 20])
+		ForeignChainAddress::Eth(Default::default())
 	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for EncodedAddress {
 	fn benchmark_value() -> Self {
-		EncodedAddress::Eth([1_u8; 20])
+		EncodedAddress::Eth(Default::default())
 	}
 }
 
