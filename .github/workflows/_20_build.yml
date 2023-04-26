@@ -139,6 +139,7 @@ jobs:
             type=schedule,pattern={{date 'YYYY-MM-DD'}},prefix=nightly-
             type=semver,pattern={{raw}}
             type=raw,value=${{ inputs.commit_hash }}
+            type=raw,value=${{ inputs.network }}
 
       - name: Login to DockerHub
         uses: docker/login-action@v2
