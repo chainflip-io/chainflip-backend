@@ -137,7 +137,7 @@ pub mod pallet {
 		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
 		/// A handler for epoch lifecycle events
-		type EpochTransitionHandler: EpochTransitionHandler<ValidatorId = ValidatorIdOf<Self>>;
+		type EpochTransitionHandler: EpochTransitionHandler;
 
 		/// Minimum amount of blocks an epoch can run for
 		#[pallet::constant]
@@ -993,9 +993,6 @@ impl<T: Config> Pallet<T> {
 				})
 				.collect(),
 		);
-
-		// Trigger the new epoch handlers on other pallets.
-		T::EpochTransitionHandler::on_new_epoch(&new_authorities);
 
 		Self::deposit_event(Event::NewEpoch(new_epoch));
 	}
