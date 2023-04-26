@@ -76,7 +76,8 @@ impl CeremonyFailureReason for SigningFailureReason {
 		let reported_parties = format_iterator(reported_parties).to_string();
 		match self {
 			SigningFailureReason::BroadcastFailure(_, _) |
-			SigningFailureReason::InvalidSigShare => {
+			SigningFailureReason::InvalidSigShare |
+			SigningFailureReason::InvalidNumberOfPayloads => {
 				warn!(
 					tag = SIGNING_CEREMONY_FAILED,
 					reported_parties = reported_parties,
@@ -94,9 +95,6 @@ impl CeremonyFailureReason for SigningFailureReason {
 			SigningFailureReason::NotEnoughSigners |
 			SigningFailureReason::UnknownKey => {
 				warn!(tag = REQUEST_TO_SIGN_IGNORED, "{REQUEST_TO_SIGN_IGNORED_PREFIX}: {self}",);
-			},
-			SigningFailureReason::InvalidNumberOfPayloads => {
-				warn!(reported_parties = reported_parties, "{self}");
 			},
 		}
 	}
