@@ -94,7 +94,7 @@ impl cf_traits::Chainflip for Test {
 impl_mock_callback!(RuntimeOrigin);
 
 parameter_types! {
-	pub static EgressedApiCall: Vec<MockEthereumApiCall<MockEthEnvironment>> = Default::default();
+	pub static EgressedApiCalls: Vec<MockEthereumApiCall<MockEthEnvironment>> = Default::default();
 }
 pub struct MockBroadcast;
 impl Broadcaster<Ethereum> for MockBroadcast {
@@ -104,9 +104,9 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 	fn threshold_sign_and_broadcast(
 		api_call: Self::ApiCall,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		let mut calls = EgressedApiCall::get();
+		let mut calls = EgressedApiCalls::get();
 		calls.push(api_call);
-		EgressedApiCall::set(calls);
+		EgressedApiCalls::set(calls);
 		(1, 2)
 	}
 
