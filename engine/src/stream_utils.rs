@@ -196,22 +196,22 @@ mod timeout_stream {
 			assert!(timeout_stream.next().await.is_none());
 		}
 
+		const DELAY_DURATION_MILLIS: u64 = 100;
+
+		fn delayed_stream(items: Vec<i32>) -> Pin<Box<dyn Stream<Item = i32>>> {
+			let items = items.into_iter();
+			Box::pin(stream::unfold(items, |mut items| async move {
+				if let Some(i) = items.next() {
+					tokio::time::sleep(Duration::from_millis(DELAY_DURATION_MILLIS)).await;
+					Some((i, items))
+				} else {
+					None
+				}
+			}))
+		}
+
 		#[tokio::test(start_paused = true)]
-		async fn test_timeout_stream_timeout() {
-			const DELAY_DURATION_MILLIS: u64 = 100;
-
-			let delayed_stream = |items: Vec<i32>| {
-				let items = items.into_iter();
-				Box::pin(stream::unfold(items, |mut items| async move {
-					if let Some(i) = items.next() {
-						tokio::time::sleep(Duration::from_millis(DELAY_DURATION_MILLIS)).await;
-						Some((i, items))
-					} else {
-						None
-					}
-				}))
-			};
-
+		async fn timeout_greater_than_delay_yields_items() {
 			// We should get the items from this one, since the timeout is double the delay.
 			let mut timeout_stream = TimeoutStream::new(
 				delayed_stream(vec![1, 2, 3]),
@@ -222,11 +222,34 @@ mod timeout_stream {
 			assert_eq!(timeout_stream.next().await.unwrap().unwrap(), 2);
 			assert_eq!(timeout_stream.next().await.unwrap().unwrap(), 3);
 			assert!(timeout_stream.next().await.is_none());
+		}
 
-			// We should get a timeout error from this one, since the timeout is less than the
-			// delay.
+		#[tokio::test(start_paused = true)]
+		async fn timeout_of_zero_does_not_yield_items() {
+			// We should get a timeout error from this one, since the timeout is zero.
 			let mut timeout_stream =
 				TimeoutStream::new(delayed_stream(vec![1, 2, 3]), Duration::default());
+
+			assert!(timeout_stream.next().await.unwrap().is_err());
+			assert!(timeout_stream.next().await.unwrap().is_err());
+			assert!(timeout_stream.next().await.unwrap().is_err());
+			// We haven't actually pulled an item off the stream, and we never will, so we should
+			// get errors indefinitely.
+			assert!(timeout_stream.next().await.unwrap().is_err());
+		}
+
+		#[tokio::test(start_paused = true)]
+		async fn non_zero_timeout_less_than_delay_does_not_yield_items() {
+			// We should get a timeout error from this one, since the timeout is less than the
+			// delay.
+			const TIMEOUT_MILLIS: u64 = 10;
+			assert!(TIMEOUT_MILLIS < DELAY_DURATION_MILLIS);
+
+			let mut timeout_stream: TimeoutStream<Pin<Box<dyn Stream<Item = i32>>>> =
+				TimeoutStream::new(
+					delayed_stream(vec![1, 2, 3]),
+					Duration::from_millis(TIMEOUT_MILLIS),
+				);
 
 			assert!(timeout_stream.next().await.unwrap().is_err());
 			assert!(timeout_stream.next().await.unwrap().is_err());
