@@ -919,8 +919,6 @@ async fn initially_incompatible_keys_can_sign() {
 
 mod key_handover {
 
-	use crate::multisig::client::helpers::PayloadAndKeyData;
-
 	use super::*;
 
 	#[tokio::test]

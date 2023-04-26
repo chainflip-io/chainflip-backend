@@ -235,7 +235,9 @@ async fn should_sign_with_different_keys() {
 	);
 	signing_ceremony.distribute_messages(messages).await;
 
-	let signatures: Vec<_> = signing_ceremony.complete().await.into_iter().take(2).collect();
+	let signatures: Vec<_> = signing_ceremony.complete().await.into_iter().collect();
+
+	assert_eq!(signatures.len(), 2);
 
 	// Signatures should be correct w.r.t. corresponding keys:
 	assert!(C::verify_signature(&signatures[0], &key_id_1, &C::signing_payload_for_test()).is_ok());
