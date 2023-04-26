@@ -7,8 +7,9 @@ use crate::multisig::{
 		common::{BroadcastFailureReason, KeygenFailureReason, KeygenStageName, ResharingContext},
 		helpers::{
 			gen_invalid_keygen_comm1, get_invalid_hash_comm, new_nodes, run_keygen, run_stages,
-			standard_signing, KeygenCeremonyRunner, SigningCeremonyRunner, ACCOUNT_IDS,
-			DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID,
+			standard_signing, KeygenCeremonyRunner, PayloadAndKeyData, SigningCeremonyRunner,
+			ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED,
+			DEFAULT_SIGNING_CEREMONY_ID,
 		},
 		keygen::{self, Complaints6, VerifyComplaints7, VerifyHashComm2},
 		utils::PartyIdxMapping,
@@ -879,9 +880,11 @@ async fn genesis_keys_can_sign() {
 		SigningCeremonyRunner::<EthSigning>::new_with_threshold_subset_of_signers(
 			new_nodes(account_ids),
 			DEFAULT_SIGNING_CEREMONY_ID,
-			public_key_bytes,
-			key_data.clone(),
-			vec![EthSigning::signing_payload_for_test()],
+			vec![PayloadAndKeyData::new(
+				EthSigning::signing_payload_for_test(),
+				public_key_bytes,
+				key_data,
+			)],
 			Rng::from_entropy(),
 		);
 	standard_signing(&mut signing_ceremony).await;
@@ -904,9 +907,11 @@ async fn initially_incompatible_keys_can_sign() {
 		SigningCeremonyRunner::<EthSigning>::new_with_threshold_subset_of_signers(
 			new_nodes(account_ids),
 			DEFAULT_SIGNING_CEREMONY_ID,
-			public_key_bytes,
-			key_data.clone(),
-			vec![EthSigning::signing_payload_for_test()],
+			vec![PayloadAndKeyData::new(
+				EthSigning::signing_payload_for_test(),
+				public_key_bytes,
+				key_data,
+			)],
 			Rng::from_entropy(),
 		);
 	standard_signing(&mut signing_ceremony).await;
@@ -1006,9 +1011,7 @@ mod key_handover {
 		let mut signing_ceremony = SigningCeremonyRunner::<Scheme>::new_with_all_signers(
 			new_nodes(receiving_participants),
 			DEFAULT_SIGNING_CEREMONY_ID,
-			new_key,
-			new_shares,
-			vec![Scheme::signing_payload_for_test()],
+			vec![PayloadAndKeyData::new(Scheme::signing_payload_for_test(), new_key, new_shares)],
 			Rng::from_entropy(),
 		);
 		standard_signing(&mut signing_ceremony).await;

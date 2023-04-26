@@ -76,12 +76,12 @@ impl<C: CryptoScheme> KeygenResult<C> {
 }
 
 impl<C: CryptoScheme> KeygenResult<C> {
-	pub fn get_public_key(&self) -> C::Point {
+	pub fn get_agg_public_key(&self) -> C::Point {
 		self.key_share.y
 	}
 
 	pub fn agg_key(&self) -> C::AggKey {
-		C::agg_key(&self.get_public_key())
+		C::agg_key(&self.get_agg_public_key())
 	}
 }
 

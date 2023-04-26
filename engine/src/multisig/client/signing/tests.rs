@@ -7,7 +7,8 @@ use crate::multisig::{
 		common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
 		helpers::{
 			gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes, new_signing_ceremony,
-			run_stages, SigningCeremonyRunner, ACCOUNT_IDS, DEFAULT_SIGNING_CEREMONY_ID,
+			run_stages, PayloadAndKeyData, SigningCeremonyRunner, ACCOUNT_IDS,
+			DEFAULT_SIGNING_CEREMONY_ID,
 		},
 		keygen::generate_key_data,
 		signing::signing_data,
@@ -101,12 +102,15 @@ async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayl
 	let (key_id, key_data) =
 		generate_key_data::<C>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()), &mut rng);
 
+	let payloads_and_key = payloads
+		.iter()
+		.map(|payload| PayloadAndKeyData::new(payload.clone(), key_id.clone(), key_data.clone()))
+		.collect();
+
 	let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
 		new_nodes(ACCOUNT_IDS.clone()),
 		DEFAULT_SIGNING_CEREMONY_ID,
-		key_id.clone(),
-		key_data,
-		payloads.to_vec(),
+		payloads_and_key,
 		rng,
 	);
 
@@ -160,20 +164,18 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 	// generated key is incompatible to increase
 	// test coverage
 	for i in 0..10 {
-		let keyseed = [i; 32];
-		let nonceseed = [11 * i; 32];
+		let key_seed = [i; 32];
+		let nonce_seed = [11 * i; 32];
 		let (key_id, key_data) = generate_key_data::<C>(
 			BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
-			&mut Rng::from_seed(keyseed),
+			&mut Rng::from_seed(key_seed),
 		);
 
 		let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
 			new_nodes(ACCOUNT_IDS.clone()),
 			DEFAULT_SIGNING_CEREMONY_ID,
-			key_id.clone(),
-			key_data,
-			vec![C::signing_payload_for_test()],
-			Rng::from_seed(nonceseed),
+			vec![PayloadAndKeyData::new(C::signing_payload_for_test(), key_id.clone(), key_data)],
+			Rng::from_seed(nonce_seed),
 		);
 
 		let messages = signing_ceremony.request().await;
@@ -193,6 +195,53 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 			.expect("should have exactly one signature");
 		assert!(C::verify_signature(&signature, &key_id, &C::signing_payload_for_test()).is_ok());
 	}
+}
+
+#[ignore = "Only works if V2 is enabled (by setting CURRENT_PROTOCOL_VERSION = 2)"]
+#[tokio::test]
+async fn should_sign_with_different_keys() {
+	// The logic for multiple payloads/keys is the same for all crypto
+	// schemes, so we only need to test one of them:
+	type C = EthSigning;
+	type Point = <C as CryptoScheme>::Point;
+
+	let mut rng = Rng::from_seed([1; 32]);
+	let account_ids = BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned());
+
+	// 1. Generate two different keys for the same set of validators.
+	let (key_id_1, key_data_1) = generate_key_data::<C>(account_ids.clone(), &mut rng);
+	let (key_id_2, key_data_2) = generate_key_data::<C>(account_ids.clone(), &mut rng);
+
+	// Ensure we don't accidentally generate the same key (e.g. by using the same seed)
+	assert_ne!(key_id_1, key_id_2);
+
+	let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
+		new_nodes(account_ids),
+		DEFAULT_SIGNING_CEREMONY_ID,
+		vec![
+			PayloadAndKeyData::new(C::signing_payload_for_test(), key_id_1.clone(), key_data_1),
+			PayloadAndKeyData::new(C::signing_payload_for_test(), key_id_2.clone(), key_data_2),
+		],
+		rng,
+	);
+
+	let messages = signing_ceremony.request().await;
+	let messages = run_stages!(
+		signing_ceremony,
+		messages,
+		signing_data::VerifyComm2<Point>,
+		signing_data::LocalSig3<Point>,
+		signing_data::VerifyLocalSig4<Point>
+	);
+	signing_ceremony.distribute_messages(messages).await;
+
+	let signatures: Vec<_> = signing_ceremony.complete().await.into_iter().collect();
+
+	assert_eq!(signatures.len(), 2);
+
+	// Signatures should be correct w.r.t. corresponding keys:
+	assert!(C::verify_signature(&signatures[0], &key_id_1, &C::signing_payload_for_test()).is_ok());
+	assert!(C::verify_signature(&signatures[1], &key_id_2, &C::signing_payload_for_test()).is_ok());
 }
 
 #[tokio::test]

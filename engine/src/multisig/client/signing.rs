@@ -24,9 +24,21 @@ pub use signing_data::{gen_signing_data_stage1, gen_signing_data_stage2, gen_sig
 
 pub use signing_detail::get_lagrange_coeff;
 
+/// Payload and the key that should be used to sign over the payload
+#[derive(Clone)]
+pub struct PayloadAndKey<C: CryptoScheme> {
+	pub payload: C::SigningPayload,
+	pub key: Arc<KeygenResult<C>>,
+}
+
 /// Data common for signing stages
 #[derive(Clone)]
 pub struct SigningStateCommonInfo<C: CryptoScheme> {
-	pub payloads: Vec<C::SigningPayload>,
-	pub key: Arc<KeygenResult<C>>,
+	pub payloads_and_keys: Vec<PayloadAndKey<C>>,
+}
+
+impl<C: CryptoScheme> SigningStateCommonInfo<C> {
+	pub fn payload_count(&self) -> usize {
+		self.payloads_and_keys.len()
+	}
 }
