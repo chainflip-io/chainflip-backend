@@ -196,7 +196,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
-		MockEpochInfo::next_epoch(vec![ALICE]);
+		MockEpochInfo::next_epoch(BTreeSet::from([ALICE]));
 	});
 
 	ext

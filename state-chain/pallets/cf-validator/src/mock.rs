@@ -237,7 +237,9 @@ pub(crate) struct TestExternalitiesWithCheck {
 macro_rules! assert_invariants {
 	() => {
 		assert_eq!(
-			<ValidatorPallet as EpochInfo>::current_authorities(),
+			<ValidatorPallet as EpochInfo>::current_authorities()
+				.into_iter()
+				.collect::<Vec<_>>(),
 			Session::validators(),
 			"Authorities out of sync at block {:?}. RotationPhase: {:?}",
 			System::block_number(),
@@ -304,7 +306,7 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 					.collect(),
 			},
 			validator_pallet: ValidatorPalletConfig {
-				genesis_authorities: GENESIS_AUTHORITIES.to_vec(),
+				genesis_authorities: BTreeSet::from(GENESIS_AUTHORITIES),
 				genesis_backups: Default::default(),
 				blocks_per_epoch: EPOCH_DURATION,
 				bond: GENESIS_BOND,

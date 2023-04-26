@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use cf_traits::{
 	offence_reporting::OffenceReporter, EpochInfo, SingleSignerNomination,
 	ThresholdSignerNomination,
@@ -40,7 +42,7 @@ fn threshold_signer_nomination_respects_epoch() {
 		CurrentEpoch::<Runtime>::put(next_epoch);
 
 		// double the number of authorities, so we also have a different threshold size
-		let new_authorities: Vec<_> = (0u8..(2 * genesis_authorities.len() as u8))
+		let new_authorities: BTreeSet<_> = (0u8..(2 * genesis_authorities.len() as u8))
 			.into_iter()
 			.map(|i| AccountId32::from([i; 32]))
 			.collect();

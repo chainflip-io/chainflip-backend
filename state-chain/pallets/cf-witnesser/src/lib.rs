@@ -72,7 +72,8 @@ pub mod pallet {
 		type ValidatorId: Member
 			+ FullCodec
 			+ From<<Self as frame_system::Config>::AccountId>
-			+ Into<<Self as frame_system::Config>::AccountId>;
+			+ Into<<Self as frame_system::Config>::AccountId>
+			+ Ord;
 
 		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId>;
 

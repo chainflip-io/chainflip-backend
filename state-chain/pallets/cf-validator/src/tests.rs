@@ -29,7 +29,7 @@ macro_rules! assert_default_rotation_outcome {
 		assert!(matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle));
 		assert_epoch_index(GENESIS_EPOCH + 1);
 		assert_eq!(Bond::<Test>::get(), BOND, "bond should be updated");
-		assert_eq!(ValidatorPallet::current_authorities(), AUCTION_WINNERS.to_vec());
+		assert_eq!(ValidatorPallet::current_authorities(), BTreeSet::from(AUCTION_WINNERS));
 	};
 }
 
@@ -158,9 +158,10 @@ fn should_rotate_when_forced() {
 #[test]
 fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 	new_test_ext().execute_with(|| {
+		let genesis_set = BTreeSet::from(GENESIS_AUTHORITIES);
 		assert_eq!(
 			CurrentAuthorities::<Test>::get(),
-			GENESIS_AUTHORITIES,
+			genesis_set,
 			"the current authorities should be the genesis authorities"
 		);
 		// Run to the epoch boundary.
@@ -168,7 +169,7 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 		run_to_block(EPOCH_DURATION);
 		assert_eq!(
 			ValidatorPallet::current_authorities(),
-			GENESIS_AUTHORITIES,
+			genesis_set,
 			"we should still be validating with the genesis authorities"
 		);
 
@@ -195,7 +196,7 @@ fn genesis() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(
 			CurrentAuthorities::<Test>::get(),
-			GENESIS_AUTHORITIES,
+			BTreeSet::from(GENESIS_AUTHORITIES),
 			"We should have a set of validators at genesis"
 		);
 		assert_eq!(Bond::<Test>::get(), GENESIS_BOND, "We should have a minimum bid at genesis");
@@ -464,15 +465,15 @@ fn highest_bond() {
 	new_test_ext().execute_with(|| {
 		// Epoch 1
 		EpochHistory::<Test>::activate_epoch(&ALICE, 1);
-		HistoricalAuthorities::<Test>::insert(1, vec![ALICE]);
+		HistoricalAuthorities::<Test>::insert(1, BTreeSet::from([ALICE]));
 		HistoricalBonds::<Test>::insert(1, 10);
 		// Epoch 2
 		EpochHistory::<Test>::activate_epoch(&ALICE, 2);
-		HistoricalAuthorities::<Test>::insert(2, vec![ALICE]);
+		HistoricalAuthorities::<Test>::insert(2, BTreeSet::from([ALICE]));
 		HistoricalBonds::<Test>::insert(2, 30);
 		// Epoch 3
 		EpochHistory::<Test>::activate_epoch(&ALICE, 3);
-		HistoricalAuthorities::<Test>::insert(3, vec![ALICE]);
+		HistoricalAuthorities::<Test>::insert(3, BTreeSet::from([ALICE]));
 		HistoricalBonds::<Test>::insert(3, 20);
 		// Expect the bond of epoch 2
 		assert_eq!(EpochHistory::<Test>::active_bond(&ALICE), 30);
@@ -513,6 +514,8 @@ fn test_missing_author_punishment() {
 		MockOffenceReporter::assert_reported(
 			PalletOffence::MissedAuthorshipSlot,
 			ValidatorPallet::current_authorities()
+				.into_iter()
+				.collect::<Vec<_>>()
 				.get(expected_authority_index..authored_authority_index)
 				.unwrap()
 				.to_vec(),
