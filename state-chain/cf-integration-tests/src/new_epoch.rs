@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use super::*;
 use crate::{genesis::GENESIS_BALANCE, network::Network};
 use cf_primitives::GENESIS_EPOCH;
@@ -106,14 +104,13 @@ fn epoch_rotates() {
 		.min_authorities(MAX_SET_SIZE)
 		.build()
 		.execute_with(|| {
-			// Genesis nodes
-			let genesis_nodes = Validator::current_authorities();
+			let mut genesis_nodes = Validator::current_authorities();
 
 			let number_of_backup_nodes = MAX_SET_SIZE
 				.checked_sub(genesis_nodes.len() as AuthorityCount)
 				.expect("Max set size must be at least the number of genesis authorities");
 
-			let (mut testnet, backup_nodes) =
+			let (mut testnet, mut backup_nodes) =
 				network::Network::create(number_of_backup_nodes as u8, &genesis_nodes);
 
 			assert_eq!(testnet.live_nodes().len() as AuthorityCount, MAX_SET_SIZE);
@@ -179,9 +176,10 @@ fn epoch_rotates() {
 				"minimum active bid should be that of the new stake"
 			);
 
+			genesis_nodes.append(&mut backup_nodes);
 			assert_eq!(
-						Validator::current_authorities().iter().collect::<BTreeSet<_>>(),
-						[genesis_nodes, backup_nodes].concat().iter().collect::<BTreeSet<_>>(),
+						Validator::current_authorities(),
+						genesis_nodes,
 						"the new winners should be those genesis authorities and the backup nodes that have keys set"
 					);
 
@@ -234,8 +232,7 @@ fn new_epoch_will_purge_stale_witnesser_storage() {
 		.build();
 
 	ext.execute_with(|| {
-		let mut nodes = Validator::current_authorities();
-		nodes.sort();
+		let nodes = Validator::current_authorities();
 		let (mut testnet, _) = network::Network::create(0, &nodes);
 
 		assert_eq!(Validator::epoch_index(), 1);
@@ -250,8 +247,7 @@ fn new_epoch_will_purge_stale_witnesser_storage() {
 		move_forward_by_epochs(3, &mut testnet);
 		assert_eq!(Validator::epoch_index(), 4);
 		assert_eq!(Validator::last_expired_epoch(), 2);
-		let mut current_authorities_after_some_epochs = Validator::current_authorities();
-		current_authorities_after_some_epochs.sort();
+		let current_authorities_after_some_epochs = Validator::current_authorities();
 		assert_eq!(nodes, current_authorities_after_some_epochs);
 
 		let call = Box::new(state_chain_runtime::RuntimeCall::System(frame_system::Call::remark {

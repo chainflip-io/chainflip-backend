@@ -67,8 +67,8 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			// Create MAX_AUTHORITIES backup nodes and stake them above our genesis
 			// authorities The result will be our newly created nodes will be authorities
 			// and the genesis authorities will become backup nodes
-			let mut genesis_authorities = Validator::current_authorities();
-			let (mut testnet, mut init_backup_nodes) =
+			let genesis_authorities = Validator::current_authorities();
+			let (mut testnet, init_backup_nodes) =
 				network::Network::create(MAX_AUTHORITIES as u8, &genesis_authorities);
 
 			// An initial stake which is greater than the genesis stakes
@@ -104,10 +104,7 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			assert_eq!(GENESIS_EPOCH + 1, Validator::epoch_index(), "We should be in a new epoch");
 
 			// assert list of authorities as being the new nodes
-			let mut current_authorities: Vec<NodeId> = Validator::current_authorities();
-
-			current_authorities.sort();
-			init_backup_nodes.sort();
+			let current_authorities = Validator::current_authorities();
 
 			assert_eq!(
 				init_backup_nodes, current_authorities,
@@ -123,11 +120,8 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			});
 
 			// assert list of backup validators as being the genesis authorities
-			let mut highest_staked_backup_nodes: Vec<NodeId> =
-				Validator::highest_staked_qualified_backup_nodes_lookup().into_iter().collect();
-
-			highest_staked_backup_nodes.sort();
-			genesis_authorities.sort();
+			let highest_staked_backup_nodes =
+				Validator::highest_staked_qualified_backup_nodes_lookup();
 
 			assert_eq!(
 				genesis_authorities, highest_staked_backup_nodes,

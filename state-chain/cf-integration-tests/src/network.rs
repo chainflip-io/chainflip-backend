@@ -411,7 +411,10 @@ impl Network {
 
 	// Create a network which includes the authorities in genesis of number of nodes
 	// and return a network and sorted list of nodes within
-	pub fn create(number_of_backup_nodes: u8, existing_nodes: &[NodeId]) -> (Self, Vec<NodeId>) {
+	pub fn create(
+		number_of_backup_nodes: u8,
+		existing_nodes: &BTreeSet<NodeId>,
+	) -> (Self, BTreeSet<NodeId>) {
 		let mut network: Network = Default::default();
 
 		// Include any nodes already *created* to the test network
@@ -421,10 +424,10 @@ impl Network {
 		}
 
 		// Create the backup nodes
-		let mut backup_nodes = Vec::new();
+		let mut backup_nodes = BTreeSet::new();
 		for _ in 0..number_of_backup_nodes {
 			let node_id = network.create_engine();
-			backup_nodes.push(node_id);
+			backup_nodes.insert(node_id);
 		}
 
 		(network, backup_nodes)

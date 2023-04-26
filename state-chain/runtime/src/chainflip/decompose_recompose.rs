@@ -88,7 +88,7 @@ mod tests {
 	use cf_traits::EpochInfo;
 	use frame_support::{assert_ok, Hashable};
 	use pallet_cf_witnesser::CallHash;
-	use sp_std::iter;
+	use sp_std::{collections::btree_set::BTreeSet, iter};
 
 	const BLOCK_HEIGHT: u64 = 1_000;
 	const BASE_FEE: u128 = 40;
@@ -144,7 +144,8 @@ mod tests {
 
 			let calls = [1, 100, 12, 10, 9, 11].map(eth_chain_tracking_call_with_fee);
 
-			let authorities = (0..calls.len()).map(|i| [i as u8; 32].into()).collect::<Vec<_>>();
+			let authorities =
+				(0..calls.len()).map(|i| [i as u8; 32].into()).collect::<BTreeSet<_>>();
 			let current_epoch = 1;
 			pallet_cf_validator::CurrentEpoch::<Runtime>::put(current_epoch);
 			pallet_cf_validator::CurrentAuthorities::<Runtime>::put(&authorities);

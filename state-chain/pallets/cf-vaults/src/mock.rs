@@ -257,7 +257,7 @@ fn test_ext_inner(key: Option<Vec<u8>>) -> sp_io::TestExternalities {
 		},
 	};
 
-	let authorities = vec![ALICE, BOB, CHARLIE];
+	let authorities = BTreeSet::from([ALICE, BOB, CHARLIE]);
 	MockEpochInfo::set_epoch(GENESIS_EPOCH);
 	MockEpochInfo::set_epoch_authority_count(GENESIS_EPOCH, authorities.len() as AuthorityCount);
 	MockEpochInfo::set_authorities(authorities);

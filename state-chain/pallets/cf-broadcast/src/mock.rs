@@ -22,6 +22,7 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
+use sp_std::collections::btree_set::BTreeSet;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -159,7 +160,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
-		MockEpochInfo::next_epoch(vec![1, 2, 3]);
+		MockEpochInfo::next_epoch(BTreeSet::from([1, 2, 3]));
 	});
 
 	ext

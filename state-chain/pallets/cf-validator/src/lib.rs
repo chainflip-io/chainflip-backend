@@ -223,9 +223,10 @@ pub mod pallet {
 	#[pallet::getter(fn current_rotation_phase)]
 	pub type CurrentRotationPhase<T: Config> = StorageValue<_, RotationPhase<T>, ValueQuery>;
 
-	/// A list of the current authorites.
+	/// A set of the current authorites.
 	#[pallet::storage]
-	pub type CurrentAuthorities<T: Config> = StorageValue<_, Vec<ValidatorIdOf<T>>, ValueQuery>;
+	pub type CurrentAuthorities<T: Config> =
+		StorageValue<_, BTreeSet<ValidatorIdOf<T>>, ValueQuery>;
 
 	/// Vanity names of the validators stored as a Map with the current validator IDs as key.
 	#[pallet::storage]
@@ -264,10 +265,10 @@ pub mod pallet {
 	pub type EpochExpiries<T: Config> =
 		StorageMap<_, Twox64Concat, T::BlockNumber, EpochIndex, OptionQuery>;
 
-	/// A map between an epoch and an vector of authorities (participating in this epoch).
+	/// A map between an epoch and the set of authorities (participating in this epoch).
 	#[pallet::storage]
 	pub type HistoricalAuthorities<T: Config> =
-		StorageMap<_, Twox64Concat, EpochIndex, Vec<ValidatorIdOf<T>>, ValueQuery>;
+		StorageMap<_, Twox64Concat, EpochIndex, BTreeSet<ValidatorIdOf<T>>, ValueQuery>;
 
 	/// A map between an epoch and the bonded balance (MAB)
 	#[pallet::storage]
@@ -401,7 +402,7 @@ pub mod pallet {
 						// We can do this with an enum instead of Result<()>
 						// We have successfully done keygen verification
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
-							let new_authorities = rotation_state.authority_candidates::<Vec<_>>();
+							let new_authorities = rotation_state.authority_candidates::<BTreeSet<_>>();
 							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities.clone());
 							EpochAuthorityCount::<T>::insert(
 								rotation_state.new_epoch_index,
@@ -809,7 +810,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub genesis_authorities: Vec<ValidatorIdOf<T>>,
+		pub genesis_authorities: BTreeSet<ValidatorIdOf<T>>,
 		pub genesis_backups: BackupMap<T>,
 		pub blocks_per_epoch: T::BlockNumber,
 		pub bond: T::Amount,
@@ -877,7 +878,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		LastExpiredEpoch::<T>::get()
 	}
 
-	fn current_authorities() -> Vec<Self::ValidatorId> {
+	fn current_authorities() -> BTreeSet<Self::ValidatorId> {
 		CurrentAuthorities::<T>::get()
 	}
 
@@ -921,7 +922,7 @@ impl<T: Config> EpochInfo for Pallet<T> {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn add_authority_info_for_epoch(
 		epoch_index: EpochIndex,
-		new_authorities: Vec<Self::ValidatorId>,
+		new_authorities: BTreeSet<Self::ValidatorId>,
 	) {
 		EpochAuthorityCount::<T>::insert(epoch_index, new_authorities.len() as AuthorityCount);
 		for (i, authority) in new_authorities.iter().enumerate() {
@@ -973,10 +974,7 @@ impl<T: Config> Pallet<T> {
 			old_epoch,
 		);
 
-		// Update current / historical authority status.
-		let new_authorities_lookup = rotation_state.authority_candidates::<BTreeSet<_>>();
-
-		let new_authorities = rotation_state.authority_candidates::<Vec<_>>();
+		let new_authorities = rotation_state.authority_candidates::<BTreeSet<_>>();
 
 		Self::initialise_new_epoch(
 			new_epoch,
@@ -985,7 +983,7 @@ impl<T: Config> Pallet<T> {
 			T::BidderProvider::get_bidders()
 				.into_iter()
 				.filter_map(|Bid { bidder_id, amount }| {
-					if !new_authorities_lookup.contains(&bidder_id) {
+					if !new_authorities.contains(&bidder_id) {
 						Some((bidder_id, amount))
 					} else {
 						None
@@ -1018,7 +1016,7 @@ impl<T: Config> Pallet<T> {
 	/// expiries etc. that relate to the state of previous epochs.
 	fn initialise_new_epoch(
 		new_epoch: EpochIndex,
-		new_authorities: &[ValidatorIdOf<T>],
+		new_authorities: &BTreeSet<ValidatorIdOf<T>>,
 		new_bond: T::Amount,
 		backup_map: BackupMap<T>,
 	) {
@@ -1174,8 +1172,10 @@ impl<T: Config> Pallet<T> {
 			num_missed_slots += 1;
 			// https://github.com/chainflip-io/substrate/blob/c172d0f683fab3792b90d876fd6ca27056af9fe9/frame/aura/src/lib.rs#L97
 			let authority_index = slot % <Self as EpochInfo>::current_authority_count() as u64;
-			if let Some(id) =
-				<Self as EpochInfo>::current_authorities().get(authority_index as usize)
+			if let Some(id) = <Self as EpochInfo>::current_authorities()
+				.into_iter()
+				.collect::<Vec<_>>()
+				.get(authority_index as usize)
 			{
 				T::OffenceReporter::report(PalletOffence::MissedAuthorshipSlot, id.clone());
 			} else {
@@ -1217,7 +1217,7 @@ impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 	type EpochIndex = EpochIndex;
 	type Amount = T::Amount;
-	fn epoch_authorities(epoch: Self::EpochIndex) -> Vec<Self::ValidatorId> {
+	fn epoch_authorities(epoch: Self::EpochIndex) -> BTreeSet<Self::ValidatorId> {
 		HistoricalAuthorities::<T>::get(epoch)
 	}
 
@@ -1282,7 +1282,7 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 			!genesis_authorities.is_empty(),
 			"No genesis authorities found! Make sure the Validator pallet is initialised before the Session pallet."
 		);
-		Some(genesis_authorities)
+		Some(genesis_authorities.into_iter().collect())
 	}
 
 	/// The current session is ending

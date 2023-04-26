@@ -8,7 +8,7 @@ use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::traits::Hooks;
 use frame_system::RawOrigin;
-use sp_std::{boxed::Box, vec};
+use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec};
 
 benchmarks! {
 	witness_at_epoch {
@@ -18,7 +18,7 @@ benchmarks! {
 		let call: <T as Config>::RuntimeCall = frame_system::Call::remark{ remark: vec![] }.into();
 		let epoch = T::EpochInfo::epoch_index();
 
-		T::EpochInfo::add_authority_info_for_epoch(epoch, vec![validator_id]);
+		T::EpochInfo::add_authority_info_for_epoch(epoch, BTreeSet::from([validator_id]));
 
 		// TODO: currently we don't measure the actual execution path
 		// we need to set the threshold to 1 to do this.

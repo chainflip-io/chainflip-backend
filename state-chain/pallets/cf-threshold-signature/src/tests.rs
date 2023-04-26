@@ -630,7 +630,7 @@ mod failure_reporting {
 		validator_set: impl IntoIterator<Item = <Test as Chainflip>::ValidatorId> + Copy,
 	) -> CeremonyContext<Test, Instance1> {
 		const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
-		MockEpochInfo::set_authorities(Vec::from_iter(validator_set));
+		MockEpochInfo::set_authorities(validator_set.into_iter().collect());
 		CeremonyContext::<Test, Instance1> {
 			request_context: RequestContext { request_id: 1, attempt_count: 0, payload: PAYLOAD },
 			threshold_ceremony_type: ThresholdCeremonyType::Standard,

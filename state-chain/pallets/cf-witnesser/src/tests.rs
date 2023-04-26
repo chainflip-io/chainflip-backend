@@ -6,6 +6,7 @@ use crate::{
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{mocks::epoch_info::MockEpochInfo, EpochInfo, EpochTransitionHandler};
 use frame_support::{assert_noop, assert_ok, traits::Hooks, weights::Weight};
+use sp_std::collections::btree_set::BTreeSet;
 
 #[test]
 fn call_on_threshold() {
@@ -60,7 +61,7 @@ fn no_double_call_on_epoch_boundary() {
 		// Only one vote, nothing should happen yet.
 		assert_ok!(Witnesser::witness_at_epoch(RuntimeOrigin::signed(ALISSA), call.clone(), 1));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
-		MockEpochInfo::next_epoch([ALISSA, BOBSON, CHARLEMAGNE].to_vec());
+		MockEpochInfo::next_epoch(BTreeSet::from([ALISSA, BOBSON, CHARLEMAGNE]));
 		// Vote for the same call, this time in another epoch.
 		assert_ok!(Witnesser::witness_at_epoch(RuntimeOrigin::signed(ALISSA), call.clone(), 2));
 		assert_eq!(pallet_dummy::Something::<Test>::get(), None);
@@ -146,9 +147,9 @@ fn can_continue_to_witness_for_old_epochs() {
 		MockEpochInfo::next_epoch(current_authorities.clone());
 
 		// remove CHARLEMAGNE and add DEIRDRE
-		current_authorities.pop();
-		current_authorities.push(DEIRDRE);
-		assert_eq!(current_authorities, vec![ALISSA, BOBSON, DEIRDRE]);
+		current_authorities.pop_last();
+		current_authorities.insert(DEIRDRE);
+		assert_eq!(current_authorities, BTreeSet::from([ALISSA, BOBSON, DEIRDRE]));
 		MockEpochInfo::next_epoch(current_authorities);
 
 		let current_epoch = MockEpochInfo::epoch_index();
