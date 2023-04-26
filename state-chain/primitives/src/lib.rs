@@ -73,10 +73,6 @@ pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = [0xEE; 20];
 /// The very first epoch number
 pub const GENESIS_EPOCH: u32 = 1;
 
-//Addresses can have all kinds of different lengths in bitcoin but we would support upto 100 since
-// we dont expect addresses higher than 100
-pub const MAX_BTC_ADDRESS_LENGTH: u32 = 100;
-
 /// Alias to 512-bit hash when used in the context of a transaction signature on the chain.
 pub type Signature = MultiSignature;
 

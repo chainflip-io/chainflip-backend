@@ -3,9 +3,10 @@ use cf_chains::AnyChain;
 use cf_primitives::{AccountRole, Asset, AssetAmount};
 use cf_traits::{
 	mocks::{
-		bid_info::MockBidInfo, egress_handler::MockEgressHandler,
-		ensure_origin_mock::NeverFailingOriginCheck, ingress_handler::MockIngressHandler,
-		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
+		address_converter::MockAddressConverter, bid_info::MockBidInfo,
+		egress_handler::MockEgressHandler, ensure_origin_mock::NeverFailingOriginCheck,
+		ingress_handler::MockIngressHandler, staking_info::MockStakingInfo,
+		system_state_info::MockSystemStateInfo,
 	},
 	Chainflip, SwappingApi,
 };
@@ -140,6 +141,7 @@ impl pallet_cf_swapping::Config for Test {
 	type IngressHandler = MockIngressHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;
 	type WeightInfo = MockWeightInfo;
+	type AddressConverter = MockAddressConverter;
 	type SwappingApi = MockSwappingApi;
 	type EnsureGovernance = NeverFailingOriginCheck<Test>;
 }

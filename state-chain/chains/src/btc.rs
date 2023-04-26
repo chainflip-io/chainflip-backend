@@ -9,23 +9,27 @@ use base58::FromBase58;
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::{borrow::Borrow, iter};
-use frame_support::{sp_io::hashing::sha2_256, RuntimeDebug};
+use frame_support::{sp_io::hashing::sha2_256, BoundedVec, RuntimeDebug};
 use libsecp256k1::{curve::*, PublicKey, SecretKey};
 use scale_info::TypeInfo;
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
+use sp_core::ConstU32;
 use sp_std::{vec, vec::Vec};
 
 extern crate alloc;
-use crate::{
-	address::BitcoinAddressData, Age, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator,
-	IngressIdConstructor,
-};
+use crate::{Age, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
 use alloc::string::String;
 pub use cf_primitives::chains::Bitcoin;
-use cf_primitives::{chains::assets, EpochIndex, IntentId, KeyId, PublicKeyBytes};
+use cf_primitives::{chains::assets, EpochIndex, KeyId, PublicKeyBytes};
 use itertools;
 
 /// This salt is used to derive the change address for every vault. i.e. for every epoch.
 pub const CHANGE_ADDRESS_SALT: u32 = 0;
+
+//The bitcoin script generated from the bitcoin address should not exceed this value according to
+// our construction
+pub const MAX_BITCOIN_SCRIPT_LENGTH: u32 = 128;
 
 pub type BlockNumber = u64;
 
@@ -111,7 +115,7 @@ impl Age for BitcoinTrackedData {
 
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
 pub struct EpochStartData {
-	pub change_address: BitcoinAddressData,
+	pub change_pubkey: AggKey,
 }
 
 impl Chain for Bitcoin {
@@ -127,7 +131,7 @@ impl Chain for Bitcoin {
 
 	type ChainAsset = assets::btc::Asset;
 
-	type ChainAccount = BitcoinAddressData;
+	type ChainAccount = BitcoinScriptBounded;
 
 	type EpochStartData = EpochStartData;
 
@@ -218,21 +222,16 @@ impl ChainAbi for Bitcoin {
 
 // TODO: Look at moving this into Utxo. They're exactly the same apart from the IntentId
 // which could be made generic, if even necessary at all.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen)]
 pub struct UtxoId {
 	// Tx hash of the transaction this utxo was a part of
 	pub tx_hash: Hash,
 	// The index of the output for this utxo
 	pub vout: u32,
-	// The public key of the account that can spend this utxo
-	pub pubkey_x: [u8; 32],
-	// Salt used to generate an address from the public key. In our case its the intent id of the
-	// swap
-	pub salt: IntentId,
 }
 
 impl IngressIdConstructor for BitcoinFetchId {
-	type Address = BitcoinAddressData;
+	type Address = BitcoinScriptBounded;
 
 	fn deployed(intent_id: u64, _address: Self::Address) -> Self {
 		BitcoinFetchId(intent_id)
@@ -595,6 +594,38 @@ impl BitcoinTransaction {
 				)
 			})
 			.collect()
+	}
+}
+
+#[derive(
+	Encode,
+	Decode,
+	TypeInfo,
+	Clone,
+	RuntimeDebug,
+	PartialEq,
+	Eq,
+	Default,
+	MaxEncodedLen,
+	PartialOrd,
+	Ord,
+)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct BitcoinScriptBounded {
+	pub data: BoundedVec<u8, ConstU32<MAX_BITCOIN_SCRIPT_LENGTH>>,
+}
+
+impl TryFrom<BitcoinScript> for BitcoinScriptBounded {
+	type Error = <Vec<u8> as TryInto<BoundedVec<u8, ConstU32<MAX_BITCOIN_SCRIPT_LENGTH>>>>::Error;
+
+	fn try_from(value: BitcoinScript) -> Result<Self, Self::Error> {
+		Ok(Self { data: value.data.try_into()? })
+	}
+}
+
+impl From<BitcoinScriptBounded> for BitcoinScript {
+	fn from(value: BitcoinScriptBounded) -> Self {
+		Self { data: value.data.into() }
 	}
 }
 

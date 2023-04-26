@@ -3,7 +3,10 @@ use cf_amm::{
 	common::{sqrt_price_at_tick, SqrtPriceQ64F96, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::{CcmIngressMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress};
+use cf_chains::{
+	address::{AddressConverter, EncodedAddress},
+	CcmIngressMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress,
+};
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount};
 use cf_test_utilities::{assert_events_eq, assert_events_match};
 use cf_traits::{AddressDerivationApi, EpochInfo, LpBalanceApi};
@@ -15,9 +18,9 @@ use pallet_cf_ingress_egress::IngressWitness;
 use pallet_cf_pools::Order;
 use pallet_cf_swapping::CcmIdCounter;
 use state_chain_runtime::{
-	chainflip::address_derivation::AddressDerivation, AccountRoles, EthereumInstance,
-	LiquidityPools, LiquidityProvider, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
-	System, Validator, Weight, Witnesser,
+	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter},
+	AccountRoles, EthereumInstance, LiquidityPools, LiquidityProvider, Runtime, RuntimeCall,
+	RuntimeEvent, RuntimeOrigin, Swapping, System, Validator, Weight, Witnesser,
 };
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
@@ -210,7 +213,7 @@ fn basic_pool_setup_provision_and_swap() {
 			RuntimeOrigin::signed(ZION.clone()),
 			Asset::Eth,
 			Asset::Flip,
-			ForeignChainAddress::Eth([1u8; 20]),
+			EncodedAddress::Eth([1u8; 20]),
 			0u16,
 			None,
 		));
@@ -242,10 +245,10 @@ fn basic_pool_setup_provision_and_swap() {
 
 		let swap_id = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapIngressReceived {
 			swap_id,
-			ingress_address: ForeignChainAddress::Eth(events_ingress_address),
+			ingress_address: events_ingress_address,
 			ingress_amount: 50,
 			..
-		}) if <Ethereum as Chain>::ChainAccount::from(events_ingress_address) == ingress_address => swap_id);
+		}) if <Ethereum as Chain>::ChainAccount::try_from(ChainAddressConverter::try_from_encoded_address(events_ingress_address.clone()).expect("we created the ingress address above so it should be valid")).unwrap() == ingress_address => swap_id);
 
 		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
 			1,
@@ -314,7 +317,7 @@ fn can_process_ccm_via_swap_intent() {
 			RuntimeOrigin::signed(ZION.clone()),
 			Asset::Flip,
 			Asset::Usdc,
-			ForeignChainAddress::Eth([0x02; 20]),
+			EncodedAddress::Eth([0x02; 20]),
 			0u16,
 			Some(message),
 		));
@@ -430,7 +433,7 @@ fn can_process_ccm_via_extrinsic_intent() {
 			ingress_asset: Asset::Flip,
 			ingress_amount,
 			egress_asset: Asset::Usdc,
-			egress_address: ForeignChainAddress::Eth([0x02; 20]),
+			egress_address: EncodedAddress::Eth([0x02; 20]),
 			message_metadata: message,
 		}));
 		let current_epoch = Validator::current_epoch();

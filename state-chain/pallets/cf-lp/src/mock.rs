@@ -3,9 +3,10 @@ use cf_chains::{eth::assets, AnyChain, Chain, Ethereum};
 use cf_primitives::{AccountId, AccountRole, AuthorityCount, IntentId};
 use cf_traits::{
 	mocks::{
-		bid_info::MockBidInfo, egress_handler::MockEgressHandler,
-		ensure_origin_mock::NeverFailingOriginCheck, ingress_handler::MockIngressHandler,
-		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
+		address_converter::MockAddressConverter, bid_info::MockBidInfo,
+		egress_handler::MockEgressHandler, ensure_origin_mock::NeverFailingOriginCheck,
+		ingress_handler::MockIngressHandler, staking_info::MockStakingInfo,
+		system_state_info::MockSystemStateInfo,
 	},
 	AddressDerivationApi,
 };
@@ -110,6 +111,7 @@ impl crate::Config for Test {
 	type IngressHandler = MockIngressHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;
 	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type AddressConverter = MockAddressConverter;
 	type WeightInfo = ();
 }
 

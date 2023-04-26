@@ -2,7 +2,6 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{btc::rpc::MockBtcRpcApi, multisig::SignatureToThresholdSignature};
 use cf_chains::{
-	btc::BitcoinNetwork,
 	eth::{Ethereum, Transaction},
 	ChainCrypto,
 };
@@ -97,12 +96,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(move |_, _| {
 			Ok(Some(Vault { public_key: Default::default(), active_from_block: 80 }))
 		});
-
-	state_chain_client
-		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
 
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
@@ -259,12 +252,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
-
-	state_chain_client
-		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
 
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
@@ -461,12 +448,6 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
 	state_chain_client
-		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
-
-	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::BitcoinInstance,
@@ -612,12 +593,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
-
-	state_chain_client
-		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
 
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
@@ -843,12 +818,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
 	state_chain_client
-		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
-
-	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::BitcoinInstance,
@@ -1067,12 +1036,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
-
-	state_chain_client
-		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
 
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
@@ -1294,12 +1257,6 @@ async fn only_encodes_and_signs_when_specified() {
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
-
-	state_chain_client
-		.expect_storage_value::<pallet_cf_environment::BitcoinNetworkSelection<state_chain_runtime::Runtime>>()
-		.with(eq(initial_block_hash))
-		.once()
-		.return_once(move |_| Ok(BitcoinNetwork::Testnet));
 
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<

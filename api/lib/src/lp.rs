@@ -5,7 +5,7 @@ pub use cf_amm::{
 	common::{SideMap, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::ForeignChainAddress;
+use cf_chains::address::EncodedAddress;
 use cf_primitives::{AccountRole, Asset, AssetAmount, EgressId};
 use chainflip_engine::{
 	settings,
@@ -24,7 +24,7 @@ use crate::{connect_submit_and_get_events, submit_and_ensure_success};
 pub async fn liquidity_deposit(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
-) -> Result<ForeignChainAddress> {
+) -> Result<EncodedAddress> {
 	let events = connect_submit_and_get_events(
 		state_chain_settings,
 		pallet_cf_lp::Call::request_deposit_address { asset },
@@ -47,7 +47,7 @@ pub async fn withdraw_asset(
 	state_chain_settings: &settings::StateChain,
 	amount: AssetAmount,
 	asset: Asset,
-	egress_address: ForeignChainAddress,
+	egress_address: EncodedAddress,
 ) -> Result<EgressId> {
 	let events = connect_submit_and_get_events(
 		state_chain_settings,

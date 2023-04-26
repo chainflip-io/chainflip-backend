@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
-use cf_chains::{address::ForeignChainAddress, eth::H256, CcmIngressMetadata, ForeignChain};
+use cf_chains::{address::EncodedAddress, eth::H256, CcmIngressMetadata, ForeignChain};
 use cf_primitives::{AccountRole, Asset, BasisPoints};
 use futures::{FutureExt, Stream};
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
@@ -18,7 +18,7 @@ pub mod primitives {
 	pub use state_chain_runtime::Hash;
 	pub type ClaimAmount = pallet_cf_staking::ClaimAmount<FlipBalance>;
 	pub use cf_chains::{
-		address::{BitcoinAddress, BitcoinAddressData, BitcoinAddressFor, ForeignChainAddress},
+		address::{EncodedAddress, ForeignChainAddress},
 		CcmIngressMetadata,
 	};
 }
@@ -330,10 +330,10 @@ pub async fn register_swap_intent(
 	state_chain_settings: &settings::StateChain,
 	ingress_asset: Asset,
 	egress_asset: Asset,
-	egress_address: ForeignChainAddress,
+	egress_address: EncodedAddress,
 	relayer_commission_bps: BasisPoints,
 	message_metadata: Option<CcmIngressMetadata>,
-) -> Result<ForeignChainAddress> {
+) -> Result<EncodedAddress> {
 	let events = connect_submit_and_get_events(
 		state_chain_settings,
 		pallet_cf_swapping::Call::register_swap_intent {
@@ -363,17 +363,14 @@ pub async fn register_swap_intent(
 	}
 }
 
-/// Sanitize the given address (hex or base58) and turn it into a ForeignChainAddress of the given
+/// Sanitize the given address (hex or base58) and turn it into a EncodedAddress of the given
 /// chain.
-pub fn clean_foreign_chain_address(
-	chain: ForeignChain,
-	address: &str,
-) -> Result<ForeignChainAddress> {
+pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result<EncodedAddress> {
 	Ok(match chain {
 		ForeignChain::Ethereum =>
-			ForeignChainAddress::Eth(clean_eth_address(address).map_err(anyhow::Error::msg)?),
+			EncodedAddress::Eth(clean_eth_address(address).map_err(anyhow::Error::msg)?),
 		ForeignChain::Polkadot =>
-			ForeignChainAddress::Dot(clean_dot_address(address).map_err(anyhow::Error::msg)?),
+			EncodedAddress::Dot(clean_dot_address(address).map_err(anyhow::Error::msg)?),
 		ForeignChain::Bitcoin => todo!("Encoded address changes will make this easier"),
 	})
 }

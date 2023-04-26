@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use cf_chains::ForeignChainAddress;
+use cf_chains::address::EncodedAddress;
 use cf_primitives::{Asset, EpochIndex, EthereumAddress};
 use tracing::info;
 use web3::{
@@ -151,7 +151,7 @@ impl EthContractWitnesser for Vault {
 					from: Asset::Eth,
 					to: Asset::try_from(destination_token).map_err(anyhow::Error::msg)?,
 					ingress_amount: amount,
-					egress_address: ForeignChainAddress::from_chain_bytes(
+					egress_address: EncodedAddress::from_chain_bytes(
 						destination_chain.try_into().map_err(anyhow::Error::msg)?,
 						destination_address.0,
 					)
@@ -172,7 +172,7 @@ impl EthContractWitnesser for Vault {
 						.ok_or(anyhow::anyhow!("Unknown ETH token sent from the contract"))?,
 					to: Asset::try_from(destination_token).map_err(anyhow::Error::msg)?,
 					ingress_amount: amount,
-					egress_address: ForeignChainAddress::from_chain_bytes(
+					egress_address: EncodedAddress::from_chain_bytes(
 						destination_chain.try_into().map_err(anyhow::Error::msg)?,
 						destination_address.0,
 					)

@@ -22,7 +22,7 @@ benchmarks! {
 			Asset::Eth,
 			1_000_000,
 		));
-	}: _(RawOrigin::Signed(caller.clone()), 1_000_000, Asset::Eth, ForeignChainAddress::benchmark_value())
+	}: _(RawOrigin::Signed(caller.clone()), 1_000_000, Asset::Eth, cf_chains::address::EncodedAddress::benchmark_value())
 	verify {
 		assert_eq!(FreeBalances::<T>::get(&caller, Asset::Eth), Some(0));
 	}

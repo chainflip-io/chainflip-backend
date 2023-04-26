@@ -7,7 +7,7 @@ use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::DispatchResult;
 
-use cf_chains::{address::ForeignChainAddress, AnyChain};
+use cf_chains::{address::AddressConverter, AnyChain};
 use cf_traits::{
 	liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, EgressApi, IngressApi, SystemStateInfo,
 };
@@ -27,6 +27,7 @@ pub use weights::WeightInfo;
 
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_chains::address::EncodedAddress;
 	use cf_primitives::{EgressId, IntentId};
 
 	use super::*;
@@ -53,6 +54,10 @@ pub mod pallet {
 		/// For governance checks.
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
+		/// A converter to convert address to and from human readable to internal address
+		/// representation.
+		type AddressConverter: AddressConverter;
+
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 	}
@@ -75,7 +80,9 @@ pub mod pallet {
 			let expired = IngressIntentExpiries::<T>::take(n);
 			for (intent_id, chain, address) in expired.clone() {
 				T::IngressHandler::expire_intent(chain, intent_id, address.clone());
-				Self::deposit_event(Event::DepositAddressExpired { address });
+				Self::deposit_event(Event::DepositAddressExpired {
+					address: T::AddressConverter::try_to_encoded_address(address).expect("This should not fail since this conversion already succeeded when expiry was scheduled"),
+				});
 			}
 			T::WeightInfo::on_initialize(expired.len() as u32)
 		}
@@ -96,16 +103,16 @@ pub mod pallet {
 		},
 		DepositAddressReady {
 			intent_id: IntentId,
-			ingress_address: ForeignChainAddress,
+			ingress_address: EncodedAddress,
 		},
 		DepositAddressExpired {
-			address: ForeignChainAddress,
+			address: EncodedAddress,
 		},
 		WithdrawalEgressScheduled {
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
-			egress_address: ForeignChainAddress,
+			egress_address: EncodedAddress,
 		},
 		LpTtlSet {
 			ttl: T::BlockNumber,
@@ -146,7 +153,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::BlockNumber,
-		Vec<(IntentId, ForeignChain, ForeignChainAddress)>,
+		Vec<(IntentId, ForeignChain, cf_chains::ForeignChainAddress)>,
 		ValueQuery,
 	>;
 
@@ -170,7 +177,10 @@ pub mod pallet {
 				(intent_id, ForeignChain::from(asset), ingress_address.clone()),
 			);
 
-			Self::deposit_event(Event::DepositAddressReady { intent_id, ingress_address });
+			Self::deposit_event(Event::DepositAddressReady {
+				intent_id,
+				ingress_address: T::AddressConverter::try_to_encoded_address(ingress_address)?,
+			});
 
 			Ok(())
 		}
@@ -182,15 +192,23 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			amount: AssetAmount,
 			asset: Asset,
-			egress_address: ForeignChainAddress,
+			egress_address: EncodedAddress,
 		) -> DispatchResult {
 			if amount > 0 {
 				T::SystemState::ensure_no_maintenance()?;
 				let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
+				let egress_address_internal = T::AddressConverter::try_from_encoded_address(
+					egress_address.clone(),
+				)
+				.map_err(|_| {
+					DispatchError::Other("Invalid Egress Address, cannot decode the address")
+				})?;
+
 				// Check validity of Chain and Asset
 				ensure!(
-					ForeignChain::from(egress_address.clone()) == ForeignChain::from(asset),
+					ForeignChain::from(egress_address_internal.clone()) ==
+						ForeignChain::from(asset),
 					Error::<T>::InvalidEgressAddress
 				);
 
@@ -198,7 +216,7 @@ pub mod pallet {
 				Self::try_debit_account(&account_id, asset, amount)?;
 
 				let egress_id =
-					T::EgressHandler::schedule_egress(asset, amount, egress_address.clone(), None);
+					T::EgressHandler::schedule_egress(asset, amount, egress_address_internal, None);
 
 				Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
 					egress_id,
