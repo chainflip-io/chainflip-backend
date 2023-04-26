@@ -342,12 +342,12 @@ fn test_migration_to_latest_from_0() {
 	{
 		let db = PersistentKeyDB::open_and_migrate_to_version(&db_file, None, 0).unwrap();
 
-		assert_eq!(read_schema_version(&db.db).unwrap(), 0);
+		assert_eq!(read_schema_version(&db.kv_db.db).unwrap(), 0);
 	}
 
 	let db = PersistentKeyDB::open_and_migrate_to_latest(&db_file, None).unwrap();
 
-	assert_eq!(read_schema_version(&db.db).unwrap(), LATEST_SCHEMA_VERSION);
+	assert_eq!(read_schema_version(&db.kv_db.db).unwrap(), LATEST_SCHEMA_VERSION);
 }
 
 #[test]
@@ -377,9 +377,10 @@ fn test_migration_to_v1() {
 		let key_id_with_prefix =
 			[get_keygen_data_prefix::<EthSigning>().as_slice(), &public_key_bytes].concat();
 
-		db.db
+		db.kv_db
+			.db
 			.put_cf(
-				get_data_column_handle(&db.db),
+				get_data_column_handle(&db.kv_db.db),
 				key_id_with_prefix,
 				bincode::serialize(key_info).expect("Couldn't serialize keygen result info"),
 			)
@@ -387,7 +388,7 @@ fn test_migration_to_v1() {
 	}
 
 	// After migration, the we should be able to load the key using the new code
-	migrate_0_to_1(&db.db);
+	migrate_0_to_1(&db.kv_db.db);
 
 	let keys = db.load_keys::<EthSigning>();
 

@@ -45,31 +45,21 @@ const METADATA_COLUMN: &str = "metadata";
 /// Name of the directory that the backups will go into (only created before migrations)
 const BACKUPS_DIRECTORY: &str = "backups";
 
-/// Database for keys and persistent metadata
-pub struct PersistentKeyDB {
+struct RocksDBKeyValueStore {
 	/// Rocksdb database instance
 	db: DB,
+}
+/// Database for keys and persistent metadata
+pub struct PersistentKeyDB {
+	/// Underlying key-value database instance
+	kv_db: RocksDBKeyValueStore,
 }
 
 fn put_schema_version_to_batch(db: &DB, batch: &mut WriteBatch, version: u32) {
 	batch.put_cf(get_metadata_column_handle(db), DB_SCHEMA_VERSION_KEY, version.to_be_bytes());
 }
 
-impl PersistentKeyDB {
-	/// Open a key database or create one if it doesn't exist. If the schema version of the
-	/// existing database is below the latest, it will attempt to migrate to the latest version.
-	pub fn open_and_migrate_to_latest(
-		db_path: &Path,
-		genesis_hash: Option<state_chain_runtime::Hash>,
-	) -> Result<Self> {
-		let span = info_span!("PersistentKeyDB");
-		let _entered = span.enter();
-
-		Self::open_and_migrate_to_version(db_path, genesis_hash, LATEST_SCHEMA_VERSION)
-	}
-
-	/// As [Self::open_and_migrate_to_latest], but allows specifying a specific version
-	/// to migrate to (useful for testing migrations)
+impl RocksDBKeyValueStore {
 	fn open_and_migrate_to_version(
 		db_path: &Path,
 		genesis_hash: Option<state_chain_runtime::Hash>,
@@ -121,7 +111,7 @@ impl PersistentKeyDB {
 		migrate_db_to_version(&db, backup_option, genesis_hash, version)
                     .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?;
 
-		Ok(PersistentKeyDB { db })
+		Ok(RocksDBKeyValueStore { db })
 	}
 
 	fn put_data<T: Serialize>(&self, prefix: &[u8], key: &[u8], value: &T) -> Result<()> {
@@ -163,6 +153,36 @@ impl PersistentKeyDB {
 				)
 			})
 	}
+}
+
+impl PersistentKeyDB {
+	/// Open a key database or create one if it doesn't exist. If the schema version of the
+	/// existing database is below the latest, it will attempt to migrate to the latest version.
+	pub fn open_and_migrate_to_latest(
+		db_path: &Path,
+		genesis_hash: Option<state_chain_runtime::Hash>,
+	) -> Result<Self> {
+		let span = info_span!("PersistentKeyDB");
+		let _entered = span.enter();
+
+		Self::open_and_migrate_to_version(db_path, genesis_hash, LATEST_SCHEMA_VERSION)
+	}
+
+	/// As [Self::open_and_migrate_to_latest], but allows specifying a specific version
+	/// to migrate to (useful for testing migrations)
+	fn open_and_migrate_to_version(
+		db_path: &Path,
+		genesis_hash: Option<state_chain_runtime::Hash>,
+		version: u32,
+	) -> Result<Self> {
+		Ok(PersistentKeyDB {
+			kv_db: RocksDBKeyValueStore::open_and_migrate_to_version(
+				db_path,
+				genesis_hash,
+				version,
+			)?,
+		})
+	}
 
 	/// Write the keyshare to the db, indexed by the key id
 	pub fn update_key<C: CryptoScheme>(
@@ -170,7 +190,8 @@ impl PersistentKeyDB {
 		key_id: &KeyId,
 		keygen_result_info: &KeygenResultInfo<C>,
 	) {
-		self.put_data(&get_keygen_data_prefix::<C>(), &key_id.to_bytes(), &keygen_result_info)
+		self.kv_db
+			.put_data(&get_keygen_data_prefix::<C>(), &key_id.to_bytes(), &keygen_result_info)
 			.unwrap_or_else(|e| panic!("Failed to update key {}. Error: {}", &key_id, e));
 	}
 
@@ -179,6 +200,7 @@ impl PersistentKeyDB {
 		let _entered = span.enter();
 
 		let keys: HashMap<_, _> = self
+			.kv_db
 			.get_data_for_prefix::<KeygenResultInfo<C>>(&get_keygen_data_prefix::<C>())
 			.map(|(key_id, key_info_result)| {
 				(
@@ -197,14 +219,16 @@ impl PersistentKeyDB {
 
 	/// Write the witnesser checkpoint to the db
 	pub fn update_checkpoint(&self, chain_tag: ChainTag, checkpoint: &WitnessedUntil) {
-		self.put_data(&get_checkpoint_prefix(chain_tag), &[], checkpoint)
+		self.kv_db
+			.put_data(&get_checkpoint_prefix(chain_tag), &[], checkpoint)
 			.unwrap_or_else(|e| {
 				panic!("Failed to update {chain_tag} witnesser checkpoint. Error: {e}")
 			});
 	}
 
 	pub fn load_checkpoint(&self, chain_tag: ChainTag) -> Result<Option<WitnessedUntil>> {
-		self.get_data(&get_checkpoint_prefix(chain_tag), &[])
+		self.kv_db
+			.get_data(&get_checkpoint_prefix(chain_tag), &[])
 			.context("Failed to load {chain_tag} checkpoint")
 	}
 }
