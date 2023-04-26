@@ -4,15 +4,29 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-use super::*;
-use crate::multisig::{
-	client::get_key_data_for_test, eth::EthSigning, polkadot::PolkadotSigning, PersistentKeyDB,
+use super::{
+	rocksdb_kv::{
+		get_metadata_column_handle, BACKUPS_DIRECTORY, DATA_COLUMN, DB_SCHEMA_VERSION_KEY,
+		METADATA_COLUMN,
+	},
+	*,
+};
+use crate::{
+	db::persistent::rocksdb_kv::{
+		create_backup, create_backup_with_directory_name, get_data_column_handle, migrate_0_to_1,
+		migrate_db_to_version, read_genesis_hash, BackupOption,
+	},
+	multisig::{
+		client::get_key_data_for_test, eth::EthSigning, polkadot::PolkadotSigning, PersistentKeyDB,
+	},
 };
 use cf_primitives::{KeyId, GENESIS_EPOCH};
 use rocksdb::{Options, DB};
 use sp_runtime::AccountId32;
 use tempfile::TempDir;
 use utilities::{assert_ok, testing::new_temp_directory_with_nonexistent_file};
+
+use super::rocksdb_kv::read_schema_version;
 
 const COLUMN_FAMILIES: &[&str] = &[DATA_COLUMN, METADATA_COLUMN];
 
