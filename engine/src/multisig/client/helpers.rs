@@ -103,13 +103,17 @@ fn new_node<C: CeremonyTrait>(account_id: AccountId) -> Node<C> {
 	}
 }
 
+pub struct PayloadAndKeygenResultInfo<C: CryptoScheme> {
+	pub payload: C::SigningPayload,
+	pub keygen_result_info: KeygenResultInfo<C>,
+}
+
 // Exists so some of the tests can easily modify signing requests
-pub struct SigningCeremonyDetails<C: CryptoScheme> {
+struct SigningCeremonyDetails<C: CryptoScheme> {
 	pub rng: Rng,
 	pub ceremony_id: CeremonyId,
 	pub signers: BTreeSet<AccountId>,
-	pub payloads: Vec<C::SigningPayload>,
-	pub keygen_result_info: KeygenResultInfo<C>,
+	pub payloads: Vec<PayloadAndKeygenResultInfo<C>>,
 }
 
 #[derive(Clone)]
@@ -152,9 +156,12 @@ impl<C: CeremonyTrait> Node<C> {
 }
 
 impl<C: CryptoScheme> Node<SigningCeremony<C>> {
-	pub async fn request_signing(&mut self, signing_ceremony_details: SigningCeremonyDetails<C>) {
-		let SigningCeremonyDetails { rng, ceremony_id, signers, payloads, keygen_result_info } =
+	async fn request_signing(&mut self, signing_ceremony_details: SigningCeremonyDetails<C>) {
+		let SigningCeremonyDetails { rng, ceremony_id, signers, payloads } =
 			signing_ceremony_details;
+
+		let (payloads, keygen_result_info) =
+			payloads.into_iter().map(|p| (p.payload, p.keygen_result_info)).unzip();
 
 		let request = prepare_signing_request::<C>(
 			ceremony_id,
@@ -606,7 +613,7 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for KeygenCeremonyRunner<C> {
 		outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
 	) -> Self::CheckedOutput {
 		let (_, public_key) = all_same(outputs.values().map(|keygen_result_info| {
-			(keygen_result_info.params, keygen_result_info.key.get_public_key())
+			(keygen_result_info.params, keygen_result_info.key.get_agg_public_key())
 		}))
 		.expect("Generated keys don't match");
 
@@ -652,10 +659,24 @@ impl<C: CryptoScheme> KeygenCeremonyRunner<C> {
 	}
 }
 
+pub struct PayloadAndKeyData<C: CryptoScheme> {
+	payload: C::SigningPayload,
+	public_key_bytes: PublicKeyBytes,
+	key_data: HashMap<AccountId, KeygenResultInfo<C>>,
+}
+
+impl<C: CryptoScheme> PayloadAndKeyData<C> {
+	pub fn new(
+		payload: C::SigningPayload,
+		public_key_bytes: PublicKeyBytes,
+		key_data: HashMap<AccountId, KeygenResultInfo<C>>,
+	) -> Self {
+		PayloadAndKeyData { payload, public_key_bytes, key_data }
+	}
+}
+
 pub struct SigningCeremonyRunnerData<C: CryptoScheme> {
-	pub public_key_bytes: PublicKeyBytes,
-	pub key_data: HashMap<AccountId, KeygenResultInfo<C>>,
-	pub payloads: Vec<C::SigningPayload>,
+	pub data: Vec<PayloadAndKeyData<C>>,
 }
 pub type SigningCeremonyRunner<C> =
 	CeremonyTestRunner<SigningCeremonyRunnerData<C>, SigningCeremony<C>>;
@@ -672,16 +693,13 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for SigningCeremonyRunner<C> {
 	) -> Self::CheckedOutput {
 		let signatures = all_same(outputs.into_values()).expect("Signatures don't match");
 
-		assert_eq!(signatures.len(), self.ceremony_runner_data.payloads.len());
+		assert_eq!(signatures.len(), self.ceremony_runner_data.data.len());
 
 		// TODO: use batch verification here?
 		for (i, signature) in signatures.iter().enumerate() {
-			C::verify_signature(
-				signature,
-				&self.ceremony_runner_data.public_key_bytes,
-				&self.ceremony_runner_data.payloads[i],
-			)
-			.expect("Should be valid signature");
+			let data = &self.ceremony_runner_data.data[i];
+			C::verify_signature(signature, &data.public_key_bytes, &data.payload)
+				.expect("Should be valid signature");
 		}
 
 		signatures
@@ -702,15 +720,13 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 	pub fn new_with_all_signers(
 		nodes: HashMap<AccountId, Node<SigningCeremony<C>>>,
 		ceremony_id: CeremonyId,
-		public_key_bytes: PublicKeyBytes,
-		key_data: HashMap<AccountId, KeygenResultInfo<C>>,
-		payloads: Vec<C::SigningPayload>,
+		payloads_and_keys: Vec<PayloadAndKeyData<C>>,
 		rng: Rng,
 	) -> Self {
 		Self::inner_new(
 			nodes,
 			ceremony_id,
-			SigningCeremonyRunnerData { public_key_bytes, key_data, payloads },
+			SigningCeremonyRunnerData { data: payloads_and_keys },
 			rng,
 		)
 	}
@@ -718,9 +734,7 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 	pub fn new_with_threshold_subset_of_signers(
 		nodes: HashMap<AccountId, Node<SigningCeremony<C>>>,
 		ceremony_id: CeremonyId,
-		public_key_bytes: PublicKeyBytes,
-		key_data: HashMap<AccountId, KeygenResultInfo<C>>,
-		payloads: Vec<C::SigningPayload>,
+		payload_and_key_data: Vec<PayloadAndKeyData<C>>,
 		rng: Rng,
 	) -> (Self, HashMap<AccountId, Node<SigningCeremony<C>>>) {
 		let nodes_len = nodes.len();
@@ -729,31 +743,27 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 			success_threshold_from_share_count(nodes_len as AuthorityCount) as usize,
 		);
 
-		(
-			Self::new_with_all_signers(
-				signers,
-				ceremony_id,
-				public_key_bytes,
-				key_data,
-				payloads,
-				rng,
-			),
-			non_signers,
-		)
+		(Self::new_with_all_signers(signers, ceremony_id, payload_and_key_data, rng), non_signers)
 	}
 
-	pub fn signing_ceremony_details(
-		&mut self,
-		account_id: &AccountId,
-	) -> SigningCeremonyDetails<C> {
+	fn signing_ceremony_details(&mut self, account_id: &AccountId) -> SigningCeremonyDetails<C> {
 		use rand_legacy::Rng as _;
+
+		let payloads = self
+			.ceremony_runner_data
+			.data
+			.iter()
+			.map(|d| PayloadAndKeygenResultInfo {
+				payload: d.payload.clone(),
+				keygen_result_info: d.key_data[account_id].clone(),
+			})
+			.collect();
 
 		SigningCeremonyDetails {
 			ceremony_id: self.ceremony_id,
 			rng: Rng::from_seed(self.rng.gen()),
 			signers: self.nodes.keys().cloned().collect(),
-			payloads: self.ceremony_runner_data.payloads.clone(),
-			keygen_result_info: self.ceremony_runner_data.key_data[account_id].clone(),
+			payloads,
 		}
 	}
 }
@@ -768,9 +778,7 @@ pub async fn new_signing_ceremony<C: CryptoScheme>(
 	SigningCeremonyRunner::new_with_threshold_subset_of_signers(
 		new_nodes(ACCOUNT_IDS.clone()),
 		DEFAULT_SIGNING_CEREMONY_ID,
-		key_id,
-		key_data,
-		vec![C::signing_payload_for_test()],
+		vec![PayloadAndKeyData::new(C::signing_payload_for_test(), key_id, key_data)],
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
 	)
 }

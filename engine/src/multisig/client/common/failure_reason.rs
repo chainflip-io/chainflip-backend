@@ -29,6 +29,8 @@ pub enum SigningFailureReason {
 	UnknownKey,
 	#[error("Invalid Number of Payloads")]
 	InvalidNumberOfPayloads,
+	#[error("Developer Error: {0}")]
+	DeveloperError(String),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -74,7 +76,8 @@ impl CeremonyFailureReason for SigningFailureReason {
 		let reported_parties = format_iterator(reported_parties).to_string();
 		match self {
 			SigningFailureReason::BroadcastFailure(_, _) |
-			SigningFailureReason::InvalidSigShare => {
+			SigningFailureReason::InvalidSigShare |
+			SigningFailureReason::InvalidNumberOfPayloads => {
 				warn!(
 					tag = SIGNING_CEREMONY_FAILED,
 					reported_parties = reported_parties,
@@ -87,13 +90,11 @@ impl CeremonyFailureReason for SigningFailureReason {
 					"{SIGNING_CEREMONY_FAILED_PREFIX}: {self}",
 				);
 			},
+			SigningFailureReason::DeveloperError(_) |
 			SigningFailureReason::InvalidParticipants |
 			SigningFailureReason::NotEnoughSigners |
 			SigningFailureReason::UnknownKey => {
 				warn!(tag = REQUEST_TO_SIGN_IGNORED, "{REQUEST_TO_SIGN_IGNORED_PREFIX}: {self}",);
-			},
-			SigningFailureReason::InvalidNumberOfPayloads => {
-				warn!(reported_parties = reported_parties, "{self}");
 			},
 		}
 	}

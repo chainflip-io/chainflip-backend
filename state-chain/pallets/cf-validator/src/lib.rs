@@ -401,11 +401,10 @@ pub mod pallet {
 						// We can do this with an enum instead of Result<()>
 						// We have successfully done keygen verification
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
-							let new_epoch = CurrentEpoch::<T>::get() + 1;
 							let new_authorities = rotation_state.authority_candidates::<Vec<_>>();
-							HistoricalAuthorities::<T>::insert(new_epoch, new_authorities.clone());
+							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities.clone());
 							EpochAuthorityCount::<T>::insert(
-								new_epoch,
+								rotation_state.new_epoch_index,
 								new_authorities.len() as AuthorityCount,
 							);
 							T::VaultRotator::activate();
@@ -1134,8 +1133,9 @@ impl<T: Config> Pallet<T> {
 			);
 			Self::set_rotation_phase(RotationPhase::Idle);
 		} else {
+			let new_epoch_index = rotation_state.new_epoch_index;
 			Self::set_rotation_phase(RotationPhase::KeygensInProgress(rotation_state));
-			T::VaultRotator::keygen(candidates, T::EpochInfo::epoch_index() + 1);
+			T::VaultRotator::keygen(candidates, new_epoch_index);
 			log::info!(target: "cf-validator", "Vault rotation initiated.");
 		}
 	}

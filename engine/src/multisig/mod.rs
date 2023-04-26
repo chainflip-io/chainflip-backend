@@ -4,8 +4,6 @@
 pub mod client;
 /// Provides cryptographic primitives used by the multisig client
 mod crypto;
-/// Storage for the keys
-pub mod db;
 
 pub use crypto::{
 	bitcoin, eth, polkadot, ChainTag, CryptoScheme, Rng, SignatureToThresholdSignature,
@@ -16,14 +14,17 @@ use cf_primitives::{CeremonyId, PublicKeyBytes};
 
 use tracing::{info, info_span, Instrument};
 
-use crate::p2p::{MultisigMessageReceiver, MultisigMessageSender};
+use crate::{
+	db::KeyStore,
+	p2p::{MultisigMessageReceiver, MultisigMessageSender},
+};
 use state_chain_runtime::AccountId;
 
 pub use client::{MultisigClient, MultisigMessage};
 
-pub use db::PersistentKeyDB;
+pub use crate::db::PersistentKeyDB;
 
-use self::client::key_store::KeyStore;
+pub use crypto::CHAIN_TAG_SIZE;
 
 /// Start the multisig client, which listens for p2p messages and requests from the SC
 pub fn start_client<C: CryptoScheme>(
@@ -32,7 +33,7 @@ pub fn start_client<C: CryptoScheme>(
 	incoming_p2p_message_receiver: MultisigMessageReceiver<<C as CryptoScheme>::Chain>,
 	outgoing_p2p_message_sender: MultisigMessageSender<<C as CryptoScheme>::Chain>,
 	latest_ceremony_id: CeremonyId,
-) -> (MultisigClient<C>, impl futures::Future<Output = Result<()>> + Send) {
+) -> (MultisigClient<C, KeyStore<C>>, impl futures::Future<Output = Result<()>> + Send) {
 	info!("Starting {} MultisigClient", C::NAME);
 
 	let (ceremony_request_sender, ceremony_request_receiver) =

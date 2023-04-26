@@ -362,15 +362,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 			for (intent_id, address) in addresses {
-				IntentActions::<T, I>::remove(&address);
-				AddressPool::<T, I>::insert(intent_id, address.clone());
-				AddressStatus::<T, I>::insert(address.clone(), DeploymentStatus::Deployed);
-				if let Some(intent_ingress_details) = IntentIngressDetails::<T, I>::take(&address) {
-					Self::deposit_event(Event::<T, I>::StopWitnessing {
-						ingress_address: address.clone(),
-						ingress_asset: intent_ingress_details.ingress_asset,
-					});
-				}
+				Self::close_ingress_channel(intent_id, address, DeploymentStatus::Deployed);
 			}
 			Ok(())
 		}
@@ -531,7 +523,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		for request in batch_to_send {
 			match request {
 				FetchOrTransfer::<T::TargetChain>::Fetch { intent_id, asset } => {
-					let (ingress_id, ingress_address) = FetchParamDetails::<T, I>::take(intent_id)
+					let (ingress_id, ingress_address) = FetchParamDetails::<T, I>::get(intent_id)
 						.expect("to have fetch param details available");
 					fetch_params.push(FetchAssetParams { ingress_fetch_id: ingress_id, asset });
 					addresses.push((intent_id, ingress_address.clone()));
@@ -717,9 +709,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok((intent_id, address))
 	}
 
-	pub fn expire_intent(intent_id: IntentId, address: TargetChainAccount<T, I>) {
+	fn close_ingress_channel(
+		intent_id: IntentId,
+		address: TargetChainAccount<T, I>,
+		address_status: DeploymentStatus,
+	) {
 		IntentActions::<T, I>::remove(&address);
-		if AddressStatus::<T, I>::get(&address) == DeploymentStatus::Deployed {
+		FetchParamDetails::<T, I>::remove(intent_id);
+		if matches!(address_status, DeploymentStatus::Deployed) {
+			AddressStatus::<T, I>::insert(address.clone(), DeploymentStatus::Deployed);
 			AddressPool::<T, I>::insert(intent_id, address.clone());
 		}
 		if let Some(intent_ingress_details) = IntentIngressDetails::<T, I>::take(&address) {
@@ -728,6 +726,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				ingress_asset: intent_ingress_details.ingress_asset,
 			});
 		}
+	}
+
+	pub fn expire_intent(intent_id: IntentId, address: TargetChainAccount<T, I>) {
+		let status = AddressStatus::<T, I>::get(&address);
+		Self::close_ingress_channel(intent_id, address, status);
 	}
 }
 

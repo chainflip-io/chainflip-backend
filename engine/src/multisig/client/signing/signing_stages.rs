@@ -5,7 +5,7 @@ use crate::multisig::{
 		self,
 		ceremony_manager::SigningCeremony,
 		common::{SigningFailureReason, SigningStageName},
-		signing,
+		signing::{self, PayloadAndKey},
 	},
 	crypto::CryptoScheme,
 };
@@ -45,7 +45,7 @@ pub struct AwaitCommitments1<Crypto: CryptoScheme> {
 
 impl<Crypto: CryptoScheme> AwaitCommitments1<Crypto> {
 	pub fn new(mut common: CeremonyCommon, signing_common: SigningStateCommonInfo<Crypto>) -> Self {
-		let nonces = (0..signing_common.payloads.len())
+		let nonces = (0..signing_common.payload_count())
 			.map(|_| SecretNoncePair::sample_random(&mut common.rng))
 			.collect();
 
@@ -140,12 +140,12 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 		let bad_parties: BTreeSet<_> = verified_commitments
 			.iter()
 			.filter_map(|(party_idx, Comm1(commitments))| {
-				if commitments.len() != self.signing_common.payloads.len() {
+				if commitments.len() != self.signing_common.payload_count() {
 					warn!(
 						"Unexpected number of commitments from party {}: {} (expected: {})",
 						party_idx,
 						commitments.len(),
-						self.signing_common.payloads.len(),
+						self.signing_common.payload_count(),
 					);
 					Some(*party_idx)
 				} else {
@@ -198,7 +198,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	/// With all nonce commitments verified, we can generate the group commitment
 	/// and our share of signature response, which we broadcast to other parties.
 	fn init(&mut self) -> DataToSend<Self::Message> {
-		let responses = (0..self.signing_common.payloads.len())
+		let responses = (0..self.signing_common.payload_count())
 			.map(|i| {
 				// Extract commitments for a specific payload (there is some room
 				// for optimisation here)
@@ -208,9 +208,11 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 					.map(|(party_idx, c)| (*party_idx, c.0[i].clone()))
 					.collect();
 
+				let PayloadAndKey { payload, key } = &self.signing_common.payloads_and_keys[i];
+
 				signing_detail::generate_local_sig::<Crypto>(
-					&self.signing_common.payloads[i],
-					&self.signing_common.key.key_share,
+					payload,
+					&key.key_share,
 					&self.nonces[i],
 					&commitments,
 					self.common.own_idx,
@@ -297,12 +299,12 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 		let bad_parties: BTreeSet<_> = local_sigs
 			.iter()
 			.filter_map(|(party_idx, LocalSig3 { responses })| {
-				if responses.len() != self.signing_common.payloads.len() {
+				if responses.len() != self.signing_common.payload_count() {
 					warn!(
 						"Unexpected number of local signatures from party {}: {} (expected: {})",
 						party_idx,
 						responses.len(),
-						self.signing_common.payloads.len(),
+						self.signing_common.payload_count(),
 					);
 					Some(*party_idx)
 				} else {
@@ -322,12 +324,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 
 		let all_idxs = &self.common.all_idxs;
 
-		let pubkeys: BTreeMap<_, _> = all_idxs
-			.iter()
-			.map(|idx| (*idx, self.signing_common.key.party_public_keys[*idx as usize - 1]))
-			.collect();
-
-		let signatures_result = (0..self.signing_common.payloads.len())
+		let signatures_result = (0..self.signing_common.payload_count())
 			.map(|i| {
 				// Extract commitments for a specific payload (there is some room
 				// for optimisation here)
@@ -346,10 +343,19 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 					})
 					.collect();
 
+				let PayloadAndKey { payload, key } = &self.signing_common.payloads_and_keys[i];
+
+				// NOTE: depending on how many payloads we will need to sign with
+				// the same key, we may want to compute this value once per key
+				let pubkeys: BTreeMap<_, _> = all_idxs
+					.iter()
+					.map(|idx| (*idx, key.party_public_keys[*idx as usize - 1]))
+					.collect();
+
 				signing_detail::aggregate_signature::<Crypto>(
-					&self.signing_common.payloads[i],
+					payload,
 					all_idxs,
-					self.signing_common.key.get_public_key(),
+					key.get_agg_public_key(),
 					&pubkeys,
 					&commitments,
 					&local_sigs,
