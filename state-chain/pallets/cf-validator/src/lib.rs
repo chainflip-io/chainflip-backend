@@ -1169,11 +1169,10 @@ impl<T: Config> Pallet<T> {
 	fn punish_missed_authorship_slots() -> Weight {
 		let mut num_missed_slots = 0;
 		let session_validators = <pallet_session::Pallet<T>>::validators();
-		let current_authority_count = Self::current_authority_count() as u64;
 		for slot in T::MissedAuthorshipSlots::missed_slots() {
 			num_missed_slots += 1;
 			// https://github.com/chainflip-io/substrate/blob/c172d0f683fab3792b90d876fd6ca27056af9fe9/frame/aura/src/lib.rs#L97
-			let authority_index = slot % current_authority_count;
+			let authority_index = slot % session_validators.len() as u64;
 			if let Some(id) = session_validators.get(authority_index as usize) {
 				T::OffenceReporter::report(PalletOffence::MissedAuthorshipSlot, id.clone());
 			} else {
