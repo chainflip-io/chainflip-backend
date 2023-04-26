@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod rocksdb_kv_tests;
+
 use std::{cmp::Ordering, collections::HashMap, fs, mem::size_of, path::Path};
 
 use cf_primitives::KeyId;
