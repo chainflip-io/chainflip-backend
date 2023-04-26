@@ -59,14 +59,14 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 		}
 	}
 
-	pub fn authority_candidates<I: FromIterator<Id>>(&self) -> I {
+	pub fn authority_candidates(&self) -> BTreeSet<Id> {
 		self.primary_candidates
 			.iter()
 			.chain(&self.secondary_candidates)
 			.filter(|id| !self.banned.contains(id))
 			.take(self.primary_candidates.len())
 			.cloned()
-			.collect::<I>()
+			.collect()
 	}
 
 	pub fn num_primary_candidates(&self) -> u32 {
@@ -125,9 +125,9 @@ mod rotation_state_tests {
 			new_epoch_index: 2,
 		};
 
-		let candidates: Vec<_> = rotation_state.authority_candidates();
+		let candidates = rotation_state.authority_candidates();
 
-		assert_eq!(candidates, vec![0, 3, 5, 6, 7, 8, 9, 20, 21, 22]);
+		assert_eq!(candidates, BTreeSet::from([0, 3, 5, 6, 7, 8, 9, 20, 21, 22]));
 	}
 
 	#[test]
@@ -144,8 +144,8 @@ mod rotation_state_tests {
 			rotation_state.qualify_nodes::<QualifyAll<_>>();
 
 			assert_eq!(
-				rotation_state.authority_candidates::<Vec<_>>(),
-				vec![5, 6, 7, 8, 9, 20, 21, 22, 23, 24]
+				rotation_state.authority_candidates(),
+				BTreeSet::from([5, 6, 7, 8, 9, 20, 21, 22, 23, 24])
 			)
 		});
 	}

@@ -402,7 +402,7 @@ pub mod pallet {
 						// We can do this with an enum instead of Result<()>
 						// We have successfully done keygen verification
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
-							let new_authorities = rotation_state.authority_candidates::<BTreeSet<_>>();
+							let new_authorities = rotation_state.authority_candidates();
 							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities.clone());
 							EpochAuthorityCount::<T>::insert(
 								rotation_state.new_epoch_index,
@@ -974,7 +974,7 @@ impl<T: Config> Pallet<T> {
 			old_epoch,
 		);
 
-		let new_authorities = rotation_state.authority_candidates::<BTreeSet<_>>();
+		let new_authorities = rotation_state.authority_candidates();
 
 		Self::initialise_new_epoch(
 			new_epoch,
@@ -1117,7 +1117,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn start_vault_rotation(rotation_state: RuntimeRotationState<T>) {
-		let candidates: BTreeSet<_> = rotation_state.authority_candidates();
+		let candidates = rotation_state.authority_candidates();
 		let SetSizeParameters { min_size, .. } = AuctionParameters::<T>::get();
 		if (candidates.len() as u32) < min_size {
 			log::warn!(
@@ -1168,15 +1168,13 @@ impl<T: Config> Pallet<T> {
 
 	fn punish_missed_authorship_slots() -> Weight {
 		let mut num_missed_slots = 0;
+		let session_validators = <pallet_session::Pallet<T>>::validators();
+		let current_authority_count = Self::current_authority_count() as u64;
 		for slot in T::MissedAuthorshipSlots::missed_slots() {
 			num_missed_slots += 1;
 			// https://github.com/chainflip-io/substrate/blob/c172d0f683fab3792b90d876fd6ca27056af9fe9/frame/aura/src/lib.rs#L97
-			let authority_index = slot % <Self as EpochInfo>::current_authority_count() as u64;
-			if let Some(id) = <Self as EpochInfo>::current_authorities()
-				.into_iter()
-				.collect::<Vec<_>>()
-				.get(authority_index as usize)
-			{
+			let authority_index = slot % current_authority_count;
+			if let Some(id) = session_validators.get(authority_index as usize) {
 				T::OffenceReporter::report(PalletOffence::MissedAuthorshipSlot, id.clone());
 			} else {
 				log::error!(
@@ -1259,13 +1257,12 @@ impl<T: Config> pallet_session::SessionManager<ValidatorIdOf<T>> for Pallet<T> {
 	///
 	/// The first rotation queues the new validators, the next rotation queues `None`, and
 	/// activates the queued validators.
-	// TODO: Write a note of when exactly this is called.
 	fn new_session(_new_index: SessionIndex) -> Option<Vec<ValidatorIdOf<T>>> {
 		match CurrentRotationPhase::<T>::get() {
 			RotationPhase::NewKeysActivated(rotation_state) => {
 				let next_authorities = rotation_state.authority_candidates();
 				Self::set_rotation_phase(RotationPhase::SessionRotating(rotation_state));
-				Some(next_authorities)
+				Some(next_authorities.into_iter().collect())
 			},
 			RotationPhase::SessionRotating(_) => {
 				Self::set_rotation_phase(RotationPhase::Idle);
