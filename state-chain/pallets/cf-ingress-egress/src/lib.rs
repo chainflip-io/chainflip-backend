@@ -29,7 +29,7 @@ use cf_traits::{
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
 pub use pallet::*;
 use sp_runtime::{Saturating, TransactionOutcome};
-pub use sp_std::{vec, vec::Vec};
+pub use sp_std::{cmp::min, vec, vec::Vec};
 
 /// Enum wrapper for fetch and egress requests.
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
@@ -378,7 +378,7 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			disabled: bool,
 		) -> DispatchResult {
-			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 
 			if disabled {
 				DisabledEgressAssets::<T, I>::insert(asset, ());
@@ -397,12 +397,18 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [on_success](Event::BatchBroadcastRequested)
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::egress_assets({
+			let len = ScheduledEgressFetchOrTransfer::<T, I>::decode_len().unwrap_or_default() as u32;
+			match maybe_size {
+				Some(n) => min(*n, len),
+				None => len,
+			}
+		}))]
 		pub fn egress_scheduled_fetch_transfer(
 			origin: OriginFor<T>,
 			maybe_size: Option<u32>,
 		) -> DispatchResult {
-			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 			with_transaction(|| Self::do_egress_scheduled_fetch_transfer(maybe_size))?;
 			Ok(())
 		}
@@ -429,13 +435,45 @@ pub mod pallet {
 		///
 		/// - [on_sucessful_ccm](Event::CcmBroadcastRequested)
 		/// - [on_failed_ccm](Event::CcmEgressInvalid)
-		#[pallet::weight(0)]
+		#[pallet::weight(T::WeightInfo::egress_ccm({
+			let len = ScheduledEgressCcm::<T, I>::decode_len().unwrap_or_default() as u32;
+			match maybe_size {
+				Some(n) => min(*n, len),
+				None => len,
+			}
+		}))]
 		pub fn egress_scheduled_ccms(
 			origin: OriginFor<T>,
 			maybe_size: Option<u32>,
 		) -> DispatchResult {
-			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
-			let _ = Self::do_egress_scheduled_ccm(maybe_size);
+			T::EnsureGovernance::ensure_origin(origin)?;
+			Self::do_egress_scheduled_ccm(maybe_size);
+			Ok(())
+		}
+
+		/// Send the specified CCM messages out to the target chain.
+		/// Assets disabled from egress will not be sent.
+		/// Requires governance
+		///
+		/// ## Events
+		///
+		/// - [on_sucessful_ccm](Event::CcmBroadcastRequested)
+		/// - [on_failed_ccm](Event::CcmEgressInvalid)
+		#[pallet::weight(T::WeightInfo::egress_ccm(egress_ids.len() as u32))]
+		pub fn egress_scheduled_ccms_by_egress_id(
+			origin: OriginFor<T>,
+			egress_ids: Vec<EgressId>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			Self::egress_ccms(ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
+				// Filter out disabled assets, and take the specified CCMs by EgressId.
+				ccms.drain_filter(|ccm| {
+					!DisabledEgressAssets::<T, I>::contains_key(ccm.asset()) &&
+						egress_ids.contains(&ccm.egress_id)
+				})
+				.collect()
+			}));
 			Ok(())
 		}
 	}
@@ -535,7 +573,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	///
 	/// Blacklisted assets are not sent and will remain in storage.
 	fn do_egress_scheduled_ccm(maybe_size: Option<u32>) -> Weight {
-		let ccm_to_send: Vec<_> = ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
+		Self::egress_ccms(ScheduledEgressCcm::<T, I>::mutate(|ccms: &mut Vec<_>| {
 			let mut remaining_batch_space = maybe_size.unwrap_or(ccms.len() as u32);
 
 			// Filter out disabled assets, and take up to batch_size requests to be sent.
@@ -550,10 +588,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				}
 			})
 			.collect()
-		});
+		}))
+	}
 
-		let ccms_sent = ccm_to_send.len() as u32;
-		for ccm in ccm_to_send {
+	// Egress the given CCMs out to the target chain. Returns the weight used.
+	fn egress_ccms(ccms: Vec<CrossChainMessage<T::TargetChain>>) -> Weight {
+		let weight = T::WeightInfo::egress_ccm(ccms.len() as u32);
+		for ccm in ccms {
 			match <T::ChainApiCall as ExecutexSwapAndCall<T::TargetChain>>::new_unsigned(
 				ccm.egress_id,
 				TransferAssetParams {
@@ -578,7 +619,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			};
 		}
 
-		T::WeightInfo::egress_ccm(ccms_sent)
+		weight
 	}
 
 	/// Completes a single ingress request.
