@@ -171,6 +171,9 @@ pub async fn register_account_role(
 ) -> Result<H256> {
 	task_scope(|scope| {
 		async {
+			if role == AccountRole::None {
+				bail!("Cannot register account role None");
+			}
 			let (_, _, state_chain_client) =
 				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
 					.await?;
@@ -183,7 +186,7 @@ pub async fn register_account_role(
 						RuntimeCall::from(pallet_cf_swapping::Call::register_as_relayer {}),
 					AccountRole::LiquidityProvider =>
 						RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
-					AccountRole::None => bail!("Cannot register account role None"),
+					AccountRole::None => unreachable!(),
 				})
 				.await
 				.expect("Could not set register account role for account");
