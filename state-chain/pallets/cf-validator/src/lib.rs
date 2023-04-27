@@ -9,6 +9,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+mod helpers;
+
 pub mod weights;
 pub use weights::WeightInfo;
 
