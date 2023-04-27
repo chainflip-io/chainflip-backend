@@ -1,6 +1,6 @@
 # Pull Request
 
-Linear issue(s): PRO-xxx
+Closes: PRO-xxx
 
 ## Checklist
 
