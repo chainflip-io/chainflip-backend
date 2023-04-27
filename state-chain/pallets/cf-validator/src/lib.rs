@@ -398,9 +398,6 @@ pub mod pallet {
 				RotationPhase::KeygensInProgress(mut rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {
-						// We need to differentiate keygen verif and other states.
-						// We can do this with an enum instead of Result<()>
-						// We have successfully done keygen verification
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
 							let new_authorities = rotation_state.authority_candidates();
 							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities.clone());
