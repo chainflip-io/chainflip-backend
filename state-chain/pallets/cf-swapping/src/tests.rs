@@ -19,6 +19,7 @@ use cf_traits::{
 use frame_support::{assert_noop, assert_ok, sp_std::iter, weights::Weight};
 
 use frame_support::traits::Hooks;
+use sp_runtime::traits::BlockNumberProvider;
 
 // Returns some test data
 fn generate_test_swaps() -> Vec<Swap> {
@@ -56,6 +57,10 @@ fn generate_test_swaps() -> Vec<Swap> {
 			swap_type: SwapType::Swap(ForeignChainAddress::Dot([4; 32])),
 		},
 	]
+}
+
+fn get_expiry() -> u64 {
+	SwapTTL::<Test>::get() + System::current_block_number()
 }
 
 fn insert_swaps(swaps: &[Swap]) {
@@ -205,6 +210,7 @@ fn expect_swap_id_to_be_emitted() {
 			Test,
 			crate::mock::RuntimeEvent::Swapping(crate::Event::NewSwapIntent {
 				ingress_address: EncodedAddress::Eth(Default::default()),
+				expiry: get_expiry(),
 			}),
 			crate::mock::RuntimeEvent::Swapping(crate::Event::SwapIngressReceived {
 				ingress_address: EncodedAddress::Eth(Default::default()),
@@ -289,7 +295,8 @@ fn swap_expires() {
 
 		let ingress_address = assert_events_match!(Test, RuntimeEvent::Swapping(crate::Event::NewSwapIntent {
 			ingress_address,
-		}) => (ingress_address));
+			..
+		}) => ingress_address);
 		let swap_intent = SwapIntent {
 			ingress_address: MockAddressConverter::try_from_encoded_address(ingress_address).unwrap(),
 			ingress_asset: Asset::Eth,
