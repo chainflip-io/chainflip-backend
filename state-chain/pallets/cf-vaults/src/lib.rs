@@ -150,7 +150,6 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	AwaitingKeygen {
 		keygen_ceremony_id: CeremonyId,
 		keygen_participants: BTreeSet<T::ValidatorId>,
-		epoch_index: EpochIndex,
 		response_status: KeygenResponseStatus<T, I>,
 	},
 	/// We are waiting for the nodes who generated the new key to complete a signing ceremony to
@@ -272,7 +271,6 @@ pub mod pallet {
 			if let Some(VaultRotationStatus::<T, I>::AwaitingKeygen {
 				keygen_ceremony_id,
 				keygen_participants,
-				epoch_index,
 				response_status,
 			}) = PendingVaultRotation::<T, I>::get()
 			{
@@ -302,7 +300,6 @@ pub mod pallet {
 						Self::trigger_keygen_verification(
 							keygen_ceremony_id,
 							new_public_key,
-							epoch_index,
 							keygen_participants,
 						);
 					},
@@ -646,7 +643,7 @@ pub mod pallet {
 		///
 		/// GenesisConfig members require `Serialize` and `Deserialize` which isn't
 		/// implemented for the AggKey type, hence we use Vec<u8> and covert during genesis.
-		pub vault_key: Option<Vec<u8>>,
+		pub vault_key: Option<AggKeyFor<T, I>>,
 		pub deployment_block: ChainBlockNumberFor<T, I>,
 		pub keygen_response_timeout: BlockNumberFor<T>,
 	}
@@ -672,12 +669,7 @@ pub mod pallet {
 						epoch_index: cf_primitives::GENESIS_EPOCH,
 						key_state: KeyState::Unlocked,
 					},
-					AggKeyFor::<T, I>::try_from(vault_key)
-						// Note: Can't use expect() here without some type shenanigans, but would
-						// give clearer error messages.
-						.unwrap_or_else(|_| {
-							panic!("Can't build genesis without a valid vault key.")
-						}),
+					vault_key,
 					self.deployment_block,
 				);
 			} else {
@@ -729,12 +721,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn trigger_keygen_verification(
 		keygen_ceremony_id: CeremonyId,
 		new_public_key: AggKeyFor<T, I>,
-		epoch_index: EpochIndex,
 		participants: BTreeSet<T::ValidatorId>,
 	) -> ThresholdSignatureRequestId {
 		let request_id = T::ThresholdSigner::request_keygen_verification_signature(
 			T::Chain::agg_key_to_payload(new_public_key),
-			T::Chain::agg_key_to_key_id(new_public_key, epoch_index),
+			new_public_key,
 			participants,
 		);
 		T::ThresholdSigner::register_callback(request_id, {
@@ -787,7 +778,6 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::AwaitingKeygen {
 			keygen_ceremony_id: ceremony_id,
 			keygen_participants: candidates.clone(),
-			epoch_index,
 			response_status: KeygenResponseStatus::new(candidates.clone()),
 		});
 
@@ -879,7 +869,6 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
 					keygen_ceremony_id: Default::default(),
 					keygen_participants: Default::default(),
-					epoch_index: cf_primitives::GENESIS_EPOCH,
 					response_status: KeygenResponseStatus::new(Default::default()),
 				});
 			},

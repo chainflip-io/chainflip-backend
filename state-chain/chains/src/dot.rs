@@ -733,6 +733,7 @@ impl SignedExtension for PolkadotSignedExtra {
 	}
 }
 
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Ord, PartialOrd, Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
 pub struct PolkadotPublicKey(pub sr25519::Public);
 

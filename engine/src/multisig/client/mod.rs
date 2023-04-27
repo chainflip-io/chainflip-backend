@@ -119,7 +119,7 @@ pub trait MultisigClientApi<C: CryptoScheme> {
 		ceremony_id: CeremonyId,
 		epoch_index: EpochIndex,
 		participants: BTreeSet<AccountId>,
-	) -> BoxFuture<'_, Result<C::AggKey, (BTreeSet<AccountId>, KeygenFailureReason)>>;
+	) -> BoxFuture<'_, Result<C::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>>;
 
 	fn initiate_signing(
 		&self,
@@ -198,7 +198,7 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 		// The epoch the key will be associated with if successful.
 		epoch_index: EpochIndex,
 		participants: BTreeSet<AccountId>,
-	) -> BoxFuture<'_, Result<C::AggKey, (BTreeSet<AccountId>, KeygenFailureReason)>> {
+	) -> BoxFuture<'_, Result<C::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>> {
 		assert!(participants.contains(&self.my_account_id));
 		let span = info_span!("Keygen Ceremony", ceremony_id = ceremony_id);
 		let _entered = span.enter();
@@ -230,10 +230,9 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 				.await
 				.expect("Keygen result channel dropped before receiving a result")
 				.map(|keygen_result_info| {
-					let agg_key = keygen_result_info.key.agg_key();
-
+					let agg_key = keygen_result_info.agg_key();
 					self.key_store.lock().unwrap().set_key(
-						KeyId { epoch_index, public_key_bytes: agg_key.clone().into() },
+						KeyId { epoch_index, public_key_bytes: agg_key.into() },
 						keygen_result_info,
 					);
 					agg_key

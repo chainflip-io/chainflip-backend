@@ -10,7 +10,7 @@ pub use crypto::{
 };
 
 use anyhow::Result;
-use cf_primitives::{CeremonyId, PublicKeyBytes};
+use cf_primitives::CeremonyId;
 
 use tracing::{info, info_span, Instrument};
 

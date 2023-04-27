@@ -101,34 +101,8 @@ pub struct MockThresholdSignature<K, P> {
 	Ord,
 	PartialOrd,
 )]
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct MockAggKey(pub [u8; 4]);
-
-impl TryFrom<PublicKeyBytes> for MockAggKey {
-	type Error = ();
-
-	fn try_from(public_key_bytes: PublicKeyBytes) -> Result<Self, Self::Error> {
-		if public_key_bytes.len() != 4 {
-			return Err(())
-		}
-		let mut key = [0u8; 4];
-		key.copy_from_slice(&public_key_bytes);
-		Ok(MockAggKey(key))
-	}
-}
-
-impl From<MockAggKey> for PublicKeyBytes {
-	fn from(val: MockAggKey) -> Self {
-		val.0.to_vec()
-	}
-}
-
-impl TryFrom<KeyId> for MockAggKey {
-	type Error = ();
-
-	fn try_from(key_id: KeyId) -> Result<Self, Self::Error> {
-		Ok(MockAggKey(key_id.public_key_bytes.try_into().map_err(|_| ())?))
-	}
-}
 
 impl ChainCrypto for MockEthereum {
 	type AggKey = MockAggKey;

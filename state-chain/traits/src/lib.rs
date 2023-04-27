@@ -19,7 +19,7 @@ use cf_chains::{
 
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, EgressId, EpochIndex, EthereumAddress, ForeignChain, IntentId, KeyId,
+	CeremonyId, EgressId, EpochIndex, EthereumAddress, ForeignChain, IntentId,
 	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -417,7 +417,7 @@ where
 
 	fn request_keygen_verification_signature(
 		payload: C::Payload,
-		key_id: KeyId,
+		key: C::AggKey,
 		participants: BTreeSet<Self::ValidatorId>,
 	) -> ThresholdSignatureRequestId;
 

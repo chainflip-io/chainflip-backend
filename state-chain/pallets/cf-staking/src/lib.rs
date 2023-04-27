@@ -352,7 +352,7 @@ pub mod pallet {
 
 			if let Some(withdrawal_address) = WithdrawalAddresses::<T>::get(&account_id) {
 				if withdrawal_address != address {
-					return Err(Error::<T>::WithdrawalAddressRestricted.into())
+					return Err(Error::<T>::WithdrawalAddressRestricted.into());
 				}
 			}
 
@@ -482,7 +482,7 @@ pub mod pallet {
 				match maybe_status.as_mut() {
 					Some(active) => {
 						if !*active {
-							return Err(Error::<T>::AlreadyNotBidding)
+							return Err(Error::<T>::AlreadyNotBidding);
 						}
 						*active = false;
 						Self::deposit_event(Event::StoppedBidding {
@@ -581,13 +581,13 @@ impl<T: Config> Pallet<T> {
 		amount: T::Balance,
 	) -> Result<(), Error<T>> {
 		if withdrawal_address == ETH_ZERO_ADDRESS {
-			return Ok(())
+			return Ok(());
 		}
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
 			// This is the initial account-creating staking event. We store the withdrawal address
 			// for this account.
 			WithdrawalAddresses::<T>::insert(account_id, withdrawal_address);
-			return Ok(())
+			return Ok(());
 		}
 		// If we reach here, the account already exists, so any provided withdrawal address
 		// *must* match the one that was added on the initial account-creating staking event,
@@ -635,7 +635,7 @@ impl<T: Config> Pallet<T> {
 			match maybe_status.as_mut() {
 				Some(active) => {
 					if *active {
-						return Err(Error::AlreadyBidding)
+						return Err(Error::AlreadyBidding);
 					}
 					*active = true;
 					Self::deposit_event(Event::StartedBidding { account_id: account_id.clone() });

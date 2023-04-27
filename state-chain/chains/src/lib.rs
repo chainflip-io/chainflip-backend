@@ -4,7 +4,7 @@ use core::fmt::Display;
 use crate::benchmarking_value::BenchmarkValue;
 pub use address::ForeignChainAddress;
 use cf_primitives::{
-	chains::assets, AssetAmount, EgressId, EpochIndex, EthAmount, IntentId, KeyId, PublicKeyBytes,
+	chains::assets, AssetAmount, EgressId, EpochIndex, EthAmount, IntentId, KeyId,
 };
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
@@ -121,11 +121,8 @@ impl Age for () {
 
 /// Common crypto-related types and operations for some external chain.
 pub trait ChainCrypto: Chain {
-	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
-	/// TODO: Consider if Encode / Decode bounds are sufficient rather than To/From Vec<u8>
-	type AggKey: TryFrom<PublicKeyBytes>
-		+ Into<PublicKeyBytes>
-		+ TryFrom<KeyId>
+	/// The chain's `AggKey` format. The AggKey is the key (or keys) that controls the vault.
+	type AggKey: MaybeSerializeDeserialize
 		+ Member
 		+ Parameter
 		+ Copy

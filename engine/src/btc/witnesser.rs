@@ -67,11 +67,8 @@ pub fn filter_interesting_utxos(
 						tx_id: UtxoId { tx_hash, vout },
 					});
 				} else if script_pubkey_bytes ==
-					derive_btc_ingress_bitcoin_script(
-						change_pubkey.pubkey_x,
-						CHANGE_ADDRESS_SALT,
-					)
-					.serialize()
+					derive_btc_ingress_bitcoin_script(change_pubkey.current, CHANGE_ADDRESS_SALT)
+						.serialize()
 				{
 					change_witnesses.push(ChangeUtxoWitness {
 						amount: tx_out.value,

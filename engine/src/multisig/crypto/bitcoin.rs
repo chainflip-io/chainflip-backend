@@ -2,8 +2,7 @@ use crate::multisig::crypto::ECScalar;
 
 pub use super::secp256k1::{Point, Scalar};
 use super::{ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature};
-use cf_chains::{btc::AggKey, Bitcoin};
-use cf_primitives::PublicKeyBytes;
+use cf_chains::Bitcoin;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -59,7 +58,7 @@ impl AsRef<[u8]> for SigningPayload {
 impl CryptoScheme for BtcSigning {
 	type Point = Point;
 	type Signature = BtcSchnorrSignature;
-	type AggKey = AggKey;
+	type PublicKey = secp256k1::schnorrsig::PublicKey;
 	type SigningPayload = SigningPayload;
 	type Chain = cf_chains::Bitcoin;
 
@@ -114,22 +113,16 @@ impl CryptoScheme for BtcSigning {
 
 	fn verify_signature(
 		signature: &Self::Signature,
-		public_key_bytes: &PublicKeyBytes,
+		public_key: &Self::PublicKey,
 		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()> {
 		let secp = secp256k1::Secp256k1::new();
 		let raw_sig = secp256k1::schnorrsig::Signature::from_slice(&signature.to_raw()).unwrap();
 		let raw_msg = secp256k1::Message::from_slice(&payload.0).unwrap();
-		let raw_pubkey =
-			secp256k1::schnorrsig::PublicKey::from_slice(&public_key_bytes[..]).unwrap();
 
-		secp.schnorrsig_verify(&raw_sig, &raw_msg, &raw_pubkey)
+		secp.schnorrsig_verify(&raw_sig, &raw_msg, &public_key)
 			.map_err(|e| anyhow::anyhow!("Failed to verify signature: {:?}", e))?;
 		Ok(())
-	}
-
-	fn agg_key(pubkey: &Self::Point) -> Self::AggKey {
-		AggKey { pubkey_x: pubkey.x_bytes() }
 	}
 
 	fn is_pubkey_compatible(pubkey: &Self::Point) -> bool {

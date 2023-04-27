@@ -1,6 +1,5 @@
 use super::{curve25519::edwards::Point, ChainTag, CryptoScheme, ECPoint};
-use cf_primitives::PublicKeyBytes;
-use ed25519_consensus::VerificationKeyBytes;
+use ed25519_consensus::{VerificationKey, VerificationKeyBytes};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -18,15 +17,6 @@ impl Signature {
 		bytes[..32].copy_from_slice(&self.r);
 		bytes[32..].copy_from_slice(&self.s);
 		bytes
-	}
-}
-
-#[derive(Clone)]
-pub struct AggKey(VerificationKeyBytes);
-
-impl From<AggKey> for PublicKeyBytes {
-	fn from(agg_key: AggKey) -> Self {
-		agg_key.0.to_bytes().to_vec()
 	}
 }
 
@@ -50,12 +40,12 @@ impl CryptoScheme for Ed25519Signing {
 
 	type Signature = Signature;
 
-	type AggKey = AggKey;
+	type PublicKey = VerificationKeyBytes;
 
 	type SigningPayload = SigningPayload;
 
 	// TODO: SUI chain type does not exist yet
-	type Chain = cf_chains::AnyChain;
+	type Chain = cf_chains::Bitcoin;
 
 	const NAME: &'static str = "Ed25519";
 
@@ -113,28 +103,16 @@ impl CryptoScheme for Ed25519Signing {
 
 	fn verify_signature(
 		signature: &Self::Signature,
-		public_key_bytes: &PublicKeyBytes,
+		public_key: &Self::PublicKey,
 		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()> {
 		use anyhow::anyhow;
 		use ed25519_consensus::VerificationKey;
 
-		let key_bytes: [u8; 32] = public_key_bytes
-			.clone()
-			.try_into()
-			.map_err(|_| anyhow!("Invalid Key length: {}", public_key_bytes.len()))?;
-
-		let key = VerificationKey::try_from(key_bytes)
-			.map_err(|_| anyhow::anyhow!("Invalid key encoding"))?;
-
 		let signature = ed25519_consensus::Signature::from(signature.to_bytes());
 
-		key.verify(&signature, &payload.0).map_err(|_| anyhow!("Invalid signature"))
-	}
-
-	fn agg_key(pubkey: &Self::Point) -> Self::AggKey {
-		let bytes: [u8; 32] = pubkey.as_bytes().into();
-		AggKey(VerificationKeyBytes::from(bytes))
+		Ok(VerificationKey::try_from(*public_key)
+			.and_then(|vk| vk.verify(&signature, &payload.0))?)
 	}
 
 	#[cfg(test)]

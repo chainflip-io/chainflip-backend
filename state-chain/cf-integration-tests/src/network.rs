@@ -247,7 +247,7 @@ impl Engine {
 								let _result = state_chain_runtime::BitcoinThresholdSigner::signature_success(
 									RuntimeOrigin::none(),
 									*ceremony_id,
-									vec![self.btc_threshold_signer.borrow().sign_with_key(key_id.clone(), &(payload[0].clone()))],
+									vec![self.btc_threshold_signer.borrow().sign_with_key(key_id.clone(), &payload[0].1)],
 								);
 					}
 					RuntimeEvent::Validator(

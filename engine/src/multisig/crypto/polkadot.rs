@@ -1,10 +1,8 @@
-use anyhow::Result;
-use cf_primitives::PublicKeyBytes;
-
 use super::{
 	curve25519::ristretto::Point, ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature,
 };
-use cf_chains::{dot::PolkadotPublicKey, ChainCrypto, Polkadot};
+use anyhow::Result;
+use cf_chains::{ChainCrypto, Polkadot};
 use schnorrkel::context::{SigningContext, SigningTranscript};
 use serde::{Deserialize, Serialize};
 
@@ -59,7 +57,7 @@ impl From<PolkadotSignature> for cf_chains::dot::PolkadotSignature {
 impl CryptoScheme for PolkadotSigning {
 	type Point = Point;
 	type Signature = PolkadotSignature;
-	type AggKey = cf_chains::dot::PolkadotPublicKey;
+	type PublicKey = schnorrkel::PublicKey;
 	type SigningPayload = SigningPayload;
 	type Chain = cf_chains::Polkadot;
 
@@ -115,23 +113,14 @@ impl CryptoScheme for PolkadotSigning {
 
 	fn verify_signature(
 		signature: &Self::Signature,
-		public_key_bytes: &PublicKeyBytes,
+		public_key: &Self::PublicKey,
 		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()> {
-		let public_key =
-			schnorrkel::PublicKey::from_bytes(public_key_bytes).expect("invalid public key");
-
 		let context = schnorrkel::signing_context(SIGNING_CTX);
 
 		public_key
 			.verify(context.bytes(payload.0.as_slice()), &signature.0)
 			.map_err(anyhow::Error::msg)
-	}
-
-	fn agg_key(pubkey: &Self::Point) -> Self::AggKey {
-		PolkadotPublicKey(sp_core::sr25519::Public::from_raw(
-			pubkey.get_element().compress().to_bytes(),
-		))
 	}
 
 	fn build_response(

@@ -79,10 +79,6 @@ impl<C: CryptoScheme> KeygenResult<C> {
 	pub fn get_agg_public_key(&self) -> C::Point {
 		self.key_share.y
 	}
-
-	pub fn agg_key(&self) -> C::AggKey {
-		C::agg_key(&self.get_agg_public_key())
-	}
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -91,6 +87,12 @@ pub struct KeygenResultInfo<C: CryptoScheme> {
 	pub key: Arc<KeygenResult<C>>,
 	pub validator_mapping: Arc<PartyIdxMapping>,
 	pub params: ThresholdParameters,
+}
+
+impl<C: CryptoScheme> KeygenResultInfo<C> {
+	pub fn agg_key(&self) -> C::PublicKey {
+		self.key.get_agg_public_key().into()
+	}
 }
 
 /// Our own secret share and the public keys of all other participants

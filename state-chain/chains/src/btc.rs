@@ -11,7 +11,7 @@ use arrayref::array_ref;
 use base58::FromBase58;
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
 pub use cf_primitives::chains::Bitcoin;
-use cf_primitives::{chains::assets, EpochIndex, KeyId, PublicKeyBytes};
+use cf_primitives::{chains::assets, EpochIndex, KeyId};
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::{borrow::Borrow, iter};
 use frame_support::{sp_io::hashing::sha2_256, BoundedVec, RuntimeDebug};
@@ -22,7 +22,6 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::ConstU32;
 use sp_std::{vec, vec::Vec};
-use utilities::SliceToArray;
 
 /// This salt is used to derive the change address for every vault. i.e. for every epoch.
 pub const CHANGE_ADDRESS_SALT: u32 = 0;
@@ -58,31 +57,12 @@ pub type Hash = [u8; 32];
 	Ord,
 	PartialOrd,
 )]
-
-// y-parity bit is assumed to always be 0x02.
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+/// A Bitcoin AggKey is made up of the previous and current public key x coordinates.
+/// The y parity bits are assumed to be always equal to 0x02.
 pub struct AggKey {
 	pub previous: Option<[u8; 32]>,
 	pub current: [u8; 32],
-}
-
-impl From<KeyId> for AggKey {
-	fn from(key_id: KeyId) -> Self {
-		key_id.public_key_bytes.into()
-	}
-}
-
-impl From<AggKey> for PublicKeyBytes {
-	fn from(agg_key: AggKey) -> Self {
-		[agg_key.previous.unwrap_or_default(), agg_key.current].concat()
-	}
-}
-
-impl From<PublicKeyBytes> for AggKey {
-	fn from(public_key_bytes: PublicKeyBytes) -> Self {
-		let previous = public_key_bytes[..32].as_array();
-		let previous = if previous == [0u8; 32] { None } else { Some(previous) };
-		AggKey { previous, current: public_key_bytes[32..].as_array() }
-	}
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
@@ -183,7 +163,7 @@ impl ChainCrypto for Bitcoin {
 	}
 
 	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
-		KeyId { epoch_index, public_key_bytes: agg_key.into() }
+		KeyId { epoch_index, public_key_bytes: agg_key.current.into() }
 	}
 }
 

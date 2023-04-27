@@ -2,7 +2,7 @@ use crate::AsyncResult;
 
 use super::{MockPallet, MockPalletStorage};
 use cf_chains::ChainCrypto;
-use cf_primitives::{KeyId, ThresholdSignatureRequestId};
+use cf_primitives::ThresholdSignatureRequestId;
 use codec::{Decode, Encode};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::OriginTrait};
 use sp_std::collections::btree_set::BTreeSet;
@@ -87,7 +87,7 @@ where
 
 	fn request_keygen_verification_signature(
 		payload: <C as ChainCrypto>::Payload,
-		_key_id: KeyId,
+		_key: <C as ChainCrypto>::AggKey,
 		_participants: BTreeSet<Self::ValidatorId>,
 	) -> ThresholdSignatureRequestId {
 		Self::request_signature(payload)

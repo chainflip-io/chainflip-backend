@@ -8,7 +8,6 @@ use super::{ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature};
 // solely use "CryptoScheme" as generic parameter instead.
 pub use super::secp256k1::{Point, Scalar};
 use cf_chains::{ChainCrypto, Ethereum};
-use cf_primitives::PublicKeyBytes;
 use num_bigint::BigUint;
 use secp256k1::constants::CURVE_ORDER;
 use serde::{Deserialize, Serialize};
@@ -60,7 +59,7 @@ impl AsRef<[u8]> for SigningPayload {
 impl CryptoScheme for EthSigning {
 	type Point = Point;
 	type Signature = EthSchnorrSignature;
-	type AggKey = cf_chains::eth::AggKey;
+	type PublicKey = cf_chains::eth::AggKey;
 	type SigningPayload = SigningPayload;
 	type Chain = cf_chains::Ethereum;
 
@@ -108,34 +107,24 @@ impl CryptoScheme for EthSigning {
 
 	fn verify_signature(
 		signature: &Self::Signature,
-		public_key_bytes: &PublicKeyBytes,
+		public_key: &Self::PublicKey,
 		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()> {
-		let pk_ser: &[u8; 33] = public_key_bytes[..].try_into().unwrap();
-		let agg_key = cf_chains::eth::AggKey::from_pubkey_compressed(*pk_ser);
-
-		let x = BigUint::from_bytes_be(&agg_key.pub_key_x);
+		let x = BigUint::from_bytes_be(&public_key.pub_key_x);
 		let half_order = BigUint::from_bytes_be(&CURVE_ORDER) / 2u32 + 1u32;
 		assert!(x < half_order);
 
-		agg_key
+		public_key
 			.verify(&payload.0, &signature.clone().into())
 			.map_err(|e| anyhow::anyhow!("Failed to verify signature: {:?}", e))?;
 
 		Ok(())
 	}
 
-	fn agg_key(pubkey: &Self::Point) -> Self::AggKey {
-		let pk = pubkey.get_element();
-		cf_chains::eth::AggKey::from_pubkey_compressed(pk.serialize())
-	}
-
 	/// Check if the public key's x coordinate is smaller than "half secp256k1's order",
 	/// which is a requirement imposed by the Key Manager contract.
 	fn is_pubkey_compatible(pubkey: &Self::Point) -> bool {
-		let pubkey = Self::agg_key(pubkey);
-
-		let x = BigUint::from_bytes_be(&pubkey.pub_key_x);
+		let x = BigUint::from_bytes_be(&pubkey.x_bytes());
 		let half_order = BigUint::from_bytes_be(&CURVE_ORDER) / 2u32 + 1u32;
 
 		x < half_order

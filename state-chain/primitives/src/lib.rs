@@ -108,12 +108,10 @@ impl Default for AccountRole {
 	}
 }
 
-pub type PublicKeyBytes = Vec<u8>;
-
 #[derive(Encode, Decode, PartialEq, Eq, Hash, Debug, Clone, TypeInfo)]
 pub struct KeyId {
 	pub epoch_index: EpochIndex,
-	pub public_key_bytes: PublicKeyBytes,
+	pub public_key_bytes: Vec<u8>,
 }
 
 impl KeyId {
