@@ -2,12 +2,9 @@ use sp_runtime::AccountId32;
 use std::{collections::BTreeSet, fs, path::PathBuf};
 use tempfile::TempDir;
 
-use crate::{
-	db::persistent::rocksdb_kv::create_backup,
-	multisig::{client::get_key_data_for_test, eth::EthSigning, polkadot::PolkadotSigning},
-};
+use crate::multisig::{client::get_key_data_for_test, eth::EthSigning, polkadot::PolkadotSigning};
 
-use super::{rocksdb_kv::BACKUPS_DIRECTORY, *};
+use super::*;
 use cf_primitives::GENESIS_EPOCH;
 use utilities::{assert_ok, testing::new_temp_directory_with_nonexistent_file};
 
@@ -162,4 +159,143 @@ fn can_load_key_from_backup() {
 
 		assert!(p_db.load_keys::<Scheme>().get(&key_id).is_some());
 	}
+}
+
+#[test]
+// TODO: Re-enable this test for linux. We currently do this because Github Actions must run with
+// root user. And so the readonly permissions will be ignored.
+#[cfg(not(target_os = "linux"))]
+fn backup_should_fail_if_cant_copy_files() {
+	let (directory, db_path) = new_temp_directory_with_nonexistent_file();
+
+	// Create a normal db
+	assert_ok!(PersistentKeyDB::open_and_migrate_to_latest(&db_path, None));
+	// Do a backup of the db,
+	assert_ok!(create_backup(&db_path, LATEST_SCHEMA_VERSION));
+
+	// Change the backups folder to readonly
+	let backups_path = directory.path().join(BACKUPS_DIRECTORY);
+	assert!(backups_path.exists());
+	let mut permissions = backups_path.metadata().unwrap().permissions();
+	permissions.set_readonly(true);
+	assert_ok!(fs::set_permissions(&backups_path, permissions));
+	assert!(
+		backups_path.metadata().unwrap().permissions().readonly(),
+		"Readonly permissions were not set"
+	);
+
+	// Try and backup the db again, it should fail with permissions denied due to readonly
+	assert!(create_backup(&db_path, LATEST_SCHEMA_VERSION).is_err());
+}
+
+#[test]
+fn test_migration_to_v1() {
+	use crate::multisig::{client::keygen, Rng};
+	use cf_primitives::AccountId;
+	use rand_legacy::FromEntropy;
+	use std::collections::BTreeSet;
+
+	let (_dir, db_file) = utilities::testing::new_temp_directory_with_nonexistent_file();
+
+	// create db with version 0
+	let db = PersistentKeyDB::open_and_migrate_to_version(&db_file, None, 0).unwrap();
+
+	let account_ids: BTreeSet<_> = [1, 2, 3].iter().map(|i| AccountId::new([*i; 32])).collect();
+
+	let (public_key_bytes, key_data) =
+		keygen::generate_key_data::<EthSigning>(account_ids, &mut Rng::from_entropy());
+
+	let key_info = key_data.values().next().unwrap();
+
+	// Sanity check: the key should not include the epoch index
+	assert_eq!(public_key_bytes.len(), 33);
+
+	// Insert the key manually, so it matches the way it was done in db version 0:
+	db.kv_db
+		.put_data(get_keygen_data_prefix::<EthSigning>().as_slice(), &public_key_bytes, key_info)
+		.unwrap();
+
+	// After migration, we should be able to load the key using the new code
+	migrate_0_to_1(&db);
+
+	let keys = db.load_keys::<EthSigning>();
+
+	assert_eq!(keys.len(), 1);
+
+	let (key_id_loaded, key_info_loaded) = keys.into_iter().next().unwrap();
+
+	assert_eq!(key_id_loaded.epoch_index, 0);
+	assert_eq!(key_id_loaded.public_key_bytes, public_key_bytes);
+	assert_eq!(key_info, &key_info_loaded);
+}
+
+#[test]
+fn backup_should_fail_if_already_exists() {
+	let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
+	// Create a normal db
+	assert_ok!(PersistentKeyDB::open_and_migrate_to_latest(&db_path, None));
+
+	// Backup up the db to a specified directory.
+	// We cannot use the normal backup directory because it has a timestamp in it.
+	let backup_dir_name = "test".to_string();
+	assert_ok!(create_backup_with_directory_name(&db_path, backup_dir_name.clone()));
+
+	// Try and back it up again to the same directory and it should fail
+	assert!(create_backup_with_directory_name(&db_path, backup_dir_name).is_err());
+}
+
+#[test]
+fn should_not_migrate_backwards() {
+	let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
+	// Create a db with schema version + 1
+	{
+		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
+		db.kv_db.put_schema_version(LATEST_SCHEMA_VERSION + 1).unwrap();
+	}
+
+	// Open the db and make sure the migration errors
+	{
+		assert!(PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).is_err());
+	}
+}
+
+#[test]
+fn new_db_returns_db_when_db_data_version_is_latest() {
+	let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
+	{
+		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
+		db.kv_db.put_schema_version(LATEST_SCHEMA_VERSION).unwrap();
+	}
+	assert_ok!(PersistentKeyDB::open_and_migrate_to_latest(&db_path, None));
+}
+
+#[test]
+fn new_db_is_created_with_correct_metadata() {
+	let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
+	let starting_genesis_hash: state_chain_runtime::Hash = sp_core::H256::random();
+
+	// Create a fresh db. This will write the schema version and genesis hash
+	assert_ok!(PersistentKeyDB::open_and_migrate_to_latest(&db_path, Some(starting_genesis_hash),));
+
+	assert!(db_path.exists());
+
+	// Open the db again, and check metadata
+	let db =
+		PersistentKeyDB::open_and_migrate_to_latest(&db_path, Some(starting_genesis_hash)).unwrap();
+
+	// Check the schema version is at the latest
+
+	assert_eq!(
+		db.kv_db.get_schema_version().expect("Should read schema version"),
+		LATEST_SCHEMA_VERSION
+	);
+
+	// Check the genesis hash exists and matches the one we provided
+	assert_eq!(
+		db.kv_db
+			.get_genesis_hash()
+			.expect("Should read genesis hash")
+			.expect("Should find genesis hash"),
+		starting_genesis_hash
+	);
 }
