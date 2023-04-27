@@ -253,7 +253,10 @@ fn test_invalid_id_is_noop() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Broadcaster::transaction_signing_failure(
-				RawOrigin::Signed(<Test as Chainflip>::EpochInfo::current_authorities()[0]).into(),
+				RawOrigin::Signed(
+					*<Test as Chainflip>::EpochInfo::current_authorities().first().unwrap()
+				)
+				.into(),
 				BroadcastAttemptId::default(),
 			),
 			Error::<Test, Instance1>::InvalidBroadcastAttemptId
@@ -266,7 +269,10 @@ fn test_invalid_sigdata_is_noop() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Broadcaster::signature_accepted(
-				RawOrigin::Signed(<Test as Chainflip>::EpochInfo::current_authorities()[0]).into(),
+				RawOrigin::Signed(
+					*<Test as Chainflip>::EpochInfo::current_authorities().first().unwrap()
+				)
+				.into(),
 				MockThresholdSignature::default(),
 				Default::default(),
 				ETH_TX_FEE,

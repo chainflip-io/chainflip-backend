@@ -4,10 +4,9 @@ macro_rules! impl_mock_epoch_info {
 		use $crate::EpochInfo;
 
 		pub struct MockEpochInfo;
-		use sp_std::collections::btree_set::BTreeSet;
 
 		thread_local! {
-			pub static CURRENT_AUTHORITIES: std::cell::RefCell<BTreeSet<$account_id>> = std::cell::RefCell::new(BTreeSet::default());
+			pub static CURRENT_AUTHORITIES: std::cell::RefCell<sp_std::collections::btree_set::BTreeSet<$account_id>> = std::cell::RefCell::new(sp_std::collections::btree_set::BTreeSet::default());
 			pub static AUTHORITY_INDEX: std::cell::RefCell<std::collections::HashMap<$epoch_index, std::collections::HashMap<$account_id, $authority_count>>> = std::cell::RefCell::new(std::collections::HashMap::new());
 			pub static BOND: std::cell::RefCell<$balance> = std::cell::RefCell::new(0);
 			pub static EPOCH: std::cell::RefCell<$epoch_index> = std::cell::RefCell::new(0);
@@ -19,7 +18,7 @@ macro_rules! impl_mock_epoch_info {
 		impl MockEpochInfo {
 
 			/// Set the current authorities.
-			pub fn set_authorities(authorities: BTreeSet<$account_id>) {
+			pub fn set_authorities(authorities: sp_std::collections::btree_set::BTreeSet<$account_id>) {
 				CURRENT_AUTHORITIES.with(|cell| {
 					*cell.borrow_mut() = authorities;
 				})
@@ -54,7 +53,7 @@ macro_rules! impl_mock_epoch_info {
 				})
 			}
 
-			pub fn set_authority_indices(epoch_index: $epoch_index, account_ids: BTreeSet<$account_id>) {
+			pub fn set_authority_indices(epoch_index: $epoch_index, account_ids: sp_std::collections::btree_set::BTreeSet<$account_id>) {
 				AUTHORITY_INDEX.with(|cell| {
 					let mut map = cell.borrow_mut();
 					let authority_index = map.entry(epoch_index).or_insert(std::collections::HashMap::new());
@@ -64,7 +63,7 @@ macro_rules! impl_mock_epoch_info {
 				})
 			}
 
-			pub fn next_epoch(authorities: BTreeSet<$account_id>) -> $epoch_index {
+			pub fn next_epoch(authorities: sp_std::collections::btree_set::BTreeSet<$account_id>) -> $epoch_index {
 				let new_epoch_index = EPOCH.with(|cell| *(cell.borrow_mut()) + 1);
 				MockEpochInfo::set_epoch(new_epoch_index);
 				MockEpochInfo::set_authorities(authorities.clone());
@@ -72,7 +71,7 @@ macro_rules! impl_mock_epoch_info {
 				new_epoch_index
 			}
 
-			pub fn inner_add_authority_info_for_epoch(epoch_index: $epoch_index, new_authorities: BTreeSet<$account_id>) {
+			pub fn inner_add_authority_info_for_epoch(epoch_index: $epoch_index, new_authorities: sp_std::collections::btree_set::BTreeSet<$account_id>) {
 				MockEpochInfo::set_epoch_authority_count(epoch_index, new_authorities.len() as $authority_count);
 				MockEpochInfo::set_authority_indices(epoch_index, new_authorities);
 			}
@@ -86,7 +85,7 @@ macro_rules! impl_mock_epoch_info {
 				LAST_EXPIRED_EPOCH.with(|cell| *cell.borrow())
 			}
 
-			fn current_authorities() -> BTreeSet<Self::ValidatorId> {
+			fn current_authorities() -> sp_std::collections::btree_set::BTreeSet<Self::ValidatorId> {
 				CURRENT_AUTHORITIES.with(|cell| cell.borrow().clone())
 			}
 
@@ -123,7 +122,7 @@ macro_rules! impl_mock_epoch_info {
 			}
 
 			#[cfg(feature = "runtime-benchmarks")]
-			fn add_authority_info_for_epoch(epoch_index: $epoch_index, new_authorities: BTreeSet<Self::ValidatorId>) {
+			fn add_authority_info_for_epoch(epoch_index: $epoch_index, new_authorities: sp_std::collections::btree_set::BTreeSet<Self::ValidatorId>) {
 				MockEpochInfo::inner_add_authority_info_for_epoch(epoch_index, new_authorities);
 			}
 		}
