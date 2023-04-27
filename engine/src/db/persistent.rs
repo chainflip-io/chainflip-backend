@@ -20,14 +20,14 @@ use anyhow::{anyhow, bail, Context, Result};
 use rocksdb_kv::{KVWriteBatch, RocksDBKeyValueStore, PREFIX_SIZE};
 
 /// Name of the directory that the backups will go into (only created before migrations)
-pub const BACKUPS_DIRECTORY: &str = "backups";
+const BACKUPS_DIRECTORY: &str = "backups";
 
 /// This is the version of the data on this current branch
 /// This version *must* be bumped, and appropriate migrations
 /// written on any changes to the persistent application data format
 const LATEST_SCHEMA_VERSION: u32 = 1;
 
-pub const PARTIAL_PREFIX_SIZE: usize = PREFIX_SIZE - CHAIN_TAG_SIZE;
+const PARTIAL_PREFIX_SIZE: usize = PREFIX_SIZE - CHAIN_TAG_SIZE;
 
 /// Keygen data uses a prefix that is a combination of a keygen data prefix and the chain tag
 const KEYGEN_DATA_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"key_____";
