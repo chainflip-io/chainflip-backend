@@ -250,7 +250,7 @@ fn should_not_migrate_backwards() {
 	// Create a db with schema version + 1
 	{
 		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
-		db.kv_db.put_schema_version(LATEST_SCHEMA_VERSION + 1).unwrap();
+		db.put_schema_version(LATEST_SCHEMA_VERSION + 1).unwrap();
 	}
 
 	// Open the db and make sure the migration errors
@@ -269,7 +269,7 @@ fn new_db_returns_db_when_db_data_version_is_latest() {
 	let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
 	{
 		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
-		db.kv_db.put_schema_version(LATEST_SCHEMA_VERSION).unwrap();
+		db.put_schema_version(LATEST_SCHEMA_VERSION).unwrap();
 	}
 	assert_ok!(PersistentKeyDB::open_and_migrate_to_latest(&db_path, None));
 }
@@ -290,15 +290,11 @@ fn new_db_is_created_with_correct_metadata() {
 
 	// Check the schema version is at the latest
 
-	assert_eq!(
-		db.kv_db.get_schema_version().expect("Should read schema version"),
-		LATEST_SCHEMA_VERSION
-	);
+	assert_eq!(db.get_schema_version().expect("Should read schema version"), LATEST_SCHEMA_VERSION);
 
 	// Check the genesis hash exists and matches the one we provided
 	assert_eq!(
-		db.kv_db
-			.get_genesis_hash()
+		db.get_genesis_hash()
 			.expect("Should read genesis hash")
 			.expect("Should find genesis hash"),
 		starting_genesis_hash
@@ -321,8 +317,7 @@ fn should_add_genesis_hash_if_missing() {
 
 	// Check that the genesis hash was added and is correct
 	assert_eq!(
-		db.kv_db
-			.get_genesis_hash()
+		db.get_genesis_hash()
 			.expect("Should read genesis hash")
 			.expect("Should find genesis hash"),
 		genesis_hash_added_later
@@ -356,10 +351,10 @@ fn test_migration_to_latest_from_0() {
 	{
 		let db = PersistentKeyDB::open_and_migrate_to_version(&db_file, None, 0).unwrap();
 
-		assert_eq!(db.kv_db.get_schema_version().unwrap(), 0);
+		assert_eq!(db.get_schema_version().unwrap(), 0);
 	}
 
 	let db = PersistentKeyDB::open_and_migrate_to_latest(&db_file, None).unwrap();
 
-	assert_eq!(db.kv_db.get_schema_version().unwrap(), LATEST_SCHEMA_VERSION);
+	assert_eq!(db.get_schema_version().unwrap(), LATEST_SCHEMA_VERSION);
 }

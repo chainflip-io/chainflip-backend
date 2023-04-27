@@ -35,6 +35,10 @@ const KEYGEN_DATA_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"key_____";
 /// chain tag
 const WITNESSER_CHECKPOINT_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"check___";
 
+/// Key used to store the `LATEST_SCHEMA_VERSION` value in the `METADATA_COLUMN`
+const DB_SCHEMA_VERSION_KEY: &[u8; 17] = b"db_schema_version";
+const GENESIS_HASH_KEY: &[u8; 12] = b"genesis_hash";
+
 /// Used to specify whether a backup should be created, and if so,
 /// the provided path is used to derive the name of the backup
 enum BackupOption<'a> {
@@ -79,10 +83,10 @@ impl PersistentKeyDB {
 		} else {
 			let mut batch = db.kv_db.create_batch();
 
-			batch.put_schema_version(0);
+			batch.put_metadata(DB_SCHEMA_VERSION_KEY, 0u32.to_be_bytes());
 
 			if let Some(genesis_hash) = genesis_hash {
-				batch.put_genesis_hash(genesis_hash);
+				batch.put_metadata(GENESIS_HASH_KEY, genesis_hash);
 			}
 
 			batch.write().context("Failed to write metadata to new db")?;
@@ -145,6 +149,41 @@ impl PersistentKeyDB {
 			.get_data(&get_checkpoint_prefix(chain_tag), &[])
 			.context("Failed to load {chain_tag} checkpoint")
 	}
+
+	/// Get the genesis hash from the metadata column in the db.
+	pub fn get_genesis_hash(&self) -> Result<Option<state_chain_runtime::Hash>> {
+		match self.kv_db.get_metadata(GENESIS_HASH_KEY) {
+			Some(hash) =>
+				if hash.len() != std::mem::size_of::<state_chain_runtime::Hash>() {
+					Err(anyhow!("Incorrect length of Genesis hash"))
+				} else {
+					Ok(Some(sp_core::H256::from_slice(&hash[..])))
+				},
+			// None is expected because the genesis hash is not known during the generate genesis
+			// keys process, so the genesis databases will not have the genesis hash,
+			// it will be added on first time startup.
+			None => Ok(None),
+		}
+	}
+
+	pub fn put_genesis_hash(&self, genesis_hash: state_chain_runtime::Hash) -> Result<()> {
+		self.kv_db.put_metadata(GENESIS_HASH_KEY, genesis_hash)
+	}
+
+	#[cfg(test)]
+	pub fn put_schema_version(&self, version: u32) -> Result<()> {
+		self.kv_db.put_metadata(DB_SCHEMA_VERSION_KEY, &version.to_be_bytes())
+	}
+
+	pub fn get_schema_version(&self) -> Result<u32> {
+		self.kv_db
+			.get_metadata(DB_SCHEMA_VERSION_KEY)
+			.map(|version| {
+				let version: [u8; 4] = version.try_into().expect("Version should be a u32");
+				u32::from_be_bytes(version)
+			})
+			.ok_or_else(|| anyhow!("Could not find db schema version"))
+	}
 }
 
 fn get_keygen_data_prefix<C: CryptoScheme>() -> Vec<u8> {
@@ -163,7 +202,6 @@ fn migrate_db_to_version(
 	target_version: u32,
 ) -> Result<(), anyhow::Error> {
 	let current_version = db
-		.kv_db
 		.get_schema_version()
 		.context("Failed to read schema version from existing db")?;
 
@@ -172,14 +210,14 @@ fn migrate_db_to_version(
 	if let Some(provided_genesis_hash) = genesis_hash {
 		// Check that the genesis in the db file matches the one provided.
 		// If None is found, it will be added to the db.
-		let existing_hash = db.kv_db.get_genesis_hash()?;
+		let existing_hash = db.get_genesis_hash()?;
 
 		match existing_hash {
 			Some(existing_hash) =>
 				if existing_hash != provided_genesis_hash {
 					bail!("Genesis hash mismatch. Have you changed Chainflip network?",)
 				},
-			None => db.kv_db.put_genesis_hash(provided_genesis_hash)?,
+			None => db.put_genesis_hash(provided_genesis_hash)?,
 		}
 	}
 
@@ -250,7 +288,7 @@ fn migrate_0_to_1(db: &PersistentKeyDB) {
 	migrate_0_to_1_for_scheme::<EthSigning>(db, &mut batch);
 	migrate_0_to_1_for_scheme::<PolkadotSigning>(db, &mut batch);
 
-	batch.put_schema_version(1);
+	batch.put_metadata(DB_SCHEMA_VERSION_KEY, 1u32.to_be_bytes());
 
 	batch.write().expect("batch write should not fail");
 }
