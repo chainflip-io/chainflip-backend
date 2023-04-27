@@ -98,7 +98,7 @@ impl RocksDBKeyValueStore {
 			.expect("metadata column must exist")
 	}
 
-	pub fn create_batch<'a>(&'a self) -> KVWriteBatch<'a> {
+	pub fn create_batch(&self) -> KVWriteBatch<'_> {
 		KVWriteBatch { db: &self.db, batch: WriteBatch::default() }
 	}
 }
@@ -110,18 +110,18 @@ pub struct KVWriteBatch<'a> {
 
 impl<'a> KVWriteBatch<'a> {
 	pub fn put_value(&mut self, key: &[u8], value: &[u8]) {
-		self.batch.put_cf(get_data_column_handle(&self.db), key, value);
+		self.batch.put_cf(get_data_column_handle(self.db), key, value);
 	}
 
 	pub fn delete_value(&mut self, key: &[u8]) {
-		self.batch.delete_cf(get_data_column_handle(&self.db), key);
+		self.batch.delete_cf(get_data_column_handle(self.db), key);
 	}
 
 	pub fn put_metadata<V>(&mut self, key: &[u8], value: V)
 	where
 		V: AsRef<[u8]>,
 	{
-		self.batch.put_cf(get_metadata_column_handle(&self.db), key, value);
+		self.batch.put_cf(get_metadata_column_handle(self.db), key, value);
 	}
 
 	pub fn write(self) -> anyhow::Result<()> {

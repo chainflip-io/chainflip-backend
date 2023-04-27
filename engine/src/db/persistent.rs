@@ -172,7 +172,7 @@ impl PersistentKeyDB {
 
 	#[cfg(test)]
 	pub fn put_schema_version(&self, version: u32) -> Result<()> {
-		self.kv_db.put_metadata(DB_SCHEMA_VERSION_KEY, &version.to_be_bytes())
+		self.kv_db.put_metadata(DB_SCHEMA_VERSION_KEY, version.to_be_bytes())
 	}
 
 	pub fn get_schema_version(&self) -> Result<u32> {
