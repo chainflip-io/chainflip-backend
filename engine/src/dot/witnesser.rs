@@ -15,7 +15,7 @@ use cf_chains::{
 use cf_primitives::{EpochIndex, PolkadotAccountId, PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use frame_support::scale_info::TypeInfo;
-use futures::{stream, Stream, StreamExt};
+use futures::{stream, Stream, StreamExt, TryStreamExt};
 use pallet_cf_ingress_egress::IngressWitness;
 use sp_core::H256;
 use sp_runtime::{AccountId32, MultiSignature};
@@ -31,7 +31,6 @@ use crate::{
 	constants::{BLOCK_PULL_TIMEOUT_MULTIPLIER, DOT_AVERAGE_BLOCK_TIME_SECONDS},
 	multisig::PersistentKeyDB,
 	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
-	stream_utils::EngineStreamExt,
 	witnesser::{
 		block_head_stream_from::block_head_stream_from,
 		block_witnesser::{
@@ -476,64 +475,62 @@ where
 		// Stream of Events objects. Each `Events` contains the events for a particular
 		// block
 		let dot_client_c = self.dot_client.clone();
-		let block_events_stream = Box::pin(
-			take_while_ok(block_head_stream_from.then(move |mini_header| {
-				let mut dot_client = dot_client_c.clone();
-				debug!("Fetching Polkadot events for block: {}", mini_header.block_number);
-				// TODO: This will not work if the block we are querying metadata has
-				// different metadata than the latest block since this client fetches
-				// the latest metadata and always uses it.
-				// https://github.com/chainflip-io/chainflip-backend/issues/2542
-				async move {
-					Result::<_, anyhow::Error>::Ok((
-						mini_header.block_hash,
-						mini_header.block_number,
-						dot_client.events(mini_header.block_hash).await?,
-					))
-				}
-			}))
-			.map(|(block_hash, block_number, events)| {
-				(
-					block_hash,
-					block_number,
-					events
-						.iter()
-						.filter_map(|event_details| match event_details {
-							Ok(event_details) =>
-								match (event_details.pallet_name(), event_details.variant_name()) {
-									(ProxyAdded::PALLET, ProxyAdded::EVENT) =>
-										Some(EventWrapper::ProxyAdded(
-											event_details
-												.as_event::<ProxyAdded>()
-												.unwrap()
-												.unwrap(),
-										)),
-									(Transfer::PALLET, Transfer::EVENT) =>
-										Some(EventWrapper::Transfer(
-											event_details.as_event::<Transfer>().unwrap().unwrap(),
-										)),
-									(TransactionFeePaid::PALLET, TransactionFeePaid::EVENT) =>
-										Some(EventWrapper::TransactionFeePaid(
-											event_details
-												.as_event::<TransactionFeePaid>()
-												.unwrap()
-												.unwrap(),
-										)),
-									_ => None,
-								}
-								.map(|event| (event_details.phase(), event)),
-							Err(err) => {
-								error!("Error while parsing event: {:?}", err);
-								None
-							},
-						})
-						.collect(),
-				)
-			}),
+		let block_events_stream = take_while_ok(block_head_stream_from.then(move |mini_header| {
+			let mut dot_client = dot_client_c.clone();
+			debug!("Fetching Polkadot events for block: {}", mini_header.block_number);
+			// TODO: This will not work if the block we are querying metadata has
+			// different metadata than the latest block since this client fetches
+			// the latest metadata and always uses it.
+			// https://github.com/chainflip-io/chainflip-backend/issues/2542
+			async move {
+				Result::<_, anyhow::Error>::Ok((
+					mini_header.block_hash,
+					mini_header.block_number,
+					dot_client.events(mini_header.block_hash).await?,
+				))
+			}
+		}))
+		.map(|(block_hash, block_number, events)| {
+			(
+				block_hash,
+				block_number,
+				events
+					.iter()
+					.filter_map(|event_details| match event_details {
+						Ok(event_details) =>
+							match (event_details.pallet_name(), event_details.variant_name()) {
+								(ProxyAdded::PALLET, ProxyAdded::EVENT) =>
+									Some(EventWrapper::ProxyAdded(
+										event_details.as_event::<ProxyAdded>().unwrap().unwrap(),
+									)),
+								(Transfer::PALLET, Transfer::EVENT) =>
+									Some(EventWrapper::Transfer(
+										event_details.as_event::<Transfer>().unwrap().unwrap(),
+									)),
+								(TransactionFeePaid::PALLET, TransactionFeePaid::EVENT) =>
+									Some(EventWrapper::TransactionFeePaid(
+										event_details
+											.as_event::<TransactionFeePaid>()
+											.unwrap()
+											.unwrap(),
+									)),
+								_ => None,
+							}
+							.map(|event| (event_details.phase(), event)),
+						Err(err) => {
+							error!("Error while parsing event: {:?}", err);
+							None
+						},
+					})
+					.collect(),
+			)
+		});
+
+		let block_events_stream = tokio_stream::StreamExt::timeout(
+			block_events_stream,
+			Duration::from_secs(DOT_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER),
 		)
-		.timeout_after(Duration::from_secs(
-			DOT_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER,
-		));
+		.map_err(|err| anyhow::anyhow!("Error while fetching Polkadot events: {:?}", err));
 
 		Ok(Box::pin(block_events_stream))
 	}
