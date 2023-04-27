@@ -2,7 +2,6 @@
 mod persistent_key_db_tests;
 mod rocksdb_kv;
 
-use rocksdb_kv::PARTIAL_PREFIX_SIZE;
 use std::{cmp::Ordering, collections::HashMap, path::Path};
 
 use cf_primitives::KeyId;
@@ -11,16 +10,14 @@ use tracing::{debug, info, info_span};
 use crate::{
 	multisig::{
 		client::KeygenResultInfo, eth::EthSigning, polkadot::PolkadotSigning, ChainTag,
-		CryptoScheme,
+		CryptoScheme, CHAIN_TAG_SIZE,
 	},
 	witnesser::checkpointing::WitnessedUntil,
 };
 
 use anyhow::{anyhow, bail, Context, Result};
 
-use rocksdb_kv::RocksDBKeyValueStore;
-
-use self::rocksdb_kv::{BackupOption, KVWriteBatch};
+use rocksdb_kv::{KVWriteBatch, RocksDBKeyValueStore, PREFIX_SIZE};
 
 /// Name of the directory that the backups will go into (only created before migrations)
 pub const BACKUPS_DIRECTORY: &str = "backups";
@@ -30,16 +27,25 @@ pub const BACKUPS_DIRECTORY: &str = "backups";
 /// written on any changes to the persistent application data format
 const LATEST_SCHEMA_VERSION: u32 = 1;
 
+pub const PARTIAL_PREFIX_SIZE: usize = PREFIX_SIZE - CHAIN_TAG_SIZE;
+
 /// Keygen data uses a prefix that is a combination of a keygen data prefix and the chain tag
 const KEYGEN_DATA_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"key_____";
 /// The Witnesser checkpoint uses a prefix that is a combination of a checkpoint prefix and the
 /// chain tag
 const WITNESSER_CHECKPOINT_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"check___";
 
+/// Used to specify whether a backup should be created, and if so,
+/// the provided path is used to derive the name of the backup
+enum BackupOption<'a> {
+	NoBackup,
+	CreateBackup(&'a Path),
+}
+
 /// Database for keys and persistent metadata
 pub struct PersistentKeyDB {
 	/// Underlying key-value database instance
-	pub kv_db: RocksDBKeyValueStore,
+	kv_db: RocksDBKeyValueStore,
 }
 
 impl PersistentKeyDB {
@@ -62,11 +68,27 @@ impl PersistentKeyDB {
 		genesis_hash: Option<state_chain_runtime::Hash>,
 		version: u32,
 	) -> Result<Self> {
-		let db =
-			PersistentKeyDB { kv_db: RocksDBKeyValueStore::open(db_path, genesis_hash, version)? };
+		let is_existing_db = db_path.exists();
 
-		// TODO: use the correct `backup_option`
-		let backup_option = BackupOption::CreateBackup(db_path);
+		let db = PersistentKeyDB { kv_db: RocksDBKeyValueStore::open(db_path)? };
+
+		// Only create a backup if there is an existing db that we don't
+		// want to accidentally corrupt
+		let backup_option = if is_existing_db {
+			BackupOption::CreateBackup(db_path)
+		} else {
+			let mut batch = db.kv_db.create_batch();
+
+			batch.put_schema_version(0);
+
+			if let Some(genesis_hash) = genesis_hash {
+				batch.put_genesis_hash(genesis_hash);
+			}
+
+			batch.write().context("Failed to write metadata to new db")?;
+			BackupOption::NoBackup
+		};
+
 		migrate_db_to_version(&db, backup_option, genesis_hash, version).with_context(|| {
 			format!(
 				"Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.",
@@ -93,11 +115,11 @@ impl PersistentKeyDB {
 
 		let keys: HashMap<_, _> = self
 			.kv_db
-			.get_data_for_prefix::<KeygenResultInfo<C>>(&get_keygen_data_prefix::<C>())
-			.map(|(key_id, key_info_result)| {
+			.get_data_for_prefix(&get_keygen_data_prefix::<C>())
+			.map(|(key_id, key_bytes)| {
 				(
 					KeyId::from_bytes(&key_id),
-					key_info_result.unwrap_or_else(|e| {
+					bincode::deserialize(&key_bytes).unwrap_or_else(|e| {
 						panic!("Failed to deserialize {} key from database: {}", C::NAME, e)
 					}),
 				)
@@ -133,10 +155,8 @@ fn get_checkpoint_prefix(chain_tag: ChainTag) -> Vec<u8> {
 	[WITNESSER_CHECKPOINT_PARTIAL_PREFIX, &(chain_tag.to_bytes())[..]].concat()
 }
 
-// ----------- migrations -----------
-
 /// Reads the schema version and migrates the db to the latest schema version if required
-pub fn migrate_db_to_version(
+fn migrate_db_to_version(
 	db: &PersistentKeyDB,
 	backup_option: BackupOption,
 	genesis_hash: Option<state_chain_runtime::Hash>,
@@ -149,8 +169,18 @@ pub fn migrate_db_to_version(
 
 	info!("Found db_schema_version of {current_version}");
 
-	if let Some(expected_genesis_hash) = genesis_hash {
-		db.kv_db.check_or_set_genesis_hash(expected_genesis_hash)?;
+	if let Some(provided_genesis_hash) = genesis_hash {
+		// Check that the genesis in the db file matches the one provided.
+		// If None is found, it will be added to the db.
+		let existing_hash = db.kv_db.get_genesis_hash()?;
+
+		match existing_hash {
+			Some(existing_hash) =>
+				if existing_hash != provided_genesis_hash {
+					bail!("Genesis hash mismatch. Have you changed Chainflip network?",)
+				},
+			None => db.kv_db.put_genesis_hash(provided_genesis_hash)?,
+		}
 	}
 
 	// Check if the db version is up-to-date or we need to do migrations
@@ -196,16 +226,14 @@ pub fn migrate_db_to_version(
 }
 
 fn migrate_0_to_1_for_scheme<C: CryptoScheme>(db: &PersistentKeyDB, batch: &mut KVWriteBatch) {
-	for (legacy_key_id, key_info_bytes) in db
-		.kv_db
-		// TODO: this should just return [u8] always instead of trying to deserialize
-		.get_data_for_prefix_bytes(&get_keygen_data_prefix::<C>())
+	for (legacy_key_id, key_info_bytes) in
+		db.kv_db.get_data_for_prefix(&get_keygen_data_prefix::<C>())
 	{
 		let new_key_id = KeyId { epoch_index: 0, public_key_bytes: legacy_key_id.to_vec() };
 		let key_id_with_prefix =
 			[get_keygen_data_prefix::<C>().as_slice(), &new_key_id.to_bytes()].concat();
 
-		batch.put_bytes(&key_id_with_prefix, &key_info_bytes);
+		batch.put_value(&key_id_with_prefix, &key_info_bytes);
 
 		let legacy_key_id_with_prefix =
 			[get_keygen_data_prefix::<C>().as_slice(), &legacy_key_id].concat();
@@ -214,7 +242,7 @@ fn migrate_0_to_1_for_scheme<C: CryptoScheme>(db: &PersistentKeyDB, batch: &mut 
 	}
 }
 
-pub fn migrate_0_to_1(db: &PersistentKeyDB) {
+fn migrate_0_to_1(db: &PersistentKeyDB) {
 	let mut batch = db.kv_db.create_batch();
 
 	// Do the migration for every scheme that we supported
@@ -228,7 +256,7 @@ pub fn migrate_0_to_1(db: &PersistentKeyDB) {
 }
 
 // Creates a backup of the database folder to BACKUPS_DIRECTORY/backup_vx_xx_xx
-pub fn create_backup(path: &Path, schema_version: u32) -> Result<String, anyhow::Error> {
+fn create_backup(path: &Path, schema_version: u32) -> Result<String, anyhow::Error> {
 	// Build the name for the new backup using the schema version and a timestamp
 	let backup_dir_name = format!(
 		"backup_v{}_{}_{}",
