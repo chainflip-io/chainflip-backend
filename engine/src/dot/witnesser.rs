@@ -125,7 +125,7 @@ where
 	let init_state = StreamState { stream: Box::pin(inner_stream) };
 
 	stream::unfold(init_state, move |mut state| async move {
-		match futures::StreamExt::next(&mut state.stream).await {
+		match state.stream.next().await {
 			Some(Ok(item)) => Some((item, state)),
 			Some(Err(e)) => {
 				error!("Error on stream: {e:?}");
