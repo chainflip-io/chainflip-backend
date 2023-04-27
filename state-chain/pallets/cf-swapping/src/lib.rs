@@ -168,7 +168,7 @@ pub mod pallet {
 		/// An new swap intent has been registered.
 		NewSwapIntent {
 			ingress_address: EncodedAddress,
-			expiry: T::BlockNumber,
+			expiry_block: T::BlockNumber,
 		},
 		/// The swap ingress was received.
 		SwapIngressReceived {
@@ -340,16 +340,16 @@ pub mod pallet {
 				message_metadata,
 			)?;
 
-			let expiry = frame_system::Pallet::<T>::current_block_number()
+			let expiry_block = frame_system::Pallet::<T>::current_block_number()
 				.saturating_add(SwapTTL::<T>::get());
 			SwapIntentExpiries::<T>::append(
-				expiry,
+				expiry_block,
 				(intent_id, ForeignChain::from(ingress_asset), ingress_address.clone()),
 			);
 
 			Self::deposit_event(Event::<T>::NewSwapIntent {
 				ingress_address: T::AddressConverter::try_to_encoded_address(ingress_address)?,
-				expiry,
+				expiry_block,
 			});
 
 			Ok(())

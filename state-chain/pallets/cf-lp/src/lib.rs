@@ -104,7 +104,7 @@ pub mod pallet {
 		DepositAddressReady {
 			intent_id: IntentId,
 			ingress_address: EncodedAddress,
-			expiry: T::BlockNumber,
+			expiry_block: T::BlockNumber,
 		},
 		DepositAddressExpired {
 			address: EncodedAddress,
@@ -173,17 +173,17 @@ pub mod pallet {
 			let (intent_id, ingress_address) =
 				T::IngressHandler::register_liquidity_ingress_intent(account_id, asset)?;
 
-			let expiry =
+			let expiry_block =
 				frame_system::Pallet::<T>::current_block_number().saturating_add(LpTTL::<T>::get());
 			IngressIntentExpiries::<T>::append(
-				expiry,
+				expiry_block,
 				(intent_id, ForeignChain::from(asset), ingress_address.clone()),
 			);
 
 			Self::deposit_event(Event::DepositAddressReady {
 				intent_id,
 				ingress_address: T::AddressConverter::try_to_encoded_address(ingress_address)?,
-				expiry,
+				expiry_block,
 			});
 
 			Ok(())
