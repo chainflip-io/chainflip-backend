@@ -59,10 +59,6 @@ fn generate_test_swaps() -> Vec<Swap> {
 	]
 }
 
-fn get_expiry() -> u64 {
-	SwapTTL::<Test>::get() + System::current_block_number()
-}
-
 fn insert_swaps(swaps: &[Swap]) {
 	for (relayer_id, swap) in swaps.iter().enumerate() {
 		if let SwapType::Swap(egress_address) = &swap.swap_type {
@@ -210,7 +206,7 @@ fn expect_swap_id_to_be_emitted() {
 			Test,
 			crate::mock::RuntimeEvent::Swapping(crate::Event::NewSwapIntent {
 				ingress_address: EncodedAddress::Eth(Default::default()),
-				expiry: get_expiry(),
+				expiry: SwapTTL::<Test>::get() + System::current_block_number(),
 			}),
 			crate::mock::RuntimeEvent::Swapping(crate::Event::SwapIngressReceived {
 				ingress_address: EncodedAddress::Eth(Default::default()),
