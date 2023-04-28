@@ -34,6 +34,7 @@ pub trait WeightInfo {
 	fn on_idle() -> Weight;
 	fn execute_group_of_swaps(a: u32, ) -> Weight;
 	fn withdraw() -> Weight;
+	fn register_as_relayer() -> Weight;
 	fn schedule_swap_by_witnesser() -> Weight;
 	fn ccm_ingress() -> Weight;
 	fn on_initialize(a: u32, ) -> Weight;
@@ -125,6 +126,14 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_ref_time(14_000_000)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
+	// Storage: AccountRoles SwappingEnabled (r:1 w:0)
+	// Storage: AccountRoles AccountRoles (r:1 w:1)
+	fn register_as_relayer() -> Weight {
+		// Minimum execution time: 20_000 nanoseconds.
+		Weight::from_ref_time(22_000_000)
+			.saturating_add(T::DbWeight::get().reads(2))
+			.saturating_add(T::DbWeight::get().writes(1))
+	}
 }
 
 // For backwards compatibility and tests
@@ -209,6 +218,14 @@ impl WeightInfo for () {
 	fn set_swap_ttl() -> Weight {
 		// Minimum execution time: 13_000 nanoseconds.
 		Weight::from_ref_time(14_000_000)
+			.saturating_add(RocksDbWeight::get().writes(1))
+	}
+	// Storage: AccountRoles SwappingEnabled (r:1 w:0)
+	// Storage: AccountRoles AccountRoles (r:1 w:1)
+	fn register_as_relayer() -> Weight {
+		// Minimum execution time: 20_000 nanoseconds.
+		Weight::from_ref_time(22_000_000)
+			.saturating_add(RocksDbWeight::get().reads(2))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 }

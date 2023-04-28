@@ -1,5 +1,6 @@
 use super::*;
 use crate as pallet_cf_reputation;
+use cf_traits::{impl_mock_chainflip, AccountRoleRegistry, Slashing};
 use frame_support::{construct_runtime, parameter_types};
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
@@ -12,14 +13,6 @@ use sp_std::cell::RefCell;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
-
-use cf_traits::{
-	mocks::{
-		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
-		system_state_info::MockSystemStateInfo,
-	},
-	Chainflip, Slashing,
-};
 
 type ValidatorId = u64;
 
@@ -69,6 +62,8 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
+impl_mock_chainflip!(Test);
+
 // A heartbeat interval in blocks
 pub const HEARTBEAT_BLOCK_INTERVAL: u64 = 150;
 pub const REPUTATION_PER_HEARTBEAT: ReputationPoints = 10;
@@ -115,16 +110,6 @@ impl Slashing for MockSlasher {
 pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 
-impl Chainflip for Test {
-	type ValidatorId = ValidatorId;
-	type Amount = u128;
-	type RuntimeCall = RuntimeCall;
-	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
-	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
-	type EpochInfo = MockEpochInfo;
-	type SystemState = MockSystemStateInfo;
-}
-
 thread_local! {
 	pub static NETWORK_STATE: RefCell<NetworkState<ValidatorId>> = RefCell::new(
 		NetworkState {
@@ -165,12 +150,10 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = AllOffences;
 	type HeartbeatBlockInterval = HeartbeatBlockInterval;
-	type AccountRoleRegistry = ();
 	type Heartbeat = MockHeartbeat;
 	type ReputationPointFloorAndCeiling = ReputationPointFloorAndCeiling;
 	type Slasher = MockSlasher;
 	type WeightInfo = ();
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type MaximumAccruableReputation = MaximumAccruableReputation;
 }
 
@@ -196,7 +179,11 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
-		MockEpochInfo::next_epoch(BTreeSet::from([ALICE]));
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE)
+			.unwrap();
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB)
+			.unwrap();
+		<Test as Chainflip>::EpochInfo::next_epoch(BTreeSet::from([ALICE]));
 	});
 
 	ext

@@ -139,9 +139,6 @@ pub mod pallet {
 			+ Parameter
 			+ UnfilteredDispatchable<RuntimeOrigin = <Self as frame_system::Config>::RuntimeOrigin>;
 
-		/// For registering and verifying the account role.
-		type AccountRoleRegistry: AccountRoleRegistry<Self>;
-
 		/// Offences that can be reported in this runtime.
 		type Offence: From<PalletOffence>;
 
@@ -625,10 +622,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let next_broadcast_attempt_id =
 					broadcast_attempt.broadcast_attempt_id.next_attempt();
 
-				BroadcastAttemptCount::<T, I>::mutate(broadcast_id, |attempt_count| {
-					*attempt_count += 1;
-					*attempt_count
-				});
+				debug_assert_eq!(
+					BroadcastAttemptCount::<T, I>::mutate(broadcast_id, |attempt_count| {
+						*attempt_count += 1;
+						*attempt_count
+					}),
+					next_broadcast_attempt_id.attempt_count,
+				);
 
 				Self::start_broadcast_attempt(BroadcastAttempt::<T, I> {
 					broadcast_attempt_id: next_broadcast_attempt_id,

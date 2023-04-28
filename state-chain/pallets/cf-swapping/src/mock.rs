@@ -1,16 +1,14 @@
 use crate::{self as pallet_cf_swapping, WeightInfo};
 use cf_chains::AnyChain;
-use cf_primitives::{AccountRole, Asset, AssetAmount};
+use cf_primitives::{Asset, AssetAmount};
 use cf_traits::{
+	impl_mock_chainflip,
 	mocks::{
-		address_converter::MockAddressConverter, bid_info::MockBidInfo,
-		egress_handler::MockEgressHandler, ensure_origin_mock::NeverFailingOriginCheck,
-		ingress_handler::MockIngressHandler, staking_info::MockStakingInfo,
-		system_state_info::MockSystemStateInfo,
+		address_converter::MockAddressConverter, egress_handler::MockEgressHandler,
+		ingress_handler::MockIngressHandler,
 	},
-	Chainflip, SwappingApi,
+	AccountRoleRegistry, SwappingApi,
 };
-use frame_benchmarking::whitelisted_caller;
 use frame_support::{dispatch::DispatchError, parameter_types, weights::Weight};
 use frame_system as system;
 use sp_core::H256;
@@ -32,7 +30,6 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		AccountRoles: pallet_cf_account_roles,
 		Swapping: pallet_cf_swapping,
 	}
 );
@@ -69,13 +66,7 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-impl pallet_cf_account_roles::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
-	type BidInfo = MockBidInfo;
-	type StakeInfo = MockStakingInfo<Self>;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type WeightInfo = ();
-}
+impl_mock_chainflip!(Test);
 
 pub struct MockSwappingApi;
 
@@ -87,16 +78,6 @@ impl SwappingApi for MockSwappingApi {
 	) -> Result<AssetAmount, DispatchError> {
 		Ok(swap_input)
 	}
-}
-
-impl Chainflip for Test {
-	type ValidatorId = u64;
-	type Amount = u128;
-	type RuntimeCall = RuntimeCall;
-	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
-	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
-	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
-	type SystemState = MockSystemStateInfo;
 }
 
 pub struct MockWeightInfo;
@@ -117,15 +98,23 @@ impl WeightInfo for MockWeightInfo {
 	fn withdraw() -> Weight {
 		Weight::from_ref_time(100)
 	}
+
 	fn schedule_swap_by_witnesser() -> Weight {
 		Weight::from_ref_time(100)
 	}
+
 	fn ccm_ingress() -> Weight {
 		Weight::from_ref_time(100)
 	}
+
+	fn register_as_relayer() -> Weight {
+		Weight::from_ref_time(100)
+	}
+
 	fn on_initialize(_a: u32) -> Weight {
 		Weight::from_ref_time(100)
 	}
+
 	fn set_swap_ttl() -> Weight {
 		Weight::from_ref_time(100)
 	}
@@ -137,33 +126,26 @@ parameter_types! {
 
 impl pallet_cf_swapping::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type AccountRoleRegistry = AccountRoles;
 	type IngressHandler = MockIngressHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;
 	type WeightInfo = MockWeightInfo;
 	type AddressConverter = MockAddressConverter;
 	type SwappingApi = MockSwappingApi;
-	type EnsureGovernance = NeverFailingOriginCheck<Test>;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig {
-		system: Default::default(),
-		swapping: SwappingConfig { swap_ttl: 5 },
-		account_roles: AccountRolesConfig {
-			initial_account_roles: vec![
-				(whitelisted_caller(), AccountRole::None),
-				(ALICE, AccountRole::Relayer),
-			],
-		},
-	};
+	let config =
+		GenesisConfig { system: Default::default(), swapping: SwappingConfig { swap_ttl: 5 } };
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_relayer(&ALICE)
+			.unwrap();
+		System::set_block_number(1);
 		System::set_block_number(1);
 	});
 

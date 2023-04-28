@@ -9,7 +9,7 @@ use cf_chains::{
 };
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount};
 use cf_test_utilities::{assert_events_eq, assert_events_match};
-use cf_traits::{AddressDerivationApi, EpochInfo, LpBalanceApi};
+use cf_traits::{AccountRoleRegistry, AddressDerivationApi, EpochInfo, LpBalanceApi};
 use frame_support::{
 	assert_ok,
 	traits::{OnIdle, OnNewAccount},
@@ -46,10 +46,7 @@ fn new_pool(unstable_asset: Asset, fee_hundredth_pips: u32, initial_sqrt_price: 
 
 fn new_account(account_id: &AccountId, role: AccountRole) {
 	AccountRoles::on_new_account(account_id);
-	assert_ok!(AccountRoles::register_account_role(
-		RuntimeOrigin::signed(account_id.clone()),
-		role
-	));
+	assert_ok!(AccountRoles::register_account_role(account_id, role));
 	assert_events_eq!(
 		Runtime,
 		RuntimeEvent::AccountRoles(pallet_cf_account_roles::Event::AccountRoleRegistered {

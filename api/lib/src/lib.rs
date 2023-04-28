@@ -8,7 +8,7 @@ use rand_legacy::FromEntropy;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
-use state_chain_runtime::opaque::SessionKeys;
+use state_chain_runtime::{opaque::SessionKeys, RuntimeCall};
 use tracing::error;
 use zeroize::Zeroize;
 
@@ -171,13 +171,22 @@ pub async fn register_account_role(
 ) -> Result<H256> {
 	task_scope(|scope| {
 		async {
+			if role == AccountRole::None {
+				bail!("Cannot register account role None");
+			}
 			let (_, _, state_chain_client) =
 				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
 					.await?;
 
 			let tx_hash = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_account_roles::Call::register_account_role {
-					role,
+				.submit_signed_extrinsic(match role {
+					AccountRole::Validator =>
+						RuntimeCall::from(pallet_cf_validator::Call::register_as_validator {}),
+					AccountRole::Relayer =>
+						RuntimeCall::from(pallet_cf_swapping::Call::register_as_relayer {}),
+					AccountRole::LiquidityProvider =>
+						RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
+					AccountRole::None => unreachable!(),
 				})
 				.await
 				.expect("Could not set register account role for account");

@@ -1,9 +1,6 @@
 use crate::{self as pallet_cf_flip, BurnFlipAccount};
 use cf_primitives::FlipBalance;
-use cf_traits::{
-	impl_mock_waived_fees, mocks::ensure_origin_mock::NeverFailingOriginCheck, StakeTransfer,
-	WaivedFees,
-};
+use cf_traits::{impl_mock_chainflip, impl_mock_waived_fees, StakeTransfer, WaivedFees};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU128, ConstU8, HandleLifetime},
@@ -68,6 +65,8 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
+impl_mock_chainflip!(Test);
+
 parameter_types! {
 	pub const ExistentialDeposit: FlipBalance = 10;
 }
@@ -83,7 +82,6 @@ impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = FlipBalance;
 	type ExistentialDeposit = ExistentialDeposit;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = MockStakeHandler;
 	type WeightInfo = ();
