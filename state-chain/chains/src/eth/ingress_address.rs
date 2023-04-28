@@ -1,4 +1,4 @@
-use cf_primitives::{IntentId, ETHEREUM_ETH_ADDRESS};
+use cf_primitives::IntentId;
 use sp_runtime::traits::{Hash, Keccak256};
 use sp_std::{mem::size_of, vec::Vec};
 
@@ -88,7 +88,6 @@ pub fn get_create_2_address(
 	Keccak256::hash(&create_2_args).to_fixed_bytes()[12..32].try_into().unwrap()
 }
 
-
 /// Get the CREATE2 salt for a given intent_id, equivalent to the big-endian u32, left-padded to 32
 /// bytes.
 pub fn get_salt(intent_id: IntentId) -> [u8; 32] {
@@ -104,7 +103,11 @@ fn test_eth_eth() {
 	const VAULT_ADDRESS: [u8; 20] = hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512");
 
 	assert_eq!(
-		get_create_2_address(VAULT_ADDRESS, Some(ETHEREUM_ETH_ADDRESS.to_vec()), 420696969),
+		get_create_2_address(
+			VAULT_ADDRESS,
+			Some(cf_primitives::ETHEREUM_ETH_ADDRESS.to_vec()),
+			420696969
+		),
 		hex_literal::hex!("Edf07a740a5D2d06b73f36fd5cc155d4240EaEEA")
 	);
 	println!("Derivation worked for ETH:ETH! 🚀");
