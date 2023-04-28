@@ -131,7 +131,8 @@ fn ingress_intents_expires() {
 		let (intent_id, ingress_address) = assert_events_match!(Test, RuntimeEvent::LiquidityProvider(crate::Event::DepositAddressReady {
 			intent_id,
 			ingress_address,
-		}) => (intent_id, ingress_address));
+			expiry_block,
+		}) if expiry_block == expiry => (intent_id, ingress_address));
 		let lp_intent = LpIntent {
 			ingress_address: MockAddressConverter::try_from_encoded_address(ingress_address.clone()).unwrap(),
 			ingress_asset: asset,
