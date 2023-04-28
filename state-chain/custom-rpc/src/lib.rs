@@ -1,6 +1,6 @@
 use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::eth::SigData;
-use cf_primitives::EthereumAddress;
+use cf_primitives::{AssetAmount, EthereumAddress, ExchangeRate, SwapResult};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
 use sc_client_api::HeaderBackend;
@@ -15,8 +15,7 @@ use state_chain_runtime::{
 };
 use std::{marker::PhantomData, sync::Arc};
 
-#[allow(unused)]
-use state_chain_runtime::{Asset, AssetAmount, ExchangeRate};
+use state_chain_runtime::Asset;
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
@@ -171,6 +170,22 @@ pub trait CustomApi {
 		to: Asset,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<SqrtPriceQ64F96>>;
+	#[method(name = "swap_rate")]
+	fn cf_pool_swap_rate(
+		&self,
+		from: Asset,
+		to: Asset,
+		amount: AssetAmount,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<ExchangeRate>>;
+	#[method(name = "swap_rate_v2")]
+	fn cf_pool_swap_rate_v2(
+		&self,
+		from: Asset,
+		to: Asset,
+		amount: AssetAmount,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<SwapResult>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -445,6 +460,32 @@ where
 		self.client
 			.runtime_api()
 			.cf_pool_sqrt_price(&self.query_block_id(at), from, to)
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_pool_swap_rate(
+		&self,
+		from: Asset,
+		to: Asset,
+		amount: AssetAmount,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<ExchangeRate>> {
+		self.client
+			.runtime_api()
+			.cf_pool_swap_rate(&self.query_block_id(at), from, to, amount)
+			.map_err(to_rpc_error)
+	}
+
+	fn cf_pool_swap_rate_v2(
+		&self,
+		from: Asset,
+		to: Asset,
+		amount: AssetAmount,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<Option<SwapResult>> {
+		self.client
+			.runtime_api()
+			.cf_pool_swap_rate_v2(&self.query_block_id(at), from, to, amount)
 			.map_err(to_rpc_error)
 	}
 }

@@ -3,12 +3,12 @@ use cf_amm::{
 	common::{OneToZero, Side, SideMap, SqrtPriceQ64F96, ZeroToOne},
 	PoolState,
 };
-use cf_primitives::{chains::assets::any, Asset, AssetAmount};
+use cf_primitives::{chains::assets::any, Asset, AssetAmount, ExchangeRate, SwapResult};
 use cf_traits::{Chainflip, LpBalanceApi, SwappingApi};
-use frame_support::{pallet_prelude::*, transactional};
+use frame_support::{pallet_prelude::*, storage::with_transaction, transactional};
 use frame_system::pallet_prelude::OriginFor;
 use sp_arithmetic::traits::Zero;
-use sp_runtime::{Permill, Saturating};
+use sp_runtime::{FixedPointNumber, Permill, Saturating, TransactionOutcome};
 
 pub use pallet::*;
 
@@ -146,14 +146,12 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Setting the buy interval to zero is not allowed.
 		ZeroBuyIntervalNotAllowed,
-
 		/// The specified exchange pool already exists.
 		PoolAlreadyExists,
 		/// The specified exchange pool does not exist.
 		PoolDoesNotExist,
 		/// The exchange pool is currently disabled.
 		PoolDisabled,
-
 		/// the Fee BIPs must be within the allowed range.
 		InvalidFeeAmount,
 		/// the initial price must be within the allowed range.
@@ -789,5 +787,47 @@ impl<T: Config> Pallet<T> {
 			},
 			_ => None,
 		}
+	}
+
+	pub fn swap_rate_exchange_rate(
+		in_asset: Asset,
+		out_asset: Asset,
+		input_amount: AssetAmount,
+	) -> Result<ExchangeRate, DispatchError> {
+		Ok(ExchangeRate::saturating_from_rational(
+			(Self::swap_rate_output_amount(in_asset, out_asset, input_amount)?).output_amount(),
+			input_amount,
+		))
+	}
+
+	// Attempt to do a dry run of a swap, returning the swap result.
+	pub fn swap_rate_output_amount(
+		from: Asset,
+		to: Asset,
+		amount: AssetAmount,
+	) -> Result<SwapResult, DispatchError> {
+		// Always roll back the storage
+		with_transaction(|| {
+			TransactionOutcome::Rollback(match (from, to) {
+				(input_asset, STABLE_ASSET) =>
+					Self::swap(input_asset, STABLE_ASSET, amount).map(SwapResult::IntoStable),
+				(STABLE_ASSET, output_asset) =>
+					Self::swap(STABLE_ASSET, output_asset, amount).map(SwapResult::FromStable),
+				(input_asset, output_asset) =>
+				// Due to how fees are taken. Dry run <input -> Stable> first, then dry run <intput
+				// -> output>.
+					Self::swap_rate_output_amount(input_asset, STABLE_ASSET, amount).map_or_else(
+						Err,
+						|intermediate_output| {
+							Self::swap(input_asset, output_asset, amount).map(|amount| {
+								SwapResult::ThroughStable(
+									intermediate_output.output_amount(),
+									amount,
+								)
+							})
+						},
+					),
+			})
+		})
 	}
 }

@@ -74,7 +74,7 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{
-	Asset, AssetAmount, BlockNumber, EthereumAddress, ExchangeRate, FlipBalance,
+	Asset, AssetAmount, BlockNumber, EthereumAddress, ExchangeRate, FlipBalance, SwapResult,
 };
 pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
 
@@ -1046,6 +1046,14 @@ impl_runtime_apis! {
 			to: Asset,
 		) -> Option<SqrtPriceQ64F96> {
 			LiquidityPools::current_sqrt_price(from, to)
+		}
+
+		fn cf_pool_swap_rate(from: Asset, to: Asset, amount: AssetAmount) -> Option<ExchangeRate> {
+			LiquidityPools::swap_rate_exchange_rate(from, to, amount).ok()
+		}
+
+		fn cf_pool_swap_rate_v2(from: Asset, to:Asset, amount: AssetAmount) -> Option<SwapResult> {
+			LiquidityPools::swap_rate_output_amount(from, to, amount).ok()
 		}
 	}
 
