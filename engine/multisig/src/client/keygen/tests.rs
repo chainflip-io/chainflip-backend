@@ -2,7 +2,7 @@ use cf_primitives::{AccountId, AuthorityCount};
 use rand_legacy::{FromEntropy, SeedableRng};
 use std::collections::BTreeSet;
 
-use crate::multisig::{
+use crate::{
 	client::{
 		common::{BroadcastFailureReason, KeygenFailureReason, KeygenStageName, ResharingContext},
 		helpers::{
@@ -19,7 +19,7 @@ use crate::multisig::{
 	CryptoScheme,
 };
 
-use crate::multisig::crypto::eth::Point;
+use crate::crypto::eth::Point;
 type CoeffComm3 = keygen::CoeffComm3<Point>;
 type VerifyCoeffComm4 = keygen::VerifyCoeffComm4<Point>;
 type SecretShare5 = keygen::SecretShare5<Point>;
@@ -868,7 +868,7 @@ mod timeout {
 
 #[tokio::test]
 async fn genesis_keys_can_sign() {
-	use crate::multisig::crypto::eth::EthSigning;
+	use crate::crypto::eth::EthSigning;
 
 	let account_ids: BTreeSet<_> = [1, 2, 3, 4].iter().map(|i| AccountId::new([*i; 32])).collect();
 
@@ -895,7 +895,7 @@ async fn genesis_keys_can_sign() {
 // was correctly turned into a compatible one, which can be used for
 // multiparty signing.
 async fn initially_incompatible_keys_can_sign() {
-	use crate::multisig::crypto::eth::EthSigning;
+	use crate::crypto::eth::EthSigning;
 
 	let account_ids: BTreeSet<_> = [1, 2, 3, 4].iter().map(|i| AccountId::new([*i; 32])).collect();
 
@@ -1021,7 +1021,7 @@ mod key_handover {
 	// (commits to an unexpected secret) gets reported
 	#[tokio::test]
 	async fn key_handover_with_incorrect_commitment() {
-		use crate::multisig::client::common::ParticipantStatus;
+		use crate::client::common::ParticipantStatus;
 		type Scheme = BtcSigning;
 		type Point = <Scheme as CryptoScheme>::Point;
 		type Scalar = <Point as ECPoint>::Scalar;

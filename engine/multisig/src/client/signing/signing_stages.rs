@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::multisig::{
+use crate::{
 	client::{
 		self,
 		ceremony_manager::SigningCeremony,

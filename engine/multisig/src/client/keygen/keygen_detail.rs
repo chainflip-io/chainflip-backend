@@ -9,7 +9,7 @@ use sp_core::H256;
 use tracing::warn;
 use zeroize::Zeroize;
 
-use crate::multisig::{
+use crate::{
 	client::{
 		common::{KeygenFailureReason, ParticipantStatus, ResharingContext},
 		KeygenResult, KeygenResultInfo, PartyIdxMapping, ThresholdParameters,
@@ -38,7 +38,7 @@ where
 
 #[test]
 fn test_simple_polynomial() {
-	use crate::multisig::crypto::eth::Scalar;
+	use crate::crypto::eth::Scalar;
 
 	// f(x) = 4 + 5x + 2x^2
 	let secret = Scalar::from(4);
@@ -68,7 +68,7 @@ impl<P: ECPoint> ShamirShare<P> {
 /// Test-only helper function used to sanity check our sharing polynomial
 #[cfg(test)]
 fn reconstruct_secret<P: ECPoint>(shares: &BTreeMap<AuthorityCount, ShamirShare<P>>) -> P::Scalar {
-	use crate::multisig::client::signing;
+	use crate::client::signing;
 
 	let all_idxs: BTreeSet<AuthorityCount> = shares.keys().into_iter().cloned().collect();
 
@@ -489,13 +489,13 @@ mod tests {
 
 	use utilities::assert_ok;
 
-	use crate::multisig::eth::EthSigning;
+	use crate::eth::EthSigning;
 
 	use super::*;
 
 	#[test]
 	fn basic_sharing() {
-		use crate::multisig::crypto::eth::Point;
+		use crate::crypto::eth::Point;
 
 		let params = ThresholdParameters { share_count: 7, threshold: 5 };
 
@@ -513,7 +513,7 @@ mod tests {
 
 	#[test]
 	fn keygen_sequential() {
-		use crate::multisig::crypto::eth::{Point, Scalar};
+		use crate::crypto::eth::{Point, Scalar};
 		use state_chain_runtime::AccountId;
 
 		let params = ThresholdParameters { share_count: 4, threshold: 2 };
@@ -579,7 +579,7 @@ pub mod genesis {
 	use std::collections::HashMap;
 
 	use super::*;
-	use crate::multisig::{client::PartyIdxMapping, eth::EthSigning};
+	use crate::{client::PartyIdxMapping, eth::EthSigning};
 	use cf_primitives::PublicKeyBytes;
 	use state_chain_runtime::AccountId;
 

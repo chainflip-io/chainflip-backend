@@ -7,7 +7,7 @@ mod tests;
 
 use std::sync::Arc;
 
-use crate::multisig::CryptoScheme;
+use crate::CryptoScheme;
 
 use super::common::KeygenResult;
 

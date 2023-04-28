@@ -3,7 +3,7 @@ use std::fmt::Display;
 use cf_primitives::AuthorityCount;
 use serde::{Deserialize, Serialize};
 
-use crate::multisig::{
+use crate::{
 	client::common::{BroadcastVerificationMessage, PreProcessStageDataCheck, SigningStageName},
 	crypto::ECPoint,
 };
@@ -112,7 +112,7 @@ impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
 #[cfg(test)]
 mod tests {
 
-	use crate::multisig::{
+	use crate::{
 		client::helpers::{gen_invalid_local_sig, gen_invalid_signing_comm1},
 		crypto::eth::Point,
 		Rng,

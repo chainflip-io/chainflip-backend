@@ -3,7 +3,7 @@ use std::{
 	sync::Arc,
 };
 
-use crate::multisig::{
+use crate::{
 	client::{
 		self,
 		ceremony_manager::KeygenCeremony,
@@ -31,7 +31,7 @@ use sp_core::H256;
 use tracing::{debug, warn};
 use utilities::threshold_from_share_count;
 
-use crate::multisig::crypto::{CryptoScheme, ECPoint, KeyShare};
+use crate::crypto::{CryptoScheme, ECPoint, KeyShare};
 
 use keygen::{
 	keygen_data::{
@@ -526,7 +526,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		// parties expect messages from all other parties)
 		for idx in &self.keygen_common.common.all_idxs {
 			self.shares.0.entry(*idx).or_insert_with(|| {
-				use crate::multisig::crypto::ECScalar;
+				use crate::crypto::ECScalar;
 				ShamirShare { value: <Crypto::Point as ECPoint>::Scalar::zero() }
 			});
 		}

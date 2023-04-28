@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use super::*;
-use crate::multisig::{
+use crate::{
 	client::{
 		self,
 		common::SigningFailureReason,
@@ -14,7 +14,7 @@ use crate::multisig::{
 };
 use mockall::predicate;
 
-use crate::multisig::client::key_store_api::MockKeyStoreAPI;
+use crate::client::key_store_api::MockKeyStoreAPI;
 use cf_primitives::{KeyId, GENESIS_EPOCH};
 use client::MultisigClient;
 use utilities::{assert_err, assert_ok, testing::assert_future_can_complete};

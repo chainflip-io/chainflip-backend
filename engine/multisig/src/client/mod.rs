@@ -30,7 +30,7 @@ use tracing::{debug, info, info_span, Instrument};
 
 use keygen::KeygenData;
 
-pub use crate::multisig::client::utils::PartyIdxMapping;
+pub use crate::client::utils::PartyIdxMapping;
 pub use common::{
 	CeremonyFailureReason, KeygenFailureReason, KeygenResult, KeygenResultInfo, KeygenStageName,
 	SigningFailureReason,

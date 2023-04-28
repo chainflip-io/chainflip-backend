@@ -1,4 +1,4 @@
-use crate::multisig::{
+use crate::{
 	client::KeygenResult,
 	crypto::{generate_single_party_signature, ECPoint, ECScalar, KeyShare},
 	CryptoScheme, Rng,

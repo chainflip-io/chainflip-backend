@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 
 use thiserror::Error;
 
-use crate::multisig::{
+use crate::{
 	crypto::{ECPoint, KeyShare},
 	CryptoScheme,
 };
@@ -127,7 +127,7 @@ impl<C: CryptoScheme> ResharingContext<C> {
 		sharing_participants: &BTreeSet<AccountId>,
 		receiving_participants: &BTreeSet<AccountId>,
 	) -> Self {
-		use crate::multisig::crypto::ECScalar;
+		use crate::crypto::ECScalar;
 		let own_idx = key.validator_mapping.get_idx(own_id).expect("our own id must be present");
 
 		let all_idxs: BTreeSet<_> = sharing_participants

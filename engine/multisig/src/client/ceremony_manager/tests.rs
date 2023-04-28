@@ -1,27 +1,24 @@
 use std::{collections::BTreeSet, pin::Pin, time::Duration};
 
 use crate::{
-	client::get_key_data_for_test,
-	multisig::{
-		client::{
-			self,
-			ceremony_manager::{
-				CeremonyHandle, CeremonyManager, CeremonyRequestState, SigningCeremony,
-			},
-			ceremony_runner::CeremonyRunner,
-			common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
-			gen_keygen_data_hash_comm1,
-			helpers::{
-				ACCOUNT_IDS, CEREMONY_TIMEOUT_DURATION, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
-				INITIAL_LATEST_CEREMONY_ID,
-			},
-			keygen::KeygenData,
-			CeremonyRequest, CeremonyRequestDetails, KeygenRequestDetails, MultisigData,
-			SigningRequestDetails,
+	client::{
+		self,
+		ceremony_manager::{
+			CeremonyHandle, CeremonyManager, CeremonyRequestState, SigningCeremony,
 		},
-		crypto::{CryptoScheme, Rng},
-		eth::{EthSchnorrSignature, EthSigning},
+		ceremony_runner::CeremonyRunner,
+		common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
+		gen_keygen_data_hash_comm1, get_key_data_for_test,
+		helpers::{
+			ACCOUNT_IDS, CEREMONY_TIMEOUT_DURATION, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
+			INITIAL_LATEST_CEREMONY_ID,
+		},
+		keygen::KeygenData,
+		CeremonyRequest, CeremonyRequestDetails, KeygenRequestDetails, MultisigData,
+		SigningRequestDetails,
 	},
+	crypto::{CryptoScheme, Rng},
+	eth::{EthSchnorrSignature, EthSigning},
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
 };
 use anyhow::Result;

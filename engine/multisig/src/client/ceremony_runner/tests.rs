@@ -1,24 +1,21 @@
 use crate::{
-	multisig::{
-		client::{
-			ceremony_manager::{prepare_signing_request, KeygenCeremony, SigningCeremony},
-			common::SigningStageName,
-			gen_keygen_data_verify_hash_comm2, get_key_data_for_test,
-			helpers::{
-				gen_invalid_keygen_stage_2_state, ACCOUNT_IDS, CEREMONY_TIMEOUT_DURATION,
-				DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
-			},
-			signing::{
-				gen_signing_data_stage1, gen_signing_data_stage2, gen_signing_data_stage4,
-				SigningData,
-			},
-			SigningFailureReason,
+	client::{
+		ceremony_manager::{prepare_signing_request, KeygenCeremony, SigningCeremony},
+		common::SigningStageName,
+		gen_keygen_data_verify_hash_comm2, get_key_data_for_test,
+		helpers::{
+			gen_invalid_keygen_stage_2_state, ACCOUNT_IDS, CEREMONY_TIMEOUT_DURATION,
+			DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
 		},
-		crypto::CryptoScheme,
-		eth::{EthSigning, Point},
-		Rng,
+		signing::{
+			gen_signing_data_stage1, gen_signing_data_stage2, gen_signing_data_stage4, SigningData,
+		},
+		SigningFailureReason,
 	},
+	crypto::CryptoScheme,
+	eth::{EthSigning, Point},
 	p2p::OutgoingMultisigStageMessages,
+	Rng,
 };
 
 use rand_legacy::SeedableRng;

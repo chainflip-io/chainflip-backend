@@ -1,6 +1,6 @@
 use cf_primitives::KeyId;
 
-use crate::multisig::crypto::CryptoScheme;
+use crate::crypto::CryptoScheme;
 
 use super::KeygenResultInfo;
 

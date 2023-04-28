@@ -17,7 +17,7 @@ mod scalar_impls {
 	use super::*;
 
 	impl ECScalar for Scalar {
-		fn random(rng: &mut crate::multisig::crypto::Rng) -> Self {
+		fn random(rng: &mut crate::crypto::Rng) -> Self {
 			use rand_legacy::RngCore;
 
 			// Instead of calling SK::random() directly, we copy its

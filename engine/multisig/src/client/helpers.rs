@@ -21,7 +21,7 @@ use utilities::{
 	testing::expect_recv_with_timeout,
 };
 
-use crate::multisig::{
+use crate::{
 	client::{
 		ceremony_manager::{
 			prepare_keygen_request, prepare_signing_request, CeremonyOutcome, CeremonyTrait,
@@ -35,7 +35,7 @@ use crate::multisig::{
 	crypto::{ECPoint, Rng},
 	CryptoScheme,
 };
-use crate::multisig::{
+use crate::{
 	client::{keygen, MultisigMessage},
 	// This determines which crypto scheme will be used in tests
 	// (we make arbitrary choice to use eth)
@@ -822,7 +822,7 @@ pub async fn run_keygen(
 
 /// Generate an invalid local sig for stage3
 pub fn gen_invalid_local_sig<P: ECPoint>(rng: &mut Rng) -> LocalSig3<P> {
-	use crate::multisig::crypto::ECScalar;
+	use crate::crypto::ECScalar;
 
 	signing::LocalSig3 { responses: vec![P::Scalar::random(rng)] }
 }

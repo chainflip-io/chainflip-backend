@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use tracing::warn;
 use utilities::threshold_from_share_count;
 
-use crate::multisig::client::utils::find_frequent_element;
+use crate::client::utils::find_frequent_element;
 
 use super::BroadcastFailureReason;
 

@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 
 use rand_legacy::SeedableRng;
 
-use crate::multisig::{
+use crate::{
 	client::{
 		common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
 		helpers::{
@@ -19,7 +19,7 @@ use crate::multisig::{
 };
 
 // We choose (arbitrarily) to use eth crypto for unit tests.
-use crate::multisig::crypto::eth::Point;
+use crate::crypto::eth::Point;
 type VerifyComm2 = signing_data::VerifyComm2<Point>;
 type LocalSig3 = signing_data::LocalSig3<Point>;
 type VerifyLocalSig4 = signing_data::VerifyLocalSig4<Point>;
@@ -135,7 +135,7 @@ async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayl
 #[ignore = "Only works if V2 is enabled (by setting CURRENT_PROTOCOL_VERSION = 2)"]
 #[tokio::test]
 async fn should_sign_multiple_payloads() {
-	use crate::multisig::crypto::{
+	use crate::crypto::{
 		bitcoin::SigningPayload as BtcPayload, eth::SigningPayload as EthPayload,
 		polkadot::SigningPayload as DotPayload,
 	};
@@ -265,7 +265,7 @@ mod timeout {
 
 	mod during_regular_stage {
 
-		type SigningData = crate::multisig::client::signing::signing_data::SigningData<Point>;
+		type SigningData = crate::client::signing::signing_data::SigningData<Point>;
 
 		use super::*;
 

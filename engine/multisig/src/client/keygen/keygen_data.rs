@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use cf_primitives::AuthorityCount;
 use serde::{Deserialize, Serialize};
 
-use crate::multisig::{
+use crate::{
 	client::common::{BroadcastVerificationMessage, KeygenStageName, PreProcessStageDataCheck},
 	crypto::ECPoint,
 };

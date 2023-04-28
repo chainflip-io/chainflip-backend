@@ -8,11 +8,9 @@ use cf_primitives::{AuthorityCount, CeremonyId};
 use tracing::warn;
 
 use crate::{
-	multisig::{
-		client::{ceremony_manager::CeremonyTrait, legacy::MultisigMessageV1, MultisigMessage},
-		CryptoScheme,
-	},
+	client::{ceremony_manager::CeremonyTrait, legacy::MultisigMessageV1, MultisigMessage},
 	p2p::{OutgoingMultisigStageMessages, ProtocolVersion, CURRENT_PROTOCOL_VERSION},
+	CryptoScheme,
 };
 
 use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};

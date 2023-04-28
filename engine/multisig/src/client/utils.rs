@@ -140,7 +140,7 @@ macro_rules! derive_display_as_type_name {
 mod utils_tests {
 	use utilities::assert_panics;
 
-	use crate::multisig::client::helpers::ACCOUNT_IDS;
+	use crate::client::helpers::ACCOUNT_IDS;
 
 	use super::*;
 

@@ -16,7 +16,7 @@ use std::{
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
 use tracing::{debug, info, info_span, trace, warn, Instrument};
 
-use crate::multisig::{
+use crate::{
 	client,
 	client::{
 		common::{KeygenFailureReason, SigningFailureReason},
@@ -789,7 +789,7 @@ mod key_id_agg_key_match {
 	use cf_chains::ChainCrypto;
 	use rand_legacy::SeedableRng;
 
-	use crate::multisig::{bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
+	use crate::{bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 
 	use super::*;
 
@@ -799,7 +799,7 @@ mod key_id_agg_key_match {
 		CC: ChainCrypto,
 		CC::AggKey: From<CScheme::AggKey>,
 	{
-		let rng = crate::multisig::crypto::Rng::from_seed([0u8; 32]);
+		let rng = crate::crypto::Rng::from_seed([0u8; 32]);
 		let agg_key = CeremonyManager::<CScheme>::new(
 			[4u8; 32].into(),
 			tokio::sync::mpsc::unbounded_channel().0,

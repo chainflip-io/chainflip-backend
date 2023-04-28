@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use cf_primitives::AuthorityCount;
 use rand_legacy::SeedableRng;
 
-use crate::multisig::{
+use crate::{
 	client::{
 		common::{BroadcastVerificationMessage, KeygenStageName, PreProcessStageDataCheck},
 		helpers::{gen_invalid_keygen_comm1, get_invalid_hash_comm},

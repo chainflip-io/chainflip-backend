@@ -5,10 +5,8 @@ use cf_primitives::{AuthorityCount, CeremonyId};
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-	multisig::{
-		client::{ceremony_manager::CeremonyTrait, utils::PartyIdxMapping},
-		crypto::Rng,
-	},
+	client::{ceremony_manager::CeremonyTrait, utils::PartyIdxMapping},
+	crypto::Rng,
 	p2p::OutgoingMultisigStageMessages,
 };
 

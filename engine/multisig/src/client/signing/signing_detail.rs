@@ -8,7 +8,7 @@ use cf_primitives::AuthorityCount;
 
 use zeroize::Zeroize;
 
-use crate::multisig::crypto::{CryptoScheme, ECPoint, ECScalar, KeyShare, Rng};
+use crate::crypto::{CryptoScheme, ECPoint, ECScalar, KeyShare, Rng};
 
 use sha2::{Digest, Sha256};
 
@@ -220,7 +220,7 @@ mod tests {
 
 	use super::*;
 
-	use crate::multisig::{
+	use crate::{
 		crypto::eth::{EthSigning, Point, Scalar},
 		eth::SigningPayload,
 	};

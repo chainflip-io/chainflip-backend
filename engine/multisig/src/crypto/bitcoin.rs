@@ -1,4 +1,4 @@
-use crate::multisig::crypto::ECScalar;
+use crate::crypto::ECScalar;
 
 pub use super::secp256k1::{Point, Scalar};
 use super::{ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature};

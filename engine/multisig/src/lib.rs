@@ -11,8 +11,6 @@ pub mod client;
 /// Provides cryptographic primitives used by the multisig client
 mod crypto;
 
-pub use crate as multisig;
-
 pub mod p2p {
 	use cf_primitives::AccountId;
 
