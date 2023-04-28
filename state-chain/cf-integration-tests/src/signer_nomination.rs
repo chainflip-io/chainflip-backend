@@ -5,9 +5,7 @@ use cf_traits::{
 	ThresholdSignerNomination,
 };
 use pallet_cf_threshold_signature::PalletOffence;
-use pallet_cf_validator::{
-	CurrentAuthorities, CurrentEpoch, HistoricalAuthorities,
-};
+use pallet_cf_validator::{CurrentAuthorities, CurrentEpoch, HistoricalAuthorities};
 use sp_runtime::AccountId32;
 use state_chain_runtime::{EthereumInstance, Reputation, Runtime, Validator};
 
