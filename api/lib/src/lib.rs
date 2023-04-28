@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::{address::EncodedAddress, eth::H256, CcmIngressMetadata, ForeignChain};
 use cf_primitives::{AccountRole, Asset, BasisPoints};
@@ -179,7 +179,7 @@ pub async fn register_account_role(
 				.await
 				.until_finalized()
 				.await
-				.expect("Could not set register account role for account");
+				.context("Could not register account role for account")?;
 			Ok(tx_hash)
 		}
 		.boxed()
@@ -201,7 +201,7 @@ pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<
 			let seed = state_chain_client
 				.rotate_session_keys()
 				.await
-				.expect("Could not rotate session keys.");
+				.context("Could not rotate session keys.")?;
 
 			let aura_key: [u8; 32] = seed[0..32].try_into().unwrap();
 			let grandpa_key: [u8; 32] = seed[32..64].try_into().unwrap();
@@ -218,8 +218,7 @@ pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<
 				})
 				.await
 				.until_finalized()
-				.await
-				.expect("Failed to submit set_keys extrinsic");
+				.await?;
 
 			Ok(tx_hash)
 		}
@@ -249,7 +248,7 @@ pub async fn force_rotation(state_chain_settings: &settings::StateChain) -> Resu
 				.await
 				.until_finalized()
 				.await
-				.expect("Should submit sudo governance proposal");
+				.context("Failed to submit rotation governance proposal")?;
 
 			println!("If you're the governance dictator, the rotation will begin soon.");
 
@@ -276,7 +275,7 @@ pub async fn stop_bidding(state_chain_settings: &settings::StateChain) -> Result
 				.await
 				.until_finalized()
 				.await
-				.expect("Could not stop bidding");
+				.context("Could not stop bidding")?;
 			println!("Account stopped bidding, in tx {tx_hash:#x}.");
 			Ok(())
 		}
@@ -302,7 +301,7 @@ pub async fn start_bidding(state_chain_settings: &settings::StateChain) -> Resul
 				.await
 				.until_finalized()
 				.await
-				.expect("Could not start bidding");
+				.context("Could not start bidding")?;
 			println!("Account started bidding at tx {tx_hash:#x}.");
 
 			Ok(())
@@ -337,7 +336,7 @@ pub async fn set_vanity_name(
 				.await
 				.until_finalized()
 				.await
-				.expect("Could not set vanity name for your account");
+				.context("Could not set vanity name for your account")?;
 			println!("Vanity name set at tx {tx_hash:#x}.");
 			Ok(())
 		}
