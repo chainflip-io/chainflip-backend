@@ -212,12 +212,6 @@ pub mod pallet {
 		AuthorityCount,
 	>;
 
-	/// Track epochs and their associated authority count.
-	#[pallet::storage]
-	#[pallet::getter(fn epoch_authority_count)]
-	pub type EpochAuthorityCount<T: Config> =
-		StorageMap<_, Twox64Concat, EpochIndex, AuthorityCount>;
-
 	/// The rotation phase we are currently at.
 	#[pallet::storage]
 	#[pallet::getter(fn current_rotation_phase)]
@@ -401,10 +395,6 @@ pub mod pallet {
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
 							let new_authorities = rotation_state.authority_candidates();
 							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities.clone());
-							EpochAuthorityCount::<T>::insert(
-								rotation_state.new_epoch_index,
-								new_authorities.len() as AuthorityCount,
-							);
 							T::VaultRotator::activate();
 							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 						},
@@ -912,8 +902,8 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		) <= frame_system::Pallet::<T>::current_block_number()
 	}
 
-	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<AuthorityCount> {
-		EpochAuthorityCount::<T>::get(epoch)
+	fn authority_count_at_epoch(epoch_index: EpochIndex) -> Option<AuthorityCount> {
+		HistoricalAuthorities::<T>::decode_len(epoch_index).map(|l| l as AuthorityCount)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -921,7 +911,6 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		epoch_index: EpochIndex,
 		new_authorities: BTreeSet<Self::ValidatorId>,
 	) {
-		EpochAuthorityCount::<T>::insert(epoch_index, new_authorities.len() as AuthorityCount);
 		for (i, authority) in new_authorities.iter().enumerate() {
 			AuthorityIndex::<T>::insert(epoch_index, authority, i as AuthorityCount);
 			HistoricalActiveEpochs::<T>::append(authority, epoch_index);
@@ -1027,8 +1016,6 @@ impl<T: Config> Pallet<T> {
 			EpochHistory::<T>::activate_epoch(account_id, new_epoch);
 			T::Bonder::update_bond(account_id, EpochHistory::<T>::active_bond(account_id));
 		});
-
-		EpochAuthorityCount::<T>::insert(new_epoch, new_authorities.len() as AuthorityCount);
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
 

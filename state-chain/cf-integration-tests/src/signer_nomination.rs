@@ -6,7 +6,7 @@ use cf_traits::{
 };
 use pallet_cf_threshold_signature::PalletOffence;
 use pallet_cf_validator::{
-	CurrentAuthorities, CurrentEpoch, EpochAuthorityCount, HistoricalAuthorities,
+	CurrentAuthorities, CurrentEpoch, HistoricalAuthorities,
 };
 use sp_runtime::AccountId32;
 use state_chain_runtime::{EthereumInstance, Reputation, Runtime, Validator};
@@ -24,10 +24,6 @@ fn threshold_signer_nomination_respects_epoch() {
 		let genesis_epoch = Validator::epoch_index();
 
 		assert_eq!(genesis_authorities, HistoricalAuthorities::<Runtime>::get(genesis_epoch));
-		assert_eq!(
-			genesis_authorities.len() as u32,
-			EpochAuthorityCount::<Runtime>::get(genesis_epoch).unwrap()
-		);
 
 		assert!(RuntimeThresholdSignerNomination::threshold_nomination_with_seed(
 			(),
@@ -48,7 +44,6 @@ fn threshold_signer_nomination_respects_epoch() {
 			.collect();
 		CurrentAuthorities::<Runtime>::put(&new_authorities);
 		HistoricalAuthorities::<Runtime>::insert(next_epoch, &new_authorities);
-		EpochAuthorityCount::<Runtime>::insert(next_epoch, new_authorities.len() as u32);
 		assert!(Validator::current_authorities()
 			.into_iter()
 			.all(|n| !genesis_authorities.contains(&n)));
