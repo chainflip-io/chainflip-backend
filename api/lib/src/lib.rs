@@ -133,7 +133,7 @@ pub async fn request_claim(
 				bail!("We are currently in an auction phase. Please wait until the auction phase is over.");
 			}
 
-			let (tx_hash, _, _) = state_chain_client
+			let (tx_hash, ..) = state_chain_client
 				.submit_signed_extrinsic(pallet_cf_staking::Call::claim {
 					amount,
 					address: eth_address,
@@ -211,7 +211,7 @@ pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<
 				grandpa: GrandpaId::from(EdPublic::from_raw(grandpa_key)),
 			};
 
-			let (tx_hash, _events, _dispatch_info) = state_chain_client
+			let (tx_hash, ..) = state_chain_client
 				.submit_signed_extrinsic(pallet_cf_validator::Call::set_keys {
 					keys: new_session_key,
 					proof: [0; 1].to_vec(),
@@ -330,7 +330,7 @@ pub async fn set_vanity_name(
 				false,
 			)
 			.await?;
-			let (tx_hash, _events, _dispatch_info) = state_chain_client
+			let (tx_hash, ..) = state_chain_client
 				.submit_signed_extrinsic(pallet_cf_validator::Call::set_vanity_name {
 					name: name.as_bytes().to_vec(),
 				})
