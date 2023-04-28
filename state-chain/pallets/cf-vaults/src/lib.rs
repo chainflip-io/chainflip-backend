@@ -60,7 +60,7 @@ pub type KeygenResponseStatus<T, I> =
 pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for nodes to generate a new aggregate key.
 	AwaitingKeygen {
-		keygen_ceremony_id: CeremonyId,
+		ceremony_id: CeremonyId,
 		keygen_participants: BTreeSet<T::ValidatorId>,
 		epoch_index: EpochIndex,
 		response_status: KeygenResponseStatus<T, I>,
@@ -176,7 +176,7 @@ pub mod pallet {
 
 			// Check if we need to finalize keygen
 			if let Some(VaultRotationStatus::<T, I>::AwaitingKeygen {
-				keygen_ceremony_id,
+				ceremony_id,
 				keygen_participants,
 				epoch_index,
 				response_status,
@@ -191,7 +191,7 @@ pub mod pallet {
 					log::debug!(
 						"Keygen response timeout has elapsed, attempting to resolve outcome..."
 					);
-					Self::deposit_event(Event::<T, I>::KeygenResponseTimeout(keygen_ceremony_id));
+					Self::deposit_event(Event::<T, I>::KeygenResponseTimeout(ceremony_id));
 				} else {
 					return weight
 				};
@@ -204,9 +204,9 @@ pub mod pallet {
 							"Can't have success unless all candidates responded"
 						);
 						weight += T::WeightInfo::on_initialize_success();
-						Self::deposit_event(Event::KeygenSuccess(keygen_ceremony_id));
+						Self::deposit_event(Event::KeygenSuccess(ceremony_id));
 						Self::trigger_keygen_verification(
-							keygen_ceremony_id,
+							ceremony_id,
 							new_public_key,
 							epoch_index,
 							keygen_participants,
@@ -222,7 +222,7 @@ pub mod pallet {
 							} else {
 								Vec::default()
 							},
-							Event::KeygenFailure(keygen_ceremony_id),
+							Event::KeygenFailure(ceremony_id),
 						);
 					},
 				}
@@ -375,8 +375,8 @@ pub mod pallet {
 			// Keygen is in progress, pull out the details.
 			let (pending_ceremony_id, keygen_status) = ensure_variant!(
 				VaultRotationStatus::<T, I>::AwaitingKeygen {
-					keygen_ceremony_id, ref mut response_status, ..
-				} => (keygen_ceremony_id, response_status),
+					ceremony_id, ref mut response_status, ..
+				} => (ceremony_id, response_status),
 				rotation,
 				Error::<T, I>::InvalidRotationStatus,
 			);

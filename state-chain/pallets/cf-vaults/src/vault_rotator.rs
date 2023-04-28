@@ -16,7 +16,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		let ceremony_id = T::CeremonyIdProvider::increment_ceremony_id();
 
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::AwaitingKeygen {
-			keygen_ceremony_id: ceremony_id,
+			ceremony_id,
 			keygen_participants: candidates.clone(),
 			epoch_index,
 			response_status: KeygenResponseStatus::new(candidates.clone()),
@@ -108,7 +108,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		match outcome {
 			AsyncResult::Pending => {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
-					keygen_ceremony_id: Default::default(),
+					ceremony_id: Default::default(),
 					keygen_participants: Default::default(),
 					epoch_index: GENESIS_EPOCH,
 					response_status: KeygenResponseStatus::new(Default::default()),

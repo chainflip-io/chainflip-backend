@@ -48,7 +48,7 @@ benchmarks_instance_pallet! {
 
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygen {
-				keygen_ceremony_id: CEREMONY_ID,
+				ceremony_id: CEREMONY_ID,
 				keygen_participants: keygen_participants.into_iter().collect(),
 				epoch_index: GENESIS_EPOCH,
 				response_status: keygen_response_status
@@ -79,7 +79,7 @@ benchmarks_instance_pallet! {
 
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygen {
-				keygen_ceremony_id: CEREMONY_ID,
+				ceremony_id: CEREMONY_ID,
 				keygen_participants: keygen_participants.into_iter().collect(),
 				epoch_index: GENESIS_EPOCH,
 				response_status: keygen_response_status
@@ -102,7 +102,7 @@ benchmarks_instance_pallet! {
 		let keygen_participants = generate_authority_set::<T, I>(150, caller.clone().into());
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygen {
-				keygen_ceremony_id: CEREMONY_ID,
+				ceremony_id: CEREMONY_ID,
 				keygen_participants: keygen_participants.clone().into_iter().collect(),
 				epoch_index: GENESIS_EPOCH,
 				response_status: KeygenResponseStatus::<T, I>::new(keygen_participants)
