@@ -109,7 +109,7 @@ impl PersistentKeyDB {
 		keygen_result_info: &KeygenResultInfo<C>,
 	) {
 		self.kv_db
-			.put_data(&get_keygen_data_prefix::<C>(), &key_id.to_bytes(), &keygen_result_info)
+			.put_data(&keygen_data_prefix::<C>(), &key_id.to_bytes(), &keygen_result_info)
 			.unwrap_or_else(|e| panic!("Failed to update key {}. Error: {}", &key_id, e));
 	}
 
@@ -119,7 +119,7 @@ impl PersistentKeyDB {
 
 		let keys: HashMap<_, _> = self
 			.kv_db
-			.get_data_for_prefix(&get_keygen_data_prefix::<C>())
+			.get_data_for_prefix(&keygen_data_prefix::<C>())
 			.map(|(key_id, key_bytes)| {
 				(
 					KeyId::from_bytes(&key_id),
@@ -186,7 +186,7 @@ impl PersistentKeyDB {
 	}
 }
 
-fn get_keygen_data_prefix<C: CryptoScheme>() -> Vec<u8> {
+fn keygen_data_prefix<C: CryptoScheme>() -> Vec<u8> {
 	[&KEYGEN_DATA_PARTIAL_PREFIX[..], &(C::CHAIN_TAG.to_bytes())[..]].concat()
 }
 
@@ -264,17 +264,16 @@ fn migrate_db_to_version(
 }
 
 fn migrate_0_to_1_for_scheme<C: CryptoScheme>(db: &PersistentKeyDB, batch: &mut KVWriteBatch) {
-	for (legacy_key_id, key_info_bytes) in
-		db.kv_db.get_data_for_prefix(&get_keygen_data_prefix::<C>())
+	for (legacy_key_id, key_info_bytes) in db.kv_db.get_data_for_prefix(&keygen_data_prefix::<C>())
 	{
 		let new_key_id = KeyId { epoch_index: 0, public_key_bytes: legacy_key_id.to_vec() };
 		let key_id_with_prefix =
-			[get_keygen_data_prefix::<C>().as_slice(), &new_key_id.to_bytes()].concat();
+			[keygen_data_prefix::<C>().as_slice(), &new_key_id.to_bytes()].concat();
 
 		batch.put_value(&key_id_with_prefix, &key_info_bytes);
 
 		let legacy_key_id_with_prefix =
-			[get_keygen_data_prefix::<C>().as_slice(), &legacy_key_id].concat();
+			[keygen_data_prefix::<C>().as_slice(), &legacy_key_id].concat();
 
 		batch.delete_value(&legacy_key_id_with_prefix);
 	}

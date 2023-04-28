@@ -212,7 +212,7 @@ fn test_migration_to_v1() {
 
 	// Insert the key manually, so it matches the way it was done in db version 0:
 	db.kv_db
-		.put_data(get_keygen_data_prefix::<EthSigning>().as_slice(), &public_key_bytes, key_info)
+		.put_data(keygen_data_prefix::<EthSigning>().as_slice(), &public_key_bytes, key_info)
 		.unwrap();
 
 	// After migration, we should be able to load the key using the new code
