@@ -824,12 +824,12 @@ dependencies = [
  "pallet-cf-emissions",
  "pallet-cf-environment",
  "pallet-cf-flip",
+ "pallet-cf-funding",
  "pallet-cf-governance",
  "pallet-cf-ingress-egress",
  "pallet-cf-lp",
  "pallet-cf-pools",
  "pallet-cf-reputation",
- "pallet-cf-funding",
  "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
@@ -1009,10 +1009,10 @@ dependencies = [
  "hex",
  "pallet-cf-account-roles",
  "pallet-cf-environment",
+ "pallet-cf-funding",
  "pallet-cf-governance",
  "pallet-cf-lp",
  "pallet-cf-pools",
- "pallet-cf-funding",
  "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
@@ -1093,10 +1093,10 @@ dependencies = [
  "pallet-cf-chain-tracking",
  "pallet-cf-environment",
  "pallet-cf-flip",
+ "pallet-cf-funding",
  "pallet-cf-governance",
  "pallet-cf-ingress-egress",
  "pallet-cf-reputation",
- "pallet-cf-funding",
  "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
@@ -5623,6 +5623,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-cf-funding"
+version = "0.1.0"
+dependencies = [
+ "cf-chains",
+ "cf-primitives",
+ "cf-runtime-upgrade-utilities",
+ "cf-test-utilities",
+ "cf-traits",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "pallet-cf-flip",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core 7.0.0",
+ "sp-io 7.0.0",
+ "sp-runtime 7.0.0",
+ "sp-std 5.0.0",
+]
+
+[[package]]
 name = "pallet-cf-governance"
 version = "0.1.0"
 dependencies = [
@@ -5726,28 +5748,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-funding"
-version = "0.1.0"
-dependencies = [
- "cf-chains",
- "cf-primitives",
- "cf-runtime-upgrade-utilities",
- "cf-test-utilities",
- "cf-traits",
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "log",
- "pallet-cf-flip",
- "parity-scale-codec",
- "scale-info",
- "sp-core 7.0.0",
- "sp-io 7.0.0",
- "sp-runtime 7.0.0",
- "sp-std 5.0.0",
-]
-
-[[package]]
 name = "pallet-cf-swapping"
 version = "0.1.0"
 dependencies = [
@@ -5826,8 +5826,8 @@ dependencies = [
  "frame-system",
  "log",
  "nanorand",
- "pallet-cf-reputation",
  "pallet-cf-funding",
+ "pallet-cf-reputation",
  "pallet-cf-vaults",
  "pallet-session",
  "parity-scale-codec",
@@ -9823,12 +9823,12 @@ dependencies = [
  "pallet-cf-emissions",
  "pallet-cf-environment",
  "pallet-cf-flip",
+ "pallet-cf-funding",
  "pallet-cf-governance",
  "pallet-cf-ingress-egress",
  "pallet-cf-lp",
  "pallet-cf-pools",
  "pallet-cf-reputation",
- "pallet-cf-funding",
  "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
  "pallet-cf-tokenholder-governance",
