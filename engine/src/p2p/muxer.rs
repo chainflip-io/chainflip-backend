@@ -163,8 +163,8 @@ impl P2PMuxer {
 									.send((account_id, message))
 									.expect("bitcoin receiver dropped");
 							},
-							ChainTag::Sui => {
-								warn!("Sui chain tag is not supported yet")
+							ChainTag::Ed25519 => {
+								warn!("Ed25519 not yet supported")
 							},
 						}
 					},
