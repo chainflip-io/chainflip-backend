@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod persistent_key_db_tests;
+mod tests;
 mod rocksdb_kv;
 
 use std::{cmp::Ordering, collections::HashMap, path::Path};
@@ -138,7 +138,7 @@ impl PersistentKeyDB {
 	/// Write the witnesser checkpoint to the db
 	pub fn update_checkpoint(&self, chain_tag: ChainTag, checkpoint: &WitnessedUntil) {
 		self.kv_db
-			.put_data(&get_checkpoint_prefix(chain_tag), &[], checkpoint)
+			.put_data(&checkpoint_prefix(chain_tag), &[], checkpoint)
 			.unwrap_or_else(|e| {
 				panic!("Failed to update {chain_tag} witnesser checkpoint. Error: {e}")
 			});
@@ -146,7 +146,7 @@ impl PersistentKeyDB {
 
 	pub fn load_checkpoint(&self, chain_tag: ChainTag) -> Result<Option<WitnessedUntil>> {
 		self.kv_db
-			.get_data(&get_checkpoint_prefix(chain_tag), &[])
+			.get_data(&checkpoint_prefix(chain_tag), &[])
 			.context("Failed to load {chain_tag} checkpoint")
 	}
 
@@ -190,7 +190,7 @@ fn keygen_data_prefix<C: CryptoScheme>() -> Vec<u8> {
 	[&KEYGEN_DATA_PARTIAL_PREFIX[..], &(C::CHAIN_TAG.to_bytes())[..]].concat()
 }
 
-fn get_checkpoint_prefix(chain_tag: ChainTag) -> Vec<u8> {
+fn checkpoint_prefix(chain_tag: ChainTag) -> Vec<u8> {
 	[WITNESSER_CHECKPOINT_PARTIAL_PREFIX, &(chain_tag.to_bytes())[..]].concat()
 }
 
