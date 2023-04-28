@@ -294,7 +294,7 @@ impl SignedExtrinsicClient {
 									match submission_watcher.submit_extrinsic_at_nonce(request.call.clone(), submission_watcher.finalized_nonce(), *request_id).await? {
 										Ok(_) => {
 											debug!("Detected a gap in the account's submitted nonce values, pending extrinsics after this gap will not be including in blocks, unless the gap is filled. Attempting to resolve.");
-											submission_watcher.anticipated_nonce = submission_watcher.finalized_nonce();
+											submission_watcher.anticipated_nonce = submission_watcher.finalized_nonce() + 1;
 											request.pending_submissions += 1;
 											for (request_id, request) in shuffled_requests {
 												match submission_watcher.submit_extrinsic_at_nonce(request.call.clone(), submission_watcher.anticipated_nonce, *request_id).await? {
