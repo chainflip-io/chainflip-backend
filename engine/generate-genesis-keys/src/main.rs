@@ -1,13 +1,11 @@
 use cf_primitives::{KeyId, GENESIS_EPOCH};
 
-use chainflip_engine::{
-	db::PersistentKeyDB,
-	multisig::{
-		client::keygen::generate_key_data, eth::EthSigning, polkadot::PolkadotSigning,
-		CryptoScheme, Rng,
-	},
-};
+use chainflip_engine::db::PersistentKeyDB;
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
+use multisig::{
+	client::keygen::generate_key_data, eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme,
+	Rng,
+};
 use rand_legacy::FromEntropy;
 use state_chain_runtime::AccountId;
 use std::{
@@ -117,7 +115,7 @@ fn generate_and_save_keys<Crypto: CryptoScheme>(
 #[cfg(test)]
 #[test]
 fn should_generate_and_save_all_keys() {
-	use chainflip_engine::multisig::bitcoin::BtcSigning;
+	use multisig::bitcoin::BtcSigning;
 
 	let tempdir = tempfile::TempDir::new().unwrap();
 	let db_path = tempdir.path().to_owned().join("test");

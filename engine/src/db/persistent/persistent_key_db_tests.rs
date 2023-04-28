@@ -5,11 +5,9 @@ use std::{
 };
 
 use super::*;
-use crate::{
-	db::PersistentKeyDB,
-	multisig::{client::get_key_data_for_test, eth::EthSigning, polkadot::PolkadotSigning},
-};
+use crate::db::PersistentKeyDB;
 use cf_primitives::{KeyId, GENESIS_EPOCH};
+use multisig::{client::get_key_data_for_test, eth::EthSigning, polkadot::PolkadotSigning};
 use rocksdb::{Options, DB};
 use sp_runtime::AccountId32;
 use tempfile::TempDir;
@@ -353,8 +351,8 @@ fn test_migration_to_latest_from_0() {
 
 #[test]
 fn test_migration_to_v1() {
-	use crate::multisig::{client::keygen, Rng};
 	use cf_primitives::AccountId;
+	use multisig::{client::keygen, Rng};
 	use rand_legacy::FromEntropy;
 	use std::collections::BTreeSet;
 

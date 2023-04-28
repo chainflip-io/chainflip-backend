@@ -5,10 +5,8 @@ use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, trace, warn, Instrument};
 
-use crate::{
-	multisig::ChainTag,
-	p2p::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages},
-};
+use crate::p2p::{MultisigMessageReceiver, MultisigMessageSender, OutgoingMultisigStageMessages};
+use multisig::ChainTag;
 
 pub use multisig::p2p::{ProtocolVersion, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION};
 

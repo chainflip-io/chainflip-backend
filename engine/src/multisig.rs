@@ -1,7 +1,7 @@
 use anyhow::Result;
 use cf_primitives::CeremonyId;
 
-use multisig::MultisigClient;
+use multisig::{CryptoScheme, MultisigClient};
 use tracing::{info, info_span, Instrument};
 
 use crate::{
@@ -9,11 +9,6 @@ use crate::{
 	p2p::{MultisigMessageReceiver, MultisigMessageSender},
 };
 use state_chain_runtime::AccountId;
-
-pub use multisig::{
-	bitcoin, client, eth, polkadot, ChainTag, CryptoScheme, Rng, SignatureToThresholdSignature,
-	CHAIN_TAG_SIZE,
-};
 
 /// Start the multisig client, which listens for p2p messages and requests from the SC
 pub fn start_client<C: CryptoScheme>(

@@ -43,7 +43,7 @@ pub struct KeygenResult<C: CryptoScheme> {
 }
 
 /// This computes a scalar, multiplying by which the public key will become compatible
-/// according to [`crate::multisig::CryptoScheme::is_pubkey_compatible`].
+/// according to [`multisig::CryptoScheme::is_pubkey_compatible`].
 fn compute_compatibility_factor<C: CryptoScheme>(
 	pubkey: &C::Point,
 ) -> <C::Point as ECPoint>::Scalar {
@@ -59,7 +59,7 @@ fn compute_compatibility_factor<C: CryptoScheme>(
 
 impl<C: CryptoScheme> KeygenResult<C> {
 	/// Create keygen result, ensuring that the public key is "contract compatible" (mostly relevant
-	/// for Ethereum keys/contracts, see [`crate::multisig::CryptoScheme::is_pubkey_compatible`]).
+	/// for Ethereum keys/contracts, see [`multisig::CryptoScheme::is_pubkey_compatible`]).
 	/// Note that the keys might be modified as part of this procedure. However, the result is
 	/// guaranteed to produce a valid multisig share as long as all ceremony participants use the
 	/// same procedure.
