@@ -56,10 +56,10 @@ ed25519-consensus = "2.0"
 tracing = "0.1"
 
 # Local deps
-cf-chains = { path = "../state-chain/chains" }
-cf-primitives = { path = "../state-chain/primitives" }
-state-chain-runtime = { path = "../state-chain/runtime" }
-utilities = {package = "utilities", path = "../utilities" }
+cf-chains = { path = "../../state-chain/chains" }
+cf-primitives = { path = "../../state-chain/primitives" }
+state-chain-runtime = { path = "../../state-chain/runtime" }
+utilities = {package = "utilities", path = "../../utilities" }
 
 # substrate deps
 sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
@@ -69,7 +69,7 @@ sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "cha
 mockall = "0.11.0"
 # Turn on the "test" feature flag for tests
 multisig = {path = ".", features = ["test"]}
-utilities = { package = "utilities", path = "../utilities" , features = ["test-utils"] }
+utilities = { package = "utilities", path = "../../utilities" , features = ["test-utils"] }
 
 [features]
 test = ['mockall']

@@ -111,7 +111,7 @@ custom-rpc = { path = "../state-chain/custom-rpc" }
 state-chain-runtime = { path = "../state-chain/runtime" }
 chainflip-node = { path = "../state-chain/node" }
 utilities = { path = "../utilities" }
-multisig = { path = "../multisig" }
+multisig = { path = "multisig" }
 
 # substrate deps
 codec = { package = "parity-scale-codec", version = "3.0.0", features = [
@@ -144,7 +144,7 @@ csv = "1.1.6"
 tempfile = "3.3.0"
 ethereum = "0.14"
 rlp = "0.5"
-multisig = { path = "../multisig", features = ["test"] }
+multisig = { path = "multisig", features = ["test"] }
 utilities = { package = "utilities", path = "../utilities" , features = ["test-utils"] }
 
 [build-dependencies]
