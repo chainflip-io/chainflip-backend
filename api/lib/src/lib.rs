@@ -237,7 +237,7 @@ pub async fn force_rotation(state_chain_settings: &settings::StateChain) -> Resu
 				.await
 				.expect("Should submit sudo governance proposal");
 
-			println!("Rotation should begin soon :)");
+			println!("If you're the governance dictator, the rotation will begin soon.");
 
 			Ok(())
 		}
