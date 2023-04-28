@@ -31,7 +31,6 @@ pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::{BaseRpcApi, BaseRpcClient, RawRpcApi},
 	extrinsic_api::ExtrinsicApi,
-	storage_api::StorageApi,
 	StateChainClient,
 };
 use utilities::{clean_dot_address, clean_eth_address, task_scope::task_scope};
@@ -247,7 +246,7 @@ pub async fn force_rotation(state_chain_settings: &settings::StateChain) -> Resu
 				.await
 				.expect("Should submit sudo governance proposal");
 
-			println!("Rotation should begin soon :)");
+			println!("If you're the governance dictator, the rotation will begin soon.");
 
 			Ok(())
 		}
@@ -260,7 +259,7 @@ pub async fn stop_bidding(state_chain_settings: &settings::StateChain) -> Result
 	task_scope(|scope| {
 		async {
 			let (_, _, state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
+				StateChainClient::new(scope, state_chain_settings, AccountRole::Validator, false)
 					.await?;
 			let tx_hash = state_chain_client
 				.submit_signed_extrinsic(pallet_cf_staking::Call::stop_bidding {})
@@ -275,37 +274,23 @@ pub async fn stop_bidding(state_chain_settings: &settings::StateChain) -> Result
 }
 
 pub async fn start_bidding(state_chain_settings: &settings::StateChain) -> Result<()> {
-	task_scope(|scope| async {
-		let (latest_block_hash, _, state_chain_client) =
-			StateChainClient::new(scope, state_chain_settings, AccountRole::None, false).await?;
+	task_scope(|scope| {
+		async {
+			let (.., state_chain_client) =
+				StateChainClient::new(scope, state_chain_settings, AccountRole::Validator, false)
+					.await?;
 
-		match state_chain_client
-			.storage_map_entry::<pallet_cf_account_roles::AccountRoles<state_chain_runtime::Runtime>>(
-				latest_block_hash,
-				&state_chain_client.account_id(),
-			)
-			.await
-			.expect("Failed to request AccountRole")
-			.ok_or_else(|| anyhow!("Your account is not staked. You must first stake and then register your account role as Validator before activating your account."))?
-		{
-			AccountRole::Validator => {
-				let tx_hash = state_chain_client
-					.submit_signed_extrinsic(pallet_cf_staking::Call::start_bidding {})
-					.await
-					.expect("Could not start bidding");
-				println!("Account started bidding at tx {tx_hash:#x}.");
-			}
-			AccountRole::None => {
-				println!("You have not yet registered an account role. If you wish to start bidding to gain a chance at becoming an authority on the Chainflip network
-				you must first register your account as the Validator role. Please see the `register-account-role` command on this CLI.")
-			}
-			_ => {
-				println!("You have already registered an account role for this account that is not the Validator role. You cannot start bidding for participation as an authority on the Chainflip network.")
-			}
+			let tx_hash = state_chain_client
+				.submit_signed_extrinsic(pallet_cf_staking::Call::start_bidding {})
+				.await
+				.expect("Could not start bidding");
+			println!("Account started bidding at tx {tx_hash:#x}.");
+
+			Ok(())
 		}
-
-		Ok(())
-	}.boxed()).await
+		.boxed()
+	})
+	.await
 }
 
 pub async fn set_vanity_name(
