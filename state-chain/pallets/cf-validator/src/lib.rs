@@ -394,7 +394,7 @@ pub mod pallet {
 					match T::VaultRotator::status() {
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
 							let new_authorities = rotation_state.authority_candidates();
-							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities.clone());
+							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
 							T::VaultRotator::activate();
 							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 						},
