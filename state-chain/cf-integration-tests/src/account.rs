@@ -3,8 +3,8 @@
 use crate::network;
 use cf_primitives::GENESIS_EPOCH;
 use cf_traits::EpochInfo;
+use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use pallet_cf_reputation::Reputations;
-use pallet_cf_staking::{ClaimAmount, MinimumStake};
 use pallet_cf_validator::{AccountPeerMapping, MappedPeers, VanityNames};
 use state_chain_runtime::{Reputation, Runtime, Validator};
 
@@ -18,11 +18,13 @@ fn account_deletion_removes_relevant_storage_items() {
 
 		let backup_node = backup_nodes.first().unwrap().clone();
 
-		let min_stake = MinimumStake::<Runtime>::get();
+		let min_funding = MinimumFunding::<Runtime>::get();
 
-		testnet
-			.stake_manager_contract
-			.stake(backup_node.clone(), min_stake, GENESIS_EPOCH);
+		testnet.state_chain_gateway_contract.fund_account(
+			backup_node.clone(),
+			min_funding,
+			GENESIS_EPOCH,
+		);
 		testnet.move_forward_blocks(1);
 
 		network::Cli::register_as_validator(&backup_node);
@@ -41,16 +43,18 @@ fn account_deletion_removes_relevant_storage_items() {
 		let vanity_names = VanityNames::<Runtime>::get();
 		assert_eq!(*vanity_names.get(&backup_node).unwrap(), elon_vanity_name.as_bytes().to_vec());
 
-		network::Cli::claim(&backup_node, ClaimAmount::Exact(min_stake), [0x22; 20]);
+		network::Cli::redeem(&backup_node, RedemptionAmount::Exact(min_funding), [0x22; 20]);
 
-		// Sign the claim request
+		// Sign the redemption request
 		testnet.move_forward_blocks(1);
 
-		testnet
-			.stake_manager_contract
-			.execute_claim(backup_node.clone(), min_stake, GENESIS_EPOCH);
+		testnet.state_chain_gateway_contract.execute_redemption(
+			backup_node.clone(),
+			min_funding,
+			GENESIS_EPOCH,
+		);
 
-		// Let witnesses be registered, completing the claiming process. This should trigger an
+		// Let witnesses be registered, completing the redeeming process. This should trigger an
 		// account deletion.
 		testnet.move_forward_blocks(1);
 

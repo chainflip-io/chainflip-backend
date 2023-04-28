@@ -16,7 +16,7 @@ benchmarks! {
 
 	reap_one_account {
 		let caller: T::AccountId = whitelisted_caller();
-		Account::<T>::insert(&caller, FlipAccount { stake: T::Balance::from(0u32), bond: T::Balance::from(0u32)});
+		Account::<T>::insert(&caller, FlipAccount { balance: T::Balance::from(0u32), bond: T::Balance::from(0u32)});
 	}: { BurnFlipAccount::<T>::on_killed_account(&caller); }
 	verify {
 		assert!(!Account::<T>::contains_key(&caller));

@@ -13,7 +13,7 @@ use super::{Ethereum, EthereumIngressId};
 
 pub mod all_batch;
 pub mod execute_x_swap_and_call;
-pub mod register_claim;
+pub mod register_redemption;
 pub mod set_agg_key_with_agg_key;
 pub mod set_comm_key_with_agg_key;
 pub mod set_gov_key_with_agg_key;
@@ -24,7 +24,7 @@ pub mod update_flip_supply;
 #[scale_info(skip_type_params(Environment))]
 pub enum EthereumApi<Environment: 'static> {
 	SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey),
-	RegisterClaim(register_claim::RegisterClaim),
+	RegisterRedemption(register_redemption::RegisterRedemption),
 	UpdateFlipSupply(update_flip_supply::UpdateFlipSupply),
 	SetGovKeyWithAggKey(set_gov_key_with_agg_key::SetGovKeyWithAggKey),
 	SetCommKeyWithAggKey(set_comm_key_with_agg_key::SetCommKeyWithAggKey),
@@ -80,9 +80,9 @@ impl<E: ReplayProtectionProvider<Ethereum>> SetCommKeyWithAggKey<Ethereum> for E
 	}
 }
 
-impl<E: ReplayProtectionProvider<Ethereum>> RegisterClaim<Ethereum> for EthereumApi<E> {
+impl<E: ReplayProtectionProvider<Ethereum>> RegisterRedemption<Ethereum> for EthereumApi<E> {
 	fn new_unsigned(node_id: &[u8; 32], amount: u128, address: &[u8; 20], expiry: u64) -> Self {
-		Self::RegisterClaim(register_claim::RegisterClaim::new_unsigned(
+		Self::RegisterRedemption(register_redemption::RegisterRedemption::new_unsigned(
 			E::replay_protection(),
 			node_id,
 			amount,
@@ -93,7 +93,7 @@ impl<E: ReplayProtectionProvider<Ethereum>> RegisterClaim<Ethereum> for Ethereum
 
 	fn amount(&self) -> u128 {
 		match self {
-			EthereumApi::RegisterClaim(call) => call.amount.unique_saturated_into(),
+			EthereumApi::RegisterRedemption(call) => call.amount.unique_saturated_into(),
 			_ => unreachable!(),
 		}
 	}
@@ -103,13 +103,13 @@ impl<E: ReplayProtectionProvider<Ethereum>> UpdateFlipSupply<Ethereum> for Ether
 	fn new_unsigned(
 		new_total_supply: u128,
 		block_number: u64,
-		stake_manager_address: &[u8; 20],
+		state_chain_gateway_address: &[u8; 20],
 	) -> Self {
 		Self::UpdateFlipSupply(update_flip_supply::UpdateFlipSupply::new_unsigned(
 			E::replay_protection(),
 			new_total_supply,
 			block_number,
-			stake_manager_address,
+			state_chain_gateway_address,
 		))
 	}
 }
@@ -190,9 +190,9 @@ impl<E> From<set_agg_key_with_agg_key::SetAggKeyWithAggKey> for EthereumApi<E> {
 	}
 }
 
-impl<E> From<register_claim::RegisterClaim> for EthereumApi<E> {
-	fn from(tx: register_claim::RegisterClaim) -> Self {
-		Self::RegisterClaim(tx)
+impl<E> From<register_redemption::RegisterRedemption> for EthereumApi<E> {
+	fn from(tx: register_redemption::RegisterRedemption) -> Self {
+		Self::RegisterRedemption(tx)
 	}
 }
 
@@ -230,7 +230,7 @@ impl<E> ApiCall<Ethereum> for EthereumApi<E> {
 	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
 		match self {
 			EthereumApi::SetAggKeyWithAggKey(tx) => tx.threshold_signature_payload(),
-			EthereumApi::RegisterClaim(tx) => tx.threshold_signature_payload(),
+			EthereumApi::RegisterRedemption(tx) => tx.threshold_signature_payload(),
 			EthereumApi::UpdateFlipSupply(tx) => tx.threshold_signature_payload(),
 			EthereumApi::SetGovKeyWithAggKey(tx) => tx.threshold_signature_payload(),
 			EthereumApi::SetCommKeyWithAggKey(tx) => tx.threshold_signature_payload(),
@@ -243,7 +243,7 @@ impl<E> ApiCall<Ethereum> for EthereumApi<E> {
 	fn signed(self, threshold_signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
 		match self {
 			EthereumApi::SetAggKeyWithAggKey(call) => call.signed(threshold_signature).into(),
-			EthereumApi::RegisterClaim(call) => call.signed(threshold_signature).into(),
+			EthereumApi::RegisterRedemption(call) => call.signed(threshold_signature).into(),
 			EthereumApi::UpdateFlipSupply(call) => call.signed(threshold_signature).into(),
 			EthereumApi::SetGovKeyWithAggKey(call) => call.signed(threshold_signature).into(),
 			EthereumApi::SetCommKeyWithAggKey(call) => call.signed(threshold_signature).into(),
@@ -256,7 +256,7 @@ impl<E> ApiCall<Ethereum> for EthereumApi<E> {
 	fn chain_encoded(&self) -> Vec<u8> {
 		match self {
 			EthereumApi::SetAggKeyWithAggKey(call) => call.chain_encoded(),
-			EthereumApi::RegisterClaim(call) => call.chain_encoded(),
+			EthereumApi::RegisterRedemption(call) => call.chain_encoded(),
 			EthereumApi::UpdateFlipSupply(call) => call.chain_encoded(),
 			EthereumApi::SetGovKeyWithAggKey(call) => call.chain_encoded(),
 			EthereumApi::SetCommKeyWithAggKey(call) => call.chain_encoded(),
@@ -269,7 +269,7 @@ impl<E> ApiCall<Ethereum> for EthereumApi<E> {
 	fn is_signed(&self) -> bool {
 		match self {
 			EthereumApi::SetAggKeyWithAggKey(call) => call.is_signed(),
-			EthereumApi::RegisterClaim(call) => call.is_signed(),
+			EthereumApi::RegisterRedemption(call) => call.is_signed(),
 			EthereumApi::UpdateFlipSupply(call) => call.is_signed(),
 			EthereumApi::SetGovKeyWithAggKey(call) => call.is_signed(),
 			EthereumApi::SetCommKeyWithAggKey(call) => call.is_signed(),

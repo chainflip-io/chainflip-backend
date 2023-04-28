@@ -536,11 +536,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::set_keygen_response_timeout())]
 		pub fn set_keygen_slash_rate(
 			origin: OriginFor<T>,
-			percent_of_stake: Percent,
+			percent_of_total_funds: Percent,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			KeygenSlashRate::<T, I>::put(percent_of_stake);
+			KeygenSlashRate::<T, I>::put(percent_of_total_funds);
 
 			Ok(().into())
 		}
@@ -668,7 +668,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn terminate_keygen_procedure(offenders: &[T::ValidatorId], event: Event<T, I>) {
 		T::OffenceReporter::report_many(PalletOffence::FailedKeygen, offenders);
 		for offender in offenders {
-			T::Slasher::slash_stake(offender, KeygenSlashRate::<T, I>::get());
+			T::Slasher::slash_balance(offender, KeygenSlashRate::<T, I>::get());
 		}
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
 			offenders: offenders.iter().cloned().collect(),

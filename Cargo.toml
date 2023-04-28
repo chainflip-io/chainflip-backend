@@ -18,7 +18,7 @@ members = [
   'state-chain/pallets/cf-lp',
   'state-chain/pallets/cf-pools',
   'state-chain/pallets/cf-reputation',
-  'state-chain/pallets/cf-staking',
+  'state-chain/pallets/cf-funding',
   'state-chain/pallets/cf-threshold-signature',
   'state-chain/pallets/cf-validator',
   'state-chain/pallets/cf-vaults',

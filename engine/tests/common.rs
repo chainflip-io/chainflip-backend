@@ -25,7 +25,7 @@ pub struct IntegrationTestConfig {
 #[derive(Debug, Deserialize, Clone)]
 pub struct Eth {
 	pub key_manager_address: H160,
-	pub stake_manager_address: H160,
+	pub state_chain_gateway_address: H160,
 	pub vault_address: H160,
 }
 

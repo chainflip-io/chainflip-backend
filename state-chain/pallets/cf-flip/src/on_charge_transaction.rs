@@ -1,7 +1,7 @@
 //! Chainflip transaction fees.
 //!
 //! The Chainflip network is permissioned and as such the main reasons for fees are (a) to encourage
-//! 'good' behaviour and (b) to ensure that only staked actors can submit extrinsics to the network.
+//! 'good' behaviour and (b) to ensure that only funded actors can submit extrinsics to the network.
 
 use crate::{imbalances::Surplus, Config as FlipConfig, Pallet as Flip};
 use cf_traits::WaivedFees;

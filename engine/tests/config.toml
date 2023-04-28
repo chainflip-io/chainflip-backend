@@ -2,5 +2,5 @@
 
 [eth]
 key_manager_address = "0xa16E02E87b7454126E5E10d957A927A7F5B5d2be"
-stake_manager_address = "0xeEBe00Ac0756308ac4AaBfD76c05c4F3088B8883"
+state_chain_gateway_address = "0xeEBe00Ac0756308ac4AaBfD76c05c4F3088B8883"
 vault_address = "0xB7A5bd0345EF1Cc5E66bf61BdeC17D2461fBd968"

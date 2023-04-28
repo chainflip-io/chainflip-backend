@@ -8,7 +8,7 @@
       },
       {
         "internalType": "uint256",
-        "name": "minStake",
+        "name": "minFunding",
         "type": "uint256"
       }
     ],
@@ -31,7 +31,7 @@
         "type": "uint256"
       }
     ],
-    "name": "ClaimExecuted",
+    "name": "RedemptionExecuted",
     "type": "event"
   },
   {
@@ -50,7 +50,7 @@
         "type": "uint256"
       }
     ],
-    "name": "ClaimExpired",
+    "name": "RedemptionExpired",
     "type": "event"
   },
   {
@@ -71,7 +71,7 @@
       {
         "indexed": true,
         "internalType": "address",
-        "name": "staker",
+        "name": "funder",
         "type": "address"
       },
       {
@@ -87,7 +87,7 @@
         "type": "uint48"
       }
     ],
-    "name": "ClaimRegistered",
+    "name": "RedemptionRegistered",
     "type": "event"
   },
   {
@@ -141,17 +141,17 @@
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "oldMinStake",
+        "name": "oldMinFunding",
         "type": "uint256"
       },
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "newMinStake",
+        "name": "newMinFunding",
         "type": "uint256"
       }
     ],
-    "name": "MinStakeChanged",
+    "name": "MinFundingChanged",
     "type": "event"
   },
   {
@@ -172,7 +172,7 @@
       {
         "indexed": false,
         "internalType": "address",
-        "name": "staker",
+        "name": "funder",
         "type": "address"
       },
       {
@@ -182,7 +182,7 @@
         "type": "address"
       }
     ],
-    "name": "Staked",
+    "name": "Funded",
     "type": "event"
   },
   {
@@ -213,7 +213,7 @@
   },
   {
     "inputs": [],
-    "name": "CLAIM_DELAY",
+    "name": "REDEMPTION_DELAY",
     "outputs": [
       {
         "internalType": "uint48",
@@ -246,7 +246,7 @@
         "type": "bytes32"
       }
     ],
-    "name": "executeClaim",
+    "name": "executeRedemption",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -318,7 +318,7 @@
   },
   {
     "inputs": [],
-    "name": "getMinimumStake",
+    "name": "getMinimumFunding",
     "outputs": [
       {
         "internalType": "uint256",
@@ -337,7 +337,7 @@
         "type": "bytes32"
       }
     ],
-    "name": "getPendingClaim",
+    "name": "getPendingRedemption",
     "outputs": [
       {
         "components": [
@@ -348,7 +348,7 @@
           },
           {
             "internalType": "address",
-            "name": "staker",
+            "name": "funder",
             "type": "address"
           },
           {
@@ -362,7 +362,7 @@
             "type": "uint48"
           }
         ],
-        "internalType": "struct IStakeManager.Claim",
+        "internalType": "struct IStateChainGateway.Redemption",
         "name": "",
         "type": "tuple"
       }
@@ -448,7 +448,7 @@
       },
       {
         "internalType": "address",
-        "name": "staker",
+        "name": "funder",
         "type": "address"
       },
       {
@@ -457,7 +457,7 @@
         "type": "uint48"
       }
     ],
-    "name": "registerClaim",
+    "name": "registerRedemption",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -486,11 +486,11 @@
     "inputs": [
       {
         "internalType": "uint256",
-        "name": "newMinStake",
+        "name": "newMinFunding",
         "type": "uint256"
       }
     ],
-    "name": "setMinStake",
+    "name": "setMinFunding",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -513,7 +513,7 @@
         "type": "address"
       }
     ],
-    "name": "stake",
+    "name": "fund_state_chain_account",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

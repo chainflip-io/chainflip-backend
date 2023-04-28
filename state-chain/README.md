@@ -28,7 +28,7 @@ cargo build --release
 
 ### Chain Specification Docs
 
-Docs on custom chain specifications can be found at https://docs.substrate.io/main-docs/build/chain-spec/.
+Docs on custom chain specifications can be found at <https://docs.substrate.io/main-docs/build/chain-spec/>.
 
 In order to create a custom chain specification use `./target/release/chainflip-node build-spec --help` to find out how.
 
@@ -60,7 +60,7 @@ process. After the project has been built, there are other ways to launch the no
 For local development you need to set the following env vars:
 
 ```bash
-export STAKE_MANAGER_ADDRESS="0x..."
+export STATE_CHAIN_GATEWAY_ADDRESS="0x..."
 export KEY_MANAGER_ADDRESS="0x..."
 export ETHEREUM_CHAIN_ID=4
 ```

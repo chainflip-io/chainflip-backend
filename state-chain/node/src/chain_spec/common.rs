@@ -2,19 +2,20 @@ use cf_primitives::AuthorityCount;
 pub use state_chain_runtime::constants::common::*;
 use state_chain_runtime::{chainflip::Offence, BlockNumber, FlipBalance};
 
-pub const GENESIS_STAKE_AMOUNT: FlipBalance = 5_000 * FLIPPERINOS_PER_FLIP;
-pub const MIN_STAKE: FlipBalance = 10 * FLIPPERINOS_PER_FLIP;
+pub const GENESIS_FUNDING_AMOUNT: FlipBalance = 5_000 * FLIPPERINOS_PER_FLIP;
+pub const MIN_FUNDING: FlipBalance = 10 * FLIPPERINOS_PER_FLIP;
 pub const ETH_PRIORITY_FEE_PERCENTILE: u8 = 50;
 pub const MIN_AUTHORITIES: AuthorityCount = 2;
 
-/// Percent of the epoch we are allowed to claim
-pub const PERCENT_OF_EPOCH_PERIOD_CLAIMABLE: u8 = 50;
+/// Percent of the epoch we are allowed to redeem
+pub const PERCENT_OF_EPOCH_PERIOD_REDEEMABLE: u8 = 50;
 
 /// Most Ethereum blocks are validated in around 12 seconds. This is a conservative
 /// time, in case things go wrong.
 pub const CONSERVATIVE_BLOCK_TIME_SECS: u64 = 20;
 
-pub const CLAIM_DELAY_BUFFER_SECS: u64 = CONSERVATIVE_BLOCK_TIME_SECS * eth::BLOCK_SAFETY_MARGIN;
+pub const REDEMPTION_DELAY_BUFFER_SECS: u64 =
+	CONSERVATIVE_BLOCK_TIME_SECS * eth::BLOCK_SAFETY_MARGIN;
 
 // Consider the equation (1 + x/1_000_000_000)^n = 1 + inf/100
 // where inf is the target yearly inflation (percent), n is the number of compundings that

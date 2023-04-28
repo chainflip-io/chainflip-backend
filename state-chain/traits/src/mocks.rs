@@ -16,14 +16,14 @@ pub mod epoch_info;
 pub mod eth_environment_provider;
 pub mod eth_replay_protection_provider;
 pub mod fee_payment;
+pub mod funding;
+pub mod funding_info;
 pub mod ingress_handler;
 pub mod key_provider;
 pub mod offence_reporting;
 pub mod qualify_node;
 pub mod reputation_resetter;
 pub mod signer_nomination;
-pub mod stake_transfer;
-pub mod staking_info;
 pub mod system_state_info;
 pub mod threshold_signer;
 pub mod time_source;
@@ -37,7 +37,7 @@ macro_rules! impl_mock_chainflip {
 			impl_mock_epoch_info,
 			mocks::{
 				account_role_registry::MockAccountRoleRegistry,
-				ensure_origin_mock::NeverFailingOriginCheck, staking_info::MockStakingInfo,
+				ensure_origin_mock::NeverFailingOriginCheck, funding_info::MockFundingInfo,
 				system_state_info::MockSystemStateInfo,
 			},
 			Chainflip,
@@ -60,7 +60,7 @@ macro_rules! impl_mock_chainflip {
 			type EpochInfo = MockEpochInfo;
 			type SystemState = MockSystemStateInfo;
 			type AccountRoleRegistry = MockAccountRoleRegistry;
-			type StakingInfo = MockStakingInfo<Self>;
+			type FundingInfo = MockFundingInfo<Self>;
 		}
 	};
 }

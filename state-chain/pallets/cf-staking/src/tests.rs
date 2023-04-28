@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, pallet, ActiveBidder, ClaimAmount, Error, EthereumAddress, FailedStakeAttempts,
-	Pallet, PendingClaims, WithdrawalAddresses,
+	mock::*, pallet, ActiveBidder, Error, EthereumAddress, FailedFundingAttempts, Pallet,
+	PendingRedemptions, RedemptionAmount, WithdrawalAddresses,
 };
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{mocks::system_state_info::MockSystemStateInfo, Bonding};
@@ -24,199 +24,228 @@ fn genesis_nodes_are_bidding_by_default() {
 }
 
 #[test]
-fn staked_amount_is_added_and_subtracted() {
+fn funded_amount_is_added_and_subtracted() {
 	new_test_ext().execute_with(|| {
-		const STAKE_A1: u128 = 45;
-		const STAKE_A2: u128 = 21;
-		const CLAIM_A: u128 = 44;
-		const STAKE_B: u128 = 78;
-		const CLAIM_B: u128 = 78;
+		const AMOUNT_A1: u128 = 45;
+		const AMOUNT_A2: u128 = 21;
+		const REDEMPTION_A: u128 = 44;
+		const AMOUNT_B: u128 = 78;
+		const REDEMPTION_B: u128 = 78;
 
 		// Accounts don't exist yet.
 		assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
 		assert!(!frame_system::Pallet::<Test>::account_exists(&BOB));
 
-		// Dispatch a signed extrinsic to stake some FLIP.
-		assert_ok!(Staking::staked(
+		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
 			ALICE,
-			STAKE_A1,
+			AMOUNT_A1,
 			ETH_ZERO_ADDRESS,
 			TX_HASH,
 		));
 		// Read pallet storage and assert the balance was added.
-		assert_eq!(Flip::total_balance_of(&ALICE), STAKE_A1);
+		assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT_A1);
 
 		// Add some more
-		assert_ok!(Staking::staked(
+		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
 			ALICE,
-			STAKE_A2,
+			AMOUNT_A2,
 			ETH_ZERO_ADDRESS,
 			TX_HASH,
 		));
-		assert_ok!(Staking::staked(RuntimeOrigin::root(), BOB, STAKE_B, ETH_ZERO_ADDRESS, TX_HASH));
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			BOB,
+			AMOUNT_B,
+			ETH_ZERO_ADDRESS,
+			TX_HASH
+		));
 
 		// Both accounts should now be created.
 		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
 		assert!(frame_system::Pallet::<Test>::account_exists(&BOB));
 
 		// Check storage again.
-		assert_eq!(Flip::total_balance_of(&ALICE), STAKE_A1 + STAKE_A2);
-		assert_eq!(Flip::total_balance_of(&BOB), STAKE_B);
+		assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT_A1 + AMOUNT_A2);
+		assert_eq!(Flip::total_balance_of(&BOB), AMOUNT_B);
 
-		// Now claim some FLIP.
-		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), CLAIM_A.into(), ETH_DUMMY_ADDR));
-		assert_ok!(Staking::claim(RuntimeOrigin::signed(BOB), CLAIM_B.into(), ETH_DUMMY_ADDR));
+		// Now redeem some FLIP.
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			REDEMPTION_A.into(),
+			ETH_DUMMY_ADDR
+		));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(BOB),
+			REDEMPTION_B.into(),
+			ETH_DUMMY_ADDR
+		));
 
 		// Make sure it was subtracted.
-		assert_eq!(Flip::total_balance_of(&ALICE), STAKE_A1 + STAKE_A2 - CLAIM_A);
-		assert_eq!(Flip::total_balance_of(&BOB), STAKE_B - CLAIM_B);
+		assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT_A1 + AMOUNT_A2 - REDEMPTION_A);
+		assert_eq!(Flip::total_balance_of(&BOB), AMOUNT_B - REDEMPTION_B);
 
-		// Check the pending claims
-		assert!(PendingClaims::<Test>::get(ALICE).is_some());
-		assert!(PendingClaims::<Test>::get(BOB).is_some());
+		// Check the pending redemptions
+		assert!(PendingRedemptions::<Test>::get(ALICE).is_some());
+		assert!(PendingRedemptions::<Test>::get(BOB).is_some());
 
-		// Two broadcasts should have been initiated by the two claims.
+		// Two broadcasts should have been initiated by the two redemptions.
 		assert_eq!(MockBroadcaster::received_requests().len(), 2);
 
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Staking(crate::Event::Staked {
+			RuntimeEvent::Funding(crate::Event::Funded {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
-				stake_added: STAKE_A1,
-				total_stake: STAKE_A1
+				funds_added: AMOUNT_A1,
+				total_balance: AMOUNT_A1
 			}),
-			RuntimeEvent::Staking(crate::Event::Staked {
+			RuntimeEvent::Funding(crate::Event::Funded {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
-				stake_added: STAKE_A2,
-				total_stake: STAKE_A1 + STAKE_A2
+				funds_added: AMOUNT_A2,
+				total_balance: AMOUNT_A1 + AMOUNT_A2
 			}),
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: BOB }),
-			RuntimeEvent::Staking(crate::Event::Staked {
+			RuntimeEvent::Funding(crate::Event::Funded {
 				account_id: BOB,
 				tx_hash: TX_HASH,
-				stake_added: STAKE_B,
-				total_stake: STAKE_B
+				funds_added: AMOUNT_B,
+				total_balance: AMOUNT_B
 			})
 		);
 	});
 }
 
 #[test]
-fn claiming_unclaimable_is_err() {
+fn redeeming_unredeemable_is_err() {
 	new_test_ext().execute_with(|| {
-		const STAKE: u128 = 100;
+		const AMOUNT: u128 = 100;
 
-		// Claim FLIP before it is staked.
+		// Redeem FLIP before it is funded.
 		assert_noop!(
-			Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR),
-			Error::<Test>::InvalidClaim
+			Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR),
+			Error::<Test>::InvalidRedemption
 		);
 
 		// Make sure account balance hasn't been touched.
 		assert_eq!(Flip::total_balance_of(&ALICE), 0u128);
 
-		// Stake some FLIP.
-		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
+		// Add some funds.
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			ETH_ZERO_ADDRESS,
+			TX_HASH
+		));
 
-		// Try to, and fail, claim an amount that would leave the balance below the minimum stake
-		let excessive_claim = STAKE - MIN_STAKE + 1;
+		// Try to, and fail, redeem an amount that would leave the balance below the minimum.
+		let excessive_redemption = AMOUNT - MIN_FUNDING + 1;
 		assert_noop!(
-			Staking::claim(RuntimeOrigin::signed(ALICE), excessive_claim.into(), ETH_DUMMY_ADDR),
-			Error::<Test>::BelowMinimumStake
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				excessive_redemption.into(),
+				ETH_DUMMY_ADDR
+			),
+			Error::<Test>::BelowMinimumFunding
 		);
 
-		// Claim FLIP from another account.
+		// Redeem FLIP from another account.
 		assert_noop!(
-			Staking::claim(RuntimeOrigin::signed(BOB), STAKE.into(), ETH_DUMMY_ADDR),
-			Error::<Test>::InvalidClaim
+			Funding::redeem(RuntimeOrigin::signed(BOB), AMOUNT.into(), ETH_DUMMY_ADDR),
+			Error::<Test>::InvalidRedemption
 		);
 
 		// Make sure storage hasn't been touched.
-		assert_eq!(Flip::total_balance_of(&ALICE), STAKE);
+		assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT);
 
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Staking(crate::Event::Staked {
+			RuntimeEvent::Funding(crate::Event::Funded {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
-				stake_added: STAKE,
-				total_stake: STAKE
+				funds_added: AMOUNT,
+				total_balance: AMOUNT
 			})
 		);
 	});
 }
 
 #[test]
-fn cannot_double_claim() {
+fn cannot_double_redeem() {
 	new_test_ext().execute_with(|| {
-		let (stake_a1, stake_a2) = (45u128, 21u128);
+		let (amount_a1, amount_a2) = (45u128, 21u128);
 
-		// Stake some FLIP.
-		assert_ok!(Staking::staked(
+		// Add some funds.
+		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
 			ALICE,
-			stake_a1 + stake_a2,
+			amount_a1 + amount_a2,
 			ETH_ZERO_ADDRESS,
 			TX_HASH
 		));
 
-		// Claim a portion.
-		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), stake_a1.into(), ETH_DUMMY_ADDR));
+		// Redeem a portion.
+		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), amount_a1.into(), ETH_DUMMY_ADDR));
 
-		// Claiming the rest should not be possible yet.
+		// Redeeming the rest should not be possible yet.
 		assert_noop!(
-			Staking::claim(RuntimeOrigin::signed(ALICE), stake_a1.into(), ETH_DUMMY_ADDR),
-			<Error<Test>>::PendingClaim
+			Funding::redeem(RuntimeOrigin::signed(ALICE), amount_a1.into(), ETH_DUMMY_ADDR),
+			<Error<Test>>::PendingRedemption
 		);
 
-		assert_ok!(Staking::claimed(RuntimeOrigin::root(), ALICE, stake_a1, TX_HASH));
-		assert!(PendingClaims::<Test>::get(&ALICE).is_none());
+		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, amount_a1, TX_HASH));
+		assert!(PendingRedemptions::<Test>::get(&ALICE).is_none());
 
-		// Should now be able to claim the rest.
-		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), stake_a2.into(), ETH_DUMMY_ADDR));
+		// Should now be able to redeem the rest.
+		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), amount_a2.into(), ETH_DUMMY_ADDR));
 
-		assert_ok!(Staking::claimed(RuntimeOrigin::root(), ALICE, stake_a2, TX_HASH));
-		assert!(PendingClaims::<Test>::get(&ALICE).is_none());
+		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, amount_a2, TX_HASH));
+		assert!(PendingRedemptions::<Test>::get(&ALICE).is_none());
 
-		// Remaining stake should be zero
+		// Remaining amount should be zero
 		assert_eq!(Flip::total_balance_of(&ALICE), 0u128);
 	});
 }
 
 #[test]
-fn claim_cannot_occur_without_staking_first() {
+fn redemption_cannot_occur_without_funding_first() {
 	new_test_ext().execute_with(|| {
-		const STAKE: u128 = 45;
+		const AMOUNT: u128 = 45;
 
 		// Account doesn't exist yet.
 		assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
 
-		// Stake some FLIP.
-		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
+		// Add some funds.
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			ETH_ZERO_ADDRESS,
+			TX_HASH
+		));
 
-		// The act of staking creates the account.
+		// The act of funding creates the account.
 		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
 
-		// Claim it.
-		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR));
+		// Redeem it.
+		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR));
 
-		// Claim should kick off a broadcast request.
+		// Redeem should kick off a broadcast request.
 		assert_eq!(MockBroadcaster::received_requests().len(), 1);
 
-		// Invalid Claimed Event from Ethereum: wrong account.
+		// Invalid Redeemed Event from Ethereum: wrong account.
 		assert_noop!(
-			Staking::claimed(RuntimeOrigin::root(), BOB, STAKE, TX_HASH),
-			<Error<Test>>::NoPendingClaim
+			Funding::redeemed(RuntimeOrigin::root(), BOB, AMOUNT, TX_HASH),
+			<Error<Test>>::NoPendingRedemption
 		);
 
-		// Valid Claimed Event from Ethereum.
-		assert_ok!(Staking::claimed(RuntimeOrigin::root(), ALICE, STAKE, TX_HASH));
+		// Valid Redeemed Event from Ethereum.
+		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, AMOUNT, TX_HASH));
 
 		// The account balance is now zero, it should have been reaped.
 		assert!(!frame_system::Pallet::<Test>::account_exists(&ALICE));
@@ -224,63 +253,69 @@ fn claim_cannot_occur_without_staking_first() {
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Staking(crate::Event::Staked {
+			RuntimeEvent::Funding(crate::Event::Funded {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
-				stake_added: STAKE,
-				total_stake: STAKE
+				funds_added: AMOUNT,
+				total_balance: AMOUNT
 			}),
-			RuntimeEvent::Staking(crate::Event::ClaimRequested {
+			RuntimeEvent::Funding(crate::Event::RedemptionRequested {
 				account_id: ALICE,
-				amount: STAKE,
+				amount: AMOUNT,
 				broadcast_id: 0,
 				expiry_time: 10,
 			}),
 			RuntimeEvent::System(frame_system::Event::KilledAccount { account: ALICE }),
-			RuntimeEvent::Staking(crate::Event::ClaimSettled(ALICE, STAKE))
+			RuntimeEvent::Funding(crate::Event::RedemptionSettled(ALICE, AMOUNT))
 		);
 	});
 }
 
 #[test]
-fn cannot_claim_bond() {
+fn cannot_redeem_bond() {
 	new_test_ext().execute_with(|| {
-		const STAKE: u128 = 200;
+		const AMOUNT: u128 = 200;
 		const BOND: u128 = 102;
 		MockEpochInfo::set_bond(BOND);
 		MockEpochInfo::add_authorities(ALICE);
 
-		// Alice and Bob stake the same amount.
-		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
-		assert_ok!(Staking::staked(RuntimeOrigin::root(), BOB, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
+		// Alice and Bob fund the same amount.
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			ETH_ZERO_ADDRESS,
+			TX_HASH
+		));
+		assert_ok!(Funding::funded(RuntimeOrigin::root(), BOB, AMOUNT, ETH_ZERO_ADDRESS, TX_HASH));
 
 		// Alice becomes an authority
 		Bonder::<Test>::update_bond(&ALICE, BOND);
 
 		// Bob can withdraw all, but not Alice.
-		assert_ok!(Staking::claim(RuntimeOrigin::signed(BOB), STAKE.into(), ETH_DUMMY_ADDR));
+		assert_ok!(Funding::redeem(RuntimeOrigin::signed(BOB), AMOUNT.into(), ETH_DUMMY_ADDR));
 		assert_noop!(
-			Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR),
+			Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR),
 			FlipError::InsufficientLiquidity
 		);
 
 		// Alice *can* withdraw 100
-		assert_ok!(Staking::claim(
+		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
-			(STAKE - BOND).into(),
+			(AMOUNT - BOND).into(),
 			ETH_DUMMY_ADDR
 		));
 
-		// Even if she claims, the remaining 100 are blocked
-		assert_ok!(Staking::claimed(RuntimeOrigin::root(), ALICE, STAKE - BOND, TX_HASH));
+		// Even if she redeems, the remaining 100 are blocked
+		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, AMOUNT - BOND, TX_HASH));
 		assert_noop!(
-			Staking::claim(RuntimeOrigin::signed(ALICE), 1.into(), ETH_DUMMY_ADDR),
+			Funding::redeem(RuntimeOrigin::signed(ALICE), 1.into(), ETH_DUMMY_ADDR),
 			FlipError::InsufficientLiquidity
 		);
 
-		// Once she is no longer bonded, Alice can claim her stake.
+		// Once she is no longer bonded, Alice can redeem her funds.
 		Bonder::<Test>::update_bond(&ALICE, 0u128);
-		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), BOND.into(), ETH_DUMMY_ADDR));
+		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), BOND.into(), ETH_DUMMY_ADDR));
 	});
 }
 
@@ -288,115 +323,137 @@ fn cannot_claim_bond() {
 fn test_stop_bidding() {
 	new_test_ext().execute_with(|| {
 		MockEpochInfo::add_authorities(ALICE);
-		const STAKE: u128 = 100;
+		const AMOUNT: u128 = 100;
 
-		// Need to be staked in order to stop or start bidding.
+		// Need to be funded in order to stop or start bidding.
 		assert_noop!(
-			Staking::stop_bidding(RuntimeOrigin::signed(ALICE)),
+			Funding::stop_bidding(RuntimeOrigin::signed(ALICE)),
 			<Error<Test>>::UnknownAccount
 		);
 		assert_noop!(
-			Staking::start_bidding(RuntimeOrigin::signed(ALICE)),
+			Funding::start_bidding(RuntimeOrigin::signed(ALICE)),
 			<Error<Test>>::UnknownAccount
 		);
 
-		// Try again with some stake, should succeed this time.
-		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
+		// Try again with some funds, should succeed this time.
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			ETH_ZERO_ADDRESS,
+			TX_HASH
+		));
 
-		assert!(!ActiveBidder::<Test>::try_get(ALICE).expect("staking adds bidder status"));
+		assert!(!ActiveBidder::<Test>::try_get(ALICE).expect("funding adds bidder status"));
 
 		assert_noop!(
-			Staking::stop_bidding(RuntimeOrigin::signed(ALICE)),
+			Funding::stop_bidding(RuntimeOrigin::signed(ALICE)),
 			<Error<Test>>::AlreadyNotBidding
 		);
 
-		assert_ok!(Staking::start_bidding(RuntimeOrigin::signed(ALICE)));
+		assert_ok!(Funding::start_bidding(RuntimeOrigin::signed(ALICE)));
 		assert!(ActiveBidder::<Test>::get(ALICE));
 
 		assert_noop!(
-			Staking::start_bidding(RuntimeOrigin::signed(ALICE)),
+			Funding::start_bidding(RuntimeOrigin::signed(ALICE)),
 			<Error<Test>>::AlreadyBidding
 		);
 
 		MockEpochInfo::set_is_auction_phase(true);
 		assert_noop!(
-			Staking::stop_bidding(RuntimeOrigin::signed(ALICE)),
+			Funding::stop_bidding(RuntimeOrigin::signed(ALICE)),
 			<Error<Test>>::AuctionPhase
 		);
 		assert!(ActiveBidder::<Test>::get(ALICE));
 
 		// Can stop bidding if outside of auction phase
 		MockEpochInfo::set_is_auction_phase(false);
-		assert_ok!(Staking::stop_bidding(RuntimeOrigin::signed(ALICE)));
+		assert_ok!(Funding::stop_bidding(RuntimeOrigin::signed(ALICE)));
 		assert!(!ActiveBidder::<Test>::get(ALICE));
 
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Staking(crate::Event::Staked {
+			RuntimeEvent::Funding(crate::Event::Funded {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
-				stake_added: STAKE,
-				total_stake: STAKE
+				funds_added: AMOUNT,
+				total_balance: AMOUNT
 			}),
-			RuntimeEvent::Staking(crate::Event::StartedBidding { account_id: ALICE }),
-			RuntimeEvent::Staking(crate::Event::StoppedBidding { account_id: ALICE })
+			RuntimeEvent::Funding(crate::Event::StartedBidding { account_id: ALICE }),
+			RuntimeEvent::Funding(crate::Event::StoppedBidding { account_id: ALICE })
 		);
 	});
 }
 
 #[test]
-fn can_only_claim_during_auction_if_not_bidding() {
+fn can_only_redeem_during_auction_if_not_bidding() {
 	new_test_ext().execute_with(|| {
-		const STAKE: u128 = 45;
+		const AMOUNT: u128 = 45;
 		MockEpochInfo::set_is_auction_phase(true);
 
-		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
-		assert_ok!(Staking::start_bidding(RuntimeOrigin::signed(ALICE)));
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			ETH_ZERO_ADDRESS,
+			TX_HASH
+		));
+		assert_ok!(Funding::start_bidding(RuntimeOrigin::signed(ALICE)));
 		assert!(ActiveBidder::<Test>::get(ALICE));
 
-		// Claiming is not allowed because Alice is bidding in the auction phase.
+		// Redeeming is not allowed because Alice is bidding in the auction phase.
 		assert_noop!(
-			Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR),
+			Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR),
 			<Error<Test>>::AuctionPhase
 		);
 
 		// Stop bidding for Alice (must be done outside of the auction phase)
 		MockEpochInfo::set_is_auction_phase(false);
-		assert_ok!(Staking::stop_bidding(RuntimeOrigin::signed(ALICE)));
+		assert_ok!(Funding::stop_bidding(RuntimeOrigin::signed(ALICE)));
 		assert!(!ActiveBidder::<Test>::get(ALICE));
 
-		// Alice should be able to claim while in the auction phase because she is not bidding
+		// Alice should be able to redeem while in the auction phase because she is not bidding
 		MockEpochInfo::set_is_auction_phase(true);
-		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR),);
+		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR),);
 	});
 }
 
 #[test]
-fn test_claim_all() {
+fn test_redeem_all() {
 	new_test_ext().execute_with(|| {
-		const STAKE: u128 = 100;
+		const AMOUNT: u128 = 100;
 		const BOND: u128 = 55;
 
-		// Stake some FLIP.
-		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
+		// Add some funds.
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			ETH_ZERO_ADDRESS,
+			TX_HASH
+		));
 
 		// Alice becomes an authority.
 		Bonder::<Test>::update_bond(&ALICE, BOND);
 
-		// Claim all available funds.
-		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), ClaimAmount::Max, ETH_DUMMY_ADDR));
+		// Redeem all available funds.
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			RedemptionAmount::Max,
+			ETH_DUMMY_ADDR
+		));
 		assert_eq!(Flip::total_balance_of(&ALICE), BOND);
 
-		// We should have a claim for the full staked amount minus the bond.
+		// We should have a redemption for the full funded amount minus the bond.
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Staking(crate::Event::Staked {
+			RuntimeEvent::Funding(crate::Event::Funded {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
-				stake_added: STAKE,
-				total_stake: STAKE
+				funds_added: AMOUNT,
+				total_balance: AMOUNT
 			})
 		);
 	});
@@ -405,138 +462,150 @@ fn test_claim_all() {
 #[test]
 fn test_check_withdrawal_address() {
 	new_test_ext().execute_with(|| {
-		const STAKE: u128 = 45;
+		const AMOUNT: u128 = 45;
 		const DIFFERENT_ETH_ADDR: EthereumAddress = [45u8; 20];
 		// Case: No account and no address provided
-		assert!(Pallet::<Test>::check_withdrawal_address(&ALICE, ETH_ZERO_ADDRESS, STAKE).is_ok());
+		assert!(Pallet::<Test>::check_withdrawal_address(&ALICE, ETH_ZERO_ADDRESS, AMOUNT).is_ok());
 		assert!(!WithdrawalAddresses::<Test>::contains_key(ALICE));
-		assert!(!FailedStakeAttempts::<Test>::contains_key(ALICE));
+		assert!(!FailedFundingAttempts::<Test>::contains_key(ALICE));
 		// Case: No account and provided withdrawal address
-		assert_ok!(Pallet::<Test>::check_withdrawal_address(&ALICE, ETH_DUMMY_ADDR, STAKE));
+		assert_ok!(Pallet::<Test>::check_withdrawal_address(&ALICE, ETH_DUMMY_ADDR, AMOUNT));
 		let withdrawal_address = WithdrawalAddresses::<Test>::get(ALICE);
 		assert!(withdrawal_address.is_some());
 		assert_eq!(withdrawal_address.unwrap(), ETH_DUMMY_ADDR);
-		// Case: User has already staked with a different address
-		Pallet::<Test>::stake_account(&ALICE, STAKE);
+		// Case: User has already funded with a different address
+		Pallet::<Test>::add_funds_to_account(&ALICE, AMOUNT);
 		assert!(
-			Pallet::<Test>::check_withdrawal_address(&ALICE, DIFFERENT_ETH_ADDR, STAKE).is_err()
+			Pallet::<Test>::check_withdrawal_address(&ALICE, DIFFERENT_ETH_ADDR, AMOUNT).is_err()
 		);
-		let stake_attempts = FailedStakeAttempts::<Test>::get(ALICE);
-		assert_eq!(stake_attempts.len(), 1);
-		let stake_attempt = stake_attempts.first();
-		assert_eq!(stake_attempt.unwrap().0, DIFFERENT_ETH_ADDR);
-		assert_eq!(stake_attempt.unwrap().1, STAKE);
+		let funding_attempts = FailedFundingAttempts::<Test>::get(ALICE);
+		assert_eq!(funding_attempts.len(), 1);
+		let funding_attempt = funding_attempts.first();
+		assert_eq!(funding_attempt.unwrap().0, DIFFERENT_ETH_ADDR);
+		assert_eq!(funding_attempt.unwrap().1, AMOUNT);
 		for e in System::events().into_iter().map(|e| e.event) {
 			println!("{e:?}");
 		}
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Staking(crate::Event::FailedStakeAttempt {
+			RuntimeEvent::Funding(crate::Event::FailedFundingAttempt {
 				account_id: ALICE,
 				withdrawal_address: DIFFERENT_ETH_ADDR,
-				amount: STAKE
+				amount: AMOUNT
 			})
 		);
-		// Case: User stakes again with the same address
-		assert!(Pallet::<Test>::check_withdrawal_address(&ALICE, ETH_DUMMY_ADDR, STAKE).is_ok());
+		// Case: User funds again with the same address
+		assert!(Pallet::<Test>::check_withdrawal_address(&ALICE, ETH_DUMMY_ADDR, AMOUNT).is_ok());
 	});
 }
 
 #[test]
-fn claim_with_withdrawal_address() {
+fn redeem_with_withdrawal_address() {
 	new_test_ext().execute_with(|| {
-		const STAKE: u128 = 45;
+		const AMOUNT: u128 = 45;
 		const WRONG_ETH_ADDR: EthereumAddress = [45u8; 20];
-		// Stake some FLIP.
-		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_DUMMY_ADDR, TX_HASH));
-		// Claim it - expect to fail because the address is different
+		// Add some funds.
+		assert_ok!(Funding::funded(RuntimeOrigin::root(), ALICE, AMOUNT, ETH_DUMMY_ADDR, TX_HASH));
+		// Redeem it - expect to fail because the address is different
 		assert_noop!(
-			Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), WRONG_ETH_ADDR),
+			Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), WRONG_ETH_ADDR),
 			<Error<Test>>::WithdrawalAddressRestricted
 		);
 		// Try it again with the right address - expect to succeed
-		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR));
+		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR));
 	});
 }
 
 #[test]
-fn cannot_claim_to_zero_address() {
+fn cannot_redeem_to_zero_address() {
 	new_test_ext().execute_with(|| {
-		const STAKE: u128 = 45;
+		const AMOUNT: u128 = 45;
 		const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
-		// Stake some FLIP, we use the zero address here to denote that we should be
-		// able to claim to any address in future
-		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
-		// Claim it - expect to fail because the address is the zero address
+		// Add some funds, we use the zero address here to denote that we should be
+		// able to redeem to any address in future
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			ETH_ZERO_ADDRESS,
+			TX_HASH
+		));
+		// Redeem it - expect to fail because the address is the zero address
 		assert_noop!(
-			Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_ZERO_ADDRESS),
-			<Error<Test>>::InvalidClaim
+			Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_ZERO_ADDRESS),
+			<Error<Test>>::InvalidRedemption
 		);
 		// Try it again with a non-zero address - expect to succeed
-		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR));
+		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR));
 	});
 }
 
 #[test]
-fn claim_expiry_removes_claim() {
+fn redemption_expiry_removes_redemption() {
 	new_test_ext().execute_with(|| {
-		const STAKE: u128 = 45;
+		const AMOUNT: u128 = 45;
 
-		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_DUMMY_ADDR, TX_HASH));
+		assert_ok!(Funding::funded(RuntimeOrigin::root(), ALICE, AMOUNT, ETH_DUMMY_ADDR, TX_HASH));
 
-		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR));
+		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR));
 		assert_noop!(
-			Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR),
-			Error::<Test>::PendingClaim
+			Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR),
+			Error::<Test>::PendingRedemption
 		);
 
-		assert_ok!(Staking::claim_expired(RuntimeOrigin::root(), ALICE, Default::default()));
+		assert_ok!(Funding::redemption_expired(RuntimeOrigin::root(), ALICE, Default::default()));
 
 		assert_noop!(
-			Staking::claimed(RuntimeOrigin::root(), ALICE, STAKE, TX_HASH),
-			Error::<Test>::NoPendingClaim
+			Funding::redeemed(RuntimeOrigin::root(), ALICE, AMOUNT, TX_HASH),
+			Error::<Test>::NoPendingRedemption
 		);
 
-		// Success, can request claim again since the last one expired.
-		assert_ok!(Staking::claim(RuntimeOrigin::signed(ALICE), STAKE.into(), ETH_DUMMY_ADDR));
+		// Success, can request redemption again since the last one expired.
+		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR));
 	});
 }
 
 #[test]
-fn stake_with_provided_withdrawal_only_on_first_attempt() {
-	// Check if the branching of the stake process is working probably
+fn fund_with_provided_withdrawal_only_on_first_attempt() {
+	// Check if the branching of the funding process is working probably
 	new_test_ext().execute_with(|| {
-		const STAKE: u128 = 45;
-		// Stake some FLIP with no withdrawal address
-		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH));
-		// Stake some FLIP again with an provided withdrawal address
-		assert_ok!(Staking::staked(RuntimeOrigin::root(), ALICE, STAKE, ETH_DUMMY_ADDR, TX_HASH));
-		// Expect an failed stake event to be fired but no stake event
+		const AMOUNT: u128 = 45;
+		// Add some funds with no withdrawal address
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			ETH_ZERO_ADDRESS,
+			TX_HASH
+		));
+		// Add some funds again with an provided withdrawal address
+		assert_ok!(Funding::funded(RuntimeOrigin::root(), ALICE, AMOUNT, ETH_DUMMY_ADDR, TX_HASH));
+		// Expect an failed funding event to be fired but no funding event
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Staking(crate::Event::Staked {
+			RuntimeEvent::Funding(crate::Event::Funded {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
-				stake_added: STAKE,
-				total_stake: STAKE
+				funds_added: AMOUNT,
+				total_balance: AMOUNT
 			}),
-			RuntimeEvent::Staking(crate::Event::FailedStakeAttempt {
+			RuntimeEvent::Funding(crate::Event::FailedFundingAttempt {
 				account_id: ALICE,
 				withdrawal_address: ETH_DUMMY_ADDR,
-				amount: STAKE
+				amount: AMOUNT
 			})
 		);
 	});
 }
 
 #[test]
-fn maintenance_mode_blocks_claim_requests() {
+fn maintenance_mode_blocks_redemption_requests() {
 	new_test_ext().execute_with(|| {
 		MockSystemStateInfo::set_maintenance(true);
 		assert_noop!(
-			Staking::claim(RuntimeOrigin::signed(ALICE), ClaimAmount::Max, ETH_DUMMY_ADDR),
+			Funding::redeem(RuntimeOrigin::signed(ALICE), RedemptionAmount::Max, ETH_DUMMY_ADDR),
 			DispatchError::Other("We are in maintenance!")
 		);
 		MockSystemStateInfo::set_maintenance(false);

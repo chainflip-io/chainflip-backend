@@ -12,7 +12,7 @@ pub const CHAIN_TYPE: ChainType = ChainType::Live;
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("8437f6b8BCACb632cC4dD627bA3a8E6E3326A418"),
 	eth_usdc_address: hex_literal::hex!("07865c6e87b9f70255377e024ace6630c1eaa37f"),
-	stake_manager_address: hex_literal::hex!("d81663aeC346006d890b8C9182dC354BE9663F19"),
+	state_chain_gateway_address: hex_literal::hex!("d81663aeC346006d890b8C9182dC354BE9663F19"),
 	key_manager_address: hex_literal::hex!("177c941BA853e731c66758675628B4Dc64Aa186A"),
 	eth_vault_address: hex_literal::hex!("83cB2d501E90792Ee3D5e049F43805126a7684c6"),
 	ethereum_chain_id: CHAIN_ID_GOERLI,
@@ -20,8 +20,8 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		"0351267cb549f545f03322391351c2e101673db664800baa433e20ba90972ec616"
 	),
 	ethereum_deployment_block: 8304200u64,
-	genesis_stake_amount: GENESIS_STAKE_AMOUNT,
-	min_stake: MIN_STAKE,
+	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
+	min_funding: MIN_FUNDING,
 	eth_block_safety_margin: eth::BLOCK_SAFETY_MARGIN as u32,
 	max_ceremony_stage_duration: 300,
 	dot_genesis_hash: H256(hex_literal::hex!(

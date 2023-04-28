@@ -2,8 +2,8 @@
 
 use super::*;
 
+use pallet_cf_funding::Config as FundingConfig;
 use pallet_cf_reputation::Config as ReputationConfig;
-use pallet_cf_staking::Config as StakingConfig;
 use pallet_session::Config as SessionConfig;
 
 use cf_traits::{AccountRoleRegistry, AuctionOutcome, VaultStatus};
@@ -26,9 +26,9 @@ mod p2p_crypto {
 #[storage_alias]
 type LastSeenSlot = StorageValue<AuraSlotExtraction, u64>;
 
-pub trait RuntimeConfig: Config + StakingConfig + SessionConfig + ReputationConfig {}
+pub trait RuntimeConfig: Config + FundingConfig + SessionConfig + ReputationConfig {}
 
-impl<T: Config + StakingConfig + SessionConfig + ReputationConfig> RuntimeConfig for T {}
+impl<T: Config + FundingConfig + SessionConfig + ReputationConfig> RuntimeConfig for T {}
 
 pub fn bidder_set<T: Chainflip, Id: From<<T as frame_system::Config>::AccountId>, I: Into<u32>>(
 	size: I,
@@ -39,21 +39,21 @@ pub fn bidder_set<T: Chainflip, Id: From<<T as frame_system::Config>::AccountId>
 		.map(move |i| account::<<T as frame_system::Config>::AccountId>("bidder", i, set_id).into())
 }
 
-/// Initialises bidders for the auction by staking each one, registering session keys and peer ids
+/// Initialises bidders for the auction by funding each one, registering session keys and peer ids
 /// and submitting heartbeats.
-pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_staked: u128) {
+pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_funded: u128) {
 	for bidder in bidder_set::<T, <T as frame_system::Config>::AccountId, _>(n, set_id) {
 		let bidder_origin: OriginFor<T> = RawOrigin::Signed(bidder.clone()).into();
-		assert_ok!(pallet_cf_staking::Pallet::<T>::staked(
+		assert_ok!(pallet_cf_funding::Pallet::<T>::funded(
 			T::EnsureWitnessed::successful_origin(),
 			bidder.clone(),
-			(flip_staked * 10u128.pow(18)).unique_saturated_into(),
-			pallet_cf_staking::ETH_ZERO_ADDRESS,
+			(flip_funded * 10u128.pow(18)).unique_saturated_into(),
+			pallet_cf_funding::ETH_ZERO_ADDRESS,
 			Default::default()
 		));
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&bidder);
 		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&bidder));
-		assert_ok!(pallet_cf_staking::Pallet::<T>::start_bidding(bidder_origin.clone(),));
+		assert_ok!(pallet_cf_funding::Pallet::<T>::start_bidding(bidder_origin.clone(),));
 
 		let public_key: p2p_crypto::Public = RuntimeAppPublic::generate_pair(None);
 		let signature = public_key.sign(&bidder.encode()).unwrap();

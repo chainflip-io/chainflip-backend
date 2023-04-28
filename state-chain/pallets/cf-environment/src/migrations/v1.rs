@@ -12,7 +12,8 @@ pub mod old {
 		StorageMap<Pallet<T>, Blake2_128Concat, Asset, EthereumAddress, ValueQuery>;
 
 	#[frame_support::storage_alias]
-	pub type StakeManagerAddress<T: Config> = StorageValue<Pallet<T>, EthereumAddress, ValueQuery>;
+	pub type StateChainGatewayAddress<T: Config> =
+		StorageValue<Pallet<T>, EthereumAddress, ValueQuery>;
 
 	#[frame_support::storage_alias]
 	pub type KeyManagerAddress<T: Config> = StorageValue<Pallet<T>, EthereumAddress, ValueQuery>;
@@ -77,7 +78,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		for (k, v) in old::SupportedEthAssets::<T>::iter().drain() {
 			EthereumSupportedAssets::<T>::insert(k, v)
 		}
-		EthereumStakeManagerAddress::<T>::put(old::StakeManagerAddress::<T>::take());
+		EthereumStateChainGatewayAddress::<T>::put(old::StateChainGatewayAddress::<T>::take());
 		EthereumKeyManagerAddress::<T>::put(old::KeyManagerAddress::<T>::take());
 		EthereumVaultAddress::<T>::put(old::EthVaultAddress::<T>::take());
 		EthereumSignatureNonce::<T>::put(old::GlobalSignatureNonce::<T>::take());
@@ -98,7 +99,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			old::SupportedEthAssets::<T>::iter_keys().collect::<sp_std::vec::Vec<_>>().len() as u32 >
 				0
 		);
-		assert!(old::StakeManagerAddress::<T>::exists());
+		assert!(old::StateChainGatewayAddress::<T>::exists());
 		assert!(old::KeyManagerAddress::<T>::exists());
 		assert!(old::EthVaultAddress::<T>::exists());
 		assert!(old::GlobalSignatureNonce::<T>::exists());
@@ -118,7 +119,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			old::SupportedEthAssets::<T>::iter_keys().collect::<sp_std::vec::Vec<_>>().len() as u32 ==
 				0
 		);
-		assert!(!old::StakeManagerAddress::<T>::exists());
+		assert!(!old::StateChainGatewayAddress::<T>::exists());
 		assert!(!old::KeyManagerAddress::<T>::exists());
 		assert!(!old::EthVaultAddress::<T>::exists());
 		assert!(!old::GlobalSignatureNonce::<T>::exists());
@@ -128,7 +129,7 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 			EthereumSupportedAssets::<T>::iter_keys().collect::<sp_std::vec::Vec<_>>().len() as u32 >
 				0
 		);
-		assert!(EthereumStakeManagerAddress::<T>::exists());
+		assert!(EthereumStateChainGatewayAddress::<T>::exists());
 		assert!(EthereumKeyManagerAddress::<T>::exists());
 		assert!(EthereumVaultAddress::<T>::exists());
 		assert!(EthereumSignatureNonce::<T>::exists());

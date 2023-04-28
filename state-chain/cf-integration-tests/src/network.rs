@@ -12,7 +12,7 @@ use cf_traits::{AccountRoleRegistry, EpochInfo};
 use chainflip_node::test_account_from_seed;
 use codec::Encode;
 use frame_support::traits::{OnFinalize, OnIdle};
-use pallet_cf_staking::{ClaimAmount, MinimumStake};
+use pallet_cf_funding::{MinimumFunding, RedemptionAmount};
 use pallet_cf_validator::RotationPhase;
 use sp_std::collections::btree_set::BTreeSet;
 use state_chain_runtime::{
@@ -25,9 +25,9 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 // Events from ethereum contract
 #[derive(Debug, Clone)]
 pub enum ContractEvent {
-	Staked { node_id: NodeId, amount: FlipBalance, total: FlipBalance, epoch: EpochIndex },
+	Funded { node_id: NodeId, amount: FlipBalance, total: FlipBalance, epoch: EpochIndex },
 
-	Claimed { node_id: NodeId, amount: FlipBalance, epoch: EpochIndex },
+	Redeemed { node_id: NodeId, amount: FlipBalance, epoch: EpochIndex },
 }
 
 macro_rules! on_events {
@@ -41,45 +41,47 @@ macro_rules! on_events {
 	}
 }
 
-pub const NEW_STAKE_AMOUNT: FlipBalance = mock_runtime::MIN_STAKE + 1;
+pub const NEW_FUNDING_AMOUNT: FlipBalance = mock_runtime::MIN_FUNDING + 1;
 
-pub fn create_testnet_with_new_staker() -> (Network, AccountId32) {
+pub fn create_testnet_with_new_funder() -> (Network, AccountId32) {
 	let (mut testnet, backup_nodes) = Network::create(1, &Validator::current_authorities());
 
 	let new_backup = backup_nodes.first().unwrap().clone();
 
-	testnet
-		.stake_manager_contract
-		.stake(new_backup.clone(), NEW_STAKE_AMOUNT, GENESIS_EPOCH);
-	// register the stake
+	testnet.state_chain_gateway_contract.fund_account(
+		new_backup.clone(),
+		NEW_FUNDING_AMOUNT,
+		GENESIS_EPOCH,
+	);
+	// register the funds
 	testnet.move_forward_blocks(1);
 
 	(testnet, new_backup)
 }
 
-// A staking contract
+// An SC Gateway contract
 #[derive(Default)]
-pub struct StakingContract {
-	// List of stakes
-	pub stakes: HashMap<NodeId, FlipBalance>,
+pub struct ScGatewayContract {
+	// List of balances
+	pub balances: HashMap<NodeId, FlipBalance>,
 	// Events to be processed
 	pub events: Vec<ContractEvent>,
 }
 
-impl StakingContract {
-	pub fn stake(&mut self, node_id: NodeId, amount: FlipBalance, epoch: EpochIndex) {
-		assert!(amount >= MinimumStake::<Runtime>::get());
-		let current_amount = self.stakes.get(&node_id).unwrap_or(&0);
+impl ScGatewayContract {
+	pub fn fund_account(&mut self, node_id: NodeId, amount: FlipBalance, epoch: EpochIndex) {
+		assert!(amount >= MinimumFunding::<Runtime>::get());
+		let current_amount = self.balances.get(&node_id).unwrap_or(&0);
 		let total = current_amount + amount;
-		self.stakes.insert(node_id.clone(), total);
+		self.balances.insert(node_id.clone(), total);
 
-		self.events.push(ContractEvent::Staked { node_id, amount, total, epoch });
+		self.events.push(ContractEvent::Funded { node_id, amount, total, epoch });
 	}
 
-	// We don't really care about the process of "registering" and then "executing" claim here.
-	// The only thing the SC cares about is the *execution* of the claim.
-	pub fn execute_claim(&mut self, node_id: NodeId, amount: FlipBalance, epoch: EpochIndex) {
-		self.events.push(ContractEvent::Claimed { node_id, amount, epoch });
+	// We don't really care about the process of "registering" and then "executing" redemption here.
+	// The only thing the SC cares about is the *execution* of the redemption.
+	pub fn execute_redemption(&mut self, node_id: NodeId, amount: FlipBalance, epoch: EpochIndex) {
+		self.events.push(ContractEvent::Redeemed { node_id, amount, epoch });
 	}
 
 	// Get events for this contract
@@ -97,11 +99,15 @@ pub struct Cli;
 
 impl Cli {
 	pub fn start_bidding(account: &NodeId) {
-		assert_ok!(Staking::start_bidding(RuntimeOrigin::signed(account.clone())));
+		assert_ok!(Funding::start_bidding(RuntimeOrigin::signed(account.clone())));
 	}
 
-	pub fn claim(account: &NodeId, amount: ClaimAmount<FlipBalance>, eth_address: EthereumAddress) {
-		assert_ok!(Staking::claim(RuntimeOrigin::signed(account.clone()), amount, eth_address));
+	pub fn redeem(
+		account: &NodeId,
+		amount: RedemptionAmount<FlipBalance>,
+		eth_address: EthereumAddress,
+	) {
+		assert_ok!(Funding::redeem(RuntimeOrigin::signed(account.clone()), amount, eth_address));
 	}
 
 	pub fn set_vanity_name(account: &NodeId, name: &str) {
@@ -156,11 +162,11 @@ impl Engine {
 	fn on_contract_event(&self, event: &ContractEvent) {
 		if self.state() == ChainflipAccountState::CurrentAuthority && self.live {
 			match event {
-				ContractEvent::Staked { node_id: validator_id, amount, epoch, .. } => {
+				ContractEvent::Funded { node_id: validator_id, amount, epoch, .. } => {
 					state_chain_runtime::Witnesser::witness_at_epoch(
 						RuntimeOrigin::signed(self.node_id.clone()),
 						Box::new(
-							pallet_cf_staking::Call::staked {
+							pallet_cf_funding::Call::funded {
 								account_id: validator_id.clone(),
 								amount: *amount,
 								withdrawal_address: ETH_ZERO_ADDRESS,
@@ -170,22 +176,22 @@ impl Engine {
 						),
 						*epoch,
 					)
-					.expect("should be able to witness stake for node");
+					.expect("should be able to witness event for node");
 				},
-				ContractEvent::Claimed { node_id, amount, epoch } => {
+				ContractEvent::Redeemed { node_id, amount, epoch } => {
 					state_chain_runtime::Witnesser::witness_at_epoch(
 						RuntimeOrigin::signed(self.node_id.clone()),
 						Box::new(
-							pallet_cf_staking::Call::claimed {
+							pallet_cf_funding::Call::redeemed {
 								account_id: node_id.clone(),
-								claimed_amount: *amount,
+								redeemed_amount: *amount,
 								tx_hash: TX_HASH,
 							}
 							.into(),
 						),
 						*epoch,
 					)
-					.expect("should be able to witness stake for node");
+					.expect("should be able to witness event for node");
 				},
 			}
 		}
@@ -328,7 +334,7 @@ impl Engine {
 				}
 			}
 
-			// Being staked we would be required to respond to keygen requests
+			// Being funded we would be required to respond to keygen requests
 			on_events!(
 				events,
 				RuntimeEvent::EthereumVault(
@@ -350,7 +356,7 @@ impl Engine {
 	}
 }
 
-/// Do this after staking.
+/// Do this after funding.
 pub(crate) fn setup_account_and_peer_mapping(node_id: &NodeId) {
 	setup_account(node_id);
 	setup_peer_mapping(node_id);
@@ -386,7 +392,7 @@ pub(crate) fn setup_peer_mapping(node_id: &NodeId) {
 #[derive(Default)]
 pub struct Network {
 	engines: HashMap<NodeId, Engine>,
-	pub stake_manager_contract: StakingContract,
+	pub state_chain_gateway_contract: ScGatewayContract,
 	last_event: usize,
 	node_counter: u32,
 
@@ -494,13 +500,13 @@ impl Network {
 				Weight::from_ref_time(1_000_000_000_000),
 			);
 
-			for event in self.stake_manager_contract.events() {
+			for event in self.state_chain_gateway_contract.events() {
 				for engine in self.engines.values() {
 					engine.on_contract_event(&event);
 				}
 			}
 
-			self.stake_manager_contract.clear();
+			self.state_chain_gateway_contract.clear();
 
 			let events = frame_system::Pallet::<Runtime>::events()
 				.into_iter()

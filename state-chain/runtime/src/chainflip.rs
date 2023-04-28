@@ -69,7 +69,7 @@ impl Chainflip for Runtime {
 	type EpochInfo = Validator;
 	type SystemState = pallet_cf_environment::SystemStateProvider<Runtime>;
 	type AccountRoleRegistry = AccountRoles;
-	type StakingInfo = Flip;
+	type FundingInfo = Flip;
 }
 
 struct BackupNodeEmissions;
@@ -80,7 +80,7 @@ impl RewardsDistribution for BackupNodeEmissions {
 
 	fn distribute() {
 		let backup_nodes =
-			Validator::highest_staked_qualified_backup_node_bids().collect::<Vec<_>>();
+			Validator::highest_funded_qualified_backup_node_bids().collect::<Vec<_>>();
 		if backup_nodes.is_empty() {
 			return
 		}
@@ -152,7 +152,8 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 			chain_id: Environment::ethereum_chain_id(),
 			contract: match signed_call {
 				EthereumApi::SetAggKeyWithAggKey(_) => Environment::key_manager_address().into(),
-				EthereumApi::RegisterClaim(_) => Environment::stake_manager_address().into(),
+				EthereumApi::RegisterRedemption(_) =>
+					Environment::state_chain_gateway_address().into(),
 				EthereumApi::UpdateFlipSupply(_) => Environment::token_address(Asset::Flip)
 					.expect("FLIP token address should exist")
 					.into(),

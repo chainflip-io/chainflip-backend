@@ -361,7 +361,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// **Can only be called via the Governance Origin or a Staked Party**
+		/// **Can only be called via the Governance Origin or a Funded Party**
 		///
 		/// Submit a call to be executed if the gov key has already committed to it.
 		///

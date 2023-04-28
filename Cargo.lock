@@ -829,7 +829,7 @@ dependencies = [
  "pallet-cf-lp",
  "pallet-cf-pools",
  "pallet-cf-reputation",
- "pallet-cf-staking",
+ "pallet-cf-funding",
  "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
@@ -1012,7 +1012,7 @@ dependencies = [
  "pallet-cf-governance",
  "pallet-cf-lp",
  "pallet-cf-pools",
- "pallet-cf-staking",
+ "pallet-cf-funding",
  "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
@@ -1096,7 +1096,7 @@ dependencies = [
  "pallet-cf-governance",
  "pallet-cf-ingress-egress",
  "pallet-cf-reputation",
- "pallet-cf-staking",
+ "pallet-cf-funding",
  "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
  "pallet-cf-validator",
@@ -5726,7 +5726,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-cf-staking"
+name = "pallet-cf-funding"
 version = "0.1.0"
 dependencies = [
  "cf-chains",
@@ -5827,7 +5827,7 @@ dependencies = [
  "log",
  "nanorand",
  "pallet-cf-reputation",
- "pallet-cf-staking",
+ "pallet-cf-funding",
  "pallet-cf-vaults",
  "pallet-session",
  "parity-scale-codec",
@@ -9828,7 +9828,7 @@ dependencies = [
  "pallet-cf-lp",
  "pallet-cf-pools",
  "pallet-cf-reputation",
- "pallet-cf-staking",
+ "pallet-cf-funding",
  "pallet-cf-swapping",
  "pallet-cf-threshold-signature",
  "pallet-cf-tokenholder-governance",
