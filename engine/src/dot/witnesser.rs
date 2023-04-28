@@ -30,7 +30,7 @@ use tracing::{debug, error, info, info_span, trace, Instrument};
 use crate::{
 	constants::{BLOCK_PULL_TIMEOUT_MULTIPLIER, DOT_AVERAGE_BLOCK_TIME_SECONDS},
 	multisig::PersistentKeyDB,
-	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
+	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
 	witnesser::{
 		block_head_stream_from::block_head_stream_from,
 		block_witnesser::{
@@ -257,7 +257,7 @@ pub async fn start<StateChainClient, DotRpc>(
 	db: Arc<PersistentKeyDB>,
 ) -> std::result::Result<(), anyhow::Error>
 where
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
 	start_epoch_process_runner(
@@ -293,7 +293,7 @@ impl HasBlockNumber for (H256, PolkadotBlockNumber, Vec<(Phase, EventWrapper)>) 
 #[async_trait]
 impl<StateChainClient, DotRpc> BlockWitnesser for DotBlockWitnesser<StateChainClient, DotRpc>
 where
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
 	type Chain = Polkadot;
@@ -320,8 +320,7 @@ where
 				address_monitor,
 			);
 
-		let _result = self
-			.state_chain_client
+		self.state_chain_client
 			.submit_signed_extrinsic(state_chain_runtime::RuntimeCall::Witnesser(
 				pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(state_chain_runtime::RuntimeCall::PolkadotChainTracking(
@@ -338,8 +337,7 @@ where
 			.await;
 
 		for call in vault_key_rotated_calls {
-			let _result = self
-				.state_chain_client
+			self.state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call,
 					epoch_index: self.epoch_index,
@@ -373,26 +371,25 @@ where
 						if monitored_signatures.contains(&sig.0) {
 							info!("Witnessing signature_accepted. signature: {sig:?}");
 
-							let _result =
-								self.state_chain_client
-									.submit_signed_extrinsic(
-										pallet_cf_witnesser::Call::witness_at_epoch {
-											call:
-												Box::new(
-													pallet_cf_broadcast::Call::<
-														_,
-														PolkadotInstance,
-													>::signature_accepted {
-														signature: sig.clone(),
-														signer_id: self.vault_account.clone(),
-														tx_fee,
-													}
-													.into(),
-												),
-											epoch_index: self.epoch_index,
-										},
-									)
-									.await;
+							self.state_chain_client
+								.submit_signed_extrinsic(
+									pallet_cf_witnesser::Call::witness_at_epoch {
+										call:
+											Box::new(
+												pallet_cf_broadcast::Call::<
+													_,
+													PolkadotInstance,
+												>::signature_accepted {
+													signature: sig.clone(),
+													signer_id: self.vault_account.clone(),
+													tx_fee,
+												}
+												.into(),
+											),
+										epoch_index: self.epoch_index,
+									},
+								)
+								.await;
 
 							monitored_signatures.remove(&sig.0);
 						}
@@ -407,8 +404,7 @@ where
 		}
 
 		if !ingress_witnesses.is_empty() {
-			let _result = self
-				.state_chain_client
+			self.state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(
 						pallet_cf_ingress_egress::Call::<_, PolkadotInstance>::do_ingress {
@@ -434,7 +430,7 @@ struct DotWitnesserGenerator<StateChainClient, DotRpc> {
 impl<StateChainClient, DotRpc> BlockWitnesserGenerator
 	for DotWitnesserGenerator<StateChainClient, DotRpc>
 where
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
 	type Witnesser = DotBlockWitnesser<StateChainClient, DotRpc>;

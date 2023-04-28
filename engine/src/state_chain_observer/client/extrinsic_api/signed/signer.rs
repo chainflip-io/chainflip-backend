@@ -37,15 +37,22 @@ where
 		current_block_number: state_chain_runtime::BlockNumber,
 		lifetime: state_chain_runtime::BlockNumber,
 		nonce: state_chain_runtime::Index,
-	) -> state_chain_runtime::UncheckedExtrinsic {
+	) -> (
+		state_chain_runtime::UncheckedExtrinsic,
+		std::ops::RangeTo<state_chain_runtime::BlockNumber>,
+	) {
 		assert!(lifetime <= state_chain_runtime::BlockHashCount::get());
+
+		let era = Era::mortal(lifetime as u64, current_block_number as u64);
+
+		let lifetime = ..era.death(current_block_number as u64) as state_chain_runtime::BlockNumber;
 
 		let extra: state_chain_runtime::SignedExtra = (
 			frame_system::CheckNonZeroSender::new(),
 			frame_system::CheckSpecVersion::new(),
 			frame_system::CheckTxVersion::new(),
 			frame_system::CheckGenesis::new(),
-			frame_system::CheckEra::from(Era::mortal(lifetime as u64, current_block_number as u64)),
+			frame_system::CheckEra::from(era),
 			frame_system::CheckNonce::from(nonce),
 			frame_system::CheckWeight::new(),
 			// This is the tx fee tip. Normally this determines transaction priority. We currently
@@ -70,11 +77,14 @@ where
 		);
 		let signature = signed_payload.using_encoded(|bytes| self.signer.sign(bytes).into());
 
-		state_chain_runtime::UncheckedExtrinsic::new_signed(
-			call,
-			MultiAddress::Id(self.account_id.clone()),
-			signature,
-			extra,
+		(
+			state_chain_runtime::UncheckedExtrinsic::new_signed(
+				call,
+				MultiAddress::Id(self.account_id.clone()),
+				signature,
+				extra,
+			),
+			lifetime,
 		)
 	}
 }

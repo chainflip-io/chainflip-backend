@@ -1,15 +1,14 @@
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::{address::EncodedAddress, eth::H256, CcmIngressMetadata, ForeignChain};
 use cf_primitives::{AccountRole, Asset, BasisPoints};
-use futures::{FutureExt, Stream};
+use futures::FutureExt;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use rand_legacy::FromEntropy;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{opaque::SessionKeys, RuntimeCall};
-use tracing::error;
 use zeroize::Zeroize;
 
 pub mod primitives {
@@ -30,8 +29,8 @@ pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
 use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::{BaseRpcApi, BaseRpcClient, RawRpcApi},
-	extrinsic_api::ExtrinsicApi,
-	StateChainClient,
+	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
+	DefaultRpcClient, StateChainClient,
 };
 use utilities::{clean_dot_address, clean_eth_address, task_scope::task_scope};
 
@@ -41,8 +40,10 @@ trait AuctionPhaseApi {
 }
 
 #[async_trait]
-impl<RawRpcClient: RawRpcApi + Send + Sync + 'static> AuctionPhaseApi
-	for StateChainClient<BaseRpcClient<RawRpcClient>>
+impl<
+		RawRpcClient: RawRpcApi + Send + Sync + 'static,
+		SignedExtrinsicClient: Send + Sync + 'static,
+	> AuctionPhaseApi for StateChainClient<SignedExtrinsicClient, BaseRpcClient<RawRpcClient>>
 {
 	async fn is_auction_phase(&self) -> Result<bool> {
 		self.base_rpc_client
@@ -59,8 +60,10 @@ trait RotateSessionKeysApi {
 }
 
 #[async_trait]
-impl<RawRpcClient: RawRpcApi + Send + Sync + 'static> RotateSessionKeysApi
-	for StateChainClient<BaseRpcClient<RawRpcClient>>
+impl<
+		RawRpcClient: RawRpcApi + Send + Sync + 'static,
+		SignedExtrinsicClient: Send + Sync + 'static,
+	> RotateSessionKeysApi for StateChainClient<SignedExtrinsicClient, BaseRpcClient<RawRpcClient>>
 {
 	async fn rotate_session_keys(&self) -> Result<Bytes> {
 		Ok(self.base_rpc_client.raw_rpc_client.rotate_keys().await?)
@@ -73,39 +76,11 @@ pub async fn request_block(
 ) -> Result<state_chain_runtime::SignedBlock> {
 	println!("Querying the state chain for the block with hash {block_hash:x?}.");
 
-	BaseRpcClient::new(state_chain_settings)
+	DefaultRpcClient::connect(&state_chain_settings.ws_endpoint)
 		.await?
 		.block(block_hash)
 		.await?
 		.ok_or_else(|| anyhow!("unknown block hash"))
-}
-
-async fn submit_and_ensure_success<Call, BlockStream>(
-	client: &StateChainClient,
-	block_stream: &mut BlockStream,
-	call: Call,
-) -> Result<(H256, Vec<state_chain_runtime::RuntimeEvent>)>
-where
-	Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static,
-	BlockStream: Stream<Item = state_chain_runtime::Header> + Unpin + Send + 'static,
-{
-	let tx_hash = client.submit_signed_extrinsic(call).await?;
-	let events = client.watch_submitted_extrinsic(tx_hash, block_stream).await?;
-
-	events
-		.iter()
-		.find_map(|event| {
-			if let state_chain_runtime::RuntimeEvent::System(
-				frame_system::Event::ExtrinsicFailed { dispatch_error, dispatch_info: _ },
-			) = event
-			{
-				error!("Extrinsic execution failed: {:?}", dispatch_error);
-				Some(Err(anyhow!("extrinsic execution failed")))
-			} else {
-				None
-			}
-		})
-		.unwrap_or(Ok((tx_hash, events)))
 }
 
 async fn connect_submit_and_get_events<Call>(
@@ -118,12 +93,19 @@ where
 {
 	task_scope(|scope| {
 		async {
-			let (_, mut block_stream, state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, required_role, false).await?;
+			let (_state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
+				scope,
+				&state_chain_settings.ws_endpoint,
+				&state_chain_settings.signing_key_file,
+				required_role,
+				false,
+			)
+			.await?;
 
-			submit_and_ensure_success(&state_chain_client, &mut block_stream, call)
-				.await
-				.map(|(_, events)| events)
+			let (_tx_hash, events, _) =
+				state_chain_client.submit_signed_extrinsic(call).await.until_finalized().await?;
+
+			Ok(events)
 		}
 		.boxed()
 	})
@@ -137,25 +119,28 @@ pub async fn request_claim(
 ) -> Result<H256> {
 	task_scope(|scope| {
 		async {
-			let (_, block_stream, state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
-					.await?;
+			let (_, state_chain_client) = StateChainClient::connect_with_account(
+				scope,
+				&state_chain_settings.ws_endpoint,
+				&state_chain_settings.signing_key_file,
+				AccountRole::None,
+				false,
+			)
+			.await?;
 
 			// Are we in a current auction phase
 			if state_chain_client.is_auction_phase().await? {
 				bail!("We are currently in an auction phase. Please wait until the auction phase is over.");
 			}
 
-			let mut block_stream = Box::new(block_stream);
-			let block_stream = block_stream.as_mut();
-
-			let (tx_hash, _) = submit_and_ensure_success(
-				&state_chain_client,
-				block_stream,
-				pallet_cf_staking::Call::claim { amount, address: eth_address },
-			)
-			.await
-			.map_err(|_| anyhow!("invalid claim"))?;
+			let (tx_hash, ..) = state_chain_client
+				.submit_signed_extrinsic(pallet_cf_staking::Call::claim {
+					amount,
+					address: eth_address,
+				})
+				.await
+				.until_finalized()
+				.await?;
 
 			Ok(tx_hash)
 		}
@@ -170,25 +155,31 @@ pub async fn register_account_role(
 ) -> Result<H256> {
 	task_scope(|scope| {
 		async {
-			if role == AccountRole::None {
-				bail!("Cannot register account role None");
-			}
-			let (_, _, state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
-					.await?;
+			let call = match role {
+				AccountRole::Validator =>
+					RuntimeCall::from(pallet_cf_validator::Call::register_as_validator {}),
+				AccountRole::Relayer =>
+					RuntimeCall::from(pallet_cf_swapping::Call::register_as_relayer {}),
+				AccountRole::LiquidityProvider =>
+					RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
+				AccountRole::None => bail!("Cannot register account role None"),
+			};
 
-			let tx_hash = state_chain_client
-				.submit_signed_extrinsic(match role {
-					AccountRole::Validator =>
-						RuntimeCall::from(pallet_cf_validator::Call::register_as_validator {}),
-					AccountRole::Relayer =>
-						RuntimeCall::from(pallet_cf_swapping::Call::register_as_relayer {}),
-					AccountRole::LiquidityProvider =>
-						RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
-					AccountRole::None => unreachable!(),
-				})
+			let (_, state_chain_client) = StateChainClient::connect_with_account(
+				scope,
+				&state_chain_settings.ws_endpoint,
+				&state_chain_settings.signing_key_file,
+				AccountRole::None,
+				false,
+			)
+			.await?;
+
+			let (tx_hash, ..) = state_chain_client
+				.submit_signed_extrinsic(call)
 				.await
-				.expect("Could not set register account role for account");
+				.until_finalized()
+				.await
+				.context("Could not register account role for account")?;
 			Ok(tx_hash)
 		}
 		.boxed()
@@ -199,13 +190,18 @@ pub async fn register_account_role(
 pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<H256> {
 	task_scope(|scope| {
 		async {
-			let (_, _, state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
-					.await?;
+			let (_, state_chain_client) = StateChainClient::connect_with_account(
+				scope,
+				&state_chain_settings.ws_endpoint,
+				&state_chain_settings.signing_key_file,
+				AccountRole::None,
+				false,
+			)
+			.await?;
 			let seed = state_chain_client
 				.rotate_session_keys()
 				.await
-				.expect("Could not rotate session keys.");
+				.context("Could not rotate session keys.")?;
 
 			let aura_key: [u8; 32] = seed[0..32].try_into().unwrap();
 			let grandpa_key: [u8; 32] = seed[32..64].try_into().unwrap();
@@ -215,13 +211,14 @@ pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<
 				grandpa: GrandpaId::from(EdPublic::from_raw(grandpa_key)),
 			};
 
-			let tx_hash = state_chain_client
+			let (tx_hash, ..) = state_chain_client
 				.submit_signed_extrinsic(pallet_cf_validator::Call::set_keys {
 					keys: new_session_key,
 					proof: [0; 1].to_vec(),
 				})
 				.await
-				.expect("Failed to submit set_keys extrinsic");
+				.until_finalized()
+				.await?;
 
 			Ok(tx_hash)
 		}
@@ -234,9 +231,14 @@ pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<
 pub async fn force_rotation(state_chain_settings: &settings::StateChain) -> Result<()> {
 	task_scope(|scope| {
 		async {
-			let (_, _, state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
-					.await?;
+			let (_, state_chain_client) = StateChainClient::connect_with_account(
+				scope,
+				&state_chain_settings.ws_endpoint,
+				&state_chain_settings.signing_key_file,
+				AccountRole::None,
+				false,
+			)
+			.await?;
 
 			println!("Submitting governance proposal for rotation.");
 			state_chain_client
@@ -244,7 +246,9 @@ pub async fn force_rotation(state_chain_settings: &settings::StateChain) -> Resu
 					call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
 				})
 				.await
-				.expect("Should submit sudo governance proposal");
+				.until_finalized()
+				.await
+				.context("Failed to submit rotation governance proposal")?;
 
 			println!("If you're the governance dictator, the rotation will begin soon.");
 
@@ -258,13 +262,20 @@ pub async fn force_rotation(state_chain_settings: &settings::StateChain) -> Resu
 pub async fn stop_bidding(state_chain_settings: &settings::StateChain) -> Result<()> {
 	task_scope(|scope| {
 		async {
-			let (_, _, state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, AccountRole::Validator, false)
-					.await?;
-			let tx_hash = state_chain_client
+			let (_, state_chain_client) = StateChainClient::connect_with_account(
+				scope,
+				&state_chain_settings.ws_endpoint,
+				&state_chain_settings.signing_key_file,
+				AccountRole::Validator,
+				false,
+			)
+			.await?;
+			let (tx_hash, ..) = state_chain_client
 				.submit_signed_extrinsic(pallet_cf_staking::Call::stop_bidding {})
 				.await
-				.expect("Could not stop bidding");
+				.until_finalized()
+				.await
+				.context("Could not stop bidding")?;
 			println!("Account stopped bidding, in tx {tx_hash:#x}.");
 			Ok(())
 		}
@@ -276,14 +287,21 @@ pub async fn stop_bidding(state_chain_settings: &settings::StateChain) -> Result
 pub async fn start_bidding(state_chain_settings: &settings::StateChain) -> Result<()> {
 	task_scope(|scope| {
 		async {
-			let (.., state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, AccountRole::Validator, false)
-					.await?;
+			let (_, state_chain_client) = StateChainClient::connect_with_account(
+				scope,
+				&state_chain_settings.ws_endpoint,
+				&state_chain_settings.signing_key_file,
+				AccountRole::Validator,
+				false,
+			)
+			.await?;
 
-			let tx_hash = state_chain_client
+			let (tx_hash, ..) = state_chain_client
 				.submit_signed_extrinsic(pallet_cf_staking::Call::start_bidding {})
 				.await
-				.expect("Could not start bidding");
+				.until_finalized()
+				.await
+				.context("Could not start bidding")?;
 			println!("Account started bidding at tx {tx_hash:#x}.");
 
 			Ok(())
@@ -303,15 +321,22 @@ pub async fn set_vanity_name(
 				bail!("Name too long. Max length is {} characters.", MAX_LENGTH_FOR_VANITY_NAME,);
 			}
 
-			let (_, _, state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
-					.await?;
-			let tx_hash = state_chain_client
+			let (_, state_chain_client) = StateChainClient::connect_with_account(
+				scope,
+				&state_chain_settings.ws_endpoint,
+				&state_chain_settings.signing_key_file,
+				AccountRole::None,
+				false,
+			)
+			.await?;
+			let (tx_hash, ..) = state_chain_client
 				.submit_signed_extrinsic(pallet_cf_validator::Call::set_vanity_name {
 					name: name.as_bytes().to_vec(),
 				})
 				.await
-				.expect("Could not set vanity name for your account");
+				.until_finalized()
+				.await
+				.context("Could not set vanity name for your account")?;
 			println!("Vanity name set at tx {tx_hash:#x}.");
 			Ok(())
 		}

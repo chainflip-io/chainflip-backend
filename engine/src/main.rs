@@ -17,7 +17,10 @@ use chainflip_engine::{
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
 		self,
-		client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
+		client::{
+			extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
+			storage_api::StorageApi,
+		},
 	},
 	witnesser::AddressMonitor,
 };
@@ -27,6 +30,7 @@ use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use futures::{FutureExt, TryFutureExt};
 use pallet_cf_validator::SemVer;
+use utilities::CachedStream;
 use web3::types::U256;
 
 #[tokio::main]
@@ -47,10 +51,11 @@ async fn main() -> anyhow::Result<()> {
 				scope.spawn(HealthChecker::start(health_check_settings).await?);
 			}
 
-			let (latest_block_hash, state_chain_block_stream, state_chain_client) =
-				state_chain_observer::client::StateChainClient::new(
+			let (state_chain_stream, state_chain_client) =
+				state_chain_observer::client::StateChainClient::connect_with_account(
 					scope,
-					&settings.state_chain,
+					&settings.state_chain.ws_endpoint,
+					&settings.state_chain.signing_key_file,
 					AccountRole::Validator,
 					true,
 				)
@@ -59,7 +64,7 @@ async fn main() -> anyhow::Result<()> {
 			let expected_chain_id = U256::from(
 				state_chain_client
 					.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
-						latest_block_hash,
+						state_chain_stream.cache().block_hash,
 					)
 					.await
 					.context("Failed to get EthereumChainId from state chain")?,
@@ -81,6 +86,8 @@ async fn main() -> anyhow::Result<()> {
 					},
 				})
 				.await
+				.until_finalized()
+				.await
 				.context("Failed to submit version to state chain")?;
 
 			let (epoch_start_sender, [epoch_start_receiver_1, epoch_start_receiver_2]) =
@@ -93,7 +100,7 @@ async fn main() -> anyhow::Result<()> {
 
 			let cfe_settings = state_chain_client
 				.storage_value::<pallet_cf_environment::CfeSettings<state_chain_runtime::Runtime>>(
-					latest_block_hash,
+					state_chain_stream.cache().block_hash,
 				)
 				.await
 				.context("Failed to get on chain CFE settings from SC")?;
@@ -103,7 +110,7 @@ async fn main() -> anyhow::Result<()> {
 
 			let latest_ceremony_id = state_chain_client
 				.storage_value::<pallet_cf_validator::CeremonyIdCounter<state_chain_runtime::Runtime>>(
-					latest_block_hash,
+					state_chain_stream.cache().block_hash,
 				)
 				.await
 				.context("Failed to get CeremonyIdCounter from SC")?;
@@ -111,7 +118,7 @@ async fn main() -> anyhow::Result<()> {
 			let db = Arc::new(
 				PersistentKeyDB::open_and_migrate_to_latest(
 					settings.signing.db_file.as_path(),
-					Some(state_chain_client.get_genesis_hash()),
+					Some(state_chain_client.genesis_hash()),
 				)
 				.context("Failed to open database")?,
 			);
@@ -125,9 +132,13 @@ async fn main() -> anyhow::Result<()> {
 				btc_incoming_receiver,
 				peer_update_sender,
 				p2p_fut,
-			) = p2p::start(state_chain_client.clone(), settings.node_p2p, latest_block_hash)
-				.await
-				.context("Failed to start p2p module")?;
+			) = p2p::start(
+				state_chain_client.clone(),
+				settings.node_p2p,
+				state_chain_stream.cache().block_hash,
+			)
+			.await
+			.context("Failed to start p2p module")?;
 
 			scope.spawn(p2p_fut);
 
@@ -172,7 +183,7 @@ async fn main() -> anyhow::Result<()> {
 				&settings.eth,
 				state_chain_client.clone(),
 				expected_chain_id,
-				latest_block_hash,
+				state_chain_stream.cache().block_hash,
 				epoch_start_receiver_1,
 				epoch_start_receiver_2,
 				cfe_settings_update_receiver,
@@ -186,7 +197,7 @@ async fn main() -> anyhow::Result<()> {
 				state_chain_client.clone(),
 				&settings.btc,
 				btc_epoch_start_receiver,
-				latest_block_hash,
+				state_chain_stream.cache().block_hash,
 				db.clone(),
 			)
 			.await
@@ -197,7 +208,7 @@ async fn main() -> anyhow::Result<()> {
 					.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<
 						state_chain_runtime::Runtime,
 						state_chain_runtime::PolkadotInstance,
-					>>(latest_block_hash)
+					>>(state_chain_stream.cache().block_hash)
 					.await
 					.context("Failed to get initial ingress details")?
 					.into_iter()
@@ -213,7 +224,7 @@ async fn main() -> anyhow::Result<()> {
 
 			scope.spawn(state_chain_observer::start(
 				state_chain_client.clone(),
-				state_chain_block_stream,
+				state_chain_stream.clone(),
 				EthBroadcaster::new(
 					&settings.eth,
 					EthDualRpcClient::new(&settings.eth, expected_chain_id)
@@ -235,7 +246,6 @@ async fn main() -> anyhow::Result<()> {
 				btc_epoch_start_sender,
 				btc_monitor_ingress_sender,
 				cfe_settings_update_sender,
-				latest_block_hash,
 			));
 
 			scope.spawn(
@@ -250,7 +260,7 @@ async fn main() -> anyhow::Result<()> {
 						.storage_map::<pallet_cf_broadcast::SignatureToBroadcastIdLookup<
 							state_chain_runtime::Runtime,
 							state_chain_runtime::PolkadotInstance,
-						>>(latest_block_hash)
+						>>(state_chain_stream.cache().block_hash)
 						.await
 						.context("Failed to get initial DOT signatures to monitor")?
 						.into_iter()
@@ -267,7 +277,7 @@ async fn main() -> anyhow::Result<()> {
 					dot_epoch_start_receiver_2,
 					dot_rpc_client,
 					state_chain_client,
-					latest_block_hash,
+					state_chain_stream.cache().block_hash,
 				)
 				.map_err(|_| anyhow::anyhow!("DOT runtime version updater failed")),
 			);
