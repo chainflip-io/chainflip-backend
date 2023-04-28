@@ -44,7 +44,7 @@ fn test_polkadot_signing() {
 	test_signing_for_scheme::<super::polkadot::PolkadotSigning>();
 }
 #[test]
-fn test_sui_signing() {
+fn test_ed25519_signing() {
 	test_signing_for_scheme::<super::ed25519::Ed25519Signing>();
 }
 
