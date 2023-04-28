@@ -1,10 +1,12 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{anyhow, Result};
-use frame_support::pallet_prelude::InvalidTransaction;
+use frame_support::{dispatch::DispatchInfo, pallet_prelude::InvalidTransaction};
 use itertools::Itertools;
 use sp_core::H256;
 use sp_runtime::{traits::Hash, MultiAddress};
+use thiserror::Error;
+use tokio::sync::oneshot;
 use tracing::{debug, warn};
 
 use crate::state_chain_observer::client::{
@@ -13,17 +15,59 @@ use crate::state_chain_observer::client::{
 
 use super::signer;
 
-pub struct Submission<Identity> {
-	lifetime: std::ops::RangeTo<cf_primitives::BlockNumber>,
-	tx_hash: H256,
-	pub identity: Identity,
+const REQUEST_LIFETIME: u32 = 128;
+
+#[derive(Error, Debug)]
+pub enum FinalizationError {
+	#[error("The requested transaction was not and will not be included in a finalized block")]
+	NotFinalized,
+	#[error(
+		"The requested transaction was not (but maybe in the future) included in a finalized block"
+	)]
+	Unknown,
 }
 
-pub struct SubmissionWatcher<
-	Identity,
-	BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static,
-> {
-	submissions_by_nonce: BTreeMap<state_chain_runtime::Index, Vec<Submission<Identity>>>,
+#[derive(Error, Debug)]
+#[error("The requested transaction was included in a finalized block but its dispatch call failed: {0:?}")]
+pub struct DispatchError(sp_runtime::DispatchError);
+
+#[derive(Error, Debug)]
+pub enum ExtrinsicError {
+	#[error(transparent)]
+	Finalization(FinalizationError),
+	#[error(transparent)]
+	Dispatch(DispatchError),
+}
+
+pub type ExtrinsicResult =
+	Result<(H256, Vec<state_chain_runtime::RuntimeEvent>, DispatchInfo), ExtrinsicError>;
+
+pub type RequestID = u64;
+
+#[derive(Debug)]
+pub struct Request {
+	id: RequestID,
+	pending_submissions: usize,
+	pub allow_resubmits: bool,
+	lifetime: std::ops::RangeToInclusive<cf_primitives::BlockNumber>,
+	call: state_chain_runtime::RuntimeCall,
+	result_sender: oneshot::Sender<ExtrinsicResult>,
+}
+
+#[derive(Debug)]
+pub enum RequestStrategy {
+	Submit(oneshot::Sender<H256>),
+	Finalize,
+}
+
+pub struct Submission {
+	lifetime: std::ops::RangeTo<cf_primitives::BlockNumber>,
+	tx_hash: H256,
+	request_id: RequestID,
+}
+
+pub struct SubmissionWatcher<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static> {
+	submissions_by_nonce: BTreeMap<state_chain_runtime::Index, Vec<Submission>>,
 	pub anticipated_nonce: state_chain_runtime::Index,
 	signer: signer::PairSigner<sp_core::sr25519::Pair>,
 	finalized_nonce: state_chain_runtime::Index,
@@ -39,8 +83,8 @@ pub enum SubmissionLogicError {
 	NonceTooLow,
 }
 
-impl<Identity: Copy, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
-	SubmissionWatcher<Identity, BaseRpcClient>
+impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
+	SubmissionWatcher<BaseRpcClient>
 {
 	pub fn new(
 		signer: signer::PairSigner<sp_core::sr25519::Pair>,
@@ -51,19 +95,22 @@ impl<Identity: Copy, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'st
 		genesis_hash: state_chain_runtime::Hash,
 		extrinsic_lifetime: state_chain_runtime::BlockNumber,
 		base_rpc_client: Arc<BaseRpcClient>,
-	) -> Self {
-		Self {
-			submissions_by_nonce: Default::default(),
-			anticipated_nonce: finalized_nonce,
-			signer,
-			finalized_nonce,
-			finalized_block_hash,
-			finalized_block_number,
-			runtime_version,
-			genesis_hash,
-			extrinsic_lifetime,
-			base_rpc_client,
-		}
+	) -> (Self, BTreeMap<RequestID, Request>) {
+		(
+			Self {
+				submissions_by_nonce: Default::default(),
+				anticipated_nonce: finalized_nonce,
+				signer,
+				finalized_nonce,
+				finalized_block_hash,
+				finalized_block_number,
+				runtime_version,
+				genesis_hash,
+				extrinsic_lifetime,
+				base_rpc_client,
+			},
+			Default::default(),
+		)
 	}
 
 	pub fn finalized_nonce(&self) -> state_chain_runtime::Index {
@@ -72,13 +119,12 @@ impl<Identity: Copy, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'st
 
 	pub async fn submit_extrinsic_at_nonce(
 		&mut self,
-		call: state_chain_runtime::RuntimeCall,
+		request: &mut Request,
 		nonce: state_chain_runtime::Index,
-		identity: Identity,
 	) -> Result<Result<H256, SubmissionLogicError>, anyhow::Error> {
 		loop {
 			let (signed_extrinsic, lifetime) = self.signer.new_signed_extrinsic(
-				call.clone(),
+				request.call.clone(),
 				&self.runtime_version,
 				self.genesis_hash,
 				self.finalized_block_hash,
@@ -86,13 +132,15 @@ impl<Identity: Copy, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'st
 				self.extrinsic_lifetime,
 				nonce,
 			);
+			assert!(lifetime.contains(&(self.finalized_block_number + 1)));
 
 			match self.base_rpc_client.submit_extrinsic(signed_extrinsic).await {
 				Ok(tx_hash) => {
+					request.pending_submissions += 1;
 					self.submissions_by_nonce
 						.entry(self.anticipated_nonce)
 						.or_default()
-						.push(Submission { lifetime, tx_hash, identity });
+						.push(Submission { lifetime, tx_hash, request_id: request.id });
 					break Ok(Ok(tx_hash))
 				},
 				Err(rpc_err) => {
@@ -149,16 +197,9 @@ impl<Identity: Copy, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'st
 		}
 	}
 
-	pub async fn submit_extrinsic(
-		&mut self,
-		call: state_chain_runtime::RuntimeCall,
-		identity: Identity,
-	) -> Result<H256, anyhow::Error> {
+	pub async fn submit_extrinsic(&mut self, request: &mut Request) -> Result<H256, anyhow::Error> {
 		Ok(loop {
-			match self
-				.submit_extrinsic_at_nonce(call.clone(), self.anticipated_nonce, identity)
-				.await?
-			{
+			match self.submit_extrinsic_at_nonce(request, self.anticipated_nonce).await? {
 				Ok(tx_hash) => {
 					self.anticipated_nonce += 1;
 					break tx_hash
@@ -170,23 +211,42 @@ impl<Identity: Copy, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'st
 		})
 	}
 
-	pub async fn on_block_finalized<State, OnSubmissionFinalized, OnSubmissionDeath>(
+	pub async fn new_request(
 		&mut self,
+		requests: &mut BTreeMap<RequestID, Request>,
+		call: state_chain_runtime::RuntimeCall,
+		result_sender: oneshot::Sender<ExtrinsicResult>,
+		strategy: RequestStrategy,
+	) -> Result<(), anyhow::Error> {
+		let id = requests.keys().next_back().map(|id| id + 1).unwrap_or(0);
+		let request = requests
+			.try_insert(
+				id,
+				Request {
+					id,
+					pending_submissions: 0,
+					allow_resubmits: match &strategy {
+						RequestStrategy::Submit(_) => false,
+						RequestStrategy::Finalize => true,
+					},
+					lifetime: ..=(self.finalized_block_number + 1 + REQUEST_LIFETIME),
+					call,
+					result_sender,
+				},
+			)
+			.unwrap();
+		let tx_hash: H256 = self.submit_extrinsic(request).await?;
+		if let RequestStrategy::Submit(hash_sender) = strategy {
+			let _result = hash_sender.send(tx_hash);
+		};
+		Ok(())
+	}
+
+	pub async fn on_block_finalized(
+		&mut self,
+		requests: &mut BTreeMap<RequestID, Request>,
 		block_hash: H256,
-		state: &mut State,
-		mut on_submission_finalized: OnSubmissionFinalized,
-		mut on_submission_death: OnSubmissionDeath,
-	) -> Result<()>
-	where
-		OnSubmissionFinalized: FnMut(
-			&mut State,
-			H256,
-			&state_chain_runtime::RuntimeCall,
-			Vec<state_chain_runtime::RuntimeEvent>,
-			Vec<Submission<Identity>>,
-		),
-		OnSubmissionDeath: FnMut(&mut State, &Submission<Identity>),
-	{
+	) -> Result<()> {
 		let block = self.base_rpc_client.block(block_hash).await?.expect(SUBSTRATE_BEHAVIOUR).block;
 		// TODO: Move this out into BlockProducer
 		let events = self
@@ -216,8 +276,8 @@ impl<Identity: Copy, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'st
 			self.anticipated_nonce = state_chain_runtime::Index::max(self.anticipated_nonce, nonce);
 
 			for (extrinsic_index, extrinsic_events) in events
-				.iter()
-				.filter_map(|event_record| match &**event_record {
+				.into_iter()
+				.filter_map(|event_record| match *event_record {
 					frame_system::EventRecord {
 						phase: frame_system::Phase::ApplyExtrinsic(extrinsic_index),
 						event,
@@ -228,10 +288,12 @@ impl<Identity: Copy, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'st
 				.sorted_by_key(|(extrinsic_index, _)| *extrinsic_index)
 				.group_by(|(extrinsic_index, _)| *extrinsic_index)
 				.into_iter()
-			{
-				let extrinsic = &block.extrinsics[*extrinsic_index as usize];
+				.map(|(extrinsic_index, extrinsic_events)| {
+					(extrinsic_index, extrinsic_events.map(|(_extrinsics_index, event)| event))
+				}) {
+				let extrinsic = &block.extrinsics[extrinsic_index as usize];
 				// TODO: Assumption needs checking
-				if let Some(mut submissions) = extrinsic.signature.as_ref().and_then(
+				if let Some(submissions) = extrinsic.signature.as_ref().and_then(
 					|(address, _, (.., frame_system::CheckNonce(nonce), _, _))| {
 						(*address == MultiAddress::Id(self.signer.account_id.clone()))
 							.then_some(())
@@ -243,34 +305,48 @@ impl<Identity: Copy, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'st
 							extrinsic,
 						);
 
-					for submission in submissions.drain_filter(|submission| {
+					let mut not_found_matching_submission = Some(extrinsic_events);
+
+					for submission in submissions {
+						if let Some(request) = requests.get_mut(&submission.request_id) {
+							request.pending_submissions -= 1;
+						}
+
 						// Note: It is technically possible for a hash collision to
 						// occur, but it is so unlikely it is effectively
 						// impossible. If it where to occur this code would not
 						// notice the extrinsic was not actually the requested one,
 						// but otherwise would continue to work.
-						submission.tx_hash != tx_hash
-					}) {
-						on_submission_death(state, &submission);
-					}
-
-					if !submissions.is_empty() {
-						assert!(submissions
-							.iter()
-							.all(|submission| submission.lifetime.contains(&block.header.number)));
-
-						on_submission_finalized(
-							state,
-							tx_hash,
-							&extrinsic.function,
-							extrinsic_events
-								.map(|(_extrinsics_index, event)| event.clone())
-								.collect::<Vec<_>>(),
-							submissions, /* Note it is possible for this to
-							              * contain more than one element, for
-							              * example by submitting the same
-							              * extrinsic repeatedly */
-						);
+						if let Some((extrinsic_events, matching_request)) =
+							(not_found_matching_submission.is_some() &&
+								submission.tx_hash == tx_hash)
+								.then_some(())
+								.and_then(|_| requests.remove(&submission.request_id))
+								.map(|request| {
+									(not_found_matching_submission.take().unwrap(), request)
+								}) {
+							let extrinsic_events = extrinsic_events.collect::<Vec<_>>();
+							let _result = matching_request.result_sender.send({
+								extrinsic_events
+									.iter()
+									.find_map(|event| match event {
+										state_chain_runtime::RuntimeEvent::System(
+											frame_system::Event::ExtrinsicSuccess { dispatch_info },
+										) => Some(Ok(*dispatch_info)),
+										state_chain_runtime::RuntimeEvent::System(
+											frame_system::Event::ExtrinsicFailed {
+												dispatch_error,
+												dispatch_info: _,
+											},
+										) => Some(Err(ExtrinsicError::Dispatch(DispatchError(
+											*dispatch_error,
+										)))),
+										_ => None,
+									})
+									.expect(SUBSTRATE_BEHAVIOUR)
+									.map(|dispatch_info| (tx_hash, extrinsic_events, dispatch_info))
+							});
+						}
 					}
 				}
 			}
@@ -282,7 +358,9 @@ impl<Identity: Copy, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'st
 					let alive = submission.lifetime.contains(&(block.header.number + 1));
 
 					if !alive {
-						on_submission_death(state, submission);
+						if let Some(request) = requests.get_mut(&submission.request_id) {
+							request.pending_submissions -= 1;
+						}
 					}
 
 					alive
@@ -290,6 +368,28 @@ impl<Identity: Copy, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'st
 
 				!submissions.is_empty()
 			});
+
+			for (_request_id, request) in requests.drain_filter(|_request_id, request| {
+				!request.lifetime.contains(&(block.header.number + 1)) ||
+					!request.allow_resubmits && request.pending_submissions == 0
+			}) {
+				let _result = request.result_sender.send(Err(ExtrinsicError::Finalization(
+					if request.pending_submissions == 0 {
+						FinalizationError::NotFinalized
+					} else {
+						FinalizationError::Unknown
+					},
+				)));
+			}
+
+			// Has to be a separate loop from the above due to not being able to await inside
+			// drain_filter
+			for (_request_id, request) in requests.iter_mut() {
+				if request.pending_submissions == 0 {
+					debug!("Resubmitting extrinsic as all existing submissions have expired.");
+					self.submit_extrinsic(request).await?;
+				}
+			}
 
 			Ok(())
 		}
