@@ -211,7 +211,7 @@ impl EthContractWitnesser for KeyManager {
 			info!("Handling event: {event}");
 			match event.event_parameters {
 				KeyManagerEvent::AggKeySetByAggKey { new_agg_key, .. } => {
-					let _result = state_chain_client
+					state_chain_client
 						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 							call: Box::new(
 								pallet_cf_vaults::Call::<_, EthereumInstance>::vault_key_rotated {
@@ -228,7 +228,7 @@ impl EthContractWitnesser for KeyManager {
 						.await;
 				},
 				KeyManagerEvent::AggKeySetByGovKey { new_agg_key, .. } => {
-					let _result = state_chain_client
+					state_chain_client
 						.submit_signed_extrinsic(
 							pallet_cf_witnesser::Call::witness_at_epoch {
 								call: Box::new(
@@ -255,7 +255,7 @@ impl EthContractWitnesser for KeyManager {
 						.context("TransactionReceipt should have effective gas price")?
 						.try_into()
 						.expect("Effective gas price should fit u128");
-					let _result = state_chain_client
+					state_chain_client
 						.submit_signed_extrinsic(
 							pallet_cf_witnesser::Call::witness_at_epoch {
 								call: Box::new(
@@ -275,7 +275,7 @@ impl EthContractWitnesser for KeyManager {
 						.await;
 				},
 				KeyManagerEvent::GovernanceAction { message } => {
-					let _result = state_chain_client
+					state_chain_client
 						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 							call: Box::new(
 								pallet_cf_governance::Call::set_whitelisted_call_hash {

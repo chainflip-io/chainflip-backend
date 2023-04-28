@@ -98,8 +98,7 @@ where
 		if latest_data.block_height > last_witnessed_data.block_height ||
 			latest_data.base_fee != last_witnessed_data.base_fee
 		{
-			let _result = self
-				.state_chain_client
+			self.state_chain_client
 				.submit_signed_extrinsic(state_chain_runtime::RuntimeCall::Witnesser(
 					pallet_cf_witnesser::Call::witness_at_epoch {
 						call: Box::new(state_chain_runtime::RuntimeCall::EthereumChainTracking(

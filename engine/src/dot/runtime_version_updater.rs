@@ -99,8 +99,7 @@ where
 		last_version_witnessed: &mut RuntimeVersion,
 	) -> anyhow::Result<()> {
 		if new_runtime_version.spec_version > last_version_witnessed.spec_version {
-			let _result = self
-				.state_chain_client
+			self.state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(
 						pallet_cf_environment::Call::update_polkadot_runtime_version {

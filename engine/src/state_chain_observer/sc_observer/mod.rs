@@ -76,19 +76,18 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 		let keygen_result_future =
 			multisig_client.initiate_keygen(ceremony_id, epoch_index, keygen_participants);
 		scope.spawn(async move {
-			let _result =
-				state_chain_client
-					.submit_signed_extrinsic(pallet_cf_vaults::Call::<
-						state_chain_runtime::Runtime,
-						I,
-					>::report_keygen_outcome {
-						ceremony_id,
-						reported_outcome: keygen_result_future
-							.await
-							.map(Into::into)
-							.map_err(|(bad_account_ids, _reason)| bad_account_ids),
-					})
-					.await;
+			state_chain_client
+                .submit_signed_extrinsic(pallet_cf_vaults::Call::<
+                    state_chain_runtime::Runtime,
+                    I,
+                >::report_keygen_outcome {
+                    ceremony_id,
+                    reported_outcome: keygen_result_future
+                        .await
+                        .map(Into::into)
+                        .map_err(|(bad_account_ids, _reason)| bad_account_ids),
+                })
+                .await;
 			Ok(())
 		});
 	} else {
@@ -136,7 +135,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 						.await;
 				},
 				Err((bad_account_ids, _reason)) => {
-					let _result = state_chain_client
+					state_chain_client
 						.submit_signed_extrinsic(pallet_cf_threshold_signature::Call::<
 							state_chain_runtime::Runtime,
 							I,
@@ -554,7 +553,7 @@ where
                                                     // a problem with the ethereum rpc node, or with the configured account. For example
                                                     // if the account balance is too low to pay for required gas.
                                                     warn!("TransactionBroadcastRequest {broadcast_attempt_id:?} failed: {e:?}.");
-                                                    let _result = state_chain_client.submit_signed_extrinsic(
+                                                    state_chain_client.submit_signed_extrinsic(
                                                         state_chain_runtime::RuntimeCall::EthereumBroadcaster(
                                                             pallet_cf_broadcast::Call::transaction_signing_failure {
                                                                 broadcast_attempt_id,
@@ -698,7 +697,7 @@ where
                         ) && has_submitted_init_heartbeat.load(Ordering::Relaxed)
                     {
                         info!("Sending heartbeat at block: {}", current_block_header.number);
-                        let _result = state_chain_client
+                        state_chain_client
                             .submit_signed_extrinsic(
                                 pallet_cf_reputation::Call::heartbeat {},
                             )

@@ -181,7 +181,7 @@ impl EthContractWitnesser for Vault {
 				_ => todo!("handle the rest"),
 			};
 
-			let _result = state_chain_client
+			state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(call.into()),
 					epoch_index: epoch,
