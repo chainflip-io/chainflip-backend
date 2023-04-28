@@ -1,5 +1,5 @@
-use super::{curve25519::edwards::Point, ChainTag, CryptoScheme, ECPoint};
-use ed25519_consensus::{VerificationKey, VerificationKeyBytes};
+use super::{curve25519::edwards::Point, CanonicalEncoding, ChainTag, CryptoScheme, ECPoint};
+use ed25519_consensus::VerificationKeyBytes;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -32,6 +32,12 @@ impl std::fmt::Display for SigningPayload {
 impl AsRef<[u8]> for SigningPayload {
 	fn as_ref(&self) -> &[u8] {
 		self.0.as_ref()
+	}
+}
+
+impl CanonicalEncoding for <Ed25519Signing as CryptoScheme>::PublicKey {
+	fn encode_key(&self) -> Vec<u8> {
+		self.as_bytes().to_vec()
 	}
 }
 
@@ -106,13 +112,17 @@ impl CryptoScheme for Ed25519Signing {
 		public_key: &Self::PublicKey,
 		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()> {
-		use anyhow::anyhow;
 		use ed25519_consensus::VerificationKey;
 
 		let signature = ed25519_consensus::Signature::from(signature.to_bytes());
 
 		Ok(VerificationKey::try_from(*public_key)
 			.and_then(|vk| vk.verify(&signature, &payload.0))?)
+	}
+
+	fn pubkey_from_point(point: Self::Point) -> Self::PublicKey {
+		VerificationKeyBytes::try_from(point.as_bytes().as_slice())
+			.expect("Point to PublicKey conversion should be infallible")
 	}
 
 	#[cfg(test)]

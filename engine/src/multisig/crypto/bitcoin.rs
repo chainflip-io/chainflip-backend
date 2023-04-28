@@ -1,7 +1,7 @@
 use crate::multisig::crypto::ECScalar;
 
 pub use super::secp256k1::{Point, Scalar};
-use super::{ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature};
+use super::{CanonicalEncoding, ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature};
 use cf_chains::Bitcoin;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -52,6 +52,12 @@ impl std::fmt::Display for SigningPayload {
 impl AsRef<[u8]> for SigningPayload {
 	fn as_ref(&self) -> &[u8] {
 		&self.0
+	}
+}
+
+impl CanonicalEncoding for <BtcSigning as CryptoScheme>::PublicKey {
+	fn encode_key(&self) -> Vec<u8> {
+		self.serialize().to_vec()
 	}
 }
 
@@ -127,6 +133,11 @@ impl CryptoScheme for BtcSigning {
 
 	fn is_pubkey_compatible(pubkey: &Self::Point) -> bool {
 		pubkey.is_even_y()
+	}
+
+	fn pubkey_from_point(point: Self::Point) -> Self::PublicKey {
+		secp256k1::schnorrsig::PublicKey::from_slice(&point.x_bytes())
+			.expect("Point to PublicKey conversion should be infallible")
 	}
 
 	#[cfg(test)]

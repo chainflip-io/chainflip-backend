@@ -59,7 +59,7 @@ use self::{
 };
 
 use super::{
-	crypto::{CryptoScheme, ECPoint},
+	crypto::{CanonicalEncoding, CryptoScheme, ECPoint},
 	Rng,
 };
 
@@ -124,9 +124,9 @@ pub trait MultisigClientApi<C: CryptoScheme> {
 	fn initiate_signing(
 		&self,
 		ceremony_id: CeremonyId,
-		key_id: KeyId,
 		signers: BTreeSet<AccountId>,
-		payload: Vec<C::SigningPayload>,
+		key_ids: Vec<KeyId>,
+		payloads: Vec<C::SigningPayload>,
 	) -> BoxFuture<'_, Result<Vec<C::Signature>, (BTreeSet<AccountId>, SigningFailureReason)>>;
 
 	fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId);
@@ -160,8 +160,8 @@ where
 	C: CryptoScheme,
 {
 	pub participants: BTreeSet<AccountId>,
-	pub payload: Vec<C::SigningPayload>,
-	pub keygen_result_info: KeygenResultInfo<C>,
+	pub payloads: Vec<C::SigningPayload>,
+	pub keygen_result_infos: Vec<KeygenResultInfo<C>>,
 	pub rng: Rng,
 	pub result_sender: CeremonyResultSender<SigningCeremony<C>>,
 }
@@ -232,7 +232,7 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 				.map(|keygen_result_info| {
 					let agg_key = keygen_result_info.agg_key();
 					self.key_store.lock().unwrap().set_key(
-						KeyId { epoch_index, public_key_bytes: agg_key.into() },
+						KeyId { epoch_index, public_key_bytes: agg_key.encode_key() },
 						keygen_result_info,
 					);
 					agg_key
@@ -249,9 +249,9 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 	fn initiate_signing(
 		&self,
 		ceremony_id: CeremonyId,
-		key_id: KeyId,
 		signers: BTreeSet<AccountId>,
-		payload: Vec<C::SigningPayload>,
+		key_ids: Vec<KeyId>,
+		payloads: Vec<C::SigningPayload>,
 	) -> BoxFuture<'_, Result<Vec<C::Signature>, (BTreeSet<AccountId>, SigningFailureReason)>> {
 		let span = info_span!("Signing Ceremony", ceremony_id = ceremony_id);
 		let _entered = span.enter();
@@ -259,7 +259,7 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 		assert!(signers.contains(&self.my_account_id));
 
 		debug!(
-			payload_count = payload.len(),
+			payload_count = payloads.len(),
 			signers = format_iterator(&signers).to_string(),
 			"Received a request to sign",
 		);
@@ -268,38 +268,40 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 		let rng = Rng::from_entropy();
 
 		// Find the correct key and send the request to sign with that key
-		let request = self.key_store.lock().unwrap().get_key(&key_id).map(|keygen_result_info| {
-			let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
-			self.ceremony_request_sender
-				.send(CeremonyRequest {
-					ceremony_id,
-					details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails {
-						participants: signers,
-						payload,
-						keygen_result_info,
-						rng,
-						result_sender,
-					})),
-				})
-				.ok()
-				.expect("Should send signing request");
-			result_receiver
-		});
+		let keygen_result_infos = {
+			let key_store = self.key_store.lock().unwrap();
+			key_ids.iter().map(|key_id| key_store.get_key(key_id)).collect::<Vec<_>>()
+		};
 
 		async move {
-			// Wait for the request to return a result, then log and return the result
-			if let Some(result_receiver) = request {
-				let result = result_receiver
+			if let Some(keygen_result_infos) =
+				keygen_result_infos.into_iter().collect::<Option<_>>()
+			{
+				let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
+				self.ceremony_request_sender
+					.send(CeremonyRequest {
+						ceremony_id,
+						details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails {
+							participants: signers,
+							payloads,
+							keygen_result_infos,
+							rng,
+							result_sender,
+						})),
+					})
+					.ok()
+					.expect("Should send signing request");
+
+				result_receiver
 					.await
-					.expect("Signing result oneshot channel dropped before receiving a result");
+					.expect("Signing result oneshot channel dropped before receiving a result")
+					.map_err(|(reported_parties, failure_reason)| {
+						failure_reason.log(&reported_parties);
 
-				result.map_err(|(reported_parties, failure_reason)| {
-					failure_reason.log(&reported_parties);
-
-					(reported_parties, failure_reason)
-				})
+						(reported_parties, failure_reason)
+					})
 			} else {
-				// No key was found for the given key_id
+				// At least one of the keys was not found for the given key_id
 				let reported_parties = BTreeSet::new();
 				let failure_reason = SigningFailureReason::UnknownKey;
 				failure_reason.log(&reported_parties);

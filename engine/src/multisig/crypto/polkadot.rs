@@ -1,8 +1,10 @@
 use super::{
-	curve25519::ristretto::Point, ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature,
+	curve25519::ristretto::Point, CanonicalEncoding, ChainTag, CryptoScheme, ECPoint,
+	SignatureToThresholdSignature,
 };
 use anyhow::Result;
 use cf_chains::{ChainCrypto, Polkadot};
+use curve25519_dalek::ristretto::CompressedRistretto;
 use schnorrkel::context::{SigningContext, SigningTranscript};
 use serde::{Deserialize, Serialize};
 
@@ -51,6 +53,12 @@ impl SigningPayload {
 impl From<PolkadotSignature> for cf_chains::dot::PolkadotSignature {
 	fn from(cfe_sig: PolkadotSignature) -> Self {
 		sp_core::sr25519::Signature(cfe_sig.0.to_bytes())
+	}
+}
+
+impl CanonicalEncoding for <PolkadotSigning as CryptoScheme>::PublicKey {
+	fn encode_key(&self) -> Vec<u8> {
+		self.to_bytes().to_vec()
 	}
 }
 
@@ -131,6 +139,11 @@ impl CryptoScheme for PolkadotSigning {
 	) -> <Self::Point as super::ECPoint>::Scalar {
 		// "Response" is computed as done in schnorrkel
 		challenge * private_key + nonce
+	}
+
+	fn pubkey_from_point(point: Self::Point) -> Self::PublicKey {
+		schnorrkel::PublicKey::from_compressed(CompressedRistretto::from_slice(&point.as_bytes()))
+			.expect("Point to PublicKey conversion should be infallible")
 	}
 
 	#[cfg(test)]

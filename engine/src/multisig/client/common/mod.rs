@@ -76,7 +76,11 @@ impl<C: CryptoScheme> KeygenResult<C> {
 }
 
 impl<C: CryptoScheme> KeygenResult<C> {
-	pub fn get_agg_public_key(&self) -> C::Point {
+	pub fn get_agg_public_key(&self) -> C::PublicKey {
+		C::pubkey_from_point(self.key_share.y)
+	}
+
+	pub fn get_agg_public_point(&self) -> C::Point {
 		self.key_share.y
 	}
 }
@@ -91,7 +95,7 @@ pub struct KeygenResultInfo<C: CryptoScheme> {
 
 impl<C: CryptoScheme> KeygenResultInfo<C> {
 	pub fn agg_key(&self) -> C::PublicKey {
-		self.key.get_agg_public_key().into()
+		self.key.get_agg_public_key()
 	}
 }
 

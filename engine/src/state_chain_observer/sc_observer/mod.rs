@@ -31,7 +31,10 @@ use crate::{
 	dot::{rpc::DotRpcApi, DotBroadcaster},
 	eth::{rpc::EthRpcApi, EthBroadcaster},
 	multisig::{
-		bitcoin::BtcSigning, client::MultisigClientApi, eth::EthSigning, polkadot::PolkadotSigning,
+		bitcoin::{BtcSigning, SigningPayload},
+		client::MultisigClientApi,
+		eth::EthSigning,
+		polkadot::PolkadotSigning,
 		CryptoScheme, SignatureToThresholdSignature,
 	},
 	p2p::{PeerInfo, PeerUpdate},
@@ -55,6 +58,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	ceremony_id: CeremonyId,
 	epoch_index: EpochIndex,
 	keygen_participants: BTreeSet<AccountId32>,
+	to_agg_key: impl FnOnce(C::PublicKey) -> <<state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain as ChainCrypto>::AggKey + Send + 'static,
 ) where
 	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
@@ -78,7 +82,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 						ceremony_id,
 						reported_outcome: keygen_result_future
 							.await
-							.map(Into::into)
+							.map(to_agg_key)
 							.map_err(|(bad_account_ids, _reason)| bad_account_ids),
 					})
 					.await;
@@ -406,6 +410,7 @@ where
                                             ceremony_id,
                                             epoch_index,
                                             participants,
+                                            |new_public_key| { new_public_key },
                                         ).await;
                                     }
                                     state_chain_runtime::RuntimeEvent::PolkadotVault(
@@ -426,6 +431,9 @@ where
                                             ceremony_id,
                                             epoch_index,
                                             participants,
+                                            |new_public_key| {
+                                                new_public_key.to_bytes().into()
+                                            },
                                         ).await;
                                     }
                                     state_chain_runtime::RuntimeEvent::BitcoinVault(
@@ -446,6 +454,12 @@ where
                                             ceremony_id,
                                             epoch_index,
                                             participants,
+                                            |new_public_key| {
+                                                cf_chains::btc::AggKey {
+                                                    previous: None,
+                                                    current: new_public_key.serialize(),
+                                                }
+                                            },
                                         ).await;
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumThresholdSigner(

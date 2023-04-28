@@ -1,8 +1,8 @@
 use cf_primitives::{KeyId, GENESIS_EPOCH};
 
 use chainflip_engine::multisig::{
-	client::keygen::generate_key_data, eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme,
-	PersistentKeyDB, Rng,
+	client::keygen::generate_key_data, eth::EthSigning, polkadot::PolkadotSigning,
+	CanonicalEncoding, CryptoScheme, PersistentKeyDB, Rng,
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use rand_legacy::FromEntropy;
@@ -83,11 +83,12 @@ fn main() {
 fn generate_and_save_keys<Crypto: CryptoScheme>(
 	node_id_to_name_map: &HashMap<AccountId, String>,
 ) -> String {
-	let (public_key_bytes, key_shares) = generate_key_data::<Crypto>(
+	let (public_key, key_shares) = generate_key_data::<Crypto>(
 		BTreeSet::from_iter(node_id_to_name_map.keys().cloned()),
 		&mut Rng::from_entropy(),
 	);
 
+	let public_key_bytes = public_key.encode_key();
 	// Create a db for each key share, giving the db the name of the node it is for.
 	for (node_id, key_share) in key_shares {
 		PersistentKeyDB::open_and_migrate_to_latest(

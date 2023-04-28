@@ -1,6 +1,6 @@
 use crate::multisig::crypto::ECScalar;
 
-use super::{ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature};
+use super::{CanonicalEncoding, ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature};
 
 // NOTE: for now, we re-export these to make it
 // clear that these a the primitives used by ethereum.
@@ -53,6 +53,12 @@ impl std::fmt::Display for SigningPayload {
 impl AsRef<[u8]> for SigningPayload {
 	fn as_ref(&self) -> &[u8] {
 		&self.0
+	}
+}
+
+impl CanonicalEncoding for <EthSigning as CryptoScheme>::PublicKey {
+	fn encode_key(&self) -> Vec<u8> {
+		self.to_pubkey_compressed().to_vec()
 	}
 }
 
@@ -128,6 +134,17 @@ impl CryptoScheme for EthSigning {
 		let half_order = BigUint::from_bytes_be(&CURVE_ORDER) / 2u32 + 1u32;
 
 		x < half_order
+	}
+
+	fn pubkey_from_point(point: Self::Point) -> Self::PublicKey {
+		cf_chains::eth::AggKey {
+			pub_key_x: point.x_bytes(),
+			pub_key_y_parity: if point.is_even_y() {
+				cf_chains::eth::ParityBit::Even
+			} else {
+				cf_chains::eth::ParityBit::Odd
+			},
+		}
 	}
 
 	#[cfg(test)]

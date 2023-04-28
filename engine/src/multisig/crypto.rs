@@ -99,12 +99,17 @@ pub trait ECPoint:
 	}
 }
 
+/// For serializing public keys.
+pub trait CanonicalEncoding {
+	fn encode_key(&self) -> Vec<u8>;
+}
+
 pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 	type Point: ECPoint;
 
 	type Signature: Debug + Clone + PartialEq + Sync + Send;
 
-	type PublicKey;
+	type PublicKey: CanonicalEncoding + Sync + Send;
 
 	type SigningPayload: Display + Debug + Sync + Send + Clone + PartialEq + Eq + AsRef<[u8]>;
 
@@ -159,6 +164,9 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 	fn is_pubkey_compatible(_pubkey: &Self::Point) -> bool {
 		true
 	}
+
+	/// Convert a point to a public key.
+	fn pubkey_from_point(point: Self::Point) -> Self::PublicKey;
 
 	#[cfg(test)]
 	fn signing_payload_for_test() -> Self::SigningPayload;
