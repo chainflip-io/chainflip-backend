@@ -214,7 +214,7 @@ pub mod pallet {
 					},
 					Err(offenders) => {
 						weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
-						Self::terminate_keygen_procedure(
+						Self::terminate_rotation(
 							&if (offenders.len() as AuthorityCount) <
 								utilities::failure_threshold_from_share_count(candidate_count)
 							{
@@ -222,6 +222,7 @@ pub mod pallet {
 							} else {
 								Vec::default()
 							},
+							PalletOffence::FailedKeygen,
 							Event::KeygenFailure(ceremony_id),
 						);
 					},
@@ -446,8 +447,9 @@ pub mod pallet {
 					// We don't do any more here. We wait for the validator pallet to
 					// let us know when we can start the external rotation.
 				},
-				Err(offenders) => Self::terminate_keygen_procedure(
+				Err(offenders) => Self::terminate_rotation(
 					&offenders[..],
+					PalletOffence::FailedKeygen,
 					Event::KeygenVerificationFailure { keygen_ceremony_id },
 				),
 			};
@@ -665,8 +667,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		request_id
 	}
 
-	fn terminate_keygen_procedure(offenders: &[T::ValidatorId], event: Event<T, I>) {
-		T::OffenceReporter::report_many(PalletOffence::FailedKeygen, offenders);
+	fn terminate_rotation(
+		offenders: &[T::ValidatorId],
+		offence: PalletOffence,
+		event: Event<T, I>,
+	) {
+		T::OffenceReporter::report_many(offence, offenders);
 		for offender in offenders {
 			T::Slasher::slash_balance(offender, KeygenSlashRate::<T, I>::get());
 		}
