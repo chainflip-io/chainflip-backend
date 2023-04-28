@@ -363,7 +363,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 			for address in addresses {
-				if AddressStatus::<T, I>::get(address.1.clone()) == DeploymentStatus::Undeployed {
+				if AddressStatus::<T, I>::get(address.1.clone()) == DeploymentStatus::Pending {
 					AddressStatus::<T, I>::insert(address.1, DeploymentStatus::Deployed);
 				}
 			}
@@ -683,15 +683,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok((intent_id, address))
 	}
 
-	fn close_ingress_channel(
-		intent_id: IntentId,
-		address: TargetChainAccount<T, I>,
-		address_status: DeploymentStatus,
-	) {
+	fn close_ingress_channel(intent_id: IntentId, address: TargetChainAccount<T, I>) {
 		IntentActions::<T, I>::remove(&address);
 		FetchParamDetails::<T, I>::remove(intent_id);
-		if matches!(address_status, DeploymentStatus::Deployed) {
-			AddressStatus::<T, I>::insert(address.clone(), DeploymentStatus::Deployed);
+		if matches!(AddressStatus::<T, I>::get(&address), DeploymentStatus::Deployed) {
 			AddressPool::<T, I>::insert(intent_id, address.clone());
 		}
 		if let Some(intent_ingress_details) = IntentIngressDetails::<T, I>::take(&address) {
@@ -703,8 +698,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub fn expire_intent(intent_id: IntentId, address: TargetChainAccount<T, I>) {
-		let status = AddressStatus::<T, I>::get(&address);
-		Self::close_ingress_channel(intent_id, address, status);
+		Self::close_ingress_channel(intent_id, address);
 	}
 }
 
