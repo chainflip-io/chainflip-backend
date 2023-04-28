@@ -79,6 +79,7 @@ impl<C: Chain> CrossChainMessage<C> {
 pub enum DeploymentStatus {
 	Deployed,   // an address that has already been deployed
 	Undeployed, // an address that has not been deployed yet
+	Pending,    // an address thats deployment is pending, but not yet confirmed
 }
 
 impl Default for DeploymentStatus {
@@ -361,8 +362,10 @@ pub mod pallet {
 			addresses: Vec<(IntentId, TargetChainAccount<T, I>)>,
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
-			for (intent_id, address) in addresses {
-				Self::close_ingress_channel(intent_id, address, DeploymentStatus::Deployed);
+			for address in addresses {
+				if AddressStatus::<T, I>::get(address.1.clone()) == DeploymentStatus::Undeployed {
+					AddressStatus::<T, I>::insert(address.1, DeploymentStatus::Deployed);
+				}
 			}
 			Ok(())
 		}
@@ -420,7 +423,6 @@ pub mod pallet {
 			}
 			Ok(())
 		}
-
 		/// Send up to `maybe_size` number of scheduled Cross chain messages out.
 		/// If None is set for `maybe_size`, send all scheduled CCMs.
 		/// Requires governance
@@ -487,6 +489,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				FetchOrTransfer::<T::TargetChain>::Fetch { intent_id, asset } => {
 					let (ingress_id, ingress_address) = FetchParamDetails::<T, I>::get(intent_id)
 						.expect("to have fetch param details available");
+					if AddressStatus::<T, I>::get(ingress_address.clone()) ==
+						DeploymentStatus::Pending
+					{
+						continue
+					}
+					if AddressStatus::<T, I>::get(ingress_address.clone()) ==
+						DeploymentStatus::Undeployed
+					{
+						AddressStatus::<T, I>::insert(
+							ingress_address.clone(),
+							DeploymentStatus::Pending,
+						);
+					}
 					fetch_params.push(FetchAssetParams { ingress_fetch_id: ingress_id, asset });
 					addresses.push((intent_id, ingress_address.clone()));
 				},
