@@ -151,7 +151,7 @@ pub async fn mint_range_order(
 	task_scope(|scope| {
 		async {
 			// Connect to State Chain
-			let (_, block_stream, state_chain_client) = StateChainClient::new(
+			let (_, mut block_stream, state_chain_client) = StateChainClient::new(
 				scope,
 				state_chain_settings,
 				AccountRole::LiquidityProvider,
@@ -165,12 +165,8 @@ pub async fn mint_range_order(
 				price_range_in_ticks: range,
 				liquidity: amount,
 			};
-			let (_tx_hash, events) = submit_and_ensure_success(
-				&state_chain_client,
-				Box::new(block_stream).as_mut(),
-				call,
-			)
-			.await?;
+			let (_tx_hash, events) =
+				submit_and_ensure_success(&state_chain_client, &mut block_stream, call).await?;
 
 			// Get some details from the emitted event
 			Ok(events
@@ -207,7 +203,7 @@ pub async fn burn_range_order(
 	task_scope(|scope| {
 		async {
 			// Connect to State Chain
-			let (_latest_block_hash, block_stream, state_chain_client) = StateChainClient::new(
+			let (_latest_block_hash, mut block_stream, state_chain_client) = StateChainClient::new(
 				scope,
 				state_chain_settings,
 				AccountRole::LiquidityProvider,
@@ -229,12 +225,8 @@ pub async fn burn_range_order(
 				price_range_in_ticks: range,
 				liquidity: amount,
 			};
-			let (_tx_hash, events) = submit_and_ensure_success(
-				&state_chain_client,
-				Box::new(block_stream).as_mut(),
-				call,
-			)
-			.await?;
+			let (_tx_hash, events) =
+				submit_and_ensure_success(&state_chain_client, &mut block_stream, call).await?;
 
 			// Get some details from the emitted event
 			Ok(events
