@@ -53,16 +53,16 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
-    epoch_index: EpochIndex,
+	epoch_index: EpochIndex,
 	keygen_participants: BTreeSet<AccountId32>,
 ) where
 	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
-    state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
+	state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
 	C: CryptoScheme,
-	C::PublicKey: Into<<<state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain as ChainCrypto>::AggKey> + Send,
 	I: 'static + Sync + Send,
-	state_chain_runtime::RuntimeCall: std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,
+	state_chain_runtime::RuntimeCall:
+		std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,
 {
 	if keygen_participants.contains(&state_chain_client.account_id()) {
 		// We initiate keygen outside of the spawn to avoid requesting ceremonies out of order
@@ -96,7 +96,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
-	key_id: KeyId,
+	key_ids: Vec<KeyId>,
 	signers: BTreeSet<AccountId>,
 	payloads: Vec<C::SigningPayload>,
 ) where
@@ -114,7 +114,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	if signers.contains(&state_chain_client.account_id()) {
 		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
 		let signing_result_future =
-			multisig_client.initiate_signing(ceremony_id, key_id, signers, payloads);
+			multisig_client.initiate_signing(ceremony_id, signers, key_ids, payloads);
 		scope.spawn(async move {
 			match signing_result_future.await {
 				Ok(signatures) => {
@@ -452,7 +452,7 @@ where
                                         pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
                                             request_id: _,
                                             ceremony_id,
-                                            key,
+                                            key_id: (epoch_index, key),
                                             signatories,
                                             payload,
                                         },
@@ -466,7 +466,7 @@ where
                                                 &eth_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            key,
+                                            vec![KeyId { epoch_index, public_key_bytes: key.to_pubkey_compressed().to_vec() }],
                                             signatories,
                                             vec![crate::multisig::eth::SigningPayload(payload.0)],
                                         ).await;
@@ -476,7 +476,7 @@ where
                                         pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
                                             request_id: _,
                                             ceremony_id,
-                                            key,
+                                            key_id: (epoch_index, key),
                                             signatories,
                                             payload,
                                         },
@@ -490,7 +490,7 @@ where
                                                 &dot_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            key,
+                                            vec![KeyId { epoch_index, public_key_bytes: key.0.to_vec() }],
                                             signatories,
                                             vec![crate::multisig::polkadot::SigningPayload::new(payload.0)
                                                 .expect("Payload should be correct size")],
@@ -500,7 +500,7 @@ where
                                         pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
                                             request_id: _,
                                             ceremony_id,
-                                            key,
+                                            key_id: (epoch_index, key),
                                             signatories,
                                             payload: payloads,
                                         },
@@ -509,24 +509,28 @@ where
                                         eth_multisig_client.update_latest_ceremony_id(ceremony_id);
                                         dot_multisig_client.update_latest_ceremony_id(ceremony_id);
 
-                                        let payloads = payloads.into_iter().map(|(current_or_previous, payload)| {
+                                        let (key_ids, payloads) = payloads.into_iter().map(|(previous_or_current, payload)| {
                                                 (
-                                                    match current_or_previous {
-                                                        PreviousOrCurrent::Current => key.current,
-                                                        PreviousOrCurrent::Previous => key.previous
-                                                            .expect("Cannot be asked to sign with previous key if none exists."),
+                                                    KeyId {
+                                                        epoch_index,
+                                                        public_key_bytes: match previous_or_current {
+                                                            PreviousOrCurrent::Current => key.current,
+                                                            PreviousOrCurrent::Previous => key.previous
+                                                                .expect("Cannot be asked to sign with previous key if none exists."),
+                                                        }
+                                                        .to_vec()
                                                     },
-                                                    payload
+                                                    SigningPayload(payload),
                                                 )
                                             })
-                                            .collect();
+                                            .unzip();
 
                                         handle_signing_request::<_, _, _, BitcoinInstance>(
                                                 scope,
                                                 &btc_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            key,
+                                            key_ids,
                                             signatories,
                                             payloads,
                                         ).await;

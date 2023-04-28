@@ -17,7 +17,9 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 use cf_chains::ChainCrypto;
-use cf_primitives::{AuthorityCount, CeremonyId, ThresholdSignatureRequestId as RequestId};
+use cf_primitives::{
+	AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId as RequestId,
+};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, EpochInfo,
 	EpochKey, KeyProvider, ThresholdSignerNomination,
@@ -60,7 +62,7 @@ pub enum RequestType<Key, Participants> {
 	/// Uses the recently generated key and the participants used to generate that key.
 	/// This signing request will only be attemped once, as failing this ought to result
 	/// in another Keygen ceremony.
-	KeygenVerification { key: Key, participants: Participants },
+	KeygenVerification { key: Key, epoch_index: EpochIndex, participants: Participants },
 }
 
 /// The type of a threshold *Ceremony* i.e. after a request has been emitted, it is then a ceremony.
@@ -96,8 +98,8 @@ pub mod pallet {
 		pub blame_counts: BTreeMap<T::ValidatorId, AuthorityCount>,
 		/// The total number of signing participants (ie. the threshold set size).
 		pub participant_count: AuthorityCount,
-		/// The key being used for verification of this ceremony.
-		pub key: <T::TargetChain as ChainCrypto>::AggKey,
+		/// The key id being used for verification of this ceremony.
+		pub key_id: (EpochIndex, <T::TargetChain as ChainCrypto>::AggKey),
 		/// Determines how/if we deal with ceremony failure.
 		pub threshold_ceremony_type: ThresholdCeremonyType,
 	}
@@ -328,7 +330,7 @@ pub mod pallet {
 		ThresholdSignatureRequest {
 			request_id: RequestId,
 			ceremony_id: CeremonyId,
-			key: <T::TargetChain as ChainCrypto>::AggKey,
+			key_id: (EpochIndex, <T::TargetChain as ChainCrypto>::AggKey),
 			signatories: BTreeSet<T::ValidatorId>,
 			payload: PayloadFor<T, I>,
 		},
@@ -476,7 +478,7 @@ pub mod pallet {
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			if let Call::<T, I>::signature_success { ceremony_id, signature } = call {
-				let CeremonyContext { key, request_context, .. } =
+				let CeremonyContext { key_id: (_, key), request_context, .. } =
 					PendingCeremonies::<T, I>::get(ceremony_id).ok_or(InvalidTransaction::Stale)?;
 
 				if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
@@ -655,11 +657,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let attempt_count = request_instruction.request_context.attempt_count;
 		let payload = request_instruction.request_context.payload.clone();
 
-		let (maybe_key_and_participants, ceremony_type) =
-			if let RequestType::KeygenVerification { key, ref participants } =
+		let (maybe_key_id_and_participants, ceremony_type) =
+			if let RequestType::KeygenVerification { epoch_index, key, ref participants } =
 				request_instruction.request_type
 			{
-				(Ok((key, participants.clone())), ThresholdCeremonyType::KeygenVerification)
+				(
+					Ok(((epoch_index, key), participants.clone())),
+					ThresholdCeremonyType::KeygenVerification,
+				)
 			} else {
 				(
 					if let Some(EpochKey { key, epoch_index, .. }) =
@@ -673,7 +678,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								(request_id, attempt_count),
 								epoch_index,
 							) {
-							Ok((key, nominees))
+							Ok(((epoch_index, key), nominees))
 						} else {
 							Err(Event::<T, I>::SignersUnavailable { request_id, attempt_count })
 						}
@@ -684,8 +689,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				)
 			};
 
-		Self::deposit_event(match maybe_key_and_participants {
-			Ok((key, participants)) => {
+		Self::deposit_event(match maybe_key_id_and_participants {
+			Ok((key_id, participants)) => {
 				let ceremony_id = T::CeremonyIdProvider::increment_ceremony_id();
 				PendingCeremonies::<T, I>::insert(ceremony_id, {
 					let remaining_respondents: BTreeSet<_> =
@@ -697,7 +702,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							payload: payload.clone(),
 						},
 						threshold_ceremony_type: ceremony_type,
-						key,
+						key_id,
 						blame_counts: BTreeMap::new(),
 						participant_count: remaining_respondents.len() as AuthorityCount,
 						remaining_respondents,
@@ -716,7 +721,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Event::<T, I>::ThresholdSignatureRequest {
 					request_id,
 					ceremony_id,
-					key,
+					key_id,
 					signatories: participants,
 					payload,
 				}
@@ -805,7 +810,11 @@ where
 	) -> RequestId {
 		Self::inner_request_signature(
 			payload,
-			RequestType::KeygenVerification { key, participants },
+			RequestType::KeygenVerification {
+				key,
+				participants,
+				epoch_index: T::EpochInfo::epoch_index(),
+			},
 		)
 	}
 
