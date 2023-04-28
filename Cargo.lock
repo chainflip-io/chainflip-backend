@@ -5522,8 +5522,6 @@ dependencies = [
  "frame-system",
  "pallet-cf-account-roles",
  "parity-scale-codec",
- "quickcheck",
- "quickcheck_macros",
  "scale-info",
  "serde",
  "sp-core 7.0.0",
