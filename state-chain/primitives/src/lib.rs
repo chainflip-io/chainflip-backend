@@ -198,20 +198,22 @@ fn test_key_id_to_and_from_bytes() {
 
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
 
+/// Struct that represents the estimated output of a Swap.
 #[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum SwapResult {
+pub enum SwapRateOutput {
 	FromStable(AssetAmount),
 	IntoStable(AssetAmount),
+	// (intermediary_stable_asset_amount, final_output_amount)
 	ThroughStable(AssetAmount, AssetAmount),
 }
 
-impl SwapResult {
+impl SwapRateOutput {
 	pub fn output_amount(&self) -> AssetAmount {
 		match self {
-			SwapResult::FromStable(amount) => *amount,
-			SwapResult::IntoStable(amount) => *amount,
-			SwapResult::ThroughStable(_, amount) => *amount,
+			SwapRateOutput::FromStable(amount) => *amount,
+			SwapRateOutput::IntoStable(amount) => *amount,
+			SwapRateOutput::ThroughStable(_, amount) => *amount,
 		}
 	}
 }

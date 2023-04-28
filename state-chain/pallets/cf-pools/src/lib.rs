@@ -3,7 +3,7 @@ use cf_amm::{
 	common::{OneToZero, Side, SideMap, SqrtPriceQ64F96, ZeroToOne},
 	PoolState,
 };
-use cf_primitives::{chains::assets::any, Asset, AssetAmount, ExchangeRate, SwapResult};
+use cf_primitives::{chains::assets::any, Asset, AssetAmount, ExchangeRate, SwapRateOutput};
 use cf_traits::{Chainflip, LpBalanceApi, SwappingApi};
 use frame_support::{pallet_prelude::*, storage::with_transaction, transactional};
 use frame_system::pallet_prelude::OriginFor;
@@ -805,14 +805,14 @@ impl<T: Config> Pallet<T> {
 		from: Asset,
 		to: Asset,
 		amount: AssetAmount,
-	) -> Result<SwapResult, DispatchError> {
+	) -> Result<SwapRateOutput, DispatchError> {
 		// Always roll back the storage
 		with_transaction(|| {
 			TransactionOutcome::Rollback(match (from, to) {
 				(input_asset, STABLE_ASSET) =>
-					Self::swap(input_asset, STABLE_ASSET, amount).map(SwapResult::IntoStable),
+					Self::swap(input_asset, STABLE_ASSET, amount).map(SwapRateOutput::IntoStable),
 				(STABLE_ASSET, output_asset) =>
-					Self::swap(STABLE_ASSET, output_asset, amount).map(SwapResult::FromStable),
+					Self::swap(STABLE_ASSET, output_asset, amount).map(SwapRateOutput::FromStable),
 				(input_asset, output_asset) =>
 				// Due to how fees are taken. Dry run <input -> Stable> first, then dry run <intput
 				// -> output>.
@@ -820,7 +820,7 @@ impl<T: Config> Pallet<T> {
 						Err,
 						|intermediate_output| {
 							Self::swap(input_asset, output_asset, amount).map(|amount| {
-								SwapResult::ThroughStable(
+								SwapRateOutput::ThroughStable(
 									intermediate_output.output_amount(),
 									amount,
 								)

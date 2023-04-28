@@ -1,5 +1,5 @@
 use crate::{
-	mock::*, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, Pools, SwapResult,
+	mock::*, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, Pools, SwapRateOutput,
 	STABLE_ASSET,
 };
 use cf_amm::common::{sqrt_price_at_tick, Tick};
@@ -253,7 +253,7 @@ fn can_get_swap_rate_into_stable() {
 		let actual_output = LiquidityPools::swap(Asset::Eth, Asset::Usdc, amount).unwrap();
 
 		assert_eq!(expected_rate, ExchangeRate::saturating_from_rational(actual_output, amount));
-		assert_eq!(expected_output, SwapResult::IntoStable(actual_output));
+		assert_eq!(expected_output, SwapRateOutput::IntoStable(actual_output));
 	});
 }
 
@@ -271,7 +271,7 @@ fn can_get_swap_rate_from_stable() {
 		let actual_output = LiquidityPools::swap(Asset::Usdc, Asset::Eth, amount).unwrap();
 
 		assert_eq!(expected_rate, ExchangeRate::saturating_from_rational(actual_output, amount));
-		assert_eq!(expected_output, SwapResult::FromStable(actual_output));
+		assert_eq!(expected_output, SwapRateOutput::FromStable(actual_output));
 	});
 }
 
@@ -295,7 +295,7 @@ fn can_get_swap_rate_through_stable() {
 		assert_eq!(expected_rate, ExchangeRate::saturating_from_rational(actual_output, amount));
 		assert_eq!(
 			expected_output,
-			SwapResult::ThroughStable(expected_intermediate_amount, actual_output)
+			SwapRateOutput::ThroughStable(expected_intermediate_amount, actual_output)
 		);
 	});
 }
