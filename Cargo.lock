@@ -5051,7 +5051,6 @@ dependencies = [
  "num-bigint",
  "num-derive",
  "num-traits",
- "parity-scale-codec",
  "public-ip",
  "rand 0.6.5",
  "rand 0.8.5",

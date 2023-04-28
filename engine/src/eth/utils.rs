@@ -2,8 +2,6 @@ use crate::eth::EventParseError;
 use anyhow::Result;
 use web3::{contract::tokens::Tokenizable, ethabi::Log};
 
-pub use multisig::eth::pubkey_to_eth_addr;
-
 /// Helper method to decode the parameters from an ETH log
 pub fn decode_log_param<T: Tokenizable>(log: &Log, param_name: &str) -> Result<T> {
 	let token = &log

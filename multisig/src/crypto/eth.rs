@@ -145,7 +145,7 @@ impl CryptoScheme for EthSigning {
 }
 
 /// Get a eth address from a public key
-pub fn pubkey_to_eth_addr(pubkey: secp256k1::PublicKey) -> [u8; 20] {
+fn pubkey_to_eth_addr(pubkey: secp256k1::PublicKey) -> [u8; 20] {
 	use sp_core::Hasher;
 
 	let pubkey_bytes: [u8; 64] = pubkey.serialize_uncompressed()[1..]
