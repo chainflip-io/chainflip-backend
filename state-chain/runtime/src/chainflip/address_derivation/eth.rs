@@ -12,17 +12,11 @@ impl AddressDerivationApi<Ethereum> for AddressDerivation {
 		intent_id: IntentId,
 	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
 		Ok(get_create_2_address(
-			ingress_asset,
 			Environment::eth_vault_address(),
-			match ingress_asset {
-				eth::Asset::Eth => None,
-				_ => Some(
-					EthEnvironment::lookup(ingress_asset)
-						.expect("ERC20 asset to be supported!")
-						.to_fixed_bytes()
-						.to_vec(),
-				),
-			},
+		Some(EthEnvironment::lookup(ingress_asset)
+			.expect("ERC20 asset to be supported!")
+			.to_fixed_bytes()
+			.to_vec()),
 			intent_id,
 		)
 		.into())
