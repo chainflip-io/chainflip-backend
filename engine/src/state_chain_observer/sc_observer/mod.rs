@@ -37,7 +37,7 @@ use crate::{
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{
 		extrinsic_api::{
-			signed::{SignedExtrinsicApi, Watch},
+			signed::{SignedExtrinsicApi, UntilFinalized},
 			unsigned::UnsignedExtrinsicApi,
 		},
 		storage_api::StorageApi,
@@ -335,7 +335,7 @@ where
                         pallet_cf_reputation::Call::heartbeat {},
                     )
                     .await
-                    .watch()
+                    .until_finalized()
                     .await
                     .context("Failed to submit initial heartbeat")?;
                 has_submitted_init_heartbeat.store(true, Ordering::Relaxed);

@@ -1461,7 +1461,7 @@ where
 	state_chain_client.
 		expect_submit_signed_extrinsic::<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>()
 		.once()
-		.return_once(|_| (H256::default(), extrinsic_api::signed::MockWatch::new()));
+		.return_once(|_| (H256::default(), extrinsic_api::signed::MockUntilFinalized::new()));
 	let state_chain_client = Arc::new(state_chain_client);
 
 	let mut multisig_client = MockMultisigClientApi::<C>::new();
@@ -1564,7 +1564,7 @@ where
 	state_chain_client
 		.expect_submit_signed_extrinsic::<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>()
 		.once()
-		.return_once(|_| (H256::default(), extrinsic_api::signed::MockWatch::new()));
+		.return_once(|_| (H256::default(), extrinsic_api::signed::MockUntilFinalized::new()));
 	let state_chain_client = Arc::new(state_chain_client);
 
 	let mut multisig_client = MockMultisigClientApi::<C>::new();

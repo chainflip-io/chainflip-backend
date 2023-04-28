@@ -29,7 +29,7 @@ pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 
 use chainflip_engine::state_chain_observer::client::{
 	base_rpc_api::{BaseRpcApi, BaseRpcClient, RawRpcApi},
-	extrinsic_api::signed::{SignedExtrinsicApi, Watch},
+	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
 	DefaultRpcClient, StateChainClient,
 };
 use utilities::{clean_dot_address, clean_eth_address, task_scope::task_scope};
@@ -103,7 +103,7 @@ where
 			.await?;
 
 			let (_tx_hash, events, _) =
-				state_chain_client.submit_signed_extrinsic(call).await.watch().await?;
+				state_chain_client.submit_signed_extrinsic(call).await.until_finalized().await?;
 
 			Ok(events)
 		}
@@ -139,7 +139,7 @@ pub async fn request_claim(
 					address: eth_address,
 				})
 				.await
-				.watch()
+				.until_finalized()
 				.await?;
 
 			Ok(tx_hash)
@@ -177,7 +177,7 @@ pub async fn register_account_role(
 			let (tx_hash, ..) = state_chain_client
 				.submit_signed_extrinsic(call)
 				.await
-				.watch()
+				.until_finalized()
 				.await
 				.expect("Could not set register account role for account");
 			Ok(tx_hash)
@@ -217,7 +217,7 @@ pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<
 					proof: [0; 1].to_vec(),
 				})
 				.await
-				.watch()
+				.until_finalized()
 				.await
 				.expect("Failed to submit set_keys extrinsic");
 
@@ -247,7 +247,7 @@ pub async fn force_rotation(state_chain_settings: &settings::StateChain) -> Resu
 					call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
 				})
 				.await
-				.watch()
+				.until_finalized()
 				.await
 				.expect("Should submit sudo governance proposal");
 
@@ -274,7 +274,7 @@ pub async fn stop_bidding(state_chain_settings: &settings::StateChain) -> Result
 			let (tx_hash, ..) = state_chain_client
 				.submit_signed_extrinsic(pallet_cf_staking::Call::stop_bidding {})
 				.await
-				.watch()
+				.until_finalized()
 				.await
 				.expect("Could not stop bidding");
 			println!("Account stopped bidding, in tx {tx_hash:#x}.");
@@ -300,7 +300,7 @@ pub async fn start_bidding(state_chain_settings: &settings::StateChain) -> Resul
 			let (tx_hash, ..) = state_chain_client
 				.submit_signed_extrinsic(pallet_cf_staking::Call::start_bidding {})
 				.await
-				.watch()
+				.until_finalized()
 				.await
 				.expect("Could not start bidding");
 			println!("Account started bidding at tx {tx_hash:#x}.");
@@ -335,7 +335,7 @@ pub async fn set_vanity_name(
 					name: name.as_bytes().to_vec(),
 				})
 				.await
-				.watch()
+				.until_finalized()
 				.await
 				.expect("Could not set vanity name for your account");
 			println!("Vanity name set at tx {tx_hash:#x}.");

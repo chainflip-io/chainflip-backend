@@ -11,7 +11,7 @@ use chainflip_engine::{
 	settings,
 	state_chain_observer::client::{
 		base_rpc_api::BaseRpcApi,
-		extrinsic_api::signed::{SignedExtrinsicApi, Watch},
+		extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
 		storage_api::StorageApi,
 		StateChainClient,
 	},
@@ -176,7 +176,7 @@ pub async fn mint_range_order(
 					liquidity: amount,
 				})
 				.await
-				.watch()
+				.until_finalized()
 				.await?;
 
 			// Get some details from the emitted event
@@ -239,7 +239,7 @@ pub async fn burn_range_order(
 					liquidity: amount,
 				})
 				.await
-				.watch()
+				.until_finalized()
 				.await?;
 
 			// Get some details from the emitted event

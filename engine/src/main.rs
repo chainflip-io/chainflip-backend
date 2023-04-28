@@ -18,7 +18,7 @@ use chainflip_engine::{
 	state_chain_observer::{
 		self,
 		client::{
-			extrinsic_api::signed::{SignedExtrinsicApi, Watch},
+			extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
 			storage_api::StorageApi,
 		},
 	},
@@ -86,7 +86,7 @@ async fn main() -> anyhow::Result<()> {
 					},
 				})
 				.await
-				.watch()
+				.until_finalized()
 				.await
 				.context("Failed to submit version to state chain")?;
 

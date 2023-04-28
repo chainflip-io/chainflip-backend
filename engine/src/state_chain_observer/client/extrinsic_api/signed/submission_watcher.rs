@@ -70,7 +70,7 @@ impl<Identity: Copy, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'st
 		self.finalized_nonce
 	}
 
-	pub async fn raw_submit_extrinsic(
+	pub async fn submit_extrinsic_at_nonce(
 		&mut self,
 		call: state_chain_runtime::RuntimeCall,
 		nonce: state_chain_runtime::Index,
@@ -156,7 +156,7 @@ impl<Identity: Copy, BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'st
 	) -> Result<H256, anyhow::Error> {
 		Ok(loop {
 			match self
-				.raw_submit_extrinsic(call.clone(), self.anticipated_nonce, identity)
+				.submit_extrinsic_at_nonce(call.clone(), self.anticipated_nonce, identity)
 				.await?
 			{
 				Ok(tx_hash) => {

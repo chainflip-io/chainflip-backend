@@ -5,7 +5,7 @@ use sp_core::H256;
 use sp_runtime::traits::Hash;
 use tokio::sync::{mpsc, oneshot};
 use tracing::debug;
-use utilities::task_scope::{Scope, ScopedJoinHandle};
+use utilities::task_scope::{Scope, ScopedJoinHandle, OR_CANCEL};
 
 use super::{
 	super::{base_rpc_api, SUBSTRATE_BEHAVIOUR},
@@ -94,6 +94,6 @@ impl UnsignedExtrinsicApi for UnsignedExtrinsicClient {
 		send_request(&self.request_sender, |result_sender| (call.into(), result_sender))
 			.await
 			.await
-			.unwrap() // or cancel
+			.expect(OR_CANCEL)
 	}
 }

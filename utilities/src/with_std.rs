@@ -4,6 +4,8 @@ use futures::{stream, Stream};
 #[doc(hidden)]
 pub use lazy_format::lazy_format as internal_lazy_format;
 use std::path::PathBuf;
+#[doc(hidden)]
+pub use tokio::select as internal_tokio_select;
 
 pub mod task_scope;
 
@@ -434,4 +436,60 @@ mod tests_read_clean_and_decode_hex_str_file {
 			);
 		});
 	}
+}
+
+#[macro_export]
+macro_rules! inner_loop_select {
+    ({ $($processed:tt)* } let $pattern:pat = $expression:expr => $body:block, $($unprocessed:tt)*) => {
+        $crate::inner_loop_select!(
+            {
+                $($processed)*
+                x = $expression => {
+					let $pattern = x;
+					$body
+				},
+            }
+            $($unprocessed)*
+		)
+    };
+    ({ $($processed:tt)* } if let $pattern:pat = $expression:expr => $body:block, $($unprocessed:tt)*) => {
+        $crate::inner_loop_select!(
+            {
+                $($processed)*
+                x = $expression => {
+					if let $pattern = x {
+						$body
+					} else { break }
+				},
+            }
+            $($unprocessed)*
+		)
+    };
+    ({ $($processed:tt)* } if let $pattern:pat = $expression:expr => $body:block else break $extra:expr, $($unprocessed:tt)*) => {
+        $crate::inner_loop_select!(
+            {
+                $($processed)*
+                x = $expression => {
+					if let $pattern = x {
+						$body
+					} else { break $extra }
+				},
+            }
+            $($unprocessed)*
+		)
+    };
+    ({ $($processed:tt)+ }) => {
+		loop {
+			$crate::internal_tokio_select!(
+				$($processed)+
+			)
+		}
+    };
+}
+
+#[macro_export]
+macro_rules! loop_select {
+    ($($cases:tt)+) => {
+        $crate::inner_loop_select!({} $($cases)+)
+    }
 }
