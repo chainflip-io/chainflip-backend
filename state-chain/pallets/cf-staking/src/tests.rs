@@ -5,7 +5,7 @@ use crate::{
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{mocks::system_state_info::MockSystemStateInfo, Bonding};
 
-use frame_support::{assert_noop, assert_ok, error::BadOrigin};
+use frame_support::{assert_noop, assert_ok};
 use pallet_cf_flip::Bonder;
 use sp_runtime::DispatchError;
 
@@ -238,28 +238,6 @@ fn claim_cannot_occur_without_staking_first() {
 			}),
 			RuntimeEvent::System(frame_system::Event::KilledAccount { account: ALICE }),
 			RuntimeEvent::Staking(crate::Event::ClaimSettled(ALICE, STAKE))
-		);
-	});
-}
-
-#[test]
-fn multisig_endpoints_cant_be_called_from_invalid_origins() {
-	new_test_ext().execute_with(|| {
-		const STAKE: u128 = 45;
-
-		assert_noop!(
-			Staking::staked(RuntimeOrigin::none(), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH),
-			BadOrigin
-		);
-		assert_noop!(
-			Staking::staked(RuntimeOrigin::signed(ALICE), ALICE, STAKE, ETH_ZERO_ADDRESS, TX_HASH,),
-			BadOrigin
-		);
-
-		assert_noop!(Staking::claimed(RuntimeOrigin::none(), ALICE, STAKE, TX_HASH), BadOrigin);
-		assert_noop!(
-			Staking::claimed(RuntimeOrigin::signed(ALICE), ALICE, STAKE, TX_HASH),
-			BadOrigin
 		);
 	});
 }

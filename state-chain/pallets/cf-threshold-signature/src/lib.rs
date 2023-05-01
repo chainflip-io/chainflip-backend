@@ -193,14 +193,8 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
-
 		/// The top-level offence type must support this pallet's offence type.
 		type Offence: From<PalletOffence>;
-
-		/// For registering and verifying the account role.
-		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
 		/// The top-level origin type of the runtime.
 		type RuntimeOrigin: From<Origin<Self, I>>

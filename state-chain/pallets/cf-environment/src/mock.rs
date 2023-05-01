@@ -1,17 +1,14 @@
-use crate::{self as pallet_cf_environment, cfe};
+use crate::{self as pallet_cf_environment, cfe, Decode, Encode, TypeInfo};
 use cf_chains::{
 	btc::BitcoinNetwork,
 	dot::{api::CreatePolkadotVault, TEST_RUNTIME_VERSION},
 	ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
-
-use cf_primitives::{AuthorityCount, BroadcastId, ThresholdSignatureRequestId};
+use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
-	impl_mock_callback,
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	BroadcastCleanup, Broadcaster, Chainflip, VaultKeyWitnessedHandler,
+	impl_mock_callback, impl_mock_chainflip, BroadcastCleanup, Broadcaster,
+	VaultKeyWitnessedHandler,
 };
-
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
 use sp_core::H256;
 use sp_runtime::{
@@ -19,8 +16,6 @@ use sp_runtime::{
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
 };
-
-use crate::{Decode, Encode, TypeInfo};
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -69,6 +64,8 @@ impl frame_system::Config for Test {
 	type OnSetCode = ();
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
+
+impl_mock_chainflip!(Test);
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockCreatePolkadotVault;
@@ -143,26 +140,12 @@ impl VaultKeyWitnessedHandler<Bitcoin> for MockBitcoinVaultKeyWitnessedHandler {
 	}
 }
 
-cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
-cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
-
-impl Chainflip for Test {
-	type ValidatorId = AccountId;
-	type Amount = u128;
-	type RuntimeCall = RuntimeCall;
-	type EnsureWitnessed = MockEnsureWitnessed;
-	type EnsureWitnessedAtCurrentEpoch = MockEnsureWitnessed;
-	type EpochInfo = MockEpochInfo;
-	type SystemState = MockSystemStateInfo;
-}
-
 parameter_types! {
 	pub const BitcoinNetworkParam: BitcoinNetwork = BitcoinNetwork::Testnet;
 }
 
 impl pallet_cf_environment::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type CreatePolkadotVault = MockCreatePolkadotVault;
 	type PolkadotBroadcaster = MockPolkadotBroadcaster;
 	type BitcoinNetwork = BitcoinNetworkParam;

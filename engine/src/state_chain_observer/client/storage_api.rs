@@ -12,6 +12,8 @@ use jsonrpsee::core::RpcResult;
 use sp_core::storage::StorageKey;
 use utilities::context;
 
+use super::SUBSTRATE_BEHAVIOUR;
+
 /// This trait extracts otherwise private type information about Substrate storage double maps
 pub trait StorageDoubleMapAssociatedTypes {
 	type Key1;
@@ -181,7 +183,7 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 		Ok(QueryKind::from_optional_value_to_query(
 			self.storage(block_hash, storage_key.clone())
 				.await?
-				.map(|data| context!(Value::decode(&mut &data.0[..])).unwrap()),
+				.map(|data| context!(Value::decode(&mut &data.0[..])).expect(SUBSTRATE_BEHAVIOUR)),
 		))
 	}
 
@@ -245,7 +247,8 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 			.map(|(storage_key, storage_data)| {
 				(
 					StorageMap::key_from_storage_key(&storage_key),
-					context!(StorageMap::Value::decode(&mut &storage_data.0[..])).unwrap(),
+					context!(StorageMap::Value::decode(&mut &storage_data.0[..]))
+						.expect(SUBSTRATE_BEHAVIOUR),
 				)
 			})
 			.collect())
@@ -253,8 +256,10 @@ impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> Storag
 }
 
 #[async_trait]
-impl<BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static> StorageApi
-	for super::StateChainClient<BaseRpcApi>
+impl<
+		BaseRpcApi: super::base_rpc_api::BaseRpcApi + Send + Sync + 'static,
+		SignedExtrinsicClient: Send + Sync + 'static,
+	> StorageApi for super::StateChainClient<SignedExtrinsicClient, BaseRpcApi>
 {
 	async fn storage_item<
 		Value: codec::FullCodec + 'static,

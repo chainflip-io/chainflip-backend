@@ -624,14 +624,13 @@ mod failure_reporting {
 	use crate::{CeremonyContext, RequestContext, ThresholdCeremonyType};
 	use cf_chains::ChainCrypto;
 	use cf_primitives::KeyId;
-	use cf_traits::mocks::epoch_info::MockEpochInfo;
 
 	fn init_context(
 		validator_set: impl IntoIterator<Item = <Test as Chainflip>::ValidatorId> + Copy,
 	) -> CeremonyContext<Test, Instance1> {
 		const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
 		MockEpochInfo::set_authorities(validator_set.into_iter().collect());
-		CeremonyContext::<Test, Instance1> {
+		CeremonyContext {
 			request_context: RequestContext { request_id: 1, attempt_count: 0, payload: PAYLOAD },
 			threshold_ceremony_type: ThresholdCeremonyType::Standard,
 			key_id: KeyId { public_key_bytes: AGG_KEY.to_vec(), epoch_index: 0 },

@@ -33,8 +33,10 @@ pub const CHAIN_TAG_SIZE: usize = std::mem::size_of::<ChainTag>();
 pub enum ChainTag {
 	Ethereum = 0x0000,
 	Polkadot = 0x0001,
-	Sui = 0x0002,
-	Bitcoin = 0x0003,
+	Bitcoin = 0x0002,
+
+	// Ed25519 placeholder
+	Ed25519 = 0xffff,
 }
 
 impl Display for ChainTag {
@@ -42,8 +44,8 @@ impl Display for ChainTag {
 		match self {
 			ChainTag::Ethereum => write!(f, "Ethereum"),
 			ChainTag::Polkadot => write!(f, "Polkadot"),
-			ChainTag::Sui => write!(f, "Sui"),
 			ChainTag::Bitcoin => write!(f, "Bitcoin"),
+			ChainTag::Ed25519 => write!(f, "Ed25519"),
 		}
 	}
 }

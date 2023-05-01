@@ -9,11 +9,12 @@ use cf_chains::{
 	ChainCrypto,
 };
 use cf_traits::{
+	impl_mock_chainflip,
 	mocks::{
 		ceremony_id_provider::MockCeremonyIdProvider, key_provider::MockKeyProvider,
-		signer_nomination::MockNominator, system_state_info::MockSystemStateInfo,
+		signer_nomination::MockNominator,
 	},
-	AsyncResult, Chainflip, KeyProvider, ThresholdSigner,
+	AccountRoleRegistry, AsyncResult, KeyProvider, ThresholdSigner,
 };
 use codec::{Decode, Encode};
 pub use frame_support::{
@@ -77,19 +78,7 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-use cf_traits::mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo};
-
-impl Chainflip for Test {
-	type ValidatorId = u64;
-	type Amount = u128;
-	type RuntimeCall = RuntimeCall;
-	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
-	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
-	type EpochInfo = MockEpochInfo;
-	type SystemState = MockSystemStateInfo;
-}
-
-// Mock Callback
+impl_mock_chainflip!(Test);
 
 thread_local! {
 	pub static CALL_DISPATCHED: std::cell::RefCell<Option<RequestId>> = Default::default();
@@ -161,12 +150,10 @@ impl pallet_cf_threshold_signature::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = PalletOffence;
 	type RuntimeOrigin = RuntimeOrigin;
-	type AccountRoleRegistry = ();
 	type ThresholdCallable = MockCallback<MockEthereum>;
 	type TargetChain = MockEthereum;
 	type ThresholdSignerNomination = MockNominator;
 	type KeyProvider = MockKeyProvider<MockEthereum>;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type OffenceReporter = MockOffenceReporter;
 	type CeremonyIdProvider = MockCeremonyIdProvider;
 	type CeremonyRetryDelay = CeremonyRetryDelay;
@@ -198,7 +185,12 @@ impl ExtBuilder {
 
 	pub fn with_authorities(mut self, validators: impl IntoIterator<Item = u64>) -> Self {
 		self.ext.execute_with(|| {
-			MockEpochInfo::set_authorities(validators.into_iter().collect());
+			let validators = BTreeSet::from_iter(validators);
+			for id in &validators {
+				<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
+					.unwrap();
+			}
+			MockEpochInfo::set_authorities(validators);
 		});
 		self
 	}

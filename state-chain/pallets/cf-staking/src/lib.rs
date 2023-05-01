@@ -84,13 +84,7 @@ pub mod pallet {
 		/// The type containing all calls that are dispatchable from the threshold source.
 		type ThresholdCallable: From<Call<Self>>;
 
-		/// For registering and verifying the account role.
-		type AccountRoleRegistry: AccountRoleRegistry<Self>;
-
 		type StakerId: AsRef<[u8; 32]> + IsType<<Self as frame_system::Config>::AccountId>;
-
-		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
 		type Balance: Parameter
 			+ Member

@@ -13,7 +13,7 @@ use crate::{
 	eth::EventParseError,
 	state_chain_observer::client::{
 		base_rpc_api::{BaseRpcClient, RawRpcApi},
-		extrinsic_api::ExtrinsicApi,
+		extrinsic_api::signed::SignedExtrinsicApi,
 		StateChainClient,
 	},
 };
@@ -106,8 +106,8 @@ pub trait EthAssetApi {
 }
 
 #[async_trait]
-impl<RawRpcClient: RawRpcApi + Send + Sync + 'static> EthAssetApi
-	for StateChainClient<BaseRpcClient<RawRpcClient>>
+impl<RawRpcClient: RawRpcApi + Send + Sync + 'static, SignedExtrinsicClient: Send + Sync>
+	EthAssetApi for StateChainClient<SignedExtrinsicClient, BaseRpcClient<RawRpcClient>>
 {
 	async fn asset(&self, token_address: EthereumAddress) -> Result<Option<Asset>> {
 		self.base_rpc_client
@@ -136,7 +136,7 @@ impl EthContractWitnesser for Vault {
 	) -> Result<()>
 	where
 		EthRpcClient: EthRpcApi + Sync + Send,
-		StateChainClient: ExtrinsicApi + EthAssetApi + Send + Sync,
+		StateChainClient: SignedExtrinsicApi + EthAssetApi + Send + Sync,
 	{
 		for event in block.block_items {
 			info!("Handling event: {event}");
@@ -181,7 +181,7 @@ impl EthContractWitnesser for Vault {
 				_ => todo!("handle the rest"),
 			};
 
-			let _result = state_chain_client
+			state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(call.into()),
 					epoch_index: epoch,

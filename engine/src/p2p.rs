@@ -10,7 +10,9 @@ use std::{
 
 use crate::{
 	settings::P2P as P2PSettings,
-	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
+	state_chain_observer::client::{
+		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+	},
 };
 
 pub use self::{
@@ -66,7 +68,7 @@ pub async fn start<StateChainClient>(
 	impl Future<Output = anyhow::Result<()>>,
 )>
 where
-	StateChainClient: StorageApi + ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
 	if settings.ip_address == IpAddr::V4(Ipv4Addr::UNSPECIFIED) {
 		anyhow::bail!("Should provide a valid IP address");

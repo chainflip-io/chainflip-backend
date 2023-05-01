@@ -1,6 +1,9 @@
 use std::{collections::BTreeSet, sync::Arc};
 
-use crate::btc::rpc::MockBtcRpcApi;
+use crate::{
+	btc::rpc::MockBtcRpcApi,
+	state_chain_observer::client::{extrinsic_api, StreamCache},
+};
 use cf_chains::{
 	eth::{Ethereum, Transaction},
 	ChainCrypto,
@@ -17,6 +20,7 @@ use sp_core::{Hasher, H256};
 use sp_runtime::{traits::Keccak256, AccountId32, Digest};
 use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance, Header};
 use tokio::sync::watch;
+use utilities::MakeCachedStream;
 use web3::types::{Bytes, SignedTransaction};
 
 use crate::{
@@ -118,7 +122,12 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
 	// No blocks in the stream
-	let sc_block_stream = tokio_stream::iter(vec![]);
+	let sc_block_stream = tokio_stream::iter(vec![]).make_cached(
+		StreamCache { block_hash: Default::default(), block_number: Default::default() },
+		|(block_hash, block_header): &(state_chain_runtime::Hash, state_chain_runtime::Header)| {
+			StreamCache { block_hash: *block_hash, block_number: block_header.number }
+		},
+	);
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -171,7 +180,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		btc_epoch_start_sender,
 		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
-		initial_block_hash,
 	)
 	.await
 	.unwrap_err();
@@ -313,7 +321,12 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		.return_once(|_| Ok(Some(PolkadotAccountId::from([3u8; 32]))));
 
 	// No blocks in the stream
-	let sc_block_stream = tokio_stream::iter(vec![]);
+	let sc_block_stream = tokio_stream::iter(vec![]).make_cached(
+		StreamCache { block_hash: initial_block_hash, block_number: 20 },
+		|(block_hash, block_header): &(state_chain_runtime::Hash, state_chain_runtime::Header)| {
+			StreamCache { block_hash: *block_hash, block_number: block_header.number }
+		},
+	);
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -366,7 +379,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		btc_epoch_start_sender,
 		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
-		initial_block_hash,
 	)
 	.await
 	.unwrap_err();
@@ -459,7 +471,12 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 			Ok(Some(Vault { public_key: Default::default(), active_from_block: 98 }))
 		});
 
-	let sc_block_stream = tokio_stream::iter(vec![]);
+	let sc_block_stream = tokio_stream::iter(vec![]).make_cached(
+		StreamCache { block_hash: initial_block_hash, block_number: 20 },
+		|(block_hash, block_header): &(state_chain_runtime::Hash, state_chain_runtime::Header)| {
+			StreamCache { block_hash: *block_hash, block_number: block_header.number }
+		},
+	);
 
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -511,7 +528,6 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		btc_epoch_start_sender,
 		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
-		initial_block_hash,
 	)
 	.await
 	.unwrap_err();
@@ -610,7 +626,15 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let new_epoch_block_header = test_header(21);
 	let new_epoch_block_header_hash = new_epoch_block_header.hash();
 	let sc_block_stream =
-		tokio_stream::iter(vec![empty_block_header.clone(), new_epoch_block_header.clone()]);
+		tokio_stream::iter(vec![empty_block_header.clone(), new_epoch_block_header.clone()])
+			.map(|block_header| (block_header.hash(), block_header))
+			.make_cached(
+				StreamCache { block_hash: initial_block_hash, block_number: 19 },
+				|(block_hash, block_header): &(
+					state_chain_runtime::Hash,
+					state_chain_runtime::Header,
+				)| StreamCache { block_hash: *block_hash, block_number: block_header.number },
+			);
 	state_chain_client
 		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
 		.with(eq(empty_block_header.hash()))
@@ -733,7 +757,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		btc_epoch_start_sender,
 		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
-		initial_block_hash,
 	)
 	.await
 	.unwrap_err();
@@ -833,7 +856,15 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let new_epoch_block_header = test_header(21);
 	let new_epoch_block_header_hash = new_epoch_block_header.hash();
 	let sc_block_stream =
-		tokio_stream::iter(vec![empty_block_header.clone(), new_epoch_block_header.clone()]);
+		tokio_stream::iter(vec![empty_block_header.clone(), new_epoch_block_header.clone()])
+			.map(|block_header| (block_header.hash(), block_header))
+			.make_cached(
+				StreamCache { block_hash: initial_block_hash, block_number: 19 },
+				|(block_hash, block_header): &(
+					state_chain_runtime::Hash,
+					state_chain_runtime::Header,
+				)| StreamCache { block_hash: *block_hash, block_number: block_header.number },
+			);
 	state_chain_client
 		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
 		.with(eq(empty_block_header.hash()))
@@ -953,7 +984,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		btc_epoch_start_sender,
 		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
-		initial_block_hash,
 	)
 	.await
 	.unwrap_err();
@@ -1053,7 +1083,15 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	let new_epoch_block_header = test_header(21);
 	let new_epoch_block_header_hash = new_epoch_block_header.hash();
 	let sc_block_stream =
-		tokio_stream::iter([empty_block_header.clone(), new_epoch_block_header.clone()]);
+		tokio_stream::iter([empty_block_header.clone(), new_epoch_block_header.clone()])
+			.map(|block_header| (block_header.hash(), block_header))
+			.make_cached(
+				StreamCache { block_hash: initial_block_hash, block_number: 19 },
+				|(block_hash, block_header): &(
+					state_chain_runtime::Hash,
+					state_chain_runtime::Header,
+				)| StreamCache { block_hash: *block_hash, block_number: block_header.number },
+			);
 
 	state_chain_client
 		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
@@ -1174,7 +1212,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		btc_epoch_start_sender,
 		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
-		initial_block_hash,
 	)
 	.await
 	.unwrap_err();
@@ -1271,7 +1308,15 @@ async fn only_encodes_and_signs_when_specified() {
 		});
 
 	let block_header = test_header(21);
-	let sc_block_stream = tokio_stream::iter([block_header.clone()]);
+	let sc_block_stream = tokio_stream::iter([block_header.clone()])
+		.map(|block_header| (block_header.hash(), block_header))
+		.make_cached(
+			StreamCache { block_hash: initial_block_hash, block_number: 20 },
+			|(block_hash, block_header): &(
+				state_chain_runtime::Hash,
+				state_chain_runtime::Header,
+			)| StreamCache { block_hash: *block_hash, block_number: block_header.number },
+		);
 
 	let mut eth_rpc_mock = MockEthRpcApi::new();
 
@@ -1381,7 +1426,6 @@ async fn only_encodes_and_signs_when_specified() {
 		btc_epoch_start_sender,
 		btc_monitor_signature_sender,
 		cfe_settings_update_sender,
-		initial_block_hash,
 	)
 	.await
 	.unwrap_err();
@@ -1415,9 +1459,9 @@ where
 		.times(2)
 		.return_const(our_account_id.clone());
 	state_chain_client.
-expect_submit_signed_extrinsic::<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime,
-I>>() 		.once()
-		.return_once(|_| Ok(sp_core::H256::default()));
+		expect_submit_signed_extrinsic::<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>()
+		.once()
+		.return_once(|_| (H256::default(), extrinsic_api::signed::MockUntilFinalized::new()));
 	let state_chain_client = Arc::new(state_chain_client);
 
 	let mut multisig_client = MockMultisigClientApi::<C>::new();
@@ -1520,7 +1564,7 @@ where
 	state_chain_client
 		.expect_submit_signed_extrinsic::<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>()
 		.once()
-		.return_once(|_| Ok(H256::default()));
+		.return_once(|_| (H256::default(), extrinsic_api::signed::MockUntilFinalized::new()));
 	let state_chain_client = Arc::new(state_chain_client);
 
 	let mut multisig_client = MockMultisigClientApi::<C>::new();
@@ -1600,10 +1644,11 @@ async fn run_the_sc_observer() {
 		async {
 			let settings = Settings::new_test().unwrap();
 
-			let (initial_block_hash, sc_block_stream, state_chain_client) =
-				crate::state_chain_observer::client::StateChainClient::new(
+			let (sc_block_stream, state_chain_client) =
+				crate::state_chain_observer::client::StateChainClient::connect_with_account(
 					scope,
-					&settings.state_chain,
+					&settings.state_chain.ws_endpoint,
+					&settings.state_chain.signing_key_file,
 					AccountRole::None,
 					false,
 				)
@@ -1668,7 +1713,6 @@ async fn run_the_sc_observer() {
 				btc_epoch_start_sender,
 				btc_monitor_ingress_sender,
 				cfe_settings_update_sender,
-				initial_block_hash,
 			)
 			.await
 			.unwrap_err();

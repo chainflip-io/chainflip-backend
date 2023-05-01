@@ -1,4 +1,4 @@
-use crate::state_chain_observer::client::extrinsic_api::ExtrinsicApi;
+use crate::state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi;
 use std::sync::Arc;
 
 use crate::eth::{EthRpcApi, SignatureAndEvent};
@@ -103,13 +103,13 @@ impl EthContractWitnesser for StakeManager {
 	) -> anyhow::Result<()>
 	where
 		EthRpcClient: EthRpcApi + Sync + Send,
-		StateChainClient: ExtrinsicApi + Send + Sync,
+		StateChainClient: SignedExtrinsicApi + Send + Sync,
 	{
 		for event in block.block_items {
 			info!("Handling event: {event}");
 			match event.event_parameters {
 				StakeManagerEvent::Staked { account_id, amount, staker: _, return_addr } => {
-					let _result = state_chain_client
+					state_chain_client
 						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 							call: Box::new(
 								pallet_cf_staking::Call::staked {
@@ -125,7 +125,7 @@ impl EthContractWitnesser for StakeManager {
 						.await;
 				},
 				StakeManagerEvent::ClaimExecuted { account_id, amount } => {
-					let _result = state_chain_client
+					state_chain_client
 						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 							call: Box::new(
 								pallet_cf_staking::Call::claimed {
@@ -140,7 +140,7 @@ impl EthContractWitnesser for StakeManager {
 						.await;
 				},
 				StakeManagerEvent::ClaimExpired { account_id, amount: _ } => {
-					let _result = state_chain_client
+					state_chain_client
 						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 							call: Box::new(
 								pallet_cf_staking::Call::claim_expired { account_id, block_number }

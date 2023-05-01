@@ -102,8 +102,6 @@ pub mod pallet {
 		/// Because we want to emit events when there is a config change during
 		/// an runtime upgrade
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-		/// Governance origin to secure extrinsic
-		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 		/// Polkadot Vault Creation Apicall
 		type CreatePolkadotVault: CreatePolkadotVault;
 		/// Polkadot broadcaster

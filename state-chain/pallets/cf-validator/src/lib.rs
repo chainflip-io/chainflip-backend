@@ -20,10 +20,10 @@ mod rotation_state;
 pub use auction_resolver::*;
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidInfo, BidderProvider,
-	Bonding, Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, ExecutionCondition,
+	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidderProvider, Bonding,
+	Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, ExecutionCondition,
 	HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter, StakeHandler,
-	SystemStateInfo, VaultRotator,
+	StakingInfo, SystemStateInfo, VaultRotator,
 };
 use cf_utilities::Port;
 use frame_support::{
@@ -133,9 +133,6 @@ pub mod pallet {
 		/// The top-level offence type must support this pallet's offence type.
 		type Offence: From<PalletOffence>;
 
-		/// For registering and verifying the account role.
-		type AccountRoleRegistry: AccountRoleRegistry<Self>;
-
 		/// A handler for epoch lifecycle events
 		type EpochTransitionHandler: EpochTransitionHandler;
 
@@ -144,9 +141,6 @@ pub mod pallet {
 		type MinEpoch: Get<<Self as frame_system::Config>::BlockNumber>;
 
 		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
-
-		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// For retrieving missed authorship slots.
 		type MissedAuthorshipSlots: MissedAuthorshipSlots;
@@ -211,12 +205,6 @@ pub mod pallet {
 		ValidatorIdOf<T>,
 		AuthorityCount,
 	>;
-
-	/// Track epochs and their associated authority count.
-	#[pallet::storage]
-	#[pallet::getter(fn epoch_authority_count)]
-	pub type EpochAuthorityCount<T: Config> =
-		StorageMap<_, Twox64Concat, EpochIndex, AuthorityCount>;
 
 	/// The rotation phase we are currently at.
 	#[pallet::storage]
@@ -368,6 +356,8 @@ pub mod pallet {
 		InconsistentRanges,
 		/// Not enough bidders were available to resolve the auction.
 		NotEnoughBidders,
+		/// Not enough stake to register as a validator.
+		NotEnoughStake,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -400,11 +390,7 @@ pub mod pallet {
 					match T::VaultRotator::status() {
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
 							let new_authorities = rotation_state.authority_candidates();
-							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities.clone());
-							EpochAuthorityCount::<T>::insert(
-								rotation_state.new_epoch_index,
-								new_authorities.len() as AuthorityCount,
-							);
+							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
 							T::VaultRotator::activate();
 							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 						},
@@ -803,6 +789,22 @@ pub mod pallet {
 			Self::deposit_event(Event::AuctionParametersChanged(parameters));
 			Ok(().into())
 		}
+
+		#[pallet::weight(T::ValidatorWeightInfo::register_as_validator())]
+		pub fn register_as_validator(origin: OriginFor<T>) -> DispatchResult {
+			let account_id: T::AccountId = ensure_signed(origin)?;
+			ensure!(
+				T::StakingInfo::total_stake_of(&account_id) >=
+					Backups::<T>::get()
+						.into_values()
+						.min()
+						.unwrap_or_else(|| T::Amount::from(0_u32))
+						.checked_div(&T::Amount::from(2_u32))
+						.expect("Division by 2 can't fail."),
+				Error::<T>::NotEnoughStake
+			);
+			T::AccountRoleRegistry::register_as_validator(&account_id)
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -912,8 +914,8 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		) <= frame_system::Pallet::<T>::current_block_number()
 	}
 
-	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<AuthorityCount> {
-		EpochAuthorityCount::<T>::get(epoch)
+	fn authority_count_at_epoch(epoch_index: EpochIndex) -> Option<AuthorityCount> {
+		HistoricalAuthorities::<T>::decode_len(epoch_index).map(|l| l as AuthorityCount)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -921,7 +923,6 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		epoch_index: EpochIndex,
 		new_authorities: BTreeSet<Self::ValidatorId>,
 	) {
-		EpochAuthorityCount::<T>::insert(epoch_index, new_authorities.len() as AuthorityCount);
 		for (i, authority) in new_authorities.iter().enumerate() {
 			AuthorityIndex::<T>::insert(epoch_index, authority, i as AuthorityCount);
 			HistoricalActiveEpochs::<T>::append(authority, epoch_index);
@@ -1027,8 +1028,6 @@ impl<T: Config> Pallet<T> {
 			EpochHistory::<T>::activate_epoch(account_id, new_epoch);
 			T::Bonder::update_bond(account_id, EpochHistory::<T>::active_bond(account_id));
 		});
-
-		EpochAuthorityCount::<T>::insert(new_epoch, new_authorities.len() as AuthorityCount);
 
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
 
@@ -1194,18 +1193,6 @@ impl<T: Config> Pallet<T> {
 }
 
 pub struct EpochHistory<T>(PhantomData<T>);
-
-pub struct BidInfoProvider<T>(PhantomData<T>);
-
-impl<T: Config> BidInfo for BidInfoProvider<T> {
-	type Balance = T::Amount;
-	fn get_min_backup_bid() -> Self::Balance {
-		Backups::<T>::get()
-			.into_values()
-			.min()
-			.unwrap_or_else(|| Self::Balance::from(0_u32))
-	}
-}
 
 impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 	type ValidatorId = ValidatorIdOf<T>;

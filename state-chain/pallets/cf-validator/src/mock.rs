@@ -1,12 +1,12 @@
 use super::*;
 use crate as pallet_cf_validator;
 use cf_traits::{
+	impl_mock_chainflip,
 	mocks::{
-		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
-		system_state_info::MockSystemStateInfo, vault_rotator::MockVaultRotatorA,
+		vault_rotator::MockVaultRotatorA,
 	},
-	Bid, Chainflip, RuntimeAuctionOutcome,
+	AccountRoleRegistry, Bid, RuntimeAuctionOutcome,
 };
 use frame_support::{
 	construct_runtime, parameter_types,
@@ -70,6 +70,8 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
+impl_mock_chainflip!(Test);
+
 impl_opaque_keys! {
 	pub struct MockSessionKeys {
 		pub dummy: UintAuthorityId,
@@ -99,14 +101,14 @@ pub const AUCTION_LOSERS: [ValidatorId; 3] = [5, 6, 7];
 pub const UNQUALIFIED_NODE: ValidatorId = 8;
 pub const UNQUALIFIED_NODE_BID: Amount = 200;
 pub const LOSING_BIDS: [Amount; 3] = [99, 90, 74];
-pub const BOND: Amount = 105;
+pub const EXPECTED_BOND: Amount = 105;
 
 thread_local! {
 	pub static NEXT_AUCTION_OUTCOME: RefCell<Result<RuntimeAuctionOutcome<Test>, &'static str>> = RefCell::new(Ok(
 		RuntimeAuctionOutcome::<Test> {
 			winners: AUCTION_WINNERS.to_vec(),
 			losers: AUCTION_LOSERS.zip(LOSING_BIDS).map(Into::into).to_vec(),
-			bond: BOND,
+			bond: *WINNING_BIDS.iter().min().unwrap(),
 		}
 	));
 
@@ -155,16 +157,6 @@ parameter_types! {
 	};
 }
 
-impl Chainflip for Test {
-	type ValidatorId = ValidatorId;
-	type Amount = Amount;
-	type RuntimeCall = RuntimeCall;
-	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
-	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
-	type EpochInfo = MockEpochInfo;
-	type SystemState = MockSystemStateInfo;
-}
-
 pub struct MockBonder;
 
 impl Bonding for MockBonder {
@@ -210,11 +202,9 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = PalletOffence;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
-	type AccountRoleRegistry = ();
 	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = ();
 	type VaultRotator = MockVaultRotatorA;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type BidderProvider = MockBidderProvider;
 	type OffenceReporter = MockOffenceReporter;
@@ -296,31 +286,45 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 	log::debug!("Initializing TestExternalitiesWithCheck with GenesisConfig.");
 
 	TestExternalitiesWithCheck {
-		ext: GenesisConfig {
-			system: SystemConfig::default(),
-			session: SessionConfig {
-				keys: [&GENESIS_AUTHORITIES[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
-					.concat()
-					.iter()
-					.map(|&i| (i, i, UintAuthorityId(i).into()))
-					.collect(),
-			},
-			validator_pallet: ValidatorPalletConfig {
-				genesis_authorities: BTreeSet::from(GENESIS_AUTHORITIES),
-				genesis_backups: Default::default(),
-				blocks_per_epoch: EPOCH_DURATION,
-				bond: GENESIS_BOND,
-				claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
-				backup_reward_node_percentage: 34,
-				authority_set_min_size: MIN_AUTHORITY_SIZE,
-				min_size: MIN_AUTHORITY_SIZE,
-				max_size: MAX_AUTHORITY_SIZE,
-				max_expansion: MAX_AUTHORITY_SET_EXPANSION,
-			},
-		}
-		.build_storage()
-		.unwrap()
-		.into(),
+		ext: {
+			let mut ext: sp_io::TestExternalities = GenesisConfig {
+				system: SystemConfig::default(),
+				session: SessionConfig {
+					keys: [&GENESIS_AUTHORITIES[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
+						.concat()
+						.iter()
+						.map(|&i| (i, i, UintAuthorityId(i).into()))
+						.collect(),
+				},
+				validator_pallet: ValidatorPalletConfig {
+					genesis_authorities: BTreeSet::from(GENESIS_AUTHORITIES),
+					genesis_backups: Default::default(),
+					blocks_per_epoch: EPOCH_DURATION,
+					bond: GENESIS_BOND,
+					claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
+					backup_reward_node_percentage: 34,
+					authority_set_min_size: MIN_AUTHORITY_SIZE,
+					min_size: MIN_AUTHORITY_SIZE,
+					max_size: MAX_AUTHORITY_SIZE,
+					max_expansion: MAX_AUTHORITY_SET_EXPANSION,
+				},
+			}
+			.build_storage()
+			.unwrap()
+			.into();
+
+			ext.execute_with(|| {
+				for account_id in
+					[&GENESIS_AUTHORITIES[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
+						.into_iter()
+						.flatten()
+				{
+					<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(account_id).unwrap();
+				}
+			});
+
+			ext
+		},
 	}
 }
 

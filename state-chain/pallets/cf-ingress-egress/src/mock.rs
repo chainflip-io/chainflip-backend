@@ -17,18 +17,14 @@ use frame_support::{
 	weights::Weight,
 };
 
+pub use cf_traits::Broadcaster;
 use cf_traits::{
-	impl_mock_callback,
+	impl_mock_callback, impl_mock_chainflip,
 	mocks::{
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
 		ccm_handler::MockCcmHandler,
 	},
 	IngressHandler,
-};
-
-pub use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	Broadcaster,
 };
 use frame_system as system;
 use sp_core::H256;
@@ -86,16 +82,7 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-impl cf_traits::Chainflip for Test {
-	type ValidatorId = u64;
-	type Amount = u128;
-	type RuntimeCall = RuntimeCall;
-	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
-	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
-	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
-	type SystemState = MockSystemStateInfo;
-}
-
+impl_mock_chainflip!(Test);
 impl_mock_callback!(RuntimeOrigin);
 
 parameter_types! {
@@ -136,7 +123,6 @@ impl crate::Config<Instance1> for Test {
 	type SwapIntentHandler = Self;
 	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;
 	type Broadcaster = MockBroadcast;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type IngressHandler = MockIngressHandler;
 	type WeightInfo = ();
 	type CcmHandler = MockCcmHandler;

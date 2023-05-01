@@ -4,10 +4,9 @@
 use super::*;
 
 use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
-use cf_primitives::AccountRole;
-use cf_traits::AccountRoleRegistry;
+use cf_traits::{AccountRoleRegistry, Chainflip};
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::dispatch::UnfilteredDispatchable;
+use frame_support::{dispatch::UnfilteredDispatchable, traits::OnNewAccount};
 use frame_system::RawOrigin;
 
 fn generate_swaps<T: Config>(amount: u32, from: Asset, to: Asset) -> Vec<Swap> {
@@ -27,7 +26,8 @@ fn generate_swaps<T: Config>(amount: u32, from: Asset, to: Asset) -> Vec<Swap> {
 benchmarks! {
 	register_swap_intent {
 		let caller: T::AccountId = whitelisted_caller();
-		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Relayer);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		T::AccountRoleRegistry::register_as_relayer(&caller).unwrap();
 		let origin = RawOrigin::Signed(caller);
 		let call = Call::<T>::register_swap_intent {
 			ingress_asset: Asset::Eth,
@@ -52,13 +52,23 @@ benchmarks! {
 
 	withdraw {
 		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		T::AccountRoleRegistry::register_as_relayer(&caller).unwrap();
 		EarnedRelayerFees::<T>::insert(caller.clone(), Asset::Eth, 200);
-		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Relayer);
 	} : _(
 		RawOrigin::Signed(caller.clone()),
 		Asset::Eth,
 		EncodedAddress::benchmark_value()
 	)
+
+	register_as_relayer {
+		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+	}: _(RawOrigin::Signed(caller.clone()))
+	verify {
+		T::AccountRoleRegistry::ensure_relayer(RawOrigin::Signed(caller).into())
+			.expect("Caller should be registered as relayer");
+	}
 
 	schedule_swap_by_witnesser {
 		let origin = T::EnsureWitnessed::successful_origin();
@@ -119,7 +129,8 @@ benchmarks! {
 	on_initialize {
 		let a in 1..100;
 		let caller: T::AccountId = whitelisted_caller();
-		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Relayer);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		T::AccountRoleRegistry::register_as_relayer(&caller).unwrap();
 		let origin = RawOrigin::Signed(caller);
 		for i in 0..a {
 			let call = Call::<T>::register_swap_intent{
@@ -145,7 +156,7 @@ benchmarks! {
 			ttl
 		};
 	}: {
-		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+		let _ = call.dispatch_bypass_filter(<T as Chainflip>::EnsureGovernance::successful_origin());
 	} verify {
 		assert_eq!(crate::SwapTTL::<T>::get(), ttl);
 	}

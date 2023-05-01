@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::{
 	constants::BTC_INGRESS_BLOCK_SAFETY_MARGIN,
-	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
+	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
 	witnesser::{
 		block_witnesser::{
 			BlockStream, BlockWitnesser, BlockWitnesserGenerator, BlockWitnesserGeneratorWrapper,
@@ -93,7 +93,7 @@ pub async fn start<StateChainClient>(
 	db: Arc<PersistentKeyDB>,
 ) -> Result<(), anyhow::Error>
 where
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 {
 	start_epoch_process_runner(
 		Arc::new(Mutex::new(epoch_starts_receiver)),
@@ -118,7 +118,7 @@ struct BtcBlockWitnesser<StateChainClient> {
 #[async_trait]
 impl<StateChainClient> BlockWitnesser for BtcBlockWitnesser<StateChainClient>
 where
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 {
 	type Chain = Bitcoin;
 	type Block = ChainBlockNumber<Self::Chain>;
@@ -138,8 +138,7 @@ where
 			filter_interesting_utxos(block.txdata, address_monitor, &self.change_pubkey);
 
 		if !ingress_witnesses.is_empty() {
-			let _result = self
-				.state_chain_client
+			self.state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(
 						pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::do_ingress {
@@ -153,8 +152,7 @@ where
 		}
 
 		if !change_witnesses.is_empty() {
-			let _result = self
-				.state_chain_client
+			self.state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(
 						pallet_cf_environment::Call::add_bitcoin_change_utxos { change_witnesses }
@@ -166,8 +164,7 @@ where
 		}
 
 		if let Some(fee_rate_sats_per_byte) = self.btc_rpc.next_block_fee_rate()? {
-			let _result = self
-				.state_chain_client
+			self.state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(state_chain_runtime::RuntimeCall::BitcoinChainTracking(
 						pallet_cf_chain_tracking::Call::update_chain_state {
@@ -188,7 +185,7 @@ where
 
 struct BtcWitnesserGenerator<StateChainClient>
 where
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 {
 	state_chain_client: Arc<StateChainClient>,
 	btc_rpc: BtcRpcClient,
@@ -197,7 +194,7 @@ where
 #[async_trait]
 impl<StateChainClient> BlockWitnesserGenerator for BtcWitnesserGenerator<StateChainClient>
 where
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 {
 	type Witnesser = BtcBlockWitnesser<StateChainClient>;
 
