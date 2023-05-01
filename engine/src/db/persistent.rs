@@ -1,6 +1,6 @@
+mod rocksdb_kv;
 #[cfg(test)]
 mod tests;
-mod rocksdb_kv;
 
 use std::{cmp::Ordering, collections::HashMap, path::Path};
 
