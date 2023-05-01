@@ -2,7 +2,9 @@ use sp_runtime::AccountId32;
 use std::{collections::BTreeSet, fs, path::PathBuf};
 use tempfile::TempDir;
 
-use crate::multisig::{client::get_key_data_for_test, eth::EthSigning, polkadot::PolkadotSigning};
+use crate::multisig::{
+	bitcoin::BtcSigning, client::get_key_data_for_test, eth::EthSigning, polkadot::PolkadotSigning,
+};
 
 use super::*;
 use cf_primitives::GENESIS_EPOCH;
@@ -39,31 +41,39 @@ fn get_single_key_data<C: CryptoScheme>() -> KeygenResultInfo<C> {
 fn can_use_multiple_crypto_schemes() {
 	type Scheme1 = EthSigning;
 	type Scheme2 = PolkadotSigning;
+	type Scheme3 = BtcSigning;
+
+	fn add_key_for_scheme<Scheme: CryptoScheme>(db: &PersistentKeyDB) -> KeyId {
+		let key_id = KeyId {
+			epoch_index: GENESIS_EPOCH,
+			public_key_bytes: rand::random::<[u8; 32]>().into(),
+		};
+		db.update_key(&key_id, &get_single_key_data::<Scheme>());
+		key_id
+	}
+
+	fn ensure_loaded_one_key<Scheme: CryptoScheme>(db: &PersistentKeyDB, expected_key: &KeyId) {
+		let keys = db.load_keys::<Scheme>();
+		assert_eq!(keys.len(), 1, "Incorrect number of keys loaded");
+		assert!(keys.contains_key(expected_key), "Incorrect key id");
+	}
 
 	let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-	let scheme_1_key_id = KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: vec![0; 33] };
-	let scheme_2_key_id = KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: vec![1; 33] };
-
 	// Create a normal db and save multiple keys to it of different crypto schemes
-	{
-		let p_db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
+	let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
 
-		p_db.update_key::<Scheme1>(&scheme_1_key_id, &get_single_key_data::<Scheme1>());
-		p_db.update_key::<Scheme2>(&scheme_2_key_id, &get_single_key_data::<Scheme2>());
-	}
+	let key_1 = add_key_for_scheme::<Scheme1>(&db);
+	let key_2 = add_key_for_scheme::<Scheme2>(&db);
+	let key_3 = add_key_for_scheme::<Scheme3>(&db);
 
-	// Open the db and load the keys of both types
-	{
-		let p_db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
+	drop(db);
 
-		let scheme_1_keys = p_db.load_keys::<Scheme1>();
-		assert_eq!(scheme_1_keys.len(), 1, "Incorrect number of keys loaded");
-		assert!(scheme_1_keys.get(&scheme_1_key_id).is_some(), "Incorrect key id");
+	// Open the db and load the keys of all types
+	let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
 
-		let scheme_2_keys = p_db.load_keys::<Scheme2>();
-		assert_eq!(scheme_2_keys.len(), 1, "Incorrect number of keys loaded");
-		assert!(scheme_2_keys.get(&scheme_2_key_id).is_some(), "Incorrect key id");
-	}
+	ensure_loaded_one_key::<Scheme1>(&db, &key_1);
+	ensure_loaded_one_key::<Scheme2>(&db, &key_2);
+	ensure_loaded_one_key::<Scheme3>(&db, &key_3);
 }
 
 #[test]
