@@ -1,11 +1,10 @@
+mod rocksdb_kv;
 #[cfg(test)]
-mod persistent_key_db_tests;
+mod tests;
 
-use std::{cmp::Ordering, collections::HashMap, fs, mem::size_of, path::Path};
+use std::{cmp::Ordering, collections::HashMap, path::Path};
 
 use cf_primitives::KeyId;
-use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
-use serde::{de::DeserializeOwned, Serialize};
 use tracing::{debug, info, info_span};
 
 use crate::{
@@ -18,41 +17,39 @@ use crate::{
 
 use anyhow::{anyhow, bail, Context, Result};
 
+use rocksdb_kv::{KVWriteBatch, RocksDBKeyValueStore, PREFIX_SIZE};
+
+/// Name of the directory that the backups will go into (only created before migrations)
+const BACKUPS_DIRECTORY: &str = "backups";
+
 /// This is the version of the data on this current branch
 /// This version *must* be bumped, and appropriate migrations
 /// written on any changes to the persistent application data format
 const LATEST_SCHEMA_VERSION: u32 = 1;
 
-/// Key used to store the `LATEST_SCHEMA_VERSION` value in the `METADATA_COLUMN`
-const DB_SCHEMA_VERSION_KEY: &[u8; 17] = b"db_schema_version";
-const GENESIS_HASH_KEY: &[u8; 12] = b"genesis_hash";
-
-/// A static length prefix is used on the `DATA_COLUMN`
-const PREFIX_SIZE: usize = 10;
 const PARTIAL_PREFIX_SIZE: usize = PREFIX_SIZE - CHAIN_TAG_SIZE;
+
 /// Keygen data uses a prefix that is a combination of a keygen data prefix and the chain tag
 const KEYGEN_DATA_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"key_____";
 /// The Witnesser checkpoint uses a prefix that is a combination of a checkpoint prefix and the
 /// chain tag
 const WITNESSER_CHECKPOINT_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"check___";
 
-/// Column family names
-// All data is stored in `DATA_COLUMN` with a prefix for key spaces
-const DATA_COLUMN: &str = "data";
-// This column is just for schema version info. No prefix is used.
-const METADATA_COLUMN: &str = "metadata";
+/// Key used to store the `LATEST_SCHEMA_VERSION` value in the `METADATA_COLUMN`
+const DB_SCHEMA_VERSION_KEY: &[u8; 17] = b"db_schema_version";
+const GENESIS_HASH_KEY: &[u8; 12] = b"genesis_hash";
 
-/// Name of the directory that the backups will go into (only created before migrations)
-const BACKUPS_DIRECTORY: &str = "backups";
+/// Used to specify whether a backup should be created, and if so,
+/// the provided path is used to derive the name of the backup
+enum BackupOption<'a> {
+	NoBackup,
+	CreateBackup(&'a Path),
+}
 
 /// Database for keys and persistent metadata
 pub struct PersistentKeyDB {
-	/// Rocksdb database instance
-	db: DB,
-}
-
-fn put_schema_version_to_batch(db: &DB, batch: &mut WriteBatch, version: u32) {
-	batch.put_cf(get_metadata_column_handle(db), DB_SCHEMA_VERSION_KEY, version.to_be_bytes());
+	/// Underlying key-value database instance
+	kv_db: RocksDBKeyValueStore,
 }
 
 impl PersistentKeyDB {
@@ -77,91 +74,32 @@ impl PersistentKeyDB {
 	) -> Result<Self> {
 		let is_existing_db = db_path.exists();
 
-		// Use a prefix extractor on the data column
-		let mut cfopts_for_prefix = Options::default();
-		cfopts_for_prefix
-			.set_prefix_extractor(rocksdb::SliceTransform::create_fixed_prefix(PREFIX_SIZE));
-
-		// Build a list of column families with descriptors
-		let cfs: HashMap<String, ColumnFamilyDescriptor> = HashMap::from_iter([
-			(
-				METADATA_COLUMN.to_string(),
-				ColumnFamilyDescriptor::new(METADATA_COLUMN, Options::default()),
-			),
-			(DATA_COLUMN.to_string(), ColumnFamilyDescriptor::new(DATA_COLUMN, cfopts_for_prefix)),
-		]);
-
-		let mut create_missing_db_and_cols_opts = Options::default();
-		create_missing_db_and_cols_opts.create_missing_column_families(true);
-		create_missing_db_and_cols_opts.create_if_missing(true);
-
-		// Open the db or create a new one if it doesn't exist
-		let db =
-			DB::open_cf_descriptors(&create_missing_db_and_cols_opts, db_path, cfs.into_values())
-				.map_err(anyhow::Error::msg)
-				.context(format!("Failed to open database at: {}", db_path.display()))?;
+		let db = PersistentKeyDB { kv_db: RocksDBKeyValueStore::open(db_path)? };
 
 		// Only create a backup if there is an existing db that we don't
 		// want to accidentally corrupt
 		let backup_option = if is_existing_db {
 			BackupOption::CreateBackup(db_path)
 		} else {
-			let mut batch = WriteBatch::default();
+			let mut batch = db.kv_db.create_batch();
 
-			put_schema_version_to_batch(&db, &mut batch, 0);
+			batch.put_metadata(DB_SCHEMA_VERSION_KEY, 0u32.to_be_bytes());
 
 			if let Some(genesis_hash) = genesis_hash {
-				batch.put_cf(get_metadata_column_handle(&db), GENESIS_HASH_KEY, genesis_hash);
+				batch.put_metadata(GENESIS_HASH_KEY, genesis_hash);
 			}
 
-			db.write(batch).context("Failed to write metadata to new db")?;
+			batch.write().context("Failed to write metadata to new db")?;
 			BackupOption::NoBackup
 		};
 
-		migrate_db_to_version(&db, backup_option, genesis_hash, version)
-                    .with_context(|| format!("Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.", db_path.display()))?;
-
-		Ok(PersistentKeyDB { db })
-	}
-
-	fn put_data<T: Serialize>(&self, prefix: &[u8], key: &[u8], value: &T) -> Result<()> {
-		let key_with_prefix = [prefix, key].concat();
-		self.db
-			.put_cf(
-				get_data_column_handle(&self.db),
-				key_with_prefix,
-				bincode::serialize(value).expect("Serialization is not expected to fail"),
+		migrate_db_to_version(&db, backup_option, genesis_hash, version).with_context(|| {
+			format!(
+				"Failed to migrate database at {}. Manual restoration of a backup or purging of the file is required.",
+				db_path.display()
 			)
-			.map_err(|e| {
-				anyhow::anyhow!("Failed to write data to database. Error: {}", e.to_string())
-			})
-	}
-
-	fn get_data<T: DeserializeOwned>(&self, prefix: &[u8], key: &[u8]) -> Result<Option<T>> {
-		let key_with_prefix = [prefix, key].concat();
-
-		self.db
-			.get_cf(get_data_column_handle(&self.db), key_with_prefix)?
-			.map(|data| {
-				bincode::deserialize(&data).map_err(|e| anyhow!("Deserialization failure: {}", e))
-			})
-			.transpose()
-	}
-
-	fn get_data_for_prefix<'a, T: DeserializeOwned>(
-		&'a self,
-		prefix: &[u8],
-	) -> impl Iterator<Item = (Vec<u8>, Result<T>)> + 'a {
-		self.db
-			.prefix_iterator_cf(get_data_column_handle(&self.db), prefix)
-			.map(|result| result.expect("prefix iterator should not fail"))
-			.map(|(key, value)| {
-				(
-					Vec::from(&key[PREFIX_SIZE..]),
-					bincode::deserialize(&value)
-						.map_err(|e| anyhow!("Deserialization failure: {}", e)),
-				)
-			})
+		})?;
+		Ok(db)
 	}
 
 	/// Write the keyshare to the db, indexed by the key id
@@ -170,7 +108,8 @@ impl PersistentKeyDB {
 		key_id: &KeyId,
 		keygen_result_info: &KeygenResultInfo<C>,
 	) {
-		self.put_data(&get_keygen_data_prefix::<C>(), &key_id.to_bytes(), &keygen_result_info)
+		self.kv_db
+			.put_data(&keygen_data_prefix::<C>(), &key_id.to_bytes(), &keygen_result_info)
 			.unwrap_or_else(|e| panic!("Failed to update key {}. Error: {}", &key_id, e));
 	}
 
@@ -179,11 +118,12 @@ impl PersistentKeyDB {
 		let _entered = span.enter();
 
 		let keys: HashMap<_, _> = self
-			.get_data_for_prefix::<KeygenResultInfo<C>>(&get_keygen_data_prefix::<C>())
-			.map(|(key_id, key_info_result)| {
+			.kv_db
+			.get_data_for_prefix(&keygen_data_prefix::<C>())
+			.map(|(key_id, key_bytes)| {
 				(
 					KeyId::from_bytes(&key_id),
-					key_info_result.unwrap_or_else(|e| {
+					bincode::deserialize(&key_bytes).unwrap_or_else(|e| {
 						panic!("Failed to deserialize {} key from database: {}", C::NAME, e)
 					}),
 				)
@@ -197,164 +137,88 @@ impl PersistentKeyDB {
 
 	/// Write the witnesser checkpoint to the db
 	pub fn update_checkpoint(&self, chain_tag: ChainTag, checkpoint: &WitnessedUntil) {
-		self.put_data(&get_checkpoint_prefix(chain_tag), &[], checkpoint)
+		self.kv_db
+			.put_data(&checkpoint_prefix(chain_tag), &[], checkpoint)
 			.unwrap_or_else(|e| {
 				panic!("Failed to update {chain_tag} witnesser checkpoint. Error: {e}")
 			});
 	}
 
 	pub fn load_checkpoint(&self, chain_tag: ChainTag) -> Result<Option<WitnessedUntil>> {
-		self.get_data(&get_checkpoint_prefix(chain_tag), &[])
+		self.kv_db
+			.get_data(&checkpoint_prefix(chain_tag), &[])
 			.context("Failed to load {chain_tag} checkpoint")
+	}
+
+	/// Get the genesis hash from the metadata column in the db.
+	pub fn get_genesis_hash(&self) -> Result<Option<state_chain_runtime::Hash>> {
+		match self.kv_db.get_metadata(GENESIS_HASH_KEY) {
+			Some(hash) =>
+				if hash.len() != std::mem::size_of::<state_chain_runtime::Hash>() {
+					Err(anyhow!("Incorrect length of Genesis hash"))
+				} else {
+					Ok(Some(sp_core::H256::from_slice(&hash[..])))
+				},
+			// None is expected because the genesis hash is not known during the generate genesis
+			// keys process, so the genesis databases will not have the genesis hash,
+			// it will be added on first time startup.
+			None => Ok(None),
+		}
+	}
+
+	pub fn put_genesis_hash(&self, genesis_hash: state_chain_runtime::Hash) -> Result<()> {
+		self.kv_db.put_metadata(GENESIS_HASH_KEY, genesis_hash)
+	}
+
+	#[cfg(test)]
+	pub fn put_schema_version(&self, version: u32) -> Result<()> {
+		self.kv_db.put_metadata(DB_SCHEMA_VERSION_KEY, version.to_be_bytes())
+	}
+
+	pub fn get_schema_version(&self) -> Result<u32> {
+		self.kv_db
+			.get_metadata(DB_SCHEMA_VERSION_KEY)
+			.map(|version| {
+				let version: [u8; 4] = version.try_into().expect("Version should be a u32");
+				u32::from_be_bytes(version)
+			})
+			.ok_or_else(|| anyhow!("Could not find db schema version"))
 	}
 }
 
-fn get_keygen_data_prefix<C: CryptoScheme>() -> Vec<u8> {
+fn keygen_data_prefix<C: CryptoScheme>() -> Vec<u8> {
 	[&KEYGEN_DATA_PARTIAL_PREFIX[..], &(C::CHAIN_TAG.to_bytes())[..]].concat()
 }
 
-fn get_checkpoint_prefix(chain_tag: ChainTag) -> Vec<u8> {
+fn checkpoint_prefix(chain_tag: ChainTag) -> Vec<u8> {
 	[WITNESSER_CHECKPOINT_PARTIAL_PREFIX, &(chain_tag.to_bytes())[..]].concat()
-}
-
-// Creates a backup of the database folder to BACKUPS_DIRECTORY/backup_vx_xx_xx
-fn create_backup(path: &Path, schema_version: u32) -> Result<String, anyhow::Error> {
-	// Build the name for the new backup using the schema version and a timestamp
-	let backup_dir_name = format!(
-		"backup_v{}_{}_{}",
-		schema_version,
-		chrono::Utc::now().to_rfc3339(),
-		&path
-			.file_name()
-			.expect("Should have file name")
-			.to_os_string()
-			.into_string()
-			.expect("Should get string from filename"),
-	);
-
-	create_backup_with_directory_name(path, backup_dir_name)
-}
-
-fn create_backup_with_directory_name(
-	path: &Path,
-	backup_dir_name: String,
-) -> Result<String, anyhow::Error> {
-	// Create the BACKUPS_DIRECTORY if it doesn't exist
-	let backups_path = path.parent().expect("Should have parent");
-	let backups_path = backups_path.join(BACKUPS_DIRECTORY);
-	if !backups_path.exists() {
-		fs::create_dir_all(&backups_path).map_err(anyhow::Error::msg).with_context(|| {
-			format!(
-				"Failed to create backup directory {}",
-				&backups_path.to_str().expect("Should get backup path as str")
-			)
-		})?;
-	}
-
-	// This db backup folder should not exist yet
-	let backup_dir_path = backups_path.join(backup_dir_name);
-	if backup_dir_path.exists() {
-		bail!("Backup directory already exists {}", backup_dir_path.display());
-	}
-
-	// Copy the files
-	let mut copy_options = fs_extra::dir::CopyOptions::new();
-	copy_options.copy_inside = true;
-	fs_extra::dir::copy(path, &backup_dir_path, &copy_options)
-		.map_err(anyhow::Error::msg)
-		.context("Failed to copy db files for backup")?;
-
-	Ok(backup_dir_path
-		.into_os_string()
-		.into_string()
-		.expect("Should get backup path as string"))
-}
-
-fn get_metadata_column_handle(db: &DB) -> &ColumnFamily {
-	get_column_handle(db, METADATA_COLUMN)
-}
-
-fn get_data_column_handle(db: &DB) -> &ColumnFamily {
-	get_column_handle(db, DATA_COLUMN)
-}
-
-fn get_column_handle<'a>(db: &'a DB, column_name: &str) -> &'a ColumnFamily {
-	db.cf_handle(column_name)
-		.unwrap_or_else(|| panic!("Should get column family handle for {column_name}"))
-}
-
-/// Get the schema version from the metadata column in the db.
-fn read_schema_version(db: &DB) -> Result<u32> {
-	db.get_cf(get_metadata_column_handle(db), DB_SCHEMA_VERSION_KEY)
-		.context("Failed to get metadata column")?
-		.map(|version| {
-			let version: [u8; 4] = version.try_into().expect("Version should be a u32");
-			u32::from_be_bytes(version)
-		})
-		.ok_or_else(|| anyhow!("Could not find db schema version"))
-}
-
-/// Get the genesis hash from the metadata column in the db.
-fn read_genesis_hash(db: &DB) -> Result<Option<state_chain_runtime::Hash>> {
-	match db
-		.get_cf(get_metadata_column_handle(db), GENESIS_HASH_KEY)
-		.context("Failed to get metadata column")?
-	{
-		Some(hash) =>
-			if hash.len() != size_of::<state_chain_runtime::Hash>() {
-				Err(anyhow!("Incorrect length of Genesis hash"))
-			} else {
-				Ok(Some(sp_core::H256::from_slice(&hash[..])))
-			},
-		// None is expected because the genesis hash is not known during the generate genesis keys
-		// process, so the genesis databases will not have the genesis hash,
-		// it will be added during `check_or_set_genesis_hash` on first time startup.
-		None => Ok(None),
-	}
-}
-
-/// Check that the genesis in the db file matches the one provided.
-/// If None is found, it will be added to the db.
-fn check_or_set_genesis_hash(db: &DB, genesis_hash: state_chain_runtime::Hash) -> Result<()> {
-	let existing_hash = read_genesis_hash(db)?;
-
-	match existing_hash {
-		Some(existing_hash) =>
-			if existing_hash == genesis_hash {
-				Ok(())
-			} else {
-				Err(anyhow!("Genesis hash mismatch. Have you changed Chainflip network?",))
-			},
-		None => {
-			db.put_cf(get_metadata_column_handle(db), GENESIS_HASH_KEY, genesis_hash)
-				.context("Failed to write genesis hash to db")?;
-
-			Ok(())
-		},
-	}
-}
-
-/// Used to specify whether a backup should be created, and if so,
-/// the provided path is used to derive the name of the backup
-enum BackupOption<'a> {
-	NoBackup,
-	CreateBackup(&'a Path),
 }
 
 /// Reads the schema version and migrates the db to the latest schema version if required
 fn migrate_db_to_version(
-	db: &DB,
+	db: &PersistentKeyDB,
 	backup_option: BackupOption,
 	genesis_hash: Option<state_chain_runtime::Hash>,
 	target_version: u32,
 ) -> Result<(), anyhow::Error> {
-	let current_version =
-		read_schema_version(db).context("Failed to read schema version from existing db")?;
+	let current_version = db
+		.get_schema_version()
+		.context("Failed to read schema version from existing db")?;
 
 	info!("Found db_schema_version of {current_version}");
 
-	if let Some(expected_genesis_hash) = genesis_hash {
-		check_or_set_genesis_hash(db, expected_genesis_hash)?;
+	if let Some(provided_genesis_hash) = genesis_hash {
+		// Check that the genesis in the db file matches the one provided.
+		// If None is found, it will be added to the db.
+		let existing_hash = db.get_genesis_hash()?;
+
+		match existing_hash {
+			Some(existing_hash) =>
+				if existing_hash != provided_genesis_hash {
+					bail!("Genesis hash mismatch. Have you changed Chainflip network?",)
+				},
+			None => db.put_genesis_hash(provided_genesis_hash)?,
+		}
 	}
 
 	// Check if the db version is up-to-date or we need to do migrations
@@ -399,32 +263,86 @@ fn migrate_db_to_version(
 	}
 }
 
-fn migrate_0_to_1_for_scheme<C: CryptoScheme>(db: &DB, batch: &mut WriteBatch) {
-	for (legacy_key_id_with_prefix, key_info_bytes) in db
-		.prefix_iterator_cf(get_data_column_handle(db), get_keygen_data_prefix::<C>())
-		.map(|result| result.expect("should successfully read all items"))
+fn migrate_0_to_1_for_scheme<C: CryptoScheme>(db: &PersistentKeyDB, batch: &mut KVWriteBatch) {
+	for (legacy_key_id, key_info_bytes) in db.kv_db.get_data_for_prefix(&keygen_data_prefix::<C>())
 	{
-		let new_key_id = KeyId {
-			epoch_index: 0,
-			public_key_bytes: legacy_key_id_with_prefix[PREFIX_SIZE..].to_vec(),
-		};
+		let new_key_id = KeyId { epoch_index: 0, public_key_bytes: legacy_key_id.to_vec() };
 		let key_id_with_prefix =
-			[get_keygen_data_prefix::<C>().as_slice(), &new_key_id.to_bytes()].concat();
-		batch.put_cf(get_data_column_handle(db), key_id_with_prefix, key_info_bytes);
+			[keygen_data_prefix::<C>().as_slice(), &new_key_id.to_bytes()].concat();
 
-		batch.delete_cf(get_data_column_handle(db), legacy_key_id_with_prefix);
+		batch.put_value(&key_id_with_prefix, &key_info_bytes);
+
+		let legacy_key_id_with_prefix =
+			[keygen_data_prefix::<C>().as_slice(), &legacy_key_id].concat();
+
+		batch.delete_value(&legacy_key_id_with_prefix);
 	}
 }
 
-fn migrate_0_to_1(db: &DB) {
-	let mut batch = WriteBatch::default();
+fn migrate_0_to_1(db: &PersistentKeyDB) {
+	let mut batch = db.kv_db.create_batch();
 
 	// Do the migration for every scheme that we supported
 	// until schema version 1:
 	migrate_0_to_1_for_scheme::<EthSigning>(db, &mut batch);
 	migrate_0_to_1_for_scheme::<PolkadotSigning>(db, &mut batch);
 
-	put_schema_version_to_batch(db, &mut batch, 1);
+	batch.put_metadata(DB_SCHEMA_VERSION_KEY, 1u32.to_be_bytes());
 
-	db.write(batch).unwrap();
+	batch.write().expect("batch write should not fail");
+}
+
+// Creates a backup of the database folder to BACKUPS_DIRECTORY/backup_vx_xx_xx
+fn create_backup(path: &Path, schema_version: u32) -> Result<String, anyhow::Error> {
+	// Build the name for the new backup using the schema version and a timestamp
+	let backup_dir_name = format!(
+		"backup_v{}_{}_{}",
+		schema_version,
+		chrono::Utc::now().to_rfc3339(),
+		&path
+			.file_name()
+			.expect("Should have file name")
+			.to_os_string()
+			.into_string()
+			.expect("Should get string from filename"),
+	);
+
+	create_backup_with_directory_name(path, backup_dir_name)
+}
+
+fn create_backup_with_directory_name(
+	path: &Path,
+	backup_dir_name: String,
+) -> Result<String, anyhow::Error> {
+	// Create the BACKUPS_DIRECTORY if it doesn't exist
+	let backups_path = path.parent().expect("Should have parent");
+	let backups_path = backups_path.join(BACKUPS_DIRECTORY);
+	if !backups_path.exists() {
+		std::fs::create_dir_all(&backups_path)
+			.map_err(anyhow::Error::msg)
+			.with_context(|| {
+				format!(
+					"Failed to create backup directory {}",
+					&backups_path.to_str().expect("Should get backup path as str")
+				)
+			})?;
+	}
+
+	// This db backup folder should not exist yet
+	let backup_dir_path = backups_path.join(backup_dir_name);
+	if backup_dir_path.exists() {
+		bail!("Backup directory already exists {}", backup_dir_path.display());
+	}
+
+	// Copy the files
+	let mut copy_options = fs_extra::dir::CopyOptions::new();
+	copy_options.copy_inside = true;
+	fs_extra::dir::copy(path, &backup_dir_path, &copy_options)
+		.map_err(anyhow::Error::msg)
+		.context("Failed to copy db files for backup")?;
+
+	Ok(backup_dir_path
+		.into_os_string()
+		.into_string()
+		.expect("Should get backup path as string"))
 }
