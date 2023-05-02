@@ -1129,7 +1129,6 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
- "tracing-subscriber 0.3.16",
  "url 1.7.2",
  "utilities",
  "web3",
