@@ -244,8 +244,6 @@ mod tests {
 	#[ignore = "Requires a running BTC node"]
 	#[tokio::test]
 	async fn test_btc_witnesser() {
-		crate::logging::init_json_logger();
-
 		let rpc = BtcRpcClient::new(&settings::Btc {
 			http_node_endpoint: "http://127.0.0.1:18443".to_string(),
 			rpc_user: "user".to_string(),

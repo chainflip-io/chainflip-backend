@@ -359,6 +359,22 @@ macro_rules! print_starting {
 	}
 }
 
+/// Install global collector using json formatting and the RUST_LOG env var.
+/// If `RUST_LOG` is not set, then it will default to INFO log level.
+pub fn init_json_logger() {
+	use tracing::metadata::LevelFilter;
+	use tracing_subscriber::EnvFilter;
+
+	tracing_subscriber::fmt()
+		.json()
+		.with_env_filter(
+			EnvFilter::builder()
+				.with_default_directive(LevelFilter::INFO.into())
+				.from_env_lossy(),
+		)
+		.init();
+}
+
 // We use PathBuf because the value must be Sized, Path is not Sized
 pub fn deser_path<'de, D>(deserializer: D) -> std::result::Result<PathBuf, D::Error>
 where

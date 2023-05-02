@@ -9,7 +9,7 @@ use chainflip_engine::{
 	dot::{self, rpc::DotRpcClient, witnesser as dot_witnesser, DotBroadcaster},
 	eth::{self, build_broadcast_channel, rpc::EthDualRpcClient, EthBroadcaster},
 	health::HealthChecker,
-	logging, p2p,
+	p2p,
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
 		self,
@@ -40,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
 	// like `--version`), so we execute it only after the settings have been parsed.
 	utilities::print_starting!();
 
-	logging::init_json_logger();
+	utilities::init_json_logger();
 
 	task_scope(|scope| {
 		async move {
