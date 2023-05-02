@@ -6,7 +6,7 @@ use std::{
 };
 
 use anyhow::Result;
-use cf_primitives::{AuthorityCount, CeremonyId, PublicKeyBytes};
+use cf_primitives::{AuthorityCount, CeremonyId};
 use futures::{stream, StreamExt};
 use itertools::{Either, Itertools};
 
@@ -605,7 +605,7 @@ pub type KeygenCeremonyRunner<C> = CeremonyTestRunner<(), KeygenCeremony<C>>;
 impl<C: CryptoScheme> CeremonyRunnerStrategy for KeygenCeremonyRunner<C> {
 	type CeremonyType = KeygenCeremony<C>;
 	type CheckedOutput =
-		(PublicKeyBytes, HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>);
+		(C::PublicKey, HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>);
 	type InitialStageData = keygen::HashComm1;
 
 	fn post_successful_complete_check(
@@ -617,7 +617,7 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for KeygenCeremonyRunner<C> {
 		}))
 		.expect("Generated keys don't match");
 
-		(C::agg_key(&public_key).into(), outputs)
+		(public_key, outputs)
 	}
 
 	async fn request_ceremony(&mut self, node_id: &AccountId) {
@@ -661,17 +661,17 @@ impl<C: CryptoScheme> KeygenCeremonyRunner<C> {
 
 pub struct PayloadAndKeyData<C: CryptoScheme> {
 	payload: C::SigningPayload,
-	public_key_bytes: PublicKeyBytes,
+	public_key: C::PublicKey,
 	key_data: HashMap<AccountId, KeygenResultInfo<C>>,
 }
 
 impl<C: CryptoScheme> PayloadAndKeyData<C> {
 	pub fn new(
 		payload: C::SigningPayload,
-		public_key_bytes: PublicKeyBytes,
+		public_key: C::PublicKey,
 		key_data: HashMap<AccountId, KeygenResultInfo<C>>,
 	) -> Self {
-		PayloadAndKeyData { payload, public_key_bytes, key_data }
+		PayloadAndKeyData { payload, public_key, key_data }
 	}
 }
 
@@ -801,7 +801,7 @@ pub async fn standard_signing<C: CryptoScheme>(
 pub async fn run_keygen(
 	nodes: HashMap<AccountId, Node<KeygenCeremonyEth>>,
 	ceremony_id: CeremonyId,
-) -> (PublicKeyBytes, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
+) -> (<EthSigning as CryptoScheme>::PublicKey, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
 	let mut keygen_ceremony = KeygenCeremonyRunner::<EthSigning>::new(
 		nodes,
 		ceremony_id,

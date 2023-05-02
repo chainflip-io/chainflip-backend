@@ -40,7 +40,7 @@ fn test_address_generation() {
 			1,
 			Vault::<Bitcoin> {
 				public_key: cf_chains::btc::AggKey {
-					previous: [0xcf; 32],
+					previous: None,
 					current: hex_literal::hex!(
 						"9fe94d03955ff4cc5dec97fa5f0dc564ae5ab63012e76dbe84c87c1c83460b48"
 					),

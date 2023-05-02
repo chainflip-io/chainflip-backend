@@ -8,6 +8,7 @@ use super::{CanonicalEncoding, ChainTag, CryptoScheme, ECPoint, SignatureToThres
 // solely use "CryptoScheme" as generic parameter instead.
 pub use super::secp256k1::{Point, Scalar};
 use cf_chains::{ChainCrypto, Ethereum};
+use cf_primitives::{EpochIndex, KeyId};
 use num_bigint::BigUint;
 use secp256k1::constants::CURVE_ORDER;
 use serde::{Deserialize, Serialize};
@@ -56,9 +57,11 @@ impl AsRef<[u8]> for SigningPayload {
 	}
 }
 
-impl CanonicalEncoding for <EthSigning as CryptoScheme>::PublicKey {
+impl CanonicalEncoding for AggKey {
 	fn encode_key(&self) -> Vec<u8> {
-		self.to_pubkey_compressed().to_vec()
+		let mut res = Vec::with_capacity(33);
+		res.extend_from_slice(&self.to_pubkey_compressed());
+		res
 	}
 }
 

@@ -1,7 +1,7 @@
 pub mod persistent;
 use std::{collections::HashMap, sync::Arc};
 
-use cf_primitives::KeyId;
+use cf_chains::KeyId;
 pub use persistent::PersistentKeyDB;
 
 use crate::multisig::{

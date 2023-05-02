@@ -10,7 +10,7 @@ use super::{
 
 impl BenchmarkValue for AggKey {
 	fn benchmark_value() -> Self {
-		AggKey { previous: [1u8; 32], current: [2u8; 32] }
+		AggKey { previous: None, current: [2u8; 32] }
 	}
 }
 

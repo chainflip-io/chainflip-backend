@@ -10,8 +10,8 @@ use alloc::string::String;
 use arrayref::array_ref;
 use base58::FromBase58;
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
+use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Bitcoin;
-use cf_primitives::{chains::assets, EpochIndex, KeyId};
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::{borrow::Borrow, iter};
 use frame_support::{sp_io::hashing::sha2_256, BoundedVec, RuntimeDebug};
@@ -160,10 +160,6 @@ impl ChainCrypto for Bitcoin {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
 		vec![(PreviousOrCurrent::Current, agg_key.current)]
-	}
-
-	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
-		KeyId { epoch_index, public_key_bytes: agg_key.current.into() }
 	}
 }
 

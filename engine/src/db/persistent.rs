@@ -3,7 +3,7 @@ mod persistent_key_db_tests;
 
 use std::{cmp::Ordering, collections::HashMap, fs, mem::size_of, path::Path};
 
-use cf_primitives::KeyId;
+use cf_chains::KeyId;
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
 use serde::{de::DeserializeOwned, Serialize};
 use tracing::{debug, info, info_span};

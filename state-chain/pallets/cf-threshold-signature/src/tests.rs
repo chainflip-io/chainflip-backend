@@ -5,10 +5,9 @@ use crate::{
 	Error, PalletOffence, RequestContext, RequestId, ThresholdSignatureResponseTimeout,
 };
 use cf_chains::mocks::MockEthereum;
-use cf_primitives::KeyId;
 use cf_traits::{
 	mocks::{key_provider::MockKeyProvider, signer_nomination::MockNominator},
-	AsyncResult, Chainflip, EpochInfo, EpochKey, KeyProvider, ThresholdSigner,
+	AsyncResult, Chainflip, EpochKey, KeyProvider, ThresholdSigner,
 };
 
 use frame_support::{
@@ -72,7 +71,7 @@ impl MockCfe {
 					payload,
 				},
 			) => {
-				assert_eq!(key_id.public_key_bytes, current_agg_key().0);
+				assert_eq!(key_id.1, current_agg_key());
 				assert_eq!(signatories, MockNominator::get_nominees().unwrap());
 
 				match &self.behaviour {
@@ -252,11 +251,11 @@ fn keygen_verification_ceremony_calls_callback_on_failure() {
 		.build()
 		.execute_with(|| {
 			const PAYLOAD: &[u8; 4] = b"OHAI";
-			let EpochKey { key: public_key_bytes, epoch_index, .. } =
+			let EpochKey { key, .. } =
 				<Test as crate::Config<_>>::KeyProvider::current_epoch_key().unwrap();
 			let request_id = EthereumThresholdSigner::request_keygen_verification_signature(
 				*PAYLOAD,
-				KeyId { epoch_index, public_key_bytes: public_key_bytes.0.to_vec() },
+				key,
 				NOMINEES.into_iter().collect(),
 			);
 			assert_ok!(EthereumThresholdSigner::register_callback(
@@ -487,7 +486,6 @@ mod unsigned_validation {
 	use super::*;
 	use crate::{Call as PalletCall, CeremonyRetryQueues, PendingCeremonies};
 	use cf_chains::{mocks::MockAggKey, ChainCrypto};
-	use cf_primitives::KeyId;
 	use cf_traits::{
 		mocks::ceremony_id_provider::MockCeremonyIdProvider, KeyProvider, ThresholdSigner,
 	};
@@ -503,10 +501,7 @@ mod unsigned_validation {
 			let participants: BTreeSet<u64> = BTreeSet::from_iter([1, 2, 3, 4, 5, 6]);
 			EthereumThresholdSigner::request_keygen_verification_signature(
 				PAYLOAD,
-				KeyId {
-					public_key_bytes: CUSTOM_AGG_KEY.0.to_vec(),
-					epoch_index: <Test as Chainflip>::EpochInfo::epoch_index() + 1,
-				},
+				CUSTOM_AGG_KEY,
 				participants,
 			);
 			let ceremony_id = MockCeremonyIdProvider::get();
@@ -622,8 +617,7 @@ mod unsigned_validation {
 mod failure_reporting {
 	use super::*;
 	use crate::{CeremonyContext, RequestContext, ThresholdCeremonyType};
-	use cf_chains::ChainCrypto;
-	use cf_primitives::KeyId;
+	use cf_chains::{mocks::MockAggKey, ChainCrypto};
 	use cf_traits::mocks::epoch_info::MockEpochInfo;
 
 	fn init_context(
@@ -634,7 +628,7 @@ mod failure_reporting {
 		CeremonyContext::<Test, Instance1> {
 			request_context: RequestContext { request_id: 1, attempt_count: 0, payload: PAYLOAD },
 			threshold_ceremony_type: ThresholdCeremonyType::Standard,
-			key_id: KeyId { public_key_bytes: AGG_KEY.to_vec(), epoch_index: 0 },
+			key_id: (0, MockAggKey(AGG_KEY)),
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),
 			participant_count: 5,

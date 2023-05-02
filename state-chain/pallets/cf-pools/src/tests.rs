@@ -133,7 +133,6 @@ fn test_buy_back_flip_no_funds_available() {
 #[test]
 fn test_buy_back_flip() {
 	new_test_ext().execute_with(|| {
-		const COLLECTED_FEE: AssetAmount = 30;
 		const INTERVAL: <Test as frame_system::Config>::BlockNumber = 5;
 		const POSITION: core::ops::Range<Tick> = -100_000..100_000;
 		const FLIP: Asset = Asset::Flip;

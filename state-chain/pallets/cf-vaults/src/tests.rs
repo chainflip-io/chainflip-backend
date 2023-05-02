@@ -84,7 +84,7 @@ fn keygen_success_triggers_keygen_verification() {
 		<VaultsPallet as VaultRotator>::keygen(btree_candidates.clone(), next_epoch);
 		let ceremony_id = current_ceremony_id();
 
-		VaultsPallet::trigger_keygen_verification(ceremony_id, NEW_AGG_PUB_KEY, next_epoch, btree_candidates);
+		VaultsPallet::trigger_keygen_verification(ceremony_id, NEW_AGG_PUB_KEY, btree_candidates);
 
 		assert!(matches!(
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
@@ -159,12 +159,9 @@ fn keygen_verification_failure() {
 
 		let keygen_ceremony_id = 12;
 
-		let next_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
-
 		let request_id = VaultsPallet::trigger_keygen_verification(
 			keygen_ceremony_id,
 			NEW_AGG_PUB_KEY,
-			next_epoch,
 			participants.clone(),
 		);
 
@@ -398,11 +395,10 @@ fn keygen_report_success() {
 			<VaultsPallet as VaultRotator>::status(),
 			AsyncResult::Pending
 		);
-		if let VaultRotationStatus::AwaitingKeygen { keygen_ceremony_id: keygen_ceremony_id_from_status, response_status, keygen_participants, epoch_index } = PendingVaultRotation::<MockRuntime, _>::get().unwrap() {
+		if let VaultRotationStatus::AwaitingKeygen { keygen_ceremony_id: keygen_ceremony_id_from_status, response_status, keygen_participants } = PendingVaultRotation::<MockRuntime, _>::get().unwrap() {
 			assert_eq!(keygen_ceremony_id, keygen_ceremony_id_from_status);
 			assert_eq!(response_status.success_votes.get(&NEW_AGG_PUB_KEY).expect("new key should have votes"), &3);
 			assert_eq!(keygen_participants, BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
-			assert_eq!(next_epoch, epoch_index);
 		} else {
 			panic!("Expected to be in AwaitingKeygen state");
 		}
@@ -554,12 +550,7 @@ fn vault_key_rotated() {
 
 		<VaultsPallet as VaultRotator>::keygen(btree_candidates.clone(), next_epoch_index);
 		let ceremony_id = current_ceremony_id();
-		VaultsPallet::trigger_keygen_verification(
-			ceremony_id,
-			NEW_AGG_PUB_KEY,
-			next_epoch_index,
-			btree_candidates,
-		);
+		VaultsPallet::trigger_keygen_verification(ceremony_id, NEW_AGG_PUB_KEY, btree_candidates);
 
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
 

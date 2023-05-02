@@ -466,7 +466,7 @@ where
                                         pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
                                             request_id: _,
                                             ceremony_id,
-                                            key_id: (epoch_index, key),
+                                            key_id,
                                             signatories,
                                             payload,
                                         },
@@ -480,7 +480,7 @@ where
                                                 &eth_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            vec![KeyId { epoch_index, public_key_bytes: key.to_pubkey_compressed().to_vec() }],
+                                            vec![key_id.into()],
                                             signatories,
                                             vec![crate::multisig::eth::SigningPayload(payload.0)],
                                         ).await;

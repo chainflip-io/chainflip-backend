@@ -1500,7 +1500,7 @@ mod dot_signing {
 
 async fn should_handle_keygen_request<C, I>()
 where
-	C: CryptoScheme<AggKey = <<state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain as ChainCrypto>::AggKey> + Send + Sync,
+	C: CryptoScheme<PublicKey = <<state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain as ChainCrypto>::AggKey> + Send + Sync,
 	I: 'static + Send + Sync,
 	state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
 	state_chain_runtime::RuntimeCall:

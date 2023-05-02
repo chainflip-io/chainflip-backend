@@ -813,10 +813,7 @@ mod key_id_agg_key_match {
 
 		let public_key_bytes: Vec<u8> = agg_key.clone().into();
 
-		assert_eq!(
-			CC::agg_key_to_key_id(CC::AggKey::from(agg_key), 9).public_key_bytes,
-			public_key_bytes
-		);
+		assert_eq!(KeyId::from((0, agg_key)).public_key_bytes, public_key_bytes);
 	}
 
 	#[test]

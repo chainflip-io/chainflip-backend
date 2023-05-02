@@ -6,7 +6,7 @@ pub mod api;
 pub mod benchmarking;
 
 pub use cf_primitives::{chains::Polkadot, PolkadotAccountId};
-use cf_primitives::{KeyId, PolkadotBlockNumber, TxId};
+use cf_primitives::{PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use core::str::FromStr;
 use scale_info::TypeInfo;
@@ -138,18 +138,6 @@ impl ChainCrypto for Polkadot {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
 		EncodedPolkadotPayload(Blake2_256::hash(&agg_key.0).to_vec())
-	}
-
-	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
-		KeyId { epoch_index, public_key_bytes: agg_key.into() }
-	}
-}
-
-impl TryFrom<KeyId> for PolkadotPublicKey {
-	type Error = &'static str;
-
-	fn try_from(key_id: KeyId) -> Result<Self, Self::Error> {
-		key_id.public_key_bytes.try_into().map_err(|_| "Invalid public key bytes")
 	}
 }
 

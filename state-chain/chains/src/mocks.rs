@@ -2,7 +2,6 @@ use crate::{
 	eth::{api::EthereumReplayProtection, TransactionFee},
 	*,
 };
-use cf_primitives::KeyId;
 use sp_std::marker::PhantomData;
 use std::cell::RefCell;
 
@@ -121,10 +120,6 @@ impl ChainCrypto for MockEthereum {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
 		agg_key.0
-	}
-
-	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
-		KeyId { epoch_index, public_key_bytes: agg_key.0.to_vec() }
 	}
 }
 

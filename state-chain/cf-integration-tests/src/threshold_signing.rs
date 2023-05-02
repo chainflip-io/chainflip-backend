@@ -216,10 +216,7 @@ impl KeyUtils for BtcKeyComponents {
 	}
 
 	fn key_id(&self) -> KeyId {
-		<cf_chains::Bitcoin as cf_chains::ChainCrypto>::agg_key_to_key_id(
-			self.agg_key,
-			self.epoch_index,
-		)
+		<cf_chains::Bitcoin as cf_chains::ChainCrypto>::from((self.epoch_index, self.agg_key))
 	}
 
 	fn generate(seed: u64, epoch_index: EpochIndex) -> Self {
@@ -227,7 +224,7 @@ impl KeyUtils for BtcKeyComponents {
 		let secp = secp256k1::Secp256k1::new();
 		let keypair = secp256k1::schnorrsig::KeyPair::from_seckey_slice(&secp, &priv_seed).unwrap();
 		let pubkey_x = secp256k1::schnorrsig::PublicKey::from_keypair(&secp, &keypair).serialize();
-		let agg_key = btc::AggKey { current: pubkey_x, previous: [0xcf; 32] };
+		let agg_key = btc::AggKey { current: pubkey_x, previous: None };
 
 		KeyComponents { seed, secret: keypair, agg_key, epoch_index }
 	}

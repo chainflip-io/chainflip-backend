@@ -4,6 +4,7 @@ pub mod bitcoin;
 mod curve25519;
 pub mod ed25519;
 pub mod eth;
+mod key_id;
 pub mod polkadot;
 pub mod secp256k1;
 #[cfg(test)]
@@ -97,11 +98,6 @@ pub trait ECPoint:
 	fn is_point_at_infinity(&self) -> bool {
 		self == &Self::point_at_infinity()
 	}
-}
-
-/// For serializing public keys.
-pub trait CanonicalEncoding {
-	fn encode_key(&self) -> Vec<u8>;
 }
 
 pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {

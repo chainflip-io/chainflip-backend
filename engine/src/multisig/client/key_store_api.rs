@@ -1,4 +1,4 @@
-use cf_primitives::KeyId;
+use cf_chains::KeyId;
 
 use crate::multisig::crypto::CryptoScheme;
 
