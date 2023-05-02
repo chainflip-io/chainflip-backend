@@ -30,7 +30,7 @@ use tokio::sync::Mutex;
 use tracing::{info_span, trace, Instrument};
 
 use crate::{
-	multisig::PersistentKeyDB,
+	db::PersistentKeyDB,
 	witnesser::{
 		block_head_stream_from::block_head_stream_from,
 		http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
@@ -244,8 +244,6 @@ mod tests {
 	#[ignore = "Requires a running BTC node"]
 	#[tokio::test]
 	async fn test_btc_witnesser() {
-		crate::logging::init_json_logger();
-
 		let rpc = BtcRpcClient::new(&settings::Btc {
 			http_node_endpoint: "http://127.0.0.1:18443".to_string(),
 			rpc_user: "user".to_string(),

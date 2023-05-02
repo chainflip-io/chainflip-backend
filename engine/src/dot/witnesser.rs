@@ -29,7 +29,7 @@ use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
 	constants::{BLOCK_PULL_TIMEOUT_MULTIPLIER, DOT_AVERAGE_BLOCK_TIME_SECONDS},
-	multisig::PersistentKeyDB,
+	db::PersistentKeyDB,
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
 	witnesser::{
 		block_head_stream_from::block_head_stream_from,

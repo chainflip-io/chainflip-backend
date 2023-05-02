@@ -30,10 +30,6 @@ use crate::{
 	btc::{rpc::BtcRpcApi, BtcBroadcaster},
 	dot::{rpc::DotRpcApi, DotBroadcaster},
 	eth::{rpc::EthRpcApi, EthBroadcaster},
-	multisig::{
-		bitcoin::BtcSigning, client::MultisigClientApi, eth::EthSigning, polkadot::PolkadotSigning,
-		CryptoScheme, SignatureToThresholdSignature,
-	},
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{
 		extrinsic_api::{
@@ -44,6 +40,10 @@ use crate::{
 		StateChainStreamApi,
 	},
 	witnesser::{AddressMonitorCommand, EpochStart},
+};
+use multisig::{
+	bitcoin::BtcSigning, client::MultisigClientApi, eth::EthSigning, polkadot::PolkadotSigning,
+	CryptoScheme, SignatureToThresholdSignature,
 };
 use utilities::task_scope::{task_scope, Scope};
 
@@ -476,7 +476,7 @@ where
                                             ceremony_id,
                                             key_id,
                                             signatories,
-                                            vec![crate::multisig::eth::SigningPayload(payload.0)],
+                                            vec![multisig::eth::SigningPayload(payload.0)],
                                         ).await;
                                     }
 
@@ -500,7 +500,7 @@ where
                                             ceremony_id,
                                             key_id,
                                             signatories,
-                                            vec![crate::multisig::polkadot::SigningPayload::new(payload.0)
+                                            vec![multisig::polkadot::SigningPayload::new(payload.0)
                                                 .expect("Payload should be correct size")],
                                         ).await;
                                     }
@@ -524,7 +524,7 @@ where
                                             ceremony_id,
                                             key_id,
                                             signatories,
-                                            payloads.into_iter().map(crate::multisig::bitcoin::SigningPayload).collect(),
+                                            payloads.into_iter().map(multisig::bitcoin::SigningPayload).collect(),
                                         ).await;
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumBroadcaster(

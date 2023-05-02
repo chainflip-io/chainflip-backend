@@ -1,34 +1,37 @@
 [package]
 authors = ["Chainflip team <https://github.com/chainflip-io>"]
-edition = '2021'
 build = 'build.rs'
+edition = '2021'
 name = "chainflip-engine"
 version = '0.7.0'
 
 [package.metadata.deb]
-depends = "$auto, systemd"
-extended-description = """\
-Chainflip Validator Engine Package"""
-maintainer = "Chainflip Labs GmbH <dev@chainflip.io>"
-name = "chainflip-engine"
-priority = "required"
-section = "rust"
-maintainer-scripts = "package/"
-systemd-units = { enable = false }
-pre-depends = "curl"
 assets = [
   ["target/release/chainflip-engine", "usr/bin/", "755"],
   ["start-engine.sh", "etc/chainflip/", "755"],
 ]
+depends = "$auto, systemd"
+extended-description = """\
+Chainflip Validator Engine Package"""
+maintainer = "Chainflip Labs GmbH <dev@chainflip.io>"
+maintainer-scripts = "package/"
+name = "chainflip-engine"
+pre-depends = "curl"
+priority = "required"
+section = "rust"
+systemd-units = {enable = false}
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 anyhow = "1.0"
-async-trait = "0.1.49"
-async-channel = "1.7.1"
 async-broadcast = "0.4.1"
+async-channel = "1.7.1"
+async-trait = "0.1.49"
+atomicwrites = "0.3.1"
 bincode = "1.3.3"
 bitcoincore-rpc = "0.16.0"
+chrono = "0.4.19"
+clap = {version = "3.2.16", features = ["derive", "env"]}
 config = "0.13.1"
 fs_extra = "1.2.0"
 futures = "0.3.14"
@@ -37,103 +40,88 @@ futures-util = "0.3.14"
 hex = "0.4.3"
 httparse = "1.4.1"
 itertools = "0.10"
-clap = { version = "3.2.16", features = ["derive", "env"] }
-chrono = "0.4.19"
-atomicwrites = "0.3.1"
 # have to use the older version until secp256k1 updates its dependency (https://github.com/rust-bitcoin/rust-secp256k1/issues/328)
-rand_legacy = { package = "rand", version = "0.6" }
+rand_legacy = {package = "rand", version = "0.6"}
 
 # Same version of jsonrpsee as substrate
-jsonrpsee = { version = "0.15.1", features = ["full"] }
+jsonrpsee = {version = "0.15.1", features = ["full"]}
 
-ethbloom = "0.12.1"
 dyn-clone = "1.0.4"
+ethbloom = "0.12.1"
 lazy_static = "1.4"
+num-bigint = "0.4"
+num-derive = "0.3"
+num-traits = "0.2"
 regex = "1"
-reqwest = { version = "0.11.4", features = ["json"] }
-secp256k1 = { version = "0.20", features = [
+reqwest = {version = "0.11.4", features = ["json"]}
+secp256k1 = {version = "0.20", features = [
   "serde",
   "rand-std",
   "global-context",
-] }
-serde = { version = "1.0", features = ["derive", "rc"] }
+]}
+serde = {version = "1.0", features = ["derive", "rc"]}
 serde_json = "1.0"
 sha2 = "0.9.5"
 subxt = "0.26.0"
 thiserror = "1.0.26"
-tokio = { version = "1.22", features = ["full", "test-util"] }
-tokio-stream = { version = "0.1.5", features = ["sync"] }
+tokio = {version = "1.22", features = ["full", "test-util"]}
+tokio-stream = {version = "0.1.5", features = ["sync"]}
 url = "1.7.2"
-num-bigint = "0.4"
-num-traits = "0.2"
-num-derive = "0.3"
-web3 = { git = 'https://github.com/tomusdrw/rust-web3.git', rev = '8796c88', features = [
+web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = '8796c88', features = [
   'signing',
-] }
+]}
 zeroize = "1.5.4"
 # Required so that we can create a web3-compatible secret key.
-web3-secp256k1 = { package = 'secp256k1', version = '0.21' }
-generic-array = "0.14"
-lazy_format = "2.0"
+web3-secp256k1 = {package = 'secp256k1', version = '0.21'}
 # We will update curve25519-dalek when we can update schnorrkel
-curve25519-dalek = { version = "2.1", features = ["serde"] }
-typenum = "1.15"
-# Note: we don't use the most recent version of schnorrkel since 0.10 switches
-# to curve25519-dalek-ng, but it is not clear at all why that fork of
-# curve25519-dalek was created, so we are not willing to trust it just yet.
-# (There is little public information on this, but some mentions can be found
-# in https://github.com/dalek-cryptography/curve25519-dalek/pull/338#issuecomment-772059572)
-# We might eventually update, but for now let's just
-# use the same version as polkadot.
-schnorrkel = "0.9.1"
-rayon = "1.5"
-pin-project = "1.0.12"
-zmq = { git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v0.9.2+1", features = [
-  "vendored",
-] }
+curve25519-dalek = {version = "2.1", features = ["serde"]}
 ed25519-dalek = "1.0"
-x25519-dalek = { version = "1.1", features = ["serde"] }
+pin-project = "1.0.12"
 rand = "0.8.4"
-ed25519-consensus = "2.0"
 tracing = "0.1"
 tracing-subscriber = {version = "0.3", features = ["json", "env-filter"]}
+x25519-dalek = {version = "1.1", features = ["serde"]}
+zmq = {git = "https://github.com/chainflip-io/rust-zmq.git", tag = "chainflip-v0.9.2+1", features = [
+  "vendored",
+]}
 
 # Local deps
-cf-chains = { path = "../state-chain/chains" }
-cf-primitives = { path = "../state-chain/primitives" }
-pallet-cf-account-roles = { path = "../state-chain/pallets/cf-account-roles" }
-pallet-cf-broadcast = { path = "../state-chain/pallets/cf-broadcast" }
-pallet-cf-chain-tracking = { path = "../state-chain/pallets/cf-chain-tracking" }
-pallet-cf-environment = { path = "../state-chain/pallets/cf-environment" }
-pallet-cf-flip = { path = "../state-chain/pallets/cf-flip" }
-pallet-cf-governance = { path = "../state-chain/pallets/cf-governance" }
-pallet-cf-ingress-egress = { path = "../state-chain/pallets/cf-ingress-egress" }
-pallet-cf-reputation = { path = "../state-chain/pallets/cf-reputation" }
-pallet-cf-staking = { path = "../state-chain/pallets/cf-staking" }
-pallet-cf-swapping = { path = "../state-chain/pallets/cf-swapping" }
-pallet-cf-threshold-signature = { path = "../state-chain/pallets/cf-threshold-signature" }
-pallet-cf-validator = { path = "../state-chain/pallets/cf-validator" }
-pallet-cf-vaults = { path = "../state-chain/pallets/cf-vaults" }
-pallet-cf-witnesser = { path = "../state-chain/pallets/cf-witnesser" }
-custom-rpc = { path = "../state-chain/custom-rpc" }
-state-chain-runtime = { path = "../state-chain/runtime" }
-chainflip-node = { path = "../state-chain/node" }
-utilities = {package = "utilities", path = "../utilities" }
+cf-chains = {path = "../state-chain/chains"}
+cf-primitives = {path = "../state-chain/primitives"}
+chainflip-node = {path = "../state-chain/node"}
+custom-rpc = {path = "../state-chain/custom-rpc"}
+multisig = {path = "multisig"}
+pallet-cf-account-roles = {path = "../state-chain/pallets/cf-account-roles"}
+pallet-cf-broadcast = {path = "../state-chain/pallets/cf-broadcast"}
+pallet-cf-chain-tracking = {path = "../state-chain/pallets/cf-chain-tracking"}
+pallet-cf-environment = {path = "../state-chain/pallets/cf-environment"}
+pallet-cf-flip = {path = "../state-chain/pallets/cf-flip"}
+pallet-cf-governance = {path = "../state-chain/pallets/cf-governance"}
+pallet-cf-ingress-egress = {path = "../state-chain/pallets/cf-ingress-egress"}
+pallet-cf-reputation = {path = "../state-chain/pallets/cf-reputation"}
+pallet-cf-staking = {path = "../state-chain/pallets/cf-staking"}
+pallet-cf-swapping = {path = "../state-chain/pallets/cf-swapping"}
+pallet-cf-threshold-signature = {path = "../state-chain/pallets/cf-threshold-signature"}
+pallet-cf-validator = {path = "../state-chain/pallets/cf-validator"}
+pallet-cf-vaults = {path = "../state-chain/pallets/cf-vaults"}
+pallet-cf-witnesser = {path = "../state-chain/pallets/cf-witnesser"}
+state-chain-runtime = {path = "../state-chain/runtime"}
+utilities = {path = "../utilities"}
 
 # substrate deps
-codec = { package = "parity-scale-codec", version = "3.0.0", features = [
+cf-amm = {path = "../state-chain/amm"}
+codec = {package = "parity-scale-codec", version = "3.0.0", features = [
   "derive",
   "full",
-] }
-scale-info = { version = "2.1.1", features = ["derive"] }
-frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-sc-rpc-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-sp-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-sp-version = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-cf-amm = {path = "../state-chain/amm"}
+]}
+frame-support = {git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2"}
+frame-system = {git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2"}
+sc-rpc-api = {git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2"}
+scale-info = {version = "2.1.1", features = ["derive"]}
+sp-core = {git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2"}
+sp-rpc = {git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2"}
+sp-runtime = {git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2"}
+sp-version = {git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2"}
 
 [dependencies.rocksdb]
 version = "0.19.0"
@@ -144,17 +132,16 @@ default-features = false
 features = ["lz4"]
 
 [dev-dependencies]
-env_logger = "0.9.0"
-log = "0.4.16"
-mockall = "0.11.0"
 csv = "1.1.6"
-tempfile = "3.3.0"
 ethereum = "0.14"
+mockall = "0.11.0"
+multisig = {path = "multisig", features = ["test"]}
 rlp = "0.5"
+tempfile = "3.3.0"
+utilities = {package = "utilities", path = "../utilities", features = ["test-utils"]}
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
-utilities = { package = "utilities", path = "../utilities" , features = ["test-utils"] }
+substrate-build-script-utils = {git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2"}
 
 [features]
 integration-test = []

@@ -5,14 +5,10 @@ use anyhow::Context;
 use cf_primitives::AccountRole;
 use chainflip_engine::{
 	btc::{self, rpc::BtcRpcClient, BtcBroadcaster},
-	db::KeyStore,
+	db::{KeyStore, PersistentKeyDB},
 	dot::{self, rpc::DotRpcClient, witnesser as dot_witnesser, DotBroadcaster},
 	eth::{self, build_broadcast_channel, rpc::EthDualRpcClient, EthBroadcaster},
 	health::HealthChecker,
-	logging,
-	multisig::{
-		self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, PersistentKeyDB,
-	},
 	p2p,
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
@@ -24,6 +20,7 @@ use chainflip_engine::{
 	},
 	witnesser::AddressMonitor,
 };
+use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 use utilities::task_scope::task_scope;
 
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
@@ -43,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
 	// like `--version`), so we execute it only after the settings have been parsed.
 	utilities::print_starting!();
 
-	logging::init_json_logger();
+	utilities::init_json_logger();
 
 	task_scope(|scope| {
 		async move {
@@ -143,7 +140,7 @@ async fn main() -> anyhow::Result<()> {
 			scope.spawn(p2p_fut);
 
 			let (eth_multisig_client, eth_multisig_client_backend_future) =
-				multisig::start_client::<EthSigning>(
+				chainflip_engine::multisig::start_client::<EthSigning>(
 					state_chain_client.account_id(),
 					KeyStore::new(db.clone()),
 					eth_incoming_receiver,
@@ -154,7 +151,7 @@ async fn main() -> anyhow::Result<()> {
 			scope.spawn(eth_multisig_client_backend_future);
 
 			let (dot_multisig_client, dot_multisig_client_backend_future) =
-				multisig::start_client::<PolkadotSigning>(
+				chainflip_engine::multisig::start_client::<PolkadotSigning>(
 					state_chain_client.account_id(),
 					KeyStore::new(db.clone()),
 					dot_incoming_receiver,
@@ -165,7 +162,7 @@ async fn main() -> anyhow::Result<()> {
 			scope.spawn(dot_multisig_client_backend_future);
 
 			let (btc_multisig_client, btc_multisig_client_backend_future) =
-				multisig::start_client::<BtcSigning>(
+				chainflip_engine::multisig::start_client::<BtcSigning>(
 					state_chain_client.account_id(),
 					KeyStore::new(db.clone()),
 					btc_incoming_receiver,

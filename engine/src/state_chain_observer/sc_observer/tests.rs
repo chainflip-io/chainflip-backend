@@ -2,7 +2,6 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
 	btc::rpc::MockBtcRpcApi,
-	multisig::SignatureToThresholdSignature,
 	state_chain_observer::client::{extrinsic_api, StreamCache},
 };
 use cf_chains::{
@@ -13,6 +12,7 @@ use cf_primitives::{AccountRole, KeyId, PolkadotAccountId, GENESIS_EPOCH};
 use frame_system::Phase;
 use futures::{FutureExt, StreamExt};
 use mockall::predicate::{self, eq};
+use multisig::SignatureToThresholdSignature;
 use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_vaults::Vault;
 
@@ -30,14 +30,14 @@ use crate::{
 		rpc::{EthWsRpcClient, MockEthRpcApi},
 		EthBroadcaster,
 	},
-	multisig::{
-		client::{KeygenFailureReason, MockMultisigClientApi, SigningFailureReason},
-		eth::EthSigning,
-		CryptoScheme,
-	},
 	settings::Settings,
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
 	witnesser::EpochStart,
+};
+use multisig::{
+	client::{KeygenFailureReason, MockMultisigClientApi, SigningFailureReason},
+	eth::EthSigning,
+	CryptoScheme,
 };
 use utilities::task_scope::task_scope;
 
@@ -1532,7 +1532,7 @@ async fn should_handle_signing_request_eth() {
 
 mod dot_signing {
 
-	use crate::multisig::polkadot::PolkadotSigning;
+	use multisig::polkadot::PolkadotSigning;
 
 	use super::*;
 	use state_chain_runtime::PolkadotInstance;
@@ -1627,7 +1627,7 @@ async fn should_handle_keygen_request_eth() {
 }
 
 mod dot_keygen {
-	use crate::multisig::polkadot::PolkadotSigning;
+	use multisig::polkadot::PolkadotSigning;
 
 	use super::*;
 	use state_chain_runtime::PolkadotInstance;

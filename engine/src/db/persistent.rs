@@ -7,12 +7,10 @@ use std::{cmp::Ordering, collections::HashMap, path::Path};
 use cf_primitives::KeyId;
 use tracing::{debug, info, info_span};
 
-use crate::{
-	multisig::{
-		client::KeygenResultInfo, eth::EthSigning, polkadot::PolkadotSigning, ChainTag,
-		CryptoScheme, CHAIN_TAG_SIZE,
-	},
-	witnesser::checkpointing::WitnessedUntil,
+use crate::witnesser::checkpointing::WitnessedUntil;
+use multisig::{
+	client::KeygenResultInfo, eth::EthSigning, polkadot::PolkadotSigning, ChainTag, CryptoScheme,
+	CHAIN_TAG_SIZE,
 };
 
 use anyhow::{anyhow, bail, Context, Result};

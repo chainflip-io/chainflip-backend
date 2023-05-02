@@ -2,7 +2,7 @@ use sp_runtime::AccountId32;
 use std::{collections::BTreeSet, fs, path::PathBuf};
 use tempfile::TempDir;
 
-use crate::multisig::{
+use multisig::{
 	bitcoin::BtcSigning, client::get_key_data_for_test, eth::EthSigning, polkadot::PolkadotSigning,
 };
 
@@ -200,8 +200,8 @@ fn backup_should_fail_if_cant_copy_files() {
 
 #[test]
 fn test_migration_to_v1() {
-	use crate::multisig::{client::keygen, Rng};
 	use cf_primitives::AccountId;
+	use multisig::{client::keygen, Rng};
 	use rand_legacy::FromEntropy;
 	use std::collections::BTreeSet;
 

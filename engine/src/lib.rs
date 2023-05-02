@@ -19,5 +19,3 @@ pub mod witnesser;
 pub mod btc;
 pub mod dot;
 pub mod eth;
-
-pub mod logging;
