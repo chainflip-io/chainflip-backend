@@ -927,6 +927,7 @@ mod key_handover {
 		ids.as_ref().iter().map(|i| AccountId::new([*i; 32])).collect()
 	}
 
+	#[derive(Default)]
 	struct HandoverTestOptions {
 		nodes_sharing_invalid_secret: BTreeSet<AccountId>,
 	}
@@ -937,7 +938,7 @@ mod key_handover {
 		receiving_set: BTreeSet<AccountId>,
 		options: HandoverTestOptions,
 	) -> (KeygenCeremonyRunner<Scheme>, PublicKeyBytes) {
-		use crate::multisig::client::common::ParticipantStatus;
+		use crate::client::common::ParticipantStatus;
 
 		assert!(sharing_subset.is_subset(&original_set));
 
@@ -1007,7 +1008,7 @@ mod key_handover {
 			original_set,
 			sharing_subset,
 			receiving_set.clone(),
-			HandoverTestOptions { nodes_sharing_invalid_secret: Default::default() },
+			HandoverTestOptions::default(),
 		)
 		.await;
 
@@ -1099,7 +1100,58 @@ mod key_handover {
 
 	#[tokio::test]
 	async fn should_recover_if_agree_on_values_stage0() {
-		todo!();
+		type Scheme = BtcSigning;
+		type Point = <Scheme as CryptoScheme>::Point;
+
+		let original_set = to_account_id_set([1, 2, 3, 4]);
+
+		// NOTE: 3 sharing nodes is the smallest set that where
+		// recovery is possible during certain stages
+		let sharing_subset = to_account_id_set([2, 3, 4]);
+
+		let receiving_set = to_account_id_set([3, 4, 5]);
+
+		// This account id will fail to broadcast initial public keys
+		let bad_account_id = sharing_subset.iter().next().unwrap().clone();
+
+		let (mut ceremony, initial_key) = prepare_handover_test::<Scheme>(
+			original_set,
+			sharing_subset,
+			receiving_set.clone(),
+			HandoverTestOptions::default(),
+		)
+		.await;
+
+		let messages = ceremony.gather_outgoing_messages::<keygen::PubkeyShares0<Point>, _>().await;
+
+		ceremony.distribute_messages_with_non_sender(messages, &bad_account_id).await;
+
+		let messages = ceremony.gather_outgoing_messages::<keygen::HashComm1, _>().await;
+
+		let messages = run_stages!(
+			ceremony,
+			messages,
+			keygen::VerifyHashComm2,
+			CoeffComm3,
+			VerifyCoeffComm4,
+			SecretShare5,
+			Complaints6,
+			VerifyComplaints7
+		);
+
+		ceremony.distribute_messages(messages).await;
+		let (new_key, new_shares) = ceremony.complete().await;
+
+		assert_eq!(new_key, initial_key);
+
+		// Ensure that the new key shares can be used for signing:
+		let mut signing_ceremony = SigningCeremonyRunner::<Scheme>::new_with_all_signers(
+			new_nodes(receiving_set),
+			DEFAULT_SIGNING_CEREMONY_ID,
+			vec![PayloadAndKeyData::new(Scheme::signing_payload_for_test(), new_key, new_shares)],
+			Rng::from_entropy(),
+		);
+		standard_signing(&mut signing_ceremony).await;
 	}
 
 	// Test that a party who doesn't perform re-sharing correctly
