@@ -1023,6 +1023,7 @@ mod key_handover {
 		let sharing_subset: BTreeSet<_> = [2, 3].into_iter().collect();
 
 		// These parties will receive the key as the result of key handover.
+		// (Note no overlap with the original set.)
 		let new_set: BTreeSet<_> = [4, 5, 6].into_iter().collect();
 
 		assert!(original_set.is_disjoint(&new_set));
@@ -1046,6 +1047,23 @@ mod key_handover {
 		let new_set: BTreeSet<_> = [3, 4, 5].into_iter().collect();
 
 		assert!(!original_set.is_disjoint(&new_set));
+
+		ensure_successful_handover(original_set, sharing_subset, new_set).await;
+	}
+
+	#[tokio::test]
+	async fn with_different_set_sizes() {
+		// These parties will hold the original key
+		let original_set: BTreeSet<_> = [1, 2, 3, 4, 5].into_iter().collect();
+
+		// A subset of them will contribute their secret shares
+		let sharing_subset: BTreeSet<_> = [1, 2, 3, 4].into_iter().collect();
+
+		// These parties will receive the key as the result of key handover.
+		// (Note that that the two sets have different size.)
+		let new_set: BTreeSet<_> = [4, 5, 6].into_iter().collect();
+
+		assert_ne!(original_set.len(), new_set.len());
 
 		ensure_successful_handover(original_set, sharing_subset, new_set).await;
 	}
