@@ -5,9 +5,14 @@ on:
       simple_bouncer:
         type: boolean
         default: false
+      timeout-minutes:
+        type: number
+        required: false
+        default: 10
 jobs:
   bouncer:
     runs-on: [hetzner]
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
       credentials:
@@ -111,6 +116,7 @@ jobs:
 
   benchmarks:
     runs-on: [hetzner]
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
