@@ -402,6 +402,10 @@ fn addresses_are_getting_reused() {
 			assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
 		})
 		.execute_as_block(2, || {
+			assert_ok!(IngressEgress::finalise_ingress(
+				RuntimeOrigin::root(),
+				vec![ingress_to_finalise]
+			));
 			IngressEgress::close_ingress_channel(ingress_to_finalise.0, ingress_to_finalise.1);
 			expect_size_of_address_pool(1);
 			// Address 1 is free to use and in the pool of available addresses
@@ -445,6 +449,7 @@ fn proof_address_pool_integrity() {
 				Weight::from_ref_time(1),
 		);
 		for ingress in ingresses {
+			assert_ok!(IngressEgress::finalise_ingress(RuntimeOrigin::root(), vec![ingress]));
 			IngressEgress::close_ingress_channel(ingress.0, ingress.1);
 		}
 		// Expect all addresses to be available
@@ -467,9 +472,9 @@ fn create_new_address_while_pool_is_empty() {
 				Weight::from_ref_time(1),
 		);
 		for ingress in ingresses {
+			assert_ok!(IngressEgress::finalise_ingress(RuntimeOrigin::root(), vec![ingress]));
 			IngressEgress::close_ingress_channel(ingress.0, ingress.1);
 		}
-		IngressEgress::on_initialize(EXPIRY_BLOCK);
 		assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
 		register_and_do_ingress(3u64, eth::Asset::Eth);
 		assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
@@ -478,7 +483,6 @@ fn create_new_address_while_pool_is_empty() {
 			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(2) +
 				Weight::from_ref_time(1),
 		);
-		IngressEgress::on_initialize(EXPIRY_BLOCK);
 		assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
 	});
 }
