@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use async_trait::async_trait;
-use cf_chains::address::{BitcoinAddressData, ScriptPubkeyBytes};
+use cf_chains::{address::ScriptPubkeyBytes, btc::BitcoinScriptBounded};
 use cf_primitives::EpochIndex;
 
 pub mod block_head_stream_from;
@@ -14,7 +14,7 @@ pub mod http_safe_stream;
 
 use anyhow::Result;
 
-use crate::multisig::ChainTag;
+use multisig::ChainTag;
 
 pub type ChainBlockNumber<Chain> = <Chain as cf_chains::Chain>::ChainBlockNumber;
 
@@ -142,12 +142,12 @@ impl AddressKeyValue for sp_core::H160 {
 	}
 }
 
-impl AddressKeyValue for BitcoinAddressData {
+impl AddressKeyValue for BitcoinScriptBounded {
 	type Key = ScriptPubkeyBytes;
 	type Value = Self;
 
 	fn key_value(&self) -> (Self::Key, Self::Value) {
-		(self.to_scriptpubkey().unwrap().data, self.clone())
+		(self.data.clone().into(), self.clone())
 	}
 }
 

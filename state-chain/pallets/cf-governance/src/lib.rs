@@ -40,17 +40,15 @@ pub mod pallet {
 	use super::*;
 
 	use cf_traits::{Chainflip, ExecutionCondition, RuntimeUpgrade};
+	use codec::Encode;
 	use frame_support::{
 		dispatch::GetDispatchInfo,
 		error::BadOrigin,
 		pallet_prelude::*,
 		traits::{UnfilteredDispatchable, UnixTime},
 	};
-	use sp_std::collections::btree_set::BTreeSet;
-
-	use codec::Encode;
-	use frame_system::{pallet, pallet_prelude::*};
-	use sp_std::{boxed::Box, vec::Vec};
+	use frame_system::pallet_prelude::*;
+	use sp_std::{boxed::Box, collections::btree_set::BTreeSet, vec::Vec};
 
 	use super::{GovCallHash, WeightInfo};
 
@@ -87,8 +85,6 @@ pub mod pallet {
 		/// The outer Origin needs to be compatible with this pallet's Origin
 		type RuntimeOrigin: From<RawOrigin>
 			+ From<frame_system::RawOrigin<<Self as frame_system::Config>::AccountId>>;
-		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<<Self as pallet::Config>::RuntimeOrigin>;
 		/// The overarching call type.
 		type RuntimeCall: Member
 			+ Parameter

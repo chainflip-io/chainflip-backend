@@ -1,5 +1,5 @@
 use crate::{self as pallet_cf_witness, WitnessDataExtraction};
-use cf_traits::mocks::{self, epoch_info::MockEpochInfo};
+use cf_traits::{impl_mock_chainflip, AccountRoleRegistry};
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -7,6 +7,7 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 };
+use sp_std::collections::btree_set::BTreeSet;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
@@ -62,13 +63,11 @@ impl system::Config for Test {
 impl pallet_cf_witness::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeOrigin = RuntimeOrigin;
-	type AccountRoleRegistry = ();
 	type RuntimeCall = RuntimeCall;
-	type ValidatorId = AccountId;
-	type EpochInfo = mocks::epoch_info::Mock;
-	type Amount = u64;
 	type WeightInfo = ();
 }
+
+impl_mock_chainflip!(Test);
 
 impl dummy::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -100,7 +99,11 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext.execute_with(|| {
 		// This is required to log events.
 		System::set_block_number(1);
-		MockEpochInfo::next_epoch(GENESIS_AUTHORITIES.to_vec());
+		MockEpochInfo::next_epoch(BTreeSet::from(GENESIS_AUTHORITIES));
+		for id in GENESIS_AUTHORITIES.iter().chain(&[DEIRDRE]) {
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
+				.unwrap();
+		}
 	});
 
 	ext

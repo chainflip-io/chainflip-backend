@@ -74,13 +74,13 @@ fn update_gov_key_via_onchain_proposal() {
 fn fees_are_burned_on_successful_proposal() {
 	new_test_ext().execute_with(|| {
 		let gov_key_proposal = Proposal::SetGovernanceKey(ForeignChain::Ethereum, vec![1; 32]);
-		let balance_before = Flip::total_balance_of(&ALICE);
+		let balance_before = <Test as Chainflip>::StakingInfo::total_stake_of(&ALICE);
 		assert_ok!(TokenholderGovernance::submit_proposal(
 			RuntimeOrigin::signed(ALICE),
 			gov_key_proposal
 		));
 		assert_eq!(
-			Flip::total_balance_of(&ALICE),
+			<Test as Chainflip>::StakingInfo::total_stake_of(&ALICE),
 			balance_before - <mock::Test as Config>::ProposalFee::get()
 		);
 	});
@@ -123,15 +123,15 @@ fn cannot_create_proposal_with_insufficient_liquidity() {
 	new_test_ext().execute_with(|| {
 		let gov_key_proposal = Proposal::SetGovernanceKey(ForeignChain::Ethereum, vec![1; 32]);
 
-		let balance_before = Flip::total_balance_of(&BROKE_PAUL);
+		let balance_before = <Test as Chainflip>::StakingInfo::total_stake_of(&BROKE_PAUL);
 		assert_noop!(
 			TokenholderGovernance::submit_proposal(
 				RuntimeOrigin::signed(BROKE_PAUL),
 				gov_key_proposal,
 			),
-			pallet_cf_flip::Error::<Test>::InsufficientLiquidity
+			cf_traits::mocks::fee_payment::ERROR_INSUFFICIENT_LIQUIDITY
 		);
-		assert_eq!(balance_before, Flip::total_balance_of(&BROKE_PAUL));
+		assert_eq!(balance_before, <Test as Chainflip>::StakingInfo::total_stake_of(&BROKE_PAUL));
 	});
 }
 

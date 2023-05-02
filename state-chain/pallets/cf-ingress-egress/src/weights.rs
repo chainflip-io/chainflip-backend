@@ -30,7 +30,6 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_ingress_egress.
 pub trait WeightInfo {
-	fn on_initialize_has_no_expired() -> Weight;
 	fn egress_assets(n: u32, ) -> Weight;
 	fn egress_ccm(n: u32, ) -> Weight;
 	fn disable_asset_egress() -> Weight;
@@ -42,10 +41,6 @@ pub trait WeightInfo {
 /// Weights for pallet_cf_ingress_egress using the Substrate node and recommended hardware.
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
-	fn on_initialize_has_no_expired() -> Weight {
-		// Minimum execution time: 0 nanoseconds.
-		Weight::from_ref_time(0)
-	}
 	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
 	// Storage: EthereumIngressEgress DisabledEgressAssets (r:1 w:0)
 	// Storage: EthereumIngressEgress FetchParamDetails (r:1 w:1)
@@ -147,10 +142,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	fn on_initialize_has_no_expired() -> Weight {
-		// Minimum execution time: 0 nanoseconds.
-		Weight::from_ref_time(0)
-	}
 	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
 	// Storage: EthereumIngressEgress DisabledEgressAssets (r:1 w:0)
 	// Storage: EthereumIngressEgress FetchParamDetails (r:1 w:1)

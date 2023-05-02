@@ -10,9 +10,10 @@ use crate::{
 		ETH_STILL_BEHIND_LOG_INTERVAL,
 	},
 	eth::TransportProtocol,
-	logging::ETH_STREAM_BEHIND,
 	witnesser::HasBlockNumber,
 };
+
+pub const ETH_STREAM_BEHIND: &str = "eth-stream-behind";
 
 /// Merges two streams of blocks. The intent of this function is to create
 /// redundancy for HTTP and WS block item streams.

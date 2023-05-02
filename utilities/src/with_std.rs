@@ -4,6 +4,8 @@ use futures::{stream, Stream};
 #[doc(hidden)]
 pub use lazy_format::lazy_format as internal_lazy_format;
 use std::path::PathBuf;
+#[doc(hidden)]
+pub use tokio::select as internal_tokio_select;
 
 pub mod task_scope;
 
@@ -67,6 +69,86 @@ macro_rules! assert_future_panics {
 			Err(panic) => panic,
 		}
 	};
+}
+
+/// This resolves a compiler bug: https://github.com/rust-lang/rust/issues/102211#issuecomment-1372215393
+/// We should be able to remove this in future versions of the rustc
+pub fn assert_stream_send<'u, R>(
+	stream: impl 'u + Send + Stream<Item = R>,
+) -> impl 'u + Send + Stream<Item = R> {
+	stream
+}
+
+pub trait CachedStream: Stream {
+	type Cache;
+
+	fn cache(&self) -> &Self::Cache;
+}
+
+#[derive(Clone)]
+#[pin_project::pin_project]
+pub struct InnerCachedStream<Stream, Cache, F> {
+	#[pin]
+	stream: Stream,
+	cache: Cache,
+	f: F,
+}
+impl<St, Cache, F> Stream for InnerCachedStream<St, Cache, F>
+where
+	St: Stream,
+	F: FnMut(&St::Item) -> Cache,
+{
+	type Item = St::Item;
+
+	fn poll_next(
+		self: core::pin::Pin<&mut Self>,
+		cx: &mut core::task::Context<'_>,
+	) -> core::task::Poll<Option<Self::Item>> {
+		let this = self.project();
+		let poll = this.stream.poll_next(cx);
+
+		if let core::task::Poll::Ready(Some(item)) = &poll {
+			*this.cache = (this.f)(item);
+		}
+
+		poll
+	}
+
+	fn size_hint(&self) -> (usize, Option<usize>) {
+		self.stream.size_hint()
+	}
+}
+impl<St, Cache, F> CachedStream for InnerCachedStream<St, Cache, F>
+where
+	St: Stream,
+	F: FnMut(&St::Item) -> Cache,
+{
+	type Cache = Cache;
+
+	fn cache(&self) -> &Self::Cache {
+		&self.cache
+	}
+}
+pub trait MakeCachedStream: Stream {
+	fn make_cached<Cache, F: FnMut(&<Self as Stream>::Item) -> Cache>(
+		self,
+		initial: Cache,
+		f: F,
+	) -> InnerCachedStream<Self, Cache, F>
+	where
+		Self: Sized;
+}
+impl<T: Stream> MakeCachedStream for T {
+	fn make_cached<Cache, F: FnMut(&<Self as Stream>::Item) -> Cache>(
+		self,
+		initial: Cache,
+		f: F,
+	) -> InnerCachedStream<Self, Cache, F>
+	where
+		Self: Sized,
+	{
+		InnerCachedStream { stream: self, cache: initial, f }
+	}
 }
 
 /// Makes a tick that outputs every duration and if ticks are "missed" (as tick() wasn't called for
@@ -277,6 +359,22 @@ macro_rules! print_starting {
 	}
 }
 
+/// Install global collector using json formatting and the RUST_LOG env var.
+/// If `RUST_LOG` is not set, then it will default to INFO log level.
+pub fn init_json_logger() {
+	use tracing::metadata::LevelFilter;
+	use tracing_subscriber::EnvFilter;
+
+	tracing_subscriber::fmt()
+		.json()
+		.with_env_filter(
+			EnvFilter::builder()
+				.with_default_directive(LevelFilter::INFO.into())
+				.from_env_lossy(),
+		)
+		.init();
+}
+
 // We use PathBuf because the value must be Sized, Path is not Sized
 pub fn deser_path<'de, D>(deserializer: D) -> std::result::Result<PathBuf, D::Error>
 where
@@ -354,4 +452,60 @@ mod tests_read_clean_and_decode_hex_str_file {
 			);
 		});
 	}
+}
+
+#[macro_export]
+macro_rules! inner_loop_select {
+    ({ $($processed:tt)* } let $pattern:pat = $expression:expr => $body:block, $($unprocessed:tt)*) => {
+        $crate::inner_loop_select!(
+            {
+                $($processed)*
+                x = $expression => {
+					let $pattern = x;
+					$body
+				},
+            }
+            $($unprocessed)*
+		)
+    };
+    ({ $($processed:tt)* } if let $pattern:pat = $expression:expr => $body:block, $($unprocessed:tt)*) => {
+        $crate::inner_loop_select!(
+            {
+                $($processed)*
+                x = $expression => {
+					if let $pattern = x {
+						$body
+					} else { break }
+				},
+            }
+            $($unprocessed)*
+		)
+    };
+    ({ $($processed:tt)* } if let $pattern:pat = $expression:expr => $body:block else break $extra:expr, $($unprocessed:tt)*) => {
+        $crate::inner_loop_select!(
+            {
+                $($processed)*
+                x = $expression => {
+					if let $pattern = x {
+						$body
+					} else { break $extra }
+				},
+            }
+            $($unprocessed)*
+		)
+    };
+    ({ $($processed:tt)+ }) => {
+		loop {
+			$crate::internal_tokio_select!(
+				$($processed)+
+			)
+		}
+    };
+}
+
+#[macro_export]
+macro_rules! loop_select {
+    ($($cases:tt)+) => {
+        $crate::inner_loop_select!({} $($cases)+)
+    }
 }

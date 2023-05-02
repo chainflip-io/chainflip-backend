@@ -1,14 +1,10 @@
 use async_trait::async_trait;
 
-use anyhow::Context;
 use cf_amm::{common::Tick, range_orders::Liquidity};
 use cf_primitives::Asset;
-use jsonrpsee::{
-	core::{
-		client::{ClientT, SubscriptionClientT},
-		RpcResult,
-	},
-	ws_client::WsClientBuilder,
+use jsonrpsee::core::{
+	client::{ClientT, SubscriptionClientT},
+	RpcResult,
 };
 use sp_core::{
 	storage::{StorageData, StorageKey},
@@ -27,7 +23,7 @@ use sc_rpc_api::{
 #[cfg(test)]
 use mockall::automock;
 
-use crate::settings;
+use super::SUBSTRATE_BEHAVIOUR;
 
 pub trait RawRpcApi:
 	CustomApiClient
@@ -123,25 +119,17 @@ pub trait BaseRpcApi {
 pub struct BaseRpcClient<RawRpcClient> {
 	pub raw_rpc_client: RawRpcClient,
 }
-
-impl BaseRpcClient<jsonrpsee::ws_client::WsClient> {
-	pub async fn new(state_chain_settings: &settings::StateChain) -> Result<Self, anyhow::Error> {
-		let ws_endpoint = state_chain_settings.ws_endpoint.as_str();
-		Ok(Self {
-			raw_rpc_client: WsClientBuilder::default().build(ws_endpoint).await.with_context(
-				|| format!("Failed to establish rpc connection to substrate node '{ws_endpoint}'"),
-			)?,
-		})
+impl<RawRpcClient> BaseRpcClient<RawRpcClient> {
+	pub fn new(raw_rpc_client: RawRpcClient) -> Self {
+		Self { raw_rpc_client }
 	}
 }
 
+#[track_caller]
 fn unwrap_value<T>(list_or_value: sp_rpc::list::ListOrValue<T>) -> T {
 	match list_or_value {
 		sp_rpc::list::ListOrValue::Value(value) => value,
-		_ => panic!(
-			"Expected a Value of {0} actually received a List of {0}",
-			std::any::type_name::<T>()
-		),
+		_ => panic!("{SUBSTRATE_BEHAVIOUR}"),
 	}
 }
 
@@ -189,7 +177,7 @@ impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcC
 		&self,
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<state_chain_runtime::Header> {
-		Ok(self.raw_rpc_client.header(Some(block_hash)).await?.unwrap())
+		Ok(self.raw_rpc_client.header(Some(block_hash)).await?.expect(SUBSTRATE_BEHAVIOUR))
 	}
 
 	async fn latest_finalized_block_hash(&self) -> RpcResult<state_chain_runtime::Hash> {

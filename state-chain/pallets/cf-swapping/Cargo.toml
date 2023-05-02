@@ -24,7 +24,7 @@ log = { version = '0.4.16', default-features = false }
 codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
 scale-info = { version = "2.1.1", default-features = false, features = ["derive"] }
 
-frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", optional = true, default-features = false }
+frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
 frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
 frame-system = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
 
@@ -47,7 +47,7 @@ std = [
   'log/std',
   'codec/std',
   'scale-info/std',
-  'frame-benchmarking?/std',
+  'frame-benchmarking/std',
   'frame-support/std',
   'frame-system/std',
   'sp-arithmetic/std',

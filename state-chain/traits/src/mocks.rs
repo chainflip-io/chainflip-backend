@@ -3,10 +3,9 @@
 use codec::{Decode, Encode, EncodeLike};
 use frame_support::{storage, StorageHasher, Twox64Concat};
 
-// pub mod broadcaster;
 pub mod account_role_registry;
+pub mod address_converter;
 pub mod api_call;
-pub mod bid_info;
 pub mod callback;
 pub mod ccm_handler;
 pub mod ceremony_id_provider;
@@ -16,6 +15,7 @@ pub mod ensure_witnessed;
 pub mod epoch_info;
 pub mod eth_environment_provider;
 pub mod eth_replay_protection_provider;
+pub mod fee_payment;
 pub mod ingress_handler;
 pub mod key_provider;
 pub mod offence_reporting;
@@ -29,6 +29,41 @@ pub mod threshold_signer;
 pub mod time_source;
 pub mod vault_rotator;
 pub mod waived_fees_mock;
+
+#[macro_export]
+macro_rules! impl_mock_chainflip {
+	($runtime:ident) => {
+		use $crate::{
+			impl_mock_epoch_info,
+			mocks::{
+				account_role_registry::MockAccountRoleRegistry,
+				ensure_origin_mock::NeverFailingOriginCheck, staking_info::MockStakingInfo,
+				system_state_info::MockSystemStateInfo,
+			},
+			Chainflip,
+		};
+
+		impl_mock_epoch_info!(
+			<$runtime as frame_system::Config>::AccountId,
+			u128,
+			cf_primitives::EpochIndex,
+			cf_primitives::AuthorityCount,
+		);
+
+		impl Chainflip for $runtime {
+			type Amount = u128;
+			type ValidatorId = <$runtime as frame_system::Config>::AccountId;
+			type RuntimeCall = RuntimeCall;
+			type EnsureWitnessed = NeverFailingOriginCheck<Self>;
+			type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
+			type EnsureGovernance = NeverFailingOriginCheck<Self>;
+			type EpochInfo = MockEpochInfo;
+			type SystemState = MockSystemStateInfo;
+			type AccountRoleRegistry = MockAccountRoleRegistry;
+			type StakingInfo = MockStakingInfo<Self>;
+		}
+	};
+}
 
 trait MockPallet {
 	const PREFIX: &'static [u8];

@@ -4,7 +4,7 @@ use std::{sync::Arc, time::Duration};
 use tokio_stream::wrappers::IntervalStream;
 
 use crate::{
-	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
+	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
 	witnesser::{
 		epoch_process_runner::{
 			self, start_epoch_process_runner, EpochProcessGenerator, EpochWitnesser,
@@ -34,7 +34,7 @@ pub async fn start<StateChainClient, EthRpcClient>(
 ) -> anyhow::Result<(), ()>
 where
 	EthRpcClient: 'static + EthRpcApi + Clone + Send + Sync,
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 {
 	start_epoch_process_runner(
 		Arc::new(Mutex::new(epoch_start_receiver)),
@@ -57,7 +57,7 @@ impl<StateChainClient, EthRpcClient> EpochWitnesser
 	for ChainDataWitnesser<StateChainClient, EthRpcClient>
 where
 	EthRpcClient: EthRpcApi + 'static + Clone + Send + Sync,
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 {
 	type Chain = Ethereum;
 	type Data = ();
@@ -98,8 +98,7 @@ where
 		if latest_data.block_height > last_witnessed_data.block_height ||
 			latest_data.base_fee != last_witnessed_data.base_fee
 		{
-			let _result = self
-				.state_chain_client
+			self.state_chain_client
 				.submit_signed_extrinsic(state_chain_runtime::RuntimeCall::Witnesser(
 					pallet_cf_witnesser::Call::witness_at_epoch {
 						call: Box::new(state_chain_runtime::RuntimeCall::EthereumChainTracking(
@@ -129,7 +128,7 @@ struct ChainDataWitnesserGenerator<StateChainClient, EthRpcClient> {
 impl<StateChainClient, EthRpcClient> EpochProcessGenerator
 	for ChainDataWitnesserGenerator<StateChainClient, EthRpcClient>
 where
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 	EthRpcClient: EthRpcApi + 'static + Send + Sync + Clone,
 {
 	type Witnesser = ChainDataWitnesser<StateChainClient, EthRpcClient>;

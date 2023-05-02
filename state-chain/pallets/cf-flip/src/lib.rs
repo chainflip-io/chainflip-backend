@@ -41,7 +41,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{StakeHandler, WaivedFees};
+	use cf_traits::{Chainflip, StakeHandler, WaivedFees};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -49,12 +49,10 @@ pub mod pallet {
 	pub type ReserveId = [u8; 4];
 
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	#[pallet::disable_frame_system_supertrait_check]
+	pub trait Config: Chainflip {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
-		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The balance of an account.
 		type Balance: Member
@@ -82,7 +80,10 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 
 		/// Handles the access of governance extrinsic
-		type WaivedFees: WaivedFees<AccountId = Self::AccountId, RuntimeCall = Self::RuntimeCall>;
+		type WaivedFees: WaivedFees<
+			AccountId = Self::AccountId,
+			RuntimeCall = <Self as frame_system::Config>::RuntimeCall,
+		>;
 	}
 
 	#[pallet::pallet]

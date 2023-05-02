@@ -1,15 +1,14 @@
 use crate as pallet_cf_lp;
 use cf_chains::{eth::assets, AnyChain, Chain, Ethereum};
-use cf_primitives::{AccountId, AccountRole, AuthorityCount, IntentId};
+use cf_primitives::{AccountId, IntentId};
 use cf_traits::{
+	impl_mock_chainflip,
 	mocks::{
-		bid_info::MockBidInfo, egress_handler::MockEgressHandler,
-		ensure_origin_mock::NeverFailingOriginCheck, ingress_handler::MockIngressHandler,
-		staking_info::MockStakingInfo, system_state_info::MockSystemStateInfo,
+		address_converter::MockAddressConverter, egress_handler::MockEgressHandler,
+		ingress_handler::MockIngressHandler,
 	},
-	AddressDerivationApi,
+	AccountRoleRegistry, AddressDerivationApi,
 };
-use frame_benchmarking::whitelisted_caller;
 use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
 use sp_core::H256;
@@ -43,12 +42,9 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		AccountRoles: pallet_cf_account_roles,
 		LiquidityProvider: pallet_cf_lp,
 	}
 );
-
-cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
 
 parameter_types! {
 	pub const BlockHashCount: u64 = 250;
@@ -82,23 +78,7 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-impl cf_traits::Chainflip for Test {
-	type ValidatorId = AccountId;
-	type Amount = u128;
-	type RuntimeCall = RuntimeCall;
-	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
-	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
-	type EpochInfo = MockEpochInfo;
-	type SystemState = MockSystemStateInfo;
-}
-
-impl pallet_cf_account_roles::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
-	type BidInfo = MockBidInfo;
-	type StakeInfo = MockStakingInfo<Self>;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type WeightInfo = ();
-}
+impl_mock_chainflip!(Test);
 
 parameter_types! {
 	pub const NetworkFee: Permill = Permill::from_percent(0);
@@ -106,10 +86,9 @@ parameter_types! {
 
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type AccountRoleRegistry = AccountRoles;
 	type IngressHandler = MockIngressHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
+	type AddressConverter = MockAddressConverter;
 	type WeightInfo = ();
 }
 
@@ -118,23 +97,19 @@ pub const NON_LP_ACCOUNT: [u8; 32] = [2u8; 32];
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let config = GenesisConfig {
-		system: Default::default(),
-		account_roles: AccountRolesConfig {
-			initial_account_roles: vec![
-				(LP_ACCOUNT.into(), AccountRole::LiquidityProvider),
-				(NON_LP_ACCOUNT.into(), AccountRole::Validator),
-				// For benchmarking test
-				(whitelisted_caller(), AccountRole::None),
-			],
-		},
-		liquidity_provider: Default::default(),
-	};
-
-	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
+	let mut ext: sp_io::TestExternalities =
+		GenesisConfig::default().build_storage().unwrap().into();
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+			&LP_ACCOUNT.into(),
+		)
+		.unwrap();
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&NON_LP_ACCOUNT.into(),
+		)
+		.unwrap();
 	});
 
 	ext

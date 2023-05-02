@@ -9,17 +9,18 @@ mod missed_authorship_slots;
 mod offences;
 mod signer_nomination;
 use crate::{
-	AccountId, Authorship, BitcoinIngressEgress, BlockNumber, EmergencyRotationPercentageRange,
-	Emissions, Environment, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
-	Flip, FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress, Reputation, Runtime,
-	RuntimeCall, System, Validator,
+	AccountId, AccountRoles, Authorship, BitcoinIngressEgress, BitcoinVault, BlockNumber,
+	EmergencyRotationPercentageRange, Emissions, Environment, EthereumBroadcaster,
+	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster,
+	PolkadotIngressEgress, Reputation, Runtime, RuntimeCall, System, Validator,
 };
 
 use cf_chains::{
-	address::ForeignChainAddress,
+	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	btc::{
 		api::{BitcoinApi, SelectedUtxos},
-		Bitcoin, BitcoinNetwork, BitcoinTransactionData, BtcAmount, Utxo,
+		ingress_address::derive_btc_ingress_address_from_script,
+		scriptpubkey_from_address, Bitcoin, BitcoinTransactionData, BtcAmount,
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
@@ -64,8 +65,11 @@ impl Chainflip for Runtime {
 	type ValidatorId = <Self as frame_system::Config>::AccountId;
 	type EnsureWitnessed = pallet_cf_witnesser::EnsureWitnessed;
 	type EnsureWitnessedAtCurrentEpoch = pallet_cf_witnesser::EnsureWitnessedAtCurrentEpoch;
+	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type EpochInfo = Validator;
 	type SystemState = pallet_cf_environment::SystemStateProvider<Runtime>;
+	type AccountRoleRegistry = AccountRoles;
+	type StakingInfo = Flip;
 }
 
 struct BackupNodeEmissions;
@@ -321,15 +325,8 @@ impl ChainEnvironment<BtcAmount, SelectedUtxos> for BtcEnvironment {
 	}
 }
 
-impl ChainEnvironment<(), BitcoinNetwork> for BtcEnvironment {
-	fn lookup(_: ()) -> Option<BitcoinNetwork> {
-		Some(Environment::bitcoin_network())
-	}
-}
-
 impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 	fn lookup(_: ()) -> Option<cf_chains::btc::AggKey> {
-		use crate::BitcoinVault;
 		<BitcoinVault as KeyProvider<Bitcoin>>::current_epoch_key().map(|epoch_key| epoch_key.key)
 	}
 }
@@ -513,25 +510,71 @@ impl IngressHandler<Polkadot> for DotIngressHandler {}
 
 pub struct BtcIngressHandler;
 impl IngressHandler<Bitcoin> for BtcIngressHandler {
-	fn handle_ingress(
+	fn on_ingress_completed(
 		utxo_id: <Bitcoin as ChainCrypto>::TransactionId,
 		amount: <Bitcoin as Chain>::ChainAmount,
-		_address: <Bitcoin as Chain>::ChainAccount,
+		address: <Bitcoin as Chain>::ChainAccount,
 		_asset: <Bitcoin as Chain>::ChainAsset,
 	) {
-		Environment::add_bitcoin_utxo_to_list(Utxo {
-			amount,
-			txid: utxo_id.tx_hash,
-			vout: utxo_id.vout,
-			pubkey_x: utxo_id.pubkey_x,
-			salt: utxo_id
-				.salt
+		Environment::add_bitcoin_utxo_to_list(amount, utxo_id, address)
+	}
+
+	fn on_ingress_initiated(
+		ingress_script: <Bitcoin as Chain>::ChainAccount,
+		salt: IntentId,
+	) -> Result<(), DispatchError> {
+		Environment::add_details_for_btc_ingress_script(
+			ingress_script,
+			salt.try_into().expect("The salt/intent_id is not expected to exceed u32 max"), /* Todo: Confirm
+			                                                                                 * this assumption.
+			                                                                                 * Consider this in
+			                                                                                 * conjunction with
+			                                                                                 * #2354 */
+			BitcoinVault::vaults(Validator::epoch_index())
+				.ok_or(DispatchError::Other("No vault for epoch"))?
+				.public_key
+				.pubkey_x,
+		);
+		Ok(())
+	}
+}
+
+pub struct ChainAddressConverter;
+impl AddressConverter for ChainAddressConverter {
+	fn try_to_encoded_address(
+		address: ForeignChainAddress,
+	) -> Result<EncodedAddress, DispatchError> {
+		match address {
+			ForeignChainAddress::Eth(address) => Ok(EncodedAddress::Eth(address)),
+			ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(address)),
+			ForeignChainAddress::Btc(address) => Ok(EncodedAddress::Btc(
+				derive_btc_ingress_address_from_script(
+					address.into(),
+					Environment::bitcoin_network(),
+				)
+				.bytes()
+				.collect::<Vec<u8>>(),
+			)),
+		}
+	}
+
+	fn try_from_encoded_address(
+		encoded_address: EncodedAddress,
+	) -> Result<ForeignChainAddress, ()> {
+		match encoded_address {
+			EncodedAddress::Eth(address_bytes) =>
+				Ok(ForeignChainAddress::Eth(address_bytes)),
+			EncodedAddress::Dot(address_bytes) =>
+				Ok(ForeignChainAddress::Dot(address_bytes)),
+			EncodedAddress::Btc(address_bytes) => Ok(ForeignChainAddress::Btc(
+				scriptpubkey_from_address(
+					sp_std::str::from_utf8(&address_bytes[..]).map_err(|_| ())?,
+					Environment::bitcoin_network(),
+				)
+				.map_err(|_| ())?
 				.try_into()
-				.expect("The salt/intent_id is not expected to exceed u32 max"), /* Todo: Confirm
-			                                                                   * this assumption.
-			                                                                   * Consider this in
-			                                                                   * conjunction with
-			                                                                   * #2354 */
-		})
+				.expect("bitcoin scripts constructed from supported addresses should not exceed 128 bytes"),
+			)),
+		}
 	}
 }

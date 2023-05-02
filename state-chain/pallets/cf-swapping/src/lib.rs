@@ -1,5 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata};
+use cf_chains::{
+	address::{AddressConverter, ForeignChainAddress},
+	CcmIngressMetadata,
+};
 use cf_primitives::{Asset, AssetAmount, ForeignChain, IntentId};
 use cf_traits::{liquidity::SwappingApi, CcmHandler, IngressApi, SystemStateInfo};
 use frame_support::{
@@ -75,7 +78,7 @@ pub(crate) struct CcmSwap {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_chains::AnyChain;
+	use cf_chains::{address::EncodedAddress, AnyChain};
 	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId};
 	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapIntentHandler};
 
@@ -86,9 +89,6 @@ pub mod pallet {
 	pub trait Config: Chainflip {
 		/// Standard Event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
-		/// For registering and verifying the account role.
-		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
 		/// API for handling asset ingress.
 		type IngressHandler: IngressApi<
@@ -101,9 +101,9 @@ pub mod pallet {
 
 		/// An interface to the AMM api implementation.
 		type SwappingApi: SwappingApi;
-
-		/// Governance origin to manage allowed assets
-		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
+		/// A converter to convert address to and from human readable to internal address
+		/// representation.
+		type AddressConverter: AddressConverter;
 
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
@@ -161,18 +161,19 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// An new swap intent has been registered.
 		NewSwapIntent {
-			ingress_address: ForeignChainAddress,
+			ingress_address: EncodedAddress,
+			expiry_block: T::BlockNumber,
 		},
 		/// The swap ingress was received.
 		SwapIngressReceived {
 			swap_id: u64,
-			ingress_address: ForeignChainAddress,
+			ingress_address: EncodedAddress,
 			ingress_amount: AssetAmount,
 		},
 		SwapScheduledByWitnesser {
 			swap_id: u64,
 			ingress_amount: AssetAmount,
-			egress_address: ForeignChainAddress,
+			egress_address: EncodedAddress,
 		},
 		/// A swap was executed.
 		SwapExecuted {
@@ -188,7 +189,7 @@ pub mod pallet {
 		/// A withdrawal was requested.
 		WithdrawalRequested {
 			amount: AssetAmount,
-			address: ForeignChainAddress,
+			address: EncodedAddress,
 			egress_id: EgressId,
 		},
 		BatchSwapFailed {
@@ -301,7 +302,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			ingress_asset: Asset,
 			egress_asset: Asset,
-			egress_address: ForeignChainAddress,
+			egress_address: EncodedAddress,
 			relayer_commission_bps: BasisPoints,
 			message_metadata: Option<CcmIngressMetadata>,
 		) -> DispatchResult {
@@ -314,28 +315,36 @@ pub mod pallet {
 					Error::<T>::CcmUnsupportedForTargetChain
 				);
 			}
-
+			let egress_address_internal =
+				T::AddressConverter::try_from_encoded_address(egress_address).map_err(|_| {
+					DispatchError::Other("Invalid Egress Address, cannot decode the address")
+				})?;
 			ensure!(
-				ForeignChain::from(egress_address.clone()) == ForeignChain::from(egress_asset),
+				ForeignChain::from(egress_address_internal.clone()) ==
+					ForeignChain::from(egress_asset),
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 
 			let (intent_id, ingress_address) = T::IngressHandler::register_swap_intent(
 				ingress_asset,
 				egress_asset,
-				egress_address,
+				egress_address_internal,
 				relayer_commission_bps,
 				relayer,
 				message_metadata,
 			)?;
 
+			let expiry_block = frame_system::Pallet::<T>::current_block_number()
+				.saturating_add(SwapTTL::<T>::get());
 			SwapIntentExpiries::<T>::append(
-				frame_system::Pallet::<T>::current_block_number()
-					.saturating_add(SwapTTL::<T>::get()),
+				expiry_block,
 				(intent_id, ForeignChain::from(ingress_asset), ingress_address.clone()),
 			);
 
-			Self::deposit_event(Event::<T>::NewSwapIntent { ingress_address });
+			Self::deposit_event(Event::<T>::NewSwapIntent {
+				ingress_address: T::AddressConverter::try_to_encoded_address(ingress_address)?,
+				expiry_block,
+			});
 
 			Ok(())
 		}
@@ -349,13 +358,18 @@ pub mod pallet {
 		pub fn withdraw(
 			origin: OriginFor<T>,
 			asset: Asset,
-			egress_address: ForeignChainAddress,
+			egress_address: EncodedAddress,
 		) -> DispatchResult {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_relayer(origin)?;
 
+			let egress_address_internal =
+				T::AddressConverter::try_from_encoded_address(egress_address.clone()).map_err(
+					|_| DispatchError::Other("Invalid Egress Address, cannot decode the address"),
+				)?;
+
 			ensure!(
-				ForeignChain::from(egress_address.clone()) == ForeignChain::from(asset),
+				ForeignChain::from(egress_address_internal.clone()) == ForeignChain::from(asset),
 				Error::<T>::InvalidEgressAddress
 			);
 
@@ -364,8 +378,13 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
 				amount,
-				address: egress_address.clone(),
-				egress_id: T::EgressHandler::schedule_egress(asset, amount, egress_address, None),
+				address: egress_address,
+				egress_id: T::EgressHandler::schedule_egress(
+					asset,
+					amount,
+					egress_address_internal,
+					None,
+				),
 			});
 
 			Ok(())
@@ -383,15 +402,20 @@ pub mod pallet {
 			from: Asset,
 			to: Asset,
 			ingress_amount: AssetAmount,
-			egress_address: ForeignChainAddress,
+			egress_address: EncodedAddress,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			let egress_address_internal =
+				T::AddressConverter::try_from_encoded_address(egress_address.clone()).map_err(
+					|_| DispatchError::Other("Invalid Egress Address, cannot decode the address"),
+				)?;
 
 			let swap_id = Self::schedule_swap(
 				from,
 				to,
 				ingress_amount,
-				SwapType::Swap(egress_address.clone()),
+				SwapType::Swap(egress_address_internal),
 			);
 
 			Self::deposit_event(Event::<T>::SwapScheduledByWitnesser {
@@ -412,22 +436,41 @@ pub mod pallet {
 			ingress_asset: Asset,
 			ingress_amount: AssetAmount,
 			egress_asset: Asset,
-			egress_address: ForeignChainAddress,
+			egress_address: EncodedAddress,
 			message_metadata: CcmIngressMetadata,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
+
+			let egress_address_internal =
+				T::AddressConverter::try_from_encoded_address(egress_address).map_err(|_| {
+					DispatchError::Other("Invalid Egress Address, cannot decode the address")
+				})?;
+
 			ensure!(
-				ForeignChain::from(egress_address.clone()) == ForeignChain::from(egress_asset),
-				Error::<T>::IncompatibleAssetAndAddress,
+				ForeignChain::from(egress_asset) ==
+					ForeignChain::from(egress_address_internal.clone()),
+				Error::<T>::IncompatibleAssetAndAddress
 			);
 
 			Self::on_ccm_ingress(
 				ingress_asset,
 				ingress_amount,
 				egress_asset,
-				egress_address,
+				egress_address_internal,
 				message_metadata,
 			)
+		}
+
+		/// Register the account as a Relayer.
+		///
+		/// Account roles are immutable once registered.
+		#[pallet::weight(T::WeightInfo::register_as_relayer())]
+		pub fn register_as_relayer(who: OriginFor<T>) -> DispatchResult {
+			let account_id = ensure_signed(who)?;
+
+			T::AccountRoleRegistry::register_as_relayer(&account_id)?;
+
+			Ok(())
 		}
 
 		/// Sets the length in which ingress intents are expired in the Swapping pallet.
@@ -611,7 +654,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::SwapIngressReceived {
 				swap_id,
-				ingress_address,
+				ingress_address: T::AddressConverter::try_to_encoded_address(ingress_address).expect("This should not fail since this conversion happens during the pipeline of a swap and ingress address has already been successfully converted in this way at the start of the swap in request_swap_intent"),
 				ingress_amount: amount,
 			});
 		}

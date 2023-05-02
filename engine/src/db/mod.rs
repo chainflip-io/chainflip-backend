@@ -4,7 +4,7 @@ use std::{collections::HashMap, sync::Arc};
 use cf_primitives::KeyId;
 pub use persistent::PersistentKeyDB;
 
-use crate::multisig::{
+use multisig::{
 	client::{key_store_api::KeyStoreAPI, KeygenResultInfo},
 	CryptoScheme,
 };
@@ -50,12 +50,13 @@ impl<C: CryptoScheme> KeyStoreAPI<C> for KeyStore<C> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::multisig::{
+	use crate::db::PersistentKeyDB;
+	use cf_primitives::AccountId;
+	use multisig::{
 		client::{keygen, keygen::generate_key_data},
 		eth::EthSigning,
-		PersistentKeyDB, Rng,
+		Rng,
 	};
-	use cf_primitives::AccountId;
 	use rand_legacy::FromEntropy;
 	use std::collections::BTreeSet;
 

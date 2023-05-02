@@ -7,12 +7,9 @@ use cf_chains::{
 	ChainCrypto,
 };
 use cf_traits::{
-	mocks::{
-		ensure_origin_mock::NeverFailingOriginCheck, epoch_info::MockEpochInfo,
-		signer_nomination::MockNominator, system_state_info::MockSystemStateInfo,
-		threshold_signer::MockThresholdSigner,
-	},
-	Chainflip, EpochKey, KeyState,
+	impl_mock_chainflip,
+	mocks::{signer_nomination::MockNominator, threshold_signer::MockThresholdSigner},
+	AccountRoleRegistry, EpochKey, KeyState,
 };
 use codec::{Decode, Encode};
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
@@ -74,15 +71,7 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-impl Chainflip for Test {
-	type ValidatorId = u64;
-	type Amount = u128;
-	type RuntimeCall = RuntimeCall;
-	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
-	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
-	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
-	type SystemState = MockSystemStateInfo;
-}
+impl_mock_chainflip!(Test);
 
 pub const BROADCAST_EXPIRY_BLOCKS: <Test as frame_system::Config>::BlockNumber = 4;
 
@@ -137,7 +126,6 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type Offence = PalletOffence;
-	type AccountRoleRegistry = ();
 	type TargetChain = MockEthereum;
 	type ApiCall = MockApiCall<MockEthereum>;
 	type TransactionBuilder = MockTransactionBuilder<Self::TargetChain, Self::ApiCall>;
@@ -159,7 +147,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
-		MockEpochInfo::next_epoch(vec![1, 2, 3]);
+		MockEpochInfo::next_epoch((0..3).collect());
+		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
+		for id in &MockEpochInfo::current_authorities() {
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
+				.unwrap();
+		}
 	});
 
 	ext

@@ -4,14 +4,6 @@ use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::dispatch::UnfilteredDispatchable;
 
 benchmarks! {
-	register_account_role {
-		SwappingEnabled::<T>::put(true);
-		let caller: T::AccountId = whitelisted_caller();
-		Pallet::<T>::on_new_account(&caller);
-	}: _(RawOrigin::Signed(caller.clone()), AccountRole::Validator)
-	verify {
-		assert_eq!(AccountRoles::<T>::get(&caller), Some(AccountRole::Validator));
-	}
 	enable_swapping {
 		let origin = <T as Config>::EnsureGovernance::successful_origin();
 		let call = Call::<T>::enable_swapping{};

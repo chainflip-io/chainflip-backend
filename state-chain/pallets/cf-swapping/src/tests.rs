@@ -2,11 +2,15 @@ use crate::{
 	mock::*, CcmGasBudget, CcmIdCounter, CcmOutputs, CcmSwap, CcmSwapOutput, EarnedRelayerFees,
 	Error, Pallet, PendingCcms, Swap, SwapIntentExpiries, SwapQueue, SwapTTL, SwapType, WeightInfo,
 };
-use cf_chains::{address::ForeignChainAddress, AnyChain, CcmIngressMetadata};
+use cf_chains::{
+	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
+	AnyChain, CcmIngressMetadata,
+};
 use cf_primitives::{Asset, ForeignChain};
 use cf_test_utilities::{assert_event_sequence, assert_events_match};
 use cf_traits::{
 	mocks::{
+		address_converter::MockAddressConverter,
 		egress_handler::{MockEgressHandler, MockEgressParameter},
 		ingress_handler::{MockIngressHandler, SwapIntent},
 	},
@@ -15,6 +19,7 @@ use cf_traits::{
 use frame_support::{assert_noop, assert_ok, sp_std::iter, weights::Weight};
 
 use frame_support::traits::Hooks;
+use sp_runtime::traits::BlockNumberProvider;
 
 // Returns some test data
 fn generate_test_swaps() -> Vec<Swap> {
@@ -77,7 +82,7 @@ fn register_swap_intent_success_with_valid_parameters() {
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			Asset::Usdc,
-			ForeignChainAddress::Eth(Default::default()),
+			EncodedAddress::Eth(Default::default()),
 			0,
 			None
 		));
@@ -181,7 +186,7 @@ fn expect_swap_id_to_be_emitted() {
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			Asset::Usdc,
-			ForeignChainAddress::Eth(Default::default()),
+			EncodedAddress::Eth(Default::default()),
 			0,
 			None
 		));
@@ -200,10 +205,11 @@ fn expect_swap_id_to_be_emitted() {
 		assert_event_sequence!(
 			Test,
 			crate::mock::RuntimeEvent::Swapping(crate::Event::NewSwapIntent {
-				ingress_address: ForeignChainAddress::Eth(Default::default()),
+				ingress_address: EncodedAddress::Eth(Default::default()),
+				expiry_block: SwapTTL::<Test>::get() + System::current_block_number(),
 			}),
 			crate::mock::RuntimeEvent::Swapping(crate::Event::SwapIngressReceived {
-				ingress_address: ForeignChainAddress::Eth(Default::default()),
+				ingress_address: EncodedAddress::Eth(Default::default()),
 				swap_id: 1,
 				ingress_amount: 500,
 			}),
@@ -225,7 +231,7 @@ fn withdraw_relayer_fees() {
 			Swapping::withdraw(
 				RuntimeOrigin::signed(ALICE),
 				Asset::Eth,
-				ForeignChainAddress::Eth(Default::default()),
+				EncodedAddress::Eth(Default::default()),
 			),
 			<Error<Test>>::NoFundsAvailable
 		);
@@ -233,7 +239,7 @@ fn withdraw_relayer_fees() {
 		assert_ok!(Swapping::withdraw(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
-			ForeignChainAddress::Eth(Default::default()),
+			EncodedAddress::Eth(Default::default()),
 		));
 		let mut egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
 		assert!(egresses.len() == 1);
@@ -242,7 +248,7 @@ fn withdraw_relayer_fees() {
 			crate::Event::<Test>::WithdrawalRequested {
 				egress_id: (ForeignChain::Ethereum, 1),
 				amount: 200,
-				address: ForeignChainAddress::Eth(Default::default()),
+				address: EncodedAddress::Eth(Default::default()),
 			},
 		));
 	});
@@ -256,14 +262,14 @@ fn can_swap_using_witness_origin() {
 			Asset::Eth,
 			Asset::Flip,
 			1_000,
-			ForeignChainAddress::Eth([0u8; 20]),
+			EncodedAddress::Eth(Default::default()),
 		));
 
 		System::assert_last_event(RuntimeEvent::Swapping(
 			crate::Event::<Test>::SwapScheduledByWitnesser {
 				swap_id: 1,
 				ingress_amount: 1_000,
-				egress_address: ForeignChainAddress::Eth([0u8; 20]),
+				egress_address: EncodedAddress::Eth(Default::default()),
 			},
 		));
 	});
@@ -278,16 +284,17 @@ fn swap_expires() {
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			Asset::Usdc,
-			ForeignChainAddress::Eth(Default::default()),
+			EncodedAddress::Eth(Default::default()),
 			0,
 			None
 		));
 
 		let ingress_address = assert_events_match!(Test, RuntimeEvent::Swapping(crate::Event::NewSwapIntent {
 			ingress_address,
-		}) => (ingress_address));
+			..
+		}) => ingress_address);
 		let swap_intent = SwapIntent {
-			ingress_address,
+			ingress_address: MockAddressConverter::try_from_encoded_address(ingress_address).unwrap(),
 			ingress_asset: Asset::Eth,
 			egress_asset: Asset::Usdc,
 			egress_address: ForeignChainAddress::Eth(Default::default()),
@@ -354,7 +361,7 @@ fn can_reject_invalid_ccms() {
 				RuntimeOrigin::signed(ALICE),
 				Asset::Btc,
 				Asset::Eth,
-				ForeignChainAddress::Dot(Default::default()),
+				EncodedAddress::Dot(Default::default()),
 				0,
 				Some(ccm.clone())
 			),
@@ -366,7 +373,7 @@ fn can_reject_invalid_ccms() {
 				Asset::Btc,
 				1_000_000,
 				Asset::Eth,
-				ForeignChainAddress::Dot(Default::default()),
+				EncodedAddress::Dot(Default::default()),
 				ccm.clone()
 			),
 			Error::<Test>::IncompatibleAssetAndAddress
@@ -377,7 +384,7 @@ fn can_reject_invalid_ccms() {
 				RuntimeOrigin::signed(ALICE),
 				Asset::Eth,
 				Asset::Dot,
-				ForeignChainAddress::Dot(Default::default()),
+				EncodedAddress::Dot(Default::default()),
 				0,
 				Some(ccm.clone())
 			),
@@ -398,7 +405,7 @@ fn can_reject_invalid_ccms() {
 				RuntimeOrigin::signed(ALICE),
 				Asset::Eth,
 				Asset::Btc,
-				ForeignChainAddress::Btc(Default::default()),
+				EncodedAddress::Btc(Default::default()),
 				0,
 				Some(ccm.clone())
 			),
@@ -445,7 +452,7 @@ fn can_process_ccms_via_swap_intent() {
 			RuntimeOrigin::signed(ALICE),
 			Asset::Dot,
 			Asset::Eth,
-			ForeignChainAddress::Eth(Default::default()),
+			EncodedAddress::Eth(Default::default()),
 			0,
 			Some(ccm.clone())
 		),);
@@ -539,7 +546,7 @@ fn can_process_ccms_via_extrinsic() {
 			Asset::Btc,
 			ingress_amount,
 			Asset::Usdc,
-			ForeignChainAddress::Eth(Default::default()),
+			EncodedAddress::Eth(Default::default()),
 			ccm.clone()
 		));
 
@@ -631,7 +638,7 @@ fn can_handle_ccms_with_gas_asset_as_ingress() {
 			Asset::Eth,
 			ingress_amount,
 			Asset::Usdc,
-			ForeignChainAddress::Eth(Default::default()),
+			EncodedAddress::Eth(Default::default()),
 			ccm.clone()
 		));
 
@@ -718,7 +725,7 @@ fn can_handle_ccms_with_principal_asset_as_ingress() {
 			Asset::Usdc,
 			ingress_amount,
 			Asset::Usdc,
-			ForeignChainAddress::Eth(Default::default()),
+			EncodedAddress::Eth(Default::default()),
 			ccm.clone()
 		));
 
@@ -806,7 +813,7 @@ fn can_handle_ccms_with_no_swaps_needed() {
 			Asset::Eth,
 			ingress_amount,
 			Asset::Eth,
-			ForeignChainAddress::Eth(Default::default()),
+			EncodedAddress::Eth(Default::default()),
 			ccm
 		));
 

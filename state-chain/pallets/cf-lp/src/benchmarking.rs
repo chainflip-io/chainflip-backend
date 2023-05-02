@@ -2,43 +2,46 @@
 
 use super::*;
 use cf_chains::benchmarking_value::BenchmarkValue;
-use cf_primitives::{AccountRole, Asset};
+use cf_primitives::Asset;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::{assert_ok, dispatch::UnfilteredDispatchable};
+use frame_support::{assert_ok, dispatch::UnfilteredDispatchable, traits::OnNewAccount};
 use frame_system::RawOrigin;
 
 benchmarks! {
 	request_deposit_address {
 		let caller: T::AccountId = whitelisted_caller();
-		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::LiquidityProvider);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
 	}: _(RawOrigin::Signed(caller), Asset::Eth)
 
 	withdraw_asset {
 		let caller: T::AccountId = whitelisted_caller();
-		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::LiquidityProvider);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
 		assert_ok!(Pallet::<T>::try_credit_account(
 			&caller,
 			Asset::Eth,
 			1_000_000,
 		));
-	}: _(RawOrigin::Signed(caller.clone()), 1_000_000, Asset::Eth, ForeignChainAddress::benchmark_value())
+	}: _(RawOrigin::Signed(caller.clone()), 1_000_000, Asset::Eth, cf_chains::address::EncodedAddress::benchmark_value())
 	verify {
 		assert_eq!(FreeBalances::<T>::get(&caller, Asset::Eth), Some(0));
 	}
 
 	register_lp_account {
 		let caller: T::AccountId = whitelisted_caller();
-		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::None);
-	}:  _(RawOrigin::Signed(caller.clone()))
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+	}: _(RawOrigin::Signed(caller.clone()))
 	verify {
-		assert_eq!(T::AccountRoleRegistry::get_account_role(caller), AccountRole::LiquidityProvider);
+		assert_ok!(T::AccountRoleRegistry::ensure_liquidity_provider(RawOrigin::Signed(caller).into()));
 	}
 
 	on_initialize {
 		let a in 1..100;
 		let caller: T::AccountId = whitelisted_caller();
-		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::LiquidityProvider);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		let _ = Pallet::<T>::register_lp_account(RawOrigin::Signed(caller.clone()).into());
 		for i in 0..a {
 			assert_ok!(Pallet::<T>::request_deposit_address(RawOrigin::Signed(caller.clone()).into(), Asset::Eth));
 		}

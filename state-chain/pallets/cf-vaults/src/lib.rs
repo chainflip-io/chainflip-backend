@@ -9,14 +9,13 @@ use cf_primitives::{
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochKey, EpochTransitionHandler, KeyProvider, KeyState, Slashing,
-	SystemStateManager, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus,
-	VaultTransitionHandler,
+	CurrentEpochIndex, EpochKey, KeyProvider, KeyState, Slashing, SystemStateManager,
+	ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus, VaultTransitionHandler,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
-use sp_runtime::traits::{BlockNumberProvider, One, Saturating};
+use sp_runtime::traits::{One, Saturating};
 use sp_std::{
 	collections::{btree_map::BTreeMap, btree_set::BTreeSet},
 	iter::Iterator,
@@ -25,6 +24,12 @@ use sp_std::{
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
+
+mod vault_rotator;
+
+mod response_status;
+
+use response_status::ResponseStatus;
 
 pub mod weights;
 pub use weights::WeightInfo;
@@ -46,104 +51,8 @@ pub type TransactionIdFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>:
 pub type ThresholdSignatureFor<T, I = ()> =
 	<<T as Config<I>>::Chain as ChainCrypto>::ThresholdSignature;
 
-/// Tracks the current state of the keygen ceremony.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
-#[scale_info(skip_type_params(T, I))]
-pub struct KeygenResponseStatus<T: Config<I>, I: 'static = ()> {
-	/// The total number of candidates participating in the keygen ceremony.
-	candidate_count: AuthorityCount,
-	/// The candidates that have yet to reply.
-	remaining_candidates: BTreeSet<T::ValidatorId>,
-	/// A map of new keys with the number of votes for each key.
-	success_votes: BTreeMap<AggKeyFor<T, I>, AuthorityCount>,
-	/// A map of the number of blame votes that each keygen participant has received.
-	blame_votes: BTreeMap<T::ValidatorId, AuthorityCount>,
-}
-
-impl<T: Config<I>, I: 'static> KeygenResponseStatus<T, I> {
-	pub fn new(candidates: BTreeSet<T::ValidatorId>) -> Self {
-		Self {
-			candidate_count: candidates.len() as AuthorityCount,
-			remaining_candidates: candidates,
-			success_votes: Default::default(),
-			blame_votes: Default::default(),
-		}
-	}
-
-	fn super_majority_threshold(&self) -> AuthorityCount {
-		utilities::success_threshold_from_share_count(self.candidate_count)
-	}
-
-	fn add_success_vote(&mut self, voter: &T::ValidatorId, key: AggKeyFor<T, I>) {
-		assert!(self.remaining_candidates.remove(voter));
-		*self.success_votes.entry(key).or_default() += 1;
-
-		SuccessVoters::<T, I>::append(key, voter);
-	}
-
-	fn add_failure_vote(&mut self, voter: &T::ValidatorId, blamed: BTreeSet<T::ValidatorId>) {
-		assert!(self.remaining_candidates.remove(voter));
-		for id in blamed {
-			*self.blame_votes.entry(id).or_default() += 1
-		}
-
-		FailureVoters::<T, I>::append(voter);
-	}
-
-	/// How many candidates are we still awaiting a response from?
-	fn remaining_candidate_count(&self) -> AuthorityCount {
-		self.remaining_candidates.len() as AuthorityCount
-	}
-
-	/// Resolves the keygen outcome as follows:
-	///
-	/// If and only if *all* candidates agree on the same key, return Success.
-	///
-	/// Otherwise, determine unresponsive, dissenting and blamed nodes and return
-	/// `Failure(unresponsive | dissenting | blamed)`
-	fn resolve_keygen_outcome(self) -> KeygenOutcomeFor<T, I> {
-		// If and only if *all* candidates agree on the same key, return success.
-		if let Some((key, votes)) = self.success_votes.iter().next() {
-			if *votes == self.candidate_count {
-				// This *should* be safe since it's bounded by the number of candidates.
-				// We may want to revise.
-				// See https://github.com/paritytech/substrate/pull/11490
-				let _ignored = SuccessVoters::<T, I>::clear(u32::MAX, None);
-				return Ok(*key)
-			}
-		}
-
-		let super_majority_threshold = self.super_majority_threshold() as usize;
-
-		// We remove who we don't want to punish, and then punish the rest
-		if let Some(key) = SuccessVoters::<T, I>::iter_keys().find(|key| {
-			SuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >= super_majority_threshold
-		}) {
-			SuccessVoters::<T, I>::remove(key);
-		} else if FailureVoters::<T, I>::decode_len().unwrap_or_default() >=
-			super_majority_threshold
-		{
-			FailureVoters::<T, I>::kill();
-		} else {
-			let _empty = SuccessVoters::<T, I>::clear(u32::MAX, None);
-			FailureVoters::<T, I>::kill();
-			log::warn!("Unable to determine a consensus outcome for keygen.");
-		}
-
-		Err(SuccessVoters::<T, I>::drain()
-			.flat_map(|(_k, dissenters)| dissenters)
-			.chain(FailureVoters::<T, I>::take())
-			.chain(self.blame_votes.into_iter().filter_map(|(id, vote_count)| {
-				if vote_count >= super_majority_threshold as u32 {
-					Some(id)
-				} else {
-					None
-				}
-			}))
-			.chain(self.remaining_candidates)
-			.collect())
-	}
-}
+pub type KeygenResponseStatus<T, I> =
+	ResponseStatus<T, KeygenSuccessVoters<T, I>, KeygenFailureVoters<T, I>, I>;
 
 /// The current status of a vault rotation.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, EnumVariant)]
@@ -210,14 +119,8 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self, I>>
 			+ IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
-
 		/// Ensure that only threshold signature consensus can trigger a key_verification success
 		type EnsureThresholdSigned: EnsureOrigin<Self::RuntimeOrigin>;
-
-		/// For registering and verifying the account role.
-		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
 		/// Offences supported in this runtime.
 		type Offence: From<PalletOffence>;
@@ -293,7 +196,7 @@ pub mod pallet {
 					return weight
 				};
 
-				let candidate_count = response_status.candidate_count;
+				let candidate_count = response_status.candidate_count();
 				match response_status.resolve_keygen_outcome() {
 					Ok(new_public_key) => {
 						debug_assert_eq!(
@@ -360,14 +263,14 @@ pub mod pallet {
 
 	/// The voters who voted for success for a particular agg key rotation
 	#[pallet::storage]
-	#[pallet::getter(fn success_voters)]
-	pub type SuccessVoters<T: Config<I>, I: 'static = ()> =
+	#[pallet::getter(fn keygen_success_voters)]
+	pub type KeygenSuccessVoters<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Identity, AggKeyFor<T, I>, Vec<T::ValidatorId>, ValueQuery>;
 
 	/// The voters who voted for failure for a particular agg key rotation
 	#[pallet::storage]
-	#[pallet::getter(fn failure_voters)]
-	pub type FailureVoters<T: Config<I>, I: 'static = ()> =
+	#[pallet::getter(fn keygen_failure_voters)]
+	pub type KeygenFailureVoters<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
 
 	/// The block since which we have been waiting for keygen to be resolved.
@@ -480,7 +383,7 @@ pub mod pallet {
 			// Make sure the ceremony id matches
 			ensure!(pending_ceremony_id == ceremony_id, Error::<T, I>::InvalidCeremonyId);
 			ensure!(
-				keygen_status.remaining_candidates.contains(&reporter),
+				keygen_status.remaining_candidates().contains(&reporter),
 				Error::<T, I>::InvalidRespondent
 			);
 
@@ -774,142 +677,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 }
 
-impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
-	type ValidatorId = T::ValidatorId;
-
-	/// # Panics
-	/// - If an empty BTreeSet of candidates is provided
-	/// - If a vault rotation outcome is already Pending (i.e. there's one already in progress)
-	fn keygen(candidates: BTreeSet<Self::ValidatorId>, epoch_index: EpochIndex) {
-		assert!(!candidates.is_empty());
-
-		assert_ne!(Self::status(), AsyncResult::Pending);
-
-		let ceremony_id = T::CeremonyIdProvider::increment_ceremony_id();
-
-		PendingVaultRotation::<T, I>::put(VaultRotationStatus::AwaitingKeygen {
-			keygen_ceremony_id: ceremony_id,
-			keygen_participants: candidates.clone(),
-			epoch_index,
-			response_status: KeygenResponseStatus::new(candidates.clone()),
-		});
-
-		// Start the timer for resolving Keygen - we check this in the on_initialise() hook each
-		// block
-		KeygenResolutionPendingSince::<T, I>::put(frame_system::Pallet::<T>::current_block_number());
-
-		Pallet::<T, I>::deposit_event(Event::KeygenRequest {
-			ceremony_id,
-			participants: candidates,
-			epoch_index,
-		});
-	}
-
-	/// Get the status of the current key generation
-	fn status() -> AsyncResult<VaultStatus<T::ValidatorId>> {
-		match PendingVaultRotation::<T, I>::decode_variant() {
-			Some(VaultRotationStatusVariant::AwaitingKeygen) => AsyncResult::Pending,
-			Some(VaultRotationStatusVariant::AwaitingKeygenVerification) => AsyncResult::Pending,
-			// It's at this point we want the vault to be considered ready to commit to. We don't
-			// want to commit until the other vaults are ready
-			Some(VaultRotationStatusVariant::KeygenVerificationComplete) =>
-				AsyncResult::Ready(VaultStatus::KeygenComplete),
-			Some(VaultRotationStatusVariant::AwaitingRotation) => AsyncResult::Pending,
-			Some(VaultRotationStatusVariant::Complete) =>
-				AsyncResult::Ready(VaultStatus::RotationComplete),
-			Some(VaultRotationStatusVariant::Failed) => match PendingVaultRotation::<T, I>::get() {
-				Some(VaultRotationStatus::Failed { offenders }) =>
-					AsyncResult::Ready(VaultStatus::Failed(offenders)),
-				_ =>
-					unreachable!("Unreachable because we are in the branch for the Failed variant."),
-			},
-			None => AsyncResult::Void,
-		}
-	}
-
-	fn activate() {
-		if let Some(VaultRotationStatus::<T, I>::KeygenVerificationComplete { new_public_key }) =
-			PendingVaultRotation::<T, I>::get()
-		{
-			if let Some(EpochKey { key, epoch_index, key_state }) = Self::current_epoch_key() {
-				if let Ok(rotation_call) =
-					<T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
-						Some(key),
-						new_public_key,
-					) {
-					let (_, threshold_request_id) =
-						T::Broadcaster::threshold_sign_and_broadcast(rotation_call);
-					debug_assert!(
-						matches!(key_state, KeyState::Unlocked),
-						"Current epoch key must be active to activate next key."
-					);
-					CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
-						epoch_index,
-						key_state: KeyState::Locked(threshold_request_id),
-					});
-				} else {
-					// TODO: Fix the integration tests and/or SetAggKeyWithAggKey impls so that this
-					// is actually unreachable.
-					log::error!(
-						"Unable to create unsigned transaction to set new vault key. This should not be possible."
-					);
-				}
-			} else {
-				// The block number value 1, which the vault is being set with is a dummy value
-				// and doesn't mean anything. It will be later modified to the real value when
-				// we witness the vault rotation manually via governance
-				Self::set_vault_for_next_epoch(new_public_key, 1_u32.into());
-				Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation { new_public_key })
-			}
-
-			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
-				new_public_key,
-			});
-		} else {
-			#[cfg(not(test))]
-			log::error!("activate key called before keygen verification completed");
-			#[cfg(test)]
-			panic!("activate key called before keygen verification completed");
-		}
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn set_status(outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
-		use cf_chains::benchmarking_value::BenchmarkValue;
-
-		match outcome {
-			AsyncResult::Pending => {
-				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
-					keygen_ceremony_id: Default::default(),
-					keygen_participants: Default::default(),
-					epoch_index: GENESIS_EPOCH,
-					response_status: KeygenResponseStatus::new(Default::default()),
-				});
-			},
-			AsyncResult::Ready(VaultStatus::KeygenComplete) => {
-				PendingVaultRotation::<T, I>::put(
-					VaultRotationStatus::<T, I>::KeygenVerificationComplete {
-						new_public_key: Default::default(),
-					},
-				);
-			},
-			AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
-				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Failed {
-					offenders,
-				});
-			},
-			AsyncResult::Ready(VaultStatus::RotationComplete) => {
-				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete {
-					tx_id: BenchmarkValue::benchmark_value(),
-				});
-			},
-			AsyncResult::Void => {
-				PendingVaultRotation::<T, I>::kill();
-			},
-		}
-	}
-}
-
 impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 	fn current_epoch_key() -> Option<EpochKey<<T::Chain as ChainCrypto>::AggKey>> {
 		CurrentVaultEpochAndState::<T, I>::get().map(|current_vault_epoch_and_state| {
@@ -928,14 +695,6 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 			CurrentEpochIndex::<T>::get(),
 			Vault { public_key: key, active_from_block: ChainBlockNumberFor::<T, I>::from(0u32) },
 		);
-	}
-}
-
-impl<T: Config<I>, I: 'static> EpochTransitionHandler for Pallet<T, I> {
-	type ValidatorId = <T as Chainflip>::ValidatorId;
-
-	fn on_new_epoch(_epoch_authorities: &[Self::ValidatorId]) {
-		PendingVaultRotation::<T, I>::kill();
 	}
 }
 

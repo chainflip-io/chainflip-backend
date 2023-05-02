@@ -4,7 +4,9 @@
 
 use cf_chains::{
 	btc::{
-		api::SelectedUtxos, utxo_selection::select_utxos_from_pool, Bitcoin, BitcoinNetwork, Utxo,
+		api::SelectedUtxos, ingress_address::derive_btc_ingress_bitcoin_script,
+		utxo_selection::select_utxos_from_pool, Bitcoin, BitcoinNetwork, BitcoinScriptBounded,
+		BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	ChainCrypto,
@@ -47,6 +49,13 @@ impl Default for SystemState {
 }
 type SignatureNonce = u64;
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct ChangeUtxoWitness {
+	pub amount: BtcAmount,
+	pub change_pubkey: cf_chains::btc::AggKey,
+	pub utxo_id: UtxoId,
+}
+
 pub mod cfe {
 	use super::*;
 	/// On chain CFE settings
@@ -78,7 +87,7 @@ pub mod cfe {
 pub mod pallet {
 
 	use cf_chains::{
-		btc::{Utxo, UtxoId},
+		btc::{BitcoinScriptBounded, Utxo, UtxoId},
 		dot::{PolkadotPublicKey, RuntimeVersion},
 	};
 	use cf_primitives::{Asset, TxId};
@@ -93,8 +102,6 @@ pub mod pallet {
 		/// Because we want to emit events when there is a config change during
 		/// an runtime upgrade
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-		/// Governance origin to secure extrinsic
-		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 		/// Polkadot Vault Creation Apicall
 		type CreatePolkadotVault: CreatePolkadotVault;
 		/// Polkadot broadcaster
@@ -203,6 +210,12 @@ pub mod pallet {
 	#[pallet::storage]
 	/// The amount of fee we want to pay per utxo.
 	pub type BitcoinFeePerUtxo<T> = StorageValue<_, u64, ValueQuery>;
+
+	#[pallet::storage]
+	/// Lookup for determining which salt and pubkey the current ingress Bitcoin Script was created
+	/// from.
+	pub type BitcoinActiveIngressDetails<T> =
+		StorageMap<_, Twox64Concat, BitcoinScriptBounded, (u32, [u8; 32]), ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -424,12 +437,7 @@ pub mod pallet {
 			let dispatch_result = T::BitcoinVaultKeyWitnessedHandler::on_new_key_activated(
 				new_public_key,
 				block_number,
-				UtxoId {
-					tx_hash: Default::default(),
-					vout: Default::default(),
-					pubkey_x: Default::default(),
-					salt: Default::default(),
-				},
+				UtxoId { tx_hash: Default::default(), vout: Default::default() },
 			)?;
 
 			Self::deposit_event(Event::<T>::BitcoinBlockNumberSetForVault { block_number });
@@ -459,14 +467,20 @@ pub mod pallet {
 		}
 
 		#[pallet::weight(0)]
-		pub fn add_btc_change_utxos(
+		pub fn add_bitcoin_change_utxos(
 			origin: OriginFor<T>,
-			utxos: Vec<cf_chains::btc::Utxo>,
+			change_witnesses: Vec<ChangeUtxoWitness>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			for utxo in utxos {
-				Self::add_bitcoin_utxo_to_list(utxo);
+			for ChangeUtxoWitness { amount, change_pubkey, utxo_id } in change_witnesses {
+				Self::add_bitcoin_utxo_to_list(
+					amount,
+					utxo_id,
+					derive_btc_ingress_bitcoin_script(change_pubkey.pubkey_x, CHANGE_ADDRESS_SALT)
+						.try_into()
+						.expect("The script should not exceed 128 bytes"),
+				);
 			}
 
 			Ok(().into())
@@ -584,8 +598,19 @@ impl<T: Config> Pallet<T> {
 		PolkadotProxyAccountNonce::<T>::set(0);
 	}
 
-	pub fn add_bitcoin_utxo_to_list(utxo: Utxo) {
-		BitcoinAvailableUtxos::<T>::append(utxo);
+	pub fn add_bitcoin_utxo_to_list(
+		amount: BtcAmount,
+		utxo_id: UtxoId,
+		ingress_script: BitcoinScriptBounded,
+	) {
+		let (salt, pubkey) = BitcoinActiveIngressDetails::<T>::take(ingress_script);
+		BitcoinAvailableUtxos::<T>::append(Utxo {
+			amount,
+			txid: utxo_id.tx_hash,
+			vout: utxo_id.vout,
+			pubkey_x: pubkey,
+			salt,
+		});
 	}
 
 	// Calculate the selection of utxos, return them and remove them from the list. If the
@@ -601,5 +626,13 @@ impl<T: Config> Pallet<T> {
 				total_output_amount,
 			)
 		})
+	}
+
+	pub fn add_details_for_btc_ingress_script(
+		ingress_script: BitcoinScriptBounded,
+		salt: u32,
+		pubkey: [u8; 32],
+	) {
+		BitcoinActiveIngressDetails::<T>::insert(ingress_script, (salt, pubkey));
 	}
 }

@@ -437,7 +437,7 @@ fn testnet_genesis(
 	keygen_ceremony_timeout_blocks: BlockNumber,
 	threshold_signature_ceremony_timeout_blocks: BlockNumber,
 ) -> GenesisConfig {
-	let authority_ids: Vec<AccountId> =
+	let authority_ids: BTreeSet<AccountId> =
 		initial_authorities.iter().map(|(id, ..)| id.clone()).collect();
 	let total_issuance =
 		total_issuance + extra_stakers.iter().map(|(_, _, stake)| *stake).sum::<u128>();

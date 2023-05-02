@@ -4,17 +4,16 @@ use crate::{
 	PalletOffence, RequestCallbacks, SignatureToBroadcastIdLookup, ThresholdSignatureData,
 	TransactionFeeDeficit, WeightInfo,
 };
-use cf_chains::{mocks::MockTransactionBuilder, FeeRefundCalculator};
-
-use cf_chains::mocks::{
-	MockApiCall, MockEthereum, MockThresholdSignature, MockTransaction, ETH_TX_FEE,
+use cf_chains::{
+	mocks::{
+		MockApiCall, MockEthereum, MockThresholdSignature, MockTransaction, MockTransactionBuilder,
+		ETH_TX_FEE,
+	},
+	FeeRefundCalculator,
 };
 use cf_traits::{
-	mocks::{
-		epoch_info::MockEpochInfo, signer_nomination::MockNominator,
-		threshold_signer::MockThresholdSigner,
-	},
-	AsyncResult, EpochInfo, ThresholdSigner,
+	mocks::{signer_nomination::MockNominator, threshold_signer::MockThresholdSigner},
+	AsyncResult, Chainflip, EpochInfo, ThresholdSigner,
 };
 use frame_support::{assert_noop, assert_ok, dispatch::Weight, traits::Hooks};
 use frame_system::RawOrigin;
@@ -63,7 +62,7 @@ impl MockCfe {
 							);
 							assert_noop!(
 								Broadcaster::transaction_signing_failure(
-									RawOrigin::Signed(nominee + 1).into(),
+									RawOrigin::Signed((nominee + 1) % 3).into(),
 									broadcast_attempt_id
 								),
 								Error::<Test, Instance1>::InvalidSigner
@@ -130,7 +129,6 @@ fn start_mock_broadcast() -> BroadcastAttemptId {
 #[test]
 fn signature_accepted_results_in_refund_for_signer() {
 	new_test_ext().execute_with(|| {
-		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = start_mock_broadcast();
 		let tx_sig_request =
 			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
@@ -162,19 +160,18 @@ fn signature_accepted_results_in_refund_for_signer() {
 #[test]
 fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 	new_test_ext().execute_with(|| {
-		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
+		let broadcast_attempt_id = start_mock_broadcast();
 
-		let mut broadcast_attempt_id = start_mock_broadcast();
-
-		for _ in 0..MockEpochInfo::current_authority_count() {
+		for i in 0..MockEpochInfo::current_authority_count() {
 			// Nominated signer responds that they can't sign the transaction.
-			MockCfe::respond(Scenario::SigningFailure);
-
 			// retry should kick off at end of block if sufficient block space is free.
+			assert_eq!(
+				BroadcastAttemptCount::<Test, _>::get(broadcast_attempt_id.broadcast_id),
+				broadcast_attempt_id.attempt_count + i,
+				"Failed for {broadcast_attempt_id:?} at iteration {i}"
+			);
+			MockCfe::respond(Scenario::SigningFailure);
 			Broadcaster::on_idle(0, LARGE_EXCESS_WEIGHT);
-			Broadcaster::on_initialize(0);
-
-			broadcast_attempt_id = broadcast_attempt_id.next_attempt();
 		}
 
 		assert_eq!(
@@ -191,7 +188,6 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 #[test]
 fn on_idle_caps_broadcasts_when_not_enough_weight() {
 	new_test_ext().execute_with(|| {
-		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = start_mock_broadcast();
 
 		MockCfe::respond(Scenario::SigningFailure);
@@ -222,7 +218,6 @@ fn on_idle_caps_broadcasts_when_not_enough_weight() {
 #[test]
 fn test_transaction_signing_failed() {
 	new_test_ext().execute_with(|| {
-		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = start_mock_broadcast();
 		assert!(
 			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id)
@@ -258,7 +253,10 @@ fn test_invalid_id_is_noop() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Broadcaster::transaction_signing_failure(
-				RawOrigin::Signed(0).into(),
+				RawOrigin::Signed(
+					*<Test as Chainflip>::EpochInfo::current_authorities().first().unwrap()
+				)
+				.into(),
 				BroadcastAttemptId::default(),
 			),
 			Error::<Test, Instance1>::InvalidBroadcastAttemptId
@@ -271,7 +269,10 @@ fn test_invalid_sigdata_is_noop() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Broadcaster::signature_accepted(
-				RawOrigin::Signed(0).into(),
+				RawOrigin::Signed(
+					*<Test as Chainflip>::EpochInfo::current_authorities().first().unwrap()
+				)
+				.into(),
 				MockThresholdSignature::default(),
 				Default::default(),
 				ETH_TX_FEE,
@@ -286,7 +287,6 @@ fn test_invalid_sigdata_is_noop() {
 #[test]
 fn signature_accepted_after_timeout_reports_failed_nodes() {
 	new_test_ext().execute_with(|| {
-		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		start_mock_broadcast();
 
 		let mut failed_authorities = vec![];
@@ -318,7 +318,6 @@ fn signature_accepted_after_timeout_reports_failed_nodes() {
 #[test]
 fn test_signature_request_expiry() {
 	new_test_ext().execute_with(|| {
-		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = start_mock_broadcast();
 		let first_broadcast_id = broadcast_attempt_id.broadcast_id;
 		assert!(
@@ -380,7 +379,6 @@ fn test_signature_request_expiry() {
 #[test]
 fn test_transmission_request_expiry() {
 	new_test_ext().execute_with(|| {
-		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = start_mock_broadcast();
 		let first_broadcast_id = broadcast_attempt_id.broadcast_id;
 		MockCfe::respond(Scenario::HappyPath);
@@ -443,7 +441,6 @@ fn threshold_signature_rerequested(broadcast_attempt_id: BroadcastAttemptId) {
 #[test]
 fn re_request_threshold_signature_on_invalid_sig() {
 	new_test_ext().execute_with(|| {
-		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = start_mock_broadcast();
 		// Expect the threshold signature pipeline to be empty
 		assert_eq!(
@@ -468,7 +465,6 @@ fn re_request_threshold_signature_on_invalid_sig() {
 #[test]
 fn re_request_threshold_signature_on_invalid_tx_params() {
 	new_test_ext().execute_with(|| {
-		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		let broadcast_attempt_id = start_mock_broadcast();
 
 		assert_eq!(
@@ -492,7 +488,6 @@ fn re_request_threshold_signature_on_invalid_tx_params() {
 #[test]
 fn threshold_sign_and_broadcast_with_callback() {
 	new_test_ext().execute_with(|| {
-		MockNominator::use_current_authorities_as_nominees::<MockEpochInfo>();
 		Broadcaster::threshold_sign_and_broadcast(MockApiCall::default(), Some(MockCallback));
 		let broadcast_attempt_id = start_mock_broadcast();
 		assert_eq!(RequestCallbacks::<Test, Instance1>::get(1), Some(MockCallback));

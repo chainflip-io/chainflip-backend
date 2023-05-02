@@ -1,11 +1,11 @@
+use std::collections::BTreeSet;
+
 use cf_traits::{
 	offence_reporting::OffenceReporter, EpochInfo, SingleSignerNomination,
 	ThresholdSignerNomination,
 };
 use pallet_cf_threshold_signature::PalletOffence;
-use pallet_cf_validator::{
-	CurrentAuthorities, CurrentEpoch, EpochAuthorityCount, HistoricalAuthorities,
-};
+use pallet_cf_validator::{CurrentAuthorities, CurrentEpoch, HistoricalAuthorities};
 use sp_runtime::AccountId32;
 use state_chain_runtime::{EthereumInstance, Reputation, Runtime, Validator};
 
@@ -22,10 +22,6 @@ fn threshold_signer_nomination_respects_epoch() {
 		let genesis_epoch = Validator::epoch_index();
 
 		assert_eq!(genesis_authorities, HistoricalAuthorities::<Runtime>::get(genesis_epoch));
-		assert_eq!(
-			genesis_authorities.len() as u32,
-			EpochAuthorityCount::<Runtime>::get(genesis_epoch).unwrap()
-		);
 
 		assert!(RuntimeThresholdSignerNomination::threshold_nomination_with_seed(
 			(),
@@ -40,13 +36,12 @@ fn threshold_signer_nomination_respects_epoch() {
 		CurrentEpoch::<Runtime>::put(next_epoch);
 
 		// double the number of authorities, so we also have a different threshold size
-		let new_authorities: Vec<_> = (0u8..(2 * genesis_authorities.len() as u8))
+		let new_authorities: BTreeSet<_> = (0u8..(2 * genesis_authorities.len() as u8))
 			.into_iter()
 			.map(|i| AccountId32::from([i; 32]))
 			.collect();
 		CurrentAuthorities::<Runtime>::put(&new_authorities);
 		HistoricalAuthorities::<Runtime>::insert(next_epoch, &new_authorities);
-		EpochAuthorityCount::<Runtime>::insert(next_epoch, new_authorities.len() as u32);
 		assert!(Validator::current_authorities()
 			.into_iter()
 			.all(|n| !genesis_authorities.contains(&n)));

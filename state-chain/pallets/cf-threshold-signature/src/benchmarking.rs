@@ -4,13 +4,12 @@
 use super::*;
 
 use cf_chains::{benchmarking_value::BenchmarkValue, ChainCrypto};
-use cf_primitives::AccountRole;
 use cf_traits::{AccountRoleRegistry, Chainflip, ThresholdSigner};
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelist_account};
 use frame_support::{
 	assert_ok,
 	dispatch::UnfilteredDispatchable,
-	traits::{IsType, OnInitialize},
+	traits::{IsType, OnInitialize, OnNewAccount},
 };
 use frame_system::RawOrigin;
 use pallet_cf_validator::CurrentAuthorities;
@@ -24,12 +23,12 @@ where
 	T: frame_system::Config + pallet_cf_validator::Config + pallet_cf_reputation::Config,
 	I: Clone + Iterator<Item = <T as Chainflip>::ValidatorId>,
 {
-	CurrentAuthorities::<T>::put(authorities.clone().collect::<Vec<_>>());
+	CurrentAuthorities::<T>::put(authorities.clone().collect::<BTreeSet<_>>());
 	for validator_id in authorities {
-		<T as pallet_cf_reputation::Config>::AccountRoleRegistry::register_account(
-			validator_id.clone().into(),
-			AccountRole::Validator,
-		);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(validator_id.into_ref());
+		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(
+			&validator_id.clone().into()
+		));
 		let account_id = validator_id.into_ref();
 		whitelist_account!(account_id);
 		assert_ok!(pallet_cf_reputation::Pallet::<T>::heartbeat(
@@ -74,7 +73,8 @@ benchmarks_instance_pallet! {
 
 		let reporter = threshold_set.next().unwrap();
 		let account: T::AccountId = reporter.clone().into();
-		<T as pallet::Config<I>>::AccountRoleRegistry::register_account(account, AccountRole::Validator);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&account);
+		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&account));
 		let offenders = BTreeSet::from_iter(threshold_set.take(a as usize));
 	} : _(RawOrigin::Signed(reporter.into()), ceremony_id, offenders)
 	set_threshold_signature_timeout {
@@ -84,7 +84,7 @@ benchmarks_instance_pallet! {
 		let call = Call::<T, I>::set_threshold_signature_timeout {
 			new_timeout
 		};
-	} : { call.dispatch_bypass_filter(<T as Config<I>>::EnsureGovernance::successful_origin())? }
+	} : { call.dispatch_bypass_filter(<T as Chainflip>::EnsureGovernance::successful_origin())? }
 	verify {
 		assert_eq!(ThresholdSignatureResponseTimeout::<T, I>::get(), new_timeout);
 	}
@@ -95,7 +95,7 @@ benchmarks_instance_pallet! {
 		// r: number of retries
 		let r in 0..50;
 		T::KeyProvider::set_key(<T::TargetChain as ChainCrypto>::AggKey::benchmark_value());
-		CurrentAuthorities::<T>::put(Vec::<<T as Chainflip>::ValidatorId>::new());
+		CurrentAuthorities::<T>::put(BTreeSet::<<T as Chainflip>::ValidatorId>::new());
 
 		// These attempts will fail because there are no authorities to do the signing.
 		for _ in 0..r {

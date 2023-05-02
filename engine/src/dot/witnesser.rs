@@ -15,7 +15,7 @@ use cf_chains::{
 use cf_primitives::{EpochIndex, PolkadotAccountId, PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use frame_support::scale_info::TypeInfo;
-use futures::{stream, Stream, StreamExt};
+use futures::{stream, Stream, StreamExt, TryStreamExt};
 use pallet_cf_ingress_egress::IngressWitness;
 use sp_core::H256;
 use sp_runtime::{AccountId32, MultiSignature};
@@ -29,9 +29,8 @@ use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
 	constants::{BLOCK_PULL_TIMEOUT_MULTIPLIER, DOT_AVERAGE_BLOCK_TIME_SECONDS},
-	multisig::PersistentKeyDB,
-	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
-	stream_utils::EngineStreamExt,
+	db::PersistentKeyDB,
+	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
 	witnesser::{
 		block_head_stream_from::block_head_stream_from,
 		block_witnesser::{
@@ -258,7 +257,7 @@ pub async fn start<StateChainClient, DotRpc>(
 	db: Arc<PersistentKeyDB>,
 ) -> std::result::Result<(), anyhow::Error>
 where
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
 	start_epoch_process_runner(
@@ -294,7 +293,7 @@ impl HasBlockNumber for (H256, PolkadotBlockNumber, Vec<(Phase, EventWrapper)>) 
 #[async_trait]
 impl<StateChainClient, DotRpc> BlockWitnesser for DotBlockWitnesser<StateChainClient, DotRpc>
 where
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
 	type Chain = Polkadot;
@@ -321,8 +320,7 @@ where
 				address_monitor,
 			);
 
-		let _result = self
-			.state_chain_client
+		self.state_chain_client
 			.submit_signed_extrinsic(state_chain_runtime::RuntimeCall::Witnesser(
 				pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(state_chain_runtime::RuntimeCall::PolkadotChainTracking(
@@ -339,8 +337,7 @@ where
 			.await;
 
 		for call in vault_key_rotated_calls {
-			let _result = self
-				.state_chain_client
+			self.state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call,
 					epoch_index: self.epoch_index,
@@ -374,26 +371,25 @@ where
 						if monitored_signatures.contains(&sig.0) {
 							info!("Witnessing signature_accepted. signature: {sig:?}");
 
-							let _result =
-								self.state_chain_client
-									.submit_signed_extrinsic(
-										pallet_cf_witnesser::Call::witness_at_epoch {
-											call:
-												Box::new(
-													pallet_cf_broadcast::Call::<
-														_,
-														PolkadotInstance,
-													>::signature_accepted {
-														signature: sig.clone(),
-														signer_id: self.vault_account.clone(),
-														tx_fee,
-													}
-													.into(),
-												),
-											epoch_index: self.epoch_index,
-										},
-									)
-									.await;
+							self.state_chain_client
+								.submit_signed_extrinsic(
+									pallet_cf_witnesser::Call::witness_at_epoch {
+										call:
+											Box::new(
+												pallet_cf_broadcast::Call::<
+													_,
+													PolkadotInstance,
+												>::signature_accepted {
+													signature: sig.clone(),
+													signer_id: self.vault_account.clone(),
+													tx_fee,
+												}
+												.into(),
+											),
+										epoch_index: self.epoch_index,
+									},
+								)
+								.await;
 
 							monitored_signatures.remove(&sig.0);
 						}
@@ -408,8 +404,7 @@ where
 		}
 
 		if !ingress_witnesses.is_empty() {
-			let _result = self
-				.state_chain_client
+			self.state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(
 						pallet_cf_ingress_egress::Call::<_, PolkadotInstance>::do_ingress {
@@ -435,7 +430,7 @@ struct DotWitnesserGenerator<StateChainClient, DotRpc> {
 impl<StateChainClient, DotRpc> BlockWitnesserGenerator
 	for DotWitnesserGenerator<StateChainClient, DotRpc>
 where
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
 {
 	type Witnesser = DotBlockWitnesser<StateChainClient, DotRpc>;
@@ -476,64 +471,62 @@ where
 		// Stream of Events objects. Each `Events` contains the events for a particular
 		// block
 		let dot_client_c = self.dot_client.clone();
-		let block_events_stream = Box::pin(
-			take_while_ok(block_head_stream_from.then(move |mini_header| {
-				let mut dot_client = dot_client_c.clone();
-				debug!("Fetching Polkadot events for block: {}", mini_header.block_number);
-				// TODO: This will not work if the block we are querying metadata has
-				// different metadata than the latest block since this client fetches
-				// the latest metadata and always uses it.
-				// https://github.com/chainflip-io/chainflip-backend/issues/2542
-				async move {
-					Result::<_, anyhow::Error>::Ok((
-						mini_header.block_hash,
-						mini_header.block_number,
-						dot_client.events(mini_header.block_hash).await?,
-					))
-				}
-			}))
-			.map(|(block_hash, block_number, events)| {
-				(
-					block_hash,
-					block_number,
-					events
-						.iter()
-						.filter_map(|event_details| match event_details {
-							Ok(event_details) =>
-								match (event_details.pallet_name(), event_details.variant_name()) {
-									(ProxyAdded::PALLET, ProxyAdded::EVENT) =>
-										Some(EventWrapper::ProxyAdded(
-											event_details
-												.as_event::<ProxyAdded>()
-												.unwrap()
-												.unwrap(),
-										)),
-									(Transfer::PALLET, Transfer::EVENT) =>
-										Some(EventWrapper::Transfer(
-											event_details.as_event::<Transfer>().unwrap().unwrap(),
-										)),
-									(TransactionFeePaid::PALLET, TransactionFeePaid::EVENT) =>
-										Some(EventWrapper::TransactionFeePaid(
-											event_details
-												.as_event::<TransactionFeePaid>()
-												.unwrap()
-												.unwrap(),
-										)),
-									_ => None,
-								}
-								.map(|event| (event_details.phase(), event)),
-							Err(err) => {
-								error!("Error while parsing event: {:?}", err);
-								None
-							},
-						})
-						.collect(),
-				)
-			}),
+		let block_events_stream = take_while_ok(block_head_stream_from.then(move |mini_header| {
+			let mut dot_client = dot_client_c.clone();
+			debug!("Fetching Polkadot events for block: {}", mini_header.block_number);
+			// TODO: This will not work if the block we are querying metadata has
+			// different metadata than the latest block since this client fetches
+			// the latest metadata and always uses it.
+			// https://github.com/chainflip-io/chainflip-backend/issues/2542
+			async move {
+				Result::<_, anyhow::Error>::Ok((
+					mini_header.block_hash,
+					mini_header.block_number,
+					dot_client.events(mini_header.block_hash).await?,
+				))
+			}
+		}))
+		.map(|(block_hash, block_number, events)| {
+			(
+				block_hash,
+				block_number,
+				events
+					.iter()
+					.filter_map(|event_details| match event_details {
+						Ok(event_details) =>
+							match (event_details.pallet_name(), event_details.variant_name()) {
+								(ProxyAdded::PALLET, ProxyAdded::EVENT) =>
+									Some(EventWrapper::ProxyAdded(
+										event_details.as_event::<ProxyAdded>().unwrap().unwrap(),
+									)),
+								(Transfer::PALLET, Transfer::EVENT) =>
+									Some(EventWrapper::Transfer(
+										event_details.as_event::<Transfer>().unwrap().unwrap(),
+									)),
+								(TransactionFeePaid::PALLET, TransactionFeePaid::EVENT) =>
+									Some(EventWrapper::TransactionFeePaid(
+										event_details
+											.as_event::<TransactionFeePaid>()
+											.unwrap()
+											.unwrap(),
+									)),
+								_ => None,
+							}
+							.map(|event| (event_details.phase(), event)),
+						Err(err) => {
+							error!("Error while parsing event: {:?}", err);
+							None
+						},
+					})
+					.collect(),
+			)
+		});
+
+		let block_events_stream = tokio_stream::StreamExt::timeout(
+			block_events_stream,
+			Duration::from_secs(DOT_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER),
 		)
-		.timeout_after(Duration::from_secs(
-			DOT_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER,
-		));
+		.map_err(|err| anyhow::anyhow!("Error while fetching Polkadot events: {:?}", err));
 
 		Ok(Box::pin(block_events_stream))
 	}

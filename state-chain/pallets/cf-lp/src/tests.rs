@@ -1,10 +1,15 @@
 use crate::{mock::*, FreeBalances, IngressIntentExpiries, LpTTL};
 
-use cf_chains::{address::ForeignChainAddress, AnyChain};
+use cf_chains::{
+	address::{AddressConverter, EncodedAddress},
+	AnyChain,
+};
 use cf_primitives::{AccountId, Asset, ForeignChain};
+
 use cf_test_utilities::assert_events_match;
 use cf_traits::{
 	mocks::{
+		address_converter::MockAddressConverter,
 		ingress_handler::{LpIntent, MockIngressHandler},
 		system_state_info::MockSystemStateInfo,
 	},
@@ -20,7 +25,7 @@ fn egress_chain_and_asset_must_match() {
 				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				1,
 				Asset::Eth,
-				ForeignChainAddress::Dot([0x00; 32]),
+				EncodedAddress::Dot(Default::default()),
 			),
 			crate::Error::<Test>::InvalidEgressAddress
 		);
@@ -38,7 +43,7 @@ fn liquidity_providers_can_withdraw_asset() {
 				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				100,
 				Asset::Dot,
-				ForeignChainAddress::Eth([0x00; 20]),
+				EncodedAddress::Eth(Default::default()),
 			),
 			crate::Error::<Test>::InvalidEgressAddress
 		);
@@ -48,7 +53,7 @@ fn liquidity_providers_can_withdraw_asset() {
 				RuntimeOrigin::signed(NON_LP_ACCOUNT.into()),
 				100,
 				Asset::Eth,
-				ForeignChainAddress::Eth([0x00; 20]),
+				EncodedAddress::Eth(Default::default()),
 			),
 			BadOrigin
 		);
@@ -57,7 +62,7 @@ fn liquidity_providers_can_withdraw_asset() {
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			100,
 			Asset::Eth,
-			ForeignChainAddress::Eth([0x00; 20]),
+			EncodedAddress::Eth(Default::default()),
 		));
 
 		assert_eq!(FreeBalances::<Test>::get(AccountId::from(LP_ACCOUNT), Asset::Eth), Some(900));
@@ -88,7 +93,7 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				100,
 				Asset::Eth,
-				ForeignChainAddress::Eth([0x00; 20]),
+				EncodedAddress::Eth(Default::default()),
 			),
 			"We are in maintenance!"
 		);
@@ -107,7 +112,7 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
 			100,
 			Asset::Eth,
-			ForeignChainAddress::Eth([0x00; 20]),
+			EncodedAddress::Eth(Default::default()),
 		));
 	});
 }
@@ -126,16 +131,17 @@ fn ingress_intents_expires() {
 		let (intent_id, ingress_address) = assert_events_match!(Test, RuntimeEvent::LiquidityProvider(crate::Event::DepositAddressReady {
 			intent_id,
 			ingress_address,
-		}) => (intent_id, ingress_address));
+			expiry_block,
+		}) if expiry_block == expiry => (intent_id, ingress_address));
 		let lp_intent = LpIntent {
-			ingress_address: ingress_address.clone(),
+			ingress_address: MockAddressConverter::try_from_encoded_address(ingress_address.clone()).unwrap(),
 			ingress_asset: asset,
 			lp_account: LP_ACCOUNT.into(),
 		};
 
 		assert_eq!(
 			IngressIntentExpiries::<Test>::get(expiry),
-			vec![(intent_id, ForeignChain::from(asset), ingress_address.clone())]
+			vec![(intent_id, ForeignChain::from(asset), MockAddressConverter::try_from_encoded_address(ingress_address.clone()).unwrap())]
 		);
 		assert_eq!(
 			MockIngressHandler::<AnyChain, Test>::get_liquidity_intents(),
@@ -146,7 +152,7 @@ fn ingress_intents_expires() {
 		LiquidityProvider::on_initialize(expiry - 1);
 		assert_eq!(
 			IngressIntentExpiries::<Test>::get(expiry),
-			vec![(intent_id, ForeignChain::from(asset), ingress_address.clone())]
+			vec![(intent_id, ForeignChain::from(asset), MockAddressConverter::try_from_encoded_address(ingress_address.clone()).unwrap())]
 		);
 		assert_eq!(
 			MockIngressHandler::<AnyChain, Test>::get_liquidity_intents(),

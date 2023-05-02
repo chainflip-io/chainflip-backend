@@ -282,17 +282,15 @@ impl Engine {
 									Validator::epoch_index()
 								);
 
-								let btc_public_key = self.btc_threshold_signer.borrow_mut().proposed_public_key();
+
 								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
 									RuntimeOrigin::signed(self.node_id.clone()),
 									Box::new(pallet_cf_vaults::Call::<_, BitcoinInstance>::vault_key_rotated {
-										new_public_key: btc_public_key,
+										new_public_key: self.btc_threshold_signer.borrow_mut().proposed_public_key(),
 										block_number: 100,
 										tx_id: UtxoId {
-											pubkey_x: btc_public_key.pubkey_x,
 											tx_hash: [2u8; 32],
 											vout: 1,
-											salt: 0,
 										},
 									}.into()),
 									Validator::epoch_index()
@@ -413,7 +411,10 @@ impl Network {
 
 	// Create a network which includes the authorities in genesis of number of nodes
 	// and return a network and sorted list of nodes within
-	pub fn create(number_of_backup_nodes: u8, existing_nodes: &[NodeId]) -> (Self, Vec<NodeId>) {
+	pub fn create(
+		number_of_backup_nodes: u8,
+		existing_nodes: &BTreeSet<NodeId>,
+	) -> (Self, BTreeSet<NodeId>) {
 		let mut network: Network = Default::default();
 
 		// Include any nodes already *created* to the test network
@@ -423,10 +424,10 @@ impl Network {
 		}
 
 		// Create the backup nodes
-		let mut backup_nodes = Vec::new();
+		let mut backup_nodes = BTreeSet::new();
 		for _ in 0..number_of_backup_nodes {
 			let node_id = network.create_engine();
-			backup_nodes.push(node_id);
+			backup_nodes.insert(node_id);
 		}
 
 		(network, backup_nodes)

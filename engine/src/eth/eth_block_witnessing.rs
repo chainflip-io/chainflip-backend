@@ -2,6 +2,7 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use cf_chains::Ethereum;
+use futures::TryStreamExt;
 use tokio::sync::Mutex;
 use tracing::{info_span, Instrument};
 
@@ -11,8 +12,7 @@ use super::{
 };
 use crate::{
 	constants::{BLOCK_PULL_TIMEOUT_MULTIPLIER, ETH_AVERAGE_BLOCK_TIME_SECONDS},
-	multisig::PersistentKeyDB,
-	stream_utils::EngineStreamExt,
+	db::PersistentKeyDB,
 	witnesser::{
 		block_witnesser::{
 			BlockStream, BlockWitnesser, BlockWitnesserGenerator, BlockWitnesserGeneratorWrapper,
@@ -91,10 +91,12 @@ impl BlockWitnesserGenerator for EthBlockWitnesserGenerator {
 			.map_err(|err| {
 				tracing::error!("Subscription error: {err}");
 				err
-			})?
-			.timeout_after(Duration::from_secs(
-				ETH_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER,
-			));
+			})?;
+		let block_stream = tokio_stream::StreamExt::timeout(
+			block_stream,
+			Duration::from_secs(ETH_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER),
+		)
+		.map_err(anyhow::Error::msg);
 
 		Ok(Box::pin(block_stream))
 	}

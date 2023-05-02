@@ -1,9 +1,5 @@
 use crate::{self as pallet_cf_pools};
-use cf_primitives::AuthorityCount;
-use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	Chainflip,
-};
+use cf_traits::{impl_mock_chainflip, AccountRoleRegistry};
 use frame_support::parameter_types;
 use frame_system as system;
 use sp_core::H256;
@@ -16,8 +12,6 @@ use sp_runtime::{
 type AccountId = u64;
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
-
-cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
@@ -65,15 +59,7 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-impl Chainflip for Test {
-	type ValidatorId = AccountId;
-	type Amount = u128;
-	type RuntimeCall = RuntimeCall;
-	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
-	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
-	type EpochInfo = MockEpochInfo;
-	type SystemState = MockSystemStateInfo;
-}
+impl_mock_chainflip!(Test);
 
 parameter_types! {
 	// 20 Basis Points
@@ -81,10 +67,8 @@ parameter_types! {
 }
 impl pallet_cf_pools::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type AccountRoleRegistry = ();
 	type LpBalance = Self;
 	type NetworkFee = NetworkFee;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type WeightInfo = ();
 }
 
@@ -97,6 +81,10 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_liquidity_provider(
+			&ALICE,
+		)
+		.unwrap();
 	});
 
 	ext

@@ -5,26 +5,28 @@ pub use cf_amm::{
 	common::{SideMap, Tick},
 	range_orders::Liquidity,
 };
-use cf_chains::ForeignChainAddress;
+use cf_chains::address::EncodedAddress;
 use cf_primitives::{AccountRole, Asset, AssetAmount, EgressId};
 use chainflip_engine::{
 	settings,
 	state_chain_observer::client::{
-		base_rpc_api::BaseRpcApi, extrinsic_api::ExtrinsicApi, storage_api::StorageApi,
+		base_rpc_api::BaseRpcApi,
+		extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
+		storage_api::StorageApi,
 		StateChainClient,
 	},
 };
 pub use core::ops::Range;
 use futures::FutureExt;
 use serde::Serialize;
-use utilities::task_scope::task_scope;
+use utilities::{task_scope::task_scope, CachedStream};
 
-use crate::{connect_submit_and_get_events, submit_and_ensure_success};
+use crate::connect_submit_and_get_events;
 
 pub async fn liquidity_deposit(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
-) -> Result<ForeignChainAddress> {
+) -> Result<EncodedAddress> {
 	let events = connect_submit_and_get_events(
 		state_chain_settings,
 		pallet_cf_lp::Call::request_deposit_address { asset },
@@ -47,7 +49,7 @@ pub async fn withdraw_asset(
 	state_chain_settings: &settings::StateChain,
 	amount: AssetAmount,
 	asset: Asset,
-	egress_address: ForeignChainAddress,
+	egress_address: EncodedAddress,
 ) -> Result<EgressId> {
 	let events = connect_submit_and_get_events(
 		state_chain_settings,
@@ -72,9 +74,14 @@ pub async fn get_balances(
 ) -> Result<HashMap<Asset, AssetAmount>> {
 	task_scope(|scope| {
 		async {
-			let (latest_block_hash, _, state_chain_client) =
-				StateChainClient::new(scope, state_chain_settings, AccountRole::None, false)
-					.await?;
+			let (state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
+				scope,
+				&state_chain_settings.ws_endpoint,
+				&state_chain_settings.signing_key_file,
+				AccountRole::None,
+				false,
+			)
+			.await?;
 
 			let balances: Result<HashMap<Asset, AssetAmount>> =
 				futures::future::join_all(Asset::all().iter().map(|asset| async {
@@ -82,7 +89,7 @@ pub async fn get_balances(
 						*asset,
 						state_chain_client
 							.storage_double_map_entry::<pallet_cf_lp::FreeBalances<state_chain_runtime::Runtime>>(
-								latest_block_hash,
+								state_chain_stream.cache().block_hash,
 								&state_chain_client.account_id(),
 								asset,
 							)
@@ -106,9 +113,10 @@ pub async fn get_range_orders(
 ) -> Result<HashMap<Asset, Vec<(Tick, Tick, Liquidity)>>> {
 	task_scope(|scope| {
 		async {
-			let (latest_block_hash, _, state_chain_client) = StateChainClient::new(
+			let (state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
 				scope,
-				state_chain_settings,
+				&state_chain_settings.ws_endpoint,
+				&state_chain_settings.signing_key_file,
 				AccountRole::LiquidityProvider,
 				false,
 			)
@@ -122,7 +130,7 @@ pub async fn get_range_orders(
 						.pool_minted_positions(
 							state_chain_client.account_id(),
 							*asset,
-							latest_block_hash,
+							state_chain_stream.cache().block_hash,
 						)
 						.await?,
 				))
@@ -151,26 +159,25 @@ pub async fn mint_range_order(
 	task_scope(|scope| {
 		async {
 			// Connect to State Chain
-			let (_, block_stream, state_chain_client) = StateChainClient::new(
+			let (_state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
 				scope,
-				state_chain_settings,
+				&state_chain_settings.ws_endpoint,
+				&state_chain_settings.signing_key_file,
 				AccountRole::LiquidityProvider,
 				false,
 			)
 			.await?;
 
 			// Submit the mint order
-			let call = pallet_cf_pools::Call::collect_and_mint_range_order {
-				unstable_asset: asset,
-				price_range_in_ticks: range,
-				liquidity: amount,
-			};
-			let (_tx_hash, events) = submit_and_ensure_success(
-				&state_chain_client,
-				Box::new(block_stream).as_mut(),
-				call,
-			)
-			.await?;
+			let (_tx_hash, events, _dispatch_info) = state_chain_client
+				.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_mint_range_order {
+					unstable_asset: asset,
+					price_range_in_ticks: range,
+					liquidity: amount,
+				})
+				.await
+				.until_finalized()
+				.await?;
 
 			// Get some details from the emitted event
 			Ok(events
@@ -207,9 +214,10 @@ pub async fn burn_range_order(
 	task_scope(|scope| {
 		async {
 			// Connect to State Chain
-			let (_latest_block_hash, block_stream, state_chain_client) = StateChainClient::new(
+			let (_state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
 				scope,
-				state_chain_settings,
+				&state_chain_settings.ws_endpoint,
+				&state_chain_settings.signing_key_file,
 				AccountRole::LiquidityProvider,
 				false,
 			)
@@ -224,17 +232,15 @@ pub async fn burn_range_order(
 			// }
 
 			// Submit the burn call
-			let call = pallet_cf_pools::Call::collect_and_burn_range_order {
-				unstable_asset: asset,
-				price_range_in_ticks: range,
-				liquidity: amount,
-			};
-			let (_tx_hash, events) = submit_and_ensure_success(
-				&state_chain_client,
-				Box::new(block_stream).as_mut(),
-				call,
-			)
-			.await?;
+			let (_tx_hash, events, _dispatch_info) = state_chain_client
+				.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_burn_range_order {
+					unstable_asset: asset,
+					price_range_in_ticks: range,
+					liquidity: amount,
+				})
+				.await
+				.until_finalized()
+				.await?;
 
 			// Get some details from the emitted event
 			Ok(events

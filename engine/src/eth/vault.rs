@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use cf_chains::ForeignChainAddress;
+use cf_chains::address::EncodedAddress;
 use cf_primitives::{Asset, EpochIndex, EthereumAddress};
 use tracing::info;
 use web3::{
@@ -13,7 +13,7 @@ use crate::{
 	eth::EventParseError,
 	state_chain_observer::client::{
 		base_rpc_api::{BaseRpcClient, RawRpcApi},
-		extrinsic_api::ExtrinsicApi,
+		extrinsic_api::signed::SignedExtrinsicApi,
 		StateChainClient,
 	},
 };
@@ -106,8 +106,8 @@ pub trait EthAssetApi {
 }
 
 #[async_trait]
-impl<RawRpcClient: RawRpcApi + Send + Sync + 'static> EthAssetApi
-	for StateChainClient<BaseRpcClient<RawRpcClient>>
+impl<RawRpcClient: RawRpcApi + Send + Sync + 'static, SignedExtrinsicClient: Send + Sync>
+	EthAssetApi for StateChainClient<SignedExtrinsicClient, BaseRpcClient<RawRpcClient>>
 {
 	async fn asset(&self, token_address: EthereumAddress) -> Result<Option<Asset>> {
 		self.base_rpc_client
@@ -136,7 +136,7 @@ impl EthContractWitnesser for Vault {
 	) -> Result<()>
 	where
 		EthRpcClient: EthRpcApi + Sync + Send,
-		StateChainClient: ExtrinsicApi + EthAssetApi + Send + Sync,
+		StateChainClient: SignedExtrinsicApi + EthAssetApi + Send + Sync,
 	{
 		for event in block.block_items {
 			info!("Handling event: {event}");
@@ -151,7 +151,7 @@ impl EthContractWitnesser for Vault {
 					from: Asset::Eth,
 					to: Asset::try_from(destination_token).map_err(anyhow::Error::msg)?,
 					ingress_amount: amount,
-					egress_address: ForeignChainAddress::from_chain_bytes(
+					egress_address: EncodedAddress::from_chain_bytes(
 						destination_chain.try_into().map_err(anyhow::Error::msg)?,
 						destination_address.0,
 					)
@@ -172,7 +172,7 @@ impl EthContractWitnesser for Vault {
 						.ok_or(anyhow::anyhow!("Unknown ETH token sent from the contract"))?,
 					to: Asset::try_from(destination_token).map_err(anyhow::Error::msg)?,
 					ingress_amount: amount,
-					egress_address: ForeignChainAddress::from_chain_bytes(
+					egress_address: EncodedAddress::from_chain_bytes(
 						destination_chain.try_into().map_err(anyhow::Error::msg)?,
 						destination_address.0,
 					)
@@ -181,7 +181,7 @@ impl EthContractWitnesser for Vault {
 				_ => todo!("handle the rest"),
 			};
 
-			let _result = state_chain_client
+			state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(call.into()),
 					epoch_index: epoch,

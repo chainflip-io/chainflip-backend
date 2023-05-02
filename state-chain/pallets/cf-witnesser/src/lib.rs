@@ -18,8 +18,7 @@ mod tests;
 
 use bitvec::prelude::*;
 use cf_primitives::EpochIndex;
-use cf_traits::EpochInfo;
-use codec::FullCodec;
+use cf_traits::{AccountRoleRegistry, Chainflip, EpochInfo};
 use frame_support::{
 	dispatch::{DispatchResultWithPostInfo, GetDispatchInfo, UnfilteredDispatchable},
 	ensure,
@@ -28,7 +27,6 @@ use frame_support::{
 	traits::EnsureOrigin,
 	Hashable,
 };
-use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::prelude::*;
 use utilities::success_threshold_from_share_count;
 
@@ -45,21 +43,18 @@ pub trait WitnessDataExtraction {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::AccountRoleRegistry;
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	#[pallet::disable_frame_system_supertrait_check]
+	pub trait Config: Chainflip {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// The outer Origin needs to be compatible with this pallet's Origin
 		type RuntimeOrigin: From<RawOrigin>;
-
-		/// For registering and verifying the account role.
-		type AccountRoleRegistry: AccountRoleRegistry<Self>;
 
 		/// The overarching call type.
 		type RuntimeCall: Member
@@ -68,15 +63,6 @@ pub mod pallet {
 			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config>::RuntimeOrigin>
 			+ GetDispatchInfo
 			+ WitnessDataExtraction;
-
-		type ValidatorId: Member
-			+ FullCodec
-			+ From<<Self as frame_system::Config>::AccountId>
-			+ Into<<Self as frame_system::Config>::AccountId>;
-
-		type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId>;
-
-		type Amount: Parameter + Default + Eq + Ord + Copy + AtLeast32BitUnsigned;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -396,8 +382,6 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: pallet::Config> cf_traits::EpochTransitionHandler for Pallet<T> {
-	type ValidatorId = T::ValidatorId;
-
 	/// Add the expired epoch to the queue to have its data culled. This is prevent the storage from
 	/// growing indefinitely.
 	fn on_expired_epoch(expired: EpochIndex) {

@@ -97,6 +97,10 @@ use futures::{
 };
 use tokio::sync::oneshot;
 
+/// This expresses the idea that another task's failure means this task cannot proceed reasonably
+/// and so we must fail too
+pub const OR_CANCEL: &str = "An error has occurred in another task";
+
 /// This function allows a top level task to spawn tasks such that if any tasks panic or error,
 /// all other tasks will be cancelled, and the panic or error will be propagated by this function.
 /// It guarantees all tasks spawned using its scope object will finish before this function exits.

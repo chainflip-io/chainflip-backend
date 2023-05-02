@@ -94,10 +94,6 @@ jobs:
           git diff --exit-code
           git diff --cached --exit-code
 
-      - name: Cancelling entire workflow
-        if: failure()
-        uses: andymckay/cancel-action@0.3
-
   docker:
     needs: [compile]
     if: inputs.network == 'development'
@@ -139,6 +135,7 @@ jobs:
             type=schedule,pattern={{date 'YYYY-MM-DD'}},prefix=nightly-
             type=semver,pattern={{raw}}
             type=raw,value=${{ inputs.commit_hash }}
+            type=raw,value=${{ inputs.network }}
 
       - name: Login to DockerHub
         uses: docker/login-action@v2

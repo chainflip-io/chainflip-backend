@@ -44,6 +44,7 @@ pub trait WeightInfo {
 	fn rotation_phase_keygen(a: u32, ) -> Weight;
 	fn rotation_phase_activating_keys(a: u32, ) -> Weight;
 	fn set_auction_parameters() -> Weight;
+	fn register_as_validator() -> Weight;
 }
 
 /// Weights for pallet_cf_validator using the Substrate node and recommended hardware.
@@ -227,6 +228,12 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
+	fn register_as_validator() -> Weight {
+		// Minimum execution time: 30_000 nanoseconds.
+		Weight::from_ref_time(31_000_000)
+			.saturating_add(T::DbWeight::get().reads(3))
+			.saturating_add(T::DbWeight::get().writes(1))
+	}
 }
 
 // For backwards compatibility and tests
@@ -407,6 +414,12 @@ impl WeightInfo for () {
 		// Minimum execution time: 20_000 nanoseconds.
 		Weight::from_ref_time(21_000_000)
 			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(1))
+	}
+	fn register_as_validator() -> Weight {
+		// Minimum execution time: 30_000 nanoseconds.
+		Weight::from_ref_time(31_000_000)
+			.saturating_add(RocksDbWeight::get().reads(3))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 }
