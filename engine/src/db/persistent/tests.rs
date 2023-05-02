@@ -199,47 +199,6 @@ fn backup_should_fail_if_cant_copy_files() {
 }
 
 #[test]
-fn test_migration_to_v1() {
-	use cf_primitives::AccountId;
-	use multisig::{client::keygen, Rng};
-	use rand_legacy::FromEntropy;
-	use std::collections::BTreeSet;
-
-	let (_dir, db_file) = utilities::testing::new_temp_directory_with_nonexistent_file();
-
-	// create db with version 0
-	let db = PersistentKeyDB::open_and_migrate_to_version(&db_file, None, 0).unwrap();
-
-	let account_ids: BTreeSet<_> = [1, 2, 3].iter().map(|i| AccountId::new([*i; 32])).collect();
-
-	let (public_key_bytes, key_data) =
-		keygen::generate_key_data::<EthSigning>(account_ids, &mut Rng::from_entropy());
-
-	let key_info = key_data.values().next().unwrap();
-
-	// Sanity check: the key should not include the epoch index
-	assert_eq!(public_key_bytes.len(), 33);
-
-	// Insert the key manually, so it matches the way it was done in db version 0:
-	db.kv_db
-		.put_data(keygen_data_prefix::<EthSigning>().as_slice(), &public_key_bytes, key_info)
-		.unwrap();
-
-	// After migration, we should be able to load the key using the new code
-	migrate_0_to_1(&db);
-
-	let keys = db.load_keys::<EthSigning>();
-
-	assert_eq!(keys.len(), 1);
-
-	let (key_id_loaded, key_info_loaded) = keys.into_iter().next().unwrap();
-
-	assert_eq!(key_id_loaded.epoch_index, 0);
-	assert_eq!(key_id_loaded.public_key_bytes, public_key_bytes);
-	assert_eq!(key_info, &key_info_loaded);
-}
-
-#[test]
 fn backup_should_fail_if_already_exists() {
 	let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
 	// Create a normal db

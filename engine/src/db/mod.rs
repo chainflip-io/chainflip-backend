@@ -27,18 +27,7 @@ impl<C: CryptoScheme> KeyStore<C> {
 
 impl<C: CryptoScheme> KeyStoreAPI<C> for KeyStore<C> {
 	fn get_key(&self, key_id: &KeyId) -> Option<KeygenResultInfo<C>> {
-		self.keys
-			.get(key_id)
-			.or_else(|| {
-				// (Temporary) fallback: due to db migration (v0 to v1), some old
-				// keys may incorrectly be stored under epoch 0. Check if this is
-				// one of those keys and return it if so.
-				self.keys.get(&KeyId {
-					epoch_index: 0,
-					public_key_bytes: key_id.public_key_bytes.clone(),
-				})
-			})
-			.cloned()
+		self.keys.get(key_id).cloned()
 	}
 
 	fn set_key(&mut self, key_id: KeyId, key: KeygenResultInfo<C>) {

@@ -8,14 +8,11 @@ use cf_primitives::KeyId;
 use tracing::{debug, info, info_span};
 
 use crate::witnesser::checkpointing::WitnessedUntil;
-use multisig::{
-	client::KeygenResultInfo, eth::EthSigning, polkadot::PolkadotSigning, ChainTag, CryptoScheme,
-	CHAIN_TAG_SIZE,
-};
+use multisig::{client::KeygenResultInfo, ChainTag, CryptoScheme, CHAIN_TAG_SIZE};
 
 use anyhow::{anyhow, bail, Context, Result};
 
-use rocksdb_kv::{KVWriteBatch, RocksDBKeyValueStore, PREFIX_SIZE};
+use rocksdb_kv::{RocksDBKeyValueStore, PREFIX_SIZE};
 
 /// Name of the directory that the backups will go into (only created before migrations)
 const BACKUPS_DIRECTORY: &str = "backups";
@@ -23,7 +20,7 @@ const BACKUPS_DIRECTORY: &str = "backups";
 /// This is the version of the data on this current branch
 /// This version *must* be bumped, and appropriate migrations
 /// written on any changes to the persistent application data format
-const LATEST_SCHEMA_VERSION: u32 = 1;
+const LATEST_SCHEMA_VERSION: u32 = 0;
 
 const PARTIAL_PREFIX_SIZE: usize = PREFIX_SIZE - CHAIN_TAG_SIZE;
 
@@ -245,49 +242,13 @@ fn migrate_db_to_version(
 
 			for version in current_version..target_version {
 				info!("Database is migrating from version {version} to {}", version + 1);
-
-				match version {
-					0 => {
-						migrate_0_to_1(db);
-					},
-					_ => {
-						panic!("Unexpected migration from version {version}");
-					},
-				}
+				// Once we have migrations, we will match on the version here
+				panic!("Unexpected migration from version {version}");
 			}
 
 			Ok(())
 		},
 	}
-}
-
-fn migrate_0_to_1_for_scheme<C: CryptoScheme>(db: &PersistentKeyDB, batch: &mut KVWriteBatch) {
-	for (legacy_key_id, key_info_bytes) in db.kv_db.get_data_for_prefix(&keygen_data_prefix::<C>())
-	{
-		let new_key_id = KeyId { epoch_index: 0, public_key_bytes: legacy_key_id.to_vec() };
-		let key_id_with_prefix =
-			[keygen_data_prefix::<C>().as_slice(), &new_key_id.to_bytes()].concat();
-
-		batch.put_value(&key_id_with_prefix, &key_info_bytes);
-
-		let legacy_key_id_with_prefix =
-			[keygen_data_prefix::<C>().as_slice(), &legacy_key_id].concat();
-
-		batch.delete_value(&legacy_key_id_with_prefix);
-	}
-}
-
-fn migrate_0_to_1(db: &PersistentKeyDB) {
-	let mut batch = db.kv_db.create_batch();
-
-	// Do the migration for every scheme that we supported
-	// until schema version 1:
-	migrate_0_to_1_for_scheme::<EthSigning>(db, &mut batch);
-	migrate_0_to_1_for_scheme::<PolkadotSigning>(db, &mut batch);
-
-	batch.put_metadata(DB_SCHEMA_VERSION_KEY, 1u32.to_be_bytes());
-
-	batch.write().expect("batch write should not fail");
 }
 
 // Creates a backup of the database folder to BACKUPS_DIRECTORY/backup_vx_xx_xx
