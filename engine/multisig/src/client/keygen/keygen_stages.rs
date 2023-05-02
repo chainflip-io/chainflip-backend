@@ -80,7 +80,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 	for PubkeySharesStage0<Crypto>
 {
 	type Message = PubkeyShares0<Crypto::Point>;
-	const NAME: KeygenStageName = KeygenStageName::HashCommitments1;
+	const NAME: KeygenStageName = KeygenStageName::PubkeyShares0;
 
 	fn init(&mut self) -> DataToSend<Self::Message> {
 		let ResharingContext { sharing_participants, party_status, .. } = &self.resharing_context;

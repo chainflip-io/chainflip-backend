@@ -124,6 +124,9 @@ impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
 	/// Returns true if this message should be delayed for the given stage
 	fn should_delay(stage_name: KeygenStageName, message: &Self) -> bool {
 		match stage_name {
+			KeygenStageName::PubkeyShares0 => {
+				matches!(message, KeygenData::HashComm1(_))
+			},
 			KeygenStageName::HashCommitments1 => {
 				matches!(message, KeygenData::VerifyHashComm2(_))
 			},

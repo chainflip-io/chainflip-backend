@@ -54,6 +54,8 @@ rayon = "1.5"
 rand = "0.8.4"
 ed25519-consensus = "2.0"
 tracing = "0.1"
+strum = {default-features = false, version = '0.24'}
+strum_macros = {default-features = false, version = '0.24'}
 
 # Local deps
 cf-chains = { path = "../../state-chain/chains" }
