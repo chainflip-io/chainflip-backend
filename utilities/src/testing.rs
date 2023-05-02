@@ -1,13 +1,18 @@
+use core::time::Duration;
+use futures::{Future, FutureExt};
 use std::{
+	collections::HashMap,
+	fmt::{self},
 	io::Write,
 	path::{Path, PathBuf},
 };
-
-use core::time::Duration;
-use futures::{Future, FutureExt};
 use tempfile::{self, TempDir};
-
 use tokio::sync::mpsc::UnboundedReceiver;
+use tracing::{
+	field::{Field, Visit},
+	Level,
+};
+use tracing_subscriber::Layer;
 
 use crate::assert_ok;
 
@@ -45,9 +50,6 @@ pub async fn expect_recv_with_timeout<Item: std::fmt::Debug>(
 		None => panic!("Timeout waiting for message, expected {}", std::any::type_name::<Item>()),
 	}
 }
-
-use tracing::Level;
-use tracing_subscriber::Layer;
 
 /// Run at the start of a unit test to output all tracing logs in a CLI readable format.
 /// Do not leave this in unit tests or it will panic when running more than one at a time.
@@ -124,12 +126,6 @@ where
 		// TODO: print the current span and any key values attached to it
 	}
 }
-
-use std::{
-	collections::HashMap,
-	fmt::{self},
-};
-use tracing::field::{Field, Visit};
 
 #[derive(Default)]
 struct CustomVisitor {

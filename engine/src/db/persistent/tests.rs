@@ -200,8 +200,8 @@ fn backup_should_fail_if_cant_copy_files() {
 
 #[test]
 fn test_migration_to_v1() {
-	use crate::multisig::{client::keygen, Rng};
 	use cf_primitives::AccountId;
+	use multisig::{client::keygen, Rng};
 	use rand_legacy::FromEntropy;
 	use std::collections::BTreeSet;
 
