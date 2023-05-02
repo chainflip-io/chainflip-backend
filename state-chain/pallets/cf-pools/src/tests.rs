@@ -243,6 +243,7 @@ fn setup_eth_and_dot_pool() {
 fn can_get_swap_rate_into_stable() {
 	new_test_ext().execute_with(|| {
 		setup_eth_and_dot_pool();
+		NetworkFee::set(Permill::zero());
 		let amount = 1_000;
 
 		// Can get swap rate for Eth -> STABLE
@@ -253,7 +254,7 @@ fn can_get_swap_rate_into_stable() {
 		let actual_output = LiquidityPools::swap(Asset::Eth, Asset::Usdc, amount).unwrap();
 
 		assert_eq!(expected_rate, ExchangeRate::saturating_from_rational(actual_output, amount));
-		assert_eq!(expected_output, SwapRateOutput::IntoStable(actual_output));
+		assert_eq!(expected_output, actual_output.into());
 	});
 }
 
@@ -261,6 +262,7 @@ fn can_get_swap_rate_into_stable() {
 fn can_get_swap_rate_from_stable() {
 	new_test_ext().execute_with(|| {
 		setup_eth_and_dot_pool();
+		NetworkFee::set(Permill::zero());
 		let amount = 1_000;
 
 		// Can get swap rate for STABLE -> ETH
@@ -271,7 +273,7 @@ fn can_get_swap_rate_from_stable() {
 		let actual_output = LiquidityPools::swap(Asset::Usdc, Asset::Eth, amount).unwrap();
 
 		assert_eq!(expected_rate, ExchangeRate::saturating_from_rational(actual_output, amount));
-		assert_eq!(expected_output, SwapRateOutput::FromStable(actual_output));
+		assert_eq!(expected_output, actual_output.into());
 	});
 }
 
@@ -279,6 +281,7 @@ fn can_get_swap_rate_from_stable() {
 fn can_get_swap_rate_through_stable() {
 	new_test_ext().execute_with(|| {
 		setup_eth_and_dot_pool();
+		NetworkFee::set(Permill::zero());
 		let amount = 1_000;
 
 		// Can get swap rate for STABLE -> ETH
@@ -289,13 +292,13 @@ fn can_get_swap_rate_through_stable() {
 		let expected_intermediate_amount =
 			LiquidityPools::swap_rate_output_amount(Asset::Eth, Asset::Usdc, amount)
 				.unwrap()
-				.output_amount();
+				.into();
 		let actual_output = LiquidityPools::swap(Asset::Eth, Asset::Dot, amount).unwrap();
 
 		assert_eq!(expected_rate, ExchangeRate::saturating_from_rational(actual_output, amount));
 		assert_eq!(
 			expected_output,
-			SwapRateOutput::ThroughStable(expected_intermediate_amount, actual_output)
+			SwapRateOutput::new(expected_intermediate_amount, actual_output)
 		);
 	});
 }

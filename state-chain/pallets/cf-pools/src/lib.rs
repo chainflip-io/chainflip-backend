@@ -5,10 +5,10 @@ use cf_amm::{
 };
 use cf_primitives::{chains::assets::any, Asset, AssetAmount, ExchangeRate, SwapRateOutput};
 use cf_traits::{Chainflip, LpBalanceApi, SwappingApi};
-use frame_support::{pallet_prelude::*, storage::with_transaction, transactional};
+use frame_support::{pallet_prelude::*, transactional};
 use frame_system::pallet_prelude::OriginFor;
 use sp_arithmetic::traits::Zero;
-use sp_runtime::{FixedPointNumber, Permill, Saturating, TransactionOutcome};
+use sp_runtime::{FixedPointNumber, Permill, Saturating};
 
 pub use pallet::*;
 
@@ -795,7 +795,7 @@ impl<T: Config> Pallet<T> {
 		input_amount: AssetAmount,
 	) -> Result<ExchangeRate, DispatchError> {
 		Ok(ExchangeRate::saturating_from_rational(
-			(Self::swap_rate_output_amount(in_asset, out_asset, input_amount)?).output_amount(),
+			(Self::swap_rate_output_amount(in_asset, out_asset, input_amount)?).output,
 			input_amount,
 		))
 	}
@@ -806,28 +806,33 @@ impl<T: Config> Pallet<T> {
 		to: Asset,
 		amount: AssetAmount,
 	) -> Result<SwapRateOutput, DispatchError> {
-		// Always roll back the storage
-		with_transaction(|| {
-			TransactionOutcome::Rollback(match (from, to) {
-				(input_asset, STABLE_ASSET) =>
-					Self::swap(input_asset, STABLE_ASSET, amount).map(SwapRateOutput::IntoStable),
-				(STABLE_ASSET, output_asset) =>
-					Self::swap(STABLE_ASSET, output_asset, amount).map(SwapRateOutput::FromStable),
-				(input_asset, output_asset) =>
-				// Due to how fees are taken. Dry run <input -> Stable> first, then dry run <intput
-				// -> output>.
-					Self::swap_rate_output_amount(input_asset, STABLE_ASSET, amount).map_or_else(
-						Err,
-						|intermediate_output| {
-							Self::swap(input_asset, output_asset, amount).map(|amount| {
-								SwapRateOutput::ThroughStable(
-									intermediate_output.output_amount(),
-									amount,
-								)
-							})
-						},
-					),
-			})
+		Ok(match (from, to) {
+			(input_asset, STABLE_ASSET) => AssetAmount::try_from(
+				Pools::<T>::get(input_asset)
+					.ok_or(Error::<T>::PoolDoesNotExist)?
+					.pool_state
+					.swap::<cf_amm::common::ZeroToOne>(amount.into(), None)
+					.0,
+			)
+			.map_err(|_| Error::<T>::OutputOverflow)?
+			.into(),
+			(STABLE_ASSET, output_asset) => AssetAmount::try_from(
+				Pools::<T>::get(output_asset)
+					.ok_or(Error::<T>::PoolDoesNotExist)?
+					.pool_state
+					.swap::<cf_amm::common::OneToZero>(amount.into(), None)
+					.0,
+			)
+			.map_err(|_| Error::<T>::OutputOverflow)?
+			.into(),
+			(input_asset, output_asset) => {
+				let intermediary: AssetAmount =
+					Self::swap_rate_output_amount(input_asset, STABLE_ASSET, amount)?.into();
+				SwapRateOutput::new(
+					intermediary,
+					Self::swap_rate_output_amount(STABLE_ASSET, output_asset, intermediary)?.into(),
+				)
+			},
 		})
 	}
 }

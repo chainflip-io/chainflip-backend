@@ -201,19 +201,27 @@ pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
 /// Struct that represents the estimated output of a Swap.
 #[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum SwapRateOutput {
-	FromStable(AssetAmount),
-	IntoStable(AssetAmount),
-	// (intermediary_stable_asset_amount, final_output_amount)
-	ThroughStable(AssetAmount, AssetAmount),
+pub struct SwapRateOutput {
+	// Intermediary amount, if there's any
+	pub intermediary: Option<AssetAmount>,
+	// Final output of the swap
+	pub output: AssetAmount,
 }
 
 impl SwapRateOutput {
-	pub fn output_amount(&self) -> AssetAmount {
-		match self {
-			SwapRateOutput::FromStable(amount) => *amount,
-			SwapRateOutput::IntoStable(amount) => *amount,
-			SwapRateOutput::ThroughStable(_, amount) => *amount,
-		}
+	pub fn new(intermediary: AssetAmount, output: AssetAmount) -> Self {
+		Self { intermediary: Some(intermediary), output }
+	}
+}
+
+impl From<AssetAmount> for SwapRateOutput {
+	fn from(value: AssetAmount) -> Self {
+		Self { intermediary: None, output: value }
+	}
+}
+
+impl From<SwapRateOutput> for AssetAmount {
+	fn from(value: SwapRateOutput) -> Self {
+		value.output
 	}
 }
