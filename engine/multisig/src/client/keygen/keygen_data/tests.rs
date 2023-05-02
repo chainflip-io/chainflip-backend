@@ -19,7 +19,7 @@ use crate::{
 
 pub fn gen_keygen_data_pubkey_shares0(participant_count: AuthorityCount) -> KeygenData<Point> {
 	let mut rng = Rng::from_seed([0; 32]);
-	KeygenData::DummyMessage0(PubkeyShares0(
+	KeygenData::PubkeyShares0(PubkeyShares0(
 		(1..=participant_count)
 			.map(|i| (i as AuthorityCount, Point::random(&mut rng)))
 			.collect(),
