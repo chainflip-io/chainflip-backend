@@ -921,26 +921,29 @@ mod key_handover {
 
 	use super::*;
 
-	#[tokio::test]
-	async fn key_handover() {
+	/// Run key handover (preceded by a keygen) with the provided parameters
+	/// and ensure that it is successful
+	async fn ensure_successful_handover(
+		original_set: BTreeSet<u8>,
+		sharing_subset: BTreeSet<u8>,
+		new_set: BTreeSet<u8>,
+	) {
 		// The high level idea of this test is to generate some key with some
 		// nodes, then introduce new nodes who the key will be handed over to.
-		// There is an overlap between the two sets of nodes, which is going
-		// to be common in practice. The resulting aggregate keys should match.
+		// The resulting aggregate keys should match, and the new nodes should
+		// be able to sign with their newly generated shares.
 
 		type Scheme = BtcSigning;
 		type Point = <Scheme as CryptoScheme>::Point;
 		type Scalar = <Point as ECPoint>::Scalar;
 
-		let all_account_ids: Vec<AccountId> =
-			[1, 2, 3, 4, 5].iter().map(|i| AccountId::new([*i; 32])).collect();
+		assert!(sharing_subset.is_subset(&original_set));
 
-		// Accounts (1), (2) and (3) will hold the original key
-		let original_set: BTreeSet<_> = all_account_ids.iter().take(3).cloned().collect();
-
-		// Accounts (3), (4) and (5) will receive the key as the result of this ceremony.
-		// (Note that (3) appears in both sets.)
-		let new_set: BTreeSet<_> = all_account_ids.iter().skip(2).take(3).cloned().collect();
+		let original_set: BTreeSet<_> =
+			original_set.iter().map(|i| AccountId::new([*i; 32])).collect();
+		let sharing_subset: BTreeSet<_> =
+			sharing_subset.iter().map(|i| AccountId::new([*i; 32])).collect();
+		let new_set: BTreeSet<_> = new_set.iter().map(|i| AccountId::new([*i; 32])).collect();
 
 		// Perform a regular keygen to generate initial keys:
 		let (initial_key, mut key_infos) = keygen::generate_key_data::<Scheme>(
@@ -948,21 +951,17 @@ mod key_handover {
 			&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
 		);
 
-		// Only 2 and 3 will contribute their secret shares
-		let sharing_participants: BTreeSet<AccountId> =
-			original_set.clone().into_iter().skip(1).collect();
-
 		// Sanity check: we have (just) enough participants to re-share the key
 		assert_eq!(
 			key_infos.values().next().as_ref().unwrap().params.threshold + 1,
-			sharing_participants.len() as u32
+			sharing_subset.len() as u32
 		);
 
 		let receiving_participants: BTreeSet<AccountId> = new_set.clone().into_iter().collect();
 		// Accounts (2), (3), (4) and (5) will participate, with (2) and (3)
 		// re-sharing their key to (3), (4) and (5)
 		let all_participants: BTreeSet<_> =
-			sharing_participants.union(&receiving_participants).cloned().collect();
+			sharing_subset.union(&receiving_participants).cloned().collect();
 
 		let mut ceremony = KeygenCeremonyRunner::<Scheme>::new(
 			new_nodes(all_participants),
@@ -974,16 +973,11 @@ mod key_handover {
 
 		for (id, node) in &mut ceremony.nodes {
 			// Give the right context type depending on whether they have keys
-			let context = if sharing_participants.contains(id) {
+			let context = if sharing_subset.contains(id) {
 				let key_info = key_infos.remove(id).unwrap();
-				ResharingContext::from_key(
-					&key_info,
-					id,
-					&sharing_participants,
-					&receiving_participants,
-				)
+				ResharingContext::from_key(&key_info, id, &sharing_subset, &receiving_participants)
 			} else {
-				ResharingContext::without_key(&sharing_participants, &receiving_participants)
+				ResharingContext::without_key(&sharing_subset, &receiving_participants)
 			};
 			node.request_key_handover(ceremony_details.clone(), context).await;
 		}
@@ -1015,6 +1009,26 @@ mod key_handover {
 			Rng::from_entropy(),
 		);
 		standard_signing(&mut signing_ceremony).await;
+	}
+
+	#[tokio::test]
+	async fn with_sets_of_nodes_overlapping() {
+		// In practice it is going to be common to have an overlap between
+		// sharing and receiving participants
+
+		// These parties will hold the original key
+		let original_set: BTreeSet<_> = [1, 2, 3].into_iter().collect();
+
+		// A subset of them will contribute their secret shares
+		let sharing_subset: BTreeSet<_> = [2, 3].into_iter().collect();
+
+		// These parties will receive the key as the result of key handover.
+		// (Note that (3) appears in both sets.)
+		let new_set: BTreeSet<_> = [3, 4, 5].into_iter().collect();
+
+		assert!(!original_set.is_disjoint(&new_set));
+
+		ensure_successful_handover(original_set, sharing_subset, new_set).await;
 	}
 
 	// Test that a party who doesn't perform re-sharing correctly
