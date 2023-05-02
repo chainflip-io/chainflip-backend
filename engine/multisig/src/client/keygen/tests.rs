@@ -1012,6 +1012,25 @@ mod key_handover {
 	}
 
 	#[tokio::test]
+	async fn with_disjoint_sets_of_nodes() {
+		// Test that key handover can be performed even if there no overlap
+		// between sharing (old) and receiving (new) validators.
+
+		// These parties will hold the original key
+		let original_set: BTreeSet<_> = [1, 2, 3].into_iter().collect();
+
+		// A subset of them will contribute their secret shares
+		let sharing_subset: BTreeSet<_> = [2, 3].into_iter().collect();
+
+		// These parties will receive the key as the result of key handover.
+		let new_set: BTreeSet<_> = [4, 5, 6].into_iter().collect();
+
+		assert!(original_set.is_disjoint(&new_set));
+
+		ensure_successful_handover(original_set, sharing_subset, new_set).await;
+	}
+
+	#[tokio::test]
 	async fn with_sets_of_nodes_overlapping() {
 		// In practice it is going to be common to have an overlap between
 		// sharing and receiving participants
