@@ -562,8 +562,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			egress_params,
 		) {
 			Ok(egress_transaction) => {
-				let (broadcast_id, _) =
-					T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
+				let (broadcast_id, _) = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
+					egress_transaction,
+					Call::finalise_ingress { addresses }.into(),
+				);
 				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
 					broadcast_id,
 					egress_ids,
