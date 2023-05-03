@@ -580,6 +580,7 @@ impl BitcoinTransaction {
 		);
 
 		let mut old_utxo_input_indices = self.old_utxo_input_indices.clone();
+		old_utxo_input_indices.reverse();
 		(0u32..)
 			.zip(&self.inputs)
 			.map(|(input_index, input)| {
@@ -947,7 +948,6 @@ mod test {
 			BitcoinNetwork::Mainnet,
 		)
 		.unwrap();
-		assert_eq!(script_pubkey.data[2..], pubkey_x);
 		let input = Utxo {
 			amount: 100010000,
 			vout: 1,
@@ -987,7 +987,8 @@ mod test {
 				hex_literal::hex!(
 					"E16117C6CD69142E41736CE2882F0E697FF4369A2CBCEE9D92FC0346C6774FB4"
 				)
-			)]
+			)],
+			"Failed signing with {sign_with:?}",
 		);
 	}
 

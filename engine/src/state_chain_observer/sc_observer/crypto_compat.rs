@@ -20,7 +20,7 @@ impl CryptoCompat<BtcSigning, cf_chains::Bitcoin> for BitcoinInstance {
 	fn pubkey_to_aggkey(
 		pubkey: <BtcSigning as CryptoScheme>::PublicKey,
 	) -> <cf_chains::Bitcoin as ChainCrypto>::AggKey {
-		cf_chains::btc::AggKey { pubkey_x: pubkey.serialize() }
+		cf_chains::btc::AggKey { previous: None, current: pubkey.serialize() }
 	}
 }
 

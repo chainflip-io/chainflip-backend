@@ -1476,8 +1476,8 @@ where
 		.expect_initiate_signing()
 		.with(
 			predicate::eq(next_ceremony_id),
-			predicate::eq(key_id.clone()),
 			predicate::eq(BTreeSet::from_iter([our_account_id.clone()])),
+			predicate::eq(vec![key_id.clone()]),
 			predicate::eq(vec![payload.clone()]),
 		)
 		.once()
@@ -1497,7 +1497,7 @@ where
 				&multisig_client,
 				state_chain_client.clone(),
 				first_ceremony_id,
-				key_id.clone(),
+				vec![key_id.clone()],
 				BTreeSet::from_iter([not_our_account_id.clone()]),
 				vec![payload.clone()],
 			)
@@ -1509,7 +1509,7 @@ where
 				&multisig_client,
 				state_chain_client.clone(),
 				next_ceremony_id,
-				key_id,
+				vec![key_id],
 				BTreeSet::from_iter([our_account_id]),
 				vec![payload],
 			)

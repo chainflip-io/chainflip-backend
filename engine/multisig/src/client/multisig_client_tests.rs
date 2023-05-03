@@ -39,6 +39,7 @@ async fn should_ignore_rts_for_unknown_key() {
 		DEFAULT_SIGNING_CEREMONY_ID,
 		KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: Vec::from([0u8; 32]) },
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
+		vec![key_id],
 		vec![EthSigning::signing_payload_for_test()],
 	);
 

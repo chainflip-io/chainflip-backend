@@ -47,7 +47,7 @@ async fn run_on_request_to_sign<C: CryptoScheme>(
 				ceremony_id,
 				participants,
 				vec![C::signing_payload_for_test()],
-				get_key_data_for_test::<C>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned())),
+				vec![get_key_data_for_test::<C>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()))],
 				Rng::from_seed(DEFAULT_SIGNING_SEED),
 				result_sender,
 				scope,
@@ -88,10 +88,10 @@ fn send_signing_request(
 		ceremony_id,
 		details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails::<EthSigning> {
 			participants,
-			payload: vec![EthSigning::signing_payload_for_test()],
-			keygen_result_info: get_key_data_for_test::<EthSigning>(BTreeSet::from_iter(
+			payloads: vec![EthSigning::signing_payload_for_test()],
+			keygen_result_infos: vec![get_key_data_for_test::<EthSigning>(BTreeSet::from_iter(
 				ACCOUNT_IDS.iter().cloned(),
-			)),
+			))],
 			rng: Rng::from_seed(DEFAULT_SIGNING_SEED),
 			result_sender,
 		})),

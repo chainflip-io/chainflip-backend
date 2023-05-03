@@ -366,8 +366,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 				self.on_request_to_sign(
 					request.ceremony_id,
 					details.participants,
-					details.payload,
-					details.keygen_result_info,
+					details.payloads,
+					details.keygen_result_infos,
 					details.rng,
 					details.result_sender,
 					scope,
@@ -483,7 +483,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		ceremony_id: CeremonyId,
 		signers: BTreeSet<AccountId>,
 		payloads: Vec<C::SigningPayload>,
-		key_info: KeygenResultInfo<C>,
+		key_infos: Vec<KeygenResultInfo<C>>,
 		rng: Rng,
 		result_sender: CeremonyResultSender<SigningCeremony<C>>,
 		scope: &Scope<'_, anyhow::Error>,
@@ -497,8 +497,11 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 		// TODO: single party signing should support multiple payloads
 		if signers.len() == 1 {
-			let _result =
-				result_sender.send(Ok(self.single_party_signing(payloads, key_info, rng)));
+			let _result = result_sender.send(Ok(self.single_party_signing(
+				payloads,
+				key_infos[0].clone(),
+				rng,
+			)));
 			return
 		}
 
@@ -506,7 +509,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 			ceremony_id,
 			&self.my_account_id,
 			signers,
-			vec![key_info],
+			key_infos,
 			payloads,
 			&self.outgoing_p2p_message_sender,
 			rng,
