@@ -41,41 +41,9 @@ mod tests {
 	use super::*;
 	use crate::db::PersistentKeyDB;
 	use cf_primitives::AccountId;
-	use multisig::{
-		client::{keygen, keygen::generate_key_data},
-		eth::EthSigning,
-		Rng,
-	};
+	use multisig::{client::keygen, eth::EthSigning, Rng};
 	use rand_legacy::FromEntropy;
 	use std::collections::BTreeSet;
-
-	#[test]
-	fn should_return_key_due_to_fallback() {
-		let account_ids: BTreeSet<_> = [1, 2, 3].iter().map(|i| AccountId::new([*i; 32])).collect();
-
-		// Create a database just so we can pass it to the key store
-		let (_dir, db_file) = utilities::testing::new_temp_directory_with_nonexistent_file();
-		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_file, None).unwrap();
-
-		let mut key_store = KeyStore::<EthSigning>::new(Arc::new(db));
-
-		// Generate a key and save it under epoch 0 (which is what migration
-		// code does for old keys)
-
-		let (key_bytes, key_data) = generate_key_data::<EthSigning>(
-			account_ids.iter().cloned().collect(),
-			&mut Rng::from_entropy(),
-		);
-
-		let key_id = KeyId { epoch_index: 0, public_key_bytes: key_bytes };
-
-		let key_info = key_data.values().next().unwrap().clone();
-
-		key_store.set_key(key_id.clone(), key_info.clone());
-
-		// Check that we are able to retrieve it using the "correct" epoch
-		assert_eq!(key_store.get_key(&KeyId { epoch_index: 10, ..key_id }), Some(key_info));
-	}
 
 	// The `new` function of the keystore should load all keys from the db.
 	// This test also covers that the `set_key` function saves the key to the db and not just the
