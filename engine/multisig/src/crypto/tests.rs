@@ -22,7 +22,7 @@ fn test_signing_for_scheme<C: CryptoScheme>() {
 			KeygenResult::new_compatible(my_key_share, vec![public_key]);
 		let secret_key = my_keygen_result.key_share.x_i.clone();
 
-		let agg_key = my_keygen_result.agg_key();
+		let agg_key = my_keygen_result.get_agg_public_key();
 
 		let payload = C::signing_payload_for_test();
 
@@ -30,7 +30,7 @@ fn test_signing_for_scheme<C: CryptoScheme>() {
 
 		// Verification is typically delegated to third-party libraries whose
 		// behaviour we are attempting to replicate with FROST.
-		assert!(C::verify_signature(&signature, &agg_key.into(), &payload).is_ok());
+		assert!(C::verify_signature(&signature, &agg_key, &payload).is_ok());
 	}
 }
 

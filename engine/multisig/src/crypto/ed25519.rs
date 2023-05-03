@@ -1,5 +1,4 @@
-use super::{curve25519::edwards::Point, ChainTag, CryptoScheme, ECPoint};
-use cf_primitives::PublicKeyBytes;
+use super::{curve25519::edwards::Point, CanonicalEncoding, ChainTag, CryptoScheme, ECPoint};
 use ed25519_consensus::VerificationKeyBytes;
 use serde::{Deserialize, Serialize};
 
@@ -21,12 +20,9 @@ impl Signature {
 	}
 }
 
-#[derive(Clone)]
-pub struct AggKey(VerificationKeyBytes);
-
-impl From<AggKey> for PublicKeyBytes {
-	fn from(agg_key: AggKey) -> Self {
-		agg_key.0.to_bytes().to_vec()
+impl CanonicalEncoding for VerificationKeyBytes {
+	fn encode_key(&self) -> Vec<u8> {
+		self.to_bytes().to_vec()
 	}
 }
 
@@ -50,11 +46,12 @@ impl CryptoScheme for Ed25519Signing {
 
 	type Signature = Signature;
 
-	type AggKey = AggKey;
+	type PublicKey = VerificationKeyBytes;
 
 	type SigningPayload = SigningPayload;
 
-	type Chain = cf_chains::AnyChain;
+	// This scheme isn't implemented on the state chain.
+	type Chain = cf_chains::none::NoneChain;
 
 	const NAME: &'static str = "Ed25519";
 
@@ -112,28 +109,20 @@ impl CryptoScheme for Ed25519Signing {
 
 	fn verify_signature(
 		signature: &Self::Signature,
-		public_key_bytes: &PublicKeyBytes,
+		public_key: &Self::PublicKey,
 		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()> {
-		use anyhow::anyhow;
 		use ed25519_consensus::VerificationKey;
-
-		let key_bytes: [u8; 32] = public_key_bytes
-			.clone()
-			.try_into()
-			.map_err(|_| anyhow!("Invalid Key length: {}", public_key_bytes.len()))?;
-
-		let key = VerificationKey::try_from(key_bytes)
-			.map_err(|_| anyhow::anyhow!("Invalid key encoding"))?;
 
 		let signature = ed25519_consensus::Signature::from(signature.to_bytes());
 
-		key.verify(&signature, &payload.0).map_err(|_| anyhow!("Invalid signature"))
+		Ok(VerificationKey::try_from(*public_key)
+			.and_then(|vk| vk.verify(&signature, &payload.0))?)
 	}
 
-	fn agg_key(pubkey: &Self::Point) -> Self::AggKey {
-		let bytes: [u8; 32] = pubkey.as_bytes().into();
-		AggKey(VerificationKeyBytes::from(bytes))
+	fn pubkey_from_point(pubkey_point: &Self::Point) -> Self::PublicKey {
+		let bytes: [u8; 32] = pubkey_point.as_bytes().into();
+		VerificationKeyBytes::from(bytes)
 	}
 
 	#[cfg(feature = "test")]

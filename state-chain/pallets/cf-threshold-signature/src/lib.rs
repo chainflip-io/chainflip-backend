@@ -17,7 +17,9 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
 use cf_chains::ChainCrypto;
-use cf_primitives::{AuthorityCount, CeremonyId, KeyId, ThresholdSignatureRequestId as RequestId};
+use cf_primitives::{
+	AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId as RequestId,
+};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, CeremonyIdProvider, Chainflip, EpochInfo,
 	EpochKey, KeyProvider, ThresholdSignerNomination,
@@ -53,14 +55,14 @@ pub enum PalletOffence {
 }
 
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum RequestType<Participants> {
+pub enum RequestType<Key, Participants> {
 	/// Will use the current key and current authority set.
 	/// This signing request will be retried until success.
 	Standard,
 	/// Uses the recently generated key and the participants used to generate that key.
 	/// This signing request will only be attemped once, as failing this ought to result
 	/// in another Keygen ceremony.
-	KeygenVerification { key_id: KeyId, participants: Participants },
+	KeygenVerification { key: Key, epoch_index: EpochIndex, participants: Participants },
 }
 
 /// The type of a threshold *Ceremony* i.e. after a request has been emitted, it is then a ceremony.
@@ -97,7 +99,7 @@ pub mod pallet {
 		/// The total number of signing participants (ie. the threshold set size).
 		pub participant_count: AuthorityCount,
 		/// The key id being used for verification of this ceremony.
-		pub key_id: KeyId,
+		pub key_id: (EpochIndex, <T::TargetChain as ChainCrypto>::AggKey),
 		/// Determines how/if we deal with ceremony failure.
 		pub threshold_ceremony_type: ThresholdCeremonyType,
 	}
@@ -118,7 +120,8 @@ pub mod pallet {
 	#[scale_info(skip_type_params(T, I))]
 	pub struct RequestInstruction<T: Config<I>, I: 'static> {
 		pub request_context: RequestContext<T, I>,
-		pub request_type: RequestType<BTreeSet<T::ValidatorId>>,
+		pub request_type:
+			RequestType<<T::TargetChain as ChainCrypto>::AggKey, BTreeSet<T::ValidatorId>>,
 	}
 
 	impl<T: Config<I>, I: 'static> RequestInstruction<T, I> {
@@ -126,7 +129,10 @@ pub mod pallet {
 			request_id: RequestId,
 			attempt_count: AttemptCount,
 			payload: PayloadFor<T, I>,
-			request_type: RequestType<BTreeSet<T::ValidatorId>>,
+			request_type: RequestType<
+				<T::TargetChain as ChainCrypto>::AggKey,
+				BTreeSet<T::ValidatorId>,
+			>,
 		) -> Self {
 			Self {
 				request_context: RequestContext { request_id, attempt_count, payload },
@@ -318,14 +324,13 @@ pub mod pallet {
 		ThresholdSignatureRequest {
 			request_id: RequestId,
 			ceremony_id: CeremonyId,
-			key_id: KeyId,
+			key_id: (EpochIndex, <T::TargetChain as ChainCrypto>::AggKey),
 			signatories: BTreeSet<T::ValidatorId>,
 			payload: PayloadFor<T, I>,
 		},
 		ThresholdSignatureFailed {
 			request_id: RequestId,
 			ceremony_id: CeremonyId,
-			key_id: KeyId,
 			offenders: Vec<T::ValidatorId>,
 		},
 		/// The threshold signature posted back to the chain was verified.
@@ -396,7 +401,6 @@ pub mod pallet {
 					num_retries += 1;
 					let CeremonyContext {
 						request_context: RequestContext { request_id, attempt_count, payload },
-						key_id,
 						threshold_ceremony_type,
 						..
 					} = failed_ceremony_context;
@@ -425,7 +429,6 @@ pub mod pallet {
 							Event::<T, I>::ThresholdSignatureFailed {
 								request_id,
 								ceremony_id,
-								key_id,
 								offenders,
 							}
 						},
@@ -469,10 +472,8 @@ pub mod pallet {
 
 		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
 			if let Call::<T, I>::signature_success { ceremony_id, signature } = call {
-				let CeremonyContext { key_id, request_context, .. } =
+				let CeremonyContext { key_id: (_, key), request_context, .. } =
 					PendingCeremonies::<T, I>::get(ceremony_id).ok_or(InvalidTransaction::Stale)?;
-
-				let key = key_id.try_into().map_err(|_| InvalidTransaction::BadProof)?;
 
 				if <T::TargetChain as ChainCrypto>::verify_threshold_signature(
 					&key,
@@ -624,7 +625,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	/// Initiate a new signature request, returning the request id.
 	fn inner_request_signature(
 		payload: PayloadFor<T, I>,
-		request_type: RequestType<BTreeSet<T::ValidatorId>>,
+		request_type: RequestType<
+			<T::TargetChain as ChainCrypto>::AggKey,
+			BTreeSet<T::ValidatorId>,
+		>,
 	) -> RequestId {
 		let request_id = ThresholdSignatureRequestIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
@@ -647,12 +651,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let attempt_count = request_instruction.request_context.attempt_count;
 		let payload = request_instruction.request_context.payload.clone();
 
-		let (maybe_key_id_participants, ceremony_type) =
-			if let RequestType::KeygenVerification { ref key_id, ref participants } =
+		let (maybe_key_id_and_participants, ceremony_type) =
+			if let RequestType::KeygenVerification { epoch_index, key, ref participants } =
 				request_instruction.request_type
 			{
 				(
-					Ok((key_id.clone(), participants.clone())),
+					Ok(((epoch_index, key), participants.clone())),
 					ThresholdCeremonyType::KeygenVerification,
 				)
 			} else {
@@ -668,7 +672,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 								(request_id, attempt_count),
 								epoch_index,
 							) {
-							Ok((T::TargetChain::agg_key_to_key_id(key, epoch_index), nominees))
+							Ok(((epoch_index, key), nominees))
 						} else {
 							Err(Event::<T, I>::SignersUnavailable { request_id, attempt_count })
 						}
@@ -679,7 +683,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				)
 			};
 
-		Self::deposit_event(match maybe_key_id_participants {
+		Self::deposit_event(match maybe_key_id_and_participants {
 			Ok((key_id, participants)) => {
 				let ceremony_id = T::CeremonyIdProvider::increment_ceremony_id();
 				PendingCeremonies::<T, I>::insert(ceremony_id, {
@@ -692,7 +696,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							payload: payload.clone(),
 						},
 						threshold_ceremony_type: ceremony_type,
-						key_id: key_id.clone(),
+						key_id,
 						blame_counts: BTreeMap::new(),
 						participant_count: remaining_respondents.len() as AuthorityCount,
 						remaining_respondents,
@@ -795,12 +799,13 @@ where
 
 	fn request_keygen_verification_signature(
 		payload: <T::TargetChain as ChainCrypto>::Payload,
-		key_id: KeyId,
 		participants: BTreeSet<Self::ValidatorId>,
+		key: <T::TargetChain as ChainCrypto>::AggKey,
+		epoch_index: EpochIndex,
 	) -> RequestId {
 		Self::inner_request_signature(
 			payload,
-			RequestType::KeygenVerification { key_id, participants },
+			RequestType::KeygenVerification { key, participants, epoch_index },
 		)
 	}
 

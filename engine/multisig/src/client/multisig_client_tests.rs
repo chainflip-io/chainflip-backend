@@ -8,14 +8,14 @@ use crate::{
 		helpers::{
 			new_nodes, ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_SIGNING_CEREMONY_ID,
 		},
-		CeremonyRequestDetails,
+		CeremonyRequestDetails, KeyId,
 	},
 	eth::EthSigning,
 };
 use mockall::predicate;
 
 use crate::client::key_store_api::MockKeyStoreAPI;
-use cf_primitives::{KeyId, GENESIS_EPOCH};
+use cf_primitives::GENESIS_EPOCH;
 use client::MultisigClient;
 use utilities::{assert_err, assert_ok, testing::assert_future_can_complete};
 
@@ -51,10 +51,10 @@ async fn should_ignore_rts_for_unknown_key() {
 #[tokio::test]
 async fn should_save_key_after_keygen() {
 	// Generate a key to use in this test
-	let (public_key_bytes, keygen_result_info) = {
-		let (public_key_bytes, key_data) =
+	let (public_key, keygen_result_info) = {
+		let (public_key, key_data) =
 			helpers::run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
-		(public_key_bytes, key_data.into_iter().next().unwrap().1)
+		(public_key, key_data.into_iter().next().unwrap().1)
 	};
 
 	// Make sure that the `set_key` function is called once with correct key data
@@ -62,7 +62,10 @@ async fn should_save_key_after_keygen() {
 	mock_key_store
 		.expect_set_key()
 		.with(
-			predicate::eq(KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes }),
+			predicate::eq(KeyId {
+				epoch_index: GENESIS_EPOCH,
+				public_key_bytes: public_key.encode_key(),
+			}),
 			predicate::eq(keygen_result_info.clone()),
 		)
 		.once()

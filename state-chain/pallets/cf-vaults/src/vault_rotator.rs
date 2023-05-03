@@ -1,5 +1,5 @@
 use super::*;
-
+use cf_traits::EpochInfo;
 use sp_runtime::traits::BlockNumberProvider;
 
 impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
@@ -8,7 +8,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	/// # Panics
 	/// - If an empty BTreeSet of candidates is provided
 	/// - If a vault rotation outcome is already Pending (i.e. there's one already in progress)
-	fn keygen(candidates: BTreeSet<Self::ValidatorId>, epoch_index: EpochIndex) {
+	fn keygen(candidates: BTreeSet<Self::ValidatorId>) {
 		assert!(!candidates.is_empty());
 
 		assert_ne!(Self::status(), AsyncResult::Pending);
@@ -18,7 +18,6 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::AwaitingKeygen {
 			keygen_ceremony_id: ceremony_id,
 			keygen_participants: candidates.clone(),
-			epoch_index,
 			response_status: KeygenResponseStatus::new(candidates.clone()),
 		});
 
@@ -29,7 +28,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		Pallet::<T, I>::deposit_event(Event::KeygenRequest {
 			ceremony_id,
 			participants: candidates,
-			epoch_index,
+			epoch_index: <T as Chainflip>::EpochInfo::epoch_index() + 1,
 		});
 	}
 
@@ -110,7 +109,6 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
 					keygen_ceremony_id: Default::default(),
 					keygen_participants: Default::default(),
-					epoch_index: GENESIS_EPOCH,
 					response_status: KeygenResponseStatus::new(Default::default()),
 				});
 			},

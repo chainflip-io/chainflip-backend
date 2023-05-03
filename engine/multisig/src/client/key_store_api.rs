@@ -1,8 +1,5 @@
-use cf_primitives::KeyId;
-
-use crate::crypto::CryptoScheme;
-
 use super::KeygenResultInfo;
+use crate::crypto::{CryptoScheme, KeyId};
 
 #[cfg(test)]
 use mockall::automock;

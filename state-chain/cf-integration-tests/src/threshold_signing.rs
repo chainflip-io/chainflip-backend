@@ -4,7 +4,7 @@ use cf_chains::{
 	dot::{PolkadotPublicKey, PolkadotSignature},
 	eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents},
 };
-use cf_primitives::{EpochIndex, KeyId, GENESIS_EPOCH};
+use cf_primitives::{EpochIndex, GENESIS_EPOCH};
 use libsecp256k1::{PublicKey, SecretKey};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use sp_core::{
@@ -31,8 +31,6 @@ pub trait KeyUtils {
 
 	fn sign(&self, message: &[u8]) -> Self::SigVerification;
 
-	fn key_id(&self) -> KeyId;
-
 	fn generate(seed: u64, epoch_index: EpochIndex) -> Self;
 
 	fn generate_next(&self) -> Self;
@@ -55,13 +53,6 @@ impl KeyUtils for EthKeyComponents {
 
 		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k));
 		SchnorrVerificationComponents { s: signature, k_times_g_address }
-	}
-
-	fn key_id(&self) -> KeyId {
-		KeyId {
-			epoch_index: self.epoch_index,
-			public_key_bytes: self.agg_key.to_pubkey_compressed().to_vec(),
-		}
 	}
 
 	fn generate(seed: u64, epoch_index: EpochIndex) -> Self {
@@ -92,17 +83,17 @@ pub struct ThresholdSigner<KeyComponents, SigVerification> {
 	_phantom: PhantomData<SigVerification>,
 }
 
-impl<KeyComponents, SigVerification, AggKey> ThresholdSigner<KeyComponents, SigVerification>
+impl<KeyComponents, SigVerification, AggKey: Eq> ThresholdSigner<KeyComponents, SigVerification>
 where
 	KeyComponents: KeyUtils<SigVerification = SigVerification, AggKey = AggKey> + Clone,
 {
-	pub fn sign_with_key(&self, key_id: KeyId, message: &[u8]) -> SigVerification {
-		let curr_key_id = self.key_components.key_id();
-		if key_id == curr_key_id {
+	pub fn sign_with_key(&self, key: AggKey, message: &[u8]) -> SigVerification {
+		let curr_key = self.key_components.agg_key();
+		if key == curr_key {
 			return self.key_components.sign(message)
 		}
-		let next_key_id = self.proposed_key_components.as_ref().unwrap().key_id();
-		if key_id == next_key_id {
+		let next_key = self.proposed_key_components.as_ref().unwrap().agg_key();
+		if key == next_key {
 			self.proposed_key_components.as_ref().unwrap().sign(message)
 		} else {
 			panic!("Unknown key");
@@ -168,10 +159,6 @@ impl KeyUtils for DotKeyComponents {
 		self.secret.sign(message)
 	}
 
-	fn key_id(&self) -> KeyId {
-		KeyId { epoch_index: self.epoch_index, public_key_bytes: self.agg_key().0.to_vec() }
-	}
-
 	fn generate(seed: u64, epoch_index: EpochIndex) -> Self {
 		let priv_seed: [u8; 32] = StdRng::seed_from_u64(seed).gen();
 		let keypair: Pair = <Pair as TraitPair>::from_seed(&priv_seed);
@@ -213,13 +200,6 @@ impl KeyUtils for BtcKeyComponents {
 		let signature =
 			secp.schnorrsig_sign(&secp256k1::Message::from_slice(message).unwrap(), &self.secret);
 		*array_ref!(signature[..], 0, 64)
-	}
-
-	fn key_id(&self) -> KeyId {
-		<cf_chains::Bitcoin as cf_chains::ChainCrypto>::agg_key_to_key_id(
-			self.agg_key,
-			self.epoch_index,
-		)
 	}
 
 	fn generate(seed: u64, epoch_index: EpochIndex) -> Self {

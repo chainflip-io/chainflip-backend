@@ -6,7 +6,7 @@ use std::{
 };
 
 use anyhow::Result;
-use cf_primitives::{AuthorityCount, CeremonyId, PublicKeyBytes};
+use cf_primitives::{AuthorityCount, CeremonyId};
 use futures::{stream, StreamExt};
 use itertools::{Either, Itertools};
 
@@ -603,19 +603,19 @@ pub type KeygenCeremonyRunner<C> = CeremonyTestRunner<(), KeygenCeremony<C>>;
 impl<C: CryptoScheme> CeremonyRunnerStrategy for KeygenCeremonyRunner<C> {
 	type CeremonyType = KeygenCeremony<C>;
 	type CheckedOutput =
-		(PublicKeyBytes, HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>);
+		(C::PublicKey, HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>);
 	type InitialStageData = keygen::HashComm1;
 
 	fn post_successful_complete_check(
 		&self,
 		outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
 	) -> Self::CheckedOutput {
-		let (_, public_key) = all_same(outputs.values().map(|keygen_result_info| {
-			(keygen_result_info.params, keygen_result_info.key.get_agg_public_key())
+		let (_, public_key_point) = all_same(outputs.values().map(|keygen_result_info| {
+			(keygen_result_info.params, keygen_result_info.key.get_agg_public_key_point())
 		}))
 		.expect("Generated keys don't match");
 
-		(C::agg_key(&public_key).into(), outputs)
+		(C::pubkey_from_point(&public_key_point), outputs)
 	}
 
 	async fn request_ceremony(&mut self, node_id: &AccountId) {
@@ -659,17 +659,17 @@ impl<C: CryptoScheme> KeygenCeremonyRunner<C> {
 
 pub struct PayloadAndKeyData<C: CryptoScheme> {
 	payload: C::SigningPayload,
-	public_key_bytes: PublicKeyBytes,
+	public_key: C::PublicKey,
 	key_data: HashMap<AccountId, KeygenResultInfo<C>>,
 }
 
 impl<C: CryptoScheme> PayloadAndKeyData<C> {
 	pub fn new(
 		payload: C::SigningPayload,
-		public_key_bytes: PublicKeyBytes,
+		public_key: C::PublicKey,
 		key_data: HashMap<AccountId, KeygenResultInfo<C>>,
 	) -> Self {
-		PayloadAndKeyData { payload, public_key_bytes, key_data }
+		PayloadAndKeyData { payload, public_key, key_data }
 	}
 }
 
@@ -696,7 +696,7 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for SigningCeremonyRunner<C> {
 		// TODO: use batch verification here?
 		for (i, signature) in signatures.iter().enumerate() {
 			let data = &self.ceremony_runner_data.data[i];
-			C::verify_signature(signature, &data.public_key_bytes, &data.payload)
+			C::verify_signature(signature, &data.public_key, &data.payload)
 				.expect("Should be valid signature");
 		}
 
@@ -799,7 +799,7 @@ pub async fn standard_signing<C: CryptoScheme>(
 pub async fn run_keygen(
 	nodes: HashMap<AccountId, Node<KeygenCeremonyEth>>,
 	ceremony_id: CeremonyId,
-) -> (PublicKeyBytes, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
+) -> (<EthSigning as CryptoScheme>::PublicKey, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
 	let mut keygen_ceremony = KeygenCeremonyRunner::<EthSigning>::new(
 		nodes,
 		ceremony_id,

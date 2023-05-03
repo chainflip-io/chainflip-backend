@@ -99,12 +99,12 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
 
 async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayload]) {
 	let mut rng = Rng::from_seed([0; 32]);
-	let (key_id, key_data) =
+	let (key, key_data) =
 		generate_key_data::<C>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()), &mut rng);
 
 	let payloads_and_key = payloads
 		.iter()
-		.map(|payload| PayloadAndKeyData::new(payload.clone(), key_id.clone(), key_data.clone()))
+		.map(|payload| PayloadAndKeyData::new(payload.clone(), key.clone(), key_data.clone()))
 		.collect();
 
 	let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
@@ -129,7 +129,7 @@ async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayl
 		.into_iter()
 		.next()
 		.expect("should have exactly one signature");
-	assert!(C::verify_signature(&signature, &key_id, &payloads[0]).is_ok());
+	assert!(C::verify_signature(&signature, &key, &payloads[0]).is_ok());
 }
 
 #[ignore = "Only works if V2 is enabled (by setting CURRENT_PROTOCOL_VERSION = 2)"]
@@ -166,7 +166,7 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 	for i in 0..10 {
 		let key_seed = [i; 32];
 		let nonce_seed = [11 * i; 32];
-		let (key_id, key_data) = generate_key_data::<C>(
+		let (key, key_data) = generate_key_data::<C>(
 			BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
 			&mut Rng::from_seed(key_seed),
 		);
@@ -174,7 +174,7 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 		let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
 			new_nodes(ACCOUNT_IDS.clone()),
 			DEFAULT_SIGNING_CEREMONY_ID,
-			vec![PayloadAndKeyData::new(C::signing_payload_for_test(), key_id.clone(), key_data)],
+			vec![PayloadAndKeyData::new(C::signing_payload_for_test(), key.clone(), key_data)],
 			Rng::from_seed(nonce_seed),
 		);
 
@@ -193,7 +193,7 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 			.into_iter()
 			.next()
 			.expect("should have exactly one signature");
-		assert!(C::verify_signature(&signature, &key_id, &C::signing_payload_for_test()).is_ok());
+		assert!(C::verify_signature(&signature, &key, &C::signing_payload_for_test()).is_ok());
 	}
 }
 
@@ -209,18 +209,18 @@ async fn should_sign_with_different_keys() {
 	let account_ids = BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned());
 
 	// 1. Generate two different keys for the same set of validators.
-	let (key_id_1, key_data_1) = generate_key_data::<C>(account_ids.clone(), &mut rng);
-	let (key_id_2, key_data_2) = generate_key_data::<C>(account_ids.clone(), &mut rng);
+	let (key_1, key_data_1) = generate_key_data::<C>(account_ids.clone(), &mut rng);
+	let (key_2, key_data_2) = generate_key_data::<C>(account_ids.clone(), &mut rng);
 
 	// Ensure we don't accidentally generate the same key (e.g. by using the same seed)
-	assert_ne!(key_id_1, key_id_2);
+	assert_ne!(key_1, key_2);
 
 	let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
 		new_nodes(account_ids),
 		DEFAULT_SIGNING_CEREMONY_ID,
 		vec![
-			PayloadAndKeyData::new(C::signing_payload_for_test(), key_id_1.clone(), key_data_1),
-			PayloadAndKeyData::new(C::signing_payload_for_test(), key_id_2.clone(), key_data_2),
+			PayloadAndKeyData::new(C::signing_payload_for_test(), key_1, key_data_1),
+			PayloadAndKeyData::new(C::signing_payload_for_test(), key_2, key_data_2),
 		],
 		rng,
 	);
@@ -240,8 +240,8 @@ async fn should_sign_with_different_keys() {
 	assert_eq!(signatures.len(), 2);
 
 	// Signatures should be correct w.r.t. corresponding keys:
-	assert!(C::verify_signature(&signatures[0], &key_id_1, &C::signing_payload_for_test()).is_ok());
-	assert!(C::verify_signature(&signatures[1], &key_id_2, &C::signing_payload_for_test()).is_ok());
+	assert!(C::verify_signature(&signatures[0], &key_1, &C::signing_payload_for_test()).is_ok());
+	assert!(C::verify_signature(&signatures[1], &key_2, &C::signing_payload_for_test()).is_ok());
 }
 
 #[tokio::test]

@@ -355,7 +355,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 				signing_detail::aggregate_signature::<Crypto>(
 					payload,
 					all_idxs,
-					key.get_agg_public_key(),
+					key.get_agg_public_key_point(),
 					&pubkeys,
 					&commitments,
 					&local_sigs,

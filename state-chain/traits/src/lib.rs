@@ -17,7 +17,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, EgressId, EpochIndex, EthereumAddress, ForeignChain, IntentId, KeyId,
+	CeremonyId, EgressId, EpochIndex, EthereumAddress, ForeignChain, IntentId,
 	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -179,7 +179,7 @@ pub trait VaultRotator {
 	type ValidatorId: Ord + Clone;
 
 	/// Start the rotation by kicking off keygen with provided candidates.
-	fn keygen(candidates: BTreeSet<Self::ValidatorId>, epoch_index: EpochIndex);
+	fn keygen(candidates: BTreeSet<Self::ValidatorId>);
 
 	/// Get the current rotation status.
 	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
@@ -429,8 +429,9 @@ where
 
 	fn request_keygen_verification_signature(
 		payload: C::Payload,
-		key_id: KeyId,
 		participants: BTreeSet<Self::ValidatorId>,
+		key: C::AggKey,
+		epoch_index: EpochIndex,
 	) -> ThresholdSignatureRequestId;
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the

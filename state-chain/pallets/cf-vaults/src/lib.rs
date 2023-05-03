@@ -3,13 +3,11 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
-use cf_primitives::{
-	AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId, GENESIS_EPOCH,
-};
+use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochKey, KeyProvider, KeyState, Slashing, SystemStateManager,
+	CurrentEpochIndex, EpochInfo, EpochKey, KeyProvider, KeyState, Slashing, SystemStateManager,
 	ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus, VaultTransitionHandler,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
@@ -62,7 +60,6 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	AwaitingKeygen {
 		keygen_ceremony_id: CeremonyId,
 		keygen_participants: BTreeSet<T::ValidatorId>,
-		epoch_index: EpochIndex,
 		response_status: KeygenResponseStatus<T, I>,
 	},
 	/// We are waiting for the nodes who generated the new key to complete a signing ceremony to
@@ -178,7 +175,6 @@ pub mod pallet {
 			if let Some(VaultRotationStatus::<T, I>::AwaitingKeygen {
 				keygen_ceremony_id,
 				keygen_participants,
-				epoch_index,
 				response_status,
 			}) = PendingVaultRotation::<T, I>::get()
 			{
@@ -208,7 +204,6 @@ pub mod pallet {
 						Self::trigger_keygen_verification(
 							keygen_ceremony_id,
 							new_public_key,
-							epoch_index,
 							keygen_participants,
 						);
 					},
@@ -548,11 +543,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
-		/// The provided Vec must be convertible to the chain's AggKey.
-		///
-		/// GenesisConfig members require `Serialize` and `Deserialize` which isn't
-		/// implemented for the AggKey type, hence we use Vec<u8> and covert during genesis.
-		pub vault_key: Option<Vec<u8>>,
+		pub vault_key: Option<AggKeyFor<T, I>>,
 		pub deployment_block: ChainBlockNumberFor<T, I>,
 		pub keygen_response_timeout: BlockNumberFor<T>,
 	}
@@ -572,18 +563,13 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
-			if let Some(vault_key) = self.vault_key.clone() {
+			if let Some(vault_key) = self.vault_key {
 				Pallet::<T, I>::set_vault_for_epoch(
 					VaultEpochAndState {
-						epoch_index: GENESIS_EPOCH,
+						epoch_index: cf_primitives::GENESIS_EPOCH,
 						key_state: KeyState::Unlocked,
 					},
-					AggKeyFor::<T, I>::try_from(vault_key)
-						// Note: Can't use expect() here without some type shenanigans, but would
-						// give clearer error messages.
-						.unwrap_or_else(|_| {
-							panic!("Can't build genesis without a valid vault key.")
-						}),
+					vault_key,
 					self.deployment_block,
 				);
 			} else {
@@ -635,13 +621,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn trigger_keygen_verification(
 		keygen_ceremony_id: CeremonyId,
 		new_public_key: AggKeyFor<T, I>,
-		epoch_index: EpochIndex,
 		participants: BTreeSet<T::ValidatorId>,
 	) -> ThresholdSignatureRequestId {
 		let request_id = T::ThresholdSigner::request_keygen_verification_signature(
 			T::Chain::agg_key_to_payload(new_public_key),
-			T::Chain::agg_key_to_key_id(new_public_key, epoch_index),
 			participants,
+			new_public_key,
+			T::EpochInfo::epoch_index(),
 		);
 		T::ThresholdSigner::register_callback(request_id, {
 			Call::on_keygen_verification_result {

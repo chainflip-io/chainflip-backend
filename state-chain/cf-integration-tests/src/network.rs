@@ -216,7 +216,7 @@ impl Engine {
 						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
 							request_id: _,
 							ceremony_id,
-							key_id,
+							key_id: (_, key),
 							signatories: _signatories,
 							payload}) => {
 
@@ -225,7 +225,7 @@ impl Engine {
 						let _result = state_chain_runtime::EthereumThresholdSigner::signature_success(
 							RuntimeOrigin::none(),
 							*ceremony_id,
-							self.eth_threshold_signer.borrow().sign_with_key(key_id.clone(), payload.as_fixed_bytes()),
+							self.eth_threshold_signer.borrow().sign_with_key(*key, payload.as_fixed_bytes()),
 						);
 					}
 
@@ -233,13 +233,13 @@ impl Engine {
 						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
 							request_id: _,
 							ceremony_id,
-							key_id,
+							key_id: (_, key),
 							signatories: _signatories,
 							payload}) => {
 								let _result = state_chain_runtime::PolkadotThresholdSigner::signature_success(
 									RuntimeOrigin::none(),
 									*ceremony_id,
-									self.dot_threshold_signer.borrow().sign_with_key(key_id.clone(), &(payload.clone().0)),
+									self.dot_threshold_signer.borrow().sign_with_key(*key, &(payload.clone().0)),
 								);
 					}
 
@@ -247,13 +247,13 @@ impl Engine {
 						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
 							request_id: _,
 							ceremony_id,
-							key_id,
+							key_id: (_, key),
 							signatories: _signatories,
 							payload}) => {
 								let _result = state_chain_runtime::BitcoinThresholdSigner::signature_success(
 									RuntimeOrigin::none(),
 									*ceremony_id,
-									vec![self.btc_threshold_signer.borrow().sign_with_key(key_id.clone(), &(payload[0].clone()))],
+									vec![self.btc_threshold_signer.borrow().sign_with_key(*key, &(payload[0].clone()))],
 								);
 					}
 					RuntimeEvent::Validator(
