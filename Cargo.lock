@@ -5055,6 +5055,8 @@ dependencies = [
  "sp-core 7.0.0",
  "sp-runtime 7.0.0",
  "state-chain-runtime",
+ "strum",
+ "strum_macros",
  "thiserror",
  "tokio",
  "tokio-stream",
