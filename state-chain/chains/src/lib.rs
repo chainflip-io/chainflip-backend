@@ -29,10 +29,10 @@ pub use cf_primitives::chains::*;
 pub mod benchmarking_value;
 
 pub mod any;
-pub mod none;
 pub mod btc;
 pub mod dot;
 pub mod eth;
+pub mod none;
 
 pub mod address;
 
