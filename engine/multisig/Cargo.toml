@@ -62,6 +62,7 @@ cf-chains = { path = "../../state-chain/chains" }
 cf-primitives = { path = "../../state-chain/primitives" }
 state-chain-runtime = { path = "../../state-chain/runtime" }
 utilities = {package = "utilities", path = "../../utilities" }
+derivative = "2.2.0"
 
 # substrate deps
 sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
