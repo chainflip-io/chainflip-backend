@@ -351,7 +351,7 @@ mod tests {
 		let decode_log = state_chain_gateway.decode_log_closure().unwrap();
 
 		let funded_event_signature =
-			H256::from_str("0x0c6eb3554617d242c4c475df7b3342571760bbf3d87ec76852e6f0943a7db896")
+			H256::from_str("0x26953d5d577c48c14b2632ca7bdb49f0f10a701d92e0c426c3c725892ede8d62")
 				.unwrap();
 		match decode_log(
             funded_event_signature,
@@ -389,7 +389,7 @@ mod tests {
 		let decode_log = state_chain_gateway.decode_log_closure().unwrap();
 
 		let redeemed_register_event_signature =
-			H256::from_str("0x2f73775f2573d45f5b0ed0064eb65f631ac9e568a52807221c44ca9d358a9cee")
+			H256::from_str("0xafb5f857789f5e128a54ca52afb668f094f4171924d0a0cd1c1fd066bf132b7b")
 				.unwrap();
 		match decode_log(
             redeemed_register_event_signature,
@@ -439,7 +439,7 @@ mod tests {
 		let decode_log = state_chain_gateway.decode_log_closure().unwrap();
 
 		let redeemed_executed_event_signature =
-			H256::from_str("0xac96f597a44ad425c6eedf6e4c8327fd959c9d912fa8d027fb54313e59f247c8")
+			H256::from_str("0x2b917410dde505b91c1ee8bf49bc98c4d80f9f6fde62c4aad7743e5c3fcd568f")
 				.unwrap();
 		match decode_log(
 			redeemed_executed_event_signature,
@@ -479,7 +479,7 @@ mod tests {
 		let decode_log = state_chain_gateway.decode_log_closure().unwrap();
 
 		let redemption_expired_event_signature =
-			H256::from_str("0x663304ace90be3e42354c18d4edfd7bf69b1868a8bdba7b9e58de9a997d57714")
+			H256::from_str("0x2e395ce432fa118cf9b801546bae2c36a87aa9b514af0bec0df46bb534513de5")
 				.unwrap();
 
 		const ACCOUNT_ID_HEX: &str =
@@ -513,7 +513,7 @@ mod tests {
 		let decode_log = state_chain_gateway.decode_log_closure().unwrap();
 
 		let min_funding_changed_event_signature =
-			H256::from_str("0xca11c8a4c461b60c9f485404c272650c2aaae260b2067d72e9924abb68556593")
+			H256::from_str("0x09c1d94393b22192a9e1fc232a9accb31e0c1ad78f42b2f42f9da84e9931d16d")
 				.unwrap();
 		match decode_log(
             min_funding_changed_event_signature,

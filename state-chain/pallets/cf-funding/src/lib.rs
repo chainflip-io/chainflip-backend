@@ -282,7 +282,6 @@ pub mod pallet {
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			let total_balance = Self::add_funds_to_account(&account_id, amount);
 			if Self::check_withdrawal_address(&account_id, withdrawal_address, amount).is_ok() {
 				let total_balance = Self::add_funds_to_account(&account_id, amount);
 				Self::deposit_event(Event::Funded {
