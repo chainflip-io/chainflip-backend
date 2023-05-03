@@ -26,12 +26,6 @@ impl CanonicalEncoding for cf_chains::dot::PolkadotPublicKey {
 	}
 }
 
-impl CanonicalEncoding for cf_chains::btc::AggKey {
-	fn encode_key(&self) -> Vec<u8> {
-		self.pubkey_x.to_vec()
-	}
-}
-
 impl CanonicalEncoding for cf_chains::eth::AggKey {
 	fn encode_key(&self) -> Vec<u8> {
 		self.to_pubkey_compressed().to_vec()
