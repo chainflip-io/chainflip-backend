@@ -768,7 +768,7 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 
 pub async fn new_signing_ceremony<C: CryptoScheme>(
 ) -> (SigningCeremonyRunner<C>, HashMap<AccountId, Node<SigningCeremony<C>>>) {
-	let (key_id, key_data) = generate_key_data::<C>(
+	let (public_key, key_data) = generate_key_data::<C>(
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
 		&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
 	);
@@ -776,7 +776,7 @@ pub async fn new_signing_ceremony<C: CryptoScheme>(
 	SigningCeremonyRunner::new_with_threshold_subset_of_signers(
 		new_nodes(ACCOUNT_IDS.clone()),
 		DEFAULT_SIGNING_CEREMONY_ID,
-		vec![PayloadAndKeyData::new(C::signing_payload_for_test(), key_id, key_data)],
+		vec![PayloadAndKeyData::new(C::signing_payload_for_test(), public_key, key_data)],
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
 	)
 }
