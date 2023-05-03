@@ -37,6 +37,9 @@ impl CanonicalEncoding for cf_chains::eth::AggKey {
 		self.to_pubkey_compressed().to_vec()
 	}
 }
+
+// TODO: remove this. Instead, we should impl/derive `Serialize` and `Deserialize` (and arguably use
+// a an abstract PublicKey instead of raw bytes).
 impl KeyId {
 	pub fn to_bytes(&self) -> Vec<u8> {
 		let mut bytes = Vec::new();
