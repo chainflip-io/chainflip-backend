@@ -741,7 +741,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn close_ingress_channel(intent_id: IntentId, address: TargetChainAccount<T, I>) {
 		IntentActions::<T, I>::remove(&address);
 		FetchParamDetails::<T, I>::remove(intent_id);
-		if matches!(AddressStatus::<T, I>::get(&address), DeploymentStatus::Deployed) {
+		if matches!(AddressStatus::<T, I>::get(&address), DeploymentStatus::Deployed) &&
+			ForeignChain::from(address.clone().into()) != ForeignChain::Bitcoin
+		{
 			AddressPool::<T, I>::insert(intent_id, address.clone());
 		}
 		if let Some(intent_ingress_details) = IntentIngressDetails::<T, I>::take(&address) {
