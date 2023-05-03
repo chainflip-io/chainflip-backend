@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use cf_chains::{address::EncodedAddress, CcmIngressMetadata, ForeignChainAddress};
 use cf_primitives::{Asset, EpochIndex, EthereumAddress};
-use tracing::info;
+use tracing::{info, warn};
 use web3::{
 	ethabi::{self, RawLog},
 	types::{H160, H256},
@@ -147,7 +147,7 @@ impl EthContractWitnesser for Vault {
 					destination_token,
 					amount,
 					sender: _,
-				} => pallet_cf_swapping::Call::schedule_swap_by_witnesser {
+				} => Some(pallet_cf_swapping::Call::schedule_swap_by_witnesser {
 					from: Asset::Eth,
 					to: Asset::try_from(destination_token).map_err(anyhow::Error::msg)?,
 					ingress_amount: amount,
@@ -156,7 +156,7 @@ impl EthContractWitnesser for Vault {
 						destination_address.0,
 					)
 					.map_err(anyhow::Error::msg)?,
-				},
+				}),
 				VaultEvent::SwapToken {
 					destination_chain,
 					destination_address,
@@ -164,7 +164,7 @@ impl EthContractWitnesser for Vault {
 					source_token,
 					amount,
 					sender: _,
-				} => pallet_cf_swapping::Call::schedule_swap_by_witnesser {
+				} => Some(pallet_cf_swapping::Call::schedule_swap_by_witnesser {
 					from: state_chain_client
 						.asset(source_token.0)
 						.await
@@ -177,7 +177,7 @@ impl EthContractWitnesser for Vault {
 						destination_address.0,
 					)
 					.map_err(anyhow::Error::msg)?,
-				},
+				}),
 				VaultEvent::XCallNative {
 					destination_chain,
 					destination_address,
@@ -187,7 +187,7 @@ impl EthContractWitnesser for Vault {
 					message,
 					gas_amount,
 					refund_address,
-				} => pallet_cf_swapping::Call::ccm_ingress {
+				} => Some(pallet_cf_swapping::Call::ccm_ingress {
 					ingress_asset: Asset::Eth,
 					ingress_amount: amount,
 					egress_asset: Asset::try_from(destination_token).map_err(anyhow::Error::msg)?,
@@ -204,7 +204,7 @@ impl EthContractWitnesser for Vault {
 						),
 						source_address: core_h160(sender).into(),
 					},
-				},
+				}),
 				VaultEvent::XCallToken {
 					destination_chain,
 					destination_address,
@@ -215,7 +215,7 @@ impl EthContractWitnesser for Vault {
 					message,
 					gas_amount,
 					refund_address,
-				} => pallet_cf_swapping::Call::ccm_ingress {
+				} => Some(pallet_cf_swapping::Call::ccm_ingress {
 					ingress_asset: state_chain_client
 						.asset(source_token.0)
 						.await
@@ -236,16 +236,21 @@ impl EthContractWitnesser for Vault {
 						),
 						source_address: core_h160(sender).into(),
 					},
+				}),
+				unhandled_event @ _ => {
+					warn!("Unhandled vault contract event: {:?}", unhandled_event);
+					None
 				},
-				_ => todo!("handle the rest"),
 			};
 
-			state_chain_client
-				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-					call: Box::new(call.into()),
-					epoch_index: epoch,
-				})
-				.await;
+			if let Some(call) = call {
+				state_chain_client
+					.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+						call: Box::new(call.into()),
+						epoch_index: epoch,
+					})
+					.await;
+			}
 		}
 		Ok(())
 	}
