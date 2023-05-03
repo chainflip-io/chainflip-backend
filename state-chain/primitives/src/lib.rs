@@ -199,29 +199,29 @@ fn test_key_id_to_and_from_bytes() {
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
 
 /// Struct that represents the estimated output of a Swap.
-#[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
+#[derive(PartialEq, Default, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct SwapRateOutput {
+pub struct SwapResult {
 	// Intermediary amount, if there's any
 	pub intermediary: Option<AssetAmount>,
 	// Final output of the swap
 	pub output: AssetAmount,
 }
 
-impl SwapRateOutput {
+impl SwapResult {
 	pub fn new(intermediary: AssetAmount, output: AssetAmount) -> Self {
 		Self { intermediary: Some(intermediary), output }
 	}
 }
 
-impl From<AssetAmount> for SwapRateOutput {
+impl From<AssetAmount> for SwapResult {
 	fn from(value: AssetAmount) -> Self {
 		Self { intermediary: None, output: value }
 	}
 }
 
-impl From<SwapRateOutput> for AssetAmount {
-	fn from(value: SwapRateOutput) -> Self {
+impl From<SwapResult> for AssetAmount {
+	fn from(value: SwapResult) -> Self {
 		value.output
 	}
 }

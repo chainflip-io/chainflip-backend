@@ -1,12 +1,11 @@
 use crate::{
-	mock::*, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, Pools, SwapRateOutput,
-	STABLE_ASSET,
+	mock::*, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, Pools, STABLE_ASSET,
 };
 use cf_amm::common::{sqrt_price_at_tick, Tick};
-use cf_primitives::{chains::assets::any::Asset, AssetAmount, ExchangeRate};
+use cf_primitives::{chains::assets::any::Asset, AssetAmount};
 use cf_traits::SwappingApi;
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
-use sp_runtime::{FixedPointNumber, Permill};
+use sp_runtime::Permill;
 
 #[test]
 fn can_create_new_trading_pool() {
@@ -204,151 +203,6 @@ fn test_network_fee_calculation() {
 		assert_eq!(
 			LiquidityPools::calculate_network_fee(Permill::from_rational(1u32, 1000u32), 3000),
 			(2997, 3)
-		);
-	});
-}
-
-fn setup_eth_and_dot_pool() {
-	// Setup exchange pool with non-default exchange rate
-	// Setup Eth pool.
-	assert_ok!(LiquidityPools::new_pool(
-		RuntimeOrigin::root(),
-		Asset::Eth,
-		0u32,
-		sqrt_price_at_tick(1_000),
-	));
-	assert_ok!(LiquidityPools::collect_and_mint_range_order(
-		RuntimeOrigin::signed(ALICE),
-		Asset::Eth,
-		900..1100,
-		1_000_000,
-	));
-
-	// Setup Dot pool.
-	assert_ok!(LiquidityPools::new_pool(
-		RuntimeOrigin::root(),
-		Asset::Dot,
-		0u32,
-		sqrt_price_at_tick(-2_500),
-	));
-	assert_ok!(LiquidityPools::collect_and_mint_range_order(
-		RuntimeOrigin::signed(ALICE),
-		Asset::Dot,
-		-2_600..-2_400,
-		1_000_000,
-	));
-}
-
-#[test]
-fn can_get_swap_rate_into_stable() {
-	new_test_ext().execute_with(|| {
-		setup_eth_and_dot_pool();
-		NetworkFee::set(Permill::zero());
-		let amount = 1_000;
-
-		// Can get swap rate for Eth -> STABLE
-		let expected_rate =
-			LiquidityPools::swap_rate_exchange_rate(Asset::Eth, Asset::Usdc, amount).unwrap();
-		let expected_output =
-			LiquidityPools::swap_rate_output_amount(Asset::Eth, Asset::Usdc, amount).unwrap();
-		let actual_output = LiquidityPools::swap(Asset::Eth, Asset::Usdc, amount).unwrap();
-
-		assert_eq!(expected_rate, ExchangeRate::saturating_from_rational(actual_output, amount));
-		assert_eq!(expected_output, actual_output.into());
-	});
-}
-
-#[test]
-fn can_get_swap_rate_from_stable() {
-	new_test_ext().execute_with(|| {
-		setup_eth_and_dot_pool();
-		NetworkFee::set(Permill::zero());
-		let amount = 1_000;
-
-		// Can get swap rate for STABLE -> ETH
-		let expected_rate =
-			LiquidityPools::swap_rate_exchange_rate(Asset::Usdc, Asset::Eth, amount).unwrap();
-		let expected_output =
-			LiquidityPools::swap_rate_output_amount(Asset::Usdc, Asset::Eth, amount).unwrap();
-		let actual_output = LiquidityPools::swap(Asset::Usdc, Asset::Eth, amount).unwrap();
-
-		assert_eq!(expected_rate, ExchangeRate::saturating_from_rational(actual_output, amount));
-		assert_eq!(expected_output, actual_output.into());
-	});
-}
-
-#[test]
-fn can_get_swap_rate_through_stable() {
-	new_test_ext().execute_with(|| {
-		setup_eth_and_dot_pool();
-		NetworkFee::set(Permill::zero());
-		let amount = 1_000;
-
-		// Can get swap rate for STABLE -> ETH
-		let expected_rate =
-			LiquidityPools::swap_rate_exchange_rate(Asset::Eth, Asset::Dot, amount).unwrap();
-		let expected_output =
-			LiquidityPools::swap_rate_output_amount(Asset::Eth, Asset::Dot, amount).unwrap();
-		let expected_intermediate_amount =
-			LiquidityPools::swap_rate_output_amount(Asset::Eth, Asset::Usdc, amount)
-				.unwrap()
-				.into();
-		let actual_output = LiquidityPools::swap(Asset::Eth, Asset::Dot, amount).unwrap();
-
-		assert_eq!(expected_rate, ExchangeRate::saturating_from_rational(actual_output, amount));
-		assert_eq!(
-			expected_output,
-			SwapRateOutput::new(expected_intermediate_amount, actual_output)
-		);
-	});
-}
-
-#[test]
-fn getting_swap_rate_does_not_change_storage() {
-	new_test_ext().execute_with(|| {
-		setup_eth_and_dot_pool();
-		let amount = 1_000;
-
-		// Getting exchange rate repeatedly does not change the exchange rate
-		assert_eq!(
-			LiquidityPools::swap_rate_exchange_rate(Asset::Eth, Asset::Dot, amount).unwrap(),
-			LiquidityPools::swap_rate_exchange_rate(Asset::Eth, Asset::Dot, amount).unwrap()
-		);
-		assert_eq!(
-			LiquidityPools::swap_rate_exchange_rate(Asset::Eth, Asset::Usdc, amount).unwrap(),
-			LiquidityPools::swap_rate_exchange_rate(Asset::Eth, Asset::Usdc, amount).unwrap()
-		);
-		assert_eq!(
-			LiquidityPools::swap_rate_exchange_rate(Asset::Usdc, Asset::Eth, amount).unwrap(),
-			LiquidityPools::swap_rate_exchange_rate(Asset::Usdc, Asset::Eth, amount).unwrap()
-		);
-
-		// Getting output amount repeatedly does not change the exchange rate
-		assert_eq!(
-			LiquidityPools::swap_rate_output_amount(Asset::Eth, Asset::Dot, amount).unwrap(),
-			LiquidityPools::swap_rate_output_amount(Asset::Eth, Asset::Dot, amount).unwrap()
-		);
-		assert_eq!(
-			LiquidityPools::swap_rate_output_amount(Asset::Eth, Asset::Usdc, amount).unwrap(),
-			LiquidityPools::swap_rate_output_amount(Asset::Eth, Asset::Usdc, amount).unwrap()
-		);
-		assert_eq!(
-			LiquidityPools::swap_rate_output_amount(Asset::Usdc, Asset::Eth, amount).unwrap(),
-			LiquidityPools::swap_rate_output_amount(Asset::Usdc, Asset::Eth, amount).unwrap()
-		);
-
-		// Only swap changes the swap rate
-		assert_ne!(
-			LiquidityPools::swap(Asset::Eth, Asset::Dot, amount).unwrap(),
-			LiquidityPools::swap(Asset::Eth, Asset::Dot, amount).unwrap()
-		);
-		assert_ne!(
-			LiquidityPools::swap(Asset::Eth, Asset::Usdc, amount).unwrap(),
-			LiquidityPools::swap(Asset::Eth, Asset::Usdc, amount).unwrap()
-		);
-		assert_ne!(
-			LiquidityPools::swap(Asset::Usdc, Asset::Eth, amount).unwrap(),
-			LiquidityPools::swap(Asset::Usdc, Asset::Eth, amount).unwrap()
 		);
 	});
 }

@@ -3,12 +3,12 @@ use cf_amm::{
 	common::{OneToZero, Side, SideMap, SqrtPriceQ64F96, ZeroToOne},
 	PoolState,
 };
-use cf_primitives::{chains::assets::any, Asset, AssetAmount, ExchangeRate, SwapRateOutput};
+use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapResult};
 use cf_traits::{Chainflip, LpBalanceApi, SwappingApi};
 use frame_support::{pallet_prelude::*, transactional};
 use frame_system::pallet_prelude::OriginFor;
 use sp_arithmetic::traits::Zero;
-use sp_runtime::{FixedPointNumber, Permill, Saturating};
+use sp_runtime::{Permill, Saturating};
 
 pub use pallet::*;
 
@@ -127,7 +127,8 @@ pub mod pallet {
 					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 					if let Err(e) = CollectedNetworkFee::<T>::try_mutate(|collected_fee| {
 						let flip_to_burn =
-							Pallet::<T>::swap(STABLE_ASSET, any::Asset::Flip, *collected_fee)?;
+							Pallet::<T>::swap(STABLE_ASSET, any::Asset::Flip, *collected_fee)?
+								.into();
 						FlipToBurn::<T>::mutate(|total| {
 							total.saturating_accrue(flip_to_burn);
 						});
@@ -612,22 +613,25 @@ impl<T: Config> SwappingApi for Pallet<T> {
 		from: any::Asset,
 		to: any::Asset,
 		input_amount: AssetAmount,
-	) -> Result<AssetAmount, DispatchError> {
+	) -> Result<SwapResult, DispatchError> {
 		Ok(match (from, to) {
 			(input_asset, STABLE_ASSET) => {
 				let gross_output =
 					Self::process_swap_leg(SwapLeg::ToStable, input_asset, input_amount)?;
-				Self::take_network_fee(gross_output)
+				Self::take_network_fee(gross_output).into()
 			},
 			(STABLE_ASSET, output_asset) => {
 				let net_input = Self::take_network_fee(input_amount);
-				Self::process_swap_leg(SwapLeg::FromStable, output_asset, net_input)?
+				Self::process_swap_leg(SwapLeg::FromStable, output_asset, net_input)?.into()
 			},
 			(input_asset, output_asset) => {
 				let intermediate_output =
 					Self::process_swap_leg(SwapLeg::ToStable, input_asset, input_amount)?;
 				let intermediate_input = Self::take_network_fee(intermediate_output);
-				Self::process_swap_leg(SwapLeg::FromStable, output_asset, intermediate_input)?
+				SwapResult::new(
+					intermediate_output,
+					Self::process_swap_leg(SwapLeg::FromStable, output_asset, intermediate_input)?,
+				)
 			},
 		})
 	}
@@ -787,52 +791,5 @@ impl<T: Config> Pallet<T> {
 			},
 			_ => None,
 		}
-	}
-
-	pub fn swap_rate_exchange_rate(
-		in_asset: Asset,
-		out_asset: Asset,
-		input_amount: AssetAmount,
-	) -> Result<ExchangeRate, DispatchError> {
-		Ok(ExchangeRate::saturating_from_rational(
-			(Self::swap_rate_output_amount(in_asset, out_asset, input_amount)?).output,
-			input_amount,
-		))
-	}
-
-	// Attempt to do a dry run of a swap, returning the swap result.
-	pub fn swap_rate_output_amount(
-		from: Asset,
-		to: Asset,
-		amount: AssetAmount,
-	) -> Result<SwapRateOutput, DispatchError> {
-		Ok(match (from, to) {
-			(input_asset, STABLE_ASSET) => AssetAmount::try_from(
-				Pools::<T>::get(input_asset)
-					.ok_or(Error::<T>::PoolDoesNotExist)?
-					.pool_state
-					.swap::<cf_amm::common::ZeroToOne>(amount.into(), None)
-					.0,
-			)
-			.map_err(|_| Error::<T>::OutputOverflow)?
-			.into(),
-			(STABLE_ASSET, output_asset) => AssetAmount::try_from(
-				Pools::<T>::get(output_asset)
-					.ok_or(Error::<T>::PoolDoesNotExist)?
-					.pool_state
-					.swap::<cf_amm::common::OneToZero>(amount.into(), None)
-					.0,
-			)
-			.map_err(|_| Error::<T>::OutputOverflow)?
-			.into(),
-			(input_asset, output_asset) => {
-				let intermediary: AssetAmount =
-					Self::swap_rate_output_amount(input_asset, STABLE_ASSET, amount)?.into();
-				SwapRateOutput::new(
-					intermediary,
-					Self::swap_rate_output_amount(STABLE_ASSET, output_asset, intermediary)?.into(),
-				)
-			},
-		})
 	}
 }

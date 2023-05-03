@@ -55,9 +55,12 @@ pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata, H256};
-use sp_runtime::traits::{
-	AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor, One,
-	OpaqueKeys, UniqueSaturatedInto, Verify,
+use sp_runtime::{
+	traits::{
+		AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
+		One, OpaqueKeys, UniqueSaturatedInto, Verify,
+	},
+	FixedPointNumber,
 };
 
 #[cfg(any(feature = "std", test))]
@@ -74,9 +77,11 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{
-	Asset, AssetAmount, BlockNumber, EthereumAddress, ExchangeRate, FlipBalance, SwapRateOutput,
+	Asset, AssetAmount, BlockNumber, EthereumAddress, ExchangeRate, FlipBalance, SwapResult,
 };
-pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
+pub use cf_traits::{
+	EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered, SwappingApi,
+};
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
@@ -1049,11 +1054,13 @@ impl_runtime_apis! {
 		}
 
 		fn cf_pool_swap_rate(from: Asset, to: Asset, amount: AssetAmount) -> Option<ExchangeRate> {
-			LiquidityPools::swap_rate_exchange_rate(from, to, amount).ok()
+			LiquidityPools::swap(from, to, amount).ok().map(
+				|output| ExchangeRate::saturating_from_rational(output.output, amount)
+			)
 		}
 
-		fn cf_pool_swap_rate_v2(from: Asset, to:Asset, amount: AssetAmount) -> Option<SwapRateOutput> {
-			LiquidityPools::swap_rate_output_amount(from, to, amount).ok()
+		fn cf_pool_swap_rate_v2(from: Asset, to:Asset, amount: AssetAmount) -> Option<SwapResult> {
+			LiquidityPools::swap(from, to, amount).ok()
 		}
 	}
 

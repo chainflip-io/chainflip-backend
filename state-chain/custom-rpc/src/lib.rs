@@ -1,6 +1,6 @@
 use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::eth::SigData;
-use cf_primitives::{AssetAmount, EthereumAddress, ExchangeRate, SwapRateOutput};
+use cf_primitives::{AssetAmount, EthereumAddress, ExchangeRate, SwapResult};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
 use sc_client_api::HeaderBackend;
@@ -185,7 +185,7 @@ pub trait CustomApi {
 		to: Asset,
 		amount: AssetAmount,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<SwapRateOutput>>;
+	) -> RpcResult<Option<SwapResult>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -482,7 +482,7 @@ where
 		to: Asset,
 		amount: AssetAmount,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<SwapRateOutput>> {
+	) -> RpcResult<Option<SwapResult>> {
 		self.client
 			.runtime_api()
 			.cf_pool_swap_rate_v2(&self.query_block_id(at), from, to, amount)

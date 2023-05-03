@@ -500,7 +500,7 @@ pub mod pallet {
 
 			debug_assert!(bundle_input > 0, "Swap input of zero is invalid.");
 
-			let bundle_output = T::SwappingApi::swap(from, to, bundle_input)?;
+			let bundle_output = T::SwappingApi::swap(from, to, bundle_input)?.into();
 			for swap in swaps {
 				Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
 				let swap_output = multiply_by_rational_with_rounding(
