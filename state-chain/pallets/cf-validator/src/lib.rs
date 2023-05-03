@@ -77,6 +77,7 @@ type RuntimeRotationState<T> =
 pub enum RotationPhase<T: Config> {
 	Idle,
 	KeygensInProgress(RuntimeRotationState<T>),
+	KeyHandoverInProgress(RuntimeRotationState<T>),
 	ActivatingKeys(RuntimeRotationState<T>),
 	NewKeysActivated(RuntimeRotationState<T>),
 	SessionRotating(RuntimeRotationState<T>),
@@ -391,10 +392,9 @@ pub mod pallet {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
-							let new_authorities = rotation_state.authority_candidates();
-							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
-							T::VaultRotator::activate();
-							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
+							let authority_candidates = rotation_state.authority_candidates();
+							T::VaultRotator::key_handover(helpers::select_sharing_participants(Self::current_authorities(), &authority_candidates), authority_candidates, rotation_state.new_epoch_index);
+							Self::set_rotation_phase(RotationPhase::KeyHandoverInProgress(rotation_state));
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
 							rotation_state.ban(offenders);
@@ -415,6 +415,30 @@ pub mod pallet {
 					};
 					T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
 				},
+				RotationPhase::KeyHandoverInProgress(rotation_state) => {
+					let num_primary_candidates = rotation_state.num_primary_candidates();
+					match T::VaultRotator::status() {
+						AsyncResult::Ready(VaultStatus::KeyHandoverComplete) => {
+							let new_authorities = rotation_state.authority_candidates();
+							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
+							T::VaultRotator::activate();
+							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
+						},
+						AsyncResult::Pending => {
+							log::debug!(target: "cf-validator", "awaiting key handover completion");
+						},
+						async_result => {
+							debug_assert!(
+								false,
+								"Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}"
+							);
+							log::error!(target: "cf-validator", "Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}");
+							Self::set_rotation_phase(RotationPhase::Idle);
+						},
+					}
+					// TODO: Use correct weight
+					T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
+				}
 				RotationPhase::ActivatingKeys(rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {

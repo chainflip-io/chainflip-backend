@@ -14,11 +14,11 @@ pub fn select_sharing_participants<ValidatorId: PartialEq + Eq + Clone + Ord>(
 		cf_utilities::success_threshold_from_share_count(old_authorities.len() as u32) as usize;
 
 	// Get the intersection of the old and new set.
-	let both: BTreeSet<_> = old_authorities.intersection(&new_authorities).cloned().collect();
+	let both: BTreeSet<_> = old_authorities.intersection(new_authorities).cloned().collect();
 
 	let n_both = both.len();
 	if n_both > success_threshold {
-		both.into_iter().take(success_threshold as usize).collect()
+		both.into_iter().take(success_threshold).collect()
 	} else {
 		let both_lookup = both.clone();
 		old_authorities

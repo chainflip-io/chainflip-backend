@@ -33,6 +33,77 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		});
 	}
 
+	/// Kicks off the key handover process
+	fn key_handover(
+		sharing_participants: BTreeSet<Self::ValidatorId>,
+		receiving_participants: BTreeSet<Self::ValidatorId>,
+		new_epoch_index: EpochIndex,
+	) {
+		assert_ne!(Self::status(), AsyncResult::Pending);
+		if let Some(VaultRotationStatus::<T, I>::KeygenVerificationComplete { new_public_key }) =
+			PendingVaultRotation::<T, I>::get()
+		{
+			if let Some(epoch_key) = Self::current_epoch_key() {
+				assert!(!sharing_participants.is_empty() && !receiving_participants.is_empty());
+
+				assert_ne!(Self::status(), AsyncResult::Pending);
+
+				let ceremony_id = T::CeremonyIdProvider::increment_ceremony_id();
+
+				// from the SC's perspective, we don't care what set they're in, they get reported
+				// the same and each participant only gets one vote, like keygen.
+				let all_participants =
+					sharing_participants.union(&receiving_participants).cloned().collect();
+
+				PendingVaultRotation::<T, I>::put(VaultRotationStatus::AwaitingKeyHandover {
+					ceremony_id,
+					response_status: KeyHandoverResponseStatus::new(all_participants),
+					new_public_key,
+				});
+
+				KeyHandoverResolutionPendingSince::<T, I>::put(
+					frame_system::Pallet::<T>::current_block_number(),
+				);
+
+				Pallet::<T, I>::deposit_event(Event::KeyHandoverRequest {
+					ceremony_id,
+					// The key we want to share is the key from the *previous/current* epoch, not
+					// the newly generated key since we're handing it over to the authorities of the
+					// new_epoch.
+					key_to_share: KeyId {
+						public_key_bytes: epoch_key.key.into(),
+						epoch_index: epoch_key.epoch_index,
+					},
+					sharing_participants,
+					receiving_participants,
+					epoch_index: new_epoch_index,
+				});
+			} else {
+				// In the case of a first rotation for the vault, we don't do a key handover, since
+				// we don't have a key to handover.
+				Self::no_key_handover();
+			}
+		} else {
+			debug_assert!(
+				false,
+				"We should have completed keygen verification before starting key handover."
+			)
+		}
+	}
+
+	fn no_key_handover() {
+		if let Some(VaultRotationStatus::KeygenVerificationComplete { new_public_key }) =
+			PendingVaultRotation::<T, I>::get()
+		{
+			PendingVaultRotation::<T, I>::put(VaultRotationStatus::KeyHandoverComplete {
+				new_public_key,
+			});
+			Self::deposit_event(Event::<T, I>::NoKeyHandover);
+		} else {
+			debug_assert!(false, "We should not be calling no_key_handover if we are not in keygen verification complete, for a chain that doesn't need handover.");
+		}
+	}
+
 	/// Get the status of the current key generation
 	fn status() -> AsyncResult<VaultStatus<T::ValidatorId>> {
 		match PendingVaultRotation::<T, I>::decode_variant() {
@@ -42,6 +113,9 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			// want to commit until the other vaults are ready
 			Some(VaultRotationStatusVariant::KeygenVerificationComplete) =>
 				AsyncResult::Ready(VaultStatus::KeygenComplete),
+			Some(VaultRotationStatusVariant::AwaitingKeyHandover) => AsyncResult::Pending,
+			Some(VaultRotationStatusVariant::KeyHandoverComplete) =>
+				AsyncResult::Ready(VaultStatus::KeyHandoverComplete),
 			Some(VaultRotationStatusVariant::AwaitingRotation) => AsyncResult::Pending,
 			Some(VaultRotationStatusVariant::Complete) =>
 				AsyncResult::Ready(VaultStatus::RotationComplete),
@@ -56,7 +130,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	}
 
 	fn activate() {
-		if let Some(VaultRotationStatus::<T, I>::KeygenVerificationComplete { new_public_key }) =
+		if let Some(VaultRotationStatus::<T, I>::KeyHandoverComplete { new_public_key }) =
 			PendingVaultRotation::<T, I>::get()
 		{
 			if let Some(EpochKey { key, epoch_index, key_state }) = Self::current_epoch_key() {
@@ -95,9 +169,9 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			});
 		} else {
 			#[cfg(not(test))]
-			log::error!("activate key called before keygen verification completed");
+			log::error!("activate key called before key handover completed");
 			#[cfg(test)]
-			panic!("activate key called before keygen verification completed");
+			panic!("activate key called before keygen handover completed");
 		}
 	}
 
@@ -117,6 +191,13 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			AsyncResult::Ready(VaultStatus::KeygenComplete) => {
 				PendingVaultRotation::<T, I>::put(
 					VaultRotationStatus::<T, I>::KeygenVerificationComplete {
+						new_public_key: Default::default(),
+					},
+				);
+			},
+			AsyncResult::Ready(VaultStatus::KeyHandoverComplete) => {
+				PendingVaultRotation::<T, I>::put(
+					VaultRotationStatus::<T, I>::KeyHandoverComplete {
 						new_public_key: Default::default(),
 					},
 				);

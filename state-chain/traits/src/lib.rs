@@ -171,6 +171,7 @@ impl<CandidateId, BidAmount: Default> Default for AuctionOutcome<CandidateId, Bi
 #[derive(PartialEq, Eq, Clone, Debug, Decode, Encode)]
 pub enum VaultStatus<ValidatorId> {
 	KeygenComplete,
+	KeyHandoverComplete,
 	RotationComplete,
 	Failed(BTreeSet<ValidatorId>),
 }
@@ -180,6 +181,18 @@ pub trait VaultRotator {
 
 	/// Start the rotation by kicking off keygen with provided candidates.
 	fn keygen(candidates: BTreeSet<Self::ValidatorId>, epoch_index: EpochIndex);
+
+	/// Start the key handover with the participating candidates.
+	fn key_handover(
+		// Authorities of the last epoch selected to share their key in the key handover
+		sharing_participants: BTreeSet<Self::ValidatorId>,
+		// These are any authorities for the new epoch who are not sharing participants
+		receiving_participants: BTreeSet<Self::ValidatorId>,
+		epoch_index: EpochIndex,
+	);
+
+	/// Called by chains that aren't required to do a key handover.
+	fn no_key_handover();
 
 	/// Get the current rotation status.
 	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>>;

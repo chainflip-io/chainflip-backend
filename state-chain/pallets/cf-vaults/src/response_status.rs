@@ -1,5 +1,4 @@
-use frame_support::{StorageMap, StorageValue, IterableStorageMap};
-use frame_support::StoragePrefixedMap;
+use frame_support::{IterableStorageMap, StorageMap, StoragePrefixedMap, StorageValue};
 
 use super::*;
 
@@ -23,7 +22,9 @@ impl<T, SuccessVoters, FailureVoters, I> ResponseStatus<T, SuccessVoters, Failur
 where
 	T: Config<I>,
 	I: 'static,
-	SuccessVoters: StorageMap<AggKeyFor<T, I>, Vec<T::ValidatorId>> + IterableStorageMap<AggKeyFor<T, I>, Vec<T::ValidatorId>> + StoragePrefixedMap<Vec<T::ValidatorId>>,
+	SuccessVoters: StorageMap<AggKeyFor<T, I>, Vec<T::ValidatorId>>
+		+ IterableStorageMap<AggKeyFor<T, I>, Vec<T::ValidatorId>>
+		+ StoragePrefixedMap<Vec<T::ValidatorId>>,
 	FailureVoters: StorageValue<Vec<T::ValidatorId>>,
 	<FailureVoters as StorageValue<Vec<T::ValidatorId>>>::Query:
 		sp_std::iter::IntoIterator<Item = T::ValidatorId>,
@@ -97,8 +98,7 @@ where
 
 		// We remove who we don't want to punish, and then punish the rest
 		if let Some(key) = SuccessVoters::iter_keys().find(|key| {
-			SuccessVoters::decode_len(key).unwrap_or_default() >=
-				super_majority_threshold
+			SuccessVoters::decode_len(key).unwrap_or_default() >= super_majority_threshold
 		}) {
 			SuccessVoters::remove(key);
 		} else if FailureVoters::decode_len().unwrap_or_default() >= super_majority_threshold {

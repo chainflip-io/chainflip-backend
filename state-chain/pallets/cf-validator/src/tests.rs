@@ -118,6 +118,13 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 		move_forward_blocks(2);
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::KeyHandoverInProgress(..)
+		));
+		MockVaultRotatorA::key_handover_success();
+
+		move_forward_blocks(2);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::ActivatingKeys(..)
 		));
 		MockVaultRotatorA::keys_activated();
@@ -182,8 +189,16 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 		move_forward_blocks(2);
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::KeyHandoverInProgress(..)
+		));
+		MockVaultRotatorA::key_handover_success();
+
+		move_forward_blocks(2);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::ActivatingKeys(..)
 		));
+
 		MockVaultRotatorA::keys_activated();
 		// TODO: Needs to be clearer why this is 2 blocks and not 1
 		move_forward_blocks(2);

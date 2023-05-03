@@ -109,6 +109,10 @@ where
 		}
 	}
 
+	pub fn current_agg_key(&self) -> AggKey {
+		self.key_components.agg_key()
+	}
+
 	pub fn proposed_public_key(&self) -> AggKey {
 		self.proposed_key_components
 			.as_ref()
