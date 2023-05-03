@@ -237,7 +237,7 @@ impl EthContractWitnesser for Vault {
 						source_address: core_h160(sender).into(),
 					},
 				}),
-				unhandled_event @ _ => {
+				unhandled_event => {
 					warn!("Unhandled vault contract event: {:?}", unhandled_event);
 					None
 				},
