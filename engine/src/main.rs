@@ -44,10 +44,6 @@ async fn main() -> anyhow::Result<()> {
 
 	task_scope(|scope| {
 		async move {
-			if let Some(health_check_settings) = &settings.health_check {
-				scope.spawn(HealthChecker::start(health_check_settings).await?);
-			}
-
 			let (state_chain_stream, state_chain_client) =
 				state_chain_observer::client::StateChainClient::connect_with_account(
 					scope,
@@ -278,6 +274,10 @@ async fn main() -> anyhow::Result<()> {
 				)
 				.map_err(|_| anyhow::anyhow!("DOT runtime version updater failed")),
 			);
+
+			if let Some(health_check_settings) = &settings.health_check {
+				scope.spawn(HealthChecker::start(health_check_settings).await?);
+			}
 
 			Ok(())
 		}
