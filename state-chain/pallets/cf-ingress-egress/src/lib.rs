@@ -526,21 +526,30 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				FetchOrTransfer::<T::TargetChain>::Fetch { intent_id, asset } => {
 					let (ingress_id, ingress_address) = FetchParamDetails::<T, I>::get(intent_id)
 						.expect("to have fetch param details available");
-					if AddressStatus::<T, I>::get(ingress_address.clone()) ==
-						DeploymentStatus::Pending
-					{
-						continue
+
+					match AddressStatus::<T, I>::get(ingress_address.clone()) {
+						DeploymentStatus::Deployed => {
+							fetch_params
+								.push(FetchAssetParams { ingress_fetch_id: ingress_id, asset });
+							addresses.push((intent_id, ingress_address.clone()));
+						},
+						DeploymentStatus::Undeployed => {
+							AddressStatus::<T, I>::insert(
+								ingress_address.clone(),
+								DeploymentStatus::Pending,
+							);
+							fetch_params
+								.push(FetchAssetParams { ingress_fetch_id: ingress_id, asset });
+							addresses.push((intent_id, ingress_address.clone()));
+						},
+						DeploymentStatus::Pending => {
+							log::info!(
+								target: "cf-ingress-egress",
+								"Address {:?} is pending deployment, skipping",
+								ingress_address
+							);
+						},
 					}
-					if AddressStatus::<T, I>::get(ingress_address.clone()) ==
-						DeploymentStatus::Undeployed
-					{
-						AddressStatus::<T, I>::insert(
-							ingress_address.clone(),
-							DeploymentStatus::Pending,
-						);
-					}
-					fetch_params.push(FetchAssetParams { ingress_fetch_id: ingress_id, asset });
-					addresses.push((intent_id, ingress_address.clone()));
 				},
 				FetchOrTransfer::<T::TargetChain>::Transfer {
 					asset,
