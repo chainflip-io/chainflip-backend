@@ -32,7 +32,11 @@ impl CanonicalEncoding for cf_chains::btc::AggKey {
 	}
 }
 
-// TODO: remove this.
+impl CanonicalEncoding for cf_chains::eth::AggKey {
+	fn encode_key(&self) -> Vec<u8> {
+		self.to_pubkey_compressed().to_vec()
+	}
+}
 impl KeyId {
 	pub fn to_bytes(&self) -> Vec<u8> {
 		let mut bytes = Vec::new();
