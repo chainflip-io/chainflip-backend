@@ -34,11 +34,9 @@ jobs:
     secrets: inherit
   notify:
     runs-on: ubuntu-latest
+    if: failure() || cancelled()
     steps:
       - name: Notify on failed build
-        if: >
-          failure() && github.ref_name == 'main'
-          || cancelled() && github.ref_name == 'main'
         env:
           DISCORD_USERNAME: 'chainflip-backend'
           DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
