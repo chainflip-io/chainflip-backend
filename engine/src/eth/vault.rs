@@ -169,7 +169,7 @@ impl EthContractWitnesser for Vault {
 						.asset(source_token.0)
 						.await
 						.map_err(anyhow::Error::msg)?
-						.ok_or(anyhow::anyhow!("Unknown ETH token sent from the contract"))?,
+						.ok_or(anyhow::anyhow!("Unknown ETH source token"))?,
 					to: Asset::try_from(destination_token).map_err(anyhow::Error::msg)?,
 					ingress_amount: amount,
 					egress_address: EncodedAddress::from_chain_bytes(
@@ -220,7 +220,7 @@ impl EthContractWitnesser for Vault {
 						.asset(source_token.0)
 						.await
 						.map_err(anyhow::Error::msg)?
-						.ok_or(anyhow::anyhow!("Unknown ETH token sent from the contract"))?,
+						.ok_or(anyhow::anyhow!("Unknown ETH source token"))?,
 					ingress_amount: amount,
 					egress_asset: Asset::try_from(destination_token).map_err(anyhow::Error::msg)?,
 					egress_address: EncodedAddress::from_chain_bytes(
