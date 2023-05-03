@@ -32,3 +32,20 @@ jobs:
       environment: dev
       commit_hash: ${{ github.sha }}
     secrets: inherit
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify on failed build
+        if: >
+          failure() && github.ref_name == 'main'
+          || cancelled() && github.ref_name == 'main'
+        env:
+          DISCORD_USERNAME: 'Nightly build'
+          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
+        uses: Ilshidur/action-discord@0.3.2
+        with:
+          args: |
+            ❗️❗️❗️❗️ Build Failed on `main` ❗️❗️❗️❗️
+            👾 Link to job: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            #️⃣ Tagging: <@&939151218708709416>
+            https://media.giphy.com/media/wHfwCBZzCMhmE/giphy.gif
