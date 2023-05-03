@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use cf_chains::address::EncodedAddress;
+use cf_chains::{address::EncodedAddress, CcmIngressMetadata, ForeignChainAddress};
 use cf_primitives::{Asset, EpochIndex, EthereumAddress};
 use tracing::info;
 use web3::{
@@ -10,7 +10,7 @@ use web3::{
 };
 
 use crate::{
-	eth::EventParseError,
+	eth::{core_h160, EventParseError},
 	state_chain_observer::client::{
 		base_rpc_api::{BaseRpcClient, RawRpcApi},
 		extrinsic_api::signed::SignedExtrinsicApi,
@@ -177,6 +177,65 @@ impl EthContractWitnesser for Vault {
 						destination_address.0,
 					)
 					.map_err(anyhow::Error::msg)?,
+				},
+				VaultEvent::XCallNative {
+					destination_chain,
+					destination_address,
+					destination_token,
+					amount,
+					sender,
+					message,
+					gas_amount,
+					refund_address,
+				} => pallet_cf_swapping::Call::ccm_ingress {
+					ingress_asset: Asset::Eth,
+					ingress_amount: amount,
+					egress_asset: Asset::try_from(destination_token).map_err(anyhow::Error::msg)?,
+					egress_address: EncodedAddress::from_chain_bytes(
+						destination_chain.try_into().map_err(anyhow::Error::msg)?,
+						destination_address.0,
+					)
+					.map_err(anyhow::Error::msg)?,
+					message_metadata: CcmIngressMetadata {
+						message: message.0,
+						gas_budget: gas_amount,
+						refund_address: ForeignChainAddress::Eth(
+							refund_address.0[..].try_into().map_err(anyhow::Error::msg)?,
+						),
+						source_address: core_h160(sender).into(),
+					},
+				},
+				VaultEvent::XCallToken {
+					destination_chain,
+					destination_address,
+					destination_token,
+					source_token,
+					amount,
+					sender,
+					message,
+					gas_amount,
+					refund_address,
+				} => pallet_cf_swapping::Call::ccm_ingress {
+					ingress_asset: state_chain_client
+						.asset(source_token.0)
+						.await
+						.map_err(anyhow::Error::msg)?
+						.ok_or(anyhow::anyhow!("Unknown ETH token sent from the contract"))?,
+					ingress_amount: amount,
+					egress_asset: Asset::try_from(destination_token).map_err(anyhow::Error::msg)?,
+					egress_address: EncodedAddress::from_chain_bytes(
+						destination_chain.try_into().map_err(anyhow::Error::msg)?,
+						destination_address.0,
+					)
+					.map_err(anyhow::Error::msg)?,
+					message_metadata: CcmIngressMetadata {
+						message: message.0,
+						gas_budget: gas_amount,
+						refund_address: ForeignChainAddress::Eth(
+							refund_address.0[..].try_into().map_err(anyhow::Error::msg)?,
+						),
+						source_address: core_h160(sender).into(),
+					},
 				},
 				_ => todo!("handle the rest"),
 			};
