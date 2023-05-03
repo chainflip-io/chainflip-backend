@@ -578,7 +578,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	fn single_party_keygen(&self, mut rng: Rng) -> KeygenResultInfo<C> {
 		info!("Performing solo keygen");
 
-		let (_key_id, key_data) =
+		let (_public_key, key_data) =
 			generate_key_data::<C>(BTreeSet::from_iter([self.my_account_id.clone()]), &mut rng);
 		key_data[&self.my_account_id].clone()
 	}

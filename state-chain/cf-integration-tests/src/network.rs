@@ -214,11 +214,11 @@ impl Engine {
 					RuntimeEvent::EthereumThresholdSigner(
 						// A signature request
 						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
-							request_id: _,
 							ceremony_id,
-							key_id: (_, key),
-							signatories: _signatories,
-							payload}) => {
+							key,
+							payload,
+							..
+						}) => {
 
 						// if we unwrap on this, we'll panic, because we will have already succeeded
 						// on a previous submission (all nodes submit this)
@@ -231,11 +231,11 @@ impl Engine {
 
 					RuntimeEvent::PolkadotThresholdSigner(
 						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
-							request_id: _,
 							ceremony_id,
-							key_id: (_, key),
-							signatories: _signatories,
-							payload}) => {
+							key,
+							payload,
+							..
+						}) => {
 								let _result = state_chain_runtime::PolkadotThresholdSigner::signature_success(
 									RuntimeOrigin::none(),
 									*ceremony_id,
@@ -245,11 +245,11 @@ impl Engine {
 
 					RuntimeEvent::BitcoinThresholdSigner(
 						pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
-							request_id: _,
 							ceremony_id,
-							key_id: (_, key),
-							signatories: _signatories,
-							payload}) => {
+							key,
+							payload,
+							..
+						}) => {
 								let _result = state_chain_runtime::BitcoinThresholdSigner::signature_success(
 									RuntimeOrigin::none(),
 									*ceremony_id,
@@ -338,17 +338,17 @@ impl Engine {
 			on_events!(
 				events,
 				RuntimeEvent::EthereumVault(
-					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, epoch_index: _ }) => {
+					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
 						report_keygen_outcome_for_chain::<EthKeyComponents, SchnorrVerificationComponents, state_chain_runtime::Runtime, EthereumInstance>(*ceremony_id, participants, self.eth_threshold_signer.clone(), self.node_id.clone());
 				}
 
 				RuntimeEvent::PolkadotVault(
-					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, epoch_index: _ }) => {
+					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
 						report_keygen_outcome_for_chain::<DotKeyComponents, PolkadotSignature, state_chain_runtime::Runtime, PolkadotInstance>(*ceremony_id, participants, self.dot_threshold_signer.clone(), self.node_id.clone());
 				}
 
 				RuntimeEvent::BitcoinVault(
-					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, epoch_index: _ }) => {
+					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
 						report_keygen_outcome_for_chain::<BtcKeyComponents, cf_chains::btc::Signature, state_chain_runtime::Runtime, BitcoinInstance>(*ceremony_id, participants, self.btc_threshold_signer.clone(), self.node_id.clone());
 				}
 			);

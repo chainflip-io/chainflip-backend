@@ -463,7 +463,8 @@ where
                                         pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
                                             request_id: _,
                                             ceremony_id,
-                                            key_id,
+                                            epoch,
+                                            key,
                                             signatories,
                                             payload,
                                         },
@@ -477,7 +478,7 @@ where
                                                 &eth_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            key_id.into(),
+                                            (epoch, key).into(),
                                             signatories,
                                             vec![multisig::eth::SigningPayload(payload.0)],
                                         ).await;
@@ -487,7 +488,8 @@ where
                                         pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
                                             request_id: _,
                                             ceremony_id,
-                                            key_id,
+                                            epoch,
+                                            key,
                                             signatories,
                                             payload,
                                         },
@@ -501,7 +503,7 @@ where
                                                 &dot_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            key_id.into(),
+                                            (epoch, key).into(),
                                             signatories,
                                             vec![multisig::polkadot::SigningPayload::new(payload.0)
                                                 .expect("Payload should be correct size")],
@@ -511,7 +513,8 @@ where
                                         pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
                                             request_id: _,
                                             ceremony_id,
-                                            key_id,
+                                            epoch,
+                                            key,
                                             signatories,
                                             payload: payloads,
                                         },
@@ -525,7 +528,7 @@ where
                                                 &btc_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            key_id.into(),
+                                            (epoch, key).into(),
                                             signatories,
                                             payloads.into_iter().map(multisig::bitcoin::SigningPayload).collect(),
                                         ).await;

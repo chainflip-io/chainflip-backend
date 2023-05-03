@@ -35,10 +35,9 @@ async fn should_ignore_rts_for_unknown_key() {
 	);
 
 	// Send a signing request
-	let key_id = KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: Vec::from([0u8; 32]) };
 	let signing_request_fut = client.initiate_signing(
 		DEFAULT_SIGNING_CEREMONY_ID,
-		key_id,
+		KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: Vec::from([0u8; 32]) },
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
 		vec![EthSigning::signing_payload_for_test()],
 	);

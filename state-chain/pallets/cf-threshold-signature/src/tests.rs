@@ -64,14 +64,14 @@ impl MockCfe {
 		match event {
 			RuntimeEvent::EthereumThresholdSigner(
 				pallet_cf_threshold_signature::Event::ThresholdSignatureRequest {
-					request_id: _,
 					ceremony_id,
-					key_id,
+					key,
 					signatories,
 					payload,
+					..
 				},
 			) => {
-				assert_eq!(key_id.1, current_agg_key());
+				assert_eq!(key, current_agg_key());
 				assert_eq!(signatories, MockNominator::get_nominees().unwrap());
 
 				match &self.behaviour {
@@ -629,7 +629,8 @@ mod failure_reporting {
 		CeremonyContext {
 			request_context: RequestContext { request_id: 1, attempt_count: 0, payload: PAYLOAD },
 			threshold_ceremony_type: ThresholdCeremonyType::Standard,
-			key_id: (0, MockAggKey(AGG_KEY)),
+			epoch: 0,
+			key: MockAggKey(AGG_KEY),
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),
 			participant_count: 5,
