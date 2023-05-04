@@ -374,7 +374,7 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 			Some(CcmIngressMetadata {
 				message: vec![],
 				gas_budget: 0,
-				refund_address: ForeignChainAddress::Eth(Default::default()),
+				cf_parameters: vec![],
 				source_address: ForeignChainAddress::Eth([0xcf; 20]),
 			}),
 		);
@@ -523,7 +523,7 @@ fn can_ingress_ccm_swap_intents() {
 		let ccm = CcmIngressMetadata {
 			message: vec![0x00, 0x01, 0x02],
 			gas_budget: 1_000,
-			refund_address: ForeignChainAddress::Eth(Default::default()),
+			cf_parameters: vec![],
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 		let amount = 5_000;
@@ -575,7 +575,7 @@ fn can_egress_ccm() {
 		let ccm = CcmIngressMetadata {
 			message: vec![0x00, 0x01, 0x02],
 			gas_budget: 1_000,
-			refund_address: ForeignChainAddress::Eth([0x02; 20]),
+			cf_parameters: vec![],
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 		let amount = 5_000;
@@ -594,7 +594,7 @@ fn can_egress_ccm() {
 				amount,
 				egress_address,
 				message: ccm.message.clone(),
-				refund_address: ForeignChainAddress::Eth([0x02; 20]),
+				cf_parameters: vec![],
 				source_address: ForeignChainAddress::Eth([0xcf; 20]),
 			}
 		]);
@@ -642,7 +642,7 @@ fn can_manually_egress_ccm() {
 				amount,
 				egress_address,
 				message: message.clone(),
-				refund_address: ForeignChainAddress::Eth([0x02; 20]),
+				cf_parameters: vec![],
 				source_address: ForeignChainAddress::Eth([0xcf; 20]),
 			}
 		);
@@ -686,7 +686,7 @@ fn can_manually_egress_ccm_by_id() {
 				amount,
 				egress_address,
 				message: message.clone(),
-				refund_address: ForeignChainAddress::Eth([0x02; 20]),
+				cf_parameters: vec![],
 				source_address: ForeignChainAddress::Eth([0xcf; 20]),
 			}
 		};

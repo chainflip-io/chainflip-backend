@@ -308,7 +308,7 @@ pub struct CcmIngressMetadata {
 	/// Amount of ingress funds to be used for gas.
 	pub gas_budget: AssetAmount,
 	/// The address refunds will go to.
-	pub refund_address: ForeignChainAddress,
+	pub cf_parameters: Vec<u8>,
 	/// The address the ingress was sent from.
 	pub source_address: ForeignChainAddress,
 }

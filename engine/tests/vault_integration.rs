@@ -73,7 +73,7 @@ pub async fn test_all_vault_events() {
 				.unwrap(),
 			message: Bytes(vec![164, 85]),
 			gas_amount: 42069,
-			refund_address: Bytes(vec![164, 85]),
+			cf_parameters: Bytes(vec![164, 85]),
 		}
 	));
 
@@ -88,7 +88,7 @@ pub async fn test_all_vault_events() {
 				.unwrap(),
 			message: Bytes(vec![164, 85]),
 			gas_amount: 42069,
-			refund_address: Bytes(vec![164, 85]),
+			cf_parameters: Bytes(vec![164, 85]),
 			source_token: web3::types::H160::from_str("0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9")
 				.unwrap(),
 		}
