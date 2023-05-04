@@ -410,6 +410,7 @@ pub mod pallet {
 								"Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}"
 							);
 							log::error!(target: "cf-validator", "Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}");
+							// TODO: We should put the chain into safe mode here.
 							Self::set_rotation_phase(RotationPhase::Idle);
 						},
 					};
@@ -433,6 +434,7 @@ pub mod pallet {
 								"Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}"
 							);
 							log::error!(target: "cf-validator", "Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}");
+							// TODO: We should put the chain into safe mode here.
 							Self::set_rotation_phase(RotationPhase::Idle);
 						},
 					}
