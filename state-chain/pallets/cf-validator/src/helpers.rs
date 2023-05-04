@@ -13,22 +13,15 @@ pub fn select_sharing_participants<ValidatorId: PartialEq + Eq + Clone + Ord>(
 	let success_threshold =
 		cf_utilities::success_threshold_from_share_count(old_authorities.len() as u32) as usize;
 
-	// Get the intersection of the old and new set.
-	let both: BTreeSet<_> = old_authorities.intersection(new_authorities).cloned().collect();
+	let both: BTreeSet<_> = old_authorities.intersection(new_authorities).collect();
 
-	let n_both = both.len();
-	if n_both >= success_threshold {
-		both.into_iter().take(success_threshold).collect()
-	} else {
-		let both_lookup = both.clone();
-		old_authorities
-			.iter()
-			.filter(|old_authority| !both_lookup.contains(old_authority))
-			.take(success_threshold - n_both)
-			.cloned()
-			.chain(both)
-			.collect()
-	}
+	let old_not_in_new: BTreeSet<_> = old_authorities.difference(new_authorities).collect();
+
+	both.into_iter()
+		.chain(old_not_in_new)
+		.cloned()
+		.take(success_threshold)
+		.collect()
 }
 
 #[cfg(test)]
@@ -67,11 +60,10 @@ mod select_sharing_participants_tests {
 
 	#[test]
 	fn test_partial_intersection() {
-		let old_authorities = BTreeSet::<ValidatorId>::from([4, 1, 3, 2, 5]);
+		let old_authorities = BTreeSet::<ValidatorId>::from([1, 2, 3, 4, 5]);
 		let new_authorities = BTreeSet::<ValidatorId>::from([3, 4, 5, 6, 7]);
 
-		// 1 and 2 are not in the new authorities, so only ordering determines that 1 is selected
-		// over 2.
+		//
 		assert_eq!(
 			select_sharing_participants(old_authorities, &new_authorities),
 			BTreeSet::from([1, 3, 4, 5])
