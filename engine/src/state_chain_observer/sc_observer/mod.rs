@@ -105,9 +105,8 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
-	key_ids: Vec<KeyId>,
 	signers: BTreeSet<AccountId>,
-	payloads: Vec<C::SigningPayload>,
+	signing_info: Vec<(KeyId, C::SigningPayload)>,
 ) where
 	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: SignedExtrinsicApi + UnsignedExtrinsicApi + 'static + Send + Sync,
@@ -123,7 +122,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	if signers.contains(&state_chain_client.account_id()) {
 		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
 		let signing_result_future =
-			multisig_client.initiate_signing(ceremony_id, signers, key_ids, payloads);
+			multisig_client.initiate_signing(ceremony_id, signers, signing_info);
 		scope.spawn(async move {
 			match signing_result_future.await {
 				Ok(signatures) => {
@@ -478,9 +477,11 @@ where
                                                 &eth_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            vec![(epoch, key).into()],
                                             signatories,
-                                            vec![multisig::eth::SigningPayload(payload.0)],
+                                            vec![(
+                                                (epoch, key).into(),
+                                                multisig::eth::SigningPayload(payload.0)
+                                            )],
                                         ).await;
                                     }
 
@@ -503,10 +504,12 @@ where
                                                 &dot_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            vec![(epoch, key).into()],
                                             signatories,
-                                            vec![multisig::polkadot::SigningPayload::new(payload.0)
-                                                .expect("Payload should be correct size")],
+                                            vec![(
+                                                (epoch, key).into(),
+                                                multisig::polkadot::SigningPayload::new(payload.0)
+                                                    .expect("Payload should be correct size")
+                                            )],
                                         ).await;
                                     }
                                     state_chain_runtime::RuntimeEvent::BitcoinThresholdSigner(
@@ -523,10 +526,10 @@ where
                                         eth_multisig_client.update_latest_ceremony_id(ceremony_id);
                                         dot_multisig_client.update_latest_ceremony_id(ceremony_id);
 
-                                        let (key_ids, payloads) = payloads.into_iter().map(|(previous_or_current, payload)| {
+                                        let signing_info = payloads.into_iter().map(|(previous_or_current, payload)| {
                                                 (
                                                     KeyId {
-                                                        epoch_index,
+                                                        epoch_index: epoch,
                                                         public_key_bytes: match previous_or_current {
                                                             PreviousOrCurrent::Current => key.current,
                                                             PreviousOrCurrent::Previous => key.previous
@@ -537,16 +540,15 @@ where
                                                     multisig::bitcoin::SigningPayload(payload),
                                                 )
                                             })
-                                            .unzip();
+                                            .collect::<Vec<_>>();
 
                                         handle_signing_request::<_, _, _, BitcoinInstance>(
                                                 scope,
                                                 &btc_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            key_ids,
                                             signatories,
-                                            payloads,
+                                            signing_info,
                                         ).await;
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumBroadcaster(

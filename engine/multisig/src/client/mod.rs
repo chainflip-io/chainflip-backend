@@ -125,8 +125,7 @@ pub trait MultisigClientApi<C: CryptoScheme> {
 		&self,
 		ceremony_id: CeremonyId,
 		signers: BTreeSet<AccountId>,
-		key_ids: Vec<KeyId>,
-		payload: Vec<C::SigningPayload>,
+		signing_info: Vec<(KeyId, C::SigningPayload)>,
 	) -> BoxFuture<'_, Result<Vec<C::Signature>, (BTreeSet<AccountId>, SigningFailureReason)>>;
 
 	fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId);
@@ -160,8 +159,7 @@ where
 	C: CryptoScheme,
 {
 	pub participants: BTreeSet<AccountId>,
-	pub payloads: Vec<C::SigningPayload>,
-	pub keygen_result_infos: Vec<KeygenResultInfo<C>>,
+	pub signing_info: Vec<(KeygenResultInfo<C>, C::SigningPayload)>,
 	pub rng: Rng,
 	pub result_sender: CeremonyResultSender<SigningCeremony<C>>,
 }
@@ -251,8 +249,7 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 		&self,
 		ceremony_id: CeremonyId,
 		signers: BTreeSet<AccountId>,
-		key_ids: Vec<KeyId>,
-		payloads: Vec<C::SigningPayload>,
+		signing_info: Vec<(KeyId, C::SigningPayload)>,
 	) -> BoxFuture<'_, Result<Vec<C::Signature>, (BTreeSet<AccountId>, SigningFailureReason)>> {
 		let span = info_span!("Signing Ceremony", ceremony_id = ceremony_id);
 		let _entered = span.enter();
@@ -260,7 +257,7 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 		assert!(signers.contains(&self.my_account_id));
 
 		debug!(
-			payload_count = payloads.len(),
+			payload_count = signing_info.len(),
 			signers = format_iterator(&signers).to_string(),
 			"Received a request to sign",
 		);
@@ -269,23 +266,23 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 		let rng = Rng::from_entropy();
 
 		// Find the correct key and send the request to sign with that key
-		let keygen_result_infos = {
+		let signing_info = {
 			let key_store = self.key_store.lock().unwrap();
-			key_ids.iter().map(|key_id| key_store.get_key(key_id)).collect::<Vec<_>>()
+			signing_info
+				.into_iter()
+				.map(|(key_id, payload)| key_store.get_key(&key_id).map(|key| (key, payload)))
+				.collect::<Vec<_>>()
 		};
 
 		async move {
-			if let Some(keygen_result_infos) =
-				keygen_result_infos.into_iter().collect::<Option<_>>()
-			{
+			if let Some(signing_info) = signing_info.into_iter().collect::<Option<_>>() {
 				let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
 				self.ceremony_request_sender
 					.send(CeremonyRequest {
 						ceremony_id,
 						details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails {
 							participants: signers,
-							payloads,
-							keygen_result_infos,
+							signing_info,
 							rng,
 							result_sender,
 						})),

@@ -1477,11 +1477,10 @@ where
 		.with(
 			predicate::eq(next_ceremony_id),
 			predicate::eq(BTreeSet::from_iter([our_account_id.clone()])),
-			predicate::eq(vec![key_id.clone()]),
-			predicate::eq(vec![payload.clone()]),
+			predicate::eq(vec![(key_id.clone(), payload.clone())]),
 		)
 		.once()
-		.return_once(|_, _, _, _| {
+		.return_once(|_, _, _| {
 			futures::future::ready(Err((
 				BTreeSet::new(),
 				SigningFailureReason::InvalidParticipants,
@@ -1497,9 +1496,8 @@ where
 				&multisig_client,
 				state_chain_client.clone(),
 				first_ceremony_id,
-				vec![key_id.clone()],
 				BTreeSet::from_iter([not_our_account_id.clone()]),
-				vec![payload.clone()],
+				vec![(key_id.clone(), payload.clone())],
 			)
 			.await;
 
@@ -1509,9 +1507,8 @@ where
 				&multisig_client,
 				state_chain_client.clone(),
 				next_ceremony_id,
-				vec![key_id],
 				BTreeSet::from_iter([our_account_id]),
-				vec![payload],
+				vec![(key_id, payload)],
 			)
 			.await;
 
