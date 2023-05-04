@@ -1,7 +1,7 @@
 use crate::chainflip::Offence;
 use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::eth::SigData;
-use cf_primitives::{Asset, AssetAmount, EpochIndex, EthereumAddress, ExchangeRate, SwapOutput};
+use cf_primitives::{Asset, AssetAmount, EpochIndex, EthereumAddress, SwapOutput};
 use codec::{Decode, Encode};
 use pallet_cf_governance::GovCallHash;
 #[cfg(feature = "std")]
@@ -110,11 +110,6 @@ decl_runtime_apis!(
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;
 		fn cf_auction_state() -> AuctionState;
 		fn cf_pool_sqrt_price(from: Asset, to: Asset) -> Option<SqrtPriceQ64F96>;
-		fn cf_pool_simulate_exchange_rate(
-			from: Asset,
-			to: Asset,
-			amount: AssetAmount,
-		) -> Option<ExchangeRate>;
 		fn cf_pool_simulate_swap(from: Asset, to: Asset, amount: AssetAmount)
 			-> Option<SwapOutput>;
 	}

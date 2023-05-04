@@ -9,7 +9,7 @@ use scale_info::TypeInfo;
 use sp_core::crypto::AccountId32;
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
-	FixedU128, MultiSignature, RuntimeDebug,
+	MultiSignature, RuntimeDebug,
 };
 
 use sp_std::vec::Vec;
@@ -37,8 +37,6 @@ pub type IntentId = u64;
 pub type EgressCounter = u64;
 
 pub type EgressId = (ForeignChain, EgressCounter);
-
-pub type ExchangeRate = FixedU128;
 
 pub type EthereumAddress = [u8; 20];
 

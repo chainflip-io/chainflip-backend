@@ -76,7 +76,7 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{
-	Asset, AssetAmount, BlockNumber, EthereumAddress, ExchangeRate, FlipBalance, SwapOutput,
+	Asset, AssetAmount, BlockNumber, EthereumAddress, FlipBalance, SwapOutput,
 };
 pub use cf_traits::{
 	EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered, SwappingApi,
@@ -1009,15 +1009,6 @@ impl_runtime_apis! {
 			to: Asset,
 		) -> Option<SqrtPriceQ64F96> {
 			LiquidityPools::current_sqrt_price(from, to)
-		}
-
-		/// Returns the exchange rate = output_amount / input_amount
-		/// Note: This function must only be called through RPC, because RPC has its own storage buffer
-		/// layer and would not affect on-chain storage.
-		fn cf_pool_simulate_exchange_rate(from: Asset, to: Asset, amount: AssetAmount) -> Option<ExchangeRate> {
-			Self::cf_pool_simulate_swap(from, to, amount).map(
-				|output| ExchangeRate::saturating_from_rational(output.output, amount)
-			)
 		}
 
 		/// Simulates a swap and return the intermediate (if any) and final output.
