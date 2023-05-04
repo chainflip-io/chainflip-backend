@@ -28,10 +28,10 @@ fn auction_repeats_after_failure_because_of_liveness() {
 
 			nodes.append(&mut backup_nodes);
 
-			// All nodes stake to be included in the next epoch which are witnessed on the
+			// All nodes add funds to be included in the next epoch which are witnessed on the
 			// state chain
 			for node in &nodes {
-				testnet.stake_manager_contract.stake(
+				testnet.state_chain_gateway_contract.fund_account(
 					node.clone(),
 					genesis::GENESIS_BALANCE + 1,
 					GENESIS_EPOCH,
@@ -92,7 +92,7 @@ fn auction_repeats_after_failure_because_of_liveness() {
 // An epoch has completed.  We have a genesis where the blocks per epoch are
 // set to 100
 // - When the epoch is reached an auction is started and completed
-// - All nodes stake above the MAB
+// - All nodes add funds above the MAB
 // - We have two nodes that haven't registered their session keys
 // - New authorities have the state of Validator with the last active epoch stored
 // - Nodes without keys state remain unqualified as a backup with `None` as their last active epoch
@@ -114,30 +114,34 @@ fn epoch_rotates() {
 				network::Network::create(number_of_backup_nodes as u8, &genesis_nodes);
 
 			assert_eq!(testnet.live_nodes().len() as AuthorityCount, MAX_SET_SIZE);
-			// All nodes stake to be included in the next epoch which are witnessed on the
+			// All nodes add funds to be included in the next epoch which are witnessed on the
 			// state chain
-			let stake_amount = genesis::GENESIS_BALANCE + 1;
+			let funding_amount = genesis::GENESIS_BALANCE + 1;
 			for node in &testnet.live_nodes() {
-				testnet.stake_manager_contract.stake(node.clone(), stake_amount, GENESIS_EPOCH);
-			}
-
-			// Add two nodes which don't have session keys
-			let keyless_nodes = vec![testnet.create_engine(), testnet.create_engine()];
-			// Our keyless nodes also stake
-			for keyless_node in &keyless_nodes {
-				testnet.stake_manager_contract.stake(
-					keyless_node.clone(),
-					stake_amount,
+				testnet.state_chain_gateway_contract.fund_account(
+					node.clone(),
+					funding_amount,
 					GENESIS_EPOCH,
 				);
 			}
 
-			// A late staker which we will use after the auction.  They are yet to stake
-			// and will do after the auction with the intention of being a backup node
-			let late_staker = testnet.create_engine();
-			testnet.set_active(&late_staker, true);
+			// Add two nodes which don't have session keys
+			let keyless_nodes = vec![testnet.create_engine(), testnet.create_engine()];
+			// Our keyless nodes also add funds
+			for keyless_node in &keyless_nodes {
+				testnet.state_chain_gateway_contract.fund_account(
+					keyless_node.clone(),
+					funding_amount,
+					GENESIS_EPOCH,
+				);
+			}
 
-			// Move forward one block to register the stakes on-chain.
+			// A late funder which we will use after the auction.  They are yet to add funds
+			// and will do after the auction with the intention of being a backup node
+			let late_funder = testnet.create_engine();
+			testnet.set_active(&late_funder, true);
+
+			// Move forward one block to register the funds on-chain.
 			testnet.move_forward_blocks(1);
 
 			for node in &backup_nodes {
@@ -172,8 +176,8 @@ fn epoch_rotates() {
 
 			assert_eq!(
 				Validator::bond(),
-				stake_amount,
-				"minimum active bid should be that of the new stake"
+				funding_amount,
+				"minimum active bid should be the balance of the latest funder"
 			);
 
 			genesis_nodes.append(&mut backup_nodes);
@@ -200,21 +204,21 @@ fn epoch_rotates() {
 				);
 			}
 
-			// A late staker comes along, they should become a backup node as long as they
-			// are sufficiently staked and have
-			testnet.stake_manager_contract.stake(
-				late_staker.clone(),
-				stake_amount,
+			// A late funder comes along, they should become a backup node as long as they
+			// are sufficiently funded and have
+			testnet.state_chain_gateway_contract.fund_account(
+				late_funder.clone(),
+				funding_amount,
 				GENESIS_EPOCH + 1,
 			);
 
-			// Register the stake.
+			// Register the new funds.
 			testnet.move_forward_blocks(1);
 
 			assert_eq!(
 				ChainflipAccountState::Backup,
-				get_validator_state(&late_staker),
-				"late staker should be a backup node"
+				get_validator_state(&late_funder),
+				"late funder should be a backup node"
 			);
 		});
 }

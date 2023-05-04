@@ -32,7 +32,7 @@ pallet-cf-environment = {path = "../../state-chain/pallets/cf-environment"}
 pallet-cf-governance = {path = "../../state-chain/pallets/cf-governance"}
 pallet-cf-lp = { path = '../../state-chain/pallets/cf-lp' }
 pallet-cf-pools = { path = '../../state-chain/pallets/cf-pools' }
-pallet-cf-staking = {path = "../../state-chain/pallets/cf-staking"}
+pallet-cf-funding = {path = "../../state-chain/pallets/cf-funding"}
 pallet-cf-swapping = { path = '../../state-chain/pallets/cf-swapping' }
 pallet-cf-threshold-signature = {path = "../../state-chain/pallets/cf-threshold-signature"}
 pallet-cf-validator = {path = "../../state-chain/pallets/cf-validator"}

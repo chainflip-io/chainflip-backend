@@ -92,7 +92,7 @@ pub mod pallet {
 		#[pallet::constant]
 		type CompoundingInterval: Get<<Self as frame_system::Config>::BlockNumber>;
 
-		/// Something that can provide the stake manager address.
+		/// Something that can provide the state chain gatweay address.
 		type EthEnvironmentProvider: EthEnvironmentProvider;
 
 		/// The interface for accessing the amount of Flip we want burn.
@@ -175,7 +175,9 @@ pub mod pallet {
 					T::EgressHandler::schedule_egress(
 						Asset::Flip,
 						flip_to_burn,
-						ForeignChainAddress::Eth(T::EthEnvironmentProvider::stake_manager_address()),
+						ForeignChainAddress::Eth(
+							T::EthEnvironmentProvider::state_chain_gateway_address(),
+						),
 						None,
 					);
 					T::Issuance::burn(flip_to_burn.into());
@@ -295,7 +297,7 @@ impl<T: Config> Pallet<T> {
 		T::Broadcaster::threshold_sign_and_broadcast(T::ApiCall::new_unsigned(
 			total_supply.unique_saturated_into(),
 			block_number.saturated_into(),
-			&T::EthEnvironmentProvider::stake_manager_address(),
+			&T::EthEnvironmentProvider::state_chain_gateway_address(),
 		));
 	}
 }

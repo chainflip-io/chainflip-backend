@@ -102,7 +102,7 @@ impl Slashing for MockSlasher {
 		});
 	}
 
-	fn slash_stake(_account_id: &Self::AccountId, _amount: sp_runtime::Percent) {
+	fn slash_balance(_account_id: &Self::AccountId, _amount: sp_runtime::Percent) {
 		unimplemented!()
 	}
 }

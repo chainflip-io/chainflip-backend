@@ -41,7 +41,7 @@ Then in another terminal:
 ## Command line arguments and defaults
 
 The `ws_endpoint` should point at a synced rpc node.
-The `signing_key_file` should be the relayer's private key for their on-chain account. The account should be staked.
+The `signing_key_file` should be the relayer's private key for their on-chain account. The account should be funded.
 
 ```sh
 > ./target/release/chainflip-lp --help

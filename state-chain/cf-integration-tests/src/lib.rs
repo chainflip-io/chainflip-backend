@@ -10,10 +10,10 @@ mod threshold_signing;
 
 mod account;
 mod authorities;
+mod funding;
 mod genesis;
 mod governance;
 mod new_epoch;
-mod staking;
 mod swapping;
 
 use frame_support::{assert_noop, assert_ok, traits::OnInitialize};
@@ -21,13 +21,13 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::crypto::Pair;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{
-	constants::common::*, opaque::SessionKeys, AccountId, Emissions, Flip, Governance, Reputation,
-	Runtime, RuntimeOrigin, Staking, System, Validator, Witnesser,
+	constants::common::*, opaque::SessionKeys, AccountId, Emissions, Flip, Funding, Governance,
+	Reputation, Runtime, RuntimeOrigin, System, Validator, Witnesser,
 };
 
 use cf_primitives::{AuthorityCount, BlockNumber, EthereumAddress, FlipBalance};
 use cf_traits::EpochInfo;
-use pallet_cf_staking::EthTransactionHash;
+use pallet_cf_funding::EthTransactionHash;
 use sp_runtime::AccountId32;
 
 type NodeId = AccountId32;

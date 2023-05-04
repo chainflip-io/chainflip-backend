@@ -127,7 +127,7 @@ fn cannot_register_swapping_roles_if_swapping_disabled() {
 	new_test_ext().execute_with(|| {
 		assert!(!SwappingEnabled::<Test>::get());
 
-		// As if the account is already staked.
+		// As if the account is already funded.
 		AccountRoles::<Test>::insert(ALICE, AccountRole::None);
 
 		assert_noop!(Pallet::<Test>::register_as_relayer(&ALICE), Error::<Test>::SwappingDisabled);

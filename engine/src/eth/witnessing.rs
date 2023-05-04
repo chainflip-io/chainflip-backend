@@ -27,7 +27,7 @@ use super::{
 	eth_block_witnessing::{self},
 	key_manager::KeyManager,
 	rpc::EthDualRpcClient,
-	stake_manager::StakeManager,
+	state_chain_gateway::StateChainGateway,
 	vault::Vault,
 };
 use itertools::Itertools;
@@ -38,7 +38,7 @@ use anyhow::Context;
 
 pub struct AllWitnessers {
 	pub key_manager: ContractWitnesser<KeyManager, StateChainClient>,
-	pub stake_manager: ContractWitnesser<StakeManager, StateChainClient>,
+	pub state_chain_gateway: ContractWitnesser<StateChainGateway, StateChainClient>,
 	pub vault: ContractWitnesser<Vault, StateChainClient>,
 	pub eth_ingress: IngressWitnesser<StateChainClient>,
 	pub flip_ingress: ContractWitnesser<Erc20Witnesser, StateChainClient>,
@@ -66,12 +66,12 @@ pub async fn start(
 		.map_err(|_r| anyhow::anyhow!("eth::chain_data_witnesser::start failed")),
 	);
 
-	let stake_manager_address = state_chain_client
-		.storage_value::<pallet_cf_environment::EthereumStakeManagerAddress<state_chain_runtime::Runtime>>(
+	let state_chain_gateway_address = state_chain_client
+		.storage_value::<pallet_cf_environment::EthereumStateChainGatewayAddress<state_chain_runtime::Runtime>>(
 			initial_block_hash,
 		)
 		.await
-		.context("Failed to get StakeManager address from SC")?;
+		.context("Failed to get StateChainGateway address from SC")?;
 
 	let key_manager_address = state_chain_client
 		.storage_value::<pallet_cf_environment::EthereumKeyManagerAddress<state_chain_runtime::Runtime>>(
@@ -177,8 +177,8 @@ pub async fn start(
 						dual_rpc.clone(),
 						false,
 					),
-					stake_manager: ContractWitnesser::new(
-						StakeManager::new(stake_manager_address.into()),
+					state_chain_gateway: ContractWitnesser::new(
+						StateChainGateway::new(state_chain_gateway_address.into()),
 						state_chain_client.clone(),
 						dual_rpc.clone(),
 						true,

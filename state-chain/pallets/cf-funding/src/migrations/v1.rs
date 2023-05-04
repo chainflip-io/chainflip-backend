@@ -16,38 +16,41 @@ mod archived {
 	use frame_support::pallet_prelude::ValueQuery;
 
 	// Note this is valid only perseverance.
-	pub const CLAIM_DELAY_BUFFER_SECONDS: u64 = 80;
+	pub const REDEMPTION_DELAY_BUFFER_SECONDS: u64 = 80;
 
 	// This is added in 0.7 but then removed in 0.8.
 	#[frame_support::storage_alias]
-	pub type ClaimDelayBufferSeconds<T: Config> = StorageValue<Pallet<T>, u64, ValueQuery>;
+	pub type RedemptionDelayBufferSeconds<T: Config> = StorageValue<Pallet<T>, u64, ValueQuery>;
 }
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 	fn on_runtime_upgrade() -> frame_support::weights::Weight {
-		let accounts = PendingClaims::<T>::iter_keys().drain().collect::<Vec<_>>();
+		let accounts = PendingRedemptions::<T>::iter_keys().drain().collect::<Vec<_>>();
 		for account in accounts {
-			PendingClaims::<T>::insert(account, ());
+			PendingRedemptions::<T>::insert(account, ());
 		}
-		archived::ClaimDelayBufferSeconds::<T>::put(archived::CLAIM_DELAY_BUFFER_SECONDS);
+		archived::RedemptionDelayBufferSeconds::<T>::put(archived::REDEMPTION_DELAY_BUFFER_SECONDS);
 		Weight::zero()
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn pre_upgrade() -> Result<Vec<u8>, &'static str> {
-		let pending_claims_accounts = PendingClaims::<T>::iter_keys().collect::<Vec<_>>();
-		let num_claims = pending_claims_accounts.len() as u32;
-		Ok((pending_claims_accounts, num_claims).encode())
+		let pending_redemptions_accounts = PendingRedemptions::<T>::iter_keys().collect::<Vec<_>>();
+		let num_redemptions = pending_redemptions_accounts.len() as u32;
+		Ok((pending_redemptions_accounts, num_redemptions).encode())
 	}
 
 	#[cfg(feature = "try-runtime")]
 	fn post_upgrade(state: Vec<u8>) -> Result<(), &'static str> {
-		let (pending_claims_accounts, num_claims) =
+		let (pending_redemptions_accounts, num_redemptions) =
 			<(Vec<AccountId<T>>, u32)>::decode(&mut &state[..])
 				.map_err(|_| "Failed to decode pre-upgrade state.")?;
-		ensure!(num_claims == pending_claims_accounts.len() as u32, "Claims mismatch!");
-		for account in pending_claims_accounts {
-			ensure!(PendingClaims::<T>::get(account).is_some(), "Missing claim!");
+		ensure!(
+			num_redemptions == pending_redemptions_accounts.len() as u32,
+			"Redemptions mismatch!"
+		);
+		for account in pending_redemptions_accounts {
+			ensure!(PendingRedemptions::<T>::get(account).is_some(), "Missing redemption!");
 		}
 		Ok(())
 	}

@@ -1,4 +1,4 @@
-//! Definitions for the "registerClaim" transaction.
+//! Definitions for the "registerRedemption" transaction.
 
 use crate::{
 	eth::{AggKey, Ethereum, SigData, Tokenizable},
@@ -13,8 +13,8 @@ use sp_std::{prelude::*, vec};
 
 use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 
-/// Represents all the arguments required to build the call to StakeManager's 'requestClaim'
-/// function.
+/// Represents all the arguments required to build the call to StateChainGateway's
+/// 'requestRedemption' function.
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct SetAggKeyWithAggKey {
 	/// The signature data for validation and replay protection.

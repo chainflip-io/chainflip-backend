@@ -41,12 +41,12 @@ where
 	let rewards: Vec<_> = backup_nodes
 		.into_iter()
 		.map(|Bid { bidder_id, amount }| {
-			let backup_stake = amount / QUANTISATION_FACTOR;
+			let backup_balance = amount / QUANTISATION_FACTOR;
 			let reward = min(
 				average_authority_reward,
 				multiply_by_rational_with_rounding(
-					average_authority_reward.saturating_mul(backup_stake),
-					backup_stake,
+					average_authority_reward.saturating_mul(backup_balance),
+					backup_balance,
 					bond,
 					Rounding::Down,
 				)

@@ -203,7 +203,7 @@ impl Slashing for MockSlasher {
 
 	fn slash(_validator_id: &Self::AccountId, _blocks: Self::BlockNumber) {}
 
-	fn slash_stake(_account_id: &Self::AccountId, _amount: sp_runtime::Percent) {}
+	fn slash_balance(_account_id: &Self::AccountId, _amount: sp_runtime::Percent) {}
 }
 
 impl pallet_cf_vaults::Config for MockRuntime {

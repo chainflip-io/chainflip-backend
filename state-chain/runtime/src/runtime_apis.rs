@@ -30,7 +30,7 @@ pub enum ChainflipAccountStateWithPassive {
 
 #[derive(Encode, Decode, Eq, PartialEq)]
 pub struct RuntimeApiAccountInfo {
-	pub stake: u128,
+	pub balance: u128,
 	pub bond: u128,
 	pub last_heartbeat: u32,
 	pub is_live: bool,
@@ -43,7 +43,7 @@ pub struct RuntimeApiAccountInfo {
 
 #[derive(Encode, Decode, Eq, PartialEq)]
 pub struct RuntimeApiAccountInfoV2 {
-	pub stake: u128,
+	pub balance: u128,
 	pub bond: u128,
 	pub last_heartbeat: u32, // can *maybe* remove this - check with Andrew
 	pub online_credits: u32,
@@ -58,7 +58,7 @@ pub struct RuntimeApiAccountInfoV2 {
 }
 
 #[derive(Encode, Decode, Eq, PartialEq)]
-pub struct RuntimeApiPendingClaim {
+pub struct RuntimeApiPendingRedemption {
 	pub amount: U256,
 	pub address: EthereumAddress,
 	pub expiry: U256,
@@ -75,8 +75,8 @@ pub struct RuntimeApiPenalty {
 pub struct AuctionState {
 	pub blocks_per_epoch: u32,
 	pub current_epoch_started_at: u32,
-	pub claim_period_as_percentage: u8,
-	pub min_stake: u128,
+	pub redemption_period_as_percentage: u8,
+	pub min_funding: u128,
 	pub auction_size_range: (u32, u32),
 }
 
@@ -86,7 +86,7 @@ decl_runtime_apis!(
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
 		fn cf_eth_flip_token_address() -> EthereumAddress;
-		fn cf_eth_stake_manager_address() -> EthereumAddress;
+		fn cf_eth_state_chain_gateway_address() -> EthereumAddress;
 		fn cf_eth_asset(token_address: EthereumAddress) -> Option<Asset>;
 		fn cf_eth_key_manager_address() -> EthereumAddress;
 		fn cf_eth_chain_id() -> u64;
@@ -94,7 +94,7 @@ decl_runtime_apis!(
 		fn cf_eth_vault() -> ([u8; 33], u32);
 		/// Returns the Auction params in the form [min_set_size, max_set_size]
 		fn cf_auction_parameters() -> (u32, u32);
-		fn cf_min_stake() -> u128;
+		fn cf_min_funding() -> u128;
 		fn cf_current_epoch() -> u32;
 		fn cf_epoch_duration() -> u32;
 		fn cf_current_epoch_started_at() -> u32;

@@ -155,9 +155,9 @@ pub mod pallet {
 		StorageMap<_, Blake2_128Concat, Asset, EthereumAddress>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn stake_manager_address)]
-	/// The address of the ETH stake manager contract
-	pub type EthereumStakeManagerAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
+	#[pallet::getter(fn state_chain_gateway_address)]
+	/// The address of the ETH state chain gatweay contract
+	pub type EthereumStateChainGatewayAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn key_manager_address)]
@@ -492,7 +492,7 @@ pub mod pallet {
 	pub struct GenesisConfig {
 		pub flip_token_address: EthereumAddress,
 		pub eth_usdc_address: EthereumAddress,
-		pub stake_manager_address: EthereumAddress,
+		pub state_chain_gateway_address: EthereumAddress,
 		pub key_manager_address: EthereumAddress,
 		pub eth_vault_address: EthereumAddress,
 		pub ethereum_chain_id: u64,
@@ -508,7 +508,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			EthereumStakeManagerAddress::<T>::set(self.stake_manager_address);
+			EthereumStateChainGatewayAddress::<T>::set(self.state_chain_gateway_address);
 			EthereumKeyManagerAddress::<T>::set(self.key_manager_address);
 			EthereumVaultAddress::<T>::set(self.eth_vault_address);
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
@@ -571,8 +571,8 @@ impl<T: Config> EthEnvironmentProvider for Pallet<T> {
 	fn vault_address() -> EthereumAddress {
 		EthereumVaultAddress::<T>::get()
 	}
-	fn stake_manager_address() -> EthereumAddress {
-		EthereumStakeManagerAddress::<T>::get()
+	fn state_chain_gateway_address() -> EthereumAddress {
+		EthereumStateChainGatewayAddress::<T>::get()
 	}
 	fn chain_id() -> u64 {
 		EthereumChainId::<T>::get()

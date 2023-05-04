@@ -18,7 +18,7 @@ pub mod weights;
 use scale_info::TypeInfo;
 pub use weights::WeightInfo;
 
-use cf_traits::{Bonding, FeePayment, Slashing, StakeHandler, StakingInfo};
+use cf_traits::{Bonding, FeePayment, FundingInfo, OnAccountFunded, Slashing};
 pub use imbalances::{Deficit, ImbalanceSource, InternalSource, Surplus};
 pub use on_charge_transaction::FlipTransactionPayment;
 
@@ -41,7 +41,7 @@ pub use pallet::*;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{Chainflip, StakeHandler, WaivedFees};
+	use cf_traits::{Chainflip, OnAccountFunded, WaivedFees};
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -73,8 +73,8 @@ pub mod pallet {
 		#[pallet::constant]
 		type BlocksPerDay: Get<Self::BlockNumber>;
 
-		/// Providing updates on staking activity
-		type StakeHandler: StakeHandler<ValidatorId = Self::AccountId, Amount = Self::Balance>;
+		/// Providing updates on funding activity
+		type OnAccountFunded: OnAccountFunded<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -102,8 +102,8 @@ pub mod pallet {
 		StorageMap<_, Blake2_128Concat, ReserveId, T::Balance, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn pending_claims_reserve)]
-	pub type PendingClaimsReserve<T: Config> =
+	#[pallet::getter(fn pending_redemptions_reserve)]
+	pub type PendingRedemptionsReserve<T: Config> =
 		StorageMap<_, Blake2_128Concat, T::AccountId, T::Balance>;
 
 	/// The total number of tokens issued.
@@ -148,8 +148,8 @@ pub mod pallet {
 		InsufficientLiquidity,
 		/// Not enough reserves.
 		InsufficientReserves,
-		/// No pending claim for this ID.
-		NoPendingClaimForThisID,
+		/// No pending redemption for this ID.
+		NoPendingRedemptionForThisID,
 	}
 
 	#[pallet::hooks]
@@ -232,23 +232,23 @@ pub mod pallet {
 /// All balance information for a Flip account.
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, PartialEq, Eq, Default, RuntimeDebug)]
 pub struct FlipAccount<Amount> {
-	/// Amount that has been staked and is considered as a bid in the auction. Includes
-	/// any bonded and vesting funds. Excludes any funds in the process of being claimed.
-	stake: Amount,
+	/// Total amount of funds in account. Includes any bonded and vesting funds. Excludes any funds
+	/// in the process of being redeemed.
+	balance: Amount,
 
 	/// Amount that is bonded and cannot be withdrawn.
 	bond: Amount,
 }
 
 impl<Balance: AtLeast32BitUnsigned + Copy> FlipAccount<Balance> {
-	/// The total balance excludes any funds that are in a pending claim request.
+	/// The total balance excludes any funds that are in a pending redemption request.
 	pub fn total(&self) -> Balance {
-		self.stake
+		self.balance
 	}
 
 	/// Excludes the bond.
 	pub fn liquid(&self) -> Balance {
-		self.stake.saturating_sub(self.bond)
+		self.balance.saturating_sub(self.bond)
 	}
 
 	/// The current bond
@@ -258,7 +258,7 @@ impl<Balance: AtLeast32BitUnsigned + Copy> FlipAccount<Balance> {
 
 	/// Account can only be slashed if its balance is higher than 20% of the bond.
 	pub fn can_be_slashed(&self, slash_amount: Balance) -> bool {
-		self.stake.saturating_sub(slash_amount) > self.bond / 5u32.into()
+		self.balance.saturating_sub(slash_amount) > self.bond / 5u32.into()
 	}
 }
 
@@ -293,7 +293,7 @@ impl<T: Config> Pallet<T> {
 		Reserve::<T>::get(reserve_id)
 	}
 
-	/// Debits an account's staked balance.
+	/// Debits an account balance.
 	///
 	/// *Warning:* Creates the flip account if it doesn't exist already, but *doesn't* ensure that
 	/// the `System`-level account exists so should only be used with accounts that are known to
@@ -306,7 +306,7 @@ impl<T: Config> Pallet<T> {
 		Surplus::from_acct(account_id, amount)
 	}
 
-	/// Debits an account's staked balance, if the account exists and sufficient funds are
+	/// Debits an account balance, if the account exists and sufficient funds are
 	/// available, otherwise returns `None`. Unlike [debit](Self::debit), does not create the
 	/// account if it doesn't exist.
 	pub fn try_debit(account_id: &T::AccountId, amount: T::Balance) -> Option<Surplus<T>> {
@@ -322,7 +322,7 @@ impl<T: Config> Pallet<T> {
 		Surplus::try_from_acct(account_id, amount, true)
 	}
 
-	/// Credits an account with some staked funds. If the amount provided would result in overflow,
+	/// Credits an account with some funds. If the amount provided would result in overflow,
 	/// does nothing.
 	///
 	/// Crediting an account creates a deficit since we need to take the credited funds from
@@ -412,12 +412,12 @@ impl<T: Config> Pallet<T> {
 			.ok_or_else(|| Error::<T>::InsufficientReserves.into())
 	}
 
-	/// Tries to withdraw funds from a pending claim. Fails if the claim doesn't exist
-	pub fn try_withdraw_pending_claim(
+	/// Tries to withdraw funds from a pending redemption. Fails if the redemption doesn't exist
+	pub fn try_withdraw_pending_redemption(
 		account_id: &T::AccountId,
 	) -> Result<Surplus<T>, DispatchError> {
-		Surplus::try_from_pending_claims_reserve(account_id)
-			.ok_or_else(|| Error::<T>::NoPendingClaimForThisID.into())
+		Surplus::try_from_pending_redemptions_reserve(account_id)
+			.ok_or_else(|| Error::<T>::NoPendingRedemptionForThisID.into())
 	}
 
 	/// Deposit `amount` into the reserve identified by a `reserve_id`. Creates the reserve it it
@@ -426,21 +426,21 @@ impl<T: Config> Pallet<T> {
 		Deficit::from_reserve(reserve_id, amount)
 	}
 
-	/// Create a pending claims reserve owned by some `account_id`.
-	pub fn deposit_pending_claim(account_id: &T::AccountId, amount: T::Balance) -> Deficit<T> {
-		Deficit::from_pending_claims_reserve(account_id, amount)
+	/// Create a pending redemptions reserve owned by some `account_id`.
+	pub fn deposit_pending_redemption(account_id: &T::AccountId, amount: T::Balance) -> Deficit<T> {
+		Deficit::from_pending_redemptions_reserve(account_id, amount)
 	}
 }
 
-impl<T: Config> StakingInfo for Pallet<T> {
+impl<T: Config> FundingInfo for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
 
-	fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance {
+	fn total_balance_of(account_id: &Self::AccountId) -> Self::Balance {
 		Self::total_balance_of(account_id)
 	}
 
-	fn total_onchain_stake() -> Self::Balance {
+	fn total_onchain_funds() -> Self::Balance {
 		Self::onchain_funds()
 	}
 }
@@ -502,52 +502,52 @@ impl<T: Config> cf_traits::Issuance for FlipIssuance<T> {
 	}
 }
 
-impl<T: Config> cf_traits::StakeTransfer for Pallet<T> {
+impl<T: Config> cf_traits::Funding for Pallet<T> {
 	type AccountId = T::AccountId;
 	type Balance = T::Balance;
-	type Handler = T::StakeHandler;
+	type Handler = T::OnAccountFunded;
 
-	fn staked_balance(account_id: &T::AccountId) -> Self::Balance {
+	fn account_balance(account_id: &T::AccountId) -> Self::Balance {
 		Account::<T>::get(account_id).total()
 	}
 
-	fn claimable_balance(account_id: &T::AccountId) -> Self::Balance {
+	fn redeemable_balance(account_id: &T::AccountId) -> Self::Balance {
 		Account::<T>::get(account_id).liquid()
 	}
 
-	fn credit_stake(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance {
+	fn credit_funds(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance {
 		let incoming = Self::bridge_in(amount);
 		Self::settle(account_id, SignedImbalance::Positive(incoming));
-		T::StakeHandler::on_stake_updated(account_id, Self::staked_balance(account_id));
+		T::OnAccountFunded::on_account_funded(account_id, Self::account_balance(account_id));
 		Self::total_balance_of(account_id)
 	}
 
-	fn try_initiate_claim(
+	fn try_initiate_redemption(
 		account_id: &Self::AccountId,
 		amount: Self::Balance,
 	) -> Result<(), DispatchError> {
 		ensure!(
-			amount <= Self::claimable_balance(account_id),
+			amount <= Self::redeemable_balance(account_id),
 			DispatchError::from(Error::<T>::InsufficientLiquidity)
 		);
-		Self::settle(account_id, Self::deposit_pending_claim(account_id, amount).into());
-		T::StakeHandler::on_stake_updated(account_id, Self::staked_balance(account_id));
+		Self::settle(account_id, Self::deposit_pending_redemption(account_id, amount).into());
+		T::OnAccountFunded::on_account_funded(account_id, Self::account_balance(account_id));
 
 		Ok(())
 	}
 
-	fn finalize_claim(account_id: &T::AccountId) -> Result<(), DispatchError> {
-		let imbalance = Self::try_withdraw_pending_claim(account_id)?;
+	fn finalize_redemption(account_id: &T::AccountId) -> Result<(), DispatchError> {
+		let imbalance = Self::try_withdraw_pending_redemption(account_id)?;
 		let amount = imbalance.peek();
 		imbalance.offset(Self::bridge_out(amount));
 		Ok(())
 	}
 
-	fn revert_claim(account_id: &Self::AccountId) -> Result<(), DispatchError> {
-		// claim reverts automatically when dropped
-		let imbalance = Self::try_withdraw_pending_claim(account_id)?;
+	fn revert_redemption(account_id: &Self::AccountId) -> Result<(), DispatchError> {
+		// redemption reverts automatically when dropped
+		let imbalance = Self::try_withdraw_pending_redemption(account_id)?;
 		Self::settle(account_id, imbalance.into());
-		T::StakeHandler::on_stake_updated(account_id, Self::staked_balance(account_id));
+		T::OnAccountFunded::on_account_funded(account_id, Self::account_balance(account_id));
 		Ok(())
 	}
 }
@@ -604,9 +604,9 @@ where
 		Self::attempt_slash(account_id, account, slash_amount);
 	}
 
-	fn slash_stake(account_id: &Self::AccountId, slash_rate: Percent) {
+	fn slash_balance(account_id: &Self::AccountId, slash_rate: Percent) {
 		let account = Account::<T>::get(account_id);
-		let slash_amount = slash_rate * account.stake;
+		let slash_amount = slash_rate * account.balance;
 		Self::attempt_slash(account_id, account, slash_amount);
 	}
 }

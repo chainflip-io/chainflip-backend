@@ -16,7 +16,6 @@ benchmarks! {
 	on_initialize_resolve_votes {
 		// Number of backers
 		let a in 10..1000;
-		let stake = <T as Chainflip>::Amount::unique_saturated_from(50_000_000_000_000_000_000_000u128);
 		let proposal = generate_proposal::<T>();
 		Proposals::<T>::insert(
 			T::BlockNumber::from(1u32),
@@ -24,7 +23,7 @@ benchmarks! {
 		);
 		let backers = (0..a).map(|i| account("doogle", i, 0)).collect::<BTreeSet<_>>();
 		for account in &backers {
-			T::FeePayment::mint_to_account(account, stake);
+			T::FeePayment::mint_to_account(account, <T as Chainflip>::Amount::unique_saturated_from(50_000_000_000_000_000_000_000u128));
 		}
 		Backers::<T>::insert(proposal, backers);
 	} : {

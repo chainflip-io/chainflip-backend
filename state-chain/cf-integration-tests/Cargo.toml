@@ -31,7 +31,7 @@ cf-amm = { path = '../amm' }
 cf-chains = { path = '../chains', features = ['runtime-integration-tests']}
 cf-test-utilities = { path = '../test-utilities' }
 pallet-cf-validator = { path = '../pallets/cf-validator'}
-pallet-cf-staking = { path = '../pallets/cf-staking'}
+pallet-cf-funding = { path = '../pallets/cf-funding'}
 pallet-cf-witnesser = { path = '../pallets/cf-witnesser'}
 pallet-cf-flip = { path = '../pallets/cf-flip'}
 pallet-cf-emissions = { path = '../pallets/cf-emissions'}

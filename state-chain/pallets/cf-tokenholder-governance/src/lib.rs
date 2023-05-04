@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::{eth::Address, ForeignChain};
-use cf_traits::{BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, FeePayment, StakingInfo};
+use cf_traits::{BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, FeePayment, FundingInfo};
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::Weight,
@@ -254,8 +254,8 @@ pub mod pallet {
 		pub fn resolve_vote(proposal: Proposal) -> usize {
 			let backers = Backers::<T>::take(&proposal);
 			Self::deposit_event(
-				if backers.iter().map(T::StakingInfo::total_stake_of).sum::<T::Amount>() >
-					(T::StakingInfo::total_onchain_stake() / 3u32.into()) * 2u32.into()
+				if backers.iter().map(T::FundingInfo::total_balance_of).sum::<T::Amount>() >
+					(T::FundingInfo::total_onchain_funds() / 3u32.into()) * 2u32.into()
 				{
 					let enactment_block =
 						<frame_system::Pallet<T>>::block_number() + T::EnactmentDelay::get();

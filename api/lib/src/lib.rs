@@ -15,7 +15,7 @@ pub mod primitives {
 	pub use cf_primitives::*;
 	pub use pallet_cf_governance::ProposalId;
 	pub use state_chain_runtime::Hash;
-	pub type ClaimAmount = pallet_cf_staking::ClaimAmount<FlipBalance>;
+	pub type RedemptionAmount = pallet_cf_funding::RedemptionAmount<FlipBalance>;
 	pub use cf_chains::{
 		address::{EncodedAddress, ForeignChainAddress},
 		CcmIngressMetadata,
@@ -112,8 +112,8 @@ where
 	.await
 }
 
-pub async fn request_claim(
-	amount: primitives::ClaimAmount,
+pub async fn request_redemption(
+	amount: primitives::RedemptionAmount,
 	eth_address: [u8; 20],
 	state_chain_settings: &settings::StateChain,
 ) -> Result<H256> {
@@ -134,7 +134,7 @@ pub async fn request_claim(
 			}
 
 			let (tx_hash, ..) = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_staking::Call::claim {
+				.submit_signed_extrinsic(pallet_cf_funding::Call::redeem {
 					amount,
 					address: eth_address,
 				})
@@ -271,7 +271,7 @@ pub async fn stop_bidding(state_chain_settings: &settings::StateChain) -> Result
 			)
 			.await?;
 			let (tx_hash, ..) = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_staking::Call::stop_bidding {})
+				.submit_signed_extrinsic(pallet_cf_funding::Call::stop_bidding {})
 				.await
 				.until_finalized()
 				.await
@@ -297,7 +297,7 @@ pub async fn start_bidding(state_chain_settings: &settings::StateChain) -> Resul
 			.await?;
 
 			let (tx_hash, ..) = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_staking::Call::start_bidding {})
+				.submit_signed_extrinsic(pallet_cf_funding::Call::start_bidding {})
 				.await
 				.until_finalized()
 				.await
@@ -418,7 +418,6 @@ pub fn generate_node_key() -> KeyPair {
 /// Generate a signing key (aka validator key) using the seed phrase.
 /// If no seed phrase is provided, a new random seed phrase will be created.
 /// Returns the key and the seed phrase used to create it.
-/// This key is used to stake your node.
 pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPair, String)> {
 	use bip39::{Language, Mnemonic, MnemonicType};
 

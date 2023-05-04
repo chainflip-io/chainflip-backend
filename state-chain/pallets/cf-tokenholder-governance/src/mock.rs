@@ -1,7 +1,7 @@
 use crate::{self as pallet_cf_tokenholder_governance};
 use cf_chains::{ChainCrypto, Ethereum, ForeignChain};
 use cf_traits::{
-	impl_mock_chainflip, impl_mock_ensure_witnessed_for_origin, impl_mock_stake_transfer,
+	impl_mock_chainflip, impl_mock_ensure_witnessed_for_origin, impl_mock_on_account_funded,
 	impl_mock_waived_fees, mocks::fee_payment::MockFeePayment, BroadcastAnyChainGovKey,
 	CommKeyBroadcaster, WaivedFees,
 };
@@ -82,7 +82,7 @@ parameter_types! {
 
 // Implement mock for RestrictionHandler
 impl_mock_waived_fees!(AccountId, RuntimeCall);
-impl_mock_stake_transfer!(AccountId, u128);
+impl_mock_on_account_funded!(AccountId, u128);
 
 pub struct MockBroadcaster;
 
@@ -167,7 +167,7 @@ pub const BROKE_PAUL: AccountId = 1987u64;
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-	let stakes = [
+	let account_balances = [
 		(ALICE, 500),
 		(BOB, 200),
 		(CHARLES, 100),
@@ -180,11 +180,11 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
-		for (account, _) in stakes {
+		for (account, _) in account_balances {
 			frame_system::Provider::<Test>::created(&account).unwrap();
 			assert!(frame_system::Pallet::<Test>::account_exists(&account));
 		}
-		MockStakingInfo::<Test>::set_stakes(stakes);
+		MockFundingInfo::<Test>::set_balances(account_balances);
 	});
 
 	ext

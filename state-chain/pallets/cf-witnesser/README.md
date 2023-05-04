@@ -6,7 +6,7 @@ Based loosely on parity's own [`pallet_multisig`](https://github.com/paritytech/
 
 ## Overview
 
-Validators on the Chainflip network need to jointly witness external events such as blockchain transactions or staking events. Consensus is reached by voting on the action to be taken as a result of the witnessed event. Actions are represented by dispatchable calls.
+Validators on the Chainflip network need to jointly witness external events such as blockchain transactions or funding events. Consensus is reached by voting on the action to be taken as a result of the witnessed event. Actions are represented by dispatchable calls.
 
 The `witness_at_epoch` extrinsic represents a vote for some call. Once the voting threshold is passed (2/3 supermajority), the call is dispatched using this pallet's custom origin.
 
@@ -16,7 +16,7 @@ This pallet defines `EnsureWitnessed` and `EnsureWitnessedAtCurrentEpoch`, imple
 
 On dispatch, the hash of the call is marked as executed to prevent the call from being replayed.
 
-> Note that each witnessable call dispatch *must* be uniquely defined. Imagine you want to witness a staking event `stake(Id, Amount)`. Now imagine that ALICE stakes the same amount twice. Clearly we need to be able to distinguish between both events, so the witnessed call for this will need to incorporate, for example, the transaction hash of the event that triggered it.
+> Note that each witnessable call dispatch *must* be uniquely defined. Imagine you want to witness a funding event `funded(Id, Amount)`. Now imagine that ALICE funds the same amount twice. Clearly we need to be able to distinguish between both events, so the witnessed call for this will need to incorporate, for example, the transaction hash of the event that triggered it.
 
 ## Extra Calldata
 
