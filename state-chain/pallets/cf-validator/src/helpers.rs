@@ -17,7 +17,7 @@ pub fn select_sharing_participants<ValidatorId: PartialEq + Eq + Clone + Ord>(
 	let both: BTreeSet<_> = old_authorities.intersection(new_authorities).cloned().collect();
 
 	let n_both = both.len();
-	if n_both > success_threshold {
+	if n_both >= success_threshold {
 		both.into_iter().take(success_threshold).collect()
 	} else {
 		let both_lookup = both.clone();
