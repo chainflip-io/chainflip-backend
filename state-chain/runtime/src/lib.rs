@@ -1054,18 +1054,18 @@ impl_runtime_apis! {
 		}
 
 		/// Returns the exchange rate = output_amount / input_amount
-		/// Note: This function must only be called through RPC, because RPC has its own storage buffer 
+		/// Note: This function must only be called through RPC, because RPC has its own storage buffer
 		/// layer and would not affect on-chain storage.
-		fn cf_pool_swap_rate(from: Asset, to: Asset, amount: AssetAmount) -> Option<ExchangeRate> {
-			LiquidityPools::swap(from, to, amount).ok().map(
+		fn cf_pool_simulate_exchange_rate(from: Asset, to: Asset, amount: AssetAmount) -> Option<ExchangeRate> {
+			Self::cf_pool_simulate_swap(from, to, amount).map(
 				|output| ExchangeRate::saturating_from_rational(output.output, amount)
 			)
 		}
-		
-		/// Returns the exchange rate = output_amount / input_amount
-		/// Note: This function must only be called through RPC, because RPC has its own storage buffer 
+
+		/// Simulates a swap and return the intermediate (if any) and final output.
+		/// Note: This function must only be called through RPC, because RPC has its own storage buffer
 		/// layer and would not affect on-chain storage.
-		fn cf_pool_swap_rate_v2(from: Asset, to:Asset, amount: AssetAmount) -> Option<SwapResult> {
+		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Option<SwapResult> {
 			LiquidityPools::swap(from, to, amount).ok()
 		}
 	}

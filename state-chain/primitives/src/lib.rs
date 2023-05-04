@@ -219,9 +219,3 @@ impl From<AssetAmount> for SwapResult {
 		Self { intermediary: None, output: value }
 	}
 }
-
-impl From<SwapResult> for AssetAmount {
-	fn from(value: SwapResult) -> Self {
-		value.output
-	}
-}

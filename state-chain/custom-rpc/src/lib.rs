@@ -472,7 +472,7 @@ where
 	) -> RpcResult<Option<ExchangeRate>> {
 		self.client
 			.runtime_api()
-			.cf_pool_swap_rate(&self.query_block_id(at), from, to, amount)
+			.cf_pool_simulate_exchange_rate(&self.query_block_id(at), from, to, amount)
 			.map_err(to_rpc_error)
 	}
 
@@ -485,7 +485,7 @@ where
 	) -> RpcResult<Option<SwapResult>> {
 		self.client
 			.runtime_api()
-			.cf_pool_swap_rate_v2(&self.query_block_id(at), from, to, amount)
+			.cf_pool_simulate_swap(&self.query_block_id(at), from, to, amount)
 			.map_err(to_rpc_error)
 	}
 }

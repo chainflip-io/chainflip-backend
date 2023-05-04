@@ -128,7 +128,7 @@ pub mod pallet {
 					if let Err(e) = CollectedNetworkFee::<T>::try_mutate(|collected_fee| {
 						let flip_to_burn =
 							Pallet::<T>::swap(STABLE_ASSET, any::Asset::Flip, *collected_fee)?
-								.into();
+								.output;
 						FlipToBurn::<T>::mutate(|total| {
 							total.saturating_accrue(flip_to_burn);
 						});
