@@ -1,3 +1,4 @@
+mod crypto_compat;
 #[cfg(test)]
 mod tests;
 
@@ -6,9 +7,10 @@ use cf_chains::{
 	btc::{self, BitcoinScriptBounded},
 	dot,
 	eth::Ethereum,
-	Bitcoin, ChainCrypto, Polkadot,
+	Bitcoin, Polkadot,
 };
-use cf_primitives::{BlockNumber, CeremonyId, EpochIndex, KeyId, PolkadotAccountId};
+use cf_primitives::{BlockNumber, CeremonyId, EpochIndex, PolkadotAccountId};
+use crypto_compat::CryptoCompat;
 use futures::{FutureExt, StreamExt, TryFutureExt};
 use sp_core::{Hasher, H160, H256};
 use sp_runtime::{traits::Keccak256, AccountId32};
@@ -43,7 +45,7 @@ use crate::{
 };
 use multisig::{
 	bitcoin::BtcSigning, client::MultisigClientApi, eth::EthSigning, polkadot::PolkadotSigning,
-	CryptoScheme, SignatureToThresholdSignature,
+	CryptoScheme, KeyId, SignatureToThresholdSignature,
 };
 use utilities::task_scope::{task_scope, Scope};
 
@@ -60,16 +62,17 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
-    epoch_index: EpochIndex,
+	epoch_index: EpochIndex,
 	keygen_participants: BTreeSet<AccountId32>,
 ) where
 	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
-    state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
-	C: CryptoScheme,
-	C::AggKey: Into<<<state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain as ChainCrypto>::AggKey> + Send,
-	I: 'static + Sync + Send,
-	state_chain_runtime::RuntimeCall: std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,
+	state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
+	C: CryptoScheme<Chain = <state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain>
+		+ 'static,
+	I: CryptoCompat<C, C::Chain> + 'static + Sync + Send,
+	state_chain_runtime::RuntimeCall:
+		std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,
 {
 	if keygen_participants.contains(&state_chain_client.account_id()) {
 		// We initiate keygen outside of the spawn to avoid requesting ceremonies out of order
@@ -84,7 +87,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
                     ceremony_id,
                     reported_outcome: keygen_result_future
                         .await
-                        .map(Into::into)
+                        .map(I::pubkey_to_aggkey)
                         .map_err(|(bad_account_ids, _reason)| bad_account_ids),
                 })
                 .await;
@@ -460,7 +463,8 @@ where
                                         pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
                                             request_id: _,
                                             ceremony_id,
-                                            key_id,
+                                            epoch,
+                                            key,
                                             signatories,
                                             payload,
                                         },
@@ -474,7 +478,7 @@ where
                                                 &eth_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            key_id,
+                                            (epoch, key).into(),
                                             signatories,
                                             vec![multisig::eth::SigningPayload(payload.0)],
                                         ).await;
@@ -484,7 +488,8 @@ where
                                         pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
                                             request_id: _,
                                             ceremony_id,
-                                            key_id,
+                                            epoch,
+                                            key,
                                             signatories,
                                             payload,
                                         },
@@ -498,7 +503,7 @@ where
                                                 &dot_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            key_id,
+                                            (epoch, key).into(),
                                             signatories,
                                             vec![multisig::polkadot::SigningPayload::new(payload.0)
                                                 .expect("Payload should be correct size")],
@@ -508,7 +513,8 @@ where
                                         pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
                                             request_id: _,
                                             ceremony_id,
-                                            key_id,
+                                            epoch,
+                                            key,
                                             signatories,
                                             payload: payloads,
                                         },
@@ -522,7 +528,7 @@ where
                                                 &btc_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            key_id,
+                                            (epoch, key).into(),
                                             signatories,
                                             payloads.into_iter().map(multisig::bitcoin::SigningPayload).collect(),
                                         ).await;

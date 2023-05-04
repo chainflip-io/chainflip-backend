@@ -1,12 +1,11 @@
 pub mod persistent;
 use std::{collections::HashMap, sync::Arc};
 
-use cf_primitives::KeyId;
 pub use persistent::PersistentKeyDB;
 
 use multisig::{
 	client::{key_store_api::KeyStoreAPI, KeygenResultInfo},
-	CryptoScheme,
+	CryptoScheme, KeyId,
 };
 
 /// A gateway for accessing key data from persistent memory
@@ -41,7 +40,7 @@ mod tests {
 	use super::*;
 	use crate::db::PersistentKeyDB;
 	use cf_primitives::AccountId;
-	use multisig::{client::keygen, eth::EthSigning, Rng};
+	use multisig::{client::keygen, eth::EthSigning, CanonicalEncoding, Rng};
 	use rand_legacy::FromEntropy;
 	use std::collections::BTreeSet;
 
@@ -51,7 +50,7 @@ mod tests {
 	#[tokio::test]
 	async fn should_load_keys_on_creation() {
 		// Generate a key to use in this test
-		let (public_key_bytes, key_data) = keygen::generate_key_data::<EthSigning>(
+		let (public_key, key_data) = keygen::generate_key_data::<EthSigning>(
 			BTreeSet::from([AccountId::new([1; 32])]),
 			&mut Rng::from_entropy(),
 		);
@@ -61,7 +60,7 @@ mod tests {
 		// A temp directory to store the key db for this test
 		let (_dir, db_file) = utilities::testing::new_temp_directory_with_nonexistent_file();
 
-		let key_id = KeyId { epoch_index: 0, public_key_bytes };
+		let key_id = KeyId { epoch_index: 0, public_key_bytes: public_key.encode_key() };
 
 		// Create a new db and use the keystore to save the key
 		{
