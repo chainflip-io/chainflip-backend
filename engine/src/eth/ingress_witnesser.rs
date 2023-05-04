@@ -68,7 +68,7 @@ where
 				}
 			})
 			.map(|(tx, to_addr)| IngressWitness {
-				ingress_address: to_addr,
+				deposit_address: to_addr,
 				asset: eth::Asset::Eth,
 				amount: tx
 					.value

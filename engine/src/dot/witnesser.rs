@@ -192,7 +192,7 @@ fn check_for_interesting_events_in_block(
 					if address_monitor.contains(to) {
 						info!("Witnessing DOT Ingress {{ amount: {amount:?}, to: {to:?} }}");
 						ingress_witnesses.push(IngressWitness {
-							ingress_address: to.clone(),
+							deposit_address: to.clone(),
 							asset: assets::dot::Asset::Dot,
 							amount: *amount,
 							tx_id: TxId { block_number, extrinsic_index },
@@ -625,11 +625,11 @@ mod tests {
 	fn witness_ingresses_for_addresses_we_monitor() {
 		// we want two monitors, one sent through at start, and one sent through channel
 		const TRANSFER_1_INDEX: u32 = 1;
-		let transfer_1_ingress_addr = PolkadotAccountId::from([1; 32]);
+		let transfer_1_deposit_address = PolkadotAccountId::from([1; 32]);
 		const TRANSFER_1_AMOUNT: PolkadotBalance = 10000;
 
 		const TRANSFER_2_INDEX: u32 = 2;
-		let transfer_2_ingress_addr = PolkadotAccountId::from([2; 32]);
+		let transfer_2_deposit_address = PolkadotAccountId::from([2; 32]);
 		const TRANSFER_2_AMOUNT: PolkadotBalance = 20000;
 
 		let block_event_details = phase_and_events(&[
@@ -638,7 +638,7 @@ mod tests {
 				TRANSFER_1_INDEX,
 				mock_transfer(
 					&PolkadotAccountId::from([7; 32]),
-					&transfer_1_ingress_addr,
+					&transfer_1_deposit_address,
 					TRANSFER_1_AMOUNT,
 				),
 			),
@@ -647,7 +647,7 @@ mod tests {
 				TRANSFER_2_INDEX,
 				mock_transfer(
 					&PolkadotAccountId::from([7; 32]),
-					&transfer_2_ingress_addr,
+					&transfer_2_deposit_address,
 					TRANSFER_2_AMOUNT,
 				),
 			),
@@ -663,10 +663,10 @@ mod tests {
 		]);
 
 		let (monitor_ingress_sender, mut address_monitor) =
-			AddressMonitor::new(BTreeSet::from([transfer_1_ingress_addr]));
+			AddressMonitor::new(BTreeSet::from([transfer_1_deposit_address]));
 
 		monitor_ingress_sender
-			.send(AddressMonitorCommand::Add(transfer_2_ingress_addr))
+			.send(AddressMonitorCommand::Add(transfer_2_deposit_address))
 			.unwrap();
 
 		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls, _) =

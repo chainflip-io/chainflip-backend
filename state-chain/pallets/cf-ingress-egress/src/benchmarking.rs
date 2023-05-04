@@ -77,17 +77,17 @@ benchmarks_instance_pallet! {
 	} : { let _ = crate::Pallet::<T, I>::on_idle(Default::default(), T::WeightInfo::egress_assets(2u32)); }
 
 	do_single_ingress {
-		let ingress_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
+		let deposit_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
 		let ingress_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
 		let ingress_amount: <<T as Config<I>>::TargetChain as Chain>::ChainAmount = BenchmarkValue::benchmark_value();
-		IntentIngressDetails::<T, I>::insert(&ingress_address, IngressDetails {
+		IntentIngressDetails::<T, I>::insert(&deposit_address, IngressDetails {
 				channel_id: 1,
 				ingress_asset,
 			});
-		IntentActions::<T, I>::insert(&ingress_address, IntentAction::<T::AccountId>::LiquidityProvision {
+		IntentActions::<T, I>::insert(&deposit_address, IntentAction::<T::AccountId>::LiquidityProvision {
 			lp_account: account("doogle", 0, 0)
 		});
 	}: {
-		Pallet::<T, I>::do_single_ingress(ingress_address, ingress_asset, ingress_amount, BenchmarkValue::benchmark_value()).unwrap()
+		Pallet::<T, I>::do_single_ingress(deposit_address, ingress_asset, ingress_amount, BenchmarkValue::benchmark_value()).unwrap()
 	}
 }

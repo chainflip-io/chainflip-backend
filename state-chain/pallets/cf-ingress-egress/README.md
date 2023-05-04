@@ -9,14 +9,15 @@ This pallet provides API for other pallets to schedule funds to be transferred t
 Periodically (triggered automatically by `on_idle`, or manually by a governance call) this pallet will sweep all scheduled outward flow requests, batch them into a single transaction to minimize fee, and dispatched.
 
 ## Terminology
-**Egress:** 
+
+**Egress:**
 The act of sending on-chain asset to an address on another chain.
 
-**Transfer:** 
+**Transfer:**
 Transfer is the part of this process that move funds from the vault to the destination address(es).
 
-**Ingress** 
+**Ingress**
 Ingress is the entire process of bridging funds in to Chainflip.
 
-**Fetch:** 
-Fetching is the part of this process that moves funds from the ingress address(es) to our vault.
+**Fetch:**
+Fetching is the part of this process that moves funds from the deposit address(es) to our vault.

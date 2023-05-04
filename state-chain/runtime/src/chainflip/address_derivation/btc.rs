@@ -1,6 +1,6 @@
 use super::AddressDerivation;
 use crate::{BitcoinVault, Validator};
-use cf_chains::{btc::ingress_address::derive_btc_ingress_bitcoin_script, Bitcoin, Chain};
+use cf_chains::{btc::deposit_address::derive_btc_ingress_bitcoin_script, Bitcoin, Chain};
 use cf_primitives::{chains::assets::btc, ChannelId};
 use cf_traits::{AddressDerivationApi, EpochInfo};
 use sp_runtime::DispatchError;

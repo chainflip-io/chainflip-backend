@@ -17,8 +17,8 @@ pub trait Rpc {
 	#[method(name = "registerAccount")]
 	async fn register_account(&self) -> Result<String, Error>;
 
-	#[method(name = "newSwapIngressAddress")]
-	async fn request_swap_ingress_address(
+	#[method(name = "requestSwapDepositAddress")]
+	async fn request_swap_deposit_address(
 		&self,
 		ingress_asset: Asset,
 		egress_asset: Asset,
@@ -45,7 +45,7 @@ impl RpcServer for RpcServerImpl {
 			.await
 			.map(|tx_hash| format!("{tx_hash:#x}"))?)
 	}
-	async fn request_swap_ingress_address(
+	async fn request_swap_deposit_address(
 		&self,
 		ingress_asset: Asset,
 		egress_asset: Asset,
@@ -53,7 +53,7 @@ impl RpcServer for RpcServerImpl {
 		relayer_commission_bps: BasisPoints,
 		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<String, Error> {
-		Ok(chainflip_api::request_swap(
+		Ok(chainflip_api::request_swap_deposit_address(
 			&self.state_chain_settings,
 			ingress_asset,
 			egress_asset,

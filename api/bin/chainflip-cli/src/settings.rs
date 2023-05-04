@@ -72,14 +72,14 @@ pub struct SwapRequestParams {
 #[derive(clap::Subcommand, Clone, Debug)]
 pub enum RelayerSubcommands {
 	/// Register a new swap intent
-	SwapRequest(SwapRequestParams),
+	RequestSwapDepositAddress(SwapRequestParams),
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
 pub enum LiquidityProviderSubcommands {
-	/// Deposit asset
-	Deposit {
-		/// Asset to deposit
+	/// Request a liquidity deposit address.
+	RequestLiquidityDepositAddress {
+		/// Asset to deposit.
 		asset: Asset,
 	},
 }

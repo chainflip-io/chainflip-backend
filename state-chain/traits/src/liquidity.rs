@@ -7,7 +7,7 @@ pub trait SwapIntentHandler {
 	type AccountId;
 
 	fn on_swap_ingress(
-		ingress_address: ForeignChainAddress,
+		deposit_address: ForeignChainAddress,
 		from: Asset,
 		to: Asset,
 		amount: AssetAmount,
@@ -57,7 +57,7 @@ impl<T: frame_system::Config> SwapIntentHandler for T {
 	type AccountId = T::AccountId;
 
 	fn on_swap_ingress(
-		_ingress_address: ForeignChainAddress,
+		_deposit_address: ForeignChainAddress,
 		_from: Asset,
 		_to: Asset,
 		_amount: AssetAmount,

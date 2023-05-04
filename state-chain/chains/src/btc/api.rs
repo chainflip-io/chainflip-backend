@@ -1,7 +1,7 @@
 pub mod batch_transfer;
 
 use super::{
-	ingress_address::derive_btc_ingress_bitcoin_script, AggKey, Bitcoin, BitcoinOutput, BtcAmount,
+	deposit_address::derive_btc_ingress_bitcoin_script, AggKey, Bitcoin, BitcoinOutput, BtcAmount,
 	Utxo, CHANGE_ADDRESS_SALT,
 };
 use crate::*;

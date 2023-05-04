@@ -105,7 +105,7 @@ pub async fn start(
 		.context("Failed to get FLIP address from SC")?
 		.expect("FLIP address must exist at genesis");
 
-	let eth_chain_ingress_addresses = state_chain_client
+	let eth_chain_deposit_addresses = state_chain_client
 		.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
@@ -117,24 +117,24 @@ pub async fn start(
 		.into_group_map();
 
 	fn monitored_addresses_from_all_eth(
-		eth_chain_ingress_addresses: &HashMap<assets::eth::Asset, Vec<H160>>,
+		eth_chain_deposit_addresses: &HashMap<assets::eth::Asset, Vec<H160>>,
 		asset: assets::eth::Asset,
 	) -> BTreeSet<H160> {
-		if let Some(eth_ingress_addresses) = eth_chain_ingress_addresses.get(&asset) {
-			eth_ingress_addresses.clone().into_iter().collect()
+		if let Some(eth_deposit_addresses) = eth_chain_deposit_addresses.get(&asset) {
+			eth_deposit_addresses.clone().into_iter().collect()
 		} else {
 			Default::default()
 		}
 	}
 
 	let eth_addresses =
-		monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Eth);
+		monitored_addresses_from_all_eth(&eth_chain_deposit_addresses, assets::eth::Asset::Eth);
 
 	let usdc_addresses =
-		monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Usdc);
+		monitored_addresses_from_all_eth(&eth_chain_deposit_addresses, assets::eth::Asset::Usdc);
 
 	let flip_addresses =
-		monitored_addresses_from_all_eth(&eth_chain_ingress_addresses, assets::eth::Asset::Flip);
+		monitored_addresses_from_all_eth(&eth_chain_deposit_addresses, assets::eth::Asset::Flip);
 
 	let (eth_ingress_sender, eth_address_monitor) = AddressMonitor::new(eth_addresses);
 

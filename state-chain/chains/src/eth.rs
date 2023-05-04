@@ -4,7 +4,7 @@ pub mod api;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
-pub mod ingress_address;
+pub mod deposit_address;
 
 use crate::*;
 pub use cf_primitives::chains::{assets, Ethereum};

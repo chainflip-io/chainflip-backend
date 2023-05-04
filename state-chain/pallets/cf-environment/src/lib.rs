@@ -4,7 +4,7 @@
 
 use cf_chains::{
 	btc::{
-		api::SelectedUtxos, ingress_address::derive_btc_ingress_bitcoin_script,
+		api::SelectedUtxos, deposit_address::derive_btc_ingress_bitcoin_script,
 		utxo_selection::select_utxos_from_pool, Bitcoin, BitcoinNetwork, BitcoinScriptBounded,
 		BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},

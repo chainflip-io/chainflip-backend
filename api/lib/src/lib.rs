@@ -345,7 +345,7 @@ pub async fn set_vanity_name(
 	.await
 }
 
-pub async fn request_swap(
+pub async fn request_swap_deposit_address(
 	state_chain_settings: &settings::StateChain,
 	ingress_asset: Asset,
 	egress_asset: Asset,
@@ -355,7 +355,7 @@ pub async fn request_swap(
 ) -> Result<EncodedAddress> {
 	let events = connect_submit_and_get_events(
 		state_chain_settings,
-		pallet_cf_swapping::Call::request_swap {
+		pallet_cf_swapping::Call::request_swap_deposit_address {
 			ingress_asset,
 			egress_asset,
 			egress_address,
@@ -367,7 +367,7 @@ pub async fn request_swap(
 	.await?;
 
 	if let Some(state_chain_runtime::RuntimeEvent::Swapping(
-		pallet_cf_swapping::Event::NewSwapIntent { ingress_address, .. },
+		pallet_cf_swapping::Event::NewSwapIntent { deposit_address, .. },
 	)) = events.iter().find(|event| {
 		matches!(
 			event,
@@ -376,7 +376,7 @@ pub async fn request_swap(
 			)
 		)
 	}) {
-		Ok((*ingress_address).clone())
+		Ok((*deposit_address).clone())
 	} else {
 		panic!("NewSwapIntent must have been generated");
 	}

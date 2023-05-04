@@ -28,10 +28,10 @@ Then in another terminal:
 # This method take a little while to respond because it submits and waits for finality. So make sure the request doesn't block.
 # Parameters are: [ingress_asset, egress_asset, egress_address, relayer_commission].
 > curl -H "Content-Type: application/json" \
-    -d '{"id":1, "jsonrpc":"2.0", "method": "relayer_newSwapIngressAddress", "params": ["Eth", "Flip","0xabababababababababababababababababababab", 0]}' \
+    -d '{"id":1, "jsonrpc":"2.0", "method": "relayer_requestSwapDepositAddress", "params": ["Eth", "Flip","0xabababababababababababababababababababab", 0]}' \
     http://localhost:62378
 
-# The result is the hex-encoded ingress address.
+# The result is the hex-encoded deposit address.
 {"jsonrpc":"2.0","result":"0x4ef7608893d5a06c2689b8d15b4dc400be0954f2","id":1}
 ```
 
@@ -67,7 +67,7 @@ OPTIONS:
 
 ## Rpc Methods
 
-### `relayer_newSwapIngressAddress`
+### `relayer_requestSwapDepositAddress`
 
 Parameters:
 
@@ -78,7 +78,7 @@ Parameters:
 
 Return:
 
-- Hex-encoded ingress address.
+- Hex-encoded deposit address.
 
 ### `relayer_registerAccount`
 

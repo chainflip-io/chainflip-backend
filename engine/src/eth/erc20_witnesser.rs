@@ -91,7 +91,7 @@ impl EthContractWitnesser for Erc20Witnesser {
 				Erc20Event::Transfer { to, value, from: _ }
 					if address_monitor.contains(&core_h160(to)) =>
 					Some(IngressWitness {
-						ingress_address: core_h160(to),
+						deposit_address: core_h160(to),
 						amount: value,
 						asset: self.asset,
 						tx_id: core_h256(event.tx_hash),

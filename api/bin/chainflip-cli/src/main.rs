@@ -43,10 +43,11 @@ async fn run_cli() -> Result<()> {
 	);
 
 	match command_line_opts.cmd {
-		Relayer(RelayerSubcommands::SwapRequest(params)) =>
-			submit_swap_request(&cli_settings.state_chain, params).await,
-		LiquidityProvider(LiquidityProviderSubcommands::Deposit { asset }) =>
-			liquidity_deposit(&cli_settings.state_chain, asset).await,
+		Relayer(RelayerSubcommands::RequestSwapDepositAddress(params)) =>
+			request_swap_deposit_address(&cli_settings.state_chain, params).await,
+		LiquidityProvider(LiquidityProviderSubcommands::RequestLiquidityDepositAddress {
+			asset,
+		}) => request_liquidity_deposit_address(&cli_settings.state_chain, asset).await,
 		Redeem { amount, eth_address } =>
 			request_redemption(amount, &eth_address, &cli_settings).await,
 		RegisterAccountRole { role } => register_account_role(role, &cli_settings).await,
@@ -60,11 +61,11 @@ async fn run_cli() -> Result<()> {
 	}
 }
 
-pub async fn submit_swap_request(
+pub async fn request_swap_deposit_address(
 	state_chain_settings: &settings::StateChain,
 	params: settings::SwapRequestParams,
 ) -> Result<()> {
-	let address = api::request_swap(
+	let address = api::request_swap_deposit_address(
 		state_chain_settings,
 		params.ingress_asset,
 		params.egress_asset,
@@ -80,11 +81,11 @@ pub async fn submit_swap_request(
 	Ok(())
 }
 
-pub async fn liquidity_deposit(
+pub async fn request_liquidity_deposit_address(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 ) -> Result<()> {
-	let address = api::lp::liquidity_deposit(state_chain_settings, asset).await?;
+	let address = api::lp::request_liquidity_deposit_address(state_chain_settings, asset).await?;
 	println!("Ingress address: {address}");
 	Ok(())
 }

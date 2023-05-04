@@ -206,7 +206,7 @@ fn basic_pool_setup_provision_and_swap() {
 
 		new_account(&ZION, AccountRole::Relayer);
 
-		assert_ok!(Swapping::request_swap(
+		assert_ok!(Swapping::request_swap_deposit_address(
 			RuntimeOrigin::signed(ZION.clone()),
 			Asset::Eth,
 			Asset::Flip,
@@ -215,12 +215,12 @@ fn basic_pool_setup_provision_and_swap() {
 			None,
 		));
 
-		let ingress_address = <AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
+		let deposit_address = <AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
 			cf_chains::eth::assets::eth::Asset::Eth,
 			pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
 		).unwrap();
 		assert_events_eq!(Runtime, RuntimeEvent::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Event::StartWitnessing { ingress_address, ingress_asset: cf_chains::eth::assets::eth::Asset::Eth },
+			pallet_cf_ingress_egress::Event::StartWitnessing { deposit_address, ingress_asset: cf_chains::eth::assets::eth::Asset::Eth },
 		));
 		System::reset_events();
 
@@ -230,7 +230,7 @@ fn basic_pool_setup_provision_and_swap() {
 				RuntimeOrigin::signed(node),
 				Box::new(RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::do_ingress {
 					ingress_witnesses: vec![IngressWitness {
-						ingress_address,
+						deposit_address,
 						asset: cf_chains::eth::assets::eth::Asset::Eth,
 						amount: 50,
 						tx_id: Default::default(),
@@ -242,10 +242,10 @@ fn basic_pool_setup_provision_and_swap() {
 
 		let swap_id = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapIngressReceived {
 			swap_id,
-			ingress_address: events_ingress_address,
+			deposit_address: events_deposit_address,
 			ingress_amount: 50,
 			..
-		}) if <Ethereum as Chain>::ChainAccount::try_from(ChainAddressConverter::try_from_encoded_address(events_ingress_address.clone()).expect("we created the ingress address above so it should be valid")).unwrap() == ingress_address => swap_id);
+		}) if <Ethereum as Chain>::ChainAccount::try_from(ChainAddressConverter::try_from_encoded_address(events_deposit_address.clone()).expect("we created the deposit address above so it should be valid")).unwrap() == deposit_address => swap_id);
 
 		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
 			1,
@@ -310,7 +310,7 @@ fn can_process_ccm_via_swap_intent() {
 		};
 
 		// Register CCM via swap intent.
-		assert_ok!(Swapping::request_swap(
+		assert_ok!(Swapping::request_swap_deposit_address(
 			RuntimeOrigin::signed(ZION.clone()),
 			Asset::Flip,
 			Asset::Usdc,
@@ -320,7 +320,7 @@ fn can_process_ccm_via_swap_intent() {
 		));
 
 		// Ingress fund for the ccm.
-		let ingress_address =
+		let deposit_address =
 			<AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
 				cf_chains::eth::assets::eth::Asset::Flip,
 				pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
@@ -333,7 +333,7 @@ fn can_process_ccm_via_swap_intent() {
 				Box::new(RuntimeCall::EthereumIngressEgress(
 					pallet_cf_ingress_egress::Call::do_ingress {
 						ingress_witnesses: vec![IngressWitness {
-							ingress_address,
+							deposit_address,
 							asset: cf_chains::eth::assets::eth::Asset::Flip,
 							amount: 1_000,
 							tx_id: Default::default(),

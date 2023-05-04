@@ -1,7 +1,7 @@
 pub mod api;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
-pub mod ingress_address;
+pub mod deposit_address;
 pub mod utxo_selection;
 
 use arrayref::array_ref;
@@ -222,7 +222,7 @@ impl IngressIdConstructor for BitcoinFetchId {
 	}
 }
 
-use self::ingress_address::tweaked_pubkey;
+use self::deposit_address::tweaked_pubkey;
 
 const INTERNAL_PUBKEY: &[u8] =
 	&hex_literal::hex!("02eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");

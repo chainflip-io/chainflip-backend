@@ -18,7 +18,7 @@ pub trait Rpc {
 	async fn register_account(&self) -> Result<String, Error>;
 
 	#[method(name = "liquidityDeposit")]
-	async fn liquidity_deposit(&self, asset: Asset) -> Result<String, Error>;
+	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<String, Error>;
 
 	#[method(name = "withdrawAsset")]
 	async fn withdraw_asset(
@@ -65,9 +65,9 @@ impl RpcServerImpl {
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-	/// Returns an ingress address
-	async fn liquidity_deposit(&self, asset: Asset) -> Result<String, Error> {
-		lp::liquidity_deposit(&self.state_chain_settings, asset)
+	/// Returns a deposit address
+	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<String, Error> {
+		lp::request_liquidity_deposit_address(&self.state_chain_settings, asset)
 			.await
 			.map(|address| address.to_string())
 			.map_err(|e| Error::Custom(e.to_string()))

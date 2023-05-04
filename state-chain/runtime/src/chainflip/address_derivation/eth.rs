@@ -1,5 +1,5 @@
 use crate::{Environment, EthEnvironment};
-use cf_chains::{eth::ingress_address::get_create_2_address, Chain, ChainEnvironment, Ethereum};
+use cf_chains::{eth::deposit_address::get_create_2_address, Chain, ChainEnvironment, Ethereum};
 use cf_primitives::{chains::assets::eth, ChannelId};
 use cf_traits::AddressDerivationApi;
 use sp_runtime::DispatchError;

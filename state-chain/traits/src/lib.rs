@@ -677,14 +677,14 @@ pub trait FundingInfo {
 /// Allow pallets to register `Intent`s in the Ingress pallet.
 pub trait IngressApi<C: Chain> {
 	type AccountId;
-	/// Issues a channel id and ingress address for a new liquidity deposit.
-	fn request_liquidity_deposit_channel(
+	/// Issues a channel id and deposit address for a new liquidity deposit.
+	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
 		ingress_asset: C::ChainAsset,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
-	/// Issues a channel id and ingress address for a new swap.
-	fn request_swap(
+	/// Issues a channel id and deposit address for a new swap.
+	fn request_swap_deposit_address(
 		ingress_asset: C::ChainAsset,
 		egress_asset: Asset,
 		egress_address: ForeignChainAddress,
@@ -697,7 +697,7 @@ pub trait IngressApi<C: Chain> {
 	fn expire_intent(chain: ForeignChain, channel_id: ChannelId, address: C::ChainAccount);
 }
 
-/// Generates a deterministic ingress address for some combination of asset, chain and channel id.
+/// Generates a deterministic deposit address for some combination of asset, chain and channel id.
 pub trait AddressDerivationApi<C: Chain> {
 	fn generate_address(
 		ingress_asset: C::ChainAsset,

@@ -19,7 +19,7 @@ use cf_chains::{
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	btc::{
 		api::{BitcoinApi, SelectedUtxos},
-		ingress_address::derive_btc_ingress_address_from_script,
+		deposit_address::derive_btc_deposit_address_from_script,
 		scriptpubkey_from_address, Bitcoin, BitcoinTransactionData, BtcAmount,
 	},
 	dot::{
@@ -412,14 +412,14 @@ macro_rules! impl_ingress_api_for_anychain {
 		impl IngressApi<AnyChain> for $anychain {
 			type AccountId = <Runtime as frame_system::Config>::AccountId;
 
-			fn request_liquidity_deposit_channel(
+			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,
 				ingress_asset: Asset,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match ingress_asset.into() {
 					$(
 						ForeignChain::$chain =>
-							$ingress_egress::request_liquidity_deposit_channel(
+							$ingress_egress::request_liquidity_deposit_address(
 								lp_account,
 								ingress_asset.try_into().unwrap(),
 							),
@@ -427,7 +427,7 @@ macro_rules! impl_ingress_api_for_anychain {
 				}
 			}
 
-			fn request_swap(
+			fn request_swap_deposit_address(
 				ingress_asset: Asset,
 				egress_asset: Asset,
 				egress_address: ForeignChainAddress,
@@ -437,7 +437,7 @@ macro_rules! impl_ingress_api_for_anychain {
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match ingress_asset.into() {
 					$(
-						ForeignChain::$chain => $ingress_egress::request_swap(
+						ForeignChain::$chain => $ingress_egress::request_swap_deposit_address(
 							ingress_asset.try_into().unwrap(),
 							egress_asset,
 							egress_address,
@@ -551,7 +551,7 @@ impl AddressConverter for ChainAddressConverter {
 			ForeignChainAddress::Eth(address) => Ok(EncodedAddress::Eth(address)),
 			ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(address)),
 			ForeignChainAddress::Btc(address) => Ok(EncodedAddress::Btc(
-				derive_btc_ingress_address_from_script(
+				derive_btc_deposit_address_from_script(
 					address.into(),
 					Environment::bitcoin_network(),
 				)

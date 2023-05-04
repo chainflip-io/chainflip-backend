@@ -161,13 +161,13 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// An new swap intent has been registered.
 		NewSwapIntent {
-			ingress_address: EncodedAddress,
+			deposit_address: EncodedAddress,
 			expiry_block: T::BlockNumber,
 		},
 		/// The swap ingress was received.
 		SwapIngressReceived {
 			swap_id: u64,
-			ingress_address: EncodedAddress,
+			deposit_address: EncodedAddress,
 			ingress_amount: AssetAmount,
 		},
 		SwapScheduledByWitnesser {
@@ -200,7 +200,7 @@ pub mod pallet {
 			egress_id: EgressId,
 		},
 		SwapIntentExpired {
-			ingress_address: ForeignChainAddress,
+			deposit_address: ForeignChainAddress,
 		},
 		SwapTtlSet {
 			ttl: T::BlockNumber,
@@ -284,7 +284,7 @@ pub mod pallet {
 			let expired = SwapIntentExpiries::<T>::take(n);
 			for (channel_id, chain, address) in expired.clone() {
 				T::IngressHandler::expire_intent(chain, channel_id, address.clone());
-				Self::deposit_event(Event::<T>::SwapIntentExpired { ingress_address: address });
+				Self::deposit_event(Event::<T>::SwapIntentExpired { deposit_address: address });
 			}
 			T::WeightInfo::on_initialize(expired.len() as u32)
 		}
@@ -297,8 +297,8 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [NewSwapIntent](Event::NewSwapIntent)
-		#[pallet::weight(T::WeightInfo::request_swap())]
-		pub fn request_swap(
+		#[pallet::weight(T::WeightInfo::request_swap_deposit_address())]
+		pub fn request_swap_deposit_address(
 			origin: OriginFor<T>,
 			ingress_asset: Asset,
 			egress_asset: Asset,
@@ -325,7 +325,7 @@ pub mod pallet {
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 
-			let (channel_id, ingress_address) = T::IngressHandler::request_swap(
+			let (channel_id, deposit_address) = T::IngressHandler::request_swap_deposit_address(
 				ingress_asset,
 				egress_asset,
 				egress_address_internal,
@@ -338,11 +338,11 @@ pub mod pallet {
 				.saturating_add(SwapTTL::<T>::get());
 			SwapIntentExpiries::<T>::append(
 				expiry_block,
-				(channel_id, ForeignChain::from(ingress_asset), ingress_address.clone()),
+				(channel_id, ForeignChain::from(ingress_asset), deposit_address.clone()),
 			);
 
 			Self::deposit_event(Event::<T>::NewSwapIntent {
-				ingress_address: T::AddressConverter::try_to_encoded_address(ingress_address)?,
+				deposit_address: T::AddressConverter::try_to_encoded_address(deposit_address)?,
 				expiry_block,
 			});
 
@@ -630,7 +630,7 @@ pub mod pallet {
 
 		/// Callback function to kick off the swapping process after a successful ingress.
 		fn on_swap_ingress(
-			ingress_address: ForeignChainAddress,
+			deposit_address: ForeignChainAddress,
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
@@ -654,7 +654,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::SwapIngressReceived {
 				swap_id,
-				ingress_address: T::AddressConverter::try_to_encoded_address(ingress_address).expect("This should not fail since this conversion happens during the pipeline of a swap and ingress address has already been successfully converted in this way at the start of the swap in request_swap_intent"),
+				deposit_address: T::AddressConverter::try_to_encoded_address(deposit_address).expect("This should not fail since this conversion happens during the pipeline of a swap and deposit address has already been successfully converted in this way at the start of the swap in request_swap_intent"),
 				ingress_amount: amount,
 			});
 		}

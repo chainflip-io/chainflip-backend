@@ -16,7 +16,7 @@ use bitcoincore_rpc::bitcoin::{hashes::Hash, Transaction};
 use cf_chains::{
 	address::ScriptPubkeyBytes,
 	btc::{
-		ingress_address::derive_btc_ingress_bitcoin_script, BitcoinScriptBounded,
+		deposit_address::derive_btc_ingress_bitcoin_script, BitcoinScriptBounded,
 		BitcoinTrackedData, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	Bitcoin,
@@ -61,7 +61,7 @@ pub fn filter_interesting_utxos(
 				let script_pubkey_bytes = tx_out.script_pubkey.to_bytes();
 				if let Some(bitcoin_script) = address_monitor.get(&script_pubkey_bytes) {
 					ingress_witnesses.push(IngressWitness {
-						ingress_address: bitcoin_script,
+						deposit_address: bitcoin_script,
 						asset: btc::Asset::Btc,
 						amount: tx_out.value,
 						tx_id: UtxoId { tx_hash, vout },

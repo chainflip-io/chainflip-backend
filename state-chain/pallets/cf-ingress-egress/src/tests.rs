@@ -128,7 +128,7 @@ fn register_and_do_ingress(
 	who: u64,
 	asset: eth::Asset,
 ) -> (ChannelId, <Ethereum as Chain>::ChainAccount) {
-	let (id, address) = IngressEgress::request_liquidity_deposit_channel(who, asset).unwrap();
+	let (id, address) = IngressEgress::request_liquidity_deposit_address(who, asset).unwrap();
 	let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
 	assert_ok!(IngressEgress::do_single_ingress(address, asset, 1_000, Default::default(),));
 	(id, address)
@@ -398,7 +398,7 @@ fn addresses_are_getting_reused() {
 		.execute_as_block(1, || {
 			// Schedule 2 ingress requests but only complete one:
 			ingress_to_finalise = register_and_do_ingress(0u64, eth::Asset::Eth);
-			IngressEgress::request_liquidity_deposit_channel(0u64, eth::Asset::Eth).unwrap();
+			IngressEgress::request_liquidity_deposit_address(0u64, eth::Asset::Eth).unwrap();
 			// Indicates we have already generated 2 addresses
 			assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 2);
 		})
@@ -530,7 +530,7 @@ fn can_ingress_ccm_swap_intents() {
 		let amount = 5_000;
 
 		// Register swap intent with CCM
-		assert_ok!(IngressEgress::request_swap(
+		assert_ok!(IngressEgress::request_swap_deposit_address(
 			from_asset,
 			to_asset,
 			egress_address.clone(),
@@ -540,17 +540,17 @@ fn can_ingress_ccm_swap_intents() {
 		));
 
 		// CCM intent is stored.
-		let ingress_address = hex_literal::hex!("bc77955482380836042253381b35a658d87a4842").into();
+		let deposit_address = hex_literal::hex!("bc77955482380836042253381b35a658d87a4842").into();
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::<Test, Instance1>::StartWitnessing {
-				ingress_address,
+				deposit_address,
 				ingress_asset: from_asset,
 			},
 		));
 
 		// Completing the ingress should trigger CcmHandler.
 		assert_ok!(IngressEgress::do_single_ingress(
-			ingress_address,
+			deposit_address,
 			from_asset,
 			amount,
 			Default::default(),
@@ -743,17 +743,17 @@ fn can_manually_egress_ccm_by_id() {
 #[test]
 fn multi_use_ingress_different_blocks() {
 	const ETH: eth::Asset = eth::Asset::Eth;
-	let (mut channel_id, mut ingress_address): (ChannelId, <Ethereum as Chain>::ChainAccount) =
+	let (mut channel_id, mut deposit_address): (ChannelId, <Ethereum as Chain>::ChainAccount) =
 		Default::default();
 
 	new_test_ext()
 		.execute_as_block(1, || {
-			(channel_id, ingress_address) = register_and_do_ingress(ALICE, ETH);
+			(channel_id, deposit_address) = register_and_do_ingress(ALICE, ETH);
 		})
 		.execute_as_block(2, || {
 			// Do another, should succeed.
 			assert_ok!(Pallet::<Test, _>::do_single_ingress(
-				ingress_address,
+				deposit_address,
 				ETH,
 				1,
 				Default::default()
@@ -763,11 +763,11 @@ fn multi_use_ingress_different_blocks() {
 			// Finalising should invalidate the ingress.
 			IngressEgress::close_ingress_channel(
 				channel_id,
-				ingress_address,
+				deposit_address,
 				DeploymentStatus::Deployed,
 			);
 			assert_noop!(
-				Pallet::<Test, _>::do_single_ingress(ingress_address, ETH, 1, Default::default()),
+				Pallet::<Test, _>::do_single_ingress(deposit_address, ETH, 1, Default::default()),
 				Error::<Test, _>::InvalidIntent
 			);
 		});
@@ -778,9 +778,9 @@ fn multi_use_ingress_same_block() {
 	const ETH: eth::Asset = eth::Asset::Eth;
 	new_test_ext()
 		.execute_as_block(1, || {
-			let (_channel_id, ingress_address) = register_and_do_ingress(ALICE, ETH);
+			let (_channel_id, deposit_address) = register_and_do_ingress(ALICE, ETH);
 			// Another ingress to the same address.
-			Pallet::<Test, _>::do_single_ingress(ingress_address, ETH, 1, Default::default())
+			Pallet::<Test, _>::do_single_ingress(deposit_address, ETH, 1, Default::default())
 				.unwrap();
 		})
 		.execute_with(|| {

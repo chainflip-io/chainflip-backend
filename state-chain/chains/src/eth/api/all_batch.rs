@@ -5,7 +5,7 @@ use scale_info::TypeInfo;
 use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
-	eth::{ingress_address::get_salt, Ethereum, SigData, Tokenizable},
+	eth::{deposit_address::get_salt, Ethereum, SigData, Tokenizable},
 	impl_api_call_eth, ApiCall, ChainCrypto,
 };
 

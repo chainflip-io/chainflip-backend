@@ -97,7 +97,7 @@ pub mod pallet {
 		},
 		DepositAddressReady {
 			channel_id: ChannelId,
-			ingress_address: EncodedAddress,
+			deposit_address: EncodedAddress,
 			expiry_block: T::BlockNumber,
 		},
 		DepositAddressExpired {
@@ -159,24 +159,27 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// For when the user wants to deposit assets into the Chain.
-		/// Generates a new ingress address for the user to posit their assets.
-		#[pallet::weight(T::WeightInfo::request_deposit_address())]
-		pub fn request_deposit_address(origin: OriginFor<T>, asset: Asset) -> DispatchResult {
+		/// Generates a new deposit address for the user to posit their assets.
+		#[pallet::weight(T::WeightInfo::request_liquidity_deposit_address())]
+		pub fn request_liquidity_deposit_address(
+			origin: OriginFor<T>,
+			asset: Asset,
+		) -> DispatchResult {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			let (channel_id, ingress_address) =
-				T::IngressHandler::request_liquidity_deposit_channel(account_id, asset)?;
+			let (channel_id, deposit_address) =
+				T::IngressHandler::request_liquidity_deposit_address(account_id, asset)?;
 
 			let expiry_block =
 				frame_system::Pallet::<T>::current_block_number().saturating_add(LpTTL::<T>::get());
 			IngressIntentExpiries::<T>::append(
 				expiry_block,
-				(channel_id, ForeignChain::from(asset), ingress_address.clone()),
+				(channel_id, ForeignChain::from(asset), deposit_address.clone()),
 			);
 
 			Self::deposit_event(Event::DepositAddressReady {
 				channel_id,
-				ingress_address: T::AddressConverter::try_to_encoded_address(ingress_address)?,
+				deposit_address: T::AddressConverter::try_to_encoded_address(deposit_address)?,
 				expiry_block,
 			});
 

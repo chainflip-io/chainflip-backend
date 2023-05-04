@@ -78,7 +78,7 @@ fn insert_swaps(swaps: &[Swap]) {
 #[test]
 fn request_swap_success_with_valid_parameters() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Swapping::request_swap(
+		assert_ok!(Swapping::request_swap_deposit_address(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			Asset::Usdc,
@@ -182,7 +182,7 @@ fn cannot_swap_with_incorrect_egress_address_type() {
 fn expect_swap_id_to_be_emitted() {
 	new_test_ext().execute_with(|| {
 		// 1. Register a swap intent -> NewSwapIntent
-		assert_ok!(Swapping::request_swap(
+		assert_ok!(Swapping::request_swap_deposit_address(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			Asset::Usdc,
@@ -205,11 +205,11 @@ fn expect_swap_id_to_be_emitted() {
 		assert_event_sequence!(
 			Test,
 			crate::mock::RuntimeEvent::Swapping(crate::Event::NewSwapIntent {
-				ingress_address: EncodedAddress::Eth(Default::default()),
+				deposit_address: EncodedAddress::Eth(Default::default()),
 				expiry_block: SwapTTL::<Test>::get() + System::current_block_number(),
 			}),
 			crate::mock::RuntimeEvent::Swapping(crate::Event::SwapIngressReceived {
-				ingress_address: EncodedAddress::Eth(Default::default()),
+				deposit_address: EncodedAddress::Eth(Default::default()),
 				swap_id: 1,
 				ingress_amount: 500,
 			}),
@@ -280,7 +280,7 @@ fn swap_expires() {
 	new_test_ext().execute_with(|| {
 		let expiry = SwapTTL::<Test>::get() + 1;
 		assert_eq!(expiry, 6); // Expiry = current(1) + TTL (5)
-		assert_ok!(Swapping::request_swap(
+		assert_ok!(Swapping::request_swap_deposit_address(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			Asset::Usdc,
@@ -289,12 +289,12 @@ fn swap_expires() {
 			None
 		));
 
-		let ingress_address = assert_events_match!(Test, RuntimeEvent::Swapping(crate::Event::NewSwapIntent {
-			ingress_address,
+		let deposit_address = assert_events_match!(Test, RuntimeEvent::Swapping(crate::Event::NewSwapIntent {
+			deposit_address,
 			..
-		}) => ingress_address);
+		}) => deposit_address);
 		let swap_intent = SwapIntent {
-			ingress_address: MockAddressConverter::try_from_encoded_address(ingress_address).unwrap(),
+			deposit_address: MockAddressConverter::try_from_encoded_address(deposit_address).unwrap(),
 			ingress_asset: Asset::Eth,
 			egress_asset: Asset::Usdc,
 			egress_address: ForeignChainAddress::Eth(Default::default()),
@@ -327,7 +327,7 @@ fn swap_expires() {
 		assert_eq!(SwapIntentExpiries::<Test>::get(6), vec![]);
 		System::assert_last_event(RuntimeEvent::Swapping(
 			crate::Event::<Test>::SwapIntentExpired {
-				ingress_address: ForeignChainAddress::Eth(Default::default()),
+				deposit_address: ForeignChainAddress::Eth(Default::default()),
 			},
 		));
 		assert!(
@@ -357,7 +357,7 @@ fn can_reject_invalid_ccms() {
 		};
 
 		assert_noop!(
-			Swapping::request_swap(
+			Swapping::request_swap_deposit_address(
 				RuntimeOrigin::signed(ALICE),
 				Asset::Btc,
 				Asset::Eth,
@@ -380,7 +380,7 @@ fn can_reject_invalid_ccms() {
 		);
 
 		assert_noop!(
-			Swapping::request_swap(
+			Swapping::request_swap_deposit_address(
 				RuntimeOrigin::signed(ALICE),
 				Asset::Eth,
 				Asset::Dot,
@@ -401,7 +401,7 @@ fn can_reject_invalid_ccms() {
 			Error::<Test>::CcmUnsupportedForTargetChain
 		);
 		assert_noop!(
-			Swapping::request_swap(
+			Swapping::request_swap_deposit_address(
 				RuntimeOrigin::signed(ALICE),
 				Asset::Eth,
 				Asset::Btc,
@@ -448,7 +448,7 @@ fn can_process_ccms_via_swap_intent() {
 		};
 
 		// Can ingress CCM via Swap Intent
-		assert_ok!(Swapping::request_swap(
+		assert_ok!(Swapping::request_swap_deposit_address(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Dot,
 			Asset::Eth,
