@@ -230,8 +230,14 @@ where
 					.transaction_receipt(tx.hash)
 					.await?
 					.status
-					.map(|s| s.as_u64() == 1)
-					.unwrap_or(false);
+					.ok_or_else(|| {
+						anyhow::anyhow!(
+							"{} client: Transaction receipt did not have status for tx {:?}",
+							T::transport_protocol(),
+							tx.hash
+						)
+					})?
+					.as_u64() == 1;
 				Result::<(bool, Transaction), anyhow::Error>::Ok((status, tx))
 			})
 			.try_collect::<Vec<_>>()
