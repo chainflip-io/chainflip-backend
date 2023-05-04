@@ -32,7 +32,7 @@ pub type EpochIndex = u32;
 
 pub type AuthorityCount = u32;
 
-pub type IntentId = u64;
+pub type ChannelId = u64;
 
 pub type EgressCounter = u64;
 

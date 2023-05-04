@@ -35,7 +35,9 @@ use cf_chains::{
 	ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
 	TransactionBuilder,
 };
-use cf_primitives::{chains::assets, Asset, BasisPoints, EgressId, IntentId, ETHEREUM_ETH_ADDRESS};
+use cf_primitives::{
+	chains::assets, Asset, BasisPoints, ChannelId, EgressId, ETHEREUM_ETH_ADDRESS,
+};
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, EgressApi,
 	EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat, IngressApi, IngressHandler,
@@ -413,7 +415,7 @@ macro_rules! impl_ingress_api_for_anychain {
 			fn register_liquidity_ingress_intent(
 				lp_account: Self::AccountId,
 				ingress_asset: Asset,
-			) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match ingress_asset.into() {
 					$(
 						ForeignChain::$chain =>
@@ -432,7 +434,7 @@ macro_rules! impl_ingress_api_for_anychain {
 				relayer_commission_bps: BasisPoints,
 				relayer_id: Self::AccountId,
 				message_metadata: Option<CcmIngressMetadata>,
-			) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
+			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match ingress_asset.into() {
 					$(
 						ForeignChain::$chain => $ingress_egress::register_swap_intent(
@@ -447,11 +449,11 @@ macro_rules! impl_ingress_api_for_anychain {
 				}
 			}
 
-			fn expire_intent(chain: ForeignChain, intent_id: IntentId, address: ForeignChainAddress) {
+			fn expire_intent(chain: ForeignChain, channel_id: ChannelId, address: ForeignChainAddress) {
 				match chain {
 					$(
 						ForeignChain::$chain => {
-							$ingress_egress::expire_intent(intent_id, address.try_into().expect("Checked for address compatibility"));
+							$ingress_egress::expire_intent(channel_id, address.try_into().expect("Checked for address compatibility"));
 						},
 					)+
 				}
@@ -522,15 +524,15 @@ impl IngressHandler<Bitcoin> for BtcIngressHandler {
 
 	fn on_ingress_initiated(
 		ingress_script: <Bitcoin as Chain>::ChainAccount,
-		salt: IntentId,
+		salt: ChannelId,
 	) -> Result<(), DispatchError> {
 		Environment::add_details_for_btc_ingress_script(
 			ingress_script,
-			salt.try_into().expect("The salt/intent_id is not expected to exceed u32 max"), /* Todo: Confirm
-			                                                                                 * this assumption.
-			                                                                                 * Consider this in
-			                                                                                 * conjunction with
-			                                                                                 * #2354 */
+			salt.try_into().expect("The salt/channel_id is not expected to exceed u32 max"), /* Todo: Confirm
+			                                                                                  * this assumption.
+			                                                                                  * Consider this in
+			                                                                                  * conjunction with
+			                                                                                  * #2354 */
 			BitcoinVault::vaults(Validator::epoch_index())
 				.ok_or(DispatchError::Other("No vault for epoch"))?
 				.public_key

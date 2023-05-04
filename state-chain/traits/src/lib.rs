@@ -17,7 +17,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, EgressId, EpochIndex, EthereumAddress, ForeignChain, IntentId,
+	CeremonyId, ChannelId, EgressId, EpochIndex, EthereumAddress, ForeignChain,
 	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -681,7 +681,7 @@ pub trait IngressApi<C: Chain> {
 	fn register_liquidity_ingress_intent(
 		lp_account: Self::AccountId,
 		ingress_asset: C::ChainAsset,
-	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
+	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
 	/// Issues an intent id and ingress address for a new swap.
 	fn register_swap_intent(
@@ -691,35 +691,35 @@ pub trait IngressApi<C: Chain> {
 		relayer_commission_bps: BasisPoints,
 		relayer_id: Self::AccountId,
 		message_metadata: Option<CcmIngressMetadata>,
-	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
+	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
 	/// Expires an intent.
-	fn expire_intent(chain: ForeignChain, intent_id: IntentId, address: C::ChainAccount);
+	fn expire_intent(chain: ForeignChain, channel_id: ChannelId, address: C::ChainAccount);
 }
 
 /// Generates a deterministic ingress address for some combination of asset, chain and intent id.
 pub trait AddressDerivationApi<C: Chain> {
 	fn generate_address(
 		ingress_asset: C::ChainAsset,
-		intent_id: IntentId,
+		channel_id: ChannelId,
 	) -> Result<C::ChainAccount, DispatchError>;
 }
 
 impl AddressDerivationApi<Ethereum> for () {
 	fn generate_address(
 		ingress_asset: <Ethereum as Chain>::ChainAsset,
-		intent_id: IntentId,
+		channel_id: ChannelId,
 	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
-		Ok(H256((ingress_asset, intent_id).encode().blake2_256()).into())
+		Ok(H256((ingress_asset, channel_id).encode().blake2_256()).into())
 	}
 }
 
 impl AddressDerivationApi<Polkadot> for () {
 	fn generate_address(
 		ingress_asset: <Polkadot as Chain>::ChainAsset,
-		intent_id: IntentId,
+		channel_id: ChannelId,
 	) -> Result<<Polkadot as Chain>::ChainAccount, DispatchError> {
-		Ok((ingress_asset, intent_id).encode().blake2_256().into())
+		Ok((ingress_asset, channel_id).encode().blake2_256().into())
 	}
 }
 
@@ -836,7 +836,7 @@ pub trait IngressHandler<C: ChainCrypto> {
 	}
 	fn on_ingress_initiated(
 		_address: <C as Chain>::ChainAccount,
-		_intent_id: IntentId,
+		_channel_id: ChannelId,
 	) -> Result<(), DispatchError> {
 		Ok(())
 	}

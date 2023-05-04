@@ -760,12 +760,12 @@ pub struct PolkadotReplayProtection {
 impl IngressIdConstructor for PolkadotIngressId {
 	type Address = AccountId32;
 
-	fn deployed(intent_id: u64, _address: Self::Address) -> Self {
-		intent_id
+	fn deployed(channel_id: u64, _address: Self::Address) -> Self {
+		channel_id
 	}
 
-	fn undeployed(intent_id: u64, _address: Self::Address) -> Self {
-		intent_id
+	fn undeployed(channel_id: u64, _address: Self::Address) -> Self {
+		channel_id
 	}
 }
 

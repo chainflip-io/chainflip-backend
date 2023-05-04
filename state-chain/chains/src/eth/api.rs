@@ -130,8 +130,8 @@ where
 				match ingress_fetch_id {
 					EthereumIngressId::Deployed(contract_address) => fetch_only_params
 						.push(EncodableFetchAssetParams { contract_address, asset: token_address }),
-					EthereumIngressId::UnDeployed(intent_id) => fetch_deploy_params
-						.push(EncodableFetchDeployAssetParams { intent_id, asset: token_address }),
+					EthereumIngressId::UnDeployed(channel_id) => fetch_deploy_params
+						.push(EncodableFetchDeployAssetParams { channel_id, asset: token_address }),
 				};
 			} else {
 				return Err(())

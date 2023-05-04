@@ -3,7 +3,7 @@ use core::fmt::Display;
 
 use crate::benchmarking_value::BenchmarkValue;
 pub use address::ForeignChainAddress;
-use cf_primitives::{chains::assets, AssetAmount, EgressId, EthAmount, IntentId};
+use cf_primitives::{chains::assets, AssetAmount, EgressId, EthAmount};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -296,9 +296,9 @@ pub trait FeeRefundCalculator<C: Chain> {
 pub trait IngressIdConstructor {
 	type Address;
 	/// Constructs the IngressId for the deployed case.
-	fn deployed(intent_id: u64, address: Self::Address) -> Self;
+	fn deployed(channel_id: u64, address: Self::Address) -> Self;
 	/// Constructs the IngressId for the undeployed case.
-	fn undeployed(intent_id: u64, address: Self::Address) -> Self;
+	fn undeployed(channel_id: u64, address: Self::Address) -> Self;
 }
 
 /// Metadata as part of a Cross Chain Message.

@@ -217,7 +217,7 @@ fn basic_pool_setup_provision_and_swap() {
 
 		let ingress_address = <AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
 			cf_chains::eth::assets::eth::Asset::Eth,
-			pallet_cf_ingress_egress::IntentIdCounter::<Runtime, EthereumInstance>::get(),
+			pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
 		).unwrap();
 		assert_events_eq!(Runtime, RuntimeEvent::EthereumIngressEgress(
 			pallet_cf_ingress_egress::Event::StartWitnessing { ingress_address, ingress_asset: cf_chains::eth::assets::eth::Asset::Eth },
@@ -323,7 +323,7 @@ fn can_process_ccm_via_swap_intent() {
 		let ingress_address =
 			<AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
 				cf_chains::eth::assets::eth::Asset::Flip,
-				pallet_cf_ingress_egress::IntentIdCounter::<Runtime, EthereumInstance>::get(),
+				pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
 			)
 			.unwrap();
 		let current_epoch = Validator::current_epoch();

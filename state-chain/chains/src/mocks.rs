@@ -29,11 +29,11 @@ impl Chain for MockEthereum {
 impl IngressIdConstructor for MockEthereumIngressId {
 	type Address = u64;
 
-	fn deployed(_intent_id: u64, _address: Self::Address) -> Self {
+	fn deployed(_channel_id: u64, _address: Self::Address) -> Self {
 		unimplemented!()
 	}
 
-	fn undeployed(_intent_id: u64, _address: Self::Address) -> Self {
+	fn undeployed(_channel_id: u64, _address: Self::Address) -> Self {
 		unimplemented!()
 	}
 }

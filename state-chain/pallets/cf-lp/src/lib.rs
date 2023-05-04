@@ -28,7 +28,7 @@ pub use weights::WeightInfo;
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_chains::address::EncodedAddress;
-	use cf_primitives::{EgressId, IntentId};
+	use cf_primitives::{ChannelId, EgressId};
 
 	use super::*;
 
@@ -72,8 +72,8 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			let expired = IngressIntentExpiries::<T>::take(n);
-			for (intent_id, chain, address) in expired.clone() {
-				T::IngressHandler::expire_intent(chain, intent_id, address.clone());
+			for (channel_id, chain, address) in expired.clone() {
+				T::IngressHandler::expire_intent(chain, channel_id, address.clone());
 				Self::deposit_event(Event::DepositAddressExpired {
 					address: T::AddressConverter::try_to_encoded_address(address).expect("This should not fail since this conversion already succeeded when expiry was scheduled"),
 				});
@@ -96,7 +96,7 @@ pub mod pallet {
 			amount_credited: AssetAmount,
 		},
 		DepositAddressReady {
-			intent_id: IntentId,
+			channel_id: ChannelId,
 			ingress_address: EncodedAddress,
 			expiry_block: T::BlockNumber,
 		},
@@ -148,7 +148,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::BlockNumber,
-		Vec<(IntentId, ForeignChain, cf_chains::ForeignChainAddress)>,
+		Vec<(ChannelId, ForeignChain, cf_chains::ForeignChainAddress)>,
 		ValueQuery,
 	>;
 
@@ -164,18 +164,18 @@ pub mod pallet {
 		pub fn request_deposit_address(origin: OriginFor<T>, asset: Asset) -> DispatchResult {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			let (intent_id, ingress_address) =
+			let (channel_id, ingress_address) =
 				T::IngressHandler::register_liquidity_ingress_intent(account_id, asset)?;
 
 			let expiry_block =
 				frame_system::Pallet::<T>::current_block_number().saturating_add(LpTTL::<T>::get());
 			IngressIntentExpiries::<T>::append(
 				expiry_block,
-				(intent_id, ForeignChain::from(asset), ingress_address.clone()),
+				(channel_id, ForeignChain::from(asset), ingress_address.clone()),
 			);
 
 			Self::deposit_event(Event::DepositAddressReady {
-				intent_id,
+				channel_id,
 				ingress_address: T::AddressConverter::try_to_encoded_address(ingress_address)?,
 				expiry_block,
 			});

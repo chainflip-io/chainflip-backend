@@ -1,6 +1,6 @@
 use crate::Vec;
 use cf_chains::{Chain, Polkadot};
-use cf_primitives::{chains::assets::dot, IntentId};
+use cf_primitives::{chains::assets::dot, ChannelId};
 use cf_traits::AddressDerivationApi;
 use sp_core::crypto::{AccountId32, ByteArray};
 use sp_runtime::{
@@ -16,7 +16,7 @@ use super::AddressDerivation;
 impl AddressDerivationApi<Polkadot> for AddressDerivation {
 	fn generate_address(
 		_ingress_asset: dot::Asset,
-		intent_id: IntentId,
+		channel_id: ChannelId,
 	) -> Result<<Polkadot as Chain>::ChainAccount, DispatchError> {
 		const PREFIX: &[u8; 16] = b"modlpy/utilisuba";
 		const RAW_PUBLIC_KEY_SIZE: usize = 32;
@@ -26,7 +26,7 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 			.ok_or(DispatchError::Other("Vault Account does not exist."))?;
 
 		// Because we re-use addresses, we don't expect to hit this case in the wild.
-		if intent_id > u16::MAX.into() {
+		if channel_id > u16::MAX.into() {
 			return Err(DispatchError::Other(
 				"Intent ID too large. Polkadot can only support up to u16 addresses",
 			))
@@ -38,7 +38,7 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 		// Then add the 32-byte public key.
 		payload.extend(master_account.as_slice());
 		// Finally, add the index to the end of the payload.
-		payload.extend(&(<u16>::try_from(intent_id).unwrap()).to_le_bytes());
+		payload.extend(&(<u16>::try_from(channel_id).unwrap()).to_le_bytes());
 
 		// Hash the whole thing
 		let payload_hash = BlakeTwo256::hash(&payload);

@@ -21,7 +21,7 @@ benchmarks_instance_pallet! {
 			if i % 2 == 0 {
 				FetchParamDetails::<T, I>::insert(i as u64, (ingress_fetch_id, egress_address.clone()));
 				batch.push(FetchOrTransfer::Fetch {
-					intent_id: i as u64,
+					channel_id: i as u64,
 					asset: egress_asset,
 				});
 			} else {
@@ -81,7 +81,7 @@ benchmarks_instance_pallet! {
 		let ingress_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
 		let ingress_amount: <<T as Config<I>>::TargetChain as Chain>::ChainAmount = BenchmarkValue::benchmark_value();
 		IntentIngressDetails::<T, I>::insert(&ingress_address, IngressDetails {
-				intent_id: 1,
+				channel_id: 1,
 				ingress_asset,
 			});
 		IntentActions::<T, I>::insert(&ingress_address, IntentAction::<T::AccountId>::LiquidityProvision {

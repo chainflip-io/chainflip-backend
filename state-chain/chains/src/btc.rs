@@ -200,7 +200,7 @@ impl ChainAbi for Bitcoin {
 	type ReplayProtection = ();
 }
 
-// TODO: Look at moving this into Utxo. They're exactly the same apart from the IntentId
+// TODO: Look at moving this into Utxo. They're exactly the same apart from the ChannelId
 // which could be made generic, if even necessary at all.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen)]
 pub struct UtxoId {
@@ -213,12 +213,12 @@ pub struct UtxoId {
 impl IngressIdConstructor for BitcoinFetchId {
 	type Address = BitcoinScriptBounded;
 
-	fn deployed(intent_id: u64, _address: Self::Address) -> Self {
-		BitcoinFetchId(intent_id)
+	fn deployed(channel_id: u64, _address: Self::Address) -> Self {
+		BitcoinFetchId(channel_id)
 	}
 
-	fn undeployed(intent_id: u64, _address: Self::Address) -> Self {
-		BitcoinFetchId(intent_id)
+	fn undeployed(channel_id: u64, _address: Self::Address) -> Self {
+		BitcoinFetchId(channel_id)
 	}
 }
 

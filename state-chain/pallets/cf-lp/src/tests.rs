@@ -128,11 +128,11 @@ fn ingress_intents_expires() {
 			asset,
 		));
 
-		let (intent_id, ingress_address) = assert_events_match!(Test, RuntimeEvent::LiquidityProvider(crate::Event::DepositAddressReady {
-			intent_id,
+		let (channel_id, ingress_address) = assert_events_match!(Test, RuntimeEvent::LiquidityProvider(crate::Event::DepositAddressReady {
+			channel_id,
 			ingress_address,
 			expiry_block,
-		}) if expiry_block == expiry => (intent_id, ingress_address));
+		}) if expiry_block == expiry => (channel_id, ingress_address));
 		let lp_intent = LpIntent {
 			ingress_address: MockAddressConverter::try_from_encoded_address(ingress_address.clone()).unwrap(),
 			ingress_asset: asset,
@@ -141,7 +141,7 @@ fn ingress_intents_expires() {
 
 		assert_eq!(
 			IngressIntentExpiries::<Test>::get(expiry),
-			vec![(intent_id, ForeignChain::from(asset), MockAddressConverter::try_from_encoded_address(ingress_address.clone()).unwrap())]
+			vec![(channel_id, ForeignChain::from(asset), MockAddressConverter::try_from_encoded_address(ingress_address.clone()).unwrap())]
 		);
 		assert_eq!(
 			MockIngressHandler::<AnyChain, Test>::get_liquidity_intents(),
@@ -152,7 +152,7 @@ fn ingress_intents_expires() {
 		LiquidityProvider::on_initialize(expiry - 1);
 		assert_eq!(
 			IngressIntentExpiries::<Test>::get(expiry),
-			vec![(intent_id, ForeignChain::from(asset), MockAddressConverter::try_from_encoded_address(ingress_address.clone()).unwrap())]
+			vec![(channel_id, ForeignChain::from(asset), MockAddressConverter::try_from_encoded_address(ingress_address.clone()).unwrap())]
 		);
 		assert_eq!(
 			MockIngressHandler::<AnyChain, Test>::get_liquidity_intents(),

@@ -19,11 +19,11 @@ impl Chain for AnyChain {
 impl IngressIdConstructor for () {
 	type Address = ForeignChainAddress;
 
-	fn deployed(_intent_id: u64, _address: Self::Address) -> Self {
+	fn deployed(_channel_id: u64, _address: Self::Address) -> Self {
 		unreachable!()
 	}
 
-	fn undeployed(_intent_id: u64, _address: Self::Address) -> Self {
+	fn undeployed(_channel_id: u64, _address: Self::Address) -> Self {
 		unreachable!()
 	}
 }

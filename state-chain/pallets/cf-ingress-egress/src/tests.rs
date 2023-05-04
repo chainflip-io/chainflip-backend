@@ -1,10 +1,10 @@
 use crate::{
-	mock::*, AddressPool, AddressStatus, CrossChainMessage, DeploymentStatus, DisabledEgressAssets,
-	Error, FetchOrTransfer, IntentAction, IntentIdCounter, Pallet, ScheduledEgressCcm,
+	mock::*, AddressPool, AddressStatus, ChannelIdCounter, CrossChainMessage, DeploymentStatus,
+	DisabledEgressAssets, Error, FetchOrTransfer, IntentAction, Pallet, ScheduledEgressCcm,
 	ScheduledEgressFetchOrTransfer, WeightInfo,
 };
 use cf_chains::{ExecutexSwapAndCall, TransferAssetParams};
-use cf_primitives::{chains::assets::eth, ForeignChain, IntentId};
+use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
 use cf_traits::{
 	mocks::{
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
@@ -127,7 +127,7 @@ fn can_schedule_swap_egress_to_batch() {
 fn register_and_do_ingress(
 	who: u64,
 	asset: eth::Asset,
-) -> (IntentId, <Ethereum as Chain>::ChainAccount) {
+) -> (ChannelId, <Ethereum as Chain>::ChainAccount) {
 	let (id, address) = IngressEgress::register_liquidity_ingress_intent(who, asset).unwrap();
 	let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
 	assert_ok!(IngressEgress::do_single_ingress(address, asset, 1_000, Default::default(),));
@@ -146,14 +146,14 @@ fn can_schedule_ingress_fetch() {
 		assert_eq!(
 			ScheduledEgressFetchOrTransfer::<Test, Instance1>::get(),
 			vec![
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_ETH },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 2u64, asset: ETH_ETH },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 3u64, asset: ETH_FLIP },
+				FetchOrTransfer::<Ethereum>::Fetch { channel_id: 1u64, asset: ETH_ETH },
+				FetchOrTransfer::<Ethereum>::Fetch { channel_id: 2u64, asset: ETH_ETH },
+				FetchOrTransfer::<Ethereum>::Fetch { channel_id: 3u64, asset: ETH_FLIP },
 			]
 		);
 
 		System::assert_has_event(RuntimeEvent::IngressEgress(
-			crate::Event::IngressFetchesScheduled { intent_id: 1, asset: eth::Asset::Eth },
+			crate::Event::IngressFetchesScheduled { channel_id: 1, asset: eth::Asset::Eth },
 		));
 
 		register_and_do_ingress(4u64, eth::Asset::Eth);
@@ -161,10 +161,10 @@ fn can_schedule_ingress_fetch() {
 		assert_eq!(
 			ScheduledEgressFetchOrTransfer::<Test, Instance1>::get(),
 			vec![
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 1u64, asset: ETH_ETH },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 2u64, asset: ETH_ETH },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 3u64, asset: ETH_FLIP },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 4u64, asset: ETH_ETH },
+				FetchOrTransfer::<Ethereum>::Fetch { channel_id: 1u64, asset: ETH_ETH },
+				FetchOrTransfer::<Ethereum>::Fetch { channel_id: 2u64, asset: ETH_ETH },
+				FetchOrTransfer::<Ethereum>::Fetch { channel_id: 3u64, asset: ETH_FLIP },
+				FetchOrTransfer::<Ethereum>::Fetch { channel_id: 4u64, asset: ETH_ETH },
 			]
 		);
 	});
@@ -342,8 +342,8 @@ fn on_idle_batch_size_is_limited_by_weight() {
 					egress_address: ALICE_ETH_ADDRESS.into(),
 					egress_id: (ForeignChain::Ethereum, 5),
 				},
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 3u64, asset: ETH_FLIP },
-				FetchOrTransfer::<Ethereum>::Fetch { intent_id: 4u64, asset: ETH_FLIP },
+				FetchOrTransfer::<Ethereum>::Fetch { channel_id: 3u64, asset: ETH_FLIP },
+				FetchOrTransfer::<Ethereum>::Fetch { channel_id: 4u64, asset: ETH_FLIP },
 			]
 		);
 	});
@@ -391,7 +391,8 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 
 #[test]
 fn addresses_are_getting_reused() {
-	let mut ingress_to_finalise: (IntentId, <Ethereum as Chain>::ChainAccount) = Default::default();
+	let mut ingress_to_finalise: (ChannelId, <Ethereum as Chain>::ChainAccount) =
+		Default::default();
 
 	new_test_ext()
 		.execute_as_block(1, || {
@@ -399,7 +400,7 @@ fn addresses_are_getting_reused() {
 			ingress_to_finalise = register_and_do_ingress(0u64, eth::Asset::Eth);
 			IngressEgress::register_liquidity_ingress_intent(0u64, eth::Asset::Eth).unwrap();
 			// Indicates we have already generated 2 addresses
-			assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
+			assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 2);
 		})
 		.execute_as_block(2, || {
 			IngressEgress::close_ingress_channel(
@@ -433,7 +434,7 @@ fn addresses_are_getting_reused() {
 			);
 			// Expect the address to be reused which is indicated by the counter not being
 			// incremented
-			assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
+			assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 2);
 			expect_size_of_address_pool(1);
 		});
 }
@@ -478,23 +479,23 @@ fn create_new_address_while_pool_is_empty() {
 			IngressEgress::close_ingress_channel(ingress.0, ingress.1, DeploymentStatus::Deployed);
 		}
 		IngressEgress::on_initialize(EXPIRY_BLOCK);
-		assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
+		assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 2);
 		register_and_do_ingress(3u64, eth::Asset::Eth);
-		assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
+		assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 2);
 		IngressEgress::on_idle(
 			1,
 			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(2) +
 				Weight::from_ref_time(1),
 		);
 		IngressEgress::on_initialize(EXPIRY_BLOCK);
-		assert_eq!(IntentIdCounter::<Test, Instance1>::get(), 2);
+		assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 2);
 	});
 }
 
 #[test]
-fn reused_address_intent_id_matches() {
+fn reused_address_channel_id_matches() {
 	new_test_ext().execute_with(|| {
-		const INTENT_ID: IntentId = 0;
+		const INTENT_ID: ChannelId = 0;
 		let eth_address =
 			<<Test as crate::Config<Instance1>>::AddressDerivation as AddressDerivationApi<
 				Ethereum,
@@ -502,14 +503,14 @@ fn reused_address_intent_id_matches() {
 			.unwrap();
 		AddressPool::<Test, _>::insert(INTENT_ID, eth_address);
 
-		let (reused_intent_id, reused_address) = IngressEgress::register_ingress_intent(
+		let (reused_channel_id, reused_address) = IngressEgress::register_ingress_intent(
 			eth::Asset::Eth,
 			IntentAction::LiquidityProvision { lp_account: 0 },
 		)
 		.unwrap();
 
 		// The reused details should be the same as before.
-		assert_eq!(reused_intent_id, INTENT_ID);
+		assert_eq!(reused_channel_id, INTENT_ID);
 		assert_eq!(eth_address, reused_address);
 	});
 }
@@ -742,12 +743,12 @@ fn can_manually_egress_ccm_by_id() {
 #[test]
 fn multi_use_ingress_different_blocks() {
 	const ETH: eth::Asset = eth::Asset::Eth;
-	let (mut intent_id, mut ingress_address): (IntentId, <Ethereum as Chain>::ChainAccount) =
+	let (mut channel_id, mut ingress_address): (ChannelId, <Ethereum as Chain>::ChainAccount) =
 		Default::default();
 
 	new_test_ext()
 		.execute_as_block(1, || {
-			(intent_id, ingress_address) = register_and_do_ingress(ALICE, ETH);
+			(channel_id, ingress_address) = register_and_do_ingress(ALICE, ETH);
 		})
 		.execute_as_block(2, || {
 			// Do another, should succeed.
@@ -761,7 +762,7 @@ fn multi_use_ingress_different_blocks() {
 		.execute_as_block(3, || {
 			// Finalising should invalidate the ingress.
 			IngressEgress::close_ingress_channel(
-				intent_id,
+				channel_id,
 				ingress_address,
 				DeploymentStatus::Deployed,
 			);
@@ -777,7 +778,7 @@ fn multi_use_ingress_same_block() {
 	const ETH: eth::Asset = eth::Asset::Eth;
 	new_test_ext()
 		.execute_as_block(1, || {
-			let (_intent_id, ingress_address) = register_and_do_ingress(ALICE, ETH);
+			let (_channel_id, ingress_address) = register_and_do_ingress(ALICE, ETH);
 			// Another ingress to the same address.
 			Pallet::<Test, _>::do_single_ingress(ingress_address, ETH, 1, Default::default())
 				.unwrap();

@@ -3,7 +3,7 @@ use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
 	CcmIngressMetadata,
 };
-use cf_primitives::{Asset, AssetAmount, ForeignChain, IntentId};
+use cf_primitives::{Asset, AssetAmount, ChannelId, ForeignChain};
 use cf_traits::{liquidity::SwappingApi, CcmHandler, IngressApi, SystemStateInfo};
 use frame_support::{
 	pallet_prelude::*,
@@ -149,7 +149,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::BlockNumber,
-		Vec<(IntentId, ForeignChain, ForeignChainAddress)>,
+		Vec<(ChannelId, ForeignChain, ForeignChainAddress)>,
 		ValueQuery,
 	>;
 	/// Tracks the outputs of Ccm swaps.
@@ -282,8 +282,8 @@ pub mod pallet {
 
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			let expired = SwapIntentExpiries::<T>::take(n);
-			for (intent_id, chain, address) in expired.clone() {
-				T::IngressHandler::expire_intent(chain, intent_id, address.clone());
+			for (channel_id, chain, address) in expired.clone() {
+				T::IngressHandler::expire_intent(chain, channel_id, address.clone());
 				Self::deposit_event(Event::<T>::SwapIntentExpired { ingress_address: address });
 			}
 			T::WeightInfo::on_initialize(expired.len() as u32)
@@ -325,7 +325,7 @@ pub mod pallet {
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 
-			let (intent_id, ingress_address) = T::IngressHandler::register_swap_intent(
+			let (channel_id, ingress_address) = T::IngressHandler::register_swap_intent(
 				ingress_asset,
 				egress_asset,
 				egress_address_internal,
@@ -338,7 +338,7 @@ pub mod pallet {
 				.saturating_add(SwapTTL::<T>::get());
 			SwapIntentExpiries::<T>::append(
 				expiry_block,
-				(intent_id, ForeignChain::from(ingress_asset), ingress_address.clone()),
+				(channel_id, ForeignChain::from(ingress_asset), ingress_address.clone()),
 			);
 
 			Self::deposit_event(Event::<T>::NewSwapIntent {
