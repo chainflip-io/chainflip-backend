@@ -118,7 +118,7 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 		move_forward_blocks(2);
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::KeyHandoverInProgress(..)
+			RotationPhase::<Test>::KeyHandoversInProgress(..)
 		));
 		MockVaultRotatorA::key_handover_success();
 
@@ -189,7 +189,7 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 		move_forward_blocks(2);
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::KeyHandoverInProgress(..)
+			RotationPhase::<Test>::KeyHandoversInProgress(..)
 		));
 		MockVaultRotatorA::key_handover_success();
 

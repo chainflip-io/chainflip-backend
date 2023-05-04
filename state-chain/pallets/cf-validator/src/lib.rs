@@ -77,7 +77,7 @@ type RuntimeRotationState<T> =
 pub enum RotationPhase<T: Config> {
 	Idle,
 	KeygensInProgress(RuntimeRotationState<T>),
-	KeyHandoverInProgress(RuntimeRotationState<T>),
+	KeyHandoversInProgress(RuntimeRotationState<T>),
 	ActivatingKeys(RuntimeRotationState<T>),
 	NewKeysActivated(RuntimeRotationState<T>),
 	SessionRotating(RuntimeRotationState<T>),
@@ -394,7 +394,7 @@ pub mod pallet {
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
 							let authority_candidates = rotation_state.authority_candidates();
 							T::VaultRotator::key_handover(helpers::select_sharing_participants(Self::current_authorities(), &authority_candidates), authority_candidates, rotation_state.new_epoch_index);
-							Self::set_rotation_phase(RotationPhase::KeyHandoverInProgress(rotation_state));
+							Self::set_rotation_phase(RotationPhase::KeyHandoversInProgress(rotation_state));
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
 							rotation_state.ban(offenders);
@@ -415,7 +415,7 @@ pub mod pallet {
 					};
 					T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
 				},
-				RotationPhase::KeyHandoverInProgress(rotation_state) => {
+				RotationPhase::KeyHandoversInProgress(rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {
 						AsyncResult::Ready(VaultStatus::KeyHandoverComplete) => {
