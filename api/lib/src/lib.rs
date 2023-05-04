@@ -345,7 +345,7 @@ pub async fn set_vanity_name(
 	.await
 }
 
-pub async fn register_swap_intent(
+pub async fn request_swap(
 	state_chain_settings: &settings::StateChain,
 	ingress_asset: Asset,
 	egress_asset: Asset,
@@ -355,7 +355,7 @@ pub async fn register_swap_intent(
 ) -> Result<EncodedAddress> {
 	let events = connect_submit_and_get_events(
 		state_chain_settings,
-		pallet_cf_swapping::Call::register_swap_intent {
+		pallet_cf_swapping::Call::request_swap {
 			ingress_asset,
 			egress_asset,
 			egress_address,

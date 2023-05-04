@@ -76,9 +76,9 @@ fn insert_swaps(swaps: &[Swap]) {
 }
 
 #[test]
-fn register_swap_intent_success_with_valid_parameters() {
+fn request_swap_success_with_valid_parameters() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Swapping::register_swap_intent(
+		assert_ok!(Swapping::request_swap(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			Asset::Usdc,
@@ -182,7 +182,7 @@ fn cannot_swap_with_incorrect_egress_address_type() {
 fn expect_swap_id_to_be_emitted() {
 	new_test_ext().execute_with(|| {
 		// 1. Register a swap intent -> NewSwapIntent
-		assert_ok!(Swapping::register_swap_intent(
+		assert_ok!(Swapping::request_swap(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			Asset::Usdc,
@@ -280,7 +280,7 @@ fn swap_expires() {
 	new_test_ext().execute_with(|| {
 		let expiry = SwapTTL::<Test>::get() + 1;
 		assert_eq!(expiry, 6); // Expiry = current(1) + TTL (5)
-		assert_ok!(Swapping::register_swap_intent(
+		assert_ok!(Swapping::request_swap(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			Asset::Usdc,
@@ -357,7 +357,7 @@ fn can_reject_invalid_ccms() {
 		};
 
 		assert_noop!(
-			Swapping::register_swap_intent(
+			Swapping::request_swap(
 				RuntimeOrigin::signed(ALICE),
 				Asset::Btc,
 				Asset::Eth,
@@ -380,7 +380,7 @@ fn can_reject_invalid_ccms() {
 		);
 
 		assert_noop!(
-			Swapping::register_swap_intent(
+			Swapping::request_swap(
 				RuntimeOrigin::signed(ALICE),
 				Asset::Eth,
 				Asset::Dot,
@@ -401,7 +401,7 @@ fn can_reject_invalid_ccms() {
 			Error::<Test>::CcmUnsupportedForTargetChain
 		);
 		assert_noop!(
-			Swapping::register_swap_intent(
+			Swapping::request_swap(
 				RuntimeOrigin::signed(ALICE),
 				Asset::Eth,
 				Asset::Btc,
@@ -448,7 +448,7 @@ fn can_process_ccms_via_swap_intent() {
 		};
 
 		// Can ingress CCM via Swap Intent
-		assert_ok!(Swapping::register_swap_intent(
+		assert_ok!(Swapping::request_swap(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Dot,
 			Asset::Eth,

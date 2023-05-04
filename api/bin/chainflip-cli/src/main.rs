@@ -43,8 +43,8 @@ async fn run_cli() -> Result<()> {
 	);
 
 	match command_line_opts.cmd {
-		Relayer(RelayerSubcommands::SwapIntent(params)) =>
-			swap_intent(&cli_settings.state_chain, params).await,
+		Relayer(RelayerSubcommands::SwapRequest(params)) =>
+			submit_swap_request(&cli_settings.state_chain, params).await,
 		LiquidityProvider(LiquidityProviderSubcommands::Deposit { asset }) =>
 			liquidity_deposit(&cli_settings.state_chain, asset).await,
 		Redeem { amount, eth_address } =>
@@ -60,11 +60,11 @@ async fn run_cli() -> Result<()> {
 	}
 }
 
-pub async fn swap_intent(
+pub async fn submit_swap_request(
 	state_chain_settings: &settings::StateChain,
-	params: settings::SwapIntentParams,
+	params: settings::SwapRequestParams,
 ) -> Result<()> {
-	let address = api::register_swap_intent(
+	let address = api::request_swap(
 		state_chain_settings,
 		params.ingress_asset,
 		params.egress_asset,

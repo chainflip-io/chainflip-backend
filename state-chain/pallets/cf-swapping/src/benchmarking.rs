@@ -24,12 +24,12 @@ fn generate_swaps<T: Config>(amount: u32, from: Asset, to: Asset) -> Vec<Swap> {
 }
 
 benchmarks! {
-	register_swap_intent {
+	request_swap {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		T::AccountRoleRegistry::register_as_relayer(&caller).unwrap();
 		let origin = RawOrigin::Signed(caller);
-		let call = Call::<T>::register_swap_intent {
+		let call = Call::<T>::request_swap {
 			ingress_asset: Asset::Eth,
 			egress_asset: Asset::Usdc,
 			egress_address: EncodedAddress::benchmark_value(),
@@ -133,7 +133,7 @@ benchmarks! {
 		T::AccountRoleRegistry::register_as_relayer(&caller).unwrap();
 		let origin = RawOrigin::Signed(caller);
 		for i in 0..a {
-			let call = Call::<T>::register_swap_intent{
+			let call = Call::<T>::request_swap{
 				ingress_asset: Asset::Usdc,
 				egress_asset: Asset::Eth,
 				egress_address: EncodedAddress::Eth(Default::default()),

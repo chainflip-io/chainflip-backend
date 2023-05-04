@@ -30,7 +30,7 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_swapping.
 pub trait WeightInfo {
-	fn register_swap_intent() -> Weight;
+	fn request_swap() -> Weight;
 	fn on_idle() -> Weight;
 	fn execute_group_of_swaps(a: u32, ) -> Weight;
 	fn withdraw() -> Weight;
@@ -54,7 +54,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumIngressEgress FetchParamDetails (r:0 w:1)
 	// Storage: EthereumIngressEgress AddressStatus (r:0 w:1)
 	// Storage: EthereumIngressEgress IntentIngressDetails (r:0 w:1)
-	fn register_swap_intent() -> Weight {
+	fn request_swap() -> Weight {
 		// Minimum execution time: 53_000 nanoseconds.
 		Weight::from_ref_time(55_000_000)
 			.saturating_add(T::DbWeight::get().reads(6))
@@ -148,7 +148,7 @@ impl WeightInfo for () {
 	// Storage: EthereumIngressEgress FetchParamDetails (r:0 w:1)
 	// Storage: EthereumIngressEgress AddressStatus (r:0 w:1)
 	// Storage: EthereumIngressEgress IntentIngressDetails (r:0 w:1)
-	fn register_swap_intent() -> Weight {
+	fn request_swap() -> Weight {
 		// Minimum execution time: 53_000 nanoseconds.
 		Weight::from_ref_time(55_000_000)
 			.saturating_add(RocksDbWeight::get().reads(6))

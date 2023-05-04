@@ -427,7 +427,7 @@ macro_rules! impl_ingress_api_for_anychain {
 				}
 			}
 
-			fn register_swap_intent(
+			fn request_swap(
 				ingress_asset: Asset,
 				egress_asset: Asset,
 				egress_address: ForeignChainAddress,
@@ -437,7 +437,7 @@ macro_rules! impl_ingress_api_for_anychain {
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match ingress_asset.into() {
 					$(
-						ForeignChain::$chain => $ingress_egress::register_swap_intent(
+						ForeignChain::$chain => $ingress_egress::request_swap(
 							ingress_asset.try_into().unwrap(),
 							egress_asset,
 							egress_address,

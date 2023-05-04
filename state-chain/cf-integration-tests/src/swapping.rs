@@ -206,7 +206,7 @@ fn basic_pool_setup_provision_and_swap() {
 
 		new_account(&ZION, AccountRole::Relayer);
 
-		assert_ok!(Swapping::register_swap_intent(
+		assert_ok!(Swapping::request_swap(
 			RuntimeOrigin::signed(ZION.clone()),
 			Asset::Eth,
 			Asset::Flip,
@@ -310,7 +310,7 @@ fn can_process_ccm_via_swap_intent() {
 		};
 
 		// Register CCM via swap intent.
-		assert_ok!(Swapping::register_swap_intent(
+		assert_ok!(Swapping::request_swap(
 			RuntimeOrigin::signed(ZION.clone()),
 			Asset::Flip,
 			Asset::Usdc,

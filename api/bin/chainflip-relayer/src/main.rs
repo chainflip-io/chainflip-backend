@@ -53,7 +53,7 @@ impl RpcServer for RpcServerImpl {
 		relayer_commission_bps: BasisPoints,
 		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<String, Error> {
-		Ok(chainflip_api::register_swap_intent(
+		Ok(chainflip_api::request_swap(
 			&self.state_chain_settings,
 			ingress_asset,
 			egress_asset,

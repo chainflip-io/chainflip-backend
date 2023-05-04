@@ -530,7 +530,7 @@ fn can_ingress_ccm_swap_intents() {
 		let amount = 5_000;
 
 		// Register swap intent with CCM
-		assert_ok!(IngressEgress::register_swap_intent(
+		assert_ok!(IngressEgress::request_swap(
 			from_asset,
 			to_asset,
 			egress_address.clone(),

@@ -96,7 +96,7 @@ impl<C: Chain, T: Chainflip> IngressApi<C> for MockIngressHandler<C, T> {
 		Ok((channel_id, ingress_address))
 	}
 
-	fn register_swap_intent(
+	fn request_swap(
 		ingress_asset: <C as Chain>::ChainAsset,
 		egress_asset: cf_primitives::Asset,
 		egress_address: ForeignChainAddress,

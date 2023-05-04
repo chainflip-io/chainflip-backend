@@ -297,8 +297,8 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [NewSwapIntent](Event::NewSwapIntent)
-		#[pallet::weight(T::WeightInfo::register_swap_intent())]
-		pub fn register_swap_intent(
+		#[pallet::weight(T::WeightInfo::request_swap())]
+		pub fn request_swap(
 			origin: OriginFor<T>,
 			ingress_asset: Asset,
 			egress_asset: Asset,
@@ -325,7 +325,7 @@ pub mod pallet {
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 
-			let (channel_id, ingress_address) = T::IngressHandler::register_swap_intent(
+			let (channel_id, ingress_address) = T::IngressHandler::request_swap(
 				ingress_asset,
 				egress_asset,
 				egress_address_internal,

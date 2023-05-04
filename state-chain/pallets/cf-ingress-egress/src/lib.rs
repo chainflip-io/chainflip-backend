@@ -795,7 +795,7 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 	}
 
 	// This should only be callable by the relayer.
-	fn register_swap_intent(
+	fn request_swap(
 		ingress_asset: TargetChainAsset<T, I>,
 		egress_asset: Asset,
 		egress_address: ForeignChainAddress,

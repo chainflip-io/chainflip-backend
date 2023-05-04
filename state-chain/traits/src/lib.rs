@@ -684,7 +684,7 @@ pub trait IngressApi<C: Chain> {
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
 	/// Issues a channel id and ingress address for a new swap.
-	fn register_swap_intent(
+	fn request_swap(
 		ingress_asset: C::ChainAsset,
 		egress_asset: Asset,
 		egress_address: ForeignChainAddress,

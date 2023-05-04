@@ -83,7 +83,7 @@ impl SwappingApi for MockSwappingApi {
 pub struct MockWeightInfo;
 
 impl WeightInfo for MockWeightInfo {
-	fn register_swap_intent() -> Weight {
+	fn request_swap() -> Weight {
 		Weight::from_ref_time(100)
 	}
 

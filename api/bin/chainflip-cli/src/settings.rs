@@ -55,7 +55,7 @@ impl Default for CLICommandLineOptions {
 }
 
 #[derive(Parser, Clone, Debug)]
-pub struct SwapIntentParams {
+pub struct SwapRequestParams {
 	/// Ingress asset ("eth"|"dot")
 	pub ingress_asset: Asset,
 	/// Egress asset ("eth"|"dot")
@@ -72,7 +72,7 @@ pub struct SwapIntentParams {
 #[derive(clap::Subcommand, Clone, Debug)]
 pub enum RelayerSubcommands {
 	/// Register a new swap intent
-	SwapIntent(SwapIntentParams),
+	SwapRequest(SwapRequestParams),
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
