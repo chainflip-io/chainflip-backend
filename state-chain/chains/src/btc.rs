@@ -6,7 +6,7 @@ pub mod utxo_selection;
 
 extern crate alloc;
 use crate::{Age, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
-use alloc::string::String;
+use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use base58::FromBase58;
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
@@ -421,7 +421,7 @@ pub struct BitcoinTransaction {
 	outputs: Vec<BitcoinOutput>,
 	signatures: Vec<Signature>,
 	transaction_bytes: Vec<u8>,
-	old_utxo_input_indices: Vec<u32>,
+	old_utxo_input_indices: VecDeque<u32>,
 }
 
 impl BitcoinTransaction {
@@ -448,7 +448,7 @@ impl BitcoinTransaction {
 					})
 				}
 			})
-			.collect::<Vec<_>>();
+			.collect::<VecDeque<_>>();
 
 		let mut transaction_bytes = Vec::default();
 		transaction_bytes.extend(VERSION);
@@ -580,13 +580,12 @@ impl BitcoinTransaction {
 		);
 
 		let mut old_utxo_input_indices = self.old_utxo_input_indices.clone();
-		old_utxo_input_indices.reverse();
 		(0u32..)
 			.zip(&self.inputs)
 			.map(|(input_index, input)| {
 				(
-					if Some(&input_index) == old_utxo_input_indices.first() {
-						old_utxo_input_indices.pop();
+					if Some(&input_index) == old_utxo_input_indices.front() {
+						old_utxo_input_indices.pop_front();
 						PreviousOrCurrent::Previous
 					} else {
 						PreviousOrCurrent::Current
