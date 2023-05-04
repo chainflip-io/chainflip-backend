@@ -628,10 +628,14 @@ impl<T: Config> SwappingApi for Pallet<T> {
 				let intermediate_output =
 					Self::process_swap_leg(SwapLeg::ToStable, input_asset, input_amount)?;
 				let intermediate_input = Self::take_network_fee(intermediate_output);
-				SwapResult::new(
-					intermediate_output,
-					Self::process_swap_leg(SwapLeg::FromStable, output_asset, intermediate_input)?,
-				)
+				SwapResult {
+					intermediary: Some(intermediate_output),
+					output: Self::process_swap_leg(
+						SwapLeg::FromStable,
+						output_asset,
+						intermediate_input,
+					)?,
+				}
 			},
 		})
 	}

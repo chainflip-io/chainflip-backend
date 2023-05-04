@@ -208,12 +208,6 @@ pub struct SwapResult {
 	pub output: AssetAmount,
 }
 
-impl SwapResult {
-	pub fn new(intermediary: AssetAmount, output: AssetAmount) -> Self {
-		Self { intermediary: Some(intermediary), output }
-	}
-}
-
 impl From<AssetAmount> for SwapResult {
 	fn from(value: AssetAmount) -> Self {
 		Self { intermediary: None, output: value }
