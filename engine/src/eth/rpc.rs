@@ -14,7 +14,7 @@ use web3_secp256k1::SecretKey;
 
 use futures::{
 	future::{select, Either},
-	FutureExt,
+	FutureExt, StreamExt, TryStreamExt,
 };
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -104,7 +104,9 @@ pub trait EthRpcApi: Send + Sync {
 	/// - Request succeeds, but doesn't return a block
 	async fn block(&self, block_number: U64) -> Result<Block<H256>>;
 
-	async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>>;
+	/// Gets only the successful transactions of a block. It filters failed transactions by
+	/// checking the receipt.
+	async fn successful_transactions(&self, block_number: U64) -> Result<Vec<Transaction>>;
 
 	async fn fee_history(
 		&self,
@@ -202,8 +204,9 @@ where
 			})
 	}
 
-	async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>> {
-		self.web3
+	async fn successful_transactions(&self, block_number: U64) -> Result<Vec<Transaction>> {
+		let block_with_txs = self
+			.web3
 			.eth()
 			.block_with_txs(block_number.into())
 			.await
@@ -219,7 +222,30 @@ where
 						block_number,
 					)
 				})
+			})?;
+
+		Ok(futures::stream::iter(block_with_txs.transactions)
+			.then(|tx: Transaction| async move {
+				let status = self
+					.transaction_receipt(tx.hash)
+					.await?
+					.status
+					.ok_or_else(|| {
+						anyhow::anyhow!(
+							"{} client: Transaction receipt did not have status for tx {:?}",
+							T::transport_protocol(),
+							tx.hash
+						)
+					})?
+					.as_u64() == 1;
+				Result::<(bool, Transaction), anyhow::Error>::Ok((status, tx))
 			})
+			.try_collect::<Vec<_>>()
+			.await?
+			.into_iter()
+			.filter(|(is_successful, _)| *is_successful)
+			.map(|(_, tx)| tx)
+			.collect())
 	}
 
 	async fn fee_history(
@@ -478,8 +504,8 @@ impl EthRpcApi for EthDualRpcClient {
 		dual_call_rpc!(self, block, block_number)
 	}
 
-	async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>> {
-		dual_call_rpc!(self, block_with_txs, block_number)
+	async fn successful_transactions(&self, block_number: U64) -> Result<Vec<Transaction>> {
+		dual_call_rpc!(self, successful_transactions, block_number)
 	}
 
 	async fn fee_history(
@@ -522,7 +548,7 @@ pub mod mocks {
 
 			async fn block(&self, block_number: U64) -> Result<Block<H256>>;
 
-			async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>>;
+			async fn successful_transactions(&self, block_number: U64) -> Result<Vec<Transaction>>;
 
 			async fn fee_history(
 				&self,
