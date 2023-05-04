@@ -59,7 +59,7 @@ use sp_runtime::{
 		AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
 		One, OpaqueKeys, UniqueSaturatedInto, Verify,
 	},
-	FixedPointNumber,
+	DispatchError,
 };
 
 #[cfg(any(feature = "std", test))]
@@ -1014,8 +1014,8 @@ impl_runtime_apis! {
 		/// Simulates a swap and return the intermediate (if any) and final output.
 		/// Note: This function must only be called through RPC, because RPC has its own storage buffer
 		/// layer and would not affect on-chain storage.
-		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Option<SwapOutput> {
-			LiquidityPools::swap(from, to, amount).ok()
+		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Result<SwapOutput, DispatchError> {
+			LiquidityPools::swap(from, to, amount)
 		}
 	}
 

@@ -8,7 +8,7 @@ use pallet_cf_governance::GovCallHash;
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
 use sp_core::U256;
-use sp_runtime::AccountId32;
+use sp_runtime::{AccountId32, DispatchError};
 use sp_std::vec::Vec;
 
 type VanityName = Vec<u8>;
@@ -110,7 +110,10 @@ decl_runtime_apis!(
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;
 		fn cf_auction_state() -> AuctionState;
 		fn cf_pool_sqrt_price(from: Asset, to: Asset) -> Option<SqrtPriceQ64F96>;
-		fn cf_pool_simulate_swap(from: Asset, to: Asset, amount: AssetAmount)
-			-> Option<SwapOutput>;
+		fn cf_pool_simulate_swap(
+			from: Asset,
+			to: Asset,
+			amount: AssetAmount,
+		) -> Result<SwapOutput, DispatchError>;
 	}
 );

@@ -175,7 +175,7 @@ pub trait CustomApi {
 		to: Asset,
 		amount: AssetAmount,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<SwapOutput>>;
+	) -> RpcResult<SwapOutput>;
 }
 
 /// An RPC extension for the state chain node.
@@ -459,10 +459,13 @@ where
 		to: Asset,
 		amount: AssetAmount,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<SwapOutput>> {
+	) -> RpcResult<SwapOutput> {
 		self.client
 			.runtime_api()
 			.cf_pool_simulate_swap(&self.query_block_id(at), from, to, amount)
 			.map_err(to_rpc_error)
+			.and_then(|r| {
+				r.map_err(|e| jsonrpsee::core::Error::Custom(<&'static str>::from(e).into()))
+			})
 	}
 }
