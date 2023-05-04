@@ -12,6 +12,7 @@ pub use cf_primitives::chains::{assets, Ethereum};
 use cf_primitives::KeyId;
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{
+	encode,
 	ethereum_types::{H256, U256},
 	Address, Hash as TxHash, Token, Uint, Word,
 };
@@ -113,12 +114,6 @@ impl Age for EthereumTrackedData {
 #[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct SigData {
-	/// The address of the Key Manager contract, to prevent replay attacks
-	key_manager_address: Address,
-	/// The ID of the chain we're broadcasting to, to prevent x-chain replays
-	chain_id: Uint,
-	/// The message hash aka. payload to be signed over.
-	msg_hash: H256,
 	/// The Schnorr signature.
 	sig: Uint,
 	/// The nonce value for the AggKey. Each Signature over an AggKey should have a unique nonce to
@@ -141,26 +136,61 @@ impl MaxEncodedLen for SigData {
 	}
 }
 
-impl SigData {
-	/// Initiate a new `SigData` with given nonce value
-	pub fn new_empty(replay_protection: EthereumReplayProtection) -> Self {
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq, Default)]
+pub struct EthereumSignatureHandler {
+	pub sig_data: SigData,
+	pub payload: <Ethereum as ChainCrypto>::Payload,
+	pub signed: bool,
+}
+
+impl EthereumSignatureHandler {
+	pub fn new_unsigned(
+		replay_protection: EthereumReplayProtection,
+		abi_encoded_function_for_payload: Vec<u8>,
+		key_manager_address: eth::Address,
+		apicall_contract_address: eth::Address,
+		ethereum_chain_id: u64,
+	) -> Self {
 		Self {
-			key_manager_address: replay_protection.key_manager_address.into(),
-			chain_id: replay_protection.chain_id.into(),
-			nonce: replay_protection.nonce.into(),
-			..Default::default()
+			sig_data: SigData { nonce: replay_protection.nonce.into(), ..Default::default() },
+			payload: Keccak256::hash(
+				&encode(&[
+					Keccak256::hash(&abi_encoded_function_for_payload[..]).tokenize(),
+					replay_protection.nonce.tokenize(),
+					apicall_contract_address.tokenize(),
+					ethereum_chain_id.tokenize(),
+					key_manager_address.tokenize(),
+				])[..],
+			),
+			signed: false,
 		}
 	}
 
-	/// Used for migrating from the old `SigData` struct.
-	pub fn from_legacy(msg_hash: H256, sig: Uint, nonce: Uint, k_times_g_address: Address) -> Self {
-		Self { msg_hash, sig, nonce, k_times_g_address, ..Default::default() }
+	pub fn insert_signature(&mut self, sig: &SchnorrVerificationComponents) {
+		self.sig_data.insert_signature(sig);
+		self.signed = true;
 	}
 
-	/// Inserts the `msg_hash` value derived from the provided calldata.
-	pub fn insert_msg_hash_from(&mut self, calldata: &[u8]) {
-		self.msg_hash = H256(Keccak256::hash(calldata).0);
+	pub fn is_signed(&self) -> bool {
+		self.signed
 	}
+}
+
+impl SigData {
+	/// Initiate a new `SigData` with given nonce value
+	pub fn new_empty(replay_protection: EthereumReplayProtection) -> Self {
+		Self { nonce: replay_protection.nonce.into(), ..Default::default() }
+	}
+
+	// /// Used for migrating from the old `SigData` struct.
+	// pub fn from_legacy(msg_hash: H256, sig: Uint, nonce: Uint, k_times_g_address: Address) ->
+	// Self { 	Self { msg_hash, sig, nonce, k_times_g_address, ..Default::default() }
+	// }
+
+	// /// Inserts the `msg_hash` value derived from the provided calldata.
+	// pub fn insert_msg_hash_from(&mut self, calldata: &[u8]) {
+	// 	self.msg_hash = H256(Keccak256::hash(calldata).0);
+	// }
 
 	/// Add the actual signature. This method does no verification.
 	pub fn insert_signature(&mut self, schnorr: &SchnorrVerificationComponents) {
@@ -184,13 +214,34 @@ impl SigData {
 impl Tokenizable for SigData {
 	fn tokenize(self) -> Token {
 		Token::Tuple(vec![
-			Token::Address(self.key_manager_address),
-			Token::Uint(self.chain_id),
-			Token::Uint(self.msg_hash.0.into()),
-			Token::Uint(self.sig),
-			Token::Uint(self.nonce),
-			Token::Address(self.k_times_g_address),
+			self.sig.tokenize(),
+			self.nonce.tokenize(),
+			self.k_times_g_address.tokenize(),
 		])
+	}
+}
+
+impl Tokenizable for U256 {
+	fn tokenize(self) -> Token {
+		Token::Uint(self)
+	}
+}
+
+impl Tokenizable for H256 {
+	fn tokenize(self) -> Token {
+		Token::Uint(self.0.into())
+	}
+}
+
+impl Tokenizable for u64 {
+	fn tokenize(self) -> Token {
+		Token::Uint(self.into())
+	}
+}
+
+impl Tokenizable for Address {
+	fn tokenize(self) -> Token {
+		Token::Address(self)
 	}
 }
 

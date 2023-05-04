@@ -28,7 +28,7 @@ use cf_chains::{
 	},
 	eth::{
 		self,
-		api::{EthereumApi, EthereumReplayProtection},
+		api::{EthContractAddresses, EthereumApi, EthereumChainId, EthereumReplayProtection},
 		Ethereum,
 	},
 	AnyChain, ApiCall, CcmIngressMetadata, Chain, ChainAbi, ChainCrypto, ChainEnvironment,
@@ -262,11 +262,7 @@ impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
 	// Get the Environment values for key_manager_address and chain_id, then use
 	// the next global signature nonce
 	fn replay_protection() -> EthereumReplayProtection {
-		EthereumReplayProtection {
-			key_manager_address: Environment::key_manager_address(),
-			chain_id: Environment::ethereum_chain_id(),
-			nonce: Environment::next_ethereum_signature_nonce(),
-		}
+		EthereumReplayProtection { nonce: Environment::next_ethereum_signature_nonce() }
 	}
 }
 
@@ -276,6 +272,22 @@ impl ChainEnvironment<assets::eth::Asset, EthAbiAddress> for EthEnvironment {
 			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS.into(),
 			erc20 => Environment::token_address(erc20.into())?.into(),
 		})
+	}
+}
+
+impl ChainEnvironment<EthContractAddresses, EthAbiAddress> for EthEnvironment {
+	fn lookup(address_type: EthContractAddresses) -> Option<EthAbiAddress> {
+		Some(match address_type {
+			EthContractAddresses::StakeManager => Environment::stake_manager_address().into(),
+			EthContractAddresses::KeyManager => Environment::key_manager_address().into(),
+			EthContractAddresses::Vault => Environment::vault_address().into(),
+		})
+	}
+}
+
+impl Get<EthereumChainId> for EthEnvironment {
+	fn get() -> EthereumChainId {
+		Environment::ethereum_chain_id()
 	}
 }
 

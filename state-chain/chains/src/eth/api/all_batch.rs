@@ -1,11 +1,11 @@
 use cf_primitives::{AssetAmount, IntentId};
 use codec::{Decode, Encode};
-use ethabi::{Address, ParamType, Token, Uint};
+use ethabi::{encode, Address, ParamType, Token, Uint};
 use scale_info::TypeInfo;
 use sp_std::{boxed::Box, vec, vec::Vec};
 
 use crate::{
-	eth::{ingress_address::get_salt, Ethereum, SigData, Tokenizable},
+	eth::{ingress_address::get_salt, Ethereum, EthereumSignatureHandler, Tokenizable},
 	impl_api_call_eth, ApiCall, ChainCrypto,
 };
 
@@ -65,10 +65,10 @@ impl Tokenizable for EncodableTransferAssetParams {
 
 /// Represents all the arguments required to build the call to Vault's 'allBatch'
 /// function.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct AllBatch {
-	/// The signature data for validation and replay protection.
-	sig_data: SigData,
+	/// The signature handler for creating payload and inserting signature.
+	signature_handler: EthereumSignatureHandler,
 	/// The list of all inbound deposits that are to be fetched that need to deploy new deposit
 	/// contracts.
 	fetch_deploy_params: Vec<EncodableFetchDeployAssetParams>,
@@ -85,28 +85,35 @@ impl AllBatch {
 		fetch_deploy_params: Vec<EncodableFetchDeployAssetParams>,
 		fetch_params: Vec<EncodableFetchAssetParams>,
 		transfer_params: Vec<EncodableTransferAssetParams>,
+		key_manager_address: Address,
+		vault_contract_address: Address,
+		ethereum_chain_id: u64,
 	) -> Self {
-		let mut calldata = Self {
-			sig_data: SigData::new_empty(replay_protection),
+		Self {
+			signature_handler: EthereumSignatureHandler::new_unsigned(
+				replay_protection,
+				Self::abi_encoded_for_payload(
+					fetch_deploy_params.clone(),
+					fetch_params.clone(),
+					transfer_params.clone(),
+				),
+				key_manager_address,
+				vault_contract_address,
+				ethereum_chain_id,
+			),
 			fetch_deploy_params,
 			fetch_params,
 			transfer_params,
-		};
-		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
-
-		calldata
+		}
 	}
 
-	fn get_function(&self) -> ethabi::Function {
+	fn get_function() -> ethabi::Function {
 		ethabi_function(
 			"allBatch",
 			vec![
 				ethabi_param(
 					"sigData",
 					ParamType::Tuple(vec![
-						ParamType::Address,
-						ParamType::Uint(256),
-						ParamType::Uint(256),
 						ParamType::Uint(256),
 						ParamType::Uint(256),
 						ParamType::Address,
@@ -139,9 +146,9 @@ impl AllBatch {
 	}
 
 	fn abi_encoded(&self) -> Vec<u8> {
-		self.get_function()
+		Self::get_function()
 			.encode_input(&[
-				self.sig_data.tokenize(),
+				self.signature_handler.sig_data.tokenize(),
 				self.fetch_deploy_params.clone().tokenize(),
 				self.fetch_params.clone().tokenize(),
 				self.transfer_params.clone().tokenize(),
@@ -152,6 +159,22 @@ impl AllBatch {
 						Therefore, as long as the tests pass, it can't fail at runtime.
 					"#,
 			)
+	}
+
+	fn abi_encoded_for_payload(
+		fetch_deploy_params: Vec<EncodableFetchDeployAssetParams>,
+		fetch_params: Vec<EncodableFetchAssetParams>,
+		transfer_params: Vec<EncodableTransferAssetParams>,
+	) -> Vec<u8> {
+		Self::get_function()
+			.short_signature()
+			.into_iter()
+			.chain(encode(&[
+				fetch_deploy_params.tokenize(),
+				fetch_params.tokenize(),
+				transfer_params.tokenize(),
+			]))
+			.collect()
 	}
 }
 
@@ -178,6 +201,7 @@ mod test_all_batch {
 		use crate::eth::tests::asymmetrise;
 		use ethabi::Token;
 		const FAKE_KEYMAN_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
+		const FAKE_VAULT_ADDR: [u8; 20] = asymmetrise([0xdf; 20]);
 		const CHAIN_ID: u64 = 1;
 		const NONCE: u64 = 9;
 
@@ -227,17 +251,16 @@ mod test_all_batch {
 		let all_batch_reference = eth_vault.function("allBatch").unwrap();
 
 		let all_batch_runtime = AllBatch::new_unsigned(
-			EthereumReplayProtection {
-				key_manager_address: FAKE_KEYMAN_ADDR,
-				chain_id: CHAIN_ID,
-				nonce: NONCE,
-			},
+			EthereumReplayProtection { nonce: NONCE },
 			dummy_fetch_deploy_asset_params.clone(),
 			dummy_fetch_asset_params.clone(),
 			dummy_transfer_asset_params.clone(),
+			FAKE_KEYMAN_ADDR.into(),
+			FAKE_VAULT_ADDR.into(),
+			CHAIN_ID,
 		);
 
-		let expected_msg_hash = all_batch_runtime.sig_data.msg_hash;
+		let expected_msg_hash = all_batch_runtime.signature_handler.payload;
 
 		assert_eq!(all_batch_runtime.threshold_signature_payload(), expected_msg_hash);
 		let runtime_payload = all_batch_runtime
@@ -259,9 +282,6 @@ mod test_all_batch {
 				.encode_input(&[
 					// sigData: SigData(address, uint, uint, uint, uint, address)
 					Token::Tuple(vec![
-						Token::Address(FAKE_KEYMAN_ADDR.into()),
-						Token::Uint(CHAIN_ID.into()),
-						Token::Uint(expected_msg_hash.0.into()),
 						Token::Uint(FAKE_SIG.into()),
 						Token::Uint(NONCE.into()),
 						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),

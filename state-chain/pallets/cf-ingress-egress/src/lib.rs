@@ -700,17 +700,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok((intent_id, address))
 	}
 
-	fn close_ingress_channel(
-		intent_id: IntentId,
-		address: TargetChainAccount<T, I>,
-		address_status: DeploymentStatus,
-	) {
+	fn close_ingress_channel(intent_id: IntentId, address: TargetChainAccount<T, I>) {
 		IntentActions::<T, I>::remove(&address);
 		FetchParamDetails::<T, I>::remove(intent_id);
-		if matches!(address_status, DeploymentStatus::Deployed) {
-			AddressStatus::<T, I>::insert(address.clone(), DeploymentStatus::Deployed);
+		if matches!(AddressStatus::<T, I>::get(&address), DeploymentStatus::Deployed) &&
+			ForeignChain::from(address.clone().into()) != ForeignChain::Bitcoin
+		{
 			AddressPool::<T, I>::insert(intent_id, address.clone());
 		}
+
 		if let Some(intent_ingress_details) = IntentIngressDetails::<T, I>::take(&address) {
 			Self::deposit_event(Event::<T, I>::StopWitnessing {
 				ingress_address: address,
@@ -720,8 +718,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	pub fn expire_intent(intent_id: IntentId, address: TargetChainAccount<T, I>) {
-		let status = AddressStatus::<T, I>::get(&address);
-		Self::close_ingress_channel(intent_id, address, status);
+		Self::close_ingress_channel(intent_id, address);
 	}
 }
 

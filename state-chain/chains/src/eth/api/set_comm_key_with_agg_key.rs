@@ -1,44 +1,48 @@
 use crate::{
-	eth::{self, Ethereum, Tokenizable},
+	eth::{Ethereum, EthereumSignatureHandler, Tokenizable},
 	impl_api_call_eth, ApiCall, ChainCrypto,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use ethabi::{ParamType, Token};
+use ethabi::{encode, Address, ParamType};
 use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
-
-use crate::eth::SigData;
 
 use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct SetCommKeyWithAggKey {
-	/// The signature data for validation and replay protection.
-	pub sig_data: SigData,
+	/// The signature handler for creating payload and inserting signature.
+	pub signature_handler: EthereumSignatureHandler,
 	/// The new community key.
-	pub new_comm_key: eth::Address,
+	pub new_comm_key: Address,
 }
 
 impl SetCommKeyWithAggKey {
 	pub fn new_unsigned(
 		replay_protection: EthereumReplayProtection,
-		new_comm_key: eth::Address,
+		new_comm_key: Address,
+		key_manager_address: super::eth::Address,
+		ethereum_chain_id: u64,
 	) -> Self {
-		let mut calldata = Self { sig_data: SigData::new_empty(replay_protection), new_comm_key };
-		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
-		calldata
+		Self {
+			signature_handler: EthereumSignatureHandler::new_unsigned(
+				replay_protection,
+				Self::abi_encoded_for_payload(new_comm_key),
+				key_manager_address,
+				key_manager_address,
+				ethereum_chain_id,
+			),
+			new_comm_key,
+		}
 	}
-	fn get_function(&self) -> ethabi::Function {
+	fn get_function() -> ethabi::Function {
 		ethabi_function(
 			"setCommKeyWithAggKey",
 			vec![
 				ethabi_param(
 					"sigData",
 					ParamType::Tuple(vec![
-						ParamType::Address,
-						ParamType::Uint(256),
-						ParamType::Uint(256),
 						ParamType::Uint(256),
 						ParamType::Uint(256),
 						ParamType::Address,
@@ -50,14 +54,25 @@ impl SetCommKeyWithAggKey {
 	}
 
 	fn abi_encoded(&self) -> Vec<u8> {
-		self.get_function()
-			.encode_input(&[self.sig_data.tokenize(), Token::Address(self.new_comm_key)])
+		Self::get_function()
+			.encode_input(&[
+				self.signature_handler.sig_data.tokenize(),
+				self.new_comm_key.tokenize(),
+			])
 			.expect(
 				r#"
 						This can only fail if the parameter types don't match the function signature encoded below.
 						Therefore, as long as the tests pass, it can't fail at runtime.
 					"#,
 			)
+	}
+
+	fn abi_encoded_for_payload(new_comm_key: Address) -> Vec<u8> {
+		Self::get_function()
+			.short_signature()
+			.into_iter()
+			.chain(encode(&[new_comm_key.tokenize()]))
+			.collect()
 	}
 }
 
@@ -91,14 +106,12 @@ mod test_set_comm_key_with_agg_key {
 		.unwrap();
 
 		let call = SetCommKeyWithAggKey::new_unsigned(
-			EthereumReplayProtection {
-				key_manager_address: FAKE_KEYMAN_ADDR,
-				chain_id: CHAIN_ID,
-				nonce: NONCE,
-			},
+			EthereumReplayProtection { nonce: NONCE },
 			H160::from(TEST_ADDR),
+			FAKE_KEYMAN_ADDR.into(),
+			CHAIN_ID,
 		);
-		let expected_msg_hash = call.sig_data.msg_hash;
+		let expected_msg_hash = call.signature_handler.payload;
 		assert_eq!(call.threshold_signature_payload(), expected_msg_hash);
 
 		assert_eq!(
@@ -115,9 +128,6 @@ mod test_set_comm_key_with_agg_key {
 				.encode_input(&[
 					// sigData: SigData(address, uint, uint, uint, uint, address)
 					Token::Tuple(vec![
-						Token::Address(FAKE_KEYMAN_ADDR.into()),
-						Token::Uint(CHAIN_ID.into()),
-						Token::Uint(expected_msg_hash.0.into()),
 						Token::Uint(FAKE_SIG.into()),
 						Token::Uint(NONCE.into()),
 						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),

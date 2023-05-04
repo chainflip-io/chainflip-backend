@@ -1,9 +1,9 @@
 use crate::{
-	eth::{Ethereum, Tokenizable},
+	eth::{Ethereum, EthereumSignatureHandler, Tokenizable},
 	impl_api_call_eth, ApiCall, ChainCrypto,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use ethabi::{Address, ParamType, Token, Uint};
+use ethabi::{encode, Address, ParamType, Token, Uint};
 use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
@@ -14,8 +14,8 @@ use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
 pub struct UpdateFlipSupply {
-	/// The signature data for validation and replay protection.
-	pub sig_data: SigData,
+	/// The signature handler for creating payload and inserting signature.
+	pub signature_handler: EthereumSignatureHandler,
 	/// The new total supply
 	pub new_total_supply: Uint,
 	/// The current state chain block number
@@ -33,27 +33,36 @@ impl MaxEncodedLen for UpdateFlipSupply {
 }
 
 impl UpdateFlipSupply {
-	pub fn new_unsigned<TotalSupply: Into<Uint>, BlockNumber: Into<Uint>>(
+	pub fn new_unsigned<TotalSupply: Into<Uint> + Clone, BlockNumber: Into<Uint> + Clone>(
 		replay_protection: EthereumReplayProtection,
 		new_total_supply: TotalSupply,
 		state_chain_block_number: BlockNumber,
 		stake_manager_address: &[u8; 20],
+		key_manager_address: Address,
+		ethereum_chain_id: u64,
 	) -> Self {
-		let mut calldata = Self {
-			sig_data: SigData::new_empty(replay_protection),
+		Self {
+			signature_handler: EthereumSignatureHandler::new_unsigned(
+				replay_protection,
+				Self::abi_encoded_for_payload(
+					new_total_supply.clone().into(),
+					state_chain_block_number.clone().into(),
+					stake_manager_address.into(),
+				),
+				key_manager_address,
+				stake_manager_address.into(),
+				ethereum_chain_id,
+			),
 			new_total_supply: new_total_supply.into(),
 			state_chain_block_number: state_chain_block_number.into(),
 			stake_manager_address: stake_manager_address.into(),
-		};
-		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
-
-		calldata
+		}
 	}
 
 	/// Gets the function defintion for the `updateFlipSupply` smart contract call. Loading this
 	/// from the json abi definition is currently not supported in no-std, so instead we hard-code
 	/// it here and verify against the abi in a unit test.
-	fn get_function(&self) -> ethabi::Function {
+	fn get_function() -> ethabi::Function {
 		ethabi_function(
 			"updateFlipSupply",
 			vec![
@@ -76,9 +85,9 @@ impl UpdateFlipSupply {
 	}
 
 	fn abi_encoded(&self) -> Vec<u8> {
-		self.get_function()
+		Self::get_function()
 			.encode_input(&[
-				self.sig_data.tokenize(),
+				self.signature_handler.sig_data.tokenize(),
 				Token::Uint(self.new_total_supply),
 				Token::Uint(self.state_chain_block_number),
 				Token::Address(self.stake_manager_address),
@@ -89,6 +98,22 @@ impl UpdateFlipSupply {
 					Therefore, as long as the tests pass, it can't fail at runtime.
 				"#,
 			)
+	}
+
+	fn abi_encoded_for_payload(
+		new_total_supply: Uint,
+		state_chain_block_number: Uint,
+		stake_manager_address: Address,
+	) -> Vec<u8> {
+		Self::get_function()
+			.short_signature()
+			.into_iter()
+			.chain(encode(&[
+				new_total_supply.tokenize(),
+				state_chain_block_number.tokenize(),
+				stake_manager_address.tokenize(),
+			]))
+			.collect()
 	}
 }
 
@@ -131,17 +156,15 @@ mod test_update_flip_supply {
 		let flip_token_reference = flip_token.function("updateFlipSupply").unwrap();
 
 		let update_flip_supply_runtime = UpdateFlipSupply::new_unsigned(
-			EthereumReplayProtection {
-				key_manager_address: FAKE_KEYMAN_ADDR,
-				chain_id: CHAIN_ID,
-				nonce: NONCE,
-			},
+			EthereumReplayProtection { nonce: NONCE },
 			NEW_TOTAL_SUPPLY,
 			STATE_CHAIN_BLOCK_NUMBER,
 			&FAKE_STAKE_MANAGER_ADDRESS,
+			FAKE_KEYMAN_ADDR.into(),
+			CHAIN_ID,
 		);
 
-		let expected_msg_hash = update_flip_supply_runtime.sig_data.msg_hash;
+		let expected_msg_hash = update_flip_supply_runtime.signature_handler.payload;
 
 		assert_eq!(update_flip_supply_runtime.threshold_signature_payload(), expected_msg_hash);
 
@@ -164,9 +187,6 @@ mod test_update_flip_supply {
 				.encode_input(&[
 					// sigData: SigData(address, uint, uint, uint, uint, address)
 					Token::Tuple(vec![
-						Token::Address(FAKE_KEYMAN_ADDR.into()),
-						Token::Uint(CHAIN_ID.into()),
-						Token::Uint(expected_msg_hash.0.into()),
 						Token::Uint(FAKE_SIG.into()),
 						Token::Uint(NONCE.into()),
 						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),

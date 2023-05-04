@@ -1,5 +1,6 @@
 use ethabi::Address;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
+use sp_core::Get;
 use sp_runtime::{traits::UniqueSaturatedInto, DispatchError};
 use sp_std::marker::PhantomData;
 
@@ -37,8 +38,6 @@ pub enum EthereumApi<Environment: 'static> {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
 pub struct EthereumReplayProtection {
-	pub key_manager_address: [u8; 20],
-	pub chain_id: u64,
 	pub nonce: u64,
 }
 
@@ -47,7 +46,12 @@ impl ChainAbi for Ethereum {
 	type ReplayProtection = EthereumReplayProtection;
 }
 
-impl<E: ReplayProtectionProvider<Ethereum>> SetAggKeyWithAggKey<Ethereum> for EthereumApi<E> {
+impl<E> SetAggKeyWithAggKey<Ethereum> for EthereumApi<E>
+where
+	E: ReplayProtectionProvider<Ethereum>,
+	E: ChainEnvironment<EthContractAddresses, Address>,
+	E: Get<EthereumChainId>,
+{
 	fn new_unsigned(
 		_old_key: Option<<Ethereum as ChainCrypto>::AggKey>,
 		new_key: <Ethereum as ChainCrypto>::AggKey,
@@ -55,11 +59,19 @@ impl<E: ReplayProtectionProvider<Ethereum>> SetAggKeyWithAggKey<Ethereum> for Et
 		Ok(Self::SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey::new_unsigned(
 			E::replay_protection(),
 			new_key,
+			E::lookup(EthContractAddresses::KeyManager)
+				.expect("This should not panic since the lookup function always returns a Some"),
+			E::get(),
 		)))
 	}
 }
 
-impl<E: ReplayProtectionProvider<Ethereum>> SetGovKeyWithAggKey<Ethereum> for EthereumApi<E> {
+impl<E> SetGovKeyWithAggKey<Ethereum> for EthereumApi<E>
+where
+	E: ReplayProtectionProvider<Ethereum>,
+	E: ChainEnvironment<EthContractAddresses, Address>,
+	E: Get<EthereumChainId>,
+{
 	fn new_unsigned(
 		_maybe_old_key: Option<<Ethereum as ChainCrypto>::GovKey>,
 		new_gov_key: <Ethereum as ChainCrypto>::GovKey,
@@ -67,20 +79,36 @@ impl<E: ReplayProtectionProvider<Ethereum>> SetGovKeyWithAggKey<Ethereum> for Et
 		Ok(Self::SetGovKeyWithAggKey(set_gov_key_with_agg_key::SetGovKeyWithAggKey::new_unsigned(
 			E::replay_protection(),
 			new_gov_key,
+			E::lookup(EthContractAddresses::KeyManager)
+				.expect("This should not panic since the lookup function always returns a Some"),
+			E::get(),
 		)))
 	}
 }
 
-impl<E: ReplayProtectionProvider<Ethereum>> SetCommKeyWithAggKey<Ethereum> for EthereumApi<E> {
-	fn new_unsigned(new_comm_key: eth::Address) -> Self {
+impl<E> SetCommKeyWithAggKey<Ethereum> for EthereumApi<E>
+where
+	E: ReplayProtectionProvider<Ethereum>,
+	E: ChainEnvironment<EthContractAddresses, Address>,
+	E: Get<EthereumChainId>,
+{
+	fn new_unsigned(new_comm_key: <Ethereum as ChainCrypto>::GovKey) -> Self {
 		Self::SetCommKeyWithAggKey(set_comm_key_with_agg_key::SetCommKeyWithAggKey::new_unsigned(
 			E::replay_protection(),
 			new_comm_key,
+			E::lookup(EthContractAddresses::KeyManager)
+				.expect("This should not panic since the lookup function always returns a Some"),
+			E::get(),
 		))
 	}
 }
 
-impl<E: ReplayProtectionProvider<Ethereum>> RegisterClaim<Ethereum> for EthereumApi<E> {
+impl<E> RegisterClaim<Ethereum> for EthereumApi<E>
+where
+	E: ReplayProtectionProvider<Ethereum>,
+	E: ChainEnvironment<EthContractAddresses, Address>,
+	E: Get<EthereumChainId>,
+{
 	fn new_unsigned(node_id: &[u8; 32], amount: u128, address: &[u8; 20], expiry: u64) -> Self {
 		Self::RegisterClaim(register_claim::RegisterClaim::new_unsigned(
 			E::replay_protection(),
@@ -88,6 +116,11 @@ impl<E: ReplayProtectionProvider<Ethereum>> RegisterClaim<Ethereum> for Ethereum
 			amount,
 			address,
 			expiry,
+			E::lookup(EthContractAddresses::KeyManager)
+				.expect("This should not panic since the lookup function always returns a Some"),
+			E::lookup(EthContractAddresses::StakeManager)
+				.expect("This should not panic since the lookup function always returns a Some"),
+			E::get(),
 		))
 	}
 
@@ -99,7 +132,12 @@ impl<E: ReplayProtectionProvider<Ethereum>> RegisterClaim<Ethereum> for Ethereum
 	}
 }
 
-impl<E: ReplayProtectionProvider<Ethereum>> UpdateFlipSupply<Ethereum> for EthereumApi<E> {
+impl<E> UpdateFlipSupply<Ethereum> for EthereumApi<E>
+where
+	E: ReplayProtectionProvider<Ethereum>,
+	E: ChainEnvironment<EthContractAddresses, Address>,
+	E: Get<EthereumChainId>,
+{
 	fn new_unsigned(
 		new_total_supply: u128,
 		block_number: u64,
@@ -110,6 +148,9 @@ impl<E: ReplayProtectionProvider<Ethereum>> UpdateFlipSupply<Ethereum> for Ether
 			new_total_supply,
 			block_number,
 			stake_manager_address,
+			E::lookup(EthContractAddresses::KeyManager)
+				.expect("This should not panic since the lookup function always returns a Some"),
+			E::get(),
 		))
 	}
 }
@@ -118,6 +159,8 @@ impl<E> AllBatch<Ethereum> for EthereumApi<E>
 where
 	E: ChainEnvironment<assets::eth::Asset, Address>,
 	E: ReplayProtectionProvider<Ethereum>,
+	E: ChainEnvironment<EthContractAddresses, Address>,
+	E: Get<EthereumChainId>,
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
@@ -153,6 +196,11 @@ where
 						.ok_or(())
 				})
 				.collect::<Result<Vec<_>, ()>>()?,
+			E::lookup(EthContractAddresses::KeyManager)
+				.expect("This should not panic since the lookup function always returns a Some"),
+			E::lookup(EthContractAddresses::Vault)
+				.expect("This should not panic since the lookup function always returns a Some"),
+			E::get(),
 		)))
 	}
 }
@@ -161,6 +209,8 @@ impl<E> ExecutexSwapAndCall<Ethereum> for EthereumApi<E>
 where
 	E: ChainEnvironment<assets::eth::Asset, Address>,
 	E: ReplayProtectionProvider<Ethereum>,
+	E: ChainEnvironment<EthContractAddresses, Address>,
+	E: Get<EthereumChainId>,
 {
 	fn new_unsigned(
 		egress_id: EgressId,
@@ -180,6 +230,11 @@ where
 			transfer_param,
 			source_address,
 			message,
+			E::lookup(EthContractAddresses::KeyManager)
+				.expect("This should not panic since the lookup function always returns a Some"),
+			E::lookup(EthContractAddresses::Vault)
+				.expect("This should not panic since the lookup function always returns a Some"),
+			E::get(),
 		)))
 	}
 }
@@ -300,11 +355,11 @@ macro_rules! impl_api_call_eth {
 	($call:ident) => {
 		impl ApiCall<Ethereum> for $call {
 			fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
-				self.sig_data.msg_hash
+				self.signature_handler.payload
 			}
 
 			fn signed(mut self, signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
-				self.sig_data.insert_signature(signature);
+				self.signature_handler.insert_signature(signature);
 				self
 			}
 
@@ -313,8 +368,17 @@ macro_rules! impl_api_call_eth {
 			}
 
 			fn is_signed(&self) -> bool {
-				self.sig_data.is_signed()
+				self.signature_handler.is_signed()
 			}
 		}
 	};
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum EthContractAddresses {
+	StakeManager,
+	KeyManager,
+	Vault,
+}
+
+pub type EthereumChainId = u64;
