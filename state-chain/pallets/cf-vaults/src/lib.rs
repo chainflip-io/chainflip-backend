@@ -409,7 +409,6 @@ pub mod pallet {
 			let mut rotation =
 				PendingVaultRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
 
-			// Failing here.
 			// Keygen is in progress, pull out the details.
 			let (pending_ceremony_id, response_status) = ensure_variant!(
 				$variant {
