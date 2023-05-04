@@ -1,0 +1,77 @@
+[package]
+authors = ['Chainflip <https://chainflip.io>']
+description = 'Multisig component of the Chainflip Engine'
+edition = '2021'
+homepage = 'https://chainflip.io'
+license = 'TBC'
+name = 'multisig'
+repository = 'https://github.com/chainflip-io/chainflip-backend'
+version = '0.1.0'
+
+[dependencies]
+mockall = { version = "0.11.0", optional = true}
+anyhow = "1.0"
+async-trait = "0.1.49"
+async-channel = "1.7.1"
+async-broadcast = "0.4.1"
+bincode = "1.3.3"
+futures = "0.3.14"
+futures-core = "0.3.14"
+futures-util = "0.3.14"
+hex = "0.4.3"
+itertools = "0.10"
+# have to use the older version until secp256k1 updates its dependency (https://github.com/rust-bitcoin/rust-secp256k1/issues/328)
+rand_legacy = { package = "rand", version = "0.6" }
+lazy_static = "1.4"
+secp256k1 = { version = "0.20", features = [
+  "serde",
+  "rand-std",
+  "global-context",
+] }
+serde = { version = "1.0", features = ["derive", "rc"] }
+sha2 = "0.9.5"
+thiserror = "1.0.26"
+tokio = { version = "1.22", features = ["full", "test-util"] }
+tokio-stream = { version = "0.1.5", features = ["sync"] }
+num-bigint = "0.4"
+num-traits = "0.2"
+num-derive = "0.3"
+zeroize = "1.5.4"
+generic-array = "0.14"
+public-ip = "0.2.2"
+# We will update curve25519-dalek when we can update schnorrkel
+curve25519-dalek = { version = "2.1", features = ["serde"] }
+typenum = "1.15"
+# Note: we don't use the most recent version of schnorrkel since 0.10 switches
+# to curve25519-dalek-ng, but it is not clear at all why that fork of
+# curve25519-dalek was created, so we are not willing to trust it just yet.
+# (There is little public information on this, but some mentions can be found
+# in https://github.com/dalek-cryptography/curve25519-dalek/pull/338#issuecomment-772059572)
+# We might eventually update, but for now let's just
+# use the same version as polkadot.
+schnorrkel = "0.9.1"
+rayon = "1.5"
+rand = "0.8.4"
+ed25519-consensus = "2.0"
+tracing = "0.1"
+strum = {default-features = false, version = '0.24'}
+strum_macros = {default-features = false, version = '0.24'}
+
+# Local deps
+cf-chains = { path = "../../state-chain/chains" }
+cf-primitives = { path = "../../state-chain/primitives" }
+state-chain-runtime = { path = "../../state-chain/runtime" }
+utilities = {package = "utilities", path = "../../utilities" }
+
+# substrate deps
+sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
+sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
+
+[dev-dependencies]
+mockall = "0.11.0"
+# Turn on the "test" feature flag for tests
+multisig = {path = ".", features = ["test"]}
+utilities = { package = "utilities", path = "../../utilities" , features = ["test-utils"] }
+
+[features]
+test = ['mockall']

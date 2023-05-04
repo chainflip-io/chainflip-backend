@@ -10,7 +10,9 @@ use std::{
 
 use crate::{
 	settings::P2P as P2PSettings,
-	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
+	state_chain_observer::client::{
+		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+	},
 };
 
 pub use self::{
@@ -21,6 +23,7 @@ use anyhow::Context;
 use cf_chains::{Bitcoin, Chain, Ethereum, Polkadot};
 use cf_primitives::AccountId;
 use futures::{Future, FutureExt};
+use multisig::p2p::OutgoingMultisigStageMessages;
 use muxer::P2PMuxer;
 use sp_core::H256;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -28,14 +31,6 @@ use tracing::{info_span, Instrument};
 use zeroize::Zeroizing;
 
 use utilities::{read_clean_and_decode_hex_str_file, task_scope::task_scope};
-
-// TODO: Consider if this should be removed, particularly once we no longer use Substrate for
-// peering
-#[derive(Debug, PartialEq, Eq)]
-pub enum OutgoingMultisigStageMessages {
-	Broadcast(Vec<AccountId>, Vec<u8>),
-	Private(Vec<(AccountId, Vec<u8>)>),
-}
 
 pub struct MultisigMessageSender<C: Chain>(
 	pub UnboundedSender<OutgoingMultisigStageMessages>,
@@ -73,7 +68,7 @@ pub async fn start<StateChainClient>(
 	impl Future<Output = anyhow::Result<()>>,
 )>
 where
-	StateChainClient: StorageApi + ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
 	if settings.ip_address == IpAddr::V4(Ipv4Addr::UNSPECIFIED) {
 		anyhow::bail!("Should provide a valid IP address");

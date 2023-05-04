@@ -3,18 +3,15 @@
 
 use super::*;
 
-use cf_primitives::AccountRole;
-use cf_traits::AccountRoleRegistry;
+use cf_traits::{AccountRoleRegistry, Chainflip};
 use frame_benchmarking::{benchmarks, whitelisted_caller};
-use frame_support::{dispatch::UnfilteredDispatchable, traits::EnsureOrigin};
+use frame_support::{
+	dispatch::UnfilteredDispatchable,
+	traits::{EnsureOrigin, OnNewAccount},
+};
 use frame_system::RawOrigin;
 
 benchmarks! {
-
-	where_clause {
-		where
-			T: pallet_cf_account_roles::Config,
-	}
 
 	staked {
 		let amount: T::Balance = T::Balance::from(100u32);
@@ -147,8 +144,9 @@ benchmarks! {
 
 	stop_bidding {
 		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
 		ActiveBidder::<T>::insert(caller.clone(), true);
-		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
 	}:_(RawOrigin::Signed(caller.clone()))
 	verify {
 		assert!(!ActiveBidder::<T>::get(caller));
@@ -156,8 +154,9 @@ benchmarks! {
 
 	start_bidding {
 		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		T::AccountRoleRegistry::register_as_validator(&caller).unwrap();
 		ActiveBidder::<T>::insert(caller.clone(), false);
-		T::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
 	}:_(RawOrigin::Signed(caller.clone()))
 	verify {
 		assert!(ActiveBidder::<T>::get(caller));
@@ -167,7 +166,7 @@ benchmarks! {
 			minimum_stake: MinimumStake::<T>::get(),
 		};
 
-		let origin = <T as pallet::Config>::EnsureGovernance::successful_origin();
+		let origin = <T as Chainflip>::EnsureGovernance::successful_origin();
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(MinimumStake::<T>::get(), MinimumStake::<T>::get());

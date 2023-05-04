@@ -12,7 +12,7 @@ use super::{
 };
 use crate::{
 	constants::{BLOCK_PULL_TIMEOUT_MULTIPLIER, ETH_AVERAGE_BLOCK_TIME_SECONDS},
-	multisig::PersistentKeyDB,
+	db::PersistentKeyDB,
 	witnesser::{
 		block_witnesser::{
 			BlockStream, BlockWitnesser, BlockWitnesserGenerator, BlockWitnesserGeneratorWrapper,

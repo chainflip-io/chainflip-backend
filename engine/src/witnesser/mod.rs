@@ -14,7 +14,7 @@ pub mod http_safe_stream;
 
 use anyhow::Result;
 
-use crate::multisig::ChainTag;
+use multisig::ChainTag;
 
 pub type ChainBlockNumber<Chain> = <Chain as cf_chains::Chain>::ChainBlockNumber;
 

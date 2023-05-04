@@ -5,7 +5,7 @@ use cf_traits::{
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotator::MockVaultRotatorA,
 	},
-	AuctionOutcome, SystemStateInfo,
+	AccountRoleRegistry, AuctionOutcome, SystemStateInfo,
 };
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;
@@ -28,7 +28,7 @@ macro_rules! assert_default_rotation_outcome {
 	() => {
 		assert!(matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle));
 		assert_epoch_index(GENESIS_EPOCH + 1);
-		assert_eq!(Bond::<Test>::get(), BOND, "bond should be updated");
+		assert_eq!(Bond::<Test>::get(), EXPECTED_BOND, "bond should be updated");
 		assert_eq!(ValidatorPallet::current_authorities(), BTreeSet::from(AUCTION_WINNERS));
 	};
 }
@@ -281,6 +281,9 @@ fn register_peer_id() {
 	new_test_ext().execute_with(|| {
 		use sp_core::{Encode, Pair};
 
+		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&ALICE).unwrap();
+		<<Test as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&BOB).unwrap();
+
 		let alice_peer_keypair = sp_core::ed25519::Pair::from_legacy_string("alice", None);
 		let alice_peer_public_key = alice_peer_keypair.public();
 
@@ -296,7 +299,7 @@ fn register_peer_id() {
 			Error::<Test>::InvalidAccountPeerMappingSignature
 		);
 
-		// Non-overlaping peer ids and valid signatures
+		// Non-overlapping peer ids and valid signatures
 		assert_ok!(ValidatorPallet::register_peer_id(
 			RuntimeOrigin::signed(ALICE),
 			alice_peer_public_key,
@@ -651,5 +654,23 @@ fn auction_params_must_be_valid_when_set() {
 			last_event::<Test>(),
 			mock::RuntimeEvent::ValidatorPallet(crate::Event::AuctionParametersChanged(..)),
 		));
+	});
+}
+
+#[test]
+fn test_ensure_stake_of_validator() {
+	new_test_ext().execute_with(|| {
+		assert_ok!(Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ALICE),));
+	});
+}
+
+#[test]
+fn test_expect_validator_register_fails() {
+	new_test_ext().execute_with(|| {
+		Backups::<Test>::put(BTreeMap::from_iter([(ALICE, 100), (BOB, 80)]));
+		assert_noop!(
+			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(3),),
+			crate::Error::<Test>::NotEnoughStake
+		);
 	});
 }

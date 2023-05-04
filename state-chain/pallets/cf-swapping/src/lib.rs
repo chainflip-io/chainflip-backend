@@ -90,9 +90,6 @@ pub mod pallet {
 		/// Standard Event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// For registering and verifying the account role.
-		type AccountRoleRegistry: AccountRoleRegistry<Self>;
-
 		/// API for handling asset ingress.
 		type IngressHandler: IngressApi<
 			AnyChain,
@@ -107,9 +104,6 @@ pub mod pallet {
 		/// A converter to convert address to and from human readable to internal address
 		/// representation.
 		type AddressConverter: AddressConverter;
-
-		/// Governance origin to manage allowed assets
-		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
@@ -465,6 +459,18 @@ pub mod pallet {
 				egress_address_internal,
 				message_metadata,
 			)
+		}
+
+		/// Register the account as a Relayer.
+		///
+		/// Account roles are immutable once registered.
+		#[pallet::weight(T::WeightInfo::register_as_relayer())]
+		pub fn register_as_relayer(who: OriginFor<T>) -> DispatchResult {
+			let account_id = ensure_signed(who)?;
+
+			T::AccountRoleRegistry::register_as_relayer(&account_id)?;
+
+			Ok(())
 		}
 
 		/// Sets the length in which ingress intents are expired in the Swapping pallet.

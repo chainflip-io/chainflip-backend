@@ -1,15 +1,12 @@
 use crate as pallet_cf_staking;
 use cf_chains::{ApiCall, Chain, ChainCrypto, Ethereum};
-use cf_primitives::{AuthorityCount, BroadcastId, ThresholdSignatureRequestId};
+use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
-	impl_mock_callback, impl_mock_waived_fees,
-	mocks::{
-		bid_info::MockBidInfo, staking_info::MockStakingInfo,
-		system_state_info::MockSystemStateInfo,
-	},
-	Broadcaster, WaivedFees,
+	impl_mock_callback, impl_mock_chainflip, impl_mock_waived_fees, mocks::time_source,
+	AccountRoleRegistry, Broadcaster, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
+use core::cell::RefCell;
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -25,19 +22,6 @@ type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = AccountId32;
 type Balance = u128;
 
-use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, time_source},
-	Chainflip,
-};
-
-impl pallet_cf_account_roles::Config for Test {
-	type RuntimeEvent = RuntimeEvent;
-	type BidInfo = MockBidInfo;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type StakeInfo = MockStakingInfo<Self>;
-	type WeightInfo = ();
-}
-
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
 	pub enum Test where
@@ -46,7 +30,6 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		AccountRoles: pallet_cf_account_roles,
 		Flip: pallet_cf_flip,
 		Staking: pallet_cf_staking,
 	}
@@ -84,15 +67,7 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-impl Chainflip for Test {
-	type ValidatorId = AccountId;
-	type Amount = Balance;
-	type RuntimeCall = RuntimeCall;
-	type EnsureWitnessed = MockEnsureWitnessed;
-	type EnsureWitnessedAtCurrentEpoch = MockEnsureWitnessed;
-	type EpochInfo = MockEpochInfo;
-	type SystemState = MockSystemStateInfo;
-}
+impl_mock_chainflip!(Test);
 
 parameter_types! {
 	pub const CeremonyRetryDelay: <Test as frame_system::Config>::BlockNumber = 1;
@@ -113,7 +88,6 @@ impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type BlocksPerDay = BlocksPerDay;
 	type StakeHandler = MockStakeHandler;
 	type WeightInfo = ();
@@ -121,7 +95,6 @@ impl pallet_cf_flip::Config for Test {
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
-cf_traits::impl_mock_epoch_info!(AccountId, u128, u32, AuthorityCount);
 cf_traits::impl_mock_stake_transfer!(AccountId, u128);
 
 pub struct MockBroadcaster;
@@ -198,14 +171,12 @@ impl pallet_cf_staking::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type TimeSource = time_source::Mock;
 	type Balance = u128;
-	type AccountRoleRegistry = ();
 	type Flip = Flip;
 	type WeightInfo = ();
 	type StakerId = AccountId;
 	type Broadcaster = MockBroadcaster;
 	type ThresholdCallable = RuntimeCall;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type RegisterClaim = MockRegisterClaim;
 }
 
@@ -220,7 +191,6 @@ pub const MIN_STAKE: u128 = 10;
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
-		account_roles: Default::default(),
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000_000 },
 		staking: StakingConfig {
@@ -234,6 +204,10 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {
+		for id in &[ALICE, BOB, CHARLIE] {
+			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
+				.unwrap();
+		}
 		System::set_block_number(1);
 	});
 

@@ -94,10 +94,6 @@ jobs:
           git diff --exit-code
           git diff --cached --exit-code
 
-      - name: Cancelling entire workflow
-        if: failure()
-        uses: andymckay/cancel-action@0.3
-
   docker:
     needs: [compile]
     if: inputs.network == 'development'

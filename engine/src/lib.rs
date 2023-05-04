@@ -1,5 +1,8 @@
 #![feature(ip)]
 #![feature(result_flattening)]
+#![feature(btree_drain_filter)]
+#![feature(drain_filter)]
+#![feature(map_try_insert)]
 
 pub mod common;
 pub mod constants;
@@ -16,5 +19,3 @@ pub mod witnesser;
 pub mod btc;
 pub mod dot;
 pub mod eth;
-
-pub mod logging;

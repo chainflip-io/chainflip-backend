@@ -4,7 +4,7 @@
 [alias]
 cf-test =     "test --lib --features runtime-benchmarks"
 cf-test-ci =  "test --lib --features runtime-benchmarks,slow-tests"
-cf-test-cfe = "test --lib --package chainflip-engine"
+cf-test-cfe = "test --lib --package chainflip-engine --package multisig"
 
 cf-clippy =    "clippy           --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings"
 cf-clippy-ci = "clippy --release --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings"

@@ -9,7 +9,7 @@ use cf_chains::{
 	Bitcoin, ChainCrypto, Polkadot,
 };
 use cf_primitives::{BlockNumber, CeremonyId, EpochIndex, KeyId, PolkadotAccountId};
-use futures::{FutureExt, Stream, StreamExt, TryFutureExt};
+use futures::{FutureExt, StreamExt, TryFutureExt};
 use sp_core::{Hasher, H160, H256};
 use sp_runtime::{traits::Keccak256, AccountId32};
 use state_chain_runtime::{
@@ -30,13 +30,20 @@ use crate::{
 	btc::{rpc::BtcRpcApi, BtcBroadcaster},
 	dot::{rpc::DotRpcApi, DotBroadcaster},
 	eth::{rpc::EthRpcApi, EthBroadcaster},
-	multisig::{
-		bitcoin::BtcSigning, client::MultisigClientApi, eth::EthSigning, polkadot::PolkadotSigning,
-		CryptoScheme, SignatureToThresholdSignature,
-	},
 	p2p::{PeerInfo, PeerUpdate},
-	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
+	state_chain_observer::client::{
+		extrinsic_api::{
+			signed::{SignedExtrinsicApi, UntilFinalized},
+			unsigned::UnsignedExtrinsicApi,
+		},
+		storage_api::StorageApi,
+		StateChainStreamApi,
+	},
 	witnesser::{AddressMonitorCommand, EpochStart},
+};
+use multisig::{
+	bitcoin::BtcSigning, client::MultisigClientApi, eth::EthSigning, polkadot::PolkadotSigning,
+	CryptoScheme, SignatureToThresholdSignature,
 };
 use utilities::task_scope::{task_scope, Scope};
 
@@ -57,7 +64,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	keygen_participants: BTreeSet<AccountId32>,
 ) where
 	MultisigClient: MultisigClientApi<C>,
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
     state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
 	C: CryptoScheme,
 	C::AggKey: Into<<<state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain as ChainCrypto>::AggKey> + Send,
@@ -69,19 +76,18 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 		let keygen_result_future =
 			multisig_client.initiate_keygen(ceremony_id, epoch_index, keygen_participants);
 		scope.spawn(async move {
-			let _result =
-				state_chain_client
-					.submit_signed_extrinsic(pallet_cf_vaults::Call::<
-						state_chain_runtime::Runtime,
-						I,
-					>::report_keygen_outcome {
-						ceremony_id,
-						reported_outcome: keygen_result_future
-							.await
-							.map(Into::into)
-							.map_err(|(bad_account_ids, _reason)| bad_account_ids),
-					})
-					.await;
+			state_chain_client
+                .submit_signed_extrinsic(pallet_cf_vaults::Call::<
+                    state_chain_runtime::Runtime,
+                    I,
+                >::report_keygen_outcome {
+                    ceremony_id,
+                    reported_outcome: keygen_result_future
+                        .await
+                        .map(Into::into)
+                        .map_err(|(bad_account_ids, _reason)| bad_account_ids),
+                })
+                .await;
 			Ok(())
 		});
 	} else {
@@ -101,7 +107,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	payloads: Vec<C::SigningPayload>,
 ) where
 	MultisigClient: MultisigClientApi<C>,
-	StateChainClient: ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: SignedExtrinsicApi + UnsignedExtrinsicApi + 'static + Send + Sync,
 	C: CryptoScheme,
 	I: 'static + Sync + Send,
 	state_chain_runtime::Runtime: pallet_cf_threshold_signature::Config<I>,
@@ -118,7 +124,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 		scope.spawn(async move {
 			match signing_result_future.await {
 				Ok(signatures) => {
-					let _result = state_chain_client
+					state_chain_client
 						.submit_unsigned_extrinsic(pallet_cf_threshold_signature::Call::<
 							state_chain_runtime::Runtime,
 							I,
@@ -129,7 +135,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 						.await;
 				},
 				Err((bad_account_ids, _reason)) => {
-					let _result = state_chain_client
+					state_chain_client
 						.submit_signed_extrinsic(pallet_cf_threshold_signature::Call::<
 							state_chain_runtime::Runtime,
 							I,
@@ -203,17 +209,17 @@ pub async fn start<
 		AddressMonitorCommand<BitcoinScriptBounded>,
 	>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
-	initial_block_hash: H256,
 ) -> Result<(), anyhow::Error>
 where
-	BlockStream: Stream<Item = state_chain_runtime::Header> + Send + 'static,
+	BlockStream: StateChainStreamApi,
 	EthRpc: EthRpcApi + Send + Sync + 'static,
 	DotRpc: DotRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
 	PolkadotMultisigClient: MultisigClientApi<PolkadotSigning> + Send + Sync + 'static,
 	BitcoinMultisigClient: MultisigClientApi<BtcSigning> + Send + Sync + 'static,
-	StateChainClient: StorageApi + ExtrinsicApi + 'static + Send + Sync,
+	StateChainClient:
+		StorageApi + UnsignedExtrinsicApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
 	task_scope(|scope| async {
         let account_id = state_chain_client.account_id();
@@ -295,24 +301,24 @@ where
 
         {
             let historical_active_epochs = BTreeSet::from_iter(state_chain_client.storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>(
-                initial_block_hash,
+                sc_block_stream.cache().block_hash,
                 &account_id
             ).await.unwrap());
 
             let current_epoch = state_chain_client
                 .storage_value::<pallet_cf_validator::CurrentEpoch<
                     state_chain_runtime::Runtime,
-                >>(initial_block_hash)
+                >>(sc_block_stream.cache().block_hash)
                 .await
                 .unwrap();
 
             if let Some(earliest_historical_active_epoch) = historical_active_epochs.iter().next() {
                 for epoch in *earliest_historical_active_epoch..current_epoch {
-                    start_epoch(initial_block_hash, epoch, false, historical_active_epochs.contains(&epoch)).await;
+                    start_epoch(sc_block_stream.cache().block_hash, epoch, false, historical_active_epochs.contains(&epoch)).await;
                 }
             }
 
-            start_epoch(initial_block_hash, current_epoch, true, historical_active_epochs.contains(&current_epoch)).await;
+            start_epoch(sc_block_stream.cache().block_hash, current_epoch, true, historical_active_epochs.contains(&current_epoch)).await;
         }
 
         // Ensure we don't submit initial heartbeat too early. Early heartbeats could falsely indicate
@@ -323,15 +329,18 @@ where
             let has_submitted_init_heartbeat = has_submitted_init_heartbeat.clone();
             async move {
                 tokio::time::sleep(Duration::from_secs(60)).await;
-                    state_chain_client
+                state_chain_client
                     .submit_signed_extrinsic(
                         pallet_cf_reputation::Call::heartbeat {},
                     )
                     .await
+                    .until_finalized()
+                    .await
                     .context("Failed to submit initial heartbeat")?;
                 has_submitted_init_heartbeat.store(true, Ordering::Relaxed);
             Ok(())
-        }.boxed()});
+            }.boxed()
+        });
 
         let mut last_heartbeat_submitted_at = 0;
 
@@ -346,8 +355,7 @@ where
         let mut sc_block_stream = Box::pin(sc_block_stream);
         loop {
             match sc_block_stream.next().await {
-                Some(current_block_header) => {
-                    let current_block_hash = current_block_header.hash();
+                Some((current_block_hash, current_block_header)) => {
                     debug!("Processing SC block {} with block hash: {current_block_hash:#x}", current_block_header.number);
 
                     match state_chain_client.storage_value::<frame_system::Events::<state_chain_runtime::Runtime>>(current_block_hash).await {
@@ -468,7 +476,7 @@ where
                                             ceremony_id,
                                             key_id,
                                             signatories,
-                                            vec![crate::multisig::eth::SigningPayload(payload.0)],
+                                            vec![multisig::eth::SigningPayload(payload.0)],
                                         ).await;
                                     }
 
@@ -492,7 +500,7 @@ where
                                             ceremony_id,
                                             key_id,
                                             signatories,
-                                            vec![crate::multisig::polkadot::SigningPayload::new(payload.0)
+                                            vec![multisig::polkadot::SigningPayload::new(payload.0)
                                                 .expect("Payload should be correct size")],
                                         ).await;
                                     }
@@ -516,7 +524,7 @@ where
                                             ceremony_id,
                                             key_id,
                                             signatories,
-                                            payloads.into_iter().map(crate::multisig::bitcoin::SigningPayload).collect(),
+                                            payloads.into_iter().map(multisig::bitcoin::SigningPayload).collect(),
                                         ).await;
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumBroadcaster(
@@ -545,7 +553,7 @@ where
                                                     // a problem with the ethereum rpc node, or with the configured account. For example
                                                     // if the account balance is too low to pay for required gas.
                                                     warn!("TransactionBroadcastRequest {broadcast_attempt_id:?} failed: {e:?}.");
-                                                    let _result = state_chain_client.submit_signed_extrinsic(
+                                                    state_chain_client.submit_signed_extrinsic(
                                                         state_chain_runtime::RuntimeCall::EthereumBroadcaster(
                                                             pallet_cf_broadcast::Call::transaction_signing_failure {
                                                                 broadcast_attempt_id,
@@ -689,7 +697,7 @@ where
                         ) && has_submitted_init_heartbeat.load(Ordering::Relaxed)
                     {
                         info!("Sending heartbeat at block: {}", current_block_header.number);
-                        let _result = state_chain_client
+                        state_chain_client
                             .submit_signed_extrinsic(
                                 pallet_cf_reputation::Call::heartbeat {},
                             )
