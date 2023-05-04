@@ -78,43 +78,51 @@ impl core::fmt::Display for KeyId {
 	}
 }
 
-#[test]
-fn test_key_id_to_and_from_bytes() {
-	let key_ids = [
-		KeyId { epoch_index: 0, public_key_bytes: vec![] },
-		KeyId { epoch_index: 1, public_key_bytes: vec![1, 2, 3] },
-		KeyId { epoch_index: 22, public_key_bytes: vec![0xa, 93, 145, u8::MAX, 0] },
-	];
+#[cfg(test)]
+mod test_super {
+	use super::*;
 
-	for key_id in key_ids {
-		assert_eq!(key_id, KeyId::from_bytes(&key_id.to_bytes()));
+	#[test]
+	fn key_id_encoding_is_symmetric() {
+		let key_ids = [
+			KeyId { epoch_index: 0, public_key_bytes: vec![] },
+			KeyId { epoch_index: 1, public_key_bytes: vec![1, 2, 3] },
+			KeyId { epoch_index: 22, public_key_bytes: vec![0xa, 93, 145, u8::MAX, 0] },
+		];
+
+		for key_id in key_ids {
+			assert_eq!(key_id, KeyId::from_bytes(&key_id.to_bytes()));
+		}
 	}
 
-	let key_id = KeyId {
-		epoch_index: 29,
-		public_key_bytes: vec![
-			0xa,
-			93,
-			141,
-			u8::MAX,
-			0,
-			82,
-			2,
-			39,
-			144,
-			241,
-			29,
-			91,
-			3,
-			241,
-			120,
-			194,
-		],
-	};
-	// We check this because if this form changes then there will be an impact to how keys should be
-	// loaded from the db on the CFE. Thus, we want to be notified if this changes.
-	let expected_bytes =
-		vec![0, 0, 0, 29, 10, 93, 141, 255, 0, 82, 2, 39, 144, 241, 29, 91, 3, 241, 120, 194];
-	assert_eq!(expected_bytes, key_id.to_bytes());
-	assert_eq!(key_id, KeyId::from_bytes(&expected_bytes));
+	#[test]
+	fn key_id_encoding_is_stable() {
+		let key_id = KeyId {
+			epoch_index: 29,
+			public_key_bytes: vec![
+				0xa,
+				93,
+				141,
+				u8::MAX,
+				0,
+				82,
+				2,
+				39,
+				144,
+				241,
+				29,
+				91,
+				3,
+				241,
+				120,
+				194,
+			],
+		};
+		// We check this because if this form changes then there will be an impact to how keys
+		// should be loaded from the db on the CFE. Thus, we want to be notified if this changes.
+		let expected_bytes =
+			vec![0, 0, 0, 29, 10, 93, 141, 255, 0, 82, 2, 39, 144, 241, 29, 91, 3, 241, 120, 194];
+		assert_eq!(expected_bytes, key_id.to_bytes());
+		assert_eq!(key_id, KeyId::from_bytes(&expected_bytes));
+	}
 }
