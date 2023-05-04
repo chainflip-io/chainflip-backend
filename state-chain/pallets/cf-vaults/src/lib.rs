@@ -61,6 +61,7 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 		keygen_ceremony_id: CeremonyId,
 		keygen_participants: BTreeSet<T::ValidatorId>,
 		response_status: KeygenResponseStatus<T, I>,
+		new_epoch_index: EpochIndex,
 	},
 	/// We are waiting for the nodes who generated the new key to complete a signing ceremony to
 	/// verify the new key.
@@ -176,6 +177,7 @@ pub mod pallet {
 				keygen_ceremony_id,
 				keygen_participants,
 				response_status,
+				..
 			}) = PendingVaultRotation::<T, I>::get()
 			{
 				let remaining_candidate_count = response_status.remaining_candidate_count();

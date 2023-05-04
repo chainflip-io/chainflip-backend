@@ -5,6 +5,7 @@ use super::*;
 
 use crate::Pallet;
 use cf_chains::benchmarking_value::BenchmarkValue;
+use cf_primitives::GENESIS_EPOCH;
 use cf_traits::{AccountRoleRegistry, EpochInfo};
 use codec::Decode;
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
@@ -50,7 +51,8 @@ benchmarks_instance_pallet! {
 			VaultRotationStatus::<T, I>::AwaitingKeygen {
 				keygen_ceremony_id: CEREMONY_ID,
 				keygen_participants: keygen_participants.into_iter().collect(),
-				response_status: keygen_response_status
+				response_status: keygen_response_status,
+				new_epoch_index: GENESIS_EPOCH,
 			},
 		);
 	} : {
@@ -80,7 +82,8 @@ benchmarks_instance_pallet! {
 			VaultRotationStatus::<T, I>::AwaitingKeygen {
 				keygen_ceremony_id: CEREMONY_ID,
 				keygen_participants: keygen_participants.into_iter().collect(),
-				response_status: keygen_response_status
+				response_status: keygen_response_status,
+				new_epoch_index: GENESIS_EPOCH,
 			},
 		);
 	} : {
@@ -102,7 +105,8 @@ benchmarks_instance_pallet! {
 			VaultRotationStatus::<T, I>::AwaitingKeygen {
 				keygen_ceremony_id: CEREMONY_ID,
 				keygen_participants: keygen_participants.clone().into_iter().collect(),
-				response_status: KeygenResponseStatus::<T, I>::new(keygen_participants)
+				response_status: KeygenResponseStatus::<T, I>::new(keygen_participants),
+				new_epoch_index: GENESIS_EPOCH,
 			},
 		);
 		use cf_chains::eth::sig_constants::SIG;

@@ -4,6 +4,7 @@ use crate::{
 	PendingVaultRotation, Vault, VaultRotationStatus, Vaults,
 };
 use cf_chains::eth::Ethereum;
+use cf_primitives::GENESIS_EPOCH;
 use cf_test_utilities::{last_event, maybe_last_event};
 use cf_traits::{
 	mocks::{ceremony_id_provider::MockCeremonyIdProvider, threshold_signer::MockThresholdSigner},
@@ -35,7 +36,7 @@ const ALL_CANDIDATES: &[<MockRuntime as Chainflip>::ValidatorId] = &[ALICE, BOB,
 #[should_panic]
 fn start_panics_with_no_candidates() {
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::keygen(BTreeSet::default());
+		<VaultsPallet as VaultRotator>::keygen(BTreeSet::default(), GENESIS_EPOCH);
 	});
 }
 
@@ -44,8 +45,8 @@ fn keygen_request_emitted() {
 	let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
 
 	new_test_ext().execute_with(|| {
-		let next_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
-		<VaultsPallet as VaultRotator>::keygen(btree_candidates.clone());
+		let rotation_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index();
+		<VaultsPallet as VaultRotator>::keygen(btree_candidates.clone(), rotation_epoch);
 		// Confirm we have a new vault rotation process running
 		assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
 		assert_eq!(
@@ -53,7 +54,7 @@ fn keygen_request_emitted() {
 			PalletEvent::<MockRuntime, _>::KeygenRequest {
 				ceremony_id: current_ceremony_id(),
 				participants: btree_candidates.clone(),
-				epoch_index: next_epoch,
+				epoch_index: rotation_epoch,
 			}
 			.into()
 		);
@@ -66,8 +67,8 @@ fn start_panics_if_called_while_vault_rotation_in_progress() {
 	let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
 
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::keygen(btree_candidates.clone());
-		<VaultsPallet as VaultRotator>::keygen(btree_candidates);
+		<VaultsPallet as VaultRotator>::keygen(btree_candidates.clone(), GENESIS_EPOCH);
+		<VaultsPallet as VaultRotator>::keygen(btree_candidates, GENESIS_EPOCH);
 	});
 }
 
@@ -76,7 +77,7 @@ fn keygen_success_triggers_keygen_verification() {
 	let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
 
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::keygen(btree_candidates.clone());
+		<VaultsPallet as VaultRotator>::keygen(btree_candidates.clone(), GENESIS_EPOCH);
 		let ceremony_id = current_ceremony_id();
 
 		VaultsPallet::trigger_keygen_verification(ceremony_id, NEW_AGG_PUB_KEY, btree_candidates);
@@ -89,7 +90,7 @@ fn keygen_success_triggers_keygen_verification() {
 }
 
 fn keygen_failure(bad_candidates: &[<MockRuntime as Chainflip>::ValidatorId]) {
-	VaultsPallet::keygen(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
+	VaultsPallet::keygen(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()), GENESIS_EPOCH);
 
 	let ceremony_id = current_ceremony_id();
 
@@ -124,8 +125,9 @@ fn test_keygen_failure() {
 #[test]
 fn keygen_called_after_keygen_failure_restarts_rotation_at_keygen() {
 	new_test_ext().execute_with(|| {
+		let rotation_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
 		keygen_failure(&[BOB, CHARLIE]);
-		VaultsPallet::keygen(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
+		VaultsPallet::keygen(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()), rotation_epoch);
 
 		assert_eq!(VaultsPallet::status(), AsyncResult::Pending);
 
@@ -134,7 +136,7 @@ fn keygen_called_after_keygen_failure_restarts_rotation_at_keygen() {
 			PalletEvent::KeygenRequest {
 				ceremony_id: current_ceremony_id(),
 				participants: ALL_CANDIDATES.iter().cloned().collect(),
-				epoch_index: <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1,
+				epoch_index: rotation_epoch,
 			}
 			.into()
 		);
@@ -195,7 +197,10 @@ fn no_active_rotation() {
 #[test]
 fn cannot_report_keygen_success_twice() {
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::keygen(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
+		<VaultsPallet as VaultRotator>::keygen(
+			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
+			GENESIS_EPOCH,
+		);
 		let ceremony_id = current_ceremony_id();
 
 		assert_ok!(VaultsPallet::report_keygen_outcome(
@@ -220,7 +225,10 @@ fn cannot_report_keygen_success_twice() {
 #[test]
 fn cannot_report_two_different_keygen_outcomes() {
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::keygen(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
+		<VaultsPallet as VaultRotator>::keygen(
+			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
+			GENESIS_EPOCH,
+		);
 		let ceremony_id = current_ceremony_id();
 
 		assert_ok!(VaultsPallet::report_keygen_outcome(
@@ -245,9 +253,7 @@ fn cannot_report_two_different_keygen_outcomes() {
 #[test]
 fn only_participants_can_report_keygen_outcome() {
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::keygen(
-			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
-		);
+		<VaultsPallet as VaultRotator>::keygen(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()) , GENESIS_EPOCH);
 		let ceremony_id = current_ceremony_id();
 
 		assert_ok!(VaultsPallet::report_keygen_outcome(
@@ -278,7 +284,10 @@ fn only_participants_can_report_keygen_outcome() {
 #[test]
 fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::keygen(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
+		<VaultsPallet as VaultRotator>::keygen(
+			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
+			GENESIS_EPOCH,
+		);
 		let ceremony_id = current_ceremony_id();
 
 		assert_ok!(VaultsPallet::report_keygen_outcome(
@@ -314,9 +323,8 @@ fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 #[test]
 fn keygen_report_success() {
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::keygen(
-			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
-		);
+		let rotation_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
+		<VaultsPallet as VaultRotator>::keygen(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()), rotation_epoch);
 		let keygen_ceremony_id = current_ceremony_id();
 
 		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 1);
@@ -374,10 +382,11 @@ fn keygen_report_success() {
 			<VaultsPallet as VaultRotator>::status(),
 			AsyncResult::Pending
 		);
-		if let VaultRotationStatus::AwaitingKeygen { keygen_ceremony_id: keygen_ceremony_id_from_status, response_status, keygen_participants, } = PendingVaultRotation::<MockRuntime, _>::get().unwrap() {
+		if let VaultRotationStatus::AwaitingKeygen { keygen_ceremony_id: keygen_ceremony_id_from_status, response_status, keygen_participants, new_epoch_index } = PendingVaultRotation::<MockRuntime, _>::get().unwrap() {
 			assert_eq!(keygen_ceremony_id, keygen_ceremony_id_from_status);
 			assert_eq!(response_status.success_votes().get(&NEW_AGG_PUB_KEY).expect("new key should have votes"), &3);
 			assert_eq!(keygen_participants, BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
+			assert_eq!(new_epoch_index, rotation_epoch);
 		} else {
 			panic!("Expected to be in AwaitingKeygen state");
 		}
@@ -416,7 +425,10 @@ fn keygen_report_success() {
 #[test]
 fn keygen_report_failure() {
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::keygen(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
+		<VaultsPallet as VaultRotator>::keygen(
+			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
+			GENESIS_EPOCH,
+		);
 		let ceremony_id = current_ceremony_id();
 
 		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 1);
@@ -476,7 +488,10 @@ fn keygen_report_failure() {
 #[test]
 fn test_keygen_timeout_period() {
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::keygen(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
+		<VaultsPallet as VaultRotator>::keygen(
+			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
+			GENESIS_EPOCH,
+		);
 		let ceremony_id = current_ceremony_id();
 
 		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 1);
@@ -519,7 +534,7 @@ fn vault_key_rotated() {
 			Error::<MockRuntime, _>::NoActiveRotation
 		);
 
-		<VaultsPallet as VaultRotator>::keygen(btree_candidates.clone());
+		<VaultsPallet as VaultRotator>::keygen(btree_candidates.clone(), GENESIS_EPOCH);
 		let ceremony_id = current_ceremony_id();
 		VaultsPallet::trigger_keygen_verification(ceremony_id, NEW_AGG_PUB_KEY, btree_candidates);
 

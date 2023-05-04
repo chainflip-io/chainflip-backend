@@ -1,5 +1,4 @@
 use super::*;
-use cf_traits::EpochInfo;
 use sp_runtime::traits::BlockNumberProvider;
 
 impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
@@ -8,7 +7,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	/// # Panics
 	/// - If an empty BTreeSet of candidates is provided
 	/// - If a vault rotation outcome is already Pending (i.e. there's one already in progress)
-	fn keygen(candidates: BTreeSet<Self::ValidatorId>) {
+	fn keygen(candidates: BTreeSet<Self::ValidatorId>, new_epoch_index: EpochIndex) {
 		assert!(!candidates.is_empty());
 
 		assert_ne!(Self::status(), AsyncResult::Pending);
@@ -19,6 +18,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			keygen_ceremony_id: ceremony_id,
 			keygen_participants: candidates.clone(),
 			response_status: KeygenResponseStatus::new(candidates.clone()),
+			new_epoch_index,
 		});
 
 		// Start the timer for resolving Keygen - we check this in the on_initialise() hook each
@@ -28,7 +28,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		Pallet::<T, I>::deposit_event(Event::KeygenRequest {
 			ceremony_id,
 			participants: candidates,
-			epoch_index: <T as Chainflip>::EpochInfo::epoch_index() + 1,
+			epoch_index: new_epoch_index,
 		});
 	}
 
@@ -110,6 +110,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 					keygen_ceremony_id: Default::default(),
 					keygen_participants: Default::default(),
 					response_status: KeygenResponseStatus::new(Default::default()),
+					new_epoch_index: Default::default(),
 				});
 			},
 			AsyncResult::Ready(VaultStatus::KeygenComplete) => {

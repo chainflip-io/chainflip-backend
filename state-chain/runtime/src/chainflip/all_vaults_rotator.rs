@@ -2,6 +2,7 @@
 
 use core::marker::PhantomData;
 
+use cf_primitives::EpochIndex;
 use cf_traits::{AsyncResult, VaultRotator, VaultStatus};
 use sp_std::{collections::btree_set::BTreeSet, vec::Vec};
 
@@ -18,10 +19,10 @@ where
 	type ValidatorId = A::ValidatorId;
 
 	/// Start all vault rotations with the provided `candidates`.
-	fn keygen(candidates: BTreeSet<Self::ValidatorId>) {
-		A::keygen(candidates.clone());
-		B::keygen(candidates.clone());
-		C::keygen(candidates);
+	fn keygen(candidates: BTreeSet<Self::ValidatorId>, next_epoch_index: EpochIndex) {
+		A::keygen(candidates.clone(), next_epoch_index);
+		B::keygen(candidates.clone(), next_epoch_index);
+		C::keygen(candidates, next_epoch_index);
 	}
 
 	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>> {
