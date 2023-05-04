@@ -393,7 +393,7 @@ pub mod pallet {
 					match T::VaultRotator::status() {
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
 							let authority_candidates = rotation_state.authority_candidates();
-							T::VaultRotator::key_handover(helpers::select_sharing_participants(Self::current_authorities(), &authority_candidates), authority_candidates, rotation_state.new_epoch_index);
+							T::VaultRotator::key_handover(helpers::select_sharing_participants(Self::current_authorities(), &authority_candidates, rotation_state.new_epoch_index), authority_candidates, rotation_state.new_epoch_index);
 							Self::set_rotation_phase(RotationPhase::KeyHandoversInProgress(rotation_state));
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
