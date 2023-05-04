@@ -412,14 +412,14 @@ macro_rules! impl_ingress_api_for_anychain {
 		impl IngressApi<AnyChain> for $anychain {
 			type AccountId = <Runtime as frame_system::Config>::AccountId;
 
-			fn register_liquidity_ingress_intent(
+			fn request_liquidity_deposit_channel(
 				lp_account: Self::AccountId,
 				ingress_asset: Asset,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match ingress_asset.into() {
 					$(
 						ForeignChain::$chain =>
-							$ingress_egress::register_liquidity_ingress_intent(
+							$ingress_egress::request_liquidity_deposit_channel(
 								lp_account,
 								ingress_asset.try_into().unwrap(),
 							),

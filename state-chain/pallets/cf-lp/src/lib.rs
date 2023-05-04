@@ -165,7 +165,7 @@ pub mod pallet {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			let (channel_id, ingress_address) =
-				T::IngressHandler::register_liquidity_ingress_intent(account_id, asset)?;
+				T::IngressHandler::request_liquidity_deposit_channel(account_id, asset)?;
 
 			let expiry_block =
 				frame_system::Pallet::<T>::current_block_number().saturating_add(LpTTL::<T>::get());

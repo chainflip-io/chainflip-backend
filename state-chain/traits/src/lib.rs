@@ -678,7 +678,7 @@ pub trait FundingInfo {
 pub trait IngressApi<C: Chain> {
 	type AccountId;
 	/// Issues a channel id and ingress address for a new liquidity deposit.
-	fn register_liquidity_ingress_intent(
+	fn request_liquidity_deposit_channel(
 		lp_account: Self::AccountId,
 		ingress_asset: C::ChainAsset,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;

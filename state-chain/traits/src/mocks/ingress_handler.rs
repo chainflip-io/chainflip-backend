@@ -76,7 +76,7 @@ impl<C: Chain, T: Chainflip> MockIngressHandler<C, T> {
 impl<C: Chain, T: Chainflip> IngressApi<C> for MockIngressHandler<C, T> {
 	type AccountId = <T as frame_system::Config>::AccountId;
 
-	fn register_liquidity_ingress_intent(
+	fn request_liquidity_deposit_channel(
 		lp_account: Self::AccountId,
 		ingress_asset: <C as cf_chains::Chain>::ChainAsset,
 	) -> Result<(cf_primitives::ChannelId, ForeignChainAddress), sp_runtime::DispatchError> {

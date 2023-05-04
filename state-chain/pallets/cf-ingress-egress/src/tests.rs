@@ -128,7 +128,7 @@ fn register_and_do_ingress(
 	who: u64,
 	asset: eth::Asset,
 ) -> (ChannelId, <Ethereum as Chain>::ChainAccount) {
-	let (id, address) = IngressEgress::register_liquidity_ingress_intent(who, asset).unwrap();
+	let (id, address) = IngressEgress::request_liquidity_deposit_channel(who, asset).unwrap();
 	let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
 	assert_ok!(IngressEgress::do_single_ingress(address, asset, 1_000, Default::default(),));
 	(id, address)
@@ -398,7 +398,7 @@ fn addresses_are_getting_reused() {
 		.execute_as_block(1, || {
 			// Schedule 2 ingress requests but only complete one:
 			ingress_to_finalise = register_and_do_ingress(0u64, eth::Asset::Eth);
-			IngressEgress::register_liquidity_ingress_intent(0u64, eth::Asset::Eth).unwrap();
+			IngressEgress::request_liquidity_deposit_channel(0u64, eth::Asset::Eth).unwrap();
 			// Indicates we have already generated 2 addresses
 			assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 2);
 		})
