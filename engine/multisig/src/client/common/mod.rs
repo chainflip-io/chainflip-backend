@@ -10,7 +10,6 @@ pub use ceremony_stage::{
 pub use broadcast_verification::BroadcastVerificationMessage;
 
 use cf_primitives::{AccountId, AuthorityCount};
-use derivative::Derivative;
 pub use failure_reason::{
 	BroadcastFailureReason, CeremonyFailureReason, KeygenFailureReason, SigningFailureReason,
 };
@@ -101,8 +100,7 @@ type SecretShare<C> = <<C as CryptoScheme>::Point as ECPoint>::Scalar;
 type PublicKeyShares<C> = BTreeMap<AccountId, <C as CryptoScheme>::Point>;
 
 /// Holds state relevant to the role in the handover ceremony.
-#[derive(Derivative)]
-#[derivative(Debug(bound = ""))]
+#[derive(Debug)]
 pub enum ParticipantStatus<C: CryptoScheme> {
 	Sharing(SecretShare<C>, PublicKeyShares<C>),
 	/// This becomes `NonSharingReceivedKeys` after shares are broadcast
@@ -110,8 +108,7 @@ pub enum ParticipantStatus<C: CryptoScheme> {
 	NonSharingReceivedKeys(PublicKeyShares<C>),
 }
 
-#[derive(Derivative)]
-#[derivative(Debug(bound = ""))]
+#[derive(Debug)]
 pub struct ResharingContext<C: CryptoScheme> {
 	/// Participants who contribute their (existing) secret shares
 	pub sharing_participants: BTreeSet<AuthorityCount>,

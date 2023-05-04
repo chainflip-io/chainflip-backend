@@ -27,7 +27,7 @@ async fn should_ignore_rts_for_unknown_key() {
 	let mut mock_key_store = MockKeyStoreAPI::new();
 	mock_key_store.expect_get_key().once().returning(|_| None);
 
-	let (ceremony_request_sender, _ceremony_request_receiver) =
+	let (ceremony_request_sender, mut ceremony_request_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
 	// Create a client
@@ -49,6 +49,10 @@ async fn should_ignore_rts_for_unknown_key() {
 	// Check that the signing request fails immediately with an "unknown key" error
 	let (_, failure_reason) = assert_err!(assert_future_can_complete(signing_request_fut));
 	assert_eq!(failure_reason, SigningFailureReason::UnknownKey);
+	assert!(matches!(
+		assert_ok!(assert_future_can_complete(ceremony_request_receiver.recv())),
+		CeremonyRequest { ceremony_id: DEFAULT_SIGNING_CEREMONY_ID, details: None }
+	));
 }
 
 #[tokio::test]

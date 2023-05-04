@@ -17,7 +17,6 @@ pub mod ceremony_manager;
 
 use std::collections::BTreeSet;
 
-use derivative::Derivative;
 use utilities::{format_iterator, threshold_from_share_count};
 
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, KeyId};
@@ -135,14 +134,12 @@ pub trait MultisigClientApi<C: CryptoScheme> {
 
 /// The ceremony details are optional to alow the updating of the ceremony id tracking
 /// when we are not participating in the ceremony.
-#[derive(Derivative)]
-#[derivative(Debug(bound = ""))]
+#[derive(Debug)]
 pub struct CeremonyRequest<C: CryptoScheme> {
 	pub ceremony_id: CeremonyId,
 	pub details: Option<CeremonyRequestDetails<C>>,
 }
-#[derive(Derivative)]
-#[derivative(Debug(bound = ""))]
+#[derive(Debug)]
 pub enum CeremonyRequestDetails<C>
 where
 	C: CryptoScheme,
@@ -151,8 +148,7 @@ where
 	Sign(SigningRequestDetails<C>),
 }
 
-#[derive(Derivative)]
-#[derivative(Debug(bound = ""))]
+#[derive(Debug)]
 pub struct KeygenRequestDetails<C: CryptoScheme> {
 	pub participants: BTreeSet<AccountId>,
 	pub rng: Rng,
@@ -162,8 +158,7 @@ pub struct KeygenRequestDetails<C: CryptoScheme> {
 	pub resharing_context: Option<ResharingContext<C>>,
 }
 
-#[derive(Derivative)]
-#[derivative(Debug(bound = ""))]
+#[derive(Debug)]
 pub struct SigningRequestDetails<C>
 where
 	C: CryptoScheme,
@@ -306,9 +301,10 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 			.boxed()
 		} else {
 			self.update_latest_ceremony_id(ceremony_id);
+			let reported_parties = Default::default();
 			let failure_reason = SigningFailureReason::UnknownKey;
-			failure_reason.log(&Default::default());
-			futures::future::ready(Err((Default::default(), failure_reason))).boxed()
+			failure_reason.log(&reported_parties);
+			futures::future::ready(Err((reported_parties, failure_reason))).boxed()
 		}
 	}
 
