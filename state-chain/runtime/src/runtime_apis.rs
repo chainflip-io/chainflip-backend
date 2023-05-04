@@ -1,7 +1,7 @@
 use crate::chainflip::Offence;
 use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::eth::SigData;
-use cf_primitives::{Asset, AssetAmount, EpochIndex, EthereumAddress, ExchangeRate, SwapResult};
+use cf_primitives::{Asset, AssetAmount, EpochIndex, EthereumAddress, ExchangeRate, SwapOutput};
 use codec::{Decode, Encode};
 use pallet_cf_governance::GovCallHash;
 #[cfg(feature = "std")]
@@ -116,6 +116,6 @@ decl_runtime_apis!(
 			amount: AssetAmount,
 		) -> Option<ExchangeRate>;
 		fn cf_pool_simulate_swap(from: Asset, to: Asset, amount: AssetAmount)
-			-> Option<SwapResult>;
+			-> Option<SwapOutput>;
 	}
 );

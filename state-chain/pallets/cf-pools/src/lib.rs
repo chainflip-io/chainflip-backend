@@ -3,7 +3,7 @@ use cf_amm::{
 	common::{OneToZero, Side, SideMap, SqrtPriceQ64F96, ZeroToOne},
 	PoolState,
 };
-use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapResult};
+use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput};
 use cf_traits::{Chainflip, LpBalanceApi, SwappingApi};
 use frame_support::{pallet_prelude::*, transactional};
 use frame_system::pallet_prelude::OriginFor;
@@ -607,7 +607,7 @@ impl<T: Config> SwappingApi for Pallet<T> {
 		from: any::Asset,
 		to: any::Asset,
 		input_amount: AssetAmount,
-	) -> Result<SwapResult, DispatchError> {
+	) -> Result<SwapOutput, DispatchError> {
 		Ok(match (from, to) {
 			(input_asset, STABLE_ASSET) => {
 				let gross_output =
@@ -622,7 +622,7 @@ impl<T: Config> SwappingApi for Pallet<T> {
 				let intermediate_output =
 					Self::process_swap_leg(SwapLeg::ToStable, input_asset, input_amount)?;
 				let intermediate_input = Self::take_network_fee(intermediate_output);
-				SwapResult {
+				SwapOutput {
 					intermediary: Some(intermediate_output),
 					output: Self::process_swap_leg(
 						SwapLeg::FromStable,

@@ -76,7 +76,7 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{
-	Asset, AssetAmount, BlockNumber, EthereumAddress, ExchangeRate, FlipBalance, SwapResult,
+	Asset, AssetAmount, BlockNumber, EthereumAddress, ExchangeRate, FlipBalance, SwapOutput,
 };
 pub use cf_traits::{
 	EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered, SwappingApi,
@@ -1023,7 +1023,7 @@ impl_runtime_apis! {
 		/// Simulates a swap and return the intermediate (if any) and final output.
 		/// Note: This function must only be called through RPC, because RPC has its own storage buffer
 		/// layer and would not affect on-chain storage.
-		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Option<SwapResult> {
+		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Option<SwapOutput> {
 			LiquidityPools::swap(from, to, amount).ok()
 		}
 	}

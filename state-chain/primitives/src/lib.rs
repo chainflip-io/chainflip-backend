@@ -201,14 +201,14 @@ pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
 /// Struct that represents the estimated output of a Swap.
 #[derive(PartialEq, Default, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct SwapResult {
+pub struct SwapOutput {
 	// Intermediary amount, if there's any
 	pub intermediary: Option<AssetAmount>,
 	// Final output of the swap
 	pub output: AssetAmount,
 }
 
-impl From<AssetAmount> for SwapResult {
+impl From<AssetAmount> for SwapOutput {
 	fn from(value: AssetAmount) -> Self {
 		Self { intermediary: None, output: value }
 	}
