@@ -919,28 +919,28 @@ async fn initially_incompatible_keys_can_sign() {
 
 mod key_handover {
 
+	use cf_primitives::PublicKeyBytes;
+
 	use super::*;
 
-	#[tokio::test]
-	async fn key_handover() {
-		// The high level idea of this test is to generate some key with some
-		// nodes, then introduce new nodes who the key will be handed over to.
-		// There is an overlap between the two sets of nodes, which is going
-		// to be common in practice. The resulting aggregate keys should match.
+	fn to_account_id_set<T: AsRef<[u8]>>(ids: T) -> BTreeSet<AccountId> {
+		ids.as_ref().iter().map(|i| AccountId::new([*i; 32])).collect()
+	}
 
-		type Scheme = BtcSigning;
-		type Point = <Scheme as CryptoScheme>::Point;
-		type Scalar = <Point as ECPoint>::Scalar;
+	#[derive(Default)]
+	struct HandoverTestOptions {
+		nodes_sharing_invalid_secret: BTreeSet<AccountId>,
+	}
 
-		let all_account_ids: Vec<AccountId> =
-			[1, 2, 3, 4, 5].iter().map(|i| AccountId::new([*i; 32])).collect();
+	async fn prepare_handover_test<Scheme: CryptoScheme>(
+		original_set: BTreeSet<AccountId>,
+		sharing_subset: BTreeSet<AccountId>,
+		receiving_set: BTreeSet<AccountId>,
+		options: HandoverTestOptions,
+	) -> (KeygenCeremonyRunner<Scheme>, PublicKeyBytes) {
+		use crate::client::common::ParticipantStatus;
 
-		// Accounts (1), (2) and (3) will hold the original key
-		let original_set: BTreeSet<_> = all_account_ids.iter().take(3).cloned().collect();
-
-		// Accounts (3), (4) and (5) will receive the key as the result of this ceremony.
-		// (Note that (3) appears in both sets.)
-		let new_set: BTreeSet<_> = all_account_ids.iter().skip(2).take(3).cloned().collect();
+		assert!(sharing_subset.is_subset(&original_set));
 
 		// Perform a regular keygen to generate initial keys:
 		let (initial_key, mut key_infos) = keygen::generate_key_data::<Scheme>(
@@ -948,21 +948,13 @@ mod key_handover {
 			&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
 		);
 
-		// Only 2 and 3 will contribute their secret shares
-		let sharing_participants: BTreeSet<AccountId> =
-			original_set.clone().into_iter().skip(1).collect();
-
 		// Sanity check: we have (just) enough participants to re-share the key
 		assert_eq!(
 			key_infos.values().next().as_ref().unwrap().params.threshold + 1,
-			sharing_participants.len() as u32
+			sharing_subset.len() as u32
 		);
 
-		let receiving_participants: BTreeSet<AccountId> = new_set.clone().into_iter().collect();
-		// Accounts (2), (3), (4) and (5) will participate, with (2) and (3)
-		// re-sharing their key to (3), (4) and (5)
-		let all_participants: BTreeSet<_> =
-			sharing_participants.union(&receiving_participants).cloned().collect();
+		let all_participants: BTreeSet<_> = sharing_subset.union(&receiving_set).cloned().collect();
 
 		let mut ceremony = KeygenCeremonyRunner::<Scheme>::new(
 			new_nodes(all_participants),
@@ -974,19 +966,51 @@ mod key_handover {
 
 		for (id, node) in &mut ceremony.nodes {
 			// Give the right context type depending on whether they have keys
-			let context = if sharing_participants.contains(id) {
+			let mut context = if sharing_subset.contains(id) {
 				let key_info = key_infos.remove(id).unwrap();
-				ResharingContext::from_key(
-					&key_info,
-					id,
-					&sharing_participants,
-					&receiving_participants,
-				)
+				ResharingContext::from_key(&key_info, id, &sharing_subset, &receiving_set)
 			} else {
-				ResharingContext::without_key(&sharing_participants, &receiving_participants)
+				ResharingContext::without_key(&sharing_subset, &receiving_set)
 			};
+
+			// Handle the case where a node sends an invalid secret share
+			if options.nodes_sharing_invalid_secret.contains(id) {
+				// Adding a small tweak to the share to make it incorrect
+				match &mut context.party_status {
+					ParticipantStatus::Sharing(secret_share, _) => {
+						*secret_share =
+							secret_share.clone() + &<Scheme::Point as ECPoint>::Scalar::from(1);
+					},
+					_ => panic!("Unexpected status"),
+				}
+			}
+
 			node.request_key_handover(ceremony_details.clone(), context).await;
 		}
+
+		(ceremony, initial_key)
+	}
+
+	/// Run key handover (preceded by a keygen) with the provided parameters
+	/// and ensure that it is successful
+	async fn ensure_successful_handover(
+		original_set: BTreeSet<AccountId>,
+		sharing_subset: BTreeSet<AccountId>,
+		receiving_set: BTreeSet<AccountId>,
+	) {
+		type Scheme = BtcSigning;
+		// The high level idea of this test is to generate some key with some
+		// nodes, then introduce new nodes who the key will be handed over to.
+		// The resulting aggregate keys should match, and the new nodes should
+		// be able to sign with their newly generated shares.
+
+		let (mut ceremony, initial_key) = prepare_handover_test(
+			original_set,
+			sharing_subset,
+			receiving_set.clone(),
+			HandoverTestOptions::default(),
+		)
+		.await;
 
 		let messages = ceremony.gather_outgoing_messages::<keygen::PubkeyShares0<Point>, _>().await;
 
@@ -1009,7 +1033,120 @@ mod key_handover {
 
 		// Ensure that the new key shares can be used for signing:
 		let mut signing_ceremony = SigningCeremonyRunner::<Scheme>::new_with_all_signers(
-			new_nodes(receiving_participants),
+			new_nodes(receiving_set),
+			DEFAULT_SIGNING_CEREMONY_ID,
+			vec![PayloadAndKeyData::new(Scheme::signing_payload_for_test(), new_key, new_shares)],
+			Rng::from_entropy(),
+		);
+		standard_signing(&mut signing_ceremony).await;
+	}
+
+	#[tokio::test]
+	async fn with_disjoint_sets_of_nodes() {
+		// Test that key handover can be performed even if there no overlap
+		// between sharing (old) and receiving (new) validators.
+
+		// These parties will hold the original key
+		let original_set = to_account_id_set([1, 2, 3]);
+
+		// A subset of them will contribute their secret shares
+		let sharing_subset = to_account_id_set([2, 3]);
+
+		// These parties will receive the key as the result of key handover.
+		// (Note no overlap with the original set.)
+		let new_set = to_account_id_set([4, 5, 6]);
+
+		assert!(original_set.is_disjoint(&new_set));
+
+		ensure_successful_handover(original_set, sharing_subset, new_set).await;
+	}
+
+	#[tokio::test]
+	async fn with_sets_of_nodes_overlapping() {
+		// In practice it is going to be common to have an overlap between
+		// sharing and receiving participants
+
+		// These parties will hold the original key
+		let original_set = to_account_id_set([1, 2, 3]);
+
+		// A subset of them will contribute their secret shares
+		let sharing_subset = to_account_id_set([2, 3]);
+
+		// These parties will receive the key as the result of key handover.
+		// (Note that (3) appears in both sets.)
+		let new_set = to_account_id_set([3, 4, 5]);
+
+		assert!(!original_set.is_disjoint(&new_set));
+
+		ensure_successful_handover(original_set, sharing_subset, new_set).await;
+	}
+
+	#[tokio::test]
+	async fn with_different_set_sizes() {
+		// These parties will hold the original key
+		let original_set = to_account_id_set([1, 2, 3, 4, 5]);
+
+		// A subset of them will contribute their secret shares
+		let sharing_subset = to_account_id_set([1, 2, 3, 4]);
+
+		// These parties will receive the key as the result of key handover.
+		// (Note that that the two sets have different size.)
+		let new_set = to_account_id_set([4, 5, 6]);
+
+		assert_ne!(original_set.len(), new_set.len());
+
+		ensure_successful_handover(original_set, sharing_subset, new_set).await;
+	}
+
+	#[tokio::test]
+	async fn should_recover_if_agree_on_values_stage0() {
+		type Scheme = BtcSigning;
+		type Point = <Scheme as CryptoScheme>::Point;
+
+		let original_set = to_account_id_set([1, 2, 3, 4]);
+
+		// NOTE: 3 sharing nodes is the smallest set that where
+		// recovery is possible during certain stages
+		let sharing_subset = to_account_id_set([2, 3, 4]);
+
+		let receiving_set = to_account_id_set([3, 4, 5]);
+
+		// This account id will fail to broadcast initial public keys
+		let bad_account_id = sharing_subset.iter().next().unwrap().clone();
+
+		let (mut ceremony, initial_key) = prepare_handover_test::<Scheme>(
+			original_set,
+			sharing_subset,
+			receiving_set.clone(),
+			HandoverTestOptions::default(),
+		)
+		.await;
+
+		let messages = ceremony.gather_outgoing_messages::<keygen::PubkeyShares0<Point>, _>().await;
+
+		ceremony.distribute_messages_with_non_sender(messages, &bad_account_id).await;
+
+		let messages = ceremony.gather_outgoing_messages::<keygen::HashComm1, _>().await;
+
+		let messages = run_stages!(
+			ceremony,
+			messages,
+			keygen::VerifyHashComm2,
+			CoeffComm3,
+			VerifyCoeffComm4,
+			SecretShare5,
+			Complaints6,
+			VerifyComplaints7
+		);
+
+		ceremony.distribute_messages(messages).await;
+		let (new_key, new_shares) = ceremony.complete().await;
+
+		assert_eq!(new_key, initial_key);
+
+		// Ensure that the new key shares can be used for signing:
+		let mut signing_ceremony = SigningCeremonyRunner::<Scheme>::new_with_all_signers(
+			new_nodes(receiving_set),
 			DEFAULT_SIGNING_CEREMONY_ID,
 			vec![PayloadAndKeyData::new(Scheme::signing_payload_for_test(), new_key, new_shares)],
 			Rng::from_entropy(),
@@ -1021,83 +1158,31 @@ mod key_handover {
 	// (commits to an unexpected secret) gets reported
 	#[tokio::test]
 	async fn key_handover_with_incorrect_commitment() {
-		use crate::client::common::ParticipantStatus;
 		type Scheme = BtcSigning;
 		type Point = <Scheme as CryptoScheme>::Point;
-		type Scalar = <Point as ECPoint>::Scalar;
-
-		let all_account_ids: Vec<AccountId> =
-			[1, 2, 3, 4, 5].iter().map(|i| AccountId::new([*i; 32])).collect();
 
 		// Accounts (1), (2) and (3) will hold the original key
-		let original_set: BTreeSet<_> = all_account_ids.iter().take(3).cloned().collect();
+		let original_set = to_account_id_set([1, 2, 3]);
+
+		// Only (2) and (3) will contribute their secret shares
+		let sharing_subset = to_account_id_set([2, 3]);
 
 		// Accounts (3), (4) and (5) will receive the key as the result of this ceremony.
 		// (Note that (3) appears in both sets.)
-		let new_set: BTreeSet<_> = all_account_ids.iter().skip(2).take(3).cloned().collect();
-
-		// Perform a regular keygen to generate initial keys:
-		let (_initial_key, mut key_infos) = keygen::generate_key_data::<Scheme>(
-			original_set.clone().into_iter().collect(),
-			&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
-		);
-
-		// Only 2 and 3 will contribute their secret shares
-		let sharing_participants: BTreeSet<AccountId> =
-			original_set.clone().into_iter().skip(1).collect();
-
-		// Sanity check: we have (just) enough participants to re-share the key
-		assert_eq!(
-			key_infos.values().next().as_ref().unwrap().params.threshold + 1,
-			sharing_participants.len() as u32
-		);
-
-		let receiving_participants: BTreeSet<AccountId> = new_set.clone().into_iter().collect();
-		// Accounts (2), (3), (4) and (5) will participate, with (2) and (3)
-		// re-sharing their key to (3), (4) and (5)
-		let all_participants: BTreeSet<_> =
-			sharing_participants.union(&receiving_participants).cloned().collect();
-
-		// Now perform a key hand-over ceremony where one of the participants
-		// commits to an unexpected secret
+		let receiving_set = to_account_id_set([3, 4, 5]);
 
 		// This account id will commit to an unexpected secret
-		let bad_account_id = all_participants.iter().next().unwrap().clone();
+		let bad_account_id = sharing_subset.iter().next().unwrap().clone();
 
-		let mut ceremony = KeygenCeremonyRunner::<Scheme>::new(
-			new_nodes(all_participants),
-			DEFAULT_KEYGEN_CEREMONY_ID,
-			Rng::from_seed(DEFAULT_KEYGEN_SEED),
-		);
-
-		let ceremony_details = ceremony.keygen_ceremony_details();
-
-		for (id, node) in &mut ceremony.nodes {
-			// Give the right context type depending on whether they have keys
-			let mut context = if sharing_participants.contains(id) {
-				let key_info = key_infos.remove(id).unwrap();
-				ResharingContext::from_key(
-					&key_info,
-					id,
-					&sharing_participants,
-					&receiving_participants,
-				)
-			} else {
-				ResharingContext::without_key(&sharing_participants, &receiving_participants)
-			};
-
-			if id == &bad_account_id {
-				// Adding a small tweak to the share to make it incorrect
-				match &mut context.party_status {
-					ParticipantStatus::Sharing(secret_share, _) => {
-						*secret_share = &*secret_share + &Scalar::from(1);
-					},
-					_ => panic!("Unexpected status"),
-				}
-			}
-
-			node.request_key_handover(ceremony_details.clone(), context).await;
-		}
+		let (mut ceremony, _initial_key) = prepare_handover_test::<Scheme>(
+			original_set,
+			sharing_subset,
+			receiving_set.clone(),
+			HandoverTestOptions {
+				nodes_sharing_invalid_secret: BTreeSet::from([bad_account_id.clone()]),
+			},
+		)
+		.await;
 
 		let messages = ceremony.gather_outgoing_messages::<keygen::PubkeyShares0<Point>, _>().await;
 

@@ -80,7 +80,7 @@ pub trait Chainflip: frame_system::Config {
 	/// For registering and checking account roles.
 	type AccountRoleRegistry: AccountRoleRegistry<Self>;
 	/// For checking nodes' current balances.
-	type StakingInfo: StakingInfo<AccountId = Self::AccountId, Balance = Self::Amount>;
+	type FundingInfo: FundingInfo<AccountId = Self::AccountId, Balance = Self::Amount>;
 }
 
 pub trait EpochInfo {
@@ -107,8 +107,8 @@ pub trait EpochInfo {
 	/// Authority count at a particular epoch.
 	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<AuthorityCount>;
 
-	/// The amount to be used as bond, this is the minimum stake needed to be included in the
-	/// current candidate authority set
+	/// The bond amount for this epoch. Authorities can only redeem funds above this minumum
+	/// balance.
 	fn bond() -> Self::Amount;
 
 	/// The current epoch we are in
@@ -210,47 +210,52 @@ pub trait ReputationResetter {
 pub trait BidderProvider {
 	type ValidatorId;
 	type Amount;
-	/// Provide a list of bidders. Those who are staked and their account is in the `bidding` state.
+	/// Provide a list of validators whose accounts are in the `bidding` state.
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
 }
 
-pub trait StakeHandler {
+pub trait OnAccountFunded {
 	type ValidatorId;
 	type Amount;
 
-	/// A callback that is triggered after some validator's stake has changed, either by staking
-	/// more Flip, or by executing a claim.
-	fn on_stake_updated(validator_id: &Self::ValidatorId, new_total: Self::Amount);
+	/// A callback that is triggered after some validator's balance has changed signigicantly,
+	/// either by funding it with more Flip, or by executing a redemption.
+	///
+	/// Note this does not trigger on small changes like transaction fees.
+	///
+	/// TODO: This should be triggered when funds are paid in tokenholder governance.
+	fn on_account_funded(validator_id: &Self::ValidatorId, new_total: Self::Amount);
 }
 
-pub trait StakeTransfer {
+pub trait Funding {
 	type AccountId;
 	type Balance;
-	type Handler: StakeHandler<ValidatorId = Self::AccountId, Amount = Self::Balance>;
+	type Handler: OnAccountFunded<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 
-	/// An account's tokens that are free to be staked.
-	fn staked_balance(account_id: &Self::AccountId) -> Self::Balance;
+	/// The account's total Flip balance.
+	fn account_balance(account_id: &Self::AccountId) -> Self::Balance;
 
-	/// An account's tokens that are free to be claimed.
-	fn claimable_balance(account_id: &Self::AccountId) -> Self::Balance;
+	/// An account's tokens that are free to be redeemed.
+	fn redeemable_balance(account_id: &Self::AccountId) -> Self::Balance;
 
-	/// Credit an account with stake from off-chain. Returns the total stake in the account.
-	fn credit_stake(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance;
+	/// Credit an account with funds from off-chain. Returns the total balance in the account after
+	/// the funds are credited.
+	fn credit_funds(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance;
 
-	/// Reserves funds for a claim, if enough claimable funds are available.
+	/// Reserves funds for a redemption, if enough redeemable funds are available.
 	///
-	/// Note this function makes no assumptions about how many claims may be pending simultaneously:
-	/// if enough funds are available, it succeeds. Otherwise, it fails.
-	fn try_initiate_claim(
+	/// Note this function makes no assumptions about how many redemptions may be pending
+	/// simultaneously: if enough funds are available, it succeeds. Otherwise, it fails.
+	fn try_initiate_redemption(
 		account_id: &Self::AccountId,
 		amount: Self::Balance,
 	) -> Result<(), DispatchError>;
 
-	/// Performs necessary settlement once a claim has been confirmed off-chain.
-	fn finalize_claim(account_id: &Self::AccountId) -> Result<(), DispatchError>;
+	/// Performs necessary settlement once a redemption has been confirmed off-chain.
+	fn finalize_redemption(account_id: &Self::AccountId) -> Result<(), DispatchError>;
 
-	/// Reverts a pending claim in the case of an expiry or cancellation.
-	fn revert_claim(account_id: &Self::AccountId) -> Result<(), DispatchError>;
+	/// Reverts a pending redemption in the case of an expiry or cancellation.
+	fn revert_redemption(account_id: &Self::AccountId) -> Result<(), DispatchError>;
 }
 
 /// Trait for managing token issuance.
@@ -289,7 +294,7 @@ pub trait EmissionsTrigger {
 pub trait EthEnvironmentProvider {
 	fn token_address(asset: assets::any::Asset) -> Option<EthereumAddress>;
 	fn key_manager_address() -> EthereumAddress;
-	fn stake_manager_address() -> EthereumAddress;
+	fn state_chain_gateway_address() -> EthereumAddress;
 	fn vault_address() -> EthereumAddress;
 	fn chain_id() -> u64;
 }
@@ -335,7 +340,8 @@ pub trait Slashing {
 	/// Slashes a validator for the equivalent of some number of blocks offline.
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
 
-	fn slash_stake(account_id: &Self::AccountId, amount: Percent);
+	/// Slahes a percentage of a validator's total balance.
+	fn slash_balance(account_id: &Self::AccountId, amount: Percent);
 }
 
 /// Can nominate a single account.
@@ -586,7 +592,7 @@ pub trait HistoricalEpoch {
 	fn deactivate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex);
 	/// Add an epoch to an authority's list of active epochs.
 	fn activate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex);
-	///  Returns the amount of a authority's stake that is currently bonded.
+	/// Returns the amount of a authority's funds that are currently bonded.
 	fn active_bond(authority: &Self::ValidatorId) -> Self::Amount;
 	/// Returns the number of active epochs a authority is still active in
 	fn number_of_active_epochs_for_authority(id: &Self::ValidatorId) -> u32;
@@ -647,14 +653,14 @@ pub trait FeePayment {
 	fn try_burn_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult;
 }
 
-/// Provides information about the on-chain staked funds.
-pub trait StakingInfo {
+/// Provides information about on-chain funds.
+pub trait FundingInfo {
 	type AccountId;
 	type Balance;
-	/// Returns the stake of an account.
-	fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance;
-	/// Returns the total stake held on-chain.
-	fn total_onchain_stake() -> Self::Balance;
+	/// Returns the funding balance of an account.
+	fn total_balance_of(account_id: &Self::AccountId) -> Self::Balance;
+	/// Returns the total amount of funds held on-chain.
+	fn total_onchain_funds() -> Self::Balance;
 }
 
 /// Allow pallets to register `Intent`s in the Ingress pallet.

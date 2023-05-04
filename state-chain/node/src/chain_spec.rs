@@ -17,9 +17,9 @@ use state_chain_runtime::{
 	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
 	BitcoinThresholdSignerConfig, BitcoinVaultConfig, BlockNumber, CfeSettings, EmissionsConfig,
 	EnvironmentConfig, EthereumThresholdSignerConfig, EthereumVaultConfig, FlipBalance, FlipConfig,
-	GenesisConfig, GovernanceConfig, GrandpaConfig, PolkadotThresholdSignerConfig,
-	PolkadotVaultConfig, ReputationConfig, SessionConfig, Signature, StakingConfig, SystemConfig,
-	ValidatorConfig, WASM_BINARY,
+	FundingConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, PolkadotThresholdSignerConfig,
+	PolkadotVaultConfig, ReputationConfig, SessionConfig, Signature, SystemConfig, ValidatorConfig,
+	WASM_BINARY,
 };
 
 use std::{env, marker::PhantomData, str::FromStr};
@@ -60,15 +60,15 @@ pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
 pub struct StateChainEnvironment {
 	flip_token_address: [u8; 20],
 	eth_usdc_address: [u8; 20],
-	stake_manager_address: [u8; 20],
+	state_chain_gateway_address: [u8; 20],
 	key_manager_address: [u8; 20],
 	eth_vault_address: [u8; 20],
 	ethereum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
-	genesis_stake_amount: u128,
-	/// Note: Minimum stake should be expressed in Flipperinos.
-	min_stake: u128,
+	genesis_funding_amount: u128,
+	/// Note: Minimum funding should be expressed in Flipperinos.
+	min_funding: u128,
 	// CFE config values starts here
 	eth_block_safety_margin: u32,
 	max_ceremony_stage_duration: u32,
@@ -97,16 +97,16 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	}
 	from_env_var!(clean_eth_address, FLIP_TOKEN_ADDRESS, flip_token_address);
 	from_env_var!(clean_eth_address, ETH_USDC_ADDRESS, eth_usdc_address);
-	from_env_var!(clean_eth_address, STAKE_MANAGER_ADDRESS, stake_manager_address);
+	from_env_var!(clean_eth_address, STATE_CHAIN_GATEWAY_ADDRESS, state_chain_gateway_address);
 	from_env_var!(clean_eth_address, KEY_MANAGER_ADDRESS, key_manager_address);
 	from_env_var!(clean_eth_address, ETH_VAULT_ADDRESS, eth_vault_address);
 	from_env_var!(hex_decode, ETH_INIT_AGG_KEY, eth_init_agg_key);
 	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
 	from_env_var!(FromStr::from_str, ETH_DEPLOYMENT_BLOCK, ethereum_deployment_block);
-	from_env_var!(FromStr::from_str, GENESIS_STAKE, genesis_stake_amount);
+	from_env_var!(FromStr::from_str, GENESIS_FUNDING, genesis_funding_amount);
 	from_env_var!(FromStr::from_str, ETH_BLOCK_SAFETY_MARGIN, eth_block_safety_margin);
 	from_env_var!(FromStr::from_str, MAX_CEREMONY_STAGE_DURATION, max_ceremony_stage_duration);
-	from_env_var!(FromStr::from_str, MIN_STAKE, min_stake);
+	from_env_var!(FromStr::from_str, MIN_FUNDING, min_funding);
 
 	let dot_genesis_hash = match env::var("DOT_GENESIS_HASH") {
 		Ok(s) => hex_decode::<32>(&s).unwrap().into(),
@@ -128,16 +128,16 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	StateChainEnvironment {
 		flip_token_address,
 		eth_usdc_address,
-		stake_manager_address,
+		state_chain_gateway_address,
 		key_manager_address,
 		eth_vault_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
-		genesis_stake_amount,
+		genesis_funding_amount,
 		eth_block_safety_margin,
 		max_ceremony_stage_duration,
-		min_stake,
+		min_funding,
 		dot_genesis_hash,
 		dot_vault_account_id,
 		dot_runtime_version: RuntimeVersion {
@@ -159,16 +159,16 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 	let StateChainEnvironment {
 		flip_token_address,
 		eth_usdc_address,
-		stake_manager_address,
+		state_chain_gateway_address,
 		key_manager_address,
 		eth_vault_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
-		genesis_stake_amount,
+		genesis_funding_amount,
 		eth_block_safety_margin,
 		max_ceremony_stage_duration,
-		min_stake,
+		min_funding,
 		dot_genesis_hash,
 		dot_vault_account_id,
 		dot_runtime_version,
@@ -220,7 +220,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				EnvironmentConfig {
 					flip_token_address,
 					eth_usdc_address,
-					stake_manager_address,
+					state_chain_gateway_address,
 					key_manager_address,
 					eth_vault_address,
 					ethereum_chain_id,
@@ -239,16 +239,16 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				eth_init_agg_key,
 				ethereum_deployment_block,
 				common::TOTAL_ISSUANCE,
-				genesis_stake_amount,
-				min_stake,
+				genesis_funding_amount,
+				min_funding,
 				8 * common::HOURS,
-				common::CLAIM_DELAY_SECS,
-				common::CLAIM_DELAY_BUFFER_SECS,
+				common::REDEMPTION_DELAY_SECS,
+				common::REDEMPTION_DELAY_BUFFER_SECS,
 				common::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 				common::BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 				common::EXPIRY_SPAN_IN_SECONDS,
 				common::ACCRUAL_RATIO,
-				common::PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
+				common::PERCENT_OF_EPOCH_PERIOD_REDEEMABLE,
 				common::SUPPLY_UPDATE_INTERVAL,
 				common::PENALTIES.to_vec(),
 				common::KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
@@ -283,16 +283,16 @@ macro_rules! network_spec {
 				let StateChainEnvironment {
 					flip_token_address,
 					eth_usdc_address,
-					stake_manager_address,
+					state_chain_gateway_address,
 					key_manager_address,
 					eth_vault_address,
 					ethereum_chain_id,
 					eth_init_agg_key,
 					ethereum_deployment_block,
-					genesis_stake_amount,
+					genesis_funding_amount,
 					eth_block_safety_margin,
 					max_ceremony_stage_duration,
-					min_stake,
+					min_funding,
 					dot_genesis_hash,
 					dot_vault_account_id,
 					dot_runtime_version,
@@ -352,7 +352,7 @@ macro_rules! network_spec {
 							EnvironmentConfig {
 								flip_token_address,
 								eth_usdc_address,
-								stake_manager_address,
+								state_chain_gateway_address,
 								key_manager_address,
 								eth_vault_address,
 								ethereum_chain_id,
@@ -371,16 +371,16 @@ macro_rules! network_spec {
 							eth_init_agg_key,
 							ethereum_deployment_block,
 							TOTAL_ISSUANCE,
-							genesis_stake_amount,
-							min_stake,
+							genesis_funding_amount,
+							min_funding,
 							3 * HOURS,
-							CLAIM_DELAY_SECS,
-							CLAIM_DELAY_BUFFER_SECS,
+							REDEMPTION_DELAY_SECS,
+							REDEMPTION_DELAY_BUFFER_SECS,
 							CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 							BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 							EXPIRY_SPAN_IN_SECONDS,
 							ACCRUAL_RATIO,
-							PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
+							PERCENT_OF_EPOCH_PERIOD_REDEEMABLE,
 							SUPPLY_UPDATE_INTERVAL,
 							PENALTIES.to_vec(),
 							KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
@@ -414,7 +414,7 @@ network_spec!(sisyphos);
 fn testnet_genesis(
 	wasm_binary: &[u8],
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>, // initial validators
-	extra_stakers: Vec<(AccountId, AccountRole, u128)>,
+	extra_accounts: Vec<(AccountId, AccountRole, u128)>,
 	root_key: AccountId,
 	min_authorities: AuthorityCount,
 	max_authorities: AuthorityCount,
@@ -422,16 +422,16 @@ fn testnet_genesis(
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
 	total_issuance: FlipBalance,
-	genesis_stake_amount: u128,
-	minimum_stake: u128,
+	genesis_funding_amount: u128,
+	minimum_funding: u128,
 	blocks_per_epoch: BlockNumber,
-	claim_delay: u64,
-	claim_delay_buffer_seconds: u64,
+	redemption_delay: u64,
+	redemption_delay_buffer_seconds: u64,
 	current_authority_emission_inflation_perbill: u32,
 	backup_node_emission_inflation_perbill: u32,
 	expiry_span: u64,
 	accrual_ratio: (i32, u32),
-	percent_of_epoch_period_claimable: u8,
+	percent_of_epoch_period_redeemable: u8,
 	supply_update_interval: u32,
 	penalties: Vec<(Offence, (i32, BlockNumber))>,
 	keygen_ceremony_timeout_blocks: BlockNumber,
@@ -440,11 +440,13 @@ fn testnet_genesis(
 	let authority_ids: BTreeSet<AccountId> =
 		initial_authorities.iter().map(|(id, ..)| id.clone()).collect();
 	let total_issuance =
-		total_issuance + extra_stakers.iter().map(|(_, _, stake)| *stake).sum::<u128>();
+		total_issuance + extra_accounts.iter().map(|(_, _, amount)| *amount).sum::<u128>();
 	let all_accounts: Vec<_> = initial_authorities
 		.iter()
-		.map(|(account_id, ..)| (account_id.clone(), AccountRole::Validator, genesis_stake_amount))
-		.chain(extra_stakers.clone())
+		.map(|(account_id, ..)| {
+			(account_id.clone(), AccountRole::Validator, genesis_funding_amount)
+		})
+		.chain(extra_accounts.clone())
 		.collect();
 
 	GenesisConfig {
@@ -460,20 +462,20 @@ fn testnet_genesis(
 		},
 		validator: ValidatorConfig {
 			genesis_authorities: authority_ids,
-			genesis_backups: extra_stakers
+			genesis_backups: extra_accounts
 				.iter()
-				.filter_map(|(id, role, stake)| {
+				.filter_map(|(id, role, amount)| {
 					if *role == AccountRole::Validator {
-						Some((id.clone(), *stake))
+						Some((id.clone(), *amount))
 					} else {
 						None
 					}
 				})
 				.collect(),
 			blocks_per_epoch,
-			claim_period_as_percentage: percent_of_epoch_period_claimable,
+			redemption_period_as_percentage: percent_of_epoch_period_redeemable,
 			backup_reward_node_percentage: 20,
-			bond: genesis_stake_amount,
+			bond: genesis_funding_amount,
 			authority_set_min_size: min_authorities,
 			min_size: min_authorities,
 			max_size: max_authorities,
@@ -486,14 +488,14 @@ fn testnet_genesis(
 				.collect::<Vec<_>>(),
 		},
 		flip: FlipConfig { total_issuance },
-		staking: StakingConfig {
-			genesis_stakers: all_accounts
+		funding: FundingConfig {
+			genesis_validators: all_accounts
 				.iter()
-				.map(|(acct, _role, stake)| (acct.clone(), *stake))
+				.map(|(acct, _role, amount)| (acct.clone(), *amount))
 				.collect(),
-			minimum_stake,
-			claim_ttl: core::time::Duration::from_secs(3 * claim_delay),
-			claim_delay_buffer_seconds,
+			minimum_funding,
+			redemption_ttl: core::time::Duration::from_secs(3 * redemption_delay),
+			redemption_delay_buffer_seconds,
 		},
 		aura: AuraConfig { authorities: vec![] },
 		grandpa: GrandpaConfig { authorities: vec![] },

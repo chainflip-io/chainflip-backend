@@ -47,8 +47,6 @@ where
 		use cf_primitives::chains::assets::eth;
 		use pallet_cf_ingress_egress::IngressWitness;
 
-		let txs = self.rpc.block_with_txs(block.block_number).await?.transactions;
-
 		let mut address_monitor =
 			self.address_monitor.try_lock().expect("should have exclusive ownership");
 
@@ -56,7 +54,10 @@ where
 		// we have any new addresses to monitor
 		address_monitor.sync_addresses();
 
-		let ingress_witnesses = txs
+		let ingress_witnesses = self
+			.rpc
+			.successful_transactions(block.block_number)
+			.await?
 			.iter()
 			.filter_map(|tx| {
 				let to_addr = core_h160(tx.to?);

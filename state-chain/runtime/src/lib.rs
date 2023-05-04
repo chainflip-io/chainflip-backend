@@ -45,7 +45,7 @@ pub use frame_support::{
 };
 use frame_system::offchain::SendTransactionTypes;
 pub use pallet_cf_environment::cfe::CfeSettings;
-use pallet_cf_staking::MinimumStake;
+use pallet_cf_funding::MinimumFunding;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -87,7 +87,7 @@ use chainflip::{
 use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
-pub use pallet_cf_staking::WithdrawalAddresses;
+pub use pallet_cf_funding::WithdrawalAddresses;
 use pallet_cf_validator::PercentageRange;
 use pallet_cf_vaults::Vault;
 pub use pallet_transaction_payment::ChargeTransactionPayment;
@@ -171,7 +171,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type ValidatorWeightInfo = pallet_cf_validator::weights::PalletWeight<Runtime>;
 	type VaultRotator = AllVaultRotator<EthereumVault, PolkadotVault, BitcoinVault>;
 	type MissedAuthorshipSlots = chainflip::MissedAuraSlots;
-	type BidderProvider = pallet_cf_staking::Pallet<Self>;
+	type BidderProvider = pallet_cf_funding::Pallet<Self>;
 	type KeygenQualification = (
 		Reputation,
 		pallet_cf_validator::PeerMapping<Self>,
@@ -431,7 +431,7 @@ impl frame_system::Config for Runtime {
 		pallet_cf_validator::DeletePeerMapping<Self>,
 		pallet_cf_validator::DeleteVanityName<Self>,
 		GrandpaOffenceReporter<Self>,
-		Staking,
+		Funding,
 		AccountRoles,
 		Reputation,
 	);
@@ -508,7 +508,7 @@ impl pallet_cf_flip::Config for Runtime {
 	type Balance = FlipBalance;
 	type ExistentialDeposit = ConstU128<500>;
 	type BlocksPerDay = ConstU32<DAYS>;
-	type StakeHandler = pallet_cf_validator::UpdateBackupMapping<Self>;
+	type OnAccountFunded = pallet_cf_validator::UpdateBackupMapping<Self>;
 	type WeightInfo = pallet_cf_flip::weights::PalletWeight<Runtime>;
 	type WaivedFees = chainflip::WaivedFees;
 }
@@ -520,18 +520,18 @@ impl pallet_cf_witnesser::Config for Runtime {
 	type WeightInfo = pallet_cf_witnesser::weights::PalletWeight<Runtime>;
 }
 
-impl pallet_cf_staking::Config for Runtime {
+impl pallet_cf_funding::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type ThresholdCallable = RuntimeCall;
-	type StakerId = AccountId;
+	type FunderId = AccountId;
 	type Balance = FlipBalance;
 	type Flip = Flip;
 	type Broadcaster = EthereumBroadcaster;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
-	type RegisterClaim = EthereumApi<EthEnvironment>;
+	type RegisterRedemption = EthereumApi<EthEnvironment>;
 	type TimeSource = Timestamp;
-	type WeightInfo = pallet_cf_staking::weights::PalletWeight<Runtime>;
+	type WeightInfo = pallet_cf_funding::weights::PalletWeight<Runtime>;
 }
 
 impl pallet_cf_tokenholder_governance::Config for Runtime {
@@ -736,8 +736,8 @@ construct_runtime!(
 		Environment: pallet_cf_environment,
 		Flip: pallet_cf_flip,
 		Emissions: pallet_cf_emissions,
-		// AccountRoles after staking, since account creation comes first.
-		Staking: pallet_cf_staking,
+		// AccountRoles after funding, since account creation comes first.
+		Funding: pallet_cf_funding,
 		AccountRoles: pallet_cf_account_roles,
 		TransactionPayment: pallet_transaction_payment,
 		Witnesser: pallet_cf_witnesser,
@@ -827,7 +827,7 @@ mod benches {
 		[pallet_cf_environment, Environment]
 		[pallet_cf_flip, Flip]
 		[pallet_cf_emissions, Emissions]
-		[pallet_cf_staking, Staking]
+		[pallet_cf_funding, Funding]
 		[pallet_session, SessionBench::<Runtime>]
 		[pallet_cf_witnesser, Witnesser]
 		[pallet_cf_validator, Validator]
@@ -861,8 +861,8 @@ impl_runtime_apis! {
 				.find(|(_, address)| *address == token_address)
 				.map(|(asset, _)| asset)
 		}
-		fn cf_eth_stake_manager_address() -> EthereumAddress {
-			Environment::stake_manager_address()
+		fn cf_eth_state_chain_gateway_address() -> EthereumAddress {
+			Environment::state_chain_gateway_address()
 		}
 		fn cf_eth_key_manager_address() -> EthereumAddress {
 			Environment::key_manager_address()
@@ -881,8 +881,8 @@ impl_runtime_apis! {
 			let auction_params = Validator::auction_parameters();
 			(auction_params.min_size, auction_params.max_size)
 		}
-		fn cf_min_stake() -> u128 {
-			MinimumStake::<Runtime>::get().unique_saturated_into()
+		fn cf_min_funding() -> u128 {
+			MinimumFunding::<Runtime>::get().unique_saturated_into()
 		}
 		fn cf_current_epoch() -> u32 {
 			Validator::current_epoch()
@@ -918,9 +918,9 @@ impl_runtime_apis! {
 			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(&account_id);
 			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode>::is_qualified(&account_id);
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(&account_id);
-			let is_bidding = pallet_cf_staking::ActiveBidder::<Runtime>::get(&account_id);
+			let is_bidding = pallet_cf_funding::ActiveBidder::<Runtime>::get(&account_id);
 			RuntimeApiAccountInfoV2 {
-				stake: account_info_v1.stake,
+				balance: account_info_v1.balance,
 				bond: account_info_v1.bond,
 				last_heartbeat: account_info_v1.last_heartbeat,
 				online_credits: account_info_v1.online_credits,
@@ -937,24 +937,24 @@ impl_runtime_apis! {
 		fn cf_account_info(account_id: AccountId) -> RuntimeApiAccountInfo {
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
-			let withdrawal_address = pallet_cf_staking::WithdrawalAddresses::<Runtime>::get(&account_id).unwrap_or([0; 20]);
+			let withdrawal_address = pallet_cf_funding::WithdrawalAddresses::<Runtime>::get(&account_id).unwrap_or([0; 20]);
 
 			let get_validator_state = |account_id: &AccountId| -> ChainflipAccountStateWithPassive {
 				if Validator::current_authorities().contains(account_id) {
 					return ChainflipAccountStateWithPassive::CurrentAuthority;
 				}
-				if Validator::highest_staked_qualified_backup_nodes_lookup().contains(account_id) {
+				if Validator::highest_funded_qualified_backup_nodes_lookup().contains(account_id) {
 					return ChainflipAccountStateWithPassive::BackupOrPassive(BackupOrPassive::Backup);
 				}
 				ChainflipAccountStateWithPassive::BackupOrPassive(BackupOrPassive::Passive)
 			};
 
 			RuntimeApiAccountInfo {
-				stake: account_info.total(),
+				balance: account_info.total(),
 				bond: account_info.bond(),
 				last_heartbeat: pallet_cf_reputation::LastHeartbeat::<Runtime>::get(&account_id).unwrap_or(0),
 				is_live: Reputation::is_qualified(&account_id),
-				is_activated: pallet_cf_staking::ActiveBidder::<Runtime>::get(&account_id),
+				is_activated: pallet_cf_funding::ActiveBidder::<Runtime>::get(&account_id),
 				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
 				withdrawal_address,
@@ -993,8 +993,8 @@ impl_runtime_apis! {
 			AuctionState {
 				blocks_per_epoch: Validator::blocks_per_epoch(),
 				current_epoch_started_at: Validator::current_epoch_started_at(),
-				claim_period_as_percentage: Validator::claim_period_as_percentage(),
-				min_stake: MinimumStake::<Runtime>::get().unique_saturated_into(),
+				redemption_period_as_percentage: Validator::redemption_period_as_percentage(),
+				min_funding: MinimumFunding::<Runtime>::get().unique_saturated_into(),
 				auction_size_range: (auction_params.min_size, auction_params.max_size)
 			}
 		}

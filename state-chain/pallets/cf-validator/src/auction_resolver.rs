@@ -82,7 +82,7 @@ impl SetSizeMaximisingAuctionResolver {
 		let bond = auction_candidates
 			.last()
 			.map(|bid| bid.amount)
-			.expect("Can't run auction with no candidates, and candidates must be staked > 0.");
+			.expect("Can't run auction with no candidates, and candidates must be funded > 0.");
 		let winners = auction_candidates.into_iter().map(|bid| bid.bidder_id).collect();
 
 		Ok(AuctionOutcome { winners, losers, bond })

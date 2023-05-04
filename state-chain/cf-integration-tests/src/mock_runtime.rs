@@ -5,15 +5,15 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use sp_runtime::{traits::Zero, BuildStorage};
 use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AccountRolesConfig,
-	EmissionsConfig, EthereumVaultConfig, FlipConfig, GovernanceConfig, ReputationConfig, Runtime,
-	SessionConfig, StakingConfig, System, ValidatorConfig,
+	EmissionsConfig, EthereumVaultConfig, FlipConfig, FundingConfig, GovernanceConfig,
+	ReputationConfig, Runtime, SessionConfig, System, ValidatorConfig,
 };
 
 pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
 pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 6;
-pub const CLAIM_DELAY_BUFFER_SECS: u64 = 10;
+pub const REDEMPTION_DELAY_BUFFER_SECS: u64 = 10;
 pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;
-pub const MIN_STAKE: FlipBalance = 10 * FLIPPERINOS_PER_FLIP;
+pub const MIN_FUNDING: FlipBalance = 10 * FLIPPERINOS_PER_FLIP;
 
 /// The offences committable within the protocol and their respective reputation penalty and
 /// suspension durations.
@@ -108,11 +108,11 @@ impl ExtBuilder {
 					.collect::<Vec<_>>(),
 			},
 			flip: FlipConfig { total_issuance: TOTAL_ISSUANCE },
-			staking: StakingConfig {
-				genesis_stakers: self.accounts.clone(),
-				minimum_stake: MIN_STAKE,
-				claim_ttl: core::time::Duration::from_secs(3 * CLAIM_DELAY_SECS),
-				claim_delay_buffer_seconds: CLAIM_DELAY_BUFFER_SECS,
+			funding: FundingConfig {
+				genesis_validators: self.accounts.clone(),
+				minimum_funding: MIN_FUNDING,
+				redemption_ttl: core::time::Duration::from_secs(3 * REDEMPTION_DELAY_SECS),
+				redemption_delay_buffer_seconds: REDEMPTION_DELAY_BUFFER_SECS,
 			},
 			reputation: ReputationConfig {
 				accrual_ratio: ACCRUAL_RATIO,
@@ -127,8 +127,8 @@ impl ExtBuilder {
 				genesis_authorities: self.accounts.iter().map(|(id, _)| id.clone()).collect(),
 				genesis_backups: Default::default(),
 				blocks_per_epoch: self.blocks_per_epoch,
-				bond: self.accounts.iter().map(|(_, stake)| *stake).min().unwrap(),
-				claim_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_CLAIMABLE,
+				bond: self.accounts.iter().map(|(_, amount)| *amount).min().unwrap(),
+				redemption_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_REDEEMABLE,
 				backup_reward_node_percentage: 34,
 				authority_set_min_size: self.min_authorities,
 				min_size: self.min_authorities,

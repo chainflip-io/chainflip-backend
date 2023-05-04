@@ -82,9 +82,10 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 
 /// Roles in the Chainflip network.
 ///
-/// Chainflip's network is permissioned and only accessible to owners of accounts with staked Flip.
-/// In addition to staking, the account owner is required to indicate the role they intend to play
-/// in the network. This will determine in which ways the account can interact with the chain.
+/// Chainflip's network is permissioned and only accessible to owners of accounts funded with a Flip
+/// balance. In addition to being funded, the account owner is required to indicate the role they
+/// intend to play in the network. This will determine in which ways the account can interact with
+/// the chain.
 ///
 /// Each account can only be associated with a single role, and the role can only be updated from
 /// the initial [AccountRole::None] state.

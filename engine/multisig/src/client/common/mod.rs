@@ -13,6 +13,7 @@ use cf_primitives::{AccountId, AuthorityCount};
 pub use failure_reason::{
 	BroadcastFailureReason, CeremonyFailureReason, KeygenFailureReason, SigningFailureReason,
 };
+use strum_macros::EnumIter;
 
 use std::{
 	collections::{BTreeMap, BTreeSet},
@@ -214,8 +215,10 @@ impl<C: CryptoScheme> ResharingContext<C> {
 	}
 }
 
-#[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[derive(Error, Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, EnumIter)]
 pub enum KeygenStageName {
+	#[error("Public Key Shares [0]")]
+	PubkeyShares0,
 	#[error("Hash Commitments [1]")]
 	HashCommitments1,
 	#[error("Verify Hash Commitments [2]")]

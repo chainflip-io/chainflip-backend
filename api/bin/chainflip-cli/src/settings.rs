@@ -93,19 +93,19 @@ pub enum CliCommand {
 	#[clap(subcommand, name = "lp")]
 	LiquidityProvider(LiquidityProviderSubcommands),
 	#[clap(
-		about = "Request a claim. After requesting the claim, please proceed to the Staking app to complete the claiming process."
+		about = "Request a redemption. After requesting the redemption, please proceed to the  to complete the redeeming process."
 	)]
-	Claim {
+	Redeem {
 		#[clap(
-			help = "Amount to claim in FLIP (omit this option to claim all available FLIP)",
+			help = "Amount to redeem in FLIP (omit this option to redeem all available FLIP)",
 			long = "exact"
 		)]
 		amount: Option<f64>,
-		#[clap(help = "The Ethereum address you wish to claim your FLIP to")]
+		#[clap(help = "The Ethereum address you wish to redeem your FLIP to")]
 		eth_address: String,
 	},
 	#[clap(
-		about = "Submit an extrinsic to request generation of a claim certificate (claiming all available FLIP)"
+		about = "Submit an extrinsic to request generation of a redemption certificate (redeeming all available FLIP)"
 	)]
 	#[clap(about = "Set your account role to the Validator, Relayer, Liquidity Provider")]
 	RegisterAccountRole {

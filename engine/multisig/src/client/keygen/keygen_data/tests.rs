@@ -7,7 +7,7 @@ use crate::{
 	client::{
 		common::{BroadcastVerificationMessage, KeygenStageName, PreProcessStageDataCheck},
 		helpers::{gen_invalid_keygen_comm1, get_invalid_hash_comm},
-		keygen::{BlameResponse8, Complaints6, KeygenData, SecretShare5},
+		keygen::{BlameResponse8, Complaints6, KeygenData, PubkeyShares0, SecretShare5},
 	},
 	crypto::Rng,
 	eth::Point,
@@ -16,6 +16,15 @@ use crate::{
 /// ==========================
 // Generate invalid keygen data with the given number of elements in its inner and outer
 // collection(s)
+
+pub fn gen_keygen_data_pubkey_shares0(participant_count: AuthorityCount) -> KeygenData<Point> {
+	let mut rng = Rng::from_seed([0; 32]);
+	KeygenData::PubkeyShares0(PubkeyShares0(
+		(1..=participant_count)
+			.map(|i| (i as AuthorityCount, Point::random(&mut rng)))
+			.collect(),
+	))
+}
 
 pub fn gen_keygen_data_hash_comm1() -> KeygenData<Point> {
 	let mut rng = Rng::from_seed([0; 32]);
@@ -219,19 +228,14 @@ fn check_data_size_verify_blame_responses9() {
 
 #[test]
 fn should_delay_correct_data_for_stage() {
+	use strum::IntoEnumIterator;
+
 	let default_length = 1;
-	let stage_name = [
-		KeygenStageName::HashCommitments1,
-		KeygenStageName::VerifyHashCommitmentsBroadcast2,
-		KeygenStageName::CoefficientCommitments3,
-		KeygenStageName::VerifyCommitmentsBroadcast4,
-		KeygenStageName::SecretSharesStage5,
-		KeygenStageName::ComplaintsStage6,
-		KeygenStageName::VerifyComplaintsBroadcastStage7,
-		KeygenStageName::BlameResponsesStage8,
-		KeygenStageName::VerifyBlameResponsesBroadcastStage9,
-	];
+
+	let stage_names: Vec<KeygenStageName> = KeygenStageName::iter().collect();
+
 	let stage_data = [
+		gen_keygen_data_pubkey_shares0(default_length),
 		gen_keygen_data_hash_comm1(),
 		gen_keygen_data_verify_hash_comm2(default_length),
 		gen_keygen_data_coeff_comm3(default_length),
@@ -243,14 +247,16 @@ fn should_delay_correct_data_for_stage() {
 		gen_keygen_data_verify_blame_response9(default_length, default_length),
 	];
 
-	for (stage_index, name) in stage_name.iter().enumerate() {
+	assert_eq!(stage_names.len(), stage_data.len());
+
+	for (stage_index, name) in stage_names.into_iter().enumerate() {
 		for (data_index, data) in stage_data.iter().enumerate() {
 			if stage_index + 1 == data_index {
 				// Should delay the next stage data (stage_index + 1)
-				assert!(KeygenData::should_delay(*name, data));
+				assert!(KeygenData::should_delay(name, data));
 			} else {
 				// Should not delay any other stage
-				assert!(!KeygenData::should_delay(*name, data));
+				assert!(!KeygenData::should_delay(name, data));
 			}
 		}
 	}

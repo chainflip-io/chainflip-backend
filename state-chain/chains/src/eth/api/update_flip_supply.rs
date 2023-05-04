@@ -20,8 +20,8 @@ pub struct UpdateFlipSupply {
 	pub new_total_supply: Uint,
 	/// The current state chain block number
 	pub state_chain_block_number: Uint,
-	/// The address of the stake manager - to mint or burn tokens
-	pub stake_manager_address: Address,
+	/// The address of the state chain gatweay - to mint or burn tokens
+	pub state_chain_gateway_address: Address,
 }
 
 impl MaxEncodedLen for UpdateFlipSupply {
@@ -37,7 +37,7 @@ impl UpdateFlipSupply {
 		replay_protection: EthereumReplayProtection,
 		new_total_supply: TotalSupply,
 		state_chain_block_number: BlockNumber,
-		stake_manager_address: &[u8; 20],
+		state_chain_gateway_address: &[u8; 20],
 		key_manager_address: Address,
 		ethereum_chain_id: u64,
 	) -> Self {
@@ -47,15 +47,15 @@ impl UpdateFlipSupply {
 				Self::abi_encoded_for_payload(
 					new_total_supply.clone().into(),
 					state_chain_block_number.clone().into(),
-					stake_manager_address.into(),
+					state_chain_gateway_address.into(),
 				),
 				key_manager_address,
-				stake_manager_address.into(),
+				state_chain_gateway_address.into(),
 				ethereum_chain_id,
 			),
 			new_total_supply: new_total_supply.into(),
 			state_chain_block_number: state_chain_block_number.into(),
-			stake_manager_address: stake_manager_address.into(),
+			state_chain_gateway_address: state_chain_gateway_address.into(),
 		}
 	}
 
@@ -79,7 +79,7 @@ impl UpdateFlipSupply {
 				),
 				ethabi_param("newTotalSupply", ParamType::Uint(256)),
 				ethabi_param("stateChainBlockNumber", ParamType::Uint(256)),
-				ethabi_param("staker", ParamType::Address),
+				ethabi_param("funder", ParamType::Address),
 			],
 		)
 	}
@@ -90,7 +90,7 @@ impl UpdateFlipSupply {
 				self.signature_handler.sig_data.tokenize(),
 				Token::Uint(self.new_total_supply),
 				Token::Uint(self.state_chain_block_number),
-				Token::Address(self.stake_manager_address),
+				Token::Address(self.state_chain_gateway_address),
 			])
 			.expect(
 				r#"
@@ -103,7 +103,7 @@ impl UpdateFlipSupply {
 	fn abi_encoded_for_payload(
 		new_total_supply: Uint,
 		state_chain_block_number: Uint,
-		stake_manager_address: Address,
+		state_chain_gateway_address: Address,
 	) -> Vec<u8> {
 		Self::get_function()
 			.short_signature()
@@ -111,7 +111,7 @@ impl UpdateFlipSupply {
 			.chain(encode(&[
 				new_total_supply.tokenize(),
 				state_chain_block_number.tokenize(),
-				stake_manager_address.tokenize(),
+				state_chain_gateway_address.tokenize(),
 			]))
 			.collect()
 	}
@@ -140,7 +140,7 @@ mod test_update_flip_supply {
 		use crate::eth::tests::asymmetrise;
 		use ethabi::Token;
 		const FAKE_KEYMAN_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
-		const FAKE_STAKE_MANAGER_ADDRESS: [u8; 20] = asymmetrise([0xcd; 20]);
+		const FAKE_STATE_CHAIN_GATEWAY_ADDRESS: [u8; 20] = asymmetrise([0xcd; 20]);
 		const CHAIN_ID: u64 = 1;
 		const NONCE: u64 = 6;
 		const NEW_TOTAL_SUPPLY: u64 = 10;
@@ -159,7 +159,7 @@ mod test_update_flip_supply {
 			EthereumReplayProtection { nonce: NONCE },
 			NEW_TOTAL_SUPPLY,
 			STATE_CHAIN_BLOCK_NUMBER,
-			&FAKE_STAKE_MANAGER_ADDRESS,
+			&FAKE_STATE_CHAIN_GATEWAY_ADDRESS,
 			FAKE_KEYMAN_ADDR.into(),
 			CHAIN_ID,
 		);
@@ -193,7 +193,7 @@ mod test_update_flip_supply {
 					]),
 					Token::Uint(NEW_TOTAL_SUPPLY.into()),
 					Token::Uint(STATE_CHAIN_BLOCK_NUMBER.into()),
-					Token::Address(FAKE_STAKE_MANAGER_ADDRESS.into()),
+					Token::Address(FAKE_STATE_CHAIN_GATEWAY_ADDRESS.into()),
 				])
 				.unwrap()
 		);

@@ -36,7 +36,7 @@ implementation of `RevertImbalance` when the imbalance is dropped.
 A `Deficit` means that there is an excess of funds *in the accounts* that needs to be reconciled. Either we have
 credited some funds to an account, or we have debited funds from some external source without putting them anywhere.
 Think of it like this: if we credit an account, we need to pay for it somehow. Either by debiting from another, or
-by minting some tokens, or by bridging them from outside (aka. staking).
+by minting some tokens, or by bridging them from outside (aka. funding).
 
 A `Surplus` is (unsurprisingly) the opposite: it means there is an excess of funds *outside of the accounts*. Maybe
 an account has been debited some amount, or we have minted some tokens. These need to be allocated somewhere.
@@ -46,11 +46,12 @@ an account has been debited some amount, or we have minted some tokens. These ne
 The approach taken when creating an imbalance is to saturate on underflow and revert on overflow.
 
 Concretely:
-- if we create an imbalance that saturates to zero, the result will be an imbalance of the maximum available amount. 
+
+- if we create an imbalance that saturates to zero, the result will be an imbalance of the maximum available amount.
 - if we create an imbalance that saturates to u128::MAX, the result is an imbalance of zero.
 
 For example, trying to mint funds to the point where the total emissions exceed `u128::MAX` has no effect and creates a
-surplus of zero. However burning `u128::MAX` funds would create a deficit equal to the total issuance. 
+surplus of zero. However burning `u128::MAX` funds would create a deficit equal to the total issuance.
 
 #### Example
 
@@ -61,22 +62,6 @@ a surplus to offset the burn. The pool's balance might be held in some reserve.
 
 If the `Deficit` created by the burn goes out of scope without being offset, the change is reverted, effectively
 minting the tokens again and adding them back to the total issuance.
-
-## Related Pallets
-
-This pallet is closely related to the [Rewards](../pallet-cf-rewards) and [Emissions](../pallet-cf-emissions) pallets,
-and also implements the [`OnChargeTransaction`](./src/on_charge_transaction.rs) trait, which largely determines the
-behaviour of `pallet-transaction-payment` in the runtime.
-
-## Dependencies
-
-This pallet has a dependency on `pallet-transaction-payment` for the implementation of
-[`OnChargeTransaction`](https://substrate.dev/rustdocs/v3.0.0/pallet_transaction_payment/trait.OnChargeTransaction.html)
-
-Implementations for the following [chainflip traits](../traits) are provided:
-
-- [`Issuance`](../traits)
-- [`StakeTransfer`](../traits)
 
 ### Genesis Configuration
 

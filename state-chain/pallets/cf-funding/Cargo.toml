@@ -1,8 +1,8 @@
 [package]
-name = 'pallet-cf-staking'
+name = 'pallet-cf-funding'
 version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
-description = 'FRAME pallet for managing stakers of FLIP.'
+description = 'FRAME pallet for managing transfer of funds to and from the State Chain Gateway contract.'
 edition = '2021'
 homepage = 'https://chainflip.io'
 license = '<TODO>'

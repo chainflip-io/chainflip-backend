@@ -1,4 +1,4 @@
-//! Definitions for the "registerClaim" transaction.
+//! Definitions for the "registerRedemption" transaction.
 
 use crate::{
 	eth::{Ethereum, EthereumSignatureHandler, SigData, Tokenizable},
@@ -16,20 +16,20 @@ use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 /// Represents all the arguments required to build the call to StakeManager's 'requestClaim'
 /// function.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
-pub struct RegisterClaim {
+pub struct RegisterRedemption {
 	/// The signature handler for creating payload and inserting signature.
 	pub signature_handler: EthereumSignatureHandler,
 	/// The id (ie. Chainflip account Id) of the claimant.
 	pub node_id: [u8; 32],
-	/// The amount being claimed in Flipperinos (atomic FLIP units). 1 FLIP = 10^18 Flipperinos
+	/// The amount being redeemed in Flipperinos (atomic FLIP units). 1 FLIP = 10^18 Flipperinos
 	pub amount: Uint,
-	/// The Ethereum address to which the claim with will be withdrawn.
+	/// The Ethereum address to which the redemption with will be withdrawn.
 	pub address: Address,
 	/// The expiry duration in seconds.
 	pub expiry: Uint,
 }
 
-impl MaxEncodedLen for RegisterClaim {
+impl MaxEncodedLen for RegisterRedemption {
 	fn max_encoded_len() -> usize {
 		SigData::max_encoded_len()
 		+ 2 * <[u64; 4]>::max_encoded_len() // 2 x Uint
@@ -38,7 +38,7 @@ impl MaxEncodedLen for RegisterClaim {
 	}
 }
 
-impl RegisterClaim {
+impl RegisterRedemption {
 	#[allow(clippy::too_many_arguments)]
 	pub fn new_unsigned<Amount: Into<Uint> + Clone>(
 		replay_protection: EthereumReplayProtection,
@@ -47,7 +47,7 @@ impl RegisterClaim {
 		address: &[u8; 20],
 		expiry: u64,
 		key_manager_address: Address,
-		stake_manager_contract: Address,
+		state_chain_gateway_address: Address,
 		ethereum_chain_id: u64,
 	) -> Self {
 		Self {
@@ -55,7 +55,7 @@ impl RegisterClaim {
 				replay_protection,
 				Self::abi_encoded_for_payload(node_id, amount.clone().into(), address, expiry),
 				key_manager_address,
-				stake_manager_contract,
+				state_chain_gateway_address,
 				ethereum_chain_id,
 			),
 			node_id: (*node_id),
@@ -65,12 +65,12 @@ impl RegisterClaim {
 		}
 	}
 
-	/// Gets the function defintion for the `registerClaim` smart contract call. Loading this from
-	/// the json abi definition is currently not supported in no-std, so instead swe hard-code it
-	/// here and verify against the abi in a unit test.
+	/// Gets the function defintion for the `registerRedemption` smart contract call. Loading this
+	/// from the json abi definition is currently not supported in no-std, so instead swe hard-code
+	/// it here and verify against the abi in a unit test.
 	fn get_function() -> ethabi::Function {
 		ethabi_function(
-			"registerClaim",
+			"registerRedemption",
 			vec![
 				ethabi_param(
 					"sigData",
@@ -85,7 +85,7 @@ impl RegisterClaim {
 				),
 				ethabi_param("nodeID", ParamType::FixedBytes(32)),
 				ethabi_param("amount", ParamType::Uint(256)),
-				ethabi_param("staker", ParamType::Address),
+				ethabi_param("funder", ParamType::Address),
 				ethabi_param("expiryTime", ParamType::Uint(48)),
 			],
 		)
@@ -127,10 +127,10 @@ impl RegisterClaim {
 	}
 }
 
-impl_api_call_eth!(RegisterClaim);
+impl_api_call_eth!(RegisterRedemption);
 
 #[cfg(test)]
-mod test_register_claim {
+mod test_register_redemption {
 	use crate::eth::SchnorrVerificationComponents;
 
 	use super::*;
@@ -141,12 +141,13 @@ mod test_register_claim {
 	// It uses a different ethabi to the CFE, so we test separately
 	fn just_load_the_contract() {
 		assert_ok!(ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/StateChainGateway.json")
+				.as_ref(),
 		));
 	}
 
 	#[test]
-	fn test_claim_payload() {
+	fn test_redemption_payload() {
 		use crate::eth::tests::asymmetrise;
 		use ethabi::Token;
 		const FAKE_KEYMAN_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
@@ -160,14 +161,16 @@ mod test_register_claim {
 		const TEST_ACCT: [u8; 32] = asymmetrise([0x42; 32]);
 		const TEST_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
 
-		let stake_manager = ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/StakeManager.json").as_ref(),
+		let state_chain_gateway = ethabi::Contract::load(
+			std::include_bytes!("../../../../../engine/src/eth/abis/StateChainGateway.json")
+				.as_ref(),
 		)
 		.unwrap();
 
-		let register_claim_reference = stake_manager.function("registerClaim").unwrap();
+		let register_redemption_reference =
+			state_chain_gateway.function("registerRedemption").unwrap();
 
-		let register_claim_runtime = RegisterClaim::new_unsigned(
+		let register_redemption_runtime = RegisterRedemption::new_unsigned(
 			EthereumReplayProtection { nonce: NONCE },
 			&TEST_ACCT,
 			AMOUNT,
@@ -178,10 +181,10 @@ mod test_register_claim {
 			CHAIN_ID,
 		);
 
-		let expected_msg_hash = register_claim_runtime.signature_handler.payload;
+		let expected_msg_hash = register_redemption_runtime.signature_handler.payload;
 
-		assert_eq!(register_claim_runtime.threshold_signature_payload(), expected_msg_hash);
-		let runtime_payload = register_claim_runtime
+		assert_eq!(register_redemption_runtime.threshold_signature_payload(), expected_msg_hash);
+		let runtime_payload = register_redemption_runtime
 			.clone()
 			.signed(&SchnorrVerificationComponents {
 				s: FAKE_SIG,
@@ -189,13 +192,13 @@ mod test_register_claim {
 			})
 			.chain_encoded(); // Ensure signing payload isn't modified by signature.
 
-		assert_eq!(register_claim_runtime.threshold_signature_payload(), expected_msg_hash);
+		assert_eq!(register_redemption_runtime.threshold_signature_payload(), expected_msg_hash);
 
 		assert_eq!(
 			// Our encoding:
 			runtime_payload,
 			// "Canonical" encoding based on the abi definition above and using the ethabi crate:
-			register_claim_reference
+			register_redemption_reference
 				.encode_input(&[
 					// sigData: SigData(address, uint, uint, uint, uint, address)
 					Token::Tuple(vec![
@@ -207,7 +210,7 @@ mod test_register_claim {
 					Token::FixedBytes(TEST_ACCT.into()),
 					// amount: uint
 					Token::Uint(AMOUNT.into()),
-					// staker: address
+					// funder: address
 					Token::Address(TEST_ADDR.into()),
 					// epiryTime: uint48
 					Token::Uint(EXPIRY_SECS.into()),
@@ -218,6 +221,6 @@ mod test_register_claim {
 
 	#[test]
 	fn test_max_encoded_len() {
-		cf_test_utilities::ensure_max_encoded_len_is_exact::<RegisterClaim>();
+		cf_test_utilities::ensure_max_encoded_len_is_exact::<RegisterRedemption>();
 	}
 }

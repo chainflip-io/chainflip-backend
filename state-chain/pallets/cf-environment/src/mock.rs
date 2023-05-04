@@ -154,7 +154,7 @@ impl pallet_cf_environment::Config for Test {
 	type WeightInfo = ();
 }
 
-pub const STAKE_MANAGER_ADDRESS: [u8; 20] = [0u8; 20];
+pub const STATE_CHAIN_GATEWAY_ADDRESS: [u8; 20] = [0u8; 20];
 pub const KEY_MANAGER_ADDRESS: [u8; 20] = [1u8; 20];
 pub const VAULT_ADDRESS: [u8; 20] = [2u8; 20];
 pub const ETH_CHAIN_ID: u64 = 1;
@@ -171,7 +171,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		environment: EnvironmentConfig {
-			stake_manager_address: STAKE_MANAGER_ADDRESS,
+			state_chain_gateway_address: STATE_CHAIN_GATEWAY_ADDRESS,
 			key_manager_address: KEY_MANAGER_ADDRESS,
 			ethereum_chain_id: ETH_CHAIN_ID,
 			eth_vault_address: VAULT_ADDRESS,

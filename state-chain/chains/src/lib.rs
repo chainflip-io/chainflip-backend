@@ -257,12 +257,12 @@ pub trait UpdateFlipSupply<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		new_total_supply: u128,
 		block_number: u64,
-		stake_manager_address: &[u8; 20],
+		state_chain_gateway_address: &[u8; 20],
 	) -> Self;
 }
 
-/// Constructs the `RegisterClaim` api call.
-pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
+/// Constructs the `RegisterRedemption` api call.
+pub trait RegisterRedemption<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(node_id: &[u8; 32], amount: u128, address: &[u8; 20], expiry: u64) -> Self;
 
 	fn amount(&self) -> u128;
