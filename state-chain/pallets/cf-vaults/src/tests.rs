@@ -480,8 +480,20 @@ fn keygen_report_success() {
 
 		assert!(matches!(PendingVaultRotation::<MockRuntime, _>::get().unwrap(), VaultRotationStatus::KeygenVerificationComplete { .. }));
 
-		// Called by validator pallet
-		VaultsPallet::no_key_handover();
+		// In this case we are not configured to run handover, so any values will do.
+		const HANDOVER_PARTICIPANTS: [u64; 2] = [ALICE, BOB];
+		VaultsPallet::key_handover(BTreeSet::from(HANDOVER_PARTICIPANTS), BTreeSet::from(HANDOVER_PARTICIPANTS), next_epoch);
+
+		let handover_ceremony_id = current_ceremony_id();
+		for p in HANDOVER_PARTICIPANTS {
+			assert_ok!(VaultsPallet::report_key_handover_outcome(
+				RuntimeOrigin::signed(p),
+				handover_ceremony_id,
+				Ok(NEW_AGG_PUB_KEY)
+			));
+		}
+
+		VaultsPallet::on_initialize(1);
 
 		// Called by validator pallet
 		VaultsPallet::activate();
@@ -499,7 +511,7 @@ fn keygen_report_success() {
 			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == NEW_AGG_PUB_KEY
 		));
 
-		assert_last_event!(crate::Event::NoKeyHandover);
+		assert_last_event!(crate::Event::KeyHandoverSuccess { .. });
 
 		// Voting has been cleared.
 		assert_eq!(KeygenSuccessVoters::<MockRuntime, _>::iter_keys().next(), None);
@@ -658,12 +670,27 @@ fn vault_key_rotated() {
 			ceremony_id,
 			NEW_AGG_PUB_KEY,
 			next_epoch_index,
-			btree_candidates,
+			btree_candidates.clone(),
 		);
 
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
 
-		VaultsPallet::no_key_handover();
+		// In this case we are not configured to run handover, so any values will do.
+		VaultsPallet::key_handover(
+			btree_candidates.clone(),
+			btree_candidates.clone(),
+			next_epoch_index,
+		);
+
+		for candidate in btree_candidates {
+			assert_ok!(VaultsPallet::report_key_handover_outcome(
+				RuntimeOrigin::signed(candidate),
+				current_ceremony_id(),
+				Ok(NEW_AGG_PUB_KEY)
+			));
+		}
+
+		VaultsPallet::on_initialize(1);
 
 		// validator pallet kicks this off
 		VaultsPallet::activate();

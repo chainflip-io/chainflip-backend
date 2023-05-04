@@ -191,9 +191,6 @@ pub trait VaultRotator {
 		epoch_index: EpochIndex,
 	);
 
-	/// Called by chains that aren't required to do a key handover.
-	fn no_key_handover();
-
 	/// Get the current rotation status.
 	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
 

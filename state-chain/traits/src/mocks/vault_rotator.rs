@@ -66,13 +66,6 @@ macro_rules! mock_vault_rotator {
 				Self::put_value(ROTATION_OUTCOME, AsyncResult::<VaultStatus<u64>>::Pending);
 			}
 
-			fn no_key_handover() {
-				Self::put_value(
-					ROTATION_OUTCOME,
-					AsyncResult::<VaultStatus<u64>>::Ready(VaultStatus::KeyHandoverComplete),
-				);
-			}
-
 			fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>> {
 				Self::get_value(ROTATION_OUTCOME).unwrap_or_default()
 			}

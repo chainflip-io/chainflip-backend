@@ -43,64 +43,58 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		if let Some(VaultRotationStatus::<T, I>::KeygenVerificationComplete { new_public_key }) =
 			PendingVaultRotation::<T, I>::get()
 		{
-			if let Some(epoch_key) = Self::current_epoch_key() {
-				assert!(!sharing_participants.is_empty() && !receiving_participants.is_empty());
+			match Self::current_epoch_key() {
+				Some(epoch_key) if <T::Chain as Chain>::KEY_HANDOVER_IS_REQUIRED => {
+					assert!(!sharing_participants.is_empty() && !receiving_participants.is_empty());
 
-				assert_ne!(Self::status(), AsyncResult::Pending);
+					assert_ne!(Self::status(), AsyncResult::Pending);
 
-				let ceremony_id = T::CeremonyIdProvider::increment_ceremony_id();
+					let ceremony_id = T::CeremonyIdProvider::increment_ceremony_id();
 
-				// from the SC's perspective, we don't care what set they're in, they get reported
-				// the same and each participant only gets one vote, like keygen.
-				let all_participants =
-					sharing_participants.union(&receiving_participants).cloned().collect();
+					// from the SC's perspective, we don't care what set they're in, they get
+					// reported the same and each participant only gets one vote, like keygen.
+					let all_participants =
+						sharing_participants.union(&receiving_participants).cloned().collect();
 
-				PendingVaultRotation::<T, I>::put(VaultRotationStatus::AwaitingKeyHandover {
-					ceremony_id,
-					response_status: KeyHandoverResponseStatus::new(all_participants),
-					new_public_key,
-				});
+					PendingVaultRotation::<T, I>::put(VaultRotationStatus::AwaitingKeyHandover {
+						ceremony_id,
+						response_status: KeyHandoverResponseStatus::new(all_participants),
+						new_public_key,
+					});
 
-				KeyHandoverResolutionPendingSince::<T, I>::put(
-					frame_system::Pallet::<T>::current_block_number(),
-				);
+					KeyHandoverResolutionPendingSince::<T, I>::put(
+						frame_system::Pallet::<T>::current_block_number(),
+					);
 
-				Pallet::<T, I>::deposit_event(Event::KeyHandoverRequest {
-					ceremony_id,
-					// The key we want to share is the key from the *previous/current* epoch, not
-					// the newly generated key since we're handing it over to the authorities of the
-					// new_epoch.
-					key_to_share: KeyId {
-						public_key_bytes: epoch_key.key.into(),
-						epoch_index: epoch_key.epoch_index,
-					},
-					sharing_participants,
-					receiving_participants,
-					epoch_index: new_epoch_index,
-				});
-			} else {
-				// In the case of a first rotation for the vault, we don't do a key handover, since
-				// we don't have a key to handover.
-				Self::no_key_handover();
+					Pallet::<T, I>::deposit_event(Event::KeyHandoverRequest {
+						ceremony_id,
+						// The key we want to share is the key from the *previous/current* epoch,
+						// not the newly generated key since we're handing it over to the
+						// authorities of the new_epoch.
+						key_to_share: KeyId {
+							public_key_bytes: epoch_key.key.into(),
+							epoch_index: epoch_key.epoch_index,
+						},
+						sharing_participants,
+						receiving_participants,
+						epoch_index: new_epoch_index,
+					});
+				},
+				_ => {
+					// We don't do a handover if:
+					// - We are not a chain that requires handover
+					// - We are a chain that requires handover, but we are doing the first rotation
+					PendingVaultRotation::<T, I>::put(VaultRotationStatus::KeyHandoverComplete {
+						new_public_key,
+					});
+					Self::deposit_event(Event::<T, I>::NoKeyHandover);
+				},
 			}
 		} else {
 			debug_assert!(
 				false,
 				"We should have completed keygen verification before starting key handover."
 			)
-		}
-	}
-
-	fn no_key_handover() {
-		if let Some(VaultRotationStatus::KeygenVerificationComplete { new_public_key }) =
-			PendingVaultRotation::<T, I>::get()
-		{
-			PendingVaultRotation::<T, I>::put(VaultRotationStatus::KeyHandoverComplete {
-				new_public_key,
-			});
-			Self::deposit_event(Event::<T, I>::NoKeyHandover);
-		} else {
-			debug_assert!(false, "We should not be calling no_key_handover if we are not in keygen verification complete, for a chain that doesn't need handover.");
 		}
 	}
 

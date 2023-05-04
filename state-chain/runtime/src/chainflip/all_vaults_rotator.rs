@@ -31,9 +31,8 @@ where
 		new_candidates: BTreeSet<Self::ValidatorId>,
 		epoch_index: EpochIndex,
 	) {
-		A::no_key_handover();
-		B::no_key_handover();
-		// TODO: Name the vaults here so it's move obvious what this means?
+		A::key_handover(sharing_participants.clone(), new_candidates.clone(), epoch_index);
+		B::key_handover(sharing_participants.clone(), new_candidates.clone(), epoch_index);
 		C::key_handover(sharing_participants, new_candidates, epoch_index);
 	}
 
@@ -77,10 +76,6 @@ where
 		} else {
 			AsyncResult::Pending
 		}
-	}
-
-	fn no_key_handover() {
-		unimplemented!("This should never be called. The inner no_key_handover calls are made in key_handover.")
 	}
 
 	fn activate() {

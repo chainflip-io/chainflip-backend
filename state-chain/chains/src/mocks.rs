@@ -14,6 +14,9 @@ pub type MockEthereumIngressId = u128;
 // Chain implementation used for testing.
 impl Chain for MockEthereum {
 	const NAME: &'static str = "MockEthereum";
+	// Even though ethereum doesn't handover, we are able to easily get more unit test coverage this
+	// way.
+	const KEY_HANDOVER_IS_REQUIRED: bool = true;
 	type IngressFetchId = MockEthereumIngressId;
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
