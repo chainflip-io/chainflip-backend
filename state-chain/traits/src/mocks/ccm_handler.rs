@@ -16,9 +16,9 @@ impl MockPallet for MockCcmHandler {
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct CcmRequest {
-	pub ingress_asset: Asset,
+	pub source_asset: Asset,
 	pub ingress_amount: AssetAmount,
-	pub egress_asset: Asset,
+	pub destination_asset: Asset,
 	pub egress_address: ForeignChainAddress,
 	pub message_metadata: CcmIngressMetadata,
 }
@@ -31,9 +31,9 @@ impl MockCcmHandler {
 
 impl CcmHandler for MockCcmHandler {
 	fn on_ccm_ingress(
-		ingress_asset: Asset,
+		source_asset: Asset,
 		ingress_amount: AssetAmount,
-		egress_asset: Asset,
+		destination_asset: Asset,
 		egress_address: ForeignChainAddress,
 		message_metadata: CcmIngressMetadata,
 	) -> DispatchResult {
@@ -43,9 +43,9 @@ impl CcmHandler for MockCcmHandler {
 			}
 			ccm_requests.as_mut().map(|v| {
 				v.push(CcmRequest {
-					ingress_asset,
+					source_asset,
 					ingress_amount,
-					egress_asset,
+					destination_asset,
 					egress_address,
 					message_metadata,
 				});

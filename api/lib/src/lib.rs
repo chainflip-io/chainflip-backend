@@ -347,8 +347,8 @@ pub async fn set_vanity_name(
 
 pub async fn request_swap_deposit_address(
 	state_chain_settings: &settings::StateChain,
-	ingress_asset: Asset,
-	egress_asset: Asset,
+	source_asset: Asset,
+	destination_asset: Asset,
 	egress_address: EncodedAddress,
 	relayer_commission_bps: BasisPoints,
 	message_metadata: Option<CcmIngressMetadata>,
@@ -356,8 +356,8 @@ pub async fn request_swap_deposit_address(
 	let events = connect_submit_and_get_events(
 		state_chain_settings,
 		pallet_cf_swapping::Call::request_swap_deposit_address {
-			ingress_asset,
-			egress_asset,
+			source_asset,
+			destination_asset,
 			egress_address,
 			relayer_commission_bps,
 			message_metadata,

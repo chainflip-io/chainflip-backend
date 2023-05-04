@@ -680,13 +680,13 @@ pub trait IngressApi<C: Chain> {
 	/// Issues a channel id and deposit address for a new liquidity deposit.
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
-		ingress_asset: C::ChainAsset,
+		source_asset: C::ChainAsset,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
 	/// Issues a channel id and deposit address for a new swap.
 	fn request_swap_deposit_address(
-		ingress_asset: C::ChainAsset,
-		egress_asset: Asset,
+		source_asset: C::ChainAsset,
+		destination_asset: Asset,
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: BasisPoints,
 		relayer_id: Self::AccountId,
@@ -700,26 +700,26 @@ pub trait IngressApi<C: Chain> {
 /// Generates a deterministic deposit address for some combination of asset, chain and channel id.
 pub trait AddressDerivationApi<C: Chain> {
 	fn generate_address(
-		ingress_asset: C::ChainAsset,
+		source_asset: C::ChainAsset,
 		channel_id: ChannelId,
 	) -> Result<C::ChainAccount, DispatchError>;
 }
 
 impl AddressDerivationApi<Ethereum> for () {
 	fn generate_address(
-		ingress_asset: <Ethereum as Chain>::ChainAsset,
+		source_asset: <Ethereum as Chain>::ChainAsset,
 		channel_id: ChannelId,
 	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
-		Ok(H256((ingress_asset, channel_id).encode().blake2_256()).into())
+		Ok(H256((source_asset, channel_id).encode().blake2_256()).into())
 	}
 }
 
 impl AddressDerivationApi<Polkadot> for () {
 	fn generate_address(
-		ingress_asset: <Polkadot as Chain>::ChainAsset,
+		source_asset: <Polkadot as Chain>::ChainAsset,
 		channel_id: ChannelId,
 	) -> Result<<Polkadot as Chain>::ChainAccount, DispatchError> {
-		Ok((ingress_asset, channel_id).encode().blake2_256().into())
+		Ok((source_asset, channel_id).encode().blake2_256().into())
 	}
 }
 
@@ -847,9 +847,9 @@ pub trait CcmHandler {
 	/// On the ingress of a cross-chain message, swap the asset into egress asset,
 	/// subtract the gas budge from it, then egress the message to the target chain.
 	fn on_ccm_ingress(
-		ingress_asset: Asset,
+		source_asset: Asset,
 		ingress_amount: AssetAmount,
-		egress_asset: Asset,
+		destination_asset: Asset,
 		egress_address: ForeignChainAddress,
 		message_metadata: CcmIngressMetadata,
 	) -> DispatchResult;
@@ -857,7 +857,7 @@ pub trait CcmHandler {
 
 impl CcmHandler for () {
 	fn on_ccm_ingress(
-		_ingress_asset: Asset,
+		_source_asset: Asset,
 		_ingress_amount: AssetAmount,
 		_egress_asset: Asset,
 		_egress_address: ForeignChainAddress,

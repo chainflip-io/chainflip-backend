@@ -15,7 +15,7 @@ use super::AddressDerivation;
 
 impl AddressDerivationApi<Polkadot> for AddressDerivation {
 	fn generate_address(
-		_ingress_asset: dot::Asset,
+		_source_asset: dot::Asset,
 		channel_id: ChannelId,
 	) -> Result<<Polkadot as Chain>::ChainAccount, DispatchError> {
 		const PREFIX: &[u8; 16] = b"modlpy/utilisuba";

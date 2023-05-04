@@ -123,14 +123,14 @@ pub mod pallet {
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct IngressDetails<C: Chain> {
 		pub channel_id: ChannelId,
-		pub ingress_asset: C::ChainAsset,
+		pub source_asset: C::ChainAsset,
 	}
 
 	/// Contains information relevant to the action to commence once ingress succeeds.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub enum IntentAction<AccountId> {
 		Swap {
-			egress_asset: Asset,
+			destination_asset: Asset,
 			egress_address: ForeignChainAddress,
 			relayer_id: AccountId,
 			relayer_commission_bps: BasisPoints,
@@ -139,7 +139,7 @@ pub mod pallet {
 			lp_account: AccountId,
 		},
 		CcmTransfer {
-			egress_asset: Asset,
+			destination_asset: Asset,
 			egress_address: ForeignChainAddress,
 			message_metadata: CcmIngressMetadata,
 		},
@@ -255,11 +255,11 @@ pub mod pallet {
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		StartWitnessing {
 			deposit_address: TargetChainAccount<T, I>,
-			ingress_asset: TargetChainAsset<T, I>,
+			source_asset: TargetChainAsset<T, I>,
 		},
 		StopWitnessing {
 			deposit_address: TargetChainAccount<T, I>,
-			ingress_asset: TargetChainAsset<T, I>,
+			source_asset: TargetChainAsset<T, I>,
 		},
 		IngressCompleted {
 			deposit_address: TargetChainAccount<T, I>,
@@ -617,7 +617,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		let ingress = IntentIngressDetails::<T, I>::get(&deposit_address)
 			.ok_or(Error::<T, I>::InvalidIntent)?;
-		ensure!(ingress.ingress_asset == asset, Error::<T, I>::IngressMismatchWithIntent);
+		ensure!(ingress.source_asset == asset, Error::<T, I>::IngressMismatchWithIntent);
 
 		// Ingress is called by witnessers, so asset/chain combination should always be valid.
 		ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
@@ -638,23 +638,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				T::LpBalance::try_credit_account(&lp_account, asset.into(), amount.into())?,
 			IntentAction::Swap {
 				egress_address,
-				egress_asset,
+				destination_asset,
 				relayer_id,
 				relayer_commission_bps,
 			} => T::SwapIntentHandler::on_swap_ingress(
 				deposit_address.clone().into(),
 				asset.into(),
-				egress_asset,
+				destination_asset,
 				amount.into(),
 				egress_address,
 				relayer_id,
 				relayer_commission_bps,
 			),
-			IntentAction::CcmTransfer { egress_asset, egress_address, message_metadata } =>
+			IntentAction::CcmTransfer { destination_asset, egress_address, message_metadata } =>
 				T::CcmHandler::on_ccm_ingress(
 					asset.into(),
 					amount.into(),
-					egress_asset,
+					destination_asset,
 					egress_address,
 					message_metadata,
 				)?,
@@ -673,7 +673,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	/// Create a new intent address for the given asset and registers it with the given action.
 	fn register_ingress_intent(
-		ingress_asset: TargetChainAsset<T, I>,
+		source_asset: TargetChainAsset<T, I>,
 		intent_action: IntentAction<T::AccountId>,
 	) -> Result<(ChannelId, TargetChainAccount<T, I>), DispatchError> {
 		// We have an address available, so we can just use it.
@@ -686,7 +686,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				.checked_add(1)
 				.ok_or(Error::<T, I>::ChannelIdsExhausted)?;
 			let new_address: TargetChainAccount<T, I> =
-				T::AddressDerivation::generate_address(ingress_asset, next_channel_id)?;
+				T::AddressDerivation::generate_address(source_asset, next_channel_id)?;
 			AddressStatus::<T, I>::insert(new_address.clone(), DeploymentStatus::Undeployed);
 			ChannelIdCounter::<T, I>::put(next_channel_id);
 			(
@@ -696,10 +696,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)
 		};
 		FetchParamDetails::<T, I>::insert(channel_id, (ingress_fetch_id, address.clone()));
-		IntentIngressDetails::<T, I>::insert(
-			&address,
-			IngressDetails { channel_id, ingress_asset },
-		);
+		IntentIngressDetails::<T, I>::insert(&address, IngressDetails { channel_id, source_asset });
 		IntentActions::<T, I>::insert(&address, intent_action);
 		T::IngressHandler::on_ingress_initiated(address.clone(), channel_id)?;
 		Ok((channel_id, address))
@@ -719,7 +716,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some(intent_ingress_details) = IntentIngressDetails::<T, I>::take(&address) {
 			Self::deposit_event(Event::<T, I>::StopWitnessing {
 				deposit_address: address,
-				ingress_asset: intent_ingress_details.ingress_asset,
+				source_asset: intent_ingress_details.source_asset,
 			});
 		}
 	}
@@ -779,16 +776,16 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 	// This should be callable by the LP pallet.
 	fn request_liquidity_deposit_address(
 		lp_account: T::AccountId,
-		ingress_asset: TargetChainAsset<T, I>,
+		source_asset: TargetChainAsset<T, I>,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 		let (channel_id, deposit_address) = Self::register_ingress_intent(
-			ingress_asset,
+			source_asset,
 			IntentAction::LiquidityProvision { lp_account },
 		)?;
 
 		Self::deposit_event(Event::StartWitnessing {
 			deposit_address: deposit_address.clone(),
-			ingress_asset,
+			source_asset,
 		});
 
 		Ok((channel_id, deposit_address.into()))
@@ -796,23 +793,23 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 
 	// This should only be callable by the relayer.
 	fn request_swap_deposit_address(
-		ingress_asset: TargetChainAsset<T, I>,
-		egress_asset: Asset,
+		source_asset: TargetChainAsset<T, I>,
+		destination_asset: Asset,
 		egress_address: ForeignChainAddress,
 		relayer_commission_bps: BasisPoints,
 		relayer_id: T::AccountId,
 		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 		let (channel_id, deposit_address) = Self::register_ingress_intent(
-			ingress_asset,
+			source_asset,
 			match message_metadata {
 				Some(msg) => IntentAction::CcmTransfer {
-					egress_asset,
+					destination_asset,
 					egress_address,
 					message_metadata: msg,
 				},
 				None => IntentAction::Swap {
-					egress_asset,
+					destination_asset,
 					egress_address,
 					relayer_commission_bps,
 					relayer_id,
@@ -822,7 +819,7 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 
 		Self::deposit_event(Event::StartWitnessing {
 			deposit_address: deposit_address.clone(),
-			ingress_asset,
+			source_asset,
 		});
 
 		Ok((channel_id, deposit_address.into()))

@@ -135,7 +135,7 @@ fn ingress_intents_expires() {
 		}) if expiry_block == expiry => (channel_id, deposit_address));
 		let lp_intent = LpIntent {
 			deposit_address: MockAddressConverter::try_from_encoded_address(deposit_address.clone()).unwrap(),
-			ingress_asset: asset,
+			source_asset: asset,
 			lp_account: LP_ACCOUNT.into(),
 		};
 

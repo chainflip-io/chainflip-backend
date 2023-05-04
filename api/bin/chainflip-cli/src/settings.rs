@@ -57,12 +57,12 @@ impl Default for CLICommandLineOptions {
 #[derive(Parser, Clone, Debug)]
 pub struct SwapRequestParams {
 	/// Ingress asset ("eth"|"dot")
-	pub ingress_asset: Asset,
+	pub source_asset: Asset,
 	/// Egress asset ("eth"|"dot")
-	pub egress_asset: Asset,
+	pub destination_asset: Asset,
 	// Note: we delay parsing this into `ForeignChainAddress`
 	// until we know which kind of address to expect (based
-	// on egress_asset)
+	// on destination_asset)
 	/// Egress asset address to receive funds after the swap
 	pub egress_address: String,
 	/// Commission to the relayer in base points

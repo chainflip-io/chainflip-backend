@@ -113,7 +113,7 @@ pub async fn start(
 		.await
 		.context("Failed to get initial ingress details")?
 		.into_iter()
-		.map(|(address, intent)| (intent.ingress_asset, address))
+		.map(|(address, intent)| (intent.source_asset, address))
 		.into_group_map();
 
 	fn monitored_addresses_from_all_eth(

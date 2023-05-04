@@ -295,8 +295,8 @@ fn swap_expires() {
 		}) => deposit_address);
 		let swap_intent = SwapIntent {
 			deposit_address: MockAddressConverter::try_from_encoded_address(deposit_address).unwrap(),
-			ingress_asset: Asset::Eth,
-			egress_asset: Asset::Usdc,
+			source_asset: Asset::Eth,
+			destination_asset: Asset::Usdc,
 			egress_address: ForeignChainAddress::Eth(Default::default()),
 			relayer_commission_bps: 0,
 			relayer_id: ALICE,
@@ -467,9 +467,9 @@ fn can_process_ccms_via_swap_intent() {
 		assert_eq!(
 			PendingCcms::<Test>::get(1),
 			Some(CcmSwap {
-				ingress_asset: Asset::Dot,
+				source_asset: Asset::Dot,
 				ingress_amount,
-				egress_asset: Asset::Eth,
+				destination_asset: Asset::Eth,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
 			})
@@ -553,9 +553,9 @@ fn can_process_ccms_via_extrinsic() {
 		assert_eq!(
 			PendingCcms::<Test>::get(1),
 			Some(CcmSwap {
-				ingress_asset: Asset::Btc,
+				source_asset: Asset::Btc,
 				ingress_amount,
-				egress_asset: Asset::Usdc,
+				destination_asset: Asset::Usdc,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
 			})
@@ -645,9 +645,9 @@ fn can_handle_ccms_with_gas_asset_as_ingress() {
 		assert_eq!(
 			PendingCcms::<Test>::get(1),
 			Some(CcmSwap {
-				ingress_asset: Asset::Eth,
+				source_asset: Asset::Eth,
 				ingress_amount,
-				egress_asset: Asset::Usdc,
+				destination_asset: Asset::Usdc,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
 			})
@@ -732,9 +732,9 @@ fn can_handle_ccms_with_principal_asset_as_ingress() {
 		assert_eq!(
 			PendingCcms::<Test>::get(1),
 			Some(CcmSwap {
-				ingress_asset: Asset::Usdc,
+				source_asset: Asset::Usdc,
 				ingress_amount,
-				egress_asset: Asset::Usdc,
+				destination_asset: Asset::Usdc,
 				egress_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
 			})

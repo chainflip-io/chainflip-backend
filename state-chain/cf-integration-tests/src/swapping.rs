@@ -220,7 +220,7 @@ fn basic_pool_setup_provision_and_swap() {
 			pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
 		).unwrap();
 		assert_events_eq!(Runtime, RuntimeEvent::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Event::StartWitnessing { deposit_address, ingress_asset: cf_chains::eth::assets::eth::Asset::Eth },
+			pallet_cf_ingress_egress::Event::StartWitnessing { deposit_address, source_asset: cf_chains::eth::assets::eth::Asset::Eth },
 		));
 		System::reset_events();
 
@@ -427,9 +427,9 @@ fn can_process_ccm_via_extrinsic_intent() {
 		};
 
 		let ccm_call = Box::new(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_ingress{
-			ingress_asset: Asset::Flip,
+			source_asset: Asset::Flip,
 			ingress_amount,
-			egress_asset: Asset::Usdc,
+			destination_asset: Asset::Usdc,
 			egress_address: EncodedAddress::Eth([0x02; 20]),
 			message_metadata: message,
 		}));

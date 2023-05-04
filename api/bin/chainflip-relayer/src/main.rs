@@ -20,8 +20,8 @@ pub trait Rpc {
 	#[method(name = "requestSwapDepositAddress")]
 	async fn request_swap_deposit_address(
 		&self,
-		ingress_asset: Asset,
-		egress_asset: Asset,
+		source_asset: Asset,
+		destination_asset: Asset,
 		egress_address: String,
 		relayer_commission_bps: BasisPoints,
 		message_metadata: Option<CcmIngressMetadata>,
@@ -47,17 +47,17 @@ impl RpcServer for RpcServerImpl {
 	}
 	async fn request_swap_deposit_address(
 		&self,
-		ingress_asset: Asset,
-		egress_asset: Asset,
+		source_asset: Asset,
+		destination_asset: Asset,
 		egress_address: String,
 		relayer_commission_bps: BasisPoints,
 		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<String, Error> {
 		Ok(chainflip_api::request_swap_deposit_address(
 			&self.state_chain_settings,
-			ingress_asset,
-			egress_asset,
-			clean_foreign_chain_address(egress_asset.into(), &egress_address)?,
+			source_asset,
+			destination_asset,
+			clean_foreign_chain_address(destination_asset.into(), &egress_address)?,
 			relayer_commission_bps,
 			message_metadata,
 		)

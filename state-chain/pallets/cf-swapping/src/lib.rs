@@ -68,9 +68,9 @@ impl CcmSwapOutput {
 // Cross chain message, including information at different stages.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub(crate) struct CcmSwap {
-	ingress_asset: Asset,
+	source_asset: Asset,
 	ingress_amount: AssetAmount,
-	egress_asset: Asset,
+	destination_asset: Asset,
 	egress_address: ForeignChainAddress,
 	message_metadata: CcmIngressMetadata,
 }
@@ -300,8 +300,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::request_swap_deposit_address())]
 		pub fn request_swap_deposit_address(
 			origin: OriginFor<T>,
-			ingress_asset: Asset,
-			egress_asset: Asset,
+			source_asset: Asset,
+			destination_asset: Asset,
 			egress_address: EncodedAddress,
 			relayer_commission_bps: BasisPoints,
 			message_metadata: Option<CcmIngressMetadata>,
@@ -311,7 +311,7 @@ pub mod pallet {
 			if message_metadata.is_some() {
 				// Currently only Ethereum supports CCM.
 				ensure!(
-					ForeignChain::Ethereum == egress_asset.into(),
+					ForeignChain::Ethereum == destination_asset.into(),
 					Error::<T>::CcmUnsupportedForTargetChain
 				);
 			}
@@ -321,13 +321,13 @@ pub mod pallet {
 				})?;
 			ensure!(
 				ForeignChain::from(egress_address_internal.clone()) ==
-					ForeignChain::from(egress_asset),
+					ForeignChain::from(destination_asset),
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 
 			let (channel_id, deposit_address) = T::IngressHandler::request_swap_deposit_address(
-				ingress_asset,
-				egress_asset,
+				source_asset,
+				destination_asset,
 				egress_address_internal,
 				relayer_commission_bps,
 				relayer,
@@ -338,7 +338,7 @@ pub mod pallet {
 				.saturating_add(SwapTTL::<T>::get());
 			SwapIntentExpiries::<T>::append(
 				expiry_block,
-				(channel_id, ForeignChain::from(ingress_asset), deposit_address.clone()),
+				(channel_id, ForeignChain::from(source_asset), deposit_address.clone()),
 			);
 
 			Self::deposit_event(Event::<T>::NewSwapIntent {
@@ -433,9 +433,9 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::ccm_ingress())]
 		pub fn ccm_ingress(
 			origin: OriginFor<T>,
-			ingress_asset: Asset,
+			source_asset: Asset,
 			ingress_amount: AssetAmount,
-			egress_asset: Asset,
+			destination_asset: Asset,
 			egress_address: EncodedAddress,
 			message_metadata: CcmIngressMetadata,
 		) -> DispatchResult {
@@ -447,15 +447,15 @@ pub mod pallet {
 				})?;
 
 			ensure!(
-				ForeignChain::from(egress_asset) ==
+				ForeignChain::from(destination_asset) ==
 					ForeignChain::from(egress_address_internal.clone()),
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 
 			Self::on_ccm_ingress(
-				ingress_asset,
+				source_asset,
 				ingress_amount,
-				egress_asset,
+				destination_asset,
 				egress_address_internal,
 				message_metadata,
 			)
@@ -611,12 +611,12 @@ pub mod pallet {
 			// Insert gas budget into storage.
 			CcmGasBudget::<T>::insert(
 				ccm_id,
-				(ForeignChain::from(ccm_swap.egress_asset).gas_asset(), ccm_output_gas),
+				(ForeignChain::from(ccm_swap.destination_asset).gas_asset(), ccm_output_gas),
 			);
 
 			// Schedule the given ccm to be egressed and deposit a event.
 			let egress_id = T::EgressHandler::schedule_egress(
-				ccm_swap.egress_asset,
+				ccm_swap.destination_asset,
 				ccm_output_principal,
 				ccm_swap.egress_address.clone(),
 				Some(ccm_swap.message_metadata),
@@ -662,20 +662,20 @@ pub mod pallet {
 
 	impl<T: Config> CcmHandler for Pallet<T> {
 		fn on_ccm_ingress(
-			ingress_asset: Asset,
+			source_asset: Asset,
 			ingress_amount: AssetAmount,
-			egress_asset: Asset,
+			destination_asset: Asset,
 			egress_address: ForeignChainAddress,
 			message_metadata: CcmIngressMetadata,
 		) -> DispatchResult {
 			// Caller should ensure that assets and addresses are compatible.
 			debug_assert!(
-				ForeignChain::from(egress_address.clone()) == ForeignChain::from(egress_asset)
+				ForeignChain::from(egress_address.clone()) == ForeignChain::from(destination_asset)
 			);
 
 			// Currently only Ethereum supports CCM.
 			ensure!(
-				ForeignChain::Ethereum == egress_asset.into(),
+				ForeignChain::Ethereum == destination_asset.into(),
 				Error::<T>::CcmUnsupportedForTargetChain
 			);
 
@@ -693,26 +693,26 @@ pub mod pallet {
 			let mut swap_output = CcmSwapOutput::default();
 
 			let principal_swap_amount = ingress_amount.saturating_sub(message_metadata.gas_budget);
-			let principal_swap_id = if ingress_asset == egress_asset {
+			let principal_swap_id = if source_asset == destination_asset {
 				swap_output.principal = Some(principal_swap_amount);
 				None
 			} else {
 				Some(Self::schedule_swap(
-					ingress_asset,
-					egress_asset,
+					source_asset,
+					destination_asset,
 					principal_swap_amount,
 					SwapType::CcmPrincipal(ccm_id),
 				))
 			};
 
-			let output_gas_asset = ForeignChain::from(egress_asset).gas_asset();
-			let gas_swap_id = if ingress_asset == output_gas_asset {
+			let output_gas_asset = ForeignChain::from(destination_asset).gas_asset();
+			let gas_swap_id = if source_asset == output_gas_asset {
 				// Ingress can be used as gas directly
 				swap_output.gas = Some(message_metadata.gas_budget);
 				None
 			} else {
 				Some(Self::schedule_swap(
-					ingress_asset,
+					source_asset,
 					output_gas_asset,
 					message_metadata.gas_budget,
 					SwapType::CcmGas(ccm_id),
@@ -729,9 +729,9 @@ pub mod pallet {
 
 			// If no swap is required, egress the CCM.
 			let ccm_swap = CcmSwap {
-				ingress_asset,
+				source_asset,
 				ingress_amount,
-				egress_asset,
+				destination_asset,
 				egress_address,
 				message_metadata,
 			};

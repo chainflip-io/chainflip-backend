@@ -188,9 +188,10 @@ impl EthContractWitnesser for Vault {
 					gas_amount,
 					refund_address,
 				} => Some(pallet_cf_swapping::Call::ccm_ingress {
-					ingress_asset: Asset::Eth,
+					source_asset: Asset::Eth,
 					ingress_amount: amount,
-					egress_asset: Asset::try_from(destination_token).map_err(anyhow::Error::msg)?,
+					destination_asset: Asset::try_from(destination_token)
+						.map_err(anyhow::Error::msg)?,
 					egress_address: EncodedAddress::from_chain_bytes(
 						destination_chain.try_into().map_err(anyhow::Error::msg)?,
 						destination_address.0,
@@ -216,13 +217,14 @@ impl EthContractWitnesser for Vault {
 					gas_amount,
 					refund_address,
 				} => Some(pallet_cf_swapping::Call::ccm_ingress {
-					ingress_asset: state_chain_client
+					source_asset: state_chain_client
 						.asset(source_token.0)
 						.await
 						.map_err(anyhow::Error::msg)?
 						.ok_or(anyhow::anyhow!("Unknown ETH source token"))?,
 					ingress_amount: amount,
-					egress_asset: Asset::try_from(destination_token).map_err(anyhow::Error::msg)?,
+					destination_asset: Asset::try_from(destination_token)
+						.map_err(anyhow::Error::msg)?,
 					egress_address: EncodedAddress::from_chain_bytes(
 						destination_chain.try_into().map_err(anyhow::Error::msg)?,
 						destination_address.0,

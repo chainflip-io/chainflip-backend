@@ -26,7 +26,7 @@ Then in another terminal:
 {"jsonrpc":"2.0","result":null,"id":1}
 
 # This method take a little while to respond because it submits and waits for finality. So make sure the request doesn't block.
-# Parameters are: [ingress_asset, egress_asset, egress_address, relayer_commission].
+# Parameters are: [source_asset, destination_asset, egress_address, relayer_commission].
 > curl -H "Content-Type: application/json" \
     -d '{"id":1, "jsonrpc":"2.0", "method": "relayer_requestSwapDepositAddress", "params": ["Eth", "Flip","0xabababababababababababababababababababab", 0]}' \
     http://localhost:62378

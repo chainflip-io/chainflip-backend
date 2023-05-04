@@ -7,7 +7,7 @@ use sp_runtime::DispatchError;
 
 impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 	fn generate_address(
-		_ingress_asset: btc::Asset,
+		_source_asset: btc::Asset,
 		channel_id: ChannelId,
 	) -> Result<<Bitcoin as Chain>::ChainAccount, DispatchError> {
 		// We don't expect to hit this case in the wild because we reuse addresses.

@@ -544,7 +544,7 @@ fn can_ingress_ccm_swap_intents() {
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::<Test, Instance1>::StartWitnessing {
 				deposit_address,
-				ingress_asset: from_asset,
+				source_asset: from_asset,
 			},
 		));
 
@@ -558,9 +558,9 @@ fn can_ingress_ccm_swap_intents() {
 		assert_eq!(
 			MockCcmHandler::get_ccm_requests(),
 			vec![CcmRequest {
-				ingress_asset: from_asset.into(),
+				source_asset: from_asset.into(),
 				ingress_amount: amount,
-				egress_asset: to_asset,
+				destination_asset: to_asset,
 				egress_address,
 				message_metadata: ccm
 			}]
@@ -572,7 +572,7 @@ fn can_ingress_ccm_swap_intents() {
 fn can_egress_ccm() {
 	new_test_ext().execute_with(|| {
 		let egress_address: H160 = [0x01; 20].into();
-		let egress_asset = eth::Asset::Eth;
+		let destination_asset = eth::Asset::Eth;
 		let ccm = CcmIngressMetadata {
 			message: vec![0x00, 0x01, 0x02],
 			gas_budget: 1_000,
@@ -581,7 +581,7 @@ fn can_egress_ccm() {
 		};
 		let amount = 5_000;
 		let egress_id = IngressEgress::schedule_egress(
-			egress_asset,
+			destination_asset,
 			amount,
 			egress_address,
 			Some(ccm.clone())
@@ -591,7 +591,7 @@ fn can_egress_ccm() {
 		assert_eq!(ScheduledEgressCcm::<Test, Instance1>::get(), vec![
 			CrossChainMessage {
 				egress_id,
-				asset: egress_asset,
+				asset: destination_asset,
 				amount,
 				egress_address,
 				message: ccm.message.clone(),
@@ -602,7 +602,7 @@ fn can_egress_ccm() {
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::<Test, Instance1>::EgressScheduled {
 				id: egress_id,
-				asset: egress_asset,
+				asset: destination_asset,
 				amount,
 				egress_address,
 			}
@@ -615,7 +615,7 @@ fn can_egress_ccm() {
 		assert_eq!(EgressedApiCalls::get(), vec![<MockEthereumApiCall<MockEthEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
 			(ForeignChain::Ethereum, 1),
 			TransferAssetParams {
-				asset: egress_asset,
+				asset: destination_asset,
 				amount,
 				to: egress_address
 			},
@@ -632,14 +632,14 @@ fn can_egress_ccm() {
 fn can_manually_egress_ccm() {
 	new_test_ext().execute_with(|| {
 		let egress_address: H160 = [0x01; 20].into();
-		let egress_asset = eth::Asset::Eth;
+		let destination_asset = eth::Asset::Eth;
 		let message = vec![0x00, 0x01, 0x02];
 		let amount = 5_000;
 
 		ScheduledEgressCcm::<Test, Instance1>::append(
 			CrossChainMessage {
 				egress_id: (ForeignChain::Ethereum, 1),
-				asset: egress_asset,
+				asset: destination_asset,
 				amount,
 				egress_address,
 				message: message.clone(),
@@ -658,7 +658,7 @@ fn can_manually_egress_ccm() {
 		assert_eq!(EgressedApiCalls::get(), vec![<MockEthereumApiCall<MockEthEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
 			(ForeignChain::Ethereum, 1),
 			TransferAssetParams {
-				asset: egress_asset,
+				asset: destination_asset,
 				amount,
 				to: egress_address
 			},
@@ -675,7 +675,7 @@ fn can_manually_egress_ccm() {
 fn can_manually_egress_ccm_by_id() {
 	new_test_ext().execute_with(|| {
 		let egress_address: H160 = [0x01; 20].into();
-		let egress_asset = eth::Asset::Eth;
+		let destination_asset = eth::Asset::Eth;
 		let message = vec![0x00, 0x01, 0x02];
 		let amount = 5_000;
 
@@ -683,7 +683,7 @@ fn can_manually_egress_ccm_by_id() {
 		let new_ccm = |id: u64| -> CrossChainMessage<Ethereum> {
 			CrossChainMessage {
 				egress_id: (ForeignChain::Ethereum, id),
-				asset: egress_asset,
+				asset: destination_asset,
 				amount,
 				egress_address,
 				message: message.clone(),
@@ -709,7 +709,7 @@ fn can_manually_egress_ccm_by_id() {
 		// Helper function that creates a FetchOrTransfer::Transfer using a given ID.
 		let transfer = FetchOrTransfer::Transfer {
 			egress_id: (ForeignChain::Ethereum, 4),
-			asset: egress_asset,
+			asset: destination_asset,
 			egress_address,
 			amount,
 		};

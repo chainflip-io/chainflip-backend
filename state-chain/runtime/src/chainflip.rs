@@ -414,32 +414,32 @@ macro_rules! impl_ingress_api_for_anychain {
 
 			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,
-				ingress_asset: Asset,
+				source_asset: Asset,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
-				match ingress_asset.into() {
+				match source_asset.into() {
 					$(
 						ForeignChain::$chain =>
 							$ingress_egress::request_liquidity_deposit_address(
 								lp_account,
-								ingress_asset.try_into().unwrap(),
+								source_asset.try_into().unwrap(),
 							),
 					)+
 				}
 			}
 
 			fn request_swap_deposit_address(
-				ingress_asset: Asset,
-				egress_asset: Asset,
+				source_asset: Asset,
+				destination_asset: Asset,
 				egress_address: ForeignChainAddress,
 				relayer_commission_bps: BasisPoints,
 				relayer_id: Self::AccountId,
 				message_metadata: Option<CcmIngressMetadata>,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
-				match ingress_asset.into() {
+				match source_asset.into() {
 					$(
 						ForeignChain::$chain => $ingress_egress::request_swap_deposit_address(
-							ingress_asset.try_into().unwrap(),
-							egress_asset,
+							source_asset.try_into().unwrap(),
+							destination_asset,
 							egress_address,
 							relayer_commission_bps,
 							relayer_id,

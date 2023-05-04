@@ -27,7 +27,7 @@ pub struct MockAddressDerivation;
 
 impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
 	fn generate_address(
-		_ingress_asset: assets::eth::Asset,
+		_source_asset: assets::eth::Asset,
 		_channel_id: ChannelId,
 	) -> Result<<Ethereum as Chain>::ChainAccount, sp_runtime::DispatchError> {
 		Ok(H160::from_str("F29aB9EbDb481BE48b80699758e6e9a3DBD609C6").unwrap())

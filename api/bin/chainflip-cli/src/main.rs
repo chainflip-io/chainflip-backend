@@ -67,10 +67,10 @@ pub async fn request_swap_deposit_address(
 ) -> Result<()> {
 	let address = api::request_swap_deposit_address(
 		state_chain_settings,
-		params.ingress_asset,
-		params.egress_asset,
+		params.source_asset,
+		params.destination_asset,
 		chainflip_api::clean_foreign_chain_address(
-			params.egress_asset.into(),
+			params.destination_asset.into(),
 			&params.egress_address,
 		)?,
 		params.relayer_commission,

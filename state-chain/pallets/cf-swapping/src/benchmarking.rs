@@ -30,8 +30,8 @@ benchmarks! {
 		T::AccountRoleRegistry::register_as_relayer(&caller).unwrap();
 		let origin = RawOrigin::Signed(caller);
 		let call = Call::<T>::request_swap_deposit_address {
-			ingress_asset: Asset::Eth,
-			egress_asset: Asset::Usdc,
+			source_asset: Asset::Eth,
+			destination_asset: Asset::Usdc,
 			egress_address: EncodedAddress::benchmark_value(),
 			relayer_commission_bps: 0,
 			message_metadata: None,
@@ -100,9 +100,9 @@ benchmarks! {
 			source_address: ForeignChainAddress::benchmark_value(),
 		};
 		let call = Call::<T>::ccm_ingress{
-			ingress_asset: Asset::Usdc,
+			source_asset: Asset::Usdc,
 			ingress_amount: 1_000,
-			egress_asset: Asset::Eth,
+			destination_asset: Asset::Eth,
 			egress_address: EncodedAddress::benchmark_value(),
 			message_metadata: metadata,
 		};
@@ -134,8 +134,8 @@ benchmarks! {
 		let origin = RawOrigin::Signed(caller);
 		for i in 0..a {
 			let call = Call::<T>::request_swap_deposit_address{
-				ingress_asset: Asset::Usdc,
-				egress_asset: Asset::Eth,
+				source_asset: Asset::Usdc,
+				destination_asset: Asset::Eth,
 				egress_address: EncodedAddress::Eth(Default::default()),
 				relayer_commission_bps: Default::default(),
 				message_metadata: None,
