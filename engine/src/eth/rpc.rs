@@ -14,7 +14,7 @@ use web3_secp256k1::SecretKey;
 
 use futures::{
 	future::{select, Either},
-	FutureExt,
+	FutureExt, StreamExt,
 };
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -104,7 +104,7 @@ pub trait EthRpcApi: Send + Sync {
 	/// - Request succeeds, but doesn't return a block
 	async fn block(&self, block_number: U64) -> Result<Block<H256>>;
 
-	async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>>;
+	async fn block_with_successful_txs(&self, block_number: U64) -> Result<Block<Transaction>>;
 
 	async fn fee_history(
 		&self,
@@ -202,8 +202,9 @@ where
 			})
 	}
 
-	async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>> {
-		self.web3
+	async fn block_with_successful_txs(&self, block_number: U64) -> Result<Block<Transaction>> {
+		let block_with_txs = self
+			.web3
 			.eth()
 			.block_with_txs(block_number.into())
 			.await
@@ -219,7 +220,52 @@ where
 						block_number,
 					)
 				})
+			})?;
+
+		let only_successful_transactions = futures::stream::iter(block_with_txs.transactions)
+			.then(|tx: Transaction| async move {
+				(
+					self.transaction_receipt(tx.hash)
+						.await
+						.expect("Failed to fetch transaction receipt")
+						.status
+						.map(|s| s.as_u64() == 1)
+						.unwrap_or(false),
+					tx,
+				)
 			})
+			.collect::<Vec<_>>()
+			.await
+			.into_iter()
+			.filter(|(is_successful, _)| *is_successful)
+			.map(|(_, tx)| tx)
+			.collect();
+
+		// Can't use `..` syntax here because of: https://github.com/rust-lang/rust/issues/86555
+		Ok(Block {
+			transactions: only_successful_transactions,
+			hash: block_with_txs.hash,
+			parent_hash: block_with_txs.parent_hash,
+			uncles_hash: block_with_txs.uncles_hash,
+			author: block_with_txs.author,
+			state_root: block_with_txs.state_root,
+			transactions_root: block_with_txs.transactions_root,
+			receipts_root: block_with_txs.receipts_root,
+			number: block_with_txs.number,
+			gas_used: block_with_txs.gas_used,
+			gas_limit: block_with_txs.gas_limit,
+			base_fee_per_gas: block_with_txs.base_fee_per_gas,
+			extra_data: block_with_txs.extra_data,
+			logs_bloom: block_with_txs.logs_bloom,
+			timestamp: block_with_txs.timestamp,
+			difficulty: block_with_txs.difficulty,
+			total_difficulty: block_with_txs.total_difficulty,
+			seal_fields: block_with_txs.seal_fields,
+			uncles: block_with_txs.uncles,
+			size: block_with_txs.size,
+			mix_hash: block_with_txs.mix_hash,
+			nonce: block_with_txs.nonce,
+		})
 	}
 
 	async fn fee_history(
@@ -478,8 +524,8 @@ impl EthRpcApi for EthDualRpcClient {
 		dual_call_rpc!(self, block, block_number)
 	}
 
-	async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>> {
-		dual_call_rpc!(self, block_with_txs, block_number)
+	async fn block_with_successful_txs(&self, block_number: U64) -> Result<Block<Transaction>> {
+		dual_call_rpc!(self, block_with_successful_txs, block_number)
 	}
 
 	async fn fee_history(
@@ -522,7 +568,7 @@ pub mod mocks {
 
 			async fn block(&self, block_number: U64) -> Result<Block<H256>>;
 
-			async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>>;
+			async fn block_with_successful_txs(&self, block_number: U64) -> Result<Block<Transaction>>;
 
 			async fn fee_history(
 				&self,
