@@ -104,6 +104,8 @@ pub trait EthRpcApi: Send + Sync {
 	/// - Request succeeds, but doesn't return a block
 	async fn block(&self, block_number: U64) -> Result<Block<H256>>;
 
+	/// Gets the block with only the successful transactions. It filters failed transactions by
+	/// checking the receipt.
 	async fn block_with_successful_txs(&self, block_number: U64) -> Result<Block<Transaction>>;
 
 	async fn fee_history(
