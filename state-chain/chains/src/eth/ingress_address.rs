@@ -50,8 +50,8 @@ const DEPLOY_BYTECODE: [u8; 1202] = hex_literal::hex!(
 const PREFIX_BYTE: u8 = 0xff;
 
 /// Derives the CREATE2 Ethereum address for a given asset, vault, and intent.
-/// @param asset_id The asset in "CHAIN:ASSET" form e.g. "ETH:ETH" or "ETH:USDC"
 /// @param vault_address The address of the Ethereum Vault
+/// @param deploy_constructor_argument The constructor argument for the asset
 /// @param intent_id The numerical intent id
 pub fn get_create_2_address(
 	vault_address: [u8; 20],
@@ -66,10 +66,13 @@ pub fn get_create_2_address(
 	let deploy_transaction_bytes_hash = Keccak256::hash(
 		&[
 			deploy_bytecode,
-			&deploy_constructor_argument.map_or(Default::default(), |mut token_addr| {
-				token_addr.splice(0..0, [0u8; 12]);
-				token_addr
-			}),
+			&deploy_constructor_argument.map_or(
+				cf_primitives::ETHEREUM_ETH_ADDRESS.into(),
+				|mut token_addr| {
+					token_addr.splice(0..0, [0u8; 12]);
+					token_addr
+				},
+			),
 		]
 		.concat(),
 	);
