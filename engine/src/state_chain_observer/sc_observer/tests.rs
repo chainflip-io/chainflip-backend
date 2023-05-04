@@ -1447,7 +1447,7 @@ where
 	>,
 {
 	let first_ceremony_id = 1;
-	let key_id = KeyId { epoch_index: 1, public_key_bytes: vec![0u8; 32] };
+	let key_id = KeyId::new(1, [0u8; 32]);
 	let payload = C::signing_payload_for_test();
 	let our_account_id = AccountId32::new([0; 32]);
 	let not_our_account_id = AccountId32::new([1u8; 32]);

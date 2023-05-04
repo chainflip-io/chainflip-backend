@@ -479,7 +479,7 @@ where
                                             ceremony_id,
                                             signatories,
                                             vec![(
-                                                (epoch, key).into(),
+                                                KeyId::new(epoch, key),
                                                 multisig::eth::SigningPayload(payload.0)
                                             )],
                                         ).await;
@@ -506,7 +506,7 @@ where
                                             ceremony_id,
                                             signatories,
                                             vec![(
-                                                (epoch, key).into(),
+                                                KeyId::new(epoch, key),
                                                 multisig::polkadot::SigningPayload::new(payload.0)
                                                     .expect("Payload should be correct size")
                                             )],
@@ -528,15 +528,14 @@ where
 
                                         let signing_info = payloads.into_iter().map(|(previous_or_current, payload)| {
                                                 (
-                                                    KeyId {
-                                                        epoch_index: epoch,
-                                                        public_key_bytes: match previous_or_current {
+                                                    KeyId::new(
+                                                        epoch,
+                                                        match previous_or_current {
                                                             PreviousOrCurrent::Current => key.current,
                                                             PreviousOrCurrent::Previous => key.previous
                                                                 .expect("Cannot be asked to sign with previous key if none exists."),
-                                                        }
-                                                        .to_vec()
-                                                    },
+                                                        },
+                                                    ),
                                                     multisig::bitcoin::SigningPayload(payload),
                                                 )
                                             })

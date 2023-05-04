@@ -104,10 +104,7 @@ fn generate_and_save_keys<Crypto: CryptoScheme>(
 			None,
 		)
 		.expect("Should create database at latest version")
-		.update_key::<Crypto>(
-			&KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: public_key_bytes.clone() },
-			&key_share,
-		);
+		.update_key::<Crypto>(&KeyId::new(GENESIS_EPOCH, public_key), &key_share);
 	}
 
 	hex::encode(&public_key_bytes)

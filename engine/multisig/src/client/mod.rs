@@ -59,7 +59,7 @@ use self::{
 };
 
 use super::{
-	crypto::{CanonicalEncoding, CryptoScheme, ECPoint, KeyId},
+	crypto::{CryptoScheme, ECPoint, KeyId},
 	Rng,
 };
 
@@ -230,10 +230,10 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 				.map(|keygen_result_info| {
 					let agg_key = keygen_result_info.key.get_agg_public_key();
 
-					self.key_store.lock().unwrap().set_key(
-						KeyId { epoch_index, public_key_bytes: agg_key.encode_key() },
-						keygen_result_info,
-					);
+					self.key_store
+						.lock()
+						.unwrap()
+						.set_key(KeyId::new(epoch_index, agg_key.clone()), keygen_result_info);
 					agg_key
 				})
 				.map_err(|(reported_parties, failure_reason)| {
