@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   geth:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-rc3
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-rc4
     pull_policy: if_not_present
     stop_grace_period: 5s
     stop_signal: SIGINT
