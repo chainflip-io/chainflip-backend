@@ -200,15 +200,21 @@ pub mod pallet {
 						KeygenFailureVoters<T, I>,
 						_,
 						KeygenResolutionPendingSince<T, I>,
-					>(response_status, ceremony_id, current_block, |new_public_key| {
-						Self::deposit_event(Event::KeygenSuccess(ceremony_id));
-						Self::trigger_keygen_verification(
-							ceremony_id,
-							new_public_key,
-							epoch_index,
-							keygen_participants,
-						);
-					});
+					>(
+						response_status,
+						ceremony_id,
+						current_block,
+						PalletOffence::FailedKeygen,
+						|new_public_key| {
+							Self::deposit_event(Event::KeygenSuccess(ceremony_id));
+							Self::trigger_keygen_verification(
+								ceremony_id,
+								new_public_key,
+								epoch_index,
+								keygen_participants,
+							);
+						},
+					);
 				},
 				Some(VaultRotationStatus::<T, I>::AwaitingKeyHandover {
 					ceremony_id,
@@ -220,12 +226,18 @@ pub mod pallet {
 						KeyHandoverFailureVoters<T, I>,
 						_,
 						KeyHandoverResolutionPendingSince<T, I>,
-					>(response_status, ceremony_id, current_block, |_| {
-						Self::deposit_event(Event::KeyHandoverSuccess { ceremony_id });
-						PendingVaultRotation::<T, I>::put(
-							VaultRotationStatus::<T, I>::KeyHandoverComplete { new_public_key },
-						);
-					});
+					>(
+						response_status,
+						ceremony_id,
+						current_block,
+						PalletOffence::FailedKeyHandover,
+						|_| {
+							Self::deposit_event(Event::KeyHandoverSuccess { ceremony_id });
+							PendingVaultRotation::<T, I>::put(
+								VaultRotationStatus::<T, I>::KeyHandoverComplete { new_public_key },
+							);
+						},
+					);
 				},
 				_ => {
 					// noop
@@ -681,6 +693,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		response_status: ResponseStatus<T, SuccessVoters, FailureVoters, I>,
 		ceremony_id: CeremonyId,
 		current_block: BlockNumberFor<T>,
+		offence: PalletOffence,
 		on_resolution_success: ResolutionSuccessFn,
 	) -> Weight
 	where
@@ -727,7 +740,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					} else {
 						Vec::default()
 					},
-					PalletOffence::FailedKeygen,
+					offence,
 					Event::KeygenFailure(ceremony_id),
 				);
 				T::WeightInfo::on_initialize_failure(offenders_len as u32)
