@@ -9,7 +9,7 @@ use scale_info::TypeInfo;
 use sp_core::crypto::AccountId32;
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
-	FixedU128, MultiSignature, RuntimeDebug,
+	MultiSignature, RuntimeDebug,
 };
 
 use sp_std::vec::Vec;
@@ -37,8 +37,6 @@ pub type IntentId = u64;
 pub type EgressCounter = u64;
 
 pub type EgressId = (ForeignChain, EgressCounter);
-
-pub type ExchangeRate = FixedU128;
 
 pub type EthereumAddress = [u8; 20];
 
@@ -110,3 +108,19 @@ impl Default for AccountRole {
 }
 
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
+
+/// Struct that represents the estimated output of a Swap.
+#[derive(PartialEq, Default, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct SwapOutput {
+	// Intermediary amount, if there's any
+	pub intermediary: Option<AssetAmount>,
+	// Final output of the swap
+	pub output: AssetAmount,
+}
+
+impl From<AssetAmount> for SwapOutput {
+	fn from(value: AssetAmount) -> Self {
+		Self { intermediary: None, output: value }
+	}
+}

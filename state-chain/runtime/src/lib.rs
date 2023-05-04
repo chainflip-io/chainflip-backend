@@ -54,9 +54,12 @@ pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata, H256};
-use sp_runtime::traits::{
-	AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor, One,
-	OpaqueKeys, UniqueSaturatedInto, Verify,
+use sp_runtime::{
+	traits::{
+		AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
+		One, OpaqueKeys, UniqueSaturatedInto, Verify,
+	},
+	DispatchError,
 };
 
 #[cfg(any(feature = "std", test))]
@@ -73,9 +76,11 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{
-	Asset, AssetAmount, BlockNumber, EthereumAddress, ExchangeRate, FlipBalance,
+	Asset, AssetAmount, BlockNumber, EthereumAddress, FlipBalance, SwapOutput,
 };
-pub use cf_traits::{EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered};
+pub use cf_traits::{
+	EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered, SwappingApi,
+};
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
@@ -1004,6 +1009,13 @@ impl_runtime_apis! {
 			to: Asset,
 		) -> Option<SqrtPriceQ64F96> {
 			LiquidityPools::current_sqrt_price(from, to)
+		}
+
+		/// Simulates a swap and return the intermediate (if any) and final output.
+		/// Note: This function must only be called through RPC, because RPC has its own storage buffer
+		/// layer and would not affect on-chain storage.
+		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Result<SwapOutput, DispatchError> {
+			LiquidityPools::swap(from, to, amount)
 		}
 	}
 
