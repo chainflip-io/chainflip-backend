@@ -146,16 +146,16 @@ impl ChainCrypto for Bitcoin {
 		payloads: &Self::Payload,
 		signatures: &Self::ThresholdSignature,
 	) -> bool {
-		payloads.iter().zip(signatures).all(|(payload, signature)| match payload {
-			(PreviousOrCurrent::Previous, payload) => agg_key
-				.previous
-				.map(|previous_key| {
-					verify_single_threshold_signature(&previous_key, payload, signature)
-				})
-				.unwrap_or_default(),
-			(PreviousOrCurrent::Current, payload) =>
-				verify_single_threshold_signature(&agg_key.current, payload, signature),
-		})
+		payloads
+			.iter()
+			.zip(signatures)
+			.all(|((previous_or_current, payload), signature)| {
+				match previous_or_current {
+					PreviousOrCurrent::Previous => agg_key.previous.as_ref(),
+					PreviousOrCurrent::Current => Some(&agg_key.current),
+				}
+				.map_or(false, |key| verify_single_threshold_signature(key, payload, signature))
+			})
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
