@@ -31,7 +31,7 @@ const PREFIX_BYTE: u8 = 0xff;
 /// Derives the CREATE2 Ethereum address for a given asset, vault, and intent.
 /// @param asset_id The asset in "CHAIN:ASSET" form e.g. "ETH:ETH" or "ETH:USDC"
 /// @param vault_address The address of the Ethereum Vault
-/// @param channel_id The numerical intent id
+/// @param channel_id The numerical channel id
 pub fn get_create_2_address(
 	asset: eth::Asset,
 	vault_address: [u8; 20],

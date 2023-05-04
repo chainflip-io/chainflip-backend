@@ -210,7 +210,7 @@ pub mod pallet {
 		OptionQuery,
 	>;
 
-	/// Stores the latest intent id used to generate an address.
+	/// Stores the latest channel id used to generate an address.
 	#[pallet::storage]
 	pub type ChannelIdCounter<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, ChannelId, ValueQuery>;
@@ -235,7 +235,7 @@ pub mod pallet {
 	pub(crate) type DisabledEgressAssets<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, ()>;
 
-	/// Stores a pool of addresses that is available for use together with the intent id.
+	/// Stores a pool of addresses that is available for use together with the channel id.
 	#[pallet::storage]
 	pub(crate) type AddressPool<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, ChannelId, TargetChainAccount<T, I>>;
@@ -245,7 +245,7 @@ pub mod pallet {
 	pub(crate) type AddressStatus<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, TargetChainAccount<T, I>, DeploymentStatus, ValueQuery>;
 
-	/// Map of intent id to the ingress id.
+	/// Map of channel id to the ingress fetch parameters.
 	#[pallet::storage]
 	pub(crate) type FetchParamDetails<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, ChannelId, (IngressFetchIdOf<T, I>, TargetChainAccount<T, I>)>;
