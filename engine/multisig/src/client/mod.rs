@@ -281,6 +281,14 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 	> {
 		let span = info_span!("Key Handover Ceremony", ceremony_id = ceremony_id);
 		let _entered = span.enter();
+
+		debug!(
+			key_id = key_id.to_string(),
+			sharing_participants = format_iterator(&sharing_participants).to_string(),
+			receiving_participants = format_iterator(&receiving_participants).to_string(),
+			"Received a key handover request",
+		);
+
 		let resharing_context =
 			if sharing_participants.contains(&self.my_account_id) {
 				let key =
