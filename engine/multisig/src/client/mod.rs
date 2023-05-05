@@ -134,10 +134,12 @@ pub trait MultisigClientApi<C: CryptoScheme> {
 
 /// The ceremony details are optional to alow the updating of the ceremony id tracking
 /// when we are not participating in the ceremony.
+#[derive(Debug)]
 pub struct CeremonyRequest<C: CryptoScheme> {
 	pub ceremony_id: CeremonyId,
 	pub details: Option<CeremonyRequestDetails<C>>,
 }
+#[derive(Debug)]
 pub enum CeremonyRequestDetails<C>
 where
 	C: CryptoScheme,
@@ -146,6 +148,7 @@ where
 	Sign(SigningRequestDetails<C>),
 }
 
+#[derive(Debug)]
 pub struct KeygenRequestDetails<C: CryptoScheme> {
 	pub participants: BTreeSet<AccountId>,
 	pub rng: Rng,
@@ -155,6 +158,7 @@ pub struct KeygenRequestDetails<C: CryptoScheme> {
 	pub resharing_context: Option<ResharingContext<C>>,
 }
 
+#[derive(Debug)]
 pub struct SigningRequestDetails<C>
 where
 	C: CryptoScheme,
@@ -222,8 +226,7 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 					resharing_context: None,
 				})),
 			})
-			.ok()
-			.expect("Should send keygen request");
+			.unwrap();
 
 		async move {
 			result_receiver
@@ -268,8 +271,7 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 		use rand_legacy::FromEntropy;
 		let rng = Rng::from_entropy();
 
-		// Find the correct key and send the request to sign with that key
-		let request = self.key_store.lock().unwrap().get_key(&key_id).map(|keygen_result_info| {
+		if let Some(keygen_result_info) = self.key_store.lock().unwrap().get_key(&key_id) {
 			let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
 			self.ceremony_request_sender
 				.send(CeremonyRequest {
@@ -282,14 +284,10 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 						result_sender,
 					})),
 				})
-				.ok()
-				.expect("Should send signing request");
-			result_receiver
-		});
+				.unwrap();
 
-		async move {
-			// Wait for the request to return a result, then log and return the result
-			if let Some(result_receiver) = request {
+			async move {
+				// Wait for the request to return a result, then log and return the result
 				let result = result_receiver
 					.await
 					.expect("Signing result oneshot channel dropped before receiving a result");
@@ -299,21 +297,20 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 
 					(reported_parties, failure_reason)
 				})
-			} else {
-				// No key was found for the given key_id
-				let reported_parties = BTreeSet::new();
-				let failure_reason = SigningFailureReason::UnknownKey;
-				failure_reason.log(&reported_parties);
-				Err((reported_parties, failure_reason))
 			}
+			.boxed()
+		} else {
+			self.update_latest_ceremony_id(ceremony_id);
+			let reported_parties = Default::default();
+			let failure_reason = SigningFailureReason::UnknownKey;
+			failure_reason.log(&reported_parties);
+			futures::future::ready(Err((reported_parties, failure_reason))).boxed()
 		}
-		.boxed()
 	}
 
 	fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId) {
 		self.ceremony_request_sender
 			.send(CeremonyRequest { ceremony_id, details: None })
-			.ok()
-			.expect("Should send ceremony request");
+			.unwrap();
 	}
 }
