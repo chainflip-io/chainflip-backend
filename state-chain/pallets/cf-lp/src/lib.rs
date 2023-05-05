@@ -9,7 +9,7 @@ use sp_runtime::DispatchResult;
 
 use cf_chains::{address::AddressConverter, AnyChain};
 use cf_traits::{
-	liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, EgressApi, IngressApi, SystemStateInfo,
+	liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi, EgressApi, SystemStateInfo,
 };
 use sp_runtime::{traits::BlockNumberProvider, Saturating};
 use sp_std::vec::Vec;
@@ -40,7 +40,7 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// API for handling asset ingress.
-		type DepositHandler: IngressApi<
+		type DepositHandler: DepositApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;

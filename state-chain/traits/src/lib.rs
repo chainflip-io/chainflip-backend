@@ -664,7 +664,7 @@ pub trait FeePayment {
 	fn try_burn_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult;
 }
 
-/// Providregister_swap_intention about on-chain funds.
+/// Provides information about on-chain funds.
 pub trait FundingInfo {
 	type AccountId;
 	type Balance;
@@ -674,9 +674,10 @@ pub trait FundingInfo {
 	fn total_onchain_funds() -> Self::Balance;
 }
 
-/// Allow pallets to register `Intent`s in the Ingress pallet.
-pub trait IngressApi<C: Chain> {
+/// Allow pallets to open and expire deposit addresses.
+pub trait DepositApi<C: Chain> {
 	type AccountId;
+
 	/// Issues a channel id and deposit address for a new liquidity deposit.
 	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
@@ -693,7 +694,7 @@ pub trait IngressApi<C: Chain> {
 		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
-	/// Expires an intent.
+	/// Expires a channel.
 	fn expire_channel(chain: ForeignChain, channel_id: ChannelId, address: C::ChainAccount);
 }
 

@@ -10,7 +10,7 @@ use cf_traits::{
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
 		ccm_handler::{CcmRequest, MockCcmHandler},
 	},
-	AddressDerivationApi, EgressApi, IngressApi,
+	AddressDerivationApi, DepositApi, EgressApi,
 };
 use frame_support::{assert_noop, assert_ok, instances::Instance1, traits::Hooks, weights::Weight};
 use sp_core::H160;

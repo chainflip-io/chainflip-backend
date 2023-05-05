@@ -1,4 +1,4 @@
-use crate::{Chainflip, IngressApi};
+use crate::{Chainflip, DepositApi};
 use cf_chains::{
 	address::ForeignChainAddress, eth::assets::any, CcmIngressMetadata, Chain, ForeignChain,
 };
@@ -73,7 +73,7 @@ impl<C: Chain, T: Chainflip> MockDepositHandler<C, T> {
 	}
 }
 
-impl<C: Chain, T: Chainflip> IngressApi<C> for MockDepositHandler<C, T> {
+impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 	type AccountId = <T as frame_system::Config>::AccountId;
 
 	fn request_liquidity_deposit_address(

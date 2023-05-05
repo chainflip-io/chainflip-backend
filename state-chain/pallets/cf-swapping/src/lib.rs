@@ -4,7 +4,7 @@ use cf_chains::{
 	CcmIngressMetadata,
 };
 use cf_primitives::{Asset, AssetAmount, ChannelId, ForeignChain};
-use cf_traits::{liquidity::SwappingApi, CcmHandler, IngressApi, SystemStateInfo};
+use cf_traits::{liquidity::SwappingApi, CcmHandler, DepositApi, SystemStateInfo};
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
@@ -91,7 +91,7 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// API for handling asset ingress.
-		type DepositHandler: IngressApi<
+		type DepositHandler: DepositApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;

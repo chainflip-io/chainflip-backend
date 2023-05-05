@@ -40,8 +40,8 @@ use cf_primitives::{
 };
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster,
-	DepositHandler, EgressApi, EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat,
-	IngressApi, Issuance, KeyProvider, NetworkState, RewardsDistribution, RuntimeUpgrade,
+	DepositApi, DepositHandler, EgressApi, EmergencyRotation, EpochInfo, EthEnvironmentProvider,
+	Heartbeat, Issuance, KeyProvider, NetworkState, RewardsDistribution, RuntimeUpgrade,
 	VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
@@ -409,7 +409,7 @@ impl CommKeyBroadcaster for TokenholderGovernanceBroadcaster {
 #[macro_export]
 macro_rules! impl_ingress_api_for_anychain {
 	( $anychain: ident, $(($chain: ident, $ingress_egress: ident)),+ ) => {
-		impl IngressApi<AnyChain> for $anychain {
+		impl DepositApi<AnyChain> for $anychain {
 			type AccountId = <Runtime as frame_system::Config>::AccountId;
 
 			fn request_liquidity_deposit_address(

@@ -23,8 +23,8 @@ use cf_chains::{
 };
 use cf_primitives::{Asset, AssetAmount, ChannelId};
 use cf_traits::{
-	liquidity::LpBalanceApi, AddressDerivationApi, Broadcaster, CcmHandler, Chainflip,
-	DepositHandler, EgressApi, IngressApi, SwapIntentHandler,
+	liquidity::LpBalanceApi, AddressDerivationApi, Broadcaster, CcmHandler, Chainflip, DepositApi,
+	DepositHandler, EgressApi, SwapIntentHandler,
 };
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
 pub use pallet::*;
@@ -782,7 +782,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 	}
 }
 
-impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	type AccountId = <T as frame_system::Config>::AccountId;
 	// This should be callable by the LP pallet.
 	fn request_liquidity_deposit_address(
