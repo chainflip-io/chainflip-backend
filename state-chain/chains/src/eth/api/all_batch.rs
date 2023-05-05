@@ -249,6 +249,7 @@ mod test_all_batch {
 		.unwrap();
 
 		let all_batch_reference = eth_vault.function("allBatch").unwrap();
+		//println!("{:?}", all_batch_reference);
 
 		let all_batch_runtime = AllBatch::new_unsigned(
 			EthereumReplayProtection { nonce: NONCE },
@@ -280,7 +281,7 @@ mod test_all_batch {
 			// "Canonical" encoding based on the abi definition above and using the ethabi crate:
 			all_batch_reference
 				.encode_input(&[
-					// sigData: SigData(address, uint, uint, uint, uint, address)
+					// sigData: SigData(uint, uint, address)
 					Token::Tuple(vec![
 						Token::Uint(FAKE_SIG.into()),
 						Token::Uint(NONCE.into()),

@@ -111,7 +111,9 @@ impl Age for EthereumTrackedData {
 
 /// The `SigData` struct used for threshold signatures in the smart contracts.
 /// See [here](https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol).
-#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(
+	Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, MaxEncodedLen,
+)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct SigData {
 	/// The Schnorr signature.
@@ -126,14 +128,6 @@ pub struct SigData {
 	/// `nonceTimesGeneratorAddress` is a generated as part of each signing round (ie. as part of
 	/// the Schnorr signature) to prevent certain classes of cryptographic attacks.
 	k_times_g_address: Address,
-}
-
-impl MaxEncodedLen for SigData {
-	fn max_encoded_len() -> usize {
-		<[u8; 20]>::max_encoded_len() * 2 // 2 x Addresses
-		+ <[u64; 4]>::max_encoded_len() * 3 // 3 x Uint
-		+ <[u8; 32]>::max_encoded_len() // H256
-	}
 }
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq, Default)]

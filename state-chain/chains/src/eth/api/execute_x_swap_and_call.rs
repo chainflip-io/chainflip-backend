@@ -251,7 +251,7 @@ mod test_execute_x_swap_and_execute {
 			// "Canonical" encoding based on the abi definition above and using the ethabi crate:
 			function_reference
 				.encode_input(&[
-					// sigData: SigData(address, uint, uint, uint, uint, address)
+					// sigData: SigData(uint, uint, address)
 					Token::Tuple(vec![
 						Token::Uint(FAKE_SIG.into()),
 						Token::Uint(NONCE.into()),

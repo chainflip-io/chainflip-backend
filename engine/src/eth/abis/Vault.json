@@ -380,21 +380,6 @@
       {
         "components": [
           {
-            "internalType": "address",
-            "name": "keyManAddr",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "chainID",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "msgHash",
-            "type": "uint256"
-          },
-          {
             "internalType": "uint256",
             "name": "sig",
             "type": "uint256"
@@ -481,21 +466,6 @@
       {
         "components": [
           {
-            "internalType": "address",
-            "name": "keyManAddr",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "chainID",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "msgHash",
-            "type": "uint256"
-          },
-          {
             "internalType": "uint256",
             "name": "sig",
             "type": "uint256"
@@ -556,21 +526,6 @@
     "inputs": [
       {
         "components": [
-          {
-            "internalType": "address",
-            "name": "keyManAddr",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "chainID",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "msgHash",
-            "type": "uint256"
-          },
           {
             "internalType": "uint256",
             "name": "sig",
@@ -649,21 +604,6 @@
       {
         "components": [
           {
-            "internalType": "address",
-            "name": "keyManAddr",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "chainID",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "msgHash",
-            "type": "uint256"
-          },
-          {
             "internalType": "uint256",
             "name": "sig",
             "type": "uint256"
@@ -713,21 +653,6 @@
     "inputs": [
       {
         "components": [
-          {
-            "internalType": "address",
-            "name": "keyManAddr",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "chainID",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "msgHash",
-            "type": "uint256"
-          },
           {
             "internalType": "uint256",
             "name": "sig",
@@ -795,21 +720,6 @@
     "inputs": [
       {
         "components": [
-          {
-            "internalType": "address",
-            "name": "keyManAddr",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "chainID",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "msgHash",
-            "type": "uint256"
-          },
           {
             "internalType": "uint256",
             "name": "sig",
@@ -950,21 +860,6 @@
       {
         "components": [
           {
-            "internalType": "address",
-            "name": "keyManAddr",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "chainID",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "msgHash",
-            "type": "uint256"
-          },
-          {
             "internalType": "uint256",
             "name": "sig",
             "type": "uint256"
@@ -1017,21 +912,6 @@
       {
         "components": [
           {
-            "internalType": "address",
-            "name": "keyManAddr",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "chainID",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "msgHash",
-            "type": "uint256"
-          },
-          {
             "internalType": "uint256",
             "name": "sig",
             "type": "uint256"
@@ -1083,21 +963,6 @@
     "inputs": [
       {
         "components": [
-          {
-            "internalType": "address",
-            "name": "keyManAddr",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "chainID",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "msgHash",
-            "type": "uint256"
-          },
           {
             "internalType": "uint256",
             "name": "sig",

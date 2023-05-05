@@ -8,11 +8,9 @@ use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 
-use crate::eth::SigData;
-
 use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default, MaxEncodedLen)]
 pub struct UpdateFlipSupply {
 	/// The signature handler for creating payload and inserting signature.
 	pub signature_handler: EthereumSignatureHandler,
@@ -20,16 +18,6 @@ pub struct UpdateFlipSupply {
 	pub new_total_supply: Uint,
 	/// The current state chain block number
 	pub state_chain_block_number: Uint,
-	/// The address of the state chain gatweay - to mint or burn tokens
-	pub state_chain_gateway_address: Address,
-}
-
-impl MaxEncodedLen for UpdateFlipSupply {
-	fn max_encoded_len() -> usize {
-		SigData::max_encoded_len() +
-			2 * <[u64; 4]>::max_encoded_len() +
-			<[u8; 20]>::max_encoded_len()
-	}
 }
 
 impl UpdateFlipSupply {
@@ -47,7 +35,6 @@ impl UpdateFlipSupply {
 				Self::abi_encoded_for_payload(
 					new_total_supply.clone().into(),
 					state_chain_block_number.clone().into(),
-					state_chain_gateway_address.into(),
 				),
 				key_manager_address,
 				state_chain_gateway_address.into(),
@@ -55,7 +42,6 @@ impl UpdateFlipSupply {
 			),
 			new_total_supply: new_total_supply.into(),
 			state_chain_block_number: state_chain_block_number.into(),
-			state_chain_gateway_address: state_chain_gateway_address.into(),
 		}
 	}
 
@@ -69,9 +55,6 @@ impl UpdateFlipSupply {
 				ethabi_param(
 					"sigData",
 					ParamType::Tuple(vec![
-						ParamType::Address,
-						ParamType::Uint(256),
-						ParamType::Uint(256),
 						ParamType::Uint(256),
 						ParamType::Uint(256),
 						ParamType::Address,
@@ -79,7 +62,6 @@ impl UpdateFlipSupply {
 				),
 				ethabi_param("newTotalSupply", ParamType::Uint(256)),
 				ethabi_param("stateChainBlockNumber", ParamType::Uint(256)),
-				ethabi_param("funder", ParamType::Address),
 			],
 		)
 	}
@@ -90,7 +72,6 @@ impl UpdateFlipSupply {
 				self.signature_handler.sig_data.tokenize(),
 				Token::Uint(self.new_total_supply),
 				Token::Uint(self.state_chain_block_number),
-				Token::Address(self.state_chain_gateway_address),
 			])
 			.expect(
 				r#"
@@ -100,19 +81,11 @@ impl UpdateFlipSupply {
 			)
 	}
 
-	fn abi_encoded_for_payload(
-		new_total_supply: Uint,
-		state_chain_block_number: Uint,
-		state_chain_gateway_address: Address,
-	) -> Vec<u8> {
+	fn abi_encoded_for_payload(new_total_supply: Uint, state_chain_block_number: Uint) -> Vec<u8> {
 		Self::get_function()
 			.short_signature()
 			.into_iter()
-			.chain(encode(&[
-				new_total_supply.tokenize(),
-				state_chain_block_number.tokenize(),
-				state_chain_gateway_address.tokenize(),
-			]))
+			.chain(encode(&[new_total_supply.tokenize(), state_chain_block_number.tokenize()]))
 			.collect()
 	}
 }
@@ -131,7 +104,8 @@ mod test_update_flip_supply {
 	// It uses a different ethabi to the CFE, so we test separately
 	fn just_load_the_contract() {
 		assert_ok!(ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/FLIP.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/StateChainGateway.json")
+				.as_ref(),
 		));
 	}
 
@@ -149,7 +123,8 @@ mod test_update_flip_supply {
 		const FAKE_SIG: [u8; 32] = asymmetrise([0xe1; 32]);
 
 		let flip_token = ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/FLIP.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/StateChainGateway.json")
+				.as_ref(),
 		)
 		.unwrap();
 
@@ -185,7 +160,7 @@ mod test_update_flip_supply {
 			// "Canoncial" encoding based on the abi definition above and using the ethabi crate:
 			flip_token_reference
 				.encode_input(&[
-					// sigData: SigData(address, uint, uint, uint, uint, address)
+					// sigData: SigData(uint, uint, address)
 					Token::Tuple(vec![
 						Token::Uint(FAKE_SIG.into()),
 						Token::Uint(NONCE.into()),
@@ -193,7 +168,6 @@ mod test_update_flip_supply {
 					]),
 					Token::Uint(NEW_TOTAL_SUPPLY.into()),
 					Token::Uint(STATE_CHAIN_BLOCK_NUMBER.into()),
-					Token::Address(FAKE_STATE_CHAIN_GATEWAY_ADDRESS.into()),
 				])
 				.unwrap()
 		);

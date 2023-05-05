@@ -13,7 +13,7 @@
       },
       {
         "internalType": "uint256",
-        "name": "genesisFunding",
+        "name": "genesisStake",
         "type": "uint256"
       },
       {
@@ -27,8 +27,8 @@
         "type": "address"
       },
       {
-        "internalType": "contract IKeyManager",
-        "name": "keyManager",
+        "internalType": "address",
+        "name": "genesisIssuer",
         "type": "address"
       }
     ],
@@ -65,24 +65,18 @@
     "inputs": [
       {
         "indexed": false,
-        "internalType": "uint256",
-        "name": "oldSupply",
-        "type": "uint256"
+        "internalType": "address",
+        "name": "oldIssuer",
+        "type": "address"
       },
       {
         "indexed": false,
-        "internalType": "uint256",
-        "name": "newSupply",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "stateChainBlockNumber",
-        "type": "uint256"
+        "internalType": "address",
+        "name": "newIssuer",
+        "type": "address"
       }
     ],
-    "name": "FlipSupplyUpdated",
+    "name": "IssuerUpdated",
     "type": "event"
   },
   {
@@ -108,19 +102,6 @@
       }
     ],
     "name": "Transfer",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "keyManager",
-        "type": "address"
-      }
-    ],
-    "name": "UpdatedKeyManager",
     "type": "event"
   },
   {
@@ -191,6 +172,24 @@
     "type": "function"
   },
   {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "burn",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "decimals",
     "outputs": [
@@ -228,32 +227,6 @@
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "getKeyManager",
-    "outputs": [
-      {
-        "internalType": "contract IKeyManager",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getLastSupplyUpdateBlockNumber",
-    "outputs": [
-      {
-        "internalType": "uint256",
-        "name": "",
-        "type": "uint256"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [
       {
         "internalType": "address",
@@ -274,6 +247,37 @@
         "type": "bool"
       }
     ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "issuer",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "account",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "mint",
+    "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
@@ -372,109 +376,12 @@
   {
     "inputs": [
       {
-        "components": [
-          {
-            "internalType": "address",
-            "name": "keyManAddr",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "chainID",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "msgHash",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "sig",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "nonce",
-            "type": "uint256"
-          },
-          {
-            "internalType": "address",
-            "name": "kTimesGAddress",
-            "type": "address"
-          }
-        ],
-        "internalType": "struct IShared.SigData",
-        "name": "sigData",
-        "type": "tuple"
-      },
-      {
-        "internalType": "uint256",
-        "name": "newTotalSupply",
-        "type": "uint256"
-      },
-      {
-        "internalType": "uint256",
-        "name": "stateChainBlockNumber",
-        "type": "uint256"
-      },
-      {
         "internalType": "address",
-        "name": "funder",
+        "name": "newIssuer",
         "type": "address"
       }
     ],
-    "name": "updateFlipSupply",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      {
-        "components": [
-          {
-            "internalType": "address",
-            "name": "keyManAddr",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "chainID",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "msgHash",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "sig",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "nonce",
-            "type": "uint256"
-          },
-          {
-            "internalType": "address",
-            "name": "kTimesGAddress",
-            "type": "address"
-          }
-        ],
-        "internalType": "struct IShared.SigData",
-        "name": "sigData",
-        "type": "tuple"
-      },
-      {
-        "internalType": "contract IKeyManager",
-        "name": "keyManager",
-        "type": "address"
-      }
-    ],
-    "name": "updateKeyManager",
+    "name": "updateIssuer",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"

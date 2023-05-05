@@ -126,7 +126,7 @@ mod test_set_comm_key_with_agg_key {
 				.function("setCommKeyWithAggKey")
 				.unwrap()
 				.encode_input(&[
-					// sigData: SigData(address, uint, uint, uint, uint, address)
+					// sigData: SigData(uint, uint, address)
 					Token::Tuple(vec![
 						Token::Uint(FAKE_SIG.into()),
 						Token::Uint(NONCE.into()),

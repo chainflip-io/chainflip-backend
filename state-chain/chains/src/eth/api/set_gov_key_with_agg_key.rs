@@ -128,7 +128,7 @@ mod test_set_gov_key_with_agg_key {
 				.function("setGovKeyWithAggKey")
 				.unwrap()
 				.encode_input(&[
-					// sigData: SigData(address, uint, uint, uint, uint, address)
+					// sigData: SigData(uint, uint, address)
 					Token::Tuple(vec![
 						Token::Uint(FAKE_SIG.into()),
 						Token::Uint(NONCE.into()),

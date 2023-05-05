@@ -1,7 +1,7 @@
 //! Definitions for the "registerRedemption" transaction.
 
 use crate::{
-	eth::{Ethereum, EthereumSignatureHandler, SigData, Tokenizable},
+	eth::{Ethereum, EthereumSignatureHandler, Tokenizable},
 	impl_api_call_eth, ApiCall, ChainCrypto,
 };
 
@@ -13,13 +13,13 @@ use sp_std::{prelude::*, vec};
 
 use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 
-/// Represents all the arguments required to build the call to StakeManager's 'requestClaim'
-/// function.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
+/// Represents all the arguments required to build the call to StateChainGateway's
+/// 'requestRedemption' function.
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default, MaxEncodedLen)]
 pub struct RegisterRedemption {
 	/// The signature handler for creating payload and inserting signature.
 	pub signature_handler: EthereumSignatureHandler,
-	/// The id (ie. Chainflip account Id) of the claimant.
+	/// The id (ie. Chainflip account Id) of the redeemer.
 	pub node_id: [u8; 32],
 	/// The amount being redeemed in Flipperinos (atomic FLIP units). 1 FLIP = 10^18 Flipperinos
 	pub amount: Uint,
@@ -27,15 +27,6 @@ pub struct RegisterRedemption {
 	pub address: Address,
 	/// The expiry duration in seconds.
 	pub expiry: Uint,
-}
-
-impl MaxEncodedLen for RegisterRedemption {
-	fn max_encoded_len() -> usize {
-		SigData::max_encoded_len()
-		+ 2 * <[u64; 4]>::max_encoded_len() // 2 x Uint
-		+ <[u8; 32]>::max_encoded_len() // 1 x [u8; 32]
-		+ <[u8; 20]>::max_encoded_len() // 1 x Address
-	}
 }
 
 impl RegisterRedemption {
@@ -200,7 +191,7 @@ mod test_register_redemption {
 			// "Canonical" encoding based on the abi definition above and using the ethabi crate:
 			register_redemption_reference
 				.encode_input(&[
-					// sigData: SigData(address, uint, uint, uint, uint, address)
+					// sigData: SigData(uint, uint, address)
 					Token::Tuple(vec![
 						Token::Uint(FAKE_SIG.into()),
 						Token::Uint(NONCE.into()),
