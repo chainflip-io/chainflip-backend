@@ -25,6 +25,17 @@ where
 		C::keygen(candidates, next_epoch_index);
 	}
 
+	/// Start all the key handovers for the vaults with the provided `candidates`.
+	fn key_handover(
+		sharing_participants: BTreeSet<Self::ValidatorId>,
+		new_candidates: BTreeSet<Self::ValidatorId>,
+		epoch_index: EpochIndex,
+	) {
+		A::key_handover(sharing_participants.clone(), new_candidates.clone(), epoch_index);
+		B::key_handover(sharing_participants.clone(), new_candidates.clone(), epoch_index);
+		C::key_handover(sharing_participants, new_candidates, epoch_index);
+	}
+
 	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>> {
 		let async_results = [A::status(), B::status(), C::status()];
 
@@ -39,6 +50,8 @@ where
 
 			if statuses.iter().all(|x| matches!(x, VaultStatus::KeygenComplete)) {
 				AsyncResult::Ready(VaultStatus::KeygenComplete)
+			} else if statuses.iter().all(|x| matches!(x, VaultStatus::KeyHandoverComplete)) {
+				AsyncResult::Ready(VaultStatus::KeyHandoverComplete)
 			} else if statuses.iter().all(|x| matches!(x, VaultStatus::RotationComplete)) {
 				AsyncResult::Ready(VaultStatus::RotationComplete)
 			} else {
@@ -104,6 +117,21 @@ mod tests {
 	}
 
 	#[test]
+	fn status_key_handover_complete_when_all_complete() {
+		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+			MockVaultRotatorA::key_handover_success();
+			MockVaultRotatorB::key_handover_success();
+			MockVaultRotatorC::key_handover_success();
+
+			assert_eq!(
+				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
+				),
+				AsyncResult::Ready(VaultStatus::KeyHandoverComplete)
+			);
+		});
+	}
+
+	#[test]
 	fn status_rotation_complete_when_all_complete() {
 		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
 			MockVaultRotatorA::keys_activated();
@@ -138,15 +166,30 @@ mod tests {
 
 	#[test]
 	fn all_ready_one_failed_is_failed() {
+		const OFFENDERS: [u64; 4] = [1u64, 2, 3, 4];
+		// Keygen
 		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
-			MockVaultRotatorA::failed([1, 2, 3, 4]);
+			MockVaultRotatorA::failed(OFFENDERS);
 			MockVaultRotatorB::keygen_success();
 			MockVaultRotatorC::keygen_success();
 
 			assert_eq!(
 				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
 				),
-				AsyncResult::Ready(VaultStatus::Failed(BTreeSet::from([1, 2, 3, 4])))
+				AsyncResult::Ready(VaultStatus::Failed(BTreeSet::from(OFFENDERS)))
+			);
+		});
+
+		// Key handover
+		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+			MockVaultRotatorA::failed(OFFENDERS);
+			MockVaultRotatorB::key_handover_success();
+			MockVaultRotatorC::key_handover_success();
+
+			assert_eq!(
+				AllVaultRotator::<MockVaultRotatorA, MockVaultRotatorB, MockVaultRotatorC>::status(
+				),
+				AsyncResult::Ready(VaultStatus::Failed(BTreeSet::from(OFFENDERS)))
 			);
 		});
 	}

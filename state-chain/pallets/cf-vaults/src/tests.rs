@@ -1,16 +1,19 @@
 use crate::{
-	mock::*, CeremonyId, Error, Event as PalletEvent, KeygenFailureVoters,
-	KeygenResolutionPendingSince, KeygenResponseTimeout, KeygenSuccessVoters, PalletOffence,
-	PendingVaultRotation, Vault, VaultRotationStatus, Vaults,
+	mock::*, CeremonyId, Error, Event as PalletEvent, KeyHandoverResolutionPendingSince,
+	KeygenFailureVoters, KeygenResolutionPendingSince, KeygenResponseTimeout, KeygenSuccessVoters,
+	PalletOffence, PendingVaultRotation, Vault, VaultRotationStatus, Vaults,
 };
-use cf_chains::eth::Ethereum;
+use cf_chains::{eth::Ethereum, mocks::MockAggKey};
 use cf_primitives::GENESIS_EPOCH;
 use cf_test_utilities::{last_event, maybe_last_event};
 use cf_traits::{
 	mocks::{ceremony_id_provider::MockCeremonyIdProvider, threshold_signer::MockThresholdSigner},
-	AccountRoleRegistry, AsyncResult, Chainflip, EpochInfo, VaultRotator, VaultStatus,
+	AccountRoleRegistry, AsyncResult, Chainflip, EpochInfo, KeyProvider, VaultRotator, VaultStatus,
 };
-use frame_support::{assert_noop, assert_ok, traits::Hooks};
+use frame_support::{
+	assert_noop, assert_ok, pallet_prelude::DispatchResultWithPostInfo, traits::Hooks,
+};
+use frame_system::pallet_prelude::BlockNumberFor;
 use sp_std::collections::btree_set::BTreeSet;
 
 pub type EthMockThresholdSigner = MockThresholdSigner<Ethereum, crate::mock::RuntimeCall>;
@@ -62,6 +65,42 @@ fn keygen_request_emitted() {
 }
 
 #[test]
+fn keygen_handover_request_emitted() {
+	let candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
+
+	new_test_ext().execute_with(|| {
+		let current_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index();
+		let next_epoch = current_epoch + 1;
+
+		PendingVaultRotation::<MockRuntime, _>::put(
+			VaultRotationStatus::KeygenVerificationComplete { new_public_key: Default::default() },
+		);
+		let ceremony_id = current_ceremony_id();
+
+		<VaultsPallet as VaultRotator>::key_handover(
+			candidates.clone(),
+			candidates.clone(),
+			next_epoch,
+		);
+
+		assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
+		assert_eq!(
+			last_event::<MockRuntime>(),
+			PalletEvent::<MockRuntime, _>::KeyHandoverRequest {
+				// It should be incremented when the request is made.
+				ceremony_id: ceremony_id + 1,
+				from_epoch: current_epoch,
+				key_to_share: VaultsPallet::current_epoch_key().unwrap().key,
+				sharing_participants: candidates.clone(),
+				receiving_participants: candidates,
+				to_epoch: next_epoch,
+			}
+			.into()
+		);
+	});
+}
+
+#[test]
 #[should_panic]
 fn start_panics_if_called_while_vault_rotation_in_progress() {
 	let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
@@ -94,8 +133,9 @@ fn keygen_failure(bad_candidates: &[<MockRuntime as Chainflip>::ValidatorId]) {
 
 	let ceremony_id = current_ceremony_id();
 
-	VaultsPallet::terminate_keygen_procedure(
+	VaultsPallet::terminate_rotation(
 		bad_candidates,
+		PalletOffence::FailedKeygen,
 		PalletEvent::KeygenFailure(ceremony_id),
 	);
 
@@ -321,6 +361,25 @@ fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 }
 
 #[test]
+fn cannot_report_key_handover_outcome_when_awaiting_keygen() {
+	new_test_ext().execute_with(|| {
+		<VaultsPallet as VaultRotator>::keygen(
+			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
+			<MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1,
+		);
+
+		assert_noop!(
+			VaultsPallet::report_key_handover_outcome(
+				RuntimeOrigin::signed(ALICE),
+				current_ceremony_id(),
+				Ok(NEW_AGG_PUB_KEY)
+			),
+			Error::<MockRuntime, _>::InvalidRotationStatus
+		);
+	});
+}
+
+#[test]
 fn keygen_report_success() {
 	new_test_ext().execute_with(|| {
 		let rotation_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
@@ -382,7 +441,7 @@ fn keygen_report_success() {
 			<VaultsPallet as VaultRotator>::status(),
 			AsyncResult::Pending
 		);
-		if let VaultRotationStatus::AwaitingKeygen { keygen_ceremony_id: keygen_ceremony_id_from_status, response_status, keygen_participants, new_epoch_index } = PendingVaultRotation::<MockRuntime, _>::get().unwrap() {
+		if let VaultRotationStatus::AwaitingKeygen { ceremony_id: keygen_ceremony_id_from_status, response_status, keygen_participants, new_epoch_index } = PendingVaultRotation::<MockRuntime, _>::get().unwrap() {
 			assert_eq!(keygen_ceremony_id, keygen_ceremony_id_from_status);
 			assert_eq!(response_status.success_votes().get(&NEW_AGG_PUB_KEY).expect("new key should have votes"), &3);
 			assert_eq!(keygen_participants, BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
@@ -397,6 +456,21 @@ fn keygen_report_success() {
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
 
 		assert!(matches!(PendingVaultRotation::<MockRuntime, _>::get().unwrap(), VaultRotationStatus::KeygenVerificationComplete { .. }));
+
+		// In this case we are not configured to run handover, so any values will do.
+		const HANDOVER_PARTICIPANTS: [u64; 2] = [ALICE, BOB];
+		VaultsPallet::key_handover(BTreeSet::from(HANDOVER_PARTICIPANTS), BTreeSet::from(HANDOVER_PARTICIPANTS), rotation_epoch);
+
+		let handover_ceremony_id = current_ceremony_id();
+		for p in HANDOVER_PARTICIPANTS {
+			assert_ok!(VaultsPallet::report_key_handover_outcome(
+				RuntimeOrigin::signed(p),
+				handover_ceremony_id,
+				Ok(NEW_AGG_PUB_KEY)
+			));
+		}
+
+		VaultsPallet::on_initialize(1);
 
 		// Called by validator pallet
 		VaultsPallet::activate();
@@ -414,7 +488,7 @@ fn keygen_report_success() {
 			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == NEW_AGG_PUB_KEY
 		));
 
-		assert_last_event!(crate::Event::KeygenVerificationSuccess { .. });
+		assert_last_event!(crate::Event::KeyHandoverSuccess { .. });
 
 		// Voting has been cleared.
 		assert_eq!(KeygenSuccessVoters::<MockRuntime, _>::iter_keys().next(), None);
@@ -485,6 +559,41 @@ fn keygen_report_failure() {
 	})
 }
 
+fn test_key_ceremony_timeout_period<PendingSince, ReportFn>(report_fn: ReportFn)
+where
+	PendingSince: frame_support::StorageValue<
+		BlockNumberFor<MockRuntime>,
+		Query = BlockNumberFor<MockRuntime>,
+	>,
+	ReportFn: Fn(
+		RuntimeOrigin,
+		CeremonyId,
+		Result<MockAggKey, BTreeSet<u64>>,
+	) -> DispatchResultWithPostInfo,
+{
+	let ceremony_id = current_ceremony_id();
+
+	assert_eq!(PendingSince::get(), 1);
+
+	assert_ok!(report_fn(
+		RuntimeOrigin::signed(ALICE),
+		ceremony_id,
+		Err(BTreeSet::from_iter([CHARLIE]))
+	));
+
+	// > 25 blocks later we should resolve an error.
+	assert!(PendingSince::exists());
+	VaultsPallet::on_initialize(1);
+	assert!(PendingSince::exists());
+	VaultsPallet::on_initialize(MOCK_KEYGEN_RESPONSE_TIMEOUT);
+	assert!(PendingSince::exists());
+	VaultsPallet::on_initialize(MOCK_KEYGEN_RESPONSE_TIMEOUT + 1);
+	assert!(!PendingSince::exists());
+
+	// Too many candidates failed to report, so we report nobody.
+	MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, vec![]);
+}
+
 #[test]
 fn test_keygen_timeout_period() {
 	new_test_ext().execute_with(|| {
@@ -492,27 +601,23 @@ fn test_keygen_timeout_period() {
 			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
 			GENESIS_EPOCH,
 		);
-		let ceremony_id = current_ceremony_id();
+		test_key_ceremony_timeout_period::<KeygenResolutionPendingSince<MockRuntime, _>, _>(
+			VaultsPallet::report_keygen_outcome,
+		)
+	});
+}
 
-		assert_eq!(KeygenResolutionPendingSince::<MockRuntime, _>::get(), 1);
-
-		assert_ok!(VaultsPallet::report_keygen_outcome(
-			RuntimeOrigin::signed(ALICE),
-			ceremony_id,
-			Err(BTreeSet::from_iter([CHARLIE]))
-		));
-
-		// > 25 blocks later we should resolve an error.
-		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
-		VaultsPallet::on_initialize(1);
-		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
-		VaultsPallet::on_initialize(MOCK_KEYGEN_RESPONSE_TIMEOUT);
-		assert!(KeygenResolutionPendingSince::<MockRuntime, _>::exists());
-		VaultsPallet::on_initialize(MOCK_KEYGEN_RESPONSE_TIMEOUT + 1);
-		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
-
-		// Too many candidates failed to report, so we report nobody.
-		MockOffenceReporter::assert_reported(PalletOffence::FailedKeygen, vec![]);
+#[test]
+fn test_key_handover_timeout_period() {
+	new_test_ext().execute_with(|| {
+		let candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
+		PendingVaultRotation::<MockRuntime, _>::put(
+			VaultRotationStatus::KeygenVerificationComplete { new_public_key: Default::default() },
+		);
+		<VaultsPallet as VaultRotator>::key_handover(candidates.clone(), candidates, 2);
+		test_key_ceremony_timeout_period::<KeyHandoverResolutionPendingSince<MockRuntime, _>, _>(
+			VaultsPallet::report_key_handover_outcome,
+		)
 	});
 }
 
@@ -523,6 +628,8 @@ fn vault_key_rotated() {
 		const TX_HASH: [u8; 4] = [0xab; 4];
 
 		let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
+
+		let rotation_epoch_index = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
 
 		assert_noop!(
 			VaultsPallet::vault_key_rotated(
@@ -536,9 +643,30 @@ fn vault_key_rotated() {
 
 		<VaultsPallet as VaultRotator>::keygen(btree_candidates.clone(), GENESIS_EPOCH);
 		let ceremony_id = current_ceremony_id();
-		VaultsPallet::trigger_keygen_verification(ceremony_id, NEW_AGG_PUB_KEY, btree_candidates);
+		VaultsPallet::trigger_keygen_verification(
+			ceremony_id,
+			NEW_AGG_PUB_KEY,
+			btree_candidates.clone(),
+		);
 
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+
+		// In this case we are not configured to run handover, so any values will do.
+		VaultsPallet::key_handover(
+			btree_candidates.clone(),
+			btree_candidates.clone(),
+			rotation_epoch_index,
+		);
+
+		for candidate in btree_candidates {
+			assert_ok!(VaultsPallet::report_key_handover_outcome(
+				RuntimeOrigin::signed(candidate),
+				current_ceremony_id(),
+				Ok(NEW_AGG_PUB_KEY)
+			));
+		}
+
+		VaultsPallet::on_initialize(1);
 
 		// validator pallet kicks this off
 		VaultsPallet::activate();
@@ -618,11 +746,9 @@ fn test_vault_key_rotated_externally() {
 #[test]
 fn key_unavailabe_on_activate_returns_governance_event() {
 	new_test_ext_no_key().execute_with(|| {
-		PendingVaultRotation::put(
-			VaultRotationStatus::<MockRuntime, _>::KeygenVerificationComplete {
-				new_public_key: NEW_AGG_PUB_KEY,
-			},
-		);
+		PendingVaultRotation::put(VaultRotationStatus::<MockRuntime, _>::KeyHandoverComplete {
+			new_public_key: NEW_AGG_PUB_KEY,
+		});
 
 		VaultsPallet::activate();
 

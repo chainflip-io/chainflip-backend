@@ -52,6 +52,7 @@ impl From<pallet_cf_vaults::PalletOffence> for Offence {
 	fn from(offences: pallet_cf_vaults::PalletOffence) -> Self {
 		match offences {
 			pallet_cf_vaults::PalletOffence::FailedKeygen => Self::ParticipateKeygenFailed,
+			pallet_cf_vaults::PalletOffence::FailedKeyHandover => Self::ParticipateKeygenFailed,
 		}
 	}
 }

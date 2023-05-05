@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_swapping, WeightInfo};
 use cf_chains::AnyChain;
-use cf_primitives::{Asset, AssetAmount};
+use cf_primitives::{Asset, AssetAmount, SwapOutput};
 use cf_traits::{
 	impl_mock_chainflip,
 	mocks::{
@@ -75,8 +75,8 @@ impl SwappingApi for MockSwappingApi {
 		_from: Asset,
 		_to: Asset,
 		swap_input: AssetAmount,
-	) -> Result<AssetAmount, DispatchError> {
-		Ok(swap_input)
+	) -> Result<SwapOutput, DispatchError> {
+		Ok(swap_input.into())
 	}
 }
 

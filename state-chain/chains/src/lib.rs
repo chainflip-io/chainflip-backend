@@ -44,6 +44,8 @@ pub mod mocks;
 pub trait Chain: Member + Parameter {
 	const NAME: &'static str;
 
+	const KEY_HANDOVER_IS_REQUIRED: bool = false;
+
 	type ChainBlockNumber: FullCodec
 		+ Member
 		+ Parameter

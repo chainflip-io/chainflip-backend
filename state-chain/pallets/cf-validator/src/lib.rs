@@ -9,6 +9,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+mod helpers;
+
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -75,6 +77,7 @@ type RuntimeRotationState<T> =
 pub enum RotationPhase<T: Config> {
 	Idle,
 	KeygensInProgress(RuntimeRotationState<T>),
+	KeyHandoversInProgress(RuntimeRotationState<T>),
 	ActivatingKeys(RuntimeRotationState<T>),
 	NewKeysActivated(RuntimeRotationState<T>),
 	SessionRotating(RuntimeRotationState<T>),
@@ -389,12 +392,15 @@ pub mod pallet {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
-							let new_authorities = rotation_state.authority_candidates();
-							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
-							T::VaultRotator::activate();
-							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
+							let authority_candidates = rotation_state.authority_candidates();
+							// We want to exclude nodes who have been banned from the key handover (but may not be in the authority_candidates)
+							let non_banned_current_authorities = rotation_state.filter_out_banned(Self::current_authorities());
+							T::VaultRotator::key_handover(helpers::select_sharing_participants(non_banned_current_authorities, &authority_candidates, block_number.unique_saturated_into()), authority_candidates, rotation_state.new_epoch_index);
+							Self::set_rotation_phase(RotationPhase::KeyHandoversInProgress(rotation_state));
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
+							// TODO: Punish a bit more here? Some of these nodes are already an authority and have failed to participate in handover.
+							// So given they're already not going to be in the set, excluding them from the set may not be enough punishment.
 							rotation_state.ban(offenders);
 
 							Self::start_vault_rotation(rotation_state);
@@ -408,11 +414,37 @@ pub mod pallet {
 								"Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}"
 							);
 							log::error!(target: "cf-validator", "Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}");
+							// TODO: We should put the chain into safe mode here.
 							Self::set_rotation_phase(RotationPhase::Idle);
 						},
 					};
 					T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
 				},
+				RotationPhase::KeyHandoversInProgress(rotation_state) => {
+					let num_primary_candidates = rotation_state.num_primary_candidates();
+					match T::VaultRotator::status() {
+						AsyncResult::Ready(VaultStatus::KeyHandoverComplete) => {
+							let new_authorities = rotation_state.authority_candidates();
+							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
+							T::VaultRotator::activate();
+							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
+						},
+						AsyncResult::Pending => {
+							log::debug!(target: "cf-validator", "awaiting key handover completion");
+						},
+						async_result => {
+							debug_assert!(
+								false,
+								"Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}"
+							);
+							log::error!(target: "cf-validator", "Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}");
+							// TODO: We should put the chain into safe mode here.
+							Self::set_rotation_phase(RotationPhase::Idle);
+						},
+					}
+					// TODO: Use correct weight
+					T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
+				}
 				RotationPhase::ActivatingKeys(rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {

@@ -151,8 +151,6 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 			Ok(())
 		});
 	} else {
-		// If we are not participating, just send an empty ceremony request (needed for ceremony id
-		// tracking)
 		multisig_client.update_latest_ceremony_id(ceremony_id);
 	}
 }
@@ -550,6 +548,58 @@ where
                                             signing_info,
                                         ).await;
                                     }
+                                    // ======= KEY HANDOVER =======
+                                    state_chain_runtime::RuntimeEvent::BitcoinVault(
+                                        pallet_cf_vaults::Event::KeyHandoverRequest {
+                                           ceremony_id,
+                                           key_to_share,
+                                           from_epoch,
+                                           sharing_participants,
+                                           receiving_participants,
+                                           to_epoch,
+                                        },
+                                    ) => {
+                                        eth_multisig_client.update_latest_ceremony_id(ceremony_id);
+                                        dot_multisig_client.update_latest_ceremony_id(ceremony_id);
+
+                                        if sharing_participants.contains(&account_id) || receiving_participants.contains(&account_id) {
+                                            let key_handover_result_future = btc_multisig_client.initiate_key_handover(ceremony_id, (from_epoch, key_to_share).into(), to_epoch, sharing_participants, receiving_participants);
+                                            let state_chain_client = state_chain_client.clone();
+                                            scope.spawn(async move {
+                                                let _result =
+                                                    state_chain_client
+                                                        .submit_signed_extrinsic(pallet_cf_vaults::Call::<
+                                                            state_chain_runtime::Runtime,
+                                                            BitcoinInstance,
+                                                        >::report_key_handover_outcome {
+                                                            ceremony_id,
+                                                            reported_outcome: key_handover_result_future
+                                                                .await
+                                                                .map(<BitcoinInstance as CryptoCompat<_, _>>::pubkey_to_aggkey)
+                                                                .map_err(|(bad_account_ids, _reason)| bad_account_ids),
+                                                        })
+                                                        .await;
+                                                Ok(())
+                                            });
+                                        } else {
+                                            btc_multisig_client.update_latest_ceremony_id(ceremony_id);
+                                        }
+                                    }
+                                    state_chain_runtime::RuntimeEvent::EthereumVault(
+                                        pallet_cf_vaults::Event::KeyHandoverRequest {
+                                           ..
+                                        },
+                                    ) => {
+                                        panic!("There should be no key handover requests made for Ethereum")
+                                    }
+                                    state_chain_runtime::RuntimeEvent::PolkadotVault(
+                                        pallet_cf_vaults::Event::KeyHandoverRequest {
+                                           ..
+                                        },
+                                    ) => {
+                                        panic!("There should be no key handover requests made for Polkadot")
+                                    }
+
                                     state_chain_runtime::RuntimeEvent::EthereumBroadcaster(
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
                                             broadcast_attempt_id,

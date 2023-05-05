@@ -100,6 +100,7 @@ type SecretShare<C> = <<C as CryptoScheme>::Point as ECPoint>::Scalar;
 type PublicKeyShares<C> = BTreeMap<AccountId, <C as CryptoScheme>::Point>;
 
 /// Holds state relevant to the role in the handover ceremony.
+#[derive(Debug)]
 pub enum ParticipantStatus<C: CryptoScheme> {
 	Sharing(SecretShare<C>, PublicKeyShares<C>),
 	/// This becomes `NonSharingReceivedKeys` after shares are broadcast
@@ -107,6 +108,7 @@ pub enum ParticipantStatus<C: CryptoScheme> {
 	NonSharingReceivedKeys(PublicKeyShares<C>),
 }
 
+#[derive(Debug)]
 pub struct ResharingContext<C: CryptoScheme> {
 	/// Participants who contribute their (existing) secret shares
 	pub sharing_participants: BTreeSet<AuthorityCount>,

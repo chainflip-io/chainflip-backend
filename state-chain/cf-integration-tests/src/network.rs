@@ -329,7 +329,7 @@ impl Engine {
 						Ok(threshold_signer.borrow_mut().propose_new_key()),
 					)
 					.unwrap_or_else(|_| {
-						panic!("should be able to report keygen outcome from node: {node_id}")
+						panic!("should be able to report keygen outcome: {node_id}")
 					});
 				}
 			}
@@ -341,7 +341,6 @@ impl Engine {
 					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
 						report_keygen_outcome_for_chain::<EthKeyComponents, SchnorrVerificationComponents, state_chain_runtime::Runtime, EthereumInstance>(*ceremony_id, participants, self.eth_threshold_signer.clone(), self.node_id.clone());
 				}
-
 				RuntimeEvent::PolkadotVault(
 					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
 						report_keygen_outcome_for_chain::<DotKeyComponents, PolkadotSignature, state_chain_runtime::Runtime, PolkadotInstance>(*ceremony_id, participants, self.dot_threshold_signer.clone(), self.node_id.clone());
@@ -350,6 +349,20 @@ impl Engine {
 				RuntimeEvent::BitcoinVault(
 					pallet_cf_vaults::Event::KeygenRequest {ceremony_id, participants, .. }) => {
 						report_keygen_outcome_for_chain::<BtcKeyComponents, cf_chains::btc::Signature, state_chain_runtime::Runtime, BitcoinInstance>(*ceremony_id, participants, self.btc_threshold_signer.clone(), self.node_id.clone());
+				}
+				RuntimeEvent::BitcoinVault(
+					pallet_cf_vaults::Event::KeyHandoverRequest {ceremony_id, sharing_participants, receiving_participants, to_epoch:_, from_epoch: _, key_to_share: _ }) => {
+						let all_participants = sharing_participants.union(receiving_participants).cloned().collect::<BTreeSet<_>>();
+						if all_participants.contains(&self.node_id) {
+							pallet_cf_vaults::Pallet::<state_chain_runtime::Runtime, BitcoinInstance>::report_key_handover_outcome(
+								RuntimeOrigin::signed(self.node_id.clone()),
+								*ceremony_id,
+								Ok(self.btc_threshold_signer.borrow_mut().current_agg_key()),
+							).unwrap_or_else(|_| {
+								panic!("should be able to report key handover outcome: {}", self.node_id)
+							});
+						}
+
 				}
 			);
 		}
