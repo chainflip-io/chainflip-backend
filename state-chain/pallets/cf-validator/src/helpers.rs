@@ -1,5 +1,4 @@
 use crate::Vec;
-use cf_primitives::EpochIndex;
 use nanorand::{Rng, WyRand};
 use sp_std::collections::btree_set::BTreeSet;
 
@@ -10,13 +9,13 @@ use sp_std::collections::btree_set::BTreeSet;
 pub fn select_sharing_participants<ValidatorId: PartialEq + Eq + Clone + Ord>(
 	old_authorities: BTreeSet<ValidatorId>,
 	new_authorities: &BTreeSet<ValidatorId>,
-	epoch_index: EpochIndex,
+	block_number: u64,
 ) -> BTreeSet<ValidatorId> {
 	assert!(!old_authorities.is_empty() && !new_authorities.is_empty());
 
-	fn shuffle<I: IntoIterator<Item = T>, T>(i: I, epoch_index: EpochIndex) -> Vec<T> {
+	fn shuffle<I: IntoIterator<Item = T>, T>(i: I, block_number: u64) -> Vec<T> {
 		let mut things: Vec<_> = i.into_iter().collect();
-		WyRand::new_seed(epoch_index as u64).shuffle(&mut things);
+		WyRand::new_seed(block_number).shuffle(&mut things);
 		things
 	}
 
@@ -24,10 +23,10 @@ pub fn select_sharing_participants<ValidatorId: PartialEq + Eq + Clone + Ord>(
 		cf_utilities::success_threshold_from_share_count(old_authorities.len() as u32) as usize;
 
 	let both = old_authorities.intersection(new_authorities);
-	let shuffled_both = shuffle(both, epoch_index);
+	let shuffled_both = shuffle(both, block_number);
 
 	let old_not_in_new = old_authorities.difference(new_authorities);
-	let shuffled_old_not_in_new = shuffle(old_not_in_new, epoch_index);
+	let shuffled_old_not_in_new = shuffle(old_not_in_new, block_number);
 
 	shuffled_both
 		.into_iter()

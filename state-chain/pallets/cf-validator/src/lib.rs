@@ -395,7 +395,7 @@ pub mod pallet {
 							let authority_candidates = rotation_state.authority_candidates();
 							// We want to exclude nodes who have been banned from the key handover (but may not be in the authority_candidates)
 							let non_banned_current_authorities = rotation_state.filter_out_banned(Self::current_authorities());
-							T::VaultRotator::key_handover(helpers::select_sharing_participants(non_banned_current_authorities, &authority_candidates, rotation_state.new_epoch_index), authority_candidates, rotation_state.new_epoch_index);
+							T::VaultRotator::key_handover(helpers::select_sharing_participants(non_banned_current_authorities, &authority_candidates, block_number.unique_saturated_into()), authority_candidates, rotation_state.new_epoch_index);
 							Self::set_rotation_phase(RotationPhase::KeyHandoversInProgress(rotation_state));
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
