@@ -11,7 +11,7 @@ use crate::{
 			BroadcastFailureReason, KeygenFailureReason, KeygenStageName, ParticipantStatus,
 			ResharingContext,
 		},
-		utils::find_frequent_element,
+		utils::{find_frequent_element, threshold_for_broadcast_verification},
 		KeygenResult, KeygenResultInfo,
 	},
 	crypto::ECScalar,
@@ -29,7 +29,6 @@ use client::{
 use itertools::Itertools;
 use sp_core::H256;
 use tracing::{debug, warn};
-use utilities::threshold_from_share_count;
 
 use crate::crypto::{CryptoScheme, ECPoint, KeyShare};
 
@@ -129,8 +128,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 			.collect();
 
 		let threshold =
-			threshold_from_share_count(self.resharing_context.sharing_participants.len() as u32)
-				as usize;
+			threshold_for_broadcast_verification(self.resharing_context.sharing_participants.len());
 
 		if pubkey_shares.len() <= threshold {
 			// Similar to broadcast verification stages, we are not able to report
