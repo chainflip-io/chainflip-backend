@@ -8,7 +8,7 @@ use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_support::traits::Hooks;
 
 benchmarks_instance_pallet! {
-	egress_assets {
+	destination_assets {
 		let n in 1u32 .. 254u32;
 		let mut batch = vec![];
 
@@ -74,7 +74,7 @@ benchmarks_instance_pallet! {
 	}
 
 	on_idle_with_nothing_to_send {
-	} : { let _ = crate::Pallet::<T, I>::on_idle(Default::default(), T::WeightInfo::egress_assets(2u32)); }
+	} : { let _ = crate::Pallet::<T, I>::on_idle(Default::default(), T::WeightInfo::destination_assets(2u32)); }
 
 	do_single_ingress {
 		let deposit_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();

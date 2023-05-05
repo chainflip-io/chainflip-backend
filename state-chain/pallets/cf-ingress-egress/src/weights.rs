@@ -30,7 +30,7 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_ingress_egress.
 pub trait WeightInfo {
-	fn egress_assets(n: u32, ) -> Weight;
+	fn destination_assets(n: u32, ) -> Weight;
 	fn egress_ccm(n: u32, ) -> Weight;
 	fn disable_asset_egress() -> Weight;
 	fn on_idle_with_nothing_to_send() -> Weight;
@@ -63,7 +63,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	// Storage: EthereumBroadcaster RequestCallbacks (r:0 w:1)
 	/// The range of component `n` is `[1, 254]`.
-	fn egress_assets(n: u32, ) -> Weight {
+	fn destination_assets(n: u32, ) -> Weight {
 		// Minimum execution time: 99_000 nanoseconds.
 		Weight::from_ref_time(122_044_142)
 			// Standard Error: 28_143
@@ -164,7 +164,7 @@ impl WeightInfo for () {
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	// Storage: EthereumBroadcaster RequestCallbacks (r:0 w:1)
 	/// The range of component `n` is `[1, 254]`.
-	fn egress_assets(n: u32, ) -> Weight {
+	fn destination_assets(n: u32, ) -> Weight {
 		// Minimum execution time: 99_000 nanoseconds.
 		Weight::from_ref_time(122_044_142)
 			// Standard Error: 28_143

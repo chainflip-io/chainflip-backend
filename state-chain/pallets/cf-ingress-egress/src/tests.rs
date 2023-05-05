@@ -308,7 +308,7 @@ fn on_idle_batch_size_is_limited_by_weight() {
 		// There's enough weights for 3 transactions, which are taken in FIFO order.
 		IngressEgress::on_idle(
 			1,
-			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(3) +
+			<Test as crate::Config<Instance1>>::WeightInfo::destination_assets(3) +
 				Weight::from_ref_time(1),
 		);
 
@@ -322,7 +322,7 @@ fn on_idle_batch_size_is_limited_by_weight() {
 		// Send another 3 requests.
 		IngressEgress::on_idle(
 			1,
-			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(3) +
+			<Test as crate::Config<Instance1>>::WeightInfo::destination_assets(3) +
 				Weight::from_ref_time(1),
 		);
 
@@ -355,7 +355,7 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 		// Does not panic if request queue is empty.
 		assert_eq!(
 			IngressEgress::on_idle(1, Weight::from_ref_time(1_000_000_000_000_000u64)),
-			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(0) +
+			<Test as crate::Config<Instance1>>::WeightInfo::destination_assets(0) +
 				<Test as crate::Config<Instance1>>::WeightInfo::egress_ccm(0)
 		);
 
@@ -380,7 +380,7 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 		);
 		assert_eq!(
 			IngressEgress::on_idle(1, Weight::from_ref_time(1_000_000_000_000_000u64)),
-			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(0) +
+			<Test as crate::Config<Instance1>>::WeightInfo::destination_assets(0) +
 				<Test as crate::Config<Instance1>>::WeightInfo::egress_ccm(0)
 		);
 
@@ -450,7 +450,7 @@ fn proof_address_pool_integrity() {
 		// Process all intents
 		IngressEgress::on_idle(
 			1,
-			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(3) +
+			<Test as crate::Config<Instance1>>::WeightInfo::destination_assets(3) +
 				Weight::from_ref_time(1),
 		);
 		for ingress in ingresses {
@@ -472,7 +472,7 @@ fn create_new_address_while_pool_is_empty() {
 			.collect::<Vec<_>>();
 		IngressEgress::on_idle(
 			1,
-			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(3) +
+			<Test as crate::Config<Instance1>>::WeightInfo::destination_assets(3) +
 				Weight::from_ref_time(1),
 		);
 		for ingress in ingresses {
@@ -484,7 +484,7 @@ fn create_new_address_while_pool_is_empty() {
 		assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 2);
 		IngressEgress::on_idle(
 			1,
-			<Test as crate::Config<Instance1>>::WeightInfo::egress_assets(2) +
+			<Test as crate::Config<Instance1>>::WeightInfo::destination_assets(2) +
 				Weight::from_ref_time(1),
 		);
 		IngressEgress::on_initialize(EXPIRY_BLOCK);

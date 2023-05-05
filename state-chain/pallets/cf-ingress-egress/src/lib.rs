@@ -309,7 +309,7 @@ pub mod pallet {
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			// Ensure we have enough weight to send an non-empty batch, and request queue isn't
 			// empty.
-			if remaining_weight.all_lte(T::WeightInfo::egress_assets(1u32)) ||
+			if remaining_weight.all_lte(T::WeightInfo::destination_assets(1u32)) ||
 				(ScheduledEgressFetchOrTransfer::<T, I>::decode_len() == Some(0) &&
 					ScheduledEgressCcm::<T, I>::decode_len() == Some(0))
 			{
@@ -318,17 +318,17 @@ pub mod pallet {
 
 			// Send fetch/transfer requests as a batch
 			let mut weights_left = remaining_weight;
-			let single_request_cost = T::WeightInfo::egress_assets(1u32)
-				.saturating_sub(T::WeightInfo::egress_assets(0u32));
+			let single_request_cost = T::WeightInfo::destination_assets(1u32)
+				.saturating_sub(T::WeightInfo::destination_assets(0u32));
 			let request_count = weights_left
-				.saturating_sub(T::WeightInfo::egress_assets(0u32))
+				.saturating_sub(T::WeightInfo::destination_assets(0u32))
 				.ref_time()
 				.checked_div(single_request_cost.ref_time())
 				.map(|x| x as u32);
 
 			weights_left = weights_left.saturating_sub(
 				with_transaction(|| Self::do_egress_scheduled_fetch_transfer(request_count))
-					.unwrap_or_else(|_| T::WeightInfo::egress_assets(0)),
+					.unwrap_or_else(|_| T::WeightInfo::destination_assets(0)),
 			);
 
 			// Send as many Cross chain messages as the weights allow.
@@ -347,7 +347,9 @@ pub mod pallet {
 
 		fn integrity_test() {
 			// Ensures the weights are benchmarked correctly.
-			assert!(T::WeightInfo::egress_assets(1).all_gte(T::WeightInfo::egress_assets(0)));
+			assert!(
+				T::WeightInfo::destination_assets(1).all_gte(T::WeightInfo::destination_assets(0))
+			);
 			assert!(T::WeightInfo::do_single_ingress().all_gte(Weight::zero()));
 		}
 	}
@@ -385,7 +387,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [on_success](Event::BatchBroadcastRequested)
-		#[pallet::weight(T::WeightInfo::egress_assets({
+		#[pallet::weight(T::WeightInfo::destination_assets({
 			let len = ScheduledEgressFetchOrTransfer::<T, I>::decode_len().unwrap_or_default() as u32;
 			match maybe_size {
 				Some(n) => min(*n, len),
@@ -546,7 +548,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					broadcast_id,
 					egress_ids,
 				});
-				TransactionOutcome::Commit(Ok(T::WeightInfo::egress_assets(
+				TransactionOutcome::Commit(Ok(T::WeightInfo::destination_assets(
 					fetch_batch_size.saturating_add(egress_batch_size),
 				)))
 			},

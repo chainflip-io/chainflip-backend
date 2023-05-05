@@ -859,7 +859,7 @@ impl CcmHandler for () {
 	fn on_ccm_ingress(
 		_source_asset: Asset,
 		_ingress_amount: AssetAmount,
-		_egress_asset: Asset,
+		_destination_asset: Asset,
 		_destination_address: ForeignChainAddress,
 		_message_metadata: CcmIngressMetadata,
 	) -> DispatchResult {
