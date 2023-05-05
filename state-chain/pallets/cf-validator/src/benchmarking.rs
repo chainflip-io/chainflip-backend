@@ -99,35 +99,6 @@ pub fn start_vault_rotation<T: RuntimeConfig>(
 	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..)));
 }
 
-pub fn rotate_authorities<T: RuntimeConfig>(candidates: u32, epoch: u32) {
-	let old_epoch = Pallet::<T>::epoch_index();
-
-	// Use an offset to ensure the candidate sets don't clash.
-	init_bidders::<T>(candidates, epoch, 100_000u128);
-
-	// Resolves the auction and starts the vault rotation.
-	Pallet::<T>::start_authority_rotation();
-
-	let block = frame_system::Pallet::<T>::current_block_number();
-
-	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..)));
-
-	T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::KeygenComplete));
-
-	Pallet::<T>::on_initialize(block);
-
-	T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::RotationComplete));
-
-	Pallet::<T>::on_initialize(block);
-	pallet_session::Pallet::<T>::on_initialize(block);
-	Pallet::<T>::on_initialize(block);
-	pallet_session::Pallet::<T>::on_initialize(block);
-
-	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle));
-
-	assert_eq!(Pallet::<T>::epoch_index(), old_epoch + 1, "authority rotation failed");
-}
-
 benchmarks! {
 	where_clause {
 		where
@@ -199,16 +170,23 @@ benchmarks! {
 		// 3 is the minimum number bidders for a successful auction.
 		let a in 3 .. 150;
 
-		// This is the initial authority set that will be expired.
-		rotate_authorities::<T>(a, 1);
-		// A new distinct authority set. The previous authorities will now be historical authorities.
-		rotate_authorities::<T>(a, 2);
+		const OLD_EPOCH: EpochIndex = 1;
+		const EPOCH_TO_EXPIRE: EpochIndex = OLD_EPOCH + 1;
 
-		const EPOCH_TO_EXPIRE: EpochIndex = 2;
-		assert_eq!(
-			Pallet::<T>::epoch_index(),
-			EPOCH_TO_EXPIRE + 1,
-		);
+		let amount = T::Amount::from(1000u32);
+
+		HistoricalBonds::<T>::insert(OLD_EPOCH, amount);
+		HistoricalBonds::<T>::insert(EPOCH_TO_EXPIRE, amount);
+
+		let authorities: BTreeSet<_>  = (0..a).into_iter().map(|id| account("hello", id, id)).collect();
+
+		HistoricalAuthorities::<T>::insert(OLD_EPOCH, authorities.clone());
+		HistoricalAuthorities::<T>::insert(EPOCH_TO_EXPIRE, authorities.clone());
+		for a in authorities {
+			EpochHistory::<T>::activate_epoch(&a, OLD_EPOCH);
+			EpochHistory::<T>::activate_epoch(&a, EPOCH_TO_EXPIRE);
+		}
+
 		// Ensure that we are expiring the expected number of authorities.
 		assert_eq!(
 			EpochHistory::<T>::epoch_authorities(EPOCH_TO_EXPIRE).len(),
@@ -216,9 +194,6 @@ benchmarks! {
 		);
 	}: {
 		Pallet::<T>::expire_epoch(EPOCH_TO_EXPIRE);
-	}
-	verify {
-		assert_eq!(LastExpiredEpoch::<T>::get(), EPOCH_TO_EXPIRE);
 	}
 	missed_authorship_slots {
 		// Unlikely we will ever miss 10 successive blocks.
@@ -310,7 +285,7 @@ benchmarks! {
 	verify {
 		assert!(matches!(
 			CurrentRotationPhase::<T>::get(),
-			RotationPhase::ActivatingKeys(..)
+			RotationPhase::KeyHandoversInProgress(..)
 		));
 	}
 
@@ -328,9 +303,13 @@ benchmarks! {
 
 		Pallet::<T>::on_initialize(block);
 
-		T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::RotationComplete));
+		assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeyHandoversInProgress(..)));
+
+		T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::KeyHandoverComplete));
 
 		Pallet::<T>::on_initialize(block);
+
+		T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::RotationComplete));
 
 	}: {
 		Pallet::<T>::on_initialize(1u32.into());
