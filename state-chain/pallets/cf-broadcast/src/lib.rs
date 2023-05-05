@@ -459,8 +459,8 @@ pub mod pallet {
 		///
 		/// - [InvalidPayload](Event::InvalidPayload)
 		/// - [InvalidBroadcastAttemptId](Event::InvalidBroadcastAttemptId)
-		#[pallet::weight(T::WeightInfo::signature_accepted())]
-		pub fn signature_accepted(
+		#[pallet::weight(T::WeightInfo::transaction_succeeded())]
+		pub fn transaction_succeeded(
 			origin: OriginFor<T>,
 			signature: ThresholdSignatureFor<T, I>,
 			signer_id: SignerIdFor<T, I>,

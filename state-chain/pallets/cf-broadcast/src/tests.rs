@@ -127,7 +127,7 @@ fn start_mock_broadcast() -> BroadcastAttemptId {
 
 // The happy path :)
 #[test]
-fn signature_accepted_results_in_refund_for_signer() {
+fn transaction_succeeded_results_in_refund_for_signer() {
 	new_test_ext().execute_with(|| {
 		let broadcast_attempt_id = start_mock_broadcast();
 		let tx_sig_request =
@@ -137,7 +137,7 @@ fn signature_accepted_results_in_refund_for_signer() {
 
 		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), 0);
 
-		assert_ok!(Broadcaster::signature_accepted(
+		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
 			MockThresholdSignature::default(),
 			nominee,
@@ -268,7 +268,7 @@ fn test_invalid_id_is_noop() {
 fn test_invalid_sigdata_is_noop() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			Broadcaster::signature_accepted(
+			Broadcaster::transaction_succeeded(
 				RawOrigin::Signed(
 					*<Test as Chainflip>::EpochInfo::current_authorities().first().unwrap()
 				)
@@ -285,7 +285,7 @@ fn test_invalid_sigdata_is_noop() {
 // the nodes who failed to broadcast should be report if we succeed, since success
 // indicates the failed nodes could have succeeded themselves.
 #[test]
-fn signature_accepted_after_timeout_reports_failed_nodes() {
+fn transaction_succeeded_after_timeout_reports_failed_nodes() {
 	new_test_ext().execute_with(|| {
 		start_mock_broadcast();
 
@@ -301,7 +301,7 @@ fn signature_accepted_after_timeout_reports_failed_nodes() {
 			Broadcaster::on_initialize(0);
 		}
 
-		assert_ok!(Broadcaster::signature_accepted(
+		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
 			MockThresholdSignature::default(),
 			Default::default(),
@@ -491,7 +491,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 		Broadcaster::threshold_sign_and_broadcast(MockApiCall::default(), Some(MockCallback));
 		let broadcast_attempt_id = start_mock_broadcast();
 		assert_eq!(RequestCallbacks::<Test, Instance1>::get(1), Some(MockCallback));
-		assert_ok!(Broadcaster::signature_accepted(
+		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
 			MockThresholdSignature::default(),
 			Default::default(),

@@ -366,7 +366,7 @@ where
 					let signature = unchecked.signature.unwrap().1;
 					if let MultiSignature::Sr25519(sig) = signature {
 						if monitored_signatures.contains(&sig.0) {
-							info!("Witnessing signature_accepted. signature: {sig:?}");
+							info!("Witnessing transaction_succeeded. signature: {sig:?}");
 
 							self.state_chain_client
 								.submit_signed_extrinsic(
@@ -376,7 +376,7 @@ where
 												pallet_cf_broadcast::Call::<
 													_,
 													PolkadotInstance,
-												>::signature_accepted {
+												>::transaction_succeeded {
 													signature: sig.clone(),
 													signer_id: self.vault_account.clone(),
 													tx_fee,

@@ -123,7 +123,7 @@ benchmarks_instance_pallet! {
 	verify {
 		assert!(AwaitingBroadcast::<T, I>::contains_key(broadcast_attempt_id.next_attempt()));
 	}
-	signature_accepted {
+	transaction_succeeded {
 		let caller: T::AccountId = whitelisted_caller();
 		let signer_id = SignerIdFor::<T, I>::benchmark_value();
 		SignatureToBroadcastIdLookup::<T, I>::insert(ThresholdSignatureFor::<T, I>::benchmark_value(), 1);
@@ -133,7 +133,7 @@ benchmarks_instance_pallet! {
 			attempt_count: 0
 		};
 		insert_transaction_broadcast_attempt::<T, I>(whitelisted_caller(), broadcast_attempt_id);
-		let call = Call::<T, I>::signature_accepted{
+		let call = Call::<T, I>::transaction_succeeded{
 			signature: ThresholdSignatureFor::<T, I>::benchmark_value(),
 			signer_id,
 			tx_fee: TransactionFeeFor::<T, I>::benchmark_value(),
@@ -143,6 +143,6 @@ benchmarks_instance_pallet! {
 	} : { call.dispatch_bypass_filter(T::EnsureWitnessedAtCurrentEpoch::successful_origin())? }
 	verify {
 		// We expect the unwrap to error if the extrinsic didn't fire an event - if an event has been emitted we reached the end of the extrinsic
-		let _ = frame_system::Pallet::<T>::events().pop().expect("No event has been emitted from the signature_accepted extrinsic").event;
+		let _ = frame_system::Pallet::<T>::events().pop().expect("No event has been emitted from the transaction_succeeded extrinsic").event;
 	}
 }

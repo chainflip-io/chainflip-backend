@@ -244,7 +244,7 @@ impl EthContractWitnesser for KeyManager {
 						.submit_signed_extrinsic(
 							pallet_cf_witnesser::Call::witness_at_epoch {
 								call: Box::new(
-									pallet_cf_broadcast::Call::<_, EthereumInstance>::signature_accepted {
+									pallet_cf_broadcast::Call::<_, EthereumInstance>::transaction_succeeded {
 										signature: SchnorrVerificationComponents {
 											s: sig_data.sig.into(),
 											k_times_g_address: sig_data.k_times_g_address.into(),
