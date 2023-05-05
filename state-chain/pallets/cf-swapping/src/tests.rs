@@ -61,13 +61,13 @@ fn generate_test_swaps() -> Vec<Swap> {
 
 fn insert_swaps(swaps: &[Swap]) {
 	for (relayer_id, swap) in swaps.iter().enumerate() {
-		if let SwapType::Swap(egress_address) = &swap.swap_type {
+		if let SwapType::Swap(destination_address) = &swap.swap_type {
 			<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
 				ForeignChainAddress::Eth([2; 20]),
 				swap.from,
 				swap.to,
 				swap.amount,
-				egress_address.clone(),
+				destination_address.clone(),
 				relayer_id as u64,
 				2,
 			);
@@ -105,8 +105,8 @@ fn process_all_swaps() {
 			.map(|swap| MockEgressParameter::<AnyChain>::Swap {
 				asset: swap.to,
 				amount: swap.amount,
-				egress_address: if let SwapType::Swap(egress_address) = swap.swap_type {
-					egress_address
+				destination_address: if let SwapType::Swap(destination_address) = swap.swap_type {
+					destination_address
 				} else {
 					ForeignChainAddress::Eth(Default::default())
 				},
@@ -162,7 +162,7 @@ fn expect_earned_fees_to_be_recorded() {
 
 #[test]
 #[should_panic]
-fn cannot_swap_with_incorrect_egress_address_type() {
+fn cannot_swap_with_incorrect_destination_address_type() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 1_u64;
 		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
@@ -269,7 +269,7 @@ fn can_swap_using_witness_origin() {
 			crate::Event::<Test>::SwapScheduledByWitnesser {
 				swap_id: 1,
 				ingress_amount: 1_000,
-				egress_address: EncodedAddress::Eth(Default::default()),
+				destination_address: EncodedAddress::Eth(Default::default()),
 			},
 		));
 	});
@@ -297,7 +297,7 @@ fn swap_expires() {
 			deposit_address: MockAddressConverter::try_from_encoded_address(deposit_address).unwrap(),
 			source_asset: Asset::Eth,
 			destination_asset: Asset::Usdc,
-			egress_address: ForeignChainAddress::Eth(Default::default()),
+			destination_address: ForeignChainAddress::Eth(Default::default()),
 			relayer_commission_bps: 0,
 			relayer_id: ALICE,
 			message_metadata: None,
@@ -470,7 +470,7 @@ fn can_process_ccms_via_swap_intent() {
 				source_asset: Asset::Dot,
 				ingress_amount,
 				destination_asset: Asset::Eth,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
 			})
 		);
@@ -506,7 +506,7 @@ fn can_process_ccms_via_swap_intent() {
 			vec![MockEgressParameter::Ccm {
 				asset: Asset::Eth,
 				amount: ingress_amount - gas_budget,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x01],
 				refund_address: ForeignChainAddress::Dot([0x01; 32]),
 			},]
@@ -556,7 +556,7 @@ fn can_process_ccms_via_extrinsic() {
 				source_asset: Asset::Btc,
 				ingress_amount,
 				destination_asset: Asset::Usdc,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
 			})
 		);
@@ -591,7 +591,7 @@ fn can_process_ccms_via_extrinsic() {
 			vec![MockEgressParameter::Ccm {
 				asset: Asset::Usdc,
 				amount: ingress_amount - gas_budget,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x02],
 				refund_address: ForeignChainAddress::Dot([0x02; 32]),
 			},]
@@ -610,7 +610,7 @@ fn can_process_ccms_via_extrinsic() {
 				principal_swap_id: Some(1),
 				gas_swap_id: Some(2),
 				ingress_amount,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::Swapping(
@@ -648,7 +648,7 @@ fn can_handle_ccms_with_gas_asset_as_ingress() {
 				source_asset: Asset::Eth,
 				ingress_amount,
 				destination_asset: Asset::Usdc,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
 			})
 		);
@@ -677,7 +677,7 @@ fn can_handle_ccms_with_gas_asset_as_ingress() {
 			vec![MockEgressParameter::Ccm {
 				asset: Asset::Usdc,
 				amount: ingress_amount - gas_budget,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x00],
 				refund_address: ForeignChainAddress::Eth([0x01; 20]),
 			},]
@@ -696,7 +696,7 @@ fn can_handle_ccms_with_gas_asset_as_ingress() {
 				principal_swap_id: Some(1),
 				gas_swap_id: None,
 				ingress_amount,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::Swapping(
@@ -735,7 +735,7 @@ fn can_handle_ccms_with_principal_asset_as_ingress() {
 				source_asset: Asset::Usdc,
 				ingress_amount,
 				destination_asset: Asset::Usdc,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
 			})
 		);
@@ -764,7 +764,7 @@ fn can_handle_ccms_with_principal_asset_as_ingress() {
 			vec![MockEgressParameter::Ccm {
 				asset: Asset::Usdc,
 				amount: ingress_amount - gas_budget,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x00],
 				refund_address: ForeignChainAddress::Eth([0x01; 20]),
 			},]
@@ -783,7 +783,7 @@ fn can_handle_ccms_with_principal_asset_as_ingress() {
 				principal_swap_id: None,
 				gas_swap_id: Some(1),
 				ingress_amount,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::Swapping(
@@ -832,7 +832,7 @@ fn can_handle_ccms_with_no_swaps_needed() {
 			vec![MockEgressParameter::Ccm {
 				asset: Asset::Eth,
 				amount: ingress_amount - gas_budget,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x00],
 				refund_address: ForeignChainAddress::Eth([0x01; 20]),
 			},]
@@ -851,7 +851,7 @@ fn can_handle_ccms_with_no_swaps_needed() {
 				principal_swap_id: None,
 				gas_swap_id: None,
 				ingress_amount,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 			},
 		));
 	});

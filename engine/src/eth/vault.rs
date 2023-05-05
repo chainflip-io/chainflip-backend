@@ -151,7 +151,7 @@ impl EthContractWitnesser for Vault {
 					from: Asset::Eth,
 					to: Asset::try_from(destination_token).map_err(anyhow::Error::msg)?,
 					ingress_amount: amount,
-					egress_address: EncodedAddress::from_chain_bytes(
+					destination_address: EncodedAddress::from_chain_bytes(
 						destination_chain.try_into().map_err(anyhow::Error::msg)?,
 						destination_address.0,
 					)
@@ -172,7 +172,7 @@ impl EthContractWitnesser for Vault {
 						.ok_or(anyhow::anyhow!("Unknown ETH source token"))?,
 					to: Asset::try_from(destination_token).map_err(anyhow::Error::msg)?,
 					ingress_amount: amount,
-					egress_address: EncodedAddress::from_chain_bytes(
+					destination_address: EncodedAddress::from_chain_bytes(
 						destination_chain.try_into().map_err(anyhow::Error::msg)?,
 						destination_address.0,
 					)
@@ -192,7 +192,7 @@ impl EthContractWitnesser for Vault {
 					ingress_amount: amount,
 					destination_asset: Asset::try_from(destination_token)
 						.map_err(anyhow::Error::msg)?,
-					egress_address: EncodedAddress::from_chain_bytes(
+					destination_address: EncodedAddress::from_chain_bytes(
 						destination_chain.try_into().map_err(anyhow::Error::msg)?,
 						destination_address.0,
 					)
@@ -225,7 +225,7 @@ impl EthContractWitnesser for Vault {
 					ingress_amount: amount,
 					destination_asset: Asset::try_from(destination_token)
 						.map_err(anyhow::Error::msg)?,
-					egress_address: EncodedAddress::from_chain_bytes(
+					destination_address: EncodedAddress::from_chain_bytes(
 						destination_chain.try_into().map_err(anyhow::Error::msg)?,
 						destination_address.0,
 					)

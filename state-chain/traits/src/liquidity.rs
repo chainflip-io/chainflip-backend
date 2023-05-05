@@ -11,7 +11,7 @@ pub trait SwapIntentHandler {
 		from: Asset,
 		to: Asset,
 		amount: AssetAmount,
-		egress_address: ForeignChainAddress,
+		destination_address: ForeignChainAddress,
 		relayer_id: Self::AccountId,
 		relayer_commission_bps: BasisPoints,
 	);
@@ -61,7 +61,7 @@ impl<T: frame_system::Config> SwapIntentHandler for T {
 		_from: Asset,
 		_to: Asset,
 		_amount: AssetAmount,
-		_egress_address: ForeignChainAddress,
+		_destination_address: ForeignChainAddress,
 		_relayer_id: Self::AccountId,
 		_relayer_commission_bps: BasisPoints,
 	) {

@@ -430,7 +430,7 @@ fn can_process_ccm_via_extrinsic_intent() {
 			source_asset: Asset::Flip,
 			ingress_amount,
 			destination_asset: Asset::Usdc,
-			egress_address: EncodedAddress::Eth([0x02; 20]),
+			destination_address: EncodedAddress::Eth([0x02; 20]),
 			message_metadata: message,
 		}));
 		let current_epoch = Validator::current_epoch();

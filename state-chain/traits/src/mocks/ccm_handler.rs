@@ -19,7 +19,7 @@ pub struct CcmRequest {
 	pub source_asset: Asset,
 	pub ingress_amount: AssetAmount,
 	pub destination_asset: Asset,
-	pub egress_address: ForeignChainAddress,
+	pub destination_address: ForeignChainAddress,
 	pub message_metadata: CcmIngressMetadata,
 }
 
@@ -34,7 +34,7 @@ impl CcmHandler for MockCcmHandler {
 		source_asset: Asset,
 		ingress_amount: AssetAmount,
 		destination_asset: Asset,
-		egress_address: ForeignChainAddress,
+		destination_address: ForeignChainAddress,
 		message_metadata: CcmIngressMetadata,
 	) -> DispatchResult {
 		<Self as MockPalletStorage>::mutate_value(CCM_HANDLER_PREFIX, |ccm_requests| {
@@ -46,7 +46,7 @@ impl CcmHandler for MockCcmHandler {
 					source_asset,
 					ingress_amount,
 					destination_asset,
-					egress_address,
+					destination_address,
 					message_metadata,
 				});
 			})

@@ -64,7 +64,7 @@ pub struct SwapRequestParams {
 	// until we know which kind of address to expect (based
 	// on destination_asset)
 	/// Egress asset address to receive funds after the swap
-	pub egress_address: String,
+	pub destination_address: String,
 	/// Commission to the relayer in base points
 	pub relayer_commission: u16,
 }

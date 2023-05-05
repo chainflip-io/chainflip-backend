@@ -41,7 +41,7 @@ pub enum FetchOrTransfer<C: Chain> {
 	Transfer {
 		egress_id: EgressId,
 		asset: C::ChainAsset,
-		egress_address: C::ChainAccount,
+		destination_address: C::ChainAccount,
 		amount: C::ChainAmount,
 	},
 }
@@ -61,7 +61,7 @@ pub(crate) struct CrossChainMessage<C: Chain> {
 	pub egress_id: EgressId,
 	pub asset: C::ChainAsset,
 	pub amount: C::ChainAmount,
-	pub egress_address: C::ChainAccount,
+	pub destination_address: C::ChainAccount,
 	pub message: Vec<u8>,
 	// The sender of the ingress transaction.
 	pub source_address: ForeignChainAddress,
@@ -131,7 +131,7 @@ pub mod pallet {
 	pub enum IntentAction<AccountId> {
 		Swap {
 			destination_asset: Asset,
-			egress_address: ForeignChainAddress,
+			destination_address: ForeignChainAddress,
 			relayer_id: AccountId,
 			relayer_commission_bps: BasisPoints,
 		},
@@ -140,7 +140,7 @@ pub mod pallet {
 		},
 		CcmTransfer {
 			destination_asset: Asset,
-			egress_address: ForeignChainAddress,
+			destination_address: ForeignChainAddress,
 			message_metadata: CcmIngressMetadata,
 		},
 	}
@@ -275,7 +275,7 @@ pub mod pallet {
 			id: EgressId,
 			asset: TargetChainAsset<T, I>,
 			amount: AssetAmount,
-			egress_address: TargetChainAccount<T, I>,
+			destination_address: TargetChainAccount<T, I>,
 		},
 		CcmBroadcastRequested {
 			broadcast_id: BroadcastId,
@@ -519,11 +519,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				FetchOrTransfer::<T::TargetChain>::Transfer {
 					asset,
 					amount,
-					egress_address,
+					destination_address,
 					egress_id,
 				} => {
 					egress_ids.push(egress_id);
-					egress_params.push(TransferAssetParams { asset, amount, to: egress_address });
+					egress_params.push(TransferAssetParams {
+						asset,
+						amount,
+						to: destination_address,
+					});
 				},
 			}
 		}
@@ -586,7 +590,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				TransferAssetParams {
 					asset: ccm.asset,
 					amount: ccm.amount,
-					to: ccm.egress_address,
+					to: ccm.destination_address,
 				},
 				ccm.source_address,
 				ccm.message,
@@ -637,7 +641,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			IntentAction::LiquidityProvision { lp_account } =>
 				T::LpBalance::try_credit_account(&lp_account, asset.into(), amount.into())?,
 			IntentAction::Swap {
-				egress_address,
+				destination_address,
 				destination_asset,
 				relayer_id,
 				relayer_commission_bps,
@@ -646,18 +650,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				asset.into(),
 				destination_asset,
 				amount.into(),
-				egress_address,
+				destination_address,
 				relayer_id,
 				relayer_commission_bps,
 			),
-			IntentAction::CcmTransfer { destination_asset, egress_address, message_metadata } =>
-				T::CcmHandler::on_ccm_ingress(
-					asset.into(),
-					amount.into(),
-					destination_asset,
-					egress_address,
-					message_metadata,
-				)?,
+			IntentAction::CcmTransfer {
+				destination_asset,
+				destination_address,
+				message_metadata,
+			} => T::CcmHandler::on_ccm_ingress(
+				asset.into(),
+				amount.into(),
+				destination_asset,
+				destination_address,
+				message_metadata,
+			)?,
 		};
 
 		T::IngressHandler::on_ingress_completed(
@@ -731,7 +738,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 	fn schedule_egress(
 		asset: TargetChainAsset<T, I>,
 		amount: TargetChainAmount<T, I>,
-		egress_address: TargetChainAccount<T, I>,
+		destination_address: TargetChainAccount<T, I>,
 		maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId {
 		let egress_counter = EgressIdCounter::<T, I>::mutate(|id| {
@@ -745,7 +752,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 					egress_id,
 					asset,
 					amount,
-					egress_address: egress_address.clone(),
+					destination_address: destination_address.clone(),
 					message,
 					refund_address,
 					source_address,
@@ -754,7 +761,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 				T::TargetChain,
 			>::Transfer {
 				asset,
-				egress_address: egress_address.clone(),
+				destination_address: destination_address.clone(),
 				amount,
 				egress_id,
 			}),
@@ -764,7 +771,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 			id: egress_id,
 			asset,
 			amount: amount.into(),
-			egress_address,
+			destination_address,
 		});
 
 		egress_id
@@ -795,7 +802,7 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 	fn request_swap_deposit_address(
 		source_asset: TargetChainAsset<T, I>,
 		destination_asset: Asset,
-		egress_address: ForeignChainAddress,
+		destination_address: ForeignChainAddress,
 		relayer_commission_bps: BasisPoints,
 		relayer_id: T::AccountId,
 		message_metadata: Option<CcmIngressMetadata>,
@@ -805,12 +812,12 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 			match message_metadata {
 				Some(msg) => IntentAction::CcmTransfer {
 					destination_asset,
-					egress_address,
+					destination_address,
 					message_metadata: msg,
 				},
 				None => IntentAction::Swap {
 					destination_asset,
-					egress_address,
+					destination_address,
 					relayer_commission_bps,
 					relayer_id,
 				},

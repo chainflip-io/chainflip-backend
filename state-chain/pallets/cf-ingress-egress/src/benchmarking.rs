@@ -12,14 +12,14 @@ benchmarks_instance_pallet! {
 		let n in 1u32 .. 254u32;
 		let mut batch = vec![];
 
-		let egress_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
+		let destination_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
 		let destination_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
 		let ingress_fetch_id: <<T as Config<I>>::TargetChain as Chain>::IngressFetchId = BenchmarkValue::benchmark_value();
 
 		// We combine fetch and egress into a single variable, assuming the weight cost is similar.
 		for i in 0..n {
 			if i % 2 == 0 {
-				FetchParamDetails::<T, I>::insert(i as u64, (ingress_fetch_id, egress_address.clone()));
+				FetchParamDetails::<T, I>::insert(i as u64, (ingress_fetch_id, destination_address.clone()));
 				batch.push(FetchOrTransfer::Fetch {
 					channel_id: i as u64,
 					asset: destination_asset,
@@ -29,7 +29,7 @@ benchmarks_instance_pallet! {
 					egress_id: (ForeignChain::Ethereum, i as u64),
 					asset: destination_asset,
 					amount: BenchmarkValue::benchmark_value(),
-					egress_address: egress_address.clone(),
+					destination_address: destination_address.clone(),
 				});
 			}
 		}
@@ -44,14 +44,14 @@ benchmarks_instance_pallet! {
 		let n in 1u32 .. 254u32;
 		let mut ccms = vec![];
 
-		let egress_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
+		let destination_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
 		let destination_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
 		for i in 0..n {
 			ccms.push(CrossChainMessage {
 				egress_id: (ForeignChain::Ethereum, 1),
 				asset: destination_asset,
 				amount: BenchmarkValue::benchmark_value(),
-				egress_address: egress_address.clone(),
+				destination_address: destination_address.clone(),
 				message: vec![0x00, 0x01, 0x02, 0x03],
 				refund_address: ForeignChainAddress::Eth(Default::default()),
 				source_address: ForeignChainAddress::Eth([0xcf; 20]),

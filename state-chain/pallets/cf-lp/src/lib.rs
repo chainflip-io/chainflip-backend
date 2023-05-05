@@ -107,7 +107,7 @@ pub mod pallet {
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
-			egress_address: EncodedAddress,
+			destination_address: EncodedAddress,
 		},
 		LpTtlSet {
 			ttl: T::BlockNumber,
@@ -193,22 +193,23 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			amount: AssetAmount,
 			asset: Asset,
-			egress_address: EncodedAddress,
+			destination_address: EncodedAddress,
 		) -> DispatchResult {
 			if amount > 0 {
 				T::SystemState::ensure_no_maintenance()?;
 				let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-				let egress_address_internal = T::AddressConverter::try_from_encoded_address(
-					egress_address.clone(),
-				)
-				.map_err(|_| {
-					DispatchError::Other("Invalid Egress Address, cannot decode the address")
-				})?;
+				let destination_address_internal =
+					T::AddressConverter::try_from_encoded_address(destination_address.clone())
+						.map_err(|_| {
+							DispatchError::Other(
+								"Invalid Egress Address, cannot decode the address",
+							)
+						})?;
 
 				// Check validity of Chain and Asset
 				ensure!(
-					ForeignChain::from(egress_address_internal.clone()) ==
+					ForeignChain::from(destination_address_internal.clone()) ==
 						ForeignChain::from(asset),
 					Error::<T>::InvalidEgressAddress
 				);
@@ -216,14 +217,18 @@ pub mod pallet {
 				// Debit the asset from the account.
 				Self::try_debit_account(&account_id, asset, amount)?;
 
-				let egress_id =
-					T::EgressHandler::schedule_egress(asset, amount, egress_address_internal, None);
+				let egress_id = T::EgressHandler::schedule_egress(
+					asset,
+					amount,
+					destination_address_internal,
+					None,
+				);
 
 				Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
 					egress_id,
 					asset,
 					amount,
-					egress_address,
+					destination_address,
 				});
 			}
 			Ok(())

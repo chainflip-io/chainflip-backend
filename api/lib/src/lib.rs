@@ -349,7 +349,7 @@ pub async fn request_swap_deposit_address(
 	state_chain_settings: &settings::StateChain,
 	source_asset: Asset,
 	destination_asset: Asset,
-	egress_address: EncodedAddress,
+	destination_address: EncodedAddress,
 	relayer_commission_bps: BasisPoints,
 	message_metadata: Option<CcmIngressMetadata>,
 ) -> Result<EncodedAddress> {
@@ -358,7 +358,7 @@ pub async fn request_swap_deposit_address(
 		pallet_cf_swapping::Call::request_swap_deposit_address {
 			source_asset,
 			destination_asset,
-			egress_address,
+			destination_address,
 			relayer_commission_bps,
 			message_metadata,
 		},

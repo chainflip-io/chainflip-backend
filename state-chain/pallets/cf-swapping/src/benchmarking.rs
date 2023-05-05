@@ -32,7 +32,7 @@ benchmarks! {
 		let call = Call::<T>::request_swap_deposit_address {
 			source_asset: Asset::Eth,
 			destination_asset: Asset::Usdc,
-			egress_address: EncodedAddress::benchmark_value(),
+			destination_address: EncodedAddress::benchmark_value(),
 			relayer_commission_bps: 0,
 			message_metadata: None,
 		};
@@ -76,7 +76,7 @@ benchmarks! {
 			from: Asset::Usdc,
 			to: Asset::Eth,
 			ingress_amount: 1_000,
-			egress_address: EncodedAddress::benchmark_value()
+			destination_address: EncodedAddress::benchmark_value()
 		};
 	}: {
 		call.dispatch_bypass_filter(origin)?;
@@ -103,7 +103,7 @@ benchmarks! {
 			source_asset: Asset::Usdc,
 			ingress_amount: 1_000,
 			destination_asset: Asset::Eth,
-			egress_address: EncodedAddress::benchmark_value(),
+			destination_address: EncodedAddress::benchmark_value(),
 			message_metadata: metadata,
 		};
 	}: {
@@ -136,7 +136,7 @@ benchmarks! {
 			let call = Call::<T>::request_swap_deposit_address{
 				source_asset: Asset::Usdc,
 				destination_asset: Asset::Eth,
-				egress_address: EncodedAddress::Eth(Default::default()),
+				destination_address: EncodedAddress::Eth(Default::default()),
 				relayer_commission_bps: Default::default(),
 				message_metadata: None,
 			};

@@ -25,7 +25,7 @@ pub trait Rpc {
 		&self,
 		amount: AssetAmount,
 		asset: Asset,
-		egress_address: &str,
+		destination_address: &str,
 	) -> Result<String, Error>;
 
 	#[method(name = "mintRangeOrder")]
@@ -78,17 +78,17 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		amount: AssetAmount,
 		asset: Asset,
-		egress_address: &str,
+		destination_address: &str,
 	) -> Result<String, Error> {
 		if amount == 0 {
 			return Err(Error::Custom("Invalid amount".to_string()))
 		}
 
-		let egress_address =
-			chainflip_api::clean_foreign_chain_address(asset.into(), egress_address)
+		let destination_address =
+			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)
 				.map_err(|e| Error::Custom(e.to_string()))?;
 
-		lp::withdraw_asset(&self.state_chain_settings, amount, asset, egress_address)
+		lp::withdraw_asset(&self.state_chain_settings, amount, asset, destination_address)
 			.await
 			.map(|(_, id)| id.to_string())
 			.map_err(|e| Error::Custom(e.to_string()))

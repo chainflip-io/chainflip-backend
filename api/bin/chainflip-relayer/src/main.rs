@@ -22,7 +22,7 @@ pub trait Rpc {
 		&self,
 		source_asset: Asset,
 		destination_asset: Asset,
-		egress_address: String,
+		destination_address: String,
 		relayer_commission_bps: BasisPoints,
 		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<String, Error>;
@@ -49,7 +49,7 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		source_asset: Asset,
 		destination_asset: Asset,
-		egress_address: String,
+		destination_address: String,
 		relayer_commission_bps: BasisPoints,
 		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<String, Error> {
@@ -57,7 +57,7 @@ impl RpcServer for RpcServerImpl {
 			&self.state_chain_settings,
 			source_asset,
 			destination_asset,
-			clean_foreign_chain_address(destination_asset.into(), &egress_address)?,
+			clean_foreign_chain_address(destination_asset.into(), &destination_address)?,
 			relayer_commission_bps,
 			message_metadata,
 		)

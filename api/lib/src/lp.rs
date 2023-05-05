@@ -49,11 +49,11 @@ pub async fn withdraw_asset(
 	state_chain_settings: &settings::StateChain,
 	amount: AssetAmount,
 	asset: Asset,
-	egress_address: EncodedAddress,
+	destination_address: EncodedAddress,
 ) -> Result<EgressId> {
 	let events = connect_submit_and_get_events(
 		state_chain_settings,
-		pallet_cf_lp::Call::withdraw_asset { amount, asset, egress_address },
+		pallet_cf_lp::Call::withdraw_asset { amount, asset, destination_address },
 		AccountRole::LiquidityProvider,
 	)
 	.await?;

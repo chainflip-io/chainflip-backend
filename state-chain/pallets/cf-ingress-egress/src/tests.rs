@@ -51,7 +51,7 @@ fn disallowed_asset_will_not_be_batch_sent() {
 			vec![FetchOrTransfer::<Ethereum>::Transfer {
 				asset,
 				amount: 1_000,
-				egress_address: ALICE_ETH_ADDRESS.into(),
+				destination_address: ALICE_ETH_ADDRESS.into(),
 				egress_id: (ForeignChain::Ethereum, 1),
 			}]
 		);
@@ -80,7 +80,7 @@ fn can_schedule_swap_egress_to_batch() {
 			id: (ForeignChain::Ethereum, 2),
 			asset: ETH_ETH,
 			amount: 2_000,
-			egress_address: ALICE_ETH_ADDRESS.into(),
+			destination_address: ALICE_ETH_ADDRESS.into(),
 		}));
 
 		IngressEgress::schedule_egress(ETH_FLIP, 3_000, BOB_ETH_ADDRESS.into(), None);
@@ -89,7 +89,7 @@ fn can_schedule_swap_egress_to_batch() {
 			id: (ForeignChain::Ethereum, 4),
 			asset: ETH_FLIP,
 			amount: 4_000,
-			egress_address: BOB_ETH_ADDRESS.into(),
+			destination_address: BOB_ETH_ADDRESS.into(),
 		}));
 
 		assert_eq!(
@@ -98,25 +98,25 @@ fn can_schedule_swap_egress_to_batch() {
 				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: ETH_ETH,
 					amount: 1_000,
-					egress_address: ALICE_ETH_ADDRESS.into(),
+					destination_address: ALICE_ETH_ADDRESS.into(),
 					egress_id: (ForeignChain::Ethereum, 1),
 				},
 				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: ETH_ETH,
 					amount: 2_000,
-					egress_address: ALICE_ETH_ADDRESS.into(),
+					destination_address: ALICE_ETH_ADDRESS.into(),
 					egress_id: (ForeignChain::Ethereum, 2),
 				},
 				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: ETH_FLIP,
 					amount: 3_000,
-					egress_address: BOB_ETH_ADDRESS.into(),
+					destination_address: BOB_ETH_ADDRESS.into(),
 					egress_id: (ForeignChain::Ethereum, 3),
 				},
 				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: ETH_FLIP,
 					amount: 4_000,
-					egress_address: BOB_ETH_ADDRESS.into(),
+					destination_address: BOB_ETH_ADDRESS.into(),
 					egress_id: (ForeignChain::Ethereum, 4),
 				},
 			]
@@ -339,7 +339,7 @@ fn on_idle_batch_size_is_limited_by_weight() {
 				FetchOrTransfer::<Ethereum>::Transfer {
 					asset: ETH_FLIP,
 					amount: 5_000,
-					egress_address: ALICE_ETH_ADDRESS.into(),
+					destination_address: ALICE_ETH_ADDRESS.into(),
 					egress_id: (ForeignChain::Ethereum, 5),
 				},
 				FetchOrTransfer::<Ethereum>::Fetch { channel_id: 3u64, asset: ETH_FLIP },
@@ -520,7 +520,7 @@ fn can_ingress_ccm_swap_intents() {
 	new_test_ext().execute_with(|| {
 		let from_asset = eth::Asset::Flip;
 		let to_asset = Asset::Eth;
-		let egress_address = ForeignChainAddress::Eth(Default::default());
+		let destination_address = ForeignChainAddress::Eth(Default::default());
 		let ccm = CcmIngressMetadata {
 			message: vec![0x00, 0x01, 0x02],
 			gas_budget: 1_000,
@@ -533,7 +533,7 @@ fn can_ingress_ccm_swap_intents() {
 		assert_ok!(IngressEgress::request_swap_deposit_address(
 			from_asset,
 			to_asset,
-			egress_address.clone(),
+			destination_address.clone(),
 			0,
 			1,
 			Some(ccm.clone()),
@@ -561,7 +561,7 @@ fn can_ingress_ccm_swap_intents() {
 				source_asset: from_asset.into(),
 				ingress_amount: amount,
 				destination_asset: to_asset,
-				egress_address,
+				destination_address,
 				message_metadata: ccm
 			}]
 		);
@@ -571,7 +571,7 @@ fn can_ingress_ccm_swap_intents() {
 #[test]
 fn can_egress_ccm() {
 	new_test_ext().execute_with(|| {
-		let egress_address: H160 = [0x01; 20].into();
+		let destination_address: H160 = [0x01; 20].into();
 		let destination_asset = eth::Asset::Eth;
 		let ccm = CcmIngressMetadata {
 			message: vec![0x00, 0x01, 0x02],
@@ -583,7 +583,7 @@ fn can_egress_ccm() {
 		let egress_id = IngressEgress::schedule_egress(
 			destination_asset,
 			amount,
-			egress_address,
+			destination_address,
 			Some(ccm.clone())
 		);
 
@@ -593,7 +593,7 @@ fn can_egress_ccm() {
 				egress_id,
 				asset: destination_asset,
 				amount,
-				egress_address,
+				destination_address,
 				message: ccm.message.clone(),
 				refund_address: ForeignChainAddress::Eth([0x02; 20]),
 				source_address: ForeignChainAddress::Eth([0xcf; 20]),
@@ -604,7 +604,7 @@ fn can_egress_ccm() {
 				id: egress_id,
 				asset: destination_asset,
 				amount,
-				egress_address,
+				destination_address,
 			}
 		));
 
@@ -617,7 +617,7 @@ fn can_egress_ccm() {
 			TransferAssetParams {
 				asset: destination_asset,
 				amount,
-				to: egress_address
+				to: destination_address
 			},
 			ForeignChainAddress::Eth([0xcf; 20]),
 			ccm.message,
@@ -631,7 +631,7 @@ fn can_egress_ccm() {
 #[test]
 fn can_manually_egress_ccm() {
 	new_test_ext().execute_with(|| {
-		let egress_address: H160 = [0x01; 20].into();
+		let destination_address: H160 = [0x01; 20].into();
 		let destination_asset = eth::Asset::Eth;
 		let message = vec![0x00, 0x01, 0x02];
 		let amount = 5_000;
@@ -641,7 +641,7 @@ fn can_manually_egress_ccm() {
 				egress_id: (ForeignChain::Ethereum, 1),
 				asset: destination_asset,
 				amount,
-				egress_address,
+				destination_address,
 				message: message.clone(),
 				refund_address: ForeignChainAddress::Eth([0x02; 20]),
 				source_address: ForeignChainAddress::Eth([0xcf; 20]),
@@ -660,7 +660,7 @@ fn can_manually_egress_ccm() {
 			TransferAssetParams {
 				asset: destination_asset,
 				amount,
-				to: egress_address
+				to: destination_address
 			},
 			ForeignChainAddress::Eth([0xcf; 20]),
 			message,
@@ -674,7 +674,7 @@ fn can_manually_egress_ccm() {
 #[test]
 fn can_manually_egress_ccm_by_id() {
 	new_test_ext().execute_with(|| {
-		let egress_address: H160 = [0x01; 20].into();
+		let destination_address: H160 = [0x01; 20].into();
 		let destination_asset = eth::Asset::Eth;
 		let message = vec![0x00, 0x01, 0x02];
 		let amount = 5_000;
@@ -685,7 +685,7 @@ fn can_manually_egress_ccm_by_id() {
 				egress_id: (ForeignChain::Ethereum, id),
 				asset: destination_asset,
 				amount,
-				egress_address,
+				destination_address,
 				message: message.clone(),
 				refund_address: ForeignChainAddress::Eth([0x02; 20]),
 				source_address: ForeignChainAddress::Eth([0xcf; 20]),
@@ -700,7 +700,7 @@ fn can_manually_egress_ccm_by_id() {
 				TransferAssetParams {
 					asset: ccm.asset,
 					amount: ccm.amount,
-					to: ccm.egress_address
+					to: ccm.destination_address
 				},
 				ccm.source_address,
 				ccm.message,
@@ -710,7 +710,7 @@ fn can_manually_egress_ccm_by_id() {
 		let transfer = FetchOrTransfer::Transfer {
 			egress_id: (ForeignChain::Ethereum, 4),
 			asset: destination_asset,
-			egress_address,
+			destination_address,
 			amount,
 		};
 

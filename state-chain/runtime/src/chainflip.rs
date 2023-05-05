@@ -430,7 +430,7 @@ macro_rules! impl_ingress_api_for_anychain {
 			fn request_swap_deposit_address(
 				source_asset: Asset,
 				destination_asset: Asset,
-				egress_address: ForeignChainAddress,
+				destination_address: ForeignChainAddress,
 				relayer_commission_bps: BasisPoints,
 				relayer_id: Self::AccountId,
 				message_metadata: Option<CcmIngressMetadata>,
@@ -440,7 +440,7 @@ macro_rules! impl_ingress_api_for_anychain {
 						ForeignChain::$chain => $ingress_egress::request_swap_deposit_address(
 							source_asset.try_into().unwrap(),
 							destination_asset,
-							egress_address,
+							destination_address,
 							relayer_commission_bps,
 							relayer_id,
 							message_metadata,
@@ -469,7 +469,7 @@ macro_rules! impl_egress_api_for_anychain {
 			fn schedule_egress(
 				asset: Asset,
 				amount: <AnyChain as Chain>::ChainAmount,
-				egress_address: <AnyChain as Chain>::ChainAccount,
+				destination_address: <AnyChain as Chain>::ChainAccount,
 				maybe_message: Option<CcmIngressMetadata>,
 			) -> EgressId {
 				match asset.into() {
@@ -477,7 +477,7 @@ macro_rules! impl_egress_api_for_anychain {
 						ForeignChain::$chain => $ingress_egress::schedule_egress(
 							asset.try_into().expect("Checked for asset compatibility"),
 							amount.try_into().expect("Checked for amount compatibility"),
-							egress_address
+							destination_address
 								.try_into()
 								.expect("This address cast is ensured to succeed."),
 							maybe_message,

@@ -687,7 +687,7 @@ pub trait IngressApi<C: Chain> {
 	fn request_swap_deposit_address(
 		source_asset: C::ChainAsset,
 		destination_asset: Asset,
-		egress_address: ForeignChainAddress,
+		destination_address: ForeignChainAddress,
 		relayer_commission_bps: BasisPoints,
 		relayer_id: Self::AccountId,
 		message_metadata: Option<CcmIngressMetadata>,
@@ -766,7 +766,7 @@ pub trait EgressApi<C: Chain> {
 	fn schedule_egress(
 		asset: C::ChainAsset,
 		amount: C::ChainAmount,
-		egress_address: C::ChainAccount,
+		destination_address: C::ChainAccount,
 		maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId;
 }
@@ -775,7 +775,7 @@ impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 	fn schedule_egress(
 		_asset: assets::eth::Asset,
 		_amount: <Ethereum as Chain>::ChainAmount,
-		_egress_address: <Ethereum as Chain>::ChainAccount,
+		_destination_address: <Ethereum as Chain>::ChainAccount,
 		_maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId {
 		(ForeignChain::Ethereum, 0)
@@ -786,7 +786,7 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 	fn schedule_egress(
 		_asset: assets::dot::Asset,
 		_amount: <Polkadot as Chain>::ChainAmount,
-		_egress_address: <Polkadot as Chain>::ChainAccount,
+		_destination_address: <Polkadot as Chain>::ChainAccount,
 		_maybe_message: Option<CcmIngressMetadata>,
 	) -> EgressId {
 		(ForeignChain::Polkadot, 0)
@@ -850,7 +850,7 @@ pub trait CcmHandler {
 		source_asset: Asset,
 		ingress_amount: AssetAmount,
 		destination_asset: Asset,
-		egress_address: ForeignChainAddress,
+		destination_address: ForeignChainAddress,
 		message_metadata: CcmIngressMetadata,
 	) -> DispatchResult;
 }
@@ -860,7 +860,7 @@ impl CcmHandler for () {
 		_source_asset: Asset,
 		_ingress_amount: AssetAmount,
 		_egress_asset: Asset,
-		_egress_address: ForeignChainAddress,
+		_destination_address: ForeignChainAddress,
 		_message_metadata: CcmIngressMetadata,
 	) -> DispatchResult {
 		Ok(())

@@ -71,7 +71,7 @@ pub async fn request_swap_deposit_address(
 		params.destination_asset,
 		chainflip_api::clean_foreign_chain_address(
 			params.destination_asset.into(),
-			&params.egress_address,
+			&params.destination_address,
 		)?,
 		params.relayer_commission,
 		None,
