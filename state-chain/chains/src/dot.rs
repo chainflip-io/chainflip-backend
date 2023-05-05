@@ -125,7 +125,10 @@ impl ChainCrypto for Polkadot {
 	type AggKey = PolkadotPublicKey;
 	type Payload = EncodedPolkadotPayload;
 	type ThresholdSignature = PolkadotSignature;
-	type TransactionId = TxId;
+	type TransactionInId = TxId;
+
+	type TransactionOutId = PolkadotHash;
+
 	type GovKey = PolkadotPublicKey;
 
 	fn verify_threshold_signature(

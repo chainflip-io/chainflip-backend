@@ -110,7 +110,8 @@ impl ChainCrypto for MockEthereum {
 	type AggKey = MockAggKey;
 	type Payload = [u8; 4];
 	type ThresholdSignature = MockThresholdSignature<Self::AggKey, Self::Payload>;
-	type TransactionId = [u8; 4];
+	type TransactionInId = [u8; 4];
+	type TransactionOutId = ();
 	type GovKey = [u8; 32];
 
 	fn verify_threshold_signature(
@@ -131,7 +132,7 @@ impl_default_benchmark_value!([u8; 4]);
 impl_default_benchmark_value!(MockThresholdSignature<MockAggKey, [u8; 4]>);
 impl_default_benchmark_value!(MockTransaction);
 
-pub const ETH_TX_HASH: <MockEthereum as ChainCrypto>::TransactionId = [0xbc; 4];
+pub const ETH_TX_HASH: <MockEthereum as ChainCrypto>::TransactionInId = [0xbc; 4];
 
 pub const ETH_TX_FEE: <MockEthereum as Chain>::TransactionFee =
 	TransactionFee { effective_gas_price: 200, gas_used: 100 };

@@ -139,7 +139,9 @@ impl ChainCrypto for Bitcoin {
 	// is multiple signatures
 	type ThresholdSignature = Vec<Signature>;
 
-	type TransactionId = UtxoId;
+	type TransactionInId = UtxoId;
+
+	type TransactionOutId = Hash;
 
 	type GovKey = Self::AggKey;
 

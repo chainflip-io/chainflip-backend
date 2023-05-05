@@ -52,7 +52,10 @@ impl ChainCrypto for Ethereum {
 	type AggKey = eth::AggKey;
 	type Payload = H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
-	type TransactionId = H256;
+	type TransactionInId = H256;
+	// We can't use the hash since we don't know it for Ethereum, as we must select an individaul
+	// authority to sign the transaction.
+	type TransactionOutId = Self::ThresholdSignature;
 	type GovKey = Address;
 
 	fn verify_threshold_signature(

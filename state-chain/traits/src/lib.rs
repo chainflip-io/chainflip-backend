@@ -818,7 +818,7 @@ pub trait FlipBurnInfo {
 /// The trait implementation is intentionally no-op by default
 pub trait DepositHandler<C: ChainCrypto> {
 	fn on_deposit_made(
-		_tx_id: <C as ChainCrypto>::TransactionId,
+		_tx_id: <C as ChainCrypto>::TransactionInId,
 		_amount: <C as Chain>::ChainAmount,
 		_address: <C as Chain>::ChainAccount,
 		_asset: <C as Chain>::ChainAsset,

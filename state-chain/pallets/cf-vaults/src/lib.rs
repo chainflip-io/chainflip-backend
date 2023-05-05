@@ -45,7 +45,7 @@ pub type KeygenOutcomeFor<T, I = ()> =
 	Result<AggKeyFor<T, I>, BTreeSet<<T as Chainflip>::ValidatorId>>;
 pub type AggKeyFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::AggKey;
 pub type ChainBlockNumberFor<T, I = ()> = <<T as Config<I>>::Chain as Chain>::ChainBlockNumber;
-pub type TransactionIdFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::TransactionId;
+pub type TransactionInIdFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::TransactionInId;
 pub type ThresholdSignatureFor<T, I = ()> =
 	<<T as Config<I>>::Chain as ChainCrypto>::ThresholdSignature;
 
@@ -570,7 +570,7 @@ pub mod pallet {
 
 			// This field is primarily required to ensure the witness calls are unique per
 			// transaction (on the external chain)
-			_tx_id: TransactionIdFor<T, I>,
+			_tx_id: TransactionInIdFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
@@ -599,7 +599,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			new_public_key: AggKeyFor<T, I>,
 			block_number: ChainBlockNumberFor<T, I>,
-			_tx_id: TransactionIdFor<T, I>,
+			_tx_id: TransactionInIdFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
