@@ -14,7 +14,7 @@ use frame_support::{
 	assert_ok,
 	traits::{OnIdle, OnNewAccount},
 };
-use pallet_cf_ingress_egress::IngressWitness;
+use pallet_cf_ingress_egress::DepositWitness;
 use pallet_cf_pools::Order;
 use pallet_cf_swapping::CcmIdCounter;
 use state_chain_runtime::{
@@ -228,8 +228,8 @@ fn basic_pool_setup_provision_and_swap() {
 		for node in Validator::current_authorities() {
 			assert_ok!(Witnesser::witness_at_epoch(
 				RuntimeOrigin::signed(node),
-				Box::new(RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::do_ingress {
-					ingress_witnesses: vec![IngressWitness {
+				Box::new(RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
+					deposit_witnesses: vec![DepositWitness {
 						deposit_address,
 						asset: cf_chains::eth::assets::eth::Asset::Eth,
 						amount: 50,
@@ -331,8 +331,8 @@ fn can_process_ccm_via_swap_intent() {
 			assert_ok!(Witnesser::witness_at_epoch(
 				RuntimeOrigin::signed(node),
 				Box::new(RuntimeCall::EthereumIngressEgress(
-					pallet_cf_ingress_egress::Call::do_ingress {
-						ingress_witnesses: vec![IngressWitness {
+					pallet_cf_ingress_egress::Call::process_deposits {
+						deposit_witnesses: vec![DepositWitness {
 							deposit_address,
 							asset: cf_chains::eth::assets::eth::Asset::Flip,
 							amount: 1_000,

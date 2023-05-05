@@ -18,7 +18,7 @@ use super::{
 	core_h160, core_h256, event::Event, rpc::EthRpcApi, utils::decode_log_param, BlockWithItems,
 	DecodeLogClosure, EthContractWitnesser, SignatureAndEvent,
 };
-use pallet_cf_ingress_egress::IngressWitness;
+use pallet_cf_ingress_egress::DepositWitness;
 
 // These are the two events that must be supported as part of the ERC20 standard
 // https://eips.ethereum.org/EIPS/eip-20#events
@@ -84,13 +84,13 @@ impl EthContractWitnesser for Erc20Witnesser {
 
 		address_monitor.sync_addresses();
 
-		let ingress_witnesses: Vec<_> = block
+		let deposit_witnesses: Vec<_> = block
 			.block_items
 			.into_iter()
 			.filter_map(|event| match event.event_parameters {
 				Erc20Event::Transfer { to, value, from: _ }
 					if address_monitor.contains(&core_h160(to)) =>
-					Some(IngressWitness {
+					Some(DepositWitness {
 						deposit_address: core_h160(to),
 						amount: value,
 						asset: self.asset,
@@ -100,12 +100,12 @@ impl EthContractWitnesser for Erc20Witnesser {
 			})
 			.collect();
 
-		if !ingress_witnesses.is_empty() {
+		if !deposit_witnesses.is_empty() {
 			state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(
-						pallet_cf_ingress_egress::Call::<_, EthereumInstance>::do_ingress {
-							ingress_witnesses,
+						pallet_cf_ingress_egress::Call::<_, EthereumInstance>::process_deposits {
+							deposit_witnesses,
 						}
 						.into(),
 					),

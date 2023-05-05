@@ -34,7 +34,7 @@ pub trait WeightInfo {
 	fn egress_ccm(n: u32, ) -> Weight;
 	fn disable_asset_egress() -> Weight;
 	fn on_idle_with_nothing_to_send() -> Weight;
-	fn do_single_ingress() -> Weight;
+	fn process_single_deposit() -> Weight;
 	fn finalise_ingress(a: u32, ) -> Weight;
 }
 
@@ -116,9 +116,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	// Storage: EthereumIngressEgress IntentIngressDetails (r:1 w:0)
 	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
-	// Storage: EthereumIngressEgress IntentActions (r:1 w:0)
+	// Storage: EthereumIngressEgress ChannelActions (r:1 w:0)
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
-	fn do_single_ingress() -> Weight {
+	fn process_single_deposit() -> Weight {
 		// Minimum execution time: 84_000 nanoseconds.
 		Weight::from_ref_time(87_000_000)
 			.saturating_add(T::DbWeight::get().reads(4))
@@ -126,7 +126,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	// Storage: EthereumIngressEgress IntentIngressDetails (r:1 w:1)
 	// Storage: EthereumIngressEgress AddressPool (r:0 w:1)
-	// Storage: EthereumIngressEgress IntentActions (r:0 w:1)
+	// Storage: EthereumIngressEgress ChannelActions (r:0 w:1)
 	// Storage: EthereumIngressEgress AddressStatus (r:0 w:1)
 	/// The range of component `a` is `[1, 100]`.
 	fn finalise_ingress(a: u32, ) -> Weight {
@@ -217,9 +217,9 @@ impl WeightInfo for () {
 	}
 	// Storage: EthereumIngressEgress IntentIngressDetails (r:1 w:0)
 	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
-	// Storage: EthereumIngressEgress IntentActions (r:1 w:0)
+	// Storage: EthereumIngressEgress ChannelActions (r:1 w:0)
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
-	fn do_single_ingress() -> Weight {
+	fn process_single_deposit() -> Weight {
 		// Minimum execution time: 84_000 nanoseconds.
 		Weight::from_ref_time(87_000_000)
 			.saturating_add(RocksDbWeight::get().reads(4))
@@ -227,7 +227,7 @@ impl WeightInfo for () {
 	}
 	// Storage: EthereumIngressEgress IntentIngressDetails (r:1 w:1)
 	// Storage: EthereumIngressEgress AddressPool (r:0 w:1)
-	// Storage: EthereumIngressEgress IntentActions (r:0 w:1)
+	// Storage: EthereumIngressEgress ChannelActions (r:0 w:1)
 	// Storage: EthereumIngressEgress AddressStatus (r:0 w:1)
 	/// The range of component `a` is `[1, 100]`.
 	fn finalise_ingress(a: u32, ) -> Weight {

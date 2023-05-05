@@ -13,7 +13,7 @@ use tokio::sync::Mutex;
 use crate::{
 	common::start_with_restart_on_failure,
 	db::PersistentKeyDB,
-	eth::ingress_witnesser::IngressWitnesser,
+	eth::ingress_witnesser::DepositWitnesser,
 	settings,
 	state_chain_observer::{client::StateChainClient, EthAddressToMonitorSender},
 	witnesser::{AddressMonitor, EpochStart},
@@ -40,9 +40,9 @@ pub struct AllWitnessers {
 	pub key_manager: ContractWitnesser<KeyManager, StateChainClient>,
 	pub state_chain_gateway: ContractWitnesser<StateChainGateway, StateChainClient>,
 	pub vault: ContractWitnesser<Vault, StateChainClient>,
-	pub eth_ingress: IngressWitnesser<StateChainClient>,
-	pub flip_ingress: ContractWitnesser<Erc20Witnesser, StateChainClient>,
-	pub usdc_ingress: ContractWitnesser<Erc20Witnesser, StateChainClient>,
+	pub eth_deposits: DepositWitnesser<StateChainClient>,
+	pub flip_deposits: ContractWitnesser<Erc20Witnesser, StateChainClient>,
+	pub usdc_deposits: ContractWitnesser<Erc20Witnesser, StateChainClient>,
 }
 
 pub async fn start(
@@ -136,11 +136,11 @@ pub async fn start(
 	let flip_addresses =
 		monitored_addresses_from_all_eth(&eth_chain_deposit_addresses, assets::eth::Asset::Flip);
 
-	let (eth_ingress_sender, eth_address_monitor) = AddressMonitor::new(eth_addresses);
+	let (eth_monitor_command_sender, eth_address_monitor) = AddressMonitor::new(eth_addresses);
 
-	let (usdc_ingress_sender, usdc_address_monitor) = AddressMonitor::new(usdc_addresses);
+	let (usdc_monitor_command_sender, usdc_address_monitor) = AddressMonitor::new(usdc_addresses);
 
-	let (flip_ingress_sender, flip_address_monitor) = AddressMonitor::new(flip_addresses);
+	let (flip_monitor_command_sender, flip_address_monitor) = AddressMonitor::new(flip_addresses);
 
 	let epoch_start_receiver = Arc::new(Mutex::new(epoch_start_receiver));
 	let eth_address_monitor = Arc::new(Mutex::new(eth_address_monitor));
@@ -189,12 +189,12 @@ pub async fn start(
 						dual_rpc.clone(),
 						true,
 					),
-					eth_ingress: IngressWitnesser::new(
+					eth_deposits: DepositWitnesser::new(
 						state_chain_client.clone(),
 						dual_rpc.clone(),
 						eth_address_monitor,
 					),
-					flip_ingress: ContractWitnesser::new(
+					flip_deposits: ContractWitnesser::new(
 						Erc20Witnesser::new(
 							flip_contract_address.into(),
 							assets::eth::Asset::Flip,
@@ -204,7 +204,7 @@ pub async fn start(
 						dual_rpc.clone(),
 						false,
 					),
-					usdc_ingress: ContractWitnesser::new(
+					usdc_deposits: ContractWitnesser::new(
 						Erc20Witnesser::new(
 							usdc_address.into(),
 							assets::eth::Asset::Usdc,
@@ -228,8 +228,8 @@ pub async fn start(
 	});
 
 	Ok(EthAddressToMonitorSender {
-		eth: eth_ingress_sender,
-		flip: flip_ingress_sender,
-		usdc: usdc_ingress_sender,
+		eth: eth_monitor_command_sender,
+		flip: flip_monitor_command_sender,
+		usdc: usdc_monitor_command_sender,
 	})
 }

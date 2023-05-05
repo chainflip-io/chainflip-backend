@@ -185,7 +185,7 @@ async fn main() -> anyhow::Result<()> {
 			.await
 			.unwrap();
 
-			let btc_monitor_ingress_sender = btc::witnessing::start(
+			let btc_monitor_command_sender = btc::witnessing::start(
 				scope,
 				state_chain_client.clone(),
 				&settings.btc,
@@ -196,7 +196,7 @@ async fn main() -> anyhow::Result<()> {
 			.await
 			.unwrap();
 
-			let (dot_ingress_sender, dot_address_monitor) = AddressMonitor::new(
+			let (dot_monitor_command_sender, dot_address_monitor) = AddressMonitor::new(
 				state_chain_client
 					.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<
 						state_chain_runtime::Runtime,
@@ -234,10 +234,10 @@ async fn main() -> anyhow::Result<()> {
 				epoch_start_sender,
 				eth_address_to_monitor,
 				dot_epoch_start_sender,
-				dot_ingress_sender,
+				dot_monitor_command_sender,
 				dot_monitor_signature_sender,
 				btc_epoch_start_sender,
-				btc_monitor_ingress_sender,
+				btc_monitor_command_sender,
 				cfe_settings_update_sender,
 			));
 

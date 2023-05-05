@@ -14,13 +14,13 @@ use crate::{
 
 use super::{eth_block_witnessing::BlockProcessor, rpc::EthDualRpcClient, EthNumberBloom};
 
-pub struct IngressWitnesser<StateChainClient> {
+pub struct DepositWitnesser<StateChainClient> {
 	rpc: EthDualRpcClient,
 	state_chain_client: Arc<StateChainClient>,
 	address_monitor: Arc<Mutex<AddressMonitor<H160, H160, ()>>>,
 }
 
-impl<StateChainClient> IngressWitnesser<StateChainClient>
+impl<StateChainClient> DepositWitnesser<StateChainClient>
 where
 	StateChainClient: SignedExtrinsicApi + Send + Sync,
 {
@@ -34,7 +34,7 @@ where
 }
 
 #[async_trait]
-impl<StateChainClient> BlockProcessor for IngressWitnesser<StateChainClient>
+impl<StateChainClient> BlockProcessor for DepositWitnesser<StateChainClient>
 where
 	StateChainClient: SignedExtrinsicApi + Send + Sync,
 {
@@ -45,7 +45,7 @@ where
 	) -> anyhow::Result<()> {
 		use crate::eth::rpc::EthRpcApi;
 		use cf_primitives::chains::assets::eth;
-		use pallet_cf_ingress_egress::IngressWitness;
+		use pallet_cf_ingress_egress::DepositWitness;
 
 		let mut address_monitor =
 			self.address_monitor.try_lock().expect("should have exclusive ownership");
@@ -54,7 +54,7 @@ where
 		// we have any new addresses to monitor
 		address_monitor.sync_addresses();
 
-		let ingress_witnesses = self
+		let deposit_witnesses = self
 			.rpc
 			.successful_transactions(block.block_number)
 			.await?
@@ -67,7 +67,7 @@ where
 					None
 				}
 			})
-			.map(|(tx, to_addr)| IngressWitness {
+			.map(|(tx, to_addr)| DepositWitness {
 				deposit_address: to_addr,
 				asset: eth::Asset::Eth,
 				amount: tx
@@ -76,14 +76,14 @@ where
 					.expect("Ingress witness transfer value should fit u128"),
 				tx_id: core_h256(tx.hash),
 			})
-			.collect::<Vec<IngressWitness<Ethereum>>>();
+			.collect::<Vec<DepositWitness<Ethereum>>>();
 
-		if !ingress_witnesses.is_empty() {
+		if !deposit_witnesses.is_empty() {
 			self.state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(
-						pallet_cf_ingress_egress::Call::<_, EthereumInstance>::do_ingress {
-							ingress_witnesses,
+						pallet_cf_ingress_egress::Call::<_, EthereumInstance>::process_deposits {
+							deposit_witnesses,
 						}
 						.into(),
 					),

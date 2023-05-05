@@ -76,7 +76,7 @@ benchmarks_instance_pallet! {
 	on_idle_with_nothing_to_send {
 	} : { let _ = crate::Pallet::<T, I>::on_idle(Default::default(), T::WeightInfo::destination_assets(2u32)); }
 
-	do_single_ingress {
+	process_single_deposit {
 		let deposit_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
 		let source_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
 		let ingress_amount: <<T as Config<I>>::TargetChain as Chain>::ChainAmount = BenchmarkValue::benchmark_value();
@@ -84,10 +84,10 @@ benchmarks_instance_pallet! {
 				channel_id: 1,
 				source_asset,
 			});
-		IntentActions::<T, I>::insert(&deposit_address, IntentAction::<T::AccountId>::LiquidityProvision {
+		ChannelActions::<T, I>::insert(&deposit_address, ChannelAction::<T::AccountId>::LiquidityProvision {
 			lp_account: account("doogle", 0, 0)
 		});
 	}: {
-		Pallet::<T, I>::do_single_ingress(deposit_address, source_asset, ingress_amount, BenchmarkValue::benchmark_value()).unwrap()
+		Pallet::<T, I>::process_single_deposit(deposit_address, source_asset, ingress_amount, BenchmarkValue::benchmark_value()).unwrap()
 	}
 }

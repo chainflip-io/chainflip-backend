@@ -16,7 +16,7 @@ use cf_primitives::{EpochIndex, PolkadotAccountId, PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use frame_support::scale_info::TypeInfo;
 use futures::{stream, Stream, StreamExt, TryStreamExt};
-use pallet_cf_ingress_egress::IngressWitness;
+use pallet_cf_ingress_egress::DepositWitness;
 use sp_core::H256;
 use sp_runtime::{AccountId32, MultiSignature};
 use state_chain_runtime::PolkadotInstance;
@@ -144,13 +144,13 @@ fn check_for_interesting_events_in_block(
 	address_monitor: &mut AddressMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
 ) -> (
 	Vec<(PolkadotExtrinsicIndex, PolkadotBalance)>,
-	Vec<IngressWitness<Polkadot>>,
+	Vec<DepositWitness<Polkadot>>,
 	Vec<Box<state_chain_runtime::RuntimeCall>>,
 	// Median tip of all extrinsics in this block
 	u128,
 ) {
 	// to contain all the ingress witnessse for this block
-	let mut ingress_witnesses = Vec::new();
+	let mut deposit_witnesses = Vec::new();
 	// We only want to attempt to decode extrinsics that were sent by us. Since
 	// a) we know how to decode calls we create (but not necessarily all calls on Polkadot)
 	// b) these are the only extrinsics we are interested in
@@ -191,7 +191,7 @@ fn check_for_interesting_events_in_block(
 
 					if address_monitor.contains(to) {
 						info!("Witnessing DOT Ingress {{ amount: {amount:?}, to: {to:?} }}");
-						ingress_witnesses.push(IngressWitness {
+						deposit_witnesses.push(DepositWitness {
 							deposit_address: to.clone(),
 							asset: assets::dot::Asset::Dot,
 							amount: *amount,
@@ -234,7 +234,7 @@ fn check_for_interesting_events_in_block(
 			.into_iter()
 			.map(|index| (index, *fee_paid_for_xt_at_index.get(&index).unwrap()))
 			.collect(),
-		ingress_witnesses,
+		deposit_witnesses,
 		vault_key_rotated_calls,
 		median_tip,
 	)
@@ -312,7 +312,7 @@ where
 		let (block_hash, block_number, block_event_details) = data;
 		trace!("Checking block: {block_number}, with hash: {block_hash:?} for interesting events");
 
-		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls, median_tip) =
+		let (interesting_indices, deposit_witnesses, vault_key_rotated_calls, median_tip) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				block_number,
@@ -403,12 +403,12 @@ where
 			}
 		}
 
-		if !ingress_witnesses.is_empty() {
+		if !deposit_witnesses.is_empty() {
 			self.state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(
-						pallet_cf_ingress_egress::Call::<_, PolkadotInstance>::do_ingress {
-							ingress_witnesses,
+						pallet_cf_ingress_egress::Call::<_, PolkadotInstance>::process_deposits {
+							deposit_witnesses,
 						}
 						.into(),
 					),
@@ -608,7 +608,7 @@ mod tests {
 			(3u32, mock_tx_fee_paid(20000)),
 		]);
 
-		let (mut interesting_indices, ingress_witnesses, vault_key_rotated_calls, _) =
+		let (mut interesting_indices, deposit_witnesses, vault_key_rotated_calls, _) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				Default::default(),
@@ -618,7 +618,7 @@ mod tests {
 
 		assert_eq!(vault_key_rotated_calls.len(), 1);
 		assert_eq!(interesting_indices.pop().unwrap(), (our_proxy_added_index, fee_paid));
-		assert!(ingress_witnesses.is_empty());
+		assert!(deposit_witnesses.is_empty());
 	}
 
 	#[test]
@@ -669,7 +669,7 @@ mod tests {
 			.send(AddressMonitorCommand::Add(transfer_2_deposit_address))
 			.unwrap();
 
-		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls, _) =
+		let (interesting_indices, deposit_witnesses, vault_key_rotated_calls, _) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				20,
@@ -678,9 +678,9 @@ mod tests {
 				&mut address_monitor,
 			);
 
-		assert_eq!(ingress_witnesses.len(), 2);
-		assert_eq!(ingress_witnesses.get(0).unwrap().amount, TRANSFER_1_AMOUNT);
-		assert_eq!(ingress_witnesses.get(1).unwrap().amount, TRANSFER_2_AMOUNT);
+		assert_eq!(deposit_witnesses.len(), 2);
+		assert_eq!(deposit_witnesses.get(0).unwrap().amount, TRANSFER_1_AMOUNT);
+		assert_eq!(deposit_witnesses.get(1).unwrap().amount, TRANSFER_2_AMOUNT);
 
 		// We don't need to submit signature accepted for ingress witnesses
 		assert_eq!(interesting_indices.len(), 0);
@@ -723,7 +723,7 @@ mod tests {
 			),
 		]);
 
-		let (interesting_indices, ingress_witnesses, vault_key_rotated_calls, _) =
+		let (interesting_indices, deposit_witnesses, vault_key_rotated_calls, _) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				20,
@@ -738,7 +738,7 @@ mod tests {
 		);
 
 		assert!(vault_key_rotated_calls.is_empty());
-		assert!(ingress_witnesses.is_empty());
+		assert!(deposit_witnesses.is_empty());
 	}
 
 	#[test]

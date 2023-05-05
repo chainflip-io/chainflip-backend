@@ -47,7 +47,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Environment EthereumVaultAddress (r:1 w:0)
 	// Storage: LiquidityProvider LpTTL (r:1 w:0)
 	// Storage: LiquidityProvider IngressIntentExpiries (r:1 w:1)
-	// Storage: EthereumIngressEgress IntentActions (r:0 w:1)
+	// Storage: EthereumIngressEgress ChannelActions (r:0 w:1)
 	// Storage: EthereumIngressEgress FetchParamDetails (r:0 w:1)
 	// Storage: EthereumIngressEgress AddressStatus (r:0 w:1)
 	// Storage: EthereumIngressEgress IntentIngressDetails (r:0 w:1)
@@ -79,7 +79,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: LiquidityProvider IngressIntentExpiries (r:1 w:1)
 	// Storage: EthereumIngressEgress AddressStatus (r:1 w:0)
 	// Storage: EthereumIngressEgress IntentIngressDetails (r:1 w:1)
-	// Storage: EthereumIngressEgress IntentActions (r:0 w:1)
+	// Storage: EthereumIngressEgress ChannelActions (r:0 w:1)
 	/// The range of component `a` is `[1, 100]`.
 	fn on_initialize(a: u32, ) -> Weight {
 		// Minimum execution time: 29_000 nanoseconds.
@@ -108,7 +108,7 @@ impl WeightInfo for () {
 	// Storage: Environment EthereumVaultAddress (r:1 w:0)
 	// Storage: LiquidityProvider LpTTL (r:1 w:0)
 	// Storage: LiquidityProvider IngressIntentExpiries (r:1 w:1)
-	// Storage: EthereumIngressEgress IntentActions (r:0 w:1)
+	// Storage: EthereumIngressEgress ChannelActions (r:0 w:1)
 	// Storage: EthereumIngressEgress FetchParamDetails (r:0 w:1)
 	// Storage: EthereumIngressEgress AddressStatus (r:0 w:1)
 	// Storage: EthereumIngressEgress IntentIngressDetails (r:0 w:1)
@@ -140,7 +140,7 @@ impl WeightInfo for () {
 	// Storage: LiquidityProvider IngressIntentExpiries (r:1 w:1)
 	// Storage: EthereumIngressEgress AddressStatus (r:1 w:0)
 	// Storage: EthereumIngressEgress IntentIngressDetails (r:1 w:1)
-	// Storage: EthereumIngressEgress IntentActions (r:0 w:1)
+	// Storage: EthereumIngressEgress ChannelActions (r:0 w:1)
 	/// The range of component `a` is `[1, 100]`.
 	fn on_initialize(a: u32, ) -> Weight {
 		// Minimum execution time: 29_000 nanoseconds.
