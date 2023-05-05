@@ -27,7 +27,7 @@ jobs:
   #   secrets: inherit
   publish:
     name: Publish Packages to APT repo
-    needs: [post-check]
+    needs: [build]
     uses: ./.github/workflows/_30_publish.yml
     with:
       version: "perseverance/"
