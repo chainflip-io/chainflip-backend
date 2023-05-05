@@ -74,19 +74,14 @@ pub fn filter_interesting_utxos(
 						amount: tx_out.value,
 						tx_id: UtxoId { tx_hash, vout },
 					});
-				} else if let Some(change_pubkey) = change_addresses
-					.iter()
-					.filter_map(
-						|(key, address)| {
-							if address == &script_pubkey_bytes {
-								Some(key)
-							} else {
-								None
-							}
-						},
-					)
-					.next()
-				{
+				} else if let Some(change_pubkey) =
+					change_addresses.iter().find_map(|(key, address)| {
+						if address == &script_pubkey_bytes {
+							Some(key)
+						} else {
+							None
+						}
+					}) {
 					change_witnesses.push(ChangeUtxoWitness {
 						amount: tx_out.value,
 						change_pubkey: *change_pubkey,
