@@ -297,8 +297,10 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
-		InvalidIntent,
-		IngressMismatchWithIntent,
+		/// The deposit address is not valid. It may have expired or may never have been issued.
+		InvalidDepositAddress,
+		/// A deposit was made using the wrong asset.
+		AssetMismatch,
 		ChannelIdsExhausted,
 		UnsupportedAsset,
 	}
@@ -624,9 +626,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		tx_id: <T::TargetChain as ChainCrypto>::TransactionId,
 	) -> DispatchResult {
 		let ingress = DepositAddressDetailsLookup::<T, I>::get(&deposit_address)
-			.ok_or(Error::<T, I>::InvalidIntent)?;
-		ensure!(ingress.source_asset == asset, Error::<T, I>::IngressMismatchWithIntent);
-
+			.ok_or(Error::<T, I>::InvalidDepositAddress)?;
+		/// A deposit was made using the wrong asset., I>::AssetMismatch);
+		/// We can't issue and more deposit
 		// Ingress is called by witnessers, so asset/chain combination should always be valid.
 		ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
 			channel_id: ingress.channel_id,
@@ -641,7 +643,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// NB: Don't take here. We should continue witnessing this address
 		// even after an ingress to it has occurred.
 		// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
-		match ChannelActions::<T, I>::get(&deposit_address).ok_or(Error::<T, I>::InvalidIntent)? {
+		match ChannelActions::<T, I>::get(&deposit_address)
+			.ok_or(Error::<T, I>::InvalidDepositAddress)?
+		{
 			ChannelAction::LiquidityProvision { lp_account } =>
 				T::LpBalance::try_credit_account(&lp_account, asset.into(), amount.into())?,
 			ChannelAction::Swap {
@@ -713,7 +717,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok((channel_id, address))
 	}
 
-	fn close_ingress_channel(
+	fn close_channel(
 		channel_id: ChannelId,
 		address: TargetChainAccount<T, I>,
 		address_status: DeploymentStatus,
@@ -734,7 +738,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	pub fn expire_channel(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
 		let status = AddressStatus::<T, I>::get(&address);
-		Self::close_ingress_channel(channel_id, address, status);
+		Self::close_channel(channel_id, address, status);
 	}
 }
 

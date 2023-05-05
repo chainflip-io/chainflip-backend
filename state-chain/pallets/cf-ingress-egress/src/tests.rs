@@ -391,21 +391,20 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 
 #[test]
 fn addresses_are_getting_reused() {
-	let mut ingress_to_finalise: (ChannelId, <Ethereum as Chain>::ChainAccount) =
-		Default::default();
+	let mut channel_details: (ChannelId, <Ethereum as Chain>::ChainAccount) = Default::default();
 
 	new_test_ext()
 		.execute_as_block(1, || {
-			// Schedule 2 ingress requests but only complete one:
-			ingress_to_finalise = request_address_and_deposit(0u64, eth::Asset::Eth);
+			// Schedule 2 deposit requests but only complete one:
+			channel_details = request_address_and_deposit(0u64, eth::Asset::Eth);
 			IngressEgress::request_liquidity_deposit_address(0u64, eth::Asset::Eth).unwrap();
 			// Indicates we have already generated 2 addresses
 			assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 2);
 		})
 		.execute_as_block(2, || {
-			IngressEgress::close_ingress_channel(
-				ingress_to_finalise.0,
-				ingress_to_finalise.1,
+			IngressEgress::close_channel(
+				channel_details.0,
+				channel_details.1,
 				DeploymentStatus::Deployed,
 			);
 			expect_size_of_address_pool(1);
@@ -422,14 +421,14 @@ fn addresses_are_getting_reused() {
 				DeploymentStatus::Deployed
 			);
 			expect_size_of_address_pool(1);
-			// Schedule another ingress request
-			ingress_to_finalise = request_address_and_deposit(0u64, eth::Asset::Eth);
+			// Schedule another deposit request
+			channel_details = request_address_and_deposit(0u64, eth::Asset::Eth);
 			expect_size_of_address_pool(0);
 		})
 		.execute_as_block(EXPIRY_BLOCK + 1, || {
-			IngressEgress::close_ingress_channel(
-				ingress_to_finalise.0,
-				ingress_to_finalise.1,
+			IngressEgress::close_channel(
+				channel_details.0,
+				channel_details.1,
 				DeploymentStatus::Deployed,
 			);
 			// Expect the address to be reused which is indicated by the counter not being
@@ -442,7 +441,7 @@ fn addresses_are_getting_reused() {
 #[test]
 fn proof_address_pool_integrity() {
 	new_test_ext().execute_with(|| {
-		let ingresses = (0..3)
+		let channel_details = (0..3)
 			.map(|id| request_address_and_deposit(id, eth::Asset::Eth))
 			.collect::<Vec<_>>();
 		// All addresses in use
@@ -452,8 +451,8 @@ fn proof_address_pool_integrity() {
 			<Test as crate::Config<Instance1>>::WeightInfo::destination_assets(3) +
 				Weight::from_ref_time(1),
 		);
-		for ingress in ingresses {
-			IngressEgress::close_ingress_channel(ingress.0, ingress.1, DeploymentStatus::Deployed);
+		for (id, address) in channel_details {
+			IngressEgress::close_channel(id, address, DeploymentStatus::Deployed);
 		}
 		// Expect all addresses to be available
 		expect_size_of_address_pool(3);
@@ -466,7 +465,7 @@ fn proof_address_pool_integrity() {
 #[test]
 fn create_new_address_while_pool_is_empty() {
 	new_test_ext().execute_with(|| {
-		let ingresses = (0..2)
+		let channel_details = (0..2)
 			.map(|id| request_address_and_deposit(id, eth::Asset::Eth))
 			.collect::<Vec<_>>();
 		IngressEgress::on_idle(
@@ -474,8 +473,8 @@ fn create_new_address_while_pool_is_empty() {
 			<Test as crate::Config<Instance1>>::WeightInfo::destination_assets(3) +
 				Weight::from_ref_time(1),
 		);
-		for ingress in ingresses {
-			IngressEgress::close_ingress_channel(ingress.0, ingress.1, DeploymentStatus::Deployed);
+		for (id, address) in channel_details {
+			IngressEgress::close_channel(id, address, DeploymentStatus::Deployed);
 		}
 		IngressEgress::on_initialize(EXPIRY_BLOCK);
 		assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 2);
@@ -547,7 +546,7 @@ fn can_process_ccm_deposit() {
 			},
 		));
 
-		// Completing the ingress should trigger CcmHandler.
+		// Making a deposit should trigger CcmHandler.
 		assert_ok!(IngressEgress::process_single_deposit(
 			deposit_address,
 			from_asset,
@@ -740,7 +739,7 @@ fn can_manually_egress_ccm_by_id() {
 	});
 }
 #[test]
-fn multi_use_ingress_different_blocks() {
+fn multi_use_deposit_address_different_blocks() {
 	const ETH: eth::Asset = eth::Asset::Eth;
 	let (mut channel_id, mut deposit_address): (ChannelId, <Ethereum as Chain>::ChainAccount) =
 		Default::default();
@@ -759,12 +758,8 @@ fn multi_use_ingress_different_blocks() {
 			));
 		})
 		.execute_as_block(3, || {
-			// Finalising should invalidate the ingress.
-			IngressEgress::close_ingress_channel(
-				channel_id,
-				deposit_address,
-				DeploymentStatus::Deployed,
-			);
+			// Closing the channel should invalidate the deposit address.
+			IngressEgress::close_channel(channel_id, deposit_address, DeploymentStatus::Deployed);
 			assert_noop!(
 				Pallet::<Test, _>::process_single_deposit(
 					deposit_address,
@@ -772,18 +767,18 @@ fn multi_use_ingress_different_blocks() {
 					1,
 					Default::default()
 				),
-				Error::<Test, _>::InvalidIntent
+				Error::<Test, _>::InvalidDepositAddress
 			);
 		});
 }
 
 #[test]
-fn multi_use_ingress_same_block() {
+fn multi_use_deposit_same_block() {
 	const ETH: eth::Asset = eth::Asset::Eth;
 	new_test_ext()
 		.execute_as_block(1, || {
 			let (_channel_id, deposit_address) = request_address_and_deposit(ALICE, ETH);
-			// Another ingress to the same address.
+			// Another deposit to the same address.
 			Pallet::<Test, _>::process_single_deposit(deposit_address, ETH, 1, Default::default())
 				.unwrap();
 		})

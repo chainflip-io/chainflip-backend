@@ -207,6 +207,7 @@ fn expect_swap_id_to_be_emitted() {
 			Test,
 			crate::mock::RuntimeEvent::Swapping(crate::Event::SwapDepositAddressReady {
 				deposit_address: EncodedAddress::Eth(Default::default()),
+				destination_address: EncodedAddress::Eth(Default::default()),
 				expiry_block: SwapTTL::<Test>::get() + System::current_block_number(),
 			}),
 			crate::mock::RuntimeEvent::Swapping(crate::Event::SwapDepositReceived {
