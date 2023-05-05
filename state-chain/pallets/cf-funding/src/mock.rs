@@ -1,4 +1,4 @@
-use crate as pallet_cf_staking;
+use crate as pallet_cf_funding;
 use cf_chains::{ApiCall, Chain, ChainCrypto, Ethereum};
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
@@ -18,7 +18,7 @@ use std::time::Duration;
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
-// Use a realistic account id for compatibility with `RegisterClaim`.
+// Use a realistic account id for compatibility with `RegisterRedemption`.
 type AccountId = AccountId32;
 type Balance = u128;
 
@@ -31,7 +31,7 @@ frame_support::construct_runtime!(
 	{
 		System: frame_system,
 		Flip: pallet_cf_flip,
-		Staking: pallet_cf_staking,
+		Funding: pallet_cf_funding,
 	}
 );
 
@@ -89,26 +89,26 @@ impl pallet_cf_flip::Config for Test {
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
 	type BlocksPerDay = BlocksPerDay;
-	type StakeHandler = MockStakeHandler;
+	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock;
 }
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
-cf_traits::impl_mock_stake_transfer!(AccountId, u128);
+cf_traits::impl_mock_on_account_funded!(AccountId, u128);
 
 pub struct MockBroadcaster;
 
 thread_local! {
-	pub static CLAIM_BROADCAST_REQUESTS: RefCell<Vec<<Ethereum as Chain>::ChainAmount>> = RefCell::new(vec![]);
+	pub static REDEMPTION_BROADCAST_REQUESTS: RefCell<Vec<<Ethereum as Chain>::ChainAmount>> = RefCell::new(vec![]);
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct MockRegisterClaim {
+pub struct MockRegisterRedemption {
 	amount: <Ethereum as Chain>::ChainAmount,
 }
 
-impl cf_chains::RegisterClaim<Ethereum> for MockRegisterClaim {
+impl cf_chains::RegisterRedemption<Ethereum> for MockRegisterRedemption {
 	fn new_unsigned(_node_id: &[u8; 32], amount: u128, _address: &[u8; 20], _expiry: u64) -> Self {
 		Self { amount }
 	}
@@ -118,7 +118,7 @@ impl cf_chains::RegisterClaim<Ethereum> for MockRegisterClaim {
 	}
 }
 
-impl ApiCall<Ethereum> for MockRegisterClaim {
+impl ApiCall<Ethereum> for MockRegisterRedemption {
 	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
 		unimplemented!()
 	}
@@ -138,20 +138,20 @@ impl ApiCall<Ethereum> for MockRegisterClaim {
 
 impl MockBroadcaster {
 	pub fn received_requests() -> Vec<<Ethereum as Chain>::ChainAmount> {
-		CLAIM_BROADCAST_REQUESTS.with(|cell| cell.borrow().clone())
+		REDEMPTION_BROADCAST_REQUESTS.with(|cell| cell.borrow().clone())
 	}
 }
 
 impl_mock_callback!(RuntimeOrigin);
 
 impl Broadcaster<Ethereum> for MockBroadcaster {
-	type ApiCall = MockRegisterClaim;
+	type ApiCall = MockRegisterRedemption;
 	type Callback = MockCallback;
 
 	fn threshold_sign_and_broadcast(
 		api_call: Self::ApiCall,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		CLAIM_BROADCAST_REQUESTS.with(|cell| {
+		REDEMPTION_BROADCAST_REQUESTS.with(|cell| {
 			cell.borrow_mut().push(api_call.amount);
 		});
 		(0, 1)
@@ -165,39 +165,39 @@ impl Broadcaster<Ethereum> for MockBroadcaster {
 	}
 }
 
-pub const CLAIM_DELAY_BUFFER_SECS: u64 = 10;
+pub const REDEMPTION_DELAY_BUFFER_SECS: u64 = 10;
 
-impl pallet_cf_staking::Config for Test {
+impl pallet_cf_funding::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type TimeSource = time_source::Mock;
 	type Balance = u128;
 	type Flip = Flip;
 	type WeightInfo = ();
-	type StakerId = AccountId;
+	type FunderId = AccountId;
 	type Broadcaster = MockBroadcaster;
 	type ThresholdCallable = RuntimeCall;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
-	type RegisterClaim = MockRegisterClaim;
+	type RegisterRedemption = MockRegisterRedemption;
 }
 
-pub const CLAIM_TTL_SECS: u64 = 10;
+pub const REDEMPTION_TTL_SECS: u64 = 10;
 
 pub const ALICE: AccountId = AccountId32::new([0xa1; 32]);
 pub const BOB: AccountId = AccountId32::new([0xb0; 32]);
 // Used as genesis node for testing.
 pub const CHARLIE: AccountId = AccountId32::new([0xc1; 32]);
 
-pub const MIN_STAKE: u128 = 10;
+pub const MIN_FUNDING: u128 = 10;
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000_000 },
-		staking: StakingConfig {
-			genesis_stakers: vec![(CHARLIE, MIN_STAKE)],
-			minimum_stake: MIN_STAKE,
-			claim_ttl: Duration::from_secs(CLAIM_TTL_SECS),
-			claim_delay_buffer_seconds: CLAIM_DELAY_BUFFER_SECS,
+		funding: FundingConfig {
+			genesis_validators: vec![(CHARLIE, MIN_FUNDING)],
+			minimum_funding: MIN_FUNDING,
+			redemption_ttl: Duration::from_secs(REDEMPTION_TTL_SECS),
+			redemption_delay_buffer_seconds: REDEMPTION_DELAY_BUFFER_SECS,
 		},
 	};
 

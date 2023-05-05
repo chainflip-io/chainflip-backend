@@ -13,7 +13,7 @@
       },
       {
         "internalType": "uint256",
-        "name": "genesisStake",
+        "name": "genesisFunding",
         "type": "uint256"
       },
       {
@@ -420,7 +420,7 @@
       },
       {
         "internalType": "address",
-        "name": "staker",
+        "name": "funder",
         "type": "address"
       }
     ],

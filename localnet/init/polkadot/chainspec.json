@@ -86,7 +86,7 @@
           ]
         ]
       },
-      "staking": {
+      "funding": {
         "validatorCount": 1,
         "minimumValidatorCount": 1,
         "invulnerables": [
@@ -95,7 +95,7 @@
         "forceEra": "NotForcing",
         "slashRewardFraction": 100000000,
         "canceledPayout": 0,
-        "stakers": [
+        "funders": [
           [
             "5GNJqTPyNqANBkUVMN1LPPrxXnFouWXoe2wNSmmEoLctxiZY",
             "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
@@ -152,8 +152,8 @@
         "phantom": null
       },
       "treasury": null,
-      "claims": {
-        "claims": [],
+      "redemptions": {
+        "redemptions": [],
         "vesting": []
       },
       "vesting": {

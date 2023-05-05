@@ -1,7 +1,7 @@
 //! Multisig signing and keygen
 pub use crypto::{
-	bitcoin, eth, polkadot, ChainTag, CryptoScheme, Rng, SignatureToThresholdSignature,
-	CHAIN_TAG_SIZE,
+	bitcoin, eth, polkadot, CanonicalEncoding, ChainTag, CryptoScheme, KeyId, Rng,
+	SignatureToThresholdSignature, CHAIN_TAG_SIZE,
 };
 
 pub use client::{MultisigClient, MultisigMessage};

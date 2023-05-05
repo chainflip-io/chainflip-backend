@@ -3,7 +3,7 @@ use crate::{
 	VAULT_ROTATION_BLOCKS,
 };
 use cf_primitives::{AuthorityCount, FlipBalance, GENESIS_EPOCH};
-use cf_traits::{EpochInfo, StakeTransfer};
+use cf_traits::EpochInfo;
 use sp_runtime::AccountId32;
 use state_chain_runtime::{Flip, Validator};
 use std::collections::HashMap;
@@ -23,28 +23,28 @@ fn authorities_earn_rewards_for_authoring_blocks() {
 			let genesis_authorities = Validator::current_authorities();
 			let (mut testnet, _) = network::Network::create(0, &genesis_authorities);
 
-			let staked_amounts = || {
+			let funded_amounts = || {
 				genesis_authorities
 					.iter()
-					.map(|id| (id.clone(), Flip::staked_balance(id)))
+					.map(|id| (id.clone(), Flip::total_balance_of(id)))
 					.collect()
 			};
 
-			let staked_amounts_before: Vec<(AccountId32, u128)> = staked_amounts();
+			let funded_amounts_before: Vec<(AccountId32, u128)> = funded_amounts();
 
 			// each authority should author a block and mint FLIP to themselves
 			testnet.move_forward_blocks(MAX_AUTHORITIES);
 
 			// Each node should have more rewards now than before, since they've each authored a
 			// block
-			let staked_amounts_after = staked_amounts();
+			let funded_amounts_after = funded_amounts();
 
 			// Ensure all nodes have increased the same amount
-			let first_node_stake = staked_amounts_after.first().unwrap().1;
-			staked_amounts_after.iter().all(|(_node, amount)| amount == &first_node_stake);
+			let first_amount = funded_amounts_after.first().unwrap().1;
+			funded_amounts_after.iter().all(|(_node, amount)| amount == &first_amount);
 
-			// Ensure all nodes have a higher stake than before
-			staked_amounts_before.into_iter().zip(staked_amounts_after).for_each(
+			// Ensure all nodes have a higher balance than before
+			funded_amounts_before.into_iter().zip(funded_amounts_after).for_each(
 				|((_node, amount_before), (_node2, amount_after))| {
 					assert!(amount_before < amount_after)
 				},
@@ -64,22 +64,26 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 		.max_authorities(MAX_AUTHORITIES)
 		.build()
 		.execute_with(|| {
-			// Create MAX_AUTHORITIES backup nodes and stake them above our genesis
+			// Create MAX_AUTHORITIES backup nodes and fund them above our genesis
 			// authorities The result will be our newly created nodes will be authorities
 			// and the genesis authorities will become backup nodes
 			let genesis_authorities = Validator::current_authorities();
 			let (mut testnet, init_backup_nodes) =
 				network::Network::create(MAX_AUTHORITIES as u8, &genesis_authorities);
 
-			// An initial stake which is greater than the genesis stakes
+			// An initial balance which is greater than the genesis balances
 			// We intend for these initially backup nodes to win the auction
-			const INITIAL_STAKE: FlipBalance = genesis::GENESIS_BALANCE * 2;
-			// Stake these backup nodes so that they are included in the next epoch
+			const INITIAL_FUNDING: FlipBalance = genesis::GENESIS_BALANCE * 2;
+			// Fund these backup nodes so that they are included in the next epoch
 			for node in &init_backup_nodes {
-				testnet.stake_manager_contract.stake(node.clone(), INITIAL_STAKE, GENESIS_EPOCH);
+				testnet.state_chain_gateway_contract.fund_account(
+					node.clone(),
+					INITIAL_FUNDING,
+					GENESIS_EPOCH,
+				);
 			}
 
-			// Allow the stakes to be registered, then initialise the account keys and peer
+			// Allow the funds to be registered, then initialise the account keys and peer
 			// ids.
 			testnet.move_forward_blocks(1);
 
@@ -120,23 +124,23 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			});
 
 			// assert list of backup validators as being the genesis authorities
-			let highest_staked_backup_nodes =
-				Validator::highest_staked_qualified_backup_nodes_lookup();
+			let highest_funded_backup_nodes =
+				Validator::highest_funded_qualified_backup_nodes_lookup();
 
 			assert_eq!(
-				genesis_authorities, highest_staked_backup_nodes,
+				genesis_authorities, highest_funded_backup_nodes,
 				"the genesis authorities should now be the backup nodes"
 			);
 
-			highest_staked_backup_nodes.iter().for_each(|account_id| {
+			highest_funded_backup_nodes.iter().for_each(|account_id| {
 				// we were active in the first epoch
 				assert_eq!(get_validator_state(account_id), ChainflipAccountState::Backup);
 				// TODO: Check historical epochs
 			});
 
-			let backup_node_balances: HashMap<NodeId, FlipBalance> = highest_staked_backup_nodes
+			let backup_node_balances: HashMap<NodeId, FlipBalance> = highest_funded_backup_nodes
 				.iter()
-				.map(|validator_id| (validator_id.clone(), Flip::staked_balance(validator_id)))
+				.map(|validator_id| (validator_id.clone(), Flip::total_balance_of(validator_id)))
 				.collect::<Vec<(NodeId, FlipBalance)>>()
 				.into_iter()
 				.collect();
@@ -145,9 +149,9 @@ fn genesis_nodes_rotated_out_accumulate_rewards_correctly() {
 			testnet.move_forward_blocks(HEARTBEAT_BLOCK_INTERVAL);
 
 			// We won't calculate the exact emissions but they should be greater than their
-			// initial stake
+			// initial balance
 			for (backup_node, pre_balance) in backup_node_balances {
-				assert!(pre_balance < Flip::staked_balance(&backup_node));
+				assert!(pre_balance < Flip::total_balance_of(&backup_node));
 			}
 		});
 }

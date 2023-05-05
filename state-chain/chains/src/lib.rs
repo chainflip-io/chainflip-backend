@@ -3,9 +3,7 @@ use core::fmt::Display;
 
 use crate::benchmarking_value::BenchmarkValue;
 pub use address::ForeignChainAddress;
-use cf_primitives::{
-	chains::assets, AssetAmount, EgressId, EpochIndex, EthAmount, IntentId, KeyId, PublicKeyBytes,
-};
+use cf_primitives::{chains::assets, AssetAmount, EgressId, EthAmount, IntentId};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -34,6 +32,7 @@ pub mod any;
 pub mod btc;
 pub mod dot;
 pub mod eth;
+pub mod none;
 
 pub mod address;
 
@@ -122,10 +121,7 @@ impl Age for () {
 /// Common crypto-related types and operations for some external chain.
 pub trait ChainCrypto: Chain {
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
-	/// TODO: Consider if Encode / Decode bounds are sufficient rather than To/From Vec<u8>
-	type AggKey: TryFrom<PublicKeyBytes>
-		+ Into<PublicKeyBytes>
-		+ TryFrom<KeyId>
+	type AggKey: MaybeSerializeDeserialize
 		+ Member
 		+ Parameter
 		+ Copy
@@ -148,8 +144,6 @@ pub trait ChainCrypto: Chain {
 
 	/// We use the AggKey as the payload for keygen verification ceremonies.
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload;
-
-	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId;
 }
 
 /// Common abi-related types and operations for some external chain.
@@ -257,12 +251,12 @@ pub trait UpdateFlipSupply<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		new_total_supply: u128,
 		block_number: u64,
-		stake_manager_address: &[u8; 20],
+		state_chain_gateway_address: &[u8; 20],
 	) -> Self;
 }
 
-/// Constructs the `RegisterClaim` api call.
-pub trait RegisterClaim<Abi: ChainAbi>: ApiCall<Abi> {
+/// Constructs the `RegisterRedemption` api call.
+pub trait RegisterRedemption<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(node_id: &[u8; 32], amount: u128, address: &[u8; 20], expiry: u64) -> Self;
 
 	fn amount(&self) -> u128;

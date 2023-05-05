@@ -4,7 +4,7 @@ Exposes relayer functionality via a json api interface.
 
 ## Example
 
-> ✋ Note: This example assumes that the node that is exposing the statechain rpc is staked.
+> ✋ Note: This example assumes that the node that is exposing the statechain rpc is funded.
 
 ```sh
 > ./target/release/chainflip-relayer \
@@ -38,7 +38,7 @@ Then in another terminal:
 ## Command line arguments and defaults
 
 - The `state_chain.ws_endpoint` should point at a synced rpc node. The default is `ws://localhost:9944`.
-- The `state_chain.signing_key_file` should be the relayer's private key for their on-chain account. The account should be staked. The default is `/etc/chainflip/keys/signing_key_file`.
+- The `state_chain.signing_key_file` should be the relayer's private key for their on-chain account. The account should be funded. The default is `/etc/chainflip/keys/signing_key_file`.
 - The `port` is the port on which the relayer will listen for connections. Use 0 to assign a random port. The default is 80.
 
 ```sh

@@ -62,7 +62,7 @@
           163,
           127
         ],
-        "stakeManagerAddress": [
+        "stateChainGatewayAddress": [
           255,
           153,
           246,
@@ -143,8 +143,8 @@
         "backupNodeEmissionInflation": 6,
         "supplyUpdateInterval": 14400
       },
-      "staking": {
-        "genesisStakers": [
+      "funding": {
+        "genesisAccounts": [
           [
             "cFLbassb4hwQ9iA7dzdVdyumRqkaXnkdYECrThhmrqjFukdVo",
             5000000000000000000000
@@ -158,8 +158,8 @@
             5000000000000000000000
           ]
         ],
-        "minimumStake": 10000000000000000000,
-        "claimTtl": {
+        "minimumFunding": 10000000000000000000,
+        "redemptionTtl": {
           "secs": 900,
           "nanos": 0
         }
@@ -190,7 +190,7 @@
         "genesisBackups": {},
         "blocksPerEpoch": 1800,
         "bond": 5000000000000000000000,
-        "claimPeriodAsPercentage": 50,
+        "redemptionPeriodAsPercentage": 50,
         "backupRewardNodePercentage": 20,
         "authoritySetMinSize": 2,
         "minSize": 2,

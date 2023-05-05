@@ -19,7 +19,7 @@ cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', defau
 cf-utilities = { package = 'utilities', path = '../../../utilities', default-features = false }
 
 # Used for benchmarking
-pallet-cf-staking = { path = '../cf-staking', optional = true, default-features = false }
+pallet-cf-funding = { path = '../cf-funding', optional = true, default-features = false }
 pallet-cf-reputation = { path = '../cf-reputation', optional = true, default-features = false }
 pallet-cf-vaults = { path = '../cf-vaults', optional = true, default-features = false }
 
@@ -70,7 +70,7 @@ runtime-benchmarks = [
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
-  'pallet-cf-staking/runtime-benchmarks',
+  'pallet-cf-funding/runtime-benchmarks',
   'pallet-cf-reputation',
   'pallet-cf-vaults/runtime-benchmarks',
   'sp-application-crypto',

@@ -1,5 +1,5 @@
 use cf_chains::address::ForeignChainAddress;
-use cf_primitives::{Asset, AssetAmount, BasisPoints};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, SwapOutput};
 use frame_support::dispatch::DispatchError;
 use sp_runtime::DispatchResult;
 
@@ -38,11 +38,8 @@ pub trait LpBalanceApi {
 pub trait SwappingApi {
 	// Attempt to swap `from` asset to `to` asset.
 	// If OK, return (output_amount, input_asset_fee, stable_asset_fee)
-	fn swap(
-		from: Asset,
-		to: Asset,
-		input_amount: AssetAmount,
-	) -> Result<AssetAmount, DispatchError>;
+	fn swap(from: Asset, to: Asset, input_amount: AssetAmount)
+		-> Result<SwapOutput, DispatchError>;
 }
 
 impl SwappingApi for () {
@@ -50,7 +47,7 @@ impl SwappingApi for () {
 		_from: Asset,
 		_to: Asset,
 		_input_amount: AssetAmount,
-	) -> Result<AssetAmount, DispatchError> {
+	) -> Result<SwapOutput, DispatchError> {
 		Ok(Default::default())
 	}
 }

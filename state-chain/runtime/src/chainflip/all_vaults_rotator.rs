@@ -19,10 +19,10 @@ where
 	type ValidatorId = A::ValidatorId;
 
 	/// Start all vault rotations with the provided `candidates`.
-	fn keygen(candidates: BTreeSet<Self::ValidatorId>, epoch_index: EpochIndex) {
-		A::keygen(candidates.clone(), epoch_index);
-		B::keygen(candidates.clone(), epoch_index);
-		C::keygen(candidates, epoch_index);
+	fn keygen(candidates: BTreeSet<Self::ValidatorId>, next_epoch_index: EpochIndex) {
+		A::keygen(candidates.clone(), next_epoch_index);
+		B::keygen(candidates.clone(), next_epoch_index);
+		C::keygen(candidates, next_epoch_index);
 	}
 
 	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>> {

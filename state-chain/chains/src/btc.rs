@@ -20,8 +20,8 @@ use sp_std::{vec, vec::Vec};
 extern crate alloc;
 use crate::{Age, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
 use alloc::string::String;
+use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Bitcoin;
-use cf_primitives::{chains::assets, EpochIndex, KeyId, PublicKeyBytes};
 use itertools;
 
 /// This salt is used to derive the change address for every vault. i.e. for every epoch.
@@ -58,28 +58,10 @@ pub type Hash = [u8; 32];
 	Ord,
 	PartialOrd,
 )]
-
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 // y-parity bit is assumed to always be 0x02.
 pub struct AggKey {
 	pub pubkey_x: [u8; 32],
-}
-
-impl From<KeyId> for AggKey {
-	fn from(key_id: KeyId) -> Self {
-		AggKey { pubkey_x: key_id.public_key_bytes.try_into().unwrap() }
-	}
-}
-
-impl From<AggKey> for PublicKeyBytes {
-	fn from(agg_key: AggKey) -> Self {
-		agg_key.pubkey_x.to_vec()
-	}
-}
-
-impl From<PublicKeyBytes> for AggKey {
-	fn from(public_key_bytes: PublicKeyBytes) -> Self {
-		AggKey { pubkey_x: public_key_bytes.try_into().unwrap() }
-	}
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
@@ -164,10 +146,6 @@ impl ChainCrypto for Bitcoin {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
 		vec![agg_key.pubkey_x]
-	}
-
-	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
-		KeyId { epoch_index, public_key_bytes: agg_key.into() }
 	}
 }
 fn verify_single_threshold_signature(

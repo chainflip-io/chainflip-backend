@@ -9,8 +9,10 @@ pub mod secp256k1;
 #[cfg(test)]
 mod tests;
 
+mod key_id;
+pub use key_id::*;
+
 use cf_chains::ChainCrypto;
-use cf_primitives::PublicKeyBytes;
 use generic_array::{typenum::Unsigned, ArrayLength};
 
 use num_derive::FromPrimitive;
@@ -107,11 +109,11 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 
 	type Signature: Debug + Clone + PartialEq + Sync + Send;
 
-	type AggKey: Into<PublicKeyBytes> + Clone;
+	type PublicKey: CanonicalEncoding + Debug + Clone + Sync + Send;
 
 	type SigningPayload: Display + Debug + Sync + Send + Clone + PartialEq + Eq + AsRef<[u8]>;
 
-	type Chain: cf_chains::Chain;
+	type Chain: cf_chains::ChainCrypto;
 
 	/// Friendly name of the scheme used for logging
 	const NAME: &'static str;
@@ -153,11 +155,12 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 
 	fn verify_signature(
 		signature: &Self::Signature,
-		public_key_bytes: &PublicKeyBytes,
+		public_key: &Self::PublicKey,
 		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()>;
 
-	fn agg_key(pubkey: &Self::Point) -> Self::AggKey;
+	/// Convert a point to a public key.
+	fn pubkey_from_point(pubkey_point: &Self::Point) -> Self::PublicKey;
 
 	// Only relevant for ETH and BTC keys, which are the only
 	// implementations that are expected to overwrite this

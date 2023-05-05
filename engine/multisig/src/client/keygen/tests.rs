@@ -918,9 +918,6 @@ async fn initially_incompatible_keys_can_sign() {
 }
 
 mod key_handover {
-
-	use cf_primitives::PublicKeyBytes;
-
 	use super::*;
 
 	fn to_account_id_set<T: AsRef<[u8]>>(ids: T) -> BTreeSet<AccountId> {
@@ -937,7 +934,7 @@ mod key_handover {
 		sharing_subset: BTreeSet<AccountId>,
 		receiving_set: BTreeSet<AccountId>,
 		options: HandoverTestOptions,
-	) -> (KeygenCeremonyRunner<Scheme>, PublicKeyBytes) {
+	) -> (KeygenCeremonyRunner<Scheme>, Scheme::PublicKey) {
 		use crate::client::common::ParticipantStatus;
 
 		assert!(sharing_subset.is_subset(&original_set));

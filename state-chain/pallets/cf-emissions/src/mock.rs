@@ -36,7 +36,7 @@ pub const FLIP_TO_BURN: u128 = 10_000;
 pub const SUPPLY_UPDATE_INTERVAL: u32 = 10;
 pub const TOTAL_ISSUANCE: u128 = 1_000_000_000;
 
-cf_traits::impl_mock_stake_transfer!(AccountId, u128);
+cf_traits::impl_mock_on_account_funded!(AccountId, u128);
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -106,7 +106,7 @@ impl pallet_cf_flip::Config for Test {
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
 	type BlocksPerDay = BlocksPerDay;
-	type StakeHandler = MockStakeHandler;
+	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock;
 }
@@ -131,20 +131,20 @@ pub struct MockUpdateFlipSupply {
 	pub nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 	pub new_total_supply: u128,
 	pub block_number: u64,
-	pub stake_manager_address: [u8; 20],
+	pub state_chain_gateway_address: [u8; 20],
 }
 
 impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
 	fn new_unsigned(
 		new_total_supply: u128,
 		block_number: u64,
-		stake_manager_address: &[u8; 20],
+		state_chain_gateway_address: &[u8; 20],
 	) -> Self {
 		Self {
 			nonce: MockEthReplayProtectionProvider::replay_protection(),
 			new_total_supply,
 			block_number,
-			stake_manager_address: *stake_manager_address,
+			state_chain_gateway_address: *state_chain_gateway_address,
 		}
 	}
 }

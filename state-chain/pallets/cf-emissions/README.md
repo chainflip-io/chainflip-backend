@@ -4,7 +4,7 @@ This pallet controls the emissions schedule of the FLIP token.
 
 ## Overview
 
-Regularly emit FLIP tokens and synchronise the current Issuance with the `StakeManager` Smart Contract via the Transaction Broadcast process.
+Regularly emit FLIP tokens and synchronise the current Issuance with the `StateChainGateway` Smart Contract via the Transaction Broadcast process.
 
 Uses the `on_initialize` pallet hook to trigger the minting of FLIP at regular intervals.
 

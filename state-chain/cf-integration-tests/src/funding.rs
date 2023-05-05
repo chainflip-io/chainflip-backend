@@ -1,18 +1,18 @@
 use crate::{
 	genesis::GENESIS_BALANCE,
-	network::{create_testnet_with_new_staker, NEW_STAKE_AMOUNT},
+	network::{create_testnet_with_new_funder, NEW_FUNDING_AMOUNT},
 };
 
 use super::{genesis, network, *};
 use cf_primitives::GENESIS_EPOCH;
 use cf_traits::EpochInfo;
-use pallet_cf_staking::pallet::Error;
+use pallet_cf_funding::pallet::Error;
 use pallet_cf_validator::Backups;
 #[test]
-// Stakers cannot claim when we are out of the claiming period (50% of the epoch)
-// We have a set of nodes that are staked and can claim in the claiming period and
-// not claim when out of the period
-fn cannot_claim_stake_out_of_claim_period() {
+// Nodes cannot redeem when we are out of the redeeming period (50% of the epoch)
+// We have a set of nodes that are funded and can redeem in the redeeming period and
+// not redeem when out of the period
+fn cannot_redeem_funds_out_of_redemption_period() {
 	const EPOCH_BLOCKS: u32 = 100;
 	const MAX_AUTHORITIES: AuthorityCount = 3;
 	super::genesis::default()
@@ -29,10 +29,14 @@ fn cannot_claim_stake_out_of_claim_period() {
 
 			nodes.append(&mut backup_nodes);
 
-			// Stake these nodes so that they are included in the next epoch
-			let stake_amount = genesis::GENESIS_BALANCE;
+			// Fund these nodes so that they are included in the next epoch
+			let funding_amount = genesis::GENESIS_BALANCE;
 			for node in &nodes {
-				testnet.stake_manager_contract.stake(node.clone(), stake_amount, GENESIS_EPOCH);
+				testnet.state_chain_gateway_contract.fund_account(
+					node.clone(),
+					funding_amount,
+					GENESIS_EPOCH,
+				);
 			}
 
 			// Move forward one block to process events
@@ -44,24 +48,25 @@ fn cannot_claim_stake_out_of_claim_period() {
 				"We should be in the genesis epoch"
 			);
 
-			// We should be able to claim stake out of an auction
+			// We should be able to redeem outside of an auction
 			for node in &nodes {
-				assert_ok!(Staking::claim(
+				assert_ok!(Funding::redeem(
 					RuntimeOrigin::signed(node.clone()),
 					1.into(),
 					ETH_DUMMY_ADDR
 				));
 			}
 
-			let end_of_claim_period = EPOCH_BLOCKS * PERCENT_OF_EPOCH_PERIOD_CLAIMABLE as u32 / 100;
-			// Move to end of the claim period
-			System::set_block_number(end_of_claim_period + 1);
-			// We will try to claim some stake
+			let end_of_redemption_period =
+				EPOCH_BLOCKS * PERCENT_OF_EPOCH_PERIOD_REDEEMABLE as u32 / 100;
+			// Move to end of the redemption period
+			System::set_block_number(end_of_redemption_period + 1);
+			// We will try to redeem
 			for node in &nodes {
 				assert_noop!(
-					Staking::claim(
+					Funding::redeem(
 						RuntimeOrigin::signed(node.clone()),
-						stake_amount.into(),
+						funding_amount.into(),
 						ETH_DUMMY_ADDR
 					),
 					Error::<Runtime>::AuctionPhase
@@ -77,21 +82,21 @@ fn cannot_claim_stake_out_of_claim_period() {
 
 			assert_eq!(2, Validator::epoch_index(), "We are in a new epoch");
 
-			// We should be able to claim again outside of the auction
-			// At the moment we have a pending claim so we would expect an error here for
+			// We should be able to redeem again outside of the auction
+			// At the moment we have a pending redemption so we would expect an error here for
 			// this.
-			// TODO implement Claims in Contract/Network
+			// TODO implement Redemptions in Contract/Network
 			for node in &nodes {
 				assert_noop!(
-					Staking::claim(RuntimeOrigin::signed(node.clone()), 1.into(), ETH_DUMMY_ADDR),
-					Error::<Runtime>::PendingClaim
+					Funding::redeem(RuntimeOrigin::signed(node.clone()), 1.into(), ETH_DUMMY_ADDR),
+					Error::<Runtime>::PendingRedemption
 				);
 			}
 		});
 }
 
 #[test]
-fn staked_node_is_added_to_backups() {
+fn funded_node_is_added_to_backups() {
 	const EPOCH_BLOCKS: u32 = 10_000_000;
 	super::genesis::default()
 		.blocks_per_epoch(EPOCH_BLOCKS)
@@ -105,9 +110,9 @@ fn staked_node_is_added_to_backups() {
 		.min_authorities(3)
 		.build()
 		.execute_with(|| {
-			let (_, new_backup) = create_testnet_with_new_staker();
+			let (_, new_backup) = create_testnet_with_new_funder();
 			let backups_map = Backups::<Runtime>::get();
 			assert_eq!(backups_map.len(), 1);
-			assert_eq!(backups_map.get(&new_backup).unwrap(), &NEW_STAKE_AMOUNT);
+			assert_eq!(backups_map.get(&new_backup).unwrap(), &NEW_FUNDING_AMOUNT);
 		});
 }
