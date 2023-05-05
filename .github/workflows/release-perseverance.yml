@@ -1,8 +1,8 @@
 name: Release Chainflip Perseverance
 on:
   push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+*'
+    # tags:
+    #   - 'v[0-9]+.[0-9]+.[0-9]+*'
 concurrency:
   group: ${{ github.ref }}-release-development
   cancel-in-progress: true
