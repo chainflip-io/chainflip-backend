@@ -5,7 +5,7 @@ mod with_std;
 #[cfg(feature = "std")]
 pub use with_std::*;
 
-#[cfg(feature = "test-utils")]
+#[cfg(any(feature = "test-utils", test))]
 pub mod testing;
 
 pub type Port = u16;
