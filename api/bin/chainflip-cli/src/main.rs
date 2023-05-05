@@ -77,7 +77,7 @@ pub async fn request_swap_deposit_address(
 		None,
 	)
 	.await?;
-	println!("Ingress address: {address}");
+	println!("Deposit Address: {address}");
 	Ok(())
 }
 
@@ -86,7 +86,7 @@ pub async fn request_liquidity_deposit_address(
 	asset: Asset,
 ) -> Result<()> {
 	let address = api::lp::request_liquidity_deposit_address(state_chain_settings, asset).await?;
-	println!("Ingress address: {address}");
+	println!("Deposit Address: {address}");
 	Ok(())
 }
 

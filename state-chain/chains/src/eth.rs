@@ -47,7 +47,7 @@ impl Chain for Ethereum {
 	type ChainAccount = eth::Address;
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
-	type DepositFetchId = EthereumIngressId;
+	type DepositFetchId = EthereumChannelId;
 }
 
 impl ChainCrypto for Ethereum {
@@ -678,12 +678,12 @@ impl From<H256> for TransactionHash {
 	}
 }
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
-pub enum EthereumIngressId {
+pub enum EthereumChannelId {
 	Deployed(Address),
 	UnDeployed(ChannelId),
 }
 
-impl IngressIdConstructor for EthereumIngressId {
+impl ChannelIdConstructor for EthereumChannelId {
 	type Address = H160;
 
 	fn deployed(_channel_id: u64, address: Self::Address) -> Self {

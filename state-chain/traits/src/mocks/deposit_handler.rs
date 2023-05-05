@@ -1,6 +1,6 @@
 use crate::{Chainflip, DepositApi};
 use cf_chains::{
-	address::ForeignChainAddress, eth::assets::any, CcmIngressMetadata, Chain, ForeignChain,
+	address::ForeignChainAddress, eth::assets::any, CcmDepositMetadata, Chain, ForeignChain,
 };
 use cf_primitives::{BasisPoints, ChannelId};
 use codec::{Decode, Encode};
@@ -28,7 +28,7 @@ pub struct SwapChannel<C: Chain, T: Chainflip> {
 	pub destination_address: ForeignChainAddress,
 	pub relayer_commission_bps: BasisPoints,
 	pub relayer_id: <T as frame_system::Config>::AccountId,
-	pub message_metadata: Option<CcmIngressMetadata>,
+	pub message_metadata: Option<CcmDepositMetadata>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -103,7 +103,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 		destination_address: ForeignChainAddress,
 		relayer_commission_bps: BasisPoints,
 		relayer_id: Self::AccountId,
-		message_metadata: Option<CcmIngressMetadata>,
+		message_metadata: Option<CcmDepositMetadata>,
 	) -> Result<(cf_primitives::ChannelId, ForeignChainAddress), sp_runtime::DispatchError> {
 		let (channel_id, deposit_address) =
 			Self::get_new_deposit_address(SwapOrLp::Swap, source_asset);

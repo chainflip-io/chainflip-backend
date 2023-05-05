@@ -80,7 +80,7 @@ Return:
 
 Parameters:
 
-- Ingress asset as a camel-case string, eg "Eth" or "Dot"
+- Source asset as a camel-case string, eg "Eth" or "Dot"
 
 Return:
 

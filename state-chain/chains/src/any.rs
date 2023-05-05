@@ -1,4 +1,4 @@
-use crate::{address::ForeignChainAddress, Chain, IngressIdConstructor};
+use crate::{address::ForeignChainAddress, Chain, ChannelIdConstructor};
 use cf_primitives::{
 	chains::{assets, AnyChain},
 	AssetAmount,
@@ -16,7 +16,7 @@ impl Chain for AnyChain {
 	type DepositFetchId = ();
 }
 
-impl IngressIdConstructor for () {
+impl ChannelIdConstructor for () {
 	type Address = ForeignChainAddress;
 
 	fn deployed(_channel_id: u64, _address: Self::Address) -> Self {

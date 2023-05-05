@@ -149,7 +149,7 @@ fn check_for_interesting_events_in_block(
 	// Median tip of all extrinsics in this block
 	u128,
 ) {
-	// to contain all the ingress witnessse for this block
+	// to contain all the deposit witnesses for this block
 	let mut deposit_witnesses = Vec::new();
 	// We only want to attempt to decode extrinsics that were sent by us. Since
 	// a) we know how to decode calls we create (but not necessarily all calls on Polkadot)
@@ -200,7 +200,7 @@ fn check_for_interesting_events_in_block(
 					}
 
 					// if `from` is our_vault then we're doing an egress
-					// if `to` is our_vault then we're doing an "ingress fetch"
+					// if `to` is our_vault then we're doing a "deposit fetch"
 					if from == our_vault || to == our_vault {
 						info!("Transfer from or to our_vault at block: {block_number}, extrinsic index: {extrinsic_index}");
 						interesting_indices.push(extrinsic_index);
@@ -243,9 +243,9 @@ fn check_for_interesting_events_in_block(
 /// Polkadot witnesser
 ///
 /// This component does all witnessing activities for Polkadot. This includes rotation witnessing,
-/// ingress witnessing and broadcast/egress witnessing.
+/// deposit witnessing and broadcast/egress witnessing.
 ///
-/// We use events for rotation and ingress witnessing but for broadcast/egress witnessing we use the
+/// We use events for rotation and deposit witnessing but for broadcast/egress witnessing we use the
 /// signature of the extrinsic.
 pub async fn start<StateChainClient, DotRpc>(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Polkadot>>,
@@ -622,7 +622,7 @@ mod tests {
 	}
 
 	#[test]
-	fn witness_ingresses_for_addresses_we_monitor() {
+	fn witness_deposits_for_addresses_we_monitor() {
 		// we want two monitors, one sent through at start, and one sent through channel
 		const TRANSFER_1_INDEX: u32 = 1;
 		let transfer_1_deposit_address = PolkadotAccountId::from([1; 32]);
@@ -662,10 +662,10 @@ mod tests {
 			),
 		]);
 
-		let (monitor_ingress_sender, mut address_monitor) =
+		let (monitor_command_sender, mut address_monitor) =
 			AddressMonitor::new(BTreeSet::from([transfer_1_deposit_address]));
 
-		monitor_ingress_sender
+		monitor_command_sender
 			.send(AddressMonitorCommand::Add(transfer_2_deposit_address))
 			.unwrap();
 
@@ -682,7 +682,7 @@ mod tests {
 		assert_eq!(deposit_witnesses.get(0).unwrap().amount, TRANSFER_1_AMOUNT);
 		assert_eq!(deposit_witnesses.get(1).unwrap().amount, TRANSFER_2_AMOUNT);
 
-		// We don't need to submit signature accepted for ingress witnesses
+		// We don't need to submit signature accepted for deposit witnesses
 		assert_eq!(interesting_indices.len(), 0);
 		assert!(vault_key_rotated_calls.is_empty());
 	}
@@ -708,7 +708,7 @@ mod tests {
 			// we'll receive this address from the channel
 			(
 				deposit_fetch_index,
-				// ingress fetch, to our vault
+				// fetch deposit, to our vault
 				mock_transfer(&PolkadotAccountId::from([7; 32]), &our_vault, deposit_fetch_amount),
 			),
 			(deposit_fetch_index, mock_tx_fee_paid(deposit_fetch_amount)),
@@ -812,7 +812,7 @@ mod tests {
 		// 	.unwrap();
 
 		// Monitor for transfers
-		// dot_monitor_ingress_sender
+		// dot_monitor_command_sender
 		// 	.send(
 		// 		PolkadotAccountId::from_str("5DJVVEYPDFZjj9JtJRE2vGvpeSnzBAUA74VXPSpkGKhJSHbN")
 		// 			.unwrap(),

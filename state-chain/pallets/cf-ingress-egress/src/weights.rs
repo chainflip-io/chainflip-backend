@@ -35,7 +35,6 @@ pub trait WeightInfo {
 	fn disable_asset_egress() -> Weight;
 	fn on_idle_with_nothing_to_send() -> Weight;
 	fn process_single_deposit() -> Weight;
-	fn finalise_ingress(a: u32, ) -> Weight;
 }
 
 /// Weights for pallet_cf_ingress_egress using the Substrate node and recommended hardware.
@@ -124,20 +123,6 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(4))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
-	// Storage: EthereumIngressEgress DepositAddressDetailsLookup (r:1 w:1)
-	// Storage: EthereumIngressEgress AddressPool (r:0 w:1)
-	// Storage: EthereumIngressEgress ChannelActions (r:0 w:1)
-	// Storage: EthereumIngressEgress AddressStatus (r:0 w:1)
-	/// The range of component `a` is `[1, 100]`.
-	fn finalise_ingress(a: u32, ) -> Weight {
-		// Minimum execution time: 21_000 nanoseconds.
-		Weight::from_ref_time(22_698_907)
-			// Standard Error: 13_692
-			.saturating_add(Weight::from_ref_time(4_597_024).saturating_mul(a.into()))
-			.saturating_add(T::DbWeight::get().reads(1))
-			.saturating_add(T::DbWeight::get().writes(3))
-			.saturating_add(T::DbWeight::get().writes((1_u64).saturating_mul(a.into())))
-	}
 }
 
 // For backwards compatibility and tests
@@ -224,19 +209,5 @@ impl WeightInfo for () {
 		Weight::from_ref_time(87_000_000)
 			.saturating_add(RocksDbWeight::get().reads(4))
 			.saturating_add(RocksDbWeight::get().writes(2))
-	}
-	// Storage: EthereumIngressEgress DepositAddressDetailsLookup (r:1 w:1)
-	// Storage: EthereumIngressEgress AddressPool (r:0 w:1)
-	// Storage: EthereumIngressEgress ChannelActions (r:0 w:1)
-	// Storage: EthereumIngressEgress AddressStatus (r:0 w:1)
-	/// The range of component `a` is `[1, 100]`.
-	fn finalise_ingress(a: u32, ) -> Weight {
-		// Minimum execution time: 21_000 nanoseconds.
-		Weight::from_ref_time(22_698_907)
-			// Standard Error: 13_692
-			.saturating_add(Weight::from_ref_time(4_597_024).saturating_mul(a.into()))
-			.saturating_add(RocksDbWeight::get().reads(1))
-			.saturating_add(RocksDbWeight::get().writes(3))
-			.saturating_add(RocksDbWeight::get().writes((1_u64).saturating_mul(a.into())))
 	}
 }

@@ -93,7 +93,7 @@ benchmarks! {
 
 	ccm_deposit {
 		let origin = T::EnsureWitnessed::successful_origin();
-		let metadata = CcmIngressMetadata {
+		let metadata = CcmDepositMetadata {
 			message: vec![0x00],
 			gas_budget: 1,
 			refund_address: ForeignChainAddress::benchmark_value(),

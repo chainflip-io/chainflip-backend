@@ -101,7 +101,7 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ Copy
 		+ BenchmarkValue
-		+ IngressIdConstructor<Address = Self::ChainAccount>;
+		+ ChannelIdConstructor<Address = Self::ChainAccount>;
 }
 
 /// Measures the age of items associated with the Chain.
@@ -293,30 +293,30 @@ pub trait FeeRefundCalculator<C: Chain> {
 }
 
 /// Helper trait to avoid matching over chains in the generic pallet.
-pub trait IngressIdConstructor {
+pub trait ChannelIdConstructor {
 	type Address;
-	/// Constructs the IngressId for the deployed case.
+	/// Constructs the ChannelId for the deployed case.
 	fn deployed(channel_id: u64, address: Self::Address) -> Self;
-	/// Constructs the IngressId for the undeployed case.
+	/// Constructs the ChannelId for the undeployed case.
 	fn undeployed(channel_id: u64, address: Self::Address) -> Self;
 }
 
 /// Metadata as part of a Cross Chain Message.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct CcmIngressMetadata {
+pub struct CcmDepositMetadata {
 	/// Call data used after the message is egressed.
 	pub message: Vec<u8>,
-	/// Amount of ingress funds to be used for gas.
+	/// User funds designated to be used for gas.
 	pub gas_budget: AssetAmount,
 	/// The address refunds will go to.
 	pub refund_address: ForeignChainAddress,
-	/// The address the ingress was sent from.
+	/// The address the deposit was sent from.
 	pub source_address: ForeignChainAddress,
 }
 
 #[cfg(feature = "std")]
-impl std::str::FromStr for CcmIngressMetadata {
+impl std::str::FromStr for CcmDepositMetadata {
 	type Err = String;
 
 	fn from_str(_s: &str) -> Result<Self, Self::Err> {

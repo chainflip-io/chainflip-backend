@@ -1,6 +1,6 @@
-# Chainflip Egress Pallet
+# Chainflip Ingress-Egress Pallet
 
-This pallet manages the outward flowing of funds from the State chain.
+This pallet tracks the flow of funds to and from Chainflip vaults.
 
 ## Overview
 
@@ -10,14 +10,20 @@ Periodically (triggered automatically by `on_idle`, or manually by a governance 
 
 ## Terminology
 
-**Egress:**
-The act of sending on-chain asset to an address on another chain.
+**Deposit**
+A deposit occurs when a user sends funds to a deposit address.
 
-**Transfer:**
-Transfer is the part of this process that move funds from the vault to the destination address(es).
+**Channel**
+A channel is a specific combination of deposit address and associated action, for example swapping or depositing liquidity.
 
 **Ingress**
-Ingress is the entire process of bridging funds in to Chainflip.
+Ingress is the abstract term describing the entire process of tracking deposits of funds into Chainflip vaults.
+
+**Egress:**
+Egress is the abstract term describing the process of triggering fetches and transfers to/from Chainflip vaults.
+
+**Transfer:**
+Transfers move funds from a Chainflip vault to (a) destination address(es).
 
 **Fetch:**
-Fetching is the part of this process that moves funds from the deposit address(es) to our vault.
+Fetches consolidate funds from the deposit address(es) into the corresponding Chainflip vault.

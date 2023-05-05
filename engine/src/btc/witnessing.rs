@@ -33,14 +33,14 @@ pub async fn start(
 		.await
 		.context("Initial query for BTC latest block number failed.")?;
 
-	let (ingress_sender, address_monitor) = AddressMonitor::new(
+	let (address_monitor_command_sender, address_monitor) = AddressMonitor::new(
 		state_chain_client
 			.storage_map::<pallet_cf_ingress_egress::DepositAddressDetailsLookup<
 				state_chain_runtime::Runtime,
 				state_chain_runtime::BitcoinInstance,
 			>>(initial_block_hash)
 			.await
-			.context("Failed to get initial BTC ingress details")?
+			.context("Failed to get initial BTC deposit details")?
 			.into_iter()
 			.filter_map(|(address, channel_details)| {
 				if channel_details.source_asset == cf_primitives::chains::assets::btc::Asset::Btc {
@@ -63,5 +63,5 @@ pub async fn start(
 		.map_err(|_| anyhow::anyhow!("btc::witnesser::start failed")),
 	);
 
-	Ok(ingress_sender)
+	Ok(address_monitor_command_sender)
 }

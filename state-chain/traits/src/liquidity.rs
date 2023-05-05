@@ -6,7 +6,7 @@ use sp_runtime::DispatchResult;
 pub trait SwapDepositHandler {
 	type AccountId;
 
-	fn on_swap_ingress(
+	fn on_swap_deposit(
 		deposit_address: ForeignChainAddress,
 		from: Asset,
 		to: Asset,
@@ -56,7 +56,7 @@ impl SwappingApi for () {
 impl<T: frame_system::Config> SwapDepositHandler for T {
 	type AccountId = T::AccountId;
 
-	fn on_swap_ingress(
+	fn on_swap_deposit(
 		_deposit_address: ForeignChainAddress,
 		_from: Asset,
 		_to: Asset,

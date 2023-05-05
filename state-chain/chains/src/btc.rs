@@ -18,7 +18,7 @@ use sp_core::ConstU32;
 use sp_std::{vec, vec::Vec};
 
 extern crate alloc;
-use crate::{Age, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
+use crate::{Age, Chain, ChainAbi, ChainCrypto, ChannelIdConstructor, FeeRefundCalculator};
 use alloc::string::String;
 use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Bitcoin;
@@ -210,7 +210,7 @@ pub struct UtxoId {
 	pub vout: u32,
 }
 
-impl IngressIdConstructor for BitcoinFetchId {
+impl ChannelIdConstructor for BitcoinFetchId {
 	type Address = BitcoinScriptBounded;
 
 	fn deployed(channel_id: u64, _address: Self::Address) -> Self {

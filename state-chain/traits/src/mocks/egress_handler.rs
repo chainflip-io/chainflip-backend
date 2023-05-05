@@ -1,6 +1,6 @@
 use super::{MockPallet, MockPalletStorage};
 use crate::EgressApi;
-use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata, Chain};
+use cf_chains::{address::ForeignChainAddress, CcmDepositMetadata, Chain};
 use cf_primitives::{AssetAmount, EgressId, ForeignChain};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
@@ -60,7 +60,7 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 		asset: <C as Chain>::ChainAsset,
 		amount: <C as Chain>::ChainAmount,
 		destination_address: <C as Chain>::ChainAccount,
-		maybe_message: Option<CcmIngressMetadata>,
+		maybe_message: Option<CcmDepositMetadata>,
 	) -> EgressId {
 		<Self as MockPalletStorage>::mutate_value(b"SCHEDULED_EGRESSES", |storage| {
 			if storage.is_none() {

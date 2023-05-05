@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
-	CcmIngressMetadata,
+	CcmDepositMetadata,
 };
 use cf_primitives::{Asset, AssetAmount, ChannelId, ForeignChain};
 use cf_traits::{liquidity::SwappingApi, CcmHandler, DepositApi, SystemStateInfo};
@@ -72,7 +72,7 @@ pub(crate) struct CcmSwap {
 	deposit_amount: AssetAmount,
 	destination_asset: Asset,
 	destination_address: ForeignChainAddress,
-	message_metadata: CcmIngressMetadata,
+	message_metadata: CcmDepositMetadata,
 }
 
 #[frame_support::pallet]
@@ -90,7 +90,7 @@ pub mod pallet {
 		/// Standard Event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// API for handling asset ingress.
+		/// API for handling asset deposits.
 		type DepositHandler: DepositApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
@@ -224,8 +224,8 @@ pub mod pallet {
 		NoFundsAvailable,
 		/// The target chain does not support CCM.
 		CcmUnsupportedForTargetChain,
-		/// The ingressed amount is insufficient to pay for the gas budget.
-		CcmInsufficientIngressAmount,
+		/// The deposited amount is insufficient to pay for the gas budget.
+		CcmInsufficientDepositAmount,
 	}
 
 	#[pallet::genesis_config]
@@ -307,7 +307,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			relayer_commission_bps: BasisPoints,
-			message_metadata: Option<CcmIngressMetadata>,
+			message_metadata: Option<CcmDepositMetadata>,
 		) -> DispatchResult {
 			let relayer = T::AccountRoleRegistry::ensure_relayer(origin)?;
 
@@ -435,9 +435,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Process the ingress of a Cross-chain-message. The fund is swapped into the target
-		/// chain's native asset, with appropriate fees and gas deducted, and the
-		/// message is egressed to the target chain.
+		/// Process the deposit of a CCM swap.
 		#[pallet::weight(T::WeightInfo::ccm_deposit())]
 		pub fn ccm_deposit(
 			origin: OriginFor<T>,
@@ -445,7 +443,7 @@ pub mod pallet {
 			deposit_amount: AssetAmount,
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
-			message_metadata: CcmIngressMetadata,
+			message_metadata: CcmDepositMetadata,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
@@ -637,8 +635,8 @@ pub mod pallet {
 	impl<T: Config> SwapDepositHandler for Pallet<T> {
 		type AccountId = T::AccountId;
 
-		/// Callback function to kick off the swapping process after a successful ingress.
-		fn on_swap_ingress(
+		/// Callback function to kick off the swapping process after a successful deposit.
+		fn on_swap_deposit(
 			deposit_address: ForeignChainAddress,
 			from: Asset,
 			to: Asset,
@@ -676,7 +674,7 @@ pub mod pallet {
 			deposit_amount: AssetAmount,
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
-			message_metadata: CcmIngressMetadata,
+			message_metadata: CcmDepositMetadata,
 		) -> DispatchResult {
 			// Caller should ensure that assets and addresses are compatible.
 			debug_assert!(
@@ -690,10 +688,10 @@ pub mod pallet {
 				Error::<T>::CcmUnsupportedForTargetChain
 			);
 
-			// Ingressed amount should be enough to pay for gas.
+			// Deposited amount should be enough to pay for gas.
 			ensure!(
 				deposit_amount > message_metadata.gas_budget,
-				Error::<T>::CcmInsufficientIngressAmount
+				Error::<T>::CcmInsufficientDepositAmount
 			);
 
 			let ccm_id = CcmIdCounter::<T>::mutate(|id| {
@@ -718,7 +716,7 @@ pub mod pallet {
 
 			let output_gas_asset = ForeignChain::from(destination_asset).gas_asset();
 			let gas_swap_id = if source_asset == output_gas_asset {
-				// Ingress can be used as gas directly
+				// Deposit can be used as gas directly
 				swap_output.gas = Some(message_metadata.gas_budget);
 				None
 			} else {

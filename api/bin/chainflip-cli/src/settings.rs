@@ -56,7 +56,7 @@ impl Default for CLICommandLineOptions {
 
 #[derive(Parser, Clone, Debug)]
 pub struct SwapRequestParams {
-	/// Ingress asset ("eth"|"dot")
+	/// Source asset ("eth"|"dot")
 	pub source_asset: Asset,
 	/// Egress asset ("eth"|"dot")
 	pub destination_asset: Asset,

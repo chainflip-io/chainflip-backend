@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use cf_chains::{address::EncodedAddress, CcmIngressMetadata, ForeignChainAddress};
+use cf_chains::{address::EncodedAddress, CcmDepositMetadata, ForeignChainAddress};
 use cf_primitives::{Asset, EpochIndex, EthereumAddress};
 use tracing::{info, warn};
 use web3::{
@@ -197,7 +197,7 @@ impl EthContractWitnesser for Vault {
 						destination_address.0,
 					)
 					.map_err(anyhow::Error::msg)?,
-					message_metadata: CcmIngressMetadata {
+					message_metadata: CcmDepositMetadata {
 						message: message.0,
 						gas_budget: gas_amount,
 						refund_address: ForeignChainAddress::Eth(
@@ -230,7 +230,7 @@ impl EthContractWitnesser for Vault {
 						destination_address.0,
 					)
 					.map_err(anyhow::Error::msg)?,
-					message_metadata: CcmIngressMetadata {
+					message_metadata: CcmDepositMetadata {
 						message: message.0,
 						gas_budget: gas_amount,
 						refund_address: ForeignChainAddress::Eth(

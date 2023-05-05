@@ -71,7 +71,7 @@ OPTIONS:
 
 Parameters:
 
-- Ingress asset as a camel-case string, eg "Eth" or "Dot".
+- Source asset as a camel-case string, eg "Eth" or "Dot".
 - Egress asset as a camel-case string, eg "Eth" or "Dot".
 - Egress Address in hex. Must match the format of the egress asset's chain: 20 bytes for ethereum assets, 32 bytes for polkadot.
 - Relayer Commission in basis points (100th of a percent).

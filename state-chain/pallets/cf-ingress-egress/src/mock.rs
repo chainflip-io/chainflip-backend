@@ -2,7 +2,7 @@ pub use crate::{self as pallet_cf_ingress_egress};
 pub use cf_chains::{
 	address::ForeignChainAddress,
 	eth::api::{EthereumApi, EthereumReplayProtection},
-	CcmIngressMetadata, Chain, ChainAbi, ChainEnvironment,
+	CcmDepositMetadata, Chain, ChainAbi, ChainEnvironment,
 };
 pub use cf_primitives::{
 	chains::{assets, Ethereum},

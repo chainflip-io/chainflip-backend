@@ -5,7 +5,7 @@ use cf_amm::{
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
-	CcmIngressMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress,
+	CcmDepositMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress,
 };
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount};
 use cf_test_utilities::{assert_events_eq, assert_events_match};
@@ -302,7 +302,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 
 		let gas_budget = 100;
 		let deposit_amount = 1_000;
-		let message = CcmIngressMetadata {
+		let message = CcmDepositMetadata {
 			message: vec![0u8, 1u8, 2u8, 3u8, 4u8],
 			gas_budget,
 			refund_address: ForeignChainAddress::Eth([0x01; 20]),
@@ -318,7 +318,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			Some(message),
 		));
 
-		// Ingress fund for the ccm.
+		// Deposit funds for the ccm.
 		let deposit_address =
 			<AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
 				cf_chains::eth::assets::eth::Asset::Flip,
@@ -418,7 +418,7 @@ fn can_process_ccm_via_direct_deposit() {
 
 		let gas_budget = 100;
 		let deposit_amount = 1_000;
-		let message = CcmIngressMetadata {
+		let message = CcmDepositMetadata {
 			message: vec![0u8, 1u8, 2u8, 3u8, 4u8],
 			gas_budget,
 			refund_address: ForeignChainAddress::Eth([0x01; 20]),

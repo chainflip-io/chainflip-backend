@@ -31,7 +31,7 @@ use cf_chains::{
 		api::{EthereumApi, EthereumReplayProtection},
 		Ethereum,
 	},
-	AnyChain, ApiCall, CcmIngressMetadata, Chain, ChainAbi, ChainCrypto, ChainEnvironment,
+	AnyChain, ApiCall, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, ChainEnvironment,
 	ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
 	TransactionBuilder,
 };
@@ -407,9 +407,9 @@ impl CommKeyBroadcaster for TokenholderGovernanceBroadcaster {
 }
 
 #[macro_export]
-macro_rules! impl_ingress_api_for_anychain {
-	( $anychain: ident, $(($chain: ident, $ingress_egress: ident)),+ ) => {
-		impl DepositApi<AnyChain> for $anychain {
+macro_rules! impl_deposit_api_for_anychain {
+	( $t: ident, $(($chain: ident, $pallet: ident)),+ ) => {
+		impl DepositApi<AnyChain> for $t {
 			type AccountId = <Runtime as frame_system::Config>::AccountId;
 
 			fn request_liquidity_deposit_address(
@@ -419,7 +419,7 @@ macro_rules! impl_ingress_api_for_anychain {
 				match source_asset.into() {
 					$(
 						ForeignChain::$chain =>
-							$ingress_egress::request_liquidity_deposit_address(
+							$pallet::request_liquidity_deposit_address(
 								lp_account,
 								source_asset.try_into().unwrap(),
 							),
@@ -433,11 +433,11 @@ macro_rules! impl_ingress_api_for_anychain {
 				destination_address: ForeignChainAddress,
 				relayer_commission_bps: BasisPoints,
 				relayer_id: Self::AccountId,
-				message_metadata: Option<CcmIngressMetadata>,
+				message_metadata: Option<CcmDepositMetadata>,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match source_asset.into() {
 					$(
-						ForeignChain::$chain => $ingress_egress::request_swap_deposit_address(
+						ForeignChain::$chain => $pallet::request_swap_deposit_address(
 							source_asset.try_into().unwrap(),
 							destination_asset,
 							destination_address,
@@ -453,7 +453,7 @@ macro_rules! impl_ingress_api_for_anychain {
 				match chain {
 					$(
 						ForeignChain::$chain => {
-							$ingress_egress::expire_channel(channel_id, address.try_into().expect("Checked for address compatibility"));
+							$pallet::expire_channel(channel_id, address.try_into().expect("Checked for address compatibility"));
 						},
 					)+
 				}
@@ -464,17 +464,17 @@ macro_rules! impl_ingress_api_for_anychain {
 
 #[macro_export]
 macro_rules! impl_egress_api_for_anychain {
-	( $anychain: ident, $(($chain: ident, $ingress_egress: ident)),+ ) => {
-		impl EgressApi<AnyChain> for $anychain {
+	( $t: ident, $(($chain: ident, $pallet: ident)),+ ) => {
+		impl EgressApi<AnyChain> for $t {
 			fn schedule_egress(
 				asset: Asset,
 				amount: <AnyChain as Chain>::ChainAmount,
 				destination_address: <AnyChain as Chain>::ChainAccount,
-				maybe_message: Option<CcmIngressMetadata>,
+				maybe_message: Option<CcmDepositMetadata>,
 			) -> EgressId {
 				match asset.into() {
 					$(
-						ForeignChain::$chain => $ingress_egress::schedule_egress(
+						ForeignChain::$chain => $pallet::schedule_egress(
 							asset.try_into().expect("Checked for asset compatibility"),
 							amount.try_into().expect("Checked for amount compatibility"),
 							destination_address
@@ -490,9 +490,8 @@ macro_rules! impl_egress_api_for_anychain {
 	}
 }
 
-// impl ingress and egress any for AnyChain.
 pub struct AnyChainIngressEgressHandler;
-impl_ingress_api_for_anychain!(
+impl_deposit_api_for_anychain!(
 	AnyChainIngressEgressHandler,
 	(Ethereum, EthereumIngressEgress),
 	(Polkadot, PolkadotIngressEgress),
@@ -523,11 +522,11 @@ impl DepositHandler<Bitcoin> for BtcDepositHandler {
 	}
 
 	fn on_channel_opened(
-		ingress_script: <Bitcoin as Chain>::ChainAccount,
+		deposit_script: <Bitcoin as Chain>::ChainAccount,
 		salt: ChannelId,
 	) -> Result<(), DispatchError> {
 		Environment::add_details_for_btc_deposit_script(
-			ingress_script,
+			deposit_script,
 			salt.try_into().expect("The salt/channel_id is not expected to exceed u32 max"), /* Todo: Confirm
 			                                                                                  * this assumption.
 			                                                                                  * Consider this in

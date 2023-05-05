@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use chainflip_api::{
 	self, clean_foreign_chain_address,
-	primitives::{AccountRole, Asset, BasisPoints, CcmIngressMetadata},
+	primitives::{AccountRole, Asset, BasisPoints, CcmDepositMetadata},
 	settings::StateChain,
 };
 use clap::Parser;
@@ -24,7 +24,7 @@ pub trait Rpc {
 		destination_asset: Asset,
 		destination_address: String,
 		relayer_commission_bps: BasisPoints,
-		message_metadata: Option<CcmIngressMetadata>,
+		message_metadata: Option<CcmDepositMetadata>,
 	) -> Result<String, Error>;
 }
 
@@ -51,7 +51,7 @@ impl RpcServer for RpcServerImpl {
 		destination_asset: Asset,
 		destination_address: String,
 		relayer_commission_bps: BasisPoints,
-		message_metadata: Option<CcmIngressMetadata>,
+		message_metadata: Option<CcmDepositMetadata>,
 	) -> Result<String, Error> {
 		Ok(chainflip_api::request_swap_deposit_address(
 			&self.state_chain_settings,

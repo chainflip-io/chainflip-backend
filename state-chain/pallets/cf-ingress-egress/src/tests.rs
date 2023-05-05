@@ -371,7 +371,7 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 			asset,
 			1_000,
 			ALICE_ETH_ADDRESS.into(),
-			Some(CcmIngressMetadata {
+			Some(CcmDepositMetadata {
 				message: vec![],
 				gas_budget: 0,
 				refund_address: ForeignChainAddress::Eth(Default::default()),
@@ -519,7 +519,7 @@ fn can_process_ccm_deposit() {
 		let from_asset = eth::Asset::Flip;
 		let to_asset = Asset::Eth;
 		let destination_address = ForeignChainAddress::Eth(Default::default());
-		let ccm = CcmIngressMetadata {
+		let ccm = CcmDepositMetadata {
 			message: vec![0x00, 0x01, 0x02],
 			gas_budget: 1_000,
 			refund_address: ForeignChainAddress::Eth(Default::default()),
@@ -571,7 +571,7 @@ fn can_egress_ccm() {
 	new_test_ext().execute_with(|| {
 		let destination_address: H160 = [0x01; 20].into();
 		let destination_asset = eth::Asset::Eth;
-		let ccm = CcmIngressMetadata {
+		let ccm = CcmDepositMetadata {
 			message: vec![0x00, 0x01, 0x02],
 			gas_budget: 1_000,
 			refund_address: ForeignChainAddress::Eth([0x02; 20]),
