@@ -393,10 +393,14 @@ pub mod pallet {
 					match T::VaultRotator::status() {
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
 							let authority_candidates = rotation_state.authority_candidates();
-							T::VaultRotator::key_handover(helpers::select_sharing_participants(Self::current_authorities(), &authority_candidates, rotation_state.new_epoch_index), authority_candidates, rotation_state.new_epoch_index);
+							// We want to exclude nodes who have been banned from the key handover (but may not be in the authority_candidates)
+							let non_banned_current_authorities = rotation_state.filter_out_banned(Self::current_authorities());
+							T::VaultRotator::key_handover(helpers::select_sharing_participants(non_banned_current_authorities, &authority_candidates, rotation_state.new_epoch_index), authority_candidates, rotation_state.new_epoch_index);
 							Self::set_rotation_phase(RotationPhase::KeyHandoversInProgress(rotation_state));
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
+							// TODO: Punish a bit more here? Some of these nodes are already an authority and have failed to participate in handover.
+							// So given they're already not going to be in the set, excluding them from the set may not be enough punishment.
 							rotation_state.ban(offenders);
 
 							Self::start_vault_rotation(rotation_state);
