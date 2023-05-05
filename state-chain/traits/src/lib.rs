@@ -689,8 +689,8 @@ pub trait DepositApi<C: Chain> {
 		source_asset: C::ChainAsset,
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
-		relayer_commission_bps: BasisPoints,
-		relayer_id: Self::AccountId,
+		broker_commission_bps: BasisPoints,
+		broker_id: Self::AccountId,
 		message_metadata: Option<CcmDepositMetadata>,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
@@ -727,8 +727,8 @@ impl AddressDerivationApi<Polkadot> for () {
 pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn register_account_role(who: &T::AccountId, role: AccountRole) -> DispatchResult;
 
-	fn register_as_relayer(account_id: &T::AccountId) -> DispatchResult {
-		Self::register_account_role(account_id, AccountRole::Relayer)
+	fn register_as_broker(account_id: &T::AccountId) -> DispatchResult {
+		Self::register_account_role(account_id, AccountRole::Broker)
 	}
 
 	fn register_as_liquidity_provider(account_id: &T::AccountId) -> DispatchResult {
@@ -744,8 +744,8 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 		role: AccountRole,
 	) -> Result<T::AccountId, BadOrigin>;
 
-	fn ensure_relayer(origin: T::RuntimeOrigin) -> Result<T::AccountId, BadOrigin> {
-		Self::ensure_account_role(origin, AccountRole::Relayer)
+	fn ensure_broker(origin: T::RuntimeOrigin) -> Result<T::AccountId, BadOrigin> {
+		Self::ensure_account_role(origin, AccountRole::Broker)
 	}
 
 	fn ensure_liquidity_provider(origin: T::RuntimeOrigin) -> Result<T::AccountId, BadOrigin> {

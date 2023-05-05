@@ -158,8 +158,8 @@ pub async fn register_account_role(
 			let call = match role {
 				AccountRole::Validator =>
 					RuntimeCall::from(pallet_cf_validator::Call::register_as_validator {}),
-				AccountRole::Relayer =>
-					RuntimeCall::from(pallet_cf_swapping::Call::register_as_relayer {}),
+				AccountRole::Broker =>
+					RuntimeCall::from(pallet_cf_swapping::Call::register_as_broker {}),
 				AccountRole::LiquidityProvider =>
 					RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
 				AccountRole::None => bail!("Cannot register account role None"),
@@ -350,7 +350,7 @@ pub async fn request_swap_deposit_address(
 	source_asset: Asset,
 	destination_asset: Asset,
 	destination_address: EncodedAddress,
-	relayer_commission_bps: BasisPoints,
+	broker_commission_bps: BasisPoints,
 	message_metadata: Option<CcmDepositMetadata>,
 ) -> Result<EncodedAddress> {
 	let events = connect_submit_and_get_events(
@@ -359,7 +359,7 @@ pub async fn request_swap_deposit_address(
 			source_asset,
 			destination_asset,
 			destination_address,
-			relayer_commission_bps,
+			broker_commission_bps,
 			message_metadata,
 		},
 		AccountRole::None,

@@ -12,8 +12,8 @@ pub trait SwapDepositHandler {
 		to: Asset,
 		amount: AssetAmount,
 		destination_address: ForeignChainAddress,
-		relayer_id: Self::AccountId,
-		relayer_commission_bps: BasisPoints,
+		broker_id: Self::AccountId,
+		broker_commission_bps: BasisPoints,
 	);
 }
 
@@ -62,8 +62,8 @@ impl<T: frame_system::Config> SwapDepositHandler for T {
 		_to: Asset,
 		_amount: AssetAmount,
 		_destination_address: ForeignChainAddress,
-		_relayer_id: Self::AccountId,
-		_relayer_commission_bps: BasisPoints,
+		_broker_id: Self::AccountId,
+		_broker_commission_bps: BasisPoints,
 	) {
 	}
 }

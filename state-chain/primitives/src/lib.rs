@@ -97,8 +97,8 @@ pub enum AccountRole {
 	Validator,
 	/// Liquidity providers can deposit assets and deploy them in trading pools.
 	LiquidityProvider,
-	/// Relayers submit swap deposit requests on behalf of users.
-	Relayer,
+	/// Brokers submit swap deposit requests on behalf of users.
+	Broker,
 }
 
 impl Default for AccountRole {

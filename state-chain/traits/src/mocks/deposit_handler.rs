@@ -26,8 +26,8 @@ pub struct SwapChannel<C: Chain, T: Chainflip> {
 	pub source_asset: <C as Chain>::ChainAsset,
 	pub destination_asset: any::Asset,
 	pub destination_address: ForeignChainAddress,
-	pub relayer_commission_bps: BasisPoints,
-	pub relayer_id: <T as frame_system::Config>::AccountId,
+	pub broker_commission_bps: BasisPoints,
+	pub broker_id: <T as frame_system::Config>::AccountId,
 	pub message_metadata: Option<CcmDepositMetadata>,
 }
 
@@ -101,8 +101,8 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 		source_asset: <C as Chain>::ChainAsset,
 		destination_asset: cf_primitives::Asset,
 		destination_address: ForeignChainAddress,
-		relayer_commission_bps: BasisPoints,
-		relayer_id: Self::AccountId,
+		broker_commission_bps: BasisPoints,
+		broker_id: Self::AccountId,
 		message_metadata: Option<CcmDepositMetadata>,
 	) -> Result<(cf_primitives::ChannelId, ForeignChainAddress), sp_runtime::DispatchError> {
 		let (channel_id, deposit_address) =
@@ -117,8 +117,8 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 					source_asset,
 					destination_asset,
 					destination_address,
-					relayer_commission_bps,
-					relayer_id,
+					broker_commission_bps,
+					broker_id,
 					message_metadata,
 				});
 			};

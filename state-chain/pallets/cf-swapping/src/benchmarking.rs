@@ -27,13 +27,13 @@ benchmarks! {
 	request_swap_deposit_address {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		T::AccountRoleRegistry::register_as_relayer(&caller).unwrap();
+		T::AccountRoleRegistry::register_as_broker(&caller).unwrap();
 		let origin = RawOrigin::Signed(caller);
 		let call = Call::<T>::request_swap_deposit_address {
 			source_asset: Asset::Eth,
 			destination_asset: Asset::Usdc,
 			destination_address: EncodedAddress::benchmark_value(),
-			relayer_commission_bps: 0,
+			broker_commission_bps: 0,
 			message_metadata: None,
 		};
 	} : { call.dispatch_bypass_filter(origin.into())?; }
@@ -53,21 +53,21 @@ benchmarks! {
 	withdraw {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		T::AccountRoleRegistry::register_as_relayer(&caller).unwrap();
-		EarnedRelayerFees::<T>::insert(caller.clone(), Asset::Eth, 200);
+		T::AccountRoleRegistry::register_as_broker(&caller).unwrap();
+		EarnedBrokerFees::<T>::insert(caller.clone(), Asset::Eth, 200);
 	} : _(
 		RawOrigin::Signed(caller.clone()),
 		Asset::Eth,
 		EncodedAddress::benchmark_value()
 	)
 
-	register_as_relayer {
+	register_as_broker {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 	}: _(RawOrigin::Signed(caller.clone()))
 	verify {
-		T::AccountRoleRegistry::ensure_relayer(RawOrigin::Signed(caller).into())
-			.expect("Caller should be registered as relayer");
+		T::AccountRoleRegistry::ensure_broker(RawOrigin::Signed(caller).into())
+			.expect("Caller should be registered as broker");
 	}
 
 	schedule_swap_by_witnesser {
@@ -130,14 +130,14 @@ benchmarks! {
 		let a in 1..100;
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		T::AccountRoleRegistry::register_as_relayer(&caller).unwrap();
+		T::AccountRoleRegistry::register_as_broker(&caller).unwrap();
 		let origin = RawOrigin::Signed(caller);
 		for i in 0..a {
 			let call = Call::<T>::request_swap_deposit_address{
 				source_asset: Asset::Usdc,
 				destination_asset: Asset::Eth,
 				destination_address: EncodedAddress::Eth(Default::default()),
-				relayer_commission_bps: Default::default(),
+				broker_commission_bps: Default::default(),
 				message_metadata: None,
 			};
 			call.dispatch_bypass_filter(origin.clone().into())?;

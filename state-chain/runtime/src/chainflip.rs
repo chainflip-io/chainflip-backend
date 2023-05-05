@@ -431,8 +431,8 @@ macro_rules! impl_deposit_api_for_anychain {
 				source_asset: Asset,
 				destination_asset: Asset,
 				destination_address: ForeignChainAddress,
-				relayer_commission_bps: BasisPoints,
-				relayer_id: Self::AccountId,
+				broker_commission_bps: BasisPoints,
+				broker_id: Self::AccountId,
 				message_metadata: Option<CcmDepositMetadata>,
 			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 				match source_asset.into() {
@@ -441,8 +441,8 @@ macro_rules! impl_deposit_api_for_anychain {
 							source_asset.try_into().unwrap(),
 							destination_asset,
 							destination_address,
-							relayer_commission_bps,
-							relayer_id,
+							broker_commission_bps,
+							broker_id,
 							message_metadata,
 						),
 					)+

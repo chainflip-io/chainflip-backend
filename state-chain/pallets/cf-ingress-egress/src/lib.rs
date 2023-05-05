@@ -131,8 +131,8 @@ pub mod pallet {
 		Swap {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
-			relayer_id: AccountId,
-			relayer_commission_bps: BasisPoints,
+			broker_id: AccountId,
+			broker_commission_bps: BasisPoints,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
@@ -648,16 +648,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ChannelAction::Swap {
 				destination_address,
 				destination_asset,
-				relayer_id,
-				relayer_commission_bps,
+				broker_id,
+				broker_commission_bps,
 			} => T::SwapDepositHandler::on_swap_deposit(
 				deposit_address.clone().into(),
 				asset.into(),
 				destination_asset,
 				amount.into(),
 				destination_address,
-				relayer_id,
-				relayer_commission_bps,
+				broker_id,
+				broker_commission_bps,
 			),
 			ChannelAction::CcmTransfer {
 				destination_asset,
@@ -801,13 +801,13 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		Ok((channel_id, deposit_address.into()))
 	}
 
-	// This should only be callable by the relayer.
+	// This should only be callable by the broker.
 	fn request_swap_deposit_address(
 		source_asset: TargetChainAsset<T, I>,
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
-		relayer_commission_bps: BasisPoints,
-		relayer_id: T::AccountId,
+		broker_commission_bps: BasisPoints,
+		broker_id: T::AccountId,
 		message_metadata: Option<CcmDepositMetadata>,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 		let (channel_id, deposit_address) = Self::open_channel(
@@ -821,8 +821,8 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 				None => ChannelAction::Swap {
 					destination_asset,
 					destination_address,
-					relayer_commission_bps,
-					relayer_id,
+					broker_commission_bps,
+					broker_id,
 				},
 			},
 		)?;

@@ -177,7 +177,7 @@ fn mint_limit_order(
 
 fn setup_pool_and_accounts(assets: Vec<Asset>) {
 	new_account(&DORIS, AccountRole::LiquidityProvider);
-	new_account(&ZION, AccountRole::Relayer);
+	new_account(&ZION, AccountRole::Broker);
 
 	for asset in assets {
 		new_pool(asset, 0u32, sqrt_price_at_tick(0));
@@ -204,7 +204,7 @@ fn basic_pool_setup_provision_and_swap() {
 		mint_limit_order(&DORIS, Asset::Flip, Order::Sell, 0, 500_000);
 		mint_range_order(&DORIS, Asset::Flip, -10..10, 1_000_000);
 
-		new_account(&ZION, AccountRole::Relayer);
+		new_account(&ZION, AccountRole::Broker);
 
 		assert_ok!(Swapping::request_swap_deposit_address(
 			RuntimeOrigin::signed(ZION.clone()),

@@ -34,7 +34,7 @@ pub trait WeightInfo {
 	fn on_idle() -> Weight;
 	fn execute_group_of_swaps(a: u32, ) -> Weight;
 	fn withdraw() -> Weight;
-	fn register_as_relayer() -> Weight;
+	fn register_as_broker() -> Weight;
 	fn schedule_swap_by_witnesser() -> Weight;
 	fn ccm_deposit() -> Weight;
 	fn on_initialize(a: u32, ) -> Weight;
@@ -77,7 +77,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
-	// Storage: Swapping EarnedRelayerFees (r:1 w:1)
+	// Storage: Swapping EarnedBrokerFees (r:1 w:1)
 	// Storage: EthereumIngressEgress EgressIdCounter (r:1 w:1)
 	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
 	fn withdraw() -> Weight {
@@ -128,7 +128,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	// Storage: AccountRoles SwappingEnabled (r:1 w:0)
 	// Storage: AccountRoles AccountRoles (r:1 w:1)
-	fn register_as_relayer() -> Weight {
+	fn register_as_broker() -> Weight {
 		// Minimum execution time: 20_000 nanoseconds.
 		Weight::from_ref_time(22_000_000)
 			.saturating_add(T::DbWeight::get().reads(2))
@@ -171,7 +171,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
-	// Storage: Swapping EarnedRelayerFees (r:1 w:1)
+	// Storage: Swapping EarnedBrokerFees (r:1 w:1)
 	// Storage: EthereumIngressEgress EgressIdCounter (r:1 w:1)
 	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
 	fn withdraw() -> Weight {
@@ -222,7 +222,7 @@ impl WeightInfo for () {
 	}
 	// Storage: AccountRoles SwappingEnabled (r:1 w:0)
 	// Storage: AccountRoles AccountRoles (r:1 w:1)
-	fn register_as_relayer() -> Weight {
+	fn register_as_broker() -> Weight {
 		// Minimum execution time: 20_000 nanoseconds.
 		Weight::from_ref_time(22_000_000)
 			.saturating_add(RocksDbWeight::get().reads(2))
