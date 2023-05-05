@@ -34,6 +34,16 @@ where
 		.map(|(x, _)| x)
 }
 
+/// The threshold that determines the number of parties we require to agree
+/// on the outcome of some broadcast.
+pub fn threshold_for_broadcast_verification(total_parties: usize) -> usize {
+	// We require half of participants (rounding up) in order to maximise
+	// the number of colluding parties required to do harm. Note that if
+	// we used the usual 2/3 threshold, it would only take 1/3 of colluding
+	// participants to result in slashing of honest participants.
+	(total_parties + 1) / 2
+}
+
 /// Mappings from signer_idx to Validator Id and back
 /// for the corresponding ceremony
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
