@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use cf_primitives::AuthorityCount;
-use rand_legacy::SeedableRng;
+use rand::SeedableRng;
 
 use crate::{
 	client::{

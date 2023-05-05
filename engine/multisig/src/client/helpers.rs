@@ -12,7 +12,7 @@ use itertools::{Either, Itertools};
 
 use async_trait::async_trait;
 
-use rand_legacy::{RngCore, SeedableRng};
+use rand::{RngCore, SeedableRng};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, debug_span, Instrument};
@@ -638,7 +638,7 @@ impl<C: CryptoScheme> KeygenCeremonyRunner<C> {
 	}
 
 	pub fn keygen_ceremony_details(&mut self) -> KeygenCeremonyDetails {
-		use rand_legacy::Rng as _;
+		use rand::Rng as _;
 
 		KeygenCeremonyDetails {
 			ceremony_id: self.ceremony_id,
@@ -745,7 +745,7 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 	}
 
 	fn signing_ceremony_details(&mut self, account_id: &AccountId) -> SigningCeremonyDetails<C> {
-		use rand_legacy::Rng as _;
+		use rand::Rng as _;
 
 		let payloads = self
 			.ceremony_runner_data

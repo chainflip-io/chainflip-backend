@@ -4,7 +4,6 @@ use cf_chains::{address::EncodedAddress, eth::H256, CcmDepositMetadata, ForeignC
 use cf_primitives::{AccountRole, Asset, BasisPoints};
 use futures::FutureExt;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
-use rand_legacy::FromEntropy;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
@@ -404,9 +403,9 @@ pub struct KeyPair {
 /// Generate a new random node key.
 /// This key is used for secure communication between Validators.
 pub fn generate_node_key() -> KeyPair {
-	use rand::SeedableRng;
+	use rand_v7::SeedableRng;
 
-	let mut rng = rand::rngs::StdRng::from_entropy();
+	let mut rng = rand_v7::rngs::StdRng::from_entropy();
 	let keypair = ed25519_dalek::Keypair::generate(&mut rng);
 
 	KeyPair {
@@ -443,7 +442,8 @@ pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPair, Strin
 pub fn generate_ethereum_key() -> KeyPair {
 	use secp256k1::Secp256k1;
 
-	let mut rng = rand_legacy::rngs::StdRng::from_entropy();
+	use rand::SeedableRng;
+	let mut rng = rand::rngs::StdRng::from_entropy();
 
 	let (secret_key, public_key) = Secp256k1::new().generate_keypair(&mut rng);
 

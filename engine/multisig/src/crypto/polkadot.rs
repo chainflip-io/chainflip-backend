@@ -157,7 +157,7 @@ impl CryptoScheme for PolkadotSigning {
 fn signature_should_be_valid() {
 	use super::{curve25519::Scalar, ECPoint, ECScalar};
 	use crate::crypto::Rng;
-	use rand_legacy::SeedableRng;
+	use rand::SeedableRng;
 	use utilities::assert_ok;
 
 	let mut rng = Rng::from_seed([0; 32]);

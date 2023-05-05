@@ -6,7 +6,7 @@ use multisig::{
 	client::keygen::generate_key_data, eth::EthSigning, polkadot::PolkadotSigning,
 	CanonicalEncoding, CryptoScheme, KeyId, Rng,
 };
-use rand_legacy::FromEntropy;
+use rand::SeedableRng;
 use state_chain_runtime::AccountId;
 use std::{
 	collections::{BTreeSet, HashMap},
