@@ -120,7 +120,7 @@ impl crate::Config<Instance1> for Test {
 	type TargetChain = Ethereum;
 	type AddressDerivation = ();
 	type LpBalance = Self;
-	type SwapIntentHandler = Self;
+	type SwapDepositHandler = Self;
 	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;
 	type Broadcaster = MockBroadcast;
 	type DepositHandler = MockDepositHandler;

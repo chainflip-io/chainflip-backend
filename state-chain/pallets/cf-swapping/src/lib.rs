@@ -80,7 +80,7 @@ pub mod pallet {
 
 	use cf_chains::{address::EncodedAddress, AnyChain};
 	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId};
-	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapIntentHandler};
+	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapDepositHandler};
 
 	use super::*;
 
@@ -143,9 +143,9 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type PendingCcms<T: Config> = StorageMap<_, Twox64Concat, u64, CcmSwap>;
 
-	/// Stores a block for when an intent will expire against the intent infos.
+	/// For a given block number, stores the list of swap channels that expire at that block.
 	#[pallet::storage]
-	pub(super) type SwapIntentExpiries<T: Config> = StorageMap<
+	pub(super) type SwapChannelExpiries<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
 		T::BlockNumber,
@@ -159,13 +159,14 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// An new swap intent has been registered.
-		NewSwapIntent {
+		/// An new swap deposit channel has been opened.
+		SwapDepositAddressReady {
 			deposit_address: EncodedAddress,
+			destination_address: EncodedAddress,
 			expiry_block: T::BlockNumber,
 		},
-		/// The swap ingress was received.
-		SwapIngressReceived {
+		/// A swap deposit has been received.
+		SwapDepositReceived {
 			swap_id: u64,
 			deposit_address: EncodedAddress,
 			ingress_amount: AssetAmount,
@@ -175,18 +176,18 @@ pub mod pallet {
 			ingress_amount: AssetAmount,
 			destination_address: EncodedAddress,
 		},
-		/// A swap was executed.
+		/// A swap has been executed.
 		SwapExecuted {
 			swap_id: u64,
 		},
-		/// A swap egress was scheduled.
+		/// A swap egress has been scheduled.
 		SwapEgressScheduled {
 			swap_id: u64,
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
 		},
-		/// A withdrawal was requested.
+		/// A relayer fee withdrawal has been requested.
 		WithdrawalRequested {
 			amount: AssetAmount,
 			address: EncodedAddress,
@@ -199,13 +200,13 @@ pub mod pallet {
 			ccm_id: u64,
 			egress_id: EgressId,
 		},
-		SwapIntentExpired {
+		SwapDepositAddressExpired {
 			deposit_address: ForeignChainAddress,
 		},
 		SwapTtlSet {
 			ttl: T::BlockNumber,
 		},
-		CcmIngressReceived {
+		CcmDepositReceived {
 			ccm_id: u64,
 			principal_swap_id: Option<u64>,
 			gas_swap_id: Option<u64>,
@@ -281,10 +282,12 @@ pub mod pallet {
 		}
 
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
-			let expired = SwapIntentExpiries::<T>::take(n);
+			let expired = SwapChannelExpiries::<T>::take(n);
 			for (channel_id, chain, address) in expired.clone() {
 				T::DepositHandler::expire_channel(chain, channel_id, address.clone());
-				Self::deposit_event(Event::<T>::SwapIntentExpired { deposit_address: address });
+				Self::deposit_event(Event::<T>::SwapDepositAddressExpired {
+					deposit_address: address,
+				});
 			}
 			T::WeightInfo::on_initialize(expired.len() as u32)
 		}
@@ -292,11 +295,11 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Register a new swap intent.
+		/// Request a swap deposit address.
 		///
 		/// ## Events
 		///
-		/// - [NewSwapIntent](Event::NewSwapIntent)
+		/// - [SwapDepositAddressReady](Event::SwapDepositAddressReady)
 		#[pallet::weight(T::WeightInfo::request_swap_deposit_address())]
 		pub fn request_swap_deposit_address(
 			origin: OriginFor<T>,
@@ -316,9 +319,10 @@ pub mod pallet {
 				);
 			}
 			let destination_address_internal =
-				T::AddressConverter::try_from_encoded_address(destination_address).map_err(
-					|_| DispatchError::Other("Invalid Egress Address, cannot decode the address"),
-				)?;
+				T::AddressConverter::try_from_encoded_address(destination_address.clone())
+					.map_err(|_| {
+						DispatchError::Other("Invalid Egress Address, cannot decode the address")
+					})?;
 			ensure!(
 				ForeignChain::from(destination_address_internal.clone()) ==
 					ForeignChain::from(destination_asset),
@@ -336,13 +340,14 @@ pub mod pallet {
 
 			let expiry_block = frame_system::Pallet::<T>::current_block_number()
 				.saturating_add(SwapTTL::<T>::get());
-			SwapIntentExpiries::<T>::append(
+			SwapChannelExpiries::<T>::append(
 				expiry_block,
 				(channel_id, ForeignChain::from(source_asset), deposit_address.clone()),
 			);
 
-			Self::deposit_event(Event::<T>::NewSwapIntent {
+			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
 				deposit_address: T::AddressConverter::try_to_encoded_address(deposit_address)?,
+				destination_address,
 				expiry_block,
 			});
 
@@ -397,7 +402,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [SwapScheduled](Event::SwapIngressReceived)
+		/// - [SwapScheduled](Event::SwapDepositReceived)
 		#[pallet::weight(T::WeightInfo::schedule_swap_by_witnesser())]
 		pub fn schedule_swap_by_witnesser(
 			origin: OriginFor<T>,
@@ -433,8 +438,8 @@ pub mod pallet {
 		/// Process the ingress of a Cross-chain-message. The fund is swapped into the target
 		/// chain's native asset, with appropriate fees and gas deducted, and the
 		/// message is egressed to the target chain.
-		#[pallet::weight(T::WeightInfo::ccm_ingress())]
-		pub fn ccm_ingress(
+		#[pallet::weight(T::WeightInfo::ccm_deposit())]
+		pub fn ccm_deposit(
 			origin: OriginFor<T>,
 			source_asset: Asset,
 			ingress_amount: AssetAmount,
@@ -455,7 +460,7 @@ pub mod pallet {
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 
-			Self::on_ccm_ingress(
+			Self::on_ccm_deposit(
 				source_asset,
 				ingress_amount,
 				destination_asset,
@@ -476,8 +481,9 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets the length in which ingress intents are expired in the Swapping pallet.
-		/// Requires Governance
+		/// Sets the lifetime of swap channels.
+		///
+		/// Requires Governance.
 		///
 		/// ## Events
 		///
@@ -628,7 +634,7 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> SwapIntentHandler for Pallet<T> {
+	impl<T: Config> SwapDepositHandler for Pallet<T> {
 		type AccountId = T::AccountId;
 
 		/// Callback function to kick off the swapping process after a successful ingress.
@@ -655,16 +661,17 @@ pub mod pallet {
 				SwapType::Swap(destination_address),
 			);
 
-			Self::deposit_event(Event::<T>::SwapIngressReceived {
+			Self::deposit_event(Event::<T>::SwapDepositReceived {
 				swap_id,
-				deposit_address: T::AddressConverter::try_to_encoded_address(deposit_address).expect("This should not fail since this conversion happens during the pipeline of a swap and deposit address has already been successfully converted in this way at the start of the swap in request_swap_intent"),
+				deposit_address: T::AddressConverter::try_to_encoded_address(deposit_address)
+					.expect("The deposit address is generated internally and is always valid."),
 				ingress_amount: amount,
 			});
 		}
 	}
 
 	impl<T: Config> CcmHandler for Pallet<T> {
-		fn on_ccm_ingress(
+		fn on_ccm_deposit(
 			source_asset: Asset,
 			ingress_amount: AssetAmount,
 			destination_asset: Asset,
@@ -723,7 +730,7 @@ pub mod pallet {
 				))
 			};
 
-			Self::deposit_event(Event::<T>::CcmIngressReceived {
+			Self::deposit_event(Event::<T>::CcmDepositReceived {
 				ccm_id,
 				principal_swap_id,
 				gas_swap_id,

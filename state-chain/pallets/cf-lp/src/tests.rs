@@ -1,4 +1,4 @@
-use crate::{mock::*, FreeBalances, IngressIntentExpiries, LpTTL};
+use crate::{mock::*, FreeBalances, LiquidityChannelExpiries, LpTTL};
 
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
@@ -118,7 +118,7 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 }
 
 #[test]
-fn ingress_intents_expires() {
+fn deposit_channel_expires() {
 	new_test_ext().execute_with(|| {
 		// Expiry = current (1) + ttl
 		let expiry = LpTTL::<Test>::get() + 1;
@@ -128,43 +128,43 @@ fn ingress_intents_expires() {
 			asset,
 		));
 
-		let (channel_id, deposit_address) = assert_events_match!(Test, RuntimeEvent::LiquidityProvider(crate::Event::DepositAddressReady {
+		let (channel_id, deposit_address) = assert_events_match!(Test, RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
 			channel_id,
 			deposit_address,
 			expiry_block,
 		}) if expiry_block == expiry => (channel_id, deposit_address));
-		let lp_intent = LpChannel {
+		let lp_channel = LpChannel {
 			deposit_address: MockAddressConverter::try_from_encoded_address(deposit_address.clone()).unwrap(),
 			source_asset: asset,
 			lp_account: LP_ACCOUNT.into(),
 		};
 
 		assert_eq!(
-			IngressIntentExpiries::<Test>::get(expiry),
+			LiquidityChannelExpiries::<Test>::get(expiry),
 			vec![(channel_id, ForeignChain::from(asset), MockAddressConverter::try_from_encoded_address(deposit_address.clone()).unwrap())]
 		);
 		assert_eq!(
 			MockDepositHandler::<AnyChain, Test>::get_liquidity_channels(),
-			vec![lp_intent.clone()]
+			vec![lp_channel.clone()]
 		);
 
 		// Does not expire until expiry
 		LiquidityProvider::on_initialize(expiry - 1);
 		assert_eq!(
-			IngressIntentExpiries::<Test>::get(expiry),
+			LiquidityChannelExpiries::<Test>::get(expiry),
 			vec![(channel_id, ForeignChain::from(asset), MockAddressConverter::try_from_encoded_address(deposit_address.clone()).unwrap())]
 		);
 		assert_eq!(
 			MockDepositHandler::<AnyChain, Test>::get_liquidity_channels(),
-			vec![lp_intent]
+			vec![lp_channel]
 		);
 
 		// Expire the address on the expiry block
 		LiquidityProvider::on_initialize(expiry);
 
-		assert_eq!(IngressIntentExpiries::<Test>::get(expiry), vec![]);
+		assert_eq!(LiquidityChannelExpiries::<Test>::get(expiry), vec![]);
 		System::assert_last_event(RuntimeEvent::LiquidityProvider(
-			crate::Event::<Test>::DepositAddressExpired { address: deposit_address },
+			crate::Event::<Test>::LiquidityDepositAddressExpired { address: deposit_address },
 		));
 		assert!(MockDepositHandler::<AnyChain, Test>::get_liquidity_channels().is_empty());
 	});

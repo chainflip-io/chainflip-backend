@@ -30,7 +30,7 @@ impl MockCcmHandler {
 }
 
 impl CcmHandler for MockCcmHandler {
-	fn on_ccm_ingress(
+	fn on_ccm_deposit(
 		source_asset: Asset,
 		ingress_amount: AssetAmount,
 		destination_asset: Asset,

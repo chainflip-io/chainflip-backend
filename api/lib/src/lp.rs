@@ -38,7 +38,7 @@ pub async fn request_liquidity_deposit_address(
 		.into_iter()
 		.find_map(|event| match event {
 			state_chain_runtime::RuntimeEvent::LiquidityProvider(
-				pallet_cf_lp::Event::DepositAddressReady { deposit_address, .. },
+				pallet_cf_lp::Event::LiquidityDepositAddressReady { deposit_address, .. },
 			) => Some(deposit_address),
 			_ => None,
 		})

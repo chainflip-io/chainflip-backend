@@ -449,11 +449,11 @@ macro_rules! impl_ingress_api_for_anychain {
 				}
 			}
 
-			fn expire_intent(chain: ForeignChain, channel_id: ChannelId, address: ForeignChainAddress) {
+			fn expire_channel(chain: ForeignChain, channel_id: ChannelId, address: ForeignChainAddress) {
 				match chain {
 					$(
 						ForeignChain::$chain => {
-							$ingress_egress::expire_intent(channel_id, address.try_into().expect("Checked for address compatibility"));
+							$ingress_egress::expire_channel(channel_id, address.try_into().expect("Checked for address compatibility"));
 						},
 					)+
 				}

@@ -28,7 +28,7 @@ const DEPLOY_BYTECODE_TOKEN: [u8; 493] = hex_literal::hex!(
 // Always the same, this is a CREATE2 constant.
 const PREFIX_BYTE: u8 = 0xff;
 
-/// Derives the CREATE2 Ethereum address for a given asset, vault, and intent.
+/// Derives the CREATE2 Ethereum address for a given asset, vault, and channel id.
 /// @param asset_id The asset in "CHAIN:ASSET" form e.g. "ETH:ETH" or "ETH:USDC"
 /// @param vault_address The address of the Ethereum Vault
 /// @param channel_id The numerical channel id
@@ -55,7 +55,7 @@ pub fn get_create_2_address(
 		.concat(),
 	);
 
-	// Unique salt per intent.
+	// Unique salt per channel id.
 	let salt = get_salt(channel_id).to_vec();
 
 	let create_2_args = [

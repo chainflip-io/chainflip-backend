@@ -91,7 +91,7 @@ benchmarks! {
 		}]);
 	}
 
-	ccm_ingress {
+	ccm_deposit {
 		let origin = T::EnsureWitnessed::successful_origin();
 		let metadata = CcmIngressMetadata {
 			message: vec![0x00],
@@ -99,7 +99,7 @@ benchmarks! {
 			refund_address: ForeignChainAddress::benchmark_value(),
 			source_address: ForeignChainAddress::benchmark_value(),
 		};
-		let call = Call::<T>::ccm_ingress{
+		let call = Call::<T>::ccm_deposit{
 			source_asset: Asset::Usdc,
 			ingress_amount: 1_000,
 			destination_asset: Asset::Eth,
@@ -143,11 +143,11 @@ benchmarks! {
 			call.dispatch_bypass_filter(origin.clone().into())?;
 		}
 		let expiry = SwapTTL::<T>::get() + frame_system::Pallet::<T>::current_block_number();
-		assert!(!SwapIntentExpiries::<T>::get(expiry).is_empty());
+		assert!(!SwapChannelExpiries::<T>::get(expiry).is_empty());
 	}: {
 		Pallet::<T>::on_initialize(expiry);
 	} verify {
-		assert!(SwapIntentExpiries::<T>::get(expiry).is_empty());
+		assert!(SwapChannelExpiries::<T>::get(expiry).is_empty());
 	}
 
 	set_swap_ttl {

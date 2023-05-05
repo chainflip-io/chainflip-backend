@@ -71,10 +71,10 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
-			let expired = IngressIntentExpiries::<T>::take(n);
+			let expired = LiquidityChannelExpiries::<T>::take(n);
 			for (channel_id, chain, address) in expired.clone() {
 				T::DepositHandler::expire_channel(chain, channel_id, address.clone());
-				Self::deposit_event(Event::DepositAddressExpired {
+				Self::deposit_event(Event::LiquidityDepositAddressExpired {
 					address: T::AddressConverter::try_to_encoded_address(address).expect("This should not fail since this conversion already succeeded when expiry was scheduled"),
 				});
 			}
@@ -95,12 +95,12 @@ pub mod pallet {
 			asset: Asset,
 			amount_credited: AssetAmount,
 		},
-		DepositAddressReady {
+		LiquidityDepositAddressReady {
 			channel_id: ChannelId,
 			deposit_address: EncodedAddress,
 			expiry_block: T::BlockNumber,
 		},
-		DepositAddressExpired {
+		LiquidityDepositAddressExpired {
 			address: EncodedAddress,
 		},
 		WithdrawalEgressScheduled {
@@ -142,9 +142,10 @@ pub mod pallet {
 	pub type FreeBalances<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
 
-	/// Stores a block for when an intent will expire against the intent infos.
+	/// For a given block number, stores the list of liquidity deposit channels that expire at that
+	/// block.
 	#[pallet::storage]
-	pub(super) type IngressIntentExpiries<T: Config> = StorageMap<
+	pub(super) type LiquidityChannelExpiries<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
 		T::BlockNumber,
@@ -152,7 +153,7 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// The TTL for liquidity provision intents.
+	/// The TTL for liquidity channels.
 	#[pallet::storage]
 	pub type LpTTL<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
@@ -172,12 +173,12 @@ pub mod pallet {
 
 			let expiry_block =
 				frame_system::Pallet::<T>::current_block_number().saturating_add(LpTTL::<T>::get());
-			IngressIntentExpiries::<T>::append(
+			LiquidityChannelExpiries::<T>::append(
 				expiry_block,
 				(channel_id, ForeignChain::from(asset), deposit_address.clone()),
 			);
 
-			Self::deposit_event(Event::DepositAddressReady {
+			Self::deposit_event(Event::LiquidityDepositAddressReady {
 				channel_id,
 				deposit_address: T::AddressConverter::try_to_encoded_address(deposit_address)?,
 				expiry_block,
@@ -245,7 +246,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets the length in which ingress intents are expired in the LP pallet.
+		/// Sets the lifetime of liquidity deposit channels.
+		///
 		/// Requires Governance
 		///
 		/// ## Events

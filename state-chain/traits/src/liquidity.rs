@@ -3,7 +3,7 @@ use cf_primitives::{Asset, AssetAmount, BasisPoints, SwapOutput};
 use frame_support::dispatch::DispatchError;
 use sp_runtime::DispatchResult;
 
-pub trait SwapIntentHandler {
+pub trait SwapDepositHandler {
 	type AccountId;
 
 	fn on_swap_ingress(
@@ -53,7 +53,7 @@ impl SwappingApi for () {
 }
 
 // TODO Remove these in favour of a real mocks.
-impl<T: frame_system::Config> SwapIntentHandler for T {
+impl<T: frame_system::Config> SwapDepositHandler for T {
 	type AccountId = T::AccountId;
 
 	fn on_swap_ingress(

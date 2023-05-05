@@ -97,7 +97,7 @@ pub enum AccountRole {
 	Validator,
 	/// Liquidity providers can deposit assets and deploy them in trading pools.
 	LiquidityProvider,
-	/// Relayers submit swap intents on behalf of users.
+	/// Relayers submit swap deposit requests on behalf of users.
 	Relayer,
 }
 

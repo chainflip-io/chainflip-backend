@@ -42,8 +42,8 @@ pub async fn start(
 			.await
 			.context("Failed to get initial BTC ingress details")?
 			.into_iter()
-			.filter_map(|(address, intent)| {
-				if intent.source_asset == cf_primitives::chains::assets::btc::Asset::Btc {
+			.filter_map(|(address, channel_details)| {
+				if channel_details.source_asset == cf_primitives::chains::assets::btc::Asset::Btc {
 					Some(address)
 				} else {
 					None

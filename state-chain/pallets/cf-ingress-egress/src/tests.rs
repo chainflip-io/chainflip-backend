@@ -447,7 +447,6 @@ fn proof_address_pool_integrity() {
 			.collect::<Vec<_>>();
 		// All addresses in use
 		expect_size_of_address_pool(0);
-		// Process all intents
 		IngressEgress::on_idle(
 			1,
 			<Test as crate::Config<Instance1>>::WeightInfo::destination_assets(3) +
@@ -503,7 +502,7 @@ fn reused_address_channel_id_matches() {
 			.unwrap();
 		AddressPool::<Test, _>::insert(INTENT_ID, eth_address);
 
-		let (reused_channel_id, reused_address) = IngressEgress::register_ingress_intent(
+		let (reused_channel_id, reused_address) = IngressEgress::open_channel(
 			eth::Asset::Eth,
 			ChannelAction::LiquidityProvision { lp_account: 0 },
 		)
@@ -516,7 +515,7 @@ fn reused_address_channel_id_matches() {
 }
 
 #[test]
-fn can_ingress_ccm_swap_intents() {
+fn can_process_ccm_deposit() {
 	new_test_ext().execute_with(|| {
 		let from_asset = eth::Asset::Flip;
 		let to_asset = Asset::Eth;
@@ -529,7 +528,7 @@ fn can_ingress_ccm_swap_intents() {
 		};
 		let amount = 5_000;
 
-		// Register swap intent with CCM
+		// Register swap deposit with CCM
 		assert_ok!(IngressEgress::request_swap_deposit_address(
 			from_asset,
 			to_asset,
@@ -539,7 +538,7 @@ fn can_ingress_ccm_swap_intents() {
 			Some(ccm.clone()),
 		));
 
-		// CCM intent is stored.
+		// CCM action is stored.
 		let deposit_address = hex_literal::hex!("bc77955482380836042253381b35a658d87a4842").into();
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::<Test, Instance1>::StartWitnessing {

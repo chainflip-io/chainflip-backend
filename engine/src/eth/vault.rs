@@ -187,7 +187,7 @@ impl EthContractWitnesser for Vault {
 					message,
 					gas_amount,
 					refund_address,
-				} => Some(pallet_cf_swapping::Call::ccm_ingress {
+				} => Some(pallet_cf_swapping::Call::ccm_deposit {
 					source_asset: Asset::Eth,
 					ingress_amount: amount,
 					destination_asset: Asset::try_from(destination_token)
@@ -216,7 +216,7 @@ impl EthContractWitnesser for Vault {
 					message,
 					gas_amount,
 					refund_address,
-				} => Some(pallet_cf_swapping::Call::ccm_ingress {
+				} => Some(pallet_cf_swapping::Call::ccm_deposit {
 					source_asset: state_chain_client
 						.asset(source_token.0)
 						.await

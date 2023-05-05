@@ -205,8 +205,10 @@ async fn main() -> anyhow::Result<()> {
 					.await
 					.context("Failed to get initial ingress details")?
 					.into_iter()
-					.filter_map(|(address, intent)| {
-						if intent.source_asset == cf_primitives::chains::assets::dot::Asset::Dot {
+					.filter_map(|(address, channel_details)| {
+						if channel_details.source_asset ==
+							cf_primitives::chains::assets::dot::Asset::Dot
+						{
 							Some(address)
 						} else {
 							None

@@ -71,7 +71,7 @@ pub struct SwapRequestParams {
 
 #[derive(clap::Subcommand, Clone, Debug)]
 pub enum RelayerSubcommands {
-	/// Register a new swap intent
+	/// Request a swap deposit address.
 	RequestSwapDepositAddress(SwapRequestParams),
 }
 

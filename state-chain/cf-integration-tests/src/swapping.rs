@@ -240,7 +240,7 @@ fn basic_pool_setup_provision_and_swap() {
 			));
 		}
 
-		let swap_id = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapIngressReceived {
+		let swap_id = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapDepositReceived {
 			swap_id,
 			deposit_address: events_deposit_address,
 			ingress_amount: 50,
@@ -295,7 +295,7 @@ fn basic_pool_setup_provision_and_swap() {
 }
 
 #[test]
-fn can_process_ccm_via_swap_intent() {
+fn can_process_ccm_via_swap_deposit_address() {
 	super::genesis::default().build().execute_with(|| {
 		// Setup pool and liquidity
 		setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip]);
@@ -309,7 +309,6 @@ fn can_process_ccm_via_swap_intent() {
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 
-		// Register CCM via swap intent.
 		assert_ok!(Swapping::request_swap_deposit_address(
 			RuntimeOrigin::signed(ZION.clone()),
 			Asset::Flip,
@@ -343,7 +342,7 @@ fn can_process_ccm_via_swap_intent() {
 				current_epoch
 			));
 		}
-		let (principal_swap_id, gas_swap_id) = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::CcmIngressReceived {
+		let (principal_swap_id, gas_swap_id) = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::CcmDepositReceived {
 			ccm_id,
 			principal_swap_id: Some(principal_swap_id),
 			gas_swap_id: Some(gas_swap_id),
@@ -413,7 +412,7 @@ fn can_process_ccm_via_swap_intent() {
 }
 
 #[test]
-fn can_process_ccm_via_extrinsic_intent() {
+fn can_process_ccm_via_direct_deposit() {
 	super::genesis::default().build().execute_with(|| {
 		setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip]);
 
@@ -426,7 +425,7 @@ fn can_process_ccm_via_extrinsic_intent() {
 			source_address: ForeignChainAddress::Eth([0xcf; 20])
 		};
 
-		let ccm_call = Box::new(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_ingress{
+		let ccm_call = Box::new(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit{
 			source_asset: Asset::Flip,
 			ingress_amount,
 			destination_asset: Asset::Usdc,
@@ -441,7 +440,7 @@ fn can_process_ccm_via_extrinsic_intent() {
 				current_epoch
 			));
 		}
-		let (principal_swap_id, gas_swap_id) = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::CcmIngressReceived {
+		let (principal_swap_id, gas_swap_id) = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::CcmDepositReceived {
 			ccm_id,
 			principal_swap_id: Some(principal_swap_id),
 			gas_swap_id: Some(gas_swap_id),

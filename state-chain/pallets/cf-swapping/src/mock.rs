@@ -103,7 +103,7 @@ impl WeightInfo for MockWeightInfo {
 		Weight::from_ref_time(100)
 	}
 
-	fn ccm_ingress() -> Weight {
+	fn ccm_deposit() -> Weight {
 		Weight::from_ref_time(100)
 	}
 

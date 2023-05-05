@@ -847,7 +847,7 @@ pub trait DepositHandler<C: ChainCrypto> {
 pub trait CcmHandler {
 	/// On the ingress of a cross-chain message, swap the asset into egress asset,
 	/// subtract the gas budge from it, then egress the message to the target chain.
-	fn on_ccm_ingress(
+	fn on_ccm_deposit(
 		source_asset: Asset,
 		ingress_amount: AssetAmount,
 		destination_asset: Asset,
@@ -857,7 +857,7 @@ pub trait CcmHandler {
 }
 
 impl CcmHandler for () {
-	fn on_ccm_ingress(
+	fn on_ccm_deposit(
 		_source_asset: Asset,
 		_ingress_amount: AssetAmount,
 		_destination_asset: Asset,

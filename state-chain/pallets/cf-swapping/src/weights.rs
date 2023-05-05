@@ -36,7 +36,7 @@ pub trait WeightInfo {
 	fn withdraw() -> Weight;
 	fn register_as_relayer() -> Weight;
 	fn schedule_swap_by_witnesser() -> Weight;
-	fn ccm_ingress() -> Weight;
+	fn ccm_deposit() -> Weight;
 	fn on_initialize(a: u32, ) -> Weight;
 	fn set_swap_ttl() -> Weight;
 }
@@ -49,7 +49,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumIngressEgress ChannelIdCounter (r:1 w:1)
 	// Storage: Environment EthereumVaultAddress (r:1 w:0)
 	// Storage: Swapping SwapTTL (r:1 w:0)
-	// Storage: Swapping SwapIntentExpiries (r:1 w:1)
+	// Storage: Swapping SwapChannelExpiries (r:1 w:1)
 	// Storage: EthereumIngressEgress ChannelActions (r:0 w:1)
 	// Storage: EthereumIngressEgress FetchParamDetails (r:0 w:1)
 	// Storage: EthereumIngressEgress AddressStatus (r:0 w:1)
@@ -99,13 +99,13 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Swapping SwapQueue (r:1 w:1)
 	// Storage: Swapping CcmOutputs (r:0 w:1)
 	// Storage: Swapping PendingCcms (r:0 w:1)
-	fn ccm_ingress() -> Weight {
+	fn ccm_deposit() -> Weight {
 		// Minimum execution time: 27_000 nanoseconds.
 		Weight::from_ref_time(28_000_000)
 			.saturating_add(T::DbWeight::get().reads(3))
 			.saturating_add(T::DbWeight::get().writes(5))
 	}
-	// Storage: Swapping SwapIntentExpiries (r:1 w:1)
+	// Storage: Swapping SwapChannelExpiries (r:1 w:1)
 	// Storage: EthereumIngressEgress AddressStatus (r:1 w:0)
 	// Storage: EthereumIngressEgress IntentIngressDetails (r:1 w:1)
 	// Storage: EthereumIngressEgress ChannelActions (r:0 w:1)
@@ -143,7 +143,7 @@ impl WeightInfo for () {
 	// Storage: EthereumIngressEgress ChannelIdCounter (r:1 w:1)
 	// Storage: Environment EthereumVaultAddress (r:1 w:0)
 	// Storage: Swapping SwapTTL (r:1 w:0)
-	// Storage: Swapping SwapIntentExpiries (r:1 w:1)
+	// Storage: Swapping SwapChannelExpiries (r:1 w:1)
 	// Storage: EthereumIngressEgress ChannelActions (r:0 w:1)
 	// Storage: EthereumIngressEgress FetchParamDetails (r:0 w:1)
 	// Storage: EthereumIngressEgress AddressStatus (r:0 w:1)
@@ -193,13 +193,13 @@ impl WeightInfo for () {
 	// Storage: Swapping SwapQueue (r:1 w:1)
 	// Storage: Swapping CcmOutputs (r:0 w:1)
 	// Storage: Swapping PendingCcms (r:0 w:1)
-	fn ccm_ingress() -> Weight {
+	fn ccm_deposit() -> Weight {
 		// Minimum execution time: 27_000 nanoseconds.
 		Weight::from_ref_time(28_000_000)
 			.saturating_add(RocksDbWeight::get().reads(3))
 			.saturating_add(RocksDbWeight::get().writes(5))
 	}
-	// Storage: Swapping SwapIntentExpiries (r:1 w:1)
+	// Storage: Swapping SwapChannelExpiries (r:1 w:1)
 	// Storage: EthereumIngressEgress AddressStatus (r:1 w:0)
 	// Storage: EthereumIngressEgress IntentIngressDetails (r:1 w:1)
 	// Storage: EthereumIngressEgress ChannelActions (r:0 w:1)

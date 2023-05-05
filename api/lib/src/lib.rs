@@ -367,18 +367,18 @@ pub async fn request_swap_deposit_address(
 	.await?;
 
 	if let Some(state_chain_runtime::RuntimeEvent::Swapping(
-		pallet_cf_swapping::Event::NewSwapIntent { deposit_address, .. },
+		pallet_cf_swapping::Event::SwapDepositAddressReady { deposit_address, .. },
 	)) = events.iter().find(|event| {
 		matches!(
 			event,
 			state_chain_runtime::RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::NewSwapIntent { .. }
+				pallet_cf_swapping::Event::SwapDepositAddressReady { .. }
 			)
 		)
 	}) {
 		Ok((*deposit_address).clone())
 	} else {
-		panic!("NewSwapIntent must have been generated");
+		panic!("SwapDepositAddressReady must have been generated");
 	}
 }
 

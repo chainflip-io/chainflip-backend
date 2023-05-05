@@ -46,11 +46,11 @@ benchmarks! {
 			assert_ok!(Pallet::<T>::request_liquidity_deposit_address(RawOrigin::Signed(caller.clone()).into(), Asset::Eth));
 		}
 		let expiry = LpTTL::<T>::get() + frame_system::Pallet::<T>::current_block_number();
-		assert!(!IngressIntentExpiries::<T>::get(expiry).is_empty());
+		assert!(!LiquidityChannelExpiries::<T>::get(expiry).is_empty());
 	}: {
 		Pallet::<T>::on_initialize(expiry);
 	} verify {
-		assert!(IngressIntentExpiries::<T>::get(expiry).is_empty());
+		assert!(LiquidityChannelExpiries::<T>::get(expiry).is_empty());
 	}
 
 	set_lp_ttl {

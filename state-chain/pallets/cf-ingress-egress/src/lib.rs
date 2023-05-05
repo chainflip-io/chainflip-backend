@@ -24,7 +24,7 @@ use cf_chains::{
 use cf_primitives::{Asset, AssetAmount, ChannelId};
 use cf_traits::{
 	liquidity::LpBalanceApi, AddressDerivationApi, Broadcaster, CcmHandler, Chainflip, DepositApi,
-	DepositHandler, EgressApi, SwapIntentHandler,
+	DepositHandler, EgressApi, SwapDepositHandler,
 };
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
 pub use pallet::*;
@@ -170,7 +170,7 @@ pub mod pallet {
 		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>;
 
 		/// For scheduling swaps.
-		type SwapIntentHandler: SwapIntentHandler<AccountId = Self::AccountId>;
+		type SwapDepositHandler: SwapDepositHandler<AccountId = Self::AccountId>;
 
 		/// Handler for Cross Chain Messages.
 		type CcmHandler: CcmHandler;
@@ -649,7 +649,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				destination_asset,
 				relayer_id,
 				relayer_commission_bps,
-			} => T::SwapIntentHandler::on_swap_ingress(
+			} => T::SwapDepositHandler::on_swap_ingress(
 				deposit_address.clone().into(),
 				asset.into(),
 				destination_asset,
@@ -662,7 +662,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				destination_asset,
 				destination_address,
 				message_metadata,
-			} => T::CcmHandler::on_ccm_ingress(
+			} => T::CcmHandler::on_ccm_deposit(
 				asset.into(),
 				amount.into(),
 				destination_asset,
@@ -682,10 +682,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok(())
 	}
 
-	/// Create a new intent address for the given asset and registers it with the given action.
-	fn register_ingress_intent(
+	/// Opens a channel for the given asset and registers it with the given action.
+	///
+	/// May re-use an existing deposit address, depending on chain configuration.
+	fn open_channel(
 		source_asset: TargetChainAsset<T, I>,
-		intent_action: ChannelAction<T::AccountId>,
+		channel_action: ChannelAction<T::AccountId>,
 	) -> Result<(ChannelId, TargetChainAccount<T, I>), DispatchError> {
 		// We have an address available, so we can just use it.
 		let (address, channel_id, ingress_fetch_id) = if let Some((channel_id, address)) =
@@ -708,7 +710,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		};
 		FetchParamDetails::<T, I>::insert(channel_id, (ingress_fetch_id, address.clone()));
 		IntentIngressDetails::<T, I>::insert(&address, IngressDetails { channel_id, source_asset });
-		ChannelActions::<T, I>::insert(&address, intent_action);
+		ChannelActions::<T, I>::insert(&address, channel_action);
 		T::DepositHandler::on_ingress_initiated(address.clone(), channel_id)?;
 		Ok((channel_id, address))
 	}
@@ -732,7 +734,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		}
 	}
 
-	pub fn expire_intent(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
+	pub fn expire_channel(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
 		let status = AddressStatus::<T, I>::get(&address);
 		Self::close_ingress_channel(channel_id, address, status);
 	}
@@ -789,10 +791,8 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		lp_account: T::AccountId,
 		source_asset: TargetChainAsset<T, I>,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
-		let (channel_id, deposit_address) = Self::register_ingress_intent(
-			source_asset,
-			ChannelAction::LiquidityProvision { lp_account },
-		)?;
+		let (channel_id, deposit_address) =
+			Self::open_channel(source_asset, ChannelAction::LiquidityProvision { lp_account })?;
 
 		Self::deposit_event(Event::StartWitnessing {
 			deposit_address: deposit_address.clone(),
@@ -811,7 +811,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		relayer_id: T::AccountId,
 		message_metadata: Option<CcmIngressMetadata>,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
-		let (channel_id, deposit_address) = Self::register_ingress_intent(
+		let (channel_id, deposit_address) = Self::open_channel(
 			source_asset,
 			match message_metadata {
 				Some(msg) => ChannelAction::CcmTransfer {
@@ -844,6 +844,6 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		address: TargetChainAccount<T, I>,
 	) {
 		assert_eq!(<T as Config<I>>::TargetChain::get(), chain, "Incompatible chains!");
-		Self::expire_intent(channel_id, address);
+		Self::expire_channel(channel_id, address);
 	}
 }
