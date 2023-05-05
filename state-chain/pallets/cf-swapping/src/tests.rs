@@ -11,8 +11,8 @@ use cf_test_utilities::{assert_event_sequence, assert_events_match};
 use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
+		deposit_handler::{MockIngressHandler, SwapIntent},
 		egress_handler::{MockEgressHandler, MockEgressParameter},
-		ingress_handler::{MockIngressHandler, SwapIntent},
 	},
 	CcmHandler, SwapIntentHandler,
 };

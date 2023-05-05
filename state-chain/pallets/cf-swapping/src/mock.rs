@@ -4,8 +4,8 @@ use cf_primitives::{Asset, AssetAmount, SwapOutput};
 use cf_traits::{
 	impl_mock_chainflip,
 	mocks::{
-		address_converter::MockAddressConverter, egress_handler::MockEgressHandler,
-		ingress_handler::MockIngressHandler,
+		address_converter::MockAddressConverter, deposit_handler::MockIngressHandler,
+		egress_handler::MockEgressHandler,
 	},
 	AccountRoleRegistry, SwappingApi,
 };

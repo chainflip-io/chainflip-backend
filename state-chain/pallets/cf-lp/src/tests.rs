@@ -10,7 +10,7 @@ use cf_test_utilities::assert_events_match;
 use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
-		ingress_handler::{LpIntent, MockIngressHandler},
+		deposit_handler::{LpIntent, MockIngressHandler},
 		system_state_info::MockSystemStateInfo,
 	},
 	SystemStateInfo,
