@@ -106,7 +106,7 @@ pub async fn start(
 		.expect("FLIP address must exist at genesis");
 
 	let eth_chain_deposit_addresses = state_chain_client
-		.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<
+		.storage_map::<pallet_cf_ingress_egress::DepositAddressDetailsLookup<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>(initial_block_hash)

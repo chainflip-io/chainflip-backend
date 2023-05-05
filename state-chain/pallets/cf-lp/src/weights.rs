@@ -50,7 +50,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumIngressEgress ChannelActions (r:0 w:1)
 	// Storage: EthereumIngressEgress FetchParamDetails (r:0 w:1)
 	// Storage: EthereumIngressEgress AddressStatus (r:0 w:1)
-	// Storage: EthereumIngressEgress IntentIngressDetails (r:0 w:1)
+	// Storage: EthereumIngressEgress DepositAddressDetailsLookup (r:0 w:1)
 	fn request_liquidity_deposit_address() -> Weight {
 		// Minimum execution time: 55_000 nanoseconds.
 		Weight::from_ref_time(56_000_000)
@@ -78,7 +78,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	// Storage: LiquidityProvider LiquidityChannelExpiries (r:1 w:1)
 	// Storage: EthereumIngressEgress AddressStatus (r:1 w:0)
-	// Storage: EthereumIngressEgress IntentIngressDetails (r:1 w:1)
+	// Storage: EthereumIngressEgress DepositAddressDetailsLookup (r:1 w:1)
 	// Storage: EthereumIngressEgress ChannelActions (r:0 w:1)
 	/// The range of component `a` is `[1, 100]`.
 	fn on_initialize(a: u32, ) -> Weight {
@@ -111,7 +111,7 @@ impl WeightInfo for () {
 	// Storage: EthereumIngressEgress ChannelActions (r:0 w:1)
 	// Storage: EthereumIngressEgress FetchParamDetails (r:0 w:1)
 	// Storage: EthereumIngressEgress AddressStatus (r:0 w:1)
-	// Storage: EthereumIngressEgress IntentIngressDetails (r:0 w:1)
+	// Storage: EthereumIngressEgress DepositAddressDetailsLookup (r:0 w:1)
 	fn request_liquidity_deposit_address() -> Weight {
 		// Minimum execution time: 55_000 nanoseconds.
 		Weight::from_ref_time(56_000_000)
@@ -139,7 +139,7 @@ impl WeightInfo for () {
 	}
 	// Storage: LiquidityProvider LiquidityChannelExpiries (r:1 w:1)
 	// Storage: EthereumIngressEgress AddressStatus (r:1 w:0)
-	// Storage: EthereumIngressEgress IntentIngressDetails (r:1 w:1)
+	// Storage: EthereumIngressEgress DepositAddressDetailsLookup (r:1 w:1)
 	// Storage: EthereumIngressEgress ChannelActions (r:0 w:1)
 	/// The range of component `a` is `[1, 100]`.
 	fn on_initialize(a: u32, ) -> Weight {

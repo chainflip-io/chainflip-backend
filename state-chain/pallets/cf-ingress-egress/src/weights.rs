@@ -114,7 +114,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
-	// Storage: EthereumIngressEgress IntentIngressDetails (r:1 w:0)
+	// Storage: EthereumIngressEgress DepositAddressDetailsLookup (r:1 w:0)
 	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
 	// Storage: EthereumIngressEgress ChannelActions (r:1 w:0)
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
@@ -124,7 +124,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(4))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
-	// Storage: EthereumIngressEgress IntentIngressDetails (r:1 w:1)
+	// Storage: EthereumIngressEgress DepositAddressDetailsLookup (r:1 w:1)
 	// Storage: EthereumIngressEgress AddressPool (r:0 w:1)
 	// Storage: EthereumIngressEgress ChannelActions (r:0 w:1)
 	// Storage: EthereumIngressEgress AddressStatus (r:0 w:1)
@@ -215,7 +215,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
-	// Storage: EthereumIngressEgress IntentIngressDetails (r:1 w:0)
+	// Storage: EthereumIngressEgress DepositAddressDetailsLookup (r:1 w:0)
 	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
 	// Storage: EthereumIngressEgress ChannelActions (r:1 w:0)
 	// Storage: LiquidityProvider FreeBalances (r:1 w:1)
@@ -225,7 +225,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(4))
 			.saturating_add(RocksDbWeight::get().writes(2))
 	}
-	// Storage: EthereumIngressEgress IntentIngressDetails (r:1 w:1)
+	// Storage: EthereumIngressEgress DepositAddressDetailsLookup (r:1 w:1)
 	// Storage: EthereumIngressEgress AddressPool (r:0 w:1)
 	// Storage: EthereumIngressEgress ChannelActions (r:0 w:1)
 	// Storage: EthereumIngressEgress AddressStatus (r:0 w:1)

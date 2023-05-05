@@ -121,7 +121,7 @@ pub mod pallet {
 
 	/// Details used to determine the ingress of funds.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub struct IngressDetails<C: Chain> {
+	pub struct DepositAddressDetails<C: Chain> {
 		pub channel_id: ChannelId,
 		pub source_asset: C::ChainAsset,
 	}
@@ -193,11 +193,11 @@ pub mod pallet {
 	}
 
 	#[pallet::storage]
-	pub type IntentIngressDetails<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type DepositAddressDetailsLookup<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		TargetChainAccount<T, I>,
-		IngressDetails<T::TargetChain>,
+		DepositAddressDetails<T::TargetChain>,
 		OptionQuery,
 	>;
 
@@ -623,7 +623,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		amount: TargetChainAmount<T, I>,
 		tx_id: <T::TargetChain as ChainCrypto>::TransactionId,
 	) -> DispatchResult {
-		let ingress = IntentIngressDetails::<T, I>::get(&deposit_address)
+		let ingress = DepositAddressDetailsLookup::<T, I>::get(&deposit_address)
 			.ok_or(Error::<T, I>::InvalidIntent)?;
 		ensure!(ingress.source_asset == asset, Error::<T, I>::IngressMismatchWithIntent);
 
@@ -709,7 +709,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)
 		};
 		FetchParamDetails::<T, I>::insert(channel_id, (ingress_fetch_id, address.clone()));
-		IntentIngressDetails::<T, I>::insert(&address, IngressDetails { channel_id, source_asset });
+		DepositAddressDetailsLookup::<T, I>::insert(
+			&address,
+			DepositAddressDetails { channel_id, source_asset },
+		);
 		ChannelActions::<T, I>::insert(&address, channel_action);
 		T::DepositHandler::on_ingress_initiated(address.clone(), channel_id)?;
 		Ok((channel_id, address))
@@ -726,10 +729,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			AddressStatus::<T, I>::insert(address.clone(), DeploymentStatus::Deployed);
 			AddressPool::<T, I>::insert(channel_id, address.clone());
 		}
-		if let Some(intent_ingress_details) = IntentIngressDetails::<T, I>::take(&address) {
+		if let Some(deposit_address_details) = DepositAddressDetailsLookup::<T, I>::take(&address) {
 			Self::deposit_event(Event::<T, I>::StopWitnessing {
 				deposit_address: address,
-				source_asset: intent_ingress_details.source_asset,
+				source_asset: deposit_address_details.source_asset,
 			});
 		}
 	}

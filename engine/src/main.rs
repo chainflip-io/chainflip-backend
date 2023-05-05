@@ -198,7 +198,7 @@ async fn main() -> anyhow::Result<()> {
 
 			let (dot_monitor_command_sender, dot_address_monitor) = AddressMonitor::new(
 				state_chain_client
-					.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<
+					.storage_map::<pallet_cf_ingress_egress::DepositAddressDetailsLookup<
 						state_chain_runtime::Runtime,
 						state_chain_runtime::PolkadotInstance,
 					>>(state_chain_stream.cache().block_hash)

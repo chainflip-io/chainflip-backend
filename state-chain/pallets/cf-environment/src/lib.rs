@@ -214,7 +214,7 @@ pub mod pallet {
 	#[pallet::storage]
 	/// Lookup for determining which salt and pubkey the current ingress Bitcoin Script was created
 	/// from.
-	pub type BitcoinActiveIngressDetails<T> =
+	pub type BitcoinActiveDepositAddressDetails<T> =
 		StorageMap<_, Twox64Concat, BitcoinScriptBounded, (u32, [u8; 32]), ValueQuery>;
 
 	#[pallet::event]
@@ -603,7 +603,7 @@ impl<T: Config> Pallet<T> {
 		utxo_id: UtxoId,
 		ingress_script: BitcoinScriptBounded,
 	) {
-		let (salt, pubkey) = BitcoinActiveIngressDetails::<T>::take(ingress_script);
+		let (salt, pubkey) = BitcoinActiveDepositAddressDetails::<T>::take(ingress_script);
 		BitcoinAvailableUtxos::<T>::append(Utxo {
 			amount,
 			txid: utxo_id.tx_hash,
@@ -633,6 +633,6 @@ impl<T: Config> Pallet<T> {
 		salt: u32,
 		pubkey: [u8; 32],
 	) {
-		BitcoinActiveIngressDetails::<T>::insert(ingress_script, (salt, pubkey));
+		BitcoinActiveDepositAddressDetails::<T>::insert(ingress_script, (salt, pubkey));
 	}
 }
