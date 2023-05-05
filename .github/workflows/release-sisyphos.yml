@@ -1,0 +1,36 @@
+name: Release Chainflip Sisyphos
+on:
+  push:
+    branches:
+      - 'release/*'
+concurrency:
+  group: ${{ github.ref }}-release-development
+  cancel-in-progress: true
+
+jobs:
+  pre-check:
+    uses: ./.github/workflows/_01_pre_check.yml
+    secrets: inherit
+  test:
+    needs: [pre-check]
+    uses: ./.github/workflows/_10_test.yml
+    secrets: inherit
+  build:
+    needs: [test]
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      network: sisyphos
+      commit_hash: ${{ github.sha }}
+  post-check:
+    needs: [build]
+    uses: ./.github/workflows/_40_post_check.yml
+    secrets: inherit
+  publish:
+    needs: [build]
+    uses: ./.github/workflows/_30_publish.yml
+    with:
+      version: "sisyphos/"
+      environment: dev
+      commit_hash: ${{ github.sha }}
+    secrets: inherit

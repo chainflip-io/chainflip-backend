@@ -1,0 +1,63 @@
+name: 🔥👩‍🔧 Hotfix Reminder
+
+on:
+  pull_request:
+    branches:
+      - release/*
+    types:
+      - closed
+
+jobs:
+  create_issue:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+
+    steps:
+      - name: Fetch user ID
+        uses: octokit/graphql-action@v2.x
+        id: fetch_user
+        with:
+          query: |
+            query($login: String!) {
+              user(login: $login) {
+                id
+              }
+            }
+          login: ${{ github.actor }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+
+      - name: Prepare title and body
+        id: prepare
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          normalised_title=$(echo $TITLE | tr -dc '[:alnum:][:space:]')
+          echo "issue_title=🍒 [HOTFIX] cherry-pick '#${{ github.event.pull_request.number }} - $normalised_title' to main" >> $GITHUB_OUTPUT
+          echo "issue_body=This is a reminder to merge the hotfix made in PR https://github.com/${{ github.repository }}/pull/${{ github.event.pull_request.number }} into the main branch. Please create a companion PR to cherry-pick the changes to main, if required, and link this issue. If this fix is not relevant to main, add a comment and close as 'wont fix'." >> $GITHUB_OUTPUT
+
+      - name: Debug
+        run: |
+          echo "title: ${{ steps.prepare.outputs.issue_title }}"
+          echo "body: ${{ steps.prepare.outputs.issue_body }}"
+          echo "repository_id: ${{ github.event.repository.node_id }}"
+          echo "assignee_ids: ${{ fromJSON(steps.fetch_user.outputs.data).user.id }}"
+
+      - name: Create Issue
+        uses: octokit/graphql-action@v2.x
+        with:
+          query: |
+            mutation createIssue($title: String!, $body: String!, $repository_id: ID!, $assignee_ids: [ID!]) {
+              createIssue(input: {title: $title, body: $body, repositoryId: $repository_id, assigneeIds: $assignee_ids}) {
+                issue {
+                  number
+                  title
+                }
+              }
+            }
+          title: ${{ steps.prepare.outputs.issue_title }}
+          body: ${{ steps.prepare.outputs.issue_body }}
+          repository_id: ${{ github.event.repository.node_id }}
+          assignee_ids: ${{ fromJSON(steps.fetch_user.outputs.data).user.id }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.CF_GITHUB_BOT_TOKEN }}

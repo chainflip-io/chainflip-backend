@@ -1,0 +1,33 @@
+name: Nightly CI
+on:
+  schedule:
+    - cron: '0 0 * * *'
+
+env:
+  RUSTC_WRAPPER: sccache
+  SCCACHE_CACHE_SIZE: 32G
+  SCCACHE_VERSION: v0.4.1
+  SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
+
+jobs:
+  test:
+    uses: ./.github/workflows/_10_test.yml
+    secrets: inherit
+  build:
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      network: development
+      commit_hash: ${{ github.sha }}
+  post-check:
+    needs: [build]
+    uses: ./.github/workflows/_40_post_check.yml
+    secrets: inherit
+  publish:
+    needs: [build]
+    uses: ./.github/workflows/_30_publish.yml
+    with:
+      version: nightly/
+      environment: dev
+      commit_hash: ${{ github.sha }}
+    secrets: inherit

@@ -1,0 +1,60 @@
+on:
+  workflow_call:
+    inputs:
+      coverage:
+        type: boolean
+        default: true
+
+env:
+  RUSTC_WRAPPER: sccache
+  SCCACHE_CACHE_SIZE: 32G
+  SCCACHE_VERSION: v0.4.1
+  SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
+
+jobs:
+  unit-tests:
+    runs-on: [hetzner]
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup sccache
+        run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
+
+      - name: cargo cf-test-ci --locked
+        run: |
+          cargo cf-test-ci --locked
+          sccache --show-stats
+
+  coverage:
+    if: inputs.coverage
+    runs-on: [hetzner]
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup sccache
+        run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Generate code coverage
+        run: cargo llvm-cov --lib --features runtime-benchmarks,slow-tests --workspace --codecov --output-path lcov.info
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CF_BACKEND_CODECOV_TOKEN }} # not required for public repos
+          files: lcov.info
+          fail_ci_if_error: false
