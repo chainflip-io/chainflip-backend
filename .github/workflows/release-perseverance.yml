@@ -1,11 +1,11 @@
 name: Release Chainflip Perseverance
-on: workflow_dispatch
-  # push:
+on:
+  push:
     # tags:
     #   - 'v[0-9]+.[0-9]+.[0-9]+*'
-concurrency:
-  group: ${{ github.ref }}-release-development
-  cancel-in-progress: true
+# concurrency:
+#   group: ${{ github.ref }}-release-development
+#   cancel-in-progress: true
 
 jobs:
   # pre-check:
