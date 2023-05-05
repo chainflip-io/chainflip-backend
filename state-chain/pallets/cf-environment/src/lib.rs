@@ -234,7 +234,7 @@ pub mod pallet {
 		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
 		/// The Polkadot Runtime Version stored on chain was updated.
 		PolkadotRuntimeVersionUpdated { runtime_version: RuntimeVersion },
-		/// The block number for set for new Bitcoin vault
+		/// The starting block number for the new Bitcoin vault was set
 		BitcoinBlockNumberSetForVault { block_number: cf_chains::btc::BlockNumber },
 	}
 
