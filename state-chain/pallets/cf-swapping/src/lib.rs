@@ -226,6 +226,8 @@ pub mod pallet {
 		CcmUnsupportedForTargetChain,
 		/// The deposited amount is insufficient to pay for the gas budget.
 		CcmInsufficientDepositAmount,
+		/// The provided address could not be decoded.
+		InvalidDestinationAddress,
 	}
 
 	#[pallet::genesis_config]
@@ -320,9 +322,7 @@ pub mod pallet {
 			}
 			let destination_address_internal =
 				T::AddressConverter::try_from_encoded_address(destination_address.clone())
-					.map_err(|_| {
-						DispatchError::Other("Invalid Egress Address, cannot decode the address")
-					})?;
+					.map_err(|_| Error::<T>::InvalidDestinationAddress)?;
 			ensure!(
 				ForeignChain::from(destination_address_internal.clone()) ==
 					ForeignChain::from(destination_asset),
@@ -370,9 +370,7 @@ pub mod pallet {
 
 			let destination_address_internal =
 				T::AddressConverter::try_from_encoded_address(destination_address.clone())
-					.map_err(|_| {
-						DispatchError::Other("Invalid Egress Address, cannot decode the address")
-					})?;
+					.map_err(|_| Error::<T>::InvalidDestinationAddress)?;
 
 			ensure!(
 				ForeignChain::from(destination_address_internal.clone()) ==
@@ -415,9 +413,7 @@ pub mod pallet {
 
 			let destination_address_internal =
 				T::AddressConverter::try_from_encoded_address(destination_address.clone())
-					.map_err(|_| {
-						DispatchError::Other("Invalid Egress Address, cannot decode the address")
-					})?;
+					.map_err(|_| Error::<T>::InvalidDestinationAddress)?;
 
 			let swap_id = Self::schedule_swap(
 				from,
@@ -447,10 +443,12 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let destination_address_internal =
-				T::AddressConverter::try_from_encoded_address(destination_address).map_err(
-					|_| DispatchError::Other("Invalid Egress Address, cannot decode the address"),
-				)?;
+			let destination_address_internal = T::AddressConverter::try_from_encoded_address(
+				destination_address,
+			)
+			.map_err(|_| {
+				DispatchError::Other("Invalid destination address, cannot decode the address")
+			})?;
 
 			ensure!(
 				ForeignChain::from(destination_asset) ==
