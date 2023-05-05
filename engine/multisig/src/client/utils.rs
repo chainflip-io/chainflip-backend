@@ -34,14 +34,24 @@ where
 		.map(|(x, _)| x)
 }
 
-/// The threshold that determines the number of parties we require to agree
-/// on the outcome of some broadcast.
+/// The threshold that determines the number of parties that we must exceed
+/// in order to agree on the outcome of some broadcast.
 pub fn threshold_for_broadcast_verification(total_parties: usize) -> usize {
-	// We require half of participants (rounding up) in order to maximise
-	// the number of colluding parties required to do harm. Note that if
-	// we used the usual 2/3 threshold, it would only take 1/3 of colluding
+	// We require (one more than) half of participants to agree in order to
+	// maximise the number of colluding parties required to do harm. Note that
+	// if we used the usual 2/3 threshold, it would only take 1/3 of colluding
 	// participants to result in slashing of honest participants.
-	(total_parties + 1) / 2
+	total_parties / 2
+}
+
+#[test]
+fn test_threshold_for_broadcast_verification() {
+	assert_eq!(threshold_for_broadcast_verification(1), 0);
+	assert_eq!(threshold_for_broadcast_verification(2), 1);
+	assert_eq!(threshold_for_broadcast_verification(3), 1);
+	assert_eq!(threshold_for_broadcast_verification(99), 49);
+	assert_eq!(threshold_for_broadcast_verification(100), 50);
+	assert_eq!(threshold_for_broadcast_verification(150), 75);
 }
 
 /// Mappings from signer_idx to Validator Id and back
