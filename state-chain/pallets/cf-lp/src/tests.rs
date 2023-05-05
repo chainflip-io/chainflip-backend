@@ -10,7 +10,7 @@ use cf_test_utilities::assert_events_match;
 use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
-		deposit_handler::{LpIntent, MockIngressHandler},
+		deposit_handler::{LpChannel, MockDepositHandler},
 		system_state_info::MockSystemStateInfo,
 	},
 	SystemStateInfo,
@@ -133,7 +133,7 @@ fn ingress_intents_expires() {
 			deposit_address,
 			expiry_block,
 		}) if expiry_block == expiry => (channel_id, deposit_address));
-		let lp_intent = LpIntent {
+		let lp_intent = LpChannel {
 			deposit_address: MockAddressConverter::try_from_encoded_address(deposit_address.clone()).unwrap(),
 			source_asset: asset,
 			lp_account: LP_ACCOUNT.into(),
@@ -144,7 +144,7 @@ fn ingress_intents_expires() {
 			vec![(channel_id, ForeignChain::from(asset), MockAddressConverter::try_from_encoded_address(deposit_address.clone()).unwrap())]
 		);
 		assert_eq!(
-			MockIngressHandler::<AnyChain, Test>::get_liquidity_intents(),
+			MockDepositHandler::<AnyChain, Test>::get_liquidity_channels(),
 			vec![lp_intent.clone()]
 		);
 
@@ -155,7 +155,7 @@ fn ingress_intents_expires() {
 			vec![(channel_id, ForeignChain::from(asset), MockAddressConverter::try_from_encoded_address(deposit_address.clone()).unwrap())]
 		);
 		assert_eq!(
-			MockIngressHandler::<AnyChain, Test>::get_liquidity_intents(),
+			MockDepositHandler::<AnyChain, Test>::get_liquidity_channels(),
 			vec![lp_intent]
 		);
 
@@ -166,7 +166,7 @@ fn ingress_intents_expires() {
 		System::assert_last_event(RuntimeEvent::LiquidityProvider(
 			crate::Event::<Test>::DepositAddressExpired { address: deposit_address },
 		));
-		assert!(MockIngressHandler::<AnyChain, Test>::get_liquidity_intents().is_empty());
+		assert!(MockDepositHandler::<AnyChain, Test>::get_liquidity_channels().is_empty());
 	});
 }
 

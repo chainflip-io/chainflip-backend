@@ -4,7 +4,7 @@ use cf_primitives::{Asset, AssetAmount, SwapOutput};
 use cf_traits::{
 	impl_mock_chainflip,
 	mocks::{
-		address_converter::MockAddressConverter, deposit_handler::MockIngressHandler,
+		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
 		egress_handler::MockEgressHandler,
 	},
 	AccountRoleRegistry, SwappingApi,
@@ -126,7 +126,7 @@ parameter_types! {
 
 impl pallet_cf_swapping::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type IngressHandler = MockIngressHandler<AnyChain, Self>;
+	type DepositHandler = MockDepositHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;
 	type WeightInfo = MockWeightInfo;
 	type AddressConverter = MockAddressConverter;

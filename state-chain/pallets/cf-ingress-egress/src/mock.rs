@@ -24,7 +24,7 @@ use cf_traits::{
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
 		ccm_handler::MockCcmHandler,
 	},
-	IngressHandler,
+	DepositHandler,
 };
 use frame_system as system;
 use sp_core::H256;
@@ -111,8 +111,8 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 	}
 }
 
-pub struct MockIngressHandler;
-impl IngressHandler<Ethereum> for MockIngressHandler {}
+pub struct MockDepositHandler;
+impl DepositHandler<Ethereum> for MockDepositHandler {}
 
 impl crate::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -123,7 +123,7 @@ impl crate::Config<Instance1> for Test {
 	type SwapIntentHandler = Self;
 	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;
 	type Broadcaster = MockBroadcast;
-	type IngressHandler = MockIngressHandler;
+	type DepositHandler = MockDepositHandler;
 	type WeightInfo = ();
 	type CcmHandler = MockCcmHandler;
 }

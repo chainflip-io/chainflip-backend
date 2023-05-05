@@ -11,7 +11,7 @@ use cf_test_utilities::{assert_event_sequence, assert_events_match};
 use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
-		deposit_handler::{MockIngressHandler, SwapIntent},
+		deposit_handler::{MockDepositHandler, SwapChannel},
 		egress_handler::{MockEgressHandler, MockEgressParameter},
 	},
 	CcmHandler, SwapIntentHandler,
@@ -293,7 +293,7 @@ fn swap_expires() {
 			deposit_address,
 			..
 		}) => deposit_address);
-		let swap_intent = SwapIntent {
+		let swap_intent = SwapChannel {
 			deposit_address: MockAddressConverter::try_from_encoded_address(deposit_address).unwrap(),
 			source_asset: Asset::Eth,
 			destination_asset: Asset::Usdc,
@@ -308,7 +308,7 @@ fn swap_expires() {
 			vec![(0, ForeignChain::Ethereum, ForeignChainAddress::Eth(Default::default()))]
 		);
 		assert_eq!(
-			MockIngressHandler::<AnyChain, Test>::get_swap_intents(),
+			MockDepositHandler::<AnyChain, Test>::get_swap_channels(),
 			vec![swap_intent.clone()]
 		);
 
@@ -319,7 +319,7 @@ fn swap_expires() {
 			vec![(0, ForeignChain::Ethereum, ForeignChainAddress::Eth(Default::default()))]
 		);
 		assert_eq!(
-			MockIngressHandler::<AnyChain, Test>::get_swap_intents(),
+			MockDepositHandler::<AnyChain, Test>::get_swap_channels(),
 			vec![swap_intent]
 		);
 
@@ -331,7 +331,7 @@ fn swap_expires() {
 			},
 		));
 		assert!(
-			MockIngressHandler::<AnyChain, Test>::get_swap_intents().is_empty()
+			MockDepositHandler::<AnyChain, Test>::get_swap_channels().is_empty()
 		);
 	});
 }

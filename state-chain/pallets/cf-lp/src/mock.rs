@@ -4,7 +4,7 @@ use cf_primitives::{AccountId, ChannelId};
 use cf_traits::{
 	impl_mock_chainflip,
 	mocks::{
-		address_converter::MockAddressConverter, deposit_handler::MockIngressHandler,
+		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
 		egress_handler::MockEgressHandler,
 	},
 	AccountRoleRegistry, AddressDerivationApi,
@@ -86,7 +86,7 @@ parameter_types! {
 
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type IngressHandler = MockIngressHandler<AnyChain, Self>;
+	type DepositHandler = MockDepositHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;
 	type AddressConverter = MockAddressConverter;
 	type WeightInfo = ();

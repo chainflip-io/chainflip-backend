@@ -23,8 +23,8 @@ use cf_chains::{
 };
 use cf_primitives::{Asset, AssetAmount, ChannelId};
 use cf_traits::{
-	liquidity::LpBalanceApi, AddressDerivationApi, Broadcaster, CcmHandler, Chainflip, EgressApi,
-	IngressApi, IngressHandler, SwapIntentHandler,
+	liquidity::LpBalanceApi, AddressDerivationApi, Broadcaster, CcmHandler, Chainflip,
+	DepositHandler, EgressApi, IngressApi, SwapIntentHandler,
 };
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
 pub use pallet::*;
@@ -186,7 +186,7 @@ pub mod pallet {
 		>;
 
 		/// Ingress Handler for performing action items on ingress needed elsewhere
-		type IngressHandler: IngressHandler<Self::TargetChain>;
+		type DepositHandler: DepositHandler<Self::TargetChain>;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
@@ -671,7 +671,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)?,
 		};
 
-		T::IngressHandler::on_ingress_completed(
+		T::DepositHandler::on_ingress_completed(
 			tx_id.clone(),
 			amount,
 			deposit_address.clone(),
@@ -709,7 +709,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		FetchParamDetails::<T, I>::insert(channel_id, (ingress_fetch_id, address.clone()));
 		IntentIngressDetails::<T, I>::insert(&address, IngressDetails { channel_id, source_asset });
 		ChannelActions::<T, I>::insert(&address, intent_action);
-		T::IngressHandler::on_ingress_initiated(address.clone(), channel_id)?;
+		T::DepositHandler::on_ingress_initiated(address.clone(), channel_id)?;
 		Ok((channel_id, address))
 	}
 
@@ -838,7 +838,7 @@ impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
 
 	// Note: we expect that the mapping from any instantiable pallet to the instance of this pallet
 	// is matching to the right chain. Because of that we can ignore the chain parameter.
-	fn expire_intent(
+	fn expire_channel(
 		chain: ForeignChain,
 		channel_id: ChannelId,
 		address: TargetChainAccount<T, I>,

@@ -694,7 +694,7 @@ pub trait IngressApi<C: Chain> {
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
 	/// Expires an intent.
-	fn expire_intent(chain: ForeignChain, channel_id: ChannelId, address: C::ChainAccount);
+	fn expire_channel(chain: ForeignChain, channel_id: ChannelId, address: C::ChainAccount);
 }
 
 /// Generates a deterministic deposit address for some combination of asset, chain and channel id.
@@ -826,7 +826,7 @@ pub trait FlipBurnInfo {
 }
 
 /// The trait implementation is intentionally no-op by default
-pub trait IngressHandler<C: ChainCrypto> {
+pub trait DepositHandler<C: ChainCrypto> {
 	fn on_ingress_completed(
 		_tx_id: <C as ChainCrypto>::TransactionId,
 		_amount: <C as Chain>::ChainAmount,

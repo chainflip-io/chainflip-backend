@@ -40,7 +40,7 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// API for handling asset ingress.
-		type IngressHandler: IngressApi<
+		type DepositHandler: IngressApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
@@ -73,7 +73,7 @@ pub mod pallet {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			let expired = IngressIntentExpiries::<T>::take(n);
 			for (channel_id, chain, address) in expired.clone() {
-				T::IngressHandler::expire_intent(chain, channel_id, address.clone());
+				T::DepositHandler::expire_channel(chain, channel_id, address.clone());
 				Self::deposit_event(Event::DepositAddressExpired {
 					address: T::AddressConverter::try_to_encoded_address(address).expect("This should not fail since this conversion already succeeded when expiry was scheduled"),
 				});
@@ -168,7 +168,7 @@ pub mod pallet {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			let (channel_id, deposit_address) =
-				T::IngressHandler::request_liquidity_deposit_address(account_id, asset)?;
+				T::DepositHandler::request_liquidity_deposit_address(account_id, asset)?;
 
 			let expiry_block =
 				frame_system::Pallet::<T>::current_block_number().saturating_add(LpTTL::<T>::get());

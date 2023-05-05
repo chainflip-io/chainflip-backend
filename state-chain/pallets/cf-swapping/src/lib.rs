@@ -91,7 +91,7 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
 		/// API for handling asset ingress.
-		type IngressHandler: IngressApi<
+		type DepositHandler: IngressApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
@@ -283,7 +283,7 @@ pub mod pallet {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			let expired = SwapIntentExpiries::<T>::take(n);
 			for (channel_id, chain, address) in expired.clone() {
-				T::IngressHandler::expire_intent(chain, channel_id, address.clone());
+				T::DepositHandler::expire_channel(chain, channel_id, address.clone());
 				Self::deposit_event(Event::<T>::SwapIntentExpired { deposit_address: address });
 			}
 			T::WeightInfo::on_initialize(expired.len() as u32)
@@ -325,7 +325,7 @@ pub mod pallet {
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 
-			let (channel_id, deposit_address) = T::IngressHandler::request_swap_deposit_address(
+			let (channel_id, deposit_address) = T::DepositHandler::request_swap_deposit_address(
 				source_asset,
 				destination_asset,
 				destination_address_internal,

@@ -219,7 +219,7 @@ impl pallet_cf_environment::Config for Runtime {
 
 impl pallet_cf_swapping::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type IngressHandler = chainflip::AnyChainIngressEgressHandler;
+	type DepositHandler = chainflip::AnyChainIngressEgressHandler;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type SwappingApi = LiquidityPools;
 	type AddressConverter = ChainAddressConverter;
@@ -291,7 +291,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type SwapIntentHandler = Swapping;
 	type ChainApiCall = eth::api::EthereumApi<EthEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
-	type IngressHandler = chainflip::EthIngressHandler;
+	type DepositHandler = chainflip::EthDepositHandler;
 	type CcmHandler = Swapping;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
@@ -306,7 +306,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type ChainApiCall = dot::api::PolkadotApi<chainflip::DotEnvironment>;
 	type Broadcaster = PolkadotBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
-	type IngressHandler = chainflip::DotIngressHandler;
+	type DepositHandler = chainflip::DotDepositHandler;
 	type CcmHandler = Swapping;
 }
 
@@ -320,7 +320,7 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type ChainApiCall = cf_chains::btc::api::BitcoinApi<chainflip::BtcEnvironment>;
 	type Broadcaster = BitcoinBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
-	type IngressHandler = chainflip::BtcIngressHandler;
+	type DepositHandler = chainflip::BtcDepositHandler;
 	type CcmHandler = Swapping;
 }
 
@@ -337,7 +337,7 @@ impl pallet_cf_pools::Config for Runtime {
 
 impl pallet_cf_lp::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type IngressHandler = chainflip::AnyChainIngressEgressHandler;
+	type DepositHandler = chainflip::AnyChainIngressEgressHandler;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type AddressConverter = ChainAddressConverter;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;

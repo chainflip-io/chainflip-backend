@@ -39,9 +39,9 @@ use cf_primitives::{
 	chains::assets, Asset, BasisPoints, ChannelId, EgressId, ETHEREUM_ETH_ADDRESS,
 };
 use cf_traits::{
-	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, EgressApi,
-	EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat, IngressApi, IngressHandler,
-	Issuance, KeyProvider, NetworkState, RewardsDistribution, RuntimeUpgrade,
+	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster,
+	DepositHandler, EgressApi, EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat,
+	IngressApi, Issuance, KeyProvider, NetworkState, RewardsDistribution, RuntimeUpgrade,
 	VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
@@ -505,14 +505,14 @@ impl_egress_api_for_anychain!(
 	(Bitcoin, BitcoinIngressEgress)
 );
 
-pub struct EthIngressHandler;
-impl IngressHandler<Ethereum> for EthIngressHandler {}
+pub struct EthDepositHandler;
+impl DepositHandler<Ethereum> for EthDepositHandler {}
 
-pub struct DotIngressHandler;
-impl IngressHandler<Polkadot> for DotIngressHandler {}
+pub struct DotDepositHandler;
+impl DepositHandler<Polkadot> for DotDepositHandler {}
 
-pub struct BtcIngressHandler;
-impl IngressHandler<Bitcoin> for BtcIngressHandler {
+pub struct BtcDepositHandler;
+impl DepositHandler<Bitcoin> for BtcDepositHandler {
 	fn on_ingress_completed(
 		utxo_id: <Bitcoin as ChainCrypto>::TransactionId,
 		amount: <Bitcoin as Chain>::ChainAmount,
