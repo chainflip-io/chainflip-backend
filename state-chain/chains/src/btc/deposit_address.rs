@@ -13,7 +13,7 @@ pub fn tweaked_pubkey(pubkey_x: [u8; 32], salt: u32) -> PublicKey {
 	tweaked
 }
 
-pub fn derive_btc_ingress_bitcoin_script(pubkey_x: [u8; 32], salt: u32) -> BitcoinScript {
+pub fn derive_btc_deposit_bitcoin_script(pubkey_x: [u8; 32], salt: u32) -> BitcoinScript {
 	BitcoinScript::default()
 		.push_uint(SEGWIT_VERSION as u32)
 		.push_bytes(tweaked_pubkey(pubkey_x, salt).serialize_compressed().into_iter().skip(1))
@@ -39,7 +39,7 @@ pub fn derive_btc_deposit_address_from_script(
 fn test_btc_derive_deposit_address() {
 	assert_eq!(
 		derive_btc_deposit_address_from_script(
-			derive_btc_ingress_bitcoin_script(
+			derive_btc_deposit_bitcoin_script(
 				hex_literal::hex!(
 					"2E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105"
 				),
@@ -51,7 +51,7 @@ fn test_btc_derive_deposit_address() {
 	);
 	assert_eq!(
 		derive_btc_deposit_address_from_script(
-			derive_btc_ingress_bitcoin_script(
+			derive_btc_deposit_bitcoin_script(
 				hex_literal::hex!(
 					"FEDBDC04F4666AF03167E2EF5FA5405BB012BC62A3B3180088E63972BD06EAD8"
 				),
@@ -63,7 +63,7 @@ fn test_btc_derive_deposit_address() {
 	);
 	assert_eq!(
 		derive_btc_deposit_address_from_script(
-			derive_btc_ingress_bitcoin_script(
+			derive_btc_deposit_bitcoin_script(
 				hex_literal::hex!(
 					"FEDBDC04F4666AF03167E2EF5FA5405BB012BC62A3B3180088E63972BD06EAD8"
 				),
@@ -75,7 +75,7 @@ fn test_btc_derive_deposit_address() {
 	);
 	assert_eq!(
 		derive_btc_deposit_address_from_script(
-			derive_btc_ingress_bitcoin_script(
+			derive_btc_deposit_bitcoin_script(
 				hex_literal::hex!(
 					"FEDBDC04F4666AF03167E2EF5FA5405BB012BC62A3B3180088E63972BD06EAD8"
 				),

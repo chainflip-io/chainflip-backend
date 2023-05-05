@@ -4,7 +4,7 @@
 
 use cf_chains::{
 	btc::{
-		api::SelectedUtxos, deposit_address::derive_btc_ingress_bitcoin_script,
+		api::SelectedUtxos, deposit_address::derive_btc_deposit_bitcoin_script,
 		utxo_selection::select_utxos_from_pool, Bitcoin, BitcoinNetwork, BitcoinScriptBounded,
 		BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
@@ -477,7 +477,7 @@ pub mod pallet {
 				Self::add_bitcoin_utxo_to_list(
 					amount,
 					utxo_id,
-					derive_btc_ingress_bitcoin_script(change_pubkey.pubkey_x, CHANGE_ADDRESS_SALT)
+					derive_btc_deposit_bitcoin_script(change_pubkey.pubkey_x, CHANGE_ADDRESS_SALT)
 						.try_into()
 						.expect("The script should not exceed 128 bytes"),
 				);
@@ -628,7 +628,7 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	pub fn add_details_for_btc_ingress_script(
+	pub fn add_details_for_btc_deposit_script(
 		ingress_script: BitcoinScriptBounded,
 		salt: u32,
 		pubkey: [u8; 32],

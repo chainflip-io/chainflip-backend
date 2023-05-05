@@ -111,7 +111,7 @@ pub async fn start(
 			state_chain_runtime::EthereumInstance,
 		>>(initial_block_hash)
 		.await
-		.context("Failed to get initial ingress details")?
+		.context("Failed to get initial deposit details")?
 		.into_iter()
 		.map(|(address, channel_details)| (channel_details.source_asset, address))
 		.into_group_map();

@@ -526,7 +526,7 @@ impl DepositHandler<Bitcoin> for BtcDepositHandler {
 		ingress_script: <Bitcoin as Chain>::ChainAccount,
 		salt: ChannelId,
 	) -> Result<(), DispatchError> {
-		Environment::add_details_for_btc_ingress_script(
+		Environment::add_details_for_btc_deposit_script(
 			ingress_script,
 			salt.try_into().expect("The salt/channel_id is not expected to exceed u32 max"), /* Todo: Confirm
 			                                                                                  * this assumption.

@@ -203,7 +203,7 @@ async fn main() -> anyhow::Result<()> {
 						state_chain_runtime::PolkadotInstance,
 					>>(state_chain_stream.cache().block_hash)
 					.await
-					.context("Failed to get initial ingress details")?
+					.context("Failed to get initial deposit details")?
 					.into_iter()
 					.filter_map(|(address, channel_details)| {
 						if channel_details.source_asset ==
