@@ -106,7 +106,7 @@ fn generate_and_save_keys<Crypto: CryptoScheme>(
 		.update_key::<Crypto>(&KeyId::new(GENESIS_EPOCH, public_key.clone()), &key_share);
 	}
 
-	hex::encode(&public_key.encode_key())
+	hex::encode(public_key.encode_key())
 }
 
 #[cfg(test)]
