@@ -556,6 +556,7 @@ where
                                            from_epoch,
                                            sharing_participants,
                                            receiving_participants,
+                                           mut new_key,
                                            to_epoch,
                                         },
                                     ) => {
@@ -563,7 +564,13 @@ where
                                         dot_multisig_client.update_latest_ceremony_id(ceremony_id);
 
                                         if sharing_participants.contains(&account_id) || receiving_participants.contains(&account_id) {
-                                            let key_handover_result_future = btc_multisig_client.initiate_key_handover(ceremony_id, (from_epoch, key_to_share).into(), to_epoch, sharing_participants, receiving_participants);
+                                            let key_handover_result_future = btc_multisig_client.initiate_key_handover(
+                                                ceremony_id,
+                                                KeyId::new(from_epoch, key_to_share.current),
+                                                to_epoch,
+                                                sharing_participants,
+                                                receiving_participants,
+                                            );
                                             let state_chain_client = state_chain_client.clone();
                                             scope.spawn(async move {
                                                 let _result =
@@ -575,7 +582,12 @@ where
                                                             ceremony_id,
                                                             reported_outcome: key_handover_result_future
                                                                 .await
-                                                                .map(<BitcoinInstance as CryptoCompat<_, _>>::pubkey_to_aggkey)
+                                                                .map(move |handover_key| {
+                                                                    assert!(
+                                                                        new_key.previous.replace(handover_key.serialize()).is_none()
+                                                                    );
+                                                                    new_key
+                                                                })
                                                                 .map_err(|(bad_account_ids, _reason)| bad_account_ids),
                                                         })
                                                         .await;

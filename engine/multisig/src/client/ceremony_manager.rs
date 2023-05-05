@@ -193,7 +193,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 			SigningStateCommonInfo {
 				payloads_and_keys: signing_info
 					.into_iter()
-					.map(|(key_info, payload)| PayloadAndKey { payload, key: key_info.key.clone() })
+					.map(|(key_info, payload)| PayloadAndKey { payload, key: key_info.key })
 					.collect(),
 			},
 		);

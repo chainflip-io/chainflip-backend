@@ -1,7 +1,7 @@
 use crate::crypto::ECScalar;
 
 pub use super::secp256k1::{Point, Scalar};
-use super::{CanonicalEncoding, ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature};
+use super::{ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature};
 use cf_chains::Bitcoin;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -52,12 +52,6 @@ impl std::fmt::Display for SigningPayload {
 impl AsRef<[u8]> for SigningPayload {
 	fn as_ref(&self) -> &[u8] {
 		&self.0
-	}
-}
-
-impl CanonicalEncoding for secp256k1::schnorrsig::PublicKey {
-	fn encode_key(&self) -> Vec<u8> {
-		self.serialize().to_vec()
 	}
 }
 
