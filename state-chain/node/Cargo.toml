@@ -118,3 +118,4 @@ maintainer-scripts = "package/perseverance"
 assets = [
   ["target/release/chainflip-node", "usr/bin/", "755"],
   ["chainspecs/perseverance.chainspec.raw.json", "etc/chainflip/perseverance.chainspec.json", "644"],
+]
