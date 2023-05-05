@@ -66,13 +66,8 @@ pub fn get_create_2_address(
 	let deploy_transaction_bytes_hash = Keccak256::hash(
 		&[
 			deploy_bytecode,
-			&deploy_constructor_argument.map_or(
-				cf_primitives::ETHEREUM_ETH_ADDRESS.into(),
-				|mut token_addr| {
-					token_addr.splice(0..0, [0u8; 12]);
-					token_addr
-				},
-			),
+			&[0u8; 12], // padding
+			&deploy_constructor_argument.unwrap_or(cf_primitives::ETHEREUM_ETH_ADDRESS.into()),
 		]
 		.concat(),
 	);
@@ -113,6 +108,12 @@ fn test_eth_eth() {
 		),
 		hex_literal::hex!("Edf07a740a5D2d06b73f36fd5cc155d4240EaEEA")
 	);
+
+	assert_eq!(
+		get_create_2_address(VAULT_ADDRESS, None, 420696969),
+		hex_literal::hex!("Edf07a740a5D2d06b73f36fd5cc155d4240EaEEA")
+	);
+
 	println!("Derivation worked for ETH:ETH! 🚀");
 }
 
