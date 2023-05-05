@@ -121,6 +121,15 @@ pub trait MultisigClientApi<C: CryptoScheme> {
 		participants: BTreeSet<AccountId>,
 	) -> BoxFuture<'_, Result<C::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>>;
 
+	fn initiate_key_handover(
+		&self,
+		ceremony_id: CeremonyId,
+		key_id: KeyId,
+		epoch_index: EpochIndex,
+		sharing_participants: BTreeSet<AccountId>,
+		new_participants: BTreeSet<AccountId>,
+	) -> BoxFuture<'_, Result<C::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>>;
+
 	fn initiate_signing(
 		&self,
 		ceremony_id: CeremonyId,
@@ -191,27 +200,15 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClient<C, KeyStore> {
 			ceremony_request_sender,
 		}
 	}
-}
 
-impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
-	for MultisigClient<C, KeyStore>
-{
-	fn initiate_keygen(
+	fn start_keygen_with_resharing_context(
 		&self,
 		ceremony_id: CeremonyId,
 		// The epoch the key will be associated with if successful.
 		epoch_index: EpochIndex,
 		participants: BTreeSet<AccountId>,
+		resharing_context: Option<ResharingContext<C>>,
 	) -> BoxFuture<'_, Result<C::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>> {
-		assert!(participants.contains(&self.my_account_id));
-		let span = info_span!("Keygen Ceremony", ceremony_id = ceremony_id);
-		let _entered = span.enter();
-
-		info!(
-			participants = format_iterator(&participants).to_string(),
-			"Received a keygen request"
-		);
-
 		use rand_legacy::FromEntropy;
 		let rng = Rng::from_entropy();
 
@@ -223,7 +220,7 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 					participants,
 					rng,
 					result_sender,
-					resharing_context: None,
+					resharing_context,
 				})),
 			})
 			.unwrap();
@@ -246,6 +243,77 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 					(reported_parties, failure_reason)
 				})
 		}
+		.boxed()
+	}
+}
+
+impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
+	for MultisigClient<C, KeyStore>
+{
+	fn initiate_keygen(
+		&self,
+		ceremony_id: CeremonyId,
+		// The epoch the key will be associated with if successful.
+		epoch_index: EpochIndex,
+		participants: BTreeSet<AccountId>,
+	) -> BoxFuture<'_, Result<C::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>> {
+		assert!(participants.contains(&self.my_account_id));
+		let span = info_span!("Keygen Ceremony", ceremony_id = ceremony_id);
+		let _entered = span.enter();
+
+		info!(
+			participants = format_iterator(&participants).to_string(),
+			"Received a keygen request"
+		);
+
+		self.start_keygen_with_resharing_context(ceremony_id, epoch_index, participants, None)
+			.instrument(span.clone())
+			.boxed()
+	}
+
+	fn initiate_key_handover(
+		&self,
+		ceremony_id: CeremonyId,
+		key_id: KeyId,
+		epoch_index: EpochIndex,
+		sharing_participants: BTreeSet<AccountId>,
+		receiving_participants: BTreeSet<AccountId>,
+	) -> BoxFuture<
+		'_,
+		Result<<C as CryptoScheme>::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>,
+	> {
+		let span = info_span!("Key Handover Ceremony", ceremony_id = ceremony_id);
+		let _entered = span.enter();
+
+		debug!(
+			key_id = key_id.to_string(),
+			sharing_participants = format_iterator(&sharing_participants).to_string(),
+			receiving_participants = format_iterator(&receiving_participants).to_string(),
+			"Received a key handover request",
+		);
+
+		let resharing_context =
+			if sharing_participants.contains(&self.my_account_id) {
+				let key =
+					self.key_store.lock().unwrap().get_key(&key_id).expect(
+						"we've been selected as a sharing participant, so we must have a key.",
+					);
+				ResharingContext::from_key(
+					&key,
+					&self.my_account_id,
+					&sharing_participants,
+					&receiving_participants,
+				)
+			} else {
+				ResharingContext::without_key(&sharing_participants, &receiving_participants)
+			};
+
+		self.start_keygen_with_resharing_context(
+			ceremony_id,
+			epoch_index,
+			sharing_participants.union(&receiving_participants).cloned().collect(),
+			Some(resharing_context),
+		)
 		.instrument(span.clone())
 		.boxed()
 	}

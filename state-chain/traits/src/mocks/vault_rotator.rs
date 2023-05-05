@@ -22,6 +22,13 @@ macro_rules! mock_vault_rotator {
 				);
 			}
 
+			pub fn key_handover_success() {
+				Self::put_value(
+					ROTATION_OUTCOME,
+					AsyncResult::<VaultStatus<u64>>::Ready(VaultStatus::KeyHandoverComplete),
+				);
+			}
+
 			pub fn keys_activated() {
 				Self::put_value(
 					ROTATION_OUTCOME,
@@ -47,6 +54,14 @@ macro_rules! mock_vault_rotator {
 			type ValidatorId = u64;
 
 			fn keygen(_candidates: BTreeSet<Self::ValidatorId>, _new_epoch_index: EpochIndex) {
+				Self::put_value(ROTATION_OUTCOME, AsyncResult::<VaultStatus<u64>>::Pending);
+			}
+
+			fn key_handover(
+				_old_participants: BTreeSet<Self::ValidatorId>,
+				_new_candidates: BTreeSet<Self::ValidatorId>,
+				_epoch_index: EpochIndex,
+			) {
 				Self::put_value(ROTATION_OUTCOME, AsyncResult::<VaultStatus<u64>>::Pending);
 			}
 
