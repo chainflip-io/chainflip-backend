@@ -14,12 +14,12 @@ benchmarks_instance_pallet! {
 
 		let destination_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
 		let destination_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
-		let ingress_fetch_id: <<T as Config<I>>::TargetChain as Chain>::IngressFetchId = BenchmarkValue::benchmark_value();
+		let deposit_fetch_id: <<T as Config<I>>::TargetChain as Chain>::DepositFetchId = BenchmarkValue::benchmark_value();
 
 		// We combine fetch and egress into a single variable, assuming the weight cost is similar.
 		for i in 0..n {
 			if i % 2 == 0 {
-				FetchParamDetails::<T, I>::insert(i as u64, (ingress_fetch_id, destination_address.clone()));
+				FetchParamDetails::<T, I>::insert(i as u64, (deposit_fetch_id, destination_address.clone()));
 				batch.push(FetchOrTransfer::Fetch {
 					channel_id: i as u64,
 					asset: destination_asset,

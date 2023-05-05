@@ -119,7 +119,7 @@ impl Chain for Bitcoin {
 
 	type EpochStartData = EpochStartData;
 
-	type IngressFetchId = BitcoinFetchId;
+	type DepositFetchId = BitcoinFetchId;
 }
 
 impl ChainCrypto for Bitcoin {

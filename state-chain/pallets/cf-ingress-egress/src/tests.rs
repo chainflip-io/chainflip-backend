@@ -135,7 +135,7 @@ fn request_address_and_deposit(
 }
 
 #[test]
-fn can_schedule_ingress_fetch() {
+fn can_schedule_deposit_fetch() {
 	new_test_ext().execute_with(|| {
 		assert!(ScheduledEgressFetchOrTransfer::<Test, Instance1>::get().is_empty());
 
@@ -153,7 +153,7 @@ fn can_schedule_ingress_fetch() {
 		);
 
 		System::assert_has_event(RuntimeEvent::IngressEgress(
-			crate::Event::IngressFetchesScheduled { channel_id: 1, asset: eth::Asset::Eth },
+			crate::Event::DepositFetchesScheduled { channel_id: 1, asset: eth::Asset::Eth },
 		));
 
 		request_address_and_deposit(4u64, eth::Asset::Eth);

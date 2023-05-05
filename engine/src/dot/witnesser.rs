@@ -688,12 +688,12 @@ mod tests {
 	}
 
 	#[test]
-	fn ingress_fetch_and_egress_witnessed() {
+	fn deposit_fetch_and_egress_witnessed() {
 		let egress_index = 3;
 		let egress_amount = 30000;
 
-		let ingress_fetch_index = 4;
-		let ingress_fetch_amount = 40000;
+		let deposit_fetch_index = 4;
+		let deposit_fetch_amount = 40000;
 		let our_vault = PolkadotAccountId::from([3; 32]);
 
 		let block_event_details = phase_and_events(&[
@@ -707,11 +707,11 @@ mod tests {
 			(egress_index, mock_tx_fee_paid(egress_amount)),
 			// we'll receive this address from the channel
 			(
-				ingress_fetch_index,
+				deposit_fetch_index,
 				// ingress fetch, to our vault
-				mock_transfer(&PolkadotAccountId::from([7; 32]), &our_vault, ingress_fetch_amount),
+				mock_transfer(&PolkadotAccountId::from([7; 32]), &our_vault, deposit_fetch_amount),
 			),
-			(ingress_fetch_index, mock_tx_fee_paid(ingress_fetch_amount)),
+			(deposit_fetch_index, mock_tx_fee_paid(deposit_fetch_amount)),
 			// this one is not for us
 			(
 				19,
@@ -734,7 +734,7 @@ mod tests {
 
 		assert!(
 			interesting_indices.contains(&(egress_index, egress_amount)) &&
-				interesting_indices.contains(&(ingress_fetch_index, ingress_fetch_amount))
+				interesting_indices.contains(&(deposit_fetch_index, deposit_fetch_amount))
 		);
 
 		assert!(vault_key_rotated_calls.is_empty());

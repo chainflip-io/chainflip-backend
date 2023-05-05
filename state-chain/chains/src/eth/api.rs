@@ -125,9 +125,9 @@ where
 	) -> Result<Self, ()> {
 		let mut fetch_only_params = vec![];
 		let mut fetch_deploy_params = vec![];
-		for FetchAssetParams { ingress_fetch_id, asset } in fetch_params {
+		for FetchAssetParams { deposit_fetch_id, asset } in fetch_params {
 			if let Some(token_address) = E::lookup(asset) {
-				match ingress_fetch_id {
+				match deposit_fetch_id {
 					EthereumIngressId::Deployed(contract_address) => fetch_only_params
 						.push(EncodableFetchAssetParams { contract_address, asset: token_address }),
 					EthereumIngressId::UnDeployed(channel_id) => fetch_deploy_params

@@ -47,7 +47,7 @@ impl Chain for Ethereum {
 	type ChainAccount = eth::Address;
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
-	type IngressFetchId = EthereumIngressId;
+	type DepositFetchId = EthereumIngressId;
 }
 
 impl ChainCrypto for Ethereum {

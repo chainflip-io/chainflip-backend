@@ -97,7 +97,7 @@ pub trait Chain: Member + Parameter {
 
 	type EpochStartData: Member + Parameter + MaxEncodedLen;
 
-	type IngressFetchId: Member
+	type DepositFetchId: Member
 		+ Parameter
 		+ Copy
 		+ BenchmarkValue
@@ -202,7 +202,7 @@ where
 /// Contains all the parameters required to fetch incoming transactions on an external chain.
 #[derive(RuntimeDebug, Copy, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct FetchAssetParams<C: Chain> {
-	pub ingress_fetch_id: <C as Chain>::IngressFetchId,
+	pub deposit_fetch_id: <C as Chain>::DepositFetchId,
 	pub asset: <C as Chain>::ChainAsset,
 }
 

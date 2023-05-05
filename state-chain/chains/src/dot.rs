@@ -118,7 +118,7 @@ impl Chain for Polkadot {
 	type TransactionFee = Self::ChainAmount;
 	type ChainAsset = assets::dot::Asset;
 	type EpochStartData = EpochStartData;
-	type IngressFetchId = PolkadotIngressId;
+	type DepositFetchId = PolkadotIngressId;
 }
 
 impl ChainCrypto for Polkadot {

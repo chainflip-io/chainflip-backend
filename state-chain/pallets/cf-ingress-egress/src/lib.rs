@@ -108,8 +108,8 @@ pub mod pallet {
 
 	pub(crate) type TargetChainAmount<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAmount;
 
-	pub(crate) type IngressFetchIdOf<T, I> =
-		<<T as Config<I>>::TargetChain as Chain>::IngressFetchId;
+	pub(crate) type DepositFetchIdOf<T, I> =
+		<<T as Config<I>>::TargetChain as Chain>::DepositFetchId;
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct DepositWitness<C: Chain + ChainCrypto> {
@@ -248,7 +248,7 @@ pub mod pallet {
 	/// Map of channel id to the ingress fetch parameters.
 	#[pallet::storage]
 	pub(crate) type FetchParamDetails<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, ChannelId, (IngressFetchIdOf<T, I>, TargetChainAccount<T, I>)>;
+		StorageMap<_, Twox64Concat, ChannelId, (DepositFetchIdOf<T, I>, TargetChainAccount<T, I>)>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -285,7 +285,7 @@ pub mod pallet {
 			egress_id: EgressId,
 			error: DispatchError,
 		},
-		IngressFetchesScheduled {
+		DepositFetchesScheduled {
 			channel_id: ChannelId,
 			asset: TargetChainAsset<T, I>,
 		},
@@ -517,7 +517,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				FetchOrTransfer::<T::TargetChain>::Fetch { channel_id, asset } => {
 					let (ingress_id, deposit_address) = FetchParamDetails::<T, I>::get(channel_id)
 						.expect("to have fetch param details available");
-					fetch_params.push(FetchAssetParams { ingress_fetch_id: ingress_id, asset });
+					fetch_params.push(FetchAssetParams { deposit_fetch_id: ingress_id, asset });
 					addresses.push((channel_id, deposit_address.clone()));
 				},
 				FetchOrTransfer::<T::TargetChain>::Transfer {
@@ -633,7 +633,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			asset,
 		});
 
-		Self::deposit_event(Event::<T, I>::IngressFetchesScheduled {
+		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled {
 			channel_id: ingress.channel_id,
 			asset,
 		});
@@ -690,10 +690,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		channel_action: ChannelAction<T::AccountId>,
 	) -> Result<(ChannelId, TargetChainAccount<T, I>), DispatchError> {
 		// We have an address available, so we can just use it.
-		let (address, channel_id, ingress_fetch_id) = if let Some((channel_id, address)) =
+		let (address, channel_id, deposit_fetch_id) = if let Some((channel_id, address)) =
 			AddressPool::<T, I>::drain().next()
 		{
-			(address.clone(), channel_id, IngressFetchIdOf::<T, I>::deployed(channel_id, address))
+			(address.clone(), channel_id, DepositFetchIdOf::<T, I>::deployed(channel_id, address))
 		} else {
 			let next_channel_id = ChannelIdCounter::<T, I>::get()
 				.checked_add(1)
@@ -705,10 +705,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			(
 				new_address.clone(),
 				next_channel_id,
-				IngressFetchIdOf::<T, I>::undeployed(next_channel_id, new_address),
+				DepositFetchIdOf::<T, I>::undeployed(next_channel_id, new_address),
 			)
 		};
-		FetchParamDetails::<T, I>::insert(channel_id, (ingress_fetch_id, address.clone()));
+		FetchParamDetails::<T, I>::insert(channel_id, (deposit_fetch_id, address.clone()));
 		DepositAddressDetailsLookup::<T, I>::insert(
 			&address,
 			DepositAddressDetails { channel_id, source_asset },
