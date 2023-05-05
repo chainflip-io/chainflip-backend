@@ -6,7 +6,7 @@ use chainflip_api as api;
 use clap::Parser;
 use settings::{CLICommandLineOptions, CLISettings};
 
-use crate::settings::{CliCommand::*, LiquidityProviderSubcommands, RelayerSubcommands};
+use crate::settings::{BrokerSubcommands, CliCommand::*, LiquidityProviderSubcommands};
 use anyhow::{anyhow, Result};
 use utilities::clean_eth_address;
 
@@ -43,7 +43,7 @@ async fn run_cli() -> Result<()> {
 	);
 
 	match command_line_opts.cmd {
-		Relayer(RelayerSubcommands::RequestSwapDepositAddress(params)) =>
+		Broker(BrokerSubcommands::RequestSwapDepositAddress(params)) =>
 			request_swap_deposit_address(&cli_settings.state_chain, params).await,
 		LiquidityProvider(LiquidityProviderSubcommands::RequestLiquidityDepositAddress {
 			asset,
@@ -73,7 +73,7 @@ pub async fn request_swap_deposit_address(
 			params.destination_asset.into(),
 			&params.destination_address,
 		)?,
-		params.relayer_commission,
+		params.broker_commission,
 		None,
 	)
 	.await?;

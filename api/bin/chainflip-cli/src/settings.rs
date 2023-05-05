@@ -65,12 +65,12 @@ pub struct SwapRequestParams {
 	// on destination_asset)
 	/// Egress asset address to receive funds after the swap
 	pub destination_address: String,
-	/// Commission to the relayer in base points
-	pub relayer_commission: u16,
+	/// Commission to the broker in basis points
+	pub broker_commission: u16,
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
-pub enum RelayerSubcommands {
+pub enum BrokerSubcommands {
 	/// Request a swap deposit address.
 	RequestSwapDepositAddress(SwapRequestParams),
 }
@@ -86,9 +86,9 @@ pub enum LiquidityProviderSubcommands {
 
 #[derive(Parser, Clone, Debug)]
 pub enum CliCommand {
-	/// Relayer specific commands
+	/// Broker specific commands
 	#[clap(subcommand)]
-	Relayer(RelayerSubcommands),
+	Broker(BrokerSubcommands),
 	/// Liquidity provider specific commands
 	#[clap(subcommand, name = "lp")]
 	LiquidityProvider(LiquidityProviderSubcommands),
@@ -107,9 +107,9 @@ pub enum CliCommand {
 	#[clap(
 		about = "Submit an extrinsic to request generation of a redemption certificate (redeeming all available FLIP)"
 	)]
-	#[clap(about = "Set your account role to the Validator, Relayer, Liquidity Provider")]
+	#[clap(about = "Set your account role to the Validator, Broker, Liquidity Provider")]
 	RegisterAccountRole {
-		#[clap(help = "Validator (v), Liquidity Provider (lp), Relayer (r)", value_parser = account_role_parser)]
+		#[clap(help = "Validator (v), Liquidity Provider (lp), Broker (b)", value_parser = account_role_parser)]
 		role: AccountRole,
 	},
 	#[clap(about = "Rotate your session keys")]
@@ -149,10 +149,10 @@ fn account_role_parser(s: &str) -> Result<AccountRole, String> {
 		Ok(AccountRole::Validator)
 	} else if lower_str == "lp" || lower_str == "liquidity provider" {
 		Ok(AccountRole::LiquidityProvider)
-	} else if lower_str == "r" || lower_str == "relayer" {
-		Ok(AccountRole::Relayer)
+	} else if lower_str == "b" || lower_str == "broker" {
+		Ok(AccountRole::Broker)
 	} else {
-		Err(format!("{s} is not a valid role. The valid roles (with their shorthand input) are: 'Validator' (v), 'Liquidity Provider' (lp), 'Relayer' (r)"))
+		Err(format!("{s} is not a valid role. The valid roles (with their shorthand input) are: 'Validator' (v), 'Liquidity Provider' (lp), 'Broker' (b)"))
 	}
 }
 

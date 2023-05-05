@@ -1,5 +1,5 @@
 use crate::{
-	mock::*, CcmGasBudget, CcmIdCounter, CcmOutputs, CcmSwap, CcmSwapOutput, EarnedRelayerFees,
+	mock::*, CcmGasBudget, CcmIdCounter, CcmOutputs, CcmSwap, CcmSwapOutput, EarnedBrokerFees,
 	Error, Pallet, PendingCcms, Swap, SwapChannelExpiries, SwapQueue, SwapTTL, SwapType,
 	WeightInfo,
 };
@@ -61,7 +61,7 @@ fn generate_test_swaps() -> Vec<Swap> {
 }
 
 fn insert_swaps(swaps: &[Swap]) {
-	for (relayer_id, swap) in swaps.iter().enumerate() {
+	for (broker_id, swap) in swaps.iter().enumerate() {
 		if let SwapType::Swap(destination_address) = &swap.swap_type {
 			<Pallet<Test> as SwapDepositHandler>::on_swap_deposit(
 				ForeignChainAddress::Eth([2; 20]),
@@ -69,7 +69,7 @@ fn insert_swaps(swaps: &[Swap]) {
 				swap.to,
 				swap.amount,
 				destination_address.clone(),
-				relayer_id as u64,
+				broker_id as u64,
 				2,
 			);
 		}
@@ -146,7 +146,7 @@ fn expect_earned_fees_to_be_recorded() {
 			200,
 		);
 		Swapping::on_idle(1, Weight::from_ref_time(1000));
-		assert_eq!(EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
+		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
 		<Pallet<Test> as SwapDepositHandler>::on_swap_deposit(
 			ForeignChainAddress::Eth([2; 20]),
 			Asset::Flip,
@@ -157,7 +157,7 @@ fn expect_earned_fees_to_be_recorded() {
 			200,
 		);
 		Swapping::on_idle(1, Weight::from_ref_time(1000));
-		assert_eq!(EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 4);
+		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 4);
 	});
 }
 
@@ -227,7 +227,7 @@ fn expect_swap_id_to_be_emitted() {
 }
 
 #[test]
-fn withdraw_relayer_fees() {
+fn withdraw_broker_fees() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Swapping::withdraw(
@@ -237,7 +237,7 @@ fn withdraw_relayer_fees() {
 			),
 			<Error<Test>>::NoFundsAvailable
 		);
-		EarnedRelayerFees::<Test>::insert(ALICE, Asset::Eth, 200);
+		EarnedBrokerFees::<Test>::insert(ALICE, Asset::Eth, 200);
 		assert_ok!(Swapping::withdraw(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
@@ -300,8 +300,8 @@ fn swap_expires() {
 			source_asset: Asset::Eth,
 			destination_asset: Asset::Usdc,
 			destination_address: ForeignChainAddress::Eth(Default::default()),
-			relayer_commission_bps: 0,
-			relayer_id: ALICE,
+			broker_commission_bps: 0,
+			broker_id: ALICE,
 			message_metadata: None,
 		};
 

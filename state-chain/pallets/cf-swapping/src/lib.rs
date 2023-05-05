@@ -122,9 +122,9 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type SwapIdCounter<T: Config> = StorageValue<_, u64, ValueQuery>;
 
-	/// Earned Fees by Relayers
+	/// Earned Fees by Brokers
 	#[pallet::storage]
-	pub(super) type EarnedRelayerFees<T: Config> =
+	pub(super) type EarnedBrokerFees<T: Config> =
 		StorageDoubleMap<_, Identity, T::AccountId, Twox64Concat, Asset, AssetAmount, ValueQuery>;
 
 	/// Cross chain messages Counter
@@ -187,7 +187,7 @@ pub mod pallet {
 			asset: Asset,
 			amount: AssetAmount,
 		},
-		/// A relayer fee withdrawal has been requested.
+		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
 			amount: AssetAmount,
 			address: EncodedAddress,
@@ -308,10 +308,10 @@ pub mod pallet {
 			source_asset: Asset,
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
-			relayer_commission_bps: BasisPoints,
+			broker_commission_bps: BasisPoints,
 			message_metadata: Option<CcmDepositMetadata>,
 		) -> DispatchResult {
-			let relayer = T::AccountRoleRegistry::ensure_relayer(origin)?;
+			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 			if message_metadata.is_some() {
 				// Currently only Ethereum supports CCM.
@@ -333,8 +333,8 @@ pub mod pallet {
 				source_asset,
 				destination_asset,
 				destination_address_internal,
-				relayer_commission_bps,
-				relayer,
+				broker_commission_bps,
+				broker,
 				message_metadata,
 			)?;
 
@@ -354,7 +354,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Relayers can withdraw their collected fees.
+		/// Brokers can withdraw their collected fees.
 		///
 		/// ## Events
 		///
@@ -366,7 +366,7 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 		) -> DispatchResult {
 			T::SystemState::ensure_no_maintenance()?;
-			let account_id = T::AccountRoleRegistry::ensure_relayer(origin)?;
+			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 			let destination_address_internal =
 				T::AddressConverter::try_from_encoded_address(destination_address.clone())
@@ -378,7 +378,7 @@ pub mod pallet {
 				Error::<T>::InvalidEgressAddress
 			);
 
-			let amount = EarnedRelayerFees::<T>::take(account_id, asset);
+			let amount = EarnedBrokerFees::<T>::take(account_id, asset);
 			ensure!(amount != 0, Error::<T>::NoFundsAvailable);
 
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
@@ -465,14 +465,14 @@ pub mod pallet {
 			)
 		}
 
-		/// Register the account as a Relayer.
+		/// Register the account as a Broker.
 		///
 		/// Account roles are immutable once registered.
-		#[pallet::weight(T::WeightInfo::register_as_relayer())]
-		pub fn register_as_relayer(who: OriginFor<T>) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::register_as_broker())]
+		pub fn register_as_broker(who: OriginFor<T>) -> DispatchResult {
 			let account_id = ensure_signed(who)?;
 
-			T::AccountRoleRegistry::register_as_relayer(&account_id)?;
+			T::AccountRoleRegistry::register_as_broker(&account_id)?;
 
 			Ok(())
 		}
@@ -640,13 +640,13 @@ pub mod pallet {
 			to: Asset,
 			amount: AssetAmount,
 			destination_address: ForeignChainAddress,
-			relayer_id: Self::AccountId,
-			relayer_commission_bps: BasisPoints,
+			broker_id: Self::AccountId,
+			broker_commission_bps: BasisPoints,
 		) {
-			let fee = Permill::from_parts(relayer_commission_bps as u32 * BASIS_POINTS_PER_MILLION) *
+			let fee = Permill::from_parts(broker_commission_bps as u32 * BASIS_POINTS_PER_MILLION) *
 				amount;
 
-			EarnedRelayerFees::<T>::mutate(&relayer_id, from, |earned_fees| {
+			EarnedBrokerFees::<T>::mutate(&broker_id, from, |earned_fees| {
 				earned_fees.saturating_accrue(fee)
 			});
 

@@ -1031,6 +1031,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "chainflip-broker-api"
+version = "0.7.0"
+dependencies = [
+ "anyhow",
+ "chainflip-api",
+ "clap 3.2.23",
+ "hex",
+ "jsonrpsee 0.16.2",
+ "tokio",
+ "tracing",
+ "tracing-subscriber 0.3.16",
+ "utilities",
+]
+
+[[package]]
 name = "chainflip-cli"
 version = "0.7.0"
 dependencies = [
@@ -1138,7 +1153,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "chainflip-lp"
+name = "chainflip-lp-api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1199,21 +1214,6 @@ dependencies = [
  "substrate-build-script-utils",
  "substrate-frame-rpc-system",
  "try-runtime-cli",
- "utilities",
-]
-
-[[package]]
-name = "chainflip-relayer"
-version = "0.7.0"
-dependencies = [
- "anyhow",
- "chainflip-api",
- "clap 3.2.23",
- "hex",
- "jsonrpsee 0.16.2",
- "tokio",
- "tracing",
- "tracing-subscriber 0.3.16",
  "utilities",
 ]
 
