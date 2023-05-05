@@ -69,26 +69,28 @@ mod select_sharing_participants_tests {
 		let sharing_participants =
 			select_sharing_participants(old_authorities, &new_authorities, 1);
 
-		assert!(new_authorities.iter().all(|x| !sharing_participants.contains(x)));
+		assert!(new_authorities.is_disjoint(&sharing_participants));
 	}
 
 	#[test]
-	fn test_partial_intersection() {
-		let old_authorities = BTreeSet::<ValidatorId>::from([1, 2, 3, 4, 5]);
-		let new_authorities = BTreeSet::<ValidatorId>::from([3, 4, 5, 6, 7]);
+	fn partial_intersection_prioritises_authorities_who_stay() {
+		const INTERSECTING_SET: [u32; 3] = [3, 4, 5];
+		let old_authorities =
+			BTreeSet::<ValidatorId>::from_iter([1, 2].iter().chain(&INTERSECTING_SET).cloned());
+		let new_authorities =
+			BTreeSet::<ValidatorId>::from_iter(INTERSECTING_SET.iter().chain(&[6, 7]).cloned());
 
 		let sharing_participants =
 			select_sharing_participants(old_authorities, &new_authorities, 1);
 
-		assert!([3, 4, 5].iter().all(|x| sharing_participants.contains(x)));
+		assert!(INTERSECTING_SET.iter().all(|x| sharing_participants.contains(x)));
 	}
 
 	#[test]
-	fn test_full_intersection() {
+	fn full_intersection_gets_threshold_amount_from_old_set() {
 		let old_authorities = BTreeSet::<ValidatorId>::from([1, 2, 3, 4, 5]);
 		let new_authorities = BTreeSet::<ValidatorId>::from([1, 2, 3, 4, 5]);
 
-		// Will just get a threshold amount of the old_authorities.
 		assert_eq!(select_sharing_participants(old_authorities, &new_authorities, 1).len(), 4);
 	}
 
