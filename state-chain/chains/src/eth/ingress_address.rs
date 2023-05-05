@@ -51,39 +51,34 @@ const PREFIX_BYTE: u8 = 0xff;
 
 /// Derives the CREATE2 Ethereum address for a given asset, vault, and intent.
 /// @param vault_address The address of the Ethereum Vault
-/// @param deploy_constructor_argument The constructor argument for the asset
+/// @param token_address The token address if this is a token deposit
 /// @param intent_id The numerical intent id
 pub fn get_create_2_address(
 	vault_address: [u8; 20],
-	deploy_constructor_argument: Option<Vec<u8>>,
+	token_address: Option<[u8; 20]>,
 	intent_id: IntentId,
 ) -> [u8; 20] {
-	let deploy_bytecode: &'static [u8] = &DEPLOY_BYTECODE;
-
-	// We hash the concatenated deploy_bytecode and deploy_constructor_argument.
 	// This hash is used in the later CREATE2 derivation.
 	// see: https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/Deposit.sol.
 	let deploy_transaction_bytes_hash = Keccak256::hash(
-		&[
-			deploy_bytecode,
-			&[0u8; 12], // padding
-			&deploy_constructor_argument.unwrap_or(cf_primitives::ETHEREUM_ETH_ADDRESS.into()),
-		]
-		.concat(),
+		itertools::chain!(
+			DEPLOY_BYTECODE,
+			[0u8; 12], // padding
+			token_address.unwrap_or(cf_primitives::ETHEREUM_ETH_ADDRESS),
+		)
+		.collect::<Vec<_>>()
+		.as_slice(),
 	);
 
-	// Unique salt per intent.
-	let salt = get_salt(intent_id).to_vec();
+	let create_2_args = itertools::chain!(
+		[PREFIX_BYTE],
+		vault_address,
+		get_salt(intent_id),
+		deploy_transaction_bytes_hash.to_fixed_bytes()
+	)
+	.collect::<Vec<_>>();
 
-	let create_2_args = [
-		[PREFIX_BYTE].to_vec(),
-		vault_address.to_vec(),
-		salt,
-		deploy_transaction_bytes_hash.as_bytes().to_vec(),
-	]
-	.concat();
-
-	Keccak256::hash(&create_2_args).to_fixed_bytes()[12..32].try_into().unwrap()
+	Keccak256::hash(&create_2_args).to_fixed_bytes()[12..].try_into().unwrap()
 }
 
 /// Get the CREATE2 salt for a given intent_id, equivalent to the big-endian u32, left-padded to 32
@@ -95,37 +90,33 @@ pub fn get_salt(intent_id: IntentId) -> [u8; 32] {
 	salt
 }
 
-#[test]
-fn test_eth_eth() {
-	// Based on previously verified values.
-	const VAULT_ADDRESS: [u8; 20] = hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512");
-
-	assert_eq!(
-		get_create_2_address(
-			VAULT_ADDRESS,
-			Some(cf_primitives::ETHEREUM_ETH_ADDRESS.to_vec()),
-			420696969
-		),
-		hex_literal::hex!("Edf07a740a5D2d06b73f36fd5cc155d4240EaEEA")
-	);
-
-	assert_eq!(
-		get_create_2_address(VAULT_ADDRESS, None, 420696969),
-		hex_literal::hex!("Edf07a740a5D2d06b73f36fd5cc155d4240EaEEA")
-	);
-
-	println!("Derivation worked for ETH:ETH! 🚀");
-}
-
-#[test]
-fn test_eth_flip() {
+#[cfg(test)]
+mod test_super {
+	use super::*;
 	// Based on previously verified values.
 	const VAULT_ADDRESS: [u8; 20] = hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512");
 	const FLIP_ADDRESS: [u8; 20] = hex_literal::hex!("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9");
 
-	assert_eq!(
-		get_create_2_address(VAULT_ADDRESS, Some(FLIP_ADDRESS.to_vec()), 42069),
-		hex_literal::hex!("334AE5875C2ce967d82611cc0bfEDdf5316f2477")
-	);
-	println!("Derivation worked for ETH:FLIP! 🚀");
+	#[test]
+	fn test_eth_eth() {
+		assert_eq!(
+			get_create_2_address(VAULT_ADDRESS, None, 420696969),
+			hex_literal::hex!("Edf07a740a5D2d06b73f36fd5cc155d4240EaEEA")
+		);
+
+		println!("Derivation worked for ETH:ETH! 🚀");
+	}
+
+	#[test]
+	fn test_eth_flip() {
+		// Based on previously verified values.
+		const VAULT_ADDRESS: [u8; 20] =
+			hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512");
+
+		assert_eq!(
+			get_create_2_address(VAULT_ADDRESS, Some(FLIP_ADDRESS), 42069),
+			hex_literal::hex!("334AE5875C2ce967d82611cc0bfEDdf5316f2477")
+		);
+		println!("Derivation worked for ETH:FLIP! 🚀");
+	}
 }

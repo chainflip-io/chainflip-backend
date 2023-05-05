@@ -16,8 +16,7 @@ impl AddressDerivationApi<Ethereum> for AddressDerivation {
 			Some(
 				EthEnvironment::lookup(ingress_asset)
 					.expect("ERC20 asset to be supported!")
-					.to_fixed_bytes()
-					.to_vec(),
+					.to_fixed_bytes(),
 			),
 			intent_id,
 		)
