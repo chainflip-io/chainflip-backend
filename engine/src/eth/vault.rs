@@ -150,7 +150,7 @@ impl EthContractWitnesser for Vault {
 				} => Some(pallet_cf_swapping::Call::schedule_swap_by_witnesser {
 					from: Asset::Eth,
 					to: Asset::try_from(destination_token).map_err(anyhow::Error::msg)?,
-					ingress_amount: amount,
+					deposit_amount: amount,
 					destination_address: EncodedAddress::from_chain_bytes(
 						destination_chain.try_into().map_err(anyhow::Error::msg)?,
 						destination_address.0,
@@ -171,7 +171,7 @@ impl EthContractWitnesser for Vault {
 						.map_err(anyhow::Error::msg)?
 						.ok_or(anyhow::anyhow!("Unknown ETH source token"))?,
 					to: Asset::try_from(destination_token).map_err(anyhow::Error::msg)?,
-					ingress_amount: amount,
+					deposit_amount: amount,
 					destination_address: EncodedAddress::from_chain_bytes(
 						destination_chain.try_into().map_err(anyhow::Error::msg)?,
 						destination_address.0,
@@ -189,7 +189,7 @@ impl EthContractWitnesser for Vault {
 					refund_address,
 				} => Some(pallet_cf_swapping::Call::ccm_deposit {
 					source_asset: Asset::Eth,
-					ingress_amount: amount,
+					deposit_amount: amount,
 					destination_asset: Asset::try_from(destination_token)
 						.map_err(anyhow::Error::msg)?,
 					destination_address: EncodedAddress::from_chain_bytes(
@@ -222,7 +222,7 @@ impl EthContractWitnesser for Vault {
 						.await
 						.map_err(anyhow::Error::msg)?
 						.ok_or(anyhow::anyhow!("Unknown ETH source token"))?,
-					ingress_amount: amount,
+					deposit_amount: amount,
 					destination_asset: Asset::try_from(destination_token)
 						.map_err(anyhow::Error::msg)?,
 					destination_address: EncodedAddress::from_chain_bytes(

@@ -849,7 +849,7 @@ pub trait CcmHandler {
 	/// subtract the gas budge from it, then egress the message to the target chain.
 	fn on_ccm_deposit(
 		source_asset: Asset,
-		ingress_amount: AssetAmount,
+		deposit_amount: AssetAmount,
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
 		message_metadata: CcmIngressMetadata,
@@ -859,7 +859,7 @@ pub trait CcmHandler {
 impl CcmHandler for () {
 	fn on_ccm_deposit(
 		_source_asset: Asset,
-		_ingress_amount: AssetAmount,
+		_deposit_amount: AssetAmount,
 		_destination_asset: Asset,
 		_destination_address: ForeignChainAddress,
 		_message_metadata: CcmIngressMetadata,

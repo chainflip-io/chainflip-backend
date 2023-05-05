@@ -69,7 +69,7 @@ impl CcmSwapOutput {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub(crate) struct CcmSwap {
 	source_asset: Asset,
-	ingress_amount: AssetAmount,
+	deposit_amount: AssetAmount,
 	destination_asset: Asset,
 	destination_address: ForeignChainAddress,
 	message_metadata: CcmIngressMetadata,
@@ -169,11 +169,11 @@ pub mod pallet {
 		SwapDepositReceived {
 			swap_id: u64,
 			deposit_address: EncodedAddress,
-			ingress_amount: AssetAmount,
+			deposit_amount: AssetAmount,
 		},
 		SwapScheduledByWitnesser {
 			swap_id: u64,
-			ingress_amount: AssetAmount,
+			deposit_amount: AssetAmount,
 			destination_address: EncodedAddress,
 		},
 		/// A swap has been executed.
@@ -210,7 +210,7 @@ pub mod pallet {
 			ccm_id: u64,
 			principal_swap_id: Option<u64>,
 			gas_swap_id: Option<u64>,
-			ingress_amount: AssetAmount,
+			deposit_amount: AssetAmount,
 			destination_address: ForeignChainAddress,
 		},
 	}
@@ -408,7 +408,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			from: Asset,
 			to: Asset,
-			ingress_amount: AssetAmount,
+			deposit_amount: AssetAmount,
 			destination_address: EncodedAddress,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
@@ -422,13 +422,13 @@ pub mod pallet {
 			let swap_id = Self::schedule_swap(
 				from,
 				to,
-				ingress_amount,
+				deposit_amount,
 				SwapType::Swap(destination_address_internal),
 			);
 
 			Self::deposit_event(Event::<T>::SwapScheduledByWitnesser {
 				swap_id,
-				ingress_amount,
+				deposit_amount,
 				destination_address,
 			});
 
@@ -442,7 +442,7 @@ pub mod pallet {
 		pub fn ccm_deposit(
 			origin: OriginFor<T>,
 			source_asset: Asset,
-			ingress_amount: AssetAmount,
+			deposit_amount: AssetAmount,
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			message_metadata: CcmIngressMetadata,
@@ -462,7 +462,7 @@ pub mod pallet {
 
 			Self::on_ccm_deposit(
 				source_asset,
-				ingress_amount,
+				deposit_amount,
 				destination_asset,
 				destination_address_internal,
 				message_metadata,
@@ -665,7 +665,7 @@ pub mod pallet {
 				swap_id,
 				deposit_address: T::AddressConverter::try_to_encoded_address(deposit_address)
 					.expect("The deposit address is generated internally and is always valid."),
-				ingress_amount: amount,
+				deposit_amount: amount,
 			});
 		}
 	}
@@ -673,7 +673,7 @@ pub mod pallet {
 	impl<T: Config> CcmHandler for Pallet<T> {
 		fn on_ccm_deposit(
 			source_asset: Asset,
-			ingress_amount: AssetAmount,
+			deposit_amount: AssetAmount,
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			message_metadata: CcmIngressMetadata,
@@ -692,7 +692,7 @@ pub mod pallet {
 
 			// Ingressed amount should be enough to pay for gas.
 			ensure!(
-				ingress_amount > message_metadata.gas_budget,
+				deposit_amount > message_metadata.gas_budget,
 				Error::<T>::CcmInsufficientIngressAmount
 			);
 
@@ -703,7 +703,7 @@ pub mod pallet {
 
 			let mut swap_output = CcmSwapOutput::default();
 
-			let principal_swap_amount = ingress_amount.saturating_sub(message_metadata.gas_budget);
+			let principal_swap_amount = deposit_amount.saturating_sub(message_metadata.gas_budget);
 			let principal_swap_id = if source_asset == destination_asset {
 				swap_output.principal = Some(principal_swap_amount);
 				None
@@ -734,14 +734,14 @@ pub mod pallet {
 				ccm_id,
 				principal_swap_id,
 				gas_swap_id,
-				ingress_amount,
+				deposit_amount,
 				destination_address: destination_address.clone(),
 			});
 
 			// If no swap is required, egress the CCM.
 			let ccm_swap = CcmSwap {
 				source_asset,
-				ingress_amount,
+				deposit_amount,
 				destination_asset,
 				destination_address,
 				message_metadata,

@@ -243,7 +243,7 @@ fn basic_pool_setup_provision_and_swap() {
 		let swap_id = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapDepositReceived {
 			swap_id,
 			deposit_address: events_deposit_address,
-			ingress_amount: 50,
+			deposit_amount: 50,
 			..
 		}) if <Ethereum as Chain>::ChainAccount::try_from(ChainAddressConverter::try_from_encoded_address(events_deposit_address.clone()).expect("we created the deposit address above so it should be valid")).unwrap() == deposit_address => swap_id);
 
@@ -301,7 +301,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 		setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip]);
 
 		let gas_budget = 100;
-		let ingress_amount = 1_000;
+		let deposit_amount = 1_000;
 		let message = CcmIngressMetadata {
 			message: vec![0u8, 1u8, 2u8, 3u8, 4u8],
 			gas_budget,
@@ -346,10 +346,10 @@ fn can_process_ccm_via_swap_deposit_address() {
 			ccm_id,
 			principal_swap_id: Some(principal_swap_id),
 			gas_swap_id: Some(gas_swap_id),
-			ingress_amount: amount,
+			deposit_amount: amount,
 			..
 		}) if ccm_id == CcmIdCounter::<Runtime>::get() && 
-			amount == ingress_amount => (principal_swap_id, gas_swap_id));
+			amount == deposit_amount => (principal_swap_id, gas_swap_id));
 
 		// on_idle to perform the swaps and egress CCM.
 		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
@@ -417,7 +417,7 @@ fn can_process_ccm_via_direct_deposit() {
 		setup_pool_and_accounts(vec![Asset::Eth, Asset::Flip]);
 
 		let gas_budget = 100;
-		let ingress_amount = 1_000;
+		let deposit_amount = 1_000;
 		let message = CcmIngressMetadata {
 			message: vec![0u8, 1u8, 2u8, 3u8, 4u8],
 			gas_budget,
@@ -427,7 +427,7 @@ fn can_process_ccm_via_direct_deposit() {
 
 		let ccm_call = Box::new(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit{
 			source_asset: Asset::Flip,
-			ingress_amount,
+			deposit_amount,
 			destination_asset: Asset::Usdc,
 			destination_address: EncodedAddress::Eth([0x02; 20]),
 			message_metadata: message,
@@ -444,10 +444,10 @@ fn can_process_ccm_via_direct_deposit() {
 			ccm_id,
 			principal_swap_id: Some(principal_swap_id),
 			gas_swap_id: Some(gas_swap_id),
-			ingress_amount: amount,
+			deposit_amount: amount,
 			..
 		}) if ccm_id == CcmIdCounter::<Runtime>::get() && 
-			amount == ingress_amount => (principal_swap_id, gas_swap_id));
+			amount == deposit_amount => (principal_swap_id, gas_swap_id));
 
 		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
 			1,

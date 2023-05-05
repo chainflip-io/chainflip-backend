@@ -79,7 +79,7 @@ benchmarks_instance_pallet! {
 	process_single_deposit {
 		let deposit_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
 		let source_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
-		let ingress_amount: <<T as Config<I>>::TargetChain as Chain>::ChainAmount = BenchmarkValue::benchmark_value();
+		let deposit_amount: <<T as Config<I>>::TargetChain as Chain>::ChainAmount = BenchmarkValue::benchmark_value();
 		DepositAddressDetailsLookup::<T, I>::insert(&deposit_address, DepositAddressDetails {
 				channel_id: 1,
 				source_asset,
@@ -88,6 +88,6 @@ benchmarks_instance_pallet! {
 			lp_account: account("doogle", 0, 0)
 		});
 	}: {
-		Pallet::<T, I>::process_single_deposit(deposit_address, source_asset, ingress_amount, BenchmarkValue::benchmark_value()).unwrap()
+		Pallet::<T, I>::process_single_deposit(deposit_address, source_asset, deposit_amount, BenchmarkValue::benchmark_value()).unwrap()
 	}
 }

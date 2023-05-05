@@ -75,7 +75,7 @@ benchmarks! {
 		let call = Call::<T>::schedule_swap_by_witnesser{
 			from: Asset::Usdc,
 			to: Asset::Eth,
-			ingress_amount: 1_000,
+			deposit_amount: 1_000,
 			destination_address: EncodedAddress::benchmark_value()
 		};
 	}: {
@@ -101,7 +101,7 @@ benchmarks! {
 		};
 		let call = Call::<T>::ccm_deposit{
 			source_asset: Asset::Usdc,
-			ingress_amount: 1_000,
+			deposit_amount: 1_000,
 			destination_asset: Asset::Eth,
 			destination_address: EncodedAddress::benchmark_value(),
 			message_metadata: metadata,
