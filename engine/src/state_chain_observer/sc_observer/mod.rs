@@ -49,12 +49,12 @@ use multisig::{
 };
 use utilities::task_scope::{task_scope, Scope};
 
-pub type EthAddressSender = UnboundedSender<AddressMonitorCommand<H160>>;
+pub type EthAddressMonitorCommandSender = UnboundedSender<AddressMonitorCommand<H160>>;
 
 pub struct EthAddressToMonitorSender {
-	pub eth: EthAddressSender,
-	pub flip: EthAddressSender,
-	pub usdc: EthAddressSender,
+	pub eth: EthAddressMonitorCommandSender,
+	pub flip: EthAddressMonitorCommandSender,
+	pub usdc: EthAddressMonitorCommandSender,
 }
 
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
@@ -201,12 +201,12 @@ pub async fn start<
 	eth_epoch_start_sender: async_broadcast::Sender<EpochStart<Ethereum>>,
 	eth_address_to_monitor_sender: EthAddressToMonitorSender,
 	dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
-	dot_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<
+	dot_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<
 		AddressMonitorCommand<PolkadotAccountId>,
 	>,
 	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<[u8; 64]>,
 	btc_epoch_start_sender: async_broadcast::Sender<EpochStart<Bitcoin>>,
-	btc_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<
+	btc_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<
 		AddressMonitorCommand<BitcoinScriptBounded>,
 	>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
@@ -668,12 +668,12 @@ where
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
-                                            ingress_address,
-                                            ingress_asset
+                                            deposit_address,
+                                            source_asset
                                         }
                                     ) => {
                                         use cf_primitives::chains::assets::eth;
-                                        match ingress_asset {
+                                        match source_asset {
                                             eth::Asset::Eth => {
                                                 &eth_address_to_monitor_sender.eth
                                             }
@@ -683,16 +683,16 @@ where
                                             eth::Asset::Usdc => {
                                                 &eth_address_to_monitor_sender.usdc
                                             }
-                                        }.send(AddressMonitorCommand::Add(ingress_address)).unwrap();
+                                        }.send(AddressMonitorCommand::Add(deposit_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumIngressEgress(
                                         pallet_cf_ingress_egress::Event::StopWitnessing {
-                                            ingress_address,
-                                            ingress_asset
+                                            deposit_address,
+                                            source_asset
                                         }
                                     ) => {
                                         use cf_primitives::chains::assets::eth;
-                                        match ingress_asset {
+                                        match source_asset {
                                             eth::Asset::Eth => {
                                                 &eth_address_to_monitor_sender.eth
                                             }
@@ -702,43 +702,43 @@ where
                                             eth::Asset::Usdc => {
                                                 &eth_address_to_monitor_sender.usdc
                                             }
-                                        }.send(AddressMonitorCommand::Remove(ingress_address)).unwrap();
+                                        }.send(AddressMonitorCommand::Remove(deposit_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
-                                            ingress_address,
-                                            ingress_asset
+                                            deposit_address,
+                                            source_asset
                                         }
                                     ) => {
-                                        assert_eq!(ingress_asset, cf_primitives::chains::assets::dot::Asset::Dot);
-                                        dot_monitor_ingress_sender.send(AddressMonitorCommand::Add(ingress_address)).unwrap();
+                                        assert_eq!(source_asset, cf_primitives::chains::assets::dot::Asset::Dot);
+                                        dot_monitor_command_sender.send(AddressMonitorCommand::Add(deposit_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
                                         pallet_cf_ingress_egress::Event::StopWitnessing {
-                                            ingress_address,
-                                            ingress_asset
+                                            deposit_address,
+                                            source_asset
                                         }
                                     ) => {
-                                        assert_eq!(ingress_asset, cf_primitives::chains::assets::dot::Asset::Dot);
-                                        dot_monitor_ingress_sender.send(AddressMonitorCommand::Remove(ingress_address)).unwrap();
+                                        assert_eq!(source_asset, cf_primitives::chains::assets::dot::Asset::Dot);
+                                        dot_monitor_command_sender.send(AddressMonitorCommand::Remove(deposit_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::BitcoinIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
-                                            ingress_address,
-                                            ingress_asset
+                                            deposit_address,
+                                            source_asset
                                         }
                                     ) => {
-                                        assert_eq!(ingress_asset, cf_primitives::chains::assets::btc::Asset::Btc);
-                                        btc_monitor_ingress_sender.send(AddressMonitorCommand::Add(ingress_address)).unwrap();
+                                        assert_eq!(source_asset, cf_primitives::chains::assets::btc::Asset::Btc);
+                                        btc_monitor_command_sender.send(AddressMonitorCommand::Add(deposit_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::BitcoinIngressEgress(
                                         pallet_cf_ingress_egress::Event::StopWitnessing {
-                                            ingress_address,
-                                            ingress_asset
+                                            deposit_address,
+                                            source_asset
                                         }
                                     ) => {
-                                        assert_eq!(ingress_asset, cf_primitives::chains::assets::btc::Asset::Btc);
-                                        btc_monitor_ingress_sender.send(AddressMonitorCommand::Remove(ingress_address)).unwrap();
+                                        assert_eq!(source_asset, cf_primitives::chains::assets::btc::Asset::Btc);
+                                        btc_monitor_command_sender.send(AddressMonitorCommand::Remove(deposit_address)).unwrap();
                                     }
                                 }}}}
                                 Err(error) => {

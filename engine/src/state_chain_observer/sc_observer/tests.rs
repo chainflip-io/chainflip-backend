@@ -136,18 +136,18 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
-	let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+	let (eth_monitor_command_sender, _eth_monitor_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+	let (eth_monitor_flip_command_sender, _eth_monitor_flip_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
+	let (eth_monitor_usdc_command_sender, _eth_monitor_usdc_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
-	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+	let (dot_monitor_command_sender, _dot_monitor_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
@@ -170,12 +170,12 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		EthAddressToMonitorSender {
-			eth: eth_monitor_ingress_sender,
-			flip: eth_monitor_flip_ingress_sender,
-			usdc: eth_monitor_usdc_ingress_sender,
+			eth: eth_monitor_command_sender,
+			flip: eth_monitor_flip_command_sender,
+			usdc: eth_monitor_usdc_command_sender,
 		},
 		dot_epoch_start_sender,
-		dot_monitor_ingress_sender,
+		dot_monitor_command_sender,
 		dot_monitor_signature_sender,
 		btc_epoch_start_sender,
 		btc_monitor_signature_sender,
@@ -335,18 +335,18 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
-	let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+	let (eth_monitor_command_sender, _eth_monitor_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+	let (eth_monitor_flip_command_sender, _eth_monitor_flip_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
+	let (eth_monitor_usdc_command_sender, _eth_monitor_usdc_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
-	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+	let (dot_monitor_command_sender, _dot_monitor_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
@@ -369,12 +369,12 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		EthAddressToMonitorSender {
-			eth: eth_monitor_ingress_sender,
-			flip: eth_monitor_flip_ingress_sender,
-			usdc: eth_monitor_usdc_ingress_sender,
+			eth: eth_monitor_command_sender,
+			flip: eth_monitor_flip_command_sender,
+			usdc: eth_monitor_usdc_command_sender,
 		},
 		dot_epoch_start_sender,
-		dot_monitor_ingress_sender,
+		dot_monitor_command_sender,
 		dot_monitor_signature_sender,
 		btc_epoch_start_sender,
 		btc_monitor_signature_sender,
@@ -484,18 +484,18 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 	let (epoch_start_sender, epoch_start_receiver) = async_broadcast::broadcast(10);
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
-	let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+	let (eth_monitor_command_sender, _eth_monitor_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+	let (eth_monitor_flip_command_sender, _eth_monitor_flip_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
+	let (eth_monitor_usdc_command_sender, _eth_monitor_usdc_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
-	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+	let (dot_monitor_command_sender, _dot_monitor_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
@@ -518,12 +518,12 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		EthAddressToMonitorSender {
-			eth: eth_monitor_ingress_sender,
-			flip: eth_monitor_flip_ingress_sender,
-			usdc: eth_monitor_usdc_ingress_sender,
+			eth: eth_monitor_command_sender,
+			flip: eth_monitor_flip_command_sender,
+			usdc: eth_monitor_usdc_command_sender,
 		},
 		dot_epoch_start_sender,
-		dot_monitor_ingress_sender,
+		dot_monitor_command_sender,
 		dot_monitor_signature_sender,
 		btc_epoch_start_sender,
 		btc_monitor_signature_sender,
@@ -713,18 +713,18 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
-	let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+	let (eth_monitor_command_sender, _eth_monitor_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+	let (eth_monitor_flip_command_sender, _eth_monitor_flip_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
+	let (eth_monitor_usdc_command_sender, _eth_monitor_usdc_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
-	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+	let (dot_monitor_command_sender, _dot_monitor_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
@@ -747,12 +747,12 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		EthAddressToMonitorSender {
-			eth: eth_monitor_ingress_sender,
-			flip: eth_monitor_flip_ingress_sender,
-			usdc: eth_monitor_usdc_ingress_sender,
+			eth: eth_monitor_command_sender,
+			flip: eth_monitor_flip_command_sender,
+			usdc: eth_monitor_usdc_command_sender,
 		},
 		dot_epoch_start_sender,
-		dot_monitor_ingress_sender,
+		dot_monitor_command_sender,
 		dot_monitor_signature_sender,
 		btc_epoch_start_sender,
 		btc_monitor_signature_sender,
@@ -940,18 +940,18 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
-	let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+	let (eth_monitor_command_sender, _eth_monitor_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+	let (eth_monitor_flip_command_sender, _eth_monitor_flip_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
+	let (eth_monitor_usdc_command_sender, _eth_monitor_usdc_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
-	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+	let (dot_monitor_command_sender, _dot_monitor_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
@@ -974,12 +974,12 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		EthAddressToMonitorSender {
-			eth: eth_monitor_ingress_sender,
-			flip: eth_monitor_flip_ingress_sender,
-			usdc: eth_monitor_usdc_ingress_sender,
+			eth: eth_monitor_command_sender,
+			flip: eth_monitor_flip_command_sender,
+			usdc: eth_monitor_usdc_command_sender,
 		},
 		dot_epoch_start_sender,
-		dot_monitor_ingress_sender,
+		dot_monitor_command_sender,
 		dot_monitor_signature_sender,
 		btc_epoch_start_sender,
 		btc_monitor_signature_sender,
@@ -1168,18 +1168,18 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
-	let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+	let (eth_monitor_command_sender, _eth_monitor_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+	let (eth_monitor_flip_command_sender, _eth_monitor_flip_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
+	let (eth_monitor_usdc_command_sender, _eth_monitor_usdc_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
-	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+	let (dot_monitor_command_sender, _dot_monitor_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
@@ -1202,12 +1202,12 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		EthAddressToMonitorSender {
-			eth: eth_monitor_ingress_sender,
-			flip: eth_monitor_flip_ingress_sender,
-			usdc: eth_monitor_usdc_ingress_sender,
+			eth: eth_monitor_command_sender,
+			flip: eth_monitor_flip_command_sender,
+			usdc: eth_monitor_usdc_command_sender,
 		},
 		dot_epoch_start_sender,
-		dot_monitor_ingress_sender,
+		dot_monitor_command_sender,
 		dot_monitor_signature_sender,
 		btc_epoch_start_sender,
 		btc_monitor_signature_sender,
@@ -1382,18 +1382,18 @@ async fn only_encodes_and_signs_when_specified() {
 
 	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
-	let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+	let (eth_monitor_command_sender, _eth_monitor_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+	let (eth_monitor_flip_command_sender, _eth_monitor_flip_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
+	let (eth_monitor_usdc_command_sender, _eth_monitor_usdc_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
-	let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+	let (dot_monitor_command_sender, _dot_monitor_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
 	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
@@ -1416,12 +1416,12 @@ async fn only_encodes_and_signs_when_specified() {
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		EthAddressToMonitorSender {
-			eth: eth_monitor_ingress_sender,
-			flip: eth_monitor_flip_ingress_sender,
-			usdc: eth_monitor_usdc_ingress_sender,
+			eth: eth_monitor_command_sender,
+			flip: eth_monitor_flip_command_sender,
+			usdc: eth_monitor_usdc_command_sender,
 		},
 		dot_epoch_start_sender,
-		dot_monitor_ingress_sender,
+		dot_monitor_command_sender,
 		dot_monitor_signature_sender,
 		btc_epoch_start_sender,
 		btc_monitor_signature_sender,
@@ -1665,19 +1665,19 @@ async fn run_the_sc_observer() {
 			let (cfe_settings_update_sender, _) =
 				watch::channel::<CfeSettings>(CfeSettings::default());
 
-			let (eth_monitor_ingress_sender, _eth_monitor_ingress_receiver) =
+			let (eth_monitor_command_sender, _eth_monitor_command_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
-			let (eth_monitor_flip_ingress_sender, _eth_monitor_flip_ingress_receiver) =
+			let (eth_monitor_flip_command_sender, _eth_monitor_flip_command_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
-			let (eth_monitor_usdc_ingress_sender, _eth_monitor_usdc_ingress_receiver) =
+			let (eth_monitor_usdc_command_sender, _eth_monitor_usdc_command_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
 			let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) =
 				async_broadcast::broadcast(10);
 
-			let (dot_monitor_ingress_sender, _dot_monitor_ingress_receiver) =
+			let (dot_monitor_command_sender, _dot_monitor_command_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
 			let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
@@ -1686,7 +1686,7 @@ async fn run_the_sc_observer() {
 			let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) =
 				async_broadcast::broadcast(10);
 
-			let (btc_monitor_ingress_sender, _btc_monitor_ingress_receiver) =
+			let (btc_monitor_command_sender, _btc_monitor_command_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
 			sc_observer::start(
@@ -1705,15 +1705,15 @@ async fn run_the_sc_observer() {
 				account_peer_mapping_change_sender,
 				epoch_start_sender,
 				EthAddressToMonitorSender {
-					eth: eth_monitor_ingress_sender,
-					flip: eth_monitor_flip_ingress_sender,
-					usdc: eth_monitor_usdc_ingress_sender,
+					eth: eth_monitor_command_sender,
+					flip: eth_monitor_flip_command_sender,
+					usdc: eth_monitor_usdc_command_sender,
 				},
 				dot_epoch_start_sender,
-				dot_monitor_ingress_sender,
+				dot_monitor_command_sender,
 				dot_monitor_signature_sender,
 				btc_epoch_start_sender,
-				btc_monitor_ingress_sender,
+				btc_monitor_command_sender,
 				cfe_settings_update_sender,
 			)
 			.await

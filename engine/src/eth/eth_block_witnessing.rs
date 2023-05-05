@@ -51,9 +51,9 @@ impl BlockWitnesser for EthBlockWitnesser {
 		futures::future::join_all([
 			witnessers.key_manager.process_block(&self.epoch, &block),
 			witnessers.state_chain_gateway.process_block(&self.epoch, &block),
-			witnessers.eth_ingress.process_block(&self.epoch, &block),
-			witnessers.flip_ingress.process_block(&self.epoch, &block),
-			witnessers.usdc_ingress.process_block(&self.epoch, &block),
+			witnessers.eth_deposits.process_block(&self.epoch, &block),
+			witnessers.flip_deposits.process_block(&self.epoch, &block),
+			witnessers.usdc_deposits.process_block(&self.epoch, &block),
 		])
 		.await
 		.into_iter()

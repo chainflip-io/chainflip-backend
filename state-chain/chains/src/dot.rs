@@ -47,7 +47,7 @@ pub const TEST_RUNTIME_VERSION: RuntimeVersion =
 	RuntimeVersion { spec_version: 9340, transaction_version: 16 };
 
 pub type PolkadotSpecVersion = u32;
-pub type PolkadotIngressId = u64;
+pub type PolkadotChannelId = u64;
 pub type PolkadotTransactionVersion = u32;
 
 pub type PolkadotUncheckedExtrinsic =
@@ -118,7 +118,7 @@ impl Chain for Polkadot {
 	type TransactionFee = Self::ChainAmount;
 	type ChainAsset = assets::dot::Asset;
 	type EpochStartData = EpochStartData;
-	type IngressFetchId = PolkadotIngressId;
+	type DepositFetchId = PolkadotChannelId;
 }
 
 impl ChainCrypto for Polkadot {
@@ -757,15 +757,15 @@ pub struct PolkadotReplayProtection {
 	pub nonce: PolkadotIndex,
 }
 
-impl IngressIdConstructor for PolkadotIngressId {
+impl ChannelIdConstructor for PolkadotChannelId {
 	type Address = AccountId32;
 
-	fn deployed(intent_id: u64, _address: Self::Address) -> Self {
-		intent_id
+	fn deployed(channel_id: u64, _address: Self::Address) -> Self {
+		channel_id
 	}
 
-	fn undeployed(intent_id: u64, _address: Self::Address) -> Self {
-		intent_id
+	fn undeployed(channel_id: u64, _address: Self::Address) -> Self {
+		channel_id
 	}
 }
 

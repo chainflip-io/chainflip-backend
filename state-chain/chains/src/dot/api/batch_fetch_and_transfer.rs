@@ -26,7 +26,7 @@ pub fn extrinsic_builder(
 						.map(|fetch_param| {
 							PolkadotRuntimeCall::Utility(UtilityCall::as_derivative {
 								// TODO: refer to issue #2354
-								index: fetch_param.ingress_fetch_id as u16,
+								index: fetch_param.deposit_fetch_id as u16,
 								call: Box::new(PolkadotRuntimeCall::Balances(
 									BalancesCall::transfer_all {
 										dest: PolkadotAccountIdLookup::from(vault_account.clone()),
@@ -73,9 +73,9 @@ mod test_batch_fetch {
 		let keypair_proxy: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_2);
 
 		let dummy_fetch_params: Vec<FetchAssetParams<Polkadot>> = vec![
-			FetchAssetParams::<Polkadot> { ingress_fetch_id: 1, asset: assets::dot::Asset::Dot },
-			FetchAssetParams::<Polkadot> { ingress_fetch_id: 2, asset: assets::dot::Asset::Dot },
-			FetchAssetParams::<Polkadot> { ingress_fetch_id: 3, asset: assets::dot::Asset::Dot },
+			FetchAssetParams::<Polkadot> { deposit_fetch_id: 1, asset: assets::dot::Asset::Dot },
+			FetchAssetParams::<Polkadot> { deposit_fetch_id: 2, asset: assets::dot::Asset::Dot },
+			FetchAssetParams::<Polkadot> { deposit_fetch_id: 3, asset: assets::dot::Asset::Dot },
 		];
 
 		let dummy_transfer_params: Vec<TransferAssetParams<Polkadot>> = vec![

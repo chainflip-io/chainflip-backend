@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use chainflip_api::{
 	self, clean_foreign_chain_address,
-	primitives::{AccountRole, Asset, BasisPoints, CcmIngressMetadata},
+	primitives::{AccountRole, Asset, BasisPoints, CcmDepositMetadata},
 	settings::StateChain,
 };
 use clap::Parser;
@@ -17,14 +17,14 @@ pub trait Rpc {
 	#[method(name = "registerAccount")]
 	async fn register_account(&self) -> Result<String, Error>;
 
-	#[method(name = "newSwapIngressAddress")]
-	async fn request_swap_ingress_address(
+	#[method(name = "requestSwapDepositAddress")]
+	async fn request_swap_deposit_address(
 		&self,
-		ingress_asset: Asset,
-		egress_asset: Asset,
-		egress_address: String,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: String,
 		relayer_commission_bps: BasisPoints,
-		message_metadata: Option<CcmIngressMetadata>,
+		message_metadata: Option<CcmDepositMetadata>,
 	) -> Result<String, Error>;
 }
 
@@ -45,19 +45,19 @@ impl RpcServer for RpcServerImpl {
 			.await
 			.map(|tx_hash| format!("{tx_hash:#x}"))?)
 	}
-	async fn request_swap_ingress_address(
+	async fn request_swap_deposit_address(
 		&self,
-		ingress_asset: Asset,
-		egress_asset: Asset,
-		egress_address: String,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: String,
 		relayer_commission_bps: BasisPoints,
-		message_metadata: Option<CcmIngressMetadata>,
+		message_metadata: Option<CcmDepositMetadata>,
 	) -> Result<String, Error> {
-		Ok(chainflip_api::register_swap_intent(
+		Ok(chainflip_api::request_swap_deposit_address(
 			&self.state_chain_settings,
-			ingress_asset,
-			egress_asset,
-			clean_foreign_chain_address(egress_asset.into(), &egress_address)?,
+			source_asset,
+			destination_asset,
+			clean_foreign_chain_address(destination_asset.into(), &destination_address)?,
 			relayer_commission_bps,
 			message_metadata,
 		)

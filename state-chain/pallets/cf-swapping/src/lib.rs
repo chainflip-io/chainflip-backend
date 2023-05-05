@@ -1,10 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
-	CcmIngressMetadata,
+	CcmDepositMetadata,
 };
-use cf_primitives::{Asset, AssetAmount, ForeignChain, IntentId};
-use cf_traits::{liquidity::SwappingApi, CcmHandler, IngressApi, SystemStateInfo};
+use cf_primitives::{Asset, AssetAmount, ChannelId, ForeignChain};
+use cf_traits::{liquidity::SwappingApi, CcmHandler, DepositApi, SystemStateInfo};
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
@@ -68,11 +68,11 @@ impl CcmSwapOutput {
 // Cross chain message, including information at different stages.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub(crate) struct CcmSwap {
-	ingress_asset: Asset,
-	ingress_amount: AssetAmount,
-	egress_asset: Asset,
-	egress_address: ForeignChainAddress,
-	message_metadata: CcmIngressMetadata,
+	source_asset: Asset,
+	deposit_amount: AssetAmount,
+	destination_asset: Asset,
+	destination_address: ForeignChainAddress,
+	message_metadata: CcmDepositMetadata,
 }
 
 #[frame_support::pallet]
@@ -80,7 +80,7 @@ pub mod pallet {
 
 	use cf_chains::{address::EncodedAddress, AnyChain};
 	use cf_primitives::{Asset, AssetAmount, BasisPoints, EgressId};
-	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapIntentHandler};
+	use cf_traits::{AccountRoleRegistry, Chainflip, EgressApi, SwapDepositHandler};
 
 	use super::*;
 
@@ -90,8 +90,8 @@ pub mod pallet {
 		/// Standard Event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// API for handling asset ingress.
-		type IngressHandler: IngressApi<
+		/// API for handling asset deposits.
+		type DepositHandler: DepositApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
@@ -143,13 +143,13 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(super) type PendingCcms<T: Config> = StorageMap<_, Twox64Concat, u64, CcmSwap>;
 
-	/// Stores a block for when an intent will expire against the intent infos.
+	/// For a given block number, stores the list of swap channels that expire at that block.
 	#[pallet::storage]
-	pub(super) type SwapIntentExpiries<T: Config> = StorageMap<
+	pub(super) type SwapChannelExpiries<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
 		T::BlockNumber,
-		Vec<(IntentId, ForeignChain, ForeignChainAddress)>,
+		Vec<(ChannelId, ForeignChain, ForeignChainAddress)>,
 		ValueQuery,
 	>;
 	/// Tracks the outputs of Ccm swaps.
@@ -159,34 +159,35 @@ pub mod pallet {
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// An new swap intent has been registered.
-		NewSwapIntent {
-			ingress_address: EncodedAddress,
+		/// An new swap deposit channel has been opened.
+		SwapDepositAddressReady {
+			deposit_address: EncodedAddress,
+			destination_address: EncodedAddress,
 			expiry_block: T::BlockNumber,
 		},
-		/// The swap ingress was received.
-		SwapIngressReceived {
+		/// A swap deposit has been received.
+		SwapDepositReceived {
 			swap_id: u64,
-			ingress_address: EncodedAddress,
-			ingress_amount: AssetAmount,
+			deposit_address: EncodedAddress,
+			deposit_amount: AssetAmount,
 		},
 		SwapScheduledByWitnesser {
 			swap_id: u64,
-			ingress_amount: AssetAmount,
-			egress_address: EncodedAddress,
+			deposit_amount: AssetAmount,
+			destination_address: EncodedAddress,
 		},
-		/// A swap was executed.
+		/// A swap has been executed.
 		SwapExecuted {
 			swap_id: u64,
 		},
-		/// A swap egress was scheduled.
+		/// A swap egress has been scheduled.
 		SwapEgressScheduled {
 			swap_id: u64,
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
 		},
-		/// A withdrawal was requested.
+		/// A relayer fee withdrawal has been requested.
 		WithdrawalRequested {
 			amount: AssetAmount,
 			address: EncodedAddress,
@@ -199,18 +200,18 @@ pub mod pallet {
 			ccm_id: u64,
 			egress_id: EgressId,
 		},
-		SwapIntentExpired {
-			ingress_address: ForeignChainAddress,
+		SwapDepositAddressExpired {
+			deposit_address: ForeignChainAddress,
 		},
 		SwapTtlSet {
 			ttl: T::BlockNumber,
 		},
-		CcmIngressReceived {
+		CcmDepositReceived {
 			ccm_id: u64,
 			principal_swap_id: Option<u64>,
 			gas_swap_id: Option<u64>,
-			ingress_amount: AssetAmount,
-			egress_address: ForeignChainAddress,
+			deposit_amount: AssetAmount,
+			destination_address: ForeignChainAddress,
 		},
 	}
 	#[pallet::error]
@@ -223,8 +224,10 @@ pub mod pallet {
 		NoFundsAvailable,
 		/// The target chain does not support CCM.
 		CcmUnsupportedForTargetChain,
-		/// The ingressed amount is insufficient to pay for the gas budget.
-		CcmInsufficientIngressAmount,
+		/// The deposited amount is insufficient to pay for the gas budget.
+		CcmInsufficientDepositAmount,
+		/// The provided address could not be decoded.
+		InvalidDestinationAddress,
 	}
 
 	#[pallet::genesis_config]
@@ -281,10 +284,12 @@ pub mod pallet {
 		}
 
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
-			let expired = SwapIntentExpiries::<T>::take(n);
-			for (intent_id, chain, address) in expired.clone() {
-				T::IngressHandler::expire_intent(chain, intent_id, address.clone());
-				Self::deposit_event(Event::<T>::SwapIntentExpired { ingress_address: address });
+			let expired = SwapChannelExpiries::<T>::take(n);
+			for (channel_id, chain, address) in expired.clone() {
+				T::DepositHandler::expire_channel(chain, channel_id, address.clone());
+				Self::deposit_event(Event::<T>::SwapDepositAddressExpired {
+					deposit_address: address,
+				});
 			}
 			T::WeightInfo::on_initialize(expired.len() as u32)
 		}
@@ -292,43 +297,42 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Register a new swap intent.
+		/// Request a swap deposit address.
 		///
 		/// ## Events
 		///
-		/// - [NewSwapIntent](Event::NewSwapIntent)
-		#[pallet::weight(T::WeightInfo::register_swap_intent())]
-		pub fn register_swap_intent(
+		/// - [SwapDepositAddressReady](Event::SwapDepositAddressReady)
+		#[pallet::weight(T::WeightInfo::request_swap_deposit_address())]
+		pub fn request_swap_deposit_address(
 			origin: OriginFor<T>,
-			ingress_asset: Asset,
-			egress_asset: Asset,
-			egress_address: EncodedAddress,
+			source_asset: Asset,
+			destination_asset: Asset,
+			destination_address: EncodedAddress,
 			relayer_commission_bps: BasisPoints,
-			message_metadata: Option<CcmIngressMetadata>,
+			message_metadata: Option<CcmDepositMetadata>,
 		) -> DispatchResult {
 			let relayer = T::AccountRoleRegistry::ensure_relayer(origin)?;
 
 			if message_metadata.is_some() {
 				// Currently only Ethereum supports CCM.
 				ensure!(
-					ForeignChain::Ethereum == egress_asset.into(),
+					ForeignChain::Ethereum == destination_asset.into(),
 					Error::<T>::CcmUnsupportedForTargetChain
 				);
 			}
-			let egress_address_internal =
-				T::AddressConverter::try_from_encoded_address(egress_address).map_err(|_| {
-					DispatchError::Other("Invalid Egress Address, cannot decode the address")
-				})?;
+			let destination_address_internal =
+				T::AddressConverter::try_from_encoded_address(destination_address.clone())
+					.map_err(|_| Error::<T>::InvalidDestinationAddress)?;
 			ensure!(
-				ForeignChain::from(egress_address_internal.clone()) ==
-					ForeignChain::from(egress_asset),
+				ForeignChain::from(destination_address_internal.clone()) ==
+					ForeignChain::from(destination_asset),
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 
-			let (intent_id, ingress_address) = T::IngressHandler::register_swap_intent(
-				ingress_asset,
-				egress_asset,
-				egress_address_internal,
+			let (channel_id, deposit_address) = T::DepositHandler::request_swap_deposit_address(
+				source_asset,
+				destination_asset,
+				destination_address_internal,
 				relayer_commission_bps,
 				relayer,
 				message_metadata,
@@ -336,13 +340,14 @@ pub mod pallet {
 
 			let expiry_block = frame_system::Pallet::<T>::current_block_number()
 				.saturating_add(SwapTTL::<T>::get());
-			SwapIntentExpiries::<T>::append(
+			SwapChannelExpiries::<T>::append(
 				expiry_block,
-				(intent_id, ForeignChain::from(ingress_asset), ingress_address.clone()),
+				(channel_id, ForeignChain::from(source_asset), deposit_address.clone()),
 			);
 
-			Self::deposit_event(Event::<T>::NewSwapIntent {
-				ingress_address: T::AddressConverter::try_to_encoded_address(ingress_address)?,
+			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
+				deposit_address: T::AddressConverter::try_to_encoded_address(deposit_address)?,
+				destination_address,
 				expiry_block,
 			});
 
@@ -358,18 +363,18 @@ pub mod pallet {
 		pub fn withdraw(
 			origin: OriginFor<T>,
 			asset: Asset,
-			egress_address: EncodedAddress,
+			destination_address: EncodedAddress,
 		) -> DispatchResult {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_relayer(origin)?;
 
-			let egress_address_internal =
-				T::AddressConverter::try_from_encoded_address(egress_address.clone()).map_err(
-					|_| DispatchError::Other("Invalid Egress Address, cannot decode the address"),
-				)?;
+			let destination_address_internal =
+				T::AddressConverter::try_from_encoded_address(destination_address.clone())
+					.map_err(|_| Error::<T>::InvalidDestinationAddress)?;
 
 			ensure!(
-				ForeignChain::from(egress_address_internal.clone()) == ForeignChain::from(asset),
+				ForeignChain::from(destination_address_internal.clone()) ==
+					ForeignChain::from(asset),
 				Error::<T>::InvalidEgressAddress
 			);
 
@@ -378,11 +383,11 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
 				amount,
-				address: egress_address,
+				address: destination_address,
 				egress_id: T::EgressHandler::schedule_egress(
 					asset,
 					amount,
-					egress_address_internal,
+					destination_address_internal,
 					None,
 				),
 			});
@@ -395,68 +400,67 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [SwapScheduled](Event::SwapIngressReceived)
+		/// - [SwapScheduled](Event::SwapDepositReceived)
 		#[pallet::weight(T::WeightInfo::schedule_swap_by_witnesser())]
 		pub fn schedule_swap_by_witnesser(
 			origin: OriginFor<T>,
 			from: Asset,
 			to: Asset,
-			ingress_amount: AssetAmount,
-			egress_address: EncodedAddress,
+			deposit_amount: AssetAmount,
+			destination_address: EncodedAddress,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let egress_address_internal =
-				T::AddressConverter::try_from_encoded_address(egress_address.clone()).map_err(
-					|_| DispatchError::Other("Invalid Egress Address, cannot decode the address"),
-				)?;
+			let destination_address_internal =
+				T::AddressConverter::try_from_encoded_address(destination_address.clone())
+					.map_err(|_| Error::<T>::InvalidDestinationAddress)?;
 
 			let swap_id = Self::schedule_swap(
 				from,
 				to,
-				ingress_amount,
-				SwapType::Swap(egress_address_internal),
+				deposit_amount,
+				SwapType::Swap(destination_address_internal),
 			);
 
 			Self::deposit_event(Event::<T>::SwapScheduledByWitnesser {
 				swap_id,
-				ingress_amount,
-				egress_address,
+				deposit_amount,
+				destination_address,
 			});
 
 			Ok(())
 		}
 
-		/// Process the ingress of a Cross-chain-message. The fund is swapped into the target
-		/// chain's native asset, with appropriate fees and gas deducted, and the
-		/// message is egressed to the target chain.
-		#[pallet::weight(T::WeightInfo::ccm_ingress())]
-		pub fn ccm_ingress(
+		/// Process the deposit of a CCM swap.
+		#[pallet::weight(T::WeightInfo::ccm_deposit())]
+		pub fn ccm_deposit(
 			origin: OriginFor<T>,
-			ingress_asset: Asset,
-			ingress_amount: AssetAmount,
-			egress_asset: Asset,
-			egress_address: EncodedAddress,
-			message_metadata: CcmIngressMetadata,
+			source_asset: Asset,
+			deposit_amount: AssetAmount,
+			destination_asset: Asset,
+			destination_address: EncodedAddress,
+			message_metadata: CcmDepositMetadata,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let egress_address_internal =
-				T::AddressConverter::try_from_encoded_address(egress_address).map_err(|_| {
-					DispatchError::Other("Invalid Egress Address, cannot decode the address")
-				})?;
+			let destination_address_internal = T::AddressConverter::try_from_encoded_address(
+				destination_address,
+			)
+			.map_err(|_| {
+				DispatchError::Other("Invalid destination address, cannot decode the address")
+			})?;
 
 			ensure!(
-				ForeignChain::from(egress_asset) ==
-					ForeignChain::from(egress_address_internal.clone()),
+				ForeignChain::from(destination_asset) ==
+					ForeignChain::from(destination_address_internal.clone()),
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 
-			Self::on_ccm_ingress(
-				ingress_asset,
-				ingress_amount,
-				egress_asset,
-				egress_address_internal,
+			Self::on_ccm_deposit(
+				source_asset,
+				deposit_amount,
+				destination_asset,
+				destination_address_internal,
 				message_metadata,
 			)
 		}
@@ -473,8 +477,9 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets the length in which ingress intents are expired in the Swapping pallet.
-		/// Requires Governance
+		/// Sets the lifetime of swap channels.
+		///
+		/// Requires Governance.
 		///
 		/// ## Events
 		///
@@ -519,11 +524,11 @@ pub mod pallet {
 
 				if swap_output > 0 {
 					match &swap.swap_type {
-						SwapType::Swap(egress_address) => {
+						SwapType::Swap(destination_address) => {
 							let egress_id = T::EgressHandler::schedule_egress(
 								swap.to,
 								swap_output,
-								egress_address.clone(),
+								destination_address.clone(),
 								None,
 							);
 
@@ -611,30 +616,30 @@ pub mod pallet {
 			// Insert gas budget into storage.
 			CcmGasBudget::<T>::insert(
 				ccm_id,
-				(ForeignChain::from(ccm_swap.egress_asset).gas_asset(), ccm_output_gas),
+				(ForeignChain::from(ccm_swap.destination_asset).gas_asset(), ccm_output_gas),
 			);
 
 			// Schedule the given ccm to be egressed and deposit a event.
 			let egress_id = T::EgressHandler::schedule_egress(
-				ccm_swap.egress_asset,
+				ccm_swap.destination_asset,
 				ccm_output_principal,
-				ccm_swap.egress_address.clone(),
+				ccm_swap.destination_address.clone(),
 				Some(ccm_swap.message_metadata),
 			);
 			Self::deposit_event(Event::<T>::CcmEgressScheduled { ccm_id, egress_id });
 		}
 	}
 
-	impl<T: Config> SwapIntentHandler for Pallet<T> {
+	impl<T: Config> SwapDepositHandler for Pallet<T> {
 		type AccountId = T::AccountId;
 
-		/// Callback function to kick off the swapping process after a successful ingress.
-		fn on_swap_ingress(
-			ingress_address: ForeignChainAddress,
+		/// Callback function to kick off the swapping process after a successful deposit.
+		fn on_swap_deposit(
+			deposit_address: ForeignChainAddress,
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
-			egress_address: ForeignChainAddress,
+			destination_address: ForeignChainAddress,
 			relayer_id: Self::AccountId,
 			relayer_commission_bps: BasisPoints,
 		) {
@@ -649,40 +654,42 @@ pub mod pallet {
 				from,
 				to,
 				amount.saturating_sub(fee),
-				SwapType::Swap(egress_address),
+				SwapType::Swap(destination_address),
 			);
 
-			Self::deposit_event(Event::<T>::SwapIngressReceived {
+			Self::deposit_event(Event::<T>::SwapDepositReceived {
 				swap_id,
-				ingress_address: T::AddressConverter::try_to_encoded_address(ingress_address).expect("This should not fail since this conversion happens during the pipeline of a swap and ingress address has already been successfully converted in this way at the start of the swap in request_swap_intent"),
-				ingress_amount: amount,
+				deposit_address: T::AddressConverter::try_to_encoded_address(deposit_address)
+					.expect("The deposit address is generated internally and is always valid."),
+				deposit_amount: amount,
 			});
 		}
 	}
 
 	impl<T: Config> CcmHandler for Pallet<T> {
-		fn on_ccm_ingress(
-			ingress_asset: Asset,
-			ingress_amount: AssetAmount,
-			egress_asset: Asset,
-			egress_address: ForeignChainAddress,
-			message_metadata: CcmIngressMetadata,
+		fn on_ccm_deposit(
+			source_asset: Asset,
+			deposit_amount: AssetAmount,
+			destination_asset: Asset,
+			destination_address: ForeignChainAddress,
+			message_metadata: CcmDepositMetadata,
 		) -> DispatchResult {
 			// Caller should ensure that assets and addresses are compatible.
 			debug_assert!(
-				ForeignChain::from(egress_address.clone()) == ForeignChain::from(egress_asset)
+				ForeignChain::from(destination_address.clone()) ==
+					ForeignChain::from(destination_asset)
 			);
 
 			// Currently only Ethereum supports CCM.
 			ensure!(
-				ForeignChain::Ethereum == egress_asset.into(),
+				ForeignChain::Ethereum == destination_asset.into(),
 				Error::<T>::CcmUnsupportedForTargetChain
 			);
 
-			// Ingressed amount should be enough to pay for gas.
+			// Deposited amount should be enough to pay for gas.
 			ensure!(
-				ingress_amount > message_metadata.gas_budget,
-				Error::<T>::CcmInsufficientIngressAmount
+				deposit_amount > message_metadata.gas_budget,
+				Error::<T>::CcmInsufficientDepositAmount
 			);
 
 			let ccm_id = CcmIdCounter::<T>::mutate(|id| {
@@ -692,47 +699,47 @@ pub mod pallet {
 
 			let mut swap_output = CcmSwapOutput::default();
 
-			let principal_swap_amount = ingress_amount.saturating_sub(message_metadata.gas_budget);
-			let principal_swap_id = if ingress_asset == egress_asset {
+			let principal_swap_amount = deposit_amount.saturating_sub(message_metadata.gas_budget);
+			let principal_swap_id = if source_asset == destination_asset {
 				swap_output.principal = Some(principal_swap_amount);
 				None
 			} else {
 				Some(Self::schedule_swap(
-					ingress_asset,
-					egress_asset,
+					source_asset,
+					destination_asset,
 					principal_swap_amount,
 					SwapType::CcmPrincipal(ccm_id),
 				))
 			};
 
-			let output_gas_asset = ForeignChain::from(egress_asset).gas_asset();
-			let gas_swap_id = if ingress_asset == output_gas_asset {
-				// Ingress can be used as gas directly
+			let output_gas_asset = ForeignChain::from(destination_asset).gas_asset();
+			let gas_swap_id = if source_asset == output_gas_asset {
+				// Deposit can be used as gas directly
 				swap_output.gas = Some(message_metadata.gas_budget);
 				None
 			} else {
 				Some(Self::schedule_swap(
-					ingress_asset,
+					source_asset,
 					output_gas_asset,
 					message_metadata.gas_budget,
 					SwapType::CcmGas(ccm_id),
 				))
 			};
 
-			Self::deposit_event(Event::<T>::CcmIngressReceived {
+			Self::deposit_event(Event::<T>::CcmDepositReceived {
 				ccm_id,
 				principal_swap_id,
 				gas_swap_id,
-				ingress_amount,
-				egress_address: egress_address.clone(),
+				deposit_amount,
+				destination_address: destination_address.clone(),
 			});
 
 			// If no swap is required, egress the CCM.
 			let ccm_swap = CcmSwap {
-				ingress_asset,
-				ingress_amount,
-				egress_asset,
-				egress_address,
+				source_asset,
+				deposit_amount,
+				destination_asset,
+				destination_address,
 				message_metadata,
 			};
 			if let Some((principal, gas)) = swap_output.completed_result() {

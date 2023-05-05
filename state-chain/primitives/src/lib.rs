@@ -32,7 +32,7 @@ pub type EpochIndex = u32;
 
 pub type AuthorityCount = u32;
 
-pub type IntentId = u64;
+pub type ChannelId = u64;
 
 pub type EgressCounter = u64;
 
@@ -97,7 +97,7 @@ pub enum AccountRole {
 	Validator,
 	/// Liquidity providers can deposit assets and deploy them in trading pools.
 	LiquidityProvider,
-	/// Relayers submit swap intents on behalf of users.
+	/// Relayers submit swap deposit requests on behalf of users.
 	Relayer,
 }
 

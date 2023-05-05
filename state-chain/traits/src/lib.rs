@@ -12,12 +12,12 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{
-	address::ForeignChainAddress, eth::H256, ApiCall, CcmIngressMetadata, Chain, ChainAbi,
+	address::ForeignChainAddress, eth::H256, ApiCall, CcmDepositMetadata, Chain, ChainAbi,
 	ChainCrypto, Ethereum, Polkadot,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, EgressId, EpochIndex, EthereumAddress, ForeignChain, IntentId,
+	CeremonyId, ChannelId, EgressId, EpochIndex, EthereumAddress, ForeignChain,
 	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -664,7 +664,7 @@ pub trait FeePayment {
 	fn try_burn_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult;
 }
 
-/// Providregister_swap_intention about on-chain funds.
+/// Provides information about on-chain funds.
 pub trait FundingInfo {
 	type AccountId;
 	type Balance;
@@ -674,52 +674,53 @@ pub trait FundingInfo {
 	fn total_onchain_funds() -> Self::Balance;
 }
 
-/// Allow pallets to register `Intent`s in the Ingress pallet.
-pub trait IngressApi<C: Chain> {
+/// Allow pallets to open and expire deposit addresses.
+pub trait DepositApi<C: Chain> {
 	type AccountId;
-	/// Issues an intent id and ingress address for a new liquidity deposit.
-	fn register_liquidity_ingress_intent(
-		lp_account: Self::AccountId,
-		ingress_asset: C::ChainAsset,
-	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
 
-	/// Issues an intent id and ingress address for a new swap.
-	fn register_swap_intent(
-		ingress_asset: C::ChainAsset,
-		egress_asset: Asset,
-		egress_address: ForeignChainAddress,
+	/// Issues a channel id and deposit address for a new liquidity deposit.
+	fn request_liquidity_deposit_address(
+		lp_account: Self::AccountId,
+		source_asset: C::ChainAsset,
+	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
+
+	/// Issues a channel id and deposit address for a new swap.
+	fn request_swap_deposit_address(
+		source_asset: C::ChainAsset,
+		destination_asset: Asset,
+		destination_address: ForeignChainAddress,
 		relayer_commission_bps: BasisPoints,
 		relayer_id: Self::AccountId,
-		message_metadata: Option<CcmIngressMetadata>,
-	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
+		message_metadata: Option<CcmDepositMetadata>,
+	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
-	/// Expires an intent.
-	fn expire_intent(chain: ForeignChain, intent_id: IntentId, address: C::ChainAccount);
+	/// Expires a channel.
+	fn expire_channel(chain: ForeignChain, channel_id: ChannelId, address: C::ChainAccount);
 }
 
-/// Generates a deterministic ingress address for some combination of asset, chain and intent id.
+/// Generates a deterministic deposit address for some combination of asset, chain and channel id.
 pub trait AddressDerivationApi<C: Chain> {
 	fn generate_address(
-		ingress_asset: C::ChainAsset,
-		intent_id: IntentId,
+		source_asset: C::ChainAsset,
+		channel_id: ChannelId,
 	) -> Result<C::ChainAccount, DispatchError>;
 }
 
 impl AddressDerivationApi<Ethereum> for () {
 	fn generate_address(
-		ingress_asset: <Ethereum as Chain>::ChainAsset,
-		intent_id: IntentId,
+		source_asset: <Ethereum as Chain>::ChainAsset,
+		channel_id: ChannelId,
 	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
-		Ok(H256((ingress_asset, intent_id).encode().blake2_256()).into())
+		Ok(H256((source_asset, channel_id).encode().blake2_256()).into())
 	}
 }
 
 impl AddressDerivationApi<Polkadot> for () {
 	fn generate_address(
-		ingress_asset: <Polkadot as Chain>::ChainAsset,
-		intent_id: IntentId,
+		source_asset: <Polkadot as Chain>::ChainAsset,
+		channel_id: ChannelId,
 	) -> Result<<Polkadot as Chain>::ChainAccount, DispatchError> {
-		Ok((ingress_asset, intent_id).encode().blake2_256().into())
+		Ok((source_asset, channel_id).encode().blake2_256().into())
 	}
 }
 
@@ -766,8 +767,8 @@ pub trait EgressApi<C: Chain> {
 	fn schedule_egress(
 		asset: C::ChainAsset,
 		amount: C::ChainAmount,
-		egress_address: C::ChainAccount,
-		maybe_message: Option<CcmIngressMetadata>,
+		destination_address: C::ChainAccount,
+		maybe_message: Option<CcmDepositMetadata>,
 	) -> EgressId;
 }
 
@@ -775,8 +776,8 @@ impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 	fn schedule_egress(
 		_asset: assets::eth::Asset,
 		_amount: <Ethereum as Chain>::ChainAmount,
-		_egress_address: <Ethereum as Chain>::ChainAccount,
-		_maybe_message: Option<CcmIngressMetadata>,
+		_destination_address: <Ethereum as Chain>::ChainAccount,
+		_maybe_message: Option<CcmDepositMetadata>,
 	) -> EgressId {
 		(ForeignChain::Ethereum, 0)
 	}
@@ -786,8 +787,8 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 	fn schedule_egress(
 		_asset: assets::dot::Asset,
 		_amount: <Polkadot as Chain>::ChainAmount,
-		_egress_address: <Polkadot as Chain>::ChainAccount,
-		_maybe_message: Option<CcmIngressMetadata>,
+		_destination_address: <Polkadot as Chain>::ChainAccount,
+		_maybe_message: Option<CcmDepositMetadata>,
 	) -> EgressId {
 		(ForeignChain::Polkadot, 0)
 	}
@@ -826,17 +827,17 @@ pub trait FlipBurnInfo {
 }
 
 /// The trait implementation is intentionally no-op by default
-pub trait IngressHandler<C: ChainCrypto> {
-	fn on_ingress_completed(
+pub trait DepositHandler<C: ChainCrypto> {
+	fn on_deposit_made(
 		_tx_id: <C as ChainCrypto>::TransactionId,
 		_amount: <C as Chain>::ChainAmount,
 		_address: <C as Chain>::ChainAccount,
 		_asset: <C as Chain>::ChainAsset,
 	) {
 	}
-	fn on_ingress_initiated(
+	fn on_channel_opened(
 		_address: <C as Chain>::ChainAccount,
-		_intent_id: IntentId,
+		_channel_id: ChannelId,
 	) -> Result<(), DispatchError> {
 		Ok(())
 	}
@@ -844,24 +845,23 @@ pub trait IngressHandler<C: ChainCrypto> {
 
 /// Trait for handling cross chain messages.
 pub trait CcmHandler {
-	/// On the ingress of a cross-chain message, swap the asset into egress asset,
-	/// subtract the gas budge from it, then egress the message to the target chain.
-	fn on_ccm_ingress(
-		ingress_asset: Asset,
-		ingress_amount: AssetAmount,
-		egress_asset: Asset,
-		egress_address: ForeignChainAddress,
-		message_metadata: CcmIngressMetadata,
+	/// Triggered when a ccm deposit is made.
+	fn on_ccm_deposit(
+		source_asset: Asset,
+		deposit_amount: AssetAmount,
+		destination_asset: Asset,
+		destination_address: ForeignChainAddress,
+		message_metadata: CcmDepositMetadata,
 	) -> DispatchResult;
 }
 
 impl CcmHandler for () {
-	fn on_ccm_ingress(
-		_ingress_asset: Asset,
-		_ingress_amount: AssetAmount,
-		_egress_asset: Asset,
-		_egress_address: ForeignChainAddress,
-		_message_metadata: CcmIngressMetadata,
+	fn on_ccm_deposit(
+		_source_asset: Asset,
+		_deposit_amount: AssetAmount,
+		_destination_asset: Asset,
+		_destination_address: ForeignChainAddress,
+		_message_metadata: CcmDepositMetadata,
 	) -> DispatchResult {
 		Ok(())
 	}

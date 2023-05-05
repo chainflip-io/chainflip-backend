@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
-use cf_chains::{address::EncodedAddress, eth::H256, CcmIngressMetadata, ForeignChain};
+use cf_chains::{address::EncodedAddress, eth::H256, CcmDepositMetadata, ForeignChain};
 use cf_primitives::{AccountRole, Asset, BasisPoints};
 use futures::FutureExt;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
@@ -18,7 +18,7 @@ pub mod primitives {
 	pub type RedemptionAmount = pallet_cf_funding::RedemptionAmount<FlipBalance>;
 	pub use cf_chains::{
 		address::{EncodedAddress, ForeignChainAddress},
-		CcmIngressMetadata,
+		CcmDepositMetadata,
 	};
 }
 
@@ -345,20 +345,20 @@ pub async fn set_vanity_name(
 	.await
 }
 
-pub async fn register_swap_intent(
+pub async fn request_swap_deposit_address(
 	state_chain_settings: &settings::StateChain,
-	ingress_asset: Asset,
-	egress_asset: Asset,
-	egress_address: EncodedAddress,
+	source_asset: Asset,
+	destination_asset: Asset,
+	destination_address: EncodedAddress,
 	relayer_commission_bps: BasisPoints,
-	message_metadata: Option<CcmIngressMetadata>,
+	message_metadata: Option<CcmDepositMetadata>,
 ) -> Result<EncodedAddress> {
 	let events = connect_submit_and_get_events(
 		state_chain_settings,
-		pallet_cf_swapping::Call::register_swap_intent {
-			ingress_asset,
-			egress_asset,
-			egress_address,
+		pallet_cf_swapping::Call::request_swap_deposit_address {
+			source_asset,
+			destination_asset,
+			destination_address,
 			relayer_commission_bps,
 			message_metadata,
 		},
@@ -367,18 +367,18 @@ pub async fn register_swap_intent(
 	.await?;
 
 	if let Some(state_chain_runtime::RuntimeEvent::Swapping(
-		pallet_cf_swapping::Event::NewSwapIntent { ingress_address, .. },
+		pallet_cf_swapping::Event::SwapDepositAddressReady { deposit_address, .. },
 	)) = events.iter().find(|event| {
 		matches!(
 			event,
 			state_chain_runtime::RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::NewSwapIntent { .. }
+				pallet_cf_swapping::Event::SwapDepositAddressReady { .. }
 			)
 		)
 	}) {
-		Ok((*ingress_address).clone())
+		Ok((*deposit_address).clone())
 	} else {
-		panic!("NewSwapIntent must have been generated");
+		panic!("SwapDepositAddressReady must have been generated");
 	}
 }
 

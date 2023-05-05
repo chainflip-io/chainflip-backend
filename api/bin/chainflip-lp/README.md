@@ -31,7 +31,7 @@ Then in another terminal:
     -d '{"id":1, "jsonrpc":"2.0", "method": "lp_liquidityDeposit", "params": ["Eth"]}' \
     http://localhost:80
 
-# The result is the hex-encoded ingress address.
+# The result is the hex-encoded deposit address.
 {"jsonrpc":"2.0","result":"0x350ec3dfd773978277868212d9f1319cbc93a8bf","id":1}
 
 ```
@@ -80,11 +80,11 @@ Return:
 
 Parameters:
 
-- Ingress asset as a camel-case string, eg "Eth" or "Dot"
+- Source asset as a camel-case string, eg "Eth" or "Dot"
 
 Return:
 
-- Hex encoded ingress address.
+- Hex encoded deposit address.
 
 ### `lp_withdrawAsset`
 
