@@ -115,7 +115,7 @@ async fn should_delay_stage_1_message_while_unauthorised() {
 	// Process a stage 1 message (It should get delayed)
 	assert_eq!(
 		ceremony_runner
-			.process_or_delay_message(sender_account_id.clone(), gen_signing_data_stage1())
+			.process_or_delay_message(sender_account_id.clone(), gen_signing_data_stage1(1))
 			.await,
 		None
 	);
@@ -173,7 +173,7 @@ async fn should_process_delayed_messages_after_finishing_a_stage() {
 	// 2 and therefore fail with BroadcastFailure because the data we used was invalid.
 	assert!(matches!(
 		ceremony_runner
-			.process_or_delay_message(sender_account_id.clone(), gen_signing_data_stage1())
+			.process_or_delay_message(sender_account_id.clone(), gen_signing_data_stage1(1))
 			.await,
 		Some(Err((
 			_,
@@ -240,13 +240,13 @@ async fn should_ignore_duplicate_message() {
 	// Process a valid stage 1 message
 	assert_eq!(
 		stage_1_state
-			.process_or_delay_message(sender_account_id.clone(), gen_signing_data_stage1())
+			.process_or_delay_message(sender_account_id.clone(), gen_signing_data_stage1(1))
 			.await,
 		None
 	);
 
 	// Process another stage 1 message from the same participant
-	ensure_message_is_ignored(&mut stage_1_state, sender_account_id, gen_signing_data_stage1())
+	ensure_message_is_ignored(&mut stage_1_state, sender_account_id, gen_signing_data_stage1(1))
 		.await;
 }
 
@@ -302,7 +302,7 @@ async fn should_ignore_message_from_non_participating_account() {
 	let (mut stage_1_state, _) = gen_stage_1_signing_state(our_account_id, participants).await;
 
 	// Process a message from a node that is not in the signing ceremony
-	ensure_message_is_ignored(&mut stage_1_state, non_participant_id, gen_signing_data_stage1())
+	ensure_message_is_ignored(&mut stage_1_state, non_participant_id, gen_signing_data_stage1(1))
 		.await;
 }
 
@@ -318,7 +318,7 @@ async fn should_ignore_message_from_unknown_account_id() {
 	let (mut stage_1_state, _) = gen_stage_1_signing_state(our_account_id, participants).await;
 
 	// Process a message from an unknown AccountId
-	ensure_message_is_ignored(&mut stage_1_state, unknown_id, gen_signing_data_stage1()).await;
+	ensure_message_is_ignored(&mut stage_1_state, unknown_id, gen_signing_data_stage1(1)).await;
 }
 
 #[tokio::test]

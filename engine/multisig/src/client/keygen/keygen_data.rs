@@ -5,10 +5,12 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use cf_primitives::AuthorityCount;
 use serde::{Deserialize, Serialize};
+use state_chain_runtime::constants::common::MAX_AUTHORITIES;
 
 use crate::{
 	client::common::{BroadcastVerificationMessage, KeygenStageName, PreProcessStageDataCheck},
 	crypto::ECPoint,
+	CryptoScheme,
 };
 
 use super::keygen_detail::ShamirShare;
@@ -56,14 +58,11 @@ impl<P: ECPoint> std::fmt::Display for KeygenData<P> {
 }
 
 impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
-	/// Check that the number of elements in the data is correct
-	fn data_size_is_valid(&self, num_of_parties: AuthorityCount) -> bool {
+	fn data_size_is_valid<C: CryptoScheme>(&self, num_of_parties: AuthorityCount) -> bool {
 		let num_of_parties = num_of_parties as usize;
 		match self {
-			// For messages that don't contain a collection (eg. HashComm1), we don't need to check
-			// the size.
-			KeygenData::PubkeyShares0(_) => true,
-			KeygenData::HashComm1(_) => true,
+			KeygenData::PubkeyShares0(_) | KeygenData::HashComm1(_) =>
+				self.initial_stage_data_size_is_valid::<C>(),
 			KeygenData::VerifyHashComm2(message) => message.data.len() == num_of_parties,
 			KeygenData::CoeffComm3(message) => {
 				// NOTE: the number of commitments may be different depending on whether
@@ -117,11 +116,18 @@ impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
 		}
 	}
 
-	fn is_first_stage(&self) -> bool {
-		matches!(self, KeygenData::HashComm1(_))
+	fn initial_stage_data_size_is_valid<C: CryptoScheme>(&self) -> bool {
+		match self {
+			KeygenData::PubkeyShares0(message) => message.0.len() <= MAX_AUTHORITIES as usize,
+			KeygenData::HashComm1(_) => true,
+			_ => panic!("unexpected stage"),
+		}
 	}
 
-	/// Returns true if this message should be delayed for the given stage
+	fn is_first_stage(&self) -> bool {
+		matches!(self, KeygenData::PubkeyShares0(_) | KeygenData::HashComm1(_))
+	}
+
 	fn should_delay(stage_name: KeygenStageName, message: &Self) -> bool {
 		match stage_name {
 			KeygenStageName::PubkeyShares0 => {

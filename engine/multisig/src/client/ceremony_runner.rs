@@ -190,13 +190,18 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 				if !data.is_first_stage() {
 					debug!(
 						from_id = sender_id.to_string(),
-						"Ignoring data: non-initial stage data for unauthorised ceremony"
+						"Ignoring data for unauthorised ceremony: non-initial stage data"
 					);
 					return None
 				}
 
-				// We do not need to check data_size_is_valid here because stage 1 messages are
-				// always the correct size.
+				if !data.initial_stage_data_size_is_valid::<<Ceremony as CeremonyTrait>::Crypto>() {
+					debug!(
+						from_id = sender_id.to_string(),
+						"Ignoring data for unauthorised ceremony: incorrect number of elements"
+					);
+					return None
+				}
 
 				self.add_delayed(sender_id, data);
 			},
@@ -212,9 +217,9 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 				};
 
 				// Check that the number of elements in the data is what we expect
-				if !data
-					.data_size_is_valid(stage.ceremony_common().all_idxs.len() as AuthorityCount)
-				{
+				if !data.data_size_is_valid::<Ceremony::Crypto>(
+					stage.ceremony_common().all_idxs.len() as AuthorityCount,
+				) {
 					debug!(
 						from_id = sender_id.to_string(),
 						"Ignoring data: incorrect number of elements"

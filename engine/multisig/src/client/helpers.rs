@@ -852,8 +852,12 @@ pub fn gen_invalid_keygen_comm1<P: ECPoint>(
 	fake_comm1
 }
 
-pub fn gen_invalid_signing_comm1(rng: &mut Rng) -> Comm1<Point> {
-	Comm1(vec![SigningCommitment { d: Point::random(rng), e: Point::random(rng) }])
+pub fn gen_invalid_signing_comm1(rng: &mut Rng, number_of_commitments: u64) -> Comm1<Point> {
+	Comm1(
+		(0..number_of_commitments)
+			.map(|_| SigningCommitment { d: Point::random(rng), e: Point::random(rng) })
+			.collect(),
+	)
 }
 
 pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(

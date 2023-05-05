@@ -54,7 +54,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
 	// This account id will send an invalid signature
 	let [bad_account_id] = signing_ceremony.select_account_ids();
 	for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
-		*message = gen_invalid_signing_comm1(&mut signing_ceremony.rng);
+		*message = gen_invalid_signing_comm1(&mut signing_ceremony.rng, 1);
 	}
 
 	let messages = signing_ceremony.run_stage::<VerifyComm2, _, _>(messages).await;
