@@ -558,7 +558,7 @@ fn can_process_ccm_deposit() {
 			MockCcmHandler::get_ccm_requests(),
 			vec![CcmRequest {
 				source_asset: from_asset.into(),
-				ingress_amount: amount,
+				deposit_amount: amount,
 				destination_asset: to_asset,
 				destination_address,
 				message_metadata: ccm

@@ -106,7 +106,7 @@ where
 				}
 
 				// Must be a current participant in the epoch to witness. Additionally, only
-				// certain witnessers (e.g. ingress) process non-current/historical epochs.
+				// certain witnessers (e.g. deposit) process non-current/historical epochs.
 				if epoch_start.participant &&
 					(epoch_start.current ||
 						<Generator::Witnesser>::SHOULD_PROCESS_HISTORICAL_EPOCHS)

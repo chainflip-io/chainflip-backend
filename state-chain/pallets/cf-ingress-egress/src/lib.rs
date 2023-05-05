@@ -671,12 +671,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)?,
 		};
 
-		T::DepositHandler::on_ingress_completed(
-			tx_id.clone(),
-			amount,
-			deposit_address.clone(),
-			asset,
-		);
+		T::DepositHandler::on_deposit_made(tx_id.clone(), amount, deposit_address.clone(), asset);
 
 		Self::deposit_event(Event::IngressCompleted { deposit_address, asset, amount, tx_id });
 		Ok(())
@@ -714,7 +709,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			DepositAddressDetails { channel_id, source_asset },
 		);
 		ChannelActions::<T, I>::insert(&address, channel_action);
-		T::DepositHandler::on_ingress_initiated(address.clone(), channel_id)?;
+		T::DepositHandler::on_channel_opened(address.clone(), channel_id)?;
 		Ok((channel_id, address))
 	}
 

@@ -513,7 +513,7 @@ impl DepositHandler<Polkadot> for DotDepositHandler {}
 
 pub struct BtcDepositHandler;
 impl DepositHandler<Bitcoin> for BtcDepositHandler {
-	fn on_ingress_completed(
+	fn on_deposit_made(
 		utxo_id: <Bitcoin as ChainCrypto>::TransactionId,
 		amount: <Bitcoin as Chain>::ChainAmount,
 		address: <Bitcoin as Chain>::ChainAccount,
@@ -522,7 +522,7 @@ impl DepositHandler<Bitcoin> for BtcDepositHandler {
 		Environment::add_bitcoin_utxo_to_list(amount, utxo_id, address)
 	}
 
-	fn on_ingress_initiated(
+	fn on_channel_opened(
 		ingress_script: <Bitcoin as Chain>::ChainAccount,
 		salt: ChannelId,
 	) -> Result<(), DispatchError> {
