@@ -128,7 +128,7 @@ benchmarks_instance_pallet! {
 		let caller: T::AccountId = whitelisted_caller();
 		let agg_key = AggKeyFor::<T, I>::benchmark_value();
 		let keygen_participants = generate_authority_set::<T, I>(150, caller.into());
-		let request_id = Pallet::<T, I>::trigger_keygen_verification(CEREMONY_ID, agg_key, keygen_participants.into_iter().collect());
+		let request_id = Pallet::<T, I>::trigger_keygen_verification(CEREMONY_ID, agg_key, keygen_participants.into_iter().collect(), 2);
 		T::ThresholdSigner::insert_signature(
 			request_id,
 			ThresholdSignatureFor::<T, I>::benchmark_value(),

@@ -7,7 +7,7 @@ use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRe
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochInfo, EpochKey, KeyProvider, KeyState, Slashing, SystemStateManager,
+	CurrentEpochIndex, EpochKey, KeyProvider, KeyState, Slashing, SystemStateManager,
 	ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus, VaultTransitionHandler,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
@@ -190,7 +190,7 @@ pub mod pallet {
 				Some(VaultRotationStatus::<T, I>::AwaitingKeygen {
 					ceremony_id,
 					keygen_participants,
-					new_epoch_index: _,
+					new_epoch_index,
 					response_status,
 				}) => {
 					weight += Self::progress_rotation::<
@@ -209,6 +209,7 @@ pub mod pallet {
 								ceremony_id,
 								new_public_key,
 								keygen_participants,
+								new_epoch_index,
 							);
 						},
 					);
@@ -778,12 +779,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		keygen_ceremony_id: CeremonyId,
 		new_public_key: AggKeyFor<T, I>,
 		participants: BTreeSet<T::ValidatorId>,
+		new_epoch_index: EpochIndex,
 	) -> ThresholdSignatureRequestId {
 		let request_id = T::ThresholdSigner::request_keygen_verification_signature(
 			T::Chain::agg_key_to_payload(new_public_key),
 			participants,
 			new_public_key,
-			T::EpochInfo::epoch_index(),
+			new_epoch_index,
 		);
 		T::ThresholdSigner::register_callback(request_id, {
 			Call::on_keygen_verification_result {
