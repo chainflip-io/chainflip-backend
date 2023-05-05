@@ -1,5 +1,4 @@
 use super::*;
-
 use sp_runtime::traits::BlockNumberProvider;
 
 impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
@@ -8,7 +7,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 	/// # Panics
 	/// - If an empty BTreeSet of candidates is provided
 	/// - If a vault rotation outcome is already Pending (i.e. there's one already in progress)
-	fn keygen(candidates: BTreeSet<Self::ValidatorId>, epoch_index: EpochIndex) {
+	fn keygen(candidates: BTreeSet<Self::ValidatorId>, new_epoch_index: EpochIndex) {
 		assert!(!candidates.is_empty());
 
 		assert_ne!(Self::status(), AsyncResult::Pending);
@@ -18,8 +17,8 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::AwaitingKeygen {
 			ceremony_id,
 			keygen_participants: candidates.clone(),
-			epoch_index,
 			response_status: KeygenResponseStatus::new(candidates.clone()),
+			new_epoch_index,
 		});
 
 		// Start the timer for resolving Keygen - we check this in the on_initialise() hook each
@@ -29,7 +28,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		Pallet::<T, I>::deposit_event(Event::KeygenRequest {
 			ceremony_id,
 			participants: candidates,
-			epoch_index,
+			epoch_index: new_epoch_index,
 		});
 	}
 
@@ -71,13 +70,11 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 						// The key we want to share is the key from the *previous/current* epoch,
 						// not the newly generated key since we're handing it over to the
 						// authorities of the new_epoch.
-						key_to_share: KeyId {
-							public_key_bytes: epoch_key.key.into(),
-							epoch_index: epoch_key.epoch_index,
-						},
+						from_epoch: epoch_key.epoch_index,
+						key_to_share: epoch_key.key,
 						sharing_participants,
 						receiving_participants,
-						epoch_index: new_epoch_index,
+						to_epoch: new_epoch_index,
 					});
 				},
 				_ => {
@@ -178,8 +175,8 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
 					ceremony_id: Default::default(),
 					keygen_participants: Default::default(),
-					epoch_index: GENESIS_EPOCH,
 					response_status: KeygenResponseStatus::new(Default::default()),
+					new_epoch_index: Default::default(),
 				});
 			},
 			AsyncResult::Ready(VaultStatus::KeygenComplete) => {

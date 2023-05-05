@@ -86,7 +86,7 @@ impl ExtBuilder {
 			frame_system::GenesisConfig::default().build_storage::<Runtime>().unwrap();
 
 		let key_components = EthKeyComponents::generate(GENESIS_KEY_SEED, GENESIS_EPOCH);
-		let ethereum_vault_key = key_components.key_id();
+		let ethereum_vault_key = key_components.agg_key();
 
 		state_chain_runtime::GenesisConfig {
 			session: SessionConfig {
@@ -136,7 +136,7 @@ impl ExtBuilder {
 				max_expansion: self.max_authorities,
 			},
 			ethereum_vault: EthereumVaultConfig {
-				vault_key: Some(ethereum_vault_key.public_key_bytes),
+				vault_key: Some(ethereum_vault_key),
 				deployment_block: 0,
 				keygen_response_timeout: 4,
 			},

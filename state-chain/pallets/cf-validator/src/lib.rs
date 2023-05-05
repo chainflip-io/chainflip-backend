@@ -1156,9 +1156,8 @@ impl<T: Config> Pallet<T> {
 			);
 			Self::set_rotation_phase(RotationPhase::Idle);
 		} else {
-			let new_epoch_index = rotation_state.new_epoch_index;
+			T::VaultRotator::keygen(candidates, rotation_state.new_epoch_index);
 			Self::set_rotation_phase(RotationPhase::KeygensInProgress(rotation_state));
-			T::VaultRotator::keygen(candidates, new_epoch_index);
 			log::info!(target: "cf-validator", "Vault rotation initiated.");
 		}
 	}

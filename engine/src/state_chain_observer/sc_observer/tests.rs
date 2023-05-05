@@ -8,7 +8,7 @@ use cf_chains::{
 	eth::{Ethereum, Transaction},
 	ChainCrypto,
 };
-use cf_primitives::{AccountRole, KeyId, PolkadotAccountId, GENESIS_EPOCH};
+use cf_primitives::{AccountRole, PolkadotAccountId, GENESIS_EPOCH};
 use frame_system::Phase;
 use futures::{FutureExt, StreamExt};
 use mockall::predicate::{self, eq};
@@ -37,11 +37,11 @@ use crate::{
 use multisig::{
 	client::{KeygenFailureReason, MockMultisigClientApi, SigningFailureReason},
 	eth::EthSigning,
-	CryptoScheme,
+	CryptoScheme, KeyId,
 };
 use utilities::task_scope::task_scope;
 
-use super::EthAddressToMonitorSender;
+use super::{crypto_compat::CryptoCompat, EthAddressToMonitorSender};
 
 fn test_header(number: u32) -> Header {
 	Header {
@@ -1545,8 +1545,10 @@ mod dot_signing {
 
 async fn should_handle_keygen_request<C, I>()
 where
-	C: CryptoScheme<AggKey = <<state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain as ChainCrypto>::AggKey> + Send + Sync,
-	I: 'static + Send + Sync,
+	C: CryptoScheme<Chain = <state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain>
+		+ Send
+		+ Sync,
+	I: CryptoCompat<C, C::Chain> + 'static + Send + Sync,
 	state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
 	state_chain_runtime::RuntimeCall:
 		std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,

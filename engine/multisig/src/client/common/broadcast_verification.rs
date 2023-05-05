@@ -3,9 +3,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use cf_primitives::AuthorityCount;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
-use utilities::threshold_from_share_count;
 
-use crate::client::utils::find_frequent_element;
+use crate::client::utils::{find_frequent_element, threshold_for_broadcast_verification};
 
 use super::BroadcastFailureReason;
 
@@ -31,11 +30,10 @@ where
 	&received_idxs == expected_idxs
 }
 
-// This might result in an error if we don't get 2/3 of parties agreeing on the same value.
+// This might result in an error if we don't get ~1/2 of parties agreeing on the same value.
 // If we don't, this means that either (a) the broadcaster did an inconsistent broadcast,
 // (b) that the broadcaster failed to deliver the message to large enough number of parties,
-// or (c) that ~1/3 of parties colluded to slash the broadcasting party. (Should we reduce
-// the threshold to 50% for symmetry?)
+// or (c) that ~1/2 of parties colluded to slash the broadcasting party.
 pub fn verify_broadcasts<T>(
 	verification_messages: BTreeMap<AuthorityCount, Option<BroadcastVerificationMessage<T>>>,
 ) -> Result<BTreeMap<AuthorityCount, T>, (BTreeSet<AuthorityCount>, BroadcastFailureReason)>
@@ -43,7 +41,7 @@ where
 	T: Clone + serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug,
 {
 	let num_parties = verification_messages.len();
-	let threshold = threshold_from_share_count(num_parties as AuthorityCount) as usize;
+	let threshold = threshold_for_broadcast_verification(num_parties);
 
 	// We know these indexes to be correct, as this data structure is constructed
 	// locally based on ceremony parameters

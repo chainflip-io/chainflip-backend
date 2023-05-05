@@ -5,6 +5,7 @@ use super::*;
 
 use crate::Pallet;
 use cf_chains::benchmarking_value::BenchmarkValue;
+use cf_primitives::GENESIS_EPOCH;
 use cf_traits::{AccountRoleRegistry, EpochInfo};
 use codec::Decode;
 use frame_benchmarking::{account, benchmarks_instance_pallet, whitelisted_caller};
@@ -50,8 +51,8 @@ benchmarks_instance_pallet! {
 			VaultRotationStatus::<T, I>::AwaitingKeygen {
 				ceremony_id: CEREMONY_ID,
 				keygen_participants: keygen_participants.into_iter().collect(),
-				epoch_index: GENESIS_EPOCH,
-				response_status: keygen_response_status
+				response_status: keygen_response_status,
+				new_epoch_index: GENESIS_EPOCH,
 			},
 		);
 	} : {
@@ -81,8 +82,8 @@ benchmarks_instance_pallet! {
 			VaultRotationStatus::<T, I>::AwaitingKeygen {
 				ceremony_id: CEREMONY_ID,
 				keygen_participants: keygen_participants.into_iter().collect(),
-				epoch_index: GENESIS_EPOCH,
-				response_status: keygen_response_status
+				response_status: keygen_response_status,
+				new_epoch_index: GENESIS_EPOCH,
 			},
 		);
 	} : {
@@ -104,8 +105,8 @@ benchmarks_instance_pallet! {
 			VaultRotationStatus::<T, I>::AwaitingKeygen {
 				ceremony_id: CEREMONY_ID,
 				keygen_participants: keygen_participants.clone().into_iter().collect(),
-				epoch_index: GENESIS_EPOCH,
-				response_status: KeygenResponseStatus::<T, I>::new(keygen_participants)
+				response_status: KeygenResponseStatus::<T, I>::new(keygen_participants),
+				new_epoch_index: GENESIS_EPOCH,
 			},
 		);
 		use cf_chains::eth::sig_constants::SIG;
@@ -127,7 +128,7 @@ benchmarks_instance_pallet! {
 		let caller: T::AccountId = whitelisted_caller();
 		let agg_key = AggKeyFor::<T, I>::benchmark_value();
 		let keygen_participants = generate_authority_set::<T, I>(150, caller.into());
-		let request_id = Pallet::<T, I>::trigger_keygen_verification(CEREMONY_ID, agg_key, 1, keygen_participants.into_iter().collect());
+		let request_id = Pallet::<T, I>::trigger_keygen_verification(CEREMONY_ID, agg_key, keygen_participants.into_iter().collect());
 		T::ThresholdSigner::insert_signature(
 			request_id,
 			ThresholdSignatureFor::<T, I>::benchmark_value(),

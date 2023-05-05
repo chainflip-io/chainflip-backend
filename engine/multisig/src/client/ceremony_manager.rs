@@ -578,7 +578,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	fn single_party_keygen(&self, mut rng: Rng) -> KeygenResultInfo<C> {
 		info!("Performing solo keygen");
 
-		let (_key_id, key_data) =
+		let (_public_key, key_data) =
 			generate_key_data::<C>(BTreeSet::from_iter([self.my_account_id.clone()]), &mut rng);
 		key_data[&self.my_account_id].clone()
 	}
@@ -781,46 +781,5 @@ impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
 		}
 
 		Ok(())
-	}
-}
-
-#[cfg(test)]
-mod key_id_agg_key_match {
-	use cf_chains::ChainCrypto;
-	use rand_legacy::SeedableRng;
-
-	use crate::{bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
-
-	use super::*;
-
-	fn test_agg_key_key_id_match<CScheme, CC>()
-	where
-		CScheme: CryptoScheme,
-		CC: ChainCrypto,
-		CC::AggKey: From<CScheme::AggKey>,
-	{
-		let rng = crate::crypto::Rng::from_seed([0u8; 32]);
-		let agg_key = CeremonyManager::<CScheme>::new(
-			[4u8; 32].into(),
-			tokio::sync::mpsc::unbounded_channel().0,
-			0,
-		)
-		.single_party_keygen(rng)
-		.key
-		.agg_key();
-
-		let public_key_bytes: Vec<u8> = agg_key.clone().into();
-
-		assert_eq!(
-			CC::agg_key_to_key_id(CC::AggKey::from(agg_key), 9).public_key_bytes,
-			public_key_bytes
-		);
-	}
-
-	#[test]
-	fn test() {
-		test_agg_key_key_id_match::<BtcSigning, cf_chains::Bitcoin>();
-		test_agg_key_key_id_match::<EthSigning, cf_chains::Ethereum>();
-		test_agg_key_key_id_match::<PolkadotSigning, cf_chains::Polkadot>();
 	}
 }
