@@ -24,16 +24,16 @@ fn generate_swaps<T: Config>(amount: u32, from: Asset, to: Asset) -> Vec<Swap> {
 }
 
 benchmarks! {
-	register_swap_intent {
+	request_swap_deposit_address {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		T::AccountRoleRegistry::register_as_relayer(&caller).unwrap();
+		T::AccountRoleRegistry::register_as_broker(&caller).unwrap();
 		let origin = RawOrigin::Signed(caller);
-		let call = Call::<T>::register_swap_intent {
-			ingress_asset: Asset::Eth,
-			egress_asset: Asset::Usdc,
-			egress_address: EncodedAddress::benchmark_value(),
-			relayer_commission_bps: 0,
+		let call = Call::<T>::request_swap_deposit_address {
+			source_asset: Asset::Eth,
+			destination_asset: Asset::Usdc,
+			destination_address: EncodedAddress::benchmark_value(),
+			broker_commission_bps: 0,
 			message_metadata: None,
 		};
 	} : { call.dispatch_bypass_filter(origin.into())?; }
@@ -53,21 +53,21 @@ benchmarks! {
 	withdraw {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		T::AccountRoleRegistry::register_as_relayer(&caller).unwrap();
-		EarnedRelayerFees::<T>::insert(caller.clone(), Asset::Eth, 200);
+		T::AccountRoleRegistry::register_as_broker(&caller).unwrap();
+		EarnedBrokerFees::<T>::insert(caller.clone(), Asset::Eth, 200);
 	} : _(
 		RawOrigin::Signed(caller.clone()),
 		Asset::Eth,
 		EncodedAddress::benchmark_value()
 	)
 
-	register_as_relayer {
+	register_as_broker {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 	}: _(RawOrigin::Signed(caller.clone()))
 	verify {
-		T::AccountRoleRegistry::ensure_relayer(RawOrigin::Signed(caller).into())
-			.expect("Caller should be registered as relayer");
+		T::AccountRoleRegistry::ensure_broker(RawOrigin::Signed(caller).into())
+			.expect("Caller should be registered as broker");
 	}
 
 	schedule_swap_by_witnesser {
@@ -75,8 +75,8 @@ benchmarks! {
 		let call = Call::<T>::schedule_swap_by_witnesser{
 			from: Asset::Usdc,
 			to: Asset::Eth,
-			ingress_amount: 1_000,
-			egress_address: EncodedAddress::benchmark_value()
+			deposit_amount: 1_000,
+			destination_address: EncodedAddress::benchmark_value()
 		};
 	}: {
 		call.dispatch_bypass_filter(origin)?;
@@ -91,19 +91,19 @@ benchmarks! {
 		}]);
 	}
 
-	ccm_ingress {
+	ccm_deposit {
 		let origin = T::EnsureWitnessed::successful_origin();
-		let metadata = CcmIngressMetadata {
+		let metadata = CcmDepositMetadata {
 			message: vec![0x00],
 			gas_budget: 1,
 			refund_address: ForeignChainAddress::benchmark_value(),
 			source_address: ForeignChainAddress::benchmark_value(),
 		};
-		let call = Call::<T>::ccm_ingress{
-			ingress_asset: Asset::Usdc,
-			ingress_amount: 1_000,
-			egress_asset: Asset::Eth,
-			egress_address: EncodedAddress::benchmark_value(),
+		let call = Call::<T>::ccm_deposit{
+			source_asset: Asset::Usdc,
+			deposit_amount: 1_000,
+			destination_asset: Asset::Eth,
+			destination_address: EncodedAddress::benchmark_value(),
 			message_metadata: metadata,
 		};
 	}: {
@@ -130,24 +130,24 @@ benchmarks! {
 		let a in 1..100;
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
-		T::AccountRoleRegistry::register_as_relayer(&caller).unwrap();
+		T::AccountRoleRegistry::register_as_broker(&caller).unwrap();
 		let origin = RawOrigin::Signed(caller);
 		for i in 0..a {
-			let call = Call::<T>::register_swap_intent{
-				ingress_asset: Asset::Usdc,
-				egress_asset: Asset::Eth,
-				egress_address: EncodedAddress::Eth(Default::default()),
-				relayer_commission_bps: Default::default(),
+			let call = Call::<T>::request_swap_deposit_address{
+				source_asset: Asset::Usdc,
+				destination_asset: Asset::Eth,
+				destination_address: EncodedAddress::Eth(Default::default()),
+				broker_commission_bps: Default::default(),
 				message_metadata: None,
 			};
 			call.dispatch_bypass_filter(origin.clone().into())?;
 		}
 		let expiry = SwapTTL::<T>::get() + frame_system::Pallet::<T>::current_block_number();
-		assert!(!SwapIntentExpiries::<T>::get(expiry).is_empty());
+		assert!(!SwapChannelExpiries::<T>::get(expiry).is_empty());
 	}: {
 		Pallet::<T>::on_initialize(expiry);
 	} verify {
-		assert!(SwapIntentExpiries::<T>::get(expiry).is_empty());
+		assert!(SwapChannelExpiries::<T>::get(expiry).is_empty());
 	}
 
 	set_swap_ttl {

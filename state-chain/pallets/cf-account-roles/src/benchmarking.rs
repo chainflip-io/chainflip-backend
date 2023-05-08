@@ -18,12 +18,12 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		Pallet::<T>::on_new_account(&caller);
 
-		let call = Call::<T>::gov_register_account_role{ account: caller.clone(), role: AccountRole::Relayer };
+		let call = Call::<T>::gov_register_account_role{ account: caller.clone(), role: AccountRole::Broker };
 	}: {
 		call.dispatch_bypass_filter(origin)?;
 	}
 	verify {
-		assert_eq!(AccountRoles::<T>::get(&caller), Some(AccountRole::Relayer));
+		assert_eq!(AccountRoles::<T>::get(&caller), Some(AccountRole::Broker));
 	}
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

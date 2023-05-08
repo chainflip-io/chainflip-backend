@@ -23,13 +23,13 @@ use utilities::{task_scope::task_scope, CachedStream};
 
 use crate::connect_submit_and_get_events;
 
-pub async fn liquidity_deposit(
+pub async fn request_liquidity_deposit_address(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 ) -> Result<EncodedAddress> {
 	let events = connect_submit_and_get_events(
 		state_chain_settings,
-		pallet_cf_lp::Call::request_deposit_address { asset },
+		pallet_cf_lp::Call::request_liquidity_deposit_address { asset },
 		AccountRole::LiquidityProvider,
 	)
 	.await?;
@@ -38,8 +38,8 @@ pub async fn liquidity_deposit(
 		.into_iter()
 		.find_map(|event| match event {
 			state_chain_runtime::RuntimeEvent::LiquidityProvider(
-				pallet_cf_lp::Event::DepositAddressReady { ingress_address, .. },
-			) => Some(ingress_address),
+				pallet_cf_lp::Event::LiquidityDepositAddressReady { deposit_address, .. },
+			) => Some(deposit_address),
 			_ => None,
 		})
 		.expect("DepositAddressReady must have been generated"))
@@ -49,11 +49,11 @@ pub async fn withdraw_asset(
 	state_chain_settings: &settings::StateChain,
 	amount: AssetAmount,
 	asset: Asset,
-	egress_address: EncodedAddress,
+	destination_address: EncodedAddress,
 ) -> Result<EgressId> {
 	let events = connect_submit_and_get_events(
 		state_chain_settings,
-		pallet_cf_lp::Call::withdraw_asset { amount, asset, egress_address },
+		pallet_cf_lp::Call::withdraw_asset { amount, asset, destination_address },
 		AccountRole::LiquidityProvider,
 	)
 	.await?;

@@ -4,7 +4,6 @@ mod ceremony_runner;
 mod common;
 pub mod key_store_api;
 pub mod keygen;
-pub mod legacy;
 pub mod signing;
 
 #[cfg(test)]
@@ -59,7 +58,7 @@ use self::{
 };
 
 use super::{
-	crypto::{CanonicalEncoding, CryptoScheme, ECPoint, KeyId},
+	crypto::{CryptoScheme, ECPoint, KeyId},
 	Rng,
 };
 
@@ -121,12 +120,20 @@ pub trait MultisigClientApi<C: CryptoScheme> {
 		participants: BTreeSet<AccountId>,
 	) -> BoxFuture<'_, Result<C::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>>;
 
-	fn initiate_signing(
+	fn initiate_key_handover(
 		&self,
 		ceremony_id: CeremonyId,
 		key_id: KeyId,
+		epoch_index: EpochIndex,
+		sharing_participants: BTreeSet<AccountId>,
+		new_participants: BTreeSet<AccountId>,
+	) -> BoxFuture<'_, Result<C::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>>;
+
+	fn initiate_signing(
+		&self,
+		ceremony_id: CeremonyId,
 		signers: BTreeSet<AccountId>,
-		payload: Vec<C::SigningPayload>,
+		signing_info: Vec<(KeyId, C::SigningPayload)>,
 	) -> BoxFuture<'_, Result<Vec<C::Signature>, (BTreeSet<AccountId>, SigningFailureReason)>>;
 
 	fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId);
@@ -164,8 +171,7 @@ where
 	C: CryptoScheme,
 {
 	pub participants: BTreeSet<AccountId>,
-	pub payload: Vec<C::SigningPayload>,
-	pub keygen_result_info: KeygenResultInfo<C>,
+	pub signing_info: Vec<(KeygenResultInfo<C>, C::SigningPayload)>,
 	pub rng: Rng,
 	pub result_sender: CeremonyResultSender<SigningCeremony<C>>,
 }
@@ -191,6 +197,51 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClient<C, KeyStore> {
 			ceremony_request_sender,
 		}
 	}
+
+	fn start_keygen_with_resharing_context(
+		&self,
+		ceremony_id: CeremonyId,
+		// The epoch the key will be associated with if successful.
+		epoch_index: EpochIndex,
+		participants: BTreeSet<AccountId>,
+		resharing_context: Option<ResharingContext<C>>,
+	) -> BoxFuture<'_, Result<C::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>> {
+		use rand::SeedableRng;
+		let rng = Rng::from_entropy();
+
+		let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
+		self.ceremony_request_sender
+			.send(CeremonyRequest {
+				ceremony_id,
+				details: Some(CeremonyRequestDetails::Keygen(KeygenRequestDetails {
+					participants,
+					rng,
+					result_sender,
+					resharing_context,
+				})),
+			})
+			.unwrap();
+
+		async move {
+			result_receiver
+				.await
+				.expect("Keygen result channel dropped before receiving a result")
+				.map(|keygen_result_info| {
+					let agg_key = keygen_result_info.key.get_agg_public_key();
+
+					self.key_store
+						.lock()
+						.unwrap()
+						.set_key(KeyId::new(epoch_index, agg_key.clone()), keygen_result_info);
+					agg_key
+				})
+				.map_err(|(reported_parties, failure_reason)| {
+					failure_reason.log(&reported_parties);
+					(reported_parties, failure_reason)
+				})
+		}
+		.boxed()
+	}
 }
 
 impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
@@ -212,40 +263,54 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 			"Received a keygen request"
 		);
 
-		use rand_legacy::FromEntropy;
-		let rng = Rng::from_entropy();
+		self.start_keygen_with_resharing_context(ceremony_id, epoch_index, participants, None)
+			.instrument(span.clone())
+			.boxed()
+	}
 
-		let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
-		self.ceremony_request_sender
-			.send(CeremonyRequest {
-				ceremony_id,
-				details: Some(CeremonyRequestDetails::Keygen(KeygenRequestDetails {
-					participants,
-					rng,
-					result_sender,
-					resharing_context: None,
-				})),
-			})
-			.unwrap();
+	fn initiate_key_handover(
+		&self,
+		ceremony_id: CeremonyId,
+		key_id: KeyId,
+		epoch_index: EpochIndex,
+		sharing_participants: BTreeSet<AccountId>,
+		receiving_participants: BTreeSet<AccountId>,
+	) -> BoxFuture<
+		'_,
+		Result<<C as CryptoScheme>::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>,
+	> {
+		let span = info_span!("Key Handover Ceremony", ceremony_id = ceremony_id);
+		let _entered = span.enter();
 
-		async move {
-			result_receiver
-				.await
-				.expect("Keygen result channel dropped before receiving a result")
-				.map(|keygen_result_info| {
-					let agg_key = keygen_result_info.key.get_agg_public_key();
+		debug!(
+			key_id = key_id.to_string(),
+			sharing_participants = format_iterator(&sharing_participants).to_string(),
+			receiving_participants = format_iterator(&receiving_participants).to_string(),
+			"Received a key handover request",
+		);
 
-					self.key_store.lock().unwrap().set_key(
-						KeyId { epoch_index, public_key_bytes: agg_key.encode_key() },
-						keygen_result_info,
+		let resharing_context =
+			if sharing_participants.contains(&self.my_account_id) {
+				let key =
+					self.key_store.lock().unwrap().get_key(&key_id).expect(
+						"we've been selected as a sharing participant, so we must have a key.",
 					);
-					agg_key
-				})
-				.map_err(|(reported_parties, failure_reason)| {
-					failure_reason.log(&reported_parties);
-					(reported_parties, failure_reason)
-				})
-		}
+				ResharingContext::from_key(
+					&key,
+					&self.my_account_id,
+					&sharing_participants,
+					&receiving_participants,
+				)
+			} else {
+				ResharingContext::without_key(&sharing_participants, &receiving_participants)
+			};
+
+		self.start_keygen_with_resharing_context(
+			ceremony_id,
+			epoch_index,
+			sharing_participants.union(&receiving_participants).cloned().collect(),
+			Some(resharing_context),
+		)
 		.instrument(span.clone())
 		.boxed()
 	}
@@ -253,9 +318,8 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 	fn initiate_signing(
 		&self,
 		ceremony_id: CeremonyId,
-		key_id: KeyId,
 		signers: BTreeSet<AccountId>,
-		payload: Vec<C::SigningPayload>,
+		signing_info: Vec<(KeyId, C::SigningPayload)>,
 	) -> BoxFuture<'_, Result<Vec<C::Signature>, (BTreeSet<AccountId>, SigningFailureReason)>> {
 		let span = info_span!("Signing Ceremony", ceremony_id = ceremony_id);
 		let _entered = span.enter();
@@ -263,23 +327,31 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 		assert!(signers.contains(&self.my_account_id));
 
 		debug!(
-			payload_count = payload.len(),
+			payload_count = signing_info.len(),
 			signers = format_iterator(&signers).to_string(),
 			"Received a request to sign",
 		);
 
-		use rand_legacy::FromEntropy;
+		use rand::SeedableRng;
 		let rng = Rng::from_entropy();
 
-		if let Some(keygen_result_info) = self.key_store.lock().unwrap().get_key(&key_id) {
+		// Find the correct key and send the request to sign with that key
+		let signing_info = {
+			let key_store = self.key_store.lock().unwrap();
+			signing_info
+				.into_iter()
+				.map(|(key_id, payload)| key_store.get_key(&key_id).map(|key| (key, payload)))
+				.collect::<Vec<_>>()
+		};
+
+		if let Some(signing_info) = signing_info.into_iter().collect::<Option<_>>() {
 			let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
 			self.ceremony_request_sender
 				.send(CeremonyRequest {
 					ceremony_id,
 					details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails {
 						participants: signers,
-						payload,
-						keygen_result_info,
+						signing_info,
 						rng,
 						result_sender,
 					})),
@@ -287,19 +359,18 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 				.unwrap();
 
 			async move {
-				// Wait for the request to return a result, then log and return the result
-				let result = result_receiver
+				result_receiver
 					.await
-					.expect("Signing result oneshot channel dropped before receiving a result");
+					.expect("Signing result oneshot channel dropped before receiving a result")
+					.map_err(|(reported_parties, failure_reason)| {
+						failure_reason.log(&reported_parties);
 
-				result.map_err(|(reported_parties, failure_reason)| {
-					failure_reason.log(&reported_parties);
-
-					(reported_parties, failure_reason)
-				})
+						(reported_parties, failure_reason)
+					})
 			}
 			.boxed()
 		} else {
+			// No key was found for the given key_id
 			self.update_latest_ceremony_id(ceremony_id);
 			let reported_parties = Default::default();
 			let failure_reason = SigningFailureReason::UnknownKey;

@@ -6,7 +6,7 @@ use multisig::{
 	client::keygen::generate_key_data, eth::EthSigning, polkadot::PolkadotSigning,
 	CanonicalEncoding, CryptoScheme, KeyId, Rng,
 };
-use rand_legacy::FromEntropy;
+use rand::SeedableRng;
 use state_chain_runtime::AccountId;
 use std::{
 	collections::{BTreeSet, HashMap},
@@ -88,7 +88,6 @@ fn generate_and_save_keys<Crypto: CryptoScheme>(
 		BTreeSet::from_iter(node_id_to_name_map.keys().cloned()),
 		&mut Rng::from_entropy(),
 	);
-	let public_key_bytes = public_key.encode_key();
 
 	// Create a db for each key share, giving the db the name of the node it is for.
 	for (node_id, key_share) in key_shares {
@@ -104,13 +103,10 @@ fn generate_and_save_keys<Crypto: CryptoScheme>(
 			None,
 		)
 		.expect("Should create database at latest version")
-		.update_key::<Crypto>(
-			&KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: public_key_bytes.clone() },
-			&key_share,
-		);
+		.update_key::<Crypto>(&KeyId::new(GENESIS_EPOCH, public_key.clone()), &key_share);
 	}
 
-	hex::encode(&public_key_bytes)
+	hex::encode(public_key.encode_key())
 }
 
 #[cfg(test)]

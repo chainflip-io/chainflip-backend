@@ -11,7 +11,7 @@ use itertools::{Either, Itertools};
 
 use async_trait::async_trait;
 
-use rand_legacy::{RngCore, SeedableRng};
+use rand::{RngCore, SeedableRng};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, debug_span, Instrument};
@@ -157,15 +157,11 @@ impl<C: CryptoScheme> Node<SigningCeremony<C>> {
 		let SigningCeremonyDetails { rng, ceremony_id, signers, payloads } =
 			signing_ceremony_details;
 
-		let (payloads, keygen_result_info) =
-			payloads.into_iter().map(|p| (p.payload, p.keygen_result_info)).unzip();
-
 		let request = prepare_signing_request::<C>(
 			ceremony_id,
 			&self.own_account_id,
 			signers,
-			keygen_result_info,
-			payloads,
+			payloads.into_iter().map(|p| (p.keygen_result_info, p.payload)).collect(),
 			&self.outgoing_p2p_message_sender,
 			rng,
 		)
@@ -410,11 +406,12 @@ where
 							.into_iter()
 							.map(|(receiver_id, message)| {
 								(receiver_id, {
-									// Because (for now) messages are serialized for V1, we need to
-									// deserialize them from v1
-									let message = super::ceremony_manager::deserialize_from_v1::<
-										C::Crypto,
-									>(&message)
+									let message = deserialize_for_version::<C::Crypto>(
+										VersionedCeremonyMessage {
+											version: CURRENT_PROTOCOL_VERSION,
+											payload: message,
+										},
+									)
 									.unwrap();
 
 									message_to_next_stage_data(message)
@@ -637,7 +634,7 @@ impl<C: CryptoScheme> KeygenCeremonyRunner<C> {
 	}
 
 	pub fn keygen_ceremony_details(&mut self) -> KeygenCeremonyDetails {
-		use rand_legacy::Rng as _;
+		use rand::Rng as _;
 
 		KeygenCeremonyDetails {
 			ceremony_id: self.ceremony_id,
@@ -744,7 +741,7 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 	}
 
 	fn signing_ceremony_details(&mut self, account_id: &AccountId) -> SigningCeremonyDetails<C> {
-		use rand_legacy::Rng as _;
+		use rand::Rng as _;
 
 		let payloads = self
 			.ceremony_runner_data

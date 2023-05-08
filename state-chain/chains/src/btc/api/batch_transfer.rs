@@ -2,13 +2,13 @@ use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_std::vec::Vec;
 
-use crate::btc::{Bitcoin, BitcoinOutput, BitcoinTransaction, Utxo};
+use crate::btc::{AggKey, Bitcoin, BitcoinOutput, BitcoinTransaction, Utxo};
 
 use crate::{ApiCall, ChainCrypto};
 
 use sp_runtime::RuntimeDebug;
 
-/// Represents all the arguments required to build the call to fetch assets for all given intent
+/// Represents all the arguments required to build the call to fetch assets for all given channel
 /// ids.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BatchTransfer {
@@ -17,8 +17,18 @@ pub struct BatchTransfer {
 }
 
 impl BatchTransfer {
-	pub fn new_unsigned(input_utxos: Vec<Utxo>, outputs: Vec<BitcoinOutput>) -> Self {
-		Self { bitcoin_transaction: BitcoinTransaction::create_new_unsigned(input_utxos, outputs) }
+	pub fn new_unsigned(
+		agg_key: &AggKey,
+		input_utxos: Vec<Utxo>,
+		outputs: Vec<BitcoinOutput>,
+	) -> Self {
+		Self {
+			bitcoin_transaction: BitcoinTransaction::create_new_unsigned(
+				agg_key,
+				input_utxos,
+				outputs,
+			),
+		}
 	}
 }
 

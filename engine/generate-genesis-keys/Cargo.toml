@@ -21,7 +21,7 @@ csv = "1.1.6"
 serde_json = "1.0"
 serde = {version = "1.0", features = ["derive"]}
 # have to use the older version until secp256k1 updates its dependency (https://github.com/rust-bitcoin/rust-secp256k1/issues/328)
-rand_legacy = { package = "rand", version = "0.6" }
+rand = "0.8.5"
 
 # Local deps
 chainflip-engine = {path = "../../engine"}

@@ -18,14 +18,14 @@ pub trait Rpc {
 	async fn register_account(&self) -> Result<String, Error>;
 
 	#[method(name = "liquidityDeposit")]
-	async fn liquidity_deposit(&self, asset: Asset) -> Result<String, Error>;
+	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<String, Error>;
 
 	#[method(name = "withdrawAsset")]
 	async fn withdraw_asset(
 		&self,
 		amount: AssetAmount,
 		asset: Asset,
-		egress_address: &str,
+		destination_address: &str,
 	) -> Result<String, Error>;
 
 	#[method(name = "mintRangeOrder")]
@@ -65,9 +65,9 @@ impl RpcServerImpl {
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-	/// Returns an ingress address
-	async fn liquidity_deposit(&self, asset: Asset) -> Result<String, Error> {
-		lp::liquidity_deposit(&self.state_chain_settings, asset)
+	/// Returns a deposit address
+	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<String, Error> {
+		lp::request_liquidity_deposit_address(&self.state_chain_settings, asset)
 			.await
 			.map(|address| address.to_string())
 			.map_err(|e| Error::Custom(e.to_string()))
@@ -78,17 +78,17 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		amount: AssetAmount,
 		asset: Asset,
-		egress_address: &str,
+		destination_address: &str,
 	) -> Result<String, Error> {
 		if amount == 0 {
 			return Err(Error::Custom("Invalid amount".to_string()))
 		}
 
-		let egress_address =
-			chainflip_api::clean_foreign_chain_address(asset.into(), egress_address)
+		let destination_address =
+			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)
 				.map_err(|e| Error::Custom(e.to_string()))?;
 
-		lp::withdraw_asset(&self.state_chain_settings, amount, asset, egress_address)
+		lp::withdraw_asset(&self.state_chain_settings, amount, asset, destination_address)
 			.await
 			.map(|(_, id)| id.to_string())
 			.map_err(|e| Error::Custom(e.to_string()))

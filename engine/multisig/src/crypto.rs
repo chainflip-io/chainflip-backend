@@ -67,9 +67,8 @@ pub struct KeyShare<P: ECPoint> {
 }
 
 // Ideally, we want to use a concrete implementation (like ChaCha20) instead of StdRng
-// to prevent it from potentially changing from under us (but it needs to be compatible
-// with rand_legacy)
-pub type Rng = rand_legacy::rngs::StdRng;
+// to prevent it from potentially changing from under us
+pub type Rng = rand::rngs::StdRng;
 
 pub trait ECPoint:
 	Clone

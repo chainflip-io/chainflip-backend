@@ -44,7 +44,7 @@ jobs:
             ./target/release/chainflip-engine
             ./target/release/chainflip-cli
             ./target/release/generate-genesis-keys
-            ./target/release/chainflip-relayer
+            ./target/release/chainflip-broker-api
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
 
   packages:
@@ -75,7 +75,7 @@ jobs:
           cargo deb -v --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ inputs.network }}
           cargo deb -v --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.get-date.outputs.date }}"
           cargo deb -v --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.get-date.outputs.date }}"
-          cargo deb -v --no-build --no-strip -p chainflip-relayer --deb-revision "${{ steps.get-date.outputs.date }}"
+          cargo deb -v --no-build --no-strip -p chainflip-broker-api --deb-revision "${{ steps.get-date.outputs.date }}"
 
       - name: Build development packages
         if: inputs.network != 'perseverance'
@@ -103,7 +103,7 @@ jobs:
           - chainflip-node
           - chainflip-engine
           - chainflip-cli
-          - chainflip-relayer
+          - chainflip-broker-api
           - generate-genesis-keys
     permissions:
       contents: read

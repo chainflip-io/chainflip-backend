@@ -4,8 +4,8 @@ use cf_primitives::{Asset, AssetAmount, SwapOutput};
 use cf_traits::{
 	impl_mock_chainflip,
 	mocks::{
-		address_converter::MockAddressConverter, egress_handler::MockEgressHandler,
-		ingress_handler::MockIngressHandler,
+		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
+		egress_handler::MockEgressHandler,
 	},
 	AccountRoleRegistry, SwappingApi,
 };
@@ -83,7 +83,7 @@ impl SwappingApi for MockSwappingApi {
 pub struct MockWeightInfo;
 
 impl WeightInfo for MockWeightInfo {
-	fn register_swap_intent() -> Weight {
+	fn request_swap_deposit_address() -> Weight {
 		Weight::from_ref_time(100)
 	}
 
@@ -103,11 +103,11 @@ impl WeightInfo for MockWeightInfo {
 		Weight::from_ref_time(100)
 	}
 
-	fn ccm_ingress() -> Weight {
+	fn ccm_deposit() -> Weight {
 		Weight::from_ref_time(100)
 	}
 
-	fn register_as_relayer() -> Weight {
+	fn register_as_broker() -> Weight {
 		Weight::from_ref_time(100)
 	}
 
@@ -126,7 +126,7 @@ parameter_types! {
 
 impl pallet_cf_swapping::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type IngressHandler = MockIngressHandler<AnyChain, Self>;
+	type DepositHandler = MockDepositHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;
 	type WeightInfo = MockWeightInfo;
 	type AddressConverter = MockAddressConverter;
@@ -143,8 +143,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {
-		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_relayer(&ALICE)
-			.unwrap();
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_broker(&ALICE).unwrap();
 		System::set_block_number(1);
 		System::set_block_number(1);
 	});

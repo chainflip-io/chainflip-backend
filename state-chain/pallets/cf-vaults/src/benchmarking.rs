@@ -49,7 +49,7 @@ benchmarks_instance_pallet! {
 
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygen {
-				keygen_ceremony_id: CEREMONY_ID,
+				ceremony_id: CEREMONY_ID,
 				keygen_participants: keygen_participants.into_iter().collect(),
 				response_status: keygen_response_status,
 				new_epoch_index: GENESIS_EPOCH,
@@ -80,7 +80,7 @@ benchmarks_instance_pallet! {
 
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygen {
-				keygen_ceremony_id: CEREMONY_ID,
+				ceremony_id: CEREMONY_ID,
 				keygen_participants: keygen_participants.into_iter().collect(),
 				response_status: keygen_response_status,
 				new_epoch_index: GENESIS_EPOCH,
@@ -103,7 +103,7 @@ benchmarks_instance_pallet! {
 		let keygen_participants = generate_authority_set::<T, I>(150, caller.clone().into());
 		PendingVaultRotation::<T, I>::put(
 			VaultRotationStatus::<T, I>::AwaitingKeygen {
-				keygen_ceremony_id: CEREMONY_ID,
+				ceremony_id: CEREMONY_ID,
 				keygen_participants: keygen_participants.clone().into_iter().collect(),
 				response_status: KeygenResponseStatus::<T, I>::new(keygen_participants),
 				new_epoch_index: GENESIS_EPOCH,
@@ -128,7 +128,7 @@ benchmarks_instance_pallet! {
 		let caller: T::AccountId = whitelisted_caller();
 		let agg_key = AggKeyFor::<T, I>::benchmark_value();
 		let keygen_participants = generate_authority_set::<T, I>(150, caller.into());
-		let request_id = Pallet::<T, I>::trigger_keygen_verification(CEREMONY_ID, agg_key, keygen_participants.into_iter().collect());
+		let request_id = Pallet::<T, I>::trigger_keygen_verification(CEREMONY_ID, agg_key, keygen_participants.into_iter().collect(), 2);
 		T::ThresholdSigner::insert_signature(
 			request_id,
 			ThresholdSignatureFor::<T, I>::benchmark_value(),

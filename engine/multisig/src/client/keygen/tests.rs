@@ -1,5 +1,5 @@
 use cf_primitives::{AccountId, AuthorityCount};
-use rand_legacy::{FromEntropy, SeedableRng};
+use rand::SeedableRng;
 use std::collections::BTreeSet;
 
 use crate::{

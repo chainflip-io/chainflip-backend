@@ -13,7 +13,7 @@ impl Chain for NoneChain {
 	type ChainAsset = assets::any::Asset;
 	type ChainAccount = ForeignChainAddress;
 	type EpochStartData = ();
-	type IngressFetchId = ();
+	type DepositFetchId = ();
 }
 
 impl ChainCrypto for NoneChain {

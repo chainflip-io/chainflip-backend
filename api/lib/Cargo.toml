@@ -9,10 +9,10 @@ async-trait = "0.1.49"
 futures = "0.3.14"
 hex = "0.4.3"
 ed25519-dalek = "1.0"
-rand = "0.7"
+rand-v7 = { package = "rand", version = "0.7" }
 tiny-bip39 = "1.0.0"
-secp256k1 = {version = "0.20"}
-rand_legacy = { package = "rand", version = "0.6" }
+secp256k1 = {version = "0.27"}
+rand = "0.8.5"
 zeroize = "1.5.4"
 serde = { version = "1.0", features = ["derive"] }
 base58 = '0.2.0'

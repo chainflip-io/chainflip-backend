@@ -45,7 +45,6 @@ use super::{
 		SigningStageName,
 	},
 	keygen::{HashCommitments1, HashContext, KeygenData, PubkeySharesStage0},
-	legacy::MultisigMessageV1,
 	signing::SigningData,
 	CeremonyRequest, MultisigData, MultisigMessage,
 };
@@ -125,8 +124,10 @@ pub struct PreparedRequest<C: CeremonyTrait> {
 
 // Checks if all keys have the same parameters (including validator indices mapping), which
 // should be the case if they have been generated for the same set of validators
-fn are_key_parameters_same<Crypto: CryptoScheme>(keys: &[KeygenResultInfo<Crypto>]) -> bool {
-	let mut keys_iter = keys.iter();
+fn are_key_parameters_same<'a, Crypto: CryptoScheme>(
+	keys: impl IntoIterator<Item = &'a KeygenResultInfo<Crypto>>,
+) -> bool {
+	let mut keys_iter = keys.into_iter();
 	let first = keys_iter.next().expect("must have at least one key");
 
 	keys_iter
@@ -138,22 +139,21 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 	ceremony_id: CeremonyId,
 	own_account_id: &AccountId,
 	signers: BTreeSet<AccountId>,
-	key_info: Vec<KeygenResultInfo<Crypto>>,
-	payloads: Vec<Crypto::SigningPayload>,
+	signing_info: Vec<(KeygenResultInfo<Crypto>, Crypto::SigningPayload)>,
 	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
 	rng: Rng,
 ) -> Result<PreparedRequest<SigningCeremony<Crypto>>, SigningFailureReason> {
 	// Sanity check: all keys must have the same parameters
-	if !are_key_parameters_same(&key_info) {
+	if !are_key_parameters_same(signing_info.iter().map(|(info, _)| info)) {
 		return Err(SigningFailureReason::DeveloperError(
 			"keys have different parameters".to_string(),
 		))
 	}
 
-	let validator_mapping = key_info[0].validator_mapping.clone();
+	let validator_mapping = signing_info[0].0.validator_mapping.clone();
 
 	// Check that we have enough signers
-	let minimum_signers_needed = key_info[0].params.threshold + 1;
+	let minimum_signers_needed = signing_info[0].0.params.threshold + 1;
 	let signers_len: AuthorityCount = signers.len().try_into().expect("too many signers");
 	if signers_len < minimum_signers_needed {
 		debug!(
@@ -190,12 +190,9 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 		let processor = AwaitCommitments1::<Crypto>::new(
 			common.clone(),
 			SigningStateCommonInfo {
-				payloads_and_keys: payloads
+				payloads_and_keys: signing_info
 					.into_iter()
-					.enumerate()
-					// TODO: when SC starts providing multiple keys in the request, we want
-					// to use the correct one (but until then we assume the key is the same)
-					.map(|(i, payload)| PayloadAndKey { payload, key: key_info[i].key.clone() })
+					.map(|(key_info, payload)| PayloadAndKey { payload, key: key_info.key })
 					.collect(),
 			},
 		);
@@ -312,23 +309,11 @@ fn map_ceremony_parties(
 	Ok((our_idx, signer_idxs))
 }
 
-pub fn deserialize_from_v1<C: CryptoScheme>(payload: &[u8]) -> Result<MultisigMessage<C::Point>> {
-	let message: MultisigMessageV1<C::Point> = bincode::deserialize(payload)
-		.map_err(|e| anyhow!("Failed to deserialize message (version: 1): {:?}", e))?;
-	Ok(MultisigMessage { ceremony_id: message.ceremony_id, data: message.data.into() })
-}
-
 pub fn deserialize_for_version<C: CryptoScheme>(
 	message: VersionedCeremonyMessage,
 ) -> Result<MultisigMessage<C::Point>> {
 	match message.version {
-		1 => {
-			// NOTE: version 1 did not expect signing over multiple payloads,
-			// so we need to parse them using the old format and transform to the new
-			// format:
-			deserialize_from_v1::<C>(&message.payload)
-		},
-		2 => bincode::deserialize::<'_, MultisigMessage<C::Point>>(&message.payload).map_err(|e| {
+		1 => bincode::deserialize::<'_, MultisigMessage<C::Point>>(&message.payload).map_err(|e| {
 			anyhow!("Failed to deserialize message (version: {}): {:?}", message.version, e)
 		}),
 		_ => Err(anyhow!("Unsupported message version: {}", message.version)),
@@ -366,8 +351,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 				self.on_request_to_sign(
 					request.ceremony_id,
 					details.participants,
-					details.payload,
-					details.keygen_result_info,
+					details.signing_info,
 					details.rng,
 					details.result_sender,
 					scope,
@@ -482,8 +466,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		&mut self,
 		ceremony_id: CeremonyId,
 		signers: BTreeSet<AccountId>,
-		payloads: Vec<C::SigningPayload>,
-		key_info: KeygenResultInfo<C>,
+		signing_info: Vec<(KeygenResultInfo<C>, C::SigningPayload)>,
 		rng: Rng,
 		result_sender: CeremonyResultSender<SigningCeremony<C>>,
 		scope: &Scope<'_, anyhow::Error>,
@@ -495,10 +478,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 		debug!("Processing a request to sign");
 
-		// TODO: single party signing should support multiple payloads
 		if signers.len() == 1 {
-			let _result =
-				result_sender.send(Ok(self.single_party_signing(payloads, key_info, rng)));
+			let _result = result_sender.send(Ok(self.single_party_signing(signing_info, rng)));
 			return
 		}
 
@@ -506,8 +487,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 			ceremony_id,
 			&self.my_account_id,
 			signers,
-			vec![key_info],
-			payloads,
+			signing_info,
 			&self.outgoing_p2p_message_sender,
 			rng,
 		) {
@@ -585,17 +565,16 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 	fn single_party_signing(
 		&self,
-		payloads: Vec<C::SigningPayload>,
-		keygen_result_info: KeygenResultInfo<C>,
+		signing_info: Vec<(KeygenResultInfo<C>, C::SigningPayload)>,
 		mut rng: Rng,
 	) -> Vec<C::Signature> {
 		info!("Performing solo signing");
 
-		let key = &keygen_result_info.key.key_share;
-
-		payloads
+		signing_info
 			.iter()
-			.map(|payload| generate_single_party_signature::<C>(&key.x_i, payload, &mut rng))
+			.map(|(key_info, payload)| {
+				generate_single_party_signature::<C>(&key_info.key.key_share.x_i, payload, &mut rng)
+			})
 			.collect()
 	}
 }

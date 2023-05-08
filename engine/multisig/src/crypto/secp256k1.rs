@@ -44,12 +44,11 @@ mod point_impls {
 					// multiplication by 0 creates a "point at infinity"
 					None
 				},
-				(Some(mut point), Some(scalar)) => {
+				(Some(point), Some(scalar)) => Some(
 					point
-						.mul_assign(secp256k1::SECP256K1, scalar.as_ref())
-						.expect("scalar must be valid and non-zero");
-					Some(point)
-				},
+						.mul_tweak(secp256k1::SECP256K1, &scalar.into())
+						.expect("scalar must be valid and non-zero"),
+				),
 			};
 
 			Point(inner)
@@ -80,13 +79,9 @@ mod point_impls {
 		// Silence clippy as addition is here by design
 		// (note that we negate the right operand first)
 		#[allow(clippy::suspicious_arithmetic_impl)]
-		fn sub(self, mut rhs: Self) -> Self::Output {
+		fn sub(self, rhs: Self) -> Self::Output {
 			// Only negate if non-zero
-			if let Some(rhs) = rhs.0.as_mut() {
-				rhs.negate_assign(secp256k1::SECP256K1)
-			}
-
-			self + rhs
+			self + Point(rhs.0.map(|x| x.negate(secp256k1::SECP256K1)))
 		}
 	}
 
@@ -119,7 +114,7 @@ mod point_impls {
 		where
 			S: serde::Serializer,
 		{
-			serializer.serialize_bytes(&self.as_bytes())
+			serializer.serialize_bytes(self.as_bytes().as_ref())
 		}
 	}
 
@@ -296,11 +291,9 @@ mod scalar_impls {
 
 			match rhs.0 {
 				None => self.clone(),
-				Some(mut x) => {
+				Some(x) => {
 					// it is safe to negate non-zero Scalar
-					x.negate_assign();
-
-					self + &Scalar(Some(x))
+					self + &Scalar(Some(x.negate()))
 				},
 			}
 		}
@@ -312,11 +305,10 @@ mod scalar_impls {
 		fn mul(self, rhs: Self) -> Self::Output {
 			let inner = match (self.0, rhs.0) {
 				(None, _) | (_, None) => None,
-				(Some(mut lhs), Some(rhs)) => {
-					lhs.mul_assign(rhs.as_ref()).expect("can't fail if both operands are valid");
+				(Some(lhs), Some(rhs)) => {
 					// implementation of mul_assign never returns
 					// a zero scalar
-					Some(lhs)
+					Some(lhs.mul_tweak(&rhs.into()).expect("can't fail if both operands are valid"))
 				},
 			};
 			Scalar(inner)
@@ -330,13 +322,13 @@ mod scalar_impls {
 			let inner = match (self.0, rhs.0) {
 				(None, rhs) => rhs,
 				(lhs, None) => lhs,
-				(Some(mut lhs), Some(rhs)) => {
+				(Some(lhs), Some(rhs)) => {
 					// Both lhs and rhs are considered "valid" (i.e.
 					// non-zero and belong to the group). Further,
 					// the addition is done modulo group order, so
 					// this function can only fail if the result
 					// itself is zero
-					lhs.add_assign(rhs.as_ref()).ok().map(|_| lhs)
+					lhs.add_tweak(&rhs.into()).ok()
 				},
 			};
 
@@ -382,4 +374,28 @@ mod scalar_impls {
 			Scalar(Some(SK::from_slice(&bytes).expect("invalid scalar")))
 		}
 	}
+}
+
+#[test]
+fn ensure_serialization_is_consistent() {
+	// Test against pre-computed values to ensure that
+	// serialization does not change unintentionally
+
+	// TODO: look into avoiding encoding the size
+	let scalar: Scalar = bincode::deserialize(&[
+		32, 0, 0, 0, 0, 0, 0, 0, 130, 0, 21, 115, 160, 3, 253, 59, 127, 215, 47, 251, 14, 175, 99,
+		170, 198, 47, 18, 222, 182, 41, 220, 167, 39, 133, 166, 98, 104, 236, 117, 139,
+	])
+	.unwrap();
+
+	let expected_point_bytes = [
+		33, 0, 0, 0, 0, 0, 0, 0, 3, 132, 146, 123, 207, 167, 151, 70, 47, 192, 104, 111, 4, 139,
+		232, 199, 163, 245, 49, 3, 132, 75, 153, 234, 44, 176, 131, 22, 250, 247, 136, 95, 115,
+	];
+
+	let point = Point::from_scalar(&scalar);
+
+	let point_bytes = bincode::serialize(&point).unwrap();
+
+	assert_eq!(point_bytes, expected_point_bytes);
 }
