@@ -46,6 +46,8 @@ pub struct PersistentKeyDB {
 	kv_db: RocksDBKeyValueStore,
 }
 
+const CHECKPOINTING_KEY: () = ();
+
 impl PersistentKeyDB {
 	/// Open a key database or create one if it doesn't exist. If the schema version of the
 	/// existing database is below the latest, it will attempt to migrate to the latest version.
@@ -122,7 +124,7 @@ impl PersistentKeyDB {
 	/// Write the witnesser checkpoint to the db
 	pub fn update_checkpoint(&self, chain_tag: ChainTag, checkpoint: &WitnessedUntil) {
 		self.kv_db
-			.put_data(&checkpoint_prefix(chain_tag), &(), checkpoint)
+			.put_data(&checkpoint_prefix(chain_tag), &CHECKPOINTING_KEY, checkpoint)
 			.unwrap_or_else(|e| {
 				panic!("Failed to update {chain_tag} witnesser checkpoint. Error: {e}")
 			});
@@ -130,7 +132,7 @@ impl PersistentKeyDB {
 
 	pub fn load_checkpoint(&self, chain_tag: ChainTag) -> Result<Option<WitnessedUntil>> {
 		self.kv_db
-			.get_data(&checkpoint_prefix(chain_tag), &[])
+			.get_data(&checkpoint_prefix(chain_tag), &CHECKPOINTING_KEY)
 			.context("Failed to load {chain_tag} checkpoint")
 	}
 

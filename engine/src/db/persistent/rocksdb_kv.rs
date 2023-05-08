@@ -69,8 +69,14 @@ impl RocksDBKeyValueStore {
 			})
 	}
 
-	pub fn get_data<T: DeserializeOwned>(&self, prefix: &[u8], key: &[u8]) -> Result<Option<T>> {
-		let key_with_prefix = [prefix, key].concat();
+	pub fn get_data<K: Serialize, T: DeserializeOwned>(
+		&self,
+		prefix: &[u8],
+		key: &K,
+	) -> Result<Option<T>> {
+		let key_with_prefix =
+			[prefix, &bincode::serialize(key).expect("Serialization is not expected to fail.")]
+				.concat();
 
 		self.db
 			.get_cf(get_data_column_handle(&self.db), key_with_prefix)?
