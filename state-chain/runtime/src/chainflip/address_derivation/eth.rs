@@ -12,17 +12,12 @@ impl AddressDerivationApi<Ethereum> for AddressDerivation {
 		channel_id: ChannelId,
 	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
 		Ok(get_create_2_address(
-			source_asset,
 			Environment::eth_vault_address(),
-			match source_asset {
-				eth::Asset::Eth => None,
-				_ => Some(
-					EthEnvironment::lookup(source_asset)
-						.expect("ERC20 asset to be supported!")
-						.to_fixed_bytes()
-						.to_vec(),
-				),
-			},
+			Some(
+				EthEnvironment::lookup(source_asset)
+					.expect("ERC20 asset to be supported!")
+					.to_fixed_bytes(),
+			),
 			channel_id,
 		)
 		.into())
