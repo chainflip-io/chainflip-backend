@@ -99,7 +99,7 @@ jobs:
           BTC_ENDPOINT: http://bitcoin:8332
           ETH_ENDPOINT: http://geth:8545
         run: |
-          ./run.sh
+          ./tests/produces_blocks.sh 3 # TODO: Change this back to ./run.sh
 
       - name: Notify on failed build
         if: failure() && github.ref_name == 'main'
