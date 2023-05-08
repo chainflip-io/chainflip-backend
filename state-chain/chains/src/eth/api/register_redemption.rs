@@ -1,24 +1,17 @@
 //! Definitions for the "registerRedemption" transaction.
 
-use crate::{
-	eth::{Ethereum, EthereumSignatureHandler, Tokenizable},
-	impl_api_call_eth, ApiCall, ChainCrypto,
-};
+use crate::eth::{EthereumCall, SigData, Tokenizable};
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use ethabi::{encode, Address, ParamType, Token, Uint};
+use ethabi::{Address, ParamType, Token, Uint};
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
 use sp_std::{prelude::*, vec};
-
-use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 
 /// Represents all the arguments required to build the call to StateChainGateway's
 /// 'requestRedemption' function.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default, MaxEncodedLen)]
 pub struct RegisterRedemption {
-	/// The signature handler for creating payload and inserting signature.
-	pub signature_handler: EthereumSignatureHandler,
 	/// The id (ie. Chainflip account Id) of the redeemer.
 	pub node_id: [u8; 32],
 	/// The amount being redeemed in Flipperinos (atomic FLIP units). 1 FLIP = 10^18 Flipperinos
@@ -31,95 +24,53 @@ pub struct RegisterRedemption {
 
 impl RegisterRedemption {
 	#[allow(clippy::too_many_arguments)]
-	pub fn new_unsigned<Amount: Into<Uint> + Clone>(
-		replay_protection: EthereumReplayProtection,
+	pub fn new<Amount: Into<Uint> + Clone>(
 		node_id: &[u8; 32],
 		amount: Amount,
 		address: &[u8; 20],
 		expiry: u64,
-		key_manager_address: Address,
-		state_chain_gateway_address: Address,
-		ethereum_chain_id: u64,
 	) -> Self {
 		Self {
-			signature_handler: EthereumSignatureHandler::new_unsigned(
-				replay_protection,
-				Self::abi_encoded_for_payload(node_id, amount.clone().into(), address, expiry),
-				key_manager_address,
-				state_chain_gateway_address,
-				ethereum_chain_id,
-			),
 			node_id: (*node_id),
 			amount: amount.into(),
 			address: address.into(),
 			expiry: expiry.into(),
 		}
 	}
+}
 
-	/// Gets the function defintion for the `registerRedemption` smart contract call. Loading this
-	/// from the json abi definition is currently not supported in no-std, so instead swe hard-code
-	/// it here and verify against the abi in a unit test.
-	fn get_function() -> ethabi::Function {
-		ethabi_function(
-			"registerRedemption",
-			vec![
-				ethabi_param(
-					"sigData",
-					ParamType::Tuple(vec![
-						// sig
-						ParamType::Uint(256),
-						// nonce
-						ParamType::Uint(256),
-						// ktimesGAddr
-						ParamType::Address,
-					]),
-				),
-				ethabi_param("nodeID", ParamType::FixedBytes(32)),
-				ethabi_param("amount", ParamType::Uint(256)),
-				ethabi_param("funder", ParamType::Address),
-				ethabi_param("expiryTime", ParamType::Uint(48)),
-			],
-		)
+impl EthereumCall for RegisterRedemption {
+	const FUNCTION_NAME: &'static str = "registerRedemption";
+
+	fn function_params() -> Vec<(&'static str, ethabi::ParamType)> {
+		vec![
+			("sigData", SigData::param_type()),
+			("nodeID", <[u8; 32]>::param_type()),
+			("amount", Uint::param_type()),
+			("funder", Address::param_type()),
+			("expiryTime", ParamType::Uint(48)),
+		]
 	}
 
-	fn abi_encoded(&self) -> Vec<u8> {
-		Self::get_function()
-			.encode_input(&[
-				self.signature_handler.sig_data.tokenize(),
-				Token::FixedBytes(self.node_id.to_vec()),
-				Token::Uint(self.amount),
-				Token::Address(self.address),
-				Token::Uint(self.expiry),
-			])
-			.expect(
-				r#"
-					This can only fail if the parameter types don't match the function signature encoded below.
-					Therefore, as long as the tests pass, it can't fail at runtime.
-				"#,
-			)
-	}
-
-	fn abi_encoded_for_payload(
-		node_id: &[u8; 32],
-		amount: Uint,
-		address: &[u8; 20],
-		expiry: u64,
-	) -> Vec<u8> {
-		encode(&[
-			Token::FixedBytes(Self::get_function().short_signature().to_vec()),
-			Token::FixedBytes(node_id.to_vec()),
-			Token::Uint(amount),
-			Token::Address(address.into()),
-			Token::Uint(expiry.into()),
-		])
+	fn function_call_args(&self) -> Vec<Token> {
+		vec![
+			self.node_id.tokenize(),
+			self.amount.tokenize(),
+			self.address.tokenize(),
+			self.expiry.tokenize(),
+		]
 	}
 }
 
-impl_api_call_eth!(RegisterRedemption);
-
 #[cfg(test)]
 mod test_register_redemption {
-	use crate::eth::SchnorrVerificationComponents;
+	use crate::{
+		eth::{
+			api::EthereumReplayProtection, EthereumTransactionBuilder,
+			SchnorrVerificationComponents,
+		},
+		ApiCall,
+	};
 
 	use super::*;
 	use frame_support::assert_ok;
@@ -139,7 +90,7 @@ mod test_register_redemption {
 		use crate::eth::tests::asymmetrise;
 		use ethabi::Token;
 		const FAKE_KEYMAN_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
-		const FAKE_STAKEMAN_ADDR: [u8; 20] = asymmetrise([0xdf; 20]);
+		const FAKE_SCGW_ADDR: [u8; 20] = asymmetrise([0xdf; 20]);
 		const CHAIN_ID: u64 = 1;
 		const NONCE: u64 = 6;
 		const EXPIRY_SECS: u64 = 10;
@@ -158,18 +109,17 @@ mod test_register_redemption {
 		let register_redemption_reference =
 			state_chain_gateway.function("registerRedemption").unwrap();
 
-		let register_redemption_runtime = RegisterRedemption::new_unsigned(
-			EthereumReplayProtection { nonce: NONCE },
-			&TEST_ACCT,
-			AMOUNT,
-			&TEST_ADDR,
-			EXPIRY_SECS,
-			FAKE_KEYMAN_ADDR.into(),
-			FAKE_STAKEMAN_ADDR.into(),
-			CHAIN_ID,
+		let call = RegisterRedemption::new(&TEST_ACCT, AMOUNT, &TEST_ADDR, EXPIRY_SECS);
+		let expected_msg_hash = call.msg_hash();
+		let register_redemption_runtime = EthereumTransactionBuilder::new_unsigned(
+			EthereumReplayProtection {
+				nonce: NONCE,
+				chain_id: CHAIN_ID,
+				key_manager_address: FAKE_KEYMAN_ADDR.into(),
+				contract_address: FAKE_SCGW_ADDR.into(),
+			},
+			call,
 		);
-
-		let expected_msg_hash = register_redemption_runtime.signature_handler.payload;
 
 		assert_eq!(register_redemption_runtime.threshold_signature_payload(), expected_msg_hash);
 		let runtime_payload = register_redemption_runtime

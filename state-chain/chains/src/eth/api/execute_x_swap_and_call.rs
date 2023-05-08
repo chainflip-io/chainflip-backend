@@ -1,25 +1,23 @@
 use cf_primitives::{EgressId, ForeignChain};
 use codec::{Decode, Encode};
-use ethabi::{encode, Address, ParamType, Token};
+use ethabi::{Address, ParamType, Token, Uint};
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 
 use crate::{
 	address::ForeignChainAddress,
-	eth::{
-		api::all_batch::EncodableTransferAssetParams, Ethereum, EthereumSignatureHandler,
-		Tokenizable,
-	},
-	impl_api_call_eth, ApiCall, ChainCrypto,
+	eth::{api::all_batch::EncodableTransferAssetParams, EthereumCall, Tokenizable},
 };
-
-use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 
 use sp_runtime::RuntimeDebug;
 
 impl Tokenizable for Vec<u8> {
 	fn tokenize(self) -> Token {
 		Token::Bytes(self)
+	}
+
+	fn param_type() -> ethabi::ParamType {
+		ParamType::Bytes
 	}
 }
 
@@ -31,6 +29,10 @@ impl Tokenizable for ForeignChain {
 			ForeignChain::Polkadot => Token::Uint(2.into()),
 			ForeignChain::Bitcoin => Token::Uint(3.into()),
 		}
+	}
+
+	fn param_type() -> ethabi::ParamType {
+		ParamType::Uint(32)
 	}
 }
 
@@ -45,14 +47,16 @@ impl Tokenizable for ForeignChainAddress {
 				Token::Tuple(vec![ForeignChain::Bitcoin.tokenize(), addr.encode().tokenize()]),
 		}
 	}
+
+	fn param_type() -> ethabi::ParamType {
+		ParamType::Tuple(vec![ForeignChain::param_type(), ParamType::Bytes])
+	}
 }
 
 /// Represents all the arguments required to build the call to Vault's 'ExecutexSwapAndCall'
 /// function.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct ExecutexSwapAndCall {
-	/// The signature handler for creating payload and inserting signature.
-	pub signature_handler: EthereumSignatureHandler,
 	/// The egress Id. Used to query Gas budge stored in the Ccm Pallet.
 	egress_id: EgressId,
 	/// A single transfer that need to be made to given addresses.
@@ -65,112 +69,57 @@ pub struct ExecutexSwapAndCall {
 
 impl ExecutexSwapAndCall {
 	#[allow(clippy::too_many_arguments)]
-	pub(crate) fn new_unsigned(
-		replay_protection: EthereumReplayProtection,
+	pub(crate) fn new(
 		egress_id: EgressId,
 		transfer_param: EncodableTransferAssetParams,
 		source_address: ForeignChainAddress,
 		message: Vec<u8>,
-		key_manager_address: Address,
-		vault_contract_address: Address,
-		ethereum_chain_id: u64,
 	) -> Self {
-		Self {
-			signature_handler: EthereumSignatureHandler::new_unsigned(
-				replay_protection,
-				Self::abi_encoded_for_payload(
-					transfer_param.clone(),
-					source_address.clone(),
-					message.clone(),
-				),
-				key_manager_address,
-				vault_contract_address,
-				ethereum_chain_id,
-			),
-			egress_id,
-			transfer_param,
-			source_address,
-			message,
-		}
+		Self { egress_id, transfer_param, source_address, message }
 	}
 
 	pub fn egress_id(&self) -> EgressId {
 		self.egress_id
 	}
+}
 
-	fn get_function() -> ethabi::Function {
-		ethabi_function(
-			"executexSwapAndCall",
-			vec![
-				ethabi_param(
-					"sigData",
-					ParamType::Tuple(vec![
-						ParamType::Uint(256),
-						ParamType::Uint(256),
-						ParamType::Address,
-					]),
-				),
-				ethabi_param(
-					"transferParams",
-					ParamType::Tuple(vec![
-						ParamType::Address,
-						ParamType::Address,
-						ParamType::Uint(256),
-					]),
-				),
-				ethabi_param("srcChain", ParamType::Uint(32)),
-				ethabi_param("srcAddress", ParamType::Bytes),
-				ethabi_param("message", ParamType::Bytes),
-			],
-		)
+impl EthereumCall for ExecutexSwapAndCall {
+	const FUNCTION_NAME: &'static str = "executexSwapAndCall";
+
+	fn function_params() -> Vec<(&'static str, ethabi::ParamType)> {
+		vec![
+			(
+				"transferParams",
+				ParamType::Tuple(vec![
+					Address::param_type(),
+					Address::param_type(),
+					Uint::param_type(),
+				]),
+			),
+			("srcChain", ParamType::Uint(32)),
+			("srcAddress", ParamType::Bytes),
+			("message", <Vec<u8>>::param_type()),
+		]
 	}
 
-	fn abi_encoded(&self) -> Vec<u8> {
-		let tokenized_address =
-			self.source_address.clone().tokenize().into_tuple().expect(
-				"The ForeignChainAddress should always return a Tuple(vec![Chain, Address])",
-			);
-
-		Self::get_function()
-			.encode_input(&[
-				self.signature_handler.sig_data.tokenize(),
-				self.transfer_param.clone().tokenize(),
-				tokenized_address[0].clone(),
-				tokenized_address[1].clone(),
-				Token::Bytes(self.message.clone()),
-			])
-			.expect(
-				r#"
-						This can only fail if the parameter types don't match the function signature encoded below.
-						Therefore, as long as the tests pass, it can't fail at runtime.
-					"#,
-			)
-	}
-
-	fn abi_encoded_for_payload(
-		transfer_param: EncodableTransferAssetParams,
-		source_address: ForeignChainAddress,
-		message: Vec<u8>,
-	) -> Vec<u8> {
-		let tokenized_address = source_address
-			.tokenize()
-			.into_tuple()
-			.expect("The ForeignChainAddress should always return a Tuple(vec![Chain, Address])");
-		encode(&[
-			Token::FixedBytes(Self::get_function().short_signature().to_vec()),
-			transfer_param.tokenize(),
-			tokenized_address[0].clone(),
-			tokenized_address[1].clone(),
-			Token::Bytes(message),
-		])
+	fn function_call_args(&self) -> Vec<Token> {
+		vec![
+			self.transfer_param.clone().tokenize(),
+			self.source_address.clone().tokenize(),
+			self.message.clone().tokenize(),
+		]
 	}
 }
 
-impl_api_call_eth!(ExecutexSwapAndCall);
-
 #[cfg(test)]
 mod test_execute_x_swap_and_execute {
-	use crate::eth::SchnorrVerificationComponents;
+	use crate::{
+		eth::{
+			api::EthereumReplayProtection, EthereumTransactionBuilder,
+			SchnorrVerificationComponents,
+		},
+		ApiCall,
+	};
 
 	use super::*;
 	use ethabi::Address;
@@ -217,18 +166,22 @@ mod test_execute_x_swap_and_execute {
 
 		let function_reference = eth_vault.function("executexSwapAndCall").unwrap();
 
-		let function_runtime = ExecutexSwapAndCall::new_unsigned(
-			EthereumReplayProtection { nonce: NONCE },
+		let call = ExecutexSwapAndCall::new(
 			(ForeignChain::Ethereum, 0),
 			dummy_transfer_asset_param.clone(),
 			dummy_src_address,
 			dummy_message.clone(),
-			FAKE_KEYMAN_ADDR.into(),
-			FAKE_VAULT_ADDR.into(),
-			CHAIN_ID,
 		);
-
-		let expected_msg_hash = function_runtime.signature_handler.payload;
+		let expected_msg_hash = call.msg_hash();
+		let function_runtime = EthereumTransactionBuilder::new_unsigned(
+			EthereumReplayProtection {
+				nonce: NONCE,
+				chain_id: CHAIN_ID,
+				key_manager_address: FAKE_KEYMAN_ADDR.into(),
+				contract_address: FAKE_VAULT_ADDR.into(),
+			},
+			call,
+		);
 
 		assert_eq!(function_runtime.threshold_signature_payload(), expected_msg_hash);
 		let runtime_payload = function_runtime

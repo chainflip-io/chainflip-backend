@@ -258,11 +258,7 @@ pub trait SetCommKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 
 /// Constructs the `UpdateFlipSupply` api call.
 pub trait UpdateFlipSupply<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(
-		new_total_supply: u128,
-		block_number: u64,
-		state_chain_gateway_address: &[u8; 20],
-	) -> Self;
+	fn new_unsigned(new_total_supply: u128, block_number: u64) -> Self;
 }
 
 /// Constructs the `RegisterRedemption` api call.

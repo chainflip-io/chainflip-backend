@@ -14,7 +14,7 @@ const PRIVATE_KEY: [u8; 32] = [2u8; 32];
 use cf_primitives::EthAmount;
 use libsecp256k1::{PublicKey, SecretKey};
 
-use super::TransactionFee;
+use super::{EthereumTransactionBuilder, TransactionFee};
 
 impl BenchmarkValue for SchnorrVerificationComponents {
 	fn benchmark_value() -> Self {
@@ -57,14 +57,11 @@ impl BenchmarkValue for AggKey {
 
 impl<E> BenchmarkValue for EthereumApi<E> {
 	fn benchmark_value() -> Self {
-		EthereumApi::UpdateFlipSupply(UpdateFlipSupply::new_unsigned(
-			EthereumReplayProtection { nonce: 15 },
-			1000000u128,
-			1u64,
-			&Address::benchmark_value().into(),
-			hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3").into(),
-			31337,
-		))
+		EthereumTransactionBuilder::new_unsigned(
+			EthereumReplayProtection::default(),
+			UpdateFlipSupply::new(1000000u128, 1u64),
+		)
+		.into()
 	}
 }
 

@@ -8,7 +8,7 @@ use self::all_batch::{
 	EncodableFetchAssetParams, EncodableFetchDeployAssetParams, EncodableTransferAssetParams,
 };
 
-use super::{Ethereum, EthereumChannelId};
+use super::{Ethereum, EthereumChannelId, EthereumTransactionBuilder, Tokenizable};
 
 pub mod all_batch;
 pub mod execute_x_swap_and_call;
@@ -22,13 +22,15 @@ pub mod update_flip_supply;
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, EqNoBound, Encode, Decode, TypeInfo)]
 #[scale_info(skip_type_params(Environment))]
 pub enum EthereumApi<Environment: 'static> {
-	SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey),
-	RegisterRedemption(register_redemption::RegisterRedemption),
-	UpdateFlipSupply(update_flip_supply::UpdateFlipSupply),
-	SetGovKeyWithAggKey(set_gov_key_with_agg_key::SetGovKeyWithAggKey),
-	SetCommKeyWithAggKey(set_comm_key_with_agg_key::SetCommKeyWithAggKey),
-	AllBatch(all_batch::AllBatch),
-	ExecutexSwapAndCall(execute_x_swap_and_call::ExecutexSwapAndCall),
+	SetAggKeyWithAggKey(EthereumTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>),
+	RegisterRedemption(EthereumTransactionBuilder<register_redemption::RegisterRedemption>),
+	UpdateFlipSupply(EthereumTransactionBuilder<update_flip_supply::UpdateFlipSupply>),
+	SetGovKeyWithAggKey(EthereumTransactionBuilder<set_gov_key_with_agg_key::SetGovKeyWithAggKey>),
+	SetCommKeyWithAggKey(
+		EthereumTransactionBuilder<set_comm_key_with_agg_key::SetCommKeyWithAggKey>,
+	),
+	AllBatch(EthereumTransactionBuilder<all_batch::AllBatch>),
+	ExecutexSwapAndCall(EthereumTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAndCall>),
 	#[doc(hidden)]
 	#[codec(skip)]
 	_Phantom(PhantomData<Environment>, Never),
@@ -37,6 +39,9 @@ pub enum EthereumApi<Environment: 'static> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, Default)]
 pub struct EthereumReplayProtection {
 	pub nonce: u64,
+	pub chain_id: u64,
+	pub key_manager_address: Address,
+	pub contract_address: Address,
 }
 
 impl ChainAbi for Ethereum {
@@ -46,76 +51,62 @@ impl ChainAbi for Ethereum {
 
 impl<E> SetAggKeyWithAggKey<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
-	E: ReplayProtectionProvider<Ethereum>,
+	E: ChainEnvironment<EthContractAddresses, EthereumReplayProtection>,
 {
 	fn new_unsigned(
 		_old_key: Option<<Ethereum as ChainCrypto>::AggKey>,
 		new_key: <Ethereum as ChainCrypto>::AggKey,
 	) -> Result<Self, ()> {
-		Ok(Self::SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey::new_unsigned(
-			E::replay_protection(),
-			new_key,
-			E::key_manager_address(),
-			E::chain_id(),
+		Ok(Self::SetAggKeyWithAggKey(EthereumTransactionBuilder::new_unsigned(
+			E::lookup(EthContractAddresses::KeyManager).ok_or(())?,
+			set_agg_key_with_agg_key::SetAggKeyWithAggKey::new(new_key),
 		)))
 	}
 }
 
 impl<E> SetGovKeyWithAggKey<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
-	E: ReplayProtectionProvider<Ethereum>,
+	E: ChainEnvironment<EthContractAddresses, EthereumReplayProtection>,
 {
 	fn new_unsigned(
 		_maybe_old_key: Option<<Ethereum as ChainCrypto>::GovKey>,
 		new_gov_key: <Ethereum as ChainCrypto>::GovKey,
 	) -> Result<Self, ()> {
-		Ok(Self::SetGovKeyWithAggKey(set_gov_key_with_agg_key::SetGovKeyWithAggKey::new_unsigned(
-			E::replay_protection(),
-			new_gov_key,
-			E::key_manager_address(),
-			E::chain_id(),
+		Ok(Self::SetGovKeyWithAggKey(EthereumTransactionBuilder::new_unsigned(
+			E::lookup(EthContractAddresses::KeyManager).ok_or(())?,
+			set_gov_key_with_agg_key::SetGovKeyWithAggKey::new(new_gov_key),
 		)))
 	}
 }
 
 impl<E> SetCommKeyWithAggKey<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
-	E: ReplayProtectionProvider<Ethereum>,
+	E: ChainEnvironment<EthContractAddresses, EthereumReplayProtection>,
 {
 	fn new_unsigned(new_comm_key: <Ethereum as ChainCrypto>::GovKey) -> Self {
-		Self::SetCommKeyWithAggKey(set_comm_key_with_agg_key::SetCommKeyWithAggKey::new_unsigned(
-			E::replay_protection(),
-			new_comm_key,
-			E::key_manager_address(),
-			E::chain_id(),
+		Self::SetCommKeyWithAggKey(EthereumTransactionBuilder::new_unsigned(
+			E::lookup(EthContractAddresses::KeyManager).expect("KeyManager contract always exists"),
+			set_comm_key_with_agg_key::SetCommKeyWithAggKey::new(new_comm_key),
 		))
 	}
 }
 
 impl<E> RegisterRedemption<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
-	E: ReplayProtectionProvider<Ethereum>,
+	E: ChainEnvironment<EthContractAddresses, EthereumReplayProtection>,
 {
 	fn new_unsigned(node_id: &[u8; 32], amount: u128, address: &[u8; 20], expiry: u64) -> Self {
-		Self::RegisterRedemption(register_redemption::RegisterRedemption::new_unsigned(
-			E::replay_protection(),
-			node_id,
-			amount,
-			address,
-			expiry,
-			E::key_manager_address(),
-			E::state_chain_gateway_address(),
-			E::chain_id(),
+		Self::RegisterRedemption(EthereumTransactionBuilder::new_unsigned(
+			E::lookup(EthContractAddresses::StateChainGateway)
+				.expect("StateChainGateway contract always exists"),
+			register_redemption::RegisterRedemption::new(node_id, amount, address, expiry),
 		))
 	}
 
 	fn amount(&self) -> u128 {
 		match self {
-			EthereumApi::RegisterRedemption(call) => call.amount.unique_saturated_into(),
+			EthereumApi::RegisterRedemption(tx_builder) =>
+				tx_builder.call.amount.unique_saturated_into(),
 			_ => unreachable!(),
 		}
 	}
@@ -123,29 +114,22 @@ where
 
 impl<E> UpdateFlipSupply<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
-	E: ReplayProtectionProvider<Ethereum>,
+	E: ChainEnvironment<EthContractAddresses, EthereumReplayProtection>,
 {
-	fn new_unsigned(
-		new_total_supply: u128,
-		block_number: u64,
-		state_chain_gateway_address: &[u8; 20],
-	) -> Self {
-		Self::UpdateFlipSupply(update_flip_supply::UpdateFlipSupply::new_unsigned(
-			E::replay_protection(),
-			new_total_supply,
-			block_number,
-			state_chain_gateway_address,
-			E::key_manager_address(),
-			E::chain_id(),
+	fn new_unsigned(new_total_supply: u128, block_number: u64) -> Self {
+		let replay_protection = E::lookup(EthContractAddresses::StateChainGateway)
+			.expect("StateChainGateway address must be configured");
+		Self::UpdateFlipSupply(EthereumTransactionBuilder::new_unsigned(
+			replay_protection,
+			update_flip_supply::UpdateFlipSupply::new(new_total_supply, block_number),
 		))
 	}
 }
 
 impl<E> AllBatch<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
-	E: ReplayProtectionProvider<Ethereum>,
+	E: ChainEnvironment<assets::eth::Asset, Address>,
+	E: ChainEnvironment<EthContractAddresses, EthereumReplayProtection>,
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
@@ -165,33 +149,32 @@ where
 				return Err(())
 			}
 		}
-		Ok(Self::AllBatch(all_batch::AllBatch::new_unsigned(
-			E::replay_protection(),
-			fetch_deploy_params,
-			fetch_only_params,
-			transfer_params
-				.into_iter()
-				.map(|TransferAssetParams { asset, to, amount }| {
-					E::token_address(asset)
-						.map(|address| all_batch::EncodableTransferAssetParams {
-							to,
-							amount,
-							asset: address,
-						})
-						.ok_or(())
-				})
-				.collect::<Result<Vec<_>, ()>>()?,
-			E::key_manager_address(),
-			E::vault_address(),
-			E::chain_id(),
+		Ok(Self::AllBatch(EthereumTransactionBuilder::new_unsigned(
+			E::lookup(EthContractAddresses::Vault).ok_or(())?,
+			all_batch::AllBatch::new(
+				fetch_deploy_params,
+				fetch_only_params,
+				transfer_params
+					.into_iter()
+					.map(|TransferAssetParams { asset, to, amount }| {
+						E::lookup(asset)
+							.map(|address| all_batch::EncodableTransferAssetParams {
+								to,
+								amount,
+								asset: address,
+							})
+							.ok_or(())
+					})
+					.collect::<Result<Vec<_>, ()>>()?,
+			),
 		)))
 	}
 }
 
 impl<E> ExecutexSwapAndCall<Ethereum> for EthereumApi<E>
 where
-	E: EthEnvironmentProvider,
-	E: ReplayProtectionProvider<Ethereum>,
+	E: ChainEnvironment<assets::eth::Asset, Address>,
+	E: ChainEnvironment<EthContractAddresses, EthereumReplayProtection>,
 {
 	fn new_unsigned(
 		egress_id: EgressId,
@@ -205,57 +188,68 @@ where
 			amount: transfer_param.amount,
 		};
 
-		Ok(Self::ExecutexSwapAndCall(execute_x_swap_and_call::ExecutexSwapAndCall::new_unsigned(
-			E::replay_protection(),
-			egress_id,
-			transfer_param,
-			source_address,
-			message,
-			E::key_manager_address(),
-			E::vault_address(),
-			E::chain_id(),
+		Ok(Self::ExecutexSwapAndCall(EthereumTransactionBuilder::new_unsigned(
+			E::lookup(EthContractAddresses::Vault).ok_or(DispatchError::CannotLookup)?,
+			execute_x_swap_and_call::ExecutexSwapAndCall::new(
+				egress_id,
+				transfer_param,
+				source_address,
+				message,
+			),
 		)))
 	}
 }
 
-impl<E> From<set_agg_key_with_agg_key::SetAggKeyWithAggKey> for EthereumApi<E> {
-	fn from(tx: set_agg_key_with_agg_key::SetAggKeyWithAggKey) -> Self {
+impl<E> From<EthereumTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>>
+	for EthereumApi<E>
+{
+	fn from(tx: EthereumTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>) -> Self {
 		Self::SetAggKeyWithAggKey(tx)
 	}
 }
 
-impl<E> From<register_redemption::RegisterRedemption> for EthereumApi<E> {
-	fn from(tx: register_redemption::RegisterRedemption) -> Self {
+impl<E> From<EthereumTransactionBuilder<register_redemption::RegisterRedemption>>
+	for EthereumApi<E>
+{
+	fn from(tx: EthereumTransactionBuilder<register_redemption::RegisterRedemption>) -> Self {
 		Self::RegisterRedemption(tx)
 	}
 }
 
-impl<E> From<update_flip_supply::UpdateFlipSupply> for EthereumApi<E> {
-	fn from(tx: update_flip_supply::UpdateFlipSupply) -> Self {
+impl<E> From<EthereumTransactionBuilder<update_flip_supply::UpdateFlipSupply>> for EthereumApi<E> {
+	fn from(tx: EthereumTransactionBuilder<update_flip_supply::UpdateFlipSupply>) -> Self {
 		Self::UpdateFlipSupply(tx)
 	}
 }
 
-impl<E> From<set_gov_key_with_agg_key::SetGovKeyWithAggKey> for EthereumApi<E> {
-	fn from(tx: set_gov_key_with_agg_key::SetGovKeyWithAggKey) -> Self {
+impl<E> From<EthereumTransactionBuilder<set_gov_key_with_agg_key::SetGovKeyWithAggKey>>
+	for EthereumApi<E>
+{
+	fn from(tx: EthereumTransactionBuilder<set_gov_key_with_agg_key::SetGovKeyWithAggKey>) -> Self {
 		Self::SetGovKeyWithAggKey(tx)
 	}
 }
 
-impl<E> From<set_comm_key_with_agg_key::SetCommKeyWithAggKey> for EthereumApi<E> {
-	fn from(tx: set_comm_key_with_agg_key::SetCommKeyWithAggKey) -> Self {
+impl<E> From<EthereumTransactionBuilder<set_comm_key_with_agg_key::SetCommKeyWithAggKey>>
+	for EthereumApi<E>
+{
+	fn from(
+		tx: EthereumTransactionBuilder<set_comm_key_with_agg_key::SetCommKeyWithAggKey>,
+	) -> Self {
 		Self::SetCommKeyWithAggKey(tx)
 	}
 }
 
-impl<E> From<all_batch::AllBatch> for EthereumApi<E> {
-	fn from(tx: all_batch::AllBatch) -> Self {
+impl<E> From<EthereumTransactionBuilder<all_batch::AllBatch>> for EthereumApi<E> {
+	fn from(tx: EthereumTransactionBuilder<all_batch::AllBatch>) -> Self {
 		Self::AllBatch(tx)
 	}
 }
 
-impl<E> From<execute_x_swap_and_call::ExecutexSwapAndCall> for EthereumApi<E> {
-	fn from(tx: execute_x_swap_and_call::ExecutexSwapAndCall) -> Self {
+impl<E> From<EthereumTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAndCall>>
+	for EthereumApi<E>
+{
+	fn from(tx: EthereumTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAndCall>) -> Self {
 		Self::ExecutexSwapAndCall(tx)
 	}
 }
@@ -314,7 +308,7 @@ impl<E> ApiCall<Ethereum> for EthereumApi<E> {
 	}
 }
 
-fn ethabi_function(name: &'static str, params: Vec<ethabi::Param>) -> ethabi::Function {
+pub(super) fn ethabi_function(name: &'static str, params: Vec<ethabi::Param>) -> ethabi::Function {
 	#[allow(deprecated)]
 	ethabi::Function {
 		name: name.into(),
@@ -325,7 +319,7 @@ fn ethabi_function(name: &'static str, params: Vec<ethabi::Param>) -> ethabi::Fu
 	}
 }
 
-fn ethabi_param(name: &'static str, param_type: ethabi::ParamType) -> ethabi::Param {
+pub(super) fn ethabi_param(name: &'static str, param_type: ethabi::ParamType) -> ethabi::Param {
 	ethabi::Param { name: name.into(), kind: param_type, internal_type: None }
 }
 
