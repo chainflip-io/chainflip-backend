@@ -158,15 +158,11 @@ impl<C: CryptoScheme> Node<SigningCeremony<C>> {
 		let SigningCeremonyDetails { rng, ceremony_id, signers, payloads } =
 			signing_ceremony_details;
 
-		let (payloads, keygen_result_info) =
-			payloads.into_iter().map(|p| (p.payload, p.keygen_result_info)).unzip();
-
 		let request = prepare_signing_request::<C>(
 			ceremony_id,
 			&self.own_account_id,
 			signers,
-			keygen_result_info,
-			payloads,
+			payloads.into_iter().map(|p| (p.keygen_result_info, p.payload)).collect(),
 			&self.outgoing_p2p_message_sender,
 			rng,
 		)

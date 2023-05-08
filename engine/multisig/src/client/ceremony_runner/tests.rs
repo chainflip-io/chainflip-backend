@@ -127,8 +127,10 @@ async fn should_delay_stage_1_message_while_unauthorised() {
 		DEFAULT_CEREMONY_ID,
 		&our_account_id.clone(),
 		participants.clone(),
-		vec![get_key_data_for_test::<EthSigning>(participants)],
-		vec![EthSigning::signing_payload_for_test()],
+		vec![(
+			get_key_data_for_test::<EthSigning>(participants),
+			EthSigning::signing_payload_for_test(),
+		)],
 		&outgoing_p2p_sender,
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
 	)
@@ -213,8 +215,10 @@ async fn gen_stage_1_signing_state(
 		DEFAULT_CEREMONY_ID,
 		&our_account_id.clone(),
 		BTreeSet::from_iter(participants.clone()),
-		vec![get_key_data_for_test::<EthSigning>(BTreeSet::from_iter(participants))],
-		vec![EthSigning::signing_payload_for_test()],
+		vec![(
+			get_key_data_for_test::<EthSigning>(BTreeSet::from_iter(participants)),
+			EthSigning::signing_payload_for_test(),
+		)],
 		&outgoing_p2p_sender,
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
 	)
@@ -363,10 +367,12 @@ async fn should_timeout_authorised_ceremony() {
 			DEFAULT_CEREMONY_ID,
 			&ACCOUNT_IDS[0],
 			BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
-			vec![get_key_data_for_test::<EthSigning>(BTreeSet::from_iter(
-				ACCOUNT_IDS.iter().cloned(),
-			))],
-			vec![EthSigning::signing_payload_for_test()],
+			vec![(
+				get_key_data_for_test::<EthSigning>(BTreeSet::from_iter(
+					ACCOUNT_IDS.iter().cloned(),
+				)),
+				EthSigning::signing_payload_for_test(),
+			)],
 			&outgoing_p2p_sender,
 			Rng::from_seed(DEFAULT_SIGNING_SEED),
 		)

@@ -2,8 +2,8 @@ use cf_primitives::EpochIndex;
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub struct KeyId {
-	pub epoch_index: EpochIndex,
-	pub public_key_bytes: Vec<u8>,
+	epoch_index: EpochIndex,
+	public_key_bytes: Vec<u8>,
 }
 
 /// Defines the commonly agreed-upon byte-encoding used for public keys.
@@ -11,11 +11,8 @@ pub trait CanonicalEncoding {
 	fn encode_key(&self) -> Vec<u8>;
 }
 
-impl<Key> From<(EpochIndex, Key)> for KeyId
-where
-	Key: CanonicalEncoding,
-{
-	fn from((epoch_index, key): (EpochIndex, Key)) -> Self {
+impl KeyId {
+	pub fn new<Key: CanonicalEncoding>(epoch_index: EpochIndex, key: Key) -> Self {
 		KeyId { epoch_index, public_key_bytes: key.encode_key() }
 	}
 }
@@ -26,15 +23,21 @@ impl CanonicalEncoding for cf_chains::dot::PolkadotPublicKey {
 	}
 }
 
-impl CanonicalEncoding for cf_chains::btc::AggKey {
-	fn encode_key(&self) -> Vec<u8> {
-		self.pubkey_x.to_vec()
-	}
-}
-
 impl CanonicalEncoding for cf_chains::eth::AggKey {
 	fn encode_key(&self) -> Vec<u8> {
 		self.to_pubkey_compressed().to_vec()
+	}
+}
+
+impl CanonicalEncoding for secp256k1::XOnlyPublicKey {
+	fn encode_key(&self) -> Vec<u8> {
+		self.serialize().to_vec()
+	}
+}
+
+impl<const S: usize> CanonicalEncoding for [u8; S] {
+	fn encode_key(&self) -> Vec<u8> {
+		self.to_vec()
 	}
 }
 

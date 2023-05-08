@@ -93,6 +93,7 @@ fn keygen_handover_request_emitted() {
 				key_to_share: VaultsPallet::current_epoch_key().unwrap().key,
 				sharing_participants: candidates.clone(),
 				receiving_participants: candidates,
+				new_key: Default::default(),
 				to_epoch: next_epoch,
 			}
 			.into()

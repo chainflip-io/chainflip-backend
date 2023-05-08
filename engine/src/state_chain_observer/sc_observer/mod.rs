@@ -4,7 +4,7 @@ mod tests;
 
 use anyhow::{anyhow, Context};
 use cf_chains::{
-	btc::{self, BitcoinScriptBounded},
+	btc::{self, BitcoinScriptBounded, PreviousOrCurrent},
 	dot,
 	eth::Ethereum,
 	Bitcoin, Polkadot,
@@ -105,9 +105,8 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
-	key_id: KeyId,
 	signers: BTreeSet<AccountId>,
-	payloads: Vec<C::SigningPayload>,
+	signing_info: Vec<(KeyId, C::SigningPayload)>,
 ) where
 	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: SignedExtrinsicApi + UnsignedExtrinsicApi + 'static + Send + Sync,
@@ -123,7 +122,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	if signers.contains(&state_chain_client.account_id()) {
 		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
 		let signing_result_future =
-			multisig_client.initiate_signing(ceremony_id, key_id, signers, payloads);
+			multisig_client.initiate_signing(ceremony_id, signers, signing_info);
 		scope.spawn(async move {
 			match signing_result_future.await {
 				Ok(signatures) => {
@@ -476,9 +475,11 @@ where
                                                 &eth_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            (epoch, key).into(),
                                             signatories,
-                                            vec![multisig::eth::SigningPayload(payload.0)],
+                                            vec![(
+                                                KeyId::new(epoch, key),
+                                                multisig::eth::SigningPayload(payload.0)
+                                            )],
                                         ).await;
                                     }
 
@@ -501,10 +502,12 @@ where
                                                 &dot_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            (epoch, key).into(),
                                             signatories,
-                                            vec![multisig::polkadot::SigningPayload::new(payload.0)
-                                                .expect("Payload should be correct size")],
+                                            vec![(
+                                                KeyId::new(epoch, key),
+                                                multisig::polkadot::SigningPayload::new(payload.0)
+                                                    .expect("Payload should be correct size")
+                                            )],
                                         ).await;
                                     }
                                     state_chain_runtime::RuntimeEvent::BitcoinThresholdSigner(
@@ -521,14 +524,28 @@ where
                                         eth_multisig_client.update_latest_ceremony_id(ceremony_id);
                                         dot_multisig_client.update_latest_ceremony_id(ceremony_id);
 
+                                        let signing_info = payloads.into_iter().map(|(previous_or_current, payload)| {
+                                                (
+                                                    KeyId::new(
+                                                        epoch,
+                                                        match previous_or_current {
+                                                            PreviousOrCurrent::Current => key.current,
+                                                            PreviousOrCurrent::Previous => key.previous
+                                                                .expect("Cannot be asked to sign with previous key if none exists."),
+                                                        },
+                                                    ),
+                                                    multisig::bitcoin::SigningPayload(payload),
+                                                )
+                                            })
+                                            .collect::<Vec<_>>();
+
                                         handle_signing_request::<_, _, _, BitcoinInstance>(
                                                 scope,
                                                 &btc_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            (epoch, key).into(),
                                             signatories,
-                                            payloads.into_iter().map(multisig::bitcoin::SigningPayload).collect(),
+                                            signing_info,
                                         ).await;
                                     }
                                     // ======= KEY HANDOVER =======
@@ -539,6 +556,7 @@ where
                                            from_epoch,
                                            sharing_participants,
                                            receiving_participants,
+                                           mut new_key,
                                            to_epoch,
                                         },
                                     ) => {
@@ -546,7 +564,13 @@ where
                                         dot_multisig_client.update_latest_ceremony_id(ceremony_id);
 
                                         if sharing_participants.contains(&account_id) || receiving_participants.contains(&account_id) {
-                                            let key_handover_result_future = btc_multisig_client.initiate_key_handover(ceremony_id, (from_epoch, key_to_share).into(), to_epoch, sharing_participants, receiving_participants);
+                                            let key_handover_result_future = btc_multisig_client.initiate_key_handover(
+                                                ceremony_id,
+                                                KeyId::new(from_epoch, key_to_share.current),
+                                                to_epoch,
+                                                sharing_participants,
+                                                receiving_participants,
+                                            );
                                             let state_chain_client = state_chain_client.clone();
                                             scope.spawn(async move {
                                                 let _result =
@@ -558,7 +582,12 @@ where
                                                             ceremony_id,
                                                             reported_outcome: key_handover_result_future
                                                                 .await
-                                                                .map(<BitcoinInstance as CryptoCompat<_, _>>::pubkey_to_aggkey)
+                                                                .map(move |handover_key| {
+                                                                    assert!(
+                                                                        new_key.previous.replace(handover_key.serialize()).is_none()
+                                                                    );
+                                                                    new_key
+                                                                })
                                                                 .map_err(|(bad_account_ids, _reason)| bad_account_ids),
                                                         })
                                                         .await;

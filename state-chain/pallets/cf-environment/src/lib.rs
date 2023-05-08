@@ -52,7 +52,7 @@ type SignatureNonce = u64;
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct ChangeUtxoWitness {
 	pub amount: BtcAmount,
-	pub change_pubkey: cf_chains::btc::AggKey,
+	pub change_pubkey: [u8; 32],
 	pub utxo_id: UtxoId,
 }
 
@@ -477,7 +477,7 @@ pub mod pallet {
 				Self::add_bitcoin_utxo_to_list(
 					amount,
 					utxo_id,
-					derive_btc_deposit_bitcoin_script(change_pubkey.pubkey_x, CHANGE_ADDRESS_SALT)
+					derive_btc_deposit_bitcoin_script(change_pubkey, CHANGE_ADDRESS_SALT)
 						.try_into()
 						.expect("The script should not exceed 128 bytes"),
 				);

@@ -1447,7 +1447,7 @@ where
 	>,
 {
 	let first_ceremony_id = 1;
-	let key_id = KeyId { epoch_index: 1, public_key_bytes: vec![0u8; 32] };
+	let key_id = KeyId::new(1, [0u8; 32]);
 	let payload = C::signing_payload_for_test();
 	let our_account_id = AccountId32::new([0; 32]);
 	let not_our_account_id = AccountId32::new([1u8; 32]);
@@ -1476,12 +1476,11 @@ where
 		.expect_initiate_signing()
 		.with(
 			predicate::eq(next_ceremony_id),
-			predicate::eq(key_id.clone()),
 			predicate::eq(BTreeSet::from_iter([our_account_id.clone()])),
-			predicate::eq(vec![payload.clone()]),
+			predicate::eq(vec![(key_id.clone(), payload.clone())]),
 		)
 		.once()
-		.return_once(|_, _, _, _| {
+		.return_once(|_, _, _| {
 			futures::future::ready(Err((
 				BTreeSet::new(),
 				SigningFailureReason::InvalidParticipants,
@@ -1497,9 +1496,8 @@ where
 				&multisig_client,
 				state_chain_client.clone(),
 				first_ceremony_id,
-				key_id.clone(),
 				BTreeSet::from_iter([not_our_account_id.clone()]),
-				vec![payload.clone()],
+				vec![(key_id.clone(), payload.clone())],
 			)
 			.await;
 
@@ -1509,9 +1507,8 @@ where
 				&multisig_client,
 				state_chain_client.clone(),
 				next_ceremony_id,
-				key_id,
 				BTreeSet::from_iter([our_account_id]),
-				vec![payload],
+				vec![(key_id, payload)],
 			)
 			.await;
 
