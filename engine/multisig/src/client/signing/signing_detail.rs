@@ -105,7 +105,16 @@ fn gen_rho_i<P: ECPoint>(
 
 	let x: [u8; 32] = result.as_slice().try_into().expect("Invalid hash size");
 
-	P::Scalar::from_bytes_mod_order(&x)
+	let mut rho_i = P::Scalar::from_bytes_mod_order(&x);
+
+	// The protocol requires rho_i != 0. Note that this slightly biases the hash,
+	// which should be safe as this doesn't meaningfully impact collision resistance
+	// (especially since parties have no or little control over the inputs)
+	if rho_i == P::Scalar::zero() {
+		rho_i = P::Scalar::from(1);
+	}
+
+	rho_i
 }
 
 type SigningResponse<P> = <P as ECPoint>::Scalar;
