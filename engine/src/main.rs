@@ -44,10 +44,6 @@ async fn main() -> anyhow::Result<()> {
 
 	task_scope(|scope| {
 		async move {
-			if let Some(health_check_settings) = &settings.health_check {
-				scope.spawn(HealthChecker::start(health_check_settings).await?);
-			}
-
 			let (state_chain_stream, state_chain_client) =
 				state_chain_observer::client::StateChainClient::connect_with_account(
 					scope,
@@ -189,7 +185,7 @@ async fn main() -> anyhow::Result<()> {
 			.await
 			.unwrap();
 
-			let btc_monitor_ingress_sender = btc::witnessing::start(
+			let btc_monitor_command_sender = btc::witnessing::start(
 				scope,
 				state_chain_client.clone(),
 				&settings.btc,
@@ -200,17 +196,19 @@ async fn main() -> anyhow::Result<()> {
 			.await
 			.unwrap();
 
-			let (dot_ingress_sender, dot_address_monitor) = AddressMonitor::new(
+			let (dot_monitor_command_sender, dot_address_monitor) = AddressMonitor::new(
 				state_chain_client
-					.storage_map::<pallet_cf_ingress_egress::IntentIngressDetails<
+					.storage_map::<pallet_cf_ingress_egress::DepositAddressDetailsLookup<
 						state_chain_runtime::Runtime,
 						state_chain_runtime::PolkadotInstance,
 					>>(state_chain_stream.cache().block_hash)
 					.await
-					.context("Failed to get initial ingress details")?
+					.context("Failed to get initial deposit details")?
 					.into_iter()
-					.filter_map(|(address, intent)| {
-						if intent.ingress_asset == cf_primitives::chains::assets::dot::Asset::Dot {
+					.filter_map(|(address, channel_details)| {
+						if channel_details.source_asset ==
+							cf_primitives::chains::assets::dot::Asset::Dot
+						{
 							Some(address)
 						} else {
 							None
@@ -238,10 +236,10 @@ async fn main() -> anyhow::Result<()> {
 				epoch_start_sender,
 				eth_address_to_monitor,
 				dot_epoch_start_sender,
-				dot_ingress_sender,
+				dot_monitor_command_sender,
 				dot_monitor_signature_sender,
 				btc_epoch_start_sender,
-				btc_monitor_ingress_sender,
+				btc_monitor_command_sender,
 				cfe_settings_update_sender,
 			));
 
@@ -278,6 +276,10 @@ async fn main() -> anyhow::Result<()> {
 				)
 				.map_err(|_| anyhow::anyhow!("DOT runtime version updater failed")),
 			);
+
+			if let Some(health_check_settings) = &settings.health_check {
+				scope.spawn(HealthChecker::start(health_check_settings).await?);
+			}
 
 			Ok(())
 		}

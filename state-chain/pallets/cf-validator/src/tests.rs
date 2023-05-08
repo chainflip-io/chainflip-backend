@@ -118,6 +118,13 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 		move_forward_blocks(2);
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::KeyHandoversInProgress(..)
+		));
+		MockVaultRotatorA::key_handover_success();
+
+		move_forward_blocks(2);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::ActivatingKeys(..)
 		));
 		MockVaultRotatorA::keys_activated();
@@ -182,8 +189,16 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 		move_forward_blocks(2);
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::KeyHandoversInProgress(..)
+		));
+		MockVaultRotatorA::key_handover_success();
+
+		move_forward_blocks(2);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
 			RotationPhase::<Test>::ActivatingKeys(..)
 		));
+
 		MockVaultRotatorA::keys_activated();
 		// TODO: Needs to be clearer why this is 2 blocks and not 1
 		move_forward_blocks(2);
@@ -658,7 +673,7 @@ fn auction_params_must_be_valid_when_set() {
 }
 
 #[test]
-fn test_ensure_stake_of_validator() {
+fn test_validator_registration_min_balance() {
 	new_test_ext().execute_with(|| {
 		assert_ok!(Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(ALICE),));
 	});
@@ -670,7 +685,7 @@ fn test_expect_validator_register_fails() {
 		Backups::<Test>::put(BTreeMap::from_iter([(ALICE, 100), (BOB, 80)]));
 		assert_noop!(
 			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(3),),
-			crate::Error::<Test>::NotEnoughStake
+			crate::Error::<Test>::NotEnoughFunds
 		);
 	});
 }

@@ -109,10 +109,12 @@ pub struct KVWriteBatch<'a> {
 }
 
 impl<'a> KVWriteBatch<'a> {
+	#[allow(dead_code)]
 	pub fn put_value(&mut self, key: &[u8], value: &[u8]) {
 		self.batch.put_cf(get_data_column_handle(self.db), key, value);
 	}
 
+	#[allow(dead_code)]
 	pub fn delete_value(&mut self, key: &[u8]) {
 		self.batch.delete_cf(get_data_column_handle(self.db), key);
 	}

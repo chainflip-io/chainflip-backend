@@ -18,7 +18,7 @@ use crate::{
 	Rng,
 };
 
-use rand_legacy::SeedableRng;
+use rand::SeedableRng;
 use sp_runtime::AccountId32;
 use tokio::sync::mpsc;
 

@@ -9,7 +9,7 @@ use sp_runtime::DispatchResult;
 
 use cf_chains::{address::AddressConverter, AnyChain};
 use cf_traits::{
-	liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, EgressApi, IngressApi, SystemStateInfo,
+	liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi, EgressApi, SystemStateInfo,
 };
 use sp_runtime::{traits::BlockNumberProvider, Saturating};
 use sp_std::vec::Vec;
@@ -28,7 +28,7 @@ pub use weights::WeightInfo;
 #[frame_support::pallet]
 pub mod pallet {
 	use cf_chains::address::EncodedAddress;
-	use cf_primitives::{EgressId, IntentId};
+	use cf_primitives::{ChannelId, EgressId};
 
 	use super::*;
 
@@ -39,8 +39,8 @@ pub mod pallet {
 		/// an runtime upgrade
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// API for handling asset ingress.
-		type IngressHandler: IngressApi<
+		/// API for handling asset deposits.
+		type DepositHandler: DepositApi<
 			AnyChain,
 			AccountId = <Self as frame_system::Config>::AccountId,
 		>;
@@ -71,10 +71,10 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
-			let expired = IngressIntentExpiries::<T>::take(n);
-			for (intent_id, chain, address) in expired.clone() {
-				T::IngressHandler::expire_intent(chain, intent_id, address.clone());
-				Self::deposit_event(Event::DepositAddressExpired {
+			let expired = LiquidityChannelExpiries::<T>::take(n);
+			for (channel_id, chain, address) in expired.clone() {
+				T::DepositHandler::expire_channel(chain, channel_id, address.clone());
+				Self::deposit_event(Event::LiquidityDepositAddressExpired {
 					address: T::AddressConverter::try_to_encoded_address(address).expect("This should not fail since this conversion already succeeded when expiry was scheduled"),
 				});
 			}
@@ -95,19 +95,19 @@ pub mod pallet {
 			asset: Asset,
 			amount_credited: AssetAmount,
 		},
-		DepositAddressReady {
-			intent_id: IntentId,
-			ingress_address: EncodedAddress,
+		LiquidityDepositAddressReady {
+			channel_id: ChannelId,
+			deposit_address: EncodedAddress,
 			expiry_block: T::BlockNumber,
 		},
-		DepositAddressExpired {
+		LiquidityDepositAddressExpired {
 			address: EncodedAddress,
 		},
 		WithdrawalEgressScheduled {
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
-			egress_address: EncodedAddress,
+			destination_address: EncodedAddress,
 		},
 		LpTtlSet {
 			ttl: T::BlockNumber,
@@ -142,41 +142,45 @@ pub mod pallet {
 	pub type FreeBalances<T: Config> =
 		StorageDoubleMap<_, Twox64Concat, T::AccountId, Identity, Asset, AssetAmount>;
 
-	/// Stores a block for when an intent will expire against the intent infos.
+	/// For a given block number, stores the list of liquidity deposit channels that expire at that
+	/// block.
 	#[pallet::storage]
-	pub(super) type IngressIntentExpiries<T: Config> = StorageMap<
+	pub(super) type LiquidityChannelExpiries<T: Config> = StorageMap<
 		_,
 		Twox64Concat,
 		T::BlockNumber,
-		Vec<(IntentId, ForeignChain, cf_chains::ForeignChainAddress)>,
+		Vec<(ChannelId, ForeignChain, cf_chains::ForeignChainAddress)>,
 		ValueQuery,
 	>;
 
-	/// The TTL for liquidity provision intents.
+	/// The TTL for liquidity channels.
 	#[pallet::storage]
 	pub type LpTTL<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
 		/// For when the user wants to deposit assets into the Chain.
-		/// Generates a new ingress address for the user to posit their assets.
-		#[pallet::weight(T::WeightInfo::request_deposit_address())]
-		pub fn request_deposit_address(origin: OriginFor<T>, asset: Asset) -> DispatchResult {
+		/// Generates a new deposit address for the user to posit their assets.
+		#[pallet::weight(T::WeightInfo::request_liquidity_deposit_address())]
+		pub fn request_liquidity_deposit_address(
+			origin: OriginFor<T>,
+			asset: Asset,
+		) -> DispatchResult {
 			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
-			let (intent_id, ingress_address) =
-				T::IngressHandler::register_liquidity_ingress_intent(account_id, asset)?;
+			let (channel_id, deposit_address) =
+				T::DepositHandler::request_liquidity_deposit_address(account_id, asset)?;
 
 			let expiry_block =
 				frame_system::Pallet::<T>::current_block_number().saturating_add(LpTTL::<T>::get());
-			IngressIntentExpiries::<T>::append(
+			LiquidityChannelExpiries::<T>::append(
 				expiry_block,
-				(intent_id, ForeignChain::from(asset), ingress_address.clone()),
+				(channel_id, ForeignChain::from(asset), deposit_address.clone()),
 			);
 
-			Self::deposit_event(Event::DepositAddressReady {
-				intent_id,
-				ingress_address: T::AddressConverter::try_to_encoded_address(ingress_address)?,
+			Self::deposit_event(Event::LiquidityDepositAddressReady {
+				channel_id,
+				deposit_address: T::AddressConverter::try_to_encoded_address(deposit_address)?,
 				expiry_block,
 			});
 
@@ -190,22 +194,23 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			amount: AssetAmount,
 			asset: Asset,
-			egress_address: EncodedAddress,
+			destination_address: EncodedAddress,
 		) -> DispatchResult {
 			if amount > 0 {
 				T::SystemState::ensure_no_maintenance()?;
 				let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
-				let egress_address_internal = T::AddressConverter::try_from_encoded_address(
-					egress_address.clone(),
-				)
-				.map_err(|_| {
-					DispatchError::Other("Invalid Egress Address, cannot decode the address")
-				})?;
+				let destination_address_internal =
+					T::AddressConverter::try_from_encoded_address(destination_address.clone())
+						.map_err(|_| {
+							DispatchError::Other(
+								"Invalid Egress Address, cannot decode the address",
+							)
+						})?;
 
 				// Check validity of Chain and Asset
 				ensure!(
-					ForeignChain::from(egress_address_internal.clone()) ==
+					ForeignChain::from(destination_address_internal.clone()) ==
 						ForeignChain::from(asset),
 					Error::<T>::InvalidEgressAddress
 				);
@@ -213,14 +218,18 @@ pub mod pallet {
 				// Debit the asset from the account.
 				Self::try_debit_account(&account_id, asset, amount)?;
 
-				let egress_id =
-					T::EgressHandler::schedule_egress(asset, amount, egress_address_internal, None);
+				let egress_id = T::EgressHandler::schedule_egress(
+					asset,
+					amount,
+					destination_address_internal,
+					None,
+				);
 
 				Self::deposit_event(Event::<T>::WithdrawalEgressScheduled {
 					egress_id,
 					asset,
 					amount,
-					egress_address,
+					destination_address,
 				});
 			}
 			Ok(())
@@ -237,7 +246,8 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets the length in which ingress intents are expired in the LP pallet.
+		/// Sets the lifetime of liquidity deposit channels.
+		///
 		/// Requires Governance
 		///
 		/// ## Events

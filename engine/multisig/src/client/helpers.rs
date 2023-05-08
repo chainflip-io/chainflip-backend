@@ -6,13 +6,13 @@ use std::{
 };
 
 use anyhow::Result;
-use cf_primitives::{AuthorityCount, CeremonyId, PublicKeyBytes};
+use cf_primitives::{AuthorityCount, CeremonyId};
 use futures::{stream, StreamExt};
 use itertools::{Either, Itertools};
 
 use async_trait::async_trait;
 
-use rand_legacy::{RngCore, SeedableRng};
+use rand::{RngCore, SeedableRng};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, debug_span, Instrument};
@@ -411,11 +411,12 @@ where
 							.into_iter()
 							.map(|(receiver_id, message)| {
 								(receiver_id, {
-									// Because (for now) messages are serialized for V1, we need to
-									// deserialize them from v1
-									let message = super::ceremony_manager::deserialize_from_v1::<
-										C::Crypto,
-									>(&message)
+									let message = deserialize_for_version::<C::Crypto>(
+										VersionedCeremonyMessage {
+											version: CURRENT_PROTOCOL_VERSION,
+											payload: message,
+										},
+									)
 									.unwrap();
 
 									message_to_next_stage_data(message)
@@ -603,19 +604,19 @@ pub type KeygenCeremonyRunner<C> = CeremonyTestRunner<(), KeygenCeremony<C>>;
 impl<C: CryptoScheme> CeremonyRunnerStrategy for KeygenCeremonyRunner<C> {
 	type CeremonyType = KeygenCeremony<C>;
 	type CheckedOutput =
-		(PublicKeyBytes, HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>);
+		(C::PublicKey, HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>);
 	type InitialStageData = keygen::HashComm1;
 
 	fn post_successful_complete_check(
 		&self,
 		outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
 	) -> Self::CheckedOutput {
-		let (_, public_key) = all_same(outputs.values().map(|keygen_result_info| {
-			(keygen_result_info.params, keygen_result_info.key.get_agg_public_key())
+		let (_, public_key_point) = all_same(outputs.values().map(|keygen_result_info| {
+			(keygen_result_info.params, keygen_result_info.key.get_agg_public_key_point())
 		}))
 		.expect("Generated keys don't match");
 
-		(C::agg_key(&public_key).into(), outputs)
+		(C::pubkey_from_point(&public_key_point), outputs)
 	}
 
 	async fn request_ceremony(&mut self, node_id: &AccountId) {
@@ -638,7 +639,7 @@ impl<C: CryptoScheme> KeygenCeremonyRunner<C> {
 	}
 
 	pub fn keygen_ceremony_details(&mut self) -> KeygenCeremonyDetails {
-		use rand_legacy::Rng as _;
+		use rand::Rng as _;
 
 		KeygenCeremonyDetails {
 			ceremony_id: self.ceremony_id,
@@ -659,17 +660,17 @@ impl<C: CryptoScheme> KeygenCeremonyRunner<C> {
 
 pub struct PayloadAndKeyData<C: CryptoScheme> {
 	payload: C::SigningPayload,
-	public_key_bytes: PublicKeyBytes,
+	public_key: C::PublicKey,
 	key_data: HashMap<AccountId, KeygenResultInfo<C>>,
 }
 
 impl<C: CryptoScheme> PayloadAndKeyData<C> {
 	pub fn new(
 		payload: C::SigningPayload,
-		public_key_bytes: PublicKeyBytes,
+		public_key: C::PublicKey,
 		key_data: HashMap<AccountId, KeygenResultInfo<C>>,
 	) -> Self {
-		PayloadAndKeyData { payload, public_key_bytes, key_data }
+		PayloadAndKeyData { payload, public_key, key_data }
 	}
 }
 
@@ -696,7 +697,7 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for SigningCeremonyRunner<C> {
 		// TODO: use batch verification here?
 		for (i, signature) in signatures.iter().enumerate() {
 			let data = &self.ceremony_runner_data.data[i];
-			C::verify_signature(signature, &data.public_key_bytes, &data.payload)
+			C::verify_signature(signature, &data.public_key, &data.payload)
 				.expect("Should be valid signature");
 		}
 
@@ -745,7 +746,7 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 	}
 
 	fn signing_ceremony_details(&mut self, account_id: &AccountId) -> SigningCeremonyDetails<C> {
-		use rand_legacy::Rng as _;
+		use rand::Rng as _;
 
 		let payloads = self
 			.ceremony_runner_data
@@ -768,7 +769,7 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 
 pub async fn new_signing_ceremony<C: CryptoScheme>(
 ) -> (SigningCeremonyRunner<C>, HashMap<AccountId, Node<SigningCeremony<C>>>) {
-	let (key_id, key_data) = generate_key_data::<C>(
+	let (public_key, key_data) = generate_key_data::<C>(
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
 		&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
 	);
@@ -776,7 +777,7 @@ pub async fn new_signing_ceremony<C: CryptoScheme>(
 	SigningCeremonyRunner::new_with_threshold_subset_of_signers(
 		new_nodes(ACCOUNT_IDS.clone()),
 		DEFAULT_SIGNING_CEREMONY_ID,
-		vec![PayloadAndKeyData::new(C::signing_payload_for_test(), key_id, key_data)],
+		vec![PayloadAndKeyData::new(C::signing_payload_for_test(), public_key, key_data)],
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
 	)
 }
@@ -799,7 +800,7 @@ pub async fn standard_signing<C: CryptoScheme>(
 pub async fn run_keygen(
 	nodes: HashMap<AccountId, Node<KeygenCeremonyEth>>,
 	ceremony_id: CeremonyId,
-) -> (PublicKeyBytes, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
+) -> (<EthSigning as CryptoScheme>::PublicKey, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
 	let mut keygen_ceremony = KeygenCeremonyRunner::<EthSigning>::new(
 		nodes,
 		ceremony_id,

@@ -1,6 +1,6 @@
 use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::eth::SigData;
-use cf_primitives::EthereumAddress;
+use cf_primitives::{Asset, AssetAmount, EthereumAddress, SwapOutput};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
 use sc_client_api::HeaderBackend;
@@ -15,12 +15,9 @@ use state_chain_runtime::{
 };
 use std::{marker::PhantomData, sync::Arc};
 
-#[allow(unused)]
-use state_chain_runtime::{Asset, AssetAmount, ExchangeRate};
-
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
-	pub stake: NumberOrHex,
+	pub balance: NumberOrHex,
 	pub bond: NumberOrHex,
 	pub last_heartbeat: u32,
 	pub is_live: bool,
@@ -33,7 +30,7 @@ pub struct RpcAccountInfo {
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfoV2 {
-	pub stake: NumberOrHex,
+	pub balance: NumberOrHex,
 	pub bond: NumberOrHex,
 	pub last_heartbeat: u32,
 	pub online_credits: u32,
@@ -48,7 +45,7 @@ pub struct RpcAccountInfoV2 {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct RpcPendingClaim {
+pub struct RpcPendingRedemption {
 	amount: NumberOrHex,
 	address: String,
 	expiry: NumberOrHex,
@@ -67,8 +64,8 @@ type RpcSuspensions = Vec<(Offence, Vec<(u32, AccountId32)>)>;
 pub struct RpcAuctionState {
 	blocks_per_epoch: u32,
 	current_epoch_started_at: u32,
-	claim_period_as_percentage: u8,
-	min_stake: NumberOrHex,
+	redemption_period_as_percentage: u8,
+	min_funding: NumberOrHex,
 	auction_size_range: (u32, u32),
 }
 
@@ -83,8 +80,8 @@ pub trait CustomApi {
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<String>;
-	#[method(name = "eth_stake_manager_address")]
-	fn cf_eth_stake_manager_address(
+	#[method(name = "eth_state_chain_gateway_address")]
+	fn cf_eth_state_chain_gateway_address(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<String>;
@@ -108,8 +105,8 @@ pub trait CustomApi {
 	#[method(name = "auction_parameters")]
 	fn cf_auction_parameters(&self, at: Option<state_chain_runtime::Hash>)
 		-> RpcResult<(u32, u32)>;
-	#[method(name = "min_stake")]
-	fn cf_min_stake(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<NumberOrHex>;
+	#[method(name = "min_funding")]
+	fn cf_min_funding(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<NumberOrHex>;
 	#[method(name = "current_epoch")]
 	fn cf_current_epoch(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u32>;
 	#[method(name = "epoch_duration")]
@@ -171,6 +168,14 @@ pub trait CustomApi {
 		to: Asset,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<Option<SqrtPriceQ64F96>>;
+	#[method(name = "swap_rate")]
+	fn cf_pool_swap_rate(
+		&self,
+		from: Asset,
+		to: Asset,
+		amount: AssetAmount,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<SwapOutput>;
 }
 
 /// An RPC extension for the state chain node.
@@ -223,10 +228,13 @@ where
 			.cf_eth_asset(&self.query_block_id(at), token_address)
 			.map_err(to_rpc_error)
 	}
-	fn cf_eth_stake_manager_address(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<String> {
+	fn cf_eth_state_chain_gateway_address(
+		&self,
+		at: Option<<B as BlockT>::Hash>,
+	) -> RpcResult<String> {
 		self.client
 			.runtime_api()
-			.cf_eth_stake_manager_address(&self.query_block_id(at))
+			.cf_eth_state_chain_gateway_address(&self.query_block_id(at))
 			.map_err(to_rpc_error)
 			.map(hex::encode)
 	}
@@ -260,10 +268,10 @@ where
 			.cf_auction_parameters(&self.query_block_id(at))
 			.map_err(to_rpc_error)
 	}
-	fn cf_min_stake(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<NumberOrHex> {
+	fn cf_min_funding(&self, at: Option<<B as BlockT>::Hash>) -> RpcResult<NumberOrHex> {
 		self.client
 			.runtime_api()
-			.cf_min_stake(&self.query_block_id(at))
+			.cf_min_funding(&self.query_block_id(at))
 			.map_err(to_rpc_error)
 			.map(Into::into)
 	}
@@ -344,7 +352,7 @@ where
 			.map_err(to_rpc_error)?;
 
 		Ok(RpcAccountInfo {
-			stake: account_info.stake.into(),
+			balance: account_info.balance.into(),
 			bond: account_info.bond.into(),
 			last_heartbeat: account_info.last_heartbeat,
 			is_live: account_info.is_live,
@@ -367,7 +375,7 @@ where
 			.map_err(to_rpc_error)?;
 
 		Ok(RpcAccountInfoV2 {
-			stake: account_info.stake.into(),
+			balance: account_info.balance.into(),
 			bond: account_info.bond.into(),
 			last_heartbeat: account_info.last_heartbeat,
 			online_credits: account_info.online_credits,
@@ -430,8 +438,8 @@ where
 		Ok(RpcAuctionState {
 			blocks_per_epoch: auction_state.blocks_per_epoch,
 			current_epoch_started_at: auction_state.current_epoch_started_at,
-			claim_period_as_percentage: auction_state.claim_period_as_percentage,
-			min_stake: auction_state.min_stake.into(),
+			redemption_period_as_percentage: auction_state.redemption_period_as_percentage,
+			min_funding: auction_state.min_funding.into(),
 			auction_size_range: auction_state.auction_size_range,
 		})
 	}
@@ -446,5 +454,21 @@ where
 			.runtime_api()
 			.cf_pool_sqrt_price(&self.query_block_id(at), from, to)
 			.map_err(to_rpc_error)
+	}
+
+	fn cf_pool_swap_rate(
+		&self,
+		from: Asset,
+		to: Asset,
+		amount: AssetAmount,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<SwapOutput> {
+		self.client
+			.runtime_api()
+			.cf_pool_simulate_swap(&self.query_block_id(at), from, to, amount)
+			.map_err(to_rpc_error)
+			.and_then(|r| {
+				r.map_err(|e| jsonrpsee::core::Error::Custom(<&'static str>::from(e).into()))
+			})
 	}
 }

@@ -113,9 +113,9 @@ impl SignedExtrinsicClient {
 						},
 					None =>
 						if wait_for_required_role {
-							warn!("Your Chainflip account {} is not staked. Note, if you have already staked, it may take some time for your stake to be detected. WAITING for your account to be staked at block: {}", signer.account_id, state_chain_stream.cache().block_hash);
+							warn!("Your Chainflip account {} is not funded. Note, it may take some time for your funds to be detected. WAITING for your account to be funded at block: {}", signer.account_id, state_chain_stream.cache().block_hash);
 						} else {
-							bail!("Your Chainflip account {} is not staked", signer.account_id);
+							bail!("Your Chainflip account {} is not funded", signer.account_id);
 						},
 				}
 

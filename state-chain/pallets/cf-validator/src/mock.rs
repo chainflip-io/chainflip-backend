@@ -216,7 +216,7 @@ impl Config for Test {
 
 /// Session pallet requires a set of validators at genesis.
 pub const GENESIS_AUTHORITIES: [u64; 3] = [u64::MAX, u64::MAX - 1, u64::MAX - 2];
-pub const CLAIM_PERCENTAGE_AT_GENESIS: Percentage = 50;
+pub const REDEMPTION_PERCENTAGE_AT_GENESIS: Percentage = 50;
 pub const GENESIS_BOND: Amount = 1;
 pub const EPOCH_DURATION: u64 = 10;
 pub(crate) struct TestExternalitiesWithCheck {
@@ -240,7 +240,7 @@ macro_rules! assert_invariants {
 			ValidatorPallet::current_authorities()
 				.into_iter()
 				.collect::<BTreeSet<_>>()
-				.is_disjoint(&ValidatorPallet::highest_staked_qualified_backup_nodes_lookup()),
+				.is_disjoint(&ValidatorPallet::highest_funded_qualified_backup_nodes_lookup()),
 			"Backup nodes and validators should not overlap",
 		);
 	};
@@ -301,7 +301,7 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 					genesis_backups: Default::default(),
 					blocks_per_epoch: EPOCH_DURATION,
 					bond: GENESIS_BOND,
-					claim_period_as_percentage: CLAIM_PERCENTAGE_AT_GENESIS,
+					redemption_period_as_percentage: REDEMPTION_PERCENTAGE_AT_GENESIS,
 					backup_reward_node_percentage: 34,
 					authority_set_min_size: MIN_AUTHORITY_SIZE,
 					min_size: MIN_AUTHORITY_SIZE,

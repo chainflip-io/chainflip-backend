@@ -18,13 +18,10 @@ mod scalar_impls {
 
 	impl ECScalar for Scalar {
 		fn random(rng: &mut crate::crypto::Rng) -> Self {
-			use rand_legacy::RngCore;
+			use rand::RngCore;
 
 			// Instead of calling SK::random() directly, we copy its
 			// implementation so we can use our own (version of) Rng
-			// TODO: might as well use a more recent version of Rng
-			// and apply this trick where an older version is expected
-			// (instead of the other way around)
 			let mut scalar_bytes = [0u8; 64];
 			rng.fill_bytes(&mut scalar_bytes);
 			Scalar(SK::from_bytes_mod_order_wide(&scalar_bytes))

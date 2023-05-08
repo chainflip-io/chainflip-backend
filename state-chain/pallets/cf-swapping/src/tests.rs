@@ -1,20 +1,21 @@
 use crate::{
-	mock::*, CcmGasBudget, CcmIdCounter, CcmOutputs, CcmSwap, CcmSwapOutput, EarnedRelayerFees,
-	Error, Pallet, PendingCcms, Swap, SwapIntentExpiries, SwapQueue, SwapTTL, SwapType, WeightInfo,
+	mock::*, CcmGasBudget, CcmIdCounter, CcmOutputs, CcmSwap, CcmSwapOutput, EarnedBrokerFees,
+	Error, Pallet, PendingCcms, Swap, SwapChannelExpiries, SwapQueue, SwapTTL, SwapType,
+	WeightInfo,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
-	AnyChain, CcmIngressMetadata,
+	AnyChain, CcmDepositMetadata,
 };
 use cf_primitives::{Asset, ForeignChain};
 use cf_test_utilities::{assert_event_sequence, assert_events_match};
 use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
+		deposit_handler::{MockDepositHandler, SwapChannel},
 		egress_handler::{MockEgressHandler, MockEgressParameter},
-		ingress_handler::{MockIngressHandler, SwapIntent},
 	},
-	CcmHandler, SwapIntentHandler,
+	CcmHandler, SwapDepositHandler,
 };
 use frame_support::{assert_noop, assert_ok, sp_std::iter, weights::Weight};
 
@@ -60,15 +61,15 @@ fn generate_test_swaps() -> Vec<Swap> {
 }
 
 fn insert_swaps(swaps: &[Swap]) {
-	for (relayer_id, swap) in swaps.iter().enumerate() {
-		if let SwapType::Swap(egress_address) = &swap.swap_type {
-			<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
+	for (broker_id, swap) in swaps.iter().enumerate() {
+		if let SwapType::Swap(destination_address) = &swap.swap_type {
+			<Pallet<Test> as SwapDepositHandler>::on_swap_deposit(
 				ForeignChainAddress::Eth([2; 20]),
 				swap.from,
 				swap.to,
 				swap.amount,
-				egress_address.clone(),
-				relayer_id as u64,
+				destination_address.clone(),
+				broker_id as u64,
 				2,
 			);
 		}
@@ -76,9 +77,9 @@ fn insert_swaps(swaps: &[Swap]) {
 }
 
 #[test]
-fn register_swap_intent_success_with_valid_parameters() {
+fn request_swap_success_with_valid_parameters() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Swapping::register_swap_intent(
+		assert_ok!(Swapping::request_swap_deposit_address(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			Asset::Usdc,
@@ -105,8 +106,8 @@ fn process_all_swaps() {
 			.map(|swap| MockEgressParameter::<AnyChain>::Swap {
 				asset: swap.to,
 				amount: swap.amount,
-				egress_address: if let SwapType::Swap(egress_address) = swap.swap_type {
-					egress_address
+				destination_address: if let SwapType::Swap(destination_address) = swap.swap_type {
+					destination_address
 				} else {
 					ForeignChainAddress::Eth(Default::default())
 				},
@@ -135,7 +136,7 @@ fn number_of_swaps_processed_limited_by_weight() {
 fn expect_earned_fees_to_be_recorded() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 2_u64;
-		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
+		<Pallet<Test> as SwapDepositHandler>::on_swap_deposit(
 			ForeignChainAddress::Eth([2; 20]),
 			Asset::Flip,
 			Asset::Usdc,
@@ -145,8 +146,8 @@ fn expect_earned_fees_to_be_recorded() {
 			200,
 		);
 		Swapping::on_idle(1, Weight::from_ref_time(1000));
-		assert_eq!(EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
-		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
+		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
+		<Pallet<Test> as SwapDepositHandler>::on_swap_deposit(
 			ForeignChainAddress::Eth([2; 20]),
 			Asset::Flip,
 			Asset::Usdc,
@@ -156,16 +157,16 @@ fn expect_earned_fees_to_be_recorded() {
 			200,
 		);
 		Swapping::on_idle(1, Weight::from_ref_time(1000));
-		assert_eq!(EarnedRelayerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 4);
+		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 4);
 	});
 }
 
 #[test]
 #[should_panic]
-fn cannot_swap_with_incorrect_egress_address_type() {
+fn cannot_swap_with_incorrect_destination_address_type() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 1_u64;
-		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
+		<Pallet<Test> as SwapDepositHandler>::on_swap_deposit(
 			ForeignChainAddress::Eth([2; 20]),
 			Asset::Eth,
 			Asset::Dot,
@@ -181,8 +182,8 @@ fn cannot_swap_with_incorrect_egress_address_type() {
 #[test]
 fn expect_swap_id_to_be_emitted() {
 	new_test_ext().execute_with(|| {
-		// 1. Register a swap intent -> NewSwapIntent
-		assert_ok!(Swapping::register_swap_intent(
+		// 1. Request a deposit address -> SwapDepositAddressReady
+		assert_ok!(Swapping::request_swap_deposit_address(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			Asset::Usdc,
@@ -190,8 +191,8 @@ fn expect_swap_id_to_be_emitted() {
 			0,
 			None
 		));
-		// 2. Schedule the swap -> SwapIngressReceived
-		<Pallet<Test> as SwapIntentHandler>::on_swap_ingress(
+		// 2. Schedule the swap -> SwapDepositReceived
+		<Pallet<Test> as SwapDepositHandler>::on_swap_deposit(
 			ForeignChainAddress::Eth(Default::default()),
 			Asset::Eth,
 			Asset::Usdc,
@@ -204,14 +205,15 @@ fn expect_swap_id_to_be_emitted() {
 		Swapping::on_idle(1, Weight::from_ref_time(100));
 		assert_event_sequence!(
 			Test,
-			crate::mock::RuntimeEvent::Swapping(crate::Event::NewSwapIntent {
-				ingress_address: EncodedAddress::Eth(Default::default()),
+			crate::mock::RuntimeEvent::Swapping(crate::Event::SwapDepositAddressReady {
+				deposit_address: EncodedAddress::Eth(Default::default()),
+				destination_address: EncodedAddress::Eth(Default::default()),
 				expiry_block: SwapTTL::<Test>::get() + System::current_block_number(),
 			}),
-			crate::mock::RuntimeEvent::Swapping(crate::Event::SwapIngressReceived {
-				ingress_address: EncodedAddress::Eth(Default::default()),
+			crate::mock::RuntimeEvent::Swapping(crate::Event::SwapDepositReceived {
+				deposit_address: EncodedAddress::Eth(Default::default()),
 				swap_id: 1,
-				ingress_amount: 500,
+				deposit_amount: 500,
 			}),
 			crate::mock::RuntimeEvent::Swapping(crate::Event::SwapExecuted { swap_id: 1 }),
 			crate::mock::RuntimeEvent::Swapping(crate::Event::SwapEgressScheduled {
@@ -225,7 +227,7 @@ fn expect_swap_id_to_be_emitted() {
 }
 
 #[test]
-fn withdraw_relayer_fees() {
+fn withdraw_broker_fees() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Swapping::withdraw(
@@ -235,7 +237,7 @@ fn withdraw_relayer_fees() {
 			),
 			<Error<Test>>::NoFundsAvailable
 		);
-		EarnedRelayerFees::<Test>::insert(ALICE, Asset::Eth, 200);
+		EarnedBrokerFees::<Test>::insert(ALICE, Asset::Eth, 200);
 		assert_ok!(Swapping::withdraw(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
@@ -268,8 +270,8 @@ fn can_swap_using_witness_origin() {
 		System::assert_last_event(RuntimeEvent::Swapping(
 			crate::Event::<Test>::SwapScheduledByWitnesser {
 				swap_id: 1,
-				ingress_amount: 1_000,
-				egress_address: EncodedAddress::Eth(Default::default()),
+				deposit_amount: 1_000,
+				destination_address: EncodedAddress::Eth(Default::default()),
 			},
 		));
 	});
@@ -280,7 +282,7 @@ fn swap_expires() {
 	new_test_ext().execute_with(|| {
 		let expiry = SwapTTL::<Test>::get() + 1;
 		assert_eq!(expiry, 6); // Expiry = current(1) + TTL (5)
-		assert_ok!(Swapping::register_swap_intent(
+		assert_ok!(Swapping::request_swap_deposit_address(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Eth,
 			Asset::Usdc,
@@ -289,49 +291,49 @@ fn swap_expires() {
 			None
 		));
 
-		let ingress_address = assert_events_match!(Test, RuntimeEvent::Swapping(crate::Event::NewSwapIntent {
-			ingress_address,
+		let deposit_address = assert_events_match!(Test, RuntimeEvent::Swapping(crate::Event::SwapDepositAddressReady {
+			deposit_address,
 			..
-		}) => ingress_address);
-		let swap_intent = SwapIntent {
-			ingress_address: MockAddressConverter::try_from_encoded_address(ingress_address).unwrap(),
-			ingress_asset: Asset::Eth,
-			egress_asset: Asset::Usdc,
-			egress_address: ForeignChainAddress::Eth(Default::default()),
-			relayer_commission_bps: 0,
-			relayer_id: ALICE,
+		}) => deposit_address);
+		let swap_channel = SwapChannel {
+			deposit_address: MockAddressConverter::try_from_encoded_address(deposit_address).unwrap(),
+			source_asset: Asset::Eth,
+			destination_asset: Asset::Usdc,
+			destination_address: ForeignChainAddress::Eth(Default::default()),
+			broker_commission_bps: 0,
+			broker_id: ALICE,
 			message_metadata: None,
 		};
 
 		assert_eq!(
-			SwapIntentExpiries::<Test>::get(expiry),
+			SwapChannelExpiries::<Test>::get(expiry),
 			vec![(0, ForeignChain::Ethereum, ForeignChainAddress::Eth(Default::default()))]
 		);
 		assert_eq!(
-			MockIngressHandler::<AnyChain, Test>::get_swap_intents(),
-			vec![swap_intent.clone()]
+			MockDepositHandler::<AnyChain, Test>::get_swap_channels(),
+			vec![swap_channel.clone()]
 		);
 
 		// Does not expire until expiry block.
 		Swapping::on_initialize(expiry - 1);
 		assert_eq!(
-			SwapIntentExpiries::<Test>::get(expiry),
+			SwapChannelExpiries::<Test>::get(expiry),
 			vec![(0, ForeignChain::Ethereum, ForeignChainAddress::Eth(Default::default()))]
 		);
 		assert_eq!(
-			MockIngressHandler::<AnyChain, Test>::get_swap_intents(),
-			vec![swap_intent]
+			MockDepositHandler::<AnyChain, Test>::get_swap_channels(),
+			vec![swap_channel]
 		);
 
 		Swapping::on_initialize(6);
-		assert_eq!(SwapIntentExpiries::<Test>::get(6), vec![]);
+		assert_eq!(SwapChannelExpiries::<Test>::get(6), vec![]);
 		System::assert_last_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::SwapIntentExpired {
-				ingress_address: ForeignChainAddress::Eth(Default::default()),
+			crate::Event::<Test>::SwapDepositAddressExpired {
+				deposit_address: ForeignChainAddress::Eth(Default::default()),
 			},
 		));
 		assert!(
-			MockIngressHandler::<AnyChain, Test>::get_swap_intents().is_empty()
+			MockDepositHandler::<AnyChain, Test>::get_swap_channels().is_empty()
 		);
 	});
 }
@@ -349,7 +351,7 @@ fn can_set_swap_ttl() {
 fn can_reject_invalid_ccms() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
-		let ccm = CcmIngressMetadata {
+		let ccm = CcmDepositMetadata {
 			message: vec![0x00],
 			gas_budget,
 			refund_address: ForeignChainAddress::Dot(Default::default()),
@@ -357,7 +359,7 @@ fn can_reject_invalid_ccms() {
 		};
 
 		assert_noop!(
-			Swapping::register_swap_intent(
+			Swapping::request_swap_deposit_address(
 				RuntimeOrigin::signed(ALICE),
 				Asset::Btc,
 				Asset::Eth,
@@ -368,7 +370,7 @@ fn can_reject_invalid_ccms() {
 			Error::<Test>::IncompatibleAssetAndAddress
 		);
 		assert_noop!(
-			Swapping::ccm_ingress(
+			Swapping::ccm_deposit(
 				RuntimeOrigin::root(),
 				Asset::Btc,
 				1_000_000,
@@ -380,7 +382,7 @@ fn can_reject_invalid_ccms() {
 		);
 
 		assert_noop!(
-			Swapping::register_swap_intent(
+			Swapping::request_swap_deposit_address(
 				RuntimeOrigin::signed(ALICE),
 				Asset::Eth,
 				Asset::Dot,
@@ -391,7 +393,7 @@ fn can_reject_invalid_ccms() {
 			Error::<Test>::CcmUnsupportedForTargetChain
 		);
 		assert_noop!(
-			Swapping::on_ccm_ingress(
+			Swapping::on_ccm_deposit(
 				Asset::Eth,
 				1_000_000,
 				Asset::Dot,
@@ -401,7 +403,7 @@ fn can_reject_invalid_ccms() {
 			Error::<Test>::CcmUnsupportedForTargetChain
 		);
 		assert_noop!(
-			Swapping::register_swap_intent(
+			Swapping::request_swap_deposit_address(
 				RuntimeOrigin::signed(ALICE),
 				Asset::Eth,
 				Asset::Btc,
@@ -412,7 +414,7 @@ fn can_reject_invalid_ccms() {
 			Error::<Test>::CcmUnsupportedForTargetChain
 		);
 		assert_noop!(
-			Swapping::on_ccm_ingress(
+			Swapping::on_ccm_deposit(
 				Asset::Eth,
 				1_000_000,
 				Asset::Btc,
@@ -423,32 +425,32 @@ fn can_reject_invalid_ccms() {
 		);
 
 		assert_noop!(
-			Swapping::on_ccm_ingress(
+			Swapping::on_ccm_deposit(
 				Asset::Eth,
 				gas_budget,
 				Asset::Eth,
 				ForeignChainAddress::Eth(Default::default()),
 				ccm
 			),
-			Error::<Test>::CcmInsufficientIngressAmount
+			Error::<Test>::CcmInsufficientDepositAmount
 		);
 	});
 }
 
 #[test]
-fn can_process_ccms_via_swap_intent() {
+fn can_process_ccms_via_swap_deposit_address() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
-		let ingress_amount = 10_000;
-		let ccm = CcmIngressMetadata {
+		let deposit_amount = 10_000;
+		let ccm = CcmDepositMetadata {
 			message: vec![0x01],
 			gas_budget,
 			refund_address: ForeignChainAddress::Dot([0x01; 32]),
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 
-		// Can ingress CCM via Swap Intent
-		assert_ok!(Swapping::register_swap_intent(
+		// Can process CCM via Swap deposit
+		assert_ok!(Swapping::request_swap_deposit_address(
 			RuntimeOrigin::signed(ALICE),
 			Asset::Dot,
 			Asset::Eth,
@@ -456,9 +458,9 @@ fn can_process_ccms_via_swap_intent() {
 			0,
 			Some(ccm.clone())
 		),);
-		assert_ok!(Swapping::on_ccm_ingress(
+		assert_ok!(Swapping::on_ccm_deposit(
 			Asset::Dot,
-			ingress_amount,
+			deposit_amount,
 			Asset::Eth,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm.clone(),
@@ -467,10 +469,10 @@ fn can_process_ccms_via_swap_intent() {
 		assert_eq!(
 			PendingCcms::<Test>::get(1),
 			Some(CcmSwap {
-				ingress_asset: Asset::Dot,
-				ingress_amount,
-				egress_asset: Asset::Eth,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				source_asset: Asset::Dot,
+				deposit_amount,
+				destination_asset: Asset::Eth,
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
 			})
 		);
@@ -482,7 +484,7 @@ fn can_process_ccms_via_swap_intent() {
 					swap_id: 1,
 					from: Asset::Dot,
 					to: Asset::Eth,
-					amount: ingress_amount - gas_budget,
+					amount: deposit_amount - gas_budget,
 					swap_type: SwapType::CcmPrincipal(1)
 				},
 				Swap {
@@ -505,8 +507,8 @@ fn can_process_ccms_via_swap_intent() {
 			MockEgressHandler::<AnyChain>::get_scheduled_egresses(),
 			vec![MockEgressParameter::Ccm {
 				asset: Asset::Eth,
-				amount: ingress_amount - gas_budget,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				amount: deposit_amount - gas_budget,
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x01],
 				refund_address: ForeignChainAddress::Dot([0x01; 32]),
 			},]
@@ -532,19 +534,19 @@ fn can_process_ccms_via_swap_intent() {
 fn can_process_ccms_via_extrinsic() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 2_000;
-		let ingress_amount = 1_000_000;
-		let ccm = CcmIngressMetadata {
+		let deposit_amount = 1_000_000;
+		let ccm = CcmDepositMetadata {
 			message: vec![0x02],
 			gas_budget,
 			refund_address: ForeignChainAddress::Dot([0x02; 32]),
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 
-		// Can ingress CCM directly via Pallet Extrinsic.
-		assert_ok!(Swapping::ccm_ingress(
+		// Can process CCM directly via Pallet Extrinsic.
+		assert_ok!(Swapping::ccm_deposit(
 			RuntimeOrigin::root(),
 			Asset::Btc,
-			ingress_amount,
+			deposit_amount,
 			Asset::Usdc,
 			EncodedAddress::Eth(Default::default()),
 			ccm.clone()
@@ -553,10 +555,10 @@ fn can_process_ccms_via_extrinsic() {
 		assert_eq!(
 			PendingCcms::<Test>::get(1),
 			Some(CcmSwap {
-				ingress_asset: Asset::Btc,
-				ingress_amount,
-				egress_asset: Asset::Usdc,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				source_asset: Asset::Btc,
+				deposit_amount,
+				destination_asset: Asset::Usdc,
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
 			})
 		);
@@ -568,7 +570,7 @@ fn can_process_ccms_via_extrinsic() {
 					swap_id: 1,
 					from: Asset::Btc,
 					to: Asset::Usdc,
-					amount: ingress_amount - gas_budget,
+					amount: deposit_amount - gas_budget,
 					swap_type: SwapType::CcmPrincipal(1)
 				},
 				Swap {
@@ -590,8 +592,8 @@ fn can_process_ccms_via_extrinsic() {
 			MockEgressHandler::<AnyChain>::get_scheduled_egresses(),
 			vec![MockEgressParameter::Ccm {
 				asset: Asset::Usdc,
-				amount: ingress_amount - gas_budget,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				amount: deposit_amount - gas_budget,
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x02],
 				refund_address: ForeignChainAddress::Dot([0x02; 32]),
 			},]
@@ -605,12 +607,12 @@ fn can_process_ccms_via_extrinsic() {
 		assert_eq!(CcmOutputs::<Test>::get(1), None);
 
 		System::assert_has_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::CcmIngressReceived {
+			crate::Event::<Test>::CcmDepositReceived {
 				ccm_id: CcmIdCounter::<Test>::get(),
 				principal_swap_id: Some(1),
 				gas_swap_id: Some(2),
-				ingress_amount,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				deposit_amount,
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::Swapping(
@@ -623,20 +625,20 @@ fn can_process_ccms_via_extrinsic() {
 }
 
 #[test]
-fn can_handle_ccms_with_gas_asset_as_ingress() {
+fn can_handle_ccms_with_non_native_gas_asset() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
-		let ingress_amount = 10_000;
-		let ccm = CcmIngressMetadata {
+		let deposit_amount = 10_000;
+		let ccm = CcmDepositMetadata {
 			message: vec![0x00],
 			gas_budget,
 			refund_address: ForeignChainAddress::Eth([0x01; 20]),
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
-		assert_ok!(Swapping::ccm_ingress(
+		assert_ok!(Swapping::ccm_deposit(
 			RuntimeOrigin::root(),
 			Asset::Eth,
-			ingress_amount,
+			deposit_amount,
 			Asset::Usdc,
 			EncodedAddress::Eth(Default::default()),
 			ccm.clone()
@@ -645,10 +647,10 @@ fn can_handle_ccms_with_gas_asset_as_ingress() {
 		assert_eq!(
 			PendingCcms::<Test>::get(1),
 			Some(CcmSwap {
-				ingress_asset: Asset::Eth,
-				ingress_amount,
-				egress_asset: Asset::Usdc,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				source_asset: Asset::Eth,
+				deposit_amount,
+				destination_asset: Asset::Usdc,
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
 			})
 		);
@@ -659,7 +661,7 @@ fn can_handle_ccms_with_gas_asset_as_ingress() {
 				swap_id: 1,
 				from: Asset::Eth,
 				to: Asset::Usdc,
-				amount: ingress_amount - gas_budget,
+				amount: deposit_amount - gas_budget,
 				swap_type: SwapType::CcmPrincipal(1)
 			},]
 		);
@@ -676,8 +678,8 @@ fn can_handle_ccms_with_gas_asset_as_ingress() {
 			MockEgressHandler::<AnyChain>::get_scheduled_egresses(),
 			vec![MockEgressParameter::Ccm {
 				asset: Asset::Usdc,
-				amount: ingress_amount - gas_budget,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				amount: deposit_amount - gas_budget,
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x00],
 				refund_address: ForeignChainAddress::Eth([0x01; 20]),
 			},]
@@ -691,12 +693,12 @@ fn can_handle_ccms_with_gas_asset_as_ingress() {
 		assert_eq!(CcmOutputs::<Test>::get(1), None);
 
 		System::assert_has_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::CcmIngressReceived {
+			crate::Event::<Test>::CcmDepositReceived {
 				ccm_id: CcmIdCounter::<Test>::get(),
 				principal_swap_id: Some(1),
 				gas_swap_id: None,
-				ingress_amount,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				deposit_amount,
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::Swapping(
@@ -709,21 +711,21 @@ fn can_handle_ccms_with_gas_asset_as_ingress() {
 }
 
 #[test]
-fn can_handle_ccms_with_principal_asset_as_ingress() {
+fn can_handle_ccms_with_native_gas_asset() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
-		let ingress_amount = 10_000;
-		let ccm = CcmIngressMetadata {
+		let deposit_amount = 10_000;
+		let ccm = CcmDepositMetadata {
 			message: vec![0x00],
 			gas_budget,
 			refund_address: ForeignChainAddress::Eth([0x01; 20]),
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 
-		assert_ok!(Swapping::ccm_ingress(
+		assert_ok!(Swapping::ccm_deposit(
 			RuntimeOrigin::root(),
 			Asset::Usdc,
-			ingress_amount,
+			deposit_amount,
 			Asset::Usdc,
 			EncodedAddress::Eth(Default::default()),
 			ccm.clone()
@@ -732,10 +734,10 @@ fn can_handle_ccms_with_principal_asset_as_ingress() {
 		assert_eq!(
 			PendingCcms::<Test>::get(1),
 			Some(CcmSwap {
-				ingress_asset: Asset::Usdc,
-				ingress_amount,
-				egress_asset: Asset::Usdc,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				source_asset: Asset::Usdc,
+				deposit_amount,
+				destination_asset: Asset::Usdc,
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
 			})
 		);
@@ -752,7 +754,7 @@ fn can_handle_ccms_with_principal_asset_as_ingress() {
 		);
 		assert_eq!(
 			CcmOutputs::<Test>::get(1),
-			Some(CcmSwapOutput { principal: Some(ingress_amount - gas_budget), gas: None })
+			Some(CcmSwapOutput { principal: Some(deposit_amount - gas_budget), gas: None })
 		);
 
 		// Swaps are executed during on_idle
@@ -763,8 +765,8 @@ fn can_handle_ccms_with_principal_asset_as_ingress() {
 			MockEgressHandler::<AnyChain>::get_scheduled_egresses(),
 			vec![MockEgressParameter::Ccm {
 				asset: Asset::Usdc,
-				amount: ingress_amount - gas_budget,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				amount: deposit_amount - gas_budget,
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x00],
 				refund_address: ForeignChainAddress::Eth([0x01; 20]),
 			},]
@@ -778,12 +780,12 @@ fn can_handle_ccms_with_principal_asset_as_ingress() {
 		assert_eq!(CcmOutputs::<Test>::get(1), None);
 
 		System::assert_has_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::CcmIngressReceived {
+			crate::Event::<Test>::CcmDepositReceived {
 				ccm_id: CcmIdCounter::<Test>::get(),
 				principal_swap_id: None,
 				gas_swap_id: Some(1),
-				ingress_amount,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				deposit_amount,
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 			},
 		));
 		System::assert_has_event(RuntimeEvent::Swapping(
@@ -799,8 +801,8 @@ fn can_handle_ccms_with_principal_asset_as_ingress() {
 fn can_handle_ccms_with_no_swaps_needed() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
-		let ingress_amount = 10_000;
-		let ccm = CcmIngressMetadata {
+		let deposit_amount = 10_000;
+		let ccm = CcmDepositMetadata {
 			message: vec![0x00],
 			gas_budget,
 			refund_address: ForeignChainAddress::Eth([0x01; 20]),
@@ -808,10 +810,10 @@ fn can_handle_ccms_with_no_swaps_needed() {
 		};
 
 		// Ccm without need for swapping are egressed directly.
-		assert_ok!(Swapping::ccm_ingress(
+		assert_ok!(Swapping::ccm_deposit(
 			RuntimeOrigin::root(),
 			Asset::Eth,
-			ingress_amount,
+			deposit_amount,
 			Asset::Eth,
 			EncodedAddress::Eth(Default::default()),
 			ccm
@@ -831,8 +833,8 @@ fn can_handle_ccms_with_no_swaps_needed() {
 			MockEgressHandler::<AnyChain>::get_scheduled_egresses(),
 			vec![MockEgressParameter::Ccm {
 				asset: Asset::Eth,
-				amount: ingress_amount - gas_budget,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				amount: deposit_amount - gas_budget,
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x00],
 				refund_address: ForeignChainAddress::Eth([0x01; 20]),
 			},]
@@ -846,12 +848,12 @@ fn can_handle_ccms_with_no_swaps_needed() {
 		));
 
 		System::assert_has_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::CcmIngressReceived {
+			crate::Event::<Test>::CcmDepositReceived {
 				ccm_id: CcmIdCounter::<Test>::get(),
 				principal_swap_id: None,
 				gas_swap_id: None,
-				ingress_amount,
-				egress_address: ForeignChainAddress::Eth(Default::default()),
+				deposit_amount,
+				destination_address: ForeignChainAddress::Eth(Default::default()),
 			},
 		));
 	});

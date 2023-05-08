@@ -1,12 +1,12 @@
 #![feature(absolute_path)]
 use std::path::PathBuf;
 
-use api::primitives::{AccountRole, Asset, ClaimAmount, Hash};
+use api::primitives::{AccountRole, Asset, Hash, RedemptionAmount};
 use chainflip_api as api;
 use clap::Parser;
 use settings::{CLICommandLineOptions, CLISettings};
 
-use crate::settings::{CliCommand::*, LiquidityProviderSubcommands, RelayerSubcommands};
+use crate::settings::{BrokerSubcommands, CliCommand::*, LiquidityProviderSubcommands};
 use anyhow::{anyhow, Result};
 use utilities::clean_eth_address;
 
@@ -43,11 +43,13 @@ async fn run_cli() -> Result<()> {
 	);
 
 	match command_line_opts.cmd {
-		Relayer(RelayerSubcommands::SwapIntent(params)) =>
-			swap_intent(&cli_settings.state_chain, params).await,
-		LiquidityProvider(LiquidityProviderSubcommands::Deposit { asset }) =>
-			liquidity_deposit(&cli_settings.state_chain, asset).await,
-		Claim { amount, eth_address } => request_claim(amount, &eth_address, &cli_settings).await,
+		Broker(BrokerSubcommands::RequestSwapDepositAddress(params)) =>
+			request_swap_deposit_address(&cli_settings.state_chain, params).await,
+		LiquidityProvider(LiquidityProviderSubcommands::RequestLiquidityDepositAddress {
+			asset,
+		}) => request_liquidity_deposit_address(&cli_settings.state_chain, asset).await,
+		Redeem { amount, eth_address } =>
+			request_redemption(amount, &eth_address, &cli_settings).await,
 		RegisterAccountRole { role } => register_account_role(role, &cli_settings).await,
 		Rotate {} => rotate_keys(&cli_settings.state_chain).await,
 		StopBidding {} => api::stop_bidding(&cli_settings.state_chain).await,
@@ -59,32 +61,32 @@ async fn run_cli() -> Result<()> {
 	}
 }
 
-pub async fn swap_intent(
+pub async fn request_swap_deposit_address(
 	state_chain_settings: &settings::StateChain,
-	params: settings::SwapIntentParams,
+	params: settings::SwapRequestParams,
 ) -> Result<()> {
-	let address = api::register_swap_intent(
+	let address = api::request_swap_deposit_address(
 		state_chain_settings,
-		params.ingress_asset,
-		params.egress_asset,
+		params.source_asset,
+		params.destination_asset,
 		chainflip_api::clean_foreign_chain_address(
-			params.egress_asset.into(),
-			&params.egress_address,
+			params.destination_asset.into(),
+			&params.destination_address,
 		)?,
-		params.relayer_commission,
+		params.broker_commission,
 		None,
 	)
 	.await?;
-	println!("Ingress address: {address}");
+	println!("Deposit Address: {address}");
 	Ok(())
 }
 
-pub async fn liquidity_deposit(
+pub async fn request_liquidity_deposit_address(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 ) -> Result<()> {
-	let address = api::lp::liquidity_deposit(state_chain_settings, asset).await?;
-	println!("Ingress address: {address}");
+	let address = api::lp::request_liquidity_deposit_address(state_chain_settings, asset).await?;
+	println!("Deposit Address: {address}");
 	Ok(())
 }
 
@@ -126,7 +128,7 @@ pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<
 	Ok(())
 }
 
-async fn request_claim(
+async fn request_redemption(
 	amount: Option<f64>,
 	eth_address: &str,
 	settings: &CLISettings,
@@ -137,7 +139,7 @@ async fn request_claim(
 		.map_err(|error| anyhow!("You supplied an invalid ETH address: {}", error))
 		.and_then(|eth_address|
 			if eth_address == [0; 20] {
-				Err(anyhow!("Cannot submit claim to the zero address. If you really want to do this, use 0x000000000000000000000000000000000000dead instead."))
+				Err(anyhow!("Cannot submit redemption to the zero address. If you really want to do this, use 0x000000000000000000000000000000000000dead instead."))
 			} else {
 				Ok(eth_address)
 			}
@@ -148,21 +150,21 @@ async fn request_claim(
 			let atomic_amount = (amount_float * 10_f64.powi(18)) as u128;
 
 			println!(
-				"Submitting claim with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`.",
+				"Submitting redemption with amount `{}` FLIP (`{}` Flipperinos) to ETH address `0x{}`.",
 				amount_float,
 				atomic_amount,
 				hex::encode(eth_address)
 			);
 
-			ClaimAmount::Exact(atomic_amount)
+			RedemptionAmount::Exact(atomic_amount)
 		},
 		None => {
 			println!(
-				"Submitting claim with MAX amount to ETH address `0x{}`.",
+				"Submitting redemption with MAX amount to ETH address `0x{}`.",
 				hex::encode(eth_address)
 			);
 
-			ClaimAmount::Max
+			RedemptionAmount::Max
 		},
 	};
 
@@ -170,10 +172,10 @@ async fn request_claim(
 		return Ok(())
 	}
 
-	let tx_hash = api::request_claim(amount, eth_address, &settings.state_chain).await?;
+	let tx_hash = api::request_redemption(amount, eth_address, &settings.state_chain).await?;
 
 	println!(
-		"Your claim request has transaction hash: `{tx_hash:#x}`. View your claim's progress on the staking app."
+		"Your redemption request has transaction hash: `{tx_hash:#x}`. View your redemption's progress on the funding app."
 	);
 
 	Ok(())

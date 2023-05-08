@@ -1,3 +1,4 @@
+mod crypto_compat;
 #[cfg(test)]
 mod tests;
 
@@ -6,9 +7,10 @@ use cf_chains::{
 	btc::{self, BitcoinScriptBounded},
 	dot,
 	eth::Ethereum,
-	Bitcoin, ChainCrypto, Polkadot,
+	Bitcoin, Polkadot,
 };
-use cf_primitives::{BlockNumber, CeremonyId, EpochIndex, KeyId, PolkadotAccountId};
+use cf_primitives::{BlockNumber, CeremonyId, EpochIndex, PolkadotAccountId};
+use crypto_compat::CryptoCompat;
 use futures::{FutureExt, StreamExt, TryFutureExt};
 use sp_core::{Hasher, H160, H256};
 use sp_runtime::{traits::Keccak256, AccountId32};
@@ -43,16 +45,16 @@ use crate::{
 };
 use multisig::{
 	bitcoin::BtcSigning, client::MultisigClientApi, eth::EthSigning, polkadot::PolkadotSigning,
-	CryptoScheme, SignatureToThresholdSignature,
+	CryptoScheme, KeyId, SignatureToThresholdSignature,
 };
 use utilities::task_scope::{task_scope, Scope};
 
-pub type EthAddressSender = UnboundedSender<AddressMonitorCommand<H160>>;
+pub type EthAddressMonitorCommandSender = UnboundedSender<AddressMonitorCommand<H160>>;
 
 pub struct EthAddressToMonitorSender {
-	pub eth: EthAddressSender,
-	pub flip: EthAddressSender,
-	pub usdc: EthAddressSender,
+	pub eth: EthAddressMonitorCommandSender,
+	pub flip: EthAddressMonitorCommandSender,
+	pub usdc: EthAddressMonitorCommandSender,
 }
 
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
@@ -60,16 +62,17 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
-    epoch_index: EpochIndex,
+	epoch_index: EpochIndex,
 	keygen_participants: BTreeSet<AccountId32>,
 ) where
 	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
-    state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
-	C: CryptoScheme,
-	C::AggKey: Into<<<state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain as ChainCrypto>::AggKey> + Send,
-	I: 'static + Sync + Send,
-	state_chain_runtime::RuntimeCall: std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,
+	state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
+	C: CryptoScheme<Chain = <state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain>
+		+ 'static,
+	I: CryptoCompat<C, C::Chain> + 'static + Sync + Send,
+	state_chain_runtime::RuntimeCall:
+		std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,
 {
 	if keygen_participants.contains(&state_chain_client.account_id()) {
 		// We initiate keygen outside of the spawn to avoid requesting ceremonies out of order
@@ -84,7 +87,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
                     ceremony_id,
                     reported_outcome: keygen_result_future
                         .await
-                        .map(Into::into)
+                        .map(I::pubkey_to_aggkey)
                         .map_err(|(bad_account_ids, _reason)| bad_account_ids),
                 })
                 .await;
@@ -149,8 +152,6 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 			Ok(())
 		});
 	} else {
-		// If we are not participating, just send an empty ceremony request (needed for ceremony id
-		// tracking)
 		multisig_client.update_latest_ceremony_id(ceremony_id);
 	}
 }
@@ -200,12 +201,12 @@ pub async fn start<
 	eth_epoch_start_sender: async_broadcast::Sender<EpochStart<Ethereum>>,
 	eth_address_to_monitor_sender: EthAddressToMonitorSender,
 	dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
-	dot_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<
+	dot_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<
 		AddressMonitorCommand<PolkadotAccountId>,
 	>,
 	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<[u8; 64]>,
 	btc_epoch_start_sender: async_broadcast::Sender<EpochStart<Bitcoin>>,
-	btc_monitor_ingress_sender: tokio::sync::mpsc::UnboundedSender<
+	btc_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<
 		AddressMonitorCommand<BitcoinScriptBounded>,
 	>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
@@ -460,7 +461,8 @@ where
                                         pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
                                             request_id: _,
                                             ceremony_id,
-                                            key_id,
+                                            epoch,
+                                            key,
                                             signatories,
                                             payload,
                                         },
@@ -474,7 +476,7 @@ where
                                                 &eth_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            key_id,
+                                            (epoch, key).into(),
                                             signatories,
                                             vec![multisig::eth::SigningPayload(payload.0)],
                                         ).await;
@@ -484,7 +486,8 @@ where
                                         pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
                                             request_id: _,
                                             ceremony_id,
-                                            key_id,
+                                            epoch,
+                                            key,
                                             signatories,
                                             payload,
                                         },
@@ -498,7 +501,7 @@ where
                                                 &dot_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            key_id,
+                                            (epoch, key).into(),
                                             signatories,
                                             vec![multisig::polkadot::SigningPayload::new(payload.0)
                                                 .expect("Payload should be correct size")],
@@ -508,7 +511,8 @@ where
                                         pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
                                             request_id: _,
                                             ceremony_id,
-                                            key_id,
+                                            epoch,
+                                            key,
                                             signatories,
                                             payload: payloads,
                                         },
@@ -522,11 +526,63 @@ where
                                                 &btc_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
-                                            key_id,
+                                            (epoch, key).into(),
                                             signatories,
                                             payloads.into_iter().map(multisig::bitcoin::SigningPayload).collect(),
                                         ).await;
                                     }
+                                    // ======= KEY HANDOVER =======
+                                    state_chain_runtime::RuntimeEvent::BitcoinVault(
+                                        pallet_cf_vaults::Event::KeyHandoverRequest {
+                                           ceremony_id,
+                                           key_to_share,
+                                           from_epoch,
+                                           sharing_participants,
+                                           receiving_participants,
+                                           to_epoch,
+                                        },
+                                    ) => {
+                                        eth_multisig_client.update_latest_ceremony_id(ceremony_id);
+                                        dot_multisig_client.update_latest_ceremony_id(ceremony_id);
+
+                                        if sharing_participants.contains(&account_id) || receiving_participants.contains(&account_id) {
+                                            let key_handover_result_future = btc_multisig_client.initiate_key_handover(ceremony_id, (from_epoch, key_to_share).into(), to_epoch, sharing_participants, receiving_participants);
+                                            let state_chain_client = state_chain_client.clone();
+                                            scope.spawn(async move {
+                                                let _result =
+                                                    state_chain_client
+                                                        .submit_signed_extrinsic(pallet_cf_vaults::Call::<
+                                                            state_chain_runtime::Runtime,
+                                                            BitcoinInstance,
+                                                        >::report_key_handover_outcome {
+                                                            ceremony_id,
+                                                            reported_outcome: key_handover_result_future
+                                                                .await
+                                                                .map(<BitcoinInstance as CryptoCompat<_, _>>::pubkey_to_aggkey)
+                                                                .map_err(|(bad_account_ids, _reason)| bad_account_ids),
+                                                        })
+                                                        .await;
+                                                Ok(())
+                                            });
+                                        } else {
+                                            btc_multisig_client.update_latest_ceremony_id(ceremony_id);
+                                        }
+                                    }
+                                    state_chain_runtime::RuntimeEvent::EthereumVault(
+                                        pallet_cf_vaults::Event::KeyHandoverRequest {
+                                           ..
+                                        },
+                                    ) => {
+                                        panic!("There should be no key handover requests made for Ethereum")
+                                    }
+                                    state_chain_runtime::RuntimeEvent::PolkadotVault(
+                                        pallet_cf_vaults::Event::KeyHandoverRequest {
+                                           ..
+                                        },
+                                    ) => {
+                                        panic!("There should be no key handover requests made for Polkadot")
+                                    }
+
                                     state_chain_runtime::RuntimeEvent::EthereumBroadcaster(
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {
                                             broadcast_attempt_id,
@@ -612,12 +668,12 @@ where
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
-                                            ingress_address,
-                                            ingress_asset
+                                            deposit_address,
+                                            source_asset
                                         }
                                     ) => {
                                         use cf_primitives::chains::assets::eth;
-                                        match ingress_asset {
+                                        match source_asset {
                                             eth::Asset::Eth => {
                                                 &eth_address_to_monitor_sender.eth
                                             }
@@ -627,16 +683,16 @@ where
                                             eth::Asset::Usdc => {
                                                 &eth_address_to_monitor_sender.usdc
                                             }
-                                        }.send(AddressMonitorCommand::Add(ingress_address)).unwrap();
+                                        }.send(AddressMonitorCommand::Add(deposit_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumIngressEgress(
                                         pallet_cf_ingress_egress::Event::StopWitnessing {
-                                            ingress_address,
-                                            ingress_asset
+                                            deposit_address,
+                                            source_asset
                                         }
                                     ) => {
                                         use cf_primitives::chains::assets::eth;
-                                        match ingress_asset {
+                                        match source_asset {
                                             eth::Asset::Eth => {
                                                 &eth_address_to_monitor_sender.eth
                                             }
@@ -646,43 +702,43 @@ where
                                             eth::Asset::Usdc => {
                                                 &eth_address_to_monitor_sender.usdc
                                             }
-                                        }.send(AddressMonitorCommand::Remove(ingress_address)).unwrap();
+                                        }.send(AddressMonitorCommand::Remove(deposit_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
-                                            ingress_address,
-                                            ingress_asset
+                                            deposit_address,
+                                            source_asset
                                         }
                                     ) => {
-                                        assert_eq!(ingress_asset, cf_primitives::chains::assets::dot::Asset::Dot);
-                                        dot_monitor_ingress_sender.send(AddressMonitorCommand::Add(ingress_address)).unwrap();
+                                        assert_eq!(source_asset, cf_primitives::chains::assets::dot::Asset::Dot);
+                                        dot_monitor_command_sender.send(AddressMonitorCommand::Add(deposit_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
                                         pallet_cf_ingress_egress::Event::StopWitnessing {
-                                            ingress_address,
-                                            ingress_asset
+                                            deposit_address,
+                                            source_asset
                                         }
                                     ) => {
-                                        assert_eq!(ingress_asset, cf_primitives::chains::assets::dot::Asset::Dot);
-                                        dot_monitor_ingress_sender.send(AddressMonitorCommand::Remove(ingress_address)).unwrap();
+                                        assert_eq!(source_asset, cf_primitives::chains::assets::dot::Asset::Dot);
+                                        dot_monitor_command_sender.send(AddressMonitorCommand::Remove(deposit_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::BitcoinIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
-                                            ingress_address,
-                                            ingress_asset
+                                            deposit_address,
+                                            source_asset
                                         }
                                     ) => {
-                                        assert_eq!(ingress_asset, cf_primitives::chains::assets::btc::Asset::Btc);
-                                        btc_monitor_ingress_sender.send(AddressMonitorCommand::Add(ingress_address)).unwrap();
+                                        assert_eq!(source_asset, cf_primitives::chains::assets::btc::Asset::Btc);
+                                        btc_monitor_command_sender.send(AddressMonitorCommand::Add(deposit_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::BitcoinIngressEgress(
                                         pallet_cf_ingress_egress::Event::StopWitnessing {
-                                            ingress_address,
-                                            ingress_asset
+                                            deposit_address,
+                                            source_asset
                                         }
                                     ) => {
-                                        assert_eq!(ingress_asset, cf_primitives::chains::assets::btc::Asset::Btc);
-                                        btc_monitor_ingress_sender.send(AddressMonitorCommand::Remove(ingress_address)).unwrap();
+                                        assert_eq!(source_asset, cf_primitives::chains::assets::btc::Asset::Btc);
+                                        btc_monitor_command_sender.send(AddressMonitorCommand::Remove(deposit_address)).unwrap();
                                     }
                                 }}}}
                                 Err(error) => {

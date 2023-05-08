@@ -20,10 +20,8 @@ futures-core = "0.3.14"
 futures-util = "0.3.14"
 hex = "0.4.3"
 itertools = "0.10"
-# have to use the older version until secp256k1 updates its dependency (https://github.com/rust-bitcoin/rust-secp256k1/issues/328)
-rand_legacy = { package = "rand", version = "0.6" }
 lazy_static = "1.4"
-secp256k1 = { version = "0.20", features = [
+secp256k1 = { version = "0.27", features = [
   "serde",
   "rand-std",
   "global-context",
@@ -54,6 +52,8 @@ rayon = "1.5"
 rand = "0.8.4"
 ed25519-consensus = "2.0"
 tracing = "0.1"
+strum = {default-features = false, version = '0.24'}
+strum_macros = {default-features = false, version = '0.24'}
 
 # Local deps
 cf-chains = { path = "../../state-chain/chains" }

@@ -4,7 +4,7 @@
 
 use cf_chains::{
 	btc::{
-		api::SelectedUtxos, ingress_address::derive_btc_ingress_bitcoin_script,
+		api::SelectedUtxos, deposit_address::derive_btc_deposit_bitcoin_script,
 		utxo_selection::select_utxos_from_pool, Bitcoin, BitcoinNetwork, BitcoinScriptBounded,
 		BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
@@ -155,9 +155,9 @@ pub mod pallet {
 		StorageMap<_, Blake2_128Concat, Asset, EthereumAddress>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn stake_manager_address)]
-	/// The address of the ETH stake manager contract
-	pub type EthereumStakeManagerAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
+	#[pallet::getter(fn state_chain_gateway_address)]
+	/// The address of the ETH state chain gatweay contract
+	pub type EthereumStateChainGatewayAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn key_manager_address)]
@@ -212,9 +212,9 @@ pub mod pallet {
 	pub type BitcoinFeePerUtxo<T> = StorageValue<_, u64, ValueQuery>;
 
 	#[pallet::storage]
-	/// Lookup for determining which salt and pubkey the current ingress Bitcoin Script was created
+	/// Lookup for determining which salt and pubkey the current deposit Bitcoin Script was created
 	/// from.
-	pub type BitcoinActiveIngressDetails<T> =
+	pub type BitcoinActiveDepositAddressDetails<T> =
 		StorageMap<_, Twox64Concat, BitcoinScriptBounded, (u32, [u8; 32]), ValueQuery>;
 
 	#[pallet::event]
@@ -234,7 +234,7 @@ pub mod pallet {
 		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
 		/// The Polkadot Runtime Version stored on chain was updated.
 		PolkadotRuntimeVersionUpdated { runtime_version: RuntimeVersion },
-		/// The block number for set for new Bitcoin vault
+		/// The starting block number for the new Bitcoin vault was set
 		BitcoinBlockNumberSetForVault { block_number: cf_chains::btc::BlockNumber },
 	}
 
@@ -477,7 +477,7 @@ pub mod pallet {
 				Self::add_bitcoin_utxo_to_list(
 					amount,
 					utxo_id,
-					derive_btc_ingress_bitcoin_script(change_pubkey.pubkey_x, CHANGE_ADDRESS_SALT)
+					derive_btc_deposit_bitcoin_script(change_pubkey.pubkey_x, CHANGE_ADDRESS_SALT)
 						.try_into()
 						.expect("The script should not exceed 128 bytes"),
 				);
@@ -492,7 +492,7 @@ pub mod pallet {
 	pub struct GenesisConfig {
 		pub flip_token_address: EthereumAddress,
 		pub eth_usdc_address: EthereumAddress,
-		pub stake_manager_address: EthereumAddress,
+		pub state_chain_gateway_address: EthereumAddress,
 		pub key_manager_address: EthereumAddress,
 		pub eth_vault_address: EthereumAddress,
 		pub ethereum_chain_id: u64,
@@ -508,7 +508,7 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig {
 		fn build(&self) {
-			EthereumStakeManagerAddress::<T>::set(self.stake_manager_address);
+			EthereumStateChainGatewayAddress::<T>::set(self.state_chain_gateway_address);
 			EthereumKeyManagerAddress::<T>::set(self.key_manager_address);
 			EthereumVaultAddress::<T>::set(self.eth_vault_address);
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
@@ -571,8 +571,8 @@ impl<T: Config> EthEnvironmentProvider for Pallet<T> {
 	fn vault_address() -> EthereumAddress {
 		EthereumVaultAddress::<T>::get()
 	}
-	fn stake_manager_address() -> EthereumAddress {
-		EthereumStakeManagerAddress::<T>::get()
+	fn state_chain_gateway_address() -> EthereumAddress {
+		EthereumStateChainGatewayAddress::<T>::get()
 	}
 	fn chain_id() -> u64 {
 		EthereumChainId::<T>::get()
@@ -601,9 +601,9 @@ impl<T: Config> Pallet<T> {
 	pub fn add_bitcoin_utxo_to_list(
 		amount: BtcAmount,
 		utxo_id: UtxoId,
-		ingress_script: BitcoinScriptBounded,
+		deposit_script: BitcoinScriptBounded,
 	) {
-		let (salt, pubkey) = BitcoinActiveIngressDetails::<T>::take(ingress_script);
+		let (salt, pubkey) = BitcoinActiveDepositAddressDetails::<T>::take(deposit_script);
 		BitcoinAvailableUtxos::<T>::append(Utxo {
 			amount,
 			txid: utxo_id.tx_hash,
@@ -628,11 +628,11 @@ impl<T: Config> Pallet<T> {
 		})
 	}
 
-	pub fn add_details_for_btc_ingress_script(
-		ingress_script: BitcoinScriptBounded,
+	pub fn add_details_for_btc_deposit_script(
+		deposit_script: BitcoinScriptBounded,
 		salt: u32,
 		pubkey: [u8; 32],
 	) {
-		BitcoinActiveIngressDetails::<T>::insert(ingress_script, (salt, pubkey));
+		BitcoinActiveDepositAddressDetails::<T>::insert(deposit_script, (salt, pubkey));
 	}
 }

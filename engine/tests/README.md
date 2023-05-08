@@ -38,17 +38,17 @@ npx hardhat node --config hardhat-interval-mining.config.js
 
 Then run the [setup script](scripts/setup.sh) that creates the events expected by the test. The script will create a a folder and pull the eth-contracts into it from git, so you may want to run the script from a temp folder somewhere. This script will also download and install [poetry](https://github.com/python-poetry/poetry) if you don't have it already.
 
-Finally, the script will deploy all the Chainflip contracts, and perform transactions that generate all possible events on the StakeManager and the KeyManager contracts. These events are what are asserted against within the integration tests.
+Finally, the script will deploy all the Chainflip contracts, and perform transactions that generate all possible events on the StateChainGateway and the KeyManager contracts. These events are what are asserted against within the integration tests.
 
 ```sh
 cd `engine/tests`
 ./scripts/setup.sh
 ```
 
-Now we can run the stake_manager_integration or key_manager_integration tests with cargo.
+Now we can run the state_chain_gateway_integration or key_manager_integration tests with cargo.
 
 ```sh
-cargo test --package chainflip-engine --test stake_manager_integration -- test_all_stake_manager_events --exact --nocapture
+cargo test --package chainflip-engine --test state_chain_gateway_integration -- test_all_state_chain_gateway_events --exact --nocapture
 cargo test --package chainflip-engine --test key_manager_integration -- test_all_key_manager_events --exact --nocapture
 ```
 
@@ -77,5 +77,5 @@ cargo test -p chainflip-engine --lib
 To run only a particular integration test you can as so:
 
 ```sh
-cargo test -p chainflip-engine --test stake_manager_integration
+cargo test -p chainflip-engine --test state_chain_gateway_integration
 ```
