@@ -45,7 +45,6 @@ use super::{
 		SigningStageName,
 	},
 	keygen::{HashCommitments1, HashContext, KeygenData, PubkeySharesStage0},
-	legacy::MultisigMessageV1,
 	signing::SigningData,
 	CeremonyRequest, MultisigData, MultisigMessage,
 };
@@ -312,23 +311,11 @@ fn map_ceremony_parties(
 	Ok((our_idx, signer_idxs))
 }
 
-pub fn deserialize_from_v1<C: CryptoScheme>(payload: &[u8]) -> Result<MultisigMessage<C::Point>> {
-	let message: MultisigMessageV1<C::Point> = bincode::deserialize(payload)
-		.map_err(|e| anyhow!("Failed to deserialize message (version: 1): {:?}", e))?;
-	Ok(MultisigMessage { ceremony_id: message.ceremony_id, data: message.data.into() })
-}
-
 pub fn deserialize_for_version<C: CryptoScheme>(
 	message: VersionedCeremonyMessage,
 ) -> Result<MultisigMessage<C::Point>> {
 	match message.version {
-		1 => {
-			// NOTE: version 1 did not expect signing over multiple payloads,
-			// so we need to parse them using the old format and transform to the new
-			// format:
-			deserialize_from_v1::<C>(&message.payload)
-		},
-		2 => bincode::deserialize::<'_, MultisigMessage<C::Point>>(&message.payload).map_err(|e| {
+		1 => bincode::deserialize::<'_, MultisigMessage<C::Point>>(&message.payload).map_err(|e| {
 			anyhow!("Failed to deserialize message (version: {}): {:?}", message.version, e)
 		}),
 		_ => Err(anyhow!("Unsupported message version: {}", message.version)),

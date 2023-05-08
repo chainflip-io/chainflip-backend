@@ -4,7 +4,6 @@ mod ceremony_runner;
 mod common;
 pub mod key_store_api;
 pub mod keygen;
-pub mod legacy;
 pub mod signing;
 
 #[cfg(test)]
