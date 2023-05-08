@@ -499,7 +499,7 @@ mod tests {
 
 		let params = ThresholdParameters { share_count: 7, threshold: 5 };
 
-		use rand_legacy::SeedableRng;
+		use rand::SeedableRng;
 		let mut rng = Rng::from_seed([0; 32]);
 
 		let (secret, _commitments, shares) = generate_secret_and_shares::<Point>(
@@ -520,7 +520,7 @@ mod tests {
 
 		let context = HashContext([0; 32]);
 
-		use rand_legacy::SeedableRng;
+		use rand::SeedableRng;
 		let mut rng = Rng::from_seed([0; 32]);
 
 		let (commitments, hash_commitments, outgoing_shares): (
@@ -672,7 +672,7 @@ pub fn get_key_data_for_test<C: CryptoScheme>(
 ) -> KeygenResultInfo<C> {
 	super::generate_key_data::<C>(
 		signers.clone(),
-		&mut <Rng as rand_legacy::SeedableRng>::from_seed([8; 32]),
+		&mut <Rng as rand::SeedableRng>::from_seed([8; 32]),
 	)
 	.1
 	.get(signers.iter().next().unwrap())

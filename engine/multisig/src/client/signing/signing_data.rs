@@ -118,7 +118,7 @@ mod tests {
 		Rng,
 	};
 
-	use rand_legacy::SeedableRng;
+	use rand::SeedableRng;
 
 	use super::*;
 

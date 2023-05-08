@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use rand_legacy::SeedableRng;
+use rand::SeedableRng;
 
 use crate::{
 	client::{

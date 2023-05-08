@@ -55,7 +55,7 @@ impl AsRef<[u8]> for SigningPayload {
 	}
 }
 
-impl CanonicalEncoding for secp256k1::schnorrsig::PublicKey {
+impl CanonicalEncoding for secp256k1::XOnlyPublicKey {
 	fn encode_key(&self) -> Vec<u8> {
 		self.serialize().to_vec()
 	}
@@ -64,7 +64,7 @@ impl CanonicalEncoding for secp256k1::schnorrsig::PublicKey {
 impl CryptoScheme for BtcSigning {
 	type Point = Point;
 	type Signature = BtcSchnorrSignature;
-	type PublicKey = secp256k1::schnorrsig::PublicKey;
+	type PublicKey = secp256k1::XOnlyPublicKey;
 	type SigningPayload = SigningPayload;
 	type Chain = cf_chains::Bitcoin;
 
@@ -123,16 +123,16 @@ impl CryptoScheme for BtcSigning {
 		payload: &Self::SigningPayload,
 	) -> anyhow::Result<()> {
 		let secp = secp256k1::Secp256k1::new();
-		let raw_sig = secp256k1::schnorrsig::Signature::from_slice(&signature.to_raw()).unwrap();
+		let raw_sig = secp256k1::schnorr::Signature::from_slice(&signature.to_raw()).unwrap();
 		let raw_msg = secp256k1::Message::from_slice(&payload.0).unwrap();
 
-		secp.schnorrsig_verify(&raw_sig, &raw_msg, public_key)
+		secp.verify_schnorr(&raw_sig, &raw_msg, public_key)
 			.map_err(|e| anyhow::anyhow!("Failed to verify signature: {:?}", e))?;
 		Ok(())
 	}
 
 	fn pubkey_from_point(pubkey_point: &Self::Point) -> Self::PublicKey {
-		secp256k1::schnorrsig::PublicKey::from_slice(&pubkey_point.x_bytes())
+		secp256k1::XOnlyPublicKey::from_slice(&pubkey_point.x_bytes())
 			.expect("from_slice expects 32 byte x coordinate.")
 	}
 
@@ -160,7 +160,7 @@ mod test {
 		let s =
 			Scalar::from_hex("ED7A468DBE45823D91CC1276F9E9F1DD3A1DB8E4C9EFE8F5DBA43B63E4C02FAD");
 		let signature = BtcSigning::build_signature(s, r);
-		let pubkey = secp256k1::schnorrsig::PublicKey::from_slice(
+		let pubkey = secp256k1::XOnlyPublicKey::from_slice(
 			hex::decode("59B2B46FB182A6D4B39FFB7A29D0B67851DDE2433683BE6D46623A7960D2799E")
 				.unwrap()
 				.as_slice(),
