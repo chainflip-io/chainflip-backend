@@ -411,11 +411,12 @@ where
 							.into_iter()
 							.map(|(receiver_id, message)| {
 								(receiver_id, {
-									let message =
-									deserialize_for_version::<C::Crypto>(VersionedCeremonyMessage {
-										version: CURRENT_PROTOCOL_VERSION,
-										payload: message,
-									})
+									let message = deserialize_for_version::<C::Crypto>(
+										VersionedCeremonyMessage {
+											version: CURRENT_PROTOCOL_VERSION,
+											payload: message,
+										},
+									)
 									.unwrap();
 
 									message_to_next_stage_data(message)
