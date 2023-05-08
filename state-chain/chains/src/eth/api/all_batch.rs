@@ -246,7 +246,6 @@ mod test_all_batch {
 		.unwrap();
 
 		let all_batch_reference = eth_vault.function("allBatch").unwrap();
-		//println!("{:?}", all_batch_reference);
 
 		let all_batch_runtime = AllBatch::new_unsigned(
 			EthereumReplayProtection { nonce: NONCE },
