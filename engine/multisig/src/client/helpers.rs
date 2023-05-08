@@ -411,11 +411,12 @@ where
 							.into_iter()
 							.map(|(receiver_id, message)| {
 								(receiver_id, {
-									// Because (for now) messages are serialized for V1, we need to
-									// deserialize them from v1
-									let message = super::ceremony_manager::deserialize_from_v1::<
-										C::Crypto,
-									>(&message)
+									let message = deserialize_for_version::<C::Crypto>(
+										VersionedCeremonyMessage {
+											version: CURRENT_PROTOCOL_VERSION,
+											payload: message,
+										},
+									)
 									.unwrap();
 
 									message_to_next_stage_data(message)

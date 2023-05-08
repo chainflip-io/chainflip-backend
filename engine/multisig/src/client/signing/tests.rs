@@ -132,7 +132,6 @@ async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayl
 	assert!(C::verify_signature(&signature, &key, &payloads[0]).is_ok());
 }
 
-#[ignore = "Only works if V2 is enabled (by setting CURRENT_PROTOCOL_VERSION = 2)"]
 #[tokio::test]
 async fn should_sign_multiple_payloads() {
 	use crate::crypto::{
@@ -197,7 +196,6 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 	}
 }
 
-#[ignore = "Only works if V2 is enabled (by setting CURRENT_PROTOCOL_VERSION = 2)"]
 #[tokio::test]
 async fn should_sign_with_different_keys() {
 	// The logic for multiple payloads/keys is the same for all crypto
