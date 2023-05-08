@@ -435,6 +435,13 @@
   },
   {
     "inputs": [],
+    "name": "govUpdateFlipIssuer",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "govWithdraw",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -558,6 +565,11 @@
         "internalType": "address",
         "name": "newIssuer",
         "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "omitChecks",
+        "type": "bool"
       }
     ],
     "name": "updateFlipIssuer",
@@ -633,6 +645,11 @@
         "internalType": "contract IKeyManager",
         "name": "keyManager",
         "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "omitChecks",
+        "type": "bool"
       }
     ],
     "name": "updateKeyManager",
