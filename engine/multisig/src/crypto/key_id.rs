@@ -29,12 +29,6 @@ impl CanonicalEncoding for cf_chains::eth::AggKey {
 	}
 }
 
-impl CanonicalEncoding for secp256k1::schnorrsig::PublicKey {
-	fn encode_key(&self) -> Vec<u8> {
-		self.serialize().to_vec()
-	}
-}
-
 impl CanonicalEncoding for secp256k1::XOnlyPublicKey {
 	fn encode_key(&self) -> Vec<u8> {
 		self.serialize().to_vec()

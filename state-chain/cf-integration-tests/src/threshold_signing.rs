@@ -210,7 +210,7 @@ impl KeyUtils for BtcKeyComponents {
 		let priv_seed: [u8; 32] = StdRng::seed_from_u64(seed).gen();
 		let secp = secp256k1::Secp256k1::new();
 		let keypair = secp256k1::KeyPair::from_seckey_slice(&secp, &priv_seed).unwrap();
-		let pubkey_x = secp256k1::PublicKey::from_keypair(&keypair).serialize();
+		let pubkey_x = secp256k1::XOnlyPublicKey::from_keypair(&keypair).0.serialize();
 		let agg_key = btc::AggKey { previous: None, current: pubkey_x };
 
 		KeyComponents { seed, secret: keypair, agg_key, epoch_index }

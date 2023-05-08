@@ -129,12 +129,6 @@ pub enum PreviousOrCurrent {
 	Current,
 }
 
-#[derive(Clone, Copy, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
-pub enum PreviousOrCurrent {
-	Previous,
-	Current,
-}
-
 impl ChainCrypto for Bitcoin {
 	type AggKey = AggKey;
 
