@@ -231,7 +231,7 @@ pub mod pallet {
 
 	/// Stores the list of assets that are not allowed to be egressed.
 	#[pallet::storage]
-	pub(crate) type DisabledEgressAssets<T: Config<I>, I: 'static = ()> =
+	pub type DisabledEgressAssets<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, ()>;
 
 	/// Stores a pool of addresses that is available for use together with the channel id.
@@ -248,6 +248,11 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type FetchParamDetails<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, ChannelId, (DepositFetchIdOf<T, I>, TargetChainAccount<T, I>)>;
+
+	/// Defines the minimum amount of Deposit allowed for each asset.
+	#[pallet::storage]
+	pub type MinimumDeposit<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -292,6 +297,18 @@ pub mod pallet {
 			broadcast_id: BroadcastId,
 			egress_ids: Vec<EgressId>,
 		},
+		MinimumDepositSet {
+			asset: TargetChainAsset<T, I>,
+			minimum_deposit: TargetChainAmount<T, I>,
+		},
+		/// The deposit amount is below the minimum deposit allowed.
+		/// The deposit is ignored.
+		DepositBelowMinimumAllowed {
+			deposit_address: TargetChainAccount<T, I>,
+			asset: TargetChainAsset<T, I>,
+			amount: TargetChainAmount<T, I>,
+			tx_id: <T::TargetChain as ChainCrypto>::TransactionId,
+		},
 	}
 
 	#[pallet::error]
@@ -300,7 +317,9 @@ pub mod pallet {
 		InvalidDepositAddress,
 		/// A deposit was made using the wrong asset.
 		AssetMismatch,
+		/// Channel ID has reached maximum
 		ChannelIdsExhausted,
+		/// The input asset is not supported by the chain
 		UnsupportedAsset,
 	}
 
@@ -470,6 +489,26 @@ pub mod pallet {
 			}));
 			Ok(())
 		}
+
+		/// Sets the minimum deposit ammount allowed for an asset.
+		/// Requires governance
+		///
+		/// ## Events
+		///
+		/// - [on_sucess](Event::MinimumDepositSet)
+		#[pallet::weight(T::WeightInfo::set_minimum_deposit())]
+		pub fn set_minimum_deposit(
+			origin: OriginFor<T>,
+			asset: TargetChainAsset<T, I>,
+			minimum_deposit: TargetChainAmount<T, I>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			MinimumDeposit::<T, I>::insert(asset, minimum_deposit);
+
+			Self::deposit_event(Event::<T, I>::MinimumDepositSet { asset, minimum_deposit });
+			Ok(())
+		}
 	}
 }
 
@@ -629,6 +668,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			DepositAddressDetailsLookup::<T, I>::get(&deposit_address)
 				.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 		ensure!(source_asset == asset, Error::<T, I>::AssetMismatch);
+
+		if amount < MinimumDeposit::<T, I>::get(asset) {
+			// If the amount is below the minimum allowed, the deposit is ignored.
+			Self::deposit_event(Event::<T, I>::DepositBelowMinimumAllowed {
+				deposit_address,
+				asset,
+				amount,
+				tx_id,
+			});
+			return Ok(())
+		}
 
 		ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
 			channel_id,

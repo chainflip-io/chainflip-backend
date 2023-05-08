@@ -35,6 +35,7 @@ pub trait WeightInfo {
 	fn disable_asset_egress() -> Weight;
 	fn on_idle_with_nothing_to_send() -> Weight;
 	fn process_single_deposit() -> Weight;
+	fn set_minimum_deposit() -> Weight;
 }
 
 /// Weights for pallet_cf_ingress_egress using the Substrate node and recommended hardware.
@@ -123,6 +124,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(4))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
+
+	fn set_minimum_deposit() -> Weight{
+		Weight::from_ref_time(1_000_000)
+	}
 }
 
 // For backwards compatibility and tests
@@ -209,5 +214,9 @@ impl WeightInfo for () {
 		Weight::from_ref_time(87_000_000)
 			.saturating_add(RocksDbWeight::get().reads(4))
 			.saturating_add(RocksDbWeight::get().writes(2))
+	}
+
+	fn set_minimum_deposit() -> Weight{
+		Weight::from_ref_time(1_000_000)
 	}
 }
