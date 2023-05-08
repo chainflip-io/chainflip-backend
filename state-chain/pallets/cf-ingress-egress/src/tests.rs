@@ -833,7 +833,7 @@ fn deposits_below_minimum_are_rejected() {
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::<Test, Instance1>::DepositBelowMinimumAllowed {
 				deposit_address,
-				asset,
+				asset: eth,
 				amount: default_deposit_amount,
 				tx_id: Default::default(),
 			},
