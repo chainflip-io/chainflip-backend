@@ -3,7 +3,7 @@ use cf_amm::{
 	common::{OneToZero, Side, SideMap, SqrtPriceQ64F96, ZeroToOne},
 	PoolState,
 };
-use cf_primitives::{chains::assets::any, Asset, AssetAmount};
+use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput};
 use cf_traits::{Chainflip, LpBalanceApi, SwappingApi};
 use frame_support::{pallet_prelude::*, transactional};
 use frame_system::pallet_prelude::OriginFor;
@@ -55,17 +55,11 @@ pub mod pallet {
 		/// The event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// For registering and verifying the account role.
-		type AccountRoleRegistry: AccountRoleRegistry<Self>;
-
 		/// Pallet responsible for managing Liquidity Providers.
 		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>;
 
 		#[pallet::constant]
 		type NetworkFee: Get<Permill>;
-
-		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
@@ -127,7 +121,8 @@ pub mod pallet {
 					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 					if let Err(e) = CollectedNetworkFee::<T>::try_mutate(|collected_fee| {
 						let flip_to_burn =
-							Pallet::<T>::swap(STABLE_ASSET, any::Asset::Flip, *collected_fee)?;
+							Pallet::<T>::swap(STABLE_ASSET, any::Asset::Flip, *collected_fee)?
+								.output;
 						FlipToBurn::<T>::mutate(|total| {
 							total.saturating_accrue(flip_to_burn);
 						});
@@ -146,14 +141,12 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Setting the buy interval to zero is not allowed.
 		ZeroBuyIntervalNotAllowed,
-
 		/// The specified exchange pool already exists.
 		PoolAlreadyExists,
 		/// The specified exchange pool does not exist.
 		PoolDoesNotExist,
 		/// The exchange pool is currently disabled.
 		PoolDisabled,
-
 		/// the Fee BIPs must be within the allowed range.
 		InvalidFeeAmount,
 		/// the initial price must be within the allowed range.
@@ -614,22 +607,29 @@ impl<T: Config> SwappingApi for Pallet<T> {
 		from: any::Asset,
 		to: any::Asset,
 		input_amount: AssetAmount,
-	) -> Result<AssetAmount, DispatchError> {
+	) -> Result<SwapOutput, DispatchError> {
 		Ok(match (from, to) {
 			(input_asset, STABLE_ASSET) => {
 				let gross_output =
 					Self::process_swap_leg(SwapLeg::ToStable, input_asset, input_amount)?;
-				Self::take_network_fee(gross_output)
+				Self::take_network_fee(gross_output).into()
 			},
 			(STABLE_ASSET, output_asset) => {
 				let net_input = Self::take_network_fee(input_amount);
-				Self::process_swap_leg(SwapLeg::FromStable, output_asset, net_input)?
+				Self::process_swap_leg(SwapLeg::FromStable, output_asset, net_input)?.into()
 			},
 			(input_asset, output_asset) => {
 				let intermediate_output =
 					Self::process_swap_leg(SwapLeg::ToStable, input_asset, input_amount)?;
 				let intermediate_input = Self::take_network_fee(intermediate_output);
-				Self::process_swap_leg(SwapLeg::FromStable, output_asset, intermediate_input)?
+				SwapOutput {
+					intermediary: Some(intermediate_output),
+					output: Self::process_swap_leg(
+						SwapLeg::FromStable,
+						output_asset,
+						intermediate_input,
+					)?,
+				}
 			},
 		})
 	}

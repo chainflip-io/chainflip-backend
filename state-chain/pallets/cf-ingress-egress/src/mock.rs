@@ -2,11 +2,11 @@ pub use crate::{self as pallet_cf_ingress_egress};
 pub use cf_chains::{
 	address::ForeignChainAddress,
 	eth::api::{EthereumApi, EthereumReplayProtection},
-	CcmIngressMetadata, Chain, ChainAbi, ChainEnvironment,
+	CcmDepositMetadata, Chain, ChainAbi, ChainEnvironment,
 };
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
-	Asset, AssetAmount, EthereumAddress, ExchangeRate, ETHEREUM_ETH_ADDRESS,
+	Asset, AssetAmount, EthereumAddress, ETHEREUM_ETH_ADDRESS,
 };
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 
@@ -17,18 +17,14 @@ use frame_support::{
 	weights::Weight,
 };
 
+pub use cf_traits::Broadcaster;
 use cf_traits::{
-	impl_mock_callback,
+	impl_mock_callback, impl_mock_chainflip,
 	mocks::{
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
 		ccm_handler::MockCcmHandler,
 	},
-	IngressHandler,
-};
-
-pub use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	Broadcaster,
+	DepositHandler,
 };
 use frame_system as system;
 use sp_core::H256;
@@ -86,16 +82,7 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-impl cf_traits::Chainflip for Test {
-	type ValidatorId = u64;
-	type Amount = u128;
-	type RuntimeCall = RuntimeCall;
-	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
-	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
-	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
-	type SystemState = MockSystemStateInfo;
-}
-
+impl_mock_chainflip!(Test);
 impl_mock_callback!(RuntimeOrigin);
 
 parameter_types! {
@@ -124,8 +111,8 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 	}
 }
 
-pub struct MockIngressHandler;
-impl IngressHandler<Ethereum> for MockIngressHandler {}
+pub struct MockDepositHandler;
+impl DepositHandler<Ethereum> for MockDepositHandler {}
 
 impl crate::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -133,11 +120,10 @@ impl crate::Config<Instance1> for Test {
 	type TargetChain = Ethereum;
 	type AddressDerivation = ();
 	type LpBalance = Self;
-	type SwapIntentHandler = Self;
+	type SwapDepositHandler = Self;
 	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;
 	type Broadcaster = MockBroadcast;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
-	type IngressHandler = MockIngressHandler;
+	type DepositHandler = MockDepositHandler;
 	type WeightInfo = ();
 	type CcmHandler = MockCcmHandler;
 }

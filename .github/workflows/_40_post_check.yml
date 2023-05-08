@@ -1,0 +1,133 @@
+name: Post build checks
+on:
+  workflow_call:
+    inputs:
+      simple_bouncer:
+        type: boolean
+        default: false
+      timeout-minutes:
+        type: number
+        required: false
+        default: 10
+jobs:
+  bouncer:
+    runs-on: [hetzner]
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    services:
+      bitcoin:
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        image: ghcr.io/chainflip-io/chainflip-bitcoin-regtest:v24.0.1
+        ports:
+          - 8332:8332
+      polkadot:
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v0.9.36-ci
+        ports:
+          - 9934:9933
+          - 9945:9944
+      geth:
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        image: ghcr.io/chainflip-io/geth:perseverance-rc2-12s-ci
+        ports:
+          - 30303:30303
+          - 30303:30303/udp
+          - 8545:8545
+          - 8546:8546
+          - 8551:8551
+    steps:
+      - name: Checkout chainflip-backend
+        uses: actions/checkout@v3
+
+      - name: Configure NodeJS
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+
+      - name: Download binaries
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-backend-bin
+
+      - name: Checkout chainflip-bouncer
+        uses: actions/checkout@v3
+        with:
+          repository: chainflip-io/chainflip-bouncer
+          token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+          path: bouncer
+
+      - name: Install node dependencies
+        working-directory: bouncer
+        run: npm i
+
+      - name: Start a localnet
+        env:
+          BINARIES_LOCATION: .
+        run: |
+          echo -n ${{ secrets.CF_LOCALNET_SIGNING_KEY }} > ./localnet/init/secrets/signing_key_file
+          echo -n ${{ secrets.CF_LOCALNET_NODE_KEY }} > ./localnet/init/secrets/node_key_file
+          echo -n ${{ secrets.CF_LOCALNET_ETH_PRIVATE_KEY }} > ./localnet/init/secrets/eth_private_key_file
+          chmod +x ${{ env.BINARIES_LOCATION }}/chainflip-*
+          ./localnet/manage.sh
+
+      - name: Run EinfachHeuteLeiderNicht.exe
+        if: inputs.simple_bouncer
+        working-directory: bouncer
+        env:
+          POLKADOT_ENDPOINT: ws://polkadot:9944
+          BTC_ENDPOINT: http://bitcoin:8332
+          ETH_ENDPOINT: http://geth:8545
+        run: |
+          ./tests/produces_blocks.sh 2
+
+      - name: Run HeuteLeiderNicht.exe
+        id: heuteleidernicht
+        if: ${{ ! inputs.simple_bouncer }}
+        working-directory: bouncer
+        env:
+          POLKADOT_ENDPOINT: ws://polkadot:9944
+          BTC_ENDPOINT: http://bitcoin:8332
+          ETH_ENDPOINT: http://geth:8545
+        run: |
+          ./run.sh
+
+      - name: Notify on failed build
+        if: failure() && github.ref_name == 'main'
+        env:
+          DISCORD_USERNAME: 'Nightly build'
+          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
+        uses: Ilshidur/action-discord@0.3.2
+        with:
+          args: |
+            ❗️❗️❗️❗️ Nightly Build Failed on `main` ❗️❗️❗️❗️
+            👾 Link to job: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            #️⃣ Tagging: <@&939151218708709416>
+            https://media.giphy.com/media/wHfwCBZzCMhmE/giphy.gif
+
+  benchmarks:
+    runs-on: [hetzner]
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Download previously built binaries
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-backend-bin
+          path: ./target/release
+
+      - name: Run benchmarks
+        run: |
+          chmod +x ./target/release/chainflip-node
+          ./state-chain/scripts/benchmark-all.sh --binary ./target/release/chainflip-node --steps 2 --repetitions 1

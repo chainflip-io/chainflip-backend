@@ -9,6 +9,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+mod helpers;
+
 pub mod weights;
 pub use weights::WeightInfo;
 
@@ -20,10 +22,10 @@ mod rotation_state;
 pub use auction_resolver::*;
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidInfo, BidderProvider,
-	Bonding, Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, ExecutionCondition,
-	HistoricalEpoch, MissedAuthorshipSlots, QualifyNode, ReputationResetter, StakeHandler,
-	SystemStateInfo, VaultRotator,
+	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidderProvider, Bonding,
+	Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, ExecutionCondition,
+	FundingInfo, HistoricalEpoch, MissedAuthorshipSlots, OnAccountFunded, QualifyNode,
+	ReputationResetter, SystemStateInfo, VaultRotator,
 };
 use cf_utilities::Port;
 use frame_support::{
@@ -75,6 +77,7 @@ type RuntimeRotationState<T> =
 pub enum RotationPhase<T: Config> {
 	Idle,
 	KeygensInProgress(RuntimeRotationState<T>),
+	KeyHandoversInProgress(RuntimeRotationState<T>),
 	ActivatingKeys(RuntimeRotationState<T>),
 	NewKeysActivated(RuntimeRotationState<T>),
 	SessionRotating(RuntimeRotationState<T>),
@@ -133,9 +136,6 @@ pub mod pallet {
 		/// The top-level offence type must support this pallet's offence type.
 		type Offence: From<PalletOffence>;
 
-		/// For registering and verifying the account role.
-		type AccountRoleRegistry: AccountRoleRegistry<Self>;
-
 		/// A handler for epoch lifecycle events
 		type EpochTransitionHandler: EpochTransitionHandler;
 
@@ -144,9 +144,6 @@ pub mod pallet {
 		type MinEpoch: Get<<Self as frame_system::Config>::BlockNumber>;
 
 		type VaultRotator: VaultRotator<ValidatorId = ValidatorIdOf<Self>>;
-
-		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// For retrieving missed authorship slots.
 		type MissedAuthorshipSlots: MissedAuthorshipSlots;
@@ -180,10 +177,10 @@ pub mod pallet {
 		type ValidatorWeightInfo: WeightInfo;
 	}
 
-	/// Percentage of epoch we allow claims.
+	/// Percentage of epoch we allow redemptions.
 	#[pallet::storage]
-	#[pallet::getter(fn claim_period_as_percentage)]
-	pub type ClaimPeriodAsPercentage<T: Config> = StorageValue<_, Percentage, ValueQuery>;
+	#[pallet::getter(fn redemption_period_as_percentage)]
+	pub type RedemptionPeriodAsPercentage<T: Config> = StorageValue<_, Percentage, ValueQuery>;
 
 	/// The starting block number for the current epoch.
 	#[pallet::storage]
@@ -211,12 +208,6 @@ pub mod pallet {
 		ValidatorIdOf<T>,
 		AuthorityCount,
 	>;
-
-	/// Track epochs and their associated authority count.
-	#[pallet::storage]
-	#[pallet::getter(fn epoch_authority_count)]
-	pub type EpochAuthorityCount<T: Config> =
-		StorageMap<_, Twox64Concat, EpochIndex, AuthorityCount>;
 
 	/// The rotation phase we are currently at.
 	#[pallet::storage]
@@ -285,7 +276,7 @@ pub mod pallet {
 	#[pallet::getter(fn ceremony_id_counter)]
 	pub type CeremonyIdCounter<T> = StorageValue<_, CeremonyId, ValueQuery>;
 
-	/// Backups, nodes who are not in the authority set, but are staked.
+	/// Backups, validator nodes who are not in the authority set.
 	#[pallet::storage]
 	#[pallet::getter(fn backups)]
 	pub type Backups<T: Config> = StorageValue<_, BackupMap<T>, ValueQuery>;
@@ -330,8 +321,8 @@ pub mod pallet {
 		PeerIdRegistered(T::AccountId, Ed25519PublicKey, Port, Ipv6Addr),
 		/// A authority has unregistered her current PeerId \[account_id, public_key\]
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
-		/// Ratio of claim period updated \[percentage\]
-		ClaimPeriodUpdated(Percentage),
+		/// Ratio of redemption period updated \[percentage\]
+		RedemptionPeriodUpdated(Percentage),
 		/// Vanity Name for a node has been set \[account_id, vanity_name\]
 		VanityNameSet(T::AccountId, VanityName),
 		/// The backup node percentage has been updated \[percentage\].
@@ -354,8 +345,8 @@ pub mod pallet {
 		AccountPeerMappingOverlap,
 		/// Invalid signature.
 		InvalidAccountPeerMappingSignature,
-		/// Invalid claim period.
-		InvalidClaimPeriod,
+		/// Invalid redemption period.
+		InvalidRedemptionPeriod,
 		/// Vanity name length exceeds the limit of 64 characters.
 		NameTooLong,
 		/// Invalid characters in the name.
@@ -368,6 +359,8 @@ pub mod pallet {
 		InconsistentRanges,
 		/// Not enough bidders were available to resolve the auction.
 		NotEnoughBidders,
+		/// Not enough funds to register as a validator.
+		NotEnoughFunds,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -399,16 +392,15 @@ pub mod pallet {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
-							let new_authorities = rotation_state.authority_candidates();
-							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities.clone());
-							EpochAuthorityCount::<T>::insert(
-								rotation_state.new_epoch_index,
-								new_authorities.len() as AuthorityCount,
-							);
-							T::VaultRotator::activate();
-							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
+							let authority_candidates = rotation_state.authority_candidates();
+							// We want to exclude nodes who have been banned from the key handover (but may not be in the authority_candidates)
+							let non_banned_current_authorities = rotation_state.filter_out_banned(Self::current_authorities());
+							T::VaultRotator::key_handover(helpers::select_sharing_participants(non_banned_current_authorities, &authority_candidates, block_number.unique_saturated_into()), authority_candidates, rotation_state.new_epoch_index);
+							Self::set_rotation_phase(RotationPhase::KeyHandoversInProgress(rotation_state));
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
+							// TODO: Punish a bit more here? Some of these nodes are already an authority and have failed to participate in handover.
+							// So given they're already not going to be in the set, excluding them from the set may not be enough punishment.
 							rotation_state.ban(offenders);
 
 							Self::start_vault_rotation(rotation_state);
@@ -422,11 +414,37 @@ pub mod pallet {
 								"Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}"
 							);
 							log::error!(target: "cf-validator", "Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}");
+							// TODO: We should put the chain into safe mode here.
 							Self::set_rotation_phase(RotationPhase::Idle);
 						},
 					};
 					T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
 				},
+				RotationPhase::KeyHandoversInProgress(rotation_state) => {
+					let num_primary_candidates = rotation_state.num_primary_candidates();
+					match T::VaultRotator::status() {
+						AsyncResult::Ready(VaultStatus::KeyHandoverComplete) => {
+							let new_authorities = rotation_state.authority_candidates();
+							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
+							T::VaultRotator::activate();
+							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
+						},
+						AsyncResult::Pending => {
+							log::debug!(target: "cf-validator", "awaiting key handover completion");
+						},
+						async_result => {
+							debug_assert!(
+								false,
+								"Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}"
+							);
+							log::error!(target: "cf-validator", "Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}");
+							// TODO: We should put the chain into safe mode here.
+							Self::set_rotation_phase(RotationPhase::Idle);
+						},
+					}
+					// TODO: Use correct weight
+					T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
+				}
 				RotationPhase::ActivatingKeys(rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {
@@ -458,30 +476,30 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Update the percentage of the epoch period that claims are permitted
+		/// Update the percentage of the epoch period that redemptions are permitted
 		///
 		/// The dispatch origin of this function must be governance
 		///
 		/// ## Events
 		///
-		/// - [ClaimPeriodUpdated](Event::ClaimPeriodUpdated)
+		/// - [RedemptionPeriodUpdated](Event::RedemptionPeriodUpdated)
 		///
 		/// ## Errors
 		///
-		/// - [InvalidClaimPeriod](Error::InvalidClaimPeriod)
+		/// - [InvalidRedemptionPeriod](Error::InvalidRedemptionPeriod)
 		///
 		/// ## Dependencies
 		///
 		/// - [EnsureGovernance]
 		#[pallet::weight(T::ValidatorWeightInfo::set_blocks_for_epoch())]
-		pub fn update_period_for_claims(
+		pub fn update_period_for_redemptions(
 			origin: OriginFor<T>,
 			percentage: Percentage,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(percentage <= 100, Error::<T>::InvalidClaimPeriod);
-			ClaimPeriodAsPercentage::<T>::set(percentage);
-			Self::deposit_event(Event::ClaimPeriodUpdated(percentage));
+			ensure!(percentage <= 100, Error::<T>::InvalidRedemptionPeriod);
+			RedemptionPeriodAsPercentage::<T>::set(percentage);
+			Self::deposit_event(Event::RedemptionPeriodUpdated(percentage));
 
 			Ok(().into())
 		}
@@ -803,6 +821,22 @@ pub mod pallet {
 			Self::deposit_event(Event::AuctionParametersChanged(parameters));
 			Ok(().into())
 		}
+
+		#[pallet::weight(T::ValidatorWeightInfo::register_as_validator())]
+		pub fn register_as_validator(origin: OriginFor<T>) -> DispatchResult {
+			let account_id: T::AccountId = ensure_signed(origin)?;
+			ensure!(
+				T::FundingInfo::total_balance_of(&account_id) >=
+					Backups::<T>::get()
+						.into_values()
+						.min()
+						.unwrap_or_else(|| T::Amount::from(0_u32))
+						.checked_div(&T::Amount::from(2_u32))
+						.expect("Division by 2 can't fail."),
+				Error::<T>::NotEnoughFunds
+			);
+			T::AccountRoleRegistry::register_as_validator(&account_id)
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -811,7 +845,7 @@ pub mod pallet {
 		pub genesis_backups: BackupMap<T>,
 		pub blocks_per_epoch: T::BlockNumber,
 		pub bond: T::Amount,
-		pub claim_period_as_percentage: Percentage,
+		pub redemption_period_as_percentage: Percentage,
 		pub backup_reward_node_percentage: Percentage,
 		pub authority_set_min_size: AuthorityCount,
 		pub min_size: AuthorityCount,
@@ -827,7 +861,7 @@ pub mod pallet {
 				genesis_backups: Default::default(),
 				blocks_per_epoch: Zero::zero(),
 				bond: Default::default(),
-				claim_period_as_percentage: Zero::zero(),
+				redemption_period_as_percentage: Zero::zero(),
 				backup_reward_node_percentage: Zero::zero(),
 				authority_set_min_size: Zero::zero(),
 				min_size: 3,
@@ -844,7 +878,7 @@ pub mod pallet {
 			LastExpiredEpoch::<T>::set(Default::default());
 			BlocksPerEpoch::<T>::set(self.blocks_per_epoch);
 			CurrentRotationPhase::<T>::set(RotationPhase::Idle);
-			ClaimPeriodAsPercentage::<T>::set(self.claim_period_as_percentage);
+			RedemptionPeriodAsPercentage::<T>::set(self.redemption_period_as_percentage);
 			BackupRewardNodePercentage::<T>::set(self.backup_reward_node_percentage);
 			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
 
@@ -906,14 +940,14 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		// start + ((epoch * percentage) / 100)
 		CurrentEpochStartedAt::<T>::get().saturating_add(
 			BlocksPerEpoch::<T>::get()
-				.saturating_mul(ClaimPeriodAsPercentage::<T>::get().into())
+				.saturating_mul(RedemptionPeriodAsPercentage::<T>::get().into())
 				.checked_div(&100u32.into())
 				.unwrap_or_default(),
 		) <= frame_system::Pallet::<T>::current_block_number()
 	}
 
-	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<AuthorityCount> {
-		EpochAuthorityCount::<T>::get(epoch)
+	fn authority_count_at_epoch(epoch_index: EpochIndex) -> Option<AuthorityCount> {
+		HistoricalAuthorities::<T>::decode_len(epoch_index).map(|l| l as AuthorityCount)
 	}
 
 	#[cfg(feature = "runtime-benchmarks")]
@@ -921,7 +955,6 @@ impl<T: Config> EpochInfo for Pallet<T> {
 		epoch_index: EpochIndex,
 		new_authorities: BTreeSet<Self::ValidatorId>,
 	) {
-		EpochAuthorityCount::<T>::insert(epoch_index, new_authorities.len() as AuthorityCount);
 		for (i, authority) in new_authorities.iter().enumerate() {
 			AuthorityIndex::<T>::insert(epoch_index, authority, i as AuthorityCount);
 			HistoricalActiveEpochs::<T>::append(authority, epoch_index);
@@ -1028,8 +1061,6 @@ impl<T: Config> Pallet<T> {
 			T::Bonder::update_bond(account_id, EpochHistory::<T>::active_bond(account_id));
 		});
 
-		EpochAuthorityCount::<T>::insert(new_epoch, new_authorities.len() as AuthorityCount);
-
 		CurrentEpochStartedAt::<T>::set(frame_system::Pallet::<T>::current_block_number());
 
 		HistoricalBonds::<T>::insert(new_epoch, new_bond);
@@ -1125,9 +1156,8 @@ impl<T: Config> Pallet<T> {
 			);
 			Self::set_rotation_phase(RotationPhase::Idle);
 		} else {
-			let new_epoch_index = rotation_state.new_epoch_index;
+			T::VaultRotator::keygen(candidates, rotation_state.new_epoch_index);
 			Self::set_rotation_phase(RotationPhase::KeygensInProgress(rotation_state));
-			T::VaultRotator::keygen(candidates, new_epoch_index);
 			log::info!(target: "cf-validator", "Vault rotation initiated.");
 		}
 	}
@@ -1138,9 +1168,9 @@ impl<T: Config> Pallet<T> {
 			Self::current_authority_count() as usize
 	}
 
-	/// Returns the bids of the highest staked backup nodes, who are eligible for the backup rewards
+	/// Returns the bids of the highest funded backup nodes, who are eligible for the backup rewards
 	/// sorted by bids highest to lowest.
-	pub fn highest_staked_qualified_backup_node_bids(
+	pub fn highest_funded_qualified_backup_node_bids(
 	) -> impl Iterator<Item = Bid<ValidatorIdOf<T>, <T as Chainflip>::Amount>> {
 		let mut backups: Vec<_> = Backups::<T>::get()
 			.into_iter()
@@ -1157,8 +1187,8 @@ impl<T: Config> Pallet<T> {
 	}
 
 	/// Returns ids as BTreeSet for fast lookups
-	pub fn highest_staked_qualified_backup_nodes_lookup() -> BTreeSet<ValidatorIdOf<T>> {
-		Self::highest_staked_qualified_backup_node_bids()
+	pub fn highest_funded_qualified_backup_nodes_lookup() -> BTreeSet<ValidatorIdOf<T>> {
+		Self::highest_funded_qualified_backup_node_bids()
 			.map(|Bid { bidder_id, .. }| bidder_id)
 			.collect()
 	}
@@ -1194,18 +1224,6 @@ impl<T: Config> Pallet<T> {
 }
 
 pub struct EpochHistory<T>(PhantomData<T>);
-
-pub struct BidInfoProvider<T>(PhantomData<T>);
-
-impl<T: Config> BidInfo for BidInfoProvider<T> {
-	type Balance = T::Amount;
-	fn get_min_backup_bid() -> Self::Balance {
-		Backups::<T>::get()
-			.into_values()
-			.min()
-			.unwrap_or_else(|| Self::Balance::from(0_u32))
-	}
-}
 
 impl<T: Config> HistoricalEpoch for EpochHistory<T> {
 	type ValidatorId = ValidatorIdOf<T>;
@@ -1371,11 +1389,11 @@ impl<T: Config> ExecutionCondition for NotDuringRotation<T> {
 
 pub struct UpdateBackupMapping<T>(PhantomData<T>);
 
-impl<T: Config> StakeHandler for UpdateBackupMapping<T> {
+impl<T: Config> OnAccountFunded for UpdateBackupMapping<T> {
 	type ValidatorId = ValidatorIdOf<T>;
 	type Amount = T::Amount;
 
-	fn on_stake_updated(validator_id: &Self::ValidatorId, amount: Self::Amount) {
+	fn on_account_funded(validator_id: &Self::ValidatorId, amount: Self::Amount) {
 		if <Pallet<T> as EpochInfo>::current_authorities().contains(validator_id) {
 			return
 		}

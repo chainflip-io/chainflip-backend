@@ -1,10 +1,7 @@
 use std::cell::RefCell;
 
 use crate::{self as pallet_cf_governance};
-use cf_traits::{
-	mocks::{epoch_info::MockEpochInfo, system_state_info::MockSystemStateInfo, time_source},
-	Chainflip, ExecutionCondition, RuntimeUpgrade,
-};
+use cf_traits::{impl_mock_chainflip, mocks::time_source, ExecutionCondition, RuntimeUpgrade};
 use frame_support::{dispatch::DispatchResultWithPostInfo, ensure, parameter_types};
 use frame_system as system;
 use sp_core::H256;
@@ -68,6 +65,8 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
+impl_mock_chainflip!(Test);
+
 pub struct UpgradeConditionMock;
 
 impl ExecutionCondition for UpgradeConditionMock {
@@ -102,22 +101,11 @@ impl RuntimeUpgradeMock {
 
 cf_traits::impl_mock_ensure_witnessed_for_origin!(RuntimeOrigin);
 
-impl Chainflip for Test {
-	type ValidatorId = u64;
-	type Amount = u128;
-	type RuntimeCall = RuntimeCall;
-	type EnsureWitnessed = MockEnsureWitnessed;
-	type EnsureWitnessedAtCurrentEpoch = MockEnsureWitnessed;
-	type EpochInfo = MockEpochInfo;
-	type SystemState = MockSystemStateInfo;
-}
-
 impl pallet_cf_governance::Config for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type RuntimeCall = RuntimeCall;
 	type RuntimeEvent = RuntimeEvent;
 	type TimeSource = time_source::Mock;
-	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type WeightInfo = ();
 	type UpgradeCondition = UpgradeConditionMock;
 	type RuntimeUpgrade = RuntimeUpgradeMock;

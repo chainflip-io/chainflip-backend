@@ -4,7 +4,7 @@ use crate::{
 	CallHash, CallHashExecuted, Config, EpochsToCull, Error, ExtraCallData, VoteMask, Votes,
 };
 use cf_test_utilities::assert_event_sequence;
-use cf_traits::{mocks::epoch_info::MockEpochInfo, EpochInfo, EpochTransitionHandler};
+use cf_traits::{EpochInfo, EpochTransitionHandler};
 use frame_support::{assert_noop, assert_ok, traits::Hooks, weights::Weight};
 use sp_std::collections::btree_set::BTreeSet;
 

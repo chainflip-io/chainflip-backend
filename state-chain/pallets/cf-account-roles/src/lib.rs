@@ -12,11 +12,10 @@ pub mod weights;
 use weights::WeightInfo;
 
 use cf_primitives::AccountRole;
-use cf_traits::{AccountRoleRegistry, BidInfo, Chainflip, QualifyNode};
+use cf_traits::{AccountRoleRegistry, QualifyNode};
 use frame_support::{
 	error::BadOrigin,
 	pallet_prelude::DispatchResult,
-	sp_runtime::traits::CheckedDiv,
 	traits::{EnsureOrigin, IsType, OnKilledAccount, OnNewAccount},
 };
 use frame_system::{ensure_signed, pallet_prelude::OriginFor, RawOrigin};
@@ -26,24 +25,12 @@ use sp_std::marker::PhantomData;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::StakingInfo;
 	use frame_support::pallet_prelude::*;
 
 	#[pallet::config]
-	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config: Chainflip {
-		/// Because this pallet emits events, it depends on the runtime's definition of an event.
+	pub trait Config: frame_system::Config {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
-		/// The Flip token implementation.
-		type StakeInfo: StakingInfo<AccountId = Self::AccountId, Balance = Self::Amount>;
-
 		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
-
-		/// Infos about bids.
-		type BidInfo: BidInfo<Balance = Self::Amount>;
-
-		/// Weights.
 		type WeightInfo: WeightInfo;
 	}
 
@@ -52,7 +39,7 @@ pub mod pallet {
 	pub struct Pallet<T>(PhantomData<T>);
 
 	// TODO: Remove once swapping is enabled and stabilised.
-	// Acts to flag the swapping features. If there are no Relayer accounts or
+	// Acts to flag the swapping features. If there are no Broker accounts or
 	// LP accounts, then the swapping features are disabled.
 	#[pallet::storage]
 	#[pallet::getter(fn swapping_enabled)]
@@ -72,7 +59,6 @@ pub mod pallet {
 		UnknownAccount,
 		AccountNotInitialised,
 		AccountRoleAlreadyRegistered,
-		NotEnoughStake,
 		/// Initially when swapping features are deployed to the chain, they will be disabled.
 		SwappingDisabled,
 	}
@@ -101,25 +87,9 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		#[pallet::weight(T::WeightInfo::register_account_role())]
-		pub fn register_account_role(origin: OriginFor<T>, role: AccountRole) -> DispatchResult {
-			let who: T::AccountId = ensure_signed(origin)?;
-			if role == AccountRole::Validator {
-				ensure!(
-					T::StakeInfo::total_stake_of(&who) >=
-						T::BidInfo::get_min_backup_bid()
-							.checked_div(&T::Amount::from(2_u32))
-							.expect("Division by 2 can't fail."),
-					Error::<T>::NotEnoughStake
-				);
-			}
-			<Self as AccountRoleRegistry<T>>::register_account_role(&who, role)?;
-			Ok(())
-		}
-
 		// TODO: Remove this function after the feature is deployed and stabilised.
 		// Once the swapping features are enabled, they can't be disabled.
-		// If they have been enabled, it's possible accounts have already registered as Relayers or
+		// If they have been enabled, it's possible accounts have already registered as Brokers or
 		// LPs. Thus, disabling this flag is not an indicator of whether the public can swap.
 		// Governance can bypass this by calling `gov_register_account_role`.
 		#[pallet::weight(T::WeightInfo::enable_swapping())]
@@ -179,7 +149,7 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 		account_role: AccountRole,
 	) -> DispatchResult {
 		match account_role {
-			AccountRole::Relayer | AccountRole::LiquidityProvider
+			AccountRole::Broker | AccountRole::LiquidityProvider
 				if !SwappingEnabled::<T>::get() =>
 				Err(Error::<T>::SwappingDisabled.into()),
 			_ => Self::register_account_role_unprotected(account_id, account_role),
@@ -194,7 +164,7 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 			AccountRole::None => Err(BadOrigin),
 			AccountRole::Validator => ensure_validator::<T>(origin),
 			AccountRole::LiquidityProvider => ensure_liquidity_provider::<T>(origin),
-			AccountRole::Relayer => ensure_relayer::<T>(origin),
+			AccountRole::Broker => ensure_broker::<T>(origin),
 		}
 	}
 
@@ -263,7 +233,7 @@ macro_rules! define_ensure_origin {
 	};
 }
 
-define_ensure_origin!(ensure_relayer, EnsureRelayer, AccountRole::Relayer);
+define_ensure_origin!(ensure_broker, EnsureBroker, AccountRole::Broker);
 define_ensure_origin!(ensure_validator, EnsureValidator, AccountRole::Validator);
 define_ensure_origin!(
 	ensure_liquidity_provider,

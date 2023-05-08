@@ -1,9 +1,6 @@
 use crate::{self as pallet_cf_flip, BurnFlipAccount};
 use cf_primitives::FlipBalance;
-use cf_traits::{
-	impl_mock_waived_fees, mocks::ensure_origin_mock::NeverFailingOriginCheck, StakeTransfer,
-	WaivedFees,
-};
+use cf_traits::{impl_mock_chainflip, impl_mock_waived_fees, Funding, WaivedFees};
 use frame_support::{
 	parameter_types,
 	traits::{ConstU128, ConstU8, HandleLifetime},
@@ -21,7 +18,7 @@ type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 pub type AccountId = u64;
 
-cf_traits::impl_mock_stake_transfer!(AccountId, u128);
+cf_traits::impl_mock_on_account_funded!(AccountId, u128);
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -68,6 +65,8 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
+impl_mock_chainflip!(Test);
+
 parameter_types! {
 	pub const ExistentialDeposit: FlipBalance = 10;
 }
@@ -83,9 +82,8 @@ impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = FlipBalance;
 	type ExistentialDeposit = ExistentialDeposit;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type BlocksPerDay = BlocksPerDay;
-	type StakeHandler = MockStakeHandler;
+	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock;
 }
@@ -112,11 +110,11 @@ pub fn check_balance_integrity() -> bool {
 	let accounts_total = pallet_cf_flip::Account::<Test>::iter_values()
 		.map(|account| account.total())
 		.sum::<FlipBalance>();
-	let pending_claims_total =
-		pallet_cf_flip::PendingClaimsReserve::<Test>::iter_values().sum::<FlipBalance>();
+	let pending_redemptions_total =
+		pallet_cf_flip::PendingRedemptionsReserve::<Test>::iter_values().sum::<FlipBalance>();
 	let reserves_total = pallet_cf_flip::Reserve::<Test>::iter_values().sum::<FlipBalance>();
 
-	(accounts_total + reserves_total + pending_claims_total) == Flip::onchain_funds()
+	(accounts_total + reserves_total + pending_redemptions_total) == Flip::onchain_funds()
 }
 
 // Build genesis storage according to the mock runtime.
@@ -132,14 +130,14 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	ext.execute_with(|| {
 		System::set_block_number(1);
 
-		// Seed with two staked accounts.
+		// Seed with two funded accounts.
 		frame_system::Provider::<Test>::created(&ALICE).unwrap();
 		frame_system::Provider::<Test>::created(&BOB).unwrap();
 		assert!(frame_system::Pallet::<Test>::account_exists(&ALICE));
 		assert!(frame_system::Pallet::<Test>::account_exists(&BOB));
 		assert!(!frame_system::Pallet::<Test>::account_exists(&CHARLIE));
-		<Flip as StakeTransfer>::credit_stake(&ALICE, 100);
-		<Flip as StakeTransfer>::credit_stake(&BOB, 50);
+		<Flip as Funding>::credit_funds(&ALICE, 100);
+		<Flip as Funding>::credit_funds(&BOB, 50);
 
 		assert_eq!(Flip::offchain_funds(), 850);
 		check_balance_integrity();
@@ -168,7 +166,7 @@ pub enum FlipOperation {
 	MintToAccount(AccountId, FlipBalance),
 	ExternalTransferOut(AccountId, FlipBalance),
 	ExternalTransferIn(AccountId, FlipBalance),
-	UpdateStakeAndBond(AccountId, FlipBalance, FlipBalance),
+	UpdateBalanceAndBond(AccountId, FlipBalance, FlipBalance),
 	SlashAccount(AccountId, SlashingRateType, Bond, Mint, BlockNumberFor<Test>),
 	AccountToAccount(AccountId, AccountId, FlipBalance, FlipBalance),
 }

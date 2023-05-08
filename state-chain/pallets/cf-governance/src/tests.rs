@@ -34,16 +34,6 @@ fn genesis_config() {
 }
 
 #[test]
-fn governance_restriction() {
-	new_test_ext().execute_with(|| {
-		assert_noop!(
-			Governance::new_membership_set(RuntimeOrigin::signed(ALICE), vec![EVE, PETER, MAX]),
-			frame_support::error::BadOrigin
-		);
-	});
-}
-
-#[test]
 fn not_a_member() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(

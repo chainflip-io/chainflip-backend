@@ -2,22 +2,19 @@
 
 use super::*;
 
+use pallet_cf_funding::Config as FundingConfig;
 use pallet_cf_reputation::Config as ReputationConfig;
-use pallet_cf_staking::Config as StakingConfig;
 use pallet_session::Config as SessionConfig;
 
-use cf_primitives::AccountRole;
-use cf_traits::{AccountRoleRegistry, VaultStatus};
-
+use cf_traits::{AccountRoleRegistry, AuctionOutcome, VaultStatus};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
+use frame_support::{
+	assert_ok, dispatch::UnfilteredDispatchable, storage_alias, traits::OnNewAccount,
+};
+use frame_system::{pallet_prelude::OriginFor, Pallet as SystemPallet, RawOrigin};
 use sp_application_crypto::RuntimeAppPublic;
 use sp_runtime::{Digest, DigestItem};
 use sp_std::vec;
-
-use cf_traits::AuctionOutcome;
-
-use frame_benchmarking::{account, benchmarks, whitelisted_caller};
-use frame_support::{assert_ok, dispatch::UnfilteredDispatchable, storage_alias};
-use frame_system::{pallet_prelude::OriginFor, Pallet as SystemPallet, RawOrigin};
 
 mod p2p_crypto {
 	use sp_application_crypto::{app_crypto, ed25519, KeyTypeId};
@@ -29,9 +26,9 @@ mod p2p_crypto {
 #[storage_alias]
 type LastSeenSlot = StorageValue<AuraSlotExtraction, u64>;
 
-pub trait RuntimeConfig: Config + StakingConfig + SessionConfig + ReputationConfig {}
+pub trait RuntimeConfig: Config + FundingConfig + SessionConfig + ReputationConfig {}
 
-impl<T: Config + StakingConfig + SessionConfig + ReputationConfig> RuntimeConfig for T {}
+impl<T: Config + FundingConfig + SessionConfig + ReputationConfig> RuntimeConfig for T {}
 
 pub fn bidder_set<T: Chainflip, Id: From<<T as frame_system::Config>::AccountId>, I: Into<u32>>(
 	size: I,
@@ -42,23 +39,21 @@ pub fn bidder_set<T: Chainflip, Id: From<<T as frame_system::Config>::AccountId>
 		.map(move |i| account::<<T as frame_system::Config>::AccountId>("bidder", i, set_id).into())
 }
 
-/// Initialises bidders for the auction by staking each one, registering session keys and peer ids
+/// Initialises bidders for the auction by funding each one, registering session keys and peer ids
 /// and submitting heartbeats.
-pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_staked: u128) {
+pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_funded: u128) {
 	for bidder in bidder_set::<T, <T as frame_system::Config>::AccountId, _>(n, set_id) {
 		let bidder_origin: OriginFor<T> = RawOrigin::Signed(bidder.clone()).into();
-		assert_ok!(pallet_cf_staking::Pallet::<T>::staked(
+		assert_ok!(pallet_cf_funding::Pallet::<T>::funded(
 			T::EnsureWitnessed::successful_origin(),
 			bidder.clone(),
-			(flip_staked * 10u128.pow(18)).unique_saturated_into(),
-			pallet_cf_staking::ETH_ZERO_ADDRESS,
+			(flip_funded * 10u128.pow(18)).unique_saturated_into(),
+			pallet_cf_funding::ETH_ZERO_ADDRESS,
 			Default::default()
 		));
-		<T as Config>::AccountRoleRegistry::register_account(
-			bidder.clone(),
-			AccountRole::Validator,
-		);
-		assert_ok!(pallet_cf_staking::Pallet::<T>::start_bidding(bidder_origin.clone(),));
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&bidder);
+		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&bidder));
+		assert_ok!(pallet_cf_funding::Pallet::<T>::start_bidding(bidder_origin.clone(),));
 
 		let public_key: p2p_crypto::Public = RuntimeAppPublic::generate_pair(None);
 		let signature = public_key.sign(&bidder.encode()).unwrap();
@@ -104,35 +99,6 @@ pub fn start_vault_rotation<T: RuntimeConfig>(
 	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..)));
 }
 
-pub fn rotate_authorities<T: RuntimeConfig>(candidates: u32, epoch: u32) {
-	let old_epoch = Pallet::<T>::epoch_index();
-
-	// Use an offset to ensure the candidate sets don't clash.
-	init_bidders::<T>(candidates, epoch, 100_000u128);
-
-	// Resolves the auction and starts the vault rotation.
-	Pallet::<T>::start_authority_rotation();
-
-	let block = frame_system::Pallet::<T>::current_block_number();
-
-	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeygensInProgress(..)));
-
-	T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::KeygenComplete));
-
-	Pallet::<T>::on_initialize(block);
-
-	T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::RotationComplete));
-
-	Pallet::<T>::on_initialize(block);
-	pallet_session::Pallet::<T>::on_initialize(block);
-	Pallet::<T>::on_initialize(block);
-	pallet_session::Pallet::<T>::on_initialize(block);
-
-	assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle));
-
-	assert_eq!(Pallet::<T>::epoch_index(), old_epoch + 1, "authority rotation failed");
-}
-
 benchmarks! {
 	where_clause {
 		where
@@ -142,7 +108,7 @@ benchmarks! {
 	set_blocks_for_epoch {
 		let b = 2_u32;
 		let call = Call::<T>::set_blocks_for_epoch { number_of_blocks: b.into() };
-		let o = <T as Config>::EnsureGovernance::successful_origin();
+		let o = T::EnsureGovernance::successful_origin();
 	}: {
 		call.dispatch_bypass_filter(o)?
 	}
@@ -151,7 +117,7 @@ benchmarks! {
 	}
 	set_backup_reward_node_percentage {
 		let call = Call::<T>::set_backup_reward_node_percentage { percentage: 20 };
-		let o = <T as Config>::EnsureGovernance::successful_origin();
+		let o = T::EnsureGovernance::successful_origin();
 	}: {
 		call.dispatch_bypass_filter(o)?
 	}
@@ -160,7 +126,7 @@ benchmarks! {
 	}
 	set_authority_set_min_size {
 		let call = Call::<T>::set_authority_set_min_size { min_size: 1 };
-		let o = <T as Config>::EnsureGovernance::successful_origin();
+		let o = T::EnsureGovernance::successful_origin();
 	}: {
 		call.dispatch_bypass_filter(o)?
 	}
@@ -169,7 +135,8 @@ benchmarks! {
 	}
 	cfe_version {
 		let caller: T::AccountId = whitelisted_caller();
-		<T as pallet::Config>::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&caller));
 		let version = SemVer {
 			major: 1,
 			minor: 2,
@@ -182,7 +149,8 @@ benchmarks! {
 	}
 	register_peer_id {
 		let caller: T::AccountId = account("doogle", 0, 0);
-		<T as pallet::Config>::AccountRoleRegistry::register_account(caller.clone(), AccountRole::Validator);
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		assert_ok!(<T as Chainflip>::AccountRoleRegistry::register_as_validator(&caller));
 		let pair: p2p_crypto::Public = RuntimeAppPublic::generate_pair(None);
 		let signature: Ed25519Signature = pair.sign(&caller.encode()).unwrap().try_into().unwrap();
 		let public_key: Ed25519PublicKey = pair.try_into().unwrap();
@@ -202,16 +170,23 @@ benchmarks! {
 		// 3 is the minimum number bidders for a successful auction.
 		let a in 3 .. 150;
 
-		// This is the initial authority set that will be expired.
-		rotate_authorities::<T>(a, 1);
-		// A new distinct authority set. The previous authorities will now be historical authorities.
-		rotate_authorities::<T>(a, 2);
+		const OLD_EPOCH: EpochIndex = 1;
+		const EPOCH_TO_EXPIRE: EpochIndex = OLD_EPOCH + 1;
 
-		const EPOCH_TO_EXPIRE: EpochIndex = 2;
-		assert_eq!(
-			Pallet::<T>::epoch_index(),
-			EPOCH_TO_EXPIRE + 1,
-		);
+		let amount = T::Amount::from(1000u32);
+
+		HistoricalBonds::<T>::insert(OLD_EPOCH, amount);
+		HistoricalBonds::<T>::insert(EPOCH_TO_EXPIRE, amount);
+
+		let authorities: BTreeSet<_>  = (0..a).into_iter().map(|id| account("hello", id, id)).collect();
+
+		HistoricalAuthorities::<T>::insert(OLD_EPOCH, authorities.clone());
+		HistoricalAuthorities::<T>::insert(EPOCH_TO_EXPIRE, authorities.clone());
+		for a in authorities {
+			EpochHistory::<T>::activate_epoch(&a, OLD_EPOCH);
+			EpochHistory::<T>::activate_epoch(&a, EPOCH_TO_EXPIRE);
+		}
+
 		// Ensure that we are expiring the expected number of authorities.
 		assert_eq!(
 			EpochHistory::<T>::epoch_authorities(EPOCH_TO_EXPIRE).len(),
@@ -219,9 +194,6 @@ benchmarks! {
 		);
 	}: {
 		Pallet::<T>::expire_epoch(EPOCH_TO_EXPIRE);
-	}
-	verify {
-		assert_eq!(LastExpiredEpoch::<T>::get(), EPOCH_TO_EXPIRE);
 	}
 	missed_authorship_slots {
 		// Unlikely we will ever miss 10 successive blocks.
@@ -313,7 +285,7 @@ benchmarks! {
 	verify {
 		assert!(matches!(
 			CurrentRotationPhase::<T>::get(),
-			RotationPhase::ActivatingKeys(..)
+			RotationPhase::KeyHandoversInProgress(..)
 		));
 	}
 
@@ -331,9 +303,13 @@ benchmarks! {
 
 		Pallet::<T>::on_initialize(block);
 
-		T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::RotationComplete));
+		assert!(matches!(CurrentRotationPhase::<T>::get(), RotationPhase::KeyHandoversInProgress(..)));
+
+		T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::KeyHandoverComplete));
 
 		Pallet::<T>::on_initialize(block);
+
+		T::VaultRotator::set_status(AsyncResult::Ready(VaultStatus::RotationComplete));
 
 	}: {
 		Pallet::<T>::on_initialize(1u32.into());
@@ -346,7 +322,7 @@ benchmarks! {
 	}
 
 	set_auction_parameters {
-		let origin = <T as Config>::EnsureGovernance::successful_origin();
+		let origin = T::EnsureGovernance::successful_origin();
 		let params = SetSizeParameters {
 			min_size: 3,
 			max_size: 150,
@@ -361,4 +337,11 @@ benchmarks! {
 		);
 	}
 
+	register_as_validator {
+		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+	}: _(RawOrigin::Signed(caller.clone()))
+	verify {
+		assert_ok!(<T as Chainflip>::AccountRoleRegistry::ensure_validator(RawOrigin::Signed(caller).into()));
+	}
 }

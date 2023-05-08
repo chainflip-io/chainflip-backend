@@ -1,15 +1,15 @@
+use core::time::Duration;
+use futures::{Future, FutureExt};
 use std::{
 	io::Write,
 	path::{Path, PathBuf},
 };
-
-use core::time::Duration;
-use futures::{Future, FutureExt};
 use tempfile::{self, TempDir};
-
 use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::assert_ok;
+
+pub mod logging;
 
 const CHANNEL_TIMEOUT: Duration = Duration::from_millis(10);
 

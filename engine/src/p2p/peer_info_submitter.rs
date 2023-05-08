@@ -14,7 +14,9 @@ use utilities::{make_periodic_tick, Port};
 
 use crate::{
 	p2p::PeerInfo,
-	state_chain_observer::client::{extrinsic_api::ExtrinsicApi, storage_api::StorageApi},
+	state_chain_observer::client::{
+		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
+	},
 };
 
 async fn update_registered_peer_id<StateChainClient>(
@@ -23,9 +25,8 @@ async fn update_registered_peer_id<StateChainClient>(
 	previous_registered_peer_info: &Option<PeerInfo>,
 	ip_address: Ipv6Addr,
 	cfe_port: Port,
-) -> Result<()>
-where
-	StateChainClient: ExtrinsicApi,
+) where
+	StateChainClient: SignedExtrinsicApi,
 {
 	let extra_info = match previous_registered_peer_info.as_ref() {
 		Some(peer_info) => {
@@ -57,9 +58,7 @@ where
 			// We sign over our account id
 			signature: sp_core::ed25519::Signature::try_from(signature.as_ref()).unwrap(),
 		})
-		.await?;
-
-	Ok(())
+		.await;
 }
 
 pub async fn start<StateChainClient>(
@@ -71,7 +70,7 @@ pub async fn start<StateChainClient>(
 	mut own_peer_info_receiver: UnboundedReceiver<PeerInfo>,
 ) -> Result<()>
 where
-	StateChainClient: StorageApi + ExtrinsicApi + Send + Sync,
+	StateChainClient: StorageApi + SignedExtrinsicApi + Send + Sync,
 {
 	let ip_address = match ip_address {
 		IpAddr::V4(ipv4) => ipv4.to_ipv6_mapped(),
@@ -99,7 +98,7 @@ where
 						ip_address,
 						cfe_port,
 					)
-					.await?;
+					.await;
 				} else {
 					debug!("Our peer info registration is up to date");
 					break;

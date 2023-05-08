@@ -10,7 +10,7 @@ use crate::{mock::*, Error, SystemState, SystemStateProvider};
 #[test]
 fn genesis_config() {
 	new_test_ext().execute_with(|| {
-		assert_eq!(STAKE_MANAGER_ADDRESS, Environment::stake_manager_address());
+		assert_eq!(STATE_CHAIN_GATEWAY_ADDRESS, Environment::state_chain_gateway_address());
 		assert_eq!(KEY_MANAGER_ADDRESS, Environment::key_manager_address());
 		assert_eq!(ETH_CHAIN_ID, Environment::ethereum_chain_id());
 		assert_eq!(CFE_SETTINGS, Environment::cfe_settings());

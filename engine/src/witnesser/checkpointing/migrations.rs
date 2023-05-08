@@ -7,12 +7,13 @@ use anyhow::Result;
 use itertools::Itertools;
 use tracing::{error, info};
 
-use crate::multisig::{ChainTag, PersistentKeyDB};
+use crate::db::PersistentKeyDB;
+use multisig::ChainTag;
 use utilities::task_scope;
 
 use super::WitnessedUntil;
 
-const LEGACY_FILE_NAMES: [&str; 2] = ["StakeManager", "KeyManager"];
+const LEGACY_FILE_NAMES: [&str; 2] = ["StateChainGateway", "KeyManager"];
 
 /// Migrate the legacy Eth witnesser checkpointing files to db
 pub async fn run_eth_migration(

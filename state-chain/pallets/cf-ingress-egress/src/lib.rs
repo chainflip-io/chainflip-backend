@@ -15,16 +15,16 @@ pub use weights::WeightInfo;
 
 use cf_primitives::{BasisPoints, EgressCounter, EgressId, ForeignChain};
 
-use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata, IngressIdConstructor};
+use cf_chains::{address::ForeignChainAddress, CcmDepositMetadata, ChannelIdConstructor};
 
 use cf_chains::{
 	AllBatch, Chain, ChainAbi, ChainCrypto, ExecutexSwapAndCall, FetchAssetParams,
 	TransferAssetParams,
 };
-use cf_primitives::{Asset, AssetAmount, IntentId};
+use cf_primitives::{Asset, AssetAmount, ChannelId};
 use cf_traits::{
-	liquidity::LpBalanceApi, AddressDerivationApi, Broadcaster, CcmHandler, Chainflip, EgressApi,
-	IngressApi, IngressHandler, SwapIntentHandler,
+	liquidity::LpBalanceApi, AddressDerivationApi, Broadcaster, CcmHandler, Chainflip, DepositApi,
+	DepositHandler, EgressApi, SwapDepositHandler,
 };
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
 pub use pallet::*;
@@ -35,13 +35,13 @@ pub use sp_std::{cmp::min, vec, vec::Vec};
 #[derive(RuntimeDebug, Eq, PartialEq, Clone, Encode, Decode, TypeInfo)]
 pub enum FetchOrTransfer<C: Chain> {
 	Fetch {
-		intent_id: IntentId,
+		channel_id: ChannelId,
 		asset: C::ChainAsset,
 	},
 	Transfer {
 		egress_id: EgressId,
 		asset: C::ChainAsset,
-		egress_address: C::ChainAccount,
+		destination_address: C::ChainAccount,
 		amount: C::ChainAmount,
 	},
 }
@@ -61,9 +61,9 @@ pub(crate) struct CrossChainMessage<C: Chain> {
 	pub egress_id: EgressId,
 	pub asset: C::ChainAsset,
 	pub amount: C::ChainAmount,
-	pub egress_address: C::ChainAccount,
+	pub destination_address: C::ChainAccount,
 	pub message: Vec<u8>,
-	// The sender of the ingress transaction.
+	// The sender of the deposit transaction.
 	pub source_address: ForeignChainAddress,
 	// Where funds might be returned to if the message fails.
 	pub refund_address: ForeignChainAddress,
@@ -108,40 +108,39 @@ pub mod pallet {
 
 	pub(crate) type TargetChainAmount<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAmount;
 
-	pub(crate) type IngressFetchIdOf<T, I> =
-		<<T as Config<I>>::TargetChain as Chain>::IngressFetchId;
+	pub(crate) type DepositFetchIdOf<T, I> =
+		<<T as Config<I>>::TargetChain as Chain>::DepositFetchId;
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub struct IngressWitness<C: Chain + ChainCrypto> {
-		pub ingress_address: C::ChainAccount,
+	pub struct DepositWitness<C: Chain + ChainCrypto> {
+		pub deposit_address: C::ChainAccount,
 		pub asset: C::ChainAsset,
 		pub amount: C::ChainAmount,
 		pub tx_id: <C as ChainCrypto>::TransactionId,
 	}
 
-	/// Details used to determine the ingress of funds.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub struct IngressDetails<C: Chain> {
-		pub intent_id: IntentId,
-		pub ingress_asset: C::ChainAsset,
+	pub struct DepositAddressDetails<C: Chain> {
+		pub channel_id: ChannelId,
+		pub source_asset: C::ChainAsset,
 	}
 
-	/// Contains information relevant to the action to commence once ingress succeeds.
+	/// Determines the action to take when a deposit is made to a channel.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub enum IntentAction<AccountId> {
+	pub enum ChannelAction<AccountId> {
 		Swap {
-			egress_asset: Asset,
-			egress_address: ForeignChainAddress,
-			relayer_id: AccountId,
-			relayer_commission_bps: BasisPoints,
+			destination_asset: Asset,
+			destination_address: ForeignChainAddress,
+			broker_id: AccountId,
+			broker_commission_bps: BasisPoints,
 		},
 		LiquidityProvision {
 			lp_account: AccountId,
 		},
 		CcmTransfer {
-			egress_asset: Asset,
-			egress_address: ForeignChainAddress,
-			message_metadata: CcmIngressMetadata,
+			destination_asset: Asset,
+			destination_address: ForeignChainAddress,
+			message_metadata: CcmDepositMetadata,
 		},
 	}
 
@@ -163,14 +162,14 @@ pub mod pallet {
 		/// Marks which chain this pallet is interacting with.
 		type TargetChain: ChainAbi + Get<ForeignChain>;
 
-		/// Generates ingress addresses.
+		/// Generates deposit addresses.
 		type AddressDerivation: AddressDerivationApi<Self::TargetChain>;
 
 		/// Pallet responsible for managing Liquidity Providers.
 		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>;
 
 		/// For scheduling swaps.
-		type SwapIntentHandler: SwapIntentHandler<AccountId = Self::AccountId>;
+		type SwapDepositHandler: SwapDepositHandler<AccountId = Self::AccountId>;
 
 		/// Handler for Cross Chain Messages.
 		type CcmHandler: CcmHandler;
@@ -185,37 +184,35 @@ pub mod pallet {
 			Callback = <Self as Config<I>>::RuntimeCall,
 		>;
 
-		/// Governance origin to manage allowed assets
-		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
-
-		/// Ingress Handler for performing action items on ingress needed elsewhere
-		type IngressHandler: IngressHandler<Self::TargetChain>;
+		/// Provides callbacks for deposit lifecycle events.
+		type DepositHandler: DepositHandler<Self::TargetChain>;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::storage]
-	pub type IntentIngressDetails<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type DepositAddressDetailsLookup<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		TargetChainAccount<T, I>,
-		IngressDetails<T::TargetChain>,
+		DepositAddressDetails<T::TargetChain>,
 		OptionQuery,
 	>;
 
 	#[pallet::storage]
-	pub type IntentActions<T: Config<I>, I: 'static = ()> = StorageMap<
+	pub type ChannelActions<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
 		Twox64Concat,
 		TargetChainAccount<T, I>,
-		IntentAction<<T as frame_system::Config>::AccountId>,
+		ChannelAction<<T as frame_system::Config>::AccountId>,
 		OptionQuery,
 	>;
 
-	/// Stores the latest intent id used to generate an address.
+	/// Stores the latest channel id used to generate an address.
 	#[pallet::storage]
-	pub type IntentIdCounter<T: Config<I>, I: 'static = ()> = StorageValue<_, IntentId, ValueQuery>;
+	pub type ChannelIdCounter<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, ChannelId, ValueQuery>;
 
 	/// Stores the latest egress id used to generate an address.
 	#[pallet::storage]
@@ -237,34 +234,34 @@ pub mod pallet {
 	pub(crate) type DisabledEgressAssets<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, ()>;
 
-	/// Stores a pool of addresses that is available for use together with the intent id.
+	/// Stores a pool of addresses that is available for use together with the channel id.
 	#[pallet::storage]
 	pub(crate) type AddressPool<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, IntentId, TargetChainAccount<T, I>>;
+		StorageMap<_, Twox64Concat, ChannelId, TargetChainAccount<T, I>>;
 
 	/// Stores the status of an address.
 	#[pallet::storage]
 	pub(crate) type AddressStatus<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Blake2_128Concat, TargetChainAccount<T, I>, DeploymentStatus, ValueQuery>;
 
-	/// Map of intent id to the ingress id.
+	/// Map of channel id to the deposit fetch parameters.
 	#[pallet::storage]
 	pub(crate) type FetchParamDetails<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, IntentId, (IngressFetchIdOf<T, I>, TargetChainAccount<T, I>)>;
+		StorageMap<_, Twox64Concat, ChannelId, (DepositFetchIdOf<T, I>, TargetChainAccount<T, I>)>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		StartWitnessing {
-			ingress_address: TargetChainAccount<T, I>,
-			ingress_asset: TargetChainAsset<T, I>,
+			deposit_address: TargetChainAccount<T, I>,
+			source_asset: TargetChainAsset<T, I>,
 		},
 		StopWitnessing {
-			ingress_address: TargetChainAccount<T, I>,
-			ingress_asset: TargetChainAsset<T, I>,
+			deposit_address: TargetChainAccount<T, I>,
+			source_asset: TargetChainAsset<T, I>,
 		},
-		IngressCompleted {
-			ingress_address: TargetChainAccount<T, I>,
+		DepositReceived {
+			deposit_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
 			tx_id: <T::TargetChain as ChainCrypto>::TransactionId,
@@ -277,7 +274,7 @@ pub mod pallet {
 			id: EgressId,
 			asset: TargetChainAsset<T, I>,
 			amount: AssetAmount,
-			egress_address: TargetChainAccount<T, I>,
+			destination_address: TargetChainAccount<T, I>,
 		},
 		CcmBroadcastRequested {
 			broadcast_id: BroadcastId,
@@ -287,8 +284,8 @@ pub mod pallet {
 			egress_id: EgressId,
 			error: DispatchError,
 		},
-		IngressFetchesScheduled {
-			intent_id: IntentId,
+		DepositFetchesScheduled {
+			channel_id: ChannelId,
 			asset: TargetChainAsset<T, I>,
 		},
 		BatchBroadcastRequested {
@@ -299,9 +296,11 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T, I = ()> {
-		InvalidIntent,
-		IngressMismatchWithIntent,
-		IntentIdsExhausted,
+		/// The deposit address is not valid. It may have expired or may never have been issued.
+		InvalidDepositAddress,
+		/// A deposit was made using the wrong asset.
+		AssetMismatch,
+		ChannelIdsExhausted,
 		UnsupportedAsset,
 	}
 
@@ -311,7 +310,7 @@ pub mod pallet {
 		fn on_idle(_block_number: BlockNumberFor<T>, remaining_weight: Weight) -> Weight {
 			// Ensure we have enough weight to send an non-empty batch, and request queue isn't
 			// empty.
-			if remaining_weight.all_lte(T::WeightInfo::egress_assets(1u32)) ||
+			if remaining_weight.all_lte(T::WeightInfo::destination_assets(1u32)) ||
 				(ScheduledEgressFetchOrTransfer::<T, I>::decode_len() == Some(0) &&
 					ScheduledEgressCcm::<T, I>::decode_len() == Some(0))
 			{
@@ -320,16 +319,17 @@ pub mod pallet {
 
 			// Send fetch/transfer requests as a batch
 			let mut weights_left = remaining_weight;
-			let single_request_cost = T::WeightInfo::egress_assets(1u32)
-				.saturating_sub(T::WeightInfo::egress_assets(0u32));
+			let single_request_cost = T::WeightInfo::destination_assets(1u32)
+				.saturating_sub(T::WeightInfo::destination_assets(0u32));
 			let request_count = weights_left
-				.saturating_sub(T::WeightInfo::egress_assets(0u32))
+				.saturating_sub(T::WeightInfo::destination_assets(0u32))
 				.ref_time()
-				.saturating_div(single_request_cost.ref_time()) as u32;
+				.checked_div(single_request_cost.ref_time())
+				.map(|x| x as u32);
 
 			weights_left = weights_left.saturating_sub(
-				with_transaction(|| Self::do_egress_scheduled_fetch_transfer(Some(request_count)))
-					.unwrap_or_else(|_| T::WeightInfo::egress_assets(0)),
+				with_transaction(|| Self::do_egress_scheduled_fetch_transfer(request_count))
+					.unwrap_or_else(|_| T::WeightInfo::destination_assets(0)),
 			);
 
 			// Send as many Cross chain messages as the weights allow.
@@ -338,17 +338,20 @@ pub mod pallet {
 			let ccm_count = weights_left
 				.saturating_sub(T::WeightInfo::egress_ccm(0u32))
 				.ref_time()
-				.saturating_div(single_ccm_cost.ref_time()) as u32;
-			weights_left =
-				weights_left.saturating_sub(Self::do_egress_scheduled_ccm(Some(ccm_count)));
+				.checked_div(single_ccm_cost.ref_time())
+				.map(|x| x as u32);
+
+			weights_left = weights_left.saturating_sub(Self::do_egress_scheduled_ccm(ccm_count));
 
 			remaining_weight.saturating_sub(weights_left)
 		}
 
 		fn integrity_test() {
 			// Ensures the weights are benchmarked correctly.
-			assert!(T::WeightInfo::egress_assets(1).all_gte(T::WeightInfo::egress_assets(0)));
-			assert!(T::WeightInfo::do_single_ingress().all_gte(Weight::zero()));
+			assert!(
+				T::WeightInfo::destination_assets(1).all_gte(T::WeightInfo::destination_assets(0))
+			);
+			assert!(T::WeightInfo::process_single_deposit().all_gte(Weight::zero()));
 		}
 	}
 
@@ -378,6 +381,7 @@ pub mod pallet {
 
 			Ok(())
 		}
+
 		/// Send up to `maybe_size` number of scheduled transactions out for a specific chain.
 		/// If None is set for `maybe_size`, send all scheduled transactions.
 		/// Requires governance
@@ -385,7 +389,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [on_success](Event::BatchBroadcastRequested)
-		#[pallet::weight(T::WeightInfo::egress_assets({
+		#[pallet::weight(T::WeightInfo::destination_assets({
 			let len = ScheduledEgressFetchOrTransfer::<T, I>::decode_len().unwrap_or_default() as u32;
 			match maybe_size {
 				Some(n) => min(*n, len),
@@ -400,17 +404,19 @@ pub mod pallet {
 			with_transaction(|| Self::do_egress_scheduled_fetch_transfer(maybe_size))?;
 			Ok(())
 		}
-		/// Complete an ingress request. Called when funds have been deposited into the given
-		/// address. Requires `EnsureWitnessed` origin.
-		#[pallet::weight(T::WeightInfo::do_single_ingress().saturating_mul(ingress_witnesses.len() as u64))]
-		pub fn do_ingress(
+
+		/// Called when funds have been deposited into the given address.
+		///
+		/// Requires `EnsureWitnessed` origin.
+		#[pallet::weight(T::WeightInfo::process_single_deposit().saturating_mul(deposit_witnesses.len() as u64))]
+		pub fn process_deposits(
 			origin: OriginFor<T>,
-			ingress_witnesses: Vec<IngressWitness<T::TargetChain>>,
+			deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			for IngressWitness { ingress_address, asset, amount, tx_id } in ingress_witnesses {
-				Self::do_single_ingress(ingress_address, asset, amount, tx_id)?;
+			for DepositWitness { deposit_address, asset, amount, tx_id } in deposit_witnesses {
+				Self::process_single_deposit(deposit_address, asset, amount, tx_id)?;
 			}
 			Ok(())
 		}
@@ -510,20 +516,24 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		for request in batch_to_send {
 			match request {
-				FetchOrTransfer::<T::TargetChain>::Fetch { intent_id, asset } => {
-					let (ingress_id, ingress_address) = FetchParamDetails::<T, I>::get(intent_id)
+				FetchOrTransfer::<T::TargetChain>::Fetch { channel_id, asset } => {
+					let (channel_id, deposit_address) = FetchParamDetails::<T, I>::get(channel_id)
 						.expect("to have fetch param details available");
-					fetch_params.push(FetchAssetParams { ingress_fetch_id: ingress_id, asset });
-					addresses.push((intent_id, ingress_address.clone()));
+					fetch_params.push(FetchAssetParams { deposit_fetch_id: channel_id, asset });
+					addresses.push((channel_id, deposit_address.clone()));
 				},
 				FetchOrTransfer::<T::TargetChain>::Transfer {
 					asset,
 					amount,
-					egress_address,
+					destination_address,
 					egress_id,
 				} => {
 					egress_ids.push(egress_id);
-					egress_params.push(TransferAssetParams { asset, amount, to: egress_address });
+					egress_params.push(TransferAssetParams {
+						asset,
+						amount,
+						to: destination_address,
+					});
 				},
 			}
 		}
@@ -542,7 +552,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					broadcast_id,
 					egress_ids,
 				});
-				TransactionOutcome::Commit(Ok(T::WeightInfo::egress_assets(
+				TransactionOutcome::Commit(Ok(T::WeightInfo::destination_assets(
 					fetch_batch_size.saturating_add(egress_batch_size),
 				)))
 			},
@@ -586,7 +596,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				TransferAssetParams {
 					asset: ccm.asset,
 					amount: ccm.amount,
-					to: ccm.egress_address,
+					to: ccm.destination_address,
 				},
 				ccm.source_address,
 				ccm.message,
@@ -608,121 +618,124 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		weight
 	}
 
-	/// Completes a single ingress request.
-	fn do_single_ingress(
-		ingress_address: TargetChainAccount<T, I>,
+	/// Completes a single deposit request.
+	fn process_single_deposit(
+		deposit_address: TargetChainAccount<T, I>,
 		asset: TargetChainAsset<T, I>,
 		amount: TargetChainAmount<T, I>,
 		tx_id: <T::TargetChain as ChainCrypto>::TransactionId,
 	) -> DispatchResult {
-		let ingress = IntentIngressDetails::<T, I>::get(&ingress_address)
-			.ok_or(Error::<T, I>::InvalidIntent)?;
-		ensure!(ingress.ingress_asset == asset, Error::<T, I>::IngressMismatchWithIntent);
+		let DepositAddressDetails { channel_id, source_asset } =
+			DepositAddressDetailsLookup::<T, I>::get(&deposit_address)
+				.ok_or(Error::<T, I>::InvalidDepositAddress)?;
+		ensure!(source_asset == asset, Error::<T, I>::AssetMismatch);
 
-		// Ingress is called by witnessers, so asset/chain combination should always be valid.
 		ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
-			intent_id: ingress.intent_id,
+			channel_id,
 			asset,
 		});
 
-		Self::deposit_event(Event::<T, I>::IngressFetchesScheduled {
-			intent_id: ingress.intent_id,
-			asset,
-		});
+		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
 		// NB: Don't take here. We should continue witnessing this address
-		// even after an ingress to it has occurred.
+		// even after an deposit to it has occurred.
 		// https://github.com/chainflip-io/chainflip-eth-contracts/pull/226
-		match IntentActions::<T, I>::get(&ingress_address).ok_or(Error::<T, I>::InvalidIntent)? {
-			IntentAction::LiquidityProvision { lp_account } =>
+		match ChannelActions::<T, I>::get(&deposit_address)
+			.ok_or(Error::<T, I>::InvalidDepositAddress)?
+		{
+			ChannelAction::LiquidityProvision { lp_account } =>
 				T::LpBalance::try_credit_account(&lp_account, asset.into(), amount.into())?,
-			IntentAction::Swap {
-				egress_address,
-				egress_asset,
-				relayer_id,
-				relayer_commission_bps,
-			} => T::SwapIntentHandler::on_swap_ingress(
-				ingress_address.clone().into(),
+			ChannelAction::Swap {
+				destination_address,
+				destination_asset,
+				broker_id,
+				broker_commission_bps,
+			} => T::SwapDepositHandler::on_swap_deposit(
+				deposit_address.clone().into(),
 				asset.into(),
-				egress_asset,
+				destination_asset,
 				amount.into(),
-				egress_address,
-				relayer_id,
-				relayer_commission_bps,
+				destination_address,
+				broker_id,
+				broker_commission_bps,
 			),
-			IntentAction::CcmTransfer { egress_asset, egress_address, message_metadata } =>
-				T::CcmHandler::on_ccm_ingress(
-					asset.into(),
-					amount.into(),
-					egress_asset,
-					egress_address,
-					message_metadata,
-				)?,
+			ChannelAction::CcmTransfer {
+				destination_asset,
+				destination_address,
+				message_metadata,
+			} => T::CcmHandler::on_ccm_deposit(
+				asset.into(),
+				amount.into(),
+				destination_asset,
+				destination_address,
+				message_metadata,
+			)?,
 		};
 
-		T::IngressHandler::on_ingress_completed(
-			tx_id.clone(),
-			amount,
-			ingress_address.clone(),
-			asset,
-		);
+		T::DepositHandler::on_deposit_made(tx_id.clone(), amount, deposit_address.clone(), asset);
 
-		Self::deposit_event(Event::IngressCompleted { ingress_address, asset, amount, tx_id });
+		Self::deposit_event(Event::DepositReceived { deposit_address, asset, amount, tx_id });
 		Ok(())
 	}
 
-	/// Create a new intent address for the given asset and registers it with the given action.
-	fn register_ingress_intent(
-		ingress_asset: TargetChainAsset<T, I>,
-		intent_action: IntentAction<T::AccountId>,
-	) -> Result<(IntentId, TargetChainAccount<T, I>), DispatchError> {
+	/// Opens a channel for the given asset and registers it with the given action.
+	///
+	/// May re-use an existing deposit address, depending on chain configuration.
+	fn open_channel(
+		source_asset: TargetChainAsset<T, I>,
+		channel_action: ChannelAction<T::AccountId>,
+	) -> Result<(ChannelId, TargetChainAccount<T, I>), DispatchError> {
 		// We have an address available, so we can just use it.
-		let (address, intent_id, ingress_fetch_id) =
-			if let Some((intent_id, address)) = AddressPool::<T, I>::drain().next() {
-				(address.clone(), intent_id, IngressFetchIdOf::<T, I>::deployed(intent_id, address))
-			} else {
-				let next_intent_id = IntentIdCounter::<T, I>::get()
-					.checked_add(1)
-					.ok_or(Error::<T, I>::IntentIdsExhausted)?;
-				let new_address: TargetChainAccount<T, I> =
-					T::AddressDerivation::generate_address(ingress_asset, next_intent_id)?;
-				AddressStatus::<T, I>::insert(new_address.clone(), DeploymentStatus::Undeployed);
-				IntentIdCounter::<T, I>::put(next_intent_id);
-				(
-					new_address.clone(),
-					next_intent_id,
-					IngressFetchIdOf::<T, I>::undeployed(next_intent_id, new_address),
-				)
-			};
-		FetchParamDetails::<T, I>::insert(intent_id, (ingress_fetch_id, address.clone()));
-		IntentIngressDetails::<T, I>::insert(&address, IngressDetails { intent_id, ingress_asset });
-		IntentActions::<T, I>::insert(&address, intent_action);
-		T::IngressHandler::on_ingress_initiated(address.clone(), intent_id)?;
-		Ok((intent_id, address))
+		let (address, channel_id, deposit_fetch_id) = if let Some((channel_id, address)) =
+			AddressPool::<T, I>::drain().next()
+		{
+			(address.clone(), channel_id, DepositFetchIdOf::<T, I>::deployed(channel_id, address))
+		} else {
+			let next_channel_id = ChannelIdCounter::<T, I>::get()
+				.checked_add(1)
+				.ok_or(Error::<T, I>::ChannelIdsExhausted)?;
+			let new_address: TargetChainAccount<T, I> =
+				T::AddressDerivation::generate_address(source_asset, next_channel_id)?;
+			AddressStatus::<T, I>::insert(new_address.clone(), DeploymentStatus::Undeployed);
+			ChannelIdCounter::<T, I>::put(next_channel_id);
+			(
+				new_address.clone(),
+				next_channel_id,
+				DepositFetchIdOf::<T, I>::undeployed(next_channel_id, new_address),
+			)
+		};
+		FetchParamDetails::<T, I>::insert(channel_id, (deposit_fetch_id, address.clone()));
+		DepositAddressDetailsLookup::<T, I>::insert(
+			&address,
+			DepositAddressDetails { channel_id, source_asset },
+		);
+		ChannelActions::<T, I>::insert(&address, channel_action);
+		T::DepositHandler::on_channel_opened(address.clone(), channel_id)?;
+		Ok((channel_id, address))
 	}
 
-	fn close_ingress_channel(
-		intent_id: IntentId,
+	fn close_channel(
+		channel_id: ChannelId,
 		address: TargetChainAccount<T, I>,
 		address_status: DeploymentStatus,
 	) {
-		IntentActions::<T, I>::remove(&address);
-		FetchParamDetails::<T, I>::remove(intent_id);
+		ChannelActions::<T, I>::remove(&address);
+		FetchParamDetails::<T, I>::remove(channel_id);
 		if matches!(address_status, DeploymentStatus::Deployed) {
 			AddressStatus::<T, I>::insert(address.clone(), DeploymentStatus::Deployed);
-			AddressPool::<T, I>::insert(intent_id, address.clone());
+			AddressPool::<T, I>::insert(channel_id, address.clone());
 		}
-		if let Some(intent_ingress_details) = IntentIngressDetails::<T, I>::take(&address) {
+		if let Some(deposit_address_details) = DepositAddressDetailsLookup::<T, I>::take(&address) {
 			Self::deposit_event(Event::<T, I>::StopWitnessing {
-				ingress_address: address,
-				ingress_asset: intent_ingress_details.ingress_asset,
+				deposit_address: address,
+				source_asset: deposit_address_details.source_asset,
 			});
 		}
 	}
 
-	pub fn expire_intent(intent_id: IntentId, address: TargetChainAccount<T, I>) {
+	pub fn expire_channel(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
 		let status = AddressStatus::<T, I>::get(&address);
-		Self::close_ingress_channel(intent_id, address, status);
+		Self::close_channel(channel_id, address, status);
 	}
 }
 
@@ -730,8 +743,8 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 	fn schedule_egress(
 		asset: TargetChainAsset<T, I>,
 		amount: TargetChainAmount<T, I>,
-		egress_address: TargetChainAccount<T, I>,
-		maybe_message: Option<CcmIngressMetadata>,
+		destination_address: TargetChainAccount<T, I>,
+		maybe_message: Option<CcmDepositMetadata>,
 	) -> EgressId {
 		let egress_counter = EgressIdCounter::<T, I>::mutate(|id| {
 			*id = id.saturating_add(1);
@@ -739,12 +752,12 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		});
 		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
 		match maybe_message {
-			Some(CcmIngressMetadata { message, refund_address, source_address, .. }) =>
+			Some(CcmDepositMetadata { message, refund_address, source_address, .. }) =>
 				ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
 					egress_id,
 					asset,
 					amount,
-					egress_address: egress_address.clone(),
+					destination_address: destination_address.clone(),
 					message,
 					refund_address,
 					source_address,
@@ -753,7 +766,7 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 				T::TargetChain,
 			>::Transfer {
 				asset,
-				egress_address: egress_address.clone(),
+				destination_address: destination_address.clone(),
 				amount,
 				egress_id,
 			}),
@@ -763,71 +776,73 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 			id: egress_id,
 			asset,
 			amount: amount.into(),
-			egress_address,
+			destination_address,
 		});
 
 		egress_id
 	}
 }
 
-impl<T: Config<I>, I: 'static> IngressApi<T::TargetChain> for Pallet<T, I> {
+impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 	type AccountId = <T as frame_system::Config>::AccountId;
 	// This should be callable by the LP pallet.
-	fn register_liquidity_ingress_intent(
+	fn request_liquidity_deposit_address(
 		lp_account: T::AccountId,
-		ingress_asset: TargetChainAsset<T, I>,
-	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
-		let (intent_id, ingress_address) = Self::register_ingress_intent(
-			ingress_asset,
-			IntentAction::LiquidityProvision { lp_account },
-		)?;
+		source_asset: TargetChainAsset<T, I>,
+	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
+		let (channel_id, deposit_address) =
+			Self::open_channel(source_asset, ChannelAction::LiquidityProvision { lp_account })?;
 
 		Self::deposit_event(Event::StartWitnessing {
-			ingress_address: ingress_address.clone(),
-			ingress_asset,
+			deposit_address: deposit_address.clone(),
+			source_asset,
 		});
 
-		Ok((intent_id, ingress_address.into()))
+		Ok((channel_id, deposit_address.into()))
 	}
 
-	// This should only be callable by the relayer.
-	fn register_swap_intent(
-		ingress_asset: TargetChainAsset<T, I>,
-		egress_asset: Asset,
-		egress_address: ForeignChainAddress,
-		relayer_commission_bps: BasisPoints,
-		relayer_id: T::AccountId,
-		message_metadata: Option<CcmIngressMetadata>,
-	) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
-		let (intent_id, ingress_address) = Self::register_ingress_intent(
-			ingress_asset,
+	// This should only be callable by the broker.
+	fn request_swap_deposit_address(
+		source_asset: TargetChainAsset<T, I>,
+		destination_asset: Asset,
+		destination_address: ForeignChainAddress,
+		broker_commission_bps: BasisPoints,
+		broker_id: T::AccountId,
+		message_metadata: Option<CcmDepositMetadata>,
+	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
+		let (channel_id, deposit_address) = Self::open_channel(
+			source_asset,
 			match message_metadata {
-				Some(msg) => IntentAction::CcmTransfer {
-					egress_asset,
-					egress_address,
+				Some(msg) => ChannelAction::CcmTransfer {
+					destination_asset,
+					destination_address,
 					message_metadata: msg,
 				},
-				None => IntentAction::Swap {
-					egress_asset,
-					egress_address,
-					relayer_commission_bps,
-					relayer_id,
+				None => ChannelAction::Swap {
+					destination_asset,
+					destination_address,
+					broker_commission_bps,
+					broker_id,
 				},
 			},
 		)?;
 
 		Self::deposit_event(Event::StartWitnessing {
-			ingress_address: ingress_address.clone(),
-			ingress_asset,
+			deposit_address: deposit_address.clone(),
+			source_asset,
 		});
 
-		Ok((intent_id, ingress_address.into()))
+		Ok((channel_id, deposit_address.into()))
 	}
 
 	// Note: we expect that the mapping from any instantiable pallet to the instance of this pallet
 	// is matching to the right chain. Because of that we can ignore the chain parameter.
-	fn expire_intent(chain: ForeignChain, intent_id: IntentId, address: TargetChainAccount<T, I>) {
+	fn expire_channel(
+		chain: ForeignChain,
+		channel_id: ChannelId,
+		address: TargetChainAccount<T, I>,
+	) {
 		assert_eq!(<T as Config<I>>::TargetChain::get(), chain, "Incompatible chains!");
-		Self::expire_intent(intent_id, address);
+		Self::expire_channel(channel_id, address);
 	}
 }

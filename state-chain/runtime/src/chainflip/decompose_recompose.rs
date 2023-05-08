@@ -148,10 +148,9 @@ mod tests {
 				(0..calls.len()).map(|i| [i as u8; 32].into()).collect::<BTreeSet<_>>();
 			let current_epoch = 1;
 			pallet_cf_validator::CurrentEpoch::<Runtime>::put(current_epoch);
-			pallet_cf_validator::CurrentAuthorities::<Runtime>::put(&authorities);
-			pallet_cf_validator::EpochAuthorityCount::<Runtime>::insert(
-				<Validator as EpochInfo>::epoch_index(),
-				authorities.len() as u32,
+			pallet_cf_validator::HistoricalAuthorities::<Runtime>::insert(
+				current_epoch,
+				&authorities,
 			);
 
 			for (index, authority_id) in authorities.into_iter().enumerate() {

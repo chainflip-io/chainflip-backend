@@ -96,9 +96,6 @@ pub mod pallet {
 		/// The event type
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-		/// For registering and verifying the account role.
-		type AccountRoleRegistry: AccountRoleRegistry<Self>;
-
 		/// The runtime offence type must be compatible with this pallet's offence type.
 		type Offence: From<PalletOffence>
 			+ Member
@@ -118,9 +115,6 @@ pub mod pallet {
 
 		/// Handle to allow us to trigger across any pallet on a heartbeat interval
 		type Heartbeat: Heartbeat<ValidatorId = Self::ValidatorId, BlockNumber = Self::BlockNumber>;
-
-		/// Implementation of EnsureOrigin trait for governance
-		type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The number of blocks for the time frame we would test liveliness within
 		#[pallet::constant]

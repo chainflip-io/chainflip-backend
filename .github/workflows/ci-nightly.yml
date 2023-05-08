@@ -21,10 +21,10 @@ jobs:
       commit_hash: ${{ github.sha }}
   post-check:
     needs: [build]
-    uses: ./.github/workflows/_25_post_check.yml
+    uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
   publish:
-    needs: [post-check]
+    needs: [build]
     uses: ./.github/workflows/_30_publish.yml
     with:
       version: nightly/

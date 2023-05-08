@@ -3,7 +3,15 @@ use cf_chains::{
 	mocks::MockEthereum, AnyChain, ApiCall, ChainAbi, ChainCrypto, ReplayProtectionProvider,
 	UpdateFlipSupply,
 };
-use cf_traits::{impl_mock_callback, mocks::egress_handler::MockEgressHandler};
+use cf_primitives::{BroadcastId, FlipBalance, ThresholdSignatureRequestId};
+use cf_traits::{
+	impl_mock_callback, impl_mock_chainflip, impl_mock_waived_fees,
+	mocks::{
+		egress_handler::MockEgressHandler, eth_environment_provider::MockEthEnvironmentProvider,
+		eth_replay_protection_provider::MockEthReplayProtectionProvider,
+	},
+	Broadcaster, FlipBurnInfo, Issuance, RewardsDistribution, WaivedFees,
+};
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	parameter_types, storage,
@@ -19,25 +27,8 @@ use sp_runtime::{
 	BuildStorage,
 };
 
-use cf_traits::{
-	mocks::{
-		eth_environment_provider::MockEthEnvironmentProvider,
-		eth_replay_protection_provider::MockEthReplayProtectionProvider,
-		system_state_info::MockSystemStateInfo,
-	},
-	Broadcaster, FlipBurnInfo, Issuance, WaivedFees,
-};
-
-use cf_primitives::{BroadcastId, FlipBalance, ThresholdSignatureRequestId};
-
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
-
-use cf_traits::{
-	impl_mock_waived_fees,
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, epoch_info},
-	Chainflip, RewardsDistribution,
-};
 
 pub type AccountId = u64;
 
@@ -45,7 +36,7 @@ pub const FLIP_TO_BURN: u128 = 10_000;
 pub const SUPPLY_UPDATE_INTERVAL: u32 = 10;
 pub const TOTAL_ISSUANCE: u128 = 1_000_000_000;
 
-cf_traits::impl_mock_stake_transfer!(AccountId, u128);
+cf_traits::impl_mock_on_account_funded!(AccountId, u128);
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -92,16 +83,7 @@ impl system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-impl Chainflip for Test {
-	type ValidatorId = AccountId;
-	type Amount = u128;
-	type RuntimeCall = RuntimeCall;
-	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
-	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
-	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
-	type SystemState = MockSystemStateInfo;
-}
-
+impl_mock_chainflip!(Test);
 impl_mock_callback!(RuntimeOrigin);
 
 parameter_types! {
@@ -123,9 +105,8 @@ impl pallet_cf_flip::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Balance = u128;
 	type ExistentialDeposit = ExistentialDeposit;
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type BlocksPerDay = BlocksPerDay;
-	type StakeHandler = MockStakeHandler;
+	type OnAccountFunded = MockOnAccountFunded;
 	type WeightInfo = ();
 	type WaivedFees = WaivedFeesMock;
 }
@@ -150,20 +131,20 @@ pub struct MockUpdateFlipSupply {
 	pub nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 	pub new_total_supply: u128,
 	pub block_number: u64,
-	pub stake_manager_address: [u8; 20],
+	pub state_chain_gateway_address: [u8; 20],
 }
 
 impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
 	fn new_unsigned(
 		new_total_supply: u128,
 		block_number: u64,
-		stake_manager_address: &[u8; 20],
+		state_chain_gateway_address: &[u8; 20],
 	) -> Self {
 		Self {
 			nonce: MockEthReplayProtectionProvider::replay_protection(),
 			new_total_supply,
 			block_number,
-			stake_manager_address: *stake_manager_address,
+			state_chain_gateway_address: *state_chain_gateway_address,
 		}
 	}
 }
@@ -241,7 +222,6 @@ impl pallet_cf_emissions::Config for Test {
 	type EthEnvironmentProvider = MockEthEnvironmentProvider;
 	type Broadcaster = MockBroadcast;
 	type WeightInfo = ();
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type FlipToBurn = MockFlipToBurn;
 	type EgressHandler = MockEgressHandler<AnyChain>;
 }
@@ -262,7 +242,7 @@ pub fn new_test_ext(validators: Vec<u64>, issuance: Option<u128>) -> sp_io::Test
 	};
 
 	for v in validators {
-		epoch_info::Mock::add_authorities(v);
+		MockEpochInfo::add_authorities(v);
 	}
 
 	config.build_storage().unwrap().into()

@@ -5,7 +5,7 @@ use cf_chains::Chain;
 use cf_primitives::EpochIndex;
 use tokio::sync::oneshot;
 
-use crate::multisig::PersistentKeyDB;
+use crate::db::PersistentKeyDB;
 
 use super::{
 	checkpointing::{

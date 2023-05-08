@@ -155,7 +155,7 @@ yeet() {
 
 logs() {
   echo "🤖 Which service would you like to tail?"
-  select SERVICE in node engine relayer polkadot geth all; do
+  select SERVICE in node engine broker polkadot geth all; do
     if [ $SERVICE == "all" ]; then
       docker compose -f localnet/docker-compose.yml logs --follow &
       tail -f /tmp/chainflip/chainflip-*.log
@@ -172,8 +172,8 @@ logs() {
     if [ $SERVICE == "engine" ]; then
       tail -f /tmp/chainflip/chainflip-engine.log
     fi
-    if [ $SERVICE == "relayer" ]; then
-      tail -f /tmp/chainflip/chainflip-relayer.log
+    if [ $SERVICE == "broker" ]; then
+      tail -f /tmp/chainflip/chainflip-broker-api.log
     fi
     break
   done

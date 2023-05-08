@@ -7,7 +7,7 @@ use crate::mock_runtime::{
 
 use super::*;
 use cf_primitives::AccountRole;
-use cf_traits::{EpochInfo, QualifyNode, StakeTransfer};
+use cf_traits::{EpochInfo, Funding, QualifyNode};
 pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
 const BLOCKS_PER_EPOCH: u32 = 1000;
@@ -32,7 +32,7 @@ fn state_of_genesis_is_as_expected() {
 		let accounts = [AccountId::from(CHARLIE), AccountId::from(BOB), AccountId::from(ALICE)];
 
 		for account in accounts.iter() {
-			assert_eq!(Flip::staked_balance(account), GENESIS_BALANCE, "the account has its stake");
+			assert_eq!(Flip::account_balance(account), GENESIS_BALANCE,);
 		}
 
 		assert_eq!(Validator::bond(), GENESIS_BALANCE);

@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::{eth::Address, ForeignChain};
-use cf_traits::{BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, FeePayment, StakingInfo};
+use cf_traits::{BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, FeePayment, FundingInfo};
 use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::Weight,
@@ -51,11 +51,6 @@ pub mod pallet {
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		/// Burns the proposal fee from the accounts.
 		type FeePayment: FeePayment<Amount = Self::Amount, AccountId = Self::AccountId>;
-		/// Provides information about the current distribution of on-chain stake.
-		type StakingInfo: StakingInfo<
-			AccountId = <Self as frame_system::Config>::AccountId,
-			Balance = Self::Amount,
-		>;
 		/// Broadcasts the community key.
 		type CommKeyBroadcaster: CommKeyBroadcaster;
 		/// Broadcasts the gov key to any supported chain.
@@ -259,8 +254,8 @@ pub mod pallet {
 		pub fn resolve_vote(proposal: Proposal) -> usize {
 			let backers = Backers::<T>::take(&proposal);
 			Self::deposit_event(
-				if backers.iter().map(T::StakingInfo::total_stake_of).sum::<T::Amount>() >
-					(T::StakingInfo::total_onchain_stake() / 3u32.into()) * 2u32.into()
+				if backers.iter().map(T::FundingInfo::total_balance_of).sum::<T::Amount>() >
+					(T::FundingInfo::total_onchain_funds() / 3u32.into()) * 2u32.into()
 				{
 					let enactment_block =
 						<frame_system::Pallet<T>>::block_number() + T::EnactmentDelay::get();

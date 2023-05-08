@@ -24,12 +24,12 @@ jobs:
       commit_hash: ${{ github.event.pull_request.head.sha }} # More info: https://github.com/actions/checkout/issues/426
   post-check:
     needs: [build]
-    uses: ./.github/workflows/_25_post_check.yml
+    uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
     with:
       simple_bouncer: true
   publish:
-    needs: [post-check]
+    needs: [build]
     uses: ./.github/workflows/_30_publish.yml
     with:
       version: ci/${{ github.event.pull_request.head.sha }}/

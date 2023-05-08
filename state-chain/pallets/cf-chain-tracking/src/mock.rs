@@ -2,10 +2,7 @@ use std::cell::RefCell;
 
 use crate::{self as pallet_cf_chain_tracking, Config};
 use cf_chains::mocks::MockEthereum;
-use cf_traits::{
-	mocks::{ensure_origin_mock::NeverFailingOriginCheck, system_state_info::MockSystemStateInfo},
-	Chainflip,
-};
+use cf_traits::{self, impl_mock_chainflip};
 use frame_support::{parameter_types, traits::ConstU64};
 use sp_core::H256;
 use sp_runtime::{
@@ -65,15 +62,7 @@ impl frame_system::Config for Test {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-impl Chainflip for Test {
-	type ValidatorId = u64;
-	type Amount = u128;
-	type RuntimeCall = RuntimeCall;
-	type EnsureWitnessed = NeverFailingOriginCheck<Self>;
-	type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
-	type EpochInfo = cf_traits::mocks::epoch_info::MockEpochInfo;
-	type SystemState = MockSystemStateInfo;
-}
+impl_mock_chainflip!(Test);
 
 pub const AGE_LIMIT: u64 = 5;
 

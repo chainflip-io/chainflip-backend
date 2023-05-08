@@ -5,7 +5,7 @@ use crate::{
 	Reserve, SlashingRate, TotalIssuance,
 };
 use cf_primitives::FlipBalance;
-use cf_traits::{Bonding, Issuance, Slashing, StakeTransfer};
+use cf_traits::{Bonding, Funding, Issuance, Slashing};
 use frame_support::{
 	assert_noop,
 	traits::{HandleLifetime, Hooks, Imbalance},
@@ -226,57 +226,57 @@ impl FlipOperation {
 					return false
 				}
 			},
-			// Update stake, Bond and claim
-			FlipOperation::UpdateStakeAndBond(account_id, stake, bond) => {
-				// Update Stake
-				let previous_stake = <Flip as StakeTransfer>::staked_balance(account_id);
+			// Update balance, Bond and redeem
+			FlipOperation::UpdateBalanceAndBond(account_id, amount, bond) => {
+				// Update Balance
+				let previous_balance = <Flip as Funding>::account_balance(account_id);
 				let previous_offchain_funds = OffchainFunds::<Test>::get();
-				<Flip as StakeTransfer>::credit_stake(account_id, *stake);
-				let new_stake = <Flip as StakeTransfer>::staked_balance(account_id);
+				<Flip as Funding>::credit_funds(account_id, *amount);
+				let new_balance = <Flip as Funding>::account_balance(account_id);
 				let new_offchain_funds = OffchainFunds::<Test>::get();
-				if new_offchain_funds != previous_offchain_funds.saturating_sub(*stake) ||
-					new_stake !=
-						(previous_stake + (previous_offchain_funds - new_offchain_funds)) ||
-					!MockStakeHandler::has_stake_updated(account_id)
+				if new_offchain_funds != previous_offchain_funds.saturating_sub(*amount) ||
+					new_balance !=
+						(previous_balance + (previous_offchain_funds - new_offchain_funds)) ||
+					!MockOnAccountFunded::has_account_been_funded(account_id)
 				{
 					return false
 				}
 
 				// Bond all of it
-				Bonder::<Test>::update_bond(account_id, new_stake);
-				if new_stake != (previous_stake + (previous_offchain_funds - new_offchain_funds)) ||
-					<Flip as StakeTransfer>::claimable_balance(account_id) != 0
+				Bonder::<Test>::update_bond(account_id, new_balance);
+				if new_balance !=
+					(previous_balance + (previous_offchain_funds - new_offchain_funds)) ||
+					<Flip as Funding>::redeemable_balance(account_id) != 0
 				{
 					return false
 				}
 
-				// Now try to claim
+				// Now try to redeem
 				assert_noop!(
-					<Flip as StakeTransfer>::try_initiate_claim(account_id, 1),
+					<Flip as Funding>::try_initiate_redemption(account_id, 1),
 					Error::<Test>::InsufficientLiquidity
 				);
 
 				// Reduce the bond
 				Bonder::<Test>::update_bond(account_id, *bond);
-				let expected_claimable_balance = new_stake.saturating_sub(*bond);
-				if <Flip as StakeTransfer>::claimable_balance(account_id) !=
-					expected_claimable_balance
+				let expected_redeemable_balance = new_balance.saturating_sub(*bond);
+				if <Flip as Funding>::redeemable_balance(account_id) != expected_redeemable_balance
 				{
 					return false
 				}
 				assert!(
-					<Flip as StakeTransfer>::try_initiate_claim(
+					<Flip as Funding>::try_initiate_redemption(
 						account_id,
-						expected_claimable_balance
+						expected_redeemable_balance
 					)
 					.is_ok(),
-					"expexted: {}, claimable: {}",
-					expected_claimable_balance,
-					<Flip as StakeTransfer>::claimable_balance(account_id)
+					"expexted: {}, redeemable: {}",
+					expected_redeemable_balance,
+					<Flip as Funding>::redeemable_balance(account_id)
 				);
-				<Flip as StakeTransfer>::finalize_claim(account_id)
-					.expect("Pending Claim should exist");
-				if !MockStakeHandler::has_stake_updated(account_id) {
+				<Flip as Funding>::finalize_redemption(account_id)
+					.expect("Pending Redemption should exist");
+				if !MockOnAccountFunded::has_account_been_funded(account_id) {
 					return false
 				}
 			},
@@ -382,7 +382,7 @@ impl Arbitrary for FlipOperation {
 			11 => FlipOperation::MintToAccount(random_account(g), u128::arbitrary(g)),
 			12 => FlipOperation::ExternalTransferOut(random_account(g), u128::arbitrary(g)),
 			13 => FlipOperation::ExternalTransferIn(random_account(g), u128::arbitrary(g)),
-			14 => FlipOperation::UpdateStakeAndBond(
+			14 => FlipOperation::UpdateBalanceAndBond(
 				random_account(g),
 				u128::arbitrary(g),
 				u128::arbitrary(g),
@@ -637,17 +637,17 @@ mod test_tx_payments {
 #[test]
 fn can_reap_dust_account() {
 	new_test_ext().execute_with(|| {
-		Account::<Test>::insert(ALICE, FlipAccount { stake: 9, bond: 0 });
-		Account::<Test>::insert(BOB, FlipAccount { stake: 10, bond: 0 });
-		Account::<Test>::insert(CHARLIE, FlipAccount { stake: 11, bond: 0 });
+		Account::<Test>::insert(ALICE, FlipAccount { balance: 9, bond: 0 });
+		Account::<Test>::insert(BOB, FlipAccount { balance: 10, bond: 0 });
+		Account::<Test>::insert(CHARLIE, FlipAccount { balance: 11, bond: 0 });
 
 		// Dust accounts are reaped on_idle
 		Flip::on_idle(1, Weight::from_ref_time(1_000_000_000_000));
 
 		assert!(!Account::<Test>::contains_key(ALICE));
-		assert_eq!(Account::<Test>::get(BOB), FlipAccount { stake: 10, bond: 0 });
+		assert_eq!(Account::<Test>::get(BOB), FlipAccount { balance: 10, bond: 0 });
 
-		assert_eq!(Account::<Test>::get(CHARLIE), FlipAccount { stake: 11, bond: 0 });
+		assert_eq!(Account::<Test>::get(CHARLIE), FlipAccount { balance: 11, bond: 0 });
 		System::assert_has_event(RuntimeEvent::Flip(crate::Event::AccountReaped {
 			who: ALICE,
 			dust_burned: 9,

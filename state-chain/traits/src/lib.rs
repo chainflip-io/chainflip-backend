@@ -10,16 +10,14 @@ pub mod offence_reporting;
 use core::fmt::Debug;
 
 pub use async_result::AsyncResult;
-use sp_std::collections::btree_set::BTreeSet;
 
 use cf_chains::{
-	address::ForeignChainAddress, eth::H256, ApiCall, CcmIngressMetadata, Chain, ChainAbi,
+	address::ForeignChainAddress, eth::H256, ApiCall, CcmDepositMetadata, Chain, ChainAbi,
 	ChainCrypto, Ethereum, Polkadot,
 };
-
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, EgressId, EpochIndex, EthereumAddress, ForeignChain, IntentId, KeyId,
+	CeremonyId, ChannelId, EgressId, EpochIndex, EthereumAddress, ForeignChain,
 	ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -35,11 +33,11 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, Bounded, MaybeSerializeDeserialize},
 	DispatchError, DispatchResult, FixedPointOperand, Percent, RuntimeDebug,
 };
-use sp_std::{iter::Sum, marker::PhantomData, prelude::*};
+use sp_std::{collections::btree_set::BTreeSet, iter::Sum, marker::PhantomData, prelude::*};
 
 /// Common base config for Chainflip pallets.
 pub trait Chainflip: frame_system::Config {
-	/// An amount for a bid
+	/// The type used for Flip balances and auction bids.
 	type Amount: Member
 		+ Parameter
 		+ MaxEncodedLen
@@ -62,19 +60,27 @@ pub trait Chainflip: frame_system::Config {
 		+ IsType<<Self as frame_system::Config>::AccountId>
 		+ MaybeSerializeDeserialize;
 
-	/// The overarching call type.
+	/// The overarching call type, with some added constraints.
 	type RuntimeCall: Member
 		+ Parameter
-		+ UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>;
+		+ UnfilteredDispatchable<RuntimeOrigin = Self::RuntimeOrigin>
+		+ IsType<<Self as frame_system::Config>::RuntimeCall>;
+
 	/// A type that allows us to check if a call was a result of witness consensus.
 	type EnsureWitnessed: EnsureOrigin<Self::RuntimeOrigin>;
 	/// A type that allows us to check if a call was a result of witness consensus by the current
 	/// epoch.
 	type EnsureWitnessedAtCurrentEpoch: EnsureOrigin<Self::RuntimeOrigin>;
+	/// Allows us to check for the governance origin.
+	type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 	/// Information about the current Epoch.
 	type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
 	/// Access to information about the current system state
 	type SystemState: SystemStateInfo;
+	/// For registering and checking account roles.
+	type AccountRoleRegistry: AccountRoleRegistry<Self>;
+	/// For checking nodes' current balances.
+	type FundingInfo: FundingInfo<AccountId = Self::AccountId, Balance = Self::Amount>;
 }
 
 pub trait EpochInfo {
@@ -101,8 +107,8 @@ pub trait EpochInfo {
 	/// Authority count at a particular epoch.
 	fn authority_count_at_epoch(epoch: EpochIndex) -> Option<AuthorityCount>;
 
-	/// The amount to be used as bond, this is the minimum stake needed to be included in the
-	/// current candidate authority set
+	/// The bond amount for this epoch. Authorities can only redeem funds above this minumum
+	/// balance.
 	fn bond() -> Self::Amount;
 
 	/// The current epoch we are in
@@ -165,6 +171,7 @@ impl<CandidateId, BidAmount: Default> Default for AuctionOutcome<CandidateId, Bi
 #[derive(PartialEq, Eq, Clone, Debug, Decode, Encode)]
 pub enum VaultStatus<ValidatorId> {
 	KeygenComplete,
+	KeyHandoverComplete,
 	RotationComplete,
 	Failed(BTreeSet<ValidatorId>),
 }
@@ -173,7 +180,16 @@ pub trait VaultRotator {
 	type ValidatorId: Ord + Clone;
 
 	/// Start the rotation by kicking off keygen with provided candidates.
-	fn keygen(candidates: BTreeSet<Self::ValidatorId>, epoch_index: EpochIndex);
+	fn keygen(candidates: BTreeSet<Self::ValidatorId>, new_epoch_index: EpochIndex);
+
+	/// Start the key handover with the participating candidates.
+	fn key_handover(
+		// Authorities of the last epoch selected to share their key in the key handover
+		sharing_participants: BTreeSet<Self::ValidatorId>,
+		// These are any authorities for the new epoch who are not sharing participants
+		receiving_participants: BTreeSet<Self::ValidatorId>,
+		epoch_index: EpochIndex,
+	);
 
 	/// Get the current rotation status.
 	fn status() -> AsyncResult<VaultStatus<Self::ValidatorId>>;
@@ -204,47 +220,52 @@ pub trait ReputationResetter {
 pub trait BidderProvider {
 	type ValidatorId;
 	type Amount;
-	/// Provide a list of bidders. Those who are staked and their account is in the `bidding` state.
+	/// Provide a list of validators whose accounts are in the `bidding` state.
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
 }
 
-pub trait StakeHandler {
+pub trait OnAccountFunded {
 	type ValidatorId;
 	type Amount;
 
-	/// A callback that is triggered after some validator's stake has changed, either by staking
-	/// more Flip, or by executing a claim.
-	fn on_stake_updated(validator_id: &Self::ValidatorId, new_total: Self::Amount);
+	/// A callback that is triggered after some validator's balance has changed signigicantly,
+	/// either by funding it with more Flip, or by executing a redemption.
+	///
+	/// Note this does not trigger on small changes like transaction fees.
+	///
+	/// TODO: This should be triggered when funds are paid in tokenholder governance.
+	fn on_account_funded(validator_id: &Self::ValidatorId, new_total: Self::Amount);
 }
 
-pub trait StakeTransfer {
+pub trait Funding {
 	type AccountId;
 	type Balance;
-	type Handler: StakeHandler<ValidatorId = Self::AccountId, Amount = Self::Balance>;
+	type Handler: OnAccountFunded<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 
-	/// An account's tokens that are free to be staked.
-	fn staked_balance(account_id: &Self::AccountId) -> Self::Balance;
+	/// The account's total Flip balance.
+	fn account_balance(account_id: &Self::AccountId) -> Self::Balance;
 
-	/// An account's tokens that are free to be claimed.
-	fn claimable_balance(account_id: &Self::AccountId) -> Self::Balance;
+	/// An account's tokens that are free to be redeemed.
+	fn redeemable_balance(account_id: &Self::AccountId) -> Self::Balance;
 
-	/// Credit an account with stake from off-chain. Returns the total stake in the account.
-	fn credit_stake(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance;
+	/// Credit an account with funds from off-chain. Returns the total balance in the account after
+	/// the funds are credited.
+	fn credit_funds(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance;
 
-	/// Reserves funds for a claim, if enough claimable funds are available.
+	/// Reserves funds for a redemption, if enough redeemable funds are available.
 	///
-	/// Note this function makes no assumptions about how many claims may be pending simultaneously:
-	/// if enough funds are available, it succeeds. Otherwise, it fails.
-	fn try_initiate_claim(
+	/// Note this function makes no assumptions about how many redemptions may be pending
+	/// simultaneously: if enough funds are available, it succeeds. Otherwise, it fails.
+	fn try_initiate_redemption(
 		account_id: &Self::AccountId,
 		amount: Self::Balance,
 	) -> Result<(), DispatchError>;
 
-	/// Performs necessary settlement once a claim has been confirmed off-chain.
-	fn finalize_claim(account_id: &Self::AccountId) -> Result<(), DispatchError>;
+	/// Performs necessary settlement once a redemption has been confirmed off-chain.
+	fn finalize_redemption(account_id: &Self::AccountId) -> Result<(), DispatchError>;
 
-	/// Reverts a pending claim in the case of an expiry or cancellation.
-	fn revert_claim(account_id: &Self::AccountId) -> Result<(), DispatchError>;
+	/// Reverts a pending redemption in the case of an expiry or cancellation.
+	fn revert_redemption(account_id: &Self::AccountId) -> Result<(), DispatchError>;
 }
 
 /// Trait for managing token issuance.
@@ -283,7 +304,7 @@ pub trait EmissionsTrigger {
 pub trait EthEnvironmentProvider {
 	fn token_address(asset: assets::any::Asset) -> Option<EthereumAddress>;
 	fn key_manager_address() -> EthereumAddress;
-	fn stake_manager_address() -> EthereumAddress;
+	fn state_chain_gateway_address() -> EthereumAddress;
 	fn vault_address() -> EthereumAddress;
 	fn chain_id() -> u64;
 }
@@ -329,7 +350,8 @@ pub trait Slashing {
 	/// Slashes a validator for the equivalent of some number of blocks offline.
 	fn slash(validator_id: &Self::AccountId, blocks_offline: Self::BlockNumber);
 
-	fn slash_stake(account_id: &Self::AccountId, amount: Percent);
+	/// Slahes a percentage of a validator's total balance.
+	fn slash_balance(account_id: &Self::AccountId, amount: Percent);
 }
 
 /// Can nominate a single account.
@@ -417,8 +439,9 @@ where
 
 	fn request_keygen_verification_signature(
 		payload: C::Payload,
-		key_id: KeyId,
 		participants: BTreeSet<Self::ValidatorId>,
+		key: C::AggKey,
+		epoch_index: EpochIndex,
 	) -> ThresholdSignatureRequestId;
 
 	/// Register a callback to be dispatched when the signature is available. Can fail if the
@@ -580,7 +603,7 @@ pub trait HistoricalEpoch {
 	fn deactivate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex);
 	/// Add an epoch to an authority's list of active epochs.
 	fn activate_epoch(authority: &Self::ValidatorId, epoch: EpochIndex);
-	///  Returns the amount of a authority's stake that is currently bonded.
+	/// Returns the amount of a authority's funds that are currently bonded.
 	fn active_bond(authority: &Self::ValidatorId) -> Self::Amount;
 	/// Returns the number of active epochs a authority is still active in
 	fn number_of_active_epochs_for_authority(id: &Self::ValidatorId) -> u32;
@@ -634,76 +657,78 @@ pub trait FeePayment {
 	/// Helper function to mint FLIP to an account.
 	#[cfg(feature = "runtime-benchmarks")]
 	fn mint_to_account(_account_id: &Self::AccountId, _amount: Self::Amount) {
-		unreachable!()
+		unimplemented!()
 	}
+
 	/// Burns an amount of tokens, if the account has enough. Otherwise fails.
 	fn try_burn_fee(account_id: &Self::AccountId, amount: Self::Amount) -> DispatchResult;
 }
 
-/// Provides information about the on-chain staked funds.
-pub trait StakingInfo {
+/// Provides information about on-chain funds.
+pub trait FundingInfo {
 	type AccountId;
 	type Balance;
-	/// Returns the stake of an account.
-	fn total_stake_of(account_id: &Self::AccountId) -> Self::Balance;
-	/// Returns the total stake held on-chain.
-	fn total_onchain_stake() -> Self::Balance;
+	/// Returns the funding balance of an account.
+	fn total_balance_of(account_id: &Self::AccountId) -> Self::Balance;
+	/// Returns the total amount of funds held on-chain.
+	fn total_onchain_funds() -> Self::Balance;
 }
 
-/// Allow pallets to register `Intent`s in the Ingress pallet.
-pub trait IngressApi<C: Chain> {
+/// Allow pallets to open and expire deposit addresses.
+pub trait DepositApi<C: Chain> {
 	type AccountId;
-	/// Issues an intent id and ingress address for a new liquidity deposit.
-	fn register_liquidity_ingress_intent(
+
+	/// Issues a channel id and deposit address for a new liquidity deposit.
+	fn request_liquidity_deposit_address(
 		lp_account: Self::AccountId,
-		ingress_asset: C::ChainAsset,
-	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
+		source_asset: C::ChainAsset,
+	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
-	/// Issues an intent id and ingress address for a new swap.
-	fn register_swap_intent(
-		ingress_asset: C::ChainAsset,
-		egress_asset: Asset,
-		egress_address: ForeignChainAddress,
-		relayer_commission_bps: BasisPoints,
-		relayer_id: Self::AccountId,
-		message_metadata: Option<CcmIngressMetadata>,
-	) -> Result<(IntentId, ForeignChainAddress), DispatchError>;
+	/// Issues a channel id and deposit address for a new swap.
+	fn request_swap_deposit_address(
+		source_asset: C::ChainAsset,
+		destination_asset: Asset,
+		destination_address: ForeignChainAddress,
+		broker_commission_bps: BasisPoints,
+		broker_id: Self::AccountId,
+		message_metadata: Option<CcmDepositMetadata>,
+	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
-	/// Expires an intent.
-	fn expire_intent(chain: ForeignChain, intent_id: IntentId, address: C::ChainAccount);
+	/// Expires a channel.
+	fn expire_channel(chain: ForeignChain, channel_id: ChannelId, address: C::ChainAccount);
 }
 
-/// Generates a deterministic ingress address for some combination of asset, chain and intent id.
+/// Generates a deterministic deposit address for some combination of asset, chain and channel id.
 pub trait AddressDerivationApi<C: Chain> {
 	fn generate_address(
-		ingress_asset: C::ChainAsset,
-		intent_id: IntentId,
+		source_asset: C::ChainAsset,
+		channel_id: ChannelId,
 	) -> Result<C::ChainAccount, DispatchError>;
 }
 
 impl AddressDerivationApi<Ethereum> for () {
 	fn generate_address(
-		ingress_asset: <Ethereum as Chain>::ChainAsset,
-		intent_id: IntentId,
+		source_asset: <Ethereum as Chain>::ChainAsset,
+		channel_id: ChannelId,
 	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
-		Ok(H256((ingress_asset, intent_id).encode().blake2_256()).into())
+		Ok(H256((source_asset, channel_id).encode().blake2_256()).into())
 	}
 }
 
 impl AddressDerivationApi<Polkadot> for () {
 	fn generate_address(
-		ingress_asset: <Polkadot as Chain>::ChainAsset,
-		intent_id: IntentId,
+		source_asset: <Polkadot as Chain>::ChainAsset,
+		channel_id: ChannelId,
 	) -> Result<<Polkadot as Chain>::ChainAccount, DispatchError> {
-		Ok((ingress_asset, intent_id).encode().blake2_256().into())
+		Ok((source_asset, channel_id).encode().blake2_256().into())
 	}
 }
 
 pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn register_account_role(who: &T::AccountId, role: AccountRole) -> DispatchResult;
 
-	fn register_as_relayer(account_id: &T::AccountId) -> DispatchResult {
-		Self::register_account_role(account_id, AccountRole::Relayer)
+	fn register_as_broker(account_id: &T::AccountId) -> DispatchResult {
+		Self::register_account_role(account_id, AccountRole::Broker)
 	}
 
 	fn register_as_liquidity_provider(account_id: &T::AccountId) -> DispatchResult {
@@ -719,8 +744,8 @@ pub trait AccountRoleRegistry<T: frame_system::Config> {
 		role: AccountRole,
 	) -> Result<T::AccountId, BadOrigin>;
 
-	fn ensure_relayer(origin: T::RuntimeOrigin) -> Result<T::AccountId, BadOrigin> {
-		Self::ensure_account_role(origin, AccountRole::Relayer)
+	fn ensure_broker(origin: T::RuntimeOrigin) -> Result<T::AccountId, BadOrigin> {
+		Self::ensure_account_role(origin, AccountRole::Broker)
 	}
 
 	fn ensure_liquidity_provider(origin: T::RuntimeOrigin) -> Result<T::AccountId, BadOrigin> {
@@ -742,8 +767,8 @@ pub trait EgressApi<C: Chain> {
 	fn schedule_egress(
 		asset: C::ChainAsset,
 		amount: C::ChainAmount,
-		egress_address: C::ChainAccount,
-		maybe_message: Option<CcmIngressMetadata>,
+		destination_address: C::ChainAccount,
+		maybe_message: Option<CcmDepositMetadata>,
 	) -> EgressId;
 }
 
@@ -751,8 +776,8 @@ impl<T: frame_system::Config> EgressApi<Ethereum> for T {
 	fn schedule_egress(
 		_asset: assets::eth::Asset,
 		_amount: <Ethereum as Chain>::ChainAmount,
-		_egress_address: <Ethereum as Chain>::ChainAccount,
-		_maybe_message: Option<CcmIngressMetadata>,
+		_destination_address: <Ethereum as Chain>::ChainAccount,
+		_maybe_message: Option<CcmDepositMetadata>,
 	) -> EgressId {
 		(ForeignChain::Ethereum, 0)
 	}
@@ -762,8 +787,8 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 	fn schedule_egress(
 		_asset: assets::dot::Asset,
 		_amount: <Polkadot as Chain>::ChainAmount,
-		_egress_address: <Polkadot as Chain>::ChainAccount,
-		_maybe_message: Option<CcmIngressMetadata>,
+		_destination_address: <Polkadot as Chain>::ChainAccount,
+		_maybe_message: Option<CcmDepositMetadata>,
 	) -> EgressId {
 		(ForeignChain::Polkadot, 0)
 	}
@@ -772,14 +797,6 @@ impl<T: frame_system::Config> EgressApi<Polkadot> for T {
 pub trait VaultTransitionHandler<C: ChainCrypto> {
 	fn on_new_vault() {}
 }
-
-/// Provides information about current bids.
-pub trait BidInfo {
-	type Balance;
-	/// Returns the smallest of all backup validator bids.
-	fn get_min_backup_bid() -> Self::Balance;
-}
-
 pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
 	fn on_new_key_activated(
 		new_public_key: C::AggKey,
@@ -810,17 +827,17 @@ pub trait FlipBurnInfo {
 }
 
 /// The trait implementation is intentionally no-op by default
-pub trait IngressHandler<C: ChainCrypto> {
-	fn on_ingress_completed(
+pub trait DepositHandler<C: ChainCrypto> {
+	fn on_deposit_made(
 		_tx_id: <C as ChainCrypto>::TransactionId,
 		_amount: <C as Chain>::ChainAmount,
 		_address: <C as Chain>::ChainAccount,
 		_asset: <C as Chain>::ChainAsset,
 	) {
 	}
-	fn on_ingress_initiated(
+	fn on_channel_opened(
 		_address: <C as Chain>::ChainAccount,
-		_intent_id: IntentId,
+		_channel_id: ChannelId,
 	) -> Result<(), DispatchError> {
 		Ok(())
 	}
@@ -828,24 +845,23 @@ pub trait IngressHandler<C: ChainCrypto> {
 
 /// Trait for handling cross chain messages.
 pub trait CcmHandler {
-	/// On the ingress of a cross-chain message, swap the asset into egress asset,
-	/// subtract the gas budge from it, then egress the message to the target chain.
-	fn on_ccm_ingress(
-		ingress_asset: Asset,
-		ingress_amount: AssetAmount,
-		egress_asset: Asset,
-		egress_address: ForeignChainAddress,
-		message_metadata: CcmIngressMetadata,
+	/// Triggered when a ccm deposit is made.
+	fn on_ccm_deposit(
+		source_asset: Asset,
+		deposit_amount: AssetAmount,
+		destination_asset: Asset,
+		destination_address: ForeignChainAddress,
+		message_metadata: CcmDepositMetadata,
 	) -> DispatchResult;
 }
 
 impl CcmHandler for () {
-	fn on_ccm_ingress(
-		_ingress_asset: Asset,
-		_ingress_amount: AssetAmount,
-		_egress_asset: Asset,
-		_egress_address: ForeignChainAddress,
-		_message_metadata: CcmIngressMetadata,
+	fn on_ccm_deposit(
+		_source_asset: Asset,
+		_deposit_amount: AssetAmount,
+		_destination_asset: Asset,
+		_destination_address: ForeignChainAddress,
+		_message_metadata: CcmDepositMetadata,
 	) -> DispatchResult {
 		Ok(())
 	}

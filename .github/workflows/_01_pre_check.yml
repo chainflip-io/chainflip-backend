@@ -17,11 +17,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+
       - name: Check Format
         run: cargo fmt --all -- --check
-      - name: Cancelling entire workflow
-        if: failure()
-        uses: andymckay/cancel-action@0.3
 
   cargo-clippy:
     runs-on: [hetzner]
@@ -37,6 +35,3 @@ jobs:
         run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
       - name: Check Linting
         run: cargo cf-clippy-ci
-      - name: cancelling
-        if: failure()
-        uses: andymckay/cancel-action@0.3

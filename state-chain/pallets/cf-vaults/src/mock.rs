@@ -1,6 +1,22 @@
 use std::cell::RefCell;
 
-use cf_primitives::BroadcastId;
+use super::*;
+use crate as pallet_cf_vaults;
+use cf_chains::{
+	eth,
+	mocks::{MockAggKey, MockEthereum},
+	ApiCall, ChainCrypto, ReplayProtectionProvider,
+};
+use cf_primitives::{BroadcastId, GENESIS_EPOCH};
+use cf_traits::{
+	impl_mock_callback, impl_mock_chainflip,
+	mocks::{
+		ceremony_id_provider::MockCeremonyIdProvider,
+		eth_replay_protection_provider::MockEthReplayProtectionProvider,
+		threshold_signer::MockThresholdSigner,
+	},
+	AccountRoleRegistry,
+};
 use frame_support::{
 	construct_runtime, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
 };
@@ -9,24 +25,6 @@ use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
 	BuildStorage,
-};
-
-use crate as pallet_cf_vaults;
-
-use super::*;
-use cf_chains::{
-	eth,
-	mocks::{MockAggKey, MockEthereum},
-	ApiCall, ChainCrypto, ReplayProtectionProvider,
-};
-use cf_traits::{
-	impl_mock_callback,
-	mocks::{
-		ceremony_id_provider::MockCeremonyIdProvider, ensure_origin_mock::NeverFailingOriginCheck,
-		epoch_info::MockEpochInfo, eth_replay_protection_provider::MockEthReplayProtectionProvider,
-		system_state_info::MockSystemStateInfo, threshold_signer::MockThresholdSigner,
-	},
-	Chainflip,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<MockRuntime>;
@@ -114,19 +112,7 @@ impl frame_system::Config for MockRuntime {
 	type MaxConsumers = frame_support::traits::ConstU32<5>;
 }
 
-parameter_types! {}
-
-impl Chainflip for MockRuntime {
-	type ValidatorId = ValidatorId;
-	type Amount = u128;
-	type RuntimeCall = RuntimeCall;
-	type EnsureWitnessed = cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck<Self>;
-	type EnsureWitnessedAtCurrentEpoch =
-		cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck<Self>;
-	type EpochInfo = MockEpochInfo;
-	type SystemState = MockSystemStateInfo;
-}
-
+impl_mock_chainflip!(MockRuntime);
 impl_mock_callback!(RuntimeOrigin);
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -217,7 +203,7 @@ impl Slashing for MockSlasher {
 
 	fn slash(_validator_id: &Self::AccountId, _blocks: Self::BlockNumber) {}
 
-	fn slash_stake(_account_id: &Self::AccountId, _amount: sp_runtime::Percent) {}
+	fn slash_balance(_account_id: &Self::AccountId, _amount: sp_runtime::Percent) {}
 }
 
 impl pallet_cf_vaults::Config for MockRuntime {
@@ -225,8 +211,6 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type Offence = PalletOffence;
 	type Chain = MockEthereum;
 	type RuntimeCall = RuntimeCall;
-	type AccountRoleRegistry = ();
-	type EnsureGovernance = NeverFailingOriginCheck<Self>;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type ThresholdSigner = MockThresholdSigner<MockEthereum, RuntimeCall>;
 	type OffenceReporter = MockOffenceReporter;
@@ -247,32 +231,40 @@ pub const NEW_AGG_PUB_KEY: MockAggKey = MockAggKey(*b"next");
 
 pub const MOCK_KEYGEN_RESPONSE_TIMEOUT: u64 = 25;
 
-fn test_ext_inner(key: Option<Vec<u8>>) -> sp_io::TestExternalities {
+fn test_ext_inner(vault_key: Option<MockAggKey>) -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		vaults_pallet: VaultsPalletConfig {
-			vault_key: key,
+			vault_key,
 			deployment_block: 0,
 			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,
 		},
 	};
 
-	let authorities = BTreeSet::from([ALICE, BOB, CHARLIE]);
-	MockEpochInfo::set_epoch(GENESIS_EPOCH);
-	MockEpochInfo::set_epoch_authority_count(GENESIS_EPOCH, authorities.len() as AuthorityCount);
-	MockEpochInfo::set_authorities(authorities);
-
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {
 		System::set_block_number(1);
+		let authorities = BTreeSet::from([ALICE, BOB, CHARLIE]);
+		for id in &authorities {
+			<MockAccountRoleRegistry as AccountRoleRegistry<MockRuntime>>::register_as_validator(
+				id,
+			)
+			.unwrap();
+		}
+		MockEpochInfo::set_epoch(GENESIS_EPOCH);
+		MockEpochInfo::set_epoch_authority_count(
+			GENESIS_EPOCH,
+			authorities.len() as AuthorityCount,
+		);
+		MockEpochInfo::set_authorities(authorities);
 	});
 
 	ext
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	test_ext_inner(Some(GENESIS_AGG_PUB_KEY.0.to_vec()))
+	test_ext_inner(Some(GENESIS_AGG_PUB_KEY))
 }
 
 pub(crate) fn new_test_ext_no_key() -> sp_io::TestExternalities {

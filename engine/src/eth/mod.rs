@@ -1,11 +1,11 @@
 pub mod chain_data_witnesser;
 pub mod contract_witnesser;
+pub mod deposit_witnesser;
 pub mod erc20_witnesser;
 pub mod eth_block_witnessing;
-pub mod ingress_witnesser;
 pub mod key_manager;
 mod merged_block_stream;
-pub mod stake_manager;
+pub mod state_chain_gateway;
 pub mod vault;
 
 pub mod event;
@@ -32,7 +32,7 @@ use crate::{
 		ws_safe_stream::safe_ws_head_stream,
 	},
 	settings,
-	state_chain_observer::client::extrinsic_api::ExtrinsicApi,
+	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
 	witnesser::{
 		block_head_stream_from::block_head_stream_from,
 		http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
@@ -390,7 +390,7 @@ pub trait EthContractWitnesser {
 	) -> anyhow::Result<()>
 	where
 		EthRpcClient: EthRpcApi + Sync + Send,
-		StateChainClient: ExtrinsicApi + EthAssetApi + Send + Sync;
+		StateChainClient: SignedExtrinsicApi + EthAssetApi + Send + Sync;
 
 	fn contract_address(&self) -> H160;
 }
