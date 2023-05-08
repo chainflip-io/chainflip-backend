@@ -39,7 +39,7 @@ pub mod pallet {
 	pub struct Pallet<T>(PhantomData<T>);
 
 	// TODO: Remove once swapping is enabled and stabilised.
-	// Acts to flag the swapping features. If there are no Relayer accounts or
+	// Acts to flag the swapping features. If there are no Broker accounts or
 	// LP accounts, then the swapping features are disabled.
 	#[pallet::storage]
 	#[pallet::getter(fn swapping_enabled)]
@@ -89,7 +89,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		// TODO: Remove this function after the feature is deployed and stabilised.
 		// Once the swapping features are enabled, they can't be disabled.
-		// If they have been enabled, it's possible accounts have already registered as Relayers or
+		// If they have been enabled, it's possible accounts have already registered as Brokers or
 		// LPs. Thus, disabling this flag is not an indicator of whether the public can swap.
 		// Governance can bypass this by calling `gov_register_account_role`.
 		#[pallet::weight(T::WeightInfo::enable_swapping())]
@@ -149,7 +149,7 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 		account_role: AccountRole,
 	) -> DispatchResult {
 		match account_role {
-			AccountRole::Relayer | AccountRole::LiquidityProvider
+			AccountRole::Broker | AccountRole::LiquidityProvider
 				if !SwappingEnabled::<T>::get() =>
 				Err(Error::<T>::SwappingDisabled.into()),
 			_ => Self::register_account_role_unprotected(account_id, account_role),
@@ -164,7 +164,7 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 			AccountRole::None => Err(BadOrigin),
 			AccountRole::Validator => ensure_validator::<T>(origin),
 			AccountRole::LiquidityProvider => ensure_liquidity_provider::<T>(origin),
-			AccountRole::Relayer => ensure_relayer::<T>(origin),
+			AccountRole::Broker => ensure_broker::<T>(origin),
 		}
 	}
 
@@ -233,7 +233,7 @@ macro_rules! define_ensure_origin {
 	};
 }
 
-define_ensure_origin!(ensure_relayer, EnsureRelayer, AccountRole::Relayer);
+define_ensure_origin!(ensure_broker, EnsureBroker, AccountRole::Broker);
 define_ensure_origin!(ensure_validator, EnsureValidator, AccountRole::Validator);
 define_ensure_origin!(
 	ensure_liquidity_provider,

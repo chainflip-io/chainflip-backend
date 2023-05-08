@@ -1,11 +1,11 @@
 pub mod api;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
-pub mod ingress_address;
+pub mod deposit_address;
 pub mod utxo_selection;
 
 extern crate alloc;
-use crate::{Age, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
+use crate::{Age, Chain, ChainAbi, ChainCrypto, ChannelIdConstructor, FeeRefundCalculator};
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use base58::FromBase58;
@@ -120,7 +120,13 @@ impl Chain for Bitcoin {
 
 	type EpochStartData = EpochStartData;
 
-	type IngressFetchId = BitcoinFetchId;
+	type DepositFetchId = BitcoinFetchId;
+}
+
+#[derive(Clone, Copy, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
+pub enum PreviousOrCurrent {
+	Previous,
+	Current,
 }
 
 #[derive(Clone, Copy, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
@@ -214,7 +220,7 @@ impl ChainAbi for Bitcoin {
 	type ReplayProtection = ();
 }
 
-// TODO: Look at moving this into Utxo. They're exactly the same apart from the IntentId
+// TODO: Look at moving this into Utxo. They're exactly the same apart from the ChannelId
 // which could be made generic, if even necessary at all.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen)]
 pub struct UtxoId {
@@ -224,19 +230,19 @@ pub struct UtxoId {
 	pub vout: u32,
 }
 
-impl IngressIdConstructor for BitcoinFetchId {
+impl ChannelIdConstructor for BitcoinFetchId {
 	type Address = BitcoinScriptBounded;
 
-	fn deployed(intent_id: u64, _address: Self::Address) -> Self {
-		BitcoinFetchId(intent_id)
+	fn deployed(channel_id: u64, _address: Self::Address) -> Self {
+		BitcoinFetchId(channel_id)
 	}
 
-	fn undeployed(intent_id: u64, _address: Self::Address) -> Self {
-		BitcoinFetchId(intent_id)
+	fn undeployed(channel_id: u64, _address: Self::Address) -> Self {
+		BitcoinFetchId(channel_id)
 	}
 }
 
-use self::ingress_address::tweaked_pubkey;
+use self::deposit_address::tweaked_pubkey;
 
 const INTERNAL_PUBKEY: &[u8] =
 	&hex_literal::hex!("02eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");

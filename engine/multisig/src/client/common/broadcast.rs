@@ -8,9 +8,8 @@ use cf_primitives::{AuthorityCount, CeremonyId};
 use tracing::warn;
 
 use crate::{
-	client::{ceremony_manager::CeremonyTrait, legacy::MultisigMessageV1, MultisigMessage},
+	client::{ceremony_manager::CeremonyTrait, MultisigMessage},
 	p2p::{OutgoingMultisigStageMessages, ProtocolVersion, CURRENT_PROTOCOL_VERSION},
-	CryptoScheme,
 };
 
 use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
@@ -89,15 +88,7 @@ fn serialize_for_version<C: CeremonyTrait>(
 ) -> Vec<u8> {
 	let message = MultisigMessage { ceremony_id, data: data.into() };
 	match version {
-		1 => {
-			// NOTE: For compatibility we convert to MultisigMessageV1 first
-			// (will remove this after all nodes support multiple payloads)
-			let message_v1: MultisigMessageV1<<C::Crypto as CryptoScheme>::Point> = message
-				.try_into()
-				.expect("should be compatible as long as we sign single payload");
-			bincode::serialize(&message_v1).unwrap()
-		},
-		2 => bincode::serialize(&message).unwrap(),
+		1 => bincode::serialize(&message).unwrap(),
 		_ => panic!("Unsupported protocol version"),
 	}
 }

@@ -55,40 +55,40 @@ impl Default for CLICommandLineOptions {
 }
 
 #[derive(Parser, Clone, Debug)]
-pub struct SwapIntentParams {
-	/// Ingress asset ("eth"|"dot")
-	pub ingress_asset: Asset,
+pub struct SwapRequestParams {
+	/// Source asset ("eth"|"dot")
+	pub source_asset: Asset,
 	/// Egress asset ("eth"|"dot")
-	pub egress_asset: Asset,
+	pub destination_asset: Asset,
 	// Note: we delay parsing this into `ForeignChainAddress`
 	// until we know which kind of address to expect (based
-	// on egress_asset)
+	// on destination_asset)
 	/// Egress asset address to receive funds after the swap
-	pub egress_address: String,
-	/// Commission to the relayer in base points
-	pub relayer_commission: u16,
+	pub destination_address: String,
+	/// Commission to the broker in basis points
+	pub broker_commission: u16,
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
-pub enum RelayerSubcommands {
-	/// Register a new swap intent
-	SwapIntent(SwapIntentParams),
+pub enum BrokerSubcommands {
+	/// Request a swap deposit address.
+	RequestSwapDepositAddress(SwapRequestParams),
 }
 
 #[derive(clap::Subcommand, Clone, Debug)]
 pub enum LiquidityProviderSubcommands {
-	/// Deposit asset
-	Deposit {
-		/// Asset to deposit
+	/// Request a liquidity deposit address.
+	RequestLiquidityDepositAddress {
+		/// Asset to deposit.
 		asset: Asset,
 	},
 }
 
 #[derive(Parser, Clone, Debug)]
 pub enum CliCommand {
-	/// Relayer specific commands
+	/// Broker specific commands
 	#[clap(subcommand)]
-	Relayer(RelayerSubcommands),
+	Broker(BrokerSubcommands),
 	/// Liquidity provider specific commands
 	#[clap(subcommand, name = "lp")]
 	LiquidityProvider(LiquidityProviderSubcommands),
@@ -107,9 +107,9 @@ pub enum CliCommand {
 	#[clap(
 		about = "Submit an extrinsic to request generation of a redemption certificate (redeeming all available FLIP)"
 	)]
-	#[clap(about = "Set your account role to the Validator, Relayer, Liquidity Provider")]
+	#[clap(about = "Set your account role to the Validator, Broker, Liquidity Provider")]
 	RegisterAccountRole {
-		#[clap(help = "Validator (v), Liquidity Provider (lp), Relayer (r)", value_parser = account_role_parser)]
+		#[clap(help = "Validator (v), Liquidity Provider (lp), Broker (b)", value_parser = account_role_parser)]
 		role: AccountRole,
 	},
 	#[clap(about = "Rotate your session keys")]
@@ -149,10 +149,10 @@ fn account_role_parser(s: &str) -> Result<AccountRole, String> {
 		Ok(AccountRole::Validator)
 	} else if lower_str == "lp" || lower_str == "liquidity provider" {
 		Ok(AccountRole::LiquidityProvider)
-	} else if lower_str == "r" || lower_str == "relayer" {
-		Ok(AccountRole::Relayer)
+	} else if lower_str == "b" || lower_str == "broker" {
+		Ok(AccountRole::Broker)
 	} else {
-		Err(format!("{s} is not a valid role. The valid roles (with their shorthand input) are: 'Validator' (v), 'Liquidity Provider' (lp), 'Relayer' (r)"))
+		Err(format!("{s} is not a valid role. The valid roles (with their shorthand input) are: 'Validator' (v), 'Liquidity Provider' (lp), 'Broker' (b)"))
 	}
 }
 

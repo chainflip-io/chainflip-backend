@@ -8,7 +8,7 @@ use std::cell::RefCell;
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockEthereum;
 
-pub type MockEthereumIngressId = u128;
+pub type MockEthereumChannelId = u128;
 
 // Chain implementation used for testing.
 impl Chain for MockEthereum {
@@ -16,7 +16,7 @@ impl Chain for MockEthereum {
 	// Even though ethereum doesn't handover, we are able to easily get more unit test coverage this
 	// way.
 	const KEY_HANDOVER_IS_REQUIRED: bool = true;
-	type IngressFetchId = MockEthereumIngressId;
+	type DepositFetchId = MockEthereumChannelId;
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
 	type TrackedData = MockTrackedData;
@@ -26,14 +26,14 @@ impl Chain for MockEthereum {
 	type EpochStartData = ();
 }
 
-impl IngressIdConstructor for MockEthereumIngressId {
+impl ChannelIdConstructor for MockEthereumChannelId {
 	type Address = u64;
 
-	fn deployed(_intent_id: u64, _address: Self::Address) -> Self {
+	fn deployed(_channel_id: u64, _address: Self::Address) -> Self {
 		unimplemented!()
 	}
 
-	fn undeployed(_intent_id: u64, _address: Self::Address) -> Self {
+	fn undeployed(_channel_id: u64, _address: Self::Address) -> Self {
 		unimplemented!()
 	}
 }

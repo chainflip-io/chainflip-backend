@@ -35,6 +35,12 @@ impl CanonicalEncoding for secp256k1::schnorrsig::PublicKey {
 	}
 }
 
+impl CanonicalEncoding for secp256k1::XOnlyPublicKey {
+	fn encode_key(&self) -> Vec<u8> {
+		self.serialize().to_vec()
+	}
+}
+
 impl<const S: usize> CanonicalEncoding for [u8; S] {
 	fn encode_key(&self) -> Vec<u8> {
 		self.to_vec()

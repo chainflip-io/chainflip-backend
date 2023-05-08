@@ -1,7 +1,7 @@
 pub mod batch_transfer;
 
 use super::{
-	ingress_address::derive_btc_ingress_bitcoin_script, AggKey, Bitcoin, BitcoinOutput, BtcAmount,
+	deposit_address::derive_btc_deposit_bitcoin_script, AggKey, Bitcoin, BitcoinOutput, BtcAmount,
 	Utxo, CHANGE_ADDRESS_SALT,
 };
 use crate::*;
@@ -30,7 +30,7 @@ where
 	) -> Result<Self, ()> {
 		let agg_key @ AggKey { current, .. } =
 			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(())?;
-		let bitcoin_change_script = derive_btc_ingress_bitcoin_script(current, CHANGE_ADDRESS_SALT);
+		let bitcoin_change_script = derive_btc_deposit_bitcoin_script(current, CHANGE_ADDRESS_SALT);
 		let mut total_output_amount: u64 = 0;
 		let mut btc_outputs = vec![];
 		for transfer_param in transfer_params {
@@ -69,7 +69,7 @@ where
 		// We will use the bitcoin address derived with the salt of 0 as the vault address where we
 		// collect unspent amounts in btc transactions and consolidate funds when rotating epoch.
 		let new_vault_change_script =
-			derive_btc_ingress_bitcoin_script(new_key.current, CHANGE_ADDRESS_SALT);
+			derive_btc_deposit_bitcoin_script(new_key.current, CHANGE_ADDRESS_SALT);
 
 		//max possible btc value to get all available utxos
 		let (all_input_utxos, total_spendable_amount_in_vault) =

@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use chainflip_api::{
 	self, clean_foreign_chain_address,
-	primitives::{AccountRole, Asset, BasisPoints, CcmIngressMetadata},
+	primitives::{AccountRole, Asset, BasisPoints, CcmDepositMetadata},
 	settings::StateChain,
 };
 use clap::Parser;
@@ -12,19 +12,19 @@ use jsonrpsee::{
 };
 use std::path::PathBuf;
 
-#[rpc(server, client, namespace = "relayer")]
+#[rpc(server, client, namespace = "broker")]
 pub trait Rpc {
 	#[method(name = "registerAccount")]
 	async fn register_account(&self) -> Result<String, Error>;
 
-	#[method(name = "newSwapIngressAddress")]
-	async fn request_swap_ingress_address(
+	#[method(name = "requestSwapDepositAddress")]
+	async fn request_swap_deposit_address(
 		&self,
-		ingress_asset: Asset,
-		egress_asset: Asset,
-		egress_address: String,
-		relayer_commission_bps: BasisPoints,
-		message_metadata: Option<CcmIngressMetadata>,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: String,
+		broker_commission_bps: BasisPoints,
+		message_metadata: Option<CcmDepositMetadata>,
 	) -> Result<String, Error>;
 }
 
@@ -33,7 +33,7 @@ pub struct RpcServerImpl {
 }
 
 impl RpcServerImpl {
-	pub fn new(RelayerOptions { ws_endpoint, signing_key_file, .. }: RelayerOptions) -> Self {
+	pub fn new(BrokerOptions { ws_endpoint, signing_key_file, .. }: BrokerOptions) -> Self {
 		Self { state_chain_settings: StateChain { ws_endpoint, signing_key_file } }
 	}
 }
@@ -41,24 +41,24 @@ impl RpcServerImpl {
 #[async_trait]
 impl RpcServer for RpcServerImpl {
 	async fn register_account(&self) -> Result<String, Error> {
-		Ok(chainflip_api::register_account_role(AccountRole::Relayer, &self.state_chain_settings)
+		Ok(chainflip_api::register_account_role(AccountRole::Broker, &self.state_chain_settings)
 			.await
 			.map(|tx_hash| format!("{tx_hash:#x}"))?)
 	}
-	async fn request_swap_ingress_address(
+	async fn request_swap_deposit_address(
 		&self,
-		ingress_asset: Asset,
-		egress_asset: Asset,
-		egress_address: String,
-		relayer_commission_bps: BasisPoints,
-		message_metadata: Option<CcmIngressMetadata>,
+		source_asset: Asset,
+		destination_asset: Asset,
+		destination_address: String,
+		broker_commission_bps: BasisPoints,
+		message_metadata: Option<CcmDepositMetadata>,
 	) -> Result<String, Error> {
-		Ok(chainflip_api::register_swap_intent(
+		Ok(chainflip_api::request_swap_deposit_address(
 			&self.state_chain_settings,
-			ingress_asset,
-			egress_asset,
-			clean_foreign_chain_address(egress_asset.into(), &egress_address)?,
-			relayer_commission_bps,
+			source_asset,
+			destination_asset,
+			clean_foreign_chain_address(destination_asset.into(), &destination_address)?,
+			broker_commission_bps,
 			message_metadata,
 		)
 		.await
@@ -68,11 +68,11 @@ impl RpcServer for RpcServerImpl {
 }
 
 #[derive(Parser, Debug, Clone, Default)]
-pub struct RelayerOptions {
+pub struct BrokerOptions {
 	#[clap(
 		long = "port",
 		default_value = "80",
-		help = "The port number on which the relayer will listen for connections. Use 0 to assign a random port."
+		help = "The port number on which the broker will listen for connections. Use 0 to assign a random port."
 	)]
 	pub port: u16,
 	#[clap(
@@ -84,14 +84,14 @@ pub struct RelayerOptions {
 	#[clap(
 		long = "state_chain.signing_key_file",
 		default_value = "/etc/chainflip/keys/signing_key_file",
-		help = "A path to a file that contains the relayer's secret key for signing extrinsics."
+		help = "A path to a file that contains the broker's secret key for signing extrinsics."
 	)]
 	pub signing_key_file: PathBuf,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-	let opts = RelayerOptions::parse();
+	let opts = BrokerOptions::parse();
 	chainflip_api::use_chainflip_account_id_encoding();
 	tracing_subscriber::FmtSubscriber::builder()
 		.with_env_filter(tracing_subscriber::EnvFilter::from_default_env())

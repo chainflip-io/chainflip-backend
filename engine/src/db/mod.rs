@@ -41,7 +41,7 @@ mod tests {
 	use crate::db::PersistentKeyDB;
 	use cf_primitives::AccountId;
 	use multisig::{client::keygen, eth::EthSigning, Rng};
-	use rand_legacy::FromEntropy;
+	use rand::SeedableRng;
 	use std::collections::BTreeSet;
 
 	// The `new` function of the keystore should load all keys from the db.

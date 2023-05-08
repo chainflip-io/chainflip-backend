@@ -3,17 +3,17 @@ use cf_primitives::{Asset, AssetAmount, BasisPoints, SwapOutput};
 use frame_support::dispatch::DispatchError;
 use sp_runtime::DispatchResult;
 
-pub trait SwapIntentHandler {
+pub trait SwapDepositHandler {
 	type AccountId;
 
-	fn on_swap_ingress(
-		ingress_address: ForeignChainAddress,
+	fn on_swap_deposit(
+		deposit_address: ForeignChainAddress,
 		from: Asset,
 		to: Asset,
 		amount: AssetAmount,
-		egress_address: ForeignChainAddress,
-		relayer_id: Self::AccountId,
-		relayer_commission_bps: BasisPoints,
+		destination_address: ForeignChainAddress,
+		broker_id: Self::AccountId,
+		broker_commission_bps: BasisPoints,
 	);
 }
 
@@ -53,17 +53,17 @@ impl SwappingApi for () {
 }
 
 // TODO Remove these in favour of a real mocks.
-impl<T: frame_system::Config> SwapIntentHandler for T {
+impl<T: frame_system::Config> SwapDepositHandler for T {
 	type AccountId = T::AccountId;
 
-	fn on_swap_ingress(
-		_ingress_address: ForeignChainAddress,
+	fn on_swap_deposit(
+		_deposit_address: ForeignChainAddress,
 		_from: Asset,
 		_to: Asset,
 		_amount: AssetAmount,
-		_egress_address: ForeignChainAddress,
-		_relayer_id: Self::AccountId,
-		_relayer_commission_bps: BasisPoints,
+		_destination_address: ForeignChainAddress,
+		_broker_id: Self::AccountId,
+		_broker_commission_bps: BasisPoints,
 	) {
 	}
 }

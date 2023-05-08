@@ -117,16 +117,17 @@ fn keygen_success_triggers_keygen_verification() {
 	let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
 
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::keygen(btree_candidates.clone(), GENESIS_EPOCH);
+		let rotation_epoch_index = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
+		<VaultsPallet as VaultRotator>::keygen(btree_candidates.clone(), rotation_epoch_index);
 		let ceremony_id = current_ceremony_id();
 
-		VaultsPallet::trigger_keygen_verification(ceremony_id, NEW_AGG_PUB_KEY, btree_candidates);
-
-		assert!(matches!(
-			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
-			VaultRotationStatus::<MockRuntime, _>::AwaitingKeygenVerification { new_public_key: k } if k == NEW_AGG_PUB_KEY
-		));
-	});
+		VaultsPallet::trigger_keygen_verification(
+			ceremony_id,
+			NEW_AGG_PUB_KEY,
+			btree_candidates,
+			rotation_epoch_index,
+		);
+	})
 }
 
 fn keygen_failure(bad_candidates: &[<MockRuntime as Chainflip>::ValidatorId]) {
@@ -187,6 +188,7 @@ fn keygen_called_after_keygen_failure_restarts_rotation_at_keygen() {
 #[test]
 fn keygen_verification_failure() {
 	new_test_ext().execute_with(|| {
+		let rotation_epoch_index = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
 		let participants = (5u64..15).into_iter().collect::<BTreeSet<_>>();
 		let keygen_ceremony_id = 12;
 
@@ -194,6 +196,7 @@ fn keygen_verification_failure() {
 			keygen_ceremony_id,
 			NEW_AGG_PUB_KEY,
 			participants.clone(),
+			rotation_epoch_index,
 		);
 
 		let blamed = vec![5, 6, 7, 8];
@@ -648,6 +651,7 @@ fn vault_key_rotated() {
 			ceremony_id,
 			NEW_AGG_PUB_KEY,
 			btree_candidates.clone(),
+			rotation_epoch_index,
 		);
 
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));

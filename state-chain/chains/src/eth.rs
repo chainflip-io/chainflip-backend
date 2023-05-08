@@ -4,10 +4,11 @@ pub mod api;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
-pub mod ingress_address;
+pub mod deposit_address;
 
 use crate::*;
 pub use cf_primitives::chains::{assets, Ethereum};
+use cf_primitives::ChannelId;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{
@@ -46,7 +47,7 @@ impl Chain for Ethereum {
 	type ChainAccount = eth::Address;
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
-	type IngressFetchId = EthereumIngressId;
+	type DepositFetchId = EthereumChannelId;
 }
 
 impl ChainCrypto for Ethereum {
@@ -677,20 +678,20 @@ impl From<H256> for TransactionHash {
 	}
 }
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
-pub enum EthereumIngressId {
+pub enum EthereumChannelId {
 	Deployed(Address),
-	UnDeployed(IntentId),
+	UnDeployed(ChannelId),
 }
 
-impl IngressIdConstructor for EthereumIngressId {
+impl ChannelIdConstructor for EthereumChannelId {
 	type Address = H160;
 
-	fn deployed(_intent_id: u64, address: Self::Address) -> Self {
+	fn deployed(_channel_id: u64, address: Self::Address) -> Self {
 		Self::Deployed(address)
 	}
 
-	fn undeployed(intent_id: u64, _address: Self::Address) -> Self {
-		Self::UnDeployed(intent_id)
+	fn undeployed(channel_id: u64, _address: Self::Address) -> Self {
+		Self::UnDeployed(channel_id)
 	}
 }
 

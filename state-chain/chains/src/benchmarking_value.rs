@@ -9,7 +9,7 @@ use crate::address::EncodedAddress;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::address::ForeignChainAddress;
 #[cfg(feature = "runtime-benchmarks")]
-use crate::eth::EthereumIngressId;
+use crate::eth::EthereumChannelId;
 
 /// Ensure type specifies a value to be used for benchmarking purposes.
 pub trait BenchmarkValue {
@@ -85,7 +85,7 @@ impl BenchmarkValue for EncodedAddress {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
-impl BenchmarkValue for EthereumIngressId {
+impl BenchmarkValue for EthereumChannelId {
 	fn benchmark_value() -> Self {
 		Self::UnDeployed(1)
 	}

@@ -3,7 +3,7 @@ use crate::{
 	crypto::{generate_single_party_signature, ECPoint, ECScalar, KeyShare},
 	CryptoScheme, Rng,
 };
-use rand_legacy::SeedableRng;
+use rand::SeedableRng;
 
 /// This test covers the specifics of signature generation
 /// for a given scheme

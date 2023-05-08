@@ -113,7 +113,7 @@ pub mod common {
 	pub mod btc {
 		use cf_chains::{btc::Bitcoin, Chain};
 
-		/// Number of blocks to wait for until we deem a BTC ingress to be safe.
-		pub const INGRESS_BLOCK_SAFETY_MARGIN: <Bitcoin as Chain>::ChainBlockNumber = 3;
+		/// Number of blocks to wait for until we deem a BTC deposit to be safe.
+		pub const BLOCK_SAFETY_MARGIN: <Bitcoin as Chain>::ChainBlockNumber = 3;
 	}
 }

@@ -4,7 +4,6 @@ mod ceremony_runner;
 mod common;
 pub mod key_store_api;
 pub mod keygen;
-pub mod legacy;
 pub mod signing;
 
 #[cfg(test)]
@@ -207,7 +206,7 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClient<C, KeyStore> {
 		participants: BTreeSet<AccountId>,
 		resharing_context: Option<ResharingContext<C>>,
 	) -> BoxFuture<'_, Result<C::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>> {
-		use rand_legacy::FromEntropy;
+		use rand::SeedableRng;
 		let rng = Rng::from_entropy();
 
 		let (result_sender, result_receiver) = tokio::sync::oneshot::channel();
@@ -333,7 +332,7 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 			"Received a request to sign",
 		);
 
-		use rand_legacy::FromEntropy;
+		use rand::SeedableRng;
 		let rng = Rng::from_entropy();
 
 		// Find the correct key and send the request to sign with that key

@@ -8,28 +8,28 @@ use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_support::traits::Hooks;
 
 benchmarks_instance_pallet! {
-	egress_assets {
+	destination_assets {
 		let n in 1u32 .. 254u32;
 		let mut batch = vec![];
 
-		let egress_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
-		let egress_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
-		let ingress_fetch_id: <<T as Config<I>>::TargetChain as Chain>::IngressFetchId = BenchmarkValue::benchmark_value();
+		let destination_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
+		let destination_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
+		let deposit_fetch_id: <<T as Config<I>>::TargetChain as Chain>::DepositFetchId = BenchmarkValue::benchmark_value();
 
 		// We combine fetch and egress into a single variable, assuming the weight cost is similar.
 		for i in 0..n {
 			if i % 2 == 0 {
-				FetchParamDetails::<T, I>::insert(i as u64, (ingress_fetch_id, egress_address.clone()));
+				FetchParamDetails::<T, I>::insert(i as u64, (deposit_fetch_id, destination_address.clone()));
 				batch.push(FetchOrTransfer::Fetch {
-					intent_id: i as u64,
-					asset: egress_asset,
+					channel_id: i as u64,
+					asset: destination_asset,
 				});
 			} else {
 				batch.push(FetchOrTransfer::Transfer {
 					egress_id: (ForeignChain::Ethereum, i as u64),
-					asset: egress_asset,
+					asset: destination_asset,
 					amount: BenchmarkValue::benchmark_value(),
-					egress_address: egress_address.clone(),
+					destination_address: destination_address.clone(),
 				});
 			}
 		}
@@ -44,14 +44,14 @@ benchmarks_instance_pallet! {
 		let n in 1u32 .. 254u32;
 		let mut ccms = vec![];
 
-		let egress_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
-		let egress_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
+		let destination_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
+		let destination_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
 		for i in 0..n {
 			ccms.push(CrossChainMessage {
 				egress_id: (ForeignChain::Ethereum, 1),
-				asset: egress_asset,
+				asset: destination_asset,
 				amount: BenchmarkValue::benchmark_value(),
-				egress_address: egress_address.clone(),
+				destination_address: destination_address.clone(),
 				message: vec![0x00, 0x01, 0x02, 0x03],
 				refund_address: ForeignChainAddress::Eth(Default::default()),
 				source_address: ForeignChainAddress::Eth([0xcf; 20]),
@@ -65,29 +65,29 @@ benchmarks_instance_pallet! {
 
 	disable_asset_egress {
 		let origin = T::EnsureGovernance::successful_origin();
-		let egress_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
-	} : { let _ = Pallet::<T, I>::disable_asset_egress(origin, egress_asset, true); }
+		let destination_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
+	} : { let _ = Pallet::<T, I>::disable_asset_egress(origin, destination_asset, true); }
 	verify {
 		assert!(DisabledEgressAssets::<T, I>::get(
-			egress_asset,
+			destination_asset,
 		).is_some());
 	}
 
 	on_idle_with_nothing_to_send {
-	} : { let _ = crate::Pallet::<T, I>::on_idle(Default::default(), T::WeightInfo::egress_assets(2u32)); }
+	} : { let _ = crate::Pallet::<T, I>::on_idle(Default::default(), T::WeightInfo::destination_assets(2u32)); }
 
-	do_single_ingress {
-		let ingress_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
-		let ingress_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
-		let ingress_amount: <<T as Config<I>>::TargetChain as Chain>::ChainAmount = BenchmarkValue::benchmark_value();
-		IntentIngressDetails::<T, I>::insert(&ingress_address, IngressDetails {
-				intent_id: 1,
-				ingress_asset,
+	process_single_deposit {
+		let deposit_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
+		let source_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
+		let deposit_amount: <<T as Config<I>>::TargetChain as Chain>::ChainAmount = BenchmarkValue::benchmark_value();
+		DepositAddressDetailsLookup::<T, I>::insert(&deposit_address, DepositAddressDetails {
+				channel_id: 1,
+				source_asset,
 			});
-		IntentActions::<T, I>::insert(&ingress_address, IntentAction::<T::AccountId>::LiquidityProvision {
+		ChannelActions::<T, I>::insert(&deposit_address, ChannelAction::<T::AccountId>::LiquidityProvision {
 			lp_account: account("doogle", 0, 0)
 		});
 	}: {
-		Pallet::<T, I>::do_single_ingress(ingress_address, ingress_asset, ingress_amount, BenchmarkValue::benchmark_value()).unwrap()
+		Pallet::<T, I>::process_single_deposit(deposit_address, source_asset, deposit_amount, BenchmarkValue::benchmark_value()).unwrap()
 	}
 }

@@ -25,7 +25,7 @@ use anyhow::Result;
 use cf_primitives::{AccountId, CeremonyId};
 use client::MultisigMessage;
 use futures::{Future, FutureExt};
-use rand_legacy::SeedableRng;
+use rand::SeedableRng;
 use sp_runtime::AccountId32;
 use tokio::sync::{mpsc, oneshot};
 use utilities::{task_scope::task_scope, threshold_from_share_count};

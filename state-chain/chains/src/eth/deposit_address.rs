@@ -1,4 +1,4 @@
-use cf_primitives::{chains::assets::eth, IntentId};
+use cf_primitives::{chains::assets::eth, ChannelId};
 use sp_runtime::traits::{Hash, Keccak256};
 use sp_std::{mem::size_of, vec::Vec};
 
@@ -28,15 +28,15 @@ const DEPLOY_BYTECODE_TOKEN: [u8; 493] = hex_literal::hex!(
 // Always the same, this is a CREATE2 constant.
 const PREFIX_BYTE: u8 = 0xff;
 
-/// Derives the CREATE2 Ethereum address for a given asset, vault, and intent.
+/// Derives the CREATE2 Ethereum address for a given asset, vault, and channel id.
 /// @param asset_id The asset in "CHAIN:ASSET" form e.g. "ETH:ETH" or "ETH:USDC"
 /// @param vault_address The address of the Ethereum Vault
-/// @param intent_id The numerical intent id
+/// @param channel_id The numerical channel id
 pub fn get_create_2_address(
 	asset: eth::Asset,
 	vault_address: [u8; 20],
 	erc20_constructor_argument: Option<Vec<u8>>,
-	intent_id: IntentId,
+	channel_id: ChannelId,
 ) -> [u8; 20] {
 	let deploy_bytecode = get_deploy_bytecode(asset);
 
@@ -55,8 +55,8 @@ pub fn get_create_2_address(
 		.concat(),
 	);
 
-	// Unique salt per intent.
-	let salt = get_salt(intent_id).to_vec();
+	// Unique salt per channel id.
+	let salt = get_salt(channel_id).to_vec();
 
 	let create_2_args = [
 		[PREFIX_BYTE].to_vec(),
@@ -80,12 +80,12 @@ fn get_deploy_bytecode(asset: eth::Asset) -> &'static [u8] {
 	}
 }
 
-/// Get the CREATE2 salt for a given intent_id, equivalent to the big-endian u32, left-padded to 32
+/// Get the CREATE2 salt for a given channel_id, equivalent to the big-endian u32, left-padded to 32
 /// bytes.
-pub fn get_salt(intent_id: IntentId) -> [u8; 32] {
+pub fn get_salt(channel_id: ChannelId) -> [u8; 32] {
 	let mut salt = [0u8; 32];
-	let offset = 32 - size_of::<IntentId>();
-	salt.get_mut(offset..).unwrap().copy_from_slice(&intent_id.to_be_bytes());
+	let offset = 32 - size_of::<ChannelId>();
+	salt.get_mut(offset..).unwrap().copy_from_slice(&channel_id.to_be_bytes());
 	salt
 }
 
