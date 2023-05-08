@@ -7,7 +7,7 @@ use crate::{
 	bitcoin::BtcSigning,
 	client::{
 		common::{BroadcastVerificationMessage, KeygenStageName, PreProcessStageDataCheck},
-		helpers::{gen_invalid_keygen_comm1, get_invalid_hash_comm},
+		helpers::{gen_junk_keygen_comm1, get_junk_hash_comm},
 		keygen::{BlameResponse8, Complaints6, KeygenData, PubkeyShares0, SecretShare5},
 	},
 	crypto::Rng,
@@ -29,21 +29,21 @@ fn gen_keygen_data_pubkey_shares0(participant_count: AuthorityCount) -> KeygenDa
 
 pub fn gen_keygen_data_hash_comm1() -> KeygenData<Point> {
 	let mut rng = Rng::from_seed([0; 32]);
-	KeygenData::HashComm1(get_invalid_hash_comm(&mut rng))
+	KeygenData::HashComm1(get_junk_hash_comm(&mut rng))
 }
 
 pub fn gen_keygen_data_verify_hash_comm2(participant_count: AuthorityCount) -> KeygenData<Point> {
 	let mut rng = Rng::from_seed([0; 32]);
 	KeygenData::VerifyHashComm2(BroadcastVerificationMessage {
 		data: (1..=participant_count)
-			.map(|i| (i as AuthorityCount, Some(get_invalid_hash_comm(&mut rng))))
+			.map(|i| (i as AuthorityCount, Some(get_junk_hash_comm(&mut rng))))
 			.collect(),
 	})
 }
 
 fn gen_keygen_data_coeff_comm3(participant_count: AuthorityCount) -> KeygenData<Point> {
 	let mut rng = Rng::from_seed([0; 32]);
-	KeygenData::CoeffComm3(gen_invalid_keygen_comm1(&mut rng, participant_count))
+	KeygenData::CoeffComm3(gen_junk_keygen_comm1(&mut rng, participant_count))
 }
 
 fn gen_keygen_data_verify_coeff_comm4(
@@ -56,7 +56,7 @@ fn gen_keygen_data_verify_coeff_comm4(
 			.map(|i| {
 				(
 					i as AuthorityCount,
-					Some(gen_invalid_keygen_comm1(&mut rng, participant_count_inner)),
+					Some(gen_junk_keygen_comm1(&mut rng, participant_count_inner)),
 				)
 			})
 			.collect(),

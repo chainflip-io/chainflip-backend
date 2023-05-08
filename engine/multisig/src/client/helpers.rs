@@ -821,13 +821,13 @@ pub async fn run_keygen(
 }
 
 /// Generate an invalid local sig for stage3
-pub fn gen_invalid_local_sig<P: ECPoint>(rng: &mut Rng) -> LocalSig3<P> {
+pub fn gen_junk_local_sig<P: ECPoint>(rng: &mut Rng) -> LocalSig3<P> {
 	use crate::crypto::ECScalar;
 
 	signing::LocalSig3 { responses: vec![P::Scalar::random(rng)] }
 }
 
-pub fn get_invalid_hash_comm(rng: &mut Rng) -> keygen::HashComm1 {
+pub fn get_junk_hash_comm(rng: &mut Rng) -> keygen::HashComm1 {
 	use sp_core::H256;
 
 	let mut buffer: [u8; 32] = [0; 32];
@@ -837,7 +837,7 @@ pub fn get_invalid_hash_comm(rng: &mut Rng) -> keygen::HashComm1 {
 }
 
 // Make these member functions of the CeremonyRunner
-pub fn gen_invalid_keygen_comm1<P: ECPoint>(
+pub fn gen_junk_keygen_comm1<P: ECPoint>(
 	rng: &mut Rng,
 	share_count: AuthorityCount,
 ) -> DKGUnverifiedCommitment<P> {
@@ -852,7 +852,7 @@ pub fn gen_invalid_keygen_comm1<P: ECPoint>(
 	fake_comm1
 }
 
-pub fn gen_invalid_signing_comm1(rng: &mut Rng, number_of_commitments: u64) -> Comm1<Point> {
+pub fn gen_junk_signing_comm1(rng: &mut Rng, number_of_commitments: u64) -> Comm1<Point> {
 	Comm1(
 		(0..number_of_commitments)
 			.map(|_| SigningCommitment { d: Point::random(rng), e: Point::random(rng) })
@@ -860,7 +860,7 @@ pub fn gen_invalid_signing_comm1(rng: &mut Rng, number_of_commitments: u64) -> C
 	)
 }
 
-pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
+pub fn gen_junk_keygen_stage_2_state<P: ECPoint>(
 	ceremony_id: CeremonyId,
 	account_ids: BTreeSet<AccountId>,
 	mut rng: Rng,
@@ -875,7 +875,7 @@ pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
 		rng: rng.clone(),
 	};
 
-	let commitment = gen_invalid_keygen_comm1(&mut rng, account_ids.len() as u32);
+	let commitment = gen_junk_keygen_comm1(&mut rng, account_ids.len() as u32);
 	let processor = VerifyHashCommitmentsBroadcast2::new(
 		KeygenCommon::new(common.clone(), HashContext([0; 32]), None),
 		commitment,

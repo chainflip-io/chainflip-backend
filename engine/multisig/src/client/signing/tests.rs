@@ -6,7 +6,7 @@ use crate::{
 	client::{
 		common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
 		helpers::{
-			gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes, new_signing_ceremony,
+			gen_junk_local_sig, gen_junk_signing_comm1, new_nodes, new_signing_ceremony,
 			run_stages, PayloadAndKeyData, SigningCeremonyRunner, ACCOUNT_IDS,
 			DEFAULT_SIGNING_CEREMONY_ID,
 		},
@@ -33,7 +33,7 @@ async fn should_report_on_invalid_local_sig3() {
 
 	// This account id will send an invalid signature
 	let [bad_account_id] = signing_ceremony.select_account_ids();
-	let invalid_sig3 = gen_invalid_local_sig(&mut signing_ceremony.rng);
+	let invalid_sig3 = gen_junk_local_sig(&mut signing_ceremony.rng);
 	for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
 		*message = invalid_sig3.clone();
 	}
@@ -54,7 +54,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
 	// This account id will send an invalid signature
 	let [bad_account_id] = signing_ceremony.select_account_ids();
 	for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
-		*message = gen_invalid_signing_comm1(&mut signing_ceremony.rng, 1);
+		*message = gen_junk_signing_comm1(&mut signing_ceremony.rng, 1);
 	}
 
 	let messages = signing_ceremony.run_stage::<VerifyComm2, _, _>(messages).await;
@@ -81,7 +81,7 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
 	// This account id will send an invalid signature
 	let [bad_account_id] = signing_ceremony.select_account_ids();
 	for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
-		*message = gen_invalid_local_sig(&mut signing_ceremony.rng);
+		*message = gen_junk_local_sig(&mut signing_ceremony.rng);
 	}
 
 	let messages = signing_ceremony.run_stage::<VerifyLocalSig4, _, _>(messages).await;

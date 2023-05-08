@@ -4,7 +4,7 @@ use crate::{
 		common::SigningStageName,
 		gen_keygen_data_verify_hash_comm2, get_key_data_for_test,
 		helpers::{
-			gen_invalid_keygen_stage_2_state, ACCOUNT_IDS, CEREMONY_TIMEOUT_DURATION,
+			gen_junk_keygen_stage_2_state, ACCOUNT_IDS, CEREMONY_TIMEOUT_DURATION,
 			DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
 		},
 		signing::{
@@ -58,7 +58,7 @@ async fn should_ignore_stage_data_with_incorrect_size() {
 	// This test only works on message stage data that can have incorrect size (ie. not first
 	// stage), so we must create a stage 2 state and add it to the ceremony managers keygen states,
 	// allowing us to process a stage 2 message.
-	let mut stage_2_state = gen_invalid_keygen_stage_2_state::<<EthSigning as CryptoScheme>::Point>(
+	let mut stage_2_state = gen_junk_keygen_stage_2_state::<<EthSigning as CryptoScheme>::Point>(
 		DEFAULT_CEREMONY_ID,
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
 		rng,
