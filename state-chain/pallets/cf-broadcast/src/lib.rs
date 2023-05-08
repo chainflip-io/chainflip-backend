@@ -98,10 +98,6 @@ pub mod pallet {
 	/// Type alias for the instance's configured ApiCall.
 	pub type ApiCallFor<T, I> = <T as Config<I>>::ApiCall;
 
-	/// Type alias for the threshold signature data.
-	pub type ThresholdSignatureInformationFor<T, I> =
-		(PayloadFor<T, I>, ThresholdSignatureFor<T, I>, ApiCallFor<T, I>);
-
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	#[scale_info(skip_type_params(T, I))]
 	pub struct BroadcastAttempt<T: Config<I>, I: 'static> {
