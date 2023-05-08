@@ -128,17 +128,17 @@ fn check_data_size_pubkey_shares0() {
 	// PubkeyShares0 messages when switching from the higher value to the lower value and will
 	// therefore the data size check for PubkeyShares0 will need to be decoupled from
 	// MAX_AUTHORITIES.
-	let expected_len = 150;
+	let max_expected_len = 150;
 
 	// Should pass with the correct data length
-	assert!(gen_keygen_data_pubkey_shares0(expected_len)
+	assert!(gen_keygen_data_pubkey_shares0(max_expected_len)
 		.initial_stage_data_size_is_valid::<BtcSigning>());
 
 	// Should pass with an empty message (This is expected behaviour for non-sharing parties)
 	assert!(gen_keygen_data_pubkey_shares0(0).initial_stage_data_size_is_valid::<BtcSigning>());
 
 	// Should fail on sizes larger than expected
-	assert!(!gen_keygen_data_pubkey_shares0(expected_len + 1)
+	assert!(!gen_keygen_data_pubkey_shares0(max_expected_len + 1)
 		.initial_stage_data_size_is_valid::<BtcSigning>());
 }
 

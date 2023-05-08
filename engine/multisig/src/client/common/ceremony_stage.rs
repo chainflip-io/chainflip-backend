@@ -81,8 +81,9 @@ pub trait PreProcessStageDataCheck<CeremonyStageName> {
 	/// This is needed because we may not know how many parties are going to participate yet.
 	fn initial_stage_data_size_is_valid<C: CryptoScheme>(&self) -> bool;
 
-	/// Returns true if the stage can be accepted as the initial stage for a ceremony
-	fn is_first_stage(&self) -> bool;
+	/// Returns true if this message should be delayed if the ceremony is still unauthorised.
+	/// This is needed because a message may arrive before the ceremony request.
+	fn should_delay_unauthorised(&self) -> bool;
 
 	/// Returns true if this message should be delayed for the given stage
 	fn should_delay(stage_name: CeremonyStageName, message: &Self) -> bool;

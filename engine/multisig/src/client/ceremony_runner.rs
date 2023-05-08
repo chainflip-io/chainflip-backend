@@ -187,7 +187,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 	) -> OptionalCeremonyReturn<Ceremony> {
 		match &mut self.stage {
 			None => {
-				if !data.is_first_stage() {
+				if !data.should_delay_unauthorised() {
 					debug!(
 						from_id = sender_id.to_string(),
 						"Ignoring data for unauthorised ceremony: non-initial stage data"
@@ -195,7 +195,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 					return None
 				}
 
-				if !data.initial_stage_data_size_is_valid::<<Ceremony as CeremonyTrait>::Crypto>() {
+				if !data.initial_stage_data_size_is_valid::<Ceremony::Crypto>() {
 					debug!(
 						from_id = sender_id.to_string(),
 						"Ignoring data for unauthorised ceremony: incorrect number of elements"

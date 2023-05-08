@@ -86,23 +86,19 @@ impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
 	fn initial_stage_data_size_is_valid<C: CryptoScheme>(&self) -> bool {
 		match self {
 			SigningData::CommStage1(message) => {
-				if message.0.is_empty() {
-					false
-				} else {
-					match C::CHAIN_TAG {
-						ChainTag::Ethereum | ChainTag::Polkadot | ChainTag::Ed25519 =>
-							message.0.len() == 1,
-						// TODO: Find out what a realistic maximum is for the number of payloads we
-						// can handle is for btc
-						ChainTag::Bitcoin => true,
-					}
+				match C::CHAIN_TAG {
+					ChainTag::Ethereum | ChainTag::Polkadot | ChainTag::Ed25519 =>
+						message.0.len() == 1,
+					// TODO: Find out what a realistic maximum is for the number of payloads we
+					// can handle is for btc
+					ChainTag::Bitcoin => true,
 				}
 			},
 			_ => panic!("unexpected stage"),
 		}
 	}
 
-	fn is_first_stage(&self) -> bool {
+	fn should_delay_unauthorised(&self) -> bool {
 		matches!(self, SigningData::CommStage1(_))
 	}
 
@@ -172,9 +168,8 @@ mod tests {
 		assert!(!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<EthSigning>());
 		assert!(!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<PolkadotSigning>());
 
-		// Should only fail if no commitments are present for bitcoin
+		// No limit on bitcoin for now
 		assert!(gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<BtcSigning>());
-		assert!(!gen_signing_data_stage1(0).initial_stage_data_size_is_valid::<BtcSigning>());
 	}
 
 	#[test]

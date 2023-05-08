@@ -124,7 +124,7 @@ impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
 		}
 	}
 
-	fn is_first_stage(&self) -> bool {
+	fn should_delay_unauthorised(&self) -> bool {
 		matches!(self, KeygenData::PubkeyShares0(_) | KeygenData::HashComm1(_))
 	}
 
