@@ -2,11 +2,11 @@ pub use crate::{self as pallet_cf_ingress_egress};
 pub use cf_chains::{
 	address::ForeignChainAddress,
 	eth::api::{EthereumApi, EthereumReplayProtection},
-	CcmIngressMetadata, Chain, ChainAbi, ChainEnvironment,
+	CcmDepositMetadata, Chain, ChainAbi, ChainEnvironment,
 };
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
-	Asset, AssetAmount, EthereumAddress, ExchangeRate, ETHEREUM_ETH_ADDRESS,
+	Asset, AssetAmount, EthereumAddress, ETHEREUM_ETH_ADDRESS,
 };
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 
@@ -24,7 +24,7 @@ use cf_traits::{
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
 		ccm_handler::MockCcmHandler,
 	},
-	IngressHandler,
+	DepositHandler,
 };
 use frame_system as system;
 use sp_core::H256;
@@ -111,8 +111,8 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 	}
 }
 
-pub struct MockIngressHandler;
-impl IngressHandler<Ethereum> for MockIngressHandler {}
+pub struct MockDepositHandler;
+impl DepositHandler<Ethereum> for MockDepositHandler {}
 
 impl crate::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -120,10 +120,10 @@ impl crate::Config<Instance1> for Test {
 	type TargetChain = Ethereum;
 	type AddressDerivation = ();
 	type LpBalance = Self;
-	type SwapIntentHandler = Self;
+	type SwapDepositHandler = Self;
 	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;
 	type Broadcaster = MockBroadcast;
-	type IngressHandler = MockIngressHandler;
+	type DepositHandler = MockDepositHandler;
 	type WeightInfo = ();
 	type CcmHandler = MockCcmHandler;
 }

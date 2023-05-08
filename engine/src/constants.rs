@@ -2,7 +2,7 @@ use std::time::Duration;
 
 pub use state_chain_runtime::constants::common::eth::BLOCK_SAFETY_MARGIN as ETH_BLOCK_SAFETY_MARGIN;
 
-pub use state_chain_runtime::constants::common::btc::INGRESS_BLOCK_SAFETY_MARGIN as BTC_INGRESS_BLOCK_SAFETY_MARGIN;
+pub use state_chain_runtime::constants::common::btc::BLOCK_SAFETY_MARGIN as BTC_INGRESS_BLOCK_SAFETY_MARGIN;
 
 // ======= State chain client =======
 

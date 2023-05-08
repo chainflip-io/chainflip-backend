@@ -4,12 +4,12 @@ pub mod api;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
-pub mod ingress_address;
+pub mod deposit_address;
 
 use crate::*;
 pub use cf_primitives::chains::{assets, Ethereum};
+use cf_primitives::ChannelId;
 
-use cf_primitives::KeyId;
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi::{
 	encode,
@@ -48,7 +48,7 @@ impl Chain for Ethereum {
 	type ChainAccount = eth::Address;
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
-	type IngressFetchId = EthereumIngressId;
+	type DepositFetchId = EthereumChannelId;
 }
 
 impl ChainCrypto for Ethereum {
@@ -71,18 +71,6 @@ impl ChainCrypto for Ethereum {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
 		H256(Blake2_256::hash(&agg_key.to_pubkey_compressed()))
-	}
-
-	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
-		KeyId { epoch_index, public_key_bytes: agg_key.into() }
-	}
-}
-
-impl TryFrom<KeyId> for eth::AggKey {
-	type Error = &'static str;
-
-	fn try_from(key_id: KeyId) -> Result<Self, Self::Error> {
-		key_id.public_key_bytes.try_into()
 	}
 }
 
@@ -517,20 +505,6 @@ impl TryFrom<&[u8]> for AggKey {
 	}
 }
 
-impl From<AggKey> for Vec<u8> {
-	fn from(agg_key: AggKey) -> Self {
-		agg_key.to_pubkey_compressed().to_vec()
-	}
-}
-
-impl TryFrom<Vec<u8>> for AggKey {
-	type Error = &'static str;
-
-	fn try_from(serialized: Vec<u8>) -> Result<Self, Self::Error> {
-		serialized.as_slice().try_into()
-	}
-}
-
 #[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct SchnorrVerificationComponents {
 	/// Scalar component
@@ -739,20 +713,20 @@ impl From<H256> for TransactionHash {
 	}
 }
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
-pub enum EthereumIngressId {
+pub enum EthereumChannelId {
 	Deployed(Address),
-	UnDeployed(IntentId),
+	UnDeployed(ChannelId),
 }
 
-impl IngressIdConstructor for EthereumIngressId {
+impl ChannelIdConstructor for EthereumChannelId {
 	type Address = H160;
 
-	fn deployed(_intent_id: u64, address: Self::Address) -> Self {
+	fn deployed(_channel_id: u64, address: Self::Address) -> Self {
 		Self::Deployed(address)
 	}
 
-	fn undeployed(intent_id: u64, _address: Self::Address) -> Self {
-		Self::UnDeployed(intent_id)
+	fn undeployed(channel_id: u64, _address: Self::Address) -> Self {
+		Self::UnDeployed(channel_id)
 	}
 }
 

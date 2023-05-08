@@ -3,9 +3,7 @@ use core::fmt::Display;
 
 use crate::benchmarking_value::BenchmarkValue;
 pub use address::ForeignChainAddress;
-use cf_primitives::{
-	chains::assets, AssetAmount, EgressId, EpochIndex, EthAmount, IntentId, KeyId, PublicKeyBytes,
-};
+use cf_primitives::{chains::assets, AssetAmount, EgressId, EthAmount};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -34,6 +32,7 @@ pub mod any;
 pub mod btc;
 pub mod dot;
 pub mod eth;
+pub mod none;
 
 pub mod address;
 
@@ -44,6 +43,8 @@ pub mod mocks;
 /// blockchains.
 pub trait Chain: Member + Parameter {
 	const NAME: &'static str;
+
+	const KEY_HANDOVER_IS_REQUIRED: bool = false;
 
 	type ChainBlockNumber: FullCodec
 		+ Member
@@ -96,11 +97,11 @@ pub trait Chain: Member + Parameter {
 
 	type EpochStartData: Member + Parameter + MaxEncodedLen;
 
-	type IngressFetchId: Member
+	type DepositFetchId: Member
 		+ Parameter
 		+ Copy
 		+ BenchmarkValue
-		+ IngressIdConstructor<Address = Self::ChainAccount>;
+		+ ChannelIdConstructor<Address = Self::ChainAccount>;
 }
 
 /// Measures the age of items associated with the Chain.
@@ -122,10 +123,7 @@ impl Age for () {
 /// Common crypto-related types and operations for some external chain.
 pub trait ChainCrypto: Chain {
 	/// The chain's `AggKey` format. The AggKey is the threshold key that controls the vault.
-	/// TODO: Consider if Encode / Decode bounds are sufficient rather than To/From Vec<u8>
-	type AggKey: TryFrom<PublicKeyBytes>
-		+ Into<PublicKeyBytes>
-		+ TryFrom<KeyId>
+	type AggKey: MaybeSerializeDeserialize
 		+ Member
 		+ Parameter
 		+ Copy
@@ -148,8 +146,6 @@ pub trait ChainCrypto: Chain {
 
 	/// We use the AggKey as the payload for keygen verification ceremonies.
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload;
-
-	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId;
 }
 
 /// Common abi-related types and operations for some external chain.
@@ -206,7 +202,7 @@ where
 /// Contains all the parameters required to fetch incoming transactions on an external chain.
 #[derive(RuntimeDebug, Copy, Clone, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
 pub struct FetchAssetParams<C: Chain> {
-	pub ingress_fetch_id: <C as Chain>::IngressFetchId,
+	pub deposit_fetch_id: <C as Chain>::DepositFetchId,
 	pub asset: <C as Chain>::ChainAsset,
 }
 
@@ -297,30 +293,30 @@ pub trait FeeRefundCalculator<C: Chain> {
 }
 
 /// Helper trait to avoid matching over chains in the generic pallet.
-pub trait IngressIdConstructor {
+pub trait ChannelIdConstructor {
 	type Address;
-	/// Constructs the IngressId for the deployed case.
-	fn deployed(intent_id: u64, address: Self::Address) -> Self;
-	/// Constructs the IngressId for the undeployed case.
-	fn undeployed(intent_id: u64, address: Self::Address) -> Self;
+	/// Constructs the ChannelId for the deployed case.
+	fn deployed(channel_id: u64, address: Self::Address) -> Self;
+	/// Constructs the ChannelId for the undeployed case.
+	fn undeployed(channel_id: u64, address: Self::Address) -> Self;
 }
 
 /// Metadata as part of a Cross Chain Message.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct CcmIngressMetadata {
+pub struct CcmDepositMetadata {
 	/// Call data used after the message is egressed.
 	pub message: Vec<u8>,
-	/// Amount of ingress funds to be used for gas.
+	/// User funds designated to be used for gas.
 	pub gas_budget: AssetAmount,
 	/// The address refunds will go to.
 	pub refund_address: ForeignChainAddress,
-	/// The address the ingress was sent from.
+	/// The address the deposit was sent from.
 	pub source_address: ForeignChainAddress,
 }
 
 #[cfg(feature = "std")]
-impl std::str::FromStr for CcmIngressMetadata {
+impl std::str::FromStr for CcmDepositMetadata {
 	type Err = String;
 
 	fn from_str(_s: &str) -> Result<Self, Self::Err> {

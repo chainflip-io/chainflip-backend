@@ -1,10 +1,9 @@
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
-use cf_chains::{address::EncodedAddress, eth::H256, CcmIngressMetadata, ForeignChain};
+use cf_chains::{address::EncodedAddress, eth::H256, CcmDepositMetadata, ForeignChain};
 use cf_primitives::{AccountRole, Asset, BasisPoints};
 use futures::FutureExt;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
-use rand_legacy::FromEntropy;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
@@ -18,7 +17,7 @@ pub mod primitives {
 	pub type RedemptionAmount = pallet_cf_funding::RedemptionAmount<FlipBalance>;
 	pub use cf_chains::{
 		address::{EncodedAddress, ForeignChainAddress},
-		CcmIngressMetadata,
+		CcmDepositMetadata,
 	};
 }
 
@@ -158,8 +157,8 @@ pub async fn register_account_role(
 			let call = match role {
 				AccountRole::Validator =>
 					RuntimeCall::from(pallet_cf_validator::Call::register_as_validator {}),
-				AccountRole::Relayer =>
-					RuntimeCall::from(pallet_cf_swapping::Call::register_as_relayer {}),
+				AccountRole::Broker =>
+					RuntimeCall::from(pallet_cf_swapping::Call::register_as_broker {}),
 				AccountRole::LiquidityProvider =>
 					RuntimeCall::from(pallet_cf_lp::Call::register_lp_account {}),
 				AccountRole::None => bail!("Cannot register account role None"),
@@ -345,21 +344,21 @@ pub async fn set_vanity_name(
 	.await
 }
 
-pub async fn register_swap_intent(
+pub async fn request_swap_deposit_address(
 	state_chain_settings: &settings::StateChain,
-	ingress_asset: Asset,
-	egress_asset: Asset,
-	egress_address: EncodedAddress,
-	relayer_commission_bps: BasisPoints,
-	message_metadata: Option<CcmIngressMetadata>,
+	source_asset: Asset,
+	destination_asset: Asset,
+	destination_address: EncodedAddress,
+	broker_commission_bps: BasisPoints,
+	message_metadata: Option<CcmDepositMetadata>,
 ) -> Result<EncodedAddress> {
 	let events = connect_submit_and_get_events(
 		state_chain_settings,
-		pallet_cf_swapping::Call::register_swap_intent {
-			ingress_asset,
-			egress_asset,
-			egress_address,
-			relayer_commission_bps,
+		pallet_cf_swapping::Call::request_swap_deposit_address {
+			source_asset,
+			destination_asset,
+			destination_address,
+			broker_commission_bps,
 			message_metadata,
 		},
 		AccountRole::None,
@@ -367,18 +366,18 @@ pub async fn register_swap_intent(
 	.await?;
 
 	if let Some(state_chain_runtime::RuntimeEvent::Swapping(
-		pallet_cf_swapping::Event::NewSwapIntent { ingress_address, .. },
+		pallet_cf_swapping::Event::SwapDepositAddressReady { deposit_address, .. },
 	)) = events.iter().find(|event| {
 		matches!(
 			event,
 			state_chain_runtime::RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::NewSwapIntent { .. }
+				pallet_cf_swapping::Event::SwapDepositAddressReady { .. }
 			)
 		)
 	}) {
-		Ok((*ingress_address).clone())
+		Ok((*deposit_address).clone())
 	} else {
-		panic!("NewSwapIntent must have been generated");
+		panic!("SwapDepositAddressReady must have been generated");
 	}
 }
 
@@ -404,9 +403,9 @@ pub struct KeyPair {
 /// Generate a new random node key.
 /// This key is used for secure communication between Validators.
 pub fn generate_node_key() -> KeyPair {
-	use rand::SeedableRng;
+	use rand_v7::SeedableRng;
 
-	let mut rng = rand::rngs::StdRng::from_entropy();
+	let mut rng = rand_v7::rngs::StdRng::from_entropy();
 	let keypair = ed25519_dalek::Keypair::generate(&mut rng);
 
 	KeyPair {
@@ -443,7 +442,8 @@ pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPair, Strin
 pub fn generate_ethereum_key() -> KeyPair {
 	use secp256k1::Secp256k1;
 
-	let mut rng = rand_legacy::rngs::StdRng::from_entropy();
+	use rand::SeedableRng;
+	let mut rng = rand::rngs::StdRng::from_entropy();
 
 	let (secret_key, public_key) = Secp256k1::new().generate_keypair(&mut rng);
 

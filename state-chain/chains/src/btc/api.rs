@@ -1,7 +1,7 @@
 pub mod batch_transfer;
 
 use super::{
-	ingress_address::derive_btc_ingress_bitcoin_script, AggKey, Bitcoin, BitcoinOutput, BtcAmount,
+	deposit_address::derive_btc_deposit_bitcoin_script, AggKey, Bitcoin, BitcoinOutput, BtcAmount,
 	Utxo, CHANGE_ADDRESS_SALT,
 };
 use crate::*;
@@ -28,7 +28,7 @@ where
 		_fetch_params: Vec<FetchAssetParams<Bitcoin>>,
 		transfer_params: Vec<TransferAssetParams<Bitcoin>>,
 	) -> Result<Self, ()> {
-		let bitcoin_change_script = derive_btc_ingress_bitcoin_script(
+		let bitcoin_change_script = derive_btc_deposit_bitcoin_script(
 			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(())?.pubkey_x,
 			CHANGE_ADDRESS_SALT,
 		);
@@ -69,7 +69,7 @@ where
 		// We will use the bitcoin address derived with the salt of 0 as the vault address where we
 		// collect unspent amounts in btc transactions and consolidate funds when rotating epoch.
 		let new_vault_change_script =
-			derive_btc_ingress_bitcoin_script(new_key.pubkey_x, CHANGE_ADDRESS_SALT);
+			derive_btc_deposit_bitcoin_script(new_key.pubkey_x, CHANGE_ADDRESS_SALT);
 
 		//max possible btc value to get all available utxos
 		let (all_input_utxos, total_spendable_amount_in_vault) =

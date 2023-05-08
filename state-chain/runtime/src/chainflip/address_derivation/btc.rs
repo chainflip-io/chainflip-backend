@@ -1,29 +1,29 @@
 use super::AddressDerivation;
 use crate::{BitcoinVault, Validator};
-use cf_chains::{btc::ingress_address::derive_btc_ingress_bitcoin_script, Bitcoin, Chain};
-use cf_primitives::{chains::assets::btc, IntentId};
+use cf_chains::{btc::deposit_address::derive_btc_deposit_bitcoin_script, Bitcoin, Chain};
+use cf_primitives::{chains::assets::btc, ChannelId};
 use cf_traits::{AddressDerivationApi, EpochInfo};
 use sp_runtime::DispatchError;
 
 impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 	fn generate_address(
-		_ingress_asset: btc::Asset,
-		intent_id: IntentId,
+		_source_asset: btc::Asset,
+		channel_id: ChannelId,
 	) -> Result<<Bitcoin as Chain>::ChainAccount, DispatchError> {
 		// We don't expect to hit this case in the wild because we reuse addresses.
-		if intent_id > u32::MAX.into() {
+		if channel_id > u32::MAX.into() {
 			return Err(DispatchError::Other("Intent ID is too large for BTC address derivation"))
 		}
 
-		Ok(derive_btc_ingress_bitcoin_script(
+		Ok(derive_btc_deposit_bitcoin_script(
 			BitcoinVault::vaults(Validator::epoch_index())
 				.ok_or(DispatchError::Other("No vault for epoch"))?
 				.public_key
 				.pubkey_x,
-			intent_id.try_into().unwrap(),
+			channel_id.try_into().unwrap(),
 		)
 		.try_into()
-		.expect("bitcoin ingress script should not exceed the max size of 128 bytes"))
+		.expect("bitcoin deposit script should not exceed the max size of 128 bytes"))
 	}
 }
 

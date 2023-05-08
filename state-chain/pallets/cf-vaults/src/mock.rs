@@ -7,7 +7,7 @@ use cf_chains::{
 	mocks::{MockAggKey, MockEthereum},
 	ApiCall, ChainCrypto, ReplayProtectionProvider,
 };
-use cf_primitives::BroadcastId;
+use cf_primitives::{BroadcastId, GENESIS_EPOCH};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip,
 	mocks::{
@@ -231,11 +231,11 @@ pub const NEW_AGG_PUB_KEY: MockAggKey = MockAggKey(*b"next");
 
 pub const MOCK_KEYGEN_RESPONSE_TIMEOUT: u64 = 25;
 
-fn test_ext_inner(key: Option<Vec<u8>>) -> sp_io::TestExternalities {
+fn test_ext_inner(vault_key: Option<MockAggKey>) -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
 		vaults_pallet: VaultsPalletConfig {
-			vault_key: key,
+			vault_key,
 			deployment_block: 0,
 			keygen_response_timeout: MOCK_KEYGEN_RESPONSE_TIMEOUT,
 		},
@@ -264,7 +264,7 @@ fn test_ext_inner(key: Option<Vec<u8>>) -> sp_io::TestExternalities {
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-	test_ext_inner(Some(GENESIS_AGG_PUB_KEY.0.to_vec()))
+	test_ext_inner(Some(GENESIS_AGG_PUB_KEY))
 }
 
 pub(crate) fn new_test_ext_no_key() -> sp_io::TestExternalities {

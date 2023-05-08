@@ -1,4 +1,4 @@
-use frame_support::{StorageMap, StorageValue};
+use frame_support::{IterableStorageMap, StorageMap, StoragePrefixedMap, StorageValue};
 
 use super::*;
 
@@ -22,7 +22,9 @@ impl<T, SuccessVoters, FailureVoters, I> ResponseStatus<T, SuccessVoters, Failur
 where
 	T: Config<I>,
 	I: 'static,
-	SuccessVoters: StorageMap<AggKeyFor<T, I>, Vec<T::ValidatorId>>,
+	SuccessVoters: StorageMap<AggKeyFor<T, I>, Vec<T::ValidatorId>>
+		+ IterableStorageMap<AggKeyFor<T, I>, Vec<T::ValidatorId>>
+		+ StoragePrefixedMap<Vec<T::ValidatorId>>,
 	FailureVoters: StorageValue<Vec<T::ValidatorId>>,
 	<FailureVoters as StorageValue<Vec<T::ValidatorId>>>::Query:
 		sp_std::iter::IntoIterator<Item = T::ValidatorId>,
@@ -57,7 +59,7 @@ where
 		assert!(self.remaining_candidates.remove(voter));
 		*self.success_votes.entry(key).or_default() += 1;
 
-		KeygenSuccessVoters::<T, I>::append(key, voter);
+		SuccessVoters::append(key, voter);
 	}
 
 	pub fn add_failure_vote(&mut self, voter: &T::ValidatorId, blamed: BTreeSet<T::ValidatorId>) {
@@ -87,7 +89,7 @@ where
 				// This *should* be safe since it's bounded by the number of candidates.
 				// We may want to revise.
 				// See https://github.com/paritytech/substrate/pull/11490
-				let _ignored = KeygenSuccessVoters::<T, I>::clear(u32::MAX, None);
+				let _ignored = SuccessVoters::clear(u32::MAX, None);
 				return Ok(*key)
 			}
 		}
@@ -95,20 +97,19 @@ where
 		let super_majority_threshold = self.super_majority_threshold() as usize;
 
 		// We remove who we don't want to punish, and then punish the rest
-		if let Some(key) = KeygenSuccessVoters::<T, I>::iter_keys().find(|key| {
-			KeygenSuccessVoters::<T, I>::decode_len(key).unwrap_or_default() >=
-				super_majority_threshold
+		if let Some(key) = SuccessVoters::iter_keys().find(|key| {
+			SuccessVoters::decode_len(key).unwrap_or_default() >= super_majority_threshold
 		}) {
-			KeygenSuccessVoters::<T, I>::remove(key);
+			SuccessVoters::remove(key);
 		} else if FailureVoters::decode_len().unwrap_or_default() >= super_majority_threshold {
 			FailureVoters::kill();
 		} else {
-			let _empty = KeygenSuccessVoters::<T, I>::clear(u32::MAX, None);
+			let _empty = SuccessVoters::clear(u32::MAX, None);
 			FailureVoters::kill();
 			log::warn!("Unable to determine a consensus outcome for keygen.");
 		}
 
-		Err(KeygenSuccessVoters::<T, I>::drain()
+		Err(SuccessVoters::drain()
 			.flat_map(|(_k, dissenters)| dissenters)
 			.chain(FailureVoters::take())
 			.chain(self.blame_votes.into_iter().filter_map(|(id, vote_count)| {

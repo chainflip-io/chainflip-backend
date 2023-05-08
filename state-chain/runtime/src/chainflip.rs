@@ -19,7 +19,7 @@ use cf_chains::{
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	btc::{
 		api::{BitcoinApi, SelectedUtxos},
-		ingress_address::derive_btc_ingress_address_from_script,
+		deposit_address::derive_btc_deposit_address_from_script,
 		scriptpubkey_from_address, Bitcoin, BitcoinTransactionData, BtcAmount,
 	},
 	dot::{
@@ -31,15 +31,17 @@ use cf_chains::{
 		api::{EthContractAddresses, EthereumApi, EthereumChainId, EthereumReplayProtection},
 		Ethereum,
 	},
-	AnyChain, ApiCall, CcmIngressMetadata, Chain, ChainAbi, ChainCrypto, ChainEnvironment,
+	AnyChain, ApiCall, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, ChainEnvironment,
 	ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
 	TransactionBuilder,
 };
-use cf_primitives::{chains::assets, Asset, BasisPoints, EgressId, IntentId, ETHEREUM_ETH_ADDRESS};
+use cf_primitives::{
+	chains::assets, Asset, BasisPoints, ChannelId, EgressId, ETHEREUM_ETH_ADDRESS,
+};
 use cf_traits::{
-	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster, EgressApi,
-	EmergencyRotation, EpochInfo, EthEnvironmentProvider, Heartbeat, IngressApi, IngressHandler,
-	Issuance, KeyProvider, NetworkState, RewardsDistribution, RuntimeUpgrade,
+	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster,
+	DepositApi, DepositHandler, EgressApi, EmergencyRotation, EpochInfo, EthEnvironmentProvider,
+	Heartbeat, Issuance, KeyProvider, NetworkState, RewardsDistribution, RuntimeUpgrade,
 	VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
@@ -418,53 +420,53 @@ impl CommKeyBroadcaster for TokenholderGovernanceBroadcaster {
 }
 
 #[macro_export]
-macro_rules! impl_ingress_api_for_anychain {
-	( $anychain: ident, $(($chain: ident, $ingress_egress: ident)),+ ) => {
-		impl IngressApi<AnyChain> for $anychain {
+macro_rules! impl_deposit_api_for_anychain {
+	( $t: ident, $(($chain: ident, $pallet: ident)),+ ) => {
+		impl DepositApi<AnyChain> for $t {
 			type AccountId = <Runtime as frame_system::Config>::AccountId;
 
-			fn register_liquidity_ingress_intent(
+			fn request_liquidity_deposit_address(
 				lp_account: Self::AccountId,
-				ingress_asset: Asset,
-			) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
-				match ingress_asset.into() {
+				source_asset: Asset,
+			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
+				match source_asset.into() {
 					$(
 						ForeignChain::$chain =>
-							$ingress_egress::register_liquidity_ingress_intent(
+							$pallet::request_liquidity_deposit_address(
 								lp_account,
-								ingress_asset.try_into().unwrap(),
+								source_asset.try_into().unwrap(),
 							),
 					)+
 				}
 			}
 
-			fn register_swap_intent(
-				ingress_asset: Asset,
-				egress_asset: Asset,
-				egress_address: ForeignChainAddress,
-				relayer_commission_bps: BasisPoints,
-				relayer_id: Self::AccountId,
-				message_metadata: Option<CcmIngressMetadata>,
-			) -> Result<(IntentId, ForeignChainAddress), DispatchError> {
-				match ingress_asset.into() {
+			fn request_swap_deposit_address(
+				source_asset: Asset,
+				destination_asset: Asset,
+				destination_address: ForeignChainAddress,
+				broker_commission_bps: BasisPoints,
+				broker_id: Self::AccountId,
+				message_metadata: Option<CcmDepositMetadata>,
+			) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
+				match source_asset.into() {
 					$(
-						ForeignChain::$chain => $ingress_egress::register_swap_intent(
-							ingress_asset.try_into().unwrap(),
-							egress_asset,
-							egress_address,
-							relayer_commission_bps,
-							relayer_id,
+						ForeignChain::$chain => $pallet::request_swap_deposit_address(
+							source_asset.try_into().unwrap(),
+							destination_asset,
+							destination_address,
+							broker_commission_bps,
+							broker_id,
 							message_metadata,
 						),
 					)+
 				}
 			}
 
-			fn expire_intent(chain: ForeignChain, intent_id: IntentId, address: ForeignChainAddress) {
+			fn expire_channel(chain: ForeignChain, channel_id: ChannelId, address: ForeignChainAddress) {
 				match chain {
 					$(
 						ForeignChain::$chain => {
-							$ingress_egress::expire_intent(intent_id, address.try_into().expect("Checked for address compatibility"));
+							$pallet::expire_channel(channel_id, address.try_into().expect("Checked for address compatibility"));
 						},
 					)+
 				}
@@ -475,20 +477,20 @@ macro_rules! impl_ingress_api_for_anychain {
 
 #[macro_export]
 macro_rules! impl_egress_api_for_anychain {
-	( $anychain: ident, $(($chain: ident, $ingress_egress: ident)),+ ) => {
-		impl EgressApi<AnyChain> for $anychain {
+	( $t: ident, $(($chain: ident, $pallet: ident)),+ ) => {
+		impl EgressApi<AnyChain> for $t {
 			fn schedule_egress(
 				asset: Asset,
 				amount: <AnyChain as Chain>::ChainAmount,
-				egress_address: <AnyChain as Chain>::ChainAccount,
-				maybe_message: Option<CcmIngressMetadata>,
+				destination_address: <AnyChain as Chain>::ChainAccount,
+				maybe_message: Option<CcmDepositMetadata>,
 			) -> EgressId {
 				match asset.into() {
 					$(
-						ForeignChain::$chain => $ingress_egress::schedule_egress(
+						ForeignChain::$chain => $pallet::schedule_egress(
 							asset.try_into().expect("Checked for asset compatibility"),
 							amount.try_into().expect("Checked for amount compatibility"),
-							egress_address
+							destination_address
 								.try_into()
 								.expect("This address cast is ensured to succeed."),
 							maybe_message,
@@ -501,9 +503,8 @@ macro_rules! impl_egress_api_for_anychain {
 	}
 }
 
-// impl ingress and egress any for AnyChain.
 pub struct AnyChainIngressEgressHandler;
-impl_ingress_api_for_anychain!(
+impl_deposit_api_for_anychain!(
 	AnyChainIngressEgressHandler,
 	(Ethereum, EthereumIngressEgress),
 	(Polkadot, PolkadotIngressEgress),
@@ -516,15 +517,15 @@ impl_egress_api_for_anychain!(
 	(Bitcoin, BitcoinIngressEgress)
 );
 
-pub struct EthIngressHandler;
-impl IngressHandler<Ethereum> for EthIngressHandler {}
+pub struct EthDepositHandler;
+impl DepositHandler<Ethereum> for EthDepositHandler {}
 
-pub struct DotIngressHandler;
-impl IngressHandler<Polkadot> for DotIngressHandler {}
+pub struct DotDepositHandler;
+impl DepositHandler<Polkadot> for DotDepositHandler {}
 
-pub struct BtcIngressHandler;
-impl IngressHandler<Bitcoin> for BtcIngressHandler {
-	fn on_ingress_completed(
+pub struct BtcDepositHandler;
+impl DepositHandler<Bitcoin> for BtcDepositHandler {
+	fn on_deposit_made(
 		utxo_id: <Bitcoin as ChainCrypto>::TransactionId,
 		amount: <Bitcoin as Chain>::ChainAmount,
 		address: <Bitcoin as Chain>::ChainAccount,
@@ -533,17 +534,17 @@ impl IngressHandler<Bitcoin> for BtcIngressHandler {
 		Environment::add_bitcoin_utxo_to_list(amount, utxo_id, address)
 	}
 
-	fn on_ingress_initiated(
-		ingress_script: <Bitcoin as Chain>::ChainAccount,
-		salt: IntentId,
+	fn on_channel_opened(
+		deposit_script: <Bitcoin as Chain>::ChainAccount,
+		salt: ChannelId,
 	) -> Result<(), DispatchError> {
-		Environment::add_details_for_btc_ingress_script(
-			ingress_script,
-			salt.try_into().expect("The salt/intent_id is not expected to exceed u32 max"), /* Todo: Confirm
-			                                                                                 * this assumption.
-			                                                                                 * Consider this in
-			                                                                                 * conjunction with
-			                                                                                 * #2354 */
+		Environment::add_details_for_btc_deposit_script(
+			deposit_script,
+			salt.try_into().expect("The salt/channel_id is not expected to exceed u32 max"), /* Todo: Confirm
+			                                                                                  * this assumption.
+			                                                                                  * Consider this in
+			                                                                                  * conjunction with
+			                                                                                  * #2354 */
 			BitcoinVault::vaults(Validator::epoch_index())
 				.ok_or(DispatchError::Other("No vault for epoch"))?
 				.public_key
@@ -562,7 +563,7 @@ impl AddressConverter for ChainAddressConverter {
 			ForeignChainAddress::Eth(address) => Ok(EncodedAddress::Eth(address)),
 			ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(address)),
 			ForeignChainAddress::Btc(address) => Ok(EncodedAddress::Btc(
-				derive_btc_ingress_address_from_script(
+				derive_btc_deposit_address_from_script(
 					address.into(),
 					Environment::bitcoin_network(),
 				)

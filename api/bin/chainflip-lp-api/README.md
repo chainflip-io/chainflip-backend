@@ -1,4 +1,4 @@
-# Chainflip Relayer
+# Chainflip Liquidity Api
 
 Exposes Liquidity Provider functionality via a json api interface.
 
@@ -7,7 +7,7 @@ Exposes Liquidity Provider functionality via a json api interface.
 ## Example
 
 ```sh
-./target/release/chainflip-lp \
+./target/release/chainflip-lp-api \
  --state_chain.ws_endpoint=ws://localhost:9944 \
  --state_chain.signing_key_file /path/to/my/signing_key
 
@@ -31,7 +31,7 @@ Then in another terminal:
     -d '{"id":1, "jsonrpc":"2.0", "method": "lp_liquidityDeposit", "params": ["Eth"]}' \
     http://localhost:80
 
-# The result is the hex-encoded ingress address.
+# The result is the hex-encoded deposit address.
 {"jsonrpc":"2.0","result":"0x350ec3dfd773978277868212d9f1319cbc93a8bf","id":1}
 
 ```
@@ -41,15 +41,15 @@ Then in another terminal:
 ## Command line arguments and defaults
 
 The `ws_endpoint` should point at a synced rpc node.
-The `signing_key_file` should be the relayer's private key for their on-chain account. The account should be funded.
+The `signing_key_file` should be the broker's private key for their on-chain account. The account should be funded.
 
 ```sh
-> ./target/release/chainflip-lp --help
+> ./target/release/chainflip-lp-api --help
 
-chainflip-lp
+chainflip-lp-api
 
 USAGE:
-    chainflip-lp [OPTIONS]
+    chainflip-lp-api [OPTIONS]
 
 OPTIONS:
     -h, --help
@@ -80,11 +80,11 @@ Return:
 
 Parameters:
 
-- Ingress asset as a camel-case string, eg "Eth" or "Dot"
+- Source asset as a camel-case string, eg "Eth" or "Dot"
 
 Return:
 
-- Hex encoded ingress address.
+- Hex encoded deposit address.
 
 ### `lp_withdrawAsset`
 

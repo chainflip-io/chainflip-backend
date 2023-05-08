@@ -1,4 +1,4 @@
-use cf_primitives::{AssetAmount, IntentId};
+use cf_primitives::{AssetAmount, ChannelId};
 use codec::{Decode, Encode};
 use ethabi::{encode, Address, ParamType, Token, Uint};
 use scale_info::TypeInfo;
@@ -21,7 +21,7 @@ pub(crate) struct EncodableFetchAssetParams {
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub(crate) struct EncodableFetchDeployAssetParams {
-	pub intent_id: IntentId,
+	pub channel_id: ChannelId,
 	pub asset: Address,
 }
 
@@ -36,7 +36,7 @@ pub(crate) struct EncodableTransferAssetParams {
 impl Tokenizable for EncodableFetchDeployAssetParams {
 	fn tokenize(self) -> Token {
 		Token::Tuple(vec![
-			Token::FixedBytes(get_salt(self.intent_id).to_vec()),
+			Token::FixedBytes(get_salt(self.channel_id).to_vec()),
 			Token::Address(self.asset),
 		])
 	}
@@ -204,11 +204,11 @@ mod test_all_batch {
 
 		let dummy_fetch_deploy_asset_params = vec![
 			EncodableFetchDeployAssetParams {
-				intent_id: 1u64,
+				channel_id: 1u64,
 				asset: Address::from_slice(&[3; 20]),
 			},
 			EncodableFetchDeployAssetParams {
-				intent_id: 2u64,
+				channel_id: 2u64,
 				asset: Address::from_slice(&[4; 20]),
 			},
 		];

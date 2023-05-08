@@ -8,7 +8,7 @@ use crate::{ApiCall, ChainCrypto};
 
 use sp_runtime::RuntimeDebug;
 
-/// Represents all the arguments required to build the call to fetch assets for all given intent
+/// Represents all the arguments required to build the call to fetch assets for all given channel
 /// ids.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BatchTransfer {

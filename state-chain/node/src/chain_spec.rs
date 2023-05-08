@@ -1,6 +1,7 @@
 use cf_chains::{
 	btc::BitcoinNetwork,
 	dot::{PolkadotHash, RuntimeVersion},
+	eth,
 };
 use cf_primitives::{AccountRole, AuthorityCount, PolkadotAccountId};
 
@@ -203,13 +204,13 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 						100 * FLIPPERINOS_PER_FLIP,
 					),
 					(
-						get_account_id_from_seed::<sr25519::Public>("RELAYER_1"),
-						AccountRole::Relayer,
+						get_account_id_from_seed::<sr25519::Public>("BROKER_1"),
+						AccountRole::Broker,
 						100 * FLIPPERINOS_PER_FLIP,
 					),
 					(
-						get_account_id_from_seed::<sr25519::Public>("RELAYER_2"),
-						AccountRole::Relayer,
+						get_account_id_from_seed::<sr25519::Public>("BROKER_2"),
+						AccountRole::Broker,
 						100 * FLIPPERINOS_PER_FLIP,
 					),
 				],
@@ -335,13 +336,13 @@ macro_rules! network_spec {
 									100 * FLIPPERINOS_PER_FLIP,
 								),
 								(
-									get_account_id_from_seed::<sr25519::Public>("RELAYER_1"),
-									AccountRole::Relayer,
+									get_account_id_from_seed::<sr25519::Public>("BROKER_1"),
+									AccountRole::Broker,
 									100 * FLIPPERINOS_PER_FLIP,
 								),
 								(
-									get_account_id_from_seed::<sr25519::Public>("RELAYER_2"),
-									AccountRole::Relayer,
+									get_account_id_from_seed::<sr25519::Public>("BROKER_2"),
+									AccountRole::Broker,
 									100 * FLIPPERINOS_PER_FLIP,
 								),
 							],
@@ -519,7 +520,7 @@ fn testnet_genesis(
 		},
 		environment: config_set,
 		ethereum_vault: EthereumVaultConfig {
-			vault_key: Some(eth_init_agg_key.to_vec()),
+			vault_key: Some(eth::AggKey::from_pubkey_compressed(eth_init_agg_key)),
 			deployment_block: ethereum_deployment_block,
 			keygen_response_timeout: keygen_ceremony_timeout_blocks,
 		},

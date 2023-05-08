@@ -16,7 +16,7 @@ use bitcoincore_rpc::bitcoin::{hashes::Hash, Transaction};
 use cf_chains::{
 	address::ScriptPubkeyBytes,
 	btc::{
-		ingress_address::derive_btc_ingress_bitcoin_script, BitcoinScriptBounded,
+		deposit_address::derive_btc_deposit_bitcoin_script, BitcoinScriptBounded,
 		BitcoinTrackedData, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	Bitcoin,
@@ -24,7 +24,7 @@ use cf_chains::{
 use cf_primitives::{chains::assets::btc, EpochIndex};
 use futures::StreamExt;
 use pallet_cf_environment::ChangeUtxoWitness;
-use pallet_cf_ingress_egress::IngressWitness;
+use pallet_cf_ingress_egress::DepositWitness;
 use state_chain_runtime::BitcoinInstance;
 use tokio::sync::Mutex;
 use tracing::{info_span, trace, Instrument};
@@ -50,9 +50,9 @@ pub fn filter_interesting_utxos(
 		BitcoinScriptBounded,
 	>,
 	change_pubkey: &cf_chains::btc::AggKey,
-) -> (Vec<IngressWitness<Bitcoin>>, Vec<ChangeUtxoWitness>) {
+) -> (Vec<DepositWitness<Bitcoin>>, Vec<ChangeUtxoWitness>) {
 	address_monitor.sync_addresses();
-	let mut ingress_witnesses = vec![];
+	let mut deposit_witnesses = vec![];
 	let mut change_witnesses = vec![];
 	for tx in txs {
 		for (vout, tx_out) in (0u32..).zip(tx.output.clone()) {
@@ -60,14 +60,14 @@ pub fn filter_interesting_utxos(
 				let tx_hash = tx.txid().as_hash().into_inner();
 				let script_pubkey_bytes = tx_out.script_pubkey.to_bytes();
 				if let Some(bitcoin_script) = address_monitor.get(&script_pubkey_bytes) {
-					ingress_witnesses.push(IngressWitness {
-						ingress_address: bitcoin_script,
+					deposit_witnesses.push(DepositWitness {
+						deposit_address: bitcoin_script,
 						asset: btc::Asset::Btc,
 						amount: tx_out.value,
 						tx_id: UtxoId { tx_hash, vout },
 					});
 				} else if script_pubkey_bytes ==
-					derive_btc_ingress_bitcoin_script(
+					derive_btc_deposit_bitcoin_script(
 						change_pubkey.pubkey_x,
 						CHANGE_ADDRESS_SALT,
 					)
@@ -82,7 +82,7 @@ pub fn filter_interesting_utxos(
 			}
 		}
 	}
-	(ingress_witnesses, change_witnesses)
+	(deposit_witnesses, change_witnesses)
 }
 
 pub async fn start<StateChainClient>(
@@ -134,15 +134,15 @@ where
 
 		trace!("Checking BTC block: {block_number} for interesting UTXOs");
 
-		let (ingress_witnesses, change_witnesses) =
+		let (deposit_witnesses, change_witnesses) =
 			filter_interesting_utxos(block.txdata, address_monitor, &self.change_pubkey);
 
-		if !ingress_witnesses.is_empty() {
+		if !deposit_witnesses.is_empty() {
 			self.state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(
-						pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::do_ingress {
-							ingress_witnesses,
+						pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::process_deposits {
+							deposit_witnesses,
 						}
 						.into(),
 					),
@@ -310,38 +310,38 @@ mod test_utxo_filtering {
 		const UTXO_WITNESSED_1: u64 = 2324;
 		const UTXO_WITNESSED_2: u64 = 1234;
 
-		let btc_ingress_script: BitcoinScriptBounded =
-			derive_btc_ingress_bitcoin_script([0; 32], 9).try_into().unwrap();
+		let btc_deposit_script: BitcoinScriptBounded =
+			derive_btc_deposit_bitcoin_script([0; 32], 9).try_into().unwrap();
 
 		let txs = vec![
 			fake_transaction(vec![
 				TxOut {
 					value: UTXO_WITNESSED_1,
-					script_pubkey: Script::from(btc_ingress_script.data.to_vec()),
+					script_pubkey: Script::from(btc_deposit_script.data.to_vec()),
 				},
 				TxOut { value: 12223, script_pubkey: Script::from(vec![0, 32, 121, 9]) },
 				TxOut {
 					value: UTXO_WITNESSED_2,
-					script_pubkey: Script::from(btc_ingress_script.data.to_vec()),
+					script_pubkey: Script::from(btc_deposit_script.data.to_vec()),
 				},
 			]),
 			fake_transaction(vec![]),
 		];
 
-		let (ingress_witnesses, _) = filter_interesting_utxos(
+		let (deposit_witnesses, _) = filter_interesting_utxos(
 			txs,
-			&mut AddressMonitor::new(BTreeSet::from([btc_ingress_script])).1,
+			&mut AddressMonitor::new(BTreeSet::from([btc_deposit_script])).1,
 			&Default::default(),
 		);
-		assert_eq!(ingress_witnesses.len(), 2);
-		assert_eq!(ingress_witnesses[0].amount, UTXO_WITNESSED_1);
-		assert_eq!(ingress_witnesses[1].amount, UTXO_WITNESSED_2);
+		assert_eq!(deposit_witnesses.len(), 2);
+		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
+		assert_eq!(deposit_witnesses[1].amount, UTXO_WITNESSED_2);
 	}
 
 	#[test]
 	fn filter_interesting_utxos_several_diff_tx() {
-		let btc_ingress_script: BitcoinScriptBounded =
-			derive_btc_ingress_bitcoin_script([0; 32], 9).try_into().unwrap();
+		let btc_deposit_script: BitcoinScriptBounded =
+			derive_btc_deposit_bitcoin_script([0; 32], 9).try_into().unwrap();
 
 		const UTXO_WITNESSED_1: u64 = 2324;
 		const UTXO_WITNESSED_2: u64 = 1234;
@@ -349,43 +349,43 @@ mod test_utxo_filtering {
 			fake_transaction(vec![
 				TxOut {
 					value: 2324,
-					script_pubkey: Script::from(btc_ingress_script.data.to_vec()),
+					script_pubkey: Script::from(btc_deposit_script.data.to_vec()),
 				},
 				TxOut { value: 12223, script_pubkey: Script::from(vec![0, 32, 121, 9]) },
 			]),
 			fake_transaction(vec![TxOut {
 				value: 1234,
-				script_pubkey: Script::from(btc_ingress_script.data.to_vec()),
+				script_pubkey: Script::from(btc_deposit_script.data.to_vec()),
 			}]),
 		];
 
-		let (ingress_witnesses, _change_witnesses) = filter_interesting_utxos(
+		let (deposit_witnesses, _change_witnesses) = filter_interesting_utxos(
 			txs,
-			&mut AddressMonitor::new(BTreeSet::from([btc_ingress_script])).1,
+			&mut AddressMonitor::new(BTreeSet::from([btc_deposit_script])).1,
 			&Default::default(),
 		);
-		assert_eq!(ingress_witnesses.len(), 2);
-		assert_eq!(ingress_witnesses[0].amount, UTXO_WITNESSED_1);
-		assert_eq!(ingress_witnesses[1].amount, UTXO_WITNESSED_2);
+		assert_eq!(deposit_witnesses.len(), 2);
+		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
+		assert_eq!(deposit_witnesses[1].amount, UTXO_WITNESSED_2);
 	}
 
 	#[test]
 	fn filter_out_value_0() {
-		let btc_ingress_script: BitcoinScriptBounded =
-			derive_btc_ingress_bitcoin_script([0; 32], 9).try_into().unwrap();
+		let btc_deposit_script: BitcoinScriptBounded =
+			derive_btc_deposit_bitcoin_script([0; 32], 9).try_into().unwrap();
 
 		const UTXO_WITNESSED_1: u64 = 2324;
 		let txs = vec![fake_transaction(vec![
-			TxOut { value: 2324, script_pubkey: Script::from(btc_ingress_script.data.to_vec()) },
-			TxOut { value: 0, script_pubkey: Script::from(btc_ingress_script.data.to_vec()) },
+			TxOut { value: 2324, script_pubkey: Script::from(btc_deposit_script.data.to_vec()) },
+			TxOut { value: 0, script_pubkey: Script::from(btc_deposit_script.data.to_vec()) },
 		])];
 
-		let (ingress_witnesses, _change_witnesses) = filter_interesting_utxos(
+		let (deposit_witnesses, _change_witnesses) = filter_interesting_utxos(
 			txs,
-			&mut AddressMonitor::new(BTreeSet::from([btc_ingress_script])).1,
+			&mut AddressMonitor::new(BTreeSet::from([btc_deposit_script])).1,
 			&Default::default(),
 		);
-		assert_eq!(ingress_witnesses.len(), 1);
-		assert_eq!(ingress_witnesses[0].amount, UTXO_WITNESSED_1);
+		assert_eq!(deposit_witnesses.len(), 1);
+		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
 	}
 }

@@ -1,5 +1,5 @@
 use crate::CcmHandler;
-use cf_chains::{address::ForeignChainAddress, CcmIngressMetadata};
+use cf_chains::{address::ForeignChainAddress, CcmDepositMetadata};
 use frame_support::dispatch::DispatchResult;
 
 use cf_primitives::{Asset, AssetAmount};
@@ -16,11 +16,11 @@ impl MockPallet for MockCcmHandler {
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct CcmRequest {
-	pub ingress_asset: Asset,
-	pub ingress_amount: AssetAmount,
-	pub egress_asset: Asset,
-	pub egress_address: ForeignChainAddress,
-	pub message_metadata: CcmIngressMetadata,
+	pub source_asset: Asset,
+	pub deposit_amount: AssetAmount,
+	pub destination_asset: Asset,
+	pub destination_address: ForeignChainAddress,
+	pub message_metadata: CcmDepositMetadata,
 }
 
 impl MockCcmHandler {
@@ -30,12 +30,12 @@ impl MockCcmHandler {
 }
 
 impl CcmHandler for MockCcmHandler {
-	fn on_ccm_ingress(
-		ingress_asset: Asset,
-		ingress_amount: AssetAmount,
-		egress_asset: Asset,
-		egress_address: ForeignChainAddress,
-		message_metadata: CcmIngressMetadata,
+	fn on_ccm_deposit(
+		source_asset: Asset,
+		deposit_amount: AssetAmount,
+		destination_asset: Asset,
+		destination_address: ForeignChainAddress,
+		message_metadata: CcmDepositMetadata,
 	) -> DispatchResult {
 		<Self as MockPalletStorage>::mutate_value(CCM_HANDLER_PREFIX, |ccm_requests| {
 			if ccm_requests.is_none() {
@@ -43,10 +43,10 @@ impl CcmHandler for MockCcmHandler {
 			}
 			ccm_requests.as_mut().map(|v| {
 				v.push(CcmRequest {
-					ingress_asset,
-					ingress_amount,
-					egress_asset,
-					egress_address,
+					source_asset,
+					deposit_amount,
+					destination_asset,
+					destination_address,
 					message_metadata,
 				});
 			})

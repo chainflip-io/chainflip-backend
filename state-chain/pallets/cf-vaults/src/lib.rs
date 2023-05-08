@@ -3,9 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
-use cf_primitives::{
-	AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId, GENESIS_EPOCH,
-};
+use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
@@ -54,22 +52,35 @@ pub type ThresholdSignatureFor<T, I = ()> =
 pub type KeygenResponseStatus<T, I> =
 	ResponseStatus<T, KeygenSuccessVoters<T, I>, KeygenFailureVoters<T, I>, I>;
 
+pub type KeyHandoverResponseStatus<T, I> =
+	ResponseStatus<T, KeyHandoverSuccessVoters<T, I>, KeyHandoverFailureVoters<T, I>, I>;
+
 /// The current status of a vault rotation.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug, EnumVariant)]
 #[scale_info(skip_type_params(T, I))]
 pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	/// We are waiting for nodes to generate a new aggregate key.
 	AwaitingKeygen {
-		keygen_ceremony_id: CeremonyId,
+		ceremony_id: CeremonyId,
 		keygen_participants: BTreeSet<T::ValidatorId>,
-		epoch_index: EpochIndex,
 		response_status: KeygenResponseStatus<T, I>,
+		new_epoch_index: EpochIndex,
 	},
 	/// We are waiting for the nodes who generated the new key to complete a signing ceremony to
 	/// verify the new key.
 	AwaitingKeygenVerification { new_public_key: AggKeyFor<T, I> },
 	/// Keygen verification is complete for key
 	KeygenVerificationComplete { new_public_key: AggKeyFor<T, I> },
+	AwaitingKeyHandover {
+		ceremony_id: CeremonyId,
+		response_status: KeyHandoverResponseStatus<T, I>,
+		// NB: This is NOT the key handed over. It is the new key for the *next* epoch.
+		new_public_key: AggKeyFor<T, I>,
+	},
+	KeyHandoverComplete {
+		// NB: This is NOT the key handed over. It is the new key for the *next* epoch.
+		new_public_key: AggKeyFor<T, I>,
+	},
 	/// We are waiting for the key to be updated on the contract, and witnessed by the network.
 	AwaitingRotation { new_public_key: AggKeyFor<T, I> },
 	/// The key has been successfully updated on the contract.
@@ -90,6 +101,7 @@ pub struct Vault<T: ChainAbi> {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletOffence {
 	FailedKeygen,
+	FailedKeyHandover,
 }
 
 #[derive(Encode, Decode, TypeInfo)]
@@ -174,59 +186,60 @@ pub mod pallet {
 				return weight
 			}
 
-			// Check if we need to finalize keygen
-			if let Some(VaultRotationStatus::<T, I>::AwaitingKeygen {
-				keygen_ceremony_id,
-				keygen_participants,
-				epoch_index,
-				response_status,
-			}) = PendingVaultRotation::<T, I>::get()
-			{
-				let remaining_candidate_count = response_status.remaining_candidate_count();
-				if remaining_candidate_count == 0 {
-					log::debug!("All keygen candidates have reported, resolving outcome...");
-				} else if current_block.saturating_sub(KeygenResolutionPendingSince::<T, I>::get()) >=
-					KeygenResponseTimeout::<T, I>::get()
-				{
-					log::debug!(
-						"Keygen response timeout has elapsed, attempting to resolve outcome..."
+			match PendingVaultRotation::<T, I>::get() {
+				Some(VaultRotationStatus::<T, I>::AwaitingKeygen {
+					ceremony_id,
+					keygen_participants,
+					new_epoch_index,
+					response_status,
+				}) => {
+					weight += Self::progress_rotation::<
+						KeygenSuccessVoters<T, I>,
+						KeygenFailureVoters<T, I>,
+						_,
+						KeygenResolutionPendingSince<T, I>,
+					>(
+						response_status,
+						ceremony_id,
+						current_block,
+						PalletOffence::FailedKeygen,
+						|new_public_key| {
+							Self::deposit_event(Event::KeygenSuccess(ceremony_id));
+							Self::trigger_keygen_verification(
+								ceremony_id,
+								new_public_key,
+								keygen_participants,
+								new_epoch_index,
+							);
+						},
 					);
-					Self::deposit_event(Event::<T, I>::KeygenResponseTimeout(keygen_ceremony_id));
-				} else {
-					return weight
-				};
-
-				let candidate_count = response_status.candidate_count();
-				match response_status.resolve_keygen_outcome() {
-					Ok(new_public_key) => {
-						debug_assert_eq!(
-							remaining_candidate_count, 0,
-							"Can't have success unless all candidates responded"
-						);
-						weight += T::WeightInfo::on_initialize_success();
-						Self::deposit_event(Event::KeygenSuccess(keygen_ceremony_id));
-						Self::trigger_keygen_verification(
-							keygen_ceremony_id,
-							new_public_key,
-							epoch_index,
-							keygen_participants,
-						);
-					},
-					Err(offenders) => {
-						weight += T::WeightInfo::on_initialize_failure(offenders.len() as u32);
-						Self::terminate_keygen_procedure(
-							&if (offenders.len() as AuthorityCount) <
-								utilities::failure_threshold_from_share_count(candidate_count)
-							{
-								offenders.into_iter().collect::<Vec<_>>()
-							} else {
-								Vec::default()
-							},
-							Event::KeygenFailure(keygen_ceremony_id),
-						);
-					},
-				}
-				KeygenResolutionPendingSince::<T, I>::kill();
+				},
+				Some(VaultRotationStatus::<T, I>::AwaitingKeyHandover {
+					ceremony_id,
+					response_status,
+					new_public_key,
+				}) => {
+					weight += Self::progress_rotation::<
+						KeyHandoverSuccessVoters<T, I>,
+						KeyHandoverFailureVoters<T, I>,
+						_,
+						KeyHandoverResolutionPendingSince<T, I>,
+					>(
+						response_status,
+						ceremony_id,
+						current_block,
+						PalletOffence::FailedKeyHandover,
+						|_| {
+							Self::deposit_event(Event::KeyHandoverSuccess { ceremony_id });
+							PendingVaultRotation::<T, I>::put(
+								VaultRotationStatus::<T, I>::KeyHandoverComplete { new_public_key },
+							);
+						},
+					);
+				},
+				_ => {
+					// noop
+				},
 			}
 
 			weight
@@ -273,10 +286,28 @@ pub mod pallet {
 	pub type KeygenFailureVoters<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
 
+	/// The voters who voted for success for a particular key handover ceremony
+	#[pallet::storage]
+	#[pallet::getter(fn key_handover_success_voters)]
+	pub type KeyHandoverSuccessVoters<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Identity, AggKeyFor<T, I>, Vec<T::ValidatorId>, ValueQuery>;
+
+	/// The voters who voted for failure for a particular key handover ceremony
+	#[pallet::storage]
+	#[pallet::getter(fn key_handover_failure_voters)]
+	pub type KeyHandoverFailureVoters<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, Vec<T::ValidatorId>, ValueQuery>;
+
 	/// The block since which we have been waiting for keygen to be resolved.
 	#[pallet::storage]
 	#[pallet::getter(fn keygen_resolution_pending_since)]
 	pub(super) type KeygenResolutionPendingSince<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
+
+	/// The block since which we have been waiting for key handover to be resolved.
+	#[pallet::storage]
+	#[pallet::getter(fn key_handover_resolution_pending_since)]
+	pub(super) type KeyHandoverResolutionPendingSince<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, BlockNumberFor<T>, ValueQuery>;
 
 	#[pallet::storage]
@@ -298,29 +329,59 @@ pub mod pallet {
 			/// The epoch index for which the key is being generated.
 			epoch_index: EpochIndex,
 		},
+		/// Request a key handover
+		KeyHandoverRequest {
+			ceremony_id: CeremonyId,
+			from_epoch: EpochIndex,
+			key_to_share: <T::Chain as ChainCrypto>::AggKey,
+			sharing_participants: BTreeSet<T::ValidatorId>,
+			receiving_participants: BTreeSet<T::ValidatorId>,
+			/// The epoch index for which the key is being handed over.
+			to_epoch: EpochIndex,
+		},
 		/// The vault for the request has rotated
 		VaultRotationCompleted,
 		/// The vault's key has been rotated externally \[new_public_key\]
 		VaultRotatedExternally(<T::Chain as ChainCrypto>::AggKey),
 		/// A keygen participant has reported that keygen was successful \[validator_id\]
 		KeygenSuccessReported(T::ValidatorId),
+		/// A key handover participant has reported that keygen was successful \[validator_id\]
+		KeyHandoverSuccessReported(T::ValidatorId),
 		/// A keygen participant has reported that keygen has failed \[validator_id\]
 		KeygenFailureReported(T::ValidatorId),
+		/// A key handover participant has reported that keygen has failed \[validator_id\]
+		KeyHandoverFailureReported(T::ValidatorId),
 		/// Keygen was successful \[ceremony_id\]
 		KeygenSuccess(CeremonyId),
+		/// The key handover was successful
+		KeyHandoverSuccess {
+			ceremony_id: CeremonyId,
+		},
+		NoKeyHandover,
 		/// The new key was successfully used to sign.
-		KeygenVerificationSuccess { agg_key: <T::Chain as ChainCrypto>::AggKey },
+		KeygenVerificationSuccess {
+			agg_key: <T::Chain as ChainCrypto>::AggKey,
+		},
 		/// Verification of the new key has failed.
-		KeygenVerificationFailure { keygen_ceremony_id: CeremonyId },
+		KeygenVerificationFailure {
+			keygen_ceremony_id: CeremonyId,
+		},
 		/// Keygen has failed \[ceremony_id\]
 		KeygenFailure(CeremonyId),
 		/// Keygen response timeout has occurred \[ceremony_id\]
 		KeygenResponseTimeout(CeremonyId),
+		KeyHandoverResponseTimeout {
+			ceremony_id: CeremonyId,
+		},
 		/// Keygen response timeout was updated \[new_timeout\]
-		KeygenResponseTimeoutUpdated { new_timeout: BlockNumberFor<T> },
+		KeygenResponseTimeoutUpdated {
+			new_timeout: BlockNumberFor<T>,
+		},
 		/// The new key has been generated, we must activate the new key on the external
 		/// chain via governance.
-		AwaitingGovernanceActivation { new_public_key: <T::Chain as ChainCrypto>::AggKey },
+		AwaitingGovernanceActivation {
+			new_public_key: <T::Chain as ChainCrypto>::AggKey,
+		},
 	}
 
 	#[pallet::error]
@@ -336,6 +397,46 @@ pub mod pallet {
 		InvalidRespondent,
 		/// There is no threshold signature available
 		ThresholdSignatureUnavailable,
+	}
+
+	macro_rules! handle_key_ceremony_report {
+		($origin:expr, $ceremony_id:expr, $reported_outcome:expr, $variant:path, $success_event:expr, $failure_event:expr) => {
+
+			let reporter = T::AccountRoleRegistry::ensure_validator($origin)?.into();
+
+			// There is a rotation happening.
+			let mut rotation =
+				PendingVaultRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
+
+			// Keygen is in progress, pull out the details.
+			let (pending_ceremony_id, response_status) = ensure_variant!(
+				$variant {
+					ceremony_id, ref mut response_status, ..
+				} => (ceremony_id, response_status),
+				rotation,
+				Error::<T, I>::InvalidRotationStatus,
+			);
+
+			// Make sure the ceremony id matches
+			ensure!(pending_ceremony_id == $ceremony_id, Error::<T, I>::InvalidCeremonyId);
+			ensure!(
+				response_status.remaining_candidates().contains(&reporter),
+				Error::<T, I>::InvalidRespondent
+			);
+
+			Self::deposit_event(match $reported_outcome {
+				Ok(key) => {
+					response_status.add_success_vote(&reporter, key);
+					$success_event(reporter)
+				},
+				Err(blamed) => {
+					response_status.add_failure_vote(&reporter, blamed);
+					$failure_event(reporter)
+				},
+			});
+
+			PendingVaultRotation::<T, I>::put(rotation);
+		};
 	}
 
 	#[pallet::call]
@@ -364,43 +465,32 @@ pub mod pallet {
 			ceremony_id: CeremonyId,
 			reported_outcome: KeygenOutcomeFor<T, I>,
 		) -> DispatchResultWithPostInfo {
-			let reporter = T::AccountRoleRegistry::ensure_validator(origin)?.into();
-
-			// -- Validity checks.
-
-			// There is a rotation happening.
-			let mut rotation =
-				PendingVaultRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
-
-			// Keygen is in progress, pull out the details.
-			let (pending_ceremony_id, keygen_status) = ensure_variant!(
-				VaultRotationStatus::<T, I>::AwaitingKeygen {
-					keygen_ceremony_id, ref mut response_status, ..
-				} => (keygen_ceremony_id, response_status),
-				rotation,
-				Error::<T, I>::InvalidRotationStatus,
-			);
-			// Make sure the ceremony id matches
-			ensure!(pending_ceremony_id == ceremony_id, Error::<T, I>::InvalidCeremonyId);
-			ensure!(
-				keygen_status.remaining_candidates().contains(&reporter),
-				Error::<T, I>::InvalidRespondent
+			handle_key_ceremony_report!(
+				origin,
+				ceremony_id,
+				reported_outcome,
+				VaultRotationStatus::<T, I>::AwaitingKeygen,
+				Event::KeygenSuccessReported,
+				Event::KeygenFailureReported
 			);
 
-			// -- Tally the votes.
+			Ok(().into())
+		}
 
-			match reported_outcome {
-				Ok(key) => {
-					keygen_status.add_success_vote(&reporter, key);
-					Self::deposit_event(Event::<T, I>::KeygenSuccessReported(reporter));
-				},
-				Err(blamed) => {
-					keygen_status.add_failure_vote(&reporter, blamed);
-					Self::deposit_event(Event::<T, I>::KeygenFailureReported(reporter));
-				},
-			}
-
-			PendingVaultRotation::<T, I>::put(rotation);
+		#[pallet::weight(T::WeightInfo::report_keygen_outcome())]
+		pub fn report_key_handover_outcome(
+			origin: OriginFor<T>,
+			ceremony_id: CeremonyId,
+			reported_outcome: KeygenOutcomeFor<T, I>,
+		) -> DispatchResultWithPostInfo {
+			handle_key_ceremony_report!(
+				origin,
+				ceremony_id,
+				reported_outcome,
+				VaultRotationStatus::<T, I>::AwaitingKeyHandover,
+				Event::KeyHandoverSuccessReported,
+				Event::KeyHandoverFailureReported
+			);
 
 			Ok(().into())
 		}
@@ -446,8 +536,9 @@ pub mod pallet {
 					// We don't do any more here. We wait for the validator pallet to
 					// let us know when we can start the external rotation.
 				},
-				Err(offenders) => Self::terminate_keygen_procedure(
+				Err(offenders) => Self::terminate_rotation(
 					&offenders[..],
+					PalletOffence::FailedKeygen,
 					Event::KeygenVerificationFailure { keygen_ceremony_id },
 				),
 			};
@@ -548,11 +639,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
-		/// The provided Vec must be convertible to the chain's AggKey.
-		///
-		/// GenesisConfig members require `Serialize` and `Deserialize` which isn't
-		/// implemented for the AggKey type, hence we use Vec<u8> and covert during genesis.
-		pub vault_key: Option<Vec<u8>>,
+		pub vault_key: Option<AggKeyFor<T, I>>,
 		pub deployment_block: ChainBlockNumberFor<T, I>,
 		pub keygen_response_timeout: BlockNumberFor<T>,
 	}
@@ -572,18 +659,13 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
-			if let Some(vault_key) = self.vault_key.clone() {
+			if let Some(vault_key) = self.vault_key {
 				Pallet::<T, I>::set_vault_for_epoch(
 					VaultEpochAndState {
-						epoch_index: GENESIS_EPOCH,
+						epoch_index: cf_primitives::GENESIS_EPOCH,
 						key_state: KeyState::Unlocked,
 					},
-					AggKeyFor::<T, I>::try_from(vault_key)
-						// Note: Can't use expect() here without some type shenanigans, but would
-						// give clearer error messages.
-						.unwrap_or_else(|_| {
-							panic!("Can't build genesis without a valid vault key.")
-						}),
+					vault_key,
 					self.deployment_block,
 				);
 			} else {
@@ -596,6 +678,67 @@ pub mod pallet {
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
+	fn progress_rotation<SuccessVoters, FailureVoters, ResolutionSuccessFn, PendingSince>(
+		response_status: ResponseStatus<T, SuccessVoters, FailureVoters, I>,
+		ceremony_id: CeremonyId,
+		current_block: BlockNumberFor<T>,
+		offence: PalletOffence,
+		on_resolution_success: ResolutionSuccessFn,
+	) -> Weight
+	where
+		ResolutionSuccessFn: FnOnce(AggKeyFor<T, I>),
+		T: Config<I>,
+		I: 'static,
+		SuccessVoters: frame_support::StorageMap<AggKeyFor<T, I>, Vec<T::ValidatorId>>
+			+ frame_support::IterableStorageMap<AggKeyFor<T, I>, Vec<T::ValidatorId>>
+			+ frame_support::StoragePrefixedMap<Vec<T::ValidatorId>>,
+		FailureVoters: frame_support::StorageValue<Vec<T::ValidatorId>>,
+		<FailureVoters as frame_support::StorageValue<Vec<T::ValidatorId>>>::Query:
+			sp_std::iter::IntoIterator<Item = T::ValidatorId>,
+		PendingSince: frame_support::StorageValue<BlockNumberFor<T>, Query = BlockNumberFor<T>>,
+	{
+		let remaining_candidate_count = response_status.remaining_candidate_count();
+		if remaining_candidate_count == 0 {
+			log::debug!("All candidates have reported, resolving outcome...");
+		} else if current_block.saturating_sub(PendingSince::get()) >=
+			KeygenResponseTimeout::<T, I>::get()
+		{
+			log::debug!("Keygen response timeout has elapsed, attempting to resolve outcome...");
+			Self::deposit_event(Event::<T, I>::KeygenResponseTimeout(ceremony_id));
+		} else {
+			return Weight::from_ref_time(0)
+		};
+
+		let candidate_count = response_status.candidate_count();
+		let weight = match response_status.resolve_keygen_outcome() {
+			Ok(new_public_key) => {
+				debug_assert_eq!(
+					remaining_candidate_count, 0,
+					"Can't have success unless all candidates responded"
+				);
+				on_resolution_success(new_public_key);
+				T::WeightInfo::on_initialize_success()
+			},
+			Err(offenders) => {
+				let offenders_len = offenders.len();
+				Self::terminate_rotation(
+					&if (offenders_len as AuthorityCount) <
+						utilities::failure_threshold_from_share_count(candidate_count)
+					{
+						offenders.into_iter().collect::<Vec<_>>()
+					} else {
+						Vec::default()
+					},
+					offence,
+					Event::KeygenFailure(ceremony_id),
+				);
+				T::WeightInfo::on_initialize_failure(offenders_len as u32)
+			},
+		};
+		PendingSince::kill();
+		weight
+	}
+
 	fn set_next_vault(
 		new_public_key: AggKeyFor<T, I>,
 		rotated_at_block_number: ChainBlockNumberFor<T, I>,
@@ -635,13 +778,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn trigger_keygen_verification(
 		keygen_ceremony_id: CeremonyId,
 		new_public_key: AggKeyFor<T, I>,
-		epoch_index: EpochIndex,
 		participants: BTreeSet<T::ValidatorId>,
+		new_epoch_index: EpochIndex,
 	) -> ThresholdSignatureRequestId {
 		let request_id = T::ThresholdSigner::request_keygen_verification_signature(
 			T::Chain::agg_key_to_payload(new_public_key),
-			T::Chain::agg_key_to_key_id(new_public_key, epoch_index),
 			participants,
+			new_public_key,
+			new_epoch_index,
 		);
 		T::ThresholdSigner::register_callback(request_id, {
 			Call::on_keygen_verification_result {
@@ -665,8 +809,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		request_id
 	}
 
-	fn terminate_keygen_procedure(offenders: &[T::ValidatorId], event: Event<T, I>) {
-		T::OffenceReporter::report_many(PalletOffence::FailedKeygen, offenders);
+	fn terminate_rotation(
+		offenders: &[T::ValidatorId],
+		offence: PalletOffence,
+		event: Event<T, I>,
+	) {
+		T::OffenceReporter::report_many(offence, offenders);
 		for offender in offenders {
 			T::Slasher::slash_balance(offender, KeygenSlashRate::<T, I>::get());
 		}

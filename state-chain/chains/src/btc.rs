@@ -1,7 +1,7 @@
 pub mod api;
 #[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
-pub mod ingress_address;
+pub mod deposit_address;
 pub mod utxo_selection;
 
 use arrayref::array_ref;
@@ -18,10 +18,10 @@ use sp_core::ConstU32;
 use sp_std::{vec, vec::Vec};
 
 extern crate alloc;
-use crate::{Age, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, IngressIdConstructor};
+use crate::{Age, Chain, ChainAbi, ChainCrypto, ChannelIdConstructor, FeeRefundCalculator};
 use alloc::string::String;
+use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Bitcoin;
-use cf_primitives::{chains::assets, EpochIndex, KeyId, PublicKeyBytes};
 use itertools;
 
 /// This salt is used to derive the change address for every vault. i.e. for every epoch.
@@ -58,28 +58,10 @@ pub type Hash = [u8; 32];
 	Ord,
 	PartialOrd,
 )]
-
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 // y-parity bit is assumed to always be 0x02.
 pub struct AggKey {
 	pub pubkey_x: [u8; 32],
-}
-
-impl From<KeyId> for AggKey {
-	fn from(key_id: KeyId) -> Self {
-		AggKey { pubkey_x: key_id.public_key_bytes.try_into().unwrap() }
-	}
-}
-
-impl From<AggKey> for PublicKeyBytes {
-	fn from(agg_key: AggKey) -> Self {
-		agg_key.pubkey_x.to_vec()
-	}
-}
-
-impl From<PublicKeyBytes> for AggKey {
-	fn from(public_key_bytes: PublicKeyBytes) -> Self {
-		AggKey { pubkey_x: public_key_bytes.try_into().unwrap() }
-	}
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
@@ -121,6 +103,8 @@ pub struct EpochStartData {
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
 
+	const KEY_HANDOVER_IS_REQUIRED: bool = true;
+
 	type ChainBlockNumber = BlockNumber;
 
 	type ChainAmount = BtcAmount;
@@ -135,7 +119,7 @@ impl Chain for Bitcoin {
 
 	type EpochStartData = EpochStartData;
 
-	type IngressFetchId = BitcoinFetchId;
+	type DepositFetchId = BitcoinFetchId;
 }
 
 impl ChainCrypto for Bitcoin {
@@ -164,10 +148,6 @@ impl ChainCrypto for Bitcoin {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
 		vec![agg_key.pubkey_x]
-	}
-
-	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
-		KeyId { epoch_index, public_key_bytes: agg_key.into() }
 	}
 }
 fn verify_single_threshold_signature(
@@ -220,7 +200,7 @@ impl ChainAbi for Bitcoin {
 	type ReplayProtection = ();
 }
 
-// TODO: Look at moving this into Utxo. They're exactly the same apart from the IntentId
+// TODO: Look at moving this into Utxo. They're exactly the same apart from the ChannelId
 // which could be made generic, if even necessary at all.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen)]
 pub struct UtxoId {
@@ -230,19 +210,19 @@ pub struct UtxoId {
 	pub vout: u32,
 }
 
-impl IngressIdConstructor for BitcoinFetchId {
+impl ChannelIdConstructor for BitcoinFetchId {
 	type Address = BitcoinScriptBounded;
 
-	fn deployed(intent_id: u64, _address: Self::Address) -> Self {
-		BitcoinFetchId(intent_id)
+	fn deployed(channel_id: u64, _address: Self::Address) -> Self {
+		BitcoinFetchId(channel_id)
 	}
 
-	fn undeployed(intent_id: u64, _address: Self::Address) -> Self {
-		BitcoinFetchId(intent_id)
+	fn undeployed(channel_id: u64, _address: Self::Address) -> Self {
+		BitcoinFetchId(channel_id)
 	}
 }
 
-use self::ingress_address::tweaked_pubkey;
+use self::deposit_address::tweaked_pubkey;
 
 const INTERNAL_PUBKEY: &[u8] =
 	&hex_literal::hex!("02eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");

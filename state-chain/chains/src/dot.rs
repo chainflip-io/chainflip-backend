@@ -6,7 +6,7 @@ pub mod api;
 pub mod benchmarking;
 
 pub use cf_primitives::{chains::Polkadot, PolkadotAccountId};
-use cf_primitives::{KeyId, PolkadotBlockNumber, TxId};
+use cf_primitives::{PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use core::str::FromStr;
 use scale_info::TypeInfo;
@@ -47,7 +47,7 @@ pub const TEST_RUNTIME_VERSION: RuntimeVersion =
 	RuntimeVersion { spec_version: 9340, transaction_version: 16 };
 
 pub type PolkadotSpecVersion = u32;
-pub type PolkadotIngressId = u64;
+pub type PolkadotChannelId = u64;
 pub type PolkadotTransactionVersion = u32;
 
 pub type PolkadotUncheckedExtrinsic =
@@ -118,7 +118,7 @@ impl Chain for Polkadot {
 	type TransactionFee = Self::ChainAmount;
 	type ChainAsset = assets::dot::Asset;
 	type EpochStartData = EpochStartData;
-	type IngressFetchId = PolkadotIngressId;
+	type DepositFetchId = PolkadotChannelId;
 }
 
 impl ChainCrypto for Polkadot {
@@ -138,18 +138,6 @@ impl ChainCrypto for Polkadot {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
 		EncodedPolkadotPayload(Blake2_256::hash(&agg_key.0).to_vec())
-	}
-
-	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
-		KeyId { epoch_index, public_key_bytes: agg_key.into() }
-	}
-}
-
-impl TryFrom<KeyId> for PolkadotPublicKey {
-	type Error = &'static str;
-
-	fn try_from(key_id: KeyId) -> Result<Self, Self::Error> {
-		key_id.public_key_bytes.try_into().map_err(|_| "Invalid public key bytes")
 	}
 }
 
@@ -733,6 +721,7 @@ impl SignedExtension for PolkadotSignedExtra {
 	}
 }
 
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Ord, PartialOrd, Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
 pub struct PolkadotPublicKey(pub sr25519::Public);
 
@@ -768,15 +757,15 @@ pub struct PolkadotReplayProtection {
 	pub nonce: PolkadotIndex,
 }
 
-impl IngressIdConstructor for PolkadotIngressId {
+impl ChannelIdConstructor for PolkadotChannelId {
 	type Address = AccountId32;
 
-	fn deployed(intent_id: u64, _address: Self::Address) -> Self {
-		intent_id
+	fn deployed(channel_id: u64, _address: Self::Address) -> Self {
+		channel_id
 	}
 
-	fn undeployed(intent_id: u64, _address: Self::Address) -> Self {
-		intent_id
+	fn undeployed(channel_id: u64, _address: Self::Address) -> Self {
+		channel_id
 	}
 }
 

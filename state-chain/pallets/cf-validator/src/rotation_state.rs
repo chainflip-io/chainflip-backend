@@ -73,6 +73,11 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 		self.primary_candidates.len() as u32
 	}
 
+	pub fn filter_out_banned(&self, mut candidates: BTreeSet<Id>) -> BTreeSet<Id> {
+		candidates.retain(|id| !self.banned.contains(id));
+		candidates
+	}
+
 	/// Ban all candidates that don't meet the qualification criterion.
 	pub fn qualify_nodes<Q: QualifyNode<ValidatorId = Id>>(&mut self) {
 		for id in self.primary_candidates.iter().chain(&self.secondary_candidates) {

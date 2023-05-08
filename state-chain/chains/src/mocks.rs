@@ -2,19 +2,21 @@ use crate::{
 	eth::{api::EthereumReplayProtection, TransactionFee},
 	*,
 };
-use cf_primitives::KeyId;
 use sp_std::marker::PhantomData;
 use std::cell::RefCell;
 
 #[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockEthereum;
 
-pub type MockEthereumIngressId = u128;
+pub type MockEthereumChannelId = u128;
 
 // Chain implementation used for testing.
 impl Chain for MockEthereum {
 	const NAME: &'static str = "MockEthereum";
-	type IngressFetchId = MockEthereumIngressId;
+	// Even though ethereum doesn't handover, we are able to easily get more unit test coverage this
+	// way.
+	const KEY_HANDOVER_IS_REQUIRED: bool = true;
+	type DepositFetchId = MockEthereumChannelId;
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
 	type TrackedData = MockTrackedData;
@@ -24,14 +26,14 @@ impl Chain for MockEthereum {
 	type EpochStartData = ();
 }
 
-impl IngressIdConstructor for MockEthereumIngressId {
+impl ChannelIdConstructor for MockEthereumChannelId {
 	type Address = u64;
 
-	fn deployed(_intent_id: u64, _address: Self::Address) -> Self {
+	fn deployed(_channel_id: u64, _address: Self::Address) -> Self {
 		unimplemented!()
 	}
 
-	fn undeployed(_intent_id: u64, _address: Self::Address) -> Self {
+	fn undeployed(_channel_id: u64, _address: Self::Address) -> Self {
 		unimplemented!()
 	}
 }
@@ -87,6 +89,7 @@ pub struct MockThresholdSignature<K, P> {
 	pub signed_payload: P,
 }
 
+#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[derive(
 	Copy,
 	Clone,
@@ -102,33 +105,6 @@ pub struct MockThresholdSignature<K, P> {
 	PartialOrd,
 )]
 pub struct MockAggKey(pub [u8; 4]);
-
-impl TryFrom<PublicKeyBytes> for MockAggKey {
-	type Error = ();
-
-	fn try_from(public_key_bytes: PublicKeyBytes) -> Result<Self, Self::Error> {
-		if public_key_bytes.len() != 4 {
-			return Err(())
-		}
-		let mut key = [0u8; 4];
-		key.copy_from_slice(&public_key_bytes);
-		Ok(MockAggKey(key))
-	}
-}
-
-impl From<MockAggKey> for PublicKeyBytes {
-	fn from(val: MockAggKey) -> Self {
-		val.0.to_vec()
-	}
-}
-
-impl TryFrom<KeyId> for MockAggKey {
-	type Error = ();
-
-	fn try_from(key_id: KeyId) -> Result<Self, Self::Error> {
-		Ok(MockAggKey(key_id.public_key_bytes.try_into().map_err(|_| ())?))
-	}
-}
 
 impl ChainCrypto for MockEthereum {
 	type AggKey = MockAggKey;
@@ -147,10 +123,6 @@ impl ChainCrypto for MockEthereum {
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
 		agg_key.0
-	}
-
-	fn agg_key_to_key_id(agg_key: Self::AggKey, epoch_index: EpochIndex) -> KeyId {
-		KeyId { epoch_index, public_key_bytes: agg_key.0.to_vec() }
 	}
 }
 

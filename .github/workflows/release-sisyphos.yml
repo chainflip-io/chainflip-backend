@@ -4,7 +4,7 @@ on:
     branches:
       - 'release/*'
 concurrency:
-  group: ${{ github.ref }}-release-development
+  group: ${{ github.ref }}-release-sisyphos
   cancel-in-progress: true
 
 jobs:
