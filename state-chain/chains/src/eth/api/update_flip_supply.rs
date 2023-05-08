@@ -82,11 +82,11 @@ impl UpdateFlipSupply {
 	}
 
 	fn abi_encoded_for_payload(new_total_supply: Uint, state_chain_block_number: Uint) -> Vec<u8> {
-		Self::get_function()
-			.short_signature()
-			.into_iter()
-			.chain(encode(&[new_total_supply.tokenize(), state_chain_block_number.tokenize()]))
-			.collect()
+		encode(&[
+			Token::FixedBytes(Self::get_function().short_signature().to_vec()),
+			new_total_supply.tokenize(),
+			state_chain_block_number.tokenize(),
+		])
 	}
 }
 

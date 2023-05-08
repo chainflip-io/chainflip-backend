@@ -6,7 +6,7 @@ use crate::{
 };
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use ethabi::{encode, ParamType};
+use ethabi::{encode, ParamType, Token};
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
 use sp_std::{prelude::*, vec};
@@ -77,11 +77,10 @@ impl SetAggKeyWithAggKey {
 	}
 
 	fn abi_encoded_for_payload(new_key: AggKey) -> Vec<u8> {
-		Self::get_function()
-			.short_signature()
-			.into_iter()
-			.chain(encode(&[new_key.tokenize()]))
-			.collect()
+		encode(&[
+			Token::FixedBytes(Self::get_function().short_signature().to_vec()),
+			new_key.tokenize(),
+		])
 	}
 }
 
@@ -93,7 +92,6 @@ mod test_set_agg_key_with_agg_key {
 
 	use super::*;
 	use frame_support::assert_ok;
-	use sp_runtime::traits::{Hash, Keccak256};
 
 	#[test]
 	// There have been obtuse test failures due to the loading of the contract failing
@@ -106,30 +104,17 @@ mod test_set_agg_key_with_agg_key {
 
 	#[test]
 	fn test_known_payload() {
-		// 000e3ae1 - function selector
-		// 0000000000000000000000005fbdb2315678afecb367f032d93f642f64180aa3 - keyManager
-		// 0000000000000000000000000000000000000000000000000000000000007a69 - chainId
-		// 0000000000000000000000000000000000000000000000000000000000000000 - msgHash
-		// 0000000000000000000000000000000000000000000000000000000000000000 - sig
-		// 000000000000000000000000000000000000000000000000000000000000000f - nonce
-		// 0000000000000000000000000000000000000000000000000000000000000000 - k*g
-		// 1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d - newKeyX
-		// 0000000000000000000000000000000000000000000000000000000000000001 - newKeyYParity
-		let expected_payload = Keccak256::hash(
-			hex_literal::hex!(
-				"000e3ae10000000000000000000000005fbdb2315678afecb367f032d93f642f64180aa30000000000000000000000000000000000000000000000000000000000007a6900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000f00000000000000000000000000000000000000000000000000000000000000001742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d0000000000000000000000000000000000000000000000000000000000000001"
-			)
-			.as_ref(),
-		);
+		let expected_payload =
+			hex_literal::hex!("d45a181d77a4e10810b033734a611885d85848663b98f372f5d279309b3da0b5")
+				.into();
 		let call = SetAggKeyWithAggKey::new_unsigned(
-			EthereumReplayProtection { nonce: 15 },
+			EthereumReplayProtection { nonce: 0 },
 			AggKey::from_pubkey_compressed(hex_literal::hex!(
-				"03 1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d"
+				"01 1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d"
 			)),
-			hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3").into(),
+			hex_literal::hex!("A44B9f3F5Bb8C278c1ee85D8F32517c6EFa64B0D").into(),
 			31337,
 		);
-
 		assert_eq!(call.threshold_signature_payload(), expected_payload);
 	}
 

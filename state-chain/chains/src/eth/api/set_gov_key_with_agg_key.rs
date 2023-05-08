@@ -3,7 +3,7 @@ use crate::{
 	impl_api_call_eth, ApiCall, ChainCrypto,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use ethabi::{encode, Address, ParamType};
+use ethabi::{encode, Address, ParamType, Token};
 use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
@@ -68,11 +68,10 @@ impl SetGovKeyWithAggKey {
 	}
 
 	fn abi_encoded_for_payload(new_gov_key: Address) -> Vec<u8> {
-		Self::get_function()
-			.short_signature()
-			.into_iter()
-			.chain(encode(&[new_gov_key.tokenize()]))
-			.collect()
+		encode(&[
+			Token::FixedBytes(Self::get_function().short_signature().to_vec()),
+			new_gov_key.tokenize(),
+		])
 	}
 }
 

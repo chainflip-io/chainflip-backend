@@ -166,15 +166,12 @@ impl AllBatch {
 		fetch_params: Vec<EncodableFetchAssetParams>,
 		transfer_params: Vec<EncodableTransferAssetParams>,
 	) -> Vec<u8> {
-		Self::get_function()
-			.short_signature()
-			.into_iter()
-			.chain(encode(&[
-				fetch_deploy_params.tokenize(),
-				fetch_params.tokenize(),
-				transfer_params.tokenize(),
-			]))
-			.collect()
+		encode(&[
+			Token::FixedBytes(Self::get_function().short_signature().to_vec()),
+			fetch_deploy_params.tokenize(),
+			fetch_params.tokenize(),
+			transfer_params.tokenize(),
+		])
 	}
 }
 

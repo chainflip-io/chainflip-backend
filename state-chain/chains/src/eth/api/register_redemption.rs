@@ -105,16 +105,13 @@ impl RegisterRedemption {
 		address: &[u8; 20],
 		expiry: u64,
 	) -> Vec<u8> {
-		Self::get_function()
-			.short_signature()
-			.into_iter()
-			.chain(encode(&[
-				Token::FixedBytes(node_id.to_vec()),
-				Token::Uint(amount),
-				Token::Address(address.into()),
-				Token::Uint(expiry.into()),
-			]))
-			.collect()
+		encode(&[
+			Token::FixedBytes(Self::get_function().short_signature().to_vec()),
+			Token::FixedBytes(node_id.to_vec()),
+			Token::Uint(amount),
+			Token::Address(address.into()),
+			Token::Uint(expiry.into()),
+		])
 	}
 }
 

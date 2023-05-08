@@ -156,16 +156,13 @@ impl ExecutexSwapAndCall {
 			.tokenize()
 			.into_tuple()
 			.expect("The ForeignChainAddress should always return a Tuple(vec![Chain, Address])");
-		Self::get_function()
-			.short_signature()
-			.into_iter()
-			.chain(encode(&[
-				transfer_param.tokenize(),
-				tokenized_address[0].clone(),
-				tokenized_address[1].clone(),
-				Token::Bytes(message),
-			]))
-			.collect()
+		encode(&[
+			Token::FixedBytes(Self::get_function().short_signature().to_vec()),
+			transfer_param.tokenize(),
+			tokenized_address[0].clone(),
+			tokenized_address[1].clone(),
+			Token::Bytes(message),
+		])
 	}
 }
 
