@@ -325,15 +325,6 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 		Self::new_unauthorised(tokio::sync::mpsc::unbounded_channel().0)
 	}
 
-	pub fn new_authorised(stage: DynStage<Ceremony>) -> Self {
-		CeremonyRunner {
-			stage: Some(stage),
-			delayed_messages: Default::default(),
-			timeout_handle: Box::pin(tokio::time::sleep(MAX_STAGE_DURATION)),
-			outcome_sender: tokio::sync::mpsc::unbounded_channel().0,
-		}
-	}
-
 	fn get_awaited_parties_count(&self) -> Option<AuthorityCount> {
 		self.stage.as_ref().map(|stage| stage.awaited_parties().len() as AuthorityCount)
 	}

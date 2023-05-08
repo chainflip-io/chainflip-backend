@@ -1,7 +1,6 @@
 use std::{
-	collections::{BTreeMap, BTreeSet, HashMap},
+	collections::{BTreeSet, HashMap},
 	fmt::Display,
-	sync::Arc,
 	time::Duration,
 };
 
@@ -28,9 +27,9 @@ use crate::{
 			KeygenCeremony, SigningCeremony,
 		},
 		ceremony_runner::CeremonyRunner,
-		common::{broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason},
-		keygen::{generate_key_data, HashComm1, HashContext, VerifyHashCommitmentsBroadcast2},
-		signing, KeygenResultInfo, PartyIdxMapping,
+		common::CeremonyFailureReason,
+		keygen::{generate_key_data, HashComm1, HashContext},
+		signing, KeygenResultInfo,
 	},
 	crypto::{ECPoint, Rng},
 	CryptoScheme,
@@ -592,7 +591,7 @@ pub(crate) use run_stages;
 use super::{
 	ceremony_manager::{deserialize_for_version, prepare_key_handover_request},
 	common::ResharingContext,
-	keygen::{KeygenCommon, SharingParameters},
+	keygen::SharingParameters,
 	signing::Comm1,
 	ThresholdParameters,
 };
@@ -858,32 +857,4 @@ pub fn gen_junk_signing_comm1(rng: &mut Rng, number_of_commitments: u64) -> Comm
 			.map(|_| SigningCommitment { d: Point::random(rng), e: Point::random(rng) })
 			.collect(),
 	)
-}
-
-pub fn gen_junk_keygen_stage_2_state<P: ECPoint>(
-	ceremony_id: CeremonyId,
-	account_ids: BTreeSet<AccountId>,
-	mut rng: Rng,
-) -> CeremonyRunner<KeygenCeremony<EthSigning>> {
-	let validator_mapping = Arc::new(PartyIdxMapping::from_participants(account_ids.clone()));
-	let common = CeremonyCommon {
-		ceremony_id,
-		own_idx: 0,
-		all_idxs: BTreeSet::from_iter((0..account_ids.len()).into_iter().map(|idx| idx as u32)),
-		outgoing_p2p_message_sender: tokio::sync::mpsc::unbounded_channel().0,
-		validator_mapping,
-		rng: rng.clone(),
-	};
-
-	let commitment = gen_junk_keygen_comm1(&mut rng, account_ids.len() as u32);
-	let processor = VerifyHashCommitmentsBroadcast2::new(
-		KeygenCommon::new(common.clone(), HashContext([0; 32]), None),
-		commitment,
-		account_ids.iter().map(|_| (0, None)).collect(),
-		keygen::OutgoingShares(BTreeMap::new()),
-	);
-
-	let stage = Box::new(BroadcastStage::new(processor, common));
-
-	CeremonyRunner::new_authorised(stage)
 }

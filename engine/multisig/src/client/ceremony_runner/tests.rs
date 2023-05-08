@@ -3,10 +3,7 @@ use crate::{
 		ceremony_manager::{prepare_signing_request, KeygenCeremony, SigningCeremony},
 		common::SigningStageName,
 		gen_keygen_data_verify_hash_comm2, get_key_data_for_test,
-		helpers::{
-			gen_junk_keygen_stage_2_state, ACCOUNT_IDS, CEREMONY_TIMEOUT_DURATION,
-			DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
-		},
+		helpers::{ACCOUNT_IDS, CEREMONY_TIMEOUT_DURATION, DEFAULT_SIGNING_SEED},
 		signing::{
 			gen_signing_data_stage1, gen_signing_data_stage2, gen_signing_data_stage4, SigningData,
 		},
@@ -52,32 +49,28 @@ fn spawn_signing_ceremony_runner(
 
 #[tokio::test]
 async fn should_ignore_stage_data_with_incorrect_size() {
-	let rng = Rng::from_seed(DEFAULT_KEYGEN_SEED);
-	let num_of_participants = ACCOUNT_IDS.len() as u32;
-
-	// This test only works on message stage data that can have incorrect size (ie. not first
-	// stage), so we must create a stage 2 state and add it to the ceremony managers keygen states,
-	// allowing us to process a stage 2 message.
-	let mut stage_2_state = gen_junk_keygen_stage_2_state::<<EthSigning as CryptoScheme>::Point>(
-		DEFAULT_CEREMONY_ID,
+	// Make an Ethereum signing ceremony that is authorised.
+	// Note: a Bitcoin signing ceremony will not work for this test because they have no size limit
+	// on stage 1 messages
+	let (mut stage_1_state, _) = gen_stage_1_signing_state(
+		ACCOUNT_IDS[0].clone(),
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
-		rng,
-	);
+	)
+	.await;
 
-	// Built a stage 2 message that has the incorrect number of elements
-	let stage_2_data = gen_keygen_data_verify_hash_comm2(num_of_participants + 1);
+	// Built a stage 1 message that has the incorrect number of elements (more then 1)
+	let stage_1_data = gen_signing_data_stage1(2);
 
-	// Process the bad message and it should get rejected
+	// Process the bad message and it should get ignored
 	assert_eq!(
-		stage_2_state
-			.process_or_delay_message(ACCOUNT_IDS[0].clone(), stage_2_data)
+		stage_1_state
+			.process_or_delay_message(ACCOUNT_IDS[0].clone(), stage_1_data)
 			.await,
 		None
 	);
 
-	// Check that the bad message was ignored, so the stage is still awaiting all
-	// num_of_participants messages.
-	assert_eq!(stage_2_state.get_awaited_parties_count(), Some(num_of_participants));
+	// Check that the stage is still awaiting all messages except our own.
+	assert_eq!(stage_1_state.get_awaited_parties_count(), Some(ACCOUNT_IDS.len() as u32 - 1));
 }
 
 #[tokio::test]
@@ -199,7 +192,7 @@ async fn ensure_message_is_ignored(
 	assert_eq!(state.get_awaited_parties_count(), awaited_parties_before_message);
 }
 
-/// Create a ceremony runner and process a signing request
+/// Create an Ethereum ceremony runner and process a signing request
 async fn gen_stage_1_signing_state(
 	our_account_id: AccountId,
 	participants: BTreeSet<AccountId>,
