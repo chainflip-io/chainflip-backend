@@ -116,7 +116,7 @@
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "oldMinStake",
+        "name": "oldMinFunding",
         "type": "uint256"
       },
       {

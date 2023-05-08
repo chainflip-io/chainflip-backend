@@ -232,7 +232,7 @@ impl EthContractWitnesser for StateChainGateway {
 				} else if event_signature == min_funding_changed.signature {
 					let log = min_funding_changed.event.parse_log(raw_log)?;
 					StateChainGatewayEvent::MinFundingChanged {
-						old_min_funding: decode_log_param(&log, "oldMinStake")?,
+						old_min_funding: decode_log_param(&log, "oldMinFunding")?,
 						new_min_funding: decode_log_param(&log, "newMinFunding")?,
 					}
 				} else if event_signature == gov_withdrawal.signature {
