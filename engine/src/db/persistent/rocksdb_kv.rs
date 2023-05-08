@@ -49,8 +49,15 @@ impl RocksDBKeyValueStore {
 		Ok(RocksDBKeyValueStore { db })
 	}
 
-	pub fn put_data<T: Serialize>(&self, prefix: &[u8], key: &[u8], value: &T) -> Result<()> {
-		let key_with_prefix = [prefix, key].concat();
+	pub fn put_data<T: Serialize, K: Serialize>(
+		&self,
+		prefix: &[u8],
+		key: &K,
+		value: &T,
+	) -> Result<()> {
+		let key_with_prefix =
+			[prefix, &bincode::serialize(key).expect("Serialization is not expected to fail.")]
+				.concat();
 		self.db
 			.put_cf(
 				get_data_column_handle(&self.db),
@@ -73,14 +80,20 @@ impl RocksDBKeyValueStore {
 			.transpose()
 	}
 
-	pub fn get_data_for_prefix<'a>(
+	pub fn get_data_for_prefix<'a, K: DeserializeOwned, V: DeserializeOwned>(
 		&'a self,
 		prefix: &[u8],
-	) -> impl Iterator<Item = (Vec<u8>, Box<[u8]>)> + 'a {
+	) -> impl Iterator<Item = (K, V)> + 'a {
 		self.db
 			.prefix_iterator_cf(get_data_column_handle(&self.db), prefix)
 			.map(|result| result.expect("prefix iterator should not fail"))
 			.map(|(key, value)| (Vec::from(&key[PREFIX_SIZE..]), value))
+			.map(|(key, value)| {
+				(
+					bincode::deserialize(&key).expect("Deserialization is not expected to fail"),
+					bincode::deserialize(&value).expect("Deserialization is not expected to fail"),
+				)
+			})
 	}
 
 	pub fn put_metadata<V>(&self, key: &[u8], value: V) -> Result<()>

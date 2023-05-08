@@ -1,7 +1,7 @@
-use anyhow::Context;
 use cf_primitives::EpochIndex;
+use serde::{Deserialize, Serialize};
 
-#[derive(PartialEq, Eq, Hash, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct KeyId {
 	epoch_index: EpochIndex,
 	public_key_bytes: Vec<u8>,
@@ -42,28 +42,6 @@ impl<const S: usize> CanonicalEncoding for [u8; S] {
 	}
 }
 
-// TODO: remove this. Instead, we should impl/derive `Serialize` and `Deserialize` (and arguably use
-// a an abstract PublicKey instead of raw bytes).
-impl KeyId {
-	pub fn to_bytes(&self) -> Vec<u8> {
-		let mut bytes = Vec::new();
-		bytes.extend_from_slice(&self.epoch_index.to_be_bytes());
-		bytes.extend_from_slice(&self.public_key_bytes);
-		bytes
-	}
-
-	pub fn try_from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
-		const S: usize = core::mem::size_of::<EpochIndex>();
-		let epoch_index = EpochIndex::from_be_bytes(
-			bytes[..S]
-				.try_into()
-				.context("Byte array provided is less than EpochIndex (u32) in size.")?,
-		);
-		let public_key_bytes = bytes[S..].to_vec();
-		Ok(Self { epoch_index, public_key_bytes })
-	}
-}
-
 impl core::fmt::Display for KeyId {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
 		#[cfg(feature = "std")]
@@ -91,19 +69,6 @@ mod test_super {
 	use super::*;
 
 	#[test]
-	fn key_id_encoding_is_symmetric() {
-		let key_ids = [
-			KeyId { epoch_index: 0, public_key_bytes: vec![] },
-			KeyId { epoch_index: 1, public_key_bytes: vec![1, 2, 3] },
-			KeyId { epoch_index: 22, public_key_bytes: vec![0xa, 93, 145, u8::MAX, 0] },
-		];
-
-		for key_id in key_ids {
-			assert_eq!(key_id, KeyId::try_from_bytes(&key_id.to_bytes()).unwrap());
-		}
-	}
-
-	#[test]
 	fn key_id_encoding_is_stable() {
 		let key_id = KeyId {
 			epoch_index: 29,
@@ -128,9 +93,11 @@ mod test_super {
 		};
 		// We check this because if this form changes then there will be an impact to how keys
 		// should be loaded from the db on the CFE. Thus, we want to be notified if this changes.
-		let expected_bytes =
-			vec![0, 0, 0, 29, 10, 93, 141, 255, 0, 82, 2, 39, 144, 241, 29, 91, 3, 241, 120, 194];
-		assert_eq!(expected_bytes, key_id.to_bytes());
-		assert_eq!(key_id, KeyId::try_from_bytes(&expected_bytes).unwrap());
+		let expected_bytes = vec![
+			29, 0, 0, 0, 16, 0, 0, 0, 0, 0, 0, 0, 10, 93, 141, 255, 0, 82, 2, 39, 144, 241, 29, 91,
+			3, 241, 120, 194,
+		];
+		assert_eq!(expected_bytes, bincode::serialize(&key_id).unwrap());
+		assert_eq!(key_id, bincode::deserialize::<KeyId>(&expected_bytes).unwrap());
 	}
 }
