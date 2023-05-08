@@ -116,7 +116,8 @@ impl PersistentKeyDB {
 			.get_data_for_prefix(&keygen_data_prefix::<C>())
 			.map(|(key_id, key_bytes)| {
 				(
-					KeyId::from_bytes(&key_id),
+					KeyId::try_from_bytes(&key_id)
+						.expect("Keys we have stored in the database should be valid."),
 					bincode::deserialize(&key_bytes).unwrap_or_else(|e| {
 						panic!("Failed to deserialize {} key from database: {}", C::NAME, e)
 					}),

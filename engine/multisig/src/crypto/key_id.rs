@@ -1,3 +1,4 @@
+use anyhow::Context;
 use cf_primitives::EpochIndex;
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone)]
@@ -51,11 +52,15 @@ impl KeyId {
 		bytes
 	}
 
-	pub fn from_bytes(bytes: &[u8]) -> Self {
+	pub fn try_from_bytes(bytes: &[u8]) -> anyhow::Result<Self> {
 		const S: usize = core::mem::size_of::<EpochIndex>();
-		let epoch_index = EpochIndex::from_be_bytes(bytes[..S].try_into().unwrap());
+		let epoch_index = EpochIndex::from_be_bytes(
+			bytes[..S]
+				.try_into()
+				.context("Byte array provided is less than EpochIndex (u32) in size.")?,
+		);
 		let public_key_bytes = bytes[S..].to_vec();
-		Self { epoch_index, public_key_bytes }
+		Ok(Self { epoch_index, public_key_bytes })
 	}
 }
 
@@ -94,7 +99,7 @@ mod test_super {
 		];
 
 		for key_id in key_ids {
-			assert_eq!(key_id, KeyId::from_bytes(&key_id.to_bytes()));
+			assert_eq!(key_id, KeyId::try_from_bytes(&key_id.to_bytes()).unwrap());
 		}
 	}
 
@@ -126,6 +131,6 @@ mod test_super {
 		let expected_bytes =
 			vec![0, 0, 0, 29, 10, 93, 141, 255, 0, 82, 2, 39, 144, 241, 29, 91, 3, 241, 120, 194];
 		assert_eq!(expected_bytes, key_id.to_bytes());
-		assert_eq!(key_id, KeyId::from_bytes(&expected_bytes));
+		assert_eq!(key_id, KeyId::try_from_bytes(&expected_bytes).unwrap());
 	}
 }
