@@ -126,7 +126,7 @@ mod tests {
 
 	use crate::{
 		bitcoin::BtcSigning,
-		client::helpers::{gen_junk_local_sig, gen_junk_signing_comm1},
+		client::helpers::{gen_dummy_local_sig, gen_dummy_signing_comm1},
 		crypto::eth::Point,
 		eth::EthSigning,
 		polkadot::PolkadotSigning,
@@ -139,14 +139,14 @@ mod tests {
 
 	pub fn gen_signing_data_stage1(number_of_commitments: u64) -> SigningData<Point> {
 		let mut rng = Rng::from_seed([0; 32]);
-		SigningData::<Point>::CommStage1(gen_junk_signing_comm1(&mut rng, number_of_commitments))
+		SigningData::<Point>::CommStage1(gen_dummy_signing_comm1(&mut rng, number_of_commitments))
 	}
 
 	pub fn gen_signing_data_stage2(participant_count: AuthorityCount) -> SigningData<Point> {
 		let mut rng = Rng::from_seed([0; 32]);
 		SigningData::<Point>::BroadcastVerificationStage2(BroadcastVerificationMessage {
 			data: (1..=participant_count)
-				.map(|i| (i as AuthorityCount, Some(gen_junk_signing_comm1(&mut rng, 1))))
+				.map(|i| (i as AuthorityCount, Some(gen_dummy_signing_comm1(&mut rng, 1))))
 				.collect(),
 		})
 	}
@@ -155,7 +155,7 @@ mod tests {
 		let mut rng = Rng::from_seed([0; 32]);
 		SigningData::<Point>::VerifyLocalSigsStage4(BroadcastVerificationMessage {
 			data: (1..=participant_count)
-				.map(|i| (i as AuthorityCount, Some(gen_junk_local_sig(&mut rng))))
+				.map(|i| (i as AuthorityCount, Some(gen_dummy_local_sig(&mut rng))))
 				.collect(),
 		})
 	}
@@ -208,7 +208,7 @@ mod tests {
 		let stage_data = [
 			gen_signing_data_stage1(default_length as u64),
 			gen_signing_data_stage2(default_length),
-			SigningData::<Point>::LocalSigStage3(gen_junk_local_sig(&mut rng)),
+			SigningData::<Point>::LocalSigStage3(gen_dummy_local_sig(&mut rng)),
 			gen_signing_data_stage4(default_length),
 		];
 

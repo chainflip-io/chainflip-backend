@@ -58,7 +58,7 @@ async fn should_ignore_stage_data_with_incorrect_size() {
 	)
 	.await;
 
-	// Built a stage 1 message that has the incorrect number of elements (more then 1)
+	// Build a stage 1 message that has the incorrect number of elements (more than 1)
 	let stage_1_data = gen_signing_data_stage1(2);
 
 	// Process the bad message and it should get ignored
