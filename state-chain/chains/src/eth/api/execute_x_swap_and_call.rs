@@ -1,6 +1,6 @@
 use cf_primitives::{EgressId, ForeignChain};
 use codec::{Decode, Encode};
-use ethabi::{Address, ParamType, Token, Uint};
+use ethabi::{ParamType, Token, Uint};
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 
@@ -18,6 +18,16 @@ impl Tokenizable for Vec<u8> {
 
 	fn param_type() -> ethabi::ParamType {
 		ParamType::Bytes
+	}
+}
+
+impl Tokenizable for u32 {
+	fn tokenize(self) -> Token {
+		Token::Uint(self.into())
+	}
+
+	fn param_type() -> ethabi::ParamType {
+		ParamType::Uint(32)
 	}
 }
 
@@ -61,8 +71,10 @@ pub struct ExecutexSwapAndCall {
 	egress_id: EgressId,
 	/// A single transfer that need to be made to given addresses.
 	transfer_param: EncodableTransferAssetParams,
-	/// The source of the transfer
-	source_address: ForeignChainAddress,
+	/// The source chain of the transfer.
+	source_chain: Uint,
+	/// The source address of the transfer.
+	source_address: Vec<u8>,
 	/// Message that needs to be passed through.
 	message: Vec<u8>,
 }
@@ -75,7 +87,21 @@ impl ExecutexSwapAndCall {
 		source_address: ForeignChainAddress,
 		message: Vec<u8>,
 	) -> Self {
-		Self { egress_id, transfer_param, source_address, message }
+		let (source_chain, source_address) = match source_address {
+			ForeignChainAddress::Eth(source_address) =>
+				(ForeignChain::Ethereum as u32, source_address.to_vec()),
+			ForeignChainAddress::Dot(source_address) =>
+				(ForeignChain::Polkadot as u32, source_address.to_vec()),
+			ForeignChainAddress::Btc(script) =>
+				(ForeignChain::Bitcoin as u32, script.data.to_vec()),
+		};
+		Self {
+			egress_id,
+			transfer_param,
+			source_chain: source_chain.into(),
+			source_address,
+			message,
+		}
 	}
 
 	pub fn egress_id(&self) -> EgressId {
@@ -88,16 +114,9 @@ impl EthereumCall for ExecutexSwapAndCall {
 
 	fn function_params() -> Vec<(&'static str, ethabi::ParamType)> {
 		vec![
-			(
-				"transferParams",
-				ParamType::Tuple(vec![
-					Address::param_type(),
-					Address::param_type(),
-					Uint::param_type(),
-				]),
-			),
-			("srcChain", ParamType::Uint(32)),
-			("srcAddress", ParamType::Bytes),
+			("transferParams", EncodableTransferAssetParams::param_type()),
+			("srcChain", u32::param_type()),
+			("srcAddress", <Vec<u8>>::param_type()),
 			("message", <Vec<u8>>::param_type()),
 		]
 	}
@@ -105,6 +124,7 @@ impl EthereumCall for ExecutexSwapAndCall {
 	fn function_call_args(&self) -> Vec<Token> {
 		vec![
 			self.transfer_param.clone().tokenize(),
+			self.source_chain.tokenize(),
 			self.source_address.clone().tokenize(),
 			self.message.clone().tokenize(),
 		]
@@ -166,13 +186,6 @@ mod test_execute_x_swap_and_execute {
 
 		let function_reference = eth_vault.function("executexSwapAndCall").unwrap();
 
-		let call = ExecutexSwapAndCall::new(
-			(ForeignChain::Ethereum, 0),
-			dummy_transfer_asset_param.clone(),
-			dummy_src_address,
-			dummy_message.clone(),
-		);
-		let expected_msg_hash = call.msg_hash();
 		let function_runtime = EthereumTransactionBuilder::new_unsigned(
 			EthereumReplayProtection {
 				nonce: NONCE,
@@ -180,10 +193,15 @@ mod test_execute_x_swap_and_execute {
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),
 				contract_address: FAKE_VAULT_ADDR.into(),
 			},
-			call,
+			ExecutexSwapAndCall::new(
+				(ForeignChain::Ethereum, 0),
+				dummy_transfer_asset_param.clone(),
+				dummy_src_address,
+				dummy_message.clone(),
+			),
 		);
 
-		assert_eq!(function_runtime.threshold_signature_payload(), expected_msg_hash);
+		let expected_msg_hash = function_runtime.threshold_signature_payload();
 		let runtime_payload = function_runtime
 			.clone()
 			.signed(&SchnorrVerificationComponents {
