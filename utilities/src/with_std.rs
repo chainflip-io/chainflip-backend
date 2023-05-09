@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use core::{fmt, time::Duration};
-use futures::{stream, FutureExt, Stream};
+use futures::{stream, Stream};
 #[doc(hidden)]
 pub use lazy_format::lazy_format as internal_lazy_format;
 use std::path::PathBuf;

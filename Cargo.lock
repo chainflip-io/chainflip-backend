@@ -10852,7 +10852,6 @@ dependencies = [
  "pin-project",
  "predicates",
  "serde",
- "serde_json",
  "tempfile",
  "tokio",
  "tracing",
