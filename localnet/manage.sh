@@ -141,6 +141,8 @@ build-localnet-in-ci() {
 destroy() {
   echo "💣 Destroying network"
   docker compose -f localnet/docker-compose.yml down --remove-orphans
+  kill -9 $(cat /tmp/chainflip/chainflip-node.pid) || true
+  kill -9 $(cat /tmp/chainflip/chainflip-engine.pid) || true
   rm -rf /tmp/chainflip
 }
 
