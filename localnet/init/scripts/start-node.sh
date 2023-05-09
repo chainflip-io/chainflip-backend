@@ -18,5 +18,3 @@ $binary_location/chainflip-node --chain=dev \
   --blocks-pruning=archive \
   --state-pruning=archive \
   --state-cache-size=0 > /tmp/chainflip/chainflip-node.log 2>&1 &
-
-echo $! > /tmp/chainflip/chainflip-node.pid
