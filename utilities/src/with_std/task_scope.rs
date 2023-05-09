@@ -11,15 +11,16 @@
 //!
 //! When you create a scope, you must provide a top level task/"async closure", which is passed a
 //! handle via which you can spawn further tasks which run asychronously.
-//! The scope will not exit/return until all the tasks have completed. Iff any of the scope's tasks
-//! panic or return an error, the scope will cancel all remaining tasks, and end by respectively
-//! panicking or returning the error.
+//! The scope will not exit/return until all the tasks have completed or been cancelled. Iff any of
+//! the scope's tasks panic or return an error, the scope will cancel all remaining tasks, and end
+//! by respectively panicking or returning the error.
 //!
 //! For the public functions in this module, if they are used unsafely the code will not compile.
 //!
 //! # Usage
 //!
-//! `scope.spawn()` should be used instead of `tokio::spawn()`.
+//! `scope.spawn()/scope.spawn_weak()/scope.spawn_with_handle()` should be used instead of
+//! `tokio::spawn()`.
 //!
 //! `scope.spawn_blocking()` (To be added) should be used instead of `tokio::spawn_blocking()`
 //! unless you are running an operation that is guaranteed to exit after a finite period and you are
@@ -146,10 +147,28 @@ pub async fn task_scope<
 
 type TaskFuture<Error> = Pin<Box<dyn 'static + Future<Output = Result<(), Error>> + Send>>;
 
+#[derive(Clone, Copy)]
+struct TaskProperties {
+	strong: bool,
+}
+#[pin_project::pin_project]
+struct TaskWrapper<Task> {
+	#[pin]
+	future: Task,
+	properties: TaskProperties,
+}
+impl<Task: Future + Unpin + 'static> Future for TaskWrapper<Task> {
+	type Output = (TaskProperties, Task::Output);
+
+	fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+		Pin::new(&mut self.future).poll(cx).map(|output| (self.properties, output))
+	}
+}
+
 /// An object used to spawn tasks into the associated scope
 #[derive(Clone)]
 pub struct Scope<'env, Error: Send + 'static> {
-	sender: async_channel::Sender<TaskFuture<Error>>,
+	sender: async_channel::Sender<(TaskProperties, TaskFuture<Error>)>,
 	/// Invariance over 'env, to make sure 'env cannot shrink,
 	/// which is necessary for soundness.
 	///
@@ -181,6 +200,7 @@ impl<'env, Error: Send + 'static> Scope<'env, Error> {
 			ScopeResultStream {
 				receiver: Some(receiver),
 				no_more_tasks: false,
+				strong_tasks: 0,
 				tasks: match runtime_handle.runtime_flavor() {
 					tokio::runtime::RuntimeFlavor::CurrentThread =>
 						ScopedTasks::CurrentThread(Default::default()),
@@ -195,15 +215,31 @@ impl<'env, Error: Send + 'static> Scope<'env, Error> {
 		)
 	}
 
-	pub fn spawn<F: 'env + Future<Output = Result<(), Error>> + Send>(&self, f: F) {
+	fn inner_spawn<F: 'env + Future<Output = Result<(), Error>> + Send>(
+		&self,
+		properties: TaskProperties,
+		f: F,
+	) {
 		let _result = self.sender.try_send({
 			let future: Pin<Box<dyn 'env + Future<Output = Result<(), Error>> + Send>> =
 				Box::pin(f);
 			let future: TaskFuture<Error> = unsafe { std::mem::transmute(future) };
-			future
+			(properties, future)
 		});
 	}
 
+	/// Spawns a task that the scope will wait for before exiting.
+	pub fn spawn<F: 'env + Future<Output = Result<(), Error>> + Send>(&self, f: F) {
+		self.inner_spawn(TaskProperties { strong: true }, f)
+	}
+
+	/// Spawns a task that the scope will not wait for before exiting.
+	pub fn spawn_weak<F: 'env + Future<Output = Result<(), Error>> + Send>(&self, f: F) {
+		self.inner_spawn(TaskProperties { strong: false }, f)
+	}
+
+	/// Spawns a task that the scope will wait for before exiting, and returns a handle that you can
+	/// receive the output of the task with.
 	pub fn spawn_with_handle<
 		T: Send + 'static,
 		F: 'env + Future<Output = Result<T, Error>> + Send,
@@ -275,16 +311,17 @@ impl<T> Future for ScopedJoinHandle<T> {
 }
 
 enum ScopedTasks<Error: Send + 'static> {
-	CurrentThread(FuturesUnordered<TaskFuture<Error>>),
+	CurrentThread(FuturesUnordered<TaskWrapper<TaskFuture<Error>>>),
 	MultiThread(
 		tokio::runtime::Handle,
-		FuturesUnordered<tokio::task::JoinHandle<Result<(), Error>>>,
+		FuturesUnordered<TaskWrapper<tokio::task::JoinHandle<Result<(), Error>>>>,
 	),
 }
 
 struct ScopeResultStream<Error: Send + 'static> {
-	receiver: Option<async_channel::Receiver<TaskFuture<Error>>>,
+	receiver: Option<async_channel::Receiver<(TaskProperties, TaskFuture<Error>)>>,
 	no_more_tasks: bool,
+	strong_tasks: usize,
 	tasks: ScopedTasks<Error>,
 }
 impl<Error: Send + 'static> Stream for ScopeResultStream<Error> {
@@ -293,12 +330,16 @@ impl<Error: Send + 'static> Stream for ScopeResultStream<Error> {
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
 		while !self.no_more_tasks {
 			match Pin::new(&mut self.as_mut().receiver.as_mut().unwrap()).poll_next(cx) {
-				Poll::Ready(Some(future)) => {
+				Poll::Ready(Some((properties, future))) => {
+					if properties.strong {
+						self.strong_tasks += 1;
+					}
 					let tasks = &mut self.tasks;
 					match tasks {
-						ScopedTasks::CurrentThread(tasks) => tasks.push(future),
+						ScopedTasks::CurrentThread(tasks) =>
+							tasks.push(TaskWrapper { future, properties }),
 						ScopedTasks::MultiThread(runtime, tasks) =>
-							tasks.push(runtime.spawn(future)),
+							tasks.push(TaskWrapper { future: runtime.spawn(future), properties }),
 					}
 				},
 				// Sender/`Scope` has been dropped
@@ -307,18 +348,28 @@ impl<Error: Send + 'static> Stream for ScopeResultStream<Error> {
 			}
 		}
 
-		match ready!(match &mut self.tasks {
-			ScopedTasks::CurrentThread(tasks) =>
-				Pin::new(tasks).poll_next(cx).map(|option| option.map(Ok)),
-			ScopedTasks::MultiThread(_, tasks) => Pin::new(tasks).poll_next(cx),
-		}) {
-			None =>
-				if self.no_more_tasks {
-					Poll::Ready(None) // End stream
-				} else {
-					Poll::Pending
+		if self.no_more_tasks && self.strong_tasks == 0 {
+			Poll::Ready(None)
+		} else {
+			match ready!(match &mut self.tasks {
+				ScopedTasks::CurrentThread(tasks) => Pin::new(tasks)
+					.poll_next(cx)
+					.map(|option| option.map(|(properties, result)| (properties, Ok(result)))),
+				ScopedTasks::MultiThread(_, tasks) => Pin::new(tasks).poll_next(cx),
+			}) {
+				None =>
+					if self.no_more_tasks {
+						Poll::Ready(None)
+					} else {
+						Poll::Pending
+					},
+				Some((properties, result)) => {
+					if properties.strong {
+						self.strong_tasks -= 1;
+					}
+					Poll::Ready(Some(result))
 				},
-			out => Poll::Ready(out),
+			}
 		}
 	}
 
@@ -355,7 +406,7 @@ impl<Error: Send + 'static> Drop for ScopeResultStream<Error> {
 			ScopedTasks::MultiThread(runtime, tasks) =>
 				if !tasks.is_empty() {
 					for task in tasks.iter() {
-						task.abort();
+						task.future.abort();
 					}
 					tokio::task::block_in_place(|| {
 						runtime.block_on(tasks.for_each(|_| async {}));

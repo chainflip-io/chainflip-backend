@@ -1,11 +1,12 @@
 use anyhow::anyhow;
 use core::{fmt, time::Duration};
-use futures::{stream, Stream};
+use futures::{stream, FutureExt, Stream};
 #[doc(hidden)]
 pub use lazy_format::lazy_format as internal_lazy_format;
 use std::path::PathBuf;
 #[doc(hidden)]
 pub use tokio::select as internal_tokio_select;
+use warp::{Filter, Reply};
 
 pub mod task_scope;
 
@@ -361,18 +362,76 @@ macro_rules! print_starting {
 
 /// Install global collector using json formatting and the RUST_LOG env var.
 /// If `RUST_LOG` is not set, then it will default to INFO log level.
-pub fn init_json_logger() {
+pub async fn init_json_logger(scope: &task_scope::Scope<'_, anyhow::Error>) {
 	use tracing::metadata::LevelFilter;
 	use tracing_subscriber::EnvFilter;
 
-	tracing_subscriber::fmt()
+	let builder = tracing_subscriber::fmt()
 		.json()
 		.with_env_filter(
 			EnvFilter::builder()
 				.with_default_directive(LevelFilter::INFO.into())
 				.from_env_lossy(),
 		)
-		.init();
+		.with_filter_reloading();
+
+	let handle = builder.reload_handle();
+
+	builder.init();
+
+	scope.spawn_weak(async move {
+		const PATH: &str = "tracing";
+
+		let change_filter = warp::post()
+			.and(warp::path(PATH))
+			.and(warp::path::end())
+			.and(warp::body::json())
+			.then({
+				let handle = handle.clone();
+				move |filter: String| {
+					futures::future::ready(
+						match EnvFilter::builder()
+							.with_default_directive(LevelFilter::INFO.into())
+							.parse(filter)
+						{
+							Ok(env_filter) => match handle.reload(env_filter) {
+								Ok(_) => warp::reply().into_response(),
+								Err(error) => warp::reply::with_status(
+									warp::reply::json(&error.to_string()),
+									warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+								)
+								.into_response(),
+							},
+							Err(error) => warp::reply::with_status(
+								warp::reply::json(&error.to_string()),
+								warp::http::StatusCode::BAD_REQUEST,
+							)
+							.into_response(),
+						},
+					)
+				}
+			});
+
+		let get_filter = warp::get().and(warp::path(PATH)).and(warp::path::end()).then(move || {
+			futures::future::ready(
+				match handle.with_current(|env_filter| {
+					warp::reply::with_status(
+						warp::reply::json(&env_filter.to_string()),
+						warp::http::StatusCode::OK,
+					)
+				}) {
+					Ok(reply) => reply.into_response(),
+					Err(_) => warp::http::StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+				},
+			)
+		});
+
+		warp::serve(change_filter.or(get_filter))
+			.run((std::net::Ipv4Addr::LOCALHOST, 36079))
+			.await;
+
+		Ok(())
+	});
 }
 
 // We use PathBuf because the value must be Sized, Path is not Sized
