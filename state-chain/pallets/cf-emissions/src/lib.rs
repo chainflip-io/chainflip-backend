@@ -2,10 +2,9 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{address::ForeignChainAddress, UpdateFlipSupply};
+use cf_chains::{address::ForeignChainAddress, EthEnvironmentProvider, UpdateFlipSupply};
 use cf_traits::{
-	BlockEmissions, Broadcaster, EgressApi, EthEnvironmentProvider, FlipBurnInfo, Issuance,
-	RewardsDistribution,
+	BlockEmissions, Broadcaster, EgressApi, FlipBurnInfo, Issuance, RewardsDistribution,
 };
 use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
@@ -176,7 +175,7 @@ pub mod pallet {
 						Asset::Flip,
 						flip_to_burn,
 						ForeignChainAddress::Eth(
-							T::EthEnvironmentProvider::state_chain_gateway_address(),
+							T::EthEnvironmentProvider::state_chain_gateway_address().into(),
 						),
 						None,
 					);
@@ -297,7 +296,7 @@ impl<T: Config> Pallet<T> {
 		T::Broadcaster::threshold_sign_and_broadcast(T::ApiCall::new_unsigned(
 			total_supply.unique_saturated_into(),
 			block_number.saturated_into(),
-			&T::EthEnvironmentProvider::state_chain_gateway_address(),
+			&T::EthEnvironmentProvider::state_chain_gateway_address().into(),
 		));
 	}
 }

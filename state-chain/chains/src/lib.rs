@@ -227,6 +227,14 @@ pub trait ChainEnvironment<
 	/// Attempt a lookup.
 	fn lookup(s: LookupKey) -> Option<LookupValue>;
 }
+/// Provides the environment data for ethereum-like chains.
+pub trait EthEnvironmentProvider {
+	fn token_address(asset: assets::eth::Asset) -> Option<eth::Address>;
+	fn key_manager_address() -> eth::Address;
+	fn state_chain_gateway_address() -> eth::Address;
+	fn vault_address() -> eth::Address;
+	fn chain_id() -> u64;
+}
 #[allow(clippy::result_unit_err)]
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
