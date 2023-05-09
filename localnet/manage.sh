@@ -51,7 +51,7 @@ setup() {
 get-workflow() {
   echo "❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3, 4, 5 or 6)"
   select WORKFLOW in build-localnet recreate destroy logs yeet bouncer; do
-    echo "You have chosen $WORKFLOW"
+    echo "You have chosen $WORKFLOW\n"
     break
   done
 }
@@ -133,7 +133,7 @@ build-localnet-in-ci() {
   check_endpoint_health -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933'
 
   ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
-  echo "🚗 Waiting for chainflip-engine to start"
+  echo "\n🚗 Waiting for chainflip-engine to start"
   check_endpoint_health 'http://localhost:5555/health'
 
 }
