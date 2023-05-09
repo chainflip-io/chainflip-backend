@@ -15,6 +15,7 @@ function check_endpoint_health() {
 
   if [ $retries -eq 0 ]; then
     echo "Maximum retries reached. Curl command failed."
+    exit 1
   fi
 }
 

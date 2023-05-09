@@ -609,7 +609,6 @@ mod tests {
 	}
 
 	#[test]
-	#[ignore = "to be fixed"]
 	fn test_sig_accepted_parsing() {
 		let key_manager = new_test_key_manager();
 		let decode_log = key_manager.decode_log_closure().unwrap();
@@ -622,7 +621,7 @@ mod tests {
             RawLog {
                 topics: vec![event_signature],
                 data: hex::decode(
-                    "000000000000000000000000e7f1725e7734ce288f8367e1bb143e90bb3f05120000000000000000000000000000000000000000000000000000000000007a69b918a2687d109fa0308fedb39f0dd091accd9edb80a9ddb2ccb1f0abaa6cfb64ed5ecfedaacc9bd0bcc5512e7fcf9650de5619acc0a747681f58d26f66468e7000000000000000000000000000000000000000000000000000000000000000030000000000000000000000007ceb2425ec324348ba69bd50205b11e29770fd96000000000000000000000000f39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+                    "915d5e738cc32564f0bdd1d0243c3e43568ee5c5f4705fd9af2c5ec1417ab2520000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b00275472775c87a3d1faa5cd3e1e320ef16617600000000000000000000000015d34aaf54267db7d7c367839aaf71a00a2c6a65",
                 )
                 .unwrap(),
             },
@@ -634,11 +633,11 @@ mod tests {
                 signer,
             } => {
                 assert_eq!(sig_data, SigData{
-                    sig: U256::from_dec_str("107365663807311708634605056423336732647043554150507905924516852373709157469808").unwrap(),
-                    nonce: U256::from_dec_str("3").unwrap(),
-                    k_times_g_address: H160::from_str("0x7ceb2425ec324348ba69bd50205b11e29770fd96").unwrap(),
+                    sig: U256::from_dec_str("65750331700972480363191035183360168818708331534574559329964306844771161911890").unwrap(),
+                    nonce: U256::from_dec_str("0").unwrap(),
+                    k_times_g_address: H160::from_str("0xb00275472775c87a3d1faa5cd3e1e320ef166176").unwrap(),
                 });
-                assert_eq!(signer, H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266").unwrap());
+                assert_eq!(signer, H160::from_str("0x15d34aaf54267db7d7c367839aaf71a00a2c6a65").unwrap());
             }
             _ => panic!("Expected KeyManagerEvent::SignatureAccepted, got different variant"),
         }
