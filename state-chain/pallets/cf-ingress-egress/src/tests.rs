@@ -814,3 +814,41 @@ fn multi_use_deposit_same_block() {
 			);
 		});
 }
+
+#[test]
+fn handle_pending_deployment() {
+	const ETH: eth::Asset = eth::Asset::Eth;
+	new_test_ext().execute_as_block(1, || {
+		// Initial request.
+		let (channel_id, deposit_address) = request_address_and_deposit(ALICE, eth::Asset::Eth);
+		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 1);
+		// Expect the address to be undeployed.
+		assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Undeployed);
+		// Process deposits.
+		IngressEgress::on_idle(1, Weight::from_ref_time(1_000_000_000_000u64));
+		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 0);
+		// Expect the address still to be pending.
+		assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Pending);
+		// Process deposit again the same address.
+		Pallet::<Test, _>::process_single_deposit(deposit_address, ETH, 1, Default::default())
+			.unwrap();
+		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 1);
+		// Expect the address still to be pending.
+		assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Pending);
+		// Process deposit again.
+		IngressEgress::on_idle(1, Weight::from_ref_time(1_000_000_000_000u64));
+		// The address should be still pending and the fetch request ignored.
+		assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Pending);
+		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 1);
+		// Now finalize the first fetch and deploy the address with that.
+		assert_ok!(IngressEgress::finalise_ingress(
+			RuntimeOrigin::root(),
+			vec![(cf_chains::eth::EthereumChannelId::UnDeployed(channel_id), deposit_address)]
+		));
+		assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Deployed);
+		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 1);
+		// Process deposit again amd expect the fetch request to be picked up.
+		IngressEgress::on_idle(1, Weight::from_ref_time(1_000_000_000_000u64));
+		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 0);
+	});
+}
