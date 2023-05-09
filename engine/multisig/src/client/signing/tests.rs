@@ -3,6 +3,7 @@ use std::collections::BTreeSet;
 use rand::SeedableRng;
 
 use crate::{
+	bitcoin,
 	client::{
 		common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
 		helpers::{
@@ -134,26 +135,11 @@ async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayl
 
 #[tokio::test]
 async fn should_sign_multiple_payloads() {
-	use crate::crypto::{
-		bitcoin::SigningPayload as BtcPayload, eth::SigningPayload as EthPayload,
-		polkadot::SigningPayload as DotPayload,
-	};
-
-	test_sign_multiple_payloads::<EthSigning>(&[
-		EthPayload(*b"Chainflip:Chainflip:Chainflip:01"),
-		EthPayload(*b"Chainflip:Chainflip:Chainflip:02"),
-	])
-	.await;
-
+	// For now, only bitcoin can have multiple payloads. The other chains will fail the message size
+	// check.
 	test_sign_multiple_payloads::<BtcSigning>(&[
-		BtcPayload(*b"Chainflip:Chainflip:Chainflip:01"),
-		BtcPayload(*b"Chainflip:Chainflip:Chainflip:02"),
-	])
-	.await;
-
-	test_sign_multiple_payloads::<PolkadotSigning>(&[
-		DotPayload::new(b"Chainflip:Chainflip:Chainflip:01".to_vec()).unwrap(),
-		DotPayload::new(b"Chainflip:Chainflip:Chainflip:02".to_vec()).unwrap(),
+		bitcoin::SigningPayload(*b"Chainflip:Chainflip:Chainflip:01"),
+		bitcoin::SigningPayload(*b"Chainflip:Chainflip:Chainflip:02"),
 	])
 	.await;
 }
@@ -198,9 +184,9 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 
 #[tokio::test]
 async fn should_sign_with_different_keys() {
-	// The logic for multiple payloads/keys is the same for all crypto
-	// schemes, so we only need to test one of them:
-	type C = EthSigning;
+	// For now, only bitcoin can have multiple payloads. The other chains will fail the message size
+	// check
+	type C = BtcSigning;
 	type Point = <C as CryptoScheme>::Point;
 
 	let mut rng = Rng::from_seed([1; 32]);
