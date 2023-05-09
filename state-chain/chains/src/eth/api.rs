@@ -106,7 +106,7 @@ where
 	E: EthEnvironmentProvider,
 	E: ReplayProtectionProvider<Ethereum>,
 {
-	fn new_unsigned(new_comm_key: <Ethabiereum as ChainCrypto>::GovKey) -> Self {
+	fn new_unsigned(new_comm_key: <Ethereum as ChainCrypto>::GovKey) -> Self {
 		Self::SetCommKeyWithAggKey(set_comm_key_with_agg_key::SetCommKeyWithAggKey::new_unsigned(
 			E::replay_protection(),
 			new_comm_key,

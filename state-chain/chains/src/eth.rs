@@ -12,7 +12,6 @@ use cf_primitives::ChannelId;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 pub use ethabi;
-	encode,
 use ethabi::{Address, Token, Uint};
 use ethereum_types::{H160, H256};
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
@@ -134,7 +133,7 @@ impl EthereumSignatureHandler {
 		Self {
 			sig_data: SigData { nonce: replay_protection.nonce.into(), ..Default::default() },
 			payload: Keccak256::hash(
-				&encode(&[
+				&ethabi::encode(&[
 					Keccak256::hash(&abi_encoded_function_for_payload[..]).tokenize(),
 					replay_protection.nonce.tokenize(),
 					apicall_contract_address.tokenize(),
@@ -191,7 +190,7 @@ impl Tokenizable for SigData {
 	}
 }
 
-impl Tokenizable for U256 {
+impl Tokenizable for Uint {
 	fn tokenize(self) -> Token {
 		Token::Uint(self)
 	}
