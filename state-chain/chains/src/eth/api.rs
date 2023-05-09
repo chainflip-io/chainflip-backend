@@ -18,12 +18,12 @@ pub mod abi {
 		path.push(name);
 		path.set_extension("json");
 		path.canonicalize()
-			.expect(format!("Failed to canonicalize abi file {:?}", path).as_str())
+			.unwrap_or_else(|e| panic!("Failed to canonicalize abi file {path:?}: {e}"))
 	}
 
 	pub fn load_abi_bytes(name: &'static str) -> impl std::io::Read {
 		std::fs::File::open(abi_file(name))
-			.expect(format!("Failed to open abi file {:?}", abi_file(name)).as_str())
+			.unwrap_or_else(|e| panic!("Failed to open abi file {:?}: {e}", abi_file(name)))
 	}
 
 	pub fn load_abi(name: &'static str) -> ethabi::Contract {
