@@ -1,6 +1,6 @@
 use crate as pallet_cf_lp;
-use cf_chains::{eth::assets, AnyChain, Chain, Ethereum};
-use cf_primitives::{AccountId, ChannelId};
+use cf_chains::{AnyChain, Chain, Ethereum};
+use cf_primitives::{chains::assets, AccountId, ChannelId};
 use cf_traits::{
 	impl_mock_chainflip,
 	mocks::{

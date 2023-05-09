@@ -2,7 +2,6 @@
 
 use super::*;
 
-use cf_primitives::Asset;
 use frame_benchmarking::benchmarks;
 
 use cf_chains::dot::RuntimeVersion;
@@ -30,8 +29,8 @@ benchmarks! {
 	}
 	update_supported_eth_assets {
 		let origin = T::EnsureGovernance::successful_origin();
-		let asset = Asset::Flip;
-		let address = [0; 20];
+		let asset = EthAsset::Flip;
+		let address = Default::default();
 		let call = Call::<T>::update_supported_eth_assets { asset, address };
 	}: { call.dispatch_bypass_filter(origin)? }
 	update_polkadot_runtime_version {

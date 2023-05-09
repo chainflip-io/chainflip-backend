@@ -1,8 +1,6 @@
 use crate::{Chainflip, DepositApi};
-use cf_chains::{
-	address::ForeignChainAddress, eth::assets::any, CcmDepositMetadata, Chain, ForeignChain,
-};
-use cf_primitives::{BasisPoints, ChannelId};
+use cf_chains::{address::ForeignChainAddress, CcmDepositMetadata, Chain, ForeignChain};
+use cf_primitives::{chains::assets::any, BasisPoints, ChannelId};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_std::marker::PhantomData;

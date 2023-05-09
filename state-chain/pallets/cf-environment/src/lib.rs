@@ -11,7 +11,7 @@ use cf_chains::{
 	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	ChainCrypto,
 };
-use cf_primitives::{Asset, BroadcastId, EthereumAddress};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, BroadcastId, EthereumAddress};
 use cf_traits::{SystemStateInfo, SystemStateManager};
 use frame_support::{
 	pallet_prelude::*,
@@ -84,16 +84,13 @@ pub mod cfe {
 
 #[frame_support::pallet]
 pub mod pallet {
-
+	use super::*;
 	use cf_chains::{
 		btc::{BitcoinScriptBounded, Utxo, UtxoId},
 		dot::{PolkadotPublicKey, RuntimeVersion},
 	};
-	use cf_primitives::{Asset, TxId};
-
+	use cf_primitives::TxId;
 	use cf_traits::{BroadcastCleanup, Broadcaster, VaultKeyWitnessedHandler};
-
-	use super::*;
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -151,7 +148,7 @@ pub mod pallet {
 	#[pallet::getter(fn supported_eth_assets)]
 	/// Map of supported assets for ETH
 	pub type EthereumSupportedAssets<T: Config> =
-		StorageMap<_, Blake2_128Concat, Asset, EthereumAddress>;
+		StorageMap<_, Blake2_128Concat, EthAsset, EthereumAddress>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn state_chain_gateway_address)]
@@ -224,9 +221,9 @@ pub mod pallet {
 		/// The on-chain CFE settings have been updated
 		CfeSettingsUpdated { new_cfe_settings: cfe::CfeSettings },
 		/// A new supported ETH asset was added
-		AddedNewEthAsset(Asset, EthereumAddress),
+		AddedNewEthAsset(EthAsset, EthereumAddress),
 		/// The address of an supported ETH asset was updated
-		UpdatedEthAsset(Asset, EthereumAddress),
+		UpdatedEthAsset(EthAsset, EthereumAddress),
 		/// Polkadot Vault Creation Call was initiated
 		PolkadotVaultCreationCallInitiated { agg_key: <Polkadot as ChainCrypto>::AggKey },
 		/// Polkadot Vault Account is successfully set
@@ -287,11 +284,11 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_supported_eth_assets())]
 		pub fn update_supported_eth_assets(
 			origin: OriginFor<T>,
-			asset: Asset,
+			asset: EthAsset,
 			address: EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(asset != Asset::Eth, Error::<T>::EthAddressNotUpdateable);
+			ensure!(asset != EthAsset::Eth, Error::<T>::EthAddressNotUpdateable);
 			Self::deposit_event(if EthereumSupportedAssets::<T>::contains_key(asset) {
 				EthereumSupportedAssets::<T>::mutate(asset, |new_address| {
 					*new_address = Some(address)
@@ -513,8 +510,8 @@ pub mod pallet {
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
 			CfeSettings::<T>::set(self.cfe_settings);
 			CurrentSystemState::<T>::set(SystemState::Normal);
-			EthereumSupportedAssets::<T>::insert(Asset::Flip, self.flip_token_address);
-			EthereumSupportedAssets::<T>::insert(Asset::Usdc, self.eth_usdc_address);
+			EthereumSupportedAssets::<T>::insert(EthAsset::Flip, self.flip_token_address);
+			EthereumSupportedAssets::<T>::insert(EthAsset::Usdc, self.eth_usdc_address);
 
 			PolkadotGenesisHash::<T>::set(self.polkadot_genesis_hash);
 			PolkadotVaultAccountId::<T>::set(self.polkadot_vault_account_id.clone());

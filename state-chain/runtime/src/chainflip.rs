@@ -28,12 +28,12 @@ use cf_chains::{
 	},
 	eth::{
 		self,
-		api::{EthereumApi, EthereumReplayProtection},
+		api::{EthEnvironmentProvider, EthereumApi, EthereumContract, EthereumReplayProtection},
 		Ethereum,
 	},
 	AnyChain, ApiCall, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, ChainEnvironment,
-	EthEnvironmentProvider, ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey,
-	SetGovKeyWithAggKey, TransactionBuilder,
+	ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
+	TransactionBuilder,
 };
 use cf_primitives::{
 	chains::assets, Asset, BasisPoints, ChannelId, EgressId, ETHEREUM_ETH_ADDRESS,
@@ -154,9 +154,8 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 				EthereumApi::SetAggKeyWithAggKey(_) => Environment::key_manager_address().into(),
 				EthereumApi::RegisterRedemption(_) =>
 					Environment::state_chain_gateway_address().into(),
-				EthereumApi::UpdateFlipSupply(_) => Environment::supported_eth_assets(Asset::Flip)
-					.expect("FLIP token address should exist")
-					.into(),
+				EthereumApi::UpdateFlipSupply(_) =>
+					Environment::state_chain_gateway_address().into(),
 				EthereumApi::SetGovKeyWithAggKey(_) => Environment::key_manager_address().into(),
 				EthereumApi::SetCommKeyWithAggKey(_) => Environment::key_manager_address().into(),
 				EthereumApi::AllBatch(_) => Environment::eth_vault_address().into(),
@@ -265,32 +264,29 @@ impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
 	}
 }
 
-impl ChainEnvironment<EthContractAddresses, EthereumReplayProtection> for EthEnvironment {
-	fn lookup(address_type: EthContractAddresses) -> Option<EthereumReplayProtection> {
-		Some(EthereumReplayProtection {
-			nonce: Environment::next_ethereum_signature_nonce(),
-			chain_id: Environment::ethereum_chain_id(),
-			key_manager_address: Environment::key_manager_address().into(),
-			contract_address: match address_type {
-				EthContractAddresses::StateChainGateway =>
-					Environment::state_chain_gateway_address().into(),
-				EthContractAddresses::KeyManager => Environment::key_manager_address().into(),
-				EthContractAddresses::Vault => Environment::vault_address().into(),
-			},
-		})
+impl EthEnvironmentProvider for EthEnvironment {
+	fn token_address(asset: assets::eth::Asset) -> Option<eth::Address> {
+		match asset {
+			assets::eth::Asset::Eth => Some(ETHEREUM_ETH_ADDRESS.into()),
+			erc20 => Environment::supported_eth_assets(erc20).map(Into::into),
+		}
 	}
-}
 
-impl ChainEnvironment<assets::eth::Asset, eth::Address> for EthEnvironment {
-	fn lookup(asset: assets::eth::Asset) -> Option<eth::Address> {
-		Some(match asset {
-			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS.into(),
-			erc20 => Environment::supported_eth_assets(<assets::eth::Asset as Into<
-				cf_primitives::Asset,
-			>>::into(erc20))?
-			.into(),
-		})
-		//.map(|address| address.into())
+	fn contract_address(contract: EthereumContract) -> eth::Address {
+		match contract {
+			EthereumContract::StateChainGateway =>
+				Environment::state_chain_gateway_address().into(),
+			EthereumContract::KeyManager => Environment::key_manager_address().into(),
+			EthereumContract::Vault => Environment::eth_vault_address().into(),
+		}
+	}
+
+	fn chain_id() -> eth::api::EthereumChainId {
+		Environment::ethereum_chain_id()
+	}
+
+	fn next_nonce() -> u64 {
+		Environment::next_ethereum_signature_nonce()
 	}
 }
 

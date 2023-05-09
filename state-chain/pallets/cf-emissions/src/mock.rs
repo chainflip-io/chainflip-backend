@@ -3,9 +3,7 @@ use cf_chains::{mocks::MockEthereum, AnyChain, ApiCall, ChainCrypto, UpdateFlipS
 use cf_primitives::{BroadcastId, FlipBalance, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_waived_fees,
-	mocks::{
-		egress_handler::MockEgressHandler, eth_environment_provider::MockEthEnvironmentProvider,
-	},
+	mocks::{egress_handler::MockEgressHandler, eth_environment_provider::MockEthEnvironment},
 	Broadcaster, FlipBurnInfo, Issuance, RewardsDistribution, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -204,7 +202,7 @@ impl pallet_cf_emissions::Config for Test {
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution;
 	type CompoundingInterval = HeartbeatBlockInterval;
-	type EthEnvironmentProvider = MockEthEnvironmentProvider;
+	type EthEnvironment = MockEthEnvironment;
 	type Broadcaster = MockBroadcast;
 	type WeightInfo = ();
 	type FlipToBurn = MockFlipToBurn;

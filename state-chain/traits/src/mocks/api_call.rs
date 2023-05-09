@@ -1,10 +1,10 @@
 use core::marker::PhantomData;
 
 use cf_chains::{
-	address::ForeignChainAddress, eth::assets, AllBatch, ApiCall, Chain, ChainAbi, ChainCrypto,
+	address::ForeignChainAddress, AllBatch, ApiCall, Chain, ChainAbi, ChainCrypto,
 	ChainEnvironment, Ethereum, ExecutexSwapAndCall, FetchAssetParams, TransferAssetParams,
 };
-use cf_primitives::{EgressId, EthereumAddress, ETHEREUM_ETH_ADDRESS};
+use cf_primitives::{chains::assets, EgressId, EthereumAddress, ETHEREUM_ETH_ADDRESS};
 use codec::{Decode, Encode};
 use frame_support::{CloneNoBound, DebugNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;

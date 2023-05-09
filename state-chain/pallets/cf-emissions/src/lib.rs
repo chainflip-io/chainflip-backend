@@ -2,7 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-use cf_chains::{address::ForeignChainAddress, EthEnvironmentProvider, UpdateFlipSupply};
+use cf_chains::{address::ForeignChainAddress, eth::api::EthEnvironmentProvider, UpdateFlipSupply};
 use cf_traits::{
 	BlockEmissions, Broadcaster, EgressApi, FlipBurnInfo, Issuance, RewardsDistribution,
 };
@@ -92,7 +92,7 @@ pub mod pallet {
 		type CompoundingInterval: Get<<Self as frame_system::Config>::BlockNumber>;
 
 		/// Something that can provide the state chain gatweay address.
-		type EthEnvironmentProvider: EthEnvironmentProvider;
+		type EthEnvironment: EthEnvironmentProvider;
 
 		/// The interface for accessing the amount of Flip we want burn.
 		type FlipToBurn: FlipBurnInfo;
@@ -175,7 +175,7 @@ pub mod pallet {
 						Asset::Flip,
 						flip_to_burn,
 						ForeignChainAddress::Eth(
-							T::EthEnvironmentProvider::state_chain_gateway_address().into(),
+							T::EthEnvironment::state_chain_gateway_address().into(),
 						),
 						None,
 					);
