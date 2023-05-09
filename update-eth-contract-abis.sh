@@ -6,7 +6,7 @@ if ! which gh >/dev/null 2>&1; then
     exit 1
 fi
 
-CONTRACT_RELEASE_TAG=perseverance-rc7
+CONTRACT_RELEASE_TAG=${1:-'perseverance-rc7'}
 PROJECT_ROOT=$(git rev-parse --show-toplevel || exit 1)
 ZIP_FILE=$PROJECT_ROOT/eth-contract-abis/abis-${CONTRACT_RELEASE_TAG}.zip
 
