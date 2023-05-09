@@ -351,10 +351,6 @@ pub mod pallet {
 			request_id: RequestId,
 			ceremony_id: CeremonyId,
 		},
-		/// The threshold signature has already succeeded or failed, so this retry is discarded
-		StaleRetryDiscarded {
-			ceremony_id: CeremonyId,
-		},
 		FailureReportProcessed {
 			request_id: RequestId,
 			ceremony_id: CeremonyId,
@@ -436,8 +432,6 @@ pub mod pallet {
 							}
 						},
 					})
-				} else {
-					Self::deposit_event(Event::<T, I>::StaleRetryDiscarded { ceremony_id })
 				}
 			}
 
