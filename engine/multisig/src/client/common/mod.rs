@@ -153,19 +153,19 @@ impl<C: CryptoScheme> ResharingContext<C> {
 		let party_public_keys = key
 			.validator_mapping
 			.get_all_ids()
-			.iter()
+			.into_iter()
 			.map(|id| {
 				// Parties that don't "participate", are expected to set their secret to 0,
 				// and thus their public key share should be a point at infinity:
-				let expected_pubkey_share = if sharing_participants.contains(id) {
-					let idx = key.validator_mapping.get_idx(id).expect("id must be present");
+				let expected_pubkey_share = if sharing_participants.contains(&id) {
+					let idx = key.validator_mapping.get_idx(&id).expect("id must be present");
 					let coeff = get_lagrange_coeff::<C::Point>(idx, &all_idxs);
 					key.key.party_public_keys[idx as usize - 1] * &coeff
 				} else {
 					C::Point::point_at_infinity()
 				};
 
-				(id.clone(), expected_pubkey_share)
+				(id, expected_pubkey_share)
 			})
 			.collect();
 
