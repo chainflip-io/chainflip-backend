@@ -296,7 +296,6 @@ impl<T: Config> Pallet<T> {
 		T::Broadcaster::threshold_sign_and_broadcast(T::ApiCall::new_unsigned(
 			total_supply.unique_saturated_into(),
 			block_number.saturated_into(),
-			&T::EthEnvironmentProvider::state_chain_gateway_address().into(),
 		));
 	}
 }

@@ -28,7 +28,7 @@ use cf_chains::{
 	},
 	eth::{
 		self,
-		api::{EthereumApi, EthereumChainId, EthereumReplayProtection},
+		api::{EthereumApi, EthereumReplayProtection},
 		Ethereum,
 	},
 	AnyChain, ApiCall, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, ChainEnvironment,
@@ -44,7 +44,6 @@ use cf_traits::{
 	KeyProvider, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
-use ethabi::Address as EthAbiAddress;
 use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
 	traits::Get,
@@ -261,15 +260,29 @@ impl RuntimeUpgrade for RuntimeUpgradeManager {
 pub struct EthEnvironment;
 
 impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
-	// Get the Environment values for key_manager_address and chain_id, then use
-	// the next global signature nonce
 	fn replay_protection() -> EthereumReplayProtection {
-		EthereumReplayProtection { nonce: Environment::next_ethereum_signature_nonce() }
+		unimplemented!()
 	}
 }
 
-impl EthEnvironmentProvider for EthEnvironment {
-	fn token_address(asset: assets::eth::Asset) -> Option<EthAbiAddress> {
+impl ChainEnvironment<EthContractAddresses, EthereumReplayProtection> for EthEnvironment {
+	fn lookup(address_type: EthContractAddresses) -> Option<EthereumReplayProtection> {
+		Some(EthereumReplayProtection {
+			nonce: Environment::next_ethereum_signature_nonce(),
+			chain_id: Environment::ethereum_chain_id(),
+			key_manager_address: Environment::key_manager_address().into(),
+			contract_address: match address_type {
+				EthContractAddresses::StateChainGateway =>
+					Environment::state_chain_gateway_address().into(),
+				EthContractAddresses::KeyManager => Environment::key_manager_address().into(),
+				EthContractAddresses::Vault => Environment::vault_address().into(),
+			},
+		})
+	}
+}
+
+impl ChainEnvironment<assets::eth::Asset, eth::Address> for EthEnvironment {
+	fn lookup(asset: assets::eth::Asset) -> Option<eth::Address> {
 		Some(match asset {
 			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS.into(),
 			erc20 => Environment::supported_eth_assets(<assets::eth::Asset as Into<
@@ -278,18 +291,6 @@ impl EthEnvironmentProvider for EthEnvironment {
 			.into(),
 		})
 		//.map(|address| address.into())
-	}
-	fn key_manager_address() -> EthAbiAddress {
-		Environment::key_manager_address().into()
-	}
-	fn vault_address() -> EthAbiAddress {
-		Environment::eth_vault_address().into()
-	}
-	fn state_chain_gateway_address() -> EthAbiAddress {
-		Environment::state_chain_gateway_address().into()
-	}
-	fn chain_id() -> EthereumChainId {
-		Environment::ethereum_chain_id()
 	}
 }
 
