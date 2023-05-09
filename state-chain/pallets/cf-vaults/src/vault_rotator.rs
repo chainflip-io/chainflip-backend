@@ -74,6 +74,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 						key_to_share: epoch_key.key,
 						sharing_participants,
 						receiving_participants,
+						new_key: new_public_key,
 						to_epoch: new_epoch_index,
 					});
 				},

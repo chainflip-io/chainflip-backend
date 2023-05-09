@@ -546,7 +546,7 @@ impl DepositHandler<Bitcoin> for BtcDepositHandler {
 			BitcoinVault::vaults(Validator::epoch_index())
 				.ok_or(DispatchError::Other("No vault for epoch"))?
 				.public_key
-				.pubkey_x,
+				.current,
 		);
 		Ok(())
 	}

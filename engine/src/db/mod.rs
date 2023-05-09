@@ -40,7 +40,7 @@ mod tests {
 	use super::*;
 	use crate::db::PersistentKeyDB;
 	use cf_primitives::AccountId;
-	use multisig::{client::keygen, eth::EthSigning, CanonicalEncoding, Rng};
+	use multisig::{client::keygen, eth::EthSigning, Rng};
 	use rand::SeedableRng;
 	use std::collections::BTreeSet;
 
@@ -60,7 +60,7 @@ mod tests {
 		// A temp directory to store the key db for this test
 		let (_dir, db_file) = utilities::testing::new_temp_directory_with_nonexistent_file();
 
-		let key_id = KeyId { epoch_index: 0, public_key_bytes: public_key.encode_key() };
+		let key_id = KeyId::new(0, public_key);
 
 		// Create a new db and use the keystore to save the key
 		{

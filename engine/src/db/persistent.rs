@@ -46,6 +46,8 @@ pub struct PersistentKeyDB {
 	kv_db: RocksDBKeyValueStore,
 }
 
+const CHECKPOINTING_KEY: () = ();
+
 impl PersistentKeyDB {
 	/// Open a key database or create one if it doesn't exist. If the schema version of the
 	/// existing database is below the latest, it will attempt to migrate to the latest version.
@@ -103,7 +105,7 @@ impl PersistentKeyDB {
 		keygen_result_info: &KeygenResultInfo<C>,
 	) {
 		self.kv_db
-			.put_data(&keygen_data_prefix::<C>(), &key_id.to_bytes(), &keygen_result_info)
+			.put_data(&keygen_data_prefix::<C>(), &key_id, &keygen_result_info)
 			.unwrap_or_else(|e| panic!("Failed to update key {}. Error: {}", &key_id, e));
 	}
 
@@ -111,18 +113,8 @@ impl PersistentKeyDB {
 		let span = info_span!("PersistentKeyDB");
 		let _entered = span.enter();
 
-		let keys: HashMap<_, _> = self
-			.kv_db
-			.get_data_for_prefix(&keygen_data_prefix::<C>())
-			.map(|(key_id, key_bytes)| {
-				(
-					KeyId::from_bytes(&key_id),
-					bincode::deserialize(&key_bytes).unwrap_or_else(|e| {
-						panic!("Failed to deserialize {} key from database: {}", C::NAME, e)
-					}),
-				)
-			})
-			.collect();
+		let keys: HashMap<_, _> =
+			self.kv_db.get_data_for_prefix(&keygen_data_prefix::<C>()).collect();
 		if !keys.is_empty() {
 			debug!("Loaded {} {} keys from the database", keys.len(), C::NAME);
 		}
@@ -132,7 +124,7 @@ impl PersistentKeyDB {
 	/// Write the witnesser checkpoint to the db
 	pub fn update_checkpoint(&self, chain_tag: ChainTag, checkpoint: &WitnessedUntil) {
 		self.kv_db
-			.put_data(&checkpoint_prefix(chain_tag), &[], checkpoint)
+			.put_data(&checkpoint_prefix(chain_tag), &CHECKPOINTING_KEY, checkpoint)
 			.unwrap_or_else(|e| {
 				panic!("Failed to update {chain_tag} witnesser checkpoint. Error: {e}")
 			});
@@ -140,7 +132,7 @@ impl PersistentKeyDB {
 
 	pub fn load_checkpoint(&self, chain_tag: ChainTag) -> Result<Option<WitnessedUntil>> {
 		self.kv_db
-			.get_data(&checkpoint_prefix(chain_tag), &[])
+			.get_data(&checkpoint_prefix(chain_tag), &CHECKPOINTING_KEY)
 			.context("Failed to load {chain_tag} checkpoint")
 	}
 

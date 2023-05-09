@@ -253,7 +253,7 @@ impl Engine {
 								let _result = state_chain_runtime::BitcoinThresholdSigner::signature_success(
 									RuntimeOrigin::none(),
 									*ceremony_id,
-									vec![self.btc_threshold_signer.borrow().sign_with_key(*key, &(payload[0].clone()))],
+									vec![self.btc_threshold_signer.borrow().sign_with_key(*key, &(payload[0].1.clone()))],
 								);
 					}
 					RuntimeEvent::Validator(
@@ -351,7 +351,7 @@ impl Engine {
 						report_keygen_outcome_for_chain::<BtcKeyComponents, cf_chains::btc::Signature, state_chain_runtime::Runtime, BitcoinInstance>(*ceremony_id, participants, self.btc_threshold_signer.clone(), self.node_id.clone());
 				}
 				RuntimeEvent::BitcoinVault(
-					pallet_cf_vaults::Event::KeyHandoverRequest {ceremony_id, sharing_participants, receiving_participants, to_epoch:_, from_epoch: _, key_to_share: _ }) => {
+					pallet_cf_vaults::Event::KeyHandoverRequest {ceremony_id, sharing_participants, receiving_participants, .. }) => {
 						let all_participants = sharing_participants.union(receiving_participants).cloned().collect::<BTreeSet<_>>();
 						if all_participants.contains(&self.node_id) {
 							pallet_cf_vaults::Pallet::<state_chain_runtime::Runtime, BitcoinInstance>::report_key_handover_outcome(

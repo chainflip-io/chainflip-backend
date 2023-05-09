@@ -336,6 +336,8 @@ pub mod pallet {
 			key_to_share: <T::Chain as ChainCrypto>::AggKey,
 			sharing_participants: BTreeSet<T::ValidatorId>,
 			receiving_participants: BTreeSet<T::ValidatorId>,
+			/// The freshly generated key for the next epoch.
+			new_key: <T::Chain as ChainCrypto>::AggKey,
 			/// The epoch index for which the key is being handed over.
 			to_epoch: EpochIndex,
 		},
