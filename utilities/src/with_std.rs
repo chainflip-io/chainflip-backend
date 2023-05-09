@@ -366,18 +366,20 @@ pub async fn init_json_logger(scope: &task_scope::Scope<'_, anyhow::Error>) {
 	use tracing::metadata::LevelFilter;
 	use tracing_subscriber::EnvFilter;
 
-	let builder = tracing_subscriber::fmt()
-		.json()
-		.with_env_filter(
-			EnvFilter::builder()
-				.with_default_directive(LevelFilter::INFO.into())
-				.from_env_lossy(),
-		)
-		.with_filter_reloading();
+	let reload_handle = {
+		let builder = tracing_subscriber::fmt()
+			.json()
+			.with_env_filter(
+				EnvFilter::builder()
+					.with_default_directive(LevelFilter::INFO.into())
+					.from_env_lossy(),
+			)
+			.with_filter_reloading();
 
-	let handle = builder.reload_handle();
-
-	builder.init();
+		let reload_handle = builder.reload_handle();
+		builder.init();
+		reload_handle
+	};
 
 	scope.spawn_weak(async move {
 		const PATH: &str = "tracing";
@@ -390,14 +392,14 @@ pub async fn init_json_logger(scope: &task_scope::Scope<'_, anyhow::Error>) {
 			.and(warp::body::content_length_limit(MAX_CONTENT_LENGTH))
 			.and(warp::body::json())
 			.then({
-				let handle = handle.clone();
+				let reload_handle = reload_handle.clone();
 				move |filter: String| {
 					futures::future::ready(
 						match EnvFilter::builder()
 							.with_default_directive(LevelFilter::INFO.into())
 							.parse(filter)
 						{
-							Ok(env_filter) => match handle.reload(env_filter) {
+							Ok(env_filter) => match reload_handle.reload(env_filter) {
 								Ok(_) => warp::reply().into_response(),
 								Err(error) => warp::reply::with_status(
 									warp::reply::json(&error.to_string()),
@@ -417,7 +419,7 @@ pub async fn init_json_logger(scope: &task_scope::Scope<'_, anyhow::Error>) {
 
 		let get_filter = warp::get().and(warp::path(PATH)).and(warp::path::end()).then(move || {
 			futures::future::ready(
-				match handle.with_current(|env_filter| {
+				match reload_handle.with_current(|env_filter| {
 					warp::reply::with_status(
 						warp::reply::json(&env_filter.to_string()),
 						warp::http::StatusCode::OK,
