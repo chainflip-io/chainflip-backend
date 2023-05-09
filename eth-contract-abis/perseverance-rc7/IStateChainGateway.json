@@ -1,19 +1,117 @@
 [
   {
+    "anonymous": false,
     "inputs": [
       {
-        "internalType": "contract IKeyManager",
-        "name": "keyManager",
+        "indexed": false,
+        "internalType": "bool",
+        "name": "communityGuardDisabled",
+        "type": "bool"
+      }
+    ],
+    "name": "CommunityGuardDisabled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "flip",
         "type": "address"
+      }
+    ],
+    "name": "FLIPSet",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "oldSupply",
+        "type": "uint256"
       },
       {
+        "indexed": false,
         "internalType": "uint256",
-        "name": "minFunding",
+        "name": "newSupply",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "stateChainBlockNumber",
         "type": "uint256"
       }
     ],
-    "stateMutability": "nonpayable",
-    "type": "constructor"
+    "name": "FlipSupplyUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "nodeID",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "funder",
+        "type": "address"
+      }
+    ],
+    "name": "Funded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "to",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "GovernanceWithdrawal",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "oldMinFunding",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newMinFunding",
+        "type": "uint256"
+      }
+    ],
+    "name": "MinFundingChanged",
+    "type": "event"
   },
   {
     "anonymous": false,
@@ -229,19 +327,6 @@
     ],
     "name": "UpdatedKeyManager",
     "type": "event"
-  },
-  {
-    "inputs": [],
-    "name": "REDEMPTION_DELAY",
-    "outputs": [
-      {
-        "internalType": "uint48",
-        "name": "",
-        "type": "uint48"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
   },
   {
     "inputs": [],

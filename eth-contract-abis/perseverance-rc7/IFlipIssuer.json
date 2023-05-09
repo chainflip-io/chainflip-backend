@@ -1,0 +1,15 @@
+[
+  {
+    "inputs": [],
+    "name": "getFLIP",
+    "outputs": [
+      {
+        "internalType": "contract IFLIP",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+]

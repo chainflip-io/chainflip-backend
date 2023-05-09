@@ -1,0 +1,68 @@
+[
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "keyManager",
+        "type": "address"
+      }
+    ],
+    "name": "UpdatedKeyManager",
+    "type": "event"
+  },
+  {
+    "inputs": [],
+    "name": "getKeyManager",
+    "outputs": [
+      {
+        "internalType": "contract IKeyManager",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddress",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "internalType": "contract IKeyManager",
+        "name": "keyManager",
+        "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "omitChecks",
+        "type": "bool"
+      }
+    ],
+    "name": "updateKeyManager",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+]
