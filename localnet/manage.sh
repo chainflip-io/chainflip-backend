@@ -61,7 +61,7 @@ build-localnet() {
   echo "💻 Please provide the location to the binaries you would like to use."
   read -p "(default: ./target/debug/) " BINARIES_LOCATION
   echo
-  BINARIES_LOCATION=${BINARIES_LOCATION:-"./target/debug/"}
+  BINARIES_LOCATION=${BINARIES_LOCATION:-"./target/debug"}
 
   if [ ! -d $BINARIES_LOCATION ]; then
     echo "❌  Couldn't find directory at $BINARIES_LOCATION"
@@ -141,8 +141,7 @@ build-localnet-in-ci() {
 destroy() {
   echo "💣 Destroying network"
   docker compose -f localnet/docker-compose.yml down --remove-orphans
-  kill -9 $(cat /tmp/chainflip/chainflip-node.pid) || true
-  kill -9 $(cat /tmp/chainflip/chainflip-engine.pid) || true
+  for pid in $(ps -ef | grep chainflip | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
   rm -rf /tmp/chainflip
 }
 
