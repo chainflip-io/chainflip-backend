@@ -3,7 +3,7 @@ use crate::{
 	DeploymentStatus, DisabledEgressAssets, Error, FetchOrTransfer, Pallet, ScheduledEgressCcm,
 	ScheduledEgressFetchOrTransfer, WeightInfo,
 };
-use cf_chains::{eth::EthereumChannelId, ExecutexSwapAndCall, TransferAssetParams};
+use cf_chains::{ExecutexSwapAndCall, TransferAssetParams};
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
 use cf_traits::{
 	mocks::{
@@ -247,8 +247,9 @@ fn all_batch_apicall_creation_failure_should_rollback_storage() {
 fn can_manually_send_batch_all() {
 	new_test_ext().execute_with(|| {
 		IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS.into(), None);
-		request_address_and_deposit(1u64, eth::Asset::Eth);
-		request_address_and_deposit(2u64, eth::Asset::Flip);
+		let mut deposit_fetch_ids = vec![];
+		deposit_fetch_ids.push(request_address_and_deposit(1u64, eth::Asset::Eth));
+		deposit_fetch_ids.push(request_address_and_deposit(2u64, eth::Asset::Flip));
 		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_ETH, 3_000, BOB_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_ETH, 4_000, BOB_ETH_ADDRESS.into(), None);
@@ -257,8 +258,13 @@ fn can_manually_send_batch_all() {
 		IngressEgress::schedule_egress(ETH_FLIP, 6_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_FLIP, 7_000, BOB_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_FLIP, 8_000, BOB_ETH_ADDRESS.into(), None);
-		request_address_and_deposit(3u64, eth::Asset::Eth);
-		request_address_and_deposit(4u64, eth::Asset::Flip);
+		deposit_fetch_ids.push(request_address_and_deposit(3u64, eth::Asset::Eth));
+		deposit_fetch_ids.push(request_address_and_deposit(4u64, eth::Asset::Flip));
+
+		// Mark addresses as deployed.
+		deposit_fetch_ids
+			.into_iter()
+			.for_each(|f| AddressStatus::<Test, _>::insert(f.1, DeploymentStatus::Deployed));
 
 		// Send only 2 requests
 		assert_ok!(IngressEgress::egress_scheduled_fetch_transfer(RuntimeOrigin::root(), Some(2)));
@@ -297,13 +303,19 @@ fn on_idle_batch_size_is_limited_by_weight() {
 	new_test_ext().execute_with(|| {
 		IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS.into(), None);
-		request_address_and_deposit(1u64, eth::Asset::Eth);
-		request_address_and_deposit(2u64, eth::Asset::Eth);
+		let mut deposit_fetch_ids = vec![];
+		deposit_fetch_ids.push(request_address_and_deposit(1u64, eth::Asset::Eth));
+		deposit_fetch_ids.push(request_address_and_deposit(2u64, eth::Asset::Eth));
 		IngressEgress::schedule_egress(ETH_FLIP, 3_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_FLIP, 4_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_FLIP, 5_000, ALICE_ETH_ADDRESS.into(), None);
-		request_address_and_deposit(3u64, eth::Asset::Flip);
-		request_address_and_deposit(4u64, eth::Asset::Flip);
+		deposit_fetch_ids.push(request_address_and_deposit(3u64, eth::Asset::Flip));
+		deposit_fetch_ids.push(request_address_and_deposit(4u64, eth::Asset::Flip));
+
+		// Mark addresses as deployed.
+		deposit_fetch_ids
+			.into_iter()
+			.for_each(|f| AddressStatus::<Test, _>::insert(f.1, DeploymentStatus::Deployed));
 
 		// There's enough weights for 3 transactions, which are taken in FIFO order.
 		IngressEgress::on_idle(
@@ -756,6 +768,8 @@ fn multi_use_deposit_address_different_blocks() {
 			(channel_id, deposit_address) = request_address_and_deposit(ALICE, ETH);
 		})
 		.execute_as_block(2, || {
+			// Set the address to deployed.
+			AddressStatus::<Test, _>::insert(deposit_address, DeploymentStatus::Deployed);
 			// Do another, should succeed.
 			assert_ok!(Pallet::<Test, _>::process_single_deposit(
 				deposit_address,
@@ -765,6 +779,8 @@ fn multi_use_deposit_address_different_blocks() {
 			));
 		})
 		.execute_as_block(3, || {
+			// Set the address to deployed.
+			AddressStatus::<Test, _>::insert(deposit_address, DeploymentStatus::Deployed);
 			// Closing the channel should invalidate the deposit address.
 			IngressEgress::close_channel(channel_id, deposit_address);
 			assert_noop!(
@@ -784,7 +800,9 @@ fn multi_use_deposit_same_block() {
 	const ETH: eth::Asset = eth::Asset::Eth;
 	new_test_ext()
 		.execute_as_block(1, || {
-			let (_channel_id, deposit_address) = request_address_and_deposit(ALICE, ETH);
+			let (_, deposit_address) = request_address_and_deposit(ALICE, ETH);
+			// Set the address to deployed.
+			AddressStatus::<Test, _>::insert(deposit_address, DeploymentStatus::Deployed);
 			// Another deposit to the same address.
 			Pallet::<Test, _>::process_single_deposit(deposit_address, ETH, 1, Default::default())
 				.unwrap();

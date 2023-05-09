@@ -362,10 +362,7 @@ pub mod pallet {
 		#[pallet::weight(10_000)]
 		pub fn finalise_ingress(
 			origin: OriginFor<T>,
-			addresses: Vec<(
-				<<T as Config<I>>::TargetChain as cf_chains::Chain>::DepositFetchId,
-				TargetChainAccount<T, I>,
-			)>,
+			addresses: Vec<(DepositFetchIdOf<T, I>, TargetChainAccount<T, I>)>,
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 			for address in addresses {
@@ -517,7 +514,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									DeploymentStatus::Deployed => false,
 									DeploymentStatus::Undeployed => {
 										AddressStatus::<T, I>::insert(
-											ingress_address.clone(),
+											ingress_address,
 											DeploymentStatus::Pending,
 										);
 										false
