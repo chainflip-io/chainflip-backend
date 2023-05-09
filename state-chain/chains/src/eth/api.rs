@@ -1,6 +1,4 @@
-use ethabi::Address;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
-use sp_core::Get;
 use sp_runtime::{traits::UniqueSaturatedInto, DispatchError};
 use sp_std::marker::PhantomData;
 
@@ -48,9 +46,8 @@ impl ChainAbi for Ethereum {
 
 impl<E> SetAggKeyWithAggKey<Ethereum> for EthereumApi<E>
 where
+	E: EthEnvironmentProvider,
 	E: ReplayProtectionProvider<Ethereum>,
-	E: ChainEnvironment<EthContractAddresses, Address>,
-	E: Get<EthereumChainId>,
 {
 	fn new_unsigned(
 		_old_key: Option<<Ethereum as ChainCrypto>::AggKey>,
@@ -59,18 +56,16 @@ where
 		Ok(Self::SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey::new_unsigned(
 			E::replay_protection(),
 			new_key,
-			E::lookup(EthContractAddresses::KeyManager)
-				.expect("This should not panic since the lookup function always returns a Some"),
-			E::get(),
+			E::key_manager_address(),
+			E::chain_id(),
 		)))
 	}
 }
 
 impl<E> SetGovKeyWithAggKey<Ethereum> for EthereumApi<E>
 where
+	E: EthEnvironmentProvider,
 	E: ReplayProtectionProvider<Ethereum>,
-	E: ChainEnvironment<EthContractAddresses, Address>,
-	E: Get<EthereumChainId>,
 {
 	fn new_unsigned(
 		_maybe_old_key: Option<<Ethereum as ChainCrypto>::GovKey>,
@@ -79,35 +74,31 @@ where
 		Ok(Self::SetGovKeyWithAggKey(set_gov_key_with_agg_key::SetGovKeyWithAggKey::new_unsigned(
 			E::replay_protection(),
 			new_gov_key,
-			E::lookup(EthContractAddresses::KeyManager)
-				.expect("This should not panic since the lookup function always returns a Some"),
-			E::get(),
+			E::key_manager_address(),
+			E::chain_id(),
 		)))
 	}
 }
 
 impl<E> SetCommKeyWithAggKey<Ethereum> for EthereumApi<E>
 where
+	E: EthEnvironmentProvider,
 	E: ReplayProtectionProvider<Ethereum>,
-	E: ChainEnvironment<EthContractAddresses, Address>,
-	E: Get<EthereumChainId>,
 {
 	fn new_unsigned(new_comm_key: <Ethereum as ChainCrypto>::GovKey) -> Self {
 		Self::SetCommKeyWithAggKey(set_comm_key_with_agg_key::SetCommKeyWithAggKey::new_unsigned(
 			E::replay_protection(),
 			new_comm_key,
-			E::lookup(EthContractAddresses::KeyManager)
-				.expect("This should not panic since the lookup function always returns a Some"),
-			E::get(),
+			E::key_manager_address(),
+			E::chain_id(),
 		))
 	}
 }
 
 impl<E> RegisterRedemption<Ethereum> for EthereumApi<E>
 where
+	E: EthEnvironmentProvider,
 	E: ReplayProtectionProvider<Ethereum>,
-	E: ChainEnvironment<EthContractAddresses, Address>,
-	E: Get<EthereumChainId>,
 {
 	fn new_unsigned(node_id: &[u8; 32], amount: u128, address: &[u8; 20], expiry: u64) -> Self {
 		Self::RegisterRedemption(register_redemption::RegisterRedemption::new_unsigned(
@@ -116,11 +107,9 @@ where
 			amount,
 			address,
 			expiry,
-			E::lookup(EthContractAddresses::KeyManager)
-				.expect("This should not panic since the lookup function always returns a Some"),
-			E::lookup(EthContractAddresses::StateChainGateway)
-				.expect("This should not panic since the lookup function always returns a Some"),
-			E::get(),
+			E::key_manager_address(),
+			E::state_chain_gateway_address(),
+			E::chain_id(),
 		))
 	}
 
@@ -134,9 +123,8 @@ where
 
 impl<E> UpdateFlipSupply<Ethereum> for EthereumApi<E>
 where
+	E: EthEnvironmentProvider,
 	E: ReplayProtectionProvider<Ethereum>,
-	E: ChainEnvironment<EthContractAddresses, Address>,
-	E: Get<EthereumChainId>,
 {
 	fn new_unsigned(
 		new_total_supply: u128,
@@ -148,19 +136,16 @@ where
 			new_total_supply,
 			block_number,
 			state_chain_gateway_address,
-			E::lookup(EthContractAddresses::KeyManager)
-				.expect("This should not panic since the lookup function always returns a Some"),
-			E::get(),
+			E::key_manager_address(),
+			E::chain_id(),
 		))
 	}
 }
 
 impl<E> AllBatch<Ethereum> for EthereumApi<E>
 where
-	E: ChainEnvironment<assets::eth::Asset, Address>,
+	E: EthEnvironmentProvider,
 	E: ReplayProtectionProvider<Ethereum>,
-	E: ChainEnvironment<EthContractAddresses, Address>,
-	E: Get<EthereumChainId>,
 {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
@@ -169,7 +154,7 @@ where
 		let mut fetch_only_params = vec![];
 		let mut fetch_deploy_params = vec![];
 		for FetchAssetParams { deposit_fetch_id, asset } in fetch_params {
-			if let Some(token_address) = E::lookup(asset) {
+			if let Some(token_address) = E::token_address(asset) {
 				match deposit_fetch_id {
 					EthereumChannelId::Deployed(contract_address) => fetch_only_params
 						.push(EncodableFetchAssetParams { contract_address, asset: token_address }),
@@ -187,7 +172,7 @@ where
 			transfer_params
 				.into_iter()
 				.map(|TransferAssetParams { asset, to, amount }| {
-					E::lookup(asset)
+					E::token_address(asset)
 						.map(|address| all_batch::EncodableTransferAssetParams {
 							to,
 							amount,
@@ -196,21 +181,17 @@ where
 						.ok_or(())
 				})
 				.collect::<Result<Vec<_>, ()>>()?,
-			E::lookup(EthContractAddresses::KeyManager)
-				.expect("This should not panic since the lookup function always returns a Some"),
-			E::lookup(EthContractAddresses::Vault)
-				.expect("This should not panic since the lookup function always returns a Some"),
-			E::get(),
+			E::key_manager_address(),
+			E::vault_address(),
+			E::chain_id(),
 		)))
 	}
 }
 
 impl<E> ExecutexSwapAndCall<Ethereum> for EthereumApi<E>
 where
-	E: ChainEnvironment<assets::eth::Asset, Address>,
+	E: EthEnvironmentProvider,
 	E: ReplayProtectionProvider<Ethereum>,
-	E: ChainEnvironment<EthContractAddresses, Address>,
-	E: Get<EthereumChainId>,
 {
 	fn new_unsigned(
 		egress_id: EgressId,
@@ -219,7 +200,7 @@ where
 		message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
 		let transfer_param = EncodableTransferAssetParams {
-			asset: E::lookup(transfer_param.asset).ok_or(DispatchError::CannotLookup)?,
+			asset: E::token_address(transfer_param.asset).ok_or(DispatchError::CannotLookup)?,
 			to: transfer_param.to,
 			amount: transfer_param.amount,
 		};
@@ -230,11 +211,9 @@ where
 			transfer_param,
 			source_address,
 			message,
-			E::lookup(EthContractAddresses::KeyManager)
-				.expect("This should not panic since the lookup function always returns a Some"),
-			E::lookup(EthContractAddresses::Vault)
-				.expect("This should not panic since the lookup function always returns a Some"),
-			E::get(),
+			E::key_manager_address(),
+			E::vault_address(),
+			E::chain_id(),
 		)))
 	}
 }
@@ -373,12 +352,4 @@ macro_rules! impl_api_call_eth {
 		}
 	};
 }
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum EthContractAddresses {
-	StateChainGateway,
-	KeyManager,
-	Vault,
-}
-
 pub type EthereumChainId = u64;

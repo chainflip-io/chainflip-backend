@@ -17,8 +17,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, ChannelId, EgressId, EpochIndex, EthereumAddress, ForeignChain,
-	ThresholdSignatureRequestId,
+	CeremonyId, ChannelId, EgressId, EpochIndex, ForeignChain, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -298,15 +297,6 @@ pub trait RewardsDistribution {
 pub trait EmissionsTrigger {
 	/// Trigger emissions.
 	fn trigger_emissions();
-}
-
-/// Provides the environment data for ethereum-like chains.
-pub trait EthEnvironmentProvider {
-	fn token_address(asset: assets::any::Asset) -> Option<EthereumAddress>;
-	fn key_manager_address() -> EthereumAddress;
-	fn state_chain_gateway_address() -> EthereumAddress;
-	fn vault_address() -> EthereumAddress;
-	fn chain_id() -> u64;
 }
 
 /// A representation of the current network state for this heartbeat interval.

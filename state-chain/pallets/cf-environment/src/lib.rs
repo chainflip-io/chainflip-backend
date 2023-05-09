@@ -12,7 +12,6 @@ use cf_chains::{
 	ChainCrypto,
 };
 use cf_primitives::{Asset, BroadcastId, EthereumAddress};
-pub use cf_traits::EthEnvironmentProvider;
 use cf_traits::{SystemStateInfo, SystemStateManager};
 use frame_support::{
 	pallet_prelude::*,
@@ -172,7 +171,7 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn ethereum_chain_id)]
 	/// The ETH chain id
-	pub type EthereumChainId<T> = StorageValue<_, u64, ValueQuery>;
+	pub type EthereumChainId<T> = StorageValue<_, cf_chains::eth::api::EthereumChainId, ValueQuery>;
 
 	#[pallet::storage]
 	pub type EthereumSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
@@ -558,24 +557,6 @@ impl<T: Config> SystemStateInfo for SystemStateProvider<T> {
 impl<T: Config> SystemStateManager for SystemStateProvider<T> {
 	fn activate_maintenance_mode() {
 		Self::set_system_state(SystemState::Maintenance);
-	}
-}
-
-impl<T: Config> EthEnvironmentProvider for Pallet<T> {
-	fn token_address(asset: Asset) -> Option<EthereumAddress> {
-		EthereumSupportedAssets::<T>::get(asset)
-	}
-	fn key_manager_address() -> EthereumAddress {
-		EthereumKeyManagerAddress::<T>::get()
-	}
-	fn vault_address() -> EthereumAddress {
-		EthereumVaultAddress::<T>::get()
-	}
-	fn state_chain_gateway_address() -> EthereumAddress {
-		EthereumStateChainGatewayAddress::<T>::get()
-	}
-	fn chain_id() -> u64 {
-		EthereumChainId::<T>::get()
 	}
 }
 
