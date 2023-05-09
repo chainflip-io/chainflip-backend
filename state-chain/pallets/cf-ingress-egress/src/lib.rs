@@ -359,7 +359,7 @@ pub mod pallet {
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Callback for when a signature is accepted by the chain.
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::finalise_ingress(addresses.len() as u32))]
 		pub fn finalise_ingress(
 			origin: OriginFor<T>,
 			addresses: Vec<(DepositFetchIdOf<T, I>, TargetChainAccount<T, I>)>,
