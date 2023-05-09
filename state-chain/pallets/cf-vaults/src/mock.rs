@@ -5,16 +5,12 @@ use crate as pallet_cf_vaults;
 use cf_chains::{
 	eth,
 	mocks::{MockAggKey, MockEthereum},
-	ApiCall, ChainCrypto, ReplayProtectionProvider,
+	ApiCall,
 };
 use cf_primitives::{BroadcastId, GENESIS_EPOCH};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip,
-	mocks::{
-		ceremony_id_provider::MockCeremonyIdProvider,
-		eth_replay_protection_provider::MockEthReplayProtectionProvider,
-		threshold_signer::MockThresholdSigner,
-	},
+	mocks::{ceremony_id_provider::MockCeremonyIdProvider, threshold_signer::MockThresholdSigner},
 	AccountRoleRegistry,
 };
 use frame_support::{
@@ -117,7 +113,7 @@ impl_mock_callback!(RuntimeOrigin);
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockSetAggKeyWithAggKey {
-	nonce: <MockEthereum as ChainAbi>::ReplayProtection,
+	old_key: <MockEthereum as ChainCrypto>::AggKey,
 	new_key: <MockEthereum as ChainCrypto>::AggKey,
 }
 
@@ -126,8 +122,7 @@ impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
 		old_key: Option<<MockEthereum as ChainCrypto>::AggKey>,
 		new_key: <MockEthereum as ChainCrypto>::AggKey,
 	) -> Result<Self, ()> {
-		old_key.ok_or(())?;
-		Ok(Self { nonce: MockEthReplayProtectionProvider::replay_protection(), new_key })
+		Ok(Self { old_key: old_key.ok_or(())?, new_key })
 	}
 }
 
