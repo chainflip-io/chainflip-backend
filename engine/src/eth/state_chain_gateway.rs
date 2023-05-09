@@ -43,7 +43,7 @@ pub enum StateChainGatewayEvent {
 		account_id: AccountId32,
 		amount: ethabi::Uint,
 		// Withdrawal address
-		funder: ethabi::Address,
+		redeem_address: ethabi::Address,
 		start_time: ethabi::Uint,
 		expiry_time: ethabi::Uint,
 	},
@@ -207,7 +207,7 @@ impl EthContractWitnesser for StateChainGateway {
 					StateChainGatewayEvent::RedemptionRegistered {
 						account_id,
 						amount: decode_log_param(&log, "amount")?,
-						funder: decode_log_param(&log, "funder")?,
+						redeem_address: decode_log_param(&log, "redeemAddress")?,
 						start_time: decode_log_param(&log, "startTime")?,
 						expiry_time: decode_log_param(&log, "expiryTime")?,
 					}
@@ -373,7 +373,7 @@ mod tests {
             } => {
                 assert_eq!(account_id, AccountId32::from_str("000000000000000000000000000000000000000000000000000000000000a455").unwrap());
                 assert_eq!(amount, 40000000000000000000000u128);
-                assert_eq!(funder,ALICE.clone());
+                assert_eq!(funder, ALICE.clone());
                 assert_eq!(
                     return_addr,
                     web3::types::H160::from_str("0x0000000000000000000000000000000000000001")
@@ -406,7 +406,7 @@ mod tests {
             StateChainGatewayEvent::RedemptionRegistered {
                 account_id,
                 amount,
-                funder,
+                redeem_address,
                 start_time,
                 expiry_time,
             } => {
@@ -420,7 +420,7 @@ mod tests {
                     web3::types::U256::from_dec_str("13333333333333334032384").unwrap()
                 );
                 assert_eq!(
-                    funder, ALICE.clone());
+                    redeem_address, ALICE.clone());
                 assert_eq!(
                     start_time,
                     web3::types::U256::from_dec_str("1638333774").unwrap()
