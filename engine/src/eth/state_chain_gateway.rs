@@ -44,6 +44,8 @@ pub enum StateChainGatewayEvent {
 		amount: ethabi::Uint,
 		// Withdrawal address
 		redeem_address: ethabi::Address,
+
+		// These are apparently uint48
 		start_time: ethabi::Uint,
 		expiry_time: ethabi::Uint,
 	},
@@ -74,6 +76,13 @@ pub enum StateChainGatewayEvent {
 
 	FLIPSet {
 		flip: ethabi::Address,
+	},
+
+	// TODO: Tests
+	FlipSupplyUpdated {
+		old_supply: ethabi::Uint,
+		new_supply: ethabi::Uint,
+		state_chain_block_number: cf_primitives::BlockNumber,
 	},
 
 	Suspended {
