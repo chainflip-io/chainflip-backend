@@ -44,10 +44,7 @@ fn can_use_multiple_crypto_schemes() {
 	type Scheme3 = BtcSigning;
 
 	fn add_key_for_scheme<Scheme: CryptoScheme>(db: &PersistentKeyDB) -> KeyId {
-		let key_id = KeyId {
-			epoch_index: GENESIS_EPOCH,
-			public_key_bytes: rand::random::<[u8; 32]>().into(),
-		};
+		let key_id = KeyId::new(GENESIS_EPOCH, rand::random::<[u8; 32]>());
 		db.update_key(&key_id, &get_single_key_data::<Scheme>());
 		key_id
 	}
@@ -86,7 +83,7 @@ fn can_load_keys_with_current_keygen_info() {
 		195, 249, 200, 151, 35, 228, 224, 122, 6, 111, 38, 103,
 	];
 
-	let key_id = KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: TEST_KEY.into() };
+	let key_id = KeyId::new(GENESIS_EPOCH, TEST_KEY);
 	let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
 	{
 		let p_db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
@@ -108,7 +105,7 @@ fn can_update_key() {
 	type Scheme = EthSigning;
 
 	let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-	let key_id = KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: vec![0; 33] };
+	let key_id = KeyId::new(GENESIS_EPOCH, [0; 33]);
 
 	let p_db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
 
@@ -146,7 +143,7 @@ fn can_load_key_from_backup() {
 	type Scheme = EthSigning;
 
 	let (directory, db_path) = new_temp_directory_with_nonexistent_file();
-	let key_id = KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: vec![0; 33] };
+	let key_id = KeyId::new(GENESIS_EPOCH, [0; 33]);
 
 	// Create a normal db and save a key in it
 	{

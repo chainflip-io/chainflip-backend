@@ -49,11 +49,19 @@ pub fn filter_interesting_utxos(
 		ScriptPubkeyBytes,
 		BitcoinScriptBounded,
 	>,
-	change_pubkey: &cf_chains::btc::AggKey,
+	change_aggkey: &cf_chains::btc::AggKey,
 ) -> (Vec<DepositWitness<Bitcoin>>, Vec<ChangeUtxoWitness>) {
 	address_monitor.sync_addresses();
 	let mut deposit_witnesses = vec![];
 	let mut change_witnesses = vec![];
+	let change_addresses = [Some(change_aggkey.current), change_aggkey.previous]
+		.iter()
+		.filter_map(|key_opt| {
+			key_opt.map(|key| {
+				(key, derive_btc_deposit_bitcoin_script(key, CHANGE_ADDRESS_SALT).serialize())
+			})
+		})
+		.collect::<Vec<_>>();
 	for tx in txs {
 		for (vout, tx_out) in (0u32..).zip(tx.output.clone()) {
 			if tx_out.value > 0 {
@@ -66,13 +74,14 @@ pub fn filter_interesting_utxos(
 						amount: tx_out.value,
 						tx_id: UtxoId { tx_hash, vout },
 					});
-				} else if script_pubkey_bytes ==
-					derive_btc_deposit_bitcoin_script(
-						change_pubkey.pubkey_x,
-						CHANGE_ADDRESS_SALT,
-					)
-					.serialize()
-				{
+				} else if let Some(change_pubkey) =
+					change_addresses.iter().find_map(|(key, address)| {
+						if address == &script_pubkey_bytes {
+							Some(key)
+						} else {
+							None
+						}
+					}) {
 					change_witnesses.push(ChangeUtxoWitness {
 						amount: tx_out.value,
 						change_pubkey: *change_pubkey,
