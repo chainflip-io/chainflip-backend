@@ -96,11 +96,6 @@ mod test_set_agg_key_with_agg_key {
 
 		let set_agg_key_reference = key_manager.function("setAggKeyWithAggKey").unwrap();
 
-		let call = SetAggKeyWithAggKey::new(AggKey {
-			pub_key_x: FAKE_NEW_KEY_X,
-			pub_key_y_parity: FAKE_NEW_KEY_Y,
-		});
-		let expected_msg_hash = call.msg_hash();
 		let set_agg_key_runtime = EthereumTransactionBuilder::new_unsigned(
 			EthereumReplayProtection {
 				nonce: NONCE,
@@ -108,10 +103,13 @@ mod test_set_agg_key_with_agg_key {
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),
 				contract_address: FAKE_KEYMAN_ADDR.into(),
 			},
-			call,
+			SetAggKeyWithAggKey::new(AggKey {
+				pub_key_x: FAKE_NEW_KEY_X,
+				pub_key_y_parity: FAKE_NEW_KEY_Y,
+			}),
 		);
 
-		assert_eq!(set_agg_key_runtime.threshold_signature_payload(), expected_msg_hash);
+		let expected_msg_hash = set_agg_key_runtime.threshold_signature_payload();
 		let runtime_payload = set_agg_key_runtime
 			.clone()
 			.signed(&SchnorrVerificationComponents {

@@ -56,8 +56,6 @@ mod test_set_comm_key_with_agg_key {
 		)
 		.unwrap();
 
-		let call = SetCommKeyWithAggKey::new(H160::from(TEST_ADDR));
-		let expected_msg_hash = call.msg_hash();
 		let tx_builder = EthereumTransactionBuilder::new_unsigned(
 			EthereumReplayProtection {
 				nonce: NONCE,
@@ -65,9 +63,8 @@ mod test_set_comm_key_with_agg_key {
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),
 				contract_address: FAKE_KEYMAN_ADDR.into(),
 			},
-			call,
+			SetCommKeyWithAggKey::new(H160::from(TEST_ADDR)),
 		);
-		assert_eq!(tx_builder.threshold_signature_payload(), expected_msg_hash);
 
 		assert_eq!(
 			// Our encoding:

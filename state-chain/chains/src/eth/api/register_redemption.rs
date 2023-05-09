@@ -1,6 +1,6 @@
 //! Definitions for the "registerRedemption" transaction.
 
-use crate::eth::{EthereumCall, SigData, Tokenizable};
+use crate::eth::{EthereumCall, Tokenizable};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::{Address, ParamType, Token, Uint};
@@ -44,7 +44,6 @@ impl EthereumCall for RegisterRedemption {
 
 	fn function_params() -> Vec<(&'static str, ethabi::ParamType)> {
 		vec![
-			("sigData", SigData::param_type()),
 			("nodeID", <[u8; 32]>::param_type()),
 			("amount", Uint::param_type()),
 			("funder", Address::param_type()),
@@ -109,8 +108,6 @@ mod test_register_redemption {
 		let register_redemption_reference =
 			state_chain_gateway.function("registerRedemption").unwrap();
 
-		let call = RegisterRedemption::new(&TEST_ACCT, AMOUNT, &TEST_ADDR, EXPIRY_SECS);
-		let expected_msg_hash = call.msg_hash();
 		let register_redemption_runtime = EthereumTransactionBuilder::new_unsigned(
 			EthereumReplayProtection {
 				nonce: NONCE,
@@ -118,10 +115,10 @@ mod test_register_redemption {
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),
 				contract_address: FAKE_SCGW_ADDR.into(),
 			},
-			call,
+			RegisterRedemption::new(&TEST_ACCT, AMOUNT, &TEST_ADDR, EXPIRY_SECS),
 		);
 
-		assert_eq!(register_redemption_runtime.threshold_signature_payload(), expected_msg_hash);
+		let expected_msg_hash = register_redemption_runtime.threshold_signature_payload();
 		let runtime_payload = register_redemption_runtime
 			.clone()
 			.signed(&SchnorrVerificationComponents {

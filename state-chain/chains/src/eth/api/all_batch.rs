@@ -1,12 +1,9 @@
-use crate::eth::{deposit_address::get_salt, EthereumCall, SigData, Tokenizable};
+use crate::eth::{deposit_address::get_salt, EthereumCall, Tokenizable};
 use cf_primitives::{AssetAmount, ChannelId};
 use codec::{Decode, Encode};
-use ethabi::{encode, Address, ParamType, Token, Uint};
+use ethabi::{Address, ParamType, Token, Uint};
 use scale_info::TypeInfo;
-use sp_runtime::{
-	traits::{Hash, Keccak256},
-	RuntimeDebug,
-};
+use sp_runtime::RuntimeDebug;
 use sp_std::{boxed::Box, vec, vec::Vec};
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
@@ -38,19 +35,17 @@ impl Tokenizable for EncodableFetchDeployAssetParams {
 	}
 
 	fn param_type() -> ethabi::ParamType {
-		ParamType::Array(Box::new(ParamType::Tuple(vec![
-			ParamType::FixedBytes(32),
-			ParamType::Address,
-		])))
+		ParamType::Tuple(vec![ParamType::FixedBytes(32), ParamType::Address])
 	}
 }
+
 impl Tokenizable for EncodableFetchAssetParams {
 	fn tokenize(self) -> Token {
 		Token::Tuple(vec![Token::Address(self.contract_address), Token::Address(self.asset)])
 	}
 
 	fn param_type() -> ethabi::ParamType {
-		ParamType::Array(Box::new(ParamType::Tuple(vec![ParamType::Address, ParamType::Address])))
+		ParamType::Tuple(vec![ParamType::Address, ParamType::Address])
 	}
 }
 
@@ -60,7 +55,7 @@ impl<T: Tokenizable> Tokenizable for Vec<T> {
 	}
 
 	fn param_type() -> ethabi::ParamType {
-		todo!()
+		ParamType::Array(Box::new(T::param_type()))
 	}
 }
 
@@ -74,11 +69,7 @@ impl Tokenizable for EncodableTransferAssetParams {
 	}
 
 	fn param_type() -> ethabi::ParamType {
-		ParamType::Array(Box::new(ParamType::Tuple(vec![
-			ParamType::Address,
-			ParamType::Address,
-			ParamType::Uint(256),
-		])))
+		ParamType::Tuple(vec![ParamType::Address, ParamType::Address, ParamType::Uint(256)])
 	}
 }
 
@@ -119,9 +110,9 @@ impl EthereumCall for AllBatch {
 
 	fn function_params() -> Vec<(&'static str, ethabi::ParamType)> {
 		vec![
-			("deployFetchParamsArray", EncodableFetchDeployAssetParams::param_type()),
-			("fetchParamsArray", EncodableFetchAssetParams::param_type()),
-			("transferParamsArray", EncodableTransferAssetParams::param_type()),
+			("deployFetchParamsArray", <Vec<EncodableFetchDeployAssetParams>>::param_type()),
+			("fetchParamsArray", <Vec<EncodableFetchAssetParams>>::param_type()),
+			("transferParamsArray", <Vec<EncodableTransferAssetParams>>::param_type()),
 		]
 	}
 }
@@ -201,12 +192,6 @@ mod test_all_batch {
 
 		let all_batch_reference = eth_vault.function("allBatch").unwrap();
 
-		let call = AllBatch::new(
-			dummy_fetch_deploy_asset_params.clone(),
-			dummy_fetch_asset_params.clone(),
-			dummy_transfer_asset_params.clone(),
-		);
-		let expected_msg_hash = call.msg_hash();
 		let all_batch_runtime = EthereumTransactionBuilder::new_unsigned(
 			EthereumReplayProtection {
 				nonce: NONCE,
@@ -214,10 +199,14 @@ mod test_all_batch {
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),
 				contract_address: FAKE_VAULT_ADDR.into(),
 			},
-			call,
+			AllBatch::new(
+				dummy_fetch_deploy_asset_params.clone(),
+				dummy_fetch_asset_params.clone(),
+				dummy_transfer_asset_params.clone(),
+			),
 		);
 
-		assert_eq!(all_batch_runtime.threshold_signature_payload(), expected_msg_hash);
+		let expected_msg_hash = all_batch_runtime.threshold_signature_payload();
 		let runtime_payload = all_batch_runtime
 			.clone()
 			.signed(&SchnorrVerificationComponents {

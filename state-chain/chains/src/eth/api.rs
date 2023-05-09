@@ -8,7 +8,7 @@ use self::all_batch::{
 	EncodableFetchAssetParams, EncodableFetchDeployAssetParams, EncodableTransferAssetParams,
 };
 
-use super::{Ethereum, EthereumChannelId, EthereumTransactionBuilder, Tokenizable};
+use super::{Ethereum, EthereumChannelId, EthereumTransactionBuilder};
 
 pub mod all_batch;
 pub mod execute_x_swap_and_call;

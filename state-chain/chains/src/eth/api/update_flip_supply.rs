@@ -3,7 +3,7 @@ use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::Uint;
 use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
-use sp_std::vec::Vec;
+use sp_std::{vec, vec::Vec};
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default, MaxEncodedLen)]
 pub struct UpdateFlipSupply {
@@ -81,8 +81,6 @@ mod test_update_flip_supply {
 
 		let flip_token_reference = flip_token.function("updateFlipSupply").unwrap();
 
-		let call = UpdateFlipSupply::new(NEW_TOTAL_SUPPLY, STATE_CHAIN_BLOCK_NUMBER);
-		let expected_msg_hash = call.msg_hash();
 		let update_flip_supply_runtime = EthereumTransactionBuilder::new_unsigned(
 			EthereumReplayProtection {
 				nonce: NONCE,
@@ -90,10 +88,10 @@ mod test_update_flip_supply {
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),
 				contract_address: FAKE_STATE_CHAIN_GATEWAY_ADDRESS.into(),
 			},
-			call,
+			UpdateFlipSupply::new(NEW_TOTAL_SUPPLY, STATE_CHAIN_BLOCK_NUMBER),
 		);
 
-		assert_eq!(update_flip_supply_runtime.threshold_signature_payload(), expected_msg_hash);
+		let expected_msg_hash = update_flip_supply_runtime.threshold_signature_payload();
 
 		let runtime_payload = update_flip_supply_runtime
 			.clone()
