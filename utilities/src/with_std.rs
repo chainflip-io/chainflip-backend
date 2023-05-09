@@ -381,10 +381,13 @@ pub async fn init_json_logger(scope: &task_scope::Scope<'_, anyhow::Error>) {
 
 	scope.spawn_weak(async move {
 		const PATH: &str = "tracing";
+		const MAX_CONTENT_LENGTH: u64 = 2 * 1024;
+		const PORT: u16 = 36079;
 
 		let change_filter = warp::post()
 			.and(warp::path(PATH))
 			.and(warp::path::end())
+			.and(warp::body::content_length_limit(MAX_CONTENT_LENGTH))
 			.and(warp::body::json())
 			.then({
 				let handle = handle.clone();
@@ -427,7 +430,7 @@ pub async fn init_json_logger(scope: &task_scope::Scope<'_, anyhow::Error>) {
 		});
 
 		warp::serve(change_filter.or(get_filter))
-			.run((std::net::Ipv4Addr::LOCALHOST, 36079))
+			.run((std::net::Ipv4Addr::LOCALHOST, PORT))
 			.await;
 
 		Ok(())
