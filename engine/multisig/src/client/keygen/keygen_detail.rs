@@ -633,7 +633,8 @@ pub mod genesis {
 								&SharingParameters::for_keygen(params),
 								&commitments,
 							)
-							.into_values()
+							.into_iter()
+							.map(|(idx, pk)| (validator_mapping.get_id(idx).clone(), pk))
 							.collect(),
 						)),
 						validator_mapping: Arc::new(validator_mapping.clone()),

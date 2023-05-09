@@ -770,33 +770,15 @@ async fn finalize_keygen<Crypto: CryptoScheme>(
 	// Making a copy while we still have sharing parameters
 	let key_params = keygen_common.sharing_params.key_params;
 
+	// `derive_local_pubkeys_for_parties` returns a vector of public keys where
+	// the index corresponds to the party's index in this ceremony.
 	let party_public_keys = utilities::task_scope::without_blocking(move || {
 		derive_local_pubkeys_for_parties(&keygen_common.sharing_params, &commitments)
 	})
-	.await;
-
-	// `derive_local_pubkeys_for_parties` returns a vector of public keys where
-	// the index corresponds to the party's index in a ceremony. In a key handover
-	// ceremony we want to re-arrange them according to party's indices in future
-	// signing ceremonies.
-	// TODO: it would be nicer if we stored account ids alongside the public key
-	// shares (would require a db migration though)
-	let party_public_keys = party_public_keys
-		.into_iter()
-		.map(|(idx, pk)| {
-			(
-				{
-					let id = keygen_common.common.validator_mapping.get_id(idx);
-					future_index_mapping
-						.get_idx(id)
-						.expect("receiving party must have a future index")
-				},
-				pk,
-			)
-		})
-		.sorted_by_key(|(idx, _)| *idx)
-		.map(|(_, pk)| pk)
-		.collect();
+	.await
+	.into_iter()
+	.map(|(idx, pk)| (keygen_common.common.validator_mapping.get_id(idx).clone(), pk))
+	.collect();
 
 	let keygen_result_info = KeygenResultInfo {
 		key: Arc::new(KeygenResult::new_compatible(
