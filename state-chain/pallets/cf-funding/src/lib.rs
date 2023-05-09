@@ -277,20 +277,18 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
 			amount: FlipBalance<T>,
-			withdrawal_address: EthereumAddress,
+			_withdrawal_address: EthereumAddress,
 			// Required to ensure this call is unique per funding event.
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			if Self::check_withdrawal_address(&account_id, withdrawal_address, amount).is_ok() {
-				let total_balance = Self::add_funds_to_account(&account_id, amount);
-				Self::deposit_event(Event::Funded {
-					account_id,
-					tx_hash,
-					funds_added: amount,
-					total_balance,
-				});
-			}
+			let total_balance = Self::add_funds_to_account(&account_id, amount);
+			Self::deposit_event(Event::Funded {
+				account_id,
+				tx_hash,
+				funds_added: amount,
+				total_balance,
+			});
 			Ok(().into())
 		}
 
@@ -564,48 +562,6 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-	/// Checks the withdrawal address requirements and saves the address if provided.
-	///
-	/// If a non-zero address was provided, then it *must* match the address that was
-	/// provided on the initial account-creating funding event.
-	fn check_withdrawal_address(
-		account_id: &AccountId<T>,
-		withdrawal_address: EthereumAddress,
-		amount: T::Balance,
-	) -> Result<(), Error<T>> {
-		if withdrawal_address == ETH_ZERO_ADDRESS {
-			return Ok(())
-		}
-		if !frame_system::Pallet::<T>::account_exists(account_id) {
-			// This is the initial account-creating funding event. We store the withdrawal address
-			// for this account.
-			WithdrawalAddresses::<T>::insert(account_id, withdrawal_address);
-			return Ok(())
-		}
-		// If we reach here, the account already exists, so any provided withdrawal address
-		// *must* match the one that was added on the initial account-creating funding event,
-		// otherwise this funding event cannot be processed.
-		match WithdrawalAddresses::<T>::get(account_id) {
-			Some(existing) if withdrawal_address == existing => Ok(()),
-			_ => {
-				// The funding event was invalid - this should only happen if someone bypasses
-				// our standard ethereum contract interfaces. We don't automatically refund here
-				// otherwise it's attack vector (refunds require a broadcast, which is
-				// expensive).
-				//
-				// Instead, we keep a record of the failed attempt so that we can potentially
-				// investigate and / or consider refunding automatically or via governance.
-				FailedFundingAttempts::<T>::append(account_id, (withdrawal_address, amount));
-				Self::deposit_event(Event::FailedFundingAttempt {
-					account_id: account_id.clone(),
-					withdrawal_address,
-					amount,
-				});
-				Err(Error::<T>::WithdrawalAddressRestricted)
-			},
-		}
-	}
-
 	/// Add funds to an account, creating the account if it doesn't exist. An account is not
 	/// an implicit bidder and needs to start bidding explicitly.
 	fn add_funds_to_account(account_id: &AccountId<T>, amount: T::Balance) -> T::Balance {
