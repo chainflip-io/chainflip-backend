@@ -44,8 +44,6 @@ pub enum StateChainGatewayEvent {
 		amount: ethabi::Uint,
 		// Withdrawal address
 		redeem_address: ethabi::Address,
-
-		// These are apparently uint48
 		start_time: ethabi::Uint,
 		expiry_time: ethabi::Uint,
 	},
@@ -77,8 +75,6 @@ pub enum StateChainGatewayEvent {
 	FLIPSet {
 		flip: ethabi::Address,
 	},
-
-	// TODO: Tests
 	FlipSupplyUpdated {
 		old_supply: ethabi::Uint,
 		new_supply: ethabi::Uint,
@@ -185,6 +181,7 @@ impl EthContractWitnesser for StateChainGateway {
 		let community_guard_disabled =
 			SignatureAndEvent::new(&self.contract, "CommunityGuardDisabled")?;
 		let flip_set = SignatureAndEvent::new(&self.contract, "FLIPSet")?;
+		let flip_supply_updated = SignatureAndEvent::new(&self.contract, "FlipSupplyUpdated")?;
 		let suspended = SignatureAndEvent::new(&self.contract, "Suspended")?;
 		let updated_key_manager = SignatureAndEvent::new(&self.contract, "UpdatedKeyManager")?;
 
@@ -264,6 +261,13 @@ impl EthContractWitnesser for StateChainGateway {
 					let log = suspended.event.parse_log(raw_log)?;
 					StateChainGatewayEvent::Suspended {
 						suspended: decode_log_param(&log, "suspended")?,
+					}
+				} else if event_signature == flip_supply_updated.signature {
+					let log = flip_supply_updated.event.parse_log(raw_log)?;
+					StateChainGatewayEvent::FlipSupplyUpdated {
+						old_supply: decode_log_param(&log, "oldSupply")?,
+						new_supply: decode_log_param(&log, "newSupply")?,
+						state_chain_block_number: decode_log_param(&log, "stateChainBlockNumber")?,
 					}
 				} else if event_signature == updated_key_manager.signature {
 					let log = updated_key_manager.event.parse_log(raw_log)?;
@@ -347,6 +351,9 @@ mod tests {
 		let flip_set = SignatureAndEvent::new(&contract, "FLIPSet").unwrap();
 		println!("flip_set {:?}", flip_set.signature);
 
+		let flip_set = SignatureAndEvent::new(&contract, "FlipSupplyUpdated").unwrap();
+		println!("flip_supply_updated {:?}", flip_set.signature);
+
 		let suspended = SignatureAndEvent::new(&contract, "Suspended").unwrap();
 		println!("suspended {:?}", suspended.signature);
 
@@ -409,7 +416,7 @@ mod tests {
                     *NODE_ID,
                     H256::from_str("0x00000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c8").unwrap()
                 ],
-                data : hex::decode("0000000000000000000000000000000000000000000002d2cd2bb7a3986000000000000000000000000000000000000000000000000000000000000061a6fd4e0000000000000000000000000000000000000000000000000000000061a9a04b").unwrap()
+                data : hex::decode("00000000000000000000000000000000000000000000000004a03ce68d21554000000000000000000000000000000000000000000000000000000000645a0e1800000000000000000000000000000000000000000000000000000000645a0e8f").unwrap()
             }
         ).unwrap() {
             StateChainGatewayEvent::RedemptionRegistered {
@@ -426,20 +433,20 @@ mod tests {
                 );
                 assert_eq!(
                     amount,
-                    web3::types::U256::from_dec_str("13333333333333334032384").unwrap()
+                    web3::types::U256::from_dec_str("333333333333333312").unwrap()
                 );
                 assert_eq!(
                     redeem_address, ALICE.clone());
                 assert_eq!(
                     start_time,
-                    web3::types::U256::from_dec_str("1638333774").unwrap()
+                    web3::types::U256::from_dec_str("1683623448").unwrap()
                 );
                 assert_eq!(
                     expiry_time,
-                    web3::types::U256::from_dec_str("1638506571").unwrap()
+                    web3::types::U256::from_dec_str("1683623567").unwrap()
                 );
             }
-            _ => panic!("Expected Funding::RedemptionRegistered, got a different variant"),
+            _ => panic!("Expected StateChainGatewayEvent::RedemptionRegistered, got a different variant"),
         }
 	}
 
@@ -479,7 +486,9 @@ mod tests {
 				);
 				assert_eq!(amount, 13333333333333334032384);
 			},
-			_ => panic!("Expected Funding::RedemptionExecuted, got a different variant"),
+			_ => panic!(
+				"Expected StateChainGatewayEvent::RedemptionExecuted, got a different variant"
+			),
 		}
 	}
 
@@ -513,7 +522,9 @@ mod tests {
 				assert_eq!(account_id, AccountId32::from_str(ACCOUNT_ID_HEX).unwrap());
 				assert_eq!(amount, 333333333333333311488u128);
 			},
-			_ => panic!("Expected Funding::RedemptionExpired, got a different variant"),
+			_ => panic!(
+				"Expected StateChainGatewayEvent::RedemptionExpired, got a different variant"
+			),
 		}
 	}
 
@@ -545,7 +556,7 @@ mod tests {
                     U256::from_dec_str("13333333333333334032384").unwrap()
                 );
             }
-            _ => panic!("Expected Funding::MinFundingChanged, got a different variant"),
+            _ => panic!("Expected StateChainGatewayEvent::MinFundingChanged, got a different variant"),
         }
 	}
 
@@ -583,7 +594,7 @@ mod tests {
                     10276666666666666665967616
                 );
             }
-            _ => panic!("Expected Funding::GovernanceWithdrawal, got a different variant"),
+            _ => panic!("Expected StateChainGatewayEvent::GovernanceWithdrawal, got a different variant"),
         }
 	}
 
@@ -612,7 +623,9 @@ mod tests {
 				// it is now disabled, so this should be true
 				assert!(community_guard_disabled)
 			},
-			_ => panic!("Expected Funding::CommunityGuardDisabled, got a different variant"),
+			_ => panic!(
+				"Expected StateChainGatewayEvent::CommunityGuardDisabled, got a different variant"
+			),
 		};
 	}
 
@@ -643,7 +656,39 @@ mod tests {
 					H160::from_str("0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9").unwrap()
 				);
 			},
-			_ => panic!("Expected Funding::FLIPSet, got a different variant"),
+			_ => panic!("Expected StateChainGatewayEvent::FLIPSet, got a different variant"),
+		};
+	}
+
+	#[test]
+	fn flip_supply_updated_parsing() {
+		let state_chain_gateway = StateChainGateway::new(H160::default());
+		let decode_log = state_chain_gateway.decode_log_closure().unwrap();
+
+		let event_signature =
+			H256::from_str("0xff4b7a826623672c6944dc44d809008e2e1105180d110fd63986e841f15eb2ad")
+				.unwrap();
+
+		match decode_log(
+			event_signature,
+			RawLog {
+				topics: vec![event_signature],
+				data: hex::decode(
+					"0000000000000000000000000000000000000000004a723dc6b40b8a9a00000000000000000000000000000000000000000000000052b7d2dcc80cd2e40000000000000000000000000000000000000000000000000000000000000000000064",
+				)
+				.unwrap(),
+			},
+		)
+		.unwrap()
+		{
+			StateChainGatewayEvent::FlipSupplyUpdated { old_supply, new_supply, state_chain_block_number  } => {
+				assert_eq!(
+					old_supply,
+					U256::from(90000000000000000000000000u128));
+				assert_eq!(new_supply, U256::from(100000000000000000000000000u128));
+				assert_eq!(state_chain_block_number, 100);
+			},
+			_ => panic!("Expected StateChainGatewayEvent::FlipSupplyUpdated, got a different variant"),
 		};
 	}
 
@@ -672,7 +717,7 @@ mod tests {
 				// we are now suspended, so this should be true
 				assert!(suspended)
 			},
-			_ => panic!("Expected Funding::Suspended, got a different variant"),
+			_ => panic!("Expected StateChainGatewayEvent::Suspended, got a different variant"),
 		};
 	}
 
@@ -703,7 +748,9 @@ mod tests {
 					H160::from_str("0x0000000000000000000000000000000000000001").unwrap()
 				)
 			},
-			_ => panic!("Expected Funding::UpdatedKeyManager, got a different variant"),
+			_ => panic!(
+				"Expected StateChainGatewayEvent::UpdatedKeyManager, got a different variant"
+			),
 		};
 	}
 }
