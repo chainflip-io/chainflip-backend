@@ -11,12 +11,10 @@ pub use cf_primitives::chains::{assets, Ethereum};
 use cf_primitives::ChannelId;
 
 use codec::{Decode, Encode, MaxEncodedLen};
-pub use ethabi::{
+pub use ethabi;
 	encode,
-	ethereum_types::{H256, U256},
-	Address, Hash as TxHash, Token, Uint, Word,
-};
-use ethereum_types::H160;
+use ethabi::{Address, Token, Uint};
+use ethereum_types::{H160, H256};
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -53,10 +51,10 @@ impl Chain for Ethereum {
 
 impl ChainCrypto for Ethereum {
 	type AggKey = eth::AggKey;
-	type Payload = eth::H256;
+	type Payload = H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
-	type TransactionId = eth::H256;
-	type GovKey = eth::Address;
+	type TransactionId = H256;
+	type GovKey = Address;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
@@ -566,11 +564,11 @@ pub struct TransactionFee {
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct Transaction {
 	pub chain_id: u64,
-	pub max_priority_fee_per_gas: Option<U256>, // EIP-1559
-	pub max_fee_per_gas: Option<U256>,
-	pub gas_limit: Option<U256>,
+	pub max_priority_fee_per_gas: Option<Uint>, // EIP-1559
+	pub max_fee_per_gas: Option<Uint>,
+	pub gas_limit: Option<Uint>,
 	pub contract: Address,
-	pub value: U256,
+	pub value: Uint,
 	pub data: Vec<u8>,
 }
 
@@ -606,7 +604,7 @@ impl Transaction {
 		Ok(())
 	}
 
-	fn check_gas_limit(&self, recovered: U256) -> Result<(), CheckedTransactionParameter> {
+	fn check_gas_limit(&self, recovered: Uint) -> Result<(), CheckedTransactionParameter> {
 		if let Some(expected) = self.gas_limit {
 			if expected != recovered {
 				return Err(CheckedTransactionParameter::GasLimit)
@@ -629,14 +627,14 @@ impl Transaction {
 		Ok(())
 	}
 
-	fn check_value(&self, recovered: U256) -> Result<(), CheckedTransactionParameter> {
+	fn check_value(&self, recovered: Uint) -> Result<(), CheckedTransactionParameter> {
 		if self.value != recovered {
 			return Err(CheckedTransactionParameter::Value)
 		}
 		Ok(())
 	}
 
-	fn check_max_fee_per_gas(&self, recovered: U256) -> Result<(), CheckedTransactionParameter> {
+	fn check_max_fee_per_gas(&self, recovered: Uint) -> Result<(), CheckedTransactionParameter> {
 		if let Some(expected) = self.max_fee_per_gas {
 			if expected != recovered {
 				return Err(CheckedTransactionParameter::MaxFeePerGas)
@@ -647,7 +645,7 @@ impl Transaction {
 
 	fn check_max_priority_fee_per_gas(
 		&self,
-		recovered: U256,
+		recovered: Uint,
 	) -> Result<(), CheckedTransactionParameter> {
 		if let Some(expected) = self.max_priority_fee_per_gas {
 			if expected != recovered {
@@ -801,12 +799,11 @@ mod verification_tests {
 	use super::*;
 	use frame_support::{assert_err, assert_ok};
 	use libsecp256k1::{PublicKey, SecretKey};
-	use rand::{prelude::*, SeedableRng};
-	use Keccak256;
 
 	#[test]
 	#[cfg(feature = "runtime-integration-tests")]
 	fn test_signature() {
+		use rand::{rngs::StdRng, Rng, SeedableRng};
 		// Message to sign over
 		let msg: [u8; 32] = Keccak256::hash(b"Whats it going to be then, eh?")
 			.as_bytes()

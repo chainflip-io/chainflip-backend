@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use cf_chains::eth::api::abi::load_abi_bytes;
 use cf_primitives::{chains::assets::eth, EpochIndex, EthAmount};
 use state_chain_runtime::EthereumInstance;
 use tokio::sync::Mutex;
@@ -52,8 +53,7 @@ impl Erc20Witnesser {
 		Self {
 			deployed_address,
 			asset,
-			contract: ethabi::Contract::load(std::include_bytes!("abis/ERC20.json").as_ref())
-				.unwrap(),
+			contract: ethabi::Contract::load(load_abi_bytes("IERC20Lite")).unwrap(),
 			address_monitor,
 		}
 	}

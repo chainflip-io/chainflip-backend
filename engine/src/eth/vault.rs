@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use cf_chains::{address::EncodedAddress, CcmDepositMetadata, ForeignChainAddress};
+use cf_chains::{
+	address::EncodedAddress, eth::api::abi::load_abi_bytes, CcmDepositMetadata, ForeignChainAddress,
+};
 use cf_primitives::{Asset, EpochIndex, EthereumAddress};
 use tracing::{info, warn};
 use web3::{
@@ -388,8 +390,7 @@ impl Vault {
 	pub fn new(deployed_address: H160) -> Self {
 		Self {
 			deployed_address,
-			contract: ethabi::Contract::load(std::include_bytes!("abis/Vault.json").as_ref())
-				.unwrap(),
+			contract: ethabi::Contract::load(load_abi_bytes("IVault")).unwrap(),
 		}
 	}
 }

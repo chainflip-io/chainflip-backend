@@ -82,7 +82,7 @@ mod test_set_gov_key_with_agg_key {
 
 	use super::*;
 	use crate::{
-		eth::{tests::asymmetrise, SchnorrVerificationComponents},
+		eth::{api::abi::load_abi, tests::asymmetrise, SchnorrVerificationComponents},
 		ApiCall,
 	};
 	use ethabi::Token;
@@ -101,10 +101,7 @@ mod test_set_gov_key_with_agg_key {
 		const NONCE: u64 = 6;
 		const TEST_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
 
-		let key_manager = ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/KeyManager.json").as_ref(),
-		)
-		.unwrap();
+		let key_manager = load_abi("IKeyManager");
 
 		let call = SetGovKeyWithAggKey::new_unsigned(
 			EthereumReplayProtection { nonce: NONCE },

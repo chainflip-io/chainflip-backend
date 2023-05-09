@@ -10,6 +10,27 @@ use self::all_batch::{
 
 use super::{Ethereum, EthereumChannelId};
 
+#[cfg(feature = "std")]
+pub mod abi {
+	fn abi_file(name: &'static str) -> std::path::PathBuf {
+		let mut path = std::path::PathBuf::from(std::env::var("CF_ETH_CONTRACT_ABI_ROOT").unwrap());
+		path.push(std::env::var("CF_ETH_CONTRACT_ABI_TAG").unwrap());
+		path.push(name);
+		path.set_extension("json");
+		path.canonicalize()
+			.expect(format!("Failed to canonicalize abi file {:?}", path).as_str())
+	}
+
+	pub fn load_abi_bytes(name: &'static str) -> impl std::io::Read {
+		std::fs::File::open(abi_file(name))
+			.expect(format!("Failed to open abi file {:?}", abi_file(name)).as_str())
+	}
+
+	pub fn load_abi(name: &'static str) -> ethabi::Contract {
+		ethabi::Contract::load(load_abi_bytes(name)).expect("Failed to load abi from bytes.")
+	}
+}
+
 pub mod all_batch;
 pub mod execute_x_swap_and_call;
 pub mod register_redemption;
@@ -85,7 +106,7 @@ where
 	E: EthEnvironmentProvider,
 	E: ReplayProtectionProvider<Ethereum>,
 {
-	fn new_unsigned(new_comm_key: <Ethereum as ChainCrypto>::GovKey) -> Self {
+	fn new_unsigned(new_comm_key: <Ethabiereum as ChainCrypto>::GovKey) -> Self {
 		Self::SetCommKeyWithAggKey(set_comm_key_with_agg_key::SetCommKeyWithAggKey::new_unsigned(
 			E::replay_protection(),
 			new_comm_key,

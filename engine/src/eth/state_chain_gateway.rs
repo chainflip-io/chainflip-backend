@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use crate::eth::{EthRpcApi, SignatureAndEvent};
 
+use cf_chains::eth::api::abi::load_abi_bytes;
 use cf_primitives::EpochIndex;
 use sp_runtime::AccountId32;
 
@@ -285,10 +286,7 @@ impl StateChainGateway {
 	pub fn new(deployed_address: H160) -> Self {
 		Self {
 			deployed_address,
-			contract: ethabi::Contract::load(
-				std::include_bytes!("abis/StateChainGateway.json").as_ref(),
-			)
-			.unwrap(),
+			contract: ethabi::Contract::load(load_abi_bytes("IStateChainGateway")).unwrap(),
 		}
 	}
 }
