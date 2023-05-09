@@ -201,7 +201,7 @@ impl Tokenizable for U256 {
 
 impl Tokenizable for H256 {
 	fn tokenize(self) -> Token {
-		Token::Uint(self.0.into())
+		Token::FixedBytes(self.0.into())
 	}
 }
 
