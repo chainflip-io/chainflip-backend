@@ -365,9 +365,10 @@ pub mod pallet {
 			addresses: Vec<(DepositFetchIdOf<T, I>, TargetChainAccount<T, I>)>,
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
-			for address in addresses {
-				if AddressStatus::<T, I>::get(address.1.clone()) == DeploymentStatus::Pending {
-					AddressStatus::<T, I>::insert(address.1, DeploymentStatus::Deployed);
+			for (_, ingress_address) in addresses {
+				if AddressStatus::<T, I>::get(ingress_address.clone()) == DeploymentStatus::Pending
+				{
+					AddressStatus::<T, I>::insert(ingress_address, DeploymentStatus::Deployed);
 				}
 			}
 			Ok(())
