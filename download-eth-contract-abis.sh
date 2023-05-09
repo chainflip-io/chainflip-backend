@@ -25,6 +25,10 @@ gh release download \
     --output ${ZIP_FILE} \
     ${CONTRACT_RELEASE_TAG}
 
-unzip -u ${ZIP_FILE} 'I*.json' -d$PROJECT_ROOT/eth-contract-abis/${CONTRACT_RELEASE_TAG}
+unzip -u ${ZIP_FILE} \
+    'IStateChainGateway.json' \
+    'IVault.json' \
+    'IKeyManager.json' \
+    -d $PROJECT_ROOT/eth-contract-abis/${CONTRACT_RELEASE_TAG}
 
 rm ${ZIP_FILE}
