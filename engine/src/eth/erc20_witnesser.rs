@@ -52,7 +52,7 @@ impl Erc20Witnesser {
 		Self {
 			deployed_address,
 			asset,
-			contract: ethabi::Contract::load(include_bytes!("IERC20.abi.json").as_ref()).unwrap(),
+			contract: ethabi::Contract::load(include_bytes!("abis/IERC20.json").as_ref()).unwrap(),
 			address_monitor,
 		}
 	}
