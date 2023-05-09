@@ -4,20 +4,21 @@ use cf_primitives::AuthorityCount;
 use rand::SeedableRng;
 
 use crate::{
+	bitcoin::BtcSigning,
 	client::{
 		common::{BroadcastVerificationMessage, KeygenStageName, PreProcessStageDataCheck},
-		helpers::{gen_invalid_keygen_comm1, get_invalid_hash_comm},
+		helpers::{gen_dummy_keygen_comm1, get_dummy_hash_comm},
 		keygen::{BlameResponse8, Complaints6, KeygenData, PubkeyShares0, SecretShare5},
 	},
 	crypto::Rng,
-	eth::Point,
+	eth::{EthSigning, Point},
 };
 
 /// ==========================
 // Generate invalid keygen data with the given number of elements in its inner and outer
 // collection(s)
 
-pub fn gen_keygen_data_pubkey_shares0(participant_count: AuthorityCount) -> KeygenData<Point> {
+fn gen_keygen_data_pubkey_shares0(participant_count: AuthorityCount) -> KeygenData<Point> {
 	let mut rng = Rng::from_seed([0; 32]);
 	KeygenData::PubkeyShares0(PubkeyShares0(
 		(1..=participant_count)
@@ -28,21 +29,21 @@ pub fn gen_keygen_data_pubkey_shares0(participant_count: AuthorityCount) -> Keyg
 
 pub fn gen_keygen_data_hash_comm1() -> KeygenData<Point> {
 	let mut rng = Rng::from_seed([0; 32]);
-	KeygenData::HashComm1(get_invalid_hash_comm(&mut rng))
+	KeygenData::HashComm1(get_dummy_hash_comm(&mut rng))
 }
 
 pub fn gen_keygen_data_verify_hash_comm2(participant_count: AuthorityCount) -> KeygenData<Point> {
 	let mut rng = Rng::from_seed([0; 32]);
 	KeygenData::VerifyHashComm2(BroadcastVerificationMessage {
 		data: (1..=participant_count)
-			.map(|i| (i as AuthorityCount, Some(get_invalid_hash_comm(&mut rng))))
+			.map(|i| (i as AuthorityCount, Some(get_dummy_hash_comm(&mut rng))))
 			.collect(),
 	})
 }
 
 fn gen_keygen_data_coeff_comm3(participant_count: AuthorityCount) -> KeygenData<Point> {
 	let mut rng = Rng::from_seed([0; 32]);
-	KeygenData::CoeffComm3(gen_invalid_keygen_comm1(&mut rng, participant_count))
+	KeygenData::CoeffComm3(gen_dummy_keygen_comm1(&mut rng, participant_count))
 }
 
 fn gen_keygen_data_verify_coeff_comm4(
@@ -55,7 +56,7 @@ fn gen_keygen_data_verify_coeff_comm4(
 			.map(|i| {
 				(
 					i as AuthorityCount,
-					Some(gen_invalid_keygen_comm1(&mut rng, participant_count_inner)),
+					Some(gen_dummy_keygen_comm1(&mut rng, participant_count_inner)),
 				)
 			})
 			.collect(),
@@ -121,25 +122,52 @@ fn gen_keygen_data_verify_blame_response9(
 // ==========================
 
 #[test]
+fn check_data_size_pubkey_shares0() {
+	// This is currently equal to MAX_AUTHORITIES. If MAX_AUTHORITIES changes, this test will need
+	// to be updated. But if MAX_AUTHORITIES is ever lowered, it will create an issue with rejecting
+	// PubkeyShares0 messages when switching from the higher value to the lower value and will
+	// therefore the data size check for PubkeyShares0 will need to be decoupled from
+	// MAX_AUTHORITIES.
+	let max_expected_len = 150;
+
+	// Should pass with the correct data length
+	assert!(gen_keygen_data_pubkey_shares0(max_expected_len)
+		.initial_stage_data_size_is_valid::<BtcSigning>());
+
+	// Should pass with an empty message (This is expected behaviour for non-sharing parties)
+	assert!(gen_keygen_data_pubkey_shares0(0).initial_stage_data_size_is_valid::<BtcSigning>());
+
+	// Should fail on sizes larger than expected
+	assert!(!gen_keygen_data_pubkey_shares0(max_expected_len + 1)
+		.initial_stage_data_size_is_valid::<BtcSigning>());
+}
+
+#[test]
 fn check_data_size_verify_hash_comm2() {
 	let expected_len: AuthorityCount = 4;
 
 	// Should pass with the correct data length
-	assert!(gen_keygen_data_verify_hash_comm2(expected_len).data_size_is_valid(expected_len));
+	assert!(gen_keygen_data_verify_hash_comm2(expected_len)
+		.data_size_is_valid::<EthSigning>(expected_len));
 
 	// Should fail on sizes larger or smaller than expected
-	assert!(!gen_keygen_data_verify_hash_comm2(expected_len + 1).data_size_is_valid(expected_len));
-	assert!(!gen_keygen_data_verify_hash_comm2(expected_len - 1).data_size_is_valid(expected_len));
+	assert!(!gen_keygen_data_verify_hash_comm2(expected_len + 1)
+		.data_size_is_valid::<EthSigning>(expected_len));
+	assert!(!gen_keygen_data_verify_hash_comm2(expected_len - 1)
+		.data_size_is_valid::<EthSigning>(expected_len));
 }
 
 #[test]
 fn check_data_size_coeff_comm3() {
 	let expected_len: AuthorityCount = 4;
 
-	assert!(gen_keygen_data_coeff_comm3(expected_len).data_size_is_valid(expected_len));
+	assert!(
+		gen_keygen_data_coeff_comm3(expected_len).data_size_is_valid::<EthSigning>(expected_len)
+	);
 
 	// It takes a few more parties to generate invalid data (due to key handover)
-	assert!(!gen_keygen_data_coeff_comm3(expected_len + 3).data_size_is_valid(expected_len));
+	assert!(!gen_keygen_data_coeff_comm3(expected_len + 3)
+		.data_size_is_valid::<EthSigning>(expected_len));
 }
 
 #[test]
@@ -148,29 +176,32 @@ fn check_data_size_verify_coeff_comm4() {
 
 	// Should pass when both collections are the correct size
 	assert!(gen_keygen_data_verify_coeff_comm4(expected_len, expected_len)
-		.data_size_is_valid(expected_len));
+		.data_size_is_valid::<EthSigning>(expected_len));
 
 	// It takes a few more parties to generate invalid data (due to key handover)
 	let large_len = expected_len + 3;
 
 	// Should fail if the other collection is larger than expected
 	assert!(!gen_keygen_data_verify_coeff_comm4(large_len, expected_len)
-		.data_size_is_valid(expected_len));
+		.data_size_is_valid::<EthSigning>(expected_len));
 
 	// The nested collection should fail if larger than expected
 	assert!(!gen_keygen_data_verify_coeff_comm4(expected_len, large_len)
-		.data_size_is_valid(expected_len));
+		.data_size_is_valid::<EthSigning>(expected_len));
 }
 
 #[test]
 fn check_data_size_complaints6() {
 	let expected_len: AuthorityCount = 4;
 
-	assert!(gen_keygen_data_complaints6(expected_len).data_size_is_valid(expected_len));
-	assert!(gen_keygen_data_complaints6(0).data_size_is_valid(expected_len));
+	assert!(
+		gen_keygen_data_complaints6(expected_len).data_size_is_valid::<EthSigning>(expected_len)
+	);
+	assert!(gen_keygen_data_complaints6(0).data_size_is_valid::<EthSigning>(expected_len));
 
 	// Should fail on sizes larger than expected
-	assert!(!gen_keygen_data_complaints6(expected_len + 1).data_size_is_valid(expected_len));
+	assert!(!gen_keygen_data_complaints6(expected_len + 1)
+		.data_size_is_valid::<EthSigning>(expected_len));
 }
 
 #[test]
@@ -179,29 +210,32 @@ fn check_data_size_verify_complaints7() {
 
 	// Should pass when both collections are the correct size
 	assert!(gen_keygen_data_verify_complaints7(expected_len, expected_len)
-		.data_size_is_valid(expected_len));
-	assert!(gen_keygen_data_verify_complaints7(expected_len, 0).data_size_is_valid(expected_len));
+		.data_size_is_valid::<EthSigning>(expected_len));
+	assert!(gen_keygen_data_verify_complaints7(expected_len, 0)
+		.data_size_is_valid::<EthSigning>(expected_len));
 
 	// The outer collection should fail if larger or smaller than expected
 	assert!(!gen_keygen_data_verify_complaints7(expected_len + 1, expected_len)
-		.data_size_is_valid(expected_len));
+		.data_size_is_valid::<EthSigning>(expected_len));
 	assert!(!gen_keygen_data_verify_complaints7(expected_len - 1, expected_len)
-		.data_size_is_valid(expected_len));
+		.data_size_is_valid::<EthSigning>(expected_len));
 
 	// The nested collection should fail if larger than expected
 	assert!(!gen_keygen_data_verify_complaints7(expected_len, expected_len + 1)
-		.data_size_is_valid(expected_len));
+		.data_size_is_valid::<EthSigning>(expected_len));
 }
 
 #[test]
 fn check_data_size_blame_response8() {
 	let expected_len: AuthorityCount = 4;
 
-	assert!(gen_keygen_data_blame_response8(expected_len).data_size_is_valid(expected_len));
-	assert!(gen_keygen_data_blame_response8(0).data_size_is_valid(expected_len));
+	assert!(gen_keygen_data_blame_response8(expected_len)
+		.data_size_is_valid::<EthSigning>(expected_len));
+	assert!(gen_keygen_data_blame_response8(0).data_size_is_valid::<EthSigning>(expected_len));
 
 	// Should fail on sizes larger than expected
-	assert!(!gen_keygen_data_blame_response8(expected_len + 1).data_size_is_valid(expected_len));
+	assert!(!gen_keygen_data_blame_response8(expected_len + 1)
+		.data_size_is_valid::<EthSigning>(expected_len));
 }
 
 #[test]
@@ -210,20 +244,19 @@ fn check_data_size_verify_blame_responses9() {
 
 	// Should pass when both collections are the correct size
 	assert!(gen_keygen_data_verify_blame_response9(expected_len, expected_len)
-		.data_size_is_valid(expected_len));
-	assert!(
-		gen_keygen_data_verify_blame_response9(expected_len, 0).data_size_is_valid(expected_len)
-	);
+		.data_size_is_valid::<EthSigning>(expected_len));
+	assert!(gen_keygen_data_verify_blame_response9(expected_len, 0)
+		.data_size_is_valid::<EthSigning>(expected_len));
 
 	// The outer collection should fail if larger or smaller than expected
 	assert!(!gen_keygen_data_verify_blame_response9(expected_len + 1, expected_len)
-		.data_size_is_valid(expected_len));
+		.data_size_is_valid::<EthSigning>(expected_len));
 	assert!(!gen_keygen_data_verify_blame_response9(expected_len - 1, expected_len)
-		.data_size_is_valid(expected_len));
+		.data_size_is_valid::<EthSigning>(expected_len));
 
 	// The nested collection should fail if larger than expected
 	assert!(!gen_keygen_data_verify_blame_response9(expected_len, expected_len + 1)
-		.data_size_is_valid(expected_len));
+		.data_size_is_valid::<EthSigning>(expected_len));
 }
 
 #[test]

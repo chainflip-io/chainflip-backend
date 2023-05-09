@@ -13,7 +13,6 @@ use crate::{
 			ACCOUNT_IDS, CEREMONY_TIMEOUT_DURATION, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
 			INITIAL_LATEST_CEREMONY_ID,
 		},
-		keygen::KeygenData,
 		CeremonyRequest, CeremonyRequestDetails, KeygenRequestDetails, MultisigData,
 		SigningRequestDetails,
 	},
@@ -32,7 +31,8 @@ use utilities::{task_scope::task_scope, threshold_from_share_count};
 
 use super::CEREMONY_ID_WINDOW;
 
-/// Run on_request_to_sign on a ceremony manager, using a junk key and default ceremony id and data.
+/// Run on_request_to_sign on a ceremony manager, using a dummy key and default ceremony id and
+/// data.
 async fn run_on_request_to_sign<C: CryptoScheme>(
 	ceremony_manager: &mut CeremonyManager<C>,
 	participants: BTreeSet<sp_runtime::AccountId32>,
@@ -76,7 +76,7 @@ fn new_ceremony_manager_for_test(
 	)
 }
 
-/// Sends a signing request to the ceremony manager with a junk key and some default values.
+/// Sends a signing request to the ceremony manager with a dummy key and some default values.
 fn send_signing_request(
 	ceremony_request_sender: &tokio::sync::mpsc::UnboundedSender<CeremonyRequest<EthSigning>>,
 	participants: BTreeSet<AccountId32>,
@@ -239,10 +239,8 @@ async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
 	let future_ceremony_id = latest_ceremony_id + CEREMONY_ID_WINDOW; // Valid, because its within the window
 	let future_ceremony_id_too_large = latest_ceremony_id + CEREMONY_ID_WINDOW + 1; // Invalid, because its too far in the future
 
-	// Junk stage 1 data to use for the test
-	let stage_1_data = MultisigData::Keygen(KeygenData::HashComm1(client::keygen::HashComm1(
-		sp_core::H256::default(),
-	)));
+	// Dummy stage 1 data to use for the test
+	let stage_1_data = MultisigData::Keygen(gen_keygen_data_hash_comm1());
 
 	// Create a new ceremony manager and set the latest_ceremony_id
 	let mut ceremony_manager = CeremonyManager::<EthSigning>::new(

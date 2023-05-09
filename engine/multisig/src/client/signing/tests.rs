@@ -3,10 +3,11 @@ use std::collections::BTreeSet;
 use rand::SeedableRng;
 
 use crate::{
+	bitcoin,
 	client::{
 		common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
 		helpers::{
-			gen_invalid_local_sig, gen_invalid_signing_comm1, new_nodes, new_signing_ceremony,
+			gen_dummy_local_sig, gen_dummy_signing_comm1, new_nodes, new_signing_ceremony,
 			run_stages, PayloadAndKeyData, SigningCeremonyRunner, ACCOUNT_IDS,
 			DEFAULT_SIGNING_CEREMONY_ID,
 		},
@@ -33,7 +34,7 @@ async fn should_report_on_invalid_local_sig3() {
 
 	// This account id will send an invalid signature
 	let [bad_account_id] = signing_ceremony.select_account_ids();
-	let invalid_sig3 = gen_invalid_local_sig(&mut signing_ceremony.rng);
+	let invalid_sig3 = gen_dummy_local_sig(&mut signing_ceremony.rng);
 	for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
 		*message = invalid_sig3.clone();
 	}
@@ -54,7 +55,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
 	// This account id will send an invalid signature
 	let [bad_account_id] = signing_ceremony.select_account_ids();
 	for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
-		*message = gen_invalid_signing_comm1(&mut signing_ceremony.rng);
+		*message = gen_dummy_signing_comm1(&mut signing_ceremony.rng, 1);
 	}
 
 	let messages = signing_ceremony.run_stage::<VerifyComm2, _, _>(messages).await;
@@ -81,7 +82,7 @@ async fn should_report_on_inconsistent_broadcast_local_sig3() {
 	// This account id will send an invalid signature
 	let [bad_account_id] = signing_ceremony.select_account_ids();
 	for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
-		*message = gen_invalid_local_sig(&mut signing_ceremony.rng);
+		*message = gen_dummy_local_sig(&mut signing_ceremony.rng);
 	}
 
 	let messages = signing_ceremony.run_stage::<VerifyLocalSig4, _, _>(messages).await;
@@ -134,26 +135,11 @@ async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayl
 
 #[tokio::test]
 async fn should_sign_multiple_payloads() {
-	use crate::crypto::{
-		bitcoin::SigningPayload as BtcPayload, eth::SigningPayload as EthPayload,
-		polkadot::SigningPayload as DotPayload,
-	};
-
-	test_sign_multiple_payloads::<EthSigning>(&[
-		EthPayload(*b"Chainflip:Chainflip:Chainflip:01"),
-		EthPayload(*b"Chainflip:Chainflip:Chainflip:02"),
-	])
-	.await;
-
+	// For now, only bitcoin can have multiple payloads. The other chains will fail the message size
+	// check.
 	test_sign_multiple_payloads::<BtcSigning>(&[
-		BtcPayload(*b"Chainflip:Chainflip:Chainflip:01"),
-		BtcPayload(*b"Chainflip:Chainflip:Chainflip:02"),
-	])
-	.await;
-
-	test_sign_multiple_payloads::<PolkadotSigning>(&[
-		DotPayload::new(b"Chainflip:Chainflip:Chainflip:01".to_vec()).unwrap(),
-		DotPayload::new(b"Chainflip:Chainflip:Chainflip:02".to_vec()).unwrap(),
+		bitcoin::SigningPayload(*b"Chainflip:Chainflip:Chainflip:01"),
+		bitcoin::SigningPayload(*b"Chainflip:Chainflip:Chainflip:02"),
 	])
 	.await;
 }
@@ -198,9 +184,9 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 
 #[tokio::test]
 async fn should_sign_with_different_keys() {
-	// The logic for multiple payloads/keys is the same for all crypto
-	// schemes, so we only need to test one of them:
-	type C = EthSigning;
+	// For now, only bitcoin can have multiple payloads. The other chains will fail the message size
+	// check
+	type C = BtcSigning;
 	type Point = <C as CryptoScheme>::Point;
 
 	let mut rng = Rng::from_seed([1; 32]);
