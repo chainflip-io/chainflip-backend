@@ -36,7 +36,6 @@ pub enum StateChainGatewayEvent {
 		account_id: AccountId32,
 		amount: u128,
 		funder: ethabi::Address,
-		return_addr: ethabi::Address,
 	},
 
 	RedemptionRegistered {
@@ -113,14 +112,14 @@ impl EthContractWitnesser for StateChainGateway {
 		for event in block.block_items {
 			info!("Handling event: {event}");
 			match event.event_parameters {
-				StateChainGatewayEvent::Funded { account_id, amount, funder: _, return_addr } => {
+				StateChainGatewayEvent::Funded { account_id, amount, funder } => {
 					state_chain_client
 						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 							call: Box::new(
 								pallet_cf_funding::Call::funded {
 									account_id,
 									amount,
-									withdrawal_address: return_addr.0,
+									withdrawal_address: funder.into(),
 									tx_hash: event.tx_hash.into(),
 								}
 								.into(),
@@ -205,7 +204,6 @@ impl EthContractWitnesser for StateChainGateway {
 							.try_into()
 							.expect("Funded event amount should fit u128"),
 						funder: decode_log_param(&log, "funder")?,
-						return_addr: decode_log_param(&log, "returnAddr")?,
 					}
 				} else if event_signature == redemption_registered.signature {
 					let log = redemption_registered.event.parse_log(raw_log)?;
@@ -362,7 +360,6 @@ mod tests {
 	}
 
 	#[test]
-	#[ignore = "to be fixed"]
 	fn test_funded_log_parsing() {
 		let state_chain_gateway = StateChainGateway::new(H160::default());
 		let decode_log = state_chain_gateway.decode_log_closure().unwrap();
@@ -375,26 +372,19 @@ mod tests {
             RawLog {
                 topics : vec![
                     funded_event_signature,
-                    *NODE_ID,
-                    H256::from_str("0x0000000000000000000000000000000000000000000000000000000000000001").unwrap()
+                    H256::from_str("0x000000000000000000000000000000000000000000000000000000000000a455").unwrap()
                 ],
-                data : hex::decode("000000000000000000000000000000000000000000000878678326eac900000000000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c8").unwrap()
+                data : hex::decode("0000000000000000000000000000000000000000000000000de0b6b3a764000000000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c8").unwrap()
             }
         ).unwrap() {
             StateChainGatewayEvent::Funded {
                 account_id,
                 amount,
                 funder,
-                return_addr,
             } => {
                 assert_eq!(account_id, AccountId32::from_str("000000000000000000000000000000000000000000000000000000000000a455").unwrap());
-                assert_eq!(amount, 40000000000000000000000u128);
+                assert_eq!(amount, 1000000000000000000u128);
                 assert_eq!(funder, ALICE.clone());
-                assert_eq!(
-                    return_addr,
-                    web3::types::H160::from_str("0x0000000000000000000000000000000000000001")
-                        .unwrap()
-                );
             }
             _ => panic!("Expected StateChainGatewayEvent::Funded, got a different variant"),
         }

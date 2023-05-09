@@ -26,7 +26,7 @@ pub async fn test_all_state_chain_gateway_events() {
 	scg_events
 		.iter()
 		.find(|event| match &event.event_parameters {
-			StateChainGatewayEvent::Funded { account_id, amount, funder, return_addr } => {
+			StateChainGatewayEvent::Funded { account_id, amount, funder } => {
 				assert_eq!(
 					account_id,
 					&AccountId32::from_str(
@@ -38,11 +38,6 @@ pub async fn test_all_state_chain_gateway_events() {
 				assert_eq!(
 					funder,
 					&web3::types::H160::from_str("0x70997970c51812dc3a010c7d01b50e0d17dc79c8")
-						.unwrap()
-				);
-				assert_eq!(
-					return_addr,
-					&web3::types::H160::from_str("0x0000000000000000000000000000000000000001")
 						.unwrap()
 				);
 				true
