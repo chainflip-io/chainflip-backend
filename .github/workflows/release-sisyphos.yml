@@ -30,6 +30,7 @@ jobs:
     with:
       network: sisyphos
       commit_hash: ${{ github.sha }}
+      environment: dev
   package:
     needs: [build]
     uses: ./.github/workflows/_25_package.yml

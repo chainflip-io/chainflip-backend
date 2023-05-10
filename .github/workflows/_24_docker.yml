@@ -9,6 +9,10 @@ on:
         description: Commit hash to be released
         required: true
         type: string
+      environment:
+        description: Prod of dev
+        required: true
+        type: string
 jobs:
   docker:
     env:
@@ -30,7 +34,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Update Docker repo for production images
-        if: inputs.network == 'perseverance'
+        if: inputs.environment == 'prod'
         run:
           echo "DOCKER_REPO=ghcr.io/chainflip-io/" >> $GITHUB_ENV
 
@@ -54,7 +58,7 @@ jobs:
             latest=true
           tags: |
             type=schedule,pattern={{date 'YYYY-MM-DD'}},prefix=nightly-
-            type=pep440,pattern={{version}}
+            type=pep440,pattern={{version}},prefix=${{ inputs.network }}-
             type=raw,value=${{ inputs.commit_hash }}
             type=raw,value=${{ inputs.network }}
 

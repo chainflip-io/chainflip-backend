@@ -15,8 +15,9 @@ jobs:
     needs: [bins]
     uses: ./.github/workflows/_24_docker.yml
     with:
-      network: sisyphos
+      network: perseverance
       commit_hash: ${{ github.sha }}
+      environment: prod
     secrets: inherit
   package:
     needs: [bins]
