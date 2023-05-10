@@ -111,6 +111,14 @@ jobs:
         run: |
           cat /tmp/chainflip/chainflip-node.log
 
+      - name: Upload Localnet Logs 💾
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: localnet-logs
+          path: |
+            /tmp/chainflip/chainflip-*.log
+
       - name: Notify on failed build
         if: failure() && github.ref_name == 'main'
         env:
