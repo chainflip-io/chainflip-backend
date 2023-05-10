@@ -47,7 +47,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 pub mod pallet {
 	use super::*;
 	use cf_chains::eth::Ethereum;
-	use cf_primitives::BroadcastId;
+	use cf_primitives::{AccountRole, BroadcastId};
 	use cf_traits::{AccountRoleRegistry, Broadcaster};
 	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
@@ -529,7 +529,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub genesis_validators: Vec<(AccountId<T>, T::Balance)>,
+		pub genesis_accounts: Vec<(AccountId<T>, AccountRole, T::Balance)>,
 		pub minimum_funding: T::Balance,
 		pub redemption_ttl: Duration,
 		pub redemption_delay_buffer_seconds: u64,
@@ -539,7 +539,7 @@ pub mod pallet {
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {
-				genesis_validators: vec![],
+				genesis_accounts: vec![],
 				minimum_funding: Default::default(),
 				redemption_ttl: Default::default(),
 				redemption_delay_buffer_seconds: Default::default(),
@@ -552,10 +552,12 @@ pub mod pallet {
 		fn build(&self) {
 			MinimumFunding::<T>::set(self.minimum_funding);
 			RedemptionTTLSeconds::<T>::set(self.redemption_ttl.as_secs());
-			for (account_id, amount) in self.genesis_validators.iter() {
+			for (account_id, role, amount) in self.genesis_accounts.iter() {
 				Pallet::<T>::add_funds_to_account(account_id, *amount);
-				Pallet::<T>::activate_bidding(account_id)
-					.expect("The account was just created so this can't fail.");
+				if matches!(role, AccountRole::Validator) {
+					Pallet::<T>::activate_bidding(account_id)
+						.expect("The account was just created so this can't fail.");
+				}
 			}
 		}
 	}
