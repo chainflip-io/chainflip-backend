@@ -492,7 +492,13 @@ fn testnet_genesis(
 		funding: FundingConfig {
 			genesis_validators: all_accounts
 				.iter()
-				.map(|(acct, _role, amount)| (acct.clone(), *amount))
+				.filter_map(|(acct, role, amount)| {
+					if matches!(role, AccountRole::Validator) {
+						Some((acct.clone(), *amount))
+					} else {
+						None
+					}
+				})
 				.collect(),
 			minimum_funding,
 			redemption_ttl: core::time::Duration::from_secs(3 * redemption_delay),
