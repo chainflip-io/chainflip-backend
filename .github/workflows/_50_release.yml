@@ -1,0 +1,23 @@
+on:
+  workflow_call:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download binaries
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-backend-bin
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          generate_release_notes: true
+          prerelease: true
+          files: |
+            chainflip-node
+            chainflip-engine
+            chainflip-cli
+            chainflip-broker-api
+            wbuild/state-chain-runtime/state_chain_runtime*.wasm

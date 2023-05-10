@@ -35,3 +35,7 @@ jobs:
       environment: prod
       commit_hash: ${{ github.sha }}
     secrets: inherit
+  release:
+    needs: [publish]
+    uses: ./.github/workflows/_50_release.yml
+    secrets: inherit
