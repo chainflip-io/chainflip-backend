@@ -418,17 +418,16 @@ pub async fn init_json_logger(scope: &task_scope::Scope<'_, anyhow::Error>) {
 			});
 
 		let get_filter = warp::get().and(warp::path(PATH)).and(warp::path::end()).then(move || {
-			futures::future::ready(
-				match reload_handle.with_current(|env_filter| {
-					warp::reply::with_status(
-						warp::reply::json(&env_filter.to_string()),
-						warp::http::StatusCode::OK,
-					)
-				}) {
-					Ok(reply) => reply.into_response(),
-					Err(_) => warp::http::StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-				},
-			)
+			futures::future::ready({
+				let (status, message) =
+					match reload_handle.with_current(|env_filter| env_filter.to_string()) {
+						Ok(reply) => (warp::http::StatusCode::OK, reply),
+						Err(error) =>
+							(warp::http::StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
+					};
+
+				warp::reply::with_status(warp::reply::json(&message), status).into_response()
+			})
 		});
 
 		warp::serve(change_filter.or(get_filter))
