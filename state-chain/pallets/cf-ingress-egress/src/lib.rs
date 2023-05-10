@@ -506,33 +506,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				// Filter out disabled assets
 				requests
 					.drain_filter(|request| {
-						let pending = match request {
-							FetchOrTransfer::Fetch { channel_id, .. } => {
-								let (_, deposit_address) =
-									FetchParamDetails::<T, I>::get(channel_id)
-										.expect("to have fetch param details available");
-								match AddressStatus::<T, I>::get(deposit_address.clone()) {
-									DeploymentStatus::Deployed => false,
-									DeploymentStatus::Undeployed => {
-										AddressStatus::<T, I>::insert(
-											deposit_address,
-											DeploymentStatus::Pending,
-										);
-										false
-									},
-									DeploymentStatus::Pending => {
-										log::info!(
-											target: "cf-ingress-egress",
-											"Address {:?} is pending deployment, skipping", deposit_address);
-										true
-									},
-								}
-							},
-							FetchOrTransfer::Transfer { .. } => false,
-						};
 						if available_batch_size > 0 &&
 							!DisabledEgressAssets::<T, I>::contains_key(request.asset()) &&
-							!pending
+							!Self::is_pending(request)
 						{
 							available_batch_size.saturating_reduce(1);
 							true
@@ -601,6 +577,29 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Err(_) => TransactionOutcome::Rollback(Err(DispatchError::Other(
 				"AllBatch ApiCall creation failed, rolled back storage",
 			))),
+		}
+	}
+
+	fn is_pending(request: &FetchOrTransfer<<T as Config<I>>::TargetChain>) -> bool {
+		match request {
+			FetchOrTransfer::Fetch { channel_id, .. } => {
+				let (_, deposit_address) = FetchParamDetails::<T, I>::get(channel_id)
+					.expect("to have fetch param details available");
+				match AddressStatus::<T, I>::get(deposit_address.clone()) {
+					DeploymentStatus::Deployed => false,
+					DeploymentStatus::Undeployed => {
+						AddressStatus::<T, I>::insert(deposit_address, DeploymentStatus::Pending);
+						false
+					},
+					DeploymentStatus::Pending => {
+						log::info!(
+							target: "cf-ingress-egress",
+							"Address {:?} is pending deployment, skipping", deposit_address);
+						true
+					},
+				}
+			},
+			FetchOrTransfer::Transfer { .. } => false,
 		}
 	}
 
