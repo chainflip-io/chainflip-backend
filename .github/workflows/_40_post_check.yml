@@ -101,6 +101,24 @@ jobs:
         run: |
           ./tests/produces_blocks.sh 3 # TODO: Change this back to ./run.sh
 
+      - name: Print chainflip-engine logs
+        if: failure()
+        run: |
+          cat /tmp/chainflip/chainflip-engine.log
+
+      - name: Print chainflip-node logs
+        if: failure()
+        run: |
+          cat /tmp/chainflip/chainflip-node.log
+
+      - name: Upload Localnet Logs 💾
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: localnet-logs
+          path: |
+            /tmp/chainflip/chainflip-*.log
+
   benchmarks:
     runs-on: [hetzner]
     timeout-minutes: ${{ inputs.timeout-minutes }}
