@@ -149,19 +149,8 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 		signed_call: &EthereumApi<EthEnvironment>,
 	) -> <Ethereum as ChainAbi>::Transaction {
 		eth::Transaction {
-			chain_id: Environment::ethereum_chain_id(),
-			contract: match signed_call {
-				EthereumApi::SetAggKeyWithAggKey(_) => Environment::key_manager_address().into(),
-				EthereumApi::RegisterRedemption(_) =>
-					Environment::state_chain_gateway_address().into(),
-				EthereumApi::UpdateFlipSupply(_) =>
-					Environment::state_chain_gateway_address().into(),
-				EthereumApi::SetGovKeyWithAggKey(_) => Environment::key_manager_address().into(),
-				EthereumApi::SetCommKeyWithAggKey(_) => Environment::key_manager_address().into(),
-				EthereumApi::AllBatch(_) => Environment::eth_vault_address().into(),
-				EthereumApi::ExecutexSwapAndCall(_) => Environment::eth_vault_address().into(),
-				EthereumApi::_Phantom(..) => unreachable!(),
-			},
+			chain_id: signed_call.replay_protection().chain_id,
+			contract: signed_call.replay_protection().contract_address,
 			data: signed_call.chain_encoded(),
 			..Default::default()
 		}

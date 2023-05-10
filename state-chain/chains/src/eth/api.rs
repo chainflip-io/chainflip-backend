@@ -294,6 +294,12 @@ macro_rules! map_over_api_variants {
 	};
 }
 
+impl<E> EthereumApi<E> {
+	pub fn replay_protection(&self) -> EthereumReplayProtection {
+		map_over_api_variants!(self, call, call.replay_protection())
+	}
+}
+
 impl<E> ApiCall<Ethereum> for EthereumApi<E> {
 	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
 		map_over_api_variants!(self, call, call.threshold_signature_payload())

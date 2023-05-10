@@ -32,7 +32,7 @@ use sp_std::{
 	str, vec,
 };
 
-use self::api::{ethabi_param, EthereumReplayProtection};
+use self::api::{ethabi_param, EthereumChainId, EthereumReplayProtection};
 
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 1;
@@ -167,9 +167,9 @@ pub trait EthereumCall {
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct EthereumTransactionBuilder<C> {
-	pub sig_data: SigData,
-	pub replay_protection: EthereumReplayProtection,
-	pub call: C,
+	sig_data: SigData,
+	replay_protection: EthereumReplayProtection,
+	call: C,
 }
 
 impl<C: EthereumCall> EthereumTransactionBuilder<C> {
@@ -179,6 +179,14 @@ impl<C: EthereumCall> EthereumTransactionBuilder<C> {
 			call,
 			sig_data: SigData::Unsigned { nonce: replay_protection.nonce.into() },
 		}
+	}
+
+	pub fn replay_protection(&self) -> EthereumReplayProtection {
+		self.replay_protection
+	}
+
+	pub fn chain_id(&self) -> EthereumChainId {
+		self.replay_protection.chain_id
 	}
 }
 
