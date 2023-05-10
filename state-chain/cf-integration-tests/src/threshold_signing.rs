@@ -201,8 +201,10 @@ impl KeyUtils for BtcKeyComponents {
 
 	fn sign(&self, message: &[u8]) -> Self::SigVerification {
 		let secp = secp256k1::Secp256k1::new();
-		let signature =
-			secp.sign_schnorr(&secp256k1::Message::from_slice(message).unwrap(), &self.secret);
+		let signature = secp.sign_schnorr_no_aux_rand(
+			&secp256k1::Message::from_slice(message).unwrap(),
+			&self.secret,
+		);
 		*array_ref!(signature[..], 0, 64)
 	}
 

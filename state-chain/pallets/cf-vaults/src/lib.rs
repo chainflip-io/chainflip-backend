@@ -85,6 +85,8 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	AwaitingRotation { new_public_key: AggKeyFor<T, I> },
 	/// The key has been successfully updated on the contract.
 	Complete { tx_id: TransactionIdFor<T, I> },
+	/// There is no need to do the activation. e.g. for Bitcoin if there are no UTXOs.
+	SkipActivation,
 	/// The rotation has failed at one of the above stages.
 	Failed { offenders: BTreeSet<T::ValidatorId> },
 }

@@ -235,13 +235,18 @@ pub trait EthEnvironmentProvider {
 	fn vault_address() -> eth::Address;
 	fn chain_id() -> u64;
 }
-#[allow(clippy::result_unit_err)]
+
+pub enum SetAggKeyWithAggKeyError {
+	NotRequired,
+	Other,
+}
+
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		maybe_old_key: Option<<Abi as ChainCrypto>::AggKey>,
 		new_key: <Abi as ChainCrypto>::AggKey,
-	) -> Result<Self, ()>;
+	) -> Result<Self, SetAggKeyWithAggKeyError>;
 }
 
 #[allow(clippy::result_unit_err)]

@@ -5,7 +5,7 @@ use crate as pallet_cf_vaults;
 use cf_chains::{
 	eth,
 	mocks::{MockAggKey, MockEthereum},
-	ApiCall, ChainCrypto, ReplayProtectionProvider,
+	ApiCall, ChainCrypto, ReplayProtectionProvider, SetAggKeyWithAggKeyError,
 };
 use cf_primitives::{BroadcastId, GENESIS_EPOCH};
 use cf_traits::{
@@ -125,8 +125,8 @@ impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
 	fn new_unsigned(
 		old_key: Option<<MockEthereum as ChainCrypto>::AggKey>,
 		new_key: <MockEthereum as ChainCrypto>::AggKey,
-	) -> Result<Self, ()> {
-		old_key.ok_or(())?;
+	) -> Result<Self, SetAggKeyWithAggKeyError> {
+		old_key.ok_or(SetAggKeyWithAggKeyError::Other)?;
 		Ok(Self { nonce: MockEthReplayProtectionProvider::replay_protection(), new_key })
 	}
 }

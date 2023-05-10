@@ -101,8 +101,8 @@ where
 	fn new_unsigned(
 		maybe_old_key: Option<PolkadotPublicKey>,
 		new_key: PolkadotPublicKey,
-	) -> Result<Self, ()> {
-		let vault = E::try_vault_account().ok_or(())?;
+	) -> Result<Self, SetAggKeyWithAggKeyError> {
+		let vault = E::try_vault_account().ok_or(SetAggKeyWithAggKeyError::Other)?;
 
 		Ok(Self::RotateVaultProxy(rotate_vault_proxy::extrinsic_builder(
 			E::replay_protection(),
