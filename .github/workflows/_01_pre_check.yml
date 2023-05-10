@@ -49,4 +49,4 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Run docker compose up
-        run: docker compose up -d
+        run: docker compose up -f ./localnet/docker-compose.yml -d
