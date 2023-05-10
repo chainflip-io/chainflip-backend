@@ -852,3 +852,40 @@ fn handle_pending_deployment() {
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 0);
 	});
 }
+
+#[test]
+fn handle_pending_deployment_same_block() {
+	new_test_ext().execute_with(|| {
+		// Initial request.
+		let (channel_id, deposit_address) = request_address_and_deposit(ALICE, eth::Asset::Eth);
+		Pallet::<Test, _>::process_single_deposit(
+			deposit_address,
+			eth::Asset::Eth,
+			1,
+			Default::default(),
+		)
+		.unwrap();
+		// Expect to have two fetch requests.
+		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 2);
+		// Expect the address to be undeployed.
+		assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Undeployed);
+		// Process deposits.
+		IngressEgress::on_idle(1, Weight::from_ref_time(1_000_000_000_000u64));
+		// Expect only one fetch request processed in one block. Note: This not the most performant
+		// solution, but also an edge case. Maybe we can improve this in the future.
+		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 1);
+		// Process deposit (again).
+		IngressEgress::on_idle(2, Weight::from_ref_time(1_000_000_000_000u64));
+		// Expect the request still to be in the queue.
+		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 1);
+		// Simulate the finalization of the first fetch request.
+		assert_ok!(IngressEgress::finalise_ingress(
+			RuntimeOrigin::root(),
+			vec![(cf_chains::eth::EthereumChannelId::UnDeployed(channel_id), deposit_address)]
+		));
+		// Process deposit (again).
+		IngressEgress::on_idle(3, Weight::from_ref_time(1_000_000_000_000u64));
+		// All fetch requests should be processed.
+		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 0);
+	});
+}
