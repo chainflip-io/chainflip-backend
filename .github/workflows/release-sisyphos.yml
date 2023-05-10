@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - 'release/*'
+
 concurrency:
   group: ${{ github.ref }}-release-sisyphos
   cancel-in-progress: true
@@ -22,12 +23,26 @@ jobs:
     with:
       network: sisyphos
       commit_hash: ${{ github.sha }}
+  docker:
+    needs: [build]
+    uses: ./.github/workflows/_24_docker.yml
+    secrets: inherit
+    with:
+      network: sisyphos
+      commit_hash: ${{ github.sha }}
+  package:
+    needs: [build]
+    uses: ./.github/workflows/_25_package.yml
+    with:
+      network: "sisyphos"
+      environment: dev
+    secrets: inherit
   post-check:
     needs: [build]
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
   publish:
-    needs: [build]
+    needs: [package]
     uses: ./.github/workflows/_30_publish.yml
     with:
       version: "sisyphos/"

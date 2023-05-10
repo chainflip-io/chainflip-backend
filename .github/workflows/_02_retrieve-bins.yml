@@ -1,0 +1,31 @@
+on:
+  workflow_call:
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get branch of tag
+        shell: bash
+        run: |
+          raw=$(git --no-pager branch --contains tags/${{ github.ref_name }} | xargs)
+          echo "BRANCH=$branch" >> $GITHUB_ENV
+
+      - name: Fetch binaries from ${{ env.BRANCH }}
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: _20_build.yml
+          name: chainflip-backend-bin
+          branch: ${{ env.BRANCH }}
+          if_no_artifact_found: error
+          github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+
+      - name: Re-upload binary artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-backend-bin
+          path: |
+            chainflip-node
+            chainflip-engine
+            chainflip-cli
+            chainflip-broker-api
+            wbuild/state-chain-runtime/state_chain_runtime*.wasm

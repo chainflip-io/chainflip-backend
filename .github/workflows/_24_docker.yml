@@ -1,0 +1,78 @@
+on:
+  workflow_call:
+    inputs:
+      network:
+        description: Network being released
+        required: true
+        type: string
+      commit_hash:
+        description: Commit hash to be released
+        required: true
+        type: string
+jobs:
+  docker:
+    env:
+      DOCKER_REPO: ghcr.io/${{ github.repository }}
+    strategy:
+      matrix:
+        target:
+          - chainflip-node
+          - chainflip-engine
+          - chainflip-cli
+          - chainflip-broker-api
+          - generate-genesis-keys
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Update Docker repo for production images
+        if: inputs.network == 'perseverance'
+        run:
+          echo "DOCKER_REPO=ghcr.io/chainflip-io/" >> $GITHUB_ENV
+
+      - name: Download binaries
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-backend-bin
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: ${{ env.DOCKER_REPO }}/${{ matrix.target }}
+          flavor: |
+            latest=true
+          tags: |
+            type=schedule,pattern={{date 'YYYY-MM-DD'}},prefix=nightly-
+            type=pep440,pattern={{version}}
+            type=raw,value=${{ inputs.commit_hash }}
+            type=raw,value=${{ inputs.network }}
+
+      - name: Login to Github Container Registry 🔑
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          file: ci/docker/cf.Dockerfile
+          build-args: >
+            TARGET=${{ matrix.target }}
