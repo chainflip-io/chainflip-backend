@@ -149,7 +149,7 @@ type TaskFuture<Error> = Pin<Box<dyn 'static + Future<Output = Result<(), Error>
 
 #[derive(Clone, Copy)]
 struct TaskProperties {
-	strong: bool,
+	weak: bool,
 }
 #[pin_project::pin_project]
 struct TaskWrapper<Task> {
@@ -199,8 +199,8 @@ impl<'env, Error: Send + 'static> Scope<'env, Error> {
 			Scope { sender, _phantom: Default::default() },
 			ScopeResultStream {
 				receiver: Some(receiver),
-				no_more_tasks: false,
-				strong_tasks: 0,
+				can_receive_new_tasks: true,
+				non_weak_tasks: 0,
 				tasks: match runtime_handle.runtime_flavor() {
 					tokio::runtime::RuntimeFlavor::CurrentThread =>
 						ScopedTasks::CurrentThread(Default::default()),
@@ -230,12 +230,12 @@ impl<'env, Error: Send + 'static> Scope<'env, Error> {
 
 	/// Spawns a task that the scope will wait for before exiting.
 	pub fn spawn<F: 'env + Future<Output = Result<(), Error>> + Send>(&self, f: F) {
-		self.inner_spawn(TaskProperties { strong: true }, f)
+		self.inner_spawn(TaskProperties { weak: false }, f)
 	}
 
 	/// Spawns a task that the scope will not wait for before exiting.
 	pub fn spawn_weak<F: 'env + Future<Output = Result<(), Error>> + Send>(&self, f: F) {
-		self.inner_spawn(TaskProperties { strong: false }, f)
+		self.inner_spawn(TaskProperties { weak: true }, f)
 	}
 
 	/// Spawns a task that the scope will wait for before exiting, and returns a handle that you can
@@ -320,19 +320,19 @@ enum ScopedTasks<Error: Send + 'static> {
 
 struct ScopeResultStream<Error: Send + 'static> {
 	receiver: Option<async_channel::Receiver<(TaskProperties, TaskFuture<Error>)>>,
-	no_more_tasks: bool,
-	strong_tasks: usize,
+	can_receive_new_tasks: bool,
+	non_weak_tasks: usize,
 	tasks: ScopedTasks<Error>,
 }
 impl<Error: Send + 'static> Stream for ScopeResultStream<Error> {
 	type Item = Result<Result<(), Error>, tokio::task::JoinError>;
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-		while !self.no_more_tasks {
+		while self.can_receive_new_tasks {
 			match Pin::new(&mut self.as_mut().receiver.as_mut().unwrap()).poll_next(cx) {
 				Poll::Ready(Some((properties, future))) => {
-					if properties.strong {
-						self.strong_tasks += 1;
+					if !properties.weak {
+						self.non_weak_tasks += 1;
 					}
 					let tasks = &mut self.tasks;
 					match tasks {
@@ -343,12 +343,12 @@ impl<Error: Send + 'static> Stream for ScopeResultStream<Error> {
 					}
 				},
 				// Sender/`Scope` has been dropped
-				Poll::Ready(None) => self.no_more_tasks = true,
+				Poll::Ready(None) => self.can_receive_new_tasks = false,
 				Poll::Pending => break,
 			}
 		}
 
-		if self.no_more_tasks && self.strong_tasks == 0 {
+		if !self.can_receive_new_tasks && self.non_weak_tasks == 0 {
 			Poll::Ready(None)
 		} else {
 			match ready!(match &mut self.tasks {
@@ -358,14 +358,14 @@ impl<Error: Send + 'static> Stream for ScopeResultStream<Error> {
 				ScopedTasks::MultiThread(_, tasks) => Pin::new(tasks).poll_next(cx),
 			}) {
 				None =>
-					if self.no_more_tasks {
-						Poll::Ready(None)
-					} else {
+					if self.can_receive_new_tasks {
 						Poll::Pending
+					} else {
+						Poll::Ready(None)
 					},
 				Some((properties, result)) => {
-					if properties.strong {
-						self.strong_tasks -= 1;
+					if !properties.weak {
+						self.non_weak_tasks -= 1;
 					}
 					Poll::Ready(Some(result))
 				},
