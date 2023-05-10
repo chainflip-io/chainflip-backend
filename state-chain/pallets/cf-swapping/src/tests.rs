@@ -1371,7 +1371,7 @@ fn ccm_without_principal_swaps_are_accepted() {
 		assert_eq!(CollectedRejectedFunds::<Test>::get(eth), 0);
 		assert_eq!(CollectedRejectedFunds::<Test>::get(flip), 0);
 
-		// Ccm with the need to swap principal: principal asset = output asset
+		// Ccm where principal asset = output asset
 		System::reset_events();
 		assert_ok!(Swapping::on_ccm_deposit(
 			eth,
@@ -1398,6 +1398,47 @@ fn ccm_without_principal_swaps_are_accepted() {
 		);
 		// No funds are confiscated
 		assert_eq!(CollectedRejectedFunds::<Test>::get(eth), 0);
+		assert_eq!(CollectedRejectedFunds::<Test>::get(flip), 0);
+	});
+}
+
+#[test]
+fn ccm_with_gas_below_minimum_swap_amount_allowed() {
+	new_test_ext().execute_with(|| {
+		let gas_budget = 1_000;
+		let flip: Asset = Asset::Flip;
+		let ccm = CcmDepositMetadata {
+			message: vec![0x01],
+			gas_budget,
+			refund_address: ForeignChainAddress::Eth(Default::default()),
+			source_address: ForeignChainAddress::Eth(Default::default()),
+		};
+
+		// Set minimum swap and gas budget.
+		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), flip, gas_budget + 1,));
+		assert_ok!(Swapping::set_minimum_ccm_gas_budget(RuntimeOrigin::root(), flip, gas_budget));
+		System::reset_events();
+
+		// Even if gas amount is below minimum swap amount, it is allowed.
+		assert_ok!(Swapping::on_ccm_deposit(
+			flip,
+			gas_budget,
+			flip,
+			ForeignChainAddress::Eth(Default::default()),
+			ccm,
+		));
+
+		// Verify the CCM is processed successfully
+		System::assert_last_event(RuntimeEvent::Swapping(
+			crate::Event::<Test>::CcmDepositReceived {
+				ccm_id: 1,
+				principal_swap_id: None,
+				gas_swap_id: Some(1),
+				deposit_amount: gas_budget,
+				destination_address: ForeignChainAddress::Eth(Default::default()),
+			},
+		));
+		// No funds are confiscated
 		assert_eq!(CollectedRejectedFunds::<Test>::get(flip), 0);
 	});
 }
