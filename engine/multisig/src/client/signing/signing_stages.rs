@@ -352,7 +352,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 					.map(|idx| {
 						(
 							*idx,
-							key.party_public_keys
+							*key.party_public_keys
 								.get(self.common.validator_mapping.get_id(*idx))
 								.expect("should have a public key for this party"),
 						)
