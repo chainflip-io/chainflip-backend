@@ -240,7 +240,7 @@ fn basic_pool_setup_provision_and_swap() {
 			));
 		}
 
-		let swap_id = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapDepositReceived {
+		let swap_id = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapScheduledByDeposit {
 			swap_id,
 			deposit_address: events_deposit_address,
 			deposit_amount: 50,
