@@ -4,9 +4,8 @@
 
 use cf_chains::{
 	btc::{
-		api::SelectedUtxos, deposit_address::derive_btc_deposit_bitcoin_script,
-		utxo_selection::select_utxos_from_pool, Bitcoin, BitcoinNetwork, BitcoinScriptBounded,
-		BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
+		api::SelectedUtxos, utxo_selection::select_utxos_from_pool, Bitcoin, BitcoinNetwork,
+		BitcoinScriptBounded, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	ChainCrypto,
@@ -473,13 +472,13 @@ pub mod pallet {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
 			for ChangeUtxoWitness { amount, change_pubkey, utxo_id } in change_witnesses {
-				Self::add_bitcoin_utxo_to_list(
+				BitcoinAvailableUtxos::<T>::append(Utxo {
 					amount,
-					utxo_id,
-					derive_btc_deposit_bitcoin_script(change_pubkey, CHANGE_ADDRESS_SALT)
-						.try_into()
-						.expect("The script should not exceed 128 bytes"),
-				);
+					txid: utxo_id.tx_hash,
+					vout: utxo_id.vout,
+					pubkey_x: change_pubkey,
+					salt: CHANGE_ADDRESS_SALT,
+				});
 			}
 
 			Ok(().into())
