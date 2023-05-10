@@ -360,8 +360,21 @@ macro_rules! print_starting {
 	}
 }
 
-/// Install global collector using json formatting and the RUST_LOG env var.
-/// If `RUST_LOG` is not set, then it will default to INFO log level.
+/// Install a tracing subscriber that uses json formatting for the logs. The initial filtering
+/// directives can be set using the RUST_LOG environment variable, if it is not set the subscriber
+/// will default to INFO, meaning all INFO, WARN, or ERROR logs will be output, all the other logs
+/// will be ignored. The filtering directives can also be controlled via a REST api while the
+/// application is running, for example:
+///
+/// `curl -X GET 127.0.0.1:36079/tracing` - This returns the current filtering directives
+/// `curl --json '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"'
+/// 127.0.0.1:36079/tracing` - This sets the filter directives so the default is DEBUG, and the
+/// logging in modules warp, hyper, jsonrpc, web3, and reqwest is turned off.
+///
+/// The above --json command is short hand for: `curl -X POST -H 'Content-Type: application/json' -d
+/// '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"' 127.0.0.1:36079/tracing
+///
+/// The full syntax used for specifying filter directives used in both the REST api and in the RUST_LOG environment variable is specified here: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
 pub async fn init_json_logger(scope: &task_scope::Scope<'_, anyhow::Error>) {
 	use tracing::metadata::LevelFilter;
 	use tracing_subscriber::EnvFilter;

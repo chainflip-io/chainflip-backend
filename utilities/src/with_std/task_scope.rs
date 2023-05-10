@@ -233,13 +233,13 @@ impl<'env, Error: Send + 'static> Scope<'env, Error> {
 		self.inner_spawn(TaskProperties { weak: false }, f)
 	}
 
-	/// Spawns a task that the scope will not wait for before exiting.
+	/// Spawns a task that the scope will not wait for before exiting, instead it will be cancelled.
 	pub fn spawn_weak<F: 'env + Future<Output = Result<(), Error>> + Send>(&self, f: F) {
 		self.inner_spawn(TaskProperties { weak: true }, f)
 	}
 
 	/// Spawns a task that the scope will wait for before exiting, and returns a handle that you can
-	/// receive the output of the task with.
+	/// receive the output of the task.
 	pub fn spawn_with_handle<
 		T: Send + 'static,
 		F: 'env + Future<Output = Result<T, Error>> + Send,
