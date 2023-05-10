@@ -101,6 +101,14 @@ jobs:
         run: |
           ./tests/produces_blocks.sh 3 # TODO: Change this back to ./run.sh
 
+      - name: Print chainflip-engine Localnet Logs
+        run: |
+          cat /tmp/chainflip/chainflip-engine.log
+
+      - name: Print chainflip-node logs
+        run: |
+          cat /tmp/chainflip/chainflip-node.log
+
       - name: Notify on failed build
         if: failure() && github.ref_name == 'main'
         env:
