@@ -1,3 +1,4 @@
+use super::{api::EthereumTransactionBuilder, TransactionFee};
 use crate::{
 	benchmarking_value::BenchmarkValue,
 	eth::{
@@ -7,15 +8,12 @@ use crate::{
 	},
 	ApiCall,
 };
-
-const SIG_NONCE: [u8; 32] = [1u8; 32];
-const PRIVATE_KEY: [u8; 32] = [2u8; 32];
-
 use cf_primitives::EthAmount;
 use ethabi::Uint;
 use libsecp256k1::{PublicKey, SecretKey};
 
-use super::{EthereumTransactionBuilder, TransactionFee};
+const SIG_NONCE: [u8; 32] = [1u8; 32];
+const PRIVATE_KEY: [u8; 32] = [2u8; 32];
 
 impl BenchmarkValue for SchnorrVerificationComponents {
 	fn benchmark_value() -> Self {
