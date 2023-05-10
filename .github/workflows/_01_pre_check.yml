@@ -50,3 +50,6 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Run docker compose up
         run: docker compose -f ./localnet/docker-compose.yml up -d
+      - name: Stop containers
+        if: always()
+        run: docker compose -f ./localnet/docker-compose.yml down --remove-orphans
