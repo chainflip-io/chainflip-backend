@@ -101,7 +101,7 @@ jobs:
         run: |
           ./tests/produces_blocks.sh 3 # TODO: Change this back to ./run.sh
 
-      - name: Print chainflip-engine Localnet Logs
+      - name: Print chainflip-engine logs
         if: failure()
         run: |
           cat /tmp/chainflip/chainflip-engine.log
