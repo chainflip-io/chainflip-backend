@@ -22,4 +22,4 @@ tree --no-default-features --depth 1 --edges=features,normal
 
 [env]
 CF_ETH_CONTRACT_ABI_ROOT = { value = "eth-contract-abis", relative = true }
-CF_ETH_CONTRACT_ABI_TAG = "perseverance-rc7"
+CF_ETH_CONTRACT_ABI_TAG = "perseverance-rc10"
