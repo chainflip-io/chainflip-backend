@@ -442,6 +442,8 @@ mod tests {
 	use anyhow::anyhow;
 	use futures::FutureExt;
 
+	use crate::assert_ok;
+
 	use super::*;
 
 	#[tokio::main]
@@ -630,5 +632,20 @@ mod tests {
 		.unwrap();
 
 		assert_eq!(a, 20);
+	}
+
+	#[tokio::main]
+	#[test]
+	async fn scope_doesnt_wait_for_weak_tasks() {
+		task_scope::<_, Infallible, _>(|scope| {
+			async {
+				let _handle = scope.spawn_weak(futures::future::pending());
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
 	}
 }
