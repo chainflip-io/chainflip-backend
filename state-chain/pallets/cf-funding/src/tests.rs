@@ -2,11 +2,16 @@ use crate::{
 	mock::*, pallet, ActiveBidder, Error, EthereumAddress, PendingRedemptions, RedemptionAmount,
 };
 use cf_test_utilities::assert_event_sequence;
-use cf_traits::{mocks::system_state_info::MockSystemStateInfo, Bonding};
+use cf_traits::{
+	mocks::{
+		account_role_registry::MockAccountRoleRegistry, system_state_info::MockSystemStateInfo,
+	},
+	AccountRoleRegistry, Bonding,
+};
 
 use frame_support::{assert_noop, assert_ok};
 use pallet_cf_flip::Bonder;
-use sp_runtime::DispatchError;
+use sp_runtime::{traits::BadOrigin, DispatchError};
 
 type FlipError = pallet_cf_flip::Error<Test>;
 
@@ -319,22 +324,11 @@ fn cannot_redeem_bond() {
 }
 
 #[test]
-fn test_stop_bidding() {
+fn test_start_and_stop_bidding() {
 	new_test_ext().execute_with(|| {
 		MockEpochInfo::add_authorities(ALICE);
 		const AMOUNT: u128 = 100;
 
-		// Need to be funded in order to stop or start bidding.
-		assert_noop!(
-			Funding::stop_bidding(RuntimeOrigin::signed(ALICE)),
-			<Error<Test>>::UnknownAccount
-		);
-		assert_noop!(
-			Funding::start_bidding(RuntimeOrigin::signed(ALICE)),
-			<Error<Test>>::UnknownAccount
-		);
-
-		// Try again with some funds, should succeed this time.
 		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
 			ALICE,
@@ -343,14 +337,27 @@ fn test_stop_bidding() {
 			TX_HASH
 		));
 
-		assert!(!ActiveBidder::<Test>::try_get(ALICE).expect("funding adds bidder status"));
+		// Not yet registered as validator.
+		assert_noop!(Funding::stop_bidding(RuntimeOrigin::signed(ALICE)), BadOrigin);
+		assert_noop!(Funding::start_bidding(RuntimeOrigin::signed(ALICE)), BadOrigin);
+
+		assert!(!ActiveBidder::<Test>::get(ALICE));
+
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&ALICE
+		));
+
+		assert!(!ActiveBidder::<Test>::get(ALICE));
 
 		assert_noop!(
 			Funding::stop_bidding(RuntimeOrigin::signed(ALICE)),
 			<Error<Test>>::AlreadyNotBidding
 		);
 
+		assert!(!ActiveBidder::<Test>::get(ALICE));
+
 		assert_ok!(Funding::start_bidding(RuntimeOrigin::signed(ALICE)));
+
 		assert!(ActiveBidder::<Test>::get(ALICE));
 
 		assert_noop!(

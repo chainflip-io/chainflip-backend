@@ -109,7 +109,11 @@ impl ExtBuilder {
 			},
 			flip: FlipConfig { total_issuance: TOTAL_ISSUANCE },
 			funding: FundingConfig {
-				genesis_validators: self.accounts.clone(),
+				genesis_accounts: self
+					.accounts
+					.iter()
+					.map(|(id, balance)| (id.clone(), AccountRole::Validator, *balance))
+					.collect(),
 				minimum_funding: MIN_FUNDING,
 				redemption_ttl: core::time::Duration::from_secs(3 * REDEMPTION_DELAY_SECS),
 				redemption_delay_buffer_seconds: REDEMPTION_DELAY_BUFFER_SECS,

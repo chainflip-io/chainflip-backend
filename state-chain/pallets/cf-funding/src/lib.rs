@@ -469,21 +469,15 @@ pub mod pallet {
 
 			ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
 
-			ActiveBidder::<T>::try_mutate_exists(&account_id, |maybe_status| {
-				match maybe_status.as_mut() {
-					Some(active) => {
-						if !*active {
-							return Err(Error::<T>::AlreadyNotBidding)
-						}
-						*active = false;
-						Self::deposit_event(Event::StoppedBidding {
-							account_id: account_id.clone(),
-						});
-						Ok(())
-					},
-					None => Err(Error::UnknownAccount),
+			ActiveBidder::<T>::try_mutate(&account_id, |is_active_bidder| {
+				if *is_active_bidder {
+					*is_active_bidder = false;
+					Ok(())
+				} else {
+					Err(Error::<T>::AlreadyNotBidding)
 				}
 			})?;
+			Self::deposit_event(Event::StoppedBidding { account_id });
 			Ok(().into())
 		}
 
@@ -500,8 +494,9 @@ pub mod pallet {
 		/// - [UnknownAccount](Error::UnknownAccount)
 		#[pallet::weight(T::WeightInfo::start_bidding())]
 		pub fn start_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			let who = T::AccountRoleRegistry::ensure_validator(origin)?;
-			Self::activate_bidding(&who)?;
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
+			Self::activate_bidding(&account_id)?;
+			Self::deposit_event(Event::StartedBidding { account_id });
 			Ok(().into())
 		}
 
@@ -570,7 +565,6 @@ impl<T: Config> Pallet<T> {
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
 			// Creates an account
 			let _ = frame_system::Provider::<T>::created(account_id);
-			ActiveBidder::<T>::insert(account_id, false);
 		}
 
 		T::Flip::credit_funds(account_id, amount)
@@ -579,19 +573,14 @@ impl<T: Config> Pallet<T> {
 	/// Sets the `active` flag associated with the account to true, signalling that the account
 	/// wishes to participate in auctions, to become a network authority.
 	///
-	/// Returns an error if the account is already bidding, or if the account has no funds.
+	/// Returns an error if the account is already bidding.
 	fn activate_bidding(account_id: &AccountId<T>) -> Result<(), Error<T>> {
-		ActiveBidder::<T>::try_mutate_exists(account_id, |maybe_status| {
-			match maybe_status.as_mut() {
-				Some(active) => {
-					if *active {
-						return Err(Error::AlreadyBidding)
-					}
-					*active = true;
-					Self::deposit_event(Event::StartedBidding { account_id: account_id.clone() });
-					Ok(())
-				},
-				None => Err(Error::UnknownAccount),
+		ActiveBidder::<T>::try_mutate(account_id, |is_active_bidder| {
+			if *is_active_bidder {
+				Err(Error::AlreadyBidding)
+			} else {
+				*is_active_bidder = true;
+				Ok(())
 			}
 		})
 	}
