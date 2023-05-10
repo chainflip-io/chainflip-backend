@@ -328,9 +328,11 @@ impl<Error: Send + 'static> Stream for ScopeResultStream<Error> {
 	type Item = Result<Result<(), Error>, tokio::task::JoinError>;
 
 	fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-		while self.can_receive_new_tasks {
-			match Pin::new(&mut self.as_mut().receiver.as_mut().unwrap()).poll_next(cx) {
-				Poll::Ready(Some((properties, future))) => {
+		if self.can_receive_new_tasks {
+			while let Poll::Ready(option) =
+				Pin::new(&mut self.as_mut().receiver.as_mut().unwrap()).poll_next(cx)
+			{
+				if let Some((properties, future)) = option {
 					if !properties.weak {
 						self.non_weak_tasks += 1;
 					}
@@ -341,10 +343,11 @@ impl<Error: Send + 'static> Stream for ScopeResultStream<Error> {
 						ScopedTasks::MultiThread(runtime, tasks) =>
 							tasks.push(TaskWrapper { future: runtime.spawn(future), properties }),
 					}
-				},
-				// Sender/`Scope` has been dropped
-				Poll::Ready(None) => self.can_receive_new_tasks = false,
-				Poll::Pending => break,
+				} else {
+					// Sender/`Scope` has been dropped
+					self.can_receive_new_tasks = false;
+					break
+				}
 			}
 		}
 
