@@ -125,9 +125,9 @@ fn can_schedule_swap_egress_to_batch() {
 }
 
 fn request_address_and_deposit(
-	who: u64,
+	who: ChannelId,
 	asset: eth::Asset,
-) -> (u64, <Ethereum as Chain>::ChainAccount) {
+) -> (ChannelId, <Ethereum as Chain>::ChainAccount) {
 	let (id, address) = IngressEgress::request_liquidity_deposit_address(who, asset).unwrap();
 	let address: <Ethereum as Chain>::ChainAccount = address.try_into().unwrap();
 	assert_ok!(IngressEgress::process_single_deposit(address, asset, 1_000, Default::default(),));
@@ -818,7 +818,7 @@ fn multi_use_deposit_same_block() {
 #[test]
 fn handle_pending_deployment() {
 	const ETH: eth::Asset = eth::Asset::Eth;
-	new_test_ext().execute_as_block(1, || {
+	new_test_ext().execute_with(|| {
 		// Initial request.
 		let (channel_id, deposit_address) = request_address_and_deposit(ALICE, eth::Asset::Eth);
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 1);

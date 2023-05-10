@@ -365,10 +365,10 @@ pub mod pallet {
 			addresses: Vec<(DepositFetchIdOf<T, I>, TargetChainAccount<T, I>)>,
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
-			for (_, ingress_address) in addresses {
-				if AddressStatus::<T, I>::get(ingress_address.clone()) == DeploymentStatus::Pending
+			for (_, deposit_address) in addresses {
+				if AddressStatus::<T, I>::get(deposit_address.clone()) == DeploymentStatus::Pending
 				{
-					AddressStatus::<T, I>::insert(ingress_address, DeploymentStatus::Deployed);
+					AddressStatus::<T, I>::insert(deposit_address, DeploymentStatus::Deployed);
 				}
 			}
 			Ok(())
@@ -508,14 +508,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					.drain_filter(|request| {
 						let pending = match request {
 							FetchOrTransfer::Fetch { channel_id, .. } => {
-								let (_, ingress_address) =
+								let (_, deposit_address) =
 									FetchParamDetails::<T, I>::get(channel_id)
 										.expect("to have fetch param details available");
-								match AddressStatus::<T, I>::get(ingress_address.clone()) {
+								match AddressStatus::<T, I>::get(deposit_address.clone()) {
 									DeploymentStatus::Deployed => false,
 									DeploymentStatus::Undeployed => {
 										AddressStatus::<T, I>::insert(
-											ingress_address,
+											deposit_address,
 											DeploymentStatus::Pending,
 										);
 										false
@@ -523,7 +523,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									DeploymentStatus::Pending => {
 										log::info!(
 											target: "cf-ingress-egress",
-											"Address {:?} is pending deployment, skipping", ingress_address);
+											"Address {:?} is pending deployment, skipping", deposit_address);
 										true
 									},
 								}
