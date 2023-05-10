@@ -101,7 +101,7 @@ benchmarks_instance_pallet! {
 			// TODO: Thats wrong, we need to insert different addresses, otherwise we will overwrite the same one amd thats not the expensive path.
 			// Unfortunately we can not so easily generate different addresses in an benchmark environment...
 			AddressStatus::<T, I>::insert(deposit_address.clone(), DeploymentStatus::Pending);
-			addresses.push((deposit_fetch_id.clone(), deposit_address.clone()));
+			addresses.push((deposit_fetch_id, deposit_address.clone()));
 		}
 	}: { let _ = Pallet::<T, I>::finalise_ingress(origin, addresses); }
 }
