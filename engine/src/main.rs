@@ -40,10 +40,10 @@ async fn main() -> anyhow::Result<()> {
 	// like `--version`), so we execute it only after the settings have been parsed.
 	utilities::print_starting!();
 
-	utilities::init_json_logger();
-
 	task_scope(|scope| {
 		async move {
+			utilities::init_json_logger(scope).await;
+
 			let (state_chain_stream, state_chain_client) =
 				state_chain_observer::client::StateChainClient::connect_with_account(
 					scope,

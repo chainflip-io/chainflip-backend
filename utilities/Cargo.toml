@@ -23,6 +23,7 @@ itertools = {version = "0.10", default_features = false}
 tracing = { version = "0.1", optional = true}
 tracing-subscriber = {version = "0.3", features = ["json", "env-filter"], optional = true}
 pin-project = {version = "1.0.12", optional = true}
+warp = {version = "0.3.5", optional = true}
 
 [features]
 default = ['std']
@@ -40,4 +41,5 @@ std = [
   'pin-project',
   'tracing',
   'tracing-subscriber',
+  'warp',
 ]
