@@ -279,57 +279,36 @@ impl<E> From<EthereumTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAnd
 	}
 }
 
-impl<E> ApiCall<Ethereum> for EthereumApi<E> {
-	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
-		match self {
-			EthereumApi::SetAggKeyWithAggKey(tx) => tx.threshold_signature_payload(),
-			EthereumApi::RegisterRedemption(tx) => tx.threshold_signature_payload(),
-			EthereumApi::UpdateFlipSupply(tx) => tx.threshold_signature_payload(),
-			EthereumApi::SetGovKeyWithAggKey(tx) => tx.threshold_signature_payload(),
-			EthereumApi::SetCommKeyWithAggKey(tx) => tx.threshold_signature_payload(),
-			EthereumApi::AllBatch(tx) => tx.threshold_signature_payload(),
-			EthereumApi::ExecutexSwapAndCall(tx) => tx.threshold_signature_payload(),
+macro_rules! map_over_api_variants {
+	( $self:expr, $var:pat_param, $var_method:expr $(,)* ) => {
+		match $self {
+			EthereumApi::SetAggKeyWithAggKey($var) => $var_method,
+			EthereumApi::RegisterRedemption($var) => $var_method,
+			EthereumApi::UpdateFlipSupply($var) => $var_method,
+			EthereumApi::SetGovKeyWithAggKey($var) => $var_method,
+			EthereumApi::SetCommKeyWithAggKey($var) => $var_method,
+			EthereumApi::AllBatch($var) => $var_method,
+			EthereumApi::ExecutexSwapAndCall($var) => $var_method,
 			EthereumApi::_Phantom(..) => unreachable!(),
 		}
+	};
+}
+
+impl<E> ApiCall<Ethereum> for EthereumApi<E> {
+	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+		map_over_api_variants!(self, call, call.threshold_signature_payload())
 	}
 
 	fn signed(self, threshold_signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
-		match self {
-			EthereumApi::SetAggKeyWithAggKey(call) => call.signed(threshold_signature).into(),
-			EthereumApi::RegisterRedemption(call) => call.signed(threshold_signature).into(),
-			EthereumApi::UpdateFlipSupply(call) => call.signed(threshold_signature).into(),
-			EthereumApi::SetGovKeyWithAggKey(call) => call.signed(threshold_signature).into(),
-			EthereumApi::SetCommKeyWithAggKey(call) => call.signed(threshold_signature).into(),
-			EthereumApi::AllBatch(call) => call.signed(threshold_signature).into(),
-			EthereumApi::ExecutexSwapAndCall(call) => call.signed(threshold_signature).into(),
-			EthereumApi::_Phantom(..) => unreachable!(),
-		}
+		map_over_api_variants!(self, call, call.signed(threshold_signature).into())
 	}
 
 	fn chain_encoded(&self) -> Vec<u8> {
-		match self {
-			EthereumApi::SetAggKeyWithAggKey(call) => call.chain_encoded(),
-			EthereumApi::RegisterRedemption(call) => call.chain_encoded(),
-			EthereumApi::UpdateFlipSupply(call) => call.chain_encoded(),
-			EthereumApi::SetGovKeyWithAggKey(call) => call.chain_encoded(),
-			EthereumApi::SetCommKeyWithAggKey(call) => call.chain_encoded(),
-			EthereumApi::AllBatch(call) => call.chain_encoded(),
-			EthereumApi::ExecutexSwapAndCall(call) => call.chain_encoded(),
-			EthereumApi::_Phantom(..) => unreachable!(),
-		}
+		map_over_api_variants!(self, call, call.chain_encoded())
 	}
 
 	fn is_signed(&self) -> bool {
-		match self {
-			EthereumApi::SetAggKeyWithAggKey(call) => call.is_signed(),
-			EthereumApi::RegisterRedemption(call) => call.is_signed(),
-			EthereumApi::UpdateFlipSupply(call) => call.is_signed(),
-			EthereumApi::SetGovKeyWithAggKey(call) => call.is_signed(),
-			EthereumApi::SetCommKeyWithAggKey(call) => call.is_signed(),
-			EthereumApi::AllBatch(call) => call.is_signed(),
-			EthereumApi::ExecutexSwapAndCall(call) => call.is_signed(),
-			EthereumApi::_Phantom(..) => unreachable!(),
-		}
+		map_over_api_variants!(self, call, call.is_signed())
 	}
 }
 
