@@ -224,9 +224,6 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// The account is not known.
-		UnknownAccount,
-
 		/// An invalid redemption has been witnessed: the account has no pending redemptions.
 		NoPendingRedemption,
 
@@ -462,7 +459,6 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [AlreadyNotBidding](Error::AlreadyNotBidding)
-		/// - [UnknownAccount](Error::UnknownAccount)
 		#[pallet::weight(T::WeightInfo::stop_bidding())]
 		pub fn stop_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
@@ -491,7 +487,6 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [AlreadyBidding](Error::AlreadyBidding)
-		/// - [UnknownAccount](Error::UnknownAccount)
 		#[pallet::weight(T::WeightInfo::start_bidding())]
 		pub fn start_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
