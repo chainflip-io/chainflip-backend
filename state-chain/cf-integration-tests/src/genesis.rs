@@ -15,9 +15,9 @@ const BLOCKS_PER_EPOCH: u32 = 1000;
 pub fn default() -> ExtBuilder {
 	ExtBuilder::default()
 		.accounts(vec![
-			(AccountId::from(ALICE), GENESIS_BALANCE),
-			(AccountId::from(BOB), GENESIS_BALANCE),
-			(AccountId::from(CHARLIE), GENESIS_BALANCE),
+			(AccountId::from(ALICE), AccountRole::Validator, GENESIS_BALANCE),
+			(AccountId::from(BOB), AccountRole::Validator, GENESIS_BALANCE),
+			(AccountId::from(CHARLIE), AccountRole::Validator, GENESIS_BALANCE),
 		])
 		.root(AccountId::from(ERIN))
 		.blocks_per_epoch(BLOCKS_PER_EPOCH)
