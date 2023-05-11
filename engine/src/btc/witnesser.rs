@@ -57,9 +57,8 @@ pub fn filter_interesting_utxos(
 	let change_addresses = [Some(change_aggkey.current), change_aggkey.previous]
 		.iter()
 		.filter_map(|key_opt| {
-			key_opt.map(|key| {
-				(key, derive_btc_deposit_bitcoin_script(key, CHANGE_ADDRESS_SALT).serialize())
-			})
+			key_opt
+				.map(|key| (key, derive_btc_deposit_bitcoin_script(key, CHANGE_ADDRESS_SALT).data))
 		})
 		.collect::<Vec<_>>();
 	for tx in txs {
