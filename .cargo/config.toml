@@ -50,5 +50,4 @@ audit --ignore RUSTSEC-2022-0070
       --ignore RUSTSEC-2020-0168
       --ignore RUSTSEC-2022-0080
       --ignore RUSTSEC-2022-0061
-      --ignore 
 '''

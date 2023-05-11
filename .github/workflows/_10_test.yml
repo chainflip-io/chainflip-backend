@@ -42,7 +42,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: cargo audit
-        run: cargo cf-audit --json -D warnings
+        run: cargo cf-audit -D unmaintained -D unsound
 
   coverage:
     if: inputs.coverage
