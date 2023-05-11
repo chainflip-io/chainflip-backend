@@ -43,7 +43,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: ${{ env.TAG }}
 
-      - name: Login to DockerHub
+      - name: Login to Github Container Registry 🔑
         uses: docker/login-action@v1
         with:
           registry: ${{ env.REGISTRY }}
