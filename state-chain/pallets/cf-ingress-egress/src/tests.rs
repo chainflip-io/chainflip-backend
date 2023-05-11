@@ -247,9 +247,9 @@ fn all_batch_apicall_creation_failure_should_rollback_storage() {
 fn can_manually_send_batch_all() {
 	new_test_ext().execute_with(|| {
 		IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS.into(), None);
-		let mut deposit_fetch_ids = vec![];
-		deposit_fetch_ids.push(request_address_and_deposit(1u64, eth::Asset::Eth));
-		deposit_fetch_ids.push(request_address_and_deposit(2u64, eth::Asset::Flip));
+
+		request_address_and_deposit(1u64, eth::Asset::Eth);
+		request_address_and_deposit(2u64, eth::Asset::Flip);
 		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_ETH, 3_000, BOB_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_ETH, 4_000, BOB_ETH_ADDRESS.into(), None);
@@ -258,13 +258,8 @@ fn can_manually_send_batch_all() {
 		IngressEgress::schedule_egress(ETH_FLIP, 6_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_FLIP, 7_000, BOB_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_FLIP, 8_000, BOB_ETH_ADDRESS.into(), None);
-		deposit_fetch_ids.push(request_address_and_deposit(3u64, eth::Asset::Eth));
-		deposit_fetch_ids.push(request_address_and_deposit(4u64, eth::Asset::Flip));
-
-		// Mark addresses as deployed.
-		deposit_fetch_ids
-			.into_iter()
-			.for_each(|f| AddressStatus::<Test, _>::insert(f.1, DeploymentStatus::Deployed));
+		request_address_and_deposit(3u64, eth::Asset::Eth);
+		request_address_and_deposit(4u64, eth::Asset::Flip);
 
 		// Send only 2 requests
 		assert_ok!(IngressEgress::egress_scheduled_fetch_transfer(RuntimeOrigin::root(), Some(2)));
@@ -303,19 +298,14 @@ fn on_idle_batch_size_is_limited_by_weight() {
 	new_test_ext().execute_with(|| {
 		IngressEgress::schedule_egress(ETH_ETH, 1_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_ETH, 2_000, ALICE_ETH_ADDRESS.into(), None);
-		let mut deposit_fetch_ids = vec![];
-		deposit_fetch_ids.push(request_address_and_deposit(1u64, eth::Asset::Eth));
-		deposit_fetch_ids.push(request_address_and_deposit(2u64, eth::Asset::Eth));
+		let mut deposits = vec![];
+		deposits.push(request_address_and_deposit(1u64, eth::Asset::Eth));
+		deposits.push(request_address_and_deposit(2u64, eth::Asset::Eth));
 		IngressEgress::schedule_egress(ETH_FLIP, 3_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_FLIP, 4_000, ALICE_ETH_ADDRESS.into(), None);
 		IngressEgress::schedule_egress(ETH_FLIP, 5_000, ALICE_ETH_ADDRESS.into(), None);
-		deposit_fetch_ids.push(request_address_and_deposit(3u64, eth::Asset::Flip));
-		deposit_fetch_ids.push(request_address_and_deposit(4u64, eth::Asset::Flip));
-
-		// Mark addresses as deployed.
-		deposit_fetch_ids
-			.into_iter()
-			.for_each(|f| AddressStatus::<Test, _>::insert(f.1, DeploymentStatus::Deployed));
+		deposits.push(request_address_and_deposit(3u64, eth::Asset::Flip));
+		deposits.push(request_address_and_deposit(4u64, eth::Asset::Flip));
 
 		// There's enough weights for 3 transactions, which are taken in FIFO order.
 		IngressEgress::on_idle(
@@ -323,6 +313,13 @@ fn on_idle_batch_size_is_limited_by_weight() {
 			<Test as crate::Config<Instance1>>::WeightInfo::destination_assets(3) +
 				Weight::from_ref_time(1),
 		);
+
+		for deposit in deposits {
+			assert_ok!(IngressEgress::finalise_ingress(
+				RuntimeOrigin::root(),
+				vec![(cf_chains::eth::EthereumChannelId::UnDeployed(deposit.0), deposit.1)]
+			));
+		}
 
 		System::assert_has_event(RuntimeEvent::IngressEgress(
 			crate::Event::BatchBroadcastRequested {
