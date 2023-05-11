@@ -59,6 +59,7 @@ fn test_threshold_for_broadcast_verification() {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PartyIdxMapping {
 	id_to_idx: HashMap<AccountId, AuthorityCount>,
+	account_ids: BTreeSet<AccountId>,
 }
 
 impl PartyIdxMapping {
@@ -69,9 +70,11 @@ impl PartyIdxMapping {
 
 	/// Get party account id based on their index
 	pub fn get_id(&self, idx: AuthorityCount) -> &AccountId {
-		self.id_to_idx
+		let idx_sub_one = idx.checked_sub(1).expect("Party mapping index must be larger than 0");
+
+		self.account_ids
 			.iter()
-			.find_map(|(id, index)| if index == &idx { Some(id) } else { None })
+			.nth(idx_sub_one as usize)
 			.unwrap_or_else(|| panic!("Party index of [{idx}] is invalid"))
 	}
 
@@ -90,8 +93,8 @@ impl PartyIdxMapping {
 		idxs.iter().map(|idx| self.get_id(*idx).clone()).collect()
 	}
 
-	pub fn get_all_ids(&self) -> BTreeSet<AccountId> {
-		self.id_to_idx.keys().cloned().collect()
+	pub fn get_all_ids(&self) -> &BTreeSet<AccountId> {
+		&self.account_ids
 	}
 
 	pub fn from_participants(participants: BTreeSet<AccountId>) -> Self {
@@ -99,12 +102,12 @@ impl PartyIdxMapping {
 
 		// The protocol requires that the indexes start at 1
 		let id_to_idx = participants
-			.into_iter()
+			.iter()
 			.enumerate()
-			.map(|(i, account_id)| (account_id, i as AuthorityCount + 1))
+			.map(|(i, account_id)| (account_id.clone(), i as AuthorityCount + 1))
 			.collect();
 
-		PartyIdxMapping { id_to_idx }
+		PartyIdxMapping { id_to_idx, account_ids: participants }
 	}
 }
 
