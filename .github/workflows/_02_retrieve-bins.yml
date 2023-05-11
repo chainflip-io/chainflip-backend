@@ -18,8 +18,7 @@ jobs:
         with:
           workflow: _20_build.yml
           name: chainflip-backend-bin
-          branch: ${{ env.BRANCH }}
-          if_no_artifact_found: error
+          branch: release/pla-332
           github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
 
       - name: Re-upload binary artifacts
