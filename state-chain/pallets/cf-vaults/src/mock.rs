@@ -5,7 +5,7 @@ use crate as pallet_cf_vaults;
 use cf_chains::{
 	eth,
 	mocks::{MockAggKey, MockEthereum},
-	ApiCall, ChainCrypto, ReplayProtectionProvider,
+	ApiCall, ChainCrypto, ReplayProtectionProvider, SetAggKeyWithAggKeyError,
 };
 use cf_primitives::{BroadcastId, GENESIS_EPOCH};
 use cf_traits::{
@@ -36,6 +36,7 @@ thread_local! {
 	pub static BAD_VALIDATORS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
 	pub static CURRENT_SYSTEM_STATE: RefCell<SystemState> = RefCell::new(SystemState::Normal);
 
+	pub static SET_AGG_KEY_WITH_AGG_KEY_REQUIRED: RefCell<bool> = RefCell::new(true);
 }
 
 construct_runtime!(
@@ -121,12 +122,24 @@ pub struct MockSetAggKeyWithAggKey {
 	new_key: <MockEthereum as ChainCrypto>::AggKey,
 }
 
+impl MockSetAggKeyWithAggKey {
+	pub fn set_required(required: bool) {
+		SET_AGG_KEY_WITH_AGG_KEY_REQUIRED.with(|cell| {
+			*cell.borrow_mut() = required;
+		});
+	}
+}
+
 impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
 	fn new_unsigned(
 		old_key: Option<<MockEthereum as ChainCrypto>::AggKey>,
 		new_key: <MockEthereum as ChainCrypto>::AggKey,
-	) -> Result<Self, ()> {
-		old_key.ok_or(())?;
+	) -> Result<Self, SetAggKeyWithAggKeyError> {
+		if !SET_AGG_KEY_WITH_AGG_KEY_REQUIRED.with(|cell| *cell.borrow()) {
+			return Err(SetAggKeyWithAggKeyError::NotRequired)
+		}
+
+		old_key.ok_or(SetAggKeyWithAggKeyError::Other)?;
 		Ok(Self { nonce: MockEthReplayProtectionProvider::replay_protection(), new_key })
 	}
 }

@@ -1,12 +1,12 @@
 //! Definitions for the "registerRedemption" transaction.
 
 use crate::{
-	eth::{Ethereum, SigData, Tokenizable},
+	eth::{Ethereum, EthereumSignatureHandler, Tokenizable},
 	impl_api_call_eth, ApiCall, ChainCrypto,
 };
 
 use codec::{Decode, Encode, MaxEncodedLen};
-use ethabi::{Address, ParamType, Token, Uint};
+use ethabi::{encode, Address, ParamType, Token, Uint};
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
 use sp_std::{prelude::*, vec};
@@ -15,10 +15,10 @@ use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 
 /// Represents all the arguments required to build the call to StateChainGateway's
 /// 'requestRedemption' function.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default, MaxEncodedLen)]
 pub struct RegisterRedemption {
-	/// The signature data for validation and replay protection.
-	pub sig_data: SigData,
+	/// The signature handler for creating payload and inserting signature.
+	pub signature_handler: EthereumSignatureHandler,
 	/// The id (ie. Chainflip account Id) of the redeemer.
 	pub node_id: [u8; 32],
 	/// The amount being redeemed in Flipperinos (atomic FLIP units). 1 FLIP = 10^18 Flipperinos
@@ -29,51 +29,43 @@ pub struct RegisterRedemption {
 	pub expiry: Uint,
 }
 
-impl MaxEncodedLen for RegisterRedemption {
-	fn max_encoded_len() -> usize {
-		SigData::max_encoded_len()
-		+ 2 * <[u64; 4]>::max_encoded_len() // 2 x Uint
-		+ <[u8; 32]>::max_encoded_len() // 1 x [u8; 32]
-		+ <[u8; 20]>::max_encoded_len() // 1 x Address
-	}
-}
-
 impl RegisterRedemption {
-	pub fn new_unsigned<Amount: Into<Uint>>(
+	#[allow(clippy::too_many_arguments)]
+	pub fn new_unsigned<Amount: Into<Uint> + Clone>(
 		replay_protection: EthereumReplayProtection,
 		node_id: &[u8; 32],
 		amount: Amount,
 		address: &[u8; 20],
 		expiry: u64,
+		key_manager_address: Address,
+		state_chain_gateway_address: Address,
+		ethereum_chain_id: u64,
 	) -> Self {
-		let mut calldata = Self {
-			sig_data: SigData::new_empty(replay_protection),
+		Self {
+			signature_handler: EthereumSignatureHandler::new_unsigned(
+				replay_protection,
+				Self::abi_encoded_for_payload(node_id, amount.clone().into(), address, expiry),
+				key_manager_address,
+				state_chain_gateway_address,
+				ethereum_chain_id,
+			),
 			node_id: (*node_id),
 			amount: amount.into(),
 			address: address.into(),
 			expiry: expiry.into(),
-		};
-		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
-
-		calldata
+		}
 	}
 
 	/// Gets the function defintion for the `registerRedemption` smart contract call. Loading this
 	/// from the json abi definition is currently not supported in no-std, so instead swe hard-code
 	/// it here and verify against the abi in a unit test.
-	fn get_function(&self) -> ethabi::Function {
+	fn get_function() -> ethabi::Function {
 		ethabi_function(
 			"registerRedemption",
 			vec![
 				ethabi_param(
 					"sigData",
 					ParamType::Tuple(vec![
-						// keyManagerAddress
-						ParamType::Address,
-						// chainId
-						ParamType::Uint(256),
-						// msgHash
-						ParamType::Uint(256),
 						// sig
 						ParamType::Uint(256),
 						// nonce
@@ -91,9 +83,9 @@ impl RegisterRedemption {
 	}
 
 	fn abi_encoded(&self) -> Vec<u8> {
-		self.get_function()
+		Self::get_function()
 			.encode_input(&[
-				self.sig_data.tokenize(),
+				self.signature_handler.sig_data.tokenize(),
 				Token::FixedBytes(self.node_id.to_vec()),
 				Token::Uint(self.amount),
 				Token::Address(self.address),
@@ -105,6 +97,21 @@ impl RegisterRedemption {
 					Therefore, as long as the tests pass, it can't fail at runtime.
 				"#,
 			)
+	}
+
+	fn abi_encoded_for_payload(
+		node_id: &[u8; 32],
+		amount: Uint,
+		address: &[u8; 20],
+		expiry: u64,
+	) -> Vec<u8> {
+		encode(&[
+			Token::FixedBytes(Self::get_function().short_signature().to_vec()),
+			Token::FixedBytes(node_id.to_vec()),
+			Token::Uint(amount),
+			Token::Address(address.into()),
+			Token::Uint(expiry.into()),
+		])
 	}
 }
 
@@ -132,6 +139,7 @@ mod test_register_redemption {
 		use crate::eth::tests::asymmetrise;
 		use ethabi::Token;
 		const FAKE_KEYMAN_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
+		const FAKE_STAKEMAN_ADDR: [u8; 20] = asymmetrise([0xdf; 20]);
 		const CHAIN_ID: u64 = 1;
 		const NONCE: u64 = 6;
 		const EXPIRY_SECS: u64 = 10;
@@ -151,18 +159,17 @@ mod test_register_redemption {
 			state_chain_gateway.function("registerRedemption").unwrap();
 
 		let register_redemption_runtime = RegisterRedemption::new_unsigned(
-			EthereumReplayProtection {
-				key_manager_address: FAKE_KEYMAN_ADDR,
-				chain_id: CHAIN_ID,
-				nonce: NONCE,
-			},
+			EthereumReplayProtection { nonce: NONCE },
 			&TEST_ACCT,
 			AMOUNT,
 			&TEST_ADDR,
 			EXPIRY_SECS,
+			FAKE_KEYMAN_ADDR.into(),
+			FAKE_STAKEMAN_ADDR.into(),
+			CHAIN_ID,
 		);
 
-		let expected_msg_hash = register_redemption_runtime.sig_data.msg_hash;
+		let expected_msg_hash = register_redemption_runtime.signature_handler.payload;
 
 		assert_eq!(register_redemption_runtime.threshold_signature_payload(), expected_msg_hash);
 		let runtime_payload = register_redemption_runtime
@@ -181,11 +188,8 @@ mod test_register_redemption {
 			// "Canonical" encoding based on the abi definition above and using the ethabi crate:
 			register_redemption_reference
 				.encode_input(&[
-					// sigData: SigData(address, uint, uint, uint, uint, address)
+					// sigData: SigData(uint, uint, address)
 					Token::Tuple(vec![
-						Token::Address(FAKE_KEYMAN_ADDR.into()),
-						Token::Uint(CHAIN_ID.into()),
-						Token::Uint(expected_msg_hash.0.into()),
 						Token::Uint(FAKE_SIG.into()),
 						Token::Uint(NONCE.into()),
 						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),
@@ -194,7 +198,7 @@ mod test_register_redemption {
 					Token::FixedBytes(TEST_ACCT.into()),
 					// amount: uint
 					Token::Uint(AMOUNT.into()),
-					// funder: address
+					// redeemer address: address
 					Token::Address(TEST_ADDR.into()),
 					// epiryTime: uint48
 					Token::Uint(EXPIRY_SECS.into()),

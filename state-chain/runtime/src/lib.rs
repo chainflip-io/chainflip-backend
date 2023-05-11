@@ -78,9 +78,7 @@ use sp_version::RuntimeVersion;
 pub use cf_primitives::{
 	Asset, AssetAmount, BlockNumber, EthereumAddress, FlipBalance, SwapOutput,
 };
-pub use cf_traits::{
-	EpochInfo, EthEnvironmentProvider, QualifyNode, SessionKeysRegistered, SwappingApi,
-};
+pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
@@ -570,7 +568,7 @@ impl pallet_cf_emissions::Config for Runtime {
 	type Issuance = pallet_cf_flip::FlipIssuance<Runtime>;
 	type RewardsDistribution = chainflip::BlockAuthorRewardDistribution;
 	type CompoundingInterval = ConstU32<COMPOUNDING_INTERVAL>;
-	type EthEnvironmentProvider = Environment;
+	type EthEnvironmentProvider = EthEnvironment;
 	type WeightInfo = pallet_cf_emissions::weights::PalletWeight<Runtime>;
 	type FlipToBurn = LiquidityPools;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
@@ -858,7 +856,7 @@ impl_runtime_apis! {
 			Validator::is_auction_phase()
 		}
 		fn cf_eth_flip_token_address() -> EthereumAddress {
-			Environment::token_address(Asset::Flip).expect("FLIP token address should exist")
+			Environment::supported_eth_assets(Asset::Flip).expect("FLIP token address should exist")
 		}
 		fn cf_eth_asset(token_address: EthereumAddress) -> Option<Asset> {
 			use pallet_cf_environment::EthereumSupportedAssets;

@@ -1,6 +1,5 @@
 use crate::{
-	mock::*, pallet, ActiveBidder, Error, EthereumAddress, FailedFundingAttempts, Pallet,
-	PendingRedemptions, RedemptionAmount, WithdrawalAddresses,
+	mock::*, pallet, ActiveBidder, Error, EthereumAddress, PendingRedemptions, RedemptionAmount,
 };
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{mocks::system_state_info::MockSystemStateInfo, Bonding};
@@ -460,64 +459,6 @@ fn test_redeem_all() {
 }
 
 #[test]
-fn test_check_withdrawal_address() {
-	new_test_ext().execute_with(|| {
-		const AMOUNT: u128 = 45;
-		const DIFFERENT_ETH_ADDR: EthereumAddress = [45u8; 20];
-		// Case: No account and no address provided
-		assert!(Pallet::<Test>::check_withdrawal_address(&ALICE, ETH_ZERO_ADDRESS, AMOUNT).is_ok());
-		assert!(!WithdrawalAddresses::<Test>::contains_key(ALICE));
-		assert!(!FailedFundingAttempts::<Test>::contains_key(ALICE));
-		// Case: No account and provided withdrawal address
-		assert_ok!(Pallet::<Test>::check_withdrawal_address(&ALICE, ETH_DUMMY_ADDR, AMOUNT));
-		let withdrawal_address = WithdrawalAddresses::<Test>::get(ALICE);
-		assert!(withdrawal_address.is_some());
-		assert_eq!(withdrawal_address.unwrap(), ETH_DUMMY_ADDR);
-		// Case: User has already funded with a different address
-		Pallet::<Test>::add_funds_to_account(&ALICE, AMOUNT);
-		assert!(
-			Pallet::<Test>::check_withdrawal_address(&ALICE, DIFFERENT_ETH_ADDR, AMOUNT).is_err()
-		);
-		let funding_attempts = FailedFundingAttempts::<Test>::get(ALICE);
-		assert_eq!(funding_attempts.len(), 1);
-		let funding_attempt = funding_attempts.first();
-		assert_eq!(funding_attempt.unwrap().0, DIFFERENT_ETH_ADDR);
-		assert_eq!(funding_attempt.unwrap().1, AMOUNT);
-		for e in System::events().into_iter().map(|e| e.event) {
-			println!("{e:?}");
-		}
-		assert_event_sequence!(
-			Test,
-			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Funding(crate::Event::FailedFundingAttempt {
-				account_id: ALICE,
-				withdrawal_address: DIFFERENT_ETH_ADDR,
-				amount: AMOUNT
-			})
-		);
-		// Case: User funds again with the same address
-		assert!(Pallet::<Test>::check_withdrawal_address(&ALICE, ETH_DUMMY_ADDR, AMOUNT).is_ok());
-	});
-}
-
-#[test]
-fn redeem_with_withdrawal_address() {
-	new_test_ext().execute_with(|| {
-		const AMOUNT: u128 = 45;
-		const WRONG_ETH_ADDR: EthereumAddress = [45u8; 20];
-		// Add some funds.
-		assert_ok!(Funding::funded(RuntimeOrigin::root(), ALICE, AMOUNT, ETH_DUMMY_ADDR, TX_HASH));
-		// Redeem it - expect to fail because the address is different
-		assert_noop!(
-			Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), WRONG_ETH_ADDR),
-			<Error<Test>>::WithdrawalAddressRestricted
-		);
-		// Try it again with the right address - expect to succeed
-		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR));
-	});
-}
-
-#[test]
 fn cannot_redeem_to_zero_address() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 45;
@@ -563,40 +504,6 @@ fn redemption_expiry_removes_redemption() {
 
 		// Success, can request redemption again since the last one expired.
 		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR));
-	});
-}
-
-#[test]
-fn fund_with_provided_withdrawal_only_on_first_attempt() {
-	// Check if the branching of the funding process is working probably
-	new_test_ext().execute_with(|| {
-		const AMOUNT: u128 = 45;
-		// Add some funds with no withdrawal address
-		assert_ok!(Funding::funded(
-			RuntimeOrigin::root(),
-			ALICE,
-			AMOUNT,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
-		// Add some funds again with an provided withdrawal address
-		assert_ok!(Funding::funded(RuntimeOrigin::root(), ALICE, AMOUNT, ETH_DUMMY_ADDR, TX_HASH));
-		// Expect an failed funding event to be fired but no funding event
-		assert_event_sequence!(
-			Test,
-			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Funding(crate::Event::Funded {
-				account_id: ALICE,
-				tx_hash: TX_HASH,
-				funds_added: AMOUNT,
-				total_balance: AMOUNT
-			}),
-			RuntimeEvent::Funding(crate::Event::FailedFundingAttempt {
-				account_id: ALICE,
-				withdrawal_address: ETH_DUMMY_ADDR,
-				amount: AMOUNT
-			})
-		);
 	});
 }
 

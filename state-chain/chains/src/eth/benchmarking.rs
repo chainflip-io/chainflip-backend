@@ -58,14 +58,12 @@ impl BenchmarkValue for AggKey {
 impl<E> BenchmarkValue for EthereumApi<E> {
 	fn benchmark_value() -> Self {
 		EthereumApi::UpdateFlipSupply(UpdateFlipSupply::new_unsigned(
-			EthereumReplayProtection {
-				key_manager_address: hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3"),
-				chain_id: 31337,
-				nonce: 15,
-			},
+			EthereumReplayProtection { nonce: 15 },
 			1000000u128,
 			1u64,
 			&Address::benchmark_value().into(),
+			hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3").into(),
+			31337,
 		))
 	}
 }

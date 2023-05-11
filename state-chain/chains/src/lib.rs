@@ -227,13 +227,26 @@ pub trait ChainEnvironment<
 	/// Attempt a lookup.
 	fn lookup(s: LookupKey) -> Option<LookupValue>;
 }
-#[allow(clippy::result_unit_err)]
+/// Provides the environment data for ethereum-like chains.
+pub trait EthEnvironmentProvider {
+	fn token_address(asset: assets::eth::Asset) -> Option<eth::Address>;
+	fn key_manager_address() -> eth::Address;
+	fn state_chain_gateway_address() -> eth::Address;
+	fn vault_address() -> eth::Address;
+	fn chain_id() -> u64;
+}
+
+pub enum SetAggKeyWithAggKeyError {
+	NotRequired,
+	Other,
+}
+
 /// Constructs the `SetAggKeyWithAggKey` api call.
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		maybe_old_key: Option<<Abi as ChainCrypto>::AggKey>,
 		new_key: <Abi as ChainCrypto>::AggKey,
-	) -> Result<Self, ()>;
+	) -> Result<Self, SetAggKeyWithAggKeyError>;
 }
 
 #[allow(clippy::result_unit_err)]

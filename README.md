@@ -145,6 +145,17 @@ After set up completion, you will see the following:
 * **logs** - Tail the logs for your current Localnet.
 * **yeet** - Destroy your current Localnet, and remove all data including docker images. You should use this if you are getting some weird caching issues.
 
+### Log Filtering
+
+These commands can be used to control which logs the engine outputs at runtime.
+  - `curl -X GET 127.0.0.1:36079/tracing` (Returns the current filtering directives)
+  - `curl --json '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"' (Sets the filter directives so the default is DEBUG, and the logging in modules warp, hyper, jsonrpc, web3, and reqwest is turned off)
+  - `curl -X POST -H 'Content-Type: application/json' -d '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"' 127.0.0.1:36079/tracing` (Equivalent to the above, but without using the --sjon short-hand)
+
+The `RUST_LOG` environment variable controls the initial filtering directives if specified at engine startup.
+
+The syntax for specifying filtering directives is given here: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
+
 ## Testnet
 
 To start a multi node testnet you can use the [chainflip-testnet-tools](https://github.com/chainflip-io/chainflip-testnet-tools). A multi-node testnet can be useful to test more complex test scenarios under more realistic conditions.

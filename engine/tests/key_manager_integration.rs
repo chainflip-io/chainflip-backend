@@ -24,41 +24,6 @@ pub async fn test_all_key_manager_events() {
 	// The following event details correspond to the events in
 	// chainflip-eth-contracts/scripts/deploy_and.py All the key strings in this test are decimal
 	// pub keys derived from the priv keys in the consts.py script https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/tests/consts.py
-	km_events
-		.iter()
-		.find(|event| match &event.event_parameters {
-			KeyManagerEvent::AggKeyNonceConsumersSet { addrs } => {
-				assert_eq!(
-					addrs,
-					&vec![
-						H160::from_str("0xe7f1725e7734ce288f8367e1bb143e90bb3f0512").unwrap(),
-						H160::from_str("0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0").unwrap(),
-						H160::from_str("0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9").unwrap()
-					]
-				);
-				true
-			},
-			_ => false,
-		})
-		.expect("Didn't find AggKeyNonceConsumersSet event");
-
-	km_events
-		.iter()
-		.find(|event| match &event.event_parameters {
-			KeyManagerEvent::AggKeyNonceConsumersUpdated { new_addrs } => {
-				assert_eq!(
-					new_addrs,
-					&vec![
-						H160::from_str("0xe7f1725e7734ce288f8367e1bb143e90bb3f0512").unwrap(),
-						H160::from_str("0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0").unwrap(),
-						H160::from_str("0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9").unwrap()
-					]
-				);
-				true
-			},
-			_ => false,
-		})
-		.expect("Didn't find AggKeyNonceConsumersUpdated event");
 
 	km_events
             .iter()
@@ -166,8 +131,6 @@ pub async fn test_all_key_manager_events() {
 		.iter()
 		.find(|event| match &event.event_parameters {
 			KeyManagerEvent::SignatureAccepted { sig_data, signer } => {
-				assert_eq!(sig_data.key_man_addr, integration_test_config.eth.key_manager_address);
-				assert_eq!(sig_data.chain_id, U256::from_dec_str("31337").unwrap());
 				assert_eq!(sig_data.nonce, U256::from_dec_str("0").unwrap());
 				assert_eq!(
 					signer,

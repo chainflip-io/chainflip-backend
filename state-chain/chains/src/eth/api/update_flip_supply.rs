@@ -1,68 +1,60 @@
 use crate::{
-	eth::{Ethereum, Tokenizable},
+	eth::{Ethereum, EthereumSignatureHandler, Tokenizable},
 	impl_api_call_eth, ApiCall, ChainCrypto,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
-use ethabi::{Address, ParamType, Token, Uint};
+use ethabi::{encode, Address, ParamType, Token, Uint};
 use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
 
-use crate::eth::SigData;
-
 use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default, MaxEncodedLen)]
 pub struct UpdateFlipSupply {
-	/// The signature data for validation and replay protection.
-	pub sig_data: SigData,
+	/// The signature handler for creating payload and inserting signature.
+	pub signature_handler: EthereumSignatureHandler,
 	/// The new total supply
 	pub new_total_supply: Uint,
 	/// The current state chain block number
 	pub state_chain_block_number: Uint,
-	/// The address of the state chain gatweay - to mint or burn tokens
-	pub state_chain_gateway_address: Address,
-}
-
-impl MaxEncodedLen for UpdateFlipSupply {
-	fn max_encoded_len() -> usize {
-		SigData::max_encoded_len() +
-			2 * <[u64; 4]>::max_encoded_len() +
-			<[u8; 20]>::max_encoded_len()
-	}
 }
 
 impl UpdateFlipSupply {
-	pub fn new_unsigned<TotalSupply: Into<Uint>, BlockNumber: Into<Uint>>(
+	pub fn new_unsigned<TotalSupply: Into<Uint> + Clone, BlockNumber: Into<Uint> + Clone>(
 		replay_protection: EthereumReplayProtection,
 		new_total_supply: TotalSupply,
 		state_chain_block_number: BlockNumber,
 		state_chain_gateway_address: &[u8; 20],
+		key_manager_address: Address,
+		ethereum_chain_id: u64,
 	) -> Self {
-		let mut calldata = Self {
-			sig_data: SigData::new_empty(replay_protection),
+		Self {
+			signature_handler: EthereumSignatureHandler::new_unsigned(
+				replay_protection,
+				Self::abi_encoded_for_payload(
+					new_total_supply.clone().into(),
+					state_chain_block_number.clone().into(),
+				),
+				key_manager_address,
+				state_chain_gateway_address.into(),
+				ethereum_chain_id,
+			),
 			new_total_supply: new_total_supply.into(),
 			state_chain_block_number: state_chain_block_number.into(),
-			state_chain_gateway_address: state_chain_gateway_address.into(),
-		};
-		calldata.sig_data.insert_msg_hash_from(calldata.abi_encoded().as_slice());
-
-		calldata
+		}
 	}
 
 	/// Gets the function defintion for the `updateFlipSupply` smart contract call. Loading this
 	/// from the json abi definition is currently not supported in no-std, so instead we hard-code
 	/// it here and verify against the abi in a unit test.
-	fn get_function(&self) -> ethabi::Function {
+	fn get_function() -> ethabi::Function {
 		ethabi_function(
 			"updateFlipSupply",
 			vec![
 				ethabi_param(
 					"sigData",
 					ParamType::Tuple(vec![
-						ParamType::Address,
-						ParamType::Uint(256),
-						ParamType::Uint(256),
 						ParamType::Uint(256),
 						ParamType::Uint(256),
 						ParamType::Address,
@@ -70,18 +62,16 @@ impl UpdateFlipSupply {
 				),
 				ethabi_param("newTotalSupply", ParamType::Uint(256)),
 				ethabi_param("stateChainBlockNumber", ParamType::Uint(256)),
-				ethabi_param("funder", ParamType::Address),
 			],
 		)
 	}
 
 	fn abi_encoded(&self) -> Vec<u8> {
-		self.get_function()
+		Self::get_function()
 			.encode_input(&[
-				self.sig_data.tokenize(),
+				self.signature_handler.sig_data.tokenize(),
 				Token::Uint(self.new_total_supply),
 				Token::Uint(self.state_chain_block_number),
-				Token::Address(self.state_chain_gateway_address),
 			])
 			.expect(
 				r#"
@@ -89,6 +79,14 @@ impl UpdateFlipSupply {
 					Therefore, as long as the tests pass, it can't fail at runtime.
 				"#,
 			)
+	}
+
+	fn abi_encoded_for_payload(new_total_supply: Uint, state_chain_block_number: Uint) -> Vec<u8> {
+		encode(&[
+			Token::FixedBytes(Self::get_function().short_signature().to_vec()),
+			new_total_supply.tokenize(),
+			state_chain_block_number.tokenize(),
+		])
 	}
 }
 
@@ -106,7 +104,8 @@ mod test_update_flip_supply {
 	// It uses a different ethabi to the CFE, so we test separately
 	fn just_load_the_contract() {
 		assert_ok!(ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/FLIP.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/StateChainGateway.json")
+				.as_ref(),
 		));
 	}
 
@@ -124,24 +123,23 @@ mod test_update_flip_supply {
 		const FAKE_SIG: [u8; 32] = asymmetrise([0xe1; 32]);
 
 		let flip_token = ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/FLIP.json").as_ref(),
+			std::include_bytes!("../../../../../engine/src/eth/abis/StateChainGateway.json")
+				.as_ref(),
 		)
 		.unwrap();
 
 		let flip_token_reference = flip_token.function("updateFlipSupply").unwrap();
 
 		let update_flip_supply_runtime = UpdateFlipSupply::new_unsigned(
-			EthereumReplayProtection {
-				key_manager_address: FAKE_KEYMAN_ADDR,
-				chain_id: CHAIN_ID,
-				nonce: NONCE,
-			},
+			EthereumReplayProtection { nonce: NONCE },
 			NEW_TOTAL_SUPPLY,
 			STATE_CHAIN_BLOCK_NUMBER,
 			&FAKE_STATE_CHAIN_GATEWAY_ADDRESS,
+			FAKE_KEYMAN_ADDR.into(),
+			CHAIN_ID,
 		);
 
-		let expected_msg_hash = update_flip_supply_runtime.sig_data.msg_hash;
+		let expected_msg_hash = update_flip_supply_runtime.signature_handler.payload;
 
 		assert_eq!(update_flip_supply_runtime.threshold_signature_payload(), expected_msg_hash);
 
@@ -162,18 +160,14 @@ mod test_update_flip_supply {
 			// "Canoncial" encoding based on the abi definition above and using the ethabi crate:
 			flip_token_reference
 				.encode_input(&[
-					// sigData: SigData(address, uint, uint, uint, uint, address)
+					// sigData: SigData(uint, uint, address)
 					Token::Tuple(vec![
-						Token::Address(FAKE_KEYMAN_ADDR.into()),
-						Token::Uint(CHAIN_ID.into()),
-						Token::Uint(expected_msg_hash.0.into()),
 						Token::Uint(FAKE_SIG.into()),
 						Token::Uint(NONCE.into()),
 						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),
 					]),
 					Token::Uint(NEW_TOTAL_SUPPLY.into()),
 					Token::Uint(STATE_CHAIN_BLOCK_NUMBER.into()),
-					Token::Address(FAKE_STATE_CHAIN_GATEWAY_ADDRESS.into()),
 				])
 				.unwrap()
 		);
