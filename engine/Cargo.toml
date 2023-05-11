@@ -130,7 +130,7 @@ ethereum = "0.14"
 mockall = "0.11.0"
 multisig = {path = "multisig", features = ["test"]}
 rlp = "0.5"
-tempfile = "3.3.0"
+tempfile = "3.5.0"
 utilities = {package = "utilities", path = "../utilities", features = ["test-utils"]}
 
 [build-dependencies]
