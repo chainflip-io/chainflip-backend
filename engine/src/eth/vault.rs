@@ -156,7 +156,7 @@ impl EthContractWitnesser for Vault {
 						destination_address.0,
 					)
 					.map_err(anyhow::Error::msg)?,
-					tx_hash: [0; 32],
+					tx_hash: event.tx_hash.into(),
 				}),
 				VaultEvent::SwapToken {
 					destination_chain,
@@ -178,7 +178,7 @@ impl EthContractWitnesser for Vault {
 						destination_address.0,
 					)
 					.map_err(anyhow::Error::msg)?,
-					tx_hash: [0; 32],
+					tx_hash: event.tx_hash.into(),
 				}),
 				VaultEvent::XCallNative {
 					destination_chain,
