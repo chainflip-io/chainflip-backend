@@ -1,11 +1,11 @@
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
-use cf_chains::{address::EncodedAddress, eth::H256, CcmDepositMetadata, ForeignChain};
+use cf_chains::{address::EncodedAddress, CcmDepositMetadata, ForeignChain};
 use cf_primitives::{AccountRole, Asset, BasisPoints};
 use futures::FutureExt;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair};
+use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{opaque::SessionKeys, RuntimeCall};
 use zeroize::Zeroize;

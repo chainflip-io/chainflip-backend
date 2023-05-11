@@ -119,20 +119,9 @@ impl_api_call_eth!(RegisterRedemption);
 
 #[cfg(test)]
 mod test_register_redemption {
-	use crate::eth::SchnorrVerificationComponents;
+	use crate::eth::{api::abi::load_abi, SchnorrVerificationComponents};
 
 	use super::*;
-	use frame_support::assert_ok;
-
-	#[test]
-	// There have been obtuse test failures due to the loading of the contract failing
-	// It uses a different ethabi to the CFE, so we test separately
-	fn just_load_the_contract() {
-		assert_ok!(ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/StateChainGateway.json")
-				.as_ref(),
-		));
-	}
 
 	#[test]
 	fn test_redemption_payload() {
@@ -149,11 +138,7 @@ mod test_register_redemption {
 		const TEST_ACCT: [u8; 32] = asymmetrise([0x42; 32]);
 		const TEST_ADDR: [u8; 20] = asymmetrise([0xcf; 20]);
 
-		let state_chain_gateway = ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/StateChainGateway.json")
-				.as_ref(),
-		)
-		.unwrap();
+		let state_chain_gateway = load_abi("IStateChainGateway");
 
 		let register_redemption_reference =
 			state_chain_gateway.function("registerRedemption").unwrap();

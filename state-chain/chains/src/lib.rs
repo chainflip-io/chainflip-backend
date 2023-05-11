@@ -229,10 +229,10 @@ pub trait ChainEnvironment<
 }
 /// Provides the environment data for ethereum-like chains.
 pub trait EthEnvironmentProvider {
-	fn token_address(asset: assets::eth::Asset) -> Option<eth::Address>;
-	fn key_manager_address() -> eth::Address;
-	fn state_chain_gateway_address() -> eth::Address;
-	fn vault_address() -> eth::Address;
+	fn token_address(asset: assets::eth::Asset) -> Option<eth::ethabi::Address>;
+	fn key_manager_address() -> eth::ethabi::Address;
+	fn state_chain_gateway_address() -> eth::ethabi::Address;
+	fn vault_address() -> eth::ethabi::Address;
 	fn chain_id() -> u64;
 }
 

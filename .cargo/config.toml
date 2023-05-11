@@ -19,3 +19,7 @@ tree --no-default-features --depth 1 --edges=features,normal
     -p pallet-cf-*
     -p cf-*
 '''
+
+[env]
+CF_ETH_CONTRACT_ABI_ROOT = { value = "eth-contract-abis", relative = true }
+CF_ETH_CONTRACT_ABI_TAG = "perseverance-rc10"

@@ -25,7 +25,7 @@ macro_rules! assert_event_sequence {
 			.collect::<Vec<_>>();
 
 		$(
-			let actual = events.pop().expect("Expected an event.");
+			let actual = events.pop().unwrap_or_else(|| panic!("No more events. Expected: {:?}", $evt));
 			assert_eq!(actual, $evt);
 		)*
 	};

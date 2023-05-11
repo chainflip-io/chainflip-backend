@@ -12,8 +12,8 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{
-	address::ForeignChainAddress, eth::H256, ApiCall, CcmDepositMetadata, Chain, ChainAbi,
-	ChainCrypto, Ethereum, Polkadot,
+	address::ForeignChainAddress, eth::ethabi::Address, ApiCall, CcmDepositMetadata, Chain,
+	ChainAbi, ChainCrypto, Ethereum, Polkadot,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
@@ -701,7 +701,7 @@ impl AddressDerivationApi<Ethereum> for () {
 		source_asset: <Ethereum as Chain>::ChainAsset,
 		channel_id: ChannelId,
 	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
-		Ok(H256((source_asset, channel_id).encode().blake2_256()).into())
+		Ok(Address::from_slice(&(source_asset, channel_id).encode().blake2_256()[..20]))
 	}
 }
 

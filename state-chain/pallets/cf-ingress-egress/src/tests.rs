@@ -538,7 +538,7 @@ fn can_process_ccm_deposit() {
 		));
 
 		// CCM action is stored.
-		let deposit_address = hex_literal::hex!("bc77955482380836042253381b35a658d87a4842").into();
+		let deposit_address = hex_literal::hex!("c6b749fe356b08fdde333b41bc77955482380836").into();
 		System::assert_last_event(RuntimeEvent::IngressEgress(
 			crate::Event::<Test, Instance1>::StartWitnessing {
 				deposit_address,
