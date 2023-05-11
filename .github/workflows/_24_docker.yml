@@ -32,12 +32,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Cancel generate-genesis-keys if prod
-        if: >
-          inputs.environment == 'prod' 
-          && matrix.target == 'generate-genesis-keys'
-        run: exit 0
-
       - name: Update Docker repo for production images
         if: inputs.environment == 'prod'
         run:

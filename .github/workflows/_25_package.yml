@@ -40,7 +40,7 @@ jobs:
           cargo deb -v --no-build --no-strip -p chainflip-broker-api --deb-revision "${{ steps.get-date.outputs.date }}"
 
       - name: Build development packages
-        if: inputs.environment == 'prod'
+        if: inputs.environment == 'dev'
         run: |
           cargo deb -v --no-build --no-strip -p generate-genesis-keys --deb-revision "${{ steps.get-date.outputs.date }}"
 
