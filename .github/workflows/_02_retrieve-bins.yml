@@ -20,6 +20,7 @@ jobs:
           name: chainflip-backend-bin
           branch: release/pla-332
           github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+          search_artifacts: true
 
       - name: Re-upload binary artifacts
         uses: actions/upload-artifact@v3
