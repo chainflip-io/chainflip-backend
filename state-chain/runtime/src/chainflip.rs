@@ -460,11 +460,14 @@ macro_rules! impl_deposit_api_for_anychain {
 				}
 			}
 
-			fn expire_channel(chain: ForeignChain, channel_id: ChannelId, address: ForeignChainAddress) {
-				match chain {
+			fn expire_channel(channel_id: ChannelId, address: ForeignChainAddress) {
+				match address.chain() {
 					$(
 						ForeignChain::$chain => {
-							$pallet::expire_channel(channel_id, address.try_into().expect("Checked for address compatibility"));
+							<$pallet as DepositApi<$chain>>::expire_channel(
+								channel_id,
+								address.try_into().expect("Checked for address compatibility")
+							);
 						},
 					)+
 				}
@@ -508,6 +511,7 @@ impl_deposit_api_for_anychain!(
 	(Polkadot, PolkadotIngressEgress),
 	(Bitcoin, BitcoinIngressEgress)
 );
+
 impl_egress_api_for_anychain!(
 	AnyChainIngressEgressHandler,
 	(Ethereum, EthereumIngressEgress),
