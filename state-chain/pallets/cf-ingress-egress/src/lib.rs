@@ -719,7 +719,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				destination_asset,
 				destination_address,
 				message_metadata,
-			)?,
+			),
 		};
 
 		T::DepositHandler::on_deposit_made(tx_id.clone(), amount, deposit_address.clone(), asset);

@@ -1,14 +1,14 @@
 use crate::{
 	mock::{RuntimeEvent, *},
-	CcmGasBudget, CcmIdCounter, CcmOutputs, CcmSwap, CcmSwapOutput, CollectedRejectedFunds,
-	EarnedBrokerFees, Error, MinimumCcmGasBudget, MinimumSwapAmount, Pallet, PendingCcms, Swap,
-	SwapChannelExpiries, SwapQueue, SwapTTL, SwapType, WeightInfo,
+	CcmFailReason, CcmGasBudget, CcmIdCounter, CcmOutputs, CcmSwap, CcmSwapOutput,
+	CollectedRejectedFunds, EarnedBrokerFees, Error, Event, MinimumCcmGasBudget, MinimumSwapAmount,
+	Pallet, PendingCcms, Swap, SwapChannelExpiries, SwapQueue, SwapTTL, SwapType, WeightInfo,
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	AnyChain, CcmDepositMetadata,
 };
-use cf_primitives::{Asset, ForeignChain};
+use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use cf_test_utilities::{assert_event_sequence, assert_events_match};
 use cf_traits::{
 	mocks::{
@@ -59,6 +59,22 @@ fn generate_test_swaps() -> Vec<Swap> {
 			swap_type: SwapType::Swap(ForeignChainAddress::Dot([4; 32])),
 		},
 	]
+}
+
+fn assert_failed_ccm(
+	from: Asset,
+	amount: AssetAmount,
+	output: Asset,
+	destination_address: ForeignChainAddress,
+	ccm: CcmDepositMetadata,
+	reason: CcmFailReason,
+) {
+	Swapping::on_ccm_deposit(from, amount, output, destination_address.clone(), ccm.clone());
+	System::assert_last_event(RuntimeEvent::Swapping(Event::CcmFailed {
+		reason,
+		destination_address,
+		message_metadata: ccm,
+	}));
 }
 
 fn insert_swaps(swaps: &[Swap]) {
@@ -206,18 +222,18 @@ fn expect_swap_id_to_be_emitted() {
 		Swapping::on_idle(1, Weight::from_ref_time(100));
 		assert_event_sequence!(
 			Test,
-			RuntimeEvent::Swapping(crate::Event::SwapDepositAddressReady {
+			RuntimeEvent::Swapping(Event::SwapDepositAddressReady {
 				deposit_address: EncodedAddress::Eth(Default::default()),
 				destination_address: EncodedAddress::Eth(Default::default()),
 				expiry_block: SwapTTL::<Test>::get() + System::current_block_number(),
 			}),
-			RuntimeEvent::Swapping(crate::Event::SwapScheduledByDeposit {
+			RuntimeEvent::Swapping(Event::SwapScheduledByDeposit {
 				deposit_address: EncodedAddress::Eth(Default::default()),
 				swap_id: 1,
 				deposit_amount: 500,
 			}),
-			RuntimeEvent::Swapping(crate::Event::SwapExecuted { swap_id: 1 }),
-			RuntimeEvent::Swapping(crate::Event::SwapEgressScheduled {
+			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1 }),
+			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 1,
 				egress_id: (ForeignChain::Ethereum, 1),
 				asset: Asset::Usdc,
@@ -247,13 +263,11 @@ fn withdraw_broker_fees() {
 		let mut egresses = MockEgressHandler::<AnyChain>::get_scheduled_egresses();
 		assert!(egresses.len() == 1);
 		assert_eq!(egresses.pop().expect("must exist").amount(), 200);
-		System::assert_last_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::WithdrawalRequested {
-				egress_id: (ForeignChain::Ethereum, 1),
-				amount: 200,
-				address: EncodedAddress::Eth(Default::default()),
-			},
-		));
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::WithdrawalRequested {
+			egress_id: (ForeignChain::Ethereum, 1),
+			amount: 200,
+			address: EncodedAddress::Eth(Default::default()),
+		}));
 	});
 }
 
@@ -269,7 +283,7 @@ fn can_swap_using_witness_origin() {
 		));
 
 		System::assert_last_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::SwapScheduledByWitnesser {
+			Event::<Test>::SwapScheduledByWitnesser {
 				swap_id: 1,
 				deposit_amount: 1_000,
 				destination_address: EncodedAddress::Eth(Default::default()),
@@ -292,7 +306,7 @@ fn swap_expires() {
 			None
 		));
 
-		let deposit_address = assert_events_match!(Test, RuntimeEvent::Swapping(crate::Event::SwapDepositAddressReady {
+		let deposit_address = assert_events_match!(Test, RuntimeEvent::Swapping(Event::SwapDepositAddressReady {
 			deposit_address,
 			..
 		}) => deposit_address);
@@ -329,7 +343,7 @@ fn swap_expires() {
 		Swapping::on_initialize(6);
 		assert_eq!(SwapChannelExpiries::<Test>::get(6), vec![]);
 		System::assert_last_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::SwapDepositAddressExpired {
+			Event::<Test>::SwapDepositAddressExpired {
 				deposit_address: ForeignChainAddress::Eth(Default::default()),
 			},
 		));
@@ -393,15 +407,13 @@ fn can_reject_invalid_ccms() {
 			),
 			Error::<Test>::CcmUnsupportedForTargetChain
 		);
-		assert_noop!(
-			Swapping::on_ccm_deposit(
-				Asset::Eth,
-				1_000_000,
-				Asset::Dot,
-				ForeignChainAddress::Dot(Default::default()),
-				ccm.clone()
-			),
-			Error::<Test>::CcmUnsupportedForTargetChain
+		assert_failed_ccm(
+			Asset::Eth,
+			1_000_000,
+			Asset::Dot,
+			ForeignChainAddress::Dot(Default::default()),
+			ccm.clone(),
+			CcmFailReason::UnsupportedForTargetChain,
 		);
 		assert_noop!(
 			Swapping::request_swap_deposit_address(
@@ -414,26 +426,22 @@ fn can_reject_invalid_ccms() {
 			),
 			Error::<Test>::CcmUnsupportedForTargetChain
 		);
-		assert_noop!(
-			Swapping::on_ccm_deposit(
-				Asset::Eth,
-				1_000_000,
-				Asset::Btc,
-				ForeignChainAddress::Btc(Default::default()),
-				ccm.clone()
-			),
-			Error::<Test>::CcmUnsupportedForTargetChain
-		);
 
-		assert_noop!(
-			Swapping::on_ccm_deposit(
-				Asset::Eth,
-				gas_budget - 1,
-				Asset::Eth,
-				ForeignChainAddress::Eth(Default::default()),
-				ccm
-			),
-			Error::<Test>::CcmInsufficientDepositAmount
+		assert_failed_ccm(
+			Asset::Eth,
+			1_000_000,
+			Asset::Btc,
+			ForeignChainAddress::Btc(Default::default()),
+			ccm.clone(),
+			CcmFailReason::UnsupportedForTargetChain,
+		);
+		assert_failed_ccm(
+			Asset::Eth,
+			gas_budget - 1,
+			Asset::Eth,
+			ForeignChainAddress::Eth(Default::default()),
+			ccm,
+			CcmFailReason::InsufficientDepositAmount,
 		);
 	});
 }
@@ -459,13 +467,13 @@ fn can_process_ccms_via_swap_deposit_address() {
 			0,
 			Some(ccm.clone())
 		),);
-		assert_ok!(Swapping::on_ccm_deposit(
+		Swapping::on_ccm_deposit(
 			Asset::Dot,
 			deposit_amount,
 			Asset::Eth,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm.clone(),
-		));
+		);
 
 		assert_eq!(
 			PendingCcms::<Test>::get(1),
@@ -522,12 +530,10 @@ fn can_process_ccms_via_swap_deposit_address() {
 		assert_eq!(PendingCcms::<Test>::get(1), None);
 		assert_eq!(CcmOutputs::<Test>::get(1), None);
 
-		System::assert_has_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::CcmEgressScheduled {
-				ccm_id: CcmIdCounter::<Test>::get(),
-				egress_id: (ForeignChain::Ethereum, 1),
-			},
-		));
+		System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::CcmEgressScheduled {
+			ccm_id: CcmIdCounter::<Test>::get(),
+			egress_id: (ForeignChain::Ethereum, 1),
+		}));
 	});
 }
 
@@ -607,21 +613,17 @@ fn can_process_ccms_via_extrinsic() {
 		assert_eq!(PendingCcms::<Test>::get(1), None);
 		assert_eq!(CcmOutputs::<Test>::get(1), None);
 
-		System::assert_has_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::CcmDepositReceived {
-				ccm_id: CcmIdCounter::<Test>::get(),
-				principal_swap_id: Some(1),
-				gas_swap_id: Some(2),
-				deposit_amount,
-				destination_address: ForeignChainAddress::Eth(Default::default()),
-			},
-		));
-		System::assert_has_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::CcmEgressScheduled {
-				ccm_id: CcmIdCounter::<Test>::get(),
-				egress_id: (ForeignChain::Ethereum, 1),
-			},
-		));
+		System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::CcmDepositReceived {
+			ccm_id: CcmIdCounter::<Test>::get(),
+			principal_swap_id: Some(1),
+			gas_swap_id: Some(2),
+			deposit_amount,
+			destination_address: ForeignChainAddress::Eth(Default::default()),
+		}));
+		System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::CcmEgressScheduled {
+			ccm_id: CcmIdCounter::<Test>::get(),
+			egress_id: (ForeignChain::Ethereum, 1),
+		}));
 	});
 }
 
@@ -693,21 +695,17 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 		assert_eq!(PendingCcms::<Test>::get(1), None);
 		assert_eq!(CcmOutputs::<Test>::get(1), None);
 
-		System::assert_has_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::CcmDepositReceived {
-				ccm_id: CcmIdCounter::<Test>::get(),
-				principal_swap_id: Some(1),
-				gas_swap_id: None,
-				deposit_amount,
-				destination_address: ForeignChainAddress::Eth(Default::default()),
-			},
-		));
-		System::assert_has_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::CcmEgressScheduled {
-				ccm_id: CcmIdCounter::<Test>::get(),
-				egress_id: (ForeignChain::Ethereum, 1),
-			},
-		));
+		System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::CcmDepositReceived {
+			ccm_id: CcmIdCounter::<Test>::get(),
+			principal_swap_id: Some(1),
+			gas_swap_id: None,
+			deposit_amount,
+			destination_address: ForeignChainAddress::Eth(Default::default()),
+		}));
+		System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::CcmEgressScheduled {
+			ccm_id: CcmIdCounter::<Test>::get(),
+			egress_id: (ForeignChain::Ethereum, 1),
+		}));
 	});
 }
 
@@ -780,21 +778,17 @@ fn can_handle_ccms_with_native_gas_asset() {
 		assert_eq!(PendingCcms::<Test>::get(1), None);
 		assert_eq!(CcmOutputs::<Test>::get(1), None);
 
-		System::assert_has_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::CcmDepositReceived {
-				ccm_id: CcmIdCounter::<Test>::get(),
-				principal_swap_id: None,
-				gas_swap_id: Some(1),
-				deposit_amount,
-				destination_address: ForeignChainAddress::Eth(Default::default()),
-			},
-		));
-		System::assert_has_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::CcmEgressScheduled {
-				ccm_id: CcmIdCounter::<Test>::get(),
-				egress_id: (ForeignChain::Ethereum, 1),
-			},
-		));
+		System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::CcmDepositReceived {
+			ccm_id: CcmIdCounter::<Test>::get(),
+			principal_swap_id: None,
+			gas_swap_id: Some(1),
+			deposit_amount,
+			destination_address: ForeignChainAddress::Eth(Default::default()),
+		}));
+		System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::CcmEgressScheduled {
+			ccm_id: CcmIdCounter::<Test>::get(),
+			egress_id: (ForeignChain::Ethereum, 1),
+		}));
 	});
 }
 
@@ -841,22 +835,18 @@ fn can_handle_ccms_with_no_swaps_needed() {
 			},]
 		);
 
-		System::assert_has_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::CcmEgressScheduled {
-				ccm_id: CcmIdCounter::<Test>::get(),
-				egress_id: (ForeignChain::Ethereum, 1),
-			},
-		));
+		System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::CcmEgressScheduled {
+			ccm_id: CcmIdCounter::<Test>::get(),
+			egress_id: (ForeignChain::Ethereum, 1),
+		}));
 
-		System::assert_has_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::CcmDepositReceived {
-				ccm_id: CcmIdCounter::<Test>::get(),
-				principal_swap_id: None,
-				gas_swap_id: None,
-				deposit_amount,
-				destination_address: ForeignChainAddress::Eth(Default::default()),
-			},
-		));
+		System::assert_has_event(RuntimeEvent::Swapping(Event::<Test>::CcmDepositReceived {
+			ccm_id: CcmIdCounter::<Test>::get(),
+			principal_swap_id: None,
+			gas_swap_id: None,
+			deposit_amount,
+			destination_address: ForeignChainAddress::Eth(Default::default()),
+		}));
 	});
 }
 
@@ -872,9 +862,10 @@ fn can_set_minimum_swap_amount() {
 
 		assert_eq!(MinimumSwapAmount::<Test>::get(asset), amount);
 
-		System::assert_last_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::MinimumSwapAmountSet { asset, amount },
-		));
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::MinimumSwapAmountSet {
+			asset,
+			amount,
+		}));
 	});
 }
 
@@ -890,9 +881,10 @@ fn can_set_minimum_ccm_gas_budget() {
 
 		assert_eq!(MinimumCcmGasBudget::<Test>::get(asset), amount);
 
-		System::assert_last_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::MinimumCcmGasBudgetSet { asset, amount },
-		));
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::MinimumCcmGasBudgetSet {
+			asset,
+			amount,
+		}));
 	});
 }
 
@@ -915,13 +907,11 @@ fn swap_by_witnesser_can_be_rejected() {
 
 		// Verify this swap is rejected
 		assert_eq!(SwapQueue::<Test>::decode_len(), None);
-		System::assert_last_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::SwapAmountBelowMinimum {
-				asset: from,
-				amount,
-				destination_address: ForeignChainAddress::Eth(Default::default()),
-			},
-		));
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountBelowMinimum {
+			asset: from,
+			amount,
+			destination_address: ForeignChainAddress::Eth(Default::default()),
+		}));
 		// Fund is confiscated
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), amount);
 
@@ -949,7 +939,7 @@ fn swap_by_witnesser_can_be_rejected() {
 			}]
 		);
 		System::assert_last_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::SwapScheduledByWitnesser {
+			Event::<Test>::SwapScheduledByWitnesser {
 				swap_id: 1,
 				deposit_amount: amount,
 				destination_address: EncodedAddress::Eth(Default::default()),
@@ -983,13 +973,11 @@ fn swap_by_deposit_can_be_rejected() {
 
 		// Verify this swap is rejected
 		assert_eq!(SwapQueue::<Test>::decode_len(), None);
-		System::assert_last_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::SwapAmountBelowMinimum {
-				asset: from,
-				amount,
-				destination_address: ForeignChainAddress::Eth(Default::default()),
-			},
-		));
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountBelowMinimum {
+			asset: from,
+			amount,
+			destination_address: ForeignChainAddress::Eth(Default::default()),
+		}));
 		// Fund is confiscated
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), amount);
 
@@ -1018,13 +1006,11 @@ fn swap_by_deposit_can_be_rejected() {
 				swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 			}]
 		);
-		System::assert_last_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::SwapScheduledByDeposit {
-				swap_id: 1,
-				deposit_address: EncodedAddress::Eth(Default::default()),
-				deposit_amount: amount,
-			},
-		));
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapScheduledByDeposit {
+			swap_id: 1,
+			deposit_address: EncodedAddress::Eth(Default::default()),
+			deposit_amount: amount,
+		}));
 
 		// Confiscated fund is unchanged
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0);
@@ -1081,7 +1067,7 @@ fn cannot_register_ccm_deposit_below_minimum_gas_budget() {
 		assert_eq!(System::current_block_number() + SwapTTL::<Test>::get(), 6);
 		assert_events_match!(
 			Test,
-			RuntimeEvent::Swapping(crate::Event::SwapDepositAddressReady {
+			RuntimeEvent::Swapping(Event::SwapDepositAddressReady {
 				expiry_block: 6,
 				..
 			}) => ()
@@ -1122,10 +1108,10 @@ fn ccm_via_exintrincs_below_minimum_gas_budget_are_rejected() {
 
 		// Verify the CCM failed
 		assert_eq!(SwapQueue::<Test>::decode_len(), None);
-		System::assert_last_event(RuntimeEvent::Swapping(crate::Event::CcmGasBudgetBelowMinimum {
-			asset: from,
-			gas_budget,
+		System::assert_last_event(RuntimeEvent::Swapping(Event::CcmFailed {
+			reason: CcmFailReason::GasBudgetBelowMinimum,
 			destination_address: ForeignChainAddress::Eth(Default::default()),
+			message_metadata: ccm.clone(),
 		}));
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), deposit_amount);
 
@@ -1145,15 +1131,13 @@ fn ccm_via_exintrincs_below_minimum_gas_budget_are_rejected() {
 
 		// Verify the CCM succeeded
 		assert_eq!(SwapQueue::<Test>::decode_len(), Some(1));
-		System::assert_last_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::CcmDepositReceived {
-				ccm_id: 1,
-				principal_swap_id: Some(1),
-				gas_swap_id: None,
-				deposit_amount,
-				destination_address: ForeignChainAddress::Eth(Default::default()),
-			},
-		));
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::CcmDepositReceived {
+			ccm_id: 1,
+			principal_swap_id: Some(1),
+			gas_swap_id: None,
+			deposit_amount,
+			destination_address: ForeignChainAddress::Eth(Default::default()),
+		}));
 
 		// The funds are not confiscated.
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0);
@@ -1190,22 +1174,17 @@ fn ccm_via_deposit_with_principal_below_minimum_are_rejected() {
 			0,
 			Some(ccm.clone())
 		));
-		assert_ok!(Swapping::on_ccm_deposit(
+
+		assert_failed_ccm(
 			from,
 			gas_budget + principal_amount,
 			to,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm.clone(),
-		));
+			CcmFailReason::PrincipalSwapAmountBelowMinimum,
+		);
 
 		// Verify the ccm is rejected
-		System::assert_last_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::SwapAmountBelowMinimum {
-				asset: from,
-				amount: principal_amount,
-				destination_address: ForeignChainAddress::Eth(Default::default()),
-			},
-		));
 		assert_eq!(SwapQueue::<Test>::decode_len(), None);
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), gas_budget + principal_amount);
 
@@ -1217,24 +1196,22 @@ fn ccm_via_deposit_with_principal_below_minimum_are_rejected() {
 		));
 		CollectedRejectedFunds::<Test>::set(from, 0);
 
-		assert_ok!(Swapping::on_ccm_deposit(
+		Swapping::on_ccm_deposit(
 			from,
 			gas_budget + principal_amount,
 			to,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm,
-		));
+		);
 
 		// Verify the CCM is processed successfully
-		System::assert_last_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::CcmDepositReceived {
-				ccm_id: 1,
-				principal_swap_id: Some(1),
-				gas_swap_id: None,
-				deposit_amount: gas_budget + principal_amount,
-				destination_address: ForeignChainAddress::Eth(Default::default()),
-			},
-		));
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::CcmDepositReceived {
+			ccm_id: 1,
+			principal_swap_id: Some(1),
+			gas_swap_id: None,
+			deposit_amount: gas_budget + principal_amount,
+			destination_address: ForeignChainAddress::Eth(Default::default()),
+		}));
 		assert_eq!(SwapQueue::<Test>::decode_len(), Some(1));
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0);
 	});
@@ -1272,13 +1249,11 @@ fn ccm_via_extrinsic_with_principal_below_minimum_are_rejected() {
 		));
 
 		// Verify the ccm is rejected
-		System::assert_last_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::SwapAmountBelowMinimum {
-				asset: from,
-				amount: principal_amount,
-				destination_address: ForeignChainAddress::Eth(Default::default()),
-			},
-		));
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::CcmFailed {
+			reason: CcmFailReason::PrincipalSwapAmountBelowMinimum,
+			destination_address: ForeignChainAddress::Eth(Default::default()),
+			message_metadata: ccm.clone(),
+		}));
 		assert_eq!(SwapQueue::<Test>::decode_len(), None);
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), gas_budget + principal_amount);
 
@@ -1300,15 +1275,13 @@ fn ccm_via_extrinsic_with_principal_below_minimum_are_rejected() {
 		));
 
 		// Verify the CCM is processed successfully
-		System::assert_last_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::CcmDepositReceived {
-				ccm_id: 1,
-				principal_swap_id: Some(1),
-				gas_swap_id: None,
-				deposit_amount: gas_budget + principal_amount,
-				destination_address: ForeignChainAddress::Eth(Default::default()),
-			},
-		));
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::CcmDepositReceived {
+			ccm_id: 1,
+			principal_swap_id: Some(1),
+			gas_swap_id: None,
+			deposit_amount: gas_budget + principal_amount,
+			destination_address: ForeignChainAddress::Eth(Default::default()),
+		}));
 		assert_eq!(SwapQueue::<Test>::decode_len(), Some(1));
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0);
 	});
@@ -1344,25 +1317,25 @@ fn ccm_without_principal_swaps_are_accepted() {
 		System::reset_events();
 
 		// Ccm with principal asset = 0
-		assert_ok!(Swapping::on_ccm_deposit(
+		Swapping::on_ccm_deposit(
 			eth,
 			gas_budget,
 			flip,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm.clone(),
-		));
+		);
 
 		// Verify the CCM is processed successfully
 		assert_event_sequence!(
 			Test,
-			RuntimeEvent::Swapping(crate::Event::CcmDepositReceived {
+			RuntimeEvent::Swapping(Event::CcmDepositReceived {
 				ccm_id: 1,
 				principal_swap_id: None,
 				gas_swap_id: None,
 				deposit_amount: gas_budget,
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 			}),
-			RuntimeEvent::Swapping(crate::Event::CcmEgressScheduled {
+			RuntimeEvent::Swapping(Event::CcmEgressScheduled {
 				ccm_id: 1,
 				egress_id: (ForeignChain::Ethereum, 1),
 			})
@@ -1373,25 +1346,25 @@ fn ccm_without_principal_swaps_are_accepted() {
 
 		// Ccm where principal asset = output asset
 		System::reset_events();
-		assert_ok!(Swapping::on_ccm_deposit(
+		Swapping::on_ccm_deposit(
 			eth,
 			gas_budget + principal_amount,
 			eth,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm,
-		));
+		);
 
 		// Verify the CCM is processed successfully
 		assert_event_sequence!(
 			Test,
-			RuntimeEvent::Swapping(crate::Event::CcmDepositReceived {
+			RuntimeEvent::Swapping(Event::CcmDepositReceived {
 				ccm_id: 2,
 				principal_swap_id: None,
 				gas_swap_id: None,
 				deposit_amount: gas_budget + principal_amount,
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 			}),
-			RuntimeEvent::Swapping(crate::Event::CcmEgressScheduled {
+			RuntimeEvent::Swapping(Event::CcmEgressScheduled {
 				ccm_id: 2,
 				egress_id: (ForeignChain::Ethereum, 1),
 			})
@@ -1420,24 +1393,22 @@ fn ccm_with_gas_below_minimum_swap_amount_allowed() {
 		System::reset_events();
 
 		// Even if gas amount is below minimum swap amount, it is allowed.
-		assert_ok!(Swapping::on_ccm_deposit(
+		Swapping::on_ccm_deposit(
 			flip,
 			gas_budget,
 			flip,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm,
-		));
+		);
 
 		// Verify the CCM is processed successfully
-		System::assert_last_event(RuntimeEvent::Swapping(
-			crate::Event::<Test>::CcmDepositReceived {
-				ccm_id: 1,
-				principal_swap_id: None,
-				gas_swap_id: Some(1),
-				deposit_amount: gas_budget,
-				destination_address: ForeignChainAddress::Eth(Default::default()),
-			},
-		));
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::CcmDepositReceived {
+			ccm_id: 1,
+			principal_swap_id: None,
+			gas_swap_id: Some(1),
+			deposit_amount: gas_budget,
+			destination_address: ForeignChainAddress::Eth(Default::default()),
+		}));
 		// No funds are confiscated
 		assert_eq!(CollectedRejectedFunds::<Test>::get(flip), 0);
 	});

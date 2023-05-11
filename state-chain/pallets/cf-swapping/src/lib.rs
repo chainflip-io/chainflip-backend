@@ -9,7 +9,7 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{BlockNumberProvider, Saturating},
-		Permill,
+		DispatchError, Permill,
 	},
 };
 use frame_system::pallet_prelude::*;
@@ -73,6 +73,14 @@ pub(crate) struct CcmSwap {
 	destination_asset: Asset,
 	destination_address: ForeignChainAddress,
 	message_metadata: CcmDepositMetadata,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum CcmFailReason {
+	UnsupportedForTargetChain,
+	InsufficientDepositAmount,
+	PrincipalSwapAmountBelowMinimum,
+	GasBudgetBelowMinimum,
 }
 
 #[frame_support::pallet]
@@ -241,10 +249,10 @@ pub mod pallet {
 			amount: AssetAmount,
 			destination_address: ForeignChainAddress,
 		},
-		CcmGasBudgetBelowMinimum {
-			asset: Asset,
-			gas_budget: AssetAmount,
+		CcmFailed {
+			reason: CcmFailReason,
 			destination_address: ForeignChainAddress,
+			message_metadata: CcmDepositMetadata,
 		},
 	}
 	#[pallet::error]
@@ -261,6 +269,8 @@ pub mod pallet {
 		CcmInsufficientDepositAmount,
 		/// The provided address could not be decoded.
 		InvalidDestinationAddress,
+		/// The swap amount is below the minimum required.
+		SwapAmountBelowMinimum,
 		/// The CCM's gas budget is below the minimum allowed.
 		CcmGasBudgetBelowMinimum,
 	}
@@ -518,7 +528,9 @@ pub mod pallet {
 				destination_asset,
 				destination_address_internal,
 				message_metadata,
-			)
+			);
+
+			Ok(())
 		}
 
 		/// Register the account as a Broker.
@@ -782,60 +794,46 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			message_metadata: CcmDepositMetadata,
-		) -> DispatchResult {
+		) {
 			// Caller should ensure that assets and addresses are compatible.
 			debug_assert!(
 				ForeignChain::from(destination_address.clone()) ==
 					ForeignChain::from(destination_asset)
 			);
 
-			// Currently only Ethereum supports CCM.
-			ensure!(
-				ForeignChain::Ethereum == destination_asset.into(),
-				Error::<T>::CcmUnsupportedForTargetChain
-			);
-
-			// Deposited amount should be enough to pay for gas.
-			ensure!(
-				deposit_amount >= message_metadata.gas_budget,
-				Error::<T>::CcmInsufficientDepositAmount
-			);
-
 			let principal_swap_amount = deposit_amount.saturating_sub(message_metadata.gas_budget);
 
-			let ccm_failed = {
-				// If the CCM's principal requires a swapand is non-zero,
+			// Checks the validity of CCM.
+			let error = if ForeignChain::Ethereum != destination_asset.into() {
+				Some(CcmFailReason::UnsupportedForTargetChain)
+			} else if deposit_amount < message_metadata.gas_budget {
+				Some(CcmFailReason::InsufficientDepositAmount)
+			} else if source_asset != destination_asset &&
+				!principal_swap_amount.is_zero() &&
+				principal_swap_amount < MinimumSwapAmount::<T>::get(source_asset)
+			{
+				// If the CCM's principal requires a swap and is non-zero,
 				// then the principal swap amount must be above minimum swap amount required.
-				if source_asset != destination_asset &&
-					!principal_swap_amount.is_zero() &&
-					principal_swap_amount < MinimumSwapAmount::<T>::get(source_asset)
-				{
-					Self::deposit_event(Event::<T>::SwapAmountBelowMinimum {
-						asset: source_asset,
-						amount: principal_swap_amount,
-						destination_address: destination_address.clone(),
-					});
-					true
-				} else if message_metadata.gas_budget < MinimumCcmGasBudget::<T>::get(source_asset)
-				{
-					// The gas budget must be above the minimum allowed
-					Self::deposit_event(Event::<T>::CcmGasBudgetBelowMinimum {
-						asset: source_asset,
-						gas_budget: message_metadata.gas_budget,
-						destination_address: destination_address.clone(),
-					});
-					true
-				} else {
-					false
-				}
+				Some(CcmFailReason::PrincipalSwapAmountBelowMinimum)
+			} else if message_metadata.gas_budget < MinimumCcmGasBudget::<T>::get(source_asset) {
+				// The gas budget must be above the minimum allowed
+				Some(CcmFailReason::GasBudgetBelowMinimum)
+			} else {
+				None
 			};
 
-			if ccm_failed {
+			if let Some(reason) = error {
 				// Confiscate the deposit and emit an event.
 				CollectedRejectedFunds::<T>::mutate(source_asset, |fund| {
 					*fund = fund.saturating_add(deposit_amount)
 				});
-				return Ok(())
+
+				Self::deposit_event(Event::<T>::CcmFailed {
+					reason,
+					destination_address,
+					message_metadata,
+				});
+				return
 			}
 
 			let ccm_id = CcmIdCounter::<T>::mutate(|id| {
@@ -894,8 +892,6 @@ pub mod pallet {
 				PendingCcms::<T>::insert(ccm_id, ccm_swap);
 				CcmOutputs::<T>::insert(ccm_id, swap_output);
 			}
-
-			Ok(())
 		}
 	}
 }
