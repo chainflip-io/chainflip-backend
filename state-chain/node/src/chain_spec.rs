@@ -490,10 +490,7 @@ fn testnet_genesis(
 		},
 		flip: FlipConfig { total_issuance },
 		funding: FundingConfig {
-			genesis_validators: all_accounts
-				.iter()
-				.map(|(acct, _role, amount)| (acct.clone(), *amount))
-				.collect(),
+			genesis_accounts: all_accounts.clone(),
 			minimum_funding,
 			redemption_ttl: core::time::Duration::from_secs(3 * redemption_delay),
 			redemption_delay_buffer_seconds,
@@ -504,7 +501,6 @@ fn testnet_genesis(
 		reputation: ReputationConfig {
 			accrual_ratio,
 			penalties,
-			// Includes backups.
 			genesis_validators: all_accounts
 				.iter()
 				.filter_map(

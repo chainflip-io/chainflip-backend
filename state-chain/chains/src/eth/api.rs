@@ -11,6 +11,42 @@ use self::all_batch::{
 
 use super::{Ethereum, EthereumChannelId, EthereumTransactionBuilder};
 
+#[cfg(feature = "std")]
+pub mod abi {
+	#[macro_export]
+	macro_rules! include_abi_bytes {
+		($name:ident) => {
+			&include_bytes!(concat!(
+				env!("CF_ETH_CONTRACT_ABI_ROOT"),
+				"/",
+				env!("CF_ETH_CONTRACT_ABI_TAG"),
+				"/",
+				stringify!($name),
+				".json"
+			))[..]
+		};
+	}
+
+	#[cfg(test)]
+	pub fn load_abi(name: &'static str) -> ethabi::Contract {
+		fn abi_file(name: &'static str) -> std::path::PathBuf {
+			let mut path = std::path::PathBuf::from(env!("CF_ETH_CONTRACT_ABI_ROOT"));
+			path.push(env!("CF_ETH_CONTRACT_ABI_TAG"));
+			path.push(name);
+			path.set_extension("json");
+			path.canonicalize()
+				.unwrap_or_else(|e| panic!("Failed to canonicalize abi file {path:?}: {e}"))
+		}
+
+		fn load_abi_bytes(name: &'static str) -> impl std::io::Read {
+			std::fs::File::open(abi_file(name))
+				.unwrap_or_else(|e| panic!("Failed to open abi file {:?}: {e}", abi_file(name)))
+		}
+
+		ethabi::Contract::load(load_abi_bytes(name)).expect("Failed to load abi from bytes.")
+	}
+}
+
 pub mod all_batch;
 pub mod execute_x_swap_and_call;
 pub mod register_redemption;
@@ -86,7 +122,7 @@ where
 	fn new_unsigned(
 		_old_key: Option<<Ethereum as ChainCrypto>::AggKey>,
 		new_key: <Ethereum as ChainCrypto>::AggKey,
-	) -> Result<Self, ()> {
+	) -> Result<Self, SetAggKeyWithAggKeyError> {
 		Ok(Self::SetAggKeyWithAggKey(EthereumTransactionBuilder::new_unsigned(
 			E::replay_protection(EthereumContract::KeyManager),
 			set_agg_key_with_agg_key::SetAggKeyWithAggKey::new(new_key),

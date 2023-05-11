@@ -2,7 +2,7 @@ use chainflip_node::test_account_from_seed;
 use frame_support::sp_io::TestExternalities;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
-use sp_runtime::{traits::Zero, BuildStorage};
+use sp_runtime::BuildStorage;
 use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AccountRolesConfig,
 	EmissionsConfig, EthereumVaultConfig, FlipConfig, FundingConfig, GovernanceConfig,
@@ -35,7 +35,7 @@ use crate::{
 use cf_primitives::{AccountRole, AuthorityCount, BlockNumber, FlipBalance, GENESIS_EPOCH};
 
 pub struct ExtBuilder {
-	pub accounts: Vec<(AccountId, FlipBalance)>,
+	pub genesis_accounts: Vec<(AccountId, AccountRole, FlipBalance)>,
 	root: Option<AccountId>,
 	blocks_per_epoch: BlockNumber,
 	max_authorities: AuthorityCount,
@@ -45,18 +45,18 @@ pub struct ExtBuilder {
 impl Default for ExtBuilder {
 	fn default() -> Self {
 		Self {
-			accounts: vec![],
-			root: None,
-			blocks_per_epoch: Zero::zero(),
 			max_authorities: MAX_AUTHORITIES,
 			min_authorities: 1,
+			genesis_accounts: Default::default(),
+			root: Default::default(),
+			blocks_per_epoch: Default::default(),
 		}
 	}
 }
 
 impl ExtBuilder {
-	pub fn accounts(mut self, accounts: Vec<(AccountId, FlipBalance)>) -> Self {
-		self.accounts = accounts;
+	pub fn accounts(mut self, accounts: Vec<(AccountId, AccountRole, FlipBalance)>) -> Self {
+		self.genesis_accounts = accounts;
 		self
 	}
 
@@ -91,7 +91,7 @@ impl ExtBuilder {
 		state_chain_runtime::GenesisConfig {
 			session: SessionConfig {
 				keys: self
-					.accounts
+					.genesis_accounts
 					.iter()
 					.map(|x| {
 						(
@@ -109,7 +109,7 @@ impl ExtBuilder {
 			},
 			flip: FlipConfig { total_issuance: TOTAL_ISSUANCE },
 			funding: FundingConfig {
-				genesis_validators: self.accounts.clone(),
+				genesis_accounts: self.genesis_accounts.clone(),
 				minimum_funding: MIN_FUNDING,
 				redemption_ttl: core::time::Duration::from_secs(3 * REDEMPTION_DELAY_SECS),
 				redemption_delay_buffer_seconds: REDEMPTION_DELAY_BUFFER_SECS,
@@ -117,17 +117,29 @@ impl ExtBuilder {
 			reputation: ReputationConfig {
 				accrual_ratio: ACCRUAL_RATIO,
 				penalties: PENALTIES.to_vec(),
-				genesis_validators: self.accounts.iter().map(|(id, _)| id.clone()).collect(),
+				genesis_validators: self
+					.genesis_accounts
+					.iter()
+					.filter_map(|(id, role, ..)| {
+						matches!(role, AccountRole::Validator).then_some(id.clone())
+					})
+					.collect(),
 			},
 			governance: GovernanceConfig {
 				members: self.root.iter().cloned().collect(),
 				expiry_span: EXPIRY_SPAN_IN_SECONDS,
 			},
 			validator: ValidatorConfig {
-				genesis_authorities: self.accounts.iter().map(|(id, _)| id.clone()).collect(),
+				genesis_authorities: self
+					.genesis_accounts
+					.iter()
+					.filter_map(|(id, role, ..)| {
+						matches!(role, AccountRole::Validator).then_some(id.clone())
+					})
+					.collect(),
 				genesis_backups: Default::default(),
 				blocks_per_epoch: self.blocks_per_epoch,
-				bond: self.accounts.iter().map(|(_, amount)| *amount).min().unwrap(),
+				bond: self.genesis_accounts.iter().map(|(.., amount)| *amount).min().unwrap(),
 				redemption_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_REDEEMABLE,
 				backup_reward_node_percentage: 34,
 				authority_set_min_size: self.min_authorities,
@@ -147,9 +159,9 @@ impl ExtBuilder {
 			},
 			account_roles: AccountRolesConfig {
 				initial_account_roles: self
-					.accounts
+					.genesis_accounts
 					.iter()
-					.map(|(id, _)| (id.clone(), AccountRole::Validator))
+					.map(|(id, role, _)| (id.clone(), *role))
 					.collect(),
 			},
 			..state_chain_runtime::GenesisConfig::default()

@@ -36,25 +36,12 @@ impl EthereumCall for SetAggKeyWithAggKey {
 
 #[cfg(test)]
 mod test_set_agg_key_with_agg_key {
-	use crate::{
-		eth::{
-			api::EthereumReplayProtection, EthereumTransactionBuilder,
-			SchnorrVerificationComponents,
-		},
-		ApiCall,
+	use crate::eth::{
+		api::{abi::load_abi, EthereumReplayProtection},
+		ApiCall, EthereumTransactionBuilder, SchnorrVerificationComponents,
 	};
 
 	use super::*;
-	use frame_support::assert_ok;
-
-	#[test]
-	// There have been obtuse test failures due to the loading of the contract failing
-	// It uses a different ethabi to the CFE, so we test separately
-	fn just_load_the_contract() {
-		assert_ok!(ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/KeyManager.json").as_ref(),
-		));
-	}
 
 	#[test]
 	fn test_known_payload() {
@@ -89,10 +76,7 @@ mod test_set_agg_key_with_agg_key {
 		const FAKE_NEW_KEY_X: [u8; 32] = asymmetrise([0xcf; 32]);
 		const FAKE_NEW_KEY_Y: ParityBit = ParityBit::Odd;
 
-		let key_manager = ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/KeyManager.json").as_ref(),
-		)
-		.unwrap();
+		let key_manager = load_abi("IKeyManager");
 
 		let set_agg_key_reference = key_manager.function("setAggKeyWithAggKey").unwrap();
 

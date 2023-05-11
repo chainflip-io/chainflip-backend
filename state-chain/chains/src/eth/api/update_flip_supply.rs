@@ -41,24 +41,13 @@ impl EthereumCall for UpdateFlipSupply {
 mod test_update_flip_supply {
 	use crate::{
 		eth::{
-			api::EthereumReplayProtection, EthereumTransactionBuilder,
-			SchnorrVerificationComponents,
+			api::{abi::load_abi, EthereumReplayProtection},
+			EthereumTransactionBuilder, SchnorrVerificationComponents,
 		},
 		ApiCall,
 	};
 
 	use super::*;
-	use frame_support::assert_ok;
-
-	#[test]
-	// There have been obtuse test failures due to the loading of the contract failing
-	// It uses a different ethabi to the CFE, so we test separately
-	fn just_load_the_contract() {
-		assert_ok!(ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/StateChainGateway.json")
-				.as_ref(),
-		));
-	}
 
 	#[test]
 	fn test_update_flip_supply_payload() {
@@ -73,11 +62,7 @@ mod test_update_flip_supply {
 		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = asymmetrise([0x7f; 20]);
 		const FAKE_SIG: [u8; 32] = asymmetrise([0xe1; 32]);
 
-		let flip_token = ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/StateChainGateway.json")
-				.as_ref(),
-		)
-		.unwrap();
+		let flip_token = load_abi("IStateChainGateway");
 
 		let flip_token_reference = flip_token.function("updateFlipSupply").unwrap();
 

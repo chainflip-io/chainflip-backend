@@ -1,6 +1,6 @@
 use crate as pallet_cf_funding;
 use cf_chains::{ApiCall, Chain, ChainCrypto, Ethereum};
-use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
+use cf_primitives::{AccountRole, BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_waived_fees, mocks::time_source,
 	AccountRoleRegistry, Broadcaster, WaivedFees,
@@ -194,7 +194,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		system: Default::default(),
 		flip: FlipConfig { total_issuance: 1_000_000 },
 		funding: FundingConfig {
-			genesis_validators: vec![(CHARLIE, MIN_FUNDING)],
+			genesis_accounts: vec![(CHARLIE, AccountRole::Validator, MIN_FUNDING)],
 			minimum_funding: MIN_FUNDING,
 			redemption_ttl: Duration::from_secs(REDEMPTION_TTL_SECS),
 			redemption_delay_buffer_seconds: REDEMPTION_DELAY_BUFFER_SECS,
@@ -204,10 +204,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();
 
 	ext.execute_with(|| {
-		for id in &[ALICE, BOB, CHARLIE] {
-			<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(id)
-				.unwrap();
-		}
+		<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(&CHARLIE)
+			.unwrap();
 		System::set_block_number(1);
 	});
 

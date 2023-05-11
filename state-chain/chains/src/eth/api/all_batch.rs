@@ -122,21 +122,11 @@ mod test_all_batch {
 	use super::*;
 	use crate::{
 		eth::{
-			api::EthereumReplayProtection, EthereumTransactionBuilder,
-			SchnorrVerificationComponents,
+			api::{abi::load_abi, EthereumReplayProtection},
+			EthereumTransactionBuilder, SchnorrVerificationComponents,
 		},
 		ApiCall,
 	};
-	use frame_support::assert_ok;
-
-	#[test]
-	// There have been obtuse test failures due to the loading of the contract failing
-	// It uses a different ethabi to the CFE, so we test separately
-	fn just_load_the_contract() {
-		assert_ok!(ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/Vault.json").as_ref(),
-		));
-	}
 
 	#[test]
 	fn test_payload() {
@@ -185,10 +175,7 @@ mod test_all_batch {
 		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = asymmetrise([0x7f; 20]);
 		const FAKE_SIG: [u8; 32] = asymmetrise([0xe1; 32]);
 
-		let eth_vault = ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/Vault.json").as_ref(),
-		)
-		.unwrap();
+		let eth_vault = load_abi("IVault");
 
 		let all_batch_reference = eth_vault.function("allBatch").unwrap();
 

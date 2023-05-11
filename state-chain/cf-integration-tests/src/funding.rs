@@ -4,7 +4,7 @@ use crate::{
 };
 
 use super::{genesis, network, *};
-use cf_primitives::GENESIS_EPOCH;
+use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use cf_traits::EpochInfo;
 use pallet_cf_funding::pallet::Error;
 use pallet_cf_validator::Backups;
@@ -103,9 +103,9 @@ fn funded_node_is_added_to_backups() {
 		// As we run a rotation at genesis we will need accounts to support
 		// having 5 authorities as the default is 3 (Alice, Bob and Charlie)
 		.accounts(vec![
-			(AccountId::from(ALICE), GENESIS_BALANCE),
-			(AccountId::from(BOB), GENESIS_BALANCE),
-			(AccountId::from(CHARLIE), GENESIS_BALANCE),
+			(AccountId::from(ALICE), AccountRole::Validator, GENESIS_BALANCE),
+			(AccountId::from(BOB), AccountRole::Validator, GENESIS_BALANCE),
+			(AccountId::from(CHARLIE), AccountRole::Validator, GENESIS_BALANCE),
 		])
 		.min_authorities(3)
 		.build()
