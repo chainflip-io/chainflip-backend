@@ -16,12 +16,13 @@ jobs:
       - name: Fetch binaries from ${{ env.BRANCH }}
         uses: dawidd6/action-download-artifact@v2
         with:
-          workflow: _20_build.yml
+          workflow: release-sisyphos.yml
           name: chainflip-backend-bin
           branch: release/pla-332
           github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+          workflow_conclusion: cancelled
           search_artifacts: true
-          workflow_conclusion: completed
+          check_artifacts: true
 
       - name: Re-upload binary artifacts
         uses: actions/upload-artifact@v3
