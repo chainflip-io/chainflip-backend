@@ -12,7 +12,6 @@ use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{OnInitialize, ValidatorRegistration},
 };
-use log::LevelFilter;
 use sp_core::H256;
 use sp_runtime::{
 	impl_opaque_keys,
@@ -275,14 +274,6 @@ pub const MAX_AUTHORITY_SIZE: u32 = 5;
 pub const MAX_AUTHORITY_SET_EXPANSION: u32 = 5;
 
 pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
-	// Log nothing by default, set RUST_LOG=debug in the environment and use
-	// `cargo test -- --no-capture` to enable debug logs.
-	let _ = simple_logger::SimpleLogger::new()
-		.with_level(LevelFilter::Off)
-		.without_timestamps()
-		.env()
-		.init();
-
 	log::debug!("Initializing TestExternalitiesWithCheck with GenesisConfig.");
 
 	TestExternalitiesWithCheck {
