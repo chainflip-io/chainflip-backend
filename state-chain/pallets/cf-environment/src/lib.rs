@@ -86,7 +86,7 @@ pub mod cfe {
 pub mod pallet {
 
 	use cf_chains::{
-		btc::{BitcoinScriptBounded, Utxo, UtxoId},
+		btc::{BitcoinScriptBounded, Utxo},
 		dot::{PolkadotPublicKey, RuntimeVersion},
 	};
 	use cf_primitives::{Asset, TxId};
@@ -402,7 +402,6 @@ pub mod pallet {
 			let dispatch_result = T::PolkadotVaultKeyWitnessedHandler::on_new_key_activated(
 				dot_witnessed_aggkey,
 				tx_id.block_number,
-				tx_id,
 			)?;
 			// Clean up the broadcast state.
 			T::PolkadotBroadcaster::clean_up_broadcast(broadcast_id)?;
@@ -436,7 +435,6 @@ pub mod pallet {
 			let dispatch_result = T::BitcoinVaultKeyWitnessedHandler::on_new_key_activated(
 				new_public_key,
 				block_number,
-				UtxoId { tx_hash: Default::default(), vout: Default::default() },
 			)?;
 
 			Self::deposit_event(Event::<T>::BitcoinBlockNumberSetForVault { block_number });

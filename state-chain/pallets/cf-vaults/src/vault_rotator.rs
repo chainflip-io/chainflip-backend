@@ -111,9 +111,6 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				VaultRotationStatusVariant::KeyHandoverComplete =>
 					AsyncResult::Ready(VaultStatus::KeyHandoverComplete),
 				VaultRotationStatusVariant::AwaitingRotation => AsyncResult::Pending,
-				// Skipping is equivalent to complete, since we don't need to do anything
-				VaultRotationStatusVariant::SkipActivation =>
-					AsyncResult::Ready(VaultStatus::RotationComplete),
 				VaultRotationStatusVariant::Complete =>
 					AsyncResult::Ready(VaultStatus::RotationComplete),
 				VaultRotationStatusVariant::Failed => match PendingVaultRotation::<T, I>::get() {
@@ -155,7 +152,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 					},
 					Err(error) => match error {
 						SetAggKeyWithAggKeyError::NotRequired => {
-							PendingVaultRotation::<T, I>::put(VaultRotationStatus::SkipActivation);
+							PendingVaultRotation::<T, I>::put(VaultRotationStatus::Complete);
 						},
 						SetAggKeyWithAggKeyError::Other => {
 							log::error!(
@@ -184,8 +181,6 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
-		use cf_chains::benchmarking_value::BenchmarkValue;
-
 		match outcome {
 			AsyncResult::Pending => {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
@@ -215,9 +210,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				});
 			},
 			AsyncResult::Ready(VaultStatus::RotationComplete) => {
-				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete {
-					tx_id: BenchmarkValue::benchmark_value(),
-				});
+				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete);
 			},
 			AsyncResult::Void => {
 				PendingVaultRotation::<T, I>::kill();
