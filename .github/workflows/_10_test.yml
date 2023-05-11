@@ -31,6 +31,19 @@ jobs:
           cargo cf-test-ci --locked
           sccache --show-stats
 
+  audit:
+    runs-on: [hetzner]
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: cargo audit
+        run: cargo cf-audit --json -D warnings
+
   coverage:
     if: inputs.coverage
     runs-on: [hetzner]
