@@ -760,7 +760,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ChannelActions::<T, I>::remove(&address);
 		FetchParamDetails::<T, I>::remove(channel_id);
 		if matches!(address_status, DeploymentStatus::Deployed) &&
-			ForeignChain::from(address.clone().into()) != ForeignChain::Bitcoin
+			T::TargetChain::get() != ForeignChain::Bitcoin
 		{
 			AddressPool::<T, I>::insert(channel_id, address.clone());
 		}
@@ -770,10 +770,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				source_asset: deposit_address_details.source_asset,
 			});
 		}
-	}
-
-	pub fn expire_channel(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
-		Self::close_channel(channel_id, address);
 	}
 }
 
@@ -875,12 +871,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 
 	// Note: we expect that the mapping from any instantiable pallet to the instance of this pallet
 	// is matching to the right chain. Because of that we can ignore the chain parameter.
-	fn expire_channel(
-		chain: ForeignChain,
-		channel_id: ChannelId,
-		address: TargetChainAccount<T, I>,
-	) {
-		assert_eq!(<T as Config<I>>::TargetChain::get(), chain, "Incompatible chains!");
-		Self::expire_channel(channel_id, address);
+	fn expire_channel(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
+		Self::close_channel(channel_id, address);
 	}
 }

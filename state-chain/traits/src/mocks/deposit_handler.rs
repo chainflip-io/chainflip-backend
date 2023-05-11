@@ -126,11 +126,7 @@ impl<C: Chain, T: Chainflip> DepositApi<C> for MockDepositHandler<C, T> {
 		Ok((channel_id, deposit_address))
 	}
 
-	fn expire_channel(
-		_chain: ForeignChain,
-		_channel_id: ChannelId,
-		address: <C as cf_chains::Chain>::ChainAccount,
-	) {
+	fn expire_channel(_channel_id: ChannelId, address: <C as cf_chains::Chain>::ChainAccount) {
 		<Self as MockPalletStorage>::mutate_value(
 			b"SWAP_INGRESS_CHANNELS",
 			|storage: &mut Option<Vec<SwapChannel<C, T>>>| {

@@ -21,6 +21,17 @@ pub enum ForeignChainAddress {
 	Dot([u8; 32]),
 	Btc(BitcoinScriptBounded),
 }
+
+impl ForeignChainAddress {
+	pub fn chain(&self) -> ForeignChain {
+		match self {
+			ForeignChainAddress::Eth(_) => ForeignChain::Ethereum,
+			ForeignChainAddress::Dot(_) => ForeignChain::Polkadot,
+			ForeignChainAddress::Btc(_) => ForeignChain::Bitcoin,
+		}
+	}
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
 pub enum EncodedAddress {
 	Eth([u8; 20]),
@@ -186,16 +197,6 @@ impl EncodedAddress {
 				Ok(EncodedAddress::Dot(address))
 			},
 			ForeignChain::Bitcoin => Ok(EncodedAddress::Btc(bytes)),
-		}
-	}
-}
-
-impl From<ForeignChainAddress> for ForeignChain {
-	fn from(address: ForeignChainAddress) -> ForeignChain {
-		match address {
-			ForeignChainAddress::Eth(_) => ForeignChain::Ethereum,
-			ForeignChainAddress::Dot(_) => ForeignChain::Polkadot,
-			ForeignChainAddress::Btc(_) => ForeignChain::Bitcoin,
 		}
 	}
 }
