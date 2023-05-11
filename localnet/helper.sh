@@ -3,11 +3,10 @@ function check_endpoint_health() {
   delay=5     # Delay between retries in seconds
 
   while [ $retries -gt 0 ]; do
-    if curl "$@"; then
+    if curl -s "$@"; then
       # Curl command succeeded, exit the loop
       break
     else
-      echo "Retrying in $delay seconds..."
       sleep $delay
       retries=$((retries - 1))
     fi
