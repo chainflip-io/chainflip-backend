@@ -145,7 +145,7 @@ mod test_register_redemption {
 					Token::FixedBytes(TEST_ACCT.into()),
 					// amount: uint
 					Token::Uint(AMOUNT.into()),
-					// funder: address
+					// redeemer address: address
 					Token::Address(TEST_ADDR.into()),
 					// epiryTime: uint48
 					Token::Uint(EXPIRY_SECS.into()),

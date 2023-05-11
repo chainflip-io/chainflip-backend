@@ -94,3 +94,41 @@ mod scalar_impls {
 		}
 	}
 }
+
+#[test]
+fn ensure_serialization_is_consistent() {
+	use super::ECPoint;
+
+	// Scalar is 32 bytes
+	let scalar: Scalar = bincode::deserialize(&[
+		22, 33, 188, 127, 243, 114, 222, 165, 177, 158, 212, 131, 122, 34, 112, 164, 230, 48, 112,
+		90, 14, 78, 91, 42, 120, 206, 28, 215, 160, 190, 21, 0,
+	])
+	.unwrap();
+
+	// Test Edwards point
+	{
+		let point = edwards::Point::from_scalar(&scalar);
+
+		// Point is 32 bytes
+		let expected_point_bytes = [
+			105, 113, 52, 248, 81, 218, 185, 180, 25, 70, 146, 24, 178, 179, 239, 247, 37, 98, 90,
+			230, 133, 204, 122, 162, 0, 84, 28, 213, 50, 135, 230, 235,
+		];
+
+		assert_eq!(bincode::serialize(&point).unwrap(), expected_point_bytes);
+	}
+
+	// Test Ristretto point
+	{
+		let point = ristretto::Point::from_scalar(&scalar);
+
+		// Point is 32 bytes
+		let expected_point_bytes = [
+			46, 177, 159, 111, 170, 191, 255, 194, 205, 23, 199, 98, 188, 141, 12, 36, 188, 225,
+			13, 218, 203, 150, 50, 216, 195, 73, 245, 243, 5, 221, 23, 118,
+		];
+
+		assert_eq!(bincode::serialize(&point).unwrap(), expected_point_bytes);
+	}
+}

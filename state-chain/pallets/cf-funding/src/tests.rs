@@ -459,18 +459,6 @@ fn test_redeem_all() {
 }
 
 #[test]
-fn redeem_with_withdrawal_address() {
-	new_test_ext().execute_with(|| {
-		const AMOUNT: u128 = 45;
-		const WRONG_ETH_ADDR: EthereumAddress = [45u8; 20];
-		// Add some funds.
-		assert_ok!(Funding::funded(RuntimeOrigin::root(), ALICE, AMOUNT, ETH_DUMMY_ADDR, TX_HASH));
-		// Try it again with the right address - expect to succeed
-		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR));
-	});
-}
-
-#[test]
 fn cannot_redeem_to_zero_address() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 45;
@@ -516,35 +504,6 @@ fn redemption_expiry_removes_redemption() {
 
 		// Success, can request redemption again since the last one expired.
 		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR));
-	});
-}
-
-#[test]
-fn fund_with_provided_withdrawal_only_on_first_attempt() {
-	// Check if the branching of the funding process is working probably
-	new_test_ext().execute_with(|| {
-		const AMOUNT: u128 = 45;
-		// Add some funds with no withdrawal address
-		assert_ok!(Funding::funded(
-			RuntimeOrigin::root(),
-			ALICE,
-			AMOUNT,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
-		// Add some funds again with an provided withdrawal address
-		assert_ok!(Funding::funded(RuntimeOrigin::root(), ALICE, AMOUNT, ETH_DUMMY_ADDR, TX_HASH));
-		// Expect an failed funding event to be fired but no funding event
-		assert_event_sequence!(
-			Test,
-			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
-			RuntimeEvent::Funding(crate::Event::Funded {
-				account_id: ALICE,
-				tx_hash: TX_HASH,
-				funds_added: AMOUNT,
-				total_balance: AMOUNT
-			})
-		);
 	});
 }
 
