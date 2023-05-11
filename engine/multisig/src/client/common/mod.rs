@@ -166,7 +166,7 @@ impl<C: CryptoScheme> ResharingContext<C> {
 					let coeff = get_lagrange_coeff::<C::Point>(idx, &all_idxs);
 					*key.key
 						.party_public_keys
-						.get(&id)
+						.get(id)
 						.expect("should have a public key for this party") *
 						&coeff
 				} else {
