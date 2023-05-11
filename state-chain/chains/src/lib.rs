@@ -213,6 +213,7 @@ pub struct TransferAssetParams<C: Chain> {
 	pub amount: <C as Chain>::ChainAmount,
 	pub to: <C as Chain>::ChainAccount,
 }
+
 /// Similar to [frame_support::StaticLookup] but with the `Key` as a type parameter instead of an
 /// associated type.
 ///
@@ -226,14 +227,6 @@ pub trait ChainEnvironment<
 {
 	/// Attempt a lookup.
 	fn lookup(s: LookupKey) -> Option<LookupValue>;
-}
-/// Provides the environment data for ethereum-like chains.
-pub trait EthEnvironmentProvider {
-	fn token_address(asset: assets::eth::Asset) -> Option<eth::ethabi::Address>;
-	fn key_manager_address() -> eth::ethabi::Address;
-	fn state_chain_gateway_address() -> eth::ethabi::Address;
-	fn vault_address() -> eth::ethabi::Address;
-	fn chain_id() -> u64;
 }
 
 pub enum SetAggKeyWithAggKeyError {
@@ -263,11 +256,7 @@ pub trait SetCommKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 
 /// Constructs the `UpdateFlipSupply` api call.
 pub trait UpdateFlipSupply<Abi: ChainAbi>: ApiCall<Abi> {
-	fn new_unsigned(
-		new_total_supply: u128,
-		block_number: u64,
-		state_chain_gateway_address: &[u8; 20],
-	) -> Self;
+	fn new_unsigned(new_total_supply: u128, block_number: u64) -> Self;
 }
 
 /// Constructs the `RegisterRedemption` api call.

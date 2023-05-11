@@ -1,17 +1,14 @@
 use core::marker::PhantomData;
 
 use cf_chains::{
-	address::ForeignChainAddress, eth::assets, AllBatch, ApiCall, Chain, ChainAbi, ChainCrypto,
-	ChainEnvironment, Ethereum, ExecutexSwapAndCall, FetchAssetParams, ReplayProtectionProvider,
-	TransferAssetParams,
+	address::ForeignChainAddress, AllBatch, ApiCall, Chain, ChainAbi, ChainCrypto,
+	ChainEnvironment, Ethereum, ExecutexSwapAndCall, FetchAssetParams, TransferAssetParams,
 };
-use cf_primitives::{EgressId, EthereumAddress, ETHEREUM_ETH_ADDRESS};
+use cf_primitives::{chains::assets, EgressId, EthereumAddress, ETHEREUM_ETH_ADDRESS};
 use codec::{Decode, Encode};
 use frame_support::{CloneNoBound, DebugNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
 use sp_runtime::DispatchError;
-
-use super::eth_replay_protection_provider::MockEthReplayProtectionProvider;
 
 pub const ETHEREUM_FLIP_ADDRESS: EthereumAddress = [0x00; 20];
 #[derive(Encode, Decode, TypeInfo, Eq, PartialEq)]
@@ -75,7 +72,7 @@ impl AllBatch<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 			Err(())
 		} else {
 			Ok(Self::AllBatch(MockAllBatch {
-				nonce: MockEthReplayProtectionProvider::replay_protection(),
+				nonce: Default::default(),
 				fetch_params,
 				transfer_params,
 				_phantom: PhantomData,
@@ -105,7 +102,7 @@ impl ExecutexSwapAndCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 			Err(DispatchError::CannotLookup)
 		} else {
 			Ok(Self::ExecutexSwapAndCall(MockExecutexSwapAndCall {
-				nonce: MockEthReplayProtectionProvider::replay_protection(),
+				nonce: Default::default(),
 				egress_id,
 				transfer_param,
 				source_address,

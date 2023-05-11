@@ -1,23 +1,22 @@
-use cf_chains::eth::ethabi::Address;
-use cf_primitives::chains::assets::eth::Asset;
+use cf_chains::eth::{api::EthEnvironmentProvider, ethabi::Address};
 
-/// A mock that just returns some constants for the KeyManager and Chain ID.
-pub struct MockEthEnvironmentProvider;
+/// A mock that just returns defaults for the KeyManager and Chain ID.
+pub struct MockEthEnvironment;
 
-impl cf_chains::EthEnvironmentProvider for MockEthEnvironmentProvider {
-	fn token_address(_asset: Asset) -> Option<Address> {
-		Some([0xcf; 20].into())
+impl EthEnvironmentProvider for MockEthEnvironment {
+	fn contract_address(_contract: cf_chains::eth::api::EthereumContract) -> Address {
+		Default::default()
 	}
-	fn key_manager_address() -> Address {
-		[0xcf; 20].into()
+
+	fn next_nonce() -> u64 {
+		Default::default()
 	}
-	fn vault_address() -> Address {
-		[0xcf; 20].into()
+
+	fn token_address(_asset: cf_primitives::chains::assets::eth::Asset) -> Option<Address> {
+		Some(Default::default())
 	}
-	fn state_chain_gateway_address() -> Address {
-		[0xcf; 20].into()
-	}
-	fn chain_id() -> u64 {
-		42
+
+	fn chain_id() -> cf_chains::eth::api::EthereumChainId {
+		Default::default()
 	}
 }
