@@ -20,7 +20,6 @@ jobs:
           name: chainflip-backend-bin
           branch: release/${{ env.MAJOR_MINOR }}
           github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
-          workflow_conclusion: cancelled
           search_artifacts: true
           check_artifacts: true
 
