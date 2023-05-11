@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::{
 	client::KeygenResult,
@@ -23,7 +23,7 @@ fn test_signing_for_scheme<C: CryptoScheme>() {
 		let my_key_share = KeyShare { x_i: secret_key, y: public_key };
 		let my_keygen_result: KeygenResult<C> = KeygenResult::new_compatible(
 			my_key_share,
-			HashMap::from_iter(vec![(AccountId::new([0; 32]), public_key)]),
+			BTreeMap::from_iter(vec![(AccountId::new([0; 32]), public_key)]),
 		);
 		let secret_key = my_keygen_result.key_share.x_i.clone();
 

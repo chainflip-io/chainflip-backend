@@ -16,7 +16,7 @@ pub use failure_reason::{
 use strum_macros::EnumIter;
 
 use std::{
-	collections::{BTreeMap, BTreeSet, HashMap},
+	collections::{BTreeMap, BTreeSet},
 	sync::Arc,
 };
 
@@ -36,7 +36,7 @@ pub struct KeygenResult<C: CryptoScheme> {
 	#[serde(bound = "")]
 	pub key_share: KeyShare<C::Point>,
 	#[serde(bound = "")]
-	pub party_public_keys: HashMap<AccountId, C::Point>,
+	pub party_public_keys: BTreeMap<AccountId, C::Point>,
 	// NOTE: making this private ensures that the only
 	// way to create the struct is through the "constructor",
 	// which is important for ensuring its compatibility
@@ -66,7 +66,7 @@ impl<C: CryptoScheme> KeygenResult<C> {
 	/// same procedure.
 	pub fn new_compatible(
 		key_share: KeyShare<C::Point>,
-		party_public_keys: HashMap<AccountId, C::Point>,
+		party_public_keys: BTreeMap<AccountId, C::Point>,
 	) -> Self {
 		let factor: <C::Point as ECPoint>::Scalar = compute_compatibility_factor::<C>(&key_share.y);
 
