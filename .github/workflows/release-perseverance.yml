@@ -30,8 +30,8 @@ jobs:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
     with:
-      version: "perseverance/"
-      environment: dev # TODO: change to prod before merge!!
+      version: "test/"
+      environment: prod # TODO: change to prod before merge!!
       commit_hash: ${{ github.sha }}
     secrets: inherit
   release:
