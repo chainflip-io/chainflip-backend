@@ -27,23 +27,21 @@ pub mod abi {
 	}
 
 	#[cfg(test)]
-	fn abi_file(name: &'static str) -> std::path::PathBuf {
-		let mut path = std::path::PathBuf::from(env!("CF_ETH_CONTRACT_ABI_ROOT"));
-		path.push(env!("CF_ETH_CONTRACT_ABI_TAG"));
-		path.push(name);
-		path.set_extension("json");
-		path.canonicalize()
-			.unwrap_or_else(|e| panic!("Failed to canonicalize abi file {path:?}: {e}"))
-	}
-
-	#[cfg(test)]
-	fn load_abi_bytes(name: &'static str) -> impl std::io::Read {
-		std::fs::File::open(abi_file(name))
-			.unwrap_or_else(|e| panic!("Failed to open abi file {:?}: {e}", abi_file(name)))
-	}
-
-	#[cfg(test)]
 	pub fn load_abi(name: &'static str) -> ethabi::Contract {
+		fn abi_file(name: &'static str) -> std::path::PathBuf {
+			let mut path = std::path::PathBuf::from(env!("CF_ETH_CONTRACT_ABI_ROOT"));
+			path.push(env!("CF_ETH_CONTRACT_ABI_TAG"));
+			path.push(name);
+			path.set_extension("json");
+			path.canonicalize()
+				.unwrap_or_else(|e| panic!("Failed to canonicalize abi file {path:?}: {e}"))
+		}
+
+		fn load_abi_bytes(name: &'static str) -> impl std::io::Read {
+			std::fs::File::open(abi_file(name))
+				.unwrap_or_else(|e| panic!("Failed to open abi file {:?}: {e}", abi_file(name)))
+		}
+
 		ethabi::Contract::load(load_abi_bytes(name)).expect("Failed to load abi from bytes.")
 	}
 }
