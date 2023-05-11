@@ -10,15 +10,15 @@ jobs:
       - name: Get branch of tag
         shell: bash
         run: |
-          raw=$(git --no-pager branch --contains tags/${{ github.ref_name }} | xargs)
-          echo "BRANCH=$raw" >> $GITHUB_ENV
+          MAJOR_MINOR=$(./ci/scripts/extract_version.sh ${{ github.ref_name }})
+          echo "MAJOR_MINOR=$MAJOR_MINOR" >> $GITHUB_ENV
 
       - name: Fetch binaries from ${{ env.BRANCH }}
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: release-sisyphos.yml
           name: chainflip-backend-bin
-          branch: release/pla-332
+          branch: release/${{ env.MAJOR_MINOR }}
           github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
           workflow_conclusion: cancelled
           search_artifacts: true
