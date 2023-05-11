@@ -20,6 +20,7 @@ jobs:
       - name: Substitute ENV
         env:
           CF_NETWORK: ${{ inputs.network }}
+          CF_VERSION: ${{ github.ref_name }}
         run: envsubst < RELEASE_TEMPLATE.md > RELEASE.md
 
       - name: Release

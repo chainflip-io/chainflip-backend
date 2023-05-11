@@ -10,10 +10,10 @@ jobs:
       - name: Get branch of tag
         shell: bash
         run: |
-          MAJOR_MINOR=$(./ci/scripts/extract_version.sh ${{ github.ref_name }})
-          echo "MAJOR_MINOR=$MAJOR_MINOR" >> $GITHUB_ENV
+          RAW=$(./ci/scripts/extract_version.sh ${{ github.ref_name }})
+          echo "MAJOR_MINOR=$RAW" >> $GITHUB_ENV
 
-      - name: Fetch binaries from ${{ env.BRANCH }}
+      - name: Fetch binaries from release/${{ env.MAJOR_MINOR }}
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: release-sisyphos.yml
