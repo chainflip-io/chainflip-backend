@@ -726,7 +726,7 @@ fn vault_key_rotated() {
 		// Status is complete.
 		assert_eq!(
 			PendingVaultRotation::<MockRuntime, _>::get(),
-			Some(VaultRotationStatus::Complete { tx_id: TX_HASH }),
+			Some(VaultRotationStatus::Complete),
 		);
 		assert_last_event!(crate::Event::VaultRotationCompleted { .. });
 	});
@@ -758,6 +758,10 @@ fn key_unavailabe_on_activate_returns_governance_event() {
 		VaultsPallet::activate();
 
 		assert_last_event!(crate::Event::AwaitingGovernanceActivation { .. });
+
+		// we're awaiting the governance action, so we are pending from
+		// perspective of an outside observer (e.g. the validator pallet)
+		assert_eq!(VaultsPallet::status(), AsyncResult::Pending);
 	})
 }
 
@@ -776,5 +780,20 @@ fn set_keygen_response_timeout_works() {
 
 		assert_last_event!(crate::Event::KeygenResponseTimeoutUpdated { .. });
 		assert_eq!(KeygenResponseTimeout::<MockRuntime, _>::get(), new_timeout)
+	})
+}
+
+#[test]
+fn when_set_agg_key_with_agg_key_not_required_we_skip_activation() {
+	new_test_ext().execute_with(|| {
+		PendingVaultRotation::put(VaultRotationStatus::<MockRuntime, _>::KeyHandoverComplete {
+			new_public_key: NEW_AGG_PUB_KEY,
+		});
+
+		MockSetAggKeyWithAggKey::set_required(false);
+
+		VaultsPallet::activate();
+
+		assert_eq!(VaultsPallet::status(), AsyncResult::Ready(VaultStatus::RotationComplete));
 	})
 }

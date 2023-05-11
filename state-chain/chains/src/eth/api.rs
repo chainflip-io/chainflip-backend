@@ -52,7 +52,7 @@ where
 	fn new_unsigned(
 		_old_key: Option<<Ethereum as ChainCrypto>::AggKey>,
 		new_key: <Ethereum as ChainCrypto>::AggKey,
-	) -> Result<Self, ()> {
+	) -> Result<Self, SetAggKeyWithAggKeyError> {
 		Ok(Self::SetAggKeyWithAggKey(set_agg_key_with_agg_key::SetAggKeyWithAggKey::new_unsigned(
 			E::replay_protection(),
 			new_key,

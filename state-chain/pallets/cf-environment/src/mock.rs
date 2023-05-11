@@ -124,7 +124,6 @@ impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler
 	fn on_new_key_activated(
 		_new_public_key: <Polkadot as ChainCrypto>::AggKey,
 		_block_number: <Polkadot as Chain>::ChainBlockNumber,
-		_tx_id: <Polkadot as ChainCrypto>::TransactionId,
 	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
 		unimplemented!()
 	}
@@ -134,7 +133,6 @@ impl VaultKeyWitnessedHandler<Bitcoin> for MockBitcoinVaultKeyWitnessedHandler {
 	fn on_new_key_activated(
 		_new_public_key: <Bitcoin as ChainCrypto>::AggKey,
 		_block_number: <Bitcoin as Chain>::ChainBlockNumber,
-		_tx_id: <Bitcoin as ChainCrypto>::TransactionId,
 	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
 		unimplemented!()
 	}
