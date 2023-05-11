@@ -405,6 +405,9 @@ fn can_only_redeem_during_auction_if_not_bidding() {
 			ETH_ZERO_ADDRESS,
 			TX_HASH
 		));
+		assert_ok!(<MockAccountRoleRegistry as AccountRoleRegistry<Test>>::register_as_validator(
+			&ALICE
+		));
 		assert_ok!(Funding::start_bidding(RuntimeOrigin::signed(ALICE)));
 		assert!(ActiveBidder::<Test>::get(ALICE));
 
