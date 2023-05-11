@@ -5,16 +5,27 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
       - name: Download binaries
         uses: actions/download-artifact@v3
         with:
           name: chainflip-backend-bin
 
+      - name: Substitute ENV
+        env:
+          CF_NETWORK: ${{ inputs.network }}
+        run: envsubst < RELEASE_TEMPLATE.md > RELEASE.md
+
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          generate_release_notes: true
-          prerelease: true
+          name: ⛓️🐬 Chainflip - ${{ env.network }} ${{ github.ref_name }}
+          generate_release_notes: false
+          body_file: RELEASE.md
+          draft: true
+          prerelease: false
           files: |
             chainflip-node
             chainflip-engine
