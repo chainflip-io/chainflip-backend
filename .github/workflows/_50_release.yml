@@ -1,5 +1,9 @@
 on:
   workflow_call:
+    inputs:
+      network:
+        type: string
+        required: true
 
 jobs:
   release:
@@ -21,9 +25,9 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          name: ⛓️🐬 Chainflip - ${{ env.network }} ${{ github.ref_name }}
+          name: chainflip:${{ env.network }} ${{ github.ref_name }}
           generate_release_notes: false
-          body_file: RELEASE.md
+          body_path: RELEASE.md
           draft: true
           prerelease: false
           files: |

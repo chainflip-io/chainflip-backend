@@ -38,3 +38,5 @@ jobs:
     needs: [publish]
     uses: ./.github/workflows/_50_release.yml
     secrets: inherit
+    with:
+      network: perseverance
