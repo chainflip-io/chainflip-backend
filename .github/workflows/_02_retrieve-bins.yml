@@ -11,7 +11,7 @@ jobs:
         shell: bash
         run: |
           raw=$(git --no-pager branch --contains tags/${{ github.ref_name }} | xargs)
-          echo "BRANCH=$branch" >> $GITHUB_ENV
+          echo "BRANCH=$raw" >> $GITHUB_ENV
 
       - name: Fetch binaries from ${{ env.BRANCH }}
         uses: dawidd6/action-download-artifact@v2
