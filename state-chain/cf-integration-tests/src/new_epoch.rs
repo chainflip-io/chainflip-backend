@@ -1,6 +1,6 @@
 use super::*;
 use crate::genesis::GENESIS_BALANCE;
-use cf_primitives::GENESIS_EPOCH;
+use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use cf_traits::EpochInfo;
 use pallet_cf_validator::RotationPhase;
 use state_chain_runtime::Validator;
@@ -13,11 +13,11 @@ fn auction_repeats_after_failure_because_of_liveness() {
 		// As we run a rotation at genesis we will need accounts to support
 		// having 5 authorities as the default is 3 (Alice, Bob and Charlie)
 		.accounts(vec![
-			(AccountId::from(ALICE), GENESIS_BALANCE),
-			(AccountId::from(BOB), GENESIS_BALANCE),
-			(AccountId::from(CHARLIE), GENESIS_BALANCE),
-			(AccountId::from([0xfc; 32]), GENESIS_BALANCE),
-			(AccountId::from([0xfb; 32]), GENESIS_BALANCE),
+			(AccountId::from(ALICE), AccountRole::Validator, GENESIS_BALANCE),
+			(AccountId::from(BOB), AccountRole::Validator, GENESIS_BALANCE),
+			(AccountId::from(CHARLIE), AccountRole::Validator, GENESIS_BALANCE),
+			(AccountId::from([0xfc; 32]), AccountRole::Validator, GENESIS_BALANCE),
+			(AccountId::from([0xfb; 32]), AccountRole::Validator, GENESIS_BALANCE),
 		])
 		.min_authorities(5)
 		.build()
