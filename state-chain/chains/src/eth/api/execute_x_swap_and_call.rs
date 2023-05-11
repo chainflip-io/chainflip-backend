@@ -170,20 +170,10 @@ impl_api_call_eth!(ExecutexSwapAndCall);
 
 #[cfg(test)]
 mod test_execute_x_swap_and_execute {
-	use crate::eth::SchnorrVerificationComponents;
+	use crate::eth::{api::abi::load_abi, SchnorrVerificationComponents};
 
 	use super::*;
 	use ethabi::Address;
-	use frame_support::assert_ok;
-
-	#[test]
-	// There have been obtuse test failures due to the loading of the contract failing
-	// It uses a different ethabi to the CFE, so we test separately
-	fn just_load_the_contract() {
-		assert_ok!(ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/Vault.json").as_ref(),
-		));
-	}
 
 	#[test]
 	fn test_payload() {
@@ -210,10 +200,7 @@ mod test_execute_x_swap_and_execute {
 		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = asymmetrise([0x7f; 20]);
 		const FAKE_SIG: [u8; 32] = asymmetrise([0xe1; 32]);
 
-		let eth_vault = ethabi::Contract::load(
-			std::include_bytes!("../../../../../engine/src/eth/abis/Vault.json").as_ref(),
-		)
-		.unwrap();
+		let eth_vault = load_abi("IVault");
 
 		let function_reference = eth_vault.function("executexSwapAndCall").unwrap();
 

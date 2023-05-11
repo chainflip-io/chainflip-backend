@@ -1,26 +1,21 @@
-use crate::state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi;
-use std::sync::Arc;
-
-use crate::eth::{EthRpcApi, SignatureAndEvent};
-
+use super::{
+	event::Event, utils::decode_log_param, BlockWithItems, DecodeLogClosure, EthContractWitnesser,
+	EventParseError,
+};
+use crate::{
+	eth::{EthRpcApi, SignatureAndEvent},
+	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
+};
+use anyhow::{anyhow, bail, Result};
+use async_trait::async_trait;
+use cf_chains::include_abi_bytes;
 use cf_primitives::EpochIndex;
 use sp_runtime::AccountId32;
-
+use std::{fmt::Debug, sync::Arc};
 use tracing::{info, trace};
 use web3::{
 	ethabi::{self, RawLog},
 	types::{H160, H256},
-};
-
-use std::fmt::Debug;
-
-use async_trait::async_trait;
-
-use anyhow::{anyhow, bail, Result};
-
-use super::{
-	event::Event, utils::decode_log_param, BlockWithItems, DecodeLogClosure, EthContractWitnesser,
-	EventParseError,
 };
 
 pub struct StateChainGateway {
@@ -285,10 +280,7 @@ impl StateChainGateway {
 	pub fn new(deployed_address: H160) -> Self {
 		Self {
 			deployed_address,
-			contract: ethabi::Contract::load(
-				std::include_bytes!("abis/StateChainGateway.json").as_ref(),
-			)
-			.unwrap(),
+			contract: ethabi::Contract::load(include_abi_bytes!(IStateChainGateway)).unwrap(),
 		}
 	}
 }

@@ -1,4 +1,4 @@
-use cf_chains::eth::Address;
+use cf_chains::eth::ethabi::Address;
 use cf_primitives::chains::assets::eth::Asset;
 
 /// A mock that just returns some constants for the KeyManager and Chain ID.
