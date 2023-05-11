@@ -103,24 +103,19 @@ impl Age for EthereumTrackedData {
 /// See [here](https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol).
 #[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum SigData {
-	Unsigned {
-		nonce: Uint,
-	},
-	Signed {
-		/// The Schnorr signature.
-		sig: Uint,
-		/// The nonce value for the AggKey. Each Signature over an AggKey should have a unique
-		/// nonce to prevent replay attacks.
-		nonce: Uint,
-		/// The address value derived from the random nonce value `k`. Also known as
-		/// `nonceTimesGeneratorAddress`.
-		///
-		/// Note this is unrelated to the `nonce` above. The nonce in the context of
-		/// `nonceTimesGeneratorAddress` is a generated as part of each signing round (ie. as part
-		/// of the Schnorr signature) to prevent certain classes of cryptographic attacks.
-		k_times_g_address: Address,
-	},
+pub struct SigData {
+	/// The Schnorr signature.
+	sig: Uint,
+	/// The nonce value for the AggKey. Each Signature over an AggKey should have a unique
+	/// nonce to prevent replay attacks.
+	pub nonce: Uint,
+	/// The address value derived from the random nonce value `k`. Also known as
+	/// `nonceTimesGeneratorAddress`.
+	///
+	/// Note this is unrelated to the `nonce` above. The nonce in the context of
+	/// `nonceTimesGeneratorAddress` is a generated as part of each signing round (ie. as part
+	/// of the Schnorr signature) to prevent certain classes of cryptographic attacks.
+	k_times_g_address: Address,
 }
 
 pub trait EthereumCall {
@@ -167,18 +162,14 @@ pub trait EthereumCall {
 
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct EthereumTransactionBuilder<C> {
-	sig_data: SigData,
+	sig_data: Option<SigData>,
 	replay_protection: EthereumReplayProtection,
 	call: C,
 }
 
 impl<C: EthereumCall> EthereumTransactionBuilder<C> {
 	pub fn new_unsigned(replay_protection: EthereumReplayProtection, call: C) -> Self {
-		Self {
-			replay_protection,
-			call,
-			sig_data: SigData::Unsigned { nonce: replay_protection.nonce.into() },
-		}
+		Self { replay_protection, call, sig_data: None }
 	}
 
 	pub fn replay_protection(&self) -> EthereumReplayProtection {
@@ -202,58 +193,38 @@ impl<C: EthereumCall + Parameter + 'static> ApiCall<Ethereum> for EthereumTransa
 		mut self,
 		threshold_signature: &<Ethereum as ChainCrypto>::ThresholdSignature,
 	) -> Self {
-		self.sig_data.insert_signature(threshold_signature);
+		self.sig_data = Some(SigData::new(self.replay_protection.nonce, threshold_signature));
 		self
 	}
 
 	fn chain_encoded(&self) -> Vec<u8> {
-		assert!(self.sig_data.is_signed(), "Unsigned chain encoding is invalid.");
-		self.call.abi_encoded(&self.sig_data)
+		self.call
+			.abi_encoded(&self.sig_data.expect("Unsigned chain encoding is invalid."))
 	}
 
 	fn is_signed(&self) -> bool {
-		self.sig_data.is_signed()
+		self.sig_data.is_some()
 	}
 }
 
 impl SigData {
-	/// Initiate a new `SigData` with given nonce value
-	pub fn new_empty(replay_protection: EthereumReplayProtection) -> Self {
-		Self::Unsigned { nonce: replay_protection.nonce.into() }
-	}
-
-	fn nonce(self) -> Uint {
-		match self {
-			Self::Unsigned { nonce } => nonce,
-			Self::Signed { nonce, .. } => nonce,
-		}
-	}
-
 	/// Add the actual signature. This method does no verification.
-	pub fn insert_signature(&mut self, schnorr: &SchnorrVerificationComponents) {
-		*self = Self::Signed {
+	pub fn new(nonce: impl Into<Uint>, schnorr: &SchnorrVerificationComponents) -> Self {
+		Self {
 			sig: schnorr.s.into(),
-			nonce: self.nonce(),
+			nonce: nonce.into(),
 			k_times_g_address: schnorr.k_times_g_address.into(),
-		};
-	}
-
-	pub fn is_signed(&self) -> bool {
-		matches!(self, Self::Signed { .. })
+		}
 	}
 }
 
 impl Tokenizable for SigData {
 	fn tokenize(self) -> Token {
-		match self {
-			SigData::Unsigned { nonce } => Token::Tuple(vec![
-				U256::default().tokenize(),
-				nonce.tokenize(),
-				H160::default().tokenize(),
-			]),
-			SigData::Signed { sig, nonce, k_times_g_address } =>
-				Token::Tuple(vec![sig.tokenize(), nonce.tokenize(), k_times_g_address.tokenize()]),
-		}
+		Token::Tuple(vec![
+			self.sig.tokenize(),
+			self.nonce.tokenize(),
+			self.k_times_g_address.tokenize(),
+		])
 	}
 
 	fn param_type() -> ParamType {
