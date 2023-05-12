@@ -25,9 +25,8 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	min_funding: MIN_FUNDING,
 	eth_block_safety_margin: eth::BLOCK_SAFETY_MARGIN as u32,
 	max_ceremony_stage_duration: 300,
-	dot_genesis_hash: H256(hex_literal::hex!(
-		todo!
-	)),
+	// TODO: update this to the correct value for perseverance
+	dot_genesis_hash: H256([0xcf; 32]),
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 9320, transaction_version: 16 },
 };
