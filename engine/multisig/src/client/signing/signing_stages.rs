@@ -349,7 +349,14 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 				// the same key, we may want to compute this value once per key
 				let pubkeys: BTreeMap<_, _> = all_idxs
 					.iter()
-					.map(|idx| (*idx, key.party_public_keys[*idx as usize - 1]))
+					.map(|idx| {
+						(
+							*idx,
+							*key.party_public_keys
+								.get(self.common.validator_mapping.get_id(*idx))
+								.expect("should have a public key for this party"),
+						)
+					})
 					.collect();
 
 				signing_detail::aggregate_signature::<Crypto>(
