@@ -1,7 +1,7 @@
 use chainflip_api::{
 	self,
 	lp::{self, Liquidity, Tick},
-	primitives::{AccountRole, Asset, AssetAmount},
+	primitives::{AccountRole, Asset},
 	settings::StateChain,
 };
 use clap::Parser;
@@ -10,7 +10,15 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	server::ServerBuilder,
 };
+use sp_rpc::number::NumberOrHex;
 use std::{ops::Range, path::PathBuf};
+
+fn to_u128(number_or_hex: NumberOrHex) -> u128 {
+	match number_or_hex {
+		NumberOrHex::Number(number) => number as u128,
+		NumberOrHex::Hex(hex) => hex.low_u128(),
+	}
+}
 
 #[rpc(server, client, namespace = "lp")]
 pub trait Rpc {
@@ -23,7 +31,7 @@ pub trait Rpc {
 	#[method(name = "withdrawAsset")]
 	async fn withdraw_asset(
 		&self,
-		amount: AssetAmount,
+		amount: NumberOrHex,
 		asset: Asset,
 		destination_address: &str,
 	) -> Result<String, Error>;
@@ -76,11 +84,11 @@ impl RpcServer for RpcServerImpl {
 	/// Returns an egress id
 	async fn withdraw_asset(
 		&self,
-		amount: AssetAmount,
+		amount: NumberOrHex,
 		asset: Asset,
 		destination_address: &str,
 	) -> Result<String, Error> {
-		if amount == 0 {
+		if to_u128(amount) == 0 {
 			return Err(Error::Custom("Invalid amount".to_string()))
 		}
 
@@ -88,7 +96,7 @@ impl RpcServer for RpcServerImpl {
 			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)
 				.map_err(|e| Error::Custom(e.to_string()))?;
 
-		lp::withdraw_asset(&self.state_chain_settings, amount, asset, destination_address)
+		lp::withdraw_asset(&self.state_chain_settings, to_u128(amount), asset, destination_address)
 			.await
 			.map(|(_, id)| id.to_string())
 			.map_err(|e| Error::Custom(e.to_string()))

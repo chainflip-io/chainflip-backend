@@ -1,6 +1,6 @@
 use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::eth::SigData;
-use cf_primitives::{Asset, AssetAmount, EthereumAddress, SwapOutput};
+use cf_primitives::{Asset, EthereumAddress, SwapOutput};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
 use sc_client_api::HeaderBackend;
@@ -14,6 +14,13 @@ use state_chain_runtime::{
 	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi},
 };
 use std::{marker::PhantomData, sync::Arc};
+
+fn to_u128(number_or_hex: NumberOrHex) -> u128 {
+	match number_or_hex {
+		NumberOrHex::Number(number) => number as u128,
+		NumberOrHex::Hex(hex) => hex.low_u128(),
+	}
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
@@ -173,7 +180,7 @@ pub trait CustomApi {
 		&self,
 		from: Asset,
 		to: Asset,
-		amount: AssetAmount,
+		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<SwapOutput>;
 }
@@ -460,12 +467,12 @@ where
 		&self,
 		from: Asset,
 		to: Asset,
-		amount: AssetAmount,
+		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<SwapOutput> {
 		self.client
 			.runtime_api()
-			.cf_pool_simulate_swap(&self.query_block_id(at), from, to, amount)
+			.cf_pool_simulate_swap(&self.query_block_id(at), from, to, to_u128(amount))
 			.map_err(to_rpc_error)
 			.and_then(|r| {
 				r.map_err(|e| jsonrpsee::core::Error::Custom(<&'static str>::from(e).into()))
