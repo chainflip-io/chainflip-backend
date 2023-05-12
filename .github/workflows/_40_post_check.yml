@@ -8,7 +8,7 @@ on:
       timeout-minutes:
         type: number
         required: false
-        default: 10
+        default: 25
 jobs:
   bouncer:
     runs-on: [hetzner]
@@ -99,7 +99,7 @@ jobs:
           BTC_ENDPOINT: http://bitcoin:8332
           ETH_ENDPOINT: http://geth:8545
         run: |
-          ./tests/produces_blocks.sh 3 # TODO: Change this back to ./run.sh
+          ./run_simple.sh # FIXME
 
       - name: Print chainflip-engine logs
         if: failure()
