@@ -99,7 +99,7 @@ jobs:
           BTC_ENDPOINT: http://bitcoin:8332
           ETH_ENDPOINT: http://geth:8545
         run: |
-          ./run.sh
+          ./run_simple.sh # FIXME
 
       - name: Print chainflip-engine logs
         if: failure()
