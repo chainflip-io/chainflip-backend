@@ -28,12 +28,12 @@ use cf_chains::{
 	},
 	eth::{
 		self,
-		api::{EthereumApi, EthereumChainId, EthereumReplayProtection},
+		api::{EthEnvironmentProvider, EthereumApi, EthereumContract, EthereumReplayProtection},
 		Ethereum,
 	},
 	AnyChain, ApiCall, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, ChainEnvironment,
-	EthEnvironmentProvider, ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey,
-	SetGovKeyWithAggKey, TransactionBuilder,
+	ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
+	TransactionBuilder,
 };
 use cf_primitives::{
 	chains::assets, Asset, BasisPoints, ChannelId, EgressId, ETHEREUM_ETH_ADDRESS,
@@ -44,7 +44,6 @@ use cf_traits::{
 	KeyProvider, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
-use ethabi::Address as EthAbiAddress;
 use frame_support::{
 	dispatch::{DispatchError, DispatchErrorWithPostInfo, PostDispatchInfo},
 	traits::Get,
@@ -150,20 +149,8 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 		signed_call: &EthereumApi<EthEnvironment>,
 	) -> <Ethereum as ChainAbi>::Transaction {
 		eth::Transaction {
-			chain_id: Environment::ethereum_chain_id(),
-			contract: match signed_call {
-				EthereumApi::SetAggKeyWithAggKey(_) => Environment::key_manager_address().into(),
-				EthereumApi::RegisterRedemption(_) =>
-					Environment::state_chain_gateway_address().into(),
-				EthereumApi::UpdateFlipSupply(_) => Environment::supported_eth_assets(Asset::Flip)
-					.expect("FLIP token address should exist")
-					.into(),
-				EthereumApi::SetGovKeyWithAggKey(_) => Environment::key_manager_address().into(),
-				EthereumApi::SetCommKeyWithAggKey(_) => Environment::key_manager_address().into(),
-				EthereumApi::AllBatch(_) => Environment::eth_vault_address().into(),
-				EthereumApi::ExecutexSwapAndCall(_) => Environment::eth_vault_address().into(),
-				EthereumApi::_Phantom(..) => unreachable!(),
-			},
+			chain_id: signed_call.replay_protection().chain_id,
+			contract: signed_call.replay_protection().contract_address,
 			data: signed_call.chain_encoded(),
 			..Default::default()
 		}
@@ -261,35 +248,34 @@ impl RuntimeUpgrade for RuntimeUpgradeManager {
 pub struct EthEnvironment;
 
 impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
-	// Get the Environment values for key_manager_address and chain_id, then use
-	// the next global signature nonce
 	fn replay_protection() -> EthereumReplayProtection {
-		EthereumReplayProtection { nonce: Environment::next_ethereum_signature_nonce() }
+		unimplemented!()
 	}
 }
 
 impl EthEnvironmentProvider for EthEnvironment {
-	fn token_address(asset: assets::eth::Asset) -> Option<EthAbiAddress> {
-		Some(match asset {
-			assets::eth::Asset::Eth => ETHEREUM_ETH_ADDRESS.into(),
-			erc20 => Environment::supported_eth_assets(<assets::eth::Asset as Into<
-				cf_primitives::Asset,
-			>>::into(erc20))?
-			.into(),
-		})
-		//.map(|address| address.into())
+	fn token_address(asset: assets::eth::Asset) -> Option<eth::ethabi::Address> {
+		match asset {
+			assets::eth::Asset::Eth => Some(ETHEREUM_ETH_ADDRESS.into()),
+			erc20 => Environment::supported_eth_assets(erc20).map(Into::into),
+		}
 	}
-	fn key_manager_address() -> EthAbiAddress {
-		Environment::key_manager_address().into()
+
+	fn contract_address(contract: EthereumContract) -> eth::ethabi::Address {
+		match contract {
+			EthereumContract::StateChainGateway =>
+				Environment::state_chain_gateway_address().into(),
+			EthereumContract::KeyManager => Environment::key_manager_address().into(),
+			EthereumContract::Vault => Environment::eth_vault_address().into(),
+		}
 	}
-	fn vault_address() -> EthAbiAddress {
-		Environment::eth_vault_address().into()
-	}
-	fn state_chain_gateway_address() -> EthAbiAddress {
-		Environment::state_chain_gateway_address().into()
-	}
-	fn chain_id() -> EthereumChainId {
+
+	fn chain_id() -> eth::api::EthereumChainId {
 		Environment::ethereum_chain_id()
+	}
+
+	fn next_nonce() -> u64 {
+		Environment::next_ethereum_signature_nonce()
 	}
 }
 
@@ -460,11 +446,14 @@ macro_rules! impl_deposit_api_for_anychain {
 				}
 			}
 
-			fn expire_channel(chain: ForeignChain, channel_id: ChannelId, address: ForeignChainAddress) {
-				match chain {
+			fn expire_channel(channel_id: ChannelId, address: ForeignChainAddress) {
+				match address.chain() {
 					$(
 						ForeignChain::$chain => {
-							$pallet::expire_channel(channel_id, address.try_into().expect("Checked for address compatibility"));
+							<$pallet as DepositApi<$chain>>::expire_channel(
+								channel_id,
+								address.try_into().expect("Checked for address compatibility")
+							);
 						},
 					)+
 				}
@@ -508,6 +497,7 @@ impl_deposit_api_for_anychain!(
 	(Polkadot, PolkadotIngressEgress),
 	(Bitcoin, BitcoinIngressEgress)
 );
+
 impl_egress_api_for_anychain!(
 	AnyChainIngressEgressHandler,
 	(Ethereum, EthereumIngressEgress),

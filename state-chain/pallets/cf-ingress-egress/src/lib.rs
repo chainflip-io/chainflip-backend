@@ -79,6 +79,7 @@ impl<C: Chain> CrossChainMessage<C> {
 pub enum DeploymentStatus {
 	Deployed,   // an address that has already been deployed
 	Undeployed, // an address that has not been deployed yet
+	Pending,    // an address thats deployment is pending, but not yet confirmed
 }
 
 impl Default for DeploymentStatus {
@@ -357,6 +358,21 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
+		/// Callback for when a signature is accepted by the chain.
+		#[pallet::weight(T::WeightInfo::finalise_ingress(addresses.len() as u32))]
+		pub fn finalise_ingress(
+			origin: OriginFor<T>,
+			addresses: Vec<(DepositFetchIdOf<T, I>, TargetChainAccount<T, I>)>,
+		) -> DispatchResult {
+			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
+			for (_, deposit_address) in addresses {
+				if AddressStatus::<T, I>::get(deposit_address.clone()) == DeploymentStatus::Pending
+				{
+					AddressStatus::<T, I>::insert(deposit_address, DeploymentStatus::Deployed);
+				}
+			}
+			Ok(())
+		}
 		/// Sets if an asset is not allowed to be sent out of the chain via Egress.
 		/// Requires Governance
 		///
@@ -420,7 +436,6 @@ pub mod pallet {
 			}
 			Ok(())
 		}
-
 		/// Send up to `maybe_size` number of scheduled Cross chain messages out.
 		/// If None is set for `maybe_size`, send all scheduled CCMs.
 		/// Requires governance
@@ -492,8 +507,32 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				requests
 					.drain_filter(|request| {
 						if available_batch_size > 0 &&
-							!DisabledEgressAssets::<T, I>::contains_key(request.asset())
-						{
+							!DisabledEgressAssets::<T, I>::contains_key(request.asset()) &&
+							!match request {
+								FetchOrTransfer::Fetch { channel_id, .. } => {
+									let (_, deposit_address) =
+										FetchParamDetails::<T, I>::get(channel_id)
+											.expect("to have fetch param details available");
+									match AddressStatus::<T, I>::get(deposit_address.clone()) {
+										DeploymentStatus::Deployed => false,
+										DeploymentStatus::Undeployed => {
+											AddressStatus::<T, I>::insert(
+												deposit_address,
+												DeploymentStatus::Pending,
+											);
+											false
+										},
+										DeploymentStatus::Pending => {
+											log::info!(
+												target: "cf-ingress-egress",
+												"Address {:?} is pending deployment, skipping", deposit_address
+											);
+											true
+										},
+									}
+								},
+								FetchOrTransfer::Transfer { .. } => false,
+							} {
 							available_batch_size.saturating_reduce(1);
 							true
 						} else {
@@ -546,8 +585,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			egress_params,
 		) {
 			Ok(egress_transaction) => {
-				let (broadcast_id, _) =
-					T::Broadcaster::threshold_sign_and_broadcast(egress_transaction);
+				let (broadcast_id, _) = T::Broadcaster::threshold_sign_and_broadcast_with_callback(
+					egress_transaction,
+					Call::finalise_ingress { addresses }.into(),
+				);
 				Self::deposit_event(Event::<T, I>::BatchBroadcastRequested {
 					broadcast_id,
 					egress_ids,
@@ -714,15 +755,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok((channel_id, address))
 	}
 
-	fn close_channel(
-		channel_id: ChannelId,
-		address: TargetChainAccount<T, I>,
-		address_status: DeploymentStatus,
-	) {
+	fn close_channel(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
+		let address_status = AddressStatus::<T, I>::get(address.clone());
 		ChannelActions::<T, I>::remove(&address);
 		FetchParamDetails::<T, I>::remove(channel_id);
-		if matches!(address_status, DeploymentStatus::Deployed) {
-			AddressStatus::<T, I>::insert(address.clone(), DeploymentStatus::Deployed);
+		if matches!(address_status, DeploymentStatus::Deployed) &&
+			T::TargetChain::get() != ForeignChain::Bitcoin
+		{
 			AddressPool::<T, I>::insert(channel_id, address.clone());
 		}
 		if let Some(deposit_address_details) = DepositAddressDetailsLookup::<T, I>::take(&address) {
@@ -731,11 +770,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				source_asset: deposit_address_details.source_asset,
 			});
 		}
-	}
-
-	pub fn expire_channel(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
-		let status = AddressStatus::<T, I>::get(&address);
-		Self::close_channel(channel_id, address, status);
 	}
 }
 
@@ -837,12 +871,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 
 	// Note: we expect that the mapping from any instantiable pallet to the instance of this pallet
 	// is matching to the right chain. Because of that we can ignore the chain parameter.
-	fn expire_channel(
-		chain: ForeignChain,
-		channel_id: ChannelId,
-		address: TargetChainAccount<T, I>,
-	) {
-		assert_eq!(<T as Config<I>>::TargetChain::get(), chain, "Incompatible chains!");
-		Self::expire_channel(channel_id, address);
+	fn expire_channel(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
+		Self::close_channel(channel_id, address);
 	}
 }

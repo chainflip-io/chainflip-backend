@@ -4,7 +4,7 @@ use frame_support::traits::Get;
 pub mod assets;
 
 macro_rules! chains {
-	( $( $chain:ident = $value:expr),+ ) => {
+	( $( $chain:ident = $value:literal),+ ) => {
 		$(
 			#[derive(Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 			pub struct $chain;
@@ -67,6 +67,13 @@ impl ForeignChain {
 			ForeignChain::Bitcoin => assets::any::Asset::Btc,
 		}
 	}
+}
+
+#[test]
+fn chain_as_u32() {
+	assert_eq!(ForeignChain::Ethereum as u32, 1);
+	assert_eq!(ForeignChain::Polkadot as u32, 2);
+	assert_eq!(ForeignChain::Bitcoin as u32, 3);
 }
 
 #[test]

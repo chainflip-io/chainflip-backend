@@ -9,7 +9,7 @@ pub mod old {
 
 	#[frame_support::storage_alias]
 	pub type SupportedEthAssets<T: Config> =
-		StorageMap<Pallet<T>, Blake2_128Concat, Asset, EthereumAddress, ValueQuery>;
+		StorageMap<Pallet<T>, Blake2_128Concat, EthAsset, EthereumAddress, ValueQuery>;
 
 	#[frame_support::storage_alias]
 	pub type StateChainGatewayAddress<T: Config> =

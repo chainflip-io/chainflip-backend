@@ -20,6 +20,7 @@ benchmarks_instance_pallet! {
 		for i in 0..n {
 			if i % 2 == 0 {
 				FetchParamDetails::<T, I>::insert(i as u64, (deposit_fetch_id, destination_address.clone()));
+				AddressStatus::<T, I>::insert(destination_address.clone(), DeploymentStatus::Deployed);
 				batch.push(FetchOrTransfer::Fetch {
 					channel_id: i as u64,
 					asset: destination_asset,
@@ -90,4 +91,17 @@ benchmarks_instance_pallet! {
 	}: {
 		Pallet::<T, I>::process_single_deposit(deposit_address, source_asset, deposit_amount, BenchmarkValue::benchmark_value()).unwrap()
 	}
+	finalise_ingress {
+		let a in 1 .. 100;
+		let mut addresses = vec![];
+		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
+		let deposit_fetch_id: <<T as Config<I>>::TargetChain as Chain>::DepositFetchId = BenchmarkValue::benchmark_value();
+		let deposit_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
+		for i in 1..a {
+			// TODO: Thats wrong, we need to insert different addresses, otherwise we will overwrite the same one amd thats not the expensive path.
+			// Unfortunately we can not so easily generate different addresses in an benchmark environment...
+			AddressStatus::<T, I>::insert(deposit_address.clone(), DeploymentStatus::Pending);
+			addresses.push((deposit_fetch_id, deposit_address.clone()));
+		}
+	}: { let _ = Pallet::<T, I>::finalise_ingress(origin, addresses); }
 }

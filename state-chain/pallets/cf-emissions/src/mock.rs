@@ -1,15 +1,9 @@
 use crate as pallet_cf_emissions;
-use cf_chains::{
-	mocks::MockEthereum, AnyChain, ApiCall, ChainAbi, ChainCrypto, ReplayProtectionProvider,
-	UpdateFlipSupply,
-};
+use cf_chains::{mocks::MockEthereum, AnyChain, ApiCall, ChainCrypto, UpdateFlipSupply};
 use cf_primitives::{BroadcastId, FlipBalance, ThresholdSignatureRequestId};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_waived_fees,
-	mocks::{
-		egress_handler::MockEgressHandler, eth_environment_provider::MockEthEnvironmentProvider,
-		eth_replay_protection_provider::MockEthReplayProtectionProvider,
-	},
+	mocks::{egress_handler::MockEgressHandler, eth_environment_provider::MockEthEnvironment},
 	Broadcaster, FlipBurnInfo, Issuance, RewardsDistribution, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -128,24 +122,13 @@ impl RewardsDistribution for MockRewardsDistribution {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockUpdateFlipSupply {
-	pub nonce: <MockEthereum as ChainAbi>::ReplayProtection,
 	pub new_total_supply: u128,
 	pub block_number: u64,
-	pub state_chain_gateway_address: [u8; 20],
 }
 
 impl UpdateFlipSupply<MockEthereum> for MockUpdateFlipSupply {
-	fn new_unsigned(
-		new_total_supply: u128,
-		block_number: u64,
-		state_chain_gateway_address: &[u8; 20],
-	) -> Self {
-		Self {
-			nonce: MockEthReplayProtectionProvider::replay_protection(),
-			new_total_supply,
-			block_number,
-			state_chain_gateway_address: *state_chain_gateway_address,
-		}
+	fn new_unsigned(new_total_supply: u128, block_number: u64) -> Self {
+		Self { new_total_supply, block_number }
 	}
 }
 
@@ -219,7 +202,7 @@ impl pallet_cf_emissions::Config for Test {
 	type Issuance = pallet_cf_flip::FlipIssuance<Test>;
 	type RewardsDistribution = MockRewardsDistribution;
 	type CompoundingInterval = HeartbeatBlockInterval;
-	type EthEnvironmentProvider = MockEthEnvironmentProvider;
+	type EthEnvironment = MockEthEnvironment;
 	type Broadcaster = MockBroadcast;
 	type WeightInfo = ();
 	type FlipToBurn = MockFlipToBurn;

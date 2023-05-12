@@ -5,14 +5,11 @@ use std::{
 };
 
 use async_trait::async_trait;
-use cf_chains::{
-	dot::{
-		self, Polkadot, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotProxyType,
-		PolkadotPublicKey, PolkadotUncheckedExtrinsic,
-	},
-	eth::assets,
+use cf_chains::dot::{
+	self, Polkadot, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotProxyType,
+	PolkadotPublicKey, PolkadotUncheckedExtrinsic,
 };
-use cf_primitives::{EpochIndex, PolkadotAccountId, PolkadotBlockNumber, TxId};
+use cf_primitives::{chains::assets, EpochIndex, PolkadotAccountId, PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use frame_support::scale_info::TypeInfo;
 use futures::{stream, Stream, StreamExt, TryStreamExt};

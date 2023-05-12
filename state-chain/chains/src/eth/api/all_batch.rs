@@ -1,17 +1,10 @@
+use crate::eth::{deposit_address::get_salt, EthereumCall, Tokenizable};
 use cf_primitives::{AssetAmount, ChannelId};
 use codec::{Decode, Encode};
-use ethabi::{encode, Address, ParamType, Token, Uint};
+use ethabi::{Address, ParamType, Token, Uint};
 use scale_info::TypeInfo;
-use sp_std::{boxed::Box, vec, vec::Vec};
-
-use crate::{
-	eth::{deposit_address::get_salt, Ethereum, EthereumSignatureHandler, Tokenizable},
-	impl_api_call_eth, ApiCall, ChainCrypto,
-};
-
-use super::{ethabi_function, ethabi_param, EthereumReplayProtection};
-
 use sp_runtime::RuntimeDebug;
+use sp_std::{boxed::Box, vec, vec::Vec};
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub(crate) struct EncodableFetchAssetParams {
@@ -40,16 +33,29 @@ impl Tokenizable for EncodableFetchDeployAssetParams {
 			Token::Address(self.asset),
 		])
 	}
+
+	fn param_type() -> ethabi::ParamType {
+		ParamType::Tuple(vec![ParamType::FixedBytes(32), ParamType::Address])
+	}
 }
+
 impl Tokenizable for EncodableFetchAssetParams {
 	fn tokenize(self) -> Token {
 		Token::Tuple(vec![Token::Address(self.contract_address), Token::Address(self.asset)])
+	}
+
+	fn param_type() -> ethabi::ParamType {
+		ParamType::Tuple(vec![ParamType::Address, ParamType::Address])
 	}
 }
 
 impl<T: Tokenizable> Tokenizable for Vec<T> {
 	fn tokenize(self) -> Token {
 		Token::Array(self.into_iter().map(|t| t.tokenize()).collect())
+	}
+
+	fn param_type() -> ethabi::ParamType {
+		ParamType::Array(Box::new(T::param_type()))
 	}
 }
 
@@ -61,14 +67,16 @@ impl Tokenizable for EncodableTransferAssetParams {
 			Token::Uint(Uint::from(self.amount)),
 		])
 	}
+
+	fn param_type() -> ethabi::ParamType {
+		ParamType::Tuple(vec![ParamType::Address, ParamType::Address, ParamType::Uint(256)])
+	}
 }
 
 /// Represents all the arguments required to build the call to Vault's 'allBatch'
 /// function.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct AllBatch {
-	/// The signature handler for creating payload and inserting signature.
-	signature_handler: EthereumSignatureHandler,
 	/// The list of all inbound deposits that are to be fetched that need to deploy new deposit
 	/// contracts.
 	fetch_deploy_params: Vec<EncodableFetchDeployAssetParams>,
@@ -80,108 +88,45 @@ pub struct AllBatch {
 }
 
 impl AllBatch {
-	pub(crate) fn new_unsigned(
-		replay_protection: EthereumReplayProtection,
+	pub(crate) fn new(
 		fetch_deploy_params: Vec<EncodableFetchDeployAssetParams>,
 		fetch_params: Vec<EncodableFetchAssetParams>,
 		transfer_params: Vec<EncodableTransferAssetParams>,
-		key_manager_address: Address,
-		vault_contract_address: Address,
-		ethereum_chain_id: u64,
 	) -> Self {
-		Self {
-			signature_handler: EthereumSignatureHandler::new_unsigned(
-				replay_protection,
-				Self::abi_encoded_for_payload(
-					fetch_deploy_params.clone(),
-					fetch_params.clone(),
-					transfer_params.clone(),
-				),
-				key_manager_address,
-				vault_contract_address,
-				ethereum_chain_id,
-			),
-			fetch_deploy_params,
-			fetch_params,
-			transfer_params,
-		}
-	}
-
-	fn get_function() -> ethabi::Function {
-		ethabi_function(
-			"allBatch",
-			vec![
-				ethabi_param(
-					"sigData",
-					ParamType::Tuple(vec![
-						ParamType::Uint(256),
-						ParamType::Uint(256),
-						ParamType::Address,
-					]),
-				),
-				ethabi_param(
-					"deployFetchParamsArray",
-					ParamType::Array(Box::new(ParamType::Tuple(vec![
-						ParamType::FixedBytes(32),
-						ParamType::Address,
-					]))),
-				),
-				ethabi_param(
-					"fetchParamsArray",
-					ParamType::Array(Box::new(ParamType::Tuple(vec![
-						ParamType::Address,
-						ParamType::Address,
-					]))),
-				),
-				ethabi_param(
-					"transferParamsArray",
-					ParamType::Array(Box::new(ParamType::Tuple(vec![
-						ParamType::Address,
-						ParamType::Address,
-						ParamType::Uint(256),
-					]))),
-				),
-			],
-		)
-	}
-
-	fn abi_encoded(&self) -> Vec<u8> {
-		Self::get_function()
-			.encode_input(&[
-				self.signature_handler.sig_data.tokenize(),
-				self.fetch_deploy_params.clone().tokenize(),
-				self.fetch_params.clone().tokenize(),
-				self.transfer_params.clone().tokenize(),
-			])
-			.expect(
-				r#"
-						This can only fail if the parameter types don't match the function signature encoded below.
-						Therefore, as long as the tests pass, it can't fail at runtime.
-					"#,
-			)
-	}
-
-	fn abi_encoded_for_payload(
-		fetch_deploy_params: Vec<EncodableFetchDeployAssetParams>,
-		fetch_params: Vec<EncodableFetchAssetParams>,
-		transfer_params: Vec<EncodableTransferAssetParams>,
-	) -> Vec<u8> {
-		encode(&[
-			Token::FixedBytes(Self::get_function().short_signature().to_vec()),
-			fetch_deploy_params.tokenize(),
-			fetch_params.tokenize(),
-			transfer_params.tokenize(),
-		])
+		Self { fetch_deploy_params, fetch_params, transfer_params }
 	}
 }
 
-impl_api_call_eth!(AllBatch);
+impl EthereumCall for AllBatch {
+	const FUNCTION_NAME: &'static str = "allBatch";
+
+	fn function_call_args(&self) -> Vec<Token> {
+		vec![
+			self.fetch_deploy_params.clone().tokenize(),
+			self.fetch_params.clone().tokenize(),
+			self.transfer_params.clone().tokenize(),
+		]
+	}
+
+	fn function_params() -> Vec<(&'static str, ethabi::ParamType)> {
+		vec![
+			("deployFetchParamsArray", <Vec<EncodableFetchDeployAssetParams>>::param_type()),
+			("fetchParamsArray", <Vec<EncodableFetchAssetParams>>::param_type()),
+			("transferParamsArray", <Vec<EncodableTransferAssetParams>>::param_type()),
+		]
+	}
+}
 
 #[cfg(test)]
 mod test_all_batch {
-	use crate::eth::{api::abi::load_abi, SchnorrVerificationComponents};
-
 	use super::*;
+	use crate::{
+		eth::{
+			api::{abi::load_abi, EthereumReplayProtection},
+			EthereumTransactionBuilder, SchnorrVerificationComponents,
+		},
+		ApiCall,
+	};
 
 	#[test]
 	fn test_payload() {
@@ -234,19 +179,21 @@ mod test_all_batch {
 
 		let all_batch_reference = eth_vault.function("allBatch").unwrap();
 
-		let all_batch_runtime = AllBatch::new_unsigned(
-			EthereumReplayProtection { nonce: NONCE },
-			dummy_fetch_deploy_asset_params.clone(),
-			dummy_fetch_asset_params.clone(),
-			dummy_transfer_asset_params.clone(),
-			FAKE_KEYMAN_ADDR.into(),
-			FAKE_VAULT_ADDR.into(),
-			CHAIN_ID,
+		let all_batch_runtime = EthereumTransactionBuilder::new_unsigned(
+			EthereumReplayProtection {
+				nonce: NONCE,
+				chain_id: CHAIN_ID,
+				key_manager_address: FAKE_KEYMAN_ADDR.into(),
+				contract_address: FAKE_VAULT_ADDR.into(),
+			},
+			AllBatch::new(
+				dummy_fetch_deploy_asset_params.clone(),
+				dummy_fetch_asset_params.clone(),
+				dummy_transfer_asset_params.clone(),
+			),
 		);
 
-		let expected_msg_hash = all_batch_runtime.signature_handler.payload;
-
-		assert_eq!(all_batch_runtime.threshold_signature_payload(), expected_msg_hash);
+		let expected_msg_hash = all_batch_runtime.threshold_signature_payload();
 		let runtime_payload = all_batch_runtime
 			.clone()
 			.signed(&SchnorrVerificationComponents {

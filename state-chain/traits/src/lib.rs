@@ -685,7 +685,7 @@ pub trait DepositApi<C: Chain> {
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
 	/// Expires a channel.
-	fn expire_channel(chain: ForeignChain, channel_id: ChannelId, address: C::ChainAccount);
+	fn expire_channel(channel_id: ChannelId, address: C::ChainAccount);
 }
 
 /// Generates a deterministic deposit address for some combination of asset, chain and channel id.
