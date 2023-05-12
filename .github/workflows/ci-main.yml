@@ -48,7 +48,7 @@ jobs:
       commit_hash: ${{ github.sha }}
     secrets: inherit
   notify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     if: failure() || cancelled()
     steps:
       - name: Notify on failed build

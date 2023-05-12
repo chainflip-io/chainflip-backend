@@ -11,7 +11,7 @@ on:
         default: 30
 jobs:
   bouncer:
-    runs-on: [hetzner]
+    runs-on: ubuntu-20.04
     timeout-minutes: ${{ inputs.timeout-minutes }}
     container:
       image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
