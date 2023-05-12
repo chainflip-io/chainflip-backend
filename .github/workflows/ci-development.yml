@@ -27,7 +27,7 @@ jobs:
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
     with:
-      simple_bouncer: true
+      simple_bouncer: false
   publish:
     needs: [build]
     uses: ./.github/workflows/_30_publish.yml
