@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
 	client::common::{BroadcastVerificationMessage, PreProcessStageDataCheck, SigningStageName},
 	crypto::ECPoint,
+	ChainTag, CryptoScheme,
 };
 
 #[cfg(test)]
@@ -71,12 +72,9 @@ impl<P: ECPoint> Display for SigningData<P> {
 }
 
 impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
-	/// Check that the number of elements and indexes in the data is correct
-	fn data_size_is_valid(&self, num_of_parties: AuthorityCount) -> bool {
+	fn data_size_is_valid<C: CryptoScheme>(&self, num_of_parties: AuthorityCount) -> bool {
 		match self {
-			// For messages that don't contain a collection (eg. CommStage1), we don't need to check
-			// the size.
-			SigningData::CommStage1(_) => true,
+			SigningData::CommStage1(_) => self.initial_stage_data_size_is_valid::<C>(),
 			SigningData::BroadcastVerificationStage2(message) =>
 				message.data.len() == num_of_parties as usize,
 			SigningData::LocalSigStage3(_) => true,
@@ -85,11 +83,25 @@ impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
 		}
 	}
 
-	fn is_first_stage(&self) -> bool {
+	fn initial_stage_data_size_is_valid<C: CryptoScheme>(&self) -> bool {
+		match self {
+			SigningData::CommStage1(message) => {
+				match C::CHAIN_TAG {
+					ChainTag::Ethereum | ChainTag::Polkadot | ChainTag::Ed25519 =>
+						message.0.len() == 1,
+					// TODO: Find out what a realistic maximum is for the number of payloads we
+					// can handle is for btc
+					ChainTag::Bitcoin => true,
+				}
+			},
+			_ => panic!("unexpected stage"),
+		}
+	}
+
+	fn should_delay_unauthorised(&self) -> bool {
 		matches!(self, SigningData::CommStage1(_))
 	}
 
-	/// Returns true if this message should be delayed for the given stage
 	fn should_delay(stage_name: SigningStageName, message: &Self) -> bool {
 		match stage_name {
 			SigningStageName::AwaitCommitments1 => {
@@ -113,25 +125,28 @@ impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
 mod tests {
 
 	use crate::{
-		client::helpers::{gen_invalid_local_sig, gen_invalid_signing_comm1},
+		bitcoin::BtcSigning,
+		client::helpers::{gen_dummy_local_sig, gen_dummy_signing_comm1},
 		crypto::eth::Point,
+		eth::EthSigning,
+		polkadot::PolkadotSigning,
 		Rng,
 	};
 
-	use rand_legacy::SeedableRng;
+	use rand::SeedableRng;
 
 	use super::*;
 
-	pub fn gen_signing_data_stage1() -> SigningData<Point> {
+	pub fn gen_signing_data_stage1(number_of_commitments: u64) -> SigningData<Point> {
 		let mut rng = Rng::from_seed([0; 32]);
-		SigningData::<Point>::CommStage1(gen_invalid_signing_comm1(&mut rng))
+		SigningData::<Point>::CommStage1(gen_dummy_signing_comm1(&mut rng, number_of_commitments))
 	}
 
 	pub fn gen_signing_data_stage2(participant_count: AuthorityCount) -> SigningData<Point> {
 		let mut rng = Rng::from_seed([0; 32]);
 		SigningData::<Point>::BroadcastVerificationStage2(BroadcastVerificationMessage {
 			data: (1..=participant_count)
-				.map(|i| (i as AuthorityCount, Some(gen_invalid_signing_comm1(&mut rng))))
+				.map(|i| (i as AuthorityCount, Some(gen_dummy_signing_comm1(&mut rng, 1))))
 				.collect(),
 		})
 	}
@@ -140,9 +155,21 @@ mod tests {
 		let mut rng = Rng::from_seed([0; 32]);
 		SigningData::<Point>::VerifyLocalSigsStage4(BroadcastVerificationMessage {
 			data: (1..=participant_count)
-				.map(|i| (i as AuthorityCount, Some(gen_invalid_local_sig(&mut rng))))
+				.map(|i| (i as AuthorityCount, Some(gen_dummy_local_sig(&mut rng))))
 				.collect(),
 		})
+	}
+
+	#[test]
+	fn check_data_size_stage1() {
+		// Should only pass if the message contains exactly one commitment for ethereum and Polkadot
+		assert!(gen_signing_data_stage1(1).initial_stage_data_size_is_valid::<EthSigning>());
+		assert!(!gen_signing_data_stage1(0).initial_stage_data_size_is_valid::<EthSigning>());
+		assert!(!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<EthSigning>());
+		assert!(!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<PolkadotSigning>());
+
+		// No limit on bitcoin for now
+		assert!(gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<BtcSigning>());
 	}
 
 	#[test]
@@ -151,9 +178,9 @@ mod tests {
 		let data_to_check = gen_signing_data_stage2(test_size);
 
 		// Should fail on sizes larger or smaller than expected
-		assert!(data_to_check.data_size_is_valid(test_size));
-		assert!(!data_to_check.data_size_is_valid(test_size - 1));
-		assert!(!data_to_check.data_size_is_valid(test_size + 1));
+		assert!(data_to_check.data_size_is_valid::<EthSigning>(test_size));
+		assert!(!data_to_check.data_size_is_valid::<EthSigning>(test_size - 1));
+		assert!(!data_to_check.data_size_is_valid::<EthSigning>(test_size + 1));
 	}
 
 	#[test]
@@ -162,9 +189,9 @@ mod tests {
 		let data_to_check = gen_signing_data_stage4(test_size);
 
 		// Should fail on sizes larger or smaller than expected
-		assert!(data_to_check.data_size_is_valid(test_size));
-		assert!(!data_to_check.data_size_is_valid(test_size - 1));
-		assert!(!data_to_check.data_size_is_valid(test_size + 1));
+		assert!(data_to_check.data_size_is_valid::<EthSigning>(test_size));
+		assert!(!data_to_check.data_size_is_valid::<EthSigning>(test_size - 1));
+		assert!(!data_to_check.data_size_is_valid::<EthSigning>(test_size + 1));
 	}
 
 	#[test]
@@ -179,9 +206,9 @@ mod tests {
 			SigningStageName::VerifyLocalSigsBroadcastStage4,
 		];
 		let stage_data = [
-			gen_signing_data_stage1(),
+			gen_signing_data_stage1(default_length as u64),
 			gen_signing_data_stage2(default_length),
-			SigningData::<Point>::LocalSigStage3(gen_invalid_local_sig(&mut rng)),
+			SigningData::<Point>::LocalSigStage3(gen_dummy_local_sig(&mut rng)),
 			gen_signing_data_stage4(default_length),
 		];
 

@@ -72,13 +72,14 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			let expired = LiquidityChannelExpiries::<T>::take(n);
-			for (channel_id, chain, address) in expired.clone() {
-				T::DepositHandler::expire_channel(chain, channel_id, address.clone());
+			let expired_count = expired.len();
+			for (channel_id, address) in expired {
+				T::DepositHandler::expire_channel(channel_id, address.clone());
 				Self::deposit_event(Event::LiquidityDepositAddressExpired {
 					address: T::AddressConverter::try_to_encoded_address(address).expect("This should not fail since this conversion already succeeded when expiry was scheduled"),
 				});
 			}
-			T::WeightInfo::on_initialize(expired.len() as u32)
+			T::WeightInfo::on_initialize(expired_count as u32)
 		}
 	}
 
@@ -149,7 +150,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::BlockNumber,
-		Vec<(ChannelId, ForeignChain, cf_chains::ForeignChainAddress)>,
+		Vec<(ChannelId, cf_chains::ForeignChainAddress)>,
 		ValueQuery,
 	>;
 
@@ -175,7 +176,7 @@ pub mod pallet {
 				frame_system::Pallet::<T>::current_block_number().saturating_add(LpTTL::<T>::get());
 			LiquidityChannelExpiries::<T>::append(
 				expiry_block,
-				(channel_id, ForeignChain::from(asset), deposit_address.clone()),
+				(channel_id, deposit_address.clone()),
 			);
 
 			Self::deposit_event(Event::LiquidityDepositAddressReady {
@@ -210,8 +211,7 @@ pub mod pallet {
 
 				// Check validity of Chain and Asset
 				ensure!(
-					ForeignChain::from(destination_address_internal.clone()) ==
-						ForeignChain::from(asset),
+					destination_address_internal.chain() == ForeignChain::from(asset),
 					Error::<T>::InvalidEgressAddress
 				);
 

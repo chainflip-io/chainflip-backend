@@ -40,8 +40,6 @@ futures-util = "0.3.14"
 hex = "0.4.3"
 httparse = "1.4.1"
 itertools = "0.10"
-# have to use the older version until secp256k1 updates its dependency (https://github.com/rust-bitcoin/rust-secp256k1/issues/328)
-rand_legacy = {package = "rand", version = "0.6"}
 
 # Same version of jsonrpsee as substrate
 jsonrpsee = {version = "0.15.1", features = ["full"]}
@@ -54,11 +52,7 @@ num-derive = "0.3"
 num-traits = "0.2"
 regex = "1"
 reqwest = {version = "0.11.4", features = ["json"]}
-secp256k1 = {version = "0.20", features = [
-  "serde",
-  "rand-std",
-  "global-context",
-]}
+secp256k1 = "0.27"
 serde = {version = "1.0", features = ["derive", "rc"]}
 serde_json = "1.0"
 sha2 = "0.9.5"

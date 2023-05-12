@@ -47,7 +47,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 pub mod pallet {
 	use super::*;
 	use cf_chains::eth::Ethereum;
-	use cf_primitives::BroadcastId;
+	use cf_primitives::{AccountRole, BroadcastId};
 	use cf_traits::{AccountRoleRegistry, Broadcaster};
 	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
@@ -224,9 +224,6 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// The account is not known.
-		UnknownAccount,
-
 		/// An invalid redemption has been witnessed: the account has no pending redemptions.
 		NoPendingRedemption,
 
@@ -277,20 +274,18 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
 			amount: FlipBalance<T>,
-			withdrawal_address: EthereumAddress,
+			_withdrawal_address: EthereumAddress,
 			// Required to ensure this call is unique per funding event.
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
-			if Self::check_withdrawal_address(&account_id, withdrawal_address, amount).is_ok() {
-				let total_balance = Self::add_funds_to_account(&account_id, amount);
-				Self::deposit_event(Event::Funded {
-					account_id,
-					tx_hash,
-					funds_added: amount,
-					total_balance,
-				});
-			}
+			let total_balance = Self::add_funds_to_account(&account_id, amount);
+			Self::deposit_event(Event::Funded {
+				account_id,
+				tx_hash,
+				funds_added: amount,
+				total_balance,
+			});
 			Ok(().into())
 		}
 
@@ -464,28 +459,21 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [AlreadyNotBidding](Error::AlreadyNotBidding)
-		/// - [UnknownAccount](Error::UnknownAccount)
 		#[pallet::weight(T::WeightInfo::stop_bidding())]
 		pub fn stop_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
 			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
 
 			ensure!(!T::EpochInfo::is_auction_phase(), Error::<T>::AuctionPhase);
 
-			ActiveBidder::<T>::try_mutate_exists(&account_id, |maybe_status| {
-				match maybe_status.as_mut() {
-					Some(active) => {
-						if !*active {
-							return Err(Error::<T>::AlreadyNotBidding)
-						}
-						*active = false;
-						Self::deposit_event(Event::StoppedBidding {
-							account_id: account_id.clone(),
-						});
-						Ok(())
-					},
-					None => Err(Error::UnknownAccount),
+			ActiveBidder::<T>::try_mutate(&account_id, |is_active_bidder| {
+				if *is_active_bidder {
+					*is_active_bidder = false;
+					Ok(())
+				} else {
+					Err(Error::<T>::AlreadyNotBidding)
 				}
 			})?;
+			Self::deposit_event(Event::StoppedBidding { account_id });
 			Ok(().into())
 		}
 
@@ -499,11 +487,11 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [AlreadyBidding](Error::AlreadyBidding)
-		/// - [UnknownAccount](Error::UnknownAccount)
 		#[pallet::weight(T::WeightInfo::start_bidding())]
 		pub fn start_bidding(origin: OriginFor<T>) -> DispatchResultWithPostInfo {
-			let who = T::AccountRoleRegistry::ensure_validator(origin)?;
-			Self::activate_bidding(&who)?;
+			let account_id = T::AccountRoleRegistry::ensure_validator(origin)?;
+			Self::activate_bidding(&account_id)?;
+			Self::deposit_event(Event::StartedBidding { account_id });
 			Ok(().into())
 		}
 
@@ -531,7 +519,7 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub genesis_validators: Vec<(AccountId<T>, T::Balance)>,
+		pub genesis_accounts: Vec<(AccountId<T>, AccountRole, T::Balance)>,
 		pub minimum_funding: T::Balance,
 		pub redemption_ttl: Duration,
 		pub redemption_delay_buffer_seconds: u64,
@@ -541,7 +529,7 @@ pub mod pallet {
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			Self {
-				genesis_validators: vec![],
+				genesis_accounts: vec![],
 				minimum_funding: Default::default(),
 				redemption_ttl: Default::default(),
 				redemption_delay_buffer_seconds: Default::default(),
@@ -554,65 +542,24 @@ pub mod pallet {
 		fn build(&self) {
 			MinimumFunding::<T>::set(self.minimum_funding);
 			RedemptionTTLSeconds::<T>::set(self.redemption_ttl.as_secs());
-			for (account_id, amount) in self.genesis_validators.iter() {
+			for (account_id, role, amount) in self.genesis_accounts.iter() {
 				Pallet::<T>::add_funds_to_account(account_id, *amount);
-				Pallet::<T>::activate_bidding(account_id)
-					.expect("The account was just created so this can't fail.");
+				if matches!(role, AccountRole::Validator) {
+					Pallet::<T>::activate_bidding(account_id)
+						.expect("The account was just created so this can't fail.");
+				}
 			}
 		}
 	}
 }
 
 impl<T: Config> Pallet<T> {
-	/// Checks the withdrawal address requirements and saves the address if provided.
-	///
-	/// If a non-zero address was provided, then it *must* match the address that was
-	/// provided on the initial account-creating funding event.
-	fn check_withdrawal_address(
-		account_id: &AccountId<T>,
-		withdrawal_address: EthereumAddress,
-		amount: T::Balance,
-	) -> Result<(), Error<T>> {
-		if withdrawal_address == ETH_ZERO_ADDRESS {
-			return Ok(())
-		}
-		if !frame_system::Pallet::<T>::account_exists(account_id) {
-			// This is the initial account-creating funding event. We store the withdrawal address
-			// for this account.
-			WithdrawalAddresses::<T>::insert(account_id, withdrawal_address);
-			return Ok(())
-		}
-		// If we reach here, the account already exists, so any provided withdrawal address
-		// *must* match the one that was added on the initial account-creating funding event,
-		// otherwise this funding event cannot be processed.
-		match WithdrawalAddresses::<T>::get(account_id) {
-			Some(existing) if withdrawal_address == existing => Ok(()),
-			_ => {
-				// The funding event was invalid - this should only happen if someone bypasses
-				// our standard ethereum contract interfaces. We don't automatically refund here
-				// otherwise it's attack vector (refunds require a broadcast, which is
-				// expensive).
-				//
-				// Instead, we keep a record of the failed attempt so that we can potentially
-				// investigate and / or consider refunding automatically or via governance.
-				FailedFundingAttempts::<T>::append(account_id, (withdrawal_address, amount));
-				Self::deposit_event(Event::FailedFundingAttempt {
-					account_id: account_id.clone(),
-					withdrawal_address,
-					amount,
-				});
-				Err(Error::<T>::WithdrawalAddressRestricted)
-			},
-		}
-	}
-
 	/// Add funds to an account, creating the account if it doesn't exist. An account is not
 	/// an implicit bidder and needs to start bidding explicitly.
 	fn add_funds_to_account(account_id: &AccountId<T>, amount: T::Balance) -> T::Balance {
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
 			// Creates an account
 			let _ = frame_system::Provider::<T>::created(account_id);
-			ActiveBidder::<T>::insert(account_id, false);
 		}
 
 		T::Flip::credit_funds(account_id, amount)
@@ -621,19 +568,14 @@ impl<T: Config> Pallet<T> {
 	/// Sets the `active` flag associated with the account to true, signalling that the account
 	/// wishes to participate in auctions, to become a network authority.
 	///
-	/// Returns an error if the account is already bidding, or if the account has no funds.
+	/// Returns an error if the account is already bidding.
 	fn activate_bidding(account_id: &AccountId<T>) -> Result<(), Error<T>> {
-		ActiveBidder::<T>::try_mutate_exists(account_id, |maybe_status| {
-			match maybe_status.as_mut() {
-				Some(active) => {
-					if *active {
-						return Err(Error::AlreadyBidding)
-					}
-					*active = true;
-					Self::deposit_event(Event::StartedBidding { account_id: account_id.clone() });
-					Ok(())
-				},
-				None => Err(Error::UnknownAccount),
+		ActiveBidder::<T>::try_mutate(account_id, |is_active_bidder| {
+			if *is_active_bidder {
+				Err(Error::AlreadyBidding)
+			} else {
+				*is_active_bidder = true;
+				Ok(())
 			}
 		})
 	}

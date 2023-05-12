@@ -1,5 +1,8 @@
 use crate::{Environment, EthEnvironment};
-use cf_chains::{eth::deposit_address::get_create_2_address, Chain, ChainEnvironment, Ethereum};
+use cf_chains::{
+	eth::{api::EthEnvironmentProvider, deposit_address::get_create_2_address},
+	Chain, Ethereum,
+};
 use cf_primitives::{chains::assets::eth, ChannelId};
 use cf_traits::AddressDerivationApi;
 use sp_runtime::DispatchError;
@@ -12,17 +15,8 @@ impl AddressDerivationApi<Ethereum> for AddressDerivation {
 		channel_id: ChannelId,
 	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
 		Ok(get_create_2_address(
-			source_asset,
 			Environment::eth_vault_address(),
-			match source_asset {
-				eth::Asset::Eth => None,
-				_ => Some(
-					EthEnvironment::lookup(source_asset)
-						.expect("ERC20 asset to be supported!")
-						.to_fixed_bytes()
-						.to_vec(),
-				),
-			},
+			EthEnvironment::token_address(source_asset).map(|address| address.to_fixed_bytes()),
 			channel_id,
 		)
 		.into())
@@ -33,7 +27,7 @@ impl AddressDerivationApi<Ethereum> for AddressDerivation {
 fn test_address_generation() {
 	use crate::Runtime;
 	use cf_chains::Ethereum;
-	use cf_primitives::Asset;
+	use cf_primitives::chains::assets::eth::Asset;
 	use pallet_cf_environment::EthereumSupportedAssets;
 
 	frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {

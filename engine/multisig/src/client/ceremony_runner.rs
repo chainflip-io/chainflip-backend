@@ -187,16 +187,21 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 	) -> OptionalCeremonyReturn<Ceremony> {
 		match &mut self.stage {
 			None => {
-				if !data.is_first_stage() {
+				if !data.should_delay_unauthorised() {
 					debug!(
 						from_id = sender_id.to_string(),
-						"Ignoring data: non-initial stage data for unauthorised ceremony"
+						"Ignoring data for unauthorised ceremony: non-initial stage data"
 					);
 					return None
 				}
 
-				// We do not need to check data_size_is_valid here because stage 1 messages are
-				// always the correct size.
+				if !data.initial_stage_data_size_is_valid::<Ceremony::Crypto>() {
+					debug!(
+						from_id = sender_id.to_string(),
+						"Ignoring data for unauthorised ceremony: incorrect number of elements"
+					);
+					return None
+				}
 
 				self.add_delayed(sender_id, data);
 			},
@@ -212,9 +217,9 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 				};
 
 				// Check that the number of elements in the data is what we expect
-				if !data
-					.data_size_is_valid(stage.ceremony_common().all_idxs.len() as AuthorityCount)
-				{
+				if !data.data_size_is_valid::<Ceremony::Crypto>(
+					stage.ceremony_common().all_idxs.len() as AuthorityCount,
+				) {
 					debug!(
 						from_id = sender_id.to_string(),
 						"Ignoring data: incorrect number of elements"
@@ -318,15 +323,6 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 	/// This is to allow calling a private method from tests
 	pub fn new_unauthorised_for_test() -> Self {
 		Self::new_unauthorised(tokio::sync::mpsc::unbounded_channel().0)
-	}
-
-	pub fn new_authorised(stage: DynStage<Ceremony>) -> Self {
-		CeremonyRunner {
-			stage: Some(stage),
-			delayed_messages: Default::default(),
-			timeout_handle: Box::pin(tokio::time::sleep(MAX_STAGE_DURATION)),
-			outcome_sender: tokio::sync::mpsc::unbounded_channel().0,
-		}
 	}
 
 	fn get_awaited_parties_count(&self) -> Option<AuthorityCount> {

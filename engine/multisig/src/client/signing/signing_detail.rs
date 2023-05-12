@@ -105,7 +105,16 @@ fn gen_rho_i<P: ECPoint>(
 
 	let x: [u8; 32] = result.as_slice().try_into().expect("Invalid hash size");
 
-	P::Scalar::from_bytes_mod_order(&x)
+	let mut rho_i = P::Scalar::from_bytes_mod_order(&x);
+
+	// The protocol requires rho_i != 0. Note that this slightly biases the hash,
+	// which should be safe as this doesn't meaningfully impact collision resistance
+	// (especially since parties have no or little control over the inputs)
+	if rho_i == P::Scalar::zero() {
+		rho_i = P::Scalar::from(1);
+	}
+
+	rho_i
 }
 
 type SigningResponse<P> = <P as ECPoint>::Scalar;
@@ -275,7 +284,7 @@ mod tests {
 
 	#[test]
 	fn bindings_are_backwards_compatible() {
-		use rand_legacy::SeedableRng;
+		use rand::SeedableRng;
 		// The seed must not change or the test will break.
 		let mut rng = Rng::from_seed([0; 32]);
 
@@ -294,15 +303,15 @@ mod tests {
 		// `gen_rho_i` has not changed.
 		assert_eq!(
 			hex::encode(bindings.get(&1u32).unwrap().as_bytes()),
-			"d21e9745014dedea06fc653b93845b17c20737ef9fe1bac189c70ffb2794250a"
+			"1c6b0bd5287db93cbdfb2c48ff3ca912524305c10fc9913496eebf806a1bfedf"
 		);
 		assert_eq!(
 			hex::encode(bindings.get(&2u32).unwrap().as_bytes()),
-			"87c25a1056df0e55a359468f76822a7244232e8a339700d24293d7ea3547aad9"
+			"ad5bcd9508fc34734acb54863b471d615acacfc38704817e02d025ac4e473164"
 		);
 		assert_eq!(
 			hex::encode(bindings.get(&3u32).unwrap().as_bytes()),
-			"d74a3892851b2f4114fb58cd0a7813dec65a7b5c1bfe6c512091e627a92f512d"
+			"d3f02a27695281149197594e831d0f02d7ff34cfe8442943d7af8a771982f4aa"
 		);
 	}
 }

@@ -5,16 +5,12 @@ use crate as pallet_cf_vaults;
 use cf_chains::{
 	eth,
 	mocks::{MockAggKey, MockEthereum},
-	ApiCall, ChainCrypto, ReplayProtectionProvider,
+	ApiCall, SetAggKeyWithAggKeyError,
 };
 use cf_primitives::{BroadcastId, GENESIS_EPOCH};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip,
-	mocks::{
-		ceremony_id_provider::MockCeremonyIdProvider,
-		eth_replay_protection_provider::MockEthReplayProtectionProvider,
-		threshold_signer::MockThresholdSigner,
-	},
+	mocks::{ceremony_id_provider::MockCeremonyIdProvider, threshold_signer::MockThresholdSigner},
 	AccountRoleRegistry,
 };
 use frame_support::{
@@ -36,6 +32,7 @@ thread_local! {
 	pub static BAD_VALIDATORS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
 	pub static CURRENT_SYSTEM_STATE: RefCell<SystemState> = RefCell::new(SystemState::Normal);
 
+	pub static SET_AGG_KEY_WITH_AGG_KEY_REQUIRED: RefCell<bool> = RefCell::new(true);
 }
 
 construct_runtime!(
@@ -117,17 +114,28 @@ impl_mock_callback!(RuntimeOrigin);
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub struct MockSetAggKeyWithAggKey {
-	nonce: <MockEthereum as ChainAbi>::ReplayProtection,
+	old_key: <MockEthereum as ChainCrypto>::AggKey,
 	new_key: <MockEthereum as ChainCrypto>::AggKey,
+}
+
+impl MockSetAggKeyWithAggKey {
+	pub fn set_required(required: bool) {
+		SET_AGG_KEY_WITH_AGG_KEY_REQUIRED.with(|cell| {
+			*cell.borrow_mut() = required;
+		});
+	}
 }
 
 impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
 	fn new_unsigned(
 		old_key: Option<<MockEthereum as ChainCrypto>::AggKey>,
 		new_key: <MockEthereum as ChainCrypto>::AggKey,
-	) -> Result<Self, ()> {
-		old_key.ok_or(())?;
-		Ok(Self { nonce: MockEthReplayProtectionProvider::replay_protection(), new_key })
+	) -> Result<Self, SetAggKeyWithAggKeyError> {
+		if !SET_AGG_KEY_WITH_AGG_KEY_REQUIRED.with(|cell| *cell.borrow()) {
+			return Err(SetAggKeyWithAggKeyError::NotRequired)
+		}
+
+		Ok(Self { old_key: old_key.ok_or(SetAggKeyWithAggKeyError::Other)?, new_key })
 	}
 }
 

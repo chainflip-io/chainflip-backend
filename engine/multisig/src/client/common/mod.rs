@@ -36,7 +36,7 @@ pub struct KeygenResult<C: CryptoScheme> {
 	#[serde(bound = "")]
 	pub key_share: KeyShare<C::Point>,
 	#[serde(bound = "")]
-	pub party_public_keys: Vec<C::Point>,
+	pub party_public_keys: BTreeMap<AccountId, C::Point>,
 	// NOTE: making this private ensures that the only
 	// way to create the struct is through the "constructor",
 	// which is important for ensuring its compatibility
@@ -64,13 +64,17 @@ impl<C: CryptoScheme> KeygenResult<C> {
 	/// Note that the keys might be modified as part of this procedure. However, the result is
 	/// guaranteed to produce a valid multisig share as long as all ceremony participants use the
 	/// same procedure.
-	pub fn new_compatible(key_share: KeyShare<C::Point>, party_public_keys: Vec<C::Point>) -> Self {
+	pub fn new_compatible(
+		key_share: KeyShare<C::Point>,
+		party_public_keys: BTreeMap<AccountId, C::Point>,
+	) -> Self {
 		let factor: <C::Point as ECPoint>::Scalar = compute_compatibility_factor::<C>(&key_share.y);
 
 		// Scale all components by `factor`, which should give us another valid multisig share
 		// (w.r.t. the scaled aggregate key):
 		let key_share = KeyShare { x_i: key_share.x_i * &factor, y: key_share.y * &factor };
-		let party_public_keys = party_public_keys.into_iter().map(|pk| pk * &factor).collect();
+		let party_public_keys =
+			party_public_keys.into_iter().map(|(id, pk)| (id, pk * &factor)).collect();
 
 		Self { key_share, party_public_keys, unused_private_field: () }
 	}
@@ -160,7 +164,11 @@ impl<C: CryptoScheme> ResharingContext<C> {
 				let expected_pubkey_share = if sharing_participants.contains(id) {
 					let idx = key.validator_mapping.get_idx(id).expect("id must be present");
 					let coeff = get_lagrange_coeff::<C::Point>(idx, &all_idxs);
-					key.key.party_public_keys[idx as usize - 1] * &coeff
+					*key.key
+						.party_public_keys
+						.get(id)
+						.expect("should have a public key for this party") *
+						&coeff
 				} else {
 					C::Point::point_at_infinity()
 				};

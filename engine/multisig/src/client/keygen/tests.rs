@@ -1,12 +1,12 @@
 use cf_primitives::{AccountId, AuthorityCount};
-use rand_legacy::{FromEntropy, SeedableRng};
+use rand::SeedableRng;
 use std::collections::BTreeSet;
 
 use crate::{
 	client::{
 		common::{BroadcastFailureReason, KeygenFailureReason, KeygenStageName, ResharingContext},
 		helpers::{
-			gen_invalid_keygen_comm1, get_invalid_hash_comm, new_nodes, run_keygen, run_stages,
+			gen_dummy_keygen_comm1, get_dummy_hash_comm, new_nodes, run_keygen, run_stages,
 			standard_signing, KeygenCeremonyRunner, PayloadAndKeyData, SigningCeremonyRunner,
 			ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED,
 			DEFAULT_SIGNING_CEREMONY_ID,
@@ -210,8 +210,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
 
 	// Make one of the nodes send a different commitment to half of the others
 	// Note: the bad node must send different comm1 to more than 1/3 of the participants
-	let commitment =
-		gen_invalid_keygen_comm1(&mut ceremony.rng, ACCOUNT_IDS.len() as AuthorityCount);
+	let commitment = gen_dummy_keygen_comm1(&mut ceremony.rng, ACCOUNT_IDS.len() as AuthorityCount);
 	for message in messages.get_mut(bad_account_id).unwrap().values_mut().step_by(2) {
 		*message = commitment.clone();
 	}
@@ -239,7 +238,7 @@ async fn should_report_on_inconsistent_broadcast_hash_comm1a() {
 
 	// Make one of the nodes send a different hash commitment to half of the others
 	// Note: the bad node must send different values to more than 1/3 of the participants
-	let hash_comm = get_invalid_hash_comm(&mut ceremony.rng);
+	let hash_comm = get_dummy_hash_comm(&mut ceremony.rng);
 	for message in messages.get_mut(bad_account_id).unwrap().values_mut().step_by(2) {
 		*message = hash_comm.clone();
 	}

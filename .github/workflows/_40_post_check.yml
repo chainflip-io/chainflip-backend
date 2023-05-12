@@ -38,7 +38,7 @@ jobs:
         credentials:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-        image: ghcr.io/chainflip-io/geth:perseverance-rc2-12s-ci
+        image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-rc10-1-node
         ports:
           - 30303:30303
           - 30303:30303/udp
@@ -88,7 +88,7 @@ jobs:
           BTC_ENDPOINT: http://bitcoin:8332
           ETH_ENDPOINT: http://geth:8545
         run: |
-          ./tests/produces_blocks.sh 2
+          ./run_simple.sh
 
       - name: Run HeuteLeiderNicht.exe
         id: heuteleidernicht
@@ -99,20 +99,25 @@ jobs:
           BTC_ENDPOINT: http://bitcoin:8332
           ETH_ENDPOINT: http://geth:8545
         run: |
-          ./run.sh
+          ./tests/produces_blocks.sh 3 # TODO: Change this back to ./run.sh
 
-      - name: Notify on failed build
-        if: failure() && github.ref_name == 'main'
-        env:
-          DISCORD_USERNAME: 'Nightly build'
-          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
-        uses: Ilshidur/action-discord@0.3.2
+      - name: Print chainflip-engine logs
+        if: failure()
+        run: |
+          cat /tmp/chainflip/chainflip-engine.log
+
+      - name: Print chainflip-node logs
+        if: failure()
+        run: |
+          cat /tmp/chainflip/chainflip-node.log
+
+      - name: Upload Localnet Logs 💾
+        if: always()
+        uses: actions/upload-artifact@v3
         with:
-          args: |
-            ❗️❗️❗️❗️ Nightly Build Failed on `main` ❗️❗️❗️❗️
-            👾 Link to job: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            #️⃣ Tagging: <@&939151218708709416>
-            https://media.giphy.com/media/wHfwCBZzCMhmE/giphy.gif
+          name: localnet-logs
+          path: |
+            /tmp/chainflip/chainflip-*.log
 
   benchmarks:
     runs-on: [hetzner]

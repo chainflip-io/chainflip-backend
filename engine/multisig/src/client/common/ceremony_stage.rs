@@ -8,6 +8,7 @@ use crate::{
 	client::{ceremony_manager::CeremonyTrait, utils::PartyIdxMapping},
 	crypto::Rng,
 	p2p::OutgoingMultisigStageMessages,
+	CryptoScheme,
 };
 
 /// Outcome of a given ceremony stage
@@ -73,7 +74,17 @@ impl CeremonyCommon {
 }
 
 pub trait PreProcessStageDataCheck<CeremonyStageName> {
-	fn data_size_is_valid(&self, num_of_parties: AuthorityCount) -> bool;
-	fn is_first_stage(&self) -> bool;
+	/// Check that the number of elements in the data is correct
+	fn data_size_is_valid<C: CryptoScheme>(&self, num_of_parties: AuthorityCount) -> bool;
+
+	/// Check that the number of elements in the data is within expected bounds.
+	/// This is needed because we may not know how many parties are going to participate yet.
+	fn initial_stage_data_size_is_valid<C: CryptoScheme>(&self) -> bool;
+
+	/// Returns true if this message should be delayed if the ceremony is still unauthorised.
+	/// This is needed because a message may arrive before the ceremony request.
+	fn should_delay_unauthorised(&self) -> bool;
+
+	/// Returns true if this message should be delayed for the given stage
 	fn should_delay(stage_name: CeremonyStageName, message: &Self) -> bool;
 }

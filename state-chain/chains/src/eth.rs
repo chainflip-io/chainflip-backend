@@ -7,15 +7,13 @@ pub mod benchmarking;
 pub mod deposit_address;
 
 use crate::*;
-pub use cf_primitives::chains::{assets, Ethereum};
-use cf_primitives::ChannelId;
+pub use cf_primitives::chains::Ethereum;
+use cf_primitives::{chains::assets, ChannelId};
 
 use codec::{Decode, Encode, MaxEncodedLen};
-pub use ethabi::{
-	ethereum_types::{H256, U256},
-	Address, Hash as TxHash, Token, Uint, Word,
-};
-use ethereum_types::H160;
+pub use ethabi;
+use ethabi::{Address, ParamType, Token, Uint};
+use ethereum_types::{H160, H256};
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -30,7 +28,7 @@ use sp_std::{
 	str, vec,
 };
 
-use self::api::EthereumReplayProtection;
+use self::api::{ethabi_param, EthereumChainId, EthereumReplayProtection};
 
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 1;
@@ -52,10 +50,10 @@ impl Chain for Ethereum {
 
 impl ChainCrypto for Ethereum {
 	type AggKey = eth::AggKey;
-	type Payload = eth::H256;
+	type Payload = H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
-	type TransactionId = eth::H256;
-	type GovKey = eth::Address;
+	type TransactionId = H256;
+	type GovKey = Address;
 
 	fn verify_threshold_signature(
 		agg_key: &Self::AggKey,
@@ -75,6 +73,7 @@ impl ChainCrypto for Ethereum {
 
 //--------------------------//
 pub trait Tokenizable {
+	fn param_type() -> ethabi::ParamType;
 	fn tokenize(self) -> Token;
 }
 
@@ -98,87 +97,214 @@ impl Age for EthereumTrackedData {
 
 /// The `SigData` struct used for threshold signatures in the smart contracts.
 /// See [here](https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol).
-#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, Default, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct SigData {
-	/// The address of the Key Manager contract, to prevent replay attacks
-	key_manager_address: Address,
-	/// The ID of the chain we're broadcasting to, to prevent x-chain replays
-	chain_id: Uint,
-	/// The message hash aka. payload to be signed over.
-	msg_hash: H256,
 	/// The Schnorr signature.
 	sig: Uint,
-	/// The nonce value for the AggKey. Each Signature over an AggKey should have a unique nonce to
-	/// prevent replay attacks.
-	nonce: Uint,
+	/// The nonce value for the AggKey. Each Signature over an AggKey should have a unique
+	/// nonce to prevent replay attacks.
+	pub nonce: Uint,
 	/// The address value derived from the random nonce value `k`. Also known as
 	/// `nonceTimesGeneratorAddress`.
 	///
 	/// Note this is unrelated to the `nonce` above. The nonce in the context of
-	/// `nonceTimesGeneratorAddress` is a generated as part of each signing round (ie. as part of
-	/// the Schnorr signature) to prevent certain classes of cryptographic attacks.
+	/// `nonceTimesGeneratorAddress` is a generated as part of each signing round (ie. as part
+	/// of the Schnorr signature) to prevent certain classes of cryptographic attacks.
 	k_times_g_address: Address,
 }
 
-impl MaxEncodedLen for SigData {
-	fn max_encoded_len() -> usize {
-		<[u8; 20]>::max_encoded_len() * 2 // 2 x Addresses
-		+ <[u64; 4]>::max_encoded_len() * 3 // 3 x Uint
-		+ <[u8; 32]>::max_encoded_len() // H256
+pub trait EthereumCall {
+	const FUNCTION_NAME: &'static str;
+
+	/// The function names and parameters, not including sigData.
+	fn function_params() -> Vec<(&'static str, ethabi::ParamType)>;
+	/// The function values to be used as call parameters, no including sigData.
+	fn function_call_args(&self) -> Vec<Token>;
+
+	fn get_function() -> ethabi::Function {
+		api::ethabi_function(
+			Self::FUNCTION_NAME,
+			core::iter::once(("sigData", SigData::param_type()))
+				.chain(Self::function_params())
+				.map(|(n, t)| ethabi_param(n, t))
+				.collect(),
+		)
+	}
+	/// Encodes the call and signature into Ethereum Abi format.
+	fn abi_encoded(&self, sig_data: &SigData) -> Vec<u8> {
+		Self::get_function()
+			.encode_input(
+				&core::iter::once(sig_data.tokenize())
+					.chain(self.function_call_args())
+					.collect::<Vec<_>>(),
+			)
+			.expect(
+				r#"
+					This can only fail if the parameter types don't match the function signature.
+					Therefore, as long as the tests pass, it can't fail at runtime.
+				"#,
+			)
+	}
+	/// Generates the message hash for this call.
+	fn msg_hash(&self) -> <Keccak256 as Hash>::Output {
+		Keccak256::hash(&ethabi::encode(
+			&core::iter::once(Self::get_function().tokenize())
+				.chain(self.function_call_args())
+				.collect::<Vec<_>>(),
+		))
+	}
+}
+
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
+pub struct EthereumTransactionBuilder<C> {
+	sig_data: Option<SigData>,
+	replay_protection: EthereumReplayProtection,
+	call: C,
+}
+
+impl<C: EthereumCall> EthereumTransactionBuilder<C> {
+	pub fn new_unsigned(replay_protection: EthereumReplayProtection, call: C) -> Self {
+		Self { replay_protection, call, sig_data: None }
+	}
+
+	pub fn replay_protection(&self) -> EthereumReplayProtection {
+		self.replay_protection
+	}
+
+	pub fn chain_id(&self) -> EthereumChainId {
+		self.replay_protection.chain_id
+	}
+}
+
+impl<C: EthereumCall + Parameter + 'static> ApiCall<Ethereum> for EthereumTransactionBuilder<C> {
+	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+		Keccak256::hash(&ethabi::encode(&[
+			self.call.msg_hash().tokenize(),
+			self.replay_protection.tokenize(),
+		]))
+	}
+
+	fn signed(
+		mut self,
+		threshold_signature: &<Ethereum as ChainCrypto>::ThresholdSignature,
+	) -> Self {
+		self.sig_data = Some(SigData::new(self.replay_protection.nonce, threshold_signature));
+		self
+	}
+
+	fn chain_encoded(&self) -> Vec<u8> {
+		self.call
+			.abi_encoded(&self.sig_data.expect("Unsigned chain encoding is invalid."))
+	}
+
+	fn is_signed(&self) -> bool {
+		self.sig_data.is_some()
 	}
 }
 
 impl SigData {
-	/// Initiate a new `SigData` with given nonce value
-	pub fn new_empty(replay_protection: EthereumReplayProtection) -> Self {
-		Self {
-			key_manager_address: replay_protection.key_manager_address.into(),
-			chain_id: replay_protection.chain_id.into(),
-			nonce: replay_protection.nonce.into(),
-			..Default::default()
-		}
-	}
-
-	/// Used for migrating from the old `SigData` struct.
-	pub fn from_legacy(msg_hash: H256, sig: Uint, nonce: Uint, k_times_g_address: Address) -> Self {
-		Self { msg_hash, sig, nonce, k_times_g_address, ..Default::default() }
-	}
-
-	/// Inserts the `msg_hash` value derived from the provided calldata.
-	pub fn insert_msg_hash_from(&mut self, calldata: &[u8]) {
-		self.msg_hash = H256(Keccak256::hash(calldata).0);
-	}
-
 	/// Add the actual signature. This method does no verification.
-	pub fn insert_signature(&mut self, schnorr: &SchnorrVerificationComponents) {
-		self.sig = schnorr.s.into();
-		self.k_times_g_address = schnorr.k_times_g_address.into();
-	}
-
-	/// Get the inner signature components as a `SchnorrVerificationComponents`.
-	pub fn get_signature(&self) -> SchnorrVerificationComponents {
-		SchnorrVerificationComponents {
-			s: self.sig.into(),
-			k_times_g_address: self.k_times_g_address.into(),
+	pub fn new(nonce: impl Into<Uint>, schnorr: &SchnorrVerificationComponents) -> Self {
+		Self {
+			sig: schnorr.s.into(),
+			nonce: nonce.into(),
+			k_times_g_address: schnorr.k_times_g_address.into(),
 		}
-	}
-
-	pub fn is_signed(&self) -> bool {
-		self.sig != Default::default() && self.k_times_g_address != Default::default()
 	}
 }
 
 impl Tokenizable for SigData {
 	fn tokenize(self) -> Token {
 		Token::Tuple(vec![
-			Token::Address(self.key_manager_address),
-			Token::Uint(self.chain_id),
-			Token::Uint(self.msg_hash.0.into()),
-			Token::Uint(self.sig),
-			Token::Uint(self.nonce),
-			Token::Address(self.k_times_g_address),
+			self.sig.tokenize(),
+			self.nonce.tokenize(),
+			self.k_times_g_address.tokenize(),
 		])
+	}
+
+	fn param_type() -> ParamType {
+		ParamType::Tuple(vec![ParamType::Uint(256), ParamType::Uint(256), ParamType::Address])
+	}
+}
+
+impl Tokenizable for EthereumReplayProtection {
+	fn tokenize(self) -> Token {
+		Token::FixedArray(vec![
+			Token::Uint(Uint::from(self.nonce)),
+			Token::Address(self.contract_address),
+			Token::Uint(Uint::from(self.chain_id)),
+			Token::Address(self.key_manager_address),
+		])
+	}
+
+	fn param_type() -> ethabi::ParamType {
+		ParamType::Tuple(vec![
+			ParamType::Uint(256),
+			ParamType::Address,
+			ParamType::Uint(256),
+			ParamType::Address,
+		])
+	}
+}
+
+impl Tokenizable for Uint {
+	fn tokenize(self) -> Token {
+		Token::Uint(self)
+	}
+
+	fn param_type() -> ethabi::ParamType {
+		ParamType::Uint(256)
+	}
+}
+
+impl Tokenizable for H256 {
+	fn tokenize(self) -> Token {
+		Token::FixedBytes(self.0.into())
+	}
+
+	fn param_type() -> ethabi::ParamType {
+		ParamType::Uint(256)
+	}
+}
+
+impl Tokenizable for u64 {
+	fn tokenize(self) -> Token {
+		Token::Uint(self.into())
+	}
+
+	fn param_type() -> ethabi::ParamType {
+		ParamType::Uint(256)
+	}
+}
+
+impl Tokenizable for Address {
+	fn tokenize(self) -> Token {
+		Token::Address(self)
+	}
+
+	fn param_type() -> ethabi::ParamType {
+		ParamType::Address
+	}
+}
+
+impl Tokenizable for ethabi::Function {
+	fn tokenize(self) -> Token {
+		Token::FixedBytes(self.short_signature().to_vec())
+	}
+
+	fn param_type() -> ethabi::ParamType {
+		ParamType::FixedBytes(4)
+	}
+}
+
+impl<const S: usize> Tokenizable for [u8; S] {
+	fn param_type() -> ethabi::ParamType {
+		ParamType::FixedBytes(S)
+	}
+
+	fn tokenize(self) -> Token {
+		Token::FixedBytes(self.to_vec())
 	}
 }
 
@@ -433,6 +559,10 @@ impl Tokenizable for AggKey {
 			Token::Uint(self.pub_key_y_parity.into()),
 		])
 	}
+
+	fn param_type() -> ethabi::ParamType {
+		ParamType::Tuple(vec![ParamType::Uint(256), ParamType::Uint(8)])
+	}
 }
 
 /// [TryFrom] implementation to convert some bytes to an [AggKey].
@@ -531,11 +661,11 @@ pub struct TransactionFee {
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
 pub struct Transaction {
 	pub chain_id: u64,
-	pub max_priority_fee_per_gas: Option<U256>, // EIP-1559
-	pub max_fee_per_gas: Option<U256>,
-	pub gas_limit: Option<U256>,
+	pub max_priority_fee_per_gas: Option<Uint>, // EIP-1559
+	pub max_fee_per_gas: Option<Uint>,
+	pub gas_limit: Option<Uint>,
 	pub contract: Address,
-	pub value: U256,
+	pub value: Uint,
 	pub data: Vec<u8>,
 }
 
@@ -571,7 +701,7 @@ impl Transaction {
 		Ok(())
 	}
 
-	fn check_gas_limit(&self, recovered: U256) -> Result<(), CheckedTransactionParameter> {
+	fn check_gas_limit(&self, recovered: Uint) -> Result<(), CheckedTransactionParameter> {
 		if let Some(expected) = self.gas_limit {
 			if expected != recovered {
 				return Err(CheckedTransactionParameter::GasLimit)
@@ -594,14 +724,14 @@ impl Transaction {
 		Ok(())
 	}
 
-	fn check_value(&self, recovered: U256) -> Result<(), CheckedTransactionParameter> {
+	fn check_value(&self, recovered: Uint) -> Result<(), CheckedTransactionParameter> {
 		if self.value != recovered {
 			return Err(CheckedTransactionParameter::Value)
 		}
 		Ok(())
 	}
 
-	fn check_max_fee_per_gas(&self, recovered: U256) -> Result<(), CheckedTransactionParameter> {
+	fn check_max_fee_per_gas(&self, recovered: Uint) -> Result<(), CheckedTransactionParameter> {
 		if let Some(expected) = self.max_fee_per_gas {
 			if expected != recovered {
 				return Err(CheckedTransactionParameter::MaxFeePerGas)
@@ -612,7 +742,7 @@ impl Transaction {
 
 	fn check_max_priority_fee_per_gas(
 		&self,
-		recovered: U256,
+		recovered: Uint,
 	) -> Result<(), CheckedTransactionParameter> {
 		if let Some(expected) = self.max_priority_fee_per_gas {
 			if expected != recovered {
@@ -766,12 +896,11 @@ mod verification_tests {
 	use super::*;
 	use frame_support::{assert_err, assert_ok};
 	use libsecp256k1::{PublicKey, SecretKey};
-	use rand::{prelude::*, SeedableRng};
-	use Keccak256;
 
 	#[test]
 	#[cfg(feature = "runtime-integration-tests")]
 	fn test_signature() {
+		use rand::{rngs::StdRng, Rng, SeedableRng};
 		// Message to sign over
 		let msg: [u8; 32] = Keccak256::hash(b"Whats it going to be then, eh?")
 			.as_bytes()
@@ -842,10 +971,5 @@ mod verification_tests {
 			),
 			AggKeyVerificationError::NoMatch
 		);
-	}
-
-	#[test]
-	fn test_max_encoded_len() {
-		cf_test_utilities::ensure_max_encoded_len_is_exact::<SigData>();
 	}
 }

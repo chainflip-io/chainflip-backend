@@ -322,7 +322,7 @@ fn swap_expires() {
 
 		assert_eq!(
 			SwapChannelExpiries::<Test>::get(expiry),
-			vec![(0, ForeignChain::Ethereum, ForeignChainAddress::Eth(Default::default()))]
+			vec![(0, ForeignChainAddress::Eth(Default::default()))]
 		);
 		assert_eq!(
 			MockDepositHandler::<AnyChain, Test>::get_swap_channels(),
@@ -333,7 +333,7 @@ fn swap_expires() {
 		Swapping::on_initialize(expiry - 1);
 		assert_eq!(
 			SwapChannelExpiries::<Test>::get(expiry),
-			vec![(0, ForeignChain::Ethereum, ForeignChainAddress::Eth(Default::default()))]
+			vec![(0, ForeignChainAddress::Eth(Default::default()))]
 		);
 		assert_eq!(
 			MockDepositHandler::<AnyChain, Test>::get_swap_channels(),

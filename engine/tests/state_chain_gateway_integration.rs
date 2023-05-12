@@ -16,17 +16,17 @@ use crate::common::IntegrationTestConfig;
 pub async fn test_all_state_chain_gateway_events() {
 	let integration_test_config = IntegrationTestConfig::from_file("tests/config.toml").unwrap();
 
-	let sm_events = common::get_contract_events(StateChainGateway::new(
+	let scg_events = common::get_contract_events(StateChainGateway::new(
 		integration_test_config.eth.state_chain_gateway_address,
 	))
 	.await;
 
 	// The following event details correspond to the events in
 	// chainflip-eth-contracts/scripts/deploy_and.py
-	sm_events
+	scg_events
 		.iter()
 		.find(|event| match &event.event_parameters {
-			StateChainGatewayEvent::Funded { account_id, amount, funder, return_addr } => {
+			StateChainGatewayEvent::Funded { account_id, amount, funder } => {
 				assert_eq!(
 					account_id,
 					&AccountId32::from_str(
@@ -40,24 +40,19 @@ pub async fn test_all_state_chain_gateway_events() {
 					&web3::types::H160::from_str("0x70997970c51812dc3a010c7d01b50e0d17dc79c8")
 						.unwrap()
 				);
-				assert_eq!(
-					return_addr,
-					&web3::types::H160::from_str("0x0000000000000000000000000000000000000001")
-						.unwrap()
-				);
 				true
 			},
 			_ => false,
 		})
 		.expect("Didn't find the Funded event");
 
-	sm_events
+	scg_events
 		.iter()
 		.find(|event| match &event.event_parameters {
 			StateChainGatewayEvent::RedemptionRegistered {
 				account_id,
 				amount,
-				funder,
+				redeem_address,
 				start_time,
 				expiry_time,
 			} => {
@@ -70,7 +65,7 @@ pub async fn test_all_state_chain_gateway_events() {
 				);
 				assert_eq!(amount, &U256::from_dec_str("333333333333333311488").unwrap());
 				assert_eq!(
-					funder,
+					redeem_address,
 					&web3::types::H160::from_str("0x70997970c51812dc3a010c7d01b50e0d17dc79c8")
 						.unwrap()
 				);
@@ -82,7 +77,7 @@ pub async fn test_all_state_chain_gateway_events() {
 		})
 		.expect("Didn't find the RedemptionRegistered event");
 
-	sm_events
+	scg_events
 		.iter()
 		.find(|event| match &event.event_parameters {
 			StateChainGatewayEvent::RedemptionExecuted { account_id, amount, .. } => {
@@ -100,7 +95,7 @@ pub async fn test_all_state_chain_gateway_events() {
 		})
 		.expect("Didn't find the RedemptionExecuted event");
 
-	sm_events
+	scg_events
 		.iter()
 		.find(|event| match &event.event_parameters {
 			StateChainGatewayEvent::RedemptionExpired { account_id, amount } => {
@@ -118,7 +113,7 @@ pub async fn test_all_state_chain_gateway_events() {
 		})
 		.expect("Didn't find the RedemptionExpired event");
 
-	sm_events
+	scg_events
 		.iter()
 		.find(|event| match event.event_parameters {
 			StateChainGatewayEvent::MinFundingChanged { old_min_funding, new_min_funding } => {
@@ -130,7 +125,7 @@ pub async fn test_all_state_chain_gateway_events() {
 		})
 		.expect("Didn't find the MinFundingChanged event");
 
-	sm_events
+	scg_events
 		.iter()
 		.find(|event| match &event.event_parameters {
 			StateChainGatewayEvent::GovernanceWithdrawal { to, amount, .. } => {

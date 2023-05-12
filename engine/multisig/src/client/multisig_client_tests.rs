@@ -40,9 +40,8 @@ async fn should_ignore_rts_for_unknown_key() {
 	// Send a signing request
 	let signing_request_fut = client.initiate_signing(
 		DEFAULT_SIGNING_CEREMONY_ID,
-		KeyId { epoch_index: GENESIS_EPOCH, public_key_bytes: Vec::from([0u8; 32]) },
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
-		vec![EthSigning::signing_payload_for_test()],
+		vec![(KeyId::new(GENESIS_EPOCH, [0u8; 32]), EthSigning::signing_payload_for_test())],
 	);
 
 	// Check that the signing request fails immediately with an "unknown key" error
@@ -68,10 +67,7 @@ async fn should_save_key_after_keygen() {
 	mock_key_store
 		.expect_set_key()
 		.with(
-			predicate::eq(KeyId {
-				epoch_index: GENESIS_EPOCH,
-				public_key_bytes: public_key.encode_key(),
-			}),
+			predicate::eq(KeyId::new(GENESIS_EPOCH, public_key)),
 			predicate::eq(keygen_result_info.clone()),
 		)
 		.once()

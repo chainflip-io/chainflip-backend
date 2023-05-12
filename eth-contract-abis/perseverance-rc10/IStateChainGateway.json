@@ -1,19 +1,117 @@
 [
   {
+    "anonymous": false,
     "inputs": [
       {
-        "internalType": "contract IKeyManager",
-        "name": "keyManager",
+        "indexed": false,
+        "internalType": "bool",
+        "name": "communityGuardDisabled",
+        "type": "bool"
+      }
+    ],
+    "name": "CommunityGuardDisabled",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "flip",
         "type": "address"
+      }
+    ],
+    "name": "FLIPSet",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "oldSupply",
+        "type": "uint256"
       },
       {
+        "indexed": false,
         "internalType": "uint256",
-        "name": "minFunding",
+        "name": "newSupply",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "stateChainBlockNumber",
         "type": "uint256"
       }
     ],
-    "stateMutability": "nonpayable",
-    "type": "constructor"
+    "name": "FlipSupplyUpdated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "nodeID",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "funder",
+        "type": "address"
+      }
+    ],
+    "name": "Funded",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "address",
+        "name": "to",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "GovernanceWithdrawal",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "oldMinFunding",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "newMinFunding",
+        "type": "uint256"
+      }
+    ],
+    "name": "MinFundingChanged",
+    "type": "event"
   },
   {
     "anonymous": false,
@@ -71,7 +169,7 @@
       {
         "indexed": true,
         "internalType": "address",
-        "name": "funder",
+        "name": "redeemAddress",
         "type": "address"
       },
       {
@@ -88,101 +186,6 @@
       }
     ],
     "name": "RedemptionRegistered",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "bool",
-        "name": "communityGuardDisabled",
-        "type": "bool"
-      }
-    ],
-    "name": "CommunityGuardDisabled",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "flip",
-        "type": "address"
-      }
-    ],
-    "name": "FLIPSet",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "to",
-        "type": "address"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      }
-    ],
-    "name": "GovernanceWithdrawal",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "oldMinFunding",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "newMinFunding",
-        "type": "uint256"
-      }
-    ],
-    "name": "MinFundingChanged",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      {
-        "indexed": true,
-        "internalType": "bytes32",
-        "name": "nodeID",
-        "type": "bytes32"
-      },
-      {
-        "indexed": false,
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
-        "indexed": false,
-        "internalType": "address",
-        "name": "funder",
-        "type": "address"
-      },
-      {
-        "indexed": true,
-        "internalType": "address",
-        "name": "returnAddr",
-        "type": "address"
-      }
-    ],
-    "name": "Funded",
     "type": "event"
   },
   {
@@ -213,19 +216,6 @@
   },
   {
     "inputs": [],
-    "name": "REDEMPTION_DELAY",
-    "outputs": [
-      {
-        "internalType": "uint48",
-        "name": "",
-        "type": "uint48"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
     "name": "disableCommunityGuard",
     "outputs": [],
     "stateMutability": "nonpayable",
@@ -247,6 +237,24 @@
       }
     ],
     "name": "executeRedemption",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "nodeID",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      }
+    ],
+    "name": "fundStateChainAccount",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -318,6 +326,19 @@
   },
   {
     "inputs": [],
+    "name": "getLastSupplyUpdateBlockNumber",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "getMinimumFunding",
     "outputs": [
       {
@@ -348,7 +369,7 @@
           },
           {
             "internalType": "address",
-            "name": "funder",
+            "name": "redeemAddress",
             "type": "address"
           },
           {
@@ -385,14 +406,14 @@
   },
   {
     "inputs": [],
-    "name": "govWithdraw",
+    "name": "govUpdateFlipIssuer",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
   },
   {
     "inputs": [],
-    "name": "govWithdrawNative",
+    "name": "govWithdraw",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -401,21 +422,6 @@
     "inputs": [
       {
         "components": [
-          {
-            "internalType": "address",
-            "name": "keyManAddr",
-            "type": "address"
-          },
-          {
-            "internalType": "uint256",
-            "name": "chainID",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint256",
-            "name": "msgHash",
-            "type": "uint256"
-          },
           {
             "internalType": "uint256",
             "name": "sig",
@@ -448,7 +454,7 @@
       },
       {
         "internalType": "address",
-        "name": "funder",
+        "name": "redeemAddress",
         "type": "address"
       },
       {
@@ -496,29 +502,6 @@
     "type": "function"
   },
   {
-    "inputs": [
-      {
-        "internalType": "bytes32",
-        "name": "nodeID",
-        "type": "bytes32"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address",
-        "name": "returnAddr",
-        "type": "address"
-      }
-    ],
-    "name": "fund_state_chain_account",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
     "inputs": [],
     "name": "suspend",
     "outputs": [],
@@ -530,20 +513,85 @@
       {
         "components": [
           {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
             "internalType": "address",
-            "name": "keyManAddr",
+            "name": "kTimesGAddress",
             "type": "address"
-          },
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "internalType": "address",
+        "name": "newIssuer",
+        "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "omitChecks",
+        "type": "bool"
+      }
+    ],
+    "name": "updateFlipIssuer",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
           {
             "internalType": "uint256",
-            "name": "chainID",
+            "name": "sig",
             "type": "uint256"
           },
           {
             "internalType": "uint256",
-            "name": "msgHash",
+            "name": "nonce",
             "type": "uint256"
           },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddress",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "internalType": "uint256",
+        "name": "newTotalSupply",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "stateChainBlockNumber",
+        "type": "uint256"
+      }
+    ],
+    "name": "updateFlipSupply",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
           {
             "internalType": "uint256",
             "name": "sig",
@@ -568,15 +616,16 @@
         "internalType": "contract IKeyManager",
         "name": "keyManager",
         "type": "address"
+      },
+      {
+        "internalType": "bool",
+        "name": "omitChecks",
+        "type": "bool"
       }
     ],
     "name": "updateKeyManager",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
-  },
-  {
-    "stateMutability": "payable",
-    "type": "receive"
   }
 ]

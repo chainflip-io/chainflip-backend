@@ -12,13 +12,12 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{
-	address::ForeignChainAddress, eth::H256, ApiCall, CcmDepositMetadata, Chain, ChainAbi,
-	ChainCrypto, Ethereum, Polkadot,
+	address::ForeignChainAddress, eth::ethabi::Address, ApiCall, CcmDepositMetadata, Chain,
+	ChainAbi, ChainCrypto, Ethereum, Polkadot,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, ChannelId, EgressId, EpochIndex, EthereumAddress, ForeignChain,
-	ThresholdSignatureRequestId,
+	CeremonyId, ChannelId, EgressId, EpochIndex, ForeignChain, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -298,15 +297,6 @@ pub trait RewardsDistribution {
 pub trait EmissionsTrigger {
 	/// Trigger emissions.
 	fn trigger_emissions();
-}
-
-/// Provides the environment data for ethereum-like chains.
-pub trait EthEnvironmentProvider {
-	fn token_address(asset: assets::any::Asset) -> Option<EthereumAddress>;
-	fn key_manager_address() -> EthereumAddress;
-	fn state_chain_gateway_address() -> EthereumAddress;
-	fn vault_address() -> EthereumAddress;
-	fn chain_id() -> u64;
 }
 
 /// A representation of the current network state for this heartbeat interval.
@@ -695,7 +685,7 @@ pub trait DepositApi<C: Chain> {
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
 	/// Expires a channel.
-	fn expire_channel(chain: ForeignChain, channel_id: ChannelId, address: C::ChainAccount);
+	fn expire_channel(channel_id: ChannelId, address: C::ChainAccount);
 }
 
 /// Generates a deterministic deposit address for some combination of asset, chain and channel id.
@@ -711,7 +701,7 @@ impl AddressDerivationApi<Ethereum> for () {
 		source_asset: <Ethereum as Chain>::ChainAsset,
 		channel_id: ChannelId,
 	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
-		Ok(H256((source_asset, channel_id).encode().blake2_256()).into())
+		Ok(Address::from_slice(&(source_asset, channel_id).encode().blake2_256()[..20]))
 	}
 }
 
@@ -801,7 +791,6 @@ pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
 	fn on_new_key_activated(
 		new_public_key: C::AggKey,
 		block_number: C::ChainBlockNumber,
-		tx_id: C::TransactionId,
 	) -> DispatchResultWithPostInfo;
 }
 

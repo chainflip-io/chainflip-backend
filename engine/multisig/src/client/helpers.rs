@@ -1,7 +1,6 @@
 use std::{
-	collections::{BTreeMap, BTreeSet, HashMap},
+	collections::{BTreeSet, HashMap},
 	fmt::Display,
-	sync::Arc,
 	time::Duration,
 };
 
@@ -12,7 +11,7 @@ use itertools::{Either, Itertools};
 
 use async_trait::async_trait;
 
-use rand_legacy::{RngCore, SeedableRng};
+use rand::{RngCore, SeedableRng};
 
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, debug_span, Instrument};
@@ -28,9 +27,9 @@ use crate::{
 			KeygenCeremony, SigningCeremony,
 		},
 		ceremony_runner::CeremonyRunner,
-		common::{broadcast::BroadcastStage, CeremonyCommon, CeremonyFailureReason},
-		keygen::{generate_key_data, HashComm1, HashContext, VerifyHashCommitmentsBroadcast2},
-		signing, KeygenResultInfo, PartyIdxMapping,
+		common::CeremonyFailureReason,
+		keygen::{generate_key_data, HashComm1, HashContext},
+		signing, KeygenResultInfo,
 	},
 	crypto::{ECPoint, Rng},
 	CryptoScheme,
@@ -158,15 +157,11 @@ impl<C: CryptoScheme> Node<SigningCeremony<C>> {
 		let SigningCeremonyDetails { rng, ceremony_id, signers, payloads } =
 			signing_ceremony_details;
 
-		let (payloads, keygen_result_info) =
-			payloads.into_iter().map(|p| (p.payload, p.keygen_result_info)).unzip();
-
 		let request = prepare_signing_request::<C>(
 			ceremony_id,
 			&self.own_account_id,
 			signers,
-			keygen_result_info,
-			payloads,
+			payloads.into_iter().map(|p| (p.keygen_result_info, p.payload)).collect(),
 			&self.outgoing_p2p_message_sender,
 			rng,
 		)
@@ -411,11 +406,12 @@ where
 							.into_iter()
 							.map(|(receiver_id, message)| {
 								(receiver_id, {
-									// Because (for now) messages are serialized for V1, we need to
-									// deserialize them from v1
-									let message = super::ceremony_manager::deserialize_from_v1::<
-										C::Crypto,
-									>(&message)
+									let message = deserialize_for_version::<C::Crypto>(
+										VersionedCeremonyMessage {
+											version: CURRENT_PROTOCOL_VERSION,
+											payload: message,
+										},
+									)
 									.unwrap();
 
 									message_to_next_stage_data(message)
@@ -592,7 +588,7 @@ pub(crate) use run_stages;
 use super::{
 	ceremony_manager::{deserialize_for_version, prepare_key_handover_request},
 	common::ResharingContext,
-	keygen::{KeygenCommon, SharingParameters},
+	keygen::SharingParameters,
 	signing::Comm1,
 	ThresholdParameters,
 };
@@ -638,7 +634,7 @@ impl<C: CryptoScheme> KeygenCeremonyRunner<C> {
 	}
 
 	pub fn keygen_ceremony_details(&mut self) -> KeygenCeremonyDetails {
-		use rand_legacy::Rng as _;
+		use rand::Rng as _;
 
 		KeygenCeremonyDetails {
 			ceremony_id: self.ceremony_id,
@@ -745,7 +741,7 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 	}
 
 	fn signing_ceremony_details(&mut self, account_id: &AccountId) -> SigningCeremonyDetails<C> {
-		use rand_legacy::Rng as _;
+		use rand::Rng as _;
 
 		let payloads = self
 			.ceremony_runner_data
@@ -821,13 +817,13 @@ pub async fn run_keygen(
 }
 
 /// Generate an invalid local sig for stage3
-pub fn gen_invalid_local_sig<P: ECPoint>(rng: &mut Rng) -> LocalSig3<P> {
+pub fn gen_dummy_local_sig<P: ECPoint>(rng: &mut Rng) -> LocalSig3<P> {
 	use crate::crypto::ECScalar;
 
 	signing::LocalSig3 { responses: vec![P::Scalar::random(rng)] }
 }
 
-pub fn get_invalid_hash_comm(rng: &mut Rng) -> keygen::HashComm1 {
+pub fn get_dummy_hash_comm(rng: &mut Rng) -> keygen::HashComm1 {
 	use sp_core::H256;
 
 	let mut buffer: [u8; 32] = [0; 32];
@@ -837,7 +833,7 @@ pub fn get_invalid_hash_comm(rng: &mut Rng) -> keygen::HashComm1 {
 }
 
 // Make these member functions of the CeremonyRunner
-pub fn gen_invalid_keygen_comm1<P: ECPoint>(
+pub fn gen_dummy_keygen_comm1<P: ECPoint>(
 	rng: &mut Rng,
 	share_count: AuthorityCount,
 ) -> DKGUnverifiedCommitment<P> {
@@ -852,34 +848,10 @@ pub fn gen_invalid_keygen_comm1<P: ECPoint>(
 	fake_comm1
 }
 
-pub fn gen_invalid_signing_comm1(rng: &mut Rng) -> Comm1<Point> {
-	Comm1(vec![SigningCommitment { d: Point::random(rng), e: Point::random(rng) }])
-}
-
-pub fn gen_invalid_keygen_stage_2_state<P: ECPoint>(
-	ceremony_id: CeremonyId,
-	account_ids: BTreeSet<AccountId>,
-	mut rng: Rng,
-) -> CeremonyRunner<KeygenCeremony<EthSigning>> {
-	let validator_mapping = Arc::new(PartyIdxMapping::from_participants(account_ids.clone()));
-	let common = CeremonyCommon {
-		ceremony_id,
-		own_idx: 0,
-		all_idxs: BTreeSet::from_iter((0..account_ids.len()).into_iter().map(|idx| idx as u32)),
-		outgoing_p2p_message_sender: tokio::sync::mpsc::unbounded_channel().0,
-		validator_mapping,
-		rng: rng.clone(),
-	};
-
-	let commitment = gen_invalid_keygen_comm1(&mut rng, account_ids.len() as u32);
-	let processor = VerifyHashCommitmentsBroadcast2::new(
-		KeygenCommon::new(common.clone(), HashContext([0; 32]), None),
-		commitment,
-		account_ids.iter().map(|_| (0, None)).collect(),
-		keygen::OutgoingShares(BTreeMap::new()),
-	);
-
-	let stage = Box::new(BroadcastStage::new(processor, common));
-
-	CeremonyRunner::new_authorised(stage)
+pub fn gen_dummy_signing_comm1(rng: &mut Rng, number_of_commitments: u64) -> Comm1<Point> {
+	Comm1(
+		(0..number_of_commitments)
+			.map(|_| SigningCommitment { d: Point::random(rng), e: Point::random(rng) })
+			.collect(),
+	)
 }

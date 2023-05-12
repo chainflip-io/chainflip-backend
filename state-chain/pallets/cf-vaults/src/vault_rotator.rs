@@ -1,4 +1,5 @@
 use super::*;
+use cf_chains::SetAggKeyWithAggKeyError;
 use sp_runtime::traits::BlockNumberProvider;
 
 impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
@@ -74,6 +75,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 						key_to_share: epoch_key.key,
 						sharing_participants,
 						receiving_participants,
+						new_key: new_public_key,
 						to_epoch: new_epoch_index,
 					});
 				},
@@ -97,26 +99,30 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 	/// Get the status of the current key generation
 	fn status() -> AsyncResult<VaultStatus<T::ValidatorId>> {
-		match PendingVaultRotation::<T, I>::decode_variant() {
-			Some(VaultRotationStatusVariant::AwaitingKeygen) => AsyncResult::Pending,
-			Some(VaultRotationStatusVariant::AwaitingKeygenVerification) => AsyncResult::Pending,
-			// It's at this point we want the vault to be considered ready to commit to. We don't
-			// want to commit until the other vaults are ready
-			Some(VaultRotationStatusVariant::KeygenVerificationComplete) =>
-				AsyncResult::Ready(VaultStatus::KeygenComplete),
-			Some(VaultRotationStatusVariant::AwaitingKeyHandover) => AsyncResult::Pending,
-			Some(VaultRotationStatusVariant::KeyHandoverComplete) =>
-				AsyncResult::Ready(VaultStatus::KeyHandoverComplete),
-			Some(VaultRotationStatusVariant::AwaitingRotation) => AsyncResult::Pending,
-			Some(VaultRotationStatusVariant::Complete) =>
-				AsyncResult::Ready(VaultStatus::RotationComplete),
-			Some(VaultRotationStatusVariant::Failed) => match PendingVaultRotation::<T, I>::get() {
-				Some(VaultRotationStatus::Failed { offenders }) =>
-					AsyncResult::Ready(VaultStatus::Failed(offenders)),
-				_ =>
-					unreachable!("Unreachable because we are in the branch for the Failed variant."),
-			},
-			None => AsyncResult::Void,
+		if let Some(status_variant) = PendingVaultRotation::<T, I>::decode_variant() {
+			match status_variant {
+				VaultRotationStatusVariant::AwaitingKeygen => AsyncResult::Pending,
+				VaultRotationStatusVariant::AwaitingKeygenVerification => AsyncResult::Pending,
+				// It's at this point we want the vault to be considered ready to commit to. We
+				// don't want to commit until the other vaults are ready
+				VaultRotationStatusVariant::KeygenVerificationComplete =>
+					AsyncResult::Ready(VaultStatus::KeygenComplete),
+				VaultRotationStatusVariant::AwaitingKeyHandover => AsyncResult::Pending,
+				VaultRotationStatusVariant::KeyHandoverComplete =>
+					AsyncResult::Ready(VaultStatus::KeyHandoverComplete),
+				VaultRotationStatusVariant::AwaitingRotation => AsyncResult::Pending,
+				VaultRotationStatusVariant::Complete =>
+					AsyncResult::Ready(VaultStatus::RotationComplete),
+				VaultRotationStatusVariant::Failed => match PendingVaultRotation::<T, I>::get() {
+					Some(VaultRotationStatus::Failed { offenders }) =>
+						AsyncResult::Ready(VaultStatus::Failed(offenders)),
+					_ => unreachable!(
+						"Unreachable because we are in the branch for the Failed variant."
+					),
+				},
+			}
+		} else {
+			AsyncResult::Void
 		}
 	}
 
@@ -125,39 +131,46 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			PendingVaultRotation::<T, I>::get()
 		{
 			if let Some(EpochKey { key, epoch_index, key_state }) = Self::current_epoch_key() {
-				if let Ok(rotation_call) =
-					<T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
-						Some(key),
-						new_public_key,
-					) {
-					let (_, threshold_request_id) =
-						T::Broadcaster::threshold_sign_and_broadcast(rotation_call);
-					debug_assert!(
-						matches!(key_state, KeyState::Unlocked),
-						"Current epoch key must be active to activate next key."
-					);
-					CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
-						epoch_index,
-						key_state: KeyState::Locked(threshold_request_id),
-					});
-				} else {
-					// TODO: Fix the integration tests and/or SetAggKeyWithAggKey impls so that this
-					// is actually unreachable.
-					log::error!(
-						"Unable to create unsigned transaction to set new vault key. This should not be possible."
-					);
+				match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
+					Some(key),
+					new_public_key,
+				) {
+					Ok(rotation_call) => {
+						let (_, threshold_request_id) =
+							T::Broadcaster::threshold_sign_and_broadcast(rotation_call);
+						debug_assert!(
+							matches!(key_state, KeyState::Unlocked),
+							"Current epoch key must be active to activate next key."
+						);
+						CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
+							epoch_index,
+							key_state: KeyState::Locked(threshold_request_id),
+						});
+						PendingVaultRotation::<T, I>::put(
+							VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
+						);
+					},
+					Err(error) => match error {
+						SetAggKeyWithAggKeyError::NotRequired => {
+							PendingVaultRotation::<T, I>::put(VaultRotationStatus::Complete);
+						},
+						SetAggKeyWithAggKeyError::Other => {
+							log::error!(
+										"Unable to create unsigned transaction to set new vault key. This should not be possible."
+									);
+						},
+					},
 				}
 			} else {
+				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
+					new_public_key,
+				});
 				// The block number value 1, which the vault is being set with is a dummy value
 				// and doesn't mean anything. It will be later modified to the real value when
 				// we witness the vault rotation manually via governance
 				Self::set_vault_for_next_epoch(new_public_key, 1_u32.into());
 				Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation { new_public_key })
 			}
-
-			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
-				new_public_key,
-			});
 		} else {
 			#[cfg(not(test))]
 			log::error!("activate key called before key handover completed");
@@ -168,8 +181,6 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_status(outcome: AsyncResult<VaultStatus<Self::ValidatorId>>) {
-		use cf_chains::benchmarking_value::BenchmarkValue;
-
 		match outcome {
 			AsyncResult::Pending => {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingKeygen {
@@ -199,9 +210,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				});
 			},
 			AsyncResult::Ready(VaultStatus::RotationComplete) => {
-				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete {
-					tx_id: BenchmarkValue::benchmark_value(),
-				});
+				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete);
 			},
 			AsyncResult::Void => {
 				PendingVaultRotation::<T, I>::kill();
