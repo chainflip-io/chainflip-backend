@@ -158,18 +158,16 @@ macro_rules! derive_display_as_type_name {
 
 impl Serialize for PartyIdxMapping {
 	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-		// We leave off the account_ids because they can be derived from the id_to_idx during
+		// We leave off the id_to_idx because they can be derived from the account_ids during
 		// deserialization
-		self.id_to_idx.serialize(serializer)
+		self.account_ids.serialize(serializer)
 	}
 }
 
 impl<'de> Deserialize<'de> for PartyIdxMapping {
 	fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-		let id_to_idx = BTreeMap::<AccountId, AuthorityCount>::deserialize(deserializer)?;
-		let account_ids = id_to_idx.keys().cloned().collect();
-
-		Ok(PartyIdxMapping { id_to_idx, account_ids })
+		let account_ids = BTreeSet::<AccountId>::deserialize(deserializer)?;
+		Ok(PartyIdxMapping::from_participants(account_ids))
 	}
 }
 
