@@ -3,8 +3,8 @@ use cf_primitives::GENESIS_EPOCH;
 use chainflip_engine::db::PersistentKeyDB;
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use multisig::{
-	client::keygen::generate_key_data, eth::EthSigning, polkadot::PolkadotSigning,
-	CanonicalEncoding, CryptoScheme, KeyId, Rng,
+	bitcoin::BtcSigning, client::keygen::generate_key_data, eth::EthSigning,
+	polkadot::PolkadotSigning, CanonicalEncoding, CryptoScheme, KeyId, Rng,
 };
 use rand::SeedableRng;
 use state_chain_runtime::AccountId;
@@ -26,6 +26,7 @@ type Record = (String, AccountId);
 struct AggKeys {
 	eth_agg_key: String,
 	dot_agg_key: String,
+	btc_agg_key: String,
 }
 
 fn load_node_ids_from_csv<R>(mut reader: csv::Reader<R>) -> HashMap<AccountId, String>
@@ -70,13 +71,16 @@ fn main() {
 		.expect("Should read from csv file"),
 	);
 
-	let agg_keys = AggKeys {
-		eth_agg_key: generate_and_save_keys::<EthSigning>(&node_id_to_name_map),
-		dot_agg_key: generate_and_save_keys::<PolkadotSigning>(&node_id_to_name_map),
-	};
-
 	// output to stdout - CI can read the json from stdout
-	println!("{}", serde_json::to_string_pretty(&agg_keys).expect("Should prettify json"));
+	println!(
+		"{}",
+		serde_json::to_string_pretty(&AggKeys {
+			eth_agg_key: generate_and_save_keys::<EthSigning>(&node_id_to_name_map),
+			dot_agg_key: generate_and_save_keys::<PolkadotSigning>(&node_id_to_name_map),
+			btc_agg_key: generate_and_save_keys::<BtcSigning>(&node_id_to_name_map),
+		})
+		.expect("Should prettify json")
+	);
 }
 
 // We just return the PublicKeyBytes (as hex) here. The chain_spec only needs to read this. At
