@@ -13,13 +13,6 @@ use jsonrpsee::{
 use sp_rpc::number::NumberOrHex;
 use std::{ops::Range, path::PathBuf};
 
-fn to_u128(number_or_hex: NumberOrHex) -> u128 {
-	match number_or_hex {
-		NumberOrHex::Number(number) => number as u128,
-		NumberOrHex::Hex(hex) => hex.low_u128(),
-	}
-}
-
 #[rpc(server, client, namespace = "lp")]
 pub trait Rpc {
 	#[method(name = "registerAccount")]
@@ -61,6 +54,12 @@ pub trait Rpc {
 	async fn get_range_orders(&self) -> Result<String, Error>;
 }
 
+fn to_u128(number_or_hex: NumberOrHex) -> u128 {
+	match number_or_hex {
+		NumberOrHex::Number(number) => number as u128,
+		NumberOrHex::Hex(hex) => hex.low_u128(),
+	}
+}
 pub struct RpcServerImpl {
 	state_chain_settings: StateChain,
 }

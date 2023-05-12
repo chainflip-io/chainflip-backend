@@ -76,6 +76,23 @@ pub struct RpcAuctionState {
 	auction_size_range: (u32, u32),
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct RpcSwapOutput {
+	// Intermediary amount, if there's any
+	pub intermediary: Option<NumberOrHex>,
+	// Final output of the swap
+	pub output: NumberOrHex,
+}
+
+impl From<SwapOutput> for RpcSwapOutput {
+	fn from(swap_output: SwapOutput) -> Self {
+		Self {
+			intermediary: Some(NumberOrHex::from(swap_output.intermediary.unwrap())),
+			output: NumberOrHex::from(swap_output.output),
+		}
+	}
+}
+
 #[rpc(server, client, namespace = "cf")]
 /// The custom RPC endpoints for the state chain node.
 pub trait CustomApi {
@@ -182,7 +199,7 @@ pub trait CustomApi {
 		to: Asset,
 		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<SwapOutput>;
+	) -> RpcResult<RpcSwapOutput>;
 }
 
 /// An RPC extension for the state chain node.
@@ -469,7 +486,7 @@ where
 		to: Asset,
 		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<SwapOutput> {
+	) -> RpcResult<RpcSwapOutput> {
 		self.client
 			.runtime_api()
 			.cf_pool_simulate_swap(&self.query_block_id(at), from, to, to_u128(amount))
@@ -477,5 +494,6 @@ where
 			.and_then(|r| {
 				r.map_err(|e| jsonrpsee::core::Error::Custom(<&'static str>::from(e).into()))
 			})
+			.map(|output| RpcSwapOutput::from(output))
 	}
 }
