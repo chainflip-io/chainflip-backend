@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
 use cf_primitives::AuthorityCount;
 use itertools::Itertools;
@@ -56,9 +56,9 @@ fn test_threshold_for_broadcast_verification() {
 
 /// Mappings from signer_idx to Validator Id and back
 /// for the corresponding ceremony
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PartyIdxMapping {
-	id_to_idx: HashMap<AccountId, AuthorityCount>,
+	id_to_idx: BTreeMap<AccountId, AuthorityCount>,
 	account_ids: BTreeSet<AccountId>,
 }
 
@@ -156,6 +156,23 @@ macro_rules! derive_display_as_type_name {
     }
 }
 
+impl Serialize for PartyIdxMapping {
+	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		// We leave off the account_ids because they can be derived from the id_to_idx during
+		// deserialization
+		self.id_to_idx.serialize(serializer)
+	}
+}
+
+impl<'de> Deserialize<'de> for PartyIdxMapping {
+	fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		let id_to_idx = BTreeMap::<AccountId, AuthorityCount>::deserialize(deserializer)?;
+		let account_ids = id_to_idx.keys().cloned().collect();
+
+		Ok(PartyIdxMapping { id_to_idx, account_ids })
+	}
+}
+
 #[cfg(test)]
 mod utils_tests {
 	use utilities::assert_panics;
@@ -163,6 +180,17 @@ mod utils_tests {
 	use crate::client::helpers::ACCOUNT_IDS;
 
 	use super::*;
+
+	#[test]
+	fn test_party_idx_mapping_serialization() {
+		let party_mapping =
+			PartyIdxMapping::from_participants(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()));
+
+		let serialized = bincode::serialize(&party_mapping).unwrap();
+		let deserialized: PartyIdxMapping = bincode::deserialize(&serialized).unwrap();
+
+		assert_eq!(party_mapping, deserialized);
+	}
 
 	#[test]
 	fn get_index_mapping_works() {
