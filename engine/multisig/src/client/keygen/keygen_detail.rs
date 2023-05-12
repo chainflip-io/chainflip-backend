@@ -393,9 +393,6 @@ pub fn derive_aggregate_pubkey<C: CryptoScheme>(
 	ValidAggregateKey(pubkey)
 }
 
-/// Derive each party's "local" pubkey.
-/// Returns a BTreeMap of public keys where the index corresponds to the party's index in this
-/// ceremony.
 pub fn derive_local_pubkeys_for_parties<P: ECPoint>(
 	sharing_params: &SharingParameters,
 	commitments: &BTreeMap<AuthorityCount, DKGCommitment<P>>,
