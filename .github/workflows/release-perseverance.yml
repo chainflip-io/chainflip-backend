@@ -31,7 +31,7 @@ jobs:
     uses: ./.github/workflows/_30_publish.yml
     with:
       version: "test/"
-      environment: prod # TODO: change to prod before merge!!
+      environment: prod
       commit_hash: ${{ github.sha }}
     secrets: inherit
   release:
