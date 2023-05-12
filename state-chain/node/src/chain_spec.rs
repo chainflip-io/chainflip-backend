@@ -324,28 +324,7 @@ macro_rules! network_spec {
 								),
 							],
 							// Extra accounts
-							vec![
-								(
-									get_account_id_from_seed::<sr25519::Public>("LP_1"),
-									AccountRole::LiquidityProvider,
-									100 * FLIPPERINOS_PER_FLIP,
-								),
-								(
-									get_account_id_from_seed::<sr25519::Public>("LP_2"),
-									AccountRole::LiquidityProvider,
-									100 * FLIPPERINOS_PER_FLIP,
-								),
-								(
-									get_account_id_from_seed::<sr25519::Public>("BROKER_1"),
-									AccountRole::Broker,
-									100 * FLIPPERINOS_PER_FLIP,
-								),
-								(
-									get_account_id_from_seed::<sr25519::Public>("BROKER_2"),
-									AccountRole::Broker,
-									100 * FLIPPERINOS_PER_FLIP,
-								),
-							],
+							$network::extra_accounts(),
 							// Governance account - Snow White
 							SNOW_WHITE_SR25519.into(),
 							MIN_AUTHORITIES,
