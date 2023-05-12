@@ -389,7 +389,7 @@ pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result
 			EncodedAddress::Eth(clean_eth_address(address).map_err(anyhow::Error::msg)?),
 		ForeignChain::Polkadot =>
 			EncodedAddress::Dot(clean_dot_address(address).map_err(anyhow::Error::msg)?),
-		ForeignChain::Bitcoin => todo!("Encoded address changes will make this easier"),
+		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
 	})
 }
 
