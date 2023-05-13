@@ -1,0 +1,51 @@
+[env]
+CF_ETH_CONTRACT_ABI_ROOT = { value = "eth-contract-abis", relative = true }
+CF_ETH_CONTRACT_ABI_TAG = "perseverance-rc10"
+
+
+# Note: If you just want to save typing command commands, you can install tab completions for most shells. Type
+# `rustup completions --help` to find out how to set this up.
+
+[alias]
+cf-test =     "test --lib --features runtime-benchmarks"
+cf-test-ci =  "test --lib --features runtime-benchmarks,slow-tests"
+cf-test-cfe = "test --lib --package chainflip-engine --package multisig"
+
+cf-clippy =    "clippy           --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings"
+cf-clippy-ci = "clippy --release --all-targets --features runtime-benchmarks,try-runtime,runtime-integration-tests,slow-tests -- -D warnings"
+
+cf-build =    "build --features runtime-benchmarks"
+cf-build-ci = "build --release --features runtime-benchmarks"
+
+# Check for feature inconsistencies.
+check-sc-features = '''
+tree --no-default-features --depth 1 --edges=features,normal
+    -p state-chain-*
+    -p pallet-cf-*
+    -p cf-*
+'''
+
+# The `cf-audit` command is configured to ignore the following advisories:
+# - RUSTSEC-2022-0070: This advisory is related to an unsound API in `secp256k1` allows use-after-free and invalid deallocation from safe code. The probelmatic version
+# is an indirect dependency, it's a dependency of web3.
+# - RUSTSEC-2021-0145: This advisory is related to a potential unaligned read in the `atty` crate, which is a substrate dependency.
+# - RUSTSEC-2023-0034: This advisory comes from the `reqwest` dependency which we currently only use for testing.
+# - RUSTSEC-2023-0023, RUSTSEC-2023-0022, RUSTSEC-2023-0024: These advisories come from `openssl`, an indirect dependency of `web3`.
+# - RUSTSEC-2020-0071: This advisory is related to a potential segmentation fault in the `time` crate, a dependency of `substrate`.
+# - RUSTSEC-2021-0139: This advisory comes from `ansi_term`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
+# - RUSTSEC-2020-0168: This advisory comes from `mach`, which is unmaintained but not a security issue. It's a dependency of `subxt`.
+# - RUSTSEC-2022-0080: This advisory comes from `parity-util-mem`, which is unmaintained but not a security issue. It's a dependency of `substrate`.
+# - RUSTSEC-2022-0061: This advisory is related to the deprecated `parity-wasm`, not a security issue. It's a dependency of `substrate`.
+cf-audit = '''
+audit --ignore RUSTSEC-2022-0070
+      --ignore RUSTSEC-2021-0145
+      --ignore RUSTSEC-2023-0034
+      --ignore RUSTSEC-2023-0023
+      --ignore RUSTSEC-2023-0022
+      --ignore RUSTSEC-2023-0024
+      --ignore RUSTSEC-2020-0071
+      --ignore RUSTSEC-2021-0139
+      --ignore RUSTSEC-2020-0168
+      --ignore RUSTSEC-2022-0080
+      --ignore RUSTSEC-2022-0061
+'''

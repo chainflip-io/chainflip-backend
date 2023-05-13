@@ -4,7 +4,7 @@ use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
 	AnyChain,
 };
-use cf_primitives::{AccountId, Asset, ForeignChain};
+use cf_primitives::{AccountId, Asset};
 
 use cf_test_utilities::assert_events_match;
 use cf_traits::{
@@ -141,7 +141,7 @@ fn deposit_channel_expires() {
 
 		assert_eq!(
 			LiquidityChannelExpiries::<Test>::get(expiry),
-			vec![(channel_id, ForeignChain::from(asset), MockAddressConverter::try_from_encoded_address(deposit_address.clone()).unwrap())]
+			vec![(channel_id, MockAddressConverter::try_from_encoded_address(deposit_address.clone()).unwrap())]
 		);
 		assert_eq!(
 			MockDepositHandler::<AnyChain, Test>::get_liquidity_channels(),
@@ -152,7 +152,7 @@ fn deposit_channel_expires() {
 		LiquidityProvider::on_initialize(expiry - 1);
 		assert_eq!(
 			LiquidityChannelExpiries::<Test>::get(expiry),
-			vec![(channel_id, ForeignChain::from(asset), MockAddressConverter::try_from_encoded_address(deposit_address.clone()).unwrap())]
+			vec![(channel_id, MockAddressConverter::try_from_encoded_address(deposit_address.clone()).unwrap())]
 		);
 		assert_eq!(
 			MockDepositHandler::<AnyChain, Test>::get_liquidity_channels(),

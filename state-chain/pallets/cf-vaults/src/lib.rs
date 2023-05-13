@@ -83,8 +83,9 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	},
 	/// We are waiting for the key to be updated on the contract, and witnessed by the network.
 	AwaitingRotation { new_public_key: AggKeyFor<T, I> },
-	/// The key has been successfully updated on the contract.
-	Complete { tx_id: TransactionIdFor<T, I> },
+	/// The key has been successfully updated on the external chain, and/or funds rotated to new
+	/// key.
+	Complete,
 	/// The rotation has failed at one of the above stages.
 	Failed { offenders: BTreeSet<T::ValidatorId> },
 }
@@ -569,11 +570,11 @@ pub mod pallet {
 
 			// This field is primarily required to ensure the witness calls are unique per
 			// transaction (on the external chain)
-			tx_id: TransactionIdFor<T, I>,
+			_tx_id: TransactionIdFor<T, I>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
-			Self::on_new_key_activated(new_public_key, block_number, tx_id)
+			Self::on_new_key_activated(new_public_key, block_number)
 		}
 
 		/// The vault's key has been updated externally, outside of the rotation
@@ -852,7 +853,6 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 	fn on_new_key_activated(
 		new_public_key: AggKeyFor<T, I>,
 		block_number: ChainBlockNumberFor<T, I>,
-		tx_id: TransactionIdFor<T, I>,
 	) -> DispatchResultWithPostInfo {
 		let rotation =
 			PendingVaultRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
@@ -866,7 +866,7 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 		// The expected new key should match the new key witnessed
 		debug_assert_eq!(new_public_key, expected_new_key);
 
-		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete { tx_id });
+		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete);
 
 		// Unlock the key that was used to authorise the activation.
 		// TODO: use broadcast callbacks for this.

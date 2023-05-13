@@ -62,7 +62,7 @@ tokio = {version = "1.22", features = ["full", "test-util"]}
 tokio-stream = {version = "0.1.5", features = ["sync"]}
 url = "1.7.2"
 web3 = {git = 'https://github.com/tomusdrw/rust-web3.git', rev = '8796c88', features = [
-  'signing',
+  'signing', 'http-rustls-tls'
 ]}
 zeroize = "1.5.4"
 # Required so that we can create a web3-compatible secret key.
@@ -130,7 +130,7 @@ ethereum = "0.14"
 mockall = "0.11.0"
 multisig = {path = "multisig", features = ["test"]}
 rlp = "0.5"
-tempfile = "3.3.0"
+tempfile = "3.5.0"
 utilities = {package = "utilities", path = "../utilities", features = ["test-utils"]}
 
 [build-dependencies]

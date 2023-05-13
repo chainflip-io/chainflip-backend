@@ -3,8 +3,8 @@ use std::{
 	sync::Arc,
 };
 
-use cf_chains::{eth::assets, Ethereum};
-use cf_primitives::Asset;
+use cf_chains::Ethereum;
+use cf_primitives::chains::assets;
 use futures::TryFutureExt;
 use pallet_cf_environment::cfe;
 use sp_core::{H160, H256};
@@ -90,7 +90,7 @@ pub async fn start(
 	let usdc_address = state_chain_client
 		.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
 			initial_block_hash,
-			&Asset::Usdc,
+			&assets::eth::Asset::Usdc,
 		)
 		.await
 		.context("Failed to get USDC address from SC")?
@@ -99,7 +99,7 @@ pub async fn start(
 	let flip_contract_address = state_chain_client
 		.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
 			initial_block_hash,
-			&Asset::Flip,
+			&assets::eth::Asset::Flip,
 		)
 		.await
 		.context("Failed to get FLIP address from SC")?

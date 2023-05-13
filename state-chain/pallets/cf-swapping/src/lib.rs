@@ -46,6 +46,8 @@ pub struct Swap {
 	pub swap_type: SwapType,
 }
 
+pub type TransactionHash = [u8; 32];
+
 /// Struct denoting swap status of a cross-chain message.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub(crate) struct CcmSwapOutput {
@@ -149,7 +151,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		T::BlockNumber,
-		Vec<(ChannelId, ForeignChain, ForeignChainAddress)>,
+		Vec<(ChannelId, ForeignChainAddress)>,
 		ValueQuery,
 	>;
 	/// Tracks the outputs of Ccm swaps.
@@ -175,6 +177,7 @@ pub mod pallet {
 			swap_id: u64,
 			deposit_amount: AssetAmount,
 			destination_address: EncodedAddress,
+			tx_hash: TransactionHash,
 		},
 		/// A swap has been executed.
 		SwapExecuted {
@@ -285,13 +288,14 @@ pub mod pallet {
 
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
 			let expired = SwapChannelExpiries::<T>::take(n);
-			for (channel_id, chain, address) in expired.clone() {
-				T::DepositHandler::expire_channel(chain, channel_id, address.clone());
+			let expired_count = expired.len();
+			for (channel_id, address) in expired {
+				T::DepositHandler::expire_channel(channel_id, address.clone());
 				Self::deposit_event(Event::<T>::SwapDepositAddressExpired {
 					deposit_address: address,
 				});
 			}
-			T::WeightInfo::on_initialize(expired.len() as u32)
+			T::WeightInfo::on_initialize(expired_count as u32)
 		}
 	}
 
@@ -324,8 +328,7 @@ pub mod pallet {
 				T::AddressConverter::try_from_encoded_address(destination_address.clone())
 					.map_err(|_| Error::<T>::InvalidDestinationAddress)?;
 			ensure!(
-				ForeignChain::from(destination_address_internal.clone()) ==
-					ForeignChain::from(destination_asset),
+				destination_address_internal.chain() == ForeignChain::from(destination_asset),
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 
@@ -340,10 +343,7 @@ pub mod pallet {
 
 			let expiry_block = frame_system::Pallet::<T>::current_block_number()
 				.saturating_add(SwapTTL::<T>::get());
-			SwapChannelExpiries::<T>::append(
-				expiry_block,
-				(channel_id, ForeignChain::from(source_asset), deposit_address.clone()),
-			);
+			SwapChannelExpiries::<T>::append(expiry_block, (channel_id, deposit_address.clone()));
 
 			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
 				deposit_address: T::AddressConverter::try_to_encoded_address(deposit_address)?,
@@ -373,8 +373,7 @@ pub mod pallet {
 					.map_err(|_| Error::<T>::InvalidDestinationAddress)?;
 
 			ensure!(
-				ForeignChain::from(destination_address_internal.clone()) ==
-					ForeignChain::from(asset),
+				destination_address_internal.chain() == ForeignChain::from(asset),
 				Error::<T>::InvalidEgressAddress
 			);
 
@@ -408,6 +407,7 @@ pub mod pallet {
 			to: Asset,
 			deposit_amount: AssetAmount,
 			destination_address: EncodedAddress,
+			tx_hash: TransactionHash,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
@@ -426,6 +426,7 @@ pub mod pallet {
 				swap_id,
 				deposit_amount,
 				destination_address,
+				tx_hash,
 			});
 
 			Ok(())
@@ -451,8 +452,7 @@ pub mod pallet {
 			})?;
 
 			ensure!(
-				ForeignChain::from(destination_asset) ==
-					ForeignChain::from(destination_address_internal.clone()),
+				ForeignChain::from(destination_asset) == destination_address_internal.chain(),
 				Error::<T>::IncompatibleAssetAndAddress
 			);
 
@@ -675,10 +675,7 @@ pub mod pallet {
 			message_metadata: CcmDepositMetadata,
 		) -> DispatchResult {
 			// Caller should ensure that assets and addresses are compatible.
-			debug_assert!(
-				ForeignChain::from(destination_address.clone()) ==
-					ForeignChain::from(destination_asset)
-			);
+			debug_assert!(destination_address.chain() == ForeignChain::from(destination_asset));
 
 			// Currently only Ethereum supports CCM.
 			ensure!(

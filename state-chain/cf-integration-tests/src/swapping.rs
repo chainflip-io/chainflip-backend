@@ -216,11 +216,11 @@ fn basic_pool_setup_provision_and_swap() {
 		));
 
 		let deposit_address = <AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
-			cf_chains::eth::assets::eth::Asset::Eth,
+			cf_primitives::chains::assets::eth::Asset::Eth,
 			pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
 		).unwrap();
 		assert_events_eq!(Runtime, RuntimeEvent::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Event::StartWitnessing { deposit_address, source_asset: cf_chains::eth::assets::eth::Asset::Eth },
+			pallet_cf_ingress_egress::Event::StartWitnessing { deposit_address, source_asset: cf_primitives::chains::assets::eth::Asset::Eth },
 		));
 		System::reset_events();
 
@@ -231,7 +231,7 @@ fn basic_pool_setup_provision_and_swap() {
 				Box::new(RuntimeCall::EthereumIngressEgress(pallet_cf_ingress_egress::Call::process_deposits {
 					deposit_witnesses: vec![DepositWitness {
 						deposit_address,
-						asset: cf_chains::eth::assets::eth::Asset::Eth,
+						asset: cf_primitives::chains::assets::eth::Asset::Eth,
 						amount: 50,
 						tx_id: Default::default(),
 					}],
@@ -321,7 +321,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 		// Deposit funds for the ccm.
 		let deposit_address =
 			<AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
-				cf_chains::eth::assets::eth::Asset::Flip,
+				cf_primitives::chains::assets::eth::Asset::Flip,
 				pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
 			)
 			.unwrap();
@@ -333,7 +333,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 					pallet_cf_ingress_egress::Call::process_deposits {
 						deposit_witnesses: vec![DepositWitness {
 							deposit_address,
-							asset: cf_chains::eth::assets::eth::Asset::Flip,
+							asset: cf_primitives::chains::assets::eth::Asset::Flip,
 							amount: 1_000,
 							tx_id: Default::default(),
 						}],

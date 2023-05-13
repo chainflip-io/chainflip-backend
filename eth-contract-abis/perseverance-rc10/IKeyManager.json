@@ -1,38 +1,5 @@
 [
   {
-    "inputs": [
-      {
-        "components": [
-          {
-            "internalType": "uint256",
-            "name": "pubKeyX",
-            "type": "uint256"
-          },
-          {
-            "internalType": "uint8",
-            "name": "pubKeyYParity",
-            "type": "uint8"
-          }
-        ],
-        "internalType": "struct IShared.Key",
-        "name": "initialAggKey",
-        "type": "tuple"
-      },
-      {
-        "internalType": "address",
-        "name": "initialGovKey",
-        "type": "address"
-      },
-      {
-        "internalType": "address",
-        "name": "initialCommKey",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "nonpayable",
-    "type": "constructor"
-  },
-  {
     "anonymous": false,
     "inputs": [
       {

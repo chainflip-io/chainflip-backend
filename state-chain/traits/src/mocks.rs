@@ -15,7 +15,6 @@ pub mod ensure_origin_mock;
 pub mod ensure_witnessed;
 pub mod epoch_info;
 pub mod eth_environment_provider;
-pub mod eth_replay_protection_provider;
 pub mod fee_payment;
 pub mod funding_info;
 pub mod key_provider;

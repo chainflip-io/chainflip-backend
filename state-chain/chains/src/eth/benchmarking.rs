@@ -3,7 +3,7 @@ use crate::{
 	eth::{
 		api::{update_flip_supply::UpdateFlipSupply, EthereumApi},
 		to_ethereum_address, Address, AggKey, EthereumReplayProtection, EthereumTrackedData,
-		SchnorrVerificationComponents, Transaction, H256, U256,
+		SchnorrVerificationComponents, Transaction, H256,
 	},
 	ApiCall,
 };
@@ -12,9 +12,10 @@ const SIG_NONCE: [u8; 32] = [1u8; 32];
 const PRIVATE_KEY: [u8; 32] = [2u8; 32];
 
 use cf_primitives::EthAmount;
+use ethabi::Uint;
 use libsecp256k1::{PublicKey, SecretKey};
 
-use super::TransactionFee;
+use super::{EthereumTransactionBuilder, TransactionFee};
 
 impl BenchmarkValue for SchnorrVerificationComponents {
 	fn benchmark_value() -> Self {
@@ -57,14 +58,11 @@ impl BenchmarkValue for AggKey {
 
 impl<E> BenchmarkValue for EthereumApi<E> {
 	fn benchmark_value() -> Self {
-		EthereumApi::UpdateFlipSupply(UpdateFlipSupply::new_unsigned(
-			EthereumReplayProtection { nonce: 15 },
-			1000000u128,
-			1u64,
-			&Address::benchmark_value().into(),
-			hex_literal::hex!("5FbDB2315678afecb367f032d93F642f64180aa3").into(),
-			31337,
-		))
+		EthereumTransactionBuilder::new_unsigned(
+			EthereumReplayProtection::default(),
+			UpdateFlipSupply::new(1000000u128, 1u64),
+		)
+		.into()
 	}
 }
 
@@ -72,8 +70,8 @@ impl BenchmarkValue for Transaction {
 	fn benchmark_value() -> Self {
 		Transaction {
 			chain_id: 31337,
-			max_fee_per_gas: U256::from(1_000_000_000u32).into(),
-			gas_limit: U256::from(21_000u32).into(),
+			max_fee_per_gas: Uint::from(1_000_000_000u32).into(),
+			gas_limit: Uint::from(21_000u32).into(),
 			contract: [0xcf; 20].into(),
 			value: 0.into(),
 			data: b"do_something()".to_vec(),

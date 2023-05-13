@@ -265,6 +265,7 @@ fn can_swap_using_witness_origin() {
 			Asset::Flip,
 			1_000,
 			EncodedAddress::Eth(Default::default()),
+			[0; 32],
 		));
 
 		System::assert_last_event(RuntimeEvent::Swapping(
@@ -272,6 +273,7 @@ fn can_swap_using_witness_origin() {
 				swap_id: 1,
 				deposit_amount: 1_000,
 				destination_address: EncodedAddress::Eth(Default::default()),
+				tx_hash: [0; 32],
 			},
 		));
 	});
@@ -307,7 +309,7 @@ fn swap_expires() {
 
 		assert_eq!(
 			SwapChannelExpiries::<Test>::get(expiry),
-			vec![(0, ForeignChain::Ethereum, ForeignChainAddress::Eth(Default::default()))]
+			vec![(0, ForeignChainAddress::Eth(Default::default()))]
 		);
 		assert_eq!(
 			MockDepositHandler::<AnyChain, Test>::get_swap_channels(),
@@ -318,7 +320,7 @@ fn swap_expires() {
 		Swapping::on_initialize(expiry - 1);
 		assert_eq!(
 			SwapChannelExpiries::<Test>::get(expiry),
-			vec![(0, ForeignChain::Ethereum, ForeignChainAddress::Eth(Default::default()))]
+			vec![(0, ForeignChainAddress::Eth(Default::default()))]
 		);
 		assert_eq!(
 			MockDepositHandler::<AnyChain, Test>::get_swap_channels(),

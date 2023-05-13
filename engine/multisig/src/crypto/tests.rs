@@ -1,8 +1,11 @@
+use std::collections::BTreeMap;
+
 use crate::{
 	client::KeygenResult,
 	crypto::{generate_single_party_signature, ECPoint, ECScalar, KeyShare},
 	CryptoScheme, Rng,
 };
+use cf_primitives::AccountId;
 use rand::SeedableRng;
 
 /// This test covers the specifics of signature generation
@@ -18,8 +21,10 @@ fn test_signing_for_scheme<C: CryptoScheme>() {
 		let public_key = <C::Point as ECPoint>::from_scalar(&secret_key);
 
 		let my_key_share = KeyShare { x_i: secret_key, y: public_key };
-		let my_keygen_result: KeygenResult<C> =
-			KeygenResult::new_compatible(my_key_share, vec![public_key]);
+		let my_keygen_result: KeygenResult<C> = KeygenResult::new_compatible(
+			my_key_share,
+			BTreeMap::from_iter(vec![(AccountId::new([0; 32]), public_key)]),
+		);
 		let secret_key = my_keygen_result.key_share.x_i.clone();
 
 		let agg_key = my_keygen_result.get_agg_public_key();

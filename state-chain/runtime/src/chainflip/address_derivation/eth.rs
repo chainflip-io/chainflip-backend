@@ -1,6 +1,7 @@
 use crate::{Environment, EthEnvironment};
 use cf_chains::{
-	eth::deposit_address::get_create_2_address, Chain, EthEnvironmentProvider, Ethereum,
+	eth::{api::EthEnvironmentProvider, deposit_address::get_create_2_address},
+	Chain, Ethereum,
 };
 use cf_primitives::{chains::assets::eth, ChannelId};
 use cf_traits::AddressDerivationApi;
@@ -15,11 +16,7 @@ impl AddressDerivationApi<Ethereum> for AddressDerivation {
 	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
 		Ok(get_create_2_address(
 			Environment::eth_vault_address(),
-			Some(
-				EthEnvironment::token_address(source_asset)
-					.expect("ERC20 asset to be supported!")
-					.to_fixed_bytes(),
-			),
+			EthEnvironment::token_address(source_asset).map(|address| address.to_fixed_bytes()),
 			channel_id,
 		)
 		.into())
@@ -30,7 +27,7 @@ impl AddressDerivationApi<Ethereum> for AddressDerivation {
 fn test_address_generation() {
 	use crate::Runtime;
 	use cf_chains::Ethereum;
-	use cf_primitives::Asset;
+	use cf_primitives::chains::assets::eth::Asset;
 	use pallet_cf_environment::EthereumSupportedAssets;
 
 	frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {

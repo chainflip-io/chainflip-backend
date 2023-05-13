@@ -1,10 +1,9 @@
 use super::*;
-use crate::{genesis::GENESIS_BALANCE, network::Network};
-use cf_primitives::GENESIS_EPOCH;
+use crate::genesis::GENESIS_BALANCE;
+use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use cf_traits::EpochInfo;
-use frame_support::traits::Hooks;
 use pallet_cf_validator::RotationPhase;
-use state_chain_runtime::{Validator, Weight};
+use state_chain_runtime::Validator;
 
 #[test]
 fn auction_repeats_after_failure_because_of_liveness() {
@@ -14,11 +13,11 @@ fn auction_repeats_after_failure_because_of_liveness() {
 		// As we run a rotation at genesis we will need accounts to support
 		// having 5 authorities as the default is 3 (Alice, Bob and Charlie)
 		.accounts(vec![
-			(AccountId::from(ALICE), GENESIS_BALANCE),
-			(AccountId::from(BOB), GENESIS_BALANCE),
-			(AccountId::from(CHARLIE), GENESIS_BALANCE),
-			(AccountId::from([0xfc; 32]), GENESIS_BALANCE),
-			(AccountId::from([0xfb; 32]), GENESIS_BALANCE),
+			(AccountId::from(ALICE), AccountRole::Validator, GENESIS_BALANCE),
+			(AccountId::from(BOB), AccountRole::Validator, GENESIS_BALANCE),
+			(AccountId::from(CHARLIE), AccountRole::Validator, GENESIS_BALANCE),
+			(AccountId::from([0xfc; 32]), AccountRole::Validator, GENESIS_BALANCE),
+			(AccountId::from([0xfb; 32]), AccountRole::Validator, GENESIS_BALANCE),
 		])
 		.min_authorities(5)
 		.build()
@@ -221,96 +220,4 @@ fn epoch_rotates() {
 				"late funder should be a backup node"
 			);
 		});
-}
-
-#[test]
-/// When an epoch expires, purge stale storages in the Witnesser pallet.
-/// This is done through ChainflipEpochTransitions.
-fn new_epoch_will_purge_stale_witnesser_storage() {
-	const EPOCH_BLOCKS: BlockNumber = 100;
-	const MAX_AUTHORITIES: AuthorityCount = 3;
-	let storage_epoch = 4;
-	let mut ext = super::genesis::default()
-		.blocks_per_epoch(EPOCH_BLOCKS)
-		.min_authorities(MAX_AUTHORITIES)
-		.build();
-
-	ext.execute_with(|| {
-		let nodes = Validator::current_authorities();
-		let (mut testnet, _) = network::Network::create(0, &nodes);
-
-		assert_eq!(Validator::epoch_index(), 1);
-
-		let move_forward_by_epochs = |epochs: u32, testnet: &mut Network| {
-			for _ in 0..epochs {
-				testnet.move_forward_blocks(EPOCH_BLOCKS + VAULT_ROTATION_BLOCKS + 1);
-				testnet.submit_heartbeat_all_engines();
-			}
-		};
-
-		move_forward_by_epochs(3, &mut testnet);
-		assert_eq!(Validator::epoch_index(), 4);
-		assert_eq!(Validator::last_expired_epoch(), 2);
-		let current_authorities_after_some_epochs = Validator::current_authorities();
-		assert_eq!(nodes, current_authorities_after_some_epochs);
-
-		let call = Box::new(state_chain_runtime::RuntimeCall::System(frame_system::Call::remark {
-			remark: vec![],
-		}));
-		let call_hash = pallet_cf_witnesser::CallHash(frame_support::Hashable::blake2_256(&*call));
-
-		for node in &nodes {
-			assert_ok!(Witnesser::witness_at_epoch(
-				RuntimeOrigin::signed(node.clone()),
-				call.clone(),
-				storage_epoch
-			));
-		}
-		pallet_cf_witnesser::ExtraCallData::<Runtime>::insert(
-			storage_epoch,
-			call_hash,
-			vec![vec![0u8]],
-		);
-
-		// Execute the call after voting has passed.
-		testnet.move_forward_blocks(1);
-
-		// Ensure Votes and calldata are registered in storage.
-		assert!(pallet_cf_witnesser::Votes::<Runtime>::get(storage_epoch, call_hash).is_some());
-		assert!(
-			pallet_cf_witnesser::ExtraCallData::<Runtime>::get(storage_epoch, call_hash).is_some()
-		);
-		assert!(pallet_cf_witnesser::CallHashExecuted::<Runtime>::get(storage_epoch, call_hash)
-			.is_some());
-
-		// Move forward in time until Epoch 4 is expired.
-		move_forward_by_epochs(2, &mut testnet);
-
-		assert_eq!(Validator::epoch_index(), 6);
-		assert_eq!(Validator::last_expired_epoch(), storage_epoch);
-	});
-
-	// Commit Overlay changeset into the backend DB, to fully test clear_prefix logic.
-	// See: /state-chain/TROUBLESHOOTING.md
-	// Section: ## Substrate storage: Separation of front overlay and backend. Feat
-	// clear_prefix()
-	let _res = ext.commit_all();
-
-	ext.execute_with(|| {
-		let call = Box::new(state_chain_runtime::RuntimeCall::System(frame_system::Call::remark {
-			remark: vec![],
-		}));
-		let call_hash = pallet_cf_witnesser::CallHash(frame_support::Hashable::blake2_256(&*call));
-
-		// Call on_idle to purge stale storage
-		Witnesser::on_idle(0, Weight::from_ref_time(1_000_000_000_000));
-
-		// Test that the storage has been purged.
-		assert!(pallet_cf_witnesser::Votes::<Runtime>::get(storage_epoch, call_hash).is_none());
-		assert!(
-			pallet_cf_witnesser::ExtraCallData::<Runtime>::get(storage_epoch, call_hash).is_none()
-		);
-		assert!(pallet_cf_witnesser::CallHashExecuted::<Runtime>::get(storage_epoch, call_hash)
-			.is_none());
-	});
 }

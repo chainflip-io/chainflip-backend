@@ -2,7 +2,10 @@ use crate::{
 	eth::{core_h160, core_h256, EthRpcApi, EventParseError, SignatureAndEvent},
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
 };
-use cf_chains::eth::{SchnorrVerificationComponents, TransactionFee};
+use cf_chains::{
+	eth::{SchnorrVerificationComponents, TransactionFee},
+	include_abi_bytes,
+};
 use cf_primitives::EpochIndex;
 use state_chain_runtime::EthereumInstance;
 use std::sync::Arc;
@@ -353,8 +356,7 @@ impl KeyManager {
 	pub fn new(deployed_address: H160) -> Self {
 		Self {
 			deployed_address,
-			contract: ethabi::Contract::load(std::include_bytes!("abis/KeyManager.json").as_ref())
-				.unwrap(),
+			contract: ethabi::Contract::load(include_abi_bytes!(IKeyManager)).unwrap(),
 		}
 	}
 }
