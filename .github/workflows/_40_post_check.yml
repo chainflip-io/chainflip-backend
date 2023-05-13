@@ -38,7 +38,7 @@ jobs:
         credentials:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-        image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-rc10-1-node-1052023
+        image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-rc10-1-node-13052023
         ports:
           - 30303:30303
           - 30303:30303/udp
