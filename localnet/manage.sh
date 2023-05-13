@@ -56,7 +56,7 @@ get-workflow() {
   done
 }
 build-localnet() {
-  cp -R $LOCALNET_INIT_DIR/keyshare /tmp/chainflip/
+  cp -R $LOCALNET_INIT_DIR/keyshare/1-node /tmp/chainflip/
   echo
   echo "💻 Please provide the location to the binaries you would like to use."
   read -p "(default: ./target/debug/) " BINARIES_LOCATION
@@ -99,7 +99,7 @@ build-localnet() {
 }
 
 build-localnet-in-ci() {
-  cp -R $LOCALNET_INIT_DIR/keyshare /tmp/chainflip/
+  cp -R $LOCALNET_INIT_DIR/keyshare/1-node /tmp/chainflip/
 
   if [ ! -d $BINARIES_LOCATION ]; then
     echo "❌  Couldn't find directory at $BINARIES_LOCATION"
