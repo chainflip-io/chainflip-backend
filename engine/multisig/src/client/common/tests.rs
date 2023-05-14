@@ -14,7 +14,6 @@ fn ensure_keygen_result_info_serialization_is_consistent() {
 
 	let mut rng = StdRng::from_seed([0; 32]);
 
-	// TODO: this will need updating after #3224 is merged
 	let expected_bytes = [
 		3, 121, 201, 158, 126, 155, 226, 97, 84, 230, 87, 8, 58, 89, 22, 223, 14, 207, 238, 172,
 		231, 198, 219, 48, 126, 211, 76, 2, 226, 154, 227, 36, 1, 60, 101, 27, 228, 255, 192, 133,
