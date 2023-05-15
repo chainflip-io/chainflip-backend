@@ -1,2 +1,15 @@
 coverage:
   range: "50...100"
+ignore:
+  - "**/tests.rs"
+  - "**/mock.rs"
+  - "**/mocks.rs"
+  - "**/mocks"
+  - "**/mock"
+  - "**/weights.rs"
+  - "**/weights"
+  - "**/benchmarking.rs"
+  - "**/testing"
+  - "**/test*"
+  - "**/*test"
+  - "**/*tests"
