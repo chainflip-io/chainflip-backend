@@ -15,13 +15,6 @@ use state_chain_runtime::{
 };
 use std::{marker::PhantomData, sync::Arc};
 
-fn to_u128(number_or_hex: NumberOrHex) -> u128 {
-	match number_or_hex {
-		NumberOrHex::Number(number) => number as u128,
-		NumberOrHex::Hex(hex) => hex.low_u128(),
-	}
-}
-
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
 	pub balance: NumberOrHex,
@@ -489,11 +482,19 @@ where
 	) -> RpcResult<RpcSwapOutput> {
 		self.client
 			.runtime_api()
-			.cf_pool_simulate_swap(&self.query_block_id(at), from, to, to_u128(amount))
+			.cf_pool_simulate_swap(
+				&self.query_block_id(at),
+				from,
+				to,
+				match amount {
+					NumberOrHex::Number(number) => number as u128,
+					NumberOrHex::Hex(hex) => hex.low_u128(),
+				},
+			)
 			.map_err(to_rpc_error)
 			.and_then(|r| {
 				r.map_err(|e| jsonrpsee::core::Error::Custom(<&'static str>::from(e).into()))
 			})
-			.map(|output| RpcSwapOutput::from(output))
+			.map(RpcSwapOutput::from)
 	}
 }

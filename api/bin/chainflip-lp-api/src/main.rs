@@ -53,13 +53,6 @@ pub trait Rpc {
 	#[method(name = "getRangeOrders")]
 	async fn get_range_orders(&self) -> Result<String, Error>;
 }
-
-fn to_u128(number_or_hex: NumberOrHex) -> u128 {
-	match number_or_hex {
-		NumberOrHex::Number(number) => number as u128,
-		NumberOrHex::Hex(hex) => hex.low_u128(),
-	}
-}
 pub struct RpcServerImpl {
 	state_chain_settings: StateChain,
 }
@@ -87,7 +80,12 @@ impl RpcServer for RpcServerImpl {
 		asset: Asset,
 		destination_address: &str,
 	) -> Result<String, Error> {
-		if to_u128(amount) == 0 {
+		let amount_as_128 = match amount {
+			NumberOrHex::Number(amount) => amount as u128,
+			NumberOrHex::Hex(hex) => hex.low_u128(),
+		};
+
+		if amount_as_128 == 0 {
 			return Err(Error::Custom("Invalid amount".to_string()))
 		}
 
@@ -95,7 +93,7 @@ impl RpcServer for RpcServerImpl {
 			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)
 				.map_err(|e| Error::Custom(e.to_string()))?;
 
-		lp::withdraw_asset(&self.state_chain_settings, to_u128(amount), asset, destination_address)
+		lp::withdraw_asset(&self.state_chain_settings, amount_as_128, asset, destination_address)
 			.await
 			.map(|(_, id)| id.to_string())
 			.map_err(|e| Error::Custom(e.to_string()))
