@@ -50,8 +50,7 @@ This pallet implements the Chainflip Authority selection process. Upon execution
 Authorities are rotated when any of three conditions are met:
 
 1. The duration of the current epoch exceeds the target **epoch duration**.
-2. An **emergency rotation** is triggered because network liveness has dropped below the liveness threshold.
-3. The governance-gated **`force_rotation`** extrinsic is called.
+2. The governance-gated **`force_rotation`** extrinsic is called.
 
 The above diagram is a high-level illustration of how we resolve authority rotations. For more detail, refer to the
 code. Advancement through each of the rotation phases is driven by the `on_initialize` hook.
@@ -73,7 +72,6 @@ code. Advancement through each of the rotation phases is driven by the `on_initi
 - Session: A session as defined by the `session` pallet. We have two sessions; Epoch which has
   a fixed number of blocks set with `set_blocks_for_epoch` and an Auction session which is of an
   undetermined number of blocks.
-- Emergency Rotation: A rotation that is triggered because network liveness has dropped below the liveness threshold.
 - Bidder: An entity that has placed a bid and would hope to be included in the winning set
 - Winners: Those Bidders that have been evaluated and have been included in the winning set
 - Minimum Bid: The minimum bid required to be included in the Winners set
