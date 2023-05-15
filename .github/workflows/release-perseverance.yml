@@ -30,7 +30,7 @@ jobs:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
     with:
-      version: "test/"
+      version: "perseverance/"
       environment: prod
       commit_hash: ${{ github.sha }}
     secrets: inherit
