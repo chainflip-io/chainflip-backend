@@ -612,6 +612,16 @@ pub mod genesis {
 
 		let validator_mapping = PartyIdxMapping::from_participants(participants);
 
+		// Local pubkeys for parties are the same for all parties,
+		// so we derive them only once:
+		let local_pubkeys: BTreeMap<_, _> = derive_local_pubkeys_for_parties::<C::Point>(
+			&SharingParameters::for_keygen(params),
+			&commitments,
+		)
+		.into_iter()
+		.map(|(idx, pk)| (validator_mapping.get_id(idx).clone(), pk))
+		.collect();
+
 		let keygen_result_infos: HashMap<_, _> = (1..=params.share_count)
 			.map(|idx| {
 				// Collect shares destined for `idx`
@@ -628,13 +638,7 @@ pub mod genesis {
 								y: agg_pubkey.0,
 								x_i: compute_secret_key_share(IncomingShares(incoming_shares)),
 							},
-							derive_local_pubkeys_for_parties(
-								&SharingParameters::for_keygen(params),
-								&commitments,
-							)
-							.into_iter()
-							.map(|(idx, pk)| (validator_mapping.get_id(idx).clone(), pk))
-							.collect(),
+							local_pubkeys.clone(),
 						)),
 						validator_mapping: Arc::new(validator_mapping.clone()),
 						params,

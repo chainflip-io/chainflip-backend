@@ -137,11 +137,10 @@ async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayl
 async fn should_sign_multiple_payloads() {
 	// For now, only bitcoin can have multiple payloads. The other chains will fail the message size
 	// check.
-	test_sign_multiple_payloads::<BtcSigning>(&[
-		bitcoin::SigningPayload(*b"Chainflip:Chainflip:Chainflip:01"),
-		bitcoin::SigningPayload(*b"Chainflip:Chainflip:Chainflip:02"),
-	])
-	.await;
+
+	let payloads = (1u8..=2).map(|i| bitcoin::SigningPayload([i; 32])).collect::<Vec<_>>();
+
+	test_sign_multiple_payloads::<BtcSigning>(&payloads).await;
 }
 
 async fn should_sign_with_all_parties<C: CryptoScheme>() {
