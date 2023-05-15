@@ -115,9 +115,15 @@ impl PersistentKeyDB {
 
 		let keys: HashMap<_, _> =
 			self.kv_db.get_data_for_prefix(&keygen_data_prefix::<C>()).collect();
+
+		for key in &keys {
+			tracing::trace!("Loaded {} key from the database: {}", C::NAME, key.0);
+		}
+
 		if !keys.is_empty() {
 			debug!("Loaded {} {} keys from the database", keys.len(), C::NAME);
 		}
+
 		keys
 	}
 
