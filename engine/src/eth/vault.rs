@@ -100,6 +100,12 @@ pub enum VaultEvent {
 		amount: u128,
 		token: ethabi::Address,
 	},
+	ExecuteActionsFailed {
+		multicall_address: ethabi::Address,
+		amount: u128,
+		token: ethabi::Address,
+		reason: web3::types::Bytes,
+	},
 }
 
 #[async_trait]
@@ -275,6 +281,8 @@ impl EthContractWitnesser for Vault {
 		let xcall_token = SignatureAndEvent::new(&self.contract, "XCallToken")?;
 		let add_gas_native = SignatureAndEvent::new(&self.contract, "AddGasNative")?;
 		let add_gas_token = SignatureAndEvent::new(&self.contract, "AddGasToken")?;
+		let execute_actions_failed =
+			SignatureAndEvent::new(&self.contract, "ExecuteActionsFailed")?;
 
 		Ok(Box::new(
 			move |event_signature: H256, raw_log: RawLog| -> Result<Self::EventParameters> {
@@ -375,6 +383,16 @@ impl EthContractWitnesser for Vault {
 						amount: decode_log_param::<ethabi::Uint>(&log, "amount")?
 							.try_into()
 							.expect("AddGasNative amount should fit into u128"),
+					}
+				} else if event_signature == execute_actions_failed.signature {
+					let log = execute_actions_failed.event.parse_log(raw_log)?;
+					VaultEvent::ExecuteActionsFailed {
+						multicall_address: decode_log_param(&log, "multicallAddress")?,
+						amount: decode_log_param::<ethabi::Uint>(&log, "amount")?
+							.try_into()
+							.expect("AddGasNative amount should fit into u128"),
+						token: decode_log_param(&log, "token")?,
+						reason: decode_log_param(&log, "reason")?,
 					}
 				} else {
 					bail!(EventParseError::UnexpectedEvent(event_signature))
