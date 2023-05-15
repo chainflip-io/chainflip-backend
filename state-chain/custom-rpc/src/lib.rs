@@ -1,5 +1,4 @@
 use cf_amm::common::SqrtPriceQ64F96;
-use cf_chains::eth::SigData;
 use cf_primitives::{Asset, EthereumAddress, SwapOutput};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
@@ -42,14 +41,6 @@ pub struct RpcAccountInfoV2 {
 	pub is_qualified: bool,
 	pub is_online: bool,
 	pub is_bidding: bool,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct RpcPendingRedemption {
-	amount: NumberOrHex,
-	address: String,
-	expiry: NumberOrHex,
-	sig_data: SigData,
 }
 
 #[derive(Serialize, Deserialize)]
