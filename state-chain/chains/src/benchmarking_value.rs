@@ -18,6 +18,7 @@ pub trait BenchmarkValue {
 	fn benchmark_value() -> Self;
 }
 
+/// Optional trait used to generage different benchmarking values.
 pub trait BenchmarkValueExtended {
 	/// Returns different values used for benchmarkings.
 	#[cfg(feature = "runtime-benchmarks")]
