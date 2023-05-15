@@ -89,11 +89,11 @@ build-localnet() {
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
   DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
   echo "🚧 Waiting for chainflip-node to start"
-  check_endpoint_health -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null
+  check_endpoint_health -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null
 
   ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
   echo "🚗 Waiting for chainflip-engine to start"
-  check_endpoint_health 'http://localhost:5555/health' > /dev/null
+  check_endpoint_health -s 'http://localhost:5555/health' > /dev/null
 
   print_success
 }
