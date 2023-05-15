@@ -100,7 +100,7 @@ benchmarks_instance_pallet! {
 	verify {
 		assert_eq!(MinimumDeposit::<T, I>::get(
 			destination_asset,
-		).into(), 1_000u128);
+		), amount);
 	}
 
 	finalise_ingress {
