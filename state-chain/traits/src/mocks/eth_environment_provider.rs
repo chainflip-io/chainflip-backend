@@ -1,4 +1,4 @@
-use cf_chains::eth::{api::EthEnvironmentProvider, ethabi::Address};
+use cf_chains::eth::{api::EthEnvironmentProvider, Address};
 
 /// A mock that just returns defaults for the KeyManager and Chain ID.
 pub struct MockEthEnvironment;

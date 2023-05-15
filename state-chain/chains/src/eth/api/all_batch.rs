@@ -1,77 +1,9 @@
-use crate::eth::{deposit_address::get_salt, EthereumCall, Tokenizable};
-use cf_primitives::{AssetAmount, ChannelId};
+use super::*;
 use codec::{Decode, Encode};
-use ethabi::{Address, ParamType, Token, Uint};
+use ethabi::Token;
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
-use sp_std::{boxed::Box, vec, vec::Vec};
-
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
-pub(crate) struct EncodableFetchAssetParams {
-	pub contract_address: Address,
-	pub asset: Address,
-}
-
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
-pub(crate) struct EncodableFetchDeployAssetParams {
-	pub channel_id: ChannelId,
-	pub asset: Address,
-}
-
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, Default, PartialEq, Eq)]
-pub(crate) struct EncodableTransferAssetParams {
-	/// For Ethereum, the asset is encoded as a contract address.
-	pub asset: Address,
-	pub to: Address,
-	pub amount: AssetAmount,
-}
-
-impl Tokenizable for EncodableFetchDeployAssetParams {
-	fn tokenize(self) -> Token {
-		Token::Tuple(vec![
-			Token::FixedBytes(get_salt(self.channel_id).to_vec()),
-			Token::Address(self.asset),
-		])
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::Tuple(vec![ParamType::FixedBytes(32), ParamType::Address])
-	}
-}
-
-impl Tokenizable for EncodableFetchAssetParams {
-	fn tokenize(self) -> Token {
-		Token::Tuple(vec![Token::Address(self.contract_address), Token::Address(self.asset)])
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::Tuple(vec![ParamType::Address, ParamType::Address])
-	}
-}
-
-impl<T: Tokenizable> Tokenizable for Vec<T> {
-	fn tokenize(self) -> Token {
-		Token::Array(self.into_iter().map(|t| t.tokenize()).collect())
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::Array(Box::new(T::param_type()))
-	}
-}
-
-impl Tokenizable for EncodableTransferAssetParams {
-	fn tokenize(self) -> Token {
-		Token::Tuple(vec![
-			Token::Address(self.asset),
-			Token::Address(self.to),
-			Token::Uint(Uint::from(self.amount)),
-		])
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::Tuple(vec![ParamType::Address, ParamType::Address, ParamType::Uint(256)])
-	}
-}
+use sp_std::{vec, vec::Vec};
 
 /// Represents all the arguments required to build the call to Vault's 'allBatch'
 /// function.
@@ -122,8 +54,8 @@ mod test_all_batch {
 	use super::*;
 	use crate::{
 		eth::{
-			api::{abi::load_abi, EthereumReplayProtection},
-			EthereumTransactionBuilder, SchnorrVerificationComponents,
+			api::{abi::load_abi, EthereumReplayProtection, EthereumTransactionBuilder},
+			SchnorrVerificationComponents,
 		},
 		ApiCall,
 	};
@@ -186,7 +118,7 @@ mod test_all_batch {
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),
 				contract_address: FAKE_VAULT_ADDR.into(),
 			},
-			AllBatch::new(
+			super::AllBatch::new(
 				dummy_fetch_deploy_asset_params.clone(),
 				dummy_fetch_asset_params.clone(),
 				dummy_transfer_asset_params.clone(),

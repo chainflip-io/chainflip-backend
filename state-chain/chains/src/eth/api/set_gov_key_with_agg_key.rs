@@ -1,4 +1,4 @@
-use crate::eth::{EthereumCall, Tokenizable};
+use super::*;
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::{Address, Token};
 use frame_support::RuntimeDebug;
@@ -31,20 +31,11 @@ impl EthereumCall for SetGovKeyWithAggKey {
 
 #[cfg(test)]
 mod test_set_gov_key_with_agg_key {
-
 	use super::*;
-	use crate::{
-		eth::{
-			api::abi::load_abi, tests::asymmetrise, EthereumTransactionBuilder,
-			SchnorrVerificationComponents,
-		},
-		ApiCall,
-	};
-	use ethabi::Token;
-	use ethereum_types::H160;
-
-	use crate::eth::api::{
-		set_gov_key_with_agg_key::SetGovKeyWithAggKey, EthereumReplayProtection,
+	use crate::eth::{
+		api::{abi::load_abi, ApiCall, EthereumTransactionBuilder},
+		tests::asymmetrise,
+		SchnorrVerificationComponents,
 	};
 
 	#[test]
@@ -65,7 +56,7 @@ mod test_set_gov_key_with_agg_key {
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),
 				contract_address: FAKE_KEYMAN_ADDR.into(),
 			},
-			SetGovKeyWithAggKey::new(H160::from(TEST_ADDR)),
+			super::SetGovKeyWithAggKey::new(Address::from(TEST_ADDR)),
 		);
 
 		assert_eq!(

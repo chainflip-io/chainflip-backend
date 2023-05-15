@@ -6,14 +6,17 @@ pub mod benchmarking;
 
 pub mod deposit_address;
 
+use self::api::{tokenizable::Tokenizable, EthereumReplayProtection};
 use crate::*;
 pub use cf_primitives::chains::Ethereum;
 use cf_primitives::{chains::assets, ChannelId};
-
 use codec::{Decode, Encode, MaxEncodedLen};
-pub use ethabi;
-use ethabi::{Address, ParamType, Token, Uint};
-use ethereum_types::{H160, H256};
+use ethabi::ParamType;
+pub use ethabi::{
+	ethereum_types::{H256, U256},
+	Address, Hash as TxHash, Token, Uint, Word,
+};
+use ethereum_types::H160;
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -27,8 +30,6 @@ use sp_std::{
 	convert::{TryFrom, TryInto},
 	str, vec,
 };
-
-use self::api::{ethabi_param, EthereumChainId, EthereumReplayProtection};
 
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 1;
@@ -71,12 +72,6 @@ impl ChainCrypto for Ethereum {
 	}
 }
 
-//--------------------------//
-pub trait Tokenizable {
-	fn param_type() -> ethabi::ParamType;
-	fn tokenize(self) -> Token;
-}
-
 #[derive(
 	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
@@ -92,219 +87,6 @@ impl Age for EthereumTrackedData {
 
 	fn birth_block(&self) -> <Ethereum as Chain>::ChainBlockNumber {
 		self.block_height
-	}
-}
-
-/// The `SigData` struct used for threshold signatures in the smart contracts.
-/// See [here](https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol).
-#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct SigData {
-	/// The Schnorr signature.
-	sig: Uint,
-	/// The nonce value for the AggKey. Each Signature over an AggKey should have a unique
-	/// nonce to prevent replay attacks.
-	pub nonce: Uint,
-	/// The address value derived from the random nonce value `k`. Also known as
-	/// `nonceTimesGeneratorAddress`.
-	///
-	/// Note this is unrelated to the `nonce` above. The nonce in the context of
-	/// `nonceTimesGeneratorAddress` is a generated as part of each signing round (ie. as part
-	/// of the Schnorr signature) to prevent certain classes of cryptographic attacks.
-	k_times_g_address: Address,
-}
-
-pub trait EthereumCall {
-	const FUNCTION_NAME: &'static str;
-
-	/// The function names and parameters, not including sigData.
-	fn function_params() -> Vec<(&'static str, ethabi::ParamType)>;
-	/// The function values to be used as call parameters, no including sigData.
-	fn function_call_args(&self) -> Vec<Token>;
-
-	fn get_function() -> ethabi::Function {
-		api::ethabi_function(
-			Self::FUNCTION_NAME,
-			core::iter::once(("sigData", SigData::param_type()))
-				.chain(Self::function_params())
-				.map(|(n, t)| ethabi_param(n, t))
-				.collect(),
-		)
-	}
-	/// Encodes the call and signature into Ethereum Abi format.
-	fn abi_encoded(&self, sig_data: &SigData) -> Vec<u8> {
-		Self::get_function()
-			.encode_input(
-				&core::iter::once(sig_data.tokenize())
-					.chain(self.function_call_args())
-					.collect::<Vec<_>>(),
-			)
-			.expect(
-				r#"
-					This can only fail if the parameter types don't match the function signature.
-					Therefore, as long as the tests pass, it can't fail at runtime.
-				"#,
-			)
-	}
-	/// Generates the message hash for this call.
-	fn msg_hash(&self) -> <Keccak256 as Hash>::Output {
-		Keccak256::hash(&ethabi::encode(
-			&core::iter::once(Self::get_function().tokenize())
-				.chain(self.function_call_args())
-				.collect::<Vec<_>>(),
-		))
-	}
-}
-
-#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
-pub struct EthereumTransactionBuilder<C> {
-	sig_data: Option<SigData>,
-	replay_protection: EthereumReplayProtection,
-	call: C,
-}
-
-impl<C: EthereumCall> EthereumTransactionBuilder<C> {
-	pub fn new_unsigned(replay_protection: EthereumReplayProtection, call: C) -> Self {
-		Self { replay_protection, call, sig_data: None }
-	}
-
-	pub fn replay_protection(&self) -> EthereumReplayProtection {
-		self.replay_protection
-	}
-
-	pub fn chain_id(&self) -> EthereumChainId {
-		self.replay_protection.chain_id
-	}
-}
-
-impl<C: EthereumCall + Parameter + 'static> ApiCall<Ethereum> for EthereumTransactionBuilder<C> {
-	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
-		Keccak256::hash(&ethabi::encode(&[
-			self.call.msg_hash().tokenize(),
-			self.replay_protection.tokenize(),
-		]))
-	}
-
-	fn signed(
-		mut self,
-		threshold_signature: &<Ethereum as ChainCrypto>::ThresholdSignature,
-	) -> Self {
-		self.sig_data = Some(SigData::new(self.replay_protection.nonce, threshold_signature));
-		self
-	}
-
-	fn chain_encoded(&self) -> Vec<u8> {
-		self.call
-			.abi_encoded(&self.sig_data.expect("Unsigned chain encoding is invalid."))
-	}
-
-	fn is_signed(&self) -> bool {
-		self.sig_data.is_some()
-	}
-}
-
-impl SigData {
-	/// Add the actual signature. This method does no verification.
-	pub fn new(nonce: impl Into<Uint>, schnorr: &SchnorrVerificationComponents) -> Self {
-		Self {
-			sig: schnorr.s.into(),
-			nonce: nonce.into(),
-			k_times_g_address: schnorr.k_times_g_address.into(),
-		}
-	}
-}
-
-impl Tokenizable for SigData {
-	fn tokenize(self) -> Token {
-		Token::Tuple(vec![
-			self.sig.tokenize(),
-			self.nonce.tokenize(),
-			self.k_times_g_address.tokenize(),
-		])
-	}
-
-	fn param_type() -> ParamType {
-		ParamType::Tuple(vec![ParamType::Uint(256), ParamType::Uint(256), ParamType::Address])
-	}
-}
-
-impl Tokenizable for EthereumReplayProtection {
-	fn tokenize(self) -> Token {
-		Token::FixedArray(vec![
-			Token::Uint(Uint::from(self.nonce)),
-			Token::Address(self.contract_address),
-			Token::Uint(Uint::from(self.chain_id)),
-			Token::Address(self.key_manager_address),
-		])
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::Tuple(vec![
-			ParamType::Uint(256),
-			ParamType::Address,
-			ParamType::Uint(256),
-			ParamType::Address,
-		])
-	}
-}
-
-impl Tokenizable for Uint {
-	fn tokenize(self) -> Token {
-		Token::Uint(self)
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::Uint(256)
-	}
-}
-
-impl Tokenizable for H256 {
-	fn tokenize(self) -> Token {
-		Token::FixedBytes(self.0.into())
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::Uint(256)
-	}
-}
-
-impl Tokenizable for u64 {
-	fn tokenize(self) -> Token {
-		Token::Uint(self.into())
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::Uint(256)
-	}
-}
-
-impl Tokenizable for Address {
-	fn tokenize(self) -> Token {
-		Token::Address(self)
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::Address
-	}
-}
-
-impl Tokenizable for ethabi::Function {
-	fn tokenize(self) -> Token {
-		Token::FixedBytes(self.short_signature().to_vec())
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::FixedBytes(4)
-	}
-}
-
-impl<const S: usize> Tokenizable for [u8; S] {
-	fn param_type() -> ethabi::ParamType {
-		ParamType::FixedBytes(S)
-	}
-
-	fn tokenize(self) -> Token {
-		Token::FixedBytes(self.to_vec())
 	}
 }
 
@@ -565,41 +347,6 @@ impl Tokenizable for AggKey {
 	}
 }
 
-/// [TryFrom] implementation to convert some bytes to an [AggKey].
-///
-/// Conversion fails *unless* the first byte is the y parity byte encoded as `2` or `3` *and* the
-/// total length of the slice is 33 bytes.
-impl TryFrom<&[u8]> for AggKey {
-	type Error = &'static str;
-
-	fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-		if bytes.len() != 33 {
-			log::error!("Invalid aggKey format: Should be 33 bytes total, got {}", bytes.len());
-			return Err("Invalid aggKey format: Should be 33 bytes total.")
-		}
-
-		let pub_key_y_parity = match bytes[0] {
-			2 => Ok(ParityBit::Even),
-			3 => Ok(ParityBit::Odd),
-			invalid => {
-				log::error!(
-					"Invalid aggKey format: Leading byte should be 2 or 3, got {}",
-					invalid,
-				);
-
-				Err("Invalid aggKey format: Leading byte should be 2 or 3")
-			},
-		}?;
-
-		let pub_key_x: [u8; 32] = bytes[1..].try_into().map_err(|e| {
-			log::error!("Invalid aggKey format: {:?}", e);
-			"Invalid aggKey format: x coordinate should be 32 bytes."
-		})?;
-
-		Ok(Self { pub_key_x, pub_key_y_parity })
-	}
-}
-
 #[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct SchnorrVerificationComponents {
 	/// Scalar component
@@ -850,21 +597,6 @@ mod tests {
 		let mut bytes = [0u8; 33];
 		bytes[0] = 3;
 		let key = AggKey::from_pubkey_compressed(bytes);
-		assert!(key.pub_key_y_parity.is_odd());
-	}
-
-	#[test]
-	fn test_agg_key_conversion_with_try_from() {
-		// 2 == even
-		let mut bytes = vec![0u8; 33];
-		bytes[0] = 2;
-		let key = AggKey::try_from(&bytes[..]).expect("Should be a valid pubkey.");
-		assert!(key.pub_key_y_parity.is_even());
-
-		// 3 == odd
-		let mut bytes = vec![0u8; 33];
-		bytes[0] = 3;
-		let key = AggKey::try_from(&bytes[..]).expect("Should be a valid pubkey.");
 		assert!(key.pub_key_y_parity.is_odd());
 	}
 }
