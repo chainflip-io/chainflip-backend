@@ -103,23 +103,14 @@ pub struct EpochStartData {
 
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
-
 	const KEY_HANDOVER_IS_REQUIRED: bool = true;
-
 	type ChainBlockNumber = BlockNumber;
-
 	type ChainAmount = BtcAmount;
-
 	type TransactionFee = Self::ChainAmount;
-
 	type TrackedData = BitcoinTrackedData;
-
 	type ChainAsset = assets::btc::Asset;
-
 	type ChainAccount = BitcoinScriptBounded;
-
 	type EpochStartData = EpochStartData;
-
 	type DepositFetchId = BitcoinFetchId;
 }
 

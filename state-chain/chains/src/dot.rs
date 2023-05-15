@@ -769,6 +769,13 @@ impl ChannelIdConstructor for PolkadotChannelId {
 	}
 }
 
+impl BenchmarkValueExtended for PolkadotChannelId {
+	#[cfg(feature = "runtime-benchmarks")]
+	fn benchmark_value_by_id(id: u8) -> Self {
+		Self::from(id)
+	}
+}
+
 #[cfg(test)]
 mod test_polkadot_extrinsics {
 

@@ -18,6 +18,13 @@ pub trait BenchmarkValue {
 	fn benchmark_value() -> Self;
 }
 
+/// Optional trait used to generage different benchmarking values.
+pub trait BenchmarkValueExtended {
+	/// Returns different values used for benchmarkings.
+	#[cfg(feature = "runtime-benchmarks")]
+	fn benchmark_value_by_id(id: u8) -> Self;
+}
+
 #[cfg(not(feature = "runtime-benchmarks"))]
 impl<T> BenchmarkValue for T {}
 
@@ -26,7 +33,6 @@ macro_rules! impl_default_benchmark_value {
 	($element:ty) => {
 		#[cfg(feature = "runtime-benchmarks")]
 		impl BenchmarkValue for $element {
-			// #[cfg(feature = "runtime-benchmarks")]
 			fn benchmark_value() -> Self {
 				<$element>::default()
 			}
@@ -78,6 +84,13 @@ impl BenchmarkValue for ForeignChainAddress {
 }
 
 #[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValueExtended for ForeignChainAddress {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		ForeignChainAddress::Eth([id; 20])
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for EncodedAddress {
 	fn benchmark_value() -> Self {
 		EncodedAddress::Eth(Default::default())
@@ -91,6 +104,19 @@ impl BenchmarkValue for EthereumChannelId {
 	}
 }
 
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValueExtended for EthereumChannelId {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		Self::UnDeployed(id as u64)
+	}
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValueExtended for () {
+	fn benchmark_value_by_id(_id: u8) -> Self {
+		Default::default()
+	}
+}
 impl_default_benchmark_value!(());
 impl_default_benchmark_value!(u32);
 impl_default_benchmark_value!(u64);
