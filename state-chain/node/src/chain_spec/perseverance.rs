@@ -7,27 +7,26 @@ use sp_core::H256;
 
 pub struct Config;
 
-pub const NETWORK_NAME: &str = "Chainflip-Sisyphos";
+pub const NETWORK_NAME: &str = "Chainflip-Perseverance";
 pub const CHAIN_TYPE: ChainType = ChainType::Live;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
-	flip_token_address: hex_literal::hex!("8437f6b8BCACb632cC4dD627bA3a8E6E3326A418"),
-	eth_usdc_address: hex_literal::hex!("07865c6e87b9f70255377e024ace6630c1eaa37f"),
-	state_chain_gateway_address: hex_literal::hex!("d81663aeC346006d890b8C9182dC354BE9663F19"),
-	key_manager_address: hex_literal::hex!("177c941BA853e731c66758675628B4Dc64Aa186A"),
-	eth_vault_address: hex_literal::hex!("83cB2d501E90792Ee3D5e049F43805126a7684c6"),
+	flip_token_address: hex_literal::hex!("0E1D4594cB44D3E929dc0fb32F1c35A26D6e8e7f"),
+	eth_usdc_address: hex_literal::hex!("07865c6E87B9F70255377e024ace6630C1Eaa37F"),
+	state_chain_gateway_address: hex_literal::hex!("A599338c8D71ff516854DA954937330aAA25CC44"),
+	key_manager_address: hex_literal::hex!("624Ab0aB5334aEAb7853d33503c5553Dfb937499"),
+	eth_vault_address: hex_literal::hex!("f2f5D8b18573721361540087A52C05f5FB6d02c1"),
 	ethereum_chain_id: CHAIN_ID_GOERLI,
 	eth_init_agg_key: hex_literal::hex!(
-		"0351267cb549f545f03322391351c2e101673db664800baa433e20ba90972ec616"
+		"035217961720cf058f447afaebf25e7c14bc44b069ebda50f44dbf25db31b8944c"
 	),
 	ethereum_deployment_block: 8304200u64,
 	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
 	min_funding: MIN_FUNDING,
 	eth_block_safety_margin: eth::BLOCK_SAFETY_MARGIN as u32,
 	max_ceremony_stage_duration: 300,
-	dot_genesis_hash: H256(hex_literal::hex!(
-		"1665348821496e14ed56718d4d078e7f85b163bf4e45fa9afbeb220b34ed475a"
-	)),
+	// TODO: update this to the correct value for perseverance
+	dot_genesis_hash: H256([0xcf; 32]),
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 9320, transaction_version: 16 },
 };
@@ -45,11 +44,11 @@ pub const DOPEY_SR25519: [u8; 32] =
 pub const DOPEY_ED25519: [u8; 32] =
 	hex_literal::hex!["7c937c229aa95b19732a4a2e306a8cefb480e7c671de8fc416ec01bb3eedb749"];
 pub const SNOW_WHITE_SR25519: [u8; 32] =
-	hex_literal::hex!["84f134a4cc6bf41d3239bbe097eac4c8f83e78b468e6c49ed5cd2ddc51a07a29"];
+	hex_literal::hex!["84f131a66e88e3e5f8dce20d413cab3fbb13769a14a4c7b640b7222863ef353d"];
 
 pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance)> {
 	vec![(
-		hex_literal::hex!("c0409f949ad2636d34e4c70dd142296fdd4a11323d320aced3d247ad8f9a7902")
+		hex_literal::hex!("b81ba08bd1225107cecf9cb1ca094292b6e4eafbedd048938fb020017171cc1f")
 			.into(),
 		AccountRole::Broker,
 		100 * FLIPPERINOS_PER_FLIP,
