@@ -20,8 +20,8 @@ localnet/init/polkadot/docker-compose.yml
 # Logs and test artifacts
 **/*.log
 **/*.db
-!localnet/init/keyshare/bashful.db
-!localnet/init/keyshare/bashful.db/*.log
+!localnet/init/keyshare/*/*.db
+!localnet/init/keyshare/**/*.log
 
 # Local CFE config
 engine/config/Local.toml

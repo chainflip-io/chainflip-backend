@@ -68,8 +68,7 @@ pub const CEREMONY_TIMEOUT_DURATION: Duration =
 	Duration::from_millis((((MAX_STAGE_DURATION_SECONDS * 2) as u64) * 1000) + 50);
 
 lazy_static! {
-	pub static ref ACCOUNT_IDS: Vec<AccountId> =
-		[1, 2, 3, 4].iter().map(|i| AccountId::new([*i; 32])).collect();
+	pub static ref ACCOUNT_IDS: Vec<AccountId> = (1..=4).map(|i| AccountId::new([i; 32])).collect();
 }
 
 pub type StageMessages<T> = HashMap<AccountId, HashMap<AccountId, T>>;
