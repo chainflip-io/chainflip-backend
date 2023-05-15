@@ -34,7 +34,8 @@ RUN rustup default ${NIGHTLY} \
     && rustup target add wasm32-unknown-unknown --toolchain ${NIGHTLY} \
     && rustup component add rustfmt \
     && rustup component add clippy \
-    && cargo install cargo-deb
+    && cargo install cargo-deb \
+    && cargo install cargo-audit
 
 RUN groupadd ci \
     && useradd -m -g ci ci \

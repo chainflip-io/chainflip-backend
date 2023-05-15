@@ -48,7 +48,7 @@ typenum = "1.15"
 # We might eventually update, but for now let's just
 # use the same version as polkadot.
 schnorrkel = "0.9.1"
-rayon = "1.5"
+rayon = "1.7.0"
 rand = "0.8.4"
 ed25519-consensus = "2.0"
 tracing = "0.1"

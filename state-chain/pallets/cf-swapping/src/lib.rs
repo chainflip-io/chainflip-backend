@@ -46,6 +46,8 @@ pub struct Swap {
 	pub swap_type: SwapType,
 }
 
+pub type TransactionHash = [u8; 32];
+
 /// Struct denoting swap status of a cross-chain message.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub(crate) struct CcmSwapOutput {
@@ -198,6 +200,7 @@ pub mod pallet {
 			swap_id: u64,
 			deposit_amount: AssetAmount,
 			destination_address: EncodedAddress,
+			tx_hash: TransactionHash,
 		},
 		/// A swap has been executed.
 		SwapExecuted {
@@ -456,6 +459,7 @@ pub mod pallet {
 			to: Asset,
 			deposit_amount: AssetAmount,
 			destination_address: EncodedAddress,
+			tx_hash: TransactionHash,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
@@ -487,6 +491,7 @@ pub mod pallet {
 					swap_id,
 					deposit_amount,
 					destination_address,
+					tx_hash,
 				});
 			}
 

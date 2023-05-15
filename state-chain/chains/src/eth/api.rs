@@ -369,30 +369,6 @@ pub(super) fn ethabi_param(name: &'static str, param_type: ethabi::ParamType) ->
 	ethabi::Param { name: name.into(), kind: param_type, internal_type: None }
 }
 
-#[macro_export]
-macro_rules! impl_api_call_eth {
-	($call:ident) => {
-		impl ApiCall<Ethereum> for $call {
-			fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
-				self.signature_handler.payload
-			}
-
-			fn signed(mut self, signature: &<Ethereum as ChainCrypto>::ThresholdSignature) -> Self {
-				self.signature_handler.insert_signature(signature);
-				self
-			}
-
-			fn chain_encoded(&self) -> Vec<u8> {
-				self.abi_encoded()
-			}
-
-			fn is_signed(&self) -> bool {
-				self.signature_handler.is_signed()
-			}
-		}
-	};
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum EthereumContract {
 	StateChainGateway,

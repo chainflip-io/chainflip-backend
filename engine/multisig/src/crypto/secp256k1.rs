@@ -1,3 +1,5 @@
+mod helpers;
+
 use super::{ECPoint, ECScalar, Rng};
 use num_bigint::BigUint;
 use secp256k1::constants::{CURVE_ORDER, SECRET_KEY_SIZE};
@@ -31,7 +33,6 @@ mod point_impls {
 	use super::*;
 
 	const POINT_AT_INFINITY_COMPRESSED: [u8; 33] = [0; 33];
-	const POINT_AT_INFINITY_UNCOMPRESSED: [u8; 65] = [0; 65];
 
 	derive_point_impls!(Point, Scalar);
 
@@ -114,7 +115,15 @@ mod point_impls {
 		where
 			S: serde::Serializer,
 		{
-			serializer.serialize_bytes(self.as_bytes().as_ref())
+			let bytes = self.as_bytes();
+			let bytes_ref: &[u8; 33] = bytes.as_ref();
+
+			use serde::ser::SerializeTuple;
+			let mut tup = serializer.serialize_tuple(33)?;
+			for byte in bytes_ref {
+				tup.serialize_element(byte)?;
+			}
+			tup.end()
 		}
 	}
 
@@ -123,12 +132,10 @@ mod point_impls {
 		where
 			D: serde::Deserializer<'de>,
 		{
-			let bytes = Vec::deserialize(deserializer)?;
+			let bytes =
+				deserializer.deserialize_tuple(33, helpers::ArrayVisitor::<[u8; 33]>::new())?;
 
-			// Check both compressed and uncompressed
-			// representations of zero (even though we
-			// only use compressed)
-			if bytes == POINT_AT_INFINITY_COMPRESSED || bytes == POINT_AT_INFINITY_UNCOMPRESSED {
+			if bytes == POINT_AT_INFINITY_COMPRESSED {
 				Ok(Point::point_at_infinity())
 			} else {
 				PK::from_slice(&bytes)
@@ -343,10 +350,14 @@ mod scalar_impls {
 		where
 			S: serde::Serializer,
 		{
-			match self.0 {
-				Some(x) => serializer.serialize_bytes(x.as_ref()),
-				None => serializer.serialize_bytes(&ZERO_SCALAR_BYTES),
+			let bytes = self.0.as_ref().map(|x| x.as_ref()).unwrap_or(&ZERO_SCALAR_BYTES);
+
+			use serde::ser::SerializeTuple;
+			let mut tup = serializer.serialize_tuple(32)?;
+			for byte in bytes {
+				tup.serialize_element(byte)?;
 			}
+			tup.end()
 		}
 	}
 
@@ -355,7 +366,9 @@ mod scalar_impls {
 		where
 			D: serde::Deserializer<'de>,
 		{
-			let bytes = Vec::deserialize(deserializer)?;
+			let mut bytes: [u8; 32] = [0; 32];
+			<[u8; 32]>::deserialize_in_place(deserializer, &mut bytes).unwrap();
+
 			if bytes == ZERO_SCALAR_BYTES {
 				Ok(Scalar::zero())
 			} else {
@@ -380,22 +393,36 @@ mod scalar_impls {
 fn ensure_serialization_is_consistent() {
 	// Test against pre-computed values to ensure that
 	// serialization does not change unintentionally
+	use rand::SeedableRng;
 
-	// TODO: look into avoiding encoding the size
-	let scalar: Scalar = bincode::deserialize(&[
-		32, 0, 0, 0, 0, 0, 0, 0, 130, 0, 21, 115, 160, 3, 253, 59, 127, 215, 47, 251, 14, 175, 99,
-		170, 198, 47, 18, 222, 182, 41, 220, 167, 39, 133, 166, 98, 104, 236, 117, 139,
-	])
-	.unwrap();
+	let mut rng = rand::rngs::StdRng::from_seed([0; 32]);
 
-	let expected_point_bytes = [
-		33, 0, 0, 0, 0, 0, 0, 0, 3, 132, 146, 123, 207, 167, 151, 70, 47, 192, 104, 111, 4, 139,
-		232, 199, 163, 245, 49, 3, 132, 75, 153, 234, 44, 176, 131, 22, 250, 247, 136, 95, 115,
+	let scalar = Scalar::random(&mut rng);
+
+	let scalar_bytes = bincode::serialize(&scalar).unwrap();
+
+	let expected_scalar_bytes = [
+		155, 244, 154, 106, 7, 85, 249, 83, 129, 31, 206, 18, 95, 38, 131, 213, 4, 41, 195, 187,
+		73, 224, 116, 20, 126, 0, 137, 165, 46, 174, 21, 95,
 	];
 
-	let point = Point::from_scalar(&scalar);
+	assert_eq!(scalar_bytes, expected_scalar_bytes);
 
+	let scalar_recovered: Scalar = bincode::deserialize(&scalar_bytes).unwrap();
+
+	assert_eq!(scalar, scalar_recovered);
+
+	let point = Point::from_scalar(&scalar);
 	let point_bytes = bincode::serialize(&point).unwrap();
 
+	let expected_point_bytes = [
+		2, 155, 239, 141, 85, 109, 128, 228, 58, 231, 224, 190, 203, 58, 126, 104, 56, 185, 93,
+		239, 228, 88, 150, 237, 96, 117, 187, 144, 53, 208, 108, 153, 100,
+	];
+
 	assert_eq!(point_bytes, expected_point_bytes);
+
+	let point_recovered: Point = bincode::deserialize(&point_bytes).unwrap();
+
+	assert_eq!(point, point_recovered);
 }

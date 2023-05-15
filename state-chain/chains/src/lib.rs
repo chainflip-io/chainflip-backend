@@ -318,13 +318,3 @@ pub struct CcmDepositMetadata {
 	/// The address the deposit was sent from.
 	pub source_address: ForeignChainAddress,
 }
-
-#[cfg(feature = "std")]
-impl std::str::FromStr for CcmDepositMetadata {
-	type Err = String;
-
-	fn from_str(_s: &str) -> Result<Self, Self::Err> {
-		// TODO: check how from_str is used / should be implemented
-		todo!()
-	}
-}

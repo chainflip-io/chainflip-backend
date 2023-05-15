@@ -76,7 +76,8 @@ benchmarks! {
 			from: Asset::Usdc,
 			to: Asset::Eth,
 			deposit_amount: 1_000,
-			destination_address: EncodedAddress::benchmark_value()
+			destination_address: EncodedAddress::benchmark_value(),
+			tx_hash: [0; 32],
 		};
 	}: {
 		call.dispatch_bypass_filter(origin)?;

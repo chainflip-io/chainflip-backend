@@ -2,6 +2,8 @@ pub mod broadcast;
 mod broadcast_verification;
 mod ceremony_stage;
 mod failure_reason;
+#[cfg(test)]
+mod tests;
 
 pub use ceremony_stage::{
 	CeremonyCommon, CeremonyStage, PreProcessStageDataCheck, ProcessMessageResult, StageResult,

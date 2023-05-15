@@ -2,8 +2,8 @@ version: "3.8"
 
 services:
   geth:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-rc9-1-node-10052023
-    pull_policy: if_not_present
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-rc11-1-node
+    pull_policy: always
     stop_grace_period: 5s
     stop_signal: SIGINT
     container_name: geth
@@ -54,7 +54,7 @@ services:
     container_name: polkadot
     platform: linux/amd64
     image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v0.9.36
-    pull_policy: if_not_present
+    pull_policy: always
     stop_grace_period: 5s
     stop_signal: SIGINT
     ports:
@@ -92,7 +92,7 @@ services:
   bitcoin:
     image: ghcr.io/chainflip-io/chainflip-bitcoin-regtest:v24.0.1
     platform: linux/amd64
-    pull_policy: if_not_present
+    pull_policy: always
     container_name: bitcoin
     restart: unless-stopped
     ports:

@@ -280,6 +280,7 @@ fn can_swap_using_witness_origin() {
 			Asset::Flip,
 			1_000,
 			EncodedAddress::Eth(Default::default()),
+			Default::default(),
 		));
 
 		System::assert_last_event(RuntimeEvent::Swapping(
@@ -287,6 +288,7 @@ fn can_swap_using_witness_origin() {
 				swap_id: 1,
 				deposit_amount: 1_000,
 				destination_address: EncodedAddress::Eth(Default::default()),
+				tx_hash: Default::default(),
 			},
 		));
 	});
@@ -903,6 +905,7 @@ fn swap_by_witnesser_can_be_rejected() {
 			to,
 			amount,
 			EncodedAddress::Eth(Default::default()),
+			Default::default(),
 		));
 
 		// Verify this swap is rejected
@@ -925,6 +928,7 @@ fn swap_by_witnesser_can_be_rejected() {
 			to,
 			amount,
 			EncodedAddress::Eth(Default::default()),
+			Default::default(),
 		));
 
 		// Verify this swap is accepted and scheduled
@@ -943,6 +947,7 @@ fn swap_by_witnesser_can_be_rejected() {
 				swap_id: 1,
 				deposit_amount: amount,
 				destination_address: EncodedAddress::Eth(Default::default()),
+				tx_hash: Default::default(),
 			},
 		));
 

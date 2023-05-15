@@ -9,10 +9,12 @@ fi
 CONTRACT_RELEASE_TAG=$1
 
 if [ -z "${CONTRACT_RELEASE_TAG}" ]; then
-    echo "❌  Please provide a release tag to download. Available tags are:"
+    echo "🔖 Please provide a release tag to download. Available tags are:"
     echo ""
-    echo "`gh release list --repo https://github.com/chainflip-io/chainflip-eth-contracts`"
-    exit 1
+    select tag in $(echo "`gh release list --repo https://github.com/chainflip-io/chainflip-eth-contracts`" | awk '{print $1}'); do
+        CONTRACT_RELEASE_TAG=$tag
+        break
+    done
 fi
 
 PROJECT_ROOT=$(git rev-parse --show-toplevel || exit 1)

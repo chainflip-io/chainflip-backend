@@ -7,6 +7,7 @@ const CEREMONY_ID_WINDOW: u64 = 6000;
 
 use anyhow::{anyhow, bail, Context, Result};
 use futures::FutureExt;
+use serde::Serialize;
 use std::{
 	collections::{hash_map, BTreeSet, HashMap},
 	fmt::{Debug, Display},
@@ -70,6 +71,7 @@ pub trait CeremonyTrait: 'static {
 			Error = MultisigData<<Self::Crypto as CryptoScheme>::Point>,
 		> + Into<MultisigData<<Self::Crypto as CryptoScheme>::Point>>
 		+ Send
+		+ Serialize
 		+ 'static;
 	type Request: Send + 'static;
 	/// The product of a successful ceremony result
