@@ -71,30 +71,6 @@ fn changing_epoch_block_size() {
 }
 
 #[test]
-fn should_request_emergency_rotation() {
-	new_test_ext().execute_with(|| {
-		MockBidderProvider::set_winning_bids();
-		<ValidatorPallet as EmergencyRotation>::request_emergency_rotation();
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::KeygensInProgress(..)
-		));
-
-		// Once we've passed the Idle phase, requesting an emergency rotation should have no
-		// effect on the rotation status.
-		for status in [
-			RotationPhase::<Test>::KeygensInProgress(Default::default()),
-			RotationPhase::<Test>::NewKeysActivated(Default::default()),
-			RotationPhase::<Test>::SessionRotating(Default::default()),
-		] {
-			CurrentRotationPhase::<Test>::put(&status);
-			ValidatorPallet::request_emergency_rotation();
-			assert_eq!(CurrentRotationPhase::<Test>::get(), status,);
-		}
-	});
-}
-
-#[test]
 fn should_retry_rotation_until_success_with_failing_auctions() {
 	new_test_ext().execute_with(|| {
 		assert_eq!(MockBidderProvider::get_bidders().len(), 0);
@@ -582,11 +558,10 @@ fn rotating_during_rotation_is_noop() {
 		));
 
 		// We don't attempt the auction again, because we're already in a rotation
-		ValidatorPallet::request_emergency_rotation();
-		assert!(matches!(
-			CurrentRotationPhase::<Test>::get(),
-			RotationPhase::<Test>::KeygensInProgress(..)
-		));
+		assert_noop!(
+			ValidatorPallet::force_rotation(RawOrigin::Root.into()),
+			Error::<Test>::RotationInProgress
+		);
 	});
 }
 
