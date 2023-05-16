@@ -1,13 +1,11 @@
 use crate::chainflip::Offence;
 use cf_amm::common::SqrtPriceQ64F96;
-use cf_chains::eth::SigData;
 use cf_primitives::{Asset, AssetAmount, EpochIndex, EthereumAddress, SwapOutput};
 use codec::{Decode, Encode};
 use pallet_cf_governance::GovCallHash;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
-use sp_core::U256;
 use sp_runtime::{AccountId32, DispatchError};
 use sp_std::vec::Vec;
 
@@ -55,14 +53,6 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub is_qualified: bool,
 	pub is_online: bool,
 	pub is_bidding: bool,
-}
-
-#[derive(Encode, Decode, Eq, PartialEq)]
-pub struct RuntimeApiPendingRedemption {
-	pub amount: U256,
-	pub address: EthereumAddress,
-	pub expiry: U256,
-	pub sig_data: SigData,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq)]

@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use core::fmt::Display;
 
-use crate::benchmarking_value::BenchmarkValue;
+use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 pub use address::ForeignChainAddress;
 use cf_primitives::{chains::assets, AssetAmount, EgressId, EthAmount};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
@@ -93,6 +93,7 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ MaxEncodedLen
 		+ BenchmarkValue
+		+ BenchmarkValueExtended
 		+ Debug
 		+ TryFrom<ForeignChainAddress>
 		+ Into<ForeignChainAddress>;
@@ -103,6 +104,7 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ Copy
 		+ BenchmarkValue
+		+ BenchmarkValueExtended
 		+ ChannelIdConstructor<Address = Self::ChainAccount>;
 }
 

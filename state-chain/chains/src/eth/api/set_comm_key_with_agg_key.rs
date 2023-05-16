@@ -1,4 +1,4 @@
-use crate::eth::{EthereumCall, Tokenizable};
+use super::*;
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::{Address, Token};
 use frame_support::RuntimeDebug;
@@ -31,17 +31,15 @@ impl EthereumCall for SetCommKeyWithAggKey {
 
 #[cfg(test)]
 mod test_set_comm_key_with_agg_key {
-
 	use super::*;
 	use crate::{
 		eth::{
-			api::abi::load_abi, tests::asymmetrise, EthereumTransactionBuilder,
+			api::{abi::load_abi, EthereumTransactionBuilder},
+			tests::asymmetrise,
 			SchnorrVerificationComponents,
 		},
 		ApiCall,
 	};
-	use ethabi::Token;
-	use ethereum_types::H160;
 
 	use crate::eth::api::EthereumReplayProtection;
 
@@ -63,7 +61,7 @@ mod test_set_comm_key_with_agg_key {
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),
 				contract_address: FAKE_KEYMAN_ADDR.into(),
 			},
-			SetCommKeyWithAggKey::new(H160::from(TEST_ADDR)),
+			super::SetCommKeyWithAggKey::new(Address::from(TEST_ADDR)),
 		);
 
 		assert_eq!(

@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use cf_chains::{eth::ethabi::Address, ForeignChain};
+use cf_chains::{eth::Address, ForeignChain};
 use cf_traits::{BroadcastAnyChainGovKey, Chainflip, CommKeyBroadcaster, FeePayment, FundingInfo};
 use codec::{Decode, Encode};
 use frame_support::{

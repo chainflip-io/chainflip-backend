@@ -1,67 +1,11 @@
+use super::*;
+use crate::address::ForeignChainAddress;
 use cf_primitives::{EgressId, ForeignChain};
 use codec::{Decode, Encode};
-use ethabi::{ParamType, Token, Uint};
+use ethabi::Token;
 use scale_info::TypeInfo;
-use sp_std::{vec, vec::Vec};
-
-use crate::{
-	address::ForeignChainAddress,
-	eth::{api::all_batch::EncodableTransferAssetParams, EthereumCall, Tokenizable},
-};
-
 use sp_runtime::RuntimeDebug;
-
-impl Tokenizable for Vec<u8> {
-	fn tokenize(self) -> Token {
-		Token::Bytes(self)
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::Bytes
-	}
-}
-
-impl Tokenizable for u32 {
-	fn tokenize(self) -> Token {
-		Token::Uint(self.into())
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::Uint(32)
-	}
-}
-
-impl Tokenizable for ForeignChain {
-	fn tokenize(self) -> Token {
-		match self {
-			// TODO: Confirm integer representaiton of foreign chains.
-			ForeignChain::Ethereum => Token::Uint(1.into()),
-			ForeignChain::Polkadot => Token::Uint(2.into()),
-			ForeignChain::Bitcoin => Token::Uint(3.into()),
-		}
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::Uint(32)
-	}
-}
-
-impl Tokenizable for ForeignChainAddress {
-	fn tokenize(self) -> Token {
-		match self {
-			ForeignChainAddress::Eth(addr) =>
-				Token::Tuple(vec![ForeignChain::Ethereum.tokenize(), addr.to_vec().tokenize()]),
-			ForeignChainAddress::Dot(addr) =>
-				Token::Tuple(vec![ForeignChain::Polkadot.tokenize(), addr.to_vec().tokenize()]),
-			ForeignChainAddress::Btc(addr) =>
-				Token::Tuple(vec![ForeignChain::Bitcoin.tokenize(), addr.encode().tokenize()]),
-		}
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::Tuple(vec![ForeignChain::param_type(), ParamType::Bytes])
-	}
-}
+use sp_std::{vec, vec::Vec};
 
 /// Represents all the arguments required to build the call to Vault's 'ExecutexSwapAndCall'
 /// function.
@@ -72,7 +16,7 @@ pub struct ExecutexSwapAndCall {
 	/// A single transfer that need to be made to given addresses.
 	transfer_param: EncodableTransferAssetParams,
 	/// The source chain of the transfer.
-	source_chain: Uint,
+	source_chain: u32,
 	/// The source address of the transfer.
 	source_address: Vec<u8>,
 	/// Message that needs to be passed through.
@@ -87,20 +31,18 @@ impl ExecutexSwapAndCall {
 		source_address: ForeignChainAddress,
 		message: Vec<u8>,
 	) -> Self {
-		let (source_chain, source_address) = match source_address {
+		let (source_chain, source_address) = Self::destructure_address(source_address);
+		Self { egress_id, transfer_param, source_chain, source_address, message }
+	}
+
+	fn destructure_address(address: ForeignChainAddress) -> (u32, Vec<u8>) {
+		match address {
 			ForeignChainAddress::Eth(source_address) =>
 				(ForeignChain::Ethereum as u32, source_address.to_vec()),
 			ForeignChainAddress::Dot(source_address) =>
 				(ForeignChain::Polkadot as u32, source_address.to_vec()),
 			ForeignChainAddress::Btc(script) =>
 				(ForeignChain::Bitcoin as u32, script.data.to_vec()),
-		};
-		Self {
-			egress_id,
-			transfer_param,
-			source_chain: source_chain.into(),
-			source_address,
-			message,
 		}
 	}
 
@@ -133,12 +75,11 @@ impl EthereumCall for ExecutexSwapAndCall {
 
 #[cfg(test)]
 mod test_execute_x_swap_and_execute {
-	use crate::eth::{
-		api::{abi::load_abi, EthereumReplayProtection},
-		ApiCall, EthereumTransactionBuilder, SchnorrVerificationComponents,
-	};
-
 	use super::*;
+	use crate::eth::{
+		api::{abi::load_abi, ApiCall, EthereumReplayProtection, EthereumTransactionBuilder},
+		SchnorrVerificationComponents,
+	};
 	use ethabi::Address;
 
 	#[test]
@@ -157,10 +98,8 @@ mod test_execute_x_swap_and_execute {
 		};
 
 		let dummy_src_address = ForeignChainAddress::Dot([0xff; 32]);
-		let tokenized_address =
-			dummy_src_address.clone().tokenize().into_tuple().expect(
-				"The ForeignChainAddress should always return a Tuple(vec![Chain, Address])",
-			);
+		let (dummy_chain, dummy_address) =
+			super::ExecutexSwapAndCall::destructure_address(dummy_src_address.clone());
 		let dummy_message = vec![0x00, 0x01, 0x02, 0x03, 0x04];
 
 		const FAKE_NONCE_TIMES_G_ADDR: [u8; 20] = asymmetrise([0x7f; 20]);
@@ -177,7 +116,7 @@ mod test_execute_x_swap_and_execute {
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),
 				contract_address: FAKE_VAULT_ADDR.into(),
 			},
-			ExecutexSwapAndCall::new(
+			super::ExecutexSwapAndCall::new(
 				(ForeignChain::Ethereum, 0),
 				dummy_transfer_asset_param.clone(),
 				dummy_src_address,
@@ -210,8 +149,8 @@ mod test_execute_x_swap_and_execute {
 						Token::Address(FAKE_NONCE_TIMES_G_ADDR.into()),
 					]),
 					dummy_transfer_asset_param.tokenize(),
-					tokenized_address[0].clone(),
-					tokenized_address[1].clone(),
+					dummy_chain.tokenize(),
+					dummy_address.tokenize(),
 					dummy_message.tokenize(),
 				])
 				.unwrap()

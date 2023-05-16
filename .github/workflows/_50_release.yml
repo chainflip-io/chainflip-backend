@@ -1,0 +1,39 @@
+on:
+  workflow_call:
+    inputs:
+      network:
+        type: string
+        required: true
+
+jobs:
+  release:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Download binaries
+        uses: actions/download-artifact@v3
+        with:
+          name: chainflip-backend-bin
+
+      - name: Substitute ENV
+        env:
+          CF_NETWORK: ${{ inputs.network }}
+          CF_VERSION: ${{ github.ref_name }}
+        run: envsubst < RELEASE_TEMPLATE.md > RELEASE.md
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: ${{ inputs.network }}:${{ github.ref_name }}
+          generate_release_notes: false
+          body_path: RELEASE.md
+          draft: true
+          prerelease: false
+          files: |
+            chainflip-node
+            chainflip-engine
+            chainflip-cli
+            chainflip-broker-api
+            wbuild/state-chain-runtime/state_chain_runtime*.wasm

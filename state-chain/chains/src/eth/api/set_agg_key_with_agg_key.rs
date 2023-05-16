@@ -1,12 +1,10 @@
-//! Definitions for the "registerRedemption" transaction.
-
-use crate::eth::{AggKey, EthereumCall, Tokenizable};
-
+use super::*;
+use crate::eth::AggKey;
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::Token;
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
-use sp_std::{prelude::*, vec};
+use sp_std::vec;
 
 /// Represents all the arguments required to build the call to StateChainGateway's
 /// 'requestRedemption' function.
@@ -37,8 +35,8 @@ impl EthereumCall for SetAggKeyWithAggKey {
 #[cfg(test)]
 mod test_set_agg_key_with_agg_key {
 	use crate::eth::{
-		api::{abi::load_abi, EthereumReplayProtection},
-		ApiCall, EthereumTransactionBuilder, SchnorrVerificationComponents,
+		api::{abi::load_abi, ApiCall, EthereumReplayProtection, EthereumTransactionBuilder},
+		SchnorrVerificationComponents,
 	};
 
 	use super::*;
@@ -57,7 +55,7 @@ mod test_set_agg_key_with_agg_key {
 				key_manager_address,
 				contract_address: key_manager_address,
 			},
-			SetAggKeyWithAggKey::new(AggKey::from_pubkey_compressed(hex_literal::hex!(
+			super::SetAggKeyWithAggKey::new(AggKey::from_pubkey_compressed(hex_literal::hex!(
 				"01 1742daacd4dbfbe66d4c8965550295873c683cb3b65019d3a53975ba553cc31d"
 			))),
 		);
@@ -87,7 +85,7 @@ mod test_set_agg_key_with_agg_key {
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),
 				contract_address: FAKE_KEYMAN_ADDR.into(),
 			},
-			SetAggKeyWithAggKey::new(AggKey {
+			super::SetAggKeyWithAggKey::new(AggKey {
 				pub_key_x: FAKE_NEW_KEY_X,
 				pub_key_y_parity: FAKE_NEW_KEY_Y,
 			}),

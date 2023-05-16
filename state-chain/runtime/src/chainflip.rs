@@ -10,9 +10,9 @@ mod offences;
 mod signer_nomination;
 use crate::{
 	AccountId, AccountRoles, Authorship, BitcoinIngressEgress, BitcoinVault, BlockNumber,
-	EmergencyRotationPercentageRange, Emissions, Environment, EthereumBroadcaster,
-	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster,
-	PolkadotIngressEgress, Reputation, Runtime, RuntimeCall, System, Validator,
+	Emissions, Environment, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
+	Flip, FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress, Runtime, RuntimeCall, System,
+	Validator,
 };
 
 use cf_chains::{
@@ -40,8 +40,8 @@ use cf_primitives::{
 };
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster,
-	DepositApi, DepositHandler, EgressApi, EmergencyRotation, EpochInfo, Heartbeat, Issuance,
-	KeyProvider, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
+	DepositApi, DepositHandler, EgressApi, EpochInfo, Heartbeat, Issuance, KeyProvider,
+	RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -50,7 +50,6 @@ use frame_support::{
 };
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
-use pallet_cf_validator::PercentageRange;
 use scale_info::TypeInfo;
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
@@ -109,21 +108,9 @@ impl Heartbeat for ChainflipHeartbeat {
 	type ValidatorId = AccountId;
 	type BlockNumber = BlockNumber;
 
-	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
+	fn on_heartbeat_interval() {
 		<Emissions as BlockEmissions>::calculate_block_emissions();
-
-		// Reputation depends on heartbeats
-		Reputation::penalise_offline_authorities(network_state.offline.clone());
-
 		BackupNodeEmissions::distribute();
-
-		// Check the state of the network and if we are within the emergency rotation range
-		// then issue an emergency rotation request
-		let PercentageRange { top, bottom } = EmergencyRotationPercentageRange::get();
-		let percent_online = network_state.percentage_online() as u8;
-		if percent_online >= bottom && percent_online <= top {
-			<Validator as EmergencyRotation>::request_emergency_rotation();
-		}
 	}
 }
 
@@ -254,14 +241,14 @@ impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
 }
 
 impl EthEnvironmentProvider for EthEnvironment {
-	fn token_address(asset: assets::eth::Asset) -> Option<eth::ethabi::Address> {
+	fn token_address(asset: assets::eth::Asset) -> Option<eth::Address> {
 		match asset {
 			assets::eth::Asset::Eth => Some(ETHEREUM_ETH_ADDRESS.into()),
 			erc20 => Environment::supported_eth_assets(erc20).map(Into::into),
 		}
 	}
 
-	fn contract_address(contract: EthereumContract) -> eth::ethabi::Address {
+	fn contract_address(contract: EthereumContract) -> eth::Address {
 		match contract {
 			EthereumContract::StateChainGateway =>
 				Environment::state_chain_gateway_address().into(),

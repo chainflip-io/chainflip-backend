@@ -1,6 +1,6 @@
 use sp_std::{vec, vec::Vec};
 
-use crate::benchmarking_value::BenchmarkValue;
+use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 
 use super::{
 	api::{batch_transfer::BatchTransfer, BitcoinApi},
@@ -52,9 +52,21 @@ impl BenchmarkValue for BitcoinScriptBounded {
 	}
 }
 
+impl BenchmarkValueExtended for BitcoinScriptBounded {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		BitcoinScriptBounded { data: [id; 100].to_vec().try_into().unwrap() }
+	}
+}
+
 impl BenchmarkValue for BitcoinFetchId {
 	fn benchmark_value() -> Self {
 		Self(1)
+	}
+}
+
+impl BenchmarkValueExtended for BitcoinFetchId {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		Self(id.into())
 	}
 }
 

@@ -1,5 +1,6 @@
+use super::{api::EthereumTransactionBuilder, TransactionFee};
 use crate::{
-	benchmarking_value::BenchmarkValue,
+	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	eth::{
 		api::{update_flip_supply::UpdateFlipSupply, EthereumApi},
 		to_ethereum_address, Address, AggKey, EthereumReplayProtection, EthereumTrackedData,
@@ -7,15 +8,12 @@ use crate::{
 	},
 	ApiCall,
 };
-
-const SIG_NONCE: [u8; 32] = [1u8; 32];
-const PRIVATE_KEY: [u8; 32] = [2u8; 32];
-
 use cf_primitives::EthAmount;
 use ethabi::Uint;
 use libsecp256k1::{PublicKey, SecretKey};
 
-use super::{EthereumTransactionBuilder, TransactionFee};
+const SIG_NONCE: [u8; 32] = [1u8; 32];
+const PRIVATE_KEY: [u8; 32] = [2u8; 32];
 
 impl BenchmarkValue for SchnorrVerificationComponents {
 	fn benchmark_value() -> Self {
@@ -37,6 +35,15 @@ impl BenchmarkValue for Address {
 	fn benchmark_value() -> Self {
 		to_ethereum_address(PublicKey::from_secret_key(
 			&SecretKey::parse(&SIG_NONCE).expect("Valid signature nonce"),
+		))
+		.into()
+	}
+}
+
+impl BenchmarkValueExtended for Address {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		to_ethereum_address(PublicKey::from_secret_key(
+			&SecretKey::parse(&[id; 32]).expect("Valid signature nonce"),
 		))
 		.into()
 	}
