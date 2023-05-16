@@ -1,6 +1,5 @@
-use crate::eth::{EthereumCall, Tokenizable};
+use super::*;
 use codec::{Decode, Encode, MaxEncodedLen};
-use ethabi::Uint;
 use frame_support::RuntimeDebug;
 use scale_info::TypeInfo;
 use sp_std::{vec, vec::Vec};
@@ -39,12 +38,9 @@ impl EthereumCall for UpdateFlipSupply {
 
 #[cfg(test)]
 mod test_update_flip_supply {
-	use crate::{
-		eth::{
-			api::{abi::load_abi, EthereumReplayProtection},
-			EthereumTransactionBuilder, SchnorrVerificationComponents,
-		},
-		ApiCall,
+	use crate::eth::{
+		api::{abi::load_abi, ApiCall, EthereumReplayProtection, EthereumTransactionBuilder},
+		SchnorrVerificationComponents,
 	};
 
 	use super::*;
@@ -73,7 +69,7 @@ mod test_update_flip_supply {
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),
 				contract_address: FAKE_STATE_CHAIN_GATEWAY_ADDRESS.into(),
 			},
-			UpdateFlipSupply::new(NEW_TOTAL_SUPPLY, STATE_CHAIN_BLOCK_NUMBER),
+			super::UpdateFlipSupply::new(NEW_TOTAL_SUPPLY, STATE_CHAIN_BLOCK_NUMBER),
 		);
 
 		let expected_msg_hash = update_flip_supply_runtime.threshold_signature_payload();
@@ -110,6 +106,6 @@ mod test_update_flip_supply {
 
 	#[test]
 	fn test_max_encoded_len() {
-		cf_test_utilities::ensure_max_encoded_len_is_exact::<UpdateFlipSupply>();
+		cf_test_utilities::ensure_max_encoded_len_is_exact::<super::UpdateFlipSupply>();
 	}
 }

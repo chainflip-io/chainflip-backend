@@ -1,15 +1,15 @@
-use ethabi::Address;
+use super::{Ethereum, EthereumChannelId, SchnorrVerificationComponents};
+use crate::*;
+use common::*;
+use ethabi::{Address, ParamType, Token, Uint};
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
-use sp_runtime::{traits::UniqueSaturatedInto, DispatchError};
+use sp_runtime::{
+	traits::{Hash, Keccak256, UniqueSaturatedInto},
+	DispatchError,
+};
 use sp_std::marker::PhantomData;
 
-use crate::*;
-
-use self::all_batch::{
-	EncodableFetchAssetParams, EncodableFetchDeployAssetParams, EncodableTransferAssetParams,
-};
-
-use super::{Ethereum, EthereumChannelId, EthereumTransactionBuilder};
+pub use tokenizable::Tokenizable;
 
 #[cfg(feature = "std")]
 pub mod abi {
@@ -48,11 +48,13 @@ pub mod abi {
 }
 
 pub mod all_batch;
+pub mod common;
 pub mod execute_x_swap_and_call;
 pub mod register_redemption;
 pub mod set_agg_key_with_agg_key;
 pub mod set_comm_key_with_agg_key;
 pub mod set_gov_key_with_agg_key;
+pub mod tokenizable;
 pub mod update_flip_supply;
 
 /// Chainflip api calls available on Ethereum.
@@ -79,6 +81,171 @@ pub struct EthereumReplayProtection {
 	pub chain_id: EthereumChainId,
 	pub key_manager_address: Address,
 	pub contract_address: Address,
+}
+
+impl Tokenizable for EthereumReplayProtection {
+	fn tokenize(self) -> Token {
+		Token::FixedArray(vec![
+			Token::Uint(Uint::from(self.nonce)),
+			Token::Address(self.contract_address),
+			Token::Uint(Uint::from(self.chain_id)),
+			Token::Address(self.key_manager_address),
+		])
+	}
+
+	fn param_type() -> ethabi::ParamType {
+		ParamType::Tuple(vec![
+			ParamType::Uint(256),
+			ParamType::Address,
+			ParamType::Uint(256),
+			ParamType::Address,
+		])
+	}
+}
+
+/// The `SigData` struct used for threshold signatures in the smart contracts.
+/// See [here](https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/interfaces/IShared.sol).
+#[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct SigData {
+	/// The Schnorr signature.
+	sig: Uint,
+	/// The nonce value for the AggKey. Each Signature over an AggKey should have a unique
+	/// nonce to prevent replay attacks.
+	pub nonce: Uint,
+	/// The address value derived from the random nonce value `k`. Also known as
+	/// `nonceTimesGeneratorAddress`.
+	///
+	/// Note this is unrelated to the `nonce` above. The nonce in the context of
+	/// `nonceTimesGeneratorAddress` is a generated as part of each signing round (ie. as part
+	/// of the Schnorr signature) to prevent certain classes of cryptographic attacks.
+	k_times_g_address: Address,
+}
+
+impl SigData {
+	/// Add the actual signature. This method does no verification.
+	pub fn new(nonce: impl Into<Uint>, schnorr: &SchnorrVerificationComponents) -> Self {
+		Self {
+			sig: schnorr.s.into(),
+			nonce: nonce.into(),
+			k_times_g_address: schnorr.k_times_g_address.into(),
+		}
+	}
+}
+
+impl Tokenizable for SigData {
+	fn tokenize(self) -> Token {
+		Token::Tuple(vec![
+			self.sig.tokenize(),
+			self.nonce.tokenize(),
+			self.k_times_g_address.tokenize(),
+		])
+	}
+
+	fn param_type() -> ParamType {
+		ParamType::Tuple(vec![ParamType::Uint(256), ParamType::Uint(256), ParamType::Address])
+	}
+}
+
+pub trait EthereumCall {
+	const FUNCTION_NAME: &'static str;
+
+	/// The function names and parameters, not including sigData.
+	fn function_params() -> Vec<(&'static str, ethabi::ParamType)>;
+	/// The function values to be used as call parameters, no including sigData.
+	fn function_call_args(&self) -> Vec<Token>;
+
+	fn get_function() -> ethabi::Function {
+		#[allow(deprecated)]
+		ethabi::Function {
+			name: Self::FUNCTION_NAME.into(),
+			inputs: core::iter::once(("sigData", SigData::param_type()))
+				.chain(Self::function_params())
+				.map(|(n, t)| ethabi_param(n, t))
+				.collect(),
+			outputs: vec![],
+			constant: None,
+			state_mutability: ethabi::StateMutability::NonPayable,
+		}
+	}
+	/// Encodes the call and signature into Ethereum Abi format.
+	fn abi_encoded(&self, sig_data: &SigData) -> Vec<u8> {
+		Self::get_function()
+			.encode_input(
+				&core::iter::once(sig_data.tokenize())
+					.chain(self.function_call_args())
+					.collect::<Vec<_>>(),
+			)
+			.expect(
+				r#"
+					This can only fail if the parameter types don't match the function signature.
+					Therefore, as long as the tests pass, it can't fail at runtime.
+				"#,
+			)
+	}
+	/// Generates the message hash for this call.
+	fn msg_hash(&self) -> <Keccak256 as Hash>::Output {
+		Keccak256::hash(&ethabi::encode(
+			&core::iter::once(Self::get_function().tokenize())
+				.chain(self.function_call_args())
+				.collect::<Vec<_>>(),
+		))
+	}
+}
+
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
+pub struct EthereumTransactionBuilder<C> {
+	sig_data: Option<SigData>,
+	replay_protection: EthereumReplayProtection,
+	call: C,
+}
+
+impl<C: EthereumCall> EthereumTransactionBuilder<C> {
+	pub fn new_unsigned(replay_protection: EthereumReplayProtection, call: C) -> Self {
+		Self { replay_protection, call, sig_data: None }
+	}
+
+	pub fn replay_protection(&self) -> EthereumReplayProtection {
+		self.replay_protection
+	}
+
+	pub fn chain_id(&self) -> EthereumChainId {
+		self.replay_protection.chain_id
+	}
+}
+
+impl<C: EthereumCall + Parameter + 'static> ApiCall<Ethereum> for EthereumTransactionBuilder<C> {
+	fn threshold_signature_payload(&self) -> <Ethereum as ChainCrypto>::Payload {
+		Keccak256::hash(&ethabi::encode(&[
+			self.call.msg_hash().tokenize(),
+			self.replay_protection.tokenize(),
+		]))
+	}
+
+	fn signed(
+		mut self,
+		threshold_signature: &<Ethereum as ChainCrypto>::ThresholdSignature,
+	) -> Self {
+		self.sig_data = Some(SigData::new(self.replay_protection.nonce, threshold_signature));
+		self
+	}
+
+	fn chain_encoded(&self) -> Vec<u8> {
+		self.call
+			.abi_encoded(&self.sig_data.expect("Unsigned chain encoding is invalid."))
+	}
+
+	fn is_signed(&self) -> bool {
+		self.sig_data.is_some()
+	}
+
+	fn transaction_out_id(&self) -> <Ethereum as ChainCrypto>::TransactionOutId {
+		let sig_data = self.sig_data.expect("Unsigned transaction_out_id is invalid.");
+		SchnorrVerificationComponents {
+			s: sig_data.sig.into(),
+			k_times_g_address: sig_data.k_times_g_address.into(),
+		}
+	}
 }
 
 /// Provides the environment data for ethereum-like chains.
@@ -220,7 +387,7 @@ where
 					.into_iter()
 					.map(|TransferAssetParams { asset, to, amount }| {
 						E::token_address(asset)
-							.map(|address| all_batch::EncodableTransferAssetParams {
+							.map(|address| EncodableTransferAssetParams {
 								to,
 								amount,
 								asset: address,
@@ -364,17 +531,6 @@ impl<E> ApiCall<Ethereum> for EthereumApi<E> {
 			EthereumApi::ExecutexSwapAndCall(call) => call.transaction_out_id(),
 			EthereumApi::_Phantom(..) => unreachable!(),
 		}
-	}
-}
-
-pub(super) fn ethabi_function(name: &'static str, params: Vec<ethabi::Param>) -> ethabi::Function {
-	#[allow(deprecated)]
-	ethabi::Function {
-		name: name.into(),
-		inputs: params,
-		outputs: vec![],
-		constant: None,
-		state_mutability: ethabi::StateMutability::NonPayable,
 	}
 }
 

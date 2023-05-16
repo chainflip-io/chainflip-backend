@@ -12,8 +12,8 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{
-	address::ForeignChainAddress, eth::ethabi::Address, ApiCall, CcmDepositMetadata, Chain,
-	ChainAbi, ChainCrypto, Ethereum, Polkadot,
+	address::ForeignChainAddress, eth::Address, ApiCall, CcmDepositMetadata, Chain, ChainAbi,
+	ChainCrypto, Ethereum, Polkadot,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,

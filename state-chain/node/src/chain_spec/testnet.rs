@@ -1,8 +1,9 @@
 pub use super::common::*;
-use super::StateChainEnvironment;
+use super::{get_account_id_from_seed, StateChainEnvironment};
 use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
+use cf_primitives::{AccountId, AccountRole, FlipBalance};
 use sc_service::ChainType;
-use sp_core::H256;
+use sp_core::{sr25519, H256};
 
 pub struct Config;
 
@@ -45,3 +46,28 @@ pub const DOPEY_ED25519: [u8; 32] =
 	hex_literal::hex!["5506333c28f3dd39095696362194f69893bc24e3ec553dbff106cdcbfe1beea4"];
 pub const SNOW_WHITE_SR25519: [u8; 32] =
 	hex_literal::hex!["ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"];
+
+pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance)> {
+	vec![
+		(
+			get_account_id_from_seed::<sr25519::Public>("LP_1"),
+			AccountRole::LiquidityProvider,
+			100 * FLIPPERINOS_PER_FLIP,
+		),
+		(
+			get_account_id_from_seed::<sr25519::Public>("LP_2"),
+			AccountRole::LiquidityProvider,
+			100 * FLIPPERINOS_PER_FLIP,
+		),
+		(
+			get_account_id_from_seed::<sr25519::Public>("BROKER_1"),
+			AccountRole::Broker,
+			100 * FLIPPERINOS_PER_FLIP,
+		),
+		(
+			get_account_id_from_seed::<sr25519::Public>("BROKER_2"),
+			AccountRole::Broker,
+			100 * FLIPPERINOS_PER_FLIP,
+		),
+	]
+}

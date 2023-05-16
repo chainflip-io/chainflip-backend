@@ -1,12 +1,10 @@
 //! Definitions for the "registerRedemption" transaction.
-
-use crate::eth::{EthereumCall, Tokenizable};
-
+use super::*;
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::{Address, ParamType, Token, Uint};
 use scale_info::TypeInfo;
 use sp_runtime::RuntimeDebug;
-use sp_std::{prelude::*, vec};
+use sp_std::vec;
 
 /// Represents all the arguments required to build the call to StateChainGateway's
 /// 'requestRedemption' function.
@@ -64,8 +62,8 @@ impl EthereumCall for RegisterRedemption {
 #[cfg(test)]
 mod test_register_redemption {
 	use crate::eth::{
-		api::{abi::load_abi, EthereumReplayProtection},
-		ApiCall, EthereumTransactionBuilder, SchnorrVerificationComponents,
+		api::{abi::load_abi, ApiCall, EthereumReplayProtection, EthereumTransactionBuilder},
+		SchnorrVerificationComponents,
 	};
 
 	use super::*;
@@ -97,7 +95,7 @@ mod test_register_redemption {
 				key_manager_address: FAKE_KEYMAN_ADDR.into(),
 				contract_address: FAKE_SCGW_ADDR.into(),
 			},
-			RegisterRedemption::new(&TEST_ACCT, AMOUNT, &TEST_ADDR, EXPIRY_SECS),
+			super::RegisterRedemption::new(&TEST_ACCT, AMOUNT, &TEST_ADDR, EXPIRY_SECS),
 		);
 
 		let expected_msg_hash = register_redemption_runtime.threshold_signature_payload();
@@ -138,6 +136,6 @@ mod test_register_redemption {
 
 	#[test]
 	fn test_max_encoded_len() {
-		cf_test_utilities::ensure_max_encoded_len_is_exact::<RegisterRedemption>();
+		cf_test_utilities::ensure_max_encoded_len_is_exact::<super::RegisterRedemption>();
 	}
 }

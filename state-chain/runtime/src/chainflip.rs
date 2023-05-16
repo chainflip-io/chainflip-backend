@@ -256,14 +256,14 @@ impl ReplayProtectionProvider<Ethereum> for EthEnvironment {
 }
 
 impl EthEnvironmentProvider for EthEnvironment {
-	fn token_address(asset: assets::eth::Asset) -> Option<eth::ethabi::Address> {
+	fn token_address(asset: assets::eth::Asset) -> Option<eth::Address> {
 		match asset {
 			assets::eth::Asset::Eth => Some(ETHEREUM_ETH_ADDRESS.into()),
 			erc20 => Environment::supported_eth_assets(erc20).map(Into::into),
 		}
 	}
 
-	fn contract_address(contract: EthereumContract) -> eth::ethabi::Address {
+	fn contract_address(contract: EthereumContract) -> eth::Address {
 		match contract {
 			EthereumContract::StateChainGateway =>
 				Environment::state_chain_gateway_address().into(),

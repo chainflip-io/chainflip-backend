@@ -1,0 +1,35 @@
+on:
+  workflow_call:
+jobs:
+  fetch:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Get branch of tag
+        shell: bash
+        run: |
+          RAW=$(./ci/scripts/extract_version.sh ${{ github.ref_name }})
+          echo "MAJOR_MINOR=$RAW" >> $GITHUB_ENV
+
+      - name: Fetch binaries from release/${{ env.MAJOR_MINOR }}
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: release-sisyphos.yml
+          name: chainflip-backend-bin
+          branch: release/${{ env.MAJOR_MINOR }}
+          github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+          search_artifacts: true
+          check_artifacts: true
+
+      - name: Re-upload binary artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-backend-bin
+          path: |
+            chainflip-node
+            chainflip-engine
+            chainflip-cli
+            chainflip-broker-api
+            wbuild/state-chain-runtime/state_chain_runtime*.wasm

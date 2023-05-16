@@ -6,14 +6,19 @@ pub mod benchmarking;
 
 pub mod deposit_address;
 
+use self::api::{
+	ethabi_param, tokenizable::Tokenizable, EthereumChainId, EthereumReplayProtection,
+};
 use crate::*;
 pub use cf_primitives::chains::Ethereum;
 use cf_primitives::{chains::assets, ChannelId};
-
 use codec::{Decode, Encode, MaxEncodedLen};
-pub use ethabi;
-use ethabi::{Address, ParamType, Token, Uint};
-use ethereum_types::{H160, H256};
+use ethabi::ParamType;
+pub use ethabi::{
+	ethereum_types::{H256, U256},
+	Address, Hash as TxHash, Token, Uint, Word,
+};
+use ethereum_types::H160;
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -27,8 +32,6 @@ use sp_std::{
 	convert::{TryFrom, TryInto},
 	str, vec,
 };
-
-use self::api::{ethabi_param, EthereumChainId, EthereumReplayProtection};
 
 // Reference constants for the chain spec
 pub const CHAIN_ID_MAINNET: u64 = 1;
@@ -72,12 +75,6 @@ impl ChainCrypto for Ethereum {
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
 		H256(Blake2_256::hash(&agg_key.to_pubkey_compressed()))
 	}
-}
-
-//--------------------------//
-pub trait Tokenizable {
-	fn param_type() -> ethabi::ParamType;
-	fn tokenize(self) -> Token;
 }
 
 #[derive(
@@ -126,13 +123,17 @@ pub trait EthereumCall {
 	fn function_call_args(&self) -> Vec<Token>;
 
 	fn get_function() -> ethabi::Function {
-		api::ethabi_function(
-			Self::FUNCTION_NAME,
-			core::iter::once(("sigData", SigData::param_type()))
+		#[allow(deprecated)]
+		ethabi::Function {
+			name: Self::FUNCTION_NAME.into(),
+			inputs: core::iter::once(("sigData", SigData::param_type()))
 				.chain(Self::function_params())
 				.map(|(n, t)| ethabi_param(n, t))
 				.collect(),
-		)
+			outputs: vec![],
+			constant: None,
+			state_mutability: ethabi::StateMutability::NonPayable,
+		}
 	}
 	/// Encodes the call and signature into Ethereum Abi format.
 	fn abi_encoded(&self, sig_data: &SigData) -> Vec<u8> {
@@ -239,86 +240,6 @@ impl Tokenizable for SigData {
 
 	fn param_type() -> ParamType {
 		ParamType::Tuple(vec![ParamType::Uint(256), ParamType::Uint(256), ParamType::Address])
-	}
-}
-
-impl Tokenizable for EthereumReplayProtection {
-	fn tokenize(self) -> Token {
-		Token::FixedArray(vec![
-			Token::Uint(Uint::from(self.nonce)),
-			Token::Address(self.contract_address),
-			Token::Uint(Uint::from(self.chain_id)),
-			Token::Address(self.key_manager_address),
-		])
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::Tuple(vec![
-			ParamType::Uint(256),
-			ParamType::Address,
-			ParamType::Uint(256),
-			ParamType::Address,
-		])
-	}
-}
-
-impl Tokenizable for Uint {
-	fn tokenize(self) -> Token {
-		Token::Uint(self)
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::Uint(256)
-	}
-}
-
-impl Tokenizable for H256 {
-	fn tokenize(self) -> Token {
-		Token::FixedBytes(self.0.into())
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::Uint(256)
-	}
-}
-
-impl Tokenizable for u64 {
-	fn tokenize(self) -> Token {
-		Token::Uint(self.into())
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::Uint(256)
-	}
-}
-
-impl Tokenizable for Address {
-	fn tokenize(self) -> Token {
-		Token::Address(self)
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::Address
-	}
-}
-
-impl Tokenizable for ethabi::Function {
-	fn tokenize(self) -> Token {
-		Token::FixedBytes(self.short_signature().to_vec())
-	}
-
-	fn param_type() -> ethabi::ParamType {
-		ParamType::FixedBytes(4)
-	}
-}
-
-impl<const S: usize> Tokenizable for [u8; S] {
-	fn param_type() -> ethabi::ParamType {
-		ParamType::FixedBytes(S)
-	}
-
-	fn tokenize(self) -> Token {
-		Token::FixedBytes(self.to_vec())
 	}
 }
 
@@ -579,41 +500,6 @@ impl Tokenizable for AggKey {
 	}
 }
 
-/// [TryFrom] implementation to convert some bytes to an [AggKey].
-///
-/// Conversion fails *unless* the first byte is the y parity byte encoded as `2` or `3` *and* the
-/// total length of the slice is 33 bytes.
-impl TryFrom<&[u8]> for AggKey {
-	type Error = &'static str;
-
-	fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
-		if bytes.len() != 33 {
-			log::error!("Invalid aggKey format: Should be 33 bytes total, got {}", bytes.len());
-			return Err("Invalid aggKey format: Should be 33 bytes total.")
-		}
-
-		let pub_key_y_parity = match bytes[0] {
-			2 => Ok(ParityBit::Even),
-			3 => Ok(ParityBit::Odd),
-			invalid => {
-				log::error!(
-					"Invalid aggKey format: Leading byte should be 2 or 3, got {}",
-					invalid,
-				);
-
-				Err("Invalid aggKey format: Leading byte should be 2 or 3")
-			},
-		}?;
-
-		let pub_key_x: [u8; 32] = bytes[1..].try_into().map_err(|e| {
-			log::error!("Invalid aggKey format: {:?}", e);
-			"Invalid aggKey format: x coordinate should be 32 bytes."
-		})?;
-
-		Ok(Self { pub_key_x, pub_key_y_parity })
-	}
-}
-
 #[derive(Encode, Decode, TypeInfo, Copy, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct SchnorrVerificationComponents {
 	/// Scalar component
@@ -864,21 +750,6 @@ mod tests {
 		let mut bytes = [0u8; 33];
 		bytes[0] = 3;
 		let key = AggKey::from_pubkey_compressed(bytes);
-		assert!(key.pub_key_y_parity.is_odd());
-	}
-
-	#[test]
-	fn test_agg_key_conversion_with_try_from() {
-		// 2 == even
-		let mut bytes = vec![0u8; 33];
-		bytes[0] = 2;
-		let key = AggKey::try_from(&bytes[..]).expect("Should be a valid pubkey.");
-		assert!(key.pub_key_y_parity.is_even());
-
-		// 3 == odd
-		let mut bytes = vec![0u8; 33];
-		bytes[0] = 3;
-		let key = AggKey::try_from(&bytes[..]).expect("Should be a valid pubkey.");
 		assert!(key.pub_key_y_parity.is_odd());
 	}
 }

@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 
 if [ $1 == 1 ]; then
-  rm -rf localnet/init/keyshare/bashful.db
-  GENESIS_NODE_IDS=localnet/init/keyshare/1-node.csv ./target/debug/generate-genesis-keys > localnet/init/keyshare/1_node_agg_keys.json
-  mv bashful.db localnet/init/keyshare/
+  mkdir -p localnet/init/keyshare/1-node
+  rm -rf localnet/init/keyshare/1-node/bashful.db
+  rm -rf ./*.db
+  GENESIS_NODE_IDS=localnet/init/keyshare/1-node.csv ./target/debug/generate-genesis-keys > localnet/init/keyshare/1-node/agg_keys.json
+  mv bashful.db localnet/init/keyshare/1-node
 elif [ $1 == 3 ]; then
-  GENESIS_NODE_IDS=localnet/init/keyshare/3-node.csv ./target/debug/generate-genesis-keys > 3_node_agg_keys.json
+  mkdir -p localnet/init/keyshare/3-node
+  rm -rf localnet/init/keyshare/3-node/*.db
+  rm -rf ./*.db
+  GENESIS_NODE_IDS=localnet/init/keyshare/3-node.csv ./target/debug/generate-genesis-keys > localnet/init/keyshare/3-node/agg_keys.json
+  mv *.db localnet/init/keyshare/3-node
 else
   echo "Incorrect option"
 fi
