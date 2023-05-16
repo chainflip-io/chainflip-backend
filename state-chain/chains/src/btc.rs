@@ -271,8 +271,8 @@ impl GetUtxoAmount for Utxo {
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BitcoinOutput {
-	amount: u64,
-	script_pubkey: BitcoinScript,
+	pub amount: u64,
+	pub script_pubkey: BitcoinScript,
 }
 
 fn get_tapleaf_hash(pubkey_x: [u8; 32], salt: u32) -> Hash {
@@ -422,7 +422,7 @@ pub fn scriptpubkey_from_address(
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BitcoinTransaction {
 	inputs: Vec<Utxo>,
-	outputs: Vec<BitcoinOutput>,
+	pub outputs: Vec<BitcoinOutput>,
 	signatures: Vec<Signature>,
 	transaction_bytes: Vec<u8>,
 	old_utxo_input_indices: VecDeque<u32>,

@@ -23,7 +23,6 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets::btc, EpochIndex};
 use futures::StreamExt;
-use pallet_cf_environment::ChangeUtxoWitness;
 use pallet_cf_ingress_egress::DepositWitness;
 use state_chain_runtime::BitcoinInstance;
 use tokio::sync::Mutex;
@@ -55,12 +54,10 @@ pub fn filter_interesting_utxos(
 		BitcoinScriptBounded,
 	>,
 	tx_hash_monitor: &mut AddressMonitor<[u8; 32], [u8; 32], ()>,
-	change_addresses: &Vec<([u8; 32], Vec<u8>)>,
-) -> (Vec<DepositWitness<Bitcoin>>, Vec<ChangeUtxoWitness>, Vec<SuccessWitness>) {
+) -> (Vec<DepositWitness<Bitcoin>>, Vec<SuccessWitness>) {
 	address_monitor.sync_addresses();
 	tx_hash_monitor.sync_addresses();
 	let mut deposit_witnesses = vec![];
-	let mut change_witnesses = vec![];
 	let mut tx_success_witnesses = vec![];
 
 	for tx in txs {
@@ -83,27 +80,11 @@ pub fn filter_interesting_utxos(
 						amount: tx_out.value,
 						tx_id: UtxoId { tx_hash, vout },
 					});
-
-				// TODO: Check that this can't be abused by someone sending to our change address at
-				// a different vout?
-				} else if let Some(change_pubkey) =
-					change_addresses.iter().find_map(|(key, address)| {
-						if address == &script_pubkey_bytes {
-							Some(key)
-						} else {
-							None
-						}
-					}) {
-					change_witnesses.push(ChangeUtxoWitness {
-						amount: tx_out.value,
-						change_pubkey: *change_pubkey,
-						utxo_id: UtxoId { tx_hash, vout },
-					});
 				}
 			}
 		}
 	}
-	(deposit_witnesses, change_witnesses, tx_success_witnesses)
+	(deposit_witnesses, tx_success_witnesses)
 }
 
 pub async fn start<StateChainClient>(
@@ -168,12 +149,8 @@ where
 			})
 			.collect::<Vec<_>>();
 
-		let (deposit_witnesses, change_witnesses, tx_success_witnesses) = filter_interesting_utxos(
-			block.txdata,
-			address_monitor,
-			tx_hash_monitor,
-			&change_addresses,
-		);
+		let (deposit_witnesses, tx_success_witnesses) =
+			filter_interesting_utxos(block.txdata, address_monitor, tx_hash_monitor);
 
 		if !deposit_witnesses.is_empty() {
 			self.state_chain_client
@@ -183,18 +160,6 @@ where
 							deposit_witnesses,
 						}
 						.into(),
-					),
-					epoch_index: self.epoch_index,
-				})
-				.await;
-		}
-
-		if !change_witnesses.is_empty() {
-			self.state_chain_client
-				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-					call: Box::new(
-						pallet_cf_environment::Call::add_bitcoin_change_utxos { change_witnesses }
-							.into(),
 					),
 					epoch_index: self.epoch_index,
 				})
@@ -356,15 +321,13 @@ mod test_utxo_filtering {
 	fn filter_interesting_utxos_no_utxos() {
 		let txs = vec![fake_transaction(vec![]), fake_transaction(vec![])];
 
-		let (deposit_witnesses, change_witnesses, success_witnesses) = filter_interesting_utxos(
+		let (deposit_witnesses, success_witnesses) = filter_interesting_utxos(
 			txs,
 			&mut AddressMonitor::new(BTreeSet::new()).1,
 			&mut AddressMonitor::new(BTreeSet::new()).1,
-			&Default::default(),
 		);
 
 		assert!(deposit_witnesses.is_empty());
-		assert!(change_witnesses.is_empty());
 		assert!(success_witnesses.is_empty());
 	}
 
@@ -395,7 +358,6 @@ mod test_utxo_filtering {
 			txs,
 			&mut AddressMonitor::new(BTreeSet::from([btc_deposit_script])).1,
 			&mut AddressMonitor::new(BTreeSet::new()).1,
-			&Default::default(),
 		);
 		assert_eq!(deposit_witnesses.len(), 2);
 		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
@@ -427,7 +389,6 @@ mod test_utxo_filtering {
 			txs,
 			&mut AddressMonitor::new(BTreeSet::from([btc_deposit_script])).1,
 			&mut AddressMonitor::new(BTreeSet::new()).1,
-			&Default::default(),
 		);
 		assert_eq!(deposit_witnesses.len(), 2);
 		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
@@ -449,7 +410,6 @@ mod test_utxo_filtering {
 			txs,
 			&mut AddressMonitor::new(BTreeSet::from([btc_deposit_script])).1,
 			&mut AddressMonitor::new(BTreeSet::new()).1,
-			&Default::default(),
 		);
 		assert_eq!(deposit_witnesses.len(), 1);
 		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
@@ -466,15 +426,13 @@ mod test_utxo_filtering {
 		];
 		let tx_hashes = txs.iter().map(|tx| tx.txid().into_inner()).collect::<Vec<_>>();
 
-		let (deposit_witnesses, change_witnesses, success_witnesses) = filter_interesting_utxos(
+		let (deposit_witnesses, success_witnesses) = filter_interesting_utxos(
 			txs,
 			&mut AddressMonitor::new(BTreeSet::new()).1,
 			&mut AddressMonitor::new(BTreeSet::from_iter(tx_hashes.clone())).1,
-			&Default::default(),
 		);
 
 		assert!(deposit_witnesses.is_empty());
-		assert!(change_witnesses.is_empty());
 		assert_eq!(success_witnesses.len(), 2);
 		assert_eq!(success_witnesses[0].tx_hash, tx_hashes[0]);
 		assert_eq!(success_witnesses[1].tx_hash, tx_hashes[1]);

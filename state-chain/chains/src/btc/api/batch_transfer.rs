@@ -14,6 +14,7 @@ use sp_runtime::RuntimeDebug;
 pub struct BatchTransfer {
 	/// The handler for creating and signing polkadot extrinsics
 	pub bitcoin_transaction: BitcoinTransaction,
+	pub agg_key: AggKey,
 }
 
 impl BatchTransfer {
@@ -28,6 +29,7 @@ impl BatchTransfer {
 				input_utxos,
 				outputs,
 			),
+			agg_key: agg_key.clone(),
 		}
 	}
 }

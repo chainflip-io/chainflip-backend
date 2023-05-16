@@ -20,7 +20,8 @@ use cf_chains::{
 	btc::{
 		api::{BitcoinApi, SelectedUtxos},
 		deposit_address::derive_btc_deposit_address_from_script,
-		scriptpubkey_from_address, Bitcoin, BitcoinTransactionData, BtcAmount,
+		scriptpubkey_from_address, Bitcoin, BitcoinTransactionData, BtcAmount, UtxoId,
+		CHANGE_ADDRESS_SALT,
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
@@ -41,8 +42,8 @@ use cf_primitives::{
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster,
 	DepositApi, DepositHandler, EgressApi, EmergencyRotation, EpochInfo, Heartbeat, Issuance,
-	KeyProvider, NetworkState, OnRotationCallback, RewardsDistribution, RuntimeUpgrade,
-	VaultTransitionHandler,
+	KeyProvider, NetworkState, OnBroadcastReady, OnRotationCallback, RewardsDistribution,
+	RuntimeUpgrade, VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -609,5 +610,35 @@ impl OnRotationCallback<Bitcoin> for RotationCallbackProvider {
 			}
 			.into(),
 		)
+	}
+}
+
+pub struct BroadcastReadyProvider;
+impl OnBroadcastReady<Ethereum> for BroadcastReadyProvider {
+	type ApiCall = EthereumApi<EthEnvironment>;
+}
+impl OnBroadcastReady<Polkadot> for BroadcastReadyProvider {
+	type ApiCall = PolkadotApi<DotEnvironment>;
+}
+impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
+	type ApiCall = BitcoinApi<BtcEnvironment>;
+
+	fn on_broadcast_ready(api_call: &Self::ApiCall) {
+		match api_call {
+			BitcoinApi::BatchTransfer(batch_transfer) => {
+				let tx_hash = batch_transfer.bitcoin_transaction.txid();
+				let outputs = batch_transfer.bitcoin_transaction.outputs.clone();
+				let output_len = outputs.len();
+				let vout = output_len - 1;
+				let change_output = outputs.get(vout).unwrap();
+				Environment::add_bitcoin_change_utxo(
+					change_output.amount,
+					UtxoId { tx_hash, vout: vout as u32 },
+					CHANGE_ADDRESS_SALT,
+					batch_transfer.agg_key.current,
+				);
+			},
+			_ => unreachable!(),
+		}
 	}
 }

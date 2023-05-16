@@ -16,7 +16,7 @@ pub use weights::WeightInfo;
 use cf_chains::{ApiCall, Chain, ChainAbi, ChainCrypto, FeeRefundCalculator, TransactionBuilder};
 use cf_traits::{
 	offence_reporting::OffenceReporter, BroadcastCleanup, Broadcaster, Chainflip, EpochInfo,
-	EpochKey, SingleSignerNomination, ThresholdSigner,
+	EpochKey, OnBroadcastReady, SingleSignerNomination, ThresholdSigner,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -70,7 +70,10 @@ pub enum PalletOffence {
 pub mod pallet {
 	use super::*;
 	use cf_chains::benchmarking_value::BenchmarkValue;
-	use cf_traits::{AccountRoleRegistry, KeyProvider, OnRotationCallback, SingleSignerNomination};
+	use cf_traits::{
+		AccountRoleRegistry, KeyProvider, OnBroadcastReady, OnRotationCallback,
+		SingleSignerNomination,
+	};
 	use frame_support::{ensure, pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;
 
@@ -177,6 +180,8 @@ pub mod pallet {
 			Self::TargetChain,
 			Origin = <Self as frame_system::Config>::RuntimeOrigin,
 		>;
+
+		type BroadcastReadyProvider: OnBroadcastReady<Self::TargetChain, ApiCall = Self::ApiCall>;
 
 		/// The timeout duration for the broadcast, measured in number of blocks.
 		#[pallet::constant]
@@ -638,6 +643,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		broadcast_id: BroadcastId,
 	) -> BroadcastAttemptId {
 		let transaction_out_id = api_call.transaction_out_id();
+
+		T::BroadcastReadyProvider::on_broadcast_ready(&api_call);
+
 		TransactionOutIdToBroadcastId::<T, I>::insert(&transaction_out_id, broadcast_id);
 
 		ThresholdSignatureData::<T, I>::insert(broadcast_id, (api_call, signature));

@@ -82,9 +82,9 @@ pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
-	epoch_transition::ChainflipEpochTransitions, BtcEnvironment, BtcVaultTransitionHandler,
-	ChainAddressConverter, ChainflipHeartbeat, EthEnvironment, EthVaultTransitionHandler,
-	RotationCallbackProvider, TokenholderGovernanceBroadcaster,
+	epoch_transition::ChainflipEpochTransitions, BroadcastReadyProvider, BtcEnvironment,
+	BtcVaultTransitionHandler, ChainAddressConverter, ChainflipHeartbeat, EthEnvironment,
+	EthVaultTransitionHandler, RotationCallbackProvider, TokenholderGovernanceBroadcaster,
 };
 
 use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
@@ -661,6 +661,7 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EthereumInstance>;
 	type RotationCallbackProvider = RotationCallbackProvider;
+	type BroadcastReadyProvider = BroadcastReadyProvider;
 	type BroadcastTimeout = ConstU32<{ 10 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type KeyProvider = EthereumVault;
@@ -681,6 +682,7 @@ impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, PolkadotInstance>;
 	type RotationCallbackProvider = RotationCallbackProvider;
+	type BroadcastReadyProvider = BroadcastReadyProvider;
 	type BroadcastTimeout = ConstU32<{ 10 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type KeyProvider = PolkadotVault;
@@ -701,6 +703,7 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, BitcoinInstance>;
 	type RotationCallbackProvider = RotationCallbackProvider;
+	type BroadcastReadyProvider = BroadcastReadyProvider;
 	type BroadcastTimeout = ConstU32<{ 10 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type KeyProvider = BitcoinVault;

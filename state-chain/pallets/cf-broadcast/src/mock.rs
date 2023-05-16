@@ -9,7 +9,7 @@ use cf_chains::{
 use cf_traits::{
 	impl_mock_chainflip,
 	mocks::{signer_nomination::MockNominator, threshold_signer::MockThresholdSigner},
-	AccountRoleRegistry, EpochKey, KeyState, OnRotationCallback,
+	AccountRoleRegistry, EpochKey, KeyState, OnBroadcastReady, OnRotationCallback,
 };
 use codec::{Decode, Encode};
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
@@ -130,6 +130,11 @@ impl MockKeyProvider {
 	}
 }
 
+pub struct MockBroadcastReadyProvider;
+impl OnBroadcastReady<MockEthereum> for MockBroadcastReadyProvider {
+	type ApiCall = MockApiCall<MockEthereum>;
+}
+
 impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
@@ -147,6 +152,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type RuntimeOrigin = RuntimeOrigin;
 	type BroadcastCallable = MockCallback;
 	type RotationCallbackProvider = MockRotationCallbackProvider;
+	type BroadcastReadyProvider = MockBroadcastReadyProvider;
 }
 
 // Build genesis storage according to the mock runtime.

@@ -868,3 +868,9 @@ pub trait OnRotationCallback<C: ChainCrypto> {
 		None
 	}
 }
+
+pub trait OnBroadcastReady<C: ChainAbi> {
+	type ApiCall: ApiCall<C>;
+
+	fn on_broadcast_ready(_api_call: &Self::ApiCall) {}
+}
