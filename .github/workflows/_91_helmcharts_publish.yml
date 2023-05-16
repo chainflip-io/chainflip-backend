@@ -2,10 +2,10 @@ name: Publish Helm Chart 📚
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - charts/**
+    # branches:
+    #   - main
+    # paths:
+    #   - charts/**
 env:
   FORCE_COLOR: 1
 
