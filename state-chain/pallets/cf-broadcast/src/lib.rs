@@ -559,20 +559,18 @@ pub mod pallet {
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn clean_up_broadcast_storage(broadcast_id: BroadcastId) {
 		let first_attempt = AttemptCount::default();
-		let transaction_signing_attepmpt: TransactionSigningAttempt<T, I> =
-			AwaitingBroadcast::take(BroadcastAttemptId {
-				broadcast_id,
-				attempt_count: first_attempt,
-			})
-			.expect("We must have the first attempt if we created a broadcast");
+		let transaction_signing_attempt = AwaitingBroadcast::<T, I>::get(BroadcastAttemptId {
+			broadcast_id,
+			attempt_count: first_attempt,
+		});
 
-		TransactionOutIdToBroadcastId::<T, I>::remove(
-			transaction_signing_attepmpt.broadcast_attempt.transaction_out_id,
-		);
+		if let Some(transaction_signing_attempt) = transaction_signing_attempt {
+			TransactionOutIdToBroadcastId::<T, I>::remove(
+				transaction_signing_attempt.broadcast_attempt.transaction_out_id,
+			);
+		};
 
-		for attempt_count in
-			first_attempt.saturating_add(1)..=(BroadcastAttemptCount::<T, I>::take(broadcast_id))
-		{
+		for attempt_count in first_attempt..=(BroadcastAttemptCount::<T, I>::take(broadcast_id)) {
 			AwaitingBroadcast::<T, I>::remove(BroadcastAttemptId { broadcast_id, attempt_count });
 		}
 

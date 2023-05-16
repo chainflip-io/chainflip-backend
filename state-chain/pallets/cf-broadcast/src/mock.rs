@@ -9,7 +9,7 @@ use cf_chains::{
 use cf_traits::{
 	impl_mock_chainflip,
 	mocks::{signer_nomination::MockNominator, threshold_signer::MockThresholdSigner},
-	AccountRoleRegistry, EpochKey, KeyState,
+	AccountRoleRegistry, EpochKey, KeyState, OnRotationCallback,
 };
 use codec::{Decode, Encode};
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
@@ -90,6 +90,8 @@ thread_local! {
 	pub static SIGNATURE_REQUESTS: RefCell<Vec<<Ethereum as ChainCrypto>::Payload>> = RefCell::new(vec![]);
 }
 
+pub type EthMockThresholdSigner = MockThresholdSigner<Ethereum, crate::mock::RuntimeCall>;
+
 pub struct MockKeyProvider;
 
 impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
@@ -100,6 +102,12 @@ impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 			key_state: KeyState::Unlocked,
 		})
 	}
+}
+
+pub struct MockRotationCallbackProvider;
+impl OnRotationCallback<MockEthereum> for MockRotationCallbackProvider {
+	type Callback = MockCallback;
+	type Origin = RuntimeOrigin;
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -138,6 +146,7 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type KeyProvider = MockKeyProvider;
 	type RuntimeOrigin = RuntimeOrigin;
 	type BroadcastCallable = MockCallback;
+	type RotationCallbackProvider = MockRotationCallbackProvider;
 }
 
 // Build genesis storage according to the mock runtime.

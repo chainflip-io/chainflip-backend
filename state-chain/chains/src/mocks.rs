@@ -149,6 +149,7 @@ impl ChainAbi for MockEthereum {
 pub struct MockApiCall<C: ChainAbi> {
 	pub payload: C::Payload,
 	pub sig: Option<C::ThresholdSignature>,
+	pub tx_out_id: C::TransactionOutId,
 }
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -157,6 +158,7 @@ impl<C: ChainCrypto + ChainAbi> BenchmarkValue for MockApiCall<C> {
 		Self {
 			payload: C::Payload::benchmark_value(),
 			sig: Some(C::ThresholdSignature::benchmark_value()),
+			tx_out_id: C::TransactionOutId::benchmark_value(),
 		}
 	}
 }
@@ -185,7 +187,7 @@ impl<C: ChainAbi> ApiCall<C> for MockApiCall<C> {
 	}
 
 	fn transaction_out_id(&self) -> <C as ChainCrypto>::TransactionOutId {
-		todo!()
+		self.tx_out_id.clone()
 	}
 }
 

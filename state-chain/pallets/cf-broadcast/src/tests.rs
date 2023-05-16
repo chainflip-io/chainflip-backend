@@ -5,11 +5,12 @@ use crate::{
 	TransactionOutIdToBroadcastId, WeightInfo,
 };
 use cf_chains::{
+	eth::SchnorrVerificationComponents,
 	mocks::{
 		MockApiCall, MockEthereum, MockThresholdSignature, MockTransaction, MockTransactionBuilder,
 		ETH_TX_FEE,
 	},
-	FeeRefundCalculator,
+	ChainCrypto, FeeRefundCalculator,
 };
 use cf_traits::{
 	mocks::{signer_nomination::MockNominator, threshold_signer::MockThresholdSigner},
@@ -117,21 +118,27 @@ fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 	assert!(ThresholdSignatureData::<Test, Instance1>::get(broadcast_id).is_none());
 }
 
-fn start_mock_broadcast() -> BroadcastAttemptId {
+fn start_mock_broadcast_tx_out_id(
+	tx_out_id: <MockEthereum as ChainCrypto>::TransactionOutId,
+) -> BroadcastAttemptId {
 	Broadcaster::start_broadcast(
 		&MockThresholdSignature::default(),
 		MockTransaction,
-		MockApiCall::default(),
+		MockApiCall { tx_out_id, ..Default::default() },
 		MockApiCall::<MockEthereum>::default().payload,
 		1,
 	)
+}
+
+fn start_mock_broadcast() -> BroadcastAttemptId {
+	start_mock_broadcast_tx_out_id(Default::default())
 }
 
 // The happy path :)
 #[test]
 fn transaction_succeeded_results_in_refund_for_signer() {
 	new_test_ext().execute_with(|| {
-		let broadcast_attempt_id = start_mock_broadcast();
+		let broadcast_attempt_id = start_mock_broadcast_tx_out_id(MOCK_TRANSACTION_OUT_ID);
 		let tx_sig_request =
 			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
 
@@ -141,6 +148,7 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 
 		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
+			2u32.into(),
 			MOCK_TRANSACTION_OUT_ID,
 			nominee,
 			ETH_TX_FEE,
@@ -275,6 +283,7 @@ fn test_sigdata_with_no_match_is_noop() {
 					*<Test as Chainflip>::EpochInfo::current_authorities().first().unwrap()
 				)
 				.into(),
+				2u32.into(),
 				MOCK_TRANSACTION_OUT_ID,
 				Default::default(),
 				ETH_TX_FEE,
@@ -289,7 +298,7 @@ fn test_sigdata_with_no_match_is_noop() {
 #[test]
 fn transaction_succeeded_after_timeout_reports_failed_nodes() {
 	new_test_ext().execute_with(|| {
-		start_mock_broadcast();
+		start_mock_broadcast_tx_out_id(MOCK_TRANSACTION_OUT_ID);
 
 		let mut failed_authorities = vec![];
 		// The last node succeeds
@@ -305,6 +314,7 @@ fn transaction_succeeded_after_timeout_reports_failed_nodes() {
 
 		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
+			2u32.into(),
 			MOCK_TRANSACTION_OUT_ID,
 			Default::default(),
 			ETH_TX_FEE,
@@ -489,11 +499,24 @@ fn re_request_threshold_signature_on_invalid_tx_params() {
 #[test]
 fn threshold_sign_and_broadcast_with_callback() {
 	new_test_ext().execute_with(|| {
-		Broadcaster::threshold_sign_and_broadcast(MockApiCall::default(), Some(MockCallback));
-		let broadcast_attempt_id = start_mock_broadcast();
+		let api_call = MockApiCall {
+			payload: Default::default(),
+			sig: Default::default(),
+			tx_out_id: MOCK_TRANSACTION_OUT_ID,
+		};
+
+		pub const ETH_DUMMY_SIG: SchnorrVerificationComponents =
+			SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
+
+		let (broadcast_id, _threshold_request_id) =
+			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), Some(MockCallback), false);
+
+		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+
 		assert_eq!(RequestCallbacks::<Test, Instance1>::get(1), Some(MockCallback));
 		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
+			2u32.into(),
 			MOCK_TRANSACTION_OUT_ID,
 			Default::default(),
 			ETH_TX_FEE,
@@ -502,14 +525,12 @@ fn threshold_sign_and_broadcast_with_callback() {
 		let mut events = System::events();
 		assert_eq!(
 			events.pop().expect("an event").event,
-			RuntimeEvent::Broadcaster(crate::Event::BroadcastSuccess {
-				broadcast_id: broadcast_attempt_id.broadcast_id
-			})
+			RuntimeEvent::Broadcaster(crate::Event::BroadcastSuccess { broadcast_id })
 		);
 		assert_eq!(
 			events.pop().expect("an event").event,
 			RuntimeEvent::Broadcaster(crate::Event::BroadcastCallbackExecuted {
-				broadcast_id: broadcast_attempt_id.broadcast_id,
+				broadcast_id,
 				result: Ok(())
 			})
 		);

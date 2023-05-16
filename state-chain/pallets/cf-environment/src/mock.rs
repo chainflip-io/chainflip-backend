@@ -116,6 +116,12 @@ impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		unimplemented!()
 	}
+
+	fn threshold_sign_and_broadcast_for_rotation(
+		_api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
+		unimplemented!()
+	}
 }
 impl BroadcastCleanup<Polkadot> for MockPolkadotBroadcaster {
 	fn clean_up_broadcast(_broadcast_id: BroadcastId) -> sp_runtime::DispatchResult {
