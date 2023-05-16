@@ -371,7 +371,7 @@ fn can_reject_invalid_ccms() {
 		let ccm = CcmDepositMetadata {
 			message: vec![0x00],
 			gas_budget,
-			refund_address: ForeignChainAddress::Dot(Default::default()),
+			cf_parameters: vec![],
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 
@@ -456,7 +456,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 		let ccm = CcmDepositMetadata {
 			message: vec![0x01],
 			gas_budget,
-			refund_address: ForeignChainAddress::Dot([0x01; 32]),
+			cf_parameters: vec![],
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 
@@ -521,7 +521,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 				amount: deposit_amount - gas_budget,
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x01],
-				refund_address: ForeignChainAddress::Dot([0x01; 32]),
+				cf_parameters: vec![],
 			},]
 		);
 
@@ -547,7 +547,7 @@ fn can_process_ccms_via_extrinsic() {
 		let ccm = CcmDepositMetadata {
 			message: vec![0x02],
 			gas_budget,
-			refund_address: ForeignChainAddress::Dot([0x02; 32]),
+			cf_parameters: vec![],
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 
@@ -604,7 +604,7 @@ fn can_process_ccms_via_extrinsic() {
 				amount: deposit_amount - gas_budget,
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x02],
-				refund_address: ForeignChainAddress::Dot([0x02; 32]),
+				cf_parameters: vec![],
 			},]
 		);
 
@@ -637,7 +637,7 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 		let ccm = CcmDepositMetadata {
 			message: vec![0x00],
 			gas_budget,
-			refund_address: ForeignChainAddress::Eth([0x01; 20]),
+			cf_parameters: vec![],
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 		assert_ok!(Swapping::ccm_deposit(
@@ -686,7 +686,7 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 				amount: deposit_amount - gas_budget,
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x00],
-				refund_address: ForeignChainAddress::Eth([0x01; 20]),
+				cf_parameters: vec![],
 			},]
 		);
 
@@ -719,7 +719,7 @@ fn can_handle_ccms_with_native_gas_asset() {
 		let ccm = CcmDepositMetadata {
 			message: vec![0x00],
 			gas_budget,
-			refund_address: ForeignChainAddress::Eth([0x01; 20]),
+			cf_parameters: vec![],
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 
@@ -769,7 +769,7 @@ fn can_handle_ccms_with_native_gas_asset() {
 				amount: deposit_amount - gas_budget,
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x00],
-				refund_address: ForeignChainAddress::Eth([0x01; 20]),
+				cf_parameters: vec![],
 			},]
 		);
 
@@ -802,7 +802,7 @@ fn can_handle_ccms_with_no_swaps_needed() {
 		let ccm = CcmDepositMetadata {
 			message: vec![0x00],
 			gas_budget,
-			refund_address: ForeignChainAddress::Eth([0x01; 20]),
+			cf_parameters: vec![],
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 
@@ -833,7 +833,7 @@ fn can_handle_ccms_with_no_swaps_needed() {
 				amount: deposit_amount - gas_budget,
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message: vec![0x00],
-				refund_address: ForeignChainAddress::Eth([0x01; 20]),
+				cf_parameters: vec![],
 			},]
 		);
 
@@ -1031,7 +1031,7 @@ fn cannot_register_ccm_deposit_below_minimum_gas_budget() {
 		let ccm = CcmDepositMetadata {
 			message: vec![0x01],
 			gas_budget,
-			refund_address: ForeignChainAddress::Eth(Default::default()),
+			cf_parameters: vec![],
 			source_address: ForeignChainAddress::Eth(Default::default()),
 		};
 
@@ -1090,7 +1090,7 @@ fn ccm_via_exintrincs_below_minimum_gas_budget_are_rejected() {
 		let ccm = CcmDepositMetadata {
 			message: vec![0x01],
 			gas_budget,
-			refund_address: ForeignChainAddress::Eth(Default::default()),
+			cf_parameters: vec![],
 			source_address: ForeignChainAddress::Eth(Default::default()),
 		};
 
@@ -1159,7 +1159,7 @@ fn ccm_via_deposit_with_principal_below_minimum_are_rejected() {
 		let ccm = CcmDepositMetadata {
 			message: vec![0x01],
 			gas_budget,
-			refund_address: ForeignChainAddress::Eth(Default::default()),
+			cf_parameters: vec![],
 			source_address: ForeignChainAddress::Eth(Default::default()),
 		};
 
@@ -1232,7 +1232,7 @@ fn ccm_via_extrinsic_with_principal_below_minimum_are_rejected() {
 		let ccm = CcmDepositMetadata {
 			message: vec![0x01],
 			gas_budget,
-			refund_address: ForeignChainAddress::Eth(Default::default()),
+			cf_parameters: vec![],
 			source_address: ForeignChainAddress::Eth(Default::default()),
 		};
 
@@ -1302,7 +1302,7 @@ fn ccm_without_principal_swaps_are_accepted() {
 		let ccm = CcmDepositMetadata {
 			message: vec![0x01],
 			gas_budget,
-			refund_address: ForeignChainAddress::Eth(Default::default()),
+			cf_parameters: vec![],
 			source_address: ForeignChainAddress::Eth(Default::default()),
 		};
 
@@ -1388,7 +1388,7 @@ fn ccm_with_gas_below_minimum_swap_amount_allowed() {
 		let ccm = CcmDepositMetadata {
 			message: vec![0x01],
 			gas_budget,
-			refund_address: ForeignChainAddress::Eth(Default::default()),
+			cf_parameters: vec![],
 			source_address: ForeignChainAddress::Eth(Default::default()),
 		};
 

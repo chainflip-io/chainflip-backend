@@ -97,7 +97,7 @@ benchmarks! {
 		let metadata = CcmDepositMetadata {
 			message: vec![0x00],
 			gas_budget: 1,
-			refund_address: ForeignChainAddress::benchmark_value(),
+			cf_parameters: vec![],
 			source_address: ForeignChainAddress::benchmark_value(),
 		};
 		let call = Call::<T>::ccm_deposit{

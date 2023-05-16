@@ -316,7 +316,7 @@ pub struct CcmDepositMetadata {
 	/// User funds designated to be used for gas.
 	pub gas_budget: AssetAmount,
 	/// The address refunds will go to.
-	pub refund_address: ForeignChainAddress,
+	pub cf_parameters: Vec<u8>,
 	/// The address the deposit was sent from.
 	pub source_address: ForeignChainAddress,
 }

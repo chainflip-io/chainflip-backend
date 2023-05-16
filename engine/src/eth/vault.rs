@@ -1,9 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use cf_chains::{
-	address::EncodedAddress, include_abi_bytes, CcmDepositMetadata, ForeignChainAddress,
-};
+use cf_chains::{address::EncodedAddress, include_abi_bytes, CcmDepositMetadata};
 use cf_primitives::{Asset, EpochIndex, EthereumAddress};
 use tracing::{info, warn};
 use web3::{
@@ -78,7 +76,7 @@ pub enum VaultEvent {
 		sender: ethabi::Address,
 		message: web3::types::Bytes,
 		gas_amount: u128,
-		refund_address: web3::types::Bytes,
+		cf_parameters: web3::types::Bytes,
 	},
 	XCallToken {
 		destination_chain: u32,
@@ -89,7 +87,7 @@ pub enum VaultEvent {
 		sender: ethabi::Address,
 		message: web3::types::Bytes,
 		gas_amount: u128,
-		refund_address: web3::types::Bytes,
+		cf_parameters: web3::types::Bytes,
 	},
 	AddGasNative {
 		swap_id: [u8; 32],
@@ -99,6 +97,12 @@ pub enum VaultEvent {
 		swap_id: [u8; 32],
 		amount: u128,
 		token: ethabi::Address,
+	},
+	ExecuteActionsFailed {
+		multicall_address: ethabi::Address,
+		amount: u128,
+		token: ethabi::Address,
+		reason: web3::types::Bytes,
 	},
 }
 
@@ -190,7 +194,7 @@ impl EthContractWitnesser for Vault {
 					sender,
 					message,
 					gas_amount,
-					refund_address,
+					cf_parameters,
 				} => Some(pallet_cf_swapping::Call::ccm_deposit {
 					source_asset: Asset::Eth,
 					deposit_amount: amount,
@@ -204,9 +208,7 @@ impl EthContractWitnesser for Vault {
 					message_metadata: CcmDepositMetadata {
 						message: message.0,
 						gas_budget: gas_amount,
-						refund_address: ForeignChainAddress::Eth(
-							refund_address.0[..].try_into().map_err(anyhow::Error::msg)?,
-						),
+						cf_parameters: cf_parameters.0.to_vec(),
 						source_address: core_h160(sender).into(),
 					},
 				}),
@@ -219,7 +221,7 @@ impl EthContractWitnesser for Vault {
 					sender,
 					message,
 					gas_amount,
-					refund_address,
+					cf_parameters,
 				} => Some(pallet_cf_swapping::Call::ccm_deposit {
 					source_asset: state_chain_client
 						.asset(source_token.0)
@@ -237,9 +239,7 @@ impl EthContractWitnesser for Vault {
 					message_metadata: CcmDepositMetadata {
 						message: message.0,
 						gas_budget: gas_amount,
-						refund_address: ForeignChainAddress::Eth(
-							refund_address.0[..].try_into().map_err(anyhow::Error::msg)?,
-						),
+						cf_parameters: cf_parameters.0.to_vec(),
 						source_address: core_h160(sender).into(),
 					},
 				}),
@@ -275,6 +275,8 @@ impl EthContractWitnesser for Vault {
 		let xcall_token = SignatureAndEvent::new(&self.contract, "XCallToken")?;
 		let add_gas_native = SignatureAndEvent::new(&self.contract, "AddGasNative")?;
 		let add_gas_token = SignatureAndEvent::new(&self.contract, "AddGasToken")?;
+		let execute_actions_failed =
+			SignatureAndEvent::new(&self.contract, "ExecuteActionsFailed")?;
 
 		Ok(Box::new(
 			move |event_signature: H256, raw_log: RawLog| -> Result<Self::EventParameters> {
@@ -342,7 +344,7 @@ impl EthContractWitnesser for Vault {
 						sender: decode_log_param(&log, "sender")?,
 						message: decode_log_param(&log, "message")?,
 						gas_amount: decode_log_param(&log, "gasAmount")?,
-						refund_address: decode_log_param(&log, "refundAddress")?,
+						cf_parameters: decode_log_param(&log, "cfParameters")?,
 					}
 				} else if event_signature == xcall_token.signature {
 					let log = xcall_token.event.parse_log(raw_log)?;
@@ -357,7 +359,7 @@ impl EthContractWitnesser for Vault {
 						sender: decode_log_param(&log, "sender")?,
 						message: decode_log_param(&log, "message")?,
 						gas_amount: decode_log_param(&log, "gasAmount")?,
-						refund_address: decode_log_param(&log, "refundAddress")?,
+						cf_parameters: decode_log_param(&log, "cfParameters")?,
 					}
 				} else if event_signature == add_gas_token.signature {
 					let log = add_gas_token.event.parse_log(raw_log)?;
@@ -375,6 +377,16 @@ impl EthContractWitnesser for Vault {
 						amount: decode_log_param::<ethabi::Uint>(&log, "amount")?
 							.try_into()
 							.expect("AddGasNative amount should fit into u128"),
+					}
+				} else if event_signature == execute_actions_failed.signature {
+					let log = execute_actions_failed.event.parse_log(raw_log)?;
+					VaultEvent::ExecuteActionsFailed {
+						multicall_address: decode_log_param(&log, "multicallAddress")?,
+						amount: decode_log_param::<ethabi::Uint>(&log, "amount")?
+							.try_into()
+							.expect("AddGasNative amount should fit into u128"),
+						token: decode_log_param(&log, "token")?,
+						reason: decode_log_param(&log, "reason")?,
 					}
 				} else {
 					bail!(EventParseError::UnexpectedEvent(event_signature))
