@@ -33,6 +33,8 @@ pub use pallet::*;
 use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Zero};
 use sp_std::prelude::*;
 
+use sp_std::collections::btree_map::BTreeMap;
+
 /// This address is used by the Ethereum contracts to indicate that no withdrawal address was
 /// specified during funding.
 ///
@@ -152,6 +154,15 @@ pub mod pallet {
 	/// TTL for a redemption from the moment of issue.
 	#[pallet::storage]
 	pub type RedemptionTTLSeconds<T: Config> = StorageValue<_, u64, ValueQuery>;
+
+	#[pallet::storage]
+	pub type Restricted<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		AccountId<T>,
+		BTreeMap<EthereumAddress, FlipBalance<T>>,
+		ValueQuery,
+	>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
