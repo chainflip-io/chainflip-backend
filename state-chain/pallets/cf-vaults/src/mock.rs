@@ -9,8 +9,7 @@ use cf_chains::{
 };
 use cf_primitives::{BroadcastId, GENESIS_EPOCH};
 use cf_traits::{
-	impl_mock_callback, impl_mock_chainflip,
-	mocks::{ceremony_id_provider::MockCeremonyIdProvider, threshold_signer::MockThresholdSigner},
+	impl_mock_callback, impl_mock_chainflip, mocks::threshold_signer::MockThresholdSigner,
 	AccountRoleRegistry,
 };
 use frame_support::{
@@ -234,7 +233,6 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type OffenceReporter = MockOffenceReporter;
 	type SetAggKeyWithAggKey = MockSetAggKeyWithAggKey;
 	type VaultTransitionHandler = MockVaultTransitionHandler;
-	type CeremonyIdProvider = MockCeremonyIdProvider;
 	type WeightInfo = ();
 	type Broadcaster = MockBroadcaster;
 	type SystemStateManager = MockSystemStateManager;
