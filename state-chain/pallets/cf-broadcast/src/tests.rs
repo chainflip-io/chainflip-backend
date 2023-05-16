@@ -1,8 +1,8 @@
 use crate::{
 	mock::*, AwaitingBroadcast, BroadcastAttemptCount, BroadcastAttemptId, BroadcastId,
 	BroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
-	PalletOffence, RequestCallbacks, SignatureToBroadcastIdLookup, ThresholdSignatureData,
-	TransactionFeeDeficit, WeightInfo,
+	PalletOffence, RequestCallbacks, ThresholdSignatureData, TransactionFeeDeficit,
+	TransactionOutIdToBroadcastId, WeightInfo,
 };
 use cf_chains::{
 	mocks::{
@@ -33,6 +33,8 @@ thread_local! {
 // When calling on_idle, we should broadcast everything with this excess weight.
 const LARGE_EXCESS_WEIGHT: Weight = Weight::from_ref_time(20_000_000_000);
 
+const MOCK_TRANSACTION_OUT_ID: [u8; 4] = [0xbc; 4];
+
 struct MockCfe;
 
 impl MockCfe {
@@ -51,6 +53,7 @@ impl MockCfe {
 					broadcast_attempt_id,
 					nominee,
 					transaction_payload: _,
+					transaction_out_id: _,
 				} => {
 					match scenario {
 						Scenario::SigningFailure => {
@@ -107,8 +110,7 @@ impl MockCfe {
 
 fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 	assert!(
-		SignatureToBroadcastIdLookup::<Test, Instance1>::get(MockThresholdSignature::default())
-			.is_none()
+		TransactionOutIdToBroadcastId::<Test, Instance1>::get(MOCK_TRANSACTION_OUT_ID).is_none()
 	);
 	assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_id).is_none());
 	assert_eq!(BroadcastAttemptCount::<Test, Instance1>::get(broadcast_id), 0);
@@ -139,7 +141,7 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 
 		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
-			MockThresholdSignature::default(),
+			MOCK_TRANSACTION_OUT_ID,
 			nominee,
 			ETH_TX_FEE,
 		));
@@ -265,7 +267,7 @@ fn test_invalid_id_is_noop() {
 }
 
 #[test]
-fn test_invalid_sigdata_is_noop() {
+fn test_sigdata_with_no_match_is_noop() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
 			Broadcaster::transaction_succeeded(
@@ -273,7 +275,7 @@ fn test_invalid_sigdata_is_noop() {
 					*<Test as Chainflip>::EpochInfo::current_authorities().first().unwrap()
 				)
 				.into(),
-				MockThresholdSignature::default(),
+				MOCK_TRANSACTION_OUT_ID,
 				Default::default(),
 				ETH_TX_FEE,
 			),
@@ -303,7 +305,7 @@ fn transaction_succeeded_after_timeout_reports_failed_nodes() {
 
 		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
-			MockThresholdSignature::default(),
+			MOCK_TRANSACTION_OUT_ID,
 			Default::default(),
 			ETH_TX_FEE,
 		));
@@ -424,8 +426,7 @@ fn threshold_signature_rerequested(broadcast_attempt_id: BroadcastAttemptId) {
 	assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
 	// Verify storage has been deleted
 	assert!(
-		SignatureToBroadcastIdLookup::<Test, Instance1>::get(MockThresholdSignature::default())
-			.is_none()
+		TransactionOutIdToBroadcastId::<Test, Instance1>::get(MOCK_TRANSACTION_OUT_ID).is_none()
 	);
 	assert_eq!(BroadcastAttemptCount::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id), 0);
 	assert!(
@@ -493,7 +494,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 		assert_eq!(RequestCallbacks::<Test, Instance1>::get(1), Some(MockCallback));
 		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
-			MockThresholdSignature::default(),
+			MOCK_TRANSACTION_OUT_ID,
 			Default::default(),
 			ETH_TX_FEE,
 		));

@@ -27,6 +27,7 @@ fn insert_transaction_broadcast_attempt<T: pallet::Config<I>, I: 'static>(
 				broadcast_attempt_id,
 				transaction_payload: TransactionFor::<T, I>::benchmark_value(),
 				threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
+				transaction_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
 			},
 			nominee,
 		},
@@ -118,6 +119,7 @@ benchmarks_instance_pallet! {
 			broadcast_attempt_id,
 			transaction_payload,
 			threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
+			transaction_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
 		})
 	}
 	verify {
@@ -126,7 +128,7 @@ benchmarks_instance_pallet! {
 	transaction_succeeded {
 		let caller: T::AccountId = whitelisted_caller();
 		let signer_id = SignerIdFor::<T, I>::benchmark_value();
-		SignatureToBroadcastIdLookup::<T, I>::insert(ThresholdSignatureFor::<T, I>::benchmark_value(), 1);
+		TransactionOutIdToBroadcastId::<T, I>::insert(TransactionOutIdFor::<T, I>::benchmark_value(), 1);
 
 		let broadcast_attempt_id = BroadcastAttemptId {
 			broadcast_id: 1,
@@ -134,7 +136,7 @@ benchmarks_instance_pallet! {
 		};
 		insert_transaction_broadcast_attempt::<T, I>(whitelisted_caller(), broadcast_attempt_id);
 		let call = Call::<T, I>::transaction_succeeded{
-			signature: ThresholdSignatureFor::<T, I>::benchmark_value(),
+			tx_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
 			signer_id,
 			tx_fee: TransactionFeeFor::<T, I>::benchmark_value(),
 		};

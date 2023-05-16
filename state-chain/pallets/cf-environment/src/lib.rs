@@ -395,10 +395,8 @@ pub mod pallet {
 			let correct_nonce = PolkadotProxyAccountNonce::<T>::get();
 
 			// Witness the agg_key rotation manually in the vaults pallet for polkadot
-			let dispatch_result = T::PolkadotVaultKeyWitnessedHandler::on_new_key_activated(
-				dot_witnessed_aggkey,
-				tx_id.block_number,
-			)?;
+			let dispatch_result =
+				T::PolkadotVaultKeyWitnessedHandler::on_new_key_activated(tx_id.block_number)?;
 			// Clean up the broadcast state.
 			T::PolkadotBroadcaster::clean_up_broadcast(broadcast_id)?;
 
@@ -428,10 +426,8 @@ pub mod pallet {
 			use cf_traits::VaultKeyWitnessedHandler;
 
 			// Witness the agg_key rotation manually in the vaults pallet for bitcoin
-			let dispatch_result = T::BitcoinVaultKeyWitnessedHandler::on_new_key_activated(
-				new_public_key,
-				block_number,
-			)?;
+			let dispatch_result =
+				T::BitcoinVaultKeyWitnessedHandler::on_new_key_activated(block_number)?;
 
 			Self::deposit_event(Event::<T>::BitcoinBlockNumberSetForVault { block_number });
 

@@ -428,16 +428,18 @@ pub struct BitcoinTransaction {
 	old_utxo_input_indices: VecDeque<u32>,
 }
 
+const LOCKTIME: [u8; 4] = 0u32.to_le_bytes();
+const VERSION: [u8; 4] = 2u32.to_le_bytes();
+const SEQUENCE_NUMBER: [u8; 4] = (u32::MAX - 2).to_le_bytes();
+
 impl BitcoinTransaction {
 	pub fn create_new_unsigned(
 		agg_key: &AggKey,
 		inputs: Vec<Utxo>,
 		outputs: Vec<BitcoinOutput>,
 	) -> Self {
-		const VERSION: [u8; 4] = 2u32.to_le_bytes();
 		const SEGWIT_MARKER: u8 = 0u8;
 		const SEGWIT_FLAG: u8 = 1u8;
-		const SEQUENCE_NUMBER: [u8; 4] = (u32::MAX - 2).to_le_bytes();
 
 		let old_utxo_input_indices = (0..)
 			.zip(&inputs)
@@ -485,8 +487,30 @@ impl BitcoinTransaction {
 			!self.signatures.iter().any(|signature| signature == &[0u8; 64])
 	}
 
+	// TODO: Deduplicat some of this.
+	pub fn txid(&self) -> [u8; 32] {
+		let mut id_bytes = Vec::default();
+		id_bytes.extend(VERSION);
+		id_bytes.extend(to_varint(self.inputs.len() as u64));
+		id_bytes.extend(self.inputs.iter().fold(Vec::<u8>::default(), |mut acc, input| {
+			acc.extend(input.txid);
+			acc.extend(input.vout.to_le_bytes());
+			acc.push(0);
+			acc.extend(SEQUENCE_NUMBER);
+			acc
+		}));
+		id_bytes.extend(to_varint(self.outputs.len() as u64));
+		id_bytes.extend(self.outputs.iter().fold(Vec::<u8>::default(), |mut acc, output| {
+			acc.extend(output.amount.to_le_bytes());
+			acc.extend(output.script_pubkey.serialize());
+			acc
+		}));
+		id_bytes.extend(&LOCKTIME);
+
+		sha2_256(&sha2_256(&id_bytes))
+	}
+
 	pub fn finalize(self) -> Vec<u8> {
-		const LOCKTIME: [u8; 4] = 0u32.to_le_bytes();
 		const NUM_WITNESSES: u8 = 3u8;
 		const LEN_SIGNATURE: u8 = 64u8;
 
@@ -525,11 +549,9 @@ impl BitcoinTransaction {
 		const EPOCH: u8 = 0u8;
 		const HASHTYPE: u8 = 0u8;
 		const VERSION: [u8; 4] = 2u32.to_le_bytes();
-		const LOCKTIME: [u8; 4] = 0u32.to_le_bytes();
 		const SPENDTYPE: u8 = 2u8;
 		const KEYVERSION: u8 = 0u8;
 		const CODESEPARATOR: [u8; 4] = u32::MAX.to_le_bytes();
-		const SEQUENCE_NUMBER: [u8; 4] = (u32::MAX - 2).to_le_bytes();
 
 		let prevouts = sha2_256(
 			self.inputs

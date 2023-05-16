@@ -138,4 +138,11 @@ impl<E> ApiCall<Bitcoin> for BitcoinApi<E> {
 			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
 	}
+
+	fn transaction_out_id(&self) -> <Bitcoin as ChainCrypto>::TransactionOutId {
+		match self {
+			BitcoinApi::BatchTransfer(call) => call.transaction_out_id(),
+			BitcoinApi::_Phantom(..) => unreachable!(),
+		}
+	}
 }

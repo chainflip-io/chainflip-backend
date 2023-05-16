@@ -187,6 +187,10 @@ impl<E: PolkadotEnvironment> ApiCall<Polkadot> for PolkadotApi<E> {
 	fn is_signed(&self) -> bool {
 		map_over_api_variants!(self, call, call.is_signed())
 	}
+
+	fn transaction_out_id(&self) -> <Polkadot as ChainCrypto>::TransactionOutId {
+		map_over_api_variants!(self, call, call.signature().unwrap())
+	}
 }
 
 pub trait CreatePolkadotVault: ApiCall<Polkadot> {
@@ -237,6 +241,11 @@ impl<E: PolkadotEnvironment + 'static> ApiCall<Polkadot> for OpaqueApiCall<E> {
 
 	fn is_signed(&self) -> bool {
 		self.builder.is_signed()
+	}
+
+	fn transaction_out_id(&self) -> <Polkadot as ChainCrypto>::TransactionOutId {
+		// TODO: Throw up unwrap()?
+		self.builder.signature().unwrap()
 	}
 }
 

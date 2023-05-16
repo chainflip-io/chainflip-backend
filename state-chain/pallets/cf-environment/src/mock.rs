@@ -91,6 +91,10 @@ impl ApiCall<Polkadot> for MockCreatePolkadotVault {
 	fn is_signed(&self) -> bool {
 		unimplemented!()
 	}
+
+	fn transaction_out_id(&self) -> <Polkadot as ChainCrypto>::TransactionOutId {
+		unimplemented!()
+	}
 }
 
 impl_mock_callback!(RuntimeOrigin);
@@ -122,7 +126,6 @@ impl BroadcastCleanup<Polkadot> for MockPolkadotBroadcaster {
 pub struct MockPolkadotVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler {
 	fn on_new_key_activated(
-		_new_public_key: <Polkadot as ChainCrypto>::AggKey,
 		_block_number: <Polkadot as Chain>::ChainBlockNumber,
 	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
 		unimplemented!()
@@ -131,7 +134,6 @@ impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler
 pub struct MockBitcoinVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Bitcoin> for MockBitcoinVaultKeyWitnessedHandler {
 	fn on_new_key_activated(
-		_new_public_key: <Bitcoin as ChainCrypto>::AggKey,
 		_block_number: <Bitcoin as Chain>::ChainBlockNumber,
 	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
 		unimplemented!()

@@ -151,6 +151,10 @@ impl ApiCall<MockEthereum> for MockUpdateFlipSupply {
 	fn is_signed(&self) -> bool {
 		unimplemented!()
 	}
+
+	fn transaction_out_id(&self) -> <MockEthereum as ChainCrypto>::TransactionOutId {
+		unimplemented!()
+	}
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]

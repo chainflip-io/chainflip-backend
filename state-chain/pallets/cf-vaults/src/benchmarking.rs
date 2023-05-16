@@ -153,7 +153,6 @@ benchmarks_instance_pallet! {
 			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
 		);
 		let call = Call::<T, I>::vault_key_rotated {
-			new_public_key,
 			block_number: 5u32.into(),
 			tx_id: Decode::decode(&mut &TX_HASH[..]).unwrap()
 		};

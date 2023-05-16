@@ -204,6 +204,17 @@ impl<C: EthereumCall + Parameter + 'static> ApiCall<Ethereum> for EthereumTransa
 	fn is_signed(&self) -> bool {
 		self.sig_data.is_some()
 	}
+
+	fn transaction_out_id(&self) -> <Ethereum as ChainCrypto>::TransactionOutId {
+		// TODO: Instead of unwrap() this, we could just have this builder create a different
+		// struct that contains the call and a non-optional sig_data.
+		// This would also improve the chain_encoded, we won't have to .expect() it.
+		let sig_data = self.sig_data.unwrap();
+		SchnorrVerificationComponents {
+			s: sig_data.sig.into(),
+			k_times_g_address: sig_data.k_times_g_address.into(),
+		}
+	}
 }
 
 impl SigData {

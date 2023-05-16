@@ -174,7 +174,6 @@ fn check_for_interesting_events_in_block(
 
 					vault_key_rotated_calls.push(Box::new(
 						pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
-							new_public_key,
 							block_number,
 							tx_id: TxId { block_number, extrinsic_index },
 						}
@@ -377,7 +376,8 @@ where
 													_,
 													PolkadotInstance,
 												>::transaction_succeeded {
-													signature: sig.clone(),
+													tx_out_id: sig.clone(),
+													block_number,
 													signer_id: self.vault_account.clone(),
 													tx_fee,
 												}

@@ -195,14 +195,11 @@ impl EthContractWitnesser for KeyManager {
 		for event in block.block_items {
 			info!("Handling event: {event}");
 			match event.event_parameters {
-				KeyManagerEvent::AggKeySetByAggKey { new_agg_key, .. } => {
+				KeyManagerEvent::AggKeySetByAggKey { .. } => {
 					state_chain_client
 						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 							call: Box::new(
 								pallet_cf_vaults::Call::<_, EthereumInstance>::vault_key_rotated {
-									new_public_key: cf_chains::eth::AggKey::from_pubkey_compressed(
-										new_agg_key.serialize(),
-									),
 									block_number,
 									tx_id: core_h256(event.tx_hash),
 								}
@@ -245,10 +242,11 @@ impl EthContractWitnesser for KeyManager {
 							pallet_cf_witnesser::Call::witness_at_epoch {
 								call: Box::new(
 									pallet_cf_broadcast::Call::<_, EthereumInstance>::transaction_succeeded {
-										signature: SchnorrVerificationComponents {
+										tx_out_id: SchnorrVerificationComponents {
 											s: sig_data.sig.into(),
 											k_times_g_address: sig_data.k_times_g_address.into(),
 										},
+										block_number,
 										signer_id: core_h160(from),
 										tx_fee: TransactionFee { effective_gas_price, gas_used },
 									}

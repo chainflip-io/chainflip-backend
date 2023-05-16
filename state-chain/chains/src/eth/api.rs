@@ -352,6 +352,19 @@ impl<E> ApiCall<Ethereum> for EthereumApi<E> {
 	fn is_signed(&self) -> bool {
 		map_over_api_variants!(self, call, call.is_signed())
 	}
+
+	fn transaction_out_id(&self) -> <Ethereum as ChainCrypto>::TransactionOutId {
+		match self {
+			EthereumApi::SetAggKeyWithAggKey(call) => call.transaction_out_id(),
+			EthereumApi::RegisterRedemption(call) => call.transaction_out_id(),
+			EthereumApi::UpdateFlipSupply(call) => call.transaction_out_id(),
+			EthereumApi::SetGovKeyWithAggKey(call) => call.transaction_out_id(),
+			EthereumApi::SetCommKeyWithAggKey(call) => call.transaction_out_id(),
+			EthereumApi::AllBatch(call) => call.transaction_out_id(),
+			EthereumApi::ExecutexSwapAndCall(call) => call.transaction_out_id(),
+			EthereumApi::_Phantom(..) => unreachable!(),
+		}
+	}
 }
 
 pub(super) fn ethabi_function(name: &'static str, params: Vec<ethabi::Param>) -> ethabi::Function {

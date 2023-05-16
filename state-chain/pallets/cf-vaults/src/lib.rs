@@ -46,6 +46,8 @@ pub type KeygenOutcomeFor<T, I = ()> =
 pub type AggKeyFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::AggKey;
 pub type ChainBlockNumberFor<T, I = ()> = <<T as Config<I>>::Chain as Chain>::ChainBlockNumber;
 pub type TransactionInIdFor<T, I = ()> = <<T as Config<I>>::Chain as ChainCrypto>::TransactionInId;
+pub type TransactionOutIdFor<T, I = ()> =
+	<<T as Config<I>>::Chain as ChainCrypto>::TransactionOutId;
 pub type ThresholdSignatureFor<T, I = ()> =
 	<<T as Config<I>>::Chain as ChainCrypto>::ThresholdSignature;
 
@@ -565,7 +567,6 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::vault_key_rotated())]
 		pub fn vault_key_rotated(
 			origin: OriginFor<T>,
-			new_public_key: AggKeyFor<T, I>,
 			block_number: ChainBlockNumberFor<T, I>,
 
 			// This field is primarily required to ensure the witness calls are unique per
@@ -574,7 +575,21 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
-			Self::on_new_key_activated(new_public_key, block_number)
+			Self::on_new_key_activated(block_number)
+		}
+
+		#[pallet::weight(T::WeightInfo::vault_key_rotated())]
+		pub fn vault_key_rotated_out(
+			origin: OriginFor<T>,
+			block_number: ChainBlockNumberFor<T, I>,
+
+			// This field is primarily required to ensure the witness calls are unique per
+			// transaction (on the external chain)
+			_tx_out_id: TransactionOutIdFor<T, I>,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
+
+			Self::on_new_key_activated(block_number)
 		}
 
 		/// The vault's key has been updated externally, outside of the rotation
@@ -850,21 +865,15 @@ impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, I> {
-	fn on_new_key_activated(
-		new_public_key: AggKeyFor<T, I>,
-		block_number: ChainBlockNumberFor<T, I>,
-	) -> DispatchResultWithPostInfo {
+	fn on_new_key_activated(block_number: ChainBlockNumberFor<T, I>) -> DispatchResultWithPostInfo {
 		let rotation =
 			PendingVaultRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
 
-		let expected_new_key = ensure_variant!(
+		let new_public_key = ensure_variant!(
 			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key } => new_public_key,
 			rotation,
 			Error::<T, I>::InvalidRotationStatus
 		);
-
-		// The expected new key should match the new key witnessed
-		debug_assert_eq!(new_public_key, expected_new_key);
 
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete);
 

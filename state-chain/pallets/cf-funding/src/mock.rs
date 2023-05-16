@@ -134,6 +134,10 @@ impl ApiCall<Ethereum> for MockRegisterRedemption {
 	fn is_signed(&self) -> bool {
 		unimplemented!()
 	}
+
+	fn transaction_out_id(&self) -> <Ethereum as ChainCrypto>::TransactionOutId {
+		todo!()
+	}
 }
 
 impl MockBroadcaster {

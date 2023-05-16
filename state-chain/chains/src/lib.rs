@@ -180,6 +180,9 @@ pub trait ApiCall<Abi: ChainAbi>: Parameter {
 
 	/// Checks we have updated the sig data to non-default values.
 	fn is_signed(&self) -> bool;
+
+	/// Generates an identifier for the output of the transaction.
+	fn transaction_out_id(&self) -> <Abi as ChainCrypto>::TransactionOutId;
 }
 
 /// Responsible for converting an api call into a raw unsigned transaction.

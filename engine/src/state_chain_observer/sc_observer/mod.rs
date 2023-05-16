@@ -123,6 +123,8 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
 		let signing_result_future =
 			multisig_client.initiate_signing(ceremony_id, signers, signing_info);
+        
+        
 		scope.spawn(async move {
 			match signing_result_future.await {
 				Ok(signatures) => {
@@ -208,6 +210,7 @@ pub async fn start<
 	btc_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<
 		AddressMonitorCommand<BitcoinScriptBounded>,
 	>,
+    btc_tx_hash_sender: tokio::sync::mpsc::UnboundedSender<AddressMonitorCommand<[u8; 32]>>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
 ) -> Result<(), anyhow::Error>
 where
@@ -617,6 +620,8 @@ where
                                             broadcast_attempt_id,
                                             nominee,
                                             transaction_payload,
+                                            // We're already witnessing this since we witness the KeyManager for SignatureAccepted events.
+                                            transaction_out_id: _,
                                         },
                                     ) if nominee == account_id => {
                                         match eth_broadcaster.encode_and_sign_tx(transaction_payload)
@@ -654,17 +659,13 @@ where
                                             broadcast_attempt_id,
                                             nominee,
                                             transaction_payload,
+                                            transaction_out_id,
                                         },
                                     ) => {
-                                        // we want to monitor for this new broadcast
-                                        let (_api_call, signature) = state_chain_client
-                                            .storage_map_entry::<pallet_cf_broadcast::ThresholdSignatureData<state_chain_runtime::Runtime, PolkadotInstance>>(current_block_hash, &broadcast_attempt_id.broadcast_id)
-                                            .await
-                                            .context(format!("Failed to fetch signature for broadcast_id: {}", broadcast_attempt_id.broadcast_id))?
-                                            .expect("If we are broadcasting this tx, the signature must exist");
 
+                                        // TODO: Rename some things here. Use Address Monitor?
                                         // get the threhsold signature, and we want the raw bytes inside the signature
-                                        dot_monitor_signature_sender.send(signature.0).unwrap();
+                                        dot_monitor_signature_sender.send(transaction_out_id.0).unwrap();
                                         if nominee == account_id {
                                             let _result = dot_broadcaster.send(transaction_payload.encoded_extrinsic).await
                                             .map(|_| info!("Polkadot transmission successful: {broadcast_attempt_id}"))
@@ -678,9 +679,13 @@ where
                                             broadcast_attempt_id,
                                             nominee,
                                             transaction_payload,
+                                            transaction_out_id,
                                         },
                                     ) => {
-                                        // TODO: monitor for broadcast completion?
+                                        
+                                        // Send this transaction_out_id to monitor
+                                        btc_tx_hash_sender.send(AddressMonitorCommand::Add(transaction_out_id)).unwrap();
+
                                         if nominee == account_id {
                                             let _result = btc_broadcaster.send(transaction_payload.encoded_transaction).await
                                             .map(|_| info!("Bitcoin transmission successful: {broadcast_attempt_id}"))

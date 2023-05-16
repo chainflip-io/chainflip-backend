@@ -496,6 +496,10 @@ pub trait Broadcaster<Api: ChainAbi> {
 		api_call: Self::ApiCall,
 		callback: Self::Callback,
 	) -> (BroadcastId, ThresholdSignatureRequestId);
+
+	fn threshold_sign_and_broadcast_for_rotation(
+		api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId);
 }
 
 pub trait BroadcastCleanup<C: Chain> {
@@ -788,10 +792,7 @@ pub trait VaultTransitionHandler<C: ChainCrypto> {
 	fn on_new_vault() {}
 }
 pub trait VaultKeyWitnessedHandler<C: ChainAbi> {
-	fn on_new_key_activated(
-		new_public_key: C::AggKey,
-		block_number: C::ChainBlockNumber,
-	) -> DispatchResultWithPostInfo;
+	fn on_new_key_activated(block_number: C::ChainBlockNumber) -> DispatchResultWithPostInfo;
 }
 
 pub trait BroadcastAnyChainGovKey {
@@ -853,5 +854,17 @@ impl CcmHandler for () {
 		_message_metadata: CcmDepositMetadata,
 	) -> DispatchResult {
 		Ok(())
+	}
+}
+
+pub trait OnRotationCallback<C: ChainCrypto> {
+	type Origin;
+	type Callback: UnfilteredDispatchable<RuntimeOrigin = Self::Origin>;
+
+	fn on_rotation(
+		_block_number: C::ChainBlockNumber,
+		_tx_out_id: C::TransactionOutId,
+	) -> Option<Self::Callback> {
+		None
 	}
 }

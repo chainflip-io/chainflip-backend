@@ -21,7 +21,10 @@ pub async fn start(
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Bitcoin>>,
 	initial_block_hash: H256,
 	db: Arc<PersistentKeyDB>,
-) -> Result<tokio::sync::mpsc::UnboundedSender<AddressMonitorCommand<BitcoinScriptBounded>>> {
+) -> Result<(
+	tokio::sync::mpsc::UnboundedSender<AddressMonitorCommand<BitcoinScriptBounded>>,
+	tokio::sync::mpsc::UnboundedSender<AddressMonitorCommand<[u8; 32]>>,
+)> {
 	let btc_rpc = BtcRpcClient::new(btc_settings)?;
 
 	// We do a simple initial query here to test the connection. Else it's possible the connection
@@ -51,6 +54,10 @@ pub async fn start(
 			})
 			.collect(),
 	);
+	// When we start how do we know what broadcasts to witness? We use the TransactionOutId storage
+	// item on chain.
+
+	let (tx_hash_monitor_sender, tx_hash_monitor) = AddressMonitor::new(Default::default());
 
 	scope.spawn(
 		super::witnesser::start(
@@ -58,10 +65,11 @@ pub async fn start(
 			state_chain_client,
 			btc_rpc,
 			address_monitor,
+			tx_hash_monitor,
 			db,
 		)
 		.map_err(|_| anyhow::anyhow!("btc::witnesser::start failed")),
 	);
 
-	Ok(address_monitor_command_sender)
+	Ok((address_monitor_command_sender, tx_hash_monitor_sender))
 }

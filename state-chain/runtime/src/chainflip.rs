@@ -12,7 +12,7 @@ use crate::{
 	AccountId, AccountRoles, Authorship, BitcoinIngressEgress, BitcoinVault, BlockNumber,
 	EmergencyRotationPercentageRange, Emissions, Environment, EthereumBroadcaster,
 	EthereumChainTracking, EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster,
-	PolkadotIngressEgress, Reputation, Runtime, RuntimeCall, System, Validator,
+	PolkadotIngressEgress, Reputation, Runtime, RuntimeCall, RuntimeOrigin, System, Validator,
 };
 
 use cf_chains::{
@@ -41,7 +41,8 @@ use cf_primitives::{
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster,
 	DepositApi, DepositHandler, EgressApi, EmergencyRotation, EpochInfo, Heartbeat, Issuance,
-	KeyProvider, NetworkState, RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
+	KeyProvider, NetworkState, OnRotationCallback, RewardsDistribution, RuntimeUpgrade,
+	VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -189,6 +190,7 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 		// TODO: For now this is a noop until we actually have dot chain tracking
 	}
 
+	// We pass the payload and not the API call?
 	fn is_valid_for_rebroadcast(
 		call: &PolkadotApi<DotEnvironment>,
 		payload: &<Polkadot as ChainCrypto>::Payload,
@@ -399,6 +401,7 @@ impl CommKeyBroadcaster for TokenholderGovernanceBroadcaster {
 		EthereumBroadcaster::threshold_sign_and_broadcast(
 			SetCommKeyWithAggKey::<Ethereum>::new_unsigned(new_key),
 			None::<RuntimeCall>,
+			false,
 		);
 	}
 }
@@ -579,5 +582,32 @@ impl AddressConverter for ChainAddressConverter {
 				.expect("bitcoin scripts constructed from supported addresses should not exceed 128 bytes"),
 			)),
 		}
+	}
+}
+
+pub struct RotationCallbackProvider;
+impl OnRotationCallback<Ethereum> for RotationCallbackProvider {
+	type Origin = RuntimeOrigin;
+	type Callback = RuntimeCall;
+}
+impl OnRotationCallback<Polkadot> for RotationCallbackProvider {
+	type Origin = RuntimeOrigin;
+	type Callback = RuntimeCall;
+}
+impl OnRotationCallback<Bitcoin> for RotationCallbackProvider {
+	type Origin = RuntimeOrigin;
+	type Callback = RuntimeCall;
+
+	fn on_rotation(
+		block_number: <Bitcoin as Chain>::ChainBlockNumber,
+		tx_out_id: <Bitcoin as ChainCrypto>::TransactionOutId,
+	) -> Option<Self::Callback> {
+		Some(
+			pallet_cf_vaults::Call::<Runtime, crate::BitcoinInstance>::vault_key_rotated_out {
+				block_number,
+				tx_out_id,
+			}
+			.into(),
+		)
 	}
 }

@@ -158,6 +158,10 @@ impl ApiCall<MockEthereum> for MockSetAggKeyWithAggKey {
 	fn is_signed(&self) -> bool {
 		unimplemented!()
 	}
+
+	fn transaction_out_id(&self) -> <MockEthereum as ChainCrypto>::TransactionOutId {
+		todo!()
+	}
 }
 
 pub struct MockVaultTransitionHandler;
