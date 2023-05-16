@@ -35,6 +35,7 @@ pub trait WeightInfo {
 	fn disable_asset_egress() -> Weight;
 	fn on_idle_with_nothing_to_send() -> Weight;
 	fn process_single_deposit() -> Weight;
+	fn set_minimum_deposit() -> Weight;
 	fn finalise_ingress(a: u32, ) -> Weight;
 }
 
@@ -123,6 +124,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(4))
 			.saturating_add(T::DbWeight::get().writes(2))
 	}
+
+	fn set_minimum_deposit() -> Weight{
+		Weight::from_ref_time(1_000_000)
+} 
 	// Storage: EthereumIngressEgress AddressStatus (r:1 w:0)
 	/// The range of component `a` is `[1, 100]`.
 	fn finalise_ingress(a: u32, ) -> Weight {
@@ -218,6 +223,10 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(4))
 			.saturating_add(RocksDbWeight::get().writes(2))
 	}
+
+	fn set_minimum_deposit() -> Weight{
+		Weight::from_ref_time(1_000_000)
+}
 	// Storage: EthereumIngressEgress AddressStatus (r:1 w:0)
 	/// The range of component `a` is `[1, 100]`.
 	fn finalise_ingress(a: u32, ) -> Weight {

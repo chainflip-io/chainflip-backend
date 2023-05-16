@@ -162,6 +162,32 @@ benchmarks! {
 		assert_eq!(crate::SwapTTL::<T>::get(), ttl);
 	}
 
+	set_minimum_swap_amount {
+		let asset = Asset::Eth;
+		let amount = 1_000;
+		let call = Call::<T>::set_minimum_swap_amount {
+			asset,
+			amount,
+		};
+	}: {
+		let _ = call.dispatch_bypass_filter(<T as Chainflip>::EnsureGovernance::successful_origin());
+	} verify {
+		assert_eq!(crate::MinimumSwapAmount::<T>::get(asset), amount);
+	}
+
+	set_minimum_ccm_gas_budget {
+		let asset = Asset::Eth;
+		let amount = 1_000;
+		let call = Call::<T>::set_minimum_ccm_gas_budget {
+			asset,
+			amount,
+		};
+	}: {
+		let _ = call.dispatch_bypass_filter(<T as Chainflip>::EnsureGovernance::successful_origin());
+	} verify {
+		assert_eq!(crate::MinimumCcmGasBudget::<T>::get(asset), amount);
+	}
+
 	impl_benchmark_test_suite!(
 		Pallet,
 		crate::mock::new_test_ext(),

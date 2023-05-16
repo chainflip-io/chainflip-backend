@@ -17,6 +17,7 @@ use sp_runtime::{
 	DispatchError,
 };
 use sp_std::{
+	cmp::Ord,
 	convert::{Into, TryFrom},
 	fmt::Debug,
 	prelude::*,
@@ -68,7 +69,8 @@ pub trait Chain: Member + Parameter {
 		+ Into<AssetAmount>
 		+ FullCodec
 		+ MaxEncodedLen
-		+ BenchmarkValue;
+		+ BenchmarkValue
+		+ Ord;
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
