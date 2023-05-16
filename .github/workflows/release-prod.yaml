@@ -1,6 +1,8 @@
 name: Release production binaries
 on:
-  workflow_dispatch:
+  push:
+    tags:
+      - '*'
 
 jobs:
   set-variables:
