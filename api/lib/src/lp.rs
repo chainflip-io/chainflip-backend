@@ -154,7 +154,7 @@ pub async fn mint_range_order(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 	range: Range<Tick>,
-	amount: Liquidity,
+	amount: NumberOrHex,
 ) -> Result<MintPositionReturn> {
 	task_scope(|scope| {
 		async {
@@ -209,7 +209,7 @@ pub async fn burn_range_order(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 	range: Range<Tick>,
-	amount: Liquidity,
+	amount: NumberOrHex,
 ) -> Result<BurnPositionReturn> {
 	task_scope(|scope| {
 		async {

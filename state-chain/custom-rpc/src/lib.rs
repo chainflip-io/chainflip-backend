@@ -471,17 +471,10 @@ where
 		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutput> {
+		let amount = u128::try_from(amount).unwrap();
 		self.client
 			.runtime_api()
-			.cf_pool_simulate_swap(
-				&self.query_block_id(at),
-				from,
-				to,
-				match amount {
-					NumberOrHex::Number(number) => number as u128,
-					NumberOrHex::Hex(hex) => hex.low_u128(),
-				},
-			)
+			.cf_pool_simulate_swap(&self.query_block_id(at), from, to, amount)
 			.map_err(to_rpc_error)
 			.and_then(|r| {
 				r.map_err(|e| jsonrpsee::core::Error::Custom(<&'static str>::from(e).into()))

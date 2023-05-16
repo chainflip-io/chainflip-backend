@@ -35,7 +35,7 @@ pub trait Rpc {
 		asset: Asset,
 		lower_tick: Tick,
 		upper_tick: Tick,
-		amount: Liquidity,
+		amount: NumberOrHex,
 	) -> Result<String, Error>;
 
 	#[method(name = "burnRangeOrder")]
@@ -44,7 +44,7 @@ pub trait Rpc {
 		asset: Asset,
 		lower_tick: Tick,
 		upper_tick: Tick,
-		amount: Liquidity,
+		amount: NumberOrHex,
 	) -> Result<String, Error>;
 
 	#[method(name = "assetBalances")]
@@ -80,12 +80,9 @@ impl RpcServer for RpcServerImpl {
 		asset: Asset,
 		destination_address: &str,
 	) -> Result<String, Error> {
-		let amount_as_128 = match amount {
-			NumberOrHex::Number(amount) => amount as u128,
-			NumberOrHex::Hex(hex) => hex.low_u128(),
-		};
+		let amount = u128::try_from(amount)?;
 
-		if amount_as_128 == 0 {
+		if amount == 0 {
 			return Err(Error::Custom("Invalid amount".to_string()))
 		}
 
@@ -93,7 +90,7 @@ impl RpcServer for RpcServerImpl {
 			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)
 				.map_err(|e| Error::Custom(e.to_string()))?;
 
-		lp::withdraw_asset(&self.state_chain_settings, amount_as_128, asset, destination_address)
+		lp::withdraw_asset(&self.state_chain_settings, amount, asset, destination_address)
 			.await
 			.map(|(_, id)| id.to_string())
 			.map_err(|e| Error::Custom(e.to_string()))
@@ -126,7 +123,7 @@ impl RpcServer for RpcServerImpl {
 		asset: Asset,
 		start: Tick,
 		end: Tick,
-		amount: Liquidity,
+		amount: NumberOrHex,
 	) -> Result<String, Error> {
 		if start >= end {
 			return Err(Error::Custom("Invalid tick range".to_string()))
@@ -145,7 +142,7 @@ impl RpcServer for RpcServerImpl {
 		asset: Asset,
 		start: Tick,
 		end: Tick,
-		amount: Liquidity,
+		amount: NumberOrHex,
 	) -> Result<String, Error> {
 		if start >= end {
 			return Err(Error::Custom("Invalid tick range".to_string()))
