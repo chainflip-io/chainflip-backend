@@ -28,6 +28,9 @@ pub trait BenchmarkValueExtended {
 #[cfg(not(feature = "runtime-benchmarks"))]
 impl<T> BenchmarkValue for T {}
 
+#[cfg(not(feature = "runtime-benchmarks"))]
+impl<T> BenchmarkValueExtended for T {}
+
 #[macro_export]
 macro_rules! impl_default_benchmark_value {
 	($element:ty) => {
