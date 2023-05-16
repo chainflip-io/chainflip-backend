@@ -114,7 +114,7 @@ impl EthContractWitnesser for StateChainGateway {
 								pallet_cf_funding::Call::funded {
 									account_id,
 									amount,
-									withdrawal_address: funder.into(),
+									address: funder.into(),
 									tx_hash: event.tx_hash.into(),
 								}
 								.into(),

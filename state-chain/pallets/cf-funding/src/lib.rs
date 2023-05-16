@@ -155,8 +155,13 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type RedemptionTTLSeconds<T: Config> = StorageValue<_, u64, ValueQuery>;
 
+	/// List of restricted contracts
 	#[pallet::storage]
-	pub type Restricted<T: Config> = StorageMap<
+	pub type RestrictedContracts<T: Config> =
+		StorageMap<_, Blake2_128Concat, EthereumAddress, (), ValueQuery>;
+
+	#[pallet::storage]
+	pub type RestrictedBalance<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
 		AccountId<T>,
@@ -285,12 +290,21 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
 			amount: FlipBalance<T>,
-			_withdrawal_address: EthereumAddress,
+			address: EthereumAddress,
 			// Required to ensure this call is unique per funding event.
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
+
 			let total_balance = Self::add_funds_to_account(&account_id, amount);
+
+			// TODO: Check if the address is restricted
+			if RestrictedContracts::<T>::contains_key(address) {
+				RestrictedBalance::<T>::mutate(account_id.clone(), |map| {
+					map.entry(address).and_modify(|balance| *balance += amount).or_insert(amount);
+				});
+			}
+
 			Self::deposit_event(Event::Funded {
 				account_id,
 				tx_hash,
@@ -332,6 +346,19 @@ pub mod pallet {
 				RedemptionAmount::Max => T::Flip::redeemable_balance(&account_id),
 				RedemptionAmount::Exact(amount) => amount,
 			};
+
+			let total_balance = T::Flip::account_balance(&account_id);
+
+			if RestrictedContracts::<T>::contains_key(address) {
+				ensure!(
+					total_balance
+						.checked_sub(
+							RestrictedBalance::<T>::get(&account_id).get(&address).unwrap()
+						)
+						.unwrap() > amount,
+					Error::<T>::InvalidRedemption
+				);
+			}
 
 			ensure!(amount > Zero::zero(), Error::<T>::InvalidRedemption);
 

@@ -6,7 +6,7 @@ pub mod benchmarking;
 
 pub mod deposit_address;
 
-use self::api::{tokenizable::Tokenizable, EthereumReplayProtection};
+use self::api::tokenizable::Tokenizable;
 use crate::*;
 pub use cf_primitives::chains::Ethereum;
 use cf_primitives::{chains::assets, ChannelId};
