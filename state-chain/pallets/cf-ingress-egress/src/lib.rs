@@ -302,9 +302,8 @@ pub mod pallet {
 			asset: TargetChainAsset<T, I>,
 			minimum_deposit: TargetChainAmount<T, I>,
 		},
-		/// The deposit amount is below the minimum deposit allowed.
-		/// The deposit is ignored.
-		DepositBelowMinimumAllowed {
+		///The deposits is rejected because the amount is below the minimum allowed.
+		DepositIgnored {
 			deposit_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
@@ -320,8 +319,6 @@ pub mod pallet {
 		AssetMismatch,
 		/// Channel ID has reached maximum
 		ChannelIdsExhausted,
-		/// The input asset is not supported by the chain
-		UnsupportedAsset,
 	}
 
 	#[pallet::hooks]
@@ -712,7 +709,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		if amount < MinimumDeposit::<T, I>::get(asset) {
 			// If the amount is below the minimum allowed, the deposit is ignored.
-			Self::deposit_event(Event::<T, I>::DepositBelowMinimumAllowed {
+			Self::deposit_event(Event::<T, I>::DepositIgnored {
 				deposit_address,
 				asset,
 				amount,

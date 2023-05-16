@@ -910,7 +910,7 @@ fn swap_by_witnesser_can_be_rejected() {
 
 		// Verify this swap is rejected
 		assert_eq!(SwapQueue::<Test>::decode_len(), None);
-		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountBelowMinimum {
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountTooLow {
 			asset: from,
 			amount,
 			destination_address: ForeignChainAddress::Eth(Default::default()),
@@ -978,7 +978,7 @@ fn swap_by_deposit_can_be_rejected() {
 
 		// Verify this swap is rejected
 		assert_eq!(SwapQueue::<Test>::decode_len(), None);
-		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountBelowMinimum {
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapAmountTooLow {
 			asset: from,
 			amount,
 			destination_address: ForeignChainAddress::Eth(Default::default()),
@@ -1186,7 +1186,7 @@ fn ccm_via_deposit_with_principal_below_minimum_are_rejected() {
 			to,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm.clone(),
-			CcmFailReason::PrincipalSwapAmountBelowMinimum,
+			CcmFailReason::PrincipalSwapAmountTooLow,
 		);
 
 		// Verify the ccm is rejected
@@ -1255,7 +1255,7 @@ fn ccm_via_extrinsic_with_principal_below_minimum_are_rejected() {
 
 		// Verify the ccm is rejected
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::CcmFailed {
-			reason: CcmFailReason::PrincipalSwapAmountBelowMinimum,
+			reason: CcmFailReason::PrincipalSwapAmountTooLow,
 			destination_address: ForeignChainAddress::Eth(Default::default()),
 			message_metadata: ccm.clone(),
 		}));

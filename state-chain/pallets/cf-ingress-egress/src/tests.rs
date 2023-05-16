@@ -853,7 +853,7 @@ fn deposits_below_minimum_are_rejected() {
 		// Observe that eth deposit gets rejected.
 		let (_, deposit_address) = request_address_and_deposit(0, eth);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test, Instance1>::DepositBelowMinimumAllowed {
+			crate::Event::<Test, Instance1>::DepositIgnored {
 				deposit_address,
 				asset: eth,
 				amount: default_deposit_amount,

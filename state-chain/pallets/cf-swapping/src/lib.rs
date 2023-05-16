@@ -81,7 +81,7 @@ pub(crate) struct CcmSwap {
 pub enum CcmFailReason {
 	UnsupportedForTargetChain,
 	InsufficientDepositAmount,
-	PrincipalSwapAmountBelowMinimum,
+	PrincipalSwapAmountTooLow,
 	GasBudgetBelowMinimum,
 }
 
@@ -247,7 +247,7 @@ pub mod pallet {
 			asset: Asset,
 			amount: AssetAmount,
 		},
-		SwapAmountBelowMinimum {
+		SwapAmountTooLow {
 			asset: Asset,
 			amount: AssetAmount,
 			destination_address: ForeignChainAddress,
@@ -273,7 +273,7 @@ pub mod pallet {
 		/// The provided address could not be decoded.
 		InvalidDestinationAddress,
 		/// The swap amount is below the minimum required.
-		SwapAmountBelowMinimum,
+		SwapAmountTooLow,
 		/// The CCM's gas budget is below the minimum allowed.
 		CcmGasBudgetBelowMinimum,
 	}
@@ -451,7 +451,7 @@ pub mod pallet {
 		/// ## Events
 		///
 		/// - [SwapScheduled](Event::SwapScheduledByWitnesser)
-		/// - [SwapAmountBelowMinimum](Event::SwapAmountBelowMinimum)
+		/// - [SwapAmountTooLow](Event::SwapAmountTooLow)
 		#[pallet::weight(T::WeightInfo::schedule_swap_by_witnesser())]
 		pub fn schedule_swap_by_witnesser(
 			origin: OriginFor<T>,
@@ -467,26 +467,12 @@ pub mod pallet {
 				T::AddressConverter::try_from_encoded_address(destination_address.clone())
 					.map_err(|_| Error::<T>::InvalidDestinationAddress)?;
 
-			if deposit_amount < MinimumSwapAmount::<T>::get(from) {
-				// If the swap amount is less than the minimum required,
-				// confiscate the fund and emit an event
-				CollectedRejectedFunds::<T>::mutate(from, |fund| {
-					*fund = fund.saturating_add(deposit_amount)
-				});
-				Self::deposit_event(Event::<T>::SwapAmountBelowMinimum {
-					asset: from,
-					amount: deposit_amount,
-					destination_address: destination_address_internal,
-				});
-			} else {
-				// Otherwise schedule the swap.
-				let swap_id = Self::schedule_swap(
-					from,
-					to,
-					deposit_amount,
-					SwapType::Swap(destination_address_internal),
-				);
-
+			if let Some(swap_id) = Self::on_swap_deposit_received(
+				from,
+				to,
+				deposit_amount,
+				destination_address_internal,
+			) {
 				Self::deposit_event(Event::<T>::SwapScheduledByWitnesser {
 					swap_id,
 					deposit_amount,
@@ -494,7 +480,6 @@ pub mod pallet {
 					tx_hash,
 				});
 			}
-
 			Ok(())
 		}
 
@@ -736,6 +721,31 @@ pub mod pallet {
 			);
 			Self::deposit_event(Event::<T>::CcmEgressScheduled { ccm_id, egress_id });
 		}
+
+		// Schedule and returns the swap id if the swap is valid.
+		fn on_swap_deposit_received(
+			from: Asset,
+			to: Asset,
+			amount: AssetAmount,
+			destination_address: ForeignChainAddress,
+		) -> Option<u64> {
+			if amount < MinimumSwapAmount::<T>::get(from) {
+				// If the swap amount is less than the minimum required,
+				// confiscate the fund and emit an event
+				CollectedRejectedFunds::<T>::mutate(from, |fund| {
+					*fund = fund.saturating_add(amount)
+				});
+				Self::deposit_event(Event::<T>::SwapAmountTooLow {
+					asset: from,
+					amount,
+					destination_address,
+				});
+				None
+			} else {
+				// Otherwise schedule the swap.
+				Some(Self::schedule_swap(from, to, amount, SwapType::Swap(destination_address)))
+			}
+		}
 	}
 
 	impl<T: Config> SwapDepositHandler for Pallet<T> {
@@ -758,25 +768,9 @@ pub mod pallet {
 				earned_fees.saturating_accrue(fee)
 			});
 
-			if amount < MinimumSwapAmount::<T>::get(from) {
-				// If the swap amount is less than the minimum required,
-				// confiscate the fund and emit an event
-				CollectedRejectedFunds::<T>::mutate(from, |fund| {
-					*fund = fund.saturating_add(amount)
-				});
-				Self::deposit_event(Event::<T>::SwapAmountBelowMinimum {
-					asset: from,
-					amount,
-					destination_address,
-				});
-			} else {
-				let swap_id = Self::schedule_swap(
-					from,
-					to,
-					amount.saturating_sub(fee),
-					SwapType::Swap(destination_address),
-				);
-
+			if let Some(swap_id) =
+				Self::on_swap_deposit_received(from, to, amount, destination_address)
+			{
 				Self::deposit_event(Event::<T>::SwapScheduledByDeposit {
 					swap_id,
 					deposit_address: T::AddressConverter::try_to_encoded_address(deposit_address)
@@ -811,7 +805,7 @@ pub mod pallet {
 			{
 				// If the CCM's principal requires a swap and is non-zero,
 				// then the principal swap amount must be above minimum swap amount required.
-				Some(CcmFailReason::PrincipalSwapAmountBelowMinimum)
+				Some(CcmFailReason::PrincipalSwapAmountTooLow)
 			} else if message_metadata.gas_budget < MinimumCcmGasBudget::<T>::get(source_asset) {
 				// The gas budget must be above the minimum allowed
 				Some(CcmFailReason::GasBudgetBelowMinimum)

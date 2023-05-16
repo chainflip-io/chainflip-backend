@@ -40,7 +40,7 @@ The gas budget is stored on-chain with the ccm_id, and can be queried. The swapp
 Swap operations uses up alot of system resources and are expensive to run. Safeguard system are put up to avoid DDOS attacks that drain resources maliciously. This is done by defining a minimum threshold for certain operations. Requests that are below this threshold are rejected and funds confiscated by the Chain. 
 
 ### On Failed Swap or CCM
-Since Swap and CCM deposit functions are called by Witnessers or Brokers, they do not return errors on failure, but will instead emit RuntimeEvents: `SwapAmountBelowMinimum` and `CcmFailed`. `CcmFailed` also contains for failure for diagnostic. All the deposited funds are confiscated by the chain and stored in the `CollectedRejectedFunds` storage. 
+Since Swap and CCM deposit functions are called by Witnessers or Brokers, they do not return errors on failure, but will instead emit RuntimeEvents: `SwapAmountTooLow` and `CcmFailed`. `CcmFailed` also contains for failure for diagnostic. All the deposited funds are confiscated by the chain and stored in the `CollectedRejectedFunds` storage. 
 
 ### Minimum Swap Threhold
 Swaps deposits are required to be above a certain threshold if they are to be processed by the pallet. This threshold is set by the `set_minimum_swap_amount` extrinsic call, and requires governance. 
