@@ -305,7 +305,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 		let message = CcmDepositMetadata {
 			message: vec![0u8, 1u8, 2u8, 3u8, 4u8],
 			gas_budget,
-			refund_address: ForeignChainAddress::Eth([0x01; 20]),
+			cf_parameters: vec![],
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 
@@ -421,7 +421,7 @@ fn can_process_ccm_via_direct_deposit() {
 		let message = CcmDepositMetadata {
 			message: vec![0u8, 1u8, 2u8, 3u8, 4u8],
 			gas_budget,
-			refund_address: ForeignChainAddress::Eth([0x01; 20]),
+			cf_parameters: vec![],
 			source_address: ForeignChainAddress::Eth([0xcf; 20])
 		};
 

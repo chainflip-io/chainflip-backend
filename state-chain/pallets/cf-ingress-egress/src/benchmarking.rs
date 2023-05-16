@@ -54,7 +54,7 @@ benchmarks_instance_pallet! {
 				amount: BenchmarkValue::benchmark_value(),
 				destination_address: destination_address.clone(),
 				message: vec![0x00, 0x01, 0x02, 0x03],
-				refund_address: ForeignChainAddress::Eth(Default::default()),
+				cf_parameters: vec![],
 				source_address: ForeignChainAddress::Eth([0xcf; 20]),
 			});
 		}
