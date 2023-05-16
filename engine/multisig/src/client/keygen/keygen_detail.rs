@@ -291,6 +291,72 @@ pub struct DKGUnverifiedCommitment<P: ECPoint> {
 	zkp: ZKPSignature<P>,
 }
 
+pub use serialisation::MAX_COEFF_COMM_3_SIZE;
+
+mod serialisation {
+
+	use state_chain_runtime::constants::common::MAX_AUTHORITIES;
+
+	use crate::crypto::{MAX_POINT_SIZE, MAX_SCALAR_SIZE};
+
+	const MAX_ZKP_SIZE: usize = MAX_POINT_SIZE + MAX_SCALAR_SIZE;
+
+	const MAX_COEFFICIENTS: usize =
+		utilities::threshold_from_share_count(MAX_AUTHORITIES) as usize + 1;
+
+	// NOTE: 8 bytes for the length of the vector
+	pub const MAX_COEFF_COMM_3_SIZE: usize = MAX_ZKP_SIZE + MAX_POINT_SIZE * MAX_COEFFICIENTS + 8;
+
+	#[cfg(test)]
+	mod tests {
+		use crate::{
+			bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme,
+		};
+		#[test]
+		fn check_comm3_max_size() {
+			check_comm3_size_for_scheme::<EthSigning>();
+			check_comm3_size_for_scheme::<BtcSigning>();
+			check_comm3_size_for_scheme::<PolkadotSigning>();
+		}
+
+		fn check_comm3_size_for_scheme<C: CryptoScheme>() {
+			// Generate Comm3 data for MAX_AUTHORITIES and check
+			// that its size is no greater than MAX_COEFF_COMM_3_SIZE
+			// for a given scheme:
+
+			use super::{super::*, *};
+			use crate::client::{common::DelayDeserialization, keygen::CoeffComm3};
+
+			use rand::SeedableRng;
+
+			let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
+
+			let params = ThresholdParameters::from_share_count(MAX_AUTHORITIES);
+
+			let context = HashContext([0; 32]);
+
+			let (secret, shares_commitments, _shares) =
+				generate_secret_and_shares::<<C as CryptoScheme>::Point>(
+					&mut rng,
+					&SharingParameters::for_keygen(params),
+					None,
+				);
+			// Zero-knowledge proof of `secret`
+			let zkp = generate_zkp_of_secret(&mut rng, secret, &context, 1 /* own index */);
+			let zkp_bytes = bincode::serialize(&zkp).unwrap();
+
+			assert!(zkp_bytes.len() <= MAX_ZKP_SIZE);
+
+			let dkg_commitment = DKGUnverifiedCommitment { commitments: shares_commitments, zkp };
+
+			let comm3: CoeffComm3<<C as CryptoScheme>::Point> =
+				DelayDeserialization::new(&dkg_commitment);
+
+			assert!(comm3.payload.len() <= MAX_COEFF_COMM_3_SIZE);
+		}
+	}
+}
+
 /// Commitments that have already been checked against the ZKP
 #[derive(Debug)]
 pub struct DKGCommitment<P: ECPoint> {
@@ -461,13 +527,6 @@ fn check_high_degree_commitments<P: ECPoint>(
 pub fn compute_secret_key_share<P: ECPoint>(secret_shares: IncomingShares<P>) -> P::Scalar {
 	// Note: the shares in secret_shares will be zeroized on drop here
 	secret_shares.0.values().map(|share| share.value.clone()).sum()
-}
-
-impl<P: ECPoint> DKGUnverifiedCommitment<P> {
-	/// Get the number of commitments
-	pub fn get_commitments_len(&self) -> usize {
-		self.commitments.0.len()
-	}
 }
 
 #[cfg(test)]

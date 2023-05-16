@@ -9,7 +9,7 @@ pub use ceremony_stage::{
 	CeremonyCommon, CeremonyStage, PreProcessStageDataCheck, ProcessMessageResult, StageResult,
 };
 
-pub use broadcast_verification::BroadcastVerificationMessage;
+pub use broadcast_verification::{BroadcastVerificationMessage, DelayDeserialization};
 
 use cf_primitives::{AccountId, AuthorityCount};
 pub use failure_reason::{
@@ -261,4 +261,30 @@ pub enum SigningStageName {
 	LocalSigStage3,
 	#[error("Verify Local Signatures [4]")]
 	VerifyLocalSigsBroadcastStage4,
+}
+
+/// Try to deserialize all messages. If at least one fails,
+/// return the parties for which deserialization failed.
+pub fn try_deserialize<T: serde::de::DeserializeOwned>(
+	messages: BTreeMap<AuthorityCount, DelayDeserialization<T>>,
+) -> Result<BTreeMap<AuthorityCount, T>, BTreeSet<AuthorityCount>> {
+	//
+	let mut bad_parties = BTreeSet::new();
+	let deserialized_messages: BTreeMap<_, _> = messages
+		.into_iter()
+		.filter_map(|(idx, serialized_message)| match serialized_message.deserialize() {
+			Ok(message) => Some((idx, message)),
+			Err(e) => {
+				tracing::warn!("Failed to deserialize message from party {}: {}", idx, e);
+				bad_parties.insert(idx);
+				None
+			},
+		})
+		.collect();
+
+	if bad_parties.is_empty() {
+		Ok(deserialized_messages)
+	} else {
+		Err(bad_parties)
+	}
 }
