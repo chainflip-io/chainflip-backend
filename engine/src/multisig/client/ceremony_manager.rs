@@ -546,7 +546,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 				if ceremony_id > latest_ceremony_id + CEREMONY_ID_WINDOW {
 					warn!("Ignoring data: unexpected future ceremony id {}", ceremony_id);
 					return
-				} else if ceremony_id < latest_ceremony_id {
+				} else if ceremony_id <= latest_ceremony_id {
 					trace!("Ignoring data: old ceremony id {}", ceremony_id);
 					return
 				} else {

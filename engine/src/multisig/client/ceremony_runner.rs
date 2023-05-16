@@ -83,15 +83,11 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 					}
 
 				}
-				() = runner.timeout_handle.as_mut() => {
-
-					// Only timeout if the ceremony is authorised
-					if runner.stage.is_some() {
-						if let Some(result) = runner.on_timeout().instrument(span.clone()).await {
-							break result;
-						}
+				// Only timeout if the ceremony is authorised
+				() = runner.timeout_handle.as_mut(), if runner.stage.is_some() => {
+					if let Some(result) = runner.on_timeout().instrument(span.clone()).await {
+						break result;
 					}
-
 				}
 			}
 		};
