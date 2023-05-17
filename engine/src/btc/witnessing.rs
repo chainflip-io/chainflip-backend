@@ -54,10 +54,19 @@ pub async fn start(
 			})
 			.collect(),
 	);
-	// When we start how do we know what broadcasts to witness? We use the TransactionOutId storage
-	// item on chain.
 
-	let (tx_hash_monitor_sender, tx_hash_monitor) = ItemMonitor::new(Default::default());
+	let (tx_hash_monitor_sender, tx_hash_monitor) = ItemMonitor::new(
+		state_chain_client
+			.storage_map::<pallet_cf_broadcast::TransactionOutIdToBroadcastId<
+				state_chain_runtime::Runtime,
+				state_chain_runtime::BitcoinInstance,
+			>>(initial_block_hash)
+			.await
+			.context("Failed to get initial BTC tx hashes to monitor for confirmation")?
+			.into_iter()
+			.map(|(tx_out_id, _)| tx_out_id)
+			.collect(),
+	);
 
 	scope.spawn(
 		super::witnesser::start(
