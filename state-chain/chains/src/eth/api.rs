@@ -521,16 +521,7 @@ impl<E> ApiCall<Ethereum> for EthereumApi<E> {
 	}
 
 	fn transaction_out_id(&self) -> <Ethereum as ChainCrypto>::TransactionOutId {
-		match self {
-			EthereumApi::SetAggKeyWithAggKey(call) => call.transaction_out_id(),
-			EthereumApi::RegisterRedemption(call) => call.transaction_out_id(),
-			EthereumApi::UpdateFlipSupply(call) => call.transaction_out_id(),
-			EthereumApi::SetGovKeyWithAggKey(call) => call.transaction_out_id(),
-			EthereumApi::SetCommKeyWithAggKey(call) => call.transaction_out_id(),
-			EthereumApi::AllBatch(call) => call.transaction_out_id(),
-			EthereumApi::ExecutexSwapAndCall(call) => call.transaction_out_id(),
-			EthereumApi::_Phantom(..) => unreachable!(),
-		}
+		map_over_api_variants!(self, call, call.transaction_out_id())
 	}
 }
 
