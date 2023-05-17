@@ -43,11 +43,11 @@ spec:
           volumeMounts:
             - name: signing-key
               mountPath: {{ .Values.signingKeyFile }}
-              subPath: signing-key
+              subPath: signing_key_file
       volumes:
         - name: signing-key
           secret:
             secretName: {{ .Values.secrets.existingOnePasswordSecret }}
             items:
-              - key: signing-key
-                path: signing-key
+              - key: signing_key
+                path: signing_key_file

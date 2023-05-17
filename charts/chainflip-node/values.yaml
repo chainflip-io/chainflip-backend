@@ -8,8 +8,8 @@ initContainer:
     pullPolicy: IfNotPresent
     tag: "20.04"
 
-signingKeyFile: /etc/chainflip/keys/signing-key
-nodeKeyFile: /etc/chainflip/keys/node-key
+signingKeyFile: /etc/chainflip/keys/signing_key_file
+nodeKeyFile: /etc/chainflip/keys/node_key_file
 
 imagePullSecrets:
   - name: dockerconfigjson
