@@ -157,7 +157,7 @@ pub async fn mint_range_order(
 	range: Range<Tick>,
 	amount: NumberOrHex,
 ) -> Result<MintPositionReturn> {
-	if let Ok(maybe_amount) = u128::try_from(amount) {
+	if let Ok(amount) = u128::try_from(amount) {
 		task_scope(|scope| {
 			async {
 				// Connect to State Chain
@@ -176,7 +176,7 @@ pub async fn mint_range_order(
 					.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_mint_range_order {
 						unstable_asset: asset,
 						price_range_in_ticks: range,
-						liquidity: maybe_amount,
+						liquidity: amount,
 					})
 					.await
 					.until_finalized()
@@ -217,7 +217,7 @@ pub async fn burn_range_order(
 	range: Range<Tick>,
 	amount: NumberOrHex,
 ) -> Result<BurnPositionReturn> {
-	if let Ok(maybe_amount) = u128::try_from(amount) {
+	if let Ok(amount) = u128::try_from(amount) {
 		task_scope(|scope| {
 			async {
 				// Connect to State Chain
@@ -244,7 +244,7 @@ pub async fn burn_range_order(
 					.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_burn_range_order {
 						unstable_asset: asset,
 						price_range_in_ticks: range,
-						liquidity: maybe_amount,
+						liquidity: amount,
 					})
 					.await
 					.until_finalized()

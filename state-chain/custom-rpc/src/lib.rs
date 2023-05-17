@@ -471,19 +471,17 @@ where
 		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutput> {
-		if let Ok(maybe_amount) = u128::try_from(amount) {
+		if let Ok(amount) = u128::try_from(amount) {
 			self.client
 				.runtime_api()
-				.cf_pool_simulate_swap(&self.query_block_id(at), from, to, maybe_amount)
+				.cf_pool_simulate_swap(&self.query_block_id(at), from, to, amount)
 				.map_err(to_rpc_error)
 				.and_then(|r| {
 					r.map_err(|e| jsonrpsee::core::Error::Custom(<&'static str>::from(e).into()))
 				})
 				.map(RpcSwapOutput::from)
 		} else {
-			Err(jsonrpsee::core::Error::Custom(
-				"Amount is too large to be represented as u128".into(),
-			))
+			Err(jsonrpsee::core::Error::Custom("Error during converting amount".into()))
 		}
 	}
 }
