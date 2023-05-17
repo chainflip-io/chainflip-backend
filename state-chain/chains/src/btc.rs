@@ -432,6 +432,28 @@ const LOCKTIME: [u8; 4] = 0u32.to_le_bytes();
 const VERSION: [u8; 4] = 2u32.to_le_bytes();
 const SEQUENCE_NUMBER: [u8; 4] = (u32::MAX - 2).to_le_bytes();
 
+fn extend_with_inputs_outputs(
+	bytes: &mut Vec<u8>,
+	inputs: &Vec<Utxo>,
+	outputs: &Vec<BitcoinOutput>,
+) {
+	bytes.extend(to_varint(inputs.len() as u64));
+	bytes.extend(inputs.iter().fold(Vec::<u8>::default(), |mut acc, input| {
+		acc.extend(input.txid);
+		acc.extend(input.vout.to_le_bytes());
+		acc.push(0);
+		acc.extend(SEQUENCE_NUMBER);
+		acc
+	}));
+
+	bytes.extend(to_varint(outputs.len() as u64));
+	bytes.extend(outputs.iter().fold(Vec::<u8>::default(), |mut acc, output| {
+		acc.extend(output.amount.to_le_bytes());
+		acc.extend(output.script_pubkey.serialize());
+		acc
+	}));
+}
+
 impl BitcoinTransaction {
 	pub fn create_new_unsigned(
 		agg_key: &AggKey,
@@ -460,20 +482,7 @@ impl BitcoinTransaction {
 		transaction_bytes.extend(VERSION);
 		transaction_bytes.push(SEGWIT_MARKER);
 		transaction_bytes.push(SEGWIT_FLAG);
-		transaction_bytes.extend(to_varint(inputs.len() as u64));
-		transaction_bytes.extend(inputs.iter().fold(Vec::<u8>::default(), |mut acc, input| {
-			acc.extend(input.txid);
-			acc.extend(input.vout.to_le_bytes());
-			acc.push(0);
-			acc.extend(SEQUENCE_NUMBER);
-			acc
-		}));
-		transaction_bytes.extend(to_varint(outputs.len() as u64));
-		transaction_bytes.extend(outputs.iter().fold(Vec::<u8>::default(), |mut acc, output| {
-			acc.extend(output.amount.to_le_bytes());
-			acc.extend(output.script_pubkey.serialize());
-			acc
-		}));
+		extend_with_inputs_outputs(&mut transaction_bytes, &inputs, &outputs);
 		Self { inputs, outputs, signatures: vec![], transaction_bytes, old_utxo_input_indices }
 	}
 
@@ -487,24 +496,10 @@ impl BitcoinTransaction {
 			!self.signatures.iter().any(|signature| signature == &[0u8; 64])
 	}
 
-	// TODO: Deduplicat some of this.
 	pub fn txid(&self) -> [u8; 32] {
 		let mut id_bytes = Vec::default();
 		id_bytes.extend(VERSION);
-		id_bytes.extend(to_varint(self.inputs.len() as u64));
-		id_bytes.extend(self.inputs.iter().fold(Vec::<u8>::default(), |mut acc, input| {
-			acc.extend(input.txid);
-			acc.extend(input.vout.to_le_bytes());
-			acc.push(0);
-			acc.extend(SEQUENCE_NUMBER);
-			acc
-		}));
-		id_bytes.extend(to_varint(self.outputs.len() as u64));
-		id_bytes.extend(self.outputs.iter().fold(Vec::<u8>::default(), |mut acc, output| {
-			acc.extend(output.amount.to_le_bytes());
-			acc.extend(output.script_pubkey.serialize());
-			acc
-		}));
+		extend_with_inputs_outputs(&mut id_bytes, &self.inputs, &self.outputs);
 		id_bytes.extend(&LOCKTIME);
 
 		sha2_256(&sha2_256(&id_bytes))
