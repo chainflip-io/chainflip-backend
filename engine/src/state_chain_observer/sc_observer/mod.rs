@@ -41,7 +41,7 @@ use crate::{
 		storage_api::StorageApi,
 		StateChainStreamApi,
 	},
-	witnesser::{MonitorCommand, EpochStart},
+	witnesser::{EpochStart, MonitorCommand},
 };
 use multisig::{
 	bitcoin::BtcSigning, client::MultisigClientApi, eth::EthSigning, polkadot::PolkadotSigning,
@@ -123,8 +123,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
 		let signing_result_future =
 			multisig_client.initiate_signing(ceremony_id, signers, signing_info);
-        
-        
+
 		scope.spawn(async move {
 			match signing_result_future.await {
 				Ok(signatures) => {
@@ -210,7 +209,7 @@ pub async fn start<
 	btc_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<
 		MonitorCommand<BitcoinScriptBounded>,
 	>,
-    btc_tx_hash_sender: tokio::sync::mpsc::UnboundedSender<MonitorCommand<[u8; 32]>>,
+	btc_tx_hash_sender: tokio::sync::mpsc::UnboundedSender<MonitorCommand<[u8; 32]>>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
 ) -> Result<(), anyhow::Error>
 where
@@ -682,7 +681,6 @@ where
                                             transaction_out_id,
                                         },
                                     ) => {
-                                        
                                         // Send this transaction_out_id to monitor
                                         btc_tx_hash_sender.send(MonitorCommand::Add(transaction_out_id)).unwrap();
 
