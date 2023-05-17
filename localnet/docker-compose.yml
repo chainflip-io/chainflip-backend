@@ -3,7 +3,7 @@ version: "3.8"
 services:
   polkadot:
     container_name: polkadot
-    image: parity/polkadot
+    image: parity/polkadot:v0.9.36
     ports:
       - 30333:30333 # p2p port
       - 9934:9933 # rpc port
