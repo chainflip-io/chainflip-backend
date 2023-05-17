@@ -27,11 +27,11 @@ ingress:
 
 resources:
   limits:
-    cpu: 1000m
-    memory: 512Mi
+    cpu: 1500m
+    memory: 2048Mi
   requests:
     cpu: 500m
-    memory: 128Mi
+    memory: 1024Mi
 
 secrets:
   existingOnePasswordSecret: chainflip-node-secrets
