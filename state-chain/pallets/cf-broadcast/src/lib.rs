@@ -577,12 +577,12 @@ pub mod pallet {
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn clean_up_broadcast_storage(broadcast_id: BroadcastId) {
 		let first_attempt = AttemptCount::default();
-		let transaction_signing_attempt = AwaitingBroadcast::<T, I>::get(BroadcastAttemptId {
-			broadcast_id,
-			attempt_count: first_attempt,
-		});
 
-		if let Some(transaction_signing_attempt) = transaction_signing_attempt {
+		if let Some(transaction_signing_attempt) =
+			AwaitingBroadcast::<T, I>::get(BroadcastAttemptId {
+				broadcast_id,
+				attempt_count: first_attempt,
+			}) {
 			TransactionOutIdToBroadcastId::<T, I>::remove(
 				transaction_signing_attempt.broadcast_attempt.transaction_out_id,
 			);
@@ -594,8 +594,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		FailedBroadcasters::<T, I>::remove(broadcast_id);
 		RequestCallbacks::<T, I>::remove(broadcast_id);
-
-		if let Some((_, _)) = ThresholdSignatureData::<T, I>::take(broadcast_id) {}
+		ThresholdSignatureData::<T, I>::remove(broadcast_id);
 	}
 
 	pub fn take_awaiting_broadcast(
@@ -676,7 +675,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn start_next_broadcast_attempt(broadcast_attempt: BroadcastAttempt<T, I>) {
 		let broadcast_id = broadcast_attempt.broadcast_attempt_id.broadcast_id;
 
-		// We only need to store the threshold signature data payload here, not the api call?
 		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
 			let EpochKey { key, .. } = T::KeyProvider::current_epoch_key()
 				.expect("Epoch key must exist if we made a broadcast.");
