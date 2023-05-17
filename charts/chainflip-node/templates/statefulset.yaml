@@ -4,8 +4,8 @@ metadata:
   name: {{ include "chainflip-node.fullname" . }}
   labels:
   {{- include "chainflip-node.labels" . | nindent 4 }}
-serviceName: {{ include "chainflip-node.fullname" . }}
 spec:
+  serviceName: {{ include "chainflip-node.fullname" . }}
   selector:
     matchLabels:
   {{- include "chainflip-node.selectorLabels" . | nindent 6 }}
