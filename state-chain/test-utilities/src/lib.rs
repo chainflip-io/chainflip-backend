@@ -1,5 +1,9 @@
 use frame_system::Config;
 
+mod rich_test_externalities;
+
+pub use rich_test_externalities::*;
+
 pub fn last_event<T: Config>() -> <T as Config>::RuntimeEvent {
 	maybe_last_event::<T>().expect("Event expected")
 }
