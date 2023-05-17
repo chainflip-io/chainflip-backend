@@ -178,7 +178,6 @@ impl TransactionBuilder<Polkadot, PolkadotApi<DotEnvironment>> for DotTransactio
 		// TODO: For now this is a noop until we actually have dot chain tracking
 	}
 
-	// We pass the payload and not the API call?
 	fn is_valid_for_rebroadcast(
 		call: &PolkadotApi<DotEnvironment>,
 		payload: &<Polkadot as ChainCrypto>::Payload,
