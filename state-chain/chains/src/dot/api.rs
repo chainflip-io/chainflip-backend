@@ -244,7 +244,6 @@ impl<E: PolkadotEnvironment + 'static> ApiCall<Polkadot> for OpaqueApiCall<E> {
 	}
 
 	fn transaction_out_id(&self) -> <Polkadot as ChainCrypto>::TransactionOutId {
-		// TODO: Throw up unwrap()?
 		self.builder.signature().unwrap()
 	}
 }
