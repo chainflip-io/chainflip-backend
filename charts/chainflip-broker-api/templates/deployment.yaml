@@ -49,5 +49,5 @@ spec:
           secret:
             secretName: {{ .Values.secrets.existingOnePasswordSecret }}
             items:
-              - key: signing_key
+              - key: signing-key
                 path: signing_key_file
