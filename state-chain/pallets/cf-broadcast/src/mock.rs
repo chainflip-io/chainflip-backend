@@ -4,7 +4,7 @@ use crate::{self as pallet_cf_broadcast, Instance1, PalletOffence};
 use cf_chains::{
 	eth::Ethereum,
 	mocks::{MockAggKey, MockApiCall, MockEthereum, MockTransactionBuilder},
-	ChainCrypto,
+	Chain, ChainCrypto,
 };
 use cf_traits::{
 	impl_mock_chainflip,
@@ -88,6 +88,8 @@ pub const INVALID_AGG_KEY: MockAggKey = MockAggKey([1, 1, 1, 1]);
 
 thread_local! {
 	pub static SIGNATURE_REQUESTS: RefCell<Vec<<Ethereum as ChainCrypto>::Payload>> = RefCell::new(vec![]);
+	pub static ROTATION_CALLBACK: RefCell<Option<MockCallback>> = RefCell::new(None);
+	pub static CALLBACK_CALLED: RefCell<bool> = RefCell::new(false);
 }
 
 pub type EthMockThresholdSigner = MockThresholdSigner<Ethereum, crate::mock::RuntimeCall>;
@@ -105,13 +107,33 @@ impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 }
 
 pub struct MockRotationCallbackProvider;
+
+impl MockRotationCallbackProvider {
+	pub fn set_callback(callback: Option<MockCallback>) {
+		ROTATION_CALLBACK.with(|cell| *cell.borrow_mut() = callback);
+	}
+}
+
 impl OnRotationCallback<MockEthereum> for MockRotationCallbackProvider {
 	type Callback = MockCallback;
 	type Origin = RuntimeOrigin;
+
+	fn on_rotation(
+		_block_number: <MockEthereum as Chain>::ChainBlockNumber,
+		_tx_out_id: <MockEthereum as ChainCrypto>::TransactionOutId,
+	) -> Option<Self::Callback> {
+		ROTATION_CALLBACK.with(|cell| cell.borrow_mut().take())
+	}
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockCallback;
+
+impl MockCallback {
+	pub fn was_called() -> bool {
+		CALLBACK_CALLED.with(|cell| *cell.borrow())
+	}
+}
 
 impl UnfilteredDispatchable for MockCallback {
 	type RuntimeOrigin = RuntimeOrigin;
@@ -120,6 +142,7 @@ impl UnfilteredDispatchable for MockCallback {
 		self,
 		_origin: Self::RuntimeOrigin,
 	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
+		CALLBACK_CALLED.with(|cell| *cell.borrow_mut() = true);
 		Ok(().into())
 	}
 }
