@@ -4,11 +4,11 @@ metadata:
   name: {{ include "chainflip-node.fullname" . }}
   labels:
   {{- include "chainflip-node.labels" . | nindent 4 }}
+serviceName: {{ include "chainflip-node.fullname" . }}
 spec:
   selector:
     matchLabels:
   {{- include "chainflip-node.selectorLabels" . | nindent 6 }}
-  revisionHistoryLimit: {{ .Values.deployment.revisionHistoryLimit }}
   template:
     metadata:
       annotations:
@@ -35,7 +35,6 @@ spec:
           volumeMounts:
             - name: {{ include "chainflip-node.fullname" . }}
               mountPath: {{ .Values.basePath | default "/etc/chainflip" }}
-
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
