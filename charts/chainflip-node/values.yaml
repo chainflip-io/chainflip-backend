@@ -47,3 +47,4 @@ ports:
   metricsPort: "9615"
 
 basePath: /etc/chainflip
+purgeChain: false

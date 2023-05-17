@@ -28,8 +28,6 @@ spec:
           args:
             - -c
             - |
-                echo "Purging the chain ..."
-                rm -rf /etc/chainflip/chaindata/*
                 echo "Downloadeding chainspec from: {{ .Values.chainspecUrl }}"
                 wget -O {{ .Values.basePath | default "/etc/chainflip" }}/{{ .Values.chainspec }} {{ .Values.chainspecUrl }}
                 echo "Checking chainspec ..."
@@ -37,6 +35,19 @@ spec:
           volumeMounts:
             - name: {{ include "chainflip-node.fullname" . }}
               mountPath: {{ .Values.basePath | default "/etc/chainflip" }}
+        {{- if .Values.purgeChain }}
+        - name: purge-chain
+          image: {{ .Values.initContainer.image.repository }}:{{ .Values.initContainer.image.tag }}
+          command: [ "/bin/bash" ]
+          args:
+            - -c
+            - |
+                echo "Purging the chain ..."
+                rm -rf /etc/chainflip/chaindata/*
+          volumeMounts:
+            - name: {{ include "chainflip-node.fullname" . }}
+              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}
+        {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
