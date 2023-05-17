@@ -28,6 +28,8 @@ spec:
           args:
             - -c
             - |
+                echo "Purging the chain ..."
+                rm -rf /etc/chainflip/chaindata/*
                 echo "Downloadeding chainspec from: {{ .Values.chainspecUrl }}"
                 wget -O {{ .Values.basePath | default "/etc/chainflip" }}/{{ .Values.chainspec }} {{ .Values.chainspecUrl }}
                 echo "Checking chainspec ..."
