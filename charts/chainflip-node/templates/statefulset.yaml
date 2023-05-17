@@ -27,14 +27,10 @@ spec:
           command: [ "/bin/bash" ]
           args:
             - -c
-            - |
-                echo "Downloadeding chainspec from: {{ .Values.chainspecUrl }}"
-                wget -O {{ .Values.basePath | default "/etc/chainflip" }}/{{ .Values.chainspec }} {{ .Values.chainspecUrl }}
-                echo "Checking chainspec ..."
-                head -n 10 {{ .Values.basePath | default "/etc/chainflip" }}/{{ .Values.chainspec }}
+            - "wget -O {{ .Values.basePath }}/{{ .Values.chainspec }} {{ .Values.chainspecUrl }}"
           volumeMounts:
             - name: {{ include "chainflip-node.fullname" . }}
-              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}
+              mountPath: {{ .Values.basePath }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
@@ -42,7 +38,7 @@ spec:
           command:
             - /usr/local/bin/chainflip-node
           args:
-            - --base-path={{ .Values.basePath | default "/etc/chainflip" }}/chaindata
+            - --base-path={{ .Values.basePath }}/chaindata
             - --chain=/etc/chainflip/{{ .Values.chainspec }}
             - --node-key-file={{ .Values.nodeKeyFile }}
             - --prometheus-external
@@ -72,7 +68,7 @@ spec:
               mountPath: {{ .Values.nodeKeyFile }}
               subPath: node-key
             - name: {{ include "chainflip-node.fullname" . }}
-              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
+              mountPath: {{ .Values.basePath }}/chaindata
       volumes:
         - name: signing-key
           secret:
