@@ -16,7 +16,7 @@ use bitcoincore_rpc::bitcoin::{hashes::Hash, Transaction};
 use cf_chains::{
 	address::ScriptPubkeyBytes,
 	btc::{
-		deposit_address::derive_btc_deposit_bitcoin_script, BitcoinScript, BitcoinScriptBounded,
+		deposit_address::derive_btc_deposit_bitcoin_script, BitcoinScriptBounded,
 		BitcoinTrackedData, BtcAmount, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	Bitcoin,
@@ -115,7 +115,9 @@ struct BtcBlockWitnesser<StateChainClient> {
 	state_chain_client: Arc<StateChainClient>,
 	btc_rpc: BtcRpcClient,
 	epoch_index: EpochIndex,
-	change_pubkey: cf_chains::btc::AggKey,
+	// Who we report as the signer to the SC. This should always the address of the
+	// current agg key.
+	current_pubkey: BitcoinScriptBounded,
 }
 
 #[async_trait]
@@ -139,16 +141,6 @@ where
 
 		trace!("Checking BTC block: {block_number} for interesting UTXOs");
 
-		// TODO: Move this onto the BtcBlockWitnesser struct.
-		let change_addresses = [Some(self.change_pubkey.current), self.change_pubkey.previous]
-			.iter()
-			.filter_map(|key_opt| {
-				key_opt.map(|key| {
-					(key, derive_btc_deposit_bitcoin_script(key, CHANGE_ADDRESS_SALT).data)
-				})
-			})
-			.collect::<Vec<_>>();
-
 		let (deposit_witnesses, tx_success_witnesses) =
 			filter_interesting_utxos(block.txdata, address_monitor, tx_hash_monitor);
 
@@ -166,9 +158,6 @@ where
 				.await;
 		}
 
-		let signer_id: BitcoinScript = BitcoinScript { data: change_addresses[0].1.clone() };
-		let signer_id: BitcoinScriptBounded = signer_id.try_into().expect("Handle this");
-
 		if !tx_success_witnesses.is_empty() {
 			for SuccessWitness { tx_hash, tx_fee } in tx_success_witnesses {
 				self.state_chain_client
@@ -177,7 +166,7 @@ where
 							pallet_cf_broadcast::Call::transaction_succeeded {
 								tx_out_id: tx_hash,
 								block_number,
-								signer_id: signer_id.clone(),
+								signer_id: self.current_pubkey.clone(),
 								tx_fee,
 							},
 						)),
@@ -230,7 +219,12 @@ where
 			state_chain_client: self.state_chain_client.clone(),
 			btc_rpc: self.btc_rpc.clone(),
 			epoch_index: epoch.epoch_index,
-			change_pubkey: epoch.data.change_pubkey,
+			current_pubkey: derive_btc_deposit_bitcoin_script(
+				epoch.data.change_pubkey.current,
+				CHANGE_ADDRESS_SALT,
+			)
+			.try_into()
+			.expect("We know our addresses are valid"),
 		}
 	}
 
