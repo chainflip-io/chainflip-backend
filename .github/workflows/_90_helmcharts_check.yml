@@ -10,7 +10,7 @@ jobs:
   check-helm-charts:
     strategy:
       matrix:
-        chart: [chainflip-broker-api]
+        chart: [chainflip-broker-api, chainflip-node]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout 🏁

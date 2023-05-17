@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "chainflip-node.fullname" . }}
+  labels:
+  {{- include "chainflip-node.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "chainflip-node.fullname" . }}
+  selector:
+    matchLabels:
+  {{- include "chainflip-node.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8501"
+      labels:
+    {{- include "chainflip-node.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: download-chainspec
+          image: {{ .Values.initContainer.image.repository }}:{{ .Values.initContainer.image.tag }}
+          command: [ "/bin/bash" ]
+          args:
+            - -c
+            - |
+                echo "Downloadeding chainspec from: {{ .Values.chainspecUrl }}"
+                wget -O {{ .Values.basePath | default "/etc/chainflip" }}/{{ .Values.chainspec }} {{ .Values.chainspecUrl }}
+                echo "Checking chainspec ..."
+                head -n 10 {{ .Values.basePath | default "/etc/chainflip" }}/{{ .Values.chainspec }}
+          volumeMounts:
+            - name: {{ include "chainflip-node.fullname" . }}
+              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}
+        {{- if .Values.purgeChain }}
+        - name: purge-chain
+          image: {{ .Values.initContainer.image.repository }}:{{ .Values.initContainer.image.tag }}
+          command: [ "/bin/bash" ]
+          args:
+            - -c
+            - |
+                echo "Purging the chain ..."
+                rm -rf /etc/chainflip/chaindata/*
+          volumeMounts:
+            - name: {{ include "chainflip-node.fullname" . }}
+              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}
+        {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /usr/local/bin/chainflip-node
+          args:
+            - --base-path={{ .Values.basePath | default "/etc/chainflip" }}/chaindata
+            - --chain=/etc/chainflip/{{ .Values.chainspec }}
+            - --node-key-file={{ .Values.nodeKeyFile }}
+            - --prometheus-external
+            - --state-cache-size=0
+            - --sync=warp
+            - --validator
+          ports:
+            - name: ws
+              containerPort: {{ .Values.ports.wsPort | default "9944" }}
+              protocol: TCP
+            - name: rpc
+              containerPort: {{ .Values.ports.rpcPort | default "9933" }}
+              protocol: TCP
+            - name: p2p
+              containerPort: {{ .Values.ports.p2pPort | default "30333" }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.ports.metricsPort | default "9615" }}
+              protocol: TCP
+          resources:
+          {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: signing-key
+              mountPath: {{ .Values.signingKeyFile }}
+              subPath: signing-key
+            - name: node-key
+              mountPath: {{ .Values.nodeKeyFile }}
+              subPath: node-key
+            - name: {{ include "chainflip-node.fullname" . }}
+              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}
+      volumes:
+        - name: signing-key
+          secret:
+            secretName: {{ .Values.secrets.existingOnePasswordSecret }}
+            items:
+              - key: signing-key
+                path: signing_key_file
+        - name: node-key
+          secret:
+            secretName: {{ .Values.secrets.existingOnePasswordSecret }}
+            items:
+              - key: node-key
+                path: node_key_file
+  volumeClaimTemplates:
+    - metadata:
+        name: {{ include "chainflip-node.fullname" . }}
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: gp2
+        resources:
+          requests:
+            storage: 50Gi

@@ -4,7 +4,7 @@ image:
   tag: ""
 containerPort: 8080
 
-signingKeyFile: /etc/chainflip/keys/signing-key
+signingKeyFile: /etc/chainflip/keys/signing_key_file
 stateChainWsEndpoint: ws://chainflip-node.staging.svc.cluster.local
 
 imagePullSecrets:
