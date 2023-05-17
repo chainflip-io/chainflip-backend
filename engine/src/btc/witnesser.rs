@@ -17,7 +17,7 @@ use cf_chains::{
 	address::ScriptPubkeyBytes,
 	btc::{
 		deposit_address::derive_btc_deposit_bitcoin_script, BitcoinScriptBounded,
-		BitcoinTrackedData, BtcAmount, UtxoId, CHANGE_ADDRESS_SALT,
+		BitcoinTrackedData, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	Bitcoin,
 };
@@ -39,11 +39,6 @@ use crate::{
 
 use super::rpc::{BtcRpcApi, BtcRpcClient};
 
-pub struct SuccessWitness {
-	tx_hash: [u8; 32],
-	tx_fee: BtcAmount,
-}
-
 // Takes txs and list of monitored addresses. Returns a list of txs that are relevant to the
 // monitored addresses.
 pub fn filter_interesting_utxos(
@@ -54,7 +49,7 @@ pub fn filter_interesting_utxos(
 		BitcoinScriptBounded,
 	>,
 	tx_hash_monitor: &mut AddressMonitor<[u8; 32], [u8; 32], ()>,
-) -> (Vec<DepositWitness<Bitcoin>>, Vec<SuccessWitness>) {
+) -> (Vec<DepositWitness<Bitcoin>>, Vec<[u8; 32]>) {
 	address_monitor.sync_addresses();
 	tx_hash_monitor.sync_addresses();
 	let mut deposit_witnesses = vec![];
@@ -63,10 +58,9 @@ pub fn filter_interesting_utxos(
 	for tx in txs {
 		let tx_hash = tx.txid().as_hash().into_inner();
 		if tx_hash_monitor.contains(&tx_hash) {
-			// TODO: Insert actual fee here. - we already know what the fee is actually, by the fact
-			// it was confirmed.
+			// TODO: We shouldn't need to add a fee
 			tracing::debug!("Tx with hash {:?} found.", hex::encode(tx_hash));
-			tx_success_witnesses.push(SuccessWitness { tx_hash, tx_fee: 0 });
+			tx_success_witnesses.push(tx_hash);
 		} else {
 			tracing::debug!("Tx not monitored with hash {:?}.", hex::encode(tx_hash));
 		}
@@ -159,7 +153,7 @@ where
 		}
 
 		if !tx_success_witnesses.is_empty() {
-			for SuccessWitness { tx_hash, tx_fee } in tx_success_witnesses {
+			for tx_hash in tx_success_witnesses {
 				self.state_chain_client
 					.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 						call: Box::new(state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
@@ -167,7 +161,9 @@ where
 								tx_out_id: tx_hash,
 								block_number,
 								signer_id: self.current_pubkey.clone(),
-								tx_fee,
+								// TODO: Ideally we can submit an empty type here. For Bitcoin
+								// and some other chains fee tracking is not necessary. PRO-370.
+								tx_fee: Default::default(),
 							},
 						)),
 						epoch_index: self.epoch_index,
@@ -428,7 +424,7 @@ mod test_utxo_filtering {
 
 		assert!(deposit_witnesses.is_empty());
 		assert_eq!(success_witnesses.len(), 2);
-		assert_eq!(success_witnesses[0].tx_hash, tx_hashes[0]);
-		assert_eq!(success_witnesses[1].tx_hash, tx_hashes[1]);
+		assert_eq!(success_witnesses[0], tx_hashes[0]);
+		assert_eq!(success_witnesses[1], tx_hashes[1]);
 	}
 }
