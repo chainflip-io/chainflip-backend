@@ -187,8 +187,12 @@ fn check_data_size_verify_coeff_comm4() {
 	assert!(gen_keygen_data_verify_coeff_comm4(expected_len, expected_len)
 		.data_size_is_valid::<EthSigning>(expected_len));
 
-	// Should fail if the other collection is larger than expected
-	assert!(!gen_keygen_data_verify_coeff_comm4(MAX_AUTHORITIES + 1, expected_len)
+	// Should fail if the outer collection is larger than expected
+	assert!(!gen_keygen_data_verify_coeff_comm4(expected_len + 1, expected_len)
+		.data_size_is_valid::<EthSigning>(expected_len));
+
+	// Should fail if the outer collection is smaller than expected
+	assert!(!gen_keygen_data_verify_coeff_comm4(expected_len - 1, expected_len)
 		.data_size_is_valid::<EthSigning>(expected_len));
 
 	// The nested collection should fail if larger than expected

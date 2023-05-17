@@ -153,8 +153,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 			.filter_map(|(party_idx, commitments)| {
 				if commitments.0.len() != self.signing_common.payload_count() {
 					warn!(
-						"Unexpected number of commitments from party {}: {} (expected: {})",
-						party_idx,
+						from_id = self.common.validator_mapping.get_id(*party_idx).to_string(),
+						"Unexpected number of commitments from party: {} (expected: {})",
 						commitments.0.len(),
 						self.signing_common.payload_count(),
 					);

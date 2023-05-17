@@ -47,7 +47,13 @@ mod serialisation {
 	fn test_signing_commitment_size_for_scheme<C: CryptoScheme>() {
 		let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
 		let comm1 = helpers::gen_dummy_signing_comm1::<C::Point>(&mut rng, 1);
-		assert!(comm1.payload.len() <= SIGNING_COMMITMENT_MAX_SIZE);
+		if matches!(<C as CryptoScheme>::CHAIN_TAG, ChainTag::Ethereum) {
+			// The constants are defined as to exactly match Ethereum/secp256k1,
+			// which we demonstrate here:
+			assert!(comm1.payload.len() == SIGNING_COMMITMENT_MAX_SIZE);
+		} else {
+			assert!(comm1.payload.len() <= SIGNING_COMMITMENT_MAX_SIZE);
+		}
 	}
 
 	#[test]
@@ -60,7 +66,14 @@ mod serialisation {
 	fn test_local_sig_size_for_scheme<C: CryptoScheme>() {
 		let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
 		let sig = helpers::gen_dummy_local_sig::<C::Point>(&mut rng);
-		assert!(sig.payload.len() <= LOCAL_SIG_MAX_SIZE);
+
+		if matches!(<C as CryptoScheme>::CHAIN_TAG, ChainTag::Ethereum) {
+			// The constants are defined as to exactly match Ethereum/secp256k1,
+			// which we demonstrate here:
+			assert!(sig.payload.len() == LOCAL_SIG_MAX_SIZE);
+		} else {
+			assert!(sig.payload.len() <= LOCAL_SIG_MAX_SIZE);
+		}
 	}
 
 	#[test]

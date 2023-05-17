@@ -268,9 +268,8 @@ pub enum SigningStageName {
 pub fn try_deserialize<T: serde::de::DeserializeOwned>(
 	messages: BTreeMap<AuthorityCount, DelayDeserialization<T>>,
 ) -> Result<BTreeMap<AuthorityCount, T>, BTreeSet<AuthorityCount>> {
-	//
 	let mut bad_parties = BTreeSet::new();
-	let deserialized_messages: BTreeMap<_, _> = messages
+	let deserialized_messages = messages
 		.into_iter()
 		.filter_map(|(idx, serialized_message)| match serialized_message.deserialize() {
 			Ok(message) => Some((idx, message)),

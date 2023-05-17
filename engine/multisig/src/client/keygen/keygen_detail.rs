@@ -310,7 +310,7 @@ mod serialisation {
 	#[cfg(test)]
 	mod tests {
 		use crate::{
-			bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme,
+			bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, ChainTag, CryptoScheme,
 		};
 		#[test]
 		fn check_comm3_max_size() {
@@ -345,14 +345,20 @@ mod serialisation {
 			let zkp = generate_zkp_of_secret(&mut rng, secret, &context, 1 /* own index */);
 			let zkp_bytes = bincode::serialize(&zkp).unwrap();
 
-			assert!(zkp_bytes.len() <= MAX_ZKP_SIZE);
-
 			let dkg_commitment = DKGUnverifiedCommitment { commitments: shares_commitments, zkp };
 
 			let comm3: CoeffComm3<<C as CryptoScheme>::Point> =
 				DelayDeserialization::new(&dkg_commitment);
 
-			assert!(comm3.payload.len() <= MAX_COEFF_COMM_3_SIZE);
+			if matches!(<C as CryptoScheme>::CHAIN_TAG, ChainTag::Ethereum) {
+				// The constants are defined as to exactly match Ethereum/secp256k1,
+				// which we demonstrate here:
+				assert!(comm3.payload.len() == MAX_COEFF_COMM_3_SIZE);
+				assert!(zkp_bytes.len() == MAX_ZKP_SIZE);
+			} else {
+				assert!(zkp_bytes.len() <= MAX_ZKP_SIZE);
+				assert!(comm3.payload.len() <= MAX_COEFF_COMM_3_SIZE);
+			}
 		}
 	}
 }
