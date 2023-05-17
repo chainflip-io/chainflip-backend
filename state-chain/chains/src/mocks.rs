@@ -38,6 +38,13 @@ impl ChannelIdConstructor for MockEthereumChannelId {
 	}
 }
 
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValueExtended for MockEthereumChannelId {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		id.into()
+	}
+}
+
 #[derive(
 	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]

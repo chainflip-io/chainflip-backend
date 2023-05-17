@@ -150,10 +150,7 @@ impl MissedAuthorshipSlots for MockMissedAuthorshipSlots {
 
 parameter_types! {
 	pub const MinEpoch: u64 = 1;
-	pub const EmergencyRotationPercentageRange: PercentageRange = PercentageRange {
-		bottom: 67,
-		top: 80,
-	};
+
 }
 
 pub struct MockBonder;
@@ -207,7 +204,6 @@ impl Config for Test {
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type BidderProvider = MockBidderProvider;
 	type OffenceReporter = MockOffenceReporter;
-	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type Bonder = MockBonder;
 	type ReputationResetter = MockReputationResetter<Self>;
 	type KeygenQualification = QualifyAll<ValidatorId>;

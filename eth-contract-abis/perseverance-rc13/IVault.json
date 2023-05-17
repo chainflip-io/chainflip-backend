@@ -60,6 +60,37 @@
     "anonymous": false,
     "inputs": [
       {
+        "indexed": true,
+        "internalType": "address payable",
+        "name": "multicallAddress",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "token",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes",
+        "name": "reason",
+        "type": "bytes"
+      }
+    ],
+    "name": "ExecuteActionsFailed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
         "indexed": false,
         "internalType": "bool",
         "name": "suspended",
@@ -548,19 +579,26 @@
         "type": "tuple"
       },
       {
-        "internalType": "address",
-        "name": "token",
-        "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "amount",
-        "type": "uint256"
-      },
-      {
-        "internalType": "address payable",
-        "name": "multicallAddr",
-        "type": "address"
+        "components": [
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          },
+          {
+            "internalType": "address payable",
+            "name": "recipient",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct IShared.TransferParams",
+        "name": "transferParams",
+        "type": "tuple"
       },
       {
         "components": [
@@ -593,6 +631,11 @@
         "internalType": "struct IMulticall.Call[]",
         "name": "calls",
         "type": "tuple[]"
+      },
+      {
+        "internalType": "uint256",
+        "name": "gasMulticall",
+        "type": "uint256"
       }
     ],
     "name": "executeActions",

@@ -327,12 +327,6 @@ impl<ValidatorId> NetworkState<ValidatorId> {
 	}
 }
 
-/// To handle those emergency rotations
-pub trait EmergencyRotation {
-	/// Request an emergency rotation
-	fn request_emergency_rotation();
-}
-
 pub trait Slashing {
 	type AccountId;
 	type BlockNumber;
@@ -511,8 +505,8 @@ pub trait BroadcastCleanup<C: Chain> {
 pub trait Heartbeat {
 	type ValidatorId;
 	type BlockNumber;
-	/// Called on every heartbeat interval with the current network state
-	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>);
+	/// Called on every heartbeat interval
+	fn on_heartbeat_interval();
 }
 
 /// Updating and calculating emissions per block for authorities and backup nodes
@@ -842,7 +836,7 @@ pub trait CcmHandler {
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
 		message_metadata: CcmDepositMetadata,
-	) -> DispatchResult;
+	);
 }
 
 impl CcmHandler for () {
@@ -852,8 +846,7 @@ impl CcmHandler for () {
 		_destination_asset: Asset,
 		_destination_address: ForeignChainAddress,
 		_message_metadata: CcmDepositMetadata,
-	) -> DispatchResult {
-		Ok(())
+	) {
 	}
 }
 
