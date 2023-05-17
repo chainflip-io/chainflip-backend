@@ -33,10 +33,6 @@ resources:
     cpu: 500m
     memory: 128Mi
 
-deployment:
-  revisionHistoryLimit: 5
-  maxUnavailable: 0
-
 secrets:
   existingOnePasswordSecret: chainflip-node-secrets
 

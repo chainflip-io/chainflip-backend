@@ -9,9 +9,6 @@ spec:
     matchLabels:
   {{- include "chainflip-node.selectorLabels" . | nindent 6 }}
   revisionHistoryLimit: {{ .Values.deployment.revisionHistoryLimit }}
-  strategy:
-    rollingUpdate:
-      maxUnavailable: {{ .Values.deployment.maxUnavailable }}
   template:
     metadata:
       annotations:
