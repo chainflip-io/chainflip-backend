@@ -1,7 +1,7 @@
 use crate::{
 	mock::*, AddressPool, AddressStatus, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DeploymentStatus, DisabledEgressAssets, Error, FetchOrTransfer, Pallet, ScheduledEgressCcm,
-	ScheduledEgressFetchOrTransfer, WeightInfo,
+	DeploymentStatus, DisabledEgressAssets, Error, FetchOrTransfer, MinimumDeposit, Pallet,
+	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, WeightInfo,
 };
 use cf_chains::{ExecutexSwapAndCall, TransferAssetParams};
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
@@ -381,7 +381,7 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 			Some(CcmDepositMetadata {
 				message: vec![],
 				gas_budget: 0,
-				refund_address: ForeignChainAddress::Eth(Default::default()),
+				cf_parameters: vec![],
 				source_address: ForeignChainAddress::Eth([0xcf; 20]),
 			}),
 		);
@@ -532,7 +532,7 @@ fn can_process_ccm_deposit() {
 		let ccm = CcmDepositMetadata {
 			message: vec![0x00, 0x01, 0x02],
 			gas_budget: 1_000,
-			refund_address: ForeignChainAddress::Eth(Default::default()),
+			cf_parameters: vec![],
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 		let amount = 5_000;
@@ -581,7 +581,7 @@ fn can_egress_ccm() {
 		let ccm = CcmDepositMetadata {
 			message: vec![0x00, 0x01, 0x02],
 			gas_budget: 1_000,
-			refund_address: ForeignChainAddress::Eth([0x02; 20]),
+			cf_parameters: vec![],
 			source_address: ForeignChainAddress::Eth([0xcf; 20]),
 		};
 		let amount = 5_000;
@@ -600,7 +600,7 @@ fn can_egress_ccm() {
 				amount,
 				destination_address,
 				message: ccm.message.clone(),
-				refund_address: ForeignChainAddress::Eth([0x02; 20]),
+				cf_parameters: vec![],
 				source_address: ForeignChainAddress::Eth([0xcf; 20]),
 			}
 		]);
@@ -648,7 +648,7 @@ fn can_manually_egress_ccm() {
 				amount,
 				destination_address,
 				message: message.clone(),
-				refund_address: ForeignChainAddress::Eth([0x02; 20]),
+				cf_parameters: vec![],
 				source_address: ForeignChainAddress::Eth([0xcf; 20]),
 			}
 		);
@@ -692,7 +692,7 @@ fn can_manually_egress_ccm_by_id() {
 				amount,
 				destination_address,
 				message: message.clone(),
-				refund_address: ForeignChainAddress::Eth([0x02; 20]),
+				cf_parameters: vec![],
 				source_address: ForeignChainAddress::Eth([0xcf; 20]),
 			}
 		};
@@ -745,6 +745,7 @@ fn can_manually_egress_ccm_by_id() {
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test>::get(), vec![transfer]);
 	});
 }
+
 #[test]
 fn multi_use_deposit_address_different_blocks() {
 	const ETH: eth::Asset = eth::Asset::Eth;
@@ -801,6 +802,67 @@ fn multi_use_deposit_same_block() {
 				0
 			);
 		});
+}
+
+#[test]
+fn can_set_minimum_deposit() {
+	new_test_ext().execute_with(|| {
+		let asset = eth::Asset::Eth;
+		let minimum_deposit = 1_500u128;
+		assert_eq!(MinimumDeposit::<Test>::get(asset), 0);
+
+		// Set the new minimum deposits
+		assert_ok!(IngressEgress::set_minimum_deposit(
+			RuntimeOrigin::root(),
+			asset,
+			minimum_deposit
+		));
+
+		assert_eq!(MinimumDeposit::<Test>::get(asset), minimum_deposit);
+
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::MinimumDepositSet { asset, minimum_deposit },
+		));
+	});
+}
+
+#[test]
+fn deposits_below_minimum_are_rejected() {
+	new_test_ext().execute_with(|| {
+		let eth = eth::Asset::Eth;
+		let flip = eth::Asset::Flip;
+		let default_deposit_amount = 1_000;
+
+		// Set minimum deposit
+		assert_ok!(IngressEgress::set_minimum_deposit(RuntimeOrigin::root(), eth, 1_500));
+		assert_ok!(IngressEgress::set_minimum_deposit(
+			RuntimeOrigin::root(),
+			flip,
+			default_deposit_amount
+		));
+
+		// Observe that eth deposit gets rejected.
+		let (_, deposit_address) = request_address_and_deposit(0, eth);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::DepositIgnored {
+				deposit_address,
+				asset: eth,
+				amount: default_deposit_amount,
+				tx_id: Default::default(),
+			},
+		));
+
+		// Flip deposit should succeed.
+		let (_, deposit_address) = request_address_and_deposit(0, flip);
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::<Test>::DepositReceived {
+				deposit_address,
+				asset: flip,
+				amount: default_deposit_amount,
+				tx_id: Default::default(),
+			},
+		));
+	});
 }
 
 #[test]

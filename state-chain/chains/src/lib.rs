@@ -17,6 +17,7 @@ use sp_runtime::{
 	DispatchError,
 };
 use sp_std::{
+	cmp::Ord,
 	convert::{Into, TryFrom},
 	fmt::Debug,
 	prelude::*,
@@ -68,7 +69,8 @@ pub trait Chain: Member + Parameter {
 		+ Into<AssetAmount>
 		+ FullCodec
 		+ MaxEncodedLen
-		+ BenchmarkValue;
+		+ BenchmarkValue
+		+ Ord;
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
@@ -314,7 +316,7 @@ pub struct CcmDepositMetadata {
 	/// User funds designated to be used for gas.
 	pub gas_budget: AssetAmount,
 	/// The address refunds will go to.
-	pub refund_address: ForeignChainAddress,
+	pub cf_parameters: Vec<u8>,
 	/// The address the deposit was sent from.
 	pub source_address: ForeignChainAddress,
 }

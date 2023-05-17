@@ -835,7 +835,7 @@ pub trait CcmHandler {
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
 		message_metadata: CcmDepositMetadata,
-	) -> DispatchResult;
+	);
 }
 
 impl CcmHandler for () {
@@ -845,7 +845,6 @@ impl CcmHandler for () {
 		_destination_asset: Asset,
 		_destination_address: ForeignChainAddress,
 		_message_metadata: CcmDepositMetadata,
-	) -> DispatchResult {
-		Ok(())
+	) {
 	}
 }

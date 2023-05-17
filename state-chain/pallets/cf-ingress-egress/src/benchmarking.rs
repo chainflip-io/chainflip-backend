@@ -54,7 +54,7 @@ benchmarks_instance_pallet! {
 				amount: BenchmarkValue::benchmark_value(),
 				destination_address: destination_address.clone(),
 				message: vec![0x00, 0x01, 0x02, 0x03],
-				refund_address: ForeignChainAddress::Eth(Default::default()),
+				cf_parameters: vec![],
 				source_address: ForeignChainAddress::Eth([0xcf; 20]),
 			});
 		}
@@ -91,6 +91,18 @@ benchmarks_instance_pallet! {
 	}: {
 		Pallet::<T, I>::process_single_deposit(deposit_address, source_asset, deposit_amount, BenchmarkValue::benchmark_value()).unwrap()
 	}
+
+	set_minimum_deposit {
+		let origin = T::EnsureGovernance::successful_origin();
+		let destination_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
+		let amount: <<T as Config<I>>::TargetChain as Chain>::ChainAmount =  BenchmarkValue::benchmark_value();
+	} : { let _ = Pallet::<T, I>::set_minimum_deposit(origin, destination_asset, amount); }
+	verify {
+		assert_eq!(MinimumDeposit::<T, I>::get(
+			destination_asset,
+		), amount);
+	}
+
 	finalise_ingress {
 		let a in 1 .. 100;
 		let mut addresses = vec![];

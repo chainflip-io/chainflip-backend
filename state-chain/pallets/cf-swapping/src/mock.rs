@@ -118,6 +118,14 @@ impl WeightInfo for MockWeightInfo {
 	fn set_swap_ttl() -> Weight {
 		Weight::from_ref_time(100)
 	}
+
+	fn set_minimum_swap_amount() -> Weight {
+		Weight::from_ref_time(100)
+	}
+
+	fn set_minimum_ccm_gas_budget() -> Weight {
+		Weight::from_ref_time(100)
+	}
 }
 
 parameter_types! {
