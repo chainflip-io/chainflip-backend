@@ -288,7 +288,10 @@ pub mod pallet {
 		/// transaction and failed.
 		BroadcastAborted { broadcast_id: BroadcastId },
 		/// A broadcast has successfully been completed.
-		BroadcastSuccess { broadcast_id: BroadcastId },
+		BroadcastSuccess {
+			broadcast_id: BroadcastId,
+			transaction_out_id: TransactionOutIdFor<T, I>,
+		},
 		/// A broadcast's threshold signature is invalid, we will attempt to re-sign it.
 		ThresholdSignatureInvalid { broadcast_id: BroadcastId },
 		/// A signature accepted event on the target chain has been witnessed and the callback was
@@ -535,7 +538,7 @@ pub mod pallet {
 
 			if RotationBroadcast::<T, I>::get(broadcast_id) {
 				if let Some(callback) =
-					T::RotationCallbackProvider::on_rotation(block_number, tx_out_id)
+					T::RotationCallbackProvider::on_rotation(block_number, tx_out_id.clone())
 				{
 					Self::deposit_event(Event::<T, I>::RotationCallbackExecuted {
 						broadcast_id,
@@ -555,7 +558,10 @@ pub mod pallet {
 
 			Self::clean_up_broadcast_storage(broadcast_id);
 
-			Self::deposit_event(Event::<T, I>::BroadcastSuccess { broadcast_id });
+			Self::deposit_event(Event::<T, I>::BroadcastSuccess {
+				broadcast_id,
+				transaction_out_id: tx_out_id,
+			});
 			Ok(().into())
 		}
 
@@ -794,7 +800,6 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 impl<T: Config<I>, I: 'static> BroadcastCleanup<T::TargetChain> for Pallet<T, I> {
 	fn clean_up_broadcast(broadcast_id: BroadcastId) -> DispatchResult {
 		Self::clean_up_broadcast_storage(broadcast_id);
-		Self::deposit_event(Event::<T, I>::BroadcastSuccess { broadcast_id });
 		Ok(())
 	}
 }

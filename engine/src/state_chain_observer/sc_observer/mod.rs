@@ -681,7 +681,6 @@ where
                                             transaction_out_id,
                                         },
                                     ) => {
-                                        // Send this transaction_out_id to monitor
                                         btc_tx_hash_sender.send(MonitorCommand::Add(transaction_out_id)).unwrap();
 
                                         if nominee == account_id {
@@ -691,6 +690,11 @@ where
                                                 error!("Error: {error:?}");
                                             });
                                         }
+                                    }
+                                    state_chain_runtime::RuntimeEvent::BitcoinBroadcaster(
+                                        pallet_cf_broadcast::Event::BroadcastSuccess { broadcast_id: _, transaction_out_id }
+                                    ) => {
+                                        btc_tx_hash_sender.send(MonitorCommand::Remove(transaction_out_id)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::Environment(
                                         pallet_cf_environment::Event::CfeSettingsUpdated {

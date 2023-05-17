@@ -508,7 +508,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 		};
 
 		let (broadcast_id, _threshold_request_id) =
-			Broadcaster::threshold_sign_and_broadcast(api_call, Some(MockCallback), false);
+			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), Some(MockCallback), false);
 
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
 
@@ -524,7 +524,10 @@ fn threshold_sign_and_broadcast_with_callback() {
 		let mut events = System::events();
 		assert_eq!(
 			events.pop().expect("an event").event,
-			RuntimeEvent::Broadcaster(crate::Event::BroadcastSuccess { broadcast_id })
+			RuntimeEvent::Broadcaster(crate::Event::BroadcastSuccess {
+				broadcast_id,
+				transaction_out_id: api_call.tx_out_id
+			})
 		);
 		assert_eq!(
 			events.pop().expect("an event").event,
@@ -549,7 +552,7 @@ fn threshold_sign_and_broadcast_with_rotation_callback() {
 		};
 
 		let (broadcast_id, _threshold_request_id) =
-			Broadcaster::threshold_sign_and_broadcast(api_call, None, true);
+			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), None, true);
 
 		// Rotation callbacks are not the same as normal request callbacks, there are not stored in
 		// storage.
@@ -566,5 +569,21 @@ fn threshold_sign_and_broadcast_with_rotation_callback() {
 
 		// We should have called the rotation callback.
 		assert!(MockCallback::was_called());
+
+		let mut events = System::events();
+		assert_eq!(
+			events.pop().expect("an event").event,
+			RuntimeEvent::Broadcaster(crate::Event::BroadcastSuccess {
+				broadcast_id,
+				transaction_out_id: api_call.tx_out_id
+			})
+		);
+		assert_eq!(
+			events.pop().expect("an event").event,
+			RuntimeEvent::Broadcaster(crate::Event::RotationCallbackExecuted {
+				broadcast_id,
+				result: Ok(())
+			})
+		);
 	});
 }
