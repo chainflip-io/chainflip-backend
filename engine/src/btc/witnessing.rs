@@ -4,7 +4,7 @@ use crate::{
 	db::PersistentKeyDB,
 	settings,
 	state_chain_observer::client::{storage_api::StorageApi, StateChainClient},
-	witnesser::{AddressMonitor, AddressMonitorCommand, EpochStart, LatestBlockNumber},
+	witnesser::{EpochStart, ItemMonitor, LatestBlockNumber, MonitorCommand},
 };
 use anyhow::{Context, Result};
 use cf_chains::{btc::BitcoinScriptBounded, Bitcoin};
@@ -22,8 +22,8 @@ pub async fn start(
 	initial_block_hash: H256,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<(
-	tokio::sync::mpsc::UnboundedSender<AddressMonitorCommand<BitcoinScriptBounded>>,
-	tokio::sync::mpsc::UnboundedSender<AddressMonitorCommand<[u8; 32]>>,
+	tokio::sync::mpsc::UnboundedSender<MonitorCommand<BitcoinScriptBounded>>,
+	tokio::sync::mpsc::UnboundedSender<MonitorCommand<[u8; 32]>>,
 )> {
 	let btc_rpc = BtcRpcClient::new(btc_settings)?;
 
@@ -36,7 +36,7 @@ pub async fn start(
 		.await
 		.context("Initial query for BTC latest block number failed.")?;
 
-	let (address_monitor_command_sender, address_monitor) = AddressMonitor::new(
+	let (address_monitor_command_sender, address_monitor) = ItemMonitor::new(
 		state_chain_client
 			.storage_map::<pallet_cf_ingress_egress::DepositAddressDetailsLookup<
 				state_chain_runtime::Runtime,
@@ -57,7 +57,7 @@ pub async fn start(
 	// When we start how do we know what broadcasts to witness? We use the TransactionOutId storage
 	// item on chain.
 
-	let (tx_hash_monitor_sender, tx_hash_monitor) = AddressMonitor::new(Default::default());
+	let (tx_hash_monitor_sender, tx_hash_monitor) = ItemMonitor::new(Default::default());
 
 	scope.spawn(
 		super::witnesser::start(

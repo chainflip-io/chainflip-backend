@@ -9,7 +9,7 @@ use tokio::sync::Mutex;
 use crate::{
 	eth::{core_h160, core_h256},
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
-	witnesser::{AddressMonitor, EpochStart},
+	witnesser::{EpochStart, ItemMonitor},
 };
 
 use super::{eth_block_witnessing::BlockProcessor, rpc::EthDualRpcClient, EthNumberBloom};
@@ -17,7 +17,7 @@ use super::{eth_block_witnessing::BlockProcessor, rpc::EthDualRpcClient, EthNumb
 pub struct DepositWitnesser<StateChainClient> {
 	rpc: EthDualRpcClient,
 	state_chain_client: Arc<StateChainClient>,
-	address_monitor: Arc<Mutex<AddressMonitor<H160, H160, ()>>>,
+	address_monitor: Arc<Mutex<ItemMonitor<H160, H160, ()>>>,
 }
 
 impl<StateChainClient> DepositWitnesser<StateChainClient>
@@ -27,7 +27,7 @@ where
 	pub fn new(
 		state_chain_client: Arc<StateChainClient>,
 		rpc: EthDualRpcClient,
-		address_monitor: Arc<Mutex<AddressMonitor<H160, H160, ()>>>,
+		address_monitor: Arc<Mutex<ItemMonitor<H160, H160, ()>>>,
 	) -> Self {
 		Self { rpc, state_chain_client, address_monitor }
 	}
@@ -52,7 +52,7 @@ where
 
 		// Before we process the transactions, check if
 		// we have any new addresses to monitor
-		address_monitor.sync_addresses();
+		address_monitor.sync_items();
 
 		let deposit_witnesses = self
 			.rpc

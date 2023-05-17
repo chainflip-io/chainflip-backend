@@ -18,7 +18,7 @@ use chainflip_engine::{
 			storage_api::StorageApi,
 		},
 	},
-	witnesser::AddressMonitor,
+	witnesser::ItemMonitor,
 };
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 use utilities::task_scope::task_scope;
@@ -196,7 +196,7 @@ async fn main() -> anyhow::Result<()> {
 			.await
 			.unwrap();
 
-			let (dot_monitor_command_sender, dot_address_monitor) = AddressMonitor::new(
+			let (dot_monitor_command_sender, dot_address_monitor) = ItemMonitor::new(
 				state_chain_client
 					.storage_map::<pallet_cf_ingress_egress::DepositAddressDetailsLookup<
 						state_chain_runtime::Runtime,

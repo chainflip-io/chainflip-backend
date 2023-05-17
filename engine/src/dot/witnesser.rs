@@ -34,7 +34,7 @@ use crate::{
 			BlockStream, BlockWitnesser, BlockWitnesserGenerator, BlockWitnesserGeneratorWrapper,
 		},
 		epoch_process_runner::start_epoch_process_runner,
-		AddressMonitor, ChainBlockNumber, EpochStart, HasBlockNumber,
+		ChainBlockNumber, EpochStart, HasBlockNumber, ItemMonitor,
 	},
 };
 
@@ -138,7 +138,7 @@ fn check_for_interesting_events_in_block(
 	block_events: Vec<(Phase, EventWrapper)>,
 	block_number: PolkadotBlockNumber,
 	our_vault: &PolkadotAccountId,
-	address_monitor: &mut AddressMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
+	address_monitor: &mut ItemMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
 ) -> (
 	Vec<(PolkadotExtrinsicIndex, PolkadotBalance)>,
 	Vec<DepositWitness<Polkadot>>,
@@ -183,7 +183,7 @@ fn check_for_interesting_events_in_block(
 				EventWrapper::Transfer(Transfer { to, amount, from }) => {
 					// When we get a transfer event, we want to check that we have
 					// pulled the latest addresses to monitor from the chain first
-					address_monitor.sync_addresses();
+					address_monitor.sync_items();
 
 					if address_monitor.contains(to) {
 						info!("Witnessing DOT Ingress {{ amount: {amount:?}, to: {to:?} }}");
@@ -246,7 +246,7 @@ fn check_for_interesting_events_in_block(
 pub async fn start<StateChainClient, DotRpc>(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Polkadot>>,
 	dot_client: DotRpc,
-	address_monitor: AddressMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
+	address_monitor: ItemMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
 	signature_receiver: tokio::sync::mpsc::UnboundedReceiver<[u8; 64]>,
 	monitored_signatures: BTreeSet<[u8; 64]>,
 	state_chain_client: Arc<StateChainClient>,
@@ -295,7 +295,7 @@ where
 	type Chain = Polkadot;
 	type Block = (H256, u32, Vec<(Phase, EventWrapper)>);
 	type StaticState = (
-		AddressMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
+		ItemMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
 		BTreeSet<[u8; 64]>,
 		tokio::sync::mpsc::UnboundedReceiver<[u8; 64]>,
 	);
@@ -542,7 +542,7 @@ mod tests {
 
 	use crate::{
 		dot::rpc::DotRpcClient, state_chain_observer::client::mocks::MockStateChainClient,
-		witnesser::AddressMonitorCommand,
+		witnesser::MonitorCommand,
 	};
 
 	fn mock_proxy_added(
@@ -610,7 +610,7 @@ mod tests {
 				block_event_details,
 				Default::default(),
 				&our_vault,
-				&mut AddressMonitor::new(Default::default()).1,
+				&mut ItemMonitor::new(Default::default()).1,
 			);
 
 		assert_eq!(vault_key_rotated_calls.len(), 1);
@@ -660,10 +660,10 @@ mod tests {
 		]);
 
 		let (monitor_command_sender, mut address_monitor) =
-			AddressMonitor::new(BTreeSet::from([transfer_1_deposit_address]));
+			ItemMonitor::new(BTreeSet::from([transfer_1_deposit_address]));
 
 		monitor_command_sender
-			.send(AddressMonitorCommand::Add(transfer_2_deposit_address))
+			.send(MonitorCommand::Add(transfer_2_deposit_address))
 			.unwrap();
 
 		let (interesting_indices, deposit_witnesses, vault_key_rotated_calls, _) =
@@ -726,7 +726,7 @@ mod tests {
 				20,
 				// arbitrary, not focus of the test
 				&our_vault,
-				&mut AddressMonitor::new(BTreeSet::default()).1,
+				&mut ItemMonitor::new(BTreeSet::default()).1,
 			);
 
 		assert!(
@@ -766,7 +766,7 @@ mod tests {
 				20,
 				// arbitrary, not focus of the test
 				&PolkadotAccountId::from([0xda; 32]),
-				&mut AddressMonitor::new(BTreeSet::default()).1,
+				&mut ItemMonitor::new(BTreeSet::default()).1,
 			);
 
 			assert_eq!(
@@ -843,7 +843,7 @@ mod tests {
 		start(
 			epoch_starts_receiver,
 			dot_rpc_client,
-			AddressMonitor::new(Default::default()).1,
+			ItemMonitor::new(Default::default()).1,
 			signature_receiver,
 			BTreeSet::default(),
 			state_chain_client,

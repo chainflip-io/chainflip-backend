@@ -68,65 +68,62 @@ pub trait LatestBlockNumber {
 }
 
 #[derive(Debug)]
-pub enum AddressMonitorCommand<AddressData> {
-	Add(AddressData),
-	Remove(AddressData),
+pub enum MonitorCommand<MonitorData> {
+	Add(MonitorData),
+	Remove(MonitorData),
 }
 
-/// This stores addresses we are interested in. New addresses
+/// This stores items we are interested in. New items
 /// come through a channel which can be polled by calling
-/// [AddressMonitor::sync_addresses].
-pub struct AddressMonitor<A, K, V> {
-	addresses: BTreeMap<K, V>,
-	address_receiver: tokio::sync::mpsc::UnboundedReceiver<AddressMonitorCommand<A>>,
+/// [ItemMonitor::sync_items].
+pub struct ItemMonitor<A, K, V> {
+	items: BTreeMap<K, V>,
+	item_receiver: tokio::sync::mpsc::UnboundedReceiver<MonitorCommand<A>>,
 }
 
 // Some addresses act as key value pairs.
-pub trait AddressKeyValue {
+pub trait ItemKeyValue {
 	type Key;
 	type Value;
 
 	fn key_value(&self) -> (Self::Key, Self::Value);
 }
 
-impl<
-		A: std::fmt::Debug + AddressKeyValue<Key = K, Value = V>,
-		K: std::cmp::Ord + Clone,
-		V: Clone,
-	> AddressMonitor<A, K, V>
+impl<A: std::fmt::Debug + ItemKeyValue<Key = K, Value = V>, K: std::cmp::Ord + Clone, V: Clone>
+	ItemMonitor<A, K, V>
 {
 	pub fn new(
-		addresses: BTreeSet<A>,
-	) -> (tokio::sync::mpsc::UnboundedSender<AddressMonitorCommand<A>>, Self) {
-		let addresses = addresses.into_iter().map(|a| a.key_value()).collect();
-		let (address_sender, address_receiver) = tokio::sync::mpsc::unbounded_channel();
-		(address_sender, Self { addresses, address_receiver })
+		items: BTreeSet<A>,
+	) -> (tokio::sync::mpsc::UnboundedSender<MonitorCommand<A>>, Self) {
+		let items = items.into_iter().map(|a| a.key_value()).collect();
+		let (item_sender, item_receiver) = tokio::sync::mpsc::unbounded_channel();
+		(item_sender, Self { items, item_receiver })
 	}
 
-	/// Check if we are interested in the address. [AddressMonitor::sync_addresses]
-	/// should be called first to ensure we check against recently added addresses.
+	/// Check if we are interested in the address. [ItemMonitor::sync_items]
+	/// should be called first to ensure we check against recently added items.
 	/// (We keep it as a separate function to make it possible to check multiple
-	/// addresses in a tight loop without having to fetch addresses on every item)
+	/// items in a tight loop without having to fetch items on every item)
 	pub fn get(&self, address: &K) -> Option<V> {
-		self.addresses.get(address).cloned()
+		self.items.get(address).cloned()
 	}
 	pub fn contains(&self, address: &K) -> bool {
-		self.addresses.contains_key(address)
+		self.items.contains_key(address)
 	}
 
-	/// Ensure the list of interesting addresses is up to date
-	pub fn sync_addresses(&mut self) {
-		while let Ok(address) = self.address_receiver.try_recv() {
+	/// Ensure the list of interesting items is up to date
+	pub fn sync_items(&mut self) {
+		while let Ok(address) = self.item_receiver.try_recv() {
 			match address {
-				AddressMonitorCommand::Add(address) => {
+				MonitorCommand::Add(address) => {
 					let (k, v) = address.key_value();
-					if self.addresses.insert(k, v).is_some() {
+					if self.items.insert(k, v).is_some() {
 						tracing::debug!("Starting to monitor: {:?}", address);
 						tracing::warn!("Address {:?} already being monitored", address);
 					}
 				},
-				AddressMonitorCommand::Remove(address) =>
-					if self.addresses.remove(&address.key_value().0).is_none() {
+				MonitorCommand::Remove(address) =>
+					if self.items.remove(&address.key_value().0).is_none() {
 						tracing::warn!("Address {:?} already not being monitored", address);
 					},
 			}
@@ -134,7 +131,7 @@ impl<
 	}
 }
 
-impl AddressKeyValue for sp_core::H160 {
+impl ItemKeyValue for sp_core::H160 {
 	type Key = Self;
 	type Value = ();
 
@@ -143,7 +140,7 @@ impl AddressKeyValue for sp_core::H160 {
 	}
 }
 
-impl AddressKeyValue for BitcoinScriptBounded {
+impl ItemKeyValue for BitcoinScriptBounded {
 	type Key = ScriptPubkeyBytes;
 	type Value = Self;
 
@@ -152,7 +149,7 @@ impl AddressKeyValue for BitcoinScriptBounded {
 	}
 }
 
-impl AddressKeyValue for sp_runtime::AccountId32 {
+impl ItemKeyValue for sp_runtime::AccountId32 {
 	type Key = Self;
 	type Value = ();
 
@@ -161,7 +158,7 @@ impl AddressKeyValue for sp_runtime::AccountId32 {
 	}
 }
 
-impl AddressKeyValue for [u8; 32] {
+impl ItemKeyValue for [u8; 32] {
 	type Key = Self;
 	type Value = ();
 

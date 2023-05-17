@@ -9,7 +9,7 @@ use crate::{
 			BlockStream, BlockWitnesser, BlockWitnesserGenerator, BlockWitnesserGeneratorWrapper,
 		},
 		epoch_process_runner::start_epoch_process_runner,
-		AddressMonitor, ChainBlockNumber,
+		ChainBlockNumber, ItemMonitor,
 	},
 };
 use bitcoincore_rpc::bitcoin::{hashes::Hash, Transaction};
@@ -43,15 +43,15 @@ use super::rpc::{BtcRpcApi, BtcRpcClient};
 // monitored addresses.
 pub fn filter_interesting_utxos(
 	txs: Vec<Transaction>,
-	address_monitor: &mut AddressMonitor<
+	address_monitor: &mut ItemMonitor<
 		BitcoinScriptBounded,
 		ScriptPubkeyBytes,
 		BitcoinScriptBounded,
 	>,
-	tx_hash_monitor: &mut AddressMonitor<[u8; 32], [u8; 32], ()>,
+	tx_hash_monitor: &mut ItemMonitor<[u8; 32], [u8; 32], ()>,
 ) -> (Vec<DepositWitness<Bitcoin>>, Vec<[u8; 32]>) {
-	address_monitor.sync_addresses();
-	tx_hash_monitor.sync_addresses();
+	address_monitor.sync_items();
+	tx_hash_monitor.sync_items();
 	let mut deposit_witnesses = vec![];
 	let mut tx_success_witnesses = vec![];
 
@@ -85,8 +85,8 @@ pub async fn start<StateChainClient>(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Bitcoin>>,
 	state_chain_client: Arc<StateChainClient>,
 	btc_rpc: BtcRpcClient,
-	address_monitor: AddressMonitor<BitcoinScriptBounded, ScriptPubkeyBytes, BitcoinScriptBounded>,
-	tx_hash_monitor: AddressMonitor<[u8; 32], [u8; 32], ()>,
+	address_monitor: ItemMonitor<BitcoinScriptBounded, ScriptPubkeyBytes, BitcoinScriptBounded>,
+	tx_hash_monitor: ItemMonitor<[u8; 32], [u8; 32], ()>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<(), anyhow::Error>
 where
@@ -122,8 +122,8 @@ where
 	type Chain = Bitcoin;
 	type Block = ChainBlockNumber<Self::Chain>;
 	type StaticState = (
-		AddressMonitor<BitcoinScriptBounded, ScriptPubkeyBytes, BitcoinScriptBounded>,
-		AddressMonitor<[u8; 32], [u8; 32], ()>,
+		ItemMonitor<BitcoinScriptBounded, ScriptPubkeyBytes, BitcoinScriptBounded>,
+		ItemMonitor<[u8; 32], [u8; 32], ()>,
 	);
 
 	async fn process_block(
@@ -287,8 +287,8 @@ mod tests {
 			epoch_starts_receiver,
 			state_chain_client,
 			rpc,
-			AddressMonitor::new(BTreeSet::new()).1,
-			AddressMonitor::new(BTreeSet::new()).1,
+			ItemMonitor::new(BTreeSet::new()).1,
+			ItemMonitor::new(BTreeSet::new()).1,
 			Arc::new(db),
 		)
 		.await
@@ -313,8 +313,8 @@ mod test_utxo_filtering {
 
 		let (deposit_witnesses, success_witnesses) = filter_interesting_utxos(
 			txs,
-			&mut AddressMonitor::new(BTreeSet::new()).1,
-			&mut AddressMonitor::new(BTreeSet::new()).1,
+			&mut ItemMonitor::new(BTreeSet::new()).1,
+			&mut ItemMonitor::new(BTreeSet::new()).1,
 		);
 
 		assert!(deposit_witnesses.is_empty());
@@ -346,8 +346,8 @@ mod test_utxo_filtering {
 
 		let (deposit_witnesses, ..) = filter_interesting_utxos(
 			txs,
-			&mut AddressMonitor::new(BTreeSet::from([btc_deposit_script])).1,
-			&mut AddressMonitor::new(BTreeSet::new()).1,
+			&mut ItemMonitor::new(BTreeSet::from([btc_deposit_script])).1,
+			&mut ItemMonitor::new(BTreeSet::new()).1,
 		);
 		assert_eq!(deposit_witnesses.len(), 2);
 		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
@@ -377,8 +377,8 @@ mod test_utxo_filtering {
 
 		let (deposit_witnesses, ..) = filter_interesting_utxos(
 			txs,
-			&mut AddressMonitor::new(BTreeSet::from([btc_deposit_script])).1,
-			&mut AddressMonitor::new(BTreeSet::new()).1,
+			&mut ItemMonitor::new(BTreeSet::from([btc_deposit_script])).1,
+			&mut ItemMonitor::new(BTreeSet::new()).1,
 		);
 		assert_eq!(deposit_witnesses.len(), 2);
 		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
@@ -398,8 +398,8 @@ mod test_utxo_filtering {
 
 		let (deposit_witnesses, ..) = filter_interesting_utxos(
 			txs,
-			&mut AddressMonitor::new(BTreeSet::from([btc_deposit_script])).1,
-			&mut AddressMonitor::new(BTreeSet::new()).1,
+			&mut ItemMonitor::new(BTreeSet::from([btc_deposit_script])).1,
+			&mut ItemMonitor::new(BTreeSet::new()).1,
 		);
 		assert_eq!(deposit_witnesses.len(), 1);
 		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
@@ -418,8 +418,8 @@ mod test_utxo_filtering {
 
 		let (deposit_witnesses, success_witnesses) = filter_interesting_utxos(
 			txs,
-			&mut AddressMonitor::new(BTreeSet::new()).1,
-			&mut AddressMonitor::new(BTreeSet::from_iter(tx_hashes.clone())).1,
+			&mut ItemMonitor::new(BTreeSet::new()).1,
+			&mut ItemMonitor::new(BTreeSet::from_iter(tx_hashes.clone())).1,
 		);
 
 		assert!(deposit_witnesses.is_empty());

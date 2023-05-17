@@ -41,7 +41,7 @@ use crate::{
 		storage_api::StorageApi,
 		StateChainStreamApi,
 	},
-	witnesser::{AddressMonitorCommand, EpochStart},
+	witnesser::{MonitorCommand, EpochStart},
 };
 use multisig::{
 	bitcoin::BtcSigning, client::MultisigClientApi, eth::EthSigning, polkadot::PolkadotSigning,
@@ -49,12 +49,12 @@ use multisig::{
 };
 use utilities::task_scope::{task_scope, Scope};
 
-pub type EthAddressMonitorCommandSender = UnboundedSender<AddressMonitorCommand<H160>>;
+pub type EthMonitorCommandSender = UnboundedSender<MonitorCommand<H160>>;
 
 pub struct EthAddressToMonitorSender {
-	pub eth: EthAddressMonitorCommandSender,
-	pub flip: EthAddressMonitorCommandSender,
-	pub usdc: EthAddressMonitorCommandSender,
+	pub eth: EthMonitorCommandSender,
+	pub flip: EthMonitorCommandSender,
+	pub usdc: EthMonitorCommandSender,
 }
 
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
@@ -203,14 +203,14 @@ pub async fn start<
 	eth_address_to_monitor_sender: EthAddressToMonitorSender,
 	dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
 	dot_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<
-		AddressMonitorCommand<PolkadotAccountId>,
+		MonitorCommand<PolkadotAccountId>,
 	>,
 	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<[u8; 64]>,
 	btc_epoch_start_sender: async_broadcast::Sender<EpochStart<Bitcoin>>,
 	btc_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<
-		AddressMonitorCommand<BitcoinScriptBounded>,
+		MonitorCommand<BitcoinScriptBounded>,
 	>,
-    btc_tx_hash_sender: tokio::sync::mpsc::UnboundedSender<AddressMonitorCommand<[u8; 32]>>,
+    btc_tx_hash_sender: tokio::sync::mpsc::UnboundedSender<MonitorCommand<[u8; 32]>>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
 ) -> Result<(), anyhow::Error>
 where
@@ -684,7 +684,7 @@ where
                                     ) => {
                                         
                                         // Send this transaction_out_id to monitor
-                                        btc_tx_hash_sender.send(AddressMonitorCommand::Add(transaction_out_id)).unwrap();
+                                        btc_tx_hash_sender.send(MonitorCommand::Add(transaction_out_id)).unwrap();
 
                                         if nominee == account_id {
                                             let _result = btc_broadcaster.send(transaction_payload.encoded_transaction).await
@@ -717,7 +717,7 @@ where
                                             eth::Asset::Usdc => {
                                                 &eth_address_to_monitor_sender.usdc
                                             }
-                                        }.send(AddressMonitorCommand::Add(deposit_address)).unwrap();
+                                        }.send(MonitorCommand::Add(deposit_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumIngressEgress(
                                         pallet_cf_ingress_egress::Event::StopWitnessing {
@@ -736,7 +736,7 @@ where
                                             eth::Asset::Usdc => {
                                                 &eth_address_to_monitor_sender.usdc
                                             }
-                                        }.send(AddressMonitorCommand::Remove(deposit_address)).unwrap();
+                                        }.send(MonitorCommand::Remove(deposit_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
@@ -745,7 +745,7 @@ where
                                         }
                                     ) => {
                                         assert_eq!(source_asset, cf_primitives::chains::assets::dot::Asset::Dot);
-                                        dot_monitor_command_sender.send(AddressMonitorCommand::Add(deposit_address)).unwrap();
+                                        dot_monitor_command_sender.send(MonitorCommand::Add(deposit_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
                                         pallet_cf_ingress_egress::Event::StopWitnessing {
@@ -754,7 +754,7 @@ where
                                         }
                                     ) => {
                                         assert_eq!(source_asset, cf_primitives::chains::assets::dot::Asset::Dot);
-                                        dot_monitor_command_sender.send(AddressMonitorCommand::Remove(deposit_address)).unwrap();
+                                        dot_monitor_command_sender.send(MonitorCommand::Remove(deposit_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::BitcoinIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
@@ -763,7 +763,7 @@ where
                                         }
                                     ) => {
                                         assert_eq!(source_asset, cf_primitives::chains::assets::btc::Asset::Btc);
-                                        btc_monitor_command_sender.send(AddressMonitorCommand::Add(deposit_address)).unwrap();
+                                        btc_monitor_command_sender.send(MonitorCommand::Add(deposit_address)).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::BitcoinIngressEgress(
                                         pallet_cf_ingress_egress::Event::StopWitnessing {
@@ -772,7 +772,7 @@ where
                                         }
                                     ) => {
                                         assert_eq!(source_asset, cf_primitives::chains::assets::btc::Asset::Btc);
-                                        btc_monitor_command_sender.send(AddressMonitorCommand::Remove(deposit_address)).unwrap();
+                                        btc_monitor_command_sender.send(MonitorCommand::Remove(deposit_address)).unwrap();
                                     }
                                 }}}}
                                 Err(error) => {
