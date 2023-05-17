@@ -29,7 +29,7 @@ impl BatchTransfer {
 				input_utxos,
 				outputs,
 			),
-			agg_key: agg_key.clone(),
+			agg_key: *agg_key,
 		}
 	}
 }

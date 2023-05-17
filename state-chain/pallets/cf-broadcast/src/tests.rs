@@ -508,7 +508,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 			SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
 
 		let (broadcast_id, _threshold_request_id) =
-			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), Some(MockCallback), false);
+			Broadcaster::threshold_sign_and_broadcast(api_call, Some(MockCallback), false);
 
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
 
