@@ -46,7 +46,7 @@ spec:
             - --chain=/etc/chainflip/{{ .Values.chainspec }}
             - --node-key-file={{ .Values.nodeKeyFile }}
             - --prometheus-external
-            - --state-cache-siz=0
+            - --state-cache-size=0
             - --sync=warp
             - --validator
           ports:
