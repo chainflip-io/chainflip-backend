@@ -118,7 +118,6 @@ impl<A: std::fmt::Debug + ItemKeyValue<Key = K, Value = V>, K: std::cmp::Ord + C
 				MonitorCommand::Add(address) => {
 					let (k, v) = address.key_value();
 					if self.items.insert(k, v).is_some() {
-						tracing::debug!("Starting to monitor: {:?}", address);
 						tracing::warn!("Address {:?} already being monitored", address);
 					}
 				},

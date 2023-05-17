@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use sp_core::H256;
 use sp_runtime::traits::Hash;
 use tokio::sync::{mpsc, oneshot};
-use tracing::debug;
 use utilities::task_scope::{Scope, ScopedJoinHandle, OR_CANCEL};
 
 use super::{

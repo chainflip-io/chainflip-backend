@@ -59,10 +59,7 @@ pub fn filter_interesting_utxos(
 		let tx_hash = tx.txid().as_hash().into_inner();
 		if tx_hash_monitor.contains(&tx_hash) {
 			// TODO: We shouldn't need to add a fee
-			tracing::debug!("Tx with hash {:?} found.", hex::encode(tx_hash));
 			tx_success_witnesses.push(tx_hash);
-		} else {
-			tracing::debug!("Tx not monitored with hash {:?}.", hex::encode(tx_hash));
 		}
 		for (vout, tx_out) in (0u32..).zip(tx.output.clone()) {
 			if tx_out.value > 0 {
