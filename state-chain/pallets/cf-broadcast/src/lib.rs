@@ -294,6 +294,10 @@ pub mod pallet {
 		/// A signature accepted event on the target chain has been witnessed and the callback was
 		/// executed.
 		BroadcastCallbackExecuted { broadcast_id: BroadcastId, result: DispatchResult },
+
+		/// Some rotations are completed when the broadcast is completed. These have a separate
+		/// rotation callback.
+		RotationCallbackExecuted { broadcast_id: BroadcastId, result: DispatchResult },
 	}
 
 	#[pallet::error]
@@ -529,14 +533,23 @@ pub mod pallet {
 				});
 			}
 
-			// We need o check if this particular transaction is intended as a rotation broadcast.
 			if RotationBroadcast::<T, I>::get(broadcast_id) {
-				// Now we call to chain specific and call the callback.
-				// Pass in the block number here
 				if let Some(callback) =
 					T::RotationCallbackProvider::on_rotation(block_number, tx_out_id)
 				{
-					callback.dispatch_bypass_filter(origin).expect("Handle this");
+					Self::deposit_event(Event::<T, I>::RotationCallbackExecuted {
+						broadcast_id,
+						result: callback
+							.dispatch_bypass_filter(origin.clone())
+							.map(|_| ())
+							.map_err(|e| {
+								log::warn!(
+									"Callback execution has failed for broadcast {}.",
+									broadcast_id
+								);
+								e.error
+							}),
+					});
 				}
 			}
 
