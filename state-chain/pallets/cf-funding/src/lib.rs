@@ -358,6 +358,11 @@ pub mod pallet {
 						.unwrap() > amount,
 					Error::<T>::InvalidRedemption
 				);
+				RestrictedBalance::<T>::mutate_exists(&account_id, |maybe_entry| {
+					if let Some(entry) = maybe_entry {
+						entry.entry(address).and_modify(|balance| *balance -= amount);
+					}
+				});
 			}
 
 			ensure!(amount > Zero::zero(), Error::<T>::InvalidRedemption);
