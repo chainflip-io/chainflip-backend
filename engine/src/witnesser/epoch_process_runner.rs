@@ -87,10 +87,6 @@ where
 			let mut epoch_start_receiver =
 				epoch_start_receiver.try_lock().expect("should have exclusive ownership");
 
-			//Start witnessing from block
-
-			//Ethereum block witnesser is starting from
-
 			loop {
 				let epoch_start = epoch_start_receiver.recv().await.expect("Sender closed");
 
