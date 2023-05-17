@@ -21,6 +21,19 @@ jobs:
       - name: Check Format
         run: cargo fmt --all -- --check
 
+  audit:
+    runs-on: [hetzner]
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: cargo audit
+        run: cargo cf-audit -D unmaintained -D unsound
+
   cargo-clippy:
     runs-on: [hetzner]
     container:
@@ -37,7 +50,7 @@ jobs:
         run: cargo cf-clippy-ci
 
   check-localnet-config:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@v3
@@ -53,3 +66,15 @@ jobs:
       - name: Stop containers
         if: always()
         run: docker compose -f ./localnet/docker-compose.yml down --remove-orphans
+
+  lint-ci-workflows:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Check workflow files
+        run: |
+          bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+          ./actionlint -color -shellcheck=
+        shell: bash

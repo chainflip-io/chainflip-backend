@@ -20,12 +20,27 @@ jobs:
     with:
       network: development
       commit_hash: ${{ github.sha }}
+  docker:
+    needs: [build]
+    uses: ./.github/workflows/_24_docker.yml
+    secrets: inherit
+    with:
+      network: development
+      commit_hash: ${{ github.event.pull_request.head.sha }}
+      environment: dev
+  package:
+    needs: [build]
+    uses: ./.github/workflows/_25_package.yml
+    with:
+      network: "development"
+      environment: dev
+    secrets: inherit
   post-check:
     needs: [build]
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
   publish:
-    needs: [build]
+    needs: [package]
     uses: ./.github/workflows/_30_publish.yml
     with:
       version: ci/${{ github.sha }}/
@@ -33,7 +48,7 @@ jobs:
       commit_hash: ${{ github.sha }}
     secrets: inherit
   notify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     if: failure() || cancelled()
     steps:
       - name: Notify on failed build

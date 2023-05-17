@@ -22,6 +22,21 @@ jobs:
     with:
       network: development
       commit_hash: ${{ github.event.pull_request.head.sha }} # More info: https://github.com/actions/checkout/issues/426
+  docker:
+    needs: [build]
+    uses: ./.github/workflows/_24_docker.yml
+    secrets: inherit
+    with:
+      network: development
+      commit_hash: ${{ github.event.pull_request.head.sha }}
+      environment: dev
+  package:
+    needs: [build]
+    uses: ./.github/workflows/_25_package.yml
+    with:
+      network: "development"
+      environment: dev
+    secrets: inherit
   post-check:
     needs: [build]
     uses: ./.github/workflows/_40_post_check.yml
@@ -29,7 +44,7 @@ jobs:
     with:
       simple_bouncer: true
   publish:
-    needs: [build]
+    needs: [package]
     uses: ./.github/workflows/_30_publish.yml
     with:
       version: ci/${{ github.event.pull_request.head.sha }}/

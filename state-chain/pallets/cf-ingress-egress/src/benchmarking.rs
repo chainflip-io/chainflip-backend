@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::{DisabledEgressAssets, ScheduledEgressFetchOrTransfer};
-use cf_chains::benchmarking_value::BenchmarkValue;
+use cf_chains::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 use cf_primitives::ForeignChain;
 use frame_benchmarking::{account, benchmarks_instance_pallet};
 use frame_support::traits::Hooks;
@@ -54,7 +54,7 @@ benchmarks_instance_pallet! {
 				amount: BenchmarkValue::benchmark_value(),
 				destination_address: destination_address.clone(),
 				message: vec![0x00, 0x01, 0x02, 0x03],
-				refund_address: ForeignChainAddress::Eth(Default::default()),
+				cf_parameters: vec![],
 				source_address: ForeignChainAddress::Eth([0xcf; 20]),
 			});
 		}
@@ -91,17 +91,29 @@ benchmarks_instance_pallet! {
 	}: {
 		Pallet::<T, I>::process_single_deposit(deposit_address, source_asset, deposit_amount, BenchmarkValue::benchmark_value()).unwrap()
 	}
+
+	set_minimum_deposit {
+		let origin = T::EnsureGovernance::successful_origin();
+		let destination_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
+		let amount: <<T as Config<I>>::TargetChain as Chain>::ChainAmount =  BenchmarkValue::benchmark_value();
+	} : { let _ = Pallet::<T, I>::set_minimum_deposit(origin, destination_asset, amount); }
+	verify {
+		assert_eq!(MinimumDeposit::<T, I>::get(
+			destination_asset,
+		), amount);
+	}
+
 	finalise_ingress {
 		let a in 1 .. 100;
 		let mut addresses = vec![];
 		let origin = T::EnsureWitnessedAtCurrentEpoch::successful_origin();
-		let deposit_fetch_id: <<T as Config<I>>::TargetChain as Chain>::DepositFetchId = BenchmarkValue::benchmark_value();
-		let deposit_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
 		for i in 1..a {
-			// TODO: Thats wrong, we need to insert different addresses, otherwise we will overwrite the same one amd thats not the expensive path.
-			// Unfortunately we can not so easily generate different addresses in an benchmark environment...
+			let deposit_address = <<T as Config<I>>::TargetChain as Chain>::ChainAccount::benchmark_value_by_id(a as u8);
+			let deposit_fetch_id = <<T as Config<I>>::TargetChain as Chain>::DepositFetchId::benchmark_value_by_id(a as u8);
 			AddressStatus::<T, I>::insert(deposit_address.clone(), DeploymentStatus::Pending);
-			addresses.push((deposit_fetch_id, deposit_address.clone()));
+			addresses.push((deposit_fetch_id, deposit_address));
 		}
 	}: { let _ = Pallet::<T, I>::finalise_ingress(origin, addresses); }
+
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }

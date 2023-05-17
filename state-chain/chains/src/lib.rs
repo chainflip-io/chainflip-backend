@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use core::fmt::Display;
 
-use crate::benchmarking_value::BenchmarkValue;
+use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 pub use address::ForeignChainAddress;
 use cf_primitives::{chains::assets, AssetAmount, EgressId, EthAmount};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
@@ -17,6 +17,7 @@ use sp_runtime::{
 	DispatchError,
 };
 use sp_std::{
+	cmp::Ord,
 	convert::{Into, TryFrom},
 	fmt::Debug,
 	prelude::*,
@@ -68,7 +69,8 @@ pub trait Chain: Member + Parameter {
 		+ Into<AssetAmount>
 		+ FullCodec
 		+ MaxEncodedLen
-		+ BenchmarkValue;
+		+ BenchmarkValue
+		+ Ord;
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
@@ -91,6 +93,7 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ MaxEncodedLen
 		+ BenchmarkValue
+		+ BenchmarkValueExtended
 		+ Debug
 		+ TryFrom<ForeignChainAddress>
 		+ Into<ForeignChainAddress>;
@@ -101,6 +104,7 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ Copy
 		+ BenchmarkValue
+		+ BenchmarkValueExtended
 		+ ChannelIdConstructor<Address = Self::ChainAccount>;
 }
 
@@ -312,7 +316,7 @@ pub struct CcmDepositMetadata {
 	/// User funds designated to be used for gas.
 	pub gas_budget: AssetAmount,
 	/// The address refunds will go to.
-	pub refund_address: ForeignChainAddress,
+	pub cf_parameters: Vec<u8>,
 	/// The address the deposit was sent from.
 	pub source_address: ForeignChainAddress,
 }

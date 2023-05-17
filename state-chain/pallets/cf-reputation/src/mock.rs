@@ -110,23 +110,12 @@ impl Slashing for MockSlasher {
 pub const ALICE: <Test as frame_system::Config>::AccountId = 100u64;
 pub const BOB: <Test as frame_system::Config>::AccountId = 200u64;
 
-thread_local! {
-	pub static NETWORK_STATE: RefCell<NetworkState<ValidatorId>> = RefCell::new(
-		NetworkState {
-			offline: vec![],
-			online: vec![],
-		}
-	);
-}
-
 pub struct MockHeartbeat;
 impl Heartbeat for MockHeartbeat {
 	type ValidatorId = ValidatorId;
 	type BlockNumber = u64;
 
-	fn on_heartbeat_interval(network_state: NetworkState<Self::ValidatorId>) {
-		NETWORK_STATE.with(|cell| *cell.borrow_mut() = network_state);
-	}
+	fn on_heartbeat_interval() {}
 }
 
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]

@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "chainflip-broker-api.fullname" . }}
+  labels:
+  {{- include "chainflip-broker-api.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+  {{- include "chainflip-broker-api.selectorLabels" . | nindent 6 }}
+  revisionHistoryLimit: {{ .Values.deployment.revisionHistoryLimit }}
+  strategy:
+    rollingUpdate:
+      maxUnavailable: {{ .Values.deployment.maxUnavailable }}
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8501"
+      labels:
+    {{- include "chainflip-broker-api.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /usr/local/bin/chainflip-broker-api
+          args:
+            - --port={{ .Values.containerPort | default 8080 }}
+            - --state_chain.signing_key_file={{ .Values.signingKeyFile }}
+            - --state_chain.ws_endpoint={{ .Values.stateChainWsEndpoint }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.containerPort | default 8080 }}
+              protocol: TCP
+          resources:
+          {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: signing-key
+              mountPath: {{ .Values.signingKeyFile }}
+              subPath: signing-key
+      volumes:
+        - name: signing-key
+          secret:
+            secretName: {{ .Values.secrets.existingOnePasswordSecret }}
+            items:
+              - key: signing-key
+                path: signing-key

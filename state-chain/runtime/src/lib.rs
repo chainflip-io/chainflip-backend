@@ -91,7 +91,6 @@ use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTra
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
 pub use pallet_cf_funding::WithdrawalAddresses;
-use pallet_cf_validator::PercentageRange;
 use pallet_cf_vaults::Vault;
 pub use pallet_transaction_payment::ChargeTransactionPayment;
 
@@ -160,10 +159,7 @@ pub fn native_version() -> NativeVersion {
 
 parameter_types! {
 	pub const MinEpoch: BlockNumber = 1;
-	pub const EmergencyRotationPercentageRange: PercentageRange = PercentageRange {
-		bottom: 67,
-		top: 80,
-	};
+
 }
 
 impl pallet_cf_validator::Config for Runtime {
@@ -185,7 +181,6 @@ impl pallet_cf_validator::Config for Runtime {
 		AccountRoles,
 	);
 	type OffenceReporter = Reputation;
-	type EmergencyRotationPercentageRange = EmergencyRotationPercentageRange;
 	type Bonder = Bonder<Runtime>;
 	type ReputationResetter = Reputation;
 }
