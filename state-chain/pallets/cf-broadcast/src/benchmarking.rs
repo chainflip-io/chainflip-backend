@@ -103,10 +103,12 @@ benchmarks_instance_pallet! {
 		assert!(Timeouts::<T, I>::contains_key(timeout_block));
 	}
 	start_next_broadcast_attempt {
+		let api_call = ApiCallFor::<T, I>::benchmark_value();
+		let signed_api_call = api_call.signed(&BenchmarkValue::benchmark_value());
 		let broadcast_attempt_id = Pallet::<T, I>::start_broadcast(
 			&BenchmarkValue::benchmark_value(),
 			BenchmarkValue::benchmark_value(),
-			BenchmarkValue::benchmark_value(),
+			signed_api_call,
 			BenchmarkValue::benchmark_value(),
 			1
 		);
