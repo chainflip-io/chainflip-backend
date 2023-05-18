@@ -140,12 +140,12 @@ async fn should_report_on_invalid_blame_response() {
 	let mut messages =
 		run_stages!(ceremony, messages, Complaints6, VerifyComplaints7, BlameResponse8);
 
-	// bad_node_id_1 also sends a bad blame responses, and so gets blamed when ceremony finished
+	// bad_node_id_1 also sends a bad blame response, and so gets blamed when ceremony finished
 	let secret_share = SecretShare5::create_random(&mut ceremony.rng);
 	for message in messages.get_mut(&bad_node_id_1).unwrap().values_mut() {
 		*message = keygen::BlameResponse8(
 			std::iter::once((
-				party_idx_mapping.get_idx(&bad_node_id_2).unwrap(),
+				party_idx_mapping.get_idx(&target_node_id).unwrap(),
 				secret_share.clone(),
 			))
 			.collect(),
