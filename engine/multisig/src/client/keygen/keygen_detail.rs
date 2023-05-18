@@ -356,6 +356,7 @@ mod serialisation {
 				assert!(comm3.payload.len() == MAX_COEFF_COMM_3_SIZE);
 				assert!(zkp_bytes.len() == MAX_ZKP_SIZE);
 			} else {
+				// Other chains might use a more compact serialization of primitives
 				assert!(zkp_bytes.len() <= MAX_ZKP_SIZE);
 				assert!(comm3.payload.len() <= MAX_COEFF_COMM_3_SIZE);
 			}

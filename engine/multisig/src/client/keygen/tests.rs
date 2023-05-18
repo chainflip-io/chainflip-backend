@@ -113,7 +113,7 @@ async fn should_enter_blaming_stage_on_timeout_secret_shares() {
 /// time and during the blaming stage, the ceremony is aborted with these
 /// parties reported
 #[tokio::test]
-async fn should_report_on_invalid_blame_response6() {
+async fn should_report_on_invalid_blame_response() {
 	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 	let party_idx_mapping =
 		PartyIdxMapping::from_participants(BTreeSet::from_iter(ceremony.nodes.keys().cloned()));
@@ -203,7 +203,7 @@ async fn should_report_on_incomplete_blame_response() {
 // the ceremony should be aborted and all faulty parties should be reported.
 // Fail on `verify_broadcasts` during `VerifyCommitmentsBroadcast2`
 #[tokio::test]
-async fn should_report_on_inconsistent_broadcast_comm1() {
+async fn should_report_on_inconsistent_broadcast_coeff_comm() {
 	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let messages = ceremony.request().await;
@@ -235,7 +235,7 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
 }
 
 #[tokio::test]
-async fn should_report_on_inconsistent_broadcast_hash_comm1a() {
+async fn should_report_on_inconsistent_broadcast_hash_comm() {
 	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let mut messages = ceremony.request().await;
@@ -267,7 +267,7 @@ async fn should_report_on_inconsistent_broadcast_hash_comm1a() {
 // to the hash commitments sent earlier, the ceremony should be aborted with
 // those parties reported.
 #[tokio::test]
-async fn should_report_on_invalid_hash_comm1a() {
+async fn should_report_on_invalid_hash_comm() {
 	type Point = <EthSigning as CryptoScheme>::Point;
 	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
@@ -301,7 +301,7 @@ async fn should_report_on_invalid_hash_comm1a() {
 }
 
 #[tokio::test]
-async fn should_report_on_inconsistent_broadcast_complaints4() {
+async fn should_report_on_inconsistent_broadcast_complaints() {
 	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let messages = ceremony.request().await;
@@ -341,7 +341,7 @@ async fn should_report_on_inconsistent_broadcast_complaints4() {
 }
 
 #[tokio::test]
-async fn should_report_on_inconsistent_broadcast_blame_responses6() {
+async fn should_report_on_inconsistent_broadcast_blame_responses() {
 	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let party_idx_mapping =
@@ -402,7 +402,7 @@ async fn should_report_on_inconsistent_broadcast_blame_responses6() {
 // If one or more parties send invalid commitments, the ceremony should be aborted.
 // Fail on `validate_commitments` during `VerifyCommitmentsBroadcast2`.
 #[tokio::test]
-async fn should_report_on_invalid_comm1() {
+async fn should_report_on_invalid_zkp_in_coeff_comm() {
 	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let messages = ceremony.request().await;
@@ -434,7 +434,7 @@ async fn should_report_on_invalid_comm1() {
 }
 
 #[tokio::test]
-async fn should_report_on_invalid_complaints4() {
+async fn should_report_on_invalid_complaints() {
 	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let messages = ceremony.request().await;
@@ -473,134 +473,145 @@ mod timeout {
 
 		use super::*;
 
-		#[tokio::test]
-		async fn should_recover_if_party_appears_offline_to_minority_stage1a() {
-			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
+		mod should_recover_if_party_appears_offline_to_minority {
 
-			let mut messages = ceremony.request().await;
+			use super::*;
 
-			let [non_sending_party_id, timed_out_party_id] = ceremony.select_account_ids();
+			// These test the following scenario: a parry fails to deliver a message
+			// to a minority of the other parties during the initial broadcast, but
+			// due to broadcast verification all nodes are able to recover since we
+			// trust the majority of the nodes who did receive the message.
 
-			messages.get_mut(&non_sending_party_id).unwrap().remove(&timed_out_party_id);
+			#[tokio::test]
+			async fn hash_commitments_stage() {
+				let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
-			ceremony.distribute_messages(messages).await;
+				let mut messages = ceremony.request().await;
 
-			// This node doesn't receive non_sending_party's message, so must timeout
-			ceremony.get_mut_node(&timed_out_party_id).force_stage_timeout().await;
+				let [non_sending_party_id, timed_out_party_id] = ceremony.select_account_ids();
 
-			let messages = ceremony.gather_outgoing_messages::<VerifyHashComm2, KeygenData>().await;
+				messages.get_mut(&non_sending_party_id).unwrap().remove(&timed_out_party_id);
 
-			let messages = run_stages!(
-				ceremony,
-				messages,
-				CoeffComm3,
-				VerifyCoeffComm4,
-				SecretShare5,
-				Complaints6,
-				VerifyComplaints7
-			);
-			ceremony.distribute_messages(messages).await;
-			ceremony.complete().await;
-		}
+				ceremony.distribute_messages(messages).await;
 
-		#[tokio::test]
-		async fn should_recover_if_party_appears_offline_to_minority_stage1() {
-			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
+				// This node doesn't receive non_sending_party's message, so must timeout
+				ceremony.get_mut_node(&timed_out_party_id).force_stage_timeout().await;
 
-			let messages = ceremony.request().await;
+				let messages =
+					ceremony.gather_outgoing_messages::<VerifyHashComm2, KeygenData>().await;
 
-			let mut messages = run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
+				let messages = run_stages!(
+					ceremony,
+					messages,
+					CoeffComm3,
+					VerifyCoeffComm4,
+					SecretShare5,
+					Complaints6,
+					VerifyComplaints7
+				);
+				ceremony.distribute_messages(messages).await;
+				ceremony.complete().await;
+			}
 
-			let [non_sending_party_id, timed_out_party_id] = ceremony.select_account_ids();
+			#[tokio::test]
+			async fn coefficient_commitments_stage() {
+				let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
-			messages.get_mut(&non_sending_party_id).unwrap().remove(&timed_out_party_id);
+				let messages = ceremony.request().await;
 
-			ceremony.distribute_messages(messages).await;
+				let mut messages = run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
 
-			// This node doesn't receive non_sending_party's message, so must timeout
-			ceremony.get_mut_node(&timed_out_party_id).force_stage_timeout().await;
+				let [non_sending_party_id, timed_out_party_id] = ceremony.select_account_ids();
 
-			let messages =
-				ceremony.gather_outgoing_messages::<VerifyCoeffComm4, KeygenData>().await;
+				messages.get_mut(&non_sending_party_id).unwrap().remove(&timed_out_party_id);
 
-			let messages =
-				run_stages!(ceremony, messages, SecretShare5, Complaints6, VerifyComplaints7);
-			ceremony.distribute_messages(messages).await;
-			ceremony.complete().await;
-		}
+				ceremony.distribute_messages(messages).await;
 
-		#[tokio::test]
-		async fn should_recover_if_party_appears_offline_to_minority_stage4() {
-			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
+				// This node doesn't receive non_sending_party's message, so must timeout
+				ceremony.get_mut_node(&timed_out_party_id).force_stage_timeout().await;
 
-			let messages = ceremony.request().await;
+				let messages =
+					ceremony.gather_outgoing_messages::<VerifyCoeffComm4, KeygenData>().await;
 
-			let mut messages = run_stages!(
-				ceremony,
-				messages,
-				VerifyHashComm2,
-				CoeffComm3,
-				VerifyCoeffComm4,
-				SecretShare5,
-				Complaints6
-			);
+				let messages =
+					run_stages!(ceremony, messages, SecretShare5, Complaints6, VerifyComplaints7);
+				ceremony.distribute_messages(messages).await;
+				ceremony.complete().await;
+			}
 
-			let [non_sending_party_id, timed_out_party_id] = ceremony.select_account_ids();
+			#[tokio::test]
+			async fn complaints_stage() {
+				let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
-			messages.get_mut(&non_sending_party_id).unwrap().remove(&timed_out_party_id);
+				let messages = ceremony.request().await;
 
-			ceremony.distribute_messages(messages).await;
+				let mut messages = run_stages!(
+					ceremony,
+					messages,
+					VerifyHashComm2,
+					CoeffComm3,
+					VerifyCoeffComm4,
+					SecretShare5,
+					Complaints6
+				);
 
-			// This node doesn't receive non_sending_party's message, so must timeout
-			ceremony.get_mut_node(&timed_out_party_id).force_stage_timeout().await;
+				let [non_sending_party_id, timed_out_party_id] = ceremony.select_account_ids();
 
-			let messages =
-				ceremony.gather_outgoing_messages::<VerifyComplaints7, KeygenData>().await;
+				messages.get_mut(&non_sending_party_id).unwrap().remove(&timed_out_party_id);
 
-			ceremony.distribute_messages(messages).await;
-			ceremony.complete().await;
-		}
+				ceremony.distribute_messages(messages).await;
 
-		#[tokio::test]
-		async fn should_recover_if_party_appears_offline_to_minority_stage6() {
-			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
+				// This node doesn't receive non_sending_party's message, so must timeout
+				ceremony.get_mut_node(&timed_out_party_id).force_stage_timeout().await;
 
-			let messages = ceremony.request().await;
+				let messages =
+					ceremony.gather_outgoing_messages::<VerifyComplaints7, KeygenData>().await;
 
-			let mut messages = run_stages!(
-				ceremony,
-				messages,
-				VerifyHashComm2,
-				CoeffComm3,
-				VerifyCoeffComm4,
-				SecretShare5
-			);
+				ceremony.distribute_messages(messages).await;
+				ceremony.complete().await;
+			}
 
-			// One party sends another a bad secret share to cause entering the blaming stage
-			let [bad_share_sender_id, bad_share_receiver_id] = &ceremony.select_account_ids();
-			*messages
-				.get_mut(bad_share_sender_id)
-				.unwrap()
-				.get_mut(bad_share_receiver_id)
-				.unwrap() = SecretShare5::create_random(&mut ceremony.rng);
+			#[tokio::test]
+			async fn blame_responses_stage() {
+				let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
-			let [non_sending_party_id, timed_out_party_id] = ceremony.select_account_ids();
+				let messages = ceremony.request().await;
 
-			let mut messages =
-				run_stages!(ceremony, messages, Complaints6, VerifyComplaints7, BlameResponse8);
+				let mut messages = run_stages!(
+					ceremony,
+					messages,
+					VerifyHashComm2,
+					CoeffComm3,
+					VerifyCoeffComm4,
+					SecretShare5
+				);
 
-			messages.get_mut(&non_sending_party_id).unwrap().remove(&timed_out_party_id);
+				// One party sends another a bad secret share to cause entering the blaming stage
+				let [bad_share_sender_id, bad_share_receiver_id] = &ceremony.select_account_ids();
+				*messages
+					.get_mut(bad_share_sender_id)
+					.unwrap()
+					.get_mut(bad_share_receiver_id)
+					.unwrap() = SecretShare5::create_random(&mut ceremony.rng);
 
-			ceremony.distribute_messages(messages).await;
+				let [non_sending_party_id, timed_out_party_id] = ceremony.select_account_ids();
 
-			// This node doesn't receive non_sending_party's message, so must timeout
-			ceremony.get_mut_node(&timed_out_party_id).force_stage_timeout().await;
+				let mut messages =
+					run_stages!(ceremony, messages, Complaints6, VerifyComplaints7, BlameResponse8);
 
-			let messages =
-				ceremony.gather_outgoing_messages::<VerifyBlameResponses9, KeygenData>().await;
+				messages.get_mut(&non_sending_party_id).unwrap().remove(&timed_out_party_id);
 
-			ceremony.distribute_messages(messages).await;
-			ceremony.complete().await;
+				ceremony.distribute_messages(messages).await;
+
+				// This node doesn't receive non_sending_party's message, so must timeout
+				ceremony.get_mut_node(&timed_out_party_id).force_stage_timeout().await;
+
+				let messages =
+					ceremony.gather_outgoing_messages::<VerifyBlameResponses9, KeygenData>().await;
+
+				ceremony.distribute_messages(messages).await;
+				ceremony.complete().await;
+			}
 		}
 	}
 
@@ -608,271 +619,302 @@ mod timeout {
 
 		use super::*;
 
-		#[tokio::test]
-		async fn should_recover_if_agree_on_values_stage2a() {
-			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
+		mod should_recover_if_agree_on_values {
 
-			let messages = ceremony.request().await;
+			use super::*;
 
-			let messages = run_stages!(ceremony, messages, VerifyHashComm2,);
+			// These test the following scenario: some party fails to send a message
+			// to any parties during a broadcast verification stage (this subsumes
+			// the case of sending to *some* parties), but the majority/quorum was
+			// reached nonetheless, so all parties should recover.
 
-			let [non_sender_id] = &ceremony.select_account_ids();
-			let messages = ceremony
-				.run_stage_with_non_sender::<CoeffComm3, _, _>(messages, non_sender_id)
-				.await;
+			#[tokio::test]
+			async fn hash_commitments_stage() {
+				let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
-			let messages = run_stages!(
-				ceremony,
-				messages,
-				VerifyCoeffComm4,
-				SecretShare5,
-				Complaints6,
-				VerifyComplaints7
-			);
+				let messages = ceremony.request().await;
 
-			ceremony.distribute_messages(messages).await;
-			ceremony.complete().await;
-		}
+				let messages = run_stages!(ceremony, messages, VerifyHashComm2,);
 
-		#[tokio::test]
-		async fn should_recover_if_agree_on_values_stage2() {
-			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
+				let [non_sender_id] = &ceremony.select_account_ids();
+				let messages = ceremony
+					.run_stage_with_non_sender::<CoeffComm3, _, _>(messages, non_sender_id)
+					.await;
 
-			let messages = ceremony.request().await;
-
-			let messages =
-				run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3, VerifyCoeffComm4);
-
-			let [non_sender_id] = &ceremony.select_account_ids();
-			let messages = ceremony
-				.run_stage_with_non_sender::<SecretShare5, _, _>(messages, non_sender_id)
-				.await;
-
-			let messages = run_stages!(ceremony, messages, Complaints6, VerifyComplaints7);
-
-			ceremony.distribute_messages(messages).await;
-			ceremony.complete().await;
-		}
-
-		#[tokio::test]
-		async fn should_recover_if_agree_on_values_stage5() {
-			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
-
-			let messages = ceremony.request().await;
-
-			let messages = run_stages!(
-				ceremony,
-				messages,
-				VerifyHashComm2,
-				CoeffComm3,
-				VerifyCoeffComm4,
-				SecretShare5,
-				Complaints6,
-				VerifyComplaints7
-			);
-
-			let [non_sender_id] = ceremony.select_account_ids();
-			ceremony.distribute_messages_with_non_sender(messages, &non_sender_id).await;
-
-			ceremony.complete().await;
-		}
-
-		#[tokio::test]
-		async fn should_recover_if_agree_on_values_stage7() {
-			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
-
-			let messages = ceremony.request().await;
-
-			let mut messages = run_stages!(
-				ceremony,
-				messages,
-				VerifyHashComm2,
-				CoeffComm3,
-				VerifyCoeffComm4,
-				SecretShare5
-			);
-
-			// One party sends another a bad secret share to cause entering the blaming stage
-			let [bad_share_sender_id, bad_share_receiver_id] = &ceremony.select_account_ids();
-			*messages
-				.get_mut(bad_share_sender_id)
-				.unwrap()
-				.get_mut(bad_share_receiver_id)
-				.unwrap() = SecretShare5::create_random(&mut ceremony.rng);
-
-			let messages = run_stages!(
-				ceremony,
-				messages,
-				Complaints6,
-				VerifyComplaints7,
-				BlameResponse8,
-				VerifyBlameResponses9
-			);
-
-			let [non_sender_id] = ceremony.select_account_ids();
-			ceremony.distribute_messages_with_non_sender(messages, &non_sender_id).await;
-
-			ceremony.complete().await;
-		}
-
-		#[tokio::test]
-		async fn should_report_if_insufficient_messages_stage2a() {
-			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
-
-			let messages = ceremony.request().await;
-
-			let [non_sending_party_id_1, non_sending_party_id_2] = ceremony.select_account_ids();
-
-			// bad party 1 times out during a broadcast stage. It should be reported
-			let messages = ceremony
-				.run_stage_with_non_sender::<VerifyHashComm2, _, _>(
+				let messages = run_stages!(
+					ceremony,
 					messages,
-					&non_sending_party_id_1,
-				)
-				.await;
+					VerifyCoeffComm4,
+					SecretShare5,
+					Complaints6,
+					VerifyComplaints7
+				);
 
-			// bad party 2 times out during a broadcast verification stage. It won't get reported.
-			ceremony
-				.distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
-				.await;
+				ceremony.distribute_messages(messages).await;
+				ceremony.complete().await;
+			}
 
-			ceremony
-				.complete_with_error(
-					&[non_sending_party_id_1],
-					KeygenFailureReason::BroadcastFailure(
-						BroadcastFailureReason::InsufficientMessages,
-						KeygenStageName::VerifyHashCommitmentsBroadcast2,
-					),
-				)
-				.await
+			#[tokio::test]
+			async fn coefficient_commitments_stage() {
+				let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
+
+				let messages = ceremony.request().await;
+
+				let messages =
+					run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3, VerifyCoeffComm4);
+
+				let [non_sender_id] = &ceremony.select_account_ids();
+				let messages = ceremony
+					.run_stage_with_non_sender::<SecretShare5, _, _>(messages, non_sender_id)
+					.await;
+
+				let messages = run_stages!(ceremony, messages, Complaints6, VerifyComplaints7);
+
+				ceremony.distribute_messages(messages).await;
+				ceremony.complete().await;
+			}
+
+			#[tokio::test]
+			async fn complaints_stage() {
+				let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
+
+				let messages = ceremony.request().await;
+
+				let messages = run_stages!(
+					ceremony,
+					messages,
+					VerifyHashComm2,
+					CoeffComm3,
+					VerifyCoeffComm4,
+					SecretShare5,
+					Complaints6,
+					VerifyComplaints7
+				);
+
+				let [non_sender_id] = ceremony.select_account_ids();
+				ceremony.distribute_messages_with_non_sender(messages, &non_sender_id).await;
+
+				ceremony.complete().await;
+			}
+
+			#[tokio::test]
+			async fn blame_responses_stage() {
+				let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
+
+				let messages = ceremony.request().await;
+
+				let mut messages = run_stages!(
+					ceremony,
+					messages,
+					VerifyHashComm2,
+					CoeffComm3,
+					VerifyCoeffComm4,
+					SecretShare5
+				);
+
+				// One party sends another a bad secret share to cause entering the blaming stage
+				let [bad_share_sender_id, bad_share_receiver_id] = &ceremony.select_account_ids();
+				*messages
+					.get_mut(bad_share_sender_id)
+					.unwrap()
+					.get_mut(bad_share_receiver_id)
+					.unwrap() = SecretShare5::create_random(&mut ceremony.rng);
+
+				let messages = run_stages!(
+					ceremony,
+					messages,
+					Complaints6,
+					VerifyComplaints7,
+					BlameResponse8,
+					VerifyBlameResponses9
+				);
+
+				let [non_sender_id] = ceremony.select_account_ids();
+				ceremony.distribute_messages_with_non_sender(messages, &non_sender_id).await;
+
+				ceremony.complete().await;
+			}
 		}
 
-		#[tokio::test]
-		async fn should_report_if_insufficient_messages_stage2() {
-			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
+		mod should_report_on_insufficient_messages {
 
-			let messages = ceremony.request().await;
+			use super::*;
 
-			let [non_sending_party_id_1, non_sending_party_id_2] = ceremony.select_account_ids();
+			// These test the scenario where during a broadcast verification stage
+			// the majority/quorum was not reached on messages from some parties
+			// for one reason or another (this could be a combination of failing
+			// to send to some parties during the initial broadcast *and* other
+			// nodes failing to re-broadcast it during the following broadcast
+			// verification stage). In this case, the parties for whom the quorum
+			// was not reached should be reported.
 
-			let messages = run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
+			#[tokio::test]
+			async fn hash_commitments_stage() {
+				let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
-			// bad party 1 times out during a broadcast stage. It should be reported
-			let messages = ceremony
-				.run_stage_with_non_sender::<VerifyCoeffComm4, _, _>(
+				let messages = ceremony.request().await;
+
+				let [non_sending_party_id_1, non_sending_party_id_2] =
+					ceremony.select_account_ids();
+
+				// bad party 1 times out during a broadcast stage. It should be reported
+				let messages = ceremony
+					.run_stage_with_non_sender::<VerifyHashComm2, _, _>(
+						messages,
+						&non_sending_party_id_1,
+					)
+					.await;
+
+				// bad party 2 times out during a broadcast verification stage. It won't get
+				// reported.
+				ceremony
+					.distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
+					.await;
+
+				ceremony
+					.complete_with_error(
+						&[non_sending_party_id_1],
+						KeygenFailureReason::BroadcastFailure(
+							BroadcastFailureReason::InsufficientMessages,
+							KeygenStageName::VerifyHashCommitmentsBroadcast2,
+						),
+					)
+					.await
+			}
+
+			#[tokio::test]
+			async fn coefficient_commitments_stage() {
+				let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
+
+				let messages = ceremony.request().await;
+
+				let [non_sending_party_id_1, non_sending_party_id_2] =
+					ceremony.select_account_ids();
+
+				let messages = run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
+
+				// bad party 1 times out during a broadcast stage. It should be reported
+				let messages = ceremony
+					.run_stage_with_non_sender::<VerifyCoeffComm4, _, _>(
+						messages,
+						&non_sending_party_id_1,
+					)
+					.await;
+
+				// bad party 2 times out during a broadcast verification stage. It won't get
+				// reported.
+				ceremony
+					.distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
+					.await;
+
+				ceremony
+					.complete_with_error(
+						&[non_sending_party_id_1],
+						KeygenFailureReason::BroadcastFailure(
+							BroadcastFailureReason::InsufficientMessages,
+							KeygenStageName::VerifyCommitmentsBroadcast4,
+						),
+					)
+					.await
+			}
+
+			#[tokio::test]
+			async fn complaints_stage() {
+				let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
+
+				let messages = ceremony.request().await;
+
+				let messages = run_stages!(
+					ceremony,
 					messages,
-					&non_sending_party_id_1,
-				)
-				.await;
+					VerifyHashComm2,
+					CoeffComm3,
+					VerifyCoeffComm4,
+					SecretShare5,
+					Complaints6
+				);
 
-			// bad party 2 times out during a broadcast verification stage. It won't get reported.
-			ceremony
-				.distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
-				.await;
+				let [non_sending_party_id_1, non_sending_party_id_2] =
+					ceremony.select_account_ids();
 
-			ceremony
-				.complete_with_error(
-					&[non_sending_party_id_1],
-					KeygenFailureReason::BroadcastFailure(
-						BroadcastFailureReason::InsufficientMessages,
-						KeygenStageName::VerifyCommitmentsBroadcast4,
-					),
-				)
-				.await
-		}
+				// bad party 1 times out during a broadcast stage. It should be reported
+				let messages = ceremony
+					.run_stage_with_non_sender::<VerifyComplaints7, _, _>(
+						messages,
+						&non_sending_party_id_1,
+					)
+					.await;
 
-		#[tokio::test]
-		async fn should_report_if_insufficient_messages_stage5() {
-			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
+				// bad party 2 times out during a broadcast verification stage. It won't get
+				// reported.
+				ceremony
+					.distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
+					.await;
 
-			let messages = ceremony.request().await;
+				ceremony
+					.complete_with_error(
+						&[non_sending_party_id_1],
+						KeygenFailureReason::BroadcastFailure(
+							BroadcastFailureReason::InsufficientMessages,
+							KeygenStageName::VerifyComplaintsBroadcastStage7,
+						),
+					)
+					.await
+			}
 
-			let messages = run_stages!(
-				ceremony,
-				messages,
-				VerifyHashComm2,
-				CoeffComm3,
-				VerifyCoeffComm4,
-				SecretShare5,
-				Complaints6
-			);
+			#[tokio::test]
+			async fn blame_responses_stage() {
+				let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
-			let [non_sending_party_id_1, non_sending_party_id_2] = ceremony.select_account_ids();
+				let messages = ceremony.request().await;
 
-			// bad party 1 times out during a broadcast stage. It should be reported
-			let messages = ceremony
-				.run_stage_with_non_sender::<VerifyComplaints7, _, _>(
+				let mut messages = run_stages!(
+					ceremony,
 					messages,
-					&non_sending_party_id_1,
-				)
-				.await;
+					VerifyHashComm2,
+					CoeffComm3,
+					VerifyCoeffComm4,
+					SecretShare5
+				);
 
-			// bad party 2 times out during a broadcast verification stage. It won't get reported.
-			ceremony
-				.distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
-				.await;
+				// One party sends another a bad secret share to cause entering the blaming stage
+				let [bad_share_sender_id, bad_share_receiver_id] = &ceremony.select_account_ids();
+				*messages
+					.get_mut(bad_share_sender_id)
+					.unwrap()
+					.get_mut(bad_share_receiver_id)
+					.unwrap() = SecretShare5::create_random(&mut ceremony.rng);
 
-			ceremony
-				.complete_with_error(
-					&[non_sending_party_id_1],
-					KeygenFailureReason::BroadcastFailure(
-						BroadcastFailureReason::InsufficientMessages,
-						KeygenStageName::VerifyComplaintsBroadcastStage7,
-					),
-				)
-				.await
-		}
+				let messages =
+					run_stages!(ceremony, messages, Complaints6, VerifyComplaints7, BlameResponse8);
 
-		#[tokio::test]
-		async fn should_report_if_insufficient_messages_stage7() {
-			let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
+				let [non_sending_party_id_1, non_sending_party_id_2] =
+					ceremony.select_account_ids();
 
-			let messages = ceremony.request().await;
+				// bad party 1 times out during a broadcast stage. It should be reported
+				let messages = ceremony
+					.run_stage_with_non_sender::<VerifyBlameResponses9, _, _>(
+						messages,
+						&non_sending_party_id_1,
+					)
+					.await;
 
-			let mut messages = run_stages!(
-				ceremony,
-				messages,
-				VerifyHashComm2,
-				CoeffComm3,
-				VerifyCoeffComm4,
-				SecretShare5
-			);
+				// bad party 2 times out during a broadcast verification stage. It won't get
+				// reported.
+				ceremony
+					.distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
+					.await;
 
-			// One party sends another a bad secret share to cause entering the blaming stage
-			let [bad_share_sender_id, bad_share_receiver_id] = &ceremony.select_account_ids();
-			*messages
-				.get_mut(bad_share_sender_id)
-				.unwrap()
-				.get_mut(bad_share_receiver_id)
-				.unwrap() = SecretShare5::create_random(&mut ceremony.rng);
-
-			let messages =
-				run_stages!(ceremony, messages, Complaints6, VerifyComplaints7, BlameResponse8);
-
-			let [non_sending_party_id_1, non_sending_party_id_2] = ceremony.select_account_ids();
-
-			// bad party 1 times out during a broadcast stage. It should be reported
-			let messages = ceremony
-				.run_stage_with_non_sender::<VerifyBlameResponses9, _, _>(
-					messages,
-					&non_sending_party_id_1,
-				)
-				.await;
-
-			// bad party 2 times out during a broadcast verification stage. It won't get reported.
-			ceremony
-				.distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
-				.await;
-
-			ceremony
-				.complete_with_error(
-					&[non_sending_party_id_1],
-					KeygenFailureReason::BroadcastFailure(
-						BroadcastFailureReason::InsufficientMessages,
-						KeygenStageName::VerifyBlameResponsesBroadcastStage9,
-					),
-				)
-				.await
+				ceremony
+					.complete_with_error(
+						&[non_sending_party_id_1],
+						KeygenFailureReason::BroadcastFailure(
+							BroadcastFailureReason::InsufficientMessages,
+							KeygenStageName::VerifyBlameResponsesBroadcastStage9,
+						),
+					)
+					.await
+			}
 		}
 	}
 }
