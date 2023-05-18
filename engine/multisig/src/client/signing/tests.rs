@@ -25,77 +25,87 @@ type VerifyComm2 = signing_data::VerifyComm2<Point>;
 type LocalSig3 = signing_data::LocalSig3<Point>;
 type VerifyLocalSig4 = signing_data::VerifyLocalSig4<Point>;
 
-#[tokio::test]
-async fn should_report_on_invalid_local_signature() {
-	let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
+mod broadcast_commitments_stage {
 
-	let messages = signing_ceremony.request().await;
-	let mut messages = run_stages!(signing_ceremony, messages, VerifyComm2, LocalSig3);
+	use super::*;
 
-	// This account id will send an invalid signature
-	let [bad_account_id] = signing_ceremony.select_account_ids();
-	let invalid_sig3 = gen_dummy_local_sig(&mut signing_ceremony.rng);
-	for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
-		*message = invalid_sig3.clone();
+	#[tokio::test]
+	async fn should_report_on_inconsistent_broadcast() {
+		let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
+
+		let mut messages = signing_ceremony.request().await;
+
+		// This account id will "broadcast" inconsistently
+		let [bad_account_id] = signing_ceremony.select_account_ids();
+		for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
+			*message = gen_dummy_signing_comm1(&mut signing_ceremony.rng, 1);
+		}
+
+		let messages = signing_ceremony.run_stage::<VerifyComm2, _, _>(messages).await;
+		signing_ceremony.distribute_messages(messages).await;
+		signing_ceremony
+			.complete_with_error(
+				&[bad_account_id],
+				SigningFailureReason::BroadcastFailure(
+					BroadcastFailureReason::Inconsistency,
+					SigningStageName::VerifyCommitmentsBroadcast2,
+				),
+			)
+			.await;
 	}
-
-	let messages = signing_ceremony.run_stage::<VerifyLocalSig4, _, _>(messages).await;
-	signing_ceremony.distribute_messages(messages).await;
-	signing_ceremony
-		.complete_with_error(&[bad_account_id], SigningFailureReason::InvalidSigShare)
-		.await;
 }
 
-#[tokio::test]
-async fn should_report_on_inconsistent_broadcast_commitments() {
-	let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
+mod local_signatures_stage {
 
-	let mut messages = signing_ceremony.request().await;
+	use super::*;
 
-	// This account id will "broadcast" inconsistently
-	let [bad_account_id] = signing_ceremony.select_account_ids();
-	for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
-		*message = gen_dummy_signing_comm1(&mut signing_ceremony.rng, 1);
+	#[tokio::test]
+	async fn should_report_on_inconsistent_broadcast() {
+		let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
+
+		let messages = signing_ceremony.request().await;
+
+		let mut messages = run_stages!(signing_ceremony, messages, VerifyComm2, LocalSig3);
+
+		// This account id will send an invalid signature
+		let [bad_account_id] = signing_ceremony.select_account_ids();
+		for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
+			*message = gen_dummy_local_sig(&mut signing_ceremony.rng);
+		}
+
+		let messages = signing_ceremony.run_stage::<VerifyLocalSig4, _, _>(messages).await;
+		signing_ceremony.distribute_messages(messages).await;
+		signing_ceremony
+			.complete_with_error(
+				&[bad_account_id],
+				SigningFailureReason::BroadcastFailure(
+					BroadcastFailureReason::Inconsistency,
+					SigningStageName::VerifyLocalSigsBroadcastStage4,
+				),
+			)
+			.await;
 	}
 
-	let messages = signing_ceremony.run_stage::<VerifyComm2, _, _>(messages).await;
-	signing_ceremony.distribute_messages(messages).await;
-	signing_ceremony
-		.complete_with_error(
-			&[bad_account_id],
-			SigningFailureReason::BroadcastFailure(
-				BroadcastFailureReason::Inconsistency,
-				SigningStageName::VerifyCommitmentsBroadcast2,
-			),
-		)
-		.await;
-}
+	#[tokio::test]
+	async fn should_report_on_invalid_local_signature() {
+		let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
-#[tokio::test]
-async fn should_report_on_inconsistent_broadcast_local_sig3() {
-	let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
+		let messages = signing_ceremony.request().await;
+		let mut messages = run_stages!(signing_ceremony, messages, VerifyComm2, LocalSig3);
 
-	let messages = signing_ceremony.request().await;
+		// This account id will send an invalid signature
+		let [bad_account_id] = signing_ceremony.select_account_ids();
+		let invalid_sig3 = gen_dummy_local_sig(&mut signing_ceremony.rng);
+		for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
+			*message = invalid_sig3.clone();
+		}
 
-	let mut messages = run_stages!(signing_ceremony, messages, VerifyComm2, LocalSig3);
-
-	// This account id will send an invalid signature
-	let [bad_account_id] = signing_ceremony.select_account_ids();
-	for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
-		*message = gen_dummy_local_sig(&mut signing_ceremony.rng);
+		let messages = signing_ceremony.run_stage::<VerifyLocalSig4, _, _>(messages).await;
+		signing_ceremony.distribute_messages(messages).await;
+		signing_ceremony
+			.complete_with_error(&[bad_account_id], SigningFailureReason::InvalidSigShare)
+			.await;
 	}
-
-	let messages = signing_ceremony.run_stage::<VerifyLocalSig4, _, _>(messages).await;
-	signing_ceremony.distribute_messages(messages).await;
-	signing_ceremony
-		.complete_with_error(
-			&[bad_account_id],
-			SigningFailureReason::BroadcastFailure(
-				BroadcastFailureReason::Inconsistency,
-				SigningStageName::VerifyLocalSigsBroadcastStage4,
-			),
-		)
-		.await;
 }
 
 async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayload]) {
