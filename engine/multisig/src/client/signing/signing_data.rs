@@ -52,6 +52,7 @@ mod serialisation {
 			// which we demonstrate here:
 			assert!(comm1.payload.len() == SIGNING_COMMITMENT_MAX_SIZE);
 		} else {
+			// Other chains might use a more compact serialization of primitives:
 			assert!(comm1.payload.len() <= SIGNING_COMMITMENT_MAX_SIZE);
 		}
 	}
@@ -72,6 +73,7 @@ mod serialisation {
 			// which we demonstrate here:
 			assert!(sig.payload.len() == LOCAL_SIG_MAX_SIZE);
 		} else {
+			// Other chains might use a more compact serialization of primitives:
 			assert!(sig.payload.len() <= LOCAL_SIG_MAX_SIZE);
 		}
 	}

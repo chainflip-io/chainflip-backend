@@ -268,18 +268,18 @@ pub enum SigningStageName {
 pub fn try_deserialize<T: serde::de::DeserializeOwned>(
 	messages: BTreeMap<AuthorityCount, DelayDeserialization<T>>,
 ) -> Result<BTreeMap<AuthorityCount, T>, BTreeSet<AuthorityCount>> {
-	let mut bad_parties = BTreeSet::new();
-	let deserialized_messages = messages
+	use itertools::Itertools as _;
+
+	let (deserialized_messages, bad_parties): (BTreeMap<_, _>, BTreeSet<_>) = messages
 		.into_iter()
-		.filter_map(|(idx, serialized_message)| match serialized_message.deserialize() {
-			Ok(message) => Some((idx, message)),
+		.map(|(idx, serialized_message)| match serialized_message.deserialize() {
+			Ok(message) => Ok((idx, message)),
 			Err(e) => {
 				tracing::warn!("Failed to deserialize message from party {}: {}", idx, e);
-				bad_parties.insert(idx);
-				None
+				Err(idx)
 			},
 		})
-		.collect();
+		.partition_result();
 
 	if bad_parties.is_empty() {
 		Ok(deserialized_messages)
