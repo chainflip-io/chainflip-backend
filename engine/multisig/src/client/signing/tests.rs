@@ -5,7 +5,9 @@ use rand::SeedableRng;
 use crate::{
 	bitcoin,
 	client::{
-		common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
+		common::{
+			BroadcastFailureReason, DelayDeserialization, SigningFailureReason, SigningStageName,
+		},
 		helpers::{
 			gen_dummy_local_sig, gen_dummy_signing_comm1, new_nodes, new_signing_ceremony,
 			run_stages, PayloadAndKeyData, SigningCeremonyRunner, ACCOUNT_IDS,
@@ -73,6 +75,32 @@ mod broadcast_commitments_stage {
 			.complete_with_error(&[bad_account_id], SigningFailureReason::DeserializationError)
 			.await;
 	}
+
+	#[tokio::test]
+	async fn should_report_on_invalid_number_of_commitments() {
+		// A party that send the wrong number of commitments (not matching
+		// the number of payloads) should be reported
+
+		let (mut signing_ceremony, _) = new_signing_ceremony::<BtcSigning>().await;
+
+		let mut messages = signing_ceremony.request().await;
+
+		let [bad_account_id] = signing_ceremony.select_account_ids();
+		for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
+			*message = {
+				// Deserialize, add an (unexpected) extra commitment and serialize again:
+				let mut comm1 = message.clone().deserialize().unwrap();
+				comm1.0.push(comm1.0[0].clone());
+				DelayDeserialization::new(&comm1)
+			}
+		}
+
+		let messages = signing_ceremony.run_stage::<VerifyComm2, _, _>(messages).await;
+		signing_ceremony.distribute_messages(messages).await;
+		signing_ceremony
+			.complete_with_error(&[bad_account_id], SigningFailureReason::InvalidNumberOfPayloads)
+			.await;
+	}
 }
 
 mod local_signatures_stage {
@@ -124,6 +152,34 @@ mod local_signatures_stage {
 		signing_ceremony.distribute_messages(messages).await;
 		signing_ceremony
 			.complete_with_error(&[bad_account_id], SigningFailureReason::InvalidSigShare)
+			.await;
+	}
+
+	#[tokio::test]
+	async fn should_report_on_invalid_number_of_local_signatures() {
+		// A party that send the wrong number of local signatures (not matching
+		// the number of payloads) should be reported
+
+		let (mut signing_ceremony, _) = new_signing_ceremony::<BtcSigning>().await;
+
+		let messages = signing_ceremony.request().await;
+		let mut messages = run_stages!(signing_ceremony, messages, VerifyComm2, LocalSig3);
+
+		// This account id will send an invalid signature
+		let [bad_account_id] = signing_ceremony.select_account_ids();
+		for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
+			*message = {
+				// Deserialize, add an (unexpected) extra local signature and serialize again:
+				let mut sig = message.clone().deserialize().unwrap();
+				sig.responses.push(sig.responses[0].clone());
+				DelayDeserialization::new(&sig)
+			}
+		}
+
+		let messages = signing_ceremony.run_stage::<VerifyLocalSig4, _, _>(messages).await;
+		signing_ceremony.distribute_messages(messages).await;
+		signing_ceremony
+			.complete_with_error(&[bad_account_id], SigningFailureReason::InvalidNumberOfPayloads)
 			.await;
 	}
 }
