@@ -101,13 +101,6 @@ async fn main() -> anyhow::Result<()> {
 			let (cfe_settings_update_sender, cfe_settings_update_receiver) =
 				tokio::sync::watch::channel(cfe_settings);
 
-			let latest_ceremony_id = state_chain_client
-				.storage_value::<pallet_cf_validator::CeremonyIdCounter<state_chain_runtime::Runtime>>(
-					state_chain_stream.cache().block_hash,
-				)
-				.await
-				.context("Failed to get CeremonyIdCounter from SC")?;
-
 			let db = Arc::new(
 				PersistentKeyDB::open_and_migrate_to_latest(
 					settings.signing.db_file.as_path(),
@@ -141,7 +134,13 @@ async fn main() -> anyhow::Result<()> {
 					KeyStore::new(db.clone()),
 					eth_incoming_receiver,
 					eth_outgoing_sender,
-					latest_ceremony_id,
+					state_chain_client
+						.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+							state_chain_runtime::Runtime,
+							state_chain_runtime::EthereumInstance,
+						>>(state_chain_stream.cache().block_hash)
+						.await
+						.context("Failed to get Ethereum CeremonyIdCounter from SC")?,
 				);
 
 			scope.spawn(eth_multisig_client_backend_future);
@@ -152,7 +151,13 @@ async fn main() -> anyhow::Result<()> {
 					KeyStore::new(db.clone()),
 					dot_incoming_receiver,
 					dot_outgoing_sender,
-					latest_ceremony_id,
+					state_chain_client
+						.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+							state_chain_runtime::Runtime,
+							state_chain_runtime::PolkadotInstance,
+						>>(state_chain_stream.cache().block_hash)
+						.await
+						.context("Failed to get Polkadot CeremonyIdCounter from SC")?,
 				);
 
 			scope.spawn(dot_multisig_client_backend_future);
@@ -163,7 +168,13 @@ async fn main() -> anyhow::Result<()> {
 					KeyStore::new(db.clone()),
 					btc_incoming_receiver,
 					btc_outgoing_sender,
-					latest_ceremony_id,
+					state_chain_client
+						.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+							state_chain_runtime::Runtime,
+							state_chain_runtime::BitcoinInstance,
+						>>(state_chain_stream.cache().block_hash)
+						.await
+						.context("Failed to get Bitcoin CeremonyIdCounter from SC")?,
 				);
 
 			scope.spawn(btc_multisig_client_backend_future);
