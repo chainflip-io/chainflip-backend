@@ -471,7 +471,6 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		let commitments = match try_deserialize(commitments) {
 			Ok(res) => res,
 			Err(bad_parties) =>
-			// TODO: unit test for this
 				return KeygenStageResult::Error(
 					bad_parties,
 					KeygenFailureReason::DeserializationError,

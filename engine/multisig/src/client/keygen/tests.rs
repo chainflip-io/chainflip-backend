@@ -399,6 +399,31 @@ async fn should_report_on_inconsistent_broadcast_blame_responses() {
 		.await;
 }
 
+#[tokio::test]
+async fn should_report_on_deserialization_failure_coeff_commitments() {
+	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
+
+	let messages = ceremony.request().await;
+	let mut messages = run_stages!(ceremony, messages, VerifyHashComm2, CoeffComm3);
+
+	let [bad_account_id] = ceremony.select_account_ids();
+
+	// Make a node send a message that won't deserialize into `CoeffComm3`
+	// Note: we must send the same bad commitment to all of the nodes,
+	// or we will fail on the `inconsistent` error instead of the validation error.
+	let corrupted_message = DelayDeserialization::new(&b"Not a CoeffComm3");
+	for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
+		*message = corrupted_message.clone();
+	}
+
+	let messages = ceremony.run_stage::<VerifyCoeffComm4, _, _>(messages).await;
+	ceremony.distribute_messages(messages).await;
+
+	ceremony
+		.complete_with_error(&[bad_account_id], KeygenFailureReason::DeserializationError)
+		.await;
+}
+
 // If one or more parties send invalid commitments, the ceremony should be aborted.
 // Fail on `validate_commitments` during `VerifyCommitmentsBroadcast2`.
 #[tokio::test]
