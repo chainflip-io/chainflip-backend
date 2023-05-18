@@ -36,6 +36,8 @@ pub enum SigningFailureReason {
 	UnknownKey,
 	#[error("Invalid Number of Payloads")]
 	InvalidNumberOfPayloads,
+	#[error("Deserialization Error")]
+	DeserializationError,
 	#[error("Developer Error: {0}")]
 	DeveloperError(String),
 }
@@ -50,6 +52,8 @@ pub enum KeygenFailureReason {
 	BroadcastFailure(BroadcastFailureReason, KeygenStageName),
 	#[error("Invalid Commitment")]
 	InvalidCommitment,
+	#[error("Deserialization Error")]
+	DeserializationError,
 	#[error("Invalid secret share in a blame response")]
 	InvalidBlameResponse,
 	#[error("Invalid Complaint")]
@@ -84,6 +88,7 @@ impl CeremonyFailureReason for SigningFailureReason {
 		match self {
 			SigningFailureReason::BroadcastFailure(_, _) |
 			SigningFailureReason::InvalidSigShare |
+			SigningFailureReason::DeserializationError |
 			SigningFailureReason::InvalidNumberOfPayloads => {
 				warn!(
 					tag = SIGNING_CEREMONY_FAILED,
@@ -114,6 +119,7 @@ impl CeremonyFailureReason for KeygenFailureReason {
 			KeygenFailureReason::BroadcastFailure(_, _) |
 			KeygenFailureReason::InvalidBlameResponse |
 			KeygenFailureReason::InvalidCommitment |
+			KeygenFailureReason::DeserializationError |
 			KeygenFailureReason::InvalidComplaint => {
 				warn!(
 					tag = KEYGEN_CEREMONY_FAILED,

@@ -12,7 +12,7 @@ use crate::CryptoScheme;
 use super::common::KeygenResult;
 
 pub use signing_data::{
-	Comm1, LocalSig3, SigningCommitment, SigningData, VerifyComm2, VerifyLocalSig4,
+	Comm1, LocalSig3, LocalSig3Inner, SigningCommitment, SigningData, VerifyComm2, VerifyLocalSig4,
 };
 
 pub use signing_detail::generate_schnorr_response;

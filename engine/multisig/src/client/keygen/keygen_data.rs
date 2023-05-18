@@ -8,12 +8,15 @@ use serde::{Deserialize, Serialize};
 use state_chain_runtime::constants::common::MAX_AUTHORITIES;
 
 use crate::{
-	client::common::{BroadcastVerificationMessage, KeygenStageName, PreProcessStageDataCheck},
+	client::common::{
+		BroadcastVerificationMessage, DelayDeserialization, KeygenStageName,
+		PreProcessStageDataCheck,
+	},
 	crypto::ECPoint,
 	CryptoScheme,
 };
 
-use super::keygen_detail::ShamirShare;
+use super::keygen_detail::{ShamirShare, MAX_COEFF_COMM_3_SIZE};
 
 #[cfg(test)]
 pub use tests::{gen_keygen_data_hash_comm1, gen_keygen_data_verify_hash_comm2};
@@ -64,26 +67,18 @@ impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
 			KeygenData::PubkeyShares0(_) | KeygenData::HashComm1(_) =>
 				self.initial_stage_data_size_is_valid::<C>(),
 			KeygenData::VerifyHashComm2(message) => message.data.len() == num_of_parties,
-			KeygenData::CoeffComm3(message) => {
-				// NOTE: the number of commitments may be different depending on whether
-				// we are doing keygen vs key handover, but it should never exceed the
-				// number of parties
-				message.get_commitments_len() <= num_of_parties
-			},
+			KeygenData::CoeffComm3(message) => message.payload.len() <= MAX_COEFF_COMM_3_SIZE,
 			KeygenData::VerifyCoeffComm4(message) => {
-				// NOTE: the number of commitments may be different depending on whether
-				// we are doing keygen vs key handover, but it should never exceed the
-				// number of parties
 				if message
 					.data
 					.values()
-					.flatten()
-					.any(|commitments| commitments.get_commitments_len() > num_of_parties)
+					.filter_map(|x| x.as_ref())
+					.all(|comm3| comm3.payload.len() > MAX_COEFF_COMM_3_SIZE)
 				{
 					return false
 				}
 
-				message.data.len() <= num_of_parties
+				message.data.len() == num_of_parties
 			},
 			KeygenData::SecretShares5(_) => true,
 			KeygenData::Complaints6(complaints) => {
@@ -173,7 +168,7 @@ pub struct PubkeyShares0<P: ECPoint>(#[serde(bound = "")] pub BTreeMap<Authority
 
 pub type VerifyHashComm2 = BroadcastVerificationMessage<HashComm1>;
 
-pub type CoeffComm3<P> = super::keygen_detail::DKGUnverifiedCommitment<P>;
+pub type CoeffComm3<P> = DelayDeserialization<super::keygen_detail::DKGUnverifiedCommitment<P>>;
 
 pub type VerifyCoeffComm4<P> = BroadcastVerificationMessage<CoeffComm3<P>>;
 
