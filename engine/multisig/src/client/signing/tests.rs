@@ -53,6 +53,26 @@ mod broadcast_commitments_stage {
 			)
 			.await;
 	}
+
+	#[tokio::test]
+	async fn should_report_on_deserialization_failure() {
+		use crate::client::common::DelayDeserialization;
+
+		let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
+
+		let mut messages = signing_ceremony.request().await;
+
+		let [bad_account_id] = signing_ceremony.select_account_ids();
+		for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
+			*message = DelayDeserialization::new(&"Not a valid Comm1");
+		}
+
+		let messages = signing_ceremony.run_stage::<VerifyComm2, _, _>(messages).await;
+		signing_ceremony.distribute_messages(messages).await;
+		signing_ceremony
+			.complete_with_error(&[bad_account_id], SigningFailureReason::DeserializationError)
+			.await;
+	}
 }
 
 mod local_signatures_stage {
