@@ -156,6 +156,26 @@ mod local_signatures_stage {
 	}
 
 	#[tokio::test]
+	async fn should_report_on_deserialization_failure() {
+		let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
+
+		let messages = signing_ceremony.request().await;
+		let mut messages = run_stages!(signing_ceremony, messages, VerifyComm2, LocalSig3);
+
+		// This account id will a message that cannot be deserialized
+		let [bad_account_id] = signing_ceremony.select_account_ids();
+		for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
+			*message = DelayDeserialization::new(&"Not a valid LocalSig3");
+		}
+
+		let messages = signing_ceremony.run_stage::<VerifyLocalSig4, _, _>(messages).await;
+		signing_ceremony.distribute_messages(messages).await;
+		signing_ceremony
+			.complete_with_error(&[bad_account_id], SigningFailureReason::DeserializationError)
+			.await;
+	}
+
+	#[tokio::test]
 	async fn should_report_on_invalid_number_of_local_signatures() {
 		// A party that send the wrong number of local signatures (not matching
 		// the number of payloads) should be reported
