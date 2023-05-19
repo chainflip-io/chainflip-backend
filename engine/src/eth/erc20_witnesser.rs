@@ -10,8 +10,7 @@ use web3::{
 };
 
 use crate::{
-	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
-	witnesser::AddressMonitor,
+	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi, witnesser::ItemMonitor,
 };
 
 use super::{
@@ -39,7 +38,7 @@ pub struct Erc20Witnesser {
 	pub deployed_address: H160,
 	asset: eth::Asset,
 	contract: ethabi::Contract,
-	address_monitor: Arc<Mutex<AddressMonitor<sp_core::H160, sp_core::H160, ()>>>,
+	address_monitor: Arc<Mutex<ItemMonitor<sp_core::H160, sp_core::H160, ()>>>,
 }
 
 impl Erc20Witnesser {
@@ -47,7 +46,7 @@ impl Erc20Witnesser {
 	pub fn new(
 		deployed_address: H160,
 		asset: eth::Asset,
-		address_monitor: Arc<Mutex<AddressMonitor<sp_core::H160, sp_core::H160, ()>>>,
+		address_monitor: Arc<Mutex<ItemMonitor<sp_core::H160, sp_core::H160, ()>>>,
 	) -> Self {
 		Self {
 			deployed_address,
@@ -81,7 +80,7 @@ impl EthContractWitnesser for Erc20Witnesser {
 		let mut address_monitor =
 			self.address_monitor.try_lock().expect("should have exclusive ownership");
 
-		address_monitor.sync_addresses();
+		address_monitor.sync_items();
 
 		let deposit_witnesses: Vec<_> = block
 			.block_items
@@ -174,7 +173,7 @@ mod tests {
 		let contract = Erc20Witnesser::new(
 			H160::default(),
 			eth::Asset::Flip,
-			Arc::new(Mutex::new(AddressMonitor::new(Default::default()).1)),
+			Arc::new(Mutex::new(ItemMonitor::new(Default::default()).1)),
 		)
 		.contract;
 
@@ -189,7 +188,7 @@ mod tests {
 		Erc20Witnesser::new(
 			H160::default(),
 			eth::Asset::Flip,
-			Arc::new(Mutex::new(AddressMonitor::new(Default::default()).1)),
+			Arc::new(Mutex::new(ItemMonitor::new(Default::default()).1)),
 		);
 	}
 
@@ -198,7 +197,7 @@ mod tests {
 		let erc20_witnesser = Erc20Witnesser::new(
 			H160::default(),
 			eth::Asset::Flip,
-			Arc::new(Mutex::new(AddressMonitor::new(Default::default()).1)),
+			Arc::new(Mutex::new(ItemMonitor::new(Default::default()).1)),
 		);
 		let decode_log = erc20_witnesser.decode_log_closure().unwrap();
 
@@ -253,7 +252,7 @@ mod tests {
 		let erc20_witnesser = Erc20Witnesser::new(
 			H160::default(),
 			eth::Asset::Flip,
-			Arc::new(Mutex::new(AddressMonitor::new(Default::default()).1)),
+			Arc::new(Mutex::new(ItemMonitor::new(Default::default()).1)),
 		);
 		let decode_log = erc20_witnesser.decode_log_closure().unwrap();
 

@@ -636,12 +636,7 @@ fn vault_key_rotated() {
 		let rotation_epoch_index = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
 
 		assert_noop!(
-			VaultsPallet::vault_key_rotated(
-				RuntimeOrigin::root(),
-				NEW_AGG_PUB_KEY,
-				ROTATION_BLOCK_NUMBER,
-				TX_HASH,
-			),
+			VaultsPallet::vault_key_rotated(RuntimeOrigin::root(), ROTATION_BLOCK_NUMBER, TX_HASH,),
 			Error::<MockRuntime, _>::NoActiveRotation
 		);
 
@@ -678,19 +673,13 @@ fn vault_key_rotated() {
 
 		assert_ok!(VaultsPallet::vault_key_rotated(
 			RuntimeOrigin::root(),
-			NEW_AGG_PUB_KEY,
 			ROTATION_BLOCK_NUMBER,
 			TX_HASH,
 		));
 
 		// Can't repeat.
 		assert_noop!(
-			VaultsPallet::vault_key_rotated(
-				RuntimeOrigin::root(),
-				NEW_AGG_PUB_KEY,
-				ROTATION_BLOCK_NUMBER,
-				TX_HASH,
-			),
+			VaultsPallet::vault_key_rotated(RuntimeOrigin::root(), ROTATION_BLOCK_NUMBER, TX_HASH,),
 			Error::<MockRuntime, _>::InvalidRotationStatus
 		);
 

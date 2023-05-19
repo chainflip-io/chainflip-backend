@@ -14,6 +14,7 @@ use sp_runtime::RuntimeDebug;
 pub struct BatchTransfer {
 	/// The handler for creating and signing polkadot extrinsics
 	pub bitcoin_transaction: BitcoinTransaction,
+	pub agg_key: AggKey,
 }
 
 impl BatchTransfer {
@@ -28,6 +29,7 @@ impl BatchTransfer {
 				input_utxos,
 				outputs,
 			),
+			agg_key: *agg_key,
 		}
 	}
 }
@@ -48,5 +50,9 @@ impl ApiCall<Bitcoin> for BatchTransfer {
 
 	fn is_signed(&self) -> bool {
 		self.bitcoin_transaction.is_signed()
+	}
+
+	fn transaction_out_id(&self) -> <Bitcoin as ChainCrypto>::TransactionOutId {
+		self.bitcoin_transaction.txid()
 	}
 }

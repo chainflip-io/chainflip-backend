@@ -1,15 +1,16 @@
 use crate::{
 	mock::*, AwaitingBroadcast, BroadcastAttemptCount, BroadcastAttemptId, BroadcastId,
 	BroadcastRetryQueue, Error, Event as BroadcastEvent, FailedBroadcasters, Instance1,
-	PalletOffence, RequestCallbacks, SignatureToBroadcastIdLookup, ThresholdSignatureData,
-	TransactionFeeDeficit, WeightInfo,
+	PalletOffence, RequestCallbacks, ThresholdSignatureData, TransactionFeeDeficit,
+	TransactionOutIdToBroadcastId, WeightInfo,
 };
 use cf_chains::{
+	eth::SchnorrVerificationComponents,
 	mocks::{
 		MockApiCall, MockEthereum, MockThresholdSignature, MockTransaction, MockTransactionBuilder,
 		ETH_TX_FEE,
 	},
-	FeeRefundCalculator,
+	ChainCrypto, FeeRefundCalculator,
 };
 use cf_traits::{
 	mocks::{signer_nomination::MockNominator, threshold_signer::MockThresholdSigner},
@@ -33,6 +34,8 @@ thread_local! {
 // When calling on_idle, we should broadcast everything with this excess weight.
 const LARGE_EXCESS_WEIGHT: Weight = Weight::from_ref_time(20_000_000_000);
 
+const MOCK_TRANSACTION_OUT_ID: [u8; 4] = [0xbc; 4];
+
 struct MockCfe;
 
 impl MockCfe {
@@ -51,6 +54,7 @@ impl MockCfe {
 					broadcast_attempt_id,
 					nominee,
 					transaction_payload: _,
+					transaction_out_id: _,
 				} => {
 					match scenario {
 						Scenario::SigningFailure => {
@@ -97,8 +101,7 @@ impl MockCfe {
 					// Informational only. No action required by the CFE.
 				},
 				BroadcastEvent::__Ignore(_, _) => unreachable!(),
-				BroadcastEvent::ThresholdSignatureInvalid { .. } => {},
-				BroadcastEvent::BroadcastCallbackExecuted { .. } => {},
+				_ => {},
 			},
 			_ => panic!("Unexpected event"),
 		};
@@ -107,29 +110,34 @@ impl MockCfe {
 
 fn assert_broadcast_storage_cleaned_up(broadcast_id: BroadcastId) {
 	assert!(
-		SignatureToBroadcastIdLookup::<Test, Instance1>::get(MockThresholdSignature::default())
-			.is_none()
+		TransactionOutIdToBroadcastId::<Test, Instance1>::get(MOCK_TRANSACTION_OUT_ID).is_none()
 	);
 	assert!(FailedBroadcasters::<Test, Instance1>::get(broadcast_id).is_none());
 	assert_eq!(BroadcastAttemptCount::<Test, Instance1>::get(broadcast_id), 0);
 	assert!(ThresholdSignatureData::<Test, Instance1>::get(broadcast_id).is_none());
 }
 
-fn start_mock_broadcast() -> BroadcastAttemptId {
+fn start_mock_broadcast_tx_out_id(
+	tx_out_id: <MockEthereum as ChainCrypto>::TransactionOutId,
+) -> BroadcastAttemptId {
 	Broadcaster::start_broadcast(
 		&MockThresholdSignature::default(),
 		MockTransaction,
-		MockApiCall::default(),
+		MockApiCall { tx_out_id, ..Default::default() },
 		MockApiCall::<MockEthereum>::default().payload,
 		1,
 	)
 }
 
+fn start_mock_broadcast() -> BroadcastAttemptId {
+	start_mock_broadcast_tx_out_id(Default::default())
+}
+
 // The happy path :)
 #[test]
-fn signature_accepted_results_in_refund_for_signer() {
+fn transaction_succeeded_results_in_refund_for_signer() {
 	new_test_ext().execute_with(|| {
-		let broadcast_attempt_id = start_mock_broadcast();
+		let broadcast_attempt_id = start_mock_broadcast_tx_out_id(MOCK_TRANSACTION_OUT_ID);
 		let tx_sig_request =
 			AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).unwrap();
 
@@ -137,9 +145,10 @@ fn signature_accepted_results_in_refund_for_signer() {
 
 		assert_eq!(TransactionFeeDeficit::<Test, Instance1>::get(nominee), 0);
 
-		assert_ok!(Broadcaster::signature_accepted(
+		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
-			MockThresholdSignature::default(),
+			2u32.into(),
+			MOCK_TRANSACTION_OUT_ID,
 			nominee,
 			ETH_TX_FEE,
 		));
@@ -265,15 +274,16 @@ fn test_invalid_id_is_noop() {
 }
 
 #[test]
-fn test_invalid_sigdata_is_noop() {
+fn test_sigdata_with_no_match_is_noop() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			Broadcaster::signature_accepted(
+			Broadcaster::transaction_succeeded(
 				RawOrigin::Signed(
 					*<Test as Chainflip>::EpochInfo::current_authorities().first().unwrap()
 				)
 				.into(),
-				MockThresholdSignature::default(),
+				2u32.into(),
+				MOCK_TRANSACTION_OUT_ID,
 				Default::default(),
 				ETH_TX_FEE,
 			),
@@ -285,9 +295,9 @@ fn test_invalid_sigdata_is_noop() {
 // the nodes who failed to broadcast should be report if we succeed, since success
 // indicates the failed nodes could have succeeded themselves.
 #[test]
-fn signature_accepted_after_timeout_reports_failed_nodes() {
+fn transaction_succeeded_after_timeout_reports_failed_nodes() {
 	new_test_ext().execute_with(|| {
-		start_mock_broadcast();
+		start_mock_broadcast_tx_out_id(MOCK_TRANSACTION_OUT_ID);
 
 		let mut failed_authorities = vec![];
 		// The last node succeeds
@@ -301,9 +311,10 @@ fn signature_accepted_after_timeout_reports_failed_nodes() {
 			Broadcaster::on_initialize(0);
 		}
 
-		assert_ok!(Broadcaster::signature_accepted(
+		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
-			MockThresholdSignature::default(),
+			2u32.into(),
+			MOCK_TRANSACTION_OUT_ID,
 			Default::default(),
 			ETH_TX_FEE,
 		));
@@ -424,8 +435,7 @@ fn threshold_signature_rerequested(broadcast_attempt_id: BroadcastAttemptId) {
 	assert!(AwaitingBroadcast::<Test, Instance1>::get(broadcast_attempt_id).is_none());
 	// Verify storage has been deleted
 	assert!(
-		SignatureToBroadcastIdLookup::<Test, Instance1>::get(MockThresholdSignature::default())
-			.is_none()
+		TransactionOutIdToBroadcastId::<Test, Instance1>::get(MOCK_TRANSACTION_OUT_ID).is_none()
 	);
 	assert_eq!(BroadcastAttemptCount::<Test, Instance1>::get(broadcast_attempt_id.broadcast_id), 0);
 	assert!(
@@ -485,30 +495,93 @@ fn re_request_threshold_signature_on_invalid_tx_params() {
 	});
 }
 
+pub const ETH_DUMMY_SIG: SchnorrVerificationComponents =
+	SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
+
 #[test]
 fn threshold_sign_and_broadcast_with_callback() {
 	new_test_ext().execute_with(|| {
-		Broadcaster::threshold_sign_and_broadcast(MockApiCall::default(), Some(MockCallback));
-		let broadcast_attempt_id = start_mock_broadcast();
-		assert_eq!(RequestCallbacks::<Test, Instance1>::get(1), Some(MockCallback));
-		assert_ok!(Broadcaster::signature_accepted(
+		let api_call = MockApiCall {
+			payload: Default::default(),
+			sig: Default::default(),
+			tx_out_id: MOCK_TRANSACTION_OUT_ID,
+		};
+
+		let (broadcast_id, _threshold_request_id) =
+			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), Some(MockCallback), false);
+
+		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+
+		assert_eq!(RequestCallbacks::<Test, Instance1>::get(broadcast_id), Some(MockCallback));
+		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
-			MockThresholdSignature::default(),
+			2u32.into(),
+			MOCK_TRANSACTION_OUT_ID,
 			Default::default(),
 			ETH_TX_FEE,
 		));
-		assert!(RequestCallbacks::<Test, Instance1>::get(1).is_none());
+		assert!(RequestCallbacks::<Test, Instance1>::get(broadcast_id).is_none());
 		let mut events = System::events();
 		assert_eq!(
 			events.pop().expect("an event").event,
 			RuntimeEvent::Broadcaster(crate::Event::BroadcastSuccess {
-				broadcast_id: broadcast_attempt_id.broadcast_id
+				broadcast_id,
+				transaction_out_id: api_call.tx_out_id
 			})
 		);
 		assert_eq!(
 			events.pop().expect("an event").event,
 			RuntimeEvent::Broadcaster(crate::Event::BroadcastCallbackExecuted {
-				broadcast_id: broadcast_attempt_id.broadcast_id,
+				broadcast_id,
+				result: Ok(())
+			})
+		);
+	});
+}
+
+#[test]
+fn threshold_sign_and_broadcast_with_rotation_callback() {
+	new_test_ext().execute_with(|| {
+		// Bitcoin has a rotation callback.
+		MockRotationCallbackProvider::set_callback(Some(MockCallback));
+		assert!(!MockCallback::was_called());
+		let api_call = MockApiCall {
+			payload: Default::default(),
+			sig: Default::default(),
+			tx_out_id: MOCK_TRANSACTION_OUT_ID,
+		};
+
+		let (broadcast_id, _threshold_request_id) =
+			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), None, true);
+
+		// Rotation callbacks are not the same as normal request callbacks, there are not stored in
+		// storage.
+		assert!(RequestCallbacks::<Test, Instance1>::get(broadcast_id).is_none());
+
+		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
+		assert_ok!(Broadcaster::transaction_succeeded(
+			RuntimeOrigin::root(),
+			2u32.into(),
+			MOCK_TRANSACTION_OUT_ID,
+			Default::default(),
+			ETH_TX_FEE,
+		));
+
+		// We should have called the rotation callback.
+		assert!(MockCallback::was_called());
+
+		let mut events = System::events();
+		assert_eq!(
+			events.pop().expect("an event").event,
+			RuntimeEvent::Broadcaster(crate::Event::BroadcastSuccess {
+				broadcast_id,
+				transaction_out_id: api_call.tx_out_id
+			})
+		);
+		assert_eq!(
+			events.pop().expect("an event").event,
+			RuntimeEvent::Broadcaster(crate::Event::RotationCallbackExecuted {
+				broadcast_id,
 				result: Ok(())
 			})
 		);

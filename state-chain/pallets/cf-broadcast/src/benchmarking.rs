@@ -27,6 +27,7 @@ fn insert_transaction_broadcast_attempt<T: pallet::Config<I>, I: 'static>(
 				broadcast_attempt_id,
 				transaction_payload: TransactionFor::<T, I>::benchmark_value(),
 				threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
+				transaction_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
 			},
 			nominee,
 		},
@@ -102,10 +103,12 @@ benchmarks_instance_pallet! {
 		assert!(Timeouts::<T, I>::contains_key(timeout_block));
 	}
 	start_next_broadcast_attempt {
+		let api_call = ApiCallFor::<T, I>::benchmark_value();
+		let signed_api_call = api_call.signed(&BenchmarkValue::benchmark_value());
 		let broadcast_attempt_id = Pallet::<T, I>::start_broadcast(
 			&BenchmarkValue::benchmark_value(),
 			BenchmarkValue::benchmark_value(),
-			BenchmarkValue::benchmark_value(),
+			signed_api_call,
 			BenchmarkValue::benchmark_value(),
 			1
 		);
@@ -118,23 +121,25 @@ benchmarks_instance_pallet! {
 			broadcast_attempt_id,
 			transaction_payload,
 			threshold_signature_payload: PayloadFor::<T, I>::benchmark_value(),
+			transaction_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
 		})
 	}
 	verify {
 		assert!(AwaitingBroadcast::<T, I>::contains_key(broadcast_attempt_id.next_attempt()));
 	}
-	signature_accepted {
+	transaction_succeeded {
 		let caller: T::AccountId = whitelisted_caller();
 		let signer_id = SignerIdFor::<T, I>::benchmark_value();
-		SignatureToBroadcastIdLookup::<T, I>::insert(ThresholdSignatureFor::<T, I>::benchmark_value(), 1);
+		TransactionOutIdToBroadcastId::<T, I>::insert(TransactionOutIdFor::<T, I>::benchmark_value(), 1);
 
 		let broadcast_attempt_id = BroadcastAttemptId {
 			broadcast_id: 1,
 			attempt_count: 0
 		};
 		insert_transaction_broadcast_attempt::<T, I>(whitelisted_caller(), broadcast_attempt_id);
-		let call = Call::<T, I>::signature_accepted{
-			signature: ThresholdSignatureFor::<T, I>::benchmark_value(),
+		let call = Call::<T, I>::transaction_succeeded{
+			tx_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
+			block_number: 2_u32.into(),
 			signer_id,
 			tx_fee: TransactionFeeFor::<T, I>::benchmark_value(),
 		};
@@ -143,6 +148,6 @@ benchmarks_instance_pallet! {
 	} : { call.dispatch_bypass_filter(T::EnsureWitnessedAtCurrentEpoch::successful_origin())? }
 	verify {
 		// We expect the unwrap to error if the extrinsic didn't fire an event - if an event has been emitted we reached the end of the extrinsic
-		let _ = frame_system::Pallet::<T>::events().pop().expect("No event has been emitted from the signature_accepted extrinsic").event;
+		let _ = frame_system::Pallet::<T>::events().pop().expect("No event has been emitted from the transaction_succeeded extrinsic").event;
 	}
 }

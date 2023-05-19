@@ -267,7 +267,6 @@ impl Engine {
 								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
 									RuntimeOrigin::signed(self.node_id.clone()),
 									Box::new(pallet_cf_vaults::Call::<_, EthereumInstance>::vault_key_rotated {
-										new_public_key: self.eth_threshold_signer.borrow_mut().proposed_public_key(),
 										block_number: 100,
 										tx_id: [1u8; 32].into(),
 									}.into()),
@@ -278,7 +277,6 @@ impl Engine {
 								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
 									RuntimeOrigin::signed(self.node_id.clone()),
 									Box::new(pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
-										new_public_key: self.dot_threshold_signer.borrow_mut().proposed_public_key(),
 										block_number: 100,
 										tx_id: TxId {
 											block_number: 2,
@@ -292,7 +290,6 @@ impl Engine {
 								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
 									RuntimeOrigin::signed(self.node_id.clone()),
 									Box::new(pallet_cf_vaults::Call::<_, BitcoinInstance>::vault_key_rotated {
-										new_public_key: self.btc_threshold_signer.borrow_mut().proposed_public_key(),
 										block_number: 100,
 										tx_id: UtxoId {
 											tx_hash: [2u8; 32],

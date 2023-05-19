@@ -139,7 +139,11 @@ pub trait ChainCrypto: Chain {
 	/// Must uniquely identify a transaction. On most chains this will be a transaction hash.
 	/// However, for example, in the case of Polkadot, the blocknumber-extrinsic-index is the unique
 	/// identifier.
-	type TransactionId: Member + Parameter + BenchmarkValue;
+	type TransactionInId: Member + Parameter + BenchmarkValue;
+
+	/// Uniquely identifies a transaction on the outoing direction.
+	type TransactionOutId: Member + Parameter + BenchmarkValue;
+
 	type GovKey: Member + Parameter + Copy + BenchmarkValue;
 
 	fn verify_threshold_signature(
@@ -180,6 +184,9 @@ pub trait ApiCall<Abi: ChainAbi>: Parameter {
 
 	/// Checks we have updated the sig data to non-default values.
 	fn is_signed(&self) -> bool;
+
+	/// Generates an identifier for the output of the transaction.
+	fn transaction_out_id(&self) -> <Abi as ChainCrypto>::TransactionOutId;
 }
 
 /// Responsible for converting an api call into a raw unsigned transaction.

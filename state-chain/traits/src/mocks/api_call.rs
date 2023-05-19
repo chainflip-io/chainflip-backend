@@ -48,6 +48,10 @@ impl ApiCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 	fn is_signed(&self) -> bool {
 		unimplemented!()
 	}
+
+	fn transaction_out_id(&self) -> <Ethereum as ChainCrypto>::TransactionOutId {
+		unimplemented!()
+	}
 }
 
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Default, Eq, Encode, Decode, TypeInfo)]

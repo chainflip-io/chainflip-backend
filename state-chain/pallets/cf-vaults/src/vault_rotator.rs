@@ -137,7 +137,9 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				) {
 					Ok(rotation_call) => {
 						let (_, threshold_request_id) =
-							T::Broadcaster::threshold_sign_and_broadcast(rotation_call);
+							T::Broadcaster::threshold_sign_and_broadcast_for_rotation(
+								rotation_call,
+							);
 						debug_assert!(
 							matches!(key_state, KeyState::Unlocked),
 							"Current epoch key must be active to activate next key."

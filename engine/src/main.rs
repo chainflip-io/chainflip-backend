@@ -18,7 +18,7 @@ use chainflip_engine::{
 			storage_api::StorageApi,
 		},
 	},
-	witnesser::AddressMonitor,
+	witnesser::ItemMonitor,
 };
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 use utilities::task_scope::task_scope;
@@ -185,7 +185,7 @@ async fn main() -> anyhow::Result<()> {
 			.await
 			.unwrap();
 
-			let btc_monitor_command_sender = btc::witnessing::start(
+			let (btc_monitor_command_sender, btc_tx_hash_sender) = btc::witnessing::start(
 				scope,
 				state_chain_client.clone(),
 				&settings.btc,
@@ -196,7 +196,7 @@ async fn main() -> anyhow::Result<()> {
 			.await
 			.unwrap();
 
-			let (dot_monitor_command_sender, dot_address_monitor) = AddressMonitor::new(
+			let (dot_monitor_command_sender, dot_address_monitor) = ItemMonitor::new(
 				state_chain_client
 					.storage_map::<pallet_cf_ingress_egress::DepositAddressDetailsLookup<
 						state_chain_runtime::Runtime,
@@ -240,6 +240,7 @@ async fn main() -> anyhow::Result<()> {
 				dot_monitor_signature_sender,
 				btc_epoch_start_sender,
 				btc_monitor_command_sender,
+				btc_tx_hash_sender,
 				cfe_settings_update_sender,
 			));
 
@@ -252,7 +253,7 @@ async fn main() -> anyhow::Result<()> {
 					// NB: We don't need to monitor Ethereum signatures because we already monitor
 					// signature accepted events from the KeyManager contract on Ethereum.
 					state_chain_client
-						.storage_map::<pallet_cf_broadcast::SignatureToBroadcastIdLookup<
+						.storage_map::<pallet_cf_broadcast::TransactionOutIdToBroadcastId<
 							state_chain_runtime::Runtime,
 							state_chain_runtime::PolkadotInstance,
 						>>(state_chain_stream.cache().block_hash)

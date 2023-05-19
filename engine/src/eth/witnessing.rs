@@ -16,7 +16,7 @@ use crate::{
 	eth::deposit_witnesser::DepositWitnesser,
 	settings,
 	state_chain_observer::{client::StateChainClient, EthAddressToMonitorSender},
-	witnesser::{AddressMonitor, EpochStart},
+	witnesser::{EpochStart, ItemMonitor},
 };
 use utilities::task_scope::Scope;
 
@@ -136,11 +136,11 @@ pub async fn start(
 	let flip_addresses =
 		monitored_addresses_from_all_eth(&eth_chain_deposit_addresses, assets::eth::Asset::Flip);
 
-	let (eth_monitor_command_sender, eth_address_monitor) = AddressMonitor::new(eth_addresses);
+	let (eth_monitor_command_sender, eth_address_monitor) = ItemMonitor::new(eth_addresses);
 
-	let (usdc_monitor_command_sender, usdc_address_monitor) = AddressMonitor::new(usdc_addresses);
+	let (usdc_monitor_command_sender, usdc_address_monitor) = ItemMonitor::new(usdc_addresses);
 
-	let (flip_monitor_command_sender, flip_address_monitor) = AddressMonitor::new(flip_addresses);
+	let (flip_monitor_command_sender, flip_address_monitor) = ItemMonitor::new(flip_addresses);
 
 	let epoch_start_receiver = Arc::new(Mutex::new(epoch_start_receiver));
 	let eth_address_monitor = Arc::new(Mutex::new(eth_address_monitor));
