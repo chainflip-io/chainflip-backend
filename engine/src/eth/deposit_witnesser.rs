@@ -53,7 +53,7 @@ fn check_for_deposits_updating_cache(
 	let txs_from_cache = block_cache.iter().flatten().filter_map(|tx| {
 		let to_addr = core_h160(tx.to?);
 
-		new_addresses.contains(&to_addr).then(|| (tx, to_addr))
+		new_addresses.contains(&to_addr).then_some((tx, to_addr))
 	});
 
 	let txs_from_new_block = transactions_in_current_block.iter().filter_map(|tx| {
@@ -147,7 +147,7 @@ mod tests {
 			block_number: None,
 			transaction_index: Some(U64::from(0)),
 			from: Some(web3_h160(create_address())),
-			to: Some(web3_h160(to.clone())),
+			to: Some(web3_h160(*to)),
 			value: 2000000.into(),
 			gas_price: None,
 			gas: 1000000.into(),
@@ -187,7 +187,7 @@ mod tests {
 				&mut address_monitor,
 			);
 
-			assert_eq!(deposits.iter().next().unwrap().deposit_address, address1);
+			assert_eq!(deposits.first().unwrap().deposit_address, address1);
 		}
 
 		// Address 2 is received after the block mentioning it, but we should still
@@ -200,7 +200,7 @@ mod tests {
 				check_for_deposits_updating_cache(vec![], &mut block_cache, &mut address_monitor);
 
 			assert_eq!(deposits.len(), 1);
-			assert_eq!(deposits.iter().next().unwrap().deposit_address, address2);
+			assert_eq!(deposits.first().unwrap().deposit_address, address2);
 		}
 
 		// Both addresses have been witnessed, so no duplicate witnesses
