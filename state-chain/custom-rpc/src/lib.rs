@@ -164,7 +164,7 @@ pub trait CustomApi {
 		&self,
 		from: Asset,
 		to: Asset,
-		amount: AssetAmount,
+		amount: String,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<SwapOutput>;
 }
@@ -451,9 +451,15 @@ where
 		&self,
 		from: Asset,
 		to: Asset,
-		amount: AssetAmount,
+		amount: String,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<SwapOutput> {
+		let amount = if amount.starts_with("0x") {
+			U256::from_str_radix(&amount, 16).map_err(to_rpc_error)?
+		} else {
+			U256::from_dec_str(&amount).map_err(to_rpc_error)?
+		};
+
 		self.client
 			.runtime_api()
 			.cf_pool_simulate_swap(&self.query_block_id(at), from, to, amount)
