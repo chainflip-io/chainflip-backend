@@ -4,7 +4,6 @@ use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
 use sc_client_api::HeaderBackend;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use sp_api::BlockT;
 use sp_rpc::number::NumberOrHex;
 use sp_runtime::AccountId32;
@@ -59,6 +58,12 @@ pub struct RpcAuctionState {
 	redemption_period_as_percentage: u8,
 	min_funding: NumberOrHex,
 	auction_size_range: (u32, u32),
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SwapRate {
+	pub intermediate: Option<String>,
+	pub destination: String,
 }
 
 #[rpc(server, client, namespace = "cf")]
@@ -167,7 +172,7 @@ pub trait CustomApi {
 		to: Asset,
 		amount: String,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<SwapOutput>;
+	) -> RpcResult<SwapRate>;
 }
 
 /// An RPC extension for the state chain node.
@@ -454,24 +459,24 @@ where
 		to: Asset,
 		amount: String,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<SwapOutput> {
-		let amount = if amount.starts_with("0x") {
-			U256::from_str_radix(&amount, 16).map_err(to_rpc_error)?
+	) -> RpcResult<SwapRate> {
+		let amount: AssetAmount = if amount.starts_with("0x") {
+			AssetAmount::from_str_radix(&amount, 16).map_err(to_rpc_error)?
 		} else {
-			U256::from_dec_str(&amount).map_err(to_rpc_error)?
+			amount.parse().map_err(to_rpc_error)?
 		};
 
 		self.client
 			.runtime_api()
 			.cf_pool_simulate_swap(&self.query_block_id(at), from, to, amount)
-			.map(|SwapOutput { intermediary, output }| {
-				let intermediary = intermediary.map(|i| i.to_string());
-				let output = output.to_string();
-				json!({ "intermediary": intermediary, "output": output }).to_string()
-			})
 			.map_err(to_rpc_error)
 			.and_then(|r| {
 				r.map_err(|e| jsonrpsee::core::Error::Custom(<&'static str>::from(e).into()))
+			})
+			.map(|SwapOutput { intermediary, output }| {
+				let intermediate = intermediary.map(|i| i.to_string());
+				let destination = output.to_string();
+				SwapRate { intermediate, destination }
 			})
 	}
 }
