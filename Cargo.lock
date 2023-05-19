@@ -1764,6 +1764,7 @@ dependencies = [
  "pallet-cf-governance",
  "sc-client-api",
  "serde",
+ "serde_json",
  "sp-api",
  "sp-rpc",
  "sp-runtime 7.0.0",

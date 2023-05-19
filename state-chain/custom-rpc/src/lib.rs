@@ -4,6 +4,7 @@ use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
 use sc_client_api::HeaderBackend;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sp_api::BlockT;
 use sp_rpc::number::NumberOrHex;
 use sp_runtime::AccountId32;
@@ -463,6 +464,11 @@ where
 		self.client
 			.runtime_api()
 			.cf_pool_simulate_swap(&self.query_block_id(at), from, to, amount)
+			.map(|SwapOutput { intermediary, output }| {
+				let intermediary = intermediary.map(|i| i.to_string());
+				let output = output.to_string();
+				json!({ "intermediary": intermediary, "output": output }).to_string()
+			})
 			.map_err(to_rpc_error)
 			.and_then(|r| {
 				r.map_err(|e| jsonrpsee::core::Error::Custom(<&'static str>::from(e).into()))
