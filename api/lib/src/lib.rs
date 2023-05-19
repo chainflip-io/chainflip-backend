@@ -377,7 +377,7 @@ pub async fn request_swap_deposit_address(
 			)
 		)
 	}) {
-		Ok(((*deposit_address).clone(), (*expiry_block).into()))
+		Ok(((*deposit_address).clone(), *expiry_block))
 	} else {
 		panic!("SwapDepositAddressReady must have been generated");
 	}
