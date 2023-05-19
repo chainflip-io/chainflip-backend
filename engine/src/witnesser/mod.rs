@@ -114,12 +114,16 @@ impl<
 		self.addresses.contains_key(address)
 	}
 
-	/// Ensure the list of interesting addresses is up to date
-	pub fn sync_addresses(&mut self) {
+	/// Ensure the list of interesting addresses is up to date,
+	/// returning the addresses that were just added.
+	pub fn sync_addresses(&mut self) -> BTreeSet<K> {
+		let mut new_addresses = BTreeSet::new();
+
 		while let Ok(address) = self.address_receiver.try_recv() {
 			match address {
 				AddressMonitorCommand::Add(address) => {
 					let (k, v) = address.key_value();
+					new_addresses.insert(k.clone());
 					if self.addresses.insert(k, v).is_some() {
 						tracing::warn!("Address {:?} already being monitored", address);
 					}
@@ -130,6 +134,8 @@ impl<
 					},
 			}
 		}
+
+		new_addresses
 	}
 }
 

@@ -8,6 +8,7 @@ use std::path::PathBuf;
 pub use tokio::select as internal_tokio_select;
 use warp::{Filter, Reply};
 
+pub mod ring_buffer;
 pub mod task_scope;
 
 pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN], &'static str> {
