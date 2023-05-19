@@ -3,7 +3,7 @@ use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
 	CcmDepositMetadata,
 };
-use cf_primitives::{Asset, AssetAmount, ChannelId, ForeignChain};
+use cf_primitives::{Asset, AssetAmount, ChannelId, ForeignChain, STABLE_ASSET};
 use cf_traits::{liquidity::SwappingApi, CcmHandler, DepositApi, SystemStateInfo};
 use frame_support::{
 	pallet_prelude::*,
@@ -44,6 +44,32 @@ pub struct Swap {
 	pub to: Asset,
 	pub amount: AssetAmount,
 	pub swap_type: SwapType,
+	pub stable_amount: Option<AssetAmount>,
+}
+
+impl Swap {
+	fn new(swap_id: u64, from: Asset, to: Asset, amount: AssetAmount, swap_type: SwapType) -> Self {
+		Self {
+			swap_id,
+			from,
+			to,
+			amount,
+			swap_type,
+			stable_amount: if from == STABLE_ASSET { Some(amount) } else { None },
+		}
+	}
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum SwapDirection {
+	IntoStable,
+	FromStable,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CcmSwapLeg {
+	Principal,
+	Gas,
 }
 
 pub type TransactionHash = [u8; 32];
@@ -203,7 +229,7 @@ pub mod pallet {
 			tx_hash: TransactionHash,
 		},
 		/// A swap has been executed.
-		SwapExecuted {
+		SwapCompleted {
 			swap_id: u64,
 		},
 		/// A swap egress has been scheduled.
@@ -220,7 +246,8 @@ pub mod pallet {
 			egress_id: EgressId,
 		},
 		BatchSwapFailed {
-			asset_pair: (Asset, Asset),
+			asset: Asset,
+			direction: SwapDirection,
 		},
 		CcmEgressScheduled {
 			ccm_id: u64,
@@ -304,28 +331,48 @@ pub mod pallet {
 			let swaps = SwapQueue::<T>::take();
 			let mut used_weight = T::DbWeight::get().reads(1);
 
-			let swap_groups = Self::group_swaps_by_asset_pair(swaps);
-			let mut unexecuted = vec![];
+			// Helper function that splits swaps of a given direction, group them by asset and do
+			// the swaps, then return the remaining swaps in a Vec.
+			let mut do_group_and_swap = |swaps: Vec<Swap>, direction: SwapDirection| -> Vec<Swap> {
+				let (swap_groups, mut remaining) = Self::split_and_group_swaps(swaps, direction);
 
-			for (asset_pair, swaps) in swap_groups {
-				let swap_group_weight = T::WeightInfo::execute_group_of_swaps(swaps.len() as u32);
-				if used_weight.saturating_add(swap_group_weight).all_gt(available_weight) {
-					// Add un-excecuted swaps back to storage
-					unexecuted.extend(swaps)
-				} else {
-					// Execute the swaps and add the weights.
-					used_weight.saturating_accrue(swap_group_weight);
-					if Self::execute_group_of_swaps(&swaps[..], asset_pair.0, asset_pair.1).is_err()
-					{
-						// If the swaps failed to execute, add them back into the queue.
-						Self::deposit_event(Event::<T>::BatchSwapFailed { asset_pair });
-						unexecuted.extend(swaps)
+				for (asset, swaps) in swap_groups {
+					let swap_group_weight = match direction {
+						SwapDirection::IntoStable =>
+							T::WeightInfo::execute_group_of_swaps_into_stable(swaps.len() as u32),
+						SwapDirection::FromStable =>
+							T::WeightInfo::execute_group_of_swaps_from_stable(swaps.len() as u32),
+					};
+					if used_weight.saturating_add(swap_group_weight).all_gt(available_weight) {
+						// Add un-excecuted swaps back to storage
+						remaining.extend(swaps);
+					} else {
+						// Execute the swaps and add the weights.
+						used_weight.saturating_accrue(swap_group_weight);
+						match Self::execute_group_of_swaps(&swaps[..], asset, direction) {
+							Ok(swap_to_execute) => remaining.extend(swap_to_execute),
+							Err(_) => {
+								// If the swaps failed to execute, add them back into the queue.
+								Self::deposit_event(Event::<T>::BatchSwapFailed {
+									asset,
+									direction,
+								});
+								remaining.extend(swaps);
+							},
+						}
 					}
 				}
-			}
+				remaining
+			};
 
-			if !unexecuted.is_empty() {
-				SwapQueue::<T>::put(unexecuted);
+			// Swap into Stable asset first.
+			let remaining_swaps = do_group_and_swap(swaps, SwapDirection::IntoStable);
+
+			// Then Swap into Output asset
+			let remaining_swaps = do_group_and_swap(remaining_swaps, SwapDirection::FromStable);
+
+			if !remaining_swaps.is_empty() {
+				SwapQueue::<T>::put(remaining_swaps);
 				used_weight.saturating_accrue(T::DbWeight::get().writes(1));
 			}
 			used_weight
@@ -588,7 +635,16 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
-		pub fn execute_group_of_swaps(swaps: &[Swap], from: Asset, to: Asset) -> DispatchResult {
+		/// Bundle the given swaps and do a single swap of a given direction.
+		/// Return the remaining swaps as a vec.
+		pub fn execute_group_of_swaps(
+			swaps: &[Swap],
+			asset: Asset,
+			direction: SwapDirection,
+		) -> Result<Vec<Swap>, DispatchError> {
+			// Stable -> stable swap should never be called.
+			debug_assert_ne!(asset, STABLE_ASSET);
+			let mut remaining_swaps = vec![];
 			debug_assert!(
 				!swaps.is_empty(),
 				"The implementation of grouped_swaps ensures that the swap groups are non-empty."
@@ -596,17 +652,29 @@ pub mod pallet {
 
 			let bundle_input: AssetAmount = swaps
 				.iter()
-				.map(|swap| {
-					debug_assert_eq!((swap.from, swap.to), (from, to));
-					swap.amount
+				.map(|swap| match direction {
+					SwapDirection::IntoStable => {
+						debug_assert_eq!(swap.from, asset);
+						swap.amount
+					},
+					SwapDirection::FromStable => {
+						debug_assert_eq!(swap.to, asset);
+						debug_assert!(swap.stable_amount.is_some());
+						swap.stable_amount.unwrap_or_default()
+					},
 				})
 				.sum();
 
 			debug_assert!(bundle_input > 0, "Swap input of zero is invalid.");
 
-			let bundle_output = T::SwappingApi::swap(from, to, bundle_input)?.output;
+			let bundle_output = match direction {
+				SwapDirection::IntoStable =>
+					T::SwappingApi::swap(asset, STABLE_ASSET, bundle_input)?.output,
+				SwapDirection::FromStable =>
+					T::SwappingApi::swap(STABLE_ASSET, asset, bundle_input)?.output,
+			};
+
 			for swap in swaps {
-				Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
 				let swap_output = multiply_by_rational_with_rounding(
 					swap.amount,
 					bundle_output,
@@ -616,58 +684,43 @@ pub mod pallet {
 				.expect("bundle_input >= swap_amount ∴ result can't overflow");
 
 				if swap_output > 0 {
-					match &swap.swap_type {
-						SwapType::Swap(destination_address) => {
-							let egress_id = T::EgressHandler::schedule_egress(
-								swap.to,
-								swap_output,
-								destination_address.clone(),
-								None,
-							);
+					// Assess if the swap is completed.
+					if direction == SwapDirection::IntoStable && swap.to != STABLE_ASSET {
+						// Swap is incomplete, schedule the next swap leg.
+						let mut new_swap = swap.clone();
+						new_swap.stable_amount = Some(swap_output);
+						remaining_swaps.push(new_swap);
+					} else {
+						Self::deposit_event(Event::<T>::SwapCompleted { swap_id: swap.swap_id });
+						// Handle swap completion logic.
+						match &swap.swap_type {
+							SwapType::Swap(destination_address) => {
+								let egress_id = T::EgressHandler::schedule_egress(
+									swap.to,
+									swap_output,
+									destination_address.clone(),
+									None,
+								);
 
-							Self::deposit_event(Event::<T>::SwapEgressScheduled {
-								swap_id: swap.swap_id,
-								egress_id,
-								asset: to,
-								amount: swap_output,
-							});
-						},
-						SwapType::CcmPrincipal(ccm_id) => {
-							CcmOutputs::<T>::mutate_exists(ccm_id, |maybe_ccm_output| {
-								let ccm_output = maybe_ccm_output
-									.as_mut()
-									.expect("CCM that scheduled Swaps must exist in storage");
-								ccm_output.principal = Some(swap_output);
-								if let Some((principal, gas)) = ccm_output.completed_result() {
-									Self::schedule_ccm_egress(
-										*ccm_id,
-										PendingCcms::<T>::take(ccm_id)
-											.expect("Ccm can only be completed once."),
-										(principal, gas),
-									);
-									*maybe_ccm_output = None;
-								}
-							});
-						},
-						SwapType::CcmGas(ccm_id) => {
-							CcmOutputs::<T>::mutate_exists(ccm_id, |maybe_ccm_output| {
-								let ccm_output = maybe_ccm_output
-									.as_mut()
-									.expect("CCM that scheduled Swaps must exist in storage");
-								ccm_output.gas = Some(swap_output);
-								if let Some((principal, gas)) = ccm_output.completed_result() {
-									Self::schedule_ccm_egress(
-										*ccm_id,
-										PendingCcms::<T>::take(ccm_id)
-											.expect("Ccm can only be completed once."),
-										(principal, gas),
-									);
-
-									*maybe_ccm_output = None;
-								}
-							});
-						},
-					};
+								Self::deposit_event(Event::<T>::SwapEgressScheduled {
+									swap_id: swap.swap_id,
+									egress_id,
+									asset: swap.to,
+									amount: swap_output,
+								});
+							},
+							SwapType::CcmPrincipal(ccm_id) => {
+								Self::handle_ccm_swap_result(
+									*ccm_id,
+									swap_output,
+									CcmSwapLeg::Principal,
+								);
+							},
+							SwapType::CcmGas(ccm_id) => {
+								Self::handle_ccm_swap_result(*ccm_id, swap_output, CcmSwapLeg::Gas);
+							},
+						};
+					}
 				} else {
 					// This is unlikely but theoretically possible if, for example, the initial swap
 					// input is so small compared to the total bundle size that it rounds down to
@@ -678,15 +731,48 @@ pub mod pallet {
 					);
 				}
 			}
-			Ok(())
+			Ok(remaining_swaps)
 		}
 
-		fn group_swaps_by_asset_pair(swaps: Vec<Swap>) -> BTreeMap<(Asset, Asset), Vec<Swap>> {
+		fn handle_ccm_swap_result(ccm_id: u64, swap_output: AssetAmount, swap_leg: CcmSwapLeg) {
+			CcmOutputs::<T>::mutate_exists(ccm_id, |maybe_ccm_output| {
+				let ccm_output = maybe_ccm_output
+					.as_mut()
+					.expect("CCM that scheduled Swaps must exist in storage");
+				match swap_leg {
+					CcmSwapLeg::Principal => ccm_output.principal = Some(swap_output),
+					CcmSwapLeg::Gas => ccm_output.gas = Some(swap_output),
+				}
+				if let Some((principal, gas)) = ccm_output.completed_result() {
+					Self::schedule_ccm_egress(
+						ccm_id,
+						PendingCcms::<T>::take(ccm_id).expect("Ccm can only be completed once."),
+						(principal, gas),
+					);
+					*maybe_ccm_output = None;
+				}
+			});
+		}
+
+		/// Split all swaps of a given direction, and group them by asset into a BTreeMap and return
+		/// the rest
+		fn split_and_group_swaps(
+			swaps: Vec<Swap>,
+			direction: SwapDirection,
+		) -> (BTreeMap<Asset, Vec<Swap>>, Vec<Swap>) {
 			let mut grouped_swaps = BTreeMap::new();
+			let mut remaining = vec![];
+
 			for swap in swaps {
-				grouped_swaps.entry((swap.from, swap.to)).or_insert(vec![]).push(swap)
+				if direction == SwapDirection::IntoStable && swap.stable_amount.is_none() {
+					grouped_swaps.entry(swap.from).or_insert(vec![]).push(swap)
+				} else if direction == SwapDirection::FromStable && swap.stable_amount.is_some() {
+					grouped_swaps.entry(swap.to).or_insert(vec![]).push(swap)
+				} else {
+					remaining.push(swap);
+				}
 			}
-			grouped_swaps
+			(grouped_swaps, remaining)
 		}
 
 		fn schedule_swap(from: Asset, to: Asset, amount: AssetAmount, swap_type: SwapType) -> u64 {
@@ -695,7 +781,7 @@ pub mod pallet {
 				*id
 			});
 
-			SwapQueue::<T>::append(Swap { swap_id, from, to, amount, swap_type });
+			SwapQueue::<T>::append(Swap::new(swap_id, from, to, amount, swap_type));
 
 			swap_id
 		}

@@ -3,7 +3,7 @@ use cf_amm::{
 	common::{OneToZero, Side, SideMap, SqrtPriceQ64F96, ZeroToOne},
 	PoolState,
 };
-use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput};
+use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
 use cf_traits::{Chainflip, LpBalanceApi, SwappingApi};
 use frame_support::{pallet_prelude::*, transactional};
 use frame_system::pallet_prelude::OriginFor;
@@ -34,8 +34,6 @@ pub mod pallet {
 	use frame_system::pallet_prelude::BlockNumberFor;
 
 	use super::*;
-
-	pub const STABLE_ASSET: any::Asset = any::Asset::Usdc;
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
 	pub struct Pool<LiquidityProvider> {
