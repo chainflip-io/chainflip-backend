@@ -351,7 +351,7 @@ pub async fn request_swap_deposit_address(
 	destination_address: EncodedAddress,
 	broker_commission_bps: BasisPoints,
 	message_metadata: Option<CcmDepositMetadata>,
-) -> Result<EncodedAddress> {
+) -> Result<(EncodedAddress, u32)> {
 	let events = connect_submit_and_get_events(
 		state_chain_settings,
 		pallet_cf_swapping::Call::request_swap_deposit_address {
@@ -366,7 +366,9 @@ pub async fn request_swap_deposit_address(
 	.await?;
 
 	if let Some(state_chain_runtime::RuntimeEvent::Swapping(
-		pallet_cf_swapping::Event::SwapDepositAddressReady { deposit_address, .. },
+		pallet_cf_swapping::Event::SwapDepositAddressReady {
+			deposit_address, expiry_block, ..
+		},
 	)) = events.iter().find(|event| {
 		matches!(
 			event,
@@ -375,7 +377,7 @@ pub async fn request_swap_deposit_address(
 			)
 		)
 	}) {
-		Ok((*deposit_address).clone())
+		Ok(((*deposit_address).clone(), *expiry_block))
 	} else {
 		panic!("SwapDepositAddressReady must have been generated");
 	}
