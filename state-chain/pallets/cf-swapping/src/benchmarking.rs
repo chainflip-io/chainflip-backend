@@ -9,12 +9,8 @@ use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::OnNewAccount};
 use frame_system::RawOrigin;
 
-fn generate_swaps<T: Config>(amount: u32, asset: Asset, direction: SwapDirection) -> Vec<Swap> {
+fn generate_swaps<T: Config>(amount: u32, from: Asset, to: Asset) -> Vec<Swap> {
 	let mut swaps: Vec<Swap> = vec![];
-	let (from, to) = match direction {
-		SwapDirection::IntoStable => (asset, STABLE_ASSET),
-		SwapDirection::FromStable => (STABLE_ASSET, asset),
-	};
 	for i in 1..amount {
 		swaps.push(Swap::new(
 			i as u64,
@@ -46,20 +42,11 @@ benchmarks! {
 		Pallet::<T>::on_idle(T::BlockNumber::from(1u32), Weight::from_ref_time(1));
 	}
 
-	execute_group_of_swaps_from_stable {
+	execute_group_of_swaps{
 		// Generate swaps
 		let a in 2..150;
 		let direction = SwapDirection::FromStable;
-		let swaps = generate_swaps::<T>(a, Asset::Eth, direction);
-	} : {
-		let _ = Pallet::<T>::execute_group_of_swaps(&swaps[..], Asset::Eth, direction);
-	}
-
-	execute_group_of_swaps_into_stable {
-		// Generate swaps
-		let a in 2..150;
-		let direction = SwapDirection::IntoStable;
-		let swaps = generate_swaps::<T>(a, Asset::Eth, direction);
+		let swaps = generate_swaps::<T>(a, Asset::Usdc, Asset::Eth);
 	} : {
 		let _ = Pallet::<T>::execute_group_of_swaps(&swaps[..], Asset::Eth, direction);
 	}

@@ -337,12 +337,8 @@ pub mod pallet {
 				let (swap_groups, mut remaining) = Self::split_and_group_swaps(swaps, direction);
 
 				for (asset, swaps) in swap_groups {
-					let swap_group_weight = match direction {
-						SwapDirection::IntoStable =>
-							T::WeightInfo::execute_group_of_swaps_into_stable(swaps.len() as u32),
-						SwapDirection::FromStable =>
-							T::WeightInfo::execute_group_of_swaps_from_stable(swaps.len() as u32),
-					};
+					let swap_group_weight =
+						T::WeightInfo::execute_group_of_swaps(swaps.len() as u32);
 					if used_weight.saturating_add(swap_group_weight).any_gt(available_weight) {
 						// Add un-excecuted swaps back to storage
 						remaining.extend(swaps);

@@ -91,11 +91,7 @@ impl WeightInfo for MockWeightInfo {
 		Weight::from_ref_time(100)
 	}
 
-	fn execute_group_of_swaps_into_stable(a: u32) -> Weight {
-		Weight::from_ref_time(100) * a as u64
-	}
-
-	fn execute_group_of_swaps_from_stable(a: u32) -> Weight {
+	fn execute_group_of_swaps(a: u32) -> Weight {
 		Weight::from_ref_time(100) * a as u64
 	}
 

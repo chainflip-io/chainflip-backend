@@ -114,9 +114,9 @@ fn process_all_swaps() {
 		insert_swaps(&swaps);
 		Swapping::on_idle(
 			1,
-			(<() as WeightInfo>::execute_group_of_swaps_from_stable(swaps.len() as u32) +
-				<() as WeightInfo>::execute_group_of_swaps_into_stable(swaps.len() as u32)) *
-				(swaps.len() as u64),
+			<() as WeightInfo>::execute_group_of_swaps(swaps.len() as u32) *
+				(swaps.len() as u64) *
+				2,
 		);
 		assert!(SwapQueue::<Test>::get().is_empty());
 		let mut expected = swaps
@@ -1481,7 +1481,7 @@ fn process_all_into_stable_swaps_first() {
 
 		System::reset_events();
 		// All swaps -> stable are executed
-		Swapping::on_idle(1, MockWeightInfo::execute_group_of_swaps_into_stable(1) * 3);
+		Swapping::on_idle(1, MockWeightInfo::execute_group_of_swaps(1) * 3);
 		assert_eq!(
 			SwapQueue::<Test>::get(),
 			vec![
@@ -1521,7 +1521,7 @@ fn process_all_into_stable_swaps_first() {
 		);
 
 		// Complete the remaining swaps
-		Swapping::on_idle(1, MockWeightInfo::execute_group_of_swaps_from_stable(4));
+		Swapping::on_idle(1, MockWeightInfo::execute_group_of_swaps(4));
 
 		assert!(SwapQueue::<Test>::get().is_empty());
 		assert_event_sequence!(
