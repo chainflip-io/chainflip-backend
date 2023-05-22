@@ -79,6 +79,7 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 				});
 			})
 		});
-		(ForeignChain::Ethereum, 1)
+		let len = Self::get_scheduled_egresses().len();
+		(ForeignChain::Ethereum, len as u64)
 	}
 }

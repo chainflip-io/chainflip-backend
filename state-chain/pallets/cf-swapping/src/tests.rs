@@ -147,7 +147,7 @@ fn number_of_swaps_processed_limited_by_weight() {
 		let swaps = generate_test_swaps();
 		insert_swaps(&swaps);
 		Swapping::on_idle(1, Weight::from_ref_time(0));
-		assert_eq!(SwapQueue::<Test>::get().len(), 0);
+		assert_eq!(SwapQueue::<Test>::get().len(), swaps.len());
 	});
 }
 
@@ -1355,7 +1355,7 @@ fn ccm_without_principal_swaps_are_accepted() {
 			}),
 			RuntimeEvent::Swapping(Event::CcmEgressScheduled {
 				ccm_id: 2,
-				egress_id: (ForeignChain::Ethereum, 1),
+				egress_id: (ForeignChain::Ethereum, 2),
 			})
 		);
 		// No funds are confiscated
@@ -1400,5 +1400,160 @@ fn ccm_with_gas_below_minimum_swap_amount_allowed() {
 		}));
 		// No funds are confiscated
 		assert_eq!(CollectedRejectedFunds::<Test>::get(flip), 0);
+	});
+}
+
+#[test]
+fn process_all_into_stable_swaps_first() {
+	new_test_ext().execute_with(|| {
+		let amount = 1_000_000;
+		let encoded_address = EncodedAddress::Eth(Default::default());
+		let address = ForeignChainAddress::Eth(Default::default());
+		assert_ok!(Swapping::schedule_swap_by_witnesser(
+			RuntimeOrigin::root(),
+			Asset::Flip,
+			Asset::Eth,
+			amount,
+			encoded_address.clone(),
+			Default::default(),
+		));
+		assert_ok!(Swapping::schedule_swap_by_witnesser(
+			RuntimeOrigin::root(),
+			Asset::Btc,
+			Asset::Eth,
+			amount,
+			encoded_address.clone(),
+			Default::default(),
+		));
+		assert_ok!(Swapping::schedule_swap_by_witnesser(
+			RuntimeOrigin::root(),
+			Asset::Dot,
+			Asset::Eth,
+			amount,
+			encoded_address.clone(),
+			Default::default(),
+		));
+		assert_ok!(Swapping::schedule_swap_by_witnesser(
+			RuntimeOrigin::root(),
+			Asset::Usdc,
+			Asset::Eth,
+			amount,
+			encoded_address,
+			Default::default(),
+		));
+		assert_eq!(
+			SwapQueue::<Test>::get(),
+			vec![
+				Swap {
+					swap_id: 1,
+					from: Asset::Flip,
+					to: Asset::Eth,
+					amount,
+					swap_type: SwapType::Swap(address.clone()),
+					stable_amount: None
+				},
+				Swap {
+					swap_id: 2,
+					from: Asset::Btc,
+					to: Asset::Eth,
+					amount,
+					swap_type: SwapType::Swap(address.clone()),
+					stable_amount: None
+				},
+				Swap {
+					swap_id: 3,
+					from: Asset::Dot,
+					to: Asset::Eth,
+					amount,
+					swap_type: SwapType::Swap(address.clone()),
+					stable_amount: None
+				},
+				Swap {
+					swap_id: 4,
+					from: Asset::Usdc,
+					to: Asset::Eth,
+					amount,
+					swap_type: SwapType::Swap(address.clone()),
+					stable_amount: Some(amount)
+				},
+			]
+		);
+
+		System::reset_events();
+		// All swaps -> stable are executed
+		Swapping::on_idle(1, MockWeightInfo::execute_group_of_swaps_into_stable(1) * 3);
+		assert_eq!(
+			SwapQueue::<Test>::get(),
+			vec![
+				Swap {
+					swap_id: 4,
+					from: Asset::Usdc,
+					to: Asset::Eth,
+					amount,
+					swap_type: SwapType::Swap(address.clone()),
+					stable_amount: Some(amount)
+				},
+				Swap {
+					swap_id: 1,
+					from: Asset::Flip,
+					to: Asset::Eth,
+					amount,
+					swap_type: SwapType::Swap(address.clone()),
+					stable_amount: Some(amount)
+				},
+				Swap {
+					swap_id: 3,
+					from: Asset::Dot,
+					to: Asset::Eth,
+					amount,
+					swap_type: SwapType::Swap(address.clone()),
+					stable_amount: Some(amount)
+				},
+				Swap {
+					swap_id: 2,
+					from: Asset::Btc,
+					to: Asset::Eth,
+					amount,
+					swap_type: SwapType::Swap(address),
+					stable_amount: Some(amount)
+				},
+			]
+		);
+
+		// Complete the remaining swaps
+		Swapping::on_idle(1, MockWeightInfo::execute_group_of_swaps_from_stable(4));
+
+		assert!(SwapQueue::<Test>::get().is_empty());
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::Swapping(Event::SwapCompleted { swap_id: 4 }),
+			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
+				swap_id: 4,
+				asset: Asset::Eth,
+				egress_id: (ForeignChain::Ethereum, 1),
+				amount
+			}),
+			RuntimeEvent::Swapping(Event::SwapCompleted { swap_id: 1 }),
+			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
+				swap_id: 1,
+				asset: Asset::Eth,
+				egress_id: (ForeignChain::Ethereum, 2),
+				amount
+			}),
+			RuntimeEvent::Swapping(Event::SwapCompleted { swap_id: 3 }),
+			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
+				swap_id: 3,
+				asset: Asset::Eth,
+				egress_id: (ForeignChain::Ethereum, 3),
+				amount
+			}),
+			RuntimeEvent::Swapping(Event::SwapCompleted { swap_id: 2 }),
+			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
+				swap_id: 2,
+				asset: Asset::Eth,
+				egress_id: (ForeignChain::Ethereum, 4),
+				amount
+			})
+		);
 	});
 }

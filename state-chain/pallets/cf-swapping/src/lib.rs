@@ -343,7 +343,7 @@ pub mod pallet {
 						SwapDirection::FromStable =>
 							T::WeightInfo::execute_group_of_swaps_from_stable(swaps.len() as u32),
 					};
-					if used_weight.saturating_add(swap_group_weight).all_gt(available_weight) {
+					if used_weight.saturating_add(swap_group_weight).any_gt(available_weight) {
 						// Add un-excecuted swaps back to storage
 						remaining.extend(swaps);
 					} else {
