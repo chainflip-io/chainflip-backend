@@ -123,7 +123,7 @@ fn keygen_success_triggers_keygen_verification() {
 
 		VaultsPallet::trigger_keygen_verification(
 			ceremony_id,
-			NEW_AGG_PUB_KEY,
+			NEW_AGG_PUB_KEY_PRE_HANDOVER,
 			btree_candidates,
 			rotation_epoch_index,
 		);
@@ -194,7 +194,7 @@ fn keygen_verification_failure() {
 
 		let request_id = VaultsPallet::trigger_keygen_verification(
 			keygen_ceremony_id,
-			NEW_AGG_PUB_KEY,
+			NEW_AGG_PUB_KEY_PRE_HANDOVER,
 			participants.clone(),
 			rotation_epoch_index,
 		);
@@ -222,7 +222,7 @@ fn no_active_rotation() {
 			VaultsPallet::report_keygen_outcome(
 				RuntimeOrigin::signed(ALICE),
 				1,
-				Ok(NEW_AGG_PUB_KEY)
+				Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 			),
 			Error::<MockRuntime, _>::NoActiveRotation
 		);
@@ -250,7 +250,7 @@ fn cannot_report_keygen_success_twice() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			RuntimeOrigin::signed(ALICE),
 			ceremony_id,
-			Ok(NEW_AGG_PUB_KEY)
+			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 		));
 
 		// Can't report twice.
@@ -258,7 +258,7 @@ fn cannot_report_keygen_success_twice() {
 			VaultsPallet::report_keygen_outcome(
 				RuntimeOrigin::signed(ALICE),
 				ceremony_id,
-				Ok(NEW_AGG_PUB_KEY)
+				Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -278,7 +278,7 @@ fn cannot_report_two_different_keygen_outcomes() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			RuntimeOrigin::signed(ALICE),
 			ceremony_id,
-			Ok(NEW_AGG_PUB_KEY)
+			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 		));
 
 		// Can't report failure after reporting success
@@ -303,7 +303,7 @@ fn only_participants_can_report_keygen_outcome() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			RuntimeOrigin::signed(ALICE),
 			ceremony_id,
-			Ok(NEW_AGG_PUB_KEY)
+			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 		));
 
 		// Only participants can respond.
@@ -317,7 +317,7 @@ fn only_participants_can_report_keygen_outcome() {
 			VaultsPallet::report_keygen_outcome(
 				RuntimeOrigin::signed(non_participant),
 				ceremony_id,
-				Ok(NEW_AGG_PUB_KEY)
+				Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
 		);
@@ -337,7 +337,7 @@ fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			RuntimeOrigin::signed(ALICE),
 			ceremony_id,
-			Ok(NEW_AGG_PUB_KEY)
+			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 		));
 
 		// Ceremony id in the past (not the pending one we're waiting for)
@@ -345,7 +345,7 @@ fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 			VaultsPallet::report_keygen_outcome(
 				RuntimeOrigin::signed(ALICE),
 				ceremony_id - 1,
-				Ok(NEW_AGG_PUB_KEY)
+				Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 			),
 			Error::<MockRuntime, _>::InvalidCeremonyId
 		);
@@ -356,7 +356,7 @@ fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 			VaultsPallet::report_keygen_outcome(
 				RuntimeOrigin::signed(ALICE),
 				ceremony_id + 1,
-				Ok(NEW_AGG_PUB_KEY)
+				Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 			),
 			Error::<MockRuntime, _>::InvalidCeremonyId
 		);
@@ -376,7 +376,7 @@ fn cannot_report_key_handover_outcome_when_awaiting_keygen() {
 			VaultsPallet::report_key_handover_outcome(
 				RuntimeOrigin::signed(ALICE),
 				current_ceremony_id(),
-				Ok(NEW_AGG_PUB_KEY)
+				Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)
 			),
 			Error::<MockRuntime, _>::InvalidRotationStatus
 		);
@@ -395,7 +395,7 @@ fn keygen_report_success() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			RuntimeOrigin::signed(ALICE),
 			keygen_ceremony_id,
-			Ok(NEW_AGG_PUB_KEY)
+			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 		));
 
 		assert_eq!(
@@ -416,7 +416,7 @@ fn keygen_report_success() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			RuntimeOrigin::signed(BOB),
 			keygen_ceremony_id,
-			Ok(NEW_AGG_PUB_KEY)
+			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 		));
 
 		// A resolution is still pending - we require 100% response rate.
@@ -436,7 +436,7 @@ fn keygen_report_success() {
 		assert_ok!(VaultsPallet::report_keygen_outcome(
 			RuntimeOrigin::signed(CHARLIE),
 			keygen_ceremony_id,
-			Ok(NEW_AGG_PUB_KEY)
+			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 		));
 
 		// This time we should have enough votes for consensus.
@@ -447,7 +447,7 @@ fn keygen_report_success() {
 		);
 		if let VaultRotationStatus::AwaitingKeygen { ceremony_id: keygen_ceremony_id_from_status, response_status, keygen_participants, new_epoch_index } = PendingVaultRotation::<MockRuntime, _>::get().unwrap() {
 			assert_eq!(keygen_ceremony_id, keygen_ceremony_id_from_status);
-			assert_eq!(response_status.success_votes().get(&NEW_AGG_PUB_KEY).expect("new key should have votes"), &3);
+			assert_eq!(response_status.success_votes().get(&NEW_AGG_PUB_KEY_PRE_HANDOVER).expect("new key should have votes"), &3);
 			assert_eq!(keygen_participants, BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()));
 			assert_eq!(new_epoch_index, rotation_epoch);
 		} else {
@@ -461,7 +461,6 @@ fn keygen_report_success() {
 
 		assert!(matches!(PendingVaultRotation::<MockRuntime, _>::get().unwrap(), VaultRotationStatus::KeygenVerificationComplete { .. }));
 
-		// In this case we are not configured to run handover, so any values will do.
 		const HANDOVER_PARTICIPANTS: [u64; 2] = [ALICE, BOB];
 		VaultsPallet::key_handover(BTreeSet::from(HANDOVER_PARTICIPANTS), BTreeSet::from(HANDOVER_PARTICIPANTS), rotation_epoch);
 
@@ -470,7 +469,7 @@ fn keygen_report_success() {
 			assert_ok!(VaultsPallet::report_key_handover_outcome(
 				RuntimeOrigin::signed(p),
 				handover_ceremony_id,
-				Ok(NEW_AGG_PUB_KEY)
+				Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)
 			));
 		}
 
@@ -489,7 +488,7 @@ fn keygen_report_success() {
 
 		assert!(matches!(
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
-			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == NEW_AGG_PUB_KEY
+			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == NEW_AGG_PUB_KEY_POST_HANDOVER
 		));
 
 		assert_last_event!(crate::Event::KeyHandoverSuccess { .. });
@@ -644,14 +643,13 @@ fn vault_key_rotated() {
 		let ceremony_id = current_ceremony_id();
 		VaultsPallet::trigger_keygen_verification(
 			ceremony_id,
-			NEW_AGG_PUB_KEY,
+			NEW_AGG_PUB_KEY_PRE_HANDOVER,
 			btree_candidates.clone(),
 			rotation_epoch_index,
 		);
 
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
 
-		// In this case we are not configured to run handover, so any values will do.
 		VaultsPallet::key_handover(
 			btree_candidates.clone(),
 			btree_candidates.clone(),
@@ -662,7 +660,7 @@ fn vault_key_rotated() {
 			assert_ok!(VaultsPallet::report_key_handover_outcome(
 				RuntimeOrigin::signed(candidate),
 				current_ceremony_id(),
-				Ok(NEW_AGG_PUB_KEY)
+				Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)
 			));
 		}
 
@@ -702,7 +700,7 @@ fn vault_key_rotated() {
 		let Vault { public_key, active_from_block } = Vaults::<MockRuntime, _>::get(next_epoch)
 			.expect("Ethereum Vault should exist in the next epoch");
 		assert_eq!(
-			public_key, NEW_AGG_PUB_KEY,
+			public_key, NEW_AGG_PUB_KEY_POST_HANDOVER,
 			"we should have the new public key in the new vault for the next epoch"
 		);
 		assert_eq!(
@@ -728,7 +726,7 @@ fn test_vault_key_rotated_externally() {
 		assert_eq!(MockSystemStateManager::get_current_system_state(), SystemState::Normal);
 		assert_ok!(VaultsPallet::vault_key_rotated_externally(
 			RuntimeOrigin::root(),
-			NEW_AGG_PUB_KEY,
+			NEW_AGG_PUB_KEY_POST_HANDOVER,
 			1,
 			TX_HASH,
 		));
@@ -741,7 +739,7 @@ fn test_vault_key_rotated_externally() {
 fn key_unavailabe_on_activate_returns_governance_event() {
 	new_test_ext_no_key().execute_with(|| {
 		PendingVaultRotation::put(VaultRotationStatus::<MockRuntime, _>::KeyHandoverComplete {
-			new_public_key: NEW_AGG_PUB_KEY,
+			new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER,
 		});
 
 		VaultsPallet::activate();
@@ -776,7 +774,7 @@ fn set_keygen_response_timeout_works() {
 fn when_set_agg_key_with_agg_key_not_required_we_skip_activation() {
 	new_test_ext().execute_with(|| {
 		PendingVaultRotation::put(VaultRotationStatus::<MockRuntime, _>::KeyHandoverComplete {
-			new_public_key: NEW_AGG_PUB_KEY,
+			new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER,
 		});
 
 		MockSetAggKeyWithAggKey::set_required(false);
