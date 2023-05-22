@@ -4,7 +4,10 @@ use std::collections::BTreeSet;
 
 use crate::{
 	client::{
-		common::{BroadcastFailureReason, KeygenFailureReason, KeygenStageName, ResharingContext},
+		common::{
+			BroadcastFailureReason, DelayDeserialization, KeygenFailureReason, KeygenStageName,
+			ResharingContext,
+		},
 		helpers::{
 			gen_dummy_keygen_comm1, get_dummy_hash_comm, new_nodes, run_keygen, run_stages,
 			standard_signing, KeygenCeremonyRunner, PayloadAndKeyData, SigningCeremonyRunner,
@@ -210,7 +213,10 @@ async fn should_report_on_inconsistent_broadcast_comm1() {
 
 	// Make one of the nodes send a different commitment to half of the others
 	// Note: the bad node must send different comm1 to more than 1/3 of the participants
-	let commitment = gen_dummy_keygen_comm1(&mut ceremony.rng, ACCOUNT_IDS.len() as AuthorityCount);
+	let commitment = DelayDeserialization::new(&gen_dummy_keygen_comm1::<Point>(
+		&mut ceremony.rng,
+		ACCOUNT_IDS.len() as AuthorityCount,
+	));
 	for message in messages.get_mut(bad_account_id).unwrap().values_mut().step_by(2) {
 		*message = commitment.clone();
 	}
@@ -262,6 +268,7 @@ async fn should_report_on_inconsistent_broadcast_hash_comm1a() {
 // those parties reported.
 #[tokio::test]
 async fn should_report_on_invalid_hash_comm1a() {
+	type Point = <EthSigning as CryptoScheme>::Point;
 	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let messages = ceremony.request().await;
@@ -273,10 +280,13 @@ async fn should_report_on_invalid_hash_comm1a() {
 	// Note: we must send the same bad commitment to all of the nodes,
 	// or we will fail on the `inconsistent` error instead of the validation error.
 	let corrupted_message = {
-		let mut original_message =
+		let original_message =
 			messages.get(&bad_account_id).unwrap().values().next().unwrap().clone();
-		original_message.corrupt_secondary_coefficient(&mut ceremony.rng);
-		original_message
+
+		let mut commitment: keygen::DKGUnverifiedCommitment<Point> =
+			original_message.deserialize().unwrap();
+		commitment.corrupt_secondary_coefficient(&mut ceremony.rng);
+		DelayDeserialization::new(&commitment)
 	};
 	for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
 		*message = corrupted_message.clone();
@@ -404,10 +414,12 @@ async fn should_report_on_invalid_comm1() {
 	// Note: we must send the same bad commitment to all of the nodes,
 	// or we will fail on the `inconsistent` error instead of the validation error.
 	let corrupted_message = {
-		let mut original_message =
+		let original_message =
 			messages.get(&bad_account_id).unwrap().values().next().unwrap().clone();
-		original_message.corrupt_primary_coefficient(&mut ceremony.rng);
-		original_message
+		let mut commitment: keygen::DKGUnverifiedCommitment<Point> =
+			original_message.deserialize().unwrap();
+		commitment.corrupt_primary_coefficient(&mut ceremony.rng);
+		DelayDeserialization::new(&commitment)
 	};
 	for message in messages.get_mut(&bad_account_id).unwrap().values_mut() {
 		*message = corrupted_message.clone();

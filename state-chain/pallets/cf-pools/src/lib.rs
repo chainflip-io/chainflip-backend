@@ -276,7 +276,7 @@ pub mod pallet {
 			unstable_asset: any::Asset,
 			enabled: bool,
 		) -> DispatchResult {
-			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 			Pools::<T>::try_mutate(unstable_asset, |maybe_pool| {
 				let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 				pool.enabled = enabled;
@@ -306,7 +306,7 @@ pub mod pallet {
 			fee_hundredth_pips: u32,
 			initial_sqrt_price: SqrtPriceQ64F96,
 		) -> DispatchResult {
-			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 			Pools::<T>::try_mutate(unstable_asset, |maybe_pool| {
 				ensure!(maybe_pool.is_none(), Error::<T>::PoolAlreadyExists);
 

@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+	collections::{BTreeMap, BTreeSet},
+	marker::PhantomData,
+};
 
 use cf_primitives::AuthorityCount;
 use serde::{Deserialize, Serialize};
@@ -7,6 +10,34 @@ use tracing::warn;
 use crate::client::utils::{find_frequent_element, threshold_for_broadcast_verification};
 
 use super::BroadcastFailureReason;
+
+/// A wrapper around a multisig message that can be
+/// used as part of larger Serialize payloads, but prevents
+/// the inner message from being deserialized until explicitly
+/// requested. (This is particularly useful in broadcast
+/// verification, where we don't need to do expensive calls
+/// to deserialize a large number of EC point in order to verify
+/// that the broadcast is successful.)
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct DelayDeserialization<T> {
+	pub payload: Vec<u8>,
+	_phantom: PhantomData<T>,
+}
+
+impl<T: serde::de::DeserializeOwned> DelayDeserialization<T> {
+	pub fn new<M: Serialize>(message: &M) -> Self {
+		DelayDeserialization {
+			payload: bincode::serialize(message).expect("serialization can't fail"),
+			_phantom: PhantomData,
+		}
+	}
+
+	pub fn deserialize(self) -> anyhow::Result<T> {
+		use anyhow::Context;
+		bincode::deserialize(&self.payload).context("deserialisation failure")
+	}
+}
 
 /// Data received by a single party for a given
 /// stage from all parties (includes our own for

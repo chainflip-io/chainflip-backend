@@ -23,9 +23,9 @@ pub use auction_resolver::*;
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidderProvider, Bonding,
-	Chainflip, EmergencyRotation, EpochInfo, EpochTransitionHandler, ExecutionCondition,
-	FundingInfo, HistoricalEpoch, MissedAuthorshipSlots, OnAccountFunded, QualifyNode,
-	ReputationResetter, SystemStateInfo, VaultRotator,
+	Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch,
+	MissedAuthorshipSlots, OnAccountFunded, QualifyNode, ReputationResetter, SystemStateInfo,
+	VaultRotator,
 };
 use cf_utilities::Port;
 use frame_support::{
@@ -162,10 +162,6 @@ pub mod pallet {
 			ValidatorId = ValidatorIdOf<Self>,
 			Offence = Self::Offence,
 		>;
-
-		/// The range of online authorities we would trigger an emergency rotation
-		#[pallet::constant]
-		type EmergencyRotationPercentageRange: Get<PercentageRange>;
 
 		/// Updates the bond of an authority.
 		type Bonder: Bonding<ValidatorId = ValidatorIdOf<Self>, Amount = Self::Amount>;
@@ -308,8 +304,6 @@ pub mod pallet {
 		EpochDurationChanged(T::BlockNumber, T::BlockNumber),
 		/// Rotation phase updated.
 		RotationPhaseUpdated { new_phase: RotationPhase<T> },
-		/// An emergency rotation has been initiated.
-		EmergencyRotationInitiated,
 		/// The CFE version has been updated.
 		CFEVersionUpdated {
 			account_id: ValidatorIdOf<T>,
@@ -1329,20 +1323,6 @@ impl<T: Config> EstimateNextSessionRotation<T::BlockNumber> for Pallet<T> {
 			Some(CurrentEpochStartedAt::<T>::get() + BlocksPerEpoch::<T>::get()),
 			T::DbWeight::get().reads(2),
 		)
-	}
-}
-
-impl<T: Config> EmergencyRotation for Pallet<T> {
-	fn request_emergency_rotation() {
-		if CurrentRotationPhase::<T>::get() == RotationPhase::<T>::Idle {
-			Pallet::<T>::deposit_event(Event::EmergencyRotationInitiated);
-			Self::start_authority_rotation();
-		} else {
-			log::warn!(
-				target: "cf-validator",
-				"Can't start emergency rotation. Authority rotation already in progress."
-			);
-		}
 	}
 }
 

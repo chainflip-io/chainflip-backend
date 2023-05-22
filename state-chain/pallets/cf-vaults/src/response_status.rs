@@ -128,7 +128,7 @@ where
 mod tests {
 	use super::*;
 	use crate::{
-		mock::{new_test_ext, MockRuntime, NEW_AGG_PUB_KEY},
+		mock::{new_test_ext, MockRuntime, NEW_AGG_PUB_KEY_PRE_HANDOVER},
 		AggKeyFor, KeygenOutcomeFor,
 	};
 	use cf_chains::mocks::MockAggKey;
@@ -262,7 +262,7 @@ mod tests {
 			let id = 1 + index as u64;
 			match outcome {
 				ReportedOutcome::Success => {
-					status.add_success_vote(&id, NEW_AGG_PUB_KEY);
+					status.add_success_vote(&id, NEW_AGG_PUB_KEY_PRE_HANDOVER);
 				},
 				ReportedOutcome::BadKey => {
 					status.add_success_vote(&id, MockAggKey(*b"bad!"));

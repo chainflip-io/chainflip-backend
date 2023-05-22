@@ -103,23 +103,14 @@ pub struct EpochStartData {
 
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
-
 	const KEY_HANDOVER_IS_REQUIRED: bool = true;
-
 	type ChainBlockNumber = BlockNumber;
-
 	type ChainAmount = BtcAmount;
-
 	type TransactionFee = Self::ChainAmount;
-
 	type TrackedData = BitcoinTrackedData;
-
 	type ChainAsset = assets::btc::Asset;
-
 	type ChainAccount = BitcoinScriptBounded;
-
 	type EpochStartData = EpochStartData;
-
 	type DepositFetchId = BitcoinFetchId;
 }
 
@@ -139,7 +130,9 @@ impl ChainCrypto for Bitcoin {
 	// is multiple signatures
 	type ThresholdSignature = Vec<Signature>;
 
-	type TransactionId = UtxoId;
+	type TransactionInId = UtxoId;
+
+	type TransactionOutId = Hash;
 
 	type GovKey = Self::AggKey;
 
@@ -269,8 +262,8 @@ impl GetUtxoAmount for Utxo {
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BitcoinOutput {
-	amount: u64,
-	script_pubkey: BitcoinScript,
+	pub amount: u64,
+	pub script_pubkey: BitcoinScript,
 }
 
 fn get_tapleaf_hash(pubkey_x: [u8; 32], salt: u32) -> Hash {
@@ -420,10 +413,36 @@ pub fn scriptpubkey_from_address(
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BitcoinTransaction {
 	inputs: Vec<Utxo>,
-	outputs: Vec<BitcoinOutput>,
+	pub outputs: Vec<BitcoinOutput>,
 	signatures: Vec<Signature>,
 	transaction_bytes: Vec<u8>,
 	old_utxo_input_indices: VecDeque<u32>,
+}
+
+const LOCKTIME: [u8; 4] = 0u32.to_le_bytes();
+const VERSION: [u8; 4] = 2u32.to_le_bytes();
+const SEQUENCE_NUMBER: [u8; 4] = (u32::MAX - 2).to_le_bytes();
+
+fn extend_with_inputs_outputs(
+	bytes: &mut Vec<u8>,
+	inputs: &Vec<Utxo>,
+	outputs: &Vec<BitcoinOutput>,
+) {
+	bytes.extend(to_varint(inputs.len() as u64));
+	bytes.extend(inputs.iter().fold(Vec::<u8>::default(), |mut acc, input| {
+		acc.extend(input.txid);
+		acc.extend(input.vout.to_le_bytes());
+		acc.push(0);
+		acc.extend(SEQUENCE_NUMBER);
+		acc
+	}));
+
+	bytes.extend(to_varint(outputs.len() as u64));
+	bytes.extend(outputs.iter().fold(Vec::<u8>::default(), |mut acc, output| {
+		acc.extend(output.amount.to_le_bytes());
+		acc.extend(output.script_pubkey.serialize());
+		acc
+	}));
 }
 
 impl BitcoinTransaction {
@@ -432,10 +451,8 @@ impl BitcoinTransaction {
 		inputs: Vec<Utxo>,
 		outputs: Vec<BitcoinOutput>,
 	) -> Self {
-		const VERSION: [u8; 4] = 2u32.to_le_bytes();
 		const SEGWIT_MARKER: u8 = 0u8;
 		const SEGWIT_FLAG: u8 = 1u8;
-		const SEQUENCE_NUMBER: [u8; 4] = (u32::MAX - 2).to_le_bytes();
 
 		let old_utxo_input_indices = (0..)
 			.zip(&inputs)
@@ -456,20 +473,7 @@ impl BitcoinTransaction {
 		transaction_bytes.extend(VERSION);
 		transaction_bytes.push(SEGWIT_MARKER);
 		transaction_bytes.push(SEGWIT_FLAG);
-		transaction_bytes.extend(to_varint(inputs.len() as u64));
-		transaction_bytes.extend(inputs.iter().fold(Vec::<u8>::default(), |mut acc, input| {
-			acc.extend(input.txid);
-			acc.extend(input.vout.to_le_bytes());
-			acc.push(0);
-			acc.extend(SEQUENCE_NUMBER);
-			acc
-		}));
-		transaction_bytes.extend(to_varint(outputs.len() as u64));
-		transaction_bytes.extend(outputs.iter().fold(Vec::<u8>::default(), |mut acc, output| {
-			acc.extend(output.amount.to_le_bytes());
-			acc.extend(output.script_pubkey.serialize());
-			acc
-		}));
+		extend_with_inputs_outputs(&mut transaction_bytes, &inputs, &outputs);
 		Self { inputs, outputs, signatures: vec![], transaction_bytes, old_utxo_input_indices }
 	}
 
@@ -483,8 +487,16 @@ impl BitcoinTransaction {
 			!self.signatures.iter().any(|signature| signature == &[0u8; 64])
 	}
 
+	pub fn txid(&self) -> [u8; 32] {
+		let mut id_bytes = Vec::default();
+		id_bytes.extend(VERSION);
+		extend_with_inputs_outputs(&mut id_bytes, &self.inputs, &self.outputs);
+		id_bytes.extend(&LOCKTIME);
+
+		sha2_256(&sha2_256(&id_bytes))
+	}
+
 	pub fn finalize(self) -> Vec<u8> {
-		const LOCKTIME: [u8; 4] = 0u32.to_le_bytes();
 		const NUM_WITNESSES: u8 = 3u8;
 		const LEN_SIGNATURE: u8 = 64u8;
 
@@ -523,11 +535,9 @@ impl BitcoinTransaction {
 		const EPOCH: u8 = 0u8;
 		const HASHTYPE: u8 = 0u8;
 		const VERSION: [u8; 4] = 2u32.to_le_bytes();
-		const LOCKTIME: [u8; 4] = 0u32.to_le_bytes();
 		const SPENDTYPE: u8 = 2u8;
 		const KEYVERSION: u8 = 0u8;
 		const CODESEPARATOR: [u8; 4] = u32::MAX.to_le_bytes();
-		const SEQUENCE_NUMBER: [u8; 4] = (u32::MAX - 2).to_le_bytes();
 
 		let prevouts = sha2_256(
 			self.inputs

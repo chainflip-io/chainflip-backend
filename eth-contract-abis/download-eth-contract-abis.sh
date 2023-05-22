@@ -19,6 +19,7 @@ fi
 
 PROJECT_ROOT=$(git rev-parse --show-toplevel || exit 1)
 ZIP_FILE=$PROJECT_ROOT/eth-contract-abis/abis-${CONTRACT_RELEASE_TAG}.zip
+TARGET_DIR=$PROJECT_ROOT/eth-contract-abis/${CONTRACT_RELEASE_TAG}
 
 gh release download \
     --clobber \
@@ -31,6 +32,7 @@ unzip -u ${ZIP_FILE} \
     'IStateChainGateway.json' \
     'IVault.json' \
     'IKeyManager.json' \
-    -d $PROJECT_ROOT/eth-contract-abis/${CONTRACT_RELEASE_TAG}
+    'Deposit_bytecode.json' \
+    -d $TARGET_DIR
 
 rm ${ZIP_FILE}

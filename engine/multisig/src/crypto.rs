@@ -28,6 +28,12 @@ use super::client::signing::generate_schnorr_response;
 /// The db uses a static length prefix, that must include the keygen data prefix and the chain tag
 pub const CHAIN_TAG_SIZE: usize = std::mem::size_of::<ChainTag>();
 
+/// Upper bound on the size of a point and scalar in bytes, which are useful
+/// for estimating size of serialized data. We have tests that (indirectly)
+/// check that these are correct.
+pub const MAX_POINT_SIZE: usize = 33;
+pub const MAX_SCALAR_SIZE: usize = 32;
+
 /// Used as a unique identifier when serializing/deserializing chain specific data.
 /// The values are explicitly given and should never be changed.
 #[repr(u16)]

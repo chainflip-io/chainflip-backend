@@ -38,6 +38,13 @@ impl ChannelIdConstructor for MockEthereumChannelId {
 	}
 }
 
+#[cfg(feature = "runtime-benchmarks")]
+impl BenchmarkValueExtended for MockEthereumChannelId {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		id.into()
+	}
+}
+
 #[derive(
 	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
@@ -110,7 +117,9 @@ impl ChainCrypto for MockEthereum {
 	type AggKey = MockAggKey;
 	type Payload = [u8; 4];
 	type ThresholdSignature = MockThresholdSignature<Self::AggKey, Self::Payload>;
-	type TransactionId = [u8; 4];
+	type TransactionInId = [u8; 4];
+	// TODO: Use a different type here? So we can get better coverage
+	type TransactionOutId = [u8; 4];
 	type GovKey = [u8; 32];
 
 	fn verify_threshold_signature(
@@ -131,7 +140,9 @@ impl_default_benchmark_value!([u8; 4]);
 impl_default_benchmark_value!(MockThresholdSignature<MockAggKey, [u8; 4]>);
 impl_default_benchmark_value!(MockTransaction);
 
-pub const ETH_TX_HASH: <MockEthereum as ChainCrypto>::TransactionId = [0xbc; 4];
+pub const MOCK_TRANSACTION_OUT_ID: [u8; 4] = [0xbc; 4];
+
+pub const ETH_TX_HASH: <MockEthereum as ChainCrypto>::TransactionInId = [0xbc; 4];
 
 pub const ETH_TX_FEE: <MockEthereum as Chain>::TransactionFee =
 	TransactionFee { effective_gas_price: 200, gas_used: 100 };
@@ -145,6 +156,7 @@ impl ChainAbi for MockEthereum {
 pub struct MockApiCall<C: ChainAbi> {
 	pub payload: C::Payload,
 	pub sig: Option<C::ThresholdSignature>,
+	pub tx_out_id: C::TransactionOutId,
 }
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -153,6 +165,7 @@ impl<C: ChainCrypto + ChainAbi> BenchmarkValue for MockApiCall<C> {
 		Self {
 			payload: C::Payload::benchmark_value(),
 			sig: Some(C::ThresholdSignature::benchmark_value()),
+			tx_out_id: C::TransactionOutId::benchmark_value(),
 		}
 	}
 }
@@ -178,6 +191,10 @@ impl<C: ChainAbi> ApiCall<C> for MockApiCall<C> {
 
 	fn is_signed(&self) -> bool {
 		self.sig.is_some()
+	}
+
+	fn transaction_out_id(&self) -> <C as ChainCrypto>::TransactionOutId {
+		self.tx_out_id.clone()
 	}
 }
 

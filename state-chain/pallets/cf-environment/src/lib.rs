@@ -5,7 +5,7 @@
 use cf_chains::{
 	btc::{
 		api::SelectedUtxos, utxo_selection::select_utxos_from_pool, Bitcoin, BitcoinNetwork,
-		BitcoinScriptBounded, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
+		BitcoinScriptBounded, BtcAmount, Utxo, UtxoId,
 	},
 	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	ChainCrypto,
@@ -46,13 +46,6 @@ impl Default for SystemState {
 	}
 }
 type SignatureNonce = u64;
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct ChangeUtxoWitness {
-	pub amount: BtcAmount,
-	pub change_pubkey: [u8; 32],
-	pub utxo_id: UtxoId,
-}
 
 pub mod cfe {
 	use super::*;
@@ -395,10 +388,8 @@ pub mod pallet {
 			let correct_nonce = PolkadotProxyAccountNonce::<T>::get();
 
 			// Witness the agg_key rotation manually in the vaults pallet for polkadot
-			let dispatch_result = T::PolkadotVaultKeyWitnessedHandler::on_new_key_activated(
-				dot_witnessed_aggkey,
-				tx_id.block_number,
-			)?;
+			let dispatch_result =
+				T::PolkadotVaultKeyWitnessedHandler::on_new_key_activated(tx_id.block_number)?;
 			// Clean up the broadcast state.
 			T::PolkadotBroadcaster::clean_up_broadcast(broadcast_id)?;
 
@@ -428,10 +419,8 @@ pub mod pallet {
 			use cf_traits::VaultKeyWitnessedHandler;
 
 			// Witness the agg_key rotation manually in the vaults pallet for bitcoin
-			let dispatch_result = T::BitcoinVaultKeyWitnessedHandler::on_new_key_activated(
-				new_public_key,
-				block_number,
-			)?;
+			let dispatch_result =
+				T::BitcoinVaultKeyWitnessedHandler::on_new_key_activated(block_number)?;
 
 			Self::deposit_event(Event::<T>::BitcoinBlockNumberSetForVault { block_number });
 
@@ -455,26 +444,6 @@ pub mod pallet {
 
 			PolkadotRuntimeVersion::<T>::put(runtime_version);
 			Self::deposit_event(Event::<T>::PolkadotRuntimeVersionUpdated { runtime_version });
-
-			Ok(().into())
-		}
-
-		#[pallet::weight(0)]
-		pub fn add_bitcoin_change_utxos(
-			origin: OriginFor<T>,
-			change_witnesses: Vec<ChangeUtxoWitness>,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			for ChangeUtxoWitness { amount, change_pubkey, utxo_id } in change_witnesses {
-				BitcoinAvailableUtxos::<T>::append(Utxo {
-					amount,
-					txid: utxo_id.tx_hash,
-					vout: utxo_id.vout,
-					pubkey_x: change_pubkey,
-					salt: CHANGE_ADDRESS_SALT,
-				});
-			}
 
 			Ok(().into())
 		}
@@ -579,11 +548,27 @@ impl<T: Config> Pallet<T> {
 		deposit_script: BitcoinScriptBounded,
 	) {
 		let (salt, pubkey) = BitcoinActiveDepositAddressDetails::<T>::take(deposit_script);
+
 		BitcoinAvailableUtxos::<T>::append(Utxo {
 			amount,
 			txid: utxo_id.tx_hash,
 			vout: utxo_id.vout,
 			pubkey_x: pubkey,
+			salt,
+		});
+	}
+
+	pub fn add_bitcoin_change_utxo(
+		amount: BtcAmount,
+		utxo_id: UtxoId,
+		salt: u32,
+		pubkey_x: [u8; 32],
+	) {
+		BitcoinAvailableUtxos::<T>::append(Utxo {
+			amount,
+			txid: utxo_id.tx_hash,
+			vout: utxo_id.vout,
+			pubkey_x,
 			salt,
 		});
 	}

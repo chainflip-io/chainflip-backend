@@ -255,7 +255,7 @@ pub mod pallet {
 		/// - [On update](Event::LpTtlSet)
 		#[pallet::weight(T::WeightInfo::set_lp_ttl())]
 		pub fn set_lp_ttl(origin: OriginFor<T>, ttl: T::BlockNumber) -> DispatchResult {
-			let _ok = T::EnsureGovernance::ensure_origin(origin)?;
+			T::EnsureGovernance::ensure_origin(origin)?;
 			LpTTL::<T>::set(ttl);
 
 			Self::deposit_event(Event::<T>::LpTtlSet { ttl });

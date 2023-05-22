@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use core::fmt::Display;
 
-use crate::benchmarking_value::BenchmarkValue;
+use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 pub use address::ForeignChainAddress;
 use cf_primitives::{chains::assets, AssetAmount, EgressId, EthAmount};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
@@ -17,6 +17,7 @@ use sp_runtime::{
 	DispatchError,
 };
 use sp_std::{
+	cmp::Ord,
 	convert::{Into, TryFrom},
 	fmt::Debug,
 	prelude::*,
@@ -68,7 +69,8 @@ pub trait Chain: Member + Parameter {
 		+ Into<AssetAmount>
 		+ FullCodec
 		+ MaxEncodedLen
-		+ BenchmarkValue;
+		+ BenchmarkValue
+		+ Ord;
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
@@ -91,6 +93,7 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ MaxEncodedLen
 		+ BenchmarkValue
+		+ BenchmarkValueExtended
 		+ Debug
 		+ TryFrom<ForeignChainAddress>
 		+ Into<ForeignChainAddress>;
@@ -101,6 +104,7 @@ pub trait Chain: Member + Parameter {
 		+ Parameter
 		+ Copy
 		+ BenchmarkValue
+		+ BenchmarkValueExtended
 		+ ChannelIdConstructor<Address = Self::ChainAccount>;
 }
 
@@ -135,7 +139,11 @@ pub trait ChainCrypto: Chain {
 	/// Must uniquely identify a transaction. On most chains this will be a transaction hash.
 	/// However, for example, in the case of Polkadot, the blocknumber-extrinsic-index is the unique
 	/// identifier.
-	type TransactionId: Member + Parameter + BenchmarkValue;
+	type TransactionInId: Member + Parameter + BenchmarkValue;
+
+	/// Uniquely identifies a transaction on the outoing direction.
+	type TransactionOutId: Member + Parameter + BenchmarkValue;
+
 	type GovKey: Member + Parameter + Copy + BenchmarkValue;
 
 	fn verify_threshold_signature(
@@ -176,6 +184,9 @@ pub trait ApiCall<Abi: ChainAbi>: Parameter {
 
 	/// Checks we have updated the sig data to non-default values.
 	fn is_signed(&self) -> bool;
+
+	/// Generates an identifier for the output of the transaction.
+	fn transaction_out_id(&self) -> <Abi as ChainCrypto>::TransactionOutId;
 }
 
 /// Responsible for converting an api call into a raw unsigned transaction.
@@ -312,7 +323,7 @@ pub struct CcmDepositMetadata {
 	/// User funds designated to be used for gas.
 	pub gas_budget: AssetAmount,
 	/// The address refunds will go to.
-	pub refund_address: ForeignChainAddress,
+	pub cf_parameters: Vec<u8>,
 	/// The address the deposit was sent from.
 	pub source_address: ForeignChainAddress,
 }
