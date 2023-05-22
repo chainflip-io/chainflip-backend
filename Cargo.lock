@@ -1014,7 +1014,6 @@ dependencies = [
  "sp-consensus-aura",
  "sp-core 7.0.0",
  "sp-finality-grandpa",
- "sp-rpc",
  "state-chain-runtime",
  "tiny-bip39 1.0.0",
  "tracing",
@@ -1157,6 +1156,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.16",
+ "utilities",
 ]
 
 [[package]]
@@ -10843,6 +10843,7 @@ dependencies = [
  "pin-project",
  "predicates",
  "serde",
+ "sp-rpc",
  "tempfile",
  "tokio",
  "tracing",

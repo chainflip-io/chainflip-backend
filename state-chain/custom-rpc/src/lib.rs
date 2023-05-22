@@ -471,17 +471,18 @@ where
 		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutput> {
-		if let Ok(amount) = u128::try_from(amount) {
-			self.client
-				.runtime_api()
-				.cf_pool_simulate_swap(&self.query_block_id(at), from, to, amount)
-				.map_err(to_rpc_error)
-				.and_then(|r| {
-					r.map_err(|e| jsonrpsee::core::Error::Custom(<&'static str>::from(e).into()))
-				})
-				.map(RpcSwapOutput::from)
-		} else {
-			Err(jsonrpsee::core::Error::Custom("Error during converting amount".into()))
-		}
+		self.client
+			.runtime_api()
+			.cf_pool_simulate_swap(
+				&self.query_block_id(at),
+				from,
+				to,
+				cf_utilities::try_parse_number_or_hex(amount)?,
+			)
+			.map_err(to_rpc_error)
+			.and_then(|r| {
+				r.map_err(|e| jsonrpsee::core::Error::Custom(<&'static str>::from(e).into()))
+			})
+			.map(RpcSwapOutput::from)
 	}
 }

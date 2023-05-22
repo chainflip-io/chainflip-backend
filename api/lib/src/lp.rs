@@ -19,7 +19,6 @@ use chainflip_engine::{
 pub use core::ops::Range;
 use futures::FutureExt;
 use serde::Serialize;
-use sp_rpc::number::NumberOrHex;
 use utilities::{task_scope::task_scope, CachedStream};
 
 use crate::connect_submit_and_get_events;
@@ -155,54 +154,49 @@ pub async fn mint_range_order(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 	range: Range<Tick>,
-	amount: NumberOrHex,
+	amount: u128,
 ) -> Result<MintPositionReturn> {
-	if let Ok(amount) = u128::try_from(amount) {
-		task_scope(|scope| {
-			async {
-				// Connect to State Chain
-				let (_state_chain_stream, state_chain_client) =
-					StateChainClient::connect_with_account(
-						scope,
-						&state_chain_settings.ws_endpoint,
-						&state_chain_settings.signing_key_file,
-						AccountRole::LiquidityProvider,
-						false,
-					)
-					.await?;
+	task_scope(|scope| {
+		async {
+			// Connect to State Chain
+			let (_state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
+				scope,
+				&state_chain_settings.ws_endpoint,
+				&state_chain_settings.signing_key_file,
+				AccountRole::LiquidityProvider,
+				false,
+			)
+			.await?;
 
-				// Submit the mint order
-				let (_tx_hash, events, _dispatch_info) = state_chain_client
-					.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_mint_range_order {
-						unstable_asset: asset,
-						price_range_in_ticks: range,
-						liquidity: amount,
-					})
-					.await
-					.until_finalized()
-					.await?;
+			// Submit the mint order
+			let (_tx_hash, events, _dispatch_info) = state_chain_client
+				.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_mint_range_order {
+					unstable_asset: asset,
+					price_range_in_ticks: range,
+					liquidity: amount,
+				})
+				.await
+				.until_finalized()
+				.await?;
 
-				// Get some details from the emitted event
-				Ok(events
-					.into_iter()
-					.find_map(|event| match event {
-						state_chain_runtime::RuntimeEvent::LiquidityPools(
-							pallet_cf_pools::Event::RangeOrderMinted {
-								assets_debited,
-								collected_fees,
-								..
-							},
-						) => Some(MintPositionReturn { assets_debited, collected_fees }),
-						_ => None,
-					})
-					.expect("LiquidityMinted must have been generated"))
-			}
-			.boxed()
-		})
-		.await
-	} else {
-		Err(anyhow!("Invalid amount"))
-	}
+			// Get some details from the emitted event
+			Ok(events
+				.into_iter()
+				.find_map(|event| match event {
+					state_chain_runtime::RuntimeEvent::LiquidityPools(
+						pallet_cf_pools::Event::RangeOrderMinted {
+							assets_debited,
+							collected_fees,
+							..
+						},
+					) => Some(MintPositionReturn { assets_debited, collected_fees }),
+					_ => None,
+				})
+				.expect("LiquidityMinted must have been generated"))
+		}
+		.boxed()
+	})
+	.await
 }
 
 #[derive(Serialize)]
@@ -215,62 +209,57 @@ pub async fn burn_range_order(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 	range: Range<Tick>,
-	amount: NumberOrHex,
+	amount: u128,
 ) -> Result<BurnPositionReturn> {
-	if let Ok(amount) = u128::try_from(amount) {
-		task_scope(|scope| {
-			async {
-				// Connect to State Chain
-				let (_state_chain_stream, state_chain_client) =
-					StateChainClient::connect_with_account(
-						scope,
-						&state_chain_settings.ws_endpoint,
-						&state_chain_settings.signing_key_file,
-						AccountRole::LiquidityProvider,
-						false,
-					)
-					.await?;
+	task_scope(|scope| {
+		async {
+			// Connect to State Chain
+			let (_state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
+				scope,
+				&state_chain_settings.ws_endpoint,
+				&state_chain_settings.signing_key_file,
+				AccountRole::LiquidityProvider,
+				false,
+			)
+			.await?;
 
-				// TODO: Re-enable this check after #3082 in implemented
-				// Find the current position and calculate new target amount
-				// if get_liquidity_at_position(&state_chain_client, asset, range,
-				// latest_block_hash) 	.await? < amount
-				// {
-				// 	bail!("Insufficient minted liquidity at position");
-				// }
+			// TODO: Re-enable this check after #3082 in implemented
+			// Find the current position and calculate new target amount
+			// if get_liquidity_at_position(&state_chain_client, asset, range,
+			// latest_block_hash) 	.await? < amount
+			// {
+			// 	bail!("Insufficient minted liquidity at position");
+			// }
 
-				// Submit the burn call
-				let (_tx_hash, events, _dispatch_info) = state_chain_client
-					.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_burn_range_order {
-						unstable_asset: asset,
-						price_range_in_ticks: range,
-						liquidity: amount,
-					})
-					.await
-					.until_finalized()
-					.await?;
+			// Submit the burn call
+			let (_tx_hash, events, _dispatch_info) = state_chain_client
+				.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_burn_range_order {
+					unstable_asset: asset,
+					price_range_in_ticks: range,
+					liquidity: amount,
+				})
+				.await
+				.until_finalized()
+				.await?;
 
-				// Get some details from the emitted event
-				Ok(events
-					.into_iter()
-					.find_map(|event| match event {
-						state_chain_runtime::RuntimeEvent::LiquidityPools(
-							pallet_cf_pools::Event::RangeOrderBurned {
-								assets_credited,
-								collected_fees,
-								..
-							},
-						) => Some(BurnPositionReturn { assets_credited, collected_fees }),
-						_ => None,
-					})
-					.expect("LiquidityBurned must have been generated"))
-			}
-			.boxed()
-		})
-		.await
-	} else {
-		Err(anyhow!("Invalid amount"))
-	}
+			// Get some details from the emitted event
+			Ok(events
+				.into_iter()
+				.find_map(|event| match event {
+					state_chain_runtime::RuntimeEvent::LiquidityPools(
+						pallet_cf_pools::Event::RangeOrderBurned {
+							assets_credited,
+							collected_fees,
+							..
+						},
+					) => Some(BurnPositionReturn { assets_credited, collected_fees }),
+					_ => None,
+				})
+				.expect("LiquidityBurned must have been generated"))
+		}
+		.boxed()
+	})
+	.await
 }
 
 #[allow(dead_code)]
