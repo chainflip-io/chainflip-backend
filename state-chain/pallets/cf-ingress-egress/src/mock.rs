@@ -10,17 +10,14 @@ pub use cf_primitives::{
 };
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 
-use frame_support::{
-	parameter_types,
-	traits::{OnFinalize, OnIdle, OnInitialize, UnfilteredDispatchable},
-	weights::Weight,
-};
+use frame_support::{instances::Instance1, parameter_types, traits::UnfilteredDispatchable};
 
 pub use cf_traits::Broadcaster;
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip,
 	mocks::{
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
+		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
 	},
 	DepositHandler,
@@ -30,7 +27,6 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -88,34 +84,6 @@ parameter_types! {
 	pub static EgressedApiCalls: Vec<MockEthereumApiCall<MockEthEnvironment>> = Default::default();
 }
 
-pub struct MockBroadcast;
-impl Broadcaster<Ethereum> for MockBroadcast {
-	type ApiCall = MockEthereumApiCall<MockEthEnvironment>;
-	type Callback = RuntimeCall;
-
-	fn threshold_sign_and_broadcast(
-		api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		let mut calls = EgressedApiCalls::get();
-		calls.push(api_call);
-		EgressedApiCalls::set(calls);
-		(1, 2)
-	}
-
-	fn threshold_sign_and_broadcast_with_callback(
-		_api_call: Self::ApiCall,
-		_callback: Self::Callback,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		(1, 2)
-	}
-
-	fn threshold_sign_and_broadcast_for_rotation(
-		_api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		(1, 2)
-	}
-}
-
 pub struct MockDepositHandler;
 impl DepositHandler<Ethereum> for MockDepositHandler {}
 
@@ -127,7 +95,7 @@ impl crate::Config for Test {
 	type LpBalance = Self;
 	type SwapDepositHandler = Self;
 	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;
-	type Broadcaster = MockBroadcast;
+	type Broadcaster = MockBroadcaster<(Self::ChainApiCall, RuntimeCall)>;
 	type DepositHandler = MockDepositHandler;
 	type WeightInfo = ();
 	type CcmHandler = MockCcmHandler;
@@ -135,33 +103,7 @@ impl crate::Config for Test {
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 
-pub struct WrappedExternalites(sp_io::TestExternalities);
-
-impl WrappedExternalites {
-	pub fn new() -> Self {
-		Self(GenesisConfig { system: Default::default() }.build_storage().unwrap().into())
-	}
-
-	pub fn execute_with<R>(&mut self, f: impl FnOnce() -> R) -> R {
-		self.0.execute_with(|| {
-			System::set_block_number(1);
-			f()
-		})
-	}
-
-	pub fn execute_as_block(mut self, block_number: u64, f: impl FnOnce()) -> Self {
-		self.0.execute_with(|| {
-			System::set_block_number(block_number);
-			<AllPalletsWithSystem as OnInitialize<_>>::on_initialize(block_number);
-			f();
-			<AllPalletsWithSystem as OnIdle<_>>::on_idle(block_number, Weight::MAX);
-			<AllPalletsWithSystem as OnFinalize<_>>::on_finalize(block_number);
-		});
-		self
-	}
-}
-
 // Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> WrappedExternalites {
-	WrappedExternalites::new()
+pub fn new_test_ext() -> cf_test_utilities::TestExternalities<Test, AllPalletsWithSystem> {
+	cf_test_utilities::TestExternalities::<_, _>::new(GenesisConfig { system: Default::default() })
 }

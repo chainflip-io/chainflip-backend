@@ -6,6 +6,7 @@ use frame_support::{storage, StorageHasher, Twox64Concat};
 pub mod account_role_registry;
 pub mod address_converter;
 pub mod api_call;
+pub mod broadcaster;
 pub mod callback;
 pub mod ccm_handler;
 pub mod ceremony_id_provider;

@@ -5,7 +5,6 @@ use frame_support::{
 	weights::Weight,
 };
 use sp_runtime::BuildStorage;
-use std::iter::FromIterator;
 
 struct RichExternalities<Runtime>(sp_io::TestExternalities, std::marker::PhantomData<Runtime>);
 
@@ -99,6 +98,11 @@ where
 		TestExternalities { ext: RichExternalities::new(ext), context: () }
 	}
 
+	#[track_caller]
+	pub fn map<R>(self, f: impl FnOnce(Ctx) -> R) -> TestExternalities<Runtime, Pallets, R> {
+		TestExternalities { ext: self.ext, context: f(self.context) }
+	}
+
 	/// Execute a closure. The return value is stored as the test state to be passed as the argument
 	/// to the next closure.
 	#[track_caller]
@@ -112,17 +116,17 @@ where
 
 	/// Access the storage without touching test state.
 	#[track_caller]
-	pub fn inspect_storage(self, f: impl FnOnce()) -> TestExternalities<Runtime, Pallets, Ctx> {
+	pub fn inspect_storage(self, f: impl FnOnce(&Ctx)) -> TestExternalities<Runtime, Pallets, Ctx> {
 		self.then_execute_with(|context| {
-			f();
+			f(&context);
 			context
 		})
 	}
 
 	/// Inspect the test state without accessing storage.
 	#[track_caller]
-	pub fn inspect_context(self, f: impl FnOnce(Ctx)) -> TestExternalities<Runtime, Pallets, Ctx> {
-		f(self.context.clone());
+	pub fn inspect_context(self, f: impl FnOnce(&Ctx)) -> TestExternalities<Runtime, Pallets, Ctx> {
+		f(&self.context);
 		self
 	}
 
@@ -151,15 +155,15 @@ where
 	///
 	/// The current context and collected closure results are passed as the next context.
 	#[track_caller]
-	pub fn then_process_events<R, I: FromIterator<R>>(
+	pub fn then_process_events<R>(
 		self,
-		mut f: impl FnMut(Ctx, Runtime::RuntimeEvent) -> R,
-	) -> TestExternalities<Runtime, Pallets, (Ctx, I)> {
+		mut f: impl FnMut(Ctx, Runtime::RuntimeEvent) -> Option<R>,
+	) -> TestExternalities<Runtime, Pallets, (Ctx, Vec<R>)> {
 		let context = self.context.clone();
 		self.ext.execute_with(move || {
 			let r = frame_system::Pallet::<Runtime>::events()
 				.into_iter()
-				.map(|e| f(context.clone(), e.event))
+				.filter_map(|e| f(context.clone(), e.event))
 				.collect();
 			(context, r)
 		})
@@ -172,12 +176,13 @@ where
 	#[track_caller]
 	pub fn then_apply_extrinsics<
 		C: UnfilteredDispatchable<RuntimeOrigin = Runtime::RuntimeOrigin> + Clone,
+		I: IntoIterator<Item = (Runtime::RuntimeOrigin, C)>,
 	>(
 		self,
-		calls: impl IntoIterator<Item = (Runtime::RuntimeOrigin, C)>,
+		f: impl FnOnce(&Ctx) -> I,
 	) -> TestExternalities<Runtime, Pallets, (Ctx, Vec<(C, DispatchResultWithPostInfo)>)> {
 		let r = self.ext.execute_as_block(|| {
-			calls
+			f(&self.context)
 				.into_iter()
 				.map(|(origin, call)| (call.clone(), call.dispatch_bypass_filter(origin)))
 				.collect()
@@ -298,23 +303,25 @@ mod test_examples {
 			})
 			// Alternatively, we can use `then_process_blocks_until` to execute blocks until a
 			.then_process_blocks_until(|_| System::block_number() == 20)
-			.then_apply_extrinsics([
-				(
-					OriginTrait::signed(ALICE),
-					RuntimeCall::from(frame_system::Call::remark_with_event {
-						remark: vec![1, 2, 3],
-					}),
-				),
-				// None is not a valid origin so this should fail:
-				(
-					OriginTrait::none(),
-					RuntimeCall::from(frame_system::Call::remark_with_event {
-						remark: vec![1, 2, 3],
-					}),
-				),
-			])
+			.then_apply_extrinsics(|_| {
+				[
+					(
+						OriginTrait::signed(ALICE),
+						RuntimeCall::from(frame_system::Call::remark_with_event {
+							remark: vec![1, 2, 3],
+						}),
+					),
+					// None is not a valid origin so this should fail:
+					(
+						OriginTrait::none(),
+						RuntimeCall::from(frame_system::Call::remark_with_event {
+							remark: vec![1, 2, 3],
+						}),
+					),
+				]
+			})
 			// Use inspect when you don't want to write to storage.
-			.inspect_storage(|| {
+			.inspect_storage(|_| {
 				assert!(matches!(
 					System::events().into_iter().map(|e| e.event).collect::<Vec<_>>().as_slice(),
 					[
@@ -323,7 +330,7 @@ mod test_examples {
 					if *sender == ALICE
 				));
 			})
-			.then_process_events::<_, Vec<_>>(|(previous_result, extrinsic_results), event| {
+			.then_process_events(|(previous_result, extrinsic_results), event| {
 				assert_eq!(previous_result, "HeyHey", "Context has been passed through.");
 				assert_eq!(System::block_number(), 21, "We processed up to the desired block.");
 				assert_eq!(extrinsic_results.len(), 2, "We have two extrinsic results.");
@@ -335,17 +342,17 @@ mod test_examples {
 				match event {
 					RuntimeEvent::System(system_event) => match system_event {
 						frame_system::Event::Remarked { sender, .. } => Some(sender),
-						e => panic!("Unexpected event {e:?}"),
+						_ => None,
 					},
 				}
 			})
 			.inspect_context(|((previous_result, extrinsic_results), event_results)| {
 				assert_eq!(extrinsic_results.len(), 2, "We have two extrinsic results.");
 				assert_eq!(
-					previous_result, "HeyHey",
+					*previous_result, "HeyHey",
 					"Context has been passed through from previous then_execute_at_block closure."
 				);
-				assert_eq!(event_results, vec![Some(ALICE)]);
+				assert_eq!(event_results[..], vec![ALICE]);
 			});
 	}
 }
