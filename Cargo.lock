@@ -1154,9 +1154,11 @@ dependencies = [
  "hex",
  "jsonrpsee 0.16.2",
  "serde_json",
+ "sp-rpc",
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.16",
+ "utilities",
 ]
 
 [[package]]
@@ -10843,6 +10845,7 @@ dependencies = [
  "pin-project",
  "predicates",
  "serde",
+ "sp-rpc",
  "tempfile",
  "tokio",
  "tracing",
