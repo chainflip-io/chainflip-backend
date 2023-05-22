@@ -47,18 +47,20 @@ async fn should_ignore_rts_for_unknown_key() {
 	// Check that the signing request fails immediately with an "unknown key" error
 	let (_, failure_reason) = assert_err!(assert_future_can_complete(signing_request_fut));
 	assert_eq!(failure_reason, SigningFailureReason::UnknownKey);
-	assert!(matches!(
-		assert_ok!(assert_future_can_complete(ceremony_request_receiver.recv())),
-		CeremonyRequest { ceremony_id: DEFAULT_SIGNING_CEREMONY_ID, details: None }
-	));
+	let request = assert_future_can_complete(ceremony_request_receiver.recv()).unwrap();
+	assert_eq!(request.ceremony_id, CeremonyId::new::<EthSigning>(DEFAULT_SIGNING_CEREMONY_ID));
+	assert!(matches!(request.details, None));
 }
 
 #[tokio::test]
 async fn should_save_key_after_keygen() {
 	// Generate a key to use in this test
 	let (public_key, keygen_result_info) = {
-		let (public_key, key_data) =
-			helpers::run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
+		let (public_key, key_data) = helpers::run_keygen(
+			new_nodes(ACCOUNT_IDS.clone()),
+			CeremonyId::new::<EthSigning>(DEFAULT_KEYGEN_CEREMONY_ID),
+		)
+		.await;
 		(public_key, key_data.into_iter().next().unwrap().1)
 	};
 

@@ -20,7 +20,9 @@ use chainflip_engine::{
 	},
 	witnesser::ItemMonitor,
 };
-use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
+use multisig::{
+	self, bitcoin::BtcSigning, client::CeremonyId, eth::EthSigning, polkadot::PolkadotSigning,
+};
 use utilities::task_scope::task_scope;
 
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
@@ -134,13 +136,15 @@ async fn main() -> anyhow::Result<()> {
 					KeyStore::new(db.clone()),
 					eth_incoming_receiver,
 					eth_outgoing_sender,
-					state_chain_client
-						.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
-							state_chain_runtime::Runtime,
-							state_chain_runtime::EthereumInstance,
-						>>(state_chain_stream.cache().block_hash)
-						.await
-						.context("Failed to get Ethereum CeremonyIdCounter from SC")?,
+					CeremonyId::new::<EthSigning>(
+						state_chain_client
+							.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+								state_chain_runtime::Runtime,
+								state_chain_runtime::EthereumInstance,
+							>>(state_chain_stream.cache().block_hash)
+							.await
+							.context("Failed to get Ethereum CeremonyIdCounter from SC")?,
+					),
 				);
 
 			scope.spawn(eth_multisig_client_backend_future);
@@ -151,13 +155,15 @@ async fn main() -> anyhow::Result<()> {
 					KeyStore::new(db.clone()),
 					dot_incoming_receiver,
 					dot_outgoing_sender,
-					state_chain_client
-						.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
-							state_chain_runtime::Runtime,
-							state_chain_runtime::PolkadotInstance,
-						>>(state_chain_stream.cache().block_hash)
-						.await
-						.context("Failed to get Polkadot CeremonyIdCounter from SC")?,
+					CeremonyId::new::<PolkadotSigning>(
+						state_chain_client
+							.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+								state_chain_runtime::Runtime,
+								state_chain_runtime::PolkadotInstance,
+							>>(state_chain_stream.cache().block_hash)
+							.await
+							.context("Failed to get Polkadot CeremonyIdCounter from SC")?,
+					),
 				);
 
 			scope.spawn(dot_multisig_client_backend_future);
@@ -168,13 +174,15 @@ async fn main() -> anyhow::Result<()> {
 					KeyStore::new(db.clone()),
 					btc_incoming_receiver,
 					btc_outgoing_sender,
-					state_chain_client
-						.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
-							state_chain_runtime::Runtime,
-							state_chain_runtime::BitcoinInstance,
-						>>(state_chain_stream.cache().block_hash)
-						.await
-						.context("Failed to get Bitcoin CeremonyIdCounter from SC")?,
+					CeremonyId::new::<BtcSigning>(
+						state_chain_client
+							.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+								state_chain_runtime::Runtime,
+								state_chain_runtime::BitcoinInstance,
+							>>(state_chain_stream.cache().block_hash)
+							.await
+							.context("Failed to get Bitcoin CeremonyIdCounter from SC")?,
+					),
 				);
 
 			scope.spawn(btc_multisig_client_backend_future);

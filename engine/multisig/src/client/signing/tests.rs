@@ -13,6 +13,7 @@ use crate::{
 		},
 		keygen::generate_key_data,
 		signing::signing_data,
+		CeremonyId,
 	},
 	crypto::{bitcoin::BtcSigning, polkadot::PolkadotSigning},
 	eth::EthSigning,
@@ -110,7 +111,7 @@ async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayl
 
 	let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
 		new_nodes(ACCOUNT_IDS.clone()),
-		DEFAULT_SIGNING_CEREMONY_ID,
+		CeremonyId::new::<EthSigning>(DEFAULT_SIGNING_CEREMONY_ID),
 		payloads_and_key,
 		rng,
 	);
@@ -157,7 +158,7 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 
 		let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
 			new_nodes(ACCOUNT_IDS.clone()),
-			DEFAULT_SIGNING_CEREMONY_ID,
+			CeremonyId::new::<EthSigning>(DEFAULT_SIGNING_CEREMONY_ID),
 			vec![PayloadAndKeyData::new(C::signing_payload_for_test(), key.clone(), key_data)],
 			Rng::from_seed(nonce_seed),
 		);
@@ -200,7 +201,7 @@ async fn should_sign_with_different_keys() {
 
 	let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
 		new_nodes(account_ids),
-		DEFAULT_SIGNING_CEREMONY_ID,
+		CeremonyId::new::<EthSigning>(DEFAULT_SIGNING_CEREMONY_ID),
 		vec![
 			PayloadAndKeyData::new(C::signing_payload_for_test(), key_1, key_data_1),
 			PayloadAndKeyData::new(C::signing_payload_for_test(), key_2, key_data_2),

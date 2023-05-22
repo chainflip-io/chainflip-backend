@@ -16,6 +16,7 @@ use crate::{
 		},
 		keygen::{self, Complaints6, VerifyComplaints7, VerifyHashComm2},
 		utils::PartyIdxMapping,
+		CeremonyId,
 	},
 	crypto::{bitcoin::BtcSigning, ECPoint, Rng},
 	eth::EthSigning,
@@ -35,7 +36,11 @@ pub type KeygenCeremonyRunnerEth = KeygenCeremonyRunner<EthSigning>;
 /// generate a key without entering a blaming stage
 #[tokio::test]
 async fn happy_path_results_in_valid_key() {
-	let (_, _) = run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
+	let (_, _) = run_keygen(
+		new_nodes(ACCOUNT_IDS.clone()),
+		CeremonyId::new::<EthSigning>(DEFAULT_KEYGEN_CEREMONY_ID),
+	)
+	.await;
 }
 
 /// If at least one party is blamed during the "Complaints" stage, we
@@ -890,7 +895,7 @@ async fn genesis_keys_can_sign() {
 	let (mut signing_ceremony, _non_signing_nodes) =
 		SigningCeremonyRunner::<EthSigning>::new_with_threshold_subset_of_signers(
 			new_nodes(account_ids),
-			DEFAULT_SIGNING_CEREMONY_ID,
+			CeremonyId::new::<EthSigning>(DEFAULT_SIGNING_CEREMONY_ID),
 			vec![PayloadAndKeyData::new(
 				EthSigning::signing_payload_for_test(),
 				public_key_bytes,
@@ -917,7 +922,7 @@ async fn initially_incompatible_keys_can_sign() {
 	let (mut signing_ceremony, _non_signing_nodes) =
 		SigningCeremonyRunner::<EthSigning>::new_with_threshold_subset_of_signers(
 			new_nodes(account_ids),
-			DEFAULT_SIGNING_CEREMONY_ID,
+			CeremonyId::new::<EthSigning>(DEFAULT_SIGNING_CEREMONY_ID),
 			vec![PayloadAndKeyData::new(
 				EthSigning::signing_payload_for_test(),
 				public_key_bytes,
@@ -966,7 +971,7 @@ mod key_handover {
 
 		let mut ceremony = KeygenCeremonyRunner::<Scheme>::new(
 			new_nodes(all_participants),
-			DEFAULT_KEYGEN_CEREMONY_ID,
+			CeremonyId::new::<Scheme>(DEFAULT_KEYGEN_CEREMONY_ID),
 			Rng::from_seed(DEFAULT_KEYGEN_SEED),
 		);
 
@@ -1042,7 +1047,7 @@ mod key_handover {
 		// Ensure that the new key shares can be used for signing:
 		let mut signing_ceremony = SigningCeremonyRunner::<Scheme>::new_with_all_signers(
 			new_nodes(receiving_set),
-			DEFAULT_SIGNING_CEREMONY_ID,
+			CeremonyId::new::<Scheme>(DEFAULT_SIGNING_CEREMONY_ID),
 			vec![PayloadAndKeyData::new(Scheme::signing_payload_for_test(), new_key, new_shares)],
 			Rng::from_entropy(),
 		);
@@ -1155,7 +1160,7 @@ mod key_handover {
 		// Ensure that the new key shares can be used for signing:
 		let mut signing_ceremony = SigningCeremonyRunner::<Scheme>::new_with_all_signers(
 			new_nodes(receiving_set),
-			DEFAULT_SIGNING_CEREMONY_ID,
+			CeremonyId::new::<Scheme>(DEFAULT_SIGNING_CEREMONY_ID),
 			vec![PayloadAndKeyData::new(Scheme::signing_payload_for_test(), new_key, new_shares)],
 			Rng::from_entropy(),
 		);

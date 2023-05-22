@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::Result;
-use cf_primitives::{AuthorityCount, CeremonyId};
+use cf_primitives::AuthorityCount;
 use futures::{stream, StreamExt};
 use itertools::{Either, Itertools};
 
@@ -58,10 +58,10 @@ pub const DEFAULT_SIGNING_SEED: [u8; 32] = [4; 32];
 /// The initial latest ceremony id starts at 0,
 /// so the first ceremony request must have a ceremony id of 1.
 /// Also the SC will never send a ceremony request at id 0.
-pub const INITIAL_LATEST_CEREMONY_ID: CeremonyId = 0;
+pub const INITIAL_LATEST_CEREMONY_ID: cf_primitives::CeremonyId = 0;
 // Ceremony ids must be consecutive.
-pub const DEFAULT_KEYGEN_CEREMONY_ID: CeremonyId = INITIAL_LATEST_CEREMONY_ID + 1;
-pub const DEFAULT_SIGNING_CEREMONY_ID: CeremonyId = DEFAULT_KEYGEN_CEREMONY_ID + 1;
+pub const DEFAULT_KEYGEN_CEREMONY_ID: cf_primitives::CeremonyId = INITIAL_LATEST_CEREMONY_ID + 1;
+pub const DEFAULT_SIGNING_CEREMONY_ID: cf_primitives::CeremonyId = DEFAULT_KEYGEN_CEREMONY_ID + 1;
 
 /// Time it takes to cause a ceremony timeout (2 stages) with a small delay to allow for processing
 pub const CEREMONY_TIMEOUT_DURATION: Duration =
@@ -352,8 +352,9 @@ where
 			let MultisigMessage { ceremony_id, data } = message;
 
 			assert_eq!(
-				ceremony_id, self_ceremony_id,
-				"Client output p2p message for ceremony_id {ceremony_id}, expected {self_ceremony_id}"
+				ceremony_id, self_ceremony_id.id,
+				"Client output p2p message for ceremony_id {ceremony_id}, expected {}",
+				self_ceremony_id.id
 			);
 
 			let ceremony_data =
@@ -589,7 +590,7 @@ use super::{
 	common::{DelayDeserialization, ResharingContext},
 	keygen::SharingParameters,
 	signing::Comm1,
-	ThresholdParameters,
+	CeremonyId, ThresholdParameters,
 };
 
 pub type KeygenCeremonyRunner<C> = CeremonyTestRunner<(), KeygenCeremony<C>>;
@@ -646,7 +647,7 @@ impl<C: CryptoScheme> KeygenCeremonyRunner<C> {
 	pub fn new_with_default() -> Self {
 		KeygenCeremonyRunner::new(
 			new_nodes(ACCOUNT_IDS.clone()),
-			DEFAULT_KEYGEN_CEREMONY_ID,
+			CeremonyId::new::<C>(DEFAULT_KEYGEN_CEREMONY_ID),
 			Rng::from_seed(DEFAULT_KEYGEN_SEED),
 		)
 	}
@@ -770,7 +771,7 @@ pub async fn new_signing_ceremony<C: CryptoScheme>(
 
 	SigningCeremonyRunner::new_with_threshold_subset_of_signers(
 		new_nodes(ACCOUNT_IDS.clone()),
-		DEFAULT_SIGNING_CEREMONY_ID,
+		CeremonyId::new::<C>(DEFAULT_SIGNING_CEREMONY_ID),
 		vec![PayloadAndKeyData::new(C::signing_payload_for_test(), public_key, key_data)],
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
 	)

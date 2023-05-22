@@ -28,7 +28,7 @@ use crate::{
 	crypto::{generate_single_party_signature, CryptoScheme, Rng},
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage},
 };
-use cf_primitives::{AuthorityCount, CeremonyId};
+use cf_primitives::AuthorityCount;
 use state_chain_runtime::AccountId;
 use utilities::task_scope::{task_scope, Scope, ScopedJoinHandle};
 
@@ -47,7 +47,7 @@ use super::{
 	},
 	keygen::{HashCommitments1, HashContext, KeygenData, PubkeySharesStage0},
 	signing::SigningData,
-	CeremonyRequest, MultisigData, MultisigMessage,
+	CeremonyId, CeremonyRequest, MultisigData, MultisigMessage,
 };
 
 pub type CeremonyOutcome<C> = Result<
@@ -315,7 +315,7 @@ pub fn deserialize_for_version<C: CryptoScheme>(
 	message: VersionedCeremonyMessage,
 ) -> Result<MultisigMessage<C::Point>> {
 	match message.version {
-		1 => bincode::deserialize::<'_, MultisigMessage<C::Point>>(&message.payload).map_err(|e| {
+		1 => bincode::deserialize::<'_, MultisigMessage<_>>(&message.payload).map_err(|e| {
 			anyhow!("Failed to deserialize message (version: {}): {:?}", message.version, e)
 		}),
 		_ => Err(anyhow!("Unsupported message version: {}", message.version)),
@@ -339,7 +339,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 	async fn on_request(&mut self, request: CeremonyRequest<C>, scope: &Scope<'_, anyhow::Error>) {
 		// Always update the latest ceremony id, even if we are not participating
-		self.update_latest_ceremony_id(request.ceremony_id);
+		self.update_latest_ceremony_id(request.ceremony_id.id);
 
 		match request.details {
 			Some(CeremonyRequestDetails::Keygen(details)) => self.on_keygen_request(
@@ -424,7 +424,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	) {
 		assert!(!participants.is_empty(), "Keygen request has no participants");
 
-		let span = info_span!("Keygen Ceremony", ceremony_id = ceremony_id);
+		let span = info_span!("Keygen Ceremony", ceremony_id = ceremony_id.to_string());
 		let _entered = span.enter();
 
 		debug!("Processing a keygen request");
@@ -475,7 +475,7 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	) {
 		assert!(!signers.is_empty(), "Request to sign has no signers");
 
-		let span = info_span!("Signing Ceremony", ceremony_id = ceremony_id);
+		let span = info_span!("Signing Ceremony", ceremony_id = ceremony_id.to_string());
 		let _entered = span.enter();
 
 		debug!("Processing a request to sign");
@@ -525,24 +525,24 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	) {
 		match message {
 			MultisigMessage { ceremony_id, data: MultisigData::Keygen(data) } => {
-				let span = info_span!("Keygen Ceremony", ceremony_id = ceremony_id);
+				let span = info_span!("Keygen Ceremony", ceremony_id = ceremony_id.to_string());
 				let _entered = span.enter();
 
 				self.keygen_states.process_data(
 					sender_id,
-					ceremony_id,
+					CeremonyId::new::<C>(ceremony_id),
 					data,
 					self.latest_ceremony_id,
 					scope,
 				)
 			},
 			MultisigMessage { ceremony_id, data: MultisigData::Signing(data) } => {
-				let span = info_span!("Signing Ceremony", ceremony_id = ceremony_id);
+				let span = info_span!("Signing Ceremony", ceremony_id = ceremony_id.to_string());
 				let _entered = span.enter();
 
 				self.signing_states.process_data(
 					sender_id,
-					ceremony_id,
+					CeremonyId::new::<C>(ceremony_id),
 					data,
 					self.latest_ceremony_id,
 					scope,
@@ -552,9 +552,9 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	}
 
 	/// Override the latest ceremony id. Used to limit the spamming of unauthorised ceremonies.
-	pub fn update_latest_ceremony_id(&mut self, ceremony_id: CeremonyId) {
-		assert_eq!(self.latest_ceremony_id + 1, ceremony_id);
-		self.latest_ceremony_id = ceremony_id;
+	pub fn update_latest_ceremony_id(&mut self, ceremony_id: cf_primitives::CeremonyId) {
+		assert_eq!(self.latest_ceremony_id.id + 1, ceremony_id);
+		self.latest_ceremony_id = CeremonyId::new::<C>(ceremony_id);
 	}
 
 	fn single_party_keygen(&self, mut rng: Rng) -> KeygenResultInfo<C> {
@@ -587,7 +587,7 @@ fn generate_keygen_context(ceremony_id: CeremonyId, signers: BTreeSet<AccountId>
 
 	let mut hasher = Sha256::new();
 
-	hasher.update(ceremony_id.to_be_bytes());
+	hasher.update(ceremony_id.id.to_be_bytes());
 
 	// NOTE: it should be sufficient to use ceremony_id as context as
 	// we never reuse the same id for different ceremonies, but lets
@@ -630,7 +630,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 			hash_map::Entry::Vacant(entry) => {
 				// Only a ceremony id that is within the ceremony id window can create unauthorised
 				// ceremonies
-				if ceremony_id > latest_ceremony_id + CEREMONY_ID_WINDOW {
+				if ceremony_id.id > latest_ceremony_id.id + CEREMONY_ID_WINDOW {
 					warn!("Ignoring data: unexpected future ceremony id {}", ceremony_id);
 					return
 				} else if ceremony_id <= latest_ceremony_id {

@@ -1,11 +1,11 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use async_trait::async_trait;
-use cf_primitives::{AuthorityCount, CeremonyId};
+use cf_primitives::AuthorityCount;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-	client::{ceremony_manager::CeremonyTrait, utils::PartyIdxMapping},
+	client::{ceremony_manager::CeremonyTrait, utils::PartyIdxMapping, CeremonyId},
 	crypto::Rng,
 	p2p::OutgoingMultisigStageMessages,
 	CryptoScheme,

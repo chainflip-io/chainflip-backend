@@ -1,7 +1,6 @@
 use anyhow::Result;
-use cf_primitives::CeremonyId;
 
-use multisig::{CryptoScheme, MultisigClient};
+use multisig::{client::CeremonyId, CryptoScheme, MultisigClient};
 use tracing::{info, info_span, Instrument};
 
 use crate::{
