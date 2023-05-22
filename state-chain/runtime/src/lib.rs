@@ -916,13 +916,12 @@ impl_runtime_apis! {
 				.collect()
 		}
 		fn cf_account_info_v2(account_id: AccountId) -> RuntimeApiAccountInfoV2 {
-			let account_info_v1 = Self::cf_account_info(account_id.clone());
-			let is_online = Reputation::current_network_state().online.contains(&account_id);
 			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(&account_id);
 			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(&account_id);
 			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode>::is_qualified(&account_id);
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(&account_id);
 			let is_bidding = pallet_cf_funding::ActiveBidder::<Runtime>::get(&account_id);
+			let account_info_v1 = Self::cf_account_info(account_id);
 			RuntimeApiAccountInfoV2 {
 				balance: account_info_v1.balance,
 				bond: account_info_v1.bond,
@@ -934,7 +933,7 @@ impl_runtime_apis! {
 				is_current_authority,
 				is_current_backup,
 				is_qualified: is_bidding && is_qualified,
-				is_online,
+				is_online: account_info_v1.is_live,
 				is_bidding,
 			}
 		}
