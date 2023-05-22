@@ -502,7 +502,7 @@ mod timeout {
 
 			use super::*;
 
-			// These test the following scenario: a parry fails to deliver a message
+			// These test the following scenario: a party fails to deliver a message
 			// to a minority of the other parties during the initial broadcast, but
 			// due to broadcast verification all nodes are able to recover since we
 			// trust the majority of the nodes who did receive the message.
