@@ -220,7 +220,7 @@ pub mod pallet {
 				Some(VaultRotationStatus::<T, I>::AwaitingKeyHandover {
 					ceremony_id,
 					response_status,
-					new_public_key,
+					new_public_key: _,
 				}) => {
 					weight += Self::progress_rotation::<
 						KeyHandoverSuccessVoters<T, I>,
@@ -232,7 +232,7 @@ pub mod pallet {
 						ceremony_id,
 						current_block,
 						PalletOffence::FailedKeyHandover,
-						|_| {
+						|new_public_key| {
 							Self::deposit_event(Event::KeyHandoverSuccess { ceremony_id });
 							PendingVaultRotation::<T, I>::put(
 								VaultRotationStatus::<T, I>::KeyHandoverComplete { new_public_key },

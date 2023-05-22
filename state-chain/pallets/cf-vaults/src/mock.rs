@@ -245,7 +245,8 @@ pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <MockRuntime as frame_system::Config>::AccountId = 456u64;
 pub const CHARLIE: <MockRuntime as frame_system::Config>::AccountId = 789u64;
 pub const GENESIS_AGG_PUB_KEY: MockAggKey = MockAggKey(*b"genk");
-pub const NEW_AGG_PUB_KEY: MockAggKey = MockAggKey(*b"next");
+pub const NEW_AGG_PUB_KEY_PRE_HANDOVER: MockAggKey = MockAggKey(*b"next");
+pub const NEW_AGG_PUB_KEY_POST_HANDOVER: MockAggKey = MockAggKey(*b"hand");
 
 pub const MOCK_KEYGEN_RESPONSE_TIMEOUT: u64 = 25;
 
