@@ -155,11 +155,12 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type RedemptionTTLSeconds<T: Config> = StorageValue<_, u64, ValueQuery>;
 
-	/// List of restricted contracts
+	/// List of restricted addresses
 	#[pallet::storage]
 	pub type RestrictedAddresses<T: Config> =
 		StorageMap<_, Blake2_128Concat, EthereumAddress, (), ValueQuery>;
 
+	/// Map that bookkeeps the restricted balances for each address
 	#[pallet::storage]
 	pub type RestrictedBalances<T: Config> = StorageMap<
 		_,
