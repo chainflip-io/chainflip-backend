@@ -8,8 +8,7 @@ use chainflip_engine::{
 	db::{KeyStore, PersistentKeyDB},
 	dot::{self, rpc::DotRpcClient, witnesser as dot_witnesser, DotBroadcaster},
 	eth::{self, build_broadcast_channel, rpc::EthDualRpcClient, EthBroadcaster},
-	health::HealthChecker,
-	p2p,
+	health, p2p,
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
 		self,
@@ -279,7 +278,7 @@ async fn main() -> anyhow::Result<()> {
 			);
 
 			if let Some(health_check_settings) = &settings.health_check {
-				scope.spawn(HealthChecker::start(health_check_settings).await?);
+				health::start(scope, health_check_settings).await?;
 			}
 
 			Ok(())
