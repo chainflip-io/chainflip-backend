@@ -661,9 +661,6 @@ where
                                             transaction_out_id,
                                         },
                                     ) => {
-
-                                        // TODO: Rename some things here. Use Address Monitor?
-                                        // get the threhsold signature, and we want the raw bytes inside the signature
                                         dot_monitor_signature_sender.send(transaction_out_id.0).unwrap();
                                         if nominee == account_id {
                                             let _result = dot_broadcaster.send(transaction_payload.encoded_extrinsic).await
