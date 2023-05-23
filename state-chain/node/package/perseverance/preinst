@@ -10,8 +10,13 @@ CF_ROOT=/etc/chainflip
 CF_BKB=$CF_ROOT/bkb
 
 # Stop the service
-echo "chainflip-node: Stopping service"
-systemctl stop chainflip-node
+if systemctl is-active --quiet chainflip-node; then
+    echo "Stopping chainflip-node..."
+    sudo systemctl stop chainflip-node
+    echo "chainflip-node stopped."
+else
+    echo "chainflip-node is already stopped."
+fi
 
 # Create a backup directory
 echo "chainflip-node: Creating backup directory $CF_BKB"
@@ -41,7 +46,6 @@ if [ -d $CF_ROOT/chainspecs ]; then
 fi
 
 systemctl daemon-reload
-systemctl restart chainflip-node
 
 #DEBHELPER#
 

@@ -10,8 +10,13 @@ CF_ROOT=/etc/chainflip
 CF_BKB=$CF_ROOT/bkb
 
 # Stop the service
-echo "chainflip-engine: Stopping service"
-systemctl stop chainflip-engine
+if systemctl is-active --quiet chainflip-engine; then
+    echo "Stopping chainflip-engine..."
+    sudo systemctl stop chainflip-engine
+    echo "chainflip-engine stopped."
+else
+    echo "chainflip-engine is already stopped."
+fi
 
 # Create a backup directory
 echo "chainflip-engine: Creating backup directory $CF_BKB"
@@ -41,7 +46,6 @@ EOF
 fi
 
 systemctl daemon-reload
-systemctl restart chainflip-engine
 
 #DEBHELPER#
 
