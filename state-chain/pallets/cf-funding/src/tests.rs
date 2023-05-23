@@ -1,5 +1,6 @@
 use crate::{
 	mock::*, pallet, ActiveBidder, Error, EthereumAddress, PendingRedemptions, RedemptionAmount,
+	RestrictedBalance, RestrictedContracts,
 };
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
@@ -526,5 +527,60 @@ fn maintenance_mode_blocks_redemption_requests() {
 			DispatchError::Other("We are in maintenance!")
 		);
 		MockSystemStateInfo::set_maintenance(false);
+	});
+}
+
+#[test]
+fn restricted_funds_getting_recorded() {
+	new_test_ext().execute_with(|| {
+		const AMOUNT: u128 = 45;
+		const RESTRICTED_ADDRESS: EthereumAddress = [0xff; 20];
+
+		// Add Address to list of restricted contracts
+		RestrictedContracts::<Test>::insert(RESTRICTED_ADDRESS, ());
+
+		// Add some funds, we use the zero address here to denote that we should be
+		// able to redeem to any address in future
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			RESTRICTED_ADDRESS,
+			TX_HASH
+		));
+
+		assert_eq!(
+			RestrictedBalance::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(),
+			&AMOUNT
+		);
+	});
+}
+
+#[test]
+fn restricted_funds_getting_reduced() {
+	new_test_ext().execute_with(|| {
+		const RESTRICTED_ADDRESS: EthereumAddress = [0x42; 20];
+		const UNRESTRICTED_ADDRESS: EthereumAddress = [0x01; 20];
+		// Add Address to list of restricted contracts
+		RestrictedContracts::<Test>::insert(RESTRICTED_ADDRESS, ());
+		// Add 50 to the restricted address
+		assert_ok!(Funding::funded(RuntimeOrigin::root(), ALICE, 50, RESTRICTED_ADDRESS, TX_HASH));
+		// and 30 to the unrestricted address
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			30,
+			UNRESTRICTED_ADDRESS,
+			TX_HASH
+		));
+		// Redeem 10
+		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), 10.into(), RESTRICTED_ADDRESS));
+		// Expect the restricted balance to be 70
+		assert_eq!(RestrictedBalance::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(), &40);
+		// Expect to fail if we try to redeem more than the restricted balance
+		assert_noop!(
+			Funding::redeem(RuntimeOrigin::signed(ALICE), 45.into(), RESTRICTED_ADDRESS),
+			Error::<Test>::InvalidRedemption
+		);
 	});
 }

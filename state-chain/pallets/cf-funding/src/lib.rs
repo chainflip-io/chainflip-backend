@@ -298,7 +298,6 @@ pub mod pallet {
 
 			let total_balance = Self::add_funds_to_account(&account_id, amount);
 
-			// TODO: Check if the address is restricted
 			if RestrictedContracts::<T>::contains_key(address) {
 				RestrictedBalance::<T>::mutate(account_id.clone(), |map| {
 					map.entry(address).and_modify(|balance| *balance += amount).or_insert(amount);
@@ -347,27 +346,29 @@ pub mod pallet {
 				RedemptionAmount::Exact(amount) => amount,
 			};
 
+			ensure!(amount > Zero::zero(), Error::<T>::InvalidRedemption);
+
+			ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::InvalidRedemption);
+
 			let total_balance = T::Flip::account_balance(&account_id);
 
+			// Note: If the address is restricted we have to ensure that amount is less than
+			// total_available - restricted balance for that address.
 			if RestrictedContracts::<T>::contains_key(address) {
-				ensure!(
-					total_balance
-						.checked_sub(
-							RestrictedBalance::<T>::get(&account_id).get(&address).unwrap()
-						)
-						.unwrap() > amount,
-					Error::<T>::InvalidRedemption
-				);
+				let claimable_balance = total_balance
+					.checked_sub(
+						RestrictedBalance::<T>::get(&account_id)
+							.get(&address)
+							.expect("to have a restricted balance for this address"),
+					)
+					.expect("to not underflow");
+				ensure!(claimable_balance >= amount, Error::<T>::InvalidRedemption);
 				RestrictedBalance::<T>::mutate_exists(&account_id, |maybe_entry| {
 					if let Some(entry) = maybe_entry {
 						entry.entry(address).and_modify(|balance| *balance -= amount);
 					}
 				});
 			}
-
-			ensure!(amount > Zero::zero(), Error::<T>::InvalidRedemption);
-
-			ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::InvalidRedemption);
 
 			// Not allowed to redeem if we are an active bidder in the auction phase
 			if T::EpochInfo::is_auction_phase() {
