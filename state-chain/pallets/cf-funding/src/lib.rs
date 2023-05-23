@@ -157,11 +157,11 @@ pub mod pallet {
 
 	/// List of restricted contracts
 	#[pallet::storage]
-	pub type RestrictedContracts<T: Config> =
+	pub type RestrictedAddresses<T: Config> =
 		StorageMap<_, Blake2_128Concat, EthereumAddress, (), ValueQuery>;
 
 	#[pallet::storage]
-	pub type RestrictedBalance<T: Config> = StorageMap<
+	pub type RestrictedBalances<T: Config> = StorageMap<
 		_,
 		Blake2_128Concat,
 		AccountId<T>,
@@ -298,8 +298,8 @@ pub mod pallet {
 
 			let total_balance = Self::add_funds_to_account(&account_id, amount);
 
-			if RestrictedContracts::<T>::contains_key(address) {
-				RestrictedBalance::<T>::mutate(account_id.clone(), |map| {
+			if RestrictedAddresses::<T>::contains_key(address) {
+				RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
 					map.entry(address).and_modify(|balance| *balance += amount).or_insert(amount);
 				});
 			}
@@ -354,16 +354,16 @@ pub mod pallet {
 
 			// Note: If the address is restricted we have to ensure that amount is less than
 			// total_available - restricted balance for that address.
-			if RestrictedContracts::<T>::contains_key(address) {
+			if RestrictedAddresses::<T>::contains_key(address) {
 				let claimable_balance = total_balance
 					.checked_sub(
-						RestrictedBalance::<T>::get(&account_id)
+						RestrictedBalances::<T>::get(&account_id)
 							.get(&address)
 							.expect("to have a restricted balance for this address"),
 					)
 					.expect("to not underflow");
 				ensure!(claimable_balance >= amount, Error::<T>::InvalidRedemption);
-				RestrictedBalance::<T>::mutate_exists(&account_id, |maybe_entry| {
+				RestrictedBalances::<T>::mutate_exists(&account_id, |maybe_entry| {
 					if let Some(entry) = maybe_entry {
 						entry.entry(address).and_modify(|balance| *balance -= amount);
 					}

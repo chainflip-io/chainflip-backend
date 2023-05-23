@@ -1,6 +1,6 @@
 use crate::{
 	mock::*, pallet, ActiveBidder, Error, EthereumAddress, PendingRedemptions, RedemptionAmount,
-	RestrictedBalance, RestrictedContracts,
+	RestrictedAddresses, RestrictedBalances,
 };
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
@@ -537,7 +537,7 @@ fn restricted_funds_getting_recorded() {
 		const RESTRICTED_ADDRESS: EthereumAddress = [0xff; 20];
 
 		// Add Address to list of restricted contracts
-		RestrictedContracts::<Test>::insert(RESTRICTED_ADDRESS, ());
+		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
 
 		// Add some funds, we use the zero address here to denote that we should be
 		// able to redeem to any address in future
@@ -550,7 +550,7 @@ fn restricted_funds_getting_recorded() {
 		));
 
 		assert_eq!(
-			RestrictedBalance::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(),
+			RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(),
 			&AMOUNT
 		);
 	});
@@ -562,7 +562,7 @@ fn restricted_funds_getting_reduced() {
 		const RESTRICTED_ADDRESS: EthereumAddress = [0x42; 20];
 		const UNRESTRICTED_ADDRESS: EthereumAddress = [0x01; 20];
 		// Add Address to list of restricted contracts
-		RestrictedContracts::<Test>::insert(RESTRICTED_ADDRESS, ());
+		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
 		// Add 50 to the restricted address
 		assert_ok!(Funding::funded(RuntimeOrigin::root(), ALICE, 50, RESTRICTED_ADDRESS, TX_HASH));
 		// and 30 to the unrestricted address
@@ -576,7 +576,7 @@ fn restricted_funds_getting_reduced() {
 		// Redeem 10
 		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), 10.into(), RESTRICTED_ADDRESS));
 		// Expect the restricted balance to be 70
-		assert_eq!(RestrictedBalance::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(), &40);
+		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(), &40);
 		// Expect to fail if we try to redeem more than the restricted balance
 		assert_noop!(
 			Funding::redeem(RuntimeOrigin::signed(ALICE), 45.into(), RESTRICTED_ADDRESS),
