@@ -1,5 +1,4 @@
 use super::*;
-use cf_chains::SetAggKeyWithAggKeyError;
 use sp_runtime::traits::BlockNumberProvider;
 
 impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
@@ -130,39 +129,30 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		if let Some(VaultRotationStatus::<T, I>::KeyHandoverComplete { new_public_key }) =
 			PendingVaultRotation::<T, I>::get()
 		{
-			if let Some(EpochKey { key, epoch_index, key_state }) = Self::current_epoch_key() {
-				match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
-					Some(key),
+			if let Some((rotation_call, key_state, epoch_index)) =
+				if let Some(EpochKey { key, epoch_index, key_state }) = Self::current_epoch_key() {
+					<T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
+						Some(key),
+						new_public_key,
+					)
+					.ok()
+					.map(|call| (call, key_state, epoch_index))
+				} else {
+					None
+				} {
+				let (_, threshold_request_id) =
+					T::Broadcaster::threshold_sign_and_broadcast_for_rotation(rotation_call);
+				debug_assert!(
+					matches!(key_state, KeyState::Unlocked),
+					"Current epoch key must be active to activate next key."
+				);
+				CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
+					epoch_index,
+					key_state: KeyState::Locked(threshold_request_id),
+				});
+				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
 					new_public_key,
-				) {
-					Ok(rotation_call) => {
-						let (_, threshold_request_id) =
-							T::Broadcaster::threshold_sign_and_broadcast_for_rotation(
-								rotation_call,
-							);
-						debug_assert!(
-							matches!(key_state, KeyState::Unlocked),
-							"Current epoch key must be active to activate next key."
-						);
-						CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
-							epoch_index,
-							key_state: KeyState::Locked(threshold_request_id),
-						});
-						PendingVaultRotation::<T, I>::put(
-							VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
-						);
-					},
-					Err(error) => match error {
-						SetAggKeyWithAggKeyError::NotRequired => {
-							PendingVaultRotation::<T, I>::put(VaultRotationStatus::Complete);
-						},
-						SetAggKeyWithAggKeyError::Other => {
-							log::error!(
-										"Unable to create unsigned transaction to set new vault key. This should not be possible."
-									);
-						},
-					},
-				}
+				});
 			} else {
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
 					new_public_key,
