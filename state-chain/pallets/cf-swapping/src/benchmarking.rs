@@ -46,9 +46,9 @@ benchmarks! {
 		// Generate swaps
 		let a in 2..150;
 		let direction = SwapDirection::FromStable;
-		let swaps = generate_swaps::<T>(a, Asset::Usdc, Asset::Eth);
+		let mut swaps = generate_swaps::<T>(a, Asset::Usdc, Asset::Eth);
 	} : {
-		let _ = Pallet::<T>::execute_group_of_swaps(&swaps[..], Asset::Eth, direction);
+		let _ = Pallet::<T>::execute_group_of_swaps(&mut swaps, Asset::Eth, direction);
 	}
 
 	withdraw {

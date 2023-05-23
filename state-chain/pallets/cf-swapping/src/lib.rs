@@ -45,6 +45,7 @@ pub struct Swap {
 	pub amount: AssetAmount,
 	pub swap_type: SwapType,
 	pub stable_amount: Option<AssetAmount>,
+	pub final_output: Option<AssetAmount>,
 }
 
 impl Swap {
@@ -56,6 +57,35 @@ impl Swap {
 			amount,
 			swap_type,
 			stable_amount: if from == STABLE_ASSET { Some(amount) } else { None },
+			final_output: if from == to { Some(amount) } else { None },
+		}
+	}
+
+	fn swap_asset(&self, direction: SwapDirection) -> Option<Asset> {
+		match (direction, self.from, self.to) {
+			(SwapDirection::IntoStable, STABLE_ASSET, _) => None,
+			(SwapDirection::IntoStable, from, _) => Some(from),
+			(SwapDirection::FromStable, _, STABLE_ASSET) => None,
+			(SwapDirection::FromStable, _, to) => Some(to),
+		}
+	}
+
+	fn swap_amount(&self, direction: SwapDirection) -> Option<AssetAmount> {
+		match direction {
+			SwapDirection::IntoStable => Some(self.amount),
+			SwapDirection::FromStable => self.stable_amount,
+		}
+	}
+
+	fn update_swap_result(&mut self, direction: SwapDirection, output: AssetAmount) {
+		match direction {
+			SwapDirection::IntoStable => {
+				self.stable_amount = Some(output);
+				if self.to == STABLE_ASSET {
+					self.final_output = Some(output);
+				}
+			},
+			SwapDirection::FromStable => self.final_output = Some(output),
 		}
 	}
 }
@@ -228,7 +258,7 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 			tx_hash: TransactionHash,
 		},
-		/// A swap has been executed.
+		/// A swap has been fully completed.
 		SwapCompleted {
 			swap_id: u64,
 		},
@@ -326,55 +356,9 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// Do swapping with remaining weight in this block
-		fn on_idle(_block_number: BlockNumberFor<T>, available_weight: Weight) -> Weight {
-			let swaps = SwapQueue::<T>::take();
-			let mut used_weight = T::DbWeight::get().reads(1);
-
-			// Helper function that splits swaps of a given direction, group them by asset and do
-			// the swaps, then return the remaining swaps in a Vec.
-			let mut do_group_and_swap = |swaps: Vec<Swap>, direction: SwapDirection| -> Vec<Swap> {
-				let (swap_groups, mut remaining) = Self::split_and_group_swaps(swaps, direction);
-
-				for (asset, swaps) in swap_groups {
-					let swap_group_weight =
-						T::WeightInfo::execute_group_of_swaps(swaps.len() as u32);
-					if used_weight.saturating_add(swap_group_weight).any_gt(available_weight) {
-						// Add un-excecuted swaps back to storage
-						remaining.extend(swaps);
-					} else {
-						// Execute the swaps and add the weights.
-						used_weight.saturating_accrue(swap_group_weight);
-						match Self::execute_group_of_swaps(&swaps[..], asset, direction) {
-							Ok(swap_to_execute) => remaining.extend(swap_to_execute),
-							Err(_) => {
-								// If the swaps failed to execute, add them back into the queue.
-								Self::deposit_event(Event::<T>::BatchSwapFailed {
-									asset,
-									direction,
-								});
-								remaining.extend(swaps);
-							},
-						}
-					}
-				}
-				remaining
-			};
-
-			// Swap into Stable asset first.
-			let remaining_swaps = do_group_and_swap(swaps, SwapDirection::IntoStable);
-
-			// Then Swap into Output asset
-			let remaining_swaps = do_group_and_swap(remaining_swaps, SwapDirection::FromStable);
-
-			if !remaining_swaps.is_empty() {
-				SwapQueue::<T>::put(remaining_swaps);
-				used_weight.saturating_accrue(T::DbWeight::get().writes(1));
-			}
-			used_weight
-		}
-
+		/// Cull expired deposit channels, then execute all swaps in the SwapQueue
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
+			// Clean up expired deposit channels
 			let expired = SwapChannelExpiries::<T>::take(n);
 			let expired_count = expired.len();
 			for (channel_id, address) in expired {
@@ -383,7 +367,51 @@ pub mod pallet {
 					deposit_address: address,
 				});
 			}
-			T::WeightInfo::on_initialize(expired_count as u32)
+
+			let swaps = SwapQueue::<T>::take();
+			let mut unprocessed_swaps = vec![];
+			let mut used_weight = T::WeightInfo::on_initialize(expired_count as u32);
+			// Helper function that splits swaps of a given direction, group them by asset and do
+			// the swaps of a given direction. Processed and unprocessed swaps are returned.
+			let mut do_group_and_swap = |swaps: Vec<Swap>, direction: SwapDirection| {
+				let (swap_groups, mut remaining) = Self::split_and_group_swaps(swaps, direction);
+
+				for (asset, mut swaps) in swap_groups {
+					used_weight.saturating_accrue(T::WeightInfo::execute_group_of_swaps(
+						swaps.len() as u32,
+					));
+					match Self::execute_group_of_swaps(&mut swaps, asset, direction) {
+						Ok(()) => remaining.extend(swaps),
+						Err(_) => {
+							// If the swaps failed to execute, add them back into the queue.
+							Self::deposit_event(Event::<T>::BatchSwapFailed { asset, direction });
+							unprocessed_swaps.extend(swaps);
+						},
+					};
+				}
+				remaining
+			};
+
+			// Swap into Stable asset first.
+			let remaining_swaps = do_group_and_swap(swaps, SwapDirection::IntoStable);
+
+			// Swap from Stable asset, and complete the swap logic.
+			do_group_and_swap(remaining_swaps, SwapDirection::FromStable)
+				.into_iter()
+				.for_each(|swap| {
+					debug_assert!(
+						swap.final_output.is_some(),
+						"All swaps should be completed by now."
+					);
+					Self::handle_completed_swap(swap);
+				});
+
+			// Reinsert unprocessed swaps back into the map.
+			if !unprocessed_swaps.is_empty() {
+				SwapQueue::<T>::put(unprocessed_swaps);
+				used_weight.saturating_accrue(T::DbWeight::get().writes(1));
+			}
+			used_weight
 		}
 	}
 
@@ -634,32 +662,19 @@ pub mod pallet {
 		/// Bundle the given swaps and do a single swap of a given direction.
 		/// Return the remaining swaps as a vec.
 		pub fn execute_group_of_swaps(
-			swaps: &[Swap],
+			swaps: &mut Vec<Swap>,
 			asset: Asset,
 			direction: SwapDirection,
-		) -> Result<Vec<Swap>, DispatchError> {
+		) -> DispatchResult {
 			// Stable -> stable swap should never be called.
 			debug_assert_ne!(asset, STABLE_ASSET);
-			let mut remaining_swaps = vec![];
 			debug_assert!(
 				!swaps.is_empty(),
 				"The implementation of grouped_swaps ensures that the swap groups are non-empty."
 			);
 
-			let bundle_input: AssetAmount = swaps
-				.iter()
-				.map(|swap| match direction {
-					SwapDirection::IntoStable => {
-						debug_assert_eq!(swap.from, asset);
-						swap.amount
-					},
-					SwapDirection::FromStable => {
-						debug_assert_eq!(swap.to, asset);
-						debug_assert!(swap.stable_amount.is_some());
-						swap.stable_amount.unwrap_or_default()
-					},
-				})
-				.sum();
+			let bundle_input: AssetAmount =
+				swaps.iter().map(|swap| swap.swap_amount(direction).unwrap_or_default()).sum();
 
 			debug_assert!(bundle_input > 0, "Swap input of zero is invalid.");
 
@@ -672,7 +687,7 @@ pub mod pallet {
 
 			for swap in swaps {
 				let swap_output = multiply_by_rational_with_rounding(
-					swap.amount,
+					swap.swap_amount(direction).unwrap_or_default(),
 					bundle_output,
 					bundle_input,
 					Rounding::Down,
@@ -680,43 +695,7 @@ pub mod pallet {
 				.expect("bundle_input >= swap_amount ∴ result can't overflow");
 
 				if swap_output > 0 {
-					// Assess if the swap is completed.
-					if direction == SwapDirection::IntoStable && swap.to != STABLE_ASSET {
-						// Swap is incomplete, schedule the next swap leg.
-						let mut new_swap = swap.clone();
-						new_swap.stable_amount = Some(swap_output);
-						remaining_swaps.push(new_swap);
-					} else {
-						Self::deposit_event(Event::<T>::SwapCompleted { swap_id: swap.swap_id });
-						// Handle swap completion logic.
-						match &swap.swap_type {
-							SwapType::Swap(destination_address) => {
-								let egress_id = T::EgressHandler::schedule_egress(
-									swap.to,
-									swap_output,
-									destination_address.clone(),
-									None,
-								);
-
-								Self::deposit_event(Event::<T>::SwapEgressScheduled {
-									swap_id: swap.swap_id,
-									egress_id,
-									asset: swap.to,
-									amount: swap_output,
-								});
-							},
-							SwapType::CcmPrincipal(ccm_id) => {
-								Self::handle_ccm_swap_result(
-									*ccm_id,
-									swap_output,
-									CcmSwapLeg::Principal,
-								);
-							},
-							SwapType::CcmGas(ccm_id) => {
-								Self::handle_ccm_swap_result(*ccm_id, swap_output, CcmSwapLeg::Gas);
-							},
-						};
-					}
+					swap.update_swap_result(direction, swap_output);
 				} else {
 					// This is unlikely but theoretically possible if, for example, the initial swap
 					// input is so small compared to the total bundle size that it rounds down to
@@ -727,7 +706,41 @@ pub mod pallet {
 					);
 				}
 			}
-			Ok(remaining_swaps)
+
+			Ok(())
+		}
+
+		/// Function that handles a completed swap.
+		fn handle_completed_swap(swap: Swap) {
+			if let Some(output_amount) = swap.final_output {
+				Self::deposit_event(Event::<T>::SwapCompleted { swap_id: swap.swap_id });
+				// Handle swap completion logic.
+				match &swap.swap_type {
+					SwapType::Swap(destination_address) => {
+						let egress_id = T::EgressHandler::schedule_egress(
+							swap.to,
+							output_amount,
+							destination_address.clone(),
+							None,
+						);
+
+						Self::deposit_event(Event::<T>::SwapEgressScheduled {
+							swap_id: swap.swap_id,
+							egress_id,
+							asset: swap.to,
+							amount: output_amount,
+						});
+					},
+					SwapType::CcmPrincipal(ccm_id) => {
+						Self::handle_ccm_swap_result(*ccm_id, output_amount, CcmSwapLeg::Principal);
+					},
+					SwapType::CcmGas(ccm_id) => {
+						Self::handle_ccm_swap_result(*ccm_id, output_amount, CcmSwapLeg::Gas);
+					},
+				};
+			} else {
+				debug_assert!(false, "Swap is not completed yet!");
+			}
 		}
 
 		fn handle_ccm_swap_result(ccm_id: u64, swap_output: AssetAmount, swap_leg: CcmSwapLeg) {
@@ -760,10 +773,8 @@ pub mod pallet {
 			let mut remaining = vec![];
 
 			for swap in swaps {
-				if direction == SwapDirection::IntoStable && swap.stable_amount.is_none() {
-					grouped_swaps.entry(swap.from).or_insert(vec![]).push(swap)
-				} else if direction == SwapDirection::FromStable && swap.stable_amount.is_some() {
-					grouped_swaps.entry(swap.to).or_insert(vec![]).push(swap)
+				if let Some(asset) = swap.swap_asset(direction) {
+					grouped_swaps.entry(asset).or_insert(vec![]).push(swap);
 				} else {
 					remaining.push(swap);
 				}
