@@ -129,17 +129,15 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		if let Some(VaultRotationStatus::<T, I>::KeyHandoverComplete { new_public_key }) =
 			PendingVaultRotation::<T, I>::get()
 		{
-			if let Some((rotation_call, key_state, epoch_index)) =
-				if let Some(EpochKey { key, epoch_index, key_state }) = Self::current_epoch_key() {
+			if let Some((rotation_call, key_state, epoch_index)) = Self::current_epoch_key()
+				.and_then(|EpochKey { key, epoch_index, key_state }| {
 					<T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
 						Some(key),
 						new_public_key,
 					)
 					.ok()
 					.map(|call| (call, key_state, epoch_index))
-				} else {
-					None
-				} {
+				}) {
 				let (_, threshold_request_id) =
 					T::Broadcaster::threshold_sign_and_broadcast_for_rotation(rotation_call);
 				debug_assert!(
@@ -150,19 +148,16 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 					epoch_index,
 					key_state: KeyState::Locked(threshold_request_id),
 				});
-				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
-					new_public_key,
-				});
 			} else {
-				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
-					new_public_key,
-				});
 				// The block number value 1, which the vault is being set with is a dummy value
 				// and doesn't mean anything. It will be later modified to the real value when
 				// we witness the vault rotation manually via governance
 				Self::set_vault_for_next_epoch(new_public_key, 1_u32.into());
 				Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation { new_public_key })
 			}
+			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
+				new_public_key,
+			});
 		} else {
 			#[cfg(not(test))]
 			log::error!("activate key called before key handover completed");

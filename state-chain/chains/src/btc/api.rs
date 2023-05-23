@@ -65,7 +65,7 @@ where
 	fn new_unsigned(
 		_maybe_old_key: Option<<Bitcoin as ChainCrypto>::AggKey>,
 		new_key: <Bitcoin as ChainCrypto>::AggKey,
-	) -> Result<Self, SetAggKeyWithAggKeyError> {
+	) -> Result<Self, ()> {
 		// We will use the bitcoin address derived with the salt of 0 as the vault address where we
 		// collect unspent amounts in btc transactions and consolidate funds when rotating epoch.
 		let new_vault_change_script =
@@ -74,8 +74,7 @@ where
 		// Max possible btc value to get all available utxos
 		// If we don't have any UTXOs then we're not required to do this.
 		let (all_input_utxos, total_spendable_amount_in_vault) =
-			<E as ChainEnvironment<BtcAmount, SelectedUtxos>>::lookup(u64::MAX)
-				.ok_or(SetAggKeyWithAggKeyError::NotRequired)?;
+			<E as ChainEnvironment<BtcAmount, SelectedUtxos>>::lookup(u64::MAX).ok_or(())?;
 
 		Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
 			&new_key,
