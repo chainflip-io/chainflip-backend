@@ -38,4 +38,6 @@ fi
 systemctl daemon-reload
 systemctl restart chainflip-node
 
+#DEBHELPER#
+
 exit 0

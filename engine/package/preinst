@@ -41,4 +41,6 @@ EOF
 systemctl daemon-reload
 systemctl restart chainflip-engine
 
+#DEBHELPER#
+
 exit 0
