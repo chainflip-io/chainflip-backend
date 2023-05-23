@@ -22,7 +22,7 @@ impl<T> RingBuffer<T> {
 	}
 }
 
-#[cfg(any(feature = "test-utils", test))]
+#[cfg(test)]
 #[test]
 fn check_ring_buffer() {
 	let mut rb = RingBuffer::new(3);
