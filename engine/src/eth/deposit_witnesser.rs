@@ -25,6 +25,10 @@ pub struct DepositWitnesser<StateChainClient> {
 	address_monitor: Arc<Mutex<AddressMonitorEth>>,
 }
 
+/// How many processed blocks to keep in the cache so that newly
+/// received addresses can be checked against them
+const BLOCK_CACHE_SIZE: usize = 4;
+
 impl<StateChainClient> DepositWitnesser<StateChainClient>
 where
 	StateChainClient: SignedExtrinsicApi + Send + Sync,
@@ -34,7 +38,12 @@ where
 		rpc: EthDualRpcClient,
 		address_monitor: Arc<Mutex<AddressMonitorEth>>,
 	) -> Self {
-		Self { rpc, state_chain_client, address_monitor, block_cache: RingBuffer::new(4) }
+		Self {
+			rpc,
+			state_chain_client,
+			address_monitor,
+			block_cache: RingBuffer::new(BLOCK_CACHE_SIZE),
+		}
 	}
 }
 
