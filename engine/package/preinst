@@ -19,7 +19,7 @@ mkdir -p $CF_BKB
 
 # Backup and delete the keys database
 echo "chainflip-engine: Backing up keys database"
-mv $CF_ROOT/data.db $CF_BKB/data.db.bak
+mv $CF_ROOT/*.db $CF_BKB/data.db.bak
 
 # Backup and delete systemd overrides if they exist
 if [ -f /etc/systemd/system/chainflip-engine.service.d/override.conf ]; then
