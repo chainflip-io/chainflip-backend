@@ -588,7 +588,6 @@ where
                                                                     assert!(
                                                                         new_key.previous.replace(handover_key.serialize()).is_none()
                                                                     );
-                                                                    //assert_eq!(new_key.previous.unwrap(), key_to_share.current);
                                                                     new_key
                                                                 })
                                                                 .map_err(|(bad_account_ids, _reason)| bad_account_ids),
