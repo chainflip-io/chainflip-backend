@@ -456,7 +456,7 @@ where
 	}
 
 	// Checks if all nodes have an outcome and the outcomes are consistent, returning the outcome.
-	async fn collect_and_check_outcomes(
+	fn collect_and_check_outcomes(
 		&mut self,
 	) -> Option<
 		Result<
@@ -518,19 +518,16 @@ where
 		}
 	}
 
-	pub async fn complete(&mut self) -> <Self as CeremonyRunnerStrategy>::CheckedOutput {
-		assert_ok!(self
-			.collect_and_check_outcomes()
-			.await
-			.expect("Failed to get all ceremony outcomes"))
+	pub fn complete(&mut self) -> <Self as CeremonyRunnerStrategy>::CheckedOutput {
+		assert_ok!(self.collect_and_check_outcomes().expect("Failed to get all ceremony outcomes"))
 	}
 
-	async fn try_complete_with_error(
+	fn try_complete_with_error(
 		&mut self,
 		bad_account_ids: &[AccountId],
 		expected_failure_reason: <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
 	) -> Option<()> {
-		let (reported, reason) = self.collect_and_check_outcomes().await?.unwrap_err();
+		let (reported, reason) = self.collect_and_check_outcomes()?.unwrap_err();
 		assert_eq!(BTreeSet::from_iter(bad_account_ids.iter()), reported.iter().collect());
 		assert_eq!(expected_failure_reason, reason);
 		Some(())
@@ -538,13 +535,12 @@ where
 
 	/// Gathers the ceremony outcomes from all nodes,
 	/// making sure they are identical and match the expected failure reason.
-	pub async fn complete_with_error(
+	pub fn complete_with_error(
 		&mut self,
 		bad_account_ids: &[AccountId],
 		expected_failure_reason: <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
 	) {
 		self.try_complete_with_error(bad_account_ids, expected_failure_reason)
-			.await
 			.expect("Failed to get all ceremony outcomes");
 	}
 
@@ -788,7 +784,7 @@ pub async fn standard_signing<C: CryptoScheme>(
 		signing::VerifyLocalSig4<C::Point>
 	);
 	signing_ceremony.distribute_messages(messages).await;
-	signing_ceremony.complete().await
+	signing_ceremony.complete()
 }
 
 pub async fn run_keygen(
@@ -812,7 +808,7 @@ pub async fn run_keygen(
 		keygen::VerifyComplaints7
 	);
 	keygen_ceremony.distribute_messages(messages).await;
-	keygen_ceremony.complete().await
+	keygen_ceremony.complete()
 }
 
 /// Generate an invalid local sig for stage3

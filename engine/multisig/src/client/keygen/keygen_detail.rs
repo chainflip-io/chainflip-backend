@@ -78,7 +78,6 @@ fn reconstruct_secret<P: ECPoint>(shares: &BTreeMap<AuthorityCount, ShamirShare<
 }
 
 /// Context used in hashing to prevent replay attacks
-#[derive(Clone)]
 pub struct HashContext(pub [u8; 32]);
 
 /// Generate challenge against which a ZKP of our secret will be generated

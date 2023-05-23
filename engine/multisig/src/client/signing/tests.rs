@@ -45,15 +45,13 @@ mod broadcast_commitments_stage {
 
 		let messages = signing_ceremony.run_stage::<VerifyComm2, _, _>(messages).await;
 		signing_ceremony.distribute_messages(messages).await;
-		signing_ceremony
-			.complete_with_error(
-				&[bad_account_id],
-				SigningFailureReason::BroadcastFailure(
-					BroadcastFailureReason::Inconsistency,
-					SigningStageName::VerifyCommitmentsBroadcast2,
-				),
-			)
-			.await;
+		signing_ceremony.complete_with_error(
+			&[bad_account_id],
+			SigningFailureReason::BroadcastFailure(
+				BroadcastFailureReason::Inconsistency,
+				SigningStageName::VerifyCommitmentsBroadcast2,
+			),
+		);
 	}
 
 	#[tokio::test]
@@ -72,8 +70,7 @@ mod broadcast_commitments_stage {
 		let messages = signing_ceremony.run_stage::<VerifyComm2, _, _>(messages).await;
 		signing_ceremony.distribute_messages(messages).await;
 		signing_ceremony
-			.complete_with_error(&[bad_account_id], SigningFailureReason::DeserializationError)
-			.await;
+			.complete_with_error(&[bad_account_id], SigningFailureReason::DeserializationError);
 	}
 
 	#[tokio::test]
@@ -98,8 +95,7 @@ mod broadcast_commitments_stage {
 		let messages = signing_ceremony.run_stage::<VerifyComm2, _, _>(messages).await;
 		signing_ceremony.distribute_messages(messages).await;
 		signing_ceremony
-			.complete_with_error(&[bad_account_id], SigningFailureReason::InvalidNumberOfPayloads)
-			.await;
+			.complete_with_error(&[bad_account_id], SigningFailureReason::InvalidNumberOfPayloads);
 	}
 }
 
@@ -123,15 +119,13 @@ mod local_signatures_stage {
 
 		let messages = signing_ceremony.run_stage::<VerifyLocalSig4, _, _>(messages).await;
 		signing_ceremony.distribute_messages(messages).await;
-		signing_ceremony
-			.complete_with_error(
-				&[bad_account_id],
-				SigningFailureReason::BroadcastFailure(
-					BroadcastFailureReason::Inconsistency,
-					SigningStageName::VerifyLocalSigsBroadcastStage4,
-				),
-			)
-			.await;
+		signing_ceremony.complete_with_error(
+			&[bad_account_id],
+			SigningFailureReason::BroadcastFailure(
+				BroadcastFailureReason::Inconsistency,
+				SigningStageName::VerifyLocalSigsBroadcastStage4,
+			),
+		);
 	}
 
 	#[tokio::test]
@@ -151,8 +145,7 @@ mod local_signatures_stage {
 		let messages = signing_ceremony.run_stage::<VerifyLocalSig4, _, _>(messages).await;
 		signing_ceremony.distribute_messages(messages).await;
 		signing_ceremony
-			.complete_with_error(&[bad_account_id], SigningFailureReason::InvalidSigShare)
-			.await;
+			.complete_with_error(&[bad_account_id], SigningFailureReason::InvalidSigShare);
 	}
 
 	#[tokio::test]
@@ -171,8 +164,7 @@ mod local_signatures_stage {
 		let messages = signing_ceremony.run_stage::<VerifyLocalSig4, _, _>(messages).await;
 		signing_ceremony.distribute_messages(messages).await;
 		signing_ceremony
-			.complete_with_error(&[bad_account_id], SigningFailureReason::DeserializationError)
-			.await;
+			.complete_with_error(&[bad_account_id], SigningFailureReason::DeserializationError);
 	}
 
 	#[tokio::test]
@@ -199,8 +191,7 @@ mod local_signatures_stage {
 		let messages = signing_ceremony.run_stage::<VerifyLocalSig4, _, _>(messages).await;
 		signing_ceremony.distribute_messages(messages).await;
 		signing_ceremony
-			.complete_with_error(&[bad_account_id], SigningFailureReason::InvalidNumberOfPayloads)
-			.await;
+			.complete_with_error(&[bad_account_id], SigningFailureReason::InvalidNumberOfPayloads);
 	}
 }
 
@@ -232,7 +223,6 @@ async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayl
 	signing_ceremony.distribute_messages(messages).await;
 	let signature = signing_ceremony
 		.complete()
-		.await
 		.into_iter()
 		.next()
 		.expect("should have exactly one signature");
@@ -279,7 +269,6 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 		signing_ceremony.distribute_messages(messages).await;
 		let signature = signing_ceremony
 			.complete()
-			.await
 			.into_iter()
 			.next()
 			.expect("should have exactly one signature");
@@ -324,7 +313,7 @@ async fn should_sign_with_different_keys() {
 	);
 	signing_ceremony.distribute_messages(messages).await;
 
-	let signatures: Vec<_> = signing_ceremony.complete().await.into_iter().collect();
+	let signatures: Vec<_> = signing_ceremony.complete().into_iter().collect();
 
 	assert_eq!(signatures.len(), 2);
 
@@ -394,7 +383,7 @@ mod timeout {
 
 				let messages = run_stages!(signing_ceremony, messages, LocalSig3, VerifyLocalSig4);
 				signing_ceremony.distribute_messages(messages).await;
-				signing_ceremony.complete().await;
+				signing_ceremony.complete();
 			}
 
 			#[tokio::test]
@@ -425,7 +414,7 @@ mod timeout {
 					.await;
 
 				signing_ceremony.distribute_messages(messages).await;
-				signing_ceremony.complete().await;
+				signing_ceremony.complete();
 			}
 		}
 	}
@@ -457,7 +446,7 @@ mod timeout {
 
 				let messages = ceremony.run_stage::<VerifyLocalSig4, _, _>(messages).await;
 				ceremony.distribute_messages(messages).await;
-				ceremony.complete().await;
+				ceremony.complete();
 			}
 
 			#[tokio::test]
@@ -472,7 +461,7 @@ mod timeout {
 
 				ceremony.distribute_messages_with_non_sender(messages, bad_node_id).await;
 
-				ceremony.complete().await;
+				ceremony.complete();
 			}
 		}
 
@@ -511,15 +500,13 @@ mod timeout {
 					.distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
 					.await;
 
-				signing_ceremony
-					.complete_with_error(
-						&[non_sending_party_id_1],
-						SigningFailureReason::BroadcastFailure(
-							BroadcastFailureReason::InsufficientMessages,
-							SigningStageName::VerifyCommitmentsBroadcast2,
-						),
-					)
-					.await
+				signing_ceremony.complete_with_error(
+					&[non_sending_party_id_1],
+					SigningFailureReason::BroadcastFailure(
+						BroadcastFailureReason::InsufficientMessages,
+						SigningStageName::VerifyCommitmentsBroadcast2,
+					),
+				)
 			}
 
 			#[tokio::test]
@@ -549,15 +536,13 @@ mod timeout {
 					.distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
 					.await;
 
-				signing_ceremony
-					.complete_with_error(
-						&[non_sending_party_id_1],
-						SigningFailureReason::BroadcastFailure(
-							BroadcastFailureReason::InsufficientMessages,
-							SigningStageName::VerifyLocalSigsBroadcastStage4,
-						),
-					)
-					.await
+				signing_ceremony.complete_with_error(
+					&[non_sending_party_id_1],
+					SigningFailureReason::BroadcastFailure(
+						BroadcastFailureReason::InsufficientMessages,
+						SigningStageName::VerifyLocalSigsBroadcastStage4,
+					),
+				)
 			}
 		}
 	}
