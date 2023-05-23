@@ -569,7 +569,7 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		// The address and the asset being sent or withdrawn must be compatible.
-		pub fn validate_destination_address(
+		fn validate_destination_address(
 			destination_address: &EncodedAddress,
 			destination_asset: Asset,
 		) -> Result<ForeignChainAddress, DispatchError> {
