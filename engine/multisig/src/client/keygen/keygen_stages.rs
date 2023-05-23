@@ -8,8 +8,8 @@ use crate::{
 		self,
 		ceremony_manager::KeygenCeremony,
 		common::{
-			BroadcastFailureReason, KeygenFailureReason, KeygenStageName, ParticipantStatus,
-			ResharingContext,
+			try_deserialize, BroadcastFailureReason, DelayDeserialization, KeygenFailureReason,
+			KeygenStageName, ParticipantStatus, ResharingContext,
 		},
 		utils::{find_frequent_element, threshold_for_broadcast_verification},
 		KeygenResult, KeygenResultInfo,
@@ -395,7 +395,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 	const NAME: KeygenStageName = KeygenStageName::CoefficientCommitments3;
 
 	fn init(&mut self) -> DataToSend<Self::Message> {
-		DataToSend::Broadcast(self.own_commitment.clone())
+		DataToSend::Broadcast(DelayDeserialization::new(&self.own_commitment))
 	}
 
 	async fn process(
@@ -465,6 +465,17 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 				.collect()
 		} else {
 			commitments
+		};
+
+		// Deserialize and report any party for which deserialization fails:
+		let commitments = match try_deserialize(commitments) {
+			Ok(res) => res,
+			Err(bad_parties) =>
+			// TODO: unit test for this
+				return KeygenStageResult::Error(
+					bad_parties,
+					KeygenFailureReason::DeserializationError,
+				),
 		};
 
 		let commitments = match validate_commitments(

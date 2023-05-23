@@ -3,6 +3,7 @@ use core::{fmt, time::Duration};
 use futures::{stream, Stream};
 #[doc(hidden)]
 pub use lazy_format::lazy_format as internal_lazy_format;
+use sp_rpc::number::NumberOrHex;
 use std::path::PathBuf;
 #[doc(hidden)]
 pub use tokio::select as internal_tokio_select;
@@ -23,6 +24,20 @@ pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN
 		.map_err(|_| "Invalid address length")?;
 
 	Ok(address)
+}
+
+pub fn try_parse_number_or_hex(amount: NumberOrHex) -> anyhow::Result<u128> {
+	u128::try_from(amount)
+		.map_err(|_| {
+			anyhow!("Error parsing amount. Please use a valid number or hex string as input.")
+		})
+		.and_then(|amount| {
+			if amount == 0 {
+				Err(anyhow!("Zero is not a valid withdrawal amount."))
+			} else {
+				Ok(amount)
+			}
+		})
 }
 
 pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], &'static str> {

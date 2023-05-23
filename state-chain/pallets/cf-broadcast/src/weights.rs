@@ -34,7 +34,7 @@ pub trait WeightInfo {
 	fn transaction_signing_failure() -> Weight;
 	fn on_signature_ready() -> Weight;
 	fn start_next_broadcast_attempt() -> Weight;
-	fn signature_accepted() -> Weight;
+	fn transaction_succeeded() -> Weight;
 }
 
 /// Weights for pallet_cf_broadcast using the Substrate node and recommended hardware.
@@ -103,7 +103,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: EthereumBroadcaster TransactionFeeDeficit (r:1 w:1)
 	// Storage: EthereumBroadcaster FailedBroadcasters (r:1 w:1)
 	// Storage: EthereumBroadcaster ThresholdSignatureData (r:1 w:0)
-	fn signature_accepted() -> Weight {
+	fn transaction_succeeded() -> Weight {
 		// Minimum execution time: 35_000 nanoseconds.
 		Weight::from_ref_time(39_000_000)
 			.saturating_add(T::DbWeight::get().reads(6))
@@ -176,7 +176,7 @@ impl WeightInfo for () {
 	// Storage: EthereumBroadcaster TransactionFeeDeficit (r:1 w:1)
 	// Storage: EthereumBroadcaster FailedBroadcasters (r:1 w:1)
 	// Storage: EthereumBroadcaster ThresholdSignatureData (r:1 w:0)
-	fn signature_accepted() -> Weight {
+	fn transaction_succeeded() -> Weight {
 		// Minimum execution time: 35_000 nanoseconds.
 		Weight::from_ref_time(39_000_000)
 			.saturating_add(RocksDbWeight::get().reads(6))

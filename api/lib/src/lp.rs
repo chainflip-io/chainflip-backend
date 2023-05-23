@@ -154,7 +154,7 @@ pub async fn mint_range_order(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 	range: Range<Tick>,
-	amount: Liquidity,
+	amount: u128,
 ) -> Result<MintPositionReturn> {
 	task_scope(|scope| {
 		async {
@@ -209,7 +209,7 @@ pub async fn burn_range_order(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 	range: Range<Tick>,
-	amount: Liquidity,
+	amount: u128,
 ) -> Result<BurnPositionReturn> {
 	task_scope(|scope| {
 		async {
@@ -225,8 +225,8 @@ pub async fn burn_range_order(
 
 			// TODO: Re-enable this check after #3082 in implemented
 			// Find the current position and calculate new target amount
-			// if get_liquidity_at_position(&state_chain_client, asset, range, latest_block_hash)
-			// 	.await? < amount
+			// if get_liquidity_at_position(&state_chain_client, asset, range,
+			// latest_block_hash) 	.await? < amount
 			// {
 			// 	bail!("Insufficient minted liquidity at position");
 			// }

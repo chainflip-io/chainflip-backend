@@ -10,12 +10,12 @@ use utilities::ring_buffer::RingBuffer;
 use crate::{
 	eth::{core_h160, core_h256},
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
-	witnesser::{AddressMonitor, EpochStart},
+	witnesser::{EpochStart, ItemMonitor},
 };
 
 use super::{eth_block_witnessing::BlockProcessor, rpc::EthDualRpcClient, EthNumberBloom};
 
-type AddressMonitorEth = AddressMonitor<H160, H160, ()>;
+type AddressMonitorEth = ItemMonitor<H160, H160, ()>;
 type BlockTransactions = Vec<web3::types::Transaction>;
 
 pub struct DepositWitnesser<StateChainClient> {
@@ -48,7 +48,7 @@ fn check_for_deposits_updating_cache(
 	use cf_primitives::chains::assets::eth;
 	// Before we process the transactions, check if
 	// we have any new addresses to monitor
-	let new_addresses = address_monitor.sync_addresses();
+	let new_addresses = address_monitor.sync_items();
 
 	let txs_from_cache = block_cache.iter().flatten().filter_map(|tx| {
 		let to_addr = core_h160(tx.to?);
@@ -130,7 +130,7 @@ mod tests {
 
 	use crate::{
 		eth::web3_h160,
-		witnesser::{AddressMonitor, AddressMonitorCommand},
+		witnesser::{ItemMonitor, MonitorCommand},
 	};
 
 	fn create_address() -> sp_core::H160 {
@@ -177,7 +177,7 @@ mod tests {
 		// and Address 2. Only Address 1 is monitored initially, so only
 		// one deposit will be witnessed at first:
 		let (address_sender, mut address_monitor) =
-			AddressMonitor::new([address1].into_iter().collect());
+			ItemMonitor::new([address1].into_iter().collect());
 		{
 			let next_block = vec![tx1, tx2];
 
@@ -194,7 +194,7 @@ mod tests {
 		// be able to witness the deposit due to the cache. Importantly no witness
 		// for Address 1 should be generated:
 		{
-			address_sender.send(AddressMonitorCommand::Add(address2)).unwrap();
+			address_sender.send(MonitorCommand::Add(address2)).unwrap();
 
 			let deposits =
 				check_for_deposits_updating_cache(vec![], &mut block_cache, &mut address_monitor);

@@ -117,7 +117,7 @@ pub mod pallet {
 		pub deposit_address: C::ChainAccount,
 		pub asset: C::ChainAsset,
 		pub amount: C::ChainAmount,
-		pub tx_id: <C as ChainCrypto>::TransactionId,
+		pub tx_id: <C as ChainCrypto>::TransactionInId,
 	}
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -270,7 +270,7 @@ pub mod pallet {
 			deposit_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
-			tx_id: <T::TargetChain as ChainCrypto>::TransactionId,
+			tx_id: <T::TargetChain as ChainCrypto>::TransactionInId,
 		},
 		AssetEgressDisabled {
 			asset: TargetChainAsset<T, I>,
@@ -307,7 +307,7 @@ pub mod pallet {
 			deposit_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
-			tx_id: <T::TargetChain as ChainCrypto>::TransactionId,
+			tx_id: <T::TargetChain as ChainCrypto>::TransactionInId,
 		},
 	}
 
@@ -700,7 +700,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		deposit_address: TargetChainAccount<T, I>,
 		asset: TargetChainAsset<T, I>,
 		amount: TargetChainAmount<T, I>,
-		tx_id: <T::TargetChain as ChainCrypto>::TransactionId,
+		tx_id: <T::TargetChain as ChainCrypto>::TransactionInId,
 	) -> DispatchResult {
 		let DepositAddressDetails { channel_id, source_asset } =
 			DepositAddressDetailsLookup::<T, I>::get(&deposit_address)
@@ -805,7 +805,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	fn close_channel(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
 		let address_status = AddressStatus::<T, I>::get(address.clone());
 		ChannelActions::<T, I>::remove(&address);
-		FetchParamDetails::<T, I>::remove(channel_id);
 		if matches!(address_status, DeploymentStatus::Deployed) &&
 			T::TargetChain::get() != ForeignChain::Bitcoin
 		{

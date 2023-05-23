@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(const_option)]
 
 #[cfg(feature = "std")]
 mod with_std;
@@ -52,7 +53,7 @@ mod test_asserts {
 /// we are using and in the corresponding literature.
 ///
 /// For the *success* threshold, use [success_threshold_from_share_count].
-pub fn threshold_from_share_count(share_count: u32) -> u32 {
+pub const fn threshold_from_share_count(share_count: u32) -> u32 {
 	if 0 == share_count {
 		0
 	} else {

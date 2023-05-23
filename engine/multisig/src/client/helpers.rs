@@ -586,7 +586,7 @@ pub(crate) use run_stages;
 
 use super::{
 	ceremony_manager::{deserialize_for_version, prepare_key_handover_request},
-	common::ResharingContext,
+	common::{DelayDeserialization, ResharingContext},
 	keygen::SharingParameters,
 	signing::Comm1,
 	ThresholdParameters,
@@ -819,7 +819,9 @@ pub async fn run_keygen(
 pub fn gen_dummy_local_sig<P: ECPoint>(rng: &mut Rng) -> LocalSig3<P> {
 	use crate::crypto::ECScalar;
 
-	signing::LocalSig3 { responses: vec![P::Scalar::random(rng)] }
+	DelayDeserialization::new(&signing::LocalSig3Inner::<P> {
+		responses: vec![P::Scalar::random(rng)],
+	})
 }
 
 pub fn get_dummy_hash_comm(rng: &mut Rng) -> keygen::HashComm1 {
@@ -847,10 +849,11 @@ pub fn gen_dummy_keygen_comm1<P: ECPoint>(
 	fake_comm1
 }
 
-pub fn gen_dummy_signing_comm1(rng: &mut Rng, number_of_commitments: u64) -> Comm1<Point> {
-	Comm1(
-		(0..number_of_commitments)
-			.map(|_| SigningCommitment { d: Point::random(rng), e: Point::random(rng) })
-			.collect(),
-	)
+pub fn gen_dummy_signing_comm1<P: ECPoint>(rng: &mut Rng, number_of_commitments: u64) -> Comm1<P> {
+	use crate::crypto::ECScalar;
+	let point = P::from_scalar(&P::Scalar::random(rng));
+	let comm1: Vec<_> = (0..number_of_commitments)
+		.map(|_| SigningCommitment { d: point, e: point })
+		.collect();
+	DelayDeserialization::new(&comm1)
 }

@@ -1,0 +1,50 @@
+image:
+  repository: ghcr.io/chainflip-io/chainflip-node
+  pullPolicy: IfNotPresent
+  tag: ""
+initContainer:
+  image:
+    repository: ghcr.io/chainflip-io/ubuntu
+    pullPolicy: IfNotPresent
+    tag: "20.04"
+
+signingKeyFile: /etc/chainflip/keys/signing_key_file
+nodeKeyFile: /etc/chainflip/keys/node_key_file
+
+imagePullSecrets:
+  - name: dockerconfigjson
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+  hosts: []
+  tls: {}
+
+resources:
+  limits:
+    cpu: 1500m
+    memory: 2048Mi
+  requests:
+    cpu: 500m
+    memory: 1024Mi
+
+secrets:
+  existingOnePasswordSecret: chainflip-node-secrets
+
+cluster: ""
+chainspec: sisyphos.chainspec.json
+chainspecUrl: ""
+
+ports:
+  wsPort: "9944"
+  rpcPort: "9933"
+  p2pPort: "30333"
+  metricsPort: "9615"
+
+basePath: /etc/chainflip
+purgeChain: false

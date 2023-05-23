@@ -4,12 +4,12 @@ use crate::{self as pallet_cf_broadcast, Instance1, PalletOffence};
 use cf_chains::{
 	eth::Ethereum,
 	mocks::{MockAggKey, MockApiCall, MockEthereum, MockTransactionBuilder},
-	ChainCrypto,
+	Chain, ChainCrypto,
 };
 use cf_traits::{
 	impl_mock_chainflip,
 	mocks::{signer_nomination::MockNominator, threshold_signer::MockThresholdSigner},
-	AccountRoleRegistry, EpochKey, KeyState,
+	AccountRoleRegistry, EpochKey, KeyState, OnBroadcastReady, OnRotationCallback,
 };
 use codec::{Decode, Encode};
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
@@ -88,7 +88,11 @@ pub const INVALID_AGG_KEY: MockAggKey = MockAggKey([1, 1, 1, 1]);
 
 thread_local! {
 	pub static SIGNATURE_REQUESTS: RefCell<Vec<<Ethereum as ChainCrypto>::Payload>> = RefCell::new(vec![]);
+	pub static ROTATION_CALLBACK: RefCell<Option<MockCallback>> = RefCell::new(None);
+	pub static CALLBACK_CALLED: RefCell<bool> = RefCell::new(false);
 }
+
+pub type EthMockThresholdSigner = MockThresholdSigner<Ethereum, crate::mock::RuntimeCall>;
 
 pub struct MockKeyProvider;
 
@@ -102,8 +106,34 @@ impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 	}
 }
 
+pub struct MockRotationCallbackProvider;
+
+impl MockRotationCallbackProvider {
+	pub fn set_callback(callback: Option<MockCallback>) {
+		ROTATION_CALLBACK.with(|cell| *cell.borrow_mut() = callback);
+	}
+}
+
+impl OnRotationCallback<MockEthereum> for MockRotationCallbackProvider {
+	type Callback = MockCallback;
+	type Origin = RuntimeOrigin;
+
+	fn on_rotation(
+		_block_number: <MockEthereum as Chain>::ChainBlockNumber,
+		_tx_out_id: <MockEthereum as ChainCrypto>::TransactionOutId,
+	) -> Option<Self::Callback> {
+		ROTATION_CALLBACK.with(|cell| cell.borrow_mut().take())
+	}
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub struct MockCallback;
+
+impl MockCallback {
+	pub fn was_called() -> bool {
+		CALLBACK_CALLED.with(|cell| *cell.borrow())
+	}
+}
 
 impl UnfilteredDispatchable for MockCallback {
 	type RuntimeOrigin = RuntimeOrigin;
@@ -112,6 +142,7 @@ impl UnfilteredDispatchable for MockCallback {
 		self,
 		_origin: Self::RuntimeOrigin,
 	) -> frame_support::pallet_prelude::DispatchResultWithPostInfo {
+		CALLBACK_CALLED.with(|cell| *cell.borrow_mut() = true);
 		Ok(().into())
 	}
 }
@@ -120,6 +151,11 @@ impl MockKeyProvider {
 	pub fn set_valid(valid: bool) {
 		VALIDKEY.with(|cell| *cell.borrow_mut() = valid);
 	}
+}
+
+pub struct MockBroadcastReadyProvider;
+impl OnBroadcastReady<MockEthereum> for MockBroadcastReadyProvider {
+	type ApiCall = MockApiCall<MockEthereum>;
 }
 
 impl pallet_cf_broadcast::Config<Instance1> for Test {
@@ -138,6 +174,8 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type KeyProvider = MockKeyProvider;
 	type RuntimeOrigin = RuntimeOrigin;
 	type BroadcastCallable = MockCallback;
+	type RotationCallbackProvider = MockRotationCallbackProvider;
+	type BroadcastReadyProvider = MockBroadcastReadyProvider;
 }
 
 // Build genesis storage according to the mock runtime.
