@@ -6,9 +6,6 @@ name = "chainflip-engine"
 version = '0.7.0'
 
 [package.metadata.deb]
-assets = [
-  ["target/release/chainflip-engine", "usr/bin/", "755"]
-]
 depends = "$auto, systemd"
 extended-description = """\
 Chainflip Validator Engine Package"""
@@ -18,24 +15,18 @@ name = "chainflip-engine"
 priority = "required"
 section = "rust"
 systemd-units = {unit-name = "chainflip-engine", enable = false}
-
-[package.metadata.deb.variants.development]
-maintainer-scripts = "package/development"
 assets = [
   ["target/release/chainflip-engine", "usr/bin/", "755"],
 ]
 
+[package.metadata.deb.variants.development]
+maintainer-scripts = "package/development"
+
 [package.metadata.deb.variants.sisyphos]
 maintainer-scripts = "package/sisyphos"
-assets = [
-  ["target/release/chainflip-engine", "usr/bin/", "755"]
-]
 
 [package.metadata.deb.variants.perseverance]
 maintainer-scripts = "package/perseverance"
-assets = [
-  ["target/release/chainflip-engine", "usr/bin/", "755"]
-]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
