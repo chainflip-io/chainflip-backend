@@ -538,13 +538,13 @@ impl AddressConverter for ChainAddressConverter {
 	fn try_to_encoded_address(
 		address: ForeignChainAddress,
 	) -> Result<EncodedAddress, DispatchError> {
-		try_to_encoded_address(address, Environment::bitcoin_network())
+		try_to_encoded_address(address, || Environment::bitcoin_network())
 	}
 
 	fn try_from_encoded_address(
 		encoded_address: EncodedAddress,
 	) -> Result<ForeignChainAddress, ()> {
-		try_from_encoded_address(encoded_address, Environment::bitcoin_network())
+		try_from_encoded_address(encoded_address, || Environment::bitcoin_network())
 	}
 }
 

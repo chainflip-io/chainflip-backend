@@ -477,7 +477,7 @@ fn rejects_invalid_swap_by_witnesser() {
 		.unwrap();
 
 		let btc_encoded_address =
-			try_to_encoded_address(ForeignChainAddress::Btc(script), BitcoinNetwork::Mainnet)
+			try_to_encoded_address(ForeignChainAddress::Btc(script), || BitcoinNetwork::Mainnet)
 				.unwrap();
 
 		// Is valid Bitcoin address, but asset is Dot, so not compatible

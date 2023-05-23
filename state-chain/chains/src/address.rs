@@ -204,24 +204,24 @@ impl EncodedAddress {
 	}
 }
 
-pub fn try_to_encoded_address(
+pub fn try_to_encoded_address<GetBitcoinNetwork: FnOnce() -> BitcoinNetwork>(
 	address: ForeignChainAddress,
-	bitcoin_network: BitcoinNetwork,
+	bitcoin_network: GetBitcoinNetwork,
 ) -> Result<EncodedAddress, DispatchError> {
 	match address {
 		ForeignChainAddress::Eth(address) => Ok(EncodedAddress::Eth(address)),
 		ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(address)),
 		ForeignChainAddress::Btc(address) => Ok(EncodedAddress::Btc(
-			derive_btc_deposit_address_from_script(address.into(), bitcoin_network)
+			derive_btc_deposit_address_from_script(address.into(), bitcoin_network())
 				.bytes()
 				.collect::<Vec<u8>>(),
 		)),
 	}
 }
 
-pub fn try_from_encoded_address(
+pub fn try_from_encoded_address<GetBitcoinNetwork: FnOnce() -> BitcoinNetwork>(
 	encoded_address: EncodedAddress,
-	bitcoin_network: BitcoinNetwork,
+	bitcoin_network: GetBitcoinNetwork,
 ) -> Result<ForeignChainAddress, ()> {
 	match encoded_address {
 		EncodedAddress::Eth(address_bytes) => Ok(ForeignChainAddress::Eth(address_bytes)),
@@ -229,7 +229,7 @@ pub fn try_from_encoded_address(
 		EncodedAddress::Btc(address_bytes) => Ok(ForeignChainAddress::Btc(
 			scriptpubkey_from_address(
 				sp_std::str::from_utf8(&address_bytes[..]).map_err(|_| ())?,
-				bitcoin_network,
+				bitcoin_network(),
 			)
 			.map_err(|_| ())?
 			.try_into()
