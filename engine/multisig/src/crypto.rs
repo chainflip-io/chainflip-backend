@@ -37,7 +37,7 @@ pub const MAX_SCALAR_SIZE: usize = 32;
 /// Used as a unique identifier when serializing/deserializing chain specific data.
 /// The values are explicitly given and should never be changed.
 #[repr(u16)]
-#[derive(Clone, Copy, Debug, FromPrimitive, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, FromPrimitive)]
 pub enum ChainTag {
 	Ethereum = 0x0000,
 	Polkadot = 0x0001,

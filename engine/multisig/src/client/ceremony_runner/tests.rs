@@ -28,7 +28,7 @@ type CeremonyRunnerChannels = (
 );
 
 // For these tests the ceremony id does not matter
-const DEFAULT_CEREMONY_ID: CeremonyId = CeremonyId { id: 1, chain: EthSigning::CHAIN_TAG };
+const DEFAULT_CEREMONY_ID: CeremonyId = 1;
 
 /// Spawn a signing ceremony runner task in the an unauthorised state with some default parameters
 fn spawn_signing_ceremony_runner(

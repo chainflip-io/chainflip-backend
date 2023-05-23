@@ -4,11 +4,11 @@ use std::{
 };
 
 use async_trait::async_trait;
-use cf_primitives::AuthorityCount;
+use cf_primitives::{AuthorityCount, CeremonyId};
 use tracing::warn;
 
 use crate::{
-	client::{ceremony_manager::CeremonyTrait, CeremonyId, MultisigMessage},
+	client::{ceremony_manager::CeremonyTrait, MultisigMessage},
 	p2p::{OutgoingMultisigStageMessages, ProtocolVersion, CURRENT_PROTOCOL_VERSION},
 };
 
@@ -86,7 +86,7 @@ fn serialize_for_version<C: CeremonyTrait>(
 	data: C::Data,
 	version: ProtocolVersion,
 ) -> Vec<u8> {
-	let message = MultisigMessage { ceremony_id: ceremony_id.id, data: data.into() };
+	let message = MultisigMessage { ceremony_id, data: data.into() };
 	match version {
 		1 => bincode::serialize(&message).unwrap(),
 		_ => panic!("Unsupported protocol version"),

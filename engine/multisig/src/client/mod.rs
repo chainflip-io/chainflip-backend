@@ -18,7 +18,7 @@ use std::collections::BTreeSet;
 
 use utilities::{format_iterator, threshold_from_share_count};
 
-use cf_primitives::{AuthorityCount, EpochIndex};
+use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
 use futures::{future::BoxFuture, FutureExt};
 use state_chain_runtime::AccountId;
 
@@ -30,7 +30,6 @@ use tracing::{debug, info, info_span, Instrument};
 use keygen::KeygenData;
 
 pub use crate::client::utils::PartyIdxMapping;
-use crate::ChainTag;
 pub use common::{
 	CeremonyFailureReason, KeygenFailureReason, KeygenResult, KeygenResultInfo, KeygenStageName,
 	SigningFailureReason,
@@ -62,24 +61,6 @@ use super::{
 	crypto::{CryptoScheme, ECPoint, KeyId},
 	Rng,
 };
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct CeremonyId {
-	pub id: cf_primitives::CeremonyId,
-	chain: ChainTag,
-}
-
-impl CeremonyId {
-	pub const fn new<C: CryptoScheme>(id: cf_primitives::CeremonyId) -> Self {
-		CeremonyId { id, chain: C::CHAIN_TAG }
-	}
-}
-
-impl std::fmt::Display for CeremonyId {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}({})", self.chain, self.id)
-	}
-}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ThresholdParameters {
@@ -120,7 +101,7 @@ impl<P: ECPoint> From<KeygenData<P>> for MultisigData<P> {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MultisigMessage<P: ECPoint> {
-	ceremony_id: cf_primitives::CeremonyId,
+	ceremony_id: CeremonyId,
 	#[serde(bound = "")]
 	data: MultisigData<P>,
 }
@@ -134,14 +115,14 @@ pub struct MultisigMessage<P: ECPoint> {
 pub trait MultisigClientApi<C: CryptoScheme> {
 	fn initiate_keygen(
 		&self,
-		ceremony_id: cf_primitives::CeremonyId,
+		ceremony_id: CeremonyId,
 		epoch_index: EpochIndex,
 		participants: BTreeSet<AccountId>,
 	) -> BoxFuture<'_, Result<C::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>>;
 
 	fn initiate_key_handover(
 		&self,
-		ceremony_id: cf_primitives::CeremonyId,
+		ceremony_id: CeremonyId,
 		key_id: KeyId,
 		epoch_index: EpochIndex,
 		sharing_participants: BTreeSet<AccountId>,
@@ -150,12 +131,12 @@ pub trait MultisigClientApi<C: CryptoScheme> {
 
 	fn initiate_signing(
 		&self,
-		ceremony_id: cf_primitives::CeremonyId,
+		ceremony_id: CeremonyId,
 		signers: BTreeSet<AccountId>,
 		signing_info: Vec<(KeyId, C::SigningPayload)>,
 	) -> BoxFuture<'_, Result<Vec<C::Signature>, (BTreeSet<AccountId>, SigningFailureReason)>>;
 
-	fn update_latest_ceremony_id(&self, ceremony_id: cf_primitives::CeremonyId);
+	fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId);
 }
 
 /// The ceremony details are optional to alow the updating of the ceremony id tracking
@@ -268,14 +249,13 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 {
 	fn initiate_keygen(
 		&self,
-		ceremony_id: cf_primitives::CeremonyId,
+		ceremony_id: CeremonyId,
 		// The epoch the key will be associated with if successful.
 		epoch_index: EpochIndex,
 		participants: BTreeSet<AccountId>,
 	) -> BoxFuture<'_, Result<C::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>> {
-		let ceremony_id = CeremonyId::new::<C>(ceremony_id);
 		assert!(participants.contains(&self.my_account_id));
-		let span = info_span!("Keygen Ceremony", ceremony_id = ceremony_id.to_string());
+		let span = info_span!("Keygen Ceremony", ceremony_id = ceremony_id);
 		let _entered = span.enter();
 
 		info!(
@@ -290,7 +270,7 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 
 	fn initiate_key_handover(
 		&self,
-		ceremony_id: cf_primitives::CeremonyId,
+		ceremony_id: CeremonyId,
 		key_id: KeyId,
 		epoch_index: EpochIndex,
 		sharing_participants: BTreeSet<AccountId>,
@@ -299,8 +279,7 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 		'_,
 		Result<<C as CryptoScheme>::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>,
 	> {
-		let ceremony_id = CeremonyId::new::<C>(ceremony_id);
-		let span = info_span!("Key Handover Ceremony", ceremony_id = ceremony_id.to_string());
+		let span = info_span!("Key Handover Ceremony", ceremony_id = ceremony_id);
 		let _entered = span.enter();
 
 		debug!(
@@ -338,12 +317,11 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 
 	fn initiate_signing(
 		&self,
-		ceremony_id: cf_primitives::CeremonyId,
+		ceremony_id: CeremonyId,
 		signers: BTreeSet<AccountId>,
 		signing_info: Vec<(KeyId, C::SigningPayload)>,
 	) -> BoxFuture<'_, Result<Vec<C::Signature>, (BTreeSet<AccountId>, SigningFailureReason)>> {
-		let ceremony_id = CeremonyId::new::<C>(ceremony_id);
-		let span = info_span!("Signing Ceremony", ceremony_id = ceremony_id.to_string());
+		let span = info_span!("Signing Ceremony", ceremony_id = ceremony_id);
 		let _entered = span.enter();
 
 		assert!(signers.contains(&self.my_account_id));
@@ -393,7 +371,7 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 			.boxed()
 		} else {
 			// No key was found for the given key_id
-			self.update_latest_ceremony_id(ceremony_id.id);
+			self.update_latest_ceremony_id(ceremony_id);
 			let reported_parties = Default::default();
 			let failure_reason = SigningFailureReason::UnknownKey;
 			failure_reason.log(&reported_parties);
@@ -401,9 +379,9 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 		}
 	}
 
-	fn update_latest_ceremony_id(&self, ceremony_id: cf_primitives::CeremonyId) {
+	fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId) {
 		self.ceremony_request_sender
-			.send(CeremonyRequest { ceremony_id: CeremonyId::new::<C>(ceremony_id), details: None })
+			.send(CeremonyRequest { ceremony_id, details: None })
 			.unwrap();
 	}
 }

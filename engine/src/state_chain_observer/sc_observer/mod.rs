@@ -9,7 +9,7 @@ use cf_chains::{
 	eth::Ethereum,
 	Bitcoin, Polkadot,
 };
-use cf_primitives::{BlockNumber, EpochIndex, PolkadotAccountId};
+use cf_primitives::{BlockNumber, CeremonyId, EpochIndex, PolkadotAccountId};
 use crypto_compat::CryptoCompat;
 use futures::{FutureExt, StreamExt, TryFutureExt};
 use sp_core::{Hasher, H160, H256};
@@ -61,7 +61,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,
 	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
-	ceremony_id: cf_primitives::CeremonyId,
+	ceremony_id: CeremonyId,
 	epoch_index: EpochIndex,
 	keygen_participants: BTreeSet<AccountId32>,
 ) where
@@ -104,7 +104,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,
 	multisig_client: &'a MultisigClient,
 	state_chain_client: Arc<StateChainClient>,
-	ceremony_id: cf_primitives::CeremonyId,
+	ceremony_id: CeremonyId,
 	signers: BTreeSet<AccountId>,
 	signing_info: Vec<(KeyId, C::SigningPayload)>,
 ) where

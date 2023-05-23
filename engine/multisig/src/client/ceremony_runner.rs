@@ -8,7 +8,7 @@ use std::{
 };
 
 use anyhow::Result;
-use cf_primitives::AuthorityCount;
+use cf_primitives::{AuthorityCount, CeremonyId};
 use futures::future::{BoxFuture, FutureExt};
 use tokio::sync::{
 	mpsc::{UnboundedReceiver, UnboundedSender},
@@ -23,7 +23,6 @@ use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, Account
 use super::{
 	ceremony_manager::{CeremonyOutcome, CeremonyTrait, DynStage, PreparedRequest},
 	common::PreProcessStageDataCheck,
-	CeremonyId,
 };
 
 const MAX_STAGE_DURATION: Duration = Duration::from_secs(MAX_STAGE_DURATION_SECONDS as u64);
@@ -56,7 +55,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 		request_receiver: oneshot::Receiver<PreparedRequest<Ceremony>>,
 		outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
 	) -> Result<()> {
-		let span = tracing::info_span!("CeremonyRunner", ceremony_id = ceremony_id.to_string());
+		let span = tracing::info_span!("CeremonyRunner", ceremony_id = ceremony_id);
 
 		// We always create unauthorised first, it can get promoted to
 		// an authorised one with a ceremony request
