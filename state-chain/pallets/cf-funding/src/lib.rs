@@ -237,6 +237,11 @@ pub mod pallet {
 		MinimumFundingUpdated {
 			new_minimum: T::Balance,
 		},
+
+		/// A new restricted address has been added
+		AddedRestrictedAddress {
+			address: EthereumAddress,
+		},
 	}
 
 	#[pallet::error]
@@ -558,6 +563,26 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			MinimumFunding::<T>::put(minimum_funding);
 			Self::deposit_event(Event::MinimumFundingUpdated { new_minimum: minimum_funding });
+			Ok(().into())
+		}
+
+		/// Add a restricted address to the list of restricted addresses.
+		///
+		/// ## Events
+		///
+		/// - [AddedRestrictedAddress](Event::AddedRestrictedAddress)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::weight(10_000)]
+		pub fn add_restricted_address(
+			origin: OriginFor<T>,
+			address: EthereumAddress,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			RestrictedAddresses::<T>::insert(address, ());
+			Self::deposit_event(Event::AddedRestrictedAddress { address });
 			Ok(().into())
 		}
 	}
