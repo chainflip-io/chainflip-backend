@@ -2,8 +2,8 @@
 set -e
 
 if [ "$1" != "upgrade" ]; then
-  echo "chainflip-node: Fresh install detected, skipping migration"
-  exit 0
+    echo "chainflip-node: Fresh install detected, skipping migration"
+    exit 0
 fi
 
 CF_ROOT=/etc/chainflip
@@ -33,6 +33,11 @@ fi
 if [ -d $CF_ROOT/data ]; then
     echo "chainflip-node: chaindata found in $CF_ROOT/data - removing"
     rm -rf $CF_ROOT/data
+fi
+
+if [ -d $CF_ROOT/chainspecs ]; then
+    echo "chainflip-node: chainspecs found in $CF_ROOT/chainspecs - removing"
+    rm -rf $CF_ROOT/chainspecs
 fi
 
 systemctl daemon-reload
