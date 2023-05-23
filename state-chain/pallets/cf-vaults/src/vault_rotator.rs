@@ -1,5 +1,6 @@
 use super::*;
 use cf_chains::SetAggKeyWithAggKeyError;
+use cf_traits::CeremonyIdProvider;
 use sp_runtime::traits::BlockNumberProvider;
 
 impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
@@ -13,7 +14,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 		assert_ne!(Self::status(), AsyncResult::Pending);
 
-		let ceremony_id = Self::increment_ceremony_id();
+		let ceremony_id = Pallet::<T, I>::increment_ceremony_id();
 
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::AwaitingKeygen {
 			ceremony_id,
@@ -49,7 +50,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 					assert_ne!(Self::status(), AsyncResult::Pending);
 
-					let ceremony_id = Self::increment_ceremony_id();
+					let ceremony_id = Pallet::<T, I>::increment_ceremony_id();
 
 					// from the SC's perspective, we don't care what set they're in, they get
 					// reported the same and each participant only gets one vote, like keygen.

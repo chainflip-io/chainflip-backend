@@ -853,13 +853,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		Self::deposit_event(event);
 	}
-
-	fn increment_ceremony_id() -> CeremonyId {
-		CeremonyIdCounter::<T, I>::mutate(|id| {
-			*id += 1;
-			*id
-		})
-	}
 }
 
 impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
