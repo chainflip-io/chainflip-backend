@@ -458,7 +458,7 @@ fn rejects_invalid_swap_deposit() {
 				Asset::Dot,
 				EncodedAddress::Dot(Default::default()),
 				0,
-				Some(ccm.clone())
+				Some(ccm)
 			),
 			Error::<Test>::CcmUnsupportedForTargetChain
 		);

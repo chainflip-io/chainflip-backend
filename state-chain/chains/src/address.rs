@@ -219,6 +219,7 @@ pub fn try_to_encoded_address<GetBitcoinNetwork: FnOnce() -> BitcoinNetwork>(
 	}
 }
 
+#[allow(clippy::result_unit_err)]
 pub fn try_from_encoded_address<GetBitcoinNetwork: FnOnce() -> BitcoinNetwork>(
 	encoded_address: EncodedAddress,
 	bitcoin_network: GetBitcoinNetwork,
