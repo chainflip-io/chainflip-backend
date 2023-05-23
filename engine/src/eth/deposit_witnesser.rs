@@ -173,52 +173,59 @@ mod tests {
 	}
 
 	#[test]
-	fn deposit_witnessing_with_cache() {
-		let address1 = create_address();
-		let address2 = create_address();
+	fn deposit_witnessing_for_known_address() {
+		// Block arrives after we start monitoring the
+		// address, so it gets witnessed as expected
+		let address = create_address();
 
-		let tx1 = create_tx(&address1);
-		let tx2 = create_tx(&address2);
+		let (_, mut address_monitor) = ItemMonitor::new([address].into_iter().collect());
 
 		let mut block_cache = RingBuffer::new(4);
 
-		// The next block will contain transactions for both Address 1
-		// and Address 2. Only Address 1 is monitored initially, so only
-		// one deposit will be witnessed at first:
-		let (address_sender, mut address_monitor) =
-			ItemMonitor::new([address1].into_iter().collect());
-		{
-			let next_block = vec![tx1, tx2];
+		let deposits = check_for_deposits_updating_cache(
+			vec![create_tx(&address)],
+			&mut block_cache,
+			&mut address_monitor,
+		);
 
-			let deposits = check_for_deposits_updating_cache(
-				next_block,
-				&mut block_cache,
-				&mut address_monitor,
-			);
+		assert_eq!(deposits.first().unwrap().deposit_address, address);
 
-			assert_eq!(deposits.first().unwrap().deposit_address, address1);
-		}
+		// The block containing the tx will be added to the cache, but
+		// no duplicate witness will be created for it:
+		assert!(check_for_deposits_updating_cache(vec![], &mut block_cache, &mut address_monitor)
+			.is_empty());
+	}
 
-		// Address 2 is received after the block mentioning it, but we should still
-		// be able to witness the deposit due to the cache. Importantly no witness
-		// for Address 1 should be generated:
-		{
-			address_sender.send(MonitorCommand::Add(address2)).unwrap();
+	#[test]
+	fn deposit_witnessing_with_delayed_address() {
+		let address = create_address();
 
-			let deposits =
-				check_for_deposits_updating_cache(vec![], &mut block_cache, &mut address_monitor);
+		let mut block_cache = RingBuffer::new(4);
 
-			assert_eq!(deposits.len(), 1);
-			assert_eq!(deposits.first().unwrap().deposit_address, address2);
-		}
+		let (address_sender, mut address_monitor) = ItemMonitor::new(Default::default());
 
-		// Both addresses have been witnessed, so no duplicate witnesses
-		// should be generated:
-		{
-			let deposits =
-				check_for_deposits_updating_cache(vec![], &mut block_cache, &mut address_monitor);
+		// Block containing the address is processed before the address is known to the
+		// witnesser, so initially no deposit witness is created:
+		let deposits = check_for_deposits_updating_cache(
+			vec![create_tx(&address)],
+			&mut block_cache,
+			&mut address_monitor,
+		);
 
-			assert!(deposits.is_empty());
-		}
+		assert_eq!(deposits.len(), 0);
+
+		// After the address is finally received, we should generate a deposit witness
+		// for the previous block due to the use of a block cache:
+		address_sender.send(MonitorCommand::Add(address)).unwrap();
+
+		let deposits =
+			check_for_deposits_updating_cache(vec![], &mut block_cache, &mut address_monitor);
+
+		assert_eq!(deposits.first().unwrap().deposit_address, address);
+
+		// The block containing the tx will stay in the cache, but
+		// no duplicate witness will be created for it:
+		assert!(check_for_deposits_updating_cache(vec![], &mut block_cache, &mut address_monitor)
+			.is_empty());
 	}
 }
