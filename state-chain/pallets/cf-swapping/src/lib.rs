@@ -362,6 +362,9 @@ pub mod pallet {
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 
+			let destination_address_internal =
+				Self::validate_destination_address(&destination_address, destination_asset)?;
+
 			if let Some(CcmDepositMetadata { gas_budget, .. }) = message_metadata {
 				// Currently only Ethereum supports CCM.
 				ensure!(
@@ -375,13 +378,6 @@ pub mod pallet {
 					Error::<T>::CcmGasBudgetBelowMinimum,
 				)
 			}
-			let destination_address_internal =
-				T::AddressConverter::try_from_encoded_address(destination_address.clone())
-					.map_err(|_| Error::<T>::InvalidDestinationAddress)?;
-			ensure!(
-				destination_address_internal.chain() == ForeignChain::from(destination_asset),
-				Error::<T>::IncompatibleAssetAndAddress
-			);
 
 			let (channel_id, deposit_address) = T::DepositHandler::request_swap_deposit_address(
 				source_asset,
@@ -420,13 +416,7 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 			let destination_address_internal =
-				T::AddressConverter::try_from_encoded_address(destination_address.clone())
-					.map_err(|_| Error::<T>::InvalidDestinationAddress)?;
-
-			ensure!(
-				destination_address_internal.chain() == ForeignChain::from(asset),
-				Error::<T>::InvalidEgressAddress
-			);
+				Self::validate_destination_address(&destination_address, asset)?;
 
 			let amount = EarnedBrokerFees::<T>::take(account_id, asset);
 			ensure!(amount != 0, Error::<T>::NoFundsAvailable);
@@ -464,8 +454,7 @@ pub mod pallet {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
 			let destination_address_internal =
-				T::AddressConverter::try_from_encoded_address(destination_address.clone())
-					.map_err(|_| Error::<T>::InvalidDestinationAddress)?;
+				Self::validate_destination_address(&destination_address, to)?;
 
 			if let Some(swap_id) = Self::on_swap_deposit_received(
 				from,
@@ -495,17 +484,8 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			let destination_address_internal = T::AddressConverter::try_from_encoded_address(
-				destination_address,
-			)
-			.map_err(|_| {
-				DispatchError::Other("Invalid destination address, cannot decode the address")
-			})?;
-
-			ensure!(
-				ForeignChain::from(destination_asset) == destination_address_internal.chain(),
-				Error::<T>::IncompatibleAssetAndAddress
-			);
+			let destination_address_internal =
+				Self::validate_destination_address(&destination_address, destination_asset)?;
 
 			Self::on_ccm_deposit(
 				source_asset,
@@ -588,6 +568,21 @@ pub mod pallet {
 	}
 
 	impl<T: Config> Pallet<T> {
+		// The address and the asset being sent or withdrawn must be compatible.
+		fn validate_destination_address(
+			destination_address: &EncodedAddress,
+			destination_asset: Asset,
+		) -> Result<ForeignChainAddress, DispatchError> {
+			let destination_address_internal =
+				T::AddressConverter::try_from_encoded_address(destination_address.clone())
+					.map_err(|_| Error::<T>::InvalidDestinationAddress)?;
+			ensure!(
+				destination_address_internal.chain() == ForeignChain::from(destination_asset),
+				Error::<T>::IncompatibleAssetAndAddress
+			);
+			Ok(destination_address_internal)
+		}
+
 		pub fn execute_group_of_swaps(swaps: &[Swap], from: Asset, to: Asset) -> DispatchResult {
 			debug_assert!(
 				!swaps.is_empty(),

@@ -10,7 +10,10 @@ use sp_core::H160;
 use sp_runtime::DispatchError;
 use sp_std::vec::Vec;
 
-use crate::btc::BitcoinScriptBounded;
+use crate::btc::{
+	deposit_address::derive_btc_deposit_address_from_script, scriptpubkey_from_address,
+	BitcoinNetwork, BitcoinScriptBounded,
+};
 
 pub type ScriptPubkeyBytes = Vec<u8>;
 
@@ -198,5 +201,42 @@ impl EncodedAddress {
 			},
 			ForeignChain::Bitcoin => Ok(EncodedAddress::Btc(bytes)),
 		}
+	}
+}
+
+pub fn try_to_encoded_address<GetBitcoinNetwork: FnOnce() -> BitcoinNetwork>(
+	address: ForeignChainAddress,
+	bitcoin_network: GetBitcoinNetwork,
+) -> Result<EncodedAddress, DispatchError> {
+	match address {
+		ForeignChainAddress::Eth(address) => Ok(EncodedAddress::Eth(address)),
+		ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(address)),
+		ForeignChainAddress::Btc(address) => Ok(EncodedAddress::Btc(
+			derive_btc_deposit_address_from_script(address.into(), bitcoin_network())
+				.bytes()
+				.collect::<Vec<u8>>(),
+		)),
+	}
+}
+
+#[allow(clippy::result_unit_err)]
+pub fn try_from_encoded_address<GetBitcoinNetwork: FnOnce() -> BitcoinNetwork>(
+	encoded_address: EncodedAddress,
+	bitcoin_network: GetBitcoinNetwork,
+) -> Result<ForeignChainAddress, ()> {
+	match encoded_address {
+		EncodedAddress::Eth(address_bytes) => Ok(ForeignChainAddress::Eth(address_bytes)),
+		EncodedAddress::Dot(address_bytes) => Ok(ForeignChainAddress::Dot(address_bytes)),
+		EncodedAddress::Btc(address_bytes) => Ok(ForeignChainAddress::Btc(
+			scriptpubkey_from_address(
+				sp_std::str::from_utf8(&address_bytes[..]).map_err(|_| ())?,
+				bitcoin_network(),
+			)
+			.map_err(|_| ())?
+			.try_into()
+			.expect(
+				"bitcoin scripts constructed from supported addresses should not exceed 128 bytes",
+			),
+		)),
 	}
 }

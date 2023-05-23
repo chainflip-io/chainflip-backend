@@ -16,12 +16,13 @@ use crate::{
 };
 
 use cf_chains::{
-	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
+	address::{
+		try_from_encoded_address, try_to_encoded_address, AddressConverter, EncodedAddress,
+		ForeignChainAddress,
+	},
 	btc::{
 		api::{BitcoinApi, SelectedUtxos},
-		deposit_address::derive_btc_deposit_address_from_script,
-		scriptpubkey_from_address, Bitcoin, BitcoinTransactionData, BtcAmount, UtxoId,
-		CHANGE_ADDRESS_SALT,
+		Bitcoin, BitcoinTransactionData, BtcAmount, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
@@ -537,38 +538,13 @@ impl AddressConverter for ChainAddressConverter {
 	fn try_to_encoded_address(
 		address: ForeignChainAddress,
 	) -> Result<EncodedAddress, DispatchError> {
-		match address {
-			ForeignChainAddress::Eth(address) => Ok(EncodedAddress::Eth(address)),
-			ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(address)),
-			ForeignChainAddress::Btc(address) => Ok(EncodedAddress::Btc(
-				derive_btc_deposit_address_from_script(
-					address.into(),
-					Environment::bitcoin_network(),
-				)
-				.bytes()
-				.collect::<Vec<u8>>(),
-			)),
-		}
+		try_to_encoded_address(address, Environment::bitcoin_network)
 	}
 
 	fn try_from_encoded_address(
 		encoded_address: EncodedAddress,
 	) -> Result<ForeignChainAddress, ()> {
-		match encoded_address {
-			EncodedAddress::Eth(address_bytes) =>
-				Ok(ForeignChainAddress::Eth(address_bytes)),
-			EncodedAddress::Dot(address_bytes) =>
-				Ok(ForeignChainAddress::Dot(address_bytes)),
-			EncodedAddress::Btc(address_bytes) => Ok(ForeignChainAddress::Btc(
-				scriptpubkey_from_address(
-					sp_std::str::from_utf8(&address_bytes[..]).map_err(|_| ())?,
-					Environment::bitcoin_network(),
-				)
-				.map_err(|_| ())?
-				.try_into()
-				.expect("bitcoin scripts constructed from supported addresses should not exceed 128 bytes"),
-			)),
-		}
+		try_from_encoded_address(encoded_address, Environment::bitcoin_network)
 	}
 }
 
