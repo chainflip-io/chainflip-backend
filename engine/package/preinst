@@ -1,0 +1,44 @@
+#!/bin/sh
+set -e
+
+if [ "$1" != "upgrade" ]; then
+  echo "chainflip-engine: Fresh install detected, skipping migration"
+  exit 0
+fi
+
+CF_ROOT=/etc/chainflip
+CF_BKB=$CF_ROOT/bkb
+
+# Stop the service
+echo "chainflip-engine: Stopping service"
+systemctl stop chainflip-engine
+
+# Create a backup directory
+echo "chainflip-engine: Creating backup directory $CF_BKB"
+mkdir -p $CF_BKB
+
+# Backup and delete the keys database
+echo "chainflip-engine: Backing up keys database"
+mv $CF_ROOT/data.db $CF_BKB/data.db.bak
+
+# Backup and delete systemd overrides if they exist
+if [ -f /etc/systemd/system/chainflip-engine.service.d/override.conf ]; then
+    echo "chainflip-engine: systemd overrides found - backing up and removing"
+    mv /etc/systemd/system/chainflip-engine.service.d/override.conf $CF_BKB/chainflip-engine_override.conf
+    rm -rf /etc/systemd/system/chainflip-engine.service.d
+fi
+
+# Add the required settings to the config file
+echo "chainflip-engine: Adding BTC RPC endpoint to config file"
+cat <<EOF >>$CF_ROOT/config/Settings.toml
+
+[btc]
+http_node_endpoint = "https://bitcoin-rpc-testnet.chainflip.xyz"
+rpc_user = "flip"
+rpc_password = "flip"
+EOF
+
+systemctl daemon-reload
+systemctl restart chainflip-engine
+
+exit 0
