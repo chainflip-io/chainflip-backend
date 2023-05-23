@@ -59,13 +59,13 @@ fn check_for_deposits_updating_cache(
 	// we have any new addresses to monitor
 	let new_addresses = address_monitor.sync_items();
 
-	let txs_from_cache = block_cache.iter().flatten().filter_map(|tx| {
+	let deposits_from_cache = block_cache.iter().flatten().filter_map(|tx| {
 		let to_addr = core_h160(tx.to?);
 
 		new_addresses.contains(&to_addr).then_some((tx, to_addr))
 	});
 
-	let txs_from_new_block = transactions_in_current_block.iter().filter_map(|tx| {
+	let deposits_from_new_block = transactions_in_current_block.iter().filter_map(|tx| {
 		let to_addr = core_h160(tx.to?);
 		if address_monitor.contains(&to_addr) {
 			Some((tx, to_addr))
@@ -74,8 +74,8 @@ fn check_for_deposits_updating_cache(
 		}
 	});
 
-	let deposit_witnesses = txs_from_new_block
-		.chain(txs_from_cache)
+	let deposit_witnesses = deposits_from_new_block
+		.chain(deposits_from_cache)
 		.map(|(tx, to_addr)| DepositWitness {
 			deposit_address: to_addr,
 			asset: eth::Asset::Eth,
