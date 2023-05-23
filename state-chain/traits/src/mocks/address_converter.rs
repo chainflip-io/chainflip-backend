@@ -1,23 +1,20 @@
-use cf_chains::address::{AddressConverter, EncodedAddress, ForeignChainAddress};
+use cf_chains::{
+	address::{
+		try_from_encoded_address, try_to_encoded_address, AddressConverter, ForeignChainAddress,
+	},
+	btc::BitcoinNetwork,
+};
 
 pub struct MockAddressConverter;
 impl AddressConverter for MockAddressConverter {
 	fn try_from_encoded_address(
 		encoded_address: cf_chains::address::EncodedAddress,
 	) -> Result<ForeignChainAddress, ()> {
-		Ok(match encoded_address {
-			EncodedAddress::Eth(_) => ForeignChainAddress::Eth(Default::default()),
-			EncodedAddress::Dot(_) => ForeignChainAddress::Dot(Default::default()),
-			EncodedAddress::Btc(_) => ForeignChainAddress::Btc(Default::default()),
-		})
+		try_from_encoded_address(encoded_address, BitcoinNetwork::Mainnet)
 	}
 	fn try_to_encoded_address(
 		address: ForeignChainAddress,
 	) -> Result<cf_chains::address::EncodedAddress, sp_runtime::DispatchError> {
-		Ok(match address {
-			ForeignChainAddress::Eth(_) => EncodedAddress::Eth(Default::default()),
-			ForeignChainAddress::Dot(_) => EncodedAddress::Dot(Default::default()),
-			ForeignChainAddress::Btc(_) => EncodedAddress::Btc(Default::default()),
-		})
+		try_to_encoded_address(address, BitcoinNetwork::Mainnet)
 	}
 }
