@@ -17,7 +17,10 @@ use tokio::sync::{
 use tracing::{debug, warn, Instrument};
 use utilities::format_iterator;
 
-use crate::client::common::{ProcessMessageResult, StageResult};
+use crate::client::{
+	ceremony_id_string,
+	common::{ProcessMessageResult, StageResult},
+};
 use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};
 
 use super::{
@@ -55,7 +58,10 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 		request_receiver: oneshot::Receiver<PreparedRequest<Ceremony>>,
 		outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
 	) -> Result<()> {
-		let span = tracing::info_span!("CeremonyRunner", ceremony_id = ceremony_id);
+		let span = tracing::info_span!(
+			"CeremonyRunner",
+			ceremony_id = ceremony_id_string::<Ceremony::Crypto>(ceremony_id)
+		);
 
 		// We always create unauthorised first, it can get promoted to
 		// an authorised one with a ceremony request
