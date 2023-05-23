@@ -29,7 +29,7 @@ if [ -f /etc/systemd/system/chainflip-engine.service.d/override.conf ]; then
 fi
 
 # Add the BTC settings to the config file if they don't exist
-if [ ! grep -q '\[btc\]' /etc/chainflip/config/Settings.toml ]; then
+if ! grep -q '\[btc\]' /etc/chainflip/config/Settings.toml; then
   echo "chainflip-engine: No BTC config found ... Adding BTC RPC endpoint to config file"
   cat <<EOF >>$CF_ROOT/config/Settings.toml
 
