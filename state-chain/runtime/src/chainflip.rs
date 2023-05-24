@@ -597,7 +597,7 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 					change_output.amount,
 					UtxoId { tx_hash, vout: vout as u32 },
 					CHANGE_ADDRESS_SALT,
-					batch_transfer.agg_key.current,
+					batch_transfer.change_utxo_key,
 				);
 			},
 			_ => unreachable!(),
