@@ -1,6 +1,6 @@
 use super::AddressDerivation;
 use crate::{BitcoinVault, Validator};
-use cf_chains::{btc::deposit_address::derive_btc_deposit_bitcoin_script, Bitcoin, Chain};
+use cf_chains::{btc::deposit_address::DepositAddress, Bitcoin, Chain};
 use cf_primitives::{chains::assets::btc, ChannelId};
 use cf_traits::{AddressDerivationApi, EpochInfo};
 use sp_runtime::DispatchError;
@@ -15,13 +15,14 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 			return Err(DispatchError::Other("Intent ID is too large for BTC address derivation"))
 		}
 
-		Ok(derive_btc_deposit_bitcoin_script(
+		Ok(DepositAddress::new(
 			BitcoinVault::vaults(Validator::epoch_index())
 				.ok_or(DispatchError::Other("No vault for epoch"))?
 				.public_key
 				.current,
-			channel_id.try_into().unwrap(),
+			channel_id as u32,
 		)
+		.lock_script()
 		.try_into()
 		.expect("bitcoin deposit script should not exceed the max size of 128 bytes"))
 	}

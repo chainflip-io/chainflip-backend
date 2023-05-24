@@ -1,4 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
+#![feature(once_cell)]
 use core::fmt::Display;
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};

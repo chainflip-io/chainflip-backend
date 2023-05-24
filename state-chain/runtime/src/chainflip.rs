@@ -22,7 +22,7 @@ use cf_chains::{
 	},
 	btc::{
 		api::{BitcoinApi, SelectedUtxos},
-		Bitcoin, BitcoinTransactionData, BtcAmount, UtxoId, CHANGE_ADDRESS_SALT,
+		scriptpubkey_from_address, Bitcoin, BitcoinTransactionData, BtcAmount, UtxoId,
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
@@ -588,19 +588,35 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 	fn on_broadcast_ready(api_call: &Self::ApiCall) {
 		match api_call {
 			BitcoinApi::BatchTransfer(batch_transfer) => {
-				let tx_hash = batch_transfer.bitcoin_transaction.txid();
+				let tx_id = batch_transfer.bitcoin_transaction.txid();
 				let outputs = batch_transfer.bitcoin_transaction.outputs.clone();
 				let output_len = outputs.len();
 				let vout = output_len - 1;
 				let change_output = outputs.get(vout).unwrap();
 				Environment::add_bitcoin_change_utxo(
 					change_output.amount,
-					UtxoId { tx_hash, vout: vout as u32 },
-					CHANGE_ADDRESS_SALT,
+					UtxoId { tx_id, vout: vout as u32 },
 					batch_transfer.change_utxo_key,
 				);
 			},
 			_ => unreachable!(),
 		}
 	}
+}
+
+#[ignore = "Replace Environment::bitcoin_network() with cf_chains::btc::BitcoinNetwork::Mainnet above and this test fails"]
+#[test]
+fn encode_and_decode_address() {
+	fn test(address: &[u8]) {
+		let encoded_address =
+			ChainAddressConverter::try_from_encoded_address(EncodedAddress::Btc(address.to_vec()))
+				.unwrap();
+		let decoded_address =
+			ChainAddressConverter::try_to_encoded_address(encoded_address).unwrap();
+		assert_eq!(decoded_address, EncodedAddress::Btc(address.to_vec()));
+	}
+	const BECH32: &[u8] = b"bc1p4syuuy97f96lfah764w33ru9v5u3uk8n8jk9xsq684xfl8sxu82sdcvdcx";
+	const P2SH: &[u8] = b"3P14159f73E4gFr7JterCCQh9QjiTjiZrG";
+	test(BECH32); // works
+	test(P2SH); // doesn't work
 }

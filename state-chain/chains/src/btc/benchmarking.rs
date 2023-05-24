@@ -4,6 +4,7 @@ use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 
 use super::{
 	api::{batch_transfer::BatchTransfer, BitcoinApi},
+	deposit_address::DepositAddress,
 	AggKey, BitcoinFetchId, BitcoinOutput, BitcoinScriptBounded, BitcoinTrackedData,
 	BitcoinTransactionData, PreviousOrCurrent, Signature, SigningPayload, Utxo, UtxoId,
 };
@@ -28,7 +29,7 @@ impl<T: BenchmarkValue> BenchmarkValue for Vec<T> {
 
 impl BenchmarkValue for UtxoId {
 	fn benchmark_value() -> Self {
-		UtxoId { tx_hash: [1u8; 32], vout: 1 }
+		UtxoId { tx_id: [1u8; 32], vout: 1 }
 	}
 }
 
@@ -77,10 +78,8 @@ impl<E> BenchmarkValue for BitcoinApi<E> {
 			BenchmarkValue::benchmark_value(),
 			vec![Utxo {
 				amount: Default::default(),
-				txid: Default::default(),
-				vout: Default::default(),
-				pubkey_x: Default::default(),
-				salt: Default::default(),
+				id: BenchmarkValue::benchmark_value(),
+				deposit_address: DepositAddress::new(Default::default(), Default::default()),
 			}],
 			vec![BitcoinOutput { amount: Default::default(), script_pubkey: Default::default() }],
 		))

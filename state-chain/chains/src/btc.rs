@@ -9,7 +9,7 @@ use crate::{Age, Chain, ChainAbi, ChainCrypto, ChannelIdConstructor, FeeRefundCa
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use base58::FromBase58;
-use bech32::{self, u5, FromBase32, ToBase32, Variant};
+use bech32::{self, FromBase32, ToBase32, Variant};
 use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Bitcoin;
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -22,6 +22,8 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_core::ConstU32;
 use sp_std::{vec, vec::Vec};
+
+use self::deposit_address::DepositAddress;
 
 /// This salt is used to derive the change address for every vault. i.e. for every epoch.
 pub const CHANGE_ADDRESS_SALT: u32 = 0;
@@ -211,9 +213,9 @@ impl ChainAbi for Bitcoin {
 // which could be made generic, if even necessary at all.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen)]
 pub struct UtxoId {
-	// Tx hash of the transaction this utxo was a part of
-	pub tx_hash: Hash,
-	// The index of the output for this utxo
+	// TxId of the transaction in which this utxo was locked.
+	pub tx_id: Hash,
+	// The index of the utxo in that transaction.
 	pub vout: u32,
 }
 
@@ -229,8 +231,6 @@ impl ChannelIdConstructor for BitcoinFetchId {
 	}
 }
 
-use self::deposit_address::tweaked_pubkey;
-
 const INTERNAL_PUBKEY: &[u8] =
 	&hex_literal::hex!("02eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
 
@@ -243,12 +243,9 @@ pub enum Error {
 }
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct Utxo {
+	pub id: UtxoId,
 	pub amount: u64,
-	pub txid: Hash,
-	pub vout: u32,
-	pub pubkey_x: [u8; 32],
-	// Salt used to create the address that this utxo was sent to.
-	pub salt: u32,
+	pub deposit_address: DepositAddress,
 }
 
 pub trait GetUtxoAmount {
@@ -264,20 +261,6 @@ impl GetUtxoAmount for Utxo {
 pub struct BitcoinOutput {
 	pub amount: u64,
 	pub script_pubkey: BitcoinScript,
-}
-
-fn get_tapleaf_hash(pubkey_x: [u8; 32], salt: u32) -> Hash {
-	// SHA256("TapLeaf")
-	const TAPLEAF_HASH: &[u8] =
-		&hex_literal::hex!("aeea8fdc4208983105734b58081d1e2638d35f1cb54008d4d357ca03be78e9ee");
-	let leaf_version = 0xC0_u8;
-	let script = BitcoinScript::default()
-		.push_uint(salt)
-		.op_drop()
-		.push_bytes(pubkey_x)
-		.op_checksig()
-		.serialize();
-	sha2_256(&[TAPLEAF_HASH, TAPLEAF_HASH, &[leaf_version], &script].concat())
 }
 
 /// For reference see https://developer.bitcoin.org/reference/transactions.html#compactsize-unsigned-integers
@@ -430,8 +413,8 @@ fn extend_with_inputs_outputs(
 ) {
 	bytes.extend(to_varint(inputs.len() as u64));
 	bytes.extend(inputs.iter().fold(Vec::<u8>::default(), |mut acc, input| {
-		acc.extend(input.txid);
-		acc.extend(input.vout.to_le_bytes());
+		acc.extend(input.id.tx_id);
+		acc.extend(input.id.vout.to_le_bytes());
 		acc.push(0);
 		acc.extend(SEQUENCE_NUMBER);
 		acc
@@ -456,13 +439,13 @@ impl BitcoinTransaction {
 
 		let old_utxo_input_indices = (0..)
 			.zip(&inputs)
-			.filter_map(|(i, Utxo { pubkey_x, .. })| {
-				if pubkey_x == &agg_key.current {
+			.filter_map(|(i, Utxo { deposit_address, .. })| {
+				if deposit_address.pubkey_x == agg_key.current {
 					None
 				} else {
 					agg_key.previous.map(|previous| {
 						// TODO: enforce this assumption ie. ensure we never use unspendable utxos.
-						assert!(pubkey_x == &previous);
+						assert!(deposit_address.pubkey_x == previous);
 						i
 					})
 				}
@@ -506,18 +489,11 @@ impl BitcoinTransaction {
 			transaction_bytes.push(NUM_WITNESSES);
 			transaction_bytes.push(LEN_SIGNATURE);
 			transaction_bytes.extend(self.signatures[i]);
-			transaction_bytes.extend(
-				BitcoinScript::default()
-					.push_uint(self.inputs[i].salt)
-					.op_drop()
-					.push_bytes(self.inputs[i].pubkey_x)
-					.op_checksig()
-					.serialize(),
-			);
-			transaction_bytes.push(0x21u8); // Length of tweaked pubkey + leaf version
-			let tweaked = tweaked_pubkey(self.inputs[i].pubkey_x, self.inputs[i].salt);
-			// push correct leaf version depending on evenness of public key
-			if tweaked.serialize_compressed()[0] == 2 {
+			transaction_bytes.extend(self.inputs[i].deposit_address.unlock_script().serialize());
+			// Length of tweaked pubkey + leaf version
+			transaction_bytes.push(0x21u8);
+			// Push correct leaf version depending on evenness of public key
+			if self.inputs[i].deposit_address.tweaked_pubkey_y() == 2 {
 				transaction_bytes.push(0xC0_u8);
 			} else {
 				transaction_bytes.push(0xC1_u8);
@@ -543,8 +519,8 @@ impl BitcoinTransaction {
 			self.inputs
 				.iter()
 				.fold(Vec::<u8>::default(), |mut acc, input| {
-					acc.extend(input.txid);
-					acc.extend(input.vout.to_le_bytes());
+					acc.extend(input.id.tx_id);
+					acc.extend(input.id.vout.to_le_bytes());
 					acc
 				})
 				.as_slice(),
@@ -562,14 +538,7 @@ impl BitcoinTransaction {
 			self.inputs
 				.iter()
 				.fold(Vec::<u8>::default(), |mut acc, input| {
-					let script = BitcoinScript::default()
-						.push_uint(SEGWIT_VERSION as u32)
-						.push_bytes(
-							&tweaked_pubkey(input.pubkey_x, input.salt).serialize_compressed()
-								[1..33],
-						)
-						.serialize();
-					acc.extend(script);
+					acc.extend(input.deposit_address.lock_script().serialize());
 					acc
 				})
 				.as_slice(),
@@ -621,7 +590,7 @@ impl BitcoinTransaction {
 							&[SPENDTYPE],
 							&input_index.to_le_bytes(),
 							// "Common signature message extension" according to BIP 342
-							&get_tapleaf_hash(input.pubkey_x, input.salt),
+							&input.deposit_address.tapleaf_hash[..],
 							&[KEYVERSION],
 							&CODESEPARATOR,
 						]
@@ -961,12 +930,13 @@ mod test {
 		.unwrap();
 		let input = Utxo {
 			amount: 100010000,
-			vout: 1,
-			txid: hex_literal::hex!(
-				"4C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB5"
-			),
-			pubkey_x,
-			salt: 123,
+			id: UtxoId {
+				tx_id: hex_literal::hex!(
+					"4C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB5"
+				),
+				vout: 1,
+			},
+			deposit_address: DepositAddress::new(pubkey_x, 123),
 		};
 		let agg_key = match sign_with {
 			PreviousOrCurrent::Previous => AggKey { previous: Some(pubkey_x), current: [0xcf; 32] },

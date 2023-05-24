@@ -1,8 +1,8 @@
 pub mod batch_transfer;
 
 use super::{
-	deposit_address::derive_btc_deposit_bitcoin_script, AggKey, Bitcoin, BitcoinOutput, BtcAmount,
-	Utxo, CHANGE_ADDRESS_SALT,
+	deposit_address::DepositAddress, AggKey, Bitcoin, BitcoinOutput, BtcAmount, Utxo,
+	CHANGE_ADDRESS_SALT,
 };
 use crate::*;
 use frame_support::{CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
@@ -30,7 +30,7 @@ where
 	) -> Result<Self, ()> {
 		let agg_key @ AggKey { current, .. } =
 			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(())?;
-		let bitcoin_change_script = derive_btc_deposit_bitcoin_script(current, CHANGE_ADDRESS_SALT);
+		let bitcoin_change_script = DepositAddress::new(current, CHANGE_ADDRESS_SALT).lock_script();
 		let mut total_output_amount: u64 = 0;
 		let mut btc_outputs = vec![];
 		for transfer_param in transfer_params {
@@ -70,7 +70,7 @@ where
 		// We will use the bitcoin address derived with the salt of 0 as the vault address where we
 		// collect unspent amounts in btc transactions and consolidate funds when rotating epoch.
 		let new_vault_change_script =
-			derive_btc_deposit_bitcoin_script(new_key.current, CHANGE_ADDRESS_SALT);
+			DepositAddress::new(new_key.current, CHANGE_ADDRESS_SALT).lock_script();
 
 		// Max possible btc value to get all available utxos
 		// If we don't have any UTXOs then we're not required to do this.

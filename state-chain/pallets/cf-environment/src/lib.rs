@@ -4,8 +4,9 @@
 
 use cf_chains::{
 	btc::{
-		api::SelectedUtxos, utxo_selection::select_utxos_from_pool, Bitcoin, BitcoinNetwork,
-		BitcoinScriptBounded, BtcAmount, Utxo, UtxoId,
+		api::SelectedUtxos, deposit_address::DepositAddress,
+		utxo_selection::select_utxos_from_pool, Bitcoin, BitcoinNetwork, BitcoinScriptBounded,
+		BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	ChainCrypto,
@@ -551,25 +552,16 @@ impl<T: Config> Pallet<T> {
 
 		BitcoinAvailableUtxos::<T>::append(Utxo {
 			amount,
-			txid: utxo_id.tx_hash,
-			vout: utxo_id.vout,
-			pubkey_x: pubkey,
-			salt,
+			id: utxo_id,
+			deposit_address: DepositAddress::new(pubkey, salt),
 		});
 	}
 
-	pub fn add_bitcoin_change_utxo(
-		amount: BtcAmount,
-		utxo_id: UtxoId,
-		salt: u32,
-		pubkey_x: [u8; 32],
-	) {
+	pub fn add_bitcoin_change_utxo(amount: BtcAmount, utxo_id: UtxoId, pubkey_x: [u8; 32]) {
 		BitcoinAvailableUtxos::<T>::append(Utxo {
 			amount,
-			txid: utxo_id.tx_hash,
-			vout: utxo_id.vout,
-			pubkey_x,
-			salt,
+			id: utxo_id,
+			deposit_address: DepositAddress::new(pubkey_x, CHANGE_ADDRESS_SALT),
 		});
 	}
 

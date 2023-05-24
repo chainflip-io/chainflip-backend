@@ -212,9 +212,13 @@ pub fn try_to_encoded_address<GetBitcoinNetwork: FnOnce() -> BitcoinNetwork>(
 		ForeignChainAddress::Eth(address) => Ok(EncodedAddress::Eth(address)),
 		ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(address)),
 		ForeignChainAddress::Btc(address) => Ok(EncodedAddress::Btc(
-			derive_btc_deposit_address_from_script(address.into(), bitcoin_network())
-				.bytes()
-				.collect::<Vec<u8>>(),
+			// TODO: This only works for our own addresses, not for arbitrary addresses.
+			cf_chains::btc::deposit_address::legacy_derive_btc_deposit_address_from_script(
+				address.into(),
+				Environment::bitcoin_network(),
+			)
+			.bytes()
+			.collect::<Vec<u8>>(),
 		)),
 	}
 }

@@ -16,8 +16,8 @@ use bitcoincore_rpc::bitcoin::{hashes::Hash, Transaction};
 use cf_chains::{
 	address::ScriptPubkeyBytes,
 	btc::{
-		deposit_address::derive_btc_deposit_bitcoin_script, BitcoinScriptBounded,
-		BitcoinTrackedData, UtxoId, CHANGE_ADDRESS_SALT,
+		deposit_address::DepositAddress, BitcoinScriptBounded, BitcoinTrackedData, UtxoId,
+		CHANGE_ADDRESS_SALT,
 	},
 	Bitcoin,
 };
@@ -61,7 +61,7 @@ pub fn filter_interesting_utxos(
 			// TODO: We shouldn't need to add a fee
 			tx_success_witnesses.push(tx_hash);
 		}
-		for (vout, tx_out) in (0u32..).zip(tx.output.clone()) {
+		for (vout, tx_out) in (0u32..).zip(tx.output) {
 			if tx_out.value > 0 {
 				let script_pubkey_bytes = tx_out.script_pubkey.to_bytes();
 				if let Some(bitcoin_script) = address_monitor.get(&script_pubkey_bytes) {
@@ -69,7 +69,7 @@ pub fn filter_interesting_utxos(
 						deposit_address: bitcoin_script,
 						asset: btc::Asset::Btc,
 						amount: tx_out.value,
-						tx_id: UtxoId { tx_hash, vout },
+						tx_id: UtxoId { tx_id: tx_hash, vout },
 					});
 				}
 			}
@@ -212,10 +212,11 @@ where
 			state_chain_client: self.state_chain_client.clone(),
 			btc_rpc: self.btc_rpc.clone(),
 			epoch_index: epoch.epoch_index,
-			current_pubkey: derive_btc_deposit_bitcoin_script(
+			current_pubkey: DepositAddress::new(
 				epoch.data.change_pubkey.current,
 				CHANGE_ADDRESS_SALT,
 			)
+			.lock_script()
 			.try_into()
 			.expect("We know our addresses are valid"),
 		}
@@ -324,7 +325,7 @@ mod test_utxo_filtering {
 		const UTXO_WITNESSED_2: u64 = 1234;
 
 		let btc_deposit_script: BitcoinScriptBounded =
-			derive_btc_deposit_bitcoin_script([0; 32], 9).try_into().unwrap();
+			DepositAddress::new([0; 32], 9).lock_script().try_into().unwrap();
 
 		let txs = vec![
 			fake_transaction(vec![
@@ -354,7 +355,7 @@ mod test_utxo_filtering {
 	#[test]
 	fn filter_interesting_utxos_several_diff_tx() {
 		let btc_deposit_script: BitcoinScriptBounded =
-			derive_btc_deposit_bitcoin_script([0; 32], 9).try_into().unwrap();
+			DepositAddress::new([0; 32], 9).lock_script().try_into().unwrap();
 
 		const UTXO_WITNESSED_1: u64 = 2324;
 		const UTXO_WITNESSED_2: u64 = 1234;
@@ -385,7 +386,7 @@ mod test_utxo_filtering {
 	#[test]
 	fn filter_out_value_0() {
 		let btc_deposit_script: BitcoinScriptBounded =
-			derive_btc_deposit_bitcoin_script([0; 32], 9).try_into().unwrap();
+			DepositAddress::new([0; 32], 9).lock_script().try_into().unwrap();
 
 		const UTXO_WITNESSED_1: u64 = 2324;
 		let txs = vec![fake_transaction(vec![
