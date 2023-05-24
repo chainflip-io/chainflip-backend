@@ -31,7 +31,7 @@ Then in another terminal:
     -d '{"id":1, "jsonrpc":"2.0", "method": "broker_requestSwapDepositAddress", "params": ["Eth", "Flip","0xabababababababababababababababababababab", 0]}' \
     http://localhost:62378
 
-# The result is the hex-encoded deposit address and expiry block.
+# The result is the hex-encoded deposit address, expiry block, and the issued block.
 {"jsonrpc":"2.0","result":{"address":"0x4ef7608893d5a06c2689b8d15b4dc400be0954f2",expiry_block:12345},"id":1}
 ```
 

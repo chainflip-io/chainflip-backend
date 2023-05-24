@@ -65,7 +65,7 @@ pub async fn request_swap_deposit_address(
 	state_chain_settings: &settings::StateChain,
 	params: settings::SwapRequestParams,
 ) -> Result<()> {
-	let (address, expiry_block) = api::request_swap_deposit_address(
+	let (address, expiry_block, ..) = api::request_swap_deposit_address(
 		state_chain_settings,
 		params.source_asset,
 		params.destination_asset,
