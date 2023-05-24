@@ -63,8 +63,8 @@ impl RpcServer for RpcServerImpl {
 			message_metadata,
 		)
 		.await
-		.map(|(address, expiry_block)| {
-			json!({ "address": address.to_string(), "expiry_block": expiry_block }).to_string()
+		.map(|(address, expiry_block, issue_block)| {
+			json!({ "address": address.to_string(), "expiry_block": expiry_block, "issue_block": issue_block }).to_string()
 		})
 		.map_err(|e| anyhow!("{}:{}", e, e.root_cause()))?)
 	}

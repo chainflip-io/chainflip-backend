@@ -27,7 +27,7 @@ pub async fn request_liquidity_deposit_address(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 ) -> Result<EncodedAddress> {
-	let events = connect_submit_and_get_events(
+	let (events, ..) = connect_submit_and_get_events(
 		state_chain_settings,
 		pallet_cf_lp::Call::request_liquidity_deposit_address { asset },
 		AccountRole::LiquidityProvider,
@@ -51,7 +51,7 @@ pub async fn withdraw_asset(
 	asset: Asset,
 	destination_address: EncodedAddress,
 ) -> Result<EgressId> {
-	let events = connect_submit_and_get_events(
+	let (events, ..) = connect_submit_and_get_events(
 		state_chain_settings,
 		pallet_cf_lp::Call::withdraw_asset { amount, asset, destination_address },
 		AccountRole::LiquidityProvider,
