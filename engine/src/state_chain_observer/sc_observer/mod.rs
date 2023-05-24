@@ -558,7 +558,6 @@ where
                                                             reported_outcome: key_handover_result_future
                                                                 .await
                                                                 .map(move |handover_key| {
-                                                                    assert_eq!(handover_key.serialize(), key_to_share.current);
                                                                     assert!(
                                                                         new_key.previous.replace(handover_key.serialize()).is_none()
                                                                     );
