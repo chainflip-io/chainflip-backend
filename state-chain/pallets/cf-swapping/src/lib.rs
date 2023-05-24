@@ -46,6 +46,7 @@ pub struct Swap {
 	pub swap_type: SwapType,
 	pub stable_amount: Option<AssetAmount>,
 	pub final_output: Option<AssetAmount>,
+	pub fee_taken: bool,
 }
 
 impl Swap {
@@ -58,6 +59,7 @@ impl Swap {
 			swap_type,
 			stable_amount: if from == STABLE_ASSET { Some(amount) } else { None },
 			final_output: if from == to { Some(amount) } else { None },
+			fee_taken: false,
 		}
 	}
 
@@ -356,9 +358,8 @@ pub mod pallet {
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		/// Cull expired deposit channels, then execute all swaps in the SwapQueue
+		/// Clean up expired deposit channels
 		fn on_initialize(n: BlockNumberFor<T>) -> Weight {
-			// Clean up expired deposit channels
 			let expired = SwapChannelExpiries::<T>::take(n);
 			let expired_count = expired.len();
 			for (channel_id, address) in expired {
@@ -367,19 +368,19 @@ pub mod pallet {
 					deposit_address: address,
 				});
 			}
+			T::WeightInfo::on_initialize(expired_count as u32)
+		}
 
+		/// Execute all swaps in the SwapQueue
+		fn on_finalize(_n: BlockNumberFor<T>) {
 			let swaps = SwapQueue::<T>::take();
 			let mut unprocessed_swaps = vec![];
-			let mut used_weight = T::WeightInfo::on_initialize(expired_count as u32);
 			// Helper function that splits swaps of a given direction, group them by asset and do
 			// the swaps of a given direction. Processed and unprocessed swaps are returned.
 			let mut do_group_and_swap = |swaps: Vec<Swap>, direction: SwapDirection| {
 				let (swap_groups, mut remaining) = Self::split_and_group_swaps(swaps, direction);
 
 				for (asset, mut swaps) in swap_groups {
-					used_weight.saturating_accrue(T::WeightInfo::execute_group_of_swaps(
-						swaps.len() as u32,
-					));
 					match Self::execute_group_of_swaps(&mut swaps, asset, direction) {
 						Ok(()) => remaining.extend(swaps),
 						Err(_) => {
@@ -393,7 +394,18 @@ pub mod pallet {
 			};
 
 			// Swap into Stable asset first.
-			let remaining_swaps = do_group_and_swap(swaps, SwapDirection::IntoStable);
+			let mut remaining_swaps = do_group_and_swap(swaps, SwapDirection::IntoStable);
+
+			// Take NetworkFee for all swaps
+			for swap in remaining_swaps.iter_mut() {
+				debug_assert!(
+					swap.stable_amount.is_some(),
+					"All swaps should have Stable amount set here"
+				);
+				let stable_amount =
+					T::SwappingApi::take_network_fee(swap.stable_amount.unwrap_or_default());
+				swap.stable_amount = Some(stable_amount);
+			}
 
 			// Swap from Stable asset, and complete the swap logic.
 			do_group_and_swap(remaining_swaps, SwapDirection::FromStable)
@@ -409,9 +421,7 @@ pub mod pallet {
 			// Reinsert unprocessed swaps back into the map.
 			if !unprocessed_swaps.is_empty() {
 				SwapQueue::<T>::put(unprocessed_swaps);
-				used_weight.saturating_accrue(T::DbWeight::get().writes(1));
 			}
-			used_weight
 		}
 	}
 
@@ -678,11 +688,12 @@ pub mod pallet {
 
 			debug_assert!(bundle_input > 0, "Swap input of zero is invalid.");
 
+			// Do all swaps as a bundle. NetworkFees are NOT taken here.
 			let bundle_output = match direction {
 				SwapDirection::IntoStable =>
-					T::SwappingApi::swap(asset, STABLE_ASSET, bundle_input)?.output,
+					T::SwappingApi::swap(asset, STABLE_ASSET, bundle_input, false)?.output,
 				SwapDirection::FromStable =>
-					T::SwappingApi::swap(STABLE_ASSET, asset, bundle_input)?.output,
+					T::SwappingApi::swap(STABLE_ASSET, asset, bundle_input, false)?.output,
 			};
 
 			for swap in swaps {

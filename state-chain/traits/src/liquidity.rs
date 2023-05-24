@@ -36,19 +36,32 @@ pub trait LpBalanceApi {
 }
 
 pub trait SwappingApi {
-	// Attempt to swap `from` asset to `to` asset.
-	// If OK, return (output_amount, input_asset_fee, stable_asset_fee)
-	fn swap(from: Asset, to: Asset, input_amount: AssetAmount)
-		-> Result<SwapOutput, DispatchError>;
+	/// Attempt to swap `from` asset to `to` asset.
+	/// If OK, return (output_amount, input_asset_fee, stable_asset_fee)
+	fn swap(
+		from: Asset,
+		to: Asset,
+		input_amount: AssetAmount,
+		should_take_network_fee: bool,
+	) -> Result<SwapOutput, DispatchError>;
+
+	/// Takes the swap amount in STABLE_ASSET, collect network fee from it
+	/// and return the remaining value
+	fn take_network_fee(input_amount: AssetAmount) -> AssetAmount;
 }
 
-impl SwappingApi for () {
+impl<T: frame_system::Config> SwappingApi for T {
 	fn swap(
 		_from: Asset,
 		_to: Asset,
 		_input_amount: AssetAmount,
+		_should_take_network_fee: bool,
 	) -> Result<SwapOutput, DispatchError> {
 		Ok(Default::default())
+	}
+
+	fn take_network_fee(input_amount: AssetAmount) -> AssetAmount {
+		input_amount
 	}
 }
 

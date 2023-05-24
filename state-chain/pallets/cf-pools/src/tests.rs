@@ -153,8 +153,8 @@ fn test_buy_back_flip() {
 		));
 
 		// Swapping should cause the network fee to be collected.
-		LiquidityPools::swap(FLIP, STABLE_ASSET, 1000).unwrap();
-		LiquidityPools::swap(STABLE_ASSET, FLIP, 1000).unwrap();
+		LiquidityPools::swap(FLIP, STABLE_ASSET, 1000, true).unwrap();
+		LiquidityPools::swap(STABLE_ASSET, FLIP, 1000, true).unwrap();
 
 		let collected_fee = CollectedNetworkFee::<Test>::get();
 		assert!(collected_fee > 0);

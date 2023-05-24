@@ -15,7 +15,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
+	BuildStorage, Percent,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -68,15 +68,28 @@ impl system::Config for Test {
 
 impl_mock_chainflip!(Test);
 
+parameter_types! {
+	pub static NetworkFee: Percent = Percent::from_percent(0);
+	pub static Swaps: Vec<(Asset, Asset, AssetAmount)> = vec![];
+}
 pub struct MockSwappingApi;
-
 impl SwappingApi for MockSwappingApi {
 	fn swap(
-		_from: Asset,
-		_to: Asset,
+		from: Asset,
+		to: Asset,
 		swap_input: AssetAmount,
+		should_take_network_fee: bool,
 	) -> Result<SwapOutput, DispatchError> {
+		let mut swaps = Swaps::get();
+		let amount =
+			if should_take_network_fee { Self::take_network_fee(swap_input) } else { swap_input };
+		swaps.push((from, to, amount));
+		Swaps::set(swaps);
 		Ok(swap_input.into())
+	}
+
+	fn take_network_fee(input_amount: AssetAmount) -> AssetAmount {
+		input_amount - NetworkFee::get() * input_amount
 	}
 }
 
@@ -85,14 +98,6 @@ pub struct MockWeightInfo;
 impl WeightInfo for MockWeightInfo {
 	fn request_swap_deposit_address() -> Weight {
 		Weight::from_ref_time(100)
-	}
-
-	fn on_idle() -> Weight {
-		Weight::from_ref_time(100)
-	}
-
-	fn execute_group_of_swaps(a: u32) -> Weight {
-		Weight::from_ref_time(100) * a as u64
 	}
 
 	fn withdraw() -> Weight {

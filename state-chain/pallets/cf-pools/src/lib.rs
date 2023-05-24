@@ -118,9 +118,13 @@ pub mod pallet {
 				{
 					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 					if let Err(e) = CollectedNetworkFee::<T>::try_mutate(|collected_fee| {
-						let flip_to_burn =
-							Pallet::<T>::swap(STABLE_ASSET, any::Asset::Flip, *collected_fee)?
-								.output;
+						let flip_to_burn = Pallet::<T>::swap(
+							STABLE_ASSET,
+							any::Asset::Flip,
+							*collected_fee,
+							true,
+						)?
+						.output;
 						FlipToBurn::<T>::mutate(|total| {
 							total.saturating_accrue(flip_to_burn);
 						});
@@ -605,31 +609,46 @@ impl<T: Config> SwappingApi for Pallet<T> {
 		from: any::Asset,
 		to: any::Asset,
 		input_amount: AssetAmount,
+		should_take_network_fee: bool,
 	) -> Result<SwapOutput, DispatchError> {
+		let take_fee_if_should =
+			|input| if should_take_network_fee { Self::take_network_fee(input) } else { input };
+
 		Ok(match (from, to) {
-			(input_asset, STABLE_ASSET) => {
-				let gross_output =
-					Self::process_swap_leg(SwapLeg::ToStable, input_asset, input_amount)?;
-				Self::take_network_fee(gross_output).into()
-			},
-			(STABLE_ASSET, output_asset) => {
-				let net_input = Self::take_network_fee(input_amount);
-				Self::process_swap_leg(SwapLeg::FromStable, output_asset, net_input)?.into()
-			},
+			(input_asset, STABLE_ASSET) => take_fee_if_should(Self::process_swap_leg(
+				SwapLeg::ToStable,
+				input_asset,
+				input_amount,
+			)?)
+			.into(),
+			(STABLE_ASSET, output_asset) => Self::process_swap_leg(
+				SwapLeg::FromStable,
+				output_asset,
+				take_fee_if_should(input_amount),
+			)?
+			.into(),
 			(input_asset, output_asset) => {
 				let intermediate_output =
 					Self::process_swap_leg(SwapLeg::ToStable, input_asset, input_amount)?;
-				let intermediate_input = Self::take_network_fee(intermediate_output);
 				SwapOutput {
 					intermediary: Some(intermediate_output),
 					output: Self::process_swap_leg(
 						SwapLeg::FromStable,
 						output_asset,
-						intermediate_input,
+						take_fee_if_should(intermediate_output),
 					)?,
 				}
 			},
 		})
+	}
+
+	fn take_network_fee(input: AssetAmount) -> AssetAmount {
+		let (remaining, fee) = Self::calculate_network_fee(T::NetworkFee::get(), input);
+		CollectedNetworkFee::<T>::mutate(|total| {
+			total.saturating_accrue(fee);
+		});
+		Self::deposit_event(Event::<T>::NetworkFeeTaken { fee_amount: fee });
+		remaining
 	}
 }
 
@@ -710,15 +729,6 @@ impl<T: Config> Pallet<T> {
 	) -> (AssetAmount, AssetAmount) {
 		let fee = fee_percentage * input;
 		(input - fee, fee)
-	}
-
-	pub fn take_network_fee(input: AssetAmount) -> AssetAmount {
-		let (remaining, fee) = Self::calculate_network_fee(T::NetworkFee::get(), input);
-		CollectedNetworkFee::<T>::mutate(|total| {
-			total.saturating_accrue(fee);
-		});
-		Self::deposit_event(Event::<T>::NetworkFeeTaken { fee_amount: fee });
-		remaining
 	}
 
 	fn try_mutate_pool_state<

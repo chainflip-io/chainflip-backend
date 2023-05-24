@@ -12,7 +12,7 @@ use cf_test_utilities::{assert_events_eq, assert_events_match};
 use cf_traits::{AccountRoleRegistry, AddressDerivationApi, EpochInfo, LpBalanceApi};
 use frame_support::{
 	assert_ok,
-	traits::{OnIdle, OnNewAccount},
+	traits::{OnFinalize, OnIdle, OnNewAccount},
 };
 use pallet_cf_ingress_egress::DepositWitness;
 use pallet_cf_pools::Order;
@@ -20,7 +20,7 @@ use pallet_cf_swapping::CcmIdCounter;
 use state_chain_runtime::{
 	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter},
 	AccountRoles, EthereumInstance, LiquidityPools, LiquidityProvider, Runtime, RuntimeCall,
-	RuntimeEvent, RuntimeOrigin, Swapping, System, Validator, Weight, Witnesser,
+	RuntimeEvent, RuntimeOrigin, Swapping, System, Timestamp, Validator, Weight, Witnesser,
 };
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
@@ -243,10 +243,9 @@ fn basic_pool_setup_provision_and_swap() {
 			..
 		}) if <Ethereum as Chain>::ChainAccount::try_from(ChainAddressConverter::try_from_encoded_address(events_deposit_address.clone()).expect("we created the deposit address above so it should be valid")).unwrap() == deposit_address => swap_id);
 
-		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
-			1,
-			Weight::from_ref_time(1_000_000_000_000),
-		);
+		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
+		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_ref_time(1_000_000_000_000));
 
 		let (.., egress_id) = assert_events_match!(
 			Runtime,
@@ -347,11 +346,9 @@ fn can_process_ccm_via_swap_deposit_address() {
 		}) if ccm_id == CcmIdCounter::<Runtime>::get() && 
 			amount == deposit_amount => (principal_swap_id, gas_swap_id));
 
-		// on_idle to perform the swaps and egress CCM.
-		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
-			1,
-			Weight::from_ref_time(1_000_000_000_000),
-		);
+		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
+		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_ref_time(1_000_000_000_000));
 
 		let (.., egress_id) = assert_events_match!(
 			Runtime,
@@ -438,10 +435,9 @@ fn can_process_ccm_via_direct_deposit() {
 		}) if ccm_id == CcmIdCounter::<Runtime>::get() && 
 			amount == deposit_amount => (principal_swap_id, gas_swap_id));
 
-		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
-			1,
-			Weight::from_ref_time(1_000_000_000_000),
-		);
+		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
+		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
+		state_chain_runtime::AllPalletsWithoutSystem::on_idle(3, Weight::from_ref_time(1_000_000_000_000));
 
 		let (.., egress_id) = assert_events_match!(
 			Runtime,
