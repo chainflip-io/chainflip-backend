@@ -7,8 +7,8 @@ use cf_chains::{eth::Ethereum, mocks::MockAggKey};
 use cf_primitives::GENESIS_EPOCH;
 use cf_test_utilities::{last_event, maybe_last_event};
 use cf_traits::{
-	mocks::{ceremony_id_provider::MockCeremonyIdProvider, threshold_signer::MockThresholdSigner},
-	AccountRoleRegistry, AsyncResult, Chainflip, EpochInfo, KeyProvider, VaultRotator, VaultStatus,
+	mocks::threshold_signer::MockThresholdSigner, AccountRoleRegistry, AsyncResult, Chainflip,
+	EpochInfo, KeyProvider, VaultRotator, VaultStatus,
 };
 use frame_support::{
 	assert_noop, assert_ok, pallet_prelude::DispatchResultWithPostInfo, traits::Hooks,
@@ -30,7 +30,7 @@ macro_rules! assert_last_event {
 }
 
 fn current_ceremony_id() -> CeremonyId {
-	MockCeremonyIdProvider::get()
+	VaultsPallet::ceremony_id_counter()
 }
 
 const ALL_CANDIDATES: &[<MockRuntime as Chainflip>::ValidatorId] = &[ALICE, BOB, CHARLIE];

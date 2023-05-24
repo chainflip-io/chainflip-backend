@@ -405,10 +405,6 @@ where
                                             epoch_index
                                         }
                                     ) => {
-                                        // Ceremony id tracking is global, so update all other clients
-                                        dot_multisig_client.update_latest_ceremony_id(ceremony_id);
-                                        btc_multisig_client.update_latest_ceremony_id(ceremony_id);
-
                                         handle_keygen_request::<_, _, _, EthereumInstance>(
                                             scope,
                                             &eth_multisig_client,
@@ -425,10 +421,6 @@ where
                                             epoch_index
                                         }
                                     ) => {
-                                        // Ceremony id tracking is global, so update all other clients
-                                        eth_multisig_client.update_latest_ceremony_id(ceremony_id);
-                                        btc_multisig_client.update_latest_ceremony_id(ceremony_id);
-
                                         handle_keygen_request::<_, _, _, PolkadotInstance>(
                                             scope,
                                             &dot_multisig_client,
@@ -445,10 +437,6 @@ where
                                             epoch_index
                                         }
                                     ) => {
-                                        // Ceremony id tracking is global, so update all other clients
-                                        eth_multisig_client.update_latest_ceremony_id(ceremony_id);
-                                        dot_multisig_client.update_latest_ceremony_id(ceremony_id);
-
                                         handle_keygen_request::<_, _, _, BitcoinInstance>(
                                             scope,
                                             &btc_multisig_client,
@@ -468,10 +456,6 @@ where
                                             payload,
                                         },
                                     ) => {
-                                        // Ceremony id tracking is global, so update all other clients
-                                        dot_multisig_client.update_latest_ceremony_id(ceremony_id);
-                                        btc_multisig_client.update_latest_ceremony_id(ceremony_id);
-
                                         handle_signing_request::<_, _, _, EthereumInstance>(
                                                 scope,
                                                 &eth_multisig_client,
@@ -495,10 +479,6 @@ where
                                             payload,
                                         },
                                     ) => {
-                                        // Ceremony id tracking is global, so update all other clients
-                                        eth_multisig_client.update_latest_ceremony_id(ceremony_id);
-                                        btc_multisig_client.update_latest_ceremony_id(ceremony_id);
-
                                         handle_signing_request::<_, _, PolkadotSigning, PolkadotInstance>(
                                                 scope,
                                                 &dot_multisig_client,
@@ -522,10 +502,6 @@ where
                                             payload: payloads,
                                         },
                                     ) => {
-                                        // Ceremony id tracking is global, so update all other clients
-                                        eth_multisig_client.update_latest_ceremony_id(ceremony_id);
-                                        dot_multisig_client.update_latest_ceremony_id(ceremony_id);
-
                                         let signing_info = payloads.into_iter().map(|(previous_or_current, payload)| {
                                                 (
                                                     KeyId::new(
@@ -562,9 +538,6 @@ where
                                            to_epoch,
                                         },
                                     ) => {
-                                        eth_multisig_client.update_latest_ceremony_id(ceremony_id);
-                                        dot_multisig_client.update_latest_ceremony_id(ceremony_id);
-
                                         if sharing_participants.contains(&account_id) || receiving_participants.contains(&account_id) {
                                             let key_handover_result_future = btc_multisig_client.initiate_key_handover(
                                                 ceremony_id,
@@ -661,9 +634,6 @@ where
                                             transaction_out_id,
                                         },
                                     ) => {
-
-                                        // TODO: Rename some things here. Use Address Monitor?
-                                        // get the threhsold signature, and we want the raw bytes inside the signature
                                         dot_monitor_signature_sender.send(transaction_out_id.0).unwrap();
                                         if nominee == account_id {
                                             let _result = dot_broadcaster.send(transaction_payload.encoded_extrinsic).await

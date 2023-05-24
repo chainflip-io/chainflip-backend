@@ -5,7 +5,8 @@ use crate::{
 	Pallet, PendingCcms, Swap, SwapChannelExpiries, SwapQueue, SwapTTL, SwapType, WeightInfo,
 };
 use cf_chains::{
-	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
+	address::{try_to_encoded_address, AddressConverter, EncodedAddress, ForeignChainAddress},
+	btc::{scriptpubkey_from_address, BitcoinNetwork, BitcoinScriptBounded},
 	AnyChain, CcmDepositMetadata,
 };
 use cf_primitives::{Asset, AssetAmount, ForeignChain};
@@ -365,7 +366,70 @@ fn can_set_swap_ttl() {
 }
 
 #[test]
-fn can_reject_invalid_ccms() {
+fn reject_invalid_ccm_deposit() {
+	new_test_ext().execute_with(|| {
+		let gas_budget = 1_000;
+		let ccm = CcmDepositMetadata {
+			message: vec![0x00],
+			gas_budget,
+			cf_parameters: vec![],
+			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+		};
+
+		assert_noop!(
+			Swapping::ccm_deposit(
+				RuntimeOrigin::root(),
+				Asset::Btc,
+				1_000_000,
+				Asset::Eth,
+				EncodedAddress::Dot(Default::default()),
+				ccm.clone()
+			),
+			Error::<Test>::IncompatibleAssetAndAddress
+		);
+
+		assert_noop!(
+			Swapping::ccm_deposit(
+				RuntimeOrigin::root(),
+				Asset::Btc,
+				1_000_000,
+				Asset::Eth,
+				EncodedAddress::Dot(Default::default()),
+				ccm.clone()
+			),
+			Error::<Test>::IncompatibleAssetAndAddress
+		);
+
+		assert_failed_ccm(
+			Asset::Eth,
+			1_000_000,
+			Asset::Dot,
+			ForeignChainAddress::Dot(Default::default()),
+			ccm.clone(),
+			CcmFailReason::UnsupportedForTargetChain,
+		);
+
+		assert_failed_ccm(
+			Asset::Eth,
+			1_000_000,
+			Asset::Btc,
+			ForeignChainAddress::Btc(Default::default()),
+			ccm.clone(),
+			CcmFailReason::UnsupportedForTargetChain,
+		);
+		assert_failed_ccm(
+			Asset::Eth,
+			gas_budget - 1,
+			Asset::Eth,
+			ForeignChainAddress::Eth(Default::default()),
+			ccm,
+			CcmFailReason::InsufficientDepositAmount,
+		);
+	});
+}
+
+#[test]
+fn rejects_invalid_swap_deposit() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
 		let ccm = CcmDepositMetadata {
@@ -386,17 +450,6 @@ fn can_reject_invalid_ccms() {
 			),
 			Error::<Test>::IncompatibleAssetAndAddress
 		);
-		assert_noop!(
-			Swapping::ccm_deposit(
-				RuntimeOrigin::root(),
-				Asset::Btc,
-				1_000_000,
-				Asset::Eth,
-				EncodedAddress::Dot(Default::default()),
-				ccm.clone()
-			),
-			Error::<Test>::IncompatibleAssetAndAddress
-		);
 
 		assert_noop!(
 			Swapping::request_swap_deposit_address(
@@ -405,45 +458,51 @@ fn can_reject_invalid_ccms() {
 				Asset::Dot,
 				EncodedAddress::Dot(Default::default()),
 				0,
-				Some(ccm.clone())
+				Some(ccm)
 			),
 			Error::<Test>::CcmUnsupportedForTargetChain
 		);
-		assert_failed_ccm(
-			Asset::Eth,
-			1_000_000,
-			Asset::Dot,
-			ForeignChainAddress::Dot(Default::default()),
-			ccm.clone(),
-			CcmFailReason::UnsupportedForTargetChain,
-		);
+	});
+}
+
+#[test]
+fn rejects_invalid_swap_by_witnesser() {
+	new_test_ext().execute_with(|| {
+		let script: BitcoinScriptBounded = scriptpubkey_from_address(
+			"BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4",
+			BitcoinNetwork::Mainnet,
+		)
+		.unwrap()
+		.try_into()
+		.unwrap();
+
+		let btc_encoded_address =
+			try_to_encoded_address(ForeignChainAddress::Btc(script), || BitcoinNetwork::Mainnet)
+				.unwrap();
+
+		// Is valid Bitcoin address, but asset is Dot, so not compatible
 		assert_noop!(
-			Swapping::request_swap_deposit_address(
-				RuntimeOrigin::signed(ALICE),
+			Swapping::schedule_swap_by_witnesser(
+				RuntimeOrigin::root(),
 				Asset::Eth,
-				Asset::Btc,
-				EncodedAddress::Btc(Default::default()),
-				0,
-				Some(ccm.clone())
+				Asset::Dot,
+				10000,
+				btc_encoded_address,
+				Default::default()
 			),
-			Error::<Test>::CcmUnsupportedForTargetChain
+			Error::<Test>::IncompatibleAssetAndAddress
 		);
 
-		assert_failed_ccm(
-			Asset::Eth,
-			1_000_000,
-			Asset::Btc,
-			ForeignChainAddress::Btc(Default::default()),
-			ccm.clone(),
-			CcmFailReason::UnsupportedForTargetChain,
-		);
-		assert_failed_ccm(
-			Asset::Eth,
-			gas_budget - 1,
-			Asset::Eth,
-			ForeignChainAddress::Eth(Default::default()),
-			ccm,
-			CcmFailReason::InsufficientDepositAmount,
+		assert_noop!(
+			Swapping::schedule_swap_by_witnesser(
+				RuntimeOrigin::root(),
+				Asset::Eth,
+				Asset::Btc,
+				10000,
+				EncodedAddress::Btc(vec![0x41, 0x80, 0x41]),
+				Default::default()
+			),
+			Error::<Test>::InvalidDestinationAddress
 		);
 	});
 }
@@ -891,7 +950,7 @@ fn can_set_minimum_ccm_gas_budget() {
 }
 
 #[test]
-fn swap_by_witnesser_can_be_rejected() {
+fn swap_by_witnesser_happy_path() {
 	new_test_ext().execute_with(|| {
 		let from = Asset::Eth;
 		let to = Asset::Flip;
@@ -957,7 +1016,7 @@ fn swap_by_witnesser_can_be_rejected() {
 }
 
 #[test]
-fn swap_by_deposit_can_be_rejected() {
+fn swap_by_deposit_happy_path() {
 	new_test_ext().execute_with(|| {
 		let from = Asset::Eth;
 		let to = Asset::Flip;

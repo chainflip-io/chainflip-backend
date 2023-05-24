@@ -20,6 +20,7 @@ use tracing::{debug, info, info_span, trace, warn, Instrument};
 use crate::{
 	client,
 	client::{
+		ceremony_id_string,
 		common::{KeygenFailureReason, SigningFailureReason},
 		keygen::generate_key_data,
 		signing::PayloadAndKey,
@@ -424,7 +425,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	) {
 		assert!(!participants.is_empty(), "Keygen request has no participants");
 
-		let span = info_span!("Keygen Ceremony", ceremony_id = ceremony_id);
+		let span =
+			info_span!("Keygen Ceremony", ceremony_id = ceremony_id_string::<C>(ceremony_id));
 		let _entered = span.enter();
 
 		debug!("Processing a keygen request");
@@ -459,7 +461,12 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 		ceremony_handle
 			.on_request(request, result_sender)
-			.with_context(|| format!("Invalid keygen request with ceremony id {ceremony_id}"))
+			.with_context(|| {
+				format!(
+					"Invalid keygen request with ceremony id {}",
+					ceremony_id_string::<C>(ceremony_id)
+				)
+			})
 			.unwrap();
 	}
 
@@ -475,7 +482,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	) {
 		assert!(!signers.is_empty(), "Request to sign has no signers");
 
-		let span = info_span!("Signing Ceremony", ceremony_id = ceremony_id);
+		let span =
+			info_span!("Signing Ceremony", ceremony_id = ceremony_id_string::<C>(ceremony_id));
 		let _entered = span.enter();
 
 		debug!("Processing a request to sign");
@@ -512,7 +520,12 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 		ceremony_handle
 			.on_request(request, result_sender)
-			.with_context(|| format!("Invalid sign request with ceremony id {ceremony_id}"))
+			.with_context(|| {
+				format!(
+					"Invalid sign request with ceremony id {}",
+					ceremony_id_string::<C>(ceremony_id)
+				)
+			})
 			.unwrap();
 	}
 
@@ -525,7 +538,10 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	) {
 		match message {
 			MultisigMessage { ceremony_id, data: MultisigData::Keygen(data) } => {
-				let span = info_span!("Keygen Ceremony", ceremony_id = ceremony_id);
+				let span = info_span!(
+					"Keygen Ceremony",
+					ceremony_id = ceremony_id_string::<C>(ceremony_id)
+				);
 				let _entered = span.enter();
 
 				self.keygen_states.process_data(
@@ -537,7 +553,10 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 				)
 			},
 			MultisigMessage { ceremony_id, data: MultisigData::Signing(data) } => {
-				let span = info_span!("Signing Ceremony", ceremony_id = ceremony_id);
+				let span = info_span!(
+					"Signing Ceremony",
+					ceremony_id = ceremony_id_string::<C>(ceremony_id)
+				);
 				let _entered = span.enter();
 
 				self.signing_states.process_data(
@@ -631,10 +650,16 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 				// Only a ceremony id that is within the ceremony id window can create unauthorised
 				// ceremonies
 				if ceremony_id > latest_ceremony_id + CEREMONY_ID_WINDOW {
-					warn!("Ignoring data: unexpected future ceremony id {}", ceremony_id);
+					warn!(
+						"Ignoring data: unexpected future ceremony id {}",
+						ceremony_id_string::<Ceremony::Crypto>(ceremony_id)
+					);
 					return
 				} else if ceremony_id <= latest_ceremony_id {
-					trace!("Ignoring data: old ceremony id {}", ceremony_id);
+					trace!(
+						"Ignoring data: old ceremony id {}",
+						ceremony_id_string::<Ceremony::Crypto>(ceremony_id)
+					);
 					return
 				} else {
 					entry.insert(CeremonyHandle::spawn(

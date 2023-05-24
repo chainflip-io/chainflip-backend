@@ -1138,6 +1138,7 @@ dependencies = [
  "tracing",
  "url 1.7.2",
  "utilities",
+ "warp",
  "web3",
  "x25519-dalek",
  "zeroize",
