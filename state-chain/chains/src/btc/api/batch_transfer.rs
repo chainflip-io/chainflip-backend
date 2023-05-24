@@ -14,12 +14,13 @@ use sp_runtime::RuntimeDebug;
 pub struct BatchTransfer {
 	/// The handler for creating and signing polkadot extrinsics
 	pub bitcoin_transaction: BitcoinTransaction,
-	pub agg_key: AggKey,
+	pub change_utxo_key: [u8; 32],
 }
 
 impl BatchTransfer {
 	pub fn new_unsigned(
 		agg_key: &AggKey,
+		change_utxo_key: [u8; 32],
 		input_utxos: Vec<Utxo>,
 		outputs: Vec<BitcoinOutput>,
 	) -> Self {
@@ -29,7 +30,7 @@ impl BatchTransfer {
 				input_utxos,
 				outputs,
 			),
-			agg_key: *agg_key,
+			change_utxo_key,
 		}
 	}
 }

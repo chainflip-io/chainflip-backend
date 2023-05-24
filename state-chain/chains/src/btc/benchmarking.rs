@@ -74,6 +74,7 @@ impl<E> BenchmarkValue for BitcoinApi<E> {
 	fn benchmark_value() -> Self {
 		BitcoinApi::BatchTransfer(BatchTransfer::new_unsigned(
 			&BenchmarkValue::benchmark_value(),
+			BenchmarkValue::benchmark_value(),
 			vec![Utxo {
 				amount: Default::default(),
 				txid: Default::default(),
