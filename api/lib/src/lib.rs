@@ -8,6 +8,7 @@ use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{opaque::SessionKeys, RuntimeCall};
+use utilities::CachedStream;
 use zeroize::Zeroize;
 
 pub mod primitives {
@@ -92,7 +93,7 @@ where
 {
 	task_scope(|scope| {
 		async {
-			let (_state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
+			let (state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
 				scope,
 				&state_chain_settings.ws_endpoint,
 				&state_chain_settings.signing_key_file,
@@ -101,6 +102,8 @@ where
 			)
 			.await?;
 
+			let block_number = state_chain_stream.cache().block_number;
+			println!("block number: {block_number:?}");
 			let (_tx_hash, events, _) =
 				state_chain_client.submit_signed_extrinsic(call).await.until_finalized().await?;
 
