@@ -80,6 +80,15 @@ pub fn get_lagrange_coeff<P: ECPoint>(
 	)
 }
 
+#[test]
+fn lagrange_coeff_with_one_party() {
+	// Just a sanity check that the lagrange coefficient
+	// is 1 when there is only one party
+	type Point = crate::eth::Point;
+	let coeff = get_lagrange_coeff::<Point>(1, &vec![1].into_iter().collect());
+	assert_eq!(coeff, <Point as ECPoint>::Scalar::from(1));
+}
+
 /// Generate a "binding value" for party `index`. See "Signing Protocol" in Section 5.2 (page 14)
 fn gen_rho_i<P: ECPoint>(
 	index: AuthorityCount,
