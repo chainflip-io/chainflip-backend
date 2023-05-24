@@ -33,6 +33,12 @@ if [ -f /etc/systemd/system/chainflip-engine.service.d/override.conf ]; then
   rm -rf /etc/systemd/system/chainflip-engine.service.d
 fi
 
+# Remove old log files to free space
+if [-f "/var/log/chainflip-engine.log" ]; then
+  echo "chainflip-engine: Removing old log file"
+  rm -rf "/var/log/chainflip-engine*"
+fi
+
 # Add the BTC settings to the config file if they don't exist
 if ! grep -q '\[btc\]' /etc/chainflip/config/Settings.toml; then
   echo "chainflip-engine: No BTC config found ... Adding BTC RPC endpoint to config file"

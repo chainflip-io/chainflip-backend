@@ -29,6 +29,12 @@ if [ -f /etc/systemd/system/chainflip-node.service.d/override.conf ]; then
     rm -rf /etc/systemd/system/chainflip-node.service.d
 fi
 
+# Remove old log files to free space
+if [-f "/var/log/chainflip-node.log" ]; then
+  echo "chainflip-node: Removing old log file"
+  rm -rf "/var/log/chainflip-node*"
+fi
+
 # Purge chaindata
 if [ -d $CF_ROOT/chaindata ]; then
     echo "chainflip-node: chaindata found in $CF_ROOT/chaindata - removing"
