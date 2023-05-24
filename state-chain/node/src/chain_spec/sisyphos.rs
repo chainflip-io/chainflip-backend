@@ -48,10 +48,18 @@ pub const SNOW_WHITE_SR25519: [u8; 32] =
 	hex_literal::hex!["84f134a4cc6bf41d3239bbe097eac4c8f83e78b468e6c49ed5cd2ddc51a07a29"];
 
 pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance)> {
-	vec![(
-		hex_literal::hex!("c0409f949ad2636d34e4c70dd142296fdd4a11323d320aced3d247ad8f9a7902")
-			.into(),
-		AccountRole::Broker,
-		100 * FLIPPERINOS_PER_FLIP,
-	)]
+	vec![
+		(
+			hex_literal::hex!("a0edda1a4beee4fe2df32c0802aa6759da49ae6165fcdb5c40d7f4cd5a30db0e")
+				.into(),
+			AccountRole::Broker,
+			100 * FLIPPERINOS_PER_FLIP,
+		),
+		(
+			hex_literal::hex!("c0409f949ad2636d34e4c70dd142296fdd4a11323d320aced3d247ad8f9a7902")
+				.into(),
+			AccountRole::LiquidityProvider,
+			100 * FLIPPERINOS_PER_FLIP,
+		),
+	]
 }
