@@ -303,6 +303,7 @@ where
 		}
 	}
 
+	#[track_caller]
 	pub async fn distribute_message<
 		StageData: Into<<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data>,
 	>(
@@ -324,6 +325,7 @@ where
 		}
 	}
 
+	#[track_caller]
 	pub async fn distribute_messages_with_non_sender<
 		StageData: Into<<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data>,
 	>(
@@ -338,6 +340,7 @@ where
 		}
 	}
 
+	#[track_caller]
 	pub async fn gather_outgoing_messages<
 		NextStageData: TryFrom<
 				<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data,
@@ -424,6 +427,7 @@ where
 			.await
 	}
 
+	#[track_caller]
 	pub async fn run_stage<
 		NextStageData: TryFrom<
 				<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data,
@@ -439,6 +443,7 @@ where
 		self.gather_outgoing_messages().await
 	}
 
+	#[track_caller]
 	pub async fn run_stage_with_non_sender<
 		NextStageData: TryFrom<
 				<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data,
@@ -455,17 +460,16 @@ where
 		self.gather_outgoing_messages().await
 	}
 
+	#[track_caller]
 	// Checks if all nodes have an outcome and the outcomes are consistent, returning the outcome.
 	fn collect_and_check_outcomes(
 		&mut self,
-	) -> Option<
-		Result<
-			<Self as CeremonyRunnerStrategy>::CheckedOutput,
-			(
-				BTreeSet<AccountId>,
-				<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
-			),
-		>,
+	) -> Result<
+		<Self as CeremonyRunnerStrategy>::CheckedOutput,
+		(
+			BTreeSet<AccountId>,
+			<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
+		),
 	> {
 		// Gather the outcomes from all the nodes
 		let results: HashMap<_, _> = self
@@ -477,8 +481,7 @@ where
 			.collect();
 
 		if results.is_empty() {
-			// No nodes have gotten an outcome yet
-			return None
+			panic!("No nodes have gotten an outcome yet");
 		}
 
 		if results.len() != self.nodes.len() {
@@ -496,7 +499,7 @@ where
 
 		if !ok_results.is_empty() && failure_reasons.is_empty() {
 			// All nodes completed successfully
-			Some(Ok(self.post_successful_complete_check(ok_results)))
+			Ok(self.post_successful_complete_check(ok_results))
 		} else if ok_results.is_empty() && !failure_reasons.is_empty() {
 			// All nodes reported failure, check that the reasons and reported nodes are the same
 			assert_eq!(
@@ -509,25 +512,27 @@ where
 				1,
 				"The ceremony failure reason was not the same for all nodes: {failure_reasons:?}",
 			);
-			Some(Err((
+			Err((
 				all_reported_parties.into_iter().next().unwrap(),
 				failure_reasons.into_iter().next().unwrap(),
-			)))
+			))
 		} else {
 			panic!("Ceremony results weren't consistently Ok() or Err() for all nodes");
 		}
 	}
 
+	#[track_caller]
 	pub fn complete(&mut self) -> <Self as CeremonyRunnerStrategy>::CheckedOutput {
-		assert_ok!(self.collect_and_check_outcomes().expect("Failed to get all ceremony outcomes"))
+		assert_ok!(self.collect_and_check_outcomes())
 	}
 
+	#[track_caller]
 	fn try_complete_with_error(
 		&mut self,
 		bad_account_ids: &[AccountId],
 		expected_failure_reason: <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
 	) -> Option<()> {
-		let (reported, reason) = self.collect_and_check_outcomes()?.unwrap_err();
+		let (reported, reason) = self.collect_and_check_outcomes().unwrap_err();
 		assert_eq!(BTreeSet::from_iter(bad_account_ids.iter()), reported.iter().collect());
 		assert_eq!(expected_failure_reason, reason);
 		Some(())
@@ -535,6 +540,7 @@ where
 
 	/// Gathers the ceremony outcomes from all nodes,
 	/// making sure they are identical and match the expected failure reason.
+	#[track_caller]
 	pub fn complete_with_error(
 		&mut self,
 		bad_account_ids: &[AccountId],
@@ -550,6 +556,7 @@ where
 		}
 	}
 
+	#[track_caller]
 	pub async fn request(
 		&mut self,
 	) -> HashMap<
