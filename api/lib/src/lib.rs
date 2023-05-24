@@ -86,7 +86,7 @@ async fn connect_submit_and_get_events<Call>(
 	state_chain_settings: &settings::StateChain,
 	call: Call,
 	required_role: AccountRole,
-) -> Result<(Vec<state_chain_runtime::RuntimeEvent>, u32)>
+) -> Result<(Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::BlockNumber)>
 where
 	Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static,
 {
@@ -351,7 +351,7 @@ pub async fn request_swap_deposit_address(
 	destination_address: EncodedAddress,
 	broker_commission_bps: BasisPoints,
 	message_metadata: Option<CcmDepositMetadata>,
-) -> Result<(EncodedAddress, u32, u32)> {
+) -> Result<(EncodedAddress, state_chain_runtime::BlockNumber, state_chain_runtime::BlockNumber)> {
 	let (events, block_number) = connect_submit_and_get_events(
 		state_chain_settings,
 		pallet_cf_swapping::Call::request_swap_deposit_address {
