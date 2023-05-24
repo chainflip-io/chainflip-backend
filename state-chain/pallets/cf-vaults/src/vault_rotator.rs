@@ -14,7 +14,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 		assert_ne!(Self::status(), AsyncResult::Pending);
 
-		let ceremony_id = Pallet::<T, I>::increment_ceremony_id();
+		let ceremony_id = Self::increment_ceremony_id();
 
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::AwaitingKeygen {
 			ceremony_id,
@@ -50,7 +50,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 					assert_ne!(Self::status(), AsyncResult::Pending);
 
-					let ceremony_id = Pallet::<T, I>::increment_ceremony_id();
+					let ceremony_id = Self::increment_ceremony_id();
 
 					// from the SC's perspective, we don't care what set they're in, they get
 					// reported the same and each participant only gets one vote, like keygen.
@@ -67,7 +67,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 						frame_system::Pallet::<T>::current_block_number(),
 					);
 
-					Pallet::<T, I>::deposit_event(Event::KeyHandoverRequest {
+					Self::deposit_event(Event::KeyHandoverRequest {
 						ceremony_id,
 						// The key we want to share is the key from the *previous/current* epoch,
 						// not the newly generated key since we're handing it over to the
