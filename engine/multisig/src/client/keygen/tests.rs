@@ -985,7 +985,7 @@ mod key_handover {
 			if options.nodes_sharing_invalid_secret.contains(id) {
 				// Adding a small tweak to the share to make it incorrect
 				match &mut context.party_status {
-					ParticipantStatus::Sharing(secret_share, _) => {
+					ParticipantStatus::Sharing { secret_share, .. } => {
 						*secret_share =
 							secret_share.clone() + &<Scheme::Point as ECPoint>::Scalar::from(1);
 					},
@@ -1085,6 +1085,17 @@ mod key_handover {
 		let new_set = to_account_id_set([3, 4, 5]);
 
 		assert!(!original_set.is_disjoint(&new_set));
+
+		ensure_successful_handover(original_set, sharing_subset, new_set).await;
+	}
+
+	#[tokio::test]
+	async fn from_single_party() {
+		let original_set = to_account_id_set([1]);
+
+		let sharing_subset = to_account_id_set([1]);
+
+		let new_set = to_account_id_set([2, 3]);
 
 		ensure_successful_handover(original_set, sharing_subset, new_set).await;
 	}

@@ -392,9 +392,10 @@ pub fn validate_commitments<C: CryptoScheme>(
 		.filter_map(|(idx, c)| {
 			if let Some(context) = resharing_context {
 				let expected_public_keys = match &context.party_status {
-					ParticipantStatus::Sharing(_, pubkeys) => pubkeys,
+					ParticipantStatus::Sharing { public_key_shares, .. } => public_key_shares,
 					ParticipantStatus::NonSharing => panic!("invalid state for the stage"),
-					ParticipantStatus::NonSharingReceivedKeys(pubkeys) => pubkeys,
+					ParticipantStatus::NonSharingReceivedKeys(public_key_shares) =>
+						public_key_shares,
 				};
 
 				// In a key handover ceremony, we check for each sharing party
