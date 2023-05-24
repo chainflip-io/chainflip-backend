@@ -39,8 +39,10 @@ pub enum ExtrinsicError {
 	Dispatch(DispatchError),
 }
 
-pub type ExtrinsicResult =
-	Result<(H256, Vec<state_chain_runtime::RuntimeEvent>, DispatchInfo), ExtrinsicError>;
+pub type ExtrinsicResult = Result<
+	(H256, Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::Header, DispatchInfo),
+	ExtrinsicError,
+>;
 
 pub type RequestID = u64;
 
@@ -344,7 +346,14 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 										_ => None,
 									})
 									.expect(SUBSTRATE_BEHAVIOUR)
-									.map(|dispatch_info| (tx_hash, extrinsic_events, dispatch_info))
+									.map(|dispatch_info| {
+										(
+											tx_hash,
+											extrinsic_events,
+											block.header.clone(),
+											dispatch_info,
+										)
+									})
 							});
 						}
 					}

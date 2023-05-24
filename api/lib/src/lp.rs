@@ -169,7 +169,7 @@ pub async fn mint_range_order(
 			.await?;
 
 			// Submit the mint order
-			let (_tx_hash, events, _dispatch_info) = state_chain_client
+			let (_tx_hash, events, ..) = state_chain_client
 				.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_mint_range_order {
 					unstable_asset: asset,
 					price_range_in_ticks: range,
@@ -232,7 +232,7 @@ pub async fn burn_range_order(
 			// }
 
 			// Submit the burn call
-			let (_tx_hash, events, _dispatch_info) = state_chain_client
+			let (_tx_hash, events, ..) = state_chain_client
 				.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_burn_range_order {
 					unstable_asset: asset,
 					price_range_in_ticks: range,

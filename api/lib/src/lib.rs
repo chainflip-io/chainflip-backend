@@ -101,7 +101,7 @@ where
 			)
 			.await?;
 
-			let (_tx_hash, events, _) =
+			let (_tx_hash, events, ..) =
 				state_chain_client.submit_signed_extrinsic(call).await.until_finalized().await?;
 
 			Ok(events)
