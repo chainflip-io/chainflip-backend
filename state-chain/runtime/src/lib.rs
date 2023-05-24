@@ -231,7 +231,6 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type VaultTransitionHandler = EthVaultTransitionHandler;
 	type Broadcaster = EthereumBroadcaster;
 	type OffenceReporter = Reputation;
-	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
 	type Slasher = FlipSlasher<Self>;
@@ -249,7 +248,6 @@ impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
 	type VaultTransitionHandler = DotVaultTransitionHandler;
 	type Broadcaster = PolkadotBroadcaster;
 	type OffenceReporter = Reputation;
-	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
 	type Slasher = FlipSlasher<Self>;
@@ -267,7 +265,6 @@ impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
 	type VaultTransitionHandler = BtcVaultTransitionHandler;
 	type Broadcaster = BitcoinBroadcaster;
 	type OffenceReporter = Reputation;
-	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
 	type Slasher = FlipSlasher<Self>;
@@ -608,7 +605,7 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type TargetChain = Ethereum;
 	type KeyProvider = EthereumVault;
 	type OffenceReporter = Reputation;
-	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
+	type CeremonyIdProvider = EthereumVault;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
@@ -622,7 +619,7 @@ impl pallet_cf_threshold_signature::Config<PolkadotInstance> for Runtime {
 	type TargetChain = Polkadot;
 	type KeyProvider = PolkadotVault;
 	type OffenceReporter = Reputation;
-	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
+	type CeremonyIdProvider = PolkadotVault;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
@@ -636,7 +633,7 @@ impl pallet_cf_threshold_signature::Config<BitcoinInstance> for Runtime {
 	type TargetChain = Bitcoin;
 	type KeyProvider = BitcoinVault;
 	type OffenceReporter = Reputation;
-	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
+	type CeremonyIdProvider = BitcoinVault;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
