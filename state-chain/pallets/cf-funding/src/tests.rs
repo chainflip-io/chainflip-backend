@@ -580,7 +580,7 @@ fn restricted_funds_getting_reduced() {
 		// Expect to fail if we try to redeem more than the restricted balance
 		assert_noop!(
 			Funding::redeem(RuntimeOrigin::signed(ALICE), 45.into(), RESTRICTED_ADDRESS),
-			Error::<Test>::InvalidRedemption
+			Error::<Test>::RedemptionAmountToHigh
 		);
 	});
 }

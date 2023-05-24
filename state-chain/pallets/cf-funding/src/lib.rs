@@ -273,6 +273,9 @@ pub mod pallet {
 
 		/// The redemption signature could not be found.
 		SignatureNotReady,
+
+		/// Redemption amount is to high to high for the restricted address
+		RedemptionAmountToHigh,
 	}
 
 	#[pallet::call]
@@ -356,19 +359,16 @@ pub mod pallet {
 
 			ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::InvalidRedemption);
 
-			let total_balance = T::Flip::account_balance(&account_id);
-
-			// Note: If the address is restricted we have to ensure that amount is less than
-			// total_available - restricted balance for that address.
 			if RestrictedAddresses::<T>::contains_key(address) {
-				let claimable_balance = total_balance
-					.checked_sub(
-						RestrictedBalances::<T>::get(&account_id)
-							.get(&address)
-							.expect("to have a restricted balance for this address"),
-					)
-					.expect("to not underflow");
-				ensure!(claimable_balance >= amount, Error::<T>::InvalidRedemption);
+				// ensure that restricted balance for the address is higher than the amount we try
+				// to redeem
+				ensure!(
+					RestrictedBalances::<T>::get(&account_id)
+						.get(&address)
+						.expect("to have a restricted balance for this address") >=
+						&amount,
+					Error::<T>::RedemptionAmountToHigh
+				);
 				RestrictedBalances::<T>::mutate_exists(&account_id, |maybe_entry| {
 					if let Some(entry) = maybe_entry {
 						entry.entry(address).and_modify(|balance| *balance -= amount);
