@@ -31,8 +31,8 @@ fi
 
 # Remove old log files to free space
 if [-f "/var/log/chainflip-node.log" ]; then
-  echo "chainflip-node: Removing old log file"
-  rm -rf "/var/log/chainflip-node*"
+    echo "chainflip-node: Removing old log file"
+    rm -rf "/var/log/chainflip-node*"
 fi
 
 # Purge chaindata
