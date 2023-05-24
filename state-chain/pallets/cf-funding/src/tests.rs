@@ -563,6 +563,7 @@ fn restricted_funds_getting_reduced() {
 		const UNRESTRICTED_ADDRESS: EthereumAddress = [0x01; 20];
 		// Add Address to list of restricted contracts
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
+		// PendingRedemptions::<Test>::insert(ALICE, ());
 		// Add 50 to the restricted address
 		assert_ok!(Funding::funded(RuntimeOrigin::root(), ALICE, 50, RESTRICTED_ADDRESS, TX_HASH));
 		// and 30 to the unrestricted address
@@ -575,12 +576,13 @@ fn restricted_funds_getting_reduced() {
 		));
 		// Redeem 10
 		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), 10.into(), RESTRICTED_ADDRESS));
+		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, 10, TX_HASH));
 		// Expect the restricted balance to be 70
 		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(), &40);
 		// Expect to fail if we try to redeem more than the restricted balance
 		assert_noop!(
 			Funding::redeem(RuntimeOrigin::signed(ALICE), 45.into(), RESTRICTED_ADDRESS),
-			Error::<Test>::RedemptionAmountToHigh
+			Error::<Test>::InvalidRedemption
 		);
 	});
 }
@@ -591,5 +593,62 @@ fn can_add_address_to_restricted_list() {
 		const RESTRICTED_ADDRESS: EthereumAddress = [0x42; 20];
 		assert_ok!(Funding::add_restricted_address(RuntimeOrigin::root(), RESTRICTED_ADDRESS));
 		assert!(RestrictedAddresses::<Test>::contains_key(RESTRICTED_ADDRESS));
+	});
+}
+
+#[test]
+fn vesting_contracts_test_case() {
+	new_test_ext().execute_with(|| {
+		// Contracts
+		const VESTING_CONTRACT_1: EthereumAddress = [0x01; 20];
+		const VESTING_CONTRACT_2: EthereumAddress = [0x02; 20];
+		const UNRESTRICTED_ADDRESS: EthereumAddress = [0x03; 20];
+		// Balances
+		const CONTRACT_1_FUNDS: u128 = 200;
+		const CONTRACT_2_FUNDS: u128 = 800;
+		const EARNED_REWARDS: u128 = 100;
+		// Add contract address to list of restricted contracts
+		RestrictedAddresses::<Test>::insert(VESTING_CONTRACT_1, ());
+		RestrictedAddresses::<Test>::insert(VESTING_CONTRACT_2, ());
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			CONTRACT_1_FUNDS,
+			VESTING_CONTRACT_1,
+			TX_HASH
+		));
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			CONTRACT_2_FUNDS,
+			VESTING_CONTRACT_2,
+			TX_HASH
+		));
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			EARNED_REWARDS,
+			UNRESTRICTED_ADDRESS,
+			TX_HASH
+		));
+		// Because 100 is available this should fail
+		assert_noop!(
+			Funding::redeem(RuntimeOrigin::signed(ALICE), 200.into(), UNRESTRICTED_ADDRESS),
+			Error::<Test>::InvalidRedemption
+		);
+		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), 50.into(), UNRESTRICTED_ADDRESS));
+		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, 50, TX_HASH));
+		// Try to redeem 100 from contract 1
+		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), 100.into(), VESTING_CONTRACT_1));
+		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, 100, TX_HASH));
+		// Try to redeem 400 from contract 2
+		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), 400.into(), VESTING_CONTRACT_2));
+		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, 400, TX_HASH));
+		// Try to redeem 150 from contract 1 - should fail because we're getting under the available
+		// balance
+		assert_noop!(
+			Funding::redeem(RuntimeOrigin::signed(ALICE), 150.into(), VESTING_CONTRACT_1),
+			Error::<Test>::InvalidRedemption
+		);
 	});
 }

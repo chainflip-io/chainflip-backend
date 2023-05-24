@@ -273,9 +273,6 @@ pub mod pallet {
 
 		/// The redemption signature could not be found.
 		SignatureNotReady,
-
-		/// Redemption amount is to high to high for the restricted address
-		RedemptionAmountToHigh,
 	}
 
 	#[pallet::call]
@@ -359,23 +356,6 @@ pub mod pallet {
 
 			ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::InvalidRedemption);
 
-			if RestrictedAddresses::<T>::contains_key(address) {
-				// ensure that restricted balance for the address is higher than the amount we try
-				// to redeem
-				ensure!(
-					RestrictedBalances::<T>::get(&account_id)
-						.get(&address)
-						.expect("to have a restricted balance for this address") >=
-						&amount,
-					Error::<T>::RedemptionAmountToHigh
-				);
-				RestrictedBalances::<T>::mutate_exists(&account_id, |maybe_entry| {
-					if let Some(entry) = maybe_entry {
-						entry.entry(address).and_modify(|balance| *balance -= amount);
-					}
-				});
-			}
-
 			// Not allowed to redeem if we are an active bidder in the auction phase
 			if T::EpochInfo::is_auction_phase() {
 				ensure!(!ActiveBidder::<T>::get(&account_id), Error::<T>::AuctionPhase);
@@ -386,6 +366,35 @@ pub mod pallet {
 				!PendingRedemptions::<T>::contains_key(&account_id),
 				Error::<T>::PendingRedemption
 			);
+
+			if RestrictedAddresses::<T>::contains_key(address) {
+				// ensure that restricted balance for the address is higher than the amount we try
+				// to redeem
+				ensure!(
+					RestrictedBalances::<T>::get(&account_id)
+						.get(&address)
+						.expect("to have a restricted balance for this address") >=
+						&amount,
+					Error::<T>::InvalidRedemption
+				);
+				RestrictedBalances::<T>::mutate_exists(&account_id, |maybe_entry| {
+					if let Some(entry) = maybe_entry {
+						entry.entry(address).and_modify(|balance| *balance -= amount);
+					}
+				});
+			} else {
+				// Sum over all restricted balances
+				let restricted_balance = RestrictedBalances::<T>::get(&account_id)
+					.into_iter()
+					.fold(Zero::zero(), |acc: FlipBalance<T>, (_, balance)| acc + balance);
+				// Total account ballance
+				let total_balance = T::Flip::account_balance(&account_id);
+				// Balance available for redemption (total - sum(all restricted balances))
+				let available_balance =
+					total_balance.checked_sub(&restricted_balance).expect("to not underflow");
+				// Ensure that the amount to redeem is not higher than the restricted balance
+				ensure!(amount <= available_balance, Error::<T>::InvalidRedemption);
+			}
 
 			if let Some(withdrawal_address) = WithdrawalAddresses::<T>::get(&account_id) {
 				if withdrawal_address != address {
