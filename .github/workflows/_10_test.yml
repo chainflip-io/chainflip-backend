@@ -15,7 +15,7 @@ jobs:
   unit-tests:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-04-16"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -35,7 +35,7 @@ jobs:
     if: inputs.coverage
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-04-16"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
