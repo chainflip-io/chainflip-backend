@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use cf_chains::{address::EncodedAddress, include_abi_bytes, CcmDepositMetadata};
-use cf_primitives::{Asset, EpochIndex, EthereumAddress};
+use cf_primitives::{Asset, EpochIndex, EthereumAddress, ForeignChain};
 use tracing::{info, warn};
 use web3::{
 	ethabi::{self, RawLog},
@@ -124,6 +124,151 @@ impl<RawRpcClient: RawRpcApi + Send + Sync + 'static, SignedExtrinsicClient: Sen
 	}
 }
 
+fn call_from_event(
+	event: Event<VaultEvent>,
+	maybe_source_token: Option<Asset>,
+) -> Option<pallet_cf_swapping::Call<state_chain_runtime::Runtime>> {
+	fn into_encoded_address_or_ignore(
+		chain: ForeignChain,
+		bytes: Vec<u8>,
+	) -> Option<EncodedAddress> {
+		match EncodedAddress::from_chain_bytes(chain, bytes) {
+			Ok(encoded_address) => Some(encoded_address),
+			Err(e) => {
+				warn!("Failed to convert into EncodedAddress: {}", e);
+				None
+			},
+		}
+	}
+
+	fn into_or_ignore<Primitive: std::fmt::Debug + TryInto<CfType> + Copy, CfType>(
+		from: Primitive,
+	) -> Option<CfType> {
+		match from.try_into() {
+			Ok(cf_type) => Some(cf_type),
+			Err(_) => {
+				warn!(
+					"Failed to convert into {:?} (primitive was {:?})",
+					std::any::type_name::<CfType>(),
+					from
+				);
+				None
+			},
+		}
+	}
+
+	match event.event_parameters {
+		VaultEvent::SwapNative {
+			destination_chain,
+			destination_address,
+			destination_token,
+			amount,
+			sender: _,
+		} => Some(
+			pallet_cf_swapping::Call::<state_chain_runtime::Runtime>::schedule_swap_by_witnesser {
+				from: Asset::Eth,
+				to: into_or_ignore(destination_token)?,
+				deposit_amount: amount,
+				destination_address: into_encoded_address_or_ignore(
+					into_or_ignore(destination_chain)?,
+					destination_address.0,
+				)?,
+				tx_hash: event.tx_hash.into(),
+			},
+		),
+		VaultEvent::SwapToken {
+			destination_chain,
+			destination_address,
+			destination_token,
+			source_token: _,
+			amount,
+			sender: _,
+		} => Some(pallet_cf_swapping::Call::schedule_swap_by_witnesser {
+			from: maybe_source_token?,
+			to: into_or_ignore(destination_token)?,
+			deposit_amount: amount,
+			destination_address: into_encoded_address_or_ignore(
+				into_or_ignore(destination_chain)?,
+				destination_address.0,
+			)?,
+			tx_hash: event.tx_hash.into(),
+		}),
+		VaultEvent::XCallNative {
+			destination_chain,
+			destination_address,
+			destination_token,
+			amount,
+			sender,
+			message,
+			gas_amount,
+			cf_parameters,
+		} => Some(pallet_cf_swapping::Call::ccm_deposit {
+			source_asset: Asset::Eth,
+			deposit_amount: amount,
+			destination_asset: into_or_ignore(destination_token)?,
+			destination_address: into_encoded_address_or_ignore(
+				into_or_ignore(destination_chain)?,
+				destination_address.0,
+			)?,
+			message_metadata: CcmDepositMetadata {
+				message: message.0,
+				gas_budget: gas_amount,
+				cf_parameters: cf_parameters.0.to_vec(),
+				source_address: core_h160(sender).into(),
+			},
+		}),
+		VaultEvent::XCallToken {
+			destination_chain,
+			destination_address,
+			destination_token,
+			source_token: _,
+			amount,
+			sender,
+			message,
+			gas_amount,
+			cf_parameters,
+		} => Some(pallet_cf_swapping::Call::ccm_deposit {
+			source_asset: maybe_source_token?,
+			deposit_amount: amount,
+			destination_asset: into_or_ignore(destination_token)?,
+			destination_address: into_encoded_address_or_ignore(
+				into_or_ignore(destination_chain)?,
+				destination_address.0,
+			)?,
+			message_metadata: CcmDepositMetadata {
+				message: message.0,
+				gas_budget: gas_amount,
+				cf_parameters: cf_parameters.0.to_vec(),
+				source_address: core_h160(sender).into(),
+			},
+		}),
+		unhandled_event => {
+			warn!("Unhandled vault contract event: {:?}", unhandled_event);
+			None
+		},
+	};
+
+	None
+}
+
+// Some events require source token asset to be fetched from the State Chain map.
+async fn source_token_from_event<StateChainClient: EthAssetApi>(
+	state_chain_client: Arc<StateChainClient>,
+	event: &Event<VaultEvent>,
+) -> Result<Option<Asset>> {
+	let source_token = match event.event_parameters {
+		VaultEvent::XCallToken { source_token, .. } => Some(source_token),
+		VaultEvent::SwapToken { source_token, .. } => Some(source_token),
+		_ => None,
+	};
+
+	if let Some(token_address) = source_token {
+		state_chain_client.asset(token_address.0).await.map_err(anyhow::Error::msg)
+	} else {
+		Ok(None)
+	}
+}
+
 #[async_trait]
 impl EthContractWitnesser for Vault {
 	type EventParameters = VaultEvent;
@@ -146,110 +291,11 @@ impl EthContractWitnesser for Vault {
 	{
 		for event in block.block_items {
 			info!("Handling event: {event}");
-			let call = match event.event_parameters {
-				VaultEvent::SwapNative {
-					destination_chain,
-					destination_address,
-					destination_token,
-					amount,
-					sender: _,
-				} => Some(pallet_cf_swapping::Call::schedule_swap_by_witnesser {
-					from: Asset::Eth,
-					to: Asset::try_from(destination_token).map_err(anyhow::Error::msg)?,
-					deposit_amount: amount,
-					destination_address: EncodedAddress::from_chain_bytes(
-						destination_chain.try_into().map_err(anyhow::Error::msg)?,
-						destination_address.0,
-					)
-					.map_err(anyhow::Error::msg)?,
-					tx_hash: event.tx_hash.into(),
-				}),
-				VaultEvent::SwapToken {
-					destination_chain,
-					destination_address,
-					destination_token,
-					source_token,
-					amount,
-					sender: _,
-				} => Some(pallet_cf_swapping::Call::schedule_swap_by_witnesser {
-					from: state_chain_client
-						.asset(source_token.0)
-						.await
-						.map_err(anyhow::Error::msg)?
-						.ok_or(anyhow::anyhow!("Unknown ETH source token"))?,
-					to: Asset::try_from(destination_token).map_err(anyhow::Error::msg)?,
-					deposit_amount: amount,
-					destination_address: EncodedAddress::from_chain_bytes(
-						destination_chain.try_into().map_err(anyhow::Error::msg)?,
-						destination_address.0,
-					)
-					.map_err(anyhow::Error::msg)?,
-					tx_hash: event.tx_hash.into(),
-				}),
-				VaultEvent::XCallNative {
-					destination_chain,
-					destination_address,
-					destination_token,
-					amount,
-					sender,
-					message,
-					gas_amount,
-					cf_parameters,
-				} => Some(pallet_cf_swapping::Call::ccm_deposit {
-					source_asset: Asset::Eth,
-					deposit_amount: amount,
-					destination_asset: Asset::try_from(destination_token)
-						.map_err(anyhow::Error::msg)?,
-					destination_address: EncodedAddress::from_chain_bytes(
-						destination_chain.try_into().map_err(anyhow::Error::msg)?,
-						destination_address.0,
-					)
-					.map_err(anyhow::Error::msg)?,
-					message_metadata: CcmDepositMetadata {
-						message: message.0,
-						gas_budget: gas_amount,
-						cf_parameters: cf_parameters.0.to_vec(),
-						source_address: core_h160(sender).into(),
-					},
-				}),
-				VaultEvent::XCallToken {
-					destination_chain,
-					destination_address,
-					destination_token,
-					source_token,
-					amount,
-					sender,
-					message,
-					gas_amount,
-					cf_parameters,
-				} => Some(pallet_cf_swapping::Call::ccm_deposit {
-					source_asset: state_chain_client
-						.asset(source_token.0)
-						.await
-						.map_err(anyhow::Error::msg)?
-						.ok_or(anyhow::anyhow!("Unknown ETH source token"))?,
-					deposit_amount: amount,
-					destination_asset: Asset::try_from(destination_token)
-						.map_err(anyhow::Error::msg)?,
-					destination_address: EncodedAddress::from_chain_bytes(
-						destination_chain.try_into().map_err(anyhow::Error::msg)?,
-						destination_address.0,
-					)
-					.map_err(anyhow::Error::msg)?,
-					message_metadata: CcmDepositMetadata {
-						message: message.0,
-						gas_budget: gas_amount,
-						cf_parameters: cf_parameters.0.to_vec(),
-						source_address: core_h160(sender).into(),
-					},
-				}),
-				unhandled_event => {
-					warn!("Unhandled vault contract event: {:?}", unhandled_event);
-					None
-				},
-			};
 
-			if let Some(call) = call {
+			let maybe_source_token =
+				source_token_from_event(state_chain_client.clone(), &event).await?;
+
+			if let Some(call) = call_from_event(event, maybe_source_token) {
 				state_chain_client
 					.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 						call: Box::new(call.into()),
