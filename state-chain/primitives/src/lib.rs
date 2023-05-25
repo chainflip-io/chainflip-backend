@@ -98,10 +98,13 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 ///
 /// Each account can only be associated with a single role, and the role can only be updated from
 /// the initial [AccountRole::None] state.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug, Copy)]
+#[derive(
+	PartialEq, Eq, Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug, Copy, Default,
+)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum AccountRole {
 	/// The default account type - indicates a bare account with no special role or permissions.
+	#[default]
 	None,
 	/// Validators are responsible for the maintenance and operation of the Chainflip network. This
 	/// role is required for any node that wishes to participate in auctions.
@@ -110,12 +113,6 @@ pub enum AccountRole {
 	LiquidityProvider,
 	/// Brokers submit swap deposit requests on behalf of users.
 	Broker,
-}
-
-impl Default for AccountRole {
-	fn default() -> Self {
-		AccountRole::None
-	}
 }
 
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;

@@ -336,19 +336,25 @@ fn to_varint(value: u64) -> Vec<u8> {
 }
 
 #[derive(
-	Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord,
+	Clone,
+	Copy,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	PartialOrd,
+	Ord,
+	Default,
 )]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum BitcoinNetwork {
+	#[default]
 	Mainnet,
 	Testnet,
 	Regtest,
-}
-
-impl Default for BitcoinNetwork {
-	fn default() -> Self {
-		BitcoinNetwork::Mainnet
-	}
 }
 
 impl BitcoinNetwork {

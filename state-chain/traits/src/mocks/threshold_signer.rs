@@ -71,10 +71,7 @@ where
 	type ValidatorId = MockValidatorId;
 
 	fn request_signature(payload: <C as ChainCrypto>::Payload) -> ThresholdSignatureRequestId {
-		let req_id = {
-			let payload = payload.clone();
-			payload.using_encoded(|bytes| bytes[0]) as u32
-		};
+		let req_id = payload.using_encoded(|bytes| bytes[0]) as u32;
 		Self::put_storage(
 			SIGNATURE,
 			req_id,

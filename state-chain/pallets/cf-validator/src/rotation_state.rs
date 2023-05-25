@@ -115,7 +115,7 @@ mod rotation_state_tests {
 		let second_ban = BTreeSet::from([1, 2, 3]);
 		rotation_state.ban(second_ban.clone());
 		assert_eq!(
-			first_ban.union(&second_ban).into_iter().cloned().collect::<BTreeSet<_>>(),
+			first_ban.union(&second_ban).cloned().collect::<BTreeSet<_>>(),
 			rotation_state.banned
 		);
 	}
