@@ -16,7 +16,7 @@ use rand::{RngCore, SeedableRng};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, debug_span, Instrument};
 use utilities::{
-	all_same, assert_ok, split_at, success_threshold_from_share_count,
+	all_same, assert_ok, assert_panics, split_at, success_threshold_from_share_count,
 	testing::expect_recv_with_timeout,
 };
 
@@ -66,6 +66,47 @@ pub const DEFAULT_SIGNING_CEREMONY_ID: CeremonyId = DEFAULT_KEYGEN_CEREMONY_ID +
 /// Time it takes to cause a ceremony timeout (2 stages) with a small delay to allow for processing
 pub const CEREMONY_TIMEOUT_DURATION: Duration =
 	Duration::from_millis((((MAX_STAGE_DURATION_SECONDS * 2) as u64) * 1000) + 50);
+
+/// Run the given function on all crypto schemes, printing a message with the scheme name if it
+/// fails. The function must be generic over the CryptoScheme. eg: my_test<C: CryptoScheme>().
+macro_rules! test_all_crypto_schemes {
+	($test_function:ident) => {
+		({
+			use crate::{
+				bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme,
+			};
+
+			fn test<C: CryptoScheme>() {
+				// Print a message with the CryptoScheme if the test fails
+				let result = std::panic::catch_unwind(|| $test_function::<C>());
+				if result.is_err() {
+					println!("The failure was using the {} CryptoScheme", C::NAME);
+					std::panic::resume_unwind(Box::new(result));
+				}
+			}
+			// Run the test on all CryptoSchemes
+			test::<EthSigning>();
+			test::<PolkadotSigning>();
+			test::<BtcSigning>();
+		})
+	};
+}
+pub(crate) use test_all_crypto_schemes;
+
+/// Run the given function on all crypto schemes.
+/// The function must be generic over the CryptoScheme. eg: my_test<C: CryptoScheme>().
+macro_rules! test_all_crypto_schemes_async {
+	($test_function:ident) => {
+		({
+			use crate::{bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
+			// Run the test on all CryptoSchemes
+			$test_function::<EthSigning>().await;
+			$test_function::<PolkadotSigning>().await;
+			$test_function::<BtcSigning>().await;
+		})
+	};
+}
+pub(crate) use test_all_crypto_schemes_async;
 
 lazy_static! {
 	pub static ref ACCOUNT_IDS: Vec<AccountId> = (1..=4).map(|i| AccountId::new([i; 32])).collect();
@@ -859,4 +900,30 @@ pub fn gen_dummy_signing_comm1<P: ECPoint>(rng: &mut Rng, number_of_commitments:
 		.map(|_| SigningCommitment { d: point, e: point })
 		.collect();
 	DelayDeserialization::new(&comm1)
+}
+
+#[test]
+fn test_all_crypto_schemes_macro() {
+	// Run the macro using all 3 function that only panic on a single scheme to make sure the macro
+	// is calling the function for each scheme.
+
+	fn panic_function_eth<C: CryptoScheme>() {
+		if matches!(<C as CryptoScheme>::CHAIN_TAG, crate::ChainTag::Ethereum) {
+			panic!();
+		}
+	}
+	fn panic_function_dot<C: CryptoScheme>() {
+		if matches!(<C as CryptoScheme>::CHAIN_TAG, crate::ChainTag::Polkadot) {
+			panic!();
+		}
+	}
+	fn panic_function_btc<C: CryptoScheme>() {
+		if matches!(<C as CryptoScheme>::CHAIN_TAG, crate::ChainTag::Bitcoin) {
+			panic!();
+		}
+	}
+
+	assert_panics!(test_all_crypto_schemes!(panic_function_eth));
+	assert_panics!(test_all_crypto_schemes!(panic_function_dot));
+	assert_panics!(test_all_crypto_schemes!(panic_function_btc));
 }

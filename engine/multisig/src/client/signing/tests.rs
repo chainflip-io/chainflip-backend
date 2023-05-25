@@ -10,13 +10,13 @@ use crate::{
 		},
 		helpers::{
 			gen_dummy_local_sig, gen_dummy_signing_comm1, new_nodes, new_signing_ceremony,
-			run_stages, PayloadAndKeyData, SigningCeremonyRunner, ACCOUNT_IDS,
-			DEFAULT_SIGNING_CEREMONY_ID,
+			run_stages, test_all_crypto_schemes_async, PayloadAndKeyData, SigningCeremonyRunner,
+			ACCOUNT_IDS, DEFAULT_SIGNING_CEREMONY_ID,
 		},
 		keygen::generate_key_data,
 		signing::signing_data,
 	},
-	crypto::{bitcoin::BtcSigning, polkadot::PolkadotSigning},
+	crypto::bitcoin::BtcSigning,
 	eth::EthSigning,
 	CryptoScheme, Rng,
 };
@@ -323,18 +323,8 @@ async fn should_sign_with_different_keys() {
 }
 
 #[tokio::test]
-async fn should_sign_with_all_parties_eth() {
-	should_sign_with_all_parties::<EthSigning>().await;
-}
-
-#[tokio::test]
-async fn should_sign_with_all_parties_polkadot() {
-	should_sign_with_all_parties::<PolkadotSigning>().await;
-}
-
-#[tokio::test]
-async fn should_sign_with_all_parties_bitcoin() {
-	should_sign_with_all_parties::<BtcSigning>().await;
+async fn should_sign_with_all_parties_on_all_schemes() {
+	test_all_crypto_schemes_async!(should_sign_with_all_parties);
 }
 
 mod timeout {

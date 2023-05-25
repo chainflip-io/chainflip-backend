@@ -39,7 +39,7 @@ pub const LOCAL_SIG_MAX_SIZE: usize = MAX_SCALAR_SIZE + 8;
 mod serialisation {
 	use super::*;
 	use crate::{
-		bitcoin::BtcSigning, client::helpers, eth::EthSigning, polkadot::PolkadotSigning,
+		client::helpers::{self, test_all_crypto_schemes},
 		CryptoScheme,
 	};
 	use rand::SeedableRng;
@@ -59,9 +59,7 @@ mod serialisation {
 
 	#[test]
 	fn test_signing_commitment_size() {
-		test_signing_commitment_size_for_scheme::<EthSigning>();
-		test_signing_commitment_size_for_scheme::<BtcSigning>();
-		test_signing_commitment_size_for_scheme::<PolkadotSigning>();
+		test_all_crypto_schemes!(test_signing_commitment_size_for_scheme);
 	}
 
 	fn test_local_sig_size_for_scheme<C: CryptoScheme>() {
@@ -80,9 +78,7 @@ mod serialisation {
 
 	#[test]
 	fn test_local_sig_size() {
-		test_local_sig_size_for_scheme::<EthSigning>();
-		test_local_sig_size_for_scheme::<BtcSigning>();
-		test_local_sig_size_for_scheme::<PolkadotSigning>();
+		test_all_crypto_schemes!(test_local_sig_size_for_scheme);
 	}
 }
 
