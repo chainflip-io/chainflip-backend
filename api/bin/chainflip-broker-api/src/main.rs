@@ -10,8 +10,15 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	server::ServerBuilder,
 };
-use serde_json::json;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+
+#[derive(Serialize, Deserialize)]
+pub struct SwapDepositAddress {
+	address: String,
+	expiry_block: chainflip_api::primitives::BlockNumber,
+	issued_block: chainflip_api::primitives::BlockNumber,
+}
 
 #[rpc(server, client, namespace = "broker")]
 pub trait Rpc {
@@ -26,7 +33,7 @@ pub trait Rpc {
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
 		message_metadata: Option<CcmDepositMetadata>,
-	) -> Result<String, Error>;
+	) -> Result<SwapDepositAddress, Error>;
 }
 
 pub struct RpcServerImpl {
@@ -53,7 +60,7 @@ impl RpcServer for RpcServerImpl {
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
 		message_metadata: Option<CcmDepositMetadata>,
-	) -> Result<String, Error> {
+	) -> Result<SwapDepositAddress, Error> {
 		Ok(chainflip_api::request_swap_deposit_address(
 			&self.state_chain_settings,
 			source_asset,
@@ -63,8 +70,10 @@ impl RpcServer for RpcServerImpl {
 			message_metadata,
 		)
 		.await
-		.map(|(address, expiry_block, issued_block)| {
-			json!({ "address": address.to_string(), "expiry_block": expiry_block, "issued_block": issued_block }).to_string()
+		.map(|(address, expiry_block, issued_block)| SwapDepositAddress {
+			address: address.to_string(),
+			expiry_block,
+			issued_block,
 		})
 		.map_err(|e| anyhow!("{}:{}", e, e.root_cause()))?)
 	}

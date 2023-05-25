@@ -1031,7 +1031,6 @@ dependencies = [
  "hex",
  "jsonrpsee 0.16.2",
  "serde",
- "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.16",
