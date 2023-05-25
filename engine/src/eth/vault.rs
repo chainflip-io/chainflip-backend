@@ -3,7 +3,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use cf_chains::{address::EncodedAddress, include_abi_bytes, CcmDepositMetadata};
 use cf_primitives::{Asset, EpochIndex, EthereumAddress, ForeignChain};
-use tracing::{info, warn};
+use tracing::info;
 use web3::{
 	ethabi::{self, RawLog, Uint},
 	types::{H160, H256},
@@ -23,7 +23,7 @@ use super::{
 	SignatureAndEvent,
 };
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 
 pub struct Vault {
 	pub deployed_address: H160,
@@ -124,36 +124,39 @@ impl<RawRpcClient: RawRpcApi + Send + Sync + 'static, SignedExtrinsicClient: Sen
 	}
 }
 
-fn call_from_event(
+enum ExitOrIgnore {
+	Exit(anyhow::Error),
+	Ignore(String),
+}
+
+async fn call_from_event<StateChainClient>(
 	event: Event<VaultEvent>,
-	maybe_source_token: Option<Asset>,
-) -> Option<pallet_cf_swapping::Call<state_chain_runtime::Runtime>> {
+	state_chain_client: Arc<StateChainClient>,
+) -> Result<pallet_cf_swapping::Call<state_chain_runtime::Runtime>, ExitOrIgnore>
+where
+	StateChainClient: EthAssetApi,
+{
 	fn into_encoded_address_or_ignore(
 		chain: ForeignChain,
 		bytes: Vec<u8>,
-	) -> Option<EncodedAddress> {
-		match EncodedAddress::from_chain_bytes(chain, bytes) {
-			Ok(encoded_address) => Some(encoded_address),
-			Err(e) => {
-				warn!("Failed to convert into EncodedAddress: {e}");
-				None
-			},
-		}
+	) -> Result<EncodedAddress, ExitOrIgnore> {
+		EncodedAddress::from_chain_bytes(chain, bytes).map_err(|e| {
+			ExitOrIgnore::Ignore(format!("Failed to convert into EncodedAddress: {e}"))
+		})
 	}
 
 	fn into_or_ignore<Primitive: std::fmt::Debug + TryInto<CfType> + Copy, CfType>(
 		from: Primitive,
-	) -> Option<CfType> {
-		match from.try_into() {
-			Ok(cf_type) => Some(cf_type),
-			Err(_) => {
-				warn!(
-					"Failed to convert into {:?} (primitive was {from:?})",
-					std::any::type_name::<CfType>(),
-				);
-				None
-			},
-		}
+	) -> Result<CfType, ExitOrIgnore>
+	where
+		<Primitive as TryInto<CfType>>::Error: std::fmt::Display,
+	{
+		from.try_into().map_err(|err| {
+			ExitOrIgnore::Ignore(format!(
+				"Failed to convert into {:?}: {err}",
+				std::any::type_name::<CfType>(),
+			))
+		})
 	}
 
 	match event.event_parameters {
@@ -163,7 +166,7 @@ fn call_from_event(
 			destination_token,
 			amount,
 			sender: _,
-		} => Some(
+		} => Ok(
 			pallet_cf_swapping::Call::<state_chain_runtime::Runtime>::schedule_swap_by_witnesser {
 				from: Asset::Eth,
 				to: into_or_ignore(destination_token)?,
@@ -179,11 +182,15 @@ fn call_from_event(
 			destination_chain,
 			destination_address,
 			destination_token,
-			source_token: _,
+			source_token,
 			amount,
 			sender: _,
-		} => Some(pallet_cf_swapping::Call::schedule_swap_by_witnesser {
-			from: maybe_source_token?,
+		} => Ok(pallet_cf_swapping::Call::schedule_swap_by_witnesser {
+			from: state_chain_client
+				.asset(source_token.0)
+				.await
+				.map_err(|e| ExitOrIgnore::Exit(anyhow!(e)))?
+				.ok_or(ExitOrIgnore::Ignore(format!("Source token {source_token} not found")))?,
 			to: into_or_ignore(destination_token)?,
 			deposit_amount: into_or_ignore(amount)?,
 			destination_address: into_encoded_address_or_ignore(
@@ -201,7 +208,7 @@ fn call_from_event(
 			message,
 			gas_amount,
 			cf_parameters,
-		} => Some(pallet_cf_swapping::Call::ccm_deposit {
+		} => Ok(pallet_cf_swapping::Call::ccm_deposit {
 			source_asset: Asset::Eth,
 			destination_asset: into_or_ignore(destination_token)?,
 			deposit_amount: into_or_ignore(amount)?,
@@ -220,14 +227,18 @@ fn call_from_event(
 			destination_chain,
 			destination_address,
 			destination_token,
-			source_token: _,
+			source_token,
 			amount,
 			sender,
 			message,
 			gas_amount,
 			cf_parameters,
-		} => Some(pallet_cf_swapping::Call::ccm_deposit {
-			source_asset: maybe_source_token?,
+		} => Ok(pallet_cf_swapping::Call::ccm_deposit {
+			source_asset: state_chain_client
+				.asset(source_token.0)
+				.await
+				.map_err(|e| ExitOrIgnore::Exit(anyhow!(e)))?
+				.ok_or(ExitOrIgnore::Ignore(format!("Source token {source_token} not found")))?,
 			destination_asset: into_or_ignore(destination_token)?,
 			deposit_amount: into_or_ignore(amount)?,
 			destination_address: into_encoded_address_or_ignore(
@@ -241,30 +252,9 @@ fn call_from_event(
 				source_address: core_h160(sender).into(),
 			},
 		}),
-		unhandled_event => {
-			warn!("Unhandled vault contract event: {unhandled_event:?}");
-			None
-		},
-	};
-
-	None
-}
-
-// Some events require source token asset to be fetched from the State Chain map.
-async fn source_token_from_event<StateChainClient: EthAssetApi>(
-	state_chain_client: Arc<StateChainClient>,
-	event: &Event<VaultEvent>,
-) -> Result<Option<Asset>> {
-	let source_token = match event.event_parameters {
-		VaultEvent::XCallToken { source_token, .. } => Some(source_token),
-		VaultEvent::SwapToken { source_token, .. } => Some(source_token),
-		_ => None,
-	};
-
-	if let Some(token_address) = source_token {
-		state_chain_client.asset(token_address.0).await.map_err(anyhow::Error::msg)
-	} else {
-		Ok(None)
+		unhandled_event => Err(ExitOrIgnore::Ignore(format!(
+			"Unhandled vault contract event: {unhandled_event:?}"
+		))),
 	}
 }
 
@@ -291,16 +281,20 @@ impl EthContractWitnesser for Vault {
 		for event in block.block_items {
 			info!("Handling event: {event}");
 
-			let maybe_source_token =
-				source_token_from_event(state_chain_client.clone(), &event).await?;
-
-			if let Some(call) = call_from_event(event, maybe_source_token) {
-				state_chain_client
-					.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-						call: Box::new(call.into()),
-						epoch_index: epoch,
-					})
-					.await;
+			match call_from_event(event, state_chain_client.clone()).await {
+				Ok(call) => {
+					state_chain_client
+						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+							call: Box::new(call.into()),
+							epoch_index: epoch,
+						})
+						.await;
+				},
+				Err(ExitOrIgnore::Exit(err)) => return Err(err),
+				Err(ExitOrIgnore::Ignore(message)) => {
+					tracing::warn!("Ignoring event: {message}");
+					continue
+				},
 			}
 		}
 		Ok(())
