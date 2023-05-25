@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use std::mem;
 
 use crate::{

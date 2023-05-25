@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use crate::{
 	mock::*, CeremonyId, Error, Event as PalletEvent, KeyHandoverResolutionPendingSince,
 	KeygenFailureVoters, KeygenResolutionPendingSince, KeygenResponseTimeout, KeygenSuccessVoters,

@@ -2,7 +2,6 @@ use crate::*;
 
 pub mod api;
 
-#[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
 pub use cf_primitives::{chains::Polkadot, PolkadotAccountId};

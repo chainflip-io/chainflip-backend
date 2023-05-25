@@ -1,3 +1,5 @@
+#![cfg(feature = "runtime-benchmarks")]
+
 use sp_std::{vec, vec::Vec};
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};

@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use crate::{mock::*, Error, *};
 use cf_test_utilities::last_event;
 use cf_traits::{

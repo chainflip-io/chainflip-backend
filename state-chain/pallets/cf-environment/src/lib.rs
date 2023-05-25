@@ -21,12 +21,9 @@ use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::vec::Vec;
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-#[cfg(test)]
 mod mock;
-#[cfg(test)]
 mod tests;
 
 pub mod weights;

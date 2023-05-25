@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use crate::{self as pallet_cf_environment, cfe, Decode, Encode, TypeInfo};
 use cf_chains::{
 	btc::{BitcoinFeeInfo, BitcoinNetwork},

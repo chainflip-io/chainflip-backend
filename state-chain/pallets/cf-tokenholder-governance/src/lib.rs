@@ -12,7 +12,6 @@ use sp_std::{cmp::PartialEq, vec, vec::Vec};
 
 pub use pallet::*;
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 mod migrations;
 #[cfg(test)]

@@ -1,3 +1,5 @@
+#![cfg(feature = "runtime-benchmarks")]
+
 use crate::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	dot::{

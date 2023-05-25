@@ -1,3 +1,5 @@
+#![cfg(feature = "runtime-benchmarks")]
+
 use super::{api::EthereumTransactionBuilder, TransactionFee};
 use crate::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
