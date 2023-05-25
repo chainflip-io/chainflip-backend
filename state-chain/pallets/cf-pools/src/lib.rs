@@ -119,7 +119,7 @@ pub mod pallet {
 					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 					if let Err(e) = CollectedNetworkFee::<T>::try_mutate(|collected_fee| {
 						let flip_to_burn = Self::swap_single_leg(
-							SwapLeg::ToStable,
+							SwapLeg::FromStable,
 							any::Asset::Flip,
 							*collected_fee,
 						)?;
