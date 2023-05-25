@@ -1010,7 +1010,7 @@ impl_runtime_apis! {
 		/// Note: This function must only be called through RPC, because RPC has its own storage buffer
 		/// layer and would not affect on-chain storage.
 		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Result<SwapOutput, DispatchError> {
-			LiquidityPools::take_fee_and_do_swap(from, to, amount)
+			LiquidityPools::swap_with_network_fee(from, to, amount)
 		}
 	}
 

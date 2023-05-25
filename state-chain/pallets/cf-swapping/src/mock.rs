@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_swapping, WeightInfo};
 use cf_chains::AnyChain;
-use cf_primitives::{Asset, AssetAmount, SwapLeg, SwapOutput, STABLE_ASSET};
+use cf_primitives::{Asset, AssetAmount, SwapLeg, STABLE_ASSET};
 use cf_traits::{
 	impl_mock_chainflip,
 	mocks::{
@@ -74,14 +74,6 @@ parameter_types! {
 }
 pub struct MockSwappingApi;
 impl SwappingApi for MockSwappingApi {
-	fn take_fee_and_do_swap(
-		_from: Asset,
-		_to: Asset,
-		input_amount: AssetAmount,
-	) -> Result<SwapOutput, DispatchError> {
-		Ok(input_amount.into())
-	}
-
 	fn take_network_fee(input_amount: AssetAmount) -> AssetAmount {
 		input_amount - NetworkFee::get() * input_amount
 	}

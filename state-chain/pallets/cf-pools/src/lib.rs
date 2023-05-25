@@ -602,40 +602,6 @@ pub mod pallet {
 }
 
 impl<T: Config> SwappingApi for Pallet<T> {
-	#[transactional]
-	fn take_fee_and_do_swap(
-		from: any::Asset,
-		to: any::Asset,
-		input_amount: AssetAmount,
-	) -> Result<SwapOutput, DispatchError> {
-		Ok(match (from, to) {
-			(input_asset, STABLE_ASSET) => Self::take_network_fee(Self::swap_single_leg(
-				SwapLeg::ToStable,
-				input_asset,
-				input_amount,
-			)?)
-			.into(),
-			(STABLE_ASSET, output_asset) => Self::swap_single_leg(
-				SwapLeg::FromStable,
-				output_asset,
-				Self::take_network_fee(input_amount),
-			)?
-			.into(),
-			(input_asset, output_asset) => {
-				let intermediate_output =
-					Self::swap_single_leg(SwapLeg::ToStable, input_asset, input_amount)?;
-				SwapOutput {
-					intermediary: Some(intermediate_output),
-					output: Self::swap_single_leg(
-						SwapLeg::FromStable,
-						output_asset,
-						Self::take_network_fee(intermediate_output),
-					)?,
-				}
-			},
-		})
-	}
-
 	fn take_network_fee(input: AssetAmount) -> AssetAmount {
 		let (remaining, fee) = Self::calculate_network_fee(T::NetworkFee::get(), input);
 		CollectedNetworkFee::<T>::mutate(|total| {
@@ -645,6 +611,7 @@ impl<T: Config> SwappingApi for Pallet<T> {
 		remaining
 	}
 
+	#[transactional]
 	fn swap_single_leg(
 		leg: SwapLeg,
 		unstable_asset: any::Asset,
@@ -690,6 +657,40 @@ impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 }
 
 impl<T: Config> Pallet<T> {
+	#[transactional]
+	pub fn swap_with_network_fee(
+		from: any::Asset,
+		to: any::Asset,
+		input_amount: AssetAmount,
+	) -> Result<SwapOutput, DispatchError> {
+		Ok(match (from, to) {
+			(input_asset, STABLE_ASSET) => Self::take_network_fee(Self::swap_single_leg(
+				SwapLeg::ToStable,
+				input_asset,
+				input_amount,
+			)?)
+			.into(),
+			(STABLE_ASSET, output_asset) => Self::swap_single_leg(
+				SwapLeg::FromStable,
+				output_asset,
+				Self::take_network_fee(input_amount),
+			)?
+			.into(),
+			(input_asset, output_asset) => {
+				let intermediate_output =
+					Self::swap_single_leg(SwapLeg::ToStable, input_asset, input_amount)?;
+				SwapOutput {
+					intermediary: Some(intermediate_output),
+					output: Self::swap_single_leg(
+						SwapLeg::FromStable,
+						output_asset,
+						Self::take_network_fee(intermediate_output),
+					)?,
+				}
+			},
+		})
+	}
+
 	fn try_credit_single_asset(
 		lp: &T::AccountId,
 		unstable_asset: Asset,

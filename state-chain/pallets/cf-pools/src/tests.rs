@@ -3,7 +3,6 @@ use crate::{
 };
 use cf_amm::common::{sqrt_price_at_tick, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
-use cf_traits::SwappingApi;
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_runtime::Permill;
 
@@ -153,8 +152,8 @@ fn test_buy_back_flip() {
 		));
 
 		// Swapping should cause the network fee to be collected.
-		LiquidityPools::take_fee_and_do_swap(FLIP, STABLE_ASSET, 1000).unwrap();
-		LiquidityPools::take_fee_and_do_swap(STABLE_ASSET, FLIP, 1000).unwrap();
+		LiquidityPools::swap_with_network_fee(FLIP, STABLE_ASSET, 1000).unwrap();
+		LiquidityPools::swap_with_network_fee(STABLE_ASSET, FLIP, 1000).unwrap();
 
 		let collected_fee = CollectedNetworkFee::<Test>::get();
 		assert!(collected_fee > 0);

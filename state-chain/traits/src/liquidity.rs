@@ -1,5 +1,5 @@
 use cf_chains::address::ForeignChainAddress;
-use cf_primitives::{Asset, AssetAmount, BasisPoints, SwapLeg, SwapOutput};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, SwapLeg};
 use frame_support::dispatch::DispatchError;
 use sp_runtime::DispatchResult;
 
@@ -36,14 +36,6 @@ pub trait LpBalanceApi {
 }
 
 pub trait SwappingApi {
-	/// Attempt to swap `from` asset to `to` asset, takes some STABLE_ASSET as network fees.
-	/// If OK, return the swap result.
-	fn take_fee_and_do_swap(
-		from: Asset,
-		to: Asset,
-		input_amount: AssetAmount,
-	) -> Result<SwapOutput, DispatchError>;
-
 	/// Takes the swap amount in STABLE_ASSET, collect network fee from it
 	/// and return the remaining value
 	fn take_network_fee(input_amount: AssetAmount) -> AssetAmount;
@@ -57,14 +49,6 @@ pub trait SwappingApi {
 }
 
 impl<T: frame_system::Config> SwappingApi for T {
-	fn take_fee_and_do_swap(
-		_from: Asset,
-		_to: Asset,
-		input_amount: AssetAmount,
-	) -> Result<SwapOutput, DispatchError> {
-		Ok(input_amount.into())
-	}
-
 	fn take_network_fee(input_amount: AssetAmount) -> AssetAmount {
 		input_amount
 	}
