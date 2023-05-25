@@ -101,8 +101,8 @@ where
 	fn new_unsigned(
 		maybe_old_key: Option<PolkadotPublicKey>,
 		new_key: PolkadotPublicKey,
-	) -> Result<Self, SetAggKeyWithAggKeyError> {
-		let vault = E::try_vault_account().ok_or(SetAggKeyWithAggKeyError::Other)?;
+	) -> Result<Self, ()> {
+		let vault = E::try_vault_account().ok_or(())?;
 
 		Ok(Self::RotateVaultProxy(rotate_vault_proxy::extrinsic_builder(
 			E::replay_protection(),
@@ -187,6 +187,10 @@ impl<E: PolkadotEnvironment> ApiCall<Polkadot> for PolkadotApi<E> {
 	fn is_signed(&self) -> bool {
 		map_over_api_variants!(self, call, call.is_signed())
 	}
+
+	fn transaction_out_id(&self) -> <Polkadot as ChainCrypto>::TransactionOutId {
+		map_over_api_variants!(self, call, call.signature().unwrap())
+	}
 }
 
 pub trait CreatePolkadotVault: ApiCall<Polkadot> {
@@ -237,6 +241,10 @@ impl<E: PolkadotEnvironment + 'static> ApiCall<Polkadot> for OpaqueApiCall<E> {
 
 	fn is_signed(&self) -> bool {
 		self.builder.is_signed()
+	}
+
+	fn transaction_out_id(&self) -> <Polkadot as ChainCrypto>::TransactionOutId {
+		self.builder.signature().unwrap()
 	}
 }
 

@@ -11,16 +11,18 @@ mod signer_nomination;
 use crate::{
 	AccountId, AccountRoles, Authorship, BitcoinIngressEgress, BitcoinVault, BlockNumber,
 	Emissions, Environment, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
-	Flip, FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress, Runtime, RuntimeCall, System,
-	Validator,
+	Flip, FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress, Runtime, RuntimeCall,
+	RuntimeOrigin, System, Validator,
 };
 
 use cf_chains::{
-	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
+	address::{
+		try_from_encoded_address, try_to_encoded_address, AddressConverter, EncodedAddress,
+		ForeignChainAddress,
+	},
 	btc::{
 		api::{BitcoinApi, SelectedUtxos},
-		deposit_address::derive_btc_deposit_address_from_script,
-		scriptpubkey_from_address, Bitcoin, BitcoinTransactionData, BtcAmount,
+		Bitcoin, BitcoinTransactionData, BtcAmount, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
@@ -41,7 +43,8 @@ use cf_primitives::{
 use cf_traits::{
 	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster,
 	DepositApi, DepositHandler, EgressApi, EpochInfo, Heartbeat, Issuance, KeyProvider,
-	RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
+	OnBroadcastReady, OnRotationCallback, RewardsDistribution, RuntimeUpgrade,
+	VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -386,6 +389,7 @@ impl CommKeyBroadcaster for TokenholderGovernanceBroadcaster {
 		EthereumBroadcaster::threshold_sign_and_broadcast(
 			SetCommKeyWithAggKey::<Ethereum>::new_unsigned(new_key),
 			None::<RuntimeCall>,
+			false,
 		);
 	}
 }
@@ -501,7 +505,7 @@ impl DepositHandler<Polkadot> for DotDepositHandler {}
 pub struct BtcDepositHandler;
 impl DepositHandler<Bitcoin> for BtcDepositHandler {
 	fn on_deposit_made(
-		utxo_id: <Bitcoin as ChainCrypto>::TransactionId,
+		utxo_id: <Bitcoin as ChainCrypto>::TransactionInId,
 		amount: <Bitcoin as Chain>::ChainAmount,
 		address: <Bitcoin as Chain>::ChainAccount,
 		_asset: <Bitcoin as Chain>::ChainAsset,
@@ -534,37 +538,69 @@ impl AddressConverter for ChainAddressConverter {
 	fn try_to_encoded_address(
 		address: ForeignChainAddress,
 	) -> Result<EncodedAddress, DispatchError> {
-		match address {
-			ForeignChainAddress::Eth(address) => Ok(EncodedAddress::Eth(address)),
-			ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(address)),
-			ForeignChainAddress::Btc(address) => Ok(EncodedAddress::Btc(
-				derive_btc_deposit_address_from_script(
-					address.into(),
-					Environment::bitcoin_network(),
-				)
-				.bytes()
-				.collect::<Vec<u8>>(),
-			)),
-		}
+		try_to_encoded_address(address, Environment::bitcoin_network)
 	}
 
 	fn try_from_encoded_address(
 		encoded_address: EncodedAddress,
 	) -> Result<ForeignChainAddress, ()> {
-		match encoded_address {
-			EncodedAddress::Eth(address_bytes) =>
-				Ok(ForeignChainAddress::Eth(address_bytes)),
-			EncodedAddress::Dot(address_bytes) =>
-				Ok(ForeignChainAddress::Dot(address_bytes)),
-			EncodedAddress::Btc(address_bytes) => Ok(ForeignChainAddress::Btc(
-				scriptpubkey_from_address(
-					sp_std::str::from_utf8(&address_bytes[..]).map_err(|_| ())?,
-					Environment::bitcoin_network(),
-				)
-				.map_err(|_| ())?
-				.try_into()
-				.expect("bitcoin scripts constructed from supported addresses should not exceed 128 bytes"),
-			)),
+		try_from_encoded_address(encoded_address, Environment::bitcoin_network)
+	}
+}
+
+pub struct RotationCallbackProvider;
+impl OnRotationCallback<Ethereum> for RotationCallbackProvider {
+	type Origin = RuntimeOrigin;
+	type Callback = RuntimeCall;
+}
+impl OnRotationCallback<Polkadot> for RotationCallbackProvider {
+	type Origin = RuntimeOrigin;
+	type Callback = RuntimeCall;
+}
+impl OnRotationCallback<Bitcoin> for RotationCallbackProvider {
+	type Origin = RuntimeOrigin;
+	type Callback = RuntimeCall;
+
+	fn on_rotation(
+		block_number: <Bitcoin as Chain>::ChainBlockNumber,
+		tx_out_id: <Bitcoin as ChainCrypto>::TransactionOutId,
+	) -> Option<Self::Callback> {
+		Some(
+			pallet_cf_vaults::Call::<Runtime, crate::BitcoinInstance>::vault_key_rotated_out {
+				block_number,
+				tx_out_id,
+			}
+			.into(),
+		)
+	}
+}
+
+pub struct BroadcastReadyProvider;
+impl OnBroadcastReady<Ethereum> for BroadcastReadyProvider {
+	type ApiCall = EthereumApi<EthEnvironment>;
+}
+impl OnBroadcastReady<Polkadot> for BroadcastReadyProvider {
+	type ApiCall = PolkadotApi<DotEnvironment>;
+}
+impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
+	type ApiCall = BitcoinApi<BtcEnvironment>;
+
+	fn on_broadcast_ready(api_call: &Self::ApiCall) {
+		match api_call {
+			BitcoinApi::BatchTransfer(batch_transfer) => {
+				let tx_hash = batch_transfer.bitcoin_transaction.txid();
+				let outputs = batch_transfer.bitcoin_transaction.outputs.clone();
+				let output_len = outputs.len();
+				let vout = output_len - 1;
+				let change_output = outputs.get(vout).unwrap();
+				Environment::add_bitcoin_change_utxo(
+					change_output.amount,
+					UtxoId { tx_hash, vout: vout as u32 },
+					CHANGE_ADDRESS_SALT,
+					batch_transfer.change_utxo_key,
+				);
+			},
+			_ => unreachable!(),
 		}
 	}
 }

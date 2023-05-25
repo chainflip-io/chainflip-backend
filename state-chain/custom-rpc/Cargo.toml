@@ -4,7 +4,6 @@ version = '0.1.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 edition = '2021'
 
-
 [dependencies]
 
 # Chainflip Runtime
@@ -23,3 +22,4 @@ sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "cha
 sp-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
 sp-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
 sc-client-api = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
+

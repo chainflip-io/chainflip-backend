@@ -88,7 +88,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		// (Otherwise, broadcast an empty struct.)
 		let pubkey_shares = if sharing_participants.contains(&self.common.own_idx) {
 			let public_key_shares = match party_status {
-				ParticipantStatus::Sharing(_, pubkeys) => pubkeys,
+				ParticipantStatus::Sharing { public_key_shares, .. } => public_key_shares,
 				_ => panic!("must be a sharing party"),
 			};
 
@@ -256,7 +256,7 @@ impl<Crypto: CryptoScheme> HashCommitments1<Crypto> {
 				.resharing_context
 				.as_ref()
 				.map(|context| match &context.party_status {
-					ParticipantStatus::Sharing(secret, _) => secret,
+					ParticipantStatus::Sharing { secret_share, .. } => secret_share,
 					ParticipantStatus::NonSharing => panic!("invalid stage at this point"),
 					// NOTE: non-sharing parties send the dummy value of 0 as their secret share,
 					ParticipantStatus::NonSharingReceivedKeys(_) => &zero_scalar,
@@ -471,7 +471,6 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		let commitments = match try_deserialize(commitments) {
 			Ok(res) => res,
 			Err(bad_parties) =>
-			// TODO: unit test for this
 				return KeygenStageResult::Error(
 					bad_parties,
 					KeygenFailureReason::DeserializationError,

@@ -7,7 +7,7 @@ Restart=always
 RestartSec=30
 Type=simple
 
-ExecStart=/etc/chainflip/start-engine.sh
+ExecStart=/usr/bin/chainflip-engine --config-root /etc/chainflip/
 
 LimitNOFILE=16000
 LimitNOFILESoft=16000

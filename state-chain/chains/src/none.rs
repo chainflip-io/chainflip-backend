@@ -20,7 +20,8 @@ impl ChainCrypto for NoneChain {
 	type AggKey = ();
 	type Payload = ();
 	type ThresholdSignature = ();
-	type TransactionId = ();
+	type TransactionInId = ();
+	type TransactionOutId = ();
 	type GovKey = ();
 
 	fn verify_threshold_signature(

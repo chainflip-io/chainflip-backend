@@ -5,12 +5,11 @@ use crate as pallet_cf_vaults;
 use cf_chains::{
 	eth,
 	mocks::{MockAggKey, MockEthereum},
-	ApiCall, SetAggKeyWithAggKeyError,
+	ApiCall,
 };
 use cf_primitives::{BroadcastId, GENESIS_EPOCH};
 use cf_traits::{
-	impl_mock_callback, impl_mock_chainflip,
-	mocks::{ceremony_id_provider::MockCeremonyIdProvider, threshold_signer::MockThresholdSigner},
+	impl_mock_callback, impl_mock_chainflip, mocks::threshold_signer::MockThresholdSigner,
 	AccountRoleRegistry,
 };
 use frame_support::{
@@ -130,12 +129,12 @@ impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
 	fn new_unsigned(
 		old_key: Option<<MockEthereum as ChainCrypto>::AggKey>,
 		new_key: <MockEthereum as ChainCrypto>::AggKey,
-	) -> Result<Self, SetAggKeyWithAggKeyError> {
+	) -> Result<Self, ()> {
 		if !SET_AGG_KEY_WITH_AGG_KEY_REQUIRED.with(|cell| *cell.borrow()) {
-			return Err(SetAggKeyWithAggKeyError::NotRequired)
+			return Err(())
 		}
 
-		Ok(Self { old_key: old_key.ok_or(SetAggKeyWithAggKeyError::Other)?, new_key })
+		Ok(Self { old_key: old_key.ok_or(())?, new_key })
 	}
 }
 
@@ -157,6 +156,10 @@ impl ApiCall<MockEthereum> for MockSetAggKeyWithAggKey {
 
 	fn is_signed(&self) -> bool {
 		unimplemented!()
+	}
+
+	fn transaction_out_id(&self) -> <MockEthereum as ChainCrypto>::TransactionOutId {
+		todo!()
 	}
 }
 
@@ -194,6 +197,12 @@ impl Broadcaster<MockEthereum> for MockBroadcaster {
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		unimplemented!()
 	}
+
+	fn threshold_sign_and_broadcast_for_rotation(
+		_api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
+		(1, 2)
+	}
 }
 
 parameter_types! {
@@ -224,7 +233,6 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type OffenceReporter = MockOffenceReporter;
 	type SetAggKeyWithAggKey = MockSetAggKeyWithAggKey;
 	type VaultTransitionHandler = MockVaultTransitionHandler;
-	type CeremonyIdProvider = MockCeremonyIdProvider;
 	type WeightInfo = ();
 	type Broadcaster = MockBroadcaster;
 	type SystemStateManager = MockSystemStateManager;
@@ -235,7 +243,8 @@ pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;
 pub const BOB: <MockRuntime as frame_system::Config>::AccountId = 456u64;
 pub const CHARLIE: <MockRuntime as frame_system::Config>::AccountId = 789u64;
 pub const GENESIS_AGG_PUB_KEY: MockAggKey = MockAggKey(*b"genk");
-pub const NEW_AGG_PUB_KEY: MockAggKey = MockAggKey(*b"next");
+pub const NEW_AGG_PUB_KEY_PRE_HANDOVER: MockAggKey = MockAggKey(*b"next");
+pub const NEW_AGG_PUB_KEY_POST_HANDOVER: MockAggKey = MockAggKey(*b"hand");
 
 pub const MOCK_KEYGEN_RESPONSE_TIMEOUT: u64 = 25;
 

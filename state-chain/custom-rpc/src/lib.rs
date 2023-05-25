@@ -1,5 +1,5 @@
 use cf_amm::common::SqrtPriceQ64F96;
-use cf_primitives::{Asset, AssetAmount, EthereumAddress, SwapOutput};
+use cf_primitives::{Asset, EthereumAddress, SwapOutput};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
 use sc_client_api::HeaderBackend;
@@ -58,6 +58,23 @@ pub struct RpcAuctionState {
 	redemption_period_as_percentage: u8,
 	min_funding: NumberOrHex,
 	auction_size_range: (u32, u32),
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcSwapOutput {
+	// Intermediary amount, if there's any
+	pub intermediary: Option<NumberOrHex>,
+	// Final output of the swap
+	pub output: NumberOrHex,
+}
+
+impl From<SwapOutput> for RpcSwapOutput {
+	fn from(swap_output: SwapOutput) -> Self {
+		Self {
+			intermediary: Some(NumberOrHex::from(swap_output.intermediary.unwrap())),
+			output: NumberOrHex::from(swap_output.output),
+		}
+	}
 }
 
 #[rpc(server, client, namespace = "cf")]
@@ -164,9 +181,9 @@ pub trait CustomApi {
 		&self,
 		from: Asset,
 		to: Asset,
-		amount: AssetAmount,
+		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<SwapOutput>;
+	) -> RpcResult<RpcSwapOutput>;
 }
 
 /// An RPC extension for the state chain node.
@@ -451,15 +468,21 @@ where
 		&self,
 		from: Asset,
 		to: Asset,
-		amount: AssetAmount,
+		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<SwapOutput> {
+	) -> RpcResult<RpcSwapOutput> {
 		self.client
 			.runtime_api()
-			.cf_pool_simulate_swap(&self.query_block_id(at), from, to, amount)
+			.cf_pool_simulate_swap(
+				&self.query_block_id(at),
+				from,
+				to,
+				cf_utilities::try_parse_number_or_hex(amount)?,
+			)
 			.map_err(to_rpc_error)
 			.and_then(|r| {
 				r.map_err(|e| jsonrpsee::core::Error::Custom(<&'static str>::from(e).into()))
 			})
+			.map(RpcSwapOutput::from)
 	}
 }

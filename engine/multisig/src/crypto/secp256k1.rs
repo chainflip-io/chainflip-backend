@@ -367,7 +367,7 @@ mod scalar_impls {
 			D: serde::Deserializer<'de>,
 		{
 			let mut bytes: [u8; 32] = [0; 32];
-			<[u8; 32]>::deserialize_in_place(deserializer, &mut bytes).unwrap();
+			<[u8; 32]>::deserialize_in_place(deserializer, &mut bytes)?;
 
 			if bytes == ZERO_SCALAR_BYTES {
 				Ok(Scalar::zero())

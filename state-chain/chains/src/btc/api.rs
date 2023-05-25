@@ -52,6 +52,7 @@ where
 		});
 		Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
 			&agg_key,
+			agg_key.current,
 			selected_input_utxos,
 			btc_outputs,
 		)))
@@ -63,9 +64,9 @@ where
 	E: ChainEnvironment<<Bitcoin as Chain>::ChainAmount, SelectedUtxos>,
 {
 	fn new_unsigned(
-		_maybe_old_key: Option<<Bitcoin as ChainCrypto>::AggKey>,
+		maybe_old_key: Option<<Bitcoin as ChainCrypto>::AggKey>,
 		new_key: <Bitcoin as ChainCrypto>::AggKey,
-	) -> Result<Self, SetAggKeyWithAggKeyError> {
+	) -> Result<Self, ()> {
 		// We will use the bitcoin address derived with the salt of 0 as the vault address where we
 		// collect unspent amounts in btc transactions and consolidate funds when rotating epoch.
 		let new_vault_change_script =
@@ -74,11 +75,11 @@ where
 		// Max possible btc value to get all available utxos
 		// If we don't have any UTXOs then we're not required to do this.
 		let (all_input_utxos, total_spendable_amount_in_vault) =
-			<E as ChainEnvironment<BtcAmount, SelectedUtxos>>::lookup(u64::MAX)
-				.ok_or(SetAggKeyWithAggKeyError::NotRequired)?;
+			<E as ChainEnvironment<BtcAmount, SelectedUtxos>>::lookup(u64::MAX).ok_or(())?;
 
 		Ok(Self::BatchTransfer(batch_transfer::BatchTransfer::new_unsigned(
-			&new_key,
+			&maybe_old_key.ok_or(())?,
+			new_key.current,
 			all_input_utxos,
 			vec![BitcoinOutput {
 				amount: total_spendable_amount_in_vault,
@@ -135,6 +136,13 @@ impl<E> ApiCall<Bitcoin> for BitcoinApi<E> {
 		match self {
 			BitcoinApi::BatchTransfer(call) => call.is_signed(),
 
+			BitcoinApi::_Phantom(..) => unreachable!(),
+		}
+	}
+
+	fn transaction_out_id(&self) -> <Bitcoin as ChainCrypto>::TransactionOutId {
+		match self {
+			BitcoinApi::BatchTransfer(call) => call.transaction_out_id(),
 			BitcoinApi::_Phantom(..) => unreachable!(),
 		}
 	}

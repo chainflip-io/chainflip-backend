@@ -20,7 +20,7 @@ mod benchmarking;
 mod rotation_state;
 
 pub use auction_resolver::*;
-use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
+use cf_primitives::{AuthorityCount, EpochIndex};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidderProvider, Bonding,
 	Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch,
@@ -86,17 +86,6 @@ pub enum RotationPhase<T: Config> {
 impl<T: Config> Default for RotationPhase<T> {
 	fn default() -> Self {
 		RotationPhase::Idle
-	}
-}
-
-pub struct CeremonyIdProvider<T>(PhantomData<T>);
-
-impl<T: Config> cf_traits::CeremonyIdProvider for CeremonyIdProvider<T> {
-	fn increment_ceremony_id() -> CeremonyId {
-		CeremonyIdCounter::<T>::mutate(|id| {
-			*id += 1;
-			*id
-		})
 	}
 }
 
@@ -266,11 +255,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type HistoricalActiveEpochs<T: Config> =
 		StorageMap<_, Twox64Concat, ValidatorIdOf<T>, Vec<EpochIndex>, ValueQuery>;
-
-	/// Counter for generating unique ceremony ids.
-	#[pallet::storage]
-	#[pallet::getter(fn ceremony_id_counter)]
-	pub type CeremonyIdCounter<T> = StorageValue<_, CeremonyId, ValueQuery>;
 
 	/// Backups, validator nodes who are not in the authority set.
 	#[pallet::storage]

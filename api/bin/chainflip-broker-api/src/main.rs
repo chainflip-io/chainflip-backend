@@ -10,6 +10,7 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	server::ServerBuilder,
 };
+use serde_json::json;
 use std::path::PathBuf;
 
 #[rpc(server, client, namespace = "broker")]
@@ -62,7 +63,9 @@ impl RpcServer for RpcServerImpl {
 			message_metadata,
 		)
 		.await
-		.map(|address| address.to_string())
+		.map(|(address, expiry_block, issued_block)| {
+			json!({ "address": address.to_string(), "expiry_block": expiry_block, "issued_block": issued_block }).to_string()
+		})
 		.map_err(|e| anyhow!("{}:{}", e, e.root_cause()))?)
 	}
 }

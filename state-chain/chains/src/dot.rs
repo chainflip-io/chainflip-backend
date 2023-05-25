@@ -125,7 +125,9 @@ impl ChainCrypto for Polkadot {
 	type AggKey = PolkadotPublicKey;
 	type Payload = EncodedPolkadotPayload;
 	type ThresholdSignature = PolkadotSignature;
-	type TransactionId = TxId;
+	type TransactionInId = TxId;
+	type TransactionOutId = PolkadotSignature;
+
 	type GovKey = PolkadotPublicKey;
 
 	fn verify_threshold_signature(
@@ -179,6 +181,10 @@ impl PolkadotExtrinsicBuilder {
 		extrinsic_call: PolkadotRuntimeCall,
 	) -> Self {
 		Self { extrinsic_call, replay_protection, signer_and_signature: None }
+	}
+
+	pub fn signature(&self) -> Option<PolkadotSignature> {
+		self.signer_and_signature.as_ref().map(|(_, sig)| sig.clone())
 	}
 
 	fn extra(&self) -> PolkadotSignedExtra {

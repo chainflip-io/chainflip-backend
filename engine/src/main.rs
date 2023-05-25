@@ -8,8 +8,7 @@ use chainflip_engine::{
 	db::{KeyStore, PersistentKeyDB},
 	dot::{self, rpc::DotRpcClient, witnesser as dot_witnesser, DotBroadcaster},
 	eth::{self, build_broadcast_channel, rpc::EthDualRpcClient, EthBroadcaster},
-	health::HealthChecker,
-	p2p,
+	health, p2p,
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
 		self,
@@ -18,7 +17,7 @@ use chainflip_engine::{
 			storage_api::StorageApi,
 		},
 	},
-	witnesser::AddressMonitor,
+	witnesser::ItemMonitor,
 };
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 use utilities::task_scope::task_scope;
@@ -101,13 +100,6 @@ async fn main() -> anyhow::Result<()> {
 			let (cfe_settings_update_sender, cfe_settings_update_receiver) =
 				tokio::sync::watch::channel(cfe_settings);
 
-			let latest_ceremony_id = state_chain_client
-				.storage_value::<pallet_cf_validator::CeremonyIdCounter<state_chain_runtime::Runtime>>(
-					state_chain_stream.cache().block_hash,
-				)
-				.await
-				.context("Failed to get CeremonyIdCounter from SC")?;
-
 			let db = Arc::new(
 				PersistentKeyDB::open_and_migrate_to_latest(
 					settings.signing.db_file.as_path(),
@@ -141,7 +133,13 @@ async fn main() -> anyhow::Result<()> {
 					KeyStore::new(db.clone()),
 					eth_incoming_receiver,
 					eth_outgoing_sender,
-					latest_ceremony_id,
+					state_chain_client
+						.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+							state_chain_runtime::Runtime,
+							state_chain_runtime::EthereumInstance,
+						>>(state_chain_stream.cache().block_hash)
+						.await
+						.context("Failed to get Ethereum CeremonyIdCounter from SC")?,
 				);
 
 			scope.spawn(eth_multisig_client_backend_future);
@@ -152,7 +150,13 @@ async fn main() -> anyhow::Result<()> {
 					KeyStore::new(db.clone()),
 					dot_incoming_receiver,
 					dot_outgoing_sender,
-					latest_ceremony_id,
+					state_chain_client
+						.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+							state_chain_runtime::Runtime,
+							state_chain_runtime::PolkadotInstance,
+						>>(state_chain_stream.cache().block_hash)
+						.await
+						.context("Failed to get Polkadot CeremonyIdCounter from SC")?,
 				);
 
 			scope.spawn(dot_multisig_client_backend_future);
@@ -163,7 +167,13 @@ async fn main() -> anyhow::Result<()> {
 					KeyStore::new(db.clone()),
 					btc_incoming_receiver,
 					btc_outgoing_sender,
-					latest_ceremony_id,
+					state_chain_client
+						.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+							state_chain_runtime::Runtime,
+							state_chain_runtime::BitcoinInstance,
+						>>(state_chain_stream.cache().block_hash)
+						.await
+						.context("Failed to get Bitcoin CeremonyIdCounter from SC")?,
 				);
 
 			scope.spawn(btc_multisig_client_backend_future);
@@ -185,7 +195,7 @@ async fn main() -> anyhow::Result<()> {
 			.await
 			.unwrap();
 
-			let btc_monitor_command_sender = btc::witnessing::start(
+			let (btc_monitor_command_sender, btc_tx_hash_sender) = btc::witnessing::start(
 				scope,
 				state_chain_client.clone(),
 				&settings.btc,
@@ -196,7 +206,7 @@ async fn main() -> anyhow::Result<()> {
 			.await
 			.unwrap();
 
-			let (dot_monitor_command_sender, dot_address_monitor) = AddressMonitor::new(
+			let (dot_monitor_command_sender, dot_address_monitor) = ItemMonitor::new(
 				state_chain_client
 					.storage_map::<pallet_cf_ingress_egress::DepositAddressDetailsLookup<
 						state_chain_runtime::Runtime,
@@ -240,6 +250,7 @@ async fn main() -> anyhow::Result<()> {
 				dot_monitor_signature_sender,
 				btc_epoch_start_sender,
 				btc_monitor_command_sender,
+				btc_tx_hash_sender,
 				cfe_settings_update_sender,
 			));
 
@@ -252,7 +263,7 @@ async fn main() -> anyhow::Result<()> {
 					// NB: We don't need to monitor Ethereum signatures because we already monitor
 					// signature accepted events from the KeyManager contract on Ethereum.
 					state_chain_client
-						.storage_map::<pallet_cf_broadcast::SignatureToBroadcastIdLookup<
+						.storage_map::<pallet_cf_broadcast::TransactionOutIdToBroadcastId<
 							state_chain_runtime::Runtime,
 							state_chain_runtime::PolkadotInstance,
 						>>(state_chain_stream.cache().block_hash)
@@ -278,7 +289,7 @@ async fn main() -> anyhow::Result<()> {
 			);
 
 			if let Some(health_check_settings) = &settings.health_check {
-				scope.spawn(HealthChecker::start(health_check_settings).await?);
+				health::start(scope, health_check_settings).await?;
 			}
 
 			Ok(())

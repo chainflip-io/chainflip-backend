@@ -54,6 +54,7 @@ impl BlockWitnesser for EthBlockWitnesser {
 			witnessers.eth_deposits.process_block(&self.epoch, &block),
 			witnessers.flip_deposits.process_block(&self.epoch, &block),
 			witnessers.usdc_deposits.process_block(&self.epoch, &block),
+			witnessers.vault.process_block(&self.epoch, &block),
 		])
 		.await
 		.into_iter()
