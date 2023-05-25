@@ -911,7 +911,7 @@ mod test {
 
 		for (valid_address, intended_btc_net, expected_scriptpubkey) in valid_addresses {
 			let pk = scriptpubkey_from_address(valid_address, &intended_btc_net)
-				.unwrap_or_else(|_| panic!("Failed to parse address: {}", valid_address));
+				.unwrap_or_else(|_| panic!("Failed to parse address: {valid_address}"));
 			assert_eq!(pk.bytes(), expected_scriptpubkey, "Input was {valid_address} / {pk:?}");
 		}
 

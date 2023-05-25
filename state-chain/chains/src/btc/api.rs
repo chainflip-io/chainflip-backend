@@ -37,7 +37,7 @@ where
 		for transfer_param in transfer_params {
 			btc_outputs.push(BitcoinOutput {
 				amount: transfer_param.amount,
-				script_pubkey: transfer_param.to.into(),
+				script_pubkey: transfer_param.to,
 			});
 			total_output_amount += transfer_param.amount;
 		}
