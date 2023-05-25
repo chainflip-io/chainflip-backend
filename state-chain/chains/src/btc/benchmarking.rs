@@ -5,8 +5,8 @@ use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 use super::{
 	api::{batch_transfer::BatchTransfer, BitcoinApi},
 	deposit_address::DepositAddress,
-	AggKey, BitcoinFetchId, BitcoinOutput, BitcoinScriptBounded, BitcoinTrackedData,
-	BitcoinTransactionData, PreviousOrCurrent, Signature, SigningPayload, Utxo, UtxoId,
+	AggKey, BitcoinFetchId, BitcoinOutput, BitcoinTrackedData, BitcoinTransactionData,
+	PreviousOrCurrent, ScriptPubkey, Signature, SigningPayload, Utxo, UtxoId,
 };
 
 impl BenchmarkValue for AggKey {
@@ -47,18 +47,6 @@ impl BenchmarkValue for SigningPayload {
 	}
 }
 
-impl BenchmarkValue for BitcoinScriptBounded {
-	fn benchmark_value() -> Self {
-		BitcoinScriptBounded { data: [3u8; 100].to_vec().try_into().unwrap() }
-	}
-}
-
-impl BenchmarkValueExtended for BitcoinScriptBounded {
-	fn benchmark_value_by_id(id: u8) -> Self {
-		BitcoinScriptBounded { data: [id; 100].to_vec().try_into().unwrap() }
-	}
-}
-
 impl BenchmarkValue for BitcoinFetchId {
 	fn benchmark_value() -> Self {
 		Self(1)
@@ -81,7 +69,10 @@ impl<E> BenchmarkValue for BitcoinApi<E> {
 				id: BenchmarkValue::benchmark_value(),
 				deposit_address: DepositAddress::new(Default::default(), Default::default()),
 			}],
-			vec![BitcoinOutput { amount: Default::default(), script_pubkey: Default::default() }],
+			vec![BitcoinOutput {
+				amount: Default::default(),
+				script_pubkey: BenchmarkValue::benchmark_value(),
+			}],
 		))
 	}
 }
@@ -95,5 +86,17 @@ impl BenchmarkValue for BitcoinTrackedData {
 impl BenchmarkValue for PreviousOrCurrent {
 	fn benchmark_value() -> Self {
 		Self::Current
+	}
+}
+
+impl BenchmarkValue for ScriptPubkey {
+	fn benchmark_value() -> Self {
+		Self::benchmark_value_by_id(0)
+	}
+}
+
+impl BenchmarkValueExtended for ScriptPubkey {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		Self::Taproot([id; 32])
 	}
 }

@@ -30,7 +30,8 @@ where
 	) -> Result<Self, ()> {
 		let agg_key @ AggKey { current, .. } =
 			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(())?;
-		let bitcoin_change_script = DepositAddress::new(current, CHANGE_ADDRESS_SALT).lock_script();
+		let bitcoin_change_script =
+			DepositAddress::new(current, CHANGE_ADDRESS_SALT).script_pubkey();
 		let mut total_output_amount: u64 = 0;
 		let mut btc_outputs = vec![];
 		for transfer_param in transfer_params {
@@ -70,7 +71,7 @@ where
 		// We will use the bitcoin address derived with the salt of 0 as the vault address where we
 		// collect unspent amounts in btc transactions and consolidate funds when rotating epoch.
 		let new_vault_change_script =
-			DepositAddress::new(new_key.current, CHANGE_ADDRESS_SALT).lock_script();
+			DepositAddress::new(new_key.current, CHANGE_ADDRESS_SALT).script_pubkey();
 
 		// Max possible btc value to get all available utxos
 		// If we don't have any UTXOs then we're not required to do this.

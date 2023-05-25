@@ -22,7 +22,7 @@ use cf_chains::{
 	},
 	btc::{
 		api::{BitcoinApi, SelectedUtxos},
-		scriptpubkey_from_address, Bitcoin, BitcoinTransactionData, BtcAmount, UtxoId,
+		Bitcoin, BitcoinTransactionData, BtcAmount, ScriptPubkey, UtxoId,
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
@@ -514,11 +514,11 @@ impl DepositHandler<Bitcoin> for BtcDepositHandler {
 	}
 
 	fn on_channel_opened(
-		deposit_script: <Bitcoin as Chain>::ChainAccount,
+		script_pubkey: ScriptPubkey,
 		salt: ChannelId,
 	) -> Result<(), DispatchError> {
 		Environment::add_details_for_btc_deposit_script(
-			deposit_script,
+			script_pubkey,
 			salt.try_into().expect("The salt/channel_id is not expected to exceed u32 max"), /* Todo: Confirm
 			                                                                                  * this assumption.
 			                                                                                  * Consider this in
@@ -534,6 +534,7 @@ impl DepositHandler<Bitcoin> for BtcDepositHandler {
 }
 
 pub struct ChainAddressConverter;
+
 impl AddressConverter for ChainAddressConverter {
 	fn try_to_encoded_address(
 		address: ForeignChainAddress,
@@ -602,21 +603,4 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 			_ => unreachable!(),
 		}
 	}
-}
-
-#[ignore = "Replace Environment::bitcoin_network() with cf_chains::btc::BitcoinNetwork::Mainnet above and this test fails"]
-#[test]
-fn encode_and_decode_address() {
-	fn test(address: &[u8]) {
-		let encoded_address =
-			ChainAddressConverter::try_from_encoded_address(EncodedAddress::Btc(address.to_vec()))
-				.unwrap();
-		let decoded_address =
-			ChainAddressConverter::try_to_encoded_address(encoded_address).unwrap();
-		assert_eq!(decoded_address, EncodedAddress::Btc(address.to_vec()));
-	}
-	const BECH32: &[u8] = b"bc1p4syuuy97f96lfah764w33ru9v5u3uk8n8jk9xsq684xfl8sxu82sdcvdcx";
-	const P2SH: &[u8] = b"3P14159f73E4gFr7JterCCQh9QjiTjiZrG";
-	test(BECH32); // works
-	test(P2SH); // doesn't work
 }

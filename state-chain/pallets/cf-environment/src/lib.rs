@@ -5,8 +5,8 @@
 use cf_chains::{
 	btc::{
 		api::SelectedUtxos, deposit_address::DepositAddress,
-		utxo_selection::select_utxos_from_pool, Bitcoin, BitcoinNetwork, BitcoinScriptBounded,
-		BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
+		utxo_selection::select_utxos_from_pool, Bitcoin, BitcoinNetwork, BtcAmount, ScriptPubkey,
+		Utxo, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	ChainCrypto,
@@ -79,7 +79,7 @@ pub mod cfe {
 pub mod pallet {
 	use super::*;
 	use cf_chains::{
-		btc::{BitcoinScriptBounded, Utxo},
+		btc::{ScriptPubkey, Utxo},
 		dot::{PolkadotPublicKey, RuntimeVersion},
 	};
 	use cf_primitives::TxId;
@@ -204,7 +204,7 @@ pub mod pallet {
 	/// Lookup for determining which salt and pubkey the current deposit Bitcoin Script was created
 	/// from.
 	pub type BitcoinActiveDepositAddressDetails<T> =
-		StorageMap<_, Twox64Concat, BitcoinScriptBounded, (u32, [u8; 32]), ValueQuery>;
+		StorageMap<_, Twox64Concat, ScriptPubkey, (u32, [u8; 32]), ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -546,7 +546,7 @@ impl<T: Config> Pallet<T> {
 	pub fn add_bitcoin_utxo_to_list(
 		amount: BtcAmount,
 		utxo_id: UtxoId,
-		deposit_script: BitcoinScriptBounded,
+		deposit_script: ScriptPubkey,
 	) {
 		let (salt, pubkey) = BitcoinActiveDepositAddressDetails::<T>::take(deposit_script);
 
@@ -581,7 +581,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn add_details_for_btc_deposit_script(
-		deposit_script: BitcoinScriptBounded,
+		deposit_script: ScriptPubkey,
 		salt: u32,
 		pubkey: [u8; 32],
 	) {

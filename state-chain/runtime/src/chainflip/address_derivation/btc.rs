@@ -22,9 +22,7 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 				.current,
 			channel_id as u32,
 		)
-		.lock_script()
-		.try_into()
-		.expect("bitcoin deposit script should not exceed the max size of 128 bytes"))
+		.script_pubkey())
 	}
 }
 

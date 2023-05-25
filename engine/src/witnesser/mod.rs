@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use async_trait::async_trait;
-use cf_chains::{address::ScriptPubkeyBytes, btc::BitcoinScriptBounded};
+use cf_chains::btc::ScriptPubkey;
 use cf_primitives::EpochIndex;
 
 pub mod block_head_stream_from;
@@ -139,12 +139,12 @@ impl ItemKeyValue for sp_core::H160 {
 	}
 }
 
-impl ItemKeyValue for BitcoinScriptBounded {
-	type Key = ScriptPubkeyBytes;
+impl ItemKeyValue for ScriptPubkey {
+	type Key = Vec<u8>;
 	type Value = Self;
 
 	fn key_value(&self) -> (Self::Key, Self::Value) {
-		(self.data.clone().into(), self.clone())
+		(self.bytes(), self.clone())
 	}
 }
 

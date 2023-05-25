@@ -1,24 +1,41 @@
 use super::*;
-use bech32::u5;
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct DepositAddress {
 	pub pubkey_x: [u8; 32],
 	pub salt: u32,
-	pub tweaked_pubkey_bytes: [u8; 33],
+	tweaked_pubkey_bytes: [u8; 33],
 	pub tapleaf_hash: Hash,
+	unlock_script: [BitcoinOp; 4],
+}
+
+fn unlock_script(pubkey_x: [u8; 32], salt: u32) -> [BitcoinOp; 4] {
+	[
+		BitcoinOp::PushUint { value: salt },
+		BitcoinOp::Drop,
+		BitcoinOp::PushArray32 { bytes: pubkey_x },
+		BitcoinOp::CheckSig,
+	]
 }
 
 impl DepositAddress {
 	pub fn new(pubkey_x: [u8; 32], salt: u32) -> Self {
+		let unlock_script = unlock_script(pubkey_x, salt);
 		let tapleaf_hash = {
 			// SHA256("TapLeaf")
 			const TAPLEAF_HASH: &[u8] = &hex_literal::hex!(
 				"aeea8fdc4208983105734b58081d1e2638d35f1cb54008d4d357ca03be78e9ee"
 			);
 			const LEAF_VERSION: u8 = 0xC0;
-			let script = Self::unlock_script_static(salt, pubkey_x).serialize();
-			sha2_256(&[TAPLEAF_HASH, TAPLEAF_HASH, &[LEAF_VERSION], &script].concat())
+			sha2_256(
+				&[
+					TAPLEAF_HASH,
+					TAPLEAF_HASH,
+					&[LEAF_VERSION],
+					&unlock_script.as_slice().btc_serialize(),
+				]
+				.concat(),
+			)
 		};
 		let tweaked_pubkey_bytes = {
 			// SHA256("TapTweak")
@@ -34,65 +51,25 @@ impl DepositAddress {
 			let _result = tweaked.tweak_add_assign(&SecretKey::parse(&tweak_hash).unwrap());
 			tweaked.serialize_compressed()
 		};
-		Self { pubkey_x, salt, tweaked_pubkey_bytes, tapleaf_hash }
+		Self { pubkey_x, salt, tweaked_pubkey_bytes, tapleaf_hash, unlock_script }
 	}
 
-	pub fn lock_script(&self) -> BitcoinScript {
-		BitcoinScript::default()
-			// TODO: segwit version should not be part of the lock script?
-			.push_uint(SEGWIT_VERSION as u32)
-			.push_bytes(self.tweaked_pubkey_x())
+	pub fn unlock_script_serialized(&self) -> Vec<u8> {
+		self.unlock_script.as_slice().btc_serialize()
 	}
 
-	fn unlock_script_static(salt: u32, pubkey_x: [u8; 32]) -> BitcoinScript {
-		BitcoinScript::default()
-			.push_uint(salt)
-			.op_drop()
-			.push_bytes(pubkey_x)
-			.op_checksig()
+	pub fn script_pubkey(&self) -> ScriptPubkey {
+		ScriptPubkey::Taproot(self.tweaked_pubkey_bytes[1..].as_array())
 	}
 
-	pub fn unlock_script(&self) -> BitcoinScript {
-		Self::unlock_script_static(self.salt, self.pubkey_x)
+	/// The leaf version depends on the evenness of the tweaked pubkey.
+	pub fn leaf_version(&self) -> u8 {
+		if self.tweaked_pubkey_bytes[0] == 2 {
+			0xC0
+		} else {
+			0xC1
+		}
 	}
-
-	pub fn tweaked_pubkey_x(&self) -> &[u8] {
-		&self.tweaked_pubkey_bytes[1..]
-	}
-
-	pub fn tweaked_pubkey_y(&self) -> u8 {
-		self.tweaked_pubkey_bytes[0]
-	}
-
-	pub fn bech32_address(&self, network: BitcoinNetwork) -> String {
-		bech32::encode(
-			network.bech32_and_bech32m_address_hrp(),
-			itertools::chain!(
-				iter::once(u5::try_from_u8(SEGWIT_VERSION).unwrap()),
-				(&self.tweaked_pubkey_x()).to_base32(),
-			)
-			.collect::<Vec<_>>(),
-			Variant::Bech32m,
-		)
-		.expect("Can only panic on invalid hrp.")
-	}
-}
-
-/// TODO: This only works for our own addresses, not for arbitrary addresses.
-pub fn legacy_derive_btc_deposit_address_from_script(
-	bitcoin_script: BitcoinScript,
-	network: BitcoinNetwork,
-) -> String {
-	bech32::encode(
-		network.bech32_and_bech32m_address_hrp(),
-		itertools::chain!(
-			iter::once(u5::try_from_u8(SEGWIT_VERSION).unwrap()),
-			(&bitcoin_script.data[2..]).to_base32()
-		)
-		.collect::<Vec<_>>(),
-		Variant::Bech32m,
-	)
-	.unwrap()
 }
 
 #[test]
@@ -102,7 +79,8 @@ fn test_btc_derive_deposit_address() {
 			hex_literal::hex!("2E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105"),
 			0
 		)
-		.bech32_address(BitcoinNetwork::Mainnet),
+		.script_pubkey()
+		.to_address(&BitcoinNetwork::Mainnet),
 		"bc1p4syuuy97f96lfah764w33ru9v5u3uk8n8jk9xsq684xfl8sxu82sdcvdcx"
 	);
 	assert_eq!(
@@ -110,7 +88,8 @@ fn test_btc_derive_deposit_address() {
 			hex_literal::hex!("FEDBDC04F4666AF03167E2EF5FA5405BB012BC62A3B3180088E63972BD06EAD8"),
 			15
 		)
-		.bech32_address(BitcoinNetwork::Mainnet),
+		.script_pubkey()
+		.to_address(&BitcoinNetwork::Mainnet),
 		"bc1phgs87wzfdqp9amtyc6darrhk3sm38tpf9a39mgjycthcet7vxl3qktqz86"
 	);
 	assert_eq!(
@@ -118,7 +97,8 @@ fn test_btc_derive_deposit_address() {
 			hex_literal::hex!("FEDBDC04F4666AF03167E2EF5FA5405BB012BC62A3B3180088E63972BD06EAD8"),
 			50
 		)
-		.bech32_address(BitcoinNetwork::Mainnet),
+		.script_pubkey()
+		.to_address(&BitcoinNetwork::Mainnet),
 		"bc1p2uf6vzdzmv0u7wyfnljnrctr5qr6hy6mmzyjpr6z7x8yt39gppfq3a54c9"
 	);
 	assert_eq!(
@@ -126,7 +106,23 @@ fn test_btc_derive_deposit_address() {
 			hex_literal::hex!("FEDBDC04F4666AF03167E2EF5FA5405BB012BC62A3B3180088E63972BD06EAD8"),
 			123456789
 		)
-		.bech32_address(BitcoinNetwork::Mainnet),
+		.script_pubkey()
+		.to_address(&BitcoinNetwork::Mainnet),
 		"bc1p8ea6zrds8q5mke8l6rlrluyle82xdr3sx4dk73r78l859gjfpsrq6gq3ev"
+	);
+}
+
+#[test]
+fn test_build_script() {
+	assert_eq!(
+		unlock_script(
+			hex_literal::hex!("2E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105"),
+			CHANGE_ADDRESS_SALT
+		)
+		.as_slice()
+		.btc_serialize(),
+		hex_literal::hex!(
+			"240075202E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105AC"
+		)
 	);
 }
