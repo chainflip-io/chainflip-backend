@@ -126,3 +126,9 @@ impl From<AssetAmount> for SwapOutput {
 		Self { intermediary: None, output: value }
 	}
 }
+
+#[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
+pub enum SwapLeg {
+	FromStable,
+	ToStable,
+}

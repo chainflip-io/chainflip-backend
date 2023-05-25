@@ -3,7 +3,7 @@ use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
 	CcmDepositMetadata,
 };
-use cf_primitives::{Asset, AssetAmount, ChannelId, ForeignChain, STABLE_ASSET};
+use cf_primitives::{Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, STABLE_ASSET};
 use cf_traits::{liquidity::SwappingApi, CcmHandler, DepositApi, SystemStateInfo};
 use frame_support::{
 	pallet_prelude::*,
@@ -63,39 +63,33 @@ impl Swap {
 		}
 	}
 
-	fn swap_asset(&self, direction: SwapDirection) -> Option<Asset> {
+	fn swap_asset(&self, direction: SwapLeg) -> Option<Asset> {
 		match (direction, self.from, self.to) {
-			(SwapDirection::IntoStable, STABLE_ASSET, _) => None,
-			(SwapDirection::IntoStable, from, _) => Some(from),
-			(SwapDirection::FromStable, _, STABLE_ASSET) => None,
-			(SwapDirection::FromStable, _, to) => Some(to),
+			(SwapLeg::ToStable, STABLE_ASSET, _) => None,
+			(SwapLeg::ToStable, from, _) => Some(from),
+			(SwapLeg::FromStable, _, STABLE_ASSET) => None,
+			(SwapLeg::FromStable, _, to) => Some(to),
 		}
 	}
 
-	fn swap_amount(&self, direction: SwapDirection) -> Option<AssetAmount> {
+	fn swap_amount(&self, direction: SwapLeg) -> Option<AssetAmount> {
 		match direction {
-			SwapDirection::IntoStable => Some(self.amount),
-			SwapDirection::FromStable => self.stable_amount,
+			SwapLeg::ToStable => Some(self.amount),
+			SwapLeg::FromStable => self.stable_amount,
 		}
 	}
 
-	fn update_swap_result(&mut self, direction: SwapDirection, output: AssetAmount) {
+	fn update_swap_result(&mut self, direction: SwapLeg, output: AssetAmount) {
 		match direction {
-			SwapDirection::IntoStable => {
+			SwapLeg::ToStable => {
 				self.stable_amount = Some(output);
 				if self.to == STABLE_ASSET {
 					self.final_output = Some(output);
 				}
 			},
-			SwapDirection::FromStable => self.final_output = Some(output),
+			SwapLeg::FromStable => self.final_output = Some(output),
 		}
 	}
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum SwapDirection {
-	IntoStable,
-	FromStable,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -261,7 +255,7 @@ pub mod pallet {
 			tx_hash: TransactionHash,
 		},
 		/// A swap has been fully completed.
-		SwapCompleted {
+		SwapExecuted {
 			swap_id: u64,
 		},
 		/// A swap egress has been scheduled.
@@ -279,7 +273,7 @@ pub mod pallet {
 		},
 		BatchSwapFailed {
 			asset: Asset,
-			direction: SwapDirection,
+			direction: SwapLeg,
 		},
 		CcmEgressScheduled {
 			ccm_id: u64,
@@ -377,7 +371,7 @@ pub mod pallet {
 			let mut unprocessed_swaps = vec![];
 			// Helper function that splits swaps of a given direction, group them by asset and do
 			// the swaps of a given direction. Processed and unprocessed swaps are returned.
-			let mut do_group_and_swap = |swaps: Vec<Swap>, direction: SwapDirection| {
+			let mut do_group_and_swap = |swaps: Vec<Swap>, direction: SwapLeg| {
 				let (swap_groups, mut remaining) = Self::split_and_group_swaps(swaps, direction);
 
 				for (asset, mut swaps) in swap_groups {
@@ -394,7 +388,7 @@ pub mod pallet {
 			};
 
 			// Swap into Stable asset first.
-			let mut remaining_swaps = do_group_and_swap(swaps, SwapDirection::IntoStable);
+			let mut remaining_swaps = do_group_and_swap(swaps, SwapLeg::ToStable);
 
 			// Take NetworkFee for all swaps
 			for swap in remaining_swaps.iter_mut() {
@@ -408,15 +402,41 @@ pub mod pallet {
 			}
 
 			// Swap from Stable asset, and complete the swap logic.
-			do_group_and_swap(remaining_swaps, SwapDirection::FromStable)
-				.into_iter()
-				.for_each(|swap| {
-					debug_assert!(
-						swap.final_output.is_some(),
-						"All swaps should be completed by now."
-					);
-					Self::handle_completed_swap(swap);
-				});
+			for swap in do_group_and_swap(remaining_swaps, SwapLeg::FromStable) {
+				if let Some(output_amount) = swap.final_output {
+					Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
+					// Handle swap completion logic.
+					match &swap.swap_type {
+						SwapType::Swap(destination_address) => {
+							let egress_id = T::EgressHandler::schedule_egress(
+								swap.to,
+								output_amount,
+								destination_address.clone(),
+								None,
+							);
+
+							Self::deposit_event(Event::<T>::SwapEgressScheduled {
+								swap_id: swap.swap_id,
+								egress_id,
+								asset: swap.to,
+								amount: output_amount,
+							});
+						},
+						SwapType::CcmPrincipal(ccm_id) => {
+							Self::handle_ccm_swap_result(
+								*ccm_id,
+								output_amount,
+								CcmSwapLeg::Principal,
+							);
+						},
+						SwapType::CcmGas(ccm_id) => {
+							Self::handle_ccm_swap_result(*ccm_id, output_amount, CcmSwapLeg::Gas);
+						},
+					};
+				} else {
+					debug_assert!(false, "Swap is not completed yet!");
+				}
+			}
 
 			// Reinsert unprocessed swaps back into the map.
 			if !unprocessed_swaps.is_empty() {
@@ -674,7 +694,7 @@ pub mod pallet {
 		pub fn execute_group_of_swaps(
 			swaps: &mut Vec<Swap>,
 			asset: Asset,
-			direction: SwapDirection,
+			direction: SwapLeg,
 		) -> DispatchResult {
 			// Stable -> stable swap should never be called.
 			debug_assert_ne!(asset, STABLE_ASSET);
@@ -688,13 +708,8 @@ pub mod pallet {
 
 			debug_assert!(bundle_input > 0, "Swap input of zero is invalid.");
 
-			// Do all swaps as a bundle. NetworkFees are NOT taken here.
-			let bundle_output = match direction {
-				SwapDirection::IntoStable =>
-					T::SwappingApi::swap(asset, STABLE_ASSET, bundle_input, false)?.output,
-				SwapDirection::FromStable =>
-					T::SwappingApi::swap(STABLE_ASSET, asset, bundle_input, false)?.output,
-			};
+			// Process the swap leg as a bundle. No network fee is taken here.
+			let bundle_output = T::SwappingApi::swap_single_leg(direction, asset, bundle_input)?;
 
 			for swap in swaps {
 				let swap_output = multiply_by_rational_with_rounding(
@@ -721,39 +736,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Function that handles a completed swap.
-		fn handle_completed_swap(swap: Swap) {
-			if let Some(output_amount) = swap.final_output {
-				Self::deposit_event(Event::<T>::SwapCompleted { swap_id: swap.swap_id });
-				// Handle swap completion logic.
-				match &swap.swap_type {
-					SwapType::Swap(destination_address) => {
-						let egress_id = T::EgressHandler::schedule_egress(
-							swap.to,
-							output_amount,
-							destination_address.clone(),
-							None,
-						);
-
-						Self::deposit_event(Event::<T>::SwapEgressScheduled {
-							swap_id: swap.swap_id,
-							egress_id,
-							asset: swap.to,
-							amount: output_amount,
-						});
-					},
-					SwapType::CcmPrincipal(ccm_id) => {
-						Self::handle_ccm_swap_result(*ccm_id, output_amount, CcmSwapLeg::Principal);
-					},
-					SwapType::CcmGas(ccm_id) => {
-						Self::handle_ccm_swap_result(*ccm_id, output_amount, CcmSwapLeg::Gas);
-					},
-				};
-			} else {
-				debug_assert!(false, "Swap is not completed yet!");
-			}
-		}
-
 		fn handle_ccm_swap_result(ccm_id: u64, swap_output: AssetAmount, swap_leg: CcmSwapLeg) {
 			CcmOutputs::<T>::mutate_exists(ccm_id, |maybe_ccm_output| {
 				let ccm_output = maybe_ccm_output
@@ -778,7 +760,7 @@ pub mod pallet {
 		/// the rest
 		fn split_and_group_swaps(
 			swaps: Vec<Swap>,
-			direction: SwapDirection,
+			direction: SwapLeg,
 		) -> (BTreeMap<Asset, Vec<Swap>>, Vec<Swap>) {
 			let mut grouped_swaps = BTreeMap::new();
 			let mut remaining = vec![];

@@ -203,7 +203,7 @@ fn expect_swap_id_to_be_emitted() {
 			ALICE,
 			0,
 		);
-		// 3. Process swaps -> SwapCompleted, SwapEgressScheduled
+		// 3. Process swaps -> SwapExecuted, SwapEgressScheduled
 		Swapping::on_finalize(1);
 		assert_event_sequence!(
 			Test,
@@ -217,7 +217,7 @@ fn expect_swap_id_to_be_emitted() {
 				swap_id: 1,
 				deposit_amount: 500,
 			}),
-			RuntimeEvent::Swapping(Event::SwapCompleted { swap_id: 1 }),
+			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1 }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 1,
 				egress_id: (ForeignChain::Ethereum, 1),
@@ -1455,28 +1455,28 @@ fn process_all_into_stable_swaps_first() {
 
 		assert_event_sequence!(
 			Test,
-			RuntimeEvent::Swapping(Event::SwapCompleted { swap_id: 4 }),
+			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 4 }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 4,
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 1),
 				amount: output_amount,
 			}),
-			RuntimeEvent::Swapping(Event::SwapCompleted { swap_id: 1 }),
+			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1 }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 1,
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 2),
 				amount: output_amount,
 			}),
-			RuntimeEvent::Swapping(Event::SwapCompleted { swap_id: 3 }),
+			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 3 }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 3,
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 3),
 				amount: output_amount,
 			}),
-			RuntimeEvent::Swapping(Event::SwapCompleted { swap_id: 2 }),
+			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2 }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 2,
 				asset: Asset::Eth,

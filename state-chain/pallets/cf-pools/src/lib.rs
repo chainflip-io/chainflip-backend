@@ -3,7 +3,7 @@ use cf_amm::{
 	common::{OneToZero, Side, SideMap, SqrtPriceQ64F96, ZeroToOne},
 	PoolState,
 };
-use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapOutput, STABLE_ASSET};
+use cf_primitives::{chains::assets::any, Asset, AssetAmount, SwapLeg, SwapOutput, STABLE_ASSET};
 use cf_traits::{Chainflip, LpBalanceApi, SwappingApi};
 use frame_support::{pallet_prelude::*, transactional};
 use frame_system::pallet_prelude::OriginFor;
@@ -118,13 +118,11 @@ pub mod pallet {
 				{
 					weight_used.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
 					if let Err(e) = CollectedNetworkFee::<T>::try_mutate(|collected_fee| {
-						let flip_to_burn = Pallet::<T>::swap(
-							STABLE_ASSET,
+						let flip_to_burn = Self::swap_single_leg(
+							SwapLeg::ToStable,
 							any::Asset::Flip,
 							*collected_fee,
-							true,
-						)?
-						.output;
+						)?;
 						FlipToBurn::<T>::mutate(|total| {
 							total.saturating_accrue(flip_to_burn);
 						});
@@ -605,37 +603,33 @@ pub mod pallet {
 
 impl<T: Config> SwappingApi for Pallet<T> {
 	#[transactional]
-	fn swap(
+	fn take_fee_and_do_swap(
 		from: any::Asset,
 		to: any::Asset,
 		input_amount: AssetAmount,
-		should_take_network_fee: bool,
 	) -> Result<SwapOutput, DispatchError> {
-		let take_fee_if_should =
-			|input| if should_take_network_fee { Self::take_network_fee(input) } else { input };
-
 		Ok(match (from, to) {
-			(input_asset, STABLE_ASSET) => take_fee_if_should(Self::process_swap_leg(
+			(input_asset, STABLE_ASSET) => Self::take_network_fee(Self::swap_single_leg(
 				SwapLeg::ToStable,
 				input_asset,
 				input_amount,
 			)?)
 			.into(),
-			(STABLE_ASSET, output_asset) => Self::process_swap_leg(
+			(STABLE_ASSET, output_asset) => Self::swap_single_leg(
 				SwapLeg::FromStable,
 				output_asset,
-				take_fee_if_should(input_amount),
+				Self::take_network_fee(input_amount),
 			)?
 			.into(),
 			(input_asset, output_asset) => {
 				let intermediate_output =
-					Self::process_swap_leg(SwapLeg::ToStable, input_asset, input_amount)?;
+					Self::swap_single_leg(SwapLeg::ToStable, input_asset, input_amount)?;
 				SwapOutput {
 					intermediary: Some(intermediate_output),
-					output: Self::process_swap_leg(
+					output: Self::swap_single_leg(
 						SwapLeg::FromStable,
 						output_asset,
-						take_fee_if_should(intermediate_output),
+						Self::take_network_fee(intermediate_output),
 					)?,
 				}
 			},
@@ -650,17 +644,49 @@ impl<T: Config> SwappingApi for Pallet<T> {
 		Self::deposit_event(Event::<T>::NetworkFeeTaken { fee_amount: fee });
 		remaining
 	}
+
+	fn swap_single_leg(
+		leg: SwapLeg,
+		unstable_asset: any::Asset,
+		input_amount: AssetAmount,
+	) -> Result<AssetAmount, DispatchError> {
+		Self::try_mutate_pool_state(unstable_asset, |pool_state| {
+			let (from, to, output_amount) = match leg {
+				SwapLeg::FromStable => (STABLE_ASSET, unstable_asset, {
+					debug_assert_eq!(Self::side_to_asset(unstable_asset, Side::One), STABLE_ASSET);
+					let (output_amount, remaining_amount) =
+						pool_state.swap::<cf_amm::common::OneToZero>(input_amount.into(), None);
+					remaining_amount
+						.is_zero()
+						.then_some(())
+						.ok_or(Error::<T>::InsufficientLiquidity)?;
+					output_amount
+				}),
+				SwapLeg::ToStable => (unstable_asset, STABLE_ASSET, {
+					debug_assert_eq!(
+						Self::side_to_asset(unstable_asset, Side::Zero),
+						unstable_asset
+					);
+					let (output_amount, remaining_amount) =
+						pool_state.swap::<cf_amm::common::ZeroToOne>(input_amount.into(), None);
+					remaining_amount
+						.is_zero()
+						.then_some(())
+						.ok_or(Error::<T>::InsufficientLiquidity)?;
+					output_amount
+				}),
+			};
+			let output_amount = output_amount.try_into().map_err(|_| Error::<T>::OutputOverflow)?;
+			Self::deposit_event(Event::<T>::AssetSwapped { from, to, input_amount, output_amount });
+			Ok(output_amount)
+		})
+	}
 }
 
 impl<T: Config> cf_traits::FlipBurnInfo for Pallet<T> {
 	fn take_flip_to_burn() -> AssetAmount {
 		FlipToBurn::<T>::take()
 	}
-}
-
-enum SwapLeg {
-	FromStable,
-	ToStable,
 }
 
 impl<T: Config> Pallet<T> {
@@ -743,43 +769,6 @@ impl<T: Config> Pallet<T> {
 			let pool = maybe_pool.as_mut().ok_or(Error::<T>::PoolDoesNotExist)?;
 			ensure!(pool.enabled, Error::<T>::PoolDisabled);
 			f(&mut pool.pool_state)
-		})
-	}
-
-	fn process_swap_leg(
-		direction: SwapLeg,
-		unstable_asset: any::Asset,
-		input_amount: AssetAmount,
-	) -> Result<AssetAmount, Error<T>> {
-		Pallet::try_mutate_pool_state(unstable_asset, |pool_state| {
-			let (from, to, output_amount) = match direction {
-				SwapLeg::FromStable => (STABLE_ASSET, unstable_asset, {
-					debug_assert_eq!(Self::side_to_asset(unstable_asset, Side::One), STABLE_ASSET);
-					let (output_amount, remaining_amount) =
-						pool_state.swap::<cf_amm::common::OneToZero>(input_amount.into(), None);
-					remaining_amount
-						.is_zero()
-						.then_some(())
-						.ok_or(Error::<T>::InsufficientLiquidity)?;
-					output_amount
-				}),
-				SwapLeg::ToStable => (unstable_asset, STABLE_ASSET, {
-					debug_assert_eq!(
-						Self::side_to_asset(unstable_asset, Side::Zero),
-						unstable_asset
-					);
-					let (output_amount, remaining_amount) =
-						pool_state.swap::<cf_amm::common::ZeroToOne>(input_amount.into(), None);
-					remaining_amount
-						.is_zero()
-						.then_some(())
-						.ok_or(Error::<T>::InsufficientLiquidity)?;
-					output_amount
-				}),
-			};
-			let output_amount = output_amount.try_into().map_err(|_| Error::<T>::OutputOverflow)?;
-			Self::deposit_event(Event::<T>::AssetSwapped { from, to, input_amount, output_amount });
-			Ok(output_amount)
 		})
 	}
 

@@ -264,7 +264,7 @@ fn basic_pool_setup_provision_and_swap() {
 				},
 			) => (),
 			RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::SwapCompleted {
+				pallet_cf_swapping::Event::SwapExecuted {
 					swap_id: executed_swap_id,
 				},
 			) if executed_swap_id == swap_id => (),
@@ -361,7 +361,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 				},
 			) if amount == deposit_amount => (),
 			RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::SwapCompleted {
+				pallet_cf_swapping::Event::SwapExecuted {
 					swap_id,
 				},
 			) if swap_id == principal_swap_id => (),
@@ -373,7 +373,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 				},
 			) => (),
 			RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::SwapCompleted {
+				pallet_cf_swapping::Event::SwapExecuted {
 					swap_id,
 				},
 			) if swap_id == gas_swap_id => (),
@@ -450,7 +450,7 @@ fn can_process_ccm_via_direct_deposit() {
 				},
 			) if input_amount == deposit_amount => (),
 			RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::SwapCompleted {
+				pallet_cf_swapping::Event::SwapExecuted {
 					swap_id,
 				},
 			) if swap_id == principal_swap_id => (),
@@ -462,7 +462,7 @@ fn can_process_ccm_via_direct_deposit() {
 				},
 			) => (),
 			RuntimeEvent::Swapping(
-				pallet_cf_swapping::Event::SwapCompleted {
+				pallet_cf_swapping::Event::SwapExecuted {
 					swap_id,
 				},
 			) if swap_id == gas_swap_id => (),

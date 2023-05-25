@@ -1,5 +1,5 @@
 use cf_chains::address::ForeignChainAddress;
-use cf_primitives::{Asset, AssetAmount, BasisPoints, SwapOutput};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, SwapLeg, SwapOutput};
 use frame_support::dispatch::DispatchError;
 use sp_runtime::DispatchResult;
 
@@ -36,32 +36,45 @@ pub trait LpBalanceApi {
 }
 
 pub trait SwappingApi {
-	/// Attempt to swap `from` asset to `to` asset.
-	/// If OK, return (output_amount, input_asset_fee, stable_asset_fee)
-	fn swap(
+	/// Attempt to swap `from` asset to `to` asset, takes some STABLE_ASSET as network fees.
+	/// If OK, return the swap result.
+	fn take_fee_and_do_swap(
 		from: Asset,
 		to: Asset,
 		input_amount: AssetAmount,
-		should_take_network_fee: bool,
 	) -> Result<SwapOutput, DispatchError>;
 
 	/// Takes the swap amount in STABLE_ASSET, collect network fee from it
 	/// and return the remaining value
 	fn take_network_fee(input_amount: AssetAmount) -> AssetAmount;
+
+	/// Process a single leg of a swap, into or from Stable asset. No network fee is taken.
+	fn swap_single_leg(
+		leg: SwapLeg,
+		unstable_asset: Asset,
+		input_amount: AssetAmount,
+	) -> Result<AssetAmount, DispatchError>;
 }
 
 impl<T: frame_system::Config> SwappingApi for T {
-	fn swap(
+	fn take_fee_and_do_swap(
 		_from: Asset,
 		_to: Asset,
-		_input_amount: AssetAmount,
-		_should_take_network_fee: bool,
+		input_amount: AssetAmount,
 	) -> Result<SwapOutput, DispatchError> {
-		Ok(Default::default())
+		Ok(input_amount.into())
 	}
 
 	fn take_network_fee(input_amount: AssetAmount) -> AssetAmount {
 		input_amount
+	}
+
+	fn swap_single_leg(
+		_leg: SwapLeg,
+		_unstable_asset: Asset,
+		input_amount: AssetAmount,
+	) -> Result<AssetAmount, DispatchError> {
+		Ok(input_amount)
 	}
 }
 

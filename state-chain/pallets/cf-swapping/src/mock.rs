@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_swapping, WeightInfo};
 use cf_chains::AnyChain;
-use cf_primitives::{Asset, AssetAmount, SwapOutput};
+use cf_primitives::{Asset, AssetAmount, SwapLeg, SwapOutput, STABLE_ASSET};
 use cf_traits::{
 	impl_mock_chainflip,
 	mocks::{
@@ -74,22 +74,31 @@ parameter_types! {
 }
 pub struct MockSwappingApi;
 impl SwappingApi for MockSwappingApi {
-	fn swap(
-		from: Asset,
-		to: Asset,
-		swap_input: AssetAmount,
-		should_take_network_fee: bool,
+	fn take_fee_and_do_swap(
+		_from: Asset,
+		_to: Asset,
+		input_amount: AssetAmount,
 	) -> Result<SwapOutput, DispatchError> {
-		let mut swaps = Swaps::get();
-		let amount =
-			if should_take_network_fee { Self::take_network_fee(swap_input) } else { swap_input };
-		swaps.push((from, to, amount));
-		Swaps::set(swaps);
-		Ok(swap_input.into())
+		Ok(input_amount.into())
 	}
 
 	fn take_network_fee(input_amount: AssetAmount) -> AssetAmount {
 		input_amount - NetworkFee::get() * input_amount
+	}
+
+	fn swap_single_leg(
+		leg: SwapLeg,
+		unstable_asset: Asset,
+		input_amount: AssetAmount,
+	) -> Result<AssetAmount, DispatchError> {
+		let mut swaps = Swaps::get();
+		let (from, to) = match leg {
+			SwapLeg::FromStable => (STABLE_ASSET, unstable_asset),
+			SwapLeg::ToStable => (unstable_asset, STABLE_ASSET),
+		};
+		swaps.push((from, to, input_amount));
+		Swaps::set(swaps);
+		Ok(input_amount)
 	}
 }
 
