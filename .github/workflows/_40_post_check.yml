@@ -57,8 +57,7 @@ jobs:
       - name: Install bc
         run: |
           apt-get update
-          apt-get install -y bc
-          apt-get install -y xxd
+          apt-get install -y bc xxd
 
       - name: Download binaries
         uses: actions/download-artifact@v3
