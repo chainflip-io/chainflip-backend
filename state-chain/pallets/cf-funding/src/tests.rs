@@ -652,3 +652,30 @@ fn vesting_contracts_test_case() {
 		);
 	});
 }
+
+#[test]
+fn can_withdraw_unrestricted_to_restricted() {
+	new_test_ext().execute_with(|| {
+		// Contracts
+		const VESTING_CONTRACT_1: EthereumAddress = [0x01; 20];
+		const UNRESTRICTED_ADDRESS: EthereumAddress = [0x03; 20];
+		// Balances
+		const AMOUNT: u128 = 100;
+		// Add contract address to list of restricted contracts
+		RestrictedAddresses::<Test>::insert(VESTING_CONTRACT_1, ());
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			UNRESTRICTED_ADDRESS,
+			TX_HASH
+		));
+		// Because 100 is available this should fail
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			AMOUNT.into(),
+			VESTING_CONTRACT_1
+		),);
+		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, AMOUNT.into(), TX_HASH));
+	});
+}
