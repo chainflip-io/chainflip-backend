@@ -58,6 +58,8 @@ pub type PolkadotAccountId = AccountId32;
 
 pub type PolkadotBlockNumber = u32;
 
+pub const STABLE_ASSET: Asset = Asset::Usdc;
+
 // Polkadot extrinsics are uniquely identified by <block number>-<extrinsic index>
 // https://wiki.polkadot.network/docs/build-protocol-info
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
@@ -123,4 +125,10 @@ impl From<AssetAmount> for SwapOutput {
 	fn from(value: AssetAmount) -> Self {
 		Self { intermediary: None, output: value }
 	}
+}
+
+#[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
+pub enum SwapLeg {
+	FromStable,
+	ToStable,
 }
