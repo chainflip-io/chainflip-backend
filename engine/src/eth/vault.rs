@@ -135,7 +135,7 @@ fn call_from_event(
 		match EncodedAddress::from_chain_bytes(chain, bytes) {
 			Ok(encoded_address) => Some(encoded_address),
 			Err(e) => {
-				warn!("Failed to convert into EncodedAddress: {}", e);
+				warn!("Failed to convert into EncodedAddress: {e}");
 				None
 			},
 		}
@@ -148,9 +148,8 @@ fn call_from_event(
 			Ok(cf_type) => Some(cf_type),
 			Err(_) => {
 				warn!(
-					"Failed to convert into {:?} (primitive was {:?})",
+					"Failed to convert into {:?} (primitive was {from:?})",
 					std::any::type_name::<CfType>(),
-					from
 				);
 				None
 			},
@@ -243,7 +242,7 @@ fn call_from_event(
 			},
 		}),
 		unhandled_event => {
-			warn!("Unhandled vault contract event: {:?}", unhandled_event);
+			warn!("Unhandled vault contract event: {unhandled_event:?}");
 			None
 		},
 	};
