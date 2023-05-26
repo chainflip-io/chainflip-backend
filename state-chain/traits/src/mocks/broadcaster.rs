@@ -63,8 +63,11 @@ impl<
 	}
 }
 
-impl<A, O: OriginTrait, C: UnfilteredDispatchable<RuntimeOrigin = O> + Member + Parameter>
-	MockBroadcaster<(A, C)>
+impl<
+		A: Decode,
+		O: OriginTrait,
+		C: UnfilteredDispatchable<RuntimeOrigin = O> + Member + Parameter,
+	> MockBroadcaster<(A, C)>
 {
 	#[track_caller]
 	pub fn dispatch_callback(id: BroadcastId) {
@@ -74,5 +77,14 @@ impl<A, O: OriginTrait, C: UnfilteredDispatchable<RuntimeOrigin = O> + Member + 
 				.expect("Expected a callback.")
 				.dispatch_bypass_filter(OriginTrait::root()),
 		);
+	}
+
+	pub fn get_pending_api_calls() -> Vec<A> {
+		Self::get_value(b"API_CALLS").unwrap_or(Default::default())
+	}
+
+	pub fn get_pending_callbacks() -> Vec<C> {
+		let max = Self::get_value(b"BROADCAST_ID").unwrap_or(1);
+		(0u32..=max).filter_map(|id| Self::take_storage(b"CALLBACKS", &id)).collect()
 	}
 }

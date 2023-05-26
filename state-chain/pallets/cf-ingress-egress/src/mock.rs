@@ -79,12 +79,11 @@ impl system::Config for Test {
 impl_mock_chainflip!(Test);
 impl_mock_callback!(RuntimeOrigin);
 
-parameter_types! {
-	pub static EgressedApiCalls: Vec<MockEthereumApiCall<MockEthEnvironment>> = Default::default();
-}
-
 pub struct MockDepositHandler;
 impl DepositHandler<Ethereum> for MockDepositHandler {}
+
+pub type MockEgressBroadcaster =
+	MockBroadcaster<(MockEthereumApiCall<MockEthEnvironment>, RuntimeCall)>;
 
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
@@ -94,7 +93,7 @@ impl crate::Config for Test {
 	type LpBalance = Self;
 	type SwapDepositHandler = Self;
 	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;
-	type Broadcaster = MockBroadcaster<(Self::ChainApiCall, RuntimeCall)>;
+	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
 	type WeightInfo = ();
 	type CcmHandler = MockCcmHandler;

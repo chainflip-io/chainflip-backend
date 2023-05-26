@@ -27,6 +27,7 @@ const ETH_ETH: eth::Asset = eth::Asset::Eth;
 const ETH_FLIP: eth::Asset = eth::Asset::Flip;
 const EXPIRY_BLOCK: u64 = 6;
 
+#[track_caller]
 fn expect_size_of_address_pool(size: usize) {
 	assert_eq!(AddressPool::<Test>::iter_keys().count(), size, "Address pool size is incorrect!");
 }
@@ -423,7 +424,7 @@ fn addresses_are_getting_reused() {
 				}),
 			)]
 		})
-		.map(|(channels, _extrinsic_results)| channels)
+		.map_context(|(channels, _extrinsic_results)| channels)
 		.then_process_events(|_ctx, event| match event {
 			RuntimeEvent::IngressEgress(PalletEvent::BatchBroadcastRequested {
 				broadcast_id,
@@ -432,10 +433,11 @@ fn addresses_are_getting_reused() {
 			_ => None,
 		})
 		.then_execute_as_next_block(|(channels, broadcast_ids)| {
-			for id in broadcast_ids {
-				MockBroadcaster::<(Test, RuntimeCall)>::dispatch_callback(id);
-			}
+			assert!(broadcast_ids.len() == 1);
 			// This would normally be triggered on broadcast success, should finalise the ingress.
+			for id in broadcast_ids {
+				MockEgressBroadcaster::dispatch_callback(id);
+			}
 			channels
 		})
 		.inspect_storage(|((id_0, _), (id_1, _))| {
@@ -647,7 +649,7 @@ fn can_egress_ccm() {
 		IngressEgress::on_idle(1, Weight::from_ref_time(1_000_000_000_000u64));
 
 		// Check that the CCM should be egressed
-		assert_eq!(EgressedApiCalls::get(), vec![<MockEthereumApiCall<MockEthEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
+		assert_eq!(MockEgressBroadcaster::get_pending_api_calls(), vec![<MockEthereumApiCall<MockEthEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
 			(ForeignChain::Ethereum, 1),
 			TransferAssetParams {
 				asset: destination_asset,
@@ -690,7 +692,7 @@ fn can_manually_egress_ccm() {
 		));
 
 		// Check that the CCM should be egressed
-		assert_eq!(EgressedApiCalls::get(), vec![<MockEthereumApiCall<MockEthEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
+		assert_eq!(MockEgressBroadcaster::get_pending_api_calls(), vec![<MockEthereumApiCall<MockEthEnvironment> as ExecutexSwapAndCall<Ethereum>>::new_unsigned(
 			(ForeignChain::Ethereum, 1),
 			TransferAssetParams {
 				asset: destination_asset,
@@ -765,7 +767,7 @@ fn can_manually_egress_ccm_by_id() {
 
 		// Check that the CCMs and only CCMs are egressed
 		assert_eq!(
-			EgressedApiCalls::get(),
+			MockEgressBroadcaster::get_pending_api_calls(),
 			vec![to_api_call(new_ccm(1)), to_api_call(new_ccm(3)),]
 		);
 		// Egressed ccms are cleared from storage.
