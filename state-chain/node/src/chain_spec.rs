@@ -346,7 +346,7 @@ macro_rules! network_spec {
 								polkadot_genesis_hash: dot_genesis_hash,
 								polkadot_vault_account_id: dot_vault_account_id.clone(),
 								polkadot_runtime_version: dot_runtime_version,
-								bitcoin_network: BitcoinNetwork::Regtest,
+								bitcoin_network: BITCOIN_NETWORK,
 								bitcoin_fee_per_utxo: BITCOIN_FEE_PER_UTXO,
 							},
 							eth_init_agg_key,
