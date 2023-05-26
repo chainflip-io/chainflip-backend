@@ -37,8 +37,8 @@ pallet-cf-governance = {path = '../cf-governance'}
 default = ['std']
 std = [
   'cf-primitives/std',
-  'cf-traits/std',
   'cf-chains/std',
+  'cf-traits/std',
   'codec/std',
   'frame-benchmarking?/std',
   'frame-support/std',
@@ -48,6 +48,8 @@ std = [
   'sp-runtime/std',
 ]
 runtime-benchmarks = [
+  'cf-primitives/runtime-benchmarks',
+  'cf-chains/runtime-benchmarks',
   'cf-traits/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',

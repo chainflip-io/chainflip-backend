@@ -14,9 +14,9 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
 # Chainflip
-cf-traits = { path = '../../traits', default-features = false }
-cf-chains = { path = '../../chains', default-features = false }
 cf-primitives = { path ='../../primitives', default-features = false }
+cf-chains = { path = '../../chains', default-features = false }
+cf-traits = { path = '../../traits', default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
 
 log = { version = '0.4.16', default-features = false }
@@ -38,6 +38,7 @@ sp-core = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainf
 [features]
 default = ['std']
 std = [
+  'cf-primitives/std',
   'cf-chains/std',
   'cf-traits/std',
   'cf-runtime-upgrade-utilities/std',
@@ -52,8 +53,9 @@ std = [
   'sp-io/std',
 ]
 runtime-benchmarks = [
-  'cf-traits/runtime-benchmarks',
+  'cf-primitives/runtime-benchmarks',
   'cf-chains/runtime-benchmarks',
+  'cf-traits/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',

@@ -95,6 +95,7 @@ pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/chainfl
 [features]
 default = ['std']
 runtime-benchmarks = [
+  'cf-primitives/runtime-benchmarks',
   'cf-chains/runtime-benchmarks',
   'cf-traits/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',
@@ -124,8 +125,8 @@ runtime-benchmarks = [
   'cf-session-benchmarking/runtime-benchmarks',
 ]
 std = [
-  'cf-chains/std',
   'cf-primitives/std',
+  'cf-chains/std',
   'cf-traits/std',
   'cf-utilities/std',
   'cf-amm/std',
