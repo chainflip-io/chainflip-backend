@@ -7,8 +7,7 @@ use tokio::sync::Mutex;
 use tracing::{info_span, Instrument};
 
 use super::{
-	rpc::EthDualRpcClient, safe_dual_block_subscription_from, witnessing::AllWitnessers,
-	EthNumberBloom,
+	rpc::EthDualRpcClient, safe_block_subscription_from, witnessing::AllWitnessers, EthNumberBloom,
 };
 use crate::{
 	constants::{BLOCK_PULL_TIMEOUT_MULTIPLIER, ETH_AVERAGE_BLOCK_TIME_SECONDS},
@@ -87,7 +86,7 @@ impl BlockWitnesserGenerator for EthBlockWitnesserGenerator {
 		&mut self,
 		from_block: ChainBlockNumber<Ethereum>,
 	) -> anyhow::Result<BlockStream<EthNumberBloom>> {
-		let block_stream = safe_dual_block_subscription_from(from_block, self.eth_dual_rpc.clone())
+		let block_stream = safe_block_subscription_from(from_block, self.eth_dual_rpc.clone())
 			.await
 			.map_err(|err| {
 				tracing::error!("Subscription error: {err}");

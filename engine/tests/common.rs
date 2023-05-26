@@ -7,7 +7,7 @@ use tracing::info;
 use chainflip_engine::{
 	eth::{
 		contract_witnesser::block_to_events, core_h160, event::Event, rpc::EthDualRpcClient,
-		safe_dual_block_subscription_from, BlockWithProcessedItems, EthContractWitnesser,
+		safe_block_subscription_from, BlockWithProcessedItems, EthContractWitnesser,
 	},
 	settings::{CfSettings, CommandLineOptions, Settings},
 };
@@ -58,8 +58,7 @@ where
 		hex::encode(contract_address)
 	);
 
-	let safe_header_stream =
-		safe_dual_block_subscription_from(from_block, eth_dual_rpc.clone()).await?;
+	let safe_header_stream = safe_block_subscription_from(from_block, eth_dual_rpc.clone()).await?;
 
 	Ok(Box::pin(safe_header_stream.then({
 		move |block| {
