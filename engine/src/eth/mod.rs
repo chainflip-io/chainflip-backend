@@ -26,7 +26,7 @@ use utilities::read_clean_and_decode_hex_str_file;
 use crate::{
 	constants::ETH_BLOCK_SAFETY_MARGIN,
 	eth::{
-		rpc::{EthDualRpcClient, EthRpcApi, EthWsRpcApi},
+		rpc::{EthRpcApi, EthWsRpcApi},
 		ws_safe_stream::safe_ws_head_stream,
 	},
 	settings,
@@ -55,7 +55,10 @@ use event::Event;
 
 use async_trait::async_trait;
 
-use self::vault::EthAssetApi;
+use self::{
+	rpc::{EthHttpRpcClient, EthWsRpcClient},
+	vault::EthAssetApi,
+};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct EthNumberBloom {
@@ -283,13 +286,13 @@ pub struct BlockWithItems<BlockItem: Debug> {
 pub async fn eth_block_head_stream_from<HeaderStream>(
 	from_block: u64,
 	safe_head_stream: HeaderStream,
-	eth_dual_rpc: EthDualRpcClient,
+	eth_rpc: EthHttpRpcClient,
 ) -> Result<Pin<Box<dyn Stream<Item = EthNumberBloom> + Send + 'static>>>
 where
 	HeaderStream: Stream<Item = EthNumberBloom> + 'static + Send,
 {
 	block_head_stream_from(from_block, safe_head_stream, move |block_number| {
-		let eth_rpc = eth_dual_rpc.clone();
+		let eth_rpc = eth_rpc.clone();
 		Box::pin(async move {
 			eth_rpc.block(U64::from(block_number)).await.and_then(|block| {
 				let number_bloom: Result<EthNumberBloom> =
@@ -321,17 +324,15 @@ macro_rules! retry_rpc_until_success {
 /// with historical blocks from a given block number.
 pub async fn safe_block_subscription_from(
 	from_block: u64,
-	eth_dual_rpc: EthDualRpcClient,
+	eth_ws_rpc: EthWsRpcClient,
+	eth_http_rpc: EthHttpRpcClient,
 ) -> Result<Pin<Box<dyn Stream<Item = EthNumberBloom> + Send + 'static>>>
 where
 {
 	Ok(eth_block_head_stream_from(
 		from_block,
-		safe_ws_head_stream(
-			eth_dual_rpc.ws_client.subscribe_new_heads().await?,
-			ETH_BLOCK_SAFETY_MARGIN,
-		),
-		eth_dual_rpc.clone(),
+		safe_ws_head_stream(eth_ws_rpc.subscribe_new_heads().await?, ETH_BLOCK_SAFETY_MARGIN),
+		eth_http_rpc,
 	)
 	.await?
 	.boxed())

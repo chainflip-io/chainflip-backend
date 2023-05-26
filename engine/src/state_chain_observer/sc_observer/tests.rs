@@ -2,7 +2,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
 	btc::rpc::MockBtcRpcApi,
-	state_chain_observer::client::{extrinsic_api, storage_api::StorageApi, StreamCache},
+	state_chain_observer::client::{extrinsic_api, StreamCache},
 };
 use cf_chains::{
 	eth::{Ethereum, SchnorrVerificationComponents, Transaction},
@@ -16,12 +16,11 @@ use multisig::SignatureToThresholdSignature;
 use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_vaults::Vault;
 
-use anyhow::Context;
 use sp_core::{Hasher, H256};
 use sp_runtime::{traits::Keccak256, AccountId32, Digest};
 use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance, Header};
 use tokio::sync::watch;
-use utilities::{CachedStream, MakeCachedStream};
+use utilities::MakeCachedStream;
 use web3::types::{Bytes, SignedTransaction};
 
 use crate::{
@@ -1729,22 +1728,12 @@ async fn run_the_sc_observer() {
 			let (btc_tx_hash_monitor_sender, _btc_tx_hash_monitor_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
-			let expected_chain_id = state_chain_client
-				.storage_value::<pallet_cf_environment::EthereumChainId<state_chain_runtime::Runtime>>(
-					sc_block_stream.cache().block_hash,
-				)
-				.await
-				.context("Failed to get EthereumChainId from state chain")?;
-
 			sc_observer::start(
 				state_chain_client,
 				sc_block_stream,
 				EthBroadcaster::new(
 					&settings.eth,
-					EthWsRpcClient::new(&settings.eth, expected_chain_id.into())
-						.await
-						.unwrap()
-						.clone(),
+					EthWsRpcClient::new(&settings.eth, None).await.unwrap().clone(),
 				)
 				.unwrap(),
 				DotBroadcaster::new(MockDotRpcApi::new()),

@@ -7,7 +7,7 @@ use chainflip_engine::{
 	btc::{self, rpc::BtcRpcClient, BtcBroadcaster},
 	db::{KeyStore, PersistentKeyDB},
 	dot::{self, rpc::DotRpcClient, witnesser as dot_witnesser, DotBroadcaster},
-	eth::{self, build_broadcast_channel, rpc::EthDualRpcClient, EthBroadcaster},
+	eth::{self, build_broadcast_channel, rpc::EthHttpRpcClient, EthBroadcaster},
 	health, p2p,
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
@@ -232,9 +232,9 @@ async fn main() -> anyhow::Result<()> {
 				state_chain_stream.clone(),
 				EthBroadcaster::new(
 					&settings.eth,
-					EthDualRpcClient::new(&settings.eth, expected_chain_id)
+					EthHttpRpcClient::new(&settings.eth, Some(expected_chain_id))
 						.await
-						.context("Failed to create EthDualRpcClient")?,
+						.context("Failed to create EthWsRpcClient")?,
 				)
 				.context("Failed to create ETH broadcaster")?,
 				DotBroadcaster::new(dot_rpc_client.clone()),

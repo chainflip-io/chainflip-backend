@@ -1,4 +1,4 @@
-use tracing::{debug, error, info, info_span, warn, Instrument};
+use tracing::{debug, error, info};
 use utilities::{context, make_periodic_tick};
 use web3::{
 	api::SubscriptionStream,
@@ -12,16 +12,13 @@ use web3::{
 };
 use web3_secp256k1::SecretKey;
 
-use futures::{
-	future::{select, Either},
-	FutureExt, StreamExt, TryStreamExt,
-};
+use futures::{FutureExt, StreamExt, TryStreamExt};
 
 use anyhow::{anyhow, Context, Result};
 
 use super::{redact_secret_eth_node_endpoint, TransportProtocol};
 use crate::{
-	constants::{ETH_DUAL_REQUEST_TIMEOUT, ETH_LOG_REQUEST_TIMEOUT, SYNC_POLL_INTERVAL},
+	constants::{ETH_LOG_REQUEST_TIMEOUT, SYNC_POLL_INTERVAL},
 	settings,
 	witnesser::LatestBlockNumber,
 };
@@ -269,13 +266,18 @@ where
 }
 
 impl EthWsRpcClient {
-	pub async fn new(eth_settings: &settings::Eth, expected_chain_id: U256) -> Result<Self> {
+	pub async fn new(
+		eth_settings: &settings::Eth,
+		expected_chain_id: Option<U256>,
+	) -> Result<Self> {
 		let client = Self::inner_new(&eth_settings.ws_node_endpoint, async {
 			context!(web3::transports::WebSocket::new(&eth_settings.ws_node_endpoint).await)
 		})
 		.await?;
 
-		validate_client_chain_id(&client, expected_chain_id).await?;
+		if let Some(expected_chain_id) = expected_chain_id {
+			validate_client_chain_id(&client, expected_chain_id).await?;
+		}
 
 		let mut poll_interval = make_periodic_tick(SYNC_POLL_INTERVAL, false);
 
@@ -337,7 +339,10 @@ impl EthWsRpcApi for EthWsRpcClient {
 }
 
 impl EthHttpRpcClient {
-	pub async fn new(eth_settings: &settings::Eth, expected_chain_id: U256) -> Result<Self> {
+	pub async fn new(
+		eth_settings: &settings::Eth,
+		expected_chain_id: Option<U256>,
+	) -> Result<Self> {
 		let client = Self::inner_new(
 			&eth_settings.http_node_endpoint,
 			std::future::ready({
@@ -347,16 +352,12 @@ impl EthHttpRpcClient {
 		.now_or_never()
 		.unwrap()?;
 
-		validate_client_chain_id(&client, expected_chain_id).await?;
+		if let Some(expected_chain_id) = expected_chain_id {
+			validate_client_chain_id(&client, expected_chain_id).await?;
+		}
 
 		Ok(client)
 	}
-}
-
-#[derive(Clone)]
-pub struct EthDualRpcClient {
-	pub ws_client: EthWsRpcClient,
-	pub http_client: EthHttpRpcClient,
 }
 
 async fn validate_client_chain_id<T>(
@@ -380,135 +381,6 @@ where
 	}
 
 	Ok(())
-}
-
-impl EthDualRpcClient {
-	/// Create an Ethereum Rpc Client, containing a HTTP and a WS client.
-	/// Passing a value to expected_chain_id ensures the endpoints provided in settings are pointing
-	/// to nodes with the same `chain_id` as that provided.
-	pub async fn new(eth_settings: &settings::Eth, expected_chain_id: U256) -> Result<Self> {
-		Self::inner_new(eth_settings, expected_chain_id).await
-	}
-
-	#[cfg(feature = "integration-test")]
-	/// For tests we assume we're pointing to the correct chain_id.
-	pub async fn new_test(eth_settings: &settings::Eth) -> Result<Self> {
-		Self::inner_new(eth_settings).await
-	}
-
-	async fn inner_new(eth_settings: &settings::Eth, expected_chain_id: U256) -> Result<Self> {
-		let ws_client = EthWsRpcClient::new(eth_settings, expected_chain_id)
-			.instrument(info_span!("Eth-Ws-RPC-Client"))
-			.await
-			.context("Failed to create EthWsRpcClient")?;
-
-		let http_client = EthHttpRpcClient::new(eth_settings, expected_chain_id)
-			.await
-			.context("Failed to create EthHttpRpcClient")?;
-
-		Ok(Self { ws_client, http_client })
-	}
-}
-
-async fn select_ok_or_both_errors<F, T, E>(
-	f1: F,
-	f2: F,
-) -> Result<(T, Option<Either<E, E>>), (E, E)>
-where
-	F: futures::Future<Output = Result<T, E>> + Unpin,
-{
-	match select(f1, f2).await {
-		Either::Left((Ok(ok), _)) | Either::Right((Ok(ok), _)) => Ok((ok, None)),
-		Either::Left((Err(e_left), right)) => match right.await {
-			Ok(ok) => Ok((ok, Some(Either::Left(e_left)))),
-			Err(e_right) => Err((e_left, e_right)),
-		},
-		Either::Right((Err(e_right), left)) => match left.await {
-			Ok(ok) => Ok((ok, Some(Either::Right(e_right)))),
-			Err(e_left) => Err((e_left, e_right)),
-		},
-	}
-}
-
-macro_rules! dual_call_rpc {
-    ($eth_dual:expr, $method:ident, $($arg:expr),*) => {
-        {
-            let ws_request = $eth_dual.ws_client.$method($($arg.clone()),*);
-            let http_request = $eth_dual.http_client.$method($($arg),*);
-
-            tokio::time::timeout(ETH_DUAL_REQUEST_TIMEOUT, select_ok_or_both_errors(ws_request, http_request))
-                .await
-                .context("ETH Dual RPC request timed out")?
-                .map_err(|(e_ws, e_http)| {
-                    anyhow!(
-                        "ETH Dual RPC request failed: {:?} side: {:?}, {:?} side: {:?}",
-                        TransportProtocol::Ws, e_ws, TransportProtocol::Http, e_http
-                    )
-                })
-                .map(|(res, maybe_err)| {
-                    if let Some(err) = maybe_err {
-                        let (side, message) = match err {
-                            Either::Left(e) => (TransportProtocol::Ws, e),
-                            Either::Right(e) => (TransportProtocol::Http, e),
-                        };
-                        warn!(
-                            "{side:?} side of the ETH Dual RPC request failed (the other succeeded): {message:?}",
-                        );
-                    }
-                    res
-                })
-        }
-    };
-}
-
-#[async_trait]
-impl EthRpcApi for EthDualRpcClient {
-	async fn estimate_gas(&self, req: CallRequest) -> Result<U256> {
-		dual_call_rpc!(self, estimate_gas, req)
-	}
-
-	async fn sign_transaction(
-		&self,
-		tx: TransactionParameters,
-		key: &SecretKey,
-	) -> Result<SignedTransaction> {
-		// NB: This clippy allow applies file-wide, but we only need it for this borrow
-		#![allow(clippy::needless_borrow)]
-		dual_call_rpc!(self, sign_transaction, tx, &key)
-	}
-
-	async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256> {
-		dual_call_rpc!(self, send_raw_transaction, rlp)
-	}
-
-	async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
-		dual_call_rpc!(self, get_logs, filter)
-	}
-
-	async fn chain_id(&self) -> Result<U256> {
-		dual_call_rpc!(self, chain_id,)
-	}
-
-	async fn transaction_receipt(&self, tx_hash: H256) -> Result<TransactionReceipt> {
-		dual_call_rpc!(self, transaction_receipt, tx_hash)
-	}
-
-	async fn block(&self, block_number: U64) -> Result<Block<H256>> {
-		dual_call_rpc!(self, block, block_number)
-	}
-
-	async fn successful_transactions(&self, block_number: U64) -> Result<Vec<Transaction>> {
-		dual_call_rpc!(self, successful_transactions, block_number)
-	}
-
-	async fn fee_history(
-		&self,
-		block_count: U256,
-		newest_block: BlockNumber,
-		reward_percentiles: Option<Vec<f64>>,
-	) -> Result<FeeHistory> {
-		dual_call_rpc!(self, fee_history, block_count, newest_block, reward_percentiles)
-	}
 }
 
 #[cfg(test)]

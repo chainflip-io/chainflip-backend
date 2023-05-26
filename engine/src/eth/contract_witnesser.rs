@@ -10,13 +10,13 @@ use crate::{
 };
 
 use super::{
-	core_h160, eth_block_witnessing::BlockProcessor, event::Event, rpc::EthDualRpcClient,
+	core_h160, eth_block_witnessing::BlockProcessor, event::Event, rpc::EthHttpRpcClient,
 	vault::EthAssetApi, BlockWithItems, DecodeLogClosure, EthContractWitnesser, EthNumberBloom,
 };
 
 pub struct ContractWitnesser<Contract, StateChainClient> {
 	contract: Contract,
-	rpc: EthDualRpcClient,
+	http_rpc: EthHttpRpcClient,
 	state_chain_client: Arc<StateChainClient>,
 	should_witness_historical_epochs: bool,
 }
@@ -29,10 +29,10 @@ where
 	pub fn new(
 		contract: Contract,
 		state_chain_client: Arc<StateChainClient>,
-		rpc: EthDualRpcClient,
+		http_rpc: EthHttpRpcClient,
 		should_witness_historical_epochs: bool,
 	) -> Self {
-		Self { contract, rpc, state_chain_client, should_witness_historical_epochs }
+		Self { contract, http_rpc, state_chain_client, should_witness_historical_epochs }
 	}
 }
 
@@ -57,7 +57,7 @@ where
 			block,
 			core_h160(contract_address),
 			&self.contract.decode_log_closure().unwrap(),
-			&self.rpc,
+			&self.http_rpc,
 		)
 		.await?;
 
@@ -68,7 +68,7 @@ where
 				BlockWithItems { block_number: block.block_number.as_u64(), block_items: events },
 				// Can't this just take a reference?
 				self.state_chain_client.clone(),
-				&self.rpc,
+				&self.http_rpc,
 			)
 			.await?;
 
@@ -80,7 +80,7 @@ pub async fn block_to_events<'a, EventParameters>(
 	header: &'a EthNumberBloom,
 	contract_address: H160,
 	decode_log_fn: &DecodeLogClosure<EventParameters>,
-	eth_rpc: &'a EthDualRpcClient,
+	eth_rpc: &'a EthHttpRpcClient,
 ) -> anyhow::Result<Vec<Event<EventParameters>>>
 where
 	EventParameters: core::fmt::Debug + Send + Sync + 'static,
