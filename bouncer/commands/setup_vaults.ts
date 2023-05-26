@@ -5,7 +5,7 @@
 // This command takes no arguments.
 // It will perform the initial polkadot vault setup procedure described here
 // https://www.notion.so/chainflip/Polkadot-Vault-Initialisation-Steps-36d6ab1a24ed4343b91f58deed547559
-// For example: ./commands/setup_polkadot_vault.sh
+// For example: ./commands/setup_vaults.sh
 
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Keyring } from '@polkadot/keyring';
