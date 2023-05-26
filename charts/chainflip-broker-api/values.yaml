@@ -1,0 +1,39 @@
+image:
+  repository: ghcr.io/chainflip-io/chainflip-broker-api
+  pullPolicy: IfNotPresent
+  tag: ""
+containerPort: 8080
+
+signingKeyFile: /etc/chainflip/keys/signing_key_file
+stateChainWsEndpoint: ws://chainflip-node.staging.svc.cluster.local
+
+imagePullSecrets:
+  - name: dockerconfigjson
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+  hosts: []
+  tls: {}
+
+resources:
+  limits:
+    cpu: 300m
+    memory: 256Mi
+  requests:
+    cpu: 150m
+    memory: 128Mi
+
+deployment:
+  revisionHistoryLimit: 5
+  maxUnavailable: 0
+
+secrets:
+  existingOnePasswordSecret: chainflip-broker-api-secrets
+
+cluster: ""

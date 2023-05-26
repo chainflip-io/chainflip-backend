@@ -1,6 +1,5 @@
 use crate::CcmHandler;
 use cf_chains::{address::ForeignChainAddress, CcmDepositMetadata};
-use frame_support::dispatch::DispatchResult;
 
 use cf_primitives::{Asset, AssetAmount};
 use codec::{Decode, Encode};
@@ -36,7 +35,7 @@ impl CcmHandler for MockCcmHandler {
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
 		message_metadata: CcmDepositMetadata,
-	) -> DispatchResult {
+	) {
 		<Self as MockPalletStorage>::mutate_value(CCM_HANDLER_PREFIX, |ccm_requests| {
 			if ccm_requests.is_none() {
 				*ccm_requests = Some(vec![]);
@@ -51,6 +50,5 @@ impl CcmHandler for MockCcmHandler {
 				});
 			})
 		});
-		Ok(())
 	}
 }

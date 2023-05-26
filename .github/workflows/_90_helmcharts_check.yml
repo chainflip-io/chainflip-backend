@@ -1,0 +1,26 @@
+name: Check Helm Charts 📋
+on:
+  pull_request:
+    paths:
+      - charts/**
+env:
+  FORCE_COLOR: 1
+
+jobs:
+  check-helm-charts:
+    strategy:
+      matrix:
+        chart: [chainflip-broker-api, chainflip-node]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@v3
+
+      - name: Download dependencies 💾
+        working-directory: charts/${{ matrix.chart }}
+        run: helm dependency update
+
+      - name: Linting ${{ matrix.chart }} 📝
+        run: >
+          helm lint
+          charts/${{ matrix.chart }}

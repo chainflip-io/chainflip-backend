@@ -38,7 +38,7 @@ jobs:
         credentials:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-        image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-rc11-1-node
+        image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v0.7.0-1-node
         ports:
           - 30303:30303
           - 30303:30303/udp
@@ -57,19 +57,12 @@ jobs:
       - name: Install bc
         run: |
           apt-get update
-          apt-get install -y bc
+          apt-get install -y bc xxd
 
       - name: Download binaries
         uses: actions/download-artifact@v3
         with:
           name: chainflip-backend-bin
-
-      - name: Checkout chainflip-bouncer
-        uses: actions/checkout@v3
-        with:
-          repository: chainflip-io/chainflip-bouncer
-          token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
-          path: bouncer
 
       - name: Install node dependencies
         working-directory: bouncer

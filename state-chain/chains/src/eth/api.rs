@@ -238,6 +238,14 @@ impl<C: EthereumCall + Parameter + 'static> ApiCall<Ethereum> for EthereumTransa
 	fn is_signed(&self) -> bool {
 		self.sig_data.is_some()
 	}
+
+	fn transaction_out_id(&self) -> <Ethereum as ChainCrypto>::TransactionOutId {
+		let sig_data = self.sig_data.expect("Unsigned transaction_out_id is invalid.");
+		SchnorrVerificationComponents {
+			s: sig_data.sig.into(),
+			k_times_g_address: sig_data.k_times_g_address.into(),
+		}
+	}
 }
 
 /// Provides the environment data for ethereum-like chains.
@@ -281,7 +289,7 @@ where
 	fn new_unsigned(
 		_old_key: Option<<Ethereum as ChainCrypto>::AggKey>,
 		new_key: <Ethereum as ChainCrypto>::AggKey,
-	) -> Result<Self, SetAggKeyWithAggKeyError> {
+	) -> Result<Self, ()> {
 		Ok(Self::SetAggKeyWithAggKey(EthereumTransactionBuilder::new_unsigned(
 			E::replay_protection(EthereumContract::KeyManager),
 			set_agg_key_with_agg_key::SetAggKeyWithAggKey::new(new_key),
@@ -510,6 +518,10 @@ impl<E> ApiCall<Ethereum> for EthereumApi<E> {
 
 	fn is_signed(&self) -> bool {
 		map_over_api_variants!(self, call, call.is_signed())
+	}
+
+	fn transaction_out_id(&self) -> <Ethereum as ChainCrypto>::TransactionOutId {
+		map_over_api_variants!(self, call, call.transaction_out_id())
 	}
 }
 

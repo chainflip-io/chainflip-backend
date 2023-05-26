@@ -4,8 +4,8 @@ use crate::{
 	client::{
 		self,
 		ceremony_manager::SigningCeremony,
-		common::{SigningFailureReason, SigningStageName},
-		signing::{self, PayloadAndKey},
+		common::{try_deserialize, DelayDeserialization, SigningFailureReason, SigningStageName},
+		signing::{self, signing_data::LocalSig3Inner, PayloadAndKey},
 	},
 	crypto::CryptoScheme,
 };
@@ -23,7 +23,7 @@ use signing::SigningStateCommonInfo;
 use tracing::{debug, warn};
 
 use super::{
-	signing_data::{Comm1, LocalSig3, VerifyComm2, VerifyLocalSig4},
+	signing_data::{Comm1, Comm1Inner, LocalSig3, VerifyComm2, VerifyLocalSig4},
 	SigningCommitment,
 };
 
@@ -63,12 +63,12 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	const NAME: SigningStageName = SigningStageName::AwaitCommitments1;
 
 	fn init(&mut self) -> DataToSend<Self::Message> {
-		let comm1 = self
+		let comm1: Vec<_> = self
 			.nonces
 			.iter()
-			.map(|nonce| SigningCommitment { d: nonce.d_pub, e: nonce.e_pub })
+			.map(|nonce| SigningCommitment::<Crypto::Point> { d: nonce.d_pub, e: nonce.e_pub })
 			.collect();
-		DataToSend::Broadcast(Comm1(comm1))
+		DataToSend::Broadcast(DelayDeserialization::new(&comm1))
 	}
 
 	async fn process(
@@ -133,18 +133,28 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 				),
 		};
 
+		// Deserialize and report any party for which deserialization fails:
+		let verified_commitments = match try_deserialize(verified_commitments) {
+			Ok(res) => res,
+			Err(bad_parties) =>
+				return SigningStageResult::Error(
+					bad_parties,
+					SigningFailureReason::DeserializationError,
+				),
+		};
+
 		// Check that the number of commitments matches
 		// the number of payloads
 		// TODO: see if there is a way to deduplicate this
 		// (that doesn't add too much complexity)
 		let bad_parties: BTreeSet<_> = verified_commitments
 			.iter()
-			.filter_map(|(party_idx, Comm1(commitments))| {
-				if commitments.len() != self.signing_common.payload_count() {
+			.filter_map(|(party_idx, commitments)| {
+				if commitments.0.len() != self.signing_common.payload_count() {
 					warn!(
-						"Unexpected number of commitments from party {}: {} (expected: {})",
-						party_idx,
-						commitments.len(),
+						from_id = self.common.validator_mapping.get_id(*party_idx).to_string(),
+						"Unexpected number of commitments from party: {} (expected: {})",
+						commitments.0.len(),
 						self.signing_common.payload_count(),
 					);
 					Some(*party_idx)
@@ -183,7 +193,7 @@ struct LocalSigStage3<Crypto: CryptoScheme> {
 	// Our nonce pair generated in the previous stage
 	nonces: Vec<Box<SecretNoncePair<Crypto::Point>>>,
 	// Public nonce commitments (verified)
-	commitments: BTreeMap<AuthorityCount, Comm1<Crypto::Point>>,
+	commitments: BTreeMap<AuthorityCount, Comm1Inner<Crypto::Point>>,
 }
 
 derive_display_as_type_name!(LocalSigStage3<Crypto: CryptoScheme>);
@@ -221,7 +231,10 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 			})
 			.collect();
 
-		let data = DataToSend::Broadcast(LocalSig3 { responses });
+		let data =
+			DataToSend::Broadcast(DelayDeserialization::new(&LocalSig3Inner::<Crypto::Point> {
+				responses,
+			}));
 
 		use zeroize::Zeroize;
 
@@ -258,7 +271,7 @@ struct VerifyLocalSigsBroadcastStage4<Crypto: CryptoScheme> {
 	common: CeremonyCommon,
 	signing_common: SigningStateCommonInfo<Crypto>,
 	/// Nonce commitments from all parties (verified to be correctly broadcast)
-	commitments: BTreeMap<AuthorityCount, Comm1<Crypto::Point>>,
+	commitments: BTreeMap<AuthorityCount, Comm1Inner<Crypto::Point>>,
 	/// Signature shares sent to us (NOT verified to be correctly broadcast)
 	local_sigs: BTreeMap<AuthorityCount, Option<LocalSig3<Crypto::Point>>>,
 }
@@ -294,11 +307,21 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 				),
 		};
 
+		// Deserialize and report any party for which deserialization fails:
+		let local_sigs = match try_deserialize(local_sigs) {
+			Ok(res) => res,
+			Err(bad_parties) =>
+				return SigningStageResult::Error(
+					bad_parties,
+					SigningFailureReason::DeserializationError,
+				),
+		};
+
 		// Check that the number of local signature matches
 		// the number of payloads
 		let bad_parties: BTreeSet<_> = local_sigs
 			.iter()
-			.filter_map(|(party_idx, LocalSig3 { responses })| {
+			.filter_map(|(party_idx, LocalSig3Inner { responses })| {
 				if responses.len() != self.signing_common.payload_count() {
 					warn!(
 						"Unexpected number of local signatures from party {}: {} (expected: {})",

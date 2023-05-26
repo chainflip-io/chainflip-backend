@@ -1,5 +1,5 @@
 use crate::{
-	benchmarking_value::BenchmarkValue,
+	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	dot::{
 		BalancesCall, PolkadotAccountIdLookup, PolkadotAddress, PolkadotChargeTransactionPayment,
 		PolkadotCheckMortality, PolkadotCheckNonce, PolkadotPublicKey, PolkadotRuntimeCall,
@@ -71,6 +71,12 @@ impl BenchmarkValue for PolkadotAccountId {
 			"858c1ee915090a119d4cb0774b908fa585ef7882f4648c577606490cc94f6e15"
 		)))
 		.into_account()
+	}
+}
+
+impl BenchmarkValueExtended for PolkadotAccountId {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		MultiSigner::Sr25519(sr25519::Public([id; 32])).into_account()
 	}
 }
 

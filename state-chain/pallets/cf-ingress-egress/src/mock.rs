@@ -11,7 +11,6 @@ pub use cf_primitives::{
 use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 
 use frame_support::{
-	instances::Instance1,
 	parameter_types,
 	traits::{OnFinalize, OnIdle, OnInitialize, UnfilteredDispatchable},
 	weights::Weight,
@@ -46,7 +45,7 @@ frame_support::construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic,
 	{
 		System: frame_system,
-		IngressEgress: pallet_cf_ingress_egress::<Instance1>,
+		IngressEgress: pallet_cf_ingress_egress,
 	}
 );
 
@@ -109,12 +108,18 @@ impl Broadcaster<Ethereum> for MockBroadcast {
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		(1, 2)
 	}
+
+	fn threshold_sign_and_broadcast_for_rotation(
+		_api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
+		(1, 2)
+	}
 }
 
 pub struct MockDepositHandler;
 impl DepositHandler<Ethereum> for MockDepositHandler {}
 
-impl crate::Config<Instance1> for Test {
+impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;

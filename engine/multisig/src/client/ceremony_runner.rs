@@ -17,7 +17,10 @@ use tokio::sync::{
 use tracing::{debug, warn, Instrument};
 use utilities::format_iterator;
 
-use crate::client::common::{ProcessMessageResult, StageResult};
+use crate::client::{
+	ceremony_id_string,
+	common::{ProcessMessageResult, StageResult},
+};
 use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};
 
 use super::{
@@ -55,7 +58,10 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 		request_receiver: oneshot::Receiver<PreparedRequest<Ceremony>>,
 		outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
 	) -> Result<()> {
-		let span = tracing::info_span!("CeremonyRunner", ceremony_id = ceremony_id);
+		let span = tracing::info_span!(
+			"CeremonyRunner",
+			ceremony_id = ceremony_id_string::<Ceremony::Crypto>(ceremony_id)
+		);
 
 		// We always create unauthorised first, it can get promoted to
 		// an authorised one with a ceremony request
@@ -82,15 +88,11 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 					}
 
 				}
-				() = runner.timeout_handle.as_mut() => {
-
-					// Only timeout if the ceremony is authorised
-					if runner.stage.is_some() {
-						if let Some(result) = runner.on_timeout().instrument(span.clone()).await {
-							break result;
-						}
+				// Only timeout if the ceremony is authorised
+				() = runner.timeout_handle.as_mut(), if runner.stage.is_some() => {
+					if let Some(result) = runner.on_timeout().instrument(span.clone()).await {
+						break result;
 					}
-
 				}
 			}
 		};

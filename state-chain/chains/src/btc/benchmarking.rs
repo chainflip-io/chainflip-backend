@@ -1,11 +1,12 @@
 use sp_std::{vec, vec::Vec};
 
-use crate::benchmarking_value::BenchmarkValue;
+use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 
 use super::{
 	api::{batch_transfer::BatchTransfer, BitcoinApi},
-	AggKey, BitcoinFetchId, BitcoinOutput, BitcoinScriptBounded, BitcoinTrackedData,
-	BitcoinTransactionData, PreviousOrCurrent, Signature, SigningPayload, Utxo, UtxoId,
+	AggKey, BitcoinFeeInfo, BitcoinFetchId, BitcoinOutput, BitcoinScriptBounded,
+	BitcoinTrackedData, BitcoinTransactionData, PreviousOrCurrent, Signature, SigningPayload, Utxo,
+	UtxoId,
 };
 
 impl BenchmarkValue for AggKey {
@@ -52,9 +53,21 @@ impl BenchmarkValue for BitcoinScriptBounded {
 	}
 }
 
+impl BenchmarkValueExtended for BitcoinScriptBounded {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		BitcoinScriptBounded { data: [id; 100].to_vec().try_into().unwrap() }
+	}
+}
+
 impl BenchmarkValue for BitcoinFetchId {
 	fn benchmark_value() -> Self {
 		Self(1)
+	}
+}
+
+impl BenchmarkValueExtended for BitcoinFetchId {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		Self(id.into())
 	}
 }
 
@@ -62,6 +75,7 @@ impl<E> BenchmarkValue for BitcoinApi<E> {
 	fn benchmark_value() -> Self {
 		BitcoinApi::BatchTransfer(BatchTransfer::new_unsigned(
 			&BenchmarkValue::benchmark_value(),
+			BenchmarkValue::benchmark_value(),
 			vec![Utxo {
 				amount: Default::default(),
 				txid: Default::default(),
@@ -76,7 +90,7 @@ impl<E> BenchmarkValue for BitcoinApi<E> {
 
 impl BenchmarkValue for BitcoinTrackedData {
 	fn benchmark_value() -> Self {
-		BitcoinTrackedData { block_height: 120, fee_rate_sats_per_byte: 4321 }
+		BitcoinTrackedData { block_height: 120, btc_fee_info: BitcoinFeeInfo::new(4321) }
 	}
 }
 

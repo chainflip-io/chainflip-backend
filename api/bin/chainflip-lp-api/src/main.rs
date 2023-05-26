@@ -1,7 +1,8 @@
+use cf_utilities::try_parse_number_or_hex;
 use chainflip_api::{
 	self,
-	lp::{self, Liquidity, Tick},
-	primitives::{AccountRole, Asset, AssetAmount},
+	lp::{self, Tick},
+	primitives::{AccountRole, Asset},
 	settings::StateChain,
 };
 use clap::Parser;
@@ -10,6 +11,7 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	server::ServerBuilder,
 };
+use sp_rpc::number::NumberOrHex;
 use std::{ops::Range, path::PathBuf};
 
 #[rpc(server, client, namespace = "lp")]
@@ -23,7 +25,7 @@ pub trait Rpc {
 	#[method(name = "withdrawAsset")]
 	async fn withdraw_asset(
 		&self,
-		amount: AssetAmount,
+		amount: NumberOrHex,
 		asset: Asset,
 		destination_address: &str,
 	) -> Result<String, Error>;
@@ -34,7 +36,7 @@ pub trait Rpc {
 		asset: Asset,
 		lower_tick: Tick,
 		upper_tick: Tick,
-		amount: Liquidity,
+		amount: NumberOrHex,
 	) -> Result<String, Error>;
 
 	#[method(name = "burnRangeOrder")]
@@ -43,7 +45,7 @@ pub trait Rpc {
 		asset: Asset,
 		lower_tick: Tick,
 		upper_tick: Tick,
-		amount: Liquidity,
+		amount: NumberOrHex,
 	) -> Result<String, Error>;
 
 	#[method(name = "assetBalances")]
@@ -52,7 +54,6 @@ pub trait Rpc {
 	#[method(name = "getRangeOrders")]
 	async fn get_range_orders(&self) -> Result<String, Error>;
 }
-
 pub struct RpcServerImpl {
 	state_chain_settings: StateChain,
 }
@@ -76,22 +77,23 @@ impl RpcServer for RpcServerImpl {
 	/// Returns an egress id
 	async fn withdraw_asset(
 		&self,
-		amount: AssetAmount,
+		amount: NumberOrHex,
 		asset: Asset,
 		destination_address: &str,
 	) -> Result<String, Error> {
-		if amount == 0 {
-			return Err(Error::Custom("Invalid amount".to_string()))
-		}
-
 		let destination_address =
 			chainflip_api::clean_foreign_chain_address(asset.into(), destination_address)
 				.map_err(|e| Error::Custom(e.to_string()))?;
 
-		lp::withdraw_asset(&self.state_chain_settings, amount, asset, destination_address)
-			.await
-			.map(|(_, id)| id.to_string())
-			.map_err(|e| Error::Custom(e.to_string()))
+		lp::withdraw_asset(
+			&self.state_chain_settings,
+			try_parse_number_or_hex(amount)?,
+			asset,
+			destination_address,
+		)
+		.await
+		.map(|(_, id)| id.to_string())
+		.map_err(|e| Error::Custom(e.to_string()))
 	}
 
 	/// Returns a list of all assets and their free balance in json format
@@ -121,16 +123,21 @@ impl RpcServer for RpcServerImpl {
 		asset: Asset,
 		start: Tick,
 		end: Tick,
-		amount: Liquidity,
+		amount: NumberOrHex,
 	) -> Result<String, Error> {
 		if start >= end {
 			return Err(Error::Custom("Invalid tick range".to_string()))
 		}
 
-		lp::mint_range_order(&self.state_chain_settings, asset, Range { start, end }, amount)
-			.await
-			.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
-			.map_err(|e| Error::Custom(e.to_string()))
+		lp::mint_range_order(
+			&self.state_chain_settings,
+			asset,
+			Range { start, end },
+			try_parse_number_or_hex(amount)?,
+		)
+		.await
+		.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
+		.map_err(|e| Error::Custom(e.to_string()))
 	}
 
 	/// Removes liquidity from a rage order.
@@ -140,16 +147,21 @@ impl RpcServer for RpcServerImpl {
 		asset: Asset,
 		start: Tick,
 		end: Tick,
-		amount: Liquidity,
+		amount: NumberOrHex,
 	) -> Result<String, Error> {
 		if start >= end {
 			return Err(Error::Custom("Invalid tick range".to_string()))
 		}
 
-		lp::burn_range_order(&self.state_chain_settings, asset, Range { start, end }, amount)
-			.await
-			.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
-			.map_err(|e| Error::Custom(e.to_string()))
+		lp::burn_range_order(
+			&self.state_chain_settings,
+			asset,
+			Range { start, end },
+			try_parse_number_or_hex(amount)?,
+		)
+		.await
+		.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
+		.map_err(|e| Error::Custom(e.to_string()))
 	}
 
 	/// Returns the tx hash that the account role was set

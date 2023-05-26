@@ -1,4 +1,5 @@
 use crate::{BitcoinInstance, EthereumInstance, Runtime, RuntimeCall};
+use cf_chains::btc::BitcoinFeeInfo;
 use codec::{Decode, Encode};
 use pallet_cf_witnesser::WitnessDataExtraction;
 use sp_std::{mem, prelude::*};
@@ -41,8 +42,8 @@ impl WitnessDataExtraction for RuntimeCall {
 			>::update_chain_state {
 				ref mut state,
 			}) => {
-				let fee_rate = mem::take(&mut state.fee_rate_sats_per_byte);
-				Some(fee_rate.encode())
+				let fee_info = mem::take(&mut state.btc_fee_info);
+				Some(fee_info.encode())
 			},
 			_ => None,
 		}
@@ -66,7 +67,7 @@ impl WitnessDataExtraction for RuntimeCall {
 				state,
 			}) => {
 				if let Some(median) = select_median(data) {
-					state.fee_rate_sats_per_byte = median;
+					state.btc_fee_info = BitcoinFeeInfo::new(median);
 				};
 			},
 			_ => {

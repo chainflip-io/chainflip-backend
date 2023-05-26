@@ -20,7 +20,8 @@ use tracing::{debug, info, info_span, trace, warn, Instrument};
 use crate::{
 	client,
 	client::{
-		common::{KeygenFailureReason, SigningFailureReason},
+		ceremony_id_string,
+		common::{KeygenFailureReason, ParticipantStatus, SigningFailureReason},
 		keygen::generate_key_data,
 		signing::PayloadAndKey,
 		CeremonyRequestDetails,
@@ -342,13 +343,26 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		self.update_latest_ceremony_id(request.ceremony_id);
 
 		match request.details {
-			Some(CeremonyRequestDetails::Keygen(details)) => self.on_keygen_request(
-				request.ceremony_id,
-				details.participants,
-				details.rng,
-				details.result_sender,
-				scope,
-			),
+			Some(CeremonyRequestDetails::Keygen(details)) => {
+				if let Some(resharing_context) = details.resharing_context {
+					self.on_key_handover_request(
+						request.ceremony_id,
+						details.participants,
+						details.rng,
+						details.result_sender,
+						resharing_context,
+						scope,
+					)
+				} else {
+					self.on_keygen_request(
+						request.ceremony_id,
+						details.participants,
+						details.rng,
+						details.result_sender,
+						scope,
+					)
+				}
+			},
 			Some(CeremonyRequestDetails::Sign(details)) => {
 				self.on_request_to_sign(
 					request.ceremony_id,
@@ -413,6 +427,71 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		.await
 	}
 
+	fn on_key_handover_request(
+		&mut self,
+		ceremony_id: CeremonyId,
+		participants: BTreeSet<AccountId>,
+		rng: Rng,
+		result_sender: CeremonyResultSender<KeygenCeremony<C>>,
+		resharing_context: ResharingContext<C>,
+		scope: &Scope<'_, anyhow::Error>,
+	) {
+		assert!(!participants.is_empty(), "Key handover request has no participants");
+
+		let span =
+			info_span!("Key Handover Ceremony", ceremony_id = ceremony_id_string::<C>(ceremony_id));
+		let _entered = span.enter();
+
+		debug!("Processing a key handover request");
+
+		if participants.len() == 1 {
+			info!("Performing a single party key handover");
+			// We are the only participant, which means we are sharing the key with
+			// ourselves, and the resulting key is exactly the same as the original
+			if let ParticipantStatus::Sharing { original_key, .. } = resharing_context.party_status
+			{
+				let _result = result_sender.send(Ok(original_key));
+				return
+			} else {
+				panic!("Our node is the only participant, so it must be sharing");
+			}
+		}
+
+		let request = match prepare_key_handover_request(
+			ceremony_id,
+			&self.my_account_id,
+			participants,
+			&self.outgoing_p2p_message_sender,
+			resharing_context,
+			rng,
+		) {
+			Ok(request) => request,
+			Err(failed_outcome) => {
+				let _res = result_sender.send(CeremonyOutcome::<KeygenCeremony<C>>::Err((
+					BTreeSet::new(),
+					failed_outcome,
+				)));
+
+				// Remove a possible unauthorised ceremony
+				self.keygen_states.cleanup_unauthorised_ceremony(&ceremony_id);
+				return
+			},
+		};
+
+		let ceremony_handle =
+			self.keygen_states.get_state_or_create_unauthorized(ceremony_id, scope);
+
+		ceremony_handle
+			.on_request(request, result_sender)
+			.with_context(|| {
+				format!(
+					"Invalid key handover request with ceremony id {}",
+					ceremony_id_string::<C>(ceremony_id)
+				)
+			})
+			.unwrap();
+	}
+
 	/// Process a keygen request
 	fn on_keygen_request(
 		&mut self,
@@ -424,7 +503,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	) {
 		assert!(!participants.is_empty(), "Keygen request has no participants");
 
-		let span = info_span!("Keygen Ceremony", ceremony_id = ceremony_id);
+		let span =
+			info_span!("Keygen Ceremony", ceremony_id = ceremony_id_string::<C>(ceremony_id));
 		let _entered = span.enter();
 
 		debug!("Processing a keygen request");
@@ -459,7 +539,12 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 		ceremony_handle
 			.on_request(request, result_sender)
-			.with_context(|| format!("Invalid keygen request with ceremony id {ceremony_id}"))
+			.with_context(|| {
+				format!(
+					"Invalid keygen request with ceremony id {}",
+					ceremony_id_string::<C>(ceremony_id)
+				)
+			})
 			.unwrap();
 	}
 
@@ -475,7 +560,8 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	) {
 		assert!(!signers.is_empty(), "Request to sign has no signers");
 
-		let span = info_span!("Signing Ceremony", ceremony_id = ceremony_id);
+		let span =
+			info_span!("Signing Ceremony", ceremony_id = ceremony_id_string::<C>(ceremony_id));
 		let _entered = span.enter();
 
 		debug!("Processing a request to sign");
@@ -512,7 +598,12 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 		ceremony_handle
 			.on_request(request, result_sender)
-			.with_context(|| format!("Invalid sign request with ceremony id {ceremony_id}"))
+			.with_context(|| {
+				format!(
+					"Invalid sign request with ceremony id {}",
+					ceremony_id_string::<C>(ceremony_id)
+				)
+			})
 			.unwrap();
 	}
 
@@ -525,7 +616,10 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	) {
 		match message {
 			MultisigMessage { ceremony_id, data: MultisigData::Keygen(data) } => {
-				let span = info_span!("Keygen Ceremony", ceremony_id = ceremony_id);
+				let span = info_span!(
+					"Keygen Ceremony",
+					ceremony_id = ceremony_id_string::<C>(ceremony_id)
+				);
 				let _entered = span.enter();
 
 				self.keygen_states.process_data(
@@ -537,7 +631,10 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 				)
 			},
 			MultisigMessage { ceremony_id, data: MultisigData::Signing(data) } => {
-				let span = info_span!("Signing Ceremony", ceremony_id = ceremony_id);
+				let span = info_span!(
+					"Signing Ceremony",
+					ceremony_id = ceremony_id_string::<C>(ceremony_id)
+				);
 				let _entered = span.enter();
 
 				self.signing_states.process_data(
@@ -631,10 +728,16 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 				// Only a ceremony id that is within the ceremony id window can create unauthorised
 				// ceremonies
 				if ceremony_id > latest_ceremony_id + CEREMONY_ID_WINDOW {
-					warn!("Ignoring data: unexpected future ceremony id {}", ceremony_id);
+					warn!(
+						"Ignoring data: unexpected future ceremony id {}",
+						ceremony_id_string::<Ceremony::Crypto>(ceremony_id)
+					);
 					return
-				} else if ceremony_id < latest_ceremony_id {
-					trace!("Ignoring data: old ceremony id {}", ceremony_id);
+				} else if ceremony_id <= latest_ceremony_id {
+					trace!(
+						"Ignoring data: old ceremony id {}",
+						ceremony_id_string::<Ceremony::Crypto>(ceremony_id)
+					);
 					return
 				} else {
 					entry.insert(CeremonyHandle::spawn(

@@ -4,14 +4,15 @@
 
 use cf_chains::{
 	btc::{
-		api::SelectedUtxos, utxo_selection::select_utxos_from_pool, Bitcoin, BitcoinNetwork,
-		BitcoinScriptBounded, BtcAmount, Utxo, UtxoId, CHANGE_ADDRESS_SALT,
+		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
+		utxo_selection::select_utxos_from_pool,
+		Bitcoin, BitcoinFeeInfo, BitcoinNetwork, BitcoinScriptBounded, BtcAmount, Utxo, UtxoId,
 	},
 	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	ChainCrypto,
 };
 use cf_primitives::{chains::assets::eth::Asset as EthAsset, BroadcastId, EthereumAddress};
-use cf_traits::{SystemStateInfo, SystemStateManager};
+use cf_traits::{GetBitcoinFeeInfo, SystemStateInfo, SystemStateManager};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{OnRuntimeUpgrade, StorageVersion},
@@ -46,13 +47,6 @@ impl Default for SystemState {
 	}
 }
 type SignatureNonce = u64;
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub struct ChangeUtxoWitness {
-	pub amount: BtcAmount,
-	pub change_pubkey: [u8; 32],
-	pub utxo_id: UtxoId,
-}
 
 pub mod cfe {
 	use super::*;
@@ -109,6 +103,9 @@ pub mod pallet {
 
 		#[pallet::constant]
 		type BitcoinNetwork: Get<BitcoinNetwork>;
+
+		/// Get Bitcoin Fee info from chain tracking
+		type BitcoinFeeInfo: cf_traits::GetBitcoinFeeInfo;
 
 		/// Weight information
 		type WeightInfo: WeightInfo;
@@ -201,10 +198,6 @@ pub mod pallet {
 	/// Selection of the bitcoin network (mainnet, testnet or regtest) that the state chain
 	/// currently supports.
 	pub type BitcoinNetworkSelection<T> = StorageValue<_, BitcoinNetwork, ValueQuery>;
-
-	#[pallet::storage]
-	/// The amount of fee we want to pay per utxo.
-	pub type BitcoinFeePerUtxo<T> = StorageValue<_, u64, ValueQuery>;
 
 	#[pallet::storage]
 	/// Lookup for determining which salt and pubkey the current deposit Bitcoin Script was created
@@ -395,10 +388,8 @@ pub mod pallet {
 			let correct_nonce = PolkadotProxyAccountNonce::<T>::get();
 
 			// Witness the agg_key rotation manually in the vaults pallet for polkadot
-			let dispatch_result = T::PolkadotVaultKeyWitnessedHandler::on_new_key_activated(
-				dot_witnessed_aggkey,
-				tx_id.block_number,
-			)?;
+			let dispatch_result =
+				T::PolkadotVaultKeyWitnessedHandler::on_new_key_activated(tx_id.block_number)?;
 			// Clean up the broadcast state.
 			T::PolkadotBroadcaster::clean_up_broadcast(broadcast_id)?;
 
@@ -428,10 +419,8 @@ pub mod pallet {
 			use cf_traits::VaultKeyWitnessedHandler;
 
 			// Witness the agg_key rotation manually in the vaults pallet for bitcoin
-			let dispatch_result = T::BitcoinVaultKeyWitnessedHandler::on_new_key_activated(
-				new_public_key,
-				block_number,
-			)?;
+			let dispatch_result =
+				T::BitcoinVaultKeyWitnessedHandler::on_new_key_activated(block_number)?;
 
 			Self::deposit_event(Event::<T>::BitcoinBlockNumberSetForVault { block_number });
 
@@ -458,26 +447,6 @@ pub mod pallet {
 
 			Ok(().into())
 		}
-
-		#[pallet::weight(0)]
-		pub fn add_bitcoin_change_utxos(
-			origin: OriginFor<T>,
-			change_witnesses: Vec<ChangeUtxoWitness>,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			for ChangeUtxoWitness { amount, change_pubkey, utxo_id } in change_witnesses {
-				BitcoinAvailableUtxos::<T>::append(Utxo {
-					amount,
-					txid: utxo_id.tx_hash,
-					vout: utxo_id.vout,
-					pubkey_x: change_pubkey,
-					salt: CHANGE_ADDRESS_SALT,
-				});
-			}
-
-			Ok(().into())
-		}
 	}
 
 	#[pallet::genesis_config]
@@ -494,7 +463,6 @@ pub mod pallet {
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
 		pub polkadot_runtime_version: RuntimeVersion,
 		pub bitcoin_network: BitcoinNetwork,
-		pub bitcoin_fee_per_utxo: u64,
 	}
 
 	/// Sets the genesis config
@@ -517,7 +485,6 @@ pub mod pallet {
 
 			BitcoinAvailableUtxos::<T>::set(vec![]);
 			BitcoinNetworkSelection::<T>::set(self.bitcoin_network);
-			BitcoinFeePerUtxo::<T>::set(self.bitcoin_fee_per_utxo);
 		}
 	}
 }
@@ -579,6 +546,7 @@ impl<T: Config> Pallet<T> {
 		deposit_script: BitcoinScriptBounded,
 	) {
 		let (salt, pubkey) = BitcoinActiveDepositAddressDetails::<T>::take(deposit_script);
+
 		BitcoinAvailableUtxos::<T>::append(Utxo {
 			amount,
 			txid: utxo_id.tx_hash,
@@ -588,19 +556,62 @@ impl<T: Config> Pallet<T> {
 		});
 	}
 
-	// Calculate the selection of utxos, return them and remove them from the list. If the
-	// total output amount exceeds the total spendable amount of all utxos, the function
-	// selects all utxos. The fee required to spend the utxos are accounted for while selection.
+	pub fn add_bitcoin_change_utxo(
+		amount: BtcAmount,
+		utxo_id: UtxoId,
+		salt: u32,
+		pubkey_x: [u8; 32],
+	) {
+		BitcoinAvailableUtxos::<T>::append(Utxo {
+			amount,
+			txid: utxo_id.tx_hash,
+			vout: utxo_id.vout,
+			pubkey_x,
+			salt,
+		});
+	}
+
+	// Calculate the selection of utxos, return them and remove them from the list. The fee required
+	// to spend the input utxos are accounted for while selection. The fee required to include
+	// outputs and the minimum constant tx fee is incorporated by adding to the output amount. The
+	// function returns the selected Utxos and the change amount that remains from the selected
+	// input Utxo list once outputs and the tx fees have been taken into account.
 	pub fn select_and_take_bitcoin_utxos(
-		total_output_amount: cf_chains::btc::BtcAmount,
-	) -> Option<SelectedUtxos> {
-		BitcoinAvailableUtxos::<T>::mutate(|available_utxos| {
-			select_utxos_from_pool(
-				available_utxos,
-				BitcoinFeePerUtxo::<T>::get(),
-				total_output_amount,
-			)
-		})
+		utxo_selection_type: UtxoSelectionType,
+	) -> Option<SelectedUtxosAndChangeAmount> {
+		let BitcoinFeeInfo { fee_per_input_utxo, fee_per_output_utxo, min_fee_required_per_tx } =
+			T::BitcoinFeeInfo::bitcoin_fee_info();
+		match utxo_selection_type {
+			UtxoSelectionType::SelectAllForRotation => {
+				let available_utxos = BitcoinAvailableUtxos::<T>::take();
+				(!available_utxos.is_empty()).then_some(available_utxos).map(|available_utxos| {
+					(
+						available_utxos.clone(),
+						available_utxos.iter().map(|Utxo { amount, .. }| *amount).sum::<u64>() -
+							(available_utxos.len() as u64) * fee_per_input_utxo -
+							fee_per_output_utxo - min_fee_required_per_tx,
+					)
+				})
+			},
+			UtxoSelectionType::Some { output_amount, number_of_outputs } =>
+				BitcoinAvailableUtxos::<T>::mutate(|available_utxos| {
+					select_utxos_from_pool(
+						available_utxos,
+						fee_per_input_utxo,
+						output_amount +
+							number_of_outputs * fee_per_output_utxo +
+							min_fee_required_per_tx,
+					)
+				})
+				.map(|(selected_utxos, total_input_spendable_amount)| {
+					(
+						selected_utxos,
+						total_input_spendable_amount -
+							output_amount - number_of_outputs * fee_per_output_utxo -
+							min_fee_required_per_tx,
+					)
+				}),
+		}
 	}
 
 	pub fn add_details_for_btc_deposit_script(

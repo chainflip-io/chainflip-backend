@@ -6,7 +6,7 @@ pub mod benchmarking;
 
 pub mod deposit_address;
 
-use self::api::{tokenizable::Tokenizable, EthereumReplayProtection};
+use self::api::tokenizable::Tokenizable;
 use crate::*;
 pub use cf_primitives::chains::Ethereum;
 use cf_primitives::{chains::assets, ChannelId};
@@ -53,7 +53,10 @@ impl ChainCrypto for Ethereum {
 	type AggKey = eth::AggKey;
 	type Payload = H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
-	type TransactionId = H256;
+	type TransactionInId = H256;
+	// We can't use the hash since we don't know it for Ethereum, as we must select an individaul
+	// authority to sign the transaction.
+	type TransactionOutId = Self::ThresholdSignature;
 	type GovKey = Address;
 
 	fn verify_threshold_signature(

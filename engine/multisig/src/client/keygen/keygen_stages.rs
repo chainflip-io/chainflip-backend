@@ -8,8 +8,8 @@ use crate::{
 		self,
 		ceremony_manager::KeygenCeremony,
 		common::{
-			BroadcastFailureReason, KeygenFailureReason, KeygenStageName, ParticipantStatus,
-			ResharingContext,
+			try_deserialize, BroadcastFailureReason, DelayDeserialization, KeygenFailureReason,
+			KeygenStageName, ParticipantStatus, ResharingContext,
 		},
 		utils::{find_frequent_element, threshold_for_broadcast_verification},
 		KeygenResult, KeygenResultInfo,
@@ -88,7 +88,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		// (Otherwise, broadcast an empty struct.)
 		let pubkey_shares = if sharing_participants.contains(&self.common.own_idx) {
 			let public_key_shares = match party_status {
-				ParticipantStatus::Sharing(_, pubkeys) => pubkeys,
+				ParticipantStatus::Sharing { public_key_shares, .. } => public_key_shares,
 				_ => panic!("must be a sharing party"),
 			};
 
@@ -256,7 +256,7 @@ impl<Crypto: CryptoScheme> HashCommitments1<Crypto> {
 				.resharing_context
 				.as_ref()
 				.map(|context| match &context.party_status {
-					ParticipantStatus::Sharing(secret, _) => secret,
+					ParticipantStatus::Sharing { secret_share, .. } => secret_share,
 					ParticipantStatus::NonSharing => panic!("invalid stage at this point"),
 					// NOTE: non-sharing parties send the dummy value of 0 as their secret share,
 					ParticipantStatus::NonSharingReceivedKeys(_) => &zero_scalar,
@@ -395,7 +395,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 	const NAME: KeygenStageName = KeygenStageName::CoefficientCommitments3;
 
 	fn init(&mut self) -> DataToSend<Self::Message> {
-		DataToSend::Broadcast(self.own_commitment.clone())
+		DataToSend::Broadcast(DelayDeserialization::new(&self.own_commitment))
 	}
 
 	async fn process(
@@ -465,6 +465,16 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 				.collect()
 		} else {
 			commitments
+		};
+
+		// Deserialize and report any party for which deserialization fails:
+		let commitments = match try_deserialize(commitments) {
+			Ok(res) => res,
+			Err(bad_parties) =>
+				return KeygenStageResult::Error(
+					bad_parties,
+					KeygenFailureReason::DeserializationError,
+				),
 		};
 
 		let commitments = match validate_commitments(

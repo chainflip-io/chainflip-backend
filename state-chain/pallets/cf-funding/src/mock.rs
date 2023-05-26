@@ -134,6 +134,10 @@ impl ApiCall<Ethereum> for MockRegisterRedemption {
 	fn is_signed(&self) -> bool {
 		unimplemented!()
 	}
+
+	fn transaction_out_id(&self) -> <Ethereum as ChainCrypto>::TransactionOutId {
+		todo!()
+	}
 }
 
 impl MockBroadcaster {
@@ -160,6 +164,12 @@ impl Broadcaster<Ethereum> for MockBroadcaster {
 	fn threshold_sign_and_broadcast_with_callback(
 		_api_call: Self::ApiCall,
 		_callback: Self::Callback,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
+		unimplemented!()
+	}
+
+	fn threshold_sign_and_broadcast_for_rotation(
+		_api_call: Self::ApiCall,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		unimplemented!()
 	}

@@ -2,11 +2,15 @@ use std::collections::BTreeSet;
 
 use cf_primitives::AuthorityCount;
 use rand::SeedableRng;
+use state_chain_runtime::constants::common::MAX_AUTHORITIES;
 
 use crate::{
 	bitcoin::BtcSigning,
 	client::{
-		common::{BroadcastVerificationMessage, KeygenStageName, PreProcessStageDataCheck},
+		common::{
+			BroadcastVerificationMessage, DelayDeserialization, KeygenStageName,
+			PreProcessStageDataCheck,
+		},
 		helpers::{gen_dummy_keygen_comm1, get_dummy_hash_comm},
 		keygen::{BlameResponse8, Complaints6, KeygenData, PubkeyShares0, SecretShare5},
 	},
@@ -43,7 +47,10 @@ pub fn gen_keygen_data_verify_hash_comm2(participant_count: AuthorityCount) -> K
 
 fn gen_keygen_data_coeff_comm3(participant_count: AuthorityCount) -> KeygenData<Point> {
 	let mut rng = Rng::from_seed([0; 32]);
-	KeygenData::CoeffComm3(gen_dummy_keygen_comm1(&mut rng, participant_count))
+	KeygenData::CoeffComm3(DelayDeserialization::new(&gen_dummy_keygen_comm1::<Point>(
+		&mut rng,
+		participant_count,
+	)))
 }
 
 fn gen_keygen_data_verify_coeff_comm4(
@@ -56,7 +63,10 @@ fn gen_keygen_data_verify_coeff_comm4(
 			.map(|i| {
 				(
 					i as AuthorityCount,
-					Some(gen_dummy_keygen_comm1(&mut rng, participant_count_inner)),
+					Some(DelayDeserialization::new(&gen_dummy_keygen_comm1::<Point>(
+						&mut rng,
+						participant_count_inner,
+					))),
 				)
 			})
 			.collect(),
@@ -165,8 +175,7 @@ fn check_data_size_coeff_comm3() {
 		gen_keygen_data_coeff_comm3(expected_len).data_size_is_valid::<EthSigning>(expected_len)
 	);
 
-	// It takes a few more parties to generate invalid data (due to key handover)
-	assert!(!gen_keygen_data_coeff_comm3(expected_len + 3)
+	assert!(!gen_keygen_data_coeff_comm3(MAX_AUTHORITIES + 1)
 		.data_size_is_valid::<EthSigning>(expected_len));
 }
 
@@ -178,15 +187,16 @@ fn check_data_size_verify_coeff_comm4() {
 	assert!(gen_keygen_data_verify_coeff_comm4(expected_len, expected_len)
 		.data_size_is_valid::<EthSigning>(expected_len));
 
-	// It takes a few more parties to generate invalid data (due to key handover)
-	let large_len = expected_len + 3;
+	// Should fail if the outer collection is larger than expected
+	assert!(!gen_keygen_data_verify_coeff_comm4(expected_len + 1, expected_len)
+		.data_size_is_valid::<EthSigning>(expected_len));
 
-	// Should fail if the other collection is larger than expected
-	assert!(!gen_keygen_data_verify_coeff_comm4(large_len, expected_len)
+	// Should fail if the outer collection is smaller than expected
+	assert!(!gen_keygen_data_verify_coeff_comm4(expected_len - 1, expected_len)
 		.data_size_is_valid::<EthSigning>(expected_len));
 
 	// The nested collection should fail if larger than expected
-	assert!(!gen_keygen_data_verify_coeff_comm4(expected_len, large_len)
+	assert!(!gen_keygen_data_verify_coeff_comm4(expected_len, MAX_AUTHORITIES + 1)
 		.data_size_is_valid::<EthSigning>(expected_len));
 }
 

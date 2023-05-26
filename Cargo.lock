@@ -1023,7 +1023,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-broker-api"
-version = "0.7.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "chainflip-api",
@@ -1038,7 +1038,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-cli"
-version = "0.7.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "chainflip-api",
@@ -1055,7 +1055,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-engine"
-version = "0.7.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "async-broadcast",
@@ -1136,6 +1136,7 @@ dependencies = [
  "tracing",
  "url 1.7.2",
  "utilities",
+ "warp",
  "web3",
  "x25519-dalek",
  "zeroize",
@@ -1144,7 +1145,7 @@ dependencies = [
 
 [[package]]
 name = "chainflip-lp-api"
-version = "0.1.0"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "chainflip-api",
@@ -1152,14 +1153,16 @@ dependencies = [
  "hex",
  "jsonrpsee 0.16.2",
  "serde_json",
+ "sp-rpc",
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.16",
+ "utilities",
 ]
 
 [[package]]
 name = "chainflip-node"
-version = "0.7.0"
+version = "0.9.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
@@ -9707,7 +9710,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
 name = "state-chain-runtime"
-version = "0.4.2"
+version = "0.9.0"
 dependencies = [
  "cf-amm",
  "cf-chains",
@@ -10841,6 +10844,7 @@ dependencies = [
  "pin-project",
  "predicates",
  "serde",
+ "sp-rpc",
  "tempfile",
  "tokio",
  "tracing",

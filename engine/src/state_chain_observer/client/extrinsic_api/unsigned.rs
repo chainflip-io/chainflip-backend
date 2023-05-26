@@ -4,7 +4,6 @@ use async_trait::async_trait;
 use sp_core::H256;
 use sp_runtime::traits::Hash;
 use tokio::sync::{mpsc, oneshot};
-use tracing::debug;
 use utilities::task_scope::{Scope, ScopedJoinHandle, OR_CANCEL};
 
 use super::{
@@ -64,7 +63,9 @@ impl UnsignedExtrinsicClient {
 									jsonrpsee::core::Error::Call(
 										jsonrpsee::types::error::CallError::Custom(ref obj),
 									) if obj.code() == 1013 => {
-										debug!("Already in pool with tx_hash: {expected_hash:#x}.");
+										tracing::debug!(
+											"Already in pool with tx_hash: {expected_hash:#x}."
+										);
 										expected_hash
 									},
 									_ => return Err(rpc_err.into()),

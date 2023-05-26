@@ -1,6 +1,6 @@
 use super::{MockPallet, MockPalletStorage};
 use crate::EgressApi;
-use cf_chains::{address::ForeignChainAddress, CcmDepositMetadata, Chain};
+use cf_chains::{CcmDepositMetadata, Chain};
 use cf_primitives::{AssetAmount, EgressId, ForeignChain};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
@@ -24,7 +24,7 @@ pub enum MockEgressParameter<C: Chain> {
 		amount: C::ChainAmount,
 		destination_address: C::ChainAccount,
 		message: Vec<u8>,
-		refund_address: ForeignChainAddress,
+		cf_parameters: Vec<u8>,
 	},
 }
 
@@ -73,12 +73,13 @@ impl<C: Chain> EgressApi<C> for MockEgressHandler<C> {
 						amount,
 						destination_address,
 						message: message.message,
-						refund_address: message.refund_address,
+						cf_parameters: message.cf_parameters,
 					},
 					None => MockEgressParameter::<C>::Swap { asset, amount, destination_address },
 				});
 			})
 		});
-		(ForeignChain::Ethereum, 1)
+		let len = Self::get_scheduled_egresses().len();
+		(ForeignChain::Ethereum, len as u64)
 	}
 }

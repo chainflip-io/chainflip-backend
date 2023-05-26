@@ -1,0 +1,16 @@
+[Unit]
+Description=Chainflip Validator Engine
+After=chainflip-node.service
+
+[Service]
+Restart=always
+RestartSec=30
+Type=simple
+
+ExecStart=/usr/bin/chainflip-engine --config-root /etc/chainflip/
+
+LimitNOFILE=16000
+LimitNOFILESoft=16000
+
+[Install]
+WantedBy=multi-user.target

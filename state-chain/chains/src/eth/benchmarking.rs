@@ -1,10 +1,10 @@
 use super::{api::EthereumTransactionBuilder, TransactionFee};
 use crate::{
-	benchmarking_value::BenchmarkValue,
+	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	eth::{
-		api::{update_flip_supply::UpdateFlipSupply, EthereumApi},
-		to_ethereum_address, Address, AggKey, EthereumReplayProtection, EthereumTrackedData,
-		SchnorrVerificationComponents, Transaction, H256,
+		api::{update_flip_supply::UpdateFlipSupply, EthereumApi, EthereumReplayProtection},
+		to_ethereum_address, Address, AggKey, EthereumTrackedData, SchnorrVerificationComponents,
+		Transaction, H256,
 	},
 	ApiCall,
 };
@@ -35,6 +35,15 @@ impl BenchmarkValue for Address {
 	fn benchmark_value() -> Self {
 		to_ethereum_address(PublicKey::from_secret_key(
 			&SecretKey::parse(&SIG_NONCE).expect("Valid signature nonce"),
+		))
+		.into()
+	}
+}
+
+impl BenchmarkValueExtended for Address {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		to_ethereum_address(PublicKey::from_secret_key(
+			&SecretKey::parse(&[id; 32]).expect("Valid signature nonce"),
 		))
 		.into()
 	}

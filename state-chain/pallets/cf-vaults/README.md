@@ -5,8 +5,7 @@ A pallet for managing Chainflip Vaults and Vault Rotations.
 ## Overview
 
 The module contains functionality to manage the vault rotation that has to occur for the ChainFlip validator set to
-rotate. Vault rotations occur at Epoch transitions or when forced by governance, or due to an emergency rotation when
-a defined proportion of validators go offline.
+rotate. Vault rotations occur at Epoch transitions or when forced by governance.
 
 Vault rotation can be thought of a two-stage process: 1. Keygen 2. Rotation.
 

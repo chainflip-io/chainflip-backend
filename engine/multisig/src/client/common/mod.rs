@@ -9,7 +9,7 @@ pub use ceremony_stage::{
 	CeremonyCommon, CeremonyStage, PreProcessStageDataCheck, ProcessMessageResult, StageResult,
 };
 
-pub use broadcast_verification::BroadcastVerificationMessage;
+pub use broadcast_verification::{BroadcastVerificationMessage, DelayDeserialization};
 
 use cf_primitives::{AccountId, AuthorityCount};
 pub use failure_reason::{
@@ -108,7 +108,11 @@ type PublicKeyShares<C> = BTreeMap<AccountId, <C as CryptoScheme>::Point>;
 /// Holds state relevant to the role in the handover ceremony.
 #[derive(Debug)]
 pub enum ParticipantStatus<C: CryptoScheme> {
-	Sharing(SecretShare<C>, PublicKeyShares<C>),
+	Sharing {
+		secret_share: SecretShare<C>,
+		public_key_shares: PublicKeyShares<C>,
+		original_key: KeygenResultInfo<C>,
+	},
 	/// This becomes `NonSharingReceivedKeys` after shares are broadcast
 	NonSharing,
 	NonSharingReceivedKeys(PublicKeyShares<C>),
@@ -156,7 +160,7 @@ impl<C: CryptoScheme> ResharingContext<C> {
 			<C::Point as ECPoint>::Scalar::zero()
 		};
 
-		let party_public_keys = key
+		let public_key_shares = key
 			.validator_mapping
 			.get_all_ids()
 			.iter()
@@ -182,7 +186,11 @@ impl<C: CryptoScheme> ResharingContext<C> {
 		let context = ResharingContext::without_key(sharing_participants, receiving_participants);
 
 		ResharingContext {
-			party_status: ParticipantStatus::Sharing(secret_share, party_public_keys),
+			party_status: ParticipantStatus::Sharing {
+				secret_share,
+				public_key_shares,
+				original_key: key.clone(),
+			},
 			..context
 		}
 	}
@@ -261,4 +269,29 @@ pub enum SigningStageName {
 	LocalSigStage3,
 	#[error("Verify Local Signatures [4]")]
 	VerifyLocalSigsBroadcastStage4,
+}
+
+/// Try to deserialize all messages. If at least one fails,
+/// return the parties for which deserialization failed.
+pub fn try_deserialize<T: serde::de::DeserializeOwned>(
+	messages: BTreeMap<AuthorityCount, DelayDeserialization<T>>,
+) -> Result<BTreeMap<AuthorityCount, T>, BTreeSet<AuthorityCount>> {
+	use itertools::Itertools as _;
+
+	let (deserialized_messages, bad_parties): (BTreeMap<_, _>, BTreeSet<_>) = messages
+		.into_iter()
+		.map(|(idx, serialized_message)| match serialized_message.deserialize() {
+			Ok(message) => Ok((idx, message)),
+			Err(e) => {
+				tracing::warn!("Failed to deserialize message from party {}: {}", idx, e);
+				Err(idx)
+			},
+		})
+		.partition_result();
+
+	if bad_parties.is_empty() {
+		Ok(deserialized_messages)
+	} else {
+		Err(bad_parties)
+	}
 }
