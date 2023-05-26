@@ -137,8 +137,8 @@
         "polkadotGenesisHash": "0x1665348821496e14ed56718d4d078e7f85b163bf4e45fa9afbeb220b34ed475a",
         "polkadotVaultAccountId": null,
         "polkadotRuntimeVersion": {
-          "spec_version": 9320,
-          "transaction_version": 16
+          "spec_version": 9360,
+          "transaction_version": 19
         },
         "bitcoinNetwork": "Testnet",
         "bitcoinFeePerUtxo": 1000

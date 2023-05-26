@@ -30,7 +30,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	// TODO: update this to the correct value for perseverance
 	dot_genesis_hash: H256([0xcf; 32]),
 	dot_vault_account_id: None,
-	dot_runtime_version: RuntimeVersion { spec_version: 9320, transaction_version: 16 },
+	dot_runtime_version: RuntimeVersion { spec_version: 9360, transaction_version: 19 },
 };
 
 pub const BASHFUL_SR25519: [u8; 32] =
