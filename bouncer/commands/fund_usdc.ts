@@ -52,6 +52,7 @@ async function main(): Promise<void> {
   // const chainid = await web3.eth.getChainId();
   const usdcContractAddress =
     process.env.ETH_USDC_ADDRESS ?? '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const usdcContract = new web3.eth.Contract(erc20TransferABI as any, usdcContractAddress);
   const txData = usdcContract.methods.transfer(ethereumAddress, microusdcAmount).encodeABI();
   const whaleKey = process.env.ETH_USDC_WHALE || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';

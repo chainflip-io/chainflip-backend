@@ -46,6 +46,7 @@ async function main(): Promise<void> {
   let btcKey: string | undefined;
   let waitingForDotKey = true;
   let waitingForBtcKey = true;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let unsubscribe: any = await chainflip.query.system.events((events: any[]) => {
     events.forEach((record) => {
       const { event } = record;
@@ -67,7 +68,6 @@ async function main(): Promise<void> {
       }
     });
   });
-  // eslint-disable-next-line no-unmodified-loop-condition
   while (waitingForBtcKey || waitingForDotKey) {
     await sleep(1000);
   }
@@ -90,6 +90,7 @@ async function main(): Promise<void> {
   let vaultEventIndex: number | undefined;
   let waitingForEvent = true;
   unsubscribe = await polkadot.rpc.chain.subscribeNewHeads(async (header) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const events: any[] = await polkadot.query.system.events.at(header.hash);
     events.forEach((record, index) => {
       const { event } = record;
@@ -102,7 +103,6 @@ async function main(): Promise<void> {
       }
     });
   });
-  // eslint-disable-next-line no-unmodified-loop-condition
   while (waitingForEvent) {
     await sleep(1000);
   }
@@ -131,6 +131,7 @@ async function main(): Promise<void> {
   // Confirmation
   console.log('Waiting for new epoch');
   waitingForEvent = true;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   unsubscribe = await chainflip.query.system.events((events: any[]) => {
     events.forEach((record) => {
       const { event } = record;
@@ -140,7 +141,6 @@ async function main(): Promise<void> {
       }
     });
   });
-  // eslint-disable-next-line no-unmodified-loop-condition
   while (waitingForEvent) {
     await sleep(1000);
   }

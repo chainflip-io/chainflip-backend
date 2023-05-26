@@ -3,9 +3,9 @@
 
 import Web3 from 'web3';
 import fs from 'fs';
-import { runWithTimeout } from '../shared/utils';
 import assert from 'assert';
 import { decodeAddress } from '@polkadot/util-crypto';
+import { runWithTimeout } from '../shared/utils';
 
 function polkadotAddressToHex(address: string): string {
   // Decode the address

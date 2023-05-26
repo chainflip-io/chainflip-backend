@@ -30,6 +30,7 @@ async function main(): Promise<void> {
     noInitWarn: true,
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await api.query.system.events((events: any[]) => {
     events.forEach((record) => {
       const { event } = record;

@@ -15,7 +15,7 @@ async function main(): Promise<void> {
   const seed = process.argv[2] ?? '0';
   await cryptoWaitReady();
   const keyring = new Keyring({ type: 'sr25519' });
-  const address = keyring.createFromUri('//' + seed).address;
+  const { address } = keyring.createFromUri('//' + seed);
   console.log(address);
   process.exit(0);
 }

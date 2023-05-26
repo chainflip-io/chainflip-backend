@@ -8,9 +8,11 @@ import { runWithTimeout, sleep } from '../shared/utils';
 
 let chainflip: ApiPromise;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function observeEvent(eventName: string): Promise<any> {
   let result;
   let waiting = true;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const unsubscribe: any = await chainflip.query.system.events((events: any[]) => {
     events.forEach((record) => {
       const { event } = record;

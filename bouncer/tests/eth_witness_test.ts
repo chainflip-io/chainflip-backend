@@ -1,16 +1,18 @@
 #!/usr/bin/env pnpm tsx
 
 import { ApiPromise, WsProvider } from '@polkadot/api';
-import { sleep, runWithTimeout } from '../shared/utils';
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { exec } from 'child_process';
+import { sleep, runWithTimeout } from '../shared/utils';
 
 let chainflip: ApiPromise;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function observeEvent(eventName: string): Promise<any> {
   let result;
   let waiting = true;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const unsubscribe: any = await chainflip.query.system.events((events: any[]) => {
     events.forEach((record) => {
       const { event } = record;
@@ -43,7 +45,7 @@ async function main(): Promise<void> {
   const ethIngressKey = (
     await observeEvent('liquidityProvider:LiquidityDepositAddressReady')
   )[1].toJSON().eth as string;
-  console.log('Found ETH address: ' + ethIngressKey);
+  console.log(`Found ETH address: ${ethIngressKey}`);
 
   exec(`./commands/fund_eth.sh ${ethIngressKey} 10`, { timeout: 20000 }, (err, stdout, stderr) => {
     if (stderr !== '') process.stdout.write(stderr);

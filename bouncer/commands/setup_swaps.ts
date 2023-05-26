@@ -11,9 +11,9 @@ import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { exec } from 'child_process';
-import { runWithTimeout, sleep } from '../shared/utils';
 import { Mutex } from 'async-mutex';
 import type { KeyringPair } from '@polkadot/keyring/types';
+import { runWithTimeout, sleep } from '../shared/utils';
 
 const deposits = {
   dot: 10000,
@@ -56,9 +56,11 @@ let snowwhite: KeyringPair;
 let lp: KeyringPair;
 const mutex = new Mutex();
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function observeEvent(eventName: string, dataCheck: (data: any) => boolean): Promise<any> {
   let result;
   let waiting = true;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const unsubscribe: any = await chainflip.query.system.events((events: any[]) => {
     events.forEach((record) => {
       const { event } = record;
@@ -71,7 +73,6 @@ async function observeEvent(eventName: string, dataCheck: (data: any) => boolean
       }
     });
   });
-  // eslint-disable-next-line no-unmodified-loop-condition
   while (waiting) {
     await sleep(1000);
   }
@@ -85,6 +86,7 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
       .requestLiquidityDepositAddress(ccy)
       .signAndSend(lp, { nonce: -1 });
   });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const checkCcy = (data: any): boolean => data[1].toJSON()[chain[ccy]] != null;
 
   const ingressKey = (
@@ -99,7 +101,6 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
   }
   console.log('Received ' + ccy + ' address: ' + ingressAddress);
   exec(
-    // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
     './commands/fund_' + ccy + ext[ccy] + ingressAddress + ' ' + deposits[ccy],
     { timeout: 30000 },
     (err, stdout, stderr) => {
@@ -111,6 +112,7 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
       if (stdout !== '') process.stdout.write(stdout);
     },
   );
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const checkDeposit = (data: any): boolean => data.asset.toJSON().toLowerCase() === ccy;
 
   await observeEvent('liquidityProvider:AccountCredited', checkDeposit);
@@ -118,9 +120,7 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
     return;
   }
   const price = BigInt(
-    Math.round(
-      Math.sqrt(values[ccy] / Math.pow(10, decimals[ccy] - decimals.usdc)) * Math.pow(2, 96),
-    ),
+    Math.round(Math.sqrt(values[ccy] / 10 ** (decimals[ccy] - decimals.usdc)) * 2 ** 96),
   );
   console.log('Setting up ' + ccy + ' pool');
   await mutex.runExclusive(async () => {
@@ -128,22 +128,22 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
       .proposeGovernanceExtrinsic(chainflip.tx.liquidityPools.newPool(ccy, 100, price))
       .signAndSend(snowwhite, { nonce: -1 });
   });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const checkPool = (data: any): boolean => data.unstableAsset.toJSON().toLowerCase() === ccy;
 
   await observeEvent('liquidityPools:NewPoolCreated', checkPool);
   const priceTick = Math.round(
-    Math.log(Math.sqrt(values[ccy] / Math.pow(10, decimals[ccy] - decimals.usdc))) /
+    Math.log(Math.sqrt(values[ccy] / 10 ** (decimals[ccy] - decimals.usdc))) /
       Math.log(Math.sqrt(1.0001)),
   );
   const buyPosition = deposits[ccy] * values[ccy] * 1000000;
   console.log(
-    // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
     'Placing Buy Limit order for ' + deposits[ccy] + ' ' + ccy + ' at ' + values[ccy] + ' USDC.',
   );
   await mutex.runExclusive(async () => {
     await chainflip.tx.liquidityPools
       .collectAndMintLimitOrder(ccy, 'Buy', priceTick, buyPosition)
-      .signAndSend(lp, { nonce: -1 }, ({ status, events, dispatchError }) => {
+      .signAndSend(lp, { nonce: -1 }, ({ status, dispatchError }) => {
         if (dispatchError != null) {
           if (dispatchError.isModule) {
             const decoded = chainflip.registry.findMetaError(dispatchError.asModule);
@@ -164,14 +164,13 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
       });
   });
   console.log(
-    // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
     'Placing Sell Limit order for ' + deposits[ccy] + ' ' + ccy + ' at ' + values[ccy] + ' USDC.',
   );
-  const sellPosition = BigInt(deposits[ccy] * Math.pow(10, decimals[ccy]));
+  const sellPosition = BigInt(deposits[ccy] * 10 ** decimals[ccy]);
   await mutex.runExclusive(async () => {
     await chainflip.tx.liquidityPools
       .collectAndMintLimitOrder(ccy, 'Sell', priceTick, sellPosition)
-      .signAndSend(lp, { nonce: -1 }, ({ status, events, dispatchError }) => {
+      .signAndSend(lp, { nonce: -1 }, ({ status, dispatchError }) => {
         if (dispatchError != null) {
           if (dispatchError.isModule) {
             const decoded = chainflip.registry.findMetaError(dispatchError.asModule);

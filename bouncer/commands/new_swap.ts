@@ -32,7 +32,7 @@ async function main(): Promise<void> {
     destinationCcy === 'dot' ? u8aToHex(keyring.decodeAddress(process.argv[4])) : process.argv[4];
   const fee = process.argv[5];
 
-  console.log('Requesting Swap ' + sourceCcy + ' -> ' + destinationCcy);
+  console.log(`Requesting Swap ${sourceCcy} -> ${destinationCcy}`);
   await chainflip.tx.swapping
     .requestSwapDepositAddress(
       sourceCcy,
