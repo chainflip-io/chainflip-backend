@@ -367,7 +367,9 @@ pub mod pallet {
 				Error::<T>::PendingRedemption
 			);
 
-			if RestrictedAddresses::<T>::contains_key(address) {
+			if RestrictedAddresses::<T>::contains_key(address) &&
+				RestrictedBalances::<T>::get(&account_id).contains_key(&address)
+			{
 				// ensure that restricted balance for the address is higher than the amount we try
 				// to redeem
 				ensure!(
