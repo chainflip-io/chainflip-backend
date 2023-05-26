@@ -896,9 +896,8 @@ fn handle_pending_deployment() {
 			RuntimeOrigin::root(),
 			vec![(cf_chains::eth::EthereumChannelId::UnDeployed(channel_id), deposit_address)]
 		));
-		let channel_id = DepositAddressDetailsLookup::<Test, _>::get(deposit_address.clone())
-			.unwrap()
-			.channel_id;
+		let channel_id =
+			DepositAddressDetailsLookup::<Test, _>::get(deposit_address).unwrap().channel_id;
 		// Verify that the DepositFetchId was updated to deployed state after the first broadcast
 		// has succeed.
 		assert_eq!(
