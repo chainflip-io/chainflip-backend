@@ -124,35 +124,35 @@ impl<RawRpcClient: RawRpcApi + Send + Sync + 'static, SignedExtrinsicClient: Sen
 	}
 }
 
-enum ExitOrIgnore {
-	Exit(anyhow::Error),
-	Ignore(String),
+enum CallFromEventError {
+	Network(anyhow::Error),
+	Decode(String),
 }
 
 async fn call_from_event<StateChainClient>(
 	event: Event<VaultEvent>,
 	state_chain_client: Arc<StateChainClient>,
-) -> Result<pallet_cf_swapping::Call<state_chain_runtime::Runtime>, ExitOrIgnore>
+) -> Result<pallet_cf_swapping::Call<state_chain_runtime::Runtime>, CallFromEventError>
 where
 	StateChainClient: EthAssetApi,
 {
 	fn into_encoded_address_or_ignore(
 		chain: ForeignChain,
 		bytes: Vec<u8>,
-	) -> Result<EncodedAddress, ExitOrIgnore> {
+	) -> Result<EncodedAddress, CallFromEventError> {
 		EncodedAddress::from_chain_bytes(chain, bytes).map_err(|e| {
-			ExitOrIgnore::Ignore(format!("Failed to convert into EncodedAddress: {e}"))
+			CallFromEventError::Decode(format!("Failed to convert into EncodedAddress: {e}"))
 		})
 	}
 
 	fn into_or_ignore<Primitive: std::fmt::Debug + TryInto<CfType> + Copy, CfType>(
 		from: Primitive,
-	) -> Result<CfType, ExitOrIgnore>
+	) -> Result<CfType, CallFromEventError>
 	where
 		<Primitive as TryInto<CfType>>::Error: std::fmt::Display,
 	{
 		from.try_into().map_err(|err| {
-			ExitOrIgnore::Ignore(format!(
+			CallFromEventError::Decode(format!(
 				"Failed to convert into {:?}: {err}",
 				std::any::type_name::<CfType>(),
 			))
@@ -189,8 +189,10 @@ where
 			from: state_chain_client
 				.asset(source_token.0)
 				.await
-				.map_err(|e| ExitOrIgnore::Exit(anyhow!(e)))?
-				.ok_or(ExitOrIgnore::Ignore(format!("Source token {source_token} not found")))?,
+				.map_err(|e| CallFromEventError::Network(anyhow!(e)))?
+				.ok_or(CallFromEventError::Decode(format!(
+					"Source token {source_token} not found"
+				)))?,
 			to: into_or_ignore(destination_token)?,
 			deposit_amount: into_or_ignore(amount)?,
 			destination_address: into_encoded_address_or_ignore(
@@ -237,8 +239,10 @@ where
 			source_asset: state_chain_client
 				.asset(source_token.0)
 				.await
-				.map_err(|e| ExitOrIgnore::Exit(anyhow!(e)))?
-				.ok_or(ExitOrIgnore::Ignore(format!("Source token {source_token} not found")))?,
+				.map_err(|e| CallFromEventError::Network(anyhow!(e)))?
+				.ok_or(CallFromEventError::Decode(format!(
+					"Source token {source_token} not found"
+				)))?,
 			destination_asset: into_or_ignore(destination_token)?,
 			deposit_amount: into_or_ignore(amount)?,
 			destination_address: into_encoded_address_or_ignore(
@@ -252,7 +256,7 @@ where
 				source_address: core_h160(sender).into(),
 			},
 		}),
-		unhandled_event => Err(ExitOrIgnore::Ignore(format!(
+		unhandled_event => Err(CallFromEventError::Decode(format!(
 			"Unhandled vault contract event: {unhandled_event:?}"
 		))),
 	}
@@ -290,8 +294,8 @@ impl EthContractWitnesser for Vault {
 						})
 						.await;
 				},
-				Err(ExitOrIgnore::Exit(err)) => return Err(err),
-				Err(ExitOrIgnore::Ignore(message)) => {
+				Err(CallFromEventError::Network(err)) => return Err(err),
+				Err(CallFromEventError::Decode(message)) => {
 					tracing::warn!("Ignoring event: {message}");
 					continue
 				},
