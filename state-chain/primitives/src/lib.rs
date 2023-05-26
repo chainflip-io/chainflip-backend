@@ -58,6 +58,15 @@ pub type PolkadotAccountId = AccountId32;
 
 pub type PolkadotBlockNumber = u32;
 
+// Bitcoin default fee, in sats per bytes, to be used if current fee is not available via chain
+// tracking.
+pub const DEFAULT_FEE_SATS_PER_BYTE: u64 = 100;
+
+// Approximate values calculated
+pub const INPUT_UTXO_SIZE_IN_BYTES: u64 = 178;
+pub const OUTPUT_UTXO_SIZE_IN_BYTES: u64 = 34;
+pub const MINIMUM_BTC_TX_SIZE_IN_BYTES: u64 = 12;
+
 pub const STABLE_ASSET: Asset = Asset::Usdc;
 
 // Polkadot extrinsics are uniquely identified by <block number>-<extrinsic index>

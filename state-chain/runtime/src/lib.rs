@@ -207,6 +207,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type BitcoinNetwork = BitcoinNetworkParam;
+	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 

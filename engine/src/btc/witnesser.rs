@@ -16,7 +16,7 @@ use bitcoincore_rpc::bitcoin::{hashes::Hash, Transaction};
 use cf_chains::{
 	address::ScriptPubkeyBytes,
 	btc::{
-		deposit_address::derive_btc_deposit_bitcoin_script, BitcoinScriptBounded,
+		deposit_address::derive_btc_deposit_bitcoin_script, BitcoinFeeInfo, BitcoinScriptBounded,
 		BitcoinTrackedData, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	Bitcoin,
@@ -176,7 +176,7 @@ where
 						pallet_cf_chain_tracking::Call::update_chain_state {
 							state: BitcoinTrackedData {
 								block_height: block_number,
-								fee_rate_sats_per_byte,
+								btc_fee_info: BitcoinFeeInfo::new(fee_rate_sats_per_byte),
 							},
 						},
 					)),
