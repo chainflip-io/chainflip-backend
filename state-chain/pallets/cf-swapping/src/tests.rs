@@ -2,7 +2,7 @@ use crate::{
 	mock::{RuntimeEvent, *},
 	CcmFailReason, CcmGasBudget, CcmIdCounter, CcmOutputs, CcmSwap, CcmSwapOutput,
 	CollectedRejectedFunds, EarnedBrokerFees, Error, Event, MinimumCcmGasBudget, MinimumSwapAmount,
-	Pallet, PendingCcms, Swap, SwapChannelExpiries, SwapQueue, SwapTTL, SwapType,
+	Pallet, PendingCcms, Swap, SwapChannelExpiries, SwapQueue, SwapTTL, SwapType, WeightInfo,
 };
 use cf_chains::{
 	address::{try_to_encoded_address, AddressConverter, EncodedAddress, ForeignChainAddress},
@@ -17,9 +17,9 @@ use cf_traits::{
 		deposit_handler::{MockDepositHandler, SwapChannel},
 		egress_handler::{MockEgressHandler, MockEgressParameter},
 	},
-	CcmHandler, SwapDepositHandler, SwappingApi,
+	CcmHandler, SwapDepositHandler,
 };
-use frame_support::{assert_noop, assert_ok, sp_std::iter};
+use frame_support::{assert_noop, assert_ok, sp_std::iter, weights::Weight};
 
 use frame_support::traits::Hooks;
 use sp_runtime::traits::BlockNumberProvider;
@@ -28,37 +28,37 @@ use sp_runtime::traits::BlockNumberProvider;
 fn generate_test_swaps() -> Vec<Swap> {
 	vec![
 		// asset -> USDC
-		Swap::new(
-			1,
-			Asset::Flip,
-			Asset::Usdc,
-			100,
-			SwapType::Swap(ForeignChainAddress::Eth([2; 20])),
-		),
+		Swap {
+			swap_id: 1,
+			from: Asset::Flip,
+			to: Asset::Usdc,
+			amount: 100,
+			swap_type: SwapType::Swap(ForeignChainAddress::Eth([2; 20])),
+		},
 		// USDC -> asset
-		Swap::new(
-			2,
-			Asset::Eth,
-			Asset::Usdc,
-			40,
-			SwapType::Swap(ForeignChainAddress::Eth([9; 20])),
-		),
+		Swap {
+			swap_id: 2,
+			from: Asset::Eth,
+			to: Asset::Usdc,
+			amount: 40,
+			swap_type: SwapType::Swap(ForeignChainAddress::Eth([9; 20])),
+		},
 		// Both assets are on the Eth chain
-		Swap::new(
-			3,
-			Asset::Flip,
-			Asset::Eth,
-			500,
-			SwapType::Swap(ForeignChainAddress::Eth([2; 20])),
-		),
+		Swap {
+			swap_id: 3,
+			from: Asset::Flip,
+			to: Asset::Eth,
+			amount: 500,
+			swap_type: SwapType::Swap(ForeignChainAddress::Eth([2; 20])),
+		},
 		// Cross chain
-		Swap::new(
-			4,
-			Asset::Flip,
-			Asset::Dot,
-			600,
-			SwapType::Swap(ForeignChainAddress::Dot([4; 32])),
-		),
+		Swap {
+			swap_id: 4,
+			from: Asset::Flip,
+			to: Asset::Dot,
+			amount: 600,
+			swap_type: SwapType::Swap(ForeignChainAddress::Dot([4; 32])),
+		},
 	]
 }
 
@@ -113,7 +113,10 @@ fn process_all_swaps() {
 	new_test_ext().execute_with(|| {
 		let swaps = generate_test_swaps();
 		insert_swaps(&swaps);
-		Swapping::on_finalize(1);
+		Swapping::on_idle(
+			1,
+			<() as WeightInfo>::execute_group_of_swaps(swaps.len() as u32) * (swaps.len() as u64),
+		);
 		assert!(SwapQueue::<Test>::get().is_empty());
 		let mut expected = swaps
 			.iter()
@@ -138,6 +141,16 @@ fn process_all_swaps() {
 }
 
 #[test]
+fn number_of_swaps_processed_limited_by_weight() {
+	new_test_ext().execute_with(|| {
+		let swaps = generate_test_swaps();
+		insert_swaps(&swaps);
+		Swapping::on_idle(1, Weight::from_ref_time(0));
+		assert_eq!(SwapQueue::<Test>::get().len(), 0);
+	});
+}
+
+#[test]
 fn expect_earned_fees_to_be_recorded() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 2_u64;
@@ -150,6 +163,7 @@ fn expect_earned_fees_to_be_recorded() {
 			ALICE,
 			200,
 		);
+		Swapping::on_idle(1, Weight::from_ref_time(1000));
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
 		<Pallet<Test> as SwapDepositHandler>::on_swap_deposit(
 			ForeignChainAddress::Eth([2; 20]),
@@ -160,6 +174,7 @@ fn expect_earned_fees_to_be_recorded() {
 			ALICE,
 			200,
 		);
+		Swapping::on_idle(1, Weight::from_ref_time(1000));
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 4);
 	});
 }
@@ -205,7 +220,7 @@ fn expect_swap_id_to_be_emitted() {
 			0,
 		);
 		// 3. Process swaps -> SwapExecuted, SwapEgressScheduled
-		Swapping::on_finalize(1);
+		Swapping::on_idle(1, Weight::from_ref_time(100));
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapDepositAddressReady {
@@ -535,21 +550,27 @@ fn can_process_ccms_via_swap_deposit_address() {
 		assert_eq!(
 			SwapQueue::<Test>::get(),
 			vec![
-				Swap::new(
-					1,
-					Asset::Dot,
-					Asset::Eth,
-					deposit_amount - gas_budget,
-					SwapType::CcmPrincipal(1)
-				),
-				Swap::new(2, Asset::Dot, Asset::Eth, gas_budget, SwapType::CcmGas(1)),
+				Swap {
+					swap_id: 1,
+					from: Asset::Dot,
+					to: Asset::Eth,
+					amount: deposit_amount - gas_budget,
+					swap_type: SwapType::CcmPrincipal(1)
+				},
+				Swap {
+					swap_id: 2,
+					from: Asset::Dot,
+					to: Asset::Eth,
+					amount: gas_budget,
+					swap_type: SwapType::CcmGas(1)
+				},
 			]
 		);
 
 		assert_eq!(CcmOutputs::<Test>::get(1), Some(CcmSwapOutput { principal: None, gas: None }));
 
 		// Swaps are executed during on_idle
-		Swapping::on_finalize(1);
+		Swapping::on_idle(1, Weight::from_ref_time(1_000_000_000_000));
 
 		// CCM is scheduled for egress
 		assert_eq!(
@@ -613,20 +634,26 @@ fn can_process_ccms_via_extrinsic() {
 		assert_eq!(
 			SwapQueue::<Test>::get(),
 			vec![
-				Swap::new(
-					1,
-					Asset::Btc,
-					Asset::Usdc,
-					deposit_amount - gas_budget,
-					SwapType::CcmPrincipal(1)
-				),
-				Swap::new(2, Asset::Btc, Asset::Eth, gas_budget, SwapType::CcmGas(1))
+				Swap {
+					swap_id: 1,
+					from: Asset::Btc,
+					to: Asset::Usdc,
+					amount: deposit_amount - gas_budget,
+					swap_type: SwapType::CcmPrincipal(1)
+				},
+				Swap {
+					swap_id: 2,
+					from: Asset::Btc,
+					to: Asset::Eth,
+					amount: gas_budget,
+					swap_type: SwapType::CcmGas(1)
+				}
 			]
 		);
 		assert_eq!(CcmOutputs::<Test>::get(1), Some(CcmSwapOutput { principal: None, gas: None }));
 
-		// Swaps are executed during on_finalize
-		Swapping::on_finalize(1);
+		// Swaps are executed during on_idle
+		Swapping::on_idle(1, Weight::from_ref_time(1_000_000_000_000));
 
 		// CCM is scheduled for egress
 		assert_eq!(
@@ -694,21 +721,21 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 
 		assert_eq!(
 			SwapQueue::<Test>::get(),
-			vec![Swap::new(
-				1,
-				Asset::Eth,
-				Asset::Usdc,
-				deposit_amount - gas_budget,
-				SwapType::CcmPrincipal(1)
-			)]
+			vec![Swap {
+				swap_id: 1,
+				from: Asset::Eth,
+				to: Asset::Usdc,
+				amount: deposit_amount - gas_budget,
+				swap_type: SwapType::CcmPrincipal(1)
+			},]
 		);
 		assert_eq!(
 			CcmOutputs::<Test>::get(1),
 			Some(CcmSwapOutput { principal: None, gas: Some(gas_budget) })
 		);
 
-		// Swaps are executed during on_finalize
-		Swapping::on_finalize(1);
+		// Swaps are executed during on_idle
+		Swapping::on_idle(1, Weight::from_ref_time(1_000_000_000_000));
 
 		// CCM is scheduled for egress
 		assert_eq!(
@@ -777,15 +804,21 @@ fn can_handle_ccms_with_native_gas_asset() {
 
 		assert_eq!(
 			SwapQueue::<Test>::get(),
-			vec![Swap::new(1, Asset::Usdc, Asset::Eth, gas_budget, SwapType::CcmGas(1))]
+			vec![Swap {
+				swap_id: 1,
+				from: Asset::Usdc,
+				to: Asset::Eth,
+				amount: gas_budget,
+				swap_type: SwapType::CcmGas(1)
+			},]
 		);
 		assert_eq!(
 			CcmOutputs::<Test>::get(1),
 			Some(CcmSwapOutput { principal: Some(deposit_amount - gas_budget), gas: None })
 		);
 
-		// Swaps are executed during on_finalize
-		Swapping::on_finalize(1);
+		// Swaps are executed during on_idle
+		Swapping::on_idle(1, Weight::from_ref_time(1_000_000_000_000));
 
 		// CCM is scheduled for egress
 		assert_eq!(
@@ -960,13 +993,13 @@ fn swap_by_witnesser_happy_path() {
 		// Verify this swap is accepted and scheduled
 		assert_eq!(
 			SwapQueue::<Test>::get(),
-			vec![Swap::new(
-				1,
+			vec![Swap {
+				swap_id: 1,
 				from,
 				to,
 				amount,
-				SwapType::Swap(ForeignChainAddress::Eth(Default::default()),),
-			)]
+				swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default()),),
+			}]
 		);
 		System::assert_last_event(RuntimeEvent::Swapping(
 			Event::<Test>::SwapScheduledByWitnesser {
@@ -1029,13 +1062,13 @@ fn swap_by_deposit_happy_path() {
 		// Verify this swap is accepted and scheduled
 		assert_eq!(
 			SwapQueue::<Test>::get(),
-			vec![Swap::new(
-				1,
+			vec![Swap {
+				swap_id: 1,
 				from,
 				to,
 				amount,
-				SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
-			)]
+				swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
+			}]
 		);
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapScheduledByDeposit {
 			swap_id: 1,
@@ -1397,7 +1430,7 @@ fn ccm_without_principal_swaps_are_accepted() {
 			}),
 			RuntimeEvent::Swapping(Event::CcmEgressScheduled {
 				ccm_id: 2,
-				egress_id: (ForeignChain::Ethereum, 2),
+				egress_id: (ForeignChain::Ethereum, 1),
 			})
 		);
 		// No funds are confiscated
@@ -1442,106 +1475,5 @@ fn ccm_with_gas_below_minimum_swap_amount_allowed() {
 		}));
 		// No funds are confiscated
 		assert_eq!(CollectedRejectedFunds::<Test>::get(flip), 0);
-	});
-}
-
-#[test]
-fn process_all_into_stable_swaps_first() {
-	new_test_ext().execute_with(|| {
-		let amount = 1_000_000;
-		let encoded_address = EncodedAddress::Eth(Default::default());
-		let address = ForeignChainAddress::Eth(Default::default());
-		assert_ok!(Swapping::schedule_swap_by_witnesser(
-			RuntimeOrigin::root(),
-			Asset::Flip,
-			Asset::Eth,
-			amount,
-			encoded_address.clone(),
-			Default::default(),
-		));
-		assert_ok!(Swapping::schedule_swap_by_witnesser(
-			RuntimeOrigin::root(),
-			Asset::Btc,
-			Asset::Eth,
-			amount,
-			encoded_address.clone(),
-			Default::default(),
-		));
-		assert_ok!(Swapping::schedule_swap_by_witnesser(
-			RuntimeOrigin::root(),
-			Asset::Dot,
-			Asset::Eth,
-			amount,
-			encoded_address.clone(),
-			Default::default(),
-		));
-		assert_ok!(Swapping::schedule_swap_by_witnesser(
-			RuntimeOrigin::root(),
-			Asset::Usdc,
-			Asset::Eth,
-			amount,
-			encoded_address,
-			Default::default(),
-		));
-		assert_eq!(
-			SwapQueue::<Test>::get(),
-			vec![
-				Swap::new(1, Asset::Flip, Asset::Eth, amount, SwapType::Swap(address.clone()),),
-				Swap::new(2, Asset::Btc, Asset::Eth, amount, SwapType::Swap(address.clone()),),
-				Swap::new(3, Asset::Dot, Asset::Eth, amount, SwapType::Swap(address.clone()),),
-				Swap::new(4, Asset::Usdc, Asset::Eth, amount, SwapType::Swap(address),),
-			]
-		);
-
-		System::reset_events();
-		// All swaps in the SwapQueue are executed.
-		Swapping::on_finalize(1);
-		assert!(SwapQueue::<Test>::get().is_empty());
-
-		// Network fee should only be taken once.
-		let total_amount_after_network_fee = MockSwappingApi::take_network_fee(amount * 4);
-		let output_amount = total_amount_after_network_fee / 4;
-		// Verify swap "from" -> STABLE_ASSET, then "to" -> Output Asset
-		assert_eq!(
-			Swaps::get(),
-			vec![
-				(Asset::Flip, Asset::Usdc, amount),
-				(Asset::Dot, Asset::Usdc, amount),
-				(Asset::Btc, Asset::Usdc, amount),
-				(Asset::Usdc, Asset::Eth, total_amount_after_network_fee),
-			]
-		);
-
-		assert_event_sequence!(
-			Test,
-			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 4 }),
-			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
-				swap_id: 4,
-				asset: Asset::Eth,
-				egress_id: (ForeignChain::Ethereum, 1),
-				amount: output_amount,
-			}),
-			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1 }),
-			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
-				swap_id: 1,
-				asset: Asset::Eth,
-				egress_id: (ForeignChain::Ethereum, 2),
-				amount: output_amount,
-			}),
-			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 3 }),
-			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
-				swap_id: 3,
-				asset: Asset::Eth,
-				egress_id: (ForeignChain::Ethereum, 3),
-				amount: output_amount,
-			}),
-			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2 }),
-			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
-				swap_id: 2,
-				asset: Asset::Eth,
-				egress_id: (ForeignChain::Ethereum, 4),
-				amount: output_amount,
-			})
-		);
 	});
 }

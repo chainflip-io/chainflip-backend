@@ -95,7 +95,6 @@ pub mod pallet {
 				};
 				Ok(())
 			})?;
-
 			Self::deposit_event(Event::<T, I>::ChainStateUpdated { state });
 
 			Ok(().into())

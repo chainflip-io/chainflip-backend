@@ -1,12 +1,15 @@
 use crate::{self as pallet_cf_environment, cfe, Decode, Encode, TypeInfo};
 use cf_chains::{
-	btc::BitcoinNetwork,
+	btc::{BitcoinFeeInfo, BitcoinNetwork},
 	dot::{api::CreatePolkadotVault, TEST_RUNTIME_VERSION},
 	ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
-use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
+use cf_primitives::{
+	BroadcastId, ThresholdSignatureRequestId, INPUT_UTXO_SIZE_IN_BYTES,
+	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
+};
 use cf_traits::{
-	impl_mock_callback, impl_mock_chainflip, BroadcastCleanup, Broadcaster,
+	impl_mock_callback, impl_mock_chainflip, BroadcastCleanup, Broadcaster, GetBitcoinFeeInfo,
 	VaultKeyWitnessedHandler,
 };
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
@@ -150,6 +153,17 @@ parameter_types! {
 	pub const BitcoinNetworkParam: BitcoinNetwork = BitcoinNetwork::Testnet;
 }
 
+pub struct MockBitcoinFeeInfo;
+impl GetBitcoinFeeInfo for MockBitcoinFeeInfo {
+	fn bitcoin_fee_info() -> BitcoinFeeInfo {
+		BitcoinFeeInfo {
+			fee_per_input_utxo: 10 * INPUT_UTXO_SIZE_IN_BYTES,
+			fee_per_output_utxo: 10 * OUTPUT_UTXO_SIZE_IN_BYTES,
+			min_fee_required_per_tx: 10 * MINIMUM_BTC_TX_SIZE_IN_BYTES,
+		}
+	}
+}
+
 impl pallet_cf_environment::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type CreatePolkadotVault = MockCreatePolkadotVault;
@@ -157,6 +171,7 @@ impl pallet_cf_environment::Config for Test {
 	type BitcoinNetwork = BitcoinNetworkParam;
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
+	type BitcoinFeeInfo = MockBitcoinFeeInfo;
 	type WeightInfo = ();
 }
 
@@ -164,7 +179,6 @@ pub const STATE_CHAIN_GATEWAY_ADDRESS: [u8; 20] = [0u8; 20];
 pub const KEY_MANAGER_ADDRESS: [u8; 20] = [1u8; 20];
 pub const VAULT_ADDRESS: [u8; 20] = [2u8; 20];
 pub const ETH_CHAIN_ID: u64 = 1;
-pub const MOCK_FEE_PER_UTXO: u64 = 10;
 
 pub const CFE_SETTINGS: cfe::CfeSettings = cfe::CfeSettings {
 	eth_block_safety_margin: 1,
@@ -188,7 +202,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			polkadot_vault_account_id: None,
 			polkadot_runtime_version: TEST_RUNTIME_VERSION,
 			bitcoin_network: Default::default(),
-			bitcoin_fee_per_utxo: MOCK_FEE_PER_UTXO,
 		},
 	};
 

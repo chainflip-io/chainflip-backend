@@ -28,7 +28,7 @@ pub async fn test_all_vault_events() {
 			destination_chain: 42069,
 			destination_address: Bytes(vec![164, 85]),
 			destination_token: 1,
-			amount: 10u128.pow(17),
+			amount: 10u128.pow(17).into(),
 			sender: web3::types::H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266")
 				.unwrap(),
 		}
@@ -40,7 +40,7 @@ pub async fn test_all_vault_events() {
 			destination_chain: 42069,
 			destination_address: Bytes(vec![164, 85]),
 			destination_token: 1,
-			amount: 10u128.pow(17),
+			amount: 10u128.pow(17).into(),
 			sender: web3::types::H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266")
 				.unwrap(),
 			source_token: web3::types::H160::from_str("0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9")
@@ -68,11 +68,11 @@ pub async fn test_all_vault_events() {
 			destination_chain: 42069,
 			destination_address: Bytes(vec![164, 85]),
 			destination_token: 3,
-			amount: 10u128.pow(17),
+			amount: 10u128.pow(17).into(),
 			sender: web3::types::H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266")
 				.unwrap(),
 			message: Bytes(vec![164, 85]),
-			gas_amount: 42069,
+			gas_amount: 42069.into(),
 			cf_parameters: Bytes(vec![164, 85]),
 		}
 	));
@@ -83,11 +83,11 @@ pub async fn test_all_vault_events() {
 			destination_chain: 42069,
 			destination_address: Bytes(vec![164, 85]),
 			destination_token: 3,
-			amount: 10u128.pow(17),
+			amount: 10u128.pow(17).into(),
 			sender: web3::types::H160::from_str("0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266")
 				.unwrap(),
 			message: Bytes(vec![164, 85]),
-			gas_amount: 42069,
+			gas_amount: 42069.into(),
 			cf_parameters: Bytes(vec![164, 85]),
 			source_token: web3::types::H160::from_str("0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9")
 				.unwrap(),
@@ -101,14 +101,14 @@ pub async fn test_all_vault_events() {
 
 	assert!(event_is_present(
 		&vault_events,
-		VaultEvent::AddGasNative { swap_id, amount: 10u128.pow(17) }
+		VaultEvent::AddGasNative { swap_id, amount: 10u128.pow(17).into() }
 	));
 
 	assert!(event_is_present(
 		&vault_events,
 		VaultEvent::AddGasToken {
 			swap_id,
-			amount: 10u128.pow(17),
+			amount: 10u128.pow(17).into(),
 			token: web3::types::H160::from_str("0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9")
 				.unwrap(),
 		}
@@ -119,7 +119,7 @@ pub async fn test_all_vault_events() {
 		VaultEvent::TransferNativeFailed {
 			recipient: web3::types::H160::from_str("0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9")
 				.unwrap(),
-			amount: 10u128.pow(17),
+			amount: 10u128.pow(17).into(),
 		}
 	));
 
@@ -128,7 +128,7 @@ pub async fn test_all_vault_events() {
 		VaultEvent::TransferTokenFailed {
 			recipient: web3::types::H160::from_str("0x0000000000000000000000000000000000000001")
 				.unwrap(),
-			amount: 300000000000000001,
+			amount: web3::ethabi::Uint::from(300000000000000001u128),
 			token: web3::types::H160::from_str("0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9")
 				.unwrap(),
 			reason: Bytes(

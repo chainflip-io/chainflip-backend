@@ -64,6 +64,13 @@ jobs:
         with:
           name: chainflip-backend-bin
 
+      - name: Checkout chainflip-bouncer
+        uses: actions/checkout@v3
+        with:
+          repository: chainflip-io/chainflip-bouncer
+          token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
+          path: bouncer
+
       - name: Install node dependencies
         working-directory: bouncer
         run: npm i

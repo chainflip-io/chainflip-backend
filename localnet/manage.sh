@@ -182,7 +182,7 @@ logs() {
 
 bouncer() {
   (
-    cd ./bouncer
+    cd ../chainflip-bouncer
     ./run.sh
   )
 }

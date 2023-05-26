@@ -58,7 +58,14 @@ pub type PolkadotAccountId = AccountId32;
 
 pub type PolkadotBlockNumber = u32;
 
-pub const STABLE_ASSET: Asset = Asset::Usdc;
+// Bitcoin default fee, in sats per bytes, to be used if current fee is not available via chain
+// tracking.
+pub const DEFAULT_FEE_SATS_PER_BYTE: u64 = 100;
+
+// Approximate values calculated
+pub const INPUT_UTXO_SIZE_IN_BYTES: u64 = 178;
+pub const OUTPUT_UTXO_SIZE_IN_BYTES: u64 = 34;
+pub const MINIMUM_BTC_TX_SIZE_IN_BYTES: u64 = 12;
 
 // Polkadot extrinsics are uniquely identified by <block number>-<extrinsic index>
 // https://wiki.polkadot.network/docs/build-protocol-info
@@ -125,10 +132,4 @@ impl From<AssetAmount> for SwapOutput {
 	fn from(value: AssetAmount) -> Self {
 		Self { intermediary: None, output: value }
 	}
-}
-
-#[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
-pub enum SwapLeg {
-	FromStable,
-	ToStable,
 }

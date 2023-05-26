@@ -867,3 +867,7 @@ pub trait OnBroadcastReady<C: ChainAbi> {
 
 	fn on_broadcast_ready(_api_call: &Self::ApiCall) {}
 }
+
+pub trait GetBitcoinFeeInfo {
+	fn bitcoin_fee_info() -> cf_chains::btc::BitcoinFeeInfo;
+}
