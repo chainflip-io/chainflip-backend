@@ -21,7 +21,7 @@ use sp_runtime::{
 
 #[cfg_attr(feature = "std", derive(Hash))]
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
-pub struct PolkadotSignature(pub sr25519::Signature);
+pub struct PolkadotSignature(sr25519::Signature);
 impl PolkadotSignature {
 	fn verify(&self, payload: &EncodedPolkadotPayload, signer: &PolkadotPublicKey) -> bool {
 		self.0.verify(&payload.0[..], &sr25519::Public(*signer.alias_inner()))
