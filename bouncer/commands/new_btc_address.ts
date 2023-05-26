@@ -8,7 +8,10 @@
 // For example: ./commands/new_btc_address.ts foobar P2PKH
 // returns: mhTU7Bz4wv8ESLdB1GdXGs5kE1MBGvdSyb
 
-import secp256k1 from 'tiny-secp256k1';
+import Module from "node:module";
+
+const require = Module.createRequire(import.meta.url);
+
 import { ECPairFactory } from 'ecpair';
 import bitcoin from 'bitcoinjs-lib';
 import axios from 'axios';
@@ -19,8 +22,8 @@ async function main(): Promise<void> {
   const seed = process.argv[2] ?? '';
   const type = process.argv[3] ?? 'P2PKH';
   const secret = sha256(seed);
-  const ecc = ECPairFactory(secp256k1);
-  const pubkey = ecc.fromPrivateKey(secret).publicKey;
+  const eccpf = ECPairFactory(require('tiny-secp256k1'));
+  const pubkey = eccpf.fromPrivateKey(secret).publicKey;
   const network = bitcoin.networks.regtest;
   let address: string | undefined;
 

@@ -4,30 +4,9 @@ import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { exec } from 'child_process';
-import { runWithTimeout, sleep } from '../shared/utils';
+import { runWithTimeout, sleep, observeEvent } from '../shared/utils';
 
 let chainflip: ApiPromise;
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function observeEvent(eventName: string): Promise<any> {
-  let result;
-  let waiting = true;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const unsubscribe: any = await chainflip.query.system.events((events: any[]) => {
-    events.forEach((record) => {
-      const { event } = record;
-      if (event.section === eventName.split(':')[0] && event.method === eventName.split(':')[1]) {
-        result = event.data;
-        waiting = false;
-        unsubscribe();
-      }
-    });
-  });
-  while (waiting) {
-    await sleep(1000);
-  }
-  return result;
-}
 
 async function main(): Promise<void> {
   const cfNodeEndpoint = process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944';
@@ -49,18 +28,22 @@ async function main(): Promise<void> {
   await chainflip.tx.governance
     .proposeGovernanceExtrinsic(chainflip.tx.liquidityProvider.setLpTtl(10))
     .signAndSend(snowwhite, { nonce: -1 });
-  await observeEvent('liquidityProvider:LpTtlSet');
+  await observeEvent('liquidityProvider:LpTtlSet', chainflip);
   console.log('Requesting new BTC LP deposit address');
   await chainflip.tx.liquidityProvider
     .requestLiquidityDepositAddress('Btc')
     .signAndSend(lp, { nonce: -1 });
-  const ingressKey = (
-    await observeEvent('liquidityProvider:LiquidityDepositAddressReady')
-  )[1].toJSON().btc as string;
+
+  const depositEventResult = await observeEvent('liquidityProvider:LiquidityDepositAddressReady', chainflip);
+  console.log('Received BTC LP deposit address: ' + depositEventResult);
+  const ingressKey = depositEventResult[1].toJSON().btc;
+
   let ingressAddress = '';
   for (let n = 2; n < ingressKey.length; n += 2) {
-    ingressAddress += String.fromCharCode(parseInt(ingressKey.slice(n, 2), 16));
+    ingressAddress += String.fromCharCode(parseInt(ingressKey.slice(n, n + 2), 16));
   }
+
+  console.log('Funding BTC LP deposit address of ' + ingressAddress + ' with 1 BTC');
   exec(
     './commands/fund_btc.sh ' + ingressAddress + ' 1',
     { timeout: 30000 },
@@ -73,12 +56,12 @@ async function main(): Promise<void> {
       if (stdout !== '') process.stdout.write(stdout);
     },
   );
-  await observeEvent('liquidityProvider:LiquidityDepositAddressExpired');
+  await observeEvent('liquidityProvider:LiquidityDepositAddressExpired', chainflip);
   console.log('Setting expiry time for LP addresses to 100 blocks');
   await chainflip.tx.governance
     .proposeGovernanceExtrinsic(chainflip.tx.liquidityProvider.setLpTtl(100))
     .signAndSend(snowwhite, { nonce: -1 });
-  await observeEvent('liquidityProvider:LpTtlSet');
+  await observeEvent('liquidityProvider:LpTtlSet', chainflip);
   console.log('=== Test complete ===');
   process.exit(0);
 }
