@@ -255,6 +255,11 @@ pub mod pallet {
 	pub type MinimumDeposit<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
 
+	/// Address ChannelId Lookup.
+	#[pallet::storage]
+	pub type AddressChannelIdLookUp<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, TargetChainAccount<T, I>, ChannelId, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -381,9 +386,21 @@ pub mod pallet {
 			addresses: Vec<(DepositFetchIdOf<T, I>, TargetChainAccount<T, I>)>,
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
-			for (_, deposit_address) in addresses {
+			for (deposit_fetch_id, deposit_address) in addresses {
 				if AddressStatus::<T, I>::get(deposit_address.clone()) == DeploymentStatus::Pending
 				{
+					let channel_id = AddressChannelIdLookUp::<T, I>::get(deposit_address.clone());
+					FetchParamDetails::<T, I>::insert(
+						channel_id,
+						(deposit_fetch_id, deposit_address.clone()),
+					);
+					FetchParamDetails::<T, I>::insert(
+						channel_id,
+						(
+							DepositFetchIdOf::<T, I>::deployed(channel_id, deposit_address.clone()),
+							deposit_address.clone(),
+						),
+					);
 					AddressStatus::<T, I>::insert(deposit_address, DeploymentStatus::Deployed);
 				}
 			}
@@ -538,7 +555,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ScheduledEgressFetchOrTransfer::<T, I>::mutate(|requests: &mut Vec<_>| {
 				// Take up to batch_size requests to be sent
 				let mut available_batch_size = maybe_size.unwrap_or(requests.len() as u32);
-
 				// Filter out disabled assets
 				requests
 					.drain_filter(|request| {
@@ -722,6 +738,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			channel_id,
 			asset,
 		});
+
+		AddressChannelIdLookUp::<T, I>::insert(&deposit_address, channel_id);
 
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
