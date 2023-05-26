@@ -13,8 +13,8 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
 cf-primitives = { path = '../../primitives', default-features = false }
-cf-traits = { path = '../../traits', default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
+cf-traits = { path = '../../traits', default-features = false }
 
 log = { version = '0.4.16', default-features = false }
 
@@ -40,17 +40,17 @@ pallet-grandpa = { git = "https://github.com/chainflip-io/substrate.git", tag = 
 default = ['std']
 std = [
   'cf-primitives/std',
-  'cf-traits/std',
   'cf-runtime-upgrade-utilities/std',
+  'cf-traits/std',
   'codec/std',
-  'scale-info/std',
   'frame-benchmarking?/std',
   'frame-support/std',
   'frame-system/std',
-  'sp-std/std',
-  'sp-staking/std',
-  'sp-runtime/std',
   'log/std',
+  'scale-info/std',
+  'sp-runtime/std',
+  'sp-staking/std',
+  'sp-std/std',
 ]
 runtime-benchmarks = [
   'cf-primitives/runtime-benchmarks',
@@ -60,6 +60,6 @@ runtime-benchmarks = [
   'frame-system/runtime-benchmarks',
 ]
 try-runtime = [
+  'cf-runtime-upgrade-utilities/try-runtime',
   'frame-support/try-runtime',
-  'cf-runtime-upgrade-utilities/try-runtime'
 ]

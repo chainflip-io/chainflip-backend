@@ -38,17 +38,17 @@ sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainfli
 default = ['std']
 std = [
   'cf-primitives/std',
+  'cf-runtime-upgrade-utilities/std',
   'cf-traits/std',
   'codec/std',
-  'scale-info/std',
   'frame-benchmarking?/std',
   'frame-support/std',
   'frame-system/std',
+  'scale-info/std',
   'sp-core/std',
-  'sp-std/std',
   'sp-runtime/std',
+  'sp-std/std',
   'sp-version/std',
-  'cf-runtime-upgrade-utilities/std',
 ]
 runtime-benchmarks = [
   'cf-primitives/runtime-benchmarks',

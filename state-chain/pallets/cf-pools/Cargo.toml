@@ -14,9 +14,9 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
 # Internal dependencies
+cf-amm = { path = '../../amm', default-features = false }
 cf-primitives = { path = '../../primitives', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
-cf-amm = { path = '../../amm', default-features = false }
 
 log = { version = '0.4.16', default-features = false }
 
@@ -38,18 +38,18 @@ sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainf
 [features]
 default = ['std']
 std = [
+  'cf-amm/std',
   'cf-primitives/std',
   'cf-traits/std',
-  'cf-amm/std',
   'codec/std',
-  'scale-info/std',
   'frame-benchmarking?/std',
   'frame-support/std',
   'frame-system/std',
-  'sp-std/std',
-  'sp-runtime/std',
   'log/std',
-  'sp-arithmetic/std'
+  'scale-info/std',
+  'sp-arithmetic/std',
+  'sp-runtime/std',
+  'sp-std/std',
 ]
 runtime-benchmarks = [
   'cf-primitives/runtime-benchmarks',
@@ -57,6 +57,6 @@ runtime-benchmarks = [
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
-  'sp-runtime/runtime-benchmarks'
+  'sp-runtime/runtime-benchmarks',
 ]
 try-runtime = ['frame-support/try-runtime']

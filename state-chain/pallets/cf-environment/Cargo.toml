@@ -13,8 +13,8 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
-cf-primitives = {path = '../../primitives', default-features = false}
 cf-chains = {path = '../../chains', default-features = false}
+cf-primitives = {path = '../../primitives', default-features = false}
 cf-traits = { path = '../../traits', default-features = false }
 serde = {optional = true, version = '1.0.126', features = ['derive']}
 hex-literal = { version = '0.3', default-features = false }
@@ -38,8 +38,8 @@ sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainfli
 [features]
 default = ['std']
 std = [
-  'cf-primitives/std',
   "cf-chains/std",
+  'cf-primitives/std',
   'cf-traits/std',
   'codec/std',
   'scale-info/std',
@@ -54,14 +54,14 @@ std = [
   'cf-runtime-upgrade-utilities/std',
 ]
 runtime-benchmarks = [
-  'cf-primitives/runtime-benchmarks',
   'cf-chains/runtime-benchmarks',
+  'cf-primitives/runtime-benchmarks',
   'cf-traits/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
 ]
 try-runtime = [
-  'frame-support/try-runtime',
   'cf-runtime-upgrade-utilities/try-runtime',
+  'frame-support/try-runtime',
 ]

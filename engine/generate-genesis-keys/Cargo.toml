@@ -24,11 +24,11 @@ serde = {version = "1.0", features = ["derive"]}
 rand = "0.8.5"
 
 # Local deps
+cf-primitives = {path = "../../state-chain/primitives"}
 chainflip-engine = {path = "../../engine"}
 chainflip-node = {path = "../../state-chain/node"}
 multisig = {path = "../../engine/multisig"}
 state-chain-runtime = {path = "../../state-chain/runtime"}
-cf-primitives = {path = "../../state-chain/primitives"}
 
 [dependencies.rocksdb]
 version = "0.19.0"

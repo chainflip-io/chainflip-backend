@@ -13,9 +13,9 @@ targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
 # Internal deps
-cf-traits = { path = '../../traits', default-features = false }
 cf-primitives = { path ='../../primitives', default-features = false }
 cf-runtime-upgrade-utilities = { path = '../../runtime-upgrade-utilities', default-features = false }
+cf-traits = { path = '../../traits', default-features = false }
 cf-utilities = { package = 'utilities', path = '../../../utilities', default-features = false }
 
 # Used for benchmarking
@@ -48,21 +48,21 @@ sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainfli
 default = ['std']
 std = [
   'cf-primitives/std',
-  'cf-traits/std',
   'cf-runtime-upgrade-utilities/std',
+  'cf-traits/std',
   'cf-utilities/std',
-  'sp-application-crypto/std',
   'codec/std',
-  'scale-info/std',
   'frame-benchmarking?/std',
   'frame-support/std',
   'frame-system/std',
-  'sp-std/std',
+  'log/std',
+  'pallet-cf-vaults/std',
+  'pallet-session/std',
+  'scale-info/std',
+  'sp-application-crypto/std',
   'sp-core/std',
   'sp-runtime/std',
-  'pallet-session/std',
-  'pallet-cf-vaults/std',
-  'log/std',
+  'sp-std/std',
 ]
 runtime-benchmarks = [
   'cf-primitives/runtime-benchmarks',
