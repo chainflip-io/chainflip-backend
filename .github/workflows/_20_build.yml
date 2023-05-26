@@ -20,7 +20,7 @@ jobs:
   compile:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-04-16"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-05-25"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}

@@ -4,12 +4,12 @@ on:
     inputs:
       nightly_version:
         type: string
-        default: nightly-2023-04-16
+        default: nightly-2023-05-25
         description: Toolchain version you want to build
         required: true
       image_tag:
         type: string
-        default: nightly-2023-04-16
+        default: nightly-2023-05-25
         description: Docker Image Tag
         required: true
 
