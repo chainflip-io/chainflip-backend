@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, AddressChannelIdLookUp, AddressPool, AddressStatus, ChannelAction, ChannelIdCounter,
-	CrossChainMessage, DeploymentStatus, DepositFetchIdOf, DisabledEgressAssets, Error,
+	mock::*, AddressPool, AddressStatus, ChannelAction, ChannelIdCounter, CrossChainMessage,
+	DeploymentStatus, DepositAddressDetailsLookup, DepositFetchIdOf, DisabledEgressAssets, Error,
 	FetchOrTransfer, FetchParamDetails, MinimumDeposit, Pallet, ScheduledEgressCcm,
 	ScheduledEgressFetchOrTransfer, WeightInfo,
 };
@@ -896,7 +896,9 @@ fn handle_pending_deployment() {
 			RuntimeOrigin::root(),
 			vec![(cf_chains::eth::EthereumChannelId::UnDeployed(channel_id), deposit_address)]
 		));
-		let channel_id = AddressChannelIdLookUp::<Test, _>::get(deposit_address);
+		let channel_id = DepositAddressDetailsLookup::<Test, _>::get(deposit_address.clone())
+			.unwrap()
+			.channel_id;
 		// Verify that the DepositFetchId was updated to deployed state after the first broadcast
 		// has succeed.
 		assert_eq!(

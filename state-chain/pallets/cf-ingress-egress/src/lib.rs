@@ -255,11 +255,6 @@ pub mod pallet {
 	pub type MinimumDeposit<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, TargetChainAmount<T, I>, ValueQuery>;
 
-	/// Address ChannelId Lookup.
-	#[pallet::storage]
-	pub type AddressChannelIdLookUp<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, TargetChainAccount<T, I>, ChannelId, ValueQuery>;
-
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
@@ -389,7 +384,10 @@ pub mod pallet {
 			for (deposit_fetch_id, deposit_address) in addresses {
 				if AddressStatus::<T, I>::get(deposit_address.clone()) == DeploymentStatus::Pending
 				{
-					let channel_id = AddressChannelIdLookUp::<T, I>::get(deposit_address.clone());
+					let channel_id =
+						DepositAddressDetailsLookup::<T, I>::get(deposit_address.clone())
+							.ok_or(Error::<T, I>::InvalidDepositAddress)?
+							.channel_id;
 					FetchParamDetails::<T, I>::insert(
 						channel_id,
 						(deposit_fetch_id, deposit_address.clone()),
@@ -738,8 +736,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			channel_id,
 			asset,
 		});
-
-		AddressChannelIdLookUp::<T, I>::insert(&deposit_address, channel_id);
 
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
 
