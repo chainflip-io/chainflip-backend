@@ -65,7 +65,18 @@ impl PolkadotPair {
 /// Alias to the opaque account ID type for this chain, actually a `AccountId32`. This is always
 /// 32 bytes.
 #[derive(
-	Copy, Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, PartialOrd, Ord, MaxEncodedLen,
+	Copy,
+	Clone,
+	Default,
+	Debug,
+	Encode,
+	Decode,
+	TypeInfo,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	MaxEncodedLen,
 )]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct PolkadotAccountId([u8; 32]);
@@ -82,11 +93,6 @@ impl PolkadotAccountId {
 	pub fn from_ss58check(s: &str) -> Result<Self, sp_core::crypto::PublicError> {
 		use sp_core::crypto::Ss58Codec;
 		sp_runtime::AccountId32::from_ss58check(s).map(|id| Self(*id.as_ref()))
-	}
-}
-impl Default for PolkadotAccountId {
-	fn default() -> Self {
-		Self::from_alias_inner(Default::default())
 	}
 }
 
