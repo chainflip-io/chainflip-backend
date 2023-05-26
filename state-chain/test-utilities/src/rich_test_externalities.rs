@@ -6,6 +6,7 @@ use frame_support::{
 };
 use sp_runtime::BuildStorage;
 
+/// Basic [sp_io::TestExternalities] wrapper that provides a richer API for testing pallets.
 struct RichExternalities<Runtime>(sp_io::TestExternalities, std::marker::PhantomData<Runtime>);
 
 impl<
@@ -19,6 +20,7 @@ impl<
 		Self(ext, Default::default())
 	}
 
+	/// Executes a closure, preserving the result as test context.
 	#[track_caller]
 	fn execute_with<Ctx>(
 		mut self,
@@ -28,8 +30,10 @@ impl<
 		TestExternalities { ext: self, context }
 	}
 
+	/// Increments the block number and executes the closure as a block, including all the runtime
+	/// hooks.
 	#[track_caller]
-	fn execute_as_block<Ctx>(
+	fn execute_as_next_block<Ctx>(
 		mut self,
 		f: impl FnOnce() -> Ctx,
 	) -> TestExternalities<Runtime, Pallets, Ctx> {
@@ -38,6 +42,8 @@ impl<
 		self.execute_at_block::<Ctx>(block_number, f)
 	}
 
+	/// Sets the block number and executes the closure as a block, including all the runtime
+	/// hooks.
 	#[track_caller]
 	fn execute_at_block<Ctx>(
 		mut self,
@@ -58,6 +64,7 @@ impl<
 	}
 }
 
+/// A wrapper around [sp_io::TestExternalities] that provides a richer API for testing pallets.
 pub struct TestExternalities<Runtime, Pallets, Ctx = ()> {
 	ext: RichExternalities<(Runtime, Pallets)>,
 	context: Ctx,
@@ -70,6 +77,8 @@ where
 		+ OnIdle<Runtime::BlockNumber>
 		+ OnFinalize<Runtime::BlockNumber>,
 {
+	/// Useful for backwards-compatibility. This is equivalent to the context-less execute_with from
+	/// [sp_io::TestExternalities].
 	#[track_caller]
 	pub fn execute_with<Ctx>(
 		self,
@@ -87,6 +96,7 @@ where
 		+ OnFinalize<Runtime::BlockNumber>,
 	Ctx: Clone,
 {
+	/// Initialises a new TestExternalities with the given genesis config at block number 1.
 	#[track_caller]
 	pub fn new<GenesisConfig: BuildStorage>(
 		config: GenesisConfig,
@@ -99,12 +109,15 @@ where
 	}
 
 	#[track_caller]
-	pub fn map<R>(self, f: impl FnOnce(Ctx) -> R) -> TestExternalities<Runtime, Pallets, R> {
+	/// Transforms the test context.
+	pub fn map_context<R>(
+		self,
+		f: impl FnOnce(Ctx) -> R,
+	) -> TestExternalities<Runtime, Pallets, R> {
 		TestExternalities { ext: self.ext, context: f(self.context) }
 	}
 
-	/// Execute a closure. The return value is stored as the test state to be passed as the argument
-	/// to the next closure.
+	/// Execute a closure. The return value is preserved as test context.
 	#[track_caller]
 	pub fn then_execute_with<R>(
 		self,
@@ -114,7 +127,7 @@ where
 		self.ext.execute_with(move || f(context))
 	}
 
-	/// Access the storage without touching test state.
+	/// Access the storage without touching test context.
 	#[track_caller]
 	pub fn inspect_storage(self, f: impl FnOnce(&Ctx)) -> TestExternalities<Runtime, Pallets, Ctx> {
 		self.then_execute_with(|context| {
@@ -123,7 +136,7 @@ where
 		})
 	}
 
-	/// Inspect the test state without accessing storage.
+	/// Inspect the test context without accessing storage.
 	#[track_caller]
 	pub fn inspect_context(self, f: impl FnOnce(&Ctx)) -> TestExternalities<Runtime, Pallets, Ctx> {
 		f(&self.context);
@@ -131,16 +144,22 @@ where
 	}
 
 	/// Execute the given closure as the next block.
+	///
+	/// The closure's return value is next context.
+	///
+	/// Prefer to use `then_apply_extrinsics` if testing extrinsics.
 	#[track_caller]
 	pub fn then_execute_as_next_block<R>(
 		self,
 		f: impl FnOnce(Ctx) -> R,
 	) -> TestExternalities<Runtime, Pallets, R> {
 		let context = self.context;
-		self.ext.execute_as_block(move || f(context))
+		self.ext.execute_as_next_block(move || f(context))
 	}
 
 	/// Execute the given closure at a specific block number.
+	///
+	/// The closure's return value is next context.
 	#[track_caller]
 	pub fn then_execute_at_block<R>(
 		self,
@@ -153,7 +172,7 @@ where
 
 	/// Execute the given closure against all the runtime events.
 	///
-	/// The current context and collected closure results are passed as the next context.
+	/// The collected closure results are added to the test context.
 	#[track_caller]
 	pub fn then_process_events<R>(
 		self,
@@ -169,10 +188,9 @@ where
 		})
 	}
 
-	/// Applies the provided extrinsics outside of a block context.
+	/// Applies the provided extrinsics in a block.
 	///
-	/// Threaded context is the previous state, and a Vec of tuples containing each call and its
-	/// result.
+	/// Adds a Vec of tuples containing each call and its result to the test context.
 	#[track_caller]
 	pub fn then_apply_extrinsics<
 		C: UnfilteredDispatchable<RuntimeOrigin = Runtime::RuntimeOrigin> + Clone,
@@ -181,7 +199,7 @@ where
 		self,
 		f: impl FnOnce(&Ctx) -> I,
 	) -> TestExternalities<Runtime, Pallets, (Ctx, Vec<(C, DispatchResultWithPostInfo)>)> {
-		let r = self.ext.execute_as_block(|| {
+		let r = self.ext.execute_as_next_block(|| {
 			f(&self.context)
 				.into_iter()
 				.map(|(origin, call)| (call.clone(), call.dispatch_bypass_filter(origin)))
@@ -190,6 +208,9 @@ where
 		TestExternalities { ext: r.ext, context: (self.context, r.context) }
 	}
 
+	/// Keeps executing blocks until the given predicate returns true.
+	///
+	/// Preserves the context.
 	#[track_caller]
 	pub fn then_process_blocks_until<F: Fn(Ctx) -> bool>(mut self, predicate: F) -> Self {
 		loop {
