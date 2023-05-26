@@ -22,7 +22,7 @@ pub const ETH_AVERAGE_BLOCK_TIME_SECONDS: u64 = 14;
 pub const ETH_LOG_REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// Duration before we timeout a select_ok request to both http and ws
-pub const ETH_DUAL_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+pub const ETH_DUAL_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Duration between each poll of the web3 client, to check if we are synced to the head of the
 /// chain
