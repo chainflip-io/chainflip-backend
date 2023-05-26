@@ -87,7 +87,10 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
       .signAndSend(lp, { nonce: -1 });
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const checkCcy = (data: any): boolean => data[1].toJSON()[chain[ccy]] != null;
+  const checkCcy = (data: any): boolean => {
+    const result = data[1].toJSON()[chain[ccy]];
+    return result !== null && result !== undefined;
+  };
 
   const ingressKey = (
     await observeEvent('liquidityProvider:LiquidityDepositAddressReady', checkCcy)
@@ -105,7 +108,7 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
     { timeout: 30000 },
     (err, stdout, stderr) => {
       if (stderr !== '') process.stdout.write(stderr);
-      if (err != null) {
+      if (err !== null) {
         console.error(err);
         process.exit(1);
       }
@@ -144,7 +147,7 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
     await chainflip.tx.liquidityPools
       .collectAndMintLimitOrder(ccy, 'Buy', priceTick, buyPosition)
       .signAndSend(lp, { nonce: -1 }, ({ status, dispatchError }) => {
-        if (dispatchError != null) {
+        if (dispatchError !== undefined) {
           if (dispatchError.isModule) {
             const decoded = chainflip.registry.findMetaError(dispatchError.asModule);
             const { docs, name, section } = decoded;
@@ -171,7 +174,7 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
     await chainflip.tx.liquidityPools
       .collectAndMintLimitOrder(ccy, 'Sell', priceTick, sellPosition)
       .signAndSend(lp, { nonce: -1 }, ({ status, dispatchError }) => {
-        if (dispatchError != null) {
+        if (dispatchError !== undefined) {
           if (dispatchError.isModule) {
             const decoded = chainflip.registry.findMetaError(dispatchError.asModule);
             const { docs, name, section } = decoded;

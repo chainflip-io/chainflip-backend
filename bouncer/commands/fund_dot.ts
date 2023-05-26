@@ -34,7 +34,7 @@ async function main() {
   await polkadot.tx.balances
     .transfer(polkadotAddress, parseInt(planckAmount))
     .signAndSend(alice, { nonce: -1 }, ({ status, dispatchError }) => {
-      if (dispatchError != null) {
+      if (dispatchError !== undefined) {
         if (dispatchError.isModule) {
           const decoded = polkadot.registry.findMetaError(dispatchError.asModule);
           const { docs, name, section } = decoded;

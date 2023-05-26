@@ -47,11 +47,11 @@ async function main(): Promise<void> {
   console.log('ETH ingress address: ' + ethIngressKey);
   await sleep(8000); // sleep for 8 seconds to give the engine a chance to start witnessing
   exec(
-    './commands/fund_eth.sh ' + ethIngressKey + ' 10',
+    './commands/fund_eth.ts ' + ethIngressKey + ' 10',
     { timeout: 10000 },
     (err, stdout, stderr) => {
       if (stderr !== '') process.stdout.write(stderr);
-      if (err != null) {
+      if (err !== null) {
         console.error(err);
         process.exit(1);
       }
@@ -60,11 +60,11 @@ async function main(): Promise<void> {
   );
   await observeEvent('liquidityProvider:AccountCredited');
   exec(
-    './commands/fund_eth.sh ' + ethIngressKey + ' 10',
+    './commands/fund_eth.ts ' + ethIngressKey + ' 10',
     { timeout: 10000 },
     (err, stdout, stderr) => {
       if (stderr !== '') process.stdout.write(stderr);
-      if (err != null) {
+      if (err !== null) {
         console.error(err);
         process.exit(1);
       }

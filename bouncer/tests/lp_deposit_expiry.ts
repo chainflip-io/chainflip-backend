@@ -66,7 +66,7 @@ async function main(): Promise<void> {
     { timeout: 30000 },
     (err, stdout, stderr) => {
       if (stderr !== '') process.stdout.write(stderr);
-      if (err != null) {
+      if (err !== null) {
         console.error(err);
         process.exit(1);
       }
