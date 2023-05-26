@@ -77,11 +77,9 @@ macro_rules! test_all_crypto_schemes {
 			};
 
 			fn test<C: CryptoScheme>() {
-				// Print a message with the CryptoScheme if the test fails
-				let result = std::panic::catch_unwind(|| $test_function::<C>());
-				if result.is_err() {
-					println!("The failure was using the {} CryptoScheme", C::NAME);
-					std::panic::resume_unwind(Box::new(result));
+				if let Err(err) = std::panic::catch_unwind(|| $test_function::<C>()) {
+					println!("Test failed with {} CryptoScheme", C::NAME);
+					std::panic::resume_unwind(err);
 				}
 			}
 			// Run the test on all CryptoSchemes
@@ -92,6 +90,32 @@ macro_rules! test_all_crypto_schemes {
 	};
 }
 pub(crate) use test_all_crypto_schemes;
+
+#[test]
+fn test_all_crypto_schemes_macro() {
+	// Run the macro using all 3 function that only panic on a single scheme to make sure the macro
+	// is calling the function for each scheme.
+
+	fn panic_function_eth<C: CryptoScheme>() {
+		if matches!(<C as CryptoScheme>::CHAIN_TAG, crate::ChainTag::Ethereum) {
+			panic!();
+		}
+	}
+	fn panic_function_dot<C: CryptoScheme>() {
+		if matches!(<C as CryptoScheme>::CHAIN_TAG, crate::ChainTag::Polkadot) {
+			panic!();
+		}
+	}
+	fn panic_function_btc<C: CryptoScheme>() {
+		if matches!(<C as CryptoScheme>::CHAIN_TAG, crate::ChainTag::Bitcoin) {
+			panic!();
+		}
+	}
+
+	assert_panics!(test_all_crypto_schemes!(panic_function_eth));
+	assert_panics!(test_all_crypto_schemes!(panic_function_dot));
+	assert_panics!(test_all_crypto_schemes!(panic_function_btc));
+}
 
 /// Run the given function on all crypto schemes.
 /// The function must be generic over the CryptoScheme. eg: my_test<C: CryptoScheme>().
@@ -522,7 +546,7 @@ where
 			.collect();
 
 		if results.is_empty() {
-			panic!("No nodes have gotten an outcome yet");
+			panic!("No nodes have received an outcome yet");
 		}
 
 		if results.len() != self.nodes.len() {
@@ -900,30 +924,4 @@ pub fn gen_dummy_signing_comm1<P: ECPoint>(rng: &mut Rng, number_of_commitments:
 		.map(|_| SigningCommitment { d: point, e: point })
 		.collect();
 	DelayDeserialization::new(&comm1)
-}
-
-#[test]
-fn test_all_crypto_schemes_macro() {
-	// Run the macro using all 3 function that only panic on a single scheme to make sure the macro
-	// is calling the function for each scheme.
-
-	fn panic_function_eth<C: CryptoScheme>() {
-		if matches!(<C as CryptoScheme>::CHAIN_TAG, crate::ChainTag::Ethereum) {
-			panic!();
-		}
-	}
-	fn panic_function_dot<C: CryptoScheme>() {
-		if matches!(<C as CryptoScheme>::CHAIN_TAG, crate::ChainTag::Polkadot) {
-			panic!();
-		}
-	}
-	fn panic_function_btc<C: CryptoScheme>() {
-		if matches!(<C as CryptoScheme>::CHAIN_TAG, crate::ChainTag::Bitcoin) {
-			panic!();
-		}
-	}
-
-	assert_panics!(test_all_crypto_schemes!(panic_function_eth));
-	assert_panics!(test_all_crypto_schemes!(panic_function_dot));
-	assert_panics!(test_all_crypto_schemes!(panic_function_btc));
 }
