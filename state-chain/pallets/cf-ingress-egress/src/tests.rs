@@ -901,7 +901,7 @@ fn handle_pending_deployment() {
 		// has succeed.
 		assert_eq!(
 			FetchParamDetails::<Test, _>::get(channel_id).unwrap().0,
-			DepositFetchIdOf::<Test, _>::deployed(channel_id, deposit_address.clone())
+			DepositFetchIdOf::<Test, _>::deployed(channel_id, deposit_address)
 		);
 		assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Deployed);
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 1);
