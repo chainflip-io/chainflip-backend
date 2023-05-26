@@ -1,6 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(const_option)]
-#![allow(clippy::items_after_test_module)]
 #[cfg(feature = "std")]
 mod with_std;
 #[cfg(feature = "std")]
