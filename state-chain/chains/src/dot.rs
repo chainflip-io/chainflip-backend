@@ -4,7 +4,7 @@ pub mod api;
 
 pub mod benchmarking;
 
-pub use cf_primitives::{chains::Polkadot, PolkadotAccountId};
+pub use cf_primitives::chains::Polkadot;
 use cf_primitives::{PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use core::str::FromStr;
@@ -16,17 +16,79 @@ use sp_runtime::{
 		AccountIdLookup, BlakeTwo256, DispatchInfoOf, Hash, SignedExtension, StaticLookup, Verify,
 	},
 	transaction_validity::{TransactionValidity, TransactionValidityError, ValidTransaction},
-	AccountId32, MultiAddress, MultiSignature,
+	MultiAddress, MultiSignature,
 };
 
-pub type PolkadotSignature = sr25519::Signature;
+#[cfg_attr(feature = "std", derive(Hash))]
+#[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
+pub struct PolkadotSignature(pub sr25519::Signature);
+impl PolkadotSignature {
+	fn verify(&self, payload: &EncodedPolkadotPayload, signer: &PolkadotPublicKey) -> bool {
+		self.0.verify(&payload.0[..], &sr25519::Public(*signer.alias_inner()))
+	}
+
+	pub const fn from_alias_inner(signature: [u8; 64]) -> Self {
+		Self(sr25519::Signature(signature))
+	}
+
+	pub fn alias_inner(&self) -> &[u8; 64] {
+		&self.0 .0
+	}
+}
 
 pub type PolkadotBalance = u128;
 pub type PolkadotIndex = u32;
 pub type PolkadotExtrinsicIndex = u32;
 pub type PolkadotHash = sp_core::H256;
 
-pub type PolkadotAddress = MultiAddress<PolkadotAccountId, ()>;
+#[cfg(feature = "std")]
+#[derive(Clone)]
+pub struct PolkadotPair(sr25519::Pair);
+#[cfg(feature = "std")]
+impl PolkadotPair {
+	pub fn from_seed(seed: &[u8; 32]) -> Self {
+		use sp_core::Pair;
+		Self(sr25519::Pair::from_seed(seed))
+	}
+
+	pub fn sign(&self, payload: &EncodedPolkadotPayload) -> PolkadotSignature {
+		use sp_core::Pair;
+		PolkadotSignature(self.0.sign(&payload.0[..]))
+	}
+
+	pub fn public_key(&self) -> PolkadotPublicKey {
+		use sp_core::Pair;
+		PolkadotPublicKey::from_alias_inner(self.0.public().into())
+	}
+}
+
+/// Alias to the opaque account ID type for this chain, actually a `AccountId32`. This is always
+/// 32 bytes.
+#[derive(
+	Copy, Clone, Debug, Encode, Decode, TypeInfo, PartialEq, Eq, PartialOrd, Ord, MaxEncodedLen,
+)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct PolkadotAccountId([u8; 32]);
+impl PolkadotAccountId {
+	pub const fn from_alias_inner(inner: [u8; 32]) -> Self {
+		Self(inner)
+	}
+
+	pub fn alias_inner(&self) -> &[u8; 32] {
+		&self.0
+	}
+
+	#[cfg(feature = "std")]
+	pub fn from_ss58check(s: &str) -> Result<Self, sp_core::crypto::PublicError> {
+		use sp_core::crypto::Ss58Codec;
+		sp_runtime::AccountId32::from_ss58check(s).map(|id| Self(*id.as_ref()))
+	}
+}
+impl Default for PolkadotAccountId {
+	fn default() -> Self {
+		Self::from_alias_inner(Default::default())
+	}
+}
 
 pub type PolkadotAccountIdLookup = <AccountIdLookup<PolkadotAccountId, ()> as StaticLookup>::Source;
 
@@ -49,8 +111,45 @@ pub type PolkadotSpecVersion = u32;
 pub type PolkadotChannelId = u64;
 pub type PolkadotTransactionVersion = u32;
 
-pub type PolkadotUncheckedExtrinsic =
-	UncheckedExtrinsic<PolkadotAddress, PolkadotRuntimeCall, MultiSignature, PolkadotSignedExtra>;
+#[derive(Debug, Clone, Encode, Decode, TypeInfo)]
+pub struct PolkadotUncheckedExtrinsic(
+	UncheckedExtrinsic<
+		MultiAddress<PolkadotAccountId, ()>,
+		PolkadotRuntimeCall,
+		MultiSignature,
+		PolkadotSignedExtra,
+	>,
+);
+impl PolkadotUncheckedExtrinsic {
+	pub fn new_signed(
+		function: PolkadotRuntimeCall,
+		signed: PolkadotAccountId,
+		signature: PolkadotSignature,
+		extra: PolkadotSignedExtra,
+	) -> Self {
+		Self(UncheckedExtrinsic::new_signed(
+			function,
+			MultiAddress::Id(signed),
+			sp_runtime::MultiSignature::Sr25519(signature.0),
+			extra,
+		))
+	}
+
+	pub fn decode<I: codec::Input>(input: &mut I) -> Result<Self, codec::Error> {
+		Ok(Self(UncheckedExtrinsic::decode(input)?))
+	}
+
+	pub fn signature(&self) -> Option<PolkadotSignature> {
+		self.0.signature.as_ref().and_then(|signature| {
+			if let MultiSignature::Sr25519(signature) = &signature.1 {
+				Some(PolkadotSignature(signature.clone()))
+			} else {
+				None
+			}
+		})
+	}
+}
+
 /// The payload being signed in transactions.
 pub type PolkadotPayload = SignedPayload<PolkadotRuntimeCall, PolkadotSignedExtra>;
 
@@ -134,11 +233,11 @@ impl ChainCrypto for Polkadot {
 		payload: &Self::Payload,
 		signature: &Self::ThresholdSignature,
 	) -> bool {
-		signature.verify(&payload.0[..], &agg_key.0)
+		signature.verify(payload, agg_key)
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
-		EncodedPolkadotPayload(Blake2_256::hash(&agg_key.0).to_vec())
+		EncodedPolkadotPayload(Blake2_256::hash(&agg_key.alias_inner()[..]).to_vec())
 	}
 }
 
@@ -235,8 +334,8 @@ impl PolkadotExtrinsicBuilder {
 		self.signer_and_signature.as_ref().map(|(signer, signature)| {
 			PolkadotUncheckedExtrinsic::new_signed(
 				self.extrinsic_call.clone(),
-				PolkadotAddress::Id(signer.clone()),
-				sp_runtime::MultiSignature::Sr25519(signature.clone()),
+				*signer,
+				signature.clone(),
 				self.extra(),
 			)
 		})
@@ -726,35 +825,7 @@ impl SignedExtension for PolkadotSignedExtra {
 	}
 }
 
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Ord, PartialOrd, Debug, Encode, Decode, Copy, Clone, Eq, PartialEq, TypeInfo)]
-pub struct PolkadotPublicKey(pub sr25519::Public);
-
-impl Default for PolkadotPublicKey {
-	fn default() -> Self {
-		[0; 32].into()
-	}
-}
-
-impl From<[u8; 32]> for PolkadotPublicKey {
-	fn from(pub_key_bytes: [u8; 32]) -> Self {
-		PolkadotPublicKey(sr25519::Public(pub_key_bytes))
-	}
-}
-
-impl TryFrom<Vec<u8>> for PolkadotPublicKey {
-	type Error = ();
-
-	fn try_from(data: Vec<u8>) -> Result<Self, Self::Error> {
-		data.as_slice().try_into().map(Self)
-	}
-}
-
-impl From<PolkadotPublicKey> for Vec<u8> {
-	fn from(k: PolkadotPublicKey) -> Self {
-		k.0.to_vec()
-	}
-}
+pub type PolkadotPublicKey = PolkadotAccountId;
 
 #[derive(Debug, Encode, Decode, TypeInfo, Eq, PartialEq, Clone)]
 pub struct PolkadotReplayProtection {
@@ -763,7 +834,7 @@ pub struct PolkadotReplayProtection {
 }
 
 impl ChannelIdConstructor for PolkadotChannelId {
-	type Address = AccountId32;
+	type Address = PolkadotAccountId;
 
 	fn deployed(channel_id: u64, _address: Self::Address) -> Self {
 		channel_id
@@ -783,20 +854,16 @@ impl BenchmarkValueExtended for PolkadotChannelId {
 
 #[cfg(test)]
 mod test_polkadot_extrinsics {
-
 	use super::*;
-	use crate::dot::sr25519::Pair;
-	use sp_core::crypto::{AccountId32, Pair as TraitPair};
-	use sp_runtime::{app_crypto::Ss58Codec, traits::IdentifyAccount, MultiSigner};
 
 	#[ignore]
 	#[test]
 	fn create_test_extrinsic() {
-		let keypair_1: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_1);
-		let keypair_2: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_2);
+		let keypair_1 = PolkadotPair::from_seed(&RAW_SEED_1);
+		let keypair_2 = PolkadotPair::from_seed(&RAW_SEED_2);
 
-		let account_id_1: AccountId32 = MultiSigner::Sr25519(keypair_1.public()).into_account();
-		let account_id_2: AccountId32 = MultiSigner::Sr25519(keypair_2.public()).into_account();
+		let account_id_1: PolkadotAccountId = keypair_1.public_key();
+		let account_id_2: PolkadotAccountId = keypair_2.public_key();
 
 		let test_runtime_call: PolkadotRuntimeCall =
 			PolkadotRuntimeCall::Balances(BalancesCall::transfer {
@@ -818,14 +885,10 @@ mod test_polkadot_extrinsics {
 		);
 		extrinsic_builder.insert_signature(
 			account_id_1,
-			keypair_1.sign(
-				&extrinsic_builder
-					.get_signature_payload(
-						TEST_RUNTIME_VERSION.spec_version,
-						TEST_RUNTIME_VERSION.transaction_version,
-					)
-					.0[..],
-			),
+			keypair_1.sign(&extrinsic_builder.get_signature_payload(
+				TEST_RUNTIME_VERSION.spec_version,
+				TEST_RUNTIME_VERSION.transaction_version,
+			)),
 		);
 
 		assert!(extrinsic_builder.is_signed());
@@ -856,8 +919,8 @@ mod test_polkadot_extrinsics {
 				.unwrap()
 		);
 
-		let keypair_1: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_1);
-		let account_id_1: AccountId32 = MultiSigner::Sr25519(keypair_1.public()).into_account();
+		let keypair_1 = PolkadotPair::from_seed(&RAW_SEED_1);
+		let account_id_1 = keypair_1.public_key();
 
 		assert_eq!(
 			account_id_1,
@@ -866,7 +929,7 @@ mod test_polkadot_extrinsics {
 		);
 
 		assert_eq!(
-			PolkadotAccountId::new(hex_literal::hex!(
+			PolkadotAccountId::from_alias_inner(hex_literal::hex!(
 				"56cc4af8ff9fb97c60320ae43d35bd831b14f0b7065f3385db0dbf4cb5d8766f"
 			)),
 			account_id_1

@@ -270,7 +270,7 @@ async fn main() -> anyhow::Result<()> {
 						.await
 						.context("Failed to get initial DOT signatures to monitor")?
 						.into_iter()
-						.map(|(signature, _)| signature.0)
+						.map(|(signature, _)| signature)
 						.collect(),
 					state_chain_client.clone(),
 					db,

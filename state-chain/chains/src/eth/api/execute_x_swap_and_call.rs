@@ -40,7 +40,7 @@ impl ExecutexSwapAndCall {
 			ForeignChainAddress::Eth(source_address) =>
 				(ForeignChain::Ethereum as u32, source_address.to_vec()),
 			ForeignChainAddress::Dot(source_address) =>
-				(ForeignChain::Polkadot as u32, source_address.to_vec()),
+				(ForeignChain::Polkadot as u32, source_address.alias_inner().to_vec()),
 			ForeignChainAddress::Btc(script) =>
 				(ForeignChain::Bitcoin as u32, script.data.to_vec()),
 		}
@@ -76,9 +76,12 @@ impl EthereumCall for ExecutexSwapAndCall {
 #[cfg(test)]
 mod test_execute_x_swap_and_execute {
 	use super::*;
-	use crate::eth::{
-		api::{abi::load_abi, ApiCall, EthereumReplayProtection, EthereumTransactionBuilder},
-		SchnorrVerificationComponents,
+	use crate::{
+		dot::PolkadotAccountId,
+		eth::{
+			api::{abi::load_abi, ApiCall, EthereumReplayProtection, EthereumTransactionBuilder},
+			SchnorrVerificationComponents,
+		},
 	};
 	use ethabi::Address;
 
@@ -97,7 +100,8 @@ mod test_execute_x_swap_and_execute {
 			amount: 10,
 		};
 
-		let dummy_src_address = ForeignChainAddress::Dot([0xff; 32]);
+		let dummy_src_address =
+			ForeignChainAddress::Dot(PolkadotAccountId::from_alias_inner([0xff; 32]));
 		let (dummy_chain, dummy_address) =
 			super::ExecutexSwapAndCall::destructure_address(dummy_src_address.clone());
 		let dummy_message = vec![0x00, 0x01, 0x02, 0x03, 0x04];

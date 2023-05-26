@@ -7,6 +7,7 @@ use crate::{
 use cf_chains::{
 	address::{try_to_encoded_address, AddressConverter, EncodedAddress, ForeignChainAddress},
 	btc::{scriptpubkey_from_address, BitcoinNetwork, BitcoinScriptBounded},
+	dot::PolkadotAccountId,
 	AnyChain, CcmDepositMetadata,
 };
 use cf_primitives::{Asset, AssetAmount, ForeignChain};
@@ -57,7 +58,7 @@ fn generate_test_swaps() -> Vec<Swap> {
 			Asset::Flip,
 			Asset::Dot,
 			600,
-			SwapType::Swap(ForeignChainAddress::Dot([4; 32])),
+			SwapType::Swap(ForeignChainAddress::Dot(PolkadotAccountId::from_alias_inner([4; 32]))),
 		),
 	]
 }

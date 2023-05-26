@@ -52,7 +52,7 @@ impl SigningPayload {
 
 impl From<PolkadotSignature> for cf_chains::dot::PolkadotSignature {
 	fn from(cfe_sig: PolkadotSignature) -> Self {
-		sp_core::sr25519::Signature(cfe_sig.0.to_bytes())
+		Self::from_alias_inner(cfe_sig.0.to_bytes())
 	}
 }
 

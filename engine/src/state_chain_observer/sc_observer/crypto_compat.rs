@@ -28,6 +28,6 @@ impl CryptoCompat<PolkadotSigning, cf_chains::Polkadot> for PolkadotInstance {
 	fn pubkey_to_aggkey(
 		pubkey: <PolkadotSigning as CryptoScheme>::PublicKey,
 	) -> <cf_chains::Polkadot as ChainCrypto>::AggKey {
-		PolkadotPublicKey(sp_core::sr25519::Public::from_raw(pubkey.to_bytes()))
+		PolkadotPublicKey::from_alias_inner(pubkey.to_bytes())
 	}
 }
