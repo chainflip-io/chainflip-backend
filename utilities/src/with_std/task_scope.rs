@@ -140,7 +140,7 @@ pub async fn task_scope<
 		},
 		// This async move scope ensures scope is dropped when top_level_task and its returned
 		// future finish (Instead of when this function exits)
-		async move { top_level_task(&scope).await }
+		top_level_task(&scope)
 	)
 	.map(|(_, t)| t)
 }
