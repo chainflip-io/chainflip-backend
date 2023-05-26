@@ -1,2 +1,2 @@
-./commands/observe_block 1 &&
-./tests/stress_test 3
+./commands/observe_block.ts 1 &&
+./tests/stress_test.sh 3

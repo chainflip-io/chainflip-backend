@@ -1,4 +1,4 @@
-./tests/observe_block 1 &&
+./commands/observe_block.ts 1 &&
 ./commands/setup_vaults.ts &&
 ./tests/stress_test.sh 3 &&
 ./commands/setup_swaps.ts &&
