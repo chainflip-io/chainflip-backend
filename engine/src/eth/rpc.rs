@@ -1,5 +1,5 @@
 use tracing::{debug, error, info, info_span, warn, Instrument};
-use utilities::{context, format_iterator, make_periodic_tick};
+use utilities::{context, make_periodic_tick};
 use web3::{
 	api::SubscriptionStream,
 	signing::SecretKeyRef,
@@ -17,7 +17,7 @@ use futures::{
 	FutureExt, StreamExt, TryStreamExt,
 };
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
 
 use super::{redact_secret_eth_node_endpoint, TransportProtocol};
 use crate::{
@@ -269,11 +269,13 @@ where
 }
 
 impl EthWsRpcClient {
-	pub async fn new(eth_settings: &settings::Eth) -> Result<Self> {
+	pub async fn new(eth_settings: &settings::Eth, expected_chain_id: U256) -> Result<Self> {
 		let client = Self::inner_new(&eth_settings.ws_node_endpoint, async {
 			context!(web3::transports::WebSocket::new(&eth_settings.ws_node_endpoint).await)
 		})
 		.await?;
+
+		validate_client_chain_id(&client, expected_chain_id).await?;
 
 		let mut poll_interval = make_periodic_tick(SYNC_POLL_INTERVAL, false);
 
@@ -335,15 +337,19 @@ impl EthWsRpcApi for EthWsRpcClient {
 }
 
 impl EthHttpRpcClient {
-	pub fn new(eth_settings: &settings::Eth) -> Result<Self> {
-		Self::inner_new(
+	pub async fn new(eth_settings: &settings::Eth, expected_chain_id: U256) -> Result<Self> {
+		let client = Self::inner_new(
 			&eth_settings.http_node_endpoint,
 			std::future::ready({
 				context!(web3::transports::Http::new(&eth_settings.http_node_endpoint))
 			}),
 		)
 		.now_or_never()
-		.unwrap()
+		.unwrap()?;
+
+		validate_client_chain_id(&client, expected_chain_id).await?;
+
+		Ok(client)
 	}
 }
 
@@ -353,49 +359,35 @@ pub struct EthDualRpcClient {
 	pub http_client: EthHttpRpcClient,
 }
 
+async fn validate_client_chain_id<T>(
+	client: &EthRpcClient<T>,
+	expected_chain_id: U256,
+) -> anyhow::Result<()>
+where
+	T: Send + Sync + EthTransport,
+	T::Out: Send,
+{
+	let chain_id = client
+		.chain_id()
+		.await
+		.context(format!("Failed to fetch chain id via {}.", T::transport_protocol()))?;
+
+	if chain_id != expected_chain_id {
+		return Err(anyhow!(
+			"Expected chain id {expected_chain_id}, {} client returned {chain_id}.",
+			T::transport_protocol()
+		))
+	}
+
+	Ok(())
+}
+
 impl EthDualRpcClient {
 	/// Create an Ethereum Rpc Client, containing a HTTP and a WS client.
 	/// Passing a value to expected_chain_id ensures the endpoints provided in settings are pointing
 	/// to nodes with the same `chain_id` as that provided.
 	pub async fn new(eth_settings: &settings::Eth, expected_chain_id: U256) -> Result<Self> {
-		let dual_rpc = Self::inner_new(eth_settings).await?;
-
-		pub async fn validate_client_chain_id<T>(
-			client: &EthRpcClient<T>,
-			expected_chain_id: U256,
-		) -> anyhow::Result<()>
-		where
-			T: Send + Sync + EthTransport,
-			T::Out: Send,
-		{
-			let chain_id = client
-				.chain_id()
-				.await
-				.context(format!("Failed to fetch chain id via {}.", T::transport_protocol()))?;
-
-			if chain_id != expected_chain_id {
-				return Err(anyhow!(
-					"Expected chain id {expected_chain_id}, {} client returned {chain_id}.",
-					T::transport_protocol()
-				))
-			}
-
-			Ok(())
-		}
-
-		let mut validation_errors = [
-			validate_client_chain_id(&dual_rpc.ws_client, expected_chain_id).await,
-			validate_client_chain_id(&dual_rpc.http_client, expected_chain_id).await,
-		]
-		.into_iter()
-		.filter_map(|res| res.err())
-		.peekable();
-
-		if validation_errors.peek().is_some() {
-			bail!("{}", format_iterator(validation_errors));
-		}
-
-		Ok(dual_rpc)
+		Self::inner_new(eth_settings, expected_chain_id).await
 	}
 
 	#[cfg(feature = "integration-test")]
@@ -404,14 +396,15 @@ impl EthDualRpcClient {
 		Self::inner_new(eth_settings).await
 	}
 
-	async fn inner_new(eth_settings: &settings::Eth) -> Result<Self> {
-		let ws_client = EthWsRpcClient::new(eth_settings)
+	async fn inner_new(eth_settings: &settings::Eth, expected_chain_id: U256) -> Result<Self> {
+		let ws_client = EthWsRpcClient::new(eth_settings, expected_chain_id)
 			.instrument(info_span!("Eth-Ws-RPC-Client"))
 			.await
 			.context("Failed to create EthWsRpcClient")?;
 
-		let http_client =
-			EthHttpRpcClient::new(eth_settings).context("Failed to create EthHttpRpcClient")?;
+		let http_client = EthHttpRpcClient::new(eth_settings, expected_chain_id)
+			.await
+			.context("Failed to create EthHttpRpcClient")?;
 
 		Ok(Self { ws_client, http_client })
 	}
