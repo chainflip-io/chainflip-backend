@@ -1,11 +1,11 @@
 use crate::{
 	mock::*, AddressPool, AddressStatus, ChannelAction, ChannelIdCounter, CrossChainMessage,
 	DeploymentStatus, DepositAddressDetailsLookup, DepositFetchIdOf, DepositWitness,
-	DisabledEgressAssets, Error, Event as PalletEvent, FetchOrTransfer, FetchParamDetails,
-	MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, WeightInfo,
+	DisabledEgressAssets, Error, Event as PalletEvent, FetchOrTransfer, MinimumDeposit, Pallet,
+	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, WeightInfo,
 };
 use cf_chains::{ChannelIdConstructor, ExecutexSwapAndCall, TransferAssetParams};
-use cf_primitives::{chains::assets::eth, BroadcastId, ChannelId, ForeignChain};
+use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
 use cf_traits::{
 	mocks::{
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
@@ -16,7 +16,6 @@ use cf_traits::{
 };
 use frame_support::{
 	assert_noop, assert_ok,
-	instances::Instance1,
 	traits::{Hooks, OriginTrait},
 	weights::Weight,
 };
@@ -409,7 +408,7 @@ fn addresses_are_getting_reused() {
 			)
 		})
 		.inspect_storage(|_| {
-			assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 2);
+			assert_eq!(ChannelIdCounter::<Test, _>::get(), 2);
 		})
 		.then_apply_extrinsics(|((_, addr_0), _)| {
 			[(
@@ -442,15 +441,15 @@ fn addresses_are_getting_reused() {
 		.inspect_storage(|((id_0, _), (id_1, _))| {
 			expect_size_of_address_pool(1);
 			// Address 1 is free to use and in the pool of available addresses
-			assert!(AddressPool::<Test, Instance1>::get(id_0).is_some());
+			assert!(AddressPool::<Test, _>::get(id_0).is_some());
 			// Address 2 not
-			assert!(AddressPool::<Test, Instance1>::get(id_1).is_none());
+			assert!(AddressPool::<Test, _>::get(id_1).is_none());
 		})
 		.then_execute_as_next_block(|((id_0, addr_0), _)| {
 			IngressEgress::close_channel(id_0, addr_0.try_into().unwrap());
 			assert_eq!(
-				AddressStatus::<Test, Instance1>::get(
-					AddressPool::<Test, Instance1>::get(id_0).expect("to have an address")
+				AddressStatus::<Test, _>::get(
+					AddressPool::<Test, _>::get(id_0).expect("to have an address")
 				),
 				DeploymentStatus::Deployed
 			);
@@ -470,7 +469,7 @@ fn addresses_are_getting_reused() {
 			// incremented
 		})
 		.inspect_storage(|_| {
-			assert_eq!(ChannelIdCounter::<Test, Instance1>::get(), 2);
+			assert_eq!(ChannelIdCounter::<Test, _>::get(), 2);
 			expect_size_of_address_pool(1);
 		});
 }

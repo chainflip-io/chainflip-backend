@@ -55,6 +55,12 @@ impl<
 		Self::put_storage(b"CALLBACKS", id, callback);
 		ids
 	}
+
+	fn threshold_sign_and_broadcast_for_rotation(
+		api_call: Self::ApiCall,
+	) -> (BroadcastId, ThresholdSignatureRequestId) {
+		Self::threshold_sign_and_broadcast(api_call)
+	}
 }
 
 impl<A, O: OriginTrait, C: UnfilteredDispatchable<RuntimeOrigin = O> + Member + Parameter>
@@ -62,9 +68,11 @@ impl<A, O: OriginTrait, C: UnfilteredDispatchable<RuntimeOrigin = O> + Member + 
 {
 	#[track_caller]
 	pub fn dispatch_callback(id: BroadcastId) {
-		Self::take_storage::<_, C>(b"CALLBACKS", &id)
-			.unwrap()
+		frame_support::assert_ok!(
 			// Use root origin as proxy for witness origin.
-			.dispatch_bypass_filter(OriginTrait::root());
+			Self::take_storage::<_, C>(b"CALLBACKS", &id)
+				.expect("Expected a callback.")
+				.dispatch_bypass_filter(OriginTrait::root()),
+		);
 	}
 }

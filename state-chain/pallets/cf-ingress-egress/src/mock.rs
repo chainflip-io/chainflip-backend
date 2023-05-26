@@ -8,9 +8,8 @@ pub use cf_primitives::{
 	chains::{assets, Ethereum},
 	Asset, AssetAmount, EthereumAddress, ETHEREUM_ETH_ADDRESS,
 };
-use cf_primitives::{BroadcastId, ThresholdSignatureRequestId};
 
-use frame_support::{instances::Instance1, parameter_types, traits::UnfilteredDispatchable};
+use frame_support::{parameter_types, traits::UnfilteredDispatchable};
 
 pub use cf_traits::Broadcaster;
 use cf_traits::{
