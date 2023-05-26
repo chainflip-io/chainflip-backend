@@ -140,6 +140,12 @@ pub enum CliCommand {
 	GenerateKeys {
 		#[clap(help = "Output path", parse(from_os_str))]
 		path: Option<PathBuf>,
+		#[clap(
+			help = "Output to the cmd line as JSON instead of saving to files",
+			long = "json",
+			short = 'j'
+		)]
+		output_as_json: bool,
 	},
 }
 
