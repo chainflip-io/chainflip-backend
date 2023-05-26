@@ -29,7 +29,8 @@ RUN curl -fsSL https://github.com/mozilla/sccache/releases/download/${SCCACHE_VE
     cp /tmp/sccache-${SCCACHE_VER}-x86_64-unknown-linux-musl/sccache /usr/local/cargo/bin/sccache && \
     rm -rf /tmp/sccache.tar.gz /tmp/sccache-${SCCACHE_VER}-x86_64-unknown-linux-musl
 
-RUN npm i -g pnpm@8
+# Install pnpm
+RUN curl -fsSL https://get.pnpm.io/install.sh | sh
 
 ARG NIGHTLY
 # Download and set nightly as the default Rust compiler
