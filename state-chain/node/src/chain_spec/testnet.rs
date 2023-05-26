@@ -31,7 +31,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		"1eb7cacaa47d19edbd35c578523b2278f9b4d49a4a25318f3fe3a21bf30d769a"
 	)),
 	dot_vault_account_id: None,
-	dot_runtime_version: RuntimeVersion { spec_version: 9320, transaction_version: 16 },
+	dot_runtime_version: RuntimeVersion { spec_version: 9360, transaction_version: 19 },
 };
 
 pub const BASHFUL_SR25519: [u8; 32] =
