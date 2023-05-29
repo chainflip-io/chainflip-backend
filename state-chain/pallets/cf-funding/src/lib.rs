@@ -31,7 +31,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
-use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Zero};
+use sp_runtime::traits::{AtLeast32BitUnsigned, BlockNumberProvider, CheckedSub, Saturating, Zero};
 use sp_std::prelude::*;
 
 /// This address is used by the Ethereum contracts to indicate that no withdrawal address was
@@ -78,7 +78,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config: cf_traits::Chainflip {
+	pub trait Config: cf_traits::Chainflip + frame_system::Config {
 		/// Standard Event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -154,6 +154,16 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type RedemptionTTLSeconds<T: Config> = StorageValue<_, u64, ValueQuery>;
 
+	/// Amount of Balance to take per Redeem. Set by Governance.
+	#[pallet::storage]
+	pub type WithdrawalTax<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
+
+	/// The total amount of Tokens collected as withdrawal tax for each block.
+	/// Used to reimburse block authors.
+	#[pallet::storage]
+	pub type CollectedWithdrawalTax<T: Config> =
+		StorageMap<_, Twox64Concat, T::BlockNumber, T::Balance, ValueQuery>;
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
@@ -197,19 +207,13 @@ pub mod pallet {
 		RedemptionSettled(AccountId<T>, FlipBalance<T>),
 
 		/// An account has stopped bidding and will no longer take part in auctions.
-		StoppedBidding {
-			account_id: AccountId<T>,
-		},
+		StoppedBidding { account_id: AccountId<T> },
 
 		/// A previously non-bidding account has started bidding.
-		StartedBidding {
-			account_id: AccountId<T>,
-		},
+		StartedBidding { account_id: AccountId<T> },
 
 		/// A redemption has expired without being executed.
-		RedemptionExpired {
-			account_id: AccountId<T>,
-		},
+		RedemptionExpired { account_id: AccountId<T> },
 
 		/// A funding attempt has failed.
 		FailedFundingAttempt {
@@ -217,10 +221,10 @@ pub mod pallet {
 			withdrawal_address: EthereumAddress,
 			amount: FlipBalance<T>,
 		},
-
-		MinimumFundingUpdated {
-			new_minimum: T::Balance,
-		},
+		/// The MinimumFunding storage is updated.
+		MinimumFundingUpdated { new_minimum: T::Balance },
+		/// The Withdrawal Tax amount is updated.
+		WithdrawalTaxAmountUpdated { amount: T::Balance },
 	}
 
 	#[pallet::error]
@@ -252,6 +256,9 @@ pub mod pallet {
 
 		/// The redemption signature could not be found.
 		SignatureNotReady,
+
+		// The amount of withdrawal is too low to pay for the Withdrawal Tax.
+		RedemptionAmountTooLow,
 	}
 
 	#[pallet::call]
@@ -323,8 +330,6 @@ pub mod pallet {
 				RedemptionAmount::Exact(amount) => amount,
 			};
 
-			ensure!(amount > Zero::zero(), Error::<T>::InvalidRedemption);
-
 			ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::InvalidRedemption);
 
 			// Not allowed to redeem if we are an active bidder in the auction phase
@@ -359,11 +364,14 @@ pub mod pallet {
 			// funds by the amount redeemed.
 			T::Flip::try_initiate_redemption(&account_id, amount)?;
 
-			let contract_expiry = T::TimeSource::now().as_secs() + RedemptionTTLSeconds::<T>::get();
+			// Deduct withdrawal fee from the redeemed amount
+			ensure!(amount > WithdrawalTax::<T>::get(), Error::<T>::RedemptionAmountTooLow);
+			let amount_minus_fee = amount.saturating_sub(WithdrawalTax::<T>::get());
 
+			let contract_expiry = T::TimeSource::now().as_secs() + RedemptionTTLSeconds::<T>::get();
 			let call = T::RegisterRedemption::new_unsigned(
 				<T as Config>::FunderId::from_ref(&account_id).as_ref(),
-				amount.into(),
+				amount_minus_fee.into(),
 				&address,
 				contract_expiry,
 			);
@@ -409,7 +417,13 @@ pub mod pallet {
 
 			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
 
-			T::Flip::finalize_redemption(&account_id).expect("This should never return an error because we already ensured above that the pending redemption does indeed exist");
+			let withdrawal_tax = WithdrawalTax::<T>::get();
+			T::Flip::finalize_redemption(&account_id, Some(withdrawal_tax))
+				.expect("This should never return an error because we already ensured above that the pending redemption does indeed exist");
+			CollectedWithdrawalTax::<T>::mutate(
+				frame_system::Pallet::<T>::current_block_number(),
+				|collected| *collected = collected.saturating_add(withdrawal_tax),
+			);
 
 			if T::Flip::account_balance(&account_id).is_zero() {
 				frame_system::Provider::<T>::killed(&account_id).unwrap_or_else(|e| {
@@ -515,6 +529,22 @@ pub mod pallet {
 			MinimumFunding::<T>::put(minimum_funding);
 			Self::deposit_event(Event::MinimumFundingUpdated { new_minimum: minimum_funding });
 			Ok(().into())
+		}
+
+		/// Sets the amount of Withdrawal Tax - amount of Flip to take from each withdrawal.
+		///
+		/// Requires Governance
+		///
+		/// ## Events
+		///
+		/// - [On update](Event::WithdrawalTaxAmountUpdated)
+		#[pallet::weight(T::WeightInfo::update_withdrawal_tax())]
+		pub fn update_withdrawal_tax(origin: OriginFor<T>, amount: T::Balance) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			WithdrawalTax::<T>::set(amount);
+
+			Self::deposit_event(Event::<T>::WithdrawalTaxAmountUpdated { amount });
+			Ok(())
 		}
 	}
 

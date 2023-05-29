@@ -276,7 +276,7 @@ impl FlipOperation {
 					expected_redeemable_balance,
 					<Flip as Funding>::redeemable_balance(account_id)
 				);
-				<Flip as Funding>::finalize_redemption(account_id)
+				<Flip as Funding>::finalize_redemption(account_id, None)
 					.expect("Pending Redemption should exist");
 				if !MockOnAccountFunded::has_account_been_funded(account_id) {
 					return false

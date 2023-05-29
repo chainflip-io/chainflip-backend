@@ -1,5 +1,6 @@
 use crate::{
 	mock::*, pallet, ActiveBidder, Error, EthereumAddress, PendingRedemptions, RedemptionAmount,
+	WithdrawalTax,
 };
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
@@ -528,3 +529,55 @@ fn maintenance_mode_blocks_redemption_requests() {
 		MockSystemStateInfo::set_maintenance(false);
 	});
 }
+
+#[test]
+fn can_update_withdrawal_tax() {
+	new_test_ext().execute_with(|| {
+		let amount = 1_000;
+		assert_eq!(WithdrawalTax::<Test>::get(), 0);
+		assert_ok!(Funding::update_withdrawal_tax(RuntimeOrigin::root(), amount));
+		assert_eq!(WithdrawalTax::<Test>::get(), amount);
+	});
+}
+
+// #[test]
+// fn cannot_withdraw_lower_than_withdrawal_tax() {
+// 	new_test_ext().execute_with(|| {
+// 		let amount = 1_000;
+// 		assert_ok!(LiquidityProvider::set_withdrawal_tax(RuntimeOrigin::root(), amount));
+// 		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, amount + 1);
+
+// 		assert_noop!(LiquidityProvider::withdraw_asset(
+// 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+// 			amount,
+// 			Asset::Eth,
+// 			EncodedAddress::Eth(Default::default()),
+// 		), crate::Error::<Test>::WithdrawalAmountTooLow);
+// 	});
+// }
+
+// #[test]
+// fn withdrawal_tax_is_collected_on_withdrawal() {
+// 	new_test_ext().execute_with(|| {
+// 		let tax = 1_000;
+// 		let amount = 5_000;
+// 		assert_ok!(LiquidityProvider::set_withdrawal_tax(RuntimeOrigin::root(), tax));
+// 		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, tax + amount);
+
+// 		assert_ok!(LiquidityProvider::withdraw_asset(
+// 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+// 			amount * 2,
+// 			Asset::Eth,
+// 			EncodedAddress::Eth(Default::default()),
+// 		));
+
+// 		let now = System::current_block_number();
+// 		assert_eq!(CollectedWithdrawalTax::<Test>::get(now), amount);
+// 		System::assert_last_event(RuntimeEvent::LiquidityProvider(crate::Event::<Test>::WithdrawalEgressScheduled {
+// 			egress_id: (),
+// 			asset: (),
+// 			amount: (),
+// 			destination_address: () }));
+
+// 	});
+// }

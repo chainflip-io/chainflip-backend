@@ -167,5 +167,16 @@ benchmarks! {
 		assert_eq!(MinimumFunding::<T>::get(), MinimumFunding::<T>::get());
 	}
 
+	update_withdrawal_tax {
+		let amount = 1_000u128.into();
+		let call = Call::<T>::update_withdrawal_tax {
+			amount,
+		};
+	}: {
+		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+	} verify {
+		assert_eq!(crate::WithdrawalTax::<T>::get(), amount);
+	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }
