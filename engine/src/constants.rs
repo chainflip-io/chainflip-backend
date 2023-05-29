@@ -15,6 +15,9 @@ pub const BLOCK_PULL_TIMEOUT_MULTIPLIER: u64 = 3;
 
 // ======= Eth Rpc Client =======
 
+/// Duration before we timeout an HTTP request to the Ethereum node
+pub const ETH_HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
+
 /// Average time it takes to mine a block on Ethereum.
 pub const ETH_AVERAGE_BLOCK_TIME_SECONDS: u64 = 14;
 

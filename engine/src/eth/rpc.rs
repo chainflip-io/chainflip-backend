@@ -1,3 +1,4 @@
+use futures_core::Future;
 use tracing::{debug, error, info};
 use utilities::{context, make_periodic_tick};
 use web3::{
@@ -18,7 +19,7 @@ use anyhow::{anyhow, Context, Result};
 
 use super::{redact_secret_eth_node_endpoint, TransportProtocol};
 use crate::{
-	constants::{ETH_LOG_REQUEST_TIMEOUT, SYNC_POLL_INTERVAL},
+	constants::{ETH_HTTP_REQUEST_TIMEOUT, ETH_LOG_REQUEST_TIMEOUT, SYNC_POLL_INTERVAL},
 	settings,
 	witnesser::LatestBlockNumber,
 };
@@ -113,6 +114,17 @@ pub trait EthRpcApi: Send + Sync {
 	) -> Result<FeeHistory>;
 }
 
+async fn with_rpc_timeout<F: Future, O, Err>(request_future: F) -> Result<O>
+where
+	F: Future<Output = std::result::Result<O, Err>>,
+	Err: Into<anyhow::Error>,
+{
+	tokio::time::timeout(ETH_HTTP_REQUEST_TIMEOUT, request_future)
+		.await
+		.context("HTTP RPC request timed out")?
+		.map_err(|e| e.into())
+}
+
 #[async_trait]
 impl<T> EthRpcApi for EthRpcClient<T>
 where
@@ -120,9 +132,7 @@ where
 	T::Out: Send,
 {
 	async fn estimate_gas(&self, req: CallRequest) -> Result<U256> {
-		self.web3
-			.eth()
-			.estimate_gas(req, None)
+		with_rpc_timeout(self.web3.eth().estimate_gas(req, None))
 			.await
 			.context(format!("{} client: Failed to estimate gas", T::transport_protocol()))
 	}
@@ -132,17 +142,13 @@ where
 		tx: TransactionParameters,
 		key: &SecretKey,
 	) -> Result<SignedTransaction> {
-		self.web3
-			.accounts()
-			.sign_transaction(tx, SecretKeyRef::from(key))
+		with_rpc_timeout(self.web3.accounts().sign_transaction(tx, SecretKeyRef::from(key)))
 			.await
 			.context(format!("{} client: Failed to sign transaction", T::transport_protocol()))
 	}
 
 	async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256> {
-		self.web3
-			.eth()
-			.send_raw_transaction(rlp)
+		with_rpc_timeout(self.web3.eth().send_raw_transaction(rlp))
 			.await
 			.context(format!("{} client: Failed to send raw transaction", T::transport_protocol()))
 	}
@@ -160,17 +166,13 @@ where
 	}
 
 	async fn chain_id(&self) -> Result<U256> {
-		self.web3
-			.eth()
-			.chain_id()
+		with_rpc_timeout(self.web3.eth().chain_id())
 			.await
 			.context(format!("{} client: Failed to fetch ETH ChainId", T::transport_protocol()))
 	}
 
 	async fn transaction_receipt(&self, tx_hash: H256) -> Result<TransactionReceipt> {
-		self.web3
-			.eth()
-			.transaction_receipt(tx_hash)
+		with_rpc_timeout(self.web3.eth().transaction_receipt(tx_hash))
 			.await
 			.context(format!("{} client: Failed to fetch ETH transaction", T::transport_protocol()))
 			.and_then(|opt_block| {
@@ -185,9 +187,7 @@ where
 	}
 
 	async fn block(&self, block_number: U64) -> Result<Block<H256>> {
-		self.web3
-			.eth()
-			.block(block_number.into())
+		with_rpc_timeout(self.web3.eth().block(block_number.into()))
 			.await
 			.context(format!("{} client: Failed to fetch block", T::transport_protocol()))
 			.and_then(|opt_block| {
@@ -202,10 +202,7 @@ where
 	}
 
 	async fn successful_transactions(&self, block_number: U64) -> Result<Vec<Transaction>> {
-		let block_with_txs = self
-			.web3
-			.eth()
-			.block_with_txs(block_number.into())
+		let block_with_txs = with_rpc_timeout(self.web3.eth().block_with_txs(block_number.into()))
 			.await
 			.context(format!(
 				"{} client: Failed to fetch block with transactions",
@@ -251,17 +248,19 @@ where
 		newest_block: BlockNumber,
 		reward_percentiles: Option<Vec<f64>>,
 	) -> Result<FeeHistory> {
-		self.web3
-			.eth()
-			.fee_history(block_count, newest_block, reward_percentiles.clone())
-			.await
-			.context(format!(
-				"{} client: Call failed: fee_history({:?}, {:?}, {:?})",
-				T::transport_protocol(),
-				block_count,
-				newest_block,
-				reward_percentiles,
-			))
+		with_rpc_timeout(self.web3.eth().fee_history(
+			block_count,
+			newest_block,
+			reward_percentiles.clone(),
+		))
+		.await
+		.context(format!(
+			"{} client: Call failed: fee_history({:?}, {:?}, {:?})",
+			T::transport_protocol(),
+			block_count,
+			newest_block,
+			reward_percentiles,
+		))
 	}
 }
 
