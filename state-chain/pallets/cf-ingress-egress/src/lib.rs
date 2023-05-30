@@ -381,16 +381,12 @@ pub mod pallet {
 			addresses: Vec<(DepositFetchIdOf<T, I>, TargetChainAccount<T, I>)>,
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
-			for (deposit_fetch_id, deposit_address) in addresses {
+			for (_, deposit_address) in addresses {
 				if AddressStatus::<T, I>::get(deposit_address.clone()) == DeploymentStatus::Pending
 				{
 					if let Some(deposit_address_details) =
 						DepositAddressDetailsLookup::<T, I>::get(deposit_address.clone())
 					{
-						FetchParamDetails::<T, I>::insert(
-							deposit_address_details.channel_id,
-							(deposit_fetch_id, deposit_address.clone()),
-						);
 						FetchParamDetails::<T, I>::insert(
 							deposit_address_details.channel_id,
 							(
@@ -401,7 +397,6 @@ pub mod pallet {
 								deposit_address.clone(),
 							),
 						);
-						AddressStatus::<T, I>::insert(deposit_address, DeploymentStatus::Deployed);
 					} else {
 						log::error!(
 							target: "cf-ingress-egress",
@@ -409,6 +404,7 @@ pub mod pallet {
 							deposit_address
 						);
 					}
+					AddressStatus::<T, I>::insert(deposit_address, DeploymentStatus::Deployed);
 				}
 			}
 			Ok(())
