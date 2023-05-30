@@ -44,10 +44,7 @@ async fn filter_successful_txs<'a, Rpc>(
 where
 	Rpc: EthRpcApi + Send + Sync,
 {
-	let futures = txs.iter().map(|(tx, _)| tx).map(|tx| {
-		let tx_hash = tx.hash.clone();
-		eth_rpc.transaction_receipt(tx_hash)
-	});
+	let futures = txs.iter().map(|(tx, _)| tx).map(|tx| eth_rpc.transaction_receipt(tx.hash));
 	let receipts = utilities::execute_in_batches(futures, 10)
 		.await?
 		.into_iter()
@@ -57,9 +54,7 @@ where
 	let statuses = receipts
 		.into_iter()
 		.map(|receipt| {
-			Ok(receipt
-				.status
-				.ok_or_else(|| anyhow::anyhow!("receipt did not contain status"))?)
+			receipt.status.ok_or_else(|| anyhow::anyhow!("receipt did not contain status"))
 		})
 		.collect::<Result<Vec<_>, anyhow::Error>>()?;
 

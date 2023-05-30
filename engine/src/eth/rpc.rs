@@ -14,7 +14,7 @@ use web3_secp256k1::SecretKey;
 
 use futures::{
 	future::{select, Either},
-	FutureExt, StreamExt, TryStreamExt,
+	FutureExt,
 };
 
 use anyhow::{anyhow, bail, Context, Result};
