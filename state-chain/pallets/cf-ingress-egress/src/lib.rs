@@ -785,6 +785,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			let new_address: TargetChainAccount<T, I> =
 				T::AddressDerivation::generate_address(source_asset, next_channel_id)?;
 			AddressStatus::<T, I>::insert(new_address.clone(), DeploymentStatus::Undeployed);
+			DepositAddressDetailsLookup::<T, I>::insert(
+				new_address.clone(),
+				DepositAddressDetails { channel_id: next_channel_id, source_asset },
+			);
 			ChannelIdCounter::<T, I>::put(next_channel_id);
 			(
 				new_address.clone(),
@@ -793,10 +797,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			)
 		};
 		FetchParamDetails::<T, I>::insert(channel_id, (deposit_fetch_id, address.clone()));
-		DepositAddressDetailsLookup::<T, I>::insert(
-			&address,
-			DepositAddressDetails { channel_id, source_asset },
-		);
+
 		ChannelActions::<T, I>::insert(&address, channel_action);
 		T::DepositHandler::on_channel_opened(address.clone(), channel_id)?;
 		Ok((channel_id, address))
@@ -810,11 +811,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		{
 			AddressPool::<T, I>::insert(channel_id, address.clone());
 		}
-		if let Some(deposit_address_details) = DepositAddressDetailsLookup::<T, I>::take(&address) {
-			Self::deposit_event(Event::<T, I>::StopWitnessing {
-				deposit_address: address,
-				source_asset: deposit_address_details.source_asset,
-			});
+
+		Self::deposit_event(Event::<T, I>::StopWitnessing {
+			deposit_address: address.clone(),
+			source_asset: DepositAddressDetailsLookup::<T, I>::get(&address)
+				.expect("sds")
+				.source_asset,
+		});
+
+		if T::TargetChain::get() == ForeignChain::Bitcoin {
+			DepositAddressDetailsLookup::<T, I>::remove(address.clone());
+			FetchParamDetails::<T, I>::remove(channel_id);
+			AddressStatus::<T, I>::remove(address);
 		}
 	}
 }
