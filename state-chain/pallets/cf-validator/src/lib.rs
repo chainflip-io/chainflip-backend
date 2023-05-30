@@ -20,7 +20,7 @@ mod benchmarking;
 mod rotation_state;
 
 pub use auction_resolver::*;
-use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
+use cf_primitives::{AuthorityCount, EpochIndex};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidderProvider, Bonding,
 	Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch,
@@ -72,32 +72,16 @@ type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
 // Might be better to add the enum inside a struct rather than struct inside enum
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
+#[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
 #[scale_info(skip_type_params(T))]
 pub enum RotationPhase<T: Config> {
+	#[default]
 	Idle,
 	KeygensInProgress(RuntimeRotationState<T>),
 	KeyHandoversInProgress(RuntimeRotationState<T>),
 	ActivatingKeys(RuntimeRotationState<T>),
 	NewKeysActivated(RuntimeRotationState<T>),
 	SessionRotating(RuntimeRotationState<T>),
-}
-
-impl<T: Config> Default for RotationPhase<T> {
-	fn default() -> Self {
-		RotationPhase::Idle
-	}
-}
-
-pub struct CeremonyIdProvider<T>(PhantomData<T>);
-
-impl<T: Config> cf_traits::CeremonyIdProvider for CeremonyIdProvider<T> {
-	fn increment_ceremony_id() -> CeremonyId {
-		CeremonyIdCounter::<T>::mutate(|id| {
-			*id += 1;
-			*id
-		})
-	}
 }
 
 type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;
@@ -266,11 +250,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type HistoricalActiveEpochs<T: Config> =
 		StorageMap<_, Twox64Concat, ValidatorIdOf<T>, Vec<EpochIndex>, ValueQuery>;
-
-	/// Counter for generating unique ceremony ids.
-	#[pallet::storage]
-	#[pallet::getter(fn ceremony_id_counter)]
-	pub type CeremonyIdCounter<T> = StorageValue<_, CeremonyId, ValueQuery>;
 
 	/// Backups, validator nodes who are not in the authority set.
 	#[pallet::storage]

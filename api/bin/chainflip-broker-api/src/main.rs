@@ -10,7 +10,6 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	server::ServerBuilder,
 };
-use serde_json::json;
 use std::path::PathBuf;
 
 #[rpc(server, client, namespace = "broker")]
@@ -26,7 +25,7 @@ pub trait Rpc {
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
 		message_metadata: Option<CcmDepositMetadata>,
-	) -> Result<String, Error>;
+	) -> Result<chainflip_api::SwapDepositAddress, Error>;
 }
 
 pub struct RpcServerImpl {
@@ -53,7 +52,7 @@ impl RpcServer for RpcServerImpl {
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
 		message_metadata: Option<CcmDepositMetadata>,
-	) -> Result<String, Error> {
+	) -> Result<chainflip_api::SwapDepositAddress, Error> {
 		Ok(chainflip_api::request_swap_deposit_address(
 			&self.state_chain_settings,
 			source_asset,
@@ -63,9 +62,6 @@ impl RpcServer for RpcServerImpl {
 			message_metadata,
 		)
 		.await
-		.map(|(address, expiry_block)| {
-			json!({ "address": address.to_string(), "expiry_block": expiry_block }).to_string()
-		})
 		.map_err(|e| anyhow!("{}:{}", e, e.root_cause()))?)
 	}
 }

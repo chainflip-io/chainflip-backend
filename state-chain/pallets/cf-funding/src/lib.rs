@@ -17,6 +17,8 @@ pub use weights::WeightInfo;
 mod tests;
 
 use cf_chains::RegisterRedemption;
+#[cfg(feature = "std")]
+use cf_primitives::AccountRole;
 use cf_primitives::EthereumAddress;
 use cf_traits::{Bid, BidderProvider, EpochInfo, Funding, SystemStateInfo};
 use frame_support::{
@@ -49,7 +51,7 @@ pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 pub mod pallet {
 	use super::*;
 	use cf_chains::eth::Ethereum;
-	use cf_primitives::{AccountRole, BroadcastId};
+	use cf_primitives::BroadcastId;
 	use cf_traits::{AccountRoleRegistry, Broadcaster};
 	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;

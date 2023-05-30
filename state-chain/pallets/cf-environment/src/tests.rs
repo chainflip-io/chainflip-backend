@@ -1,4 +1,7 @@
-use cf_chains::dot::{RuntimeVersion, TEST_RUNTIME_VERSION};
+use cf_chains::{
+	btc::{api::UtxoSelectionType, Utxo},
+	dot::{RuntimeVersion, TEST_RUNTIME_VERSION},
+};
 use cf_primitives::chains::assets::eth::Asset;
 use cf_traits::SystemStateInfo;
 use frame_support::{assert_noop, assert_ok};
@@ -119,5 +122,57 @@ fn test_update_polkadot_runtime_version() {
 		};
 		assert_ok!(Environment::update_polkadot_runtime_version(RuntimeOrigin::root(), update_to));
 		assert_eq!(Environment::polkadot_runtime_version(), update_to);
+	});
+}
+
+#[test]
+fn test_btc_utxo_selection() {
+	new_test_ext().execute_with(|| {
+		// returns none when there are no utxos available for selection
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectAllForRotation),
+			None
+		);
+
+		// add some UTXOs to the available utxos list.
+		Environment::add_bitcoin_utxo_to_list(10000, Default::default(), Default::default());
+		Environment::add_bitcoin_utxo_to_list(5000, Default::default(), Default::default());
+		Environment::add_bitcoin_utxo_to_list(100000, Default::default(), Default::default());
+		Environment::add_bitcoin_utxo_to_list(5000000, Default::default(), Default::default());
+		Environment::add_bitcoin_utxo_to_list(25000, Default::default(), Default::default());
+
+		// select some utxos for a tx
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::Some {
+				output_amount: 12000,
+				number_of_outputs: 2
+			})
+			.unwrap(),
+			(
+				vec![
+					Utxo { amount: 5000, ..Default::default() },
+					Utxo { amount: 10000, ..Default::default() },
+					Utxo { amount: 25000, ..Default::default() },
+					Utxo { amount: 100000, ..Default::default() }
+				],
+				120080
+			)
+		);
+
+		// add the change utxo back to the available utxo list
+		Environment::add_bitcoin_utxo_to_list(120080, Default::default(), Default::default());
+
+		// select all remaining utxos
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectAllForRotation)
+				.unwrap(),
+			(
+				vec![
+					Utxo { amount: 5000000, ..Default::default() },
+					Utxo { amount: 120080, ..Default::default() },
+				],
+				5116060
+			)
+		);
 	});
 }

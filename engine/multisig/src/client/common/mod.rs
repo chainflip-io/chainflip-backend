@@ -108,7 +108,11 @@ type PublicKeyShares<C> = BTreeMap<AccountId, <C as CryptoScheme>::Point>;
 /// Holds state relevant to the role in the handover ceremony.
 #[derive(Debug)]
 pub enum ParticipantStatus<C: CryptoScheme> {
-	Sharing(SecretShare<C>, PublicKeyShares<C>),
+	Sharing {
+		secret_share: SecretShare<C>,
+		public_key_shares: PublicKeyShares<C>,
+		original_key: KeygenResultInfo<C>,
+	},
 	/// This becomes `NonSharingReceivedKeys` after shares are broadcast
 	NonSharing,
 	NonSharingReceivedKeys(PublicKeyShares<C>),
@@ -156,7 +160,7 @@ impl<C: CryptoScheme> ResharingContext<C> {
 			<C::Point as ECPoint>::Scalar::zero()
 		};
 
-		let party_public_keys = key
+		let public_key_shares = key
 			.validator_mapping
 			.get_all_ids()
 			.iter()
@@ -182,7 +186,11 @@ impl<C: CryptoScheme> ResharingContext<C> {
 		let context = ResharingContext::without_key(sharing_participants, receiving_participants);
 
 		ResharingContext {
-			party_status: ParticipantStatus::Sharing(secret_share, party_public_keys),
+			party_status: ParticipantStatus::Sharing {
+				secret_share,
+				public_key_shares,
+				original_key: key.clone(),
+			},
 			..context
 		}
 	}

@@ -13,7 +13,7 @@ jobs:
   packages:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -35,7 +35,7 @@ jobs:
       - name: Build global packages
         run: |
           cargo deb -v --no-build --no-strip -p chainflip-node --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ inputs.network }}
-          cargo deb -v --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.get-date.outputs.date }}"
+          cargo deb -v --no-build --no-strip -p chainflip-engine --deb-revision "${{ steps.get-date.outputs.date }}" --variant=${{ inputs.network }}
           cargo deb -v --no-build --no-strip -p chainflip-cli --deb-revision "${{ steps.get-date.outputs.date }}"
           cargo deb -v --no-build --no-strip -p chainflip-broker-api --deb-revision "${{ steps.get-date.outputs.date }}"
 

@@ -137,7 +137,6 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 		let verified_commitments = match try_deserialize(verified_commitments) {
 			Ok(res) => res,
 			Err(bad_parties) =>
-			// TODO: unit test for this
 				return SigningStageResult::Error(
 					bad_parties,
 					SigningFailureReason::DeserializationError,
@@ -312,7 +311,6 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 		let local_sigs = match try_deserialize(local_sigs) {
 			Ok(res) => res,
 			Err(bad_parties) =>
-			// TODO: unit test for this
 				return SigningStageResult::Error(
 					bad_parties,
 					SigningFailureReason::DeserializationError,

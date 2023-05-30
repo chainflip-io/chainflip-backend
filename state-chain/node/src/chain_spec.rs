@@ -53,8 +53,6 @@ where
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
 
-const BITCOIN_FEE_PER_UTXO: u64 = 1000; // Todo: what value to put here?
-
 /// generate session keys from Aura and Grandpa keys
 pub fn session_keys(aura: AuraId, grandpa: GrandpaId) -> SessionKeys {
 	SessionKeys { aura, grandpa }
@@ -236,7 +234,6 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					polkadot_vault_account_id: dot_vault_account_id.clone(),
 					polkadot_runtime_version: dot_runtime_version,
 					bitcoin_network: BitcoinNetwork::Regtest,
-					bitcoin_fee_per_utxo: BITCOIN_FEE_PER_UTXO,
 				},
 				eth_init_agg_key,
 				ethereum_deployment_block,
@@ -346,8 +343,7 @@ macro_rules! network_spec {
 								polkadot_genesis_hash: dot_genesis_hash,
 								polkadot_vault_account_id: dot_vault_account_id.clone(),
 								polkadot_runtime_version: dot_runtime_version,
-								bitcoin_network: BitcoinNetwork::Regtest,
-								bitcoin_fee_per_utxo: BITCOIN_FEE_PER_UTXO,
+								bitcoin_network: BITCOIN_NETWORK,
 							},
 							eth_init_agg_key,
 							ethereum_deployment_block,

@@ -7,8 +7,8 @@ use cf_chains::{eth::Ethereum, mocks::MockAggKey};
 use cf_primitives::GENESIS_EPOCH;
 use cf_test_utilities::{last_event, maybe_last_event};
 use cf_traits::{
-	mocks::{ceremony_id_provider::MockCeremonyIdProvider, threshold_signer::MockThresholdSigner},
-	AccountRoleRegistry, AsyncResult, Chainflip, EpochInfo, KeyProvider, VaultRotator, VaultStatus,
+	mocks::threshold_signer::MockThresholdSigner, AccountRoleRegistry, AsyncResult, Chainflip,
+	EpochInfo, KeyProvider, VaultRotator, VaultStatus,
 };
 use frame_support::{
 	assert_noop, assert_ok, pallet_prelude::DispatchResultWithPostInfo, traits::Hooks,
@@ -30,7 +30,7 @@ macro_rules! assert_last_event {
 }
 
 fn current_ceremony_id() -> CeremonyId {
-	MockCeremonyIdProvider::get()
+	VaultsPallet::ceremony_id_counter()
 }
 
 const ALL_CANDIDATES: &[<MockRuntime as Chainflip>::ValidatorId] = &[ALICE, BOB, CHARLIE];
@@ -189,7 +189,7 @@ fn keygen_called_after_keygen_failure_restarts_rotation_at_keygen() {
 fn keygen_verification_failure() {
 	new_test_ext().execute_with(|| {
 		let rotation_epoch_index = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
-		let participants = (5u64..15).into_iter().collect::<BTreeSet<_>>();
+		let participants = (5u64..15).collect::<BTreeSet<_>>();
 		let keygen_ceremony_id = 12;
 
 		let request_id = VaultsPallet::trigger_keygen_verification(
@@ -771,7 +771,7 @@ fn set_keygen_response_timeout_works() {
 }
 
 #[test]
-fn when_set_agg_key_with_agg_key_not_required_we_skip_activation() {
+fn when_set_agg_key_with_agg_key_not_required_we_wait_for_governance() {
 	new_test_ext().execute_with(|| {
 		PendingVaultRotation::put(VaultRotationStatus::<MockRuntime, _>::KeyHandoverComplete {
 			new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER,
@@ -780,7 +780,12 @@ fn when_set_agg_key_with_agg_key_not_required_we_skip_activation() {
 		MockSetAggKeyWithAggKey::set_required(false);
 
 		VaultsPallet::activate();
-
-		assert_eq!(VaultsPallet::status(), AsyncResult::Ready(VaultStatus::RotationComplete));
+		assert_eq!(
+			last_event::<MockRuntime>(),
+			PalletEvent::<MockRuntime, _>::AwaitingGovernanceActivation {
+				new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER
+			}
+			.into()
+		);
 	})
 }

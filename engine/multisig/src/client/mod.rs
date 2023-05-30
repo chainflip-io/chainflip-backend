@@ -255,7 +255,8 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 		participants: BTreeSet<AccountId>,
 	) -> BoxFuture<'_, Result<C::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>> {
 		assert!(participants.contains(&self.my_account_id));
-		let span = info_span!("Keygen Ceremony", ceremony_id = ceremony_id);
+		let span =
+			info_span!("Keygen Ceremony", ceremony_id = ceremony_id_string::<C>(ceremony_id));
 		let _entered = span.enter();
 
 		info!(
@@ -279,7 +280,8 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 		'_,
 		Result<<C as CryptoScheme>::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>,
 	> {
-		let span = info_span!("Key Handover Ceremony", ceremony_id = ceremony_id);
+		let span =
+			info_span!("Key Handover Ceremony", ceremony_id = ceremony_id_string::<C>(ceremony_id));
 		let _entered = span.enter();
 
 		debug!(
@@ -321,7 +323,8 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 		signers: BTreeSet<AccountId>,
 		signing_info: Vec<(KeyId, C::SigningPayload)>,
 	) -> BoxFuture<'_, Result<Vec<C::Signature>, (BTreeSet<AccountId>, SigningFailureReason)>> {
-		let span = info_span!("Signing Ceremony", ceremony_id = ceremony_id);
+		let span =
+			info_span!("Signing Ceremony", ceremony_id = ceremony_id_string::<C>(ceremony_id));
 		let _entered = span.enter();
 
 		assert!(signers.contains(&self.my_account_id));
@@ -384,4 +387,10 @@ impl<C: CryptoScheme, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 			.send(CeremonyRequest { ceremony_id, details: None })
 			.unwrap();
 	}
+}
+
+/// Outputs the ceremony id with the name of the crypto scheme to make it visibly unique in the
+/// logs.
+pub fn ceremony_id_string<C: CryptoScheme>(ceremony_id: CeremonyId) -> String {
+	format!("{}({ceremony_id})", C::NAME)
 }
