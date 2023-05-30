@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, pallet, ActiveBidder, Error, EthereumAddress, PendingRedemptions, RedemptionAmount,
-	WithdrawalTax,
+	mock::*, pallet, ActiveBidder, CollectedWithdrawalTax, Error, EthereumAddress,
+	PendingRedemptions, RedemptionAmount, WithdrawalTax,
 };
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
@@ -12,7 +12,10 @@ use cf_traits::{
 
 use frame_support::{assert_noop, assert_ok};
 use pallet_cf_flip::Bonder;
-use sp_runtime::{traits::BadOrigin, DispatchError};
+use sp_runtime::{
+	traits::{BadOrigin, BlockNumberProvider},
+	DispatchError,
+};
 
 type FlipError = pallet_cf_flip::Error<Test>;
 
@@ -537,47 +540,84 @@ fn can_update_withdrawal_tax() {
 		assert_eq!(WithdrawalTax::<Test>::get(), 0);
 		assert_ok!(Funding::update_withdrawal_tax(RuntimeOrigin::root(), amount));
 		assert_eq!(WithdrawalTax::<Test>::get(), amount);
+		System::assert_last_event(RuntimeEvent::Funding(
+			crate::Event::<Test>::WithdrawalTaxAmountUpdated { amount },
+		));
 	});
 }
 
-// #[test]
-// fn cannot_withdraw_lower_than_withdrawal_tax() {
-// 	new_test_ext().execute_with(|| {
-// 		let amount = 1_000;
-// 		assert_ok!(LiquidityProvider::set_withdrawal_tax(RuntimeOrigin::root(), amount));
-// 		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, amount + 1);
+#[test]
+fn cannot_withdraw_lower_than_withdrawal_tax() {
+	new_test_ext().execute_with(|| {
+		let amount = 1_000;
+		assert_ok!(Funding::update_withdrawal_tax(RuntimeOrigin::root(), amount));
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			amount,
+			Default::default(),
+			Default::default(),
+		));
 
-// 		assert_noop!(LiquidityProvider::withdraw_asset(
-// 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
-// 			amount,
-// 			Asset::Eth,
-// 			EncodedAddress::Eth(Default::default()),
-// 		), crate::Error::<Test>::WithdrawalAmountTooLow);
-// 	});
-// }
+		assert_noop!(
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				RedemptionAmount::Exact(amount),
+				Default::default(),
+			),
+			crate::Error::<Test>::RedemptionAmountTooLow
+		);
 
-// #[test]
-// fn withdrawal_tax_is_collected_on_withdrawal() {
-// 	new_test_ext().execute_with(|| {
-// 		let tax = 1_000;
-// 		let amount = 5_000;
-// 		assert_ok!(LiquidityProvider::set_withdrawal_tax(RuntimeOrigin::root(), tax));
-// 		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, tax + amount);
+		// Reduce the withdrawal tax
+		assert_ok!(Funding::update_withdrawal_tax(RuntimeOrigin::root(), amount - 1));
 
-// 		assert_ok!(LiquidityProvider::withdraw_asset(
-// 			RuntimeOrigin::signed(LP_ACCOUNT.into()),
-// 			amount * 2,
-// 			Asset::Eth,
-// 			EncodedAddress::Eth(Default::default()),
-// 		));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			RedemptionAmount::Exact(amount),
+			Default::default()
+		));
+	});
+}
 
-// 		let now = System::current_block_number();
-// 		assert_eq!(CollectedWithdrawalTax::<Test>::get(now), amount);
-// 		System::assert_last_event(RuntimeEvent::LiquidityProvider(crate::Event::<Test>::WithdrawalEgressScheduled {
-// 			egress_id: (),
-// 			asset: (),
-// 			amount: (),
-// 			destination_address: () }));
+#[test]
+fn withdrawal_tax_is_collected_on_withdrawal() {
+	new_test_ext().execute_with(|| {
+		let tax = 1_000;
+		let amount = 5_000;
+		assert_ok!(Funding::update_withdrawal_tax(RuntimeOrigin::root(), tax));
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			tax + amount,
+			Default::default(),
+			Default::default(),
+		));
 
-// 	});
-// }
+		let previous_total_issuance = Flip::total_issuance();
+		let previous_offchain = Flip::offchain_funds();
+
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			RedemptionAmount::Exact(tax + amount),
+			Default::default()
+		));
+		// Send TotalAmount - tax
+		assert_eq!(MockBroadcaster::received_requests(), vec![amount]);
+
+		assert_ok!(Funding::redeemed(
+			RuntimeOrigin::root(),
+			ALICE,
+			tax + amount,
+			Default::default()
+		));
+
+		// Tax is collected
+		let now = System::current_block_number();
+		assert_eq!(CollectedWithdrawalTax::<Test>::get(now), tax);
+
+		// Tax is burned
+		assert_eq!(Flip::total_issuance(), previous_total_issuance - tax);
+		// Total - tax is bridged out.
+		assert_eq!(Flip::offchain_funds(), previous_offchain + amount);
+	});
+}
