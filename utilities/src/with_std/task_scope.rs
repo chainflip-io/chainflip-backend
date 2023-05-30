@@ -140,7 +140,10 @@ pub async fn task_scope<
 		},
 		// This async move scope ensures scope is dropped when top_level_task and its returned
 		// future finish (Instead of when this function exits)
-		top_level_task(&scope)
+		#[allow(clippy::redundant_async_block)]
+		async move {
+			top_level_task(&scope).await
+		}
 	)
 	.map(|(_, t)| t)
 }
