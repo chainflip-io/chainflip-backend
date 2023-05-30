@@ -22,11 +22,7 @@ const ETH_FLIP: eth::Asset = eth::Asset::Flip;
 const EXPIRY_BLOCK: u64 = 6;
 
 fn expect_size_of_address_pool(size: usize) {
-	assert_eq!(
-		AddressPool::<Test>::iter_keys().into_iter().count(),
-		size,
-		"Address pool size is incorrect!"
-	);
+	assert_eq!(AddressPool::<Test>::iter_keys().count(), size, "Address pool size is incorrect!");
 }
 
 #[test]
