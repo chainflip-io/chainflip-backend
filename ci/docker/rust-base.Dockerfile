@@ -15,7 +15,12 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     jq \
     protobuf-compiler \
     git \
-    nodejs
+    software-properties-common \
+    npm
+
+RUN npm install npm@latest -g && \
+    npm install n -g && \
+    n latest
 
 # Set environment
 ENV PATH="/root/.cargo/bin:${PATH}"
@@ -29,8 +34,7 @@ RUN curl -fsSL https://github.com/mozilla/sccache/releases/download/${SCCACHE_VE
     cp /tmp/sccache-${SCCACHE_VER}-x86_64-unknown-linux-musl/sccache /usr/local/cargo/bin/sccache && \
     rm -rf /tmp/sccache.tar.gz /tmp/sccache-${SCCACHE_VER}-x86_64-unknown-linux-musl
 
-# Install pnpm
-RUN curl -f https://get.pnpm.io/v6.16.js | node - add --global pnpm
+RUN npm install -g pnpm
 
 ARG NIGHTLY
 # Download and set nightly as the default Rust compiler
