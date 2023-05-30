@@ -250,7 +250,9 @@ pub mod pallet {
 		},
 		SwapScheduledByWitnesser {
 			swap_id: u64,
+			deposit_asset: Asset,
 			deposit_amount: AssetAmount,
+			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			tx_hash: TransactionHash,
 		},
@@ -565,7 +567,9 @@ pub mod pallet {
 			) {
 				Self::deposit_event(Event::<T>::SwapScheduledByWitnesser {
 					swap_id,
+					deposit_asset: from,
 					deposit_amount,
+					destination_asset: to,
 					destination_address,
 					tx_hash,
 				});

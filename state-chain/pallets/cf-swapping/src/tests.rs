@@ -260,11 +260,15 @@ fn withdraw_broker_fees() {
 #[test]
 fn can_swap_using_witness_origin() {
 	new_test_ext().execute_with(|| {
+		let from = Asset::Eth;
+		let to = Asset::Flip;
+		let amount = 1_000;
+
 		assert_ok!(Swapping::schedule_swap_by_witnesser(
 			RuntimeOrigin::root(),
-			Asset::Eth,
-			Asset::Flip,
-			1_000,
+			from,
+			to,
+			amount,
 			EncodedAddress::Eth(Default::default()),
 			Default::default(),
 		));
@@ -272,7 +276,9 @@ fn can_swap_using_witness_origin() {
 		System::assert_last_event(RuntimeEvent::Swapping(
 			Event::<Test>::SwapScheduledByWitnesser {
 				swap_id: 1,
-				deposit_amount: 1_000,
+				deposit_asset: from,
+				deposit_amount: amount,
+				destination_asset: to,
 				destination_address: EncodedAddress::Eth(Default::default()),
 				tx_hash: Default::default(),
 			},
@@ -971,7 +977,9 @@ fn swap_by_witnesser_happy_path() {
 		System::assert_last_event(RuntimeEvent::Swapping(
 			Event::<Test>::SwapScheduledByWitnesser {
 				swap_id: 1,
+				deposit_asset: from,
 				deposit_amount: amount,
+				destination_asset: to,
 				destination_address: EncodedAddress::Eth(Default::default()),
 				tx_hash: Default::default(),
 			},
