@@ -124,7 +124,7 @@ jobs:
         uses: Ilshidur/action-discord@0.3.2
         with:
           args: |
-            ❗️❗️❗️❗️ The Bouncer has rejected you❗️❗️❗️❗️
+            ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, the Bouncer has rejected you ❗️❗️❗️❗️
             👾 Link to job: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
             #️⃣ Tagging: <@&939151218708709416>
             https://media.giphy.com/media/wHfwCBZzCMhmE/giphy.gif
