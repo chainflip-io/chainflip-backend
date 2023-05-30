@@ -12,7 +12,11 @@ use crate::{
 	witnesser::{EpochStart, ItemMonitor},
 };
 
-use super::{eth_block_witnessing::BlockProcessor, rpc::EthDualRpcClient, EthNumberBloom};
+use super::{
+	eth_block_witnessing::BlockProcessor,
+	rpc::{EthDualRpcClient, EthRpcApi},
+	EthNumberBloom,
+};
 
 pub struct DepositWitnesser<StateChainClient> {
 	rpc: EthDualRpcClient,
@@ -33,6 +37,41 @@ where
 	}
 }
 
+async fn filter_successful_txs<'a, Rpc>(
+	txs: &'a [(web3::types::Transaction, sp_core::H160)],
+	eth_rpc: &'a Rpc,
+) -> anyhow::Result<impl Iterator<Item = &'a (web3::types::Transaction, sp_core::H160)> + 'a>
+where
+	Rpc: EthRpcApi + Send + Sync,
+{
+	let futures = txs.iter().map(|(tx, _)| tx).map(|tx| {
+		let tx_hash = tx.hash.clone();
+		eth_rpc.transaction_receipt(tx_hash)
+	});
+	let receipts = utilities::execute_in_batches(futures, 10)
+		.await?
+		.into_iter()
+		.collect::<Vec<_>>();
+
+	// Note that we abort in case any of the receipts are missing a status:
+	let statuses = receipts
+		.into_iter()
+		.map(|receipt| {
+			Ok(receipt
+				.status
+				.ok_or_else(|| anyhow::anyhow!("receipt did not contain status"))?)
+		})
+		.collect::<Result<Vec<_>, anyhow::Error>>()?;
+
+	Ok(txs.iter().zip(statuses.into_iter()).filter_map(|(tx, status)| {
+		if status.as_u64() == 1 {
+			Some(tx)
+		} else {
+			None
+		}
+	}))
+}
+
 #[async_trait]
 impl<StateChainClient> BlockProcessor for DepositWitnesser<StateChainClient>
 where
@@ -50,15 +89,14 @@ where
 		let mut address_monitor =
 			self.address_monitor.try_lock().expect("should have exclusive ownership");
 
+		let unchecked_txs = self.rpc.block_with_txs(block.block_number).await?.transactions;
+
 		// Before we process the transactions, check if
 		// we have any new addresses to monitor
 		address_monitor.sync_items();
 
-		let deposit_witnesses = self
-			.rpc
-			.successful_transactions(block.block_number)
-			.await?
-			.iter()
+		let interesting_txs = unchecked_txs
+			.into_iter()
 			.filter_map(|tx| {
 				let to_addr = core_h160(tx.to?);
 				if address_monitor.contains(&to_addr) {
@@ -67,8 +105,13 @@ where
 					None
 				}
 			})
+			.collect::<Vec<_>>();
+
+		let successful_txs = filter_successful_txs(&interesting_txs, &self.rpc).await?;
+
+		let deposit_witnesses = successful_txs
 			.map(|(tx, to_addr)| DepositWitness {
-				deposit_address: to_addr,
+				deposit_address: *to_addr,
 				asset: eth::Asset::Eth,
 				amount: tx
 					.value
@@ -94,4 +137,40 @@ where
 
 		Ok(())
 	}
+}
+
+#[tokio::test]
+async fn test_successful_tx_filter() {
+	use web3::types::{TransactionReceipt, H256, U64};
+	let mut rpc = crate::eth::rpc::MockEthRpcApi::default();
+
+	// A tx with default hash is not successful, anything else is:
+	rpc.expect_transaction_receipt().returning(|tx_hash| {
+		if tx_hash == Default::default() {
+			Ok(TransactionReceipt { status: Some(U64::from(0)), ..Default::default() })
+		} else {
+			Ok(TransactionReceipt { status: Some(U64::from(1)), ..Default::default() })
+		}
+	});
+
+	// tx1 and tx3 are successful, tx2 is not:
+	let tx1 = (
+		web3::types::Transaction { hash: H256::from([0x1; 32]), ..Default::default() },
+		Default::default(),
+	);
+	let tx2 = (
+		web3::types::Transaction { hash: H256::default(), ..Default::default() },
+		Default::default(),
+	);
+	let tx3 = (
+		web3::types::Transaction { hash: H256::from([0x3; 32]), ..Default::default() },
+		Default::default(),
+	);
+
+	let txs = [tx1.clone(), tx2, tx3.clone()];
+
+	assert_eq!(
+		filter_successful_txs(&txs, &rpc).await.unwrap().collect::<Vec<_>>(),
+		vec![&tx1, &tx3]
+	);
 }

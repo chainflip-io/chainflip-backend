@@ -514,6 +514,80 @@ pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow
 		.with_context(|| format!("Failed to decode {} file at {}", context, file.display()))
 }
 
+/// Execute futures ensuring that no more than
+/// `max_batch_size` are running at the same time.
+pub async fn execute_in_batches<F, T>(
+	futures: impl Iterator<Item = F> + Send,
+	max_batch_size: usize,
+) -> anyhow::Result<Vec<T>>
+where
+	F: futures::Future<Output = Result<T, anyhow::Error>> + Send,
+	<F as futures::Future>::Output: Send,
+	T: Send + 'static,
+{
+	use futures::FutureExt;
+	use std::sync::Arc;
+
+	task_scope::task_scope(|scope| {
+		async {
+			let mut handles = Vec::new();
+			let semaphore = Arc::new(tokio::sync::Semaphore::new(max_batch_size));
+			for f in futures {
+				let permit = semaphore
+					.clone()
+					.acquire_owned()
+					.await
+					.expect("semaphore should not be closed");
+				handles.push(scope.spawn_with_handle(async {
+					let result = f.await;
+					drop(permit);
+					result
+				}));
+			}
+
+			Ok(futures::future::join_all(handles).await)
+		}
+		.boxed()
+	})
+	.await
+}
+
+#[tokio::test]
+async fn test_execute_in_batches() {
+	use std::sync::{
+		atomic::{AtomicUsize, Ordering},
+		Arc,
+	};
+
+	let job_ids = (0..100).collect::<Vec<_>>();
+
+	const MAX_CONCURRENT_JOBS: usize = 10;
+
+	// This keeps track of the number of jobs that are currently running
+	let parallel_job_count = Arc::new(AtomicUsize::new(0));
+
+	let results = execute_in_batches(
+		job_ids.iter().copied().map(|i| {
+			let parallel_job_count = parallel_job_count.clone();
+			async move {
+				parallel_job_count.fetch_add(1, Ordering::Relaxed);
+				// Ensure that we don't exceed the limit for concurrent jobs:
+				assert!(parallel_job_count.load(Ordering::Relaxed) <= MAX_CONCURRENT_JOBS);
+				// Ensure jobs run long enough to overlap:
+				tokio::time::sleep(std::time::Duration::from_millis(1)).await;
+				parallel_job_count.fetch_sub(1, Ordering::Relaxed);
+				Ok(i)
+			}
+		}),
+		MAX_CONCURRENT_JOBS,
+	)
+	.await
+	.unwrap();
+
+	// Ensure the results come in the same order:
+	assert_eq!(results, job_ids);
+}
+
 #[cfg(test)]
 mod tests_read_clean_and_decode_hex_str_file {
 	use crate::{assert_ok, testing::with_file};

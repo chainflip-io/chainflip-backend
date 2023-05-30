@@ -104,6 +104,8 @@ pub trait EthRpcApi: Send + Sync {
 	/// - Request succeeds, but doesn't return a block
 	async fn block(&self, block_number: U64) -> Result<Block<H256>>;
 
+	async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>>;
+
 	/// Gets only the successful transactions of a block. It filters failed transactions by
 	/// checking the receipt.
 	async fn successful_transactions(&self, block_number: U64) -> Result<Vec<Transaction>>;
@@ -193,6 +195,26 @@ where
 			.block(block_number.into())
 			.await
 			.context(format!("{} client: Failed to fetch block", T::transport_protocol()))
+			.and_then(|opt_block| {
+				opt_block.ok_or_else(|| {
+					anyhow!(
+						"{} client: Getting ETH block for block number {} returned None",
+						T::transport_protocol(),
+						block_number,
+					)
+				})
+			})
+	}
+
+	async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>> {
+		self.web3
+			.eth()
+			.block_with_txs(block_number.into())
+			.await
+			.context(format!(
+				"{} client: Failed to fetch block with transactions",
+				T::transport_protocol()
+			))
 			.and_then(|opt_block| {
 				opt_block.ok_or_else(|| {
 					anyhow!(
@@ -504,6 +526,10 @@ impl EthRpcApi for EthDualRpcClient {
 		dual_call_rpc!(self, block, block_number)
 	}
 
+	async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>> {
+		dual_call_rpc!(self, block_with_txs, block_number)
+	}
+
 	async fn successful_transactions(&self, block_number: U64) -> Result<Vec<Transaction>> {
 		dual_call_rpc!(self, successful_transactions, block_number)
 	}
@@ -547,6 +573,8 @@ pub mod mocks {
 			async fn transaction_receipt(&self, tx_hash: H256) -> Result<TransactionReceipt>;
 
 			async fn block(&self, block_number: U64) -> Result<Block<H256>>;
+
+			async fn block_with_txs(&self, block_number: U64) -> Result<Block<Transaction>>;
 
 			async fn successful_transactions(&self, block_number: U64) -> Result<Vec<Transaction>>;
 
