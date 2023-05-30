@@ -20,7 +20,9 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 				.ok_or(DispatchError::Other("No vault for epoch"))?
 				.public_key
 				.current,
-			channel_id as u32,
+			channel_id
+				.try_into()
+				.expect("We should never have a channel ID larger than u32::MAX"),
 		)
 		.script_pubkey())
 	}
