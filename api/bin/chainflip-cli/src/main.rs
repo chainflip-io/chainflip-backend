@@ -2,6 +2,7 @@
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use serde::Serialize;
+use settings::GenerateKeysOutputType;
 use std::{fs, path::PathBuf};
 
 use crate::settings::{
@@ -35,8 +36,8 @@ async fn run_cli() -> Result<()> {
 	let command_line_opts = CLICommandLineOptions::parse();
 
 	// Generating keys does not require the settings, so run it before them
-	if let GenerateKeys { path, output_as_json } = command_line_opts.cmd {
-		return generate_keys(path, output_as_json)
+	if let GenerateKeys { output_type } = command_line_opts.cmd {
+		return generate_keys(output_type)
 	}
 
 	let cli_settings = CLISettings::new(command_line_opts.clone()).map_err(|err| anyhow!("Please ensure your config file path is configured correctly and the file is valid. You can also just set all configurations required command line arguments.\n{}", err))?;
@@ -62,8 +63,7 @@ async fn run_cli() -> Result<()> {
 		Query { block_hash } => request_block(block_hash, &cli_settings.state_chain).await,
 		VanityName { name } => api::set_vanity_name(name, &cli_settings.state_chain).await,
 		ForceRotation {} => api::force_rotation(&cli_settings.state_chain).await,
-		GenerateKeys { path: _, output_as_json: _ } =>
-			unreachable!("GenerateKeys is handled above"),
+		GenerateKeys { .. } => unreachable!("GenerateKeys is handled above"),
 	}
 }
 
@@ -214,7 +214,7 @@ fn confirm_submit() -> bool {
 }
 
 /// Generate the 3 keys required for a chainflip node and output them to a path or as JSON.
-fn generate_keys(path: Option<PathBuf>, output_as_json: bool) -> Result<()> {
+fn generate_keys(output_type: Option<GenerateKeysOutputType>) -> Result<()> {
 	#[derive(Serialize)]
 	struct Keys {
 		node_key: KeyPair,
@@ -225,8 +225,7 @@ fn generate_keys(path: Option<PathBuf>, output_as_json: bool) -> Result<()> {
 
 	impl Keys {
 		fn generate() -> Result<Self> {
-			let (signing_key, signing_key_seed) = api::generate_signing_key(None)?;
-			Ok(Keys {
+			api::generate_signing_key(None).map(|(signing_key, signing_key_seed)| Keys {
 				node_key: api::generate_node_key(),
 				ethereum_key: api::generate_ethereum_key(),
 				signing_key,
@@ -235,59 +234,60 @@ fn generate_keys(path: Option<PathBuf>, output_as_json: bool) -> Result<()> {
 		}
 	}
 
-	if output_as_json {
-		if path.is_some() {
-			anyhow::bail!("Cannot output keys as JSON and to a file at the same time");
-		}
-
-		println!(
-			"{}",
-			serde_json::to_string_pretty(&Keys::generate()?).expect("Should prettify keys to JSON")
-		);
-	} else {
-		const NODE_KEY_FILE_NAME: &str = "node_key_file";
-		const SIGNING_KEY_FILE_NAME: &str = "signing_key_file";
-		const ETHEREUM_KEY_FILE_NAME: &str = "ethereum_key_file";
-
-		let output_path = path.unwrap_or_else(|| PathBuf::from("."));
-
-		let absolute_path_string = std::path::absolute(&output_path)
-			.expect("Failed to get absolute path")
-			.to_string_lossy()
-			.into_owned();
-
-		if output_path.is_file() {
-			anyhow::bail!("Invalid keys path {}", absolute_path_string);
-		}
-		if !output_path.exists() {
-			std::fs::create_dir_all(output_path.clone())?
-		}
-
-		let node_key_file = output_path.join(NODE_KEY_FILE_NAME);
-		let signing_key_file = output_path.join(SIGNING_KEY_FILE_NAME);
-		let ethereum_key_file = output_path.join(ETHEREUM_KEY_FILE_NAME);
-
-		if node_key_file.exists() || signing_key_file.exists() || ethereum_key_file.exists() {
-			anyhow::bail!(
-			"Key file(s) already exist, please move/delete them manually from {absolute_path_string}"
+	match output_type.unwrap_or(GenerateKeysOutputType::Files { path: PathBuf::from(".") }) {
+		GenerateKeysOutputType::Json => {
+			println!(
+				"{}",
+				serde_json::to_string_pretty(&Keys::generate()?)
+					.expect("Should prettify keys to JSON")
 			);
-		}
+		},
+		GenerateKeysOutputType::Files { path } => {
+			const NODE_KEY_FILE_NAME: &str = "node_key_file";
+			const SIGNING_KEY_FILE_NAME: &str = "signing_key_file";
+			const ETHEREUM_KEY_FILE_NAME: &str = "ethereum_key_file";
 
-		println!("Generating fresh keys for your Chainflip Node!");
+			let absolute_path_string = std::path::absolute(&path)
+				.expect("Failed to get absolute path")
+				.to_string_lossy()
+				.into_owned();
 
-		let keys = Keys::generate()?;
+			if path.is_file() {
+				anyhow::bail!("Invalid keys path {}", absolute_path_string);
+			}
+			if !path.exists() {
+				std::fs::create_dir_all(path.clone())?
+			}
 
-		fs::write(node_key_file, hex::encode(keys.node_key.secret_key))?;
-		println!("🔑 Your Node public key is: 0x{}", hex::encode(keys.node_key.public_key));
+			let node_key_file = path.join(NODE_KEY_FILE_NAME);
+			let signing_key_file = path.join(SIGNING_KEY_FILE_NAME);
+			let ethereum_key_file = path.join(ETHEREUM_KEY_FILE_NAME);
 
-		fs::write(ethereum_key_file, hex::encode(keys.ethereum_key.secret_key))?;
-		println!("🔑 Your Ethereum public key is: 0x{}", hex::encode(keys.ethereum_key.public_key));
+			if node_key_file.exists() || signing_key_file.exists() || ethereum_key_file.exists() {
+				anyhow::bail!(
+				"Key file(s) already exist, please move/delete them manually from {absolute_path_string}"
+				);
+			}
 
-		fs::write(signing_key_file, hex::encode(keys.signing_key.secret_key))?;
-		println!("🔑 Your Validator key is: 0x{}", hex::encode(keys.signing_key.public_key));
-		println!("🌱 Your Validator key seed phrase is: {}", keys.signing_key_seed);
+			println!("Generating fresh keys for your Chainflip Node!");
 
-		println!("Saved all secret keys to {absolute_path_string}");
+			let keys = Keys::generate()?;
+
+			fs::write(node_key_file, hex::encode(keys.node_key.secret_key))?;
+			println!("🔑 Your Node public key is: 0x{}", hex::encode(keys.node_key.public_key));
+
+			fs::write(ethereum_key_file, hex::encode(keys.ethereum_key.secret_key))?;
+			println!(
+				"🔑 Your Ethereum public key is: 0x{}",
+				hex::encode(keys.ethereum_key.public_key)
+			);
+
+			fs::write(signing_key_file, hex::encode(keys.signing_key.secret_key))?;
+			println!("🔑 Your Validator key is: 0x{}", hex::encode(keys.signing_key.public_key));
+			println!("🌱 Your Validator key seed phrase is: {}", keys.signing_key_seed);
+
+			println!("Saved all secret keys to {absolute_path_string}");
+		},
 	}
 
 	Ok(())
