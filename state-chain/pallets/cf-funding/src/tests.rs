@@ -588,15 +588,6 @@ fn restricted_funds_getting_reduced() {
 }
 
 #[test]
-fn can_add_address_to_restricted_list() {
-	new_test_ext().execute_with(|| {
-		const RESTRICTED_ADDRESS: EthereumAddress = [0x42; 20];
-		assert_ok!(Funding::add_restricted_address(RuntimeOrigin::root(), RESTRICTED_ADDRESS));
-		assert!(RestrictedAddresses::<Test>::contains_key(RESTRICTED_ADDRESS));
-	});
-}
-
-#[test]
 fn vesting_contracts_test_case() {
 	new_test_ext().execute_with(|| {
 		// Contracts

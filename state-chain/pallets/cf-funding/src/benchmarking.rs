@@ -22,7 +22,7 @@ benchmarks! {
 		let call = Call::<T>::funded {
 			account_id: caller.clone(),
 			amount,
-			address: withdrawal_address,
+			funder: withdrawal_address,
 			tx_hash,
 		};
 		let origin = T::EnsureWitnessed::successful_origin();
@@ -45,7 +45,7 @@ benchmarks! {
 		let call = Call::<T>::funded {
 			account_id: caller.clone(),
 			amount: MinimumFunding::<T>::get() * T::Balance::from(2u128),
-			address: withdrawal_address,
+			funder: withdrawal_address,
 			tx_hash
 		};
 		call.dispatch_bypass_filter(origin)?;
@@ -66,7 +66,7 @@ benchmarks! {
 		Call::<T>::funded {
 			account_id: caller.clone(),
 			amount: MinimumFunding::<T>::get(),
-			address: withdrawal_address,
+			funder: withdrawal_address,
 			tx_hash
 		}.dispatch_bypass_filter(origin)?;
 
@@ -89,7 +89,7 @@ benchmarks! {
 		Call::<T>::funded {
 			account_id: caller.clone(),
 			amount: MinimumFunding::<T>::get(),
-			address: withdrawal_address,
+			funder: withdrawal_address,
 			tx_hash
 		}.dispatch_bypass_filter(origin.clone())?;
 
@@ -118,7 +118,7 @@ benchmarks! {
 		Call::<T>::funded {
 			account_id: caller.clone(),
 			amount: MinimumFunding::<T>::get(),
-			address: withdrawal_address,
+			funder: withdrawal_address,
 			tx_hash
 		}.dispatch_bypass_filter(origin.clone())?;
 

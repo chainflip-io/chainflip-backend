@@ -244,6 +244,11 @@ pub mod pallet {
 		AddedRestrictedAddress {
 			address: EthereumAddress,
 		},
+
+		/// A restricted address has been removed
+		RemovedRestrictedAddress {
+			address: EthereumAddress,
+		},
 	}
 
 	#[pallet::error]
@@ -298,7 +303,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
 			amount: FlipBalance<T>,
-			address: EthereumAddress,
+			funder: EthereumAddress,
 			// Required to ensure this call is unique per funding event.
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
@@ -306,9 +311,9 @@ pub mod pallet {
 
 			let total_balance = Self::add_funds_to_account(&account_id, amount);
 
-			if RestrictedAddresses::<T>::contains_key(address) {
+			if RestrictedAddresses::<T>::contains_key(funder) {
 				RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
-					map.entry(address).and_modify(|balance| *balance += amount).or_insert(amount);
+					map.entry(funder).and_modify(|balance| *balance += amount).or_insert(amount);
 				});
 			}
 
@@ -582,23 +587,31 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Add a restricted address to the list of restricted addresses.
+		/// Adds/Removes restricted addresses to the list of restricted addresses.
 		///
 		/// ## Events
 		///
 		/// - [AddedRestrictedAddress](Event::AddedRestrictedAddress)
+		/// - [RemovedRestrictedAddress](Event::RemovedRestrictedAddress)
 		///
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::weight(10_000)]
-		pub fn add_restricted_address(
+		pub fn update_restricted_addresses(
 			origin: OriginFor<T>,
-			address: EthereumAddress,
+			addresses_to_add: Vec<EthereumAddress>,
+			addresses_to_remove: Vec<EthereumAddress>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			RestrictedAddresses::<T>::insert(address, ());
-			Self::deposit_event(Event::AddedRestrictedAddress { address });
+			for address in addresses_to_add {
+				RestrictedAddresses::<T>::insert(address, ());
+				Self::deposit_event(Event::AddedRestrictedAddress { address });
+			}
+			for address in addresses_to_remove {
+				RestrictedAddresses::<T>::remove(address);
+				Self::deposit_event(Event::RemovedRestrictedAddress { address });
+			}
 			Ok(().into())
 		}
 	}
@@ -691,7 +704,6 @@ impl<T: Config> BidderProvider for Pallet<T> {
 /// be handled by governance. We don't want to lose track of them.
 impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
-		WithdrawalAddresses::<T>::remove(account_id);
 		ActiveBidder::<T>::remove(account_id);
 	}
 }
