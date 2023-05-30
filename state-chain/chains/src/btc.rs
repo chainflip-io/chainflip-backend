@@ -349,7 +349,7 @@ pub enum ScriptPubkey {
 	P2WPKH([u8; 20]),
 	P2WSH([u8; 32]),
 	Taproot([u8; 32]),
-	Other { version: u8, program: BoundedVec<u8, ConstU32<MAX_SEGWIT_PROGRAM_LEN>> },
+	Other { version: u8, program: BoundedVec<u8, ConstU32<MAX_SEGWIT_PROGRAM_BYTES>> },
 }
 
 impl SerializeBtc for ScriptPubkey {
@@ -431,13 +431,15 @@ pub fn scriptpubkey_from_address(
 	// See https://en.bitcoin.it/wiki/Base58Check_encoding
 	fn try_decode_as_base58(address: &str, network: &BitcoinNetwork) -> Option<ScriptPubkey> {
 		const CHECKSUM_LENGTH: usize = 4;
+		const PAYLOAD_LENGTH: usize = 21;
 
-		let data: [u8; 1 + 20 + CHECKSUM_LENGTH] = address.from_base58().ok()?.try_into().ok()?;
+		let data: [u8; PAYLOAD_LENGTH + CHECKSUM_LENGTH] =
+			address.from_base58().ok()?.try_into().ok()?;
 
 		let (payload, checksum) = data.split_at(data.len() - CHECKSUM_LENGTH);
 
 		if &sha2_256(&sha2_256(payload))[..CHECKSUM_LENGTH] == checksum {
-			let [version, hash @ ..] = payload.as_array::<21>();
+			let [version, hash @ ..] = payload.as_array::<PAYLOAD_LENGTH>();
 			if version == network.p2pkh_address_version() {
 				Some(ScriptPubkey::P2PKH(hash.as_array()))
 			} else if version == network.p2sh_address_version() {
@@ -469,10 +471,10 @@ pub fn scriptpubkey_from_address(
 				(
 					SEGWIT_VERSION_TAPROOT..=SEGWIT_VERSION_MAX,
 					Variant::Bech32m,
-					(MIN_SEGWIT_PROGRAM_LEN..=MAX_SEGWIT_PROGRAM_LEN),
+					(MIN_SEGWIT_PROGRAM_BYTES..=MAX_SEGWIT_PROGRAM_BYTES),
 				) => Some(ScriptPubkey::Other {
 					version,
-					program: program.try_into().expect("Checked for MAX_SEGWIT_PROGRAM_LEN"),
+					program: program.try_into().expect("Checked for MAX_SEGWIT_PROGRAM_BYTES"),
 				}),
 				_ => None,
 			}
@@ -720,7 +722,7 @@ impl<T: SerializeBtc> SerializeBtc for &[T] {
 #[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
 enum BitcoinOp {
 	PushUint { value: u32 },
-	PushBytes { bytes: BoundedVec<u8, ConstU32<40>> },
+	PushBytes { bytes: BoundedVec<u8, ConstU32<MAX_SEGWIT_PROGRAM_BYTES>> },
 	Drop,
 	CheckSig,
 	Dup,
@@ -747,18 +749,21 @@ impl SerializeBtc for BitcoinOp {
 				},
 			},
 			BitcoinOp::PushBytes { bytes } => {
-				let num_bytes = bytes.len();
-				if num_bytes < 0x4c {
-					buf.push(num_bytes as u8);
-				} else if num_bytes < 0xff {
-					buf.push(0x4c);
-					buf.push(num_bytes as u8);
-				} else if num_bytes < 0xffff {
-					buf.push(0x4d);
-					buf.extend(num_bytes.to_le_bytes().into_iter().take(2));
-				} else {
-					buf.push(0x4e);
-					buf.extend(num_bytes.to_le_bytes().into_iter().take(4));
+				let num_bytes = bytes.len() as u32;
+				match num_bytes {
+					0..=0x4b => buf.push(num_bytes as u8),
+					0x4c..=0xff => {
+						buf.push(0x4c);
+						buf.push(num_bytes as u8);
+					},
+					0x100..=0xffff => {
+						buf.push(0x4d);
+						buf.extend(num_bytes.to_le_bytes().into_iter().take(2));
+					},
+					0x10000..=0xffffffff => {
+						buf.push(0x4e);
+						buf.extend(num_bytes.to_le_bytes().into_iter().take(4));
+					},
 				}
 				buf.extend(bytes);
 			},
@@ -798,14 +803,11 @@ impl SerializeBtc for BitcoinOp {
 			BitcoinOp::PushBytes { bytes } => {
 				let num_bytes = bytes.len();
 				num_bytes +
-					if num_bytes < 0x4c {
-						1
-					} else if num_bytes < 0xff {
-						2
-					} else if num_bytes < 0xffff {
-						3
-					} else {
-						5
+					match num_bytes {
+						0..=0x4b => 1,
+						0x4c..=0xff => 2,
+						0x100..=0xffff => 3,
+						_ => 5,
 					}
 			},
 			BitcoinOp::Drop |
