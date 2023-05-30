@@ -4,12 +4,12 @@ use std::mem;
 
 use crate::{
 	mock::*, Account, Bonder, Error, FlipAccount, FlipIssuance, FlipSlasher, OffchainFunds,
-	PendingRedemptionsReserve, Reserve, SlashingRate, TotalIssuance,
+	Reserve, SlashingRate, TotalIssuance,
 };
 use cf_primitives::FlipBalance;
 use cf_traits::{Bonding, Funding, Issuance, Slashing};
 use frame_support::{
-	assert_noop, assert_ok,
+	assert_noop,
 	traits::{HandleLifetime, Hooks, Imbalance},
 	weights::Weight,
 };
@@ -276,7 +276,7 @@ impl FlipOperation {
 					expected_redeemable_balance,
 					<Flip as Funding>::redeemable_balance(account_id)
 				);
-				<Flip as Funding>::finalize_redemption(account_id, None)
+				<Flip as Funding>::finalize_redemption(account_id)
 					.expect("Pending Redemption should exist");
 				if !MockOnAccountFunded::has_account_been_funded(account_id) {
 					return false
@@ -657,34 +657,5 @@ fn can_reap_dust_account() {
 		System::assert_last_event(RuntimeEvent::System(frame_system::Event::KilledAccount {
 			account: ALICE,
 		}));
-	})
-}
-
-#[test]
-fn redemption_fully_consumed_in_finalize() {
-	new_test_ext().execute_with(|| {
-		let initial_balance = Account::<Test>::get(ALICE).total();
-		Flip::settle(&ALICE, Flip::mint(10_000).into());
-		let prev_total_issuance = TotalIssuance::<Test>::get();
-		let prev_offchain = OffchainFunds::<Test>::get();
-
-		// Can redeem with 0 fee
-		assert_ok!(Flip::try_initiate_redemption(&ALICE, 1_000));
-		assert_eq!(PendingRedemptionsReserve::<Test>::get(ALICE), Some(1_000));
-		assert_ok!(Flip::finalize_redemption(&ALICE, None));
-		assert_eq!(PendingRedemptionsReserve::<Test>::get(ALICE), None);
-
-		assert_eq!(TotalIssuance::<Test>::get(), prev_total_issuance);
-		assert_eq!(OffchainFunds::<Test>::get(), prev_offchain + 1_000);
-
-		// Can redeem with some fee
-		assert_ok!(Flip::try_initiate_redemption(&ALICE, 1_000));
-		assert_ok!(Flip::finalize_redemption(&ALICE, Some(999)));
-
-		// Fee is burned, rest is bridged out.
-		assert_eq!(TotalIssuance::<Test>::get(), prev_total_issuance - 999);
-		assert_eq!(OffchainFunds::<Test>::get(), prev_offchain + 1_000 + 1);
-
-		assert_eq!(Account::<Test>::get(ALICE).total(), initial_balance + 8_000);
 	})
 }

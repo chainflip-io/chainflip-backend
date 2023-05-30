@@ -532,29 +532,11 @@ impl<T: Config> cf_traits::Funding for Pallet<T> {
 		Ok(())
 	}
 
-	fn finalize_redemption(
-		account_id: &T::AccountId,
-		fee_to_burn: Option<Self::Balance>,
-	) -> Result<(), DispatchError> {
+	fn finalize_redemption(account_id: &T::AccountId) -> Result<(), DispatchError> {
 		// Get the total redemption amount.
-		let mut imbalance: Surplus<T> = Self::try_withdraw_pending_redemption(account_id)?;
-		let total_amount = imbalance.peek();
-
-		// Calculate the amount to BridgeOut and amount to Burn.
-		let bridge_amount = match fee_to_burn {
-			Some(fees) if !fees.is_zero() => {
-				// Burn the fee and reduce the total_amount
-				debug_assert!(total_amount > fees, "Redemption amount must be larger than Fee.");
-				let burn = Self::burn(total_amount.min(fees));
-				imbalance = imbalance.offset(burn).same().unwrap_or_default();
-				total_amount.saturating_sub(fees)
-			},
-			_ => total_amount,
-		};
-
-		// Bridge out the remaining.
-		let res = imbalance.offset(Self::bridge_out(bridge_amount));
-
+		let imbalance: Surplus<T> = Self::try_withdraw_pending_redemption(account_id)?;
+		let amount = imbalance.peek();
+		let res = imbalance.offset(Self::bridge_out(amount));
 		debug_assert!(
 			res.try_none().is_ok(),
 			"Bridge Out + Burned Fee should consume the entire Redemption amount."

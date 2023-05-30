@@ -262,10 +262,7 @@ pub trait Funding {
 
 	/// Performs necessary settlement once a redemption has been confirmed off-chain.
 	/// Optionally burn some token as fees, and bridge out the rest
-	fn finalize_redemption(
-		account_id: &Self::AccountId,
-		fee_to_burn: Option<Self::Balance>,
-	) -> Result<(), DispatchError>;
+	fn finalize_redemption(account_id: &Self::AccountId) -> Result<(), DispatchError>;
 
 	/// Reverts a pending redemption in the case of an expiry or cancellation.
 	fn revert_redemption(account_id: &Self::AccountId) -> Result<(), DispatchError>;

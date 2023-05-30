@@ -19,7 +19,7 @@ use cf_chains::RegisterRedemption;
 #[cfg(feature = "std")]
 use cf_primitives::AccountRole;
 use cf_primitives::EthereumAddress;
-use cf_traits::{Bid, BidderProvider, EpochInfo, Funding, SystemStateInfo};
+use cf_traits::{Bid, BidderProvider, EpochInfo, FeePayment, Funding, SystemStateInfo};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
@@ -31,7 +31,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
-use sp_runtime::traits::{AtLeast32BitUnsigned, BlockNumberProvider, CheckedSub, Saturating, Zero};
+use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Saturating, Zero};
 use sp_std::prelude::*;
 
 /// This address is used by the Ethereum contracts to indicate that no withdrawal address was
@@ -78,7 +78,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config: cf_traits::Chainflip + frame_system::Config {
+	pub trait Config: cf_traits::Chainflip {
 		/// Standard Event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -97,10 +97,11 @@ pub mod pallet {
 			+ From<u128>;
 
 		/// The Flip token implementation.
-		type Flip: Funding<
-			AccountId = <Self as frame_system::Config>::AccountId,
-			Balance = Self::Balance,
-		>;
+		type Flip: Funding<AccountId = <Self as frame_system::Config>::AccountId, Balance = Self::Balance>
+			+ FeePayment<
+				Amount = Self::Balance,
+				AccountId = <Self as frame_system::Config>::AccountId,
+			>;
 
 		type Broadcaster: Broadcaster<Ethereum, ApiCall = Self::RegisterRedemption>;
 
@@ -157,12 +158,6 @@ pub mod pallet {
 	/// Amount of Balance to take per Redeem. Set by Governance.
 	#[pallet::storage]
 	pub type WithdrawalTax<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
-
-	/// The total amount of Tokens collected as withdrawal tax for each block.
-	/// Used to reimburse block authors.
-	#[pallet::storage]
-	pub type CollectedWithdrawalTax<T: Config> =
-		StorageMap<_, Twox64Concat, T::BlockNumber, T::Balance, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -329,7 +324,8 @@ pub mod pallet {
 				RedemptionAmount::Max => T::Flip::redeemable_balance(&account_id),
 				RedemptionAmount::Exact(amount) => amount,
 			};
-
+			let fee_to_burn = WithdrawalTax::<T>::get();
+			ensure!(amount > fee_to_burn, Error::<T>::RedemptionAmountTooLow);
 			ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::InvalidRedemption);
 
 			// Not allowed to redeem if we are an active bidder in the auction phase
@@ -360,13 +356,15 @@ pub mod pallet {
 				Error::<T>::BelowMinimumFunding
 			);
 
-			// Return an error if the redeemer tries to redeem too much. Otherwise decrement the
-			// funds by the amount redeemed.
-			T::Flip::try_initiate_redemption(&account_id, amount)?;
+			// Burn the fee and redeem the rest
+			T::Flip::try_burn_fee(&account_id, fee_to_burn)?;
 
 			// Deduct withdrawal fee from the redeemed amount
-			ensure!(amount > WithdrawalTax::<T>::get(), Error::<T>::RedemptionAmountTooLow);
-			let amount_minus_fee = amount.saturating_sub(WithdrawalTax::<T>::get());
+			let amount_minus_fee = amount.saturating_sub(fee_to_burn);
+
+			// Return an error if the redeemer tries to redeem too much. Otherwise decrement the
+			// funds by the amount redeemed.
+			T::Flip::try_initiate_redemption(&account_id, amount_minus_fee)?;
 
 			let contract_expiry = T::TimeSource::now().as_secs() + RedemptionTTLSeconds::<T>::get();
 			let call = T::RegisterRedemption::new_unsigned(
@@ -417,13 +415,8 @@ pub mod pallet {
 
 			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
 
-			let withdrawal_tax = WithdrawalTax::<T>::get();
-			T::Flip::finalize_redemption(&account_id, Some(withdrawal_tax))
+			T::Flip::finalize_redemption(&account_id)
 				.expect("This should never return an error because we already ensured above that the pending redemption does indeed exist");
-			CollectedWithdrawalTax::<T>::mutate(
-				frame_system::Pallet::<T>::current_block_number(),
-				|collected| *collected = collected.saturating_add(withdrawal_tax),
-			);
 
 			if T::Flip::account_balance(&account_id).is_zero() {
 				frame_system::Provider::<T>::killed(&account_id).unwrap_or_else(|e| {
