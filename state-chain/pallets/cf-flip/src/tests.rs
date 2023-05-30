@@ -671,14 +671,15 @@ fn redemption_fully_consumed_in_finalize() {
 		// Can redeem with 0 fee
 		assert_ok!(Flip::try_initiate_redemption(&ALICE, 1_000));
 		assert_eq!(PendingRedemptionsReserve::<Test>::get(ALICE), Some(1_000));
-		assert_ok!(Flip::finalize_redemption(&ALICE, 0.into()));
+		assert_ok!(Flip::finalize_redemption(&ALICE, None));
+		assert_eq!(PendingRedemptionsReserve::<Test>::get(ALICE), None);
 
 		assert_eq!(TotalIssuance::<Test>::get(), prev_total_issuance);
 		assert_eq!(OffchainFunds::<Test>::get(), prev_offchain + 1_000);
 
 		// Can redeem with some fee
 		assert_ok!(Flip::try_initiate_redemption(&ALICE, 1_000));
-		assert_ok!(Flip::finalize_redemption(&ALICE, 999.into()));
+		assert_ok!(Flip::finalize_redemption(&ALICE, Some(999)));
 
 		// Fee is burned, rest is bridged out.
 		assert_eq!(TotalIssuance::<Test>::get(), prev_total_issuance - 999);

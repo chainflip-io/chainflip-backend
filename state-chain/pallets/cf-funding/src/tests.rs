@@ -547,7 +547,7 @@ fn can_update_withdrawal_tax() {
 }
 
 #[test]
-fn cannot_withdraw_lower_than_withdrawal_tax() {
+fn cannot_redeem_lower_than_withdrawal_tax() {
 	new_test_ext().execute_with(|| {
 		let amount = 1_000;
 		assert_ok!(Funding::update_withdrawal_tax(RuntimeOrigin::root(), amount));
@@ -559,6 +559,7 @@ fn cannot_withdraw_lower_than_withdrawal_tax() {
 			Default::default(),
 		));
 
+		// Redemtion amount must be larger than the Withdrawal Tax
 		assert_noop!(
 			Funding::redeem(
 				RuntimeOrigin::signed(ALICE),
@@ -588,7 +589,7 @@ fn withdrawal_tax_is_collected_on_withdrawal() {
 		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
 			ALICE,
-			tax + amount,
+			1_000_000,
 			Default::default(),
 			Default::default(),
 		));
@@ -601,7 +602,7 @@ fn withdrawal_tax_is_collected_on_withdrawal() {
 			RedemptionAmount::Exact(tax + amount),
 			Default::default()
 		));
-		// Send TotalAmount - tax
+		// Tell contract to send (TotalAmount - tax)
 		assert_eq!(MockBroadcaster::received_requests(), vec![amount]);
 
 		assert_ok!(Funding::redeemed(
@@ -619,5 +620,25 @@ fn withdrawal_tax_is_collected_on_withdrawal() {
 		assert_eq!(Flip::total_issuance(), previous_total_issuance - tax);
 		// Total - tax is bridged out.
 		assert_eq!(Flip::offchain_funds(), previous_offchain + amount);
+
+		// More redeem add to the collected tax
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			RedemptionAmount::Exact(amount),
+			Default::default()
+		));
+		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, amount, Default::default()));
+		assert_eq!(CollectedWithdrawalTax::<Test>::get(now), tax * 2);
+
+		// Collected tax is stored in the correct block
+		System::set_block_number(now + 1);
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			RedemptionAmount::Exact(amount),
+			Default::default()
+		));
+		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, amount, Default::default()));
+		assert_eq!(CollectedWithdrawalTax::<Test>::get(now), tax * 2);
+		assert_eq!(CollectedWithdrawalTax::<Test>::get(now + 1), tax);
 	});
 }
