@@ -546,9 +546,9 @@ impl<T: Config> Pallet<T> {
 	pub fn add_bitcoin_utxo_to_list(
 		amount: BtcAmount,
 		utxo_id: UtxoId,
-		deposit_script: ScriptPubkey,
+		script_pubkey: ScriptPubkey,
 	) {
-		let (salt, pubkey) = BitcoinActiveDepositAddressDetails::<T>::take(deposit_script);
+		let (salt, pubkey) = BitcoinActiveDepositAddressDetails::<T>::take(script_pubkey);
 
 		BitcoinAvailableUtxos::<T>::append(Utxo {
 			amount,
@@ -581,10 +581,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn add_details_for_btc_deposit_script(
-		deposit_script: ScriptPubkey,
+		script_pubkey: ScriptPubkey,
 		salt: u32,
 		pubkey: [u8; 32],
 	) {
-		BitcoinActiveDepositAddressDetails::<T>::insert(deposit_script, (salt, pubkey));
+		BitcoinActiveDepositAddressDetails::<T>::insert(script_pubkey, (salt, pubkey));
 	}
 }
