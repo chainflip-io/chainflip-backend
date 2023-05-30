@@ -657,12 +657,14 @@ fn vesting_contracts_test_case() {
 fn can_withdraw_unrestricted_to_restricted() {
 	new_test_ext().execute_with(|| {
 		// Contracts
-		const VESTING_CONTRACT_1: EthereumAddress = [0x01; 20];
+		const RESTRICTED_ADDRESS_1: EthereumAddress = [0x01; 20];
+		const RESTRICTED_ADDRESS_2: EthereumAddress = [0x02; 20];
 		const UNRESTRICTED_ADDRESS: EthereumAddress = [0x03; 20];
 		// Balances
 		const AMOUNT: u128 = 100;
-		// Add contract address to list of restricted contracts
-		RestrictedAddresses::<Test>::insert(VESTING_CONTRACT_1, ());
+		// Add restricted addresses.
+		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
+		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_2, ());
 		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
 			ALICE,
@@ -670,11 +672,18 @@ fn can_withdraw_unrestricted_to_restricted() {
 			UNRESTRICTED_ADDRESS,
 			TX_HASH
 		));
-		// Because 100 is available this should fail
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			RESTRICTED_ADDRESS_2,
+			TX_HASH
+		));
+		// Funds are not restricted, this should be ok.
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			AMOUNT.into(),
-			VESTING_CONTRACT_1
+			RESTRICTED_ADDRESS_1
 		),);
 		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, AMOUNT.into(), TX_HASH));
 	});
