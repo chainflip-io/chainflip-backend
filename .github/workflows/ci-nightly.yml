@@ -25,7 +25,7 @@ jobs:
     secrets: inherit
     with:
       network: development
-      commit_hash: ${{ github.event.pull_request.head.sha }}
+      commit_hash: ${{ github.sha }}
       environment: dev
   package:
     needs: [build]
