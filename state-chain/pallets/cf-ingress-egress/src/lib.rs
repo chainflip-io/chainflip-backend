@@ -384,22 +384,31 @@ pub mod pallet {
 			for (deposit_fetch_id, deposit_address) in addresses {
 				if AddressStatus::<T, I>::get(deposit_address.clone()) == DeploymentStatus::Pending
 				{
-					let channel_id =
+					if let Some(deposit_address_details) =
 						DepositAddressDetailsLookup::<T, I>::get(deposit_address.clone())
-							.ok_or(Error::<T, I>::InvalidDepositAddress)?
-							.channel_id;
-					FetchParamDetails::<T, I>::insert(
-						channel_id,
-						(deposit_fetch_id, deposit_address.clone()),
-					);
-					FetchParamDetails::<T, I>::insert(
-						channel_id,
-						(
-							DepositFetchIdOf::<T, I>::deployed(channel_id, deposit_address.clone()),
-							deposit_address.clone(),
-						),
-					);
-					AddressStatus::<T, I>::insert(deposit_address, DeploymentStatus::Deployed);
+					{
+						FetchParamDetails::<T, I>::insert(
+							deposit_address_details.channel_id,
+							(deposit_fetch_id, deposit_address.clone()),
+						);
+						FetchParamDetails::<T, I>::insert(
+							deposit_address_details.channel_id,
+							(
+								DepositFetchIdOf::<T, I>::deployed(
+									deposit_address_details.channel_id,
+									deposit_address.clone(),
+								),
+								deposit_address.clone(),
+							),
+						);
+						AddressStatus::<T, I>::insert(deposit_address, DeploymentStatus::Deployed);
+					} else {
+						log::error!(
+							target: "cf-ingress-egress",
+							"Deposit address details not found for {:?}",
+							deposit_address
+						);
+					}
 				}
 			}
 			Ok(())
