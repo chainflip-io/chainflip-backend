@@ -7,31 +7,40 @@ description = 'Shared Chain-specific functionality for use in the substrate runt
 
 [dependencies]
 cf-primitives = { path = '../primitives', default-features = false }
+cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
 
 # Cryptography
-libsecp256k1 = { default-features = false, version = '0.7', features = ['static-context'] }
+libsecp256k1 = { default-features = false, version = '0.7', features = [
+  'static-context',
+] }
 
 # Ethereum
-ethabi = {default-features = false, version = '18.0'}
-ethereum-types = {default-features = false, version = '0.14.1'}
-ethereum = {default-features = false, version = '0.14'}
-rlp = {default-features = false, version = '0.5'}
+ethabi = { default-features = false, version = '18.0' }
+ethereum-types = { default-features = false, version = '0.14.1' }
+ethereum = { default-features = false, version = '0.14' }
+rlp = { default-features = false, version = '0.5' }
 
 # Bitcoin
-bech32 = {default-features = false, version = '0.9.1'}
+bech32 = { default-features = false, version = '0.9.1' }
 base58 = '0.2.0'
 
 # Other
-hex = {default-features = false, version = '0.4'}
+hex = { default-features = false, version = '0.4' }
 hex-literal = { version = '0.3', default-features = false }
-serde = { optional = true, version = '1.0.126', features = ['derive'], default-features = false }
+serde = { optional = true, version = '1.0.126', features = [
+  'derive',
+], default-features = false }
 log = { version = '0.4.16', default-features = false }
 itertools = { version = '0.10.0', default-features = false }
 arrayref = '0.3.6'
 
 # Substrate packages
-codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
-scale-info = { version = '2.1.1', default-features = false, features = ['derive'] }
+codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = [
+  'derive',
+] }
+scale-info = { version = '2.1.1', default-features = false, features = [
+  'derive',
+] }
 frame-support = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
 frame-system = { git = 'https://github.com/chainflip-io/substrate.git', tag = 'chainflip-monthly-2022-12+2', default-features = false, optional = true }
 sp-std = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
@@ -40,7 +49,7 @@ sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainf
 
 [dev-dependencies]
 cf-test-utilities = { path = '../test-utilities' }
-rand = {version='0.8.4'}
+rand = { version = '0.8.4' }
 
 [features]
 default = ['std']
@@ -60,7 +69,7 @@ std = [
   'serde',
   'sp-runtime/std',
   'sp-std/std',
-  'sp-core/std'
+  'sp-core/std',
 ]
 runtime-benchmarks = [
   'cf-primitives/runtime-benchmarks',

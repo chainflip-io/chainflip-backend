@@ -4,7 +4,7 @@ mod tests;
 
 use anyhow::{anyhow, Context};
 use cf_chains::{
-	btc::{self, BitcoinScriptBounded, PreviousOrCurrent},
+	btc::{self, PreviousOrCurrent, ScriptPubkey},
 	dot::{self, PolkadotAccountId, PolkadotSignature},
 	eth::Ethereum,
 	Bitcoin, Polkadot,
@@ -206,9 +206,7 @@ pub async fn start<
 	>,
 	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<PolkadotSignature>,
 	btc_epoch_start_sender: async_broadcast::Sender<EpochStart<Bitcoin>>,
-	btc_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<
-		MonitorCommand<BitcoinScriptBounded>,
-	>,
+	btc_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<MonitorCommand<ScriptPubkey>>,
 	btc_tx_hash_sender: tokio::sync::mpsc::UnboundedSender<MonitorCommand<[u8; 32]>>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
 ) -> Result<(), anyhow::Error>
