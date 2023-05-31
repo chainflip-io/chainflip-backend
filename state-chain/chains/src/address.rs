@@ -1,7 +1,10 @@
 extern crate alloc;
 
-use crate::btc::{BitcoinNetwork, ScriptPubkey};
-use cf_primitives::{EthereumAddress, ForeignChain, PolkadotAccountId};
+use crate::{
+	btc::{BitcoinNetwork, ScriptPubkey},
+	dot::PolkadotAccountId,
+};
+use cf_primitives::{EthereumAddress, ForeignChain};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -14,7 +17,7 @@ use sp_std::vec::Vec;
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum ForeignChainAddress {
 	Eth(EthereumAddress),
-	Dot([u8; 32]),
+	Dot(PolkadotAccountId),
 	Btc(ScriptPubkey),
 }
 
@@ -93,23 +96,12 @@ impl TryFrom<ForeignChainAddress> for H160 {
 	}
 }
 
-impl TryFrom<ForeignChainAddress> for [u8; 32] {
-	type Error = AddressError;
-
-	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
-		match address {
-			ForeignChainAddress::Dot(addr) => Ok(addr),
-			_ => Err(AddressError::InvalidAddress),
-		}
-	}
-}
-
 impl TryFrom<ForeignChainAddress> for PolkadotAccountId {
 	type Error = AddressError;
 
 	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
 		match address {
-			ForeignChainAddress::Dot(addr) => Ok(addr.into()),
+			ForeignChainAddress::Dot(addr) => Ok(addr),
 			_ => Err(AddressError::InvalidAddress),
 		}
 	}
@@ -155,15 +147,9 @@ impl From<H160> for ForeignChainAddress {
 	}
 }
 
-impl From<[u8; 32]> for ForeignChainAddress {
-	fn from(address: [u8; 32]) -> ForeignChainAddress {
-		ForeignChainAddress::Dot(address)
-	}
-}
-
 impl From<PolkadotAccountId> for ForeignChainAddress {
-	fn from(address: PolkadotAccountId) -> ForeignChainAddress {
-		ForeignChainAddress::Dot(address.into())
+	fn from(account_id: PolkadotAccountId) -> ForeignChainAddress {
+		ForeignChainAddress::Dot(account_id)
 	}
 }
 
@@ -203,7 +189,7 @@ pub fn try_to_encoded_address<GetBitcoinNetwork: FnOnce() -> BitcoinNetwork>(
 ) -> Result<EncodedAddress, DispatchError> {
 	match address {
 		ForeignChainAddress::Eth(address) => Ok(EncodedAddress::Eth(address)),
-		ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(address)),
+		ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(*address.aliased_ref())),
 		ForeignChainAddress::Btc(script_pubkey) => Ok(EncodedAddress::Btc(
 			script_pubkey.to_address(&bitcoin_network()).as_bytes().to_vec(),
 		)),
@@ -217,7 +203,8 @@ pub fn try_from_encoded_address<GetBitcoinNetwork: FnOnce() -> BitcoinNetwork>(
 ) -> Result<ForeignChainAddress, ()> {
 	match encoded_address {
 		EncodedAddress::Eth(address_bytes) => Ok(ForeignChainAddress::Eth(address_bytes)),
-		EncodedAddress::Dot(address_bytes) => Ok(ForeignChainAddress::Dot(address_bytes)),
+		EncodedAddress::Dot(address_bytes) =>
+			Ok(ForeignChainAddress::Dot(PolkadotAccountId::from_aliased(address_bytes))),
 		EncodedAddress::Btc(address_bytes) => Ok(ForeignChainAddress::Btc(
 			ScriptPubkey::try_from_address(
 				sp_std::str::from_utf8(&address_bytes[..]).map_err(|_| ())?,

@@ -14,7 +14,6 @@ use cf_traits::{
 use sp_runtime::{traits::BlockNumberProvider, Saturating};
 use sp_std::vec::Vec;
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 #[cfg(test)]

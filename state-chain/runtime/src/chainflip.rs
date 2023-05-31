@@ -9,10 +9,10 @@ mod missed_authorship_slots;
 mod offences;
 mod signer_nomination;
 use crate::{
-	AccountId, AccountRoles, Authorship, BitcoinIngressEgress, BitcoinVault, BlockNumber,
-	Emissions, Environment, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
-	Flip, FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress, Runtime, RuntimeCall,
-	RuntimeOrigin, System, Validator,
+	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinVault,
+	BlockNumber, Emissions, Environment, EthereumBroadcaster, EthereumChainTracking,
+	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress, Runtime,
+	RuntimeCall, RuntimeOrigin, System, Validator,
 };
 
 use cf_chains::{
@@ -21,8 +21,8 @@ use cf_chains::{
 		ForeignChainAddress,
 	},
 	btc::{
-		api::{BitcoinApi, SelectedUtxos},
-		Bitcoin, BitcoinTransactionData, BtcAmount, ScriptPubkey, UtxoId,
+		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
+		Bitcoin, BitcoinFeeInfo, BitcoinTransactionData, ScriptPubkey, UtxoId,
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
@@ -295,7 +295,7 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 		match query {
 			cf_chains::dot::api::SystemAccounts::Proxy =>
 				<PolkadotVault as KeyProvider<Polkadot>>::current_epoch_key()
-					.map(|epoch_key| epoch_key.key.0.into()),
+					.map(|epoch_key| epoch_key.key),
 			cf_chains::dot::api::SystemAccounts::Vault => Environment::polkadot_vault_account(),
 		}
 	}
@@ -309,9 +309,9 @@ impl ReplayProtectionProvider<Bitcoin> for BtcEnvironment {
 	fn replay_protection() {}
 }
 
-impl ChainEnvironment<BtcAmount, SelectedUtxos> for BtcEnvironment {
-	fn lookup(output_amount: BtcAmount) -> Option<SelectedUtxos> {
-		Environment::select_and_take_bitcoin_utxos(output_amount)
+impl ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount> for BtcEnvironment {
+	fn lookup(utxo_selection_type: UtxoSelectionType) -> Option<SelectedUtxosAndChangeAmount> {
+		Environment::select_and_take_bitcoin_utxos(utxo_selection_type)
 	}
 }
 
@@ -602,5 +602,12 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 			},
 			_ => unreachable!(),
 		}
+	}
+}
+
+pub struct BitcoinFeeGetter;
+impl cf_traits::GetBitcoinFeeInfo for BitcoinFeeGetter {
+	fn bitcoin_fee_info() -> BitcoinFeeInfo {
+		BitcoinChainTracking::chain_state().unwrap_or(Default::default()).btc_fee_info
 	}
 }

@@ -4,7 +4,6 @@ pub mod deposit_witnesser;
 pub mod erc20_witnesser;
 pub mod eth_block_witnessing;
 pub mod key_manager;
-mod merged_block_stream;
 pub mod state_chain_gateway;
 pub mod vault;
 
@@ -22,22 +21,17 @@ use anyhow::{anyhow, Context, Result};
 use cf_primitives::EpochIndex;
 use regex::Regex;
 use tracing::{debug, info_span, Instrument};
-use utilities::{make_periodic_tick, read_clean_and_decode_hex_str_file};
+use utilities::read_clean_and_decode_hex_str_file;
 
 use crate::{
 	constants::ETH_BLOCK_SAFETY_MARGIN,
 	eth::{
-		merged_block_stream::merged_block_stream,
-		rpc::{EthDualRpcClient, EthRpcApi, EthWsRpcApi},
+		rpc::{EthRpcApi, EthWsRpcApi},
 		ws_safe_stream::safe_ws_head_stream,
 	},
 	settings,
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
-	witnesser::{
-		block_head_stream_from::block_head_stream_from,
-		http_safe_stream::{safe_polling_http_head_stream, HTTP_POLL_INTERVAL},
-		HasBlockNumber,
-	},
+	witnesser::{block_head_stream_from::block_head_stream_from, HasBlockNumber},
 };
 
 use futures::StreamExt;
@@ -61,7 +55,10 @@ use event::Event;
 
 use async_trait::async_trait;
 
-use self::vault::EthAssetApi;
+use self::{
+	rpc::{EthHttpRpcClient, EthWsRpcClient},
+	vault::EthAssetApi,
+};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct EthNumberBloom {
@@ -289,13 +286,13 @@ pub struct BlockWithItems<BlockItem: Debug> {
 pub async fn eth_block_head_stream_from<HeaderStream>(
 	from_block: u64,
 	safe_head_stream: HeaderStream,
-	eth_dual_rpc: EthDualRpcClient,
+	eth_rpc: EthHttpRpcClient,
 ) -> Result<Pin<Box<dyn Stream<Item = EthNumberBloom> + Send + 'static>>>
 where
 	HeaderStream: Stream<Item = EthNumberBloom> + 'static + Send,
 {
 	block_head_stream_from(from_block, safe_head_stream, move |block_number| {
-		let eth_rpc = eth_dual_rpc.clone();
+		let eth_rpc = eth_rpc.clone();
 		Box::pin(async move {
 			eth_rpc.block(U64::from(block_number)).await.and_then(|block| {
 				let number_bloom: Result<EthNumberBloom> =
@@ -323,53 +320,22 @@ macro_rules! retry_rpc_until_success {
 }
 
 /// Returns a safe stream of blocks from the latest block onward,
-/// using a dual (WS/HTTP) rpc subscription. Prepends the current head of the 'subscription' streams
+/// using a WS rpc subscription. Prepends the current head of the 'subscription' streams
 /// with historical blocks from a given block number.
-pub async fn safe_dual_block_subscription_from(
+pub async fn safe_block_subscription_from(
 	from_block: u64,
-	eth_dual_rpc: EthDualRpcClient,
+	eth_ws_rpc: EthWsRpcClient,
+	eth_http_rpc: EthHttpRpcClient,
 ) -> Result<Pin<Box<dyn Stream<Item = EthNumberBloom> + Send + 'static>>>
 where
 {
-	let safe_ws_head_stream = eth_block_head_stream_from(
+	Ok(eth_block_head_stream_from(
 		from_block,
-		safe_ws_head_stream(
-			eth_dual_rpc.ws_client.subscribe_new_heads().await?,
-			ETH_BLOCK_SAFETY_MARGIN,
-		),
-		eth_dual_rpc.clone(),
+		safe_ws_head_stream(eth_ws_rpc.subscribe_new_heads().await?, ETH_BLOCK_SAFETY_MARGIN),
+		eth_http_rpc,
 	)
-	.await?;
-
-	let http_client = eth_dual_rpc.http_client.clone();
-	let safe_http_head_stream = eth_block_head_stream_from(
-		from_block,
-		safe_polling_http_head_stream(
-			http_client.clone(),
-			HTTP_POLL_INTERVAL,
-			ETH_BLOCK_SAFETY_MARGIN,
-		)
-		.await
-		.then(move |block_number| {
-			let http_client = http_client.clone();
-			async move {
-				let mut interval = make_periodic_tick(HTTP_POLL_INTERVAL, false);
-				EthNumberBloom::try_from(retry_rpc_until_success!(
-					http_client.block(block_number.into()),
-					interval
-				))
-				.expect("A block should contain relevant details")
-			}
-		}),
-		eth_dual_rpc.clone(),
-	)
-	.await?;
-
-	Ok(Box::pin(
-		merged_block_stream(safe_ws_head_stream, safe_http_head_stream)
-			.await
-			.map(|(number_bloom, _)| number_bloom),
-	))
+	.await?
+	.boxed())
 }
 
 #[async_trait]

@@ -18,12 +18,11 @@ pub fn extrinsic_builder(replay_protection: PolkadotReplayProtection) -> Polkado
 mod test_create_anonymous_vault {
 
 	use super::*;
-	use crate::dot::{sr25519::Pair, NONCE_2, RAW_SEED_2, TEST_RUNTIME_VERSION};
-	use sp_core::crypto::Pair as TraitPair;
+	use crate::dot::{PolkadotPair, NONCE_2, RAW_SEED_2, TEST_RUNTIME_VERSION};
 
 	#[test]
 	fn create_test_api_call() {
-		let keypair_proxy: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_2);
+		let keypair_proxy = PolkadotPair::from_seed(&RAW_SEED_2);
 
 		let mut builder = super::extrinsic_builder(PolkadotReplayProtection {
 			nonce: NONCE_2,
@@ -44,7 +43,7 @@ mod test_create_anonymous_vault {
 			.split_whitespace()
 			.collect::<String>()
 		);
-		builder.insert_signature(keypair_proxy.public().into(), keypair_proxy.sign(&payload.0[..]));
+		builder.insert_signature(keypair_proxy.public_key(), keypair_proxy.sign(&payload));
 		assert!(builder.is_signed());
 	}
 }

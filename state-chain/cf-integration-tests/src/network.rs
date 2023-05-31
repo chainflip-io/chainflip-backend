@@ -239,7 +239,7 @@ impl Engine {
 								let _result = state_chain_runtime::PolkadotThresholdSigner::signature_success(
 									RuntimeOrigin::none(),
 									*ceremony_id,
-									self.dot_threshold_signer.borrow().sign_with_key(*key, &(payload.clone().0)),
+									self.dot_threshold_signer.borrow().sign_with_key(*key, payload),
 								);
 					}
 

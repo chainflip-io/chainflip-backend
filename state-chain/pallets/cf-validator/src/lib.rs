@@ -4,9 +4,7 @@
 #![feature(array_zip)]
 #![feature(is_sorted)]
 
-#[cfg(test)]
 mod mock;
-#[cfg(test)]
 mod tests;
 
 mod helpers;
@@ -15,7 +13,6 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 mod auction_resolver;
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 mod rotation_state;
 
@@ -72,21 +69,16 @@ type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
 // Might be better to add the enum inside a struct rather than struct inside enum
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
+#[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
 #[scale_info(skip_type_params(T))]
 pub enum RotationPhase<T: Config> {
+	#[default]
 	Idle,
 	KeygensInProgress(RuntimeRotationState<T>),
 	KeyHandoversInProgress(RuntimeRotationState<T>),
 	ActivatingKeys(RuntimeRotationState<T>),
 	NewKeysActivated(RuntimeRotationState<T>),
 	SessionRotating(RuntimeRotationState<T>),
-}
-
-impl<T: Config> Default for RotationPhase<T> {
-	fn default() -> Self {
-		RotationPhase::Idle
-	}
 }
 
 type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;

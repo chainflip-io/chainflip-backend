@@ -207,6 +207,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type BitcoinNetwork = BitcoinNetworkParam;
+	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
@@ -1010,7 +1011,7 @@ impl_runtime_apis! {
 		/// Note: This function must only be called through RPC, because RPC has its own storage buffer
 		/// layer and would not affect on-chain storage.
 		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Result<SwapOutput, DispatchError> {
-			LiquidityPools::swap(from, to, amount)
+			LiquidityPools::swap_with_network_fee(from, to, amount)
 		}
 	}
 

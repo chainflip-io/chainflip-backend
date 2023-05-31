@@ -1,6 +1,6 @@
 [package]
 name = 'state-chain-runtime'
-version = '0.4.2'
+version = '0.9.0'
 authors = ['Chainflip Team <https://github.com/chainflip-io>']
 edition = '2021'
 homepage = 'https://chainflip.io'
@@ -27,12 +27,12 @@ ethabi = {default-features = false, version = '18.0'}
 
 
 # Chainflip local dependencies
-cf-traits = { path = '../traits', default-features = false }
-cf-primitives = { path = '../primitives', default-features = false }
-cf-chains = { path = '../chains', default-features = false }
-cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
-cf-session-benchmarking = { path = '../cf-session-benchmarking', optional = true, default-features = false }
 cf-amm = { path = '../amm', default-features = false }
+cf-chains = { path = '../chains', default-features = false }
+cf-primitives = { path = '../primitives', default-features = false }
+cf-session-benchmarking = { path = '../cf-session-benchmarking', optional = true, default-features = false }
+cf-traits = { path = '../traits', default-features = false }
+cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
 
 pallet-cf-account-roles = { path = '../pallets/cf-account-roles', default-features = false }
 pallet-cf-broadcast = { path = '../pallets/cf-broadcast', default-features = false }
@@ -96,6 +96,8 @@ pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/chainfl
 default = ['std']
 runtime-benchmarks = [
   'cf-chains/runtime-benchmarks',
+  'cf-primitives/runtime-benchmarks',
+  'cf-session-benchmarking/runtime-benchmarks',
   'cf-traits/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
@@ -107,12 +109,12 @@ runtime-benchmarks = [
   'pallet-cf-emissions/runtime-benchmarks',
   'pallet-cf-environment/runtime-benchmarks',
   'pallet-cf-flip/runtime-benchmarks',
+  'pallet-cf-funding/runtime-benchmarks',
   'pallet-cf-governance/runtime-benchmarks',
   'pallet-cf-ingress-egress/runtime-benchmarks',
   'pallet-cf-lp/runtime-benchmarks',
   'pallet-cf-pools/runtime-benchmarks',
   'pallet-cf-reputation/runtime-benchmarks',
-  'pallet-cf-funding/runtime-benchmarks',
   'pallet-cf-swapping/runtime-benchmarks',
   'pallet-cf-threshold-signature/runtime-benchmarks',
   'pallet-cf-tokenholder-governance/runtime-benchmarks',
@@ -121,14 +123,13 @@ runtime-benchmarks = [
   'pallet-cf-witnesser/runtime-benchmarks',
   'pallet-timestamp/runtime-benchmarks',
   'sp-runtime/runtime-benchmarks',
-  'cf-session-benchmarking/runtime-benchmarks',
 ]
 std = [
+  'cf-amm/std',
   'cf-chains/std',
   'cf-primitives/std',
   'cf-traits/std',
   'cf-utilities/std',
-  'cf-amm/std',
   'codec/std',
   'ethabi/std',
   'frame-benchmarking?/std',
@@ -148,12 +149,12 @@ std = [
   'pallet-cf-emissions/std',
   'pallet-cf-environment/std',
   'pallet-cf-flip/std',
+  'pallet-cf-funding/std',
   'pallet-cf-governance/std',
   'pallet-cf-ingress-egress/std',
   'pallet-cf-lp/std',
   'pallet-cf-pools/std',
   'pallet-cf-reputation/std',
-  'pallet-cf-funding/std',
   'pallet-cf-swapping/std',
   'pallet-cf-threshold-signature/std',
   'pallet-cf-tokenholder-governance/std',

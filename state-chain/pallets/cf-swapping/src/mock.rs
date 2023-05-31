@@ -1,6 +1,6 @@
 use crate::{self as pallet_cf_swapping, WeightInfo};
 use cf_chains::AnyChain;
-use cf_primitives::{Asset, AssetAmount, SwapOutput};
+use cf_primitives::{Asset, AssetAmount, SwapLeg, STABLE_ASSET};
 use cf_traits::{
 	impl_mock_chainflip,
 	mocks::{
@@ -15,7 +15,7 @@ use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup},
-	BuildStorage,
+	BuildStorage, Percent,
 };
 
 type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -68,15 +68,29 @@ impl system::Config for Test {
 
 impl_mock_chainflip!(Test);
 
+parameter_types! {
+	pub static NetworkFee: Percent = Percent::from_percent(0);
+	pub static Swaps: Vec<(Asset, Asset, AssetAmount)> = vec![];
+}
 pub struct MockSwappingApi;
-
 impl SwappingApi for MockSwappingApi {
-	fn swap(
-		_from: Asset,
-		_to: Asset,
-		swap_input: AssetAmount,
-	) -> Result<SwapOutput, DispatchError> {
-		Ok(swap_input.into())
+	fn take_network_fee(input_amount: AssetAmount) -> AssetAmount {
+		input_amount - NetworkFee::get() * input_amount
+	}
+
+	fn swap_single_leg(
+		leg: SwapLeg,
+		unstable_asset: Asset,
+		input_amount: AssetAmount,
+	) -> Result<AssetAmount, DispatchError> {
+		let mut swaps = Swaps::get();
+		let (from, to) = match leg {
+			SwapLeg::FromStable => (STABLE_ASSET, unstable_asset),
+			SwapLeg::ToStable => (unstable_asset, STABLE_ASSET),
+		};
+		swaps.push((from, to, input_amount));
+		Swaps::set(swaps);
+		Ok(input_amount)
 	}
 }
 
@@ -87,19 +101,11 @@ impl WeightInfo for MockWeightInfo {
 		Weight::from_ref_time(100)
 	}
 
-	fn on_idle() -> Weight {
-		Weight::from_ref_time(100)
-	}
-
-	fn execute_group_of_swaps(_a: u32) -> Weight {
-		Weight::from_ref_time(100)
-	}
-
 	fn withdraw() -> Weight {
 		Weight::from_ref_time(100)
 	}
 
-	fn schedule_swap_by_witnesser() -> Weight {
+	fn schedule_swap_from_contract() -> Weight {
 		Weight::from_ref_time(100)
 	}
 

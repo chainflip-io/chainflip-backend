@@ -1,6 +1,6 @@
 pub use super::common::*;
 use super::StateChainEnvironment;
-use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
+use cf_chains::{btc::BitcoinNetwork, dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
 use cf_primitives::{AccountId, AccountRole, FlipBalance};
 use sc_service::ChainType;
 use sp_core::H256;
@@ -9,6 +9,8 @@ pub struct Config;
 
 pub const NETWORK_NAME: &str = "Chainflip-Perseverance";
 pub const CHAIN_TYPE: ChainType = ChainType::Live;
+
+pub const BITCOIN_NETWORK: BitcoinNetwork = BitcoinNetwork::Testnet;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("0E1D4594cB44D3E929dc0fb32F1c35A26D6e8e7f"),
@@ -28,7 +30,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	// TODO: update this to the correct value for perseverance
 	dot_genesis_hash: H256([0xcf; 32]),
 	dot_vault_account_id: None,
-	dot_runtime_version: RuntimeVersion { spec_version: 9320, transaction_version: 16 },
+	dot_runtime_version: RuntimeVersion { spec_version: 9360, transaction_version: 19 },
 };
 
 pub const BASHFUL_SR25519: [u8; 32] =

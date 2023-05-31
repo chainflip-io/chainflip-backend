@@ -1,11 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-#[cfg(test)]
 mod mock;
-#[cfg(test)]
 mod tests;
 
 pub mod weights;

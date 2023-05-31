@@ -15,14 +15,14 @@ pub const BLOCK_PULL_TIMEOUT_MULTIPLIER: u64 = 3;
 
 // ======= Eth Rpc Client =======
 
+/// Duration before we timeout an HTTP request to the Ethereum node
+pub const ETH_HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
+
 /// Average time it takes to mine a block on Ethereum.
 pub const ETH_AVERAGE_BLOCK_TIME_SECONDS: u64 = 14;
 
 /// Duration before we give up waiting on a response for a web3 request
 pub const ETH_LOG_REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
-
-/// Duration before we timeout a select_ok request to both http and ws
-pub const ETH_DUAL_REQUEST_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// Duration between each poll of the web3 client, to check if we are synced to the head of the
 /// chain

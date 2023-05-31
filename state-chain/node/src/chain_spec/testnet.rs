@@ -1,6 +1,6 @@
 pub use super::common::*;
 use super::{get_account_id_from_seed, StateChainEnvironment};
-use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
+use cf_chains::{btc::BitcoinNetwork, dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
 use cf_primitives::{AccountId, AccountRole, FlipBalance};
 use sc_service::ChainType;
 use sp_core::{sr25519, H256};
@@ -9,6 +9,8 @@ pub struct Config;
 
 pub const NETWORK_NAME: &str = "Chainflip-Testnet";
 pub const CHAIN_TYPE: ChainType = ChainType::Local;
+
+pub const BITCOIN_NETWORK: BitcoinNetwork = BitcoinNetwork::Regtest;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"),
@@ -26,10 +28,10 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	eth_block_safety_margin: eth::BLOCK_SAFETY_MARGIN as u32,
 	max_ceremony_stage_duration: 300,
 	dot_genesis_hash: H256(hex_literal::hex!(
-		"1eb7cacaa47d19edbd35c578523b2278f9b4d49a4a25318f3fe3a21bf30d769a"
+		"63c94acc94e3275e480d9290f60ebb70338f63fdedeacc1a6d2551c7fc67ac0a"
 	)),
 	dot_vault_account_id: None,
-	dot_runtime_version: RuntimeVersion { spec_version: 9320, transaction_version: 16 },
+	dot_runtime_version: RuntimeVersion { spec_version: 9360, transaction_version: 19 },
 };
 
 pub const BASHFUL_SR25519: [u8; 32] =

@@ -17,7 +17,7 @@ pub fn extrinsic_builder(
 	PolkadotExtrinsicBuilder::new(
 		replay_protection,
 		PolkadotRuntimeCall::Proxy(ProxyCall::proxy {
-			real: PolkadotAccountIdLookup::from(vault_account.clone()),
+			real: PolkadotAccountIdLookup::from(vault_account),
 			force_proxy_type: Some(PolkadotProxyType::Any),
 			call: Box::new(PolkadotRuntimeCall::Utility(UtilityCall::batch {
 				calls: [
@@ -29,7 +29,7 @@ pub fn extrinsic_builder(
 								index: fetch_param.deposit_fetch_id as u16,
 								call: Box::new(PolkadotRuntimeCall::Balances(
 									BalancesCall::transfer_all {
-										dest: PolkadotAccountIdLookup::from(vault_account.clone()),
+										dest: PolkadotAccountIdLookup::from(vault_account),
 										keep_alive: false,
 									},
 								)),
@@ -56,21 +56,15 @@ pub fn extrinsic_builder(
 mod test_batch_fetch {
 
 	use super::*;
-	use crate::dot::{sr25519::Pair, NONCE_1, RAW_SEED_1, RAW_SEED_2, TEST_RUNTIME_VERSION};
+	use crate::dot::{PolkadotPair, NONCE_1, RAW_SEED_1, RAW_SEED_2, TEST_RUNTIME_VERSION};
 	use cf_primitives::chains::assets;
-	use sp_core::{
-		crypto::{AccountId32, Pair as TraitPair},
-		sr25519,
-	};
-	use sp_runtime::{traits::IdentifyAccount, MultiSigner};
 
 	#[test]
 	fn create_test_api_call() {
-		let keypair_vault: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_1);
-		let account_id_vault: AccountId32 =
-			MultiSigner::Sr25519(keypair_vault.public()).into_account();
+		let keypair_vault = PolkadotPair::from_seed(&RAW_SEED_1);
+		let account_id_vault = keypair_vault.public_key();
 
-		let keypair_proxy: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_2);
+		let keypair_proxy = PolkadotPair::from_seed(&RAW_SEED_2);
 
 		let dummy_fetch_params: Vec<FetchAssetParams<Polkadot>> = vec![
 			FetchAssetParams::<Polkadot> { deposit_fetch_id: 1, asset: assets::dot::Asset::Dot },
@@ -80,17 +74,17 @@ mod test_batch_fetch {
 
 		let dummy_transfer_params: Vec<TransferAssetParams<Polkadot>> = vec![
 			TransferAssetParams::<Polkadot> {
-				to: MultiSigner::Sr25519(sr25519::Public([7u8; 32])).into_account(),
+				to: PolkadotAccountId::from_aliased([7u8; 32]),
 				amount: 4,
 				asset: assets::dot::Asset::Dot,
 			},
 			TransferAssetParams::<Polkadot> {
-				to: MultiSigner::Sr25519(sr25519::Public([8u8; 32])).into_account(),
+				to: PolkadotAccountId::from_aliased([8u8; 32]),
 				amount: 5,
 				asset: assets::dot::Asset::Dot,
 			},
 			TransferAssetParams::<Polkadot> {
-				to: MultiSigner::Sr25519(sr25519::Public([9u8; 32])).into_account(),
+				to: PolkadotAccountId::from_aliased([9u8; 32]),
 				amount: 6,
 				asset: assets::dot::Asset::Dot,
 			},
@@ -111,7 +105,7 @@ mod test_batch_fetch {
 			hex::encode(&payload.0),
 			"fefffc6f6999882f0481ac2a5c5df813b53adf448a478fb1420f89df84455df3"
 		);
-		builder.insert_signature(keypair_proxy.public().into(), keypair_proxy.sign(&payload.0[..]));
+		builder.insert_signature(keypair_proxy.public_key(), keypair_proxy.sign(&payload));
 		assert!(builder.is_signed());
 	}
 }

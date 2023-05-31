@@ -2,9 +2,8 @@ pub mod batch_fetch_and_transfer;
 pub mod create_anonymous_vault;
 pub mod rotate_vault_proxy;
 
-use super::{PolkadotExtrinsicBuilder, PolkadotPublicKey, RuntimeVersion};
+use super::{PolkadotAccountId, PolkadotExtrinsicBuilder, PolkadotPublicKey, RuntimeVersion};
 use crate::{dot::Polkadot, *};
-use cf_primitives::PolkadotAccountId;
 use frame_support::{traits::Get, CloneNoBound, DebugNoBound, EqNoBound, Never, PartialEqNoBound};
 use sp_std::marker::PhantomData;
 
@@ -87,8 +86,8 @@ where
 
 		Ok(Self::ChangeGovKey(rotate_vault_proxy::extrinsic_builder(
 			E::replay_protection(),
-			maybe_old_key.map(|key| key.0.into()),
-			new_key.0.into(),
+			maybe_old_key,
+			new_key,
 			vault,
 		)))
 	}
@@ -106,8 +105,8 @@ where
 
 		Ok(Self::RotateVaultProxy(rotate_vault_proxy::extrinsic_builder(
 			E::replay_protection(),
-			maybe_old_key.map(|key| key.0.into()),
-			new_key.0.into(),
+			maybe_old_key,
+			new_key,
 			vault,
 		)))
 	}
@@ -251,18 +250,17 @@ impl<E: PolkadotEnvironment + 'static> ApiCall<Polkadot> for OpaqueApiCall<E> {
 #[cfg(test)]
 mod mocks {
 	use super::*;
-	use crate::dot::{PolkadotReplayProtection, NONCE_1, RAW_SEED_1, RAW_SEED_2};
-	use sp_core::{crypto::Pair as PairTrait, sr25519::Pair};
+	use crate::dot::{PolkadotPair, PolkadotReplayProtection, NONCE_1, RAW_SEED_1, RAW_SEED_2};
 
 	pub struct MockEnv;
 
 	impl PolkadotEnvironment for MockEnv {
 		fn try_vault_account() -> Option<PolkadotAccountId> {
-			Some(<Pair as PairTrait>::from_seed(&RAW_SEED_1).public().into())
+			Some(PolkadotPair::from_seed(&RAW_SEED_1).public_key())
 		}
 
 		fn try_proxy_account() -> Option<PolkadotAccountId> {
-			Some(<Pair as PairTrait>::from_seed(&RAW_SEED_2).public().into())
+			Some(PolkadotPair::from_seed(&RAW_SEED_2).public_key())
 		}
 
 		fn runtime_version() -> crate::dot::RuntimeVersion {

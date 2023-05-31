@@ -414,6 +414,23 @@ pub struct KeyPair {
 	pub public_key: Vec<u8>,
 }
 
+// Serialize the keypair as hex strings for convenience
+impl Serialize for KeyPair {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		use serde::ser::SerializeStruct;
+
+		let secret_key_hex = hex::encode(&self.secret_key);
+		let public_key_hex = hex::encode(&self.public_key);
+		let mut state = serializer.serialize_struct("KeyPair", 2)?;
+		state.serialize_field("secret_key", &secret_key_hex)?;
+		state.serialize_field("public_key", &public_key_hex)?;
+		state.end()
+	}
+}
+
 /// Generate a new random node key.
 /// This key is used for secure communication between Validators.
 pub fn generate_node_key() -> KeyPair {

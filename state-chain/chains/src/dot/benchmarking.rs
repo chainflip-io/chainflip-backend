@@ -1,25 +1,24 @@
+#![cfg(feature = "runtime-benchmarks")]
+
 use crate::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	dot::{
-		BalancesCall, PolkadotAccountIdLookup, PolkadotAddress, PolkadotChargeTransactionPayment,
-		PolkadotCheckMortality, PolkadotCheckNonce, PolkadotPublicKey, PolkadotRuntimeCall,
-		PolkadotSignature, PolkadotSignedExtra, PolkadotTransactionData,
-		PolkadotUncheckedExtrinsic,
+		BalancesCall, PolkadotAccountIdLookup, PolkadotChargeTransactionPayment,
+		PolkadotCheckMortality, PolkadotCheckNonce, PolkadotRuntimeCall, PolkadotSignature,
+		PolkadotSignedExtra, PolkadotTransactionData, PolkadotUncheckedExtrinsic,
 	},
 };
 
-use sp_core::{crypto::AccountId32, sr25519};
-use sp_runtime::{generic::Era, traits::IdentifyAccount, MultiSignature, MultiSigner};
+use sp_runtime::generic::Era;
 
 use super::{
 	api::{create_anonymous_vault, PolkadotApi},
 	EncodedPolkadotPayload, PolkadotAccountId, PolkadotReplayProtection, PolkadotTrackedData, TxId,
 };
 
-const SIGNATURE: [u8; 64] = [1u8; 64];
-const ACCOUNT_ID_1: [u8; 32] = [2u8; 32];
-const ACCOUNT_ID_2: [u8; 32] = [3u8; 32];
-const PUBLIC_KEY: [u8; 32] = [4u8; 32];
+const SIGNATURE: PolkadotSignature = PolkadotSignature::from_aliased([1u8; 64]);
+const ACCOUNT_ID_1: PolkadotAccountId = PolkadotAccountId::from_aliased([2u8; 32]);
+const ACCOUNT_ID_2: PolkadotAccountId = PolkadotAccountId::from_aliased([3u8; 32]);
 const NONCE: u32 = 5;
 const ENCODED_EXTRINSIC: [u8; 100] = [3u8; 100];
 
@@ -27,11 +26,11 @@ impl BenchmarkValue for PolkadotUncheckedExtrinsic {
 	fn benchmark_value() -> Self {
 		PolkadotUncheckedExtrinsic::new_signed(
 			PolkadotRuntimeCall::Balances(BalancesCall::transfer_all {
-				dest: PolkadotAccountIdLookup::from(AccountId32::new(ACCOUNT_ID_1)),
+				dest: PolkadotAccountIdLookup::from(ACCOUNT_ID_1),
 				keep_alive: true,
 			}),
-			PolkadotAddress::Id(AccountId32::new(ACCOUNT_ID_2)),
-			MultiSignature::Sr25519(sr25519::Signature(SIGNATURE)),
+			ACCOUNT_ID_2,
+			SIGNATURE,
 			PolkadotSignedExtra((
 				(),
 				(),
@@ -49,13 +48,7 @@ impl BenchmarkValue for PolkadotUncheckedExtrinsic {
 
 impl BenchmarkValue for PolkadotSignature {
 	fn benchmark_value() -> Self {
-		sr25519::Signature(SIGNATURE)
-	}
-}
-
-impl BenchmarkValue for PolkadotPublicKey {
-	fn benchmark_value() -> Self {
-		PolkadotPublicKey(sr25519::Public(PUBLIC_KEY))
+		SIGNATURE
 	}
 }
 
@@ -67,16 +60,14 @@ impl BenchmarkValue for PolkadotTransactionData {
 
 impl BenchmarkValue for PolkadotAccountId {
 	fn benchmark_value() -> Self {
-		MultiSigner::Sr25519(sr25519::Public(hex_literal::hex!(
+		Self::from_aliased(hex_literal::hex!(
 			"858c1ee915090a119d4cb0774b908fa585ef7882f4648c577606490cc94f6e15"
-		)))
-		.into_account()
+		))
 	}
 }
-
 impl BenchmarkValueExtended for PolkadotAccountId {
 	fn benchmark_value_by_id(id: u8) -> Self {
-		MultiSigner::Sr25519(sr25519::Public([id; 32])).into_account()
+		Self::from_aliased([id; 32])
 	}
 }
 

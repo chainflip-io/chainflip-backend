@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use crate::{
 	mock::{dummy::pallet as pallet_dummy, *},
 	weights::WeightInfo,

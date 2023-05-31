@@ -21,7 +21,7 @@ pub fn extrinsic_builder(
 					call: Box::new(PolkadotRuntimeCall::Utility(UtilityCall::batch_all {
 						calls: [
 							Some(PolkadotRuntimeCall::Proxy(ProxyCall::add_proxy {
-								delegate: new_proxy.clone().into(),
+								delegate: new_proxy.into(),
 								proxy_type: PolkadotProxyType::Any,
 								delay: 0,
 							})),
@@ -51,31 +51,18 @@ pub fn extrinsic_builder(
 mod test_rotate_vault_proxy {
 
 	use super::*;
-	use crate::dot::{
-		sr25519::Pair, NONCE_2, RAW_SEED_1, RAW_SEED_2, RAW_SEED_3, TEST_RUNTIME_VERSION,
-	};
-	use sp_core::crypto::{AccountId32, Pair as TraitPair};
-	use sp_runtime::{app_crypto::Ss58Codec, traits::IdentifyAccount, MultiSigner};
+	use crate::dot::{PolkadotPair, NONCE_2, RAW_SEED_2, RAW_SEED_3, TEST_RUNTIME_VERSION};
 
 	#[test]
 	fn create_test_api_call() {
-		let keypair_vault: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_1);
-		let _account_id_vault: AccountId32 =
-			MultiSigner::Sr25519(keypair_vault.public()).into_account();
-
-		let keypair_old_proxy: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_2);
-		let _account_id_old_proxy: AccountId32 =
-			MultiSigner::Sr25519(keypair_old_proxy.public()).into_account();
-
-		let keypair_new_proxy: Pair = <Pair as TraitPair>::from_seed(&RAW_SEED_3);
-		let _account_id_new_proxy: AccountId32 =
-			MultiSigner::Sr25519(keypair_new_proxy.public()).into_account();
+		let keypair_old_proxy = PolkadotPair::from_seed(&RAW_SEED_2);
+		let keypair_new_proxy = PolkadotPair::from_seed(&RAW_SEED_3);
 
 		let mut builder = super::extrinsic_builder(
 			PolkadotReplayProtection { nonce: NONCE_2, genesis_hash: Default::default() },
-			Some(keypair_old_proxy.public().into()),
-			keypair_new_proxy.public().into(),
-			AccountId32::from_ss58check("5D58KA25o2KcL9EiBJckjScGzvH5nUEiKJBrgAjsSfRuGJkc")
+			Some(keypair_old_proxy.public_key()),
+			keypair_new_proxy.public_key(),
+			PolkadotAccountId::from_ss58check("5D58KA25o2KcL9EiBJckjScGzvH5nUEiKJBrgAjsSfRuGJkc")
 				.unwrap(),
 		);
 
@@ -98,10 +85,7 @@ mod test_rotate_vault_proxy {
 			.split_whitespace()
 			.collect::<String>()
 		);
-		builder.insert_signature(
-			keypair_old_proxy.public().into(),
-			keypair_old_proxy.sign(&payload.0[..]),
-		);
+		builder.insert_signature(keypair_old_proxy.public_key(), keypair_old_proxy.sign(&payload));
 		assert!(builder.is_signed());
 	}
 }

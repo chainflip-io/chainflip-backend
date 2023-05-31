@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use super::*;
 use crate as pallet_cf_validator;
 use cf_traits::{

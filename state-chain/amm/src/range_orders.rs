@@ -19,7 +19,6 @@
 //! doesn't exist we use U256 of SqrtPriceQ64F96. It is relatively simply to verify that all
 //! instances of SqrtPriceQ64F96 are <=U160::MAX.
 
-#[cfg(test)]
 mod tests;
 
 use sp_std::{collections::btree_map::BTreeMap, convert::Infallible};

@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use crate::{self as pallet_cf_flip, BurnFlipAccount};
 use cf_primitives::FlipBalance;
 use cf_traits::{impl_mock_chainflip, impl_mock_waived_fees, Funding, WaivedFees};

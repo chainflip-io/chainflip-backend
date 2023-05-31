@@ -12,8 +12,8 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{
-	address::ForeignChainAddress, eth::Address, ApiCall, CcmDepositMetadata, Chain, ChainAbi,
-	ChainCrypto, Ethereum, Polkadot,
+	address::ForeignChainAddress, dot::PolkadotPublicKey, eth::Address, ApiCall,
+	CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
@@ -708,7 +708,7 @@ impl AddressDerivationApi<Polkadot> for () {
 		source_asset: <Polkadot as Chain>::ChainAsset,
 		channel_id: ChannelId,
 	) -> Result<<Polkadot as Chain>::ChainAccount, DispatchError> {
-		Ok((source_asset, channel_id).encode().blake2_256().into())
+		Ok(PolkadotPublicKey::from_aliased((source_asset, channel_id).encode().blake2_256()))
 	}
 }
 
@@ -866,4 +866,8 @@ pub trait OnBroadcastReady<C: ChainAbi> {
 	type ApiCall: ApiCall<C>;
 
 	fn on_broadcast_ready(_api_call: &Self::ApiCall) {}
+}
+
+pub trait GetBitcoinFeeInfo {
+	fn bitcoin_fee_info() -> cf_chains::btc::BitcoinFeeInfo;
 }

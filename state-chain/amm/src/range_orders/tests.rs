@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 #[cfg(feature = "slow-tests")]
 use crate::common::{Side, MIN_SQRT_PRICE};
 
@@ -79,7 +81,6 @@ fn maximum_liquidity_swap() {
 
 	let minted_amounts: SideMap<Amount> = (MIN_TICK..0)
 		.map(|lower_tick| (lower_tick, -lower_tick))
-		.into_iter()
 		.map(|(lower_tick, upper_tick)| {
 			pool_state
 				.collect_and_mint(

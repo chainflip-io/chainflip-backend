@@ -3,7 +3,6 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 #[cfg(test)]
@@ -384,6 +383,26 @@ pub mod pallet {
 			for (_, deposit_address) in addresses {
 				if AddressStatus::<T, I>::get(deposit_address.clone()) == DeploymentStatus::Pending
 				{
+					if let Some(deposit_address_details) =
+						DepositAddressDetailsLookup::<T, I>::get(deposit_address.clone())
+					{
+						FetchParamDetails::<T, I>::insert(
+							deposit_address_details.channel_id,
+							(
+								DepositFetchIdOf::<T, I>::deployed(
+									deposit_address_details.channel_id,
+									deposit_address.clone(),
+								),
+								deposit_address.clone(),
+							),
+						);
+					} else {
+						log::error!(
+							target: "cf-ingress-egress",
+							"Deposit address details not found for {:?}",
+							deposit_address
+						);
+					}
 					AddressStatus::<T, I>::insert(deposit_address, DeploymentStatus::Deployed);
 				}
 			}
@@ -538,7 +557,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ScheduledEgressFetchOrTransfer::<T, I>::mutate(|requests: &mut Vec<_>| {
 				// Take up to batch_size requests to be sent
 				let mut available_batch_size = maybe_size.unwrap_or(requests.len() as u32);
-
 				// Filter out disabled assets
 				requests
 					.drain_filter(|request| {
@@ -738,7 +756,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				destination_asset,
 				broker_id,
 				broker_commission_bps,
-			} => T::SwapDepositHandler::on_swap_deposit(
+			} => T::SwapDepositHandler::schedule_swap_from_channel(
 				deposit_address.clone().into(),
 				asset.into(),
 				destination_asset,
@@ -746,6 +764,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				destination_address,
 				broker_id,
 				broker_commission_bps,
+				channel_id,
 			),
 			ChannelAction::CcmTransfer {
 				destination_asset,

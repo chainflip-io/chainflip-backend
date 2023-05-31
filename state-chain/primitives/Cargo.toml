@@ -33,3 +33,4 @@ std = [
   'sp-core/std',
   'frame-support/std',
 ]
+runtime-benchmarks = []

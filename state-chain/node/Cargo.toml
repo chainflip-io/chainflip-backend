@@ -8,7 +8,7 @@ license = '<TODO>'
 name = 'chainflip-node'
 publish = false
 repository = 'https://github.com/chainflip-io/chainflip-backend'
-version = '0.7.0'
+version = '0.9.0'
 
 [[bin]]
 name = 'chainflip-node'
@@ -23,9 +23,9 @@ state-chain-runtime = { path = "../runtime" }
 
 # Local dependencies
 cf-chains = {path = "../chains"}
-utilities = {package = "utilities", path = "../../utilities"}
-custom-rpc = {path = "../custom-rpc"}
 cf-primitives = { path = "../primitives" }
+custom-rpc = {path = "../custom-rpc"}
+utilities = {package = "utilities", path = "../../utilities"}
 
 # Added by Chainflip
 futures = {version = "0.3.4"}
