@@ -281,6 +281,7 @@ pub mod pallet {
 		/// The redemption signature could not be found.
 		SignatureNotReady,
 
+		/// The amount to redeem is too high.
 		AmountToHigh,
 	}
 
