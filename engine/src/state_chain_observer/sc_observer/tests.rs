@@ -1733,7 +1733,7 @@ async fn run_the_sc_observer() {
 				sc_block_stream,
 				EthBroadcaster::new(
 					&settings.eth,
-					EthWsRpcClient::new(&settings.eth).await.unwrap().clone(),
+					EthWsRpcClient::new(&settings.eth, None).await.unwrap().clone(),
 				)
 				.unwrap(),
 				DotBroadcaster::new(MockDotRpcApi::new()),

@@ -1,0 +1,37 @@
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: false
+        default: ${{ github.ref_name }}
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        manifest: [state-chain/node/Cargo.toml, engine/Cargo.toml, api/bin/chainflip-cli/Cargo.toml, api/bin/chainflip-broker-api/Cargo.toml]
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@v3
+
+      - name: Install Rust 🦀
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Extract version from Cargo.toml 🌽
+        id: cargo
+        shell: bash
+        run: |
+          echo "version=$(cargo read-manifest --manifest-path ${{ matrix.manifest }} | jq -r .version)" >> $GITHUB_OUTPUT
+
+      - name: Check tag version matches Cargo.toml 🕵️‍♂️
+        shell: bash
+        run: |
+          if [[ "${{ inputs.tag }}" != "${{ steps.cargo.outputs.version }}" ]]; then
+            echo "Tag version (${{ inputs.tag }}) does not match version (${{ steps.cargo.outputs.version }}) in ${{ matrix.manifest }}"
+            exit 1
+          fi

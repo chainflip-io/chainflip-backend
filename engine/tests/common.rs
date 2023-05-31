@@ -6,8 +6,11 @@ use tracing::info;
 
 use chainflip_engine::{
 	eth::{
-		contract_witnesser::block_to_events, core_h160, event::Event, rpc::EthDualRpcClient,
-		safe_dual_block_subscription_from, BlockWithProcessedItems, EthContractWitnesser,
+		contract_witnesser::block_to_events,
+		core_h160,
+		event::Event,
+		rpc::{EthHttpRpcClient, EthWsRpcClient},
+		safe_block_subscription_from, BlockWithProcessedItems, EthContractWitnesser,
 	},
 	settings::{CfSettings, CommandLineOptions, Settings},
 };
@@ -43,7 +46,8 @@ impl IntegrationTestConfig {
 async fn block_events_stream_for_contract_from<EventParameters, ContractWitnesser>(
 	from_block: u64,
 	contract_witnesser: ContractWitnesser,
-	eth_dual_rpc: EthDualRpcClient,
+	eth_http_rpc: EthHttpRpcClient,
+	eth_ws_rpc: EthWsRpcClient,
 ) -> Result<
 	Pin<Box<dyn Stream<Item = BlockWithProcessedItems<Event<EventParameters>>> + Send + 'static>>,
 >
@@ -59,11 +63,11 @@ where
 	);
 
 	let safe_header_stream =
-		safe_dual_block_subscription_from(from_block, eth_dual_rpc.clone()).await?;
+		safe_block_subscription_from(from_block, eth_ws_rpc.clone(), eth_http_rpc.clone()).await?;
 
 	Ok(Box::pin(safe_header_stream.then({
 		move |block| {
-			let rpc = eth_dual_rpc.clone();
+			let rpc = eth_http_rpc.clone();
 			let decode_log_closure = contract_witnesser.decode_log_closure().unwrap();
 			async move {
 				let processed_block_items =
@@ -85,16 +89,20 @@ pub async fn get_contract_events<ContractWitnesser>(
 where
 	ContractWitnesser: EthContractWitnesser + std::marker::Sync + Send + 'static,
 {
-	let eth_dual_rpc = EthDualRpcClient::new_test(
-		&<Settings as CfSettings>::load_settings_from_all_sources(
-			"config/testing/".to_owned(),
-			CommandLineOptions::default(),
-		)
-		.unwrap()
-		.eth,
+	let settings = <Settings as CfSettings>::load_settings_from_all_sources(
+		"config/testing/".to_owned(),
+		CommandLineOptions::default(),
 	)
-	.await
-	.expect("Could not create EthDualRpcClient");
+	.unwrap()
+	.eth;
+
+	let eth_http_rpc = EthHttpRpcClient::new(&settings, None)
+		.await
+		.expect("Failed to create EthWsRpcClient");
+
+	let eth_ws_rpc = EthWsRpcClient::new(&settings, None)
+		.await
+		.expect("Failed to create EthWsRpcClient");
 
 	// The stream is infinite unless we stop it after a short time
 	// in which it should have already done it's job.
@@ -103,7 +111,8 @@ where
         block_events_stream_for_contract_from(
             0,
             contract_witnesser,
-            eth_dual_rpc.clone(),
+            eth_http_rpc.clone(),
+            eth_ws_rpc.clone(),
         ),
     )
     .await

@@ -35,17 +35,13 @@ mod migrations;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SystemState {
+	#[default]
 	Normal,
 	Maintenance,
 }
 
-impl Default for SystemState {
-	fn default() -> Self {
-		SystemState::Normal
-	}
-}
 type SignatureNonce = u64;
 
 pub mod cfe {
