@@ -189,7 +189,7 @@ fn keygen_called_after_keygen_failure_restarts_rotation_at_keygen() {
 fn keygen_verification_failure() {
 	new_test_ext().execute_with(|| {
 		let rotation_epoch_index = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
-		let participants = (5u64..15).into_iter().collect::<BTreeSet<_>>();
+		let participants = (5u64..15).collect::<BTreeSet<_>>();
 		let keygen_ceremony_id = 12;
 
 		let request_id = VaultsPallet::trigger_keygen_verification(
