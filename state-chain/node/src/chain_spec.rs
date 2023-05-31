@@ -113,7 +113,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		Err(_) => defaults.dot_genesis_hash,
 	};
 	let dot_vault_account_id = match env::var("DOT_VAULT_ACCOUNT_ID") {
-		Ok(s) => Some(PolkadotAccountId::from_alias_inner(hex_decode::<32>(&s).unwrap())),
+		Ok(s) => Some(PolkadotAccountId::from_aliased(hex_decode::<32>(&s).unwrap())),
 		Err(_) => defaults.dot_vault_account_id,
 	};
 	let dot_spec_version: u32 = match env::var("DOT_SPEC_VERSION") {

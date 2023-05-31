@@ -74,17 +74,17 @@ mod test_batch_fetch {
 
 		let dummy_transfer_params: Vec<TransferAssetParams<Polkadot>> = vec![
 			TransferAssetParams::<Polkadot> {
-				to: PolkadotAccountId::from_alias_inner([7u8; 32]),
+				to: PolkadotAccountId::from_aliased([7u8; 32]),
 				amount: 4,
 				asset: assets::dot::Asset::Dot,
 			},
 			TransferAssetParams::<Polkadot> {
-				to: PolkadotAccountId::from_alias_inner([8u8; 32]),
+				to: PolkadotAccountId::from_aliased([8u8; 32]),
 				amount: 5,
 				asset: assets::dot::Asset::Dot,
 			},
 			TransferAssetParams::<Polkadot> {
-				to: PolkadotAccountId::from_alias_inner([9u8; 32]),
+				to: PolkadotAccountId::from_aliased([9u8; 32]),
 				amount: 6,
 				asset: assets::dot::Asset::Dot,
 			},

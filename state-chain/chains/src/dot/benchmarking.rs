@@ -16,9 +16,9 @@ use super::{
 	EncodedPolkadotPayload, PolkadotAccountId, PolkadotReplayProtection, PolkadotTrackedData, TxId,
 };
 
-const SIGNATURE: PolkadotSignature = PolkadotSignature::from_alias_inner([1u8; 64]);
-const ACCOUNT_ID_1: PolkadotAccountId = PolkadotAccountId::from_alias_inner([2u8; 32]);
-const ACCOUNT_ID_2: PolkadotAccountId = PolkadotAccountId::from_alias_inner([3u8; 32]);
+const SIGNATURE: PolkadotSignature = PolkadotSignature::from_aliased([1u8; 64]);
+const ACCOUNT_ID_1: PolkadotAccountId = PolkadotAccountId::from_aliased([2u8; 32]);
+const ACCOUNT_ID_2: PolkadotAccountId = PolkadotAccountId::from_aliased([3u8; 32]);
 const NONCE: u32 = 5;
 const ENCODED_EXTRINSIC: [u8; 100] = [3u8; 100];
 
@@ -60,14 +60,14 @@ impl BenchmarkValue for PolkadotTransactionData {
 
 impl BenchmarkValue for PolkadotAccountId {
 	fn benchmark_value() -> Self {
-		Self::from_alias_inner(hex_literal::hex!(
+		Self::from_aliased(hex_literal::hex!(
 			"858c1ee915090a119d4cb0774b908fa585ef7882f4648c577606490cc94f6e15"
 		))
 	}
 }
 impl BenchmarkValueExtended for PolkadotAccountId {
 	fn benchmark_value_by_id(id: u8) -> Self {
-		Self::from_alias_inner([id; 32])
+		Self::from_aliased([id; 32])
 	}
 }
 

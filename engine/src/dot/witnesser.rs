@@ -549,7 +549,7 @@ mod tests {
 	fn mock_tx_fee_paid(actual_fee: PolkadotBalance) -> EventWrapper {
 		EventWrapper::TransactionFeePaid(TransactionFeePaid {
 			actual_fee,
-			who: PolkadotAccountId::from_alias_inner([0xab; 32]),
+			who: PolkadotAccountId::from_aliased([0xab; 32]),
 			tip: Default::default(),
 		})
 	}
@@ -557,7 +557,7 @@ mod tests {
 	fn mock_tx_fee_paid_tip(tip: PolkadotBalance) -> EventWrapper {
 		EventWrapper::TransactionFeePaid(TransactionFeePaid {
 			actual_fee: Default::default(),
-			who: PolkadotAccountId::from_alias_inner([0xab; 32]),
+			who: PolkadotAccountId::from_aliased([0xab; 32]),
 			tip,
 		})
 	}
@@ -581,8 +581,8 @@ mod tests {
 
 	#[test]
 	fn proxy_added_event_for_our_vault_witnessed() {
-		let our_vault = PolkadotAccountId::from_alias_inner([0; 32]);
-		let other_acct = PolkadotAccountId::from_alias_inner([1; 32]);
+		let our_vault = PolkadotAccountId::from_aliased([0; 32]);
+		let other_acct = PolkadotAccountId::from_aliased([1; 32]);
 		let our_proxy_added_index = 1u32;
 		let fee_paid = 10000;
 		let block_event_details = phase_and_events(&[
@@ -611,11 +611,11 @@ mod tests {
 	fn witness_deposits_for_addresses_we_monitor() {
 		// we want two monitors, one sent through at start, and one sent through channel
 		const TRANSFER_1_INDEX: u32 = 1;
-		let transfer_1_deposit_address = PolkadotAccountId::from_alias_inner([1; 32]);
+		let transfer_1_deposit_address = PolkadotAccountId::from_aliased([1; 32]);
 		const TRANSFER_1_AMOUNT: PolkadotBalance = 10000;
 
 		const TRANSFER_2_INDEX: u32 = 2;
-		let transfer_2_deposit_address = PolkadotAccountId::from_alias_inner([2; 32]);
+		let transfer_2_deposit_address = PolkadotAccountId::from_aliased([2; 32]);
 		const TRANSFER_2_AMOUNT: PolkadotBalance = 20000;
 
 		let block_event_details = phase_and_events(&[
@@ -623,7 +623,7 @@ mod tests {
 			(
 				TRANSFER_1_INDEX,
 				mock_transfer(
-					&PolkadotAccountId::from_alias_inner([7; 32]),
+					&PolkadotAccountId::from_aliased([7; 32]),
 					&transfer_1_deposit_address,
 					TRANSFER_1_AMOUNT,
 				),
@@ -632,7 +632,7 @@ mod tests {
 			(
 				TRANSFER_2_INDEX,
 				mock_transfer(
-					&PolkadotAccountId::from_alias_inner([7; 32]),
+					&PolkadotAccountId::from_aliased([7; 32]),
 					&transfer_2_deposit_address,
 					TRANSFER_2_AMOUNT,
 				),
@@ -641,8 +641,8 @@ mod tests {
 			(
 				19,
 				mock_transfer(
-					&PolkadotAccountId::from_alias_inner([7; 32]),
-					&PolkadotAccountId::from_alias_inner([9; 32]),
+					&PolkadotAccountId::from_aliased([7; 32]),
+					&PolkadotAccountId::from_aliased([9; 32]),
 					93232,
 				),
 			),
@@ -660,7 +660,7 @@ mod tests {
 				block_event_details,
 				20,
 				// arbitrary, not focus of the test
-				&PolkadotAccountId::from_alias_inner([0xda; 32]),
+				&PolkadotAccountId::from_aliased([0xda; 32]),
 				&mut address_monitor,
 			);
 
@@ -680,18 +680,14 @@ mod tests {
 
 		let deposit_fetch_index = 4;
 		let deposit_fetch_amount = 40000;
-		let our_vault = PolkadotAccountId::from_alias_inner([3; 32]);
+		let our_vault = PolkadotAccountId::from_aliased([3; 32]);
 
 		let block_event_details = phase_and_events(&[
 			// we'll be witnessing this from the start
 			(
 				egress_index,
 				// egress, from our vault
-				mock_transfer(
-					&our_vault,
-					&PolkadotAccountId::from_alias_inner([6; 32]),
-					egress_amount,
-				),
+				mock_transfer(&our_vault, &PolkadotAccountId::from_aliased([6; 32]), egress_amount),
 			),
 			// fee same as amount for simpler testing
 			(egress_index, mock_tx_fee_paid(egress_amount)),
@@ -700,7 +696,7 @@ mod tests {
 				deposit_fetch_index,
 				// fetch deposit, to our vault
 				mock_transfer(
-					&PolkadotAccountId::from_alias_inner([7; 32]),
+					&PolkadotAccountId::from_aliased([7; 32]),
 					&our_vault,
 					deposit_fetch_amount,
 				),
@@ -710,8 +706,8 @@ mod tests {
 			(
 				19,
 				mock_transfer(
-					&PolkadotAccountId::from_alias_inner([7; 32]),
-					&PolkadotAccountId::from_alias_inner([9; 32]),
+					&PolkadotAccountId::from_aliased([7; 32]),
+					&PolkadotAccountId::from_aliased([9; 32]),
 					93232,
 				),
 			),
@@ -762,7 +758,7 @@ mod tests {
 				block_event_details,
 				20,
 				// arbitrary, not focus of the test
-				&PolkadotAccountId::from_alias_inner([0xda; 32]),
+				&PolkadotAccountId::from_aliased([0xda; 32]),
 				&mut ItemMonitor::new(BTreeSet::default()).1,
 			);
 
@@ -813,7 +809,7 @@ mod tests {
 		// 	)
 		// 	.unwrap();
 
-		let signature = PolkadotSignature::from_alias_inner(hex::decode("7c388203aefbcdc22077ed91bec9af80a23c56f8ff2ee24d40f4c2791d51773342f4aed0e8f0652ed33d404d9b78366a927be9fad02f5204f2f2ffbea7459886").unwrap().try_into().unwrap());
+		let signature = PolkadotSignature::from_aliased(hex::decode("7c388203aefbcdc22077ed91bec9af80a23c56f8ff2ee24d40f4c2791d51773342f4aed0e8f0652ed33d404d9b78366a927be9fad02f5204f2f2ffbea7459886").unwrap().try_into().unwrap());
 
 		dot_monitor_signature_sender.send(signature).unwrap();
 

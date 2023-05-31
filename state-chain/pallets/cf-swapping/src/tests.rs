@@ -58,7 +58,7 @@ fn generate_test_swaps() -> Vec<Swap> {
 			Asset::Flip,
 			Asset::Dot,
 			600,
-			SwapType::Swap(ForeignChainAddress::Dot(PolkadotAccountId::from_alias_inner([4; 32]))),
+			SwapType::Swap(ForeignChainAddress::Dot(PolkadotAccountId::from_aliased([4; 32]))),
 		),
 	]
 }

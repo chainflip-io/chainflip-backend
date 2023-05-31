@@ -123,7 +123,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			>>()
 			.with(eq(initial_block_hash))
 			.once()
-			.return_once(|_| Ok(Some(PolkadotAccountId::from_alias_inner([3u8; 32]))));
+			.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	// No blocks in the stream
 	let sc_block_stream = tokio_stream::iter(vec![]).make_cached(
@@ -268,7 +268,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		>>()
 		.with(eq(initial_block_hash))
 		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from_alias_inner([3u8; 32]))));
+		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
@@ -326,7 +326,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		>>()
 		.with(eq(initial_block_hash))
 		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from_alias_inner([3u8; 32]))));
+		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	// No blocks in the stream
 	let sc_block_stream = tokio_stream::iter(vec![]).make_cached(
@@ -471,7 +471,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		>>()
 		.with(eq(initial_block_hash))
 		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from_alias_inner([3u8; 32]))));
+		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
@@ -626,7 +626,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		>>()
 		.with(eq(initial_block_hash))
 		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from_alias_inner([3u8; 32]))));
+		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
@@ -716,7 +716,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	>>()
 	.with(eq(new_epoch_block_header_hash))
 	.once()
-	.return_once(|_| Ok(Some(PolkadotAccountId::from_alias_inner([3u8; 32]))));
+	.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	state_chain_client.
 expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
@@ -861,7 +861,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		>>()
 		.with(eq(initial_block_hash))
 		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from_alias_inner([3u8; 32]))));
+		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
@@ -937,7 +937,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		>>()
 		.with(eq(new_epoch_block_header_hash))
 		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from_alias_inner([3u8; 32]))));
+		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
@@ -1093,7 +1093,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		>>()
 		.with(eq(initial_block_hash))
 		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from_alias_inner([3u8; 32]))));
+		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
@@ -1170,7 +1170,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			>>()
 			.with(eq(new_epoch_block_header_hash))
 			.once()
-			.return_once(|_| Ok(Some(PolkadotAccountId::from_alias_inner([3u8; 32]))));
+			.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	state_chain_client
 			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
@@ -1327,7 +1327,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		>>()
 		.with(eq(initial_block_hash))
 		.once()
-		.return_once(|_| Ok(Some(PolkadotAccountId::from_alias_inner([3u8; 32]))));
+		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	state_chain_client
 		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<

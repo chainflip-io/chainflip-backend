@@ -59,7 +59,7 @@ impl<C: Chain, T: Chainflip> MockDepositHandler<C, T> {
 			match asset.into() {
 				ForeignChain::Ethereum => ForeignChainAddress::Eth([channel_id as u8; 20]),
 				ForeignChain::Polkadot => ForeignChainAddress::Dot(
-					PolkadotAccountId::from_alias_inner([channel_id as u8; 32]),
+					PolkadotAccountId::from_aliased([channel_id as u8; 32]),
 				),
 				ForeignChain::Bitcoin => todo!("Bitcoin address"),
 			},

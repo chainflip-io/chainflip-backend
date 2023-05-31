@@ -708,7 +708,7 @@ impl AddressDerivationApi<Polkadot> for () {
 		source_asset: <Polkadot as Chain>::ChainAsset,
 		channel_id: ChannelId,
 	) -> Result<<Polkadot as Chain>::ChainAccount, DispatchError> {
-		Ok(PolkadotPublicKey::from_alias_inner((source_asset, channel_id).encode().blake2_256()))
+		Ok(PolkadotPublicKey::from_aliased((source_asset, channel_id).encode().blake2_256()))
 	}
 }
 

@@ -24,14 +24,14 @@ use sp_runtime::{
 pub struct PolkadotSignature(sr25519::Signature);
 impl PolkadotSignature {
 	fn verify(&self, payload: &EncodedPolkadotPayload, signer: &PolkadotPublicKey) -> bool {
-		self.0.verify(&payload.0[..], &sr25519::Public(*signer.alias_inner()))
+		self.0.verify(&payload.0[..], &sr25519::Public(*signer.aliased_ref()))
 	}
 
-	pub const fn from_alias_inner(signature: [u8; 64]) -> Self {
+	pub const fn from_aliased(signature: [u8; 64]) -> Self {
 		Self(sr25519::Signature(signature))
 	}
 
-	pub fn alias_inner(&self) -> &[u8; 64] {
+	pub fn aliased_ref(&self) -> &[u8; 64] {
 		&self.0 .0
 	}
 }
@@ -58,7 +58,7 @@ impl PolkadotPair {
 
 	pub fn public_key(&self) -> PolkadotPublicKey {
 		use sp_core::Pair;
-		PolkadotPublicKey::from_alias_inner(self.0.public().into())
+		PolkadotPublicKey::from_aliased(self.0.public().into())
 	}
 }
 
@@ -81,11 +81,11 @@ impl PolkadotPair {
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct PolkadotAccountId([u8; 32]);
 impl PolkadotAccountId {
-	pub const fn from_alias_inner(inner: [u8; 32]) -> Self {
-		Self(inner)
+	pub const fn from_aliased(account_id: [u8; 32]) -> Self {
+		Self(account_id)
 	}
 
-	pub fn alias_inner(&self) -> &[u8; 32] {
+	pub fn aliased_ref(&self) -> &[u8; 32] {
 		&self.0
 	}
 
@@ -243,7 +243,7 @@ impl ChainCrypto for Polkadot {
 	}
 
 	fn agg_key_to_payload(agg_key: Self::AggKey) -> Self::Payload {
-		EncodedPolkadotPayload(Blake2_256::hash(&agg_key.alias_inner()[..]).to_vec())
+		EncodedPolkadotPayload(Blake2_256::hash(&agg_key.aliased_ref()[..]).to_vec())
 	}
 }
 
@@ -935,7 +935,7 @@ mod test_polkadot_extrinsics {
 		);
 
 		assert_eq!(
-			PolkadotAccountId::from_alias_inner(hex_literal::hex!(
+			PolkadotAccountId::from_aliased(hex_literal::hex!(
 				"56cc4af8ff9fb97c60320ae43d35bd831b14f0b7065f3385db0dbf4cb5d8766f"
 			)),
 			account_id_1

@@ -35,14 +35,14 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 		// Fill the first slots with the derivation prefix.
 		payload.extend(PREFIX);
 		// Then add the 32-byte public key.
-		payload.extend(master_account.alias_inner());
+		payload.extend(master_account.aliased_ref());
 		// Finally, add the index to the end of the payload.
 		payload.extend(&(<u16>::try_from(channel_id).unwrap()).to_le_bytes());
 
 		// Hash the whole thing
 		let payload_hash = BlakeTwo256::hash(&payload);
 
-		Ok(PolkadotAccountId::from_alias_inner(*payload_hash.as_fixed_bytes()))
+		Ok(PolkadotAccountId::from_aliased(*payload_hash.as_fixed_bytes()))
 	}
 }
 
@@ -57,7 +57,7 @@ fn test_dot_derive() {
 			"15uPkKV7SsNXxw5VCu3LgnuaR5uSZ4QMyzxnLfDFE9J5nni9",
 		)
 		.unwrap();
-		PolkadotVaultAccountId::<Runtime>::put(PolkadotAccountId::from_alias_inner(
+		PolkadotVaultAccountId::<Runtime>::put(PolkadotAccountId::from_aliased(
 			*account_id.as_ref(),
 		));
 
@@ -69,7 +69,7 @@ fn test_dot_derive() {
 					6259
 				)
 				.unwrap()
-				.alias_inner()
+				.aliased_ref()
 			)
 			.to_ss58check_with_version(address_format),
 		);

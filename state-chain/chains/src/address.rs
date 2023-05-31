@@ -196,7 +196,7 @@ pub fn try_to_encoded_address<GetBitcoinNetwork: FnOnce() -> BitcoinNetwork>(
 ) -> Result<EncodedAddress, DispatchError> {
 	match address {
 		ForeignChainAddress::Eth(address) => Ok(EncodedAddress::Eth(address)),
-		ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(*address.alias_inner())),
+		ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(*address.aliased_ref())),
 		ForeignChainAddress::Btc(address) => Ok(EncodedAddress::Btc(
 			derive_btc_deposit_address_from_script(address.into(), bitcoin_network())
 				.bytes()
@@ -213,7 +213,7 @@ pub fn try_from_encoded_address<GetBitcoinNetwork: FnOnce() -> BitcoinNetwork>(
 	match encoded_address {
 		EncodedAddress::Eth(address_bytes) => Ok(ForeignChainAddress::Eth(address_bytes)),
 		EncodedAddress::Dot(address_bytes) =>
-			Ok(ForeignChainAddress::Dot(PolkadotAccountId::from_alias_inner(address_bytes))),
+			Ok(ForeignChainAddress::Dot(PolkadotAccountId::from_aliased(address_bytes))),
 		EncodedAddress::Btc(address_bytes) => Ok(ForeignChainAddress::Btc(
 			scriptpubkey_from_address(
 				sp_std::str::from_utf8(&address_bytes[..]).map_err(|_| ())?,
