@@ -267,6 +267,7 @@ where
 impl EthWsRpcClient {
 	pub async fn new(
 		eth_settings: &settings::Eth,
+		// TODO: make this non-optional once we remove integration tests (PRO-414)
 		expected_chain_id: Option<U256>,
 	) -> Result<Self> {
 		let client = Self::inner_new(&eth_settings.ws_node_endpoint, async {
@@ -340,6 +341,7 @@ impl EthWsRpcApi for EthWsRpcClient {
 impl EthHttpRpcClient {
 	pub async fn new(
 		eth_settings: &settings::Eth,
+		// TODO: make this non-optional once we remove integration tests (PRO-414)
 		expected_chain_id: Option<U256>,
 	) -> Result<Self> {
 		let client = Self::inner_new(

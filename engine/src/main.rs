@@ -234,7 +234,7 @@ async fn main() -> anyhow::Result<()> {
 					&settings.eth,
 					EthHttpRpcClient::new(&settings.eth, Some(expected_chain_id))
 						.await
-						.context("Failed to create EthWsRpcClient")?,
+						.context("Failed to create EthHttpRpcClient")?,
 				)
 				.context("Failed to create ETH broadcaster")?,
 				DotBroadcaster::new(dot_rpc_client.clone()),
