@@ -316,18 +316,6 @@ pub struct VerifyHashCommitmentsBroadcast2<Crypto: CryptoScheme> {
 	shares_to_send: OutgoingShares<Crypto::Point>,
 }
 
-#[cfg(feature = "test")]
-impl<Crypto: CryptoScheme> VerifyHashCommitmentsBroadcast2<Crypto> {
-	pub fn new(
-		keygen_common: KeygenCommon<Crypto>,
-		own_commitment: DKGUnverifiedCommitment<Crypto::Point>,
-		hash_commitments: BTreeMap<AuthorityCount, Option<HashComm1>>,
-		shares_to_send: OutgoingShares<Crypto::Point>,
-	) -> Self {
-		Self { keygen_common, own_commitment, hash_commitments, shares_to_send }
-	}
-}
-
 derive_display_as_type_name!(VerifyHashCommitmentsBroadcast2<Crypto: CryptoScheme>);
 
 #[async_trait]

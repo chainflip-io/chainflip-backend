@@ -78,7 +78,6 @@ fn reconstruct_secret<P: ECPoint>(shares: &BTreeMap<AuthorityCount, ShamirShare<
 }
 
 /// Context used in hashing to prevent replay attacks
-#[derive(Clone)]
 pub struct HashContext(pub [u8; 32]);
 
 /// Generate challenge against which a ZKP of our secret will be generated
@@ -308,14 +307,11 @@ mod serialisation {
 
 	#[cfg(test)]
 	mod tests {
-		use crate::{
-			bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, ChainTag, CryptoScheme,
-		};
+		use crate::{client::helpers::test_all_crypto_schemes, ChainTag, CryptoScheme};
+
 		#[test]
 		fn check_comm3_max_size() {
-			check_comm3_size_for_scheme::<EthSigning>();
-			check_comm3_size_for_scheme::<BtcSigning>();
-			check_comm3_size_for_scheme::<PolkadotSigning>();
+			test_all_crypto_schemes!(check_comm3_size_for_scheme);
 		}
 
 		fn check_comm3_size_for_scheme<C: CryptoScheme>() {
