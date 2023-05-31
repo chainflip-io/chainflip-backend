@@ -1,21 +1,21 @@
 use super::*;
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct DepositAddress {
 	pub pubkey_x: [u8; 32],
 	pub salt: u32,
 	tweaked_pubkey_bytes: [u8; 33],
 	pub tapleaf_hash: Hash,
-	unlock_script: [BitcoinOp; 4],
+	unlock_script: BitcoinScript,
 }
 
-fn unlock_script(pubkey_x: [u8; 32], salt: u32) -> [BitcoinOp; 4] {
-	[
+fn unlock_script(pubkey_x: [u8; 32], salt: u32) -> BitcoinScript {
+	BitcoinScript::new(&[
 		BitcoinOp::PushUint { value: salt },
 		BitcoinOp::Drop,
 		BitcoinOp::PushArray32 { bytes: pubkey_x },
 		BitcoinOp::CheckSig,
-	]
+	])
 }
 
 impl DepositAddress {
@@ -28,13 +28,8 @@ impl DepositAddress {
 			);
 			const LEAF_VERSION: u8 = 0xC0;
 			sha2_256(
-				&[
-					TAPLEAF_HASH,
-					TAPLEAF_HASH,
-					&[LEAF_VERSION],
-					&unlock_script.as_slice().btc_serialize(),
-				]
-				.concat(),
+				&[TAPLEAF_HASH, TAPLEAF_HASH, &[LEAF_VERSION], &unlock_script.btc_serialize()]
+					.concat(),
 			)
 		};
 		let tweaked_pubkey_bytes = {
@@ -55,7 +50,7 @@ impl DepositAddress {
 	}
 
 	pub fn unlock_script_serialized(&self) -> Vec<u8> {
-		self.unlock_script.as_slice().btc_serialize()
+		self.unlock_script.btc_serialize()
 	}
 
 	pub fn script_pubkey(&self) -> ScriptPubkey {
@@ -119,7 +114,6 @@ fn test_build_script() {
 			hex_literal::hex!("2E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105"),
 			CHANGE_ADDRESS_SALT
 		)
-		.as_slice()
 		.btc_serialize(),
 		hex_literal::hex!(
 			"240075202E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105AC"

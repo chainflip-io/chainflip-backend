@@ -338,8 +338,8 @@ impl BitcoinNetwork {
 const SEGWIT_VERSION_ZERO: u8 = 0;
 const SEGWIT_VERSION_TAPROOT: u8 = 1;
 const SEGWIT_VERSION_MAX: u8 = 16;
-const MIN_SEGWIT_PROGRAM_LEN: u32 = 2;
-const MAX_SEGWIT_PROGRAM_LEN: u32 = 40;
+const MIN_SEGWIT_PROGRAM_BYTES: u32 = 2;
+const MAX_SEGWIT_PROGRAM_BYTES: u32 = 40;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -354,18 +354,16 @@ pub enum ScriptPubkey {
 
 impl SerializeBtc for ScriptPubkey {
 	fn btc_encode_to(&self, buf: &mut Vec<u8>) {
-		for op in self.program() {
-			op.btc_encode_to(buf);
-		}
+		self.program().btc_encode_to(buf)
 	}
 
 	fn size(&self) -> usize {
-		self.program().map(|op| op.size()).sum()
+		self.program().size()
 	}
 }
 
 impl ScriptPubkey {
-	fn program(&self) -> impl Iterator<Item = BitcoinOp> {
+	fn program(&self) -> BitcoinScript {
 		let (version, bytes) = match self {
 			ScriptPubkey::P2PKH(hash) => (None, hash.to_vec().try_into().unwrap()),
 			ScriptPubkey::P2SH(hash) => (None, hash.to_vec().try_into().unwrap()),
@@ -378,18 +376,19 @@ impl ScriptPubkey {
 			ScriptPubkey::Other { version, program } => (Some(*version), program.clone()),
 		};
 
-		[
-			version.map(|version| BitcoinOp::PushVersion { version }),
-			Some(BitcoinOp::PushBytes { bytes }),
-		]
-		.into_iter()
-		.flatten()
+		BitcoinScript::new(
+			&[
+				version.map(|version| BitcoinOp::PushVersion { version }),
+				Some(BitcoinOp::PushBytes { bytes }),
+			]
+			.into_iter()
+			.flatten()
+			.collect::<Vec<_>>(),
+		)
 	}
 
 	pub fn bytes(&self) -> Vec<u8> {
-		let mut buf = Vec::with_capacity(MAX_SEGWIT_PROGRAM_LEN as usize + 1);
-		self.btc_encode_to(&mut buf);
-		buf
+		self.program().raw()
 	}
 
 	pub fn to_address(&self, network: &BitcoinNetwork) -> String {
@@ -515,10 +514,7 @@ fn extend_with_inputs_outputs(
 		acc
 	}));
 
-	bytes.extend(to_varint(outputs.len() as u64));
-	for output in outputs {
-		output.btc_encode_to(bytes)
-	}
+	outputs.as_slice().btc_encode_to(bytes);
 }
 
 impl BitcoinTransaction {
@@ -582,7 +578,7 @@ impl BitcoinTransaction {
 			transaction_bytes.push(NUM_WITNESSES);
 			transaction_bytes.push(LEN_SIGNATURE);
 			transaction_bytes.extend(self.signatures[i]);
-			transaction_bytes.extend(&self.inputs[i].deposit_address.unlock_script_serialized());
+			transaction_bytes.extend(self.inputs[i].deposit_address.unlock_script_serialized());
 			// Length of tweaked pubkey + leaf version
 			transaction_bytes.push(33u8);
 			transaction_bytes.push(self.inputs[i].deposit_address.leaf_version());
@@ -697,8 +693,7 @@ trait SerializeBtc {
 	fn size(&self) -> usize;
 	/// Returns a serialized bitcoin payload.
 	fn btc_serialize(&self) -> Vec<u8> {
-		let mut buf = to_varint(self.size() as u64);
-		buf.reserve_exact(self.size());
+		let mut buf = Vec::with_capacity(self.size());
 		self.btc_encode_to(&mut buf);
 		buf
 	}
@@ -706,13 +701,15 @@ trait SerializeBtc {
 
 impl<T: SerializeBtc> SerializeBtc for &[T] {
 	fn btc_encode_to(&self, buf: &mut Vec<u8>) {
+		buf.extend(to_varint(self.len() as u64));
 		for t in self.iter() {
 			t.btc_encode_to(buf);
 		}
 	}
 
 	fn size(&self) -> usize {
-		self.iter().map(|t| t.size()).sum()
+		let s = self.iter().map(|t| t.size()).sum::<usize>();
+		s + to_varint(s as u64).len()
 	}
 }
 
@@ -733,6 +730,43 @@ enum BitcoinOp {
 	PushArray20 { bytes: [u8; 20] },
 	PushArray32 { bytes: [u8; 32] },
 	PushVersion { version: u8 },
+}
+
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+struct BitcoinScript {
+	bytes: BoundedVec<u8, ConstU32<MAX_BITCOIN_SCRIPT_LENGTH>>,
+}
+
+impl BitcoinScript {
+	pub fn new(ops: &[BitcoinOp]) -> Self {
+		let mut bytes = Vec::with_capacity(ops.iter().map(|op| op.size()).sum::<usize>());
+		for op in ops.iter() {
+			op.btc_encode_to(&mut bytes);
+		}
+		Self { bytes: bytes.try_into().unwrap() }
+	}
+
+	pub fn raw(self) -> Vec<u8> {
+		self.bytes.into_inner()
+	}
+}
+
+impl AsRef<[u8]> for BitcoinScript {
+	fn as_ref(&self) -> &[u8] {
+		self.bytes.as_ref()
+	}
+}
+
+impl SerializeBtc for BitcoinScript {
+	fn btc_encode_to(&self, buf: &mut Vec<u8>) {
+		buf.extend(to_varint(self.bytes.len() as u64));
+		buf.extend(&self.bytes[..]);
+	}
+
+	fn size(&self) -> usize {
+		let s = self.bytes.len();
+		s + to_varint(s as u64).len()
+	}
 }
 
 impl SerializeBtc for BitcoinOp {
