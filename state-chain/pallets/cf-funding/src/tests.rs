@@ -1,6 +1,6 @@
 use crate::{
 	mock::*, pallet, ActiveBidder, Error, EthereumAddress, PendingRedemptions, RedemptionAmount,
-	WithdrawalTax,
+	RedemptionTax,
 };
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
@@ -531,23 +531,23 @@ fn maintenance_mode_blocks_redemption_requests() {
 }
 
 #[test]
-fn can_update_withdrawal_tax() {
+fn can_update_redemption_tax() {
 	new_test_ext().execute_with(|| {
 		let amount = 1_000;
-		assert_eq!(WithdrawalTax::<Test>::get(), 0);
-		assert_ok!(Funding::update_withdrawal_tax(RuntimeOrigin::root(), amount));
-		assert_eq!(WithdrawalTax::<Test>::get(), amount);
+		assert_eq!(RedemptionTax::<Test>::get(), 0);
+		assert_ok!(Funding::update_redemption_tax(RuntimeOrigin::root(), amount));
+		assert_eq!(RedemptionTax::<Test>::get(), amount);
 		System::assert_last_event(RuntimeEvent::Funding(
-			crate::Event::<Test>::WithdrawalTaxAmountUpdated { amount },
+			crate::Event::<Test>::RedemptionTaxAmountUpdated { amount },
 		));
 	});
 }
 
 #[test]
-fn cannot_redeem_lower_than_withdrawal_tax() {
+fn cannot_redeem_lower_than_redemption_tax() {
 	new_test_ext().execute_with(|| {
 		let amount = 1_000;
-		assert_ok!(Funding::update_withdrawal_tax(RuntimeOrigin::root(), amount));
+		assert_ok!(Funding::update_redemption_tax(RuntimeOrigin::root(), amount));
 		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
 			ALICE,
@@ -567,7 +567,7 @@ fn cannot_redeem_lower_than_withdrawal_tax() {
 		);
 
 		// Reduce the withdrawal tax
-		assert_ok!(Funding::update_withdrawal_tax(RuntimeOrigin::root(), amount - 1));
+		assert_ok!(Funding::update_redemption_tax(RuntimeOrigin::root(), amount - 1));
 
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
@@ -578,11 +578,11 @@ fn cannot_redeem_lower_than_withdrawal_tax() {
 }
 
 #[test]
-fn withdrawal_tax_is_burned_on_withdrawal() {
+fn redemption_tax_is_burned_on_withdrawal() {
 	new_test_ext().execute_with(|| {
 		let tax = 1_000;
 		let amount = 5_000;
-		assert_ok!(Funding::update_withdrawal_tax(RuntimeOrigin::root(), tax));
+		assert_ok!(Funding::update_redemption_tax(RuntimeOrigin::root(), tax));
 		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
 			ALICE,

@@ -157,7 +157,7 @@ pub mod pallet {
 
 	/// The fee levied for every redemption request. Can be updated by Governance.
 	#[pallet::storage]
-	pub type WithdrawalTax<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
+	pub type RedemptionTax<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -216,10 +216,12 @@ pub mod pallet {
 			withdrawal_address: EthereumAddress,
 			amount: FlipBalance<T>,
 		},
-		/// The MinimumFunding storage is updated.
+
+		/// The minimum funding amount has been updated.
 		MinimumFundingUpdated { new_minimum: T::Balance },
-		/// The Withdrawal Tax amount is updated.
-		WithdrawalTaxAmountUpdated { amount: T::Balance },
+
+		/// The Withdrawal Tax has been updated.
+		RedemptionTaxAmountUpdated { amount: T::Balance },
 	}
 
 	#[pallet::error]
@@ -252,7 +254,7 @@ pub mod pallet {
 		/// The redemption signature could not be found.
 		SignatureNotReady,
 
-		// The amount of withdrawal is too low to pay for the Withdrawal Tax.
+		/// The requested redemption amount is too low to pay for the Withdrawal Tax.
 		RedemptionAmountTooLow,
 	}
 
@@ -324,7 +326,7 @@ pub mod pallet {
 				RedemptionAmount::Max => T::Flip::redeemable_balance(&account_id),
 				RedemptionAmount::Exact(amount) => amount,
 			};
-			let fee_to_burn = WithdrawalTax::<T>::get();
+			let fee_to_burn = RedemptionTax::<T>::get();
 			ensure!(amount > fee_to_burn, Error::<T>::RedemptionAmountTooLow);
 			ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::InvalidRedemption);
 
@@ -524,19 +526,19 @@ pub mod pallet {
 			Ok(().into())
 		}
 
-		/// Sets the amount of Withdrawal Tax - amount of Flip to take from each withdrawal.
+		/// Updates the Withdrawal Tax, which is the amount levied on each withdrawal request.
 		///
 		/// Requires Governance
 		///
 		/// ## Events
 		///
-		/// - [On update](Event::WithdrawalTaxAmountUpdated)
-		#[pallet::weight(T::WeightInfo::update_withdrawal_tax())]
-		pub fn update_withdrawal_tax(origin: OriginFor<T>, amount: T::Balance) -> DispatchResult {
+		/// - [On update](Event::RedemptionTaxAmountUpdated)
+		#[pallet::weight(T::WeightInfo::update_redemption_tax())]
+		pub fn update_redemption_tax(origin: OriginFor<T>, amount: T::Balance) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-			WithdrawalTax::<T>::set(amount);
+			RedemptionTax::<T>::set(amount);
 
-			Self::deposit_event(Event::<T>::WithdrawalTaxAmountUpdated { amount });
+			Self::deposit_event(Event::<T>::RedemptionTaxAmountUpdated { amount });
 			Ok(())
 		}
 	}
