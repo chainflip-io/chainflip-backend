@@ -384,6 +384,26 @@ pub mod pallet {
 			for (_, deposit_address) in addresses {
 				if AddressStatus::<T, I>::get(deposit_address.clone()) == DeploymentStatus::Pending
 				{
+					if let Some(deposit_address_details) =
+						DepositAddressDetailsLookup::<T, I>::get(deposit_address.clone())
+					{
+						FetchParamDetails::<T, I>::insert(
+							deposit_address_details.channel_id,
+							(
+								DepositFetchIdOf::<T, I>::deployed(
+									deposit_address_details.channel_id,
+									deposit_address.clone(),
+								),
+								deposit_address.clone(),
+							),
+						);
+					} else {
+						log::error!(
+							target: "cf-ingress-egress",
+							"Deposit address details not found for {:?}",
+							deposit_address
+						);
+					}
 					AddressStatus::<T, I>::insert(deposit_address, DeploymentStatus::Deployed);
 				}
 			}
@@ -538,7 +558,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ScheduledEgressFetchOrTransfer::<T, I>::mutate(|requests: &mut Vec<_>| {
 				// Take up to batch_size requests to be sent
 				let mut available_batch_size = maybe_size.unwrap_or(requests.len() as u32);
-
 				// Filter out disabled assets
 				requests
 					.drain_filter(|request| {
