@@ -13,10 +13,6 @@ jobs:
   bouncer:
     runs-on: ubuntu-20.04
     timeout-minutes: ${{ inputs.timeout-minutes }}
-    container:
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
     services:
       bitcoin:
         credentials:
