@@ -54,7 +54,10 @@ jobs:
         with:
           node-version: 16
 
-      - name: Install bc
+      - name: Install pnpm
+        run: npm i -g pnpm
+
+      - name: Install system packages
         run: |
           apt-get update
           apt-get install -y bc xxd
