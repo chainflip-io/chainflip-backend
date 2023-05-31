@@ -14,7 +14,6 @@ jobs:
     runs-on: ubuntu-20.04
     timeout-minutes: ${{ inputs.timeout-minutes }}
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:pnpm-in-rust-base-test"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -52,7 +51,7 @@ jobs:
       - name: Configure NodeJS
         uses: actions/setup-node@v3
         with:
-          node-version: 16
+          node-version: 20
 
       - name: Install pnpm
         run: npm i -g pnpm
