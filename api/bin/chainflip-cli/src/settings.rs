@@ -155,11 +155,12 @@ impl std::str::FromStr for GenerateKeysOutputType {
 	type Err = String;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		if s.eq_ignore_ascii_case("json") {
-			Ok(GenerateKeysOutputType::Json)
+		let s = s.trim();
+		Ok(if s.eq_ignore_ascii_case("json") {
+			GenerateKeysOutputType::Json
 		} else {
-			Ok(GenerateKeysOutputType::Files { path: PathBuf::from(s) })
-		}
+			GenerateKeysOutputType::Files { path: PathBuf::from(s) }
+		})
 	}
 }
 

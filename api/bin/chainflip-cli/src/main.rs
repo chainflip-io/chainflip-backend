@@ -223,23 +223,20 @@ fn generate_keys(output_type: Option<GenerateKeysOutputType>) -> Result<()> {
 		signing_key_seed: String,
 	}
 
-	impl Keys {
-		fn generate() -> Result<Self> {
-			api::generate_signing_key(None).map(|(signing_key, signing_key_seed)| Keys {
-				node_key: api::generate_node_key(),
-				ethereum_key: api::generate_ethereum_key(),
-				signing_key,
-				signing_key_seed,
-			})
-		}
-	}
+	// Generate new keys
+	let keys = api::generate_signing_key(None).map(|(signing_key, signing_key_seed)| Keys {
+		node_key: api::generate_node_key(),
+		ethereum_key: api::generate_ethereum_key(),
+		signing_key,
+		signing_key_seed,
+	})?;
 
+	// Output the keys depending on the users selected output type
 	match output_type.unwrap_or(GenerateKeysOutputType::Files { path: PathBuf::from(".") }) {
 		GenerateKeysOutputType::Json => {
 			println!(
 				"{}",
-				serde_json::to_string_pretty(&Keys::generate()?)
-					.expect("Should prettify keys to JSON")
+				serde_json::to_string_pretty(&keys).expect("Should prettify keys to JSON")
 			);
 		},
 		GenerateKeysOutputType::Files { path } => {
@@ -270,8 +267,6 @@ fn generate_keys(output_type: Option<GenerateKeysOutputType>) -> Result<()> {
 			}
 
 			println!("Generating fresh keys for your Chainflip Node!");
-
-			let keys = Keys::generate()?;
 
 			fs::write(node_key_file, hex::encode(keys.node_key.secret_key))?;
 			println!("🔑 Your Node public key is: 0x{}", hex::encode(keys.node_key.public_key));
