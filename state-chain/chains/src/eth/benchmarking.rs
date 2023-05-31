@@ -2,9 +2,9 @@ use super::{api::EthereumTransactionBuilder, TransactionFee};
 use crate::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	eth::{
-		api::{update_flip_supply::UpdateFlipSupply, EthereumApi},
-		to_ethereum_address, Address, AggKey, EthereumReplayProtection, EthereumTrackedData,
-		SchnorrVerificationComponents, Transaction, H256,
+		api::{update_flip_supply::UpdateFlipSupply, EthereumApi, EthereumReplayProtection},
+		to_ethereum_address, Address, AggKey, EthereumTrackedData, SchnorrVerificationComponents,
+		Transaction, H256,
 	},
 	ApiCall,
 };

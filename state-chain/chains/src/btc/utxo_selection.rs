@@ -15,9 +15,9 @@ use super::GetUtxoAmount;
 pub fn select_utxos_from_pool<UTXO: GetUtxoAmount>(
 	available_utxos: &mut Vec<UTXO>,
 	fee_per_utxo: u64,
-	amount_to_be_egressed: u64,
+	amount_to_be_spent: u64,
 ) -> Option<(Vec<UTXO>, u64)> {
-	if amount_to_be_egressed == 0 || available_utxos.is_empty() {
+	if available_utxos.is_empty() {
 		return None
 	}
 
@@ -27,7 +27,7 @@ pub fn select_utxos_from_pool<UTXO: GetUtxoAmount>(
 
 	let mut cumulative_amount = 0;
 
-	while cumulative_amount < amount_to_be_egressed {
+	while cumulative_amount < amount_to_be_spent {
 		if let Some(current_smallest_utxo) = available_utxos.pop() {
 			cumulative_amount += current_smallest_utxo.amount() - fee_per_utxo;
 			selected_utxos.push(current_smallest_utxo);
@@ -74,8 +74,8 @@ fn test_utxo_selection() {
 		UTXO { amount: 768 },
 	];
 
-	// empty list is output for 0 egress
-	assert_eq!(select_utxos_from_pool(&mut available_utxos.clone(), FEE_PER_UTXO, 0), None);
+	// empty utxo list as input should return Option::None.
+	assert_eq!(select_utxos_from_pool(&mut Vec::<UTXO>::new(), FEE_PER_UTXO, 0), None);
 	assert_eq!(
 		select_utxos_from_pool(&mut available_utxos.clone(), FEE_PER_UTXO, 1),
 		Some((vec![UTXO { amount: 7 }, UTXO { amount: 15 }], 18))

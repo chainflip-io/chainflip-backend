@@ -60,7 +60,7 @@ where
 
 				AsyncResult::Ready(VaultStatus::Failed(
 					statuses
-						.iter()
+						.into_iter()
 						.filter_map(|r| {
 							if let VaultStatus::Failed(offenders) = r {
 								Some(offenders)
@@ -68,9 +68,8 @@ where
 								None
 							}
 						})
-						.fold(BTreeSet::default(), |acc, x| {
-							acc.union(x).into_iter().cloned().collect::<BTreeSet<_>>()
-						}),
+						.flatten()
+						.collect(),
 				))
 			}
 		} else {
