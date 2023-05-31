@@ -16,7 +16,7 @@ use rand::{RngCore, SeedableRng};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, debug_span, Instrument};
 use utilities::{
-	all_same, assert_ok, split_at, success_threshold_from_share_count,
+	all_same, assert_ok, assert_panics, split_at, success_threshold_from_share_count,
 	testing::expect_recv_with_timeout,
 };
 
@@ -66,6 +66,71 @@ pub const DEFAULT_SIGNING_CEREMONY_ID: CeremonyId = DEFAULT_KEYGEN_CEREMONY_ID +
 /// Time it takes to cause a ceremony timeout (2 stages) with a small delay to allow for processing
 pub const CEREMONY_TIMEOUT_DURATION: Duration =
 	Duration::from_millis((((MAX_STAGE_DURATION_SECONDS * 2) as u64) * 1000) + 50);
+
+/// Run the given function on all crypto schemes, printing a message with the scheme name if it
+/// fails. The function must be generic over the CryptoScheme. eg: my_test<C: CryptoScheme>().
+macro_rules! test_all_crypto_schemes {
+	($test_function:ident) => {
+		({
+			use crate::{
+				bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme,
+			};
+
+			fn test<C: CryptoScheme>() {
+				if let Err(err) = std::panic::catch_unwind(|| $test_function::<C>()) {
+					println!("Test failed with {} CryptoScheme", C::NAME);
+					std::panic::resume_unwind(err);
+				}
+			}
+			// Run the test on all CryptoSchemes
+			test::<EthSigning>();
+			test::<PolkadotSigning>();
+			test::<BtcSigning>();
+		})
+	};
+}
+pub(crate) use test_all_crypto_schemes;
+
+#[test]
+fn test_all_crypto_schemes_macro() {
+	// Run the macro using all 3 function that only panic on a single scheme to make sure the macro
+	// is calling the function for each scheme.
+
+	fn panic_function_eth<C: CryptoScheme>() {
+		if matches!(<C as CryptoScheme>::CHAIN_TAG, crate::ChainTag::Ethereum) {
+			panic!();
+		}
+	}
+	fn panic_function_dot<C: CryptoScheme>() {
+		if matches!(<C as CryptoScheme>::CHAIN_TAG, crate::ChainTag::Polkadot) {
+			panic!();
+		}
+	}
+	fn panic_function_btc<C: CryptoScheme>() {
+		if matches!(<C as CryptoScheme>::CHAIN_TAG, crate::ChainTag::Bitcoin) {
+			panic!();
+		}
+	}
+
+	assert_panics!(test_all_crypto_schemes!(panic_function_eth));
+	assert_panics!(test_all_crypto_schemes!(panic_function_dot));
+	assert_panics!(test_all_crypto_schemes!(panic_function_btc));
+}
+
+/// Run the given function on all crypto schemes.
+/// The function must be generic over the CryptoScheme. eg: my_test<C: CryptoScheme>().
+macro_rules! test_all_crypto_schemes_async {
+	($test_function:ident) => {
+		({
+			use crate::{bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
+			// Run the test on all CryptoSchemes
+			$test_function::<EthSigning>().await;
+			$test_function::<PolkadotSigning>().await;
+			$test_function::<BtcSigning>().await;
+		})
+	};
+}
+pub(crate) use test_all_crypto_schemes_async;
 
 lazy_static! {
 	pub static ref ACCOUNT_IDS: Vec<AccountId> = (1..=4).map(|i| AccountId::new([i; 32])).collect();
@@ -303,6 +368,7 @@ where
 		}
 	}
 
+	#[track_caller]
 	pub async fn distribute_message<
 		StageData: Into<<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data>,
 	>(
@@ -324,6 +390,7 @@ where
 		}
 	}
 
+	#[track_caller]
 	pub async fn distribute_messages_with_non_sender<
 		StageData: Into<<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data>,
 	>(
@@ -338,6 +405,7 @@ where
 		}
 	}
 
+	#[track_caller]
 	pub async fn gather_outgoing_messages<
 		NextStageData: TryFrom<
 				<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data,
@@ -424,6 +492,7 @@ where
 			.await
 	}
 
+	#[track_caller]
 	pub async fn run_stage<
 		NextStageData: TryFrom<
 				<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data,
@@ -439,6 +508,7 @@ where
 		self.gather_outgoing_messages().await
 	}
 
+	#[track_caller]
 	pub async fn run_stage_with_non_sender<
 		NextStageData: TryFrom<
 				<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data,
@@ -455,17 +525,16 @@ where
 		self.gather_outgoing_messages().await
 	}
 
+	#[track_caller]
 	// Checks if all nodes have an outcome and the outcomes are consistent, returning the outcome.
-	async fn collect_and_check_outcomes(
+	fn collect_and_check_outcomes(
 		&mut self,
-	) -> Option<
-		Result<
-			<Self as CeremonyRunnerStrategy>::CheckedOutput,
-			(
-				BTreeSet<AccountId>,
-				<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
-			),
-		>,
+	) -> Result<
+		<Self as CeremonyRunnerStrategy>::CheckedOutput,
+		(
+			BTreeSet<AccountId>,
+			<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
+		),
 	> {
 		// Gather the outcomes from all the nodes
 		let results: HashMap<_, _> = self
@@ -477,8 +546,7 @@ where
 			.collect();
 
 		if results.is_empty() {
-			// No nodes have gotten an outcome yet
-			return None
+			panic!("No nodes have received an outcome yet");
 		}
 
 		if results.len() != self.nodes.len() {
@@ -496,7 +564,7 @@ where
 
 		if !ok_results.is_empty() && failure_reasons.is_empty() {
 			// All nodes completed successfully
-			Some(Ok(self.post_successful_complete_check(ok_results)))
+			Ok(self.post_successful_complete_check(ok_results))
 		} else if ok_results.is_empty() && !failure_reasons.is_empty() {
 			// All nodes reported failure, check that the reasons and reported nodes are the same
 			assert_eq!(
@@ -509,28 +577,27 @@ where
 				1,
 				"The ceremony failure reason was not the same for all nodes: {failure_reasons:?}",
 			);
-			Some(Err((
+			Err((
 				all_reported_parties.into_iter().next().unwrap(),
 				failure_reasons.into_iter().next().unwrap(),
-			)))
+			))
 		} else {
 			panic!("Ceremony results weren't consistently Ok() or Err() for all nodes");
 		}
 	}
 
-	pub async fn complete(&mut self) -> <Self as CeremonyRunnerStrategy>::CheckedOutput {
-		assert_ok!(self
-			.collect_and_check_outcomes()
-			.await
-			.expect("Failed to get all ceremony outcomes"))
+	#[track_caller]
+	pub fn complete(&mut self) -> <Self as CeremonyRunnerStrategy>::CheckedOutput {
+		assert_ok!(self.collect_and_check_outcomes())
 	}
 
-	async fn try_complete_with_error(
+	#[track_caller]
+	fn try_complete_with_error(
 		&mut self,
 		bad_account_ids: &[AccountId],
 		expected_failure_reason: <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
 	) -> Option<()> {
-		let (reported, reason) = self.collect_and_check_outcomes().await?.unwrap_err();
+		let (reported, reason) = self.collect_and_check_outcomes().unwrap_err();
 		assert_eq!(BTreeSet::from_iter(bad_account_ids.iter()), reported.iter().collect());
 		assert_eq!(expected_failure_reason, reason);
 		Some(())
@@ -538,13 +605,13 @@ where
 
 	/// Gathers the ceremony outcomes from all nodes,
 	/// making sure they are identical and match the expected failure reason.
-	pub async fn complete_with_error(
+	#[track_caller]
+	pub fn complete_with_error(
 		&mut self,
 		bad_account_ids: &[AccountId],
 		expected_failure_reason: <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
 	) {
 		self.try_complete_with_error(bad_account_ids, expected_failure_reason)
-			.await
 			.expect("Failed to get all ceremony outcomes");
 	}
 
@@ -554,6 +621,7 @@ where
 		}
 	}
 
+	#[track_caller]
 	pub async fn request(
 		&mut self,
 	) -> HashMap<
@@ -788,7 +856,7 @@ pub async fn standard_signing<C: CryptoScheme>(
 		signing::VerifyLocalSig4<C::Point>
 	);
 	signing_ceremony.distribute_messages(messages).await;
-	signing_ceremony.complete().await
+	signing_ceremony.complete()
 }
 
 pub async fn run_keygen(
@@ -812,7 +880,7 @@ pub async fn run_keygen(
 		keygen::VerifyComplaints7
 	);
 	keygen_ceremony.distribute_messages(messages).await;
-	keygen_ceremony.complete().await
+	keygen_ceremony.complete()
 }
 
 /// Generate an invalid local sig for stage3

@@ -73,7 +73,7 @@ async fn should_enter_blaming_stage_on_invalid_secret_shares() {
 		VerifyBlameResponses9
 	);
 	ceremony.distribute_messages(messages).await;
-	ceremony.complete().await;
+	ceremony.complete();
 }
 
 #[tokio::test]
@@ -106,7 +106,7 @@ async fn should_enter_blaming_stage_on_timeout_secret_shares() {
 	let messages =
 		run_stages!(ceremony, messages, VerifyComplaints7, BlameResponse8, VerifyBlameResponses9);
 	ceremony.distribute_messages(messages).await;
-	ceremony.complete().await;
+	ceremony.complete();
 }
 
 /// If one or more parties send an invalid secret share both the first
@@ -155,8 +155,7 @@ async fn should_report_on_invalid_blame_response() {
 	let messages = ceremony.run_stage::<VerifyBlameResponses9, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
 	ceremony
-		.complete_with_error(&[bad_node_id_1.clone()], KeygenFailureReason::InvalidBlameResponse)
-		.await;
+		.complete_with_error(&[bad_node_id_1.clone()], KeygenFailureReason::InvalidBlameResponse);
 }
 
 /// If party is blamed by one or more peers, its BlameResponse sent in
@@ -195,8 +194,7 @@ async fn should_report_on_incomplete_blame_response() {
 	let messages = ceremony.run_stage::<VerifyBlameResponses9, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
 	ceremony
-		.complete_with_error(&[bad_node_id_1.clone()], KeygenFailureReason::InvalidBlameResponse)
-		.await;
+		.complete_with_error(&[bad_node_id_1.clone()], KeygenFailureReason::InvalidBlameResponse);
 }
 
 // If one of more parties (are thought to) broadcast data inconsistently,
@@ -223,15 +221,13 @@ async fn should_report_on_inconsistent_broadcast_coeff_comm() {
 
 	let messages = ceremony.run_stage::<VerifyCoeffComm4, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
-	ceremony
-		.complete_with_error(
-			&[bad_account_id.clone()],
-			KeygenFailureReason::BroadcastFailure(
-				BroadcastFailureReason::Inconsistency,
-				KeygenStageName::VerifyCommitmentsBroadcast4,
-			),
-		)
-		.await;
+	ceremony.complete_with_error(
+		&[bad_account_id.clone()],
+		KeygenFailureReason::BroadcastFailure(
+			BroadcastFailureReason::Inconsistency,
+			KeygenStageName::VerifyCommitmentsBroadcast4,
+		),
+	);
 }
 
 #[tokio::test]
@@ -252,15 +248,13 @@ async fn should_report_on_inconsistent_broadcast_hash_comm() {
 	let messages = run_stages!(ceremony, messages, VerifyHashComm2,);
 
 	ceremony.distribute_messages(messages).await;
-	ceremony
-		.complete_with_error(
-			&[bad_account_id.clone()],
-			KeygenFailureReason::BroadcastFailure(
-				BroadcastFailureReason::Inconsistency,
-				KeygenStageName::VerifyHashCommitmentsBroadcast2,
-			),
-		)
-		.await;
+	ceremony.complete_with_error(
+		&[bad_account_id.clone()],
+		KeygenFailureReason::BroadcastFailure(
+			BroadcastFailureReason::Inconsistency,
+			KeygenStageName::VerifyHashCommitmentsBroadcast2,
+		),
+	);
 }
 
 // If one or more parties reveal invalid coefficients that don't correspond
@@ -295,9 +289,7 @@ async fn should_report_on_invalid_hash_comm() {
 	let messages = ceremony.run_stage::<VerifyCoeffComm4, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
 
-	ceremony
-		.complete_with_error(&[bad_account_id], KeygenFailureReason::InvalidCommitment)
-		.await;
+	ceremony.complete_with_error(&[bad_account_id], KeygenFailureReason::InvalidCommitment);
 }
 
 #[tokio::test]
@@ -329,15 +321,13 @@ async fn should_report_on_inconsistent_broadcast_complaints() {
 
 	let messages = ceremony.run_stage::<keygen::VerifyComplaints7, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
-	ceremony
-		.complete_with_error(
-			&[bad_account_id.clone()],
-			KeygenFailureReason::BroadcastFailure(
-				BroadcastFailureReason::Inconsistency,
-				KeygenStageName::VerifyComplaintsBroadcastStage7,
-			),
-		)
-		.await;
+	ceremony.complete_with_error(
+		&[bad_account_id.clone()],
+		KeygenFailureReason::BroadcastFailure(
+			BroadcastFailureReason::Inconsistency,
+			KeygenStageName::VerifyComplaintsBroadcastStage7,
+		),
+	);
 }
 
 #[tokio::test]
@@ -388,15 +378,13 @@ async fn should_report_on_inconsistent_broadcast_blame_responses() {
 
 	let messages = ceremony.run_stage::<VerifyBlameResponses9, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
-	ceremony
-		.complete_with_error(
-			&[bad_account_id.clone()],
-			KeygenFailureReason::BroadcastFailure(
-				BroadcastFailureReason::Inconsistency,
-				KeygenStageName::VerifyBlameResponsesBroadcastStage9,
-			),
-		)
-		.await;
+	ceremony.complete_with_error(
+		&[bad_account_id.clone()],
+		KeygenFailureReason::BroadcastFailure(
+			BroadcastFailureReason::Inconsistency,
+			KeygenStageName::VerifyBlameResponsesBroadcastStage9,
+		),
+	);
 }
 
 #[tokio::test]
@@ -419,9 +407,7 @@ async fn should_report_on_deserialization_failure_coeff_commitments() {
 	let messages = ceremony.run_stage::<VerifyCoeffComm4, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
 
-	ceremony
-		.complete_with_error(&[bad_account_id], KeygenFailureReason::DeserializationError)
-		.await;
+	ceremony.complete_with_error(&[bad_account_id], KeygenFailureReason::DeserializationError);
 }
 
 // If one or more parties send invalid commitments, the ceremony should be aborted.
@@ -453,9 +439,7 @@ async fn should_report_on_invalid_zkp_in_coeff_comm() {
 	let messages = ceremony.run_stage::<VerifyCoeffComm4, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
 
-	ceremony
-		.complete_with_error(&[bad_account_id], KeygenFailureReason::InvalidCommitment)
-		.await;
+	ceremony.complete_with_error(&[bad_account_id], KeygenFailureReason::InvalidCommitment);
 }
 
 #[tokio::test]
@@ -485,9 +469,7 @@ async fn should_report_on_invalid_complaints() {
 
 	let messages = ceremony.run_stage::<keygen::VerifyComplaints7, _, _>(messages).await;
 	ceremony.distribute_messages(messages).await;
-	ceremony
-		.complete_with_error(&[bad_account_id], KeygenFailureReason::InvalidComplaint)
-		.await;
+	ceremony.complete_with_error(&[bad_account_id], KeygenFailureReason::InvalidComplaint);
 }
 
 mod timeout {
@@ -535,7 +517,7 @@ mod timeout {
 					VerifyComplaints7
 				);
 				ceremony.distribute_messages(messages).await;
-				ceremony.complete().await;
+				ceremony.complete();
 			}
 
 			#[tokio::test]
@@ -561,7 +543,7 @@ mod timeout {
 				let messages =
 					run_stages!(ceremony, messages, SecretShare5, Complaints6, VerifyComplaints7);
 				ceremony.distribute_messages(messages).await;
-				ceremony.complete().await;
+				ceremony.complete();
 			}
 
 			#[tokio::test]
@@ -593,7 +575,7 @@ mod timeout {
 					ceremony.gather_outgoing_messages::<VerifyComplaints7, KeygenData>().await;
 
 				ceremony.distribute_messages(messages).await;
-				ceremony.complete().await;
+				ceremony.complete();
 			}
 
 			#[tokio::test]
@@ -635,7 +617,7 @@ mod timeout {
 					ceremony.gather_outgoing_messages::<VerifyBlameResponses9, KeygenData>().await;
 
 				ceremony.distribute_messages(messages).await;
-				ceremony.complete().await;
+				ceremony.complete();
 			}
 		}
 	}
@@ -676,7 +658,7 @@ mod timeout {
 				);
 
 				ceremony.distribute_messages(messages).await;
-				ceremony.complete().await;
+				ceremony.complete();
 			}
 
 			#[tokio::test]
@@ -696,7 +678,7 @@ mod timeout {
 				let messages = run_stages!(ceremony, messages, Complaints6, VerifyComplaints7);
 
 				ceremony.distribute_messages(messages).await;
-				ceremony.complete().await;
+				ceremony.complete();
 			}
 
 			#[tokio::test]
@@ -719,7 +701,7 @@ mod timeout {
 				let [non_sender_id] = ceremony.select_account_ids();
 				ceremony.distribute_messages_with_non_sender(messages, &non_sender_id).await;
 
-				ceremony.complete().await;
+				ceremony.complete();
 			}
 
 			#[tokio::test]
@@ -757,7 +739,7 @@ mod timeout {
 				let [non_sender_id] = ceremony.select_account_ids();
 				ceremony.distribute_messages_with_non_sender(messages, &non_sender_id).await;
 
-				ceremony.complete().await;
+				ceremony.complete();
 			}
 		}
 
@@ -796,15 +778,13 @@ mod timeout {
 					.distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
 					.await;
 
-				ceremony
-					.complete_with_error(
-						&[non_sending_party_id_1],
-						KeygenFailureReason::BroadcastFailure(
-							BroadcastFailureReason::InsufficientMessages,
-							KeygenStageName::VerifyHashCommitmentsBroadcast2,
-						),
-					)
-					.await
+				ceremony.complete_with_error(
+					&[non_sending_party_id_1],
+					KeygenFailureReason::BroadcastFailure(
+						BroadcastFailureReason::InsufficientMessages,
+						KeygenStageName::VerifyHashCommitmentsBroadcast2,
+					),
+				)
 			}
 
 			#[tokio::test]
@@ -832,15 +812,13 @@ mod timeout {
 					.distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
 					.await;
 
-				ceremony
-					.complete_with_error(
-						&[non_sending_party_id_1],
-						KeygenFailureReason::BroadcastFailure(
-							BroadcastFailureReason::InsufficientMessages,
-							KeygenStageName::VerifyCommitmentsBroadcast4,
-						),
-					)
-					.await
+				ceremony.complete_with_error(
+					&[non_sending_party_id_1],
+					KeygenFailureReason::BroadcastFailure(
+						BroadcastFailureReason::InsufficientMessages,
+						KeygenStageName::VerifyCommitmentsBroadcast4,
+					),
+				)
 			}
 
 			#[tokio::test]
@@ -876,15 +854,13 @@ mod timeout {
 					.distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
 					.await;
 
-				ceremony
-					.complete_with_error(
-						&[non_sending_party_id_1],
-						KeygenFailureReason::BroadcastFailure(
-							BroadcastFailureReason::InsufficientMessages,
-							KeygenStageName::VerifyComplaintsBroadcastStage7,
-						),
-					)
-					.await
+				ceremony.complete_with_error(
+					&[non_sending_party_id_1],
+					KeygenFailureReason::BroadcastFailure(
+						BroadcastFailureReason::InsufficientMessages,
+						KeygenStageName::VerifyComplaintsBroadcastStage7,
+					),
+				)
 			}
 
 			#[tokio::test]
@@ -930,15 +906,13 @@ mod timeout {
 					.distribute_messages_with_non_sender(messages, &non_sending_party_id_2)
 					.await;
 
-				ceremony
-					.complete_with_error(
-						&[non_sending_party_id_1],
-						KeygenFailureReason::BroadcastFailure(
-							BroadcastFailureReason::InsufficientMessages,
-							KeygenStageName::VerifyBlameResponsesBroadcastStage9,
-						),
-					)
-					.await
+				ceremony.complete_with_error(
+					&[non_sending_party_id_1],
+					KeygenFailureReason::BroadcastFailure(
+						BroadcastFailureReason::InsufficientMessages,
+						KeygenStageName::VerifyBlameResponsesBroadcastStage9,
+					),
+				)
 			}
 		}
 	}
@@ -1102,7 +1076,7 @@ mod key_handover {
 		);
 
 		ceremony.distribute_messages(messages).await;
-		let (new_key, new_shares) = ceremony.complete().await;
+		let (new_key, new_shares) = ceremony.complete();
 
 		assert_eq!(new_key, initial_key);
 
@@ -1226,7 +1200,7 @@ mod key_handover {
 		);
 
 		ceremony.distribute_messages(messages).await;
-		let (new_key, new_shares) = ceremony.complete().await;
+		let (new_key, new_shares) = ceremony.complete();
 
 		assert_eq!(new_key, initial_key);
 
@@ -1283,8 +1257,6 @@ mod key_handover {
 
 		ceremony.distribute_messages(messages).await;
 
-		ceremony
-			.complete_with_error(&[bad_account_id], KeygenFailureReason::InvalidCommitment)
-			.await;
+		ceremony.complete_with_error(&[bad_account_id], KeygenFailureReason::InvalidCommitment);
 	}
 }

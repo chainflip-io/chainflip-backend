@@ -1,9 +1,10 @@
 use crate::{
 	mock::*, AddressPool, AddressStatus, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DeploymentStatus, DisabledEgressAssets, Error, FetchOrTransfer, MinimumDeposit, Pallet,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, WeightInfo,
+	DeploymentStatus, DepositAddressDetailsLookup, DepositFetchIdOf, DisabledEgressAssets, Error,
+	FetchOrTransfer, FetchParamDetails, MinimumDeposit, Pallet, ScheduledEgressCcm,
+	ScheduledEgressFetchOrTransfer, WeightInfo,
 };
-use cf_chains::{ExecutexSwapAndCall, TransferAssetParams};
+use cf_chains::{ChannelIdConstructor, ExecutexSwapAndCall, TransferAssetParams};
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
 use cf_traits::{
 	mocks::{
@@ -891,6 +892,14 @@ fn handle_pending_deployment() {
 			RuntimeOrigin::root(),
 			vec![(cf_chains::eth::EthereumChannelId::UnDeployed(channel_id), deposit_address)]
 		));
+		let channel_id =
+			DepositAddressDetailsLookup::<Test, _>::get(deposit_address).unwrap().channel_id;
+		// Verify that the DepositFetchId was updated to deployed state after the first broadcast
+		// has succeed.
+		assert_eq!(
+			FetchParamDetails::<Test, _>::get(channel_id).unwrap().0,
+			DepositFetchIdOf::<Test, _>::deployed(channel_id, deposit_address)
+		);
 		assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Deployed);
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 1);
 		// Process deposit again amd expect the fetch request to be picked up.

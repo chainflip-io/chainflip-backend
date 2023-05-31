@@ -13,7 +13,10 @@ use tokio::sync::Mutex;
 use crate::{
 	common::start_with_restart_on_failure,
 	db::PersistentKeyDB,
-	eth::deposit_witnesser::DepositWitnesser,
+	eth::{
+		deposit_witnesser::DepositWitnesser,
+		rpc::{EthHttpRpcClient, EthWsRpcClient},
+	},
 	settings,
 	state_chain_observer::{client::StateChainClient, EthAddressToMonitorSender},
 	witnesser::{EpochStart, ItemMonitor},
@@ -26,7 +29,6 @@ use super::{
 	erc20_witnesser::Erc20Witnesser,
 	eth_block_witnessing::{self},
 	key_manager::KeyManager,
-	rpc::EthDualRpcClient,
 	state_chain_gateway::StateChainGateway,
 	vault::Vault,
 };
@@ -58,7 +60,7 @@ pub async fn start(
 ) -> anyhow::Result<EthAddressToMonitorSender> {
 	scope.spawn(
 		chain_data_witnesser::start(
-			EthDualRpcClient::new(eth_settings, expected_chain_id).await.unwrap(),
+			EthHttpRpcClient::new(eth_settings, Some(expected_chain_id)).await.unwrap(),
 			state_chain_client.clone(),
 			epoch_start_receiver_2,
 			cfe_settings_update_receiver,
@@ -163,9 +165,16 @@ pub async fn start(
 			// We create a new RPC on each call to the future, since one common reason for
 			// failure is that the WS connection has been dropped. This ensures that we create a
 			// new client, and therefore create a new connection.
-			let dual_rpc =
-				EthDualRpcClient::new(&eth_settings, expected_chain_id).await.map_err(|err| {
-					tracing::error!("Failed to create EthDualRpcClient: {:?}", err);
+			let ws_rpc = EthWsRpcClient::new(&eth_settings, Some(expected_chain_id))
+				.await
+				.map_err(|err| {
+					tracing::error!("Failed to create EthWsRpcClient: {:?}", err);
+				})?;
+
+			let http_rpc = EthHttpRpcClient::new(&eth_settings, Some(expected_chain_id))
+				.await
+				.map_err(|err| {
+					tracing::error!("Failed to create EthHttpRpcClient: {:?}", err);
 				})?;
 
 			eth_block_witnessing::start(
@@ -174,24 +183,24 @@ pub async fn start(
 					key_manager: ContractWitnesser::new(
 						KeyManager::new(key_manager_address.into()),
 						state_chain_client.clone(),
-						dual_rpc.clone(),
+						http_rpc.clone(),
 						false,
 					),
 					state_chain_gateway: ContractWitnesser::new(
 						StateChainGateway::new(state_chain_gateway_address.into()),
 						state_chain_client.clone(),
-						dual_rpc.clone(),
+						http_rpc.clone(),
 						true,
 					),
 					vault: ContractWitnesser::new(
 						Vault::new(vault_address.into()),
 						state_chain_client.clone(),
-						dual_rpc.clone(),
+						http_rpc.clone(),
 						true,
 					),
 					eth_deposits: DepositWitnesser::new(
 						state_chain_client.clone(),
-						dual_rpc.clone(),
+						http_rpc.clone(),
 						eth_address_monitor,
 					),
 					flip_deposits: ContractWitnesser::new(
@@ -201,7 +210,7 @@ pub async fn start(
 							flip_address_monitor,
 						),
 						state_chain_client.clone(),
-						dual_rpc.clone(),
+						http_rpc.clone(),
 						false,
 					),
 					usdc_deposits: ContractWitnesser::new(
@@ -211,11 +220,12 @@ pub async fn start(
 							usdc_address_monitor,
 						),
 						state_chain_client.clone(),
-						dual_rpc.clone(),
+						http_rpc.clone(),
 						false,
 					),
 				},
-				dual_rpc,
+				ws_rpc,
+				http_rpc,
 				db,
 			)
 			.await
