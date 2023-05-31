@@ -101,8 +101,9 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
     }
   }
   console.log('Received ' + ccy + ' address: ' + ingressAddress);
+  let interpreter = ext[ccy] === '.ts' ? 'pnpm tsx' : 'bash';
   exec(
-    './commands/fund_' + ccy + ext[ccy] + ingressAddress + ' ' + deposits[ccy],
+    interpreter + ' ./commands/fund_' + ccy + ext[ccy] + ' ' + ingressAddress + ' ' + deposits[ccy],
     { timeout: 30000 },
     (err, stdout, stderr) => {
       if (stderr !== '') process.stdout.write(stderr);
