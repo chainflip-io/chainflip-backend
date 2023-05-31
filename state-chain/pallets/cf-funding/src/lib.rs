@@ -377,7 +377,9 @@ pub mod pallet {
 			// We have some restrictions on the account
 			if RestrictedBalances::<T>::contains_key(account_id.clone()) {
 				// We're talking about the current address
-				if RestrictedAddresses::<T>::contains_key(address) {
+				if RestrictedAddresses::<T>::contains_key(address) &&
+					RestrictedBalances::<T>::get(&account_id).get(&address).is_some()
+				{
 					// ensure that restricted balance for the address is higher than the amount we
 					// try to redeem
 					ensure!(
