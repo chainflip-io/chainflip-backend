@@ -423,13 +423,13 @@ fn addresses_are_getting_reused() {
 		})
 		// Close the channels.
 		.then_execute_as_next_block(|channels| {
-			for (id, address) in &channels {
+			for (id, address, _asset) in &channels {
 				IngressEgress::close_channel(*id, address.clone());
 			}
 			channels[0]
 		})
 		// Check that the used address is now deployed and in the pool of available addresses.
-		.inspect_storage(|(channel_id, address)| {
+		.inspect_storage(|(channel_id, address, _asset)| {
 			expect_size_of_address_pool(1);
 			// Address 1 is free to use and in the pool of available addresses
 			assert_eq!(AddressPool::<Test, _>::get(channel_id).unwrap(), *address);

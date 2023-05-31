@@ -119,7 +119,11 @@ pub trait RequestAddressAndDeposit {
 	) -> cf_test_utilities::TestExternalities<
 		Test,
 		AllPalletsWithSystem,
-		Vec<(ChannelId, <<Test as crate::Config>::TargetChain as Chain>::ChainAccount)>,
+		Vec<(
+			ChannelId,
+			<<Test as crate::Config>::TargetChain as Chain>::ChainAccount,
+			<<Test as crate::Config>::TargetChain as Chain>::ChainAsset,
+		)>,
 	>;
 }
 
@@ -128,7 +132,7 @@ impl<Ctx: Clone> RequestAddressAndDeposit
 {
 	fn request_address_and_deposit(
 		self,
-		requests: &[(
+		deposit_details: &[(
 			<Test as frame_system::Config>::AccountId,
 			<<Test as crate::Config>::TargetChain as Chain>::ChainAsset,
 			<<Test as crate::Config>::TargetChain as Chain>::ChainAmount,
@@ -136,49 +140,44 @@ impl<Ctx: Clone> RequestAddressAndDeposit
 	) -> cf_test_utilities::TestExternalities<
 		Test,
 		AllPalletsWithSystem,
-		Vec<(ChannelId, <<Test as crate::Config>::TargetChain as Chain>::ChainAccount)>,
+		Vec<(
+			ChannelId,
+			<<Test as crate::Config>::TargetChain as Chain>::ChainAccount,
+			<<Test as crate::Config>::TargetChain as Chain>::ChainAsset,
+		)>,
 	> {
-		self.then_execute_as_next_block(|_| {
-			requests
-				.into_iter()
-				.copied()
-				.map(|(broker, asset, amount)| {
-					(
-						IngressEgress::request_liquidity_deposit_address(broker, asset)
-							.map(|(id, addr)| {
-								(id, <<Test as crate::Config>::TargetChain as Chain>::ChainAccount::try_from(addr).unwrap())
-							})
-							.unwrap(),
-						asset,
-						amount,
-					)
-				})
-				.collect::<Vec<_>>()
-		})
-		.then_apply_extrinsics(|deposit_details| {
-			deposit_details
-				.into_iter()
-				.filter_map(|&((_channel_id, ref deposit_address), asset, amount)| {
-					(!amount.is_zero()).then_some((
-						OriginTrait::none(),
-						RuntimeCall::from(pallet_cf_ingress_egress::Call::process_deposits {
-							deposit_witnesses: vec![DepositWitness {
-								deposit_address: deposit_address.clone().try_into().unwrap(),
-								asset: asset.into(),
-								amount,
-								tx_id: Default::default(),
-							}],
-						}),
-					))
-				})
-				.collect::<Vec<_>>()
-		})
-		.map_context(|(deposit_details, _extrinsic_results)| {
-			deposit_details
-				.into_iter()
-				.map(|(channel, _asset, _amount)| channel)
-				.collect::<Vec<_>>()
-		})
+		let (requests, amounts): (Vec<_>, Vec<_>) = deposit_details
+			.into_iter()
+			.copied()
+			.map(|(acct, asset, amount)| ((acct, asset), amount))
+			.unzip();
+
+		self.request_deposit_addresses(&requests[..])
+			.then_apply_extrinsics(move |channel| {
+				channel
+					.into_iter()
+					.zip(amounts)
+					.filter_map(|(&(_channel_id, ref deposit_address, asset), amount)| {
+						(!amount.is_zero()).then_some((
+							OriginTrait::none(),
+							RuntimeCall::from(pallet_cf_ingress_egress::Call::process_deposits {
+								deposit_witnesses: vec![DepositWitness {
+									deposit_address: deposit_address.clone().try_into().unwrap(),
+									asset: asset.into(),
+									amount,
+									tx_id: Default::default(),
+								}],
+							}),
+						))
+					})
+					.collect::<Vec<_>>()
+			})
+			.map_context(|(deposit_details, extrinsic_results)| {
+				for (call, result) in extrinsic_results {
+					assert!(result.is_ok(), "Extrinsic failed: {:?}", call);
+				}
+				deposit_details
+			})
 	}
 }
 
@@ -193,7 +192,8 @@ pub trait RequestAddress {
 		Test,
 		AllPalletsWithSystem,
 		Vec<(
-			(ChannelId, <<Test as crate::Config>::TargetChain as Chain>::ChainAccount),
+			ChannelId,
+			<<Test as crate::Config>::TargetChain as Chain>::ChainAccount,
 			<<Test as crate::Config>::TargetChain as Chain>::ChainAsset,
 		)>,
 	>;
@@ -212,7 +212,8 @@ impl<Ctx: Clone> RequestAddress
 		Test,
 		AllPalletsWithSystem,
 		Vec<(
-			(ChannelId, <<Test as crate::Config>::TargetChain as Chain>::ChainAccount),
+			ChannelId,
+			<<Test as crate::Config>::TargetChain as Chain>::ChainAccount,
 			<<Test as crate::Config>::TargetChain as Chain>::ChainAsset,
 		)>,
 	> {
@@ -221,14 +222,11 @@ impl<Ctx: Clone> RequestAddress
 				.into_iter()
 				.copied()
 				.map(|(broker, asset)| {
-					(
-						IngressEgress::request_liquidity_deposit_address(broker, asset)
-							.map(|(id, addr)| {
-								(id, <<Test as crate::Config>::TargetChain as Chain>::ChainAccount::try_from(addr).unwrap())
-							})
-							.unwrap(),
-						asset,
-					)
+					IngressEgress::request_liquidity_deposit_address(broker, asset)
+						.map(|(id, addr)| {
+							(id, <<Test as crate::Config>::TargetChain as Chain>::ChainAccount::try_from(addr).unwrap(), asset)
+						})
+						.unwrap()
 				})
 				.collect()
 		})
