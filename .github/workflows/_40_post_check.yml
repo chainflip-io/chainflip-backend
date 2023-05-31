@@ -76,33 +76,9 @@ jobs:
           chmod +x ${{ env.BINARIES_LOCATION }}/chainflip-*
           ./localnet/manage.sh
 
-      - name: Debug /usr/bin/env
-        working-directory: bouncer
-        run: |
-          /usr/bin/env
-
-      - name: Debug /usr/bin/env pnpm tsx
-        working-directory: bouncer
-        run: |
-          /usr/bin/env pnpm tsx
-
-      - name: Debug pnpm tsx
-        working-directory: bouncer
-        run: |
-          pnpm tsx
-
-      - name: Debug pnpm tsx
-        working-directory: bouncer
-        run: |
-          echo $(which pnpm)
-
       - name: Run EinfachHeuteLeiderNicht.exe
         if: inputs.simple_bouncer
         working-directory: bouncer
-        env:
-          POLKADOT_ENDPOINT: ws://polkadot:9944
-          BTC_ENDPOINT: http://bitcoin:8332
-          ETH_ENDPOINT: http://geth:8545
         run: |
           ./run_simple.sh
 
@@ -110,10 +86,6 @@ jobs:
         id: heuteleidernicht
         if: ${{ ! inputs.simple_bouncer }}
         working-directory: bouncer
-        env:
-          POLKADOT_ENDPOINT: ws://polkadot:9944
-          BTC_ENDPOINT: http://bitcoin:8332
-          ETH_ENDPOINT: http://geth:8545
         run: |
           ./run.sh
 
