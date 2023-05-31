@@ -37,28 +37,34 @@ where
 	}
 }
 
-async fn filter_successful_txs<'a, Rpc>(
-	txs: &'a [(web3::types::Transaction, sp_core::H160)],
-	eth_rpc: &'a Rpc,
-) -> anyhow::Result<impl Iterator<Item = &'a (web3::types::Transaction, sp_core::H160)> + 'a>
+async fn filter_successful_txs<Rpc>(
+	txs: Vec<(web3::types::Transaction, sp_core::H160)>,
+	eth_rpc: &Rpc,
+) -> anyhow::Result<impl Iterator<Item = (web3::types::Transaction, sp_core::H160)>>
 where
-	Rpc: EthRpcApi + Send + Sync,
+	Rpc: EthRpcApi,
 {
+	use futures::StreamExt;
+
+	const MAX_CONCURRENT_REQUESTS: usize = 10;
+
 	let futures = txs.iter().map(|(tx, _)| tx).map(|tx| eth_rpc.transaction_receipt(tx.hash));
-	let receipts = utilities::execute_in_batches(futures, 10)
-		.await?
+	let receipts = utilities::assert_stream_send(futures::stream::iter(futures))
+		.buffered(MAX_CONCURRENT_REQUESTS)
+		.collect::<Vec<_>>()
+		.await
 		.into_iter()
-		.collect::<Vec<_>>();
+		.collect::<Result<Vec<_>, _>>()?;
 
 	// Note that we abort in case any of the receipts are missing a status:
 	let statuses = receipts
 		.into_iter()
 		.map(|receipt| {
-			receipt.status.ok_or_else(|| anyhow::anyhow!("receipt did not contain status"))
+			receipt.status.ok_or_else(|| anyhow::anyhow!("Receipt did not contain status"))
 		})
 		.collect::<Result<Vec<_>, anyhow::Error>>()?;
 
-	Ok(txs.iter().zip(statuses.into_iter()).filter_map(|(tx, status)| {
+	Ok(txs.into_iter().zip(statuses.into_iter()).filter_map(|(tx, status)| {
 		if status.as_u64() == 1 {
 			Some(tx)
 		} else {
@@ -102,11 +108,11 @@ where
 			})
 			.collect::<Vec<_>>();
 
-		let successful_txs = filter_successful_txs(&interesting_txs, &self.rpc).await?;
+		let successful_txs = filter_successful_txs(interesting_txs, &self.rpc).await?;
 
 		let deposit_witnesses = successful_txs
 			.map(|(tx, to_addr)| DepositWitness {
-				deposit_address: *to_addr,
+				deposit_address: to_addr,
 				asset: eth::Asset::Eth,
 				amount: tx
 					.value
@@ -162,10 +168,7 @@ async fn test_successful_tx_filter() {
 		Default::default(),
 	);
 
-	let txs = [tx1.clone(), tx2, tx3.clone()];
+	let txs = vec![tx1.clone(), tx2, tx3.clone()];
 
-	assert_eq!(
-		filter_successful_txs(&txs, &rpc).await.unwrap().collect::<Vec<_>>(),
-		vec![&tx1, &tx3]
-	);
+	assert_eq!(filter_successful_txs(txs, &rpc).await.unwrap().collect::<Vec<_>>(), vec![tx1, tx3]);
 }
