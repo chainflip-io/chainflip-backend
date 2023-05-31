@@ -1,4 +1,4 @@
-#!/opt/hostedtoolcache/node/20.2.0/x64/bin/pnpm tsx
+#!/usr/bin/env pnpm tsx
 
 // INSTRUCTIONS
 //
