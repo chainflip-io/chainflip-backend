@@ -137,11 +137,6 @@ pub mod pallet {
 	pub type PendingRedemptions<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, (), OptionQuery>;
 
-	/// Locks a particular account's ability to redeem to a particular ETH address.
-	#[pallet::storage]
-	pub type WithdrawalAddresses<T: Config> =
-		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress, OptionQuery>;
-
 	/// Currently just used to record failed funding attempts so that if necessary in the future we
 	/// can use it to recover user funds.
 	#[pallet::storage]
@@ -229,13 +224,6 @@ pub mod pallet {
 			account_id: AccountId<T>,
 		},
 
-		/// A funding attempt has failed.
-		FailedFundingAttempt {
-			account_id: AccountId<T>,
-			withdrawal_address: EthereumAddress,
-			amount: FlipBalance<T>,
-		},
-
 		MinimumFundingUpdated {
 			new_minimum: T::Balance,
 		},
@@ -295,7 +283,6 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [FailedFundingAttempt](Event::FailedFundingAttempt)
 		/// - [Funded](Event::Funded)
 		///
 		/// ## Errors
@@ -409,12 +396,6 @@ pub mod pallet {
 						total_balance.checked_sub(&restricted_balance).expect("to not underflow");
 					// Ensure that the amount to redeem is not higher than the restricted balance
 					ensure!(amount <= available_balance, Error::<T>::AmountToHigh);
-				}
-			}
-
-			if let Some(withdrawal_address) = WithdrawalAddresses::<T>::get(&account_id) {
-				if withdrawal_address != address {
-					return Err(Error::<T>::WithdrawalAddressRestricted.into())
 				}
 			}
 
