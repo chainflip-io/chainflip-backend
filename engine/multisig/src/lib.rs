@@ -1,3 +1,5 @@
+#![cfg_attr(test, feature(closure_track_caller))]
+
 //! Multisig signing and keygen
 pub use crypto::{
 	bitcoin, eth, polkadot, CanonicalEncoding, ChainTag, CryptoScheme, KeyId, Rng,

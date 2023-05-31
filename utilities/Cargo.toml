@@ -26,6 +26,9 @@ pin-project = {version = "1.0.12", optional = true}
 warp = {version = "0.3.5", optional = true}
 sp-rpc = {git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", optional = true}
 
+[dev-dependencies]
+tempfile = "3.3.0"
+
 [features]
 default = ['std']
 test-utils = ['tempfile', 'tracing', 'tracing-subscriber']
