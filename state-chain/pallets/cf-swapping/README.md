@@ -22,13 +22,19 @@ At present, only Ethereum is supported as a CCM destination chain. The funds are
 
 ### Structure
 
-CCM message consists of the following parts: - Information to perform a swap request (`from_asset`, `to_asset`, `amount` and `destination_address`) - A `gas_budget` determining the amount of has available for execution on the egress chain. - A `message` containing arbitrary bytes to be interpreted on the egress chain. - A `refund_address` for gas refunds (not implemented yet).
+CCM message consists of the following parts:
+    - Information to perform a swap request (`from_asset`, `to_asset`, `amount` and `destination_address`)
+    - A `gas_budget` determining the amount of has available for execution on the egress chain.
+    - A `message` containing arbitrary bytes to be interpreted on the egress chain.
+    - A `refund_address` for gas refunds (not implemented yet).
 
 ### Pathways
 
 #### Deposit
 
-CCM messages can be entered on-chain in the following ways: - Calling `fn ccm_deposit()` extrinsic, requires Witness Origin. This is for when the user deposits funds directly into the Vault contract and called the contract function. - Calling `request_swap_deposit_address()` function, passing in the metadata via `message_metadata: Some(metadata)`, then complete the deposit by depositing funds into the designated address.
+CCM messages can be entered on-chain in the following ways:
+    - Calling `fn ccm_deposit()` extrinsic, requires Witness Origin. This is for when the user deposits funds directly into the Vault contract and called the contract function.
+    - Calling `request_swap_deposit_address()` function, passing in the metadata via `message_metadata: Some(metadata)`, then complete the deposit by depositing funds into the designated address.
 
 #### Processing
 
