@@ -54,8 +54,8 @@ jobs:
 
       - name: Install system packages
         run: |
-          apt-get update
-          apt-get install -y bc xxd
+          sudo apt-get update
+          sudo apt-get install -y bc xxd
 
       - name: Download binaries
         uses: actions/download-artifact@v3
