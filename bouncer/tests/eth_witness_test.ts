@@ -45,7 +45,7 @@ async function main(): Promise<void> {
   )[1].toJSON().eth as string;
   console.log(`Found ETH address: ${ethIngressKey}`);
 
-  exec(`./commands/fund_eth.ts ${ethIngressKey} 10`, { timeout: 20000 }, (err, stdout, stderr) => {
+  exec(`pnpm tsx ./commands/fund_eth.ts ${ethIngressKey} 10`, { timeout: 20000 }, (err, stdout, stderr) => {
     if (stderr !== '') process.stdout.write(stderr);
     if (err !== null) {
       console.error(err);
