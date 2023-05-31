@@ -183,50 +183,54 @@ impl<Ctx: Clone> RequestAddressAndDeposit
 }
 
 pub trait RequestAddress {
-	fn request_deposit_addresses<const S: usize>(
+	fn request_deposit_addresses(
 		self,
-		requests: [(
+		requests: &[(
 			<Test as frame_system::Config>::AccountId,
 			<<Test as crate::Config>::TargetChain as Chain>::ChainAsset,
-		); S],
+		)],
 	) -> cf_test_utilities::TestExternalities<
 		Test,
 		AllPalletsWithSystem,
-		[(
+		Vec<(
 			(ChannelId, <<Test as crate::Config>::TargetChain as Chain>::ChainAccount),
 			<<Test as crate::Config>::TargetChain as Chain>::ChainAsset,
-		); S],
+		)>,
 	>;
 }
 
 impl<Ctx: Clone> RequestAddress
 	for cf_test_utilities::TestExternalities<Test, AllPalletsWithSystem, Ctx>
 {
-	fn request_deposit_addresses<const S: usize>(
+	fn request_deposit_addresses(
 		self,
-		requests: [(
+		requests: &[(
 			<Test as frame_system::Config>::AccountId,
 			<<Test as crate::Config>::TargetChain as Chain>::ChainAsset,
-		); S],
+		)],
 	) -> cf_test_utilities::TestExternalities<
 		Test,
 		AllPalletsWithSystem,
-		[(
+		Vec<(
 			(ChannelId, <<Test as crate::Config>::TargetChain as Chain>::ChainAccount),
 			<<Test as crate::Config>::TargetChain as Chain>::ChainAsset,
-		); S],
+		)>,
 	> {
 		self.then_execute_as_next_block(|_| {
-			requests.map(|(broker, asset)| {
-				(
-					IngressEgress::request_liquidity_deposit_address(broker, asset)
-						.map(|(id, addr)| {
-							(id, <<Test as crate::Config>::TargetChain as Chain>::ChainAccount::try_from(addr).unwrap())
-						})
-						.unwrap(),
-					asset,
-				)
-			})
+			requests
+				.into_iter()
+				.copied()
+				.map(|(broker, asset)| {
+					(
+						IngressEgress::request_liquidity_deposit_address(broker, asset)
+							.map(|(id, addr)| {
+								(id, <<Test as crate::Config>::TargetChain as Chain>::ChainAccount::try_from(addr).unwrap())
+							})
+							.unwrap(),
+						asset,
+					)
+				})
+				.collect()
 		})
 	}
 }

@@ -435,7 +435,7 @@ fn addresses_are_getting_reused() {
 			assert_eq!(AddressPool::<Test, _>::get(channel_id).unwrap(), *address);
 			assert_eq!(AddressStatus::<Test, _>::get(address), DeploymentStatus::Deployed);
 		})
-		.request_deposit_addresses([(ALICE, eth::Asset::Eth)])
+		.request_deposit_addresses(&[(ALICE, eth::Asset::Eth)])
 		// The address should have been taken from the pool and the id counter unchanged.
 		.inspect_storage(|_| {
 			expect_size_of_address_pool(0);
