@@ -153,7 +153,7 @@ impl EthContractWitnesser for Vault {
 					destination_token,
 					amount,
 					sender: _,
-				} => Some(pallet_cf_swapping::Call::schedule_swap_by_witnesser {
+				} => Some(pallet_cf_swapping::Call::schedule_swap_from_contract {
 					from: Asset::Eth,
 					to: Asset::try_from(destination_token).map_err(anyhow::Error::msg)?,
 					deposit_amount: amount,
@@ -171,7 +171,7 @@ impl EthContractWitnesser for Vault {
 					source_token,
 					amount,
 					sender: _,
-				} => Some(pallet_cf_swapping::Call::schedule_swap_by_witnesser {
+				} => Some(pallet_cf_swapping::Call::schedule_swap_from_contract {
 					from: state_chain_client
 						.asset(source_token.0)
 						.await

@@ -99,7 +99,7 @@ impl WeightInfo for MockWeightInfo {
 		Weight::from_ref_time(100)
 	}
 
-	fn schedule_swap_by_witnesser() -> Weight {
+	fn schedule_swap_from_contract() -> Weight {
 		Weight::from_ref_time(100)
 	}
 

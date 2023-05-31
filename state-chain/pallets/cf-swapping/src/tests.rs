@@ -2,7 +2,8 @@ use crate::{
 	mock::{RuntimeEvent, *},
 	CcmFailReason, CcmGasBudget, CcmIdCounter, CcmOutputs, CcmSwap, CcmSwapOutput,
 	CollectedRejectedFunds, EarnedBrokerFees, Error, Event, MinimumCcmGasBudget, MinimumSwapAmount,
-	Pallet, PendingCcms, Swap, SwapChannelExpiries, SwapQueue, SwapTTL, SwapType, WeightInfo,
+	Pallet, PendingCcms, Swap, SwapChannelExpiries, SwapOrigin, SwapQueue, SwapTTL, SwapType,
+	WeightInfo,
 };
 use cf_chains::{
 	address::{try_to_encoded_address, AddressConverter, EncodedAddress, ForeignChainAddress},
@@ -81,7 +82,7 @@ fn assert_failed_ccm(
 fn insert_swaps(swaps: &[Swap]) {
 	for (broker_id, swap) in swaps.iter().enumerate() {
 		if let SwapType::Swap(destination_address) = &swap.swap_type {
-			<Pallet<Test> as SwapDepositHandler>::on_swap_deposit(
+			<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
 				ForeignChainAddress::Eth([2; 20]),
 				swap.from,
 				swap.to,
@@ -89,6 +90,7 @@ fn insert_swaps(swaps: &[Swap]) {
 				destination_address.clone(),
 				broker_id as u64,
 				2,
+				1,
 			);
 		}
 	}
@@ -154,7 +156,7 @@ fn number_of_swaps_processed_limited_by_weight() {
 fn expect_earned_fees_to_be_recorded() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 2_u64;
-		<Pallet<Test> as SwapDepositHandler>::on_swap_deposit(
+		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
 			ForeignChainAddress::Eth([2; 20]),
 			Asset::Flip,
 			Asset::Usdc,
@@ -162,10 +164,11 @@ fn expect_earned_fees_to_be_recorded() {
 			ForeignChainAddress::Eth([2; 20]),
 			ALICE,
 			200,
+			1,
 		);
 		Swapping::on_idle(1, Weight::from_ref_time(1000));
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
-		<Pallet<Test> as SwapDepositHandler>::on_swap_deposit(
+		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
 			ForeignChainAddress::Eth([2; 20]),
 			Asset::Flip,
 			Asset::Usdc,
@@ -173,6 +176,7 @@ fn expect_earned_fees_to_be_recorded() {
 			ForeignChainAddress::Eth([2; 20]),
 			ALICE,
 			200,
+			1,
 		);
 		Swapping::on_idle(1, Weight::from_ref_time(1000));
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 4);
@@ -184,7 +188,7 @@ fn expect_earned_fees_to_be_recorded() {
 fn cannot_swap_with_incorrect_destination_address_type() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 1_u64;
-		<Pallet<Test> as SwapDepositHandler>::on_swap_deposit(
+		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
 			ForeignChainAddress::Eth([2; 20]),
 			Asset::Eth,
 			Asset::Dot,
@@ -192,6 +196,7 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 			ForeignChainAddress::Eth([2; 20]),
 			ALICE,
 			2,
+			1,
 		);
 		assert_eq!(SwapQueue::<Test>::get(), vec![]);
 	});
@@ -209,8 +214,8 @@ fn expect_swap_id_to_be_emitted() {
 			0,
 			None
 		));
-		// 2. Schedule the swap -> SwapScheduledByDeposit
-		<Pallet<Test> as SwapDepositHandler>::on_swap_deposit(
+		// 2. Schedule the swap -> SwapScheduled
+		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
 			ForeignChainAddress::Eth(Default::default()),
 			Asset::Eth,
 			Asset::Usdc,
@@ -218,6 +223,7 @@ fn expect_swap_id_to_be_emitted() {
 			ForeignChainAddress::Eth(Default::default()),
 			ALICE,
 			0,
+			1,
 		);
 		// 3. Process swaps -> SwapExecuted, SwapEgressScheduled
 		Swapping::on_idle(1, Weight::from_ref_time(100));
@@ -228,10 +234,16 @@ fn expect_swap_id_to_be_emitted() {
 				destination_address: EncodedAddress::Eth(Default::default()),
 				expiry_block: SwapTTL::<Test>::get() + System::current_block_number(),
 			}),
-			RuntimeEvent::Swapping(Event::SwapScheduledByDeposit {
-				deposit_address: EncodedAddress::Eth(Default::default()),
+			RuntimeEvent::Swapping(Event::SwapScheduled {
 				swap_id: 1,
 				deposit_amount: 500,
+				deposit_asset: Asset::Eth,
+				destination_asset: Asset::Usdc,
+				destination_address: EncodedAddress::Eth(Default::default()),
+				origin: SwapOrigin::DepositChannel {
+					deposit_address: ForeignChainAddress::Eth(Default::default()),
+					channel_id: 1
+				}
 			}),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1 }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -275,23 +287,27 @@ fn withdraw_broker_fees() {
 #[test]
 fn can_swap_using_witness_origin() {
 	new_test_ext().execute_with(|| {
-		assert_ok!(Swapping::schedule_swap_by_witnesser(
+		let from = Asset::Eth;
+		let to = Asset::Flip;
+		let amount = 1_000;
+
+		assert_ok!(Swapping::schedule_swap_from_contract(
 			RuntimeOrigin::root(),
-			Asset::Eth,
-			Asset::Flip,
-			1_000,
+			from,
+			to,
+			amount,
 			EncodedAddress::Eth(Default::default()),
 			Default::default(),
 		));
 
-		System::assert_last_event(RuntimeEvent::Swapping(
-			Event::<Test>::SwapScheduledByWitnesser {
-				swap_id: 1,
-				deposit_amount: 1_000,
-				destination_address: EncodedAddress::Eth(Default::default()),
-				tx_hash: Default::default(),
-			},
-		));
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapScheduled {
+			swap_id: 1,
+			deposit_asset: from,
+			deposit_amount: amount,
+			destination_asset: to,
+			destination_address: EncodedAddress::Eth(Default::default()),
+			origin: SwapOrigin::Vault { tx_hash: Default::default() },
+		}));
 	});
 }
 
@@ -482,7 +498,7 @@ fn rejects_invalid_swap_by_witnesser() {
 
 		// Is valid Bitcoin address, but asset is Dot, so not compatible
 		assert_noop!(
-			Swapping::schedule_swap_by_witnesser(
+			Swapping::schedule_swap_from_contract(
 				RuntimeOrigin::root(),
 				Asset::Eth,
 				Asset::Dot,
@@ -494,7 +510,7 @@ fn rejects_invalid_swap_by_witnesser() {
 		);
 
 		assert_noop!(
-			Swapping::schedule_swap_by_witnesser(
+			Swapping::schedule_swap_from_contract(
 				RuntimeOrigin::root(),
 				Asset::Eth,
 				Asset::Btc,
@@ -958,7 +974,7 @@ fn swap_by_witnesser_happy_path() {
 
 		// Set minimum swap amount to > deposit amount
 		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), from, amount + 1));
-		assert_ok!(Swapping::schedule_swap_by_witnesser(
+		assert_ok!(Swapping::schedule_swap_from_contract(
 			RuntimeOrigin::root(),
 			from,
 			to,
@@ -981,7 +997,7 @@ fn swap_by_witnesser_happy_path() {
 		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), from, amount));
 		CollectedRejectedFunds::<Test>::set(from, 0);
 
-		assert_ok!(Swapping::schedule_swap_by_witnesser(
+		assert_ok!(Swapping::schedule_swap_from_contract(
 			RuntimeOrigin::root(),
 			from,
 			to,
@@ -1001,14 +1017,14 @@ fn swap_by_witnesser_happy_path() {
 				swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default()),),
 			}]
 		);
-		System::assert_last_event(RuntimeEvent::Swapping(
-			Event::<Test>::SwapScheduledByWitnesser {
-				swap_id: 1,
-				deposit_amount: amount,
-				destination_address: EncodedAddress::Eth(Default::default()),
-				tx_hash: Default::default(),
-			},
-		));
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapScheduled {
+			swap_id: 1,
+			deposit_asset: from,
+			deposit_amount: amount,
+			destination_asset: to,
+			destination_address: EncodedAddress::Eth(Default::default()),
+			origin: SwapOrigin::Vault { tx_hash: Default::default() },
+		}));
 
 		// Confiscated fund is unchanged
 		assert_eq!(CollectedRejectedFunds::<Test>::get(from), 0);
@@ -1025,7 +1041,7 @@ fn swap_by_deposit_happy_path() {
 		// Set minimum swap amount to > deposit amount
 		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), from, amount + 1));
 
-		Swapping::on_swap_deposit(
+		Swapping::schedule_swap_from_channel(
 			ForeignChainAddress::Eth(Default::default()),
 			from,
 			to,
@@ -1033,6 +1049,7 @@ fn swap_by_deposit_happy_path() {
 			ForeignChainAddress::Eth(Default::default()),
 			Default::default(),
 			Default::default(),
+			1,
 		);
 
 		// Verify this swap is rejected
@@ -1049,7 +1066,7 @@ fn swap_by_deposit_happy_path() {
 		assert_ok!(Swapping::set_minimum_swap_amount(RuntimeOrigin::root(), from, amount));
 		CollectedRejectedFunds::<Test>::set(from, 0);
 
-		Swapping::on_swap_deposit(
+		Swapping::schedule_swap_from_channel(
 			ForeignChainAddress::Eth(Default::default()),
 			from,
 			to,
@@ -1057,6 +1074,7 @@ fn swap_by_deposit_happy_path() {
 			ForeignChainAddress::Eth(Default::default()),
 			Default::default(),
 			Default::default(),
+			1,
 		);
 
 		// Verify this swap is accepted and scheduled
@@ -1070,10 +1088,16 @@ fn swap_by_deposit_happy_path() {
 				swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 			}]
 		);
-		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapScheduledByDeposit {
+		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapScheduled {
 			swap_id: 1,
-			deposit_address: EncodedAddress::Eth(Default::default()),
 			deposit_amount: amount,
+			deposit_asset: from,
+			destination_asset: to,
+			destination_address: EncodedAddress::Eth(Default::default()),
+			origin: SwapOrigin::DepositChannel {
+				deposit_address: ForeignChainAddress::Eth(Default::default()),
+				channel_id: 1,
+			},
 		}));
 
 		// Confiscated fund is unchanged

@@ -4,8 +4,7 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	address::{AddressConverter, EncodedAddress},
-	CcmDepositMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress,
+	address::EncodedAddress, CcmDepositMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress,
 };
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount};
 use cf_test_utilities::{assert_events_eq, assert_events_match};
@@ -16,11 +15,11 @@ use frame_support::{
 };
 use pallet_cf_ingress_egress::DepositWitness;
 use pallet_cf_pools::Order;
-use pallet_cf_swapping::CcmIdCounter;
+use pallet_cf_swapping::{CcmIdCounter, SwapOrigin};
 use state_chain_runtime::{
-	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter},
-	AccountRoles, EthereumInstance, LiquidityPools, LiquidityProvider, Runtime, RuntimeCall,
-	RuntimeEvent, RuntimeOrigin, Swapping, System, Validator, Weight, Witnesser,
+	chainflip::address_derivation::AddressDerivation, AccountRoles, EthereumInstance,
+	LiquidityPools, LiquidityProvider, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
+	System, Validator, Weight, Witnesser,
 };
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
@@ -240,12 +239,15 @@ fn basic_pool_setup_provision_and_swap() {
 			));
 		}
 
-		let swap_id = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapScheduledByDeposit {
+		let swap_id = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapScheduled {
 			swap_id,
-			deposit_address: events_deposit_address,
 			deposit_amount: 50,
+			origin: SwapOrigin::DepositChannel {
+				deposit_address: events_deposit_address,
+				..
+			},
 			..
-		}) if <Ethereum as Chain>::ChainAccount::try_from(ChainAddressConverter::try_from_encoded_address(events_deposit_address.clone()).expect("we created the deposit address above so it should be valid")).unwrap() == deposit_address => swap_id);
+		}) if <Ethereum as Chain>::ChainAccount::try_from(events_deposit_address.clone()).unwrap() == deposit_address => swap_id);
 
 		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
 			1,
@@ -348,7 +350,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			gas_swap_id: Some(gas_swap_id),
 			deposit_amount: amount,
 			..
-		}) if ccm_id == CcmIdCounter::<Runtime>::get() && 
+		}) if ccm_id == CcmIdCounter::<Runtime>::get() &&
 			amount == deposit_amount => (principal_swap_id, gas_swap_id));
 
 		// on_idle to perform the swaps and egress CCM.
@@ -446,7 +448,7 @@ fn can_process_ccm_via_direct_deposit() {
 			gas_swap_id: Some(gas_swap_id),
 			deposit_amount: amount,
 			..
-		}) if ccm_id == CcmIdCounter::<Runtime>::get() && 
+		}) if ccm_id == CcmIdCounter::<Runtime>::get() &&
 			amount == deposit_amount => (principal_swap_id, gas_swap_id));
 
 		state_chain_runtime::AllPalletsWithoutSystem::on_idle(
