@@ -349,7 +349,7 @@ pub enum ScriptPubkey {
 	P2WPKH([u8; 20]),
 	P2WSH([u8; 32]),
 	Taproot([u8; 32]),
-	Other { version: u8, program: BoundedVec<u8, ConstU32<MAX_SEGWIT_PROGRAM_BYTES>> },
+	OtherSegwit { version: u8, program: BoundedVec<u8, ConstU32<MAX_SEGWIT_PROGRAM_BYTES>> },
 }
 
 impl SerializeBtc for ScriptPubkey {
@@ -373,7 +373,7 @@ impl ScriptPubkey {
 				(Some(SEGWIT_VERSION_ZERO), hash.to_vec().try_into().unwrap()),
 			ScriptPubkey::Taproot(hash) =>
 				(Some(SEGWIT_VERSION_TAPROOT), hash.to_vec().try_into().unwrap()),
-			ScriptPubkey::Other { version, program } => (Some(*version), program.clone()),
+			ScriptPubkey::OtherSegwit { version, program } => (Some(*version), program.clone()),
 		};
 
 		BitcoinScript::new(
@@ -399,7 +399,7 @@ impl ScriptPubkey {
 			ScriptPubkey::P2WSH(data) => (&data[..], Some(Variant::Bech32), SEGWIT_VERSION_ZERO),
 			ScriptPubkey::Taproot(data) =>
 				(&data[..], Some(Variant::Bech32m), SEGWIT_VERSION_TAPROOT),
-			ScriptPubkey::Other { version, program } =>
+			ScriptPubkey::OtherSegwit { version, program } =>
 				(&program[..], Some(Variant::Bech32m), *version),
 		};
 		if let Some(variant) = maybe_bech {
@@ -471,7 +471,7 @@ pub fn scriptpubkey_from_address(
 					SEGWIT_VERSION_TAPROOT..=SEGWIT_VERSION_MAX,
 					Variant::Bech32m,
 					(MIN_SEGWIT_PROGRAM_BYTES..=MAX_SEGWIT_PROGRAM_BYTES),
-				) => Some(ScriptPubkey::Other {
+				) => Some(ScriptPubkey::OtherSegwit {
 					version,
 					program: program.try_into().expect("Checked for MAX_SEGWIT_PROGRAM_BYTES"),
 				}),
