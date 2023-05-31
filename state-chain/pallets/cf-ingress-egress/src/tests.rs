@@ -9,16 +9,11 @@ use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
 use cf_traits::{
 	mocks::{
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
-		broadcaster::MockBroadcaster,
 		ccm_handler::{CcmRequest, MockCcmHandler},
 	},
 	AddressDerivationApi, DepositApi, EgressApi,
 };
-use frame_support::{
-	assert_noop, assert_ok,
-	traits::{Hooks, OriginTrait},
-	weights::Weight,
-};
+use frame_support::{assert_noop, assert_ok, traits::Hooks, weights::Weight};
 use sp_core::H160;
 
 const ALICE_ETH_ADDRESS: EthereumAddress = [100u8; 20];
@@ -402,29 +397,15 @@ fn on_idle_does_nothing_if_nothing_to_send() {
 #[test]
 fn addresses_are_getting_reused() {
 	new_test_ext()
-		.then_execute_as_next_block(|_| {
-			(
-				IngressEgress::request_liquidity_deposit_address(0u64, eth::Asset::Eth).unwrap(),
-				IngressEgress::request_liquidity_deposit_address(0u64, eth::Asset::Eth).unwrap(),
-			)
+		// Request 2 deposit addresses and deposit to one of them.
+		.request_address_and_deposit(&[
+			(ALICE, eth::Asset::Eth, 100u32.into()),
+			(ALICE, eth::Asset::Eth, 0u32.into()),
+		])
+		.inspect_storage(|deposit_details| {
+			assert_eq!(ChannelIdCounter::<Test, _>::get(), deposit_details.len() as u64);
 		})
-		.inspect_storage(|_| {
-			assert_eq!(ChannelIdCounter::<Test, _>::get(), 2);
-		})
-		.then_apply_extrinsics(|((_, addr_0), _)| {
-			[(
-				OriginTrait::none(),
-				RuntimeCall::from(pallet_cf_ingress_egress::Call::process_deposits {
-					deposit_witnesses: vec![DepositWitness {
-						deposit_address: addr_0.clone().try_into().unwrap(),
-						asset: eth::Asset::Eth,
-						amount: 1u32.into(),
-						tx_id: Default::default(),
-					}],
-				}),
-			)]
-		})
-		.map_context(|(channels, _extrinsic_results)| channels)
+		// Simulate broadcast success.
 		.then_process_events(|_ctx, event| match event {
 			RuntimeEvent::IngressEgress(PalletEvent::BatchBroadcastRequested {
 				broadcast_id,
@@ -440,39 +421,25 @@ fn addresses_are_getting_reused() {
 			}
 			channels
 		})
-		.inspect_storage(|((id_0, _), (id_1, _))| {
+		// Close the channels.
+		.then_execute_as_next_block(|channels| {
+			for (id, address) in &channels {
+				IngressEgress::close_channel(*id, address.clone());
+			}
+			channels[0]
+		})
+		// Check that the used address is now deployed and in the pool of available addresses.
+		.inspect_storage(|(channel_id, address)| {
 			expect_size_of_address_pool(1);
 			// Address 1 is free to use and in the pool of available addresses
-			assert!(AddressPool::<Test, _>::get(id_0).is_some());
-			// Address 2 not
-			assert!(AddressPool::<Test, _>::get(id_1).is_none());
+			assert_eq!(AddressPool::<Test, _>::get(channel_id).unwrap(), *address);
+			assert_eq!(AddressStatus::<Test, _>::get(address), DeploymentStatus::Deployed);
 		})
-		.then_execute_as_next_block(|((id_0, addr_0), _)| {
-			IngressEgress::close_channel(id_0, addr_0.try_into().unwrap());
-			assert_eq!(
-				AddressStatus::<Test, _>::get(
-					AddressPool::<Test, _>::get(id_0).expect("to have an address")
-				),
-				DeploymentStatus::Deployed
-			);
-		})
-		.inspect_storage(|_| {
-			expect_size_of_address_pool(1);
-		})
-		.then_execute_as_next_block(|_| {
-			IngressEgress::request_liquidity_deposit_address(0u64, eth::Asset::Eth).unwrap()
-		})
+		.request_deposit_addresses([(ALICE, eth::Asset::Eth)])
+		// The address should have been taken from the pool and the id counter unchanged.
 		.inspect_storage(|_| {
 			expect_size_of_address_pool(0);
-		})
-		.then_execute_as_next_block(|(id, addr)| {
-			IngressEgress::close_channel(id, addr.try_into().unwrap());
-			// Expect the address to be reused which is indicated by the counter not being
-			// incremented
-		})
-		.inspect_storage(|_| {
 			assert_eq!(ChannelIdCounter::<Test, _>::get(), 2);
-			expect_size_of_address_pool(1);
 		});
 }
 
