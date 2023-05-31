@@ -118,6 +118,7 @@ jobs:
             /tmp/chainflip/chainflip-*.log
 
       - name: Notify on failed bouncer
+        if: failure() && github.ref_name == 'main'
         env:
           DISCORD_USERNAME: 'HEUTE LEIDER NICHT'
           DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
