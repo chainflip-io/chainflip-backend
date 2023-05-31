@@ -13,7 +13,7 @@ jobs:
   packages:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20"
+      image: "ghcr.io/${{ github.repository }}/rust-base:pnpm-in-rust-base-test"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
