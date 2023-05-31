@@ -11,8 +11,8 @@ use warp::Filter;
 
 use crate::settings;
 
-const INITIALISING: &'static str = "INITIALISING";
-const RUNNING: &'static str = "RUNNING";
+const INITIALISING: &str = "INITIALISING";
+const RUNNING: &str = "RUNNING";
 
 #[tracing::instrument(name = "health-check", skip_all)]
 pub async fn start<'a, 'env>(
