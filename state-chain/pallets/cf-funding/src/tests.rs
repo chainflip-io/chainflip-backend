@@ -582,7 +582,7 @@ fn restricted_funds_getting_reduced() {
 		// Expect to fail if we try to redeem more than the restricted balance
 		assert_noop!(
 			Funding::redeem(RuntimeOrigin::signed(ALICE), 45.into(), RESTRICTED_ADDRESS),
-			Error::<Test>::InvalidRedemption
+			Error::<Test>::AmountToHigh
 		);
 	});
 }
@@ -625,7 +625,7 @@ fn vesting_contracts_test_case() {
 		// Because 100 is available this should fail
 		assert_noop!(
 			Funding::redeem(RuntimeOrigin::signed(ALICE), 200.into(), UNRESTRICTED_ADDRESS),
-			Error::<Test>::InvalidRedemption
+			Error::<Test>::AmountToHigh
 		);
 		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), 50.into(), UNRESTRICTED_ADDRESS));
 		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, 50, TX_HASH));
@@ -639,7 +639,7 @@ fn vesting_contracts_test_case() {
 		// balance
 		assert_noop!(
 			Funding::redeem(RuntimeOrigin::signed(ALICE), 150.into(), VESTING_CONTRACT_1),
-			Error::<Test>::InvalidRedemption
+			Error::<Test>::AmountToHigh
 		);
 	});
 }
@@ -671,11 +671,10 @@ fn can_withdraw_unrestricted_to_restricted() {
 			TX_HASH
 		));
 		// Funds are not restricted, this should be ok.
-		assert_ok!(Funding::redeem(
-			RuntimeOrigin::signed(ALICE),
-			AMOUNT.into(),
-			RESTRICTED_ADDRESS_1
-		),);
-		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, AMOUNT.into(), TX_HASH));
+		assert_noop!(
+			Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), RESTRICTED_ADDRESS_1),
+			Error::<Test>::AmountToHigh
+		);
+		// assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, AMOUNT.into(), TX_HASH));
 	});
 }

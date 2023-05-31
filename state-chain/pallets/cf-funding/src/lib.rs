@@ -280,6 +280,8 @@ pub mod pallet {
 
 		/// The redemption signature could not be found.
 		SignatureNotReady,
+
+		AmountToHigh,
 	}
 
 	#[pallet::call]
@@ -377,17 +379,16 @@ pub mod pallet {
 			// We have some restrictions on the account
 			if RestrictedBalances::<T>::contains_key(account_id.clone()) {
 				// We're talking about the current address
-				if RestrictedAddresses::<T>::contains_key(address) &&
-					RestrictedBalances::<T>::get(&account_id).get(&address).is_some()
+				if RestrictedAddresses::<T>::contains_key(address)
+				// RestrictedBalances::<T>::get(&account_id).get(&address).is_some()
 				{
 					// ensure that restricted balance for the address is higher than the amount we
 					// try to redeem
 					ensure!(
 						RestrictedBalances::<T>::get(&account_id)
 							.get(&address)
-							.expect("to have a restricted balance for this address") >=
-							&amount,
-						Error::<T>::InvalidRedemption
+							.unwrap_or(&Zero::zero()) >= &amount,
+						Error::<T>::AmountToHigh
 					);
 					RestrictedBalances::<T>::mutate_exists(&account_id, |maybe_entry| {
 						if let Some(entry) = maybe_entry {
@@ -406,7 +407,7 @@ pub mod pallet {
 					let available_balance =
 						total_balance.checked_sub(&restricted_balance).expect("to not underflow");
 					// Ensure that the amount to redeem is not higher than the restricted balance
-					ensure!(amount <= available_balance, Error::<T>::InvalidRedemption);
+					ensure!(amount <= available_balance, Error::<T>::AmountToHigh);
 				}
 			}
 
