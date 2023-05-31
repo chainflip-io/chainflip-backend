@@ -145,7 +145,7 @@ pub enum CliCommand {
 	},
 }
 
-#[derive(Parser, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum GenerateKeysOutputType {
 	Files { path: PathBuf },
 	Json,
