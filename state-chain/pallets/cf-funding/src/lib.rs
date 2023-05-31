@@ -155,7 +155,7 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type RedemptionTTLSeconds<T: Config> = StorageValue<_, u64, ValueQuery>;
 
-	/// Amount of Balance to take per Redeem. Set by Governance.
+	/// The fee levied for every redemption request. Can be updated by Governance.
 	#[pallet::storage]
 	pub type WithdrawalTax<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
