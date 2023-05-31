@@ -214,7 +214,7 @@ impl ChainAbi for Bitcoin {
 // which could be made generic, if even necessary at all.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen)]
 pub struct UtxoId {
-	// TxId of the transaction in which this utxo was locked.
+	// TxId of the transaction in which this utxo was created.
 	pub tx_id: Hash,
 	// The index of the utxo in that transaction.
 	pub vout: u32,
