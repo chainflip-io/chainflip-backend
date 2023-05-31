@@ -1,5 +1,3 @@
-#!/usr/bin/env pnpm tsx
-
 // INSTRUCTIONS
 //
 // This command takes four arguments.
@@ -8,7 +6,7 @@
 // Argument 2 is the destination currency ("btc", "eth", "dot" or "usdc")
 // Argument 3 is the destination address
 // Argument 4 is the broker fee in basis points
-// For example: ./commands/new_swap.ts dot btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX 100
+// For example: pnpm tsx ./commands/new_swap.ts dot btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX 100
 
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Keyring } from '@polkadot/keyring';

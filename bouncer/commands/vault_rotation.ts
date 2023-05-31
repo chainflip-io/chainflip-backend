@@ -1,10 +1,8 @@
-#!/usr/bin/env pnpm tsx
-
 // INSTRUCTIONS
 //
 // This command takes no arguments.
 // It will force a rotation on the chainflip state-chain
-// For example: ./commands/vault_rotation.ts
+// For example: pnpm tsx ./commands/vault_rotation.ts
 
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Keyring } from '@polkadot/keyring';

@@ -1,11 +1,9 @@
-#!/usr/bin/env pnpm tsx
-
 // INSTRUCTIONS
 //
 // This command takes one argument.
 // It will trigger an EthereumBroadcaster signing stress test to be executed on the chainflip state-chain
 // The argument specifies the number of requested signatures
-// For example: ./commands/stress_test.ts 3
+// For example: pnpm tsx ./commands/stress_test.ts 3
 // will initiate a stress test generating 3 signatures
 
 import { ApiPromise, WsProvider } from '@polkadot/api';

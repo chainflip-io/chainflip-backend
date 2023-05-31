@@ -1,12 +1,10 @@
-#!/usr/bin/env pnpm tsx
-
 // INSTRUCTIONS
 //
 // This command takes one argument.
 // It will observe the chainflip state-chain until the block with the blocknumber given by the argument
 // is observed
 
-// For example: ./commands/observe_block.ts 3
+// For example: pnpm tsx ./commands/observe_block.ts 3
 // will wait until block number 3 has appeared on the state chain
 
 import { ApiPromise, WsProvider } from '@polkadot/api';

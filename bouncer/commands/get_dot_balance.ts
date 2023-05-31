@@ -1,11 +1,9 @@
-#!/usr/bin/env pnpm tsx
-
 // INSTRUCTIONS
 //
 // This command takes one argument.
 // It will print the Dot balance of the address provided as the first argument.
 //
-// For example: ./commands/get_dot_balance.ts 5Dd1drBHuBzHK7qGWzGQ2iR2KnbYZJbYuUfc88v5Cv4juWci
+// For example: pnpm tsx ./commands/get_dot_balance.ts 5Dd1drBHuBzHK7qGWzGQ2iR2KnbYZJbYuUfc88v5Cv4juWci
 // might print: 1.2
 
 import { ApiPromise, WsProvider } from '@polkadot/api';

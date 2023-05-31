@@ -1,12 +1,10 @@
-#!/usr/bin/env pnpm tsx
-
 // INSTRUCTIONS
 //
 // This command takes two arguments.
 // It will fund the polkadot address provided as the first argument with the amount of
 // tokens provided in the second argument. The token amount is interpreted in DOT.
 //
-// For example: ./commands/fund_dot.ts 12QTpTMELPfdz2xr9AeeavstY8uMcpUqeKWDWiwarskk4hSB 1.2
+// For example: pnpm tsx ./commands/fund_dot.ts 12QTpTMELPfdz2xr9AeeavstY8uMcpUqeKWDWiwarskk4hSB 1.2
 // will send 1.2 DOT to account 12QTpTMELPfdz2xr9AeeavstY8uMcpUqeKWDWiwarskk4hSB
 
 import { ApiPromise, WsProvider } from '@polkadot/api';

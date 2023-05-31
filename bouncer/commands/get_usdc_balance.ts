@@ -1,11 +1,9 @@
-#!/usr/bin/env pnpm tsx
-
 // INSTRUCTIONS
 //
 // This command takes one argument.
 // It will print the Usdc balance of the address provided as the first argument.
 //
-// For example: ./commands/get_usdc_balance.ts 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6
+// For example: pnpm tsx ./commands/get_usdc_balance.ts 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6
 // might print: 100.2
 
 import Web3 from 'web3';
