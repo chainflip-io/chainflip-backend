@@ -620,7 +620,7 @@ fn vesting_contracts_test_case() {
 		// Because 100 is available this should fail
 		assert_noop!(
 			Funding::redeem(RuntimeOrigin::signed(ALICE), 200.into(), UNRESTRICTED_ADDRESS),
-			Error::<Test>::AmountToHigh
+			Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance
 		);
 		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), 50.into(), UNRESTRICTED_ADDRESS));
 		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, 50, TX_HASH));

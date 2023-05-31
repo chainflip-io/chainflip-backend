@@ -272,8 +272,8 @@ pub mod pallet {
 		/// The redemption signature could not be found.
 		SignatureNotReady,
 
-		/// The amount to redeem is too high.
-		AmountToHigh,
+		/// The amount to redeem is higher then the restricted balance.
+		AmountToRedeemIsHigherThanRestrictedBalance,
 	}
 
 	#[pallet::call]
@@ -391,7 +391,10 @@ pub mod pallet {
 					// Balance available for redemption (total - sum(all restricted balances))
 					let available_balance = total_balance.saturating_sub(restricted_balance);
 					// Ensure that the amount to redeem is not higher than the restricted balance
-					ensure!(amount <= available_balance, Error::<T>::AmountToHigh);
+					ensure!(
+						amount <= available_balance,
+						Error::<T>::AmountToRedeemIsHigherThanRestrictedBalance
+					);
 				}
 			}
 
