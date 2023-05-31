@@ -85,6 +85,7 @@ where
 	) -> anyhow::Result<()> {
 		use crate::eth::rpc::EthRpcApi;
 		use cf_primitives::chains::assets::eth;
+		use itertools::Itertools;
 		use pallet_cf_ingress_egress::DepositWitness;
 
 		let mut address_monitor =
@@ -111,6 +112,7 @@ where
 		let successful_txs = filter_successful_txs(interesting_txs, &self.rpc).await?;
 
 		let deposit_witnesses = successful_txs
+			.unique_by(|(tx, _)| tx.hash)
 			.map(|(tx, to_addr)| DepositWitness {
 				deposit_address: to_addr,
 				asset: eth::Asset::Eth,
