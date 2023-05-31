@@ -546,6 +546,7 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub genesis_accounts: Vec<(AccountId<T>, AccountRole, T::Balance)>,
+		pub redemption_tax: T::Balance,
 		pub minimum_funding: T::Balance,
 		pub redemption_ttl: Duration,
 		pub redemption_delay_buffer_seconds: u64,
@@ -556,6 +557,7 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				genesis_accounts: vec![],
+				redemption_tax: Default::default(),
 				minimum_funding: Default::default(),
 				redemption_ttl: Default::default(),
 				redemption_delay_buffer_seconds: Default::default(),
@@ -567,6 +569,7 @@ pub mod pallet {
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			MinimumFunding::<T>::set(self.minimum_funding);
+			RedemptionTax::<T>::set(self.redemption_tax);
 			RedemptionTTLSeconds::<T>::set(self.redemption_ttl.as_secs());
 			for (account_id, role, amount) in self.genesis_accounts.iter() {
 				Pallet::<T>::add_funds_to_account(account_id, *amount);
