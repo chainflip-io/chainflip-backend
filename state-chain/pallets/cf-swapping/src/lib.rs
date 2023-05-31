@@ -140,7 +140,7 @@ pub enum CcmFailReason {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum SwapOrigin {
 	DepositChannel { deposit_address: ForeignChainAddress, channel_id: ChannelId },
-	Vault { tx_id: TransactionHash },
+	Vault { tx_hash: TransactionHash },
 }
 
 #[frame_support::pallet]
@@ -572,7 +572,7 @@ pub mod pallet {
 					deposit_amount,
 					destination_asset: to,
 					destination_address,
-					origin: SwapOrigin::Vault { tx_id: tx_hash },
+					origin: SwapOrigin::Vault { tx_hash },
 				});
 			}
 			Ok(())
