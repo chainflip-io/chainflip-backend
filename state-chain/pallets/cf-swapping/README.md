@@ -22,19 +22,13 @@ At present, only Ethereum is supported as a CCM destination chain. The funds are
 
 ### Structure
 
-CCM message consists of the following parts:
-    - Information to perform a swap request (`from_asset`, `to_asset`, `amount` and `destination_address`)
-    - A `gas_budget` determining the amount of has available for execution on the egress chain.
-    - A `message` containing arbitrary bytes to be interpreted on the egress chain.
-    - A `refund_address` for gas refunds (not implemented yet).
+CCM message consists of the following parts: - Information to perform a swap request (`from_asset`, `to_asset`, `amount` and `destination_address`) - A `gas_budget` determining the amount of has available for execution on the egress chain. - A `message` containing arbitrary bytes to be interpreted on the egress chain. - A `refund_address` for gas refunds (not implemented yet).
 
 ### Pathways
 
 #### Deposit
 
-CCM messages can be entered on-chain in the following ways:
-    - Calling `fn ccm_deposit()` extrinsic, requires Witness Origin. This is for when the user deposits funds directly into the Vault contract and called the contract function.
-    - Calling `request_swap_deposit_address()` function, passing in the metadata via `message_metadata: Some(metadata)`, then complete the deposit by depositing funds into the designated address.
+CCM messages can be entered on-chain in the following ways: - Calling `fn ccm_deposit()` extrinsic, requires Witness Origin. This is for when the user deposits funds directly into the Vault contract and called the contract function. - Calling `request_swap_deposit_address()` function, passing in the metadata via `message_metadata: Some(metadata)`, then complete the deposit by depositing funds into the designated address.
 
 #### Processing
 
@@ -56,7 +50,7 @@ Since Swap and CCM deposit functions are called by Witnessers, they do not retur
 
 Swaps deposits are required to be above a certain threshold if they are to be processed by the pallet. This threshold is set by the `set_minimum_swap_amount` extrinsic call, and requires governance.
 
-This check is done for both `schedule_swap_by_witnesser`, `on_swap_deposit` pathways, which includes the principal swap component of a CCM. If the principal amount does not need to be swapped (if the output asset == input asset, or if the principal amount is 0), then a principal amount lower than the `MinimumSwapAmount` is allowed.
+This check is done for both `schedule_swap_from_contract`, `schedule_swap_from_channel` pathways, which includes the principal swap component of a CCM. If the principal amount does not need to be swapped (if the output asset == input asset, or if the principal amount is 0), then a principal amount lower than the `MinimumSwapAmount` is allowed.
 
 The Gas budgets are exempt from this threshold (as gas budgets are expected to be smaller in value), but has its own threshold as safeguards.
 

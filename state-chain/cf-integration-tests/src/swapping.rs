@@ -236,7 +236,7 @@ fn basic_pool_setup_provision_and_swap() {
 			));
 		}
 
-		let swap_id = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapScheduledByDeposit {
+		let swap_id = assert_events_match!(Runtime, RuntimeEvent::Swapping(pallet_cf_swapping::Event::SwapScheduled {
 			swap_id,
 			deposit_address: events_deposit_address,
 			deposit_amount: 50,
@@ -343,7 +343,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			gas_swap_id: Some(gas_swap_id),
 			deposit_amount: amount,
 			..
-		}) if ccm_id == CcmIdCounter::<Runtime>::get() && 
+		}) if ccm_id == CcmIdCounter::<Runtime>::get() &&
 			amount == deposit_amount => (principal_swap_id, gas_swap_id));
 
 		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
@@ -432,7 +432,7 @@ fn can_process_ccm_via_direct_deposit() {
 			gas_swap_id: Some(gas_swap_id),
 			deposit_amount: amount,
 			..
-		}) if ccm_id == CcmIdCounter::<Runtime>::get() && 
+		}) if ccm_id == CcmIdCounter::<Runtime>::get() &&
 			amount == deposit_amount => (principal_swap_id, gas_swap_id));
 
 		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));

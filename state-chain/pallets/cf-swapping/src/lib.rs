@@ -137,6 +137,12 @@ pub enum CcmFailReason {
 	GasBudgetBelowMinimum,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum SwapOrigin {
+	DepositChannel { deposit_address: ForeignChainAddress, channel_id: ChannelId },
+	Vault { tx_id: TransactionHash },
+}
+
 #[frame_support::pallet]
 pub mod pallet {
 
@@ -243,18 +249,13 @@ pub mod pallet {
 			expiry_block: T::BlockNumber,
 		},
 		/// A swap deposit has been received.
-		SwapScheduledByDeposit {
-			swap_id: u64,
-			deposit_address: EncodedAddress,
-			deposit_amount: AssetAmount,
-		},
-		SwapScheduledByWitnesser {
+		SwapScheduled {
 			swap_id: u64,
 			deposit_asset: Asset,
 			deposit_amount: AssetAmount,
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
-			tx_hash: TransactionHash,
+			origin: SwapOrigin,
 		},
 		/// A swap has been fully completed.
 		SwapExecuted {
@@ -543,10 +544,10 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [SwapScheduled](Event::SwapScheduledByWitnesser)
+		/// - [SwapScheduled](Event::SwapScheduled)
 		/// - [SwapAmountTooLow](Event::SwapAmountTooLow)
-		#[pallet::weight(T::WeightInfo::schedule_swap_by_witnesser())]
-		pub fn schedule_swap_by_witnesser(
+		#[pallet::weight(T::WeightInfo::schedule_swap_from_contract())]
+		pub fn schedule_swap_from_contract(
 			origin: OriginFor<T>,
 			from: Asset,
 			to: Asset,
@@ -559,19 +560,19 @@ pub mod pallet {
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, to)?;
 
-			if let Some(swap_id) = Self::on_swap_deposit_received(
+			if let Some(swap_id) = Self::schedule_swap_from_channel_received(
 				from,
 				to,
 				deposit_amount,
 				destination_address_internal,
 			) {
-				Self::deposit_event(Event::<T>::SwapScheduledByWitnesser {
+				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
 					deposit_asset: from,
 					deposit_amount,
 					destination_asset: to,
 					destination_address,
-					tx_hash,
+					origin: SwapOrigin::Vault { tx_id: tx_hash },
 				});
 			}
 			Ok(())
@@ -808,7 +809,7 @@ pub mod pallet {
 		}
 
 		// Schedule and returns the swap id if the swap is valid.
-		fn on_swap_deposit_received(
+		fn schedule_swap_from_channel_received(
 			from: Asset,
 			to: Asset,
 			amount: AssetAmount,
@@ -837,7 +838,7 @@ pub mod pallet {
 		type AccountId = T::AccountId;
 
 		/// Callback function to kick off the swapping process after a successful deposit.
-		fn on_swap_deposit(
+		fn schedule_swap_from_channel(
 			deposit_address: ForeignChainAddress,
 			from: Asset,
 			to: Asset,
@@ -845,6 +846,7 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			broker_id: Self::AccountId,
 			broker_commission_bps: BasisPoints,
+			channel_id: ChannelId,
 		) {
 			let fee = Permill::from_parts(broker_commission_bps as u32 * BASIS_POINTS_PER_MILLION) *
 				amount;
@@ -853,14 +855,20 @@ pub mod pallet {
 				earned_fees.saturating_accrue(fee)
 			});
 
+			let encoded_destination_address =
+				T::AddressConverter::try_to_encoded_address(destination_address.clone())
+					.expect("what to expect here?");
+
 			if let Some(swap_id) =
-				Self::on_swap_deposit_received(from, to, amount, destination_address)
+				Self::schedule_swap_from_channel_received(from, to, amount, destination_address)
 			{
-				Self::deposit_event(Event::<T>::SwapScheduledByDeposit {
+				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
-					deposit_address: T::AddressConverter::try_to_encoded_address(deposit_address)
-						.expect("The deposit address is generated internally and is always valid."),
+					deposit_asset: from,
 					deposit_amount: amount,
+					destination_asset: to,
+					destination_address: encoded_destination_address,
+					origin: SwapOrigin::DepositChannel { deposit_address, channel_id },
 				});
 			}
 		}
