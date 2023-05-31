@@ -32,7 +32,10 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
-use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Zero};
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, CheckedSub, Zero},
+	Saturating,
+};
 use sp_std::prelude::*;
 
 use sp_std::collections::btree_map::BTreeMap;
@@ -367,20 +370,14 @@ pub mod pallet {
 			// We have some restrictions on the account
 			if RestrictedBalances::<T>::contains_key(account_id.clone()) {
 				// We're talking about the current address
-				if RestrictedAddresses::<T>::contains_key(address)
-				// RestrictedBalances::<T>::get(&account_id).get(&address).is_some()
-				{
+				if RestrictedAddresses::<T>::contains_key(address) {
 					// ensure that restricted balance for the address is higher than the amount we
 					// try to redeem
-					ensure!(
-						RestrictedBalances::<T>::get(&account_id)
-							.get(&address)
-							.unwrap_or(&Zero::zero()) >= &amount,
-						Error::<T>::AmountToHigh
-					);
 					RestrictedBalances::<T>::mutate_exists(&account_id, |maybe_entry| {
 						if let Some(entry) = maybe_entry {
-							entry.entry(address).and_modify(|balance| *balance -= amount);
+							entry.entry(address).and_modify(|balance| {
+								*balance = balance.saturating_sub(amount);
+							});
 						}
 					});
 				// some other address but funds are restricted
@@ -392,8 +389,7 @@ pub mod pallet {
 					// Total account ballance
 					let total_balance = T::Flip::account_balance(&account_id);
 					// Balance available for redemption (total - sum(all restricted balances))
-					let available_balance =
-						total_balance.checked_sub(&restricted_balance).expect("to not underflow");
+					let available_balance = total_balance.saturating_sub(restricted_balance);
 					// Ensure that the amount to redeem is not higher than the restricted balance
 					ensure!(amount <= available_balance, Error::<T>::AmountToHigh);
 				}

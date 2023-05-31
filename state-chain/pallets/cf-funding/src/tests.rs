@@ -579,11 +579,6 @@ fn restricted_funds_getting_reduced() {
 		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, 10, TX_HASH));
 		// Expect the restricted balance to be 70
 		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(), &40);
-		// Expect to fail if we try to redeem more than the restricted balance
-		assert_noop!(
-			Funding::redeem(RuntimeOrigin::signed(ALICE), 45.into(), RESTRICTED_ADDRESS),
-			Error::<Test>::AmountToHigh
-		);
 	});
 }
 
@@ -635,12 +630,6 @@ fn vesting_contracts_test_case() {
 		// Try to redeem 400 from contract 2
 		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), 400.into(), VESTING_CONTRACT_2));
 		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, 400, TX_HASH));
-		// Try to redeem 150 from contract 1 - should fail because we're getting under the available
-		// balance
-		assert_noop!(
-			Funding::redeem(RuntimeOrigin::signed(ALICE), 150.into(), VESTING_CONTRACT_1),
-			Error::<Test>::AmountToHigh
-		);
 	});
 }
 
@@ -671,10 +660,41 @@ fn can_withdraw_unrestricted_to_restricted() {
 			TX_HASH
 		));
 		// Funds are not restricted, this should be ok.
-		assert_noop!(
-			Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), RESTRICTED_ADDRESS_1),
-			Error::<Test>::AmountToHigh
-		);
-		// assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, AMOUNT.into(), TX_HASH));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			AMOUNT.into(),
+			RESTRICTED_ADDRESS_1
+		));
+	});
+}
+
+#[test]
+fn can_withdrawal_also_free_funds_to_restricted_address() {
+	new_test_ext().execute_with(|| {
+		const RESTRICTED_ADDRESS_1: EthereumAddress = [0x01; 20];
+		const UNRESTRICTED_ADDRESS: EthereumAddress = [0x03; 20];
+		const AMOUNT_1: u128 = 100;
+		const AMOUNT_2: u128 = 50;
+		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT_1,
+			RESTRICTED_ADDRESS_1,
+			TX_HASH
+		));
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT_2,
+			UNRESTRICTED_ADDRESS,
+			TX_HASH
+		));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			(AMOUNT_1 + AMOUNT_2).into(),
+			RESTRICTED_ADDRESS_1
+		));
+		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS_1).unwrap(), &0);
 	});
 }
