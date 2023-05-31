@@ -10,8 +10,11 @@ use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use base58::FromBase58;
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
-use cf_primitives::chains::assets;
 pub use cf_primitives::chains::Bitcoin;
+use cf_primitives::{
+	chains::assets, DEFAULT_FEE_SATS_PER_BYTE, INPUT_UTXO_SIZE_IN_BYTES,
+	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
+};
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::{borrow::Borrow, iter};
 use frame_support::{sp_io::hashing::sha2_256, BoundedVec, RuntimeDebug};
@@ -85,7 +88,37 @@ impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 #[codec(mel_bound())]
 pub struct BitcoinTrackedData {
 	pub block_height: BlockNumber,
-	pub fee_rate_sats_per_byte: BtcAmount,
+	pub btc_fee_info: BitcoinFeeInfo,
+}
+
+#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+pub struct BitcoinFeeInfo {
+	pub fee_per_input_utxo: BtcAmount,
+	pub fee_per_output_utxo: BtcAmount,
+	pub min_fee_required_per_tx: BtcAmount,
+}
+
+impl Default for BitcoinFeeInfo {
+	fn default() -> Self {
+		Self {
+			fee_per_input_utxo: DEFAULT_FEE_SATS_PER_BYTE * INPUT_UTXO_SIZE_IN_BYTES,
+			fee_per_output_utxo: DEFAULT_FEE_SATS_PER_BYTE * OUTPUT_UTXO_SIZE_IN_BYTES,
+			min_fee_required_per_tx: DEFAULT_FEE_SATS_PER_BYTE * MINIMUM_BTC_TX_SIZE_IN_BYTES,
+		}
+	}
+}
+
+impl BitcoinFeeInfo {
+	pub fn new(sats_per_byte: BtcAmount) -> Self {
+		Self {
+			// Our input utxos are approximately 178 bytes each in the Btc transaction
+			fee_per_input_utxo: sats_per_byte * INPUT_UTXO_SIZE_IN_BYTES,
+			// Our output utxos are approximately 34 bytes each in the Btc transaction
+			fee_per_output_utxo: sats_per_byte * OUTPUT_UTXO_SIZE_IN_BYTES,
+			// Minimum size of tx that does not scale with input and output utxos is 12 bytes
+			min_fee_required_per_tx: sats_per_byte * MINIMUM_BTC_TX_SIZE_IN_BYTES,
+		}
+	}
 }
 
 impl Age for BitcoinTrackedData {
@@ -209,7 +242,7 @@ impl ChainAbi for Bitcoin {
 
 // TODO: Look at moving this into Utxo. They're exactly the same apart from the ChannelId
 // which could be made generic, if even necessary at all.
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen, Default)]
 pub struct UtxoId {
 	// Tx hash of the transaction this utxo was a part of
 	pub tx_hash: Hash,
@@ -241,7 +274,7 @@ pub enum Error {
 	/// The address is invalid
 	InvalidAddress,
 }
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
 pub struct Utxo {
 	pub amount: u64,
 	pub txid: Hash,
@@ -303,19 +336,25 @@ fn to_varint(value: u64) -> Vec<u8> {
 }
 
 #[derive(
-	Clone, Copy, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord,
+	Clone,
+	Copy,
+	Debug,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+	PartialOrd,
+	Ord,
+	Default,
 )]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub enum BitcoinNetwork {
+	#[default]
 	Mainnet,
 	Testnet,
 	Regtest,
-}
-
-impl Default for BitcoinNetwork {
-	fn default() -> Self {
-		BitcoinNetwork::Mainnet
-	}
 }
 
 impl BitcoinNetwork {

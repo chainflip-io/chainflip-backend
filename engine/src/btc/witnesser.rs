@@ -16,7 +16,7 @@ use bitcoincore_rpc::bitcoin::{hashes::Hash, Transaction};
 use cf_chains::{
 	address::ScriptPubkeyBytes,
 	btc::{
-		deposit_address::derive_btc_deposit_bitcoin_script, BitcoinScriptBounded,
+		deposit_address::derive_btc_deposit_bitcoin_script, BitcoinFeeInfo, BitcoinScriptBounded,
 		BitcoinTrackedData, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	Bitcoin,
@@ -56,7 +56,7 @@ pub fn filter_interesting_utxos(
 	let mut tx_success_witnesses = vec![];
 
 	for tx in txs {
-		let tx_hash = tx.txid().as_hash().into_inner();
+		let tx_hash = tx.txid().as_raw_hash().to_byte_array();
 		if tx_hash_monitor.contains(&tx_hash) {
 			// TODO: We shouldn't need to add a fee
 			tx_success_witnesses.push(tx_hash);
@@ -176,7 +176,7 @@ where
 						pallet_cf_chain_tracking::Call::update_chain_state {
 							state: BitcoinTrackedData {
 								block_height: block_number,
-								fee_rate_sats_per_byte,
+								btc_fee_info: BitcoinFeeInfo::new(fee_rate_sats_per_byte),
 							},
 						},
 					)),
@@ -298,10 +298,18 @@ mod test_utxo_filtering {
 	use std::collections::BTreeSet;
 
 	use super::*;
-	use bitcoincore_rpc::bitcoin::{PackedLockTime, Script, Transaction, TxOut};
+	use bitcoincore_rpc::bitcoin::{
+		absolute::{Height, LockTime},
+		ScriptBuf, Transaction, TxOut,
+	};
 
 	fn fake_transaction(tx_outs: Vec<TxOut>) -> Transaction {
-		Transaction { version: 2, lock_time: PackedLockTime(0), input: vec![], output: tx_outs }
+		Transaction {
+			version: 2,
+			lock_time: LockTime::Blocks(Height::from_consensus(0).unwrap()),
+			input: vec![],
+			output: tx_outs,
+		}
 	}
 
 	#[test]
@@ -330,12 +338,12 @@ mod test_utxo_filtering {
 			fake_transaction(vec![
 				TxOut {
 					value: UTXO_WITNESSED_1,
-					script_pubkey: Script::from(btc_deposit_script.data.to_vec()),
+					script_pubkey: ScriptBuf::from(btc_deposit_script.data.to_vec()),
 				},
-				TxOut { value: 12223, script_pubkey: Script::from(vec![0, 32, 121, 9]) },
+				TxOut { value: 12223, script_pubkey: ScriptBuf::from(vec![0, 32, 121, 9]) },
 				TxOut {
 					value: UTXO_WITNESSED_2,
-					script_pubkey: Script::from(btc_deposit_script.data.to_vec()),
+					script_pubkey: ScriptBuf::from(btc_deposit_script.data.to_vec()),
 				},
 			]),
 			fake_transaction(vec![]),
@@ -362,13 +370,13 @@ mod test_utxo_filtering {
 			fake_transaction(vec![
 				TxOut {
 					value: 2324,
-					script_pubkey: Script::from(btc_deposit_script.data.to_vec()),
+					script_pubkey: ScriptBuf::from(btc_deposit_script.data.to_vec()),
 				},
-				TxOut { value: 12223, script_pubkey: Script::from(vec![0, 32, 121, 9]) },
+				TxOut { value: 12223, script_pubkey: ScriptBuf::from(vec![0, 32, 121, 9]) },
 			]),
 			fake_transaction(vec![TxOut {
 				value: 1234,
-				script_pubkey: Script::from(btc_deposit_script.data.to_vec()),
+				script_pubkey: ScriptBuf::from(btc_deposit_script.data.to_vec()),
 			}]),
 		];
 
@@ -389,8 +397,8 @@ mod test_utxo_filtering {
 
 		const UTXO_WITNESSED_1: u64 = 2324;
 		let txs = vec![fake_transaction(vec![
-			TxOut { value: 2324, script_pubkey: Script::from(btc_deposit_script.data.to_vec()) },
-			TxOut { value: 0, script_pubkey: Script::from(btc_deposit_script.data.to_vec()) },
+			TxOut { value: 2324, script_pubkey: ScriptBuf::from(btc_deposit_script.data.to_vec()) },
+			TxOut { value: 0, script_pubkey: ScriptBuf::from(btc_deposit_script.data.to_vec()) },
 		])];
 
 		let (deposit_witnesses, ..) = filter_interesting_utxos(
@@ -408,10 +416,11 @@ mod test_utxo_filtering {
 			fake_transaction(vec![]),
 			fake_transaction(vec![TxOut {
 				value: 2324,
-				script_pubkey: Script::from(vec![0, 32, 121, 9]),
+				script_pubkey: ScriptBuf::from(vec![0, 32, 121, 9]),
 			}]),
 		];
-		let tx_hashes = txs.iter().map(|tx| tx.txid().into_inner()).collect::<Vec<_>>();
+		let tx_hashes =
+			txs.iter().map(|tx| tx.txid().to_raw_hash().to_byte_array()).collect::<Vec<_>>();
 
 		let (deposit_witnesses, success_witnesses) = filter_interesting_utxos(
 			txs,
