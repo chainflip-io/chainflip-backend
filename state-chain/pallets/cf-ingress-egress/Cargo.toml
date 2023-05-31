@@ -11,9 +11,9 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 
 
 [dependencies]
-cf-traits = {path = '../../traits', default-features = false}
-cf-primitives = {path = '../../primitives', default-features = false}
 cf-chains = { path ='../../chains', default-features = false }
+cf-primitives = {path = '../../primitives', default-features = false}
+cf-traits = {path = '../../traits', default-features = false}
 
 log = { version = '0.4.16', default-features = false }
 
@@ -36,18 +36,20 @@ pallet-cf-governance = {path = '../cf-governance'}
 [features]
 default = ['std']
 std = [
+  'cf-chains/std',
   'cf-primitives/std',
   'cf-traits/std',
-  'cf-chains/std',
   'codec/std',
   'frame-benchmarking?/std',
   'frame-support/std',
   'frame-system/std',
   'scale-info/std',
-  'sp-std/std',
   'sp-runtime/std',
+  'sp-std/std',
 ]
 runtime-benchmarks = [
+  'cf-chains/runtime-benchmarks',
+  'cf-primitives/runtime-benchmarks',
   'cf-traits/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',

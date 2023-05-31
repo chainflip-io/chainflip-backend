@@ -1,5 +1,5 @@
-#![cfg_attr(not(feature = "std"), no_std)]
 #![cfg(test)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
 /// Based on the substrate example template pallet
 pub use pallet::*;

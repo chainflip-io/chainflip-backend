@@ -1,16 +1,12 @@
 use arrayref::array_ref;
 use cf_chains::{
 	btc,
-	dot::{PolkadotPublicKey, PolkadotSignature},
+	dot::{EncodedPolkadotPayload, PolkadotPair, PolkadotPublicKey, PolkadotSignature},
 	eth::{to_ethereum_address, AggKey, SchnorrVerificationComponents},
 };
 use cf_primitives::{EpochIndex, GENESIS_EPOCH};
 use libsecp256k1::{PublicKey, SecretKey};
 use rand::{rngs::StdRng, Rng, SeedableRng};
-use sp_core::{
-	crypto::Pair as TraitPair,
-	sr25519::{self, Pair},
-};
 use std::marker::PhantomData;
 
 use crate::GENESIS_KEY_SEED;
@@ -28,8 +24,9 @@ pub type EthKeyComponents = KeyComponents<SecretKey, AggKey>;
 pub trait KeyUtils {
 	type SigVerification;
 	type AggKey;
+	type Message: ?Sized;
 
-	fn sign(&self, message: &[u8]) -> Self::SigVerification;
+	fn sign(&self, message: &Self::Message) -> Self::SigVerification;
 
 	fn generate(seed: u64, epoch_index: EpochIndex) -> Self;
 
@@ -41,8 +38,9 @@ pub trait KeyUtils {
 impl KeyUtils for EthKeyComponents {
 	type SigVerification = SchnorrVerificationComponents;
 	type AggKey = AggKey;
+	type Message = [u8];
 
-	fn sign(&self, message: &[u8]) -> Self::SigVerification {
+	fn sign(&self, message: &Self::Message) -> Self::SigVerification {
 		let message: &[u8; 32] = message.try_into().expect("Message for Ethereum is not 32 bytes");
 		assert_eq!(self.agg_key, AggKey::from_private_key_bytes(self.secret.serialize()));
 
@@ -87,7 +85,7 @@ impl<KeyComponents, SigVerification, AggKey: Eq> ThresholdSigner<KeyComponents, 
 where
 	KeyComponents: KeyUtils<SigVerification = SigVerification, AggKey = AggKey> + Clone,
 {
-	pub fn sign_with_key(&self, key: AggKey, message: &[u8]) -> SigVerification {
+	pub fn sign_with_key(&self, key: AggKey, message: &KeyComponents::Message) -> SigVerification {
 		let curr_key = self.key_components.agg_key();
 		if key == curr_key {
 			return self.key_components.sign(message)
@@ -133,7 +131,7 @@ impl Default for EthThresholdSigner {
 	}
 }
 
-pub type DotKeyComponents = KeyComponents<Pair, sr25519::Public>;
+pub type DotKeyComponents = KeyComponents<PolkadotPair, PolkadotPublicKey>;
 
 pub type DotThresholdSigner = ThresholdSigner<DotKeyComponents, PolkadotSignature>;
 
@@ -149,19 +147,16 @@ impl Default for DotThresholdSigner {
 
 impl KeyUtils for DotKeyComponents {
 	type SigVerification = PolkadotSignature;
-
 	type AggKey = PolkadotPublicKey;
+	type Message = EncodedPolkadotPayload;
 
-	fn sign(&self, message: &[u8]) -> Self::SigVerification {
+	fn sign(&self, message: &Self::Message) -> Self::SigVerification {
 		self.secret.sign(message)
 	}
 
 	fn generate(seed: u64, epoch_index: EpochIndex) -> Self {
-		let priv_seed: [u8; 32] = StdRng::seed_from_u64(seed).gen();
-		let keypair: Pair = <Pair as TraitPair>::from_seed(&priv_seed);
-		let agg_key = keypair.public();
-
-		KeyComponents { seed, secret: keypair, agg_key, epoch_index }
+		let keypair = PolkadotPair::from_seed(&StdRng::seed_from_u64(seed).gen());
+		KeyComponents { seed, agg_key: keypair.public_key(), secret: keypair, epoch_index }
 	}
 
 	fn generate_next(&self) -> Self {
@@ -169,7 +164,7 @@ impl KeyUtils for DotKeyComponents {
 	}
 
 	fn agg_key(&self) -> Self::AggKey {
-		cf_chains::dot::PolkadotPublicKey(self.agg_key)
+		self.agg_key
 	}
 }
 
@@ -189,10 +184,10 @@ impl Default for BtcThresholdSigner {
 
 impl KeyUtils for BtcKeyComponents {
 	type SigVerification = btc::Signature;
-
 	type AggKey = btc::AggKey;
+	type Message = [u8];
 
-	fn sign(&self, message: &[u8]) -> Self::SigVerification {
+	fn sign(&self, message: &Self::Message) -> Self::SigVerification {
 		let secp = secp256k1::Secp256k1::new();
 		let signature =
 			secp.sign_schnorr(&secp256k1::Message::from_slice(message).unwrap(), &self.secret);

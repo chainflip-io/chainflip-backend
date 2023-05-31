@@ -1,5 +1,4 @@
 pub mod api;
-#[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 pub mod deposit_address;
 pub mod utxo_selection;

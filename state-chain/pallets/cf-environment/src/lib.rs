@@ -21,12 +21,9 @@ use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_std::vec::Vec;
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-#[cfg(test)]
 mod mock;
-#[cfg(test)]
 mod tests;
 
 pub mod weights;
@@ -372,7 +369,7 @@ pub mod pallet {
 			use cf_traits::VaultKeyWitnessedHandler;
 
 			// Set Polkadot Pure Proxy Vault Account
-			PolkadotVaultAccountId::<T>::put(dot_pure_proxy_vault_key.clone());
+			PolkadotVaultAccountId::<T>::put(dot_pure_proxy_vault_key);
 			Self::deposit_event(Event::<T>::PolkadotVaultAccountSet {
 				polkadot_vault_account_id: dot_pure_proxy_vault_key,
 			});
@@ -475,7 +472,7 @@ pub mod pallet {
 			EthereumSupportedAssets::<T>::insert(EthAsset::Usdc, self.eth_usdc_address);
 
 			PolkadotGenesisHash::<T>::set(self.polkadot_genesis_hash);
-			PolkadotVaultAccountId::<T>::set(self.polkadot_vault_account_id.clone());
+			PolkadotVaultAccountId::<T>::set(self.polkadot_vault_account_id);
 			PolkadotRuntimeVersion::<T>::set(self.polkadot_runtime_version);
 			PolkadotProxyAccountNonce::<T>::set(0);
 

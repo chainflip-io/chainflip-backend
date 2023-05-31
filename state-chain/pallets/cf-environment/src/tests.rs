@@ -1,3 +1,4 @@
+#![cfg(test)]
 use cf_chains::{
 	btc::{api::UtxoSelectionType, Utxo},
 	dot::{RuntimeVersion, TEST_RUNTIME_VERSION},

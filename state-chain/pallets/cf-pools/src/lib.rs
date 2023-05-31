@@ -12,7 +12,6 @@ use sp_runtime::{Permill, Saturating};
 
 pub use pallet::*;
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 pub mod weights;
 pub use weights::WeightInfo;
