@@ -48,7 +48,7 @@ where
 
 	const MAX_CONCURRENT_REQUESTS: usize = 10;
 
-	let futures = txs.iter().map(|(tx, _)| tx).map(|tx| eth_rpc.transaction_receipt(tx.hash));
+	let futures = txs.iter().map(|(tx, _)| eth_rpc.transaction_receipt(tx.hash));
 	let receipts = utilities::assert_stream_send(futures::stream::iter(futures))
 		.buffered(MAX_CONCURRENT_REQUESTS)
 		.collect::<Vec<_>>()
