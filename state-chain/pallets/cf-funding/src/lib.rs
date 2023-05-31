@@ -254,8 +254,14 @@ pub mod pallet {
 		/// The redemption signature could not be found.
 		SignatureNotReady,
 
-		/// The requested redemption amount is too low to pay for the Withdrawal Tax.
+		/// The requested redemption amount is too low to pay for the redemption tax.
 		RedemptionAmountTooLow,
+
+		/// Minimum funding amount must be greater than the redemption tax.
+		InvalidMinimumFundingUpdate,
+
+		/// Redemption tax must be less than the minimum funding amount.
+		InvalidRedemptionTaxUpdate,
 	}
 
 	#[pallet::call]
@@ -521,6 +527,10 @@ pub mod pallet {
 			minimum_funding: T::Balance,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(
+				minimum_funding > RedemptionTax::<T>::get(),
+				Error::<T>::InvalidMinimumFundingUpdate
+			);
 			MinimumFunding::<T>::put(minimum_funding);
 			Self::deposit_event(Event::MinimumFundingUpdated { new_minimum: minimum_funding });
 			Ok(().into())
@@ -536,8 +546,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_redemption_tax())]
 		pub fn update_redemption_tax(origin: OriginFor<T>, amount: T::Balance) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(amount < MinimumFunding::<T>::get(), Error::<T>::InvalidRedemptionTaxUpdate);
 			RedemptionTax::<T>::set(amount);
-
 			Self::deposit_event(Event::<T>::RedemptionTaxAmountUpdated { amount });
 			Ok(())
 		}
@@ -568,6 +578,10 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
+			assert!(
+				self.redemption_tax < self.minimum_funding,
+				"Redemption tax must be less than minimum funding"
+			);
 			MinimumFunding::<T>::set(self.minimum_funding);
 			RedemptionTax::<T>::set(self.redemption_tax);
 			RedemptionTTLSeconds::<T>::set(self.redemption_ttl.as_secs());
