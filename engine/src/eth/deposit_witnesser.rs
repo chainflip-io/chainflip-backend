@@ -174,3 +174,21 @@ async fn test_successful_tx_filter() {
 
 	assert_eq!(filter_successful_txs(txs, &rpc).await.unwrap().collect::<Vec<_>>(), vec![tx1, tx3]);
 }
+
+#[tokio::test]
+async fn successful_tx_filter_on_no_status() {
+	use web3::types::{TransactionReceipt, H256};
+	let mut rpc = crate::eth::rpc::MockEthRpcApi::default();
+
+	// Return receipts with no status (which is unexpected)
+	rpc.expect_transaction_receipt()
+		.returning(|_| Ok(TransactionReceipt { status: None, ..Default::default() }));
+
+	let txs = vec![(
+		web3::types::Transaction { hash: H256::from([0x1; 32]), ..Default::default() },
+		Default::default(),
+	)];
+
+	// We expect error due to missing status:
+	assert!(filter_successful_txs(txs, &rpc).await.is_err());
+}
