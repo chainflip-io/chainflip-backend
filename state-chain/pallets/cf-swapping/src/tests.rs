@@ -6,7 +6,7 @@ use crate::{
 };
 use cf_chains::{
 	address::{try_to_encoded_address, AddressConverter, EncodedAddress, ForeignChainAddress},
-	btc::{scriptpubkey_from_address, BitcoinNetwork},
+	btc::{BitcoinNetwork, ScriptPubkey},
 	AnyChain, CcmDepositMetadata,
 };
 use cf_primitives::{Asset, AssetAmount, ForeignChain};
@@ -468,7 +468,7 @@ fn rejects_invalid_swap_deposit() {
 #[test]
 fn rejects_invalid_swap_by_witnesser() {
 	new_test_ext().execute_with(|| {
-		let script_pubkey = scriptpubkey_from_address(
+		let script_pubkey = ScriptPubkey::try_from_address(
 			"BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4",
 			&BitcoinNetwork::Mainnet,
 		)

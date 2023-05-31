@@ -1,6 +1,6 @@
 extern crate alloc;
 
-use crate::btc::{scriptpubkey_from_address, BitcoinNetwork, ScriptPubkey};
+use crate::btc::{BitcoinNetwork, ScriptPubkey};
 use cf_primitives::{EthereumAddress, ForeignChain, PolkadotAccountId};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -219,7 +219,7 @@ pub fn try_from_encoded_address<GetBitcoinNetwork: FnOnce() -> BitcoinNetwork>(
 		EncodedAddress::Eth(address_bytes) => Ok(ForeignChainAddress::Eth(address_bytes)),
 		EncodedAddress::Dot(address_bytes) => Ok(ForeignChainAddress::Dot(address_bytes)),
 		EncodedAddress::Btc(address_bytes) => Ok(ForeignChainAddress::Btc(
-			scriptpubkey_from_address(
+			ScriptPubkey::try_from_address(
 				sp_std::str::from_utf8(&address_bytes[..]).map_err(|_| ())?,
 				&bitcoin_network(),
 			)

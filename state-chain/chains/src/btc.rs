@@ -421,70 +421,67 @@ impl ScriptPubkey {
 			buf.to_base58()
 		}
 	}
-}
 
-pub fn scriptpubkey_from_address(
-	address: &str,
-	network: &BitcoinNetwork,
-) -> Result<ScriptPubkey, Error> {
-	// See https://en.bitcoin.it/wiki/Base58Check_encoding
-	fn try_decode_as_base58(address: &str, network: &BitcoinNetwork) -> Option<ScriptPubkey> {
-		const CHECKSUM_LENGTH: usize = 4;
-		const PAYLOAD_LENGTH: usize = 21;
+	pub fn try_from_address(address: &str, network: &BitcoinNetwork) -> Result<Self, Error> {
+		// See https://en.bitcoin.it/wiki/Base58Check_encoding
+		fn try_decode_as_base58(address: &str, network: &BitcoinNetwork) -> Option<ScriptPubkey> {
+			const CHECKSUM_LENGTH: usize = 4;
+			const PAYLOAD_LENGTH: usize = 21;
 
-		let data: [u8; PAYLOAD_LENGTH + CHECKSUM_LENGTH] =
-			address.from_base58().ok()?.try_into().ok()?;
+			let data: [u8; PAYLOAD_LENGTH + CHECKSUM_LENGTH] =
+				address.from_base58().ok()?.try_into().ok()?;
 
-		let (payload, checksum) = data.split_at(data.len() - CHECKSUM_LENGTH);
+			let (payload, checksum) = data.split_at(data.len() - CHECKSUM_LENGTH);
 
-		if &sha2_256(&sha2_256(payload))[..CHECKSUM_LENGTH] == checksum {
-			let [version, hash @ ..] = payload.as_array::<PAYLOAD_LENGTH>();
-			if version == network.p2pkh_address_version() {
-				Some(ScriptPubkey::P2PKH(hash.as_array()))
-			} else if version == network.p2sh_address_version() {
-				Some(ScriptPubkey::P2SH(hash.as_array()))
+			if &sha2_256(&sha2_256(payload))[..CHECKSUM_LENGTH] == checksum {
+				let [version, hash @ ..] = payload.as_array::<PAYLOAD_LENGTH>();
+				if version == network.p2pkh_address_version() {
+					Some(ScriptPubkey::P2PKH(hash.as_array()))
+				} else if version == network.p2sh_address_version() {
+					Some(ScriptPubkey::P2SH(hash.as_array()))
+				} else {
+					None
+				}
 			} else {
 				None
 			}
-		} else {
-			None
 		}
-	}
 
-	// See https://en.bitcoin.it/wiki/BIP_0350
-	fn try_decode_as_bech32_or_bech32m(
-		address: &str,
-		network: &BitcoinNetwork,
-	) -> Option<ScriptPubkey> {
-		let (hrp, data, variant) = bech32::decode(address).ok()?;
-		if hrp == network.bech32_and_bech32m_address_hrp() {
-			let version = data.get(0)?.to_u8();
-			let program = Vec::from_base32(&data[1..]).ok()?;
-			match (version, variant, program.len() as u32) {
-				(SEGWIT_VERSION_ZERO, Variant::Bech32, 20) =>
-					Some(ScriptPubkey::P2WPKH(program.as_array())),
-				(SEGWIT_VERSION_ZERO, Variant::Bech32, 32) =>
-					Some(ScriptPubkey::P2WSH(program.as_array())),
-				(SEGWIT_VERSION_TAPROOT, Variant::Bech32m, 32) =>
-					Some(ScriptPubkey::Taproot(program.as_array())),
-				(
-					SEGWIT_VERSION_TAPROOT..=SEGWIT_VERSION_MAX,
-					Variant::Bech32m,
-					(MIN_SEGWIT_PROGRAM_BYTES..=MAX_SEGWIT_PROGRAM_BYTES),
-				) => Some(ScriptPubkey::OtherSegwit {
-					version,
-					program: program.try_into().expect("Checked for MAX_SEGWIT_PROGRAM_BYTES"),
-				}),
-				_ => None,
+		// See https://en.bitcoin.it/wiki/BIP_0350
+		fn try_decode_as_bech32_or_bech32m(
+			address: &str,
+			network: &BitcoinNetwork,
+		) -> Option<ScriptPubkey> {
+			let (hrp, data, variant) = bech32::decode(address).ok()?;
+			if hrp == network.bech32_and_bech32m_address_hrp() {
+				let version = data.get(0)?.to_u8();
+				let program = Vec::from_base32(&data[1..]).ok()?;
+				match (version, variant, program.len() as u32) {
+					(SEGWIT_VERSION_ZERO, Variant::Bech32, 20) =>
+						Some(ScriptPubkey::P2WPKH(program.as_array())),
+					(SEGWIT_VERSION_ZERO, Variant::Bech32, 32) =>
+						Some(ScriptPubkey::P2WSH(program.as_array())),
+					(SEGWIT_VERSION_TAPROOT, Variant::Bech32m, 32) =>
+						Some(ScriptPubkey::Taproot(program.as_array())),
+					(
+						SEGWIT_VERSION_TAPROOT..=SEGWIT_VERSION_MAX,
+						Variant::Bech32m,
+						(MIN_SEGWIT_PROGRAM_BYTES..=MAX_SEGWIT_PROGRAM_BYTES),
+					) => Some(ScriptPubkey::OtherSegwit {
+						version,
+						program: program.try_into().expect("Checked for MAX_SEGWIT_PROGRAM_BYTES"),
+					}),
+					_ => None,
+				}
+			} else {
+				None
 			}
-		} else {
-			None
 		}
-	}
 
-	try_decode_as_base58(address, network)
-		.or_else(|| try_decode_as_bech32_or_bech32m(address, network))
-		.ok_or(Error::InvalidAddress)
+		try_decode_as_base58(address, network)
+			.or_else(|| try_decode_as_bech32_or_bech32m(address, network))
+			.ok_or(Error::InvalidAddress)
+	}
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
@@ -946,7 +943,7 @@ mod test {
 		];
 
 		for (valid_address, intended_btc_net, expected_scriptpubkey) in valid_addresses {
-			let pk = scriptpubkey_from_address(valid_address, &intended_btc_net)
+			let pk = ScriptPubkey::try_from_address(valid_address, &intended_btc_net)
 				.unwrap_or_else(|_| panic!("Failed to parse address: {valid_address}"));
 			assert_eq!(pk.bytes(), expected_scriptpubkey, "Input was {valid_address} / {pk:?}");
 		}
@@ -1004,7 +1001,7 @@ mod test {
 
 		for (invalid_address, intended_btc_net) in invalid_addresses {
 			assert!(matches!(
-				scriptpubkey_from_address(invalid_address, &intended_btc_net,),
+				ScriptPubkey::try_from_address(invalid_address, &intended_btc_net,),
 				Err(Error::InvalidAddress)
 			));
 		}
@@ -1044,7 +1041,7 @@ mod test {
 
 		for (address, validity) in test_addresses {
 			assert_eq!(
-				scriptpubkey_from_address(address, &BitcoinNetwork::Mainnet,).is_ok(),
+				ScriptPubkey::try_from_address(address, &BitcoinNetwork::Mainnet,).is_ok(),
 				validity
 			);
 		}
@@ -1053,7 +1050,7 @@ mod test {
 	fn create_test_unsigned_transaction(sign_with: PreviousOrCurrent) -> BitcoinTransaction {
 		let pubkey_x =
 			hex_literal::hex!("78C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDB");
-		let script_pubkey = scriptpubkey_from_address(
+		let script_pubkey = ScriptPubkey::try_from_address(
 			"bc1pgtj0f3u2rk8ex6khlskz7q50nwc48r8unfgfhxzsx9zhcdnczhqq60lzjt",
 			&BitcoinNetwork::Mainnet,
 		)
