@@ -75,6 +75,17 @@ jobs:
           echo -n ${{ secrets.CF_LOCALNET_ETH_PRIVATE_KEY }} > ./localnet/init/secrets/eth_private_key_file
           chmod +x ${{ env.BINARIES_LOCATION }}/chainflip-*
           ./localnet/manage.sh
+      - name: Debug /usr/bin/env
+        run: |
+          /usr/bin/env
+
+      - name: Debug /usr/bin/env pnpm tsx
+        run: |
+          /usr/bin/env pnpm tsx
+
+      - name: Debug pnpm tsx
+        run: |
+          pnpm tsx
 
       - name: Run EinfachHeuteLeiderNicht.exe
         if: inputs.simple_bouncer
