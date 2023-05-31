@@ -168,7 +168,7 @@ benchmarks! {
 	}
 
 	update_redemption_tax {
-		let amount = 1_000u128.into();
+		let amount = 1u128.into();
 		let call = Call::<T>::update_redemption_tax {
 			amount,
 		};

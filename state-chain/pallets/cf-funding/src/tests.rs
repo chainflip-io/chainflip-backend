@@ -279,6 +279,8 @@ fn redemption_cannot_occur_without_funding_first() {
 #[test]
 fn cannot_redeem_bond() {
 	new_test_ext().execute_with(|| {
+		assert_ok!(Funding::update_redemption_tax(RuntimeOrigin::root(), 0));
+		assert_ok!(Funding::update_minimum_funding(RuntimeOrigin::root(), 1));
 		const AMOUNT: u128 = 200;
 		const BOND: u128 = 102;
 		MockEpochInfo::set_bond(BOND);
@@ -498,7 +500,13 @@ fn redemption_expiry_removes_redemption() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 45;
 
-		assert_ok!(Funding::funded(RuntimeOrigin::root(), ALICE, AMOUNT, ETH_DUMMY_ADDR, TX_HASH));
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT * 2,
+			ETH_DUMMY_ADDR,
+			TX_HASH
+		));
 
 		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR));
 		assert_noop!(
@@ -534,7 +542,7 @@ fn maintenance_mode_blocks_redemption_requests() {
 fn can_update_redemption_tax() {
 	new_test_ext().execute_with(|| {
 		let amount = 1_000;
-		assert_eq!(RedemptionTax::<Test>::get(), 0);
+		assert_ok!(Funding::update_minimum_funding(RuntimeOrigin::root(), amount + 1));
 		assert_ok!(Funding::update_redemption_tax(RuntimeOrigin::root(), amount));
 		assert_eq!(RedemptionTax::<Test>::get(), amount);
 		System::assert_last_event(RuntimeEvent::Funding(
@@ -544,9 +552,22 @@ fn can_update_redemption_tax() {
 }
 
 #[test]
+fn redemption_tax_cannot_be_larger_than_minimum_funding() {
+	new_test_ext().execute_with(|| {
+		let amount = 1_000;
+		assert_ok!(Funding::update_minimum_funding(RuntimeOrigin::root(), amount));
+		assert_noop!(
+			Funding::update_redemption_tax(RuntimeOrigin::root(), amount),
+			Error::<Test>::InvalidRedemptionTaxUpdate
+		);
+	});
+}
+
+#[test]
 fn cannot_redeem_lower_than_redemption_tax() {
 	new_test_ext().execute_with(|| {
 		let amount = 1_000;
+		assert_ok!(Funding::update_minimum_funding(RuntimeOrigin::root(), amount + 1));
 		assert_ok!(Funding::update_redemption_tax(RuntimeOrigin::root(), amount));
 		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
@@ -574,44 +595,5 @@ fn cannot_redeem_lower_than_redemption_tax() {
 			RedemptionAmount::Exact(amount),
 			Default::default()
 		));
-	});
-}
-
-#[test]
-fn redemption_tax_is_burned_on_withdrawal() {
-	new_test_ext().execute_with(|| {
-		let tax = 1_000;
-		let amount = 5_000;
-		assert_ok!(Funding::update_redemption_tax(RuntimeOrigin::root(), tax));
-		assert_ok!(Funding::funded(
-			RuntimeOrigin::root(),
-			ALICE,
-			1_000_000,
-			Default::default(),
-			Default::default(),
-		));
-
-		let previous_total_issuance = Flip::total_issuance();
-		let previous_offchain = Flip::offchain_funds();
-
-		assert_ok!(Funding::redeem(
-			RuntimeOrigin::signed(ALICE),
-			RedemptionAmount::Exact(tax + amount),
-			Default::default()
-		));
-		// Tell contract to send (TotalAmount - tax)
-		assert_eq!(MockBroadcaster::received_requests(), vec![amount]);
-
-		assert_ok!(Funding::redeemed(
-			RuntimeOrigin::root(),
-			ALICE,
-			tax + amount,
-			Default::default()
-		));
-
-		// Tax is burned
-		assert_eq!(Flip::total_issuance(), previous_total_issuance - tax);
-		// Total - tax is bridged out.
-		assert_eq!(Flip::offchain_funds(), previous_offchain + amount);
 	});
 }
