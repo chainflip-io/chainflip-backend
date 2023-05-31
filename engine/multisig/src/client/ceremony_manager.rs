@@ -723,7 +723,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 		debug!("Received data {data} from [{sender_id}]");
 
 		// If no ceremony exists, create an unauthorised one (with ceremony id tracking
-		if self.ceremony_handles.get(&ceremony_id).is_none() {
+		if !self.ceremony_handles.contains_key(&ceremony_id) {
 			// Only a ceremony id that is within the ceremony id window can create unauthorised
 			// ceremonies
 			let ceremony_id_string = ceremony_id_string::<Ceremony::Crypto>(ceremony_id);
@@ -750,7 +750,8 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 			}
 		}
 
-		let ceremony_handle = self.ceremony_handles.get(&ceremony_id).expect("Should exist");
+		let ceremony_handle =
+			self.ceremony_handles.get(&ceremony_id).expect("Entry is inserted above");
 
 		// NOTE: There is a short delay between dropping the ceremony runner (and any channels
 		// associated with it) and dropping the corresponding ceremony handle, which makes it
