@@ -11,18 +11,16 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 		channel_id: ChannelId,
 	) -> Result<<Bitcoin as Chain>::ChainAccount, DispatchError> {
 		// We don't expect to hit this case in the wild because we reuse addresses.
-		if channel_id > u32::MAX.into() {
-			return Err(DispatchError::Other("Intent ID is too large for BTC address derivation"))
-		}
+		let channel_id: u32 = channel_id
+			.try_into()
+			.map_err(|_| "Intent ID is too large for BTC address derivation")?;
 
 		Ok(DepositAddress::new(
 			BitcoinVault::vaults(Validator::epoch_index())
 				.ok_or(DispatchError::Other("No vault for epoch"))?
 				.public_key
 				.current,
-			channel_id
-				.try_into()
-				.expect("We should never have a channel ID larger than u32::MAX"),
+			channel_id,
 		)
 		.script_pubkey())
 	}
