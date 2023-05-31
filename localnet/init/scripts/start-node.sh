@@ -17,4 +17,4 @@ $binary_location/chainflip-node --chain=dev \
   --execution=Native \
   --blocks-pruning=archive \
   --state-pruning=archive \
-  --state-cache-size=0
+  --state-cache-size=0 > /tmp/chainflip/chainflip-node.log 2>&1 &
