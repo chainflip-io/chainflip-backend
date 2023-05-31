@@ -6,7 +6,7 @@ use crate::{
 };
 use cf_chains::{
 	address::{try_to_encoded_address, AddressConverter, EncodedAddress, ForeignChainAddress},
-	btc::{scriptpubkey_from_address, BitcoinNetwork, BitcoinScriptBounded},
+	btc::{BitcoinNetwork, ScriptPubkey},
 	dot::PolkadotAccountId,
 	AnyChain, CcmDepositMetadata,
 };
@@ -414,7 +414,7 @@ fn reject_invalid_ccm_deposit() {
 			Asset::Eth,
 			1_000_000,
 			Asset::Btc,
-			ForeignChainAddress::Btc(Default::default()),
+			ForeignChainAddress::Btc(cf_chains::btc::ScriptPubkey::P2PKH(Default::default())),
 			ccm.clone(),
 			CcmFailReason::UnsupportedForTargetChain,
 		);
@@ -469,17 +469,17 @@ fn rejects_invalid_swap_deposit() {
 #[test]
 fn rejects_invalid_swap_by_witnesser() {
 	new_test_ext().execute_with(|| {
-		let script: BitcoinScriptBounded = scriptpubkey_from_address(
+		let script_pubkey = ScriptPubkey::try_from_address(
 			"BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4",
-			BitcoinNetwork::Mainnet,
+			&BitcoinNetwork::Mainnet,
 		)
-		.unwrap()
-		.try_into()
 		.unwrap();
 
 		let btc_encoded_address =
-			try_to_encoded_address(ForeignChainAddress::Btc(script), || BitcoinNetwork::Mainnet)
-				.unwrap();
+			try_to_encoded_address(ForeignChainAddress::Btc(script_pubkey), || {
+				BitcoinNetwork::Mainnet
+			})
+			.unwrap();
 
 		// Is valid Bitcoin address, but asset is Dot, so not compatible
 		assert_noop!(
