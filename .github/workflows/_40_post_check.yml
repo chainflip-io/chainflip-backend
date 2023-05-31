@@ -69,7 +69,7 @@ jobs:
 
       - name: Install node dependencies
         working-directory: bouncer
-        run: npm i
+        run: pnpm install
 
       - name: Start a localnet
         env:
