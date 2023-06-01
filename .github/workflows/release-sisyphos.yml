@@ -16,7 +16,6 @@ jobs:
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit
   build:
-    needs: [test]
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
