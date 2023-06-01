@@ -292,7 +292,7 @@ impl Engine {
 									Box::new(pallet_cf_vaults::Call::<_, BitcoinInstance>::vault_key_rotated {
 										block_number: 100,
 										tx_id: UtxoId {
-											tx_id: [2u8; 32],
+											tx_hash: [2u8; 32],
 											vout: 1,
 										},
 									}.into()),

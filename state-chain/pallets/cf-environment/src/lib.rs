@@ -5,10 +5,8 @@
 use cf_chains::{
 	btc::{
 		api::{SelectedUtxosAndChangeAmount, UtxoSelectionType},
-		deposit_address::DepositAddress,
 		utxo_selection::select_utxos_from_pool,
-		Bitcoin, BitcoinFeeInfo, BitcoinNetwork, BtcAmount, ScriptPubkey, Utxo, UtxoId,
-		CHANGE_ADDRESS_SALT,
+		Bitcoin, BitcoinFeeInfo, BitcoinNetwork, BitcoinScriptBounded, BtcAmount, Utxo, UtxoId,
 	},
 	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	ChainCrypto,
@@ -74,7 +72,7 @@ pub mod cfe {
 pub mod pallet {
 	use super::*;
 	use cf_chains::{
-		btc::{ScriptPubkey, Utxo},
+		btc::{BitcoinScriptBounded, Utxo},
 		dot::{PolkadotPublicKey, RuntimeVersion},
 	};
 	use cf_primitives::TxId;
@@ -198,7 +196,7 @@ pub mod pallet {
 	/// Lookup for determining which salt and pubkey the current deposit Bitcoin Script was created
 	/// from.
 	pub type BitcoinActiveDepositAddressDetails<T> =
-		StorageMap<_, Twox64Concat, ScriptPubkey, (u32, [u8; 32]), ValueQuery>;
+		StorageMap<_, Twox64Concat, BitcoinScriptBounded, (u32, [u8; 32]), ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -277,8 +275,8 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(asset != EthAsset::Eth, Error::<T>::EthAddressNotUpdateable);
 			Self::deposit_event(if EthereumSupportedAssets::<T>::contains_key(asset) {
-				EthereumSupportedAssets::<T>::mutate(asset, |mapped_address| {
-					mapped_address.replace(address);
+				EthereumSupportedAssets::<T>::mutate(asset, |new_address| {
+					*new_address = Some(address)
 				});
 				Event::UpdatedEthAsset(asset, address)
 			} else {
@@ -538,22 +536,31 @@ impl<T: Config> Pallet<T> {
 	pub fn add_bitcoin_utxo_to_list(
 		amount: BtcAmount,
 		utxo_id: UtxoId,
-		script_pubkey: ScriptPubkey,
+		deposit_script: BitcoinScriptBounded,
 	) {
-		let (salt, pubkey) = BitcoinActiveDepositAddressDetails::<T>::take(script_pubkey);
+		let (salt, pubkey) = BitcoinActiveDepositAddressDetails::<T>::take(deposit_script);
 
 		BitcoinAvailableUtxos::<T>::append(Utxo {
 			amount,
-			id: utxo_id,
-			deposit_address: DepositAddress::new(pubkey, salt),
+			txid: utxo_id.tx_hash,
+			vout: utxo_id.vout,
+			pubkey_x: pubkey,
+			salt,
 		});
 	}
 
-	pub fn add_bitcoin_change_utxo(amount: BtcAmount, utxo_id: UtxoId, pubkey_x: [u8; 32]) {
+	pub fn add_bitcoin_change_utxo(
+		amount: BtcAmount,
+		utxo_id: UtxoId,
+		salt: u32,
+		pubkey_x: [u8; 32],
+	) {
 		BitcoinAvailableUtxos::<T>::append(Utxo {
 			amount,
-			id: utxo_id,
-			deposit_address: DepositAddress::new(pubkey_x, CHANGE_ADDRESS_SALT),
+			txid: utxo_id.tx_hash,
+			vout: utxo_id.vout,
+			pubkey_x,
+			salt,
 		});
 	}
 
@@ -601,10 +608,10 @@ impl<T: Config> Pallet<T> {
 	}
 
 	pub fn add_details_for_btc_deposit_script(
-		script_pubkey: ScriptPubkey,
+		deposit_script: BitcoinScriptBounded,
 		salt: u32,
 		pubkey: [u8; 32],
 	) {
-		BitcoinActiveDepositAddressDetails::<T>::insert(script_pubkey, (salt, pubkey));
+		BitcoinActiveDepositAddressDetails::<T>::insert(deposit_script, (salt, pubkey));
 	}
 }

@@ -14,9 +14,10 @@ use crate::{
 };
 use bitcoincore_rpc::bitcoin::{hashes::Hash, Transaction};
 use cf_chains::{
+	address::ScriptPubkeyBytes,
 	btc::{
-		deposit_address::DepositAddress, BitcoinFeeInfo, BitcoinTrackedData, ScriptPubkey, UtxoId,
-		CHANGE_ADDRESS_SALT,
+		deposit_address::derive_btc_deposit_bitcoin_script, BitcoinFeeInfo, BitcoinScriptBounded,
+		BitcoinTrackedData, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	Bitcoin,
 };
@@ -42,7 +43,11 @@ use super::rpc::{BtcRpcApi, BtcRpcClient};
 // monitored addresses.
 pub fn filter_interesting_utxos(
 	txs: Vec<Transaction>,
-	address_monitor: &mut ItemMonitor<ScriptPubkey, Vec<u8>, ScriptPubkey>,
+	address_monitor: &mut ItemMonitor<
+		BitcoinScriptBounded,
+		ScriptPubkeyBytes,
+		BitcoinScriptBounded,
+	>,
 	tx_hash_monitor: &mut ItemMonitor<[u8; 32], [u8; 32], ()>,
 ) -> (Vec<DepositWitness<Bitcoin>>, Vec<[u8; 32]>) {
 	address_monitor.sync_items();
@@ -56,7 +61,7 @@ pub fn filter_interesting_utxos(
 			// TODO: We shouldn't need to add a fee
 			tx_success_witnesses.push(tx_hash);
 		}
-		for (vout, tx_out) in (0u32..).zip(tx.output) {
+		for (vout, tx_out) in (0u32..).zip(tx.output.clone()) {
 			if tx_out.value > 0 {
 				let script_pubkey_bytes = tx_out.script_pubkey.to_bytes();
 				if let Some(bitcoin_script) = address_monitor.get(&script_pubkey_bytes) {
@@ -64,7 +69,7 @@ pub fn filter_interesting_utxos(
 						deposit_address: bitcoin_script,
 						asset: btc::Asset::Btc,
 						amount: tx_out.value,
-						tx_id: UtxoId { tx_id: tx_hash, vout },
+						tx_id: UtxoId { tx_hash, vout },
 					});
 				}
 			}
@@ -77,7 +82,7 @@ pub async fn start<StateChainClient>(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Bitcoin>>,
 	state_chain_client: Arc<StateChainClient>,
 	btc_rpc: BtcRpcClient,
-	address_monitor: ItemMonitor<ScriptPubkey, Vec<u8>, ScriptPubkey>,
+	address_monitor: ItemMonitor<BitcoinScriptBounded, ScriptPubkeyBytes, BitcoinScriptBounded>,
 	tx_hash_monitor: ItemMonitor<[u8; 32], [u8; 32], ()>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<(), anyhow::Error>
@@ -103,7 +108,7 @@ struct BtcBlockWitnesser<StateChainClient> {
 	epoch_index: EpochIndex,
 	// Who we report as the signer to the SC. This should always the address of the
 	// current agg key.
-	current_pubkey: ScriptPubkey,
+	current_pubkey: BitcoinScriptBounded,
 }
 
 #[async_trait]
@@ -113,8 +118,10 @@ where
 {
 	type Chain = Bitcoin;
 	type Block = ChainBlockNumber<Self::Chain>;
-	type StaticState =
-		(ItemMonitor<ScriptPubkey, Vec<u8>, ScriptPubkey>, ItemMonitor<[u8; 32], [u8; 32], ()>);
+	type StaticState = (
+		ItemMonitor<BitcoinScriptBounded, ScriptPubkeyBytes, BitcoinScriptBounded>,
+		ItemMonitor<[u8; 32], [u8; 32], ()>,
+	);
 
 	async fn process_block(
 		&mut self,
@@ -205,11 +212,12 @@ where
 			state_chain_client: self.state_chain_client.clone(),
 			btc_rpc: self.btc_rpc.clone(),
 			epoch_index: epoch.epoch_index,
-			current_pubkey: DepositAddress::new(
+			current_pubkey: derive_btc_deposit_bitcoin_script(
 				epoch.data.change_pubkey.current,
 				CHANGE_ADDRESS_SALT,
 			)
-			.script_pubkey(),
+			.try_into()
+			.expect("We know our addresses are valid"),
 		}
 	}
 
@@ -294,7 +302,6 @@ mod test_utxo_filtering {
 		absolute::{Height, LockTime},
 		ScriptBuf, Transaction, TxOut,
 	};
-	use cf_chains::btc::ScriptPubkey;
 
 	fn fake_transaction(tx_outs: Vec<TxOut>) -> Transaction {
 		Transaction {
@@ -324,18 +331,19 @@ mod test_utxo_filtering {
 		const UTXO_WITNESSED_1: u64 = 2324;
 		const UTXO_WITNESSED_2: u64 = 1234;
 
-		let btc_deposit_script: ScriptPubkey = DepositAddress::new([0; 32], 9).script_pubkey();
+		let btc_deposit_script: BitcoinScriptBounded =
+			derive_btc_deposit_bitcoin_script([0; 32], 9).try_into().unwrap();
 
 		let txs = vec![
 			fake_transaction(vec![
 				TxOut {
 					value: UTXO_WITNESSED_1,
-					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
+					script_pubkey: ScriptBuf::from(btc_deposit_script.data.to_vec()),
 				},
 				TxOut { value: 12223, script_pubkey: ScriptBuf::from(vec![0, 32, 121, 9]) },
 				TxOut {
 					value: UTXO_WITNESSED_2,
-					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
+					script_pubkey: ScriptBuf::from(btc_deposit_script.data.to_vec()),
 				},
 			]),
 			fake_transaction(vec![]),
@@ -353,18 +361,22 @@ mod test_utxo_filtering {
 
 	#[test]
 	fn filter_interesting_utxos_several_diff_tx() {
-		let btc_deposit_script: ScriptPubkey = DepositAddress::new([0; 32], 9).script_pubkey();
+		let btc_deposit_script: BitcoinScriptBounded =
+			derive_btc_deposit_bitcoin_script([0; 32], 9).try_into().unwrap();
 
 		const UTXO_WITNESSED_1: u64 = 2324;
 		const UTXO_WITNESSED_2: u64 = 1234;
 		let txs = vec![
 			fake_transaction(vec![
-				TxOut { value: 2324, script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()) },
+				TxOut {
+					value: 2324,
+					script_pubkey: ScriptBuf::from(btc_deposit_script.data.to_vec()),
+				},
 				TxOut { value: 12223, script_pubkey: ScriptBuf::from(vec![0, 32, 121, 9]) },
 			]),
 			fake_transaction(vec![TxOut {
 				value: 1234,
-				script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
+				script_pubkey: ScriptBuf::from(btc_deposit_script.data.to_vec()),
 			}]),
 		];
 
@@ -380,12 +392,13 @@ mod test_utxo_filtering {
 
 	#[test]
 	fn filter_out_value_0() {
-		let btc_deposit_script: ScriptPubkey = DepositAddress::new([0; 32], 9).script_pubkey();
+		let btc_deposit_script: BitcoinScriptBounded =
+			derive_btc_deposit_bitcoin_script([0; 32], 9).try_into().unwrap();
 
 		const UTXO_WITNESSED_1: u64 = 2324;
 		let txs = vec![fake_transaction(vec![
-			TxOut { value: 2324, script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()) },
-			TxOut { value: 0, script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()) },
+			TxOut { value: 2324, script_pubkey: ScriptBuf::from(btc_deposit_script.data.to_vec()) },
+			TxOut { value: 0, script_pubkey: ScriptBuf::from(btc_deposit_script.data.to_vec()) },
 		])];
 
 		let (deposit_witnesses, ..) = filter_interesting_utxos(

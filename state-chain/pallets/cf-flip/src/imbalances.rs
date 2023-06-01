@@ -11,7 +11,7 @@ use sp_runtime::{
 	traits::{CheckedAdd, CheckedSub, Saturating, Zero},
 	RuntimeDebug,
 };
-use sp_std::{mem, result};
+use sp_std::{cmp, mem, result};
 
 /// Internal sources of funds.
 #[derive(RuntimeDebug, PartialEq, Eq, Clone, Encode, Decode, TypeInfo)]
@@ -307,10 +307,10 @@ impl<T: Config> Imbalance<T::Balance> for Surplus<T> {
 		let (s_a, s_b) = (self.source.clone(), other.source.clone());
 		mem::forget((self, other));
 
-		if a >= b {
-			SameOrOther::Same(Self::new(a - b, s_a))
-		} else {
-			SameOrOther::Other(Deficit::new(b - a, s_b))
+		match a.cmp(&b) {
+			cmp::Ordering::Less => SameOrOther::Other(Deficit::new(b - a, s_b)),
+			cmp::Ordering::Greater => SameOrOther::Same(Self::new(a - b, s_a)),
+			cmp::Ordering::Equal => SameOrOther::None,
 		}
 	}
 	fn peek(&self) -> T::Balance {
