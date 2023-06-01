@@ -52,7 +52,9 @@ fn test_simple_polynomial() {
 
 /// Evaluation of a sharing polynomial for a given party index
 /// as per Shamir Secret Sharing scheme
-#[derive(Debug, Default, Clone, Deserialize, Serialize, Zeroize)]
+#[derive(
+	Debug, Default, Clone, Deserialize, Serialize, Zeroize, PartialOrd, Ord, PartialEq, Eq,
+)]
 pub struct ShamirShare<P: ECPoint> {
 	/// the result of polynomial evaluation
 	pub value: P::Scalar,
@@ -266,12 +268,12 @@ pub fn verify_share<P: ECPoint>(
 }
 
 /// Commitments to the sharing polynomial coefficient
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialOrd, Ord, PartialEq, Eq)]
 struct CoefficientCommitments<P>(Vec<P>);
 
 /// Zero-knowledge proof of us knowing the secret
 /// (in a form of a Schnorr signature)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialOrd, Ord, PartialEq, Eq)]
 struct ZKPSignature<P: ECPoint> {
 	#[serde(bound = "")]
 	r: P,
@@ -281,7 +283,7 @@ struct ZKPSignature<P: ECPoint> {
 /// Commitments along with the corresponding ZKP
 /// which should be sent to other parties at the
 /// beginning of the ceremony
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialOrd, Ord, PartialEq, Eq)]
 pub struct DKGUnverifiedCommitment<P: ECPoint> {
 	#[serde(bound = "")]
 	commitments: CoefficientCommitments<P>,
