@@ -26,7 +26,7 @@ impl<
 		mut self,
 		f: impl FnOnce() -> Ctx,
 	) -> TestExternalities<Runtime, Pallets, Ctx> {
-		let context = self.0.execute_with(|| f());
+		let context = self.0.execute_with(f);
 		TestExternalities { ext: self, context }
 	}
 
@@ -191,6 +191,7 @@ where
 	/// Applies the provided extrinsics in a block.
 	///
 	/// Adds a Vec of tuples containing each call and its result to the test context.
+	#[allow(clippy::type_complexity)]
 	#[track_caller]
 	pub fn then_apply_extrinsics<
 		C: UnfilteredDispatchable<RuntimeOrigin = Runtime::RuntimeOrigin> + Clone,
