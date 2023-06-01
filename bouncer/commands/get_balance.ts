@@ -1,24 +1,12 @@
 import { execSync } from "child_process";
-import { getBtcBalance } from "./get_btc_balance";
-import { getEthBalance } from "./get_eth_balance";
-import { getDotBalance } from "./get_dot_balance";
 
-function getBalance(ccy: string, address: string) {
-    var amount = 0;
-    if (ccy == "btc") {
-        amount = getBtcBalance(address);
-    }
-    // } else if (ccy == "eth") {
-    //     console.log("Getting eth Balance")
-    //     amount = getEthBalance(address);
-    // } else if (ccy == "dot") {
-    //     amount = getDotBalance(address);
-    // } else if (ccy == "usdc") {
-    //     amount = getUsdcBalance(address);
-    // }
+function get_balance(ccy: string, address: string) {
+    address = address.trim();
+    const result = execSync(`pnpm tsx ./commands/get_${ccy}_balance.ts ${address}`);
+    const result_str = result.toString().trim();
+    console.log(result_str);
 }
 
-let ccy = process.argv[2];
-let address = process.argv[3];
-address = address.trim();
-getBalance(ccy, address)
+const ccy = process.argv[2];
+const address = process.argv[3];
+get_balance(ccy, address);

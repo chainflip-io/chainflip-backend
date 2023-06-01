@@ -11,3 +11,5 @@ function fund(fund_ccy: string, address: string) {
         execSync(`pnpm tsx ./commands/fund_usdc.ts ${address} 500`);
     }
 }
+
+fund(process.argv[2], process.argv[3]);

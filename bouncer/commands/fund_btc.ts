@@ -18,8 +18,6 @@ const client = new Client({
 });
 
 async function sendBitcoin() {
-    console.log(`Sending ${btc_amount} BTC to ${bitcoin_address}`);
-
     try {
         const txid = await client.sendToAddress(bitcoin_address, btc_amount, '', '', false, true, null, 'unset', null, 1);
 
@@ -31,7 +29,6 @@ async function sendBitcoin() {
             if (confirmations < 1) {
                 await new Promise(resolve => setTimeout(resolve, 1000));
             } else {
-                console.log(`Transaction confirmed`);
                 process.exit(0);
             }
         }
