@@ -77,12 +77,15 @@ macro_rules! assert_events_eq {
 #[macro_export]
 macro_rules! impl_test_helpers {
 	( $runtime:ty ) => {
+		/// Test runner wrapping [sp_io::TestExternalities] in a richer api.
 		type TestRunner<Ctx> = $crate::TestExternalities<$runtime, AllPalletsWithSystem, Ctx>;
 
+		/// Create new test externalities with the provided genesis config.
 		pub fn with_genesis(g: GenesisConfig) -> TestRunner<()> {
 			TestRunner::<()>::new(g)
 		}
 
+		/// Create new test externalities with the default genesis config.
 		pub fn new_test_ext() -> TestRunner<()> {
 			with_genesis(Default::default())
 		}

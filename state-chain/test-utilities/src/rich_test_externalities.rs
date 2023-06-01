@@ -96,7 +96,7 @@ where
 		+ OnFinalize<Runtime::BlockNumber>,
 	Ctx: Clone,
 {
-	/// Initialises a new TestExternalities with the given genesis config at block number 1.
+	/// Initialises new [TestExternalities] with the given genesis config at block number 1.
 	#[track_caller]
 	pub fn new<GenesisConfig: BuildStorage>(
 		config: GenesisConfig,
@@ -108,8 +108,8 @@ where
 		TestExternalities { ext: RichExternalities::new(ext), context: () }
 	}
 
+	/// Transforms the test context. Analogous to [std::iter::Iterator::map].
 	#[track_caller]
-	/// Transforms the test context.
 	pub fn map_context<R>(
 		self,
 		f: impl FnOnce(Ctx) -> R,
@@ -117,7 +117,7 @@ where
 		TestExternalities { ext: self.ext, context: f(self.context) }
 	}
 
-	/// Execute a closure. The return value is preserved as test context.
+	/// Execute a closure. The return value of the closure is preserved as test context.
 	#[track_caller]
 	pub fn then_execute_with<R>(
 		self,
@@ -127,7 +127,9 @@ where
 		self.ext.execute_with(move || f(context))
 	}
 
-	/// Access the storage without touching test context.
+	/// Access the storage without changing the test context.
+	///
+	/// Use this for assertions, for example testing invariants.
 	#[track_caller]
 	pub fn inspect_storage(self, f: impl FnOnce(&Ctx)) -> TestExternalities<Runtime, Pallets, Ctx> {
 		self.then_execute_with(|context| {
@@ -143,7 +145,7 @@ where
 		self
 	}
 
-	/// Execute the given closure as the next block.
+	/// Execute the given closure as if it was an extrinsic in the next block.
 	///
 	/// The closure's return value is next context.
 	///
@@ -157,7 +159,7 @@ where
 		self.ext.execute_as_next_block(move || f(context))
 	}
 
-	/// Execute the given closure at a specific block number.
+	/// Execute the given closure as if it was an extrinsic at a specific block number.
 	///
 	/// The closure's return value is next context.
 	#[track_caller]
@@ -188,7 +190,7 @@ where
 		})
 	}
 
-	/// Applies the provided extrinsics in a block.
+	/// Applies the provided extrinsics in the next block.
 	///
 	/// Adds a Vec of tuples containing each call and its result to the test context.
 	#[allow(clippy::type_complexity)]
@@ -209,7 +211,7 @@ where
 		TestExternalities { ext: r.ext, context: (self.context, r.context) }
 	}
 
-	/// Keeps executing blocks until the given predicate returns true.
+	/// Keeps executing pallet hooks until the given predicate returns true.
 	///
 	/// Preserves the context.
 	#[track_caller]
@@ -323,8 +325,12 @@ mod test_examples {
 				);
 				"HeyHey"
 			})
-			// Alternatively, we can use `then_process_blocks_until` to execute blocks until a
-			.then_process_blocks_until(|_| System::block_number() == 20)
+			// Alternatively, we can use `then_process_blocks_until` to execute blocks until some
+			// condition is met.
+			.then_process_blocks_until(|_| {
+				assert!(System::block_number() <= 20);
+				System::block_number() == 20
+			})
 			.then_apply_extrinsics(|_| {
 				[
 					(
