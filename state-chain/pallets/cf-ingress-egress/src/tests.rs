@@ -1,7 +1,7 @@
 use crate::{
 	mock::*, AddressPool, AddressStatus, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DeploymentStatus, DepositAddressDetailsLookup, DepositFetchIdOf, DepositWitness,
-	DisabledEgressAssets, Error, Event as PalletEvent, FetchOrTransfer, MinimumDeposit, Pallet,
+	DeploymentStatus, DepositAddressDetailsLookup, DepositFetchIdOf, DisabledEgressAssets, Error,
+	Event as PalletEvent, FetchOrTransfer, FetchParamDetails, MinimumDeposit, Pallet,
 	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, WeightInfo,
 };
 use cf_chains::{ChannelIdConstructor, ExecutexSwapAndCall, TransferAssetParams};
