@@ -308,7 +308,7 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 
 			ext.execute_with(|| {
 				assert_eq!(
-					VanityNames::<Test>::get().get(&GENESIS_AUTHORITIES[0]).unwrap(), 
+					VanityNames::<Test>::get().get(&GENESIS_AUTHORITIES[0]).unwrap(),
 					&"Alice ✅".as_bytes().to_vec()
 				);
 				for account_id in

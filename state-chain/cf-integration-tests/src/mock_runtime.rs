@@ -138,6 +138,7 @@ impl ExtBuilder {
 					})
 					.collect(),
 				genesis_backups: Default::default(),
+				genesis_vanity_names: Default::default(),
 				blocks_per_epoch: self.blocks_per_epoch,
 				bond: self.genesis_accounts.iter().map(|(.., amount)| *amount).min().unwrap(),
 				redemption_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_REDEEMABLE,
