@@ -40,13 +40,6 @@ const chain = {
   usdc: 'eth',
 } as const;
 
-const ext = {
-  dot: '.ts',
-  btc: '.sh',
-  eth: '.ts',
-  usdc: '.ts',
-} as const;
-
 const cfNodeEndpoint = process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944';
 let chainflip: ApiPromise;
 let keyring: Keyring;
@@ -101,9 +94,8 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
     }
   }
   console.log('Received ' + ccy + ' address: ' + ingressAddress);
-  let interpreter = ext[ccy] === '.ts' ? 'pnpm tsx' : 'bash';
   exec(
-    interpreter + ' ./commands/fund_' + ccy + ext[ccy] + ' ' + ingressAddress + ' ' + deposits[ccy],
+    'pnpm tsx ./commands/fund_' + ccy + '.ts' + ' ' + ingressAddress + ' ' + deposits[ccy],
     { timeout: 30000 },
     (err, stdout, stderr) => {
       if (stderr !== '') process.stdout.write(stderr);
@@ -136,7 +128,7 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
   await observeEvent('liquidityPools:NewPoolCreated', checkPool);
   const priceTick = Math.round(
     Math.log(Math.sqrt(values[ccy] / 10 ** (decimals[ccy] - decimals.usdc))) /
-      Math.log(Math.sqrt(1.0001)),
+    Math.log(Math.sqrt(1.0001)),
   );
   const buyPosition = deposits[ccy] * values[ccy] * 1000000;
   console.log(
@@ -159,9 +151,6 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
             );
           }
           process.exit(-1);
-        }
-        if (status.isInBlock || status.isFinalized) {
-          // waiting = false;
         }
       });
   });
@@ -187,9 +176,6 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
           }
           process.exit(-1);
         }
-        if (status.isInBlock || status.isFinalized) {
-          // waiting = false;
-        }
       });
   });
 }
@@ -210,8 +196,10 @@ async function main(): Promise<void> {
   const lpUri = process.env.LP_URI ?? '//LP_1';
   lp = keyring.createFromUri(lpUri);
 
+  // We need USDC to complete before the others.
+  await setupCurrency('usdc');
+
   await Promise.all([
-    setupCurrency('usdc'),
     setupCurrency('dot'),
     setupCurrency('eth'),
     setupCurrency('btc'),

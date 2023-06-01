@@ -28,6 +28,9 @@ async function main(): Promise<void> {
   const sudoCall = api.tx.governance.callAsSudo(stressTest);
   const proposal = api.tx.governance.proposeGovernanceExtrinsic(sudoCall);
   await proposal.signAndSend(snowwhite);
+
+  console.log("Requesting" + signaturesCount + "ETH signatures");
+
   process.exit(0);
 }
 
