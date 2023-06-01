@@ -53,7 +53,7 @@ async function main() {
 	const usdcContractAddress = process.env.ETH_USDC_ADDRESS || '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
 	const usdcContract = new web3.eth.Contract(erc20TransferABI, usdcContractAddress);
 	const txData = usdcContract.methods.transfer(ethereum_address, microusdc_amount).encodeABI();
-	const whaleKey = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+	const whaleKey = process.env.ETH_USDC_WHALE || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
   console.log("Transferring " + usdc_amount + " USDC to " + ethereum_address);
 	const tx = {to: usdcContractAddress,
 				data: txData,
