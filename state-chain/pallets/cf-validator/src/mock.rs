@@ -288,6 +288,10 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 				validator_pallet: ValidatorPalletConfig {
 					genesis_authorities: BTreeSet::from(GENESIS_AUTHORITIES),
 					genesis_backups: Default::default(),
+					genesis_vanity_names: BTreeMap::from_iter([(
+						GENESIS_AUTHORITIES[0],
+						"Alice ✅".as_bytes().to_vec(),
+					)]),
 					blocks_per_epoch: EPOCH_DURATION,
 					bond: GENESIS_BOND,
 					redemption_period_as_percentage: REDEMPTION_PERCENTAGE_AT_GENESIS,
@@ -303,6 +307,10 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 			.into();
 
 			ext.execute_with(|| {
+				assert_eq!(
+					VanityNames::<Test>::get().get(&GENESIS_AUTHORITIES[0]).unwrap(), 
+					&"Alice ✅".as_bytes().to_vec()
+				);
 				for account_id in
 					[&GENESIS_AUTHORITIES[..], &AUCTION_WINNERS[..], &AUCTION_LOSERS[..]]
 						.into_iter()
