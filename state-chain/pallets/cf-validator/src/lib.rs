@@ -4,9 +4,7 @@
 #![feature(array_zip)]
 #![feature(is_sorted)]
 
-#[cfg(test)]
 mod mock;
-#[cfg(test)]
 mod tests;
 
 mod helpers;
@@ -15,7 +13,6 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 mod auction_resolver;
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 mod rotation_state;
 

@@ -167,7 +167,7 @@ where
 			amount,
 			sender: _,
 		} => Ok(
-			pallet_cf_swapping::Call::<state_chain_runtime::Runtime>::schedule_swap_by_witnesser {
+			pallet_cf_swapping::Call::<state_chain_runtime::Runtime>::schedule_swap_from_contract {
 				from: Asset::Eth,
 				to: into_or_ignore(destination_token)?,
 				deposit_amount: into_or_ignore(amount)?,
@@ -185,7 +185,7 @@ where
 			source_token,
 			amount,
 			sender: _,
-		} => Ok(pallet_cf_swapping::Call::schedule_swap_by_witnesser {
+		} => Ok(pallet_cf_swapping::Call::schedule_swap_from_contract {
 			from: state_chain_client
 				.asset(source_token.0)
 				.await

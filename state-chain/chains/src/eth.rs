@@ -1,7 +1,6 @@
 //! Types and functions that are common to ethereum.
 pub mod api;
 
-#[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 
 pub mod deposit_address;

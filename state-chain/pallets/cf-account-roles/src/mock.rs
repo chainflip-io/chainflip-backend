@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use crate::{self as pallet_cf_account_roles, Config};
 use cf_traits::mocks::ensure_origin_mock::NeverFailingOriginCheck;
 

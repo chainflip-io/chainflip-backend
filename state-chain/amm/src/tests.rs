@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use cf_utilities::assert_ok;
 use sp_core::crypto::Infallible;
 

@@ -68,5 +68,3 @@ MY_ADDRESS=`./commands/new_eth_address.sh desert` &&
 echo "Created new ETH address $MY_ADDRESS" &&
 perform_swap btc eth $MY_ADDRESS &&
 echo "=== Test complete ==="
-
-

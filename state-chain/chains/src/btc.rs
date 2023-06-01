@@ -1,22 +1,24 @@
 pub mod api;
-#[cfg(feature = "runtime-benchmarks")]
 pub mod benchmarking;
 pub mod deposit_address;
 pub mod utxo_selection;
 
 extern crate alloc;
+use core::mem::size_of;
+
+use self::deposit_address::DepositAddress;
 use crate::{Age, Chain, ChainAbi, ChainCrypto, ChannelIdConstructor, FeeRefundCalculator};
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
-use base58::FromBase58;
+use base58::{FromBase58, ToBase58};
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
 pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{
 	chains::assets, DEFAULT_FEE_SATS_PER_BYTE, INPUT_UTXO_SIZE_IN_BYTES,
 	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
 };
+use cf_utilities::SliceToArray;
 use codec::{Decode, Encode, MaxEncodedLen};
-use core::{borrow::Borrow, iter};
 use frame_support::{sp_io::hashing::sha2_256, BoundedVec, RuntimeDebug};
 use itertools;
 use libsecp256k1::{curve::*, PublicKey, SecretKey};
@@ -142,7 +144,7 @@ impl Chain for Bitcoin {
 	type TransactionFee = Self::ChainAmount;
 	type TrackedData = BitcoinTrackedData;
 	type ChainAsset = assets::btc::Asset;
-	type ChainAccount = BitcoinScriptBounded;
+	type ChainAccount = ScriptPubkey;
 	type EpochStartData = EpochStartData;
 	type DepositFetchId = BitcoinFetchId;
 }
@@ -244,14 +246,14 @@ impl ChainAbi for Bitcoin {
 // which could be made generic, if even necessary at all.
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, MaxEncodedLen, Default)]
 pub struct UtxoId {
-	// Tx hash of the transaction this utxo was a part of
-	pub tx_hash: Hash,
-	// The index of the output for this utxo
+	// TxId of the transaction in which this utxo was created.
+	pub tx_id: Hash,
+	// The index of the utxo in that transaction.
 	pub vout: u32,
 }
 
 impl ChannelIdConstructor for BitcoinFetchId {
-	type Address = BitcoinScriptBounded;
+	type Address = ScriptPubkey;
 
 	fn deployed(channel_id: u64, _address: Self::Address) -> Self {
 		BitcoinFetchId(channel_id)
@@ -262,26 +264,19 @@ impl ChannelIdConstructor for BitcoinFetchId {
 	}
 }
 
-use self::deposit_address::tweaked_pubkey;
-
 const INTERNAL_PUBKEY: &[u8] =
 	&hex_literal::hex!("02eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
-
-const SEGWIT_VERSION: u8 = 1;
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub enum Error {
 	/// The address is invalid
 	InvalidAddress,
 }
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
+#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct Utxo {
+	pub id: UtxoId,
 	pub amount: u64,
-	pub txid: Hash,
-	pub vout: u32,
-	pub pubkey_x: [u8; 32],
-	// Salt used to create the address that this utxo was sent to.
-	pub salt: u32,
+	pub deposit_address: DepositAddress,
 }
 
 pub trait GetUtxoAmount {
@@ -293,24 +288,21 @@ impl GetUtxoAmount for Utxo {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
 pub struct BitcoinOutput {
 	pub amount: u64,
-	pub script_pubkey: BitcoinScript,
+	pub script_pubkey: ScriptPubkey,
 }
 
-fn get_tapleaf_hash(pubkey_x: [u8; 32], salt: u32) -> Hash {
-	// SHA256("TapLeaf")
-	const TAPLEAF_HASH: &[u8] =
-		&hex_literal::hex!("aeea8fdc4208983105734b58081d1e2638d35f1cb54008d4d357ca03be78e9ee");
-	let leaf_version = 0xC0_u8;
-	let script = BitcoinScript::default()
-		.push_uint(salt)
-		.op_drop()
-		.push_bytes(pubkey_x)
-		.op_checksig()
-		.serialize();
-	sha2_256(&[TAPLEAF_HASH, TAPLEAF_HASH, &[leaf_version], &script].concat())
+impl SerializeBtc for BitcoinOutput {
+	fn btc_encode_to(&self, buf: &mut Vec<u8>) {
+		buf.extend(self.amount.to_le_bytes());
+		buf.extend(self.script_pubkey.btc_serialize());
+	}
+
+	fn size(&self) -> usize {
+		size_of::<u64>() + self.script_pubkey.size()
+	}
 }
 
 /// For reference see https://developer.bitcoin.org/reference/transactions.html#compactsize-unsigned-integers
@@ -381,71 +373,152 @@ impl BitcoinNetwork {
 	}
 }
 
-pub fn scriptpubkey_from_address(
-	address: &str,
-	network: BitcoinNetwork,
-) -> Result<BitcoinScript, Error> {
-	// See https://en.bitcoin.it/wiki/Base58Check_encoding
-	let try_decode_as_base58 = || {
-		const CHECKSUM_LENGTH: usize = 4;
+const SEGWIT_VERSION_ZERO: u8 = 0;
+const SEGWIT_VERSION_TAPROOT: u8 = 1;
+const SEGWIT_VERSION_MAX: u8 = 16;
+const MIN_SEGWIT_PROGRAM_BYTES: u32 = 2;
+const MAX_SEGWIT_PROGRAM_BYTES: u32 = 40;
 
-		let data: [u8; 1 + 20 + CHECKSUM_LENGTH] = address.from_base58().ok()?.try_into().ok()?;
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub enum ScriptPubkey {
+	P2PKH([u8; 20]),
+	P2SH([u8; 20]),
+	P2WPKH([u8; 20]),
+	P2WSH([u8; 32]),
+	Taproot([u8; 32]),
+	OtherSegwit { version: u8, program: BoundedVec<u8, ConstU32<MAX_SEGWIT_PROGRAM_BYTES>> },
+}
 
-		let (payload, checksum) = data.split_at(data.len() - CHECKSUM_LENGTH);
+impl SerializeBtc for ScriptPubkey {
+	fn btc_encode_to(&self, buf: &mut Vec<u8>) {
+		self.program().btc_encode_to(buf)
+	}
 
-		if &sha2_256(&sha2_256(payload))[..CHECKSUM_LENGTH] == checksum {
-			let (&version, hash) = payload.split_first().unwrap();
-			if version == network.p2pkh_address_version() {
-				Some(
-					BitcoinScript::default()
-						.op_dup()
-						.op_hash160()
-						.push_bytes(hash /* pubkey hash */)
-						.op_equalverify()
-						.op_checksig(),
-				)
-			} else if version == network.p2sh_address_version() {
-				Some(
-					BitcoinScript::default()
-						.op_hash160()
-						.push_bytes(hash /* script hash */)
-						.op_equal(),
-				)
+	fn size(&self) -> usize {
+		self.program().size()
+	}
+}
+
+impl ScriptPubkey {
+	fn program(&self) -> BitcoinScript {
+		let (version, bytes) = match self {
+			ScriptPubkey::P2PKH(hash) => (None, hash.to_vec().try_into().unwrap()),
+			ScriptPubkey::P2SH(hash) => (None, hash.to_vec().try_into().unwrap()),
+			ScriptPubkey::P2WPKH(hash) =>
+				(Some(SEGWIT_VERSION_ZERO), hash.to_vec().try_into().unwrap()),
+			ScriptPubkey::P2WSH(hash) =>
+				(Some(SEGWIT_VERSION_ZERO), hash.to_vec().try_into().unwrap()),
+			ScriptPubkey::Taproot(hash) =>
+				(Some(SEGWIT_VERSION_TAPROOT), hash.to_vec().try_into().unwrap()),
+			ScriptPubkey::OtherSegwit { version, program } => (Some(*version), program.clone()),
+		};
+
+		BitcoinScript::new(
+			&[
+				version.map(|version| BitcoinOp::PushVersion { version }),
+				Some(BitcoinOp::PushBytes { bytes }),
+			]
+			.into_iter()
+			.flatten()
+			.collect::<Vec<_>>(),
+		)
+	}
+
+	pub fn bytes(&self) -> Vec<u8> {
+		self.program().raw()
+	}
+
+	pub fn to_address(&self, network: &BitcoinNetwork) -> String {
+		let (data, maybe_bech, version) = match self {
+			ScriptPubkey::P2PKH(data) => (&data[..], None, network.p2pkh_address_version()),
+			ScriptPubkey::P2SH(data) => (&data[..], None, network.p2sh_address_version()),
+			ScriptPubkey::P2WPKH(data) => (&data[..], Some(Variant::Bech32), SEGWIT_VERSION_ZERO),
+			ScriptPubkey::P2WSH(data) => (&data[..], Some(Variant::Bech32), SEGWIT_VERSION_ZERO),
+			ScriptPubkey::Taproot(data) =>
+				(&data[..], Some(Variant::Bech32m), SEGWIT_VERSION_TAPROOT),
+			ScriptPubkey::OtherSegwit { version, program } =>
+				(&program[..], Some(Variant::Bech32m), *version),
+		};
+		if let Some(variant) = maybe_bech {
+			let version = u5::try_from_u8(version);
+			bech32::encode(
+				network.bech32_and_bech32m_address_hrp(),
+				itertools::chain!(version, data.to_base32()).collect::<Vec<_>>(),
+				variant,
+			)
+			.expect("Can only fail on invalid hrp.")
+		} else {
+			const CHECKSUM_LENGTH: usize = 4;
+			let mut buf = Vec::with_capacity(1 + data.len() + CHECKSUM_LENGTH);
+			buf.push(version);
+			buf.extend_from_slice(data);
+			let checksum =
+				sha2_256(&sha2_256(&buf))[..CHECKSUM_LENGTH].as_array::<CHECKSUM_LENGTH>();
+			buf.extend(checksum);
+			buf.to_base58()
+		}
+	}
+
+	pub fn try_from_address(address: &str, network: &BitcoinNetwork) -> Result<Self, Error> {
+		// See https://en.bitcoin.it/wiki/Base58Check_encoding
+		fn try_decode_as_base58(address: &str, network: &BitcoinNetwork) -> Option<ScriptPubkey> {
+			const CHECKSUM_LENGTH: usize = 4;
+			const PAYLOAD_LENGTH: usize = 21;
+
+			let data: [u8; PAYLOAD_LENGTH + CHECKSUM_LENGTH] =
+				address.from_base58().ok()?.try_into().ok()?;
+
+			let (payload, checksum) = data.split_at(data.len() - CHECKSUM_LENGTH);
+
+			if &sha2_256(&sha2_256(payload))[..CHECKSUM_LENGTH] == checksum {
+				let [version, hash @ ..] = payload.as_array::<PAYLOAD_LENGTH>();
+				if version == network.p2pkh_address_version() {
+					Some(ScriptPubkey::P2PKH(hash.as_array()))
+				} else if version == network.p2sh_address_version() {
+					Some(ScriptPubkey::P2SH(hash.as_array()))
+				} else {
+					None
+				}
 			} else {
 				None
 			}
-		} else {
-			None
 		}
-	};
 
-	// See https://en.bitcoin.it/wiki/BIP_0350
-	let try_decode_as_bech32_or_bech32m = || {
-		let (hrp, data, variant) = bech32::decode(address).ok()?;
-		if hrp == network.bech32_and_bech32m_address_hrp() {
-			let version = data.get(0)?.to_u8();
-			let program = {
+		// See https://en.bitcoin.it/wiki/BIP_0350
+		fn try_decode_as_bech32_or_bech32m(
+			address: &str,
+			network: &BitcoinNetwork,
+		) -> Option<ScriptPubkey> {
+			let (hrp, data, variant) = bech32::decode(address).ok()?;
+			if hrp == network.bech32_and_bech32m_address_hrp() {
+				let version = data.get(0)?.to_u8();
 				let program = Vec::from_base32(&data[1..]).ok()?;
-				match (version, variant) {
-					(0, Variant::Bech32) if [20, 32].contains(&program.len()) => Some(program),
-					(1..=16, Variant::Bech32m) if (2..=40).contains(&program.len()) =>
-						Some(program),
+				match (version, variant, program.len() as u32) {
+					(SEGWIT_VERSION_ZERO, Variant::Bech32, 20) =>
+						Some(ScriptPubkey::P2WPKH(program.as_array())),
+					(SEGWIT_VERSION_ZERO, Variant::Bech32, 32) =>
+						Some(ScriptPubkey::P2WSH(program.as_array())),
+					(SEGWIT_VERSION_TAPROOT, Variant::Bech32m, 32) =>
+						Some(ScriptPubkey::Taproot(program.as_array())),
+					(
+						SEGWIT_VERSION_TAPROOT..=SEGWIT_VERSION_MAX,
+						Variant::Bech32m,
+						(MIN_SEGWIT_PROGRAM_BYTES..=MAX_SEGWIT_PROGRAM_BYTES),
+					) => Some(ScriptPubkey::OtherSegwit {
+						version,
+						program: program.try_into().expect("Checked for MAX_SEGWIT_PROGRAM_BYTES"),
+					}),
 					_ => None,
 				}
-			}?;
-
-			Some(BitcoinScript::default().push_uint(version as u32).push_bytes(program))
-		} else {
-			None
+			} else {
+				None
+			}
 		}
-	};
 
-	if let Some(script) = try_decode_as_base58() {
-		Ok(script)
-	} else if let Some(script) = try_decode_as_bech32_or_bech32m() {
-		Ok(script)
-	} else {
-		Err(Error::InvalidAddress)
+		try_decode_as_base58(address, network)
+			.or_else(|| try_decode_as_bech32_or_bech32m(address, network))
+			.ok_or(Error::InvalidAddress)
 	}
 }
 
@@ -469,19 +542,14 @@ fn extend_with_inputs_outputs(
 ) {
 	bytes.extend(to_varint(inputs.len() as u64));
 	bytes.extend(inputs.iter().fold(Vec::<u8>::default(), |mut acc, input| {
-		acc.extend(input.txid);
-		acc.extend(input.vout.to_le_bytes());
+		acc.extend(input.id.tx_id);
+		acc.extend(input.id.vout.to_le_bytes());
 		acc.push(0);
 		acc.extend(SEQUENCE_NUMBER);
 		acc
 	}));
 
-	bytes.extend(to_varint(outputs.len() as u64));
-	bytes.extend(outputs.iter().fold(Vec::<u8>::default(), |mut acc, output| {
-		acc.extend(output.amount.to_le_bytes());
-		acc.extend(output.script_pubkey.serialize());
-		acc
-	}));
+	outputs.as_slice().btc_encode_to(bytes);
 }
 
 impl BitcoinTransaction {
@@ -495,13 +563,13 @@ impl BitcoinTransaction {
 
 		let old_utxo_input_indices = (0..)
 			.zip(&inputs)
-			.filter_map(|(i, Utxo { pubkey_x, .. })| {
-				if pubkey_x == &agg_key.current {
+			.filter_map(|(i, Utxo { deposit_address, .. })| {
+				if deposit_address.pubkey_x == agg_key.current {
 					None
 				} else {
 					agg_key.previous.map(|previous| {
 						// TODO: enforce this assumption ie. ensure we never use unspendable utxos.
-						assert!(pubkey_x == &previous);
+						assert!(deposit_address.pubkey_x == previous);
 						i
 					})
 				}
@@ -545,22 +613,10 @@ impl BitcoinTransaction {
 			transaction_bytes.push(NUM_WITNESSES);
 			transaction_bytes.push(LEN_SIGNATURE);
 			transaction_bytes.extend(self.signatures[i]);
-			transaction_bytes.extend(
-				BitcoinScript::default()
-					.push_uint(self.inputs[i].salt)
-					.op_drop()
-					.push_bytes(self.inputs[i].pubkey_x)
-					.op_checksig()
-					.serialize(),
-			);
-			transaction_bytes.push(0x21u8); // Length of tweaked pubkey + leaf version
-			let tweaked = tweaked_pubkey(self.inputs[i].pubkey_x, self.inputs[i].salt);
-			// push correct leaf version depending on evenness of public key
-			if tweaked.serialize_compressed()[0] == 2 {
-				transaction_bytes.push(0xC0_u8);
-			} else {
-				transaction_bytes.push(0xC1_u8);
-			}
+			transaction_bytes.extend(self.inputs[i].deposit_address.unlock_script_serialized());
+			// Length of tweaked pubkey + leaf version
+			transaction_bytes.push(33u8);
+			transaction_bytes.push(self.inputs[i].deposit_address.leaf_version());
 			transaction_bytes.extend(INTERNAL_PUBKEY[1..33].iter());
 		}
 		transaction_bytes.extend(LOCKTIME);
@@ -582,8 +638,8 @@ impl BitcoinTransaction {
 			self.inputs
 				.iter()
 				.fold(Vec::<u8>::default(), |mut acc, input| {
-					acc.extend(input.txid);
-					acc.extend(input.vout.to_le_bytes());
+					acc.extend(input.id.tx_id);
+					acc.extend(input.id.vout.to_le_bytes());
 					acc
 				})
 				.as_slice(),
@@ -601,14 +657,7 @@ impl BitcoinTransaction {
 			self.inputs
 				.iter()
 				.fold(Vec::<u8>::default(), |mut acc, input| {
-					let script = BitcoinScript::default()
-						.push_uint(SEGWIT_VERSION as u32)
-						.push_bytes(
-							&tweaked_pubkey(input.pubkey_x, input.salt).serialize_compressed()
-								[1..33],
-						)
-						.serialize();
-					acc.extend(script);
+					acc.extend(input.deposit_address.script_pubkey().btc_serialize());
 					acc
 				})
 				.as_slice(),
@@ -624,7 +673,7 @@ impl BitcoinTransaction {
 				.iter()
 				.fold(Vec::<u8>::default(), |mut acc, output| {
 					acc.extend(output.amount.to_le_bytes());
-					acc.extend(output.script_pubkey.serialize());
+					acc.extend(output.script_pubkey.btc_serialize());
 					acc
 				})
 				.as_slice(),
@@ -660,7 +709,7 @@ impl BitcoinTransaction {
 							&[SPENDTYPE],
 							&input_index.to_le_bytes(),
 							// "Common signature message extension" according to BIP 342
-							&get_tapleaf_hash(input.pubkey_x, input.salt),
+							&input.deposit_address.tapleaf_hash[..],
 							&[KEYVERSION],
 							&CODESEPARATOR,
 						]
@@ -672,127 +721,174 @@ impl BitcoinTransaction {
 	}
 }
 
-#[derive(
-	Encode,
-	Decode,
-	TypeInfo,
-	Clone,
-	RuntimeDebug,
-	PartialEq,
-	Eq,
-	Default,
-	MaxEncodedLen,
-	PartialOrd,
-	Ord,
-)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct BitcoinScriptBounded {
-	pub data: BoundedVec<u8, ConstU32<MAX_BITCOIN_SCRIPT_LENGTH>>,
-}
-
-impl TryFrom<BitcoinScript> for BitcoinScriptBounded {
-	type Error = <Vec<u8> as TryInto<BoundedVec<u8, ConstU32<MAX_BITCOIN_SCRIPT_LENGTH>>>>::Error;
-
-	fn try_from(value: BitcoinScript) -> Result<Self, Self::Error> {
-		Ok(Self { data: value.data.try_into()? })
+trait SerializeBtc {
+	/// Encodes this item to a byte buffer.
+	fn btc_encode_to(&self, buf: &mut Vec<u8>);
+	/// The exact size this object will have once serialized.
+	fn size(&self) -> usize;
+	/// Returns a serialized bitcoin payload.
+	fn btc_serialize(&self) -> Vec<u8> {
+		let mut buf = Vec::with_capacity(self.size());
+		self.btc_encode_to(&mut buf);
+		buf
 	}
 }
 
-impl From<BitcoinScriptBounded> for BitcoinScript {
-	fn from(value: BitcoinScriptBounded) -> Self {
-		Self { data: value.data.into() }
+impl<T: SerializeBtc> SerializeBtc for &[T] {
+	fn btc_encode_to(&self, buf: &mut Vec<u8>) {
+		buf.extend(to_varint(self.len() as u64));
+		for t in self.iter() {
+			t.btc_encode_to(buf);
+		}
+	}
+
+	fn size(&self) -> usize {
+		let s = self.iter().map(|t| t.size()).sum::<usize>();
+		s + to_varint(s as u64).len()
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Default)]
-pub struct BitcoinScript {
-	pub data: Vec<u8>,
-}
-
+/// Subset of ops needed for Chainflip.
+///
 /// For reference see https://en.bitcoin.it/wiki/Script
+#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq)]
+enum BitcoinOp {
+	PushUint { value: u32 },
+	PushBytes { bytes: BoundedVec<u8, ConstU32<MAX_SEGWIT_PROGRAM_BYTES>> },
+	Drop,
+	CheckSig,
+	Dup,
+	Hash160,
+	EqualVerify,
+	Equal,
+	// Not part of the bitcoin spec, implemented for convenience
+	PushArray20 { bytes: [u8; 20] },
+	PushArray32 { bytes: [u8; 32] },
+	PushVersion { version: u8 },
+}
+
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq)]
+struct BitcoinScript {
+	bytes: BoundedVec<u8, ConstU32<MAX_BITCOIN_SCRIPT_LENGTH>>,
+}
+
 impl BitcoinScript {
-	/// Adds an operation to the script that pushes an unsigned integer onto the stack
-	fn push_uint(mut self, value: u32) -> Self {
-		match value {
-			0 => self.data.push(0),
-			1..=16 => self.data.push(0x50 + value as u8),
-			_ => {
-				let num_bytes =
-					sp_std::mem::size_of::<u32>() - (value.leading_zeros() / 8) as usize;
-				self = self.push_bytes(value.to_le_bytes().into_iter().take(num_bytes));
-			},
+	pub fn new(ops: &[BitcoinOp]) -> Self {
+		let mut bytes = Vec::with_capacity(ops.iter().map(|op| op.size()).sum::<usize>());
+		for op in ops.iter() {
+			op.btc_encode_to(&mut bytes);
 		}
-		self
-	}
-	/// Adds an operation to the script that pushes exactly the provided bytes of data to the stack
-	fn push_bytes<
-		Bytes: IntoIterator<Item = Item, IntoIter = Iter>,
-		Iter: ExactSizeIterator<Item = Item>,
-		Item: Borrow<u8>,
-	>(
-		mut self,
-		bytes: Bytes,
-	) -> Self {
-		let bytes = bytes.into_iter().map(|byte| *byte.borrow());
-		let num_bytes = bytes.len();
-		assert!(num_bytes <= u32::MAX as usize);
-		let num_bytes = num_bytes as u32;
-		match num_bytes {
-			0x0 => self.data.extend(iter::once(0x0)),
-			0x1..=0x4B => self.data.extend(itertools::chain!(iter::once(num_bytes as u8), bytes)),
-			0x4C..=0xFF => self.data.extend(itertools::chain!(
-				iter::once(0x4c),
-				(num_bytes as u8).to_le_bytes(),
-				bytes
-			)),
-			0x100..=0xFFFF => self.data.extend(itertools::chain!(
-				iter::once(0x4d),
-				(num_bytes as u16).to_le_bytes(),
-				bytes
-			)),
-			_ => self.data.extend(itertools::chain!(
-				iter::once(0x4e),
-				num_bytes.to_le_bytes(),
-				bytes
-			)),
-		}
-		self
+		Self { bytes: bytes.try_into().unwrap() }
 	}
 
-	/// Adds an operation to the script that drops the topmost item from the stack
-	fn op_drop(mut self) -> Self {
-		self.data.push(0x75);
-		self
+	pub fn raw(self) -> Vec<u8> {
+		self.bytes.into_inner()
 	}
-	/// Adds the CHECKSIG operation to the script
-	fn op_checksig(mut self) -> Self {
-		self.data.push(0xAC);
-		self
+}
+
+impl AsRef<[u8]> for BitcoinScript {
+	fn as_ref(&self) -> &[u8] {
+		self.bytes.as_ref()
 	}
-	/// Adds the DUP operation to the script
-	fn op_dup(mut self) -> Self {
-		self.data.push(0x76);
-		self
+}
+
+impl SerializeBtc for BitcoinScript {
+	fn btc_encode_to(&self, buf: &mut Vec<u8>) {
+		buf.extend(to_varint(self.bytes.len() as u64));
+		buf.extend(&self.bytes[..]);
 	}
-	/// Adds the HASH160 operation to the script
-	fn op_hash160(mut self) -> Self {
-		self.data.push(0xA9);
-		self
+
+	fn size(&self) -> usize {
+		let s = self.bytes.len();
+		s + to_varint(s as u64).len()
 	}
-	/// Adds the EQUALVERIFY operation to the script
-	fn op_equalverify(mut self) -> Self {
-		self.data.push(0x88);
-		self
+}
+
+impl SerializeBtc for BitcoinOp {
+	fn btc_encode_to(&self, buf: &mut Vec<u8>) {
+		match self {
+			BitcoinOp::PushUint { value } => match value {
+				0 => buf.push(0),
+				1..=16 => buf.push(0x50 + *value as u8),
+				_ => {
+					let num_bytes =
+						sp_std::mem::size_of::<u32>() - (value.leading_zeros() / 8) as usize;
+					buf.push(num_bytes as u8);
+					buf.extend(value.to_le_bytes().into_iter().take(num_bytes));
+				},
+			},
+			BitcoinOp::PushBytes { bytes } => {
+				let num_bytes = bytes.len() as u32;
+				match num_bytes {
+					0..=0x4b => buf.push(num_bytes as u8),
+					0x4c..=0xff => {
+						buf.push(0x4c);
+						buf.push(num_bytes as u8);
+					},
+					0x100..=0xffff => {
+						buf.push(0x4d);
+						buf.extend(num_bytes.to_le_bytes().into_iter().take(2));
+					},
+					0x10000..=0xffffffff => {
+						buf.push(0x4e);
+						buf.extend(num_bytes.to_le_bytes().into_iter().take(4));
+					},
+				}
+				buf.extend(bytes);
+			},
+			BitcoinOp::Drop => buf.push(0x75),
+			BitcoinOp::CheckSig => buf.push(0xac),
+			BitcoinOp::Dup => buf.push(0x76),
+			BitcoinOp::Hash160 => buf.push(0xa9),
+			BitcoinOp::EqualVerify => buf.push(0x88),
+			BitcoinOp::Equal => buf.push(0x87),
+			BitcoinOp::PushArray20 { bytes } => {
+				buf.push(20u8);
+				buf.extend(bytes);
+			},
+			BitcoinOp::PushArray32 { bytes } => {
+				buf.push(32u8);
+				buf.extend(bytes);
+			},
+			BitcoinOp::PushVersion { version } =>
+				if *version == 0 {
+					buf.push(0);
+				} else {
+					buf.push(0x50 + *version);
+				},
+		}
 	}
-	/// Adds the EQUAL operation to the script
-	fn op_equal(mut self) -> Self {
-		self.data.push(0x87);
-		self
-	}
-	/// Serializes the script by returning the varint encoded length
-	/// of the script and then the script itself
-	pub fn serialize(&self) -> Vec<u8> {
-		itertools::chain!(to_varint(self.data.len() as u64), self.data.iter().cloned()).collect()
+
+	fn size(&self) -> usize {
+		match self {
+			BitcoinOp::PushUint { value } => match value {
+				0..=16 => 1,
+				_ => {
+					let num_bytes =
+						sp_std::mem::size_of::<u32>() - (value.leading_zeros() / 8) as usize;
+					1 + num_bytes
+				},
+			},
+			BitcoinOp::PushBytes { bytes } => {
+				let num_bytes = bytes.len();
+				num_bytes +
+					match num_bytes {
+						0..=0x4b => 1,
+						0x4c..=0xff => 2,
+						0x100..=0xffff => 3,
+						_ => 5,
+					}
+			},
+			BitcoinOp::Drop |
+			BitcoinOp::CheckSig |
+			BitcoinOp::Dup |
+			BitcoinOp::Hash160 |
+			BitcoinOp::EqualVerify |
+			BitcoinOp::Equal => 1,
+			BitcoinOp::PushArray20 { .. } => 21,
+			BitcoinOp::PushArray32 { .. } => 33,
+			BitcoinOp::PushVersion { .. } => 1,
+		}
 	}
 }
 
@@ -885,10 +981,9 @@ mod test {
 		];
 
 		for (valid_address, intended_btc_net, expected_scriptpubkey) in valid_addresses {
-			assert_eq!(
-				scriptpubkey_from_address(valid_address, intended_btc_net,).unwrap().data,
-				expected_scriptpubkey
-			);
+			let pk = ScriptPubkey::try_from_address(valid_address, &intended_btc_net)
+				.unwrap_or_else(|_| panic!("Failed to parse address: {valid_address}"));
+			assert_eq!(pk.bytes(), expected_scriptpubkey, "Input was {valid_address} / {pk:?}");
 		}
 
 		let invalid_addresses = [
@@ -944,7 +1039,7 @@ mod test {
 
 		for (invalid_address, intended_btc_net) in invalid_addresses {
 			assert!(matches!(
-				scriptpubkey_from_address(invalid_address, intended_btc_net,),
+				ScriptPubkey::try_from_address(invalid_address, &intended_btc_net,),
 				Err(Error::InvalidAddress)
 			));
 		}
@@ -984,7 +1079,7 @@ mod test {
 
 		for (address, validity) in test_addresses {
 			assert_eq!(
-				scriptpubkey_from_address(address, BitcoinNetwork::Mainnet,).is_ok(),
+				ScriptPubkey::try_from_address(address, &BitcoinNetwork::Mainnet,).is_ok(),
 				validity
 			);
 		}
@@ -993,19 +1088,20 @@ mod test {
 	fn create_test_unsigned_transaction(sign_with: PreviousOrCurrent) -> BitcoinTransaction {
 		let pubkey_x =
 			hex_literal::hex!("78C79A2B436DA5575A03CDE40197775C656FFF9F0F59FC1466E09C20A81A9CDB");
-		let script_pubkey = scriptpubkey_from_address(
+		let script_pubkey = ScriptPubkey::try_from_address(
 			"bc1pgtj0f3u2rk8ex6khlskz7q50nwc48r8unfgfhxzsx9zhcdnczhqq60lzjt",
-			BitcoinNetwork::Mainnet,
+			&BitcoinNetwork::Mainnet,
 		)
 		.unwrap();
 		let input = Utxo {
 			amount: 100010000,
-			vout: 1,
-			txid: hex_literal::hex!(
-				"4C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB5"
-			),
-			pubkey_x,
-			salt: 123,
+			id: UtxoId {
+				tx_id: hex_literal::hex!(
+					"4C94E48A870B85F41228D33CF25213DFCC8DD796E7211ED6B1F9A014809DBBB5"
+				),
+				vout: 1,
+			},
+			deposit_address: DepositAddress::new(pubkey_x, 123),
 		};
 		let agg_key = match sign_with {
 			PreviousOrCurrent::Previous => AggKey { previous: Some(pubkey_x), current: [0xcf; 32] },
@@ -1043,24 +1139,6 @@ mod test {
 	}
 
 	#[test]
-	fn test_build_script() {
-		assert_eq!(
-			BitcoinScript::default()
-				.push_uint(0)
-				.op_drop()
-				.push_bytes(
-					hex::decode("2E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105")
-						.unwrap(),
-				)
-				.op_checksig()
-				.serialize(),
-			hex_literal::hex!(
-				"240075202E897376020217C8E385A30B74B758293863049FA66A3FD177E012B076059105AC"
-			)
-		);
-	}
-
-	#[test]
 	fn test_push_uint() {
 		let test_data = [
 			(0, vec![0]),
@@ -1073,8 +1151,10 @@ mod test {
 			(11394560, vec![3, 0, 0xDE, 0xAD]),
 			(u32::MAX, vec![4, 255, 255, 255, 255]),
 		];
-		for x in test_data {
-			assert_eq!(BitcoinScript::default().push_uint(x.0).data, x.1);
+		for (value, encoded) in test_data {
+			let mut buf = Vec::new();
+			BitcoinOp::PushUint { value }.btc_encode_to(&mut buf);
+			assert_eq!(buf, encoded);
 		}
 	}
 

@@ -1,9 +1,9 @@
 use cf_chains::{
 	btc::BitcoinNetwork,
-	dot::{PolkadotHash, RuntimeVersion},
+	dot::{PolkadotAccountId, PolkadotHash, RuntimeVersion},
 	eth,
 };
-use cf_primitives::{AccountRole, AuthorityCount, PolkadotAccountId};
+use cf_primitives::{AccountRole, AuthorityCount};
 
 use common::FLIPPERINOS_PER_FLIP;
 use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
@@ -113,7 +113,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		Err(_) => defaults.dot_genesis_hash,
 	};
 	let dot_vault_account_id = match env::var("DOT_VAULT_ACCOUNT_ID") {
-		Ok(s) => Some(hex_decode::<32>(&s).unwrap().into()),
+		Ok(s) => Some(PolkadotAccountId::from_aliased(hex_decode::<32>(&s).unwrap())),
 		Err(_) => defaults.dot_vault_account_id,
 	};
 	let dot_spec_version: u32 = match env::var("DOT_SPEC_VERSION") {
@@ -231,7 +231,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					},
 
 					polkadot_genesis_hash: dot_genesis_hash,
-					polkadot_vault_account_id: dot_vault_account_id.clone(),
+					polkadot_vault_account_id: dot_vault_account_id,
 					polkadot_runtime_version: dot_runtime_version,
 					bitcoin_network: BitcoinNetwork::Regtest,
 				},

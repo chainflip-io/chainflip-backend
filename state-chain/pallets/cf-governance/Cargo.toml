@@ -13,8 +13,8 @@ repository = 'https://github.com/chainflip-io/chainflip-backend'
 targets = ['x86_64-unknown-linux-gnu']
 
 [dependencies]
-cf-traits = { path = '../../traits', default-features = false }
 cf-primitives = { path ='../../primitives', default-features = false }
+cf-traits = { path = '../../traits', default-features = false }
 
 # Parity deps
 codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
@@ -37,19 +37,21 @@ sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainfli
 [features]
 default = ['std']
 std = [
+  'cf-primitives/std',
+  'cf-runtime-upgrade-utilities/std',
   'cf-traits/std',
   'codec/std',
-  'scale-info/std',
   'frame-benchmarking?/std',
   'frame-support/std',
   'frame-system/std',
+  'scale-info/std',
   'sp-core/std',
-  'sp-std/std',
   'sp-runtime/std',
+  'sp-std/std',
   'sp-version/std',
-  'cf-runtime-upgrade-utilities/std',
 ]
 runtime-benchmarks = [
+  'cf-primitives/runtime-benchmarks',
   'cf-traits/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',

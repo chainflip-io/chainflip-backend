@@ -239,7 +239,7 @@ impl Engine {
 								let _result = state_chain_runtime::PolkadotThresholdSigner::signature_success(
 									RuntimeOrigin::none(),
 									*ceremony_id,
-									self.dot_threshold_signer.borrow().sign_with_key(*key, &(payload.clone().0)),
+									self.dot_threshold_signer.borrow().sign_with_key(*key, payload),
 								);
 					}
 
@@ -292,7 +292,7 @@ impl Engine {
 									Box::new(pallet_cf_vaults::Call::<_, BitcoinInstance>::vault_key_rotated {
 										block_number: 100,
 										tx_id: UtxoId {
-											tx_hash: [2u8; 32],
+											tx_id: [2u8; 32],
 											vout: 1,
 										},
 									}.into()),

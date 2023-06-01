@@ -797,6 +797,7 @@ dependencies = [
  "sp-core 7.0.0",
  "sp-runtime 7.0.0",
  "sp-std 5.0.0",
+ "utilities",
 ]
 
 [[package]]
@@ -1056,6 +1057,7 @@ dependencies = [
  "futures",
  "hex",
  "serde",
+ "serde_json",
  "substrate-build-script-utils",
  "tokio",
  "utilities",

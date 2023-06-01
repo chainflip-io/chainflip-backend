@@ -2,13 +2,9 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-#[cfg(test)]
 mod mock;
-
-#[cfg(test)]
 mod tests;
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 mod imbalances;

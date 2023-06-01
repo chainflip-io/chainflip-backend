@@ -33,7 +33,7 @@ pub trait WeightInfo {
 	fn request_swap_deposit_address() -> Weight;
 	fn withdraw() -> Weight;
 	fn register_as_broker() -> Weight;
-	fn schedule_swap_by_witnesser() -> Weight;
+	fn schedule_swap_from_contract() -> Weight;
 	fn ccm_deposit() -> Weight;
 	fn on_initialize(a: u32, ) -> Weight;
 	fn set_swap_ttl() -> Weight;
@@ -60,7 +60,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(6))
 			.saturating_add(T::DbWeight::get().writes(6))
 	}
-	
+
 
 	// Storage: Environment CurrentSystemState (r:1 w:0)
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
@@ -75,7 +75,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	// Storage: Swapping SwapIdCounter (r:1 w:1)
 	// Storage: Swapping SwapQueue (r:1 w:1)
-	fn schedule_swap_by_witnesser() -> Weight {
+	fn schedule_swap_from_contract() -> Weight {
 		// Minimum execution time: 19_000 nanoseconds.
 		Weight::from_ref_time(20_000_000)
 			.saturating_add(T::DbWeight::get().reads(2))
@@ -148,7 +148,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(6))
 			.saturating_add(RocksDbWeight::get().writes(6))
 	}
-	
+
 
 	// Storage: Environment CurrentSystemState (r:1 w:0)
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
@@ -163,7 +163,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Swapping SwapIdCounter (r:1 w:1)
 	// Storage: Swapping SwapQueue (r:1 w:1)
-	fn schedule_swap_by_witnesser() -> Weight {
+	fn schedule_swap_from_contract() -> Weight {
 		// Minimum execution time: 19_000 nanoseconds.
 		Weight::from_ref_time(20_000_000)
 			.saturating_add(RocksDbWeight::get().reads(2))

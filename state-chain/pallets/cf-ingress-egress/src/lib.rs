@@ -3,7 +3,6 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 #[cfg(test)]
@@ -757,7 +756,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				destination_asset,
 				broker_id,
 				broker_commission_bps,
-			} => T::SwapDepositHandler::on_swap_deposit(
+			} => T::SwapDepositHandler::schedule_swap_from_channel(
 				deposit_address.clone().into(),
 				asset.into(),
 				destination_asset,
@@ -765,6 +764,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				destination_address,
 				broker_id,
 				broker_commission_bps,
+				channel_id,
 			),
 			ChannelAction::CcmTransfer {
 				destination_asset,

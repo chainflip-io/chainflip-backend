@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use crate::{mock::*, BlockEmissions, LastSupplyUpdateBlock, Pallet};
 use cf_traits::{
 	mocks::{egress_handler::MockEgressHandler, system_state_info::MockSystemStateInfo},

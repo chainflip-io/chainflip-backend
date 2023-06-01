@@ -6,7 +6,6 @@
 #[cfg(test)]
 mod mock;
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 mod migrations;
 

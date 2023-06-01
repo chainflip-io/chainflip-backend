@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc};
 
 use anyhow::Context;
 
@@ -41,6 +41,13 @@ async fn main() -> anyhow::Result<()> {
 
 	task_scope(|scope| {
 		async move {
+			let has_completed_initialising = Arc::new(AtomicBool::new(false));
+
+			if let Some(health_check_settings) = &settings.health_check {
+				health::start(scope, health_check_settings, has_completed_initialising.clone())
+					.await?;
+			}
+
 			utilities::init_json_logger(scope).await;
 
 			let (state_chain_stream, state_chain_client) =
@@ -270,7 +277,7 @@ async fn main() -> anyhow::Result<()> {
 						.await
 						.context("Failed to get initial DOT signatures to monitor")?
 						.into_iter()
-						.map(|(signature, _)| signature.0)
+						.map(|(signature, _)| signature)
 						.collect(),
 					state_chain_client.clone(),
 					db,
@@ -288,9 +295,7 @@ async fn main() -> anyhow::Result<()> {
 				.map_err(|_| anyhow::anyhow!("DOT runtime version updater failed")),
 			);
 
-			if let Some(health_check_settings) = &settings.health_check {
-				health::start(scope, health_check_settings).await?;
-			}
+			has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);
 
 			Ok(())
 		}

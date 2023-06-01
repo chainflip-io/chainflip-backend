@@ -1,5 +1,5 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-#[cfg(test)]
+
 mod tests;
 
 use codec::{Decode, Encode};

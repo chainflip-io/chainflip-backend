@@ -6,7 +6,6 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_core::crypto::AccountId32;
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
 	MultiSignature, RuntimeDebug,
@@ -51,10 +50,6 @@ pub type BroadcastId = u32;
 /// The type of the Id given to threshold signature requests. Note a single request may
 /// result in multiple ceremonies, but only one ceremony should succeed.
 pub type ThresholdSignatureRequestId = u32;
-
-/// Alias to the opaque account ID type for this chain, actually a `AccountId32`. This is always
-/// 32 bytes.
-pub type PolkadotAccountId = AccountId32;
 
 pub type PolkadotBlockNumber = u32;
 

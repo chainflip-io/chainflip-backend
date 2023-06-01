@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 #[cfg(feature = "slow-tests")]
 use crate::common::{Side, MIN_SQRT_PRICE};
 
