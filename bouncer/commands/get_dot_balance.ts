@@ -9,9 +9,8 @@
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { runWithTimeout } from '../shared/utils';
 
-async function main(): Promise<void> {
-  const address = process.argv[2] ?? '0';
-  const polkadotEndpoint = process.env.POLKADOT_ENDPOINT ?? 'ws://127.0.0.1:9945';
+export async function getDotBalance(address: string) {
+
   const polkadot = await ApiPromise.create({
     provider: new WsProvider(polkadotEndpoint),
     noInitWarn: true,
@@ -29,7 +28,10 @@ async function main(): Promise<void> {
   process.exit(0);
 }
 
-runWithTimeout(main(), 5000).catch((error) => {
+const address = process.argv[2] ?? '0';
+const polkadotEndpoint = process.env.POLKADOT_ENDPOINT ?? 'ws://127.0.0.1:9945';
+
+runWithTimeout(getDotBalance(address), 5000).catch((error) => {
   console.error(error);
   process.exit(-1);
 });

@@ -30,9 +30,7 @@ const erc20BalanceABI = [
   },
 ];
 
-async function main(): Promise<void> {
-  const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
-  const ethereumAddress = process.argv[2] ?? '0';
+export async function getUsdcBalance(ethereumAddress: string) {
   const web3 = new Web3(ethEndpoint);
   const usdcContractAddress =
     process.env.ETH_USDC_ADDRESS ?? '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
@@ -52,7 +50,10 @@ async function main(): Promise<void> {
   process.exit(0);
 }
 
-runWithTimeout(main(), 5000).catch((error) => {
+const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
+const ethereumAddress = process.argv[2] ?? '0';
+
+runWithTimeout(getUsdcBalance(ethereumAddress), 5000).catch((error) => {
   console.error(error);
   process.exit(-1);
 });

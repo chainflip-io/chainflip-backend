@@ -9,9 +9,8 @@
 import Web3 from 'web3';
 import { runWithTimeout } from '../shared/utils';
 
-async function main(): Promise<void> {
-  const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
-  const ethereumAddress = process.argv[2] ?? '0';
+export async function getEthBalance(address: string) {
+
   const web3 = new Web3(ethEndpoint);
 
   const weiBalance: string = await web3.eth.getBalance(ethereumAddress);
@@ -27,7 +26,10 @@ async function main(): Promise<void> {
   process.exit(0);
 }
 
-runWithTimeout(main(), 5000).catch((error) => {
+const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
+const ethereumAddress = process.argv[2] ?? '0';
+
+runWithTimeout(getEthBalance(ethereumAddress), 5000).catch((error) => {
   console.error(error);
   process.exit(-1);
 });

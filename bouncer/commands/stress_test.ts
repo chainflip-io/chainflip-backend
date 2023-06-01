@@ -29,7 +29,7 @@ async function main(): Promise<void> {
   const proposal = api.tx.governance.proposeGovernanceExtrinsic(sudoCall);
   await proposal.signAndSend(snowwhite);
 
-  console.log("Requesting" + signaturesCount + "ETH signatures");
+  console.log("Requesting " + signaturesCount + " ETH signatures");
 
   process.exit(0);
 }

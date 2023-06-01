@@ -43,7 +43,7 @@ async function main(): Promise<void> {
 
   console.log('Funding BTC LP deposit address of ' + ingressAddress + ' with 1 BTC');
   exec(
-    './commands/fund_btc.sh ' + ingressAddress + ' 1',
+    'pnpm ./commands/fund_btc.ts ' + ingressAddress + ' 1',
     { timeout: 30000 },
     (err, stdout, stderr) => {
       if (stderr !== '') process.stdout.write(stderr);

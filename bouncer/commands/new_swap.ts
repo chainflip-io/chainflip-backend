@@ -14,7 +14,7 @@ import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { u8aToHex } from '@polkadot/util';
 import { runWithTimeout } from '../shared/utils';
 
-async function main(): Promise<void> {
+async function newSwap(): Promise<void> {
   const cfNodeEndpoint = process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944';
   await cryptoWaitReady();
   const keyring = new Keyring({ type: 'sr25519' });
@@ -43,7 +43,7 @@ async function main(): Promise<void> {
   process.exit(0);
 }
 
-runWithTimeout(main(), 60000).catch((error) => {
+runWithTimeout(newSwap(), 60000).catch((error) => {
   console.error(error);
   process.exit(-1);
 });

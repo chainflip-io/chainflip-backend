@@ -39,6 +39,8 @@ async function main(): Promise<void> {
   const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
   const ethereumAddress = process.argv[2];
   const usdcAmount = process.argv[3].trim();
+
+  console.log("Submitting transaction to transfer USDC to " + ethereumAddress + " for " + usdcAmount + " USDC")
   let microusdcAmount;
   if (!usdcAmount.includes('.')) {
     microusdcAmount = usdcAmount + '000000';

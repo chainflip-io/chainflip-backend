@@ -16,9 +16,10 @@ async function main() {
   const polkadot_endpoint = process.env.POLKADOT_ENDPOINT || 'ws://127.0.0.1:9945';
   const polkadotAddress = process.argv[2];
   const dotAmount = process.argv[3].trim();
-  var planckAmount;
-  if (dotAmount.indexOf('.') == -1) {
-    planckAmount = dotAmount + "0000000000";
+
+  let planckAmount;
+  if (!dotAmount.includes('.')) {
+    planckAmount = dotAmount + '0000000000';
   } else {
     const amount_parts = dotAmount.split('.');
     planckAmount = amount_parts[0] + amount_parts[1].padEnd(10, '0').substr(0, 10);
@@ -46,6 +47,7 @@ async function main() {
         process.exit(0);
       }
     });
+  console.log("Dot transfer submitted");
 }
 
 runWithTimeout(main(), 20000).catch((error) => {
