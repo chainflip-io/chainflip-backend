@@ -19,7 +19,7 @@ use pallet_cf_swapping::{CcmIdCounter, SwapOrigin};
 use state_chain_runtime::{
 	chainflip::address_derivation::AddressDerivation, AccountRoles, EthereumInstance,
 	LiquidityPools, LiquidityProvider, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
-	System, Validator, Weight, Witnesser,
+	System, Timestamp, Validator, Weight, Witnesser,
 };
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
