@@ -32,7 +32,7 @@ pub mod waived_fees_mock;
 
 #[macro_export]
 macro_rules! impl_mock_chainflip {
-	($runtime:ident) => {
+	($runtime:ty) => {
 		use $crate::{
 			impl_mock_epoch_info,
 			mocks::{
