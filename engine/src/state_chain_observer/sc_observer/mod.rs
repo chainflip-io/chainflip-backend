@@ -4,12 +4,12 @@ mod tests;
 
 use anyhow::{anyhow, Context};
 use cf_chains::{
-	btc::{self, BitcoinScriptBounded, PreviousOrCurrent},
-	dot,
+	btc::{self, PreviousOrCurrent, ScriptPubkey},
+	dot::{self, PolkadotAccountId, PolkadotSignature},
 	eth::Ethereum,
 	Bitcoin, Polkadot,
 };
-use cf_primitives::{BlockNumber, CeremonyId, EpochIndex, PolkadotAccountId};
+use cf_primitives::{BlockNumber, CeremonyId, EpochIndex};
 use crypto_compat::CryptoCompat;
 use futures::{FutureExt, StreamExt, TryFutureExt};
 use sp_core::{Hasher, H160, H256};
@@ -204,11 +204,9 @@ pub async fn start<
 	dot_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<
 		MonitorCommand<PolkadotAccountId>,
 	>,
-	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<[u8; 64]>,
+	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<PolkadotSignature>,
 	btc_epoch_start_sender: async_broadcast::Sender<EpochStart<Bitcoin>>,
-	btc_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<
-		MonitorCommand<BitcoinScriptBounded>,
-	>,
+	btc_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<MonitorCommand<ScriptPubkey>>,
 	btc_tx_hash_sender: tokio::sync::mpsc::UnboundedSender<MonitorCommand<[u8; 32]>>,
 	cfe_settings_update_sender: watch::Sender<CfeSettings>,
 ) -> Result<(), anyhow::Error>
@@ -634,7 +632,7 @@ where
                                             transaction_out_id,
                                         },
                                     ) => {
-                                        dot_monitor_signature_sender.send(transaction_out_id.0).unwrap();
+                                        dot_monitor_signature_sender.send(transaction_out_id).unwrap();
                                         if nominee == account_id {
                                             let _result = dot_broadcaster.send(transaction_payload.encoded_extrinsic).await
                                             .map(|_| info!("Polkadot transmission successful: {broadcast_attempt_id}"))

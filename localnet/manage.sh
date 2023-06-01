@@ -51,7 +51,7 @@ setup() {
 get-workflow() {
   echo "❓ Would you like to build, recreate or destroy your Localnet? (Type 1, 2, 3, 4, 5 or 6)"
   select WORKFLOW in build-localnet recreate destroy logs yeet bouncer; do
-    echo "You have chosen $WORKFLOW\n"
+    echo "You have chosen $WORKFLOW"
     break
   done
 }
@@ -182,7 +182,7 @@ logs() {
 
 bouncer() {
   (
-    cd ../chainflip-bouncer
+    cd ./bouncer
     ./run.sh
   )
 }

@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use crate as pallet_cf_emissions;
 use cf_chains::{mocks::MockEthereum, AnyChain, ApiCall, ChainCrypto, UpdateFlipSupply};
 use cf_primitives::{BroadcastId, FlipBalance, ThresholdSignatureRequestId};

@@ -22,13 +22,13 @@ targets = ['x86_64-unknown-linux-gnu']
 state-chain-runtime = { path = "../runtime" }
 
 # Local dependencies
-cf-chains = {path = "../chains"}
-utilities = {package = "utilities", path = "../../utilities"}
-custom-rpc = {path = "../custom-rpc"}
+cf-chains = { path = "../chains" }
 cf-primitives = { path = "../primitives" }
+custom-rpc = { path = "../custom-rpc" }
+utilities = { package = "utilities", path = "../../utilities" }
 
 # Added by Chainflip
-futures = {version = "0.3.4"}
+futures = { version = "0.3.4" }
 hex = "0.4"
 hex-literal = "0.3.1"
 
@@ -82,14 +82,11 @@ substrate-build-script-utils = { git = "https://github.com/chainflip-io/substrat
 [features]
 default = []
 runtime-benchmarks = [
-	"state-chain-runtime/runtime-benchmarks",
-	"frame-benchmarking/runtime-benchmarks",
-	"frame-benchmarking-cli/runtime-benchmarks",
+  "state-chain-runtime/runtime-benchmarks",
+  "frame-benchmarking/runtime-benchmarks",
+  "frame-benchmarking-cli/runtime-benchmarks",
 ]
-try-runtime = [
-  "state-chain-runtime/try-runtime",
-  "try-runtime-cli/try-runtime",
-]
+try-runtime = ["state-chain-runtime/try-runtime", "try-runtime-cli/try-runtime"]
 
 [package.metadata.deb]
 depends = "$auto, systemd"
@@ -100,24 +97,38 @@ maintainer = "Chainflip Labs GmbH <dev@chainflip.io>"
 name = "chainflip-node"
 priority = "required"
 section = "rust"
-systemd-units = {unit-name = "chainflip-node", enable = false}
+systemd-units = { unit-name = "chainflip-node", enable = false }
 
 [package.metadata.deb.variants.development]
 maintainer-scripts = "package/development"
-assets = [
-  ["target/release/chainflip-node", "usr/bin/", "755"],
-]
+assets = [["target/release/chainflip-node", "usr/bin/", "755"]]
 
 [package.metadata.deb.variants.sisyphos]
 maintainer-scripts = "package/sisyphos"
 assets = [
-  ["target/release/chainflip-node", "usr/bin/", "755"],
-  ["chainspecs/sisyphos.chainspec.raw.json", "etc/chainflip/sisyphos.chainspec.json", "644"],
+  [
+    "target/release/chainflip-node",
+    "usr/bin/",
+    "755",
+  ],
+  [
+    "chainspecs/sisyphos.chainspec.raw.json",
+    "etc/chainflip/sisyphos.chainspec.json",
+    "644",
+  ],
 ]
 
 [package.metadata.deb.variants.perseverance]
 maintainer-scripts = "package/perseverance"
 assets = [
-  ["target/release/chainflip-node", "usr/bin/", "755"],
-  ["chainspecs/perseverance.chainspec.raw.json", "etc/chainflip/perseverance.chainspec.json", "644"],
+  [
+    "target/release/chainflip-node",
+    "usr/bin/",
+    "755",
+  ],
+  [
+    "chainspecs/perseverance.chainspec.raw.json",
+    "etc/chainflip/perseverance.chainspec.json",
+    "644",
+  ],
 ]

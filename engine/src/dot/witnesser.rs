@@ -1,21 +1,20 @@
 use std::{
-	collections::{BTreeSet, HashMap},
+	collections::{HashMap, HashSet},
 	sync::Arc,
 	time::Duration,
 };
 
 use async_trait::async_trait;
 use cf_chains::dot::{
-	self, Polkadot, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash, PolkadotProxyType,
-	PolkadotPublicKey, PolkadotUncheckedExtrinsic,
+	self, Polkadot, PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash,
+	PolkadotProxyType, PolkadotSignature, PolkadotUncheckedExtrinsic,
 };
-use cf_primitives::{chains::assets, EpochIndex, PolkadotAccountId, PolkadotBlockNumber, TxId};
+use cf_primitives::{chains::assets, EpochIndex, PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use frame_support::scale_info::TypeInfo;
 use futures::{stream, Stream, StreamExt, TryStreamExt};
 use pallet_cf_ingress_egress::DepositWitness;
 use sp_core::H256;
-use sp_runtime::{AccountId32, MultiSignature};
 use state_chain_runtime::PolkadotInstance;
 use subxt::{
 	config::Header,
@@ -160,17 +159,13 @@ fn check_for_interesting_events_in_block(
 		if let Phase::ApplyExtrinsic(extrinsic_index) = *phase {
 			match wrapped_event {
 				EventWrapper::ProxyAdded(ProxyAdded { delegator, delegatee, .. }) => {
-					if AsRef::<[u8; 32]>::as_ref(&delegator) !=
-						AsRef::<[u8; 32]>::as_ref(&our_vault)
-					{
+					if delegator != our_vault {
 						continue
 					}
 
 					interesting_indices.push(extrinsic_index);
 
-					let new_public_key =
-						PolkadotPublicKey::from(*AsRef::<[u8; 32]>::as_ref(&delegatee));
-					info!("Witnessing ProxyAdded. new public key: {new_public_key:?} at block number {block_number} and extrinsic_index; {extrinsic_index}");
+					info!("Witnessing ProxyAdded. new delegatee: {delegatee:?} at block number {block_number} and extrinsic_index; {extrinsic_index}");
 
 					vault_key_rotated_calls.push(Box::new(
 						pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
@@ -188,7 +183,7 @@ fn check_for_interesting_events_in_block(
 					if address_monitor.contains(to) {
 						info!("Witnessing DOT Ingress {{ amount: {amount:?}, to: {to:?} }}");
 						deposit_witnesses.push(DepositWitness {
-							deposit_address: to.clone(),
+							deposit_address: *to,
 							asset: assets::dot::Asset::Dot,
 							amount: *amount,
 							tx_id: TxId { block_number, extrinsic_index },
@@ -247,8 +242,8 @@ pub async fn start<StateChainClient, DotRpc>(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Polkadot>>,
 	dot_client: DotRpc,
 	address_monitor: ItemMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
-	signature_receiver: tokio::sync::mpsc::UnboundedReceiver<[u8; 64]>,
-	monitored_signatures: BTreeSet<[u8; 64]>,
+	signature_receiver: tokio::sync::mpsc::UnboundedReceiver<PolkadotSignature>,
+	monitored_signatures: HashSet<PolkadotSignature>,
 	state_chain_client: Arc<StateChainClient>,
 	db: Arc<PersistentKeyDB>,
 ) -> std::result::Result<(), anyhow::Error>
@@ -275,7 +270,7 @@ struct DotBlockWitnesser<StateChainClient, DotRpc> {
 	dot_client: DotRpc,
 	epoch_index: EpochIndex,
 	// The account id of our Polkadot vault.
-	vault_account: AccountId32,
+	vault_account: cf_chains::dot::PolkadotAccountId,
 }
 
 impl HasBlockNumber for (H256, PolkadotBlockNumber, Vec<(Phase, EventWrapper)>) {
@@ -296,8 +291,8 @@ where
 	type Block = (H256, u32, Vec<(Phase, EventWrapper)>);
 	type StaticState = (
 		ItemMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
-		BTreeSet<[u8; 64]>,
-		tokio::sync::mpsc::UnboundedReceiver<[u8; 64]>,
+		HashSet<cf_chains::dot::PolkadotSignature>,
+		tokio::sync::mpsc::UnboundedReceiver<cf_chains::dot::PolkadotSignature>,
 	);
 
 	async fn process_block(
@@ -362,10 +357,9 @@ where
 				let mut xt_bytes = xt_encoded.as_slice();
 				let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);
 				if let Ok(unchecked) = unchecked {
-					let signature = unchecked.signature.unwrap().1;
-					if let MultiSignature::Sr25519(sig) = signature {
-						if monitored_signatures.contains(&sig.0) {
-							info!("Witnessing transaction_succeeded. signature: {sig:?}");
+					if let Some(signature) = unchecked.signature() {
+						if monitored_signatures.remove(&signature) {
+							info!("Witnessing transaction_succeeded. signature: {signature:?}");
 
 							self.state_chain_client
 								.submit_signed_extrinsic(
@@ -376,9 +370,9 @@ where
 													_,
 													PolkadotInstance,
 												>::transaction_succeeded {
-													tx_out_id: sig.clone(),
+													tx_out_id: signature,
 													block_number,
-													signer_id: self.vault_account.clone(),
+													signer_id: self.vault_account,
 													tx_fee,
 												}
 												.into(),
@@ -387,8 +381,6 @@ where
 									},
 								)
 								.await;
-
-							monitored_signatures.remove(&sig.0);
 						}
 					}
 				} else {
@@ -531,14 +523,11 @@ where
 
 #[cfg(test)]
 mod tests {
-
-	use std::str::FromStr;
-
 	use super::*;
 
-	use cf_chains::dot;
-	use cf_primitives::PolkadotAccountId;
+	use cf_chains::dot::{self, PolkadotAccountId};
 	use itertools::Itertools;
+	use std::collections::BTreeSet;
 
 	use crate::{
 		dot::rpc::DotRpcClient, state_chain_observer::client::mocks::MockStateChainClient,
@@ -550,8 +539,8 @@ mod tests {
 		delegatee: &PolkadotAccountId,
 	) -> EventWrapper {
 		EventWrapper::ProxyAdded(ProxyAdded {
-			delegator: delegator.clone(),
-			delegatee: delegatee.clone(),
+			delegator: *delegator,
+			delegatee: *delegatee,
 			proxy_type: PolkadotProxyType::Any,
 			delay: 0,
 		})
@@ -560,7 +549,7 @@ mod tests {
 	fn mock_tx_fee_paid(actual_fee: PolkadotBalance) -> EventWrapper {
 		EventWrapper::TransactionFeePaid(TransactionFeePaid {
 			actual_fee,
-			who: PolkadotAccountId::from([0xab; 32]),
+			who: PolkadotAccountId::from_aliased([0xab; 32]),
 			tip: Default::default(),
 		})
 	}
@@ -568,7 +557,7 @@ mod tests {
 	fn mock_tx_fee_paid_tip(tip: PolkadotBalance) -> EventWrapper {
 		EventWrapper::TransactionFeePaid(TransactionFeePaid {
 			actual_fee: Default::default(),
-			who: PolkadotAccountId::from([0xab; 32]),
+			who: PolkadotAccountId::from_aliased([0xab; 32]),
 			tip,
 		})
 	}
@@ -578,7 +567,7 @@ mod tests {
 		to: &PolkadotAccountId,
 		amount: PolkadotBalance,
 	) -> EventWrapper {
-		EventWrapper::Transfer(Transfer { from: from.clone(), to: to.clone(), amount })
+		EventWrapper::Transfer(Transfer { from: *from, to: *to, amount })
 	}
 
 	fn phase_and_events(
@@ -592,8 +581,8 @@ mod tests {
 
 	#[test]
 	fn proxy_added_event_for_our_vault_witnessed() {
-		let our_vault = PolkadotAccountId::from([0; 32]);
-		let other_acct = PolkadotAccountId::from([1; 32]);
+		let our_vault = PolkadotAccountId::from_aliased([0; 32]);
+		let other_acct = PolkadotAccountId::from_aliased([1; 32]);
 		let our_proxy_added_index = 1u32;
 		let fee_paid = 10000;
 		let block_event_details = phase_and_events(&[
@@ -622,11 +611,11 @@ mod tests {
 	fn witness_deposits_for_addresses_we_monitor() {
 		// we want two monitors, one sent through at start, and one sent through channel
 		const TRANSFER_1_INDEX: u32 = 1;
-		let transfer_1_deposit_address = PolkadotAccountId::from([1; 32]);
+		let transfer_1_deposit_address = PolkadotAccountId::from_aliased([1; 32]);
 		const TRANSFER_1_AMOUNT: PolkadotBalance = 10000;
 
 		const TRANSFER_2_INDEX: u32 = 2;
-		let transfer_2_deposit_address = PolkadotAccountId::from([2; 32]);
+		let transfer_2_deposit_address = PolkadotAccountId::from_aliased([2; 32]);
 		const TRANSFER_2_AMOUNT: PolkadotBalance = 20000;
 
 		let block_event_details = phase_and_events(&[
@@ -634,7 +623,7 @@ mod tests {
 			(
 				TRANSFER_1_INDEX,
 				mock_transfer(
-					&PolkadotAccountId::from([7; 32]),
+					&PolkadotAccountId::from_aliased([7; 32]),
 					&transfer_1_deposit_address,
 					TRANSFER_1_AMOUNT,
 				),
@@ -643,7 +632,7 @@ mod tests {
 			(
 				TRANSFER_2_INDEX,
 				mock_transfer(
-					&PolkadotAccountId::from([7; 32]),
+					&PolkadotAccountId::from_aliased([7; 32]),
 					&transfer_2_deposit_address,
 					TRANSFER_2_AMOUNT,
 				),
@@ -652,8 +641,8 @@ mod tests {
 			(
 				19,
 				mock_transfer(
-					&PolkadotAccountId::from([7; 32]),
-					&PolkadotAccountId::from([9; 32]),
+					&PolkadotAccountId::from_aliased([7; 32]),
+					&PolkadotAccountId::from_aliased([9; 32]),
 					93232,
 				),
 			),
@@ -671,7 +660,7 @@ mod tests {
 				block_event_details,
 				20,
 				// arbitrary, not focus of the test
-				&PolkadotAccountId::from([0xda; 32]),
+				&PolkadotAccountId::from_aliased([0xda; 32]),
 				&mut address_monitor,
 			);
 
@@ -691,14 +680,14 @@ mod tests {
 
 		let deposit_fetch_index = 4;
 		let deposit_fetch_amount = 40000;
-		let our_vault = PolkadotAccountId::from([3; 32]);
+		let our_vault = PolkadotAccountId::from_aliased([3; 32]);
 
 		let block_event_details = phase_and_events(&[
 			// we'll be witnessing this from the start
 			(
 				egress_index,
 				// egress, from our vault
-				mock_transfer(&our_vault, &PolkadotAccountId::from([6; 32]), egress_amount),
+				mock_transfer(&our_vault, &PolkadotAccountId::from_aliased([6; 32]), egress_amount),
 			),
 			// fee same as amount for simpler testing
 			(egress_index, mock_tx_fee_paid(egress_amount)),
@@ -706,15 +695,19 @@ mod tests {
 			(
 				deposit_fetch_index,
 				// fetch deposit, to our vault
-				mock_transfer(&PolkadotAccountId::from([7; 32]), &our_vault, deposit_fetch_amount),
+				mock_transfer(
+					&PolkadotAccountId::from_aliased([7; 32]),
+					&our_vault,
+					deposit_fetch_amount,
+				),
 			),
 			(deposit_fetch_index, mock_tx_fee_paid(deposit_fetch_amount)),
 			// this one is not for us
 			(
 				19,
 				mock_transfer(
-					&PolkadotAccountId::from([7; 32]),
-					&PolkadotAccountId::from([9; 32]),
+					&PolkadotAccountId::from_aliased([7; 32]),
+					&PolkadotAccountId::from_aliased([9; 32]),
 					93232,
 				),
 			),
@@ -765,7 +758,7 @@ mod tests {
 				block_event_details,
 				20,
 				// arbitrary, not focus of the test
-				&PolkadotAccountId::from([0xda; 32]),
+				&PolkadotAccountId::from_aliased([0xda; 32]),
 				&mut ItemMonitor::new(BTreeSet::default()).1,
 			);
 
@@ -816,7 +809,7 @@ mod tests {
 		// 	)
 		// 	.unwrap();
 
-		let signature: [u8; 64] = hex::decode("7c388203aefbcdc22077ed91bec9af80a23c56f8ff2ee24d40f4c2791d51773342f4aed0e8f0652ed33d404d9b78366a927be9fad02f5204f2f2ffbea7459886").unwrap().try_into().unwrap();
+		let signature = PolkadotSignature::from_aliased(hex::decode("7c388203aefbcdc22077ed91bec9af80a23c56f8ff2ee24d40f4c2791d51773342f4aed0e8f0652ed33d404d9b78366a927be9fad02f5204f2f2ffbea7459886").unwrap().try_into().unwrap());
 
 		dot_monitor_signature_sender.send(signature).unwrap();
 
@@ -828,7 +821,7 @@ mod tests {
 				current: true,
 				participant: true,
 				data: dot::EpochStartData {
-					vault_account: PolkadotAccountId::from_str(
+					vault_account: PolkadotAccountId::from_ss58check(
 						"12RtzLB2z2dsg9RUGtTuxhuyzsTFScYG8hBT7hJcaNbFqCry",
 					)
 					.unwrap(),
@@ -845,7 +838,7 @@ mod tests {
 			dot_rpc_client,
 			ItemMonitor::new(Default::default()).1,
 			signature_receiver,
-			BTreeSet::default(),
+			HashSet::default(),
 			state_chain_client,
 			Arc::new(db),
 		)

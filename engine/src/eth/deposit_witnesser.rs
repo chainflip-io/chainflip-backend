@@ -14,12 +14,12 @@ use crate::{
 
 use super::{
 	eth_block_witnessing::BlockProcessor,
-	rpc::{EthDualRpcClient, EthRpcApi},
+	rpc::{EthHttpRpcClient, EthRpcApi},
 	EthNumberBloom,
 };
 
 pub struct DepositWitnesser<StateChainClient> {
-	rpc: EthDualRpcClient,
+	rpc: EthHttpRpcClient,
 	state_chain_client: Arc<StateChainClient>,
 	address_monitor: Arc<Mutex<ItemMonitor<H160, H160, ()>>>,
 }
@@ -30,7 +30,7 @@ where
 {
 	pub fn new(
 		state_chain_client: Arc<StateChainClient>,
-		rpc: EthDualRpcClient,
+		rpc: EthHttpRpcClient,
 		address_monitor: Arc<Mutex<ItemMonitor<H160, H160, ()>>>,
 	) -> Self {
 		Self { rpc, state_chain_client, address_monitor }

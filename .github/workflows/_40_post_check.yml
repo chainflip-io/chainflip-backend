@@ -8,13 +8,13 @@ on:
       timeout-minutes:
         type: number
         required: false
-        default: 30
+        default: 120
 jobs:
   bouncer:
     runs-on: ubuntu-20.04
     timeout-minutes: ${{ inputs.timeout-minutes }}
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -57,20 +57,12 @@ jobs:
       - name: Install bc
         run: |
           apt-get update
-          apt-get install -y bc
-          apt-get install -y xxd
+          apt-get install -y bc xxd
 
       - name: Download binaries
         uses: actions/download-artifact@v3
         with:
           name: chainflip-backend-bin
-
-      - name: Checkout chainflip-bouncer
-        uses: actions/checkout@v3
-        with:
-          repository: chainflip-io/chainflip-bouncer
-          token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
-          path: bouncer
 
       - name: Install node dependencies
         working-directory: bouncer
@@ -124,6 +116,19 @@ jobs:
           name: localnet-logs
           path: |
             /tmp/chainflip/chainflip-*.log
+
+      - name: Notify on failed bouncer
+        if: failure() && github.ref_name == 'main'
+        env:
+          DISCORD_USERNAME: 'HEUTE LEIDER NICHT'
+          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
+        uses: Ilshidur/action-discord@0.3.2
+        with:
+          args: |
+            ❗️❗️❗️❗️ Sorry **${{ github.actor }}**, the Bouncer has rejected you ❗️❗️❗️❗️
+            👾 Link to job: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            #️⃣ Tagging: <@&939151218708709416>
+            https://media.giphy.com/media/wHfwCBZzCMhmE/giphy.gif
 
   benchmarks:
     runs-on: [hetzner]

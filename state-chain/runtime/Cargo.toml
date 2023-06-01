@@ -21,18 +21,18 @@ getrandom = { version = '0.2.3', features = ['js'], default-features = false }
 
 hex-literal = "0.3.1"
 log = { version = '0.4.16', default-features = false }
-nanorand = { version = '0.7', default-features = false, features = ['wyrand']}
+nanorand = { version = '0.7', default-features = false, features = ['wyrand'] }
 serde = { version = '1.0.126', optional = true, features = ['derive'] }
-ethabi = {default-features = false, version = '18.0'}
+ethabi = { default-features = false, version = '18.0' }
 
 
 # Chainflip local dependencies
-cf-traits = { path = '../traits', default-features = false }
-cf-primitives = { path = '../primitives', default-features = false }
-cf-chains = { path = '../chains', default-features = false }
-cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
-cf-session-benchmarking = { path = '../cf-session-benchmarking', optional = true, default-features = false }
 cf-amm = { path = '../amm', default-features = false }
+cf-chains = { path = '../chains', default-features = false }
+cf-primitives = { path = '../primitives', default-features = false }
+cf-session-benchmarking = { path = '../cf-session-benchmarking', optional = true, default-features = false }
+cf-traits = { path = '../traits', default-features = false }
+cf-utilities = { package = 'utilities', path = '../../utilities', default-features = false }
 
 pallet-cf-account-roles = { path = '../pallets/cf-account-roles', default-features = false }
 pallet-cf-broadcast = { path = '../pallets/cf-broadcast', default-features = false }
@@ -42,24 +42,30 @@ pallet-cf-environment = { path = '../pallets/cf-environment', default-features =
 pallet-cf-flip = { path = '../pallets/cf-flip', default-features = false }
 pallet-cf-governance = { path = '../pallets/cf-governance', default-features = false }
 pallet-cf-ingress-egress = { path = '../pallets/cf-ingress-egress', default-features = false }
-pallet-cf-lp =  { path = '../pallets/cf-lp', default-features = false }
-pallet-cf-pools = { path = '../pallets/cf-pools', default-features = false  }
+pallet-cf-lp = { path = '../pallets/cf-lp', default-features = false }
+pallet-cf-pools = { path = '../pallets/cf-pools', default-features = false }
 pallet-cf-reputation = { path = '../pallets/cf-reputation', default-features = false }
 pallet-cf-funding = { path = '../pallets/cf-funding', default-features = false }
-pallet-cf-swapping = { path = '../pallets/cf-swapping', default-features = false  }
+pallet-cf-swapping = { path = '../pallets/cf-swapping', default-features = false }
 pallet-cf-threshold-signature = { path = '../pallets/cf-threshold-signature', default-features = false }
 pallet-cf-tokenholder-governance = { path = '../pallets/cf-tokenholder-governance', default-features = false }
 pallet-cf-validator = { path = '../pallets/cf-validator', default-features = false }
 pallet-cf-vaults = { path = '../pallets/cf-vaults', default-features = false }
-pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = false}
+pallet-cf-witnesser = { path = '../pallets/cf-witnesser', default-features = false }
 
 # SCALE
-codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
-scale-info = { version = '2.1.1', default-features = false, features = ['derive'] }
+codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = [
+  'derive',
+] }
+scale-info = { version = '2.1.1', default-features = false, features = [
+  'derive',
+] }
 
 # Additional FRAME pallets
 pallet-authorship = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false }
-pallet-session = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false, features = ['historical'] }
+pallet-session = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", default-features = false, features = [
+  'historical',
+] }
 
 # Substrate dependencies
 frame-benchmarking = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", optional = true, default-features = false }
@@ -96,6 +102,8 @@ pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/chainfl
 default = ['std']
 runtime-benchmarks = [
   'cf-chains/runtime-benchmarks',
+  'cf-primitives/runtime-benchmarks',
+  'cf-session-benchmarking/runtime-benchmarks',
   'cf-traits/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
@@ -107,12 +115,12 @@ runtime-benchmarks = [
   'pallet-cf-emissions/runtime-benchmarks',
   'pallet-cf-environment/runtime-benchmarks',
   'pallet-cf-flip/runtime-benchmarks',
+  'pallet-cf-funding/runtime-benchmarks',
   'pallet-cf-governance/runtime-benchmarks',
   'pallet-cf-ingress-egress/runtime-benchmarks',
   'pallet-cf-lp/runtime-benchmarks',
   'pallet-cf-pools/runtime-benchmarks',
   'pallet-cf-reputation/runtime-benchmarks',
-  'pallet-cf-funding/runtime-benchmarks',
   'pallet-cf-swapping/runtime-benchmarks',
   'pallet-cf-threshold-signature/runtime-benchmarks',
   'pallet-cf-tokenholder-governance/runtime-benchmarks',
@@ -121,14 +129,13 @@ runtime-benchmarks = [
   'pallet-cf-witnesser/runtime-benchmarks',
   'pallet-timestamp/runtime-benchmarks',
   'sp-runtime/runtime-benchmarks',
-  'cf-session-benchmarking/runtime-benchmarks',
 ]
 std = [
+  'cf-amm/std',
   'cf-chains/std',
   'cf-primitives/std',
   'cf-traits/std',
   'cf-utilities/std',
-  'cf-amm/std',
   'codec/std',
   'ethabi/std',
   'frame-benchmarking?/std',
@@ -148,12 +155,12 @@ std = [
   'pallet-cf-emissions/std',
   'pallet-cf-environment/std',
   'pallet-cf-flip/std',
+  'pallet-cf-funding/std',
   'pallet-cf-governance/std',
   'pallet-cf-ingress-egress/std',
   'pallet-cf-lp/std',
   'pallet-cf-pools/std',
   'pallet-cf-reputation/std',
-  'pallet-cf-funding/std',
   'pallet-cf-swapping/std',
   'pallet-cf-threshold-signature/std',
   'pallet-cf-tokenholder-governance/std',

@@ -70,7 +70,7 @@ impl<P: ECPoint> ShamirShare<P> {
 fn reconstruct_secret<P: ECPoint>(shares: &BTreeMap<AuthorityCount, ShamirShare<P>>) -> P::Scalar {
 	use crate::client::signing;
 
-	let all_idxs: BTreeSet<AuthorityCount> = shares.keys().into_iter().cloned().collect();
+	let all_idxs: BTreeSet<AuthorityCount> = shares.keys().cloned().collect();
 
 	shares.iter().fold(P::Scalar::zero(), |acc, (index, ShamirShare { value })| {
 		acc + signing::get_lagrange_coeff::<P>(*index, &all_idxs) * value
@@ -78,7 +78,6 @@ fn reconstruct_secret<P: ECPoint>(shares: &BTreeMap<AuthorityCount, ShamirShare<
 }
 
 /// Context used in hashing to prevent replay attacks
-#[derive(Clone)]
 pub struct HashContext(pub [u8; 32]);
 
 /// Generate challenge against which a ZKP of our secret will be generated
@@ -213,7 +212,6 @@ fn generate_secret_and_shares<P: ECPoint>(
 	// Coefficients for the sharing polynomial used to share `secret` via the Shamir Secret Sharing
 	// scheme (Figure 1: Round 1, Step 1)
 	let coefficients: Vec<_> = (0..sharing_parameters.key_params.threshold)
-		.into_iter()
 		.map(|_| P::Scalar::random(rng))
 		.collect();
 
@@ -309,14 +307,11 @@ mod serialisation {
 
 	#[cfg(test)]
 	mod tests {
-		use crate::{
-			bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, ChainTag, CryptoScheme,
-		};
+		use crate::{client::helpers::test_all_crypto_schemes, ChainTag, CryptoScheme};
+
 		#[test]
 		fn check_comm3_max_size() {
-			check_comm3_size_for_scheme::<EthSigning>();
-			check_comm3_size_for_scheme::<BtcSigning>();
-			check_comm3_size_for_scheme::<PolkadotSigning>();
+			test_all_crypto_schemes!(check_comm3_size_for_scheme);
 		}
 
 		fn check_comm3_size_for_scheme<C: CryptoScheme>() {

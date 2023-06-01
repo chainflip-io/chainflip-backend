@@ -37,7 +37,6 @@ pub mod none;
 
 pub mod address;
 
-#[cfg(feature = "std")]
 pub mod mocks;
 
 /// A trait representing all the types and constants that need to be implemented for supported

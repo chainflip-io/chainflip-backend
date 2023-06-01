@@ -20,7 +20,6 @@ use sp_std::{
 	prelude::*,
 };
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 mod vault_rotator;
@@ -31,9 +30,7 @@ use response_status::ResponseStatus;
 
 pub mod weights;
 pub use weights::WeightInfo;
-#[cfg(test)]
 mod mock;
-#[cfg(test)]
 mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);

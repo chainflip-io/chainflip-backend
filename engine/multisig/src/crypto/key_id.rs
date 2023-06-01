@@ -20,7 +20,7 @@ impl KeyId {
 
 impl CanonicalEncoding for cf_chains::dot::PolkadotPublicKey {
 	fn encode_key(&self) -> Vec<u8> {
-		self.0.to_vec()
+		self.aliased_ref().to_vec()
 	}
 }
 

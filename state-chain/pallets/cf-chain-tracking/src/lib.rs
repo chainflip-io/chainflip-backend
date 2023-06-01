@@ -2,11 +2,8 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-#[cfg(test)]
 mod mock;
-#[cfg(test)]
 mod tests;
 
 pub mod weights;
@@ -95,7 +92,6 @@ pub mod pallet {
 				};
 				Ok(())
 			})?;
-
 			Self::deposit_event(Event::<T, I>::ChainStateUpdated { state });
 
 			Ok(().into())

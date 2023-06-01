@@ -19,32 +19,32 @@ secp256k1 = { version = "0.27", features = ["rand-std"] }
 arrayref = '0.3.6'
 
 # Chainflip local dependencies
-state-chain-runtime = { path = '../runtime'}
-chainflip-node = { path = '../node'}
-cf-traits = { path = '../traits'}
-cf-primitives = { path = '../primitives' }
+# Additional FRAME pallets
 cf-amm = { path = '../amm' }
 cf-chains = { path = '../chains', features = ['runtime-integration-tests']}
+cf-primitives = { path = '../primitives' }
 cf-test-utilities = { path = '../test-utilities' }
-pallet-cf-validator = { path = '../pallets/cf-validator'}
-pallet-cf-funding = { path = '../pallets/cf-funding'}
-pallet-cf-witnesser = { path = '../pallets/cf-witnesser'}
-pallet-cf-flip = { path = '../pallets/cf-flip'}
-pallet-cf-emissions = { path = '../pallets/cf-emissions'}
-pallet-cf-governance = { path = '../pallets/cf-governance'}
-pallet-cf-reputation = { path = '../pallets/cf-reputation'}
-pallet-cf-vaults = { path = '../pallets/cf-vaults'}
-pallet-cf-threshold-signature = { path = '../pallets/cf-threshold-signature'}
-pallet-cf-broadcast = { path = '../pallets/cf-broadcast'}
-pallet-cf-environment = { path = '../pallets/cf-environment'}
-pallet-cf-account-roles = { path = '../pallets/cf-account-roles'}
-pallet-cf-ingress-egress = { path = '../pallets/cf-ingress-egress' }
-pallet-cf-swapping ={ path = '../pallets/cf-swapping' }
-pallet-cf-pools ={ path = '../pallets/cf-pools' }
-pallet-cf-lp ={ path = '../pallets/cf-lp' }
-# Additional FRAME pallets
+cf-traits = { path = '../traits'}
+chainflip-node = { path = '../node'}
 pallet-authorship = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
+pallet-cf-account-roles = { path = '../pallets/cf-account-roles'}
+pallet-cf-broadcast = { path = '../pallets/cf-broadcast'}
+pallet-cf-emissions = { path = '../pallets/cf-emissions'}
+pallet-cf-environment = { path = '../pallets/cf-environment'}
+pallet-cf-flip = { path = '../pallets/cf-flip'}
+pallet-cf-funding = { path = '../pallets/cf-funding'}
+pallet-cf-governance = { path = '../pallets/cf-governance'}
+pallet-cf-ingress-egress = { path = '../pallets/cf-ingress-egress' }
+pallet-cf-lp ={ path = '../pallets/cf-lp' }
+pallet-cf-pools ={ path = '../pallets/cf-pools' }
+pallet-cf-reputation = { path = '../pallets/cf-reputation'}
+pallet-cf-swapping ={ path = '../pallets/cf-swapping' }
+pallet-cf-threshold-signature = { path = '../pallets/cf-threshold-signature'}
+pallet-cf-validator = { path = '../pallets/cf-validator'}
+pallet-cf-vaults = { path = '../pallets/cf-vaults'}
+pallet-cf-witnesser = { path = '../pallets/cf-witnesser'}
 pallet-session = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2", features = ['historical'] }
+state-chain-runtime = { path = '../runtime'}
 
 # Substrate dependencies
 codec = { package = "parity-scale-codec", version = "3.1.1", features = ["derive"] }

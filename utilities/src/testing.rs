@@ -18,6 +18,7 @@ pub fn assert_future_can_complete<I>(f: impl Future<Output = I>) -> I {
 	assert_ok!(f.now_or_never())
 }
 
+#[track_caller]
 pub fn with_file<C: FnOnce(&Path)>(text: &[u8], closure: C) {
 	let mut tempfile = tempfile::NamedTempFile::new().unwrap();
 	tempfile.write_all(text).unwrap();
@@ -26,6 +27,7 @@ pub fn with_file<C: FnOnce(&Path)>(text: &[u8], closure: C) {
 
 /// Create a temp directory that will be deleted when `TempDir` is dropped.
 /// Also returns the path to a non-existent file in the directory.
+#[track_caller]
 pub fn new_temp_directory_with_nonexistent_file() -> (TempDir, PathBuf) {
 	let tempdir = tempfile::TempDir::new().unwrap();
 	let tempfile = tempdir.path().to_owned().join("file");
@@ -37,6 +39,7 @@ pub async fn recv_with_timeout<I>(receiver: &mut UnboundedReceiver<I>) -> Option
 	tokio::time::timeout(CHANNEL_TIMEOUT, receiver.recv()).await.ok()?
 }
 
+#[track_caller]
 pub async fn expect_recv_with_timeout<Item: std::fmt::Debug>(
 	receiver: &mut UnboundedReceiver<Item>,
 ) -> Item {

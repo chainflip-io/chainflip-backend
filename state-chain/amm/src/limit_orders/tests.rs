@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use crate::{
 	common::{mul_div, sqrt_price_at_tick, tick_at_sqrt_price, MAX_TICK, MIN_TICK},
 	limit_orders, range_orders,
@@ -73,13 +75,12 @@ fn test_float() {
 		(numerator, rng_u256_inclusive_bound(rng, numerator..=U256::MAX))
 	}
 
-	for x in std::iter::repeat(()).take(16).into_iter().map(|_| rng_u256(&mut rng)) {
+	for x in std::iter::repeat(()).take(16).map(|_| rng_u256(&mut rng)) {
 		assert_eq!(FloatBetweenZeroAndOne::max(), FloatBetweenZeroAndOne::max().mul_div_ceil(x, x));
 	}
 
 	for ((x, y), z) in std::iter::repeat(())
 		.take(16)
-		.into_iter()
 		.map(|_| (rng_u256_numerator_denominator(&mut rng), rng_u256(&mut rng)))
 	{
 		let f = FloatBetweenZeroAndOne::max().mul_div_ceil(x, y);
@@ -87,9 +88,8 @@ fn test_float() {
 		assert_eq!((z, z), FloatBetweenZeroAndOne::integer_mul_div(z, &f, &f));
 	}
 
-	for ((x, y), z) in (0..16)
-		.into_iter()
-		.map(|_| (rng_u256_numerator_denominator(&mut rng), rng_u256(&mut rng)))
+	for ((x, y), z) in
+		(0..16).map(|_| (rng_u256_numerator_denominator(&mut rng), rng_u256(&mut rng)))
 	{
 		let (floor, ceil) = FloatBetweenZeroAndOne::integer_mul_div(
 			z,
@@ -106,7 +106,6 @@ fn test_float() {
 		let initial_float = FloatBetweenZeroAndOne::max();
 
 		let (final_value_floor, final_value_ceil, final_float) = (0..rng.gen_range(8, 256))
-			.into_iter()
 			.map(|_| rng_u256_numerator_denominator(&mut rng))
 			.fold(
 				(initial_value, initial_value, initial_float.clone()),
