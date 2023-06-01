@@ -19,7 +19,8 @@ async function main() {
 	const keyring = new Keyring({type: 'sr25519'});
 	const snowwhite_uri = process.env.SNOWWHITE_URI || 'market outdoor rubber basic simple banana resist quarter lab random hurdle cruise';
 	const snowwhite = keyring.createFromUri(snowwhite_uri);
-	const alice = keyring.createFromUri('//Alice');
+	const alice_uri = process.env.POLKADOT_ALICE_URI || "//Alice";
+	const alice = keyring.createFromUri(alice_uri);
 	const chainflip = await ApiPromise.create({provider: new WsProvider(cf_node_endpoint), noInitWarn: true});
 	const polkadot = await ApiPromise.create({provider: new WsProvider(polkadot_endpoint), noInitWarn: true});
 
