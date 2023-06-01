@@ -5,7 +5,7 @@
 # This command takes one argument.
 # It will print the Bitcoin balance of the address provided as the first argument.
 #
-# For example: ./commands/get_btc_balance.sh bcrt1ptdd9uy58dxf8ua9y7z0xf89y32qpmul600zgnmrga299vce8m9qq23ej63
+# For example: ./commands/get_btc_balance.sh bcrt1ptdd9uy58dxf8ua9y7z0xf89y32qpmul600zgnmrga299vce8m9qq23ej63 
 # might print: 1.2
 
 if [ -z "${BTC_ENDPOINT}" ]; then

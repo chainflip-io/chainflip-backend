@@ -22,7 +22,7 @@ use cf_chains::{
 	},
 	btc::{
 		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
-		Bitcoin, BitcoinFeeInfo, BitcoinTransactionData, ScriptPubkey, UtxoId,
+		Bitcoin, BitcoinFeeInfo, BitcoinTransactionData, UtxoId, CHANGE_ADDRESS_SALT,
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
@@ -514,11 +514,11 @@ impl DepositHandler<Bitcoin> for BtcDepositHandler {
 	}
 
 	fn on_channel_opened(
-		script_pubkey: ScriptPubkey,
+		deposit_script: <Bitcoin as Chain>::ChainAccount,
 		salt: ChannelId,
 	) -> Result<(), DispatchError> {
 		Environment::add_details_for_btc_deposit_script(
-			script_pubkey,
+			deposit_script,
 			salt.try_into().expect("The salt/channel_id is not expected to exceed u32 max"), /* Todo: Confirm
 			                                                                                  * this assumption.
 			                                                                                  * Consider this in
@@ -534,7 +534,6 @@ impl DepositHandler<Bitcoin> for BtcDepositHandler {
 }
 
 pub struct ChainAddressConverter;
-
 impl AddressConverter for ChainAddressConverter {
 	fn try_to_encoded_address(
 		address: ForeignChainAddress,
@@ -589,14 +588,15 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 	fn on_broadcast_ready(api_call: &Self::ApiCall) {
 		match api_call {
 			BitcoinApi::BatchTransfer(batch_transfer) => {
-				let tx_id = batch_transfer.bitcoin_transaction.txid();
+				let tx_hash = batch_transfer.bitcoin_transaction.txid();
 				let outputs = batch_transfer.bitcoin_transaction.outputs.clone();
 				let output_len = outputs.len();
 				let vout = output_len - 1;
 				let change_output = outputs.get(vout).unwrap();
 				Environment::add_bitcoin_change_utxo(
 					change_output.amount,
-					UtxoId { tx_id, vout: vout as u32 },
+					UtxoId { tx_hash, vout: vout as u32 },
+					CHANGE_ADDRESS_SALT,
 					batch_transfer.change_utxo_key,
 				);
 			},

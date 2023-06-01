@@ -4,7 +4,7 @@
 //
 // Arguments:
 // timeout - (optional, default=10000) The command will fail after this many milliseconds
-// succeed_on - If ALL of the provided events are observed, the command will succeed. Events are
+// succeed_on - If ALL of the provided events are observed, the command will succeed. Events are 
 //              separated by commas
 // fail_on - If ANY of the provided events is observed, the command will fail
 //
@@ -39,10 +39,10 @@ async function main() {
 					if(print_event) {
 						console.log(event.data.toString());
 					}
-					// remove the expected event from the list
+					// remove the expected event from the list 
 					expected_events.splice(i, 1);
 					break;
-				}
+				} 
 			}
 			if(expected_events.length == 0){
 				process.exit(0);

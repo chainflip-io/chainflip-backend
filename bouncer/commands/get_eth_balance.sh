@@ -5,7 +5,7 @@
 // This command takes one argument.
 // It will print the Eth balance of the address provided as the first argument.
 //
-// For example: ./commands/get_eth_balance.sh 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6
+// For example: ./commands/get_eth_balance.sh 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6 
 // might print: 1.2
 
 const Web3 = require('web3');
