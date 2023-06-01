@@ -85,6 +85,6 @@ impl<
 
 	pub fn get_pending_callbacks() -> Vec<C> {
 		let max = Self::get_value(b"BROADCAST_ID").unwrap_or(1);
-		(0u32..=max).filter_map(|id| Self::take_storage(b"CALLBACKS", &id)).collect()
+		(0u32..=max).filter_map(|id| Self::take_storage(b"CALLBACKS", id)).collect()
 	}
 }

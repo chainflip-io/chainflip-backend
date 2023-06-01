@@ -424,7 +424,7 @@ fn addresses_are_getting_reused() {
 		// Close the channels.
 		.then_execute_as_next_block(|channels| {
 			for (id, address, _asset) in &channels {
-				IngressEgress::close_channel(*id, address.clone());
+				IngressEgress::close_channel(*id, *address);
 			}
 			channels[0]
 		})

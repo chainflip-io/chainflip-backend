@@ -97,22 +97,18 @@ pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 // Configure a mock runtime to test the pallet.
 cf_test_utilities::impl_test_helpers!(Test);
 
+type TestChainAccount = <<Test as crate::Config>::TargetChain as Chain>::ChainAccount;
+type TestChainAmount = <<Test as crate::Config>::TargetChain as Chain>::ChainAmount;
+type TestChainAsset = <<Test as crate::Config>::TargetChain as Chain>::ChainAsset;
+
 pub trait RequestAddressAndDeposit {
 	fn request_address_and_deposit(
 		self,
-		requests: &[(
-			<Test as frame_system::Config>::AccountId,
-			<<Test as crate::Config>::TargetChain as Chain>::ChainAsset,
-			<<Test as crate::Config>::TargetChain as Chain>::ChainAmount,
-		)],
+		requests: &[(<Test as frame_system::Config>::AccountId, TestChainAsset, TestChainAmount)],
 	) -> cf_test_utilities::TestExternalities<
 		Test,
 		AllPalletsWithSystem,
-		Vec<(
-			ChannelId,
-			<<Test as crate::Config>::TargetChain as Chain>::ChainAccount,
-			<<Test as crate::Config>::TargetChain as Chain>::ChainAsset,
-		)>,
+		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
 	>;
 }
 
@@ -121,20 +117,16 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 		self,
 		deposit_details: &[(
 			<Test as frame_system::Config>::AccountId,
-			<<Test as crate::Config>::TargetChain as Chain>::ChainAsset,
-			<<Test as crate::Config>::TargetChain as Chain>::ChainAmount,
+			TestChainAsset,
+			TestChainAmount,
 		)],
 	) -> cf_test_utilities::TestExternalities<
 		Test,
 		AllPalletsWithSystem,
-		Vec<(
-			ChannelId,
-			<<Test as crate::Config>::TargetChain as Chain>::ChainAccount,
-			<<Test as crate::Config>::TargetChain as Chain>::ChainAsset,
-		)>,
+		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
 	> {
 		let (requests, amounts): (Vec<_>, Vec<_>) = deposit_details
-			.into_iter()
+			.iter()
 			.copied()
 			.map(|(acct, asset, amount)| ((acct, asset), amount))
 			.unzip();
@@ -142,15 +134,15 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 		self.request_deposit_addresses(&requests[..])
 			.then_apply_extrinsics(move |channel| {
 				channel
-					.into_iter()
+					.iter()
 					.zip(amounts)
-					.filter_map(|(&(_channel_id, ref deposit_address, asset), amount)| {
+					.filter_map(|(&(_channel_id, deposit_address, asset), amount)| {
 						(!amount.is_zero()).then_some((
 							OriginTrait::none(),
 							RuntimeCall::from(pallet_cf_ingress_egress::Call::process_deposits {
 								deposit_witnesses: vec![DepositWitness {
-									deposit_address: deposit_address.clone().try_into().unwrap(),
-									asset: asset.into(),
+									deposit_address,
+									asset,
 									amount,
 									tx_id: Default::default(),
 								}],
@@ -161,7 +153,7 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 			})
 			.map_context(|(deposit_details, extrinsic_results)| {
 				for (call, result) in extrinsic_results {
-					assert!(result.is_ok(), "Extrinsic failed: {:?}", call);
+					assert!(result.is_ok(), "Extrinsic failed: {call:?}");
 				}
 				deposit_details
 			})
@@ -171,18 +163,11 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 pub trait RequestAddress {
 	fn request_deposit_addresses(
 		self,
-		requests: &[(
-			<Test as frame_system::Config>::AccountId,
-			<<Test as crate::Config>::TargetChain as Chain>::ChainAsset,
-		)],
+		requests: &[(<Test as frame_system::Config>::AccountId, TestChainAsset)],
 	) -> cf_test_utilities::TestExternalities<
 		Test,
 		AllPalletsWithSystem,
-		Vec<(
-			ChannelId,
-			<<Test as crate::Config>::TargetChain as Chain>::ChainAccount,
-			<<Test as crate::Config>::TargetChain as Chain>::ChainAsset,
-		)>,
+		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
 	>;
 }
 
@@ -191,28 +176,19 @@ impl<Ctx: Clone> RequestAddress
 {
 	fn request_deposit_addresses(
 		self,
-		requests: &[(
-			<Test as frame_system::Config>::AccountId,
-			<<Test as crate::Config>::TargetChain as Chain>::ChainAsset,
-		)],
+		requests: &[(<Test as frame_system::Config>::AccountId, TestChainAsset)],
 	) -> cf_test_utilities::TestExternalities<
 		Test,
 		AllPalletsWithSystem,
-		Vec<(
-			ChannelId,
-			<<Test as crate::Config>::TargetChain as Chain>::ChainAccount,
-			<<Test as crate::Config>::TargetChain as Chain>::ChainAsset,
-		)>,
+		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
 	> {
 		self.then_execute_as_next_block(|_| {
 			requests
-				.into_iter()
+				.iter()
 				.copied()
 				.map(|(broker, asset)| {
 					IngressEgress::request_liquidity_deposit_address(broker, asset)
-						.map(|(id, addr)| {
-							(id, <<Test as crate::Config>::TargetChain as Chain>::ChainAccount::try_from(addr).unwrap(), asset)
-						})
+						.map(|(id, addr)| (id, TestChainAccount::try_from(addr).unwrap(), asset))
 						.unwrap()
 				})
 				.collect()
