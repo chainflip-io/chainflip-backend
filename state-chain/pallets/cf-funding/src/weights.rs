@@ -38,6 +38,7 @@ pub trait WeightInfo {
 	fn stop_bidding() -> Weight;
 	fn start_bidding() -> Weight;
 	fn update_minimum_funding() -> Weight;
+	fn update_redemption_tax() -> Weight;
 }
 
 /// Weights for pallet_cf_funding using the Substrate node and recommended hardware.
@@ -183,6 +184,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_ref_time(14_000_000)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
+
+	fn update_redemption_tax() -> Weight{
+		Weight::from_ref_time(1_000_000)
+	}
 }
 
 // For backwards compatibility and tests
@@ -326,5 +331,9 @@ impl WeightInfo for () {
 		// Minimum execution time: 14_000 nanoseconds.
 		Weight::from_ref_time(14_000_000)
 			.saturating_add(RocksDbWeight::get().writes(1))
+	}
+
+	fn update_redemption_tax() -> Weight{
+		Weight::from_ref_time(1_000_000)
 	}
 }

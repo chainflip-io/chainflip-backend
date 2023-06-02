@@ -25,7 +25,7 @@ async function main() {
 	}
 	const web3 = new Web3(eth_endpoint);
 	const chainid = await web3.eth.getChainId();
-	const whaleKey = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+	const whaleKey = process.env.ETH_USDC_WHALE || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 	const tx = {to: ethereum_address,
 				value: wei_amount,
 				gas: 2000000};

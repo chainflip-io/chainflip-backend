@@ -110,6 +110,7 @@ impl ExtBuilder {
 			flip: FlipConfig { total_issuance: TOTAL_ISSUANCE },
 			funding: FundingConfig {
 				genesis_accounts: self.genesis_accounts.clone(),
+				redemption_tax: MIN_FUNDING / 2,
 				minimum_funding: MIN_FUNDING,
 				redemption_ttl: core::time::Duration::from_secs(3 * REDEMPTION_DELAY_SECS),
 				redemption_delay_buffer_seconds: REDEMPTION_DELAY_BUFFER_SECS,
@@ -138,6 +139,7 @@ impl ExtBuilder {
 					})
 					.collect(),
 				genesis_backups: Default::default(),
+				genesis_vanity_names: Default::default(),
 				blocks_per_epoch: self.blocks_per_epoch,
 				bond: self.genesis_accounts.iter().map(|(.., amount)| *amount).min().unwrap(),
 				redemption_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_REDEEMABLE,

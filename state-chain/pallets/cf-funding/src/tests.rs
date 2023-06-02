@@ -1,6 +1,6 @@
 use crate::{
 	mock::*, pallet, ActiveBidder, Error, EthereumAddress, PendingRedemptions, RedemptionAmount,
-	RestrictedAddresses, RestrictedBalances,
+	RedemptionTax, RestrictedAddresses, RestrictedBalances,
 };
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
@@ -279,6 +279,8 @@ fn redemption_cannot_occur_without_funding_first() {
 #[test]
 fn cannot_redeem_bond() {
 	new_test_ext().execute_with(|| {
+		assert_ok!(Funding::update_redemption_tax(RuntimeOrigin::root(), 0));
+		assert_ok!(Funding::update_minimum_funding(RuntimeOrigin::root(), 1));
 		const AMOUNT: u128 = 200;
 		const BOND: u128 = 102;
 		MockEpochInfo::set_bond(BOND);
@@ -498,7 +500,13 @@ fn redemption_expiry_removes_redemption() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 45;
 
-		assert_ok!(Funding::funded(RuntimeOrigin::root(), ALICE, AMOUNT, ETH_DUMMY_ADDR, TX_HASH));
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT * 2,
+			ETH_DUMMY_ADDR,
+			TX_HASH
+		));
 
 		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR));
 		assert_noop!(
@@ -557,6 +565,19 @@ fn restricted_funds_getting_recorded() {
 }
 
 #[test]
+fn can_update_redemption_tax() {
+	new_test_ext().execute_with(|| {
+		let amount = 1_000;
+		assert_ok!(Funding::update_minimum_funding(RuntimeOrigin::root(), amount + 1));
+		assert_ok!(Funding::update_redemption_tax(RuntimeOrigin::root(), amount));
+		assert_eq!(RedemptionTax::<Test>::get(), amount);
+		System::assert_last_event(RuntimeEvent::Funding(
+			crate::Event::<Test>::RedemptionTaxAmountUpdated { amount },
+		));
+	});
+}
+
+#[test]
 fn restricted_funds_getting_reduced() {
 	new_test_ext().execute_with(|| {
 		const RESTRICTED_ADDRESS: EthereumAddress = [0x42; 20];
@@ -579,6 +600,18 @@ fn restricted_funds_getting_reduced() {
 		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, 10, TX_HASH));
 		// Expect the restricted balance to be 70
 		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(), &40);
+	});
+}
+
+#[test]
+fn redemption_tax_cannot_be_larger_than_minimum_funding() {
+	new_test_ext().execute_with(|| {
+		let amount = 1_000;
+		assert_ok!(Funding::update_minimum_funding(RuntimeOrigin::root(), amount));
+		assert_noop!(
+			Funding::update_redemption_tax(RuntimeOrigin::root(), amount),
+			Error::<Test>::InvalidRedemptionTaxUpdate
+		);
 	});
 }
 
@@ -877,4 +910,39 @@ mod test_restricted_balances {
 			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
 		),
 	];
+}
+
+#[test]
+fn cannot_redeem_lower_than_redemption_tax() {
+	new_test_ext().execute_with(|| {
+		let amount = 1_000;
+		assert_ok!(Funding::update_minimum_funding(RuntimeOrigin::root(), amount + 1));
+		assert_ok!(Funding::update_redemption_tax(RuntimeOrigin::root(), amount));
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			amount,
+			Default::default(),
+			Default::default(),
+		));
+
+		// Redemtion amount must be larger than the Withdrawal Tax
+		assert_noop!(
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				RedemptionAmount::Exact(amount),
+				Default::default(),
+			),
+			crate::Error::<Test>::RedemptionAmountTooLow
+		);
+
+		// Reduce the withdrawal tax
+		assert_ok!(Funding::update_redemption_tax(RuntimeOrigin::root(), amount - 1));
+
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			RedemptionAmount::Exact(amount),
+			Default::default()
+		));
+	});
 }
