@@ -776,7 +776,13 @@ mod test_restricted_balances {
 							result,
 						)
 					)
-					.unwrap_or_else(|e| {
+					.unwrap_or_else(|_| {
+						let address = match address {
+							UNRESTRICTED_ADDRESS => "UNRESTRICTED_ADDRESS",
+							RESTRICTED_ADDRESS_1 => "RESTRICTED_ADDRESS_1",
+							RESTRICTED_ADDRESS_2 => "RESTRICTED_ADDRESS_2",
+							_ => unreachable!(),
+						};
 						panic!("Test failed with (amount, address) = {:?}", (amount, address));
 					})
 				}
@@ -795,29 +801,29 @@ mod test_restricted_balances {
 	];
 	test_restricted_balances![
 		anything_above_100_can_only_be_redeemed_to_restricted_addresses,
-		(101, UNRESTRICTED_ADDRESS, Some(Error::InvalidRedemption)),
+		(101, UNRESTRICTED_ADDRESS, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
 		(101, RESTRICTED_ADDRESS_1, None),
 		(101, RESTRICTED_ADDRESS_2, None),
-		(300, UNRESTRICTED_ADDRESS, Some(Error::InvalidRedemption)),
+		(300, UNRESTRICTED_ADDRESS, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
 		(300, RESTRICTED_ADDRESS_1, None),
 		(300, RESTRICTED_ADDRESS_2, None),
 	];
 	test_restricted_balances![
 		anything_above_300_and_up_to_900_can_only_be_redeemed_to_restricted_address_2,
-		(301, UNRESTRICTED_ADDRESS, Some(Error::InvalidRedemption)),
-		(301, RESTRICTED_ADDRESS_1, Some(Error::InvalidRedemption)),
+		(301, UNRESTRICTED_ADDRESS, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
+		(301, RESTRICTED_ADDRESS_1, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
 		(301, RESTRICTED_ADDRESS_2, None),
-		(900, UNRESTRICTED_ADDRESS, Some(Error::InvalidRedemption)),
-		(900, RESTRICTED_ADDRESS_1, Some(Error::InvalidRedemption)),
+		(900, UNRESTRICTED_ADDRESS, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
+		(900, RESTRICTED_ADDRESS_1, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
 		(900, RESTRICTED_ADDRESS_2, None),
 	];
 	test_restricted_balances![
 		redemptions_of_more_than_900_are_not_possible,
-		(901, UNRESTRICTED_ADDRESS, Some(Error::InvalidRedemption)),
-		(901, RESTRICTED_ADDRESS_1, Some(Error::InvalidRedemption)),
-		(901, RESTRICTED_ADDRESS_2, Some(Error::InvalidRedemption)),
-		(1100, UNRESTRICTED_ADDRESS, Some(Error::InvalidRedemption)),
-		(1100, RESTRICTED_ADDRESS_1, Some(Error::InvalidRedemption)),
-		(1100, RESTRICTED_ADDRESS_2, Some(Error::InvalidRedemption)),
+		(901, UNRESTRICTED_ADDRESS, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
+		(901, RESTRICTED_ADDRESS_1, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
+		(901, RESTRICTED_ADDRESS_2, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
+		(1100, UNRESTRICTED_ADDRESS, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
+		(1100, RESTRICTED_ADDRESS_1, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
+		(1100, RESTRICTED_ADDRESS_2, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
 	];
 }
