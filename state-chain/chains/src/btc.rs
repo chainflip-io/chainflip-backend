@@ -14,7 +14,7 @@ use base58::{FromBase58, ToBase58};
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
 pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{
-	chains::assets, DEFAULT_FEE_SATS_PER_BYTE, INPUT_UTXO_SIZE_IN_BYTES,
+	chains::assets, DEFAULT_FEE_SATS_PER_KILO_BYTE, INPUT_UTXO_SIZE_IN_BYTES,
 	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
 };
 use cf_utilities::SliceToArray;
@@ -100,25 +100,34 @@ pub struct BitcoinFeeInfo {
 	pub min_fee_required_per_tx: BtcAmount,
 }
 
+const BYTES_PER_KILOBYTE: BtcAmount = 1024;
+
 impl Default for BitcoinFeeInfo {
 	fn default() -> Self {
 		Self {
-			fee_per_input_utxo: DEFAULT_FEE_SATS_PER_BYTE * INPUT_UTXO_SIZE_IN_BYTES,
-			fee_per_output_utxo: DEFAULT_FEE_SATS_PER_BYTE * OUTPUT_UTXO_SIZE_IN_BYTES,
-			min_fee_required_per_tx: DEFAULT_FEE_SATS_PER_BYTE * MINIMUM_BTC_TX_SIZE_IN_BYTES,
+			fee_per_input_utxo: DEFAULT_FEE_SATS_PER_KILO_BYTE * INPUT_UTXO_SIZE_IN_BYTES /
+				BYTES_PER_KILOBYTE,
+			fee_per_output_utxo: DEFAULT_FEE_SATS_PER_KILO_BYTE * OUTPUT_UTXO_SIZE_IN_BYTES /
+				BYTES_PER_KILOBYTE,
+			min_fee_required_per_tx: DEFAULT_FEE_SATS_PER_KILO_BYTE * MINIMUM_BTC_TX_SIZE_IN_BYTES /
+				BYTES_PER_KILOBYTE,
 		}
 	}
 }
 
 impl BitcoinFeeInfo {
-	pub fn new(sats_per_byte: BtcAmount) -> Self {
+	pub fn new(sats_per_kilo_byte: BtcAmount) -> Self {
 		Self {
 			// Our input utxos are approximately 178 bytes each in the Btc transaction
-			fee_per_input_utxo: sats_per_byte * INPUT_UTXO_SIZE_IN_BYTES,
+			fee_per_input_utxo: sats_per_kilo_byte.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) /
+				BYTES_PER_KILOBYTE,
 			// Our output utxos are approximately 34 bytes each in the Btc transaction
-			fee_per_output_utxo: sats_per_byte * OUTPUT_UTXO_SIZE_IN_BYTES,
+			fee_per_output_utxo: sats_per_kilo_byte.saturating_mul(OUTPUT_UTXO_SIZE_IN_BYTES) /
+				BYTES_PER_KILOBYTE,
 			// Minimum size of tx that does not scale with input and output utxos is 12 bytes
-			min_fee_required_per_tx: sats_per_byte * MINIMUM_BTC_TX_SIZE_IN_BYTES,
+			min_fee_required_per_tx: sats_per_kilo_byte
+				.saturating_mul(MINIMUM_BTC_TX_SIZE_IN_BYTES) /
+				BYTES_PER_KILOBYTE,
 		}
 	}
 }
