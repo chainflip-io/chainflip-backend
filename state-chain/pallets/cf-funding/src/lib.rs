@@ -169,6 +169,11 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+	/// Redeem address for an restricted account.
+	#[pallet::storage]
+	pub type RedeemAddress<T: Config> =
+		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress, ValueQuery>;
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
@@ -370,8 +375,6 @@ pub mod pallet {
 			if RestrictedBalances::<T>::contains_key(account_id.clone()) {
 				// We're talking about the current address
 				if RestrictedAddresses::<T>::contains_key(address) {
-					// ensure that restricted balance for the address is higher than the amount we
-					// try to redeem
 					RestrictedBalances::<T>::mutate_exists(&account_id, |maybe_entry| {
 						if let Some(entry) = maybe_entry {
 							entry.entry(address).and_modify(|balance| {
@@ -393,6 +396,15 @@ pub mod pallet {
 					ensure!(
 						amount <= available_balance,
 						Error::<T>::AmountToRedeemIsHigherThanRestrictedBalance
+					);
+				}
+			} else {
+				// We have an redeem address
+				if RedeemAddress::<T>::contains_key(account_id.clone()) {
+					// Ensure that the redeem address is the same as the one we try to redeem to
+					ensure!(
+						RedeemAddress::<T>::get(account_id.clone()) == address,
+						Error::<T>::InvalidRedemption
 					);
 				}
 			}
@@ -595,6 +607,16 @@ pub mod pallet {
 				RestrictedAddresses::<T>::remove(address);
 				Self::deposit_event(Event::RemovedRestrictedAddress { address });
 			}
+			Ok(().into())
+		}
+
+		#[pallet::weight(10_000)]
+		pub fn bind_redeem_address(
+			origin: OriginFor<T>,
+			address: EthereumAddress,
+		) -> DispatchResultWithPostInfo {
+			let account_id = ensure_signed(origin)?;
+			RedeemAddress::<T>::insert(&account_id, address);
 			Ok(().into())
 		}
 	}

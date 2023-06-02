@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, pallet, ActiveBidder, Error, EthereumAddress, PendingRedemptions, RedemptionAmount,
-	RestrictedAddresses, RestrictedBalances,
+	mock::*, pallet, ActiveBidder, Error, EthereumAddress, PendingRedemptions, RedeemAddress,
+	RedemptionAmount, RestrictedAddresses, RestrictedBalances,
 };
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
@@ -696,5 +696,29 @@ fn can_withdrawal_also_free_funds_to_restricted_address() {
 			RESTRICTED_ADDRESS_1
 		));
 		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS_1).unwrap(), &0);
+	});
+}
+
+#[test]
+fn can_only_redeem_funds_to_redeem_address() {
+	new_test_ext().execute_with(|| {
+		const RESTRICTED_ADDRESS_1: EthereumAddress = [0x01; 20];
+		const REDEEM_ADDRESS: EthereumAddress = [0x02; 20];
+		const UNRESTRICTED_ADDRESS: EthereumAddress = [0x03; 20];
+		const AMOUNT: u128 = 100;
+		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
+		RedeemAddress::<Test>::insert(ALICE, REDEEM_ADDRESS);
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			UNRESTRICTED_ADDRESS,
+			TX_HASH
+		));
+		assert_noop!(
+			Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), UNRESTRICTED_ADDRESS),
+			Error::<Test>::InvalidRedemption
+		);
+		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), REDEEM_ADDRESS));
 	});
 }
