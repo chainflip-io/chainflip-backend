@@ -49,27 +49,31 @@ pub const DOPEY_ED25519: [u8; 32] =
 pub const SNOW_WHITE_SR25519: [u8; 32] =
 	hex_literal::hex!["ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"];
 
-pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance)> {
+pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8>>)> {
 	vec![
 		(
 			get_account_id_from_seed::<sr25519::Public>("LP_1"),
 			AccountRole::LiquidityProvider,
 			100 * FLIPPERINOS_PER_FLIP,
+			Some(b"Chainflip Testnet LP 1".to_vec()),
 		),
 		(
 			get_account_id_from_seed::<sr25519::Public>("LP_2"),
 			AccountRole::LiquidityProvider,
 			100 * FLIPPERINOS_PER_FLIP,
+			Some(b"Chainflip Testnet LP 2".to_vec()),
 		),
 		(
 			get_account_id_from_seed::<sr25519::Public>("BROKER_1"),
 			AccountRole::Broker,
 			100 * FLIPPERINOS_PER_FLIP,
+			Some(b"Chainflip Testnet Broker 1".to_vec()),
 		),
 		(
 			get_account_id_from_seed::<sr25519::Public>("BROKER_2"),
 			AccountRole::Broker,
 			100 * FLIPPERINOS_PER_FLIP,
+			Some(b"Chainflip Testnet Broker 2".to_vec()),
 		),
 	]
 }
