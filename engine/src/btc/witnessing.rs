@@ -77,7 +77,7 @@ pub async fn start(
 			tx_hash_monitor,
 			db,
 		)
-		.map_err(|_| anyhow::anyhow!("btc::witnesser::start failed")),
+		.map_err(|e| anyhow::anyhow!("btc::witnesser::start failed. {}:{}", e, e.root_cause())),
 	);
 
 	Ok((address_monitor_command_sender, tx_hash_monitor_sender))

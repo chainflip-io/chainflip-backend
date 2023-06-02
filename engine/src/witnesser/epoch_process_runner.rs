@@ -70,7 +70,7 @@ pub async fn start_epoch_process_runner<Generator>(
 	>,
 	mut witnesser_generator: Generator,
 	initial_state: <Generator::Witnesser as EpochWitnesser>::StaticState,
-) -> Result<(), ()>
+) -> anyhow::Result<(), ()>
 where
 	Generator: EpochProcessGenerator,
 {
@@ -161,8 +161,8 @@ where
 				witnesser.do_witness(data.map_err(|e| {
 						error!("Error while getting data for witnesser: {:?}", e);
 					})?,
-					&mut state).await.map_err(|_| {
-					error!("Witnesser failed to process data")
+					&mut state).await.map_err(|e| {
+					error!("Witnesser failed to process data: {:?}", e)
 				})?;
 			},
 		}
@@ -223,8 +223,8 @@ where
 
 				let block_number = block.block_number();
 
-				witnesser.do_witness(block, &mut state).await.map_err(|_| {
-					error!("Witnesser failed to process block")
+				witnesser.do_witness(block, &mut state).await.map_err(|e| {
+					error!("Witnesser failed to process block. {:?}", e)
 				})?;
 
 				last_processed_block = Some(block_number);

@@ -64,9 +64,7 @@ impl RocksDBKeyValueStore {
 				key_with_prefix,
 				bincode::serialize(value).expect("Serialization is not expected to fail"),
 			)
-			.map_err(|e| {
-				anyhow::anyhow!("Failed to write data to database. Error: {}", e.to_string())
-			})
+			.map_err(|e| anyhow::anyhow!("Failed to write data to database. Error: {}", e))
 	}
 
 	pub fn get_data<K: Serialize, T: DeserializeOwned>(

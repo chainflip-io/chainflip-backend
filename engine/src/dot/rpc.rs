@@ -29,12 +29,12 @@ macro_rules! refresh_connection_on_error {
 		match $self.online_client.$namespace().$method($($arg,)*).await {
 			Err(e) => {
 				tracing::warn!(
-					"Initial {} query failed with error: {e}, refreshing client and retrying", stringify!($method)
+					"Initial {} query failed with error: {}, refreshing client and retrying", stringify!($method), e
 				);
 				$self.refresh_client()
 					.await
-					.map_err(|e| anyhow!("Failed to refresh client: {e}"))?;
-				$self.online_client.$namespace().$method($($arg,)*).await.map_err(|e| anyhow!("Failed to query {} Polkadot with error: {e}", stringify!($method)))
+					.map_err(|e| anyhow!("Failed to refresh client: {}", e))?;
+				$self.online_client.$namespace().$method($($arg,)*).await.map_err(|e| anyhow!("Failed to query {} Polkadot with error: {}", stringify!($method), e))
 			},
 			Ok(ok) => Ok(ok),
 		}

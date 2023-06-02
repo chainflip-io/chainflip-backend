@@ -393,7 +393,7 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 					"Signing Key",
 					|str| {
 						<[u8; 32]>::try_from(hex::decode(str).map_err(anyhow::Error::new)?)
-							.map_err(|_err| anyhow!("Wrong length"))
+							.map_err(|e| anyhow!("Str to [u8; 32] decodung failed. {:?}", e))
 					},
 				)?,
 			)),

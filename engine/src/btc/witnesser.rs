@@ -94,7 +94,7 @@ where
 	)
 	.instrument(info_span!("BTC-Witnesser"))
 	.await
-	.map_err(|_| anyhow::anyhow!("Btc witnesser failed"))
+	.map_err(|()| anyhow::anyhow!("Btc witnesser failed."))
 }
 
 struct BtcBlockWitnesser<StateChainClient> {

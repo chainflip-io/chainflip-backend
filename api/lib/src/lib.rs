@@ -463,7 +463,7 @@ pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPair, Strin
 				seed_phrase.to_string(),
 			)
 		})
-		.map_err(|_| anyhow::Error::msg("Invalid seed phrase"))
+		.map_err(|e| anyhow!("Invalid seed phrase. {:?}", e))
 }
 
 /// Generate a new random ethereum key.

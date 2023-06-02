@@ -65,7 +65,7 @@ pub async fn start(
 			epoch_start_receiver_2,
 			cfe_settings_update_receiver,
 		)
-		.map_err(|_r| anyhow::anyhow!("eth::chain_data_witnesser::start failed")),
+		.map_err(|e| anyhow::anyhow!("eth::chain_data_witnesser::start failed. {:?}", e)),
 	);
 
 	let state_chain_gateway_address = state_chain_client
