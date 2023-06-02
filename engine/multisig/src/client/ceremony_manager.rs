@@ -22,11 +22,10 @@ use crate::{
 	client::{
 		ceremony_id_string,
 		common::{KeygenFailureReason, ParticipantStatus, SigningFailureReason},
-		keygen::generate_key_data,
 		signing::PayloadAndKey,
 		CeremonyRequestDetails,
 	},
-	crypto::{generate_single_party_signature, CryptoScheme, Rng},
+	crypto::{CryptoScheme, Rng},
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage},
 };
 use cf_primitives::{AuthorityCount, CeremonyId};
@@ -510,11 +509,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 		debug!("Processing a keygen request");
 
-		if participants.len() == 1 {
-			let _result = result_sender.send(Ok(self.single_party_keygen(rng)));
-			return
-		}
-
 		let request = match prepare_keygen_request(
 			ceremony_id,
 			&self.my_account_id,
@@ -566,11 +560,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		let _entered = span.enter();
 
 		debug!("Processing a request to sign");
-
-		if signers.len() == 1 {
-			let _result = result_sender.send(Ok(self.single_party_signing(signing_info, rng)));
-			return
-		}
 
 		let request = match prepare_signing_request(
 			ceremony_id,
@@ -653,29 +642,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 	pub fn update_latest_ceremony_id(&mut self, ceremony_id: CeremonyId) {
 		assert_eq!(self.latest_ceremony_id + 1, ceremony_id);
 		self.latest_ceremony_id = ceremony_id;
-	}
-
-	fn single_party_keygen(&self, mut rng: Rng) -> KeygenResultInfo<C> {
-		info!("Performing solo keygen");
-
-		let (_public_key, key_data) =
-			generate_key_data::<C>(BTreeSet::from_iter([self.my_account_id.clone()]), &mut rng);
-		key_data[&self.my_account_id].clone()
-	}
-
-	fn single_party_signing(
-		&self,
-		signing_info: Vec<(KeygenResultInfo<C>, C::SigningPayload)>,
-		mut rng: Rng,
-	) -> Vec<C::Signature> {
-		info!("Performing solo signing");
-
-		signing_info
-			.iter()
-			.map(|(key_info, payload)| {
-				generate_single_party_signature::<C>(&key_info.key.key_share.x_i, payload, &mut rng)
-			})
-			.collect()
 	}
 }
 
