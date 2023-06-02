@@ -6,7 +6,7 @@ on:
       - 'release/*'
 
 concurrency:
-  group: ${{ github.ref }}-release-development
+  group: ${{ github.ref }}-merge-commit
   cancel-in-progress: true
 
 jobs:
