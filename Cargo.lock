@@ -5769,6 +5769,7 @@ dependencies = [
  "async-channel",
  "async-trait",
  "bincode",
+ "blake2",
  "cf-chains",
  "cf-primitives",
  "curve25519-dalek 2.1.3",

@@ -10,8 +10,6 @@ use zeroize::Zeroize;
 
 use crate::crypto::{CryptoScheme, ECPoint, ECScalar, KeyShare, Rng};
 
-use sha2::{Digest, Sha256};
-
 use super::signing_data::SigningCommitment;
 
 /// A pair of secret single-use nonces (and their
@@ -81,7 +79,9 @@ fn gen_rho_i<P: ECPoint>(
 	signing_commitments: &BTreeMap<AuthorityCount, SigningCommitment<P>>,
 	all_idxs: &BTreeSet<AuthorityCount>,
 ) -> P::Scalar {
-	let mut hasher = Sha256::new();
+	use blake2::{Blake2b, Digest};
+	let mut hasher = Blake2b::<typenum::U32>::new();
+
 	hasher.update(b"I");
 	hasher.update(index.to_be_bytes());
 	hasher.update(msg);
