@@ -12,7 +12,7 @@ use cf_traits::{
 
 use frame_support::{assert_noop, assert_ok};
 use pallet_cf_flip::Bonder;
-use sp_runtime::{traits::BadOrigin, AccountId32, DispatchError};
+use sp_runtime::{traits::BadOrigin, DispatchError};
 
 type FlipError = pallet_cf_flip::Error<Test>;
 
