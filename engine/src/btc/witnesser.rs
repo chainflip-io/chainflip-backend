@@ -177,7 +177,7 @@ where
 				.await;
 		}
 
-		if let Some(fee_rate_sats_per_kilo_byte) = self.btc_rpc.next_block_fee_rate()? {
+		if let Some(fee_rate_sats_per_kilo_kilo_byte) = self.btc_rpc.next_block_fee_rate()? {
 			debug!("Submitting fee rate of {fee_rate_sats_per_kilo_byte} sats/kB to state chain");
 			self.state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
