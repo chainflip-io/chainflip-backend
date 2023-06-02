@@ -15,16 +15,15 @@ async function performSwap(SRC_CCY: string, DST_CCY: string, ADDRESS: string) {
 
     let SWAP_ADDRESS = execSync(`pnpm tsx ./commands/observe_events.ts --timeout 10000 --succeed_on swapping:SwapDepositAddressReady --fail_on foo:bar`);
 
-    // SWAP_ADDRESS IS [{"dot":"0x9d8bcece6a43e9c22ea6b7c0143785baca1eb6dd0d7ce2a9a13892d6c0ef6dca"},{"btc":"0x6d7652566d73717542376a324436514b54763151614557577362354342347a443935"},1384] at this point
     SWAP_ADDRESS = JSON.parse(SWAP_ADDRESS);
     SWAP_ADDRESS = SWAP_ADDRESS[0][DEPOSIT_ADDRESS_CCY];
 
     console.log("The swap address is: " + SWAP_ADDRESS);
 
-
     if (SRC_CCY == "btc") {
         console.log("Doing BTC address conversion");
-        SWAP_ADDRESS = Buffer.from(SWAP_ADDRESS.toString(), 'hex').toString();
+        SWAP_ADDRESS = SWAP_ADDRESS.replace(/^0x/, '');
+        SWAP_ADDRESS = Buffer.from(SWAP_ADDRESS, 'hex').toString();
     }
 
     console.log(`Swap address: ${SWAP_ADDRESS}`);
@@ -34,6 +33,8 @@ async function performSwap(SRC_CCY: string, DST_CCY: string, ADDRESS: string) {
     console.log(`Old balance: ${OLD_BALANCE}`);
 
     execSync(`pnpm tsx ./commands/fund.ts ${SRC_CCY} ${SWAP_ADDRESS}`);
+
+    console.log("Funded the address");
 
     execSync(`pnpm tsx ./commands/observe_events.ts --timeout 30000 --succeed_on swapping:SwapExecuted --fail_on foo:bar`);
 
@@ -46,7 +47,6 @@ async function performSwap(SRC_CCY: string, DST_CCY: string, ADDRESS: string) {
             console.log(`Swap success! New balance: ${NEW_BALANCE}!`);
             return 0;
         } else {
-            console.log("Not found yet");
             await new Promise(resolve => setTimeout(resolve, 2000));
         }
     }

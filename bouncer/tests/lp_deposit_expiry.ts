@@ -33,7 +33,6 @@ async function main(): Promise<void> {
     .signAndSend(lp, { nonce: -1 });
 
   const depositEventResult = await observeEvent('liquidityProvider:LiquidityDepositAddressReady', chainflip);
-  console.log('Received BTC LP deposit address: ' + depositEventResult);
   const ingressKey = depositEventResult[1].toJSON().btc;
 
   let ingressAddress = '';
@@ -43,7 +42,7 @@ async function main(): Promise<void> {
 
   console.log('Funding BTC LP deposit address of ' + ingressAddress + ' with 1 BTC');
   exec(
-    'pnpm ./commands/fund_btc.ts ' + ingressAddress + ' 1',
+    'pnpm tsx ./commands/fund_btc.ts ' + ingressAddress + ' 1',
     { timeout: 30000 },
     (err, stdout, stderr) => {
       if (stderr !== '') process.stdout.write(stderr);
