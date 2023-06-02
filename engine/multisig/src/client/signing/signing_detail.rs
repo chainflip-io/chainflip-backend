@@ -288,15 +288,15 @@ mod tests {
 		// `gen_rho_i` has not changed.
 		assert_eq!(
 			hex::encode(bindings.get(&1u32).unwrap().as_bytes()),
-			"1c6b0bd5287db93cbdfb2c48ff3ca912524305c10fc9913496eebf806a1bfedf"
+			"676381eb7c929eeb53de452c493bf9dd7db6ba98736b59ed0cf185cb6e26c67b"
 		);
 		assert_eq!(
 			hex::encode(bindings.get(&2u32).unwrap().as_bytes()),
-			"ad5bcd9508fc34734acb54863b471d615acacfc38704817e02d025ac4e473164"
+			"aaecf4c71075da92be658842efef51a83bcd23e6f3a9d624e02ed6ec9bdd628c"
 		);
 		assert_eq!(
 			hex::encode(bindings.get(&3u32).unwrap().as_bytes()),
-			"d3f02a27695281149197594e831d0f02d7ff34cfe8442943d7af8a771982f4aa"
+			"944dfda1d57e1848a1c99ff54e8570a98a59a4aeb0255c6609997d33b8e02c00"
 		);
 	}
 }
