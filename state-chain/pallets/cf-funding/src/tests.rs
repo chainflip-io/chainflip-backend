@@ -704,8 +704,12 @@ mod test_restricted_balances {
 	use super::*;
 
 	const RESTRICTED_ADDRESS_1: EthereumAddress = [0x01; 20];
+	const RESTRICTED_BALANCE_1: u128 = 200;
 	const RESTRICTED_ADDRESS_2: EthereumAddress = [0x02; 20];
+	const RESTRICTED_BALANCE_2: u128 = 800;
 	const UNRESTRICTED_ADDRESS: EthereumAddress = [0x03; 20];
+	const UNRESTRICTED_BALANCE: u128 = 100;
+	const TOTAL_BALANCE: u128 = RESTRICTED_BALANCE_1 + RESTRICTED_BALANCE_2 + UNRESTRICTED_BALANCE;
 
 	#[track_caller]
 	fn run_test(
@@ -718,9 +722,9 @@ mod test_restricted_balances {
 			RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_2, ());
 
 			for (address, amount) in [
-				(RESTRICTED_ADDRESS_1, 200),
-				(RESTRICTED_ADDRESS_2, 800),
-				(UNRESTRICTED_ADDRESS, 100),
+				(RESTRICTED_ADDRESS_1, RESTRICTED_BALANCE_1),
+				(RESTRICTED_ADDRESS_2, RESTRICTED_BALANCE_2),
+				(UNRESTRICTED_ADDRESS, UNRESTRICTED_BALANCE),
 			] {
 				assert_ok!(Funding::funded(
 					RuntimeOrigin::root(),
@@ -768,62 +772,109 @@ mod test_restricted_balances {
 		( $case:ident, $( $spec:expr, )+ ) => {
 			#[test]
 			fn $case() {
-				for (amount, address, result) in [$( $spec, )+] {
+				$(
 					std::panic::catch_unwind(||
 						run_test(
-							amount,
-							address,
-							result,
+							$spec.0,
+							$spec.1,
+							$spec.2,
 						)
 					)
 					.unwrap_or_else(|_| {
-						let address = match address {
-							UNRESTRICTED_ADDRESS => "UNRESTRICTED_ADDRESS",
-							RESTRICTED_ADDRESS_1 => "RESTRICTED_ADDRESS_1",
-							RESTRICTED_ADDRESS_2 => "RESTRICTED_ADDRESS_2",
-							_ => unreachable!(),
-						};
-						panic!("Test failed with (amount, address) = {:?}", (amount, address));
-					})
-				}
+						let spec = stringify!($spec);
+						panic!("Test failed with {spec}");
+					});
+				)+
 			}
 		};
 	}
 
 	test_restricted_balances![
 		up_to_100_can_be_claimed_to_any_address,
-		(MIN_FUNDING, UNRESTRICTED_ADDRESS, None),
-		(MIN_FUNDING, RESTRICTED_ADDRESS_1, None),
-		(MIN_FUNDING, RESTRICTED_ADDRESS_2, None),
-		(100, UNRESTRICTED_ADDRESS, None),
-		(100, RESTRICTED_ADDRESS_1, None),
-		(100, RESTRICTED_ADDRESS_2, None),
+		(MIN_FUNDING, UNRESTRICTED_ADDRESS, None::<Error<Test>>),
+		(MIN_FUNDING, RESTRICTED_ADDRESS_1, None::<Error<Test>>),
+		(MIN_FUNDING, RESTRICTED_ADDRESS_2, None::<Error<Test>>),
+		(UNRESTRICTED_BALANCE, UNRESTRICTED_ADDRESS, None::<Error<Test>>),
+		(UNRESTRICTED_BALANCE, RESTRICTED_ADDRESS_1, None::<Error<Test>>),
+		(UNRESTRICTED_BALANCE, RESTRICTED_ADDRESS_2, None::<Error<Test>>),
 	];
 	test_restricted_balances![
-		anything_above_100_can_only_be_redeemed_to_restricted_addresses,
-		(101, UNRESTRICTED_ADDRESS, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
-		(101, RESTRICTED_ADDRESS_1, None),
-		(101, RESTRICTED_ADDRESS_2, None),
-		(300, UNRESTRICTED_ADDRESS, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
-		(300, RESTRICTED_ADDRESS_1, None),
-		(300, RESTRICTED_ADDRESS_2, None),
+		restricted_funds_can_only_be_redeemed_to_restricted_addresses,
+		(
+			UNRESTRICTED_BALANCE + 1,
+			UNRESTRICTED_ADDRESS,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(UNRESTRICTED_BALANCE + 1, RESTRICTED_ADDRESS_1, None::<Error<Test>>),
+		(UNRESTRICTED_BALANCE + 1, RESTRICTED_ADDRESS_2, None::<Error<Test>>),
+		(
+			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1,
+			UNRESTRICTED_ADDRESS,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1, RESTRICTED_ADDRESS_1, None::<Error<Test>>),
+		(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1, RESTRICTED_ADDRESS_2, None::<Error<Test>>),
 	];
 	test_restricted_balances![
-		anything_above_300_and_up_to_900_can_only_be_redeemed_to_restricted_address_2,
-		(301, UNRESTRICTED_ADDRESS, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
-		(301, RESTRICTED_ADDRESS_1, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
-		(301, RESTRICTED_ADDRESS_2, None),
-		(900, UNRESTRICTED_ADDRESS, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
-		(900, RESTRICTED_ADDRESS_1, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
-		(900, RESTRICTED_ADDRESS_2, None),
+		higher_than_restricted_amount_1_can_only_be_redeemed_to_restricted_address_2,
+		(
+			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1 + 1,
+			UNRESTRICTED_ADDRESS,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(
+			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1 + 1,
+			RESTRICTED_ADDRESS_1,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(
+			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1 + 1,
+			RESTRICTED_ADDRESS_2,
+			None::<Error<Test>>
+		),
+		(
+			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2,
+			UNRESTRICTED_ADDRESS,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(
+			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2,
+			RESTRICTED_ADDRESS_1,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2, RESTRICTED_ADDRESS_2, None::<Error<Test>>),
 	];
 	test_restricted_balances![
-		redemptions_of_more_than_900_are_not_possible,
-		(901, UNRESTRICTED_ADDRESS, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
-		(901, RESTRICTED_ADDRESS_1, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
-		(901, RESTRICTED_ADDRESS_2, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
-		(1100, UNRESTRICTED_ADDRESS, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
-		(1100, RESTRICTED_ADDRESS_1, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
-		(1100, RESTRICTED_ADDRESS_2, Some(Error::AmountToRedeemIsHigherThanRestrictedBalance)),
+		redemptions_of_more_than_the_higher_restricted_amount_are_not_possible_to_any_address,
+		(
+			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2 + 1,
+			UNRESTRICTED_ADDRESS,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(
+			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2 + 1,
+			RESTRICTED_ADDRESS_1,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(
+			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2 + 1,
+			RESTRICTED_ADDRESS_2,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(
+			TOTAL_BALANCE,
+			UNRESTRICTED_ADDRESS,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(
+			TOTAL_BALANCE,
+			RESTRICTED_ADDRESS_1,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(
+			TOTAL_BALANCE,
+			RESTRICTED_ADDRESS_2,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
 	];
 }
