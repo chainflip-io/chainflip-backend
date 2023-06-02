@@ -20,45 +20,6 @@ const ETH_DUMMY_ADDR: EthereumAddress = [42u8; 20];
 const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
 const TX_HASH: pallet::EthTransactionHash = [211u8; 32];
 
-struct AccountBalanceDetails {
-	account_id: AccountId32,
-	amount: u128,
-	address: EthereumAddress,
-}
-
-fn setup_account_balances(
-	contract_a: AccountBalanceDetails,
-	contract_b: AccountBalanceDetails,
-	free: AccountBalanceDetails,
-) {
-	RestrictedAddresses::<Test>::insert(contract_a.address, ());
-	RestrictedAddresses::<Test>::insert(contract_b.address, ());
-	// Set up the contract accounts.
-	assert_ok!(Funding::funded(
-		RuntimeOrigin::root(),
-		contract_a.account_id,
-		contract_a.amount,
-		contract_a.address,
-		TX_HASH,
-	));
-	assert_ok!(Funding::funded(
-		RuntimeOrigin::root(),
-		contract_b.account_id,
-		contract_b.amount,
-		contract_b.address,
-		TX_HASH,
-	));
-
-	// Set up the details account.
-	assert_ok!(Funding::funded(
-		RuntimeOrigin::root(),
-		free.account_id,
-		free.amount,
-		free.address,
-		TX_HASH,
-	));
-}
-
 #[test]
 fn genesis_nodes_are_bidding_by_default() {
 	new_test_ext().execute_with(|| {
