@@ -10,7 +10,7 @@ use cf_traits::{
 	AccountRoleRegistry, Bonding,
 };
 
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{assert_noop, assert_ok, pallet_prelude::DispatchResultWithPostInfo};
 use pallet_cf_flip::Bonder;
 use sp_runtime::{traits::BadOrigin, DispatchError};
 
@@ -697,4 +697,127 @@ fn can_withdrawal_also_free_funds_to_restricted_address() {
 		));
 		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS_1).unwrap(), &0);
 	});
+}
+
+#[cfg(test)]
+mod test_restricted_balances {
+	use super::*;
+
+	const RESTRICTED_ADDRESS_1: EthereumAddress = [0x01; 20];
+	const RESTRICTED_ADDRESS_2: EthereumAddress = [0x02; 20];
+	const UNRESTRICTED_ADDRESS: EthereumAddress = [0x03; 20];
+
+	#[track_caller]
+	fn run_test(
+		redeem_amount: u128,
+		redeem_address: EthereumAddress,
+		maybe_error: Option<Error<Test>>,
+	) {
+		new_test_ext().execute_with(|| {
+			RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
+			RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_2, ());
+
+			for (address, amount) in [
+				(RESTRICTED_ADDRESS_1, 200),
+				(RESTRICTED_ADDRESS_2, 800),
+				(UNRESTRICTED_ADDRESS, 100),
+			] {
+				assert_ok!(Funding::funded(
+					RuntimeOrigin::root(),
+					ALICE,
+					amount,
+					address,
+					Default::default(),
+				));
+			}
+
+			let initial_balance = Flip::total_balance_of(&ALICE);
+			assert_eq!(initial_balance, 1100);
+
+			match maybe_error {
+				None => {
+					assert_ok!(Funding::redeem(
+						RuntimeOrigin::signed(ALICE),
+						redeem_amount.into(),
+						redeem_address
+					));
+					assert!(matches!(
+						cf_test_utilities::last_event::<Test>(),
+						RuntimeEvent::Funding(crate::Event::RedemptionRequested {
+							account_id,
+							amount,
+							..
+						}) if account_id == ALICE && amount == redeem_amount));
+					assert_eq!(Flip::total_balance_of(&ALICE), initial_balance - redeem_amount);
+				},
+				Some(e) => {
+					assert_noop!(
+						Funding::redeem(
+							RuntimeOrigin::signed(ALICE),
+							redeem_amount.into(),
+							redeem_address
+						),
+						e,
+					);
+				},
+			}
+		});
+	}
+
+	macro_rules! test_restricted_balances {
+		( $case:ident, $( $spec:expr, )+ ) => {
+			#[test]
+			fn $case() {
+				for (amount, address, result) in [$( $spec, )+] {
+					std::panic::catch_unwind(||
+						run_test(
+							amount,
+							address,
+							result,
+						)
+					)
+					.unwrap_or_else(|e| {
+						panic!("Test failed with (amount, address) = {:?}", (amount, address));
+					})
+				}
+			}
+		};
+	}
+
+	test_restricted_balances![
+		up_to_100_can_be_claimed_to_any_address,
+		(MIN_FUNDING, UNRESTRICTED_ADDRESS, None),
+		(MIN_FUNDING, RESTRICTED_ADDRESS_1, None),
+		(MIN_FUNDING, RESTRICTED_ADDRESS_2, None),
+		(100, UNRESTRICTED_ADDRESS, None),
+		(100, RESTRICTED_ADDRESS_1, None),
+		(100, RESTRICTED_ADDRESS_2, None),
+	];
+	test_restricted_balances![
+		anything_above_100_can_only_be_redeemed_to_restricted_addresses,
+		(101, UNRESTRICTED_ADDRESS, Some(Error::InvalidRedemption)),
+		(101, RESTRICTED_ADDRESS_1, None),
+		(101, RESTRICTED_ADDRESS_2, None),
+		(300, UNRESTRICTED_ADDRESS, Some(Error::InvalidRedemption)),
+		(300, RESTRICTED_ADDRESS_1, None),
+		(300, RESTRICTED_ADDRESS_2, None),
+	];
+	test_restricted_balances![
+		anything_above_300_and_up_to_900_can_only_be_redeemed_to_restricted_address_2,
+		(301, UNRESTRICTED_ADDRESS, Some(Error::InvalidRedemption)),
+		(301, RESTRICTED_ADDRESS_1, Some(Error::InvalidRedemption)),
+		(301, RESTRICTED_ADDRESS_2, None),
+		(900, UNRESTRICTED_ADDRESS, Some(Error::InvalidRedemption)),
+		(900, RESTRICTED_ADDRESS_1, Some(Error::InvalidRedemption)),
+		(900, RESTRICTED_ADDRESS_2, None),
+	];
+	test_restricted_balances![
+		redemptions_of_more_than_900_are_not_possible,
+		(901, UNRESTRICTED_ADDRESS, Some(Error::InvalidRedemption)),
+		(901, RESTRICTED_ADDRESS_1, Some(Error::InvalidRedemption)),
+		(901, RESTRICTED_ADDRESS_2, Some(Error::InvalidRedemption)),
+		(1100, UNRESTRICTED_ADDRESS, Some(Error::InvalidRedemption)),
+		(1100, RESTRICTED_ADDRESS_1, Some(Error::InvalidRedemption)),
+		(1100, RESTRICTED_ADDRESS_2, Some(Error::InvalidRedemption)),
+	];
 }
