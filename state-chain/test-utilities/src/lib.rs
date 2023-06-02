@@ -17,6 +17,29 @@ pub fn ensure_max_encoded_len_is_exact<T: Default + codec::Encode + codec::MaxEn
 	assert_eq!(T::default().encode().len(), T::max_encoded_len());
 }
 
+#[track_caller]
+pub fn assert_has_event<T: frame_system::Config>(event: <T as frame_system::Config>::RuntimeEvent) {
+	let events = frame_system::Pallet::<T>::events()
+		.into_iter()
+		.map(|e| e.event)
+		.collect::<Vec<_>>();
+	assert!(events.iter().any(|e| e == &event), "Event {event:#?} not found in {events:#?}",);
+}
+
+#[macro_export]
+macro_rules! assert_has_matching_event {
+	(( $runtime:ty, $event:pat )) => {
+		let events = frame_system::Pallet::<T>::events()
+			.into_iter()
+			.map(|e| e.event)
+			.collect::<Vec<_>>();
+		assert!(
+			events.iter().any(|e| matches!(e, $event)),
+			"No event matching {stringify!($event):#?} found in {events:#?}",
+		);
+	};
+}
+
 /// Checks the deposited events in the order they occur
 #[macro_export]
 macro_rules! assert_event_sequence {

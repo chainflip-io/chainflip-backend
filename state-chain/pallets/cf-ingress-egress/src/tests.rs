@@ -6,6 +6,7 @@ use crate::{
 };
 use cf_chains::{ChannelIdConstructor, ExecutexSwapAndCall, TransferAssetParams};
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
+use cf_test_utilities::assert_has_event;
 use cf_traits::{
 	mocks::{
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
@@ -150,7 +151,7 @@ fn can_schedule_deposit_fetch() {
 			]
 		);
 
-		System::assert_has_event(RuntimeEvent::IngressEgress(
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
 			crate::Event::DepositFetchesScheduled { channel_id: 1, asset: eth::Asset::Eth },
 		));
 
@@ -189,7 +190,7 @@ fn on_idle_can_send_batch_all() {
 		// Take all scheduled Egress and Broadcast as batch
 		IngressEgress::on_idle(1, Weight::from_ref_time(1_000_000_000_000u64));
 
-		System::assert_has_event(RuntimeEvent::IngressEgress(
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
 			crate::Event::BatchBroadcastRequested {
 				broadcast_id: 1,
 				egress_ids: vec![
@@ -261,7 +262,7 @@ fn can_manually_send_batch_all() {
 
 		// Send only 2 requests
 		assert_ok!(IngressEgress::egress_scheduled_fetch_transfer(RuntimeOrigin::root(), Some(2)));
-		System::assert_has_event(RuntimeEvent::IngressEgress(
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
 			crate::Event::BatchBroadcastRequested {
 				broadcast_id: 1,
 				egress_ids: vec![(ForeignChain::Ethereum, 1)],
@@ -272,9 +273,9 @@ fn can_manually_send_batch_all() {
 		// send all remaining requests
 		assert_ok!(IngressEgress::egress_scheduled_fetch_transfer(RuntimeOrigin::root(), None));
 
-		System::assert_has_event(RuntimeEvent::IngressEgress(
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
 			crate::Event::BatchBroadcastRequested {
-				broadcast_id: 1,
+				broadcast_id: 2,
 				egress_ids: vec![
 					(ForeignChain::Ethereum, 2),
 					(ForeignChain::Ethereum, 3),
@@ -318,7 +319,7 @@ fn on_idle_batch_size_is_limited_by_weight() {
 			));
 		}
 
-		System::assert_has_event(RuntimeEvent::IngressEgress(
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
 			crate::Event::BatchBroadcastRequested {
 				broadcast_id: 1,
 				egress_ids: vec![(ForeignChain::Ethereum, 1), (ForeignChain::Ethereum, 2)],
@@ -331,9 +332,9 @@ fn on_idle_batch_size_is_limited_by_weight() {
 			<Test as crate::Config>::WeightInfo::destination_assets(3) + Weight::from_ref_time(1),
 		);
 
-		System::assert_has_event(RuntimeEvent::IngressEgress(
+		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
 			crate::Event::BatchBroadcastRequested {
-				broadcast_id: 1,
+				broadcast_id: 2,
 				egress_ids: vec![(ForeignChain::Ethereum, 3), (ForeignChain::Ethereum, 4)],
 			},
 		));
