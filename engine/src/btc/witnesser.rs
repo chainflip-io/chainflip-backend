@@ -169,14 +169,14 @@ where
 			}
 		}
 
-		if let Some(fee_rate_sats_per_byte) = self.btc_rpc.next_block_fee_rate()? {
+		if let Some(fee_rate_sats_per_kilo_byte) = self.btc_rpc.next_block_fee_rate()? {
 			self.state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(state_chain_runtime::RuntimeCall::BitcoinChainTracking(
 						pallet_cf_chain_tracking::Call::update_chain_state {
 							state: BitcoinTrackedData {
 								block_height: block_number,
-								btc_fee_info: BitcoinFeeInfo::new(fee_rate_sats_per_byte),
+								btc_fee_info: BitcoinFeeInfo::new(fee_rate_sats_per_kilo_byte),
 							},
 						},
 					)),
