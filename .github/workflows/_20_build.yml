@@ -30,7 +30,7 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout PR Head Commit
-        if: ! github.event.inputs.checkout_merge_commit
+        if: github.event.inputs.checkout_merge_commit == false
         uses: actions/checkout@v3
         with:
           ref: ""

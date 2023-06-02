@@ -51,7 +51,7 @@ jobs:
           - 8551:8551
     steps:
       - name: Checkout PR Head Commit
-        if: ! github.event.inputs.checkout_merge_commit
+        if: github.event.inputs.checkout_merge_commit == false
         uses: actions/checkout@v3
         with:
           ref: ""
