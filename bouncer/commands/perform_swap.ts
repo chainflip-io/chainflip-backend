@@ -26,14 +26,14 @@ async function performSwap(SRC_CCY: string, DST_CCY: string, ADDRESS: string) {
         console.log("Doing BTC address conversion");
         SWAP_ADDRESS = Buffer.from(SWAP_ADDRESS.toString(), 'hex').toString();
     }
-    // SWAP_ADDRESS = SWAP_ADDRESS.toString().trim();
+
     console.log(`Swap address: ${SWAP_ADDRESS}`);
 
     let OLD_BALANCE = execSync(`pnpm tsx ./commands/get_balance.ts ${DST_CCY} ${ADDRESS}`);
 
     console.log(`Old balance: ${OLD_BALANCE}`);
 
-    execSync(`pnpm tsx ./commands/fund.ts ${DST_CCY} ${SWAP_ADDRESS}`);
+    execSync(`pnpm tsx ./commands/fund.ts ${SRC_CCY} ${SWAP_ADDRESS}`);
 
     execSync(`pnpm tsx ./commands/observe_events.ts --timeout 30000 --succeed_on swapping:SwapExecuted --fail_on foo:bar`);
 

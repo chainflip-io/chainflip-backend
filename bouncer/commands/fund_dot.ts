@@ -29,7 +29,6 @@ async function main() {
   const alice = keyring.createFromUri('//Alice');
   const polkadot = await ApiPromise.create({ provider: new WsProvider(polkadot_endpoint), noInitWarn: true });
 
-  console.log('Transferring ' + dotAmount + ' DOT to ' + polkadotAddress);
   await polkadot.tx.balances
     .transfer(polkadotAddress, parseInt(planckAmount))
     .signAndSend(alice, { nonce: -1 }, ({ status, dispatchError }) => {
@@ -44,10 +43,9 @@ async function main() {
         process.exit(-1);
       }
       if (status.isInBlock || status.isFinalized) {
-        process.exit(0);
+        process.exit(0)
       }
     });
-  console.log("Dot transfer submitted");
 }
 
 runWithTimeout(main(), 20000).catch((error) => {

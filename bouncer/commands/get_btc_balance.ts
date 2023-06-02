@@ -14,7 +14,6 @@ const client = new Client({
 });
 
 export async function getBtcBalance(bitcoinAddress: string) {
-    console.log(`Getting balance for ${bitcoinAddress}`);
     try {
         const result = await client.listReceivedByAddress(1, false, true, bitcoinAddress);
         const amount = result[0]?.amount || 0;
