@@ -367,41 +367,40 @@ pub mod pallet {
 			);
 
 			// We have some restrictions on the account
-			if RestrictedBalances::<T>::contains_key(account_id.clone()) {
+			let remaining = if RestrictedBalances::<T>::contains_key(account_id.clone()) {
 				// We're talking about the current address
-				if RestrictedAddresses::<T>::contains_key(address) {
-					// ensure that restricted balance for the address is higher than the amount we
-					// try to redeem
-					RestrictedBalances::<T>::mutate_exists(&account_id, |maybe_entry| {
-						if let Some(entry) = maybe_entry {
-							entry.entry(address).and_modify(|balance| {
-								*balance = balance.saturating_sub(amount);
-							});
-						}
-					});
+				// ensure that restricted balance for the address is higher than the amount we
+				// try to redeem
+				RestrictedBalances::<T>::mutate_exists(&account_id, |maybe_entry| {
+					if let Some(entry) = maybe_entry {
+						entry.entry(address).and_modify(|balance| {
+							*balance = balance.saturating_sub(amount);
+						});
+					}
+				});
 				// some other address but funds are restricted
-				} else {
-					// Sum over all restricted balances
-					let restricted_balance = RestrictedBalances::<T>::get(&account_id)
-						.into_iter()
-						.fold(Zero::zero(), |acc: FlipBalance<T>, (_, balance)| acc + balance);
-					// Total account ballance
-					let total_balance = T::Flip::account_balance(&account_id);
-					// Balance available for redemption (total - sum(all restricted balances))
-					let available_balance = total_balance.saturating_sub(restricted_balance);
-					// Ensure that the amount to redeem is not higher than the restricted balance
-					ensure!(
-						amount <= available_balance,
-						Error::<T>::AmountToRedeemIsHigherThanRestrictedBalance
-					);
-				}
-			}
-
-			// Calculate the amount that would remain after this redemption and ensure it won't be
-			// less than the system's minimum balance.
-			let remaining = T::Flip::account_balance(&account_id)
-				.checked_sub(&amount)
-				.ok_or(Error::<T>::InvalidRedemption)?;
+				// Sum over all restricted balances
+				let restricted_balance = RestrictedBalances::<T>::get(&account_id)
+					.into_iter()
+					.fold(Zero::zero(), |acc: FlipBalance<T>, (_, balance)| acc + balance);
+				// Total account ballance
+				let total_balance = T::Flip::account_balance(&account_id);
+				// Balance available for redemption (total - sum(all restricted balances))
+				let available_balance = total_balance.saturating_sub(restricted_balance);
+				// Ensure that the amount to redeem is not higher than the restricted balance
+				ensure!(
+					amount <= available_balance,
+					Error::<T>::AmountToRedeemIsHigherThanRestrictedBalance
+				);
+				available_balance
+			} else {
+				// Calculate the amount that would remain after this redemption and ensure it won't
+				// be less than the system's minimum balance.
+				let remaining = T::Flip::account_balance(&account_id)
+					.checked_sub(&amount)
+					.ok_or(Error::<T>::InvalidRedemption)?;
+				remaining
+			};
 
 			ensure!(
 				remaining == Zero::zero() || remaining >= MinimumFunding::<T>::get(),
