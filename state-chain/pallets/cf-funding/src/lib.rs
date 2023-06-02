@@ -407,10 +407,9 @@ pub mod pallet {
 			} else {
 				// Calculate the amount that would remain after this redemption and ensure it won't
 				// be less than the system's minimum balance.
-				let remaining = T::Flip::account_balance(&account_id)
+				T::Flip::account_balance(&account_id)
 					.checked_sub(&amount)
-					.ok_or(Error::<T>::InvalidRedemption)?;
-				remaining
+					.ok_or(Error::<T>::InvalidRedemption)?
 			};
 
 			ensure!(
