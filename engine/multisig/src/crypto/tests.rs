@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crate::{
 	client::KeygenResult,
 	crypto::{generate_single_party_signature, ECPoint, ECScalar, KeyShare},
-	CryptoScheme, Rng,
+	test_all_crypto_schemes, CryptoScheme, Rng,
 };
 use cf_primitives::AccountId;
 use rand::SeedableRng;
@@ -40,20 +40,6 @@ fn test_signing_for_scheme<C: CryptoScheme>() {
 }
 
 #[test]
-fn test_eth_signing() {
-	test_signing_for_scheme::<super::eth::EthSigning>();
-}
-
-#[test]
-fn test_polkadot_signing() {
-	test_signing_for_scheme::<super::polkadot::PolkadotSigning>();
-}
-#[test]
-fn test_ed25519_signing() {
-	test_signing_for_scheme::<super::ed25519::Ed25519Signing>();
-}
-
-#[test]
-fn test_bitcoin_signing() {
-	test_signing_for_scheme::<super::bitcoin::BtcSigning>();
+fn test_signing_for_all_schemes() {
+	test_all_crypto_schemes!(test_signing_for_scheme);
 }

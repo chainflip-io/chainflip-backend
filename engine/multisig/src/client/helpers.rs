@@ -69,11 +69,13 @@ pub const CEREMONY_TIMEOUT_DURATION: Duration =
 
 /// Run the given function on all crypto schemes, printing a message with the scheme name if it
 /// fails. The function must be generic over the CryptoScheme. eg: my_test<C: CryptoScheme>().
+#[macro_export]
 macro_rules! test_all_crypto_schemes {
 	($test_function:ident) => {
 		({
-			use crate::{
-				bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, CryptoScheme,
+			use $crate::{
+				bitcoin::BtcSigning, ed25519::Ed25519Signing, eth::EthSigning,
+				polkadot::PolkadotSigning, CryptoScheme,
 			};
 
 			fn test<C: CryptoScheme>() {
@@ -86,10 +88,11 @@ macro_rules! test_all_crypto_schemes {
 			test::<EthSigning>();
 			test::<PolkadotSigning>();
 			test::<BtcSigning>();
+			test::<Ed25519Signing>();
 		})
 	};
 }
-pub(crate) use test_all_crypto_schemes;
+pub use test_all_crypto_schemes;
 
 #[test]
 fn test_all_crypto_schemes_macro() {
@@ -122,11 +125,15 @@ fn test_all_crypto_schemes_macro() {
 macro_rules! test_all_crypto_schemes_async {
 	($test_function:ident) => {
 		({
-			use crate::{bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
+			use crate::{
+				bitcoin::BtcSigning, ed25519::Ed25519Signing, eth::EthSigning,
+				polkadot::PolkadotSigning,
+			};
 			// Run the test on all CryptoSchemes
 			$test_function::<EthSigning>().await;
 			$test_function::<PolkadotSigning>().await;
 			$test_function::<BtcSigning>().await;
+			$test_function::<Ed25519Signing>().await;
 		})
 	};
 }
