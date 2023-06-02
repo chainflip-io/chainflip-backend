@@ -10,7 +10,7 @@ use cf_traits::{
 	AccountRoleRegistry, Bonding,
 };
 
-use frame_support::{assert_noop, assert_ok, pallet_prelude::DispatchResultWithPostInfo};
+use frame_support::{assert_noop, assert_ok};
 use pallet_cf_flip::Bonder;
 use sp_runtime::{traits::BadOrigin, DispatchError};
 
