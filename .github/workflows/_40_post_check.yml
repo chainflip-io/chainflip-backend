@@ -9,6 +9,10 @@ on:
         type: number
         required: false
         default: 120
+      checkout_merge_commit:
+        type: boolean
+        default: false
+        required: false
 jobs:
   bouncer:
     runs-on: ubuntu-20.04
@@ -46,8 +50,17 @@ jobs:
           - 8546:8546
           - 8551:8551
     steps:
-      - name: Checkout chainflip-backend
+      - name: Checkout PR Head Commit
+        if: ! github.event.inputs.checkout_merge_commit
         uses: actions/checkout@v3
+        with:
+          ref: ""
+
+      - name: Checkout Merge Commit
+        if: github.event.inputs.checkout_merge_commit
+        uses: actions/checkout@v3
+        with:
+          ref: "refs/pull/${{ github.event.number }}/merge"
 
       - name: Configure NodeJS
         uses: actions/setup-node@v3
