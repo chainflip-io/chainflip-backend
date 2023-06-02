@@ -33,9 +33,9 @@ where
 	fn new_unsigned(
 		_fetch_params: Vec<FetchAssetParams<Bitcoin>>,
 		transfer_params: Vec<TransferAssetParams<Bitcoin>>,
-	) -> Result<Self, ()> {
+	) -> Result<Self, AllBatchError> {
 		let agg_key @ AggKey { current, .. } =
-			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(())?;
+			<E as ChainEnvironment<(), AggKey>>::lookup(()).ok_or(AllBatchError::Other)?;
 		let bitcoin_change_script =
 			DepositAddress::new(current, CHANGE_ADDRESS_SALT).script_pubkey();
 		let mut total_output_amount: u64 = 0;
@@ -48,12 +48,14 @@ where
 			total_output_amount += transfer_param.amount;
 		}
 		// Looks up all available Utxos and selects and takes them for the transaction depending on
-		// the amount that needs to be output.
+		// the amount that needs to be output. If the output amount is 0,
 		let (selected_input_utxos, change_amount) = E::lookup(UtxoSelectionType::Some {
-			output_amount: total_output_amount,
+			output_amount: (total_output_amount > 0)
+				.then_some(total_output_amount)
+				.ok_or(AllBatchError::NotRequired)?,
 			number_of_outputs: (btc_outputs.len() + 1) as u64, // +1 for the change output
 		})
-		.ok_or(())?;
+		.ok_or(AllBatchError::Other)?;
 
 		btc_outputs
 			.push(BitcoinOutput { amount: change_amount, script_pubkey: bitcoin_change_script });

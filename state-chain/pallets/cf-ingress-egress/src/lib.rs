@@ -17,7 +17,7 @@ use cf_primitives::{BasisPoints, EgressCounter, EgressId, ForeignChain};
 use cf_chains::{address::ForeignChainAddress, CcmDepositMetadata, ChannelIdConstructor};
 
 use cf_chains::{
-	AllBatch, Chain, ChainAbi, ChainCrypto, ExecutexSwapAndCall, FetchAssetParams,
+	AllBatch, AllBatchError, Chain, ChainAbi, ChainCrypto, ExecutexSwapAndCall, FetchAssetParams,
 	TransferAssetParams,
 };
 use cf_primitives::{Asset, AssetAmount, ChannelId};
@@ -651,7 +651,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					fetch_batch_size.saturating_add(egress_batch_size),
 				)))
 			},
-			Err(_) => TransactionOutcome::Rollback(Err(DispatchError::Other(
+			Err(AllBatchError::NotRequired) =>
+				TransactionOutcome::Commit(Ok(T::WeightInfo::destination_assets(
+					fetch_batch_size.saturating_add(egress_batch_size),
+				))),
+			Err(AllBatchError::Other) => TransactionOutcome::Rollback(Err(DispatchError::Other(
 				"AllBatch ApiCall creation failed, rolled back storage",
 			))),
 		}
