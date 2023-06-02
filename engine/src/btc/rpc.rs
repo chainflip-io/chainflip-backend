@@ -63,6 +63,7 @@ impl BtcRpcApi for BtcRpcClient {
 		Ok(self.client.send_raw_transaction(&transaction_bytes)?)
 	}
 
+	/// Fee rate in sats/kB
 	fn next_block_fee_rate(&self) -> Result<Option<BtcAmount>> {
 		Ok(self
 			.client
