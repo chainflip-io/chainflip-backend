@@ -13,6 +13,8 @@ jobs:
   pre-check:
     uses: ./.github/workflows/_01_pre_check.yml
     secrets: inherit
+    with:
+      checkout_merge_commit: true
   test:
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit

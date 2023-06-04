@@ -14,6 +14,10 @@ on:
         description: prod or dev repo
         required: true
         type: string
+      checkout_merge_commit:
+        type: boolean
+        default: false
+        required: false
 
 env:
   APTLY_VERSION: "1.5.0"
@@ -27,7 +31,20 @@ jobs:
       id-token: write
       contents: read
     steps:
+      - name: Checkout PR Head Commit
+        if: github.event.inputs.checkout_merge_commit == false && github.event_name == 'pull_request'
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Checkout Merge Commit
+        if: github.event.inputs.checkout_merge_commit == true && github.event_name == 'pull_request'
+        uses: actions/checkout@v3
+        with:
+          ref: "${{ github.ref }}"
+
       - name: Checkout
+        if: github.event.inputs.checkout_merge_commit == false || github.event_name != 'pull_request'
         uses: actions/checkout@v3
 
       - name: Download packages

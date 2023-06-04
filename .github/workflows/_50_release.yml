@@ -4,12 +4,29 @@ on:
       network:
         type: string
         required: true
+      checkout_merge_commit:
+        type: boolean
+        default: false
+        required: false
 
 jobs:
   release:
     runs-on: ubuntu-20.04
     steps:
+      - name: Checkout PR Head Commit
+        if: github.event.inputs.checkout_merge_commit == false && github.event_name == 'pull_request'
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Checkout Merge Commit
+        if: github.event.inputs.checkout_merge_commit == true && github.event_name == 'pull_request'
+        uses: actions/checkout@v3
+        with:
+          ref: "${{ github.ref }}"
+
       - name: Checkout
+        if: github.event.inputs.checkout_merge_commit == false || github.event_name != 'pull_request'
         uses: actions/checkout@v3
 
       - name: Download binaries

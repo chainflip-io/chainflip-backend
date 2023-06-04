@@ -25,16 +25,20 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout PR Head Commit
-        if: github.event.inputs.checkout_merge_commit == false
+        if: github.event.inputs.checkout_merge_commit == false && github.event_name == 'pull_request'
         uses: actions/checkout@v3
         with:
-          ref: ""
+          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Checkout Merge Commit
-        if: github.event.inputs.checkout_merge_commit
+        if: github.event.inputs.checkout_merge_commit == true && github.event_name == 'pull_request'
         uses: actions/checkout@v3
         with:
-          ref: "refs/pull/${{ github.event.number }}/merge"
+          ref: "${{ github.ref }}"
+
+      - name: Checkout
+        if: github.event.inputs.checkout_merge_commit == false || github.event_name != 'pull_request'
+        uses: actions/checkout@v3
 
       - name: Setup sccache
         run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
