@@ -174,6 +174,7 @@ pub fn aggregate_signature<C: CryptoScheme>(
 	group_commitment: C::Point,
 	bound_commitments: &BTreeMap<AuthorityCount, C::Point>,
 	responses: &BTreeMap<AuthorityCount, SigningResponse<C::Point>>,
+	lagrange_coefficients: &BTreeMap<AuthorityCount, <C::Point as ECPoint>::Scalar>,
 ) -> Result<C::Signature, BTreeSet<AuthorityCount>> {
 	let challenge = C::build_challenge(agg_pubkey, group_commitment, payload);
 
@@ -181,15 +182,13 @@ pub fn aggregate_signature<C: CryptoScheme>(
 		.iter()
 		.copied()
 		.filter(|signer_idx| {
-			let lambda_i = get_lagrange_coeff::<C::Point>(*signer_idx, signer_idxs);
-
 			let y_i = pubkeys[signer_idx];
 
 			let response = &responses[signer_idx];
 
 			!C::is_party_response_valid(
 				&y_i,
-				&lambda_i,
+				&lagrange_coefficients[signer_idx],
 				&bound_commitments[signer_idx],
 				&group_commitment,
 				&challenge,

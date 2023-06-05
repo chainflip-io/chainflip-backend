@@ -22,6 +22,7 @@ use client::common::{
 use signing::signing_detail::{self, SecretNoncePair};
 
 use signing::SigningStateCommonInfo;
+use signing_detail::get_lagrange_coeff;
 use tracing::{debug, warn};
 
 use super::{
@@ -381,6 +382,13 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 
 		let all_idxs = &self.common.all_idxs;
 
+		let lagrange_coefficients: BTreeMap<_, _> = all_idxs
+			.iter()
+			.map(|signer_idx| {
+				(*signer_idx, get_lagrange_coeff::<Crypto::Point>(*signer_idx, all_idxs))
+			})
+			.collect();
+
 		let signatures_result = (0..self.signing_common.payload_count())
 			.map(|i| {
 				// Extract local signatures for a specific payload (there is some
@@ -418,6 +426,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 					payload_data.group_commitment,
 					&payload_data.bound_commitments,
 					&local_sigs,
+					&lagrange_coefficients,
 				)
 			})
 			.collect::<Result<Vec<_>, _>>();
