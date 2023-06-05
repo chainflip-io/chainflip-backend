@@ -85,10 +85,12 @@ jobs:
           chmod +x ${{ env.BINARIES_LOCATION }}/chainflip-*
           ./localnet/manage.sh
 
-      - name: Set up ngrok
+      - name: Expose endpoints for Polkadot and Chainflip
         env:
           NGROK_AUTHTOKEN: ${{ secrets.CF_NGROK_AUTHTOKEN }}
-        run: ngrok http http://localhost > /dev/null &
+        run: |
+          ngrok http http://localhost:9944 > /dev/null &
+          ngrok http http://localhost:9945 > /dev/null &
 
       - name: Run EinfachHeuteLeiderNicht.exe
         if: inputs.simple_bouncer
@@ -130,7 +132,7 @@ jobs:
             /tmp/chainflip/chainflip-*.log
 
       - name: Notify on failed bouncer
-        if: failure() && github.ref_name == 'main'
+        if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'
         env:
           DISCORD_USERNAME: 'HEUTE LEIDER NICHT'
           DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}

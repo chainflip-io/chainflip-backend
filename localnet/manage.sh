@@ -133,8 +133,15 @@ build-localnet-in-ci() {
   check_endpoint_health -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null
 
   ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
-  echo "\n🚗 Waiting for chainflip-engine to start"
-  check_endpoint_health 'http://localhost:5555/health' > /dev/null
+  echo "🚗 Waiting for chainflip-engine to start"
+  while true; do
+      output=$(check_endpoint_health 'http://localhost:5555/health')
+      if [[ $output == "RUNNING" ]]; then
+          echo "Command is running!"
+          break
+      fi
+      sleep 1
+  done
 
 }
 
