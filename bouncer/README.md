@@ -6,12 +6,20 @@ localnets.
 
 ## Installation / Setup
 
-You need NodeJS and JQ on your machine:
- brew install node jq
+You need [NodeJS](https://github.com/nvm-sh/nvm#installing-and-updating) and JQ
+on your machine:
+
+```sh
+brew install jq
+```
 
 Then you need to install the dependencies:
- cd bouncer
- npm install
+
+```sh
+cd bouncer
+npm install -g pnpm
+pnpm install
+```
 
 Now you can use the provided scripts, assuming that a localnet is already running on your machine.
 To connect to a remote network such as a Devnet, you need to set the following environment variables:

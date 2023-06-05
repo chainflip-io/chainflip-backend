@@ -1,2 +1,2 @@
-./tests/produces_blocks.sh 1 &&
-./tests/stress_test.sh 3
+pnpm tsx ./commands/observe_block.ts 1 &&
+pnpm tsx ./commands/stress_test.ts 3
