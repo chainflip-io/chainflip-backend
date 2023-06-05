@@ -87,7 +87,7 @@ jobs:
 
       - name: Set up ngrok
         env:
-          NGROK_AUTHTOKEN: ${{ secret.CF_NGROK_AUTHTOKEN }}
+          NGROK_AUTHTOKEN: ${{ secrets.CF_NGROK_AUTHTOKEN }}
         run: ngrok -log=stdout 9944 > /dev/null &
 
       - name: Run EinfachHeuteLeiderNicht.exe
