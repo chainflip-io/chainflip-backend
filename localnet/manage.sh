@@ -93,7 +93,14 @@ build-localnet() {
 
   ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
   echo "🚗 Waiting for chainflip-engine to start"
-  check_endpoint_health -s 'http://localhost:5555/health' > /dev/null
+  while true; do
+      output=$(check_endpoint_health 'http://localhost:5555/health')
+      if [[ $output == "RUNNING" ]]; then
+          echo "Command is running!"
+          break
+      fi
+      sleep 1
+  done
 
   print_success
 }
