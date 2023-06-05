@@ -2,9 +2,7 @@ use futures::{Future, StreamExt};
 
 /// A wrapper around `futures::stream::FuturesUnordered` that waits instead of returning None when
 /// there are no futures to poll.
-#[pin_project::pin_project]
 pub struct FuturesUnorderedWait<Fut> {
-	#[pin]
 	futures: futures::stream::FuturesUnordered<Fut>,
 }
 
