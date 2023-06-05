@@ -48,6 +48,6 @@ jobs:
       version: ci/${{ github.ref }}/
       environment: dev
     secrets: inherit
-  publish:
+  merge-commit-summary:
     needs: [publish]
-    uses: _04_merge_commit_summary.yml
+    uses: ./.github/workflows/_04_merge_commit_summary.yml
