@@ -400,17 +400,28 @@ pub mod pallet {
 				// try to redeem
 				RestrictedBalances::<T>::mutate_exists(&account_id, |maybe_entry| {
 					if let Some(entry) = maybe_entry {
-						entry.entry(address).and_modify(|balance| {
-							*balance = balance.saturating_sub(amount);
-						});
+						if let Some(restricted_balance) = entry.get(&address) {
+							let new_restricted_balance = restricted_balance.saturating_sub(amount);
+							if new_restricted_balance == Zero::zero() {
+								entry.remove_entry(&address);
+							} else {
+								entry.entry(address).and_modify(|restricted_balance| {
+									*restricted_balance = new_restricted_balance;
+								});
+							}
+						}
 					}
 				});
+				// Remove the the account from the restricted balances if it's empty
+				if RestrictedBalances::<T>::get(&account_id).is_empty() {
+					RestrictedBalances::<T>::remove(&account_id);
+				}
 				// some other address but funds are restricted
 				// Sum over all restricted balances
 				let restricted_balance = RestrictedBalances::<T>::get(&account_id)
 					.into_iter()
 					.fold(Zero::zero(), |acc: FlipBalance<T>, (_, balance)| acc + balance);
-				// Total account ballance
+				// Total account balance
 				let total_balance = T::Flip::account_balance(&account_id);
 				// Balance available for redemption (total - sum(all restricted balances))
 				let available_balance = total_balance.saturating_sub(restricted_balance);
@@ -421,19 +432,19 @@ pub mod pallet {
 				);
 				available_balance
 			} else {
+				// Check if the
+				if RedeemAddress::<T>::contains_key(&account_id) {
+					ensure!(
+						RedeemAddress::<T>::get(&account_id) == address,
+						Error::<T>::InvalidRedemption
+					);
+				}
 				// Calculate the amount that would remain after this redemption and ensure it won't
 				// be less than the system's minimum balance.
 				T::Flip::account_balance(&account_id)
 					.checked_sub(&amount)
 					.ok_or(Error::<T>::InvalidRedemption)?
 			};
-
-			if RedeemAddress::<T>::contains_key(&account_id) {
-				ensure!(
-					RedeemAddress::<T>::get(&account_id) == address,
-					Error::<T>::InvalidRedemption
-				);
-			}
 
 			ensure!(
 				remaining == Zero::zero() || remaining >= MinimumFunding::<T>::get(),

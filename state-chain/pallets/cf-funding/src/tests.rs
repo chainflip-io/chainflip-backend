@@ -729,7 +729,7 @@ fn can_withdrawal_also_free_funds_to_restricted_address() {
 			(AMOUNT_1 + AMOUNT_2).into(),
 			RESTRICTED_ADDRESS_1
 		));
-		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS_1).unwrap(), &0);
+		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS_1), None);
 	});
 }
 
@@ -754,6 +754,50 @@ fn can_only_redeem_funds_to_redeem_address() {
 			Error::<Test>::InvalidRedemption
 		);
 		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), REDEEM_ADDRESS));
+	});
+}
+
+#[test]
+fn redeem_funds_until_restricted_balance_is_zero_and_then_redeem_to_redeem_address() {
+	new_test_ext().execute_with(|| {
+		const RESTRICTED_ADDRESS: EthereumAddress = [0x01; 20];
+		const REDEEM_ADDRESS: EthereumAddress = [0x02; 20];
+		const UNRESTRICTED_ADDRESS: EthereumAddress = [0x03; 20];
+		const AMOUNT: u128 = 100;
+		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
+		RedeemAddress::<Test>::insert(ALICE, REDEEM_ADDRESS);
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			UNRESTRICTED_ADDRESS,
+			TX_HASH
+		));
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			RESTRICTED_ADDRESS,
+			TX_HASH
+		));
+		assert_ok!(Funding::funded(RuntimeOrigin::root(), ALICE, AMOUNT, REDEEM_ADDRESS, TX_HASH));
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			(AMOUNT).into(),
+			RESTRICTED_ADDRESS
+		));
+		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, AMOUNT, TX_HASH));
+		// Redeem to an unrestricted address should fail because the account has a redeem address.
+		assert_noop!(
+			Funding::redeem(RuntimeOrigin::signed(ALICE), (AMOUNT).into(), UNRESTRICTED_ADDRESS),
+			Error::<Test>::InvalidRedemption
+		);
+		// Redeem the rest of the existing funds to the redeem address.
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			(AMOUNT * 2).into(),
+			REDEEM_ADDRESS
+		));
 	});
 }
 
