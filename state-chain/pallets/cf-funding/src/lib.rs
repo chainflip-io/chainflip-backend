@@ -93,7 +93,8 @@ pub mod pallet {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ Into<u128>
-			+ From<u128>;
+			+ From<u128>
+			+ core::iter::Sum;
 
 		/// The Flip token implementation.
 		type Flip: Funding<AccountId = <Self as frame_system::Config>::AccountId, Balance = Self::Balance>
@@ -262,8 +263,10 @@ pub mod pallet {
 		/// The redemption signature could not be found.
 		SignatureNotReady,
 
-		/// The amount to redeem is higher then the restricted balance.
-		AmountToRedeemIsHigherThanRestrictedBalance,
+		/// The redemption cannot be processed because of restrictions places on the redemption
+		/// address.
+		AccountRestrictionsViolated,
+
 		/// The requested redemption amount is too low to pay for the redemption tax.
 		RedemptionAmountTooLow,
 
@@ -272,6 +275,9 @@ pub mod pallet {
 
 		/// Redemption tax must be less than the minimum funding amount.
 		InvalidRedemptionTaxUpdate,
+
+		/// The account has insufficient funds to pay for the redemption.
+		InsufficientBalance,
 	}
 
 	#[pallet::call]
@@ -343,15 +349,8 @@ pub mod pallet {
 			address: EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
-			T::SystemState::ensure_no_maintenance()?;
 
-			let amount = match amount {
-				RedemptionAmount::Max => T::Flip::redeemable_balance(&account_id),
-				RedemptionAmount::Exact(amount) => amount,
-			};
-			let fee_to_burn = RedemptionTax::<T>::get();
-			ensure!(amount > fee_to_burn, Error::<T>::RedemptionAmountTooLow);
-			ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::InvalidRedemption);
+			T::SystemState::ensure_no_maintenance()?;
 
 			// Not allowed to redeem if we are an active bidder in the auction phase
 			if T::EpochInfo::is_auction_phase() {
@@ -364,69 +363,67 @@ pub mod pallet {
 				Error::<T>::PendingRedemption
 			);
 
-			// We have some restrictions on the account
-			let remaining = if RestrictedBalances::<T>::contains_key(account_id.clone()) {
-				// We're talking about the current address
-				// ensure that restricted balance for the address is higher than the amount we
-				// try to redeem
-				RestrictedBalances::<T>::mutate_exists(&account_id, |maybe_entry| {
-					if let Some(entry) = maybe_entry {
-						entry.entry(address).and_modify(|balance| {
-							*balance = balance.saturating_sub(amount);
-						});
-					}
-				});
-				// some other address but funds are restricted
-				// Sum over all restricted balances
-				let restricted_balance = RestrictedBalances::<T>::get(&account_id)
-					.into_iter()
-					.fold(Zero::zero(), |acc: FlipBalance<T>, (_, balance)| acc + balance);
-				// Total account ballance
-				let total_balance = T::Flip::account_balance(&account_id);
-				// Balance available for redemption (total - sum(all restricted balances))
-				let available_balance = total_balance.saturating_sub(restricted_balance);
-				// Ensure that the amount to redeem is not higher than the restricted balance
-				ensure!(
-					amount <= available_balance,
-					Error::<T>::AmountToRedeemIsHigherThanRestrictedBalance
-				);
-				available_balance
-			} else {
-				// Calculate the amount that would remain after this redemption and ensure it won't
-				// be less than the system's minimum balance.
-				T::Flip::account_balance(&account_id)
-					.checked_sub(&amount)
-					.ok_or(Error::<T>::InvalidRedemption)?
+			let mut restricted_balances = RestrictedBalances::<T>::get(&account_id);
+			let redemption_fee = RedemptionTax::<T>::get();
+
+			// The amount to withdraw, net of fees.
+			let net_amount = match amount {
+				RedemptionAmount::Max => {
+					let restricted = restricted_balances.values().copied().sum::<FlipBalance<T>>() -
+						restricted_balances.get(&address).copied().unwrap_or_default();
+					let unrestricted = T::Flip::redeemable_balance(&account_id)
+						.checked_sub(&restricted)
+						.ok_or(Error::<T>::AccountRestrictionsViolated)?;
+					unrestricted
+						.checked_sub(&redemption_fee)
+						.ok_or(Error::<T>::RedemptionAmountTooLow)?
+				},
+				RedemptionAmount::Exact(amount) => amount,
 			};
 
 			ensure!(
-				remaining == Zero::zero() || remaining >= MinimumFunding::<T>::get(),
+				T::Flip::try_burn_fee(&account_id, redemption_fee).is_ok(),
+				Error::<T>::InsufficientBalance
+			);
+
+			// If necessary, update account restrictions.
+			if let Some(restricted_balance) = restricted_balances.get_mut(&address) {
+				restricted_balance.saturating_reduce(net_amount);
+				RestrictedBalances::<T>::insert(&account_id, &restricted_balances);
+			}
+
+			let remaining_balance = T::Flip::account_balance(&account_id)
+				.checked_sub(&net_amount)
+				.ok_or(Error::<T>::InsufficientBalance)?;
+
+			ensure!(
+				remaining_balance == Zero::zero() ||
+					remaining_balance >= MinimumFunding::<T>::get(),
 				Error::<T>::BelowMinimumFunding
 			);
 
-			// Burn the fee and redeem the rest
-			T::Flip::try_burn_fee(&account_id, fee_to_burn)?;
+			ensure!(
+				remaining_balance >= restricted_balances.values().copied().sum(),
+				Error::<T>::AccountRestrictionsViolated
+			);
 
-			// Deduct withdrawal fee from the redeemed amount
-			let amount_minus_fee = amount.saturating_sub(fee_to_burn);
+			// Update the account balance.
+			T::Flip::try_initiate_redemption(&account_id, net_amount)?;
 
-			// Return an error if the redeemer tries to redeem too much. Otherwise decrement the
-			// funds by the amount redeemed.
-			T::Flip::try_initiate_redemption(&account_id, amount_minus_fee)?;
-
+			// Send the transaction.
 			let contract_expiry = T::TimeSource::now().as_secs() + RedemptionTTLSeconds::<T>::get();
 			let call = T::RegisterRedemption::new_unsigned(
 				<T as Config>::FunderId::from_ref(&account_id).as_ref(),
-				amount_minus_fee.into(),
+				net_amount.into(),
 				&address,
 				contract_expiry,
 			);
 
-			PendingRedemptions::<T>::insert(account_id.clone(), ());
+			PendingRedemptions::<T>::insert(&account_id, ());
 
 			Self::deposit_event(Event::RedemptionRequested {
 				account_id,
-				amount,
+				amount: net_amount,
 				broadcast_id: T::Broadcaster::threshold_sign_and_broadcast(call).0,
 				expiry_time: contract_expiry,
 			});
