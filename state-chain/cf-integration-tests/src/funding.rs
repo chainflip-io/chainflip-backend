@@ -6,8 +6,10 @@ use crate::{
 use super::{genesis, network, *};
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use cf_traits::EpochInfo;
+use mock_runtime::MIN_FUNDING;
 use pallet_cf_funding::pallet::Error;
 use pallet_cf_validator::Backups;
+
 #[test]
 // Nodes cannot redeem when we are out of the redeeming period (50% of the epoch)
 // We have a set of nodes that are funded and can redeem in the redeeming period and
@@ -52,7 +54,7 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 			for node in &nodes {
 				assert_ok!(Funding::redeem(
 					RuntimeOrigin::signed(node.clone()),
-					1.into(),
+					(MIN_FUNDING + 1).into(),
 					ETH_DUMMY_ADDR
 				));
 			}
@@ -88,7 +90,11 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 			// TODO implement Redemptions in Contract/Network
 			for node in &nodes {
 				assert_noop!(
-					Funding::redeem(RuntimeOrigin::signed(node.clone()), 1.into(), ETH_DUMMY_ADDR),
+					Funding::redeem(
+						RuntimeOrigin::signed(node.clone()),
+						(MIN_FUNDING + 1).into(),
+						ETH_DUMMY_ADDR
+					),
 					Error::<Runtime>::PendingRedemption
 				);
 			}

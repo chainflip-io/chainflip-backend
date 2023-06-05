@@ -48,3 +48,10 @@ jobs:
             ./target/release/chainflip-broker-api
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
 
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-node-runtime
+          path: |
+            ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
+

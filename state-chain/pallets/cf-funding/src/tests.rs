@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, pallet, ActiveBidder, Error, EthereumAddress, PendingRedemptions, RedeemAddress,
-	RedemptionAmount, RestrictedAddresses, RestrictedBalances,
+	mock::*, pallet, ActiveBidder, Error, EthereumAddress, PendingRedemptions, RedemptionAmount,
+	RedemptionTax, RestrictedAddresses, RestrictedBalances,
 };
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
@@ -10,6 +10,7 @@ use cf_traits::{
 	AccountRoleRegistry, Bonding,
 };
 
+use crate::RedeemAddress;
 use frame_support::{assert_noop, assert_ok};
 use pallet_cf_flip::Bonder;
 use sp_runtime::{traits::BadOrigin, DispatchError};
@@ -279,6 +280,8 @@ fn redemption_cannot_occur_without_funding_first() {
 #[test]
 fn cannot_redeem_bond() {
 	new_test_ext().execute_with(|| {
+		assert_ok!(Funding::update_redemption_tax(RuntimeOrigin::root(), 0));
+		assert_ok!(Funding::update_minimum_funding(RuntimeOrigin::root(), 1));
 		const AMOUNT: u128 = 200;
 		const BOND: u128 = 102;
 		MockEpochInfo::set_bond(BOND);
@@ -498,7 +501,13 @@ fn redemption_expiry_removes_redemption() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 45;
 
-		assert_ok!(Funding::funded(RuntimeOrigin::root(), ALICE, AMOUNT, ETH_DUMMY_ADDR, TX_HASH));
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT * 2,
+			ETH_DUMMY_ADDR,
+			TX_HASH
+		));
 
 		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR));
 		assert_noop!(
@@ -557,6 +566,19 @@ fn restricted_funds_getting_recorded() {
 }
 
 #[test]
+fn can_update_redemption_tax() {
+	new_test_ext().execute_with(|| {
+		let amount = 1_000;
+		assert_ok!(Funding::update_minimum_funding(RuntimeOrigin::root(), amount + 1));
+		assert_ok!(Funding::update_redemption_tax(RuntimeOrigin::root(), amount));
+		assert_eq!(RedemptionTax::<Test>::get(), amount);
+		System::assert_last_event(RuntimeEvent::Funding(
+			crate::Event::<Test>::RedemptionTaxAmountUpdated { amount },
+		));
+	});
+}
+
+#[test]
 fn restricted_funds_getting_reduced() {
 	new_test_ext().execute_with(|| {
 		const RESTRICTED_ADDRESS: EthereumAddress = [0x42; 20];
@@ -579,6 +601,18 @@ fn restricted_funds_getting_reduced() {
 		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, 10, TX_HASH));
 		// Expect the restricted balance to be 70
 		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(), &40);
+	});
+}
+
+#[test]
+fn redemption_tax_cannot_be_larger_than_minimum_funding() {
+	new_test_ext().execute_with(|| {
+		let amount = 1_000;
+		assert_ok!(Funding::update_minimum_funding(RuntimeOrigin::root(), amount));
+		assert_noop!(
+			Funding::update_redemption_tax(RuntimeOrigin::root(), amount),
+			Error::<Test>::InvalidRedemptionTaxUpdate
+		);
 	});
 }
 
@@ -720,5 +754,220 @@ fn can_only_redeem_funds_to_redeem_address() {
 			Error::<Test>::InvalidRedemption
 		);
 		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), REDEEM_ADDRESS));
+	});
+}
+
+#[cfg(test)]
+mod test_restricted_balances {
+	use super::*;
+
+	const RESTRICTED_ADDRESS_1: EthereumAddress = [0x01; 20];
+	const RESTRICTED_BALANCE_1: u128 = 200;
+	const RESTRICTED_ADDRESS_2: EthereumAddress = [0x02; 20];
+	const RESTRICTED_BALANCE_2: u128 = 800;
+	const UNRESTRICTED_ADDRESS: EthereumAddress = [0x03; 20];
+	const UNRESTRICTED_BALANCE: u128 = 100;
+	const TOTAL_BALANCE: u128 = RESTRICTED_BALANCE_1 + RESTRICTED_BALANCE_2 + UNRESTRICTED_BALANCE;
+
+	#[track_caller]
+	fn run_test(
+		redeem_amount: u128,
+		redeem_address: EthereumAddress,
+		maybe_error: Option<Error<Test>>,
+	) {
+		new_test_ext().execute_with(|| {
+			RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
+			RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_2, ());
+
+			for (address, amount) in [
+				(RESTRICTED_ADDRESS_1, RESTRICTED_BALANCE_1),
+				(RESTRICTED_ADDRESS_2, RESTRICTED_BALANCE_2),
+				(UNRESTRICTED_ADDRESS, UNRESTRICTED_BALANCE),
+			] {
+				assert_ok!(Funding::funded(
+					RuntimeOrigin::root(),
+					ALICE,
+					amount,
+					address,
+					Default::default(),
+				));
+			}
+
+			let initial_balance = Flip::total_balance_of(&ALICE);
+			assert_eq!(initial_balance, 1100);
+
+			match maybe_error {
+				None => {
+					assert_ok!(Funding::redeem(
+						RuntimeOrigin::signed(ALICE),
+						redeem_amount.into(),
+						redeem_address
+					));
+					assert!(matches!(
+						cf_test_utilities::last_event::<Test>(),
+						RuntimeEvent::Funding(crate::Event::RedemptionRequested {
+							account_id,
+							amount,
+							..
+						}) if account_id == ALICE && amount == redeem_amount));
+					assert_eq!(Flip::total_balance_of(&ALICE), initial_balance - redeem_amount);
+				},
+				Some(e) => {
+					assert_noop!(
+						Funding::redeem(
+							RuntimeOrigin::signed(ALICE),
+							redeem_amount.into(),
+							redeem_address
+						),
+						e,
+					);
+				},
+			}
+		});
+	}
+
+	macro_rules! test_restricted_balances {
+		( $case:ident, $( $spec:expr, )+ ) => {
+			#[test]
+			fn $case() {
+				$(
+					std::panic::catch_unwind(||
+						run_test(
+							$spec.0,
+							$spec.1,
+							$spec.2,
+						)
+					)
+					.unwrap_or_else(|_| {
+						let spec = stringify!($spec);
+						panic!("Test failed with {spec}");
+					});
+				)+
+			}
+		};
+	}
+
+	test_restricted_balances![
+		up_to_100_can_be_claimed_to_any_address,
+		(MIN_FUNDING, UNRESTRICTED_ADDRESS, None::<Error<Test>>),
+		(MIN_FUNDING, RESTRICTED_ADDRESS_1, None::<Error<Test>>),
+		(MIN_FUNDING, RESTRICTED_ADDRESS_2, None::<Error<Test>>),
+		(UNRESTRICTED_BALANCE, UNRESTRICTED_ADDRESS, None::<Error<Test>>),
+		(UNRESTRICTED_BALANCE, RESTRICTED_ADDRESS_1, None::<Error<Test>>),
+		(UNRESTRICTED_BALANCE, RESTRICTED_ADDRESS_2, None::<Error<Test>>),
+	];
+	test_restricted_balances![
+		restricted_funds_can_only_be_redeemed_to_restricted_addresses,
+		(
+			UNRESTRICTED_BALANCE + 1,
+			UNRESTRICTED_ADDRESS,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(UNRESTRICTED_BALANCE + 1, RESTRICTED_ADDRESS_1, None::<Error<Test>>),
+		(UNRESTRICTED_BALANCE + 1, RESTRICTED_ADDRESS_2, None::<Error<Test>>),
+		(
+			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1,
+			UNRESTRICTED_ADDRESS,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1, RESTRICTED_ADDRESS_1, None::<Error<Test>>),
+		(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1, RESTRICTED_ADDRESS_2, None::<Error<Test>>),
+	];
+	test_restricted_balances![
+		higher_than_restricted_amount_1_can_only_be_redeemed_to_restricted_address_2,
+		(
+			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1 + 1,
+			UNRESTRICTED_ADDRESS,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(
+			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1 + 1,
+			RESTRICTED_ADDRESS_1,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(
+			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1 + 1,
+			RESTRICTED_ADDRESS_2,
+			None::<Error<Test>>
+		),
+		(
+			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2,
+			UNRESTRICTED_ADDRESS,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(
+			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2,
+			RESTRICTED_ADDRESS_1,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2, RESTRICTED_ADDRESS_2, None::<Error<Test>>),
+	];
+	test_restricted_balances![
+		redemptions_of_more_than_the_higher_restricted_amount_are_not_possible_to_any_address,
+		(
+			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2 + 1,
+			UNRESTRICTED_ADDRESS,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(
+			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2 + 1,
+			RESTRICTED_ADDRESS_1,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(
+			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2 + 1,
+			RESTRICTED_ADDRESS_2,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(
+			TOTAL_BALANCE,
+			UNRESTRICTED_ADDRESS,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(
+			TOTAL_BALANCE,
+			RESTRICTED_ADDRESS_1,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+		(
+			TOTAL_BALANCE,
+			RESTRICTED_ADDRESS_2,
+			Some(Error::<Test>::AmountToRedeemIsHigherThanRestrictedBalance)
+		),
+	];
+}
+
+#[test]
+fn cannot_redeem_lower_than_redemption_tax() {
+	new_test_ext().execute_with(|| {
+		let amount = 1_000;
+		assert_ok!(Funding::update_minimum_funding(RuntimeOrigin::root(), amount + 1));
+		assert_ok!(Funding::update_redemption_tax(RuntimeOrigin::root(), amount));
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			amount,
+			Default::default(),
+			Default::default(),
+		));
+
+		// Redemtion amount must be larger than the Withdrawal Tax
+		assert_noop!(
+			Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				RedemptionAmount::Exact(amount),
+				Default::default(),
+			),
+			crate::Error::<Test>::RedemptionAmountTooLow
+		);
+
+		// Reduce the withdrawal tax
+		assert_ok!(Funding::update_redemption_tax(RuntimeOrigin::root(), amount - 1));
+
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			RedemptionAmount::Exact(amount),
+			Default::default()
+		));
 	});
 }
