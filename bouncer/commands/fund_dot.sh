@@ -27,7 +27,8 @@ async function main() {
 	}
 	await cryptoWaitReady();
 	const keyring = new Keyring({type: 'sr25519'});
-	const alice = keyring.createFromUri('//Alice');
+	const alice_uri = process.env.POLKADOT_ALICE_URI || "//Alice";
+	const alice = keyring.createFromUri(alice_uri);
 	const polkadot = await ApiPromise.create({provider: new WsProvider(polkadot_endpoint), noInitWarn: true});
 
 	console.log("Transferring " + dot_amount + " DOT to " + polkadot_address);
