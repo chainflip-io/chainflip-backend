@@ -169,7 +169,7 @@ impl Engine {
 							pallet_cf_funding::Call::funded {
 								account_id: validator_id.clone(),
 								amount: *amount,
-								withdrawal_address: ETH_ZERO_ADDRESS,
+								funder: ETH_ZERO_ADDRESS,
 								tx_hash: TX_HASH,
 							}
 							.into(),
