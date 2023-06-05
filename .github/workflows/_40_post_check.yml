@@ -49,6 +49,13 @@ jobs:
       - name: Checkout chainflip-backend
         uses: actions/checkout@v3
 
+      - name: Setup ngrok
+        run: |
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null 
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | tee /etc/apt/sources.list.d/ngrok.list 
+          apt update 
+          apt install ngrok
+
       - name: Configure NodeJS
         uses: actions/setup-node@v3
         with:
@@ -77,6 +84,13 @@ jobs:
           echo -n ${{ secrets.CF_LOCALNET_ETH_PRIVATE_KEY }} > ./localnet/init/secrets/eth_private_key_file
           chmod +x ${{ env.BINARIES_LOCATION }}/chainflip-*
           ./localnet/manage.sh
+
+      - name: Expose endpoints for Polkadot and Chainflip
+        env:
+          NGROK_AUTHTOKEN: ${{ secrets.CF_NGROK_AUTHTOKEN }}
+        run: |
+          ngrok http http://localhost:9944 > /dev/null &
+          ngrok http http://localhost:9945 > /dev/null &
 
       - name: Run EinfachHeuteLeiderNicht.exe
         if: inputs.simple_bouncer
@@ -118,7 +132,7 @@ jobs:
             /tmp/chainflip/chainflip-*.log
 
       - name: Notify on failed bouncer
-        if: failure() && github.ref_name == 'main'
+        if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'
         env:
           DISCORD_USERNAME: 'HEUTE LEIDER NICHT'
           DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}

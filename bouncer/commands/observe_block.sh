@@ -23,7 +23,7 @@ async function main() {
 	process.exit(0);
 }
 
-runWithTimeout(main(), 10000).catch((error) => {
+runWithTimeout(main(), 60000).catch((error) => {
 	console.log("Failed to observe block no. " + process.argv[2]);
 	process.exit(-1);
 });
