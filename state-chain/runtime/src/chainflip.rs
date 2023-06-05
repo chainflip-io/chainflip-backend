@@ -438,6 +438,9 @@ macro_rules! impl_deposit_api_for_anychain {
 			}
 
 			fn expire_channel(channel_id: ChannelId, address: ForeignChainAddress) {
+				if address.chain() == ForeignChain::Bitcoin {
+					Environment::cleanup_bitcoin_deposit_address_details(address.clone().try_into().expect("Checked for address compatibility"));
+				}
 				match address.chain() {
 					$(
 						ForeignChain::$chain => {
