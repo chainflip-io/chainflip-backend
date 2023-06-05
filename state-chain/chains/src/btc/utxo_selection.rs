@@ -34,17 +34,12 @@ pub fn select_utxos_from_pool<UTXO: GetUtxoAmount + Clone>(
 
 	while cumulative_amount < amount_to_be_spent {
 		if let Some(current_smallest_utxo) = available_utxos.pop() {
-			cumulative_amount +=
-				current_smallest_utxo.amount().checked_sub(fee_per_utxo).map_or_else(
-					|| {
-						skipped_utxos.push(current_smallest_utxo.clone());
-						0
-					},
-					|spendable_value| {
-						selected_utxos.push(current_smallest_utxo.clone());
-						spendable_value
-					},
-				);
+			if current_smallest_utxo.amount() > fee_per_utxo {
+				cumulative_amount += current_smallest_utxo.amount() - fee_per_utxo;
+				selected_utxos.push(current_smallest_utxo.clone());
+			} else {
+				skipped_utxos.push(current_smallest_utxo.clone());
+			}
 		} else {
 			break
 		}
