@@ -45,7 +45,7 @@ jobs:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
     with:
-      version: ci/${{ github.ref }}/
+      version: ci/${{ github.sha }}/
       environment: dev
     secrets: inherit
   merge-commit-summary:
