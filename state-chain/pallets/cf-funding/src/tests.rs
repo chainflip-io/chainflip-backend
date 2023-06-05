@@ -472,30 +472,6 @@ fn test_redeem_all() {
 }
 
 #[test]
-fn cannot_redeem_to_zero_address() {
-	new_test_ext().execute_with(|| {
-		const AMOUNT: u128 = 45;
-		const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
-		// Add some funds, we use the zero address here to denote that we should be
-		// able to redeem to any address in future
-		assert_ok!(Funding::funded(
-			RuntimeOrigin::root(),
-			ALICE,
-			AMOUNT,
-			ETH_ZERO_ADDRESS,
-			TX_HASH
-		));
-		// Redeem it - expect to fail because the address is the zero address
-		assert_noop!(
-			Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_ZERO_ADDRESS),
-			<Error<Test>>::InvalidRedemption
-		);
-		// Try it again with a non-zero address - expect to succeed
-		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), ETH_DUMMY_ADDR));
-	});
-}
-
-#[test]
 fn redemption_expiry_removes_redemption() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: u128 = 45;

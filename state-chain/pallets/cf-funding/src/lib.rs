@@ -41,14 +41,6 @@ use sp_std::prelude::*;
 
 use sp_std::collections::btree_map::BTreeMap;
 
-/// This address is used by the Ethereum contracts to indicate that no withdrawal address was
-/// specified during funding.
-///
-/// Normally, this means that the account was funded via the 'normal' contract flow. The presence
-/// of any other address indicates that the funds were added from a *vesting* contract and can
-/// only be redeemed to the specified address.
-pub const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
-
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
 #[frame_support::pallet]
@@ -142,12 +134,6 @@ pub mod pallet {
 	pub type PendingRedemptions<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, (), OptionQuery>;
 
-	/// Currently just used to record failed funding attempts so that if necessary in the future we
-	/// can use it to recover user funds.
-	#[pallet::storage]
-	pub type FailedFundingAttempts<T: Config> =
-		StorageMap<_, Blake2_128Concat, AccountId<T>, Vec<FundingAttempt<T::Balance>>, ValueQuery>;
-
 	/// The minimum amount a user can fund their account with, and therefore the minimum balance
 	/// they must have remaining after they redeem.
 	#[pallet::storage]
@@ -171,6 +157,7 @@ pub mod pallet {
 		BTreeMap<EthereumAddress, FlipBalance<T>>,
 		ValueQuery,
 	>;
+
 	/// The fee levied for every redemption request. Can be updated by Governance.
 	#[pallet::storage]
 	pub type RedemptionTax<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
@@ -725,10 +712,9 @@ impl<T: Config> BidderProvider for Pallet<T> {
 
 /// Ensure we clean up account specific items that definitely won't be required once the account
 /// leaves the network.
-/// NB: We deliberately don't include FailedFundingAttempts. Given something went wrong, these can
-/// be handled by governance. We don't want to lose track of them.
 impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
 		ActiveBidder::<T>::remove(account_id);
+		RestrictedBalances::<T>::remove(account_id);
 	}
 }
