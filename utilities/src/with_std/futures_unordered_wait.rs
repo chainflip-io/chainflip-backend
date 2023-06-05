@@ -67,6 +67,15 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn one_future_is_ready() {
+		let mut stream = FuturesUnorderedWait::<TestFuture>::new();
+		stream.push(TestFuture { ready: true });
+		assert_eq!(stream.next().now_or_never(), Some(Some(())));
+
+		assert_eq!(stream.next().now_or_never(), None);
+	}
+
+	#[tokio::test]
 	async fn many_futures_are_ready() {
 		let mut stream = FuturesUnorderedWait::<TestFuture>::new();
 
