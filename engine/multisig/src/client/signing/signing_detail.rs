@@ -39,21 +39,6 @@ impl<P: ECPoint> SecretNoncePair<P> {
 	}
 }
 
-/// Combine individual commitments into group (schnorr) commitment.
-/// See "Signing Protocol" in Section 5.2 (page 14).
-fn gen_group_commitment<P: ECPoint>(
-	signing_commitments: &BTreeMap<AuthorityCount, SigningCommitment<P>>,
-	bindings: &BTreeMap<AuthorityCount, P::Scalar>,
-) -> P {
-	signing_commitments
-		.iter()
-		.map(|(idx, comm)| {
-			let rho_i = bindings[idx].clone();
-			comm.d + comm.e * rho_i
-		})
-		.sum()
-}
-
 /// Generate a lagrange coefficient for party `signer_index`
 /// according to Section 4 (page 9)
 pub fn get_lagrange_coeff<P: ECPoint>(
@@ -128,12 +113,15 @@ fn gen_rho_i<P: ECPoint>(
 
 type SigningResponse<P> = <P as ECPoint>::Scalar;
 
+pub type NonceBinding<Crypto> = <<Crypto as CryptoScheme>::Point as ECPoint>::Scalar;
+pub type SchnorrCommitment<Crypto> = <Crypto as CryptoScheme>::Point;
+
 /// Generate binding values for each party given their previously broadcast commitments
-fn generate_bindings<C: CryptoScheme>(
+pub fn generate_bindings<C: CryptoScheme>(
 	payload: &C::SigningPayload,
 	commitments: &BTreeMap<AuthorityCount, SigningCommitment<C::Point>>,
 	all_idxs: &BTreeSet<AuthorityCount>,
-) -> BTreeMap<AuthorityCount, <C::Point as ECPoint>::Scalar> {
+) -> BTreeMap<AuthorityCount, NonceBinding<C>> {
 	all_idxs
 		.iter()
 		.map(|idx| (*idx, gen_rho_i(*idx, payload.as_ref(), commitments, all_idxs)))
@@ -145,15 +133,11 @@ pub fn generate_local_sig<C: CryptoScheme>(
 	payload: &C::SigningPayload,
 	key: &KeyShare<C::Point>,
 	nonces: &SecretNoncePair<C::Point>,
-	commitments: &BTreeMap<AuthorityCount, SigningCommitment<C::Point>>,
+	bindings: &BTreeMap<AuthorityCount, <C::Point as ECPoint>::Scalar>,
+	group_commitment: C::Point,
 	own_idx: AuthorityCount,
 	all_idxs: &BTreeSet<AuthorityCount>,
 ) -> SigningResponse<C::Point> {
-	let bindings = generate_bindings::<C>(payload, commitments, all_idxs);
-
-	// This is `R` in a Schnorr signature
-	let group_commitment = gen_group_commitment(commitments, &bindings);
-
 	let SecretNoncePair { d, e, .. } = nonces;
 
 	let lambda_i = get_lagrange_coeff::<C::Point>(own_idx, all_idxs);
@@ -187,18 +171,10 @@ pub fn aggregate_signature<C: CryptoScheme>(
 	signer_idxs: &BTreeSet<AuthorityCount>,
 	agg_pubkey: C::Point,
 	pubkeys: &BTreeMap<AuthorityCount, C::Point>,
-	commitments: &BTreeMap<AuthorityCount, SigningCommitment<C::Point>>,
+	group_commitment: C::Point,
+	bound_commitments: &BTreeMap<AuthorityCount, C::Point>,
 	responses: &BTreeMap<AuthorityCount, SigningResponse<C::Point>>,
 ) -> Result<C::Signature, BTreeSet<AuthorityCount>> {
-	let bindings = generate_bindings::<C>(payload, commitments, signer_idxs);
-
-	let bound_commitments: BTreeMap<_, _> = commitments
-		.iter()
-		.map(|(idx, comm)| (*idx, comm.d + comm.e * bindings[idx].clone()))
-		.collect();
-
-	let group_commitment = bound_commitments.values().cloned().sum();
-
 	let challenge = C::build_challenge(agg_pubkey, group_commitment, payload);
 
 	let invalid_idxs: BTreeSet<AuthorityCount> = signer_idxs

@@ -25,7 +25,8 @@ use signing::SigningStateCommonInfo;
 use tracing::{debug, warn};
 
 use super::{
-	signing_data::{Comm1, Comm1Inner, LocalSig3, VerifyComm2, VerifyLocalSig4},
+	signing_data::{Comm1, LocalSig3, VerifyComm2, VerifyLocalSig4},
+	signing_detail::{NonceBinding, SchnorrCommitment},
 	SigningCommitment,
 };
 
@@ -106,6 +107,13 @@ struct VerifyCommitmentsBroadcast2<Crypto: CryptoScheme> {
 
 derive_display_as_type_name!(VerifyCommitmentsBroadcast2<Crypto: CryptoScheme>);
 
+/// Data derived for a single payload from initial commitments
+pub struct DerivedSignatureData<C: CryptoScheme> {
+	group_commitment: SchnorrCommitment<C>,
+	bindings: BTreeMap<AuthorityCount, NonceBinding<C>>,
+	bound_commitments: BTreeMap<AuthorityCount, SchnorrCommitment<C>>,
+}
+
 #[async_trait]
 impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	for VerifyCommitmentsBroadcast2<Crypto>
@@ -175,11 +183,43 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 
 		debug!("{} is successful", Self::NAME);
 
+		let signature_data: Vec<_> = self
+			.signing_common
+			.payloads_and_keys
+			.iter()
+			.enumerate()
+			.map(|(payload_idx, PayloadAndKey { payload, .. })| {
+				let commitments = verified_commitments
+					.iter()
+					.map(|(party_idx, commitments)| {
+						(*party_idx, commitments.0[payload_idx].clone())
+					})
+					.collect::<BTreeMap<_, _>>();
+
+				let bindings = signing_detail::generate_bindings::<Crypto>(
+					payload,
+					&commitments,
+					&self.common.all_idxs,
+				);
+
+				let bound_commitments = commitments
+					.iter()
+					.map(|(idx, comm)| (*idx, comm.d + comm.e * bindings[idx].clone()))
+					.collect::<BTreeMap<_, _>>();
+
+				// Combine individual commitments into group (schnorr) commitment.
+				// See "Signing Protocol" in Section 5.2 (page 14).
+				let group_commitment = bound_commitments.values().cloned().sum();
+
+				DerivedSignatureData { group_commitment, bindings, bound_commitments }
+			})
+			.collect();
+
 		let processor = LocalSigStage3::<Crypto> {
 			common: self.common.clone(),
 			signing_common: self.signing_common,
 			nonces: self.nonces,
-			commitments: verified_commitments,
+			signature_data,
 		};
 
 		let state = BroadcastStage::new(processor, self.common);
@@ -194,8 +234,7 @@ struct LocalSigStage3<Crypto: CryptoScheme> {
 	signing_common: SigningStateCommonInfo<Crypto>,
 	// Our nonce pair generated in the previous stage
 	nonces: Vec<Box<SecretNoncePair<Crypto::Point>>>,
-	// Public nonce commitments (verified)
-	commitments: BTreeMap<AuthorityCount, Comm1Inner<Crypto::Point>>,
+	signature_data: Vec<DerivedSignatureData<Crypto>>,
 }
 
 derive_display_as_type_name!(LocalSigStage3<Crypto: CryptoScheme>);
@@ -212,21 +251,15 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	fn init(&mut self) -> DataToSend<Self::Message> {
 		let responses = (0..self.signing_common.payload_count())
 			.map(|i| {
-				// Extract commitments for a specific payload (there is some room
-				// for optimisation here)
-				let commitments = self
-					.commitments
-					.iter()
-					.map(|(party_idx, c)| (*party_idx, c.0[i].clone()))
-					.collect();
-
 				let PayloadAndKey { payload, key } = &self.signing_common.payloads_and_keys[i];
+				let signature_data = &self.signature_data[i];
 
 				signing_detail::generate_local_sig::<Crypto>(
 					payload,
 					&key.key_share,
 					&self.nonces[i],
-					&commitments,
+					&signature_data.bindings,
+					signature_data.group_commitment.clone(),
 					self.common.own_idx,
 					&self.common.all_idxs,
 				)
@@ -258,7 +291,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 		let processor = VerifyLocalSigsBroadcastStage4::<Crypto> {
 			common: self.common.clone(),
 			signing_common: self.signing_common,
-			commitments: self.commitments,
+			signature_data: self.signature_data,
 			local_sigs: messages,
 		};
 
@@ -272,8 +305,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 struct VerifyLocalSigsBroadcastStage4<Crypto: CryptoScheme> {
 	common: CeremonyCommon,
 	signing_common: SigningStateCommonInfo<Crypto>,
-	/// Nonce commitments from all parties (verified to be correctly broadcast)
-	commitments: BTreeMap<AuthorityCount, Comm1Inner<Crypto::Point>>,
+	signature_data: Vec<DerivedSignatureData<Crypto>>,
 	/// Signature shares sent to us (NOT verified to be correctly broadcast)
 	local_sigs: BTreeMap<AuthorityCount, Option<LocalSig3<Crypto::Point>>>,
 }
@@ -351,14 +383,6 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 
 		let signatures_result = (0..self.signing_common.payload_count())
 			.map(|i| {
-				// Extract commitments for a specific payload (there is some room
-				// for optimisation here)
-				let commitments = self
-					.commitments
-					.iter()
-					.map(|(party_idx, commitments)| (*party_idx, commitments.0[i].clone()))
-					.collect();
-
 				// Extract local signatures for a specific payload (there is some
 				// room for optimization here)
 				let local_sigs = local_sigs
@@ -384,12 +408,15 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 					})
 					.collect();
 
+				let payload_data = &self.signature_data[i];
+
 				signing_detail::aggregate_signature::<Crypto>(
 					payload,
 					all_idxs,
 					key.get_agg_public_key_point(),
 					&pubkeys,
-					&commitments,
+					payload_data.group_commitment,
+					&payload_data.bound_commitments,
 					&local_sigs,
 				)
 			})
