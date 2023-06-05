@@ -11,6 +11,18 @@ mod point_impls {
 
 	use super::*;
 
+	impl Ord for Point {
+		fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+			self.as_bytes().cmp(&other.as_bytes())
+		}
+	}
+
+	impl PartialOrd for Point {
+		fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+			Some(self.cmp(other))
+		}
+	}
+
 	impl ECPoint for Point {
 		type Scalar = Scalar;
 

@@ -23,7 +23,6 @@ pub struct RpcAccountInfo {
 	pub is_activated: bool,
 	pub online_credits: u32,
 	pub reputation_points: i32,
-	pub withdrawal_address: String,
 	pub state: ChainflipAccountStateWithPassive,
 }
 
@@ -34,7 +33,6 @@ pub struct RpcAccountInfoV2 {
 	pub last_heartbeat: u32,
 	pub online_credits: u32,
 	pub reputation_points: i32,
-	pub withdrawal_address: String,
 	pub keyholder_epochs: Vec<u32>,
 	pub is_current_authority: bool,
 	pub is_current_backup: bool,
@@ -367,7 +365,6 @@ where
 			is_activated: account_info.is_activated,
 			online_credits: account_info.online_credits,
 			reputation_points: account_info.reputation_points,
-			withdrawal_address: hex::encode(account_info.withdrawal_address),
 			state: account_info.state,
 		})
 	}
@@ -388,7 +385,6 @@ where
 			last_heartbeat: account_info.last_heartbeat,
 			online_credits: account_info.online_credits,
 			reputation_points: account_info.reputation_points,
-			withdrawal_address: hex::encode(account_info.withdrawal_address),
 			keyholder_epochs: account_info.keyholder_epochs,
 			is_current_authority: account_info.is_current_authority,
 			is_current_backup: account_info.is_current_backup,

@@ -22,7 +22,7 @@ benchmarks! {
 		let call = Call::<T>::funded {
 			account_id: caller.clone(),
 			amount,
-			withdrawal_address,
+			funder: withdrawal_address,
 			tx_hash,
 		};
 		let origin = T::EnsureWitnessed::successful_origin();
@@ -45,7 +45,7 @@ benchmarks! {
 		let call = Call::<T>::funded {
 			account_id: caller.clone(),
 			amount: MinimumFunding::<T>::get() * T::Balance::from(2u128),
-			withdrawal_address,
+			funder: withdrawal_address,
 			tx_hash
 		};
 		call.dispatch_bypass_filter(origin)?;
@@ -66,7 +66,7 @@ benchmarks! {
 		Call::<T>::funded {
 			account_id: caller.clone(),
 			amount: MinimumFunding::<T>::get(),
-			withdrawal_address,
+			funder: withdrawal_address,
 			tx_hash
 		}.dispatch_bypass_filter(origin)?;
 
@@ -89,7 +89,7 @@ benchmarks! {
 		Call::<T>::funded {
 			account_id: caller.clone(),
 			amount: MinimumFunding::<T>::get(),
-			withdrawal_address,
+			funder: withdrawal_address,
 			tx_hash
 		}.dispatch_bypass_filter(origin.clone())?;
 
@@ -118,7 +118,7 @@ benchmarks! {
 		Call::<T>::funded {
 			account_id: caller.clone(),
 			amount: MinimumFunding::<T>::get(),
-			withdrawal_address,
+			funder: withdrawal_address,
 			tx_hash
 		}.dispatch_bypass_filter(origin.clone())?;
 
@@ -165,6 +165,17 @@ benchmarks! {
 	} : { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(MinimumFunding::<T>::get(), MinimumFunding::<T>::get());
+	}
+
+	update_redemption_tax {
+		let amount = 1u128.into();
+		let call = Call::<T>::update_redemption_tax {
+			amount,
+		};
+	}: {
+		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+	} verify {
+		assert_eq!(crate::RedemptionTax::<T>::get(), amount);
 	}
 
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);

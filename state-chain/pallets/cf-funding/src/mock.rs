@@ -205,6 +205,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		flip: FlipConfig { total_issuance: 1_000_000 },
 		funding: FundingConfig {
 			genesis_accounts: vec![(CHARLIE, AccountRole::Validator, MIN_FUNDING)],
+			redemption_tax: MIN_FUNDING / 2,
 			minimum_funding: MIN_FUNDING,
 			redemption_ttl: Duration::from_secs(REDEMPTION_TTL_SECS),
 			redemption_delay_buffer_seconds: REDEMPTION_DELAY_BUFFER_SECS,

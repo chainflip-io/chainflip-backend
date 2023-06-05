@@ -19,7 +19,6 @@ jobs:
     uses: ./.github/workflows/_24_docker.yml
     with:
       network: perseverance
-      commit_hash: ${{ github.sha }}
       environment: prod
     secrets: inherit
   package:
@@ -35,7 +34,6 @@ jobs:
     with:
       version: "perseverance/"
       environment: prod
-      commit_hash: ${{ github.sha }}
     secrets: inherit
   release:
     needs: [publish]

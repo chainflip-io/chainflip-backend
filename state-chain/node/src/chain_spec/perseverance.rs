@@ -48,11 +48,12 @@ pub const DOPEY_ED25519: [u8; 32] =
 pub const SNOW_WHITE_SR25519: [u8; 32] =
 	hex_literal::hex!["84f131a66e88e3e5f8dce20d413cab3fbb13769a14a4c7b640b7222863ef353d"];
 
-pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance)> {
+pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8>>)> {
 	vec![(
 		hex_literal::hex!("b81ba08bd1225107cecf9cb1ca094292b6e4eafbedd048938fb020017171cc1f")
 			.into(),
 		AccountRole::Broker,
 		100 * FLIPPERINOS_PER_FLIP,
+		Some(b"Chainflip Broker".to_vec()),
 	)]
 }
