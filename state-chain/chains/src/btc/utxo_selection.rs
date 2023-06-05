@@ -12,7 +12,11 @@ use super::GetUtxoAmount;
 /// amount utxo in the list before the transaction EXCEPT for the case where the algorithm has to
 /// choose all available utxos for the transaction but then the fragmentation doesnt matter anyways
 /// since we in any case have to use all utxos (because the output amount is high enough).
-pub fn select_utxos_from_pool<UTXO: GetUtxoAmount>(
+///
+/// In the case where the fee to spend the utxo is higher than the amount locked in the utxo, the
+/// algorithm will skip the selection of that utxo and will keep it in the list of available utxos
+/// for future use when the fee possibly comes down so that it is feasable to select these utxos.
+pub fn select_utxos_from_pool<UTXO: GetUtxoAmount + Clone>(
 	available_utxos: &mut Vec<UTXO>,
 	fee_per_utxo: u64,
 	amount_to_be_spent: u64,
@@ -24,13 +28,18 @@ pub fn select_utxos_from_pool<UTXO: GetUtxoAmount>(
 	available_utxos.sort_by_key(|utxo| sp_std::cmp::Reverse(utxo.amount()));
 
 	let mut selected_utxos: Vec<UTXO> = vec![];
+	let mut skipped_utxos: Vec<UTXO> = vec![];
 
 	let mut cumulative_amount = 0;
 
 	while cumulative_amount < amount_to_be_spent {
 		if let Some(current_smallest_utxo) = available_utxos.pop() {
-			cumulative_amount += current_smallest_utxo.amount() - fee_per_utxo;
-			selected_utxos.push(current_smallest_utxo);
+			if current_smallest_utxo.amount() > fee_per_utxo {
+				cumulative_amount += current_smallest_utxo.amount() - fee_per_utxo;
+				selected_utxos.push(current_smallest_utxo.clone());
+			} else {
+				skipped_utxos.push(current_smallest_utxo.clone());
+			}
 		} else {
 			break
 		}
@@ -40,6 +49,8 @@ pub fn select_utxos_from_pool<UTXO: GetUtxoAmount>(
 		cumulative_amount += utxo.amount() - fee_per_utxo;
 		selected_utxos.push(utxo);
 	}
+
+	available_utxos.append(&mut skipped_utxos);
 
 	Some((selected_utxos, cumulative_amount))
 }
@@ -118,7 +129,35 @@ fn test_utxo_selection() {
 	// entering the amount greater than the max spendable amount will
 	// cause the function to select all available utxos
 	assert_eq!(
-		select_utxos_from_pool(&mut available_utxos, FEE_PER_UTXO, 100000),
+		select_utxos_from_pool(&mut available_utxos.clone(), FEE_PER_UTXO, 100000),
 		Some((all_selected_utxos, 2485))
 	);
+
+	// choosing the fee to spend the input utxo as greater than the amounts in the 2 smallest utxos
+	// will cause the algorithm to skip the selection of those 2 utxos and adding it to the list of
+	// available utxos for future use.
+	assert_eq!(
+		select_utxos_from_pool(&mut available_utxos, 16, 19),
+		Some((
+			vec![
+				UTXO { amount: 19 },
+				UTXO { amount: 20 },
+				UTXO { amount: 25 },
+				UTXO { amount: 41 },
+				UTXO { amount: 110 }
+			],
+			135
+		))
+	);
+
+	assert_eq!(
+		available_utxos,
+		vec![
+			UTXO { amount: 1000 },
+			UTXO { amount: 768 },
+			UTXO { amount: 500 },
+			UTXO { amount: 7 },
+			UTXO { amount: 15 }
+		],
+	)
 }
