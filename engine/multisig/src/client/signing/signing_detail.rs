@@ -192,7 +192,12 @@ pub fn aggregate_signature<C: CryptoScheme>(
 ) -> Result<C::Signature, BTreeSet<AuthorityCount>> {
 	let bindings = generate_bindings::<C>(payload, commitments, signer_idxs);
 
-	let group_commitment = gen_group_commitment(commitments, &bindings);
+	let bound_commitments: BTreeMap<_, _> = commitments
+		.iter()
+		.map(|(idx, comm)| (*idx, comm.d + comm.e * bindings[idx].clone()))
+		.collect();
+
+	let group_commitment = bound_commitments.values().cloned().sum();
 
 	let challenge = C::build_challenge(agg_pubkey, group_commitment, payload);
 
@@ -200,11 +205,7 @@ pub fn aggregate_signature<C: CryptoScheme>(
 		.iter()
 		.copied()
 		.filter(|signer_idx| {
-			let rho_i = bindings[signer_idx].clone();
 			let lambda_i = get_lagrange_coeff::<C::Point>(*signer_idx, signer_idxs);
-
-			let commitment = &commitments[signer_idx];
-			let commitment_i = commitment.d + (commitment.e * rho_i);
 
 			let y_i = pubkeys[signer_idx];
 
@@ -213,7 +214,7 @@ pub fn aggregate_signature<C: CryptoScheme>(
 			!C::is_party_response_valid(
 				&y_i,
 				&lambda_i,
-				&commitment_i,
+				&bound_commitments[signer_idx],
 				&group_commitment,
 				&challenge,
 				response,
