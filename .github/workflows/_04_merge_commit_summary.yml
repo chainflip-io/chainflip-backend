@@ -10,17 +10,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get Base Branch head commit SHA 🕵️‍♂️
-        id: base_branch_head_commit
-        run: |
-          echo "base_branch_head_sha=$(git rev-parse origin/${{ github.event.inputs.base_branch }})" >> $GITHUB_OUTPUT
-
       - name: Note for Developers
         run: |
           echo "### 📝 Commit SHA" >> $GITHUB_STEP_SUMMARY
           echo "The following commit: \`${{ github.sha }}\` the merge commit provided by GitHub Actions Context for \`pull_request\` event. More details [here](https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request)." >> $GITHUB_STEP_SUMMARY
-          echo "To Reproduce this locally run the following:" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`shell" >> $GITHUB_STEP_SUMMARY
-          echo "git checkout ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "git merge ${{ steps.base_branch_head_commit.outputs.base_branch_head_sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "Base branch head SHA: \`$(git rev-parse origin/${{ github.base_ref }})\`" >> $GITHUB_STEP_SUMMARY
+          echo "PR branch head SHA: \`${{ github.event.pull_request.head.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "Merge Commit SHA: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
