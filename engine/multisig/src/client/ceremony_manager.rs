@@ -15,13 +15,13 @@ use std::{
 	sync::Arc,
 };
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
-use tracing::{debug, info, info_span, trace, warn, Instrument};
+use tracing::{debug, info_span, trace, warn, Instrument};
 
 use crate::{
 	client,
 	client::{
 		ceremony_id_string,
-		common::{KeygenFailureReason, ParticipantStatus, SigningFailureReason},
+		common::{KeygenFailureReason, SigningFailureReason},
 		signing::PayloadAndKey,
 		CeremonyRequestDetails,
 	},
@@ -443,19 +443,6 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 		let _entered = span.enter();
 
 		debug!("Processing a key handover request");
-
-		if participants.len() == 1 {
-			info!("Performing a single party key handover");
-			// We are the only participant, which means we are sharing the key with
-			// ourselves, and the resulting key is exactly the same as the original
-			if let ParticipantStatus::Sharing { original_key, .. } = resharing_context.party_status
-			{
-				let _result = result_sender.send(Ok(original_key));
-				return
-			} else {
-				panic!("Our node is the only participant, so it must be sharing");
-			}
-		}
 
 		let request = match prepare_key_handover_request(
 			ceremony_id,

@@ -144,19 +144,13 @@ where
 			),
 		};
 
+		self.common
+			.outgoing_p2p_message_sender
+			.send(outgoing_messages)
+			.expect("Could not send p2p message.");
+
 		// Save our own share
-		match self.process_message(common.own_idx, own_message.into()) {
-			// Must be a single party ceremony, so we are ready to proceed
-			ProcessMessageResult::Ready => ProcessMessageResult::Ready,
-			// Must be a multi-party ceremony, so send our messages to others and wait (NotReady)
-			ProcessMessageResult::NotReady => {
-				self.common
-					.outgoing_p2p_message_sender
-					.send(outgoing_messages)
-					.expect("Could not send p2p message.");
-				ProcessMessageResult::NotReady
-			},
-		}
+		self.process_message(common.own_idx, own_message.into())
 	}
 
 	fn process_message(&mut self, signer_idx: AuthorityCount, m: C::Data) -> ProcessMessageResult {
