@@ -184,7 +184,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 
 		debug!("{} is successful", Self::NAME);
 
-		let signature_data: Vec<_> = self
+		let signature_data = self
 			.signing_common
 			.payloads_and_keys
 			.iter()
@@ -247,8 +247,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	type Message = LocalSig3<Crypto::Point>;
 	const NAME: SigningStageName = SigningStageName::LocalSigStage3;
 
-	/// With all nonce commitments verified, we can generate the group commitment
-	/// and our share of signature response, which we broadcast to other parties.
+	/// With all nonce commitments verified, and the group commitment computed,
+	/// we can generate our share of signature response, which we broadcast to other parties.
 	fn init(&mut self) -> DataToSend<Self::Message> {
 		let responses = (0..self.signing_common.payload_count())
 			.map(|i| {
