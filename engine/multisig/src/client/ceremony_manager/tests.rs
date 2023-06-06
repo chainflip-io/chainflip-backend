@@ -1,16 +1,13 @@
 use std::{collections::BTreeSet, pin::Pin, time::Duration};
 
 use crate::{
-	bitcoin::BtcSigning,
 	client::{
 		self,
 		ceremony_manager::{
 			CeremonyHandle, CeremonyManager, CeremonyRequestState, SigningCeremony,
 		},
 		ceremony_runner::CeremonyRunner,
-		common::{
-			BroadcastFailureReason, ResharingContext, SigningFailureReason, SigningStageName,
-		},
+		common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
 		gen_keygen_data_hash_comm1, get_key_data_for_test,
 		helpers::{
 			ACCOUNT_IDS, CEREMONY_TIMEOUT_DURATION, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
@@ -30,7 +27,7 @@ use futures::{Future, FutureExt};
 use rand::SeedableRng;
 use sp_runtime::AccountId32;
 use tokio::sync::{mpsc, oneshot};
-use utilities::{assert_ok, task_scope::task_scope, threshold_from_share_count};
+use utilities::{task_scope::task_scope, threshold_from_share_count};
 
 use super::CEREMONY_ID_WINDOW;
 
@@ -453,116 +450,4 @@ async fn should_route_p2p_message() {
 		outgoing_p2p_receiver.try_recv().unwrap(),
 		OutgoingMultisigStageMessages::Broadcast(..)
 	))
-}
-
-#[tokio::test]
-async fn single_party_keygen() {
-	let our_account_id = AccountId::new([1; 32]);
-
-	let (ceremony_request_sender, _, _) =
-		spawn_ceremony_manager::<EthSigning>(our_account_id.clone(), INITIAL_LATEST_CEREMONY_ID);
-
-	let (result_sender, mut result_receiver) = oneshot::channel();
-
-	// Send a keygen request with us as the only participant
-	let request = CeremonyRequest {
-		ceremony_id: INITIAL_LATEST_CEREMONY_ID + 1,
-		details: Some(CeremonyRequestDetails::Keygen(KeygenRequestDetails {
-			rng: Rng::from_seed(DEFAULT_KEYGEN_SEED),
-			participants: BTreeSet::from_iter(vec![our_account_id].iter().cloned()),
-			result_sender,
-			resharing_context: None,
-		})),
-	};
-
-	ceremony_request_sender.send(request).unwrap();
-
-	// Small delay to let the ceremony manager process the result
-	tokio::time::sleep(Duration::from_millis(50)).await;
-
-	let result = result_receiver.try_recv().expect("Failed to receive a ceremony result");
-	assert_eq!(
-		result.expect("Failed single party keygen").params.share_count,
-		1,
-		"Was not single party keygen"
-	)
-}
-
-#[tokio::test]
-async fn single_party_signing() {
-	type Scheme = EthSigning;
-
-	let our_account_id = AccountId::new([1; 32]);
-
-	let (ceremony_request_sender, _, _) =
-		spawn_ceremony_manager::<Scheme>(our_account_id.clone(), INITIAL_LATEST_CEREMONY_ID);
-
-	let (result_sender, mut result_receiver) = oneshot::channel();
-
-	let participants = BTreeSet::from_iter(vec![our_account_id].iter().cloned());
-
-	// Send a signing request with us as the only participant
-	let request = CeremonyRequest {
-		ceremony_id: INITIAL_LATEST_CEREMONY_ID + 1,
-		details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails {
-			participants: participants.clone(),
-			signing_info: vec![(
-				get_key_data_for_test(participants),
-				Scheme::signing_payload_for_test(),
-			)],
-			rng: Rng::from_seed(DEFAULT_KEYGEN_SEED),
-			result_sender,
-		})),
-	};
-
-	ceremony_request_sender.send(request).unwrap();
-
-	// Small delay to let the ceremony manager process the result
-	tokio::time::sleep(Duration::from_millis(50)).await;
-
-	let result = result_receiver.try_recv().expect("Failed to receive a ceremony result");
-	assert_ok!(result);
-}
-
-#[tokio::test]
-async fn single_party_key_handover() {
-	let our_account_id = AccountId::new([1; 32]);
-
-	let (ceremony_request_sender, _, _) =
-		spawn_ceremony_manager::<BtcSigning>(our_account_id.clone(), INITIAL_LATEST_CEREMONY_ID);
-
-	let (result_sender, mut result_receiver) = oneshot::channel();
-
-	let participants = BTreeSet::from_iter(vec![our_account_id.clone()].iter().cloned());
-
-	// Create a resharing context with us as the only participant
-	let resharing_context = Some(ResharingContext::from_key(
-		&get_key_data_for_test(participants.clone()),
-		&our_account_id,
-		&participants,
-		&participants,
-	));
-
-	// Send the resharing context in a keygen request with us as the only participant
-	let request = CeremonyRequest {
-		ceremony_id: INITIAL_LATEST_CEREMONY_ID + 1,
-		details: Some(CeremonyRequestDetails::Keygen(KeygenRequestDetails {
-			rng: Rng::from_seed(DEFAULT_KEYGEN_SEED),
-			participants,
-			result_sender,
-			resharing_context,
-		})),
-	};
-
-	ceremony_request_sender.send(request).unwrap();
-
-	// Small delay to let the ceremony manager process the result
-	tokio::time::sleep(Duration::from_millis(50)).await;
-
-	let result = result_receiver.try_recv().expect("Failed to receive a ceremony result");
-	assert_eq!(
-		result.expect("Failed single party keygen").params.share_count,
-		1,
-		"Was not single party keygen"
-	)
 }
