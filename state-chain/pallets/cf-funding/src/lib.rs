@@ -174,7 +174,7 @@ pub mod pallet {
 
 	/// Redeem address for an restricted account.
 	#[pallet::storage]
-	pub type RedeemAddress<T: Config> =
+	pub type BoundAddress<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress, ValueQuery>;
 
 	/// The fee levied for every redemption request. Can be updated by Governance.
@@ -301,6 +301,12 @@ pub mod pallet {
 
 		/// Redemption tax must be less than the minimum funding amount.
 		InvalidRedemptionTaxUpdate,
+
+		/// The account is already bound to a redeem address.
+		AccountAlreadyBound,
+
+		/// The address is already a restricted.
+		AddressIsAlreadyRestricted,
 	}
 
 	#[pallet::call]
@@ -433,9 +439,9 @@ pub mod pallet {
 				available_balance
 			} else {
 				// Check if the
-				if RedeemAddress::<T>::contains_key(&account_id) {
+				if BoundAddress::<T>::contains_key(&account_id) {
 					ensure!(
-						RedeemAddress::<T>::get(&account_id) == address,
+						BoundAddress::<T>::get(&account_id) == address,
 						Error::<T>::InvalidRedemption
 					);
 				}
@@ -651,15 +657,29 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Binds an account to a redeem address. This is used to allow an account to redeem their
+		/// funds to a specific address.
+		///
+		/// ## Errors
+		///
+		/// - [AccountAlreadyBound](Error::AccountAlreadyBound)
+		/// - [AddressIsAlreadyRestricted](Error::AddressIsAlreadyRestricted)
+		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::weight(10_000)]
 		pub fn bind_redeem_address(
 			origin: OriginFor<T>,
 			address: EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
-			RedeemAddress::<T>::insert(&account_id, address);
+			ensure!(!BoundAddress::<T>::contains_key(&account_id), Error::<T>::AccountAlreadyBound);
+			ensure!(
+				!RestrictedAddresses::<T>::contains_key(&address),
+				Error::<T>::AddressIsAlreadyRestricted
+			);
+			BoundAddress::<T>::insert(&account_id, address);
 			Ok(().into())
 		}
+
 		/// Updates the Withdrawal Tax, which is the amount levied on each withdrawal request.
 		///
 		/// Requires Governance

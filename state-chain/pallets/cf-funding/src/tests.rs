@@ -10,7 +10,7 @@ use cf_traits::{
 	AccountRoleRegistry, Bonding,
 };
 
-use crate::RedeemAddress;
+use crate::BoundAddress;
 use frame_support::{assert_noop, assert_ok};
 use pallet_cf_flip::Bonder;
 use sp_runtime::{traits::BadOrigin, DispatchError};
@@ -741,7 +741,7 @@ fn can_only_redeem_funds_to_redeem_address() {
 		const UNRESTRICTED_ADDRESS: EthereumAddress = [0x03; 20];
 		const AMOUNT: u128 = 100;
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
-		RedeemAddress::<Test>::insert(ALICE, REDEEM_ADDRESS);
+		BoundAddress::<Test>::insert(ALICE, REDEEM_ADDRESS);
 		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
 			ALICE,
@@ -765,7 +765,7 @@ fn redeem_funds_until_restricted_balance_is_zero_and_then_redeem_to_redeem_addre
 		const UNRESTRICTED_ADDRESS: EthereumAddress = [0x03; 20];
 		const AMOUNT: u128 = 100;
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS, ());
-		RedeemAddress::<Test>::insert(ALICE, REDEEM_ADDRESS);
+		BoundAddress::<Test>::insert(ALICE, REDEEM_ADDRESS);
 		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
 			ALICE,
