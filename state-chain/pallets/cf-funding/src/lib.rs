@@ -263,9 +263,8 @@ pub mod pallet {
 		/// The redemption signature could not be found.
 		SignatureNotReady,
 
-		/// The redemption cannot be processed because of restrictions places on the redemption
-		/// address.
-		AccountRestrictionsViolated,
+		/// There are not enough unrestricted funds to process the redemption.
+		InsufficientUnrestrictedFunds,
 
 		/// The requested redemption amount is too low to pay for the redemption tax.
 		RedemptionAmountTooLow,
@@ -373,7 +372,7 @@ pub mod pallet {
 						restricted_balances.get(&address).copied().unwrap_or_default();
 					let unrestricted = T::Flip::redeemable_balance(&account_id)
 						.checked_sub(&restricted)
-						.ok_or(Error::<T>::AccountRestrictionsViolated)?;
+						.ok_or(Error::<T>::InsufficientUnrestrictedFunds)?;
 					unrestricted
 						.checked_sub(&redemption_fee)
 						.ok_or(Error::<T>::RedemptionAmountTooLow)?
@@ -404,7 +403,7 @@ pub mod pallet {
 
 			ensure!(
 				remaining_balance >= restricted_balances.values().copied().sum(),
-				Error::<T>::AccountRestrictionsViolated
+				Error::<T>::InsufficientUnrestrictedFunds
 			);
 
 			// Update the account balance.

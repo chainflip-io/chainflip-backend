@@ -659,7 +659,7 @@ fn vesting_contracts_test_case() {
 		// Because 100 is available this should fail
 		assert_noop!(
 			Funding::redeem(RuntimeOrigin::signed(ALICE), 200.into(), UNRESTRICTED_ADDRESS),
-			Error::<Test>::AccountRestrictionsViolated
+			Error::<Test>::InsufficientUnrestrictedFunds
 		);
 		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), 50.into(), UNRESTRICTED_ADDRESS));
 		assert_ok!(Funding::redeemed(RuntimeOrigin::root(), ALICE, 50, TX_HASH));
@@ -845,14 +845,14 @@ mod test_restricted_balances {
 		(
 			UNRESTRICTED_BALANCE + 1,
 			UNRESTRICTED_ADDRESS,
-			Some(Error::<Test>::AccountRestrictionsViolated)
+			Some(Error::<Test>::InsufficientUnrestrictedFunds)
 		),
 		(UNRESTRICTED_BALANCE + 1, RESTRICTED_ADDRESS_1, None::<Error<Test>>),
 		(UNRESTRICTED_BALANCE + 1, RESTRICTED_ADDRESS_2, None::<Error<Test>>),
 		(
 			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1,
 			UNRESTRICTED_ADDRESS,
-			Some(Error::<Test>::AccountRestrictionsViolated)
+			Some(Error::<Test>::InsufficientUnrestrictedFunds)
 		),
 		(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1, RESTRICTED_ADDRESS_1, None::<Error<Test>>),
 		(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1, RESTRICTED_ADDRESS_2, None::<Error<Test>>),
@@ -862,12 +862,12 @@ mod test_restricted_balances {
 		(
 			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1 + 1,
 			UNRESTRICTED_ADDRESS,
-			Some(Error::<Test>::AccountRestrictionsViolated)
+			Some(Error::<Test>::InsufficientUnrestrictedFunds)
 		),
 		(
 			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1 + 1,
 			RESTRICTED_ADDRESS_1,
-			Some(Error::<Test>::AccountRestrictionsViolated)
+			Some(Error::<Test>::InsufficientUnrestrictedFunds)
 		),
 		(
 			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1 + 1,
@@ -877,12 +877,12 @@ mod test_restricted_balances {
 		(
 			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2,
 			UNRESTRICTED_ADDRESS,
-			Some(Error::<Test>::AccountRestrictionsViolated)
+			Some(Error::<Test>::InsufficientUnrestrictedFunds)
 		),
 		(
 			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2,
 			RESTRICTED_ADDRESS_1,
-			Some(Error::<Test>::AccountRestrictionsViolated)
+			Some(Error::<Test>::InsufficientUnrestrictedFunds)
 		),
 		(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2, RESTRICTED_ADDRESS_2, None::<Error<Test>>),
 	];
@@ -891,21 +891,21 @@ mod test_restricted_balances {
 		(
 			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2 + 1,
 			UNRESTRICTED_ADDRESS,
-			Some(Error::<Test>::AccountRestrictionsViolated)
+			Some(Error::<Test>::InsufficientUnrestrictedFunds)
 		),
 		(
 			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2 + 1,
 			RESTRICTED_ADDRESS_1,
-			Some(Error::<Test>::AccountRestrictionsViolated)
+			Some(Error::<Test>::InsufficientUnrestrictedFunds)
 		),
 		(
 			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2 + 1,
 			RESTRICTED_ADDRESS_2,
-			Some(Error::<Test>::AccountRestrictionsViolated)
+			Some(Error::<Test>::InsufficientUnrestrictedFunds)
 		),
-		(TOTAL_BALANCE, UNRESTRICTED_ADDRESS, Some(Error::<Test>::AccountRestrictionsViolated)),
-		(TOTAL_BALANCE, RESTRICTED_ADDRESS_1, Some(Error::<Test>::AccountRestrictionsViolated)),
-		(TOTAL_BALANCE, RESTRICTED_ADDRESS_2, Some(Error::<Test>::AccountRestrictionsViolated)),
+		(TOTAL_BALANCE, UNRESTRICTED_ADDRESS, Some(Error::<Test>::InsufficientUnrestrictedFunds)),
+		(TOTAL_BALANCE, RESTRICTED_ADDRESS_1, Some(Error::<Test>::InsufficientUnrestrictedFunds)),
+		(TOTAL_BALANCE, RESTRICTED_ADDRESS_2, Some(Error::<Test>::InsufficientUnrestrictedFunds)),
 	];
 }
 
