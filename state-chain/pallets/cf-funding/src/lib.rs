@@ -642,7 +642,7 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::update_restricted_addresses(addresses_to_add.len() as u32, addresses_to_remove.len() as u32))]
 		pub fn update_restricted_addresses(
 			origin: OriginFor<T>,
 			addresses_to_add: Vec<EthereumAddress>,
@@ -669,7 +669,7 @@ pub mod pallet {
 		/// - [AccountAlreadyBound](Error::AccountAlreadyBound)
 		/// - [AddressIsAlreadyRestricted](Error::AddressIsAlreadyRestricted)
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(10_000)]
+		#[pallet::weight(T::WeightInfo::bind_redeem_address())]
 		pub fn bind_redeem_address(
 			origin: OriginFor<T>,
 			address: EthereumAddress,

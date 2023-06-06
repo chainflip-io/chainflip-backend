@@ -178,5 +178,23 @@ benchmarks! {
 		assert_eq!(crate::RedemptionTax::<T>::get(), amount);
 	}
 
+	bind_redeem_address {
+		let caller: T::AccountId = whitelisted_caller();
+	}:_(RawOrigin::Signed(caller.clone()), [42u8; 20])
+	verify {
+		assert!(BoundAddress::<T>::contains_key(&caller));
+	}
+
+	update_restricted_addresses {
+		let a in 1 .. 100;
+		let b in 1 .. 100;
+		let call = Call::<T>::update_restricted_addresses {
+			addresses_to_add: (1 .. a as u32).into_iter().map(|_| [42u8; 20]).collect::<Vec<_>>(),
+			addresses_to_remove: (1 .. b as u32).into_iter().map(|_| [42u8; 20]).collect::<Vec<_>>()
+		};
+	}: {
+		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
+	}
+
 	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test,);
 }
