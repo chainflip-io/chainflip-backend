@@ -61,6 +61,7 @@ jobs:
           cache: 'pnpm'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@chainflip-io'
+          cache-dependency-path: 'bouncer/pnpm-lock.yaml'
 
       - name: Install system packages
         run: |
