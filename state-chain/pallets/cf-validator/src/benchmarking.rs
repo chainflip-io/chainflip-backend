@@ -48,7 +48,7 @@ pub fn init_bidders<T: RuntimeConfig>(n: u32, set_id: u32, flip_funded: u128) {
 			T::EnsureWitnessed::successful_origin(),
 			bidder.clone(),
 			(flip_funded * 10u128.pow(18)).unique_saturated_into(),
-			pallet_cf_funding::ETH_ZERO_ADDRESS,
+			Default::default(),
 			Default::default()
 		));
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&bidder);
