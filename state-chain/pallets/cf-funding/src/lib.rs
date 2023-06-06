@@ -307,6 +307,9 @@ pub mod pallet {
 
 		/// The address is already a restricted.
 		AddressIsAlreadyRestricted,
+
+		/// The ETH zero address is not allowed to use.
+		EthZeroAddressIsNotAllowed,
 	}
 
 	#[pallet::call]
@@ -647,6 +650,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			for address in addresses_to_add {
+				ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::EthZeroAddressIsNotAllowed);
 				RestrictedAddresses::<T>::insert(address, ());
 				Self::deposit_event(Event::AddedRestrictedAddress { address });
 			}
@@ -671,11 +675,8 @@ pub mod pallet {
 			address: EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
+			ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::EthZeroAddressIsNotAllowed);
 			ensure!(!BoundAddress::<T>::contains_key(&account_id), Error::<T>::AccountAlreadyBound);
-			ensure!(
-				!RestrictedAddresses::<T>::contains_key(address),
-				Error::<T>::AddressIsAlreadyRestricted
-			);
 			BoundAddress::<T>::insert(&account_id, address);
 			Ok(().into())
 		}

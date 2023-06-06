@@ -1015,3 +1015,36 @@ fn cannot_redeem_lower_than_redemption_tax() {
 		));
 	});
 }
+
+#[test]
+fn can_bind_redeem_address() {
+	new_test_ext().execute_with(|| {
+		const REDEEM_ADDRESS: EthereumAddress = [0x01; 20];
+		assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(ALICE), REDEEM_ADDRESS));
+		assert!(BoundAddress::<Test>::contains_key(ALICE));
+		assert_eq!(BoundAddress::<Test>::get(ALICE), REDEEM_ADDRESS);
+	});
+}
+
+#[test]
+fn cannot_bind_redeem_address_twice() {
+	new_test_ext().execute_with(|| {
+		const REDEEM_ADDRESS: EthereumAddress = [0x01; 20];
+		assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(ALICE), REDEEM_ADDRESS));
+		assert_noop!(
+			Funding::bind_redeem_address(RuntimeOrigin::signed(ALICE), REDEEM_ADDRESS),
+			crate::Error::<Test>::AccountAlreadyBound
+		);
+	});
+}
+
+#[test]
+fn cannot_bind_redeem_address_to_zero_address() {
+	new_test_ext().execute_with(|| {
+		const REDEEM_ADDRESS: EthereumAddress = [0xff; 20];
+		assert_noop!(
+			Funding::bind_redeem_address(RuntimeOrigin::signed(ALICE), REDEEM_ADDRESS),
+			crate::Error::<Test>::EthZeroAddressIsNotAllowed
+		);
+	});
+}
