@@ -540,13 +540,17 @@ impl<T: Config> Pallet<T> {
 		utxo_id: UtxoId,
 		script_pubkey: ScriptPubkey,
 	) {
-		let (salt, pubkey) = BitcoinActiveDepositAddressDetails::<T>::take(script_pubkey);
+		let (salt, pubkey) = BitcoinActiveDepositAddressDetails::<T>::get(script_pubkey);
 
 		BitcoinAvailableUtxos::<T>::append(Utxo {
 			amount,
 			id: utxo_id,
 			deposit_address: DepositAddress::new(pubkey, salt),
 		});
+	}
+
+	pub fn cleanup_bitcoin_deposit_address_details(script_pubkey: ScriptPubkey) {
+		BitcoinActiveDepositAddressDetails::<T>::remove(script_pubkey);
 	}
 
 	pub fn add_bitcoin_change_utxo(amount: BtcAmount, utxo_id: UtxoId, pubkey_x: [u8; 32]) {
