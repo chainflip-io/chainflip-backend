@@ -12,9 +12,11 @@ LABEL org.opencontainers.image.revision="${VCS_REF}"
 LABEL org.opencontainers.image.created="${BUILD_DATETIME}"
 LABEL org.opencontainers.image.documentation="https://github.com/chainflip-io/chainflip-backend"
 
-USER flip
-
 ENV ENTRYPOINT=/usr/local/bin/${TARGET}
 COPY ${TARGET} ${ENTRYPOINT}
 RUN chmod +x ${ENTRYPOINT}
+
+RUN useradd -m -u 1000 -U -s /bin/sh -d /flip flip
+USER flip
+
 CMD ${ENTRYPOINT}

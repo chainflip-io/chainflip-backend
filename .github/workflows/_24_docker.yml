@@ -91,7 +91,7 @@ jobs:
           build-args: |
             TARGET=${{ matrix.target }}
             BUILD_DATETIME="${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}"
-            VCS_REF==${{ github.sha }}
+            VCS_REF=${{ github.sha }}
 
   chainflip-tools:
     needs: get-date-time
@@ -158,4 +158,4 @@ jobs:
           build-args: |
             TARGET=${{ matrix.target }}
             BUILD_DATETIME="${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}"
-            VCS_REF==${{ github.sha }}
+            VCS_REF=${{ github.sha }}
