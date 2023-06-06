@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use cf_chains::Chain;
 use cf_primitives::EpochIndex;
 use tokio::sync::oneshot;
+use tracing::{instrument, Instrument};
 
 use crate::db::PersistentKeyDB;
 
@@ -67,20 +68,22 @@ where
 		.await
 	}
 
+	#[instrument(level = "debug", skip_all, fields(chain = Self::Chain::NAME, block_number = block.block_number().into()))]
 	async fn do_witness(
 		&mut self,
 		block: W::Block,
 		state: &mut Self::StaticState,
 	) -> anyhow::Result<()> {
-		let block_number = block.block_number();
+		let block_number = block.block_number().into();
 
-		self.witnesser.process_block(block, state).await?;
+		self.witnesser
+			.process_block(block, state)
+			.instrument(tracing::debug_span!("process_block"))
+			.await?;
 
+		tracing::debug!("Checkpointing {} at block {}", Self::Chain::NAME, block_number);
 		self.witnessed_until_sender
-			.send(WitnessedUntil {
-				epoch_index: self.epoch_index,
-				block_number: block_number.into(),
-			})
+			.send(WitnessedUntil { epoch_index: self.epoch_index, block_number })
 			.await
 			.unwrap();
 
