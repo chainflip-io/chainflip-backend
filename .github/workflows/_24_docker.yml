@@ -90,7 +90,7 @@ jobs:
           file: ci/docker/cf.Dockerfile
           build-args: |
             TARGET=${{ matrix.target }}
-            BUILD_DATETIME="${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}"
+            BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
             VCS_REF=${{ github.sha }}
 
   chainflip-tools:
@@ -157,5 +157,5 @@ jobs:
           file: ci/docker/cf.Dockerfile
           build-args: |
             TARGET=${{ matrix.target }}
-            BUILD_DATETIME="${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}"
+            BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
             VCS_REF=${{ github.sha }}
