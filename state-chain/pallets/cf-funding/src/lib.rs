@@ -673,7 +673,7 @@ pub mod pallet {
 			let account_id = ensure_signed(origin)?;
 			ensure!(!BoundAddress::<T>::contains_key(&account_id), Error::<T>::AccountAlreadyBound);
 			ensure!(
-				!RestrictedAddresses::<T>::contains_key(&address),
+				!RestrictedAddresses::<T>::contains_key(address),
 				Error::<T>::AddressIsAlreadyRestricted
 			);
 			BoundAddress::<T>::insert(&account_id, address);
