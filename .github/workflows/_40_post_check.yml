@@ -51,6 +51,9 @@ jobs:
           sudo apt update 
           sudo apt install ngrok
 
+      - name: Install pnpm
+        run: npm install -g pnpm@8
+
       - name: Configure NodeJS
         uses: actions/setup-node@v3
         with:
@@ -58,9 +61,6 @@ jobs:
           cache: 'pnpm'
           registry-url: 'https://npm.pkg.github.com'
           scope: '@chainflip-io'
-
-      - name: Install pnpm
-        run: npm i -g pnpm
 
       - name: Install system packages
         run: |
