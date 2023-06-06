@@ -10,7 +10,20 @@ on:
         required: true
         type: string
 jobs:
+  get-date-time:
+    runs-on: ubuntu-20.04
+    outputs:
+      date: ${{ steps.date.outputs.date }}
+      time: ${{ steps.date.outputs.time }}
+    steps:
+      - name: Get the date and time
+        id: date
+        run: |
+          echo "date=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+          echo "time=$(date +'%H:%M:%S')" >> "$GITHUB_OUTPUT"
+
   chainflip-binaries:
+    needs: get-date-time
     env:
       DOCKER_REPO: ghcr.io/${{ github.repository }}
     strategy:
@@ -77,8 +90,11 @@ jobs:
           file: ci/docker/cf.Dockerfile
           build-args: >
             TARGET=${{ matrix.target }}
+            BUILD_DATETIME="${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}"
+            VCS_REF==${{ github.sha }}
 
   chainflip-tools:
+    needs: get-date-time
     if: inputs.environment != 'prod'
     env:
       DOCKER_REPO: ghcr.io/${{ github.repository }}
@@ -141,3 +157,5 @@ jobs:
           file: ci/docker/cf.Dockerfile
           build-args: >
             TARGET=${{ matrix.target }}
+            BUILD_DATETIME="${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}"
+            VCS_REF==${{ github.sha }}
