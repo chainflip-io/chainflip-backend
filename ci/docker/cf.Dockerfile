@@ -22,4 +22,4 @@ RUN chmod +x ${ENTRYPOINT} \
 
 USER flip
 
-CMD [${ENTRYPOINT}]
+CMD ["${ENTRYPOINT}"]
