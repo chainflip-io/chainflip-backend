@@ -11,7 +11,7 @@ use crate::settings::{
 };
 use api::{
 	primitives::{AccountRole, Asset, Hash, RedemptionAmount},
-	KeyPair,
+	AccountId32, KeyPair,
 };
 use chainflip_api as api;
 use utilities::clean_eth_address;
@@ -222,7 +222,23 @@ fn generate_keys(output_type: Option<GenerateKeysOutputType>) -> Result<()> {
 		ethereum_address: String,
 		signing_key: KeyPair,
 		signing_key_seed: String,
-		signing_account_id: String,
+		signing_account_id: AccountId32,
+	}
+
+	impl std::fmt::Display for Keys {
+		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+			writeln!(f, "🔑 Node public key: 0x{}", hex::encode(&self.node_key.public_key))?;
+			writeln!(
+				f,
+				"🔑 Ethereum public key: 0x{}",
+				hex::encode(&self.ethereum_key.public_key)
+			)?;
+			writeln!(f, "👤 Ethereum address: 0x{}", self.ethereum_address)?;
+			writeln!(f, "🔑 Validator key: 0x{}", hex::encode(&self.signing_key.public_key))?;
+			writeln!(f, "👤 Validator account id: 0x{}", self.signing_account_id)?;
+			writeln!(f, "🌱 Validator key seed phrase: {}", self.signing_key_seed)?;
+			Ok(())
+		}
 	}
 
 	// Generate new keys
@@ -234,7 +250,7 @@ fn generate_keys(output_type: Option<GenerateKeysOutputType>) -> Result<()> {
 		ethereum_address: hex::encode(ethereum_address),
 		signing_key,
 		signing_key_seed,
-		signing_account_id: hex::encode(signing_account_id),
+		signing_account_id,
 	};
 
 	// Output the keys depending on the users selected output type
@@ -272,22 +288,12 @@ fn generate_keys(output_type: Option<GenerateKeysOutputType>) -> Result<()> {
 				);
 			}
 
-			println!("Generating fresh keys for your Chainflip Node!");
+			println!("Generated fresh keys for your Chainflip Node!");
+			println!("{}", keys);
 
 			fs::write(node_key_file, hex::encode(keys.node_key.secret_key))?;
-			println!("🔑 Your Node public key is: 0x{}", hex::encode(keys.node_key.public_key));
-
 			fs::write(ethereum_key_file, hex::encode(keys.ethereum_key.secret_key))?;
-			println!(
-				"🔑 Your Ethereum public key is: 0x{}",
-				hex::encode(keys.ethereum_key.public_key)
-			);
-			println!("👤 Your Ethereum address is: 0x{}", keys.ethereum_address);
-
 			fs::write(signing_key_file, hex::encode(keys.signing_key.secret_key))?;
-			println!("🔑 Your Validator key is: 0x{}", hex::encode(keys.signing_key.public_key));
-			println!("👤 Your Validator account id is: 0x{}", keys.signing_account_id);
-			println!("🌱 Your Validator key seed phrase is: {}", keys.signing_key_seed);
 
 			println!("Saved all secret keys to {absolute_path_string}");
 		},

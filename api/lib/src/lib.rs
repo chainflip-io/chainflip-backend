@@ -4,19 +4,16 @@ use cf_chains::{
 	address::EncodedAddress, eth::to_ethereum_address, CcmDepositMetadata, ForeignChain,
 };
 use cf_primitives::{AccountRole, Asset, BasisPoints};
-use chainflip_node::chain_spec::get_account_id_from_seed;
 use futures::FutureExt;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
 use serde::{Deserialize, Serialize};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{
-	crypto::AccountId32, ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair,
-	H256,
-};
+use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{opaque::SessionKeys, RuntimeCall};
 use zeroize::Zeroize;
 
+pub use sp_core::crypto::AccountId32;
 pub mod primitives {
 	pub use cf_primitives::*;
 	pub use pallet_cf_governance::ProposalId;
@@ -467,7 +464,7 @@ pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPair, Strin
 			(
 				KeyPair { secret_key: seed.to_vec(), public_key: pair.public().to_vec() },
 				seed_phrase.to_string(),
-				get_account_id_from_seed::<SrPublic>(seed_phrase),
+				pair.public().into(),
 			)
 		})
 		.map_err(|_| anyhow::Error::msg("Invalid seed phrase"))
