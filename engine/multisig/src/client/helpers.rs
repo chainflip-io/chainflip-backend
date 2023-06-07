@@ -71,7 +71,7 @@ pub const CEREMONY_TIMEOUT_DURATION: Duration =
 /// fails. The function must be generic over the CryptoScheme. eg: my_test<C: CryptoScheme>().
 #[macro_export]
 macro_rules! test_all_crypto_schemes {
-	($test_function:ident) => {
+	($test_function:ident ($($lt:tt),*)) => {
 		({
 			use $crate::{
 				bitcoin::BtcSigning, ed25519::Ed25519Signing, eth::EthSigning,
@@ -79,7 +79,7 @@ macro_rules! test_all_crypto_schemes {
 			};
 
 			fn test<C: CryptoScheme>() {
-				if let Err(err) = std::panic::catch_unwind(|| $test_function::<C>()) {
+				if let Err(err) = std::panic::catch_unwind(|| $test_function::<C>($($lt)*) ) {
 					println!("Test failed with {} CryptoScheme", C::NAME);
 					std::panic::resume_unwind(err);
 				}
@@ -115,25 +115,25 @@ fn test_all_crypto_schemes_macro() {
 		}
 	}
 
-	assert_panics!(test_all_crypto_schemes!(panic_function_eth));
-	assert_panics!(test_all_crypto_schemes!(panic_function_dot));
-	assert_panics!(test_all_crypto_schemes!(panic_function_btc));
+	assert_panics!(test_all_crypto_schemes!(panic_function_eth()));
+	assert_panics!(test_all_crypto_schemes!(panic_function_dot()));
+	assert_panics!(test_all_crypto_schemes!(panic_function_btc()));
 }
 
 /// Run the given function on all crypto schemes.
 /// The function must be generic over the CryptoScheme. eg: my_test<C: CryptoScheme>().
 macro_rules! test_all_crypto_schemes_async {
-	($test_function:ident) => {
+	($test_function:ident ($($lt:tt),*)) => {
 		({
 			use crate::{
 				bitcoin::BtcSigning, ed25519::Ed25519Signing, eth::EthSigning,
 				polkadot::PolkadotSigning,
 			};
 			// Run the test on all CryptoSchemes
-			$test_function::<EthSigning>().await;
-			$test_function::<PolkadotSigning>().await;
-			$test_function::<BtcSigning>().await;
-			$test_function::<Ed25519Signing>().await;
+			$test_function::<EthSigning>($($lt)*).await;
+			$test_function::<PolkadotSigning>($($lt)*).await;
+			$test_function::<BtcSigning>($($lt)*).await;
+			$test_function::<Ed25519Signing>($($lt)*).await;
 		})
 	};
 }

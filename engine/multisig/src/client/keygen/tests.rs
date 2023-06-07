@@ -40,7 +40,7 @@ async fn happy_path_results_in_valid_key() {
 
 #[tokio::test]
 async fn should_keygen_with_single_party_on_all_schemes() {
-	test_all_crypto_schemes_async!(should_keygen_with_single_party);
+	test_all_crypto_schemes_async!(should_keygen_with_single_party());
 }
 
 async fn should_keygen_with_single_party<C: CryptoScheme>() {

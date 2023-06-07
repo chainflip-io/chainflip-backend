@@ -41,5 +41,5 @@ fn test_signing_for_scheme<C: CryptoScheme>() {
 
 #[test]
 fn test_signing_for_all_schemes() {
-	test_all_crypto_schemes!(test_signing_for_scheme);
+	test_all_crypto_schemes!(test_signing_for_scheme());
 }
