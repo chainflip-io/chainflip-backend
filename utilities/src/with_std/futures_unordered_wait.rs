@@ -9,12 +9,15 @@ pub struct FuturesUnorderedWait<Fut> {
 }
 
 impl<Fut> FuturesUnorderedWait<Fut> {
+	pub fn new() -> Self {
+		Self { futures: futures::stream::FuturesUnordered::new() }
+	}
+
 	pub fn push(&mut self, future: Fut) {
 		self.futures.push(future);
 	}
 
-	#[allow(dead_code)]
-	async fn next(&mut self) -> Option<Fut::Output>
+	pub async fn next(&mut self) -> Option<Fut::Output>
 	where
 		Fut: Future,
 	{
