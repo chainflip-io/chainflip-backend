@@ -18,8 +18,7 @@ COPY --chown=1000:1000 ${TARGET} ${ENTRYPOINT}
 RUN chmod +x ${ENTRYPOINT} \
     && useradd -m -u 1000 -U -s /bin/sh -d /flip flip \
     && mkdir -p /etc/chainflip \
-    && chown -R 1000:1000 /etc/chainflip \
-    && rm -rf /bin /sbin /usr/bin /usr/sbin
+    && chown -R 1000:1000 /etc/chainflip
 
 USER flip
 

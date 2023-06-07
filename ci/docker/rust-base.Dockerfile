@@ -14,13 +14,9 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     python3-dev \
     jq \
     protobuf-compiler \
-    git \
-    software-properties-common \
-    npm
-
-RUN npm install npm@latest -g && \
-    npm install n -g && \
-    n latest
+    apt-get autoremove -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Set environment
 ENV PATH="/root/.cargo/bin:${PATH}"
@@ -34,8 +30,6 @@ RUN curl -fsSL https://github.com/mozilla/sccache/releases/download/${SCCACHE_VE
     cp /tmp/sccache-${SCCACHE_VER}-x86_64-unknown-linux-musl/sccache /usr/local/cargo/bin/sccache && \
     rm -rf /tmp/sccache.tar.gz /tmp/sccache-${SCCACHE_VER}-x86_64-unknown-linux-musl
 
-RUN npm install -g pnpm
-
 ARG NIGHTLY
 # Download and set nightly as the default Rust compiler
 RUN rustup default ${NIGHTLY} \
@@ -46,4 +40,4 @@ RUN rustup default ${NIGHTLY} \
     && cargo install cargo-audit
 
 RUN groupadd ci \
-    && useradd -m -g ci ci \
+    && useradd -m -g ci ci

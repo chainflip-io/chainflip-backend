@@ -93,4 +93,4 @@ jobs:
       - name: Lint 🐳🔬
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: ${{ matrix.dockerfile }}
+          dockerfile: ci/docker/${{ matrix.dockerfile }}
