@@ -56,7 +56,9 @@ async fn load_from_legacy_checkpoint_file(file_path: PathBuf) -> Option<Witnesse
 	if file_path.exists() {
 		task_scope::without_blocking(move || {
 			std::fs::read_to_string(file_path)
-				.map_err(anyhow::Error::new)
+				.map_err(|e| {
+					anyhow::anyhow!("{}", e).context("Error loading legacy checkpoint file.")
+				})
 				.and_then(|string| {
 					serde_json::from_str::<WitnessedUntil>(&string).map_err(anyhow::Error::new)
 				})

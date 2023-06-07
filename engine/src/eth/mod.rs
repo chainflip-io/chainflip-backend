@@ -160,7 +160,11 @@ where
 		let secret_key = read_clean_and_decode_hex_str_file(
 			&eth_settings.private_key_file,
 			"Ethereum Private Key",
-			|key| SecretKey::from_str(key).map_err(anyhow::Error::new),
+			|key| {
+				SecretKey::from_str(key)
+					.map_err(anyhow::Error::new)
+					.context("Eth broadcaster failed to read secret key.")
+			},
 		)?;
 		Ok(Self { eth_rpc, secret_key, address: SecretKeyRef::new(&secret_key).address() })
 	}
@@ -389,7 +393,7 @@ fn redact_secret_eth_node_endpoint(endpoint: &str) -> Result<String> {
 		// No secret was found, so just redact almost all of the url
 		let url = url::Url::parse(endpoint)
 			.map_err(anyhow::Error::msg)
-			.with_context(|| "Failed to parse node endpoint into a URL")?;
+			.context("Failed to parse node endpoint into a URL")?;
 		Ok(format!(
 			"{}****",
 			endpoint

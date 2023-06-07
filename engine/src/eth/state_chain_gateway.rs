@@ -183,10 +183,13 @@ impl EthContractWitnesser for StateChainGateway {
 			move |event_signature: H256, raw_log: RawLog| -> Result<Self::EventParameters> {
 				// get the node_id from the log and return as AccountId32
 				let node_id_from_log = |log| {
-					let account_bytes: [u8; 32] =
-						decode_log_param::<ethabi::FixedBytes>(log, "nodeID")?.try_into().map_err(
-							|_| anyhow!("Could not cast FixedBytes nodeID into [u8;32]"),
-						)?;
+					let account_bytes: [u8; 32] = decode_log_param::<ethabi::FixedBytes>(
+						log, "nodeID",
+					)?
+					.try_into()
+					.map_err(|e| {
+						anyhow!("{:?}", e).context("Could not cast FixedBytes nodeID into [u8;32]")
+					})?;
 					Result::<_, anyhow::Error>::Ok(AccountId32::new(account_bytes))
 				};
 

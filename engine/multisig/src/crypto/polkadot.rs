@@ -128,7 +128,7 @@ impl CryptoScheme for PolkadotSigning {
 
 		public_key
 			.verify(context.bytes(payload.0.as_slice()), &signature.0)
-			.map_err(anyhow::Error::msg)
+			.map_err(|e| anyhow::anyhow!("{:?}", e).context("Failed to verify signature."))
 	}
 
 	fn pubkey_from_point(pubkey_point: &Self::Point) -> Self::PublicKey {

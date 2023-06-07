@@ -82,9 +82,11 @@ where
 		let secret =
 			read_clean_and_decode_hex_str_file(&settings.node_key_file, "Node Key", |str| {
 				ed25519_dalek::SecretKey::from_bytes(
-					&Zeroizing::new(hex::decode(str).map_err(anyhow::Error::new)?)[..],
+					&Zeroizing::new(hex::decode(str).map_err(|e| {
+						anyhow::anyhow!("{}", e).context("Failed to decode node key file.")
+					})?)[..],
 				)
-				.map_err(anyhow::Error::new)
+				.map_err(|e| anyhow::anyhow!("{}", e).context("Failed to read node key from file."))
 			})?;
 
 		let public = (&secret).into();

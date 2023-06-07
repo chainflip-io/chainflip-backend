@@ -62,7 +62,9 @@ impl RpcServer for RpcServerImpl {
 			message_metadata,
 		)
 		.await
-		.map_err(|e| anyhow!("{}:{}", e, e.root_cause()))?)
+		.map_err(|e| {
+			anyhow!("{}:{}", e, e.root_cause()).context("Failed to request swap deposit address")
+		})?)
 	}
 }
 

@@ -282,7 +282,10 @@ async fn main() -> anyhow::Result<()> {
 					state_chain_client.clone(),
 					db,
 				)
-				.map_err(|e| anyhow::anyhow!("DOT witnesser failed. {}:{}", e, e.root_cause())),
+				.map_err(|e| {
+					anyhow::anyhow!("Error:{} \nRoot cause: {}", e, e.root_cause())
+						.context("DOT witnesser failed.")
+				}),
 			);
 
 			scope.spawn(
@@ -293,7 +296,8 @@ async fn main() -> anyhow::Result<()> {
 					state_chain_stream.cache().block_hash,
 				)
 				.map_err(|e| {
-					anyhow::anyhow!("DOT runtime version updater failed. {}:{}", e, e.root_cause())
+					anyhow::anyhow!("Error: {} \nRoot cause: {}", e, e.root_cause())
+						.context("DOT runtime version updater failed.")
 				}),
 			);
 

@@ -33,8 +33,8 @@ macro_rules! refresh_connection_on_error {
 				);
 				$self.refresh_client()
 					.await
-					.map_err(|e| anyhow!("Failed to refresh client: {}", e))?;
-				$self.online_client.$namespace().$method($($arg,)*).await.map_err(|e| anyhow!("Failed to query {} Polkadot with error: {}", stringify!($method), e))
+					.map_err(|e| anyhow!("{}", e).context("Failed to refresh Polkadot client connection."))?;
+				$self.online_client.$namespace().$method($($arg,)*).await.map_err(|e| anyhow!("Failed to query {} Polkadot with error: {}", stringify!($method), e).context("Failed to refresh Polkadot Client connection."))
 			},
 			Ok(ok) => Ok(ok),
 		}
@@ -98,7 +98,10 @@ impl DotRpcApi for DotRpcClient {
 		Ok(Box::pin(
 			refresh_connection_on_error!(self, blocks, subscribe_finalized)?
 				.map(|block| block.map(|block| block.header().clone()))
-				.map_err(|e| anyhow!("Error in finalised head stream: {e}")),
+				.map_err(|e| {
+					anyhow!("Error in finalised head stream: {e}")
+						.context("Error in Polkadot RPC client.")
+				}),
 		))
 	}
 
@@ -122,7 +125,10 @@ impl DotRpcApi for DotRpcClient {
 		safe_runtime_version_stream(
 			self.current_runtime_version().await?,
 			refresh_connection_on_error!(self, rpc, subscribe_runtime_version)?.map(|item| {
-				item.map_err(anyhow::Error::new).map(
+				item.map_err(|e| {
+					anyhow::anyhow!("{}", e).context("Failed to connect to Polkadot client.")
+				})
+				.map(
 					|subxt::rpc::types::RuntimeVersion {
 					     spec_version,
 					     transaction_version,
@@ -132,7 +138,9 @@ impl DotRpcApi for DotRpcClient {
 			}),
 		)
 		.await
-		.map_err(|e| anyhow!("Failed to subscribe to Polkadot runtime version with error: {e}"))
+		.map_err(|e| {
+			anyhow!("Error: {e}").context("Failed to subscribe to Polkadot runtime version.")
+		})
 	}
 
 	async fn block(
@@ -169,7 +177,10 @@ impl DotRpcApi for DotRpcClient {
 		EventsClient::new(self.online_client.clone())
 			.at(Some(block_hash))
 			.await
-			.map_err(|e| anyhow!("Failed to query events for block {block_hash}, with error: {e}"))
+			.map_err(|e| {
+				anyhow!("Failed to query events for block {block_hash}, with error: {e}")
+					.context("Failed to query Polkadot RPC events.")
+			})
 	}
 
 	async fn submit_raw_encoded_extrinsic(

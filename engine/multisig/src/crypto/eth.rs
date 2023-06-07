@@ -113,8 +113,7 @@ impl CryptoScheme for EthSigning {
 
 		public_key
 			.verify(&payload.0, &signature.clone().into())
-			.map_err(|e| anyhow::anyhow!("Failed to verify signature: {:?}", e))?;
-
+			.map_err(|e| anyhow::anyhow!("{:?}", e).context("Failed to verify signature"))?;
 		Ok(())
 	}
 

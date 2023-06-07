@@ -638,6 +638,7 @@ where
                                             .map(|_| info!("Polkadot transmission successful: {broadcast_attempt_id}"))
                                             .map_err(|error| {
                                                 error!("Error: {error:?}");
+                                                error.context("Polkadot transmission failed.")
                                             });
                                         }
                                     }
@@ -656,6 +657,7 @@ where
                                             .map(|_| info!("Bitcoin transmission successful: {broadcast_attempt_id}"))
                                             .map_err(|error| {
                                                 error!("Error: {error:?}");
+                                                error.context("Bitcoin transmission failed.")
                                             });
                                         }
                                     }

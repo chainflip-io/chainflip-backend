@@ -11,6 +11,7 @@ use warp::{Filter, Reply};
 
 pub mod task_scope;
 
+#[track_caller]
 pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN], &'static str> {
 	let address_hex_str = match address_str.strip_prefix("0x") {
 		Some(address_stripped) => address_stripped,
@@ -25,6 +26,7 @@ pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN
 	Ok(address)
 }
 
+#[track_caller]
 pub fn try_parse_number_or_hex(amount: NumberOrHex) -> anyhow::Result<u128> {
 	u128::try_from(amount)
 		.map_err(|_| {
@@ -39,10 +41,12 @@ pub fn try_parse_number_or_hex(amount: NumberOrHex) -> anyhow::Result<u128> {
 		})
 }
 
+#[track_caller]
 pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], &'static str> {
 	clean_hex_address(dirty_eth_address)
 }
 
+#[track_caller]
 pub fn clean_dot_address(dirty_dot_address: &str) -> Result<[u8; 32], &'static str> {
 	clean_hex_address(dirty_dot_address)
 }
@@ -492,6 +496,7 @@ where
 	deserializer.deserialize_any(PathVisitor)
 }
 
+#[track_caller]
 pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow::Error>>(
 	file: &std::path::Path,
 	context: &str,
@@ -500,7 +505,10 @@ pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow
 	use anyhow::Context;
 
 	std::fs::read_to_string(file)
-		.map_err(|e| anyhow!("Failed to read {context} file at {}: {e}", file.display()))
+		.map_err(|e| {
+			anyhow!("Failed to read {context} file at {}: {e}", file.display())
+				.context("Failed to read hex str file.")
+		})
 		.and_then(|string| {
 			let mut str = string.as_str();
 			str = str.trim();

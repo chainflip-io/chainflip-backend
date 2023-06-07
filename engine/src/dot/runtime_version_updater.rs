@@ -55,7 +55,10 @@ where
 	)
 	.instrument(info_span!("DOT-Runtime-Version"))
 	.await
-	.map_err(|()| anyhow!("DOT-Runtime-Version witnesser exited unexpectedly"))
+	.map_err(|()| {
+		anyhow!("DOT-Runtime-Version witnesser exited unexpectedly")
+			.context("Failed to start Polkadot epoch process runner.")
+	})
 }
 
 struct RuntimeVersionUpdater<StateChainClient> {

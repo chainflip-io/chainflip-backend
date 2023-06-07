@@ -392,8 +392,12 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 					&self.signing_key_file,
 					"Signing Key",
 					|str| {
-						<[u8; 32]>::try_from(hex::decode(str).map_err(anyhow::Error::new)?)
-							.map_err(|e| anyhow!("Str to [u8; 32] decodung failed. {:?}", e))
+						<[u8; 32]>::try_from(hex::decode(str).map_err(anyhow::Error::new)?).map_err(
+							|e| {
+								anyhow!("Str to [u8; 32] decodung failed. {:?}", e)
+									.context("State chain observer client creation failed.")
+							},
+						)
 					},
 				)?,
 			)),

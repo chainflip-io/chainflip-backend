@@ -261,7 +261,9 @@ where
 	)
 	.instrument(info_span!("Dot-Witnesser"))
 	.await
-	.map_err(|_| anyhow::anyhow!("Dot witnesser failed"))
+	.map_err(|()| {
+		anyhow::anyhow!("Dot witnesser failed").context("Failed to start Polkadot witnesser.")
+	})
 }
 
 // An instance of a Polkadot Witnesser for a particular epoch.
@@ -515,7 +517,10 @@ where
 			block_events_stream,
 			Duration::from_secs(DOT_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER),
 		)
-		.map_err(|err| anyhow::anyhow!("Error while fetching Polkadot events: {:?}", err));
+		.map_err(|err| {
+			anyhow::anyhow!("Error while fetching Polkadot events: {:?}", err)
+				.context("Error in getting Polkadot lock stream.")
+		});
 
 		Ok(Box::pin(block_events_stream))
 	}
