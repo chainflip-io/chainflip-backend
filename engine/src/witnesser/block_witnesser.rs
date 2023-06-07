@@ -81,9 +81,9 @@ where
 			.instrument(tracing::debug_span!("process_block"))
 			.await?;
 
-		tracing::debug!("Checkpointing {} at block {}", Self::Chain::NAME, block_number);
 		self.witnessed_until_sender
 			.send(WitnessedUntil { epoch_index: self.epoch_index, block_number })
+			.instrument(tracing::debug_span!("send_witnessed_until"))
 			.await
 			.unwrap();
 

@@ -7,6 +7,7 @@ use sp_rpc::number::NumberOrHex;
 use std::path::PathBuf;
 #[doc(hidden)]
 pub use tokio::select as internal_tokio_select;
+use tracing_subscriber::fmt::format::FmtSpan;
 use warp::{Filter, Reply};
 
 pub mod task_scope;
@@ -402,6 +403,7 @@ pub async fn init_json_logger(scope: &task_scope::Scope<'_, anyhow::Error>) {
 					.with_default_directive(LevelFilter::INFO.into())
 					.from_env_lossy(),
 			)
+			.with_span_events(FmtSpan::FULL)
 			.with_filter_reloading();
 
 		let reload_handle = builder.reload_handle();
