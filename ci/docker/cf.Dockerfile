@@ -15,7 +15,8 @@ LABEL org.opencontainers.image.documentation="https://github.com/chainflip-io/ch
 
 COPY --chown=1000:1000 ${TARGET} ${ENTRYPOINT}
 
-RUN chmod +x ${ENTRYPOINT} \
+RUN rm -rf /bin /sbin /usr/bin /usr/sbin \
+    && chmod +x ${ENTRYPOINT} \
     && useradd -m -u 1000 -U -s /bin/sh -d /flip flip \
     && mkdir -p /etc/chainflip \
     && chown -R 1000:1000 /etc/chainflip
