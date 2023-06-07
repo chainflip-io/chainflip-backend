@@ -55,7 +55,7 @@ pub type PolkadotBlockNumber = u32;
 
 // Bitcoin default fee, in sats per bytes, to be used if current fee is not available via chain
 // tracking.
-pub const DEFAULT_FEE_SATS_PER_BYTE: u64 = 100;
+pub const DEFAULT_FEE_SATS_PER_KILO_BYTE: u64 = 102400;
 
 // Approximate values calculated
 pub const INPUT_UTXO_SIZE_IN_BYTES: u64 = 178;

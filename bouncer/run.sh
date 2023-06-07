@@ -1,7 +1,6 @@
-./tests/produces_blocks.sh 1 &&
-./commands/setup_vaults.sh &&
-./tests/stress_test.sh 3 &&
-./commands/setup_swaps.sh &&
+pnpm tsx ./commands/observe_block.ts 5 &&
+pnpm tsx ./commands/setup_vaults.ts &&
+pnpm tsx ./commands/setup_swaps.ts &&
 ./tests/swapping.sh &&
-./tests/lp_deposit_expiry.sh &&
+pnpm tsx ./tests/lp_deposit_expiry.ts &&
 ./tests/rotates_through_btc_swap.sh

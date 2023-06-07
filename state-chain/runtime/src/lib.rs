@@ -90,7 +90,6 @@ use chainflip::{
 use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
-pub use pallet_cf_funding::WithdrawalAddresses;
 use pallet_cf_vaults::Vault;
 pub use pallet_transaction_payment::ChargeTransactionPayment;
 
@@ -926,7 +925,6 @@ impl_runtime_apis! {
 				last_heartbeat: account_info_v1.last_heartbeat,
 				online_credits: account_info_v1.online_credits,
 				reputation_points: account_info_v1.reputation_points,
-				withdrawal_address: account_info_v1.withdrawal_address,
 				keyholder_epochs: key_holder_epochs,
 				is_current_authority,
 				is_current_backup,
@@ -938,7 +936,6 @@ impl_runtime_apis! {
 		fn cf_account_info(account_id: AccountId) -> RuntimeApiAccountInfo {
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
-			let withdrawal_address = pallet_cf_funding::WithdrawalAddresses::<Runtime>::get(&account_id).unwrap_or([0; 20]);
 
 			let get_validator_state = |account_id: &AccountId| -> ChainflipAccountStateWithPassive {
 				if Validator::current_authorities().contains(account_id) {
@@ -958,7 +955,6 @@ impl_runtime_apis! {
 				is_activated: pallet_cf_funding::ActiveBidder::<Runtime>::get(&account_id),
 				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
-				withdrawal_address,
 				state: get_validator_state(&account_id),
 			}
 		}

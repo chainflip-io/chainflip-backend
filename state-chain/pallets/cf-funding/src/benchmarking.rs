@@ -22,7 +22,7 @@ benchmarks! {
 		let call = Call::<T>::funded {
 			account_id: caller.clone(),
 			amount,
-			withdrawal_address,
+			funder: withdrawal_address,
 			tx_hash,
 		};
 		let origin = T::EnsureWitnessed::successful_origin();
@@ -35,7 +35,7 @@ benchmarks! {
 	redeem {
 		// If we redeem an amount which takes us below the minimum balance, the redemption
 		// will fail.
-		let balance_to_redeem = RedemptionAmount::Exact(MinimumFunding::<T>::get());
+		let balance_to_redeem = RedemptionAmount::Exact(T::Balance::from(2u128));
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 		let withdrawal_address: EthereumAddress = [42u8; 20];
 
@@ -45,7 +45,7 @@ benchmarks! {
 		let call = Call::<T>::funded {
 			account_id: caller.clone(),
 			amount: MinimumFunding::<T>::get() * T::Balance::from(2u128),
-			withdrawal_address,
+			funder: withdrawal_address,
 			tx_hash
 		};
 		call.dispatch_bypass_filter(origin)?;
@@ -66,7 +66,7 @@ benchmarks! {
 		Call::<T>::funded {
 			account_id: caller.clone(),
 			amount: MinimumFunding::<T>::get(),
-			withdrawal_address,
+			funder: withdrawal_address,
 			tx_hash
 		}.dispatch_bypass_filter(origin)?;
 
@@ -89,7 +89,7 @@ benchmarks! {
 		Call::<T>::funded {
 			account_id: caller.clone(),
 			amount: MinimumFunding::<T>::get(),
-			withdrawal_address,
+			funder: withdrawal_address,
 			tx_hash
 		}.dispatch_bypass_filter(origin.clone())?;
 
@@ -118,7 +118,7 @@ benchmarks! {
 		Call::<T>::funded {
 			account_id: caller.clone(),
 			amount: MinimumFunding::<T>::get(),
-			withdrawal_address,
+			funder: withdrawal_address,
 			tx_hash
 		}.dispatch_bypass_filter(origin.clone())?;
 

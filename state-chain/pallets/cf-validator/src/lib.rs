@@ -813,6 +813,7 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config> {
 		pub genesis_authorities: BTreeSet<ValidatorIdOf<T>>,
 		pub genesis_backups: BackupMap<T>,
+		pub genesis_vanity_names: BTreeMap<T::AccountId, VanityName>,
 		pub blocks_per_epoch: T::BlockNumber,
 		pub bond: T::Amount,
 		pub redemption_period_as_percentage: Percentage,
@@ -829,6 +830,7 @@ pub mod pallet {
 			Self {
 				genesis_authorities: Default::default(),
 				genesis_backups: Default::default(),
+				genesis_vanity_names: Default::default(),
 				blocks_per_epoch: Zero::zero(),
 				bond: Default::default(),
 				redemption_period_as_percentage: Zero::zero(),
@@ -851,6 +853,7 @@ pub mod pallet {
 			RedemptionPeriodAsPercentage::<T>::set(self.redemption_period_as_percentage);
 			BackupRewardNodePercentage::<T>::set(self.backup_reward_node_percentage);
 			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
+			VanityNames::<T>::put(&self.genesis_vanity_names);
 
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
 
