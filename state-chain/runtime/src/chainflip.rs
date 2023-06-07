@@ -14,7 +14,7 @@ use crate::{
 	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress, Runtime,
 	RuntimeCall, RuntimeOrigin, System, Validator,
 };
-
+use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
 	address::{
 		to_encoded_address, try_from_encoded_address, AddressConverter, EncodedAddress,
@@ -41,10 +41,10 @@ use cf_primitives::{
 	chains::assets, Asset, BasisPoints, ChannelId, EgressId, ETHEREUM_ETH_ADDRESS,
 };
 use cf_traits::{
-	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster,
-	DepositApi, DepositHandler, EgressApi, EpochInfo, Heartbeat, Issuance, KeyProvider,
-	OnBroadcastReady, OnRotationCallback, RewardsDistribution, RuntimeUpgrade,
-	VaultTransitionHandler,
+	impl_runtime_safe_mode, BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip,
+	CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo, Heartbeat, Issuance,
+	KeyProvider, OnBroadcastReady, OnRotationCallback, RewardsDistribution, RuntimeUpgrade,
+	SafeMode, SystemStateInfo, SystemStateManager, VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -59,8 +59,6 @@ use sp_core::U256;
 use sp_runtime::traits::{BlockNumberProvider, UniqueSaturatedFrom, UniqueSaturatedInto};
 use sp_std::prelude::*;
 
-use backup_node_rewards::calculate_backup_rewards;
-
 impl Chainflip for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type Amount = FlipBalance;
@@ -69,9 +67,35 @@ impl Chainflip for Runtime {
 	type EnsureWitnessedAtCurrentEpoch = pallet_cf_witnesser::EnsureWitnessedAtCurrentEpoch;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type EpochInfo = Validator;
-	type SystemState = pallet_cf_environment::SystemStateProvider<Runtime>;
+	type SystemState = SystemStateDeprecated;
 	type AccountRoleRegistry = AccountRoles;
 	type FundingInfo = Flip;
+}
+
+impl_runtime_safe_mode! {
+	RuntimeSafeMode,
+	pallet_cf_environment::RuntimeSafeMode<Runtime>,
+}
+
+/// Legacy System State - to be deleted when all pallets are updated to use SafeMode.
+pub struct SystemStateDeprecated;
+
+impl SystemStateInfo for SystemStateDeprecated {
+	fn ensure_no_maintenance() -> sp_runtime::DispatchResult {
+		if pallet_cf_environment::RuntimeSafeMode::<Runtime>::get() == SafeMode::CODE_GREEN {
+			Ok(())
+		} else {
+			Err(DispatchError::from("Maintenance mode is active."))
+		}
+	}
+}
+
+impl SystemStateManager for SystemStateDeprecated {
+	fn activate_maintenance_mode() {
+		pallet_cf_environment::RuntimeSafeMode::<Runtime>::put(
+			<RuntimeSafeMode as SafeMode>::CODE_RED,
+		);
+	}
 }
 
 struct BackupNodeEmissions;

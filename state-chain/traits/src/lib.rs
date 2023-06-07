@@ -2,6 +2,7 @@
 
 mod async_result;
 pub mod liquidity;
+pub mod safe_mode;
 pub use liquidity::*;
 
 pub mod mocks;
@@ -10,6 +11,7 @@ pub mod offence_reporting;
 use core::fmt::Debug;
 
 pub use async_result::AsyncResult;
+pub use safe_mode::SafeMode;
 
 use cf_chains::{
 	address::ForeignChainAddress, dot::PolkadotPublicKey, eth::Address, ApiCall,

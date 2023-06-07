@@ -207,6 +207,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type BitcoinNetwork = BitcoinNetworkParam;
 	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
+	type RuntimeSafeMode = chainflip::RuntimeSafeMode;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
@@ -232,7 +233,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Broadcaster = EthereumBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
-	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
+	type SystemStateManager = chainflip::SystemStateDeprecated;
 	type Slasher = FlipSlasher<Self>;
 }
 
@@ -249,7 +250,7 @@ impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
 	type Broadcaster = PolkadotBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
-	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
+	type SystemStateManager = chainflip::SystemStateDeprecated;
 	type Slasher = FlipSlasher<Self>;
 }
 
@@ -266,7 +267,7 @@ impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
 	type Broadcaster = BitcoinBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
-	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
+	type SystemStateManager = chainflip::SystemStateDeprecated;
 	type Slasher = FlipSlasher<Self>;
 }
 

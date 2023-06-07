@@ -8,13 +8,6 @@ use cf_chains::dot::RuntimeVersion;
 use frame_support::dispatch::UnfilteredDispatchable;
 
 benchmarks! {
-	set_system_state {
-		let call = Call::<T>::set_system_state { state: SystemState::Maintenance };
-		let origin = T::EnsureGovernance::successful_origin();
-	}: { call.dispatch_bypass_filter(origin)? }
-	verify {
-		assert_eq!(CurrentSystemState::<T>::get(), SystemState::Maintenance);
-	}
 	set_cfe_settings {
 		let cfe_settings = cfe::CfeSettings {
 			eth_priority_fee_percentile: 50,
