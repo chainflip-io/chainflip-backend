@@ -6,6 +6,7 @@
     "prettier:write": "prettier --write ."
   },
   "dependencies": {
+    "@chainflip-io/cli": "^0.0.5",
     "@polkadot/api": "10.7.2",
     "@polkadot/keyring": "12.2.1",
     "@polkadot/util": "12.2.1",
@@ -16,6 +17,7 @@
     "bitcoinjs-lib": "^6.1.0",
     "child_process": "^1.0.2",
     "ecpair": "^2.1.0",
+    "ethers": "^5.7.2",
     "md5": "^2.3.0",
     "minimist": "^1.2.8",
     "tiny-secp256k1": "^2.2.1",

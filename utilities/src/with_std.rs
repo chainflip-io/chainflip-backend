@@ -9,6 +9,7 @@ use std::path::PathBuf;
 pub use tokio::select as internal_tokio_select;
 use warp::{Filter, Reply};
 
+pub mod futures_unordered_wait;
 pub mod task_scope;
 
 #[track_caller]
