@@ -1,0 +1,58 @@
+// Constructs a very simple Raw BTC transaction. Can be used for manual testing a raw broadcast for example.
+// You can change the sendToAddress and the amount in the call at the bottom.
+// This will work on localnets or any network that has the whale wallet.
+
+import Module from "node:module";
+const require = Module.createRequire(import.meta.url);
+
+const Client = require('bitcoin-core');
+
+const BTC_ENDPOINT = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
+console.log(`BTC_ENDPOINT is set to '${BTC_ENDPOINT}'`);
+
+const client = new Client({
+    host: BTC_ENDPOINT.split(':')[1].slice(2),
+    port: Number(BTC_ENDPOINT.split(':')[2]),
+    username: 'flip',
+    password: 'flip',
+    wallet: 'whale',
+});
+
+const createRawTransaction = async (toAddress, amountInBtc) => {
+    try {
+
+        const feeInBtc = 0.00001;
+
+        // List unspent UTXOs
+        const utxos = await client.listUnspent();
+
+        const utxo = utxos.find(utxo => utxo.amount >= (amountInBtc + feeInBtc));
+        if (!utxo) throw new Error('Insufficient funds');
+
+        // Prepare the transaction inputs and outputs
+        const inputs = [{
+            txid: utxo.txid,
+            vout: utxo.vout
+        }];
+
+        const changeAmount = utxo.amount - amountInBtc - feeInBtc;
+        const changeAddress = await client.getNewAddress();
+        const outputs = {
+            [toAddress]: amountInBtc,
+            [changeAddress]: changeAmount
+        };
+
+        // Create the raw transaction
+        const rawTx = await client.createRawTransaction(inputs, outputs);
+
+        // Sign the raw transaction
+        const signedTx = await client.signRawTransactionWithWallet(rawTx);
+
+        // Here's your raw signed transaction
+        console.log('Raw signed transaction:', signedTx.hex);
+    } catch (error) {
+        console.error('An error occurred', error);
+    }
+};
+
+createRawTransaction('muZpTpBYhxmRFuCjLc7C6BBDF32C8XVJUi', 1);
