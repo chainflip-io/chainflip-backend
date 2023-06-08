@@ -12,13 +12,15 @@ use futures::Future;
 use tokio::sync::{mpsc, oneshot};
 use utilities::{futures_unordered_wait::FuturesUnorderedWait, task_scope::Scope};
 
-type FutureAnyGenerator = Pin<
+type TypedFutureGenerator<T> = Pin<
 	Box<
-		dyn Fn() -> Pin<Box<dyn Future<Output = Result<BoxAny, anyhow::Error>> + Send + Sync>>
+		dyn Fn() -> Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send + Sync>>
 			+ Send
 			+ Sync,
 	>,
 >;
+
+type FutureAnyGenerator = TypedFutureGenerator<BoxAny>;
 
 // The id per *request* from the external caller. This is not tracking *submissions*.
 type RequestId = u64;
@@ -76,14 +78,6 @@ impl RequestHolder {
 		self.stored_requests.get(request_id)
 	}
 }
-
-type FutureTGenerator<T> = Pin<
-	Box<
-		dyn Fn() -> Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send + Sync>>
-			+ Send
-			+ Sync,
-	>,
->;
 
 // Creates a future of a particular submission.
 pub fn submission_future(
@@ -164,7 +158,7 @@ impl RpcRetrierClient {
 	// Separate function so we can more easily test.
 	async fn send_request<T: Send + Sync + Clone + 'static>(
 		&self,
-		specific_closure: FutureTGenerator<T>,
+		specific_closure: TypedFutureGenerator<T>,
 	) -> oneshot::Receiver<BoxAny> {
 		let future_any_fn: FutureAnyGenerator = Box::pin(move || {
 			let future = specific_closure();
@@ -182,7 +176,7 @@ impl RpcRetrierClient {
 	/// Requests something to be retried by the retry client.
 	pub async fn request<T: Send + Sync + Clone + 'static>(
 		&self,
-		specific_closure: FutureTGenerator<T>,
+		specific_closure: TypedFutureGenerator<T>,
 	) -> T {
 		let rx = self.send_request(specific_closure).await;
 		let result: BoxAny = rx.await.unwrap();
@@ -202,13 +196,13 @@ mod tests {
 	fn specific_fut_closure<T: Send + Sync + Clone + 'static>(
 		value: T,
 		timeout_millis: u64,
-	) -> FutureTGenerator<T> {
+	) -> TypedFutureGenerator<T> {
 		Box::pin(move || {
 			let value = value.clone();
 			Box::pin(async move {
 				// We need to delay in the tests, else we'll resolve immediately, meaning the
 				// channel is sent down, and can theoretically be replaced using the same request id
-				// and the tests will still work despite their potentially being a bug in the
+				// and the tests will still work despite there potentially being a bug in the
 				// implementation.
 				tokio::time::sleep(tokio::time::Duration::from_millis(timeout_millis)).await;
 				Ok(value)
@@ -325,7 +319,7 @@ mod tests {
 
 	fn specific_fut_err<T: Send + Sync + Clone + 'static>(
 		timeout_millis: u64,
-	) -> FutureTGenerator<T> {
+	) -> TypedFutureGenerator<T> {
 		Box::pin(move || {
 			Box::pin(async move {
 				tokio::time::sleep(tokio::time::Duration::from_millis(timeout_millis)).await;
