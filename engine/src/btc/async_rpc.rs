@@ -8,7 +8,7 @@ use bitcoin::{Amount, Block, BlockHash, Txid};
 
 use crate::settings;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 #[derive(Clone)]
 pub struct AsyncBtcRpcClient {
@@ -42,7 +42,7 @@ impl std::fmt::Display for Error {
 		match *self {
 			Error::Transport(ref e) => write!(f, "Transport error: {}", e),
 			Error::Json(ref e) => write!(f, "JSON decode error: {}", e),
-			Error::Rpc(ref r) => write!(f, "RPC error response: {:?}", r),
+			Error::Rpc(ref e) => write!(f, "RPC error response: {:?}", e),
 		}
 	}
 }
@@ -50,7 +50,7 @@ impl std::fmt::Display for Error {
 impl AsyncBtcRpcClient {
 	pub fn new(btc_settings: &settings::Btc) -> Result<Self> {
 		Ok(Self {
-			client: Client::new(),
+			client: Client::builder().build()?,
 			url: btc_settings.http_node_endpoint.clone(),
 			user: btc_settings.rpc_user.clone(),
 			password: btc_settings.rpc_password.clone(),
@@ -83,10 +83,10 @@ impl AsyncBtcRpcClient {
 
 		let error = &response["error"];
 		if !error.is_null() {
-			return Err(Error::Rpc(serde_json::from_value(error.clone()).map_err(Error::Json)?))
+			Err(Error::Rpc(serde_json::from_value(error.clone()).map_err(Error::Json)?))
+		} else {
+			Ok(T::deserialize(&response["result"]).map_err(Error::Json))?
 		}
-
-		Ok(T::deserialize(&response["result"]).map_err(Error::Json))?
 	}
 }
 
@@ -126,8 +126,7 @@ impl AsyncBtcRpcApi for AsyncBtcRpcClient {
 		// deserialization.
 		let hex_block: String =
 			self.call_rpc("getblock", vec![json!(block_hash), json!(0)]).await?;
-		let hex_bytes =
-			hex::decode(hex_block).map_err(|e| anyhow::anyhow!("Response not valid hex: {e}"))?;
+		let hex_bytes = hex::decode(hex_block).context("Response not valid hex")?;
 		Ok(bitcoin::consensus::encode::deserialize(&hex_bytes)?)
 	}
 
