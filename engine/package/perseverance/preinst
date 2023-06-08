@@ -47,7 +47,7 @@ if ! grep -q '\[btc\]' /etc/chainflip/config/Settings.toml; then
 [btc]
 http_node_endpoint = "https://pbtc.chainflip.xyz"
 rpc_user = "flip"
-rpc_password = "aqPo9L4dkqHUAijkddFBRKVHkq4h827R"
+rpc_password = "flip"
 EOF
 fi
 
