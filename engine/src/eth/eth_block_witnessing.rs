@@ -109,7 +109,7 @@ impl BlockWitnesserGenerator for EthBlockWitnesserGenerator {
 			block_stream,
 			Duration::from_secs(ETH_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER),
 		)
-		.map_err(|e| anyhow::anyhow!("{}", e).context("Eth witnesser failed, error in timeout."));
+		.map_err(|e| anyhow::anyhow!("{e}").context("Eth witnesser failed, error in timeout."));
 
 		Ok(Box::pin(block_stream))
 	}

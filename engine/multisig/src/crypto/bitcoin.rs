@@ -121,7 +121,7 @@ impl CryptoScheme for BtcSigning {
 		let raw_msg = secp256k1::Message::from_slice(&payload.0).unwrap();
 
 		secp.verify_schnorr(&raw_sig, &raw_msg, public_key)
-			.map_err(|e| anyhow::anyhow!("{:?}", e).context("Failed to verify signature."))?;
+			.map_err(|e| anyhow::anyhow!("{e:?}").context("Failed to verify signature."))?;
 		Ok(())
 	}
 

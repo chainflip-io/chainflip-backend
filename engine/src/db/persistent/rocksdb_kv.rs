@@ -82,7 +82,7 @@ impl RocksDBKeyValueStore {
 			.get_cf(get_data_column_handle(&self.db), key_with_prefix)?
 			.map(|data| {
 				bincode::deserialize(&data).map_err(|e| {
-					anyhow!("{}", e).context("Failed to deserialize data from Database.")
+					anyhow!("{e}").context("Failed to deserialize data from Database.")
 				})
 			})
 			.transpose()

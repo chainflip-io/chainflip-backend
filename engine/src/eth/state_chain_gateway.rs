@@ -188,7 +188,7 @@ impl EthContractWitnesser for StateChainGateway {
 					)?
 					.try_into()
 					.map_err(|e| {
-						anyhow!("{:?}", e).context("Could not cast FixedBytes nodeID into [u8;32]")
+						anyhow!("{e:?}").context("Could not cast FixedBytes nodeID into [u8;32]")
 					})?;
 					Result::<_, anyhow::Error>::Ok(AccountId32::new(account_bytes))
 				};

@@ -33,7 +33,7 @@ macro_rules! refresh_connection_on_error {
 				);
 				$self.refresh_client()
 					.await
-					.map_err(|e| anyhow!("{}", e).context("Failed to refresh Polkadot client connection."))?;
+					.map_err(|e| anyhow!("{e}").context("Failed to refresh Polkadot client connection."))?;
 				$self.online_client.$namespace().$method($($arg,)*).await.map_err(|e| anyhow!("Failed to query {} Polkadot with error: {}", stringify!($method), e).context("Failed to refresh Polkadot Client connection."))
 			},
 			Ok(ok) => Ok(ok),
@@ -126,7 +126,7 @@ impl DotRpcApi for DotRpcClient {
 			self.current_runtime_version().await?,
 			refresh_connection_on_error!(self, rpc, subscribe_runtime_version)?.map(|item| {
 				item.map_err(|e| {
-					anyhow::anyhow!("{}", e).context("Failed to connect to Polkadot client.")
+					anyhow::anyhow!("{e}").context("Failed to connect to Polkadot RPC client.")
 				})
 				.map(
 					|subxt::rpc::types::RuntimeVersion {
