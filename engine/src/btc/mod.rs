@@ -1,6 +1,5 @@
 use self::rpc::BtcRpcApi;
 
-pub mod async_rpc;
 pub mod rpc;
 pub mod witnesser;
 pub mod witnessing;
@@ -23,6 +22,6 @@ where
 	}
 
 	pub async fn send(&self, transaction_bytes: Vec<u8>) -> Result<Txid> {
-		self.rpc.send_raw_transaction(transaction_bytes)
+		self.rpc.send_raw_transaction(transaction_bytes).await
 	}
 }
