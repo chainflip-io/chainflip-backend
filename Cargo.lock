@@ -1125,6 +1125,7 @@ dependencies = [
  "async-trait",
  "atomicwrites",
  "bincode",
+ "bitcoin",
  "bitcoincore-rpc",
  "cf-amm",
  "cf-chains",
