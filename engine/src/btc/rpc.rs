@@ -32,8 +32,6 @@ impl BtcRpcClient {
 
 #[cfg_attr(test, automock)]
 pub trait BtcRpcApi: Send + Sync {
-	fn best_block_hash(&self) -> Result<BlockHash>;
-
 	fn block(&self, block_hash: BlockHash) -> Result<Block>;
 
 	fn block_hash(&self, block_number: BlockNumber) -> Result<BlockHash>;
@@ -47,10 +45,6 @@ pub trait BtcRpcApi: Send + Sync {
 }
 
 impl BtcRpcApi for BtcRpcClient {
-	fn best_block_hash(&self) -> Result<BlockHash> {
-		Ok(self.client.get_best_block_hash()?)
-	}
-
 	fn block(&self, block_hash: BlockHash) -> Result<Block> {
 		Ok(self.client.get_block(&block_hash)?)
 	}

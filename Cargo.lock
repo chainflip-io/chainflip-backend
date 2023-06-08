@@ -970,8 +970,13 @@ dependencies = [
 name = "cf-test-utilities"
 version = "0.1.0"
 dependencies = [
+ "frame-support",
  "frame-system",
  "parity-scale-codec",
+ "scale-info",
+ "sp-core 7.0.0",
+ "sp-io 7.0.0",
+ "sp-runtime 7.0.0",
 ]
 
 [[package]]
@@ -5742,6 +5747,7 @@ version = "0.1.0"
 dependencies = [
  "cf-chains",
  "cf-primitives",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",

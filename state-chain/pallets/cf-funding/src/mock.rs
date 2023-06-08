@@ -198,6 +198,8 @@ pub const BOB: AccountId = AccountId32::new([0xb0; 32]);
 pub const CHARLIE: AccountId = AccountId32::new([0xc1; 32]);
 
 pub const MIN_FUNDING: u128 = 10;
+pub const REDEMPTION_TAX: u128 = MIN_FUNDING / 2;
+
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
@@ -205,7 +207,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		flip: FlipConfig { total_issuance: 1_000_000 },
 		funding: FundingConfig {
 			genesis_accounts: vec![(CHARLIE, AccountRole::Validator, MIN_FUNDING)],
-			redemption_tax: MIN_FUNDING / 2,
+			redemption_tax: REDEMPTION_TAX,
 			minimum_funding: MIN_FUNDING,
 			redemption_ttl: Duration::from_secs(REDEMPTION_TTL_SECS),
 			redemption_delay_buffer_seconds: REDEMPTION_DELAY_BUFFER_SECS,
