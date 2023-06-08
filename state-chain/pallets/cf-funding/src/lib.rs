@@ -158,6 +158,7 @@ pub mod pallet {
 		BTreeMap<EthereumAddress, FlipBalance<T>>,
 		ValueQuery,
 	>;
+
 	/// The fee levied for every redemption request. Can be updated by Governance.
 	#[pallet::storage]
 	pub type RedemptionTax<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
