@@ -1004,6 +1004,10 @@ mod test {
 			let pk = ScriptPubkey::try_from_address(valid_address, &intended_btc_net)
 				.unwrap_or_else(|_| panic!("Failed to parse address: {valid_address}"));
 			assert_eq!(pk.bytes(), expected_scriptpubkey, "Input was {valid_address} / {pk:?}");
+			assert_eq!(
+				pk.to_address(&intended_btc_net).to_uppercase(),
+				valid_address.to_uppercase()
+			);
 		}
 
 		let invalid_addresses = [

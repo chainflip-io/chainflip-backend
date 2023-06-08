@@ -17,7 +17,7 @@ use crate::{
 
 use cf_chains::{
 	address::{
-		try_from_encoded_address, try_to_encoded_address, AddressConverter, EncodedAddress,
+		to_encoded_address, try_from_encoded_address, AddressConverter, EncodedAddress,
 		ForeignChainAddress,
 	},
 	btc::{
@@ -539,10 +539,8 @@ impl DepositHandler<Bitcoin> for BtcDepositHandler {
 pub struct ChainAddressConverter;
 
 impl AddressConverter for ChainAddressConverter {
-	fn try_to_encoded_address(
-		address: ForeignChainAddress,
-	) -> Result<EncodedAddress, DispatchError> {
-		try_to_encoded_address(address, Environment::bitcoin_network)
+	fn to_encoded_address(address: ForeignChainAddress) -> EncodedAddress {
+		to_encoded_address(address, Environment::bitcoin_network)
 	}
 
 	fn try_from_encoded_address(
