@@ -126,7 +126,8 @@ impl AsyncBtcRpcApi for AsyncBtcRpcClient {
 		// deserialization.
 		let hex_block: String =
 			self.call_rpc("getblock", vec![json!(block_hash), json!(0)]).await?;
-		let hex_bytes = hex::decode(hex_block).unwrap();
+		let hex_bytes =
+			hex::decode(hex_block).map_err(|e| anyhow::anyhow!("Response not valid hex: {e}"))?;
 		Ok(bitcoin::consensus::encode::deserialize(&hex_bytes)?)
 	}
 
