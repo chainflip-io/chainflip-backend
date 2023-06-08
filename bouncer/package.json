@@ -14,5 +14,24 @@
     "sha256": "^0.2.0",
     "tiny-secp256k1": "^2.2.1",
     "web3": "^1.9.0"
+<<<<<<< HEAD
   }
 }
+=======
+  },
+  "devDependencies": {
+    "@types/minimist": "^1.2.2",
+    "@types/node": "18",
+    "@typescript-eslint/eslint-plugin": "^5.43.0",
+    "@typescript-eslint/parser": "^5.59.7",
+    "eslint": "^8.41.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-config-prettier": "^8.8.0",
+    "eslint-plugin-import": "^2.25.2",
+    "prettier": "^2.8.8",
+    "tsx": "^3.12.7",
+    "typescript": "^5.0.4"
+  },
+  "type": "module"
+}
+>>>>>>> 627cb6c63 (chore: convert event types to EncodedAddress (#3267))
