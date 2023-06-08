@@ -91,6 +91,7 @@ pub trait ECPoint:
 	+ std::ops::Add<Output = Self>
 	+ std::iter::Sum
 	+ PartialEq
+	+ Ord
 	+ Sync
 	+ Send
 {
@@ -192,6 +193,7 @@ pub trait ECScalar:
 	+ std::iter::Sum
 	+ zeroize::Zeroize
 	+ PartialEq
+	+ Ord
 	+ Sync
 	+ Send
 	+ ZeroizeOnDrop

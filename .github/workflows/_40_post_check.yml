@@ -1,4 +1,5 @@
 name: Post build checks
+
 on:
   workflow_call:
     inputs:
@@ -9,15 +10,15 @@ on:
         type: number
         required: false
         default: 120
+
+permissions:
+  packages: read
+  contents: read
+
 jobs:
   bouncer:
     runs-on: ubuntu-20.04
     timeout-minutes: ${{ inputs.timeout-minutes }}
-    container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20"
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
     services:
       bitcoin:
         credentials:
@@ -49,15 +50,34 @@ jobs:
       - name: Checkout chainflip-backend
         uses: actions/checkout@v3
 
+      - name: Setup ngrok
+        run: |
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt update
+          sudo apt install ngrok
+
+      - name: Install pnpm
+        run: npm install -g pnpm@8
+
       - name: Configure NodeJS
         uses: actions/setup-node@v3
         with:
-          node-version: 16
+          node-version: 18
+          cache: "pnpm"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@chainflip-io"
+          cache-dependency-path: "bouncer/pnpm-lock.yaml"
 
-      - name: Install bc
+      - name: Set NPM registry
         run: |
-          apt-get update
-          apt-get install -y bc xxd
+          pnpm set @chainflip-io:registry=https://npm.pkg.github.com/
+          pnpm set //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc xxd
 
       - name: Download binaries
         uses: actions/download-artifact@v3
@@ -66,7 +86,7 @@ jobs:
 
       - name: Install node dependencies
         working-directory: bouncer
-        run: npm i
+        run: pnpm install
 
       - name: Start a localnet
         env:
@@ -78,13 +98,16 @@ jobs:
           chmod +x ${{ env.BINARIES_LOCATION }}/chainflip-*
           ./localnet/manage.sh
 
+      - name: Expose endpoints for Polkadot and Chainflip
+        env:
+          NGROK_AUTHTOKEN: ${{ secrets.CF_NGROK_AUTHTOKEN }}
+        run: |
+          ngrok http http://localhost:9944 > /dev/null &
+          ngrok http http://localhost:9945 > /dev/null &
+
       - name: Run EinfachHeuteLeiderNicht.exe
         if: inputs.simple_bouncer
         working-directory: bouncer
-        env:
-          POLKADOT_ENDPOINT: ws://polkadot:9944
-          BTC_ENDPOINT: http://bitcoin:8332
-          ETH_ENDPOINT: http://geth:8545
         run: |
           ./run_simple.sh
 
@@ -92,10 +115,6 @@ jobs:
         id: heuteleidernicht
         if: ${{ ! inputs.simple_bouncer }}
         working-directory: bouncer
-        env:
-          POLKADOT_ENDPOINT: ws://polkadot:9944
-          BTC_ENDPOINT: http://bitcoin:8332
-          ETH_ENDPOINT: http://geth:8545
         run: |
           ./run.sh
 
@@ -118,9 +137,9 @@ jobs:
             /tmp/chainflip/chainflip-*.log
 
       - name: Notify on failed bouncer
-        if: failure() && github.ref_name == 'main'
+        if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'
         env:
-          DISCORD_USERNAME: 'HEUTE LEIDER NICHT'
+          DISCORD_USERNAME: "HEUTE LEIDER NICHT"
           DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
         uses: Ilshidur/action-discord@0.3.2
         with:

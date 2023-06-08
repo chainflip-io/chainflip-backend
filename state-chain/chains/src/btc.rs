@@ -14,7 +14,7 @@ use base58::{FromBase58, ToBase58};
 use bech32::{self, u5, FromBase32, ToBase32, Variant};
 pub use cf_primitives::chains::Bitcoin;
 use cf_primitives::{
-	chains::assets, DEFAULT_FEE_SATS_PER_BYTE, INPUT_UTXO_SIZE_IN_BYTES,
+	chains::assets, DEFAULT_FEE_SATS_PER_KILO_BYTE, INPUT_UTXO_SIZE_IN_BYTES,
 	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
 };
 use cf_utilities::SliceToArray;
@@ -100,25 +100,34 @@ pub struct BitcoinFeeInfo {
 	pub min_fee_required_per_tx: BtcAmount,
 }
 
+const BYTES_PER_KILOBYTE: BtcAmount = 1024;
+
 impl Default for BitcoinFeeInfo {
 	fn default() -> Self {
 		Self {
-			fee_per_input_utxo: DEFAULT_FEE_SATS_PER_BYTE * INPUT_UTXO_SIZE_IN_BYTES,
-			fee_per_output_utxo: DEFAULT_FEE_SATS_PER_BYTE * OUTPUT_UTXO_SIZE_IN_BYTES,
-			min_fee_required_per_tx: DEFAULT_FEE_SATS_PER_BYTE * MINIMUM_BTC_TX_SIZE_IN_BYTES,
+			fee_per_input_utxo: DEFAULT_FEE_SATS_PER_KILO_BYTE * INPUT_UTXO_SIZE_IN_BYTES /
+				BYTES_PER_KILOBYTE,
+			fee_per_output_utxo: DEFAULT_FEE_SATS_PER_KILO_BYTE * OUTPUT_UTXO_SIZE_IN_BYTES /
+				BYTES_PER_KILOBYTE,
+			min_fee_required_per_tx: DEFAULT_FEE_SATS_PER_KILO_BYTE * MINIMUM_BTC_TX_SIZE_IN_BYTES /
+				BYTES_PER_KILOBYTE,
 		}
 	}
 }
 
 impl BitcoinFeeInfo {
-	pub fn new(sats_per_byte: BtcAmount) -> Self {
+	pub fn new(sats_per_kilo_byte: BtcAmount) -> Self {
 		Self {
 			// Our input utxos are approximately 178 bytes each in the Btc transaction
-			fee_per_input_utxo: sats_per_byte * INPUT_UTXO_SIZE_IN_BYTES,
+			fee_per_input_utxo: sats_per_kilo_byte.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) /
+				BYTES_PER_KILOBYTE,
 			// Our output utxos are approximately 34 bytes each in the Btc transaction
-			fee_per_output_utxo: sats_per_byte * OUTPUT_UTXO_SIZE_IN_BYTES,
+			fee_per_output_utxo: sats_per_kilo_byte.saturating_mul(OUTPUT_UTXO_SIZE_IN_BYTES) /
+				BYTES_PER_KILOBYTE,
 			// Minimum size of tx that does not scale with input and output utxos is 12 bytes
-			min_fee_required_per_tx: sats_per_byte * MINIMUM_BTC_TX_SIZE_IN_BYTES,
+			min_fee_required_per_tx: sats_per_kilo_byte
+				.saturating_mul(MINIMUM_BTC_TX_SIZE_IN_BYTES) /
+				BYTES_PER_KILOBYTE,
 		}
 	}
 }
@@ -402,27 +411,36 @@ impl SerializeBtc for ScriptPubkey {
 
 impl ScriptPubkey {
 	fn program(&self) -> BitcoinScript {
-		let (version, bytes) = match self {
-			ScriptPubkey::P2PKH(hash) => (None, hash.to_vec().try_into().unwrap()),
-			ScriptPubkey::P2SH(hash) => (None, hash.to_vec().try_into().unwrap()),
-			ScriptPubkey::P2WPKH(hash) =>
-				(Some(SEGWIT_VERSION_ZERO), hash.to_vec().try_into().unwrap()),
-			ScriptPubkey::P2WSH(hash) =>
-				(Some(SEGWIT_VERSION_ZERO), hash.to_vec().try_into().unwrap()),
-			ScriptPubkey::Taproot(hash) =>
-				(Some(SEGWIT_VERSION_TAPROOT), hash.to_vec().try_into().unwrap()),
-			ScriptPubkey::OtherSegwit { version, program } => (Some(*version), program.clone()),
-		};
-
-		BitcoinScript::new(
-			&[
-				version.map(|version| BitcoinOp::PushVersion { version }),
-				Some(BitcoinOp::PushBytes { bytes }),
-			]
-			.into_iter()
-			.flatten()
-			.collect::<Vec<_>>(),
-		)
+		match self {
+			ScriptPubkey::P2PKH(hash) => BitcoinScript::new(&[
+				BitcoinOp::Dup,
+				BitcoinOp::Hash160,
+				BitcoinOp::PushArray20 { bytes: *hash },
+				BitcoinOp::EqualVerify,
+				BitcoinOp::CheckSig,
+			]),
+			ScriptPubkey::P2SH(hash) => BitcoinScript::new(&[
+				BitcoinOp::Hash160,
+				BitcoinOp::PushArray20 { bytes: *hash },
+				BitcoinOp::Equal,
+			]),
+			ScriptPubkey::P2WPKH(hash) => BitcoinScript::new(&[
+				BitcoinOp::PushVersion { version: SEGWIT_VERSION_ZERO },
+				BitcoinOp::PushArray20 { bytes: *hash },
+			]),
+			ScriptPubkey::P2WSH(hash) => BitcoinScript::new(&[
+				BitcoinOp::PushVersion { version: SEGWIT_VERSION_ZERO },
+				BitcoinOp::PushArray32 { bytes: *hash },
+			]),
+			ScriptPubkey::Taproot(hash) => BitcoinScript::new(&[
+				BitcoinOp::PushVersion { version: SEGWIT_VERSION_TAPROOT },
+				BitcoinOp::PushArray32 { bytes: *hash },
+			]),
+			ScriptPubkey::OtherSegwit { version, program } => BitcoinScript::new(&[
+				BitcoinOp::PushVersion { version: *version },
+				BitcoinOp::PushBytes { bytes: program.clone() },
+			]),
+		}
 	}
 
 	pub fn bytes(&self) -> Vec<u8> {
@@ -978,6 +996,8 @@ mod test {
 			("tb1qqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvsesrxh6hy", BitcoinNetwork::Testnet, &hex_literal::hex!("0020000000c4a5cad46221b2a187905e5266362b99d5e91c6ce24d165dab93e86433")[..]),
 			("tb1pqqqqp399et2xygdj5xreqhjjvcmzhxw4aywxecjdzew6hylgvsesf3hn0c", BitcoinNetwork::Testnet, &hex_literal::hex!("5120000000c4a5cad46221b2a187905e5266362b99d5e91c6ce24d165dab93e86433")[..]),
 			("bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0", BitcoinNetwork::Mainnet, &hex_literal::hex!("512079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798")[..]),
+			("1AKDDsfTh8uY4X3ppy1m7jw1fVMBSMkzjP", BitcoinNetwork::Mainnet, &hex_literal::hex!("76a914662AD25DB00E7BB38BC04831AE48B4B446D1269888ac")[..]),
+			("34nSkinWC9rDDJiUY438qQN1JHmGqBHGW7", BitcoinNetwork::Mainnet, &hex_literal::hex!("a91421EF2F4B1EA1F9ED09C1128D1EBB61D4729CA7D687")[..]),
 		];
 
 		for (valid_address, intended_btc_net, expected_scriptpubkey) in valid_addresses {

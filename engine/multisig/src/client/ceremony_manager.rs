@@ -72,6 +72,7 @@ pub trait CeremonyTrait: 'static {
 			Error = MultisigData<<Self::Crypto as CryptoScheme>::Point>,
 		> + Into<MultisigData<<Self::Crypto as CryptoScheme>::Point>>
 		+ Send
+		+ Ord
 		+ Serialize
 		+ 'static;
 	type Request: Send + 'static;

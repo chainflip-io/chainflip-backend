@@ -11,6 +11,8 @@ use warp::{Filter, Reply};
 
 pub mod task_scope;
 
+pub mod futures_unordered_wait;
+
 pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN], &'static str> {
 	let address_hex_str = match address_str.strip_prefix("0x") {
 		Some(address_stripped) => address_stripped,

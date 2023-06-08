@@ -19,7 +19,7 @@ use cf_chains::RegisterRedemption;
 #[cfg(feature = "std")]
 use cf_primitives::AccountRole;
 use cf_primitives::EthereumAddress;
-use cf_traits::{Bid, BidderProvider, EpochInfo, Funding, SystemStateInfo};
+use cf_traits::{Bid, BidderProvider, EpochInfo, FeePayment, Funding, SystemStateInfo};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
@@ -31,16 +31,15 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
-use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Zero};
+use sp_runtime::{
+	traits::{AtLeast32BitUnsigned, CheckedSub, Zero},
+	Saturating,
+};
+
+// use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Saturating, Zero};
 use sp_std::prelude::*;
 
-/// This address is used by the Ethereum contracts to indicate that no withdrawal address was
-/// specified during funding.
-///
-/// Normally, this means that the account was funded via the 'normal' contract flow. The presence
-/// of any other address indicates that the funds were added from a *vesting* contract and can
-/// only be redeemed to the specified address.
-pub const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
+use sp_std::collections::btree_map::BTreeMap;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
@@ -94,13 +93,15 @@ pub mod pallet {
 			+ Copy
 			+ MaybeSerializeDeserialize
 			+ Into<u128>
-			+ From<u128>;
+			+ From<u128>
+			+ core::iter::Sum;
 
 		/// The Flip token implementation.
-		type Flip: Funding<
-			AccountId = <Self as frame_system::Config>::AccountId,
-			Balance = Self::Balance,
-		>;
+		type Flip: Funding<AccountId = <Self as frame_system::Config>::AccountId, Balance = Self::Balance>
+			+ FeePayment<
+				Amount = Self::Balance,
+				AccountId = <Self as frame_system::Config>::AccountId,
+			>;
 
 		type Broadcaster: Broadcaster<Ethereum, ApiCall = Self::RegisterRedemption>;
 
@@ -134,17 +135,6 @@ pub mod pallet {
 	pub type PendingRedemptions<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, (), OptionQuery>;
 
-	/// Locks a particular account's ability to redeem to a particular ETH address.
-	#[pallet::storage]
-	pub type WithdrawalAddresses<T: Config> =
-		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress, OptionQuery>;
-
-	/// Currently just used to record failed funding attempts so that if necessary in the future we
-	/// can use it to recover user funds.
-	#[pallet::storage]
-	pub type FailedFundingAttempts<T: Config> =
-		StorageMap<_, Blake2_128Concat, AccountId<T>, Vec<FundingAttempt<T::Balance>>, ValueQuery>;
-
 	/// The minimum amount a user can fund their account with, and therefore the minimum balance
 	/// they must have remaining after they redeem.
 	#[pallet::storage]
@@ -153,6 +143,25 @@ pub mod pallet {
 	/// TTL for a redemption from the moment of issue.
 	#[pallet::storage]
 	pub type RedemptionTTLSeconds<T: Config> = StorageValue<_, u64, ValueQuery>;
+
+	/// List of restricted addresses
+	#[pallet::storage]
+	pub type RestrictedAddresses<T: Config> =
+		StorageMap<_, Blake2_128Concat, EthereumAddress, (), ValueQuery>;
+
+	/// Map that bookkeeps the restricted balances for each address
+	#[pallet::storage]
+	pub type RestrictedBalances<T: Config> = StorageMap<
+		_,
+		Blake2_128Concat,
+		AccountId<T>,
+		BTreeMap<EthereumAddress, FlipBalance<T>>,
+		ValueQuery,
+	>;
+
+	/// The fee levied for every redemption request. Can be updated by Governance.
+	#[pallet::storage]
+	pub type RedemptionTax<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -197,20 +206,19 @@ pub mod pallet {
 		RedemptionSettled(AccountId<T>, FlipBalance<T>),
 
 		/// An account has stopped bidding and will no longer take part in auctions.
-		StoppedBidding {
-			account_id: AccountId<T>,
-		},
+		StoppedBidding { account_id: AccountId<T> },
 
 		/// A previously non-bidding account has started bidding.
-		StartedBidding {
-			account_id: AccountId<T>,
-		},
+		StartedBidding { account_id: AccountId<T> },
 
 		/// A redemption has expired without being executed.
-		RedemptionExpired {
-			account_id: AccountId<T>,
-		},
+		RedemptionExpired { account_id: AccountId<T> },
 
+		/// A new restricted address has been added
+		AddedRestrictedAddress { address: EthereumAddress },
+
+		/// A restricted address has been removed
+		RemovedRestrictedAddress { address: EthereumAddress },
 		/// A funding attempt has failed.
 		FailedFundingAttempt {
 			account_id: AccountId<T>,
@@ -218,9 +226,11 @@ pub mod pallet {
 			amount: FlipBalance<T>,
 		},
 
-		MinimumFundingUpdated {
-			new_minimum: T::Balance,
-		},
+		/// The minimum funding amount has been updated.
+		MinimumFundingUpdated { new_minimum: T::Balance },
+
+		/// The Withdrawal Tax has been updated.
+		RedemptionTaxAmountUpdated { amount: T::Balance },
 	}
 
 	#[pallet::error]
@@ -252,6 +262,21 @@ pub mod pallet {
 
 		/// The redemption signature could not be found.
 		SignatureNotReady,
+
+		/// There are not enough unrestricted funds to process the redemption.
+		InsufficientUnrestrictedFunds,
+
+		/// The requested redemption amount is too low to pay for the redemption tax.
+		RedemptionAmountTooLow,
+
+		/// Minimum funding amount must be greater than the redemption tax.
+		InvalidMinimumFundingUpdate,
+
+		/// Redemption tax must be less than the minimum funding amount.
+		InvalidRedemptionTaxUpdate,
+
+		/// The account has insufficient funds to pay for the redemption.
+		InsufficientBalance,
 	}
 
 	#[pallet::call]
@@ -264,7 +289,6 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [FailedFundingAttempt](Event::FailedFundingAttempt)
 		/// - [Funded](Event::Funded)
 		///
 		/// ## Errors
@@ -275,12 +299,20 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			account_id: AccountId<T>,
 			amount: FlipBalance<T>,
-			_withdrawal_address: EthereumAddress,
+			funder: EthereumAddress,
 			// Required to ensure this call is unique per funding event.
 			tx_hash: EthTransactionHash,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
+
 			let total_balance = Self::add_funds_to_account(&account_id, amount);
+
+			if RestrictedAddresses::<T>::contains_key(funder) {
+				RestrictedBalances::<T>::mutate(account_id.clone(), |map| {
+					map.entry(funder).and_modify(|balance| *balance += amount).or_insert(amount);
+				});
+			}
+
 			Self::deposit_event(Event::Funded {
 				account_id,
 				tx_hash,
@@ -316,16 +348,8 @@ pub mod pallet {
 			address: EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
+
 			T::SystemState::ensure_no_maintenance()?;
-
-			let amount = match amount {
-				RedemptionAmount::Max => T::Flip::redeemable_balance(&account_id),
-				RedemptionAmount::Exact(amount) => amount,
-			};
-
-			ensure!(amount > Zero::zero(), Error::<T>::InvalidRedemption);
-
-			ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::InvalidRedemption);
 
 			// Not allowed to redeem if we are an active bidder in the auction phase
 			if T::EpochInfo::is_auction_phase() {
@@ -338,41 +362,67 @@ pub mod pallet {
 				Error::<T>::PendingRedemption
 			);
 
-			if let Some(withdrawal_address) = WithdrawalAddresses::<T>::get(&account_id) {
-				if withdrawal_address != address {
-					return Err(Error::<T>::WithdrawalAddressRestricted.into())
-				}
-			}
+			let mut restricted_balances = RestrictedBalances::<T>::get(&account_id);
+			let redemption_fee = RedemptionTax::<T>::get();
 
-			// Calculate the amount that would remain after this redemption and ensure it won't be
-			// less than the system's minimum balance.
-			let remaining = T::Flip::account_balance(&account_id)
-				.checked_sub(&amount)
-				.ok_or(Error::<T>::InvalidRedemption)?;
+			// The amount to withdraw, net of fees.
+			let net_amount = match amount {
+				RedemptionAmount::Max => {
+					let restricted = restricted_balances.values().copied().sum::<FlipBalance<T>>() -
+						restricted_balances.get(&address).copied().unwrap_or_default();
+					let unrestricted = T::Flip::redeemable_balance(&account_id)
+						.checked_sub(&restricted)
+						.ok_or(Error::<T>::InsufficientUnrestrictedFunds)?;
+					unrestricted
+						.checked_sub(&redemption_fee)
+						.ok_or(Error::<T>::RedemptionAmountTooLow)?
+				},
+				RedemptionAmount::Exact(amount) => amount,
+			};
 
 			ensure!(
-				remaining == Zero::zero() || remaining >= MinimumFunding::<T>::get(),
+				T::Flip::try_burn_fee(&account_id, redemption_fee).is_ok(),
+				Error::<T>::InsufficientBalance
+			);
+
+			// If necessary, update account restrictions.
+			if let Some(restricted_balance) = restricted_balances.get_mut(&address) {
+				restricted_balance.saturating_reduce(net_amount);
+				RestrictedBalances::<T>::insert(&account_id, &restricted_balances);
+			}
+
+			let remaining_balance = T::Flip::account_balance(&account_id)
+				.checked_sub(&net_amount)
+				.ok_or(Error::<T>::InsufficientBalance)?;
+
+			ensure!(
+				remaining_balance == Zero::zero() ||
+					remaining_balance >= MinimumFunding::<T>::get(),
 				Error::<T>::BelowMinimumFunding
 			);
 
-			// Return an error if the redeemer tries to redeem too much. Otherwise decrement the
-			// funds by the amount redeemed.
-			T::Flip::try_initiate_redemption(&account_id, amount)?;
+			ensure!(
+				remaining_balance >= restricted_balances.values().copied().sum(),
+				Error::<T>::InsufficientUnrestrictedFunds
+			);
 
+			// Update the account balance.
+			T::Flip::try_initiate_redemption(&account_id, net_amount)?;
+
+			// Send the transaction.
 			let contract_expiry = T::TimeSource::now().as_secs() + RedemptionTTLSeconds::<T>::get();
-
 			let call = T::RegisterRedemption::new_unsigned(
 				<T as Config>::FunderId::from_ref(&account_id).as_ref(),
-				amount.into(),
+				net_amount.into(),
 				&address,
 				contract_expiry,
 			);
 
-			PendingRedemptions::<T>::insert(account_id.clone(), ());
+			PendingRedemptions::<T>::insert(&account_id, ());
 
 			Self::deposit_event(Event::RedemptionRequested {
 				account_id,
-				amount,
+				amount: net_amount,
 				broadcast_id: T::Broadcaster::threshold_sign_and_broadcast(call).0,
 				expiry_time: contract_expiry,
 			});
@@ -409,7 +459,8 @@ pub mod pallet {
 
 			PendingRedemptions::<T>::take(&account_id).ok_or(Error::<T>::NoPendingRedemption)?;
 
-			T::Flip::finalize_redemption(&account_id).expect("This should never return an error because we already ensured above that the pending redemption does indeed exist");
+			T::Flip::finalize_redemption(&account_id)
+				.expect("This should never return an error because we already ensured above that the pending redemption does indeed exist");
 
 			if T::Flip::account_balance(&account_id).is_zero() {
 				frame_system::Provider::<T>::killed(&account_id).unwrap_or_else(|e| {
@@ -512,15 +563,64 @@ pub mod pallet {
 			minimum_funding: T::Balance,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(
+				minimum_funding > RedemptionTax::<T>::get(),
+				Error::<T>::InvalidMinimumFundingUpdate
+			);
 			MinimumFunding::<T>::put(minimum_funding);
 			Self::deposit_event(Event::MinimumFundingUpdated { new_minimum: minimum_funding });
 			Ok(().into())
+		}
+
+		/// Adds/Removes restricted addresses to the list of restricted addresses.
+		///
+		/// ## Events
+		///
+		/// - [AddedRestrictedAddress](Event::AddedRestrictedAddress)
+		/// - [RemovedRestrictedAddress](Event::RemovedRestrictedAddress)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::weight(10_000)]
+		pub fn update_restricted_addresses(
+			origin: OriginFor<T>,
+			addresses_to_add: Vec<EthereumAddress>,
+			addresses_to_remove: Vec<EthereumAddress>,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			for address in addresses_to_add {
+				RestrictedAddresses::<T>::insert(address, ());
+				Self::deposit_event(Event::AddedRestrictedAddress { address });
+			}
+			for address in addresses_to_remove {
+				RestrictedAddresses::<T>::remove(address);
+				Self::deposit_event(Event::RemovedRestrictedAddress { address });
+			}
+			Ok(().into())
+		}
+
+		/// Updates the Withdrawal Tax, which is the amount levied on each withdrawal request.
+		///
+		/// Requires Governance
+		///
+		/// ## Events
+		///
+		/// - [On update](Event::RedemptionTaxAmountUpdated)
+		#[pallet::weight(T::WeightInfo::update_redemption_tax())]
+		pub fn update_redemption_tax(origin: OriginFor<T>, amount: T::Balance) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(amount < MinimumFunding::<T>::get(), Error::<T>::InvalidRedemptionTaxUpdate);
+			RedemptionTax::<T>::set(amount);
+			Self::deposit_event(Event::<T>::RedemptionTaxAmountUpdated { amount });
+			Ok(())
 		}
 	}
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub genesis_accounts: Vec<(AccountId<T>, AccountRole, T::Balance)>,
+		pub redemption_tax: T::Balance,
 		pub minimum_funding: T::Balance,
 		pub redemption_ttl: Duration,
 		pub redemption_delay_buffer_seconds: u64,
@@ -531,6 +631,7 @@ pub mod pallet {
 		fn default() -> Self {
 			Self {
 				genesis_accounts: vec![],
+				redemption_tax: Default::default(),
 				minimum_funding: Default::default(),
 				redemption_ttl: Default::default(),
 				redemption_delay_buffer_seconds: Default::default(),
@@ -541,7 +642,12 @@ pub mod pallet {
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
+			assert!(
+				self.redemption_tax < self.minimum_funding,
+				"Redemption tax must be less than minimum funding"
+			);
 			MinimumFunding::<T>::set(self.minimum_funding);
+			RedemptionTax::<T>::set(self.redemption_tax);
 			RedemptionTTLSeconds::<T>::set(self.redemption_ttl.as_secs());
 			for (account_id, role, amount) in self.genesis_accounts.iter() {
 				Pallet::<T>::add_funds_to_account(account_id, *amount);
@@ -602,11 +708,9 @@ impl<T: Config> BidderProvider for Pallet<T> {
 
 /// Ensure we clean up account specific items that definitely won't be required once the account
 /// leaves the network.
-/// NB: We deliberately don't include FailedFundingAttempts. Given something went wrong, these can
-/// be handled by governance. We don't want to lose track of them.
 impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 	fn on_killed_account(account_id: &T::AccountId) {
-		WithdrawalAddresses::<T>::remove(account_id);
 		ActiveBidder::<T>::remove(account_id);
+		RestrictedBalances::<T>::remove(account_id);
 	}
 }

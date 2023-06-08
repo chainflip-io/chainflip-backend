@@ -21,7 +21,9 @@ use async_trait::async_trait;
 use cf_primitives::AuthorityCount;
 use client::{
 	common::{
-		broadcast::{verify_broadcasts, BroadcastStage, BroadcastStageProcessor, DataToSend},
+		broadcast::{
+			verify_broadcasts_non_blocking, BroadcastStage, BroadcastStageProcessor, DataToSend,
+		},
 		CeremonyCommon, StageResult,
 	},
 	keygen, ThresholdParameters,
@@ -333,7 +335,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> StageResult<KeygenCeremony<Crypto>> {
-		let hash_commitments = match verify_broadcasts(messages) {
+		let hash_commitments = match verify_broadcasts_non_blocking(messages).await {
 			Ok(hash_commitments) => hash_commitments,
 			Err((reported_parties, abort_reason)) => {
 				warn!("Broadcast verification is not successful for {}", Self::NAME);
@@ -433,7 +435,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> KeygenStageResult<Crypto> {
-		let commitments = match verify_broadcasts(messages) {
+		let commitments = match verify_broadcasts_non_blocking(messages).await {
 			Ok(comms) => comms,
 			Err((reported_parties, abort_reason)) =>
 				return KeygenStageResult::Error(
@@ -687,7 +689,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> KeygenStageResult<Crypto> {
-		let verified_complaints = match verify_broadcasts(messages) {
+		let verified_complaints = match verify_broadcasts_non_blocking(messages).await {
 			Ok(comms) => comms,
 			Err((reported_parties, abort_reason)) =>
 				return KeygenStageResult::Error(
@@ -971,7 +973,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 	) -> KeygenStageResult<Crypto> {
 		debug!("Processing {}", Self::NAME);
 
-		let verified_responses = match verify_broadcasts(messages) {
+		let verified_responses = match verify_broadcasts_non_blocking(messages).await {
 			Ok(comms) => comms,
 			Err((reported_parties, abort_reason)) =>
 				return KeygenStageResult::Error(

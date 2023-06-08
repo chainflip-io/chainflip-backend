@@ -35,7 +35,6 @@ pub struct RuntimeApiAccountInfo {
 	pub is_activated: bool,
 	pub online_credits: u32,
 	pub reputation_points: i32,
-	pub withdrawal_address: EthereumAddress,
 	pub state: ChainflipAccountStateWithPassive,
 }
 
@@ -46,7 +45,6 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub last_heartbeat: u32, // can *maybe* remove this - check with Andrew
 	pub online_credits: u32,
 	pub reputation_points: i32,
-	pub withdrawal_address: EthereumAddress,
 	pub keyholder_epochs: Vec<EpochIndex>,
 	pub is_current_authority: bool,
 	pub is_current_backup: bool,
