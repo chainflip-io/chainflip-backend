@@ -40,8 +40,6 @@ services:
       # - 30333:30333 # p2p port
       - 9934:9933 # rpc port
       - 9945:9944 # ws port
-    volumes:
-      - ./init/polkadot/chainspec.json:/chainspec.json
     healthcheck:
       test:
         [
