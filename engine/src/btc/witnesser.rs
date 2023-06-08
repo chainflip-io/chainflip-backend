@@ -12,7 +12,7 @@ use crate::{
 		ChainBlockNumber, ItemMonitor,
 	},
 };
-use bitcoincore_rpc::bitcoin::{hashes::Hash, Transaction};
+use bitcoin::{hashes::Hash, Transaction};
 use cf_chains::{
 	btc::{
 		deposit_address::DepositAddress, BitcoinFeeInfo, BitcoinTrackedData, ScriptPubkey, UtxoId,
@@ -125,7 +125,7 @@ where
 		block_number: ChainBlockNumber<Bitcoin>,
 		(address_monitor, tx_hash_monitor): &mut Self::StaticState,
 	) -> anyhow::Result<()> {
-		let block = self.btc_rpc.block(self.btc_rpc.block_hash(block_number)?)?;
+		let block = self.btc_rpc.block(self.btc_rpc.block_hash(block_number).await?).await?;
 
 		trace!("Checking BTC block: {block_number} for interesting UTXOs");
 
@@ -170,7 +170,7 @@ where
 				.await;
 		}
 
-		if let Some(fee_rate_sats_per_kilo_kilo_byte) = self.btc_rpc.next_block_fee_rate()? {
+		if let Some(fee_rate_sats_per_kilo_byte) = self.btc_rpc.next_block_fee_rate().await? {
 			debug!("Submitting fee rate of {fee_rate_sats_per_kilo_byte} sats/kB to state chain");
 			self.state_chain_client
 				.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
@@ -299,7 +299,7 @@ mod test_utxo_filtering {
 	use std::collections::BTreeSet;
 
 	use super::*;
-	use bitcoincore_rpc::bitcoin::{
+	use bitcoin::{
 		absolute::{Height, LockTime},
 		ScriptBuf, Transaction, TxOut,
 	};
