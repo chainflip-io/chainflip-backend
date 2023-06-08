@@ -10,15 +10,6 @@ use crate::settings;
 
 use anyhow::{Context, Result};
 
-#[derive(Clone)]
-pub struct AsyncBtcRpcClient {
-	// internally the Client is Arc'd
-	client: Client,
-	url: String,
-	user: String,
-	password: String,
-}
-
 // From jsonrpc crate
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct RpcError {
@@ -45,6 +36,30 @@ impl std::fmt::Display for Error {
 			Error::Rpc(ref e) => write!(f, "RPC error response: {:?}", e),
 		}
 	}
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct FeeRateResponse {
+	#[serde(
+		default,
+		rename = "feerate",
+		skip_serializing_if = "Option::is_none",
+		with = "bitcoin::amount::serde::as_btc::opt"
+	)]
+	feerate: Option<Amount>,
+
+	// We need it for the deserialization, but we don't use it.
+	#[allow(dead_code)]
+	blocks: u32,
+}
+
+#[derive(Clone)]
+pub struct AsyncBtcRpcClient {
+	// internally the Client is Arc'd
+	client: Client,
+	url: String,
+	user: String,
+	password: String,
 }
 
 impl AsyncBtcRpcClient {
@@ -102,21 +117,6 @@ pub trait AsyncBtcRpcApi {
 	async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> anyhow::Result<Txid>;
 
 	async fn next_block_fee_rate(&self) -> anyhow::Result<Option<cf_chains::btc::BtcAmount>>;
-}
-
-#[derive(Clone, Debug, Deserialize)]
-struct FeeRateResponse {
-	#[serde(
-		default,
-		rename = "feerate",
-		skip_serializing_if = "Option::is_none",
-		with = "bitcoin::amount::serde::as_btc::opt"
-	)]
-	feerate: Option<Amount>,
-
-	// We need it for the deserialization, but we don't use it.
-	#[allow(dead_code)]
-	blocks: u32,
 }
 
 #[async_trait::async_trait]
