@@ -5,6 +5,8 @@
 ARG UBUNTU_VERSION=20.04
 FROM ubuntu:${UBUNTU_VERSION}
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 # Substrate and rust compiler dependencies.
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get -y install --no-install-recommends \
@@ -44,6 +46,8 @@ RUN curl -fsSL https://github.com/mozilla/sccache/releases/download/${SCCACHE_VE
 RUN rustc --version && \
     cargo --version && \
     sccache --version
+
+WORKDIR /
 
 COPY rust-toolchain.toml .
 RUN rustup update \
