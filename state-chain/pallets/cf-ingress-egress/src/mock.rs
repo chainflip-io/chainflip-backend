@@ -182,7 +182,7 @@ impl<Ctx: Clone> RequestAddress
 		AllPalletsWithSystem,
 		Vec<(ChannelId, TestChainAccount, TestChainAsset)>,
 	> {
-		self.then_execute_as_next_block(|_| {
+		self.then_execute_at_next_block(|_| {
 			requests
 				.iter()
 				.copied()

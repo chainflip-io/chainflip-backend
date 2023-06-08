@@ -33,7 +33,7 @@ impl<
 	/// Increments the block number and executes the closure as a block, including all the runtime
 	/// hooks.
 	#[track_caller]
-	fn execute_as_next_block<Ctx>(
+	fn execute_at_next_block<Ctx>(
 		mut self,
 		f: impl FnOnce() -> Ctx,
 	) -> TestExternalities<Runtime, Pallets, Ctx> {
@@ -151,12 +151,12 @@ where
 	///
 	/// Prefer to use `then_apply_extrinsics` if testing extrinsics.
 	#[track_caller]
-	pub fn then_execute_as_next_block<R>(
+	pub fn then_execute_at_next_block<R>(
 		self,
 		f: impl FnOnce(Ctx) -> R,
 	) -> TestExternalities<Runtime, Pallets, R> {
 		let context = self.context;
-		self.ext.execute_as_next_block(move || f(context))
+		self.ext.execute_at_next_block(move || f(context))
 	}
 
 	/// Execute the given closure as if it was an extrinsic at a specific block number.
@@ -202,7 +202,7 @@ where
 		self,
 		f: impl FnOnce(&Ctx) -> I,
 	) -> TestExternalities<Runtime, Pallets, (Ctx, Vec<(C, DispatchResultWithPostInfo)>)> {
-		let r = self.ext.execute_as_next_block(|| {
+		let r = self.ext.execute_at_next_block(|| {
 			f(&self.context)
 				.into_iter()
 				.map(|(origin, call)| (call.clone(), call.dispatch_bypass_filter(origin)))
@@ -224,7 +224,7 @@ where
 			if should_break {
 				break next
 			} else {
-				self = next.then_execute_as_next_block(|context| context);
+				self = next.then_execute_at_next_block(|context| context);
 			}
 		}
 	}
@@ -309,11 +309,11 @@ mod test_examples {
 				);
 				System::block_number()
 			})
-			.then_execute_as_next_block(|n| {
+			.then_execute_at_next_block(|n| {
 				assert_eq!(
 					System::block_number(),
 					n + 1,
-					"Block number should increment when we execute_as_next_block."
+					"Block number should increment when we execute_at_next_block."
 				);
 			})
 			// This can be useful for testing eg. expiry logic.

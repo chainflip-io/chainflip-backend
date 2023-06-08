@@ -414,7 +414,7 @@ fn addresses_are_getting_reused() {
 			}) => Some(broadcast_id),
 			_ => None,
 		})
-		.then_execute_as_next_block(|(channels, broadcast_ids)| {
+		.then_execute_at_next_block(|(channels, broadcast_ids)| {
 			assert!(broadcast_ids.len() == 1);
 			// This would normally be triggered on broadcast success, should finalise the ingress.
 			for id in broadcast_ids {
@@ -423,7 +423,7 @@ fn addresses_are_getting_reused() {
 			channels
 		})
 		// Close the channels.
-		.then_execute_as_next_block(|channels| {
+		.then_execute_at_next_block(|channels| {
 			for (id, address, _asset) in &channels {
 				IngressEgress::close_channel(*id, *address);
 			}
@@ -751,8 +751,8 @@ fn multi_use_deposit_address_different_blocks() {
 	const ETH: eth::Asset = eth::Asset::Eth;
 
 	new_test_ext()
-		.then_execute_as_next_block(|_| request_address_and_deposit(ALICE, ETH))
-		.then_execute_as_next_block(|channel @ (_, deposit_address)| {
+		.then_execute_at_next_block(|_| request_address_and_deposit(ALICE, ETH))
+		.then_execute_at_next_block(|channel @ (_, deposit_address)| {
 			// Set the address to deployed.
 			AddressStatus::<Test, _>::insert(deposit_address, DeploymentStatus::Deployed);
 			// Do another, should succeed.
@@ -764,7 +764,7 @@ fn multi_use_deposit_address_different_blocks() {
 			));
 			channel
 		})
-		.then_execute_as_next_block(|(channel_id, deposit_address)| {
+		.then_execute_at_next_block(|(channel_id, deposit_address)| {
 			// Set the address to deployed.
 			AddressStatus::<Test, _>::insert(deposit_address, DeploymentStatus::Deployed);
 			// Closing the channel should invalidate the deposit address.
@@ -785,7 +785,7 @@ fn multi_use_deposit_address_different_blocks() {
 fn multi_use_deposit_same_block() {
 	const ETH: eth::Asset = eth::Asset::Eth;
 	new_test_ext()
-		.then_execute_as_next_block(|_| {
+		.then_execute_at_next_block(|_| {
 			let (_, deposit_address) = request_address_and_deposit(ALICE, ETH);
 			// Set the address to deployed.
 			AddressStatus::<Test, _>::insert(deposit_address, DeploymentStatus::Deployed);
