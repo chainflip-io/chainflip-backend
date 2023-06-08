@@ -9,7 +9,7 @@ use tokio::{
 };
 
 use async_trait::async_trait;
-use tracing::{error, info};
+use tracing::{error, info, Instrument};
 
 use utilities::task_scope::{task_scope, ScopedJoinHandle};
 
@@ -214,7 +214,7 @@ where
 				}
 
 			},
-			Some(block) = block_stream.next() => {
+			Some(block) = block_stream.next().instrument(tracing::debug_span!("Eth-Block-Stream-Future")) => {
 				// This will be an error if the stream times out. When it does, we return
 				// an error so that we restart the witnesser.
 				let block = block.map_err(|e| {
