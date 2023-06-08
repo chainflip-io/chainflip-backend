@@ -1,4 +1,5 @@
 name: Post build checks
+
 on:
   workflow_call:
     inputs:
@@ -9,6 +10,11 @@ on:
         type: number
         required: false
         default: 120
+
+permissions:
+  packages: read
+  contents: read
+
 jobs:
   bouncer:
     runs-on: ubuntu-20.04
@@ -46,18 +52,27 @@ jobs:
 
       - name: Setup ngrok
         run: |
-          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null 
-          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list 
-          sudo apt update 
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt update
           sudo apt install ngrok
+
+      - name: Install pnpm
+        run: npm install -g pnpm@8
 
       - name: Configure NodeJS
         uses: actions/setup-node@v3
         with:
-          node-version: 20
+          node-version: 18
+          cache: "pnpm"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@chainflip-io"
+          cache-dependency-path: "bouncer/pnpm-lock.yaml"
 
-      - name: Install pnpm
-        run: npm i -g pnpm
+      - name: Set NPM registry
+        run: |
+          pnpm set @chainflip-io:registry=https://npm.pkg.github.com/
+          pnpm set //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
 
       - name: Install system packages
         run: |
@@ -124,7 +139,7 @@ jobs:
       - name: Notify on failed bouncer
         if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'
         env:
-          DISCORD_USERNAME: 'HEUTE LEIDER NICHT'
+          DISCORD_USERNAME: "HEUTE LEIDER NICHT"
           DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
         uses: Ilshidur/action-discord@0.3.2
         with:
