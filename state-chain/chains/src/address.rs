@@ -10,7 +10,6 @@ use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_core::H160;
-use sp_runtime::DispatchError;
 use sp_std::vec::Vec;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
@@ -39,9 +38,7 @@ pub enum EncodedAddress {
 }
 
 pub trait AddressConverter: Sized {
-	fn try_to_encoded_address(
-		address: ForeignChainAddress,
-	) -> Result<EncodedAddress, DispatchError>;
+	fn to_encoded_address(address: ForeignChainAddress) -> EncodedAddress;
 	#[allow(clippy::result_unit_err)]
 	fn try_from_encoded_address(encoded_address: EncodedAddress)
 		-> Result<ForeignChainAddress, ()>;
@@ -183,16 +180,15 @@ impl EncodedAddress {
 	}
 }
 
-pub fn try_to_encoded_address<GetBitcoinNetwork: FnOnce() -> BitcoinNetwork>(
+pub fn to_encoded_address<GetBitcoinNetwork: FnOnce() -> BitcoinNetwork>(
 	address: ForeignChainAddress,
 	bitcoin_network: GetBitcoinNetwork,
-) -> Result<EncodedAddress, DispatchError> {
+) -> EncodedAddress {
 	match address {
-		ForeignChainAddress::Eth(address) => Ok(EncodedAddress::Eth(address)),
-		ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(*address.aliased_ref())),
-		ForeignChainAddress::Btc(script_pubkey) => Ok(EncodedAddress::Btc(
-			script_pubkey.to_address(&bitcoin_network()).as_bytes().to_vec(),
-		)),
+		ForeignChainAddress::Eth(address) => EncodedAddress::Eth(address),
+		ForeignChainAddress::Dot(address) => EncodedAddress::Dot(*address.aliased_ref()),
+		ForeignChainAddress::Btc(script_pubkey) =>
+			EncodedAddress::Btc(script_pubkey.to_address(&bitcoin_network()).as_bytes().to_vec()),
 	}
 }
 
@@ -222,7 +218,7 @@ fn encode_and_decode_address() {
 		let network = || BitcoinNetwork::Mainnet;
 		let encoded_addr = EncodedAddress::Btc(address.as_bytes().to_vec());
 		let foreign_chain_addr = try_from_encoded_address(encoded_addr.clone(), network).unwrap();
-		let recovered_addr = try_to_encoded_address(foreign_chain_addr, network).unwrap();
+		let recovered_addr = to_encoded_address(foreign_chain_addr, network);
 		if case_sensitive {
 			assert_eq!(recovered_addr, encoded_addr, "{recovered_addr} != {encoded_addr}");
 		} else {
