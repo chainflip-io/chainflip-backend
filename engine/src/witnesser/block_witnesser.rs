@@ -83,7 +83,6 @@ where
 
 		self.witnessed_until_sender
 			.send(WitnessedUntil { epoch_index: self.epoch_index, block_number })
-			.instrument(tracing::trace_span!("send_witnessed_until"))
 			.await
 			.unwrap();
 
