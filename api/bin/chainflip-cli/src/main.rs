@@ -1,5 +1,5 @@
 #![feature(absolute_path)]
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use serde::Serialize;
 use settings::GenerateKeysOutputType;
@@ -40,7 +40,7 @@ async fn run_cli() -> Result<()> {
 		return generate_keys(output_type)
 	}
 
-	let cli_settings = CLISettings::new(command_line_opts.clone()).map_err(|err| anyhow!("{}", err).context("Please ensure your config file path is configured correctly and the file is valid. You can also just set all configurations required command line arguments.\n"))?;
+	let cli_settings = CLISettings::new(command_line_opts.clone()).context("Please ensure your config file path is configured correctly and the file is valid. You can also just set all configurations required command line arguments.\n")?;
 
 	println!(
 		"Connecting to state chain node at: `{}` and using private key located at: `{}`",
