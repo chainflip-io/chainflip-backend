@@ -250,7 +250,7 @@ pub mod pallet {
 		/// A swap deposit has been received.
 		SwapScheduled {
 			swap_id: u64,
-			deposit_asset: Asset,
+			source_asset: Asset,
 			deposit_amount: AssetAmount,
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
@@ -567,7 +567,7 @@ pub mod pallet {
 			) {
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
-					deposit_asset: from,
+					source_asset: from,
 					deposit_amount,
 					destination_asset: to,
 					destination_address,
@@ -864,7 +864,7 @@ pub mod pallet {
 			{
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
-					deposit_asset: from,
+					source_asset: from,
 					deposit_amount: amount,
 					destination_asset: to,
 					destination_address: encoded_destination_address,
