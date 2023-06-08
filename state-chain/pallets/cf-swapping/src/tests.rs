@@ -222,7 +222,7 @@ fn expect_swap_id_to_be_emitted() {
 			RuntimeEvent::Swapping(Event::SwapScheduled {
 				swap_id: 1,
 				deposit_amount: 500,
-				deposit_asset: Asset::Eth,
+				source_asset: Asset::Eth,
 				destination_asset: Asset::Usdc,
 				destination_address: EncodedAddress::Eth(Default::default()),
 				origin: SwapOrigin::DepositChannel {
@@ -287,7 +287,7 @@ fn can_swap_using_witness_origin() {
 
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapScheduled {
 			swap_id: 1,
-			deposit_asset: from,
+			source_asset: from,
 			deposit_amount: amount,
 			destination_asset: to,
 			destination_address: EncodedAddress::Eth(Default::default()),
@@ -986,7 +986,7 @@ fn swap_by_witnesser_happy_path() {
 		);
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapScheduled {
 			swap_id: 1,
-			deposit_asset: from,
+			source_asset: from,
 			deposit_amount: amount,
 			destination_asset: to,
 			destination_address: EncodedAddress::Eth(Default::default()),
@@ -1058,7 +1058,7 @@ fn swap_by_deposit_happy_path() {
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::SwapScheduled {
 			swap_id: 1,
 			deposit_amount: amount,
-			deposit_asset: from,
+			source_asset: from,
 			destination_asset: to,
 			destination_address: EncodedAddress::Eth(Default::default()),
 			origin: SwapOrigin::DepositChannel {
