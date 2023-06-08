@@ -76,17 +76,17 @@ impl AsyncBtcRpcClient {
 			.json(&request_body)
 			.send()
 			.await
-			.map_err(|err| Error::Transport(err))?
+			.map_err(Error::Transport)?
 			.json::<serde_json::Value>()
 			.await
-			.map_err(|err| Error::Transport(err))?;
+			.map_err(Error::Transport)?;
 
 		let error = &response["error"];
 		if !error.is_null() {
 			return Err(Error::Rpc(serde_json::from_value(error.clone()).unwrap()))
 		}
 
-		Ok(T::deserialize(&response["result"]).map_err(|err| Error::Json(err)))?
+		Ok(T::deserialize(&response["result"]).map_err(Error::Json))?
 	}
 }
 
@@ -178,10 +178,9 @@ mod tests {
 
 		// Generate new hex bytes using ./bouncer/commands/create_raw_btc_tx.ts;
 		let hex_str =
-		"0200000000010133e287d3a464b226a1917303e1714af508a6bfe219265184a93c7f78851085a30000000000fdffffff0200e1f505000000001976a9149a1c78a507689f6f54b847ad1cef1e614ee23f1e88ac58d94a1f000000001600145baa7941ea1268fbd6279a0408a0419f8acd8245024730440220590dcc64661a362b54543f66d3cd24fdeae8a210643ad4f6fd39031281a9657902201f7a750d01f7cfc948ae4f8b76221b5c325f8ff82ac1b0d1d9a927632b40dd6001210386dc234ecbc4e677b927da260349cbd399c622507feb9dd2895a3537f6d4aa5d00000000"
-		;
+		"0200000000010133e287d3a464b226a1917303e1714af508a6bfe219265184a93c7f78851085a30000000000fdffffff0200e1f505000000001976a9149a1c78a507689f6f54b847ad1cef1e614ee23f1e88ac58d94a1f000000001600145baa7941ea1268fbd6279a0408a0419f8acd8245024730440220590dcc64661a362b54543f66d3cd24fdeae8a210643ad4f6fd39031281a9657902201f7a750d01f7cfc948ae4f8b76221b5c325f8ff82ac1b0d1d9a927632b40dd6001210386dc234ecbc4e677b927da260349cbd399c622507feb9dd2895a3537f6d4aa5d00000000";
 
-		let bytes = hex::decode(hex_str).unwrap()?;
+		let bytes = hex::decode(hex_str).unwrap();
 
 		let send_raw_transaction = client.send_raw_transaction(bytes).await.unwrap();
 
