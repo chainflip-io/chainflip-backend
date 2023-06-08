@@ -2,22 +2,13 @@ name: Build rust-base Docker Image
 on:
   workflow_dispatch:
     inputs:
-      nightly_version:
-        type: string
-        default: nightly-2023-03-20
-        description: Toolchain version you want to build
-        required: true
-      image_tag:
-        type: string
-        default: nightly-2023-03-20
-        description: Docker Image Tag
-        required: true
-
+      debug_image:
+        description: "Are you bulding a debug image for experimenting?"
+        type: boolean
+        default: false
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: '${{ github.repository }}/rust-base'
-  TAG: ${{ github.event.inputs.image_tag }}
-  NIGHTLY_VERSION: ${{ github.event.inputs.nightly_version }}
+  IMAGE_NAME: "${{ github.repository }}/rust-base"
 
 jobs:
   build:
@@ -25,14 +16,27 @@ jobs:
     permissions:
       contents: read
       packages: write
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-${{ matrix.ubuntu_version }}
     strategy:
       fail-fast: false
       matrix:
         ubuntu_version: [20.04, 22.04]
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+
+      - name: Get toolchain version
+        id: toolchain
+        run: echo "rust_toolchain=$(grep 'channel' rust-toolchain.toml | sed -n -e 's/^.*channel = "\(.*\)".*$/\1/p')" >> $GITHUB_OUTPUT
+
+      - name: Set Image Tags
+        id: image_tags
+        run: |
+          if [ "${{ github.event.inputs.debug_image }}" = "true" ]; then
+            echo "debug_image_tags=debug-${{ steps.toolchain.outputs.rust_toolchain }}-ubuntu-${{ matrix.ubuntu_version }}-${{ github.run_number }}" >> $GITHUB_OUTPUT
+          else
+            echo "debug_image_tags=debug-${{ steps.toolchain.outputs.rust_toolchain }}-ubuntu-${{ matrix.ubuntu_version }}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
@@ -45,7 +49,7 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: ${{ env.TAG }}-${{ matrix.ubuntu_version }}
+          tags: ${{ steps.image_tags.outputs.debug_image_tags }}
 
       - name: Login to Github Container Registry 🔑
         uses: docker/login-action@v1
@@ -64,5 +68,4 @@ jobs:
           cache-to: type=gha,mode=max
           file: ci/docker/rust-base.Dockerfile
           build-args: |
-            NIGHTLY=${{ env.NIGHTLY_VERSION }}
             UBUNTU_VERSION=${{ matrix.ubuntu_version }}

@@ -17,6 +17,8 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     jq \
     protobuf-compiler \
     pkg-config \
+    libssl-dev \
+    openssl \
     curl \
     ca-certificates \
     && apt-get autoremove -y \
@@ -43,14 +45,11 @@ RUN rustc --version && \
     cargo --version && \
     sccache --version
 
-ARG NIGHTLY
-# Download and set nightly as the default Rust compiler
-RUN rustup default ${NIGHTLY} \
-    && rustup target add wasm32-unknown-unknown --toolchain ${NIGHTLY} \
-    && rustup component add rustfmt \
-    && rustup component add clippy \
+COPY rust-toolchain.toml .
+RUN rustup update \
     && cargo install cargo-deb \
-    && cargo install cargo-audit
+    && cargo install cargo-audit \
+    && rm rust-toolchain.toml
 
 RUN groupadd ci \
     && useradd -m -g ci ci
