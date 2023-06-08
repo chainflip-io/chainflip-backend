@@ -49,6 +49,7 @@ pub struct RpcRetrierClient {
 	request_sender: mpsc::Sender<RequestPackage>,
 }
 
+#[derive(Default)]
 pub struct RequestHolder {
 	last_request_id: RequestId,
 
@@ -56,10 +57,6 @@ pub struct RequestHolder {
 }
 
 impl RequestHolder {
-	pub fn new() -> Self {
-		Self { last_request_id: 0, stored_requests: BTreeMap::new() }
-	}
-
 	// Returns the request id of the new request
 	pub fn insert(&mut self, request_id: RequestId, request: RequestPackage) {
 		assert!(self.stored_requests.insert(request_id, request).is_none());
@@ -104,11 +101,11 @@ pub fn submission_future(
 /// When a request fails it will be retried after a delay that exponentially increases on each retry
 /// attempt.
 impl RpcRetrierClient {
-	pub fn new<'a>(scope: &Scope<'a, anyhow::Error>, initial_request_timeout_millis: u64) -> Self {
+	pub fn new(scope: &Scope<'_, anyhow::Error>, initial_request_timeout_millis: u64) -> Self {
 		let (request_sender, mut request_receiver) =
 			mpsc::channel::<(oneshot::Sender<BoxAny>, FutureAnyGenerator)>(1);
 
-		let mut request_holder = RequestHolder::new();
+		let mut request_holder = RequestHolder::default();
 
 		let mut retry_delays = RetryDelays::new();
 
