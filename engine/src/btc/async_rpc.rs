@@ -64,7 +64,7 @@ impl AsyncBtcRpcClient {
 	) -> Result<T, Error> {
 		let request_body = json!({
 			"jsonrpc": "1.0",
-			"id":"curltest",
+			"id":"1",
 			"method": method,
 			"params": params
 		});
