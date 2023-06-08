@@ -10,7 +10,7 @@ jobs:
   cargo-fmt:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/nightly-2023-03-20-ubuntu-20.04-ubuntu-20.04"
+      image: "ghcr.io/${{ github.repository }}/nightly-2023-03-20-ubuntu-20.04"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -24,7 +24,7 @@ jobs:
   audit:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/nightly-2023-03-20-ubuntu-20.04-ubuntu-20.04"
+      image: "ghcr.io/${{ github.repository }}/nightly-2023-03-20-ubuntu-20.04"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -37,7 +37,7 @@ jobs:
   cargo-clippy:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/nightly-2023-03-20-ubuntu-20.04-ubuntu-20.04"
+      image: "ghcr.io/${{ github.repository }}/nightly-2023-03-20-ubuntu-20.04"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
