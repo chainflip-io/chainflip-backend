@@ -1,6 +1,6 @@
 pub use super::common::*;
 use super::StateChainEnvironment;
-use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
+use cf_chains::{btc::BitcoinNetwork, dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
 use cf_primitives::{AccountId, AccountRole, FlipBalance};
 use sc_service::ChainType;
 use sp_core::H256;
@@ -9,6 +9,8 @@ pub struct Config;
 
 pub const NETWORK_NAME: &str = "Chainflip-Perseverance";
 pub const CHAIN_TYPE: ChainType = ChainType::Live;
+
+pub const BITCOIN_NETWORK: BitcoinNetwork = BitcoinNetwork::Testnet;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("0E1D4594cB44D3E929dc0fb32F1c35A26D6e8e7f"),
@@ -28,7 +30,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	// TODO: update this to the correct value for perseverance
 	dot_genesis_hash: H256([0xcf; 32]),
 	dot_vault_account_id: None,
-	dot_runtime_version: RuntimeVersion { spec_version: 9320, transaction_version: 16 },
+	dot_runtime_version: RuntimeVersion { spec_version: 9360, transaction_version: 19 },
 };
 
 pub const BASHFUL_SR25519: [u8; 32] =
@@ -46,11 +48,12 @@ pub const DOPEY_ED25519: [u8; 32] =
 pub const SNOW_WHITE_SR25519: [u8; 32] =
 	hex_literal::hex!["84f131a66e88e3e5f8dce20d413cab3fbb13769a14a4c7b640b7222863ef353d"];
 
-pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance)> {
+pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8>>)> {
 	vec![(
 		hex_literal::hex!("b81ba08bd1225107cecf9cb1ca094292b6e4eafbedd048938fb020017171cc1f")
 			.into(),
 		AccountRole::Broker,
 		100 * FLIPPERINOS_PER_FLIP,
+		Some(b"Chainflip Broker".to_vec()),
 	)]
 }

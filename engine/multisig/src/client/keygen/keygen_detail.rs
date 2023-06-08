@@ -52,7 +52,9 @@ fn test_simple_polynomial() {
 
 /// Evaluation of a sharing polynomial for a given party index
 /// as per Shamir Secret Sharing scheme
-#[derive(Debug, Default, Clone, Deserialize, Serialize, Zeroize)]
+#[derive(
+	Debug, Default, Clone, Deserialize, Serialize, Zeroize, PartialOrd, Ord, PartialEq, Eq,
+)]
 pub struct ShamirShare<P: ECPoint> {
 	/// the result of polynomial evaluation
 	pub value: P::Scalar,
@@ -70,7 +72,7 @@ impl<P: ECPoint> ShamirShare<P> {
 fn reconstruct_secret<P: ECPoint>(shares: &BTreeMap<AuthorityCount, ShamirShare<P>>) -> P::Scalar {
 	use crate::client::signing;
 
-	let all_idxs: BTreeSet<AuthorityCount> = shares.keys().into_iter().cloned().collect();
+	let all_idxs: BTreeSet<AuthorityCount> = shares.keys().cloned().collect();
 
 	shares.iter().fold(P::Scalar::zero(), |acc, (index, ShamirShare { value })| {
 		acc + signing::get_lagrange_coeff::<P>(*index, &all_idxs) * value
@@ -78,7 +80,6 @@ fn reconstruct_secret<P: ECPoint>(shares: &BTreeMap<AuthorityCount, ShamirShare<
 }
 
 /// Context used in hashing to prevent replay attacks
-#[derive(Clone)]
 pub struct HashContext(pub [u8; 32]);
 
 /// Generate challenge against which a ZKP of our secret will be generated
@@ -213,7 +214,6 @@ fn generate_secret_and_shares<P: ECPoint>(
 	// Coefficients for the sharing polynomial used to share `secret` via the Shamir Secret Sharing
 	// scheme (Figure 1: Round 1, Step 1)
 	let coefficients: Vec<_> = (0..sharing_parameters.key_params.threshold)
-		.into_iter()
 		.map(|_| P::Scalar::random(rng))
 		.collect();
 
@@ -268,12 +268,12 @@ pub fn verify_share<P: ECPoint>(
 }
 
 /// Commitments to the sharing polynomial coefficient
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialOrd, Ord, PartialEq, Eq)]
 struct CoefficientCommitments<P>(Vec<P>);
 
 /// Zero-knowledge proof of us knowing the secret
 /// (in a form of a Schnorr signature)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialOrd, Ord, PartialEq, Eq)]
 struct ZKPSignature<P: ECPoint> {
 	#[serde(bound = "")]
 	r: P,
@@ -283,7 +283,7 @@ struct ZKPSignature<P: ECPoint> {
 /// Commitments along with the corresponding ZKP
 /// which should be sent to other parties at the
 /// beginning of the ceremony
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialOrd, Ord, PartialEq, Eq)]
 pub struct DKGUnverifiedCommitment<P: ECPoint> {
 	#[serde(bound = "")]
 	commitments: CoefficientCommitments<P>,
@@ -309,14 +309,11 @@ mod serialisation {
 
 	#[cfg(test)]
 	mod tests {
-		use crate::{
-			bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning, ChainTag, CryptoScheme,
-		};
+		use crate::{client::helpers::test_all_crypto_schemes, ChainTag, CryptoScheme};
+
 		#[test]
 		fn check_comm3_max_size() {
-			check_comm3_size_for_scheme::<EthSigning>();
-			check_comm3_size_for_scheme::<BtcSigning>();
-			check_comm3_size_for_scheme::<PolkadotSigning>();
+			test_all_crypto_schemes!(check_comm3_size_for_scheme);
 		}
 
 		fn check_comm3_size_for_scheme<C: CryptoScheme>() {
@@ -356,6 +353,7 @@ mod serialisation {
 				assert!(comm3.payload.len() == MAX_COEFF_COMM_3_SIZE);
 				assert!(zkp_bytes.len() == MAX_ZKP_SIZE);
 			} else {
+				// Other chains might use a more compact serialization of primitives
 				assert!(zkp_bytes.len() <= MAX_ZKP_SIZE);
 				assert!(comm3.payload.len() <= MAX_COEFF_COMM_3_SIZE);
 			}
@@ -392,9 +390,10 @@ pub fn validate_commitments<C: CryptoScheme>(
 		.filter_map(|(idx, c)| {
 			if let Some(context) = resharing_context {
 				let expected_public_keys = match &context.party_status {
-					ParticipantStatus::Sharing(_, pubkeys) => pubkeys,
+					ParticipantStatus::Sharing { public_key_shares, .. } => public_key_shares,
 					ParticipantStatus::NonSharing => panic!("invalid state for the stage"),
-					ParticipantStatus::NonSharingReceivedKeys(pubkeys) => pubkeys,
+					ParticipantStatus::NonSharingReceivedKeys(public_key_shares) =>
+						public_key_shares,
 				};
 
 				// In a key handover ceremony, we check for each sharing party

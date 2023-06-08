@@ -4,9 +4,7 @@
 #![feature(array_zip)]
 #![feature(is_sorted)]
 
-#[cfg(test)]
 mod mock;
-#[cfg(test)]
 mod tests;
 
 mod helpers;
@@ -15,12 +13,11 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 mod auction_resolver;
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 mod rotation_state;
 
 pub use auction_resolver::*;
-use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex};
+use cf_primitives::{AuthorityCount, EpochIndex};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidderProvider, Bonding,
 	Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch,
@@ -72,32 +69,16 @@ type RuntimeRotationState<T> =
 	RotationState<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
 
 // Might be better to add the enum inside a struct rather than struct inside enum
-#[derive(Clone, PartialEq, Eq, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
+#[derive(Clone, PartialEq, Eq, Default, Encode, Decode, TypeInfo, RuntimeDebugNoBound)]
 #[scale_info(skip_type_params(T))]
 pub enum RotationPhase<T: Config> {
+	#[default]
 	Idle,
 	KeygensInProgress(RuntimeRotationState<T>),
 	KeyHandoversInProgress(RuntimeRotationState<T>),
 	ActivatingKeys(RuntimeRotationState<T>),
 	NewKeysActivated(RuntimeRotationState<T>),
 	SessionRotating(RuntimeRotationState<T>),
-}
-
-impl<T: Config> Default for RotationPhase<T> {
-	fn default() -> Self {
-		RotationPhase::Idle
-	}
-}
-
-pub struct CeremonyIdProvider<T>(PhantomData<T>);
-
-impl<T: Config> cf_traits::CeremonyIdProvider for CeremonyIdProvider<T> {
-	fn increment_ceremony_id() -> CeremonyId {
-		CeremonyIdCounter::<T>::mutate(|id| {
-			*id += 1;
-			*id
-		})
-	}
 }
 
 type ValidatorIdOf<T> = <T as Chainflip>::ValidatorId;
@@ -266,11 +247,6 @@ pub mod pallet {
 	#[pallet::storage]
 	pub type HistoricalActiveEpochs<T: Config> =
 		StorageMap<_, Twox64Concat, ValidatorIdOf<T>, Vec<EpochIndex>, ValueQuery>;
-
-	/// Counter for generating unique ceremony ids.
-	#[pallet::storage]
-	#[pallet::getter(fn ceremony_id_counter)]
-	pub type CeremonyIdCounter<T> = StorageValue<_, CeremonyId, ValueQuery>;
 
 	/// Backups, validator nodes who are not in the authority set.
 	#[pallet::storage]
@@ -837,6 +813,7 @@ pub mod pallet {
 	pub struct GenesisConfig<T: Config> {
 		pub genesis_authorities: BTreeSet<ValidatorIdOf<T>>,
 		pub genesis_backups: BackupMap<T>,
+		pub genesis_vanity_names: BTreeMap<T::AccountId, VanityName>,
 		pub blocks_per_epoch: T::BlockNumber,
 		pub bond: T::Amount,
 		pub redemption_period_as_percentage: Percentage,
@@ -853,6 +830,7 @@ pub mod pallet {
 			Self {
 				genesis_authorities: Default::default(),
 				genesis_backups: Default::default(),
+				genesis_vanity_names: Default::default(),
 				blocks_per_epoch: Zero::zero(),
 				bond: Default::default(),
 				redemption_period_as_percentage: Zero::zero(),
@@ -875,6 +853,7 @@ pub mod pallet {
 			RedemptionPeriodAsPercentage::<T>::set(self.redemption_period_as_percentage);
 			BackupRewardNodePercentage::<T>::set(self.backup_reward_node_percentage);
 			AuthoritySetMinSize::<T>::set(self.authority_set_min_size);
+			VanityNames::<T>::put(&self.genesis_vanity_names);
 
 			CurrentEpoch::<T>::set(GENESIS_EPOCH);
 

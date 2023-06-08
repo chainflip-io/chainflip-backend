@@ -8,7 +8,6 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 pub mod weights;
@@ -79,7 +78,9 @@ const THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AccountRoleRegistry, AsyncResult, ThresholdSignerNomination};
+	use cf_traits::{
+		AccountRoleRegistry, AsyncResult, CeremonyIdProvider, ThresholdSignerNomination,
+	};
 	use frame_support::{
 		dispatch::DispatchResultWithPostInfo,
 		pallet_prelude::{InvalidTransaction, *},
@@ -535,7 +536,7 @@ pub mod pallet {
 			});
 
 			log::debug!(
-				"Threshold signature request {} suceeded at ceremony {} after {} attempts.",
+				"Threshold signature request {} succeeded at ceremony {} after {} attempts.",
 				request_id,
 				ceremony_id,
 				attempt_count

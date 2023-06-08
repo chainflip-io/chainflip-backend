@@ -2,13 +2,9 @@
 #![doc = include_str!("../README.md")]
 #![doc = include_str!("../../cf-doc-head.md")]
 
-#[cfg(test)]
 mod mock;
-
-#[cfg(test)]
 mod tests;
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 mod imbalances;
@@ -537,9 +533,14 @@ impl<T: Config> cf_traits::Funding for Pallet<T> {
 	}
 
 	fn finalize_redemption(account_id: &T::AccountId) -> Result<(), DispatchError> {
-		let imbalance = Self::try_withdraw_pending_redemption(account_id)?;
+		// Get the total redemption amount.
+		let imbalance: Surplus<T> = Self::try_withdraw_pending_redemption(account_id)?;
 		let amount = imbalance.peek();
-		imbalance.offset(Self::bridge_out(amount));
+		let res = imbalance.offset(Self::bridge_out(amount));
+		debug_assert!(
+			res.try_none().is_ok(),
+			"Bridge Out + Burned Fee should consume the entire Redemption amount."
+		);
 		Ok(())
 	}
 

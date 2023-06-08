@@ -289,7 +289,7 @@ where
 	fn new_unsigned(
 		_old_key: Option<<Ethereum as ChainCrypto>::AggKey>,
 		new_key: <Ethereum as ChainCrypto>::AggKey,
-	) -> Result<Self, SetAggKeyWithAggKeyError> {
+	) -> Result<Self, ()> {
 		Ok(Self::SetAggKeyWithAggKey(EthereumTransactionBuilder::new_unsigned(
 			E::replay_protection(EthereumContract::KeyManager),
 			set_agg_key_with_agg_key::SetAggKeyWithAggKey::new(new_key),
@@ -363,7 +363,7 @@ where
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<TransferAssetParams<Ethereum>>,
-	) -> Result<Self, ()> {
+	) -> Result<Self, AllBatchError> {
 		let mut fetch_only_params = vec![];
 		let mut fetch_deploy_params = vec![];
 		for FetchAssetParams { deposit_fetch_id, asset } in fetch_params {
@@ -375,7 +375,7 @@ where
 						.push(EncodableFetchDeployAssetParams { channel_id, asset: token_address }),
 				};
 			} else {
-				return Err(())
+				return Err(AllBatchError::Other)
 			}
 		}
 		Ok(Self::AllBatch(EthereumTransactionBuilder::new_unsigned(
@@ -392,9 +392,9 @@ where
 								amount,
 								asset: address,
 							})
-							.ok_or(())
+							.ok_or(AllBatchError::Other)
 					})
-					.collect::<Result<Vec<_>, ()>>()?,
+					.collect::<Result<Vec<_>, _>>()?,
 			),
 		)))
 	}

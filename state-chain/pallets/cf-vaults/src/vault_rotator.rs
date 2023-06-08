@@ -1,5 +1,5 @@
 use super::*;
-use cf_chains::SetAggKeyWithAggKeyError;
+use cf_traits::CeremonyIdProvider;
 use sp_runtime::traits::BlockNumberProvider;
 
 impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
@@ -13,7 +13,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 		assert_ne!(Self::status(), AsyncResult::Pending);
 
-		let ceremony_id = T::CeremonyIdProvider::increment_ceremony_id();
+		let ceremony_id = Self::increment_ceremony_id();
 
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::AwaitingKeygen {
 			ceremony_id,
@@ -49,7 +49,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 
 					assert_ne!(Self::status(), AsyncResult::Pending);
 
-					let ceremony_id = T::CeremonyIdProvider::increment_ceremony_id();
+					let ceremony_id = Self::increment_ceremony_id();
 
 					// from the SC's perspective, we don't care what set they're in, they get
 					// reported the same and each participant only gets one vote, like keygen.
@@ -66,7 +66,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 						frame_system::Pallet::<T>::current_block_number(),
 					);
 
-					Pallet::<T, I>::deposit_event(Event::KeyHandoverRequest {
+					Self::deposit_event(Event::KeyHandoverRequest {
 						ceremony_id,
 						// The key we want to share is the key from the *previous/current* epoch,
 						// not the newly generated key since we're handing it over to the
@@ -130,49 +130,35 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		if let Some(VaultRotationStatus::<T, I>::KeyHandoverComplete { new_public_key }) =
 			PendingVaultRotation::<T, I>::get()
 		{
-			if let Some(EpochKey { key, epoch_index, key_state }) = Self::current_epoch_key() {
-				match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
-					Some(key),
-					new_public_key,
-				) {
-					Ok(rotation_call) => {
-						let (_, threshold_request_id) =
-							T::Broadcaster::threshold_sign_and_broadcast_for_rotation(
-								rotation_call,
-							);
-						debug_assert!(
-							matches!(key_state, KeyState::Unlocked),
-							"Current epoch key must be active to activate next key."
-						);
-						CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
-							epoch_index,
-							key_state: KeyState::Locked(threshold_request_id),
-						});
-						PendingVaultRotation::<T, I>::put(
-							VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
-						);
-					},
-					Err(error) => match error {
-						SetAggKeyWithAggKeyError::NotRequired => {
-							PendingVaultRotation::<T, I>::put(VaultRotationStatus::Complete);
-						},
-						SetAggKeyWithAggKeyError::Other => {
-							log::error!(
-										"Unable to create unsigned transaction to set new vault key. This should not be possible."
-									);
-						},
-					},
-				}
-			} else {
-				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
-					new_public_key,
+			if let Some((rotation_call, key_state, epoch_index)) = Self::current_epoch_key()
+				.and_then(|EpochKey { key, epoch_index, key_state }| {
+					<T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
+						Some(key),
+						new_public_key,
+					)
+					.ok()
+					.map(|call| (call, key_state, epoch_index))
+				}) {
+				let (_, threshold_request_id) =
+					T::Broadcaster::threshold_sign_and_broadcast_for_rotation(rotation_call);
+				debug_assert!(
+					matches!(key_state, KeyState::Unlocked),
+					"Current epoch key must be active to activate next key."
+				);
+				CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
+					epoch_index,
+					key_state: KeyState::Locked(threshold_request_id),
 				});
+			} else {
 				// The block number value 1, which the vault is being set with is a dummy value
 				// and doesn't mean anything. It will be later modified to the real value when
 				// we witness the vault rotation manually via governance
 				Self::set_vault_for_next_epoch(new_public_key, 1_u32.into());
 				Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation { new_public_key })
 			}
+			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
+				new_public_key,
+			});
 		} else {
 			#[cfg(not(test))]
 			log::error!("activate key called before key handover completed");

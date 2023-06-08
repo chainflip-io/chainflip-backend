@@ -1,7 +1,7 @@
 use core::marker::PhantomData;
 
 use cf_chains::{
-	address::ForeignChainAddress, AllBatch, ApiCall, Chain, ChainAbi, ChainCrypto,
+	address::ForeignChainAddress, AllBatch, AllBatchError, ApiCall, Chain, ChainAbi, ChainCrypto,
 	ChainEnvironment, Ethereum, ExecutexSwapAndCall, FetchAssetParams, TransferAssetParams,
 };
 use cf_primitives::{chains::assets, EgressId, EthereumAddress, ETHEREUM_ETH_ADDRESS};
@@ -66,14 +66,14 @@ impl AllBatch<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Ethereum>>,
 		transfer_params: Vec<TransferAssetParams<Ethereum>>,
-	) -> Result<Self, ()> {
+	) -> Result<Self, AllBatchError> {
 		if fetch_params
 			.iter()
 			.any(|FetchAssetParams { asset, .. }| MockEthEnvironment::lookup(*asset).is_none()) ||
 			transfer_params.iter().any(|TransferAssetParams { asset, .. }| {
 				MockEthEnvironment::lookup(*asset).is_none()
 			}) {
-			Err(())
+			Err(AllBatchError::Other)
 		} else {
 			Ok(Self::AllBatch(MockAllBatch {
 				nonce: Default::default(),

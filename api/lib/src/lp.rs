@@ -27,7 +27,7 @@ pub async fn request_liquidity_deposit_address(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 ) -> Result<EncodedAddress> {
-	let events = connect_submit_and_get_events(
+	let (events, ..) = connect_submit_and_get_events(
 		state_chain_settings,
 		pallet_cf_lp::Call::request_liquidity_deposit_address { asset },
 		AccountRole::LiquidityProvider,
@@ -51,7 +51,7 @@ pub async fn withdraw_asset(
 	asset: Asset,
 	destination_address: EncodedAddress,
 ) -> Result<EgressId> {
-	let events = connect_submit_and_get_events(
+	let (events, ..) = connect_submit_and_get_events(
 		state_chain_settings,
 		pallet_cf_lp::Call::withdraw_asset { amount, asset, destination_address },
 		AccountRole::LiquidityProvider,
@@ -154,7 +154,7 @@ pub async fn mint_range_order(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 	range: Range<Tick>,
-	amount: Liquidity,
+	amount: u128,
 ) -> Result<MintPositionReturn> {
 	task_scope(|scope| {
 		async {
@@ -169,7 +169,7 @@ pub async fn mint_range_order(
 			.await?;
 
 			// Submit the mint order
-			let (_tx_hash, events, _dispatch_info) = state_chain_client
+			let (_tx_hash, events, ..) = state_chain_client
 				.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_mint_range_order {
 					unstable_asset: asset,
 					price_range_in_ticks: range,
@@ -209,7 +209,7 @@ pub async fn burn_range_order(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 	range: Range<Tick>,
-	amount: Liquidity,
+	amount: u128,
 ) -> Result<BurnPositionReturn> {
 	task_scope(|scope| {
 		async {
@@ -225,14 +225,14 @@ pub async fn burn_range_order(
 
 			// TODO: Re-enable this check after #3082 in implemented
 			// Find the current position and calculate new target amount
-			// if get_liquidity_at_position(&state_chain_client, asset, range, latest_block_hash)
-			// 	.await? < amount
+			// if get_liquidity_at_position(&state_chain_client, asset, range,
+			// latest_block_hash) 	.await? < amount
 			// {
 			// 	bail!("Insufficient minted liquidity at position");
 			// }
 
 			// Submit the burn call
-			let (_tx_hash, events, _dispatch_info) = state_chain_client
+			let (_tx_hash, events, ..) = state_chain_client
 				.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_burn_range_order {
 					unstable_asset: asset,
 					price_range_in_ticks: range,

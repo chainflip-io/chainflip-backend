@@ -1,5 +1,5 @@
 use cf_amm::common::SqrtPriceQ64F96;
-use cf_primitives::{Asset, AssetAmount, EthereumAddress, SwapOutput};
+use cf_primitives::{Asset, EthereumAddress, SwapOutput};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
 use sc_client_api::HeaderBackend;
@@ -23,7 +23,6 @@ pub struct RpcAccountInfo {
 	pub is_activated: bool,
 	pub online_credits: u32,
 	pub reputation_points: i32,
-	pub withdrawal_address: String,
 	pub state: ChainflipAccountStateWithPassive,
 }
 
@@ -34,7 +33,6 @@ pub struct RpcAccountInfoV2 {
 	pub last_heartbeat: u32,
 	pub online_credits: u32,
 	pub reputation_points: i32,
-	pub withdrawal_address: String,
 	pub keyholder_epochs: Vec<u32>,
 	pub is_current_authority: bool,
 	pub is_current_backup: bool,
@@ -58,6 +56,23 @@ pub struct RpcAuctionState {
 	redemption_period_as_percentage: u8,
 	min_funding: NumberOrHex,
 	auction_size_range: (u32, u32),
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcSwapOutput {
+	// Intermediary amount, if there's any
+	pub intermediary: Option<NumberOrHex>,
+	// Final output of the swap
+	pub output: NumberOrHex,
+}
+
+impl From<SwapOutput> for RpcSwapOutput {
+	fn from(swap_output: SwapOutput) -> Self {
+		Self {
+			intermediary: Some(NumberOrHex::from(swap_output.intermediary.unwrap())),
+			output: NumberOrHex::from(swap_output.output),
+		}
+	}
 }
 
 #[rpc(server, client, namespace = "cf")]
@@ -164,9 +179,9 @@ pub trait CustomApi {
 		&self,
 		from: Asset,
 		to: Asset,
-		amount: AssetAmount,
+		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<SwapOutput>;
+	) -> RpcResult<RpcSwapOutput>;
 }
 
 /// An RPC extension for the state chain node.
@@ -350,7 +365,6 @@ where
 			is_activated: account_info.is_activated,
 			online_credits: account_info.online_credits,
 			reputation_points: account_info.reputation_points,
-			withdrawal_address: hex::encode(account_info.withdrawal_address),
 			state: account_info.state,
 		})
 	}
@@ -371,7 +385,6 @@ where
 			last_heartbeat: account_info.last_heartbeat,
 			online_credits: account_info.online_credits,
 			reputation_points: account_info.reputation_points,
-			withdrawal_address: hex::encode(account_info.withdrawal_address),
 			keyholder_epochs: account_info.keyholder_epochs,
 			is_current_authority: account_info.is_current_authority,
 			is_current_backup: account_info.is_current_backup,
@@ -451,15 +464,21 @@ where
 		&self,
 		from: Asset,
 		to: Asset,
-		amount: AssetAmount,
+		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<SwapOutput> {
+	) -> RpcResult<RpcSwapOutput> {
 		self.client
 			.runtime_api()
-			.cf_pool_simulate_swap(&self.query_block_id(at), from, to, amount)
+			.cf_pool_simulate_swap(
+				&self.query_block_id(at),
+				from,
+				to,
+				cf_utilities::try_parse_number_or_hex(amount)?,
+			)
 			.map_err(to_rpc_error)
 			.and_then(|r| {
 				r.map_err(|e| jsonrpsee::core::Error::Custom(<&'static str>::from(e).into()))
 			})
+			.map(RpcSwapOutput::from)
 	}
 }

@@ -6,7 +6,6 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_core::crypto::AccountId32;
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
 	MultiSignature, RuntimeDebug,
@@ -52,11 +51,18 @@ pub type BroadcastId = u32;
 /// result in multiple ceremonies, but only one ceremony should succeed.
 pub type ThresholdSignatureRequestId = u32;
 
-/// Alias to the opaque account ID type for this chain, actually a `AccountId32`. This is always
-/// 32 bytes.
-pub type PolkadotAccountId = AccountId32;
-
 pub type PolkadotBlockNumber = u32;
+
+// Bitcoin default fee, in sats per bytes, to be used if current fee is not available via chain
+// tracking.
+pub const DEFAULT_FEE_SATS_PER_KILO_BYTE: u64 = 102400;
+
+// Approximate values calculated
+pub const INPUT_UTXO_SIZE_IN_BYTES: u64 = 178;
+pub const OUTPUT_UTXO_SIZE_IN_BYTES: u64 = 34;
+pub const MINIMUM_BTC_TX_SIZE_IN_BYTES: u64 = 12;
+
+pub const STABLE_ASSET: Asset = Asset::Usdc;
 
 // Polkadot extrinsics are uniquely identified by <block number>-<extrinsic index>
 // https://wiki.polkadot.network/docs/build-protocol-info
@@ -87,10 +93,13 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 ///
 /// Each account can only be associated with a single role, and the role can only be updated from
 /// the initial [AccountRole::None] state.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug, Copy)]
+#[derive(
+	PartialEq, Eq, Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug, Copy, Default,
+)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum AccountRole {
 	/// The default account type - indicates a bare account with no special role or permissions.
+	#[default]
 	None,
 	/// Validators are responsible for the maintenance and operation of the Chainflip network. This
 	/// role is required for any node that wishes to participate in auctions.
@@ -99,12 +108,6 @@ pub enum AccountRole {
 	LiquidityProvider,
 	/// Brokers submit swap deposit requests on behalf of users.
 	Broker,
-}
-
-impl Default for AccountRole {
-	fn default() -> Self {
-		AccountRole::None
-	}
 }
 
 pub type EgressBatch<Amount, EgressAddress> = Vec<(Amount, EgressAddress)>;
@@ -123,4 +126,10 @@ impl From<AssetAmount> for SwapOutput {
 	fn from(value: AssetAmount) -> Self {
 		Self { intermediary: None, output: value }
 	}
+}
+
+#[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
+pub enum SwapLeg {
+	FromStable,
+	ToStable,
 }

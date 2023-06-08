@@ -1,6 +1,6 @@
 pub use super::common::*;
 use super::StateChainEnvironment;
-use cf_chains::{dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
+use cf_chains::{btc::BitcoinNetwork, dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
 use cf_primitives::{AccountId, AccountRole, FlipBalance};
 use sc_service::ChainType;
 use sp_core::H256;
@@ -9,6 +9,8 @@ pub struct Config;
 
 pub const NETWORK_NAME: &str = "Chainflip-Sisyphos";
 pub const CHAIN_TYPE: ChainType = ChainType::Live;
+
+pub const BITCOIN_NETWORK: BitcoinNetwork = BitcoinNetwork::Testnet;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("8437f6b8BCACb632cC4dD627bA3a8E6E3326A418"),
@@ -29,7 +31,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		"1665348821496e14ed56718d4d078e7f85b163bf4e45fa9afbeb220b34ed475a"
 	)),
 	dot_vault_account_id: None,
-	dot_runtime_version: RuntimeVersion { spec_version: 9320, transaction_version: 16 },
+	dot_runtime_version: RuntimeVersion { spec_version: 9360, transaction_version: 19 },
 };
 
 pub const BASHFUL_SR25519: [u8; 32] =
@@ -47,11 +49,21 @@ pub const DOPEY_ED25519: [u8; 32] =
 pub const SNOW_WHITE_SR25519: [u8; 32] =
 	hex_literal::hex!["84f134a4cc6bf41d3239bbe097eac4c8f83e78b468e6c49ed5cd2ddc51a07a29"];
 
-pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance)> {
-	vec![(
-		hex_literal::hex!("c0409f949ad2636d34e4c70dd142296fdd4a11323d320aced3d247ad8f9a7902")
-			.into(),
-		AccountRole::Broker,
-		100 * FLIPPERINOS_PER_FLIP,
-	)]
+pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8>>)> {
+	vec![
+		(
+			hex_literal::hex!("a0edda1a4beee4fe2df32c0802aa6759da49ae6165fcdb5c40d7f4cd5a30db0e")
+				.into(),
+			AccountRole::Broker,
+			100 * FLIPPERINOS_PER_FLIP,
+			Some(b"Chainflip Sisyphos Broker".to_vec()),
+		),
+		(
+			hex_literal::hex!("c0409f949ad2636d34e4c70dd142296fdd4a11323d320aced3d247ad8f9a7902")
+				.into(),
+			AccountRole::LiquidityProvider,
+			100 * FLIPPERINOS_PER_FLIP,
+			Some(b"Chainflip Sisyphos LP".to_vec()),
+		),
+	]
 }

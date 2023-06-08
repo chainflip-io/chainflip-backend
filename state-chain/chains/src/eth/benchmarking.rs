@@ -1,10 +1,15 @@
-use super::{api::EthereumTransactionBuilder, TransactionFee};
+#![cfg(feature = "runtime-benchmarks")]
+
+use super::{
+	api::{EthereumReplayProtection, EthereumTransactionBuilder},
+	TransactionFee,
+};
 use crate::{
 	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
 	eth::{
 		api::{update_flip_supply::UpdateFlipSupply, EthereumApi},
-		to_ethereum_address, Address, AggKey, EthereumReplayProtection, EthereumTrackedData,
-		SchnorrVerificationComponents, Transaction, H256,
+		to_ethereum_address, Address, AggKey, EthereumTrackedData, SchnorrVerificationComponents,
+		Transaction, H256,
 	},
 	ApiCall,
 };

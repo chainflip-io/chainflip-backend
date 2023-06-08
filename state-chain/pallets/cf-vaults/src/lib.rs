@@ -6,9 +6,9 @@ use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, CeremonyIdProvider, Chainflip,
-	CurrentEpochIndex, EpochKey, KeyProvider, KeyState, Slashing, SystemStateManager,
-	ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus, VaultTransitionHandler,
+	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, Chainflip, CurrentEpochIndex,
+	EpochKey, KeyProvider, KeyState, Slashing, SystemStateManager, ThresholdSigner,
+	VaultKeyWitnessedHandler, VaultRotator, VaultStatus, VaultTransitionHandler,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
@@ -20,7 +20,6 @@ use sp_std::{
 	prelude::*,
 };
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 mod vault_rotator;
@@ -31,9 +30,7 @@ use response_status::ResponseStatus;
 
 pub mod weights;
 pub use weights::WeightInfo;
-#[cfg(test)]
 mod mock;
-#[cfg(test)]
 mod tests;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
@@ -90,6 +87,15 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	Complete,
 	/// The rotation has failed at one of the above stages.
 	Failed { offenders: BTreeSet<T::ValidatorId> },
+}
+
+impl<T: Config<I>, I: 'static> cf_traits::CeremonyIdProvider for Pallet<T, I> {
+	fn increment_ceremony_id() -> CeremonyId {
+		CeremonyIdCounter::<T, I>::mutate(|id| {
+			*id += 1;
+			*id
+		})
+	}
 }
 
 /// A single vault.
@@ -168,9 +174,6 @@ pub mod pallet {
 
 		type Slasher: Slashing<AccountId = Self::ValidatorId, BlockNumber = Self::BlockNumber>;
 
-		/// Ceremony Id source for keygen ceremonies.
-		type CeremonyIdProvider: CeremonyIdProvider;
-
 		// A trait which allows us to put the chain into maintenance mode.
 		type SystemStateManager: SystemStateManager;
 
@@ -220,7 +223,7 @@ pub mod pallet {
 				Some(VaultRotationStatus::<T, I>::AwaitingKeyHandover {
 					ceremony_id,
 					response_status,
-					new_public_key,
+					new_public_key: _,
 				}) => {
 					weight += Self::progress_rotation::<
 						KeyHandoverSuccessVoters<T, I>,
@@ -232,7 +235,7 @@ pub mod pallet {
 						ceremony_id,
 						current_block,
 						PalletOffence::FailedKeyHandover,
-						|_| {
+						|new_public_key| {
 							Self::deposit_event(Event::KeyHandoverSuccess { ceremony_id });
 							PendingVaultRotation::<T, I>::put(
 								VaultRotationStatus::<T, I>::KeyHandoverComplete { new_public_key },
@@ -321,6 +324,12 @@ pub mod pallet {
 	/// (2/3 must agree the node was an offender) on keygen failure.
 	#[pallet::storage]
 	pub(super) type KeygenSlashRate<T, I = ()> = StorageValue<_, Percent, ValueQuery>;
+
+	/// Counter for generating unique ceremony ids.
+	#[pallet::storage]
+	#[pallet::getter(fn ceremony_id_counter)]
+	pub type CeremonyIdCounter<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, CeremonyId, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]

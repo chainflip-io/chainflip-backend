@@ -1,9 +1,9 @@
-use crate::{BitcoinInstance, EthereumInstance, Runtime, RuntimeCall};
+use crate::{BitcoinInstance, EthereumInstance, PolkadotInstance, Runtime, RuntimeCall};
 use codec::{Decode, Encode};
 use pallet_cf_witnesser::WitnessDataExtraction;
 use sp_std::{mem, prelude::*};
 
-fn select_median<T: Ord + Encode + Decode>(data: &mut [Vec<u8>]) -> Option<T> {
+fn select_median<T: Encode + Decode>(data: &mut [Vec<u8>]) -> Option<T> {
 	if data.is_empty() {
 		return None
 	}
@@ -41,8 +41,17 @@ impl WitnessDataExtraction for RuntimeCall {
 			>::update_chain_state {
 				ref mut state,
 			}) => {
-				let fee_rate = mem::take(&mut state.fee_rate_sats_per_byte);
-				Some(fee_rate.encode())
+				let fee_info = mem::take(&mut state.btc_fee_info);
+				Some(fee_info.encode())
+			},
+			RuntimeCall::PolkadotChainTracking(pallet_cf_chain_tracking::Call::<
+				Runtime,
+				PolkadotInstance,
+			>::update_chain_state {
+				ref mut state,
+			}) => {
+				let fee_info = mem::take(&mut state.median_tip);
+				Some(fee_info.encode())
 			},
 			_ => None,
 		}
@@ -66,7 +75,17 @@ impl WitnessDataExtraction for RuntimeCall {
 				state,
 			}) => {
 				if let Some(median) = select_median(data) {
-					state.fee_rate_sats_per_byte = median;
+					state.btc_fee_info = median;
+				};
+			},
+			RuntimeCall::PolkadotChainTracking(pallet_cf_chain_tracking::Call::<
+				Runtime,
+				PolkadotInstance,
+			>::update_chain_state {
+				state,
+			}) => {
+				if let Some(median) = select_median(data) {
+					state.median_tip = median;
 				};
 			},
 			_ => {
@@ -81,44 +100,75 @@ mod tests {
 	use super::*;
 	use crate::{RuntimeOrigin, Validator, Witnesser};
 	use cf_chains::{
-		eth::{Ethereum, EthereumTrackedData},
-		Chain,
+		btc::{BitcoinFeeInfo, BitcoinTrackedData},
+		dot::PolkadotTrackedData,
+		eth::EthereumTrackedData,
+		Bitcoin, Chain, Ethereum, Polkadot,
 	};
-	use cf_primitives::AccountRole;
+	use cf_primitives::{AccountRole, ForeignChain};
 	use cf_traits::EpochInfo;
-	use frame_support::{assert_ok, Hashable};
+	use frame_support::{assert_ok, traits::Get, Hashable};
 	use pallet_cf_witnesser::CallHash;
 	use sp_std::{collections::btree_set::BTreeSet, iter};
 
 	const BLOCK_HEIGHT: u64 = 1_000;
 	const BASE_FEE: u128 = 40;
 
-	fn eth_chain_tracking_call_with_fee(
-		priority_fee: <Ethereum as Chain>::ChainAmount,
-	) -> RuntimeCall {
-		RuntimeCall::EthereumChainTracking(pallet_cf_chain_tracking::Call::<
-			Runtime,
-			EthereumInstance,
-		>::update_chain_state {
-			state: EthereumTrackedData {
-				block_height: BLOCK_HEIGHT,
-				base_fee: BASE_FEE,
-				priority_fee,
-			},
-		})
+	fn chain_tracking_call_with_fee<C: Chain + Get<ForeignChain>>(fee: u32) -> RuntimeCall {
+		match <C as Get<ForeignChain>>::get() {
+			ForeignChain::Ethereum =>
+				RuntimeCall::EthereumChainTracking(pallet_cf_chain_tracking::Call::<
+					Runtime,
+					EthereumInstance,
+				>::update_chain_state {
+					state: EthereumTrackedData {
+						block_height: BLOCK_HEIGHT,
+						base_fee: BASE_FEE,
+						priority_fee: fee.into(),
+					},
+				}),
+			ForeignChain::Bitcoin =>
+				RuntimeCall::BitcoinChainTracking(pallet_cf_chain_tracking::Call::<
+					Runtime,
+					BitcoinInstance,
+				>::update_chain_state {
+					state: BitcoinTrackedData {
+						block_height: BLOCK_HEIGHT,
+						btc_fee_info: BitcoinFeeInfo::new(fee.into()),
+					},
+				}),
+			ForeignChain::Polkadot =>
+				RuntimeCall::PolkadotChainTracking(pallet_cf_chain_tracking::Call::<
+					Runtime,
+					PolkadotInstance,
+				>::update_chain_state {
+					state: PolkadotTrackedData {
+						block_height: BLOCK_HEIGHT as u32,
+						median_tip: fee.into(),
+					},
+				}),
+		}
 	}
 
 	#[test]
-	fn test_medians() {
-		test_priority_fee_median([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 5);
-		test_priority_fee_median([6, 4, 5, 10, 1, 7, 8, 9, 2, 3], 5);
-		test_priority_fee_median([1, 2, 3, 4, 6, 6, 7, 8, 9, 10], 6);
-		test_priority_fee_median([0, 0, 1, 1, 2, 3, 3, 4, 6], 2);
-		test_priority_fee_median([1, 1, 1], 1);
+	fn test_medians_all_chains() {
+		test_medians::<Ethereum>();
+		test_medians::<Bitcoin>();
+		test_medians::<Polkadot>();
 	}
 
-	fn test_priority_fee_median<const S: usize>(fees: [u128; S], expected_median: u128) {
-		let mut calls = fees.map(eth_chain_tracking_call_with_fee);
+	#[track_caller]
+	fn test_medians<C: Chain + Get<ForeignChain>>() {
+		test_priority_fee_median::<C>(&[1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 5);
+		test_priority_fee_median::<C>(&[6, 4, 5, 10, 1, 7, 8, 9, 2, 3], 5);
+		test_priority_fee_median::<C>(&[1, 2, 3, 4, 6, 6, 7, 8, 9, 10], 6);
+		test_priority_fee_median::<C>(&[0, 0, 1, 1, 2, 3, 3, 4, 6], 2);
+		test_priority_fee_median::<C>(&[1, 1, 1], 1);
+	}
+
+	fn test_priority_fee_median<T: Chain + Get<ForeignChain>>(fees: &[u32], expected_median: u32) {
+		let mut calls =
+			fees.iter().copied().map(chain_tracking_call_with_fee::<T>).collect::<Vec<_>>();
 
 		let mut extracted_data =
 			calls.iter_mut().map(|call| call.extract().unwrap()).collect::<Vec<_>>();
@@ -132,7 +182,7 @@ mod tests {
 		let mut threshold_call = calls.last().unwrap().clone();
 		threshold_call.combine_and_inject(&mut extracted_data[..]);
 
-		assert_eq!(threshold_call, eth_chain_tracking_call_with_fee(expected_median));
+		assert_eq!(threshold_call, chain_tracking_call_with_fee::<T>(expected_median));
 	}
 
 	#[test]
@@ -142,7 +192,7 @@ mod tests {
 				pallet_cf_chain_tracking::ChainState::<Runtime, EthereumInstance>::get().is_none()
 			);
 
-			let calls = [1, 100, 12, 10, 9, 11].map(eth_chain_tracking_call_with_fee);
+			let calls = [1u32, 100, 12, 10, 9, 11].map(chain_tracking_call_with_fee::<Ethereum>);
 
 			let authorities =
 				(0..calls.len()).map(|i| [i as u8; 32].into()).collect::<BTreeSet<_>>();

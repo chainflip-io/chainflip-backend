@@ -5,22 +5,18 @@ on:
         description: Network being released
         required: true
         type: string
-      commit_hash:
-        description: Commit hash to be released
-        required: true
-        type: string
 
 env:
   SCCACHE_CACHE_SIZE: 32G
   SCCACHE_VERSION: v0.4.1
   SCCACHE_REDIS: ${{ secrets.SCCACHE_REDIS }}
-  COMMIT_HASH: ${{ inputs.commit_hash }}
+  COMMIT_HASH: ${{ github.sha }}
 
 jobs:
   compile:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2022-12-16"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -46,5 +42,12 @@ jobs:
             ./target/release/chainflip-cli
             ./target/release/generate-genesis-keys
             ./target/release/chainflip-broker-api
+            ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
+
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: chainflip-node-runtime
+          path: |
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
 

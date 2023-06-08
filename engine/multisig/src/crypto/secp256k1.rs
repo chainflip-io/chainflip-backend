@@ -14,7 +14,7 @@ type PK = secp256k1::PublicKey;
 pub struct Scalar(Option<SK>);
 
 // None if it is a "point at infinity"
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Point(Option<PK>);
 
 const GENERATOR_COMPRESSED: [u8; 33] = [
@@ -214,6 +214,18 @@ mod scalar_impls {
 		}
 	}
 
+	impl Ord for Scalar {
+		fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+			self.as_bytes().cmp(other.as_bytes())
+		}
+	}
+
+	impl PartialOrd for Scalar {
+		fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+			Some(self.cmp(other))
+		}
+	}
+
 	impl ECScalar for Scalar {
 		fn random(rng: &mut Rng) -> Self {
 			let sk = SK::new(rng);
@@ -367,7 +379,7 @@ mod scalar_impls {
 			D: serde::Deserializer<'de>,
 		{
 			let mut bytes: [u8; 32] = [0; 32];
-			<[u8; 32]>::deserialize_in_place(deserializer, &mut bytes).unwrap();
+			<[u8; 32]>::deserialize_in_place(deserializer, &mut bytes)?;
 
 			if bytes == ZERO_SCALAR_BYTES {
 				Ok(Scalar::zero())

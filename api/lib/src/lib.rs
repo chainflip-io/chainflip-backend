@@ -4,6 +4,7 @@ use cf_chains::{address::EncodedAddress, CcmDepositMetadata, ForeignChain};
 use cf_primitives::{AccountRole, Asset, BasisPoints};
 use futures::FutureExt;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
+use serde::{Deserialize, Serialize};
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
@@ -86,7 +87,7 @@ async fn connect_submit_and_get_events<Call>(
 	state_chain_settings: &settings::StateChain,
 	call: Call,
 	required_role: AccountRole,
-) -> Result<Vec<state_chain_runtime::RuntimeEvent>>
+) -> Result<(Vec<state_chain_runtime::RuntimeEvent>, state_chain_runtime::BlockNumber)>
 where
 	Call: Into<state_chain_runtime::RuntimeCall> + Clone + std::fmt::Debug + Send + Sync + 'static,
 {
@@ -101,10 +102,10 @@ where
 			)
 			.await?;
 
-			let (_tx_hash, events, _) =
+			let (_tx_hash, events, header, ..) =
 				state_chain_client.submit_signed_extrinsic(call).await.until_finalized().await?;
 
-			Ok(events)
+			Ok((events, header.number))
 		}
 		.boxed()
 	})
@@ -344,6 +345,13 @@ pub async fn set_vanity_name(
 	.await
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct SwapDepositAddress {
+	pub address: String,
+	pub expiry_block: state_chain_runtime::BlockNumber,
+	pub issued_block: state_chain_runtime::BlockNumber,
+}
+
 pub async fn request_swap_deposit_address(
 	state_chain_settings: &settings::StateChain,
 	source_asset: Asset,
@@ -351,8 +359,8 @@ pub async fn request_swap_deposit_address(
 	destination_address: EncodedAddress,
 	broker_commission_bps: BasisPoints,
 	message_metadata: Option<CcmDepositMetadata>,
-) -> Result<(EncodedAddress, u32)> {
-	let events = connect_submit_and_get_events(
+) -> Result<SwapDepositAddress> {
+	let (events, block_number) = connect_submit_and_get_events(
 		state_chain_settings,
 		pallet_cf_swapping::Call::request_swap_deposit_address {
 			source_asset,
@@ -377,7 +385,11 @@ pub async fn request_swap_deposit_address(
 			)
 		)
 	}) {
-		Ok(((*deposit_address).clone(), *expiry_block))
+		Ok(SwapDepositAddress {
+			address: deposit_address.to_string(),
+			expiry_block: *expiry_block,
+			issued_block: block_number,
+		})
 	} else {
 		panic!("SwapDepositAddressReady must have been generated");
 	}
@@ -400,6 +412,23 @@ pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result
 pub struct KeyPair {
 	pub secret_key: Vec<u8>,
 	pub public_key: Vec<u8>,
+}
+
+// Serialize the keypair as hex strings for convenience
+impl Serialize for KeyPair {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		use serde::ser::SerializeStruct;
+
+		let secret_key_hex = hex::encode(&self.secret_key);
+		let public_key_hex = hex::encode(&self.public_key);
+		let mut state = serializer.serialize_struct("KeyPair", 2)?;
+		state.serialize_field("secret_key", &secret_key_hex)?;
+		state.serialize_field("public_key", &public_key_hex)?;
+		state.end()
+	}
 }
 
 /// Generate a new random node key.

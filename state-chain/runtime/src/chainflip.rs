@@ -9,19 +9,20 @@ mod missed_authorship_slots;
 mod offences;
 mod signer_nomination;
 use crate::{
-	AccountId, AccountRoles, Authorship, BitcoinIngressEgress, BitcoinVault, BlockNumber,
-	Emissions, Environment, EthereumBroadcaster, EthereumChainTracking, EthereumIngressEgress,
-	Flip, FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress, Runtime, RuntimeCall,
-	RuntimeOrigin, System, Validator,
+	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinVault,
+	BlockNumber, Emissions, Environment, EthereumBroadcaster, EthereumChainTracking,
+	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress, Runtime,
+	RuntimeCall, RuntimeOrigin, System, Validator,
 };
 
 use cf_chains::{
-	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
+	address::{
+		to_encoded_address, try_from_encoded_address, AddressConverter, EncodedAddress,
+		ForeignChainAddress,
+	},
 	btc::{
-		api::{BitcoinApi, SelectedUtxos},
-		deposit_address::derive_btc_deposit_address_from_script,
-		scriptpubkey_from_address, Bitcoin, BitcoinTransactionData, BtcAmount, UtxoId,
-		CHANGE_ADDRESS_SALT,
+		api::{BitcoinApi, SelectedUtxosAndChangeAmount, UtxoSelectionType},
+		Bitcoin, BitcoinFeeInfo, BitcoinTransactionData, ScriptPubkey, UtxoId,
 	},
 	dot::{
 		api::PolkadotApi, Polkadot, PolkadotAccountId, PolkadotReplayProtection,
@@ -294,7 +295,7 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 		match query {
 			cf_chains::dot::api::SystemAccounts::Proxy =>
 				<PolkadotVault as KeyProvider<Polkadot>>::current_epoch_key()
-					.map(|epoch_key| epoch_key.key.0.into()),
+					.map(|epoch_key| epoch_key.key),
 			cf_chains::dot::api::SystemAccounts::Vault => Environment::polkadot_vault_account(),
 		}
 	}
@@ -308,9 +309,9 @@ impl ReplayProtectionProvider<Bitcoin> for BtcEnvironment {
 	fn replay_protection() {}
 }
 
-impl ChainEnvironment<BtcAmount, SelectedUtxos> for BtcEnvironment {
-	fn lookup(output_amount: BtcAmount) -> Option<SelectedUtxos> {
-		Environment::select_and_take_bitcoin_utxos(output_amount)
+impl ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount> for BtcEnvironment {
+	fn lookup(utxo_selection_type: UtxoSelectionType) -> Option<SelectedUtxosAndChangeAmount> {
+		Environment::select_and_take_bitcoin_utxos(utxo_selection_type)
 	}
 }
 
@@ -437,6 +438,9 @@ macro_rules! impl_deposit_api_for_anychain {
 			}
 
 			fn expire_channel(channel_id: ChannelId, address: ForeignChainAddress) {
+				if address.chain() == ForeignChain::Bitcoin {
+					Environment::cleanup_bitcoin_deposit_address_details(address.clone().try_into().expect("Checked for address compatibility"));
+				}
 				match address.chain() {
 					$(
 						ForeignChain::$chain => {
@@ -513,11 +517,11 @@ impl DepositHandler<Bitcoin> for BtcDepositHandler {
 	}
 
 	fn on_channel_opened(
-		deposit_script: <Bitcoin as Chain>::ChainAccount,
+		script_pubkey: ScriptPubkey,
 		salt: ChannelId,
 	) -> Result<(), DispatchError> {
 		Environment::add_details_for_btc_deposit_script(
-			deposit_script,
+			script_pubkey,
 			salt.try_into().expect("The salt/channel_id is not expected to exceed u32 max"), /* Todo: Confirm
 			                                                                                  * this assumption.
 			                                                                                  * Consider this in
@@ -533,42 +537,16 @@ impl DepositHandler<Bitcoin> for BtcDepositHandler {
 }
 
 pub struct ChainAddressConverter;
+
 impl AddressConverter for ChainAddressConverter {
-	fn try_to_encoded_address(
-		address: ForeignChainAddress,
-	) -> Result<EncodedAddress, DispatchError> {
-		match address {
-			ForeignChainAddress::Eth(address) => Ok(EncodedAddress::Eth(address)),
-			ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(address)),
-			ForeignChainAddress::Btc(address) => Ok(EncodedAddress::Btc(
-				derive_btc_deposit_address_from_script(
-					address.into(),
-					Environment::bitcoin_network(),
-				)
-				.bytes()
-				.collect::<Vec<u8>>(),
-			)),
-		}
+	fn to_encoded_address(address: ForeignChainAddress) -> EncodedAddress {
+		to_encoded_address(address, Environment::bitcoin_network)
 	}
 
 	fn try_from_encoded_address(
 		encoded_address: EncodedAddress,
 	) -> Result<ForeignChainAddress, ()> {
-		match encoded_address {
-			EncodedAddress::Eth(address_bytes) =>
-				Ok(ForeignChainAddress::Eth(address_bytes)),
-			EncodedAddress::Dot(address_bytes) =>
-				Ok(ForeignChainAddress::Dot(address_bytes)),
-			EncodedAddress::Btc(address_bytes) => Ok(ForeignChainAddress::Btc(
-				scriptpubkey_from_address(
-					sp_std::str::from_utf8(&address_bytes[..]).map_err(|_| ())?,
-					Environment::bitcoin_network(),
-				)
-				.map_err(|_| ())?
-				.try_into()
-				.expect("bitcoin scripts constructed from supported addresses should not exceed 128 bytes"),
-			)),
-		}
+		try_from_encoded_address(encoded_address, Environment::bitcoin_network)
 	}
 }
 
@@ -612,19 +590,25 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 	fn on_broadcast_ready(api_call: &Self::ApiCall) {
 		match api_call {
 			BitcoinApi::BatchTransfer(batch_transfer) => {
-				let tx_hash = batch_transfer.bitcoin_transaction.txid();
+				let tx_id = batch_transfer.bitcoin_transaction.txid();
 				let outputs = batch_transfer.bitcoin_transaction.outputs.clone();
 				let output_len = outputs.len();
 				let vout = output_len - 1;
 				let change_output = outputs.get(vout).unwrap();
 				Environment::add_bitcoin_change_utxo(
 					change_output.amount,
-					UtxoId { tx_hash, vout: vout as u32 },
-					CHANGE_ADDRESS_SALT,
-					batch_transfer.agg_key.current,
+					UtxoId { tx_id, vout: vout as u32 },
+					batch_transfer.change_utxo_key,
 				);
 			},
 			_ => unreachable!(),
 		}
+	}
+}
+
+pub struct BitcoinFeeGetter;
+impl cf_traits::GetBitcoinFeeInfo for BitcoinFeeGetter {
+	fn bitcoin_fee_info() -> BitcoinFeeInfo {
+		BitcoinChainTracking::chain_state().unwrap_or(Default::default()).btc_fee_info
 	}
 }

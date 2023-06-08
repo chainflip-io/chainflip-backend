@@ -10,10 +10,6 @@ on:
         description: prod or dev repo
         required: true
         type: string
-      commit_hash:
-        description: prod or dev repo
-        required: true
-        type: string
 
 env:
   APTLY_VERSION: "1.5.0"
@@ -136,4 +132,4 @@ jobs:
         if: inputs.environment == 'dev'
         run: |
           echo "### Usage in \`testnet-tools\`" >> $GITHUB_STEP_SUMMARY
-          echo "Use the full commit hash: \`${{ inputs.commit_hash }}\` for your network configuration. " >> $GITHUB_STEP_SUMMARY
+          echo "Use the full commit hash: \`${{ github.sha }}\` for your network configuration. " >> $GITHUB_STEP_SUMMARY

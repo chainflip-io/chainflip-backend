@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![feature(const_option)]
+#![cfg_attr(any(feature = "test-utils", test), feature(closure_track_caller))]
 
 #[cfg(feature = "std")]
 mod with_std;

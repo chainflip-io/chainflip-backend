@@ -37,7 +37,6 @@ pub mod none;
 
 pub mod address;
 
-#[cfg(feature = "std")]
 pub mod mocks;
 
 /// A trait representing all the types and constants that need to be implemented for supported
@@ -240,17 +239,13 @@ pub trait ChainEnvironment<
 	fn lookup(s: LookupKey) -> Option<LookupValue>;
 }
 
-pub enum SetAggKeyWithAggKeyError {
-	NotRequired,
-	Other,
-}
-
 /// Constructs the `SetAggKeyWithAggKey` api call.
+#[allow(clippy::result_unit_err)]
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		maybe_old_key: Option<<Abi as ChainCrypto>::AggKey>,
 		new_key: <Abi as ChainCrypto>::AggKey,
-	) -> Result<Self, SetAggKeyWithAggKeyError>;
+	) -> Result<Self, ()>;
 }
 
 #[allow(clippy::result_unit_err)]
@@ -277,12 +272,16 @@ pub trait RegisterRedemption<Abi: ChainAbi>: ApiCall<Abi> {
 	fn amount(&self) -> u128;
 }
 
+pub enum AllBatchError {
+	NotRequired,
+	Other,
+}
 #[allow(clippy::result_unit_err)]
 pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		fetch_params: Vec<FetchAssetParams<Abi>>,
 		transfer_params: Vec<TransferAssetParams<Abi>>,
-	) -> Result<Self, ()>;
+	) -> Result<Self, AllBatchError>;
 }
 
 #[allow(clippy::result_unit_err)]

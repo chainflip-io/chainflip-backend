@@ -31,11 +31,9 @@ use sp_std::marker::PhantomData;
 /// Weight functions needed for pallet_cf_swapping.
 pub trait WeightInfo {
 	fn request_swap_deposit_address() -> Weight;
-	fn on_idle() -> Weight;
-	fn execute_group_of_swaps(a: u32, ) -> Weight;
 	fn withdraw() -> Weight;
 	fn register_as_broker() -> Weight;
-	fn schedule_swap_by_witnesser() -> Weight;
+	fn schedule_swap_from_contract() -> Weight;
 	fn ccm_deposit() -> Weight;
 	fn on_initialize(a: u32, ) -> Weight;
 	fn set_swap_ttl() -> Weight;
@@ -62,21 +60,8 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(6))
 			.saturating_add(T::DbWeight::get().writes(6))
 	}
-	// Storage: Swapping SwapQueue (r:1 w:0)
-	fn on_idle() -> Weight {
-		// Minimum execution time: 3_000 nanoseconds.
-		Weight::from_ref_time(3_000_000)
-			.saturating_add(T::DbWeight::get().reads(1))
-	}
-	// Storage: LiquidityPools Pools (r:1 w:0)
-	/// The range of component `a` is `[2, 150]`.
-	fn execute_group_of_swaps(a: u32, ) -> Weight {
-		// Minimum execution time: 6_000 nanoseconds.
-		Weight::from_ref_time(7_062_424)
-			// Standard Error: 784
-			.saturating_add(Weight::from_ref_time(4_931).saturating_mul(a.into()))
-			.saturating_add(T::DbWeight::get().reads(1))
-	}
+
+
 	// Storage: Environment CurrentSystemState (r:1 w:0)
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Swapping EarnedBrokerFees (r:1 w:1)
@@ -90,7 +75,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	// Storage: Swapping SwapIdCounter (r:1 w:1)
 	// Storage: Swapping SwapQueue (r:1 w:1)
-	fn schedule_swap_by_witnesser() -> Weight {
+	fn schedule_swap_from_contract() -> Weight {
 		// Minimum execution time: 19_000 nanoseconds.
 		Weight::from_ref_time(20_000_000)
 			.saturating_add(T::DbWeight::get().reads(2))
@@ -163,21 +148,8 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(6))
 			.saturating_add(RocksDbWeight::get().writes(6))
 	}
-	// Storage: Swapping SwapQueue (r:1 w:0)
-	fn on_idle() -> Weight {
-		// Minimum execution time: 3_000 nanoseconds.
-		Weight::from_ref_time(3_000_000)
-			.saturating_add(RocksDbWeight::get().reads(1))
-	}
-	// Storage: LiquidityPools Pools (r:1 w:0)
-	/// The range of component `a` is `[2, 150]`.
-	fn execute_group_of_swaps(a: u32, ) -> Weight {
-		// Minimum execution time: 6_000 nanoseconds.
-		Weight::from_ref_time(7_062_424)
-			// Standard Error: 784
-			.saturating_add(Weight::from_ref_time(4_931).saturating_mul(a.into()))
-			.saturating_add(RocksDbWeight::get().reads(1))
-	}
+
+
 	// Storage: Environment CurrentSystemState (r:1 w:0)
 	// Storage: AccountRoles AccountRoles (r:1 w:0)
 	// Storage: Swapping EarnedBrokerFees (r:1 w:1)
@@ -191,7 +163,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Swapping SwapIdCounter (r:1 w:1)
 	// Storage: Swapping SwapQueue (r:1 w:1)
-	fn schedule_swap_by_witnesser() -> Weight {
+	fn schedule_swap_from_contract() -> Weight {
 		// Minimum execution time: 19_000 nanoseconds.
 		Weight::from_ref_time(20_000_000)
 			.saturating_add(RocksDbWeight::get().reads(2))

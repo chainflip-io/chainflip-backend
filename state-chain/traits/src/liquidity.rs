@@ -1,12 +1,13 @@
 use cf_chains::address::ForeignChainAddress;
-use cf_primitives::{Asset, AssetAmount, BasisPoints, SwapOutput};
+use cf_primitives::{Asset, AssetAmount, BasisPoints, ChannelId, SwapLeg};
 use frame_support::dispatch::DispatchError;
 use sp_runtime::DispatchResult;
 
 pub trait SwapDepositHandler {
 	type AccountId;
 
-	fn on_swap_deposit(
+	#[allow(clippy::too_many_arguments)]
+	fn schedule_swap_from_channel(
 		deposit_address: ForeignChainAddress,
 		from: Asset,
 		to: Asset,
@@ -14,6 +15,7 @@ pub trait SwapDepositHandler {
 		destination_address: ForeignChainAddress,
 		broker_id: Self::AccountId,
 		broker_commission_bps: BasisPoints,
+		channel_id: ChannelId,
 	);
 }
 
@@ -36,19 +38,29 @@ pub trait LpBalanceApi {
 }
 
 pub trait SwappingApi {
-	// Attempt to swap `from` asset to `to` asset.
-	// If OK, return (output_amount, input_asset_fee, stable_asset_fee)
-	fn swap(from: Asset, to: Asset, input_amount: AssetAmount)
-		-> Result<SwapOutput, DispatchError>;
+	/// Takes the swap amount in STABLE_ASSET, collect network fee from it
+	/// and return the remaining value
+	fn take_network_fee(input_amount: AssetAmount) -> AssetAmount;
+
+	/// Process a single leg of a swap, into or from Stable asset. No network fee is taken.
+	fn swap_single_leg(
+		leg: SwapLeg,
+		unstable_asset: Asset,
+		input_amount: AssetAmount,
+	) -> Result<AssetAmount, DispatchError>;
 }
 
-impl SwappingApi for () {
-	fn swap(
-		_from: Asset,
-		_to: Asset,
-		_input_amount: AssetAmount,
-	) -> Result<SwapOutput, DispatchError> {
-		Ok(Default::default())
+impl<T: frame_system::Config> SwappingApi for T {
+	fn take_network_fee(input_amount: AssetAmount) -> AssetAmount {
+		input_amount
+	}
+
+	fn swap_single_leg(
+		_leg: SwapLeg,
+		_unstable_asset: Asset,
+		input_amount: AssetAmount,
+	) -> Result<AssetAmount, DispatchError> {
+		Ok(input_amount)
 	}
 }
 
@@ -56,7 +68,7 @@ impl SwappingApi for () {
 impl<T: frame_system::Config> SwapDepositHandler for T {
 	type AccountId = T::AccountId;
 
-	fn on_swap_deposit(
+	fn schedule_swap_from_channel(
 		_deposit_address: ForeignChainAddress,
 		_from: Asset,
 		_to: Asset,
@@ -64,6 +76,7 @@ impl<T: frame_system::Config> SwapDepositHandler for T {
 		_destination_address: ForeignChainAddress,
 		_broker_id: Self::AccountId,
 		_broker_commission_bps: BasisPoints,
+		_channel_id: ChannelId,
 	) {
 	}
 }

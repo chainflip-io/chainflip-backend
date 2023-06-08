@@ -13,7 +13,9 @@ use crate::{
 use async_trait::async_trait;
 use cf_primitives::AuthorityCount;
 use client::common::{
-	broadcast::{verify_broadcasts, BroadcastStage, BroadcastStageProcessor, DataToSend},
+	broadcast::{
+		verify_broadcasts_non_blocking, BroadcastStage, BroadcastStageProcessor, DataToSend,
+	},
 	CeremonyCommon, StageResult,
 };
 
@@ -124,7 +126,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> SigningStageResult<Crypto> {
-		let verified_commitments = match verify_broadcasts(messages) {
+		let verified_commitments = match verify_broadcasts_non_blocking(messages).await {
 			Ok(comms) => comms,
 			Err((reported_parties, abort_reason)) =>
 				return SigningStageResult::Error(
@@ -137,7 +139,6 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 		let verified_commitments = match try_deserialize(verified_commitments) {
 			Ok(res) => res,
 			Err(bad_parties) =>
-			// TODO: unit test for this
 				return SigningStageResult::Error(
 					bad_parties,
 					SigningFailureReason::DeserializationError,
@@ -299,7 +300,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> SigningStageResult<Crypto> {
-		let local_sigs = match verify_broadcasts(messages) {
+		let local_sigs = match verify_broadcasts_non_blocking(messages).await {
 			Ok(sigs) => sigs,
 			Err((reported_parties, abort_reason)) =>
 				return SigningStageResult::Error(
@@ -312,7 +313,6 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 		let local_sigs = match try_deserialize(local_sigs) {
 			Ok(res) => res,
 			Err(bad_parties) =>
-			// TODO: unit test for this
 				return SigningStageResult::Error(
 					bad_parties,
 					SigningFailureReason::DeserializationError,

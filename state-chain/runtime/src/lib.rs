@@ -90,7 +90,6 @@ use chainflip::{
 use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
 use constants::common::*;
 use pallet_cf_flip::{Bonder, FlipSlasher};
-pub use pallet_cf_funding::WithdrawalAddresses;
 use pallet_cf_vaults::Vault;
 pub use pallet_transaction_payment::ChargeTransactionPayment;
 
@@ -207,6 +206,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type BitcoinNetwork = BitcoinNetworkParam;
+	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
@@ -231,7 +231,6 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type VaultTransitionHandler = EthVaultTransitionHandler;
 	type Broadcaster = EthereumBroadcaster;
 	type OffenceReporter = Reputation;
-	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
 	type Slasher = FlipSlasher<Self>;
@@ -249,7 +248,6 @@ impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
 	type VaultTransitionHandler = DotVaultTransitionHandler;
 	type Broadcaster = PolkadotBroadcaster;
 	type OffenceReporter = Reputation;
-	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
 	type Slasher = FlipSlasher<Self>;
@@ -267,7 +265,6 @@ impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
 	type VaultTransitionHandler = BtcVaultTransitionHandler;
 	type Broadcaster = BitcoinBroadcaster;
 	type OffenceReporter = Reputation;
-	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
 	type SystemStateManager = pallet_cf_environment::SystemStateProvider<Runtime>;
 	type Slasher = FlipSlasher<Self>;
@@ -608,7 +605,7 @@ impl pallet_cf_threshold_signature::Config<EthereumInstance> for Runtime {
 	type TargetChain = Ethereum;
 	type KeyProvider = EthereumVault;
 	type OffenceReporter = Reputation;
-	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
+	type CeremonyIdProvider = EthereumVault;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
@@ -622,7 +619,7 @@ impl pallet_cf_threshold_signature::Config<PolkadotInstance> for Runtime {
 	type TargetChain = Polkadot;
 	type KeyProvider = PolkadotVault;
 	type OffenceReporter = Reputation;
-	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
+	type CeremonyIdProvider = PolkadotVault;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
@@ -636,7 +633,7 @@ impl pallet_cf_threshold_signature::Config<BitcoinInstance> for Runtime {
 	type TargetChain = Bitcoin;
 	type KeyProvider = BitcoinVault;
 	type OffenceReporter = Reputation;
-	type CeremonyIdProvider = pallet_cf_validator::CeremonyIdProvider<Self>;
+	type CeremonyIdProvider = BitcoinVault;
 	type CeremonyRetryDelay = ConstU32<1>;
 	type Weights = pallet_cf_threshold_signature::weights::PalletWeight<Self>;
 }
@@ -916,32 +913,29 @@ impl_runtime_apis! {
 				.collect()
 		}
 		fn cf_account_info_v2(account_id: AccountId) -> RuntimeApiAccountInfoV2 {
-			let account_info_v1 = Self::cf_account_info(account_id.clone());
-			let is_online = Reputation::current_network_state().online.contains(&account_id);
 			let is_current_backup = pallet_cf_validator::Backups::<Runtime>::get().contains_key(&account_id);
 			let key_holder_epochs = pallet_cf_validator::HistoricalActiveEpochs::<Runtime>::get(&account_id);
 			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode>::is_qualified(&account_id);
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(&account_id);
 			let is_bidding = pallet_cf_funding::ActiveBidder::<Runtime>::get(&account_id);
+			let account_info_v1 = Self::cf_account_info(account_id);
 			RuntimeApiAccountInfoV2 {
 				balance: account_info_v1.balance,
 				bond: account_info_v1.bond,
 				last_heartbeat: account_info_v1.last_heartbeat,
 				online_credits: account_info_v1.online_credits,
 				reputation_points: account_info_v1.reputation_points,
-				withdrawal_address: account_info_v1.withdrawal_address,
 				keyholder_epochs: key_holder_epochs,
 				is_current_authority,
 				is_current_backup,
 				is_qualified: is_bidding && is_qualified,
-				is_online,
+				is_online: account_info_v1.is_live,
 				is_bidding,
 			}
 		}
 		fn cf_account_info(account_id: AccountId) -> RuntimeApiAccountInfo {
 			let account_info = pallet_cf_flip::Account::<Runtime>::get(&account_id);
 			let reputation_info = pallet_cf_reputation::Reputations::<Runtime>::get(&account_id);
-			let withdrawal_address = pallet_cf_funding::WithdrawalAddresses::<Runtime>::get(&account_id).unwrap_or([0; 20]);
 
 			let get_validator_state = |account_id: &AccountId| -> ChainflipAccountStateWithPassive {
 				if Validator::current_authorities().contains(account_id) {
@@ -961,7 +955,6 @@ impl_runtime_apis! {
 				is_activated: pallet_cf_funding::ActiveBidder::<Runtime>::get(&account_id),
 				online_credits: reputation_info.online_credits,
 				reputation_points: reputation_info.reputation_points,
-				withdrawal_address,
 				state: get_validator_state(&account_id),
 			}
 		}
@@ -1014,7 +1007,7 @@ impl_runtime_apis! {
 		/// Note: This function must only be called through RPC, because RPC has its own storage buffer
 		/// layer and would not affect on-chain storage.
 		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Result<SwapOutput, DispatchError> {
-			LiquidityPools::swap(from, to, amount)
+			LiquidityPools::swap_with_network_fee(from, to, amount)
 		}
 	}
 

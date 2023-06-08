@@ -1,3 +1,5 @@
+#![cfg(feature = "runtime-benchmarks")]
+
 use super::*;
 
 use cf_chains::benchmarking_value::BenchmarkValue;

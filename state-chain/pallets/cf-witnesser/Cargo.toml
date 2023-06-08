@@ -16,8 +16,8 @@ targets = ['x86_64-unknown-linux-gnu']
 hex = { version = '0.4', default-features = false }
 
 # Internal deps
-cf-traits = { path = '../../traits', default-features = false }
 cf-primitives = { path ='../../primitives', default-features = false }
+cf-traits = { path = '../../traits', default-features = false }
 
 # Local deps
 utilities = { path = '../../../utilities', default-features = false }
@@ -44,20 +44,21 @@ sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainf
 default = ['std']
 std = [
   'bitvec/std',
-  'cf-traits/std',
   'cf-primitives/std',
+  'cf-traits/std',
   'codec/std',
-  'scale-info/std',
   'frame-benchmarking?/std',
   'frame-support/std',
   'frame-system/std',
+  'scale-info/std',
   'sp-runtime/std',
   'sp-std/std',
 ]
 runtime-benchmarks = [
+  'cf-primitives/runtime-benchmarks',
+  'cf-traits/runtime-benchmarks',
   'frame-benchmarking/runtime-benchmarks',
   'frame-support/runtime-benchmarks',
   'frame-system/runtime-benchmarks',
-  'cf-traits/runtime-benchmarks'
 ]
 try-runtime = ['frame-support/try-runtime']

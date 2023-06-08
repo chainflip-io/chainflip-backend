@@ -1,11 +1,15 @@
+#![cfg(feature = "runtime-benchmarks")]
+
 use sp_std::{vec, vec::Vec};
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 
 use super::{
 	api::{batch_transfer::BatchTransfer, BitcoinApi},
-	AggKey, BitcoinFetchId, BitcoinOutput, BitcoinScriptBounded, BitcoinTrackedData,
-	BitcoinTransactionData, PreviousOrCurrent, Signature, SigningPayload, Utxo, UtxoId,
+	deposit_address::DepositAddress,
+	AggKey, BitcoinFeeInfo, BitcoinFetchId, BitcoinOutput, BitcoinTrackedData,
+	BitcoinTransactionData, PreviousOrCurrent, ScriptPubkey, Signature, SigningPayload, Utxo,
+	UtxoId,
 };
 
 impl BenchmarkValue for AggKey {
@@ -28,7 +32,7 @@ impl<T: BenchmarkValue> BenchmarkValue for Vec<T> {
 
 impl BenchmarkValue for UtxoId {
 	fn benchmark_value() -> Self {
-		UtxoId { tx_hash: [1u8; 32], vout: 1 }
+		UtxoId { tx_id: [1u8; 32], vout: 1 }
 	}
 }
 
@@ -43,18 +47,6 @@ impl BenchmarkValue for Signature {
 impl BenchmarkValue for SigningPayload {
 	fn benchmark_value() -> Self {
 		[1u8; 32]
-	}
-}
-
-impl BenchmarkValue for BitcoinScriptBounded {
-	fn benchmark_value() -> Self {
-		BitcoinScriptBounded { data: [3u8; 100].to_vec().try_into().unwrap() }
-	}
-}
-
-impl BenchmarkValueExtended for BitcoinScriptBounded {
-	fn benchmark_value_by_id(id: u8) -> Self {
-		BitcoinScriptBounded { data: [id; 100].to_vec().try_into().unwrap() }
 	}
 }
 
@@ -74,26 +66,40 @@ impl<E> BenchmarkValue for BitcoinApi<E> {
 	fn benchmark_value() -> Self {
 		BitcoinApi::BatchTransfer(BatchTransfer::new_unsigned(
 			&BenchmarkValue::benchmark_value(),
+			BenchmarkValue::benchmark_value(),
 			vec![Utxo {
 				amount: Default::default(),
-				txid: Default::default(),
-				vout: Default::default(),
-				pubkey_x: Default::default(),
-				salt: Default::default(),
+				id: BenchmarkValue::benchmark_value(),
+				deposit_address: DepositAddress::new(Default::default(), Default::default()),
 			}],
-			vec![BitcoinOutput { amount: Default::default(), script_pubkey: Default::default() }],
+			vec![BitcoinOutput {
+				amount: Default::default(),
+				script_pubkey: BenchmarkValue::benchmark_value(),
+			}],
 		))
 	}
 }
 
 impl BenchmarkValue for BitcoinTrackedData {
 	fn benchmark_value() -> Self {
-		BitcoinTrackedData { block_height: 120, fee_rate_sats_per_byte: 4321 }
+		BitcoinTrackedData { block_height: 120, btc_fee_info: BitcoinFeeInfo::new(4321) }
 	}
 }
 
 impl BenchmarkValue for PreviousOrCurrent {
 	fn benchmark_value() -> Self {
 		Self::Current
+	}
+}
+
+impl BenchmarkValue for ScriptPubkey {
+	fn benchmark_value() -> Self {
+		Self::benchmark_value_by_id(0)
+	}
+}
+
+impl BenchmarkValueExtended for ScriptPubkey {
+	fn benchmark_value_by_id(id: u8) -> Self {
+		Self::Taproot([id; 32])
 	}
 }

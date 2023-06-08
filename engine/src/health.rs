@@ -3,82 +3,52 @@
 //! Returns a HTTP 200 response to any request on {hostname}:{port}/health
 //! Method returns a Sender, allowing graceful termination of the infinite loop
 
-use anyhow::{Context, Result};
-use futures::Future;
-use tokio::{
-	io::{AsyncReadExt, AsyncWriteExt},
-	net::TcpListener,
-};
-use tracing::{error, info, info_span, warn, Instrument};
+use std::{net::IpAddr, sync::Arc};
+
+use tracing::info;
+use utilities::task_scope;
+use warp::Filter;
 
 use crate::settings;
 
-pub struct HealthChecker {
-	listener: TcpListener,
-}
+const INITIALISING: &str = "INITIALISING";
+const RUNNING: &str = "RUNNING";
 
-// Returns the health checker run future so we can make sure TcpListener is active before
-// proceeding in tests
-impl HealthChecker {
-	pub async fn start(
-		health_check_settings: &settings::HealthCheck,
-	) -> Result<impl Future<Output = Result<(), anyhow::Error>>> {
-		let bind_address =
-			format!("{}:{}", health_check_settings.hostname, health_check_settings.port);
+#[tracing::instrument(name = "health-check", skip_all)]
+pub async fn start<'a, 'env>(
+	scope: &'a task_scope::Scope<'env, anyhow::Error>,
+	health_check_settings: &'a settings::HealthCheck,
+	has_completed_initialising: Arc<std::sync::atomic::AtomicBool>,
+) -> Result<(), anyhow::Error> {
+	info!("Starting");
 
-		info!("Starting health-checker");
+	const PATH: &str = "health";
 
-		let health_checker = Self {
-			listener: TcpListener::bind(&bind_address)
-				.await
-				.with_context(|| format!("Could not bind TCP listener to {bind_address}"))?,
-		};
-
-		Ok(health_checker
-			.run()
-			.instrument(info_span!("health-check", bind_address = bind_address)))
-	}
-
-	async fn run(self) -> Result<()> {
-		loop {
-			match self.listener.accept().await {
-				Ok((mut stream, _address)) => {
-					let mut buffer = [0; 1024];
-					stream.read(&mut buffer).await.context("Couldn't read stream into buffer")?;
-
-					let mut headers = [httparse::EMPTY_HEADER; 16];
-					let mut request = httparse::Request::new(&mut headers);
-					match request.parse(&buffer) /* Iff returns Ok, fills request with the parsed request */ {
-                        Ok(_) => {
-                            if request.path.eq(&Some("/health")) {
-                                let http_200_response = "HTTP/1.1 200 OK\r\n\r\n";
-                                stream
-                                    .write(http_200_response.as_bytes())
-                                    .await
-                                    .context("Could not write to health check stream")?;
-                                stream
-                                    .flush()
-                                    .await
-                                    .context("Could not flush health check TCP stream")?;
-                            } else {
-                                warn!("Requested health at invalid path: {:?}", request.path);
-                            }
-                        },
-                        Err(e) => {
-                            warn!("Invalid health check request, could not parse: {e}");
-                        }
-                    }
+	let future =
+		warp::serve(warp::any().and(warp::path(PATH)).and(warp::path::end()).map(move || {
+			warp::reply::with_status(
+				if has_completed_initialising.load(std::sync::atomic::Ordering::Relaxed) {
+					RUNNING
+				} else {
+					INITIALISING
 				},
-				Err(e) => {
-					error!("Could not open CFE health check TCP stream: {e}");
-				},
-			}
-		}
-	}
+				warp::http::StatusCode::OK,
+			)
+		}))
+		.bind((health_check_settings.hostname.parse::<IpAddr>()?, health_check_settings.port));
+
+	scope.spawn_weak(async move {
+		future.await;
+		Ok(())
+	});
+
+	Ok(())
 }
 
 #[cfg(test)]
 mod tests {
+
+	use futures_util::FutureExt;
 
 	use crate::settings::Settings;
 
@@ -88,25 +58,43 @@ mod tests {
 	async fn health_check_test() {
 		let health_check = Settings::new_test().unwrap().health_check.unwrap();
 
-		tokio::spawn(HealthChecker::start(&health_check).await.unwrap());
+		task_scope::task_scope(|scope| {
+			async {
+				let has_completed_initialising =
+					Arc::new(std::sync::atomic::AtomicBool::new(false));
+				start(scope, &health_check, has_completed_initialising.clone()).await.unwrap();
 
-		let request_test = |path: &'static str, expected_status: Option<reqwest::StatusCode>| {
-			let health_check = health_check.clone();
-			async move {
-				assert_eq!(
-					expected_status,
-					reqwest::get(&format!(
-						"http://{}:{}/{}",
-						&health_check.hostname, &health_check.port, path
-					))
-					.await
-					.ok()
-					.map(|x| x.status()),
-				);
+				let request_test = |path: &'static str,
+				                    expected_status: reqwest::StatusCode,
+				                    expected_text: &'static str| {
+					let health_check = health_check.clone();
+
+					async move {
+						let resp = reqwest::get(&format!(
+							"http://{}:{}/{}",
+							&health_check.hostname, &health_check.port, path
+						))
+						.await
+						.unwrap();
+
+						assert_eq!(expected_status, resp.status());
+						assert_eq!(resp.text().await.unwrap(), expected_text);
+					}
+				};
+
+				// starts with `has_completed_initialising` set to false
+				request_test("health", reqwest::StatusCode::OK, INITIALISING).await;
+				request_test("invalid", reqwest::StatusCode::NOT_FOUND, "").await;
+
+				has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);
+
+				request_test("health", reqwest::StatusCode::OK, RUNNING).await;
+
+				Ok(())
 			}
-		};
-
-		request_test("health", Some(reqwest::StatusCode::from_u16(200).unwrap())).await;
-		request_test("invalid", None).await;
+			.boxed()
+		})
+		.await
+		.unwrap();
 	}
 }
