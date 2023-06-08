@@ -10,10 +10,7 @@ use std::{any::Any, collections::BTreeMap, pin::Pin, time::Duration};
 use anyhow::Result;
 use futures::Future;
 use tokio::sync::{mpsc, oneshot};
-use utilities::{
-	futures_unordered_wait::FuturesUnorderedWait,
-	task_scope::{Scope, ScopedJoinHandle},
-};
+use utilities::{futures_unordered_wait::FuturesUnorderedWait, task_scope::Scope};
 
 type FutureAnyGenerator = Pin<
 	Box<
@@ -48,9 +45,6 @@ type RequestPackage = (oneshot::Sender<BoxAny>, FutureAnyGenerator);
 pub struct RpcRetrierClient {
 	// The channel to send requests to the client.
 	request_sender: mpsc::Sender<RequestPackage>,
-
-	#[allow(dead_code)]
-	task_handle: ScopedJoinHandle<()>,
 }
 
 pub struct RequestHolder {
@@ -126,7 +120,7 @@ impl RpcRetrierClient {
 
 		let mut running_futures = RequestFutures::new();
 
-		let task_handle = scope.spawn_with_handle(async move {
+		scope.spawn(async move {
 			utilities::loop_select! {
 				if let Some((response_sender, closure)) = request_receiver.recv() => {
 					let request_id = request_holder.next_request_id();
@@ -164,7 +158,7 @@ impl RpcRetrierClient {
 			Ok(())
 		});
 
-		Self { request_sender, task_handle }
+		Self { request_sender }
 	}
 
 	// Separate function so we can more easily test.
