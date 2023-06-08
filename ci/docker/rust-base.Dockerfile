@@ -16,6 +16,7 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     python3-dev \
     jq \
     protobuf-compiler \
+    pkg-config \
     curl \
     ca-certificates \
     && apt-get autoremove -y \
