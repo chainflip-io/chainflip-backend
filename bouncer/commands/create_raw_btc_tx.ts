@@ -1,6 +1,5 @@
 // Constructs a very simple Raw BTC transaction. Can be used for manual testing a raw broadcast for example.
-// You can change the sendToAddress and the amount in the call at the bottom.
-// This will work on localnets or any network that has the whale wallet.
+// Usage: pnpm tsx create_raw_btc_tx.js <bitcoin_address> <btc_amount>
 
 import Module from "node:module";
 const require = Module.createRequire(import.meta.url);
@@ -55,4 +54,12 @@ const createRawTransaction = async (toAddress, amountInBtc) => {
     }
 };
 
-createRawTransaction('muZpTpBYhxmRFuCjLc7C6BBDF32C8XVJUi', 1);
+const bitcoinAddress = process.argv[2];
+const btcAmount = parseFloat(process.argv[3]);
+
+if (!bitcoinAddress || !btcAmount) {
+    console.log('Usage: pnpm tsx create_raw_btc_tx.js <bitcoin_address> <btc_amount>');
+    process.exit(-1);
+}
+
+createRawTransaction(bitcoinAddress, btcAmount);
