@@ -83,7 +83,7 @@ impl AsyncBtcRpcClient {
 
 		let error = &response["error"];
 		if !error.is_null() {
-			return Err(Error::Rpc(serde_json::from_value(error.clone()).unwrap()))
+			return Err(Error::Rpc(serde_json::from_value(error.clone()).map_err(Error::Json)?))
 		}
 
 		Ok(T::deserialize(&response["result"]).map_err(Error::Json))?
