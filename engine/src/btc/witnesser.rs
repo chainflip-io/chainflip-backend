@@ -12,7 +12,7 @@ use crate::{
 		ChainBlockNumber, ItemMonitor,
 	},
 };
-use bitcoincore_rpc::bitcoin::{hashes::Hash, Transaction};
+use bitcoin::{hashes::Hash, Transaction};
 use cf_chains::{
 	btc::{
 		deposit_address::DepositAddress, BitcoinFeeInfo, BitcoinTrackedData, ScriptPubkey, UtxoId,
@@ -298,7 +298,7 @@ mod test_utxo_filtering {
 	use std::collections::BTreeSet;
 
 	use super::*;
-	use bitcoincore_rpc::bitcoin::{
+	use bitcoin::{
 		absolute::{Height, LockTime},
 		ScriptBuf, Transaction, TxOut,
 	};

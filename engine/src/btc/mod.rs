@@ -5,7 +5,7 @@ pub mod witnesser;
 pub mod witnessing;
 
 use anyhow::Result;
-use bitcoincore_rpc::bitcoin::Txid;
+use bitcoin::Txid;
 pub struct BtcBroadcaster<BtcRpc>
 where
 	BtcRpc: BtcRpcApi,
