@@ -33,9 +33,9 @@ jobs:
         id: image_tags
         run: |
           if [ "${{ github.event.inputs.debug_image }}" = "true" ]; then
-            echo "debug_image_tags=debug-${{ steps.toolchain.outputs.rust_toolchain }}-ubuntu-${{ matrix.ubuntu_version }}-${{ github.run_number }}" >> $GITHUB_OUTPUT
+            echo "debug_image_tags=${{ steps.toolchain.outputs.rust_toolchain }}-ubuntu-${{ matrix.ubuntu_version }}-${{ github.run_number }}" >> $GITHUB_OUTPUT
           else
-            echo "debug_image_tags=debug-${{ steps.toolchain.outputs.rust_toolchain }}-ubuntu-${{ matrix.ubuntu_version }}" >> $GITHUB_OUTPUT
+            echo "debug_image_tags=${{ steps.toolchain.outputs.rust_toolchain }}-ubuntu-${{ matrix.ubuntu_version }}" >> $GITHUB_OUTPUT
           fi
 
       - name: Set up QEMU
