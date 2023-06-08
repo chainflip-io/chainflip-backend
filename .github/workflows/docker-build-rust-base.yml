@@ -45,7 +45,7 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: ${{ env.TAG }}
+          tags: ${{ env.TAG }}-${{ matrix.ubuntu_version }}
 
       - name: Login to Github Container Registry 🔑
         uses: docker/login-action@v1
