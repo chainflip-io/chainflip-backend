@@ -2,7 +2,7 @@ version: "3.8"
 
 services:
   geth:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v0.7.0-1-node
+    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-rc14-1-node-2023-06-08
     pull_policy: always
     stop_grace_period: 5s
     stop_signal: SIGINT
@@ -28,32 +28,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    command:
-      - --allow-insecure-unlock
-      - --datadir=/geth/data
-      - --gcmode=archive
-      - --http
-      - --http.addr=0.0.0.0
-      - --http.api=admin,db,debug,eth,miner,net,personal,shh,txpool,web3
-      - --http.corsdomain=*
-      - --http.vhosts=*
-      - --mine
-      - --miner.threads=1
-      - --networkid=10997
-      - --nodiscover
-      - --password=/geth/password
-      - --rpc.allow-unprotected-txs
-      - --unlock=0xa994738936572Fb88564d69134F67Aaa7C7d4A6E
-      - --ws
-      - --ws.addr=0.0.0.0
-      - --ws.api=web3,eth,debug
-      - --ws.origins=*
-      - --ws.port=8546
 
   polkadot:
     container_name: polkadot
     platform: linux/amd64
-    image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v0.9.36
+    image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v0.9.36-ci
     pull_policy: always
     stop_grace_period: 5s
     stop_signal: SIGINT
@@ -76,18 +55,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
-    command:
-      - --alice
-      - --blocks-pruning=archive
-      - --chain=/chainspec.json
-      - --force-authoring
-      - --name=PolkaDocker
-      - --rpc-cors=all
-      - --rpc-external
-      - --rpc-methods=unsafe
-      - --state-pruning=archive
-      - --validator
-      - --ws-external
 
   bitcoin:
     image: ghcr.io/chainflip-io/chainflip-bitcoin-regtest:v24.0.1
