@@ -18,10 +18,13 @@ with (
     github_actions = yaml.safe_load(github_actions_file)
     for service, path in services.items():
         path_parts = path.split('.')
+        docker_image = docker_compose
+        for part in path_parts:
+            docker_image = docker_image.get(part, None)
         github_image = github_actions['jobs']['bouncer']['services'].get(
             service, {}).get('image', None)
-        if docker_compose != github_image:
-            error_message = f"""🚨 \033[1;31m{service} docker image mismatch!\033[0m\n\033[1;33mLocal:\033[0m {docker_compose}\n\033[1;33mGitHub:\033[0m {github_image}"""
+        if docker_image != github_image:
+            error_message = f"""🚨 \033[1;31m{service} docker image mismatch!\033[0m\n\033[1;33mLocal:\033[0m {docker_image}\n\033[1;33mGitHub:\033[0m {github_image}"""
             print(error_message)
             EXIT_CODE = 1
         else:
