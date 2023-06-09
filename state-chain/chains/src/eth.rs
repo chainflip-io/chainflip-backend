@@ -102,6 +102,12 @@ pub enum AggKeyVerificationError {
 	NoMatch,
 }
 
+impl Display for AggKeyVerificationError {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		write!(f, "{:?}", self)
+	}
+}
+
 /// A parity bit can be either odd or even, but can have different representations depending on its
 /// use. Ethereum generaly assumes `0` or `1` but the standard serialization format used in most
 /// libraries assumes `2` or `3`.

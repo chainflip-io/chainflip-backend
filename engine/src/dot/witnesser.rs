@@ -261,7 +261,7 @@ where
 	)
 	.instrument(info_span!("Dot-Witnesser"))
 	.await
-	.map_err(|_| anyhow::anyhow!("Dot witnesser failed"))
+	.map_err(|()| anyhow::anyhow!("Dot witnesser failed"))
 }
 
 // An instance of a Polkadot Witnesser for a particular epoch.

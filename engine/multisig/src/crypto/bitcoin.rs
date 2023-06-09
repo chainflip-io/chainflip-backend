@@ -1,7 +1,7 @@
-use crate::crypto::ECScalar;
-
 pub use super::secp256k1::{Point, Scalar};
 use super::{ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature};
+use crate::crypto::ECScalar;
+use anyhow::Context;
 use cf_chains::Bitcoin;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -121,7 +121,7 @@ impl CryptoScheme for BtcSigning {
 		let raw_msg = secp256k1::Message::from_slice(&payload.0).unwrap();
 
 		secp.verify_schnorr(&raw_sig, &raw_msg, public_key)
-			.map_err(|e| anyhow::anyhow!("Failed to verify signature: {:?}", e))?;
+			.context("Failed to verify signature: {e:?}")?;
 		Ok(())
 	}
 

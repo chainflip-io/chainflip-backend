@@ -189,7 +189,11 @@ where
 			from: state_chain_client
 				.asset(source_token.0)
 				.await
-				.map_err(|e| CallFromEventError::Network(anyhow!(e)))?
+				.map_err(|e| {
+					CallFromEventError::Network(
+						anyhow!(e).context("Failed to retrieve from token for SwapToken call."),
+					)
+				})?
 				.ok_or(CallFromEventError::Decode(format!(
 					"Source token {source_token} not found"
 				)))?,
@@ -239,7 +243,11 @@ where
 			source_asset: state_chain_client
 				.asset(source_token.0)
 				.await
-				.map_err(|e| CallFromEventError::Network(anyhow!(e)))?
+				.map_err(|e| {
+					CallFromEventError::Network(
+						anyhow!(e).context("Failed to retrieve From token for XCallToken call."),
+					)
+				})?
 				.ok_or(CallFromEventError::Decode(format!(
 					"Source token {source_token} not found"
 				)))?,

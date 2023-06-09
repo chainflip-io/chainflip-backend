@@ -308,7 +308,7 @@ fn map_ceremony_parties(
 	// Check that signer ids are known for this key
 	let signer_idxs = validator_mapping
 		.get_all_idxs(participants)
-		.map_err(|_| "invalid participants")?;
+		.map_err(|()| "Failed to map ceremony parties: invalid participants")?;
 
 	Ok((our_idx, signer_idxs))
 }
@@ -319,8 +319,10 @@ pub fn deserialize_for_version<C: CryptoScheme>(
 	match message.version {
 		1 => bincode::deserialize::<'_, MultisigMessage<C::Point>>(&message.payload).map_err(|e| {
 			anyhow!("Failed to deserialize message (version: {}): {:?}", message.version, e)
+				.context("Failed to deserialize version.")
 		}),
-		_ => Err(anyhow!("Unsupported message version: {}", message.version)),
+		_ => Err(anyhow!("Unsupported message version: {}", message.version)
+			.context("Failed to deserialize version.")),
 	}
 }
 

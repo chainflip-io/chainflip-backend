@@ -4,11 +4,10 @@ pub mod storage_api;
 
 use async_trait::async_trait;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use cf_primitives::AccountRole;
 use futures::{StreamExt, TryStreamExt};
 
-use anyhow::Context;
 use sp_core::{Pair, H256};
 use state_chain_runtime::AccountId;
 use std::sync::Arc;
@@ -392,8 +391,10 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 					&self.signing_key_file,
 					"Signing Key",
 					|str| {
-						<[u8; 32]>::try_from(hex::decode(str).map_err(anyhow::Error::new)?)
-							.map_err(|_err| anyhow!("Wrong length"))
+						<[u8; 32]>::try_from(
+							hex::decode(str).context("Failed to decode signing key from file.")?,
+						)
+						.map_err(|e| anyhow!("Failed to decode signing key: Wrong length. {e:?}"))
 					},
 				)?,
 			)),

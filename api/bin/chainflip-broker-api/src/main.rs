@@ -1,4 +1,4 @@
-use anyhow::anyhow;
+use anyhow::Context;
 use chainflip_api::{
 	self, clean_foreign_chain_address,
 	primitives::{AccountRole, Asset, BasisPoints, CcmDepositMetadata},
@@ -62,7 +62,7 @@ impl RpcServer for RpcServerImpl {
 			message_metadata,
 		)
 		.await
-		.map_err(|e| anyhow!("{}:{}", e, e.root_cause()))?)
+		.context("Failed to request swap deposit address.")?)
 	}
 }
 

@@ -7,6 +7,7 @@ use super::{ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature};
 // TODO: we probably want to change the "clients" to
 // solely use "CryptoScheme" as generic parameter instead.
 pub use super::secp256k1::{Point, Scalar};
+use anyhow::Context;
 use cf_chains::{eth::ParityBit, ChainCrypto, Ethereum};
 use num_bigint::BigUint;
 use secp256k1::constants::CURVE_ORDER;
@@ -113,7 +114,8 @@ impl CryptoScheme for EthSigning {
 
 		public_key
 			.verify(&payload.0, &signature.clone().into())
-			.map_err(|e| anyhow::anyhow!("Failed to verify signature: {:?}", e))?;
+			.map_err(anyhow::Error::msg)
+			.context("Failed to verify signature")?;
 
 		Ok(())
 	}

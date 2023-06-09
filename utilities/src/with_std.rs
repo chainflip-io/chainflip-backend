@@ -502,7 +502,7 @@ pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow
 	use anyhow::Context;
 
 	std::fs::read_to_string(file)
-		.map_err(|e| anyhow!("Failed to read {context} file at {}: {e}", file.display()))
+		.context(format!("Failed to read {context} file at {}", file.display()))
 		.and_then(|string| {
 			let mut str = string.as_str();
 			str = str.trim();

@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use super::{
 	curve25519::ristretto::Point, CanonicalEncoding, ChainTag, CryptoScheme, ECPoint,
@@ -129,6 +129,7 @@ impl CryptoScheme for PolkadotSigning {
 		public_key
 			.verify(context.bytes(payload.0.as_slice()), &signature.0)
 			.map_err(anyhow::Error::msg)
+			.context("Failed to verify signature in Polkadot Signing.")
 	}
 
 	fn pubkey_from_point(pubkey_point: &Self::Point) -> Self::PublicKey {

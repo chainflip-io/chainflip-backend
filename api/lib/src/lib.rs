@@ -50,7 +50,8 @@ impl<
 			.raw_rpc_client
 			.cf_is_auction_phase(None)
 			.await
-			.map_err(Into::into)
+			.map_err(anyhow::Error::msg)
+			.context("Error RPC query: is_auction_phase")
 	}
 }
 
@@ -399,10 +400,16 @@ pub async fn request_swap_deposit_address(
 /// chain.
 pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result<EncodedAddress> {
 	Ok(match chain {
-		ForeignChain::Ethereum =>
-			EncodedAddress::Eth(clean_eth_address(address).map_err(anyhow::Error::msg)?),
-		ForeignChain::Polkadot =>
-			EncodedAddress::Dot(clean_dot_address(address).map_err(anyhow::Error::msg)?),
+		ForeignChain::Ethereum => EncodedAddress::Eth(
+			clean_eth_address(address)
+				.map_err(anyhow::Error::msg)
+				.context("Failed to clean Ethereum foreign chain address.")?,
+		),
+		ForeignChain::Polkadot => EncodedAddress::Dot(
+			clean_dot_address(address)
+				.map_err(anyhow::Error::msg)
+				.context("Failed to clean Polkadot address.")?,
+		),
 		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
 	})
 }
@@ -463,7 +470,9 @@ pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPair, Strin
 				seed_phrase.to_string(),
 			)
 		})
-		.map_err(|_| anyhow::Error::msg("Invalid seed phrase"))
+		.map_err(|e| {
+			anyhow!("Invalid seed phrase. Error: {e:?}").context("Failed to generate signing key.")
+		})
 }
 
 /// Generate a new random ethereum key.

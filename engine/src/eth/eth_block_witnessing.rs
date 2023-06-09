@@ -63,7 +63,7 @@ impl BlockWitnesser for EthBlockWitnesser {
 		.collect::<anyhow::Result<Vec<()>>>()
 		.map_err(|err| {
 			tracing::error!("Eth witnesser failed to process block: {err}");
-			err
+			err.context("Eth witnesser failed to process block.")
 		})?;
 
 		Ok(())
@@ -97,13 +97,16 @@ impl BlockWitnesserGenerator for EthBlockWitnesserGenerator {
 				.await
 				.map_err(|err| {
 					tracing::error!("Subscription error: {err}");
-					err
+					err.context("Eth witnesser failed to get block stream.")
 				})?;
 		let block_stream = tokio_stream::StreamExt::timeout(
 			block_stream,
 			Duration::from_secs(ETH_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER),
 		)
-		.map_err(anyhow::Error::msg);
+		.map_err(|elapsed| {
+			anyhow::anyhow!("Timed out: Time elapsed {elapsed}")
+				.context("Eth witnesser failed to get latest block stream.")
+		});
 
 		Ok(Box::pin(block_stream))
 	}

@@ -11,7 +11,7 @@ use subxt::{
 	rpc_params, Config, OnlineClient, PolkadotConfig,
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 
 #[cfg(test)]
 use mockall::automock;
@@ -33,8 +33,10 @@ macro_rules! refresh_connection_on_error {
 				);
 				$self.refresh_client()
 					.await
-					.map_err(|e| anyhow!("Failed to refresh client: {e}"))?;
-				$self.online_client.$namespace().$method($($arg,)*).await.map_err(|e| anyhow!("Failed to query {} Polkadot with error: {e}", stringify!($method)))
+					.context("Failed to refresh client: {e}")?;
+				$self.online_client.$namespace().$method($($arg,)*)
+					.await
+					.context(format!("Failed to query Polkadot: {}", stringify!($method)))
 			},
 			Ok(ok) => Ok(ok),
 		}
@@ -122,7 +124,7 @@ impl DotRpcApi for DotRpcClient {
 		safe_runtime_version_stream(
 			self.current_runtime_version().await?,
 			refresh_connection_on_error!(self, rpc, subscribe_runtime_version)?.map(|item| {
-				item.map_err(anyhow::Error::new).map(
+				item.context("Failed to retrieve Polkadot Runtime version.").map(
 					|subxt::rpc::types::RuntimeVersion {
 					     spec_version,
 					     transaction_version,
@@ -132,7 +134,7 @@ impl DotRpcApi for DotRpcClient {
 			}),
 		)
 		.await
-		.map_err(|e| anyhow!("Failed to subscribe to Polkadot runtime version with error: {e}"))
+		.context("Failed to subscribe to Polkadot runtime version.")
 	}
 
 	async fn block(
@@ -169,7 +171,7 @@ impl DotRpcApi for DotRpcClient {
 		EventsClient::new(self.online_client.clone())
 			.at(Some(block_hash))
 			.await
-			.map_err(|e| anyhow!("Failed to query events for block {block_hash}, with error: {e}"))
+			.context(format!("Failed to query events for block {block_hash})"))
 	}
 
 	async fn submit_raw_encoded_extrinsic(

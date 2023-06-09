@@ -92,7 +92,7 @@ pub fn submission_future(
 				Ok(Err(e)) => Err(e),
 				Err(_) => Err(anyhow::anyhow!("Request timed out")),
 			}
-			.map_err(|e| (e, timeout_millis)),
+			.map_err(|e| (e.context("Failed to submit request. Timed out."), timeout_millis)),
 		)
 	})
 }
