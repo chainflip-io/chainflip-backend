@@ -49,24 +49,6 @@ jobs:
       - name: Check Linting
         run: cargo cf-clippy-ci
 
-  check-localnet-config:
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Checkout 🏁
-        uses: actions/checkout@v3
-
-      - name: Login to Github Container Registry 🔑
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Run docker compose up
-        run: docker compose -f ./localnet/docker-compose.yml up -d
-      - name: Stop containers
-        if: always()
-        run: docker compose -f ./localnet/docker-compose.yml down --remove-orphans
-
   lint-ci-workflows:
     runs-on: ubuntu-20.04
     steps:
@@ -78,3 +60,19 @@ jobs:
           bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
           ./actionlint -color -shellcheck=
         shell: bash
+
+  lint-dockerfiles:
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        dockerfile:
+          - cf.Dockerfile
+          - rust-base.Dockerfile
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@v3
+
+      - name: Lint 🐳🔬
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: ci/docker/${{ matrix.dockerfile }}

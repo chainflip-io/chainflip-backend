@@ -21,14 +21,12 @@ jobs:
     secrets: inherit
     with:
       network: development
-      commit_hash: ${{ github.event.pull_request.head.sha }} # More info: https://github.com/actions/checkout/issues/426
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml
     secrets: inherit
     with:
       network: development
-      commit_hash: ${{ github.event.pull_request.head.sha }}
       environment: dev
   package:
     needs: [build]
@@ -42,12 +40,14 @@ jobs:
     uses: ./.github/workflows/_40_post_check.yml
     secrets: inherit
     with:
-      simple_bouncer: true
+      simple_bouncer: false
   publish:
     needs: [package]
     uses: ./.github/workflows/_30_publish.yml
     with:
-      version: ci/${{ github.event.pull_request.head.sha }}/
+      version: ci/${{ github.sha }}/
       environment: dev
-      commit_hash: ${{ github.event.pull_request.head.sha }}
     secrets: inherit
+  merge-commit-summary:
+    needs: [publish]
+    uses: ./.github/workflows/_04_merge_commit_summary.yml

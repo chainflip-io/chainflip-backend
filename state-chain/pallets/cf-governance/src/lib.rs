@@ -16,7 +16,6 @@ pub use pallet::*;
 use sp_runtime::{DispatchError, TransactionOutcome};
 use sp_std::{boxed::Box, ops::Add, vec::Vec};
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 pub mod weights;

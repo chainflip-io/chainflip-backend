@@ -1,9 +1,9 @@
 use cf_chains::{
 	btc::BitcoinNetwork,
-	dot::{PolkadotHash, RuntimeVersion},
+	dot::{PolkadotAccountId, PolkadotHash, RuntimeVersion},
 	eth,
 };
-use cf_primitives::{AccountRole, AuthorityCount, PolkadotAccountId};
+use cf_primitives::{AccountRole, AuthorityCount};
 
 use common::FLIPPERINOS_PER_FLIP;
 use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
@@ -23,7 +23,7 @@ use state_chain_runtime::{
 	WASM_BINARY,
 };
 
-use std::{env, marker::PhantomData, str::FromStr};
+use std::{collections::BTreeMap, env, marker::PhantomData, str::FromStr};
 use utilities::clean_eth_address;
 
 use sp_runtime::traits::{IdentifyAccount, Verify};
@@ -113,7 +113,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		Err(_) => defaults.dot_genesis_hash,
 	};
 	let dot_vault_account_id = match env::var("DOT_VAULT_ACCOUNT_ID") {
-		Ok(s) => Some(hex_decode::<32>(&s).unwrap().into()),
+		Ok(s) => Some(PolkadotAccountId::from_aliased(hex_decode::<32>(&s).unwrap())),
 		Err(_) => defaults.dot_vault_account_id,
 	};
 	let dot_spec_version: u32 = match env::var("DOT_SPEC_VERSION") {
@@ -196,21 +196,25 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 						get_account_id_from_seed::<sr25519::Public>("LP_1"),
 						AccountRole::LiquidityProvider,
 						100 * FLIPPERINOS_PER_FLIP,
+						Some(b"Chainflip LP 1".to_vec()),
 					),
 					(
 						get_account_id_from_seed::<sr25519::Public>("LP_2"),
 						AccountRole::LiquidityProvider,
 						100 * FLIPPERINOS_PER_FLIP,
+						Some(b"Chainflip LP 2".to_vec()),
 					),
 					(
 						get_account_id_from_seed::<sr25519::Public>("BROKER_1"),
 						AccountRole::Broker,
 						100 * FLIPPERINOS_PER_FLIP,
+						Some(b"Chainflip Broker 1".to_vec()),
 					),
 					(
 						get_account_id_from_seed::<sr25519::Public>("BROKER_2"),
 						AccountRole::Broker,
 						100 * FLIPPERINOS_PER_FLIP,
+						Some(b"Chainflip Broker 2".to_vec()),
 					),
 				],
 				// Governance account - Snow White
@@ -231,7 +235,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					},
 
 					polkadot_genesis_hash: dot_genesis_hash,
-					polkadot_vault_account_id: dot_vault_account_id.clone(),
+					polkadot_vault_account_id: dot_vault_account_id,
 					polkadot_runtime_version: dot_runtime_version,
 					bitcoin_network: BitcoinNetwork::Regtest,
 				},
@@ -240,6 +244,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				common::TOTAL_ISSUANCE,
 				genesis_funding_amount,
 				min_funding,
+				common::REDEMPTION_TAX,
 				8 * common::HOURS,
 				common::REDEMPTION_DELAY_SECS,
 				common::REDEMPTION_DELAY_BUFFER_SECS,
@@ -350,6 +355,7 @@ macro_rules! network_spec {
 							TOTAL_ISSUANCE,
 							genesis_funding_amount,
 							min_funding,
+							REDEMPTION_TAX,
 							3 * HOURS,
 							REDEMPTION_DELAY_SECS,
 							REDEMPTION_DELAY_BUFFER_SECS,
@@ -392,7 +398,7 @@ network_spec!(perseverance);
 fn testnet_genesis(
 	wasm_binary: &[u8],
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>, // initial validators
-	extra_accounts: Vec<(AccountId, AccountRole, u128)>,
+	extra_accounts: Vec<(AccountId, AccountRole, u128, Option<Vec<u8>>)>,
 	root_key: AccountId,
 	min_authorities: AuthorityCount,
 	max_authorities: AuthorityCount,
@@ -402,6 +408,7 @@ fn testnet_genesis(
 	total_issuance: FlipBalance,
 	genesis_funding_amount: u128,
 	minimum_funding: u128,
+	redemption_tax: u128,
 	blocks_per_epoch: BlockNumber,
 	redemption_delay: u64,
 	redemption_delay_buffer_seconds: u64,
@@ -418,7 +425,17 @@ fn testnet_genesis(
 	let authority_ids: BTreeSet<AccountId> =
 		initial_authorities.iter().map(|(id, ..)| id.clone()).collect();
 	let total_issuance =
-		total_issuance + extra_accounts.iter().map(|(_, _, amount)| *amount).sum::<u128>();
+		total_issuance + extra_accounts.iter().map(|(_, _, amount, _)| *amount).sum::<u128>();
+	let (extra_accounts, genesis_vanity_names): (Vec<_>, BTreeMap<_, _>) = extra_accounts
+		.into_iter()
+		.map(|(account, role, balance, vanity)| {
+			((account.clone(), role, balance), (account, vanity))
+		})
+		.unzip();
+	let genesis_vanity_names = genesis_vanity_names
+		.into_iter()
+		.filter_map(|(account, vanity)| vanity.map(|vanity| (account, vanity)))
+		.collect::<BTreeMap<_, _>>();
 	let all_accounts: Vec<_> = initial_authorities
 		.iter()
 		.map(|(account_id, ..)| {
@@ -426,6 +443,13 @@ fn testnet_genesis(
 		})
 		.chain(extra_accounts.clone())
 		.collect();
+
+	assert!(
+		genesis_vanity_names
+			.keys()
+			.all(|id| all_accounts.iter().any(|(acc_id, ..)| acc_id == id)),
+		"Found a vanity name for non-genesis account."
+	);
 
 	GenesisConfig {
 		account_roles: AccountRolesConfig {
@@ -450,6 +474,7 @@ fn testnet_genesis(
 					}
 				})
 				.collect(),
+			genesis_vanity_names,
 			blocks_per_epoch,
 			redemption_period_as_percentage: percent_of_epoch_period_redeemable,
 			backup_reward_node_percentage: 20,
@@ -469,6 +494,7 @@ fn testnet_genesis(
 		funding: FundingConfig {
 			genesis_accounts: all_accounts.clone(),
 			minimum_funding,
+			redemption_tax,
 			redemption_ttl: core::time::Duration::from_secs(3 * redemption_delay),
 			redemption_delay_buffer_seconds,
 		},

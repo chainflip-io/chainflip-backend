@@ -14,7 +14,7 @@ use crate::{
 
 use super::ceremony_stage::{CeremonyCommon, CeremonyStage, ProcessMessageResult, StageResult};
 
-pub use super::broadcast_verification::verify_broadcasts;
+pub use super::broadcast_verification::verify_broadcasts_non_blocking;
 
 /// Used by individual stages to distinguish between
 /// a public message that should be broadcast to everyone

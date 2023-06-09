@@ -21,7 +21,9 @@ use async_trait::async_trait;
 use cf_primitives::AuthorityCount;
 use client::{
 	common::{
-		broadcast::{verify_broadcasts, BroadcastStage, BroadcastStageProcessor, DataToSend},
+		broadcast::{
+			verify_broadcasts_non_blocking, BroadcastStage, BroadcastStageProcessor, DataToSend,
+		},
 		CeremonyCommon, StageResult,
 	},
 	keygen, ThresholdParameters,
@@ -316,18 +318,6 @@ pub struct VerifyHashCommitmentsBroadcast2<Crypto: CryptoScheme> {
 	shares_to_send: OutgoingShares<Crypto::Point>,
 }
 
-#[cfg(feature = "test")]
-impl<Crypto: CryptoScheme> VerifyHashCommitmentsBroadcast2<Crypto> {
-	pub fn new(
-		keygen_common: KeygenCommon<Crypto>,
-		own_commitment: DKGUnverifiedCommitment<Crypto::Point>,
-		hash_commitments: BTreeMap<AuthorityCount, Option<HashComm1>>,
-		shares_to_send: OutgoingShares<Crypto::Point>,
-	) -> Self {
-		Self { keygen_common, own_commitment, hash_commitments, shares_to_send }
-	}
-}
-
 derive_display_as_type_name!(VerifyHashCommitmentsBroadcast2<Crypto: CryptoScheme>);
 
 #[async_trait]
@@ -345,7 +335,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> StageResult<KeygenCeremony<Crypto>> {
-		let hash_commitments = match verify_broadcasts(messages) {
+		let hash_commitments = match verify_broadcasts_non_blocking(messages).await {
 			Ok(hash_commitments) => hash_commitments,
 			Err((reported_parties, abort_reason)) => {
 				warn!("Broadcast verification is not successful for {}", Self::NAME);
@@ -445,7 +435,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> KeygenStageResult<Crypto> {
-		let commitments = match verify_broadcasts(messages) {
+		let commitments = match verify_broadcasts_non_blocking(messages).await {
 			Ok(comms) => comms,
 			Err((reported_parties, abort_reason)) =>
 				return KeygenStageResult::Error(
@@ -699,7 +689,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
 	) -> KeygenStageResult<Crypto> {
-		let verified_complaints = match verify_broadcasts(messages) {
+		let verified_complaints = match verify_broadcasts_non_blocking(messages).await {
 			Ok(comms) => comms,
 			Err((reported_parties, abort_reason)) =>
 				return KeygenStageResult::Error(
@@ -983,7 +973,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<KeygenCeremony<Crypto>>
 	) -> KeygenStageResult<Crypto> {
 		debug!("Processing {}", Self::NAME);
 
-		let verified_responses = match verify_broadcasts(messages) {
+		let verified_responses = match verify_broadcasts_non_blocking(messages).await {
 			Ok(comms) => comms,
 			Err((reported_parties, abort_reason)) =>
 				return KeygenStageResult::Error(

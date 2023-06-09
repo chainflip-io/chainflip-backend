@@ -19,14 +19,13 @@ jobs:
     secrets: inherit
     with:
       network: development
-      commit_hash: ${{ github.sha }}
+
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml
     secrets: inherit
     with:
       network: development
-      commit_hash: ${{ github.sha }}
       environment: dev
   package:
     needs: [build]
@@ -45,20 +44,4 @@ jobs:
     with:
       version: ci/${{ github.sha }}/
       environment: dev
-      commit_hash: ${{ github.sha }}
     secrets: inherit
-  notify:
-    runs-on: ubuntu-20.04
-    if: failure() || cancelled()
-    steps:
-      - name: Notify on failed build
-        env:
-          DISCORD_USERNAME: 'chainflip-backend'
-          DISCORD_WEBHOOK: ${{ secrets.CF_DISCORD_ALERTS_CRITICAL }}
-        uses: Ilshidur/action-discord@0.3.2
-        with:
-          args: |
-            ❗️❗️❗️❗️ Build Failed on `main` ❗️❗️❗️❗️
-            👾 Link to job: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            #️⃣ Tagging: <@&939151218708709416>
-            https://media.giphy.com/media/wHfwCBZzCMhmE/giphy.gif

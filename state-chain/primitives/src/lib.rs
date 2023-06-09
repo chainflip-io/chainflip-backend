@@ -6,7 +6,6 @@
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_core::crypto::AccountId32;
 use sp_runtime::{
 	traits::{IdentifyAccount, Verify},
 	MultiSignature, RuntimeDebug,
@@ -52,15 +51,11 @@ pub type BroadcastId = u32;
 /// result in multiple ceremonies, but only one ceremony should succeed.
 pub type ThresholdSignatureRequestId = u32;
 
-/// Alias to the opaque account ID type for this chain, actually a `AccountId32`. This is always
-/// 32 bytes.
-pub type PolkadotAccountId = AccountId32;
-
 pub type PolkadotBlockNumber = u32;
 
 // Bitcoin default fee, in sats per bytes, to be used if current fee is not available via chain
 // tracking.
-pub const DEFAULT_FEE_SATS_PER_BYTE: u64 = 100;
+pub const DEFAULT_FEE_SATS_PER_KILO_BYTE: u64 = 102400;
 
 // Approximate values calculated
 pub const INPUT_UTXO_SIZE_IN_BYTES: u64 = 178;

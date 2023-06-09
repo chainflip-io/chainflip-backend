@@ -14,7 +14,6 @@ use cf_traits::{
 use sp_runtime::{traits::BlockNumberProvider, Saturating};
 use sp_std::vec::Vec;
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 #[cfg(test)]
@@ -76,7 +75,7 @@ pub mod pallet {
 			for (channel_id, address) in expired {
 				T::DepositHandler::expire_channel(channel_id, address.clone());
 				Self::deposit_event(Event::LiquidityDepositAddressExpired {
-					address: T::AddressConverter::try_to_encoded_address(address).expect("This should not fail since this conversion already succeeded when expiry was scheduled"),
+					address: T::AddressConverter::to_encoded_address(address),
 				});
 			}
 			T::WeightInfo::on_initialize(expired_count as u32)
@@ -181,7 +180,7 @@ pub mod pallet {
 
 			Self::deposit_event(Event::LiquidityDepositAddressReady {
 				channel_id,
-				deposit_address: T::AddressConverter::try_to_encoded_address(deposit_address)?,
+				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 				expiry_block,
 			});
 

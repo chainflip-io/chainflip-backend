@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use std::cell::RefCell;
 
 use crate::{self as pallet_cf_chain_tracking, Config};

@@ -5,7 +5,7 @@ pub mod witnesser;
 pub mod witnessing;
 
 use anyhow::Result;
-use bitcoincore_rpc::bitcoin::Txid;
+use bitcoin::Txid;
 pub struct BtcBroadcaster<BtcRpc>
 where
 	BtcRpc: BtcRpcApi,
@@ -22,6 +22,6 @@ where
 	}
 
 	pub async fn send(&self, transaction_bytes: Vec<u8>) -> Result<Txid> {
-		self.rpc.send_raw_transaction(transaction_bytes)
+		self.rpc.send_raw_transaction(transaction_bytes).await
 	}
 }

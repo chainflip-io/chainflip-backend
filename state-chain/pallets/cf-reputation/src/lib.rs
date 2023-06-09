@@ -25,7 +25,6 @@ use sp_std::{
 	iter::{self, Iterator},
 	prelude::*,
 };
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
 mod reporting_adapter;

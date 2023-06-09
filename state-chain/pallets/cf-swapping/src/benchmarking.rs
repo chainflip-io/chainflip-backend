@@ -44,9 +44,9 @@ benchmarks! {
 			.expect("Caller should be registered as broker");
 	}
 
-	schedule_swap_by_witnesser {
+	schedule_swap_from_contract {
 		let origin = T::EnsureWitnessed::successful_origin();
-		let call = Call::<T>::schedule_swap_by_witnesser{
+		let call = Call::<T>::schedule_swap_from_contract{
 			from: Asset::Usdc,
 			to: Asset::Eth,
 			deposit_amount: 1_000,

@@ -1,5 +1,7 @@
 use crate::{Chainflip, DepositApi};
-use cf_chains::{address::ForeignChainAddress, CcmDepositMetadata, Chain, ForeignChain};
+use cf_chains::{
+	address::ForeignChainAddress, dot::PolkadotAccountId, CcmDepositMetadata, Chain, ForeignChain,
+};
 use cf_primitives::{chains::assets::any, BasisPoints, ChannelId};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
@@ -56,7 +58,9 @@ impl<C: Chain, T: Chainflip> MockDepositHandler<C, T> {
 			channel_id,
 			match asset.into() {
 				ForeignChain::Ethereum => ForeignChainAddress::Eth([channel_id as u8; 20]),
-				ForeignChain::Polkadot => ForeignChainAddress::Dot([channel_id as u8; 32]),
+				ForeignChain::Polkadot => ForeignChainAddress::Dot(
+					PolkadotAccountId::from_aliased([channel_id as u8; 32]),
+				),
 				ForeignChain::Bitcoin => todo!("Bitcoin address"),
 			},
 		)

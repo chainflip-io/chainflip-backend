@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 use crate::{self as pallet_cf_witness, WitnessDataExtraction};
 use cf_traits::{impl_mock_chainflip, AccountRoleRegistry};
 use frame_support::parameter_types;

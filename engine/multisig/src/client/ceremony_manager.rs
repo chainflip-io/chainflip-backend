@@ -9,7 +9,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use futures::FutureExt;
 use serde::Serialize;
 use std::{
-	collections::{hash_map, BTreeSet, HashMap},
+	collections::{BTreeSet, HashMap},
 	fmt::{Debug, Display},
 	marker::PhantomData,
 	sync::Arc,
@@ -72,6 +72,7 @@ pub trait CeremonyTrait: 'static {
 			Error = MultisigData<<Self::Crypto as CryptoScheme>::Point>,
 		> + Into<MultisigData<<Self::Crypto as CryptoScheme>::Point>>
 		+ Send
+		+ Ord
 		+ Serialize
 		+ 'static;
 	type Request: Send + 'static;
@@ -722,33 +723,36 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 	) {
 		debug!("Received data {data} from [{sender_id}]");
 
-		// Get the existing ceremony or create an unauthorised one (with ceremony id tracking check)
-		let ceremony_handle = match self.ceremony_handles.entry(ceremony_id) {
-			hash_map::Entry::Vacant(entry) => {
-				// Only a ceremony id that is within the ceremony id window can create unauthorised
-				// ceremonies
-				if ceremony_id > latest_ceremony_id + CEREMONY_ID_WINDOW {
-					warn!(
-						"Ignoring data: unexpected future ceremony id {}",
-						ceremony_id_string::<Ceremony::Crypto>(ceremony_id)
-					);
-					return
-				} else if ceremony_id <= latest_ceremony_id {
-					trace!(
-						"Ignoring data: old ceremony id {}",
-						ceremony_id_string::<Ceremony::Crypto>(ceremony_id)
-					);
-					return
-				} else {
-					entry.insert(CeremonyHandle::spawn(
-						ceremony_id,
-						self.outcome_sender.clone(),
-						scope,
-					))
-				}
-			},
-			hash_map::Entry::Occupied(entry) => entry.into_mut(),
-		};
+		// If no ceremony exists, create an unauthorised one (with ceremony id tracking
+		if !self.ceremony_handles.contains_key(&ceremony_id) {
+			// Only a ceremony id that is within the ceremony id window can create unauthorised
+			// ceremonies
+			let ceremony_id_string = ceremony_id_string::<Ceremony::Crypto>(ceremony_id);
+			if ceremony_id > latest_ceremony_id + CEREMONY_ID_WINDOW {
+				warn!("Ignoring data: unexpected future ceremony id {ceremony_id_string}",);
+				return
+			} else if ceremony_id <= latest_ceremony_id {
+				trace!("Ignoring data: old ceremony id {ceremony_id_string}",);
+				return
+			} else {
+				let total = self
+					.ceremony_handles
+					.values()
+					.filter(|handle| {
+						matches!(handle.request_state, CeremonyRequestState::Unauthorised(_))
+					})
+					.count() + 1;
+
+				trace!("Creating unauthorised ceremony {ceremony_id_string} (Total: {total})",);
+				self.ceremony_handles.insert(
+					ceremony_id,
+					CeremonyHandle::spawn(ceremony_id, self.outcome_sender.clone(), scope),
+				);
+			}
+		}
+
+		let ceremony_handle =
+			self.ceremony_handles.get(&ceremony_id).expect("Entry is inserted above");
 
 		// NOTE: There is a short delay between dropping the ceremony runner (and any channels
 		// associated with it) and dropping the corresponding ceremony handle, which makes it

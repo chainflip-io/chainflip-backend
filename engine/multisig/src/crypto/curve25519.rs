@@ -16,6 +16,18 @@ mod scalar_impls {
 
 	use super::*;
 
+	impl Ord for Scalar {
+		fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+			self.0.as_bytes().cmp(other.0.as_bytes())
+		}
+	}
+
+	impl PartialOrd for Scalar {
+		fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+			Some(self.cmp(other))
+		}
+	}
+
 	impl ECScalar for Scalar {
 		fn random(rng: &mut crate::crypto::Rng) -> Self {
 			use rand::RngCore;

@@ -6,28 +6,17 @@ use state_chain_runtime::AccountId;
 
 use serde::{Deserialize, Serialize};
 
-fn hash_serialized<T: Clone + Serialize>(data: &T) -> [u8; 32] {
-	use sha2::{Digest, Sha256};
-
-	let mut hasher = Sha256::new();
-
-	hasher.update(bincode::serialize(data).unwrap());
-
-	*hasher.finalize().as_ref()
-}
-
 /// Find an element that appears more than `threshold` times
 pub fn find_frequent_element<T, Iter>(iter: Iter, threshold: usize) -> Option<T>
 where
-	T: Serialize + Clone + std::fmt::Debug,
+	T: Clone + std::fmt::Debug + Ord,
 	Iter: Iterator<Item = T>,
 {
-	iter.map(|x| (x.clone(), hash_serialized(&x)))
-		.sorted_by_key(|(_, hash)| *hash)
-		.group_by(|(_, hash)| *hash)
+	iter.sorted_unstable()
+		.group_by(|x| x.clone())
 		.into_iter()
 		.map(|(_, mut group)| {
-			let first = group.next().expect("must have at least one element").0;
+			let first = group.next().expect("must have at least one element");
 			(first, group.count() + 1)
 		})
 		.find(|(_, count)| *count > threshold)

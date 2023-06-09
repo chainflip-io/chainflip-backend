@@ -56,7 +56,7 @@ Since Swap and CCM deposit functions are called by Witnessers, they do not retur
 
 Swaps deposits are required to be above a certain threshold if they are to be processed by the pallet. This threshold is set by the `set_minimum_swap_amount` extrinsic call, and requires governance.
 
-This check is done for both `schedule_swap_by_witnesser`, `on_swap_deposit` pathways, which includes the principal swap component of a CCM. If the principal amount does not need to be swapped (if the output asset == input asset, or if the principal amount is 0), then a principal amount lower than the `MinimumSwapAmount` is allowed.
+This check is done for both `schedule_swap_from_contract`, `schedule_swap_from_channel` pathways, which includes the principal swap component of a CCM. If the principal amount does not need to be swapped (if the output asset == input asset, or if the principal amount is 0), then a principal amount lower than the `MinimumSwapAmount` is allowed.
 
 The Gas budgets are exempt from this threshold (as gas budgets are expected to be smaller in value), but has its own threshold as safeguards.
 

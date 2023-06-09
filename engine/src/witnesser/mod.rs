@@ -1,9 +1,12 @@
 //! Common Witnesser functionality
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+	collections::{BTreeMap, BTreeSet},
+	fmt::Debug,
+};
 
 use async_trait::async_trait;
-use cf_chains::{address::ScriptPubkeyBytes, btc::BitcoinScriptBounded};
+use cf_chains::{btc::ScriptPubkey, dot::PolkadotAccountId};
 use cf_primitives::EpochIndex;
 
 pub mod block_head_stream_from;
@@ -81,6 +84,12 @@ pub struct ItemMonitor<A, K, V> {
 	item_receiver: tokio::sync::mpsc::UnboundedReceiver<MonitorCommand<A>>,
 }
 
+impl<A, K: Debug, V: Debug> Debug for ItemMonitor<A, K, V> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("ItemMonitor").field("items", &self.items).finish()
+	}
+}
+
 // Some addresses act as key value pairs.
 pub trait ItemKeyValue {
 	type Key;
@@ -139,12 +148,12 @@ impl ItemKeyValue for sp_core::H160 {
 	}
 }
 
-impl ItemKeyValue for BitcoinScriptBounded {
-	type Key = ScriptPubkeyBytes;
+impl ItemKeyValue for ScriptPubkey {
+	type Key = Vec<u8>;
 	type Value = Self;
 
 	fn key_value(&self) -> (Self::Key, Self::Value) {
-		(self.data.clone().into(), self.clone())
+		(self.bytes(), self.clone())
 	}
 }
 
@@ -154,6 +163,15 @@ impl ItemKeyValue for sp_runtime::AccountId32 {
 
 	fn key_value(&self) -> (Self::Key, Self::Value) {
 		(self.clone(), ())
+	}
+}
+
+impl ItemKeyValue for PolkadotAccountId {
+	type Key = Self;
+	type Value = ();
+
+	fn key_value(&self) -> (Self::Key, Self::Value) {
+		(*self, ())
 	}
 }
 

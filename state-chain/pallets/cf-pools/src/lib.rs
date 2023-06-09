@@ -12,7 +12,6 @@ use sp_runtime::{Permill, Saturating};
 
 pub use pallet::*;
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 pub mod weights;
 pub use weights::WeightInfo;
@@ -468,7 +467,7 @@ pub mod pallet {
 			})
 		}
 
-		/// Collects and mints a range order.
+		/// Collects and mints a limit order.
 		///
 		/// ## Events
 		///
@@ -535,7 +534,7 @@ pub mod pallet {
 			})
 		}
 
-		/// Collects and burns a range order.
+		/// Collects and burns a limit order.
 		///
 		/// ## Events
 		///

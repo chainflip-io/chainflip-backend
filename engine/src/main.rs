@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{atomic::AtomicBool, Arc};
 
 use anyhow::Context;
 
@@ -7,7 +7,7 @@ use chainflip_engine::{
 	btc::{self, rpc::BtcRpcClient, BtcBroadcaster},
 	db::{KeyStore, PersistentKeyDB},
 	dot::{self, rpc::DotRpcClient, witnesser as dot_witnesser, DotBroadcaster},
-	eth::{self, build_broadcast_channel, rpc::EthDualRpcClient, EthBroadcaster},
+	eth::{self, build_broadcast_channel, rpc::EthHttpRpcClient, EthBroadcaster},
 	health, p2p,
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
@@ -41,6 +41,13 @@ async fn main() -> anyhow::Result<()> {
 
 	task_scope(|scope| {
 		async move {
+			let has_completed_initialising = Arc::new(AtomicBool::new(false));
+
+			if let Some(health_check_settings) = &settings.health_check {
+				health::start(scope, health_check_settings, has_completed_initialising.clone())
+					.await?;
+			}
+
 			utilities::init_json_logger(scope).await;
 
 			let (state_chain_stream, state_chain_client) =
@@ -232,9 +239,9 @@ async fn main() -> anyhow::Result<()> {
 				state_chain_stream.clone(),
 				EthBroadcaster::new(
 					&settings.eth,
-					EthDualRpcClient::new(&settings.eth, expected_chain_id)
+					EthHttpRpcClient::new(&settings.eth, Some(expected_chain_id))
 						.await
-						.context("Failed to create EthDualRpcClient")?,
+						.context("Failed to create EthHttpRpcClient")?,
 				)
 				.context("Failed to create ETH broadcaster")?,
 				DotBroadcaster::new(dot_rpc_client.clone()),
@@ -270,7 +277,7 @@ async fn main() -> anyhow::Result<()> {
 						.await
 						.context("Failed to get initial DOT signatures to monitor")?
 						.into_iter()
-						.map(|(signature, _)| signature.0)
+						.map(|(signature, _)| signature)
 						.collect(),
 					state_chain_client.clone(),
 					db,
@@ -288,9 +295,7 @@ async fn main() -> anyhow::Result<()> {
 				.map_err(|_| anyhow::anyhow!("DOT runtime version updater failed")),
 			);
 
-			if let Some(health_check_settings) = &settings.health_check {
-				health::start(scope, health_check_settings).await?;
-			}
+			has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);
 
 			Ok(())
 		}

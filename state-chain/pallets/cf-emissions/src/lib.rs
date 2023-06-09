@@ -10,13 +10,8 @@ use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
 
-#[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-
-#[cfg(test)]
 mod mock;
-
-#[cfg(test)]
 mod tests;
 
 use frame_support::traits::{Get, Imbalance};
