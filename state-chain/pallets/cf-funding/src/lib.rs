@@ -159,7 +159,7 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
-	/// Redeem address for an restricted account.
+	/// Map of bound addresses for accounts.
 	#[pallet::storage]
 	pub type BoundAddress<T: Config> =
 		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress>;
@@ -290,7 +290,7 @@ pub mod pallet {
 		/// Redemption tax must be less than the minimum funding amount.
 		InvalidRedemptionTaxUpdate,
 
-		/// The account is already bound to a redeem address.
+		/// The account is already bound to an address.
 		AccountAlreadyBound,
 
 		/// The account has insufficient funds to pay for the redemption.
