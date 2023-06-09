@@ -260,7 +260,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 					&key.key_share,
 					&self.nonces[i],
 					&signature_data.bindings,
-					signature_data.group_commitment.clone(),
+					signature_data.group_commitment,
 					self.common.own_idx,
 					&self.common.all_idxs,
 				)
