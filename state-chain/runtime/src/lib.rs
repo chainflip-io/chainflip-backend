@@ -1014,6 +1014,7 @@ impl_runtime_apis! {
 			runtime_apis::Environment {
 				bitcoin_network: Environment::bitcoin_network(),
 				ethereum_chain_id: Environment::ethereum_chain_id(),
+				polkadot_genesis_hash: Environment::polkadot_genesis_hash(),
 			}
 		}
 	}

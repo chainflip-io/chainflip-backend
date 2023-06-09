@@ -1,6 +1,6 @@
 use crate::chainflip::Offence;
 use cf_amm::common::SqrtPriceQ64F96;
-use cf_chains::{btc::BitcoinNetwork, eth::api::EthereumChainId};
+use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::api::EthereumChainId};
 use cf_primitives::{Asset, AssetAmount, EpochIndex, EthereumAddress, SwapOutput};
 use codec::{Decode, Encode};
 use pallet_cf_governance::GovCallHash;
@@ -73,6 +73,7 @@ pub struct AuctionState {
 pub struct Environment {
 	pub bitcoin_network: BitcoinNetwork,
 	pub ethereum_chain_id: EthereumChainId,
+	pub polkadot_genesis_hash: PolkadotHash,
 }
 
 decl_runtime_apis!(
