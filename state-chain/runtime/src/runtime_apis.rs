@@ -70,7 +70,7 @@ pub struct AuctionState {
 }
 
 #[derive(Encode, Decode, Eq, PartialEq)]
-pub struct NetworkInfo {
+pub struct Environment {
 	pub bitcoin_network: BitcoinNetwork,
 }
 
@@ -109,6 +109,6 @@ decl_runtime_apis!(
 			to: Asset,
 			amount: AssetAmount,
 		) -> Result<SwapOutput, DispatchError>;
-		fn cf_network_info() -> NetworkInfo;
+		fn cf_environment() -> Environment;
 	}
 );

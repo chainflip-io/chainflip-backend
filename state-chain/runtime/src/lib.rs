@@ -8,7 +8,6 @@ mod weights;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_transaction_payment::ConstFeeMultiplier;
-use runtime_apis::NetworkInfo;
 
 use crate::{
 	chainflip::Offence,
@@ -1011,8 +1010,8 @@ impl_runtime_apis! {
 			LiquidityPools::swap_with_network_fee(from, to, amount)
 		}
 
-		fn cf_network_info() -> NetworkInfo {
-			NetworkInfo { bitcoin_network: Environment::bitcoin_network() }
+		fn cf_environment() -> runtime_apis::Environment {
+			runtime_apis::Environment { bitcoin_network: Environment::bitcoin_network() }
 		}
 	}
 

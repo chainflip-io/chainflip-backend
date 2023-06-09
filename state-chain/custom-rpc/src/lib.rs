@@ -11,7 +11,7 @@ use sp_runtime::AccountId32;
 use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
-	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi, NetworkInfo},
+	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi, Environment},
 };
 use std::{marker::PhantomData, sync::Arc};
 
@@ -77,12 +77,12 @@ impl From<SwapOutput> for RpcSwapOutput {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct RpcNetworkInfo {
+pub struct RpcEnvironment {
 	bitcoin_network: BitcoinNetwork,
 }
 
-impl From<NetworkInfo> for RpcNetworkInfo {
-	fn from(network_info: NetworkInfo) -> Self {
+impl From<Environment> for RpcEnvironment {
+	fn from(network_info: Environment) -> Self {
 		Self { bitcoin_network: network_info.bitcoin_network }
 	}
 }
@@ -195,7 +195,7 @@ pub trait CustomApi {
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutput>;
 	#[method(name = "network_info")]
-	fn cf_network_info(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcNetworkInfo>;
+	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
 }
 
 /// An RPC extension for the state chain node.
@@ -496,11 +496,11 @@ where
 			.map(RpcSwapOutput::from)
 	}
 
-	fn cf_network_info(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcNetworkInfo> {
+	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment> {
 		self.client
 			.runtime_api()
-			.cf_network_info(&self.query_block_id(at))
+			.cf_environment(&self.query_block_id(at))
 			.map_err(to_rpc_error)
-			.map(RpcNetworkInfo::from)
+			.map(RpcEnvironment::from)
 	}
 }
