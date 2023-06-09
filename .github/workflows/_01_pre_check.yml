@@ -90,4 +90,5 @@ jobs:
 
       - name: Check 🐳🕵️‍♂️
         run: |
+          pip install PyYAML
           python ci/scripts/check_docker_image_tags.py
