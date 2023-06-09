@@ -1034,18 +1034,6 @@ fn cannot_bind_redeem_address_twice() {
 	});
 }
 
-// Probably obsolete
-// #[test]
-// fn cannot_bind_redeem_address_to_zero_address() {
-// 	new_test_ext().execute_with(|| {
-// 		const REDEEM_ADDRESS: EthereumAddress = [0xff; 20];
-// 		assert_noop!(
-// 			Funding::bind_redeem_address(RuntimeOrigin::signed(ALICE), REDEEM_ADDRESS),
-// 			crate::Error::<Test>::EthZeroAddressIsNotAllowed
-// 		);
-// 	});
-// }
-
 #[test]
 fn max_redemption_is_net_exact_is_gross() {
 	const UNRESTRICTED_AMOUNT: FlipBalance = 100;

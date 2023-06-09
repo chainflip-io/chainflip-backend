@@ -293,11 +293,6 @@ pub mod pallet {
 		/// The account is already bound to a redeem address.
 		AccountAlreadyBound,
 
-		/// The address is already a restricted.
-		AddressIsAlreadyRestricted,
-
-		/// The ETH zero address is not allowed to use.
-		EthZeroAddressIsNotAllowed,
 		/// The account has insufficient funds to pay for the redemption.
 		InsufficientBalance,
 	}
@@ -621,7 +616,6 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			for address in addresses_to_add {
-				// ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::EthZeroAddressIsNotAllowed);
 				RestrictedAddresses::<T>::insert(address, ());
 				Self::deposit_event(Event::AddedRestrictedAddress { address });
 			}
@@ -638,7 +632,6 @@ pub mod pallet {
 		/// ## Errors
 		///
 		/// - [AccountAlreadyBound](Error::AccountAlreadyBound)
-		/// - [AddressIsAlreadyRestricted](Error::AddressIsAlreadyRestricted)
 		/// - [BadOrigin](frame_support::error::BadOrigin)
 		#[pallet::weight(T::WeightInfo::bind_redeem_address())]
 		pub fn bind_redeem_address(
@@ -646,7 +639,6 @@ pub mod pallet {
 			address: EthereumAddress,
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
-			// ensure!(address != ETH_ZERO_ADDRESS, Error::<T>::EthZeroAddressIsNotAllowed);
 			ensure!(!BoundAddress::<T>::contains_key(&account_id), Error::<T>::AccountAlreadyBound);
 			BoundAddress::<T>::insert(&account_id, address);
 			Ok(().into())
