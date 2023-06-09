@@ -98,7 +98,7 @@ impl<C: CeremonyTrait, Stage> CeremonyStage<C> for BroadcastStage<C, Stage>
 where
 	Stage: BroadcastStageProcessor<C> + Send,
 {
-	fn init(&mut self) {
+	fn init(&mut self) -> ProcessMessageResult {
 		let common = &self.common;
 
 		let idx_to_id = |idx: &AuthorityCount| common.validator_mapping.get_id(*idx).clone();
@@ -144,13 +144,13 @@ where
 			),
 		};
 
-		// Save our own share
-		self.messages.insert(common.own_idx, own_message);
-
 		self.common
 			.outgoing_p2p_message_sender
 			.send(outgoing_messages)
 			.expect("Could not send p2p message.");
+
+		// Save our own share
+		self.process_message(common.own_idx, own_message.into())
 	}
 
 	fn process_message(&mut self, signer_idx: AuthorityCount, m: C::Data) -> ProcessMessageResult {
