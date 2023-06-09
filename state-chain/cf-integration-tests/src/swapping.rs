@@ -4,7 +4,8 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	address::EncodedAddress, CcmDepositMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress,
+	address::{AddressConverter, EncodedAddress},
+	CcmDepositMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress,
 };
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount, STABLE_ASSET};
 use cf_test_utilities::{assert_events_eq, assert_events_match};
@@ -17,9 +18,9 @@ use pallet_cf_ingress_egress::DepositWitness;
 use pallet_cf_pools::Order;
 use pallet_cf_swapping::{CcmIdCounter, SwapOrigin};
 use state_chain_runtime::{
-	chainflip::address_derivation::AddressDerivation, AccountRoles, EthereumInstance,
-	LiquidityPools, LiquidityProvider, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
-	System, Timestamp, Validator, Weight, Witnesser,
+	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter},
+	AccountRoles, EthereumInstance, LiquidityPools, LiquidityProvider, Runtime, RuntimeCall,
+	RuntimeEvent, RuntimeOrigin, Swapping, System, Timestamp, Validator, Weight, Witnesser,
 };
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
@@ -243,7 +244,7 @@ fn basic_pool_setup_provision_and_swap() {
 				..
 			},
 			..
-		}) if <Ethereum as Chain>::ChainAccount::try_from(events_deposit_address.clone()).unwrap() == deposit_address => swap_id);
+		}) if <Ethereum as Chain>::ChainAccount::try_from(ChainAddressConverter::try_from_encoded_address(events_deposit_address.clone()).expect("we created the deposit address above so it should be valid")).unwrap() == deposit_address => swap_id);
 
 		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
 		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
