@@ -313,7 +313,7 @@ mod serialisation {
 
 		#[test]
 		fn check_comm3_max_size() {
-			test_all_crypto_schemes!(check_comm3_size_for_scheme);
+			test_all_crypto_schemes!(check_comm3_size_for_scheme());
 		}
 
 		fn check_comm3_size_for_scheme<C: CryptoScheme>() {

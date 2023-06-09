@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 
+use cf_primitives::AccountId;
 use rand::SeedableRng;
 
 use crate::{
@@ -239,7 +240,7 @@ async fn should_sign_multiple_payloads() {
 	test_sign_multiple_payloads::<BtcSigning>(&payloads).await;
 }
 
-async fn should_sign_with_all_parties<C: CryptoScheme>() {
+async fn should_sign_with_all_parties<C: CryptoScheme>(participants: &BTreeSet<AccountId>) {
 	// This seed ensures that the initially
 	// generated key is incompatible to increase
 	// test coverage
@@ -247,12 +248,12 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 		let key_seed = [i; 32];
 		let nonce_seed = [11 * i; 32];
 		let (key, key_data) = generate_key_data::<C>(
-			BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
+			BTreeSet::from_iter(participants.iter().cloned()),
 			&mut Rng::from_seed(key_seed),
 		);
 
 		let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
-			new_nodes(ACCOUNT_IDS.clone()),
+			new_nodes(participants.clone()),
 			DEFAULT_SIGNING_CEREMONY_ID,
 			vec![PayloadAndKeyData::new(C::signing_payload_for_test(), key.clone(), key_data)],
 			Rng::from_seed(nonce_seed),
@@ -274,6 +275,18 @@ async fn should_sign_with_all_parties<C: CryptoScheme>() {
 			.expect("should have exactly one signature");
 		assert!(C::verify_signature(&signature, &key, &C::signing_payload_for_test()).is_ok());
 	}
+}
+
+#[tokio::test]
+async fn should_sign_with_single_party_on_all_schemes() {
+	let participants = &BTreeSet::from_iter(vec![ACCOUNT_IDS[0].clone()]);
+	test_all_crypto_schemes_async!(should_sign_with_all_parties(participants));
+}
+
+#[tokio::test]
+async fn should_sign_with_all_parties_on_all_schemes() {
+	let participants = &BTreeSet::from_iter(ACCOUNT_IDS.clone());
+	test_all_crypto_schemes_async!(should_sign_with_all_parties(participants));
 }
 
 #[tokio::test]
@@ -320,11 +333,6 @@ async fn should_sign_with_different_keys() {
 	// Signatures should be correct w.r.t. corresponding keys:
 	assert!(C::verify_signature(&signatures[0], &key_1, &C::signing_payload_for_test()).is_ok());
 	assert!(C::verify_signature(&signatures[1], &key_2, &C::signing_payload_for_test()).is_ok());
-}
-
-#[tokio::test]
-async fn should_sign_with_all_parties_on_all_schemes() {
-	test_all_crypto_schemes_async!(should_sign_with_all_parties);
 }
 
 mod timeout {
