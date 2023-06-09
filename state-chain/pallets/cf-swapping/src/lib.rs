@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::{
-	address::{AddressConverter, ForeignChainAddress},
+	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	CcmDepositMetadata,
 };
 use cf_primitives::{Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, STABLE_ASSET};
@@ -136,9 +136,9 @@ pub enum CcmFailReason {
 	GasBudgetBelowMinimum,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum SwapOrigin {
-	DepositChannel { deposit_address: ForeignChainAddress, channel_id: ChannelId },
+	DepositChannel { deposit_address: EncodedAddress, channel_id: ChannelId },
 	Vault { tx_hash: TransactionHash },
 }
 
@@ -873,7 +873,10 @@ pub mod pallet {
 					deposit_amount: amount,
 					destination_asset: to,
 					destination_address: encoded_destination_address,
-					origin: SwapOrigin::DepositChannel { deposit_address, channel_id },
+					origin: SwapOrigin::DepositChannel {
+						deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
+						channel_id,
+					},
 				});
 			}
 		}
