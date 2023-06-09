@@ -1,5 +1,5 @@
 use cf_amm::common::SqrtPriceQ64F96;
-use cf_chains::btc::BitcoinNetwork;
+use cf_chains::{btc::BitcoinNetwork, eth::api::EthereumChainId};
 use cf_primitives::{Asset, EthereumAddress, SwapOutput};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
@@ -79,11 +79,15 @@ impl From<SwapOutput> for RpcSwapOutput {
 #[derive(Serialize, Deserialize)]
 pub struct RpcEnvironment {
 	bitcoin_network: BitcoinNetwork,
+	ethereum_chain_id: EthereumChainId,
 }
 
 impl From<Environment> for RpcEnvironment {
 	fn from(network_info: Environment) -> Self {
-		Self { bitcoin_network: network_info.bitcoin_network }
+		Self {
+			bitcoin_network: network_info.bitcoin_network,
+			ethereum_chain_id: network_info.ethereum_chain_id,
+		}
 	}
 }
 

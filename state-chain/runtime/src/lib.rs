@@ -1011,7 +1011,10 @@ impl_runtime_apis! {
 		}
 
 		fn cf_environment() -> runtime_apis::Environment {
-			runtime_apis::Environment { bitcoin_network: Environment::bitcoin_network() }
+			runtime_apis::Environment {
+				bitcoin_network: Environment::bitcoin_network(),
+				ethereum_chain_id: Environment::ethereum_chain_id(),
+			}
 		}
 	}
 
