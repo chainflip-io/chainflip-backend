@@ -211,31 +211,20 @@ pub mod pallet {
 		RedemptionSettled(AccountId<T>, FlipBalance<T>),
 
 		/// An account has stopped bidding and will no longer take part in auctions.
-		StoppedBidding {
-			account_id: AccountId<T>,
-		},
+		StoppedBidding { account_id: AccountId<T> },
 
 		/// A previously non-bidding account has started bidding.
-		StartedBidding {
-			account_id: AccountId<T>,
-		},
+		StartedBidding { account_id: AccountId<T> },
 
 		/// A redemption has expired without being executed.
-		RedemptionExpired {
-			account_id: AccountId<T>,
-		},
+		RedemptionExpired { account_id: AccountId<T> },
 
-		MinimumFundingUpdated {
-			new_minimum: T::Balance,
-		},
+		/// The minimum funding amount has been updated.
+		MinimumFundingUpdated { new_minimum: T::Balance },
 		/// A new restricted address has been added
-		AddedRestrictedAddress {
-			address: EthereumAddress,
-		},
+		AddedRestrictedAddress { address: EthereumAddress },
 		/// A restricted address has been removed
-		RemovedRestrictedAddress {
-			address: EthereumAddress,
-		},
+		RemovedRestrictedAddress { address: EthereumAddress },
 		/// A funding attempt has failed.
 		FailedFundingAttempt {
 			account_id: AccountId<T>,
@@ -243,9 +232,7 @@ pub mod pallet {
 			amount: FlipBalance<T>,
 		},
 		/// The Withdrawal Tax has been updated.
-		RedemptionTaxAmountUpdated {
-			amount: T::Balance,
-		},
+		RedemptionTaxAmountUpdated { amount: T::Balance },
 	}
 
 	#[pallet::error]
