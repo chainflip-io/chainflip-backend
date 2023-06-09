@@ -3,7 +3,6 @@ import sys
 import yaml
 
 EXIT_CODE = 0
-success_message = "🎉 \033[1;32mDocker image tags match!\033[0m"
 
 services = {
     "geth": "services.geth.image",
@@ -31,5 +30,6 @@ with (
             print(error_message)
             EXIT_CODE = 1
         else:
-            print(success_message)
+            print(
+                f"🎉 \033[1;32m{service}: Docker image tags match!\033[0m")
     sys.exit(EXIT_CODE)
