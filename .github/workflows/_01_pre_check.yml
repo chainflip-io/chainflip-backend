@@ -76,3 +76,19 @@ jobs:
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: ci/docker/${{ matrix.dockerfile }}
+
+  check-docker-image-tags:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@v3
+
+      - name: Setup Python 🐍
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+
+      - name: Check 🐳🕵️‍♂️
+        run: |
+          pip install yaml
+          python ci/scripts/check_docker_image_tags.py
