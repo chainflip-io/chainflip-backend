@@ -66,9 +66,6 @@ jobs:
           apt update
           apt install ngrok
 
-      - name: Install pnpm
-        run: npm install -g pnpm@8
-
       - name: Configure NodeJS
         uses: actions/setup-node@v3
         with:
