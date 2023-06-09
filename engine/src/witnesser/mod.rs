@@ -1,6 +1,9 @@
 //! Common Witnesser functionality
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+	collections::{BTreeMap, BTreeSet},
+	fmt::Debug,
+};
 
 use async_trait::async_trait;
 use cf_chains::{address::ScriptPubkeyBytes, btc::BitcoinScriptBounded, dot::PolkadotAccountId};
@@ -79,6 +82,12 @@ pub enum MonitorCommand<MonitorData> {
 pub struct ItemMonitor<A, K, V> {
 	items: BTreeMap<K, V>,
 	item_receiver: tokio::sync::mpsc::UnboundedReceiver<MonitorCommand<A>>,
+}
+
+impl<A, K: Debug, V: Debug> Debug for ItemMonitor<A, K, V> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("ItemMonitor").field("items", &self.items).finish()
+	}
 }
 
 // Some addresses act as key value pairs.

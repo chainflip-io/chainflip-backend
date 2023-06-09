@@ -75,6 +75,7 @@ where
 				new_witnessed_until > prev_witnessed_until,
 				"Expected {new_witnessed_until:?} > {prev_witnessed_until:?}."
 			);
+			tracing::debug!("Checkpointing {chain_tag} at {new_witnessed_until:?}.");
 			db.update_checkpoint(chain_tag, &new_witnessed_until);
 			prev_witnessed_until = new_witnessed_until;
 		}
