@@ -221,16 +221,20 @@ pub mod pallet {
 
 		/// The minimum funding amount has been updated.
 		MinimumFundingUpdated { new_minimum: T::Balance },
+
 		/// A new restricted address has been added
 		AddedRestrictedAddress { address: EthereumAddress },
+
 		/// A restricted address has been removed
 		RemovedRestrictedAddress { address: EthereumAddress },
+
 		/// A funding attempt has failed.
 		FailedFundingAttempt {
 			account_id: AccountId<T>,
 			withdrawal_address: EthereumAddress,
 			amount: FlipBalance<T>,
 		},
+
 		/// The Withdrawal Tax has been updated.
 		RedemptionTaxAmountUpdated { amount: T::Balance },
 	}
