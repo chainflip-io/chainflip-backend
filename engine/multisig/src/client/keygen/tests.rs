@@ -10,9 +10,9 @@ use crate::{
 		},
 		helpers::{
 			gen_dummy_keygen_comm1, get_dummy_hash_comm, new_nodes, run_keygen, run_stages,
-			standard_signing, KeygenCeremonyRunner, PayloadAndKeyData, SigningCeremonyRunner,
-			ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID, DEFAULT_KEYGEN_SEED,
-			DEFAULT_SIGNING_CEREMONY_ID,
+			standard_signing, test_all_crypto_schemes_async, KeygenCeremonyRunner,
+			PayloadAndKeyData, SigningCeremonyRunner, ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID,
+			DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID,
 		},
 		keygen::{self, Complaints6, VerifyComplaints7, VerifyHashComm2},
 		utils::PartyIdxMapping,
@@ -36,6 +36,30 @@ pub type KeygenCeremonyRunnerEth = KeygenCeremonyRunner<EthSigning>;
 #[tokio::test]
 async fn happy_path_results_in_valid_key() {
 	let (_, _) = run_keygen(new_nodes(ACCOUNT_IDS.clone()), DEFAULT_KEYGEN_CEREMONY_ID).await;
+}
+
+#[tokio::test]
+async fn should_keygen_with_single_party_on_all_schemes() {
+	test_all_crypto_schemes_async!(should_keygen_with_single_party());
+}
+
+async fn should_keygen_with_single_party<C: CryptoScheme>() {
+	let participants = BTreeSet::from_iter(vec![ACCOUNT_IDS[0].clone()]);
+
+	let mut keygen_ceremony = KeygenCeremonyRunner::<C>::new(
+		new_nodes(participants.clone()),
+		DEFAULT_KEYGEN_CEREMONY_ID,
+		Rng::from_seed(DEFAULT_KEYGEN_SEED),
+	);
+
+	// No need to run the stages because the request should progress the ceremony to completion
+	keygen_ceremony.request().await;
+	let (_, shares) = keygen_ceremony.complete();
+	assert_eq!(
+		shares.iter().next().unwrap().1.params.share_count,
+		1,
+		"Should be a single party key"
+	);
 }
 
 /// If at least one party is blamed during the "Complaints" stage, we
@@ -1137,6 +1161,17 @@ mod key_handover {
 		let sharing_subset = to_account_id_set([1]);
 
 		let new_set = to_account_id_set([2, 3]);
+
+		ensure_successful_handover(original_set, sharing_subset, new_set).await;
+	}
+
+	#[tokio::test]
+	async fn only_single_party() {
+		let original_set = to_account_id_set([1]);
+
+		let sharing_subset = to_account_id_set([1]);
+
+		let new_set = to_account_id_set([1]);
 
 		ensure_successful_handover(original_set, sharing_subset, new_set).await;
 	}

@@ -59,7 +59,7 @@ mod serialisation {
 
 	#[test]
 	fn test_signing_commitment_size() {
-		test_all_crypto_schemes!(test_signing_commitment_size_for_scheme);
+		test_all_crypto_schemes!(test_signing_commitment_size_for_scheme());
 	}
 
 	fn test_local_sig_size_for_scheme<C: CryptoScheme>() {
@@ -78,7 +78,7 @@ mod serialisation {
 
 	#[test]
 	fn test_local_sig_size() {
-		test_all_crypto_schemes!(test_local_sig_size_for_scheme);
+		test_all_crypto_schemes!(test_local_sig_size_for_scheme());
 	}
 }
 
