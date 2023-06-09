@@ -1,9 +1,8 @@
 #![feature(absolute_path)]
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use serde::Serialize;
-use settings::GenerateKeysOutputType;
-use std::{fs, path::PathBuf};
+use std::{io::Write, path::PathBuf};
 
 use crate::settings::{
 	BrokerSubcommands, CLICommandLineOptions, CLISettings, CliCommand::*,
@@ -36,8 +35,8 @@ async fn run_cli() -> Result<()> {
 	let command_line_opts = CLICommandLineOptions::parse();
 
 	// Generating keys does not require the settings, so run it before them
-	if let GenerateKeys { output_type } = command_line_opts.cmd {
-		return generate_keys(output_type)
+	if let GenerateKeys { json, path, seed_phrase } = command_line_opts.cmd {
+		return generate_keys(json, path, seed_phrase)
 	}
 
 	let cli_settings = CLISettings::new(command_line_opts.clone()).map_err(|err| anyhow!("Please ensure your config file path is configured correctly and the file is valid. You can also just set all configurations required command line arguments.\n{}", err))?;
@@ -213,15 +212,15 @@ fn confirm_submit() -> bool {
 	}
 }
 
-/// Generate the 3 keys required for a chainflip node and output them to a path or as JSON.
-fn generate_keys(output_type: Option<GenerateKeysOutputType>) -> Result<()> {
+/// Entry point for the [settings::CliCommand::GenerateKeys] subcommand.
+fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>) -> Result<()> {
 	#[derive(Serialize)]
 	struct Keys {
 		node_key: KeyPair,
+		seed_phrase: String,
 		ethereum_key: KeyPair,
-		ethereum_address: String,
+		ethereum_address: [u8; 20],
 		signing_key: KeyPair,
-		signing_key_seed: String,
 		signing_account_id: AccountId32,
 	}
 
@@ -233,70 +232,68 @@ fn generate_keys(output_type: Option<GenerateKeysOutputType>) -> Result<()> {
 				"🔑 Ethereum public key: 0x{}",
 				hex::encode(&self.ethereum_key.public_key)
 			)?;
-			writeln!(f, "👤 Ethereum address: 0x{}", self.ethereum_address)?;
+			writeln!(f, "👤 Ethereum address: 0x{}", hex::encode(self.ethereum_address))?;
 			writeln!(f, "🔑 Validator key: 0x{}", hex::encode(&self.signing_key.public_key))?;
 			writeln!(f, "👤 Validator account id: 0x{}", self.signing_account_id)?;
-			writeln!(f, "🌱 Validator key seed phrase: {}", self.signing_key_seed)?;
+			writeln!(f, "🌱 Seed phrase: {}", self.seed_phrase)?;
 			Ok(())
 		}
 	}
 
-	// Generate new keys
-	let (ethereum_key, ethereum_address) = api::generate_ethereum_key();
-	let (signing_key, signing_key_seed, signing_account_id) = api::generate_signing_key(None)?;
-	let keys = Keys {
-		node_key: api::generate_node_key(),
-		ethereum_key,
-		ethereum_address: hex::encode(ethereum_address),
-		signing_key,
-		signing_key_seed,
-		signing_account_id,
-	};
+	impl Keys {
+		pub fn new(maybe_seed_phrase: Option<String>) -> Result<Self> {
+			let (signing_key, seed_phrase, signing_account_id) =
+				api::generate_signing_key(maybe_seed_phrase.as_ref().map(String::as_str))
+					.context("Error while generating signing key.")?;
+			let (ethereum_key, ethereum_address) =
+				api::generate_ethereum_key(Some(seed_phrase.clone()))
+					.context("Error while generating Ethereum key.")?;
+			Ok(Keys {
+				node_key: api::generate_node_key(),
+				seed_phrase,
+				ethereum_key,
+				ethereum_address,
+				signing_key,
+				signing_account_id,
+			})
+		}
+	}
 
-	// Output the keys depending on the users selected output type
-	match output_type.unwrap_or(GenerateKeysOutputType::Files { path: PathBuf::from(".") }) {
-		GenerateKeysOutputType::Json => {
-			println!(
+	let keys = Keys::new(seed_phrase)?;
+
+	if json {
+		println!("{}", serde_json::to_string_pretty(&keys)?);
+	} else {
+		println!("Generated fresh keys for your Chainflip Node!");
+		println!("{}", keys);
+	}
+
+	if let Some(path) = path {
+		if !path.try_exists().context("Could not determine if the directory path exists.")? {
+			std::fs::create_dir_all(&path).context("Unable to create keys directory.")?;
+		}
+		let path = path.canonicalize().context("Unable to resolve path to keys directory.")?;
+		fn create_and_open_for_write(
+			file_path: impl AsRef<std::path::Path>,
+		) -> std::io::Result<std::fs::File> {
+			std::fs::OpenOptions::new().write(true).create_new(true).open(file_path)
+		}
+		for (name, key) in [
+			("node_key", hex::encode(keys.node_key.secret_key)),
+			("signing_key", hex::encode(keys.signing_key.secret_key)),
+			("ethereum_key", hex::encode(keys.ethereum_key.secret_key)),
+		] {
+			let filename = [name, "_file"].concat();
+			write!(
+				create_and_open_for_write(path.join(&filename))
+					.context(format!("Could not open file {filename}."))?,
 				"{}",
-				serde_json::to_string_pretty(&keys).expect("Should prettify keys to JSON")
-			);
-		},
-		GenerateKeysOutputType::Files { path } => {
-			const NODE_KEY_FILE_NAME: &str = "node_key_file";
-			const SIGNING_KEY_FILE_NAME: &str = "signing_key_file";
-			const ETHEREUM_KEY_FILE_NAME: &str = "ethereum_key_file";
+				key
+			)
+			.context("Error while writing to file.")?;
+		}
 
-			let absolute_path_string = std::path::absolute(&path)
-				.expect("Failed to get absolute path")
-				.to_string_lossy()
-				.into_owned();
-
-			if path.is_file() {
-				anyhow::bail!("Invalid keys path {}", absolute_path_string);
-			}
-			if !path.exists() {
-				std::fs::create_dir_all(path.clone())?
-			}
-
-			let node_key_file = path.join(NODE_KEY_FILE_NAME);
-			let signing_key_file = path.join(SIGNING_KEY_FILE_NAME);
-			let ethereum_key_file = path.join(ETHEREUM_KEY_FILE_NAME);
-
-			if node_key_file.exists() || signing_key_file.exists() || ethereum_key_file.exists() {
-				anyhow::bail!(
-				"Key file(s) already exist, please move/delete them manually from {absolute_path_string}"
-				);
-			}
-
-			println!("Generated fresh keys for your Chainflip Node!");
-			println!("{}", keys);
-
-			fs::write(node_key_file, hex::encode(keys.node_key.secret_key))?;
-			fs::write(ethereum_key_file, hex::encode(keys.ethereum_key.secret_key))?;
-			fs::write(signing_key_file, hex::encode(keys.signing_key.secret_key))?;
-
-			println!("Saved all secret keys to {absolute_path_string}");
-		},
+		println!("Saved all secret keys to '{}'.", path.display());
 	}
 
 	Ok(())

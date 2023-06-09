@@ -138,30 +138,16 @@ pub enum CliCommand {
 		about = "Generates the 3 key files needed to run a chainflip node (Node Key, Ethereum Key and Validator Key)"
 	)]
 	GenerateKeys {
-		#[clap(
-			help = "Set to `json` to output to the cmd line as JSON, or provide a path to a directory where the keys will be saved. Defaults to save the keys to the local directory"
-		)]
-		output_type: Option<GenerateKeysOutputType>,
+		/// Output to the cmd line as JSON.
+		#[clap(short, long, action)]
+		json: bool,
+		/// Optionally provide a path to a directory where the keys will be saved.
+		#[clap(short, long, action)]
+		path: Option<PathBuf>,
+		/// Optionally supply a seed to generate the keys deterministically.
+		#[clap(short, long, action)]
+		seed_phrase: Option<String>,
 	},
-}
-
-#[derive(Clone, Debug)]
-pub enum GenerateKeysOutputType {
-	Files { path: PathBuf },
-	Json,
-}
-
-impl std::str::FromStr for GenerateKeysOutputType {
-	type Err = String;
-
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let s = s.trim();
-		Ok(if s.eq_ignore_ascii_case("json") {
-			GenerateKeysOutputType::Json
-		} else {
-			GenerateKeysOutputType::Files { path: PathBuf::from(s) }
-		})
-	}
 }
 
 fn account_role_parser(s: &str) -> Result<AccountRole, String> {

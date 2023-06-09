@@ -455,15 +455,16 @@ pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPair, Strin
 	use bip39::{Language, Mnemonic, MnemonicType};
 
 	// Get a new random seed phrase if one was not provided
-	let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
-	let seed_phrase = seed_phrase.unwrap_or_else(|| mnemonic.phrase());
+	let mnemonic = seed_phrase
+		.map(|phrase| Mnemonic::from_phrase(&phrase[..], Language::English))
+		.unwrap_or_else(|| Ok(Mnemonic::new(MnemonicType::Words12, Language::English)))?;
 
-	sp_core::Pair::from_phrase(seed_phrase, None)
+	sp_core::Pair::from_phrase(mnemonic.phrase(), None)
 		.map(|(pair, seed)| {
 			let pair: sp_core::sr25519::Pair = pair;
 			(
 				KeyPair { secret_key: seed.to_vec(), public_key: pair.public().to_vec() },
-				seed_phrase.to_string(),
+				mnemonic.to_string(),
 				pair.public().into(),
 			)
 		})
@@ -475,20 +476,27 @@ pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPair, Strin
 /// transactions. We recommend importing the generated secret key into metamask for account
 /// management.
 /// returns the keypair and the derived ethereum address
-pub fn generate_ethereum_key() -> (KeyPair, [u8; 20]) {
-	use rand::SeedableRng;
-	let mut rng = rand::rngs::StdRng::from_entropy();
+pub fn generate_ethereum_key(phrase: Option<String>) -> Result<(KeyPair, [u8; 20])> {
+	use bip39::{Language, Mnemonic, MnemonicType, Seed};
 
-	let secret_key = libsecp256k1::SecretKey::random(&mut rng);
+	let phrase = phrase.unwrap_or_else(|| {
+		Mnemonic::new(MnemonicType::Words12, Language::English).phrase().to_string()
+	});
+
+	let seed =
+		Seed::new(&Mnemonic::from_phrase(&phrase[..], Language::English)?, Default::default());
+
+	let secret_key = libsecp256k1::SecretKey::parse_slice(&seed.as_bytes()[..32])
+		.context("Unable to derive secret key.")?;
 	let public_key = libsecp256k1::PublicKey::from_secret_key(&secret_key);
 
-	(
+	Ok((
 		KeyPair {
 			secret_key: secret_key.serialize().to_vec(),
 			public_key: public_key.serialize_compressed().to_vec(),
 		},
 		to_ethereum_address(public_key),
-	)
+	))
 }
 
 #[test]
