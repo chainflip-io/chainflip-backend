@@ -2,6 +2,9 @@
 import sys
 import yaml
 
+EXIT_CODE = 0
+success_message = "🎉 \033[1;32mDocker image tags match!\033[0m"
+
 services = {
     "geth": "services.geth.image",
     "polkadot": "services.polkadot.image",
@@ -27,4 +30,6 @@ with (
             error_message = f"""🚨 \033[1;31m{service} docker image mismatch!\033[0m\n\033[1;33mLocal:\033[0m {docker_image}\n\033[1;33mGitHub:\033[0m {github_image}"""
             print(error_message)
             EXIT_CODE = 1
+        else:
+            print(success_message)
     sys.exit(EXIT_CODE)
