@@ -19,7 +19,7 @@ jobs:
   bouncer:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20-ubuntu-22.04"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20-ubuntu-20.04"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -108,8 +108,13 @@ jobs:
         env:
           NGROK_AUTHTOKEN: ${{ secrets.CF_NGROK_AUTHTOKEN }}
         run: |
-          ngrok http http://localhost:9944 > /dev/null &
-          ngrok http http://localhost:9945 > /dev/null &
+          ngrok http http://localhost:9944 --log-format=logfmt --log=/tmp/ngrok-chainflip-node.log &
+          ngrok http http://localhost:9945 --log-format=logfmt --log=/tmp/ngrok-polkadot.log &
+          sleep 10
+
+      - name: Get ngrok URLs
+        id: ngrok-urls
+        run: python3 ./ci/scripts/get_ngrok_urls.py
 
       - name: Run EinfachHeuteLeiderNicht.exe
         if: inputs.simple_bouncer
