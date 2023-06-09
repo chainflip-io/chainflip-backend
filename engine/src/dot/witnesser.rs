@@ -252,6 +252,7 @@ where
 	DotRpc: DotSubscribeApi + DotRpcApi + 'static + Send + Sync + Clone,
 {
 	start_epoch_process_runner(
+		None,
 		Arc::new(Mutex::new(epoch_starts_receiver)),
 		BlockWitnesserGeneratorWrapper {
 			generator: DotWitnesserGenerator { state_chain_client, dot_client },

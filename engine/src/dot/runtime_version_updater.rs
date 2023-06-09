@@ -47,6 +47,7 @@ where
 	};
 
 	start_epoch_process_runner(
+		None,
 		// NOTE: we only use Arc<Mutex> here to
 		// satisfy the interface...
 		Arc::new(Mutex::new(epoch_starts_receiver)),
@@ -55,7 +56,7 @@ where
 	)
 	.instrument(info_span!("DOT-Runtime-Version"))
 	.await
-	.map_err(|()| anyhow!("DOT-Runtime-Version witnesser exited unexpectedly"))
+	.map_err(|_| anyhow!("DOT-Runtime-Version witnesser exited unexpectedly"))
 }
 
 struct RuntimeVersionUpdater<StateChainClient> {

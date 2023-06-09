@@ -88,6 +88,7 @@ where
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 {
 	start_epoch_process_runner(
+		None,
 		Arc::new(Mutex::new(epoch_starts_receiver)),
 		BlockWitnesserGeneratorWrapper {
 			db,
