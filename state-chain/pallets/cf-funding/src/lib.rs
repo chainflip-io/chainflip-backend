@@ -162,7 +162,7 @@ pub mod pallet {
 	/// Redeem address for an restricted account.
 	#[pallet::storage]
 	pub type BoundAddress<T: Config> =
-		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, AccountId<T>, EthereumAddress>;
 
 	/// The fee levied for every redemption request. Can be updated by Governance.
 	#[pallet::storage]
@@ -385,72 +385,22 @@ pub mod pallet {
 				Error::<T>::PendingRedemption
 			);
 
-			// // We have some restrictions on the account
-			// let remaining = if RestrictedBalances::<T>::contains_key(account_id.clone()) {
-			// 	// We're talking about the current address
-			// 	// ensure that restricted balance for the address is higher than the amount we
-			// 	// try to redeem
-			// 	RestrictedBalances::<T>::mutate_exists(&account_id, |maybe_entry| {
-			// 		if let Some(entry) = maybe_entry {
-			// 			if let Some(restricted_balance) = entry.get(&address) {
-			// 				let new_restricted_balance = restricted_balance.saturating_sub(amount);
-			// 				if new_restricted_balance == Zero::zero() {
-			// 					entry.remove_entry(&address);
-			// 				} else {
-			// 					entry.entry(address).and_modify(|restricted_balance| {
-			// 						*restricted_balance = new_restricted_balance;
-			// 					});
-			// 				}
-			// 			}
-			// 		}
-			// 	});
-			// 	// Remove the the account from the restricted balances if it's empty
-			// 	if RestrictedBalances::<T>::get(&account_id).is_empty() {
-			// 		RestrictedBalances::<T>::remove(&account_id);
-			// 	}
-			// 	// some other address but funds are restricted
-			// 	// Sum over all restricted balances
-			// 	let restricted_balance = RestrictedBalances::<T>::get(&account_id)
-			// 		.into_iter()
-			// 		.fold(Zero::zero(), |acc: FlipBalance<T>, (_, balance)| acc + balance);
-			// 	// Total account balance
-			// 	let total_balance = T::Flip::account_balance(&account_id);
-			// 	// Balance available for redemption (total - sum(all restricted balances))
-			// 	let available_balance = total_balance.saturating_sub(restricted_balance);
-			// 	// Ensure that the amount to redeem is not higher than the restricted balance
-			// 	ensure!(
-			// 		amount <= available_balance,
-			// 		Error::<T>::AmountToRedeemIsHigherThanRestrictedBalance
-			// 	);
-			// 	available_balance
-			// } else {
-			// 	// Check if the
-			// 	if BoundAddress::<T>::contains_key(&account_id) {
-			// 		ensure!(
-			// 			BoundAddress::<T>::get(&account_id) == address,
-			// 			Error::<T>::InvalidRedemption
-			// 		);
-			// 	}
-
-			// 	// Calculate the amount that would remain after this redemption and ensure it won't
-			// 	// be less than the system's minimum balance.
-			// 	T::Flip::account_balance(&account_id)
-			// 		.checked_sub(&amount)
-			// 		.ok_or(Error::<T>::InvalidRedemption)?
-			// };
-
 			let mut restricted_balances = RestrictedBalances::<T>::get(&account_id);
 			let redemption_fee = RedemptionTax::<T>::get();
+
+			if let Some(bound_address) = BoundAddress::<T>::get(&account_id) {
+				ensure!(
+					bound_address == address ||
+						restricted_balances.keys().any(|res_address| res_address == &address),
+					Error::<T>::InvalidRedemption
+				);
+			}
 
 			// The amount to withdraw, net of fees.
 			let net_amount = match amount {
 				RedemptionAmount::Max => {
 					let restricted = restricted_balances.values().copied().sum::<FlipBalance<T>>() -
 						restricted_balances.get(&address).copied().unwrap_or_default();
-					// Remove the the account from the restricted balances if it's empty
-					if restricted == Zero::zero() {
-						RestrictedBalances::<T>::remove(&account_id);
-					}
 					let unrestricted = T::Flip::redeemable_balance(&account_id)
 						.checked_sub(&restricted)
 						.ok_or(Error::<T>::InsufficientUnrestrictedFunds)?;
