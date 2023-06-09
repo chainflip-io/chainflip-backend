@@ -8,6 +8,7 @@ mod weights;
 pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_transaction_payment::ConstFeeMultiplier;
+use runtime_apis::NetworkInfo;
 
 use crate::{
 	chainflip::Offence,
@@ -1008,6 +1009,10 @@ impl_runtime_apis! {
 		/// layer and would not affect on-chain storage.
 		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Result<SwapOutput, DispatchError> {
 			LiquidityPools::swap_with_network_fee(from, to, amount)
+		}
+
+		fn cf_network_info() -> NetworkInfo {
+			NetworkInfo { bitcoin_network: Environment::bitcoin_network() }
 		}
 	}
 

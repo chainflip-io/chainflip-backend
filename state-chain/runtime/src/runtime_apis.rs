@@ -1,5 +1,6 @@
 use crate::chainflip::Offence;
 use cf_amm::common::SqrtPriceQ64F96;
+use cf_chains::btc::BitcoinNetwork;
 use cf_primitives::{Asset, AssetAmount, EpochIndex, EthereumAddress, SwapOutput};
 use codec::{Decode, Encode};
 use pallet_cf_governance::GovCallHash;
@@ -68,6 +69,11 @@ pub struct AuctionState {
 	pub auction_size_range: (u32, u32),
 }
 
+#[derive(Encode, Decode, Eq, PartialEq)]
+pub struct NetworkInfo {
+	pub bitcoin_network: BitcoinNetwork,
+}
+
 decl_runtime_apis!(
 	/// Definition for all runtime API interfaces.
 	pub trait CustomRuntimeApi {
@@ -103,5 +109,6 @@ decl_runtime_apis!(
 			to: Asset,
 			amount: AssetAmount,
 		) -> Result<SwapOutput, DispatchError>;
+		fn cf_network_info() -> NetworkInfo;
 	}
 );

@@ -1,4 +1,5 @@
 use cf_amm::common::SqrtPriceQ64F96;
+use cf_chains::btc::BitcoinNetwork;
 use cf_primitives::{Asset, EthereumAddress, SwapOutput};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
@@ -10,7 +11,7 @@ use sp_runtime::AccountId32;
 use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
-	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi},
+	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi, NetworkInfo},
 };
 use std::{marker::PhantomData, sync::Arc};
 
@@ -72,6 +73,17 @@ impl From<SwapOutput> for RpcSwapOutput {
 			intermediary: Some(NumberOrHex::from(swap_output.intermediary.unwrap())),
 			output: NumberOrHex::from(swap_output.output),
 		}
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcNetworkInfo {
+	bitcoin_network: BitcoinNetwork,
+}
+
+impl From<NetworkInfo> for RpcNetworkInfo {
+	fn from(network_info: NetworkInfo) -> Self {
+		Self { bitcoin_network: network_info.bitcoin_network }
 	}
 }
 
@@ -182,6 +194,8 @@ pub trait CustomApi {
 		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutput>;
+	#[method(name = "network_info")]
+	fn cf_network_info(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcNetworkInfo>;
 }
 
 /// An RPC extension for the state chain node.
@@ -480,5 +494,13 @@ where
 				r.map_err(|e| jsonrpsee::core::Error::Custom(<&'static str>::from(e).into()))
 			})
 			.map(RpcSwapOutput::from)
+	}
+
+	fn cf_network_info(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcNetworkInfo> {
+		self.client
+			.runtime_api()
+			.cf_network_info(&self.query_block_id(at))
+			.map_err(to_rpc_error)
+			.map(RpcNetworkInfo::from)
 	}
 }
