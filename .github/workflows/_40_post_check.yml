@@ -17,8 +17,17 @@ permissions:
 
 jobs:
   bouncer:
-    runs-on: ubuntu-20.04
+    runs-on: [hetzner]
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20-ubuntu-20.04"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
+    env:
+      POLKADOT_ENDPOINT: ws://polkadot:9944
+      BTC_ENDPOINT: http://bitcoin:8332
+      ETH_ENDPOINT: http://geth:8545
     services:
       bitcoin:
         credentials:
@@ -52,13 +61,10 @@ jobs:
 
       - name: Setup ngrok
         run: |
-          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
-          sudo apt update
-          sudo apt install ngrok
-
-      - name: Install pnpm
-        run: npm install -g pnpm@8
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | tee /etc/apt/sources.list.d/ngrok.list
+          apt update
+          apt install ngrok
 
       - name: Configure NodeJS
         uses: actions/setup-node@v3
@@ -76,8 +82,8 @@ jobs:
 
       - name: Install system packages
         run: |
-          sudo apt-get update
-          sudo apt-get install -y bc xxd
+          apt-get update
+          apt-get install -y bc xxd
 
       - name: Download binaries
         uses: actions/download-artifact@v3
@@ -102,8 +108,13 @@ jobs:
         env:
           NGROK_AUTHTOKEN: ${{ secrets.CF_NGROK_AUTHTOKEN }}
         run: |
-          ngrok http http://localhost:9944 > /dev/null &
-          ngrok http http://localhost:9945 > /dev/null &
+          ngrok http http://localhost:9944 --log-format=logfmt --log=/tmp/ngrok-chainflip-node.log &
+          ngrok http http://polkadot:9944 --log-format=logfmt --log=/tmp/ngrok-polkadot.log &
+          sleep 10
+
+      - name: Get ngrok URLs
+        id: ngrok-urls
+        run: python3 ./ci/scripts/get_ngrok_urls.py
 
       - name: Run EinfachHeuteLeiderNicht.exe
         if: inputs.simple_bouncer

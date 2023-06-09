@@ -121,13 +121,19 @@ build-localnet-in-ci() {
   done
 
   echo "🪙 Waiting for Bitcoin node to start"
-  check_endpoint_health --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332
+  check_endpoint_health --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://bitcoin:8332 > /dev/null
 
   echo "💎 Waiting for ETH node to start"
-  check_endpoint_health -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://localhost:8545
+  check_endpoint_health -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":67}' http://geth:8545 > /dev/null
 
   echo "🚦 Waiting for polkadot node to start"
-  REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9945') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
+  REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://polkadot:9944') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
+
+  echo "🎛️ Replacing URLs in Settings.toml"
+  sed -i -e "s|localhost:8332|bitcoin:8332|g" ./localnet/init/config/Settings.toml
+  sed -i -e "s|localhost:8545|geth:8545|g" ./localnet/init/config/Settings.toml
+  sed -i -e "s|localhost:8546|geth:8546|g" ./localnet/init/config/Settings.toml
+  sed -i -e "s|localhost:9945|polkadot:9944|g" ./localnet/init/config/Settings.toml
 
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
   DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
