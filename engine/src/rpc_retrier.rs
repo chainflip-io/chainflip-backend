@@ -143,10 +143,8 @@ impl<RpcClient: Clone + Send + Sync + 'static> RpcRetrierClient<RpcClient> {
 					tracing::trace!("Retrying request id: {request_id}, that had a timeout of {timeout_millis}");
 
 					if let Some((response_sender, closure)) = request_holder.get(&request_id) {
-						if response_sender.is_closed() {
-							// The receiver has been dropped, so we don't need to retry.
-							continue;
-						} else {
+						// If the receiver has been dropped, we don't need to retry.
+						if !response_sender.is_closed() {
 							// Apply exponential backoff.
 							running_futures.push(submission_future(primary_client.clone(), closure, request_id, timeout_millis.saturating_mul(2)));
 						}
