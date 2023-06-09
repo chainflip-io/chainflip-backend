@@ -226,7 +226,7 @@ fn expect_swap_id_to_be_emitted() {
 				destination_asset: Asset::Usdc,
 				destination_address: EncodedAddress::Eth(Default::default()),
 				origin: SwapOrigin::DepositChannel {
-					deposit_address: ForeignChainAddress::Eth(Default::default()),
+					deposit_address: EncodedAddress::Eth(Default::default()),
 					channel_id: 1
 				}
 			}),
@@ -1059,7 +1059,7 @@ fn swap_by_deposit_happy_path() {
 			destination_asset: to,
 			destination_address: EncodedAddress::Eth(Default::default()),
 			origin: SwapOrigin::DepositChannel {
-				deposit_address: ForeignChainAddress::Eth(Default::default()),
+				deposit_address: EncodedAddress::Eth(Default::default()),
 				channel_id: 1,
 			},
 		}));
