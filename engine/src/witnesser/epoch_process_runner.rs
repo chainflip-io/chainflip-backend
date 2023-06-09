@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use futures::{FutureExt, Stream, StreamExt};
+use futures_util::TryFutureExt;
 use num_traits::CheckedSub;
 use std::pin::Pin;
 use tokio::{
@@ -62,7 +63,20 @@ pub trait EpochProcessGenerator: Send {
 
 type WitnesserTask<Witnesser> = ScopedJoinHandle<<Witnesser as EpochWitnesser>::StaticState>;
 
+#[derive(Debug)]
+pub enum EpochProcessRunnerError<C: cf_chains::Chain> {
+	WitnesserError(EpochStart<C>),
+	Other(anyhow::Error),
+}
+
+impl<C: cf_chains::Chain> From<()> for EpochProcessRunnerError<C> {
+	fn from(_: ()) -> Self {
+		EpochProcessRunnerError::Other(anyhow::anyhow!("Unknown Error"))
+	}
+}
+
 pub async fn start_epoch_process_runner<Generator>(
+	mut resume_at: Option<EpochStart<<Generator::Witnesser as EpochWitnesser>::Chain>>,
 	epoch_start_receiver: Arc<
 		Mutex<
 			async_broadcast::Receiver<EpochStart<<Generator::Witnesser as EpochWitnesser>::Chain>>,
@@ -70,7 +84,7 @@ pub async fn start_epoch_process_runner<Generator>(
 	>,
 	mut witnesser_generator: Generator,
 	initial_state: <Generator::Witnesser as EpochWitnesser>::StaticState,
-) -> Result<(), ()>
+) -> Result<(), EpochProcessRunnerError<<Generator::Witnesser as EpochWitnesser>::Chain>>
 where
 	Generator: EpochProcessGenerator,
 {
@@ -88,7 +102,11 @@ where
 				epoch_start_receiver.try_lock().expect("should have exclusive ownership");
 
 			loop {
-				let epoch_start = epoch_start_receiver.recv().await.expect("Sender closed");
+				let epoch_start = if let Some(epoch_start) = resume_at.take() {
+					epoch_start
+				} else {
+					epoch_start_receiver.recv().await.expect("Sender closed")
+				};
 
 				if let Some((end_witnessing_sender, handle)) = current_task.take() {
 					// Send a signal to the previous epoch's witnesser process
@@ -116,16 +134,23 @@ where
 					let (end_witnessing_sender, end_witnessing_receiver) = oneshot::channel();
 
 					if let WitnesserInitResult::Created((witnesser, data_stream)) =
-						witnesser_generator.init(epoch_start).await.map_err(|e| {
+						witnesser_generator.init(epoch_start.clone()).await.map_err(|e| {
 							error!("Error while initializing epoch witnesser: {:?}", e);
+							EpochProcessRunnerError::Other(e)
 						})? {
 						current_task = Some((
 							end_witnessing_sender,
-							scope.spawn_with_handle(witnesser.run_witnesser(
-								data_stream,
-								end_witnessing_receiver,
-								option_state.take().expect("state must be present"),
-							)),
+							scope.spawn_with_handle(
+								witnesser
+									.run_witnesser(
+										data_stream,
+										end_witnessing_receiver,
+										option_state.take().expect("state must be present"),
+									)
+									.map_err(|_| {
+										EpochProcessRunnerError::WitnesserError(epoch_start)
+									}),
+							),
 						));
 					};
 				}
@@ -276,6 +301,9 @@ mod epoch_witnesser_testing {
 		}
 
 		async fn do_witness(&mut self, block: u64, _: &mut ()) -> anyhow::Result<()> {
+			if block == u64::MAX {
+				return Err(anyhow::anyhow!("WTF!"))
+			}
 			self.last_processed_block = block;
 			self.processed_blocks_sender.send(block).unwrap();
 			Ok(())
@@ -374,7 +402,8 @@ mod epoch_witnesser_testing {
 			TestEpochWitnesserGenerator::new();
 		let mut epoch_starter = EpochStarter { epoch_index: 0, epoch_start_sender };
 
-		tokio::spawn(start_epoch_process_runner(
+		let join_handle = tokio::spawn(start_epoch_process_runner(
+			None,
 			Arc::new(Mutex::new(epoch_start_receiver)),
 			epoch_witnesser_generator,
 			(),
@@ -416,5 +445,21 @@ mod epoch_witnesser_testing {
 		tokio::time::sleep(Duration::from_millis(10)).await;
 		block_sender.send(5).await.unwrap();
 		assert_eq!(recv_with_timeout(&mut processed_blocks_receiver).await, None);
+
+		// Start another epoch.
+		epoch_starter.start(6, true).await;
+
+		// Make the witnesser fail
+		block_sender.send(u64::MAX).await.unwrap();
+
+		let result = join_handle.await.unwrap();
+		assert!(
+			matches!(
+				&result,
+				Err(EpochProcessRunnerError::WitnesserError(epoch_start)) if epoch_start.epoch_index == epoch_starter.epoch_index - 1
+			),
+			"Expected error, got {:?}",
+			&result
+		);
 	}
 }

@@ -37,12 +37,16 @@ where
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 {
 	start_epoch_process_runner(
+		None,
 		Arc::new(Mutex::new(epoch_start_receiver)),
 		ChainDataWitnesserGenerator { eth_rpc, state_chain_client, cfe_settings_update_receiver },
 		EthereumTrackedData::default(),
 	)
 	.instrument(info_span!("Eth-Chain-Data-Witnesser"))
 	.await
+	.map_err(|e| {
+		error!("Exited unexpectedly: {:?}", e);
+	})
 }
 
 struct ChainDataWitnesser<StateChainClient, EthRpcClient> {
