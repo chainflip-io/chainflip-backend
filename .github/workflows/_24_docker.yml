@@ -159,3 +159,4 @@ jobs:
             TARGET=${{ matrix.target }}
             BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
             VCS_REF=${{ github.sha }}
+            CHAINSPEC=${{ inputs.environment }}

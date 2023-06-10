@@ -3,6 +3,7 @@ ARG BUILD_DATETIME
 ARG TARGET
 ARG VCS_REF
 ARG ENTRYPOINT=/usr/local/bin/${TARGET}
+ARG CHAINSPEC
 
 LABEL org.opencontainers.image.authors="dev@chainflip.io"
 LABEL org.opencontainers.image.vendor="Chainflip Labs GmbH"
@@ -13,6 +14,7 @@ LABEL org.opencontainers.image.created="${BUILD_DATETIME}"
 LABEL org.opencontainers.image.documentation="https://github.com/chainflip-io/chainflip-backend"
 
 COPY --chown=1000:1000 ${TARGET} ${ENTRYPOINT}
+COPY --chown=1000:1000 ./state-chain/node/chainspecs/${CHAINSPEC}.chainspec.raw.json /etc/chainflip/${CHAINSPEC}.chainspec.json
 
 WORKDIR /etc/chainflip
 
