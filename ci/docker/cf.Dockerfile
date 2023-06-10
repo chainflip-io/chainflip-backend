@@ -13,8 +13,8 @@ LABEL org.opencontainers.image.revision="${VCS_REF}"
 LABEL org.opencontainers.image.created="${BUILD_DATETIME}"
 LABEL org.opencontainers.image.documentation="https://github.com/chainflip-io/chainflip-backend"
 
-COPY --chown=1000:1000 ${TARGET} ${ENTRYPOINT}
-COPY --chown=1000:1000 ./state-chain/node/chainspecs/${CHAINSPEC}.chainspec.raw.json /etc/chainflip/${CHAINSPEC}.chainspec.json
+# This command will pass if at least one of the files specified exist.
+COPY --chown=1000:1000 ${TARGET} ./state-chain/node/chainspecs/${CHAINSPEC}.chainspec.raw.json /etc/chainflip/${CHAINSPEC}.chainspec.json ${ENTRYPOINT}
 
 WORKDIR /etc/chainflip
 
