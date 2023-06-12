@@ -276,6 +276,7 @@ pub mod pallet {
 		BatchSwapFailed {
 			asset: Asset,
 			direction: SwapLeg,
+			error: DispatchError,
 		},
 		CcmEgressScheduled {
 			ccm_id: u64,
@@ -379,9 +380,9 @@ pub mod pallet {
 				for (asset, mut swaps) in swap_groups {
 					match Self::execute_group_of_swaps(&mut swaps, asset, direction) {
 						Ok(()) => remaining.extend(swaps),
-						Err(_) => {
+						Err(error) => {
 							// If the swaps failed to execute, add them back into the queue.
-							Self::deposit_event(Event::<T>::BatchSwapFailed { asset, direction });
+							Self::deposit_event(Event::<T>::BatchSwapFailed { asset, direction, error });
 							unprocessed_swaps.extend(swaps);
 						},
 					};
