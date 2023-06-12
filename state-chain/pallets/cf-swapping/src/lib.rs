@@ -382,7 +382,11 @@ pub mod pallet {
 						Ok(()) => remaining.extend(swaps),
 						Err(error) => {
 							// If the swaps failed to execute, add them back into the queue.
-							Self::deposit_event(Event::<T>::BatchSwapFailed { asset, direction, error });
+							Self::deposit_event(Event::<T>::BatchSwapFailed {
+								asset,
+								direction,
+								error,
+							});
 							unprocessed_swaps.extend(swaps);
 						},
 					};
