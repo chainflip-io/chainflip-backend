@@ -35,7 +35,7 @@ use crate::{
 
 use anyhow::{Context, Result};
 
-use super::rpc::DotRpcApi;
+use super::rpc::{DotRpcApi, DotSubscribeApi};
 
 #[derive(Debug, Clone, Copy)]
 pub struct MiniHeader {
@@ -248,7 +248,7 @@ pub async fn start<StateChainClient, DotRpc>(
 ) -> std::result::Result<(), EpochProcessRunnerError<Polkadot>>
 where
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
-	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
+	DotRpc: DotSubscribeApi + DotRpcApi + 'static + Send + Sync + Clone,
 {
 	start_epoch_process_runner(
 		resume_at,
@@ -340,9 +340,9 @@ where
 		if !interesting_indices.is_empty() {
 			info!("We got an interesting block at block: {block_number}, hash: {block_hash:?}");
 
-			let block = self
+			let extrinsics = self
 				.dot_client
-				.block(block_hash)
+				.extrinsics(block_hash)
 				.await
 				.context("Failed fetching block from DOT RPC")?
 				.context(
@@ -351,7 +351,7 @@ where
 
 			signature_monitor.sync_items();
 			for (extrinsic_index, tx_fee) in interesting_indices {
-				let xt = block.extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
+				let xt = extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
 				let xt_encoded = xt.0.encode();
 				let mut xt_bytes = xt_encoded.as_slice();
 				let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);
@@ -419,7 +419,7 @@ impl<StateChainClient, DotRpc> BlockWitnesserGenerator
 	for DotWitnesserGenerator<StateChainClient, DotRpc>
 where
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
-	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
+	DotRpc: DotRpcApi + DotSubscribeApi + 'static + Send + Sync + Clone,
 {
 	type Witnesser = DotBlockWitnesser<StateChainClient, DotRpc>;
 
