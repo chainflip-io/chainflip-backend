@@ -339,9 +339,9 @@ where
 		if !interesting_indices.is_empty() {
 			info!("We got an interesting block at block: {block_number}, hash: {block_hash:?}");
 
-			let block = self
+			let extrinsics = self
 				.dot_client
-				.block(block_hash)
+				.extrinsics(block_hash)
 				.await
 				.context("Failed fetching block from DOT RPC")?
 				.context(
@@ -352,7 +352,7 @@ where
 				monitored_signatures.insert(sig);
 			}
 			for (extrinsic_index, tx_fee) in interesting_indices {
-				let xt = block.extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
+				let xt = extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
 				let xt_encoded = xt.0.encode();
 				let mut xt_bytes = xt_encoded.as_slice();
 				let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);

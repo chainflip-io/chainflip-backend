@@ -7,7 +7,7 @@ use cf_primitives::PolkadotBlockNumber;
 use futures::{Stream, StreamExt, TryStreamExt};
 use subxt::{
 	events::{Events, EventsClient},
-	rpc::types::{Bytes, ChainBlock},
+	rpc::types::{Bytes, ChainBlockExtrinsic},
 	rpc_params, Config, OnlineClient, PolkadotConfig,
 };
 
@@ -16,7 +16,7 @@ use anyhow::{anyhow, Result};
 #[cfg(test)]
 use mockall::automock;
 
-type PolkadotHeader = <PolkadotConfig as Config>::Header;
+pub type PolkadotHeader = <PolkadotConfig as Config>::Header;
 
 #[derive(Clone)]
 pub struct DotRpcClient {
@@ -67,10 +67,10 @@ pub trait DotRpcApi: Send + Sync {
 		block_number: PolkadotBlockNumber,
 	) -> Result<Option<PolkadotHash>>;
 
-	async fn block(
+	async fn extrinsics(
 		&mut self,
 		block_hash: PolkadotHash,
-	) -> Result<Option<ChainBlock<PolkadotConfig>>>;
+	) -> Result<Option<Vec<ChainBlockExtrinsic>>>;
 
 	async fn events(&mut self, block_hash: PolkadotHash) -> Result<Events<PolkadotConfig>>;
 
@@ -135,11 +135,12 @@ impl DotRpcApi for DotRpcClient {
 		.map_err(|e| anyhow!("Failed to subscribe to Polkadot runtime version with error: {e}"))
 	}
 
-	async fn block(
+	async fn extrinsics(
 		&mut self,
 		block_hash: PolkadotHash,
-	) -> Result<Option<ChainBlock<PolkadotConfig>>> {
-		refresh_connection_on_error!(self, rpc, block, Some(block_hash)).map(|o| o.map(|b| b.block))
+	) -> Result<Option<Vec<ChainBlockExtrinsic>>> {
+		refresh_connection_on_error!(self, rpc, block, Some(block_hash))
+			.map(|o| o.map(|b| b.block.extrinsics))
 	}
 
 	async fn events(&mut self, block_hash: PolkadotHash) -> Result<Events<PolkadotConfig>> {
