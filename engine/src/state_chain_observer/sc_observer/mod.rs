@@ -11,9 +11,9 @@ use cf_chains::{
 };
 use cf_primitives::{BlockNumber, CeremonyId, EpochIndex};
 use crypto_compat::CryptoCompat;
-use futures::{FutureExt, StreamExt, TryFutureExt};
-use sp_core::{Hasher, H160, H256};
-use sp_runtime::{traits::Keccak256, AccountId32};
+use futures::{FutureExt, StreamExt};
+use sp_core::{H160, H256};
+use sp_runtime::{AccountId32};
 use state_chain_runtime::{
 	AccountId, BitcoinInstance, CfeSettings, EthereumInstance, PolkadotInstance,
 };
@@ -31,7 +31,7 @@ use tracing::{debug, error, info, info_span, trace, warn, Instrument};
 use crate::{
 	btc::{rpc::BtcRpcApi, BtcBroadcaster},
 	dot::{rpc::DotRpcApi, DotBroadcaster},
-	eth::{rpc::EthRpcApi, EthBroadcaster},
+	eth::{ethers_rpc::EthersRpcApi, broadcaster::EthBroadcaster},
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{
 		extrinsic_api::{
@@ -212,7 +212,7 @@ pub async fn start<
 ) -> Result<(), anyhow::Error>
 where
 	BlockStream: StateChainStreamApi,
-	EthRpc: EthRpcApi + Send + Sync + 'static,
+	EthRpc: EthersRpcApi + Send + Sync + 'static,
 	DotRpc: DotRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
@@ -594,36 +594,23 @@ where
                                             transaction_out_id: _,
                                         },
                                     ) if nominee == account_id => {
-                                        // TODO: We can use send_transaction here.
-                                        match eth_broadcaster.encode_and_sign_tx(transaction_payload)
-                                            .and_then(|raw_signed_tx| {
-                                                // We want to transmit here to decrease the delay between getting a gas price estimate
-                                                // and transmitting it to the Ethereum network
-                                                let expected_broadcast_tx_hash = Keccak256::hash(&raw_signed_tx.0[..]);
-                                                eth_broadcaster.send(raw_signed_tx.0).inspect_ok(move |tx_hash| {
-                                                    assert_eq!(
-                                                        tx_hash.0, expected_broadcast_tx_hash.0,
-                                                        "tx_hash returned from `send` does not match expected hash"
-                                                    );
-                                                })
-                                            })
-                                            .await {
-                                                Ok(tx_hash) => debug!("TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
-                                                Err(e) => {
-                                                    // Note: this error can indicate that we failed to estimate gas, or that there is
-                                                    // a problem with the ethereum rpc node, or with the configured account. For example
-                                                    // if the account balance is too low to pay for required gas.
-                                                    warn!("TransactionBroadcastRequest {broadcast_attempt_id:?} failed: {e:?}.");
-                                                    state_chain_client.submit_signed_extrinsic(
-                                                        state_chain_runtime::RuntimeCall::EthereumBroadcaster(
-                                                            pallet_cf_broadcast::Call::transaction_signing_failure {
-                                                                broadcast_attempt_id,
-                                                            },
-                                                        ),
-                                                    )
-                                                    .await;
-                                                }
-                                            };
+                                        match eth_broadcaster.estimate_gas_and_send_transaction(transaction_payload).await {
+                                            Ok(tx_hash) => debug!("TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
+                                            Err(e) => {
+                                                // Note: this error can indicate that we failed to estimate gas, or that there is
+                                                // a problem with the ethereum rpc node, or with the configured account. For example
+                                                // if the account balance is too low to pay for required gas.
+                                                warn!("TransactionBroadcastRequest {broadcast_attempt_id:?} failed: {e:?}.");
+                                                state_chain_client.submit_signed_extrinsic(
+                                                    state_chain_runtime::RuntimeCall::EthereumBroadcaster(
+                                                        pallet_cf_broadcast::Call::transaction_signing_failure {
+                                                            broadcast_attempt_id,
+                                                        },
+                                                    ),
+                                                )
+                                                .await;
+                                            }
+                                        }
                                     }
                                     state_chain_runtime::RuntimeEvent::PolkadotBroadcaster(
                                         pallet_cf_broadcast::Event::TransactionBroadcastRequest {

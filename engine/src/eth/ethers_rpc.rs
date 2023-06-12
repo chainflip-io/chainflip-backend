@@ -30,6 +30,8 @@ impl EthersRpcClient {
 #[cfg_attr(test, automock)]
 #[async_trait::async_trait]
 pub trait EthersRpcApi: Send + Sync {
+	fn address(&self) -> H160;
+
 	async fn estimate_gas(&self, req: &TypedTransaction) -> Result<U256>;
 
 	async fn send_transaction(&self, tx: TransactionRequest) -> Result<TxHash>;
@@ -57,6 +59,10 @@ pub trait EthersRpcApi: Send + Sync {
 
 #[async_trait::async_trait]
 impl EthersRpcApi for EthersRpcClient {
+	fn address(&self) -> H160 {
+		self.signer.address()
+	}
+
 	async fn estimate_gas(&self, req: &TypedTransaction) -> Result<U256> {
 		Ok(self.signer.estimate_gas(req, None).await?)
 	}
