@@ -53,7 +53,7 @@ services:
   polkadot:
     container_name: polkadot
     platform: linux/amd64
-    image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v0.9.36
+    image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v0.9.36-ci
     pull_policy: always
     stop_grace_period: 5s
     stop_signal: SIGINT
