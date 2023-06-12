@@ -1550,7 +1550,7 @@ fn process_all_into_stable_swaps_first() {
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 2),
 				amount: output_amount,
-				intermediate_amount: None,
+				intermediate_amount: Some(1000000),
 			}),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 3 }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -1558,7 +1558,7 @@ fn process_all_into_stable_swaps_first() {
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 3),
 				amount: output_amount,
-				intermediate_amount: None,
+				intermediate_amount: Some(1000000),
 			}),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2 }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -1566,7 +1566,7 @@ fn process_all_into_stable_swaps_first() {
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 4),
 				amount: output_amount,
-				intermediate_amount: None,
+				intermediate_amount: Some(1000000),
 			})
 		);
 	});
