@@ -38,7 +38,6 @@ secrets:
 
 cluster: ""
 chainspec: sisyphos.chainspec.json
-chainspecUrl: ""
 
 ports:
   wsPort: "9944"
