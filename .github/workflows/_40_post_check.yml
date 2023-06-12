@@ -154,7 +154,7 @@ jobs:
       - name: Download previously built binaries
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin-ubuntu-20.04
           path: ./target/release
 
       - name: Run benchmarks
