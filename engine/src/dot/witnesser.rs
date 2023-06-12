@@ -39,7 +39,7 @@ use crate::{
 
 use anyhow::{Context, Result};
 
-use super::rpc::DotRpcApi;
+use super::rpc::{DotRpcApi, DotSubscribeApi};
 
 #[derive(Debug, Clone, Copy)]
 pub struct MiniHeader {
@@ -249,7 +249,7 @@ pub async fn start<StateChainClient, DotRpc>(
 ) -> std::result::Result<(), anyhow::Error>
 where
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
-	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
+	DotRpc: DotSubscribeApi + DotRpcApi + 'static + Send + Sync + Clone,
 {
 	start_epoch_process_runner(
 		Arc::new(Mutex::new(epoch_starts_receiver)),
@@ -420,7 +420,7 @@ impl<StateChainClient, DotRpc> BlockWitnesserGenerator
 	for DotWitnesserGenerator<StateChainClient, DotRpc>
 where
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
-	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
+	DotRpc: DotRpcApi + DotSubscribeApi + 'static + Send + Sync + Clone,
 {
 	type Witnesser = DotBlockWitnesser<StateChainClient, DotRpc>;
 

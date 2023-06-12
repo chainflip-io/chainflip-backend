@@ -59,6 +59,19 @@ impl DotRpcClient {
 	}
 }
 
+/// This trait defines any subscription interfaces to Polkadot.
+#[async_trait]
+pub trait DotSubscribeApi: Send + Sync {
+	async fn subscribe_finalized_heads(
+		&mut self,
+	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>>;
+
+	async fn subscribe_runtime_version(
+		&mut self,
+	) -> Result<Pin<Box<dyn Stream<Item = RuntimeVersion> + Send>>>;
+}
+
+/// The trait that defines the stateless / non-subscription requests to Polkadot.
 #[cfg_attr(test, automock)]
 #[async_trait]
 pub trait DotRpcApi: Send + Sync {
@@ -76,14 +89,6 @@ pub trait DotRpcApi: Send + Sync {
 
 	async fn current_runtime_version(&mut self) -> Result<RuntimeVersion>;
 
-	async fn subscribe_finalized_heads(
-		&mut self,
-	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>>;
-
-	async fn subscribe_runtime_version(
-		&mut self,
-	) -> Result<Pin<Box<dyn Stream<Item = RuntimeVersion> + Send>>>;
-
 	async fn submit_raw_encoded_extrinsic(
 		&mut self,
 		encoded_bytes: Vec<u8>,
@@ -92,16 +97,6 @@ pub trait DotRpcApi: Send + Sync {
 
 #[async_trait]
 impl DotRpcApi for DotRpcClient {
-	async fn subscribe_finalized_heads(
-		&mut self,
-	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
-		Ok(Box::pin(
-			refresh_connection_on_error!(self, blocks, subscribe_finalized)?
-				.map(|block| block.map(|block| block.header().clone()))
-				.map_err(|e| anyhow!("Error in finalised head stream: {e}")),
-		))
-	}
-
 	async fn block_hash(
 		&mut self,
 		block_number: PolkadotBlockNumber,
@@ -114,25 +109,6 @@ impl DotRpcApi for DotRpcClient {
 			spec_version: rv.spec_version,
 			transaction_version: rv.transaction_version,
 		})
-	}
-
-	async fn subscribe_runtime_version(
-		&mut self,
-	) -> Result<Pin<Box<dyn Stream<Item = RuntimeVersion> + Send>>> {
-		safe_runtime_version_stream(
-			self.current_runtime_version().await?,
-			refresh_connection_on_error!(self, rpc, subscribe_runtime_version)?.map(|item| {
-				item.map_err(anyhow::Error::new).map(
-					|subxt::rpc::types::RuntimeVersion {
-					     spec_version,
-					     transaction_version,
-					     ..
-					 }| RuntimeVersion { spec_version, transaction_version },
-				)
-			}),
-		)
-		.await
-		.map_err(|e| anyhow!("Failed to subscribe to Polkadot runtime version with error: {e}"))
 	}
 
 	async fn extrinsics(
@@ -185,6 +161,38 @@ impl DotRpcApi for DotRpcClient {
 			"author_submitExtrinsic",
 			rpc_params![encoded_bytes.clone()]
 		)
+	}
+}
+
+#[async_trait]
+impl DotSubscribeApi for DotRpcClient {
+	async fn subscribe_finalized_heads(
+		&mut self,
+	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
+		Ok(Box::pin(
+			refresh_connection_on_error!(self, blocks, subscribe_finalized)?
+				.map(|block| block.map(|block| block.header().clone()))
+				.map_err(|e| anyhow!("Error in finalised head stream: {e}")),
+		))
+	}
+
+	async fn subscribe_runtime_version(
+		&mut self,
+	) -> Result<Pin<Box<dyn Stream<Item = RuntimeVersion> + Send>>> {
+		safe_runtime_version_stream(
+			self.current_runtime_version().await?,
+			refresh_connection_on_error!(self, rpc, subscribe_runtime_version)?.map(|item| {
+				item.map_err(anyhow::Error::new).map(
+					|subxt::rpc::types::RuntimeVersion {
+					     spec_version,
+					     transaction_version,
+					     ..
+					 }| RuntimeVersion { spec_version, transaction_version },
+				)
+			}),
+		)
+		.await
+		.map_err(|e| anyhow!("Failed to subscribe to Polkadot runtime version with error: {e}"))
 	}
 }
 
