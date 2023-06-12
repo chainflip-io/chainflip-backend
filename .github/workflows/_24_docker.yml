@@ -32,7 +32,7 @@ jobs:
           if [ "${{ inputs.environment }}" == "prod" ]; then
             echo "dockerfile=ci/docker/chainflip-binaries/prod.Dockerfile" >> "$GITHUB_OUTPUT"
           else
-            echo "dockerfile=chainflip-binaries/dev.Dockerfile" >> "$GITHUB_OUTPUT"
+            echo "dockerfile=ci/docker/chainflip-binaries/dev.Dockerfile" >> "$GITHUB_OUTPUT"
           fi
 
   chainflip-binaries:
