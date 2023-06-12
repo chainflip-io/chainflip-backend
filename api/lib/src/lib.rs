@@ -456,7 +456,7 @@ pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPair, Strin
 
 	// Get a new random seed phrase if one was not provided
 	let mnemonic = seed_phrase
-		.map(|phrase| Mnemonic::from_phrase(&phrase[..], Language::English))
+		.map(|phrase| Mnemonic::from_phrase(phrase, Language::English))
 		.unwrap_or_else(|| Ok(Mnemonic::new(MnemonicType::Words12, Language::English)))?;
 
 	sp_core::Pair::from_phrase(mnemonic.phrase(), None)

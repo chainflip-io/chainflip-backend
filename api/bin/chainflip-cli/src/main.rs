@@ -243,7 +243,7 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 	impl Keys {
 		pub fn new(maybe_seed_phrase: Option<String>) -> Result<Self> {
 			let (signing_key, seed_phrase, signing_account_id) =
-				api::generate_signing_key(maybe_seed_phrase.as_ref().map(String::as_str))
+				api::generate_signing_key(maybe_seed_phrase.as_deref())
 					.context("Error while generating signing key.")?;
 			let (ethereum_key, ethereum_address) =
 				api::generate_ethereum_key(Some(seed_phrase.clone()))
