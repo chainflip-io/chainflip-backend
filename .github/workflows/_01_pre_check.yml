@@ -66,7 +66,7 @@ jobs:
     strategy:
       matrix:
         dockerfile:
-          - cf.Dockerfile
+          - chainflip-binaries.Dockerfile
           - rust-base.Dockerfile
     steps:
       - name: Checkout 🏁
