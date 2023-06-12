@@ -5,16 +5,38 @@ on:
         description: Network being released
         required: true
         type: string
-      commit_hash:
-        description: Commit hash to be released
-        required: true
-        type: string
       environment:
         description: Prod of dev
         required: true
         type: string
 jobs:
+  get-date-time:
+    runs-on: ubuntu-20.04
+    outputs:
+      date: ${{ steps.date.outputs.date }}
+      time: ${{ steps.date.outputs.time }}
+    steps:
+      - name: Get the date and time
+        id: date
+        run: |
+          echo "date=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
+          echo "time=$(date +'%H:%M:%S')" >> "$GITHUB_OUTPUT"
+  set-dockerfile-name:
+    runs-on: ubuntu-20.04
+    outputs:
+      dockerfile: ${{ steps.dockerfile.outputs.dockerfile }}
+    steps:
+      - name: Set dockerfile name
+        id: dockerfile
+        run: |
+          if [ "${{ inputs.environment }}" == "prod" ]; then
+            echo "dockerfile=ci/docker/chainflip-binaries/prod.Dockerfile" >> "$GITHUB_OUTPUT"
+          else
+            echo "dockerfile=ci/docker/chainflip-binaries/dev.Dockerfile" >> "$GITHUB_OUTPUT"
+          fi
+
   chainflip-binaries:
+    needs: [get-date-time, set-dockerfile-name]
     env:
       DOCKER_REPO: ghcr.io/${{ github.repository }}
     strategy:
@@ -40,7 +62,7 @@ jobs:
       - name: Download binaries
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin-ubuntu-20.04
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -58,7 +80,7 @@ jobs:
           tags: |
             type=schedule,pattern={{date 'YYYY-MM-DD'}},prefix=nightly-
             type=pep440,pattern={{version}},prefix=${{ inputs.network }}-
-            type=raw,value=${{ inputs.commit_hash }}
+            type=raw,value=${{ github.sha }}
             type=ref,event=branch
             type=ref,event=tag
             type=ref,event=pr
@@ -78,11 +100,15 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          file: ci/docker/cf.Dockerfile
-          build-args: >
+          file: ${{ needs.set-dockerfile-name.outputs.dockerfile }}
+          build-args: |
             TARGET=${{ matrix.target }}
+            BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
+            VCS_REF=${{ github.sha }}
+            CHAINSPEC=${{ inputs.network }}
 
   chainflip-tools:
+    needs: [get-date-time, set-dockerfile-name]
     if: inputs.environment != 'prod'
     env:
       DOCKER_REPO: ghcr.io/${{ github.repository }}
@@ -106,7 +132,7 @@ jobs:
       - name: Download binaries
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin-ubuntu-20.04
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -124,7 +150,7 @@ jobs:
           tags: |
             type=schedule,pattern={{date 'YYYY-MM-DD'}},prefix=nightly-
             type=pep440,pattern={{version}},prefix=${{ inputs.network }}-
-            type=raw,value=${{ inputs.commit_hash }}
+            type=raw,value=${{ github.sha }}
             type=raw,value=${{ inputs.network }}
 
       - name: Login to Github Container Registry 🔑
@@ -142,6 +168,9 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          file: ci/docker/cf.Dockerfile
-          build-args: >
+          file: ${{ needs.set-dockerfile-name.outputs.dockerfile }}
+          build-args: |
             TARGET=${{ matrix.target }}
+            BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
+            VCS_REF=${{ github.sha }}
+            CHAINSPEC=${{ inputs.network }}

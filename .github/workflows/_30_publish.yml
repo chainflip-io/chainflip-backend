@@ -10,10 +10,6 @@ on:
         description: prod or dev repo
         required: true
         type: string
-      commit_hash:
-        description: prod or dev repo
-        required: true
-        type: string
 
 env:
   APTLY_VERSION: "1.5.0"
@@ -22,7 +18,11 @@ env:
 
 jobs:
   build-deb:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-${{ matrix.ubuntu_version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu_version: [20.04, 22.04]
     permissions:
       id-token: write
       contents: read
@@ -33,7 +33,7 @@ jobs:
       - name: Download packages
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-packages
+          name: chainflip-backend-packages-ubuntu-${{ matrix.ubuntu_version }}
           path: packages
 
       - name: Get commit SHA, distribution codename
@@ -136,4 +136,4 @@ jobs:
         if: inputs.environment == 'dev'
         run: |
           echo "### Usage in \`testnet-tools\`" >> $GITHUB_STEP_SUMMARY
-          echo "Use the full commit hash: \`${{ inputs.commit_hash }}\` for your network configuration. " >> $GITHUB_STEP_SUMMARY
+          echo "Use the full commit hash: \`${{ github.sha }}\` for your network configuration. " >> $GITHUB_STEP_SUMMARY
