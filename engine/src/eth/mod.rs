@@ -295,17 +295,13 @@ where
 	block_head_stream_from(from_block, safe_head_stream, move |block_number| {
 		let eth_rpc = eth_rpc.clone();
 		Box::pin(async move {
-			eth_rpc
-				.block(U64::from(block_number))
-				.await
-				.and_then(|block| {
-					let number_bloom: Result<EthNumberBloom> =
-						block.try_into().context("Failed to convert Block to EthNumberBloom");
-					number_bloom
-				})
-				.inspect_err(|e| {
-					tracing::error!("Error fetching block number {}: {:?}", block_number, e);
-				})
+			eth_rpc.block(U64::from(block_number)).await.and_then(|block| {
+				EthNumberBloom::try_from(block)
+					.context("Failed to convert Block to EthNumberBloom")
+					.inspect_err(|e| {
+						tracing::error!("Error fetching block number {}: {:?}", block_number, &e);
+					})
+			})
 		})
 	})
 	.await
