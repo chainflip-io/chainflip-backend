@@ -16,18 +16,17 @@ jobs:
     uses: ./.github/workflows/_10_test.yml
     secrets: inherit
   build:
+    needs: [test]
     uses: ./.github/workflows/_20_build.yml
     secrets: inherit
     with:
       network: sisyphos
-      commit_hash: ${{ github.sha }}
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml
     secrets: inherit
     with:
       network: sisyphos
-      commit_hash: ${{ github.sha }}
       environment: dev
   package:
     needs: [build]
@@ -46,5 +45,4 @@ jobs:
     with:
       version: "sisyphos/"
       environment: dev
-      commit_hash: ${{ github.sha }}
     secrets: inherit

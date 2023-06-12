@@ -69,7 +69,7 @@ jobs:
       - name: Download binaries
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin-ubuntu-20.04
 
       - name: Install node dependencies
         working-directory: bouncer
@@ -90,7 +90,7 @@ jobs:
           NGROK_AUTHTOKEN: ${{ secrets.CF_NGROK_AUTHTOKEN }}
         run: |
           ngrok http http://localhost:9944 > /dev/null &
-          ngrok http http://localhost:9945 > /dev/null &
+          ngrok http http://polkadot:9945 > /dev/null &
 
       - name: Run EinfachHeuteLeiderNicht.exe
         if: inputs.simple_bouncer
@@ -154,7 +154,7 @@ jobs:
       - name: Download previously built binaries
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin-ubuntu-20.04
           path: ./target/release
 
       - name: Run benchmarks
