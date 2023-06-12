@@ -8,6 +8,7 @@ use cf_traits::{
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::cell::RefCell;
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
+use pallet_cf_flip::Bonder;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	testing::Header,
@@ -188,6 +189,7 @@ impl pallet_cf_funding::Config for Test {
 	type ThresholdCallable = RuntimeCall;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type RegisterRedemption = MockRegisterRedemption;
+	type Bonding = Bonder<Test>;
 }
 
 pub const REDEMPTION_TTL_SECS: u64 = 10;

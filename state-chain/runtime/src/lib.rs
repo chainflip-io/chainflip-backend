@@ -527,6 +527,7 @@ impl pallet_cf_funding::Config for Runtime {
 	type RegisterRedemption = EthereumApi<EthEnvironment>;
 	type TimeSource = Timestamp;
 	type WeightInfo = pallet_cf_funding::weights::PalletWeight<Runtime>;
+	type Bonding = Bonder<Runtime>;
 }
 
 impl pallet_cf_tokenholder_governance::Config for Runtime {

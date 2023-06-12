@@ -1097,3 +1097,42 @@ fn max_redemption_is_net_exact_is_gross() {
 	do_test(UNRESTRICTED_ADDRESS, RedemptionAmount::Exact(50), 50);
 	do_test(RESTRICTED_ADDRESS, RedemptionAmount::Exact(150), 150);
 }
+
+#[test]
+fn bond_should_count_toward_restricted_balance() {
+	new_test_ext().execute_with(|| {
+		// Found account
+		const UNRESTRICTED_AMOUNT: FlipBalance = 100;
+		const RESTRICTED_AMOUNT: FlipBalance = 100;
+		const TOTAL_BALANCE: FlipBalance = UNRESTRICTED_AMOUNT + RESTRICTED_AMOUNT;
+		const UNRESTRICTED_ADDRESS: EthereumAddress = [0x01; 20];
+		const RESTRICTED_ADDRESS: EthereumAddress = [0x02; 20];
+		assert_ok!(Funding::update_restricted_addresses(
+			RuntimeOrigin::root(),
+			vec![RESTRICTED_ADDRESS],
+			Default::default(),
+		));
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			RESTRICTED_AMOUNT,
+			RESTRICTED_ADDRESS,
+			Default::default(),
+		));
+		// Check the bond.
+		Bonder::<Test>::update_bond(&ALICE, 50);
+		let bond = Bonder::<Test>::bond_of(&ALICE);
+		let total = Flip::total_balance_of(&ALICE);
+		assert_eq!(total, 100);
+		assert_eq!(bond, 50);
+		assert_eq!(
+			RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(),
+			&RESTRICTED_AMOUNT
+		);
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			pallet::RedemptionAmount::Exact(30),
+			RESTRICTED_ADDRESS
+		));
+	});
+}

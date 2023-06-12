@@ -603,6 +603,8 @@ pub trait Bonding {
 	type Amount;
 	/// Update the bond of an authority
 	fn update_bond(authority: &Self::ValidatorId, bond: Self::Amount);
+	/// Returns the bond of an authority
+	fn bond_of(authority: &Self::ValidatorId) -> Self::Amount;
 }
 
 pub trait CeremonyIdProvider {

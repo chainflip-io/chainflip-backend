@@ -48,7 +48,7 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::eth::Ethereum;
 	use cf_primitives::BroadcastId;
-	use cf_traits::{AccountRoleRegistry, Broadcaster};
+	use cf_traits::{AccountRoleRegistry, Bonding, Broadcaster};
 	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
 
@@ -113,6 +113,8 @@ pub mod pallet {
 
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
+
+		type Bonding: Bonding<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -381,6 +383,8 @@ pub mod pallet {
 					Error::<T>::InvalidRedemption
 				);
 			}
+
+			let bond = T::Bonding::bond_of(&account_id);
 
 			// The amount to withdraw, net of fees.
 			let net_amount = match amount {

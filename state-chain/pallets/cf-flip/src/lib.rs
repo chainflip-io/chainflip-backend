@@ -476,6 +476,10 @@ impl<T: Config> Bonding for Bonder<T> {
 			}
 		})
 	}
+
+	fn bond_of(authority: &Self::ValidatorId) -> Self::Amount {
+		Account::<T>::get(authority).bond
+	}
 }
 
 pub struct FlipIssuance<T>(PhantomData<T>);
