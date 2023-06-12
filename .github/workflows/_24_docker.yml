@@ -21,9 +21,22 @@ jobs:
         run: |
           echo "date=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
           echo "time=$(date +'%H:%M:%S')" >> "$GITHUB_OUTPUT"
+  set-dockerfile-name:
+    runs-on: ubuntu-20.04
+    outputs:
+      dockerfile: ${{ steps.dockerfile.outputs.dockerfile }}
+    steps:
+      - name: Set dockerfile name
+        id: dockerfile
+        run: |
+          if [ "${{ inputs.environment }}" == "prod" ]; then
+            echo "dockerfile=ci/docker/chainflip-binaries/prod.Dockerfile" >> "$GITHUB_OUTPUT"
+          else
+            echo "dockerfile=ci/docker/chainflip-binaries/dev.Dockerfile" >> "$GITHUB_OUTPUT"
+          fi
 
   chainflip-binaries:
-    needs: get-date-time
+    needs: [get-date-time, set-dockerfile-name]
     env:
       DOCKER_REPO: ghcr.io/${{ github.repository }}
     strategy:
@@ -87,14 +100,15 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          file: ci/docker/cf.Dockerfile
+          file: ${{ needs.set-dockerfile-name.outputs.dockerfile }}
           build-args: |
             TARGET=${{ matrix.target }}
             BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
             VCS_REF=${{ github.sha }}
+            CHAINSPEC=${{ inputs.network }}
 
   chainflip-tools:
-    needs: get-date-time
+    needs: [get-date-time, set-dockerfile-name]
     if: inputs.environment != 'prod'
     env:
       DOCKER_REPO: ghcr.io/${{ github.repository }}
@@ -154,8 +168,9 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          file: ci/docker/cf.Dockerfile
+          file: ${{ needs.set-dockerfile-name.outputs.dockerfile }}
           build-args: |
             TARGET=${{ matrix.target }}
             BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
             VCS_REF=${{ github.sha }}
+            CHAINSPEC=${{ inputs.network }}

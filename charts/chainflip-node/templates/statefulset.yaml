@@ -22,19 +22,6 @@ spec:
       {{- toYaml . | nindent 8 }}
       {{- end }}
       initContainers:
-        - name: download-chainspec
-          image: {{ .Values.initContainer.image.repository }}:{{ .Values.initContainer.image.tag }}
-          command: [ "/bin/bash" ]
-          args:
-            - -c
-            - |
-                echo "Downloadeding chainspec from: {{ .Values.chainspecUrl }}"
-                wget -O {{ .Values.basePath | default "/etc/chainflip" }}/{{ .Values.chainspec }} {{ .Values.chainspecUrl }}
-                echo "Checking chainspec ..."
-                head -n 10 {{ .Values.basePath | default "/etc/chainflip" }}/{{ .Values.chainspec }}
-          volumeMounts:
-            - name: {{ include "chainflip-node.fullname" . }}
-              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}
         {{- if .Values.purgeChain }}
         - name: purge-chain
           image: {{ .Values.initContainer.image.repository }}:{{ .Values.initContainer.image.tag }}
