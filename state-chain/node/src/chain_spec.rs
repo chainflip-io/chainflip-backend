@@ -3,7 +3,7 @@ use cf_chains::{
 	dot::{PolkadotAccountId, PolkadotHash, RuntimeVersion},
 	eth,
 };
-use cf_primitives::{AccountRole, AuthorityCount};
+use cf_primitives::{AccountRole, AuthorityCount, DEFAULT_SWAP_TTL};
 
 use common::FLIPPERINOS_PER_FLIP;
 use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
@@ -19,8 +19,8 @@ use state_chain_runtime::{
 	BitcoinThresholdSignerConfig, BitcoinVaultConfig, BlockNumber, CfeSettings, EmissionsConfig,
 	EnvironmentConfig, EthereumThresholdSignerConfig, EthereumVaultConfig, FlipBalance, FlipConfig,
 	FundingConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, PolkadotThresholdSignerConfig,
-	PolkadotVaultConfig, ReputationConfig, SessionConfig, Signature, SystemConfig, ValidatorConfig,
-	WASM_BINARY,
+	PolkadotVaultConfig, ReputationConfig, SessionConfig, Signature, SwappingConfig, SystemConfig,
+	ValidatorConfig, WASM_BINARY,
 };
 
 use std::{collections::BTreeMap, env, marker::PhantomData, str::FromStr};
@@ -554,7 +554,10 @@ fn testnet_genesis(
 		},
 		transaction_payment: Default::default(),
 		liquidity_pools: Default::default(),
-		swapping: Default::default(),
+		swapping: SwappingConfig {
+			swap_ttl: DEFAULT_SWAP_TTL,
+			minimum_swap_amount: common::MINIMUM_SWAP_AMOUNT.to_vec(),
+		},
 		liquidity_provider: Default::default(),
 	}
 }

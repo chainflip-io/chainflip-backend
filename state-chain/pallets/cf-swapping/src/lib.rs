@@ -3,7 +3,9 @@ use cf_chains::{
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	CcmDepositMetadata,
 };
-use cf_primitives::{Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, STABLE_ASSET};
+use cf_primitives::{
+	Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, DEFAULT_SWAP_TTL, STABLE_ASSET,
+};
 use cf_traits::{liquidity::SwappingApi, CcmHandler, DepositApi, SystemStateInfo};
 use frame_support::{
 	pallet_prelude::*,
@@ -336,19 +338,23 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub swap_ttl: T::BlockNumber,
+		pub minimum_swap_amount: Vec<(Asset, AssetAmount)>,
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			SwapTTL::<T>::put(self.swap_ttl);
+			for (asset, min) in &self.minimum_swap_amount {
+				MinimumSwapAmount::<T>::insert(asset, min);
+			}
 		}
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { swap_ttl: T::BlockNumber::from(1200u32) }
+			Self { swap_ttl: T::BlockNumber::from(DEFAULT_SWAP_TTL), minimum_swap_amount: vec![] }
 		}
 	}
 

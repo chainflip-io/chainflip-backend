@@ -1,4 +1,4 @@
-use cf_primitives::AuthorityCount;
+use cf_primitives::{Asset, AssetAmount, AuthorityCount};
 pub use state_chain_runtime::constants::common::*;
 use state_chain_runtime::{chainflip::Offence, BlockNumber, FlipBalance};
 
@@ -46,4 +46,12 @@ pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 	// so there is no need to suspend them further.
 	(Offence::FailedToBroadcastTransaction, (10, 0)),
 	(Offence::GrandpaEquivocation, (50, HEARTBEAT_BLOCK_INTERVAL * 5)),
+];
+
+pub const MINIMUM_SWAP_AMOUNT: &[(Asset, AssetAmount)] = &[
+	(Asset::Eth, 580_000_000_000_000u128), // 1usd worth of Eth = 0.00058 * 18 d.p
+	(Asset::Flip, FLIPPERINOS_PER_FLIP),   // 1 Flip
+	(Asset::Usdc, 1_000_000u128),          // USDC = 6 d.p
+	(Asset::Dot, 10_000_000_000u128),      // DOT = 10 d.p
+	(Asset::Btc, 390_000u128),             // 1 USD worth of BTC = 0.000039 * 10 d.p
 ];

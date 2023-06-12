@@ -63,6 +63,7 @@ pub const OUTPUT_UTXO_SIZE_IN_BYTES: u64 = 34;
 pub const MINIMUM_BTC_TX_SIZE_IN_BYTES: u64 = 12;
 
 pub const STABLE_ASSET: Asset = Asset::Usdc;
+pub const DEFAULT_SWAP_TTL: BlockNumber = 1200u32;
 
 // Polkadot extrinsics are uniquely identified by <block number>-<extrinsic index>
 // https://wiki.polkadot.network/docs/build-protocol-info
