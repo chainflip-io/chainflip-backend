@@ -49,7 +49,7 @@ jobs:
       - name: Download binaries
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin-ubuntu-20.04
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -118,7 +118,7 @@ jobs:
       - name: Download binaries
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin-ubuntu-20.04
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
