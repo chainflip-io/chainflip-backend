@@ -18,14 +18,12 @@ jobs:
     secrets: inherit
     with:
       network: development
-      commit_hash: ${{ github.sha }}
   docker:
     needs: [build]
     uses: ./.github/workflows/_24_docker.yml
     secrets: inherit
     with:
       network: development
-      commit_hash: ${{ github.sha }}
       environment: dev
   package:
     needs: [build]
@@ -44,5 +42,4 @@ jobs:
     with:
       version: nightly/
       environment: dev
-      commit_hash: ${{ github.sha }}
     secrets: inherit
