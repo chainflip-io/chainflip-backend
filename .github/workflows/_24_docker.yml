@@ -81,6 +81,7 @@ jobs:
             type=schedule,pattern={{date 'YYYY-MM-DD'}},prefix=nightly-
             type=pep440,pattern={{version}},prefix=${{ inputs.network }}-
             type=raw,value=${{ github.sha }}
+            type=raw,value=${{ inputs.network }}
             type=ref,event=branch
             type=ref,event=tag
             type=ref,event=pr
@@ -152,6 +153,9 @@ jobs:
             type=pep440,pattern={{version}},prefix=${{ inputs.network }}-
             type=raw,value=${{ github.sha }}
             type=raw,value=${{ inputs.network }}
+            type=ref,event=branch
+            type=ref,event=tag
+            type=ref,event=pr
 
       - name: Login to Github Container Registry 🔑
         uses: docker/login-action@v2
