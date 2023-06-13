@@ -26,4 +26,6 @@ RUN chmod +x ${ENTRYPOINT} \
 
 USER flip
 
+RUN ls -la /etc/chainflip
+
 CMD ["${ENTRYPOINT}"]
