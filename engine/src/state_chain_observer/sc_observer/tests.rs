@@ -9,7 +9,6 @@ use cf_chains::{
 	eth::{Ethereum, SchnorrVerificationComponents, Transaction},
 	ChainCrypto,
 };
-use sp_runtime::{AccountId32, Digest};
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use frame_system::Phase;
 use futures::{FutureExt, StreamExt};
@@ -17,20 +16,18 @@ use mockall::predicate::{self, eq};
 use multisig::SignatureToThresholdSignature;
 use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_vaults::Vault;
+use sp_runtime::{AccountId32, Digest};
 
-use sp_core::{H256};
+use crate::eth::ethers_rpc::MockEthersRpcApi;
+use sp_core::H256;
 use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance, Header};
 use tokio::sync::watch;
 use utilities::MakeCachedStream;
-use crate::eth::ethers_rpc::MockEthersRpcApi;
 
 use crate::{
 	btc::BtcBroadcaster,
 	dot::{rpc::MockDotRpcApi, DotBroadcaster},
-	eth::{
-		ethers_rpc::EthersRpcClient,
-		broadcaster::EthBroadcaster,
-	},
+	eth::{broadcaster::EthBroadcaster, ethers_rpc::EthersRpcClient},
 	settings::Settings,
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
 	witnesser::EpochStart,
@@ -1719,9 +1716,7 @@ async fn run_the_sc_observer() {
 			sc_observer::start(
 				state_chain_client,
 				sc_block_stream,
-				EthBroadcaster::new(
-					EthersRpcClient::new(&settings.eth).await.unwrap(),
-				),
+				EthBroadcaster::new(EthersRpcClient::new(&settings.eth).await.unwrap()),
 				DotBroadcaster::new(MockDotRpcApi::new()),
 				BtcBroadcaster::new(MockBtcRpcApi::new()),
 				MockMultisigClientApi::new(),

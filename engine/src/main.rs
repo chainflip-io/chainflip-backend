@@ -7,7 +7,7 @@ use chainflip_engine::{
 	btc::{self, rpc::BtcRpcClient, BtcBroadcaster},
 	db::{KeyStore, PersistentKeyDB},
 	dot::{self, rpc::DotRpcClient, witnesser as dot_witnesser, DotBroadcaster},
-	eth::{self, build_broadcast_channel, broadcaster::EthBroadcaster},
+	eth::{self, broadcaster::EthBroadcaster, build_broadcast_channel},
 	health, p2p,
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
@@ -22,13 +22,13 @@ use chainflip_engine::{
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 use utilities::task_scope::task_scope;
 
+use crate::eth::ethers_rpc::EthersRpcClient;
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use futures::{FutureExt, TryFutureExt};
 use pallet_cf_validator::SemVer;
 use utilities::CachedStream;
 use web3::types::U256;
-use crate::eth::ethers_rpc::EthersRpcClient;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -238,9 +238,7 @@ async fn main() -> anyhow::Result<()> {
 			scope.spawn(state_chain_observer::start(
 				state_chain_client.clone(),
 				state_chain_stream.clone(),
-				EthBroadcaster::new(EthersRpcClient::new(
-					&settings.eth,
-				).await.unwrap()),
+				EthBroadcaster::new(EthersRpcClient::new(&settings.eth).await.unwrap()),
 				DotBroadcaster::new(dot_rpc_client.clone()),
 				BtcBroadcaster::new(btc_rpc_client.clone()),
 				eth_multisig_client,

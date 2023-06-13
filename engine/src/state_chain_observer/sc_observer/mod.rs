@@ -13,7 +13,7 @@ use cf_primitives::{BlockNumber, CeremonyId, EpochIndex};
 use crypto_compat::CryptoCompat;
 use futures::{FutureExt, StreamExt};
 use sp_core::{H160, H256};
-use sp_runtime::{AccountId32};
+use sp_runtime::AccountId32;
 use state_chain_runtime::{
 	AccountId, BitcoinInstance, CfeSettings, EthereumInstance, PolkadotInstance,
 };
@@ -31,7 +31,7 @@ use tracing::{debug, error, info, info_span, trace, warn, Instrument};
 use crate::{
 	btc::{rpc::BtcRpcApi, BtcBroadcaster},
 	dot::{rpc::DotRpcApi, DotBroadcaster},
-	eth::{ethers_rpc::EthersRpcApi, broadcaster::EthBroadcaster},
+	eth::{broadcaster::EthBroadcaster, ethers_rpc::EthersRpcApi},
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{
 		extrinsic_api::{

@@ -11,9 +11,9 @@ pub mod event;
 
 mod ws_safe_stream;
 
-pub mod retry_rpc;
-pub mod ethers_rpc;
 pub mod broadcaster;
+pub mod ethers_rpc;
+pub mod retry_rpc;
 pub mod rpc;
 pub mod utils;
 pub mod witnessing;
@@ -25,7 +25,11 @@ use regex::Regex;
 
 use crate::{
 	constants::ETH_BLOCK_SAFETY_MARGIN,
-	eth::{ethers_rpc::EthersRpcApi, rpc::{EthWsRpcApi, EthRpcApi}, ws_safe_stream::safe_ws_head_stream},
+	eth::{
+		ethers_rpc::EthersRpcApi,
+		rpc::{EthRpcApi, EthWsRpcApi},
+		ws_safe_stream::safe_ws_head_stream,
+	},
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
 	witnesser::{block_head_stream_from::block_head_stream_from, HasBlockNumber},
 };

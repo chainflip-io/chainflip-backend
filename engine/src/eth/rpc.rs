@@ -4,9 +4,8 @@ use utilities::{context, make_periodic_tick};
 use web3::{
 	api::SubscriptionStream,
 	types::{
-		Block, BlockHeader, BlockNumber, FeeHistory, Filter, Log,
-		SyncState, Transaction, TransactionReceipt, H256,
-		U256, U64,
+		Block, BlockHeader, BlockNumber, FeeHistory, Filter, Log, SyncState, Transaction,
+		TransactionReceipt, H256, U256, U64,
 	},
 	Web3,
 };
@@ -117,7 +116,6 @@ where
 	T: Send + Sync + EthTransport,
 	T::Out: Send,
 {
-
 	async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
 		let request_fut = self.web3.eth().logs(filter);
 
