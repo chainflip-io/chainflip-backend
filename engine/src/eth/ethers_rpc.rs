@@ -9,6 +9,7 @@ use utilities::read_clean_and_decode_hex_str_file;
 #[cfg(test)]
 use mockall::automock;
 
+#[derive(Clone)]
 pub struct EthersRpcClient {
 	signer: SignerMiddleware<Provider<Http>, LocalWallet>,
 }
