@@ -104,7 +104,7 @@ spec:
         name: {{ include "chainflip-node.fullname" . }}
       spec:
         accessModes:
-          - ReadWriteOnce
+          - ReadWriteMany
         storageClassName: gp2
         resources:
           requests:
