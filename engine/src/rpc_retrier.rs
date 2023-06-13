@@ -81,28 +81,37 @@ impl<RpcClient> RequestHolder<RpcClient> {
 
 const MAX_DELAY_TIME_MILLIS: u64 = 60000 * 20;
 
+fn max_sleep_time_millis(initial_request_timeout_millis: u64, attempt: u32) -> u64 {
+	min(MAX_DELAY_TIME_MILLIS, initial_request_timeout_millis * 2u64.pow(attempt))
+}
+
 // Creates a future of a particular submission.
 fn submission_future<RpcClient: Clone>(
 	client: RpcClient,
 	submission_fn: &FutureAnyGenerator<RpcClient>,
 	request_id: RequestId,
 	initial_request_timeout_millis: u64,
-	attempt_count: u32,
+	attempt: u32,
 ) -> Pin<Box<impl Future<Output = (RequestId, Result<BoxAny, (anyhow::Error, AttemptCount)>)>>> {
 	let submission_fut = submission_fn(client);
 	// Apply exponential backoff to the request.
-	let timeout_millis =
-		min(MAX_DELAY_TIME_MILLIS, initial_request_timeout_millis * 2u64.pow(attempt_count));
 	Box::pin(async move {
 		(
 			request_id,
-			match tokio::time::timeout(Duration::from_millis(timeout_millis), submission_fut).await
+			match tokio::time::timeout(
+				Duration::from_millis(max_sleep_time_millis(
+					initial_request_timeout_millis,
+					attempt,
+				)),
+				submission_fut,
+			)
+			.await
 			{
 				Ok(Ok(t)) => Ok(t),
 				Ok(Err(e)) => Err(e),
 				Err(_) => Err(anyhow::anyhow!("Request timed out")),
 			}
-			.map_err(|e| (e, attempt_count)),
+			.map_err(|e| (e, attempt)),
 		)
 	})
 }
@@ -141,7 +150,7 @@ impl<RpcClient: Clone + Send + Sync + 'static> RpcRetrierClient<RpcClient> {
 						},
 						Err((e, attempt)) => {
 							// Apply exponential back off with jitter to the retries.
-							let sleep_time_millis = rand::thread_rng().gen_range(0..min(MAX_DELAY_TIME_MILLIS, initial_request_timeout_millis * 2u64.pow(attempt)));
+							let sleep_time_millis = rand::thread_rng().gen_range(0..max_sleep_time_millis(initial_request_timeout_millis, attempt));
 
 							tracing::error!("Error in for request_id {request_id}, attempt {attempt} request: {e}. Delaying for {sleep_time_millis}ms");
 
