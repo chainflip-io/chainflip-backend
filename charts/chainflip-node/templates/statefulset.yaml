@@ -31,14 +31,25 @@ spec:
             - |
                 echo "Purging the chain ..."
                 rm -rf /etc/chainflip/chaindata/*
+                chown -R 1000:1000 /etc/chainflip/*
           volumeMounts:
             - name: {{ include "chainflip-node.fullname" . }}
               mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
+            - name: signing-key
+              mountPath: {{ .Values.signingKeyFile }}
+              subPath: signing-key
+            - name: node-key
+              mountPath: {{ .Values.nodeKeyFile }}
+              subPath: node-key
         {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            fsGroup: 1000
+            runAsUser: 1000
+            runAsNonRoot: true
           command:
             - /usr/local/bin/chainflip-node
           args:
