@@ -21,9 +21,6 @@ spec:
       imagePullSecrets:
       {{- toYaml . | nindent 8 }}
       {{- end }}
-      securityContext:
-        fsGroup: 1000
-        runAsUser: 1000
       initContainers:
         {{- if .Values.purgeChain }}
         - name: purge-chain
@@ -34,6 +31,8 @@ spec:
             - |
                 echo "Purging the chain ..."
                 rm -rf /etc/chainflip/chaindata/*
+                chown -R 1000:1000 /etc/chainflip/chaindata
+                chown -R 1000:1000 /etc/chainflip/keys
           volumeMounts:
             - name: {{ include "chainflip-node.fullname" . }}
               mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
@@ -42,6 +41,10 @@ spec:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            fsGroup: 1000
+            runAsUser: 1000
+            runAsNonRoot: true
           command:
             - /usr/local/bin/chainflip-node
           args:
