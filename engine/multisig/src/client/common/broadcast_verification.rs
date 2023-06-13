@@ -18,7 +18,7 @@ use super::BroadcastFailureReason;
 /// verification, where we don't need to do expensive calls
 /// to deserialize a large number of EC point in order to verify
 /// that the broadcast is successful.)
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(transparent)]
 pub struct DelayDeserialization<T> {
 	pub payload: Vec<u8>,
@@ -43,7 +43,7 @@ impl<T: serde::de::DeserializeOwned> DelayDeserialization<T> {
 /// stage from all parties (includes our own for
 /// simplicity). Used for broadcast verification.
 /// `None` indicates that the data hasn't been received.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
 pub struct BroadcastVerificationMessage<T: Clone> {
 	pub data: BTreeMap<AuthorityCount, Option<T>>,
 }
@@ -65,11 +65,11 @@ where
 // If we don't, this means that either (a) the broadcaster did an inconsistent broadcast,
 // (b) that the broadcaster failed to deliver the message to large enough number of parties,
 // or (c) that ~1/2 of parties colluded to slash the broadcasting party.
-pub fn verify_broadcasts<T>(
+fn verify_broadcasts<T>(
 	verification_messages: BTreeMap<AuthorityCount, Option<BroadcastVerificationMessage<T>>>,
 ) -> Result<BTreeMap<AuthorityCount, T>, (BTreeSet<AuthorityCount>, BroadcastFailureReason)>
 where
-	T: Clone + serde::Serialize + serde::de::DeserializeOwned + std::fmt::Debug,
+	T: Clone + std::fmt::Debug + Ord,
 {
 	let num_parties = verification_messages.len();
 	let threshold = threshold_for_broadcast_verification(num_parties);
@@ -148,6 +148,15 @@ where
 			},
 		))
 	}
+}
+
+pub async fn verify_broadcasts_non_blocking<T>(
+	verification_messages: BTreeMap<AuthorityCount, Option<BroadcastVerificationMessage<T>>>,
+) -> Result<BTreeMap<AuthorityCount, T>, (BTreeSet<AuthorityCount>, BroadcastFailureReason)>
+where
+	T: Clone + std::fmt::Debug + Ord + Send + 'static,
+{
+	utilities::task_scope::without_blocking(move || verify_broadcasts(verification_messages)).await
 }
 
 #[cfg(test)]

@@ -23,7 +23,7 @@ use state_chain_runtime::{
 	WASM_BINARY,
 };
 
-use std::{env, marker::PhantomData, str::FromStr};
+use std::{collections::BTreeMap, env, marker::PhantomData, str::FromStr};
 use utilities::clean_eth_address;
 
 use sp_runtime::traits::{IdentifyAccount, Verify};
@@ -196,21 +196,25 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 						get_account_id_from_seed::<sr25519::Public>("LP_1"),
 						AccountRole::LiquidityProvider,
 						100 * FLIPPERINOS_PER_FLIP,
+						Some(b"Chainflip LP 1".to_vec()),
 					),
 					(
 						get_account_id_from_seed::<sr25519::Public>("LP_2"),
 						AccountRole::LiquidityProvider,
 						100 * FLIPPERINOS_PER_FLIP,
+						Some(b"Chainflip LP 2".to_vec()),
 					),
 					(
 						get_account_id_from_seed::<sr25519::Public>("BROKER_1"),
 						AccountRole::Broker,
 						100 * FLIPPERINOS_PER_FLIP,
+						Some(b"Chainflip Broker 1".to_vec()),
 					),
 					(
 						get_account_id_from_seed::<sr25519::Public>("BROKER_2"),
 						AccountRole::Broker,
 						100 * FLIPPERINOS_PER_FLIP,
+						Some(b"Chainflip Broker 2".to_vec()),
 					),
 				],
 				// Governance account - Snow White
@@ -394,7 +398,7 @@ network_spec!(perseverance);
 fn testnet_genesis(
 	wasm_binary: &[u8],
 	initial_authorities: Vec<(AccountId, AuraId, GrandpaId)>, // initial validators
-	extra_accounts: Vec<(AccountId, AccountRole, u128)>,
+	extra_accounts: Vec<(AccountId, AccountRole, u128, Option<Vec<u8>>)>,
 	root_key: AccountId,
 	min_authorities: AuthorityCount,
 	max_authorities: AuthorityCount,
@@ -421,7 +425,17 @@ fn testnet_genesis(
 	let authority_ids: BTreeSet<AccountId> =
 		initial_authorities.iter().map(|(id, ..)| id.clone()).collect();
 	let total_issuance =
-		total_issuance + extra_accounts.iter().map(|(_, _, amount)| *amount).sum::<u128>();
+		total_issuance + extra_accounts.iter().map(|(_, _, amount, _)| *amount).sum::<u128>();
+	let (extra_accounts, genesis_vanity_names): (Vec<_>, BTreeMap<_, _>) = extra_accounts
+		.into_iter()
+		.map(|(account, role, balance, vanity)| {
+			((account.clone(), role, balance), (account, vanity))
+		})
+		.unzip();
+	let genesis_vanity_names = genesis_vanity_names
+		.into_iter()
+		.filter_map(|(account, vanity)| vanity.map(|vanity| (account, vanity)))
+		.collect::<BTreeMap<_, _>>();
 	let all_accounts: Vec<_> = initial_authorities
 		.iter()
 		.map(|(account_id, ..)| {
@@ -429,6 +443,13 @@ fn testnet_genesis(
 		})
 		.chain(extra_accounts.clone())
 		.collect();
+
+	assert!(
+		genesis_vanity_names
+			.keys()
+			.all(|id| all_accounts.iter().any(|(acc_id, ..)| acc_id == id)),
+		"Found a vanity name for non-genesis account."
+	);
 
 	GenesisConfig {
 		account_roles: AccountRolesConfig {
@@ -453,6 +474,7 @@ fn testnet_genesis(
 					}
 				})
 				.collect(),
+			genesis_vanity_names,
 			blocks_per_epoch,
 			redemption_period_as_percentage: percent_of_epoch_period_redeemable,
 			backup_reward_node_percentage: 20,

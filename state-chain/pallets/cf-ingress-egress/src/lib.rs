@@ -838,6 +838,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				deposit_address: address,
 				source_asset: deposit_address_details.source_asset,
 			});
+		} else {
+			log::error!("This should not error since we create the DepositAddressDetailsLookup at the time of opening the channel")
 		}
 	}
 }

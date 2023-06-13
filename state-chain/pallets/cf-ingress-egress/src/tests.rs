@@ -1,8 +1,8 @@
 use crate::{
 	mock::*, AddressPool, AddressStatus, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DeploymentStatus, DepositAddressDetailsLookup, DepositFetchIdOf, DisabledEgressAssets, Error,
-	FetchOrTransfer, FetchParamDetails, MinimumDeposit, Pallet, ScheduledEgressCcm,
-	ScheduledEgressFetchOrTransfer, WeightInfo,
+	DeploymentStatus, DepositAddressDetailsLookup, DepositFetchIdOf, DepositWitness,
+	DisabledEgressAssets, Error, FetchOrTransfer, FetchParamDetails, MinimumDeposit, Pallet,
+	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer, WeightInfo,
 };
 use cf_chains::{ChannelIdConstructor, ExecutexSwapAndCall, TransferAssetParams};
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
@@ -770,11 +770,14 @@ fn multi_use_deposit_address_different_blocks() {
 			// Closing the channel should invalidate the deposit address.
 			IngressEgress::close_channel(channel_id, deposit_address);
 			assert_noop!(
-				Pallet::<Test, _>::process_single_deposit(
-					deposit_address,
-					ETH,
-					1,
-					Default::default()
+				IngressEgress::process_deposits(
+					RuntimeOrigin::root(),
+					vec![DepositWitness {
+						deposit_address,
+						asset: eth::Asset::Eth,
+						amount: 1,
+						tx_id: Default::default()
+					}]
 				),
 				Error::<Test, _>::InvalidDepositAddress
 			);
