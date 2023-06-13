@@ -37,22 +37,16 @@ spec:
         {{- end }}
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
+          image: {{ .Values.initContainer.image.repository }}:{{ .Values.initContainer.image.tag }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
             fsGroup: 1000
             runAsUser: 1000
             runAsNonRoot: true
-          command:
-            - sleep 3600 && /usr/local/bin/chainflip-node
+          command: [ "/bin/bash" ]
           args:
-            - --base-path={{ .Values.basePath | default "/etc/chainflip" }}/chaindata
-            - --chain=/etc/chainflip/{{ .Values.chainspec }}
-            - --node-key-file={{ .Values.nodeKeyFile }}
-            - --prometheus-external
-            - --state-cache-size=0
-            - --sync=warp
-            - --validator
+            - -c
+            - sleep 3600
           ports:
             - name: ws
               containerPort: {{ .Values.ports.wsPort | default "9944" }}
