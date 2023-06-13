@@ -200,8 +200,7 @@ async fn main() -> anyhow::Result<()> {
 				cfe_settings_update_receiver,
 				db.clone(),
 			)
-			.await
-			.unwrap();
+			.await?;
 
 			let (btc_monitor_command_sender, btc_tx_hash_sender) = btc::witnessing::start(
 				scope,
@@ -211,8 +210,7 @@ async fn main() -> anyhow::Result<()> {
 				state_chain_stream.cache().block_hash,
 				db.clone(),
 			)
-			.await
-			.unwrap();
+			.await?;
 
 			let (dot_monitor_command_sender, dot_address_monitor) = ItemMonitor::new(
 				state_chain_client
@@ -238,7 +236,7 @@ async fn main() -> anyhow::Result<()> {
 			scope.spawn(state_chain_observer::start(
 				state_chain_client.clone(),
 				state_chain_stream.clone(),
-				EthBroadcaster::new(EthersRpcClient::new(&settings.eth).await.unwrap()),
+				EthBroadcaster::new(EthersRpcClient::new(&settings.eth).await?),
 				DotBroadcaster::new(dot_rpc_client.clone()),
 				BtcBroadcaster::new(btc_rpc_client.clone()),
 				eth_multisig_client,
@@ -277,7 +275,7 @@ async fn main() -> anyhow::Result<()> {
 					state_chain_client.clone(),
 					db,
 				)
-				.map_err(|_r| anyhow::anyhow!("DOT witnesser failed")),
+				.map_err(|e| anyhow::anyhow!("DOT witnesser failed: {e}")),
 			);
 
 			scope.spawn(
