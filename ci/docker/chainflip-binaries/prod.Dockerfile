@@ -20,11 +20,10 @@ COPY --chown=1000:1000 ./state-chain/node/chainspecs/${CHAINSPEC}.chainspec.raw.
 WORKDIR /etc/chainflip
 
 RUN chmod +x ${ENTRYPOINT} \
-    && useradd -m -u 1000 -U -s /bin/sh -d /flip flip \
     && chown -R 1000:1000 /etc/chainflip \
     && rm -rf /sbin /usr/sbin /usr/local/sbin
 
-USER flip
+USER 1000
 
 RUN ls -la /etc/chainflip
 
