@@ -52,7 +52,7 @@ jsonrpsee = { version = "0.15.1", features = ["full"] }
 
 dyn-clone = "1.0.4"
 ethbloom = "0.12.1"
-ethers = "2.0.7"
+ethers = { version = "2.0.7", features = ["rustls"] }
 lazy_static = "1.4"
 num-bigint = "0.4"
 num-derive = "0.3"
