@@ -150,7 +150,7 @@ impl<RpcClient: Clone + Send + Sync + 'static> RpcRetrierClient<RpcClient> {
 							// We avoid small delays by always having a time of at least half.
 							let half_max = max_sleep_duration(initial_request_timeout, attempt) / 2;
 							let sleep_duration = half_max + rand::thread_rng().gen_range(Duration::default()..half_max);
-							tracing::error!("Error in for request_id {request_id}, attempt {attempt} request: {e}. Delaying for {}ms", sleep_duration.as_millis());
+							tracing::error!("Error for request_id {request_id}, attempt {attempt}: {e}. Delaying for {}ms", sleep_duration.as_millis());
 
 							// Delay the request before the next retry.
 							retry_delays.push(Box::pin(
