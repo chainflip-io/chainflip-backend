@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::{
-	address::{AddressConverter, ForeignChainAddress},
+	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	CcmDepositMetadata,
 };
 use cf_primitives::{Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, STABLE_ASSET};
@@ -89,6 +89,14 @@ impl Swap {
 			SwapLeg::FromStable => self.final_output = Some(output),
 		}
 	}
+
+	fn intermediate_amount(&self) -> Option<AssetAmount> {
+		if self.from == STABLE_ASSET || self.to == STABLE_ASSET {
+			None
+		} else {
+			self.stable_amount
+		}
+	}
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -136,9 +144,9 @@ pub enum CcmFailReason {
 	GasBudgetBelowMinimum,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum SwapOrigin {
-	DepositChannel { deposit_address: ForeignChainAddress, channel_id: ChannelId },
+	DepositChannel { deposit_address: EncodedAddress, channel_id: ChannelId },
 	Vault { tx_hash: TransactionHash },
 }
 
@@ -266,6 +274,7 @@ pub mod pallet {
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
+			intermediate_amount: Option<AssetAmount>,
 		},
 		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
@@ -422,6 +431,7 @@ pub mod pallet {
 								egress_id,
 								asset: swap.to,
 								amount: output_amount,
+								intermediate_amount: swap.intermediate_amount(),
 							});
 						},
 						SwapType::CcmPrincipal(ccm_id) => {
@@ -868,7 +878,10 @@ pub mod pallet {
 					deposit_amount: amount,
 					destination_asset: to,
 					destination_address: encoded_destination_address,
-					origin: SwapOrigin::DepositChannel { deposit_address, channel_id },
+					origin: SwapOrigin::DepositChannel {
+						deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
+						channel_id,
+					},
 				});
 			}
 		}

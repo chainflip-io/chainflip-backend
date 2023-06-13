@@ -226,7 +226,7 @@ fn expect_swap_id_to_be_emitted() {
 				destination_asset: Asset::Usdc,
 				destination_address: EncodedAddress::Eth(Default::default()),
 				origin: SwapOrigin::DepositChannel {
-					deposit_address: ForeignChainAddress::Eth(Default::default()),
+					deposit_address: EncodedAddress::Eth(Default::default()),
 					channel_id: 1
 				}
 			}),
@@ -236,6 +236,7 @@ fn expect_swap_id_to_be_emitted() {
 				egress_id: (ForeignChain::Ethereum, 1),
 				asset: Asset::Usdc,
 				amount: 500,
+				intermediate_amount: None,
 			})
 		);
 	});
@@ -1059,7 +1060,7 @@ fn swap_by_deposit_happy_path() {
 			destination_asset: to,
 			destination_address: EncodedAddress::Eth(Default::default()),
 			origin: SwapOrigin::DepositChannel {
-				deposit_address: ForeignChainAddress::Eth(Default::default()),
+				deposit_address: EncodedAddress::Eth(Default::default()),
 				channel_id: 1,
 			},
 		}));
@@ -1541,6 +1542,7 @@ fn process_all_into_stable_swaps_first() {
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 1),
 				amount: output_amount,
+				intermediate_amount: None,
 			}),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1 }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -1548,6 +1550,7 @@ fn process_all_into_stable_swaps_first() {
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 2),
 				amount: output_amount,
+				intermediate_amount: Some(1000000),
 			}),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 3 }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -1555,6 +1558,7 @@ fn process_all_into_stable_swaps_first() {
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 3),
 				amount: output_amount,
+				intermediate_amount: Some(1000000),
 			}),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2 }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -1562,6 +1566,7 @@ fn process_all_into_stable_swaps_first() {
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 4),
 				amount: output_amount,
+				intermediate_amount: Some(1000000),
 			})
 		);
 	});

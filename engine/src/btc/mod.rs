@@ -1,5 +1,6 @@
 use self::rpc::BtcRpcApi;
 
+pub mod retry_rpc;
 pub mod rpc;
 pub mod witnesser;
 pub mod witnessing;

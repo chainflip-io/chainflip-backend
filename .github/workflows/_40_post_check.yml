@@ -88,7 +88,7 @@ jobs:
       - name: Download binaries
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin-ubuntu-20.04
 
       - name: Install node dependencies
         working-directory: bouncer
@@ -107,12 +107,14 @@ jobs:
       - name: Expose endpoints for Polkadot and Chainflip
         env:
           NGROK_AUTHTOKEN: ${{ secrets.CF_NGROK_AUTHTOKEN }}
+        continue-on-error: true
         run: |
           ngrok http http://localhost:9944 --log-format=logfmt --log=/tmp/ngrok-chainflip-node.log &
           ngrok http http://polkadot:9944 --log-format=logfmt --log=/tmp/ngrok-polkadot.log &
           sleep 10
 
       - name: Get ngrok URLs
+        continue-on-error: true
         id: ngrok-urls
         run: python3 ./ci/scripts/get_ngrok_urls.py
 
@@ -170,7 +172,7 @@ jobs:
       - name: Download previously built binaries
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin-ubuntu-20.04
           path: ./target/release
 
       - name: Run benchmarks
