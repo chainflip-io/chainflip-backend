@@ -9,6 +9,7 @@ use cf_chains::{
 	eth::{Ethereum, SchnorrVerificationComponents, Transaction},
 	ChainCrypto,
 };
+use sp_runtime::{AccountId32, Digest};
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use frame_system::Phase;
 use futures::{FutureExt, StreamExt};
@@ -17,20 +18,16 @@ use multisig::SignatureToThresholdSignature;
 use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_vaults::Vault;
 
-use sp_core::{Hasher, H256};
-use sp_runtime::{traits::Keccak256, AccountId32, Digest};
+use sp_core::{H256};
 use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance, Header};
 use tokio::sync::watch;
 use utilities::MakeCachedStream;
-use web3::types::{Bytes, SignedTransaction};
 use crate::eth::ethers_rpc::MockEthersRpcApi;
 
-use crate::eth::ethers_rpc::EthersRpcApi;
 use crate::{
 	btc::BtcBroadcaster,
 	dot::{rpc::MockDotRpcApi, DotBroadcaster},
 	eth::{
-		rpc::{MockEthRpcApi},
 		ethers_rpc::EthersRpcClient,
 		broadcaster::EthBroadcaster,
 	},
