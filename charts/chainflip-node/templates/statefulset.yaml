@@ -30,6 +30,7 @@ spec:
             - -c
             - |
                 echo "Purging the chain ..."
+                ls -al
                 rm -rf /etc/chainflip/chaindata/*
           volumeMounts:
             - name: {{ include "chainflip-node.fullname" . }}
