@@ -35,6 +35,7 @@ use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, CheckedSub, Zero},
 	Saturating,
 };
+use sp_std::cmp::{max, min};
 
 // use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Saturating, Zero};
 use sp_std::prelude::*;
@@ -384,20 +385,22 @@ pub mod pallet {
 				);
 			}
 
+			let restricted = restricted_balances.values().copied().sum::<FlipBalance<T>>() -
+				restricted_balances.get(&address).copied().unwrap_or_default();
+
 			let bond = T::Bonding::bond_of(&account_id);
 
-			// The amount to withdraw, net of fees.
+			let unrestricted =
+				T::Flip::account_balance(&account_id).saturating_sub(max(restricted, bond));
+
+			let max_redeem = if let Some(res_amount) = restricted_balances.get(&address) {
+				min(unrestricted + *res_amount, T::Flip::redeemable_balance(&account_id))
+			} else {
+				unrestricted
+			};
+
 			let net_amount = match amount {
-				RedemptionAmount::Max => {
-					let restricted = restricted_balances.values().copied().sum::<FlipBalance<T>>() -
-						restricted_balances.get(&address).copied().unwrap_or_default();
-					let unrestricted = T::Flip::redeemable_balance(&account_id)
-						.checked_sub(&restricted)
-						.ok_or(Error::<T>::InsufficientUnrestrictedFunds)?;
-					unrestricted
-						.checked_sub(&redemption_fee)
-						.ok_or(Error::<T>::RedemptionAmountTooLow)?
-				},
+				RedemptionAmount::Max => max_redeem.saturating_sub(redemption_fee),
 				RedemptionAmount::Exact(amount) => amount,
 			};
 
@@ -423,7 +426,7 @@ pub mod pallet {
 			);
 
 			ensure!(
-				remaining_balance >= restricted_balances.values().copied().sum(),
+				remaining_balance >= restricted_balances.values().copied().sum::<FlipBalance<T>>(),
 				Error::<T>::InsufficientUnrestrictedFunds
 			);
 
