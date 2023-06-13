@@ -34,6 +34,12 @@ spec:
                 chown -R 1000:1000 /etc/chainflip/chaindata
                 chown -R 1000:1000 /etc/chainflip/keys
           volumeMounts:
+            - name: signing-key
+              mountPath: {{ .Values.signingKeyFile }}
+              subPath: signing-key
+            - name: node-key
+              mountPath: {{ .Values.nodeKeyFile }}
+              subPath: node-key
             - name: {{ include "chainflip-node.fullname" . }}
               mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
         {{- end }}
