@@ -150,7 +150,9 @@ impl<RpcClient: Clone + Send + Sync + 'static> RpcRetrierClient<RpcClient> {
 						},
 						Err((e, attempt)) => {
 							// Apply exponential back off with jitter to the retries.
-							let sleep_time_millis = rand::thread_rng().gen_range(0..max_sleep_time_millis(initial_request_timeout_millis, attempt));
+							// We avoid small delays by always having a time of at least half.
+							let half_max = max_sleep_time_millis(initial_request_timeout_millis, attempt) / 2;
+							let sleep_time_millis = half_max + rand::thread_rng().gen_range(0..half_max);
 
 							tracing::error!("Error in for request_id {request_id}, attempt {attempt} request: {e}. Delaying for {sleep_time_millis}ms");
 
