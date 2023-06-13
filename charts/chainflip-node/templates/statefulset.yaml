@@ -21,6 +21,9 @@ spec:
       imagePullSecrets:
       {{- toYaml . | nindent 8 }}
       {{- end }}
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
       initContainers:
         {{- if .Values.purgeChain }}
         - name: purge-chain
@@ -33,7 +36,7 @@ spec:
                 rm -rf /etc/chainflip/chaindata/*
           volumeMounts:
             - name: {{ include "chainflip-node.fullname" . }}
-              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}
+              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
         {{- end }}
       containers:
         - name: {{ .Chart.Name }}
@@ -72,7 +75,8 @@ spec:
               mountPath: {{ .Values.nodeKeyFile }}
               subPath: node-key
             - name: {{ include "chainflip-node.fullname" . }}
-              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}
+              mountPath:  {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
+
       volumes:
         - name: signing-key
           secret:
