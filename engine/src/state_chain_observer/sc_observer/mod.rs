@@ -594,6 +594,7 @@ where
                                             transaction_out_id: _,
                                         },
                                     ) if nominee == account_id => {
+                                        // TODO: We can use send_transaction here.
                                         match eth_broadcaster.encode_and_sign_tx(transaction_payload)
                                             .and_then(|raw_signed_tx| {
                                                 // We want to transmit here to decrease the delay between getting a gas price estimate

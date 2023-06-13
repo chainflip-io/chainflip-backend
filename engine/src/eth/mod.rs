@@ -13,6 +13,7 @@ mod ws_safe_stream;
 
 pub mod rpc;
 
+mod ethers_rpc;
 pub mod utils;
 pub mod witnessing;
 
