@@ -31,9 +31,9 @@ jobs:
         id: dockerfile
         run: |
           if [[ "${{ inputs.environment }}" == "prod" || "${{ inputs.network }}" == "sisyphos" || "${{ inputs.network }}" == "perseverance" ]] ; then
-            echo "dockerfile_path=ci/docker/chainflip-binaries/prod" >> "$GITHUB_OUTPUT"
+            echo "dockerfile_path=ci/docker/prod" >> "$GITHUB_OUTPUT"
           else
-            echo "dockerfile_path=ci/docker/chainflip-binaries/dev" >> "$GITHUB_OUTPUT"
+            echo "dockerfile_path=ci/docker/dev" >> "$GITHUB_OUTPUT"
           fi
 
   chainflip-binaries:
