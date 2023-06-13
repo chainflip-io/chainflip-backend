@@ -25,7 +25,7 @@ jobs:
   set-dockerfile-name:
     runs-on: ubuntu-20.04
     outputs:
-      dockerfile_path: ${{ steps.dockerfile.outputs.dockerfile_path_path }}
+      dockerfile_path: ${{ steps.dockerfile.outputs.dockerfile_path }}
     steps:
       - name: Set dockerfile name
         id: dockerfile
