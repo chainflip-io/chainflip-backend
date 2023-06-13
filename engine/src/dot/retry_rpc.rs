@@ -1,6 +1,7 @@
 use crate::dot::PolkadotConfig;
 use cf_chains::dot::{PolkadotHash, RuntimeVersion};
 use cf_primitives::PolkadotBlockNumber;
+use core::time::Duration;
 use subxt::{events::Events, rpc::types::ChainBlockExtrinsic};
 use utilities::task_scope::Scope;
 
@@ -14,11 +15,11 @@ pub struct DotRetryRpcClient {
 	retry_client: RpcRetrierClient<DotRpcClient>,
 }
 
-const POLKADOT_RPC_TIMEOUT_MILLIS: u64 = 1000;
+const POLKADOT_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
 
 impl DotRetryRpcClient {
 	pub fn new(scope: &Scope<'_, anyhow::Error>, dot_client: DotRpcClient) -> Self {
-		Self { retry_client: RpcRetrierClient::new(scope, dot_client, POLKADOT_RPC_TIMEOUT_MILLIS) }
+		Self { retry_client: RpcRetrierClient::new(scope, dot_client, POLKADOT_RPC_TIMEOUT) }
 	}
 }
 
