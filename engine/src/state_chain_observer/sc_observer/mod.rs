@@ -595,7 +595,7 @@ where
                                         },
                                     ) if nominee == account_id => {
                                         match eth_broadcaster.send(transaction_payload).await {
-                                            Ok(tx_hash) => debug!("Ethereum TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
+                                            Ok(tx_hash) => info!("Ethereum TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
                                             Err(error) => {
                                                 // Note: this error can indicate that we failed to estimate gas, or that there is
                                                 // a problem with the ethereum rpc node, or with the configured account. For example
@@ -623,7 +623,7 @@ where
                                         dot_monitor_signature_sender.send(transaction_out_id).unwrap();
                                         if nominee == account_id {
                                             match dot_broadcaster.send(transaction_payload.encoded_extrinsic).await {
-                                                Ok(tx_hash) => debug!("Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                Ok(tx_hash) => info!("Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
                                                 Err(error) => {
                                                     error!("Error on Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
                                                     state_chain_client.submit_signed_extrinsic(
@@ -650,7 +650,7 @@ where
 
                                         if nominee == account_id {
                                             match btc_broadcaster.send(transaction_payload.encoded_transaction).await {
-                                                Ok(tx_hash) => debug!("Bitcoin TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
+                                                Ok(tx_hash) => info!("Bitcoin TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
                                                 Err(error) => {
                                                     error!("Error on Bitcoin TransactionBroadcastRequest {broadcast_attempt_id:?}: {error:?}");
                                                     state_chain_client.submit_signed_extrinsic(
