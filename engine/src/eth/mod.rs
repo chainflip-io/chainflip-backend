@@ -160,8 +160,9 @@ where
 		let secret_key = read_clean_and_decode_hex_str_file(
 			&eth_settings.private_key_file,
 			"Ethereum Private Key",
-			|key| SecretKey::from_str(key).context("Eth broadcaster failed to read key file."),
-		)?;
+			|key| SecretKey::from_str(key).context("Failed to load Ethereum private key."),
+		)
+		.context("Eth broadcaster failed to read key file.")?;
 		Ok(Self { eth_rpc, secret_key, address: SecretKeyRef::new(&secret_key).address() })
 	}
 

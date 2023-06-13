@@ -319,10 +319,8 @@ pub fn deserialize_for_version<C: CryptoScheme>(
 	match message.version {
 		1 => bincode::deserialize::<'_, MultisigMessage<C::Point>>(&message.payload).map_err(|e| {
 			anyhow!("Failed to deserialize message (version: {}): {:?}", message.version, e)
-				.context("Failed to deserialize version.")
 		}),
-		_ => Err(anyhow!("Unsupported message version: {}", message.version)
-			.context("Failed to deserialize version.")),
+		_ => Err(anyhow!("Unsupported message version: {}", message.version)),
 	}
 }
 

@@ -391,10 +391,9 @@ impl SignedExtrinsicClientBuilderTrait for SignedExtrinsicClientBuilder {
 					&self.signing_key_file,
 					"Signing Key",
 					|str| {
-						<[u8; 32]>::try_from(
-							hex::decode(str).context("Failed to decode signing key from file.")?,
-						)
-						.map_err(|e| anyhow!("Failed to decode signing key: Wrong length. {e:?}"))
+						<[u8; 32]>::try_from(hex::decode(str)?).map_err(|e| {
+							anyhow!("Failed to decode signing key: Wrong length. {e:?}")
+						})
 					},
 				)?,
 			)),

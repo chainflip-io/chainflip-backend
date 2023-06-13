@@ -1,4 +1,3 @@
-use anyhow::Context;
 use chainflip_api::{
 	self, clean_foreign_chain_address,
 	primitives::{AccountRole, Asset, BasisPoints, CcmDepositMetadata},
@@ -61,8 +60,7 @@ impl RpcServer for RpcServerImpl {
 			broker_commission_bps,
 			message_metadata,
 		)
-		.await
-		.context("Failed to request swap deposit address.")?)
+		.await?)
 	}
 }
 

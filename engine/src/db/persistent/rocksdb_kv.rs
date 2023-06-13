@@ -43,7 +43,7 @@ impl RocksDBKeyValueStore {
 
 		// Open the db or create a new one if it doesn't exist
 		let db = DB::open_cf_descriptors(&open_options, db_path, column_families)
-			.context(format!("Failed to open database at: {}", db_path.display()))?;
+			.with_context(|| format!("Failed to open database at: {}", db_path.display()))?;
 
 		Ok(RocksDBKeyValueStore { db })
 	}

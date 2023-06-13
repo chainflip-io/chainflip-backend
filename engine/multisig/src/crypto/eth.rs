@@ -115,7 +115,7 @@ impl CryptoScheme for EthSigning {
 		public_key
 			.verify(&payload.0, &signature.clone().into())
 			.map_err(anyhow::Error::msg)
-			.context("Failed to verify signature")?;
+			.context("Failed to verify Ethereum signature")?;
 
 		Ok(())
 	}

@@ -403,12 +403,12 @@ pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result
 		ForeignChain::Ethereum => EncodedAddress::Eth(
 			clean_eth_address(address)
 				.map_err(anyhow::Error::msg)
-				.context("Failed to clean Ethereum foreign chain address.")?,
+				.context("Failed to parse Ethereum foreign chain address.")?,
 		),
 		ForeignChain::Polkadot => EncodedAddress::Dot(
 			clean_dot_address(address)
 				.map_err(anyhow::Error::msg)
-				.context("Failed to clean Polkadot address.")?,
+				.context("Failed to parse Polkadot address.")?,
 		),
 		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
 	})
@@ -470,9 +470,7 @@ pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPair, Strin
 				seed_phrase.to_string(),
 			)
 		})
-		.map_err(|e| {
-			anyhow!("Invalid seed phrase. Error: {e:?}").context("Failed to generate signing key.")
-		})
+		.map_err(|e| anyhow!("Failed to generate signing key - invalid seed phrase. Error: {e:?}"))
 }
 
 /// Generate a new random ethereum key.

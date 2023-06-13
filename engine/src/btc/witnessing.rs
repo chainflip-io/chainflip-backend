@@ -78,8 +78,11 @@ pub async fn start(
 			db,
 		)
 		.map_err(|e| {
-			anyhow::anyhow!("Error: {} \nRoot cause: {}", e, e.root_cause())
-				.context("Btc Witnesser failed to start.")
+			anyhow::anyhow!(
+				"Btc Witnesser failed to start. Error: {} \nRoot cause: {}",
+				e,
+				e.root_cause()
+			)
 		}),
 	);
 

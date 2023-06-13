@@ -190,9 +190,9 @@ where
 				.asset(source_token.0)
 				.await
 				.map_err(|e| {
-					CallFromEventError::Network(
-						anyhow!(e).context("Failed to retrieve from token for SwapToken call."),
-					)
+					CallFromEventError::Network(anyhow!(
+						"Failed to retrieve from token for SwapToken call: {e}"
+					))
 				})?
 				.ok_or(CallFromEventError::Decode(format!(
 					"Source token {source_token} not found"
@@ -244,9 +244,9 @@ where
 				.asset(source_token.0)
 				.await
 				.map_err(|e| {
-					CallFromEventError::Network(
-						anyhow!(e).context("Failed to retrieve From token for XCallToken call."),
-					)
+					CallFromEventError::Network(anyhow!(
+						"Failed to retrieve From token for XCallToken call: {e}"
+					))
 				})?
 				.ok_or(CallFromEventError::Decode(format!(
 					"Source token {source_token} not found"

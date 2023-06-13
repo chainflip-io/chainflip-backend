@@ -104,7 +104,17 @@ pub enum AggKeyVerificationError {
 
 impl Display for AggKeyVerificationError {
 	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-		write!(f, "{:?}", self)
+		write!(
+			f,
+			"{}",
+			match self {
+				Self::InvalidSignature =>
+					"InvalidSignature: The provided signature is not a valid private key",
+				Self::InvalidPubkey => "InvalidPubkey: The agg_key is not a valid public key.",
+				Self::NoMatch =>
+					"NoMatch: The recovered `k_times_g_address` does not match the expected value.",
+			}
+		)
 	}
 }
 
