@@ -36,6 +36,7 @@ spec:
                 echo "Purging the chain ..."
                 rm -rf /etc/chainflip/chaindata/*
                 ls -la /etc/chainflip/
+                ls -la /etc/chainflip/keys
           volumeMounts:
             - name: {{ include "chainflip-node.fullname" . }}
               mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
@@ -76,14 +77,14 @@ spec:
           resources:
           {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
+            - name: {{ include "chainflip-node.fullname" . }}
+              mountPath:  {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
             - name: signing-key
               mountPath: {{ .Values.signingKeyFile }}
               subPath: signing-key
             - name: node-key
               mountPath: {{ .Values.nodeKeyFile }}
               subPath: node-key
-            - name: {{ include "chainflip-node.fullname" . }}
-              mountPath:  {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
 
       volumes:
         - name: signing-key
