@@ -1,3 +1,4 @@
+pub mod retry_rpc;
 pub mod rpc;
 pub mod runtime_version_updater;
 pub mod safe_runtime_version_stream;

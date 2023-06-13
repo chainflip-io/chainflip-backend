@@ -12,15 +12,11 @@ use futures::Future;
 use tokio::sync::{mpsc, oneshot};
 use utilities::{futures_unordered_wait::FuturesUnorderedWait, task_scope::Scope};
 
-type TypedFutureGenerator<T> = Pin<
-	Box<
-		dyn Fn() -> Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send + Sync>>
-			+ Send
-			+ Sync,
-	>,
+type TypedFutureGenerator<T, RpcClient> = Pin<
+	Box<dyn Fn(RpcClient) -> Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send>> + Send>,
 >;
 
-type FutureAnyGenerator = TypedFutureGenerator<BoxAny>;
+type FutureAnyGenerator<RpcClient> = TypedFutureGenerator<BoxAny, RpcClient>;
 
 // The id per *request* from the external caller. This is not tracking *submissions*.
 type RequestId = u64;
@@ -28,37 +24,38 @@ type RequestId = u64;
 type RequestFutures = FuturesUnorderedWait<
 	Pin<
 		Box<
-			dyn Future<Output = (RequestId, Result<BoxAny, (anyhow::Error, u64)>)>
-				+ Send
-				+ Sync
-				+ 'static,
+			dyn Future<Output = (RequestId, Result<BoxAny, (anyhow::Error, u64)>)> + Send + 'static,
 		>,
 	>,
 >;
 
 type RetryDelays =
-	FuturesUnorderedWait<Pin<Box<dyn Future<Output = (RequestId, u64)> + Send + Sync + 'static>>>;
+	FuturesUnorderedWait<Pin<Box<dyn Future<Output = (RequestId, u64)> + Send + 'static>>>;
 
-type BoxAny = Box<dyn Any + Send + Sync>;
+type BoxAny = Box<dyn Any + Send>;
 
-type RequestPackage = (oneshot::Sender<BoxAny>, FutureAnyGenerator);
+type RequestPackage<RpcClient> = (oneshot::Sender<BoxAny>, FutureAnyGenerator<RpcClient>);
 
 /// Tracks all the retries
-pub struct RpcRetrierClient {
+pub struct RpcRetrierClient<RpcClient> {
 	// The channel to send requests to the client.
-	request_sender: mpsc::Sender<RequestPackage>,
+	request_sender: mpsc::Sender<RequestPackage<RpcClient>>,
 }
 
 #[derive(Default)]
-pub struct RequestHolder {
+pub struct RequestHolder<RpcClient> {
 	last_request_id: RequestId,
 
-	stored_requests: BTreeMap<RequestId, (oneshot::Sender<BoxAny>, FutureAnyGenerator)>,
+	stored_requests: BTreeMap<RequestId, (oneshot::Sender<BoxAny>, FutureAnyGenerator<RpcClient>)>,
 }
 
-impl RequestHolder {
+impl<RpcClient> RequestHolder<RpcClient> {
+	pub fn new() -> Self {
+		Self { last_request_id: 0, stored_requests: BTreeMap::new() }
+	}
+
 	// Returns the request id of the new request
-	pub fn insert(&mut self, request_id: RequestId, request: RequestPackage) {
+	pub fn insert(&mut self, request_id: RequestId, request: RequestPackage<RpcClient>) {
 		assert!(self.stored_requests.insert(request_id, request).is_none());
 	}
 
@@ -67,22 +64,23 @@ impl RequestHolder {
 		self.last_request_id
 	}
 
-	pub fn remove(&mut self, request_id: &RequestId) -> Option<RequestPackage> {
+	pub fn remove(&mut self, request_id: &RequestId) -> Option<RequestPackage<RpcClient>> {
 		self.stored_requests.remove(request_id)
 	}
 
-	pub fn get(&self, request_id: &RequestId) -> Option<&RequestPackage> {
+	pub fn get(&self, request_id: &RequestId) -> Option<&RequestPackage<RpcClient>> {
 		self.stored_requests.get(request_id)
 	}
 }
 
 // Creates a future of a particular submission.
-pub fn submission_future(
-	submission_fn: &FutureAnyGenerator,
+fn submission_future<RpcClient: Clone>(
+	client: RpcClient,
+	submission_fn: &FutureAnyGenerator<RpcClient>,
 	request_id: RequestId,
 	timeout_millis: u64,
 ) -> Pin<Box<impl Future<Output = (RequestId, Result<BoxAny, (anyhow::Error, u64)>)>>> {
-	let submission_fut = submission_fn();
+	let submission_fut = submission_fn(client);
 	Box::pin(async move {
 		(
 			request_id,
@@ -102,12 +100,16 @@ pub fn submission_future(
 /// Requests submitted to this client will be retried until success.
 /// When a request fails it will be retried after a delay that exponentially increases on each retry
 /// attempt.
-impl RpcRetrierClient {
-	pub fn new(scope: &Scope<'_, anyhow::Error>, initial_request_timeout_millis: u64) -> Self {
+impl<RpcClient: Clone + Send + Sync + 'static> RpcRetrierClient<RpcClient> {
+	pub fn new(
+		scope: &Scope<'_, anyhow::Error>,
+		primary_client: RpcClient,
+		initial_request_timeout_millis: u64,
+	) -> Self {
 		let (request_sender, mut request_receiver) =
-			mpsc::channel::<(oneshot::Sender<BoxAny>, FutureAnyGenerator)>(1);
+			mpsc::channel::<(oneshot::Sender<BoxAny>, FutureAnyGenerator<RpcClient>)>(1);
 
-		let mut request_holder = RequestHolder::default();
+		let mut request_holder = RequestHolder::new();
 
 		let mut retry_delays = RetryDelays::new();
 
@@ -117,7 +119,7 @@ impl RpcRetrierClient {
 			utilities::loop_select! {
 				if let Some((response_sender, closure)) = request_receiver.recv() => {
 					let request_id = request_holder.next_request_id();
-					running_futures.push(submission_future(&closure, request_id, initial_request_timeout_millis));
+					running_futures.push(submission_future(primary_client.clone(), &closure, request_id, initial_request_timeout_millis));
 					request_holder.insert(request_id, (response_sender, closure));
 				},
 				if let Some((request_id, result)) = running_futures.next() => {
@@ -142,9 +144,12 @@ impl RpcRetrierClient {
 				if let Some((request_id, timeout_millis)) = retry_delays.next() => {
 					tracing::trace!("Retrying request id: {request_id}, that had a timeout of {timeout_millis}");
 
-					if let Some((_, closure)) = request_holder.get(&request_id) {
-						// Apply exponential backoff.
-						running_futures.push(submission_future(closure, request_id, timeout_millis.saturating_mul(2)));
+					if let Some((response_sender, closure)) = request_holder.get(&request_id) {
+						// If the receiver has been dropped, we don't need to retry.
+						if !response_sender.is_closed() {
+							// Apply exponential backoff.
+							running_futures.push(submission_future(primary_client.clone(), closure, request_id, timeout_millis.saturating_mul(2)));
+						}
 					}
 				},
 			};
@@ -155,12 +160,12 @@ impl RpcRetrierClient {
 	}
 
 	// Separate function so we can more easily test.
-	async fn send_request<T: Send + Sync + Clone + 'static>(
+	async fn send_request<T: Send + Clone + 'static>(
 		&self,
-		specific_closure: TypedFutureGenerator<T>,
+		specific_closure: TypedFutureGenerator<T, RpcClient>,
 	) -> oneshot::Receiver<BoxAny> {
-		let future_any_fn: FutureAnyGenerator = Box::pin(move || {
-			let future = specific_closure();
+		let future_any_fn: FutureAnyGenerator<RpcClient> = Box::pin(move |client| {
+			let future = specific_closure(client);
 			Box::pin(async move {
 				let result = future.await?;
 				let result: BoxAny = Box::new(result);
@@ -173,9 +178,9 @@ impl RpcRetrierClient {
 	}
 
 	/// Requests something to be retried by the retry client.
-	pub async fn request<T: Send + Sync + Clone + 'static>(
+	pub async fn request<T: Send + Clone + 'static>(
 		&self,
-		specific_closure: TypedFutureGenerator<T>,
+		specific_closure: TypedFutureGenerator<T, RpcClient>,
 	) -> T {
 		let rx = self.send_request(specific_closure).await;
 		let result: BoxAny = rx.await.unwrap();
@@ -192,11 +197,11 @@ mod tests {
 
 	use super::*;
 
-	fn specific_fut_closure<T: Send + Sync + Clone + 'static>(
+	fn specific_fut_closure<T: Send + Sync + Clone + 'static, RpcClient>(
 		value: T,
 		timeout_millis: u64,
-	) -> TypedFutureGenerator<T> {
-		Box::pin(move || {
+	) -> TypedFutureGenerator<T, RpcClient> {
+		Box::pin(move |_client| {
 			let value = value.clone();
 			Box::pin(async move {
 				// We need to delay in the tests, else we'll resolve immediately, meaning the
@@ -209,7 +214,7 @@ mod tests {
 		})
 	}
 
-	async fn check_result<T: PartialEq + std::fmt::Debug + Send + Sync + Clone + 'static>(
+	async fn check_result<T: PartialEq + std::fmt::Debug + Send + Clone + 'static>(
 		result_rx: oneshot::Receiver<BoxAny>,
 		expected: T,
 	) {
@@ -224,7 +229,7 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT_MILLIS: u64 = 100;
 
-				let retrier_client = RpcRetrierClient::new(scope, INITIAL_TIMEOUT_MILLIS);
+				let retrier_client = RpcRetrierClient::new(scope, (), INITIAL_TIMEOUT_MILLIS);
 
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
@@ -261,7 +266,7 @@ mod tests {
 				const TIMEOUT_MILLIS: u64 = 1000;
 				const INITIAL_TIMEOUT_MILLIS: u64 = 50;
 
-				let retrier_client = RpcRetrierClient::new(scope, INITIAL_TIMEOUT_MILLIS);
+				let retrier_client = RpcRetrierClient::new(scope, (), INITIAL_TIMEOUT_MILLIS);
 
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
@@ -290,7 +295,7 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT_MILLIS: u64 = 100;
 
-				let retrier_client = RpcRetrierClient::new(scope, INITIAL_TIMEOUT_MILLIS);
+				let retrier_client = RpcRetrierClient::new(scope, (), INITIAL_TIMEOUT_MILLIS);
 
 				const REQUEST_1: u32 = 32;
 				assert_eq!(
@@ -316,10 +321,10 @@ mod tests {
 		.unwrap();
 	}
 
-	fn specific_fut_err<T: Send + Sync + Clone + 'static>(
+	fn specific_fut_err<T: Send + Clone + 'static, RpcClient>(
 		timeout_millis: u64,
-	) -> TypedFutureGenerator<T> {
-		Box::pin(move || {
+	) -> TypedFutureGenerator<T, RpcClient> {
+		Box::pin(move |_client| {
 			Box::pin(async move {
 				tokio::time::sleep(tokio::time::Duration::from_millis(timeout_millis)).await;
 				Err(anyhow::anyhow!("Sorry, this just doesn't work."))
@@ -334,9 +339,9 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT_MILLIS: u64 = 100;
 
-				let retrier_client = RpcRetrierClient::new(scope, INITIAL_TIMEOUT_MILLIS);
+				let retrier_client = RpcRetrierClient::new(scope, (), INITIAL_TIMEOUT_MILLIS);
 
-				retrier_client.request(specific_fut_err::<()>(INITIAL_TIMEOUT_MILLIS)).await;
+				retrier_client.request(specific_fut_err::<(), _>(INITIAL_TIMEOUT_MILLIS)).await;
 
 				Ok(())
 			}

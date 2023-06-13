@@ -10,7 +10,7 @@ jobs:
   cargo-fmt:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20-ubuntu-20.04"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -24,7 +24,7 @@ jobs:
   audit:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20-ubuntu-20.04"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -37,7 +37,7 @@ jobs:
   cargo-clippy:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20-ubuntu-20.04"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -66,7 +66,8 @@ jobs:
     strategy:
       matrix:
         dockerfile:
-          - cf.Dockerfile
+          - chainflip-binaries/dev.Dockerfile
+          - chainflip-binaries/prod.Dockerfile
           - rust-base.Dockerfile
     steps:
       - name: Checkout 🏁
@@ -76,3 +77,19 @@ jobs:
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: ci/docker/${{ matrix.dockerfile }}
+
+  check-docker-image-tags:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@v3
+
+      - name: Setup Python 🐍
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+
+      - name: Check 🐳🕵️‍♂️
+        run: |
+          pip install PyYAML
+          python ci/scripts/check_docker_image_tags.py

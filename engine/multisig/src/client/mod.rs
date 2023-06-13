@@ -38,6 +38,9 @@ pub use common::{
 #[cfg(test)]
 pub use self::utils::ensure_unsorted;
 
+#[cfg(test)]
+pub use helpers::test_all_crypto_schemes;
+
 #[cfg(feature = "test")]
 pub use keygen::get_key_data_for_test;
 

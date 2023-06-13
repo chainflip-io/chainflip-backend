@@ -1009,6 +1009,14 @@ impl_runtime_apis! {
 		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Result<SwapOutput, DispatchError> {
 			LiquidityPools::swap_with_network_fee(from, to, amount)
 		}
+
+		fn cf_environment() -> runtime_apis::Environment {
+			runtime_apis::Environment {
+				bitcoin_network: Environment::bitcoin_network(),
+				ethereum_chain_id: Environment::ethereum_chain_id(),
+				polkadot_genesis_hash: Environment::polkadot_genesis_hash(),
+			}
+		}
 	}
 
 	// END custom runtime APIs

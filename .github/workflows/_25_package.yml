@@ -12,8 +12,12 @@ on:
 jobs:
   packages:
     runs-on: [hetzner]
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu_version: [20.04, 22.04]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20-ubuntu-${{ matrix.ubuntu_version }}"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -24,7 +28,7 @@ jobs:
       - name: Download binaries from same run
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
           path: ./target/release
 
       - name: Get date
@@ -47,7 +51,7 @@ jobs:
       - name: Upload packages
         uses: actions/upload-artifact@v3
         with:
-          name: chainflip-backend-packages
+          name: chainflip-backend-packages-ubuntu-${{ matrix.ubuntu_version }}
           path: |
             target/debian/*.deb
 
