@@ -1,6 +1,8 @@
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
-use cf_chains::{address::EncodedAddress, CcmDepositMetadata, ForeignChain};
+use cf_chains::{
+	address::EncodedAddress, eth::to_ethereum_address, CcmDepositMetadata, ForeignChain,
+};
 use cf_primitives::{AccountRole, Asset, BasisPoints};
 use futures::FutureExt;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
@@ -11,6 +13,7 @@ use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{opaque::SessionKeys, RuntimeCall};
 use zeroize::Zeroize;
 
+pub use sp_core::crypto::AccountId32;
 pub mod primitives {
 	pub use cf_primitives::*;
 	pub use pallet_cf_governance::ProposalId;
@@ -447,8 +450,8 @@ pub fn generate_node_key() -> KeyPair {
 
 /// Generate a signing key (aka validator key) using the seed phrase.
 /// If no seed phrase is provided, a new random seed phrase will be created.
-/// Returns the key and the seed phrase used to create it.
-pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPair, String)> {
+/// Returns the key, seed phrase and the derived account id.
+pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPair, String, AccountId32)> {
 	use bip39::{Language, Mnemonic, MnemonicType};
 
 	// Get a new random seed phrase if one was not provided
@@ -461,6 +464,7 @@ pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPair, Strin
 			(
 				KeyPair { secret_key: seed.to_vec(), public_key: pair.public().to_vec() },
 				seed_phrase.to_string(),
+				pair.public().into(),
 			)
 		})
 		.map_err(|_| anyhow::Error::msg("Invalid seed phrase"))
@@ -470,15 +474,21 @@ pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPair, Strin
 /// A chainflip validator must have their own Ethereum private keys and be capable of submitting
 /// transactions. We recommend importing the generated secret key into metamask for account
 /// management.
-pub fn generate_ethereum_key() -> KeyPair {
-	use secp256k1::Secp256k1;
-
+/// returns the keypair and the derived ethereum address
+pub fn generate_ethereum_key() -> (KeyPair, [u8; 20]) {
 	use rand::SeedableRng;
 	let mut rng = rand::rngs::StdRng::from_entropy();
 
-	let (secret_key, public_key) = Secp256k1::new().generate_keypair(&mut rng);
+	let secret_key = libsecp256k1::SecretKey::random(&mut rng);
+	let public_key = libsecp256k1::PublicKey::from_secret_key(&secret_key);
 
-	KeyPair { secret_key: secret_key[..].to_vec(), public_key: public_key.serialize().to_vec() }
+	(
+		KeyPair {
+			secret_key: secret_key.serialize().to_vec(),
+			public_key: public_key.serialize_compressed().to_vec(),
+		},
+		to_ethereum_address(public_key),
+	)
 }
 
 #[test]
@@ -486,7 +496,7 @@ fn test_generate_signing_key_with_known_seed() {
 	const SEED_PHRASE: &str =
 		"essay awesome afraid movie wish save genius eyebrow tonight milk agree pretty alcohol three whale";
 
-	let (generate_key, _) = generate_signing_key(Some(SEED_PHRASE)).unwrap();
+	let (generate_key, _, _) = generate_signing_key(Some(SEED_PHRASE)).unwrap();
 
 	// Compare the generated secret key with a known secret key generated using the `chainflip-node
 	// key generate` command

@@ -17,7 +17,7 @@ use crate::{
 		SigningRequestDetails,
 	},
 	crypto::{CryptoScheme, Rng},
-	eth::{EthSchnorrSignature, EthSigning},
+	eth::EthSigning,
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
 };
 use anyhow::Result;
@@ -77,24 +77,22 @@ fn new_ceremony_manager_for_test(
 }
 
 /// Sends a signing request to the ceremony manager with a dummy key and some default values.
-fn send_signing_request(
-	ceremony_request_sender: &tokio::sync::mpsc::UnboundedSender<CeremonyRequest<EthSigning>>,
+fn send_signing_request<C: CryptoScheme>(
+	ceremony_request_sender: &tokio::sync::mpsc::UnboundedSender<CeremonyRequest<C>>,
 	participants: BTreeSet<AccountId32>,
 	ceremony_id: CeremonyId,
 ) -> tokio::sync::oneshot::Receiver<
-	Result<Vec<EthSchnorrSignature>, (BTreeSet<AccountId32>, SigningFailureReason)>,
+	Result<Vec<C::Signature>, (BTreeSet<AccountId32>, SigningFailureReason)>,
 > {
 	let (result_sender, result_receiver) = oneshot::channel();
 
 	let request = CeremonyRequest {
 		ceremony_id,
-		details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails::<EthSigning> {
+		details: Some(CeremonyRequestDetails::Sign(SigningRequestDetails::<C> {
 			participants,
 			signing_info: vec![(
-				get_key_data_for_test::<EthSigning>(BTreeSet::from_iter(
-					ACCOUNT_IDS.iter().cloned(),
-				)),
-				EthSigning::signing_payload_for_test(),
+				get_key_data_for_test::<C>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned())),
+				C::signing_payload_for_test(),
 			)],
 			rng: Rng::from_seed(DEFAULT_SIGNING_SEED),
 			result_sender,
@@ -106,11 +104,11 @@ fn send_signing_request(
 	result_receiver
 }
 
-fn spawn_ceremony_manager(
+fn spawn_ceremony_manager<C: CryptoScheme>(
 	our_account_id: AccountId,
 	latest_ceremony_id: CeremonyId,
 ) -> (
-	mpsc::UnboundedSender<CeremonyRequest<EthSigning>>,
+	mpsc::UnboundedSender<CeremonyRequest<C>>,
 	mpsc::UnboundedSender<(AccountId32, VersionedCeremonyMessage)>,
 	mpsc::UnboundedReceiver<OutgoingMultisigStageMessages>,
 ) {
@@ -118,7 +116,7 @@ fn spawn_ceremony_manager(
 	let (incoming_p2p_sender, incoming_p2p_receiver) = mpsc::unbounded_channel();
 	let (outgoing_p2p_sender, outgoing_p2p_receiver) = mpsc::unbounded_channel();
 	let ceremony_manager =
-		CeremonyManager::<EthSigning>::new(our_account_id, outgoing_p2p_sender, latest_ceremony_id);
+		CeremonyManager::<C>::new(our_account_id, outgoing_p2p_sender, latest_ceremony_id);
 	tokio::spawn(ceremony_manager.run(ceremony_request_receiver, incoming_p2p_receiver));
 
 	(ceremony_request_sender, incoming_p2p_sender, outgoing_p2p_receiver)
@@ -294,7 +292,7 @@ async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
 #[tokio::test(start_paused = true)]
 async fn should_send_outcome_of_authorised_ceremony() {
 	let (ceremony_request_sender, _incoming_p2p_sender, _outgoing_p2p_receiver) =
-		spawn_ceremony_manager(ACCOUNT_IDS[0].clone(), INITIAL_LATEST_CEREMONY_ID);
+		spawn_ceremony_manager::<EthSigning>(ACCOUNT_IDS[0].clone(), INITIAL_LATEST_CEREMONY_ID);
 
 	// Send a signing request in order to create an authorised ceremony
 	let mut result_receiver = send_signing_request(
@@ -404,7 +402,7 @@ async fn should_route_p2p_message() {
 	let sender_account_id = ACCOUNT_IDS[1].clone();
 
 	let (ceremony_request_sender, incoming_p2p_sender, mut outgoing_p2p_receiver) =
-		spawn_ceremony_manager(our_account_id.clone(), INITIAL_LATEST_CEREMONY_ID);
+		spawn_ceremony_manager::<EthSigning>(our_account_id.clone(), INITIAL_LATEST_CEREMONY_ID);
 
 	// Send a keygen request with only 2 participants, us and one other node.
 	// So we will only need to receive one p2p message to complete the stage and advance.
@@ -413,7 +411,7 @@ async fn should_route_p2p_message() {
 	let (result_sender, _result_receiver) = oneshot::channel();
 	let request = CeremonyRequest {
 		ceremony_id,
-		details: Some(CeremonyRequestDetails::Keygen(KeygenRequestDetails::<EthSigning> {
+		details: Some(CeremonyRequestDetails::Keygen(KeygenRequestDetails {
 			rng: Rng::from_seed(DEFAULT_KEYGEN_SEED),
 			participants,
 			result_sender,

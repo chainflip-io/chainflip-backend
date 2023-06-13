@@ -35,7 +35,7 @@ pub enum ProcessMessageResult {
 #[async_trait]
 pub trait CeremonyStage<C: CeremonyTrait> {
 	/// Perform initial computation for this stage (and initiate communication with other parties)
-	fn init(&mut self);
+	fn init(&mut self) -> ProcessMessageResult;
 
 	/// Process message from signer at index `signer_idx`. Precondition: the signer is a valid
 	/// holder of the key and selected to participate in this ceremony (TODO: also check that

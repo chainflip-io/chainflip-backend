@@ -2,7 +2,7 @@
 
 //! Multisig signing and keygen
 pub use crypto::{
-	bitcoin, eth, polkadot, CanonicalEncoding, ChainTag, CryptoScheme, KeyId, Rng,
+	bitcoin, ed25519, eth, polkadot, CanonicalEncoding, ChainTag, CryptoScheme, KeyId, Rng,
 	SignatureToThresholdSignature, CHAIN_TAG_SIZE,
 };
 

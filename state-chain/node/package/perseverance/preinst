@@ -7,7 +7,6 @@ if [ "$1" != "upgrade" ]; then
 fi
 
 CF_ROOT=/etc/chainflip
-CF_BKB=$CF_ROOT/bkb
 
 # Stop the service
 if systemctl is-active --quiet chainflip-node; then
@@ -18,14 +17,9 @@ else
     echo "chainflip-node is already stopped."
 fi
 
-# Create a backup directory
-echo "chainflip-node: Creating backup directory $CF_BKB"
-mkdir -p $CF_BKB
-
 # Backup and delete systemd overrides if they exist
 if [ -f /etc/systemd/system/chainflip-node.service.d/override.conf ]; then
     echo "chainflip-node: systemd overrides found - backing up and removing"
-    mv /etc/systemd/system/chainflip-node.service.d/override.conf $CF_BKB/chainflip-node_override.conf
     rm -rf /etc/systemd/system/chainflip-node.service.d
 fi
 

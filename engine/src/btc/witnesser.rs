@@ -12,7 +12,7 @@ use crate::{
 		ChainBlockNumber, ItemMonitor,
 	},
 };
-use bitcoincore_rpc::bitcoin::{hashes::Hash, Transaction};
+use bitcoin::{hashes::Hash, Transaction};
 use cf_chains::{
 	btc::{
 		deposit_address::DepositAddress, BitcoinFeeInfo, BitcoinTrackedData, ScriptPubkey, UtxoId,
@@ -25,7 +25,7 @@ use futures::StreamExt;
 use pallet_cf_ingress_egress::DepositWitness;
 use state_chain_runtime::BitcoinInstance;
 use tokio::sync::Mutex;
-use tracing::{info_span, trace, Instrument};
+use tracing::{debug, info_span, trace, Instrument};
 
 use crate::{
 	db::PersistentKeyDB,
@@ -49,6 +49,9 @@ pub fn filter_interesting_utxos(
 	tx_hash_monitor.sync_items();
 	let mut deposit_witnesses = vec![];
 	let mut tx_success_witnesses = vec![];
+
+	debug!("looking for addresses: {:?}", address_monitor);
+	debug!("looking for hashes: {:?}", tx_hash_monitor);
 
 	for tx in txs {
 		let tx_hash = tx.txid().as_raw_hash().to_byte_array();
@@ -121,12 +124,18 @@ where
 		block_number: ChainBlockNumber<Bitcoin>,
 		(address_monitor, tx_hash_monitor): &mut Self::StaticState,
 	) -> anyhow::Result<()> {
-		let block = self.btc_rpc.block(self.btc_rpc.block_hash(block_number)?)?;
+		let block = self.btc_rpc.block(self.btc_rpc.block_hash(block_number).await?).await?;
 
 		trace!("Checking BTC block: {block_number} for interesting UTXOs");
 
 		let (deposit_witnesses, tx_success_witnesses) =
 			filter_interesting_utxos(block.txdata, address_monitor, tx_hash_monitor);
+
+		debug!(
+			"Found {} successful transactions and {} deposit utxos in block {block_number}.",
+			tx_success_witnesses.len(),
+			deposit_witnesses.len(),
+		);
 
 		if !deposit_witnesses.is_empty() {
 			self.state_chain_client
@@ -142,27 +151,26 @@ where
 				.await;
 		}
 
-		if !tx_success_witnesses.is_empty() {
-			for tx_hash in tx_success_witnesses {
-				self.state_chain_client
-					.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-						call: Box::new(state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
-							pallet_cf_broadcast::Call::transaction_succeeded {
-								tx_out_id: tx_hash,
-								block_number,
-								signer_id: self.current_pubkey.clone(),
-								// TODO: Ideally we can submit an empty type here. For Bitcoin
-								// and some other chains fee tracking is not necessary. PRO-370.
-								tx_fee: Default::default(),
-							},
-						)),
-						epoch_index: self.epoch_index,
-					})
-					.await;
-			}
+		for tx_hash in tx_success_witnesses {
+			self.state_chain_client
+				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+					call: Box::new(state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
+						pallet_cf_broadcast::Call::transaction_succeeded {
+							tx_out_id: tx_hash,
+							block_number,
+							signer_id: self.current_pubkey.clone(),
+							// TODO: Ideally we can submit an empty type here. For Bitcoin
+							// and some other chains fee tracking is not necessary. PRO-370.
+							tx_fee: Default::default(),
+						},
+					)),
+					epoch_index: self.epoch_index,
+				})
+				.await;
 		}
 
-		if let Some(fee_rate_sats_per_kilo_byte) = self.btc_rpc.next_block_fee_rate()? {
+		if let Some(fee_rate_sats_per_kilo_byte) = self.btc_rpc.next_block_fee_rate().await? {
+			debug!("Submitting fee rate of {fee_rate_sats_per_kilo_byte} sats/kB to state chain");
 			self.state_chain_client
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(state_chain_runtime::RuntimeCall::BitcoinChainTracking(
@@ -290,7 +298,7 @@ mod test_utxo_filtering {
 	use std::collections::BTreeSet;
 
 	use super::*;
-	use bitcoincore_rpc::bitcoin::{
+	use bitcoin::{
 		absolute::{Height, LockTime},
 		ScriptBuf, Transaction, TxOut,
 	};

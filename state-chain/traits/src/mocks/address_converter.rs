@@ -1,6 +1,6 @@
 use cf_chains::{
 	address::{
-		try_from_encoded_address, try_to_encoded_address, AddressConverter, ForeignChainAddress,
+		to_encoded_address, try_from_encoded_address, AddressConverter, ForeignChainAddress,
 	},
 	btc::BitcoinNetwork,
 };
@@ -12,9 +12,7 @@ impl AddressConverter for MockAddressConverter {
 	) -> Result<ForeignChainAddress, ()> {
 		try_from_encoded_address(encoded_address, || BitcoinNetwork::Mainnet)
 	}
-	fn try_to_encoded_address(
-		address: ForeignChainAddress,
-	) -> Result<cf_chains::address::EncodedAddress, sp_runtime::DispatchError> {
-		try_to_encoded_address(address, || BitcoinNetwork::Mainnet)
+	fn to_encoded_address(address: ForeignChainAddress) -> cf_chains::address::EncodedAddress {
+		to_encoded_address(address, || BitcoinNetwork::Mainnet)
 	}
 }
