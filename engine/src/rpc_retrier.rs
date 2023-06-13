@@ -2,13 +2,15 @@
 //!
 //! This module provides a generic RPC request retrier. It is used to retry RPC requests
 //! that may fail due to network issues or other transient errors.
-//! It applies exponential backoff to the requests if they fail, and will retry them until they
-//! succeed.
+//! It applies exponential backoff and jitter to the requests if they fail, and will retry them
+//! until they succeed.
 
 use std::{any::Any, collections::BTreeMap, pin::Pin, time::Duration};
 
 use anyhow::Result;
+use core::cmp::min;
 use futures::Future;
+use rand::Rng;
 use tokio::sync::{mpsc, oneshot};
 use utilities::{futures_unordered_wait::FuturesUnorderedWait, task_scope::Scope};
 
@@ -21,16 +23,20 @@ type FutureAnyGenerator<RpcClient> = TypedFutureGenerator<BoxAny, RpcClient>;
 // The id per *request* from the external caller. This is not tracking *submissions*.
 type RequestId = u64;
 
+type AttemptCount = u32;
+
 type RequestFutures = FuturesUnorderedWait<
 	Pin<
 		Box<
-			dyn Future<Output = (RequestId, Result<BoxAny, (anyhow::Error, u64)>)> + Send + 'static,
+			dyn Future<Output = (RequestId, Result<BoxAny, (anyhow::Error, AttemptCount)>)>
+				+ Send
+				+ 'static,
 		>,
 	>,
 >;
 
 type RetryDelays =
-	FuturesUnorderedWait<Pin<Box<dyn Future<Output = (RequestId, u64)> + Send + 'static>>>;
+	FuturesUnorderedWait<Pin<Box<dyn Future<Output = (RequestId, AttemptCount)> + Send + 'static>>>;
 
 type BoxAny = Box<dyn Any + Send>;
 
@@ -73,14 +79,20 @@ impl<RpcClient> RequestHolder<RpcClient> {
 	}
 }
 
+const MAX_DELAY_TIME_MILLIS: u64 = 60000 * 20;
+
 // Creates a future of a particular submission.
 fn submission_future<RpcClient: Clone>(
 	client: RpcClient,
 	submission_fn: &FutureAnyGenerator<RpcClient>,
 	request_id: RequestId,
-	timeout_millis: u64,
-) -> Pin<Box<impl Future<Output = (RequestId, Result<BoxAny, (anyhow::Error, u64)>)>>> {
+	initial_request_timeout_millis: u64,
+	attempt_count: u32,
+) -> Pin<Box<impl Future<Output = (RequestId, Result<BoxAny, (anyhow::Error, AttemptCount)>)>>> {
 	let submission_fut = submission_fn(client);
+	// Apply exponential backoff to the request.
+	let timeout_millis =
+		min(MAX_DELAY_TIME_MILLIS, initial_request_timeout_millis * 2u64.pow(attempt_count));
 	Box::pin(async move {
 		(
 			request_id,
@@ -90,7 +102,7 @@ fn submission_future<RpcClient: Clone>(
 				Ok(Err(e)) => Err(e),
 				Err(_) => Err(anyhow::anyhow!("Request timed out")),
 			}
-			.map_err(|e| (e, timeout_millis)),
+			.map_err(|e| (e, attempt_count)),
 		)
 	})
 }
@@ -117,7 +129,7 @@ impl<RpcClient: Clone + Send + Sync + 'static> RpcRetrierClient<RpcClient> {
 			utilities::loop_select! {
 				if let Some((response_sender, closure)) = request_receiver.recv() => {
 					let request_id = request_holder.next_request_id();
-					running_futures.push(submission_future(primary_client.clone(), &closure, request_id, initial_request_timeout_millis));
+					running_futures.push(submission_future(primary_client.clone(), &closure, request_id, initial_request_timeout_millis, 0));
 					request_holder.insert(request_id, (response_sender, closure));
 				},
 				if let Some((request_id, result)) = running_futures.next() => {
@@ -127,26 +139,30 @@ impl<RpcClient: Clone + Send + Sync + 'static> RpcRetrierClient<RpcClient> {
 								let _result = response_sender.send(value);
 							}
 						},
-						Err((e, timeout_millis)) => {
-							tracing::error!("Error in for request_id {request_id} request: {e}");
+						Err((e, attempt)) => {
+							// Apply exponential back off with jitter to the retries.
+							let sleep_time_millis = rand::thread_rng().gen_range(0..min(MAX_DELAY_TIME_MILLIS, initial_request_timeout_millis * 2u64.pow(attempt)));
+
+							tracing::error!("Error in for request_id {request_id}, attempt {attempt} request: {e}. Delaying for {sleep_time_millis}ms");
+
 							// Delay the request before the next retry.
 							retry_delays.push(Box::pin(
 								async move {
-									tokio::time::sleep(Duration::from_millis(timeout_millis)).await;
-									(request_id, timeout_millis)
+									tokio::time::sleep(Duration::from_millis(sleep_time_millis)).await;
+									(request_id, attempt)
 								}
 							));
 						},
 					}
 				},
-				if let Some((request_id, timeout_millis)) = retry_delays.next() => {
-					tracing::trace!("Retrying request id: {request_id}, that had a timeout of {timeout_millis}");
+				if let Some((request_id, attempt)) = retry_delays.next() => {
+					let next_attempt = attempt.saturating_add(1);
+					tracing::trace!("Retrying request id: {request_id} for attempt: {next_attempt}");
 
 					if let Some((response_sender, closure)) = request_holder.get(&request_id) {
 						// If the receiver has been dropped, we don't need to retry.
 						if !response_sender.is_closed() {
-							// Apply exponential backoff.
-							running_futures.push(submission_future(primary_client.clone(), closure, request_id, timeout_millis.saturating_mul(2)));
+							running_futures.push(submission_future(primary_client.clone(), closure, request_id, initial_request_timeout_millis, next_attempt));
 						}
 					}
 				},
