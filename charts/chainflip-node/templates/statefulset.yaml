@@ -39,10 +39,6 @@ spec:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          securityContext:
-            fsGroup: 1000
-            runAsUser: 1000
-            runAsNonRoot: true
           command:
             - /usr/local/bin/chainflip-node
           args:
