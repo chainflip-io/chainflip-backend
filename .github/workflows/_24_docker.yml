@@ -21,18 +21,19 @@ jobs:
         run: |
           echo "date=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
           echo "time=$(date +'%H:%M:%S')" >> "$GITHUB_OUTPUT"
+
   set-dockerfile-name:
     runs-on: ubuntu-20.04
     outputs:
-      dockerfile: ${{ steps.dockerfile.outputs.dockerfile }}
+      dockerfile_path: ${{ steps.dockerfile.outputs.dockerfile_path_path }}
     steps:
       - name: Set dockerfile name
         id: dockerfile
         run: |
           if [[ "${{ inputs.environment }}" == "prod" || "${{ inputs.network }}" == "sisyphos" || "${{ inputs.network }}" == "perseverance" ]] ; then
-            echo "dockerfile=ci/docker/chainflip-binaries/prod.Dockerfile" >> "$GITHUB_OUTPUT"
+            echo "dockerfile_path=ci/docker/chainflip-binaries/prod" >> "$GITHUB_OUTPUT"
           else
-            echo "dockerfile=ci/docker/chainflip-binaries/dev.Dockerfile" >> "$GITHUB_OUTPUT"
+            echo "dockerfile_path=ci/docker/chainflip-binaries/dev" >> "$GITHUB_OUTPUT"
           fi
 
   chainflip-binaries:
@@ -101,9 +102,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          file: ${{ needs.set-dockerfile-name.outputs.dockerfile }}
+          file: ${{ needs.set-dockerfile-name.outputs.dockerfile_path }}/${{ matrix.target }}.Dockerfile
           build-args: |
-            TARGET=${{ matrix.target }}
             BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
             VCS_REF=${{ github.sha }}
             CHAINSPEC=${{ inputs.network }}
@@ -172,9 +172,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          file: ${{ needs.set-dockerfile-name.outputs.dockerfile }}
+          file: ${{ needs.set-dockerfile-name.outputs.dockerfile_path }}/${{ matrix.target }}.Dockerfile
           build-args: |
-            TARGET=${{ matrix.target }}
             BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
             VCS_REF=${{ github.sha }}
             CHAINSPEC=${{ inputs.network }}
