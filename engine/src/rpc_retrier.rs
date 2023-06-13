@@ -163,6 +163,9 @@ impl<RpcClient: Clone + Send + Sync + 'static> RpcRetrierClient<RpcClient> {
 						// If the receiver has been dropped, we don't need to retry.
 						if !response_sender.is_closed() {
 							running_futures.push(submission_future(primary_client.clone(), closure, request_id, initial_request_timeout_millis, next_attempt));
+						} else {
+							tracing::trace!("Request id: {request_id} dropped, not retrying.");
+							request_holder.remove(&request_id);
 						}
 					}
 				},
