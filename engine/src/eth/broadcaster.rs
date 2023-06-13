@@ -30,7 +30,8 @@ where
 		Self { address: Default::default(), eth_rpc }
 	}
 
-	pub async fn estimate_gas_and_send_transaction(
+	/// Estimates gas and signs and broadcasts the transaction.
+	pub async fn send(
 		&self,
 		// This is from the SC.
 		unsigned_tx: cf_chains::eth::Transaction,
