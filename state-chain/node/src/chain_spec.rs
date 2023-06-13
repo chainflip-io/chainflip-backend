@@ -3,7 +3,7 @@ use cf_chains::{
 	dot::{PolkadotAccountId, PolkadotHash, RuntimeVersion},
 	eth,
 };
-use cf_primitives::{AccountRole, AuthorityCount, DEFAULT_SWAP_TTL};
+use cf_primitives::{AccountRole, AuthorityCount};
 
 use common::FLIPPERINOS_PER_FLIP;
 use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
@@ -555,7 +555,7 @@ fn testnet_genesis(
 		transaction_payment: Default::default(),
 		liquidity_pools: Default::default(),
 		swapping: SwappingConfig {
-			swap_ttl: DEFAULT_SWAP_TTL,
+			swap_ttl: common::DEFAULT_SWAP_TTL,
 			minimum_swap_amount: common::MINIMUM_SWAP_AMOUNT.to_vec(),
 		},
 		liquidity_provider: Default::default(),

@@ -49,7 +49,7 @@ benchmarks! {
 		let call = Call::<T>::schedule_swap_from_contract{
 			from: Asset::Usdc,
 			to: Asset::Eth,
-			deposit_amount: 1_000,
+			deposit_amount: 1_000_000_000_000_000_000,
 			destination_address: EncodedAddress::benchmark_value(),
 			tx_hash: [0; 32],
 		};
@@ -61,7 +61,7 @@ benchmarks! {
 			1,
 			Asset::Usdc,
 			Asset::Eth,
-			1_000,
+			1_000_000_000_000_000_000,
 			SwapType::Swap(ForeignChainAddress::benchmark_value())
 		)]);
 	}

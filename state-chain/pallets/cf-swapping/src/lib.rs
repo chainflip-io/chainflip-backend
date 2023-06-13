@@ -3,9 +3,7 @@ use cf_chains::{
 	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	CcmDepositMetadata,
 };
-use cf_primitives::{
-	Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, DEFAULT_SWAP_TTL, STABLE_ASSET,
-};
+use cf_primitives::{Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, STABLE_ASSET};
 use cf_traits::{liquidity::SwappingApi, CcmHandler, DepositApi, SystemStateInfo};
 use frame_support::{
 	pallet_prelude::*,
@@ -354,7 +352,8 @@ pub mod pallet {
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { swap_ttl: T::BlockNumber::from(DEFAULT_SWAP_TTL), minimum_swap_amount: vec![] }
+			// 1200 = 2 hours (6 sec per block)
+			Self { swap_ttl: T::BlockNumber::from(1_200u32), minimum_swap_amount: vec![] }
 		}
 	}
 
