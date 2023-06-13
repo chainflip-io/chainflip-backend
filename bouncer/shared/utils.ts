@@ -1,5 +1,6 @@
 import * as crypto from 'crypto';
 import { setTimeout as sleep } from 'timers/promises';
+import { execSync } from "child_process";
 
 import { ApiPromise, WsProvider } from '@polkadot/api';
 
@@ -14,6 +15,14 @@ export const runWithTimeout = <T>(promise: Promise<T>, millis: number): Promise<
 export const sha256 = (data: string): Buffer => crypto.createHash('sha256').update(data).digest();
 
 export { sleep };
+
+export async function chainflipApi(endpoint?: string): Promise<ApiPromise> {
+  const cfNodeEndpoint = endpoint ?? 'ws://127.0.0.1:9944';
+  return ApiPromise.create({
+    provider: new WsProvider(cfNodeEndpoint),
+    noInitWarn: true,
+  });
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function observeEvent(eventName: string, chainflip: ApiPromise): Promise<any> {
@@ -34,4 +43,29 @@ export async function observeEvent(eventName: string, chainflip: ApiPromise): Pr
     await sleep(1000);
   }
   return result;
+}
+
+// TODO: import JS function instead
+export function getBalanceSync(dstCcy: string, address: string): number {
+  return Number(execSync(`pnpm tsx ./commands/get_balance.ts ${dstCcy} ${address}`));
+}
+
+export function newDotAddress(seed: string): string {
+  return String(execSync(`pnpm tsx ./commands/new_dot_address.ts ${seed}`)).trim();
+}
+
+export async function observeBalanceIncrease(dstCcy: string, address: string, oldBalance: number): Promise<number> {
+
+  for (let i = 0; i < 60; i++) {
+    const newBalance = getBalanceSync(dstCcy, address);
+
+    if (newBalance > oldBalance) {
+      return Number(newBalance);
+    }
+
+    await sleep(1000);
+
+  }
+
+  return Promise.reject(new Error("Failed to observe balance increase"));
 }
