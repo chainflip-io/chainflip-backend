@@ -40,10 +40,6 @@ spec:
           volumeMounts:
             - name: {{ include "chainflip-node.fullname" . }}
               mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
-            - name: signing-key
-              mountPath: {{ .Values.signingKeyFile }}
-            - name: node-key
-              mountPath: {{ .Values.nodeKeyFile }}
         {{- end }}
       containers:
         - name: {{ .Chart.Name }}
@@ -54,7 +50,7 @@ spec:
           args:
             - --base-path={{ .Values.basePath | default "/etc/chainflip" }}/chaindata
             - --chain=/etc/chainflip/{{ .Values.chainspec }}
-            - --node-key-file={{ .Values.nodeKeyFile }}
+            - --node-key-file={{ .Values.basePath | default "/etc/chainflip" }}/keys/node_key_file
             - --prometheus-external
             - --state-cache-size=0
             - --sync=warp
@@ -76,25 +72,21 @@ spec:
           {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: {{ include "chainflip-node.fullname" . }}
-              mountPath:  {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
-            - name: signing-key
-              mountPath: {{ .Values.signingKeyFile }}
-            - name: node-key
-              mountPath: {{ .Values.nodeKeyFile }}
+              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
+            - name: keys
+              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/keys
+
 
       volumes:
-        - name: signing-key
+        - name: keys
           secret:
             secretName: {{ .Values.secrets.existingOnePasswordSecret }}
             items:
               - key: signing-key
                 path: signing_key_file
-        - name: node-key
-          secret:
-            secretName: {{ .Values.secrets.existingOnePasswordSecret }}
-            items:
               - key: node-key
                 path: node_key_file
+
   volumeClaimTemplates:
     - metadata:
         name: {{ include "chainflip-node.fullname" . }}
