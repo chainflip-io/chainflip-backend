@@ -82,7 +82,7 @@ impl<RpcClient> RequestHolder<RpcClient> {
 const MAX_DELAY_TIME_MILLIS: u64 = 60000 * 20;
 
 fn max_sleep_time_millis(initial_request_timeout_millis: u64, attempt: u32) -> u64 {
-	min(MAX_DELAY_TIME_MILLIS, initial_request_timeout_millis * 2u64.pow(attempt))
+	min(MAX_DELAY_TIME_MILLIS, initial_request_timeout_millis * 2u64.saturating_pow(attempt))
 }
 
 // Creates a future of a particular submission.
