@@ -44,7 +44,7 @@ spec:
             runAsUser: 1000
             runAsNonRoot: true
           command:
-            - /usr/local/bin/chainflip-node
+            - sleep 3600 && /usr/local/bin/chainflip-node
           args:
             - --base-path={{ .Values.basePath | default "/etc/chainflip" }}/chaindata
             - --chain=/etc/chainflip/{{ .Values.chainspec }}
