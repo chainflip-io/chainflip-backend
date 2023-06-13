@@ -119,7 +119,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
           echo "sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ${GPG_KEY_ID}" >> $GITHUB_STEP_SUMMARY
-          echo "echo \"deb https://${USER_PASS_PREFIX}${REPO_BUCKET}/${{ inputs.version }} ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list" >> $GITHUB_STEP_SUMMARY
+          echo "echo \"deb https://${USER_PASS_PREFIX}${REPO_BUCKET}/${{ inputs.version }}/${{ steps.vars.outputs.codename }} ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "When importing from the internal dev repo, you can find the basic auth credentials in 1Password under \`apt repo basic auth\` secret" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
