@@ -510,14 +510,6 @@ pub mod pallet {
 				*fee_deficit = fee_deficit.saturating_add(to_refund);
 			});
 
-			// If people failed to broadcast before we got a success, they should be reported.
-			if let Some(failed_signers) = FailedBroadcasters::<T, I>::get(broadcast_id) {
-				T::OffenceReporter::report_many(
-					PalletOffence::FailedToBroadcastTransaction,
-					&failed_signers,
-				);
-			}
-
 			if let Some(callback) = RequestCallbacks::<T, I>::get(broadcast_id) {
 				Self::deposit_event(Event::<T, I>::BroadcastCallbackExecuted {
 					broadcast_id,
@@ -594,8 +586,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		for attempt_count in first_attempt..=(BroadcastAttemptCount::<T, I>::take(broadcast_id)) {
 			AwaitingBroadcast::<T, I>::remove(BroadcastAttemptId { broadcast_id, attempt_count });
 		}
-
-		FailedBroadcasters::<T, I>::remove(broadcast_id);
+		// Report the people who failed to broadcast this tx during its whole lifetime.
+		if let Some(failed_signers) = FailedBroadcasters::<T, I>::take(broadcast_id) {
+			T::OffenceReporter::report_many(
+				PalletOffence::FailedToBroadcastTransaction,
+				&failed_signers,
+			);
+		}
 		RequestCallbacks::<T, I>::remove(broadcast_id);
 		ThresholdSignatureData::<T, I>::remove(broadcast_id);
 	}

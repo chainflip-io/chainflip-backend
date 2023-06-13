@@ -11,7 +11,7 @@ use crate::settings::{
 };
 use api::{
 	primitives::{AccountRole, Asset, Hash, RedemptionAmount},
-	KeyPair,
+	AccountId32, KeyPair,
 };
 use chainflip_api as api;
 use utilities::clean_eth_address;
@@ -219,17 +219,39 @@ fn generate_keys(output_type: Option<GenerateKeysOutputType>) -> Result<()> {
 	struct Keys {
 		node_key: KeyPair,
 		ethereum_key: KeyPair,
+		ethereum_address: String,
 		signing_key: KeyPair,
 		signing_key_seed: String,
+		signing_account_id: AccountId32,
+	}
+
+	impl std::fmt::Display for Keys {
+		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+			writeln!(f, "🔑 Node public key: 0x{}", hex::encode(&self.node_key.public_key))?;
+			writeln!(
+				f,
+				"🔑 Ethereum public key: 0x{}",
+				hex::encode(&self.ethereum_key.public_key)
+			)?;
+			writeln!(f, "👤 Ethereum address: 0x{}", self.ethereum_address)?;
+			writeln!(f, "🔑 Validator key: 0x{}", hex::encode(&self.signing_key.public_key))?;
+			writeln!(f, "👤 Validator account id: 0x{}", self.signing_account_id)?;
+			writeln!(f, "🌱 Validator key seed phrase: {}", self.signing_key_seed)?;
+			Ok(())
+		}
 	}
 
 	// Generate new keys
-	let keys = api::generate_signing_key(None).map(|(signing_key, signing_key_seed)| Keys {
+	let (ethereum_key, ethereum_address) = api::generate_ethereum_key();
+	let (signing_key, signing_key_seed, signing_account_id) = api::generate_signing_key(None)?;
+	let keys = Keys {
 		node_key: api::generate_node_key(),
-		ethereum_key: api::generate_ethereum_key(),
+		ethereum_key,
+		ethereum_address: hex::encode(ethereum_address),
 		signing_key,
 		signing_key_seed,
-	})?;
+		signing_account_id,
+	};
 
 	// Output the keys depending on the users selected output type
 	match output_type.unwrap_or(GenerateKeysOutputType::Files { path: PathBuf::from(".") }) {
@@ -266,20 +288,12 @@ fn generate_keys(output_type: Option<GenerateKeysOutputType>) -> Result<()> {
 				);
 			}
 
-			println!("Generating fresh keys for your Chainflip Node!");
+			println!("Generated fresh keys for your Chainflip Node!");
+			println!("{}", keys);
 
 			fs::write(node_key_file, hex::encode(keys.node_key.secret_key))?;
-			println!("🔑 Your Node public key is: 0x{}", hex::encode(keys.node_key.public_key));
-
 			fs::write(ethereum_key_file, hex::encode(keys.ethereum_key.secret_key))?;
-			println!(
-				"🔑 Your Ethereum public key is: 0x{}",
-				hex::encode(keys.ethereum_key.public_key)
-			);
-
 			fs::write(signing_key_file, hex::encode(keys.signing_key.secret_key))?;
-			println!("🔑 Your Validator key is: 0x{}", hex::encode(keys.signing_key.public_key));
-			println!("🌱 Your Validator key seed phrase is: {}", keys.signing_key_seed);
 
 			println!("Saved all secret keys to {absolute_path_string}");
 		},

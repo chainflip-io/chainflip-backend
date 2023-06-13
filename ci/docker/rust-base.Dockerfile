@@ -1,7 +1,11 @@
 # This Dockfile provides the base image to perform all tasks
 # related to our Rust projects. Our CI needs a properly configured
 # environment so we can guarantee consistancy between projects.
-FROM rust:bullseye as rust-substrate-base
+
+ARG UBUNTU_VERSION=20.04
+FROM ubuntu:${UBUNTU_VERSION}
+
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Substrate and rust compiler dependencies.
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
@@ -14,16 +18,26 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     python3-dev \
     jq \
     protobuf-compiler \
+    pkg-config \
+    libssl-dev \
+    openssl \
+    curl \
     git \
-    software-properties-common \
-    npm
+    wget \
+    nodejs \
+    npm \
+    ca-certificates \
+    && apt-get autoremove -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN npm install npm@latest -g && \
-    npm install n -g && \
-    n latest
+RUN npm install -g pnpm
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y
 
 # Set environment
-ENV PATH="/root/.cargo/bin:${PATH}"
+ENV PATH="/root/.cargo/bin:/usr/local/cargo/bin/:${PATH}"
 ENV RUSTC_WRAPPER=sccache
 
 # Download and install sccache https://github.com/mozilla/sccache
@@ -31,19 +45,21 @@ ARG SCCACHE_VER="v0.4.1"
 # Install sccache from GitHub repo
 RUN curl -fsSL https://github.com/mozilla/sccache/releases/download/${SCCACHE_VER}/sccache-${SCCACHE_VER}-x86_64-unknown-linux-musl.tar.gz -o /tmp/sccache.tar.gz && \
     tar -xzf /tmp/sccache.tar.gz -C /tmp && \
+    mkdir -p /usr/local/cargo/bin/ && \
     cp /tmp/sccache-${SCCACHE_VER}-x86_64-unknown-linux-musl/sccache /usr/local/cargo/bin/sccache && \
     rm -rf /tmp/sccache.tar.gz /tmp/sccache-${SCCACHE_VER}-x86_64-unknown-linux-musl
 
-RUN npm install -g pnpm
+RUN rustc --version && \
+    cargo --version && \
+    sccache --version
 
-ARG NIGHTLY
-# Download and set nightly as the default Rust compiler
-RUN rustup default ${NIGHTLY} \
-    && rustup target add wasm32-unknown-unknown --toolchain ${NIGHTLY} \
-    && rustup component add rustfmt \
-    && rustup component add clippy \
+WORKDIR /
+
+COPY rust-toolchain.toml .
+RUN rustup update \
     && cargo install cargo-deb \
-    && cargo install cargo-audit
+    && cargo install cargo-audit \
+    && rm rust-toolchain.toml
 
 RUN groupadd ci \
-    && useradd -m -g ci ci \
+    && useradd -m -g ci ci

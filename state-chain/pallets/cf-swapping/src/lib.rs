@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::{
-	address::{AddressConverter, ForeignChainAddress},
+	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	CcmDepositMetadata,
 };
 use cf_primitives::{Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, STABLE_ASSET};
@@ -89,6 +89,14 @@ impl Swap {
 			SwapLeg::FromStable => self.final_output = Some(output),
 		}
 	}
+
+	fn intermediate_amount(&self) -> Option<AssetAmount> {
+		if self.from == STABLE_ASSET || self.to == STABLE_ASSET {
+			None
+		} else {
+			self.stable_amount
+		}
+	}
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -136,9 +144,9 @@ pub enum CcmFailReason {
 	GasBudgetBelowMinimum,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum SwapOrigin {
-	DepositChannel { deposit_address: ForeignChainAddress, channel_id: ChannelId },
+	DepositChannel { deposit_address: EncodedAddress, channel_id: ChannelId },
 	Vault { tx_hash: TransactionHash },
 }
 
@@ -250,7 +258,7 @@ pub mod pallet {
 		/// A swap deposit has been received.
 		SwapScheduled {
 			swap_id: u64,
-			deposit_asset: Asset,
+			source_asset: Asset,
 			deposit_amount: AssetAmount,
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
@@ -266,6 +274,7 @@ pub mod pallet {
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
+			intermediate_amount: Option<AssetAmount>,
 		},
 		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
@@ -282,7 +291,7 @@ pub mod pallet {
 			egress_id: EgressId,
 		},
 		SwapDepositAddressExpired {
-			deposit_address: ForeignChainAddress,
+			deposit_address: EncodedAddress,
 		},
 		SwapTtlSet {
 			ttl: T::BlockNumber,
@@ -292,7 +301,7 @@ pub mod pallet {
 			principal_swap_id: Option<u64>,
 			gas_swap_id: Option<u64>,
 			deposit_amount: AssetAmount,
-			destination_address: ForeignChainAddress,
+			destination_address: EncodedAddress,
 		},
 		MinimumSwapAmountSet {
 			asset: Asset,
@@ -305,11 +314,11 @@ pub mod pallet {
 		SwapAmountTooLow {
 			asset: Asset,
 			amount: AssetAmount,
-			destination_address: ForeignChainAddress,
+			destination_address: EncodedAddress,
 		},
 		CcmFailed {
 			reason: CcmFailReason,
-			destination_address: ForeignChainAddress,
+			destination_address: EncodedAddress,
 			message_metadata: CcmDepositMetadata,
 		},
 	}
@@ -361,7 +370,7 @@ pub mod pallet {
 			for (channel_id, address) in expired {
 				T::DepositHandler::expire_channel(channel_id, address.clone());
 				Self::deposit_event(Event::<T>::SwapDepositAddressExpired {
-					deposit_address: address,
+					deposit_address: T::AddressConverter::to_encoded_address(address),
 				});
 			}
 			T::WeightInfo::on_initialize(expired_count as u32)
@@ -422,6 +431,7 @@ pub mod pallet {
 								egress_id,
 								asset: swap.to,
 								amount: output_amount,
+								intermediate_amount: swap.intermediate_amount(),
 							});
 						},
 						SwapType::CcmPrincipal(ccm_id) => {
@@ -496,7 +506,7 @@ pub mod pallet {
 			SwapChannelExpiries::<T>::append(expiry_block, (channel_id, deposit_address.clone()));
 
 			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
-				deposit_address: T::AddressConverter::try_to_encoded_address(deposit_address)?,
+				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 				destination_address,
 				expiry_block,
 			});
@@ -567,7 +577,7 @@ pub mod pallet {
 			) {
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
-					deposit_asset: from,
+					source_asset: from,
 					deposit_amount,
 					destination_asset: to,
 					destination_address,
@@ -823,7 +833,9 @@ pub mod pallet {
 				Self::deposit_event(Event::<T>::SwapAmountTooLow {
 					asset: from,
 					amount,
-					destination_address,
+					destination_address: T::AddressConverter::to_encoded_address(
+						destination_address,
+					),
 				});
 				None
 			} else {
@@ -855,19 +867,21 @@ pub mod pallet {
 			});
 
 			let encoded_destination_address =
-				T::AddressConverter::try_to_encoded_address(destination_address.clone())
-					.expect("what to expect here?");
+				T::AddressConverter::to_encoded_address(destination_address.clone());
 
 			if let Some(swap_id) =
 				Self::schedule_swap_from_channel_received(from, to, amount, destination_address)
 			{
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
-					deposit_asset: from,
+					source_asset: from,
 					deposit_amount: amount,
 					destination_asset: to,
 					destination_address: encoded_destination_address,
-					origin: SwapOrigin::DepositChannel { deposit_address, channel_id },
+					origin: SwapOrigin::DepositChannel {
+						deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
+						channel_id,
+					},
 				});
 			}
 		}
@@ -881,6 +895,8 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			message_metadata: CcmDepositMetadata,
 		) {
+			let encoded_destination_address =
+				T::AddressConverter::to_encoded_address(destination_address.clone());
 			// Caller should ensure that assets and addresses are compatible.
 			debug_assert!(destination_address.chain() == ForeignChain::from(destination_asset));
 
@@ -913,7 +929,7 @@ pub mod pallet {
 
 				Self::deposit_event(Event::<T>::CcmFailed {
 					reason,
-					destination_address,
+					destination_address: encoded_destination_address,
 					message_metadata,
 				});
 				return
@@ -958,7 +974,7 @@ pub mod pallet {
 				principal_swap_id,
 				gas_swap_id,
 				deposit_amount,
-				destination_address: destination_address.clone(),
+				destination_address: encoded_destination_address,
 			});
 
 			// If no swap is required, egress the CCM.
