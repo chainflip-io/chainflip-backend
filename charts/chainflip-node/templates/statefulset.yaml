@@ -35,8 +35,7 @@ spec:
             - |
                 echo "Purging the chain ..."
                 rm -rf /etc/chainflip/chaindata/*
-                ls -la /etc/chainflip/keys
-                chown -R 1000:1000 /etc/chainflip/*
+                ls -la /etc/chainflip/
           volumeMounts:
             - name: {{ include "chainflip-node.fullname" . }}
               mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
