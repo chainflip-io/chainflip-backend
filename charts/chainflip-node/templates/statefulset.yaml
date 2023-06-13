@@ -42,10 +42,8 @@ spec:
               mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
             - name: signing-key
               mountPath: {{ .Values.signingKeyFile }}
-              subPath: signing-key
             - name: node-key
               mountPath: {{ .Values.nodeKeyFile }}
-              subPath: node-key
         {{- end }}
       containers:
         - name: {{ .Chart.Name }}
@@ -81,10 +79,8 @@ spec:
               mountPath:  {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
             - name: signing-key
               mountPath: {{ .Values.signingKeyFile }}
-              subPath: signing-key
             - name: node-key
               mountPath: {{ .Values.nodeKeyFile }}
-              subPath: node-key
 
       volumes:
         - name: signing-key
