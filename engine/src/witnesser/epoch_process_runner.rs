@@ -147,6 +147,12 @@ where
 										end_witnessing_receiver,
 										option_state.take().expect("state must be present"),
 									)
+									.instrument(tracing::info_span!(
+										"EpochWitnesser",
+										chain =
+											<<Generator::Witnesser as EpochWitnesser>::Chain as cf_chains::Chain>::NAME,
+										epoch = &epoch_start.epoch_index,
+									))
 									.map_err(|_| {
 										EpochProcessRunnerError::WitnesserError(epoch_start)
 									}),
