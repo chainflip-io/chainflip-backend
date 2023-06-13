@@ -219,6 +219,7 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 		node_key: KeyPair,
 		seed_phrase: String,
 		ethereum_key: KeyPair,
+		#[serde(with = "hex")]
 		ethereum_address: [u8; 20],
 		signing_key: KeyPair,
 		signing_account_id: AccountId32,
@@ -242,12 +243,13 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 
 	impl Keys {
 		pub fn new(maybe_seed_phrase: Option<String>) -> Result<Self> {
-			let (signing_key, seed_phrase, signing_account_id) =
+			let (seed_phrase, signing_key, signing_account_id) =
 				api::generate_signing_key(maybe_seed_phrase.as_deref())
 					.context("Error while generating signing key.")?;
-			let (ethereum_key, ethereum_address) =
-				api::generate_ethereum_key(Some(seed_phrase.clone()))
+			let (seed_phrase_eth, ethereum_key, ethereum_address) =
+				api::generate_ethereum_key(Some(&seed_phrase))
 					.context("Error while generating Ethereum key.")?;
+			assert_eq!(seed_phrase, seed_phrase_eth);
 			Ok(Keys {
 				node_key: api::generate_node_key(),
 				seed_phrase,
@@ -273,11 +275,7 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 			std::fs::create_dir_all(&path).context("Unable to create keys directory.")?;
 		}
 		let path = path.canonicalize().context("Unable to resolve path to keys directory.")?;
-		fn create_and_open_for_write(
-			file_path: impl AsRef<std::path::Path>,
-		) -> std::io::Result<std::fs::File> {
-			std::fs::OpenOptions::new().write(true).create_new(true).open(file_path)
-		}
+
 		for (name, key) in [
 			("node_key", hex::encode(keys.node_key.secret_key)),
 			("signing_key", hex::encode(keys.signing_key.secret_key)),
@@ -285,7 +283,10 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 		] {
 			let filename = [name, "_file"].concat();
 			write!(
-				create_and_open_for_write(path.join(&filename))
+				std::fs::OpenOptions::new()
+					.write(true)
+					.create_new(true)
+					.open(path.join(&filename))
 					.context(format!("Could not open file {filename}."))?,
 				"{}",
 				key

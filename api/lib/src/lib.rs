@@ -410,7 +410,7 @@ pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result
 	})
 }
 
-#[derive(Debug, Zeroize)]
+#[derive(Debug, Zeroize, PartialEq, Eq)]
 /// Public and Secret keys as bytes
 pub struct KeyPair {
 	pub secret_key: Vec<u8>,
@@ -448,13 +448,12 @@ pub fn generate_node_key() -> KeyPair {
 	}
 }
 
-/// Generate a signing key (aka validator key) using the seed phrase.
+/// Generate a signing key (aka. account key).
+///
 /// If no seed phrase is provided, a new random seed phrase will be created.
-/// Returns the key, seed phrase and the derived account id.
-pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPair, String, AccountId32)> {
+pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(String, KeyPair, AccountId32)> {
 	use bip39::{Language, Mnemonic, MnemonicType};
 
-	// Get a new random seed phrase if one was not provided
 	let mnemonic = seed_phrase
 		.map(|phrase| Mnemonic::from_phrase(phrase, Language::English))
 		.unwrap_or_else(|| Ok(Mnemonic::new(MnemonicType::Words12, Language::English)))?;
@@ -463,34 +462,35 @@ pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPair, Strin
 		.map(|(pair, seed)| {
 			let pair: sp_core::sr25519::Pair = pair;
 			(
-				KeyPair { secret_key: seed.to_vec(), public_key: pair.public().to_vec() },
 				mnemonic.to_string(),
+				KeyPair { secret_key: seed.to_vec(), public_key: pair.public().to_vec() },
 				pair.public().into(),
 			)
 		})
 		.map_err(|_| anyhow::Error::msg("Invalid seed phrase"))
 }
 
-/// Generate a new random ethereum key.
+/// Generate an ethereum key.
+///
 /// A chainflip validator must have their own Ethereum private keys and be capable of submitting
-/// transactions. We recommend importing the generated secret key into metamask for account
-/// management.
-/// returns the keypair and the derived ethereum address
-pub fn generate_ethereum_key(phrase: Option<String>) -> Result<(KeyPair, [u8; 20])> {
+/// transactions.
+///
+/// If no seed phrase is provided, a new random seed phrase will be created.
+pub fn generate_ethereum_key(seed_phrase: Option<&str>) -> Result<(String, KeyPair, [u8; 20])> {
 	use bip39::{Language, Mnemonic, MnemonicType, Seed};
 
-	let phrase = phrase.unwrap_or_else(|| {
-		Mnemonic::new(MnemonicType::Words12, Language::English).phrase().to_string()
-	});
+	let mnemonic = seed_phrase
+		.map(|phrase| Mnemonic::from_phrase(phrase, Language::English))
+		.unwrap_or_else(|| Ok(Mnemonic::new(MnemonicType::Words12, Language::English)))?;
 
-	let seed =
-		Seed::new(&Mnemonic::from_phrase(&phrase[..], Language::English)?, Default::default());
-
-	let secret_key = libsecp256k1::SecretKey::parse_slice(&seed.as_bytes()[..32])
-		.context("Unable to derive secret key.")?;
+	let secret_key = libsecp256k1::SecretKey::parse_slice(
+		&Seed::new(&mnemonic, Default::default()).as_bytes()[..32],
+	)
+	.context("Unable to derive secret key.")?;
 	let public_key = libsecp256k1::PublicKey::from_secret_key(&secret_key);
 
 	Ok((
+		mnemonic.to_string(),
 		KeyPair {
 			secret_key: secret_key.serialize().to_vec(),
 			public_key: public_key.serialize_compressed().to_vec(),
@@ -499,17 +499,38 @@ pub fn generate_ethereum_key(phrase: Option<String>) -> Result<(KeyPair, [u8; 20
 	))
 }
 
-#[test]
-fn test_generate_signing_key_with_known_seed() {
-	const SEED_PHRASE: &str =
+#[cfg(test)]
+mod test_key_generation {
+	use super::*;
+
+	#[test]
+	fn test_generate_signing_key_with_known_seed() {
+		const SEED_PHRASE: &str =
 		"essay awesome afraid movie wish save genius eyebrow tonight milk agree pretty alcohol three whale";
 
-	let (generate_key, _, _) = generate_signing_key(Some(SEED_PHRASE)).unwrap();
+		let (_, generated_key, _) = generate_signing_key(Some(SEED_PHRASE)).unwrap();
 
-	// Compare the generated secret key with a known secret key generated using the `chainflip-node
-	// key generate` command
-	assert_eq!(
-		hex::encode(generate_key.secret_key),
-		"afabf42a9a99910cdd64795ef05ed71acfa2238f5682d26ae62028df3cc59727"
-	);
+		// Compare the generated secret key with a known secret key generated using the
+		// `chainflip-node key generate` command
+		assert_eq!(
+			hex::encode(generated_key.secret_key),
+			"afabf42a9a99910cdd64795ef05ed71acfa2238f5682d26ae62028df3cc59727"
+		);
+	}
+
+	#[test]
+	fn test_restore_signing_keys() {
+		let ref original @ (ref seed_phrase, ..) = generate_signing_key(None).unwrap();
+		let restored = generate_signing_key(Some(seed_phrase)).unwrap();
+
+		assert_eq!(*original, restored);
+	}
+
+	#[test]
+	fn test_restore_eth_keys() {
+		let ref original @ (ref seed_phrase, ..) = generate_ethereum_key(None).unwrap();
+		let restored = generate_ethereum_key(Some(seed_phrase)).unwrap();
+
+		assert_eq!(*original, restored);
+	}
 }
