@@ -62,8 +62,8 @@ async fn load_from_legacy_checkpoint_file(file_path: PathBuf) -> Option<Witnesse
 				})
 				.map_err(|e| {
 					error!("Failed to read legacy witnesser checkpoint file: {e}");
-					e.context("serde_json failed to convert legacy witnesser checkpoint file.")
 				})
+				.context("serde_json failed to convert legacy witnesser checkpoint file.")
 				.ok()
 		})
 		.await

@@ -90,10 +90,12 @@ where
 		last_witnessed_data: &mut EthereumTrackedData,
 	) -> anyhow::Result<()> {
 		let priority_fee = self.cfe_settings_update_receiver.borrow().eth_priority_fee_percentile;
-		let latest_data = get_tracked_data(&self.eth_rpc, priority_fee).await.map_err(|e| {
-			error!("Failed to get tracked data: {e:?}");
-			e.context("Witness failed to get tracked data.")
-		})?;
+		let latest_data = get_tracked_data(&self.eth_rpc, priority_fee)
+			.await
+			.map_err(|e| {
+				error!("Failed to get tracked data: {e:?}");
+			})
+			.context("Failed to get tracked data.")?;
 
 		if latest_data.block_height > last_witnessed_data.block_height ||
 			latest_data.base_fee != last_witnessed_data.base_fee
