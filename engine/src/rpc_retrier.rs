@@ -87,12 +87,10 @@ fn submission_future<RpcClient: Clone>(
 			match tokio::time::timeout(Duration::from_millis(timeout_millis), submission_fut).await
 			{
 				Ok(Ok(t)) => Ok(t),
-				Ok(Err(e)) => Err((e, timeout_millis)),
-				Err(elapsed) => Err((
-					anyhow::anyhow!("Failed to submit request: timed out. Elapsed: {elapsed}"),
-					timeout_millis,
-				)),
-			},
+				Ok(Err(e)) => Err(e),
+				Err(_) => Err(anyhow::anyhow!("Request timed out")),
+			}
+			.map_err(|e| (e.context("Failed to submit request. Timed out."), timeout_millis)),
 		)
 	})
 }
