@@ -145,7 +145,7 @@ async fn request_redemption(
 ) -> Result<()> {
 	// Sanitise data
 	let eth_address: [u8; 20] = clean_eth_address(eth_address)
-		.map_err(anyhow::Error::msg).context("Invalid ETH address supplied")
+		.context("Invalid ETH address supplied")
 		.and_then(|eth_address|
 			if eth_address == [0; 20] {
 				Err(anyhow!("Cannot submit redemption to the zero address. If you really want to do this, use 0x000000000000000000000000000000000000dead instead."))

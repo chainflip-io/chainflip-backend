@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use cf_chains::{btc::ScriptPubkey, Bitcoin};
-use futures::TryFutureExt;
+use futures_util::FutureExt;
 use sp_core::H256;
 use utilities::task_scope::Scope;
 
@@ -77,13 +77,7 @@ pub async fn start(
 			tx_hash_monitor,
 			db,
 		)
-		.map_err(|e| {
-			anyhow::anyhow!(
-				"Btc Witnesser failed to start. Error: {} \nRoot cause: {}",
-				e,
-				e.root_cause()
-			)
-		}),
+		.map(|result| result.context("Btc Witnesser failed to start")),
 	);
 
 	Ok((address_monitor_command_sender, tx_hash_monitor_sender))
