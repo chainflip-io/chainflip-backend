@@ -89,6 +89,11 @@ impl SystemStateInfo for SystemStateDeprecated {
 			Err(DispatchError::from("Maintenance mode is active."))
 		}
 	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn activate_maintenance_mode() {
+		<Self as SystemStateManager>::activate_maintenance_mode();
+	}
 }
 
 impl SystemStateManager for SystemStateDeprecated {
