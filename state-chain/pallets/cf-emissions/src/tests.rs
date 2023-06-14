@@ -1,10 +1,7 @@
 #![cfg(test)]
 
 use crate::{mock::*, BlockEmissions, LastSupplyUpdateBlock, Pallet};
-use cf_traits::{
-	mocks::{egress_handler::MockEgressHandler, system_state_info::MockSystemStateInfo},
-	RewardsDistribution,
-};
+use cf_traits::{mocks::egress_handler::MockEgressHandler, RewardsDistribution, SafeMode};
 use frame_support::traits::OnInitialize;
 use pallet_cf_flip::Pallet as Flip;
 
@@ -114,16 +111,16 @@ fn should_mint_and_initiate_broadcast() {
 }
 
 #[test]
-fn no_update_of_update_total_supply_during_maintanance() {
+fn no_update_of_update_total_supply_during_safe_mode_code_red() {
 	new_test_ext(vec![1, 2], None).execute_with(|| {
-		// Activate maintenance mode
-		MockSystemStateInfo::set_maintenance(true);
+		// Activate code red
+		MockRuntimeSafeMode::set_safe_mode(SafeMode::CODE_RED);
 		// Try send a broadcast to update the total supply
 		Emissions::on_initialize(SUPPLY_UPDATE_INTERVAL.into());
 		// Expect nothing to be sent
 		assert!(MockBroadcast::get_called().is_none());
-		// Deactivate maintenance mode
-		MockSystemStateInfo::set_maintenance(false);
+		// Deactivate code red
+		MockRuntimeSafeMode::set_safe_mode(SafeMode::CODE_GREEN);
 		// Try send a broadcast to update the total supply
 		Emissions::on_initialize((SUPPLY_UPDATE_INTERVAL * 2).into());
 		// Expect the broadcast to be sendt
