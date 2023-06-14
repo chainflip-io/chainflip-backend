@@ -21,6 +21,8 @@ use futures::FutureExt;
 use serde::Serialize;
 use utilities::{task_scope::task_scope, CachedStream};
 
+pub use pallet_cf_pools::Order as BuyOrSellOrder;
+
 use crate::connect_submit_and_get_events;
 
 pub async fn request_liquidity_deposit_address(
@@ -145,7 +147,7 @@ pub async fn get_range_orders(
 }
 
 #[derive(Serialize)]
-pub struct MintPositionReturn {
+pub struct MintRangeOrderReturn {
 	assets_debited: SideMap<AssetAmount>,
 	collected_fees: SideMap<AssetAmount>,
 }
@@ -154,8 +156,8 @@ pub async fn mint_range_order(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 	range: Range<Tick>,
-	amount: u128,
-) -> Result<MintPositionReturn> {
+	amount: AssetAmount,
+) -> Result<MintRangeOrderReturn> {
 	task_scope(|scope| {
 		async {
 			// Connect to State Chain
@@ -189,10 +191,10 @@ pub async fn mint_range_order(
 							collected_fees,
 							..
 						},
-					) => Some(MintPositionReturn { assets_debited, collected_fees }),
+					) => Some(MintRangeOrderReturn { assets_debited, collected_fees }),
 					_ => None,
 				})
-				.expect("LiquidityMinted must have been generated"))
+				.expect("RangeOrderMinted must have been generated"))
 		}
 		.boxed()
 	})
@@ -200,7 +202,7 @@ pub async fn mint_range_order(
 }
 
 #[derive(Serialize)]
-pub struct BurnPositionReturn {
+pub struct BurnRageOrderReturn {
 	assets_credited: SideMap<AssetAmount>,
 	collected_fees: SideMap<AssetAmount>,
 }
@@ -209,8 +211,8 @@ pub async fn burn_range_order(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 	range: Range<Tick>,
-	amount: u128,
-) -> Result<BurnPositionReturn> {
+	amount: AssetAmount,
+) -> Result<BurnRageOrderReturn> {
 	task_scope(|scope| {
 		async {
 			// Connect to State Chain
@@ -252,10 +254,138 @@ pub async fn burn_range_order(
 							collected_fees,
 							..
 						},
-					) => Some(BurnPositionReturn { assets_credited, collected_fees }),
+					) => Some(BurnRageOrderReturn { assets_credited, collected_fees }),
 					_ => None,
 				})
-				.expect("LiquidityBurned must have been generated"))
+				.expect("RangeOrderBurned must have been generated"))
+		}
+		.boxed()
+	})
+	.await
+}
+
+#[derive(Serialize)]
+pub struct MintLimitOrderReturn {
+	assets_debited: AssetAmount,
+	collected_fees: AssetAmount,
+	swapped_liquidity: AssetAmount,
+}
+
+pub async fn mint_limit_order(
+	state_chain_settings: &settings::StateChain,
+	asset: Asset,
+	order: BuyOrSellOrder,
+	price: Tick,
+	amount: AssetAmount,
+) -> Result<MintLimitOrderReturn> {
+	task_scope(|scope| {
+		async {
+			// Connect to State Chain
+			let (_state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
+				scope,
+				&state_chain_settings.ws_endpoint,
+				&state_chain_settings.signing_key_file,
+				AccountRole::LiquidityProvider,
+				false,
+			)
+			.await?;
+
+			// Submit the mint order
+			let (_tx_hash, events, ..) = state_chain_client
+				.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_mint_limit_order {
+					unstable_asset: asset,
+					order,
+					price_as_tick: price,
+					amount,
+				})
+				.await
+				.until_finalized()
+				.await?;
+
+			// Get some details from the emitted event
+			Ok(events
+				.into_iter()
+				.find_map(|event| match event {
+					state_chain_runtime::RuntimeEvent::LiquidityPools(
+						pallet_cf_pools::Event::LimitOrderMinted {
+							assets_debited,
+							collected_fees,
+							swapped_liquidity,
+							..
+						},
+					) => Some(MintLimitOrderReturn {
+						assets_debited,
+						collected_fees,
+						swapped_liquidity,
+					}),
+					_ => None,
+				})
+				.expect("LimitOrderMinted must have been generated"))
+		}
+		.boxed()
+	})
+	.await
+}
+
+#[derive(Serialize)]
+pub struct BurnLimitOrderReturn {
+	assets_credited: AssetAmount,
+	collected_fees: AssetAmount,
+	swapped_liquidity: AssetAmount,
+}
+
+pub async fn burn_limit_order(
+	state_chain_settings: &settings::StateChain,
+	asset: Asset,
+	order: BuyOrSellOrder,
+	price: Tick,
+	amount: AssetAmount,
+) -> Result<BurnLimitOrderReturn> {
+	task_scope(|scope| {
+		async {
+			// Connect to State Chain
+			let (_state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
+				scope,
+				&state_chain_settings.ws_endpoint,
+				&state_chain_settings.signing_key_file,
+				AccountRole::LiquidityProvider,
+				false,
+			)
+			.await?;
+
+			// TODO: get limit orders and see if there's enough liquidity to burn
+
+			// Submit the burn order
+			let (_tx_hash, events, ..) = state_chain_client
+				.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_burn_limit_order {
+					unstable_asset: asset,
+					order,
+					price_as_tick: price,
+					amount,
+				})
+				.await
+				.until_finalized()
+				.await?;
+
+			// Get some details from the emitted event
+			Ok(events
+				.into_iter()
+				.find_map(|event| match event {
+					state_chain_runtime::RuntimeEvent::LiquidityPools(
+						pallet_cf_pools::Event::LimitOrderBurned {
+							assets_credited,
+							collected_fees,
+							swapped_liquidity,
+							..
+						},
+					) => Some(BurnLimitOrderReturn {
+						assets_credited,
+						collected_fees,
+						swapped_liquidity,
+					}),
+					_ => None,
+				})
+				.expect("LimitOrderBurned must have been generated"))
 		}
 		.boxed()
 	})
