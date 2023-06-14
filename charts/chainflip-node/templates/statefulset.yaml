@@ -21,10 +21,10 @@ spec:
       imagePullSecrets:
       {{- toYaml . | nindent 8 }}
       {{- end }}
-      # securityContext:
-      #   runAsUser: 1000
-      #   runAsGroup: 1000
-      #   fsGroup: 1000
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       initContainers:
         {{- if .Values.purgeChain }}
         - name: purge-chain
@@ -47,6 +47,9 @@ spec:
             - /usr/local/bin/chainflip-node
           args:
             - --base-path={{ .Values.basePath | default "/etc/chainflip" }}/chaindata
+            {{- if .Values.bootnodes }}
+            - --bootnodes={{ .Values.bootnodes }}
+            {{- end }}
             - --chain=/etc/chainflip/{{ .Values.chainspec }}
             - --node-key-file={{ .Values.basePath | default "/etc/chainflip" }}/keys/node_key_file
             - --prometheus-external
