@@ -48,8 +48,8 @@ cd `engine/tests`
 Now we can run the state_chain_gateway_integration or key_manager_integration tests with cargo.
 
 ```sh
-cargo test --package chainflip-engine --test state_chain_gateway_integration -- test_all_state_chain_gateway_events --exact --nocapture
-cargo test --package chainflip-engine --test key_manager_integration -- test_all_key_manager_events --exact --nocapture
+cargo test --package chainflip-engine --test state_chain_gateway_integration --features integration-test -- test_all_state_chain_gateway_events --exact --nocapture
+cargo test --package chainflip-engine --test key_manager_integration --features integration-test -- test_all_key_manager_events --exact --nocapture
 ```
 
 --------
