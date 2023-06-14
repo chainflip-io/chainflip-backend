@@ -14,7 +14,7 @@ use cf_chains::{
 	ChainCrypto,
 };
 use cf_primitives::{chains::assets::eth::Asset as EthAsset, BroadcastId, EthereumAddress};
-use cf_traits::GetBitcoinFeeInfo;
+use cf_traits::{GetBitcoinFeeInfo, SafeMode};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{OnRuntimeUpgrade, StorageVersion},
@@ -35,6 +35,20 @@ mod migrations;
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
 type SignatureNonce = u64;
+
+#[derive(
+	Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebugNoBound, PartialEq, Eq, Default,
+)]
+#[scale_info(skip_type_params(T))]
+pub enum SafeModeCode<T: Config> {
+	/// Sh*t, meet Fan. Stop everything.
+	Red,
+	/// Sunshine, meet Rainbows. Regular operation.
+	#[default]
+	Green,
+	/// Schrödinger, meet Cat. It's complicated.
+	Amber(T::RuntimeSafeMode),
+}
 
 pub mod cfe {
 	use super::*;
@@ -412,6 +426,22 @@ pub mod pallet {
 
 			PolkadotRuntimeVersion::<T>::put(runtime_version);
 			Self::deposit_event(Event::<T>::PolkadotRuntimeVersionUpdated { runtime_version });
+
+			Ok(().into())
+		}
+
+		#[pallet::weight(T::WeightInfo::update_safe_mode())]
+		pub fn update_safe_mode(
+			origin: OriginFor<T>,
+			code: SafeModeCode<T>,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			RuntimeSafeMode::<T>::put(match code {
+				SafeModeCode::Green => SafeMode::CODE_GREEN,
+				SafeModeCode::Red => SafeMode::CODE_RED,
+				SafeModeCode::Amber(safe_mode) => safe_mode,
+			});
 
 			Ok(().into())
 		}

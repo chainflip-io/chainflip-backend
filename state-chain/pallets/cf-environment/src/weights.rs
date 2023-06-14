@@ -33,6 +33,7 @@ pub trait WeightInfo {
 	fn set_cfe_settings() -> Weight;
 	fn update_supported_eth_assets() -> Weight;
 	fn update_polkadot_runtime_version() -> Weight;
+	fn update_safe_mode() -> Weight;
 }
 
 /// Weights for pallet_cf_environment using the Substrate node and recommended hardware.
@@ -58,6 +59,13 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
+	// Storage: Environment PolkadotRuntimeVersion (r:1 w:1)
+	fn update_safe_mode() -> Weight {
+		// Minimum execution time: 20_000 nanoseconds.
+		Weight::from_ref_time(20_000_000)
+			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(T::DbWeight::get().writes(1))
+	}
 }
 
 // For backwards compatibility and tests
@@ -77,6 +85,13 @@ impl WeightInfo for () {
 	}
 	// Storage: Environment PolkadotRuntimeVersion (r:1 w:1)
 	fn update_polkadot_runtime_version() -> Weight {
+		// Minimum execution time: 20_000 nanoseconds.
+		Weight::from_ref_time(20_000_000)
+			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(1))
+	}
+	// Storage: Environment PolkadotRuntimeVersion (r:1 w:1)
+	fn update_safe_mode() -> Weight {
 		// Minimum execution time: 20_000 nanoseconds.
 		Weight::from_ref_time(20_000_000)
 			.saturating_add(RocksDbWeight::get().reads(1))

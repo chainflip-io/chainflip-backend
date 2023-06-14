@@ -35,4 +35,11 @@ benchmarks! {
 	verify {
 		assert_eq!(PolkadotRuntimeVersion::<T>::get(), runtime_version);
 	}
+	update_safe_mode {
+		let origin = T::EnsureGovernance::successful_origin();
+		let call = Call::<T>::update_safe_mode { code: SafeModeCode::Red };
+	}: { call.dispatch_bypass_filter(origin)? }
+	verify {
+		assert_eq!(RuntimeSafeMode::<T>::get(), SafeMode::CODE_RED);
+	}
 }
