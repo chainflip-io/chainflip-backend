@@ -300,9 +300,7 @@ fn redact_secret_eth_node_endpoint(endpoint: &str) -> Result<String> {
 		Ok(endpoint_redacted)
 	} else {
 		// No secret was found, so just redact almost all of the url
-		let url = url::Url::parse(endpoint)
-			.map_err(anyhow::Error::msg)
-			.with_context(|| "Failed to parse node endpoint into a URL")?;
+		let url = url::Url::parse(endpoint).context("Failed to parse node endpoint into a URL")?;
 		Ok(format!(
 			"{}****",
 			endpoint

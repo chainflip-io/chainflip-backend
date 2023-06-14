@@ -1,4 +1,4 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use core::{fmt, time::Duration};
 use futures::{stream, Stream};
 #[doc(hidden)]
@@ -14,16 +14,16 @@ pub mod task_scope;
 
 pub mod futures_unordered_wait;
 
-pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN], &'static str> {
+pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN], anyhow::Error> {
 	let address_hex_str = match address_str.strip_prefix("0x") {
 		Some(address_stripped) => address_stripped,
 		None => address_str,
 	};
 
 	let address: [u8; LEN] = hex::decode(address_hex_str)
-		.map_err(|_| "Invalid hex")?
+		.context("Invalid hex")?
 		.try_into()
-		.map_err(|_| "Invalid address length")?;
+		.map_err(|_| anyhow::anyhow!("Invalid address length"))?;
 
 	Ok(address)
 }
@@ -42,12 +42,12 @@ pub fn try_parse_number_or_hex(amount: NumberOrHex) -> anyhow::Result<u128> {
 		})
 }
 
-pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], &'static str> {
-	clean_hex_address(dirty_eth_address)
+pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], anyhow::Error> {
+	clean_hex_address(dirty_eth_address).context("Failed to parse Ethereum address.")
 }
 
-pub fn clean_dot_address(dirty_dot_address: &str) -> Result<[u8; 32], &'static str> {
-	clean_hex_address(dirty_dot_address)
+pub fn clean_dot_address(dirty_dot_address: &str) -> Result<[u8; 32], anyhow::Error> {
+	clean_hex_address(dirty_dot_address).context("Failed to parse Polkadot address.")
 }
 
 #[test]
@@ -501,10 +501,8 @@ pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow
 	context: &str,
 	t: T,
 ) -> Result<V, anyhow::Error> {
-	use anyhow::Context;
-
 	std::fs::read_to_string(file)
-		.map_err(|e| anyhow!("Failed to read {context} file at {}: {e}", file.display()))
+		.with_context(|| format!("Failed to read {context} file at {}", file.display()))
 		.and_then(|string| {
 			let mut str = string.as_str();
 			str = str.trim();
