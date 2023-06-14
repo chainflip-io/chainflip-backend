@@ -307,7 +307,7 @@ fn map_ceremony_parties(
 	// Check that signer ids are known for this key
 	let signer_idxs = validator_mapping
 		.get_all_idxs(participants)
-		.map_err(|_| "invalid participants")?;
+		.map_err(|()| "Failed to map ceremony parties: invalid participants")?;
 
 	Ok((our_idx, signer_idxs))
 }

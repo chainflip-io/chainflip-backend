@@ -18,7 +18,11 @@ env:
 
 jobs:
   build-deb:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-${{ matrix.ubuntu_version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu_version: [20.04, 22.04]
     permissions:
       id-token: write
       contents: read
@@ -29,7 +33,7 @@ jobs:
       - name: Download packages
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-packages
+          name: chainflip-backend-packages-ubuntu-${{ matrix.ubuntu_version }}
           path: packages
 
       - name: Get commit SHA, distribution codename
@@ -94,12 +98,12 @@ jobs:
       - name: Publish prod
         if: inputs.environment == 'prod'
         run: |
-          aptly publish -gpg-key=${{ steps.import_gpg_prod.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}"
+          aptly publish -gpg-key=${{ steps.import_gpg_prod.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}${{ steps.vars.outputs.codename }}"
 
       - name: Publish dev
         if: inputs.environment == 'dev'
         run: |
-          aptly publish -gpg-key=${{ steps.import_gpg_dev.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}"
+          aptly publish -gpg-key=${{ steps.import_gpg_dev.outputs.keyid }} -distribution=${{ steps.vars.outputs.codename }} snapshot -force-overwrite snap "s3:chainflip-${{ inputs.environment }}:${{ inputs.version }}${{ steps.vars.outputs.codename }}"
 
       - name: Set Summary Title
         if: inputs.environment == 'prod'
@@ -115,7 +119,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
           echo "sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys ${GPG_KEY_ID}" >> $GITHUB_STEP_SUMMARY
-          echo "echo \"deb https://${USER_PASS_PREFIX}${REPO_BUCKET}/${{ inputs.version }} ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list" >> $GITHUB_STEP_SUMMARY
+          echo "echo \"deb https://${USER_PASS_PREFIX}${REPO_BUCKET}/${{ inputs.version }}${{ steps.vars.outputs.codename }} ${{ steps.vars.outputs.codename }} main\"  | sudo tee /etc/apt/sources.list.d/chainflip.list" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "When importing from the internal dev repo, you can find the basic auth credentials in 1Password under \`apt repo basic auth\` secret" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

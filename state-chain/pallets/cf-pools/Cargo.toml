@@ -19,6 +19,7 @@ cf-primitives = { path = '../../primitives', default-features = false }
 cf-traits = { path = '../../traits', default-features = false }
 
 log = { version = '0.4.16', default-features = false }
+serde = { optional = true, version = '1.0.126', features = ['derive'] }
 
 # Parity deps
 codec = { package = 'parity-scale-codec', version = '3.0.0', default-features = false, features = ['derive'] }
@@ -50,6 +51,7 @@ std = [
   'sp-arithmetic/std',
   'sp-runtime/std',
   'sp-std/std',
+  'serde',
 ]
 runtime-benchmarks = [
   'cf-primitives/runtime-benchmarks',

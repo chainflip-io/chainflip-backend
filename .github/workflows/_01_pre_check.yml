@@ -61,13 +61,17 @@ jobs:
           ./actionlint -color -shellcheck=
         shell: bash
 
-  lint-dockerfiles:
+  lint-dev-dockerfiles:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
         dockerfile:
-          - cf.Dockerfile
-          - rust-base.Dockerfile
+          - chainflip-broker-api
+          - chainflip-cli
+          - chainflip-engine
+          - chainflip-node
+          - generate-genesis-keys
+          - rust-base
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@v3
@@ -75,7 +79,24 @@ jobs:
       - name: Lint 🐳🔬
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: ci/docker/${{ matrix.dockerfile }}
+          dockerfile: ci/docker/dev/${{ matrix.dockerfile }}.Dockerfile
+  lint-prod-dockerfiles:
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        dockerfile:
+          - chainflip-broker-api
+          - chainflip-cli
+          - chainflip-engine
+          - chainflip-node
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@v3
+
+      - name: Lint 🐳🔬
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: ci/docker/prod/${{ matrix.dockerfile }}.Dockerfile
 
   check-docker-image-tags:
     runs-on: ubuntu-20.04
@@ -84,7 +105,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Setup Python 🐍
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: 3.9
 

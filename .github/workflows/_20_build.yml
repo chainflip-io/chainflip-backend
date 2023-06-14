@@ -15,8 +15,12 @@ env:
 jobs:
   compile:
     runs-on: [hetzner]
+    strategy:
+      fail-fast: true
+      matrix:
+        ubuntu_version: [20.04, 22.04]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20-ubuntu-20.04"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20-ubuntu-${{ matrix.ubuntu_version }}"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -35,7 +39,7 @@ jobs:
       - name: Upload binary artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
           path: |
             ./target/release/chainflip-node
             ./target/release/chainflip-engine
@@ -47,7 +51,7 @@ jobs:
       - name: Upload binary artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: chainflip-node-runtime
+          name: chainflip-node-runtime-ubuntu-${{ matrix.ubuntu_version }}
           path: |
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
 
