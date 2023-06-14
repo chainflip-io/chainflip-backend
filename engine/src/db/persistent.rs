@@ -273,10 +273,12 @@ fn create_backup_with_directory_name(
 	let backups_path = path.parent().expect("Should have parent");
 	let backups_path = backups_path.join(BACKUPS_DIRECTORY);
 	if !backups_path.exists() {
-		std::fs::create_dir_all(&backups_path).context(format!(
-			"Failed to create backup directory {}",
-			&backups_path.to_str().expect("Should get backup path as str")
-		))?;
+		std::fs::create_dir_all(&backups_path).with_context(|| {
+			format!(
+				"Failed to create backup directory {}",
+				&backups_path.to_str().expect("Should get backup path as str")
+			)
+		})?;
 	}
 
 	// This db backup folder should not exist yet
