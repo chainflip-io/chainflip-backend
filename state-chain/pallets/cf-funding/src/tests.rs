@@ -1103,11 +1103,13 @@ fn bond_should_count_toward_restricted_balance() {
 	new_test_ext().execute_with(|| {
 		const AMOUNT: FlipBalance = 50;
 		const RESTRICTED_ADDRESS: EthereumAddress = [0x02; 20];
+		// Set restricted addresses.
 		assert_ok!(Funding::update_restricted_addresses(
 			RuntimeOrigin::root(),
 			vec![RESTRICTED_ADDRESS],
 			Default::default(),
 		));
+		// Fund the restricted address.
 		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
 			ALICE,
@@ -1115,6 +1117,7 @@ fn bond_should_count_toward_restricted_balance() {
 			RESTRICTED_ADDRESS,
 			Default::default(),
 		));
+		// Fund an unrestricted address.
 		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
 			ALICE,
@@ -1122,15 +1125,17 @@ fn bond_should_count_toward_restricted_balance() {
 			Default::default(),
 			Default::default(),
 		));
+		// Set the bond.
 		Bonder::<Test>::update_bond(&ALICE, AMOUNT);
-		let bond = Bonder::<Test>::bond_of(&ALICE);
-		let total = Flip::total_balance_of(&ALICE);
-		assert_eq!(total, AMOUNT * 2);
-		assert_eq!(bond, AMOUNT);
+		// Prof we are setup correctly.
+		assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT * 2, "Total balance to be correct.");
+		assert_eq!(Bonder::<Test>::bond_of(&ALICE), AMOUNT, "Bond to be correct.");
+		// Assert the restricted balance is correct.
 		assert_eq!(
 			RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(),
 			&AMOUNT
 		);
+		// Redeem the restricted balance.
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			pallet::RedemptionAmount::Exact(AMOUNT / 2),

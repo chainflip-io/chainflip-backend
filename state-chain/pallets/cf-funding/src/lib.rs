@@ -115,6 +115,7 @@ pub mod pallet {
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
 
+		/// Access to bonds.
 		type Bonding: Bonding<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 
 		/// Benchmark stuff

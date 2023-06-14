@@ -163,9 +163,7 @@ impl Bonding for MockBonder {
 
 	fn update_bond(_: &Self::ValidatorId, _: Self::Amount) {}
 
-	fn bond_of(_: &Self::ValidatorId) -> Self::Amount {
-		todo!()
-	}
+	fn bond_of(_: &Self::ValidatorId) -> Self::Amount {}
 }
 
 pub type MockOffenceReporter =
