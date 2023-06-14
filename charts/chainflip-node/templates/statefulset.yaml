@@ -47,9 +47,7 @@ spec:
             - /usr/local/bin/chainflip-node
           args:
             - --base-path={{ .Values.basePath | default "/etc/chainflip" }}/chaindata
-            {{- if .Values.bootnodes }}
             - --bootnodes={{ .Values.bootnodes }}
-            {{- end }}
             - --chain=/etc/chainflip/{{ .Values.chainspec }}
             - --node-key-file={{ .Values.basePath | default "/etc/chainflip" }}/keys/node_key_file
             - --prometheus-external
