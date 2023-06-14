@@ -47,3 +47,5 @@ ports:
 
 basePath: /etc/chainflip
 purgeChain: false
+
+bootnodes: ""

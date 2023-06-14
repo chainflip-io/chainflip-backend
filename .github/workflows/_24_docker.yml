@@ -21,18 +21,19 @@ jobs:
         run: |
           echo "date=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
           echo "time=$(date +'%H:%M:%S')" >> "$GITHUB_OUTPUT"
+
   set-dockerfile-name:
     runs-on: ubuntu-20.04
     outputs:
-      dockerfile: ${{ steps.dockerfile.outputs.dockerfile }}
+      dockerfile_path: ${{ steps.dockerfile.outputs.dockerfile_path }}
     steps:
       - name: Set dockerfile name
         id: dockerfile
         run: |
           if [[ "${{ inputs.environment }}" == "prod" || "${{ inputs.network }}" == "sisyphos" || "${{ inputs.network }}" == "perseverance" ]] ; then
-            echo "dockerfile=ci/docker/chainflip-binaries/prod.Dockerfile" >> "$GITHUB_OUTPUT"
+            echo "dockerfile_path=ci/docker/prod" >> "$GITHUB_OUTPUT"
           else
-            echo "dockerfile=ci/docker/chainflip-binaries/dev.Dockerfile" >> "$GITHUB_OUTPUT"
+            echo "dockerfile_path=ci/docker/dev" >> "$GITHUB_OUTPUT"
           fi
 
   chainflip-binaries:
@@ -81,6 +82,7 @@ jobs:
             type=schedule,pattern={{date 'YYYY-MM-DD'}},prefix=nightly-
             type=pep440,pattern={{version}},prefix=${{ inputs.network }}-
             type=raw,value=${{ github.sha }}
+            type=raw,value=${{ inputs.network }}
             type=ref,event=branch
             type=ref,event=tag
             type=ref,event=pr
@@ -100,9 +102,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          file: ${{ needs.set-dockerfile-name.outputs.dockerfile }}
+          file: ${{ needs.set-dockerfile-name.outputs.dockerfile_path }}/${{ matrix.target }}.Dockerfile
           build-args: |
-            TARGET=${{ matrix.target }}
             BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
             VCS_REF=${{ github.sha }}
             CHAINSPEC=${{ inputs.network }}
@@ -152,6 +153,9 @@ jobs:
             type=pep440,pattern={{version}},prefix=${{ inputs.network }}-
             type=raw,value=${{ github.sha }}
             type=raw,value=${{ inputs.network }}
+            type=ref,event=branch
+            type=ref,event=tag
+            type=ref,event=pr
 
       - name: Login to Github Container Registry 🔑
         uses: docker/login-action@v2
@@ -168,9 +172,8 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          file: ${{ needs.set-dockerfile-name.outputs.dockerfile }}
+          file: ${{ needs.set-dockerfile-name.outputs.dockerfile_path }}/${{ matrix.target }}.Dockerfile
           build-args: |
-            TARGET=${{ matrix.target }}
             BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
             VCS_REF=${{ github.sha }}
             CHAINSPEC=${{ inputs.network }}
