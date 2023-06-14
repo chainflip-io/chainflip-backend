@@ -3,15 +3,12 @@ use tracing::{debug, error, info};
 use utilities::{context, make_periodic_tick};
 use web3::{
 	api::SubscriptionStream,
-	signing::SecretKeyRef,
 	types::{
-		Block, BlockHeader, BlockNumber, Bytes, CallRequest, FeeHistory, Filter, Log,
-		SignedTransaction, SyncState, Transaction, TransactionParameters, TransactionReceipt, H256,
-		U256, U64,
+		Block, BlockHeader, BlockNumber, FeeHistory, Filter, Log, SyncState, Transaction,
+		TransactionReceipt, H256, U256, U64,
 	},
 	Web3,
 };
-use web3_secp256k1::SecretKey;
 
 use futures::FutureExt;
 
@@ -81,16 +78,6 @@ impl EthTransport for web3::transports::Http {
 #[cfg_attr(test, automock)]
 #[async_trait]
 pub trait EthRpcApi: Send + Sync {
-	async fn estimate_gas(&self, req: CallRequest) -> Result<U256>;
-
-	async fn sign_transaction(
-		&self,
-		tx: TransactionParameters,
-		key: &SecretKey,
-	) -> Result<SignedTransaction>;
-
-	async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256>;
-
 	async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>>;
 
 	async fn chain_id(&self) -> Result<U256>;
@@ -129,28 +116,6 @@ where
 	T: Send + Sync + EthTransport,
 	T::Out: Send,
 {
-	async fn estimate_gas(&self, req: CallRequest) -> Result<U256> {
-		with_rpc_timeout(self.web3.eth().estimate_gas(req, None))
-			.await
-			.context(format!("{} client: Failed to estimate gas", T::transport_protocol()))
-	}
-
-	async fn sign_transaction(
-		&self,
-		tx: TransactionParameters,
-		key: &SecretKey,
-	) -> Result<SignedTransaction> {
-		with_rpc_timeout(self.web3.accounts().sign_transaction(tx, SecretKeyRef::from(key)))
-			.await
-			.context(format!("{} client: Failed to sign transaction", T::transport_protocol()))
-	}
-
-	async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256> {
-		with_rpc_timeout(self.web3.eth().send_raw_transaction(rlp))
-			.await
-			.context(format!("{} client: Failed to send raw transaction", T::transport_protocol()))
-	}
-
 	async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
 		let request_fut = self.web3.eth().logs(filter);
 
@@ -371,16 +336,6 @@ pub mod mocks {
 
 		#[async_trait]
 		impl EthRpcApi for EthHttpRpcClient {
-			async fn estimate_gas(&self, req: CallRequest) -> Result<U256>;
-
-			async fn sign_transaction(
-				&self,
-				tx: TransactionParameters,
-				key: &SecretKey,
-			) -> Result<SignedTransaction>;
-
-			async fn send_raw_transaction(&self, rlp: Bytes) -> Result<H256>;
-
 			async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>>;
 
 			async fn chain_id(&self) -> Result<U256>;

@@ -16,21 +16,18 @@ use mockall::predicate::{self, eq};
 use multisig::SignatureToThresholdSignature;
 use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_vaults::Vault;
+use sp_runtime::{AccountId32, Digest};
 
-use sp_core::{Hasher, H256};
-use sp_runtime::{traits::Keccak256, AccountId32, Digest};
+use crate::eth::ethers_rpc::MockEthersRpcApi;
+use sp_core::H256;
 use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance, Header};
 use tokio::sync::watch;
 use utilities::MakeCachedStream;
-use web3::types::{Bytes, SignedTransaction};
 
 use crate::{
 	btc::BtcBroadcaster,
 	dot::{rpc::MockDotRpcApi, DotBroadcaster},
-	eth::{
-		rpc::{EthWsRpcClient, MockEthRpcApi},
-		EthBroadcaster,
-	},
+	eth::{broadcaster::EthBroadcaster, ethers_rpc::EthersRpcClient},
 	settings::Settings,
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
 	witnesser::EpochStart,
@@ -168,7 +165,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
-		EthBroadcaster::new_test(MockEthRpcApi::new()),
+		EthBroadcaster::new_test(MockEthersRpcApi::new()),
 		DotBroadcaster::new(MockDotRpcApi::new()),
 		BtcBroadcaster::new(MockBtcRpcApi::new()),
 		MockMultisigClientApi::new(),
@@ -371,7 +368,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
-		EthBroadcaster::new_test(MockEthRpcApi::new()),
+		EthBroadcaster::new_test(MockEthersRpcApi::new()),
 		DotBroadcaster::new(MockDotRpcApi::new()),
 		BtcBroadcaster::new(MockBtcRpcApi::new()),
 		MockMultisigClientApi::new(),
@@ -525,7 +522,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
-		EthBroadcaster::new_test(MockEthRpcApi::new()),
+		EthBroadcaster::new_test(MockEthersRpcApi::new()),
 		DotBroadcaster::new(MockDotRpcApi::new()),
 		BtcBroadcaster::new(MockBtcRpcApi::new()),
 		MockMultisigClientApi::new(),
@@ -759,7 +756,7 @@ expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chai
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
-		EthBroadcaster::new_test(MockEthRpcApi::new()),
+		EthBroadcaster::new_test(MockEthersRpcApi::new()),
 		DotBroadcaster::new(MockDotRpcApi::new()),
 		BtcBroadcaster::new(MockBtcRpcApi::new()),
 		MockMultisigClientApi::new(),
@@ -991,7 +988,7 @@ expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chai
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
-		EthBroadcaster::new_test(MockEthRpcApi::new()),
+		EthBroadcaster::new_test(MockEthersRpcApi::new()),
 		DotBroadcaster::new(MockDotRpcApi::new()),
 		BtcBroadcaster::new(MockBtcRpcApi::new()),
 		MockMultisigClientApi::new(),
@@ -1224,7 +1221,7 @@ expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chai
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
-		EthBroadcaster::new_test(MockEthRpcApi::new()),
+		EthBroadcaster::new_test(MockEthersRpcApi::new()),
 		DotBroadcaster::new(MockDotRpcApi::new()),
 		BtcBroadcaster::new(MockBtcRpcApi::new()),
 		MockMultisigClientApi::new(),
@@ -1351,32 +1348,6 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			)| StreamCache { block_hash: *block_hash, block_number: block_header.number },
 		);
 
-	let mut eth_rpc_mock = MockEthRpcApi::new();
-
-	// when we are selected to sign we must estimate gas and sign
-	// NB: We only do this once, since we are only selected to sign once
-	eth_rpc_mock
-		.expect_estimate_gas()
-		.once()
-		.returning(|_| Ok(web3::types::U256::from(100_000)));
-
-	eth_rpc_mock.expect_sign_transaction().once().return_once(|_, _| {
-		// just a nothing signed transaction
-		Ok(SignedTransaction {
-			message_hash: web3::types::H256::default(),
-			v: 1,
-			r: web3::types::H256::default(),
-			s: web3::types::H256::default(),
-			raw_transaction: Bytes(Vec::new()),
-			transaction_hash: web3::types::H256::default(),
-		})
-	});
-
-	eth_rpc_mock
-		.expect_send_raw_transaction()
-		.once()
-		.return_once(|tx| Ok(Keccak256::hash(&tx.0[..]).0.into()));
-
 	state_chain_client
 		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
 		.with(eq(block_header.hash()))
@@ -1442,10 +1413,23 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 
 	let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
+	let mut ethers_rpc_mock = MockEthersRpcApi::new();
+	// when we are selected to sign we must estimate gas and sign
+	// NB: We only do this once, since we are only selected to sign once
+	ethers_rpc_mock
+		.expect_estimate_gas()
+		.once()
+		.returning(|_| Ok(ethers::types::U256::from(100_000)));
+
+	ethers_rpc_mock.expect_send_transaction().once().return_once(|tx| {
+		// return some hash
+		Ok(tx.sighash())
+	});
+
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
-		EthBroadcaster::new_test(eth_rpc_mock),
+		EthBroadcaster::new_test(ethers_rpc_mock),
 		DotBroadcaster::new(MockDotRpcApi::new()),
 		BtcBroadcaster::new(MockBtcRpcApi::new()),
 		MockMultisigClientApi::new(),
@@ -1732,11 +1716,7 @@ async fn run_the_sc_observer() {
 			sc_observer::start(
 				state_chain_client,
 				sc_block_stream,
-				EthBroadcaster::new(
-					&settings.eth,
-					EthWsRpcClient::new(&settings.eth, None).await.unwrap().clone(),
-				)
-				.unwrap(),
+				EthBroadcaster::new(EthersRpcClient::new(&settings.eth).await.unwrap()),
 				DotBroadcaster::new(MockDotRpcApi::new()),
 				BtcBroadcaster::new(MockBtcRpcApi::new()),
 				MockMultisigClientApi::new(),
