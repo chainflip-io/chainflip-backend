@@ -134,6 +134,36 @@ Return:
   - Asset_0
   - Asset_1
 
+### `lp_mintLimitOrder`
+
+Parameters:
+
+- Asset as a camel-case string, eg "Eth" or "Dot"
+- Order as a camel-case string, "Buy" or "Sell"
+- Price tick as i32
+- Asset amount as u128
+
+Return:
+
+- assets_debited
+- collected_fees
+- swapped_liquidity
+
+### `lp_burnLimitOrder`
+
+Parameters:
+
+- Asset as a camel-case string, eg "Eth" or "Dot"
+- Order as a camel-case string, "Buy" or "Sell"
+- Price tick as i32
+- Asset amount as u128
+
+Return:
+
+- assets_credited
+- collected_fees
+- swapped_liquidity
+
 ### `lp_tokenBalances`
 
 Parameters:

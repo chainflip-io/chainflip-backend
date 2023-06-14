@@ -6503,6 +6503,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "scale-info",
+ "serde",
  "sp-arithmetic 6.0.0",
  "sp-core 7.0.0",
  "sp-io 7.0.0",
