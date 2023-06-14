@@ -15,7 +15,7 @@ use crate::{
 };
 
 use super::rpc::EthRpcApi;
-
+use anyhow::Context;
 use cf_chains::eth::{Ethereum, EthereumTrackedData};
 
 use state_chain_runtime::CfeSettings;
@@ -94,6 +94,7 @@ where
 			.await
 			.map_err(|e| {
 				error!("Failed to get tracked data: {e:?}");
+				e
 			})
 			.context("Failed to get tracked data.")?;
 
