@@ -232,7 +232,6 @@ fn migrate_db_to_version(
 				info!(
 					"Database backup created at {}",
 					create_backup(path, current_version)
-						.map_err(anyhow::Error::msg)
 						.context("Failed to create database backup before migration")?
 				);
 			}
@@ -274,14 +273,12 @@ fn create_backup_with_directory_name(
 	let backups_path = path.parent().expect("Should have parent");
 	let backups_path = backups_path.join(BACKUPS_DIRECTORY);
 	if !backups_path.exists() {
-		std::fs::create_dir_all(&backups_path)
-			.map_err(anyhow::Error::msg)
-			.with_context(|| {
-				format!(
-					"Failed to create backup directory {}",
-					&backups_path.to_str().expect("Should get backup path as str")
-				)
-			})?;
+		std::fs::create_dir_all(&backups_path).with_context(|| {
+			format!(
+				"Failed to create backup directory {}",
+				&backups_path.to_str().expect("Should get backup path as str")
+			)
+		})?;
 	}
 
 	// This db backup folder should not exist yet
@@ -294,7 +291,6 @@ fn create_backup_with_directory_name(
 	let mut copy_options = fs_extra::dir::CopyOptions::new();
 	copy_options.copy_inside = true;
 	fs_extra::dir::copy(path, &backup_dir_path, &copy_options)
-		.map_err(anyhow::Error::msg)
 		.context("Failed to copy db files for backup")?;
 
 	Ok(backup_dir_path
