@@ -23,12 +23,12 @@ type FutureAnyGenerator<RpcClient> = TypedFutureGenerator<BoxAny, RpcClient>;
 // The id per *request* from the external caller. This is not tracking *submissions*.
 type RequestId = u64;
 
-type AttemptCount = u32;
+type Attempt = u32;
 
 type RequestFutures = FuturesUnorderedWait<
 	Pin<
 		Box<
-			dyn Future<Output = (RequestId, Result<BoxAny, (anyhow::Error, AttemptCount)>)>
+			dyn Future<Output = (RequestId, Result<BoxAny, (anyhow::Error, Attempt)>)>
 				+ Send
 				+ 'static,
 		>,
@@ -36,7 +36,7 @@ type RequestFutures = FuturesUnorderedWait<
 >;
 
 type RetryDelays =
-	FuturesUnorderedWait<Pin<Box<dyn Future<Output = (RequestId, AttemptCount)> + Send + 'static>>>;
+	FuturesUnorderedWait<Pin<Box<dyn Future<Output = (RequestId, Attempt)> + Send + 'static>>>;
 
 type BoxAny = Box<dyn Any + Send>;
 
@@ -91,8 +91,8 @@ fn submission_future<RpcClient: Clone>(
 	submission_fn: &FutureAnyGenerator<RpcClient>,
 	request_id: RequestId,
 	initial_request_timeout: Duration,
-	attempt: u32,
-) -> Pin<Box<impl Future<Output = (RequestId, Result<BoxAny, (anyhow::Error, AttemptCount)>)>>> {
+	attempt: Attempt,
+) -> Pin<Box<impl Future<Output = (RequestId, Result<BoxAny, (anyhow::Error, Attempt)>)>>> {
 	let submission_fut = submission_fn(client);
 	// Apply exponential backoff to the request.
 	Box::pin(async move {
@@ -164,14 +164,14 @@ impl<RpcClient: Clone + Send + Sync + 'static> RpcRetrierClient<RpcClient> {
 				},
 				if let Some((request_id, attempt)) = retry_delays.next() => {
 					let next_attempt = attempt.saturating_add(1);
-					tracing::trace!("Retrying request id: {request_id} for attempt: {next_attempt}");
+					tracing::trace!("Retrying request_id: {request_id} for attempt: {next_attempt}");
 
 					if let Some((response_sender, closure)) = request_holder.get(&request_id) {
 						// If the receiver has been dropped, we don't need to retry.
 						if !response_sender.is_closed() {
 							running_futures.push(submission_future(primary_client.clone(), closure, request_id, initial_request_timeout, next_attempt));
 						} else {
-							tracing::trace!("Request id: {request_id} dropped, not retrying.");
+							tracing::trace!("Dropped request_id: {request_id}, not retrying.");
 							request_holder.remove(&request_id);
 						}
 					}
