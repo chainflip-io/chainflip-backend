@@ -16,10 +16,18 @@ pub struct DotRetryRpcClient {
 }
 
 const POLKADOT_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
+const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
 impl DotRetryRpcClient {
 	pub fn new(scope: &Scope<'_, anyhow::Error>, dot_client: DotRpcClient) -> Self {
-		Self { retry_client: RpcRetrierClient::new(scope, dot_client, POLKADOT_RPC_TIMEOUT) }
+		Self {
+			retry_client: RpcRetrierClient::new(
+				scope,
+				dot_client,
+				POLKADOT_RPC_TIMEOUT,
+				MAX_CONCURRENT_SUBMISSIONS,
+			),
+		}
 	}
 }
 
