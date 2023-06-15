@@ -12,6 +12,16 @@ pub struct MockEthereum;
 
 pub type MockEthereumChannelId = u128;
 
+pub struct MockDepositAddress;
+
+impl DepositAddress for MockDepositAddress {
+	type FetchParams = ();
+
+	fn fetch_params() -> Self::FetchParams {
+		unreachable!()
+	}
+}
+
 // Chain implementation used for testing.
 impl Chain for MockEthereum {
 	const NAME: &'static str = "MockEthereum";
@@ -26,6 +36,7 @@ impl Chain for MockEthereum {
 	type ChainAccount = u64;
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
+	type DepositAddress = MockDepositAddress;
 }
 
 impl ChannelIdConstructor for MockEthereumChannelId {

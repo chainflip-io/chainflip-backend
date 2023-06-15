@@ -3,6 +3,15 @@ use super::*;
 /// A Chain that can't be constructed.
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum NoneChain {}
+pub struct NoneChainDepositAddress;
+
+impl DepositAddress for NoneChainDepositAddress {
+	type FetchParams = ();
+
+	fn fetch_params() -> Self::FetchParams {
+		unreachable!()
+	}
+}
 
 impl Chain for NoneChain {
 	const NAME: &'static str = "NONE";
@@ -14,6 +23,7 @@ impl Chain for NoneChain {
 	type ChainAccount = ForeignChainAddress;
 	type EpochStartData = ();
 	type DepositFetchId = ();
+	type DepositAddress = NoneChainDepositAddress;
 }
 
 impl ChainCrypto for NoneChain {

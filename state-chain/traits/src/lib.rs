@@ -871,3 +871,17 @@ pub trait OnBroadcastReady<C: ChainAbi> {
 pub trait GetBitcoinFeeInfo {
 	fn bitcoin_fee_info() -> cf_chains::btc::BitcoinFeeInfo;
 }
+
+pub trait DepositAddress {
+	type FetchParams;
+
+	// see PRO-421
+	fn maybe_recycle(self) -> Option<Self>
+	where
+		Self: Sized,
+	{
+		None
+	}
+
+	fn fetch_params() -> Self::FetchParams;
+}

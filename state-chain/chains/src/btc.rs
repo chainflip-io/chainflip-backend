@@ -4,6 +4,7 @@ pub mod deposit_address;
 pub mod utxo_selection;
 
 extern crate alloc;
+use crate::DepositAddress as DepositAddressTrait;
 use core::mem::size_of;
 
 use self::deposit_address::DepositAddress;
@@ -145,6 +146,16 @@ pub struct EpochStartData {
 	pub change_pubkey: AggKey,
 }
 
+pub struct BitcoinDepositAddress;
+
+impl DepositAddressTrait for BitcoinDepositAddress {
+	type FetchParams = ();
+
+	fn fetch_params() -> Self::FetchParams {
+		todo!()
+	}
+}
+
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
 	const KEY_HANDOVER_IS_REQUIRED: bool = true;
@@ -156,6 +167,7 @@ impl Chain for Bitcoin {
 	type ChainAccount = ScriptPubkey;
 	type EpochStartData = EpochStartData;
 	type DepositFetchId = BitcoinFetchId;
+	type DepositAddress = BitcoinDepositAddress;
 }
 
 #[derive(Clone, Copy, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]

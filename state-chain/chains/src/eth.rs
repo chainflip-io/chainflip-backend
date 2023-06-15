@@ -8,7 +8,7 @@ pub mod deposit_address;
 use self::api::tokenizable::Tokenizable;
 use crate::*;
 pub use cf_primitives::chains::Ethereum;
-use cf_primitives::{chains::assets, ChannelId};
+use cf_primitives::{chains::assets, ChannelId, EthereumAddress};
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::ParamType;
 pub use ethabi::{
@@ -46,6 +46,7 @@ impl Chain for Ethereum {
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
 	type DepositFetchId = EthereumChannelId;
+	type DepositAddress = EthereumDepositAddress;
 }
 
 impl ChainCrypto for Ethereum {
@@ -571,6 +572,27 @@ impl ChannelIdConstructor for EthereumChannelId {
 
 	fn undeployed(channel_id: u64, _address: Self::Address) -> Self {
 		Self::UnDeployed(channel_id)
+	}
+}
+
+pub struct EthereumDepositAddress {
+	address: EthereumAddress,
+	channel_id: u64,
+	deployment_status: bool,
+}
+
+impl DepositAddress for EthereumDepositAddress {
+	type FetchParams = ();
+
+	fn fetch_params() -> Self::FetchParams {
+		todo!()
+	}
+
+	fn maybe_recycle(self) -> Option<Self>
+	where
+		Self: Sized,
+	{
+		None
 	}
 }
 

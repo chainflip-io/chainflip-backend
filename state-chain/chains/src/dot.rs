@@ -213,6 +213,16 @@ impl Age for PolkadotTrackedData {
 	}
 }
 
+pub struct PolkadotDepositAddress;
+
+impl DepositAddress for PolkadotDepositAddress {
+	type FetchParams = ();
+
+	fn fetch_params() -> Self::FetchParams {
+		todo!()
+	}
+}
+
 impl Chain for Polkadot {
 	const NAME: &'static str = "Polkadot";
 	type ChainBlockNumber = PolkadotBlockNumber;
@@ -223,6 +233,7 @@ impl Chain for Polkadot {
 	type ChainAsset = assets::dot::Asset;
 	type EpochStartData = EpochStartData;
 	type DepositFetchId = PolkadotChannelId;
+	type DepositAddress = PolkadotDepositAddress;
 }
 
 impl ChainCrypto for Polkadot {
