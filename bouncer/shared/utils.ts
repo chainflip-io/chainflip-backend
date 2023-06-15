@@ -3,7 +3,7 @@ import { setTimeout as sleep } from 'timers/promises';
 import { execSync } from "child_process";
 
 import { ApiPromise, WsProvider } from '@polkadot/api';
-import { ChainId } from '@chainflip-io/cli/.';
+import { ChainId } from '@chainflip-io/cli';
 
 export const runWithTimeout = <T>(promise: Promise<T>, millis: number): Promise<T> =>
   Promise.race([
