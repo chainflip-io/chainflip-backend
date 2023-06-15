@@ -212,6 +212,15 @@ fn confirm_submit() -> bool {
 	}
 }
 
+const DISCLAIMER: &'static str = r#"
+❗️❗️
+❗️ THIS SEED PHRASE ALLOS YOU TO RECOVER YOUR CHAINFLIP ACCOUNT KEYS AND ETHEREUM KEYS.
+❗️ HOWEVER, THIS SEED PHRASE SHOULD ONLY BE USED IN CONJUNCTION WITH THIS UTILITY. NOTABLY,
+❗️ IT CANNOT BE USED TO IMPORT YOUR ETHEREUM ADDRESS INTO METAMASK OR ANY OTHER WALLET IMPLEMENTATION.
+❗️ THIS IS BY DESIGN: THIS ETHEREUM KEY SHOULD BE USED EXCLUSIVELY BY YOUR CHAINFLIP NODE.
+❗️❗️
+"#;
+
 /// Entry point for the [settings::CliCommand::GenerateKeys] subcommand.
 fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>) -> Result<()> {
 	#[derive(Serialize)]
@@ -236,6 +245,7 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 			writeln!(f, "👤 Ethereum address: 0x{}", hex::encode(self.ethereum_address))?;
 			writeln!(f, "🔑 Validator key: 0x{}", hex::encode(&self.signing_key.public_key))?;
 			writeln!(f, "👤 Validator account id: 0x{}", self.signing_account_id)?;
+			writeln!(f, "")?;
 			writeln!(f, "🌱 Seed phrase: {}", self.seed_phrase)?;
 			Ok(())
 		}
@@ -266,8 +276,11 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 	if json {
 		println!("{}", serde_json::to_string_pretty(&keys)?);
 	} else {
-		println!("Generated fresh keys for your Chainflip Node!");
+		println!();
+		println!("Generated fresh Validator keys for your Chainflip Node!");
+		println!();
 		println!("{}", keys);
+		println!("{}", DISCLAIMER);
 	}
 
 	if let Some(path) = path {
@@ -294,7 +307,16 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 			.context("Error while writing to file.")?;
 		}
 
-		println!("Saved all secret keys to '{}'.", path.display());
+		println!();
+		println!("💾 Saved all secret keys to '{}'.", path.display());
+	} else {
+		if !json {
+			println!();
+			println!(
+				"💡 You can save the private key files to a directory using the --path argument:"
+			);
+			println!("💡 `chainflip-cli --seed $MY_SEED_PHRASE --file $PATH_TO_KEYS_DIR`");
+		}
 	}
 
 	Ok(())

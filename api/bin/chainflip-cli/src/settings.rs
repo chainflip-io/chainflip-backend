@@ -134,9 +134,16 @@ pub enum CliCommand {
         about = "Force a key rotation. This can only be executed by the governance dictator"
     )]
 	ForceRotation {},
-	#[clap(
-		about = "Generates the 3 key files needed to run a chainflip node (Node Key, Ethereum Key and Validator Key)"
-	)]
+	#[clap(about = "
+			Generates the private/public keys required needed to run a Chainflip validator node. Theses are the
+				Node Key, Ethereum Key and Validator Key. The Validator Key and Ethereum Key can be recovered
+				using the seed phrase. The Node Key does not control any funds and therefore doesn't need to be
+				recoverable. It is generated independently of the seed phrase.
+
+			Note the seed phrase can only be used to recover keys using this utility. Notably, it isn't possible
+			to use the seed phrase to import the Ethereum wallet into Metamask. This is by design: the Ethereum
+			wallet should remain for the exclusive use of the Validator node.
+		")]
 	GenerateKeys {
 		/// Output to the cmd line as JSON.
 		#[clap(short, long, action)]

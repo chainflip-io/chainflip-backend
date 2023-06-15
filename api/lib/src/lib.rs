@@ -476,6 +476,10 @@ pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(String, KeyPai
 /// transactions.
 ///
 /// If no seed phrase is provided, a new random seed phrase will be created.
+///
+/// Note this is *not* a general-purpose utility for deriving Ethereum addresses. You should
+/// not expect to be able to recover this address in any mainstream wallet. Notably, this
+/// does *not* use BIP44 derivation paths.
 pub fn generate_ethereum_key(seed_phrase: Option<&str>) -> Result<(String, KeyPair, [u8; 20])> {
 	use bip39::{Language, Mnemonic, MnemonicType, Seed};
 
