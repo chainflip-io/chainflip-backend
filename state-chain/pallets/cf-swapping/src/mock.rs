@@ -153,7 +153,7 @@ pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
 		system: Default::default(),
-		swapping: SwappingConfig { swap_ttl: 5, minimum_swap_amount: vec![] },
+		swapping: SwappingConfig { swap_ttl: 5, minimum_swap_amounts: vec![] },
 	};
 
 	let mut ext: sp_io::TestExternalities = config.build_storage().unwrap().into();

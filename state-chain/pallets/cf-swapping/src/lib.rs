@@ -336,14 +336,14 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub swap_ttl: T::BlockNumber,
-		pub minimum_swap_amount: Vec<(Asset, AssetAmount)>,
+		pub minimum_swap_amounts: Vec<(Asset, AssetAmount)>,
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			SwapTTL::<T>::put(self.swap_ttl);
-			for (asset, min) in &self.minimum_swap_amount {
+			for (asset, min) in &self.minimum_swap_amounts {
 				MinimumSwapAmount::<T>::insert(asset, min);
 			}
 		}
@@ -353,7 +353,7 @@ pub mod pallet {
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
 			// 1200 = 2 hours (6 sec per block)
-			Self { swap_ttl: T::BlockNumber::from(1_200u32), minimum_swap_amount: vec![] }
+			Self { swap_ttl: T::BlockNumber::from(1_200u32), minimum_swap_amounts: vec![] }
 		}
 	}
 
