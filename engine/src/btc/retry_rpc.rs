@@ -11,10 +11,18 @@ pub struct BtcRetryRpcClient {
 }
 
 const BITCOIN_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
+const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
 impl BtcRetryRpcClient {
 	pub fn new(scope: &Scope<'_, anyhow::Error>, btc_client: BtcRpcClient) -> Self {
-		Self { retry_client: RpcRetrierClient::new(scope, btc_client, BITCOIN_RPC_TIMEOUT) }
+		Self {
+			retry_client: RpcRetrierClient::new(
+				scope,
+				btc_client,
+				BITCOIN_RPC_TIMEOUT,
+				MAX_CONCURRENT_SUBMISSIONS,
+			),
+		}
 	}
 }
 
