@@ -9,8 +9,9 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{BlockNumberProvider, Saturating},
-		DispatchError, Permill,
+		DispatchError, Permill, TransactionOutcome,
 	},
+	storage::with_transaction,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -112,6 +113,25 @@ pub type TransactionHash = [u8; 32];
 pub(crate) struct CcmSwapOutput {
 	principal: Option<AssetAmount>,
 	gas: Option<AssetAmount>,
+}
+
+struct FailedSwap {
+	pub asset: Asset,
+	pub direction: SwapLeg,
+	pub amount: AssetAmount,
+}
+
+impl FailedSwap {
+	fn new(asset: Asset, direction: SwapLeg, amount: AssetAmount) -> Self {
+		Self { asset, direction, amount }
+	}
+}
+
+struct SwapError(Option<FailedSwap>);
+impl From<DispatchError> for SwapError {
+	fn from(_err: DispatchError) -> Self {
+		Self(None)
+	}
 }
 
 impl CcmSwapOutput {
@@ -282,9 +302,12 @@ pub mod pallet {
 			address: EncodedAddress,
 			egress_id: EgressId,
 		},
+		/// Most likely cause of this error is that there are insufficient
+		/// liquidity in the Pool. Also this could happen if the result overflowed u128::MAX
 		BatchSwapFailed {
 			asset: Asset,
 			direction: SwapLeg,
+			amount: AssetAmount,
 		},
 		CcmEgressScheduled {
 			ccm_id: u64,
@@ -378,81 +401,101 @@ pub mod pallet {
 
 		/// Execute all swaps in the SwapQueue
 		fn on_finalize(_n: BlockNumberFor<T>) {
-			let swaps = SwapQueue::<T>::take();
-			let mut unprocessed_swaps = vec![];
-			// Helper function that splits swaps of a given direction, group them by asset and do
-			// the swaps of a given direction. Processed and unprocessed swaps are returned.
-			let mut do_group_and_swap = |swaps: Vec<Swap>, direction: SwapLeg| {
-				let (swap_groups, mut remaining) = Self::split_and_group_swaps(swaps, direction);
+			// Wrap the entire swapping section as a transaction, any failed swap will rollback all
+			// storage changes.
+			if let Err(SwapError(Some(err))) = with_transaction(|| {
+				let swaps = SwapQueue::<T>::take();
+				// Helper function that splits swaps of a given direction, group them by asset
+				// and do the swaps of a given direction. Processed and unprocessed swaps are
+				// returned.
+				let do_group_and_swap =
+					|swaps: Vec<Swap>, direction: SwapLeg| -> Result<Vec<Swap>, SwapError> {
+						let (swap_groups, mut remaining) =
+							Self::split_and_group_swaps(swaps, direction);
 
-				for (asset, mut swaps) in swap_groups {
-					match Self::execute_group_of_swaps(&mut swaps, asset, direction) {
-						Ok(()) => remaining.extend(swaps),
-						Err(_) => {
-							// If the swaps failed to execute, add them back into the queue.
-							Self::deposit_event(Event::<T>::BatchSwapFailed { asset, direction });
-							unprocessed_swaps.extend(swaps);
-						},
+						for (asset, mut swaps) in swap_groups {
+							match Self::execute_group_of_swaps(&mut swaps, asset, direction) {
+								Ok(()) => remaining.extend(swaps),
+								Err(amount) =>
+									return Err(SwapError(Some(FailedSwap::new(
+										asset, direction, amount,
+									)))),
+							};
+						}
+						Ok(remaining)
 					};
+
+				// Swap into Stable asset first.
+				let mut remaining_swaps = match do_group_and_swap(swaps, SwapLeg::ToStable) {
+					Ok(remaining) => remaining,
+					Err(err) => return TransactionOutcome::Rollback(Err(err)),
+				};
+
+				// Take NetworkFee for all swaps
+				for swap in remaining_swaps.iter_mut() {
+					debug_assert!(
+						swap.stable_amount.is_some(),
+						"All swaps should have Stable amount set here"
+					);
+					let stable_amount =
+						T::SwappingApi::take_network_fee(swap.stable_amount.unwrap_or_default());
+					swap.stable_amount = Some(stable_amount);
 				}
-				remaining
-			};
 
-			// Swap into Stable asset first.
-			let mut remaining_swaps = do_group_and_swap(swaps, SwapLeg::ToStable);
+				// Swap from Stable asset, and complete the swap logic.
+				let remaining_swaps = match do_group_and_swap(remaining_swaps, SwapLeg::FromStable)
+				{
+					Ok(remaining) => remaining,
+					Err(err) => return TransactionOutcome::Rollback(Err(err)),
+				};
+				for swap in remaining_swaps {
+					if let Some(output_amount) = swap.final_output {
+						Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
+						// Handle swap completion logic.
+						match &swap.swap_type {
+							SwapType::Swap(destination_address) => {
+								let egress_id = T::EgressHandler::schedule_egress(
+									swap.to,
+									output_amount,
+									destination_address.clone(),
+									None,
+								);
 
-			// Take NetworkFee for all swaps
-			for swap in remaining_swaps.iter_mut() {
-				debug_assert!(
-					swap.stable_amount.is_some(),
-					"All swaps should have Stable amount set here"
-				);
-				let stable_amount =
-					T::SwappingApi::take_network_fee(swap.stable_amount.unwrap_or_default());
-				swap.stable_amount = Some(stable_amount);
-			}
-
-			// Swap from Stable asset, and complete the swap logic.
-			for swap in do_group_and_swap(remaining_swaps, SwapLeg::FromStable) {
-				if let Some(output_amount) = swap.final_output {
-					Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
-					// Handle swap completion logic.
-					match &swap.swap_type {
-						SwapType::Swap(destination_address) => {
-							let egress_id = T::EgressHandler::schedule_egress(
-								swap.to,
-								output_amount,
-								destination_address.clone(),
-								None,
-							);
-
-							Self::deposit_event(Event::<T>::SwapEgressScheduled {
-								swap_id: swap.swap_id,
-								egress_id,
-								asset: swap.to,
-								amount: output_amount,
-								intermediate_amount: swap.intermediate_amount(),
-							});
-						},
-						SwapType::CcmPrincipal(ccm_id) => {
-							Self::handle_ccm_swap_result(
-								*ccm_id,
-								output_amount,
-								CcmSwapLeg::Principal,
-							);
-						},
-						SwapType::CcmGas(ccm_id) => {
-							Self::handle_ccm_swap_result(*ccm_id, output_amount, CcmSwapLeg::Gas);
-						},
-					};
-				} else {
-					debug_assert!(false, "Swap is not completed yet!");
+								Self::deposit_event(Event::<T>::SwapEgressScheduled {
+									swap_id: swap.swap_id,
+									egress_id,
+									asset: swap.to,
+									amount: output_amount,
+									intermediate_amount: swap.intermediate_amount(),
+								});
+							},
+							SwapType::CcmPrincipal(ccm_id) => {
+								Self::handle_ccm_swap_result(
+									*ccm_id,
+									output_amount,
+									CcmSwapLeg::Principal,
+								);
+							},
+							SwapType::CcmGas(ccm_id) => {
+								Self::handle_ccm_swap_result(
+									*ccm_id,
+									output_amount,
+									CcmSwapLeg::Gas,
+								);
+							},
+						};
+					} else {
+						debug_assert!(false, "Swap is not completed yet!");
+					}
 				}
-			}
 
-			// Reinsert unprocessed swaps back into the map.
-			if !unprocessed_swaps.is_empty() {
-				SwapQueue::<T>::put(unprocessed_swaps);
+				TransactionOutcome::Commit(Ok(()))
+			}) {
+				Self::deposit_event(Event::<T>::BatchSwapFailed {
+					asset: err.asset,
+					direction: err.direction,
+					amount: err.amount,
+				})
 			}
 		}
 	}
@@ -698,13 +741,13 @@ pub mod pallet {
 			Ok(destination_address_internal)
 		}
 
-		/// Bundle the given swaps and do a single swap of a given direction.
-		/// Return the remaining swaps as a vec.
+		/// Bundle the given swaps and do a single swap of a given direction. Updates the given
+		/// swaps in-place. If batch swap failed, return the input amount.
 		pub fn execute_group_of_swaps(
 			swaps: &mut Vec<Swap>,
 			asset: Asset,
 			direction: SwapLeg,
-		) -> DispatchResult {
+		) -> Result<(), AssetAmount> {
 			// Stable -> stable swap should never be called.
 			debug_assert_ne!(asset, STABLE_ASSET);
 			debug_assert!(
@@ -718,7 +761,8 @@ pub mod pallet {
 			debug_assert!(bundle_input > 0, "Swap input of zero is invalid.");
 
 			// Process the swap leg as a bundle. No network fee is taken here.
-			let bundle_output = T::SwappingApi::swap_single_leg(direction, asset, bundle_input)?;
+			let bundle_output = T::SwappingApi::swap_single_leg(direction, asset, bundle_input)
+				.map_err(|_| bundle_input)?;
 
 			for swap in swaps {
 				let swap_output = multiply_by_rational_with_rounding(
