@@ -1,7 +1,7 @@
 import { executeNativeSwap } from '../commands/native_swap';
 import { Token, chainflipApi, getAddress as newAddress, getBalanceSync, observeBalanceIncrease, observeEvent, runWithTimeout } from '../shared/utils';
 
-async function testToken(destToken: Token) {
+async function testNativeSwap(destToken: Token) {
 
     const api = await chainflipApi();
     const addr = newAddress(destToken, 'never');
@@ -21,8 +21,8 @@ async function testToken(destToken: Token) {
 }
 
 async function test() {
-    await testToken('DOT');
-    await testToken('USDC');
+    await testNativeSwap('DOT');
+    await testNativeSwap('USDC');
 }
 
 // A successful execution usually takes ~150 seconds
