@@ -210,9 +210,6 @@ pub mod pallet {
 		/// A redemption has expired without being executed.
 		RedemptionExpired { account_id: AccountId<T> },
 
-		/// The minimum funding amount has been updated.
-		MinimumFundingUpdated { new_minimum: T::Amount },
-
 		/// A new restricted address has been added
 		AddedRestrictedAddress { address: EthereumAddress },
 
@@ -225,6 +222,9 @@ pub mod pallet {
 			withdrawal_address: EthereumAddress,
 			amount: FlipBalance<T>,
 		},
+
+		/// The minimum funding amount has been updated.
+		MinimumFundingUpdated { new_minimum: T::Amount },
 
 		/// The Withdrawal Tax has been updated.
 		RedemptionTaxAmountUpdated { amount: T::Amount },
@@ -272,11 +272,11 @@ pub mod pallet {
 		/// Redemption tax must be less than the minimum funding amount.
 		InvalidRedemptionTaxUpdate,
 
-		/// The account is already bound to an address.
-		AccountAlreadyBound,
-
 		/// The account has insufficient funds to pay for the redemption.
 		InsufficientBalance,
+
+		/// The account is already bound to an address.
+		AccountAlreadyBound,
 	}
 
 	#[pallet::call]
