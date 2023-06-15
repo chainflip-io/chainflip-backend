@@ -8,7 +8,7 @@ use cf_traits::{
 	mocks::{
 		account_role_registry::MockAccountRoleRegistry, system_state_info::MockSystemStateInfo,
 	},
-	AccountRoleRegistry, Bonding,
+	AccountInfo, AccountRoleRegistry, Bonding,
 };
 
 use crate::BoundAddress;
@@ -1129,7 +1129,7 @@ fn bond_should_count_toward_restricted_balance() {
 		Bonder::<Test>::update_bond(&ALICE, AMOUNT);
 		// Prof we are setup correctly.
 		assert_eq!(Flip::total_balance_of(&ALICE), AMOUNT * 2, "Total balance to be correct.");
-		assert_eq!(Bonder::<Test>::bond_of(&ALICE), AMOUNT, "Bond to be correct.");
+		assert_eq!(Flip::bond(&ALICE), AMOUNT, "Bond to be correct.");
 		// Assert the restricted balance is correct.
 		assert_eq!(
 			RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).unwrap(),

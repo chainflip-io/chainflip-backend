@@ -8,7 +8,6 @@ use cf_traits::{
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::cell::RefCell;
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
-use pallet_cf_flip::Bonder;
 use scale_info::TypeInfo;
 use sp_runtime::{
 	testing::Header,
@@ -181,7 +180,6 @@ pub const REDEMPTION_DELAY_BUFFER_SECS: u64 = 10;
 impl pallet_cf_funding::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type TimeSource = time_source::Mock;
-	type Balance = u128;
 	type Flip = Flip;
 	type WeightInfo = ();
 	type FunderId = AccountId;
@@ -189,7 +187,6 @@ impl pallet_cf_funding::Config for Test {
 	type ThresholdCallable = RuntimeCall;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
 	type RegisterRedemption = MockRegisterRedemption;
-	type Bonding = Bonder<Test>;
 }
 
 pub const REDEMPTION_TTL_SECS: u64 = 10;

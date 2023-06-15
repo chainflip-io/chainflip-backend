@@ -19,7 +19,10 @@ use cf_chains::RegisterRedemption;
 #[cfg(feature = "std")]
 use cf_primitives::AccountRole;
 use cf_primitives::EthereumAddress;
-use cf_traits::{Bid, BidderProvider, EpochInfo, FeePayment, Funding, SystemStateInfo};
+use cf_traits::{
+	AccountInfo, AccountRoleRegistry, Bid, BidderProvider, Broadcaster, Chainflip, EpochInfo,
+	FeePayment, Funding, SystemStateInfo,
+};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
@@ -32,7 +35,7 @@ use frame_support::{
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_runtime::{
-	traits::{AtLeast32BitUnsigned, CheckedSub, Zero},
+	traits::{CheckedSub, UniqueSaturatedInto, Zero},
 	Saturating,
 };
 use sp_std::cmp::{max, min};
@@ -49,7 +52,6 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::eth::Ethereum;
 	use cf_primitives::BroadcastId;
-	use cf_traits::{AccountRoleRegistry, Bonding, Broadcaster};
 	use frame_support::{pallet_prelude::*, Parameter};
 	use frame_system::pallet_prelude::*;
 
@@ -60,7 +62,7 @@ pub mod pallet {
 
 	pub type FundingAttempt<Amount> = (EthereumAddress, Amount);
 
-	pub type FlipBalance<T> = <T as Config>::Balance;
+	pub type FlipBalance<T> = <T as Chainflip>::Amount;
 
 	pub type EthTransactionHash = [u8; 32];
 
@@ -78,7 +80,7 @@ pub mod pallet {
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
-	pub trait Config: cf_traits::Chainflip {
+	pub trait Config: Chainflip {
 		/// Standard Event type.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -87,22 +89,10 @@ pub mod pallet {
 
 		type FunderId: AsRef<[u8; 32]> + IsType<<Self as frame_system::Config>::AccountId>;
 
-		type Balance: Parameter
-			+ Member
-			+ AtLeast32BitUnsigned
-			+ Default
-			+ Copy
-			+ MaybeSerializeDeserialize
-			+ Into<u128>
-			+ From<u128>
-			+ core::iter::Sum;
-
 		/// The Flip token implementation.
-		type Flip: Funding<AccountId = <Self as frame_system::Config>::AccountId, Balance = Self::Balance>
-			+ FeePayment<
-				Amount = Self::Balance,
-				AccountId = <Self as frame_system::Config>::AccountId,
-			>;
+		type Flip: Funding<AccountId = <Self as frame_system::Config>::AccountId, Balance = Self::Amount>
+			+ AccountInfo<Self>
+			+ FeePayment<Amount = Self::Amount, AccountId = <Self as frame_system::Config>::AccountId>;
 
 		type Broadcaster: Broadcaster<Ethereum, ApiCall = Self::RegisterRedemption>;
 
@@ -114,9 +104,6 @@ pub mod pallet {
 
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
-
-		/// Access to bonds.
-		type Bonding: Bonding<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -142,7 +129,7 @@ pub mod pallet {
 	/// The minimum amount a user can fund their account with, and therefore the minimum balance
 	/// they must have remaining after they redeem.
 	#[pallet::storage]
-	pub type MinimumFunding<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
+	pub type MinimumFunding<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
 	/// TTL for a redemption from the moment of issue.
 	#[pallet::storage]
@@ -170,7 +157,7 @@ pub mod pallet {
 
 	/// The fee levied for every redemption request. Can be updated by Governance.
 	#[pallet::storage]
-	pub type RedemptionTax<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
+	pub type RedemptionTax<T: Config> = StorageValue<_, T::Amount, ValueQuery>;
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
@@ -224,7 +211,7 @@ pub mod pallet {
 		RedemptionExpired { account_id: AccountId<T> },
 
 		/// The minimum funding amount has been updated.
-		MinimumFundingUpdated { new_minimum: T::Balance },
+		MinimumFundingUpdated { new_minimum: T::Amount },
 
 		/// A new restricted address has been added
 		AddedRestrictedAddress { address: EthereumAddress },
@@ -240,7 +227,7 @@ pub mod pallet {
 		},
 
 		/// The Withdrawal Tax has been updated.
-		RedemptionTaxAmountUpdated { amount: T::Balance },
+		RedemptionTaxAmountUpdated { amount: T::Amount },
 	}
 
 	#[pallet::error]
@@ -389,13 +376,11 @@ pub mod pallet {
 			let restricted = restricted_balances.values().copied().sum::<FlipBalance<T>>() -
 				restricted_balances.get(&address).copied().unwrap_or_default();
 
-			let bond = T::Bonding::bond_of(&account_id);
-
-			let unrestricted =
-				T::Flip::account_balance(&account_id).saturating_sub(max(restricted, bond));
+			let unrestricted = T::Flip::balance(&account_id)
+				.saturating_sub(max(restricted, T::Flip::bond(&account_id)));
 
 			let max_redeem = if let Some(res_amount) = restricted_balances.get(&address) {
-				min(unrestricted + *res_amount, T::Flip::redeemable_balance(&account_id))
+				min(unrestricted + *res_amount, T::Flip::liquid_funds(&account_id))
 			} else {
 				unrestricted
 			};
@@ -416,7 +401,7 @@ pub mod pallet {
 				RestrictedBalances::<T>::insert(&account_id, &restricted_balances);
 			}
 
-			let remaining_balance = T::Flip::account_balance(&account_id)
+			let remaining_balance = T::Flip::balance(&account_id)
 				.checked_sub(&net_amount)
 				.ok_or(Error::<T>::InsufficientBalance)?;
 
@@ -438,7 +423,7 @@ pub mod pallet {
 			let contract_expiry = T::TimeSource::now().as_secs() + RedemptionTTLSeconds::<T>::get();
 			let call = T::RegisterRedemption::new_unsigned(
 				<T as Config>::FunderId::from_ref(&account_id).as_ref(),
-				net_amount.into(),
+				net_amount.unique_saturated_into(),
 				&address,
 				contract_expiry,
 			);
@@ -487,7 +472,7 @@ pub mod pallet {
 			T::Flip::finalize_redemption(&account_id)
 				.expect("This should never return an error because we already ensured above that the pending redemption does indeed exist");
 
-			if T::Flip::account_balance(&account_id).is_zero() {
+			if T::Flip::balance(&account_id).is_zero() {
 				frame_system::Provider::<T>::killed(&account_id).unwrap_or_else(|e| {
 					// This shouldn't happen, and not much we can do if it does except fix it on a
 					// subsequent release. Consequences are minor.
@@ -585,7 +570,7 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_minimum_funding())]
 		pub fn update_minimum_funding(
 			origin: OriginFor<T>,
-			minimum_funding: T::Balance,
+			minimum_funding: T::Amount,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(
@@ -651,7 +636,7 @@ pub mod pallet {
 		///
 		/// - [On update](Event::RedemptionTaxAmountUpdated)
 		#[pallet::weight(T::WeightInfo::update_redemption_tax())]
-		pub fn update_redemption_tax(origin: OriginFor<T>, amount: T::Balance) -> DispatchResult {
+		pub fn update_redemption_tax(origin: OriginFor<T>, amount: T::Amount) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(amount < MinimumFunding::<T>::get(), Error::<T>::InvalidRedemptionTaxUpdate);
 			RedemptionTax::<T>::set(amount);
@@ -662,9 +647,9 @@ pub mod pallet {
 
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
-		pub genesis_accounts: Vec<(AccountId<T>, AccountRole, T::Balance)>,
-		pub redemption_tax: T::Balance,
-		pub minimum_funding: T::Balance,
+		pub genesis_accounts: Vec<(AccountId<T>, AccountRole, T::Amount)>,
+		pub redemption_tax: T::Amount,
+		pub minimum_funding: T::Amount,
 		pub redemption_ttl: Duration,
 		pub redemption_delay_buffer_seconds: u64,
 	}
@@ -706,7 +691,7 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	/// Add funds to an account, creating the account if it doesn't exist. An account is not
 	/// an implicit bidder and needs to start bidding explicitly.
-	fn add_funds_to_account(account_id: &AccountId<T>, amount: T::Balance) -> T::Balance {
+	fn add_funds_to_account(account_id: &AccountId<T>, amount: T::Amount) -> T::Amount {
 		if !frame_system::Pallet::<T>::account_exists(account_id) {
 			// Creates an account
 			let _ = frame_system::Provider::<T>::created(account_id);
@@ -733,13 +718,13 @@ impl<T: Config> Pallet<T> {
 
 impl<T: Config> BidderProvider for Pallet<T> {
 	type ValidatorId = <T as frame_system::Config>::AccountId;
-	type Amount = T::Balance;
+	type Amount = T::Amount;
 
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
 		ActiveBidder::<T>::iter()
 			.filter_map(|(bidder_id, active)| {
 				if active {
-					let amount = T::Flip::account_balance(&bidder_id);
+					let amount = T::Flip::balance(&bidder_id);
 					Some(Bid { bidder_id, amount })
 				} else {
 					None

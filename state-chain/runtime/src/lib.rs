@@ -519,7 +519,6 @@ impl pallet_cf_funding::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type ThresholdCallable = RuntimeCall;
 	type FunderId = AccountId;
-	type Balance = FlipBalance;
 	type Flip = Flip;
 	type Broadcaster = EthereumBroadcaster;
 	type EnsureThresholdSigned =
@@ -527,7 +526,6 @@ impl pallet_cf_funding::Config for Runtime {
 	type RegisterRedemption = EthereumApi<EthEnvironment>;
 	type TimeSource = Timestamp;
 	type WeightInfo = pallet_cf_funding::weights::PalletWeight<Runtime>;
-	type Bonding = Bonder<Runtime>;
 }
 
 impl pallet_cf_tokenholder_governance::Config for Runtime {

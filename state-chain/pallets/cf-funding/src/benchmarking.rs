@@ -14,7 +14,7 @@ use frame_system::RawOrigin;
 benchmarks! {
 
 	funded {
-		let amount: T::Balance = T::Balance::from(100u32);
+		let amount: T::Amount = T::Amount::from(100u32);
 		let withdrawal_address: EthereumAddress = [42u8; 20];
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 		let caller: T::AccountId = whitelisted_caller();
@@ -29,13 +29,13 @@ benchmarks! {
 
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
-		assert_eq!(T::Flip::account_balance(&caller), amount);
+		assert_eq!(T::Flip::balance(&caller), amount);
 	}
 
 	redeem {
 		// If we redeem an amount which takes us below the minimum balance, the redemption
 		// will fail.
-		let balance_to_redeem = RedemptionAmount::Exact(T::Balance::from(2u128));
+		let balance_to_redeem = RedemptionAmount::Exact(T::Amount::from(2u32));
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 		let withdrawal_address: EthereumAddress = [42u8; 20];
 
@@ -44,7 +44,7 @@ benchmarks! {
 
 		let call = Call::<T>::funded {
 			account_id: caller.clone(),
-			amount: MinimumFunding::<T>::get() * T::Balance::from(2u128),
+			amount: MinimumFunding::<T>::get() * T::Amount::from(2u32),
 			funder: withdrawal_address,
 			tx_hash
 		};
@@ -85,21 +85,22 @@ benchmarks! {
 
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = T::EnsureWitnessed::successful_origin();
+		let funds = MinimumFunding::<T>::get() * T::Amount::from(10u32);
 
 		Call::<T>::funded {
 			account_id: caller.clone(),
-			amount: MinimumFunding::<T>::get(),
+			amount: funds,
 			funder: withdrawal_address,
 			tx_hash
 		}.dispatch_bypass_filter(origin.clone())?;
 
 		// Push a redemption
-		let redeemable = T::Flip::redeemable_balance(&caller);
-		Pallet::<T>::redeem(RawOrigin::Signed(caller.clone()).into(), RedemptionAmount::Max, withdrawal_address)?;
+		let redeemed_amount = funds / T::Amount::from(2u32);
+		Pallet::<T>::redeem(RawOrigin::Signed(caller.clone()).into(), RedemptionAmount::Exact(redeemed_amount), withdrawal_address)?;
 
 		let call = Call::<T>::redeemed {
 			account_id: caller.clone(),
-			redeemed_amount: redeemable,
+			redeemed_amount,
 			tx_hash
 		};
 
@@ -123,7 +124,6 @@ benchmarks! {
 		}.dispatch_bypass_filter(origin.clone())?;
 
 		// Push a redemption
-		let redeemable = T::Flip::redeemable_balance(&caller);
 		Pallet::<T>::redeem(RawOrigin::Signed(caller.clone()).into(), RedemptionAmount::Max, withdrawal_address)?;
 
 		let call = Call::<T>::redemption_expired {
@@ -168,7 +168,7 @@ benchmarks! {
 	}
 
 	update_redemption_tax {
-		let amount = 1u128.into();
+		let amount = 1u32.into();
 		let call = Call::<T>::update_redemption_tax {
 			amount,
 		};
