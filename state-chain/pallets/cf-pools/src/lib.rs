@@ -10,6 +10,9 @@ use frame_system::pallet_prelude::OriginFor;
 use sp_arithmetic::traits::Zero;
 use sp_runtime::{Permill, Saturating};
 
+#[cfg(feature = "std")]
+use serde::{Deserialize, Serialize};
+
 pub use pallet::*;
 
 mod benchmarking;
@@ -41,6 +44,7 @@ pub mod pallet {
 	}
 
 	#[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
+	#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 	pub enum Order {
 		Buy,
 		Sell,

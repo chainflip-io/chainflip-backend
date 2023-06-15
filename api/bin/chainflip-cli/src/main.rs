@@ -39,7 +39,10 @@ async fn run_cli() -> Result<()> {
 		return generate_keys(json, path, seed_phrase)
 	}
 
-	let cli_settings = CLISettings::new(command_line_opts.clone()).map_err(|err| anyhow!("Please ensure your config file path is configured correctly and the file is valid. You can also just set all configurations required command line arguments.\n{}", err))?;
+	let cli_settings = CLISettings::new(command_line_opts.clone()).context(
+		r#"Please ensure your config file path is configured correctly and the file is valid.
+			You can also just set all configurations required as command line arguments."#,
+	)?;
 
 	println!(
 		"Connecting to state chain node at: `{}` and using private key located at: `{}`",
@@ -140,9 +143,8 @@ async fn request_redemption(
 	settings: &CLISettings,
 ) -> Result<()> {
 	// Sanitise data
-
-	let eth_address = clean_eth_address(eth_address)
-		.map_err(|error| anyhow!("You supplied an invalid ETH address: {}", error))
+	let eth_address: [u8; 20] = clean_eth_address(eth_address)
+		.context("Invalid ETH address supplied")
 		.and_then(|eth_address|
 			if eth_address == [0; 20] {
 				Err(anyhow!("Cannot submit redemption to the zero address. If you really want to do this, use 0x000000000000000000000000000000000000dead instead."))
