@@ -97,11 +97,16 @@ macro_rules! assert_events_eq {
 	}};
 }
 
+/// Implements test helpers for running tests with [rich_test_externalities::TestExternalities]:
+///
+/// - `TestRunner` type alias for `TestExternalities` with all pallets and `()` as context.
+/// - `with_genesis` function to create a new `TestRunner` with the provided genesis config.
+/// - `new_test_ext` function to create a new `TestRunner` with the default genesis config.
 #[macro_export]
 macro_rules! impl_test_helpers {
 	( $runtime:ty ) => {
 		/// Test runner wrapping [sp_io::TestExternalities] in a richer api.
-		type TestRunner<Ctx> = $crate::TestExternalities<$runtime, AllPalletsWithSystem, Ctx>;
+		pub type TestRunner<Ctx> = $crate::TestExternalities<$runtime, AllPalletsWithSystem, Ctx>;
 
 		/// Create new test externalities with the provided genesis config.
 		pub fn with_genesis(g: GenesisConfig) -> TestRunner<()> {

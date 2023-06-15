@@ -1,6 +1,7 @@
 use frame_support::{
+	assert_noop, assert_ok,
 	dispatch::UnfilteredDispatchable,
-	pallet_prelude::DispatchResultWithPostInfo,
+	pallet_prelude::DispatchResult,
 	traits::{OnFinalize, OnIdle, OnInitialize},
 	weights::Weight,
 };
@@ -109,6 +110,9 @@ where
 	}
 
 	/// Transforms the test context. Analogous to [std::iter::Iterator::map].
+	///
+	/// Storage is not accessible in this closure. This means that assert_noop! won't work. If
+	/// storage access is required, use `inspect_storage`.
 	#[track_caller]
 	pub fn map_context<R>(
 		self,
@@ -190,25 +194,29 @@ where
 		})
 	}
 
-	/// Applies the provided extrinsics in the next block.
-	///
-	/// Adds a Vec of tuples containing each call and its result to the test context.
+	/// Applies the provided extrinsics in the next block, asserting the expected result.
 	#[allow(clippy::type_complexity)]
 	#[track_caller]
 	pub fn then_apply_extrinsics<
 		C: UnfilteredDispatchable<RuntimeOrigin = Runtime::RuntimeOrigin> + Clone,
-		I: IntoIterator<Item = (Runtime::RuntimeOrigin, C)>,
+		I: IntoIterator<Item = (Runtime::RuntimeOrigin, C, DispatchResult)>,
 	>(
 		self,
 		f: impl FnOnce(&Ctx) -> I,
-	) -> TestExternalities<Runtime, Pallets, (Ctx, Vec<(C, DispatchResultWithPostInfo)>)> {
+	) -> TestExternalities<Runtime, Pallets, Ctx> {
 		let r = self.ext.execute_at_next_block(|| {
-			f(&self.context)
-				.into_iter()
-				.map(|(origin, call)| (call.clone(), call.dispatch_bypass_filter(origin)))
-				.collect()
+			for (origin, call, expected_result) in f(&self.context) {
+				match expected_result {
+					Ok(_) => {
+						assert_ok!(call.dispatch_bypass_filter(origin));
+					},
+					Err(e) => {
+						assert_noop!(call.dispatch_bypass_filter(origin), e);
+					},
+				}
+			}
 		});
-		TestExternalities { ext: r.ext, context: (self.context, r.context) }
+		TestExternalities { ext: r.ext, context: self.context }
 	}
 
 	/// Keeps executing pallet hooks until the given predicate returns true.
@@ -238,6 +246,7 @@ mod test_examples {
 	use sp_runtime::{
 		testing::Header,
 		traits::{BlakeTwo256, IdentityLookup},
+		DispatchError,
 	};
 
 	type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
@@ -338,6 +347,7 @@ mod test_examples {
 						RuntimeCall::from(frame_system::Call::remark_with_event {
 							remark: vec![1, 2, 3],
 						}),
+						Ok(()),
 					),
 					// None is not a valid origin so this should fail:
 					(
@@ -345,6 +355,7 @@ mod test_examples {
 						RuntimeCall::from(frame_system::Call::remark_with_event {
 							remark: vec![1, 2, 3],
 						}),
+						Err(DispatchError::BadOrigin.into()),
 					),
 				]
 			})
@@ -358,15 +369,9 @@ mod test_examples {
 					if *sender == ALICE
 				));
 			})
-			.then_process_events(|(previous_result, extrinsic_results), event| {
+			.then_process_events(|previous_result, event| {
 				assert_eq!(previous_result, "HeyHey", "Context has been passed through.");
 				assert_eq!(System::block_number(), 21, "We processed up to the desired block.");
-				assert_eq!(extrinsic_results.len(), 2, "We have two extrinsic results.");
-				assert_eq!(
-					extrinsic_results.iter().filter(|(_call, result)| result.is_ok()).count(),
-					1,
-					"One of them should have succeeded."
-				);
 				match event {
 					RuntimeEvent::System(system_event) => match system_event {
 						frame_system::Event::Remarked { sender, .. } => Some(sender),
@@ -374,8 +379,7 @@ mod test_examples {
 					},
 				}
 			})
-			.inspect_context(|((previous_result, extrinsic_results), event_results)| {
-				assert_eq!(extrinsic_results.len(), 2, "We have two extrinsic results.");
+			.inspect_context(|(previous_result, event_results)| {
 				assert_eq!(
 					*previous_result, "HeyHey",
 					"Context has been passed through from previous then_execute_at_block closure."
