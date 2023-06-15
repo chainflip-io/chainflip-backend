@@ -483,10 +483,11 @@ pub fn generate_ethereum_key(seed_phrase: Option<&str>) -> Result<(String, KeyPa
 		.map(|phrase| Mnemonic::from_phrase(phrase, Language::English))
 		.unwrap_or_else(|| Ok(Mnemonic::new(MnemonicType::Words12, Language::English)))?;
 
-	let secret_key = libsecp256k1::SecretKey::parse_slice(
-		&Seed::new(&mnemonic, Default::default()).as_bytes()[..32],
-	)
-	.context("Unable to derive secret key.")?;
+	let seed = Seed::new(&mnemonic, Default::default());
+	let master_key_bytes = hmac_sha512::HMAC::mac(seed, b"Chainflip Ethereum Key");
+
+	let secret_key = libsecp256k1::SecretKey::parse_slice(&master_key_bytes[..32])
+		.context("Unable to derive secret key.")?;
 	let public_key = libsecp256k1::PublicKey::from_secret_key(&secret_key);
 
 	Ok((
