@@ -96,7 +96,7 @@ impl SubmissionHolder {
 	}
 
 	pub fn push(&mut self, submission: SubmissionFuture) {
-		if self.running_submissions.count() < self.maximum_submissions {
+		if (self.running_submissions.len() as u32) < self.maximum_submissions {
 			self.running_submissions.push(submission);
 		} else {
 			self.submissions_buffer.push_back(submission);

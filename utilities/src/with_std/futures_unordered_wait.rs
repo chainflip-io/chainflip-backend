@@ -6,21 +6,20 @@ use futures::{Future, StreamExt};
 #[derive(Default)]
 pub struct FuturesUnorderedWait<Fut> {
 	futures: futures::stream::FuturesUnordered<Fut>,
-	count: u32,
 }
 
 impl<Fut> FuturesUnorderedWait<Fut> {
 	pub fn new() -> Self {
-		Self { futures: futures::stream::FuturesUnordered::new(), count: 0 }
+		Self { futures: futures::stream::FuturesUnordered::new() }
 	}
 
 	pub fn push(&mut self, future: Fut) {
 		self.futures.push(future);
-		self.count += 1;
 	}
 
-	pub fn count(&self) -> u32 {
-		self.count
+	#[allow(clippy::len_without_is_empty)]
+	pub fn len(&self) -> usize {
+		self.futures.len()
 	}
 
 	pub async fn next(&mut self) -> Option<Fut::Output>
@@ -30,9 +29,7 @@ impl<Fut> FuturesUnorderedWait<Fut> {
 		if self.futures.is_empty() {
 			futures::future::pending().await
 		} else {
-			let res = self.futures.next().await;
-			self.count -= 1;
-			res
+			self.futures.next().await
 		}
 	}
 }
@@ -78,7 +75,6 @@ mod tests {
 	async fn one_future_is_ready() {
 		let mut stream = FuturesUnorderedWait::<TestFuture>::default();
 		stream.push(TestFuture { ready: true });
-		assert!(stream.count() == 1);
 		assert_eq!(stream.next().now_or_never(), Some(Some(())));
 
 		assert_eq!(stream.next().now_or_never(), None);
@@ -93,13 +89,11 @@ mod tests {
 		for _ in 0..READY_FUTURES {
 			stream.push(TestFuture { ready: true });
 		}
-		assert_eq!(stream.count(), READY_FUTURES);
 
 		for _ in 0..READY_FUTURES {
 			assert_eq!(stream.next().now_or_never(), Some(Some(())));
 		}
 
-		assert_eq!(stream.count(), 0);
 		assert_eq!(stream.next().now_or_never(), None);
 	}
 
