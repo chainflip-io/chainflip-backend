@@ -2,7 +2,7 @@ import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { exec } from 'child_process';
-import { runWithTimeout, sleep, observeEvent } from '../shared/utils';
+import { runWithTimeout, observeEvent } from '../shared/utils';
 
 let chainflip: ApiPromise;
 

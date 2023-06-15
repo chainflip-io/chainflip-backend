@@ -23,7 +23,7 @@ async function main(): Promise<void> {
   const cfNodeEndpoint = process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944';
   const expectedEvents = args.succeed_on.split(',');
   const printEvent = expectedEvents.length === 1;
-  const badEvents = args.fail_on.split(',');
+  const badEvents = args.fail_on ? args.fail_on.split(',') : [];
   const api = await ApiPromise.create({
     provider: new WsProvider(cfNodeEndpoint),
     noInitWarn: true,
