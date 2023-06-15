@@ -38,7 +38,6 @@ secrets:
 
 cluster: ""
 chainspec: sisyphos.chainspec.json
-chainspecUrl: ""
 
 ports:
   wsPort: "9944"
@@ -48,3 +47,5 @@ ports:
 
 basePath: /etc/chainflip
 purgeChain: false
+
+bootnodes: ""

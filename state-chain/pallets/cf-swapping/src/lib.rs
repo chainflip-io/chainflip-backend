@@ -89,6 +89,14 @@ impl Swap {
 			SwapLeg::FromStable => self.final_output = Some(output),
 		}
 	}
+
+	fn intermediate_amount(&self) -> Option<AssetAmount> {
+		if self.from == STABLE_ASSET || self.to == STABLE_ASSET {
+			None
+		} else {
+			self.stable_amount
+		}
+	}
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -266,6 +274,7 @@ pub mod pallet {
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
+			intermediate_amount: Option<AssetAmount>,
 		},
 		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
@@ -427,6 +436,7 @@ pub mod pallet {
 								egress_id,
 								asset: swap.to,
 								amount: output_amount,
+								intermediate_amount: swap.intermediate_amount(),
 							});
 						},
 						SwapType::CcmPrincipal(ccm_id) => {

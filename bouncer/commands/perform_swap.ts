@@ -1,4 +1,5 @@
 import { execSync } from 'child_process';
+import { getBalanceSync, observeBalanceIncrease } from '../shared/utils';
 
 async function performSwap(SRC_CCY: string, DST_CCY: string, ADDRESS: string) {
     const FEE = 100;
@@ -13,7 +14,7 @@ async function performSwap(SRC_CCY: string, DST_CCY: string, ADDRESS: string) {
 
     DEPOSIT_ADDRESS_CCY = DEPOSIT_ADDRESS_CCY.trim();
 
-    let SWAP_ADDRESS = execSync(`pnpm tsx ./commands/observe_events.ts --timeout 10000 --succeed_on swapping:SwapDepositAddressReady --fail_on foo:bar`);
+    let SWAP_ADDRESS = execSync(`pnpm tsx ./commands/observe_events.ts --timeout 10000 --succeed_on swapping:SwapDepositAddressReady`);
 
     SWAP_ADDRESS = JSON.parse(SWAP_ADDRESS);
     SWAP_ADDRESS = SWAP_ADDRESS[0][DEPOSIT_ADDRESS_CCY];
@@ -28,7 +29,7 @@ async function performSwap(SRC_CCY: string, DST_CCY: string, ADDRESS: string) {
 
     console.log(`Swap address: ${SWAP_ADDRESS}`);
 
-    let OLD_BALANCE = execSync(`pnpm tsx ./commands/get_balance.ts ${DST_CCY} ${ADDRESS}`);
+    const OLD_BALANCE = getBalanceSync(DST_CCY, ADDRESS);
 
     console.log(`Old balance: ${OLD_BALANCE}`);
 
@@ -40,17 +41,8 @@ async function performSwap(SRC_CCY: string, DST_CCY: string, ADDRESS: string) {
 
     console.log("Waiting for balance to update");
 
-    for (let i = 0; i < 60; i++) {
-        let NEW_BALANCE = execSync(`pnpm tsx ./commands/get_balance.ts ${DST_CCY} ${ADDRESS}`);
-
-        if (Number(NEW_BALANCE) > Number(OLD_BALANCE)) {
-            console.log(`Swap success! New balance: ${NEW_BALANCE}!`);
-            return 0;
-        } else {
-            await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-    }
-    process.exit(1);
+    const newBalance = await observeBalanceIncrease(DST_CCY, ADDRESS, OLD_BALANCE);
+    console.log(`Swap success! New balance: ${newBalance}!`);
 }
 
 async function main() {
