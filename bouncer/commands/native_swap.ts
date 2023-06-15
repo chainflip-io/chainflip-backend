@@ -1,7 +1,8 @@
-import { executeSwap, ChainId } from '@chainflip-io/cli';
+import { executeSwap } from '@chainflip-io/cli';
 import { u8aToHex } from '@polkadot/util';
 import { decodeAddress } from '@polkadot/util-crypto';
 import { Wallet, getDefaultProvider } from 'ethers';
+import { chainFromToken } from '../shared/utils';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function executeNativeSwap(destTokenSymbol: any, destinationAddress: string) {
@@ -11,18 +12,7 @@ export async function executeNativeSwap(destTokenSymbol: any, destinationAddress
     ).connect(getDefaultProvider('http://localhost:8545'));
 
     const destToken = destTokenSymbol.toUpperCase();
-    const destChainId = (() => {
-        if (['FLIP', 'USDC', 'ETH'].includes(destToken)) {
-            return ChainId.Ethereum;
-        }
-        if (destToken === 'DOT') {
-            return ChainId.Polkadot;
-        }
-        if (destToken === 'BTC') {
-            return ChainId.Bitcoin;
-        }
-        throw new Error("unsupported token");
-    })();
+    const destChainId = chainFromToken(destToken);
 
     let destAddress = destinationAddress;
 

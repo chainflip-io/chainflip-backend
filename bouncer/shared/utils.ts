@@ -3,6 +3,7 @@ import { setTimeout as sleep } from 'timers/promises';
 import { execSync } from "child_process";
 
 import { ApiPromise, WsProvider } from '@polkadot/api';
+import { ChainId } from '@chainflip-io/cli/.';
 
 export const runWithTimeout = <T>(promise: Promise<T>, millis: number): Promise<T> =>
   Promise.race([
@@ -67,6 +68,19 @@ export function getAddress(token: Token, seed: string, type?: string): string {
   return String(rawAddress).trim();
 
 }
+
+export function chainFromToken(token: Token): ChainId {
+  if (['FLIP', 'USDC', 'ETH'].includes(token)) {
+    return ChainId.Ethereum;
+  }
+  if (token === 'DOT') {
+    return ChainId.Polkadot;
+  }
+  if (token === 'BTC') {
+    return ChainId.Bitcoin;
+  }
+  throw new Error("unsupported token");
+};
 
 // TODO: import JS function instead
 export function getBalanceSync(dstCcy: string, address: string): number {
