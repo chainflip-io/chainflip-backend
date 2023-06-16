@@ -12,6 +12,9 @@ pub mod futures_unordered_wait;
 pub mod loop_select;
 pub mod task_scope;
 
+mod cached_stream;
+pub use cached_stream::{CachedStream, MakeCachedStream};
+
 pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN], anyhow::Error> {
 	let address_hex_str = match address_str.strip_prefix("0x") {
 		Some(address_stripped) => address_stripped,
@@ -94,78 +97,6 @@ pub fn assert_stream_send<'u, R>(
 	stream: impl 'u + Send + Stream<Item = R>,
 ) -> impl 'u + Send + Stream<Item = R> {
 	stream
-}
-
-pub trait CachedStream: Stream {
-	type Cache;
-
-	fn cache(&self) -> &Self::Cache;
-}
-
-#[derive(Clone)]
-#[pin_project::pin_project]
-pub struct InnerCachedStream<Stream, Cache, F> {
-	#[pin]
-	stream: Stream,
-	cache: Cache,
-	f: F,
-}
-impl<St, Cache, F> Stream for InnerCachedStream<St, Cache, F>
-where
-	St: Stream,
-	F: FnMut(&St::Item) -> Cache,
-{
-	type Item = St::Item;
-
-	fn poll_next(
-		self: core::pin::Pin<&mut Self>,
-		cx: &mut core::task::Context<'_>,
-	) -> core::task::Poll<Option<Self::Item>> {
-		let this = self.project();
-		let poll = this.stream.poll_next(cx);
-
-		if let core::task::Poll::Ready(Some(item)) = &poll {
-			*this.cache = (this.f)(item);
-		}
-
-		poll
-	}
-
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.stream.size_hint()
-	}
-}
-impl<St, Cache, F> CachedStream for InnerCachedStream<St, Cache, F>
-where
-	St: Stream,
-	F: FnMut(&St::Item) -> Cache,
-{
-	type Cache = Cache;
-
-	fn cache(&self) -> &Self::Cache {
-		&self.cache
-	}
-}
-pub trait MakeCachedStream: Stream {
-	fn make_cached<Cache, F: FnMut(&<Self as Stream>::Item) -> Cache>(
-		self,
-		initial: Cache,
-		f: F,
-	) -> InnerCachedStream<Self, Cache, F>
-	where
-		Self: Sized;
-}
-impl<T: Stream> MakeCachedStream for T {
-	fn make_cached<Cache, F: FnMut(&<Self as Stream>::Item) -> Cache>(
-		self,
-		initial: Cache,
-		f: F,
-	) -> InnerCachedStream<Self, Cache, F>
-	where
-		Self: Sized,
-	{
-		InnerCachedStream { stream: self, cache: initial, f }
-	}
 }
 
 /// Makes a tick that outputs every duration and if ticks are "missed" (as tick() wasn't called for
