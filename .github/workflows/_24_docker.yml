@@ -54,7 +54,6 @@ jobs:
           - generate-genesis-keys
         docker-repo:
           - ghcr.io/${{ github.repository }}
-          - flipperino
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout 🏁
@@ -115,6 +114,7 @@ jobs:
             CHAINSPEC=${{ inputs.network }}
 
   public-images:
+    if: inputs.environment == 'prod'
     needs: [get-date-time, set-dockerfile-name]
     strategy:
       matrix:
