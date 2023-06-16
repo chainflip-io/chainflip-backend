@@ -213,6 +213,7 @@ impl Age for PolkadotTrackedData {
 	}
 }
 
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub struct PolkadotDepositAddress;
 
 impl DepositAddress for PolkadotDepositAddress {

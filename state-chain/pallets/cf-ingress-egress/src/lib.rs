@@ -111,6 +111,9 @@ pub mod pallet {
 	pub(crate) type DepositFetchIdOf<T, I> =
 		<<T as Config<I>>::TargetChain as Chain>::DepositFetchId;
 
+	pub(crate) type DepositAddressOf<T, I> =
+		<<T as Config<I>>::TargetChain as Chain>::DepositAddress;
+
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct DepositWitness<C: Chain + ChainCrypto> {
 		pub deposit_address: C::ChainAccount,
@@ -238,6 +241,10 @@ pub mod pallet {
 	#[pallet::storage]
 	pub(crate) type AddressPool<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, ChannelId, TargetChainAccount<T, I>>;
+
+	#[pallet::storage]
+	pub(crate) type AddressPoolDepositAddress<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, ChannelId, DepositAddressOf<T, I>>;
 
 	/// Stores the status of an address.
 	#[pallet::storage]

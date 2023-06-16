@@ -106,7 +106,7 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValueExtended
 		+ ChannelIdConstructor<Address = Self::ChainAccount>;
 
-	type DepositAddress: DepositAddress;
+	type DepositAddress: Member + Parameter + Copy + DepositAddress;
 }
 
 /// Measures the age of items associated with the Chain.
@@ -332,7 +332,7 @@ pub struct CcmDepositMetadata {
 pub trait DepositAddress {
 	type FetchParams;
 
-	// see PRO-421
+	/// Called at the end when we want to recycle a deposit address.
 	fn maybe_recycle(self) -> Option<Self>
 	where
 		Self: Sized,
@@ -340,5 +340,16 @@ pub trait DepositAddress {
 		None
 	}
 
+	fn construct_api_call() {}
+
+	/// Called when the first threshold has succeeded.
 	fn fetch_params() -> Self::FetchParams;
+
+	/// Called when we check for the address status.
+	fn skip_fetch(self) -> bool
+	where
+		Self: Sized,
+	{
+		false
+	}
 }

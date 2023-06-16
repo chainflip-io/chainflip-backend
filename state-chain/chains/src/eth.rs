@@ -557,6 +557,7 @@ impl From<H256> for TransactionHash {
 		Self(x)
 	}
 }
+
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub enum EthereumChannelId {
 	Deployed(Address),
@@ -575,10 +576,12 @@ impl ChannelIdConstructor for EthereumChannelId {
 	}
 }
 
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub struct EthereumDepositAddress {
 	address: EthereumAddress,
 	channel_id: u64,
 	deployment_status: bool,
+	deposit_fetch_id: EthereumChannelId,
 }
 
 impl DepositAddress for EthereumDepositAddress {

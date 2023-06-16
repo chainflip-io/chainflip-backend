@@ -3,6 +3,8 @@ use super::*;
 /// A Chain that can't be constructed.
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum NoneChain {}
+
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub struct NoneChainDepositAddress;
 
 impl DepositAddress for NoneChainDepositAddress {

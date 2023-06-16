@@ -146,6 +146,7 @@ pub struct EpochStartData {
 	pub change_pubkey: AggKey,
 }
 
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub struct BitcoinDepositAddress;
 
 impl DepositAddressTrait for BitcoinDepositAddress {
