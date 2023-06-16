@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fmt::Display, sync::Arc};
 
 use futures::{FutureExt, Stream, StreamExt};
 use futures_util::TryFutureExt;
@@ -67,6 +67,26 @@ type WitnesserTask<Witnesser> = ScopedJoinHandle<<Witnesser as EpochWitnesser>::
 pub enum EpochProcessRunnerError<C: cf_chains::Chain> {
 	WitnesserError(EpochStart<C>),
 	Other(anyhow::Error),
+}
+
+impl<C: cf_chains::Chain> Display for EpochProcessRunnerError<C> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			EpochProcessRunnerError::WitnesserError(e) => {
+				write!(f, "Epoch processor witnessing error at epoch: {:?}", e)
+			},
+			EpochProcessRunnerError::Other(e) => write!(f, "Epoch process error: {:?}", e),
+		}
+	}
+}
+
+impl<C: cf_chains::Chain> std::error::Error for EpochProcessRunnerError<C> {
+	fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+		match self {
+			EpochProcessRunnerError::WitnesserError(_) => None,
+			EpochProcessRunnerError::Other(e) => Some(e.as_ref()),
+		}
+	}
 }
 
 impl<C: cf_chains::Chain> From<()> for EpochProcessRunnerError<C> {
