@@ -2,6 +2,7 @@ use bitcoin::{Block, BlockHash, Txid};
 use utilities::task_scope::Scope;
 
 use crate::rpc_retrier::RpcRetrierClient;
+use core::time::Duration;
 
 use super::rpc::{BtcRpcApi, BtcRpcClient};
 
@@ -9,11 +10,19 @@ pub struct BtcRetryRpcClient {
 	retry_client: RpcRetrierClient<BtcRpcClient>,
 }
 
-const BITCOIN_RPC_TIMEOUT_MILLIS: u64 = 1000;
+const BITCOIN_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
+const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
 impl BtcRetryRpcClient {
 	pub fn new(scope: &Scope<'_, anyhow::Error>, btc_client: BtcRpcClient) -> Self {
-		Self { retry_client: RpcRetrierClient::new(scope, btc_client, BITCOIN_RPC_TIMEOUT_MILLIS) }
+		Self {
+			retry_client: RpcRetrierClient::new(
+				scope,
+				btc_client,
+				BITCOIN_RPC_TIMEOUT,
+				MAX_CONCURRENT_SUBMISSIONS,
+			),
+		}
 	}
 }
 
