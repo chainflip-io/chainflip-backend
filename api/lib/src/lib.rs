@@ -504,6 +504,8 @@ pub fn generate_ethereum_key(seed_phrase: Option<&str>) -> Result<(String, KeyPa
 
 #[cfg(test)]
 mod test_key_generation {
+	use sp_core::crypto::Ss58Codec;
+
 	use super::*;
 
 	#[test]
@@ -511,13 +513,34 @@ mod test_key_generation {
 		const SEED_PHRASE: &str =
 		"essay awesome afraid movie wish save genius eyebrow tonight milk agree pretty alcohol three whale";
 
-		let (_, generated_key, _) = generate_signing_key(Some(SEED_PHRASE)).unwrap();
+		let generated = generate_signing_key(Some(SEED_PHRASE)).unwrap();
 
 		// Compare the generated secret key with a known secret key generated using the
 		// `chainflip-node key generate` command
 		assert_eq!(
-			hex::encode(generated_key.secret_key),
-			"afabf42a9a99910cdd64795ef05ed71acfa2238f5682d26ae62028df3cc59727"
+			"afabf42a9a99910cdd64795ef05ed71acfa2238f5682d26ae62028df3cc59727",
+			hex::encode(generated.1.secret_key)
+		);
+		assert_eq!(
+			(generated.0, generated.2),
+			(
+				SEED_PHRASE.to_string(),
+				AccountId32::from_ss58check("cFMziohdyxVZy4DGXw2zkapubUoTaqjvAM7QGcpyLo9Cba7HA")
+					.unwrap(),
+			)
+		);
+
+		let generated = generate_ethereum_key(Some(SEED_PHRASE)).unwrap();
+		assert_eq!(
+			"5c25d9ae0363ecd8dd18da1608ead2a4dc1ec658d6ed412d47e10d486ff0d1db",
+			hex::encode(generated.1.secret_key)
+		);
+		assert_eq!(
+			(generated.0, generated.2.to_vec()),
+			(
+				SEED_PHRASE.to_string(),
+				hex::decode("e01156ca92d904cc67ff47517bf3a3500b418280").unwrap()
+			)
 		);
 	}
 
