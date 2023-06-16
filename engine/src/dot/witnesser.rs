@@ -516,7 +516,14 @@ where
 			block_events_stream,
 			Duration::from_secs(DOT_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER),
 		)
-		.map_err(|err| anyhow::anyhow!("Error while fetching Polkadot events: {:?}", err));
+		.map_err(|err| {
+			error!("Error while fetching Polkadot events: {:?}", err);
+			anyhow::anyhow!("Error while fetching Polkadot events: {:?}", err)
+		})
+		.chain(stream::once(async {
+			error!("Stream ended unexpectedly");
+			Err(anyhow::anyhow!("Stream ended unexpectedly"))
+		}));
 
 		Ok(Box::pin(block_events_stream))
 	}
