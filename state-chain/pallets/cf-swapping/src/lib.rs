@@ -9,9 +9,9 @@ use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
 		traits::{BlockNumberProvider, Saturating},
-		DispatchError, Permill, TransactionOutcome,
+		DispatchError, Permill,
 	},
-	storage::with_transaction,
+	storage::with_storage_layer,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -121,16 +121,10 @@ struct FailedSwap {
 	pub amount: AssetAmount,
 }
 
-impl FailedSwap {
-	fn new(asset: Asset, direction: SwapLeg, amount: AssetAmount) -> Self {
-		Self { asset, direction, amount }
-	}
-}
-
-struct SwapError(Option<FailedSwap>);
-impl From<DispatchError> for SwapError {
+/// This impl is never used. This is purely used to satisfy trait requirment
+impl From<DispatchError> for FailedSwap {
 	fn from(_err: DispatchError) -> Self {
-		Self(None)
+		Self { asset: Asset::Eth, direction: SwapLeg::ToStable, amount: 0 }
 	}
 }
 
@@ -403,33 +397,27 @@ pub mod pallet {
 		fn on_finalize(_n: BlockNumberFor<T>) {
 			// Wrap the entire swapping section as a transaction, any failed swap will rollback all
 			// storage changes.
-			if let Err(SwapError(Some(err))) = with_transaction(|| {
+			if let Err(failed_swap) = with_storage_layer(|| -> Result<(), FailedSwap> {
 				let swaps = SwapQueue::<T>::take();
 				// Helper function that splits swaps of a given direction, group them by asset
 				// and do the swaps of a given direction. Processed and unprocessed swaps are
 				// returned.
 				let do_group_and_swap =
-					|swaps: Vec<Swap>, direction: SwapLeg| -> Result<Vec<Swap>, SwapError> {
+					|swaps: Vec<Swap>, direction: SwapLeg| -> Result<Vec<Swap>, FailedSwap> {
 						let (swap_groups, mut remaining) =
 							Self::split_and_group_swaps(swaps, direction);
 
 						for (asset, mut swaps) in swap_groups {
 							match Self::execute_group_of_swaps(&mut swaps, asset, direction) {
 								Ok(()) => remaining.extend(swaps),
-								Err(amount) =>
-									return Err(SwapError(Some(FailedSwap::new(
-										asset, direction, amount,
-									)))),
+								Err(amount) => return Err(FailedSwap { asset, direction, amount }),
 							};
 						}
 						Ok(remaining)
 					};
 
 				// Swap into Stable asset first.
-				let mut remaining_swaps = match do_group_and_swap(swaps, SwapLeg::ToStable) {
-					Ok(remaining) => remaining,
-					Err(err) => return TransactionOutcome::Rollback(Err(err)),
-				};
+				let mut remaining_swaps = do_group_and_swap(swaps, SwapLeg::ToStable)?;
 
 				// Take NetworkFee for all swaps
 				for swap in remaining_swaps.iter_mut() {
@@ -443,11 +431,7 @@ pub mod pallet {
 				}
 
 				// Swap from Stable asset, and complete the swap logic.
-				let remaining_swaps = match do_group_and_swap(remaining_swaps, SwapLeg::FromStable)
-				{
-					Ok(remaining) => remaining,
-					Err(err) => return TransactionOutcome::Rollback(Err(err)),
-				};
+				let remaining_swaps = do_group_and_swap(remaining_swaps, SwapLeg::FromStable)?;
 				for swap in remaining_swaps {
 					if let Some(output_amount) = swap.final_output {
 						Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
@@ -488,13 +472,12 @@ pub mod pallet {
 						debug_assert!(false, "Swap is not completed yet!");
 					}
 				}
-
-				TransactionOutcome::Commit(Ok(()))
+				Ok(())
 			}) {
 				Self::deposit_event(Event::<T>::BatchSwapFailed {
-					asset: err.asset,
-					direction: err.direction,
-					amount: err.amount,
+					asset: failed_swap.asset,
+					direction: failed_swap.direction,
+					amount: failed_swap.amount,
 				})
 			}
 		}
