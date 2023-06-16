@@ -81,7 +81,7 @@ macro_rules! inner_loop_select {
     };
     ({ $($processed:tt)+ }) => {
 		loop {
-			$crate::internal_tokio_select!(
+			$crate::loop_select::internal_tokio_select!(
 				$($processed)+
 			)
 		}
