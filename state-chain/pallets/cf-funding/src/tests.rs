@@ -740,14 +740,14 @@ fn can_withdrawal_also_free_funds_to_restricted_address() {
 }
 
 #[test]
-fn can_only_redeem_funds_to_redeem_address() {
+fn can_only_redeem_funds_to_bound_address() {
 	new_test_ext().execute_with(|| {
 		const RESTRICTED_ADDRESS_1: EthereumAddress = [0x01; 20];
-		const REDEEM_ADDRESS: EthereumAddress = [0x02; 20];
+		const BOUND_ADDRESS: EthereumAddress = [0x02; 20];
 		const UNRESTRICTED_ADDRESS: EthereumAddress = [0x03; 20];
 		const AMOUNT: u128 = 100;
 		RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
-		BoundAddress::<Test>::insert(ALICE, REDEEM_ADDRESS);
+		BoundAddress::<Test>::insert(ALICE, BOUND_ADDRESS);
 		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
 			ALICE,
@@ -757,7 +757,7 @@ fn can_only_redeem_funds_to_redeem_address() {
 		));
 		assert_noop!(
 			Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), UNRESTRICTED_ADDRESS),
-			Error::<Test>::InvalidRedemption
+			Error::<Test>::AccountBindingRestrictionViolated
 		);
 		assert_ok!(Funding::funded(
 			RuntimeOrigin::root(),
@@ -766,7 +766,7 @@ fn can_only_redeem_funds_to_redeem_address() {
 			UNRESTRICTED_ADDRESS,
 			TX_HASH
 		));
-		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), REDEEM_ADDRESS));
+		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), AMOUNT.into(), BOUND_ADDRESS));
 	});
 }
 
@@ -822,11 +822,17 @@ mod test_restricted_balances {
 	const UNRESTRICTED_BALANCE: u128 = 100;
 	const TOTAL_BALANCE: u128 = RESTRICTED_BALANCE_1 + RESTRICTED_BALANCE_2 + UNRESTRICTED_BALANCE;
 
+	const NO_BOND: u128 = 0;
+	const LOW_BOND: u128 = UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1 + 50;
+	const MID_BOND: u128 = UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2 + 50;
+	const HIGH_BOND: u128 = RESTRICTED_BALANCE_1 + RESTRICTED_BALANCE_2 + 50;
+
 	#[track_caller]
-	fn run_test(
-		redeem_amount: u128,
+	fn run_test<E: Into<DispatchError>>(
+		bond: FlipBalance,
+		redeem_amount: RedemptionAmount<FlipBalance>,
 		redeem_address: EthereumAddress,
-		maybe_error: Option<Error<Test>>,
+		maybe_error: Option<E>,
 	) {
 		new_test_ext().execute_with(|| {
 			RestrictedAddresses::<Test>::insert(RESTRICTED_ADDRESS_1, ());
@@ -846,36 +852,36 @@ mod test_restricted_balances {
 				));
 			}
 
-			let initial_balance = Flip::total_balance_of(&ALICE);
+			Bonder::<Test>::update_bond(&ALICE, bond);
+
+			let initial_balance = Flip::balance(&ALICE);
 			assert_eq!(initial_balance, TOTAL_BALANCE + REDEMPTION_TAX);
 
 			match maybe_error {
 				None => {
 					assert_ok!(Funding::redeem(
 						RuntimeOrigin::signed(ALICE),
-						redeem_amount.into(),
+						redeem_amount,
 						redeem_address
 					));
+					let expected_redeemed_amount =
+						initial_balance - Flip::balance(&ALICE) - RedemptionTax::<Test>::get();
 					assert!(matches!(
 						cf_test_utilities::last_event::<Test>(),
 						RuntimeEvent::Funding(crate::Event::RedemptionRequested {
 							account_id,
 							amount,
 							..
-						}) if account_id == ALICE && amount == redeem_amount));
-					assert_eq!(
-						Flip::total_balance_of(&ALICE),
-						initial_balance - redeem_amount - RedemptionTax::<Test>::get()
-					);
+						}) if account_id == ALICE && amount == expected_redeemed_amount));
 				},
 				Some(e) => {
 					assert_noop!(
 						Funding::redeem(
 							RuntimeOrigin::signed(ALICE),
-							redeem_amount.into(),
+							redeem_amount,
 							redeem_address
 						),
-						e,
+						e.into(),
 					);
 				},
 			}
@@ -883,12 +889,13 @@ mod test_restricted_balances {
 	}
 
 	macro_rules! test_restricted_balances {
-		( $case:ident, $( $spec:expr, )+ ) => {
+		( $case:ident, $bond:expr, $( $spec:expr, )+ ) => {
 			#[test]
 			fn $case() {
 				$(
 					std::panic::catch_unwind(||
 						run_test(
+							$bond,
 							$spec.0,
 							$spec.1,
 							$spec.2,
@@ -905,79 +912,183 @@ mod test_restricted_balances {
 
 	test_restricted_balances![
 		up_to_100_can_be_claimed_to_any_address,
-		(MIN_FUNDING, UNRESTRICTED_ADDRESS, None::<Error<Test>>),
-		(MIN_FUNDING, RESTRICTED_ADDRESS_1, None::<Error<Test>>),
-		(MIN_FUNDING, RESTRICTED_ADDRESS_2, None::<Error<Test>>),
-		(UNRESTRICTED_BALANCE, UNRESTRICTED_ADDRESS, None::<Error<Test>>),
-		(UNRESTRICTED_BALANCE, RESTRICTED_ADDRESS_1, None::<Error<Test>>),
-		(UNRESTRICTED_BALANCE, RESTRICTED_ADDRESS_2, None::<Error<Test>>),
+		NO_BOND,
+		(RedemptionAmount::Exact(MIN_FUNDING), UNRESTRICTED_ADDRESS, None::<Error<Test>>),
+		(RedemptionAmount::Exact(MIN_FUNDING), RESTRICTED_ADDRESS_1, None::<Error<Test>>),
+		(RedemptionAmount::Exact(MIN_FUNDING), RESTRICTED_ADDRESS_2, None::<Error<Test>>),
+		(RedemptionAmount::Exact(UNRESTRICTED_BALANCE), UNRESTRICTED_ADDRESS, None::<Error<Test>>),
+		(RedemptionAmount::Exact(UNRESTRICTED_BALANCE), RESTRICTED_ADDRESS_1, None::<Error<Test>>),
+		(RedemptionAmount::Exact(UNRESTRICTED_BALANCE), RESTRICTED_ADDRESS_2, None::<Error<Test>>),
 	];
 	test_restricted_balances![
 		restricted_funds_can_only_be_redeemed_to_restricted_addresses,
+		NO_BOND,
 		(
-			UNRESTRICTED_BALANCE + 1,
-			UNRESTRICTED_ADDRESS,
-			Some(Error::<Test>::InsufficientUnrestrictedFunds)
-		),
-		(UNRESTRICTED_BALANCE + 1, RESTRICTED_ADDRESS_1, None::<Error<Test>>),
-		(UNRESTRICTED_BALANCE + 1, RESTRICTED_ADDRESS_2, None::<Error<Test>>),
-		(
-			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1,
-			UNRESTRICTED_ADDRESS,
-			Some(Error::<Test>::InsufficientUnrestrictedFunds)
-		),
-		(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1, RESTRICTED_ADDRESS_1, None::<Error<Test>>),
-		(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1, RESTRICTED_ADDRESS_2, None::<Error<Test>>),
-	];
-	test_restricted_balances![
-		higher_than_restricted_amount_1_can_only_be_redeemed_to_restricted_address_2,
-		(
-			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1 + 1,
+			RedemptionAmount::Exact(UNRESTRICTED_BALANCE + 1),
 			UNRESTRICTED_ADDRESS,
 			Some(Error::<Test>::InsufficientUnrestrictedFunds)
 		),
 		(
-			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1 + 1,
+			RedemptionAmount::Exact(UNRESTRICTED_BALANCE + 1),
 			RESTRICTED_ADDRESS_1,
-			Some(Error::<Test>::InsufficientUnrestrictedFunds)
+			None::<Error<Test>>
 		),
 		(
-			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1 + 1,
+			RedemptionAmount::Exact(UNRESTRICTED_BALANCE + 1),
 			RESTRICTED_ADDRESS_2,
 			None::<Error<Test>>
 		),
 		(
-			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2,
+			RedemptionAmount::Exact(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1),
 			UNRESTRICTED_ADDRESS,
 			Some(Error::<Test>::InsufficientUnrestrictedFunds)
 		),
 		(
-			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2,
+			RedemptionAmount::Exact(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1),
+			RESTRICTED_ADDRESS_1,
+			None::<Error<Test>>
+		),
+		(
+			RedemptionAmount::Exact(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1),
+			RESTRICTED_ADDRESS_2,
+			None::<Error<Test>>
+		),
+	];
+	test_restricted_balances![
+		higher_than_restricted_amount_1_can_only_be_redeemed_to_restricted_address_2,
+		NO_BOND,
+		(
+			RedemptionAmount::Exact(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1 + 1),
+			UNRESTRICTED_ADDRESS,
+			Some(Error::<Test>::InsufficientUnrestrictedFunds)
+		),
+		(
+			RedemptionAmount::Exact(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1 + 1),
 			RESTRICTED_ADDRESS_1,
 			Some(Error::<Test>::InsufficientUnrestrictedFunds)
 		),
-		(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2, RESTRICTED_ADDRESS_2, None::<Error<Test>>),
+		(
+			RedemptionAmount::Exact(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_1 + 1),
+			RESTRICTED_ADDRESS_2,
+			None::<Error<Test>>
+		),
+		(
+			RedemptionAmount::Exact(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2),
+			UNRESTRICTED_ADDRESS,
+			Some(Error::<Test>::InsufficientUnrestrictedFunds)
+		),
+		(
+			RedemptionAmount::Exact(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2),
+			RESTRICTED_ADDRESS_1,
+			Some(Error::<Test>::InsufficientUnrestrictedFunds)
+		),
+		(
+			RedemptionAmount::Exact(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2),
+			RESTRICTED_ADDRESS_2,
+			None::<Error<Test>>
+		),
 	];
 	test_restricted_balances![
 		redemptions_of_more_than_the_higher_restricted_amount_are_not_possible_to_any_address,
+		NO_BOND,
 		(
-			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2 + 1,
+			RedemptionAmount::Exact(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2 + 1),
 			UNRESTRICTED_ADDRESS,
 			Some(Error::<Test>::InsufficientUnrestrictedFunds)
 		),
 		(
-			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2 + 1,
+			RedemptionAmount::Exact(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2 + 1),
 			RESTRICTED_ADDRESS_1,
 			Some(Error::<Test>::InsufficientUnrestrictedFunds)
 		),
 		(
-			UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2 + 1,
+			RedemptionAmount::Exact(UNRESTRICTED_BALANCE + RESTRICTED_BALANCE_2 + 1),
 			RESTRICTED_ADDRESS_2,
 			Some(Error::<Test>::InsufficientUnrestrictedFunds)
 		),
-		(TOTAL_BALANCE, UNRESTRICTED_ADDRESS, Some(Error::<Test>::InsufficientUnrestrictedFunds)),
-		(TOTAL_BALANCE, RESTRICTED_ADDRESS_1, Some(Error::<Test>::InsufficientUnrestrictedFunds)),
-		(TOTAL_BALANCE, RESTRICTED_ADDRESS_2, Some(Error::<Test>::InsufficientUnrestrictedFunds)),
+		(
+			RedemptionAmount::<FlipBalance>::Exact(TOTAL_BALANCE),
+			UNRESTRICTED_ADDRESS,
+			Some(Error::<Test>::InsufficientUnrestrictedFunds)
+		),
+		(
+			RedemptionAmount::<FlipBalance>::Exact(TOTAL_BALANCE),
+			RESTRICTED_ADDRESS_1,
+			Some(Error::<Test>::InsufficientUnrestrictedFunds)
+		),
+		(
+			RedemptionAmount::<FlipBalance>::Exact(TOTAL_BALANCE),
+			RESTRICTED_ADDRESS_2,
+			Some(Error::<Test>::InsufficientUnrestrictedFunds)
+		),
+		(RedemptionAmount::<FlipBalance>::Max, UNRESTRICTED_ADDRESS, None::<Error<Test>>),
+		(RedemptionAmount::<FlipBalance>::Max, RESTRICTED_ADDRESS_1, None::<Error<Test>>),
+		(RedemptionAmount::<FlipBalance>::Max, RESTRICTED_ADDRESS_2, None::<Error<Test>>),
+	];
+	// With the low bond, the higher restricted balance is blocked by the bond.
+	test_restricted_balances![
+		bond_takes_precedence_over_restricted_balances_with_low_bond,
+		LOW_BOND,
+		(
+			RedemptionAmount::<FlipBalance>::Exact(UNRESTRICTED_BALANCE),
+			UNRESTRICTED_ADDRESS,
+			None::<Error<Test>>
+		),
+		(
+			RedemptionAmount::<FlipBalance>::Exact(RESTRICTED_BALANCE_1),
+			RESTRICTED_ADDRESS_1,
+			None::<Error<Test>>
+		),
+		(
+			RedemptionAmount::<FlipBalance>::Exact(RESTRICTED_BALANCE_2),
+			RESTRICTED_ADDRESS_2,
+			Some(FlipError::InsufficientLiquidity)
+		),
+	];
+	// With the mid-sized bond, both restricted balances are blocked by the bond.
+	test_restricted_balances![
+		bond_takes_precedence_over_restricted_balances_with_mid_bond,
+		MID_BOND,
+		(
+			RedemptionAmount::<FlipBalance>::Exact(UNRESTRICTED_BALANCE),
+			UNRESTRICTED_ADDRESS,
+			None::<Error<Test>>
+		),
+		(
+			RedemptionAmount::<FlipBalance>::Exact(RESTRICTED_BALANCE_1),
+			RESTRICTED_ADDRESS_1,
+			Some(FlipError::InsufficientLiquidity)
+		),
+		(
+			RedemptionAmount::<FlipBalance>::Exact(RESTRICTED_BALANCE_2),
+			RESTRICTED_ADDRESS_2,
+			Some(FlipError::InsufficientLiquidity)
+		),
+	];
+	// If the bond is higher than the sum of restrictions, it takes priority over both.
+	test_restricted_balances![
+		bond_takes_precedence_over_restricted_balances_with_high_bond,
+		HIGH_BOND,
+		(
+			RedemptionAmount::<FlipBalance>::Exact(UNRESTRICTED_BALANCE),
+			UNRESTRICTED_ADDRESS,
+			Some(FlipError::InsufficientLiquidity)
+		),
+		(
+			RedemptionAmount::<FlipBalance>::Exact(UNRESTRICTED_BALANCE - 50),
+			UNRESTRICTED_ADDRESS,
+			None::<Error<Test>>
+		),
+		(
+			RedemptionAmount::<FlipBalance>::Exact(RESTRICTED_BALANCE_1),
+			RESTRICTED_ADDRESS_1,
+			Some(FlipError::InsufficientLiquidity)
+		),
+		(
+			RedemptionAmount::<FlipBalance>::Exact(RESTRICTED_BALANCE_2),
+			RESTRICTED_ADDRESS_2,
+			Some(FlipError::InsufficientLiquidity)
+		),
 	];
 }
 

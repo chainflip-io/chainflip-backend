@@ -38,7 +38,7 @@ use sp_runtime::{
 	traits::{CheckedSub, UniqueSaturatedInto, Zero},
 	Saturating,
 };
-use sp_std::cmp::{max, min};
+use sp_std::cmp::max;
 
 // use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Saturating, Zero};
 use sp_std::prelude::*;
@@ -277,6 +277,9 @@ pub mod pallet {
 
 		/// The account is already bound to an address.
 		AccountAlreadyBound,
+
+		/// The account is bound to a withdrawal address.
+		AccountBindingRestrictionViolated,
 	}
 
 	#[pallet::call]
@@ -369,24 +372,22 @@ pub mod pallet {
 				ensure!(
 					bound_address == address ||
 						restricted_balances.keys().any(|res_address| res_address == &address),
-					Error::<T>::InvalidRedemption
+					Error::<T>::AccountBindingRestrictionViolated
 				);
 			}
 
-			let restricted = restricted_balances.values().copied().sum::<FlipBalance<T>>() -
-				restricted_balances.get(&address).copied().unwrap_or_default();
-
-			let unrestricted = T::Flip::balance(&account_id)
-				.saturating_sub(max(restricted, T::Flip::bond(&account_id)));
-
-			let max_redeem = if let Some(res_amount) = restricted_balances.get(&address) {
-				min(unrestricted + *res_amount, T::Flip::liquid_funds(&account_id))
-			} else {
-				unrestricted
-			};
+			// The available funds are the total balance minus whichever is larger from:
+			// - The bond.
+			// - The total restricted funds that need to remain in the account after the redemption.
+			let liquid_balance = T::Flip::balance(&account_id) -
+				max(
+					T::Flip::bond(&account_id),
+					restricted_balances.values().copied().sum::<FlipBalance<T>>() -
+						restricted_balances.get(&address).copied().unwrap_or_default(),
+				);
 
 			let net_amount = match amount {
-				RedemptionAmount::Max => max_redeem.saturating_sub(redemption_fee),
+				RedemptionAmount::Max => liquid_balance.saturating_sub(redemption_fee),
 				RedemptionAmount::Exact(amount) => amount,
 			};
 
@@ -398,6 +399,9 @@ pub mod pallet {
 			// If necessary, update account restrictions.
 			if let Some(restricted_balance) = restricted_balances.get_mut(&address) {
 				restricted_balance.saturating_reduce(net_amount);
+				if restricted_balance.is_zero() {
+					restricted_balances.remove(&address);
+				}
 				RestrictedBalances::<T>::insert(&account_id, &restricted_balances);
 			}
 
@@ -410,7 +414,6 @@ pub mod pallet {
 					remaining_balance >= MinimumFunding::<T>::get(),
 				Error::<T>::BelowMinimumFunding
 			);
-
 			ensure!(
 				remaining_balance >= restricted_balances.values().copied().sum::<FlipBalance<T>>(),
 				Error::<T>::InsufficientUnrestrictedFunds
