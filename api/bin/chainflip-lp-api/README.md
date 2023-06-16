@@ -20,8 +20,8 @@ Then in another terminal:
 
 ```sh
 > curl -H "Content-Type: application/json" \
-    -d '{"id":1, "jsonrpc":"2.0", "method": "lp_registerAccount", 0}' \
-    http://localhost:80
+    -d '{"id":1, "jsonrpc":"2.0", "method": "lp_registerAccount", "params": [0]}' \
+    http://localhost:10589
 
 {"jsonrpc":"2.0","result":null,"id":1}
 
