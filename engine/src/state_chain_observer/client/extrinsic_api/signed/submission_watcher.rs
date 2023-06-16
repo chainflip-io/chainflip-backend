@@ -15,6 +15,9 @@ use crate::state_chain_observer::client::{
 
 use super::signer;
 
+#[cfg(test)]
+mod tests;
+
 const REQUEST_LIFETIME: u32 = 128;
 
 #[derive(Error, Debug)]
@@ -402,5 +405,10 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 			Ok(())
 		}
+	}
+
+	#[cfg(test)]
+	fn get_anticipated_nonce(&self) -> state_chain_runtime::Index {
+		self.anticipated_nonce
 	}
 }
