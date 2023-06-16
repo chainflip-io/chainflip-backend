@@ -33,22 +33,22 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	dot_runtime_version: RuntimeVersion { spec_version: 9360, transaction_version: 19 },
 };
 
-pub const BASHFUL_ACCOUNT_ID: &'static str = "cFLbassb4hwQ9iA7dzdVdyumRqkaXnkdYECrThhmrqjFukdVo";
+pub const BASHFUL_ACCOUNT_ID: &str = "cFLbassb4hwQ9iA7dzdVdyumRqkaXnkdYECrThhmrqjFukdVo";
 pub const BASHFUL_SR25519: [u8; 32] =
 	hex_literal::hex!["789523326e5f007f7643f14fa9e6bcfaaff9dd217e7e7a384648a46398245d55"];
 pub const BASHFUL_ED25519: [u8; 32] =
 	hex_literal::hex!["7fdaaa9becf88f9f0a3590bd087ddce9f8d284ccf914c542e4c9f0c0e6440a6a"];
-pub const DOC_ACCOUNT_ID: &'static str = "cFLdocJo3bjT7JbT7R46cA89QfvoitrKr9P3TsMcdkVWeeVLa";
+pub const DOC_ACCOUNT_ID: &str = "cFLdocJo3bjT7JbT7R46cA89QfvoitrKr9P3TsMcdkVWeeVLa";
 pub const DOC_SR25519: [u8; 32] =
 	hex_literal::hex!["7a467c9e1722b35408618a0cffc87c1e8433798e9c5a79339a10d71ede9e9d79"];
 pub const DOC_ED25519: [u8; 32] =
 	hex_literal::hex!["3489d0b548c5de56c1f3bd679dbabe3b0bff44fb5e7a377931c1c54590de5de6"];
-pub const DOPEY_ACCOUNT_ID: &'static str = "cFLdopvNB7LaiBbJoNdNC26e9Gc1FNJKFtvNZjAmXAAVnzCk4";
+pub const DOPEY_ACCOUNT_ID: &str = "cFLdopvNB7LaiBbJoNdNC26e9Gc1FNJKFtvNZjAmXAAVnzCk4";
 pub const DOPEY_SR25519: [u8; 32] =
 	hex_literal::hex!["7a4738071f16c71ef3e5d94504d472fdf73228cb6a36e744e0caaf13555c3c01"];
 pub const DOPEY_ED25519: [u8; 32] =
 	hex_literal::hex!["d9a7e774a58c50062caf081a69556736e62eb0c854461f4485f281f60c53160f"];
-pub const SNOW_WHITE_ACCOUNT_ID: &'static str = "cFNSnowmY7pj9QCYEqyMUuSrFaSrZ9Wqhmcqaug2wtfV1qvz2";
+pub const SNOW_WHITE_ACCOUNT_ID: &str = "cFNSnowmY7pj9QCYEqyMUuSrFaSrZ9Wqhmcqaug2wtfV1qvz2";
 pub const SNOW_WHITE_SR25519: [u8; 32] =
 	hex_literal::hex!["ca589039b72c5a68ca39210ad0700523534e552f8dc9a39e300a2657bf4b8967"];
 

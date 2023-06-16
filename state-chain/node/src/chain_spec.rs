@@ -522,7 +522,7 @@ fn testnet_genesis(
 			backup_reward_node_percentage: 20,
 			bond: all_accounts
 				.iter()
-				.filter_map(|(id, _, funds)| authority_ids.contains(&id).then_some(*funds))
+				.filter_map(|(id, _, funds)| authority_ids.contains(id).then_some(*funds))
 				.min()
 				.map(|bond| {
 					log::info!("Bond will be set to {:?} Flip", bond / FLIPPERINOS_PER_FLIP);
