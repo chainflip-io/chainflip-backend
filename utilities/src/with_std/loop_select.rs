@@ -276,65 +276,65 @@ mod test_loop_select {
 	#[tokio::test]
 	async fn runs_enabled_branches() {
 		macro_rules! test {
-			($future:ident, $body:ident, cases: $({$($branches:tt)+})+) => {
+			($condition_has_run:ident, $branch_has_run:ident, cases: $({$($branches:tt)+})+) => {
 				$({
-					let mut $future = 0u32;
-					let mut $body = 0u32;
+					let mut condition_runs = 0u32;
+					let mut branch_runs = 0u32;
 					{
-						let mut $future = || {
-							$future += 1;
+						let mut $condition_has_run = || {
+							condition_runs += 1;
 						};
-						let mut $body = || {
-							$body += 1;
+						let mut $branch_has_run = || {
+							branch_runs += 1;
 						};
 						loop_select!(
 							$($branches)+
 						);
 					}
-					assert_eq!($future, 1);
-					assert_eq!($body, 1);
+					assert_eq!(condition_runs, 1);
+					assert_eq!(branch_runs, 1);
 				})+
 			}
 		}
 		test!(
-			future,
-			body,
+			condition_has_run,
+			branch_has_run,
 			cases:
 			{
 				if true => if let 1 = async {
-					future();
+					condition_has_run();
 					1
-				} => { body(); break },
+				} => { branch_has_run(); break },
 			}
 			{
 				if true => let _ = async {
-					future();
+					condition_has_run();
 					1
-				} => { body(); break },
+				} => { branch_has_run(); break },
 			}
 			{
 				if true => if let 1 = async {
-					future();
+					condition_has_run();
 					1
-				} => { body(); break; } else break unreachable!(),
+				} => { branch_has_run(); break; } else break unreachable!(),
 			}
 			{
 				if let 1 = async {
-					future();
+					condition_has_run();
 					1
-				} => { body(); break },
+				} => { branch_has_run(); break },
 			}
 			{
 				let _ = async {
-					future();
+					condition_has_run();
 					1
-				} => { body(); break },
+				} => { branch_has_run(); break },
 			}
 			{
 				if let 1 = async {
-					future();
+					condition_has_run();
 					1
-				} => { body(); break } else break unreachable!(),
+				} => { branch_has_run(); break } else break unreachable!(),
 			}
 		);
 	}
