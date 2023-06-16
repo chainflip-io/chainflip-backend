@@ -5,7 +5,7 @@ mod tests;
 use anyhow::{anyhow, Context};
 use cf_chains::{
 	btc::{self, BitcoinScriptBounded, PreviousOrCurrent},
-	dot::{self, PolkadotAccountId, PolkadotSignature},
+	dot::{self, PolkadotAccountId},
 	eth::Ethereum,
 	Bitcoin, Polkadot,
 };
@@ -204,7 +204,7 @@ pub async fn start<
 	dot_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<
 		MonitorCommand<PolkadotAccountId>,
 	>,
-	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<PolkadotSignature>,
+	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<MonitorCommand<[u8; 64]>>,
 	btc_epoch_start_sender: async_broadcast::Sender<EpochStart<Bitcoin>>,
 	btc_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<
 		MonitorCommand<BitcoinScriptBounded>,
@@ -634,7 +634,7 @@ where
                                             transaction_out_id,
                                         },
                                     ) => {
-                                        dot_monitor_signature_sender.send(transaction_out_id).unwrap();
+                                        dot_monitor_signature_sender.send(MonitorCommand::Add(*transaction_out_id.aliased_ref())).unwrap();
                                         if nominee == account_id {
                                             let _result = dot_broadcaster.send(transaction_payload.encoded_extrinsic).await
                                             .map(|_| info!("Polkadot transmission successful: {broadcast_attempt_id}"))

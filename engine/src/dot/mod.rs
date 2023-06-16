@@ -2,6 +2,7 @@ pub mod rpc;
 pub mod runtime_version_updater;
 pub mod safe_runtime_version_stream;
 pub mod witnesser;
+pub mod witnessing;
 
 use rpc::DotRpcApi;
 use subxt::{Config, PolkadotConfig};
