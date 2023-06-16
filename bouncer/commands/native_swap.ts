@@ -1,11 +1,9 @@
 import { executeSwap } from '@chainflip-io/cli';
-import { u8aToHex } from '@polkadot/util';
-import { decodeAddress } from '@polkadot/util-crypto';
 import { Wallet, getDefaultProvider } from 'ethers';
 import { chainFromToken } from '../shared/utils';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function executeNativeSwap(destTokenSymbol: any, destinationAddress: string) {
+export async function executeNativeSwap(destTokenSymbol: any, destAddress: string) {
 
     const wallet = Wallet.fromMnemonic(
         'test test test test test test test test test test test junk',
@@ -13,12 +11,6 @@ export async function executeNativeSwap(destTokenSymbol: any, destinationAddress
 
     const destToken = destTokenSymbol.toUpperCase();
     const destChainId = chainFromToken(destToken);
-
-    let destAddress = destinationAddress;
-
-    if (destToken === 'DOT') {
-        destAddress = u8aToHex(decodeAddress(destAddress))
-    }
 
     await executeSwap(
         {
