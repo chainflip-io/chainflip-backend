@@ -1,9 +1,10 @@
 {
   "dependencies": {
-    "@polkadot/api": "*",
-    "@polkadot/keyring": "*",
-    "@polkadot/util": "*",
-    "@polkadot/util-crypto": "*",
+    "@chainflip-io/cli": "^0.0.8",
+    "@polkadot/api": "10.7.2",
+    "@polkadot/keyring": "12.2.1",
+    "@polkadot/util": "12.2.1",
+    "@polkadot/util-crypto": "12.2.1",
     "async-mutex": "^0.4.0",
     "axios": "^1.3.5",
     "bitcoinjs-lib": "^6.1.0",
@@ -14,10 +15,6 @@
     "sha256": "^0.2.0",
     "tiny-secp256k1": "^2.2.1",
     "web3": "^1.9.0"
-<<<<<<< HEAD
-  }
-}
-=======
   },
   "devDependencies": {
     "@types/minimist": "^1.2.2",
@@ -34,4 +31,3 @@
   },
   "type": "module"
 }
->>>>>>> 627cb6c63 (chore: convert event types to EncodedAddress (#3267))
