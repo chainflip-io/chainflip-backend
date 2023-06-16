@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
 use cf_chains::dot::{
@@ -8,7 +8,7 @@ use cf_chains::dot::{
 use cf_primitives::{chains::assets, EpochIndex, PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use frame_support::scale_info::TypeInfo;
-use futures::{stream, Stream, StreamExt, TryStreamExt};
+use futures::{stream, Stream, StreamExt};
 use pallet_cf_ingress_egress::DepositWitness;
 use sp_core::H256;
 use state_chain_runtime::PolkadotInstance;
@@ -20,7 +20,6 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
-	constants::{BLOCK_PULL_TIMEOUT_MULTIPLIER, DOT_AVERAGE_BLOCK_TIME_SECONDS},
 	db::PersistentKeyDB,
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
 	witnesser::{
@@ -508,20 +507,8 @@ where
 					})
 					.collect(),
 			)
-		});
-
-		let block_events_stream = tokio_stream::StreamExt::timeout(
-			block_events_stream,
-			Duration::from_secs(DOT_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER),
-		)
-		.map_err(|err| {
-			error!("Error while fetching Polkadot events: {:?}", err);
-			anyhow::anyhow!("Error while fetching Polkadot events: {:?}", err)
 		})
-		.chain(stream::once(async {
-			error!("Stream ended unexpectedly");
-			Err(anyhow::anyhow!("Stream ended unexpectedly"))
-		}));
+		.map(Ok);
 
 		Ok(Box::pin(block_events_stream))
 	}

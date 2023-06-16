@@ -1,12 +1,21 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use cf_chains::Chain;
 use cf_primitives::EpochIndex;
+use futures_util::TryStreamExt;
+use multisig::ChainTag;
 use tokio::sync::oneshot;
-use tracing::{instrument, Instrument};
+use tokio_stream::StreamExt;
+use tracing::{error, instrument, Instrument};
 
-use crate::db::PersistentKeyDB;
+use crate::{
+	constants::{
+		BLOCK_PULL_TIMEOUT_MULTIPLIER, BTC_AVERAGE_BLOCK_TIME_SECONDS,
+		DOT_AVERAGE_BLOCK_TIME_SECONDS, ETH_AVERAGE_BLOCK_TIME_SECONDS,
+	},
+	db::PersistentKeyDB,
+};
 
 use super::{
 	checkpointing::{
@@ -129,21 +138,49 @@ where
 		&mut self,
 		epoch: EpochStart<<Generator::Witnesser as BlockWitnesser>::Chain>,
 	) -> anyhow::Result<WitnesserInitResult<Self::Witnesser>> {
+		let chain: &'static str = <Generator::Witnesser as BlockWitnesser>::Chain::NAME;
+		let expected_block_time_seconds = match <<Generator::Witnesser as BlockWitnesser>::Chain as HasChainTag>::CHAIN_TAG {
+			ChainTag::Ethereum => ETH_AVERAGE_BLOCK_TIME_SECONDS,
+			ChainTag::Bitcoin => BTC_AVERAGE_BLOCK_TIME_SECONDS,
+			ChainTag::Polkadot => DOT_AVERAGE_BLOCK_TIME_SECONDS,
+			ChainTag::Ed25519 => panic!("Ed25519 witnesser does not exist."),
+		};
+
 		let (from_block, witnessed_until_sender) =
 			match get_witnesser_start_block_with_checkpointing::<
 				<Generator::Witnesser as BlockWitnesser>::Chain,
 			>(epoch.epoch_index, epoch.block_number, self.db.clone())
 			.await
-			.unwrap_or_else(|_| panic!("Failed to start {} witnesser checkpointing", <Generator::Witnesser as BlockWitnesser>::Chain::NAME))
+			.unwrap_or_else(|_| panic!("Failed to start {chain} witnesser checkpointing"))
 			{
 				StartCheckpointing::Started((from_block, witnessed_until_sender)) =>
 					(from_block, witnessed_until_sender),
 				StartCheckpointing::AlreadyWitnessedEpoch => return Ok(WitnesserInitResult::EpochSkipped),
 			};
 
-		tracing::info!("{} block witnesser is starting from block {}", <Generator::Witnesser as BlockWitnesser>::Chain::NAME, from_block);
+		tracing::info!("{chain} block witnesser is starting from block {}", from_block);
 
-		let block_stream = self.generator.get_block_stream(from_block).await?;
+		let block_stream = self.generator
+			.get_block_stream(from_block)
+			.await?
+			.timeout(Duration::from_secs(expected_block_time_seconds * BLOCK_PULL_TIMEOUT_MULTIPLIER))
+			.map(|timeout_result| {
+				timeout_result.unwrap_or_else(|_| {
+					let chain = <Generator::Witnesser as BlockWitnesser>::Chain::NAME;
+					error!("{chain} block stream timed out.", );
+					Err(anyhow::anyhow!("{chain} block stream timed out."))
+				})
+			})
+			.map_err(|err| {
+				let chain = <Generator::Witnesser as BlockWitnesser>::Chain::NAME;
+				error!("Error while fetching {chain} events: {:?}", err);
+				anyhow::anyhow!("Error while fetching {chain} events: {:?}", err)
+			})
+			.chain(futures_util::stream::once(async {
+				let chain = <Generator::Witnesser as BlockWitnesser>::Chain::NAME;
+				error!("{chain} block stream ended unexpectedly");
+				Err(anyhow::anyhow!("{chain} block stream ended unexpectedly"))
+			}));
 
 		let witnesser = BlockWitnesserWrapper {
 			epoch_index: epoch.epoch_index,
@@ -151,8 +188,7 @@ where
 			witnessed_until_sender,
 		};
 
-		Ok(WitnesserInitResult::Created((witnesser, block_stream)))
-
+		Ok(WitnesserInitResult::Created((witnesser, Box::pin(block_stream))))
 	}
 
 }

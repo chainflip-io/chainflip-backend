@@ -44,6 +44,10 @@ pub const ETH_LOG_BEHIND_REPORT_BLOCK_INTERVAL: u64 = 10;
 
 pub const DOT_AVERAGE_BLOCK_TIME_SECONDS: u64 = 6;
 
+// ======= Btc Rpc Client =======
+
+pub const BTC_AVERAGE_BLOCK_TIME_SECONDS: u64 = 10 * 60;
+
 // ======= Settings environment variables =======
 
 /// A HTTP node endpoint for Ethereum
