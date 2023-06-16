@@ -216,7 +216,7 @@ fn confirm_submit() -> bool {
 
 const DISCLAIMER: &'static str = r#"
 ❗️❗️
-❗️ THIS SEED PHRASE ALLOS YOU TO RECOVER YOUR CHAINFLIP ACCOUNT KEYS AND ETHEREUM KEYS.
+❗️ THIS SEED PHRASE ALLOWS YOU TO RECOVER YOUR CHAINFLIP ACCOUNT KEYS AND ETHEREUM KEYS.
 ❗️ HOWEVER, THIS SEED PHRASE SHOULD ONLY BE USED IN CONJUNCTION WITH THIS UTILITY. NOTABLY,
 ❗️ IT CANNOT BE USED TO IMPORT YOUR ETHEREUM ADDRESS INTO METAMASK OR ANY OTHER WALLET IMPLEMENTATION.
 ❗️ THIS IS BY DESIGN: THIS ETHEREUM KEY SHOULD BE USED EXCLUSIVELY BY YOUR CHAINFLIP NODE.
@@ -245,8 +245,12 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 				hex::encode(&self.ethereum_key.public_key)
 			)?;
 			writeln!(f, "👤 Ethereum address: 0x{}", hex::encode(self.ethereum_address))?;
-			writeln!(f, "🔑 Validator key: 0x{}", hex::encode(&self.signing_key.public_key))?;
-			writeln!(f, "👤 Validator account id: 0x{}", self.signing_account_id)?;
+			writeln!(
+				f,
+				"🔑 Validator public key: 0x{}",
+				hex::encode(&self.signing_key.public_key)
+			)?;
+			writeln!(f, "👤 Validator account id: {}", self.signing_account_id)?;
 			writeln!(f, "")?;
 			writeln!(f, "🌱 Seed phrase: {}", self.seed_phrase)?;
 			Ok(())
