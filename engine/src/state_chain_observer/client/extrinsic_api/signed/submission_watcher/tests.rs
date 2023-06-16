@@ -8,7 +8,7 @@ use crate::{
 
 use super::*;
 
-const INITIAL_NONCE: state_chain_runtime::Index = 10;
+const INITIAL_NONCE: Nonce = 10;
 
 #[tokio::test]
 async fn should_increment_nonce_on_success() {
