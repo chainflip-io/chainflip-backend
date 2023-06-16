@@ -355,7 +355,7 @@ mod test_examples {
 						RuntimeCall::from(frame_system::Call::remark_with_event {
 							remark: vec![1, 2, 3],
 						}),
-						Err(DispatchError::BadOrigin.into()),
+						Err(DispatchError::BadOrigin),
 					),
 				]
 			})
