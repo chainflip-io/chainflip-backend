@@ -9,6 +9,11 @@ on:
         description: Prod of dev
         required: true
         type: string
+      publish_public_images:
+        description: Publish public images
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -114,7 +119,7 @@ jobs:
             CHAINSPEC=${{ inputs.network }}
 
   public-images:
-    if: inputs.environment == 'prod'
+    if: inputs.publish_public_images == 'true'
     needs: [get-date-time, set-dockerfile-name]
     strategy:
       matrix:
