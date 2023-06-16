@@ -40,14 +40,14 @@ type SignatureNonce = u64;
 	Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebugNoBound, PartialEq, Eq, Default,
 )]
 #[scale_info(skip_type_params(T))]
-pub enum SafeModeCode<T: Config> {
+pub enum SafeModeUpdate<T: Config> {
 	/// Sh*t, meet Fan. Stop everything.
-	Red,
+	CodeRed,
 	/// Sunshine, meet Rainbows. Regular operation.
 	#[default]
-	Green,
+	CodeGreen,
 	/// Schrödinger, meet Cat. It's complicated.
-	Amber(T::RuntimeSafeMode),
+	CodeAmber(T::RuntimeSafeMode),
 }
 
 pub mod cfe {
@@ -430,17 +430,22 @@ pub mod pallet {
 			Ok(().into())
 		}
 
+		/// Update the current safe mode status.
+		///
+		/// Can only be dispatched from the governance origin.
+		///
+		/// See [SafeModeUpdate] for the different options.
 		#[pallet::weight(T::WeightInfo::update_safe_mode())]
 		pub fn update_safe_mode(
 			origin: OriginFor<T>,
-			code: SafeModeCode<T>,
+			update: SafeModeUpdate<T>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			RuntimeSafeMode::<T>::put(match code {
-				SafeModeCode::Green => SafeMode::CODE_GREEN,
-				SafeModeCode::Red => SafeMode::CODE_RED,
-				SafeModeCode::Amber(safe_mode) => safe_mode,
+			RuntimeSafeMode::<T>::put(match update {
+				SafeModeUpdate::CodeGreen => SafeMode::CODE_GREEN,
+				SafeModeUpdate::CodeRed => SafeMode::CODE_RED,
+				SafeModeUpdate::CodeAmber(safe_mode) => safe_mode,
 			});
 
 			Ok(().into())

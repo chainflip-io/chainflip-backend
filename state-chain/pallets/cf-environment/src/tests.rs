@@ -7,7 +7,7 @@ use cf_primitives::chains::assets::eth::Asset;
 use cf_traits::SafeMode;
 use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
 
-use crate::{EthereumSupportedAssets, RuntimeSafeMode, SafeModeCode};
+use crate::{EthereumSupportedAssets, RuntimeSafeMode, SafeModeUpdate};
 
 use crate::{mock::*, Error};
 
@@ -125,11 +125,11 @@ fn update_safe_mode() {
 	new_test_ext().execute_with(|| {
 		// Default to GREEN
 		assert_eq!(RuntimeSafeMode::<Test>::get(), SafeMode::CODE_GREEN);
-		assert_ok!(Environment::update_safe_mode(OriginTrait::root(), SafeModeCode::Red));
+		assert_ok!(Environment::update_safe_mode(OriginTrait::root(), SafeModeUpdate::CodeRed));
 		assert_eq!(RuntimeSafeMode::<Test>::get(), SafeMode::CODE_RED);
 		assert_ok!(Environment::update_safe_mode(
 			OriginTrait::root(),
-			SafeModeCode::Amber(SafeMode::CODE_GREEN),
+			SafeModeUpdate::CodeAmber(SafeMode::CODE_GREEN),
 		));
 		assert_eq!(RuntimeSafeMode::<Test>::get(), SafeMode::CODE_GREEN);
 	});

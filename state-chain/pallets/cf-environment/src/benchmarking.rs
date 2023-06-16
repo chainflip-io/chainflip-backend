@@ -37,7 +37,7 @@ benchmarks! {
 	}
 	update_safe_mode {
 		let origin = T::EnsureGovernance::successful_origin();
-		let call = Call::<T>::update_safe_mode { code: SafeModeCode::Red };
+		let call = Call::<T>::update_safe_mode { update: SafeModeUpdate::CodeRed };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
 		assert_eq!(RuntimeSafeMode::<T>::get(), SafeMode::CODE_RED);
