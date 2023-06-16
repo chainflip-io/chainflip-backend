@@ -99,137 +99,140 @@ macro_rules! loop_select {
 mod test_loop_select {
 	use futures::StreamExt;
 
+	#[allow(clippy::unit_cmp)]
 	#[tokio::test]
 	async fn exits_loop_on_branch_failure() {
+		const BREAK_VALUE: u32 = 1;
+
 		// Single branch
 
-		loop_select!(
+		assert_eq!((), loop_select!(
 			if let 'a' = futures::future::ready('b') => { panic!() },
-		);
-		loop_select!(
-			if let 'a' = futures::future::ready('b') => { panic!() } else break 1,
-		);
-		loop_select!(
+		));
+		assert_eq!(BREAK_VALUE, loop_select!(
+			if let 'a' = futures::future::ready('b') => { panic!() } else break BREAK_VALUE,
+		));
+		assert_eq!((), loop_select!(
 			if true => if let 'a' = futures::future::ready('b') => { panic!() },
-		);
-		loop_select!(
-			if true => if let 'a' = futures::future::ready('b') => { panic!() } else break 1,
-		);
+		));
+		assert_eq!(BREAK_VALUE, loop_select!(
+			if true => if let 'a' = futures::future::ready('b') => { panic!() } else break BREAK_VALUE,
+		));
 
 		// Multiple branches
 
 		// Other branch is Ready
 		{
 			// Other branch has no enable expression
-			loop_select!(
+			assert_eq!((), loop_select!(
 				if let 'a' = futures::future::ready('b') => { panic!() },
 				let _ = futures::future::ready('c') => {},
-			);
-			loop_select!(
-				if let 'a' = futures::future::ready('b') => { panic!() } else break 1,
+			));
+			assert_eq!(BREAK_VALUE, loop_select!(
+				if let 'a' = futures::future::ready('b') => { panic!() } else break BREAK_VALUE,
 				let _ = futures::future::ready('c') => {},
-			);
-			loop_select!(
+			));
+			assert_eq!((), loop_select!(
 				if true => if let 'a' = futures::future::ready('b') => { panic!() },
 				let _ = futures::future::ready('c') => {},
-			);
-			loop_select!(
-				if true => if let 'a' = futures::future::ready('b') => { panic!() } else break 1,
+			));
+			assert_eq!(BREAK_VALUE, loop_select!(
+				if true => if let 'a' = futures::future::ready('b') => { panic!() } else break BREAK_VALUE,
 				let _ = futures::future::ready('c') => {},
-			);
+			));
 
 			// Other branch is disabled
-			loop_select!(
+			assert_eq!((), loop_select!(
 				if let 'a' = futures::future::ready('b') => { panic!() },
 				if false => let _ = futures::future::ready('c') => {},
-			);
-			loop_select!(
-				if let 'a' = futures::future::ready('b') => { panic!() } else break 1,
+			));
+			assert_eq!(BREAK_VALUE, loop_select!(
+				if let 'a' = futures::future::ready('b') => { panic!() } else break BREAK_VALUE,
 				if false => let _ = futures::future::ready('c') => {},
-			);
-			loop_select!(
+			));
+			assert_eq!((), loop_select!(
 				if true => if let 'a' = futures::future::ready('b') => { panic!() },
 				if false => let _ = futures::future::ready('c') => {},
-			);
-			loop_select!(
-				if true => if let 'a' = futures::future::ready('b') => { panic!() } else break 1,
+			));
+			assert_eq!(BREAK_VALUE, loop_select!(
+				if true => if let 'a' = futures::future::ready('b') => { panic!() } else break BREAK_VALUE,
 				if false => let _ = futures::future::ready('c') => {},
-			);
+			));
 
 			// Other branch is enabled
-			loop_select!(
+			assert_eq!((), loop_select!(
 				if let 'a' = futures::future::ready('b') => { panic!() },
 				if true => let _ = futures::future::ready('c') => {},
-			);
-			loop_select!(
-				if let 'a' = futures::future::ready('b') => { panic!() } else break 1,
+			));
+			assert_eq!(BREAK_VALUE, loop_select!(
+				if let 'a' = futures::future::ready('b') => { panic!() } else break BREAK_VALUE,
 				if true => let _ = futures::future::ready('c') => {},
-			);
-			loop_select!(
+			));
+			assert_eq!((), loop_select!(
 				if true => if let 'a' = futures::future::ready('b') => { panic!() },
 				if true => let _ = futures::future::ready('c') => {},
-			);
-			loop_select!(
-				if true => if let 'a' = futures::future::ready('b') => { panic!() } else break 1,
+			));
+			assert_eq!(BREAK_VALUE, loop_select!(
+				if true => if let 'a' = futures::future::ready('b') => { panic!() } else break BREAK_VALUE,
 				if true => let _ = futures::future::ready('c') => {},
-			);
+			));
 		}
 
 		// Other branch is Pending
 		{
 			// Other branch has no enable expression
-			loop_select!(
+			assert_eq!((), loop_select!(
 				if let 'a' = futures::future::ready('b') => { panic!() },
 				let _ = futures::future::pending::<u32>() => {},
-			);
-			loop_select!(
-				if let 'a' = futures::future::ready('b') => { panic!() } else break 1,
+			));
+			assert_eq!(BREAK_VALUE, loop_select!(
+				if let 'a' = futures::future::ready('b') => { panic!() } else break BREAK_VALUE,
 				let _ = futures::future::pending::<u32>() => {},
-			);
-			loop_select!(
+			));
+			assert_eq!((), loop_select!(
 				if true => if let 'a' = futures::future::ready('b') => { panic!() },
 				let _ = futures::future::pending::<u32>() => {},
-			);
-			loop_select!(
-				if true => if let 'a' = futures::future::ready('b') => { panic!() } else break 1,
+			));
+			assert_eq!(BREAK_VALUE, loop_select!(
+				if true => if let 'a' = futures::future::ready('b') => { panic!() } else break BREAK_VALUE,
 				let _ = futures::future::pending::<u32>() => {},
-			);
+			));
 
 			// Other branch is disabled
-			loop_select!(
+			assert_eq!((), loop_select!(
 				if let 'a' = futures::future::ready('b') => { panic!() },
 				if false => let _ = futures::future::pending::<u32>() => {},
-			);
-			loop_select!(
-				if let 'a' = futures::future::ready('b') => { panic!() } else break 1,
+			));
+			assert_eq!(BREAK_VALUE, loop_select!(
+				if let 'a' = futures::future::ready('b') => { panic!() } else break BREAK_VALUE,
 				if false => let _ = futures::future::pending::<u32>() => {},
-			);
-			loop_select!(
+			));
+			assert_eq!((), loop_select!(
 				if true => if let 'a' = futures::future::ready('b') => { panic!() },
 				if false => let _ = futures::future::pending::<u32>() => {},
-			);
-			loop_select!(
-				if true => if let 'a' = futures::future::ready('b') => { panic!() } else break 1,
+			));
+			assert_eq!(BREAK_VALUE, loop_select!(
+				if true => if let 'a' = futures::future::ready('b') => { panic!() } else break BREAK_VALUE,
 				if false => let _ = futures::future::pending::<u32>() => {},
-			);
+			));
 
 			// Other branch is enabled
-			loop_select!(
+			assert_eq!((), loop_select!(
 				if let 'a' = futures::future::ready('b') => { panic!() },
 				if true => let _ = futures::future::pending::<u32>() => {},
-			);
-			loop_select!(
-				if let 'a' = futures::future::ready('b') => { panic!() } else break 1,
+			));
+			assert_eq!(BREAK_VALUE, loop_select!(
+				if let 'a' = futures::future::ready('b') => { panic!() } else break BREAK_VALUE,
 				if true => let _ = futures::future::pending::<u32>() => {},
-			);
-			loop_select!(
+			));
+			assert_eq!((), loop_select!(
 				if true => if let 'a' = futures::future::ready('b') => { panic!() },
 				if true => let _ = futures::future::pending::<u32>() => {},
-			);
-			loop_select!(
-				if true => if let 'a' = futures::future::ready('b') => { panic!() } else break 1,
+			));
+			assert_eq!(BREAK_VALUE, loop_select!(
+				if true => if let 'a' = futures::future::ready('b') => { panic!() } else break BREAK_VALUE,
 				if true => let _ = futures::future::pending::<u32>() => {},
-			);
+			));
 		}
 	}
 
