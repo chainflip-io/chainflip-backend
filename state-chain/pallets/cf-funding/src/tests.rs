@@ -735,7 +735,7 @@ fn can_withdrawal_also_free_funds_to_restricted_address() {
 			RedemptionAmount::Max,
 			RESTRICTED_ADDRESS_1
 		));
-		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS_1), Some(&0u128));
+		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS_1), None);
 	});
 }
 
@@ -803,7 +803,7 @@ fn redeem_funds_until_restricted_balance_is_zero_and_then_redeem_to_redeem_addre
 		// Redeem to an unrestricted address should fail because the account has a redeem address.
 		assert_noop!(
 			Funding::redeem(RuntimeOrigin::signed(ALICE), (AMOUNT).into(), UNRESTRICTED_ADDRESS),
-			Error::<Test>::InvalidRedemption
+			Error::<Test>::AccountBindingRestrictionViolated
 		);
 		// Redeem the rest of the existing funds to the redeem address.
 		assert_ok!(Funding::redeem(RuntimeOrigin::signed(ALICE), (AMOUNT).into(), REDEEM_ADDRESS));
