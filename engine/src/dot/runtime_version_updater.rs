@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::{anyhow, bail};
+use anyhow::anyhow;
 use async_trait::async_trait;
 use cf_chains::{dot::RuntimeVersion, Polkadot};
 use futures::StreamExt;
@@ -14,8 +14,8 @@ use crate::{
 	},
 	witnesser::{
 		epoch_process_runner::{
-			self, start_epoch_process_runner, EpochProcessGenerator, EpochWitnesser,
-			WitnesserInitResult,
+			self, start_epoch_process_runner, EpochProcessGenerator, EpochProcessRunnerError,
+			EpochWitnesser, WitnesserInitResult,
 		},
 		ChainBlockNumber, EpochStart,
 	},
@@ -23,12 +23,13 @@ use crate::{
 
 use super::rpc::DotRpcApi;
 
+// TODO: Pass in the version here?
 pub async fn start<StateChainClient, DotRpc>(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Polkadot>>,
 	dot_client: DotRpc,
 	state_chain_client: Arc<StateChainClient>,
 	latest_block_hash: H256,
-) -> anyhow::Result<()>
+) -> Result<(), EpochProcessRunnerError<Polkadot>>
 where
 	StateChainClient: SignedExtrinsicApi + StorageApi + 'static + Send + Sync,
 	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
@@ -43,7 +44,11 @@ where
 		.await
 	{
 		Ok(version) => version,
-		Err(e) => bail!("Failed to get PolkadotRuntimeVersion from SC: {:?}", e),
+		Err(e) =>
+			return Err(EpochProcessRunnerError::Other(anyhow!(
+				"Failed to get on-chain runtime version: {}",
+				e
+			))),
 	};
 
 	start_epoch_process_runner(
@@ -56,7 +61,6 @@ where
 	)
 	.instrument(info_span!("DOT-Runtime-Version"))
 	.await
-	.map_err(|_| anyhow!("DOT-Runtime-Version witnesser exited unexpectedly"))
 }
 
 struct RuntimeVersionUpdater<StateChainClient> {
