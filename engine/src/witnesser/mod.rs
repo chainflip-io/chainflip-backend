@@ -6,7 +6,11 @@ use std::{
 };
 
 use async_trait::async_trait;
-use cf_chains::{address::ScriptPubkeyBytes, btc::BitcoinScriptBounded, dot::PolkadotAccountId};
+use cf_chains::{
+	address::ScriptPubkeyBytes,
+	btc::BitcoinScriptBounded,
+	dot::{PolkadotAccountId, PolkadotSignature},
+};
 use cf_primitives::EpochIndex;
 
 pub mod block_head_stream_from;
@@ -189,12 +193,11 @@ impl ItemKeyValue for [u8; 32] {
 	}
 }
 
-// Polkadot signature inner
-impl ItemKeyValue for [u8; 64] {
+impl ItemKeyValue for PolkadotSignature {
 	type Key = Self;
 	type Value = ();
 
 	fn key_value(&self) -> (Self::Key, Self::Value) {
-		(*self, ())
+		(self.clone(), ())
 	}
 }

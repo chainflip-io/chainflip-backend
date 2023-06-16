@@ -11,7 +11,10 @@ use crate::{
 use crate::state_chain_observer::client::storage_api::StorageApi;
 
 use anyhow::{Context, Result};
-use cf_chains::{dot::PolkadotAccountId, Polkadot};
+use cf_chains::{
+	dot::{PolkadotAccountId, PolkadotSignature},
+	Polkadot,
+};
 use sp_core::H256;
 use tokio::sync::Mutex;
 use utilities::task_scope::Scope;
@@ -30,7 +33,7 @@ pub async fn start(
 	db: Arc<PersistentKeyDB>,
 ) -> Result<(
 	tokio::sync::mpsc::UnboundedSender<MonitorCommand<PolkadotAccountId>>,
-	tokio::sync::mpsc::UnboundedSender<MonitorCommand<[u8; 64]>>,
+	tokio::sync::mpsc::UnboundedSender<MonitorCommand<PolkadotSignature>>,
 )> {
 	let (monitor_address_sender, address_monitor) = ItemMonitor::new(
 		state_chain_client
@@ -60,7 +63,7 @@ pub async fn start(
 			.await
 			.context("Failed to get initial DOT signatures to monitor")?
 			.into_iter()
-			.map(|(signature, _)| *signature.aliased_ref())
+			.map(|(signature, _)| signature)
 			.collect(),
 	);
 

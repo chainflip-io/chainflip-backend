@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use async_trait::async_trait;
 use cf_chains::dot::{
 	self, Polkadot, PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash,
-	PolkadotProxyType, PolkadotUncheckedExtrinsic,
+	PolkadotProxyType, PolkadotSignature, PolkadotUncheckedExtrinsic,
 };
 use cf_primitives::{chains::assets, EpochIndex, PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
@@ -242,7 +242,7 @@ pub async fn start<StateChainClient, DotRpc>(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Polkadot>>,
 	dot_client: DotRpc,
 	address_monitor: Arc<Mutex<ItemMonitor<PolkadotAccountId, PolkadotAccountId, ()>>>,
-	signature_monitor: Arc<Mutex<ItemMonitor<[u8; 64], [u8; 64], ()>>>,
+	signature_monitor: Arc<Mutex<ItemMonitor<PolkadotSignature, PolkadotSignature, ()>>>,
 	state_chain_client: Arc<StateChainClient>,
 	db: Arc<PersistentKeyDB>,
 ) -> std::result::Result<(), EpochProcessRunnerError<Polkadot>>
@@ -290,7 +290,7 @@ where
 	type Block = (H256, u32, Vec<(Phase, EventWrapper)>);
 	type StaticState = (
 		Arc<Mutex<ItemMonitor<PolkadotAccountId, PolkadotAccountId, ()>>>,
-		Arc<Mutex<ItemMonitor<[u8; 64], [u8; 64], ()>>>,
+		Arc<Mutex<ItemMonitor<PolkadotSignature, PolkadotSignature, ()>>>,
 	);
 
 	async fn process_block(
@@ -357,7 +357,7 @@ where
 				let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);
 				if let Ok(unchecked) = unchecked {
 					if let Some(signature) = unchecked.signature() {
-						if signature_monitor.remove(signature.aliased_ref()) {
+						if signature_monitor.remove(&signature) {
 							info!("Witnessing transaction_succeeded. signature: {signature:?}");
 
 							self.state_chain_client
@@ -812,11 +812,11 @@ mod tests {
 		// 	)
 		// 	.unwrap();
 
-		let sig_bytes = hex::decode("7c388203aefbcdc22077ed91bec9af80a23c56f8ff2ee24d40f4c2791d51773342f4aed0e8f0652ed33d404d9b78366a927be9fad02f5204f2f2ffbea7459886").unwrap().try_into().unwrap();
+		let polkadot_sig = PolkadotSignature::from_aliased(hex::decode("7c388203aefbcdc22077ed91bec9af80a23c56f8ff2ee24d40f4c2791d51773342f4aed0e8f0652ed33d404d9b78366a927be9fad02f5204f2f2ffbea7459886").unwrap().try_into().unwrap());
 
 		let (signature_sender, signature_monitor) = ItemMonitor::new(BTreeSet::default());
 
-		signature_sender.send(MonitorCommand::Add(sig_bytes)).unwrap();
+		signature_sender.send(MonitorCommand::Add(polkadot_sig)).unwrap();
 
 		// proxy type governance
 		epoch_starts_sender
