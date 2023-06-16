@@ -39,6 +39,8 @@ pub trait WeightInfo {
 	fn start_bidding() -> Weight;
 	fn update_minimum_funding() -> Weight;
 	fn update_redemption_tax() -> Weight;
+	fn bind_redeem_address() -> Weight;
+	fn update_restricted_addresses(a: u32, b: u32, ) -> Weight;
 }
 
 /// Weights for pallet_cf_funding using the Substrate node and recommended hardware.
@@ -46,6 +48,7 @@ pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Flip OffchainFunds (r:1 w:1)
 	// Storage: Flip Account (r:1 w:1)
+	// Storage: Flip TotalIssuance (r:1 w:1)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: Validator Backups (r:1 w:1)
 	// Storage: AccountRoles AccountRoles (r:0 w:1)
@@ -56,35 +59,39 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(5))
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
+	// Storage: Funding RedemptionTax (r:1 w:0)
 	// Storage: Validator CurrentRotationPhase (r:1 w:0)
 	// Storage: Validator CurrentEpochStartedAt (r:1 w:0)
 	// Storage: Validator BlocksPerEpoch (r:1 w:0)
 	// Storage: Validator RedemptionPeriodAsPercentage (r:1 w:0)
 	// Storage: Funding PendingRedemptions (r:1 w:1)
-	// Storage: Funding WithdrawalAddresses (r:1 w:0)
+	// Storage: Funding RestrictedBalances (r:1 w:0)
+	// Storage: Funding BoundAddress (r:1 w:0)
 	// Storage: Flip Account (r:1 w:1)
 	// Storage: Funding MinimumFunding (r:1 w:0)
+	// Storage: Flip TotalIssuance (r:1 w:1)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: Validator Backups (r:1 w:1)
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: Funding RedemptionTTLSeconds (r:1 w:0)
-	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
-	// Storage: Environment EthereumChainId (r:1 w:0)
 	// Storage: Environment EthereumSignatureNonce (r:1 w:1)
+	// Storage: Environment EthereumChainId (r:1 w:0)
+	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
+	// Storage: Environment EthereumStateChainGatewayAddress (r:1 w:0)
 	// Storage: EthereumBroadcaster BroadcastIdCounter (r:1 w:1)
 	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
 	// Storage: EthereumVault CurrentVaultEpochAndState (r:1 w:0)
 	// Storage: EthereumVault Vaults (r:1 w:0)
-	// Storage: Validator EpochAuthorityCount (r:1 w:0)
-	// Storage: Reputation Suspensions (r:3 w:0)
 	// Storage: Validator HistoricalAuthorities (r:1 w:0)
-	// Storage: Validator CeremonyIdCounter (r:1 w:1)
+	// Storage: Reputation Suspensions (r:3 w:0)
+	// Storage: EthereumVault CeremonyIdCounter (r:1 w:1)
 	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:0)
 	// Storage: EthereumThresholdSigner CeremonyRetryQueues (r:1 w:1)
 	// Storage: EthereumThresholdSigner Signature (r:0 w:1)
 	// Storage: EthereumThresholdSigner PendingCeremonies (r:0 w:1)
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	// Storage: Flip PendingRedemptionsReserve (r:0 w:1)
+	// Storage: EthereumBroadcaster RotationBroadcast (r:0 w:1)
 	fn redeem() -> Weight {
 		// Minimum execution time: 222_630 nanoseconds.
 		Weight::from_ref_time(225_467_000)
@@ -93,6 +100,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
 	// Storage: Flip Account (r:1 w:1)
+	// Storage: Funding RedemptionTax (r:1 w:0)
 	// Storage: Validator CurrentRotationPhase (r:1 w:0)
 	// Storage: Validator CurrentEpochStartedAt (r:1 w:0)
 	// Storage: Validator BlocksPerEpoch (r:1 w:0)
@@ -104,23 +112,24 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Validator Backups (r:1 w:1)
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: Funding RedemptionTTLSeconds (r:1 w:0)
-	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
-	// Storage: Environment EthereumChainId (r:1 w:0)
 	// Storage: Environment EthereumSignatureNonce (r:1 w:1)
+	// Storage: Environment EthereumChainId (r:1 w:0)
+	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
+	// Storage: Environment EthereumStateChainGatewayAddress (r:1 w:0)
 	// Storage: EthereumBroadcaster BroadcastIdCounter (r:1 w:1)
 	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
 	// Storage: EthereumVault CurrentVaultEpochAndState (r:1 w:0)
 	// Storage: EthereumVault Vaults (r:1 w:0)
-	// Storage: Validator EpochAuthorityCount (r:1 w:0)
-	// Storage: Reputation Suspensions (r:3 w:0)
 	// Storage: Validator HistoricalAuthorities (r:1 w:0)
-	// Storage: Validator CeremonyIdCounter (r:1 w:1)
+	// Storage: Reputation Suspensions (r:3 w:0)
+	// Storage: EthereumVault CeremonyIdCounter (r:1 w:1)
 	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:0)
 	// Storage: EthereumThresholdSigner CeremonyRetryQueues (r:1 w:1)
 	// Storage: EthereumThresholdSigner Signature (r:0 w:1)
 	// Storage: EthereumThresholdSigner PendingCeremonies (r:0 w:1)
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	// Storage: Flip PendingRedemptionsReserve (r:0 w:1)
+	// Storage: EthereumBroadcaster RotationBroadcast (r:0 w:1)
 	fn redeem_all() -> Weight {
 		// Minimum execution time: 222_156 nanoseconds.
 		Weight::from_ref_time(223_620_000)
@@ -141,15 +150,17 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: Funding WithdrawalAddresses (r:0 w:1)
 	// Storage: Funding ActiveBidder (r:0 w:1)
 	// Storage: AccountRoles AccountRoles (r:0 w:1)
+	// Storage: Funding ActiveBidder (r:0 w:1)
 	fn redeemed() -> Weight {
 		// Minimum execution time: 122_055 nanoseconds.
 		Weight::from_ref_time(123_692_000)
 			.saturating_add(T::DbWeight::get().reads(7))
-			.saturating_add(T::DbWeight::get().writes(12))
+			.saturating_add(T::DbWeight::get().writes(11))
 	}
 	// Storage: Funding PendingRedemptions (r:1 w:1)
 	// Storage: Flip PendingRedemptionsReserve (r:1 w:1)
 	// Storage: Flip Account (r:1 w:1)
+	// Storage: Flip TotalIssuance (r:1 w:1)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: Validator Backups (r:1 w:1)
 	fn redemption_expired() -> Weight {
@@ -178,6 +189,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(2))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
+	// Storage: Funding RedemptionTax (r:1 w:0)
 	// Storage: Funding MinimumFunding (r:0 w:1)
 	fn update_minimum_funding() -> Weight {
 		// Minimum execution time: 28_784 nanoseconds.
@@ -193,12 +205,32 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().reads(1))
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
+	// Storage: Funding BoundAddress (r:1 w:1)
+	fn bind_redeem_address() -> Weight {
+		// Minimum execution time: 17_000 nanoseconds.
+		Weight::from_ref_time(18_000_000)
+			.saturating_add(T::DbWeight::get().reads(1))
+			.saturating_add(T::DbWeight::get().writes(1))
+	}
+	// Storage: Funding RestrictedAddresses (r:0 w:1)
+	/// The range of component `a` is `[1, 100]`.
+	/// The range of component `b` is `[1, 100]`.
+	fn update_restricted_addresses(a: u32, b: u32, ) -> Weight {
+		// Minimum execution time: 894_000 nanoseconds.
+		Weight::from_ref_time(995_413)
+			// Standard Error: 47_147
+			.saturating_add(Weight::from_ref_time(9_110_754).saturating_mul(a.into()))
+			// Standard Error: 47_147
+			.saturating_add(Weight::from_ref_time(9_085_808).saturating_mul(b.into()))
+			.saturating_add(T::DbWeight::get().writes(1))
+	}
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
 	// Storage: Flip OffchainFunds (r:1 w:1)
 	// Storage: Flip Account (r:1 w:1)
+	// Storage: Flip TotalIssuance (r:1 w:1)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: Validator Backups (r:1 w:1)
 	// Storage: AccountRoles AccountRoles (r:0 w:1)
@@ -209,35 +241,39 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(5))
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
+	// Storage: Funding RedemptionTax (r:1 w:0)
 	// Storage: Validator CurrentRotationPhase (r:1 w:0)
 	// Storage: Validator CurrentEpochStartedAt (r:1 w:0)
 	// Storage: Validator BlocksPerEpoch (r:1 w:0)
 	// Storage: Validator RedemptionPeriodAsPercentage (r:1 w:0)
 	// Storage: Funding PendingRedemptions (r:1 w:1)
-	// Storage: Funding WithdrawalAddresses (r:1 w:0)
+	// Storage: Funding RestrictedBalances (r:1 w:0)
+	// Storage: Funding BoundAddress (r:1 w:0)
 	// Storage: Flip Account (r:1 w:1)
 	// Storage: Funding MinimumFunding (r:1 w:0)
+	// Storage: Flip TotalIssuance (r:1 w:1)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: Validator Backups (r:1 w:1)
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: Funding RedemptionTTLSeconds (r:1 w:0)
-	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
-	// Storage: Environment EthereumChainId (r:1 w:0)
 	// Storage: Environment EthereumSignatureNonce (r:1 w:1)
+	// Storage: Environment EthereumChainId (r:1 w:0)
+	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
+	// Storage: Environment EthereumStateChainGatewayAddress (r:1 w:0)
 	// Storage: EthereumBroadcaster BroadcastIdCounter (r:1 w:1)
 	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
 	// Storage: EthereumVault CurrentVaultEpochAndState (r:1 w:0)
 	// Storage: EthereumVault Vaults (r:1 w:0)
-	// Storage: Validator EpochAuthorityCount (r:1 w:0)
-	// Storage: Reputation Suspensions (r:3 w:0)
 	// Storage: Validator HistoricalAuthorities (r:1 w:0)
-	// Storage: Validator CeremonyIdCounter (r:1 w:1)
+	// Storage: Reputation Suspensions (r:3 w:0)
+	// Storage: EthereumVault CeremonyIdCounter (r:1 w:1)
 	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:0)
 	// Storage: EthereumThresholdSigner CeremonyRetryQueues (r:1 w:1)
 	// Storage: EthereumThresholdSigner Signature (r:0 w:1)
 	// Storage: EthereumThresholdSigner PendingCeremonies (r:0 w:1)
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	// Storage: Flip PendingRedemptionsReserve (r:0 w:1)
+	// Storage: EthereumBroadcaster RotationBroadcast (r:0 w:1)
 	fn redeem() -> Weight {
 		// Minimum execution time: 222_630 nanoseconds.
 		Weight::from_ref_time(225_467_000)
@@ -246,6 +282,7 @@ impl WeightInfo for () {
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
 	// Storage: Flip Account (r:1 w:1)
+	// Storage: Funding RedemptionTax (r:1 w:0)
 	// Storage: Validator CurrentRotationPhase (r:1 w:0)
 	// Storage: Validator CurrentEpochStartedAt (r:1 w:0)
 	// Storage: Validator BlocksPerEpoch (r:1 w:0)
@@ -257,23 +294,24 @@ impl WeightInfo for () {
 	// Storage: Validator Backups (r:1 w:1)
 	// Storage: Timestamp Now (r:1 w:0)
 	// Storage: Funding RedemptionTTLSeconds (r:1 w:0)
-	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
-	// Storage: Environment EthereumChainId (r:1 w:0)
 	// Storage: Environment EthereumSignatureNonce (r:1 w:1)
+	// Storage: Environment EthereumChainId (r:1 w:0)
+	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
+	// Storage: Environment EthereumStateChainGatewayAddress (r:1 w:0)
 	// Storage: EthereumBroadcaster BroadcastIdCounter (r:1 w:1)
 	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
 	// Storage: EthereumVault CurrentVaultEpochAndState (r:1 w:0)
 	// Storage: EthereumVault Vaults (r:1 w:0)
-	// Storage: Validator EpochAuthorityCount (r:1 w:0)
-	// Storage: Reputation Suspensions (r:3 w:0)
 	// Storage: Validator HistoricalAuthorities (r:1 w:0)
-	// Storage: Validator CeremonyIdCounter (r:1 w:1)
+	// Storage: Reputation Suspensions (r:3 w:0)
+	// Storage: EthereumVault CeremonyIdCounter (r:1 w:1)
 	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:0)
 	// Storage: EthereumThresholdSigner CeremonyRetryQueues (r:1 w:1)
 	// Storage: EthereumThresholdSigner Signature (r:0 w:1)
 	// Storage: EthereumThresholdSigner PendingCeremonies (r:0 w:1)
 	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
 	// Storage: Flip PendingRedemptionsReserve (r:0 w:1)
+	// Storage: EthereumBroadcaster RotationBroadcast (r:0 w:1)
 	fn redeem_all() -> Weight {
 		// Minimum execution time: 222_156 nanoseconds.
 		Weight::from_ref_time(223_620_000)
@@ -294,15 +332,17 @@ impl WeightInfo for () {
 	// Storage: Funding WithdrawalAddresses (r:0 w:1)
 	// Storage: Funding ActiveBidder (r:0 w:1)
 	// Storage: AccountRoles AccountRoles (r:0 w:1)
+	// Storage: Funding ActiveBidder (r:0 w:1)
 	fn redeemed() -> Weight {
 		// Minimum execution time: 122_055 nanoseconds.
 		Weight::from_ref_time(123_692_000)
 			.saturating_add(RocksDbWeight::get().reads(7))
-			.saturating_add(RocksDbWeight::get().writes(12))
+			.saturating_add(RocksDbWeight::get().writes(11))
 	}
 	// Storage: Funding PendingRedemptions (r:1 w:1)
 	// Storage: Flip PendingRedemptionsReserve (r:1 w:1)
 	// Storage: Flip Account (r:1 w:1)
+	// Storage: Flip TotalIssuance (r:1 w:1)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
 	// Storage: Validator Backups (r:1 w:1)
 	fn redemption_expired() -> Weight {
@@ -331,6 +371,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().reads(2))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
+	// Storage: Funding RedemptionTax (r:1 w:0)
 	// Storage: Funding MinimumFunding (r:0 w:1)
 	fn update_minimum_funding() -> Weight {
 		// Minimum execution time: 28_784 nanoseconds.
@@ -344,6 +385,25 @@ impl WeightInfo for () {
 		// Minimum execution time: 30_037 nanoseconds.
 		Weight::from_ref_time(30_501_000)
 			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(1))
+	}
+	// Storage: Funding BoundAddress (r:1 w:1)
+	fn bind_redeem_address() -> Weight {
+		// Minimum execution time: 17_000 nanoseconds.
+		Weight::from_ref_time(18_000_000)
+			.saturating_add(RocksDbWeight::get().reads(1))
+			.saturating_add(RocksDbWeight::get().writes(1))
+	}
+	// Storage: Funding RestrictedAddresses (r:0 w:1)
+	/// The range of component `a` is `[1, 100]`.
+	/// The range of component `b` is `[1, 100]`.
+	fn update_restricted_addresses(a: u32, b: u32, ) -> Weight {
+		// Minimum execution time: 894_000 nanoseconds.
+		Weight::from_ref_time(995_413)
+			// Standard Error: 47_147
+			.saturating_add(Weight::from_ref_time(9_110_754).saturating_mul(a.into()))
+			// Standard Error: 47_147
+			.saturating_add(Weight::from_ref_time(9_085_808).saturating_mul(b.into()))
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 }
