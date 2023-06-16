@@ -40,6 +40,10 @@ pub fn test_account_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as 
 		.public()
 }
 
+pub fn parse_account(ss58: &str) -> AccountId {
+	AccountId::from_str(ss58).unwrap_or_else(|_| panic!("Invalid address: {}", ss58))
+}
+
 type AccountPublic = <Signature as Verify>::Signer;
 
 /// Generate an account ID from seed.
@@ -281,6 +285,11 @@ macro_rules! network_spec {
 				env_override: Option<StateChainEnvironment>,
 			) -> Result<ChainSpec, String> {
 				use $network::*;
+				assert_eq!(
+					parse_account(SNOW_WHITE_ACCOUNT_ID).as_ref(),
+					SNOW_WHITE_SR25519,
+					"Snow White account ID does not match the public key."
+				);
 
 				let wasm_binary =
 					WASM_BINARY.ok_or_else(|| "Wasm binary not available".to_string())?;
@@ -311,17 +320,17 @@ macro_rules! network_spec {
 							// Initial PoA authorities
 							vec![
 								(
-									BASHFUL_SR25519.into(),
+									parse_account(BASHFUL_ACCOUNT_ID),
 									BASHFUL_SR25519.unchecked_into(),
 									BASHFUL_ED25519.unchecked_into(),
 								),
 								(
-									DOC_SR25519.into(),
+									parse_account(DOC_ACCOUNT_ID),
 									DOC_SR25519.unchecked_into(),
 									DOC_ED25519.unchecked_into(),
 								),
 								(
-									DOPEY_SR25519.into(),
+									parse_account(DOPEY_ACCOUNT_ID),
 									DOPEY_SR25519.unchecked_into(),
 									DOPEY_ED25519.unchecked_into(),
 								),
@@ -422,10 +431,24 @@ fn testnet_genesis(
 	keygen_ceremony_timeout_blocks: BlockNumber,
 	threshold_signature_ceremony_timeout_blocks: BlockNumber,
 ) -> GenesisConfig {
+	// Sanity Checks
+	for (account_id, aura_id, grandpa_id) in initial_authorities.iter() {
+		assert_eq!(
+			AsRef::<[u8]>::as_ref(account_id),
+			AsRef::<[u8]>::as_ref(aura_id),
+			"Aura and Account ID ({}) should be the same",
+			account_id
+		);
+		assert_ne!(
+			AsRef::<[u8]>::as_ref(grandpa_id),
+			AsRef::<[u8]>::as_ref(aura_id),
+			"Aura and Grandpa ID should be different for {}.",
+			account_id
+		);
+	}
+
 	let authority_ids: BTreeSet<AccountId> =
 		initial_authorities.iter().map(|(id, ..)| id.clone()).collect();
-	let total_issuance =
-		total_issuance + extra_accounts.iter().map(|(_, _, amount, _)| *amount).sum::<u128>();
 	let (extra_accounts, genesis_vanity_names): (Vec<_>, BTreeMap<_, _>) = extra_accounts
 		.into_iter()
 		.map(|(account, role, balance, vanity)| {
@@ -436,10 +459,29 @@ fn testnet_genesis(
 		.into_iter()
 		.filter_map(|(account, vanity)| vanity.map(|vanity| (account, vanity)))
 		.collect::<BTreeMap<_, _>>();
-	let all_accounts: Vec<_> = initial_authorities
+	let all_accounts: BTreeSet<_> = initial_authorities
 		.iter()
-		.map(|(account_id, ..)| {
-			(account_id.clone(), AccountRole::Validator, genesis_funding_amount)
+		.filter_map(|(account_id, ..)| -> Option<(AccountId, AccountRole, u128)> {
+			if let Some((_, role, funds)) = extra_accounts.iter().find(|(id, ..)| id == account_id)
+			{
+				// If the genesis account is listed in `extra_accounts` we will use the details from
+				// there.
+				assert!(*role == AccountRole::Validator, "Extra account is not a validator.");
+				log::info!(
+					"Using custom values for genesis authority {}: {} FLIP",
+					account_id,
+					funds / FLIPPERINOS_PER_FLIP
+				);
+				None
+			} else {
+				// Otherwise we will use the default values.
+				log::info!(
+					"Using default funds for genesis authority {}: {} FLIP",
+					account_id,
+					genesis_funding_amount / FLIPPERINOS_PER_FLIP
+				);
+				Some((account_id.clone(), AccountRole::Validator, genesis_funding_amount))
+			}
 		})
 		.chain(extra_accounts.clone())
 		.collect();
@@ -463,7 +505,7 @@ fn testnet_genesis(
 			code: wasm_binary.to_vec(),
 		},
 		validator: ValidatorConfig {
-			genesis_authorities: authority_ids,
+			genesis_authorities: authority_ids.clone(),
 			genesis_backups: extra_accounts
 				.iter()
 				.filter_map(|(id, role, amount)| {
@@ -478,7 +520,15 @@ fn testnet_genesis(
 			blocks_per_epoch,
 			redemption_period_as_percentage: percent_of_epoch_period_redeemable,
 			backup_reward_node_percentage: 20,
-			bond: genesis_funding_amount,
+			bond: all_accounts
+				.iter()
+				.filter_map(|(id, _, funds)| authority_ids.contains(&id).then_some(*funds))
+				.min()
+				.map(|bond| {
+					log::info!("Bond will be set to {:?} Flip", bond / FLIPPERINOS_PER_FLIP);
+					bond
+				})
+				.expect("At least one authority is required"),
 			authority_set_min_size: min_authorities,
 			min_size: min_authorities,
 			max_size: max_authorities,
@@ -492,7 +542,7 @@ fn testnet_genesis(
 		},
 		flip: FlipConfig { total_issuance },
 		funding: FundingConfig {
-			genesis_accounts: all_accounts.clone(),
+			genesis_accounts: Vec::from_iter(all_accounts.clone()),
 			minimum_funding,
 			redemption_tax,
 			redemption_ttl: core::time::Duration::from_secs(3 * redemption_delay),
