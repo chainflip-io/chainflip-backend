@@ -1,17 +1,15 @@
 use anyhow::{anyhow, Context};
 use core::{fmt, time::Duration};
-use futures::{stream, Stream};
+use futures::{stream, Future, Stream};
 #[doc(hidden)]
 pub use lazy_format::lazy_format as internal_lazy_format;
 use sp_rpc::number::NumberOrHex;
 use std::path::PathBuf;
-#[doc(hidden)]
-pub use tokio::select as internal_tokio_select;
 use warp::{Filter, Reply};
 
-pub mod task_scope;
-
 pub mod futures_unordered_wait;
+pub mod loop_select;
+pub mod task_scope;
 
 pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN], anyhow::Error> {
 	let address_hex_str = match address_str.strip_prefix("0x") {
@@ -545,58 +543,32 @@ mod tests_read_clean_and_decode_hex_str_file {
 	}
 }
 
-#[macro_export]
-macro_rules! inner_loop_select {
-    ({ $($processed:tt)* } let $pattern:pat = $expression:expr => $body:block, $($unprocessed:tt)*) => {
-        $crate::inner_loop_select!(
-            {
-                $($processed)*
-                x = $expression => {
-					let $pattern = x;
-					$body
-				},
-            }
-            $($unprocessed)*
-		)
-    };
-    ({ $($processed:tt)* } if let $pattern:pat = $expression:expr => $body:block, $($unprocessed:tt)*) => {
-        $crate::inner_loop_select!(
-            {
-                $($processed)*
-                x = $expression => {
-					if let $pattern = x {
-						$body
-					} else { break }
-				},
-            }
-            $($unprocessed)*
-		)
-    };
-    ({ $($processed:tt)* } if let $pattern:pat = $expression:expr => $body:block else break $extra:expr, $($unprocessed:tt)*) => {
-        $crate::inner_loop_select!(
-            {
-                $($processed)*
-                x = $expression => {
-					if let $pattern = x {
-						$body
-					} else { break $extra }
-				},
-            }
-            $($unprocessed)*
-		)
-    };
-    ({ $($processed:tt)+ }) => {
-		loop {
-			$crate::internal_tokio_select!(
-				$($processed)+
-			)
+#[pin_project::pin_project]
+pub struct NextOrPending<'a, St: ?Sized> {
+	#[pin]
+	stream: &'a mut St,
+}
+impl<'a, St: Stream + ?Sized + Unpin> Future for NextOrPending<'a, St> {
+	type Output = <St as Stream>::Item;
+
+	fn poll(
+		self: core::pin::Pin<&mut Self>,
+		cx: &mut core::task::Context<'_>,
+	) -> core::task::Poll<Self::Output> {
+		let this = self.project();
+		match this.stream.poll_next(cx) {
+			core::task::Poll::Ready(Some(item)) => core::task::Poll::Ready(item),
+			_ => core::task::Poll::Pending,
 		}
-    };
+	}
 }
 
-#[macro_export]
-macro_rules! loop_select {
-    ($($cases:tt)+) => {
-        $crate::inner_loop_select!({} $($cases)+)
-    }
+pub trait UnendingStream: Stream {
+	fn next_or_pending(&mut self) -> NextOrPending<'_, Self>
+	where
+		Self: Unpin,
+	{
+		NextOrPending { stream: self }
+	}
 }
+impl<T: Stream + ?Sized + Unpin> UnendingStream for T {}
