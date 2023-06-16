@@ -47,6 +47,7 @@ jobs:
           - chainflip-engine
           - chainflip-cli
           - chainflip-broker-api
+          - chainflip-lp-api
     permissions:
       contents: read
       packages: write
