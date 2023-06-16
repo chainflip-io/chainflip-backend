@@ -7,7 +7,7 @@ use crate::{
 	Reserve, SlashingRate, TotalIssuance,
 };
 use cf_primitives::FlipBalance;
-use cf_traits::{Bonding, Funding, Issuance, Slashing};
+use cf_traits::{AccountInfo, Bonding, Funding, Issuance, Slashing};
 use frame_support::{
 	assert_noop,
 	traits::{HandleLifetime, Hooks, Imbalance},
@@ -231,10 +231,10 @@ impl FlipOperation {
 			// Update balance, Bond and redeem
 			FlipOperation::UpdateBalanceAndBond(account_id, amount, bond) => {
 				// Update Balance
-				let previous_balance = <Flip as Funding>::account_balance(account_id);
+				let previous_balance = <Flip as AccountInfo<_>>::balance(account_id);
 				let previous_offchain_funds = OffchainFunds::<Test>::get();
 				<Flip as Funding>::credit_funds(account_id, *amount);
-				let new_balance = <Flip as Funding>::account_balance(account_id);
+				let new_balance = <Flip as AccountInfo<_>>::balance(account_id);
 				let new_offchain_funds = OffchainFunds::<Test>::get();
 				if new_offchain_funds != previous_offchain_funds.saturating_sub(*amount) ||
 					new_balance !=
@@ -248,7 +248,7 @@ impl FlipOperation {
 				Bonder::<Test>::update_bond(account_id, new_balance);
 				if new_balance !=
 					(previous_balance + (previous_offchain_funds - new_offchain_funds)) ||
-					<Flip as Funding>::redeemable_balance(account_id) != 0
+					<Flip as AccountInfo<_>>::liquid_funds(account_id) != 0
 				{
 					return false
 				}
@@ -262,7 +262,7 @@ impl FlipOperation {
 				// Reduce the bond
 				Bonder::<Test>::update_bond(account_id, *bond);
 				let expected_redeemable_balance = new_balance.saturating_sub(*bond);
-				if <Flip as Funding>::redeemable_balance(account_id) != expected_redeemable_balance
+				if <Flip as AccountInfo<_>>::liquid_funds(account_id) != expected_redeemable_balance
 				{
 					return false
 				}
@@ -274,7 +274,7 @@ impl FlipOperation {
 					.is_ok(),
 					"expexted: {}, redeemable: {}",
 					expected_redeemable_balance,
-					<Flip as Funding>::redeemable_balance(account_id)
+					<Flip as AccountInfo<_>>::liquid_funds(account_id)
 				);
 				<Flip as Funding>::finalize_redemption(account_id)
 					.expect("Pending Redemption should exist");
