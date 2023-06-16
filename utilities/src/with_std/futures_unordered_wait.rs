@@ -17,6 +17,11 @@ impl<Fut> FuturesUnorderedWait<Fut> {
 		self.futures.push(future);
 	}
 
+	#[allow(clippy::len_without_is_empty)]
+	pub fn len(&self) -> usize {
+		self.futures.len()
+	}
+
 	pub async fn next(&mut self) -> Option<Fut::Output>
 	where
 		Fut: Future,
