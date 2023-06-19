@@ -115,16 +115,15 @@ pub(crate) struct CcmSwapOutput {
 	gas: Option<AssetAmount>,
 }
 
-struct FailedSwap {
-	pub asset: Asset,
-	pub direction: SwapLeg,
-	pub amount: AssetAmount,
+enum BatchExecutionError {
+	SwapLegFailed { asset: Asset, direction: SwapLeg, amount: AssetAmount },
+	DispatchError { error: DispatchError },
 }
 
 /// This impl is never used. This is purely used to satisfy trait requirment
-impl From<DispatchError> for FailedSwap {
-	fn from(_err: DispatchError) -> Self {
-		Self { asset: Asset::Eth, direction: SwapLeg::ToStable, amount: 0 }
+impl From<DispatchError> for BatchExecutionError {
+	fn from(error: DispatchError) -> Self {
+		Self::DispatchError { error }
 	}
 }
 
@@ -397,42 +396,26 @@ pub mod pallet {
 		fn on_finalize(_n: BlockNumberFor<T>) {
 			// Wrap the entire swapping section as a transaction, any failed swap will rollback all
 			// storage changes.
-			if let Err(failed_swap) = with_storage_layer(|| -> Result<(), FailedSwap> {
-				let swaps = SwapQueue::<T>::take();
-				// Helper function that splits swaps of a given direction, group them by asset
-				// and do the swaps of a given direction. Processed and unprocessed swaps are
-				// returned.
-				let do_group_and_swap =
-					|swaps: Vec<Swap>, direction: SwapLeg| -> Result<Vec<Swap>, FailedSwap> {
-						let (swap_groups, mut remaining) =
-							Self::split_and_group_swaps(swaps, direction);
-
-						for (asset, mut swaps) in swap_groups {
-							match Self::execute_group_of_swaps(&mut swaps, asset, direction) {
-								Ok(()) => remaining.extend(swaps),
-								Err(amount) => return Err(FailedSwap { asset, direction, amount }),
-							};
-						}
-						Ok(remaining)
-					};
+			if let Err(failed_swap) = with_storage_layer(|| -> Result<(), BatchExecutionError> {
+				let mut swaps = SwapQueue::<T>::take();
 
 				// Swap into Stable asset first.
-				let mut remaining_swaps = do_group_and_swap(swaps, SwapLeg::ToStable)?;
+				Self::do_group_and_swap(&mut swaps, SwapLeg::ToStable)?;
 
 				// Take NetworkFee for all swaps
-				for swap in remaining_swaps.iter_mut() {
+				for swap in swaps.iter_mut() {
 					debug_assert!(
 						swap.stable_amount.is_some(),
 						"All swaps should have Stable amount set here"
 					);
-					let stable_amount =
-						T::SwappingApi::take_network_fee(swap.stable_amount.unwrap_or_default());
-					swap.stable_amount = Some(stable_amount);
+					let stable_amount = swap.stable_amount.get_or_insert_with(Default::default);
+					*stable_amount = T::SwappingApi::take_network_fee(*stable_amount);
 				}
 
 				// Swap from Stable asset, and complete the swap logic.
-				let remaining_swaps = do_group_and_swap(remaining_swaps, SwapLeg::FromStable)?;
-				for swap in remaining_swaps {
+				Self::do_group_and_swap(&mut swaps, SwapLeg::FromStable)?;
+
+				for swap in swaps {
 					if let Some(output_amount) = swap.final_output {
 						Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
 						// Handle swap completion logic.
@@ -474,11 +457,17 @@ pub mod pallet {
 				}
 				Ok(())
 			}) {
-				Self::deposit_event(Event::<T>::BatchSwapFailed {
-					asset: failed_swap.asset,
-					direction: failed_swap.direction,
-					amount: failed_swap.amount,
-				})
+				match failed_swap {
+					BatchExecutionError::SwapLegFailed { asset, direction, amount } =>
+						Self::deposit_event(Event::<T>::BatchSwapFailed {
+							asset,
+							direction,
+							amount,
+						}),
+					BatchExecutionError::DispatchError { error } => {
+						log::error!("Failed to execute swap batch: {:?}", error);
+					},
+				}
 			}
 		}
 	}
@@ -724,10 +713,27 @@ pub mod pallet {
 			Ok(destination_address_internal)
 		}
 
+		// Helper function that splits swaps of a given direction, group them by asset
+		// and do the swaps of a given direction. Processed and unprocessed swaps are
+		// returned.
+		fn do_group_and_swap(
+			swaps: &mut Vec<Swap>,
+			direction: SwapLeg,
+		) -> Result<(), BatchExecutionError> {
+			let swap_groups = Self::split_and_group_swaps(swaps, direction);
+
+			for (asset, swaps) in swap_groups {
+				Self::execute_group_of_swaps(swaps, asset, direction).map_err(|amount| {
+					BatchExecutionError::SwapLegFailed { asset, direction, amount }
+				})?;
+			}
+			Ok(())
+		}
+
 		/// Bundle the given swaps and do a single swap of a given direction. Updates the given
 		/// swaps in-place. If batch swap failed, return the input amount.
-		pub fn execute_group_of_swaps(
-			swaps: &mut Vec<Swap>,
+		fn execute_group_of_swaps(
+			swaps: Vec<&mut Swap>,
 			asset: Asset,
 			direction: SwapLeg,
 		) -> Result<(), AssetAmount> {
@@ -795,20 +801,18 @@ pub mod pallet {
 		/// Split all swaps of a given direction, and group them by asset into a BTreeMap and return
 		/// the rest
 		fn split_and_group_swaps(
-			swaps: Vec<Swap>,
+			swaps: &mut Vec<Swap>,
 			direction: SwapLeg,
-		) -> (BTreeMap<Asset, Vec<Swap>>, Vec<Swap>) {
+		) -> BTreeMap<Asset, Vec<&mut Swap>> {
 			let mut grouped_swaps = BTreeMap::new();
-			let mut remaining = vec![];
 
 			for swap in swaps {
 				if let Some(asset) = swap.swap_asset(direction) {
 					grouped_swaps.entry(asset).or_insert(vec![]).push(swap);
-				} else {
-					remaining.push(swap);
 				}
 			}
-			(grouped_swaps, remaining)
+
+			grouped_swaps
 		}
 
 		fn schedule_swap(from: Asset, to: Asset, amount: AssetAmount, swap_type: SwapType) -> u64 {
