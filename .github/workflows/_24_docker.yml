@@ -49,6 +49,7 @@ jobs:
   private-images:
     needs: [get-date-time, set-dockerfile-name]
     strategy:
+      fail-fast: false
       matrix:
         target:
           - chainflip-node
@@ -122,6 +123,7 @@ jobs:
     if: inputs.publish_public_images == 'true'
     needs: [get-date-time, set-dockerfile-name]
     strategy:
+      fail-fast: false
       matrix:
         target:
           - chainflip-node
