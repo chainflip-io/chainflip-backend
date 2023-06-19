@@ -1,9 +1,13 @@
 pub use super::common::*;
 use super::{parse_account, StateChainEnvironment};
 use cf_chains::{btc::BitcoinNetwork, dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
-use cf_primitives::{AccountId, AccountRole, FlipBalance};
+use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance};
 use sc_service::ChainType;
 use sp_core::H256;
+
+// *** Overrides from common
+pub const ACCRUAL_RATIO: (i32, u32) = (10, 10);
+// ***
 
 pub struct Config;
 
@@ -13,25 +17,29 @@ pub const CHAIN_TYPE: ChainType = ChainType::Live;
 pub const BITCOIN_NETWORK: BitcoinNetwork = BitcoinNetwork::Testnet;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
-	flip_token_address: hex_literal::hex!("0E1D4594cB44D3E929dc0fb32F1c35A26D6e8e7f"),
-	eth_usdc_address: hex_literal::hex!("07865c6E87B9F70255377e024ace6630C1Eaa37F"),
-	state_chain_gateway_address: hex_literal::hex!("A599338c8D71ff516854DA954937330aAA25CC44"),
-	key_manager_address: hex_literal::hex!("624Ab0aB5334aEAb7853d33503c5553Dfb937499"),
-	eth_vault_address: hex_literal::hex!("f2f5D8b18573721361540087A52C05f5FB6d02c1"),
+	flip_token_address: hex_literal::hex!("9ada116ec46a6a0501bCFFC3E4C027a640a8536e"),
+	eth_usdc_address: hex_literal::hex!("07865c6e87b9f70255377e024ace6630c1eaa37f"),
+	state_chain_gateway_address: hex_literal::hex!("0e30aFE29222c093aac54E77AD97d49FFA51cc54"),
+	key_manager_address: hex_literal::hex!("50E436B37F69b6C4Ef11BfDB62575c1992c49464"),
+	eth_vault_address: hex_literal::hex!("53685A9158255dE80FbC91846c0Ae0C5F3070A91"),
 	ethereum_chain_id: CHAIN_ID_GOERLI,
 	eth_init_agg_key: hex_literal::hex!(
-		"035217961720cf058f447afaebf25e7c14bc44b069ebda50f44dbf25db31b8944c"
+		"0238de34ff83a64fe33bfc888d2736d10f1d0776cd1845382ae345dd3dad6d2f13"
 	),
-	ethereum_deployment_block: 8304200u64,
+	ethereum_deployment_block: 9184114u64,
 	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
 	min_funding: MIN_FUNDING,
 	eth_block_safety_margin: eth::BLOCK_SAFETY_MARGIN as u32,
 	max_ceremony_stage_duration: 300,
 	// TODO: update this to the correct value for perseverance
-	dot_genesis_hash: H256([0xcf; 32]),
+	dot_genesis_hash: H256(hex_literal::hex!(
+		"bb5111c1747c9e9774c2e6bd229806fb4d7497af2829782f39b977724e490b5c"
+	)),
 	dot_vault_account_id: None,
 	dot_runtime_version: RuntimeVersion { spec_version: 9360, transaction_version: 19 },
 };
+
+pub const EPOCH_DURATION_BLOCKS: BlockNumber = 24 * HOURS;
 
 pub const BASHFUL_ACCOUNT_ID: &str = "cFLbassb4hwQ9iA7dzdVdyumRqkaXnkdYECrThhmrqjFukdVo";
 pub const BASHFUL_SR25519: [u8; 32] =
@@ -48,9 +56,9 @@ pub const DOPEY_SR25519: [u8; 32] =
 	hex_literal::hex!["7a4738071f16c71ef3e5d94504d472fdf73228cb6a36e744e0caaf13555c3c01"];
 pub const DOPEY_ED25519: [u8; 32] =
 	hex_literal::hex!["d9a7e774a58c50062caf081a69556736e62eb0c854461f4485f281f60c53160f"];
-pub const SNOW_WHITE_ACCOUNT_ID: &str = "cFNSnowmY7pj9QCYEqyMUuSrFaSrZ9Wqhmcqaug2wtfV1qvz2";
+pub const SNOW_WHITE_ACCOUNT_ID: &str = "cFLsnoJA2YhAGt9815jPqmzK5esKVyhNAwPoeFmD3PEceE12a";
 pub const SNOW_WHITE_SR25519: [u8; 32] =
-	hex_literal::hex!["ca589039b72c5a68ca39210ad0700523534e552f8dc9a39e300a2657bf4b8967"];
+	hex_literal::hex!["84f131a66e88e3e5f8dce20d413cab3fbb13769a14a4c7b640b7222863ef353d"];
 
 pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8>>)> {
 	[
@@ -75,6 +83,7 @@ pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<
 	.collect()
 }
 
+#[ignore = "Only used as a convenience."]
 #[test]
 fn print_total() {
 	let s = phoenix_accounts().iter().map(|(_, _, s, _)| *s).sum::<u128>();

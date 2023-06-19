@@ -1,7 +1,7 @@
 pub use super::common::*;
 use super::StateChainEnvironment;
 use cf_chains::{btc::BitcoinNetwork, dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
-use cf_primitives::{AccountId, AccountRole, FlipBalance};
+use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance};
 use sc_service::ChainType;
 use sp_core::H256;
 
@@ -52,6 +52,8 @@ pub const DOPEY_ED25519: [u8; 32] =
 pub const SNOW_WHITE_ACCOUNT_ID: &str = "cFLsnoVqoi2DdzewWg5NQDaQC2rLwjPeNJ5AGxEYRpw49wFir";
 pub const SNOW_WHITE_SR25519: [u8; 32] =
 	hex_literal::hex!["84f134a4cc6bf41d3239bbe097eac4c8f83e78b468e6c49ed5cd2ddc51a07a29"];
+
+pub const EPOCH_DURATION_BLOCKS: BlockNumber = 3 * HOURS;
 
 pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8>>)> {
 	vec![

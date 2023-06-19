@@ -365,7 +365,7 @@ macro_rules! network_spec {
 							genesis_funding_amount,
 							min_funding,
 							REDEMPTION_TAX,
-							3 * HOURS,
+							EPOCH_DURATION_BLOCKS,
 							REDEMPTION_DELAY_SECS,
 							REDEMPTION_DELAY_BUFFER_SECS,
 							CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
@@ -548,7 +548,9 @@ fn testnet_genesis(
 			redemption_ttl: core::time::Duration::from_secs(3 * redemption_delay),
 			redemption_delay_buffer_seconds,
 		},
+		// These are set indirectly via the session pallet.
 		aura: AuraConfig { authorities: vec![] },
+		// These are set indirectly via the session pallet.
 		grandpa: GrandpaConfig { authorities: vec![] },
 		governance: GovernanceConfig { members: BTreeSet::from([root_key]), expiry_span },
 		reputation: ReputationConfig {
