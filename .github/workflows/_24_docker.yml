@@ -130,7 +130,7 @@ jobs:
           - chainflip-broker-api
           - chainflip-lp-api
         docker-repo:
-          - flipperino
+          - chainfliplabs
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout 🏁
