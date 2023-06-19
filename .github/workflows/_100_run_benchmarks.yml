@@ -42,24 +42,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Setup Tailscale 🪡 ⚙️
-        id: tailscale
-        uses: tailscale/github-action@main
-        with:
-          authkey: ${{ secrets.CF_TAILSCALE_AUTHKEY }}
-      - run: sudo apt update && sudo apt install -y zip unzip jq
-      - name: Load secret 🗝👨‍💻
-        uses: 1password/load-secrets-action@v1
-        env:
-          OP_CONNECT_HOST: ${{ secrets.CF_1PASSWORD_CONNECTOR_URL }}
-          OP_CONNECT_TOKEN: ${{ secrets.CF_1PASSWORD_CONNECTOR_TOKEN_READ_ONLY }}
-          CF_APT_REPO_BASIC_AUTH_USERNAME: op://github-actions/CF_APT_REPO_BASIC_AUTH/username
-          CF_APT_REPO_BASIC_AUTH_PASSWORD: op://github-actions/CF_APT_REPO_BASIC_AUTH/password
-
       - name: Download binary to benchmark
         run: |
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 14DFB4CA9296F83A
-          echo "deb https://${{ env.CF_APT_REPO_BASIC_AUTH_USERNAME }}:${{ env.CF_APT_REPO_BASIC_AUTH_PASSWORD }}@apt.aws.chainflip.xyz/ci/${{ inputs.commit_sha }}/$(lsb_release -c -s) $(lsb_release -c -s) main"  | sudo tee /etc/apt/sources.list.d/chainflip.list
+          echo "deb https://${{ secrets.CF_APT_REPO_BASIC_AUTH_USERNAME }}:${{ secrets.CF_APT_REPO_BASIC_AUTH_PASSWORD }}@apt.aws.chainflip.xyz/ci/${{ inputs.commit_sha }}/$(lsb_release -c -s) $(lsb_release -c -s) main"  | sudo tee /etc/apt/sources.list.d/chainflip.list
           sudo apt update
           sudo apt install chainflip-node
 
