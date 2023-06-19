@@ -35,7 +35,7 @@ if ! grep -q '\[btc\]' /etc/chainflip/config/Settings.toml; then
     cat <<EOF >>$CF_ROOT/config/Settings.toml
 
 [btc]
-http_node_endpoint = "https://pbtc.chainflip.xyz"
+http_node_endpoint = "http://a108a82b574a640359e360cf66afd45d-424380952.eu-central-1.elb.amazonaws.com"
 rpc_user = "flip"
 rpc_password = "flip"
 EOF
