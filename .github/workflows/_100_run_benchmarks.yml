@@ -45,7 +45,7 @@ jobs:
       - name: Download binary to benchmark
         run: |
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 14DFB4CA9296F83A
-          echo "deb https://${{ secrets.CF_APT_REPO_BASIC_AUTH_USERNAME }}:${{ secrets.CF_APT_REPO_BASIC_AUTH_PASSWORD }}@apt.aws.chainflip.xyz/ci/${{ inputs.commit_sha }}/$(lsb_release -c -s) $(lsb_release -c -s) main"  | sudo tee /etc/apt/sources.list.d/chainflip.list
+          echo "deb https://${{ secrets.CF_APT_REPO_BASIC_AUTH_USERNAME }}:${{ secrets.CF_APT_REPO_BASIC_AUTH_PASSWORD }}@apt.aws.chainflip.xyz/${{ inputs.commit_sha }}/$(lsb_release -c -s) $(lsb_release -c -s) main"  | sudo tee /etc/apt/sources.list.d/chainflip.list
           sudo apt update
           sudo apt install chainflip-node
 
