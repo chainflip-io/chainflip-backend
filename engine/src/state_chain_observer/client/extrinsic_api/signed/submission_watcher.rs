@@ -406,9 +406,4 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			Ok(())
 		}
 	}
-
-	#[cfg(test)]
-	fn get_anticipated_nonce(&self) -> state_chain_runtime::Index {
-		self.anticipated_nonce
-	}
 }

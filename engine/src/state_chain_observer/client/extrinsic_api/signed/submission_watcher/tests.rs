@@ -22,7 +22,7 @@ async fn should_increment_nonce_on_success() {
 
 	let watcher = new_watcher_and_submit_test_extrinsic(mock_rpc_api).await;
 
-	assert_eq!(watcher.get_anticipated_nonce(), INITIAL_NONCE + 1);
+	assert_eq!(watcher.anticipated_nonce, INITIAL_NONCE + 1);
 }
 
 /// If the tx fails due to the same nonce existing in the pool already, it should increment the
@@ -46,7 +46,7 @@ async fn should_increment_and_retry_if_nonce_in_pool() {
 	let watcher = new_watcher_and_submit_test_extrinsic(mock_rpc_api).await;
 
 	// Nonce should be +2, once for the initial submission, and once for the retry
-	assert_eq!(watcher.get_anticipated_nonce(), INITIAL_NONCE + 2);
+	assert_eq!(watcher.anticipated_nonce, INITIAL_NONCE + 2);
 }
 
 #[tokio::test]
@@ -72,7 +72,7 @@ async fn should_increment_and_retry_if_nonce_consumed_in_prev_blocks() {
 	let watcher = new_watcher_and_submit_test_extrinsic(mock_rpc_api).await;
 
 	// Nonce should be +2, once for the initial submission, and once for the retry
-	assert_eq!(watcher.get_anticipated_nonce(), INITIAL_NONCE + 2);
+	assert_eq!(watcher.anticipated_nonce, INITIAL_NONCE + 2);
 }
 
 /// If the tx fails due to a bad proof, it should fetch the runtime version and retry.
@@ -119,7 +119,7 @@ async fn should_update_version_on_bad_proof() {
 	let watcher = new_watcher_and_submit_test_extrinsic(mock_rpc_api).await;
 
 	// The bad proof should not have incremented the nonce, so it should only be +1 from the retry.
-	assert_eq!(watcher.get_anticipated_nonce(), INITIAL_NONCE + 1);
+	assert_eq!(watcher.anticipated_nonce, INITIAL_NONCE + 1);
 }
 
 /// If the tx fails due to an error that is unrelated to the nonce, it should not increment the
@@ -134,7 +134,7 @@ async fn should_not_increment_nonce_on_unrelated_failure() {
 
 	let watcher = new_watcher_and_submit_test_extrinsic(mock_rpc_api).await;
 
-	assert_eq!(watcher.get_anticipated_nonce(), INITIAL_NONCE);
+	assert_eq!(watcher.anticipated_nonce, INITIAL_NONCE);
 }
 
 /// Create a new watcher and submit a dummy extrinsic.
@@ -171,11 +171,7 @@ async fn new_watcher_and_submit_test_extrinsic(
 		result_sender: oneshot::channel().0,
 	};
 
-	assert_eq!(
-		watcher.get_anticipated_nonce(),
-		INITIAL_NONCE,
-		"Nonce should start at INITIAL_NONCE"
-	);
+	assert_eq!(watcher.anticipated_nonce, INITIAL_NONCE, "Nonce should start at INITIAL_NONCE");
 	let _result = watcher.submit_extrinsic(&mut request).await;
 
 	watcher
