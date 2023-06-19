@@ -9,6 +9,16 @@ on:
         description: Prod of dev
         required: true
         type: string
+      publish_public_images:
+        description: Publish public images
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   get-date-time:
     runs-on: ubuntu-20.04
@@ -36,10 +46,8 @@ jobs:
             echo "dockerfile_path=ci/docker/dev" >> "$GITHUB_OUTPUT"
           fi
 
-  chainflip-binaries:
+  private-images:
     needs: [get-date-time, set-dockerfile-name]
-    env:
-      DOCKER_REPO: ghcr.io/${{ github.repository }}
     strategy:
       matrix:
         target:
@@ -48,35 +56,30 @@ jobs:
           - chainflip-cli
           - chainflip-broker-api
           - chainflip-lp-api
-    permissions:
-      contents: read
-      packages: write
+          - generate-genesis-keys
+        docker-repo:
+          - ghcr.io/${{ github.repository }}
     runs-on: ubuntu-20.04
     steps:
-      - name: Checkout
+      - name: Checkout 🏁
         uses: actions/checkout@v3
 
-      - name: Update Docker repo for production images
-        if: inputs.environment == 'prod'
-        run:
-          echo "DOCKER_REPO=ghcr.io/chainflip-io" >> $GITHUB_ENV
-
-      - name: Download binaries
+      - name: Download binaries 📥
         uses: actions/download-artifact@v3
         with:
           name: chainflip-backend-bin-ubuntu-20.04
 
-      - name: Set up QEMU
+      - name: Set up QEMU 🧞
         uses: docker/setup-qemu-action@v2
 
-      - name: Set up Docker Buildx
+      - name: Set up Docker Buildx 🪄
         uses: docker/setup-buildx-action@v2
 
-      - name: Docker meta
+      - name: Docker meta 📄
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.DOCKER_REPO }}/${{ matrix.target }}
+          images: ${{ matrix.docker-repo }}/${{ matrix.target }}
           flavor: |
             latest=true
           tags: |
@@ -95,7 +98,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Login to DockerHub 🔑
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.CF_DOCKERHUB_USERNAME }}
+          password: ${{ secrets.CF_DOCKERHUB_TOKEN }}
+
+      - name: Build and push 🏗️🫸
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -109,44 +118,40 @@ jobs:
             VCS_REF=${{ github.sha }}
             CHAINSPEC=${{ inputs.network }}
 
-  chainflip-tools:
+  public-images:
+    if: inputs.publish_public_images == 'true'
     needs: [get-date-time, set-dockerfile-name]
-    if: inputs.environment != 'prod'
-    env:
-      DOCKER_REPO: ghcr.io/${{ github.repository }}
     strategy:
       matrix:
         target:
-          - generate-genesis-keys
-    permissions:
-      contents: read
-      packages: write
+          - chainflip-node
+          - chainflip-engine
+          - chainflip-cli
+          - chainflip-broker-api
+          - chainflip-lp-api
+        docker-repo:
+          - chainfliplabs
     runs-on: ubuntu-20.04
     steps:
-      - name: Checkout
+      - name: Checkout 🏁
         uses: actions/checkout@v3
 
-      - name: Update Docker repo for production images
-        if: inputs.environment == 'prod'
-        run:
-          echo "DOCKER_REPO=ghcr.io/chainflip-io" >> $GITHUB_ENV
-
-      - name: Download binaries
+      - name: Download binaries 📥
         uses: actions/download-artifact@v3
         with:
           name: chainflip-backend-bin-ubuntu-20.04
 
-      - name: Set up QEMU
+      - name: Set up QEMU 🧞
         uses: docker/setup-qemu-action@v2
 
-      - name: Set up Docker Buildx
+      - name: Set up Docker Buildx 🪄
         uses: docker/setup-buildx-action@v2
 
-      - name: Docker meta
+      - name: Docker meta 📄
         id: meta
         uses: docker/metadata-action@v4
         with:
-          images: ${{ env.DOCKER_REPO }}/${{ matrix.target }}
+          images: ${{ matrix.docker-repo }}/${{ matrix.target }}
           flavor: |
             latest=true
           tags: |
@@ -158,14 +163,13 @@ jobs:
             type=ref,event=tag
             type=ref,event=pr
 
-      - name: Login to Github Container Registry 🔑
+      - name: Login to DockerHub 🔑
         uses: docker/login-action@v2
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          username: ${{ secrets.CF_DOCKERHUB_USERNAME }}
+          password: ${{ secrets.CF_DOCKERHUB_TOKEN }}
 
-      - name: Build and push
+      - name: Build and push 🏗️🫸
         uses: docker/build-push-action@v4
         with:
           context: .
