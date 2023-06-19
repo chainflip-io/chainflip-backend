@@ -15,9 +15,10 @@ use std::{
 use anyhow::Result;
 use core::cmp::min;
 use futures::Future;
+use futures_util::stream::FuturesUnordered;
 use rand::Rng;
 use tokio::sync::{mpsc, oneshot};
-use utilities::{futures_unordered_wait::FuturesUnorderedWait, task_scope::Scope};
+use utilities::{task_scope::Scope, UnendingStream};
 
 type TypedFutureGenerator<T, RpcClient> = Pin<
 	Box<dyn Fn(RpcClient) -> Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send>> + Send>,
@@ -32,10 +33,10 @@ type Attempt = u32;
 
 type SubmissionFutureOutput = (RequestId, Result<BoxAny, (anyhow::Error, Attempt)>);
 type SubmissionFuture = Pin<Box<dyn Future<Output = SubmissionFutureOutput> + Send + 'static>>;
-type SubmissionFutures = FuturesUnorderedWait<SubmissionFuture>;
+type SubmissionFutures = FuturesUnordered<SubmissionFuture>;
 
 type RetryDelays =
-	FuturesUnorderedWait<Pin<Box<dyn Future<Output = (RequestId, Attempt)> + Send + 'static>>>;
+	FuturesUnordered<Pin<Box<dyn Future<Output = (RequestId, Attempt)> + Send + 'static>>>;
 
 type BoxAny = Box<dyn Any + Send>;
 
@@ -103,8 +104,8 @@ impl SubmissionHolder {
 		}
 	}
 
-	pub async fn next(&mut self) -> Option<SubmissionFutureOutput> {
-		let next_output = self.running_submissions.next().await;
+	pub async fn next(&mut self) -> SubmissionFutureOutput {
+		let next_output = self.running_submissions.next_or_pending().await;
 		if let Some(buffered_submission) = self.submissions_buffer.pop_front() {
 			self.running_submissions.push(buffered_submission);
 		}
@@ -173,7 +174,7 @@ impl<RpcClient: Clone + Send + Sync + 'static> RpcRetrierClient<RpcClient> {
 					submission_holder.push(submission_future(primary_client.clone(), &closure, request_id, initial_request_timeout, 0));
 					request_holder.insert(request_id, (response_sender, closure));
 				},
-				if let Some((request_id, result)) = submission_holder.next() => {
+				let (request_id, result) = submission_holder.next() => {
 					match result {
 						Ok(value) => {
 							if let Some((response_sender, _)) = request_holder.remove(&request_id) {
@@ -197,7 +198,7 @@ impl<RpcClient: Clone + Send + Sync + 'static> RpcRetrierClient<RpcClient> {
 						},
 					}
 				},
-				if let Some((request_id, attempt)) = retry_delays.next() => {
+				if let (request_id, attempt) = retry_delays.next_or_pending() => {
 					let next_attempt = attempt.saturating_add(1);
 					tracing::trace!("Retrying request_id: {request_id} for attempt: {next_attempt}");
 
