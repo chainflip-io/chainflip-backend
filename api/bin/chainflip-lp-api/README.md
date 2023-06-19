@@ -20,8 +20,8 @@ Then in another terminal:
 
 ```sh
 > curl -H "Content-Type: application/json" \
-    -d '{"id":1, "jsonrpc":"2.0", "method": "lp_registerAccount", 0}' \
-    http://localhost:80
+    -d '{"id":1, "jsonrpc":"2.0", "method": "lp_registerAccount", "params": [0]}' \
+    http://localhost:10589
 
 {"jsonrpc":"2.0","result":null,"id":1}
 
@@ -133,6 +133,36 @@ Return:
 - fees_harvested
   - Asset_0
   - Asset_1
+
+### `lp_mintLimitOrder`
+
+Parameters:
+
+- Asset as a camel-case string, eg "Eth" or "Dot"
+- Order as a camel-case string, "Buy" or "Sell"
+- Price tick as i32
+- Asset amount as u128
+
+Return:
+
+- assets_debited
+- collected_fees
+- swapped_liquidity
+
+### `lp_burnLimitOrder`
+
+Parameters:
+
+- Asset as a camel-case string, eg "Eth" or "Dot"
+- Order as a camel-case string, "Buy" or "Sell"
+- Price tick as i32
+- Asset amount as u128
+
+Return:
+
+- assets_credited
+- collected_fees
+- swapped_liquidity
 
 ### `lp_tokenBalances`
 

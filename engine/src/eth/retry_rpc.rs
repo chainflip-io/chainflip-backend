@@ -3,6 +3,7 @@ use ethers::{prelude::*, types::transaction::eip2718::TypedTransaction};
 use utilities::task_scope::Scope;
 
 use crate::{eth::ethers_rpc::EthersRpcApi, rpc_retrier::RpcRetrierClient};
+use std::time::Duration;
 
 use super::ethers_rpc::EthersRpcClient;
 
@@ -10,12 +11,18 @@ pub struct EthersRetryRpcClient {
 	retry_client: RpcRetrierClient<EthersRpcClient>,
 }
 
-const ETHERS_RPC_TIMEOUT_MILLIS: u64 = 1000;
+const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
+const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
 impl EthersRetryRpcClient {
 	pub fn new(scope: &Scope<'_, anyhow::Error>, ethers_client: EthersRpcClient) -> Self {
 		Self {
-			retry_client: RpcRetrierClient::new(scope, ethers_client, ETHERS_RPC_TIMEOUT_MILLIS),
+			retry_client: RpcRetrierClient::new(
+				scope,
+				ethers_client,
+				ETHERS_RPC_TIMEOUT,
+				MAX_CONCURRENT_SUBMISSIONS,
+			),
 		}
 	}
 }

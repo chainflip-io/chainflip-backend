@@ -1,7 +1,7 @@
 use cf_utilities::try_parse_number_or_hex;
 use chainflip_api::{
 	self,
-	lp::{self, Tick},
+	lp::{self, BuyOrSellOrder, Tick},
 	primitives::{AccountRole, Asset},
 	settings::StateChain,
 };
@@ -45,6 +45,24 @@ pub trait Rpc {
 		asset: Asset,
 		lower_tick: Tick,
 		upper_tick: Tick,
+		amount: NumberOrHex,
+	) -> Result<String, Error>;
+
+	#[method(name = "mintLimitOrder")]
+	async fn mint_limit_order(
+		&self,
+		asset: Asset,
+		order: BuyOrSellOrder,
+		price: Tick,
+		amount: NumberOrHex,
+	) -> Result<String, Error>;
+
+	#[method(name = "burnLimitOrder")]
+	async fn burn_limit_order(
+		&self,
+		asset: Asset,
+		order: BuyOrSellOrder,
+		price: Tick,
 		amount: NumberOrHex,
 	) -> Result<String, Error>;
 
@@ -157,6 +175,48 @@ impl RpcServer for RpcServerImpl {
 			&self.state_chain_settings,
 			asset,
 			Range { start, end },
+			try_parse_number_or_hex(amount)?,
+		)
+		.await
+		.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
+		.map_err(|e| Error::Custom(e.to_string()))
+	}
+
+	/// Creates or adds liquidity to a limit order.
+	/// Returns the assets debited, fees harvested and swapped liquidity.
+	async fn mint_limit_order(
+		&self,
+		asset: Asset,
+		order: BuyOrSellOrder,
+		price: Tick,
+		amount: NumberOrHex,
+	) -> Result<String, Error> {
+		lp::mint_limit_order(
+			&self.state_chain_settings,
+			asset,
+			order,
+			price,
+			try_parse_number_or_hex(amount)?,
+		)
+		.await
+		.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
+		.map_err(|e| Error::Custom(e.to_string()))
+	}
+
+	/// Removes liquidity from a limit order.
+	/// Returns the assets credited, fees harvested and swapped liquidity.
+	async fn burn_limit_order(
+		&self,
+		asset: Asset,
+		order: BuyOrSellOrder,
+		price: Tick,
+		amount: NumberOrHex,
+	) -> Result<String, Error> {
+		lp::burn_limit_order(
+			&self.state_chain_settings,
+			asset,
+			order,
+			price,
 			try_parse_number_or_hex(amount)?,
 		)
 		.await

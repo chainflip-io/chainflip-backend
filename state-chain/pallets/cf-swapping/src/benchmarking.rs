@@ -45,28 +45,46 @@ benchmarks! {
 	}
 
 	schedule_swap_from_contract {
-		let origin = T::EnsureWitnessed::successful_origin();
+		let deposit_amount = 1_000;
+
+		// reduce minimum swap amount
+		let gov_origin = T::EnsureGovernance::successful_origin();
+		let call = Call::<T>::set_minimum_swap_amount{
+			asset: Asset::Usdc,
+			amount: 1u128,
+		};
+		call.dispatch_bypass_filter(gov_origin)?;
+
+		let witness_origin = T::EnsureWitnessed::successful_origin();
 		let call = Call::<T>::schedule_swap_from_contract{
 			from: Asset::Usdc,
 			to: Asset::Eth,
-			deposit_amount: 1_000,
+			deposit_amount,
 			destination_address: EncodedAddress::benchmark_value(),
 			tx_hash: [0; 32],
 		};
 	}: {
-		call.dispatch_bypass_filter(origin)?;
+		call.dispatch_bypass_filter(witness_origin)?;
 	}
 	verify {
 		assert_eq!(SwapQueue::<T>::get(), vec![Swap::new(
 			1,
 			Asset::Usdc,
 			Asset::Eth,
-			1_000,
+			deposit_amount,
 			SwapType::Swap(ForeignChainAddress::benchmark_value())
 		)]);
 	}
 
 	ccm_deposit {
+		// reduce minimum swap amount
+		let gov_origin = T::EnsureGovernance::successful_origin();
+		let call = Call::<T>::set_minimum_swap_amount{
+			asset: Asset::Usdc,
+			amount: 1u128,
+		};
+		call.dispatch_bypass_filter(gov_origin)?;
+
 		let origin = T::EnsureWitnessed::successful_origin();
 		let metadata = CcmDepositMetadata {
 			message: vec![0x00],
