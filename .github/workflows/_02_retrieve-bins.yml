@@ -40,6 +40,6 @@ jobs:
       - name: Upload binary artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: chainflip-node-runtime
+          name: chainflip-node-runtime-${{ matrix.ubuntu_version }}
           path: |
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
