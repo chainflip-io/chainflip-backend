@@ -139,10 +139,11 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			match self.base_rpc_client.submit_extrinsic(signed_extrinsic).await {
 				Ok(tx_hash) => {
 					request.pending_submissions += 1;
-					self.submissions_by_nonce
-						.entry(self.anticipated_nonce)
-						.or_default()
-						.push(Submission { lifetime, tx_hash, request_id: request.id });
+					self.submissions_by_nonce.entry(nonce).or_default().push(Submission {
+						lifetime,
+						tx_hash,
+						request_id: request.id,
+					});
 					break Ok(Ok(tx_hash))
 				},
 				Err(rpc_err) => {
