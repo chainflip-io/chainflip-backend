@@ -36,6 +36,7 @@ jobs:
             chainflip-engine
             chainflip-cli
             chainflip-broker-api
+            chainflip-lp-api
 
       - name: Upload binary artifacts
         uses: actions/upload-artifact@v3
