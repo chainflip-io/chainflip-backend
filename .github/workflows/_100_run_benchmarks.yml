@@ -47,7 +47,7 @@ jobs:
         uses: tailscale/github-action@main
         with:
           authkey: ${{ secrets.CF_TAILSCALE_AUTHKEY }}
-
+      - run: sudo apt update && sudo apt install -y zip unzip jq
       - name: Load secret 🗝👨‍💻
         uses: 1password/load-secrets-action@v1
         env:
