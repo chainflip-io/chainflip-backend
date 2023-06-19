@@ -101,8 +101,11 @@ async fn should_update_version_on_bad_proof() {
 			transaction_version: 0,
 			state_version: 0,
 		};
-		assert_ne!(new_runtime_version, Default::default(), 
-            "The new runtime version must be different from the version that the watcher started with");
+		assert_ne!(
+			new_runtime_version,
+			Default::default(),
+			"The new runtime version must be different from the version that the watcher started with"
+		);
 
 		Ok(new_runtime_version)
 	});
