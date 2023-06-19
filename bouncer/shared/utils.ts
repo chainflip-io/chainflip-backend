@@ -59,7 +59,7 @@ export function getAddress(token: Token, seed: string, type?: string): string {
       case 'DOT':
         return execSync(`pnpm tsx ./commands/new_dot_address.ts ${seed}`);
       case 'BTC':
-        return execSync(`pnpm tsx ./commands/new_btc_address.ts ${seed} ${type}`);
+        return execSync(`pnpm tsx ./commands/new_btc_address.ts ${seed} ${type ?? 'P2PKH'}`);
       default:
         throw new Error("unexpected token");
     }

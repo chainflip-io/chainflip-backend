@@ -243,12 +243,6 @@ pub trait Funding {
 	type Balance;
 	type Handler: OnAccountFunded<ValidatorId = Self::AccountId, Amount = Self::Balance>;
 
-	/// The account's total Flip balance.
-	fn account_balance(account_id: &Self::AccountId) -> Self::Balance;
-
-	/// An account's tokens that are free to be redeemed.
-	fn redeemable_balance(account_id: &Self::AccountId) -> Self::Balance;
-
 	/// Credit an account with funds from off-chain. Returns the total balance in the account after
 	/// the funds are credited.
 	fn credit_funds(account_id: &Self::AccountId, amount: Self::Balance) -> Self::Balance;
@@ -267,6 +261,17 @@ pub trait Funding {
 
 	/// Reverts a pending redemption in the case of an expiry or cancellation.
 	fn revert_redemption(account_id: &Self::AccountId) -> Result<(), DispatchError>;
+}
+
+pub trait AccountInfo<T: Chainflip> {
+	/// Returns the account's total Flip balance.
+	fn balance(account_id: &T::AccountId) -> T::Amount;
+
+	/// Returns the bond on the account.
+	fn bond(account_id: &T::AccountId) -> T::Amount;
+
+	/// Returns the account's liquid funds, net of the bond.
+	fn liquid_funds(account_id: &T::AccountId) -> T::Amount;
 }
 
 /// Trait for managing token issuance.

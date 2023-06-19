@@ -23,6 +23,7 @@ async function testNativeSwap(destToken: Token) {
 async function test() {
     await testNativeSwap('DOT');
     await testNativeSwap('USDC');
+    await testNativeSwap('BTC');
 }
 
 // A successful execution usually takes ~150 seconds
