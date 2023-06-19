@@ -12,8 +12,8 @@ use sp_std::vec::Vec;
 
 use crate::{
 	btc::{
-		deposit_address::derive_btc_deposit_address_from_script, scriptpubkey_from_address,
-		BitcoinNetwork, BitcoinScriptBounded,
+		deposit_address::derive_btc_address_from_script, scriptpubkey_from_address, BitcoinNetwork,
+		BitcoinScriptBounded,
 	},
 	dot::PolkadotAccountId,
 };
@@ -198,7 +198,7 @@ pub fn try_to_encoded_address<GetBitcoinNetwork: FnOnce() -> BitcoinNetwork>(
 		ForeignChainAddress::Eth(address) => Ok(EncodedAddress::Eth(address)),
 		ForeignChainAddress::Dot(address) => Ok(EncodedAddress::Dot(*address.aliased_ref())),
 		ForeignChainAddress::Btc(address) => Ok(EncodedAddress::Btc(
-			derive_btc_deposit_address_from_script(address.into(), bitcoin_network())
+			derive_btc_address_from_script(address.into(), bitcoin_network())
 				.bytes()
 				.collect::<Vec<u8>>(),
 		)),

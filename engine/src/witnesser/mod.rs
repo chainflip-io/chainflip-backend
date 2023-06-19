@@ -6,7 +6,11 @@ use std::{
 };
 
 use async_trait::async_trait;
-use cf_chains::{address::ScriptPubkeyBytes, btc::BitcoinScriptBounded, dot::PolkadotAccountId};
+use cf_chains::{
+	address::ScriptPubkeyBytes,
+	btc::BitcoinScriptBounded,
+	dot::{PolkadotAccountId, PolkadotSignature},
+};
 use cf_primitives::EpochIndex;
 
 pub mod block_head_stream_from;
@@ -120,6 +124,11 @@ impl<A: std::fmt::Debug + ItemKeyValue<Key = K, Value = V>, K: std::cmp::Ord + C
 		self.items.contains_key(address)
 	}
 
+	/// Remove an item, return true if an item was actually removed.
+	pub fn remove(&mut self, address: &K) -> bool {
+		self.items.remove(address).is_some()
+	}
+
 	/// Ensure the list of interesting items is up to date
 	pub fn sync_items(&mut self) {
 		while let Ok(address) = self.item_receiver.try_recv() {
@@ -181,5 +190,14 @@ impl ItemKeyValue for [u8; 32] {
 
 	fn key_value(&self) -> (Self::Key, Self::Value) {
 		(*self, ())
+	}
+}
+
+impl ItemKeyValue for PolkadotSignature {
+	type Key = Self;
+	type Value = ();
+
+	fn key_value(&self) -> (Self::Key, Self::Value) {
+		(self.clone(), ())
 	}
 }

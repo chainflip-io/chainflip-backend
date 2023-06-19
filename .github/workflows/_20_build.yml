@@ -46,6 +46,7 @@ jobs:
             ./target/release/chainflip-cli
             ./target/release/generate-genesis-keys
             ./target/release/chainflip-broker-api
+            ./target/release/chainflip-lp-api
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm
 
       - name: Upload binary artifacts

@@ -3,7 +3,6 @@ use std::{
 	time::Duration,
 };
 
-use cf_chains::Ethereum;
 use futures::Future;
 use tracing::log;
 
@@ -102,10 +101,10 @@ mod tests {
 /// The `StaticState` is used to allow for state to be shared between restarts.
 /// Such as a Receiver a task might need to continue to receive data from some other task,
 /// despite the fact it has been restarted.
-pub async fn start_with_restart_on_failure<TaskFut>(
-	task_generator: impl Fn(Option<EpochStart<Ethereum>>) -> TaskFut,
+pub async fn start_with_restart_on_failure<TaskFut, C: cf_chains::Chain>(
+	task_generator: impl Fn(Option<EpochStart<C>>) -> TaskFut,
 ) where
-	TaskFut: Future<Output = Result<(), EpochProcessRunnerError<Ethereum>>> + Send + 'static,
+	TaskFut: Future<Output = Result<(), EpochProcessRunnerError<C>>> + Send + 'static,
 {
 	let mut resume_at = None;
 
@@ -130,6 +129,8 @@ pub async fn start_with_restart_on_failure<TaskFut>(
 
 #[cfg(test)]
 mod test_restart_on_failure {
+
+	use cf_chains::Ethereum;
 
 	use super::*;
 

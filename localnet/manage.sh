@@ -91,6 +91,12 @@ build-localnet() {
   echo "🚧 Waiting for chainflip-node to start"
   check_endpoint_health -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null
 
+  echo "🕺 Starting Broker API ..."
+  ./$LOCALNET_INIT_DIR/scripts/start-broker-api.sh $BINARIES_LOCATION
+
+  echo "🤑 Starting LP API ..."
+  ./$LOCALNET_INIT_DIR/scripts/start-lp-api.sh $BINARIES_LOCATION
+
   ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
   echo "🚗 Waiting for chainflip-engine to start"
   while true; do
@@ -170,7 +176,7 @@ yeet() {
 
 logs() {
   echo "🤖 Which service would you like to tail?"
-  select SERVICE in node engine broker polkadot geth bitcoin all; do
+  select SERVICE in node engine broker lp polkadot geth bitcoin all; do
     if [ $SERVICE == "all" ]; then
       docker compose -f localnet/docker-compose.yml logs --follow &
       tail -f /tmp/chainflip/chainflip-*.log
@@ -192,6 +198,9 @@ logs() {
     fi
     if [ $SERVICE == "broker" ]; then
       tail -f /tmp/chainflip/chainflip-broker-api.log
+    fi
+    if [ $SERVICE == "lp" ]; then
+      tail -f /tmp/chainflip/chainflip-lp-api.log
     fi
     break
   done

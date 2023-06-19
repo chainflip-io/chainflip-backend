@@ -245,7 +245,7 @@ where
 				}
 
 			},
-			Some(block) = block_stream.next().instrument(tracing::debug_span!("Eth-Block-Stream-Future")) => {
+			Some(block) = block_stream.next().instrument(tracing::debug_span!("Block-Stream-Future")) => {
 				// This will be an error if the stream times out. When it does, we return
 				// an error so that we restart the witnesser.
 				let block = block.map_err(|e| {
