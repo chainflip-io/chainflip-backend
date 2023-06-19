@@ -104,7 +104,7 @@ impl SubmissionHolder {
 		}
 	}
 
-	pub async fn next(&mut self) -> SubmissionFutureOutput {
+	pub async fn next_or_pending(&mut self) -> SubmissionFutureOutput {
 		let next_output = self.running_submissions.next_or_pending().await;
 		if let Some(buffered_submission) = self.submissions_buffer.pop_front() {
 			self.running_submissions.push(buffered_submission);
@@ -174,7 +174,7 @@ impl<RpcClient: Clone + Send + Sync + 'static> RpcRetrierClient<RpcClient> {
 					submission_holder.push(submission_future(primary_client.clone(), &closure, request_id, initial_request_timeout, 0));
 					request_holder.insert(request_id, (response_sender, closure));
 				},
-				let (request_id, result) = submission_holder.next() => {
+				let (request_id, result) = submission_holder.next_or_pending() => {
 					match result {
 						Ok(value) => {
 							if let Some((response_sender, _)) = request_holder.remove(&request_id) {
@@ -198,7 +198,7 @@ impl<RpcClient: Clone + Send + Sync + 'static> RpcRetrierClient<RpcClient> {
 						},
 					}
 				},
-				if let (request_id, attempt) = retry_delays.next_or_pending() => {
+				let (request_id, attempt) = retry_delays.next_or_pending() => {
 					let next_attempt = attempt.saturating_add(1);
 					tracing::trace!("Retrying request_id: {request_id} for attempt: {next_attempt}");
 
