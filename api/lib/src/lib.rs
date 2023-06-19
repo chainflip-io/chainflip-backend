@@ -509,7 +509,7 @@ mod test_key_generation {
 	use super::*;
 
 	#[test]
-	fn test_generate_signing_key_with_known_seed() {
+	fn restored_keys_remain_compatible() {
 		const SEED_PHRASE: &str =
 		"essay awesome afraid movie wish save genius eyebrow tonight milk agree pretty alcohol three whale";
 
