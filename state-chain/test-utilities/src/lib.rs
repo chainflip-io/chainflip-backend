@@ -43,7 +43,7 @@ macro_rules! assert_has_matching_event {
 /// Checks the deposited events in the order they occur
 #[macro_export]
 macro_rules! assert_event_sequence {
-	($runtime:ty, $($evt:expr),*) => {
+	($runtime:ty, $($evt:expr),* $(,)?) => {
 		let mut events = frame_system::Pallet::<$runtime>::events()
 		.into_iter()
 		// We want to be able to input the events into this macro in the order they occurred.
