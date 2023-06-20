@@ -11,10 +11,6 @@ pub const MIN_AUTHORITIES: AuthorityCount = 2;
 /// Percent of the epoch we are allowed to redeem
 pub const PERCENT_OF_EPOCH_PERIOD_REDEEMABLE: u8 = 50;
 
-/// Most Ethereum blocks are validated in around 12 seconds. This is a conservative
-/// time, in case things go wrong.
-pub const CONSERVATIVE_BLOCK_TIME_SECS: u64 = 20;
-
 // Consider the equation (1 + x/1_000_000_000)^n = 1 + inf/100
 // where inf is the target yearly inflation (percent), n is the number of compundings that
 // we do in a year and x is the inflation rate (Perbill) for each compunding time period.
