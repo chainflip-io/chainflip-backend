@@ -1,9 +1,7 @@
 import { ApiPromise, WsProvider } from "@polkadot/api";
 import Keyring from "@polkadot/keyring";
 import { cryptoWaitReady } from "@polkadot/util-crypto";
-import { Mutex } from "async-mutex";
-
-const mutex = new Mutex();
+import { polkadotSigningMutex } from "./utils";
 
 export async function fundDot(address: string, amount: string) {
 
@@ -31,7 +29,7 @@ export async function fundDot(address: string, amount: string) {
     // The mutex ensures that we use the right nonces by eliminating certain
     // race conditions (this doesn't impact performance significantly as
     // waiting for block confirmation can still be done concurrently)
-    await mutex.runExclusive(async () => {
+    await polkadotSigningMutex.runExclusive(async () => {
 
         await polkadot.tx.balances
             .transfer(address, parseInt(planckAmount))
@@ -46,7 +44,6 @@ export async function fundDot(address: string, amount: string) {
                     }
                 }
                 if (status.isInBlock || status.isFinalized) {
-                    console.log("finalized!");
                     resolve();
                 }
             });

@@ -18,7 +18,7 @@ export async function newSwap(sourceToken: Token, destToken: Token,
     const brokerUri = process.env.BROKER_URI ?? '//BROKER_1';
     const broker = keyring.createFromUri(brokerUri);
 
-    mutex.runExclusive(async () => {
+    await mutex.runExclusive(async () => {
         await chainflip.tx.swapping
             .requestSwapDepositAddress(
                 sourceToken,

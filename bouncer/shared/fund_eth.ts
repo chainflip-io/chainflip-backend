@@ -1,5 +1,5 @@
 import Web3 from "web3";
-
+import { ethereumSigningMutex } from "./utils";
 
 export async function fundEth(ethereumAddress: string, ethAmount: string) {
 
@@ -21,7 +21,8 @@ export async function fundEth(ethereumAddress: string, ethAmount: string) {
         gas: 2000000
     };
 
-    // TODO: mutex
-    const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
-    await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
+    await ethereumSigningMutex.runExclusive(async () => {
+        const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
+        await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
+    })
 }

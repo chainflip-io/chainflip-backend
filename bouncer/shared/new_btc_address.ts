@@ -10,7 +10,9 @@ import { Mutex } from "async-mutex";
 
 const btcWalletMutex = new Mutex();
 
-export async function newBtcAddress(seed: string, type: string): Promise<string> {
+export type BtcAddressType = 'P2PKH' | 'P2SH' | 'P2WPKH' | 'P2WSH';
+
+export async function newBtcAddress(seed: string, type: BtcAddressType): Promise<string> {
     const btcEndpoint = process.env.BTC_ENDPOINT ?? 'http://127.0.0.1:8332';
 
     const secret = sha256(seed);
@@ -74,7 +76,7 @@ export async function newBtcAddress(seed: string, type: string): Promise<string>
 
     // Would get a "Wallet is currently rescanning error"
     // if this is called concurrently
-    btcWalletMutex.runExclusive(async () => {
+    await btcWalletMutex.runExclusive(async () => {
         await axios.post(btcEndpoint + '/wallet/watch', registerAddressData, axiosConfig);
     })
 

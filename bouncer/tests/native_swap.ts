@@ -8,7 +8,7 @@ async function testNativeSwap(destAsset: Asset) {
     const addr = newAddress(destAsset, 'never');
     console.log("Destination address:", addr);
 
-    const oldBalance = getBalanceSync(destAsset, addr);
+    const oldBalance = await getBalance(destAsset, addr);
     // Note that we start observing events before executing
     // the swap to avoid race conditions:
     console.log(`Executing native contract swap to (${destAsset}) ${addr}. Current balance: ${oldBalance}`)
