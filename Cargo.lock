@@ -6338,6 +6338,7 @@ dependencies = [
  "cf-chains",
  "cf-primitives",
  "cf-runtime-upgrade-utilities",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",

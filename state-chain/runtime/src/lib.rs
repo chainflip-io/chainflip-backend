@@ -703,23 +703,18 @@ impl pallet_cf_chain_tracking::Config<EthereumInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Ethereum;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
-	type AgeLimit = ConstU64<{ constants::common::eth::BLOCK_SAFETY_MARGIN }>;
 }
 
 impl pallet_cf_chain_tracking::Config<PolkadotInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Polkadot;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
-	// TODO: Set good limit
-	type AgeLimit = ConstU32<1>;
 }
 
 impl pallet_cf_chain_tracking::Config<BitcoinInstance> for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = Bitcoin;
 	type WeightInfo = pallet_cf_chain_tracking::weights::PalletWeight<Runtime>;
-	// TODO: Set good limit
-	type AgeLimit = ConstU64<1>;
 }
 
 construct_runtime!(
