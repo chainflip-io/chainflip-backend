@@ -134,34 +134,25 @@ pub enum CliCommand {
         about = "Force a key rotation. This can only be executed by the governance dictator"
     )]
 	ForceRotation {},
-	#[clap(
-		about = "Generates the 3 key files needed to run a chainflip node (Node Key, Ethereum Key and Validator Key)"
-	)]
+	/// Generates the private/public keys required needed to run a Chainflip validator node. These
+	/// are the Node Key, Ethereum Key and Validator Key. The Validator Key and Ethereum Key can be
+	/// recovered using the seed phrase. The Node Key does not control any funds and therefore
+	/// doesn't need to be recoverable. It is generated independently of the seed phrase.
+	///
+	/// Note the seed phrase can only be used to recover keys using this utility. Notably, it isn't
+	/// possible to use the seed phrase to import the Ethereum wallet into Metamask. This is by
+	/// design: the Ethereum wallet should remain for the exclusive use of the Validator node.
 	GenerateKeys {
-		#[clap(
-			help = "Set to `json` to output to the cmd line as JSON, or provide a path to a directory where the keys will be saved. Defaults to save the keys to the local directory"
-		)]
-		output_type: Option<GenerateKeysOutputType>,
+		/// Output to the cmd line as JSON instead of pretty-printing the keys.
+		#[clap(short, long, action)]
+		json: bool,
+		/// Provide a path to a directory where the keys will be saved.
+		#[clap(short, long, action)]
+		path: Option<PathBuf>,
+		/// Supply a seed to generate the keys deterministically (restore keys).
+		#[clap(short, long, action)]
+		seed_phrase: Option<String>,
 	},
-}
-
-#[derive(Clone, Debug)]
-pub enum GenerateKeysOutputType {
-	Files { path: PathBuf },
-	Json,
-}
-
-impl std::str::FromStr for GenerateKeysOutputType {
-	type Err = String;
-
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let s = s.trim();
-		Ok(if s.eq_ignore_ascii_case("json") {
-			GenerateKeysOutputType::Json
-		} else {
-			GenerateKeysOutputType::Files { path: PathBuf::from(s) }
-		})
-	}
 }
 
 fn account_role_parser(s: &str) -> Result<AccountRole, String> {
