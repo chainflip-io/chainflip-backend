@@ -17,6 +17,13 @@ else
     echo "chainflip-node is already stopped."
 fi
 
+NODE_VERSION=$(chainflip-node -V)
+
+if echo "$NODE_VERSION" | grep 0.8; then
+    echo "chainflip-node: Detected version 0.8, skipping migration"
+    exit 0
+fi
+
 # Backup and delete systemd overrides if they exist
 if [ -f /etc/systemd/system/chainflip-node.service.d/override.conf ]; then
     echo "chainflip-node: systemd overrides found - backing up and removing"
@@ -24,7 +31,7 @@ if [ -f /etc/systemd/system/chainflip-node.service.d/override.conf ]; then
 fi
 
 # Remove old log files to free space
-if [-f "/var/log/chainflip-node.log" ]; then
+if [ -f "/var/log/chainflip-node.log" ]; then
     echo "chainflip-node: Removing old log file"
     rm -rf "/var/log/chainflip-node*"
 fi

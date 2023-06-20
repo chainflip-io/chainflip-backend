@@ -120,7 +120,7 @@ jobs:
             CHAINSPEC=${{ inputs.network }}
 
   public-images:
-    if: inputs.publish_public_images == 'true'
+    if: inputs.publish_public_images
     needs: [get-date-time, set-dockerfile-name]
     strategy:
       fail-fast: false

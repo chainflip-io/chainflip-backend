@@ -7,7 +7,11 @@ on:
 
 jobs:
   release:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-${{ matrix.ubuntu_version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu_version: [20.04, 22.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -15,7 +19,7 @@ jobs:
       - name: Download binaries
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
 
       - name: Substitute ENV
         env:
@@ -26,7 +30,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
-          name: ${{ inputs.network }}:${{ github.ref_name }}
+          name: ${{ inputs.network }}:${{ github.ref_name }}:ubuntu-${{ matrix.ubuntu_version }}
           generate_release_notes: false
           body_path: RELEASE.md
           draft: true
@@ -36,4 +40,5 @@ jobs:
             chainflip-engine
             chainflip-cli
             chainflip-broker-api
+            chainflip-lp-api
             wbuild/state-chain-runtime/state_chain_runtime*.wasm
