@@ -45,7 +45,7 @@ spec:
           image: "{{ .Values.brokerApi.image.repository }}:{{ .Values.brokerApi.image.tag | default "latest" }}"
           imagePullPolicy: {{ .Values.brokerApi.image.pullPolicy }}
           command:
-            - /usr/local/bin/chainflip-brokerApi-api
+            - /usr/local/bin/chainflip-broker-api
           args:
             - --port={{ .Values.brokerApi.containerPort | default 8080 }}
             - --state_chain.signing_key_file={{ .Values.signingKeyFile }}
