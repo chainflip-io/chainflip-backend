@@ -147,15 +147,10 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 									tx_id: Default::default(),
 								}],
 							}),
+							Ok(()),
 						))
 					})
 					.collect::<Vec<_>>()
-			})
-			.map_context(|(deposit_details, extrinsic_results)| {
-				for (call, result) in extrinsic_results {
-					assert!(result.is_ok(), "Extrinsic failed: {call:?}");
-				}
-				deposit_details
 			})
 	}
 }
