@@ -16,7 +16,7 @@ broker:
   enabled: false
   image:
     tag: "latest"
-    repository: ghcr.io/chainflip-io/chainflip-broker
+    repository: ghcr.io/chainflip-io/chainflip-backend/chainflip-broker
     pullPolicy: IfNotPresent
   containerPort: 8080
   resources: {}
