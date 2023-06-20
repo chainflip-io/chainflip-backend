@@ -27,7 +27,7 @@ fi
 # Delete the old engine data.db directory
 if [ -d "$CF_ROOT/data.db" ]; then
     echo "chainflip-engine: Removing old data.db directory"
-    rm -rf "$CF_ROOT/*.db"
+    rm -rf "$CF_ROOT/data.db"
 fi
 
 # Backup and delete systemd overrides if they exist
