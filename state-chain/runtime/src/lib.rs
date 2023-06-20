@@ -53,12 +53,9 @@ pub use pallet_timestamp::Call as TimestampCall;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata, H256};
-use sp_runtime::{
-	traits::{
-		AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor,
-		One, OpaqueKeys, UniqueSaturatedInto, Verify,
-	},
-	DispatchError,
+use sp_runtime::traits::{
+	AccountIdLookup, BlakeTwo256, Block as BlockT, ConvertInto, IdentifyAccount, NumberFor, One,
+	OpaqueKeys, UniqueSaturatedInto, Verify,
 };
 
 #[cfg(any(feature = "std", test))]
@@ -1000,10 +997,15 @@ impl_runtime_apis! {
 		}
 
 		/// Simulates a swap and return the intermediate (if any) and final output.
+		///
+		/// If no swap rate can be calculated, returns None. This can happen if the pools are not
+		/// provisioned, or if the input amount amount is too high or too low to give a meaningful
+		/// output.
+		///
 		/// Note: This function must only be called through RPC, because RPC has its own storage buffer
 		/// layer and would not affect on-chain storage.
-		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Result<SwapOutput, DispatchError> {
-			LiquidityPools::swap_with_network_fee(from, to, amount)
+		fn cf_pool_simulate_swap(from: Asset, to:Asset, amount: AssetAmount) -> Option<SwapOutput> {
+			LiquidityPools::swap_with_network_fee(from, to, amount).ok()
 		}
 
 		fn cf_environment() -> runtime_apis::Environment {

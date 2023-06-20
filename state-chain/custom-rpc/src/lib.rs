@@ -497,7 +497,7 @@ where
 			)
 			.map_err(to_rpc_error)
 			.and_then(|r| {
-				r.map_err(|e| jsonrpsee::core::Error::Custom(<&'static str>::from(e).into()))
+				r.ok_or(jsonrpsee::core::Error::from(anyhow::anyhow!("Unable to process swap.")))
 			})
 			.map(RpcSwapOutput::from)
 	}
