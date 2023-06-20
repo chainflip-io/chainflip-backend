@@ -3,7 +3,7 @@ on:
 jobs:
   fetch:
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         ubuntu_version: [20.04, 22.04]
     runs-on: ubuntu-${{ matrix.ubuntu_version }}
@@ -32,11 +32,12 @@ jobs:
         with:
           name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
           path: |
-            chainflip-node
-            chainflip-engine
-            chainflip-cli
             chainflip-broker-api
+            chainflip-cli
+            chainflip-engine
             chainflip-lp-api
+            chainflip-node
+            generate-genesis-keys
 
       - name: Upload binary artifacts
         uses: actions/upload-artifact@v3

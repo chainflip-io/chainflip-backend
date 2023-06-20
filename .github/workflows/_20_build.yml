@@ -16,7 +16,7 @@ jobs:
   compile:
     runs-on: [hetzner]
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         ubuntu_version: [20.04, 22.04]
     container:
