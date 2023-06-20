@@ -1,5 +1,5 @@
-import { Mutex } from "async-mutex";
 import Web3 from "web3";
+import { ethereumSigningMutex } from "./utils";
 
 const erc20TransferABI = [
     // transfer
@@ -26,9 +26,6 @@ const erc20TransferABI = [
     },
 ];
 
-// TODO: The mutex likely needs to be shared by all eth clients
-const mutex = new Mutex();
-
 export async function fundUsdc(ethereumAddress: string, usdcAmount: string) {
 
     const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
@@ -52,8 +49,9 @@ export async function fundUsdc(ethereumAddress: string, usdcAmount: string) {
     const whaleKey = process.env.ETH_USDC_WHALE || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
     console.log('Transferring ' + usdcAmount + ' USDC to ' + ethereumAddress);
     const tx = { to: usdcContractAddress, data: txData, gas: 2000000 };
-    mutex.runExclusive(async () => {
+    await ethereumSigningMutex.runExclusive(async () => {
+
         const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
         await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
-    })
+    });
 }

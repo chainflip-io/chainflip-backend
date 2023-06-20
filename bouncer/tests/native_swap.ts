@@ -1,13 +1,14 @@
 import { executeNativeSwap } from '../commands/native_swap';
-import { Token, chainflipApi, getAddress as newAddress, getBalanceSync, observeBalanceIncrease, observeEvent, runWithTimeout } from '../shared/utils';
+import { getBalance } from '../shared/get_balance';
+import { Token, chainflipApi, getAddress as newAddress, observeBalanceIncrease, observeEvent, runWithTimeout } from '../shared/utils';
 
 async function testNativeSwap(destToken: Token) {
 
     const api = await chainflipApi();
-    const addr = newAddress(destToken, 'never');
+    const addr = await newAddress(destToken, 'never');
     console.log("Destination address:", addr);
 
-    const oldBalance = getBalanceSync(destToken, addr);
+    const oldBalance = await getBalance(destToken, addr);
     // Note that we start observing events before executing
     // the swap to avoid race conditions:
     console.log(`Executing native contract swap to (${destToken}) ${addr}. Current balance: ${oldBalance}`)
