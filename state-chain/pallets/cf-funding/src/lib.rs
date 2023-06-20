@@ -654,7 +654,6 @@ pub mod pallet {
 		pub redemption_tax: T::Amount,
 		pub minimum_funding: T::Amount,
 		pub redemption_ttl: Duration,
-		pub redemption_delay_buffer_seconds: u64,
 	}
 
 	#[cfg(feature = "std")]
@@ -665,7 +664,6 @@ pub mod pallet {
 				redemption_tax: Default::default(),
 				minimum_funding: Default::default(),
 				redemption_ttl: Default::default(),
-				redemption_delay_buffer_seconds: Default::default(),
 			}
 		}
 	}
