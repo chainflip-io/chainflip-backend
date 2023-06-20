@@ -10,6 +10,22 @@ initContainer:
 
 signingKeyFile: /etc/chainflip/keys/signing_key_file
 nodeKeyFile: /etc/chainflip/keys/node_key_file
+stateChainWsEndpoint: ws://localhost:9944
+
+brokerApi:
+  enabled: false
+  image:
+    tag: "latest"
+    repository: ghcr.io/chainflip-io/chainflip-broker-api
+    pullPolicy: IfNotPresent
+  containerPort: 8080
+  resources: {}
+#    limits:
+#      cpu: 1500m
+#      memory: 2048Mi
+#    requests:
+#      cpu: 500m
+#      memory: 1024Mi
 
 imagePullSecrets:
   - name: dockerconfigjson

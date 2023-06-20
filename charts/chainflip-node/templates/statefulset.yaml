@@ -40,6 +40,28 @@ spec:
               mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
         {{- end }}
       containers:
+      {{- if .Values.brokerApi.enabled }}
+        - name: {{ .Chart.Name }}-broker-api
+          image: "{{ .Values.brokerApi.image.repository }}:{{ .Values.brokerApi.image.tag | default "latest" }}"
+          imagePullPolicy: {{ .Values.brokerApi.image.pullPolicy }}
+          command:
+            - /usr/local/bin/chainflip-broker-api
+          args:
+            - --port={{ .Values.brokerApi.containerPort | default 8080 }}
+            - --state_chain.signing_key_file={{ .Values.signingKeyFile }}
+            - --state_chain.ws_endpoint={{ .Values.stateChainWsEndpoint }}
+          ports:
+            - name: broker-api
+              containerPort: {{ .Values.brokerApi.containerPort | default 8080 }}
+              protocol: TCP
+          {{ with .Values.brokerApi.resources }}
+          resources:
+          {{- toYaml .| nindent 12 }}
+          {{ end }}
+          volumeMounts:
+            - name: keys
+              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/keys
+        {{ end }}
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -52,7 +74,6 @@ spec:
             - --node-key-file={{ .Values.basePath | default "/etc/chainflip" }}/keys/node_key_file
             - --prometheus-external
             - --state-cache-size=0
-            - --sync=warp
             - --validator
           ports:
             - name: ws
@@ -74,8 +95,6 @@ spec:
               mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
             - name: keys
               mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/keys
-
-
       volumes:
         - name: keys
           secret:
