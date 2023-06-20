@@ -12,5 +12,28 @@ spec:
       targetPort: ws
       protocol: TCP
       name: ws
+    - port: {{ .Values.service.port }}
+      targetPort: broker
+      protocol: TCP
+      name: http
   selector:
   {{- include "chainflip-node.selectorLabels" . | nindent 4 }}
+---
+{{- if .Values.broker.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "chainflip-node.fullname" . }}-broker
+  labels:
+  {{- include "chainflip-node.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  sessionAffinity: ClientIP
+  ports:
+    - port: 80
+      targetPort: broker
+      protocol: TCP
+      name: http
+  selector:
+  {{- include "chainflip-node.selectorLabels" . | nindent 4 }}
+{{- end }}
