@@ -99,6 +99,7 @@ fn funded_amount_is_added_and_subtracted() {
 		// Two broadcasts should have been initiated by the two redemptions.
 		assert_eq!(MockBroadcaster::received_requests().len(), 2);
 
+		const TOTAL_A: u128 = AMOUNT_A1 + AMOUNT_A2;
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: ALICE }),
@@ -112,7 +113,7 @@ fn funded_amount_is_added_and_subtracted() {
 				account_id: ALICE,
 				tx_hash: TX_HASH,
 				funds_added: AMOUNT_A2,
-				total_balance: AMOUNT_A1 + AMOUNT_A2
+				total_balance: TOTAL_A,
 			}),
 			RuntimeEvent::System(frame_system::Event::NewAccount { account: BOB }),
 			RuntimeEvent::Funding(crate::Event::Funded {

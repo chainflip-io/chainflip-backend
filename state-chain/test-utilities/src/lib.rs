@@ -43,7 +43,7 @@ macro_rules! assert_has_matching_event {
 /// Checks the deposited events in the order they occur
 #[macro_export]
 macro_rules! assert_event_sequence {
-	($runtime:ty, $($evt:expr),* $(,)?) => {
+	($runtime:ty, $( $evt:pat $(if $guard:expr )? ),* $(,)?) => {
 		let mut events = frame_system::Pallet::<$runtime>::events()
 		.into_iter()
 		// We want to be able to input the events into this macro in the order they occurred.
@@ -52,8 +52,8 @@ macro_rules! assert_event_sequence {
 			.collect::<Vec<_>>();
 
 		$(
-			let actual = events.pop().unwrap_or_else(|| panic!("No more events. Expected: {:?}", $evt));
-			assert_eq!(actual, $evt);
+			let actual = events.pop().unwrap_or_else(|| panic!("No more events. Expected: {:?}", stringify!($evt)));
+			assert!(matches!(actual, $evt $(if $guard)?), "Expected: {:?}. Actual: {:?}", stringify!($evt $(if $guard)?), actual);
 		)*
 	};
 }
