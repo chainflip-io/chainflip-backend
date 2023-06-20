@@ -150,9 +150,18 @@ pub struct EpochStartData {
 pub struct BitcoinDepositAddress;
 
 impl DepositAddressTrait for BitcoinDepositAddress {
-	type FetchParams = ();
+	type Address = ScriptPubkey;
+	type DepositFetchId = BitcoinFetchId;
 
-	fn fetch_params() -> Self::FetchParams {
+	fn get_address(&self) -> Self::Address {
+		todo!()
+	}
+
+	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
+		todo!()
+	}
+
+	fn new(channel_id: u64, address: Self::Address) -> Self {
 		todo!()
 	}
 }

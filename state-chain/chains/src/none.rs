@@ -8,10 +8,19 @@ pub enum NoneChain {}
 pub struct NoneChainDepositAddress;
 
 impl DepositAddress for NoneChainDepositAddress {
-	type FetchParams = ();
+	type Address = ForeignChainAddress;
+	type DepositFetchId = ();
 
-	fn fetch_params() -> Self::FetchParams {
-		unreachable!()
+	fn get_address(&self) -> Self::Address {
+		todo!()
+	}
+
+	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
+		todo!()
+	}
+
+	fn new(channel_id: u64, address: Self::Address) -> Self {
+		todo!()
 	}
 }
 

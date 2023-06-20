@@ -578,24 +578,26 @@ impl ChannelIdConstructor for EthereumChannelId {
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub struct EthereumDepositAddress {
-	address: EthereumAddress,
+	address: H160,
 	channel_id: u64,
 	deployment_status: bool,
 	deposit_fetch_id: EthereumChannelId,
 }
 
 impl DepositAddress for EthereumDepositAddress {
-	type FetchParams = ();
+	type Address = H160;
+	type DepositFetchId = EthereumChannelId;
 
-	fn fetch_params() -> Self::FetchParams {
+	fn get_address(&self) -> Self::Address {
 		todo!()
 	}
 
-	fn maybe_recycle(self) -> Option<Self>
-	where
-		Self: Sized,
-	{
-		None
+	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
+		todo!()
+	}
+
+	fn new(channel_id: u64, address: Self::Address) -> Self {
+		todo!()
 	}
 }
 

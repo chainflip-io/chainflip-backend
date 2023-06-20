@@ -16,10 +16,19 @@ pub type MockEthereumChannelId = u128;
 pub struct MockDepositAddress;
 
 impl DepositAddress for MockDepositAddress {
-	type FetchParams = ();
+	type Address = u64;
+	type DepositFetchId = ();
 
-	fn fetch_params() -> Self::FetchParams {
-		unreachable!()
+	fn get_address(&self) -> Self::Address {
+		todo!()
+	}
+
+	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
+		todo!()
+	}
+
+	fn new(channel_id: u64, address: Self::Address) -> Self {
+		todo!()
 	}
 }
 

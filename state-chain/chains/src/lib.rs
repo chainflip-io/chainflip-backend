@@ -106,7 +106,7 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValueExtended
 		+ ChannelIdConstructor<Address = Self::ChainAccount>;
 
-	type DepositAddress: Member + Parameter + Copy + DepositAddress;
+	type DepositAddress: Member + Parameter + Copy + DepositAddress<Address = Self::ChainAccount>;
 }
 
 /// Measures the age of items associated with the Chain.
@@ -329,24 +329,67 @@ pub struct CcmDepositMetadata {
 	pub source_address: ForeignChainAddress,
 }
 
-pub trait DepositAddress {
-	type FetchParams;
+// pub trait DepositAddress {
+// 	type FetchParams;
+// 	type Address;
 
-	/// Called at the end when we want to recycle a deposit address.
-	fn maybe_recycle(self) -> Option<Self>
+// 	/// Called at the end when we want to recycle a deposit address.
+// 	fn maybe_recycle(self) -> Option<Self>
+// 	where
+// 		Self: Sized,
+// 	{
+// 		None
+// 	}
+
+// 	fn get_address(&self) -> Self::Address;
+
+// 	fn construct_api_call() {}
+
+// 	/// Called when the first threshold has succeeded.
+// 	fn fetch_params() -> Self::FetchParams;
+
+// 	/// Called when we check for the address status.
+// 	fn skip_fetch(self) -> bool
+// 	where
+// 		Self: Sized,
+// 	{
+// 		false
+// 	}
+// }
+
+/// Deposit address trait. This traits defines the interface for chain specific aspects of deposit
+/// address management.
+pub trait DepositAddress {
+	type Address;
+	type DepositFetchId;
+
+	fn new(channel_id: u64, address: Self::Address) -> Self;
+
+	/// Returns the actual address raw address.
+	fn get_address(&self) -> Self::Address;
+
+	/// Returns the deposit fetch id.
+	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId;
+
+	/// Indicates if we want to skip the broadcast.
+	fn maybe_skip(self) -> bool
 	where
 		Self: Sized,
 	{
-		None
+		false
 	}
 
-	fn construct_api_call() {}
-
-	/// Called when the first threshold has succeeded.
-	fn fetch_params() -> Self::FetchParams;
-
-	/// Called when we check for the address status.
-	fn skip_fetch(self) -> bool
+	fn process(self)
+	where
+		Self: Sized,
+	{
+	}
+	fn finalize(self)
+	where
+		Self: Sized,
+	{
+	}
+	fn maybe_recycle(self) -> bool
 	where
 		Self: Sized,
 	{
