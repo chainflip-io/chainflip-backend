@@ -1,8 +1,8 @@
-import { execSync } from "child_process";
+import { Token, getBalance } from "../shared/get_balance";
 
-function get_balance(ccy: string, address: string) {
+async function get_balance(ccy: string, address: string) {
     address = address.trim();
-    const result = execSync(`pnpm tsx ./commands/get_${ccy}_balance.ts ${address}`);
+    const result = await getBalance(ccy.toUpperCase() as Token, address);
     const result_str = result.toString().trim();
     console.log(result_str);
 }
