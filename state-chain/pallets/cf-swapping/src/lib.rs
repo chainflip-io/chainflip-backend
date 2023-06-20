@@ -4,11 +4,11 @@ use cf_chains::{
 	CcmDepositMetadata,
 };
 use cf_primitives::{Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, STABLE_ASSET};
-use cf_traits::{liquidity::SwappingApi, CcmHandler, DepositApi, SystemStateInfo};
+use cf_traits::{liquidity::SwappingApi, CcmHandler, DepositApi, SafeMode};
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
-		traits::{BlockNumberProvider, Saturating},
+		traits::{BlockNumberProvider, Get, Saturating},
 		DispatchError, Permill,
 	},
 	storage::with_storage_layer,
@@ -157,6 +157,16 @@ pub enum CcmFailReason {
 	GasBudgetBelowMinimum,
 }
 
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct PalletSafeMode {
+	do_swaps: bool,
+}
+
+impl SafeMode for PalletSafeMode {
+	const CODE_RED: Self = Self { do_swaps: false };
+	const CODE_GREEN: Self = Self { do_swaps: true };
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum SwapOrigin {
 	DepositChannel { deposit_address: EncodedAddress, channel_id: ChannelId },
@@ -192,6 +202,9 @@ pub mod pallet {
 		/// A converter to convert address to and from human readable to internal address
 		/// representation.
 		type AddressConverter: AddressConverter;
+
+		/// Safe mode access.
+		type SafeMode: Get<PalletSafeMode>;
 
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
@@ -408,6 +421,9 @@ pub mod pallet {
 
 		/// Execute all swaps in the SwapQueue
 		fn on_finalize(_n: BlockNumberFor<T>) {
+			if !T::SafeMode::get().do_swaps {
+				return
+			}
 			// Wrap the entire swapping section as a transaction, any failed swap will rollback all
 			// storage changes.
 			if let Err(failed_swap) = with_storage_layer(|| -> Result<(), BatchExecutionError> {
@@ -563,7 +579,6 @@ pub mod pallet {
 			asset: Asset,
 			destination_address: EncodedAddress,
 		) -> DispatchResult {
-			T::SystemState::ensure_no_maintenance()?;
 			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 			let destination_address_internal =

@@ -77,6 +77,7 @@ impl_runtime_safe_mode! {
 	RuntimeSafeMode,
 	pallet_cf_environment::RuntimeSafeMode<Runtime>,
 	emissions: pallet_cf_emissions::PalletSafeMode,
+	swapping: pallet_cf_swapping::PalletSafeMode,
 }
 
 /// Legacy System State - to be deleted when all pallets are updated to use SafeMode.
