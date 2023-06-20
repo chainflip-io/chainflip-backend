@@ -134,24 +134,22 @@ pub enum CliCommand {
         about = "Force a key rotation. This can only be executed by the governance dictator"
     )]
 	ForceRotation {},
-	#[clap(about = "
-			Generates the private/public keys required needed to run a Chainflip validator node. Theses are the
-				Node Key, Ethereum Key and Validator Key. The Validator Key and Ethereum Key can be recovered
-				using the seed phrase. The Node Key does not control any funds and therefore doesn't need to be
-				recoverable. It is generated independently of the seed phrase.
-
-			Note the seed phrase can only be used to recover keys using this utility. Notably, it isn't possible
-			to use the seed phrase to import the Ethereum wallet into Metamask. This is by design: the Ethereum
-			wallet should remain for the exclusive use of the Validator node.
-		")]
+	/// Generates the private/public keys required needed to run a Chainflip validator node. These
+	/// are the Node Key, Ethereum Key and Validator Key. The Validator Key and Ethereum Key can be
+	/// recovered using the seed phrase. The Node Key does not control any funds and therefore
+	/// doesn't need to be recoverable. It is generated independently of the seed phrase.
+	///
+	/// Note the seed phrase can only be used to recover keys using this utility. Notably, it isn't
+	/// possible to use the seed phrase to import the Ethereum wallet into Metamask. This is by
+	/// design: the Ethereum wallet should remain for the exclusive use of the Validator node.
 	GenerateKeys {
-		/// Output to the cmd line as JSON.
+		/// Output to the cmd line as JSON instead of pretty-printing the keys.
 		#[clap(short, long, action)]
 		json: bool,
-		/// Optionally provide a path to a directory where the keys will be saved.
+		/// Provide a path to a directory where the keys will be saved.
 		#[clap(short, long, action)]
 		path: Option<PathBuf>,
-		/// Optionally supply a seed to generate the keys deterministically.
+		/// Supply a seed to generate the keys deterministically (restore keys).
 		#[clap(short, long, action)]
 		seed_phrase: Option<String>,
 	},

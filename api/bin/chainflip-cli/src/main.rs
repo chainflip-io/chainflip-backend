@@ -214,7 +214,7 @@ fn confirm_submit() -> bool {
 	}
 }
 
-const DISCLAIMER: &'static str = r#"
+const DISCLAIMER: &str = r#"
 ❗️❗️
 ❗️ THIS SEED PHRASE ALLOWS YOU TO RECOVER YOUR CHAINFLIP ACCOUNT KEYS AND ETHEREUM KEYS.
 ❗️ HOWEVER, THIS SEED PHRASE SHOULD ONLY BE USED IN CONJUNCTION WITH THIS UTILITY. NOTABLY,
@@ -251,7 +251,7 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 				hex::encode(&self.signing_key.public_key)
 			)?;
 			writeln!(f, "👤 Validator account id: {}", self.signing_account_id)?;
-			writeln!(f, "")?;
+			writeln!(f)?;
 			writeln!(f, "🌱 Seed phrase: {}", self.seed_phrase)?;
 			Ok(())
 		}
@@ -315,14 +315,10 @@ fn generate_keys(json: bool, path: Option<PathBuf>, seed_phrase: Option<String>)
 
 		println!();
 		println!("💾 Saved all secret keys to '{}'.", path.display());
-	} else {
-		if !json {
-			println!();
-			println!(
-				"💡 You can save the private key files to a directory using the --path argument:"
-			);
-			println!("💡 `chainflip-cli --seed $MY_SEED_PHRASE --file $PATH_TO_KEYS_DIR`");
-		}
+	} else if !json {
+		println!();
+		println!("💡 You can save the private key files to a directory using the --path argument:");
+		println!("💡 `chainflip-cli --seed $MY_SEED_PHRASE --file $PATH_TO_KEYS_DIR`");
 	}
 
 	Ok(())
