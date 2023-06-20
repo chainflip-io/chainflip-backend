@@ -236,8 +236,8 @@ fn expect_swap_id_to_be_emitted() {
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 1,
 				egress_id: (ForeignChain::Ethereum, 1),
-				destination_asset: Asset::Usdc,
-				egress_amount: 500,
+				asset: Asset::Usdc,
+				amount: 500,
 			})
 		);
 	});
@@ -1540,31 +1540,31 @@ fn process_all_into_stable_swaps_first() {
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 1,
-				destination_asset: Asset::Eth,
+				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 1),
-				egress_amount,
-			}) if egress_amount == output_amount,
+				amount,
+			}) if amount == output_amount,
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 2,
-				destination_asset: Asset::Eth,
+				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 2),
-				egress_amount,
-			}) if egress_amount == output_amount,
+				amount,
+			}) if amount == output_amount,
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 3, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 3,
-				destination_asset: Asset::Eth,
+				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 3),
-				egress_amount,
-			}) if egress_amount == output_amount,
+				amount,
+			}) if amount == output_amount,
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 4, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 4,
-				destination_asset: Asset::Eth,
+				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 4),
-				egress_amount,
-			}) if egress_amount == output_amount,
+				amount,
+			}) if amount == output_amount,
 		);
 	});
 }

@@ -292,8 +292,8 @@ pub mod pallet {
 		SwapEgressScheduled {
 			swap_id: u64,
 			egress_id: EgressId,
-			destination_asset: Asset,
-			egress_amount: AssetAmount,
+			asset: Asset,
+			amount: AssetAmount,
 		},
 		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
@@ -449,8 +449,8 @@ pub mod pallet {
 								Self::deposit_event(Event::<T>::SwapEgressScheduled {
 									swap_id: swap.swap_id,
 									egress_id,
-									destination_asset: swap.to,
-									egress_amount,
+									asset: swap.to,
+									amount: egress_amount,
 								});
 							},
 							SwapType::CcmPrincipal(ccm_id) => {

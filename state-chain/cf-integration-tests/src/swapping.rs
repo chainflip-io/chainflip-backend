@@ -275,7 +275,7 @@ fn basic_pool_setup_provision_and_swap() {
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapEgressScheduled {
 					egress_id: egress_id @ (ForeignChain::Ethereum, _),
-					destination_asset: Asset::Flip,
+					asset: Asset::Flip,
 					..
 				},
 			) => egress_id
