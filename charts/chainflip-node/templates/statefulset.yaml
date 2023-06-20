@@ -59,9 +59,8 @@ spec:
           {{- toYaml .| nindent 12 }}
           {{ end }}
           volumeMounts:
-            - name: signing-key
-              mountPath: {{ .Values.signingKeyFile }}
-              subPath: signing_key_file
+            - name: keys
+              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/keys
         {{ end }}
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
