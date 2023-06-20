@@ -488,3 +488,157 @@ fn can_process_ccm_via_direct_deposit() {
 		);
 	});
 }
+
+#[test]
+fn failed_swaps_are_rolled_back() {
+	super::genesis::default().build().execute_with(|| {
+		setup_pool_and_accounts(vec![Asset::Eth, Asset::Btc]);
+
+		// Get current pool's liquidity
+		let eth_sqrt_pice = LiquidityPools::current_sqrt_price(Asset::Eth, STABLE_ASSET)
+			.expect("Eth pool should be set up with liquidity.");
+		let btc_sqrt_pice = LiquidityPools::current_sqrt_price(Asset::Btc, STABLE_ASSET)
+			.expect("Btc pool should be set up with liquidity.");
+
+		let witness_swap_ingress =
+			|from: Asset, to: Asset, amount: AssetAmount, destination_address: EncodedAddress| {
+				let swap_call = Box::new(RuntimeCall::Swapping(
+					pallet_cf_swapping::Call::schedule_swap_from_contract {
+						from,
+						to,
+						deposit_amount: amount,
+						destination_address,
+						tx_hash: Default::default(),
+					},
+				));
+				let current_epoch = Validator::current_epoch();
+				for node in Validator::current_authorities() {
+					assert_ok!(Witnesser::witness_at_epoch(
+						RuntimeOrigin::signed(node),
+						swap_call.clone(),
+						current_epoch
+					));
+				}
+			};
+
+		witness_swap_ingress(
+			Asset::Eth,
+			Asset::Flip,
+			1_000,
+			EncodedAddress::Eth(Default::default()),
+		);
+		witness_swap_ingress(
+			Asset::Eth,
+			Asset::Btc,
+			1_000,
+			EncodedAddress::Btc("1JmRyKDGoGKu8dj1VAJZgMqWKa3muTyacB".as_bytes().to_vec()),
+		);
+		witness_swap_ingress(
+			Asset::Btc,
+			Asset::Usdc,
+			1_000,
+			EncodedAddress::Eth(Default::default()),
+		);
+		System::reset_events();
+
+		// Usdc -> Flip swap will fail. All swaps are stalled.
+		Swapping::on_finalize(1);
+
+		assert_events_match!(
+			Runtime,
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::BatchSwapFailed {
+					asset: Asset::Flip,
+					direction: cf_primitives::SwapLeg::FromStable,
+					amount: 998
+				},
+			) => ()
+		);
+
+		// Repeatedly processing Failed swaps should not impact pool liquidity
+		assert_eq!(
+			Some(eth_sqrt_pice),
+			LiquidityPools::current_sqrt_price(Asset::Eth, STABLE_ASSET)
+		);
+		assert_eq!(
+			Some(btc_sqrt_pice),
+			LiquidityPools::current_sqrt_price(Asset::Btc, STABLE_ASSET)
+		);
+
+		// Subsequent swaps will also fail. No swaps should be processed and the Pool liquidity
+		// shouldn't be drained.
+		Swapping::on_finalize(2);
+		assert_eq!(
+			Some(eth_sqrt_pice),
+			LiquidityPools::current_sqrt_price(Asset::Eth, STABLE_ASSET)
+		);
+		assert_eq!(
+			Some(btc_sqrt_pice),
+			LiquidityPools::current_sqrt_price(Asset::Btc, STABLE_ASSET)
+		);
+
+		// All swaps can continue once the problematic pool is fixed
+		setup_pool_and_accounts(vec![Asset::Flip]);
+		System::reset_events();
+
+		Swapping::on_finalize(3);
+
+		assert_ne!(
+			Some(eth_sqrt_pice),
+			LiquidityPools::current_sqrt_price(Asset::Eth, STABLE_ASSET)
+		);
+		assert_ne!(
+			Some(btc_sqrt_pice),
+			LiquidityPools::current_sqrt_price(Asset::Btc, STABLE_ASSET)
+		);
+
+		assert_events_match!(
+			Runtime,
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from: Asset:: Eth,
+					to: Asset::Usdc,
+					input_amount: 2_000,
+					..
+				},
+			) => (),
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from: Asset:: Btc,
+					to: Asset::Usdc,
+					input_amount: 1_000,
+					..
+				},
+			) => (),
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from: Asset::Usdc,
+					to: Asset::Flip,
+					..
+				},
+			) => (),
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from: Asset::Usdc,
+					to: Asset::Btc,
+					..
+				},
+			) => (),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::SwapExecuted {
+					swap_id: 1,
+				},
+			) => (),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::SwapExecuted {
+					swap_id: 2,
+				},
+			) => (),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::SwapExecuted {
+					swap_id: 3,
+				},
+			) => ()
+		);
+	});
+}
