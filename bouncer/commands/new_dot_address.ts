@@ -5,15 +5,12 @@
 // For example: pnpm tsx ./commands/new_dot_address.ts foobar
 // returns: 5Dd1drBHuBzHK7qGWzGQ2iR2KnbYZJbYuUfc88v5Cv4juWci
 
-import { Keyring } from '@polkadot/keyring';
-import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { runWithTimeout } from '../shared/utils';
+import { newDotAddress } from '../shared/new_dot_address';
 
 async function main(): Promise<void> {
   const seed = process.argv[2] ?? '0';
-  await cryptoWaitReady();
-  const keyring = new Keyring({ type: 'sr25519' });
-  const { address } = keyring.createFromUri('//' + seed);
+  const address = newDotAddress(seed);
   console.log(address);
   process.exit(0);
 }
