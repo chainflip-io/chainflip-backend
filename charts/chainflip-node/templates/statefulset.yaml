@@ -75,6 +75,9 @@ spec:
             - --prometheus-external
             - --state-cache-size=0
             - --validator
+            - --unsafe-ws-external
+            - --unsafe-rpc-external
+            - --rpc-methods=unsafe
           ports:
             - name: ws
               containerPort: {{ .Values.ports.wsPort | default "9944" }}
