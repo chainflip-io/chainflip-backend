@@ -606,6 +606,9 @@ pub mod pallet {
 
 impl<T: Config> SwappingApi for Pallet<T> {
 	fn take_network_fee(input: AssetAmount) -> AssetAmount {
+		if input.is_zero() {
+			return input
+		}
 		let (remaining, fee) = Self::calculate_network_fee(T::NetworkFee::get(), input);
 		CollectedNetworkFee::<T>::mutate(|total| {
 			total.saturating_accrue(fee);

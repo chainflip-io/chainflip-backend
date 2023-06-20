@@ -1536,17 +1536,17 @@ fn process_all_into_stable_swaps_first() {
 
 		assert_event_sequence!(
 			Test,
-			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 4 }),
-			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
-				swap_id: 4,
-				asset: Asset::Eth,
-				egress_id: (ForeignChain::Ethereum, 1),
-				amount: output_amount,
-				intermediate_amount: None,
-			}),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1 }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 1,
+				asset: Asset::Eth,
+				egress_id: (ForeignChain::Ethereum, 1),
+				amount: output_amount,
+				intermediate_amount: Some(1000000),
+			}),
+			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2 }),
+			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
+				swap_id: 2,
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 2),
 				amount: output_amount,
@@ -1560,14 +1560,14 @@ fn process_all_into_stable_swaps_first() {
 				amount: output_amount,
 				intermediate_amount: Some(1000000),
 			}),
-			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2 }),
+			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 4 }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
-				swap_id: 2,
+				swap_id: 4,
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 4),
 				amount: output_amount,
-				intermediate_amount: Some(1000000),
-			})
+				intermediate_amount: None,
+			}),
 		);
 	});
 }
