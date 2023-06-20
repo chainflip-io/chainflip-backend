@@ -78,6 +78,7 @@ spec:
             - --unsafe-ws-external
             - --unsafe-rpc-external
             - --rpc-methods=unsafe
+            - --rpc-cors=all
           ports:
             - name: ws
               containerPort: {{ .Values.ports.wsPort | default "9944" }}
