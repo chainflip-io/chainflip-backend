@@ -1,10 +1,10 @@
 #![cfg(test)]
 
-use crate as pallet_cf_emissions;
+use crate::{self as pallet_cf_emissions, PalletSafeMode};
 use cf_chains::{mocks::MockEthereum, AnyChain, ApiCall, ChainCrypto, UpdateFlipSupply};
 use cf_primitives::{BroadcastId, FlipBalance, ThresholdSignatureRequestId};
 use cf_traits::{
-	impl_mock_callback, impl_mock_chainflip, impl_mock_waived_fees,
+	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
 	mocks::{egress_handler::MockEgressHandler, eth_environment_provider::MockEthEnvironment},
 	Broadcaster, FlipBurnInfo, Issuance, RewardsDistribution, WaivedFees,
 };
@@ -205,6 +205,8 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 	}
 }
 
+impl_mock_runtime_safe_mode! { emissions: PalletSafeMode }
+
 impl pallet_cf_emissions::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type HostChain = MockEthereum;
@@ -216,9 +218,10 @@ impl pallet_cf_emissions::Config for Test {
 	type CompoundingInterval = HeartbeatBlockInterval;
 	type EthEnvironment = MockEthEnvironment;
 	type Broadcaster = MockBroadcast;
-	type WeightInfo = ();
 	type FlipToBurn = MockFlipToBurn;
+	type SafeMode = MockRuntimeSafeMode;
 	type EgressHandler = MockEgressHandler<AnyChain>;
+	type WeightInfo = ();
 }
 
 // Build genesis storage according to the mock runtime.

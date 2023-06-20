@@ -14,7 +14,7 @@ use cf_chains::{
 	ChainCrypto,
 };
 use cf_primitives::{chains::assets::eth::Asset as EthAsset, BroadcastId, EthereumAddress};
-use cf_traits::{GetBitcoinFeeInfo, SystemStateInfo, SystemStateManager};
+use cf_traits::{GetBitcoinFeeInfo, SafeMode};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{OnRuntimeUpgrade, StorageVersion},
@@ -34,14 +34,21 @@ mod migrations;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
 
-#[derive(Clone, Default, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum SystemState {
-	#[default]
-	Normal,
-	Maintenance,
-}
-
 type SignatureNonce = u64;
+
+#[derive(
+	Encode, Decode, MaxEncodedLen, TypeInfo, Clone, RuntimeDebugNoBound, PartialEq, Eq, Default,
+)]
+#[scale_info(skip_type_params(T))]
+pub enum SafeModeUpdate<T: Config> {
+	/// Sh*t, meet Fan. Stop everything.
+	CodeRed,
+	/// Sunshine, meet Rainbows. Regular operation.
+	#[default]
+	CodeGreen,
+	/// Schrödinger, meet Cat. It's complicated.
+	CodeAmber(T::RuntimeSafeMode),
+}
 
 pub mod cfe {
 	use super::*;
@@ -96,6 +103,9 @@ pub mod pallet {
 		/// On new key witnessed handler for Bitcoin
 		type BitcoinVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Bitcoin>;
 
+		/// The runtime's safe mode is stored in this pallet.
+		type RuntimeSafeMode: cf_traits::SafeMode + Member + Parameter + Default;
+
 		#[pallet::constant]
 		type BitcoinNetwork: Get<BitcoinNetwork>;
 
@@ -108,8 +118,6 @@ pub mod pallet {
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// The network is currently paused.
-		NetworkIsInMaintenance,
 		/// The settings provided were invalid.
 		InvalidCfeSettings,
 		/// Eth is not an Erc20 token, so its address can't be updated.
@@ -128,11 +136,6 @@ pub mod pallet {
 	#[pallet::getter(fn cfe_settings)]
 	/// The settings used by the CFE
 	pub type CfeSettings<T> = StorageValue<_, cfe::CfeSettings, ValueQuery>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn system_state)]
-	/// The current state the system is in (normal, maintenance).
-	pub type CurrentSystemState<T> = StorageValue<_, SystemState, ValueQuery>;
 
 	// ETHEREUM CHAIN RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
@@ -200,11 +203,14 @@ pub mod pallet {
 	pub type BitcoinActiveDepositAddressDetails<T> =
 		StorageMap<_, Twox64Concat, ScriptPubkey, (u32, [u8; 32]), ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn safe_mode)]
+	/// Stores the current safe mode state for the runtime.
+	pub type RuntimeSafeMode<T> = StorageValue<_, <T as Config>::RuntimeSafeMode, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// The system state has been updated
-		SystemStateUpdated { new_system_state: SystemState },
 		/// The on-chain CFE settings have been updated
 		CfeSettingsUpdated { new_cfe_settings: cfe::CfeSettings },
 		/// A new supported ETH asset was added
@@ -240,25 +246,6 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
-		/// Changes the current system state.
-		///
-		/// ## Events
-		///
-		/// - [SystemStateUpdated](Event::SystemStateUpdated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(T::WeightInfo::set_system_state())]
-		pub fn set_system_state(
-			origin: OriginFor<T>,
-			state: SystemState,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			SystemStateProvider::<T>::set_system_state(state);
-			Ok(().into())
-		}
-
 		/// Adds or updates an asset address in the map of supported ETH assets.
 		///
 		/// ## Events
@@ -442,6 +429,27 @@ pub mod pallet {
 
 			Ok(().into())
 		}
+
+		/// Update the current safe mode status.
+		///
+		/// Can only be dispatched from the governance origin.
+		///
+		/// See [SafeModeUpdate] for the different options.
+		#[pallet::weight(T::WeightInfo::update_safe_mode())]
+		pub fn update_safe_mode(
+			origin: OriginFor<T>,
+			update: SafeModeUpdate<T>,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			RuntimeSafeMode::<T>::put(match update {
+				SafeModeUpdate::CodeGreen => SafeMode::CODE_GREEN,
+				SafeModeUpdate::CodeRed => SafeMode::CODE_RED,
+				SafeModeUpdate::CodeAmber(safe_mode) => safe_mode,
+			});
+
+			Ok(().into())
+		}
 	}
 
 	#[pallet::genesis_config]
@@ -469,7 +477,6 @@ pub mod pallet {
 			EthereumVaultAddress::<T>::set(self.eth_vault_address);
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
 			CfeSettings::<T>::set(self.cfe_settings);
-			CurrentSystemState::<T>::set(SystemState::Normal);
 			EthereumSupportedAssets::<T>::insert(EthAsset::Flip, self.flip_token_address);
 			EthereumSupportedAssets::<T>::insert(EthAsset::Usdc, self.eth_usdc_address);
 
@@ -481,38 +488,6 @@ pub mod pallet {
 			BitcoinAvailableUtxos::<T>::set(vec![]);
 			BitcoinNetworkSelection::<T>::set(self.bitcoin_network);
 		}
-	}
-}
-
-pub struct SystemStateProvider<T>(PhantomData<T>);
-
-impl<T: Config> SystemStateProvider<T> {
-	fn set_system_state(new_system_state: SystemState) {
-		if CurrentSystemState::<T>::get() != new_system_state {
-			CurrentSystemState::<T>::put(&new_system_state);
-			Pallet::<T>::deposit_event(Event::<T>::SystemStateUpdated { new_system_state });
-		}
-	}
-}
-
-impl<T: Config> SystemStateInfo for SystemStateProvider<T> {
-	fn ensure_no_maintenance() -> frame_support::sp_runtime::DispatchResult {
-		ensure!(
-			<pallet::CurrentSystemState<T>>::get() != SystemState::Maintenance,
-			Error::<T>::NetworkIsInMaintenance
-		);
-		Ok(())
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn activate_maintenance_mode() {
-		<Self as SystemStateManager>::activate_maintenance_mode();
-	}
-}
-
-impl<T: Config> SystemStateManager for SystemStateProvider<T> {
-	fn activate_maintenance_mode() {
-		Self::set_system_state(SystemState::Maintenance);
 	}
 }
 
