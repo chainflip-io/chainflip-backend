@@ -2,7 +2,11 @@ on:
   workflow_call:
 jobs:
   fetch:
-    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: true
+      matrix:
+        ubuntu_version: [20.04, 22.04]
+    runs-on: ubuntu-${{ matrix.ubuntu_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -17,7 +21,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v2
         with:
           workflow: release-sisyphos.yml
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
           branch: release/${{ env.MAJOR_MINOR }}
           github_token: ${{ secrets.CF_GITHUB_BOT_TOKEN }}
           search_artifacts: true
@@ -26,16 +30,17 @@ jobs:
       - name: Re-upload binary artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin-ubuntu-${{ matrix.ubuntu_version }}
           path: |
             chainflip-node
             chainflip-engine
             chainflip-cli
             chainflip-broker-api
+            chainflip-lp-api
 
       - name: Upload binary artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: chainflip-node-runtime
+          name: chainflip-node-runtime-ubuntu-${{ matrix.ubuntu_version }}
           path: |
             ./target/release/wbuild/state-chain-runtime/state_chain_runtime*.wasm

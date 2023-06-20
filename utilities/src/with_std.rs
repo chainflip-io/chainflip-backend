@@ -1,15 +1,16 @@
 use anyhow::{anyhow, Context};
 use core::{fmt, time::Duration};
-use futures::{stream, Future, Stream};
+use futures::{stream, Stream};
 #[doc(hidden)]
 pub use lazy_format::lazy_format as internal_lazy_format;
 use sp_rpc::number::NumberOrHex;
 use std::path::PathBuf;
 use warp::{Filter, Reply};
 
-pub mod futures_unordered_wait;
 pub mod loop_select;
 pub mod task_scope;
+pub mod unending_stream;
+pub use unending_stream::UnendingStream;
 
 mod cached_stream;
 pub use cached_stream::{CachedStream, MakeCachedStream};
@@ -473,33 +474,3 @@ mod tests_read_clean_and_decode_hex_str_file {
 		});
 	}
 }
-
-#[pin_project::pin_project]
-pub struct NextOrPending<'a, St: ?Sized> {
-	#[pin]
-	stream: &'a mut St,
-}
-impl<'a, St: Stream + ?Sized + Unpin> Future for NextOrPending<'a, St> {
-	type Output = <St as Stream>::Item;
-
-	fn poll(
-		self: core::pin::Pin<&mut Self>,
-		cx: &mut core::task::Context<'_>,
-	) -> core::task::Poll<Self::Output> {
-		let this = self.project();
-		match this.stream.poll_next(cx) {
-			core::task::Poll::Ready(Some(item)) => core::task::Poll::Ready(item),
-			_ => core::task::Poll::Pending,
-		}
-	}
-}
-
-pub trait UnendingStream: Stream {
-	fn next_or_pending(&mut self) -> NextOrPending<'_, Self>
-	where
-		Self: Unpin,
-	{
-		NextOrPending { stream: self }
-	}
-}
-impl<T: Stream + ?Sized + Unpin> UnendingStream for T {}

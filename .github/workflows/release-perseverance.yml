@@ -20,6 +20,7 @@ jobs:
     with:
       network: perseverance
       environment: prod
+      publish_public_images: true
     secrets: inherit
   package:
     needs: [bins]
