@@ -17,6 +17,12 @@ else
     echo "chainflip-engine is already stopped."
 fi
 
+# Delete the old engine data.db directory
+if [ -d "$CF_ROOT/data.db" ]; then
+    echo "chainflip-engine: Removing old data.db directory"
+    rm -rf "$CF_ROOT/data.db"
+fi
+
 # Backup and delete systemd overrides if they exist
 if [ -f /etc/systemd/system/chainflip-engine.service.d/override.conf ]; then
     echo "chainflip-engine: systemd overrides found - backing up and removing"
