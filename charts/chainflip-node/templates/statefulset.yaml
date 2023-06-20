@@ -40,21 +40,21 @@ spec:
               mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
         {{- end }}
       containers:
-      {{- if .Values.broker.enabled }}
-        - name: {{ .Chart.Name }}-broker
-          image: "{{ .Values.broker.image.repository }}:{{ .Values.broker.image.tag | default "latest" }}"
-          imagePullPolicy: {{ .Values.broker.image.pullPolicy }}
+      {{- if .Values.brokerApi.enabled }}
+        - name: {{ .Chart.Name }}-brokerApi
+          image: "{{ .Values.brokerApi.image.repository }}:{{ .Values.brokerApi.image.tag | default "latest" }}"
+          imagePullPolicy: {{ .Values.brokerApi.image.pullPolicy }}
           command:
-            - /usr/local/bin/chainflip-broker-api
+            - /usr/local/bin/chainflip-brokerApi-api
           args:
-            - --port={{ .Values.broker.containerPort | default 8080 }}
+            - --port={{ .Values.brokerApi.containerPort | default 8080 }}
             - --state_chain.signing_key_file={{ .Values.signingKeyFile }}
             - --state_chain.ws_endpoint={{ .Values.stateChainWsEndpoint }}
           ports:
-            - name: broker
-              containerPort: {{ .Values.broker.containerPort | default 8080 }}
+            - name: broker-api
+              containerPort: {{ .Values.brokerApi.containerPort | default 8080 }}
               protocol: TCP
-          {{ with .Values.broker.resources }}
+          {{ with .Values.brokerApi.resources }}
           resources:
           {{- toYaml .| nindent 12 }}
           {{ end }}

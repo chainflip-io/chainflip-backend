@@ -19,11 +19,11 @@ spec:
   selector:
   {{- include "chainflip-node.selectorLabels" . | nindent 4 }}
 ---
-{{- if .Values.broker.enabled }}
+{{- if .Values.brokerApi.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "chainflip-node.fullname" . }}-broker
+  name: {{ include "chainflip-node.fullname" . }}-broker-api
   labels:
   {{- include "chainflip-node.labels" . | nindent 4 }}
 spec:
@@ -31,7 +31,7 @@ spec:
   sessionAffinity: ClientIP
   ports:
     - port: 80
-      targetPort: broker
+      targetPort: broker-api
       protocol: TCP
       name: http
   selector:
