@@ -269,12 +269,13 @@ fn basic_pool_setup_provision_and_swap() {
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
 					swap_id: executed_swap_id,
+					..
 				},
 			) if executed_swap_id == swap_id => (),
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapEgressScheduled {
 					egress_id: egress_id @ (ForeignChain::Ethereum, _),
-					asset: Asset::Flip,
+					destination_asset: Asset::Flip,
 					..
 				},
 			) => egress_id
@@ -366,6 +367,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
 					swap_id,
+					..
 				},
 			) if swap_id == principal_swap_id => (),
 			RuntimeEvent::LiquidityPools(
@@ -378,6 +380,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
 					swap_id,
+					..
 				},
 			) if swap_id == gas_swap_id => (),
 			RuntimeEvent::Swapping(
@@ -455,6 +458,7 @@ fn can_process_ccm_via_direct_deposit() {
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
 					swap_id,
+					..
 				},
 			) if swap_id == principal_swap_id => (),
 			RuntimeEvent::LiquidityPools(
@@ -467,6 +471,7 @@ fn can_process_ccm_via_direct_deposit() {
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
 					swap_id,
+					..
 				},
 			) if swap_id == gas_swap_id => (),
 			RuntimeEvent::Swapping(
@@ -627,16 +632,19 @@ fn failed_swaps_are_rolled_back() {
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
 					swap_id: 1,
+					..
 				},
 			) => (),
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
 					swap_id: 2,
+					..
 				},
 			) => (),
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
 					swap_id: 3,
+					..
 				},
 			) => ()
 		);
