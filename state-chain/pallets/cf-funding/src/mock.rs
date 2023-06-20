@@ -175,8 +175,6 @@ impl Broadcaster<Ethereum> for MockBroadcaster {
 	}
 }
 
-pub const REDEMPTION_DELAY_BUFFER_SECS: u64 = 10;
-
 impl pallet_cf_funding::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type TimeSource = time_source::Mock;
@@ -209,7 +207,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			redemption_tax: REDEMPTION_TAX,
 			minimum_funding: MIN_FUNDING,
 			redemption_ttl: Duration::from_secs(REDEMPTION_TTL_SECS),
-			redemption_delay_buffer_seconds: REDEMPTION_DELAY_BUFFER_SECS,
 		},
 	};
 
