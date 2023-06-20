@@ -31,6 +31,7 @@ utilities = { package = "utilities", path = "../../utilities" }
 futures = { version = "0.3.4" }
 hex = "0.4"
 hex-literal = "0.3.1"
+log = "0.4.16"
 
 # Substrate-node-template dependencies
 clap = { version = "4.0.9", features = ["derive"] }
