@@ -218,6 +218,8 @@ fn expect_swap_id_to_be_emitted() {
 				deposit_address: EncodedAddress::Eth(Default::default()),
 				destination_address: EncodedAddress::Eth(Default::default()),
 				expiry_block: SwapTTL::<Test>::get() + System::current_block_number(),
+				source_asset: Asset::Eth,
+				destination_asset: Asset::Usdc,
 			}),
 			RuntimeEvent::Swapping(Event::SwapScheduled {
 				swap_id: 1,

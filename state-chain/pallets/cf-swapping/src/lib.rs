@@ -267,6 +267,8 @@ pub mod pallet {
 			deposit_address: EncodedAddress,
 			destination_address: EncodedAddress,
 			expiry_block: T::BlockNumber,
+			source_asset: Asset,
+			destination_asset: Asset,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -529,6 +531,8 @@ pub mod pallet {
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 				destination_address,
 				expiry_block,
+				source_asset,
+				destination_asset,
 			});
 
 			Ok(())
