@@ -94,7 +94,18 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 /// Each account can only be associated with a single role, and the role can only be updated from
 /// the initial [AccountRole::None] state.
 #[derive(
-	PartialEq, Eq, Clone, Encode, Decode, MaxEncodedLen, TypeInfo, RuntimeDebug, Copy, Default,
+	PartialEq,
+	Eq,
+	Clone,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	RuntimeDebug,
+	Copy,
+	Default,
+	PartialOrd,
+	Ord,
 )]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum AccountRole {

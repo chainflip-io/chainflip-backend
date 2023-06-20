@@ -1322,6 +1322,7 @@ dependencies = [
  "hex",
  "hex-literal",
  "jsonrpsee 0.15.1",
+ "log",
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc",
  "sc-basic-authorship",
