@@ -41,7 +41,7 @@ spec:
         {{- end }}
       containers:
       {{- if .Values.broker.enabled }}
-        - name: {{ .Chart.Name }}
+        - name: {{ .Chart.Name }}-broker
           image: "{{ .Values.broker.image.repository }}:{{ .Values.broker.image.tag | default "latest" }}"
           imagePullPolicy: {{ .Values.broker.image.pullPolicy }}
           command:
