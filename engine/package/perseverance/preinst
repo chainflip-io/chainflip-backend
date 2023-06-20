@@ -6,6 +6,13 @@ if [ "$1" != "upgrade" ]; then
     exit 0
 fi
 
+ENGINE_VERSION=$(chainflip-engine -V)
+
+if echo "$ENGINE_VERSION" | grep 0.8; then
+    echo "chainflip-engine: Detected version 0.8, skipping migration"
+    exit 0
+fi
+
 CF_ROOT=/etc/chainflip
 
 # Stop the service
@@ -15,6 +22,12 @@ if systemctl is-active --quiet chainflip-engine; then
     echo "chainflip-engine stopped."
 else
     echo "chainflip-engine is already stopped."
+fi
+
+# Delete the old engine data.db directory
+if [ -d "$CF_ROOT/data.db" ]; then
+    echo "chainflip-engine: Removing old data.db directory"
+    rm -rf "$CF_ROOT/*.db"
 fi
 
 # Backup and delete systemd overrides if they exist
@@ -35,7 +48,7 @@ if ! grep -q '\[btc\]' /etc/chainflip/config/Settings.toml; then
     cat <<EOF >>$CF_ROOT/config/Settings.toml
 
 [btc]
-http_node_endpoint = "https://pbtc.chainflip.xyz"
+http_node_endpoint = "http://a108a82b574a640359e360cf66afd45d-424380952.eu-central-1.elb.amazonaws.com"
 rpc_user = "flip"
 rpc_password = "flip"
 EOF

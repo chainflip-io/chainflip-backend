@@ -69,6 +69,7 @@ jobs:
           - chainflip-broker-api
           - chainflip-cli
           - chainflip-engine
+          - chainflip-lp-api
           - chainflip-node
           - generate-genesis-keys
           - rust-base
@@ -88,7 +89,9 @@ jobs:
           - chainflip-broker-api
           - chainflip-cli
           - chainflip-engine
+          - chainflip-lp-api
           - chainflip-node
+          - generate-genesis-keys
     steps:
       - name: Checkout 🏁
         uses: actions/checkout@v3

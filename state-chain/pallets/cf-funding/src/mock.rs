@@ -180,7 +180,6 @@ pub const REDEMPTION_DELAY_BUFFER_SECS: u64 = 10;
 impl pallet_cf_funding::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type TimeSource = time_source::Mock;
-	type Balance = u128;
 	type Flip = Flip;
 	type WeightInfo = ();
 	type FunderId = AccountId;

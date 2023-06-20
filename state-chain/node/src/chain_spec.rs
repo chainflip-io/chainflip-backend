@@ -3,7 +3,7 @@ use cf_chains::{
 	dot::{PolkadotAccountId, PolkadotHash, RuntimeVersion},
 	eth,
 };
-use cf_primitives::{AccountRole, AuthorityCount};
+use cf_primitives::{chains::assets, AccountRole, AssetAmount, AuthorityCount};
 
 use common::FLIPPERINOS_PER_FLIP;
 use frame_benchmarking::sp_std::collections::btree_set::BTreeSet;
@@ -19,8 +19,8 @@ use state_chain_runtime::{
 	BitcoinThresholdSignerConfig, BitcoinVaultConfig, BlockNumber, CfeSettings, EmissionsConfig,
 	EnvironmentConfig, EthereumThresholdSignerConfig, EthereumVaultConfig, FlipBalance, FlipConfig,
 	FundingConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, PolkadotThresholdSignerConfig,
-	PolkadotVaultConfig, ReputationConfig, SessionConfig, Signature, SystemConfig, ValidatorConfig,
-	WASM_BINARY,
+	PolkadotVaultConfig, ReputationConfig, SessionConfig, Signature, SwappingConfig, SystemConfig,
+	ValidatorConfig, WASM_BINARY,
 };
 
 use std::{collections::BTreeMap, env, marker::PhantomData, str::FromStr};
@@ -257,6 +257,8 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				common::PENALTIES.to_vec(),
 				common::KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
 				common::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
+				common::SWAP_TTL,
+				common::MINIMUM_SWAP_AMOUNTS.to_vec(),
 			)
 		},
 		// Bootnodes
@@ -368,6 +370,8 @@ macro_rules! network_spec {
 							PENALTIES.to_vec(),
 							KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
 							THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
+							SWAP_TTL,
+							MINIMUM_SWAP_AMOUNTS.to_vec(),
 						)
 					},
 					// Bootnodes
@@ -421,6 +425,8 @@ fn testnet_genesis(
 	penalties: Vec<(Offence, (i32, BlockNumber))>,
 	keygen_ceremony_timeout_blocks: BlockNumber,
 	threshold_signature_ceremony_timeout_blocks: BlockNumber,
+	swap_ttl: BlockNumber,
+	minimum_swap_amounts: Vec<(assets::any::Asset, AssetAmount)>,
 ) -> GenesisConfig {
 	let authority_ids: BTreeSet<AccountId> =
 		initial_authorities.iter().map(|(id, ..)| id.clone()).collect();
@@ -554,7 +560,7 @@ fn testnet_genesis(
 		},
 		transaction_payment: Default::default(),
 		liquidity_pools: Default::default(),
-		swapping: Default::default(),
+		swapping: SwappingConfig { swap_ttl, minimum_swap_amounts },
 		liquidity_provider: Default::default(),
 	}
 }
