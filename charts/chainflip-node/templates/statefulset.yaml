@@ -41,7 +41,7 @@ spec:
         {{- end }}
       containers:
       {{- if .Values.brokerApi.enabled }}
-        - name: {{ .Chart.Name }}-brokerApi
+        - name: {{ .Chart.Name }}-broker-api
           image: "{{ .Values.brokerApi.image.repository }}:{{ .Values.brokerApi.image.tag | default "latest" }}"
           imagePullPolicy: {{ .Values.brokerApi.image.pullPolicy }}
           command:
