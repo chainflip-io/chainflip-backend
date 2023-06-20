@@ -6,6 +6,13 @@ if [ "$1" != "upgrade" ]; then
     exit 0
 fi
 
+ENGINE_VERSION=$(chainflip-engine -V)
+
+if echo "$ENGINE_VERSION" | grep 0.8; then
+    echo "chainflip-engine: Detected version 0.8, skipping migration"
+    exit 0
+fi
+
 CF_ROOT=/etc/chainflip
 
 # Stop the service
