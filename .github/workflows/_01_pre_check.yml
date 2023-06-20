@@ -10,7 +10,7 @@ jobs:
   cargo-fmt:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20-ubuntu-20.04"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -24,7 +24,7 @@ jobs:
   audit:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20-ubuntu-20.04"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -37,7 +37,7 @@ jobs:
   cargo-clippy:
     runs-on: [hetzner]
     container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20"
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20-ubuntu-20.04"
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -48,24 +48,6 @@ jobs:
         run: ./ci/scripts/install_sccache.sh $SCCACHE_VERSION
       - name: Check Linting
         run: cargo cf-clippy-ci
-
-  check-localnet-config:
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Checkout 🏁
-        uses: actions/checkout@v3
-
-      - name: Login to Github Container Registry 🔑
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Run docker compose up
-        run: docker compose -f ./localnet/docker-compose.yml up -d
-      - name: Stop containers
-        if: always()
-        run: docker compose -f ./localnet/docker-compose.yml down --remove-orphans
 
   lint-ci-workflows:
     runs-on: ubuntu-20.04
@@ -78,3 +60,59 @@ jobs:
           bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
           ./actionlint -color -shellcheck=
         shell: bash
+
+  lint-dev-dockerfiles:
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        dockerfile:
+          - chainflip-broker-api
+          - chainflip-cli
+          - chainflip-engine
+          - chainflip-lp-api
+          - chainflip-node
+          - generate-genesis-keys
+          - rust-base
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@v3
+
+      - name: Lint 🐳🔬
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: ci/docker/dev/${{ matrix.dockerfile }}.Dockerfile
+  lint-prod-dockerfiles:
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        dockerfile:
+          - chainflip-broker-api
+          - chainflip-cli
+          - chainflip-engine
+          - chainflip-lp-api
+          - chainflip-node
+          - generate-genesis-keys
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@v3
+
+      - name: Lint 🐳🔬
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: ci/docker/prod/${{ matrix.dockerfile }}.Dockerfile
+
+  check-docker-image-tags:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout 🏁
+        uses: actions/checkout@v3
+
+      - name: Setup Python 🐍
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9
+
+      - name: Check 🐳🕵️‍♂️
+        run: |
+          pip install PyYAML
+          python ci/scripts/check_docker_image_tags.py

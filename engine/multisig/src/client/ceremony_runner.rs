@@ -122,7 +122,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 		&mut self,
 		mut initial_stage: DynStage<Ceremony>,
 	) -> OptionalCeremonyReturn<Ceremony> {
-		initial_stage.init();
+		let single_party_result = initial_stage.init();
 
 		// This function is only ever called from a oneshot channel,
 		// so it should never get called twice.
@@ -134,50 +134,61 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 		// we don't want other parties to be able to control when our stages time out.
 		self.timeout_handle = Box::pin(tokio::time::sleep(MAX_STAGE_DURATION));
 
-		self.process_delayed().await
+		if let ProcessMessageResult::Ready = single_party_result {
+			self.finalize_current_stage().await
+		} else {
+			self.process_delayed().await
+		}
 	}
 
-	async fn finalize_current_stage(&mut self) -> OptionalCeremonyReturn<Ceremony> {
-		// Ideally, we would pass the authorised state as a parameter
-		// as it is always present (i.e. not `None`) when this function
-		// is called, but the borrow checker won't let allow this.
+	fn finalize_current_stage(&mut self) -> BoxFuture<OptionalCeremonyReturn<Ceremony>> {
+		async {
+			// Ideally, we would pass the authorised state as a parameter
+			// as it is always present (i.e. not `None`) when this function
+			// is called, but the borrow checker won't let allow this.
 
-		let stage = self
-			.stage
-			.take()
-			.expect("Ceremony must be authorised to finalize any of its stages");
+			let stage = self
+				.stage
+				.take()
+				.expect("Ceremony must be authorised to finalize any of its stages");
 
-		let validator_mapping = stage.ceremony_common().validator_mapping.clone();
+			let validator_mapping = stage.ceremony_common().validator_mapping.clone();
 
-		match stage.finalize().await {
-			StageResult::NextStage(mut next_stage) => {
-				debug!("Ceremony transitions to {}", next_stage.get_stage_name());
+			match stage.finalize().await {
+				StageResult::NextStage(mut next_stage) => {
+					debug!("Ceremony transitions to {}", next_stage.get_stage_name());
 
-				next_stage.init();
+					let single_party_result = next_stage.init();
 
-				self.stage = Some(next_stage);
+					self.stage = Some(next_stage);
 
-				// Instead of resetting the expiration time, we simply extend
-				// it (any remaining time carries over to the next stage).
-				// Doing it otherwise would allow other parties to influence
-				// the time at which the stages in individual nodes time out
-				// (by sending their data at specific times) thus making some
-				// attacks possible.
-				{
-					let current_deadline = self.timeout_handle.as_ref().deadline();
-					self.timeout_handle.as_mut().reset(current_deadline + MAX_STAGE_DURATION);
-				}
+					// Instead of resetting the expiration time, we simply extend
+					// it (any remaining time carries over to the next stage).
+					// Doing it otherwise would allow other parties to influence
+					// the time at which the stages in individual nodes time out
+					// (by sending their data at specific times) thus making some
+					// attacks possible.
+					{
+						let current_deadline = self.timeout_handle.as_ref().deadline();
+						self.timeout_handle.as_mut().reset(current_deadline + MAX_STAGE_DURATION);
+					}
 
-				self.process_delayed().await
-			},
-			StageResult::Error(bad_validators, reason) =>
-				Some(Err((validator_mapping.get_ids(bad_validators), reason))),
-			StageResult::Done(result) => {
-				debug!("Ceremony reached the final stage!");
+					if let ProcessMessageResult::Ready = single_party_result {
+						self.finalize_current_stage().await
+					} else {
+						self.process_delayed().await
+					}
+				},
+				StageResult::Error(bad_validators, reason) =>
+					Some(Err((validator_mapping.get_ids(bad_validators), reason))),
+				StageResult::Done(result) => {
+					debug!("Ceremony reached the final stage!");
 
-				Some(Ok(result))
-			},
+					Some(Ok(result))
+				},
+			}
 		}
+		.boxed()
 	}
 
 	/// Process message from a peer, returning ceremony outcome if

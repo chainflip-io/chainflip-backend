@@ -1,0 +1,20 @@
+on:
+  workflow_call:
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Note for Developers
+        run: |
+          echo "### 📝 Commit SHA" >> $GITHUB_STEP_SUMMARY
+          echo "The following commit: \`${{ github.sha }}\` the merge commit provided by GitHub Actions Context for \`pull_request\` event. More details [here](https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request)." >> $GITHUB_STEP_SUMMARY
+          echo "Base branch head SHA: \`$(git rev-parse origin/${{ github.base_ref }})\`" >> $GITHUB_STEP_SUMMARY
+          echo "PR branch head SHA: \`${{ github.event.pull_request.head.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "Merge Commit SHA: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "To check the merge commit, go [here](https://github.com/chainflip-io/chainflip-backend/commit/${{ github.sha }})" >> $GITHUB_STEP_SUMMARY

@@ -38,7 +38,7 @@ jobs:
         credentials:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-        image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:v0.7.0-1-node
+        image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-rc14-1-node-2023-06-08-1234
         ports:
           - 30303:30303
           - 30303:30303/udp
@@ -69,7 +69,7 @@ jobs:
       - name: Download binaries
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin-ubuntu-20.04
 
       - name: Install node dependencies
         working-directory: bouncer
@@ -90,7 +90,7 @@ jobs:
           NGROK_AUTHTOKEN: ${{ secrets.CF_NGROK_AUTHTOKEN }}
         run: |
           ngrok http http://localhost:9944 > /dev/null &
-          ngrok http http://localhost:9945 > /dev/null &
+          ngrok http http://polkadot:9945 > /dev/null &
 
       - name: Run EinfachHeuteLeiderNicht.exe
         if: inputs.simple_bouncer
@@ -125,6 +125,7 @@ jobs:
 
       - name: Upload Localnet Logs 💾
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v3
         with:
           name: localnet-logs
@@ -154,7 +155,7 @@ jobs:
       - name: Download previously built binaries
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-bin
+          name: chainflip-backend-bin-ubuntu-20.04
           path: ./target/release
 
       - name: Run benchmarks

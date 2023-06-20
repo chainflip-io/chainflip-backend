@@ -151,7 +151,7 @@ pub async fn start(
 
 	let eth_settings = eth_settings.clone();
 
-	let create_and_run_witnesser_futures = move || {
+	let create_and_run_witnesser_futures = move |resume_at_epoch: Option<EpochStart<Ethereum>>| {
 		let eth_settings = eth_settings.clone();
 		let state_chain_client = state_chain_client.clone();
 		let db = db.clone();
@@ -178,6 +178,7 @@ pub async fn start(
 				})?;
 
 			eth_block_witnessing::start(
+				resume_at_epoch,
 				epoch_start_receiver,
 				AllWitnessers {
 					key_manager: ContractWitnesser::new(

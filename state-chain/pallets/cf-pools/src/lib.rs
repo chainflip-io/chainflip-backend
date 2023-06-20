@@ -467,7 +467,7 @@ pub mod pallet {
 			})
 		}
 
-		/// Collects and mints a range order.
+		/// Collects and mints a limit order.
 		///
 		/// ## Events
 		///
@@ -534,7 +534,7 @@ pub mod pallet {
 			})
 		}
 
-		/// Collects and burns a range order.
+		/// Collects and burns a limit order.
 		///
 		/// ## Events
 		///

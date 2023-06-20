@@ -21,6 +21,10 @@ spec:
       imagePullSecrets:
       {{- toYaml . | nindent 8 }}
       {{- end }}
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
       initContainers:
         - name: download-chainspec
           image: {{ .Values.initContainer.image.repository }}:{{ .Values.initContainer.image.tag }}
@@ -46,7 +50,7 @@ spec:
                 rm -rf /etc/chainflip/chaindata/*
           volumeMounts:
             - name: {{ include "chainflip-node.fullname" . }}
-              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}
+              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
         {{- end }}
       containers:
         - name: {{ .Chart.Name }}
@@ -56,8 +60,9 @@ spec:
             - /usr/local/bin/chainflip-node
           args:
             - --base-path={{ .Values.basePath | default "/etc/chainflip" }}/chaindata
+            - --bootnodes={{ .Values.bootnodes }}
             - --chain=/etc/chainflip/{{ .Values.chainspec }}
-            - --node-key-file={{ .Values.nodeKeyFile }}
+            - --node-key-file={{ .Values.basePath | default "/etc/chainflip" }}/keys/node_key_file
             - --prometheus-external
             - --state-cache-size=0
             - --sync=warp
@@ -78,27 +83,22 @@ spec:
           resources:
           {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
-            - name: signing-key
-              mountPath: {{ .Values.signingKeyFile }}
-              subPath: signing-key
-            - name: node-key
-              mountPath: {{ .Values.nodeKeyFile }}
-              subPath: node-key
             - name: {{ include "chainflip-node.fullname" . }}
-              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}
+              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
+            - name: keys
+              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/keys
+
+
       volumes:
-        - name: signing-key
+        - name: keys
           secret:
             secretName: {{ .Values.secrets.existingOnePasswordSecret }}
             items:
               - key: signing-key
                 path: signing_key_file
-        - name: node-key
-          secret:
-            secretName: {{ .Values.secrets.existingOnePasswordSecret }}
-            items:
               - key: node-key
                 path: node_key_file
+
   volumeClaimTemplates:
     - metadata:
         name: {{ include "chainflip-node.fullname" . }}

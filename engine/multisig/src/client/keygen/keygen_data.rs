@@ -22,7 +22,7 @@ use super::keygen_detail::{ShamirShare, MAX_COEFF_COMM_3_SIZE};
 pub use tests::{gen_keygen_data_hash_comm1, gen_keygen_data_verify_hash_comm2};
 
 /// Data sent between parties over p2p for a keygen ceremony
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub enum KeygenData<P: ECPoint> {
 	#[serde(bound = "")]
 	PubkeyShares0(PubkeyShares0<P>),
@@ -160,10 +160,10 @@ impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
 	}
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialOrd, Ord, PartialEq, Eq)]
 pub struct HashComm1(pub sp_core::H256);
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialOrd, Ord, PartialEq, Eq)]
 pub struct PubkeyShares0<P: ECPoint>(#[serde(bound = "")] pub BTreeMap<AuthorityCount, P>);
 
 pub type VerifyHashComm2 = BroadcastVerificationMessage<HashComm1>;
@@ -178,7 +178,7 @@ pub type VerifyCoeffComm4<P> = BroadcastVerificationMessage<CoeffComm3<P>>;
 pub type SecretShare5<P> = ShamirShare<P>;
 
 /// List of parties blamed for sending invalid secret shares
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialOrd, Ord, PartialEq, Eq)]
 pub struct Complaints6(pub BTreeSet<AuthorityCount>);
 
 pub type VerifyComplaints7 = BroadcastVerificationMessage<Complaints6>;
@@ -190,7 +190,7 @@ pub type VerifyComplaints7 = BroadcastVerificationMessage<Complaints6>;
 /// to reveal/broadcast some them at this stage: a node's long-term secret can
 /// only be recovered by collecting shares from all (N-1) nodes, which would
 /// require collusion of N-1 nodes.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialOrd, Ord, PartialEq, Eq)]
 pub struct BlameResponse8<P: ECPoint>(
 	#[serde(bound = "")] pub BTreeMap<AuthorityCount, ShamirShare<P>>,
 );
