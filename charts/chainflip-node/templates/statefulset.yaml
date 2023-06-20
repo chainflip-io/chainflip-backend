@@ -74,7 +74,6 @@ spec:
             - --node-key-file={{ .Values.basePath | default "/etc/chainflip" }}/keys/node_key_file
             - --prometheus-external
             - --state-cache-size=0
-            - --sync=warp
             - --validator
           ports:
             - name: ws
