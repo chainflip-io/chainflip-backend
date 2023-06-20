@@ -215,28 +215,29 @@ fn expect_swap_id_to_be_emitted() {
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapDepositAddressReady {
-				deposit_address: EncodedAddress::Eth(Default::default()),
-				destination_address: EncodedAddress::Eth(Default::default()),
-				expiry_block: SwapTTL::<Test>::get() + System::current_block_number(),
-			}),
+				deposit_address: EncodedAddress::Eth(..),
+				destination_address: EncodedAddress::Eth(..),
+				expiry_block,
+				source_asset: Asset::Eth,
+				destination_asset: Asset::Usdc,
+			}) if expiry_block == SwapTTL::<Test>::get() + System::current_block_number(),
 			RuntimeEvent::Swapping(Event::SwapScheduled {
 				swap_id: 1,
 				deposit_amount: 500,
 				source_asset: Asset::Eth,
 				destination_asset: Asset::Usdc,
-				destination_address: EncodedAddress::Eth(Default::default()),
+				destination_address: EncodedAddress::Eth(..),
 				origin: SwapOrigin::DepositChannel {
-					deposit_address: EncodedAddress::Eth(Default::default()),
+					deposit_address: EncodedAddress::Eth(..),
 					channel_id: 1
 				}
 			}),
-			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1 }),
+			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 1,
 				egress_id: (ForeignChain::Ethereum, 1),
 				asset: Asset::Usdc,
 				amount: 500,
-				intermediate_amount: None,
 			})
 		);
 	});
@@ -264,8 +265,8 @@ fn withdraw_broker_fees() {
 		assert_eq!(egresses.pop().expect("must exist").amount(), 200);
 		System::assert_last_event(RuntimeEvent::Swapping(Event::<Test>::WithdrawalRequested {
 			egress_id: (ForeignChain::Ethereum, 1),
-			amount: 200,
-			address: EncodedAddress::Eth(Default::default()),
+			egress_amount: 200,
+			destination_address: EncodedAddress::Eth(Default::default()),
 		}));
 	});
 }
@@ -1385,9 +1386,9 @@ fn ccm_without_principal_swaps_are_accepted() {
 				ccm_id: 1,
 				principal_swap_id: None,
 				gas_swap_id: None,
-				deposit_amount: gas_budget,
-				destination_address: EncodedAddress::Eth(Default::default()),
-			}),
+				deposit_amount,
+				destination_address: EncodedAddress::Eth(..),
+			}) if deposit_amount == gas_budget,
 			RuntimeEvent::Swapping(Event::CcmEgressScheduled {
 				ccm_id: 1,
 				egress_id: (ForeignChain::Ethereum, 1),
@@ -1414,9 +1415,9 @@ fn ccm_without_principal_swaps_are_accepted() {
 				ccm_id: 2,
 				principal_swap_id: None,
 				gas_swap_id: None,
-				deposit_amount: gas_budget + principal_amount,
-				destination_address: EncodedAddress::Eth(Default::default()),
-			}),
+				deposit_amount,
+				destination_address: EncodedAddress::Eth(..),
+			}) if deposit_amount == gas_budget + principal_amount,
 			RuntimeEvent::Swapping(Event::CcmEgressScheduled {
 				ccm_id: 2,
 				egress_id: (ForeignChain::Ethereum, 2),
@@ -1536,38 +1537,34 @@ fn process_all_into_stable_swaps_first() {
 
 		assert_event_sequence!(
 			Test,
-			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1 }),
+			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 1,
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 1),
-				amount: output_amount,
-				intermediate_amount: Some(1000000),
-			}),
-			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2 }),
+				amount,
+			}) if amount == output_amount,
+			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 2, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 2,
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 2),
-				amount: output_amount,
-				intermediate_amount: Some(1000000),
-			}),
-			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 3 }),
+				amount,
+			}) if amount == output_amount,
+			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 3, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 3,
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 3),
-				amount: output_amount,
-				intermediate_amount: Some(1000000),
-			}),
-			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 4 }),
+				amount,
+			}) if amount == output_amount,
+			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 4, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
 				swap_id: 4,
 				asset: Asset::Eth,
 				egress_id: (ForeignChain::Ethereum, 4),
-				amount: output_amount,
-				intermediate_amount: None,
-			}),
+				amount,
+			}) if amount == output_amount,
 		);
 	});
 }
