@@ -55,10 +55,10 @@ rpc_password = "flip"
 EOF
 fi
 
-# Check if polkadot endpoint is polkadot.chainflip.io and change to polkadot.chainflip.xyz
-if grep -q 'polkadot.chainflip.io' /etc/chainflip/config/Settings.toml; then
-    echo "chainflip-engine: Found polkadot.chainflip.io endpoint ... Changing to polkadot.chainflip.xyz"
-    sed -i 's/polkadot.chainflip.io/polkadot.chainflip.xyz/g' /etc/chainflip/config/Settings.toml
+# Check if pdot endpoint is pdot.chainflip.io and change to pdot.chainflip.xyz
+if grep -q 'pdot.chainflip.io' /etc/chainflip/config/Settings.toml; then
+    echo "chainflip-engine: Found pdot.chainflip.io endpoint ... Changing to pdot.chainflip.xyz"
+    sed -i 's/pdot.chainflip.io/pdot.chainflip.xyz/g' /etc/chainflip/config/Settings.toml
 fi
 
 systemctl daemon-reload
