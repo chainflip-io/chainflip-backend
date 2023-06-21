@@ -1,7 +1,7 @@
 import { ApiPromise, WsProvider } from "@polkadot/api";
 import Keyring from "@polkadot/keyring";
 import { cryptoWaitReady } from "@polkadot/util-crypto";
-import { polkadotSigningMutex } from "./utils";
+import { polkadotSigningMutex, sleep } from "./utils";
 
 export async function fundDot(address: string, amount: string) {
 
@@ -25,6 +25,11 @@ export async function fundDot(address: string, amount: string) {
         resolve = resolve_;
         reject = reject_;
     });
+
+    // Ensure that both of these have been assigned from the callback above
+    while (!resolve || !reject) {
+        await sleep(1);
+    }
 
     // The mutex ensures that we use the right nonces by eliminating certain
     // race conditions (this doesn't impact performance significantly as

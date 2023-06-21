@@ -2,7 +2,7 @@ import { Keyring } from "@polkadot/api";
 import { u8aToHex } from "@polkadot/util";
 import { cryptoWaitReady } from "@polkadot/util-crypto";
 import { Mutex } from "async-mutex";
-import { Token, chainflipApi } from "./utils";
+import { Token, getChainflipApi } from "./utils";
 
 const mutex = new Mutex();
 
@@ -11,7 +11,7 @@ export async function newSwap(sourceToken: Token, destToken: Token,
     await cryptoWaitReady();
     const keyring = new Keyring({ type: 'sr25519' });
 
-    const chainflip = await chainflipApi();
+    const chainflip = await getChainflipApi();
     const destinationAddress =
         destToken === 'DOT' ? u8aToHex(keyring.decodeAddress(destAddress)) : destAddress;
 

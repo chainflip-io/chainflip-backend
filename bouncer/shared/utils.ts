@@ -22,21 +22,27 @@ export const sha256 = (data: string): Buffer => crypto.createHash('sha256').upda
 
 export { sleep };
 
-export async function chainflipApi(endpoint?: string): Promise<ApiPromise> {
-  const cfNodeEndpoint = endpoint ?? 'ws://127.0.0.1:9944';
-  return ApiPromise.create({
-    provider: new WsProvider(cfNodeEndpoint),
-    noInitWarn: true,
-  });
-}
+// It is important to cache WS connections because nodes seem to have a
+// limit on how many can be opened at the same time (from the same IP presumably)
+function getCachedSubstrateApi(defaultEndpoint: string) {
+  let api: ApiPromise | undefined;
 
-export async function polkadotApi(endpoint?: string): Promise<ApiPromise> {
-  const polkadotEndpoint = endpoint ?? 'ws://127.0.0.1:9945';
-  return ApiPromise.create({
-    provider: new WsProvider(polkadotEndpoint),
-    noInitWarn: true,
-  });
-}
+  return async (providedEndpoint?: string): Promise<ApiPromise> => {
+    if (api) return api;
+
+    const endpoint = providedEndpoint ?? defaultEndpoint;
+
+    api = await ApiPromise.create({
+      provider: new WsProvider(endpoint),
+      noInitWarn: true,
+    });
+
+    return api;
+  };
+};
+
+export const getChainflipApi = getCachedSubstrateApi('ws://127.0.0.1:9944');
+export const getPolkadotApi = getCachedSubstrateApi('ws://127.0.0.1:9945');
 
 export const polkadotSigningMutex = new Mutex();
 export const ethereumSigningMutex = new Mutex();

@@ -2,42 +2,45 @@ import { encodeAddress } from '@polkadot/util-crypto';
 import { newSwap } from './new_swap';
 import { fund } from './fund';
 import { getBalance } from './get_balance';
-import { Token, chainflipApi as getChainflipApi, observeBalanceIncrease, observeEvent, observeEventWithNameAndQuery } from '../shared/utils';
+import { Token, getChainflipApi, observeBalanceIncrease, observeEvent, observeEventWithNameAndQuery } from '../shared/utils';
 
-function extractDestinationAddress(swapInfo: any, destToken: Token) {
+function extractDestinationAddress(swapInfo: any, destToken: Token): string | undefined {
+    const token = (destToken === 'USDC') ? 'ETH' : destToken;
+    return swapInfo[1][token.toLowerCase()];
+}
 
-    let destAddress = (() => {
-        let token = destToken;
-        if (token === 'USDC') {
-            token = 'ETH';
-        }
-        return swapInfo[1][token.toLowerCase()];
-    })();
+function encodeDestinationAddress(address: string, destToken: Token): string {
 
-    if (destToken === 'BTC') {
+    let destAddress = address;
+
+    if (destAddress && destToken === 'BTC') {
         destAddress = destAddress.replace(/^0x/, '');
         destAddress = Buffer.from(destAddress, 'hex').toString();
     }
-    if (destToken === 'DOT') {
+    if (destAddress && destToken === 'DOT') {
         destAddress = encodeAddress(destAddress);
     }
 
     return destAddress;
 }
 
-export async function performSwap(sourceToken: Token, destToken: Token, ADDRESS: string) {
+export async function performSwap(sourceToken: Token, destToken: Token, ADDRESS: string, swapTag?: string) {
     const FEE = 100;
 
-    const tag = `[${sourceToken}->${destToken}]`;
+    const tag = swapTag ?? '';
 
     const chainflipApi = await getChainflipApi();
 
     const addressPromise = observeEventWithNameAndQuery('swapping:SwapDepositAddressReady',
         (event) => {
+            // Find deposit address for the right swap by looking at destination address:
             const swapInfo = JSON.parse(event.data.toString());
             const destAddress = extractDestinationAddress(swapInfo, destToken);
+            if (!destAddress) return false;
 
-            return destAddress.toLowerCase() === ADDRESS.toLowerCase()
+            const destAddressEncoded = encodeDestinationAddress(destAddress, destToken);
+
+            return destAddressEncoded.toLowerCase() === ADDRESS.toLowerCase()
         },
         chainflipApi);
 
@@ -53,7 +56,7 @@ export async function performSwap(sourceToken: Token, destToken: Token, ADDRESS:
 
     const swapInfo = JSON.parse((await addressPromise).toString());
     let swapAddress = swapInfo[0][depositAddressToken.toLowerCase()];
-    const destAddress = swapInfo[1][destToken.toLowerCase()];
+    const destAddress = extractDestinationAddress(swapInfo, destToken);
 
     console.log(`${tag} Destination address is: ${destAddress}`);
     console.log(`${tag} The swap address is: ${swapAddress}`);

@@ -7,7 +7,7 @@
 
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { chainflipApi, polkadotApi, sleep } from '../shared/utils';
+import { getChainflipApi, getPolkadotApi, sleep } from '../shared/utils';
 
 async function main(): Promise<void> {
   await cryptoWaitReady();
@@ -19,8 +19,8 @@ async function main(): Promise<void> {
   const alice_uri = process.env.POLKADOT_ALICE_URI || "//Alice";
   const alice = keyring.createFromUri(alice_uri);
 
-  const chainflip = await chainflipApi(process.env.CF_NODE_ENDPOINT);
-  const polkadot = await polkadotApi(process.env.POLKADOT_ENDPOINT);
+  const chainflip = await getChainflipApi(process.env.CF_NODE_ENDPOINT);
+  const polkadot = await getPolkadotApi(process.env.POLKADOT_ENDPOINT);
 
   console.log('=== Performing initial Vault setup ===');
 
