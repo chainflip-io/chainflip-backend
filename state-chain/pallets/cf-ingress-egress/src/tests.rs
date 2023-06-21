@@ -1,8 +1,8 @@
 use crate::{
-	mock::*, AddressPool, AddressStatus, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DeploymentStatus, DepositAddressDetailsLookup, DepositFetchIdOf, DepositWitness,
-	DisabledEgressAssets, Error, Event as PalletEvent, FetchOrTransfer, FetchParamDetails,
-	MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
+	mock::*, AddressPool, ChannelAction, ChannelIdCounter, CrossChainMessage, DeploymentStatus,
+	DepositAddressDetailsLookup, DepositFetchIdOf, DepositWitness, DisabledEgressAssets, Error,
+	Event as PalletEvent, FetchOrTransfer, FetchParamDetails, MinimumDeposit, Pallet,
+	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 };
 use cf_chains::{ChannelIdConstructor, DepositAddress, ExecutexSwapAndCall, TransferAssetParams};
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
@@ -337,7 +337,7 @@ fn addresses_are_getting_reused() {
 				AddressPool::<Test, _>::get(channel_id, false).unwrap().get_address(),
 				*address
 			);
-			assert_eq!(AddressStatus::<Test, _>::get(address), DeploymentStatus::Deployed);
+			// assert_eq!(AddressStatus::<Test, _>::get(address), DeploymentStatus::Deployed);
 		})
 		.request_deposit_addresses(&[(ALICE, eth::Asset::Eth)])
 		// The address should have been taken from the pool and the id counter unchanged.
@@ -537,7 +537,7 @@ fn multi_use_deposit_address_different_blocks() {
 		.then_execute_at_next_block(|_| request_address_and_deposit(ALICE, ETH))
 		.then_execute_at_next_block(|channel @ (_, deposit_address)| {
 			// Set the address to deployed.
-			AddressStatus::<Test, _>::insert(deposit_address, DeploymentStatus::Deployed);
+			// AddressStatus::<Test, _>::insert(deposit_address, DeploymentStatus::Deployed);
 			// Do another, should succeed.
 			assert_ok!(Pallet::<Test, _>::process_single_deposit(
 				deposit_address,
@@ -549,7 +549,7 @@ fn multi_use_deposit_address_different_blocks() {
 		})
 		.then_execute_at_next_block(|(channel_id, deposit_address)| {
 			// Set the address to deployed.
-			AddressStatus::<Test, _>::insert(deposit_address, DeploymentStatus::Deployed);
+			// AddressStatus::<Test, _>::insert(deposit_address, DeploymentStatus::Deployed);
 			// Closing the channel should invalidate the deposit address.
 			IngressEgress::close_channel(channel_id, deposit_address);
 			assert_noop!(
@@ -574,7 +574,7 @@ fn multi_use_deposit_same_block() {
 		.then_execute_at_next_block(|_| {
 			let (_, deposit_address) = request_address_and_deposit(ALICE, ETH);
 			// Set the address to deployed.
-			AddressStatus::<Test, _>::insert(deposit_address, DeploymentStatus::Deployed);
+			// AddressStatus::<Test, _>::insert(deposit_address, DeploymentStatus::Deployed);
 			// Another deposit to the same address.
 			Pallet::<Test, _>::process_single_deposit(deposit_address, ETH, 1, Default::default())
 				.unwrap();
@@ -656,12 +656,12 @@ fn handle_pending_deployment() {
 		let (channel_id, deposit_address) = request_address_and_deposit(ALICE, eth::Asset::Eth);
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 1);
 		// Expect the address to be undeployed.
-		assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Undeployed);
+		// assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Undeployed);
 		// Process deposits.
 		IngressEgress::on_finalize(1);
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 0);
 		// Expect the address still to be pending.
-		assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Pending);
+		// assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Pending);
 		// Process deposit again the same address.
 		Pallet::<Test, _>::process_single_deposit(deposit_address, ETH, 1, Default::default())
 			.unwrap();
@@ -671,11 +671,11 @@ fn handle_pending_deployment() {
 		request_address_and_deposit(2u64, eth::Asset::Eth);
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 3);
 		// Expect the address still to be pending.
-		assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Pending);
+		// assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Pending);
 		// Process deposit again.
 		IngressEgress::on_finalize(1);
 		// The address should be still pending and the fetch request ignored.
-		assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Pending);
+		// assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Pending);
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 1);
 		// Now finalize the first fetch and deploy the address with that.
 		assert_ok!(IngressEgress::finalise_ingress(
@@ -690,7 +690,7 @@ fn handle_pending_deployment() {
 			FetchParamDetails::<Test, _>::get(channel_id).unwrap().0,
 			DepositFetchIdOf::<Test, _>::deployed(channel_id, deposit_address)
 		);
-		assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Deployed);
+		// assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Deployed);
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 1);
 		// Process deposit again amd expect the fetch request to be picked up.
 		IngressEgress::on_finalize(1);
@@ -713,7 +713,7 @@ fn handle_pending_deployment_same_block() {
 		// Expect to have two fetch requests.
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 2);
 		// Expect the address to be undeployed.
-		assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Undeployed);
+		// assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Undeployed);
 		// Process deposits.
 		IngressEgress::on_finalize(1);
 		// Expect only one fetch request processed in one block. Note: This not the most performant

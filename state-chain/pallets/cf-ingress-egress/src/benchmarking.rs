@@ -49,7 +49,7 @@ benchmarks_instance_pallet! {
 		for i in 1..a {
 			let deposit_address = <<T as Config<I>>::TargetChain as Chain>::ChainAccount::benchmark_value_by_id(a as u8);
 			let deposit_fetch_id = <<T as Config<I>>::TargetChain as Chain>::DepositFetchId::benchmark_value_by_id(a as u8);
-			AddressStatus::<T, I>::insert(deposit_address.clone(), DeploymentStatus::Pending);
+			// AddressStatus::<T, I>::insert(deposit_address.clone(), DeploymentStatus::Pending);
 			addresses.push((deposit_fetch_id, deposit_address));
 		}
 	}: { let _ = Pallet::<T, I>::finalise_ingress(origin, addresses); }
