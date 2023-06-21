@@ -6,12 +6,13 @@ if [ "$1" != "upgrade" ]; then
     exit 0
 fi
 
-ENGINE_VERSION=$(chainflip-engine -V)
-
-if echo "$ENGINE_VERSION" | grep 0.8; then
-    echo "chainflip-engine: Detected version 0.8, skipping migration"
-    exit 0
-fi
+# TODO: Uncomment after we re-re-release 0.8
+#ENGINE_VERSION=$(chainflip-engine -V)
+#
+#if echo "$ENGINE_VERSION" | grep 0.8; then
+#    echo "chainflip-engine: Detected version 0.8, skipping migration"
+#    exit 0
+#fi
 
 CF_ROOT=/etc/chainflip
 
@@ -52,6 +53,12 @@ http_node_endpoint = "http://a108a82b574a640359e360cf66afd45d-424380952.eu-centr
 rpc_user = "flip"
 rpc_password = "flip"
 EOF
+fi
+
+# Check if pdot endpoint is pdot.chainflip.io and change to pdot.chainflip.xyz
+if grep -q 'pdot.chainflip.io' /etc/chainflip/config/Settings.toml; then
+    echo "chainflip-engine: Found pdot.chainflip.io endpoint ... Changing to pdot.chainflip.xyz"
+    sed -i 's/pdot.chainflip.io/pdot.chainflip.xyz/g' /etc/chainflip/config/Settings.toml
 fi
 
 systemctl daemon-reload
