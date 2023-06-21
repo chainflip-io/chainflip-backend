@@ -125,7 +125,7 @@ fn phoenix_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8
 			"⍜ Chainflip Validator",
 			19566972903661520235503,
 		),
-		("cFLdopvNB7LaiBbJoNdNC26e9Gc1FNJKFtvNZjAmXAAVnzCk4", "dopey", 11430744594105204499021),
+		("cFLdopvNB7LaiBbJoNdNC26e9Gc1FNJKFtvNZjAmXAAVnzCk4", "dopey", 21430744594105204499021),
 		(
 			"cFLx7uzuKwb5JwW64CSghgPww1GCJXew87ohYMPTExz7HbnWH",
 			"banghj#9194",
@@ -565,7 +565,7 @@ fn phoenix_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8
 		("cFLWYACk2N6Vzdbj2Faxhs41wXCHo3cwTVnMBWJhSdanJ2gk3", "Kratos#3842", 17710161831497964924),
 		("cFK3m4NsmFDxL43eJddjXgLcifh5qJR8aWT4P43NTkJVg62JU", "teolider", 14498350276876723466945),
 		("cFK254S4MXbtkSt6UnUbvbP3yjyhKLNeeLY5w2c7kBJLX23fK", "SERHIO", 22313526172771099824),
-		("cFLdocJo3bjT7JbT7R46cA89QfvoitrKr9P3TsMcdkVWeeVLa", "doc", 11185384281868071438691),
+		("cFLdocJo3bjT7JbT7R46cA89QfvoitrKr9P3TsMcdkVWeeVLa", "doc", 21185384281868071438691),
 		("cFPPaPvjH11CZ93K8mYaSgDpZce3PqrXoarYEise791cvck8q", "Lizard", 1734335435008338864456),
 		("cFJL1kQBVfEcDeN9W9wLWdjbMzygrk9AtGaEC1rpTu8WYBP5C", "liluwei", 92164348467672213812),
 		(
@@ -697,7 +697,7 @@ fn phoenix_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8
 			"KeeJef#7335",
 			18438502689199850967533,
 		),
-		("cFLbassb4hwQ9iA7dzdVdyumRqkaXnkdYECrThhmrqjFukdVo", "bashful", 12688664848117008169133),
+		("cFLbassb4hwQ9iA7dzdVdyumRqkaXnkdYECrThhmrqjFukdVo", "bashful", 22688664848117008169133),
 		(
 			"cFK9tUyq2TFogm5LKoha4ciLSMZnBPkVVQVfGvnQRWkfvfAm5",
 			"Sleipnir_1",
