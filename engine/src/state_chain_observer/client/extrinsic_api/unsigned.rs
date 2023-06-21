@@ -62,9 +62,10 @@ impl UnsignedExtrinsicClient {
 									// the transaction hash
 									jsonrpsee::core::Error::Call(
 										jsonrpsee::types::error::CallError::Custom(ref obj),
-									) if obj.code() == 1013 => {
+									) if [1012, 1013].contains(&obj.code()) => {
 										tracing::debug!(
-											"Already in pool with tx_hash: {expected_hash:#x}."
+											"Already in pool (code {}) with tx_hash: {expected_hash:#x}.",
+											obj.code(),
 										);
 										expected_hash
 									},
