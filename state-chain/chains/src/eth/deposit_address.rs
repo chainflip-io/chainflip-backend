@@ -132,7 +132,6 @@ mod test_super {
 		))
 		.trim()
 		.trim_matches('"');
-		println!("CF_ETH_CONTRACT_ABI_TAG: {}", env!("CF_ETH_CONTRACT_ABI_TAG"));
 		assert_eq!(
 			DEPOSIT_CONTRACT_BYTECODE,
 			hex::decode(expected_bytecode_hex).unwrap().as_slice(),
