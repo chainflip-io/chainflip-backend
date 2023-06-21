@@ -17,7 +17,7 @@ pub struct MockDepositAddress;
 
 impl DepositAddress for MockDepositAddress {
 	type Address = u64;
-	type DepositFetchId = ();
+	type DepositFetchId = u128;
 
 	fn get_address(&self) -> Self::Address {
 		todo!()

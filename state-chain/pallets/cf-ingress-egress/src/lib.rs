@@ -239,12 +239,12 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, ()>;
 
 	/// Stores a pool of addresses that is available for use together with the channel id.
-	#[pallet::storage]
-	pub(crate) type AddressPool<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, ChannelId, TargetChainAccount<T, I>>;
+	// #[pallet::storage]
+	// pub(crate) type AddressPool<T: Config<I>, I: 'static = ()> =
+	// 	StorageMap<_, Twox64Concat, ChannelId, TargetChainAccount<T, I>>;
 
 	#[pallet::storage]
-	pub(crate) type AddressPoolDepositAddress<T: Config<I>, I: 'static = ()> =
+	pub(crate) type AddressPool<T: Config<I>, I: 'static = ()> =
 		StorageDoubleMap<_, Twox64Concat, ChannelId, Twox64Concat, bool, DepositAddressOf<T, I>>;
 
 	/// Stores the status of an address.
@@ -354,13 +354,9 @@ pub mod pallet {
 			for (_, deposit_address) in addresses {
 				let channel_id =
 					DepositAddressDetailsLookup::<T, I>::get(deposit_address.clone()).unwrap();
-				AddressPoolDepositAddress::<T, I>::mutate_exists(
-					channel_id.channel_id,
-					true,
-					|e| {
-						e.unwrap().finalize();
-					},
-				);
+				AddressPool::<T, I>::mutate_exists(channel_id.channel_id, true, |e| {
+					e.unwrap().finalize();
+				});
 				// Manipulate the  address state
 				// if AddressStatus::<T, I>::get(deposit_address.clone()) ==
 				// DeploymentStatus::Pending {
@@ -465,11 +461,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						!DisabledEgressAssets::<T, I>::contains_key(request.asset()) &&
 							match request {
 								FetchOrTransfer::Fetch { channel_id, .. } => {
-									let (_, deposit_address) =
-										FetchParamDetails::<T, I>::get(channel_id.clone())
-											.expect("to have fetch param details available");
+									// let (_, deposit_address) =
+									// 	FetchParamDetails::<T, I>::get(channel_id.clone())
+									// 		.expect("to have fetch param details available");
 
-									AddressPoolDepositAddress::<T, I>::mutate_exists(
+									AddressPool::<T, I>::mutate_exists(
 										channel_id.clone(),
 										true,
 										|maybe_address| {
@@ -477,30 +473,27 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 										},
 									);
 
-									AddressPoolDepositAddress::<T, I>::get(
-										channel_id.clone(),
-										true,
-									)
-									.expect("asdf")
-									.maybe_skip();
+									AddressPool::<T, I>::get(channel_id.clone(), true)
+										.expect("asdf")
+										.maybe_skip()
 
-									match AddressStatus::<T, I>::get(deposit_address.clone()) {
-										DeploymentStatus::Deployed => true,
-										DeploymentStatus::Undeployed => {
-											AddressStatus::<T, I>::insert(
-												deposit_address,
-												DeploymentStatus::Pending,
-											);
-											true
-										},
-										DeploymentStatus::Pending => {
-											log::info!(
-												target: "cf-ingress-egress",
-												"Address {:?} is pending deployment, skipping", deposit_address
-											);
-											false
-										},
-									}
+									// match AddressStatus::<T, I>::get(deposit_address.clone()) {
+									// 	DeploymentStatus::Deployed => true,
+									// 	DeploymentStatus::Undeployed => {
+									// 		AddressStatus::<T, I>::insert(
+									// 			deposit_address,
+									// 			DeploymentStatus::Pending,
+									// 		);
+									// 		true
+									// 	},
+									// 	DeploymentStatus::Pending => {
+									// 		log::info!(
+									// 			target: "cf-ingress-egress",
+									// 			"Address {:?} is pending deployment, skipping",
+									// deposit_address 		);
+									// 		false
+									// 	},
+									// }
 								},
 								FetchOrTransfer::Transfer { .. } => true,
 							}
@@ -521,10 +514,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		for request in batch_to_send {
 			match request {
 				FetchOrTransfer::<T::TargetChain>::Fetch { channel_id, asset } => {
-					let (channel_id, deposit_address) = FetchParamDetails::<T, I>::get(channel_id)
-						.expect("to have fetch param details available");
-					fetch_params.push(FetchAssetParams { deposit_fetch_id: channel_id, asset });
-					addresses.push((channel_id, deposit_address.clone()));
+					// let (channel_id, deposit_address) = FetchParamDetails::<T,
+					// I>::get(channel_id) 	.expect("to have fetch param details available");
+					let deposit_fetch_id = AddressPool::<T, I>::get(channel_id, true)
+						.expect("")
+						.get_deposit_fetch_id();
+					let deposit_address =
+						AddressPool::<T, I>::get(channel_id, true).expect("").get_address();
+					fetch_params.push(FetchAssetParams {
+						deposit_fetch_id: deposit_fetch_id.into(),
+						asset,
+					});
+					addresses.push((deposit_fetch_id, deposit_address.clone()));
 				},
 				FetchOrTransfer::<T::TargetChain>::Transfer {
 					asset,
@@ -682,14 +683,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<(ChannelId, TargetChainAccount<T, I>), DispatchError> {
 		// We have an address available, so we can just use it.
 
-		for (channel_id, inuse, deposit_address) in AddressPoolDepositAddress::<T, I>::iter() {
+		for (channel_id, inuse, deposit_address) in AddressPool::<T, I>::iter() {
 			if !inuse {
 				// We have an address available, so we can just use it.
-				AddressPoolDepositAddress::<T, I>::insert(
-					channel_id,
-					true,
-					deposit_address.clone(),
-				);
+				AddressPool::<T, I>::insert(channel_id, true, deposit_address.clone());
 				let raw_address = deposit_address.clone().get_address();
 				DepositAddressDetailsLookup::<T, I>::insert(
 					deposit_address.clone().get_address(),
@@ -713,7 +710,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ChannelActions::<T, I>::insert(&new_address, channel_action);
 		T::DepositHandler::on_channel_opened(new_address.clone(), next_channel_id)?;
 
-		AddressPoolDepositAddress::<T, I>::insert(
+		AddressPool::<T, I>::insert(
 			next_channel_id,
 			true,
 			<T::TargetChain as Chain>::DepositAddress::new(next_channel_id, new_address.clone()),
@@ -745,19 +742,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	fn close_channel(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
-		let address_status = AddressStatus::<T, I>::get(address.clone());
+		// let address_status = AddressStatus::<T, I>::get(address.clone());
 		ChannelActions::<T, I>::remove(&address);
-		if matches!(address_status, DeploymentStatus::Deployed) &&
-			T::TargetChain::get() != ForeignChain::Bitcoin
-		{
-			// AddressPoolDepositAddress::<T, I>::insert(channel_id);
-			AddressPool::<T, I>::insert(channel_id, address.clone());
-		}
-		let recycle = AddressPoolDepositAddress::<T, I>::get(channel_id, true)
-			.expect("asdf")
-			.maybe_recycle();
+		// if matches!(address_status, DeploymentStatus::Deployed) &&
+		// 	T::TargetChain::get() != ForeignChain::Bitcoin
+		// {
+		// 	// AddressPoolDepositAddress::<T, I>::insert(channel_id);
+		// 	AddressPool::<T, I>::insert(channel_id, address.clone());
+		// }
+		let recycle = AddressPool::<T, I>::get(channel_id, true).expect("asdf").maybe_recycle();
 		if !recycle {
-			AddressPoolDepositAddress::<T, I>::remove(channel_id, true);
+			AddressPool::<T, I>::remove(channel_id, true);
 		}
 		if let Some(deposit_address_details) = DepositAddressDetailsLookup::<T, I>::take(&address) {
 			Self::deposit_event(Event::<T, I>::StopWitnessing {

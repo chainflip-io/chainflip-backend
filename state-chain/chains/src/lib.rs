@@ -106,7 +106,10 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValueExtended
 		+ ChannelIdConstructor<Address = Self::ChainAccount>;
 
-	type DepositAddress: Member + Parameter + Copy + DepositAddress<Address = Self::ChainAccount>;
+	type DepositAddress: Member
+		+ Parameter
+		+ Copy
+		+ DepositAddress<Address = Self::ChainAccount, DepositFetchId = Self::DepositFetchId>;
 }
 
 /// Measures the age of items associated with the Chain.

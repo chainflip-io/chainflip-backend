@@ -4,7 +4,7 @@ use crate::{
 	DisabledEgressAssets, Error, Event as PalletEvent, FetchOrTransfer, FetchParamDetails,
 	MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 };
-use cf_chains::{ChannelIdConstructor, ExecutexSwapAndCall, TransferAssetParams};
+use cf_chains::{ChannelIdConstructor, DepositAddress, ExecutexSwapAndCall, TransferAssetParams};
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
 use cf_test_utilities::assert_has_event;
 use cf_traits::{
@@ -333,7 +333,10 @@ fn addresses_are_getting_reused() {
 		.inspect_storage(|(channel_id, address, _asset)| {
 			expect_size_of_address_pool(1);
 			// Address 1 is free to use and in the pool of available addresses
-			assert_eq!(AddressPool::<Test, _>::get(channel_id).unwrap(), *address);
+			assert_eq!(
+				AddressPool::<Test, _>::get(channel_id, false).unwrap().get_address(),
+				*address
+			);
 			assert_eq!(AddressStatus::<Test, _>::get(address), DeploymentStatus::Deployed);
 		})
 		.request_deposit_addresses(&[(ALICE, eth::Asset::Eth)])
@@ -400,14 +403,16 @@ fn reused_address_channel_id_matches() {
 			Ethereum,
 		>>::generate_address(eth::Asset::Eth, INTENT_ID)
 		.unwrap();
-		AddressPool::<Test, _>::insert(INTENT_ID, eth_address);
-
+		let new_address = <<Test as crate::Config>::TargetChain as Chain>::DepositAddress::new(
+			INTENT_ID,
+			eth_address,
+		);
+		AddressPool::<Test, _>::insert(INTENT_ID, true, new_address);
 		let (reused_channel_id, reused_address) = IngressEgress::open_channel(
 			eth::Asset::Eth,
 			ChannelAction::LiquidityProvision { lp_account: 0 },
 		)
 		.unwrap();
-
 		// The reused details should be the same as before.
 		assert_eq!(reused_channel_id, INTENT_ID);
 		assert_eq!(eth_address, reused_address);
