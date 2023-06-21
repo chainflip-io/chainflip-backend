@@ -6,7 +6,7 @@ import { fundEth } from "./fund_eth";
 
 export async function fund(token: Token, address: string) {
     if (token === 'BTC') {
-        await fundBtc(address, '0.5');
+        await fundBtc(address, '0.05');
     } else if (token === 'ETH') {
         await fundEth(address, '5');
     } else if (token === 'DOT') {

@@ -23,6 +23,10 @@ export async function fundEth(ethereumAddress: string, ethAmount: string) {
 
     await ethereumSigningMutex.runExclusive(async () => {
         const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
-        await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
+        await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string, ((error, hash) => {
+            if (error) {
+                console.error("Eth transaction failure:", error);
+            }
+        }));
     })
 }

@@ -1,8 +1,8 @@
-import { polkadotApi } from "./utils";
+import { getPolkadotApi } from "./utils";
 
 export async function getDotBalance(address: string): Promise<string> {
 
-    const polkadot = await polkadotApi(process.env.POLKADOT_ENDPOINT);
+    const polkadot = await getPolkadotApi(process.env.POLKADOT_ENDPOINT);
 
     const planckBalance: string = (await polkadot.query.system.account(address)).data.free.toString();
     const balanceLen = planckBalance.length;

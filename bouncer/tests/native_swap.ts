@@ -1,10 +1,10 @@
 import { executeNativeSwap } from '../commands/native_swap';
 import { getBalance } from '../shared/get_balance';
-import { Token, chainflipApi, getAddress as newAddress, observeBalanceIncrease, observeEvent, runWithTimeout } from '../shared/utils';
+import { Token, getChainflipApi, getAddress as newAddress, observeBalanceIncrease, observeEvent, runWithTimeout } from '../shared/utils';
 
 async function testNativeSwap(destToken: Token) {
 
-    const api = await chainflipApi();
+    const api = await getChainflipApi();
     const addr = await newAddress(destToken, 'never');
     console.log("Destination address:", addr);
 
