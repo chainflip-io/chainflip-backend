@@ -21,8 +21,9 @@ use cf_primitives::AccountRole;
 use cf_primitives::EthereumAddress;
 use cf_traits::{
 	AccountInfo, AccountRoleRegistry, Bid, BidderProvider, Broadcaster, Chainflip, EpochInfo,
-	FeePayment, Funding, SystemStateInfo,
+	FeePayment, Funding, SafeMode,
 };
+use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
@@ -31,9 +32,11 @@ use frame_support::{
 		EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OnRuntimeUpgrade, StorageVersion,
 		UnixTime,
 	},
+	RuntimeDebug,
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
+use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{CheckedSub, UniqueSaturatedInto, Zero},
 	Saturating,
@@ -46,6 +49,17 @@ use sp_std::prelude::*;
 use sp_std::collections::btree_map::BTreeMap;
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+
+/// This Pallet's safe mode.
+#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
+pub struct PalletSafeMode {
+	do_redeem: bool,
+}
+
+impl SafeMode for PalletSafeMode {
+	const CODE_RED: Self = Self { do_redeem: false };
+	const CODE_GREEN: Self = Self { do_redeem: true };
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -104,6 +118,9 @@ pub mod pallet {
 
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
+
+		/// Safe Mode access.
+		type SafeMode: Get<PalletSafeMode>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -280,6 +297,9 @@ pub mod pallet {
 
 		/// The account is bound to a withdrawal address.
 		AccountBindingRestrictionViolated,
+
+		/// The system Safe Mode is Code Red. Functionalities are halted.
+		RuntimeSafeModeIsCodeRed,
 	}
 
 	#[pallet::call]
@@ -352,7 +372,10 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 
-			T::SystemState::ensure_no_maintenance()?;
+			ensure!(
+				T::SafeMode::get() == PalletSafeMode::CODE_GREEN,
+				Error::<T>::RuntimeSafeModeIsCodeRed
+			);
 
 			// Not allowed to redeem if we are an active bidder in the auction phase
 			if T::EpochInfo::is_auction_phase() {
