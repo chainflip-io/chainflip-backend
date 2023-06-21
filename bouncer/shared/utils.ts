@@ -100,22 +100,6 @@ export async function observeEvent(eventName: string, chainflip: ApiPromise, eve
   return result;
 }
 
-export async function observeEventWithNameAndQuery(eventName: string, query: EventQuery, chainflip: ApiPromise): Promise<any> {
-  return observeEventWithQuery(
-    event => {
-      const nameMatches = event.section === eventName.split(':')[0] && event.method === eventName.split(':')[1];
-      return nameMatches && query(event)
-    },
-    chainflip);
-}
-
-export async function observeEvent(eventName: string, chainflip: ApiPromise): Promise<any> {
-  return observeEventWithNameAndQuery(eventName,
-    _ => true,
-    chainflip);
-}
-
-
 export async function getAddress(asset: Asset, seed: string, type?: BtcAddressType): Promise<string> {
   let rawAddress;
 
@@ -142,14 +126,14 @@ export function chainFromAsset(asset: Asset): Chain {
   if (asset in assetChains) {
     return assetChains[asset];
   }
-  
+
   throw new Error('unexpected asset');
 }
 
 export async function observeBalanceIncrease(dstCcy: string, address: string, oldBalance: number): Promise<number> {
 
   for (let i = 0; i < 60; i++) {
-    const newBalance = await getBalance(dstCcy as Token, address);
+    const newBalance = await getBalance(dstCcy as Asset, address);
 
     if (newBalance > oldBalance) {
       return Number(newBalance);
