@@ -14,10 +14,6 @@ spec:
       targetPort: ws
       protocol: TCP
       name: ws
-    - port: {{ .Values.service.port }}
-      targetPort: broker
-      protocol: TCP
-      name: http
     - name: metrics
       port: {{ .Values.ports.metricsPort }}
       targetPort: metrics
