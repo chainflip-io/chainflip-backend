@@ -60,6 +60,7 @@ async function main(): Promise<void> {
   const tx = { to: usdcContractAddress, data: txData, gas: 2000000 };
   const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
   await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
+  console.log("Transfer done");
   process.exit(0);
 }
 

@@ -106,6 +106,7 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
       if (stdout !== '') process.stdout.write(stdout);
     },
   );
+  console.log('Waiting for ' + ccy + ' deposit');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const checkDeposit = (data: any): boolean => data.asset.toJSON().toLowerCase() === ccy;
 
