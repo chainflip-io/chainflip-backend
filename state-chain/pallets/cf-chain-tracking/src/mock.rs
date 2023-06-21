@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use crate::{self as pallet_cf_chain_tracking, Config};
 use cf_chains::mocks::MockEthereum;
 use cf_traits::{self, impl_mock_chainflip};
-use frame_support::{parameter_types, traits::ConstU64};
+use frame_support::parameter_types;
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -66,22 +66,10 @@ impl frame_system::Config for Test {
 
 impl_mock_chainflip!(Test);
 
-pub const AGE_LIMIT: u64 = 5;
-
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type TargetChain = MockEthereum;
 	type WeightInfo = ();
-	type AgeLimit = ConstU64<AGE_LIMIT>;
 }
 
-pub fn new_test_ext() -> sp_io::TestExternalities {
-	let mut ext: sp_io::TestExternalities =
-		frame_system::GenesisConfig::default().build_storage::<Test>().unwrap().into();
-
-	ext.execute_with(|| {
-		System::set_block_number(1);
-	});
-
-	ext
-}
+cf_test_utilities::impl_test_helpers!(Test);

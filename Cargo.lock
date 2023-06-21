@@ -1143,6 +1143,7 @@ dependencies = [
  "frame-system",
  "futures",
  "hex",
+ "hmac-sha512",
  "libsecp256k1",
  "pallet-cf-account-roles",
  "pallet-cf-environment",
@@ -1991,6 +1992,7 @@ dependencies = [
 name = "custom-rpc"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "cf-amm",
  "cf-chains",
  "cf-primitives",
@@ -3953,6 +3955,9 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "hex-literal"
@@ -4005,6 +4010,12 @@ dependencies = [
  "generic-array 0.14.7",
  "hmac 0.8.1",
 ]
+
+[[package]]
+name = "hmac-sha512"
+version = "1.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4ce1f4656bae589a3fab938f9f09bf58645b7ed01a2c5f8a3c238e01a4ef78a"
 
 [[package]]
 name = "home"
@@ -6327,6 +6338,7 @@ dependencies = [
  "cf-chains",
  "cf-primitives",
  "cf-runtime-upgrade-utilities",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",

@@ -1,6 +1,3 @@
-use async_trait::async_trait;
-use std::sync::Arc;
-
 use crate::{
 	constants::BTC_INGRESS_BLOCK_SAFETY_MARGIN,
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
@@ -12,6 +9,8 @@ use crate::{
 		ChainBlockNumber, ItemMonitor,
 	},
 };
+use anyhow::anyhow;
+use async_trait::async_trait;
 use bitcoin::{hashes::Hash, Transaction};
 use cf_chains::{
 	btc::{
@@ -24,6 +23,7 @@ use cf_primitives::{chains::assets::btc, EpochIndex};
 use futures::StreamExt;
 use pallet_cf_ingress_egress::DepositWitness;
 use state_chain_runtime::BitcoinInstance;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{debug, info_span, trace, Instrument};
 
@@ -97,7 +97,7 @@ where
 	)
 	.instrument(info_span!("BTC-Witnesser"))
 	.await
-	.map_err(|_| anyhow::anyhow!("Btc witnesser failed"))
+	.map_err(|()| anyhow!("Btc witnesser failed"))
 }
 
 struct BtcBlockWitnesser<StateChainClient> {

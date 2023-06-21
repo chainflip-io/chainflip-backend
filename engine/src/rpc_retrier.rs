@@ -5,14 +5,20 @@
 //! It applies exponential backoff and jitter to the requests if they fail, and will retry them
 //! until they succeed.
 
-use std::{any::Any, collections::BTreeMap, pin::Pin, time::Duration};
+use std::{
+	any::Any,
+	collections::{BTreeMap, VecDeque},
+	pin::Pin,
+	time::Duration,
+};
 
 use anyhow::Result;
 use core::cmp::min;
 use futures::Future;
+use futures_util::stream::FuturesUnordered;
 use rand::Rng;
 use tokio::sync::{mpsc, oneshot};
-use utilities::{futures_unordered_wait::FuturesUnorderedWait, task_scope::Scope};
+use utilities::{task_scope::Scope, UnendingStream};
 
 type TypedFutureGenerator<T, RpcClient> = Pin<
 	Box<dyn Fn(RpcClient) -> Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send>> + Send>,
@@ -25,18 +31,12 @@ type RequestId = u64;
 
 type Attempt = u32;
 
-type RequestFutures = FuturesUnorderedWait<
-	Pin<
-		Box<
-			dyn Future<Output = (RequestId, Result<BoxAny, (anyhow::Error, Attempt)>)>
-				+ Send
-				+ 'static,
-		>,
-	>,
->;
+type SubmissionFutureOutput = (RequestId, Result<BoxAny, (anyhow::Error, Attempt)>);
+type SubmissionFuture = Pin<Box<dyn Future<Output = SubmissionFutureOutput> + Send + 'static>>;
+type SubmissionFutures = FuturesUnordered<SubmissionFuture>;
 
 type RetryDelays =
-	FuturesUnorderedWait<Pin<Box<dyn Future<Output = (RequestId, Attempt)> + Send + 'static>>>;
+	FuturesUnordered<Pin<Box<dyn Future<Output = (RequestId, Attempt)> + Send + 'static>>>;
 
 type BoxAny = Box<dyn Any + Send>;
 
@@ -79,6 +79,40 @@ impl<RpcClient> RequestHolder<RpcClient> {
 	}
 }
 
+// Buffers the number of futures that are currently running. And pushes to the buffer when
+// a slot is available on a next() call.
+struct SubmissionHolder {
+	running_submissions: SubmissionFutures,
+	maximum_submissions: u32,
+	submissions_buffer: VecDeque<SubmissionFuture>,
+}
+
+impl SubmissionHolder {
+	pub fn new(maximum_submissions: u32) -> Self {
+		Self {
+			running_submissions: SubmissionFutures::new(),
+			maximum_submissions,
+			submissions_buffer: Default::default(),
+		}
+	}
+
+	pub fn push(&mut self, submission: SubmissionFuture) {
+		if (self.running_submissions.len() as u32) < self.maximum_submissions {
+			self.running_submissions.push(submission);
+		} else {
+			self.submissions_buffer.push_back(submission);
+		}
+	}
+
+	pub async fn next_or_pending(&mut self) -> SubmissionFutureOutput {
+		let next_output = self.running_submissions.next_or_pending().await;
+		if let Some(buffered_submission) = self.submissions_buffer.pop_front() {
+			self.running_submissions.push(buffered_submission);
+		}
+		next_output
+	}
+}
+
 const MAX_DELAY_TIME_MILLIS: Duration = Duration::from_secs(60 * 20);
 
 fn max_sleep_duration(initial_request_timeout: Duration, attempt: u32) -> Duration {
@@ -92,7 +126,7 @@ fn submission_future<RpcClient: Clone>(
 	request_id: RequestId,
 	initial_request_timeout: Duration,
 	attempt: Attempt,
-) -> Pin<Box<impl Future<Output = (RequestId, Result<BoxAny, (anyhow::Error, Attempt)>)>>> {
+) -> SubmissionFuture {
 	let submission_fut = submission_fn(client);
 	// Apply exponential backoff to the request.
 	Box::pin(async move {
@@ -121,6 +155,7 @@ impl<RpcClient: Clone + Send + Sync + 'static> RpcRetrierClient<RpcClient> {
 		scope: &Scope<'_, anyhow::Error>,
 		primary_client: RpcClient,
 		initial_request_timeout: Duration,
+		maximum_concurrent_submissions: u32,
 	) -> Self {
 		let (request_sender, mut request_receiver) =
 			mpsc::channel::<(oneshot::Sender<BoxAny>, FutureAnyGenerator<RpcClient>)>(1);
@@ -129,16 +164,17 @@ impl<RpcClient: Clone + Send + Sync + 'static> RpcRetrierClient<RpcClient> {
 
 		let mut retry_delays = RetryDelays::new();
 
-		let mut running_futures = RequestFutures::new();
+		// This holds any submissions that are waiting for a slot to open up.
+		let mut submission_holder = SubmissionHolder::new(maximum_concurrent_submissions);
 
 		scope.spawn(async move {
 			utilities::loop_select! {
 				if let Some((response_sender, closure)) = request_receiver.recv() => {
 					let request_id = request_holder.next_request_id();
-					running_futures.push(submission_future(primary_client.clone(), &closure, request_id, initial_request_timeout, 0));
+					submission_holder.push(submission_future(primary_client.clone(), &closure, request_id, initial_request_timeout, 0));
 					request_holder.insert(request_id, (response_sender, closure));
 				},
-				if let Some((request_id, result)) = running_futures.next() => {
+				let (request_id, result) = submission_holder.next_or_pending() => {
 					match result {
 						Ok(value) => {
 							if let Some((response_sender, _)) = request_holder.remove(&request_id) {
@@ -162,14 +198,14 @@ impl<RpcClient: Clone + Send + Sync + 'static> RpcRetrierClient<RpcClient> {
 						},
 					}
 				},
-				if let Some((request_id, attempt)) = retry_delays.next() => {
+				let (request_id, attempt) = retry_delays.next_or_pending() => {
 					let next_attempt = attempt.saturating_add(1);
 					tracing::trace!("Retrying request_id: {request_id} for attempt: {next_attempt}");
 
 					if let Some((response_sender, closure)) = request_holder.get(&request_id) {
 						// If the receiver has been dropped, we don't need to retry.
 						if !response_sender.is_closed() {
-							running_futures.push(submission_future(primary_client.clone(), closure, request_id, initial_request_timeout, next_attempt));
+							submission_holder.push(submission_future(primary_client.clone(), closure, request_id, initial_request_timeout, next_attempt));
 						} else {
 							tracing::trace!("Dropped request_id: {request_id}, not retrying.");
 							request_holder.remove(&request_id);
@@ -217,6 +253,7 @@ mod tests {
 	use std::any::Any;
 
 	use futures_util::FutureExt;
+	use tokio::time::timeout;
 	use utilities::task_scope::task_scope;
 
 	use super::*;
@@ -253,7 +290,7 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client = RpcRetrierClient::new(scope, (), INITIAL_TIMEOUT);
+				let retrier_client = RpcRetrierClient::new(scope, (), INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				let rx1 = retrier_client
@@ -290,7 +327,7 @@ mod tests {
 				const TIMEOUT: Duration = Duration::from_millis(1000);
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(50);
 
-				let retrier_client = RpcRetrierClient::new(scope, (), INITIAL_TIMEOUT);
+				let retrier_client = RpcRetrierClient::new(scope, (), INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				let rx1 =
@@ -317,7 +354,7 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client = RpcRetrierClient::new(scope, (), INITIAL_TIMEOUT);
+				let retrier_client = RpcRetrierClient::new(scope, (), INITIAL_TIMEOUT, 100);
 
 				const REQUEST_1: u32 = 32;
 				assert_eq!(
@@ -330,6 +367,59 @@ mod tests {
 					REQUEST_2,
 					retrier_client.request(specific_fut_closure(REQUEST_2, INITIAL_TIMEOUT)).await
 				);
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
+
+	#[tokio::test]
+	async fn once_at_max_concurrent_submissions_cannot_submit_more() {
+		task_scope(|scope| {
+			async move {
+				const TIMEOUT: Duration = Duration::from_millis(200);
+
+				const INITIAL_TIMEOUT: Duration = Duration::from_millis(1000);
+
+				let retrier_client = RpcRetrierClient::new(scope, (), INITIAL_TIMEOUT, 2);
+
+				// Requests 1 and 2 fill the future buffer.
+				const REQUEST_1: u32 = 32;
+				let rx1 =
+					retrier_client.send_request(specific_fut_closure(REQUEST_1, TIMEOUT)).await;
+
+				const REQUEST_2: u64 = 64;
+				let rx2 =
+					retrier_client.send_request(specific_fut_closure(REQUEST_2, TIMEOUT)).await;
+
+				// The submission buffer should be full of the first two requests. We set the
+				// timeout here to 0. Such that if the submission buffer is not working, we would
+				// expect this request call to resolve immediately.
+				const REQUEST_3: u128 = 128;
+				timeout(
+					Duration::from_millis(100),
+					retrier_client.request(specific_fut_closure(REQUEST_3, Duration::default())),
+				)
+				.await
+				.unwrap_err();
+
+				// This future will wait for the first two requests to complete.
+				assert_eq!(
+					timeout(
+						Duration::from_millis(600),
+						retrier_client
+							.request(specific_fut_closure(REQUEST_3, Duration::default())),
+					)
+					.await
+					.unwrap(),
+					REQUEST_3,
+				);
+
+				check_result(rx1, REQUEST_1).await;
+				check_result(rx2, REQUEST_2).await;
 
 				Ok(())
 			}
@@ -357,7 +447,7 @@ mod tests {
 			async move {
 				const INITIAL_TIMEOUT: Duration = Duration::from_millis(100);
 
-				let retrier_client = RpcRetrierClient::new(scope, (), INITIAL_TIMEOUT);
+				let retrier_client = RpcRetrierClient::new(scope, (), INITIAL_TIMEOUT, 100);
 
 				retrier_client.request(specific_fut_err::<(), _>(INITIAL_TIMEOUT)).await;
 

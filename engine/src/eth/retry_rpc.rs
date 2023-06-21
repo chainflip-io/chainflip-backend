@@ -12,10 +12,18 @@ pub struct EthersRetryRpcClient {
 }
 
 const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
+const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
 impl EthersRetryRpcClient {
 	pub fn new(scope: &Scope<'_, anyhow::Error>, ethers_client: EthersRpcClient) -> Self {
-		Self { retry_client: RpcRetrierClient::new(scope, ethers_client, ETHERS_RPC_TIMEOUT) }
+		Self {
+			retry_client: RpcRetrierClient::new(
+				scope,
+				ethers_client,
+				ETHERS_RPC_TIMEOUT,
+				MAX_CONCURRENT_SUBMISSIONS,
+			),
+		}
 	}
 }
 

@@ -53,7 +53,7 @@ impl<
 			.raw_rpc_client
 			.cf_is_auction_phase(None)
 			.await
-			.map_err(Into::into)
+			.context("Error RPC query: is_auction_phase")
 	}
 }
 
@@ -402,15 +402,13 @@ pub async fn request_swap_deposit_address(
 /// chain.
 pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result<EncodedAddress> {
 	Ok(match chain {
-		ForeignChain::Ethereum =>
-			EncodedAddress::Eth(clean_eth_address(address).map_err(anyhow::Error::msg)?),
-		ForeignChain::Polkadot =>
-			EncodedAddress::Dot(clean_dot_address(address).map_err(anyhow::Error::msg)?),
+		ForeignChain::Ethereum => EncodedAddress::Eth(clean_eth_address(address)?),
+		ForeignChain::Polkadot => EncodedAddress::Dot(clean_dot_address(address)?),
 		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
 	})
 }
 
-#[derive(Debug, Zeroize)]
+#[derive(Debug, Zeroize, PartialEq, Eq)]
 /// Public and Secret keys as bytes
 pub struct KeyPair {
 	pub secret_key: Vec<u8>,
@@ -448,60 +446,117 @@ pub fn generate_node_key() -> KeyPair {
 	}
 }
 
-/// Generate a signing key (aka validator key) using the seed phrase.
+/// Generate a signing key (aka. account key).
+///
 /// If no seed phrase is provided, a new random seed phrase will be created.
-/// Returns the key, seed phrase and the derived account id.
-pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPair, String, AccountId32)> {
+pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(String, KeyPair, AccountId32)> {
 	use bip39::{Language, Mnemonic, MnemonicType};
 
-	// Get a new random seed phrase if one was not provided
-	let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
-	let seed_phrase = seed_phrase.unwrap_or_else(|| mnemonic.phrase());
+	let mnemonic = seed_phrase
+		.map(|phrase| Mnemonic::from_phrase(phrase, Language::English))
+		.unwrap_or_else(|| Ok(Mnemonic::new(MnemonicType::Words12, Language::English)))?;
 
-	sp_core::Pair::from_phrase(seed_phrase, None)
+	sp_core::Pair::from_phrase(mnemonic.phrase(), None)
 		.map(|(pair, seed)| {
 			let pair: sp_core::sr25519::Pair = pair;
 			(
+				mnemonic.to_string(),
 				KeyPair { secret_key: seed.to_vec(), public_key: pair.public().to_vec() },
-				seed_phrase.to_string(),
 				pair.public().into(),
 			)
 		})
-		.map_err(|_| anyhow::Error::msg("Invalid seed phrase"))
+		.map_err(|e| anyhow!("Failed to generate signing key - invalid seed phrase. Error: {e:?}"))
 }
 
-/// Generate a new random ethereum key.
+/// Generate an ethereum key.
+///
 /// A chainflip validator must have their own Ethereum private keys and be capable of submitting
-/// transactions. We recommend importing the generated secret key into metamask for account
-/// management.
-/// returns the keypair and the derived ethereum address
-pub fn generate_ethereum_key() -> (KeyPair, [u8; 20]) {
-	use rand::SeedableRng;
-	let mut rng = rand::rngs::StdRng::from_entropy();
+/// transactions.
+///
+/// If no seed phrase is provided, a new random seed phrase will be created.
+///
+/// Note this is *not* a general-purpose utility for deriving Ethereum addresses. You should
+/// not expect to be able to recover this address in any mainstream wallet. Notably, this
+/// does *not* use BIP44 derivation paths.
+pub fn generate_ethereum_key(seed_phrase: Option<&str>) -> Result<(String, KeyPair, [u8; 20])> {
+	use bip39::{Language, Mnemonic, MnemonicType, Seed};
 
-	let secret_key = libsecp256k1::SecretKey::random(&mut rng);
+	let mnemonic = seed_phrase
+		.map(|phrase| Mnemonic::from_phrase(phrase, Language::English))
+		.unwrap_or_else(|| Ok(Mnemonic::new(MnemonicType::Words12, Language::English)))?;
+
+	let seed = Seed::new(&mnemonic, Default::default());
+	let master_key_bytes = hmac_sha512::HMAC::mac(seed, b"Chainflip Ethereum Key");
+
+	let secret_key = libsecp256k1::SecretKey::parse_slice(&master_key_bytes[..32])
+		.context("Unable to derive secret key.")?;
 	let public_key = libsecp256k1::PublicKey::from_secret_key(&secret_key);
 
-	(
+	Ok((
+		mnemonic.to_string(),
 		KeyPair {
 			secret_key: secret_key.serialize().to_vec(),
 			public_key: public_key.serialize_compressed().to_vec(),
 		},
 		to_ethereum_address(public_key),
-	)
+	))
 }
 
-#[test]
-fn test_generate_signing_key_with_known_seed() {
-	const SEED_PHRASE: &str =
+#[cfg(test)]
+mod test_key_generation {
+	use sp_core::crypto::Ss58Codec;
+
+	use super::*;
+
+	#[test]
+	fn restored_keys_remain_compatible() {
+		const SEED_PHRASE: &str =
 		"essay awesome afraid movie wish save genius eyebrow tonight milk agree pretty alcohol three whale";
 
-	let (generate_key, _, _) = generate_signing_key(Some(SEED_PHRASE)).unwrap();
+		let generated = generate_signing_key(Some(SEED_PHRASE)).unwrap();
 
-	// Compare the generated secret key with a known secret key generated using the `chainflip-node
-	// key generate` command
-	assert_eq!(
-		hex::encode(generate_key.secret_key),
-		"afabf42a9a99910cdd64795ef05ed71acfa2238f5682d26ae62028df3cc59727"
-	);
+		// Compare the generated secret key with a known secret key generated using the
+		// `chainflip-node key generate` command
+		assert_eq!(
+			"afabf42a9a99910cdd64795ef05ed71acfa2238f5682d26ae62028df3cc59727",
+			hex::encode(generated.1.secret_key)
+		);
+		assert_eq!(
+			(generated.0, generated.2),
+			(
+				SEED_PHRASE.to_string(),
+				AccountId32::from_ss58check("cFMziohdyxVZy4DGXw2zkapubUoTaqjvAM7QGcpyLo9Cba7HA")
+					.unwrap(),
+			)
+		);
+
+		let generated = generate_ethereum_key(Some(SEED_PHRASE)).unwrap();
+		assert_eq!(
+			"5c25d9ae0363ecd8dd18da1608ead2a4dc1ec658d6ed412d47e10d486ff0d1db",
+			hex::encode(generated.1.secret_key)
+		);
+		assert_eq!(
+			(generated.0, generated.2.to_vec()),
+			(
+				SEED_PHRASE.to_string(),
+				hex::decode("e01156ca92d904cc67ff47517bf3a3500b418280").unwrap()
+			)
+		);
+	}
+
+	#[test]
+	fn test_restore_signing_keys() {
+		let ref original @ (ref seed_phrase, ..) = generate_signing_key(None).unwrap();
+		let restored = generate_signing_key(Some(seed_phrase)).unwrap();
+
+		assert_eq!(*original, restored);
+	}
+
+	#[test]
+	fn test_restore_eth_keys() {
+		let ref original @ (ref seed_phrase, ..) = generate_ethereum_key(None).unwrap();
+		let restored = generate_ethereum_key(Some(seed_phrase)).unwrap();
+
+		assert_eq!(*original, restored);
+	}
 }

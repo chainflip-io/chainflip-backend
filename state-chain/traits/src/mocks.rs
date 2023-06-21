@@ -23,6 +23,7 @@ pub mod offence_reporting;
 pub mod on_account_funded;
 pub mod qualify_node;
 pub mod reputation_resetter;
+pub mod safe_mode;
 pub mod signer_nomination;
 pub mod system_state_info;
 pub mod threshold_signer;
