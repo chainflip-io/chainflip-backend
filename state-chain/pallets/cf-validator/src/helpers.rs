@@ -6,12 +6,19 @@ use sp_std::collections::btree_set::BTreeSet;
 /// We want to select as many olds that are also in the new set as possible.
 /// This reduces the number of peers, and therefore p2p messages required to complete
 /// the handover ceremony. It also minimises the chance of a participating node being offline.
-pub fn select_sharing_participants<ValidatorId: PartialEq + Eq + Clone + Ord>(
+pub fn select_sharing_participants<
+	ValidatorId: sp_std::fmt::Debug + PartialEq + Eq + Clone + Ord,
+>(
 	old_authorities: BTreeSet<ValidatorId>,
 	new_authorities: &BTreeSet<ValidatorId>,
 	block_number: u64,
 ) -> BTreeSet<ValidatorId> {
-	assert!(!old_authorities.is_empty() && !new_authorities.is_empty());
+	assert!(
+		!old_authorities.is_empty() && !new_authorities.is_empty(),
+		"Can't select sharing participants from {:?} and {:?}",
+		old_authorities,
+		new_authorities
+	);
 
 	fn shuffle<I: IntoIterator<Item = T>, T>(i: I, block_number: u64) -> Vec<T> {
 		let mut things: Vec<_> = i.into_iter().collect();
