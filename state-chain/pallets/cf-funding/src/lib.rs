@@ -20,10 +20,10 @@ use cf_chains::RegisterRedemption;
 use cf_primitives::AccountRole;
 use cf_primitives::EthereumAddress;
 use cf_traits::{
-	AccountInfo, AccountRoleRegistry, Bid, BidderProvider, Broadcaster, Chainflip, EpochInfo,
-	FeePayment, Funding, SafeMode,
+	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Bid, BidderProvider, Broadcaster,
+	Chainflip, EpochInfo, FeePayment, Funding, SafeMode,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
@@ -32,7 +32,6 @@ use frame_support::{
 		EnsureOrigin, HandleLifetime, IsType, OnKilledAccount, OnRuntimeUpgrade, StorageVersion,
 		UnixTime,
 	},
-	RuntimeDebug,
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
@@ -41,25 +40,11 @@ use sp_runtime::{
 	traits::{CheckedSub, UniqueSaturatedInto, Zero},
 	Saturating,
 };
-use sp_std::cmp::max;
-
-// use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Saturating, Zero};
-use sp_std::prelude::*;
-
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::{cmp::max, collections::btree_map::BTreeMap, prelude::*};
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
-/// This Pallet's safe mode.
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct PalletSafeMode {
-	do_redeem: bool,
-}
-
-impl SafeMode for PalletSafeMode {
-	const CODE_RED: Self = Self { do_redeem: false };
-	const CODE_GREEN: Self = Self { do_redeem: true };
-}
+impl_pallet_safe_mode!(PalletSafeMode, do_redeem);
 
 #[frame_support::pallet]
 pub mod pallet {

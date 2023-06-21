@@ -4,22 +4,19 @@
 
 use cf_chains::{address::ForeignChainAddress, eth::api::EthEnvironmentProvider, UpdateFlipSupply};
 use cf_traits::{
-	BlockEmissions, Broadcaster, EgressApi, FlipBurnInfo, Issuance, RewardsDistribution, SafeMode,
+	impl_pallet_safe_mode, BlockEmissions, Broadcaster, EgressApi, FlipBurnInfo, Issuance,
+	RewardsDistribution,
 };
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::MaxEncodedLen;
 use frame_support::dispatch::Weight;
 use frame_system::pallet_prelude::BlockNumberFor;
 pub use pallet::*;
-use scale_info::TypeInfo;
 
 mod benchmarking;
 mod mock;
 mod tests;
 
-use frame_support::{
-	traits::{Get, Imbalance},
-	RuntimeDebug,
-};
+use frame_support::traits::{Get, Imbalance};
 use sp_arithmetic::traits::UniqueSaturatedFrom;
 use sp_runtime::{
 	traits::{AtLeast32BitUnsigned, UniqueSaturatedInto, Zero},
@@ -31,16 +28,7 @@ use cf_primitives::{chains::AnyChain, Asset};
 pub mod weights;
 pub use weights::WeightInfo;
 
-/// This Pallet's safe mode.
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct PalletSafeMode {
-	do_emissions_sync: bool,
-}
-
-impl SafeMode for PalletSafeMode {
-	const CODE_RED: Self = Self { do_emissions_sync: false };
-	const CODE_GREEN: Self = Self { do_emissions_sync: true };
-}
+impl_pallet_safe_mode!(PalletSafeMode, do_emissions_sync);
 
 #[frame_support::pallet]
 pub mod pallet {

@@ -326,6 +326,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type DepositHandler = chainflip::AnyChainIngressEgressHandler;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type AddressConverter = ChainAddressConverter;
+	type SafeMode = chainflip::RuntimeSafeMode;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 }
 
