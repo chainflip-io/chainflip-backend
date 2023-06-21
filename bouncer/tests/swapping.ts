@@ -12,7 +12,7 @@ async function testSwap(sourceToken: Token, destToken: Token, addressType?: BtcA
     const address = await getAddress(destToken, seed, addressType);
 
     console.log(`Created new ${destToken} address: ${address}`);
-    const tag = `[${swapCount++}:${sourceToken}->${destToken}]`;
+    const tag = `[${swapCount++}: ${sourceToken}->${destToken}]`;
 
     await performSwap(sourceToken, destToken, address, tag);
 }

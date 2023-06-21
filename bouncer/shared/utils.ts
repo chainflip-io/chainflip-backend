@@ -64,20 +64,32 @@ export function getBtcClient(btcEndpoint?: string): any {
   });
 }
 
-type EventQuery = (event: any) => boolean;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type EventQuery = (data: any) => boolean;
 
-export async function observeEventWithQuery(query: EventQuery, chainflip: ApiPromise): Promise<any> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function observeEvent(eventName: string, chainflip: ApiPromise, eventQuery?: EventQuery): Promise<any> {
   let result;
   let waiting = true;
+
+  const query = eventQuery ?? (() => true);
+
+  const [expectedSection, expectedMethod] = eventName.split(':');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const unsubscribe: any = await chainflip.query.system.events((events: any[]) => {
     events.forEach((record) => {
       const { event } = record;
 
-      if (query(event)) {
-        result = event.data;
-        waiting = false;
-        unsubscribe();
+      if (event.section === expectedSection && event.method === expectedMethod) {
+
+        const data = event.data.toJSON();
+
+        if (query(data)) {
+          result = event.data;
+          waiting = false;
+          unsubscribe();
+        }
+
       }
 
     });
@@ -86,21 +98,6 @@ export async function observeEventWithQuery(query: EventQuery, chainflip: ApiPro
     await sleep(1000);
   }
   return result;
-}
-
-export async function observeEventWithNameAndQuery(eventName: string, query: EventQuery, chainflip: ApiPromise): Promise<any> {
-  return observeEventWithQuery(
-    event => {
-      const nameMatches = event.section === eventName.split(':')[0] && event.method === eventName.split(':')[1];
-      return nameMatches && query(event)
-    },
-    chainflip);
-}
-
-export async function observeEvent(eventName: string, chainflip: ApiPromise): Promise<any> {
-  return observeEventWithNameAndQuery(eventName,
-    _ => true,
-    chainflip);
 }
 
 export type Token = 'USDC' | 'ETH' | 'DOT' | 'FLIP' | 'BTC';

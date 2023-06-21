@@ -2,7 +2,7 @@ import { encodeAddress } from '@polkadot/util-crypto';
 import { newSwap } from './new_swap';
 import { fund } from './fund';
 import { getBalance } from './get_balance';
-import { Token, getChainflipApi, observeBalanceIncrease, observeEvent, observeEventWithNameAndQuery } from '../shared/utils';
+import { Token, getChainflipApi, observeBalanceIncrease, observeEvent } from '../shared/utils';
 
 function extractDestinationAddress(swapInfo: any, destToken: Token): string | undefined {
     const token = (destToken === 'USDC') ? 'ETH' : destToken;
@@ -31,18 +31,16 @@ export async function performSwap(sourceToken: Token, destToken: Token, ADDRESS:
 
     const chainflipApi = await getChainflipApi();
 
-    const addressPromise = observeEventWithNameAndQuery('swapping:SwapDepositAddressReady',
-        (event) => {
+    const addressPromise = observeEvent('swapping:SwapDepositAddressReady', chainflipApi,
+        (swapInfo: any) => {
             // Find deposit address for the right swap by looking at destination address:
-            const swapInfo = JSON.parse(event.data.toString());
             const destAddress = extractDestinationAddress(swapInfo, destToken);
             if (!destAddress) return false;
 
             const destAddressEncoded = encodeDestinationAddress(destAddress, destToken);
 
             return destAddressEncoded.toLowerCase() === ADDRESS.toLowerCase()
-        },
-        chainflipApi);
+        });
 
 
     await newSwap(sourceToken, destToken, ADDRESS, FEE);
