@@ -19,11 +19,12 @@ mod rotation_state;
 pub use auction_resolver::*;
 use cf_primitives::{AuthorityCount, EpochIndex};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidderProvider, Bonding,
-	Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch,
-	MissedAuthorshipSlots, OnAccountFunded, QualifyNode, ReputationResetter, SystemStateInfo,
-	VaultRotator,
+	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid,
+	BidderProvider, Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition,
+	FundingInfo, HistoricalEpoch, MissedAuthorshipSlots, OnAccountFunded, QualifyNode,
+	ReputationResetter, SafeMode, UpdateSafeModeForBenchmarking, VaultRotator,
 };
+
 use cf_utilities::Port;
 use frame_support::{
 	pallet_prelude::*,
@@ -93,6 +94,8 @@ pub enum PalletOffence {
 
 pub const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
 
+impl_pallet_safe_mode!(PalletSafeMode, do_authority_rotation);
+
 pub type Percentage = u8;
 #[frame_support::pallet]
 pub mod pallet {
@@ -149,6 +152,9 @@ pub mod pallet {
 
 		/// This is used to reset the validator's reputation
 		type ReputationResetter: ReputationResetter<ValidatorId = ValidatorIdOf<Self>>;
+
+		/// Safe Mode access.
+		type SafeMode: Get<PalletSafeMode> + UpdateSafeModeForBenchmarking<PalletSafeMode>;
 
 		/// Benchmark weights.
 		type ValidatorWeightInfo: WeightInfo;
@@ -1086,18 +1092,18 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn start_authority_rotation() -> Weight {
-		if T::SystemState::is_maintenance_mode() {
+		if T::SafeMode::get() == SafeMode::CODE_RED {
 			log::warn!(
 				target: "cf-validator",
-				"Can't start authority rotation. System is in maintenance mode."
+				"Can't start authority rotation. Runtime Safe Mode is in CODE RED."
 			);
-			return T::ValidatorWeightInfo::start_authority_rotation_in_maintenance_mode()
+			return T::ValidatorWeightInfo::start_authority_rotation_in_safe_mode_code_red()
 		} else if !matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle) {
 			log::error!(
 				target: "cf-validator",
 				"Can't start authority rotation. Authority rotation already in progress."
 			);
-			return T::ValidatorWeightInfo::start_authority_rotation_in_maintenance_mode()
+			return T::ValidatorWeightInfo::start_authority_rotation_in_safe_mode_code_red()
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
 

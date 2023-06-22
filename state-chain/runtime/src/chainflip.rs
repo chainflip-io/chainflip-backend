@@ -80,6 +80,7 @@ impl_runtime_safe_mode! {
 	funding: pallet_cf_funding::PalletSafeMode,
 	swapping: pallet_cf_swapping::PalletSafeMode,
 	liquidity_provider: pallet_cf_lp::PalletSafeMode,
+	validator: pallet_cf_validator::PalletSafeMode,
 }
 
 /// Legacy System State - to be deleted when all pallets are updated to use SafeMode.

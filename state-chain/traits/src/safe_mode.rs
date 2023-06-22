@@ -3,6 +3,11 @@ pub trait SafeMode {
 	const CODE_GREEN: Self;
 }
 
+pub trait UpdateSafeModeForBenchmarking<PalletSafeMode: SafeMode> {
+	#[cfg(feature = "runtime-benchmarks")]
+	fn update(pallet_update: &PalletSafeMode);
+}
+
 /// Implements the top-level RuntimeSafeMode struct.
 ///
 /// The macros takes the following arguments:
@@ -32,7 +37,7 @@ macro_rules! impl_runtime_safe_mode {
 		/// Hides imports.
 		mod __inner {
 			use super::*;
-			use $crate::SafeMode;
+			use $crate::{SafeMode, UpdateSafeModeForBenchmarking};
 			use codec::{Encode, Decode, MaxEncodedLen};
 			use frame_support::{
 				storage::StorageValue,
@@ -67,10 +72,26 @@ macro_rules! impl_runtime_safe_mode {
 				};
 			}
 
+			impl UpdateSafeModeForBenchmarking<Self> for $runtime_safe_mode{
+				#[cfg(feature = "runtime-benchmarks")]
+				fn update(update: &Self) {
+					<$root_storage as StorageValue<_>>::put(update);
+				}
+			}
+
 			$(
 				impl Get<$pallet_safe_mode> for $runtime_safe_mode {
 					fn get() -> $pallet_safe_mode {
 						<Self as Get<Self>>::get().$name
+					}
+				}
+
+				impl UpdateSafeModeForBenchmarking<$pallet_safe_mode> for $runtime_safe_mode {
+					#[cfg(feature = "runtime-benchmarks")]
+					fn update(update: &$pallet_safe_mode) {
+						<$root_storage as StorageValue<_>>::mutate(|current|{
+							current.$name = update.clone();
+						});
 					}
 				}
 			)*
@@ -78,6 +99,25 @@ macro_rules! impl_runtime_safe_mode {
 	};
 }
 
+/// Implements a standard SafeMode struct for a pallet.
+///
+/// Params:
+/// - The name of the pallet's SafeMode struct.
+/// - A list of bool flags used to control functionalities.
+///
+/// Code red sets all bool flags to `false`
+/// Code gree sets all bool flags to `true`
+///
+/// For example:
+///
+/// ```ignore
+/// impl_pallet_safe_mode! {
+///     PalletSafeMode,
+///     do_function_1,
+///     do_function_2,
+///     do_function_3
+/// }
+/// ```
 #[macro_export]
 macro_rules! impl_pallet_safe_mode {
 	(

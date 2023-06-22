@@ -175,6 +175,7 @@ impl pallet_cf_validator::Config for Runtime {
 	);
 	type OffenceReporter = Reputation;
 	type Bonder = Bonder<Runtime>;
+	type SafeMode = chainflip::RuntimeSafeMode;
 	type ReputationResetter = Reputation;
 }
 
