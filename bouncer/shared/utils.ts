@@ -131,7 +131,7 @@ export function chainFromAsset(asset: Asset): Chain {
 
 export async function observeBalanceIncrease(dstCcy: string, address: string, oldBalance: number): Promise<number> {
 
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 120; i++) {
     const newBalance = await getBalance(dstCcy as Asset, address);
 
     if (newBalance > oldBalance) {
