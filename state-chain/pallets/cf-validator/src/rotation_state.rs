@@ -73,9 +73,13 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 		self.primary_candidates.len() as u32
 	}
 
-	pub fn filter_out_banned(&self, mut candidates: BTreeSet<Id>) -> BTreeSet<Id> {
-		candidates.retain(|id| !self.banned.contains(id));
-		candidates
+	pub fn unbanned_current_authorities<T: Config + Chainflip<ValidatorId = Id>>(
+		&self,
+	) -> BTreeSet<Id> {
+		Pallet::<T>::current_authorities()
+			.into_iter()
+			.filter(|id| !self.banned.contains(id))
+			.collect()
 	}
 
 	/// Ban all candidates that don't meet the qualification criterion.
