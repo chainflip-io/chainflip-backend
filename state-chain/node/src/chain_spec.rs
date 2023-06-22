@@ -67,6 +67,7 @@ pub struct StateChainEnvironment {
 	state_chain_gateway_address: [u8; 20],
 	key_manager_address: [u8; 20],
 	eth_vault_address: [u8; 20],
+	eth_address_checker_address: [u8; 20],
 	ethereum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
@@ -104,6 +105,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(clean_eth_address, STATE_CHAIN_GATEWAY_ADDRESS, state_chain_gateway_address);
 	from_env_var!(clean_eth_address, KEY_MANAGER_ADDRESS, key_manager_address);
 	from_env_var!(clean_eth_address, ETH_VAULT_ADDRESS, eth_vault_address);
+	from_env_var!(clean_eth_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
 	from_env_var!(hex_decode, ETH_INIT_AGG_KEY, eth_init_agg_key);
 	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
 	from_env_var!(FromStr::from_str, ETH_DEPLOYMENT_BLOCK, ethereum_deployment_block);
@@ -135,6 +137,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		state_chain_gateway_address,
 		key_manager_address,
 		eth_vault_address,
+		eth_address_checker_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
@@ -166,6 +169,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		state_chain_gateway_address,
 		key_manager_address,
 		eth_vault_address,
+		eth_address_checker_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
@@ -231,6 +235,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					state_chain_gateway_address,
 					key_manager_address,
 					eth_vault_address,
+					eth_address_checker_address,
 					ethereum_chain_id,
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
@@ -300,6 +305,7 @@ macro_rules! network_spec {
 					state_chain_gateway_address,
 					key_manager_address,
 					eth_vault_address,
+					eth_address_checker_address,
 					ethereum_chain_id,
 					eth_init_agg_key,
 					ethereum_deployment_block,
@@ -348,6 +354,7 @@ macro_rules! network_spec {
 								state_chain_gateway_address,
 								key_manager_address,
 								eth_vault_address,
+								eth_address_checker_address,
 								ethereum_chain_id,
 								cfe_settings: CfeSettings {
 									eth_block_safety_margin,
