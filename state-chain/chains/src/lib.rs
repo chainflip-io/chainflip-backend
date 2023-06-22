@@ -382,6 +382,7 @@ pub trait DepositAddress {
 		false
 	}
 
+	/// Set the state of the
 	fn process(self)
 	where
 		Self: Sized,

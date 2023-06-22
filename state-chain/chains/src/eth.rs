@@ -575,6 +575,13 @@ impl From<H256> for TransactionHash {
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
+enum DeploymentStatus {
+	Deployed,
+	Pending,
+	Undeployed,
+}
+
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub enum EthereumChannelId {
 	Deployed(Address),
 	UnDeployed(ChannelId),
@@ -596,7 +603,7 @@ impl ChannelIdConstructor for EthereumChannelId {
 pub struct EthereumDepositAddress {
 	address: H160,
 	channel_id: u64,
-	deployment_status: bool,
+	deployment_status: DeploymentStatus,
 	deposit_fetch_id: EthereumChannelId,
 }
 
@@ -605,15 +612,64 @@ impl DepositAddress for EthereumDepositAddress {
 	type DepositFetchId = EthereumChannelId;
 
 	fn get_address(&self) -> Self::Address {
-		todo!()
+		self.address
+	}
+
+	fn process(mut self)
+	where
+		Self: Sized,
+	{
+		match self.deposit_fetch_id {
+			EthereumChannelId::Deployed(_) => {
+				self.deployment_status = DeploymentStatus::Deployed;
+			},
+			EthereumChannelId::UnDeployed(_) => {
+				self.deployment_status = DeploymentStatus::Pending;
+			},
+		}
 	}
 
 	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
-		todo!()
+		self.deposit_fetch_id
 	}
 
 	fn new(channel_id: u64, address: Self::Address) -> Self {
-		todo!()
+		EthereumDepositAddress {
+			address,
+			channel_id,
+			deployment_status: DeploymentStatus::Undeployed,
+			deposit_fetch_id: EthereumChannelId::UnDeployed(channel_id),
+		}
+	}
+
+	fn maybe_skip(self) -> bool
+	where
+		Self: Sized,
+	{
+		match self.deposit_fetch_id {
+			EthereumChannelId::Deployed(_) => false,
+			EthereumChannelId::UnDeployed(_) => true,
+		}
+	}
+
+	fn maybe_recycle(self) -> bool
+	where
+		Self: Sized,
+	{
+		true
+	}
+
+	fn finalize(mut self)
+	where
+		Self: Sized,
+	{
+		match self.deployment_status {
+			DeploymentStatus::Pending => {
+				self.deposit_fetch_id = EthereumChannelId::Deployed(self.address);
+			},
+			DeploymentStatus::Undeployed => self.deployment_status = DeploymentStatus::Pending,
+			_ => (),
+		}
 	}
 }
 

@@ -659,6 +659,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			<T::TargetChain as Chain>::DepositAddress::new(next_channel_id, new_address.clone()),
 		);
 
+		DepositAddressDetailsLookup::<T, I>::insert(
+			new_address.clone(),
+			DepositAddressDetails { channel_id: next_channel_id, source_asset },
+		);
+
 		Ok((next_channel_id, new_address))
 	}
 
