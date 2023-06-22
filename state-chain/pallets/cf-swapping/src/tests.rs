@@ -220,6 +220,7 @@ fn expect_swap_id_to_be_emitted() {
 				expiry_block,
 				source_asset: Asset::Eth,
 				destination_asset: Asset::Usdc,
+				channel_id: 0,
 			}) if expiry_block == SwapTTL::<Test>::get() + System::current_block_number(),
 			RuntimeEvent::Swapping(Event::SwapScheduled {
 				swap_id: 1,
@@ -351,6 +352,7 @@ fn swap_expires() {
 		System::assert_last_event(RuntimeEvent::Swapping(
 			Event::<Test>::SwapDepositAddressExpired {
 				deposit_address: EncodedAddress::Eth(Default::default()),
+				channel_id: 0,
 			},
 		));
 		assert!(

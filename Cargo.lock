@@ -1175,6 +1175,7 @@ dependencies = [
  "clap 3.2.25",
  "hex",
  "jsonrpsee 0.16.2",
+ "serde",
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.17",
