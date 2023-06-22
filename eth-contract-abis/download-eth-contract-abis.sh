@@ -33,6 +33,7 @@ unzip -u ${ZIP_FILE} \
     'IVault.json' \
     'IKeyManager.json' \
     'Deposit_bytecode.json' \
+    'IAddressChecker.json' \
     -d $TARGET_DIR
 
 rm ${ZIP_FILE}
