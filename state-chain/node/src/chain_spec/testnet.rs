@@ -1,7 +1,7 @@
 pub use super::common::*;
 use super::{get_account_id_from_seed, StateChainEnvironment};
 use cf_chains::{btc::BitcoinNetwork, dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
-use cf_primitives::{AccountId, AccountRole, FlipBalance};
+use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance};
 use sc_service::ChainType;
 use sp_core::{sr25519, H256};
 
@@ -34,18 +34,24 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	dot_runtime_version: RuntimeVersion { spec_version: 9360, transaction_version: 19 },
 };
 
+pub const EPOCH_DURATION_BLOCKS: BlockNumber = 3 * HOURS;
+
+pub const BASHFUL_ACCOUNT_ID: &str = "cFK7GTahm9qeX5Jjct3yfSvV4qLb8LJaArHL2SL6m9HAzc2sq";
 pub const BASHFUL_SR25519: [u8; 32] =
 	hex_literal::hex!["36c0078af3894b8202b541ece6c5d8fb4a091f7e5812b688e703549040473911"];
 pub const BASHFUL_ED25519: [u8; 32] =
 	hex_literal::hex!["971b584324592e9977f0ae407eb6b8a1aa5bcd1ca488e54ab49346566f060dd8"];
+pub const DOC_ACCOUNT_ID: &str = "cFLxadYLtGwLKA4QZ7XM7KEtmwEohJJy4rVGCG6XK6qS1reye";
 pub const DOC_SR25519: [u8; 32] =
 	hex_literal::hex!["8898758bf88855615d459f552e36bfd14e8566c8b368f6a6448942759d5c7f04"];
 pub const DOC_ED25519: [u8; 32] =
 	hex_literal::hex!["e4c4009bd437cba06a2f25cf02f4efc0cac4525193a88fe1d29196e5d0ff54e8"];
+pub const DOPEY_ACCOUNT_ID: &str = "cFNSnvbAqypZTfshHJxx9JLATURCvpQUFexn2bM1TaCZxnpbg";
 pub const DOPEY_SR25519: [u8; 32] =
 	hex_literal::hex!["ca58f2f4ae713dbb3b4db106640a3db150e38007940dfe29e6ebb870c4ccd47e"];
 pub const DOPEY_ED25519: [u8; 32] =
 	hex_literal::hex!["5506333c28f3dd39095696362194f69893bc24e3ec553dbff106cdcbfe1beea4"];
+pub const SNOW_WHITE_ACCOUNT_ID: &str = "cFNYfLm7YEjWenMB7pBRGMTaawyhYLcRxgrNUqsvZBrKNXvfw";
 pub const SNOW_WHITE_SR25519: [u8; 32] =
 	hex_literal::hex!["ced2e4db6ce71779ac40ccec60bf670f38abbf9e27a718b4412060688a9ad212"];
 
