@@ -269,6 +269,7 @@ pub mod pallet {
 			expiry_block: T::BlockNumber,
 			source_asset: Asset,
 			destination_asset: Asset,
+			channel_id: ChannelId,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -314,6 +315,7 @@ pub mod pallet {
 		},
 		SwapDepositAddressExpired {
 			deposit_address: EncodedAddress,
+			channel_id: ChannelId,
 		},
 		SwapTtlSet {
 			ttl: T::BlockNumber,
@@ -398,6 +400,7 @@ pub mod pallet {
 				T::DepositHandler::expire_channel(channel_id, address.clone());
 				Self::deposit_event(Event::<T>::SwapDepositAddressExpired {
 					deposit_address: T::AddressConverter::to_encoded_address(address),
+					channel_id,
 				});
 			}
 			T::WeightInfo::on_initialize(expired_count as u32)
@@ -543,6 +546,7 @@ pub mod pallet {
 				expiry_block,
 				source_asset,
 				destination_asset,
+				channel_id,
 			});
 
 			Ok(())

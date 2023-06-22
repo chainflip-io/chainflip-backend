@@ -1,6 +1,6 @@
 use chainflip_api::{
 	self, clean_foreign_chain_address,
-	primitives::{AccountRole, Asset, BasisPoints, CcmDepositMetadata},
+	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, CcmDepositMetadata, ChannelId},
 	settings::StateChain,
 };
 use clap::Parser;
@@ -9,7 +9,30 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	server::ServerBuilder,
 };
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+
+/// The response type expected by the broker api.
+///
+/// Note that changing this struct is a breaking change to the api.
+#[derive(Serialize, Deserialize)]
+pub struct BrokerSwapDepositAddress {
+	pub address: String,
+	pub expiry_block: BlockNumber,
+	pub issued_block: BlockNumber,
+	pub channel_id: ChannelId,
+}
+
+impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
+	fn from(value: chainflip_api::SwapDepositAddress) -> Self {
+		Self {
+			address: value.address,
+			expiry_block: value.expiry_block,
+			issued_block: value.issued_block,
+			channel_id: value.channel_id,
+		}
+	}
+}
 
 #[rpc(server, client, namespace = "broker")]
 pub trait Rpc {
@@ -24,7 +47,7 @@ pub trait Rpc {
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
 		message_metadata: Option<CcmDepositMetadata>,
-	) -> Result<chainflip_api::SwapDepositAddress, Error>;
+	) -> Result<BrokerSwapDepositAddress, Error>;
 }
 
 pub struct RpcServerImpl {
@@ -51,7 +74,7 @@ impl RpcServer for RpcServerImpl {
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
 		message_metadata: Option<CcmDepositMetadata>,
-	) -> Result<chainflip_api::SwapDepositAddress, Error> {
+	) -> Result<BrokerSwapDepositAddress, Error> {
 		Ok(chainflip_api::request_swap_deposit_address(
 			&self.state_chain_settings,
 			source_asset,
@@ -61,6 +84,7 @@ impl RpcServer for RpcServerImpl {
 			message_metadata,
 		)
 		.await?)
+		.map(BrokerSwapDepositAddress::from)
 	}
 }
 
