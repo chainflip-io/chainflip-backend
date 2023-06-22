@@ -1,15 +1,16 @@
 import { encodeAddress } from '@polkadot/util-crypto';
+import { Asset } from '@chainflip-io/cli/.';
 import { newSwap } from './new_swap';
 import { fund } from './fund';
 import { getBalance } from './get_balance';
-import { Token, getChainflipApi, observeBalanceIncrease, observeEvent } from '../shared/utils';
+import { getChainflipApi, observeBalanceIncrease, observeEvent } from '../shared/utils';
 
-function extractDestinationAddress(swapInfo: any, destToken: Token): string | undefined {
+function extractDestinationAddress(swapInfo: any, destToken: Asset): string | undefined {
     const token = (destToken === 'USDC') ? 'ETH' : destToken;
     return swapInfo[1][token.toLowerCase()];
 }
 
-function encodeDestinationAddress(address: string, destToken: Token): string {
+function encodeDestinationAddress(address: string, destToken: Asset): string {
 
     let destAddress = address;
 
@@ -24,7 +25,7 @@ function encodeDestinationAddress(address: string, destToken: Token): string {
     return destAddress;
 }
 
-export async function performSwap(sourceToken: Token, destToken: Token, ADDRESS: string, swapTag?: string) {
+export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS: string, swapTag?: string) {
     const FEE = 100;
 
     const tag = swapTag ?? '';
@@ -80,6 +81,12 @@ export async function performSwap(sourceToken: Token, destToken: Token, ADDRESS:
 
     console.log(`${tag} Waiting for balance to update`);
 
-    const newBalance = await observeBalanceIncrease(destToken, ADDRESS, OLD_BALANCE);
-    console.log(`${tag} Swap success! New balance: ${newBalance}!`);
+    try {
+        const newBalance = await observeBalanceIncrease(destToken, ADDRESS, OLD_BALANCE);
+        console.log(`${tag} Swap success! New balance: ${newBalance}!`);
+    }
+    catch (err) {
+        console.error(`${tag}: ${err}`);
+    }
+
 }

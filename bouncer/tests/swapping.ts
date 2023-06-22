@@ -1,12 +1,13 @@
 
 import { randomAsHex } from "@polkadot/util-crypto";
+import { Asset } from "@chainflip-io/cli/.";
 import { performSwap } from "../shared/perform_swap";
-import { Token, getAddress, runWithTimeout } from "../shared/utils";
+import { getAddress, runWithTimeout } from "../shared/utils";
 import { BtcAddressType } from "../shared/new_btc_address";
 
 let swapCount = 1;
 
-async function testSwap(sourceToken: Token, destToken: Token, addressType?: BtcAddressType) {
+async function testSwap(sourceToken: Asset, destToken: Asset, addressType?: BtcAddressType) {
     // Seed needs to be unique per swap:
     const seed = randomAsHex(32);
     const address = await getAddress(destToken, seed, addressType);

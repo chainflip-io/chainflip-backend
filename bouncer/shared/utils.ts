@@ -4,11 +4,11 @@ import Module from "node:module";
 
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
+import { Chain, Asset, assetChains } from '@chainflip-io/cli';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
 import { newEthAddress } from './new_eth_address';
-import { Chain, Asset, assetChains } from '@chainflip-io/cli';
 
 export const runWithTimeout = <T>(promise: Promise<T>, millis: number): Promise<T> =>
   Promise.race([
@@ -45,7 +45,6 @@ export const getChainflipApi = getCachedSubstrateApi('ws://127.0.0.1:9944');
 export const getPolkadotApi = getCachedSubstrateApi('ws://127.0.0.1:9945');
 
 export const polkadotSigningMutex = new Mutex();
-export const ethereumSigningMutex = new Mutex();
 
 export function getBtcClient(btcEndpoint?: string): any {
 
