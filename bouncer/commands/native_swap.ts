@@ -1,15 +1,14 @@
 import { executeSwap, ExecuteSwapParams } from '@chainflip-io/cli';
 import { Wallet, getDefaultProvider } from 'ethers';
-import { chainFromAsset } from '../shared/utils';
+import { Asset, chainFromAsset } from '../shared/utils';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function executeNativeSwap(destAssetSymbol: any, destAddress: string) {
+export async function executeNativeSwap(desetToken: Asset, destAddress: string) {
 
     const wallet = Wallet.fromMnemonic(
         'test test test test test test test test test test test junk',
     ).connect(getDefaultProvider('http://localhost:8545'));
 
-    const destAsset = destAssetSymbol.toUpperCase();
     const destChain = chainFromAsset(destAsset);
 
     await executeSwap(
