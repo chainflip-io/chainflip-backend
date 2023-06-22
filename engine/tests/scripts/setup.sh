@@ -7,7 +7,7 @@ set -ex
 #
 # =============================================================
 
-readonly CONTRACT_VERSION_TAG="perseverance-rc14"
+readonly CONTRACT_VERSION_TAG="perseverance-rc15"
 
 if ! which poetry; then
   curl -sSL https://install.python-poetry.org | python3 -

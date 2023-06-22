@@ -1,6 +1,6 @@
 [env]
 CF_ETH_CONTRACT_ABI_ROOT = { value = "eth-contract-abis", relative = true }
-CF_ETH_CONTRACT_ABI_TAG = "perseverance-rc13"
+CF_ETH_CONTRACT_ABI_TAG = "perseverance-rc15"
 
 
 # Note: If you just want to save typing command commands, you can install tab completions for most shells. Type
