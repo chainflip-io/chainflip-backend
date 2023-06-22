@@ -19,7 +19,7 @@ use crate::{
 		block_witnesser::{
 			BlockStream, BlockWitnesser, BlockWitnesserGenerator, BlockWitnesserGeneratorWrapper,
 		},
-		epoch_process_runner::start_epoch_process_runner,
+		epoch_process_runner::{start_epoch_process_runner, EpochProcessRunnerError},
 		ChainBlockNumber, EpochStart,
 	},
 };
@@ -110,13 +110,15 @@ impl BlockWitnesserGenerator for EthBlockWitnesserGenerator {
 }
 
 pub async fn start(
+	resume_at_epoch: Option<EpochStart<Ethereum>>,
 	epoch_start_receiver: Arc<Mutex<async_broadcast::Receiver<EpochStart<Ethereum>>>>,
 	witnessers: AllWitnessers,
 	ws_rpc: EthWsRpcClient,
 	http_rpc: EthHttpRpcClient,
 	db: Arc<PersistentKeyDB>,
-) -> Result<(), ()> {
+) -> Result<(), EpochProcessRunnerError<Ethereum>> {
 	start_epoch_process_runner(
+		resume_at_epoch,
 		epoch_start_receiver,
 		BlockWitnesserGeneratorWrapper {
 			db,

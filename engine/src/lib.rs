@@ -3,6 +3,7 @@
 #![feature(btree_drain_filter)]
 #![feature(drain_filter)]
 #![feature(map_try_insert)]
+#![feature(result_option_inspect)]
 
 pub mod common;
 pub mod constants;

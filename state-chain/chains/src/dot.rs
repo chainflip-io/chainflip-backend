@@ -36,6 +36,18 @@ impl PolkadotSignature {
 	}
 }
 
+impl PartialOrd for PolkadotSignature {
+	fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+		self.aliased_ref().partial_cmp(other.aliased_ref())
+	}
+}
+
+impl Ord for PolkadotSignature {
+	fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+		self.aliased_ref().cmp(other.aliased_ref())
+	}
+}
+
 pub type PolkadotBalance = u128;
 pub type PolkadotIndex = u32;
 pub type PolkadotExtrinsicIndex = u32;

@@ -68,7 +68,7 @@ where
 		.await
 	}
 
-	#[instrument(level = "debug", skip_all, fields(chain = Self::Chain::NAME, block_number = block.block_number().into()))]
+	#[instrument(level = "trace", skip_all, fields(chain = Self::Chain::NAME, block_number = block.block_number().into()))]
 	async fn do_witness(
 		&mut self,
 		block: W::Block,
@@ -78,12 +78,11 @@ where
 
 		self.witnesser
 			.process_block(block, state)
-			.instrument(tracing::debug_span!("process_block"))
+			.instrument(tracing::trace_span!("process_block"))
 			.await?;
 
 		self.witnessed_until_sender
 			.send(WitnessedUntil { epoch_index: self.epoch_index, block_number })
-			.instrument(tracing::debug_span!("send_witnessed_until"))
 			.await
 			.unwrap();
 
