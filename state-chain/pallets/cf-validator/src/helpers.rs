@@ -6,24 +6,23 @@ use sp_std::collections::btree_set::BTreeSet;
 /// We want to select as many olds that are also in the new set as possible.
 /// This reduces the number of peers, and therefore p2p messages required to complete
 /// the handover ceremony. It also minimises the chance of a participating node being offline.
+///
+/// If no sharing set can be determined, returns None.
 pub fn select_sharing_participants<
 	ValidatorId: sp_std::fmt::Debug + PartialEq + Eq + Clone + Ord,
 >(
 	old_authorities: BTreeSet<ValidatorId>,
 	new_authorities: &BTreeSet<ValidatorId>,
 	block_number: u64,
-) -> BTreeSet<ValidatorId> {
-	assert!(
-		!old_authorities.is_empty() && !new_authorities.is_empty(),
-		"Can't select sharing participants from {:?} and {:?}",
-		old_authorities,
-		new_authorities
-	);
-
+) -> Option<BTreeSet<ValidatorId>> {
 	fn shuffle<I: IntoIterator<Item = T>, T>(i: I, block_number: u64) -> Vec<T> {
 		let mut things: Vec<_> = i.into_iter().collect();
 		WyRand::new_seed(block_number).shuffle(&mut things);
 		things
+	}
+
+	if old_authorities.is_empty() || new_authorities.is_empty() {
+		return None
 	}
 
 	let success_threshold =
@@ -35,18 +34,18 @@ pub fn select_sharing_participants<
 	let old_not_in_new = old_authorities.difference(new_authorities);
 	let shuffled_old_not_in_new = shuffle(old_not_in_new, block_number);
 
-	shuffled_both
-		.into_iter()
-		.chain(shuffled_old_not_in_new)
-		.take(success_threshold)
-		.cloned()
-		.collect()
+	Some(
+		shuffled_both
+			.into_iter()
+			.chain(shuffled_old_not_in_new)
+			.take(success_threshold)
+			.cloned()
+			.collect(),
+	)
 }
 
 #[cfg(test)]
 mod select_sharing_participants_tests {
-	use cf_utilities::assert_panics;
-
 	use super::*;
 
 	type ValidatorId = u32;
@@ -56,7 +55,7 @@ mod select_sharing_participants_tests {
 		let old_authorities = BTreeSet::<ValidatorId>::default();
 		let new_authorities = BTreeSet::<ValidatorId>::from([1, 2, 3, 4, 5]);
 
-		assert_panics!(select_sharing_participants(old_authorities, &new_authorities, 1));
+		assert!(select_sharing_participants(old_authorities, &new_authorities, 1).is_none());
 	}
 
 	#[test]
@@ -64,7 +63,7 @@ mod select_sharing_participants_tests {
 		let old_authorities = BTreeSet::<ValidatorId>::from([1, 2, 3, 4, 5]);
 		let new_authorities = BTreeSet::<ValidatorId>::default();
 
-		assert_panics!(select_sharing_participants(old_authorities, &new_authorities, 1));
+		assert!(select_sharing_participants(old_authorities, &new_authorities, 1).is_none());
 	}
 
 	#[test]
@@ -73,7 +72,7 @@ mod select_sharing_participants_tests {
 		let new_authorities = BTreeSet::<ValidatorId>::from([6, 7, 8, 9, 10]);
 
 		let sharing_participants =
-			select_sharing_participants(old_authorities, &new_authorities, 1);
+			select_sharing_participants(old_authorities, &new_authorities, 1).unwrap();
 
 		assert!(new_authorities.is_disjoint(&sharing_participants));
 	}
@@ -87,7 +86,7 @@ mod select_sharing_participants_tests {
 			BTreeSet::<ValidatorId>::from_iter(INTERSECTING_SET.iter().chain(&[6, 7]).cloned());
 
 		let sharing_participants =
-			select_sharing_participants(old_authorities, &new_authorities, 1);
+			select_sharing_participants(old_authorities, &new_authorities, 1).unwrap();
 
 		assert!(INTERSECTING_SET.iter().all(|x| sharing_participants.contains(x)));
 	}
@@ -97,7 +96,10 @@ mod select_sharing_participants_tests {
 		let old_authorities = BTreeSet::<ValidatorId>::from([1, 2, 3, 4, 5]);
 		let new_authorities = BTreeSet::<ValidatorId>::from([1, 2, 3, 4, 5]);
 
-		assert_eq!(select_sharing_participants(old_authorities, &new_authorities, 1).len(), 4);
+		assert_eq!(
+			select_sharing_participants(old_authorities, &new_authorities, 1).unwrap().len(),
+			4
+		);
 	}
 
 	#[test]
@@ -106,7 +108,7 @@ mod select_sharing_participants_tests {
 		let new_authorities = BTreeSet::<ValidatorId>::from([1, 2, 3, 9, 10]);
 
 		let sharing_participants =
-			select_sharing_participants(old_authorities, &new_authorities, 1);
+			select_sharing_participants(old_authorities, &new_authorities, 1).unwrap();
 
 		// All thew new authorities are shared. There should be another 2 from the old authorities.
 		assert_eq!(sharing_participants.len(), 7);

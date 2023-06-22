@@ -363,16 +363,27 @@ pub mod pallet {
 					match T::VaultRotator::status() {
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
 							let authority_candidates = rotation_state.authority_candidates();
-							T::VaultRotator::key_handover(
-								helpers::select_sharing_participants(
-									// This cannot be empty, checked after VaultStatus::Failed
+							if let Some(sharing_participants) = helpers::select_sharing_participants(
 									rotation_state.unbanned_current_authorities::<T>(),
 									&authority_candidates,
 									block_number.unique_saturated_into(),
-								),
-								authority_candidates,
-								rotation_state.new_epoch_index,
-							);
+								) {
+									T::VaultRotator::key_handover(
+										sharing_participants,
+										authority_candidates,
+										rotation_state.new_epoch_index,
+									);
+								} else {
+									// Can only reach here if there are no sharing participants. This should not happend
+									// since (a) if there are no more unbanned authorities for key handover, we abort
+									// after VaultStatus::Failed (see below). And (b) authority_candidates cannot be
+									// empty by definition.
+									log::error!(
+										target: "cf-validator",
+										"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
+									);
+									Self::abort_rotation();
+								}
 							Self::set_rotation_phase(RotationPhase::KeyHandoversInProgress(rotation_state));
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
@@ -386,7 +397,7 @@ pub mod pallet {
 									target: "cf-validator",
 									"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
 								);
-								Self::set_rotation_phase(RotationPhase::Idle);
+								Self::abort_rotation();
 							} else {
 								Self::start_vault_rotation(rotation_state);
 							}
@@ -400,8 +411,9 @@ pub mod pallet {
 								"Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}"
 							);
 							log::error!(target: "cf-validator", "Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}");
+							Self::deposit_event(Event::<T>::RotationAborted);
 							// TODO: We should put the chain into safe mode here.
-							Self::set_rotation_phase(RotationPhase::Idle);
+							Self::abort_rotation();
 						},
 					};
 					T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
@@ -425,7 +437,7 @@ pub mod pallet {
 							);
 							log::error!(target: "cf-validator", "Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}");
 							// TODO: We should put the chain into safe mode here.
-							Self::set_rotation_phase(RotationPhase::Idle);
+							Self::abort_rotation();
 						},
 					}
 					// TODO: Use correct weight
@@ -448,7 +460,7 @@ pub mod pallet {
 								"Pending, or Ready(RotationComplete) possible. Got: {async_result:?}"
 							);
 							log::error!(target: "cf-validator", "Pending and Ready(RotationComplete) possible. Got {async_result:?}");
-							Self::set_rotation_phase(RotationPhase::Idle);
+							Self::abort_rotation();
 						},
 					}
 					T::ValidatorWeightInfo::rotation_phase_activating_keys(num_primary_candidates)
@@ -1064,6 +1076,15 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::RotationPhaseUpdated { new_phase });
 	}
 
+	fn abort_rotation() {
+		log::warn!(
+			target: "cf-validator",
+			"Aborting rotation at phase: {:?}.", CurrentRotationPhase::<T>::get()
+		);
+		Self::set_rotation_phase(RotationPhase::Idle);
+		Self::deposit_event(Event::<T>::RotationAborted);
+	}
+
 	fn start_authority_rotation() -> Weight {
 		if T::SystemState::is_maintenance_mode() {
 			log::warn!(
@@ -1143,7 +1164,7 @@ impl<T: Config> Pallet<T> {
 				candidates.len(),
 				min_size
 			);
-			Self::set_rotation_phase(RotationPhase::Idle);
+			Self::abort_rotation();
 		} else {
 			T::VaultRotator::keygen(candidates, rotation_state.new_epoch_index);
 			Self::set_rotation_phase(RotationPhase::KeygensInProgress(rotation_state));
