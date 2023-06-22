@@ -35,6 +35,8 @@ export async function fundBtc(address: string, amount: any) {
 
         if (confirmations < 1) {
             await sleep(1000);
+        } else {
+            return;
         }
     }
 }
