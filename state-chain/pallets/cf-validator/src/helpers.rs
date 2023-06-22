@@ -11,6 +11,7 @@ use sp_std::collections::btree_set::BTreeSet;
 pub fn select_sharing_participants<
 	ValidatorId: sp_std::fmt::Debug + PartialEq + Eq + Clone + Ord,
 >(
+	authority_threshold: u32,
 	old_authorities: BTreeSet<ValidatorId>,
 	new_authorities: &BTreeSet<ValidatorId>,
 	block_number: u64,
@@ -21,7 +22,7 @@ pub fn select_sharing_participants<
 		things
 	}
 
-	if old_authorities.is_empty() || new_authorities.is_empty() {
+	if old_authorities.len() as u32 <= authority_threshold || new_authorities.is_empty() {
 		return None
 	}
 
@@ -55,7 +56,7 @@ mod select_sharing_participants_tests {
 		let old_authorities = BTreeSet::<ValidatorId>::default();
 		let new_authorities = BTreeSet::<ValidatorId>::from([1, 2, 3, 4, 5]);
 
-		assert!(select_sharing_participants(old_authorities, &new_authorities, 1).is_none());
+		assert!(select_sharing_participants(0, old_authorities, &new_authorities, 1).is_none());
 	}
 
 	#[test]
@@ -63,7 +64,7 @@ mod select_sharing_participants_tests {
 		let old_authorities = BTreeSet::<ValidatorId>::from([1, 2, 3, 4, 5]);
 		let new_authorities = BTreeSet::<ValidatorId>::default();
 
-		assert!(select_sharing_participants(old_authorities, &new_authorities, 1).is_none());
+		assert!(select_sharing_participants(0, old_authorities, &new_authorities, 1).is_none());
 	}
 
 	#[test]
@@ -72,7 +73,7 @@ mod select_sharing_participants_tests {
 		let new_authorities = BTreeSet::<ValidatorId>::from([6, 7, 8, 9, 10]);
 
 		let sharing_participants =
-			select_sharing_participants(old_authorities, &new_authorities, 1).unwrap();
+			select_sharing_participants(0, old_authorities, &new_authorities, 1).unwrap();
 
 		assert!(new_authorities.is_disjoint(&sharing_participants));
 	}
@@ -86,7 +87,7 @@ mod select_sharing_participants_tests {
 			BTreeSet::<ValidatorId>::from_iter(INTERSECTING_SET.iter().chain(&[6, 7]).cloned());
 
 		let sharing_participants =
-			select_sharing_participants(old_authorities, &new_authorities, 1).unwrap();
+			select_sharing_participants(0, old_authorities, &new_authorities, 1).unwrap();
 
 		assert!(INTERSECTING_SET.iter().all(|x| sharing_participants.contains(x)));
 	}
@@ -97,7 +98,9 @@ mod select_sharing_participants_tests {
 		let new_authorities = BTreeSet::<ValidatorId>::from([1, 2, 3, 4, 5]);
 
 		assert_eq!(
-			select_sharing_participants(old_authorities, &new_authorities, 1).unwrap().len(),
+			select_sharing_participants(0, old_authorities, &new_authorities, 1)
+				.unwrap()
+				.len(),
 			4
 		);
 	}
@@ -108,10 +111,38 @@ mod select_sharing_participants_tests {
 		let new_authorities = BTreeSet::<ValidatorId>::from([1, 2, 3, 9, 10]);
 
 		let sharing_participants =
-			select_sharing_participants(old_authorities, &new_authorities, 1).unwrap();
+			select_sharing_participants(0, old_authorities, &new_authorities, 1).unwrap();
 
 		// All thew new authorities are shared. There should be another 2 from the old authorities.
 		assert_eq!(sharing_participants.len(), 7);
 		assert!(new_authorities.iter().all(|x| sharing_participants.contains(x)));
+	}
+
+	#[test]
+	fn test_none_if_old_authority_threshold_not_met() {
+		let new_authorities = BTreeSet::<ValidatorId>::from([1, 2, 3, 9, 10]);
+		const THRESHOLD: u32 = 5;
+
+		assert!(select_sharing_participants(
+			THRESHOLD,
+			BTreeSet::<ValidatorId>::from_iter(0..THRESHOLD - 1),
+			&new_authorities,
+			1
+		)
+		.is_none());
+		assert!(select_sharing_participants(
+			THRESHOLD,
+			BTreeSet::<ValidatorId>::from_iter(0..THRESHOLD),
+			&new_authorities,
+			1
+		)
+		.is_none());
+		assert!(select_sharing_participants(
+			THRESHOLD,
+			BTreeSet::<ValidatorId>::from_iter(0..THRESHOLD + 1),
+			&new_authorities,
+			1
+		)
+		.is_some());
 	}
 }

@@ -364,6 +364,7 @@ pub mod pallet {
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
 							let authority_candidates = rotation_state.authority_candidates();
 							if let Some(sharing_participants) = helpers::select_sharing_participants(
+									Self::current_consensus_threshold(),
 									rotation_state.unbanned_current_authorities::<T>(),
 									&authority_candidates,
 									block_number.unique_saturated_into(),
@@ -392,7 +393,7 @@ pub mod pallet {
 							rotation_state.ban(offenders);
 
 							if rotation_state.unbanned_current_authorities::<T>().len() as u32 <=
-								cf_utilities::threshold_from_share_count(Self::current_authority_count()) {
+								Self::current_consensus_threshold() {
 								log::warn!(
 									target: "cf-validator",
 									"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
@@ -1230,6 +1231,12 @@ impl<T: Config> Pallet<T> {
 		)?;
 		AuctionParameters::<T>::put(new_parameters);
 		Ok(())
+	}
+
+	///Note that the resulting threshold is the maximum number of parties not enough to generate a
+	/// signature, i.e. at least t+1 parties are required.
+	fn current_consensus_threshold() -> AuthorityCount {
+		cf_utilities::threshold_from_share_count(Self::current_authority_count())
 	}
 }
 
