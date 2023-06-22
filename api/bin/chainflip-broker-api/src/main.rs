@@ -12,6 +12,9 @@ use jsonrpsee::{
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+/// The response type expected by the broker api.
+///
+/// Note that changing this struct is a breaking change to the api.
 #[derive(Serialize, Deserialize)]
 pub struct BrokerSwapDepositAddress {
 	pub address: String,
