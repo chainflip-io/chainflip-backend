@@ -89,9 +89,9 @@ fn generate_dkg_challenge<P: ECPoint>(
 	public: P,
 	commitment: P,
 ) -> P::Scalar {
-	use sha2::{Digest, Sha256};
+	use blake2::{Blake2b, Digest};
 
-	let mut hasher = Sha256::new();
+	let mut hasher = Blake2b::<typenum::U32>::new();
 
 	hasher.update(public.as_bytes());
 	hasher.update(commitment.as_bytes());
@@ -505,9 +505,9 @@ pub fn derive_local_pubkeys_for_parties<P: ECPoint>(
 pub fn generate_hash_commitment<P: ECPoint>(
 	coefficient_commitments: &DKGUnverifiedCommitment<P>,
 ) -> H256 {
-	use sha2::{Digest, Sha256};
+	use blake2::{Blake2b, Digest};
 
-	let mut hasher = Sha256::new();
+	let mut hasher = Blake2b::<typenum::U32>::new();
 
 	for comm in &coefficient_commitments.commitments.0 {
 		hasher.update(bincode::serialize(&comm).expect("serialization can't fail"));

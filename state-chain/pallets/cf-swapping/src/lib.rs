@@ -267,6 +267,8 @@ pub mod pallet {
 			deposit_address: EncodedAddress,
 			destination_address: EncodedAddress,
 			expiry_block: T::BlockNumber,
+			source_asset: Asset,
+			destination_asset: Asset,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -277,9 +279,14 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 			origin: SwapOrigin,
 		},
-		/// A swap has been fully completed.
+		/// A swap has been executed.
 		SwapExecuted {
 			swap_id: u64,
+			source_asset: Asset,
+			deposit_amount: AssetAmount,
+			destination_asset: Asset,
+			egress_amount: AssetAmount,
+			intermediate_amount: Option<AssetAmount>,
 		},
 		/// A swap egress has been scheduled.
 		SwapEgressScheduled {
@@ -287,13 +294,12 @@ pub mod pallet {
 			egress_id: EgressId,
 			asset: Asset,
 			amount: AssetAmount,
-			intermediate_amount: Option<AssetAmount>,
 		},
 		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
-			amount: AssetAmount,
-			address: EncodedAddress,
 			egress_id: EgressId,
+			egress_amount: AssetAmount,
+			destination_address: EncodedAddress,
 		},
 		/// Most likely cause of this error is that there are insufficient
 		/// liquidity in the Pool. Also this could happen if the result overflowed u128::MAX
@@ -421,14 +427,21 @@ pub mod pallet {
 				Self::do_group_and_swap(&mut swaps, SwapLeg::FromStable)?;
 
 				for swap in swaps {
-					if let Some(output_amount) = swap.final_output {
-						Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
+					if let Some(egress_amount) = swap.final_output {
+						Self::deposit_event(Event::<T>::SwapExecuted {
+							swap_id: swap.swap_id,
+							source_asset: swap.from,
+							destination_asset: swap.to,
+							deposit_amount: swap.amount,
+							egress_amount,
+							intermediate_amount: swap.intermediate_amount(),
+						});
 						// Handle swap completion logic.
 						match &swap.swap_type {
 							SwapType::Swap(destination_address) => {
 								let egress_id = T::EgressHandler::schedule_egress(
 									swap.to,
-									output_amount,
+									egress_amount,
 									destination_address.clone(),
 									None,
 								);
@@ -437,21 +450,20 @@ pub mod pallet {
 									swap_id: swap.swap_id,
 									egress_id,
 									asset: swap.to,
-									amount: output_amount,
-									intermediate_amount: swap.intermediate_amount(),
+									amount: egress_amount,
 								});
 							},
 							SwapType::CcmPrincipal(ccm_id) => {
 								Self::handle_ccm_swap_result(
 									*ccm_id,
-									output_amount,
+									egress_amount,
 									CcmSwapLeg::Principal,
 								);
 							},
 							SwapType::CcmGas(ccm_id) => {
 								Self::handle_ccm_swap_result(
 									*ccm_id,
-									output_amount,
+									egress_amount,
 									CcmSwapLeg::Gas,
 								);
 							},
@@ -529,6 +541,8 @@ pub mod pallet {
 				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 				destination_address,
 				expiry_block,
+				source_asset,
+				destination_asset,
 			});
 
 			Ok(())
@@ -551,15 +565,15 @@ pub mod pallet {
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, asset)?;
 
-			let amount = EarnedBrokerFees::<T>::take(account_id, asset);
-			ensure!(amount != 0, Error::<T>::NoFundsAvailable);
+			let egress_amount = EarnedBrokerFees::<T>::take(account_id, asset);
+			ensure!(egress_amount != 0, Error::<T>::NoFundsAvailable);
 
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
-				amount,
-				address: destination_address,
+				egress_amount,
+				destination_address,
 				egress_id: T::EgressHandler::schedule_egress(
 					asset,
-					amount,
+					egress_amount,
 					destination_address_internal,
 					None,
 				),

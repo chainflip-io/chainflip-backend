@@ -634,9 +634,9 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 /// Create unique deterministic context used for generating a ZKP to prevent replay attacks
 fn generate_keygen_context(ceremony_id: CeremonyId, signers: BTreeSet<AccountId>) -> HashContext {
-	use sha2::{Digest, Sha256};
+	use blake2::{Blake2b, Digest};
 
-	let mut hasher = Sha256::new();
+	let mut hasher = Blake2b::<typenum::U32>::new();
 
 	hasher.update(ceremony_id.to_be_bytes());
 

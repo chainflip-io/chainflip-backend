@@ -1,9 +1,8 @@
 import * as crypto from 'crypto';
 import { setTimeout as sleep } from 'timers/promises';
-import { execSync } from "child_process";
-
+import { execSync } from 'child_process';
 import { ApiPromise, WsProvider } from '@polkadot/api';
-import { ChainId } from '@chainflip-io/cli';
+import { Chain, Asset, assetChains } from '@chainflip-io/cli';
 
 export const runWithTimeout = <T>(promise: Promise<T>, millis: number): Promise<T> =>
   Promise.race([
@@ -46,12 +45,9 @@ export async function observeEvent(eventName: string, chainflip: ApiPromise): Pr
   return result;
 }
 
-export type Token = 'USDC' | 'ETH' | 'DOT' | 'FLIP' | 'BTC';
-
-export function getAddress(token: Token, seed: string, type?: string): string {
+export function getAddress(asset: Asset, seed: string, type?: string): string {
   const rawAddress = (() => {
-
-    switch (token) {
+    switch (asset) {
       case 'ETH':
       case 'USDC':
       case 'FLIP':
@@ -61,26 +57,20 @@ export function getAddress(token: Token, seed: string, type?: string): string {
       case 'BTC':
         return execSync(`pnpm tsx ./commands/new_btc_address.ts ${seed} ${type ?? 'P2PKH'}`);
       default:
-        throw new Error("unexpected token");
+        throw new Error('unexpected asset');
     }
   })();
 
   return String(rawAddress).trim();
-
 }
 
-export function chainFromToken(token: Token): ChainId {
-  if (['FLIP', 'USDC', 'ETH'].includes(token)) {
-    return ChainId.Ethereum;
+export function chainFromAsset(asset: Asset): Chain {
+  if (asset in assetChains) {
+    return assetChains[asset];
   }
-  if (token === 'DOT') {
-    return ChainId.Polkadot;
-  }
-  if (token === 'BTC') {
-    return ChainId.Bitcoin;
-  }
-  throw new Error("unsupported token");
-};
+  
+  throw new Error('unexpected asset');
+}
 
 // TODO: import JS function instead
 export function getBalanceSync(dstCcy: string, address: string): number {
@@ -97,7 +87,6 @@ export async function observeBalanceIncrease(dstCcy: string, address: string, ol
     }
 
     await sleep(1000);
-
   }
 
   return Promise.reject(new Error("Failed to observe balance increase"));

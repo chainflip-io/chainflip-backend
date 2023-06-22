@@ -88,6 +88,7 @@ where
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 {
 	start_epoch_process_runner(
+		None,
 		Arc::new(Mutex::new(epoch_starts_receiver)),
 		BlockWitnesserGeneratorWrapper {
 			db,
@@ -97,7 +98,7 @@ where
 	)
 	.instrument(info_span!("BTC-Witnesser"))
 	.await
-	.map_err(|()| anyhow!("Btc witnesser failed"))
+	.map_err(|_| anyhow!("Btc witnesser failed"))
 }
 
 struct BtcBlockWitnesser<StateChainClient> {

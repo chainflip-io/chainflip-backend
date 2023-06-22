@@ -70,7 +70,7 @@ pub struct RpcSwapOutput {
 impl From<SwapOutput> for RpcSwapOutput {
 	fn from(swap_output: SwapOutput) -> Self {
 		Self {
-			intermediary: Some(NumberOrHex::from(swap_output.intermediary.unwrap())),
+			intermediary: swap_output.intermediary.map(NumberOrHex::from),
 			output: NumberOrHex::from(swap_output.output),
 		}
 	}
@@ -497,7 +497,7 @@ where
 			)
 			.map_err(to_rpc_error)
 			.and_then(|r| {
-				r.map_err(|e| jsonrpsee::core::Error::Custom(<&'static str>::from(e).into()))
+				r.ok_or(jsonrpsee::core::Error::from(anyhow::anyhow!("Unable to process swap.")))
 			})
 			.map(RpcSwapOutput::from)
 	}
