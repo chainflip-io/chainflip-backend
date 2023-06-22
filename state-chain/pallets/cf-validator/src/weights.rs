@@ -40,7 +40,7 @@ pub trait WeightInfo {
 	fn missed_authorship_slots(m: u32, ) -> Weight;
 	fn rotation_phase_idle() -> Weight;
 	fn start_authority_rotation(a: u32, ) -> Weight;
-	fn start_authority_rotation_in_maintenance_mode() -> Weight;
+	fn start_authority_rotation_in_safe_mode_code_red() -> Weight;
 	fn rotation_phase_keygen(a: u32, ) -> Weight;
 	fn rotation_phase_activating_keys(a: u32, ) -> Weight;
 	fn set_auction_parameters() -> Weight;
@@ -162,7 +162,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(8))
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
-	fn start_authority_rotation_in_maintenance_mode() -> Weight {
+	fn start_authority_rotation_in_safe_mode_code_red() -> Weight {
 		// Minimum execution time: 13_000 nanoseconds.
 		Weight::from_ref_time(13_000_000)
 			.saturating_add(T::DbWeight::get().reads(1))
@@ -335,7 +335,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(8))
 	}
 	// Storage: Environment CurrentSystemState (r:1 w:0)
-	fn start_authority_rotation_in_maintenance_mode() -> Weight {
+	fn start_authority_rotation_in_safe_mode_code_red() -> Weight {
 		// Minimum execution time: 13_000 nanoseconds.
 		Weight::from_ref_time(13_000_000)
 			.saturating_add(RocksDbWeight::get().reads(1))

@@ -8,6 +8,10 @@ pub trait UpdateSafeModeForBenchmarking<PalletSafeMode: SafeMode> {
 	fn update(pallet_update: &PalletSafeMode);
 }
 
+pub trait ActivateCodeRed {
+	fn activate_code_red();
+}
+
 /// Implements the top-level RuntimeSafeMode struct.
 ///
 /// The macros takes the following arguments:
@@ -37,7 +41,7 @@ macro_rules! impl_runtime_safe_mode {
 		/// Hides imports.
 		mod __inner {
 			use super::*;
-			use $crate::{SafeMode, UpdateSafeModeForBenchmarking};
+			use $crate::{SafeMode, UpdateSafeModeForBenchmarking, ActivateCodeRed};
 			use codec::{Encode, Decode, MaxEncodedLen};
 			use frame_support::{
 				storage::StorageValue,
@@ -72,10 +76,16 @@ macro_rules! impl_runtime_safe_mode {
 				};
 			}
 
-			impl UpdateSafeModeForBenchmarking<Self> for $runtime_safe_mode{
+			impl UpdateSafeModeForBenchmarking<Self> for $runtime_safe_mode {
 				#[cfg(feature = "runtime-benchmarks")]
 				fn update(update: &Self) {
 					<$root_storage as StorageValue<_>>::put(update);
+				}
+			}
+
+			impl ActivateCodeRed for $runtime_safe_mode {
+				fn activate_code_red() {
+					<$root_storage as StorageValue<_>>::put(Self::CODE_RED);
 				}
 			}
 

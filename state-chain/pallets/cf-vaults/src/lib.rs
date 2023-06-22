@@ -6,8 +6,8 @@ use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, Chainflip, CurrentEpochIndex,
-	EpochKey, KeyProvider, KeyState, Slashing, SystemStateManager, ThresholdSigner,
+	offence_reporting::OffenceReporter, ActivateCodeRed, AsyncResult, Broadcaster, Chainflip,
+	CurrentEpochIndex, EpochKey, KeyProvider, KeyState, Slashing, ThresholdSigner,
 	VaultKeyWitnessedHandler, VaultRotator, VaultStatus, VaultTransitionHandler,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
@@ -174,8 +174,8 @@ pub mod pallet {
 
 		type Slasher: Slashing<AccountId = Self::ValidatorId, BlockNumber = Self::BlockNumber>;
 
-		// A trait which allows us to put the chain into maintenance mode.
-		type SystemStateManager: SystemStateManager;
+		/// Safe Mode access.
+		type SafeMode: ActivateCodeRed;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -612,10 +612,12 @@ pub mod pallet {
 		/// the only thing we can do is to halt and wait for further governance
 		/// intervention.
 		///
+		/// This function activates CODE RED for the runtime's safe mode, which halts
+		/// many functions on the statechain.
+		///
 		/// ## Events
 		///
 		/// - [VaultRotatedExternally](Event::VaultRotatedExternally)
-		/// - [SystemStateHasBeenChanged](Event::SystemStateHasBeenChanged)
 		///
 		/// ## Errors
 		///
@@ -635,7 +637,7 @@ pub mod pallet {
 
 			Self::set_next_vault(new_public_key, block_number);
 
-			T::SystemStateManager::activate_maintenance_mode();
+			T::SafeMode::activate_code_red();
 
 			Pallet::<T, I>::deposit_event(Event::VaultRotatedExternally(new_public_key));
 

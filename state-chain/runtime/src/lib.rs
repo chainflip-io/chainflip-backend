@@ -229,7 +229,7 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Broadcaster = EthereumBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
-	type SystemStateManager = chainflip::SystemStateDeprecated;
+	type SafeMode = chainflip::RuntimeSafeMode;
 	type Slasher = FlipSlasher<Self>;
 }
 
@@ -246,7 +246,7 @@ impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
 	type Broadcaster = PolkadotBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
-	type SystemStateManager = chainflip::SystemStateDeprecated;
+	type SafeMode = chainflip::RuntimeSafeMode;
 	type Slasher = FlipSlasher<Self>;
 }
 
@@ -263,7 +263,7 @@ impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
 	type Broadcaster = BitcoinBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
-	type SystemStateManager = chainflip::SystemStateDeprecated;
+	type SafeMode = chainflip::RuntimeSafeMode;
 	type Slasher = FlipSlasher<Self>;
 }
 

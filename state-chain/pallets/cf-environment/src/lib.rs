@@ -230,6 +230,8 @@ pub mod pallet {
 		PolkadotRuntimeVersionUpdated { runtime_version: RuntimeVersion },
 		/// The starting block number for the new Bitcoin vault was set
 		BitcoinBlockNumberSetForVault { block_number: cf_chains::btc::BlockNumber },
+		/// The Safe Mode settings for the chain has been updated
+		RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate<T> },
 	}
 
 	#[pallet::hooks]
@@ -447,11 +449,13 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			RuntimeSafeMode::<T>::put(match update {
+			RuntimeSafeMode::<T>::put(match update.clone() {
 				SafeModeUpdate::CodeGreen => SafeMode::CODE_GREEN,
 				SafeModeUpdate::CodeRed => SafeMode::CODE_RED,
 				SafeModeUpdate::CodeAmber(safe_mode) => safe_mode,
 			});
+
+			Self::deposit_event(Event::<T>::RuntimeSafeModeUpdated { safe_mode: update });
 
 			Ok(().into())
 		}
