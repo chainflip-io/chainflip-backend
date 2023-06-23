@@ -37,8 +37,6 @@ pub type EgressCounter = u64;
 
 pub type EgressId = (ForeignChain, EgressCounter);
 
-pub type EthereumAddress = [u8; 20];
-
 pub type EthAmount = u128;
 
 pub type AssetAmount = u128;
@@ -72,7 +70,9 @@ pub struct TxId {
 	pub extrinsic_index: u32,
 }
 
-pub const ETHEREUM_ETH_ADDRESS: EthereumAddress = [0xEE; 20];
+pub const ETHEREUM_ETH_ADDRESS: [u8; 20] = [0xEE; 20];
+
+pub type EvmAddress = [u8; 20];
 
 /// The very first epoch number
 pub const GENESIS_EPOCH: u32 = 1;

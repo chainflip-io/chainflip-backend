@@ -15,7 +15,7 @@ benchmarks! {
 
 	funded {
 		let amount: T::Amount = T::Amount::from(100u32);
-		let withdrawal_address: EthereumAddress = [42u8; 20];
+		let withdrawal_address: EvmAddress = [42u8; 20];
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 		let caller: T::AccountId = whitelisted_caller();
 
@@ -37,7 +37,7 @@ benchmarks! {
 		// will fail.
 		let balance_to_redeem = RedemptionAmount::Exact(T::Amount::from(2u32));
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
-		let withdrawal_address: EthereumAddress = [42u8; 20];
+		let withdrawal_address: EvmAddress = [42u8; 20];
 
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = T::EnsureWitnessed::successful_origin();
@@ -55,7 +55,7 @@ benchmarks! {
 		assert!(PendingRedemptions::<T>::contains_key(&caller));
 	}
 	redeem_all {
-		let withdrawal_address: EthereumAddress = [42u8; 20];
+		let withdrawal_address: EvmAddress = [42u8; 20];
 		let caller: T::AccountId = whitelisted_caller();
 
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
@@ -81,7 +81,7 @@ benchmarks! {
 
 	redeemed {
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
-		let withdrawal_address: EthereumAddress = [42u8; 20];
+		let withdrawal_address: EvmAddress = [42u8; 20];
 
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = T::EnsureWitnessed::successful_origin();
@@ -111,7 +111,7 @@ benchmarks! {
 
 	redemption_expired {
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
-		let withdrawal_address: EthereumAddress = [42u8; 20];
+		let withdrawal_address: EvmAddress = [42u8; 20];
 
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = T::EnsureWitnessed::successful_origin();

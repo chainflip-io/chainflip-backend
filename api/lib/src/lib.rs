@@ -406,7 +406,8 @@ pub async fn request_swap_deposit_address(
 /// chain.
 pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result<EncodedAddress> {
 	Ok(match chain {
-		ForeignChain::Ethereum => EncodedAddress::Eth(clean_eth_address(address)?),
+		ForeignChain::Ethereum | ForeignChain::Arbitrum =>
+			EncodedAddress::Eth(clean_eth_address(address)?),
 		ForeignChain::Polkadot => EncodedAddress::Dot(clean_dot_address(address)?),
 		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
 	})

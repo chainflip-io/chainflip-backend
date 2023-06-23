@@ -34,7 +34,7 @@ fn generate_test_swaps() -> Vec<Swap> {
 			Asset::Flip,
 			Asset::Usdc,
 			100,
-			SwapType::Swap(ForeignChainAddress::Eth([2; 20])),
+			SwapType::Swap(ForeignChainAddress::Eth([2; 20].into())),
 		),
 		// USDC -> asset
 		Swap::new(
@@ -42,7 +42,7 @@ fn generate_test_swaps() -> Vec<Swap> {
 			Asset::Eth,
 			Asset::Usdc,
 			40,
-			SwapType::Swap(ForeignChainAddress::Eth([9; 20])),
+			SwapType::Swap(ForeignChainAddress::Eth([9; 20].into())),
 		),
 		// Both assets are on the Eth chain
 		Swap::new(
@@ -50,7 +50,7 @@ fn generate_test_swaps() -> Vec<Swap> {
 			Asset::Flip,
 			Asset::Eth,
 			500,
-			SwapType::Swap(ForeignChainAddress::Eth([2; 20])),
+			SwapType::Swap(ForeignChainAddress::Eth([2; 20].into())),
 		),
 		// Cross chain
 		Swap::new(
@@ -83,7 +83,7 @@ fn insert_swaps(swaps: &[Swap]) {
 	for (broker_id, swap) in swaps.iter().enumerate() {
 		if let SwapType::Swap(destination_address) = &swap.swap_type {
 			<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
-				ForeignChainAddress::Eth([2; 20]),
+				ForeignChainAddress::Eth([2; 20].into()),
 				swap.from,
 				swap.to,
 				swap.amount,
@@ -144,22 +144,22 @@ fn expect_earned_fees_to_be_recorded() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 2_u64;
 		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
-			ForeignChainAddress::Eth([2; 20]),
+			ForeignChainAddress::Eth([2; 20].into()),
 			Asset::Flip,
 			Asset::Usdc,
 			100,
-			ForeignChainAddress::Eth([2; 20]),
+			ForeignChainAddress::Eth([2; 20].into()),
 			ALICE,
 			200,
 			1,
 		);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, cf_primitives::Asset::Flip), 2);
 		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
-			ForeignChainAddress::Eth([2; 20]),
+			ForeignChainAddress::Eth([2; 20].into()),
 			Asset::Flip,
 			Asset::Usdc,
 			100,
-			ForeignChainAddress::Eth([2; 20]),
+			ForeignChainAddress::Eth([2; 20].into()),
 			ALICE,
 			200,
 			1,
@@ -174,11 +174,11 @@ fn cannot_swap_with_incorrect_destination_address_type() {
 	new_test_ext().execute_with(|| {
 		const ALICE: u64 = 1_u64;
 		<Pallet<Test> as SwapDepositHandler>::schedule_swap_from_channel(
-			ForeignChainAddress::Eth([2; 20]),
+			ForeignChainAddress::Eth([2; 20].into()),
 			Asset::Eth,
 			Asset::Dot,
 			10,
-			ForeignChainAddress::Eth([2; 20]),
+			ForeignChainAddress::Eth([2; 20].into()),
 			ALICE,
 			2,
 			1,
@@ -378,7 +378,7 @@ fn reject_invalid_ccm_deposit() {
 			message: vec![0x00],
 			gas_budget,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+			source_address: ForeignChainAddress::Eth([0xcf; 20].into()),
 		};
 
 		assert_noop!(
@@ -441,7 +441,7 @@ fn rejects_invalid_swap_deposit() {
 			message: vec![0x00],
 			gas_budget,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+			source_address: ForeignChainAddress::Eth([0xcf; 20].into()),
 		};
 
 		assert_noop!(
@@ -518,7 +518,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 			message: vec![0x01],
 			gas_budget,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+			source_address: ForeignChainAddress::Eth([0xcf; 20].into()),
 		};
 
 		// Can process CCM via Swap deposit
@@ -603,7 +603,7 @@ fn can_process_ccms_via_extrinsic() {
 			message: vec![0x02],
 			gas_budget,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+			source_address: ForeignChainAddress::Eth([0xcf; 20].into()),
 		};
 
 		// Can process CCM directly via Pallet Extrinsic.
@@ -687,7 +687,7 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 			message: vec![0x00],
 			gas_budget,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+			source_address: ForeignChainAddress::Eth([0xcf; 20].into()),
 		};
 		assert_ok!(Swapping::ccm_deposit(
 			RuntimeOrigin::root(),
@@ -769,7 +769,7 @@ fn can_handle_ccms_with_native_gas_asset() {
 			message: vec![0x00],
 			gas_budget,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+			source_address: ForeignChainAddress::Eth([0xcf; 20].into()),
 		};
 
 		assert_ok!(Swapping::ccm_deposit(
@@ -846,7 +846,7 @@ fn can_handle_ccms_with_no_swaps_needed() {
 			message: vec![0x00],
 			gas_budget,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+			source_address: ForeignChainAddress::Eth([0xcf; 20].into()),
 		};
 
 		// Ccm without need for swapping are egressed directly.

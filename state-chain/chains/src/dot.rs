@@ -844,14 +844,12 @@ pub struct PolkadotReplayProtection {
 	pub nonce: PolkadotIndex,
 }
 
-impl ChannelIdConstructor for PolkadotChannelId {
-	type Address = PolkadotAccountId;
-
-	fn deployed(channel_id: u64, _address: Self::Address) -> Self {
+impl ChannelIdConstructor<Polkadot> for PolkadotChannelId {
+	fn deployed(channel_id: u64, _address: PolkadotAccountId) -> Self {
 		channel_id
 	}
 
-	fn undeployed(channel_id: u64, _address: Self::Address) -> Self {
+	fn undeployed(channel_id: u64, _address: PolkadotAccountId) -> Self {
 		channel_id
 	}
 }

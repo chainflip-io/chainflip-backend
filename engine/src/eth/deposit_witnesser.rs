@@ -114,7 +114,7 @@ where
 		let deposit_witnesses = successful_txs
 			.unique_by(|(tx, _)| tx.hash)
 			.map(|(tx, to_addr)| DepositWitness {
-				deposit_address: to_addr,
+				deposit_address: to_addr.into(),
 				asset: eth::Asset::Eth,
 				amount: tx
 					.value

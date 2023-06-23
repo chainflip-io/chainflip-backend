@@ -32,6 +32,7 @@ pub use cf_primitives::chains::*;
 pub mod benchmarking_value;
 
 pub mod any;
+pub mod arb;
 pub mod btc;
 pub mod dot;
 pub mod eth;
@@ -105,7 +106,7 @@ pub trait Chain: Member + Parameter {
 		+ Copy
 		+ BenchmarkValue
 		+ BenchmarkValueExtended
-		+ ChannelIdConstructor<Address = Self::ChainAccount>;
+		+ ChannelIdConstructor<Self>;
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -295,12 +296,11 @@ pub trait FeeRefundCalculator<C: Chain> {
 }
 
 /// Helper trait to avoid matching over chains in the generic pallet.
-pub trait ChannelIdConstructor {
-	type Address;
+pub trait ChannelIdConstructor<C: Chain> {
 	/// Constructs the ChannelId for the deployed case.
-	fn deployed(channel_id: u64, address: Self::Address) -> Self;
+	fn deployed(channel_id: u64, address: <C as Chain>::ChainAccount) -> Self;
 	/// Constructs the ChannelId for the undeployed case.
-	fn undeployed(channel_id: u64, address: Self::Address) -> Self;
+	fn undeployed(channel_id: u64, address: <C as Chain>::ChainAccount) -> Self;
 }
 
 /// Metadata as part of a Cross Chain Message.

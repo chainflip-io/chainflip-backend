@@ -27,3 +27,9 @@ impl PalletInstanceAlias for cf_chains::btc::Bitcoin {
 }
 
 pub type BitcoinInstance = <cf_chains::btc::Bitcoin as PalletInstanceAlias>::Instance;
+
+impl PalletInstanceAlias for cf_chains::arb::Arbitrum {
+	type Instance = Instance4;
+}
+
+pub type ArbitrumInstance = <cf_chains::arb::Arbitrum as PalletInstanceAlias>::Instance;

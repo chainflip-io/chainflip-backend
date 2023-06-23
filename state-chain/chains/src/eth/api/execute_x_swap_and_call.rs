@@ -38,10 +38,12 @@ impl ExecutexSwapAndCall {
 	fn destructure_address(address: ForeignChainAddress) -> (u32, Vec<u8>) {
 		match address {
 			ForeignChainAddress::Eth(source_address) =>
-				(ForeignChain::Ethereum as u32, source_address.to_vec()),
+				(ForeignChain::Ethereum as u32, source_address.0.to_vec()),
 			ForeignChainAddress::Dot(source_address) =>
 				(ForeignChain::Polkadot as u32, source_address.aliased_ref().to_vec()),
 			ForeignChainAddress::Btc(script) => (ForeignChain::Bitcoin as u32, script.bytes()),
+			ForeignChainAddress::Arb(source_address) =>
+				(ForeignChain::Arbitrum as u32, source_address.0.to_vec()),
 		}
 	}
 

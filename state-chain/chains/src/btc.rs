@@ -256,14 +256,12 @@ pub struct UtxoId {
 	pub vout: u32,
 }
 
-impl ChannelIdConstructor for BitcoinFetchId {
-	type Address = ScriptPubkey;
-
-	fn deployed(channel_id: u64, _address: Self::Address) -> Self {
+impl ChannelIdConstructor<Bitcoin> for BitcoinFetchId {
+	fn deployed(channel_id: u64, _address: ScriptPubkey) -> Self {
 		BitcoinFetchId(channel_id)
 	}
 
-	fn undeployed(channel_id: u64, _address: Self::Address) -> Self {
+	fn undeployed(channel_id: u64, _address: ScriptPubkey) -> Self {
 		BitcoinFetchId(channel_id)
 	}
 }

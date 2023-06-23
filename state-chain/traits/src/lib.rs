@@ -14,7 +14,7 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{
-	address::ForeignChainAddress, dot::PolkadotPublicKey, eth::Address, ApiCall,
+	address::ForeignChainAddress, dot::PolkadotPublicKey, eth::EthereumAddress, ApiCall,
 	CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot,
 };
 use cf_primitives::{
@@ -693,7 +693,9 @@ impl AddressDerivationApi<Ethereum> for () {
 		source_asset: <Ethereum as Chain>::ChainAsset,
 		channel_id: ChannelId,
 	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
-		Ok(Address::from_slice(&(source_asset, channel_id).encode().blake2_256()[..20]))
+		Ok(EthereumAddress(
+			(source_asset, channel_id).encode().blake2_256()[..20].try_into().unwrap(),
+		))
 	}
 }
 

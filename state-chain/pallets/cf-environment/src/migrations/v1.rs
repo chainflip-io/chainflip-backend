@@ -9,17 +9,16 @@ pub mod old {
 
 	#[frame_support::storage_alias]
 	pub type SupportedEthAssets<T: Config> =
-		StorageMap<Pallet<T>, Blake2_128Concat, EthAsset, EthereumAddress, ValueQuery>;
+		StorageMap<Pallet<T>, Blake2_128Concat, EthAsset, EvmAddress, ValueQuery>;
 
 	#[frame_support::storage_alias]
-	pub type StateChainGatewayAddress<T: Config> =
-		StorageValue<Pallet<T>, EthereumAddress, ValueQuery>;
+	pub type StateChainGatewayAddress<T: Config> = StorageValue<Pallet<T>, EvmAddress, ValueQuery>;
 
 	#[frame_support::storage_alias]
-	pub type KeyManagerAddress<T: Config> = StorageValue<Pallet<T>, EthereumAddress, ValueQuery>;
+	pub type KeyManagerAddress<T: Config> = StorageValue<Pallet<T>, EvmAddress, ValueQuery>;
 
 	#[frame_support::storage_alias]
-	pub type EthVaultAddress<T: Config> = StorageValue<Pallet<T>, EthereumAddress, ValueQuery>;
+	pub type EthVaultAddress<T: Config> = StorageValue<Pallet<T>, EvmAddress, ValueQuery>;
 
 	#[frame_support::storage_alias]
 	pub type GlobalSignatureNonce<T: Config> = StorageValue<Pallet<T>, SignatureNonce, ValueQuery>;

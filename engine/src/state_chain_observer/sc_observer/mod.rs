@@ -696,7 +696,7 @@ where
                                             eth::Asset::Usdc => {
                                                 &eth_address_to_monitor_sender.usdc
                                             }
-                                        }.send(MonitorCommand::Add(deposit_address)).unwrap();
+                                        }.send(MonitorCommand::Add(deposit_address.into())).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumIngressEgress(
                                         pallet_cf_ingress_egress::Event::StopWitnessing {
@@ -715,7 +715,7 @@ where
                                             eth::Asset::Usdc => {
                                                 &eth_address_to_monitor_sender.usdc
                                             }
-                                        }.send(MonitorCommand::Remove(deposit_address)).unwrap();
+                                        }.send(MonitorCommand::Remove(deposit_address.into())).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {

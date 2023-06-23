@@ -52,7 +52,8 @@ macro_rules! chains {
 chains! {
 	Ethereum = 1,
 	Polkadot = 2,
-	Bitcoin = 3
+	Bitcoin = 3,
+	Arbitrum = 4
 }
 
 /// Can be any Chain.
@@ -66,6 +67,7 @@ impl ForeignChain {
 			ForeignChain::Ethereum => assets::any::Asset::Eth,
 			ForeignChain::Polkadot => assets::any::Asset::Dot,
 			ForeignChain::Bitcoin => assets::any::Asset::Btc,
+			ForeignChain::Arbitrum => assets::any::Asset::ArbEth,
 		}
 	}
 }
@@ -88,6 +90,7 @@ fn chain_as_u32() {
 	assert_eq!(ForeignChain::Ethereum as u32, 1);
 	assert_eq!(ForeignChain::Polkadot as u32, 2);
 	assert_eq!(ForeignChain::Bitcoin as u32, 3);
+	assert_eq!(ForeignChain::Arbitrum as u32, 4);
 }
 
 #[test]
@@ -95,7 +98,8 @@ fn chain_id_to_chain() {
 	assert_eq!(ForeignChain::try_from(1), Ok(ForeignChain::Ethereum));
 	assert_eq!(ForeignChain::try_from(2), Ok(ForeignChain::Polkadot));
 	assert_eq!(ForeignChain::try_from(3), Ok(ForeignChain::Bitcoin));
-	assert!(ForeignChain::try_from(4).is_err());
+	assert_eq!(ForeignChain::try_from(4), Ok(ForeignChain::Arbitrum));
+	assert!(ForeignChain::try_from(5).is_err());
 }
 
 #[test]
@@ -103,6 +107,7 @@ fn test_chains() {
 	assert_eq!(Ethereum.as_ref(), &ForeignChain::Ethereum);
 	assert_eq!(Polkadot.as_ref(), &ForeignChain::Polkadot);
 	assert_eq!(Bitcoin.as_ref(), &ForeignChain::Bitcoin);
+	assert_eq!(Arbitrum.as_ref(), &ForeignChain::Arbitrum);
 }
 
 #[test]
@@ -110,4 +115,5 @@ fn test_get_chain_identifier() {
 	assert_eq!(Ethereum::get(), ForeignChain::Ethereum);
 	assert_eq!(Polkadot::get(), ForeignChain::Polkadot);
 	assert_eq!(Bitcoin::get(), ForeignChain::Bitcoin);
+	assert_eq!(Arbitrum::get(), ForeignChain::Arbitrum);
 }

@@ -138,7 +138,7 @@ where
 				message: message.to_vec(),
 				gas_budget: try_into_primitive(gas_amount)?,
 				cf_parameters: cf_parameters.0.to_vec(),
-				source_address: sender.into(),
+				source_address: cf_chains::ForeignChainAddress::Eth(sender.into()),
 			},
 		}),
 		VaultEvents::XcallTokenFilter(XcallTokenFilter {
@@ -171,7 +171,7 @@ where
 				message: message.to_vec(),
 				gas_budget: try_into_primitive(gas_amount)?,
 				cf_parameters: cf_parameters.0.to_vec(),
-				source_address: sender.into(),
+				source_address: cf_chains::ForeignChainAddress::Eth(sender.into()),
 			},
 		}),
 		unhandled_event => Err(CallFromEventError::Decode(format!(

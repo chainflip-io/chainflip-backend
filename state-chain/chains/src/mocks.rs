@@ -62,14 +62,12 @@ impl Chain for MockEthereum {
 	type EpochStartData = ();
 }
 
-impl ChannelIdConstructor for MockEthereumChannelId {
-	type Address = u64;
-
-	fn deployed(_channel_id: u64, _address: Self::Address) -> Self {
+impl ChannelIdConstructor<MockEthereum> for MockEthereumChannelId {
+	fn deployed(_channel_id: u64, _address: u64) -> Self {
 		unimplemented!()
 	}
 
-	fn undeployed(_channel_id: u64, _address: Self::Address) -> Self {
+	fn undeployed(_channel_id: u64, _address: u64) -> Self {
 		unimplemented!()
 	}
 }
