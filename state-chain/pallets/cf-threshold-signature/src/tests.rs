@@ -103,6 +103,16 @@ impl MockCfe {
 							Error::<Test, Instance1>::InvalidCeremonyId
 						);
 
+						// Can't report a non-participant
+						assert_noop!(
+							EthereumThresholdSigner::report_signature_failed(
+								RuntimeOrigin::signed(self.id),
+								ceremony_id,
+								bad.iter().cloned().chain([1234]).collect(),
+							),
+							Error::<Test, Instance1>::InvalidAccusation
+						);
+
 						// Unsolicited responses are rejected.
 						assert_noop!(
 							EthereumThresholdSigner::report_signature_failed(
@@ -555,6 +565,7 @@ mod unsigned_validation {
 		ExtBuilder::new()
 			.with_authorities(AUTHORITIES)
 			.with_nominees(NOMINEES)
+			.with_request(b"OHAI")
 			.build()
 			.execute_with(|| {
 				const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
@@ -580,16 +591,14 @@ mod unsigned_validation {
 		ExtBuilder::new()
 			.with_authorities(AUTHORITIES)
 			.with_nominees(NOMINEES)
+			.with_request(b"OHAI")
 			.build()
 			.execute_with(|| {
-				const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
-				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
-				let ceremony_id = MockCeremonyIdProvider::get();
 				assert_eq!(
 					Test::validate_unsigned(
 						TransactionSource::External,
 						&PalletCall::signature_success {
-							ceremony_id,
+							ceremony_id: MockCeremonyIdProvider::get(),
 							signature: INVALID_SIGNATURE
 						}
 						.into()
@@ -633,7 +642,7 @@ mod failure_reporting {
 			key: MockAggKey(AGG_KEY),
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),
-			participant_count: 5,
+			participants: BTreeSet::from_iter(validator_set),
 		}
 	}
 

@@ -328,6 +328,29 @@ fn only_participants_can_report_keygen_outcome() {
 }
 
 #[test]
+fn can_only_report_keygen_participants() {
+	new_test_ext().execute_with(|| {
+		<VaultsPallet as VaultRotator>::keygen(
+			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
+			GENESIS_EPOCH,
+		);
+		let non_participant = u64::MAX;
+
+		assert!(!ALL_CANDIDATES.contains(&non_participant), "Non-participant is a candidate");
+		assert_noop!(
+			VaultsPallet::report_keygen_outcome(
+				RuntimeOrigin::signed(ALICE),
+				current_ceremony_id(),
+				// Report the non-participant
+				Err(BTreeSet::from_iter([non_participant]))
+			),
+			Error::<MockRuntime, _>::InvalidAccusation
+		);
+		assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
+	});
+}
+
+#[test]
 fn reporting_keygen_outcome_must_be_for_pending_ceremony_id() {
 	new_test_ext().execute_with(|| {
 		<VaultsPallet as VaultRotator>::keygen(
@@ -738,7 +761,7 @@ fn test_vault_key_rotated_externally() {
 }
 
 #[test]
-fn key_unavailabe_on_activate_returns_governance_event() {
+fn key_unavailable_on_activate_returns_governance_event() {
 	new_test_ext_no_key().execute_with(|| {
 		PendingVaultRotation::put(VaultRotationStatus::<MockRuntime, _>::KeyHandoverComplete {
 			new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER,
