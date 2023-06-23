@@ -383,15 +383,17 @@ pub trait DepositAddress {
 	}
 
 	/// Set the state of the
-	fn process(self)
+	fn process(self) -> Self
 	where
 		Self: Sized,
 	{
+		self
 	}
-	fn finalize(self)
+	fn finalize(self) -> Self
 	where
 		Self: Sized,
 	{
+		self
 	}
 	fn maybe_recycle(self) -> bool
 	where

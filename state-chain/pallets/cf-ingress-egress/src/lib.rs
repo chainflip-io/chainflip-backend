@@ -344,9 +344,9 @@ pub mod pallet {
 			for (_, deposit_address) in addresses {
 				let channel_id =
 					DepositAddressDetailsLookup::<T, I>::get(deposit_address.clone()).unwrap();
-				AddressPool::<T, I>::mutate_exists(channel_id.channel_id, true, |e| {
-					e.unwrap().finalize();
-				});
+				let new_state =
+					AddressPool::<T, I>::get(channel_id.channel_id, true).unwrap().finalize();
+				AddressPool::<T, I>::insert(channel_id.channel_id, true, new_state);
 			}
 			Ok(())
 		}
@@ -426,17 +426,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						!DisabledEgressAssets::<T, I>::contains_key(request.asset()) &&
 							match request {
 								FetchOrTransfer::Fetch { channel_id, .. } => {
-									AddressPool::<T, I>::mutate_exists(
+									let updated_state =
+										AddressPool::<T, I>::get(channel_id.clone(), true)
+											.unwrap()
+											.process();
+									AddressPool::<T, I>::insert(
 										channel_id.clone(),
 										true,
-										|maybe_address| {
-											maybe_address.as_mut().expect("to exist").process()
-										},
+										updated_state,
 									);
-
-									AddressPool::<T, I>::get(channel_id.clone(), true)
-										.expect("asdf")
-										.maybe_skip()
+									let skip_it =
+										AddressPool::<T, I>::get(channel_id.clone(), true)
+											.expect("asdf")
+											.maybe_skip();
+									skip_it
 								},
 								FetchOrTransfer::Transfer { .. } => true,
 							}
@@ -457,8 +460,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		for request in batch_to_send {
 			match request {
 				FetchOrTransfer::<T::TargetChain>::Fetch { channel_id, asset } => {
-					// let (channel_id, deposit_address) = FetchParamDetails::<T,
-					// I>::get(channel_id) 	.expect("to have fetch param details available");
 					let deposit_fetch_id = AddressPool::<T, I>::get(channel_id, true)
 						.expect("")
 						.get_deposit_fetch_id();
@@ -669,8 +670,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn close_channel(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
 		ChannelActions::<T, I>::remove(&address);
-		let recycle = AddressPool::<T, I>::get(channel_id, true).expect("asdf").maybe_recycle();
-		if !recycle {
+		let dep_address = AddressPool::<T, I>::get(channel_id, true).expect("asdf");
+		if dep_address.maybe_recycle() {
+			AddressPool::<T, I>::insert(channel_id, false, dep_address);
+		} else {
 			AddressPool::<T, I>::remove(channel_id, true);
 		}
 		if let Some(deposit_address_details) = DepositAddressDetailsLookup::<T, I>::take(&address) {

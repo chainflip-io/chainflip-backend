@@ -615,18 +615,18 @@ impl DepositAddress for EthereumDepositAddress {
 		self.address
 	}
 
-	fn process(mut self)
+	fn process(mut self) -> Self
 	where
 		Self: Sized,
 	{
-		match self.deposit_fetch_id {
-			EthereumChannelId::Deployed(_) => {
-				self.deployment_status = DeploymentStatus::Deployed;
-			},
-			EthereumChannelId::UnDeployed(_) => {
+		match self.deployment_status {
+			DeploymentStatus::Deployed => {},
+			DeploymentStatus::Pending => {},
+			DeploymentStatus::Undeployed => {
 				self.deployment_status = DeploymentStatus::Pending;
 			},
 		}
+		self
 	}
 
 	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
@@ -646,9 +646,10 @@ impl DepositAddress for EthereumDepositAddress {
 	where
 		Self: Sized,
 	{
-		match self.deposit_fetch_id {
-			EthereumChannelId::Deployed(_) => false,
-			EthereumChannelId::UnDeployed(_) => true,
+		match self.deployment_status {
+			DeploymentStatus::Deployed => false,
+			DeploymentStatus::Pending => true,
+			DeploymentStatus::Undeployed => false,
 		}
 	}
 
@@ -659,7 +660,7 @@ impl DepositAddress for EthereumDepositAddress {
 		true
 	}
 
-	fn finalize(mut self)
+	fn finalize(mut self) -> Self
 	where
 		Self: Sized,
 	{
@@ -670,6 +671,7 @@ impl DepositAddress for EthereumDepositAddress {
 			DeploymentStatus::Undeployed => self.deployment_status = DeploymentStatus::Pending,
 			_ => (),
 		}
+		self
 	}
 }
 
