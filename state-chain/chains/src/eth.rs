@@ -15,6 +15,7 @@ pub use ethabi::{
 	ethereum_types::{H256, U256},
 	Address, Hash as TxHash, Token, Uint, Word,
 };
+use ethereum_types::H160;
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -36,6 +37,39 @@ pub const CHAIN_ID_ROPSTEN: u64 = 3;
 pub const CHAIN_ID_GOERLI: u64 = 5;
 pub const CHAIN_ID_KOVAN: u64 = 42;
 
+#[derive(
+	Copy,
+	Clone,
+	RuntimeDebug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	PartialOrd,
+	Ord,
+)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct EthereumAddress(pub [u8; 20]);
+
+impl From<EthereumAddress> for H160 {
+	fn from(value: EthereumAddress) -> Self {
+		value.0.into()
+	}
+}
+impl From<H160> for EthereumAddress {
+	fn from(value: H160) -> Self {
+		EthereumAddress(*value.as_fixed_bytes())
+	}
+}
+impl From<[u8; 20]> for EthereumAddress {
+	fn from(value: [u8; 20]) -> Self {
+		EthereumAddress(value)
+	}
+}
+
 impl Chain for Ethereum {
 	const NAME: &'static str = "Ethereum";
 	type KeyHandoverIsRequired = ConstBool<false>;
@@ -44,7 +78,7 @@ impl Chain for Ethereum {
 	type ChainAmount = EthAmount;
 	type TransactionFee = eth::TransactionFee;
 	type TrackedData = EthereumTrackedData;
-	type ChainAccount = eth::Address;
+	type ChainAccount = EthereumAddress;
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
 	type DepositFetchId = EthereumFetchId;
@@ -637,8 +671,8 @@ impl From<&DepositChannel<Ethereum>> for EthereumFetchId {
 	fn from(channel: &DepositChannel<Ethereum>) -> Self {
 		match channel.state {
 			DeploymentStatus::Undeployed => EthereumFetchId::Undeployed(channel.channel_id),
-			DeploymentStatus::Pending => EthereumFetchId::Deployed(channel.address),
-			DeploymentStatus::Deployed => EthereumFetchId::Deployed(channel.address),
+			DeploymentStatus::Pending => EthereumFetchId::Deployed(channel.address.into()),
+			DeploymentStatus::Deployed => EthereumFetchId::Deployed(channel.address.into()),
 		}
 	}
 }

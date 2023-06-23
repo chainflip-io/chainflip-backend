@@ -162,7 +162,7 @@ impl EthContractWitnesser for KeyManager {
 											s: sig_data.sig.into(),
 											k_times_g_address: sig_data.k_times_g_address.into(),
 										},
-										signer_id: core_h160(from),
+										signer_id: core_h160(from).into(),
 										tx_fee: TransactionFee { effective_gas_price, gas_used },
 									}
 									.into(),

@@ -1,7 +1,7 @@
 use crate::chainflip::Offence;
 use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::api::EthereumChainId};
-use cf_primitives::{Asset, AssetAmount, EpochIndex, EthereumAddress, SemVer, SwapOutput};
+use cf_primitives::{Asset, AssetAmount, EpochIndex, EvmAddress, SemVer, SwapOutput};
 use codec::{Decode, Encode};
 use pallet_cf_governance::GovCallHash;
 #[cfg(feature = "std")]
@@ -52,7 +52,7 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub is_qualified: bool,
 	pub is_online: bool,
 	pub is_bidding: bool,
-	pub bound_redeem_address: Option<EthereumAddress>,
+	pub bound_redeem_address: Option<EvmAddress>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq)]
@@ -82,10 +82,10 @@ decl_runtime_apis!(
 	pub trait CustomRuntimeApi {
 		/// Returns true if the current phase is the auction phase.
 		fn cf_is_auction_phase() -> bool;
-		fn cf_eth_flip_token_address() -> EthereumAddress;
-		fn cf_eth_state_chain_gateway_address() -> EthereumAddress;
-		fn cf_eth_asset(token_address: EthereumAddress) -> Option<Asset>;
-		fn cf_eth_key_manager_address() -> EthereumAddress;
+		fn cf_eth_flip_token_address() -> EvmAddress;
+		fn cf_eth_state_chain_gateway_address() -> EvmAddress;
+		fn cf_eth_asset(token_address: EvmAddress) -> Option<Asset>;
+		fn cf_eth_key_manager_address() -> EvmAddress;
 		fn cf_eth_chain_id() -> u64;
 		/// Returns the eth vault in the form [agg_key, active_from_eth_block]
 		fn cf_eth_vault() -> ([u8; 33], u32);

@@ -310,7 +310,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			message: vec![0u8, 1u8, 2u8, 3u8, 4u8],
 			gas_budget,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+			source_address: ForeignChainAddress::Eth([0xcf; 20].into()),
 		};
 
 		assert_ok!(Swapping::request_swap_deposit_address(
@@ -419,7 +419,7 @@ fn can_process_ccm_via_direct_deposit() {
 			message: vec![0u8, 1u8, 2u8, 3u8, 4u8],
 			gas_budget,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20])
+			source_address: ForeignChainAddress::Eth([0xcf; 20].into())
 		};
 
 		let ccm_call = Box::new(RuntimeCall::Swapping(pallet_cf_swapping::Call::ccm_deposit{

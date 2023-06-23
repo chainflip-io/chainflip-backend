@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use cf_primitives::{Asset, EpochIndex, EthereumAddress};
+use cf_primitives::{Asset, EpochIndex, EvmAddress};
 use tracing::info;
 use web3::types::H160;
 
@@ -24,14 +24,14 @@ pub struct Vault {
 
 #[async_trait]
 pub trait EthAssetApi {
-	async fn asset(&self, token_address: EthereumAddress) -> Result<Option<Asset>>;
+	async fn asset(&self, token_address: EvmAddress) -> Result<Option<Asset>>;
 }
 
 #[async_trait]
 impl<RawRpcClient: RawRpcApi + Send + Sync + 'static, SignedExtrinsicClient: Send + Sync>
 	EthAssetApi for StateChainClient<SignedExtrinsicClient, BaseRpcClient<RawRpcClient>>
 {
-	async fn asset(&self, token_address: EthereumAddress) -> Result<Option<Asset>> {
+	async fn asset(&self, token_address: EvmAddress) -> Result<Option<Asset>> {
 		self.base_rpc_client
 			.raw_rpc_client
 			.cf_eth_asset(None, token_address)

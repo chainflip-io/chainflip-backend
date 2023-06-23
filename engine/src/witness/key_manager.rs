@@ -116,7 +116,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 														s: sig_data.sig.into(),
 														k_times_g_address: sig_data.k_times_g_address.into(),
 													},
-													signer_id: from,
+													signer_id: from.into(),
 													tx_fee: TransactionFee { effective_gas_price, gas_used },
 												}
 												.into(),

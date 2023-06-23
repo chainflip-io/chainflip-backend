@@ -105,7 +105,7 @@ impl Cli {
 	pub fn redeem(
 		account: &NodeId,
 		amount: RedemptionAmount<FlipBalance>,
-		eth_address: EthereumAddress,
+		eth_address: EvmAddress,
 	) {
 		assert_ok!(Funding::redeem(RuntimeOrigin::signed(account.clone()), amount, eth_address));
 	}

@@ -90,7 +90,7 @@ pub mod pallet {
 		type CompoundingInterval: Get<<Self as frame_system::Config>::BlockNumber>;
 
 		/// Something that can provide the state chain gatweay address.
-		type EthEnvironment: EthEnvironmentProvider;
+		type EthEnvironment: EthEnvironmentProvider<Self::HostChain>;
 
 		/// The interface for accessing the amount of Flip we want burn.
 		type FlipToBurn: FlipBurnInfo;

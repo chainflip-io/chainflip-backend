@@ -12,7 +12,7 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 };
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, EthereumAddress, SemVer};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, EvmAddress, SemVer};
 use cf_traits::{CompatibleVersions, GetBitcoinFeeInfo, SafeMode};
 use frame_support::{
 	pallet_prelude::*,
@@ -105,27 +105,27 @@ pub mod pallet {
 	#[pallet::getter(fn supported_eth_assets)]
 	/// Map of supported assets for ETH
 	pub type EthereumSupportedAssets<T: Config> =
-		StorageMap<_, Blake2_128Concat, EthAsset, EthereumAddress>;
+		StorageMap<_, Blake2_128Concat, EthAsset, EvmAddress>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn state_chain_gateway_address)]
 	/// The address of the ETH state chain gatweay contract
-	pub type EthereumStateChainGatewayAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
+	pub type EthereumStateChainGatewayAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn key_manager_address)]
 	/// The address of the ETH key manager contract
-	pub type EthereumKeyManagerAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
+	pub type EthereumKeyManagerAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn eth_vault_address)]
 	/// The address of the ETH vault contract
-	pub type EthereumVaultAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
+	pub type EthereumVaultAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn eth_address_checker_address)]
 	/// The address of the Address Checker contract on ETH
-	pub type EthereumAddressCheckerAddress<T> = StorageValue<_, EthereumAddress, ValueQuery>;
+	pub type EthereumAddressCheckerAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn ethereum_chain_id)]
@@ -185,9 +185,9 @@ pub mod pallet {
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		/// A new supported ETH asset was added
-		AddedNewEthAsset(EthAsset, EthereumAddress),
+		AddedNewEthAsset(EthAsset, EvmAddress),
 		/// The address of an supported ETH asset was updated
-		UpdatedEthAsset(EthAsset, EthereumAddress),
+		UpdatedEthAsset(EthAsset, EvmAddress),
 		/// Polkadot Vault Account is successfully set
 		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
 		/// The Polkadot Runtime Version stored on chain was updated.
@@ -241,7 +241,7 @@ pub mod pallet {
 		pub fn update_supported_eth_assets(
 			origin: OriginFor<T>,
 			asset: EthAsset,
-			address: EthereumAddress,
+			address: EvmAddress,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(asset != EthAsset::Eth, Error::<T>::EthAddressNotUpdateable);
@@ -400,12 +400,12 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	#[cfg_attr(feature = "std", derive(Default))]
 	pub struct GenesisConfig {
-		pub flip_token_address: EthereumAddress,
-		pub eth_usdc_address: EthereumAddress,
-		pub state_chain_gateway_address: EthereumAddress,
-		pub key_manager_address: EthereumAddress,
-		pub eth_vault_address: EthereumAddress,
-		pub eth_address_checker_address: EthereumAddress,
+		pub flip_token_address: EvmAddress,
+		pub eth_usdc_address: EvmAddress,
+		pub state_chain_gateway_address: EvmAddress,
+		pub key_manager_address: EvmAddress,
+		pub eth_vault_address: EvmAddress,
+		pub eth_address_checker_address: EvmAddress,
 		pub ethereum_chain_id: u64,
 		pub polkadot_genesis_hash: PolkadotHash,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,

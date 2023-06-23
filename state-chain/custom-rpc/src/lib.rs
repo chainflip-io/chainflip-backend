@@ -1,6 +1,6 @@
 use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::api::EthereumChainId};
-use cf_primitives::{Asset, EthereumAddress, SwapOutput};
+use cf_primitives::{Asset, EvmAddress, SwapOutput};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
 use sc_client_api::HeaderBackend;
@@ -40,7 +40,7 @@ pub struct RpcAccountInfoV2 {
 	pub is_qualified: bool,
 	pub is_online: bool,
 	pub is_bidding: bool,
-	pub bound_redeem_address: Option<EthereumAddress>,
+	pub bound_redeem_address: Option<EvmAddress>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -114,7 +114,7 @@ pub trait CustomApi {
 	fn cf_eth_asset(
 		&self,
 		at: Option<state_chain_runtime::Hash>,
-		token_address: EthereumAddress,
+		token_address: EvmAddress,
 	) -> RpcResult<Option<Asset>>;
 	#[method(name = "eth_flip_token_address")]
 	fn cf_eth_flip_token_address(&self, at: Option<state_chain_runtime::Hash>)
@@ -250,7 +250,7 @@ where
 	fn cf_eth_asset(
 		&self,
 		at: Option<<B as BlockT>::Hash>,
-		token_address: EthereumAddress,
+		token_address: EvmAddress,
 	) -> RpcResult<Option<Asset>> {
 		self.client
 			.runtime_api()

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use cf_chains::Ethereum;
+use cf_chains::{Ethereum, ForeignChainAddress};
 use ethers::types::Bloom;
 use sp_core::{H160, H256};
 
@@ -151,7 +151,7 @@ where
 				message: message.to_vec(),
 				gas_budget: try_into_primitive(gas_amount)?,
 				cf_parameters: cf_parameters.0.to_vec(),
-				source_address: sender.into(),
+				source_address: ForeignChainAddress::Eth(sender.into()),
 			},
 			tx_hash: event.tx_hash.into(),
 		}),
@@ -185,7 +185,7 @@ where
 				message: message.to_vec(),
 				gas_budget: try_into_primitive(gas_amount)?,
 				cf_parameters: cf_parameters.0.to_vec(),
-				source_address: sender.into(),
+				source_address: ForeignChainAddress::Eth(sender.into()),
 			},
 			tx_hash: event.tx_hash.into(),
 		}),
