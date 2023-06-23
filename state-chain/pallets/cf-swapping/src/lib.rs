@@ -4,7 +4,7 @@ use cf_chains::{
 	CcmDepositMetadata,
 };
 use cf_primitives::{Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, STABLE_ASSET};
-use cf_traits::{liquidity::SwappingApi, CcmHandler, DepositApi, SafeMode};
+use cf_traits::{impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi};
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
@@ -157,16 +157,7 @@ pub enum CcmFailReason {
 	GasBudgetBelowMinimum,
 }
 
-#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
-pub struct PalletSafeMode {
-	do_swaps: bool,
-}
-
-impl SafeMode for PalletSafeMode {
-	const CODE_RED: Self = Self { do_swaps: false };
-	const CODE_GREEN: Self = Self { do_swaps: true };
-}
-
+impl_pallet_safe_mode!(PalletSafeMode, do_swaps, do_withdraw);
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum SwapOrigin {
 	DepositChannel { deposit_address: EncodedAddress, channel_id: ChannelId },
@@ -377,6 +368,8 @@ pub mod pallet {
 		SwapAmountTooLow,
 		/// The CCM's gas budget is below the minimum allowed.
 		CcmGasBudgetBelowMinimum,
+		/// The system Safe Mode is Code Red. Functionalities are halted.
+		RuntimeSafeModeIsCodeRed,
 	}
 
 	#[pallet::genesis_config]
@@ -579,6 +572,8 @@ pub mod pallet {
 			asset: Asset,
 			destination_address: EncodedAddress,
 		) -> DispatchResult {
+			ensure!(T::SafeMode::get().do_withdraw, Error::<T>::RuntimeSafeModeIsCodeRed);
+
 			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 			let destination_address_internal =

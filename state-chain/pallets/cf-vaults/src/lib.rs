@@ -174,7 +174,7 @@ pub mod pallet {
 
 		type Slasher: Slashing<AccountId = Self::ValidatorId, BlockNumber = Self::BlockNumber>;
 
-		/// Safe Mode access.
+		/// For activating Safe mode: CODE RED for the chain.
 		type SafeMode: ActivateCodeRed;
 
 		/// Benchmark stuff

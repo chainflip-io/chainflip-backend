@@ -1,13 +1,16 @@
+/// Trait for defining Safe Mode for the State Chain.
 pub trait SafeMode {
 	const CODE_RED: Self;
 	const CODE_GREEN: Self;
 }
 
+/// For directly setting safe mode. For Benchmarking only.
 pub trait UpdateSafeModeForBenchmarking<PalletSafeMode: SafeMode> {
 	#[cfg(feature = "runtime-benchmarks")]
 	fn update(pallet_update: &PalletSafeMode);
 }
 
+/// For activating Code Red for the State chain.
 pub trait ActivateCodeRed {
 	fn activate_code_red();
 }
@@ -167,6 +170,7 @@ pub(crate) mod test {
 	#[storage_alias]
 	pub type SafeModeStorage = StorageValue<Mock, TestRuntimeSafeMode, ValueQuery>;
 
+	// SafeMode struct can be defined manually
 	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Eq, Debug)]
 	pub struct ExampleSafeModeA {
 		safe: bool,
@@ -188,6 +192,7 @@ pub(crate) mod test {
 		const CODE_GREEN: Self = Self::Safe;
 	}
 
+	// Use this macro to quickly define a safe mode struct with a list of bool flags.
 	impl_pallet_safe_mode!(TestPalletSafeMode, flag_1, flag_2);
 
 	// Use this for multiple `impl_pallet_safe_mode` calls within the same mod.

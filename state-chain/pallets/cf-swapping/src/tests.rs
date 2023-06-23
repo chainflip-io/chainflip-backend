@@ -1592,3 +1592,35 @@ fn cannot_swap_in_safe_mode() {
 		assert_eq!(SwapQueue::<Test>::decode_len(), None);
 	});
 }
+
+#[test]
+fn cannot_withdraw_in_safe_mode() {
+	new_test_ext().execute_with(|| {
+		EarnedBrokerFees::<Test>::insert(ALICE, Asset::Eth, 200);
+
+		// Activate code red
+		MockRuntimeSafeMode::set_safe_mode(SafeMode::CODE_RED);
+
+		// Cannot withdraw
+		assert_noop!(
+			Swapping::withdraw(
+				RuntimeOrigin::signed(ALICE),
+				Asset::Eth,
+				EncodedAddress::Eth(Default::default()),
+			),
+			Error::<Test>::RuntimeSafeModeIsCodeRed
+		);
+		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, Asset::Eth), 200);
+
+		// Change back to code green
+		MockRuntimeSafeMode::set_safe_mode(SafeMode::CODE_GREEN);
+
+		// withdraws are now alloed
+		assert_ok!(Swapping::withdraw(
+			RuntimeOrigin::signed(ALICE),
+			Asset::Eth,
+			EncodedAddress::Eth(Default::default()),
+		));
+		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, Asset::Eth), 0);
+	});
+}
