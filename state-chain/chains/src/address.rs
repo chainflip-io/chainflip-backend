@@ -108,17 +108,6 @@ impl TryFrom<ForeignChainAddress> for ArbitrumAddress {
 	}
 }
 
-// impl TryFrom<ForeignChainAddress> for H160 {
-// 	type Error = AddressError;
-
-// 	fn try_from(address: ForeignChainAddress) -> Result<Self, Self::Error> {
-// 		match address {
-// 			ForeignChainAddress::Eth(addr) => Ok(addr.into()),
-// 			_ => Err(AddressError::InvalidAddress),
-// 		}
-// 	}
-// }
-
 impl TryFrom<ForeignChainAddress> for PolkadotAccountId {
 	type Error = AddressError;
 
@@ -170,12 +159,6 @@ impl From<ArbitrumAddress> for ForeignChainAddress {
 	}
 }
 
-// impl From<H160> for ForeignChainAddress {
-// 	fn from(address: H160) -> ForeignChainAddress {
-// 		ForeignChainAddress::Eth(address.to_fixed_bytes())
-// 	}
-// }
-
 impl From<PolkadotAccountId> for ForeignChainAddress {
 	fn from(account_id: PolkadotAccountId) -> ForeignChainAddress {
 		ForeignChainAddress::Dot(account_id)
@@ -191,7 +174,7 @@ impl From<ScriptPubkey> for ForeignChainAddress {
 impl EncodedAddress {
 	pub fn from_chain_bytes(chain: ForeignChain, bytes: Vec<u8>) -> Result<Self, &'static str> {
 		match chain {
-			ForeignChain::Ethereum | ForeignChain::Arbitrum => {
+			ForeignChain::Ethereum => {
 				if bytes.len() != 20 {
 					return Err("Invalid Ethereum address length")
 				}
@@ -208,6 +191,14 @@ impl EncodedAddress {
 				Ok(EncodedAddress::Dot(address))
 			},
 			ForeignChain::Bitcoin => Ok(EncodedAddress::Btc(bytes)),
+			ForeignChain::Arbitrum => {
+				if bytes.len() != 20 {
+					return Err("Invalid Arbitrum address length")
+				}
+				let mut address = [0u8; 20];
+				address.copy_from_slice(&bytes);
+				Ok(EncodedAddress::Arb(address))
+			},
 		}
 	}
 }
