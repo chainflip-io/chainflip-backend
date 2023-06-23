@@ -104,6 +104,10 @@ pub enum VaultEvent {
 		token: ethabi::Address,
 		reason: web3::types::Bytes,
 	},
+	FetchedNative {
+		sender: ethabi::Address,
+		amount: u128,
+	},
 }
 
 #[async_trait]
@@ -328,6 +332,7 @@ impl EthContractWitnesser for Vault {
 		let add_gas_token = SignatureAndEvent::new(&self.contract, "AddGasToken")?;
 		let execute_actions_failed =
 			SignatureAndEvent::new(&self.contract, "ExecuteActionsFailed")?;
+		let fetched_native = SignatureAndEvent::new(&self.contract, "FetchedNative")?;
 
 		Ok(Box::new(
 			move |event_signature: H256, raw_log: RawLog| -> Result<Self::EventParameters> {
@@ -422,6 +427,12 @@ impl EthContractWitnesser for Vault {
 						amount: decode_log_param(&log, "amount")?,
 						token: decode_log_param(&log, "token")?,
 						reason: decode_log_param(&log, "reason")?,
+					}
+				} else if event_signature == fetched_native.signature {
+					let log = fetched_native.event.parse_log(raw_log)?;
+					VaultEvent::FetchedNative {
+						sender: decode_log_param(&log, "sender")?,
+						amount: decode_log_param(&log, "amount")?,
 					}
 				} else {
 					bail!(EventParseError::UnexpectedEvent(event_signature))
