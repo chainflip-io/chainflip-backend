@@ -22,6 +22,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	state_chain_gateway_address: hex_literal::hex!("0e30aFE29222c093aac54E77AD97d49FFA51cc54"),
 	key_manager_address: hex_literal::hex!("50E436B37F69b6C4Ef11BfDB62575c1992c49464"),
 	eth_vault_address: hex_literal::hex!("53685A9158255dE80FbC91846c0Ae0C5F3070A91"),
+	eth_address_checker_address: hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"),
 	ethereum_chain_id: CHAIN_ID_GOERLI,
 	eth_init_agg_key: hex_literal::hex!(
 		"0238de34ff83a64fe33bfc888d2736d10f1d0776cd1845382ae345dd3dad6d2f13"
