@@ -76,7 +76,7 @@ impl ChainCrypto for Arbitrum {
 	type Payload = H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
 	type TransactionInId = H256;
-	// We can't use the hash since we don't know it for Ethereum, as we must select an individaul
+	// We can't use the hash since we don't know it for Arbitrum, as we must select an individaul
 	// authority to sign the transaction.
 	type TransactionOutId = Self::ThresholdSignature;
 	type GovKey = Address;
@@ -88,7 +88,7 @@ impl ChainCrypto for Arbitrum {
 	) -> bool {
 		agg_key
 			.verify(payload.as_fixed_bytes(), signature)
-			.map_err(|e| log::debug!("Ethereum signature verification failed: {:?}.", e))
+			.map_err(|e| log::debug!("Arbitrum signature verification failed: {:?}.", e))
 			.is_ok()
 	}
 
