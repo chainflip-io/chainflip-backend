@@ -190,12 +190,19 @@ pub(crate) mod test {
 
 	impl_pallet_safe_mode!(TestPalletSafeMode, flag_1, flag_2);
 
+	// Use this for multiple `impl_pallet_safe_mode` calls within the same mod.
+	mod __test_mode_2 {
+		impl_pallet_safe_mode!(TestPalletSafeMode2, flag_1, flag_2);
+	}
+	use __test_mode_2::TestPalletSafeMode2;
+
 	impl_runtime_safe_mode! {
 		TestRuntimeSafeMode,
 		SafeModeStorage,
 		example_a: ExampleSafeModeA,
 		example_b: ExampleSafeModeB,
 		pallet: TestPalletSafeMode,
+		pallet_2: TestPalletSafeMode2,
 	}
 
 	#[test]
@@ -209,6 +216,7 @@ pub(crate) mod test {
 						example_a: ExampleSafeModeA::CODE_GREEN,
 						example_b: ExampleSafeModeB::CODE_GREEN,
 						pallet: SafeMode::CODE_GREEN,
+						pallet_2: SafeMode::CODE_GREEN,
 					}
 			);
 			assert!(
@@ -224,8 +232,8 @@ pub(crate) mod test {
 					TestPalletSafeMode::CODE_GREEN
 			);
 
-			// Code Red
-			SafeModeStorage::put(TestRuntimeSafeMode::CODE_RED);
+			// Activate Code Red
+			TestRuntimeSafeMode::activate_code_red();
 
 			assert!(
 				<TestRuntimeSafeMode as Get<TestRuntimeSafeMode>>::get() ==
@@ -233,6 +241,7 @@ pub(crate) mod test {
 						example_a: ExampleSafeModeA::CODE_RED,
 						example_b: ExampleSafeModeB::CODE_RED,
 						pallet: SafeMode::CODE_RED,
+						pallet_2: SafeMode::CODE_RED,
 					}
 			);
 			assert_eq!(
@@ -253,6 +262,7 @@ pub(crate) mod test {
 				example_a: ExampleSafeModeA::CODE_RED,
 				example_b: ExampleSafeModeB::CODE_RED,
 				pallet: TestPalletSafeMode { flag_1: true, flag_2: false },
+				pallet_2: TestPalletSafeMode2 { flag_1: false, flag_2: true },
 			});
 			assert!(
 				<TestRuntimeSafeMode as Get<TestPalletSafeMode>>::get() ==
