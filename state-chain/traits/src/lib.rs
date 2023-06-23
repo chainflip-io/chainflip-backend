@@ -76,8 +76,6 @@ pub trait Chainflip: frame_system::Config {
 	type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 	/// Information about the current Epoch.
 	type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
-	/// Access to information about the current system state
-	type SystemState: SystemStateInfo;
 	/// For registering and checking account roles.
 	type AccountRoleRegistry: AccountRoleRegistry<Self>;
 	/// For checking nodes' current balances.
@@ -629,28 +627,6 @@ pub trait CeremonyIdProvider {
 pub trait MissedAuthorshipSlots {
 	/// Get a list of slots that were missed.
 	fn missed_slots() -> sp_std::ops::Range<u64>;
-}
-
-/// Something that manages access to the system state.
-pub trait SystemStateInfo {
-	/// Ensure that the network is **not** in maintenance mode.
-	fn ensure_no_maintenance() -> DispatchResult;
-
-	/// Check if the network is in maintenance mode.
-	fn is_maintenance_mode() -> bool {
-		Self::ensure_no_maintenance().is_err()
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn activate_maintenance_mode() {
-		unimplemented!()
-	}
-}
-
-/// Something that can manipulate the system state.
-pub trait SystemStateManager {
-	/// Turn system maintenance on.
-	fn activate_maintenance_mode();
 }
 
 /// Allows accounts to pay for things by burning fees.

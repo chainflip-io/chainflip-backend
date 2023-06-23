@@ -73,10 +73,10 @@ fn cannot_deposit_and_withdrawal_during_safe_mode() {
 	new_test_ext().execute_with(|| {
 		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000);
 
-		// Activate maintenance mode
+		// Activate Safe Mode: Code red
 		MockRuntimeSafeMode::set_safe_mode(SafeMode::CODE_RED);
 
-		// Cannot request deposit address during maintenance.
+		// Cannot request deposit address during Code red.
 		assert_noop!(
 			LiquidityProvider::request_liquidity_deposit_address(
 				RuntimeOrigin::signed(LP_ACCOUNT.into()),
@@ -85,7 +85,7 @@ fn cannot_deposit_and_withdrawal_during_safe_mode() {
 			crate::Error::<Test>::RuntimeSafeModeIsCodeRed,
 		);
 
-		// Cannot withdraw liquidity during maintenance.
+		// Cannot withdraw liquidity during Code red.
 		assert_noop!(
 			LiquidityProvider::withdraw_asset(
 				RuntimeOrigin::signed(LP_ACCOUNT.into()),
@@ -96,7 +96,7 @@ fn cannot_deposit_and_withdrawal_during_safe_mode() {
 			crate::Error::<Test>::RuntimeSafeModeIsCodeRed,
 		);
 
-		// Deactivate maintenance mode
+		// Safe mode is now Code Green
 		MockRuntimeSafeMode::set_safe_mode(SafeMode::CODE_GREEN);
 
 		// Deposit and withdrawal can now work as per normal.

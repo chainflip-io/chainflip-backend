@@ -128,18 +128,25 @@ fn update_safe_mode() {
 		assert_ok!(Environment::update_safe_mode(OriginTrait::root(), SafeModeUpdate::CodeRed));
 		assert_eq!(RuntimeSafeMode::<Test>::get(), SafeMode::CODE_RED);
 		System::assert_last_event(RuntimeEvent::Environment(
-			crate::Event::<Test>::RuntimeSafeModeUpdated { 
-				safe_mode: SafeModeUpdate::CodeRed, 
-			}));
-			
-		assert_ok!(Environment::update_safe_mode(
-			OriginTrait::root(),
-			SafeModeUpdate::CodeAmber(SafeMode::CODE_GREEN),
+			crate::Event::<Test>::RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate::CodeRed },
 		));
+
+		assert_ok!(Environment::update_safe_mode(OriginTrait::root(), SafeModeUpdate::CodeGreen,));
 		assert_eq!(RuntimeSafeMode::<Test>::get(), SafeMode::CODE_GREEN);
 		System::assert_last_event(RuntimeEvent::Environment(
-			crate::Event::<Test>::RuntimeSafeModeUpdated { 
-				safe_mode: SafeModeUpdate::CodeGreen, 
-			}));
+			crate::Event::<Test>::RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate::CodeGreen },
+		));
+		let mock_code_amber =
+			MockRuntimeSafeMode { mock: MockPalletSafeMode { flag1: true, flag2: false } };
+		assert_ok!(Environment::update_safe_mode(
+			OriginTrait::root(),
+			SafeModeUpdate::CodeAmber(mock_code_amber.clone())
+		));
+		assert_eq!(RuntimeSafeMode::<Test>::get(), mock_code_amber);
+		System::assert_last_event(RuntimeEvent::Environment(
+			crate::Event::<Test>::RuntimeSafeModeUpdated {
+				safe_mode: SafeModeUpdate::CodeAmber(mock_code_amber),
+			},
+		));
 	});
 }

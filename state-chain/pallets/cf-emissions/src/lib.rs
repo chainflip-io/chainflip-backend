@@ -189,7 +189,7 @@ pub mod pallet {
 					LastSupplyUpdateBlock::<T>::set(current_block);
 					return T::WeightInfo::rewards_minted()
 				} else {
-					log::info!("System maintenance: skipping supply update broadcast.");
+					log::info!("Runtime Safe Mode is CODE RED: skipping supply update broadcast.");
 				}
 			}
 			T::WeightInfo::rewards_not_minted()
