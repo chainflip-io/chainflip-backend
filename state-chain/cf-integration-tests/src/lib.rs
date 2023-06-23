@@ -25,14 +25,14 @@ use state_chain_runtime::{
 	Reputation, Runtime, RuntimeOrigin, System, Validator,
 };
 
-use cf_primitives::{AuthorityCount, BlockNumber, EthereumAddress, FlipBalance};
+use cf_primitives::{AuthorityCount, BlockNumber, EvmAddress, FlipBalance};
 use cf_traits::EpochInfo;
 use pallet_cf_funding::EthTransactionHash;
 use sp_runtime::AccountId32;
 
 type NodeId = AccountId32;
-const ETH_DUMMY_ADDR: EthereumAddress = [42u8; 20];
-const ETH_ZERO_ADDRESS: EthereumAddress = [0xff; 20];
+const ETH_DUMMY_ADDR: EvmAddress = [42u8; 20];
+const ETH_ZERO_ADDRESS: EvmAddress = [0xff; 20];
 const TX_HASH: EthTransactionHash = [211u8; 32];
 
 pub const GENESIS_KEY_SEED: u64 = 42;

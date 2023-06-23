@@ -70,7 +70,7 @@ impl EthContractWitnesser for Erc20Witnesser {
 				Erc20Events::TransferFilter(TransferFilter { to, value, from: _ })
 					if address_monitor.contains(&to) =>
 					Some(DepositWitness {
-						deposit_address: to,
+						deposit_address: to.into(),
 						amount: value.try_into().expect(
 							"Any ERC20 tokens we support should have amounts that fit into a u128",
 						),

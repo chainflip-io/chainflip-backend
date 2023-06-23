@@ -9,6 +9,8 @@ use crate::address::EncodedAddress;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::address::ForeignChainAddress;
 #[cfg(feature = "runtime-benchmarks")]
+use crate::eth::EthereumAddress;
+#[cfg(feature = "runtime-benchmarks")]
 use crate::eth::EthereumChannelId;
 
 /// Ensure type specifies a value to be used for benchmarking purposes.
@@ -82,14 +84,14 @@ impl BenchmarkValue for btc::Asset {
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for ForeignChainAddress {
 	fn benchmark_value() -> Self {
-		ForeignChainAddress::Eth(Default::default())
+		ForeignChainAddress::Eth(EthereumAddress(Default::default()))
 	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValueExtended for ForeignChainAddress {
 	fn benchmark_value_by_id(id: u8) -> Self {
-		ForeignChainAddress::Eth([id; 20])
+		ForeignChainAddress::Eth(EthereumAddress([id; 20]))
 	}
 }
 

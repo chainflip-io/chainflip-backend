@@ -8,7 +8,7 @@ use cf_chains::{
 	address::AddressConverter, ChannelIdConstructor, ExecutexSwapAndCall, SwapOrigin,
 	TransferAssetParams,
 };
-use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
+use cf_primitives::{chains::assets::eth, ChannelId, EvmAddress, ForeignChain};
 use cf_test_utilities::assert_has_event;
 use cf_traits::{
 	mocks::{
@@ -21,8 +21,8 @@ use cf_traits::{
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_core::H160;
 
-const ALICE_ETH_ADDRESS: EthereumAddress = [100u8; 20];
-const BOB_ETH_ADDRESS: EthereumAddress = [101u8; 20];
+const ALICE_ETH_ADDRESS: EvmAddress = [100u8; 20];
+const BOB_ETH_ADDRESS: EvmAddress = [101u8; 20];
 const ETH_ETH: eth::Asset = eth::Asset::Eth;
 const ETH_FLIP: eth::Asset = eth::Asset::Flip;
 const EXPIRY_BLOCK: u64 = 6;
@@ -84,7 +84,7 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 			message: vec![0x00, 0x01, 0x02],
 			gas_budget: 1_000,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+			source_address: ForeignChainAddress::Eth([0xcf; 20].into()),
 		};
 
 		assert!(DisabledEgressAssets::<Test>::get(asset).is_none());
@@ -426,7 +426,7 @@ fn can_process_ccm_deposit() {
 			message: vec![0x00, 0x01, 0x02],
 			gas_budget: 1_000,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+			source_address: ForeignChainAddress::Eth([0xcf; 20].into()),
 		};
 		let amount = 5_000;
 
@@ -487,13 +487,13 @@ fn can_egress_ccm() {
 			message: vec![0x00, 0x01, 0x02],
 			gas_budget: 1_000,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+			source_address: ForeignChainAddress::Eth([0xcf; 20].into()),
 		};
 		let amount = 5_000;
 		let egress_id = IngressEgress::schedule_egress(
 			destination_asset,
 			amount,
-			destination_address,
+			destination_address.into(),
 			Some(ccm.clone())
 		);
 
@@ -503,10 +503,10 @@ fn can_egress_ccm() {
 				egress_id,
 				asset: destination_asset,
 				amount,
-				destination_address,
+				destination_address: destination_address.into(),
 				message: ccm.message.clone(),
 				cf_parameters: vec![],
-				source_address: ForeignChainAddress::Eth([0xcf; 20]),
+				source_address: ForeignChainAddress::Eth([0xcf; 20].into()),
 			}
 		]);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
@@ -514,7 +514,7 @@ fn can_egress_ccm() {
 				id: egress_id,
 				asset: destination_asset,
 				amount,
-				destination_address,
+				destination_address: destination_address.into(),
 			}
 		));
 
@@ -527,9 +527,9 @@ fn can_egress_ccm() {
 			TransferAssetParams {
 				asset: destination_asset,
 				amount,
-				to: destination_address
+				to: destination_address.into()
 			},
-			ForeignChainAddress::Eth([0xcf; 20]),
+			ForeignChainAddress::Eth([0xcf; 20].into()),
 			ccm.message,
 		).unwrap()]);
 
@@ -697,7 +697,10 @@ fn handle_pending_deployment() {
 		// has succeed.
 		assert_eq!(
 			FetchParamDetails::<Test, _>::get(channel_id).unwrap().0,
-			DepositFetchIdOf::<Test, _>::deployed(channel_id, deposit_address)
+			<DepositFetchIdOf::<Test, _> as ChannelIdConstructor<Ethereum>>::deployed(
+				channel_id,
+				deposit_address
+			)
 		);
 		assert_eq!(AddressStatus::<Test, _>::get(deposit_address), DeploymentStatus::Deployed);
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 1);

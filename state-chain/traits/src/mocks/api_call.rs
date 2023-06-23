@@ -1,16 +1,17 @@
 use core::marker::PhantomData;
 
 use cf_chains::{
-	address::ForeignChainAddress, AllBatch, AllBatchError, ApiCall, Chain, ChainAbi, ChainCrypto,
-	ChainEnvironment, Ethereum, ExecutexSwapAndCall, FetchAssetParams, TransferAssetParams,
+	address::ForeignChainAddress, eth::EthereumAddress, AllBatch, AllBatchError, ApiCall, Chain,
+	ChainAbi, ChainCrypto, ChainEnvironment, Ethereum, ExecutexSwapAndCall, FetchAssetParams,
+	TransferAssetParams,
 };
-use cf_primitives::{chains::assets, EgressId, EthereumAddress, ETHEREUM_ETH_ADDRESS};
+use cf_primitives::{chains::assets, EgressId, ETHEREUM_ETH_ADDRESS};
 use codec::{Decode, Encode};
 use frame_support::{CloneNoBound, DebugNoBound, PartialEqNoBound};
 use scale_info::TypeInfo;
 use sp_runtime::DispatchError;
 
-pub const ETHEREUM_FLIP_ADDRESS: EthereumAddress = [0x00; 20];
+pub const ETHEREUM_FLIP_ADDRESS: [u8; 20] = [0x00; 20];
 #[derive(Encode, Decode, TypeInfo, Eq, PartialEq)]
 pub struct MockEthEnvironment;
 
@@ -19,8 +20,8 @@ impl ChainEnvironment<<Ethereum as Chain>::ChainAsset, <Ethereum as Chain>::Chai
 {
 	fn lookup(asset: <Ethereum as Chain>::ChainAsset) -> Option<<Ethereum as Chain>::ChainAccount> {
 		match asset {
-			assets::eth::Asset::Eth => Some(ETHEREUM_ETH_ADDRESS.into()),
-			assets::eth::Asset::Flip => Some(ETHEREUM_FLIP_ADDRESS.into()),
+			assets::eth::Asset::Eth => Some(EthereumAddress(ETHEREUM_ETH_ADDRESS)),
+			assets::eth::Asset::Flip => Some(EthereumAddress(ETHEREUM_FLIP_ADDRESS)),
 			_ => None,
 		}
 	}

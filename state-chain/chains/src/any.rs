@@ -19,14 +19,12 @@ impl Chain for AnyChain {
 	type DepositFetchId = ();
 }
 
-impl ChannelIdConstructor for () {
-	type Address = ForeignChainAddress;
-
-	fn deployed(_channel_id: u64, _address: Self::Address) -> Self {
+impl ChannelIdConstructor<AnyChain> for () {
+	fn deployed(_channel_id: u64, _address: ForeignChainAddress) -> Self {
 		unreachable!()
 	}
 
-	fn undeployed(_channel_id: u64, _address: Self::Address) -> Self {
+	fn undeployed(_channel_id: u64, _address: ForeignChainAddress) -> Self {
 		unreachable!()
 	}
 }

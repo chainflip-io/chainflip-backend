@@ -6,7 +6,7 @@ pub mod benchmarking;
 pub mod deposit_address;
 
 use self::api::tokenizable::Tokenizable;
-use crate::*;
+use crate::{arb::ArbitrumAddress, *};
 pub use cf_primitives::chains::Ethereum;
 use cf_primitives::{chains::assets, ChannelId};
 use codec::{Decode, Encode, MaxEncodedLen};
@@ -37,6 +37,39 @@ pub const CHAIN_ID_ROPSTEN: u64 = 3;
 pub const CHAIN_ID_GOERLI: u64 = 5;
 pub const CHAIN_ID_KOVAN: u64 = 42;
 
+#[derive(
+	Copy,
+	Clone,
+	RuntimeDebug,
+	Default,
+	PartialEq,
+	Eq,
+	Encode,
+	Decode,
+	MaxEncodedLen,
+	TypeInfo,
+	PartialOrd,
+	Ord,
+)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct EthereumAddress(pub [u8; 20]);
+
+impl From<EthereumAddress> for H160 {
+	fn from(value: EthereumAddress) -> Self {
+		value.0.into()
+	}
+}
+impl From<H160> for EthereumAddress {
+	fn from(value: H160) -> Self {
+		EthereumAddress(*value.as_fixed_bytes())
+	}
+}
+impl From<[u8; 20]> for EthereumAddress {
+	fn from(value: [u8; 20]) -> Self {
+		EthereumAddress(value)
+	}
+}
+
 impl Chain for Ethereum {
 	const NAME: &'static str = "Ethereum";
 	type KeyHandoverIsRequired = ConstBool<false>;
@@ -45,7 +78,7 @@ impl Chain for Ethereum {
 	type ChainAmount = EthAmount;
 	type TransactionFee = eth::TransactionFee;
 	type TrackedData = EthereumTrackedData;
-	type ChainAccount = eth::Address;
+	type ChainAccount = EthereumAddress;
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
 	type DepositFetchId = EthereumChannelId;
@@ -572,14 +605,22 @@ pub enum EthereumChannelId {
 	UnDeployed(ChannelId),
 }
 
-impl ChannelIdConstructor for EthereumChannelId {
-	type Address = H160;
-
-	fn deployed(_channel_id: u64, address: Self::Address) -> Self {
-		Self::Deployed(address)
+impl ChannelIdConstructor<Ethereum> for EthereumChannelId {
+	fn deployed(_channel_id: u64, address: EthereumAddress) -> Self {
+		Self::Deployed(address.into())
 	}
 
-	fn undeployed(channel_id: u64, _address: Self::Address) -> Self {
+	fn undeployed(channel_id: u64, _address: EthereumAddress) -> Self {
+		Self::UnDeployed(channel_id)
+	}
+}
+
+impl ChannelIdConstructor<Arbitrum> for EthereumChannelId {
+	fn deployed(_channel_id: u64, address: ArbitrumAddress) -> Self {
+		Self::Deployed(address.into())
+	}
+
+	fn undeployed(channel_id: u64, _address: ArbitrumAddress) -> Self {
 		Self::UnDeployed(channel_id)
 	}
 }

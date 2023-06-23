@@ -19,6 +19,11 @@ impl Chain for NoneChain {
 	type DepositFetchId = ();
 }
 
+impl ChannelIdConstructor<NoneChain> for () {
+	fn deployed(_channel_id: u64, _address: <NoneChain as Chain>::ChainAccount) -> Self {}
+	fn undeployed(_channel_id: u64, _address: <NoneChain as Chain>::ChainAccount) -> Self {}
+}
+
 impl ChainCrypto for NoneChain {
 	type AggKey = ();
 	type Payload = ();
