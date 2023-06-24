@@ -6,8 +6,8 @@ import { Asset, chainFromAsset } from '../shared/utils';
 export async function executeNativeSwap(desetToken: Asset, destAddress: string) {
 
     const wallet = Wallet.fromMnemonic(
-        'test test test test test test test test test test test junk',
-    ).connect(getDefaultProvider('http://localhost:8545'));
+      'test test test test test test test test test test test junk',
+    ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
 
     const destChain = chainFromAsset(destAsset);
 
