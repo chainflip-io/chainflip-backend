@@ -15,6 +15,9 @@ use crate::state_chain_observer::client::{
 
 use super::signer;
 
+#[cfg(test)]
+mod tests;
+
 const REQUEST_LIFETIME: u32 = 128;
 
 #[derive(Error, Debug)]
