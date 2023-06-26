@@ -32,10 +32,7 @@ fn spawn_node(
 	let account_id = AccountId::new([idx as u8 + 1; 32]);
 
 	// Secret key does not implement clone:
-	let secret = {
-		let bytes: [u8; 32] = key.secret.to_bytes().try_into().unwrap();
-		ed25519_dalek::SecretKey::from_bytes(&bytes).unwrap()
-	};
+	let secret = { ed25519_dalek::SecretKey::from_bytes(&key.secret.to_bytes()).unwrap() };
 
 	let key = P2PKey::new(secret);
 	let (msg_sender, peer_update_sender, msg_receiver, own_peer_info_receiver, fut) =
