@@ -13,22 +13,21 @@ use std::{
 
 use auth::Authenticator;
 use serde::{Deserialize, Serialize};
-use sp_core::ed25519;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, error, info, info_span, trace, warn, Instrument};
 use utilities::Port;
 use x25519_dalek::StaticSecret;
 
-use crate::p2p::OutgoingMultisigStageMessages;
+use crate::p2p::{pk_to_string, OutgoingMultisigStageMessages};
 use socket::OutgoingSocket;
 
 use self::socket::ConnectedOutgoingSocket;
 
-type EdPublicKey = ed25519::Public;
-type XPublicKey = x25519_dalek::PublicKey;
+use super::{EdPublicKey, P2PKey, XPublicKey};
 
-pub struct KeyPair {
+#[derive(Clone)]
+pub struct X25519KeyPair {
 	pub public_key: XPublicKey,
 	pub secret_key: StaticSecret,
 }
@@ -71,7 +70,7 @@ impl std::fmt::Display for PeerInfo {
 			f,
 			"PeerInfo {{ account_id: {}, pubkey: {}, ip: {}, port: {} }}",
 			self.account_id,
-			to_string(&self.pubkey),
+			pk_to_string(&self.pubkey),
 			self.ip,
 			self.port,
 		)
@@ -89,7 +88,7 @@ enum RegistrationStatus {
 	Registered,
 }
 
-fn ed25519_secret_key_to_x25519_secret_key(
+pub fn ed25519_secret_key_to_x25519_secret_key(
 	ed25519_sk: &ed25519_dalek::SecretKey,
 ) -> x25519_dalek::StaticSecret {
 	use sha2::{Digest, Sha512};
@@ -113,14 +112,10 @@ pub fn ed25519_public_key_to_x25519_public_key(
 
 	x25519_dalek::PublicKey::from(x_point.to_bytes())
 }
-
-fn to_string(pk: &XPublicKey) -> String {
-	hex::encode(pk.as_bytes())
-}
 /// The state a nodes needs for p2p
 struct P2PContext {
 	/// Our own key, used for initiating and accepting secure connections
-	key: KeyPair,
+	key: X25519KeyPair,
 	/// A handle to the authenticator thread that can be used to make changes to the
 	/// list of allowed peers
 	authenticator: Arc<Authenticator>,
@@ -143,8 +138,8 @@ struct P2PContext {
 	zmq_context: zmq::Context,
 }
 
-pub fn start(
-	node_key: &ed25519_dalek::Keypair,
+pub(super) fn start(
+	p2p_key: &P2PKey,
 	port: Port,
 	current_peers: Vec<PeerInfo>,
 	our_account_id: AccountId,
@@ -155,14 +150,7 @@ pub fn start(
 	UnboundedReceiver<PeerInfo>,
 	impl Future<Output = ()>,
 ) {
-	let key = {
-		let secret_key = ed25519_secret_key_to_x25519_secret_key(&node_key.secret);
-
-		let public_key: x25519_dalek::PublicKey = (&secret_key).into();
-		debug!("Our derived x25519 pubkey: {:?}", to_string(&public_key));
-
-		KeyPair { public_key, secret_key }
-	};
+	debug!("Our derived x25519 pubkey: {}", pk_to_string(&p2p_key.encryption_key.public_key));
 
 	let zmq_context = zmq::Context::new();
 
@@ -185,7 +173,7 @@ pub fn start(
 
 	let mut context = P2PContext {
 		zmq_context,
-		key,
+		key: p2p_key.encryption_key.clone(),
 		monitor_handle,
 		authenticator,
 		active_connections: Default::default(),
@@ -286,7 +274,7 @@ impl P2PContext {
 			trace!("Received a message from {acc_id}");
 			self.incoming_message_sender.send((acc_id.clone(), payload)).unwrap();
 		} else {
-			warn!("Received a message for an unknown x25519 key: {}", to_string(&pubkey));
+			warn!("Received a message for an unknown x25519 key: {}", pk_to_string(&pubkey));
 		}
 	}
 
