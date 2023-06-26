@@ -67,7 +67,10 @@ pub trait ChainClient: Send + Sync {
 	type Hash: aliases::Hash;
 	type Data: aliases::Data;
 
-	async fn at_index(&self, index: Self::Index) -> Header<Self::Index, Self::Hash, Self::Data>;
+	async fn header_at_index(
+		&self,
+		index: Self::Index,
+	) -> Header<Self::Index, Self::Hash, Self::Data>;
 }
 
 pub trait ChainStream: Stream<Item = Header<Self::Index, Self::Hash, Self::Data>> + Send {
