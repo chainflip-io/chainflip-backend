@@ -7,7 +7,7 @@ use super::*;
 #[scale_info(skip_type_params(T, SuccessVoters, FailureVoters, I))]
 pub struct ResponseStatus<T: Config<I>, SuccessVoters, FailureVoters, I: 'static = ()> {
 	/// The candidates participating in the keygen ceremony.
-	participants: BTreeSet<T::ValidatorId>,
+	candidates: BTreeSet<T::ValidatorId>,
 	/// The candidates that have yet to reply.
 	remaining_candidates: BTreeSet<T::ValidatorId>,
 	/// A map of new keys with the number of votes for each key.
@@ -31,7 +31,7 @@ where
 {
 	pub fn new(candidates: BTreeSet<T::ValidatorId>) -> Self {
 		Self {
-			participants: candidates.clone(),
+			candidates: candidates.clone(),
 			remaining_candidates: candidates,
 			success_votes: Default::default(),
 			blame_votes: Default::default(),
@@ -40,11 +40,11 @@ where
 	}
 
 	pub fn candidate_count(&self) -> AuthorityCount {
-		self.participants.len() as AuthorityCount
+		self.candidates.len() as AuthorityCount
 	}
 
-	pub fn participants(&self) -> &BTreeSet<T::ValidatorId> {
-		&self.participants
+	pub fn candidates(&self) -> &BTreeSet<T::ValidatorId> {
+		&self.candidates
 	}
 
 	pub fn remaining_candidates(&self) -> &BTreeSet<T::ValidatorId> {

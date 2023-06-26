@@ -553,7 +553,12 @@ where
                                            to_epoch,
                                         },
                                     ) => {
-                                        if sharing_participants.contains(&account_id) || receiving_participants.contains(&account_id) {
+                                        let all_participants = sharing_participants
+                                            .iter()
+                                            .chain(receiving_participants.iter())
+                                            .cloned()
+                                            .collect::<BTreeSet<_>>();
+                                        if all_participants.contains(&account_id) {
                                             let key_handover_result_future = btc_multisig_client.initiate_key_handover(
                                                 ceremony_id,
                                                 KeyId::new(from_epoch, key_to_share.current),
@@ -581,11 +586,7 @@ where
                                                                 .map_err(|(bad_account_ids, _reason)| {
                                                                     ensure_reported_parties_are_participants(
                                                                         &bad_account_ids,
-                                                                        &(sharing_participants
-                                                                            .iter()
-                                                                            .chain(receiving_participants.iter())
-                                                                            .cloned()
-                                                                            .collect::<BTreeSet<_>>()),
+                                                                        &all_participants,
                                                                     );
                                                                     bad_account_ids
                                                                 }),

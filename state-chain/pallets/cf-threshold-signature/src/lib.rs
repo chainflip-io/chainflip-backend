@@ -97,8 +97,8 @@ pub mod pallet {
 		pub remaining_respondents: BTreeSet<T::ValidatorId>,
 		/// The number of blame votes (accusations) each authority has received.
 		pub blame_counts: BTreeMap<T::ValidatorId, AuthorityCount>,
-		/// The signing participants (ie. the threshold set).
-		pub participants: BTreeSet<T::ValidatorId>,
+		/// The candidates participating in the signing ceremony (ie. the threshold set).
+		pub candidates: BTreeSet<T::ValidatorId>,
 		/// The epoch in which the ceremony was started.
 		pub epoch: EpochIndex,
 		/// The key we want to sign with.
@@ -168,10 +168,10 @@ pub mod pallet {
 		pub fn offenders(&self) -> Vec<T::ValidatorId> {
 			// A threshold for number of blame 'accusations' that are required for someone to be
 			// punished.
-			let blame_threshold = (self.participants.len() as u32).saturating_mul(2) / 3;
+			let blame_threshold = (self.candidates.len() as AuthorityCount).saturating_mul(2) / 3;
 			// The maximum number of offenders we are willing to report without risking the liveness
 			// of the network.
-			let liveness_threshold = self.participants.len() / 2;
+			let liveness_threshold = self.candidates.len() / 2;
 
 			let mut to_report = self
 				.blame_counts
@@ -384,8 +384,8 @@ pub mod pallet {
 		InvalidRespondent,
 		/// The request Id is stale or not yet valid.
 		InvalidRequestId,
-		/// A reported offender is not a participant in the ceremony.
-		InvalidAccusation,
+		/// A reported offender is not participating in the ceremony.
+		InvalidBlame,
 	}
 
 	#[pallet::hooks]
@@ -580,8 +580,8 @@ pub mod pallet {
 							return Err(Error::<T, I>::InvalidRespondent)
 						}
 
-						if offenders.difference(&context.participants).count() > 0 {
-							return Err(Error::<T, I>::InvalidAccusation)
+						if !offenders.is_subset(&context.candidates) {
+							return Err(Error::<T, I>::InvalidBlame)
 						}
 
 						for id in offenders {
@@ -701,7 +701,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						epoch,
 						key,
 						blame_counts: BTreeMap::new(),
-						participants: participants.clone(),
+						candidates: participants.clone(),
 						remaining_respondents: participants.clone(),
 					}
 				});

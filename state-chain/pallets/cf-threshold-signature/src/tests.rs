@@ -103,14 +103,14 @@ impl MockCfe {
 							Error::<Test, Instance1>::InvalidCeremonyId
 						);
 
-						// Can't report a non-participant
+						// Can't report a non-candidate
 						assert_noop!(
 							EthereumThresholdSigner::report_signature_failed(
 								RuntimeOrigin::signed(self.id),
 								ceremony_id,
 								bad.iter().cloned().chain([1234]).collect(),
 							),
-							Error::<Test, Instance1>::InvalidAccusation
+							Error::<Test, Instance1>::InvalidBlame
 						);
 
 						// Unsolicited responses are rejected.
@@ -565,15 +565,16 @@ mod unsigned_validation {
 		ExtBuilder::new()
 			.with_authorities(AUTHORITIES)
 			.with_nominees(NOMINEES)
-			.with_request(b"OHAI")
 			.build()
 			.execute_with(|| {
 				const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
+				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
 				assert_eq!(
 					Test::validate_unsigned(
 						TransactionSource::External,
 						&PalletCall::signature_success {
-							ceremony_id: 1234,
+							// Incorrect ceremony id
+							ceremony_id: MockCeremonyIdProvider::get() + 1,
 							signature: sign(PAYLOAD)
 						}
 						.into()
@@ -642,7 +643,7 @@ mod failure_reporting {
 			key: MockAggKey(AGG_KEY),
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),
-			participants: BTreeSet::from_iter(validator_set),
+			candidates: BTreeSet::from_iter(validator_set),
 		}
 	}
 
