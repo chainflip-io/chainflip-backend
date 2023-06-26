@@ -22,7 +22,7 @@ use crate::eth::ethers_rpc::MockEthersRpcApi;
 use sp_core::H256;
 use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance, Header};
 use tokio::sync::watch;
-use utilities::MakeCachedStream;
+use utilities::{assert_future_panics, MakeCachedStream};
 
 use crate::{
 	btc::BtcBroadcaster,
@@ -1747,4 +1747,31 @@ async fn run_the_sc_observer() {
 	})
 	.await
 	.unwrap();
+}
+
+#[tokio::test]
+async fn test_ensure_reported_parties_are_participants() {
+	use sc_observer::ensure_reported_parties_are_participants;
+
+	fn to_account_id_set<T: AsRef<[u8]>>(ids: T) -> BTreeSet<AccountId> {
+		ids.as_ref().iter().map(|i| AccountId::new([*i; 32])).collect()
+	}
+
+	// Test a few different common scenarios that should be fine
+	ensure_reported_parties_are_participants(
+		&to_account_id_set(vec![0, 2]),
+		&to_account_id_set(vec![0, 1, 2, 3]),
+	);
+	ensure_reported_parties_are_participants(
+		&BTreeSet::new(),
+		&to_account_id_set(vec![0, 1, 2, 3]),
+	);
+
+	// Test the panic case, one of the reported parties is not a participant.
+	assert_future_panics!(async move {
+		ensure_reported_parties_are_participants(
+			&to_account_id_set(vec![0, 1, 2, 3]),
+			&to_account_id_set(vec![0, 1, 2]),
+		);
+	});
 }

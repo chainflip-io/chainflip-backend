@@ -297,7 +297,7 @@ fn cannot_report_two_different_keygen_outcomes() {
 }
 
 #[test]
-fn only_participants_can_report_keygen_outcome() {
+fn only_candidates_can_report_keygen_outcome() {
 	new_test_ext().execute_with(|| {
 		<VaultsPallet as VaultRotator>::keygen(BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()) , GENESIS_EPOCH);
 		let ceremony_id = current_ceremony_id();
@@ -308,20 +308,43 @@ fn only_participants_can_report_keygen_outcome() {
 			Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 		));
 
-		// Only participants can respond.
-		let non_participant = u64::MAX;
+		// Only candidates can respond.
+		let non_candidate = u64::MAX;
 		<<MockRuntime as Chainflip>::AccountRoleRegistry as AccountRoleRegistry<MockRuntime>>::register_as_validator(
-			&non_participant,
+			&non_candidate,
 		)
 		.unwrap();
-		assert!(!ALL_CANDIDATES.contains(&non_participant), "Non-participant is a candidate");
+		assert!(!ALL_CANDIDATES.contains(&non_candidate));
 		assert_noop!(
 			VaultsPallet::report_keygen_outcome(
-				RuntimeOrigin::signed(non_participant),
+				RuntimeOrigin::signed(non_candidate),
 				ceremony_id,
 				Ok(NEW_AGG_PUB_KEY_PRE_HANDOVER)
 			),
 			Error::<MockRuntime, _>::InvalidRespondent
+		);
+		assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
+	});
+}
+
+#[test]
+fn can_only_report_keygen_candidates() {
+	new_test_ext().execute_with(|| {
+		<VaultsPallet as VaultRotator>::keygen(
+			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
+			GENESIS_EPOCH,
+		);
+
+		let non_candidate = u64::MAX;
+		assert!(!ALL_CANDIDATES.contains(&non_candidate));
+		assert_noop!(
+			VaultsPallet::report_keygen_outcome(
+				RuntimeOrigin::signed(ALICE),
+				current_ceremony_id(),
+				// Report the non-candidate
+				Err(BTreeSet::from_iter([non_candidate]))
+			),
+			Error::<MockRuntime, _>::InvalidBlame
 		);
 		assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
 	});
@@ -738,7 +761,7 @@ fn test_vault_key_rotated_externally() {
 }
 
 #[test]
-fn key_unavailabe_on_activate_returns_governance_event() {
+fn key_unavailable_on_activate_returns_governance_event() {
 	new_test_ext_no_key().execute_with(|| {
 		PendingVaultRotation::put(VaultRotationStatus::<MockRuntime, _>::KeyHandoverComplete {
 			new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER,

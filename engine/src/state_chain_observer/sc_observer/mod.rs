@@ -57,6 +57,17 @@ pub struct EthAddressToMonitorSender {
 	pub usdc: EthMonitorCommandSender,
 }
 
+/// Panic if any of the reported parties are not participants in the ceremony
+pub fn ensure_reported_parties_are_participants(
+	reported_parties: &BTreeSet<AccountId>,
+	participants: &BTreeSet<AccountId>,
+) {
+	let non_participants = reported_parties.difference(participants).collect::<BTreeSet<_>>();
+	if !non_participants.is_empty() {
+		panic!("Trying to report non-participant {}", utilities::format_iterator(non_participants));
+	}
+}
+
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,
 	multisig_client: &'a MultisigClient,
@@ -77,7 +88,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	if keygen_participants.contains(&state_chain_client.account_id()) {
 		// We initiate keygen outside of the spawn to avoid requesting ceremonies out of order
 		let keygen_result_future =
-			multisig_client.initiate_keygen(ceremony_id, epoch_index, keygen_participants);
+			multisig_client.initiate_keygen(ceremony_id, epoch_index, keygen_participants.clone());
 		scope.spawn(async move {
 			state_chain_client
 				.finalize_signed_extrinsic(pallet_cf_vaults::Call::<
@@ -85,10 +96,15 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 					I,
 				>::report_keygen_outcome {
 					ceremony_id,
-					reported_outcome: keygen_result_future
-						.await
-						.map(I::pubkey_to_aggkey)
-						.map_err(|(bad_account_ids, _reason)| bad_account_ids),
+					reported_outcome: keygen_result_future.await.map(I::pubkey_to_aggkey).map_err(
+						|(bad_account_ids, _reason)| {
+							ensure_reported_parties_are_participants(
+								&bad_account_ids,
+								&keygen_participants,
+							);
+							bad_account_ids
+						},
+					),
 				})
 				.await;
 			Ok(())
@@ -122,7 +138,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	if signers.contains(&state_chain_client.account_id()) {
 		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
 		let signing_result_future =
-			multisig_client.initiate_signing(ceremony_id, signers, signing_info);
+			multisig_client.initiate_signing(ceremony_id, signers.clone(), signing_info);
 
 		scope.spawn(async move {
 			match signing_result_future.await {
@@ -138,6 +154,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 						.await;
 				},
 				Err((bad_account_ids, _reason)) => {
+					ensure_reported_parties_are_participants(&bad_account_ids, &signers);
 					state_chain_client
 						.finalize_signed_extrinsic(pallet_cf_threshold_signature::Call::<
 							state_chain_runtime::Runtime,
@@ -538,13 +555,18 @@ where
                                            to_epoch,
                                         },
                                     ) => {
-                                        if sharing_participants.contains(&account_id) || receiving_participants.contains(&account_id) {
+                                        let all_participants = sharing_participants
+                                            .iter()
+                                            .chain(receiving_participants.iter())
+                                            .cloned()
+                                            .collect::<BTreeSet<_>>();
+                                        if all_participants.contains(&account_id) {
                                             let key_handover_result_future = btc_multisig_client.initiate_key_handover(
                                                 ceremony_id,
                                                 KeyId::new(from_epoch, key_to_share.current),
                                                 to_epoch,
-                                                sharing_participants,
-                                                receiving_participants,
+                                                sharing_participants.clone(),
+                                                receiving_participants.clone(),
                                             );
                                             let state_chain_client = state_chain_client.clone();
                                             scope.spawn(async move {
@@ -563,7 +585,13 @@ where
                                                                     );
                                                                     new_key
                                                                 })
-                                                                .map_err(|(bad_account_ids, _reason)| bad_account_ids),
+                                                                .map_err(|(bad_account_ids, _reason)| {
+                                                                    ensure_reported_parties_are_participants(
+                                                                        &bad_account_ids,
+                                                                        &all_participants,
+                                                                    );
+                                                                    bad_account_ids
+                                                                }),
                                                         })
                                                         .await;
                                                 Ok(())
