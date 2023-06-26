@@ -61,7 +61,7 @@ where
 									unsafe_cache.pop_front().unwrap()
 								} else {
 									// We don't check sequence of hashes and assume due to order of requests it will be safe (even though this is not true)
-									chain_client.at_index(next_output_index).await
+									chain_client.header_at_index(next_output_index).await
 								})
 							}
 						} else break None,
