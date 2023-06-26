@@ -70,7 +70,7 @@ pub struct RpcSwapOutput {
 impl From<SwapOutput> for RpcSwapOutput {
 	fn from(swap_output: SwapOutput) -> Self {
 		Self {
-			intermediary: Some(NumberOrHex::from(swap_output.intermediary.unwrap())),
+			intermediary: swap_output.intermediary.map(NumberOrHex::from),
 			output: NumberOrHex::from(swap_output.output),
 		}
 	}

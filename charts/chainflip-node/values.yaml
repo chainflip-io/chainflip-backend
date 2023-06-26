@@ -16,7 +16,7 @@ brokerApi:
   enabled: false
   image:
     tag: "latest"
-    repository: ghcr.io/chainflip-io/chainflip-broker-api
+    repository: ghcr.io/chainflip-io/chainflip-backend/chainflip-broker-api
     pullPolicy: IfNotPresent
   containerPort: 8080
   resources: {}
@@ -33,6 +33,7 @@ imagePullSecrets:
 service:
   type: ClusterIP
   port: 80
+  annotations: {}
 
 ingress:
   enabled: false

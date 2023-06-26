@@ -40,6 +40,10 @@ pub fn test_account_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as 
 		.public()
 }
 
+pub fn parse_account(ss58: &str) -> AccountId {
+	AccountId::from_str(ss58).unwrap_or_else(|_| panic!("Invalid address: {}", ss58))
+}
+
 type AccountPublic = <Signature as Verify>::Signer;
 
 /// Generate an account ID from seed.
@@ -63,6 +67,7 @@ pub struct StateChainEnvironment {
 	state_chain_gateway_address: [u8; 20],
 	key_manager_address: [u8; 20],
 	eth_vault_address: [u8; 20],
+	eth_address_checker_address: [u8; 20],
 	ethereum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
@@ -100,6 +105,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(clean_eth_address, STATE_CHAIN_GATEWAY_ADDRESS, state_chain_gateway_address);
 	from_env_var!(clean_eth_address, KEY_MANAGER_ADDRESS, key_manager_address);
 	from_env_var!(clean_eth_address, ETH_VAULT_ADDRESS, eth_vault_address);
+	from_env_var!(clean_eth_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
 	from_env_var!(hex_decode, ETH_INIT_AGG_KEY, eth_init_agg_key);
 	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
 	from_env_var!(FromStr::from_str, ETH_DEPLOYMENT_BLOCK, ethereum_deployment_block);
@@ -131,6 +137,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		state_chain_gateway_address,
 		key_manager_address,
 		eth_vault_address,
+		eth_address_checker_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
@@ -162,6 +169,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		state_chain_gateway_address,
 		key_manager_address,
 		eth_vault_address,
+		eth_address_checker_address,
 		ethereum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
@@ -227,6 +235,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					state_chain_gateway_address,
 					key_manager_address,
 					eth_vault_address,
+					eth_address_checker_address,
 					ethereum_chain_id,
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
@@ -282,6 +291,11 @@ macro_rules! network_spec {
 				env_override: Option<StateChainEnvironment>,
 			) -> Result<ChainSpec, String> {
 				use $network::*;
+				assert_eq!(
+					parse_account(SNOW_WHITE_ACCOUNT_ID).as_ref(),
+					SNOW_WHITE_SR25519,
+					"Snow White account ID does not match the public key."
+				);
 
 				let wasm_binary =
 					WASM_BINARY.ok_or_else(|| "Wasm binary not available".to_string())?;
@@ -291,6 +305,7 @@ macro_rules! network_spec {
 					state_chain_gateway_address,
 					key_manager_address,
 					eth_vault_address,
+					eth_address_checker_address,
 					ethereum_chain_id,
 					eth_init_agg_key,
 					ethereum_deployment_block,
@@ -312,17 +327,17 @@ macro_rules! network_spec {
 							// Initial PoA authorities
 							vec![
 								(
-									BASHFUL_SR25519.into(),
+									parse_account(BASHFUL_ACCOUNT_ID),
 									BASHFUL_SR25519.unchecked_into(),
 									BASHFUL_ED25519.unchecked_into(),
 								),
 								(
-									DOC_SR25519.into(),
+									parse_account(DOC_ACCOUNT_ID),
 									DOC_SR25519.unchecked_into(),
 									DOC_ED25519.unchecked_into(),
 								),
 								(
-									DOPEY_SR25519.into(),
+									parse_account(DOPEY_ACCOUNT_ID),
 									DOPEY_SR25519.unchecked_into(),
 									DOPEY_ED25519.unchecked_into(),
 								),
@@ -339,6 +354,7 @@ macro_rules! network_spec {
 								state_chain_gateway_address,
 								key_manager_address,
 								eth_vault_address,
+								eth_address_checker_address,
 								ethereum_chain_id,
 								cfe_settings: CfeSettings {
 									eth_block_safety_margin,
@@ -357,7 +373,7 @@ macro_rules! network_spec {
 							genesis_funding_amount,
 							min_funding,
 							REDEMPTION_TAX,
-							3 * HOURS,
+							EPOCH_DURATION_BLOCKS,
 							REDEMPTION_DELAY_SECS,
 							CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 							BACKUP_NODE_EMISSION_INFLATION_PERBILL,
@@ -425,10 +441,24 @@ fn testnet_genesis(
 	swap_ttl: BlockNumber,
 	minimum_swap_amounts: Vec<(assets::any::Asset, AssetAmount)>,
 ) -> GenesisConfig {
+	// Sanity Checks
+	for (account_id, aura_id, grandpa_id) in initial_authorities.iter() {
+		assert_eq!(
+			AsRef::<[u8]>::as_ref(account_id),
+			AsRef::<[u8]>::as_ref(aura_id),
+			"Aura and Account ID ({}) should be the same",
+			account_id
+		);
+		assert_ne!(
+			AsRef::<[u8]>::as_ref(grandpa_id),
+			AsRef::<[u8]>::as_ref(aura_id),
+			"Aura and Grandpa ID should be different for {}.",
+			account_id
+		);
+	}
+
 	let authority_ids: BTreeSet<AccountId> =
 		initial_authorities.iter().map(|(id, ..)| id.clone()).collect();
-	let total_issuance =
-		total_issuance + extra_accounts.iter().map(|(_, _, amount, _)| *amount).sum::<u128>();
 	let (extra_accounts, genesis_vanity_names): (Vec<_>, BTreeMap<_, _>) = extra_accounts
 		.into_iter()
 		.map(|(account, role, balance, vanity)| {
@@ -439,10 +469,29 @@ fn testnet_genesis(
 		.into_iter()
 		.filter_map(|(account, vanity)| vanity.map(|vanity| (account, vanity)))
 		.collect::<BTreeMap<_, _>>();
-	let all_accounts: Vec<_> = initial_authorities
+	let all_accounts: BTreeSet<_> = initial_authorities
 		.iter()
-		.map(|(account_id, ..)| {
-			(account_id.clone(), AccountRole::Validator, genesis_funding_amount)
+		.filter_map(|(account_id, ..)| -> Option<(AccountId, AccountRole, u128)> {
+			if let Some((_, role, funds)) = extra_accounts.iter().find(|(id, ..)| id == account_id)
+			{
+				// If the genesis account is listed in `extra_accounts` we will use the details from
+				// there.
+				assert!(*role == AccountRole::Validator, "Extra account is not a validator.");
+				log::info!(
+					"Using custom values for genesis authority {}: {} FLIP",
+					account_id,
+					funds / FLIPPERINOS_PER_FLIP
+				);
+				None
+			} else {
+				// Otherwise we will use the default values.
+				log::info!(
+					"Using default funds for genesis authority {}: {} FLIP",
+					account_id,
+					genesis_funding_amount / FLIPPERINOS_PER_FLIP
+				);
+				Some((account_id.clone(), AccountRole::Validator, genesis_funding_amount))
+			}
 		})
 		.chain(extra_accounts.clone())
 		.collect();
@@ -466,7 +515,7 @@ fn testnet_genesis(
 			code: wasm_binary.to_vec(),
 		},
 		validator: ValidatorConfig {
-			genesis_authorities: authority_ids,
+			genesis_authorities: authority_ids.clone(),
 			genesis_backups: extra_accounts
 				.iter()
 				.filter_map(|(id, role, amount)| {
@@ -481,7 +530,15 @@ fn testnet_genesis(
 			blocks_per_epoch,
 			redemption_period_as_percentage: percent_of_epoch_period_redeemable,
 			backup_reward_node_percentage: 20,
-			bond: genesis_funding_amount,
+			bond: all_accounts
+				.iter()
+				.filter_map(|(id, _, funds)| authority_ids.contains(id).then_some(*funds))
+				.min()
+				.map(|bond| {
+					log::info!("Bond will be set to {:?} Flip", bond / FLIPPERINOS_PER_FLIP);
+					bond
+				})
+				.expect("At least one authority is required"),
 			authority_set_min_size: min_authorities,
 			min_size: min_authorities,
 			max_size: max_authorities,
@@ -495,12 +552,14 @@ fn testnet_genesis(
 		},
 		flip: FlipConfig { total_issuance },
 		funding: FundingConfig {
-			genesis_accounts: all_accounts.clone(),
+			genesis_accounts: Vec::from_iter(all_accounts.clone()),
 			minimum_funding,
 			redemption_tax,
 			redemption_ttl: core::time::Duration::from_secs(3 * redemption_delay),
 		},
+		// These are set indirectly via the session pallet.
 		aura: AuraConfig { authorities: vec![] },
+		// These are set indirectly via the session pallet.
 		grandpa: GrandpaConfig { authorities: vec![] },
 		governance: GovernanceConfig { members: BTreeSet::from([root_key]), expiry_span },
 		reputation: ReputationConfig {

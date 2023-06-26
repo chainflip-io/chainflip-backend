@@ -6,7 +6,7 @@
     "prettier:write": "prettier --write ."
   },
   "dependencies": {
-    "@chainflip-io/cli": "^0.0.8",
+    "@chainflip-io/cli": "^0.0.14",
     "@polkadot/api": "10.7.2",
     "@polkadot/keyring": "12.2.1",
     "@polkadot/util": "12.2.1",

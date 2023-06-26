@@ -1,8 +1,4 @@
-use std::{
-	collections::{HashMap, HashSet},
-	sync::Arc,
-	time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use cf_chains::dot::{
@@ -32,7 +28,7 @@ use crate::{
 		block_witnesser::{
 			BlockStream, BlockWitnesser, BlockWitnesserGenerator, BlockWitnesserGeneratorWrapper,
 		},
-		epoch_process_runner::start_epoch_process_runner,
+		epoch_process_runner::{start_epoch_process_runner, EpochProcessRunnerError},
 		ChainBlockNumber, EpochStart, HasBlockNumber, ItemMonitor,
 	},
 };
@@ -137,7 +133,7 @@ fn check_for_interesting_events_in_block(
 	block_events: Vec<(Phase, EventWrapper)>,
 	block_number: PolkadotBlockNumber,
 	our_vault: &PolkadotAccountId,
-	address_monitor: &mut ItemMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
+	address_monitor: &mut Arc<Mutex<ItemMonitor<PolkadotAccountId, PolkadotAccountId, ()>>>,
 ) -> (
 	Vec<(PolkadotExtrinsicIndex, PolkadotBalance)>,
 	Vec<DepositWitness<Polkadot>>,
@@ -155,6 +151,9 @@ fn check_for_interesting_events_in_block(
 	let mut fee_paid_for_xt_at_index = HashMap::new();
 	let events_iter = block_events.iter();
 	let mut tips = Vec::<PolkadotBalance>::new();
+
+	let mut address_monitor = address_monitor.try_lock().expect("should have exclusive ownership");
+
 	for (phase, wrapped_event) in events_iter {
 		if let Phase::ApplyExtrinsic(extrinsic_index) = *phase {
 			match wrapped_event {
@@ -239,29 +238,29 @@ fn check_for_interesting_events_in_block(
 /// We use events for rotation and deposit witnessing but for broadcast/egress witnessing we use the
 /// signature of the extrinsic.
 pub async fn start<StateChainClient, DotRpc>(
+	resume_at: Option<EpochStart<Polkadot>>,
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Polkadot>>,
 	dot_client: DotRpc,
-	address_monitor: ItemMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
-	signature_receiver: tokio::sync::mpsc::UnboundedReceiver<PolkadotSignature>,
-	monitored_signatures: HashSet<PolkadotSignature>,
+	address_monitor: Arc<Mutex<ItemMonitor<PolkadotAccountId, PolkadotAccountId, ()>>>,
+	signature_monitor: Arc<Mutex<ItemMonitor<PolkadotSignature, PolkadotSignature, ()>>>,
 	state_chain_client: Arc<StateChainClient>,
 	db: Arc<PersistentKeyDB>,
-) -> std::result::Result<(), anyhow::Error>
+) -> std::result::Result<(), EpochProcessRunnerError<Polkadot>>
 where
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 	DotRpc: DotSubscribeApi + DotRpcApi + 'static + Send + Sync + Clone,
 {
 	start_epoch_process_runner(
+		resume_at,
 		Arc::new(Mutex::new(epoch_starts_receiver)),
 		BlockWitnesserGeneratorWrapper {
 			generator: DotWitnesserGenerator { state_chain_client, dot_client },
 			db,
 		},
-		(address_monitor, monitored_signatures, signature_receiver),
+		(address_monitor, signature_monitor),
 	)
 	.instrument(info_span!("Dot-Witnesser"))
 	.await
-	.map_err(|()| anyhow::anyhow!("Dot witnesser failed"))
 }
 
 // An instance of a Polkadot Witnesser for a particular epoch.
@@ -290,18 +289,20 @@ where
 	type Chain = Polkadot;
 	type Block = (H256, u32, Vec<(Phase, EventWrapper)>);
 	type StaticState = (
-		ItemMonitor<PolkadotAccountId, PolkadotAccountId, ()>,
-		HashSet<cf_chains::dot::PolkadotSignature>,
-		tokio::sync::mpsc::UnboundedReceiver<cf_chains::dot::PolkadotSignature>,
+		Arc<Mutex<ItemMonitor<PolkadotAccountId, PolkadotAccountId, ()>>>,
+		Arc<Mutex<ItemMonitor<PolkadotSignature, PolkadotSignature, ()>>>,
 	);
 
 	async fn process_block(
 		&mut self,
 		data: Self::Block,
-		(address_monitor, monitored_signatures, signature_receiver): &mut Self::StaticState,
+		(address_monitor, signature_monitor): &mut Self::StaticState,
 	) -> anyhow::Result<()> {
 		let (block_hash, block_number, block_event_details) = data;
 		trace!("Checking block: {block_number}, with hash: {block_hash:?} for interesting events");
+
+		let mut signature_monitor =
+			signature_monitor.try_lock().expect("should have exclusive ownership");
 
 		let (interesting_indices, deposit_witnesses, vault_key_rotated_calls, median_tip) =
 			check_for_interesting_events_in_block(
@@ -348,9 +349,7 @@ where
 					format!("Polkadot block does not exist for block hash: {block_hash:?}",),
 				)?;
 
-			while let Ok(sig) = signature_receiver.try_recv() {
-				monitored_signatures.insert(sig);
-			}
+			signature_monitor.sync_items();
 			for (extrinsic_index, tx_fee) in interesting_indices {
 				let xt = extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
 				let xt_encoded = xt.0.encode();
@@ -358,7 +357,7 @@ where
 				let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);
 				if let Ok(unchecked) = unchecked {
 					if let Some(signature) = unchecked.signature() {
-						if monitored_signatures.remove(&signature) {
+						if signature_monitor.remove(&signature) {
 							info!("Witnessing transaction_succeeded. signature: {signature:?}");
 
 							self.state_chain_client
@@ -515,7 +514,14 @@ where
 			block_events_stream,
 			Duration::from_secs(DOT_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER),
 		)
-		.map_err(|err| anyhow::anyhow!("Error while fetching Polkadot events: {:?}", err));
+		.map_err(|err| {
+			error!("Error while fetching Polkadot events: {:?}", err);
+			anyhow::anyhow!("Error while fetching Polkadot events: {:?}", err)
+		})
+		.chain(stream::once(async {
+			error!("Stream ended unexpectedly");
+			Err(anyhow::anyhow!("Stream ended unexpectedly"))
+		}));
 
 		Ok(Box::pin(block_events_stream))
 	}
@@ -599,7 +605,7 @@ mod tests {
 				block_event_details,
 				Default::default(),
 				&our_vault,
-				&mut ItemMonitor::new(Default::default()).1,
+				&mut Arc::new(Mutex::new(ItemMonitor::new(Default::default()).1)),
 			);
 
 		assert_eq!(vault_key_rotated_calls.len(), 1);
@@ -648,7 +654,7 @@ mod tests {
 			),
 		]);
 
-		let (monitor_command_sender, mut address_monitor) =
+		let (monitor_command_sender, address_monitor) =
 			ItemMonitor::new(BTreeSet::from([transfer_1_deposit_address]));
 
 		monitor_command_sender
@@ -661,7 +667,7 @@ mod tests {
 				20,
 				// arbitrary, not focus of the test
 				&PolkadotAccountId::from_aliased([0xda; 32]),
-				&mut address_monitor,
+				&mut Arc::new(Mutex::new(address_monitor)),
 			);
 
 		assert_eq!(deposit_witnesses.len(), 2);
@@ -719,7 +725,7 @@ mod tests {
 				20,
 				// arbitrary, not focus of the test
 				&our_vault,
-				&mut ItemMonitor::new(BTreeSet::default()).1,
+				&mut Arc::new(Mutex::new(ItemMonitor::new(BTreeSet::default()).1)),
 			);
 
 		assert!(
@@ -759,7 +765,7 @@ mod tests {
 				20,
 				// arbitrary, not focus of the test
 				&PolkadotAccountId::from_aliased([0xda; 32]),
-				&mut ItemMonitor::new(BTreeSet::default()).1,
+				&mut Arc::new(Mutex::new(ItemMonitor::new(BTreeSet::default()).1)),
 			);
 
 			assert_eq!(
@@ -778,9 +784,6 @@ mod tests {
 		let dot_rpc_client = DotRpcClient::new(url).await.unwrap();
 
 		let (epoch_starts_sender, epoch_starts_receiver) = async_broadcast::broadcast(10);
-
-		let (dot_monitor_signature_sender, signature_receiver) =
-			tokio::sync::mpsc::unbounded_channel();
 
 		let state_chain_client = Arc::new(MockStateChainClient::new());
 
@@ -809,9 +812,11 @@ mod tests {
 		// 	)
 		// 	.unwrap();
 
-		let signature = PolkadotSignature::from_aliased(hex::decode("7c388203aefbcdc22077ed91bec9af80a23c56f8ff2ee24d40f4c2791d51773342f4aed0e8f0652ed33d404d9b78366a927be9fad02f5204f2f2ffbea7459886").unwrap().try_into().unwrap());
+		let polkadot_sig = PolkadotSignature::from_aliased(hex::decode("7c388203aefbcdc22077ed91bec9af80a23c56f8ff2ee24d40f4c2791d51773342f4aed0e8f0652ed33d404d9b78366a927be9fad02f5204f2f2ffbea7459886").unwrap().try_into().unwrap());
 
-		dot_monitor_signature_sender.send(signature).unwrap();
+		let (signature_sender, signature_monitor) = ItemMonitor::new(BTreeSet::default());
+
+		signature_sender.send(MonitorCommand::Add(polkadot_sig)).unwrap();
 
 		// proxy type governance
 		epoch_starts_sender
@@ -834,11 +839,11 @@ mod tests {
 		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
 
 		start(
+			None,
 			epoch_starts_receiver,
 			dot_rpc_client,
-			ItemMonitor::new(Default::default()).1,
-			signature_receiver,
-			HashSet::default(),
+			Arc::new(Mutex::new(ItemMonitor::new(Default::default()).1)),
+			Arc::new(Mutex::new(signature_monitor)),
 			state_chain_client,
 			Arc::new(db),
 		)

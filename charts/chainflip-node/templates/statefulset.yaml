@@ -11,9 +11,6 @@ spec:
   {{- include "chainflip-node.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "8501"
       labels:
     {{- include "chainflip-node.selectorLabels" . | nindent 8 }}
     spec:
@@ -75,6 +72,10 @@ spec:
             - --prometheus-external
             - --state-cache-size=0
             - --validator
+            - --unsafe-ws-external
+            - --unsafe-rpc-external
+            - --rpc-methods=unsafe
+            - --rpc-cors=all
           ports:
             - name: ws
               containerPort: {{ .Values.ports.wsPort | default "9944" }}

@@ -5,14 +5,11 @@
 // https://www.notion.so/chainflip/Polkadot-Vault-Initialisation-Steps-36d6ab1a24ed4343b91f58deed547559
 // For example: pnpm tsx ./commands/setup_vaults.ts
 
-import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { sleep } from '../shared/utils';
+import { getChainflipApi, getPolkadotApi, sleep } from '../shared/utils';
 
 async function main(): Promise<void> {
-  const cfNodeEndpoint = process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944';
-  const polkadotEndpoint = process.env.POLKADOT_ENDPOINT ?? 'ws://127.0.0.1:9945';
   await cryptoWaitReady();
   const keyring = new Keyring({ type: 'sr25519' });
   const snowwhiteUri =
@@ -21,14 +18,9 @@ async function main(): Promise<void> {
   const snowwhite = keyring.createFromUri(snowwhiteUri);
   const alice_uri = process.env.POLKADOT_ALICE_URI || "//Alice";
   const alice = keyring.createFromUri(alice_uri);
-  const chainflip = await ApiPromise.create({
-    provider: new WsProvider(cfNodeEndpoint),
-    noInitWarn: true,
-  });
-  const polkadot = await ApiPromise.create({
-    provider: new WsProvider(polkadotEndpoint),
-    noInitWarn: true,
-  });
+
+  const chainflip = await getChainflipApi(process.env.CF_NODE_ENDPOINT);
+  const polkadot = await getPolkadotApi(process.env.POLKADOT_ENDPOINT);
 
   console.log('=== Performing initial Vault setup ===');
 

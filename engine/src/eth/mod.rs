@@ -21,6 +21,7 @@ pub mod witnessing;
 use anyhow::{anyhow, Context, Result};
 
 use cf_primitives::EpochIndex;
+use futures::FutureExt;
 use regex::Regex;
 
 use crate::{
@@ -177,9 +178,11 @@ where
 		let eth_rpc = eth_rpc.clone();
 		Box::pin(async move {
 			eth_rpc.block(U64::from(block_number)).await.and_then(|block| {
-				let number_bloom: Result<EthNumberBloom> =
-					block.try_into().context("Failed to convert Block to EthNumberBloom");
-				number_bloom
+				EthNumberBloom::try_from(block)
+					.context("Failed to convert Block to EthNumberBloom")
+					.inspect_err(|e| {
+						tracing::error!("Error fetching block number {}: {:?}", block_number, &e);
+					})
 			})
 		})
 	})
@@ -211,9 +214,37 @@ pub async fn safe_block_subscription_from(
 ) -> Result<Pin<Box<dyn Stream<Item = EthNumberBloom> + Send + 'static>>>
 where
 {
+	struct ConscientiousEthWebsocketBlockHeaderStream {
+		stream: Option<
+			web3::api::SubscriptionStream<web3::transports::WebSocket, web3::types::BlockHeader>,
+		>,
+	}
+
+	impl Drop for ConscientiousEthWebsocketBlockHeaderStream {
+		fn drop(&mut self) {
+			println!("Dropping the ETH WS connection");
+			self.stream.take().unwrap().unsubscribe().now_or_never();
+		}
+	}
+
+	impl Stream for ConscientiousEthWebsocketBlockHeaderStream {
+		type Item = Result<web3::types::BlockHeader, web3::Error>;
+
+		fn poll_next(
+			mut self: Pin<&mut Self>,
+			cx: &mut std::task::Context<'_>,
+		) -> std::task::Poll<Option<Self::Item>> {
+			Pin::new(self.stream.as_mut().unwrap()).poll_next(cx)
+		}
+	}
+
+	let header_stream = ConscientiousEthWebsocketBlockHeaderStream {
+		stream: Some(eth_ws_rpc.subscribe_new_heads().await?),
+	};
+
 	Ok(eth_block_head_stream_from(
 		from_block,
-		safe_ws_head_stream(eth_ws_rpc.subscribe_new_heads().await?, ETH_BLOCK_SAFETY_MARGIN),
+		safe_ws_head_stream(header_stream, ETH_BLOCK_SAFETY_MARGIN),
 		eth_http_rpc,
 	)
 	.await?
