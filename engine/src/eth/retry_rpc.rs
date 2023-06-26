@@ -150,8 +150,12 @@ mod tests {
 	async fn test_eth_retry_rpc() {
 		task_scope(|scope| {
 			async move {
+				let vault_address = "B7A5bd0345EF1Cc5E66bf61BdeC17D2461fBd968".parse().unwrap();
+
 				let settings = Settings::new_test().unwrap();
-				let client = EthersRpcClient::new(&settings.eth).await.unwrap();
+				let client = EthersRpcClient::new(&settings.eth, vault_address, H160::random())
+					.await
+					.unwrap();
 
 				let retry_client = EthersRetryRpcClient::new(scope, client);
 

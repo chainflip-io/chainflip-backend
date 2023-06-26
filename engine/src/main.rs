@@ -220,7 +220,29 @@ async fn main() -> anyhow::Result<()> {
 			scope.spawn(state_chain_observer::start(
 				state_chain_client.clone(),
 				state_chain_stream.clone(),
-				EthBroadcaster::new(EthersRpcClient::new(&settings.eth).await?),
+				EthBroadcaster::new(
+					EthersRpcClient::new(
+						&settings.eth,
+						// This call for the vault is duplicated inside eth::witnessing::start().
+						// Duplicated here since we don't know what's going to happen with the code
+						// in eth::witnessing::start().
+						state_chain_client
+							.storage_value::<pallet_cf_environment::EthereumVaultAddress<
+								state_chain_runtime::Runtime,
+							>>(state_chain_stream.cache().block_hash)
+							.await
+							.context("Failed to get ETH Vault contract address from SC")?
+							.into(),
+						state_chain_client
+							.storage_value::<pallet_cf_environment::EthereumAddressCheckerAddress<
+								state_chain_runtime::Runtime,
+							>>(state_chain_stream.cache().block_hash)
+							.await
+							.context("Failed to get ETH AddressChecker contract address from SC")?
+							.into(),
+					)
+					.await?,
+				),
 				DotBroadcaster::new(dot_rpc_client.clone()),
 				BtcBroadcaster::new(btc_rpc_client.clone()),
 				eth_multisig_client,
