@@ -7,11 +7,23 @@ use super::{
 	epoch_source::Epoch,
 };
 
+use utilities::assert_stream_send;
+
 #[async_trait::async_trait]
-pub trait ChainSplitByEpoch<'a> {
+pub trait ChainSplitByEpoch<'a>: Sized {
 	type UnderlyingChainSource: ChainSource;
 
 	async fn stream(self) -> BoxCurrentAndFuture<'a, Item<'a, Self::UnderlyingChainSource>>;
+
+	async fn run(self) {
+		let stream = assert_stream_send(
+			self.stream()
+				.await
+				.into_stream()
+				.flat_map_unordered(None, |(_, chain_stream)| chain_stream),
+		);
+		stream.for_each(|_| futures::future::ready(())).await;
+	}
 }
 
 type Item<'a, UnderlyingChainSource> = (
