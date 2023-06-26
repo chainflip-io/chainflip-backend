@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate::{mock::*, Error, *};
-use cf_test_utilities::last_event;
+use cf_test_utilities::{assert_event_sequence, last_event};
 use cf_traits::{
 	mocks::{
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
@@ -665,4 +665,51 @@ fn test_expect_validator_register_fails() {
 			crate::Error::<Test>::NotEnoughFunds
 		);
 	});
+}
+
+#[test]
+fn key_handover_should_repeat_until_below_authority_threshold() {
+	new_test_ext().execute_with_unchecked_invariants(|| {
+		CurrentAuthorities::<Test>::set((0..10).collect());
+		CurrentRotationPhase::<Test>::put(RotationPhase::KeygensInProgress(
+			RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
+				winners: (0..12).collect(),
+				losers: Default::default(),
+				bond: Default::default(),
+			}),
+		));
+		MockVaultRotatorA::keygen_success();
+		System::reset_events();
+		Pallet::<Test>::on_initialize(0);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::KeyHandoversInProgress(..)
+		));
+
+		// Below the threshold, we can try again.
+		MockVaultRotatorA::failed(0..3);
+		System::reset_events();
+		Pallet::<Test>::on_initialize(1);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::KeyHandoversInProgress(..)
+		));
+
+		// Above the threshold, we abort.
+		MockVaultRotatorA::failed(0..4);
+		System::reset_events();
+		Pallet::<Test>::on_initialize(2);
+		assert!(
+			matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::Idle),
+			"Expected Idle, got {:?}",
+			CurrentRotationPhase::<Test>::get(),
+		);
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
+				new_phase: RotationPhase::Idle
+			}),
+			RuntimeEvent::ValidatorPallet(Event::RotationAborted)
+		);
+	})
 }

@@ -362,30 +362,7 @@ pub mod pallet {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
-							let authority_candidates = rotation_state.authority_candidates();
-							if let Some(sharing_participants) = helpers::select_sharing_participants(
-									Self::current_consensus_threshold(),
-									rotation_state.unbanned_current_authorities::<T>(),
-									&authority_candidates,
-									block_number.unique_saturated_into(),
-								) {
-									T::VaultRotator::key_handover(
-										sharing_participants,
-										authority_candidates,
-										rotation_state.new_epoch_index,
-									);
-								} else {
-									// Can only reach here if there are no sharing participants. This should not happend
-									// since (a) if there are no more unbanned authorities for key handover, we abort
-									// after VaultStatus::Failed (see below). And (b) authority_candidates cannot be
-									// empty by definition.
-									log::error!(
-										target: "cf-validator",
-										"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
-									);
-									Self::abort_rotation();
-								}
-							Self::set_rotation_phase(RotationPhase::KeyHandoversInProgress(rotation_state));
+							Self::start_key_handover(rotation_state, block_number);
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
 							// TODO: Punish a bit more here? Some of these nodes are already an authority and have failed to participate in handover.
@@ -419,7 +396,7 @@ pub mod pallet {
 					};
 					T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
 				},
-				RotationPhase::KeyHandoversInProgress(rotation_state) => {
+				RotationPhase::KeyHandoversInProgress(mut rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {
 						AsyncResult::Ready(VaultStatus::KeyHandoverComplete) => {
@@ -427,6 +404,30 @@ pub mod pallet {
 							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
 							T::VaultRotator::activate();
 							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
+						},
+						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
+							// If any authority *candidates* failed handover, we need to abort.
+							let num_failed_candidates = offenders.union(&rotation_state.authority_candidates()).count();
+							if num_failed_candidates > 0 {
+								log::warn!(
+									"{num_failed_candidates} authority candidate(s) failed to participate in key handover. Aborting rotation."
+								);
+								Self::abort_rotation();
+							}
+
+							// We can reach here if any *current* authorities were unable to participate in handover.
+							rotation_state.ban(offenders);
+
+							if rotation_state.unbanned_current_authorities::<T>().len() as u32 <=
+								Self::current_consensus_threshold() {
+								log::warn!(
+									target: "cf-validator",
+									"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
+								);
+								Self::abort_rotation();
+							} else {
+								Self::start_key_handover(rotation_state, block_number);
+							}
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting key handover completion");
@@ -1170,6 +1171,29 @@ impl<T: Config> Pallet<T> {
 			T::VaultRotator::keygen(candidates, rotation_state.new_epoch_index);
 			Self::set_rotation_phase(RotationPhase::KeygensInProgress(rotation_state));
 			log::info!(target: "cf-validator", "Vault rotation initiated.");
+		}
+	}
+
+	fn start_key_handover(rotation_state: RuntimeRotationState<T>, block_number: T::BlockNumber) {
+		let authority_candidates = rotation_state.authority_candidates();
+		if let Some(sharing_participants) = helpers::select_sharing_participants(
+			Self::current_consensus_threshold(),
+			rotation_state.unbanned_current_authorities::<T>(),
+			&authority_candidates,
+			block_number.unique_saturated_into(),
+		) {
+			T::VaultRotator::key_handover(
+				sharing_participants,
+				authority_candidates,
+				rotation_state.new_epoch_index,
+			);
+			Self::set_rotation_phase(RotationPhase::KeyHandoversInProgress(rotation_state));
+		} else {
+			log::warn!(
+				target: "cf-validator",
+				"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
+			);
+			Self::abort_rotation();
 		}
 	}
 
