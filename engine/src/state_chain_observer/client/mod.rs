@@ -88,7 +88,7 @@ impl StateChainClient<extrinsic_api::signed::SignedExtrinsicClient> {
 		signing_key_file: &std::path::Path,
 		required_role: AccountRole,
 		wait_for_required_role: bool,
-	) -> Result<(impl StateChainStreamApi + Clone + 'static, Arc<Self>)> {
+	) -> Result<(impl StateChainStreamApi + Clone, Arc<Self>)> {
 		Self::new_with_account(
 			scope,
 			DefaultRpcClient::connect(ws_endpoint).await?.into(),
@@ -104,7 +104,7 @@ impl StateChainClient<()> {
 	pub async fn connect_without_account<'a>(
 		scope: &Scope<'a, anyhow::Error>,
 		ws_endpoint: &str,
-	) -> Result<(impl StateChainStreamApi + Clone + 'static, Arc<Self>)> {
+	) -> Result<(impl StateChainStreamApi + Clone, Arc<Self>)> {
 		Self::new_without_account(scope, DefaultRpcClient::connect(ws_endpoint).await?.into()).await
 	}
 }
@@ -118,7 +118,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		signing_key_file: &std::path::Path,
 		required_role: AccountRole,
 		wait_for_required_role: bool,
-	) -> Result<(impl StateChainStreamApi + Clone + 'static, Arc<Self>)> {
+	) -> Result<(impl StateChainStreamApi + Clone, Arc<Self>)> {
 		Self::new(
 			scope,
 			base_rpc_client,
@@ -140,7 +140,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	pub async fn new_without_account<'a>(
 		scope: &Scope<'a, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
-	) -> Result<(impl StateChainStreamApi + Clone + 'static, Arc<Self>)> {
+	) -> Result<(impl StateChainStreamApi + Clone, Arc<Self>)> {
 		Self::new(scope, base_rpc_client, ()).await
 	}
 }
@@ -155,7 +155,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		scope: &Scope<'a, anyhow::Error>,
 		base_rpc_client: Arc<BaseRpcClient>,
 		signed_extrinsic_client_builder: SignedExtrinsicClientBuilder,
-	) -> Result<(impl StateChainStreamApi + Clone + 'static, Arc<Self>)> {
+	) -> Result<(impl StateChainStreamApi + Clone, Arc<Self>)> {
 		let genesis_hash = base_rpc_client.block_hash(0).await?.expect(SUBSTRATE_BEHAVIOUR);
 
 		let (mut state_chain_stream, block_producer) = {
