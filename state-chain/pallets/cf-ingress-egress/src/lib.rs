@@ -645,7 +645,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					new_address.clone(),
 				);
 				ChannelIdCounter::<T, I>::put(next_channel_id);
-				InUseAddresses::<T, I>::insert(next_channel_id, new_depo_address.clone());
 				(new_depo_address, next_channel_id)
 			};
 
@@ -662,6 +661,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// 		return Ok((channel_id, raw_address))
 		// 	}
 		// }
+
+		InUseAddresses::<T, I>::insert(channel_id, deposit_address_wrapper.clone());
 
 		let new_address = deposit_address_wrapper.get_address();
 
