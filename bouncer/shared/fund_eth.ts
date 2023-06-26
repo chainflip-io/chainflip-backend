@@ -10,7 +10,7 @@ export async function getNextEthNonce(): Promise<number> {
         if (nextNonce === undefined) {
             const ethEndpoint = process.env.ETH_ENDPOINT || "http://127.0.0.1:8545";
             const web3 = new Web3(ethEndpoint);
-            const whaleKey = process.env.ETH_USDC_WHALE ?? '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+            const whaleKey = process.env.ETH_USDC_WHALE || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
             const address = web3.eth.accounts.privateKeyToAccount(whaleKey).address;
             const txCount = await web3.eth.getTransactionCount(address);
             nextNonce = txCount;
