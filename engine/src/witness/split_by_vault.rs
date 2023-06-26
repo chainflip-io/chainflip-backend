@@ -7,8 +7,10 @@ use super::{
 	epoch_source::Vault,
 };
 
+use utilities::assert_stream_send;
+
 #[async_trait::async_trait]
-pub trait ChainSplitByVault<'a>
+pub trait ChainSplitByVault<'a>: Sized
 where
 	state_chain_runtime::Runtime:
 		pallet_cf_vaults::Config<<Self::UnderlyingChainSource as ExternalChainSource>::Instance>,
@@ -16,6 +18,16 @@ where
 	type UnderlyingChainSource: ExternalChainSource;
 
 	async fn stream(self) -> BoxCurrentAndFuture<'a, Item<'a, Self::UnderlyingChainSource>>;
+
+	async fn run(self) {
+		let stream = assert_stream_send(
+			self.stream()
+				.await
+				.into_stream()
+				.flat_map_unordered(None, |(_, _, chain_stream, _)| chain_stream),
+		);
+		stream.for_each(|_| futures::future::ready(())).await;
+	}
 }
 
 type Item<'a, UnderlyingChainSource> = (

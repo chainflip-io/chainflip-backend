@@ -1,5 +1,6 @@
 use cf_chains::Chain;
 use futures_core::{stream::BoxStream, Stream};
+use futures_util::{stream, StreamExt};
 
 use super::chain_source::ChainSourceWithClient;
 
@@ -8,6 +9,11 @@ pub const STATE_CHAIN_CONNECTION: &str = "State Chain client connection failed";
 pub struct CurrentAndFuture<It: Iterator, St: Stream<Item = It::Item>> {
 	pub current: It,
 	pub future: St,
+}
+impl<It: Iterator, St: Stream<Item = It::Item>> CurrentAndFuture<It, St> {
+	pub fn into_stream(self) -> impl Stream<Item = It::Item> {
+		stream::iter(self.current).chain(self.future)
+	}
 }
 
 pub type BoxCurrentAndFuture<'a, T> =
