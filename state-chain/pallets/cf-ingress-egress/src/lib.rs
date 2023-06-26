@@ -238,9 +238,15 @@ pub mod pallet {
 	pub type DisabledEgressAssets<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, TargetChainAsset<T, I>, ()>;
 
+	/// Stores address ready for use.
 	#[pallet::storage]
 	pub(crate) type AddressPool<T: Config<I>, I: 'static = ()> =
-		StorageDoubleMap<_, Twox64Concat, ChannelId, Twox64Concat, bool, DepositAddressOf<T, I>>;
+		StorageMap<_, Twox64Concat, ChannelId, DepositAddressOf<T, I>>;
+
+	/// Stores the current addresses in use.
+	#[pallet::storage]
+	pub(crate) type InUseAddresses<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, ChannelId, DepositAddressOf<T, I>>;
 
 	/// Map of channel id to the deposit fetch parameters.
 	#[pallet::storage]
@@ -345,11 +351,12 @@ pub mod pallet {
 				let channel_id =
 					DepositAddressDetailsLookup::<T, I>::get(deposit_address.clone()).unwrap();
 				let new_state =
-					AddressPool::<T, I>::get(channel_id.channel_id, true).unwrap().finalize();
-				AddressPool::<T, I>::insert(channel_id.channel_id, true, new_state);
+					InUseAddresses::<T, I>::get(channel_id.channel_id).unwrap().finalize();
+				InUseAddresses::<T, I>::insert(channel_id.channel_id, new_state);
 			}
 			Ok(())
 		}
+
 		/// Sets if an asset is not allowed to be sent out of the chain via Egress.
 		/// Requires Governance
 		///
@@ -427,18 +434,16 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 							match request {
 								FetchOrTransfer::Fetch { channel_id, .. } => {
 									let updated_state =
-										AddressPool::<T, I>::get(channel_id.clone(), true)
+										InUseAddresses::<T, I>::get(channel_id.clone())
 											.unwrap()
 											.process();
-									AddressPool::<T, I>::insert(
+									InUseAddresses::<T, I>::insert(
 										channel_id.clone(),
-										true,
 										updated_state,
 									);
-									let skip_it =
-										AddressPool::<T, I>::get(channel_id.clone(), true)
-											.expect("asdf")
-											.maybe_skip();
+									let skip_it = InUseAddresses::<T, I>::get(channel_id.clone())
+										.unwrap()
+										.maybe_skip();
 									skip_it
 								},
 								FetchOrTransfer::Transfer { .. } => true,
@@ -460,11 +465,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		for request in batch_to_send {
 			match request {
 				FetchOrTransfer::<T::TargetChain>::Fetch { channel_id, asset } => {
-					let deposit_fetch_id = AddressPool::<T, I>::get(channel_id, true)
-						.expect("")
-						.get_deposit_fetch_id();
+					let deposit_fetch_id =
+						InUseAddresses::<T, I>::get(channel_id).unwrap().get_deposit_fetch_id();
 					let deposit_address =
-						AddressPool::<T, I>::get(channel_id, true).expect("").get_address();
+						InUseAddresses::<T, I>::get(channel_id).unwrap().get_address();
 					fetch_params.push(FetchAssetParams {
 						deposit_fetch_id: deposit_fetch_id.into(),
 						asset,
@@ -627,54 +631,56 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<(ChannelId, TargetChainAccount<T, I>), DispatchError> {
 		// We have an address available, so we can just use it.
 
-		for (channel_id, inuse, deposit_address) in AddressPool::<T, I>::iter() {
-			if !inuse {
-				// We have an address available, so we can just use it.
-				AddressPool::<T, I>::insert(channel_id, true, deposit_address.clone());
-				let raw_address = deposit_address.clone().get_address();
-				DepositAddressDetailsLookup::<T, I>::insert(
-					deposit_address.clone().get_address(),
-					DepositAddressDetails { channel_id, source_asset },
+		let (deposit_address_wrapper, channel_id) =
+			if let Some((channel_id, address)) = AddressPool::<T, I>::drain().next() {
+				(address.clone(), channel_id)
+			} else {
+				let next_channel_id = ChannelIdCounter::<T, I>::get()
+					.checked_add(1)
+					.ok_or(Error::<T, I>::ChannelIdsExhausted)?;
+				let new_address: TargetChainAccount<T, I> =
+					T::AddressDerivation::generate_address(source_asset, next_channel_id)?;
+				let new_depo_address = <T::TargetChain as Chain>::DepositAddress::new(
+					next_channel_id,
+					new_address.clone(),
 				);
-				ChannelActions::<T, I>::insert(raw_address.clone(), channel_action.clone());
-				return Ok((channel_id, raw_address))
-			}
-		}
+				ChannelIdCounter::<T, I>::put(next_channel_id);
+				InUseAddresses::<T, I>::insert(next_channel_id, new_depo_address.clone());
+				(new_depo_address, next_channel_id)
+			};
 
-		// We don't have an address available, so we need to generate one.
-		let next_channel_id = ChannelIdCounter::<T, I>::get()
-			.checked_add(1)
-			.ok_or(Error::<T, I>::ChannelIdsExhausted)?;
+		// for (channel_id, inuse, deposit_address) in AddressPool::<T, I>::iter() {
+		// 	if !inuse {
+		// 		// We have an address available, so we can just use it.
+		// 		InUseAddresses::<T, I>::insert(channel_id, deposit_address.clone());
+		// 		let raw_address = deposit_address.clone().get_address();
+		// 		DepositAddressDetailsLookup::<T, I>::insert(
+		// 			deposit_address.clone().get_address(),
+		// 			DepositAddressDetails { channel_id, source_asset },
+		// 		);
+		// 		ChannelActions::<T, I>::insert(raw_address.clone(), channel_action.clone());
+		// 		return Ok((channel_id, raw_address))
+		// 	}
+		// }
 
-		let new_address: TargetChainAccount<T, I> =
-			T::AddressDerivation::generate_address(source_asset, next_channel_id)?;
-
-		ChannelIdCounter::<T, I>::put(next_channel_id);
+		let new_address = deposit_address_wrapper.get_address();
 
 		ChannelActions::<T, I>::insert(&new_address, channel_action);
-		T::DepositHandler::on_channel_opened(new_address.clone(), next_channel_id)?;
-
-		AddressPool::<T, I>::insert(
-			next_channel_id,
-			true,
-			<T::TargetChain as Chain>::DepositAddress::new(next_channel_id, new_address.clone()),
-		);
+		T::DepositHandler::on_channel_opened(new_address.clone(), channel_id)?;
 
 		DepositAddressDetailsLookup::<T, I>::insert(
 			new_address.clone(),
-			DepositAddressDetails { channel_id: next_channel_id, source_asset },
+			DepositAddressDetails { channel_id, source_asset },
 		);
 
-		Ok((next_channel_id, new_address))
+		Ok((channel_id, new_address))
 	}
 
 	fn close_channel(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
 		ChannelActions::<T, I>::remove(&address);
-		let dep_address = AddressPool::<T, I>::get(channel_id, true).expect("asdf");
+		let dep_address = InUseAddresses::<T, I>::take(channel_id).unwrap();
 		if dep_address.maybe_recycle() {
-			AddressPool::<T, I>::insert(channel_id, false, dep_address);
-		} else {
-			AddressPool::<T, I>::remove(channel_id, true);
+			AddressPool::<T, I>::insert(channel_id, dep_address);
 		}
 		if let Some(deposit_address_details) = DepositAddressDetailsLookup::<T, I>::take(&address) {
 			Self::deposit_event(Event::<T, I>::StopWitnessing {

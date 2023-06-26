@@ -25,7 +25,7 @@ const EXPIRY_BLOCK: u64 = 6;
 
 #[track_caller]
 fn expect_size_of_address_pool(size: usize) {
-	let free_addresses = AddressPool::<Test>::iter_keys().filter(|e| e.1 == false).count();
+	let free_addresses = AddressPool::<Test>::iter_keys().count();
 	assert_eq!(free_addresses, size, "Address pool size is incorrect!");
 }
 
@@ -334,10 +334,7 @@ fn addresses_are_getting_reused() {
 		.inspect_storage(|(channel_id, address, _asset)| {
 			expect_size_of_address_pool(1);
 			// Address 1 is free to use and in the pool of available addresses
-			assert_eq!(
-				AddressPool::<Test, _>::get(channel_id, false).unwrap().get_address(),
-				*address
-			);
+			assert_eq!(AddressPool::<Test, _>::get(channel_id).unwrap().get_address(), *address);
 			// assert_eq!(AddressStatus::<Test, _>::get(address), DeploymentStatus::Deployed);
 		})
 		.request_deposit_addresses(&[(ALICE, eth::Asset::Eth)])
@@ -408,7 +405,7 @@ fn reused_address_channel_id_matches() {
 			INTENT_ID,
 			eth_address,
 		);
-		AddressPool::<Test, _>::insert(INTENT_ID, true, new_address);
+		AddressPool::<Test, _>::insert(INTENT_ID, new_address);
 		let (reused_channel_id, reused_address) = IngressEgress::open_channel(
 			eth::Asset::Eth,
 			ChannelAction::LiquidityProvision { lp_account: 0 },
