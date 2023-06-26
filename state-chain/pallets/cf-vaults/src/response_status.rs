@@ -6,8 +6,8 @@ use super::*;
 #[derive(PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, TypeInfo, DebugNoBound)]
 #[scale_info(skip_type_params(T, SuccessVoters, FailureVoters, I))]
 pub struct ResponseStatus<T: Config<I>, SuccessVoters, FailureVoters, I: 'static = ()> {
-	/// The total number of candidates participating in the keygen ceremony.
-	candidate_count: AuthorityCount,
+	/// The candidates participating in the keygen ceremony.
+	candidates: BTreeSet<T::ValidatorId>,
 	/// The candidates that have yet to reply.
 	remaining_candidates: BTreeSet<T::ValidatorId>,
 	/// A map of new keys with the number of votes for each key.
@@ -31,7 +31,7 @@ where
 {
 	pub fn new(candidates: BTreeSet<T::ValidatorId>) -> Self {
 		Self {
-			candidate_count: candidates.len() as AuthorityCount,
+			candidates: candidates.clone(),
 			remaining_candidates: candidates,
 			success_votes: Default::default(),
 			blame_votes: Default::default(),
@@ -40,7 +40,11 @@ where
 	}
 
 	pub fn candidate_count(&self) -> AuthorityCount {
-		self.candidate_count
+		self.candidates.len() as AuthorityCount
+	}
+
+	pub fn candidates(&self) -> &BTreeSet<T::ValidatorId> {
+		&self.candidates
 	}
 
 	pub fn remaining_candidates(&self) -> &BTreeSet<T::ValidatorId> {
@@ -52,7 +56,7 @@ where
 	}
 
 	fn super_majority_threshold(&self) -> AuthorityCount {
-		utilities::success_threshold_from_share_count(self.candidate_count)
+		utilities::success_threshold_from_share_count(self.candidate_count())
 	}
 
 	pub fn add_success_vote(&mut self, voter: &T::ValidatorId, key: AggKeyFor<T, I>) {
@@ -85,7 +89,7 @@ where
 	pub fn resolve_keygen_outcome(self) -> KeygenOutcomeFor<T, I> {
 		// If and only if *all* candidates agree on the same key, return success.
 		if let Some((key, votes)) = self.success_votes.iter().next() {
-			if *votes == self.candidate_count {
+			if *votes == self.candidate_count() {
 				// This *should* be safe since it's bounded by the number of candidates.
 				// We may want to revise.
 				// See https://github.com/paritytech/substrate/pull/11490
