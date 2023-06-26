@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use core::fmt::Display;
+#![feature(step_trait)]
+use core::{fmt::Display, iter::Step};
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 pub use address::ForeignChainAddress;
@@ -58,7 +59,9 @@ pub trait Chain: Member + Parameter {
 		+ Into<u64>
 		+ MaxEncodedLen
 		+ Display
-		+ CheckedSub;
+		+ CheckedSub
+		+ Unpin
+		+ Step;
 
 	type ChainAmount: Member
 		+ Parameter
