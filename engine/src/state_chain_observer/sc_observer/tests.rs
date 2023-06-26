@@ -19,7 +19,7 @@ use pallet_cf_vaults::Vault;
 use sp_runtime::{AccountId32, Digest};
 
 use crate::eth::ethers_rpc::MockEthersRpcApi;
-use sp_core::{H160, H256};
+use sp_core::H256;
 use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance, Header};
 use tokio::sync::watch;
 use utilities::MakeCachedStream;
@@ -32,6 +32,7 @@ use crate::{
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
 	witnesser::EpochStart,
 };
+use ethers::prelude::MockProvider;
 use multisig::{
 	client::{KeygenFailureReason, MockMultisigClientApi, SigningFailureReason},
 	eth::EthSigning,
@@ -1718,9 +1719,10 @@ async fn run_the_sc_observer() {
 				sc_block_stream,
 				EthBroadcaster::new(
 					EthersRpcClient::new(
+						Arc::new(ethers::prelude::Provider::<MockProvider>::new(
+							MockProvider::new(),
+						)),
 						&settings.eth,
-						"B7A5bd0345EF1Cc5E66bf61BdeC17D2461fBd968".parse().unwrap(),
-						H160::random(),
 					)
 					.await
 					.unwrap(),

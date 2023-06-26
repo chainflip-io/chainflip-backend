@@ -9,34 +9,20 @@ use utilities::read_clean_and_decode_hex_str_file;
 use mockall::automock;
 
 #[derive(Clone)]
-pub struct EthersRpcClient {
-	signer: SignerMiddleware<Provider<Http>, LocalWallet>,
-	address_checker: AddressChecker<Provider<Http>>,
-	vault: Vault<Provider<Http>>,
+pub struct EthersRpcClient<T: JsonRpcClient> {
+	signer: SignerMiddleware<Arc<Provider<T>>, LocalWallet>,
 }
 
-abigen!(AddressChecker, "eth-contract-abis/perseverance-rc17/IAddressChecker.json");
-abigen!(Vault, "eth-contract-abis/perseverance-rc17/IVault.json");
-
-impl EthersRpcClient {
-	pub async fn new(
-		eth_settings: &settings::Eth,
-		vault_contract_address: H160,
-		address_checker_address: H160,
-	) -> Result<Self> {
-		let provider = Provider::<Http>::try_from(eth_settings.http_node_endpoint.to_string())?;
+impl<T: JsonRpcClient + 'static> EthersRpcClient<T> {
+	pub async fn new(provider: Arc<Provider<T>>, eth_settings: &settings::Eth) -> Result<Self> {
 		let wallet = read_clean_and_decode_hex_str_file(
 			&eth_settings.private_key_file,
 			"Ethereum Private Key",
 			|key| ethers::signers::Wallet::from_str(key).map_err(anyhow::Error::new),
 		)?;
 		let chain_id = provider.get_chainid().await?;
-		let signer =
-			SignerMiddleware::new(provider.clone(), wallet.with_chain_id(chain_id.as_u64()));
-		let provider = Arc::new(provider);
-		let address_checker = AddressChecker::new(address_checker_address, provider.clone());
-		let vault = Vault::new(vault_contract_address, provider);
-		Ok(Self { signer, address_checker, vault })
+		let signer = SignerMiddleware::new(provider, wallet.with_chain_id(chain_id.as_u64()));
+		Ok(Self { signer })
 	}
 }
 
@@ -68,20 +54,10 @@ pub trait EthersRpcApi: Send + Sync {
 		newest_block: BlockNumber,
 		reward_percentiles: &[f64],
 	) -> Result<FeeHistory>;
-
-	async fn fetched_native_events(&self, block_hash: H256) -> Result<Vec<FetchedNativeFilter>>;
-
-	async fn address_states(
-		&self,
-		block_hash: H256,
-		addresses: Vec<H160>,
-	) -> Result<Vec<AddressState>>;
-
-	async fn balances(&self, block_hash: H256, addresses: Vec<H160>) -> Result<Vec<U256>>;
 }
 
 #[async_trait::async_trait]
-impl EthersRpcApi for EthersRpcClient {
+impl<T: JsonRpcClient + 'static> EthersRpcApi for EthersRpcClient<T> {
 	fn address(&self) -> H160 {
 		self.signer.address()
 	}
@@ -129,35 +105,6 @@ impl EthersRpcApi for EthersRpcClient {
 	) -> Result<FeeHistory> {
 		Ok(self.signer.fee_history(block_count, last_block, reward_percentiles).await?)
 	}
-
-	async fn fetched_native_events(&self, block_hash: H256) -> Result<Vec<FetchedNativeFilter>> {
-		let fetched_native_events =
-			self.vault.event::<FetchedNativeFilter>().at_block_hash(block_hash);
-
-		Ok(fetched_native_events.query().await?)
-	}
-
-	async fn address_states(
-		&self,
-		block_hash: H256,
-		addresses: Vec<H160>,
-	) -> Result<Vec<AddressState>> {
-		Ok(self
-			.address_checker
-			.address_states(addresses)
-			.block(BlockId::Hash(block_hash))
-			.call()
-			.await?)
-	}
-
-	async fn balances(&self, block_hash: H256, addresses: Vec<H160>) -> Result<Vec<U256>> {
-		Ok(self
-			.address_checker
-			.native_balances(addresses)
-			.block(BlockId::Hash(block_hash))
-			.call()
-			.await?)
-	}
 }
 
 #[cfg(test)]
@@ -171,13 +118,10 @@ mod tests {
 	#[ignore = "Requires correct settings"]
 	async fn ethers_rpc_test() {
 		let settings = Settings::new_test().unwrap();
-		let client = EthersRpcClient::new(
-			&settings.eth,
-			"B7A5bd0345EF1Cc5E66bf61BdeC17D2461fBd968".parse().unwrap(),
-			H160::random(),
-		)
-		.await
-		.unwrap();
+
+		let provider =
+			Provider::<Http>::try_from(settings.eth.http_node_endpoint.to_string()).unwrap();
+		let client = EthersRpcClient::new(Arc::new(provider), &settings.eth).await.unwrap();
 		let chain_id = client.chain_id().await.unwrap();
 		println!("{:?}", chain_id);
 

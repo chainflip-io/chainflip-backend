@@ -1,10 +1,11 @@
 use std::collections::BTreeMap;
 
-use super::ethers_rpc::*;
+use super::{address_checker::*, ethers_vault::*};
 use ethers::prelude::*;
 use itertools::Itertools;
 use sp_core::U256;
 
+// TODO: Write a comment describing why we do this once this has stabilised a bit: PRO-573
 #[allow(unused)]
 fn eth_ingresses_at_block(
 	addresses: Vec<H160>,
@@ -23,11 +24,13 @@ fn eth_ingresses_at_block(
 		.into_group_map_by(|f| f.sender)
 		.into_iter()
 		.map(|(sender, events)| {
-			(sender, events.into_iter().fold(U256::from(0), |acc, f| acc + f.amount))
+			(sender, events.into_iter().fold(U256::from(0), |acc, f| acc.saturating_add(f.amount)))
 		})
 		.collect();
 
-	for (i, (address, address_state)) in addresses.iter().zip(address_states).enumerate() {
+	for ((address, address_state), previous_block_balance) in
+		addresses.iter().zip(address_states).zip(previous_block_balances)
+	{
 		if address_state.has_contract {
 			if let Some(amount) = fetched_native_totals.get(address) {
 				let amount = *amount;
@@ -36,11 +39,9 @@ fn eth_ingresses_at_block(
 				}
 			}
 		} else {
-			let balance_prev_block = previous_block_balances.get(i).expect(
-				"The contract will return the items in the same order as the input addresses",
-			);
+			assert!(fetched_native_totals.get(address).is_none());
 
-			let balance_diff = address_state.balance.saturating_sub(*balance_prev_block);
+			let balance_diff = address_state.balance.saturating_sub(previous_block_balance);
 
 			if balance_diff > U256::from(0) {
 				ingresses_for_block.push((*address, balance_diff));
@@ -52,7 +53,12 @@ fn eth_ingresses_at_block(
 
 #[cfg(test)]
 mod tests {
-	use crate::settings::Settings;
+	use std::sync::Arc;
+
+	use crate::{
+		eth::ethers_rpc::{EthersRpcApi, EthersRpcClient},
+		settings::Settings,
+	};
 
 	use super::*;
 	use ethers::{abi::ethereum_types::BloomInput, prelude::U256};
@@ -114,14 +120,13 @@ mod tests {
 			vec![FetchedNativeFilter { sender: H160::random(), amount: U256::from(300) }];
 
 		let ingresses = eth_ingresses_at_block(
-			addresses,
+			addresses.clone(),
 			previous_block_balances,
 			address_states,
 			native_events,
 		);
 
-		assert_eq!(ingresses.len(), 1);
-		assert_eq!(ingresses[0].1, U256::from(100)); // Balance increase should be 100
+		assert!(ingresses.eq(&[(addresses[0], U256::from(100))]));
 	}
 
 	#[test]
@@ -145,16 +150,13 @@ mod tests {
 		];
 
 		let ingresses = eth_ingresses_at_block(
-			addresses,
+			addresses.clone(),
 			previous_block_balances,
 			address_states,
 			native_events,
 		);
 
-		assert_eq!(ingresses.len(), 2);
-		// We ignore the previous block balances since it is captured by the first event.
-		assert_eq!(ingresses[0].1, U256::from(323)); // Balance increase should be 323, sum of the events
-		assert_eq!(ingresses[1].1, U256::from(212));
+		assert!(ingresses.eq(&[(addresses[0], U256::from(323)), (addresses[1], U256::from(212))]));
 	}
 
 	#[ignore = "requries connection to a node"]
@@ -165,9 +167,15 @@ mod tests {
 			"e7f1725E7734CE288F8367e1Bb143E90bb3F0512".parse::<Address>().unwrap();
 
 		let settings = Settings::new_test().unwrap();
-		let client = EthersRpcClient::new(&settings.eth, vault_address, address_checker_address)
-			.await
-			.unwrap();
+
+		let provider = Arc::new(
+			Provider::<Http>::try_from(settings.eth.http_node_endpoint.to_string()).unwrap(),
+		);
+		let client = EthersRpcClient::new(provider.clone(), &settings.eth).await.unwrap();
+
+		let vault_rpc = VaultRpc::new(provider.clone(), vault_address);
+
+		let address_checker_rpc = AddressCheckerRpc::new(provider.clone(), address_checker_address);
 
 		let addresses = vec![
 			"41aD2bc63A2059f9b623533d87fe99887D794847".parse().unwrap(),
@@ -192,12 +200,13 @@ mod tests {
 			.unwrap();
 
 		let previous_block_balances =
-			client.balances(prev_block_hash, addresses.clone()).await.unwrap();
+			address_checker_rpc.balances(prev_block_hash, addresses.clone()).await.unwrap();
 
-		let address_states = client.address_states(block_hash, addresses.clone()).await.unwrap();
+		let address_states =
+			address_checker_rpc.address_states(block_hash, addresses.clone()).await.unwrap();
 
 		let fetched_native_events = if logs_bloom.contains_bloom(&vault_bloom) {
-			client.fetched_native_events(block_hash).await.unwrap()
+			vault_rpc.fetched_native_events(block_hash).await.unwrap()
 		} else {
 			vec![]
 		};

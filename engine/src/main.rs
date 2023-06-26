@@ -19,6 +19,7 @@ use chainflip_engine::{
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
+use ethers::prelude::*;
 use futures::FutureExt;
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 use pallet_cf_validator::SemVer;
@@ -222,24 +223,10 @@ async fn main() -> anyhow::Result<()> {
 				state_chain_stream.clone(),
 				EthBroadcaster::new(
 					EthersRpcClient::new(
+						Arc::new(Provider::<Http>::try_from(
+							settings.eth.http_node_endpoint.to_string(),
+						)?),
 						&settings.eth,
-						// This call for the vault is duplicated inside eth::witnessing::start().
-						// Duplicated here since we don't know what's going to happen with the code
-						// in eth::witnessing::start().
-						state_chain_client
-							.storage_value::<pallet_cf_environment::EthereumVaultAddress<
-								state_chain_runtime::Runtime,
-							>>(state_chain_stream.cache().block_hash)
-							.await
-							.context("Failed to get ETH Vault contract address from SC")?
-							.into(),
-						state_chain_client
-							.storage_value::<pallet_cf_environment::EthereumAddressCheckerAddress<
-								state_chain_runtime::Runtime,
-							>>(state_chain_stream.cache().block_hash)
-							.await
-							.context("Failed to get ETH AddressChecker contract address from SC")?
-							.into(),
 					)
 					.await?,
 				),
