@@ -406,7 +406,7 @@ pub mod pallet {
 							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
-							let num_failed_candidates = offenders.union(&rotation_state.authority_candidates()).count();
+							let num_failed_candidates = offenders.intersection(&rotation_state.authority_candidates()).count();
 							rotation_state.ban(offenders);
 							if rotation_state.unbanned_current_authorities::<T>().len() as u32 <= Self::current_consensus_threshold() {
 								log::warn!(
