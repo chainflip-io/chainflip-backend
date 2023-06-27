@@ -79,8 +79,12 @@ pub struct Submission {
 
 pub struct SubmissionWatcher<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static> {
 	submissions_by_nonce: BTreeMap<Nonce, Vec<Submission>>,
+	// The locally tracked nonce used to submit multiple extrinsics in a single block. A new
+	// request will be submitted at this nonce.
 	pub anticipated_nonce: Nonce,
 	signer: signer::PairSigner<sp_core::sr25519::Pair>,
+	// Our account nonce at the time of the last finalized block, ie. the nonce of the next
+	// extrinsic that will be accepted.
 	finalized_nonce: Nonce,
 	finalized_block_hash: state_chain_runtime::Hash,
 	finalized_block_number: BlockNumber,
@@ -120,6 +124,10 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				extrinsic_lifetime,
 				base_rpc_client,
 			},
+			// Return an empty requests map. This is done so that initial state of the requests
+			// matches the submission watchers state. The requests must be stored outside of
+			// the watcher so it can be manipulated by it's parent while holding a mut reference
+			// to the watcher.
 			Default::default(),
 		)
 	}
