@@ -24,7 +24,7 @@ pub struct Epoch<Info, HistoricInfo> {
 
 #[derive(Clone)]
 enum EpochUpdate<Info, HistoricInfo> {
-	Current(Info),
+	NewCurrent(Info),
 	Historic(HistoricInfo),
 	Expired,
 }
@@ -93,7 +93,7 @@ impl<'a, 'env, StateChainClient: client::storage_api::StorageApi + Send + Sync +
 							.expect(STATE_CHAIN_CONNECTION));
 						if old_current_epoch != current_epoch {
 							let _result = epoch_update_sender.broadcast((old_current_epoch, block_hash, EpochUpdate::Historic(())));
-							let _result = epoch_update_sender.broadcast((current_epoch, block_hash, EpochUpdate::Current(())));
+							let _result = epoch_update_sender.broadcast((current_epoch, block_hash, EpochUpdate::NewCurrent(())));
 							historic_epochs.insert(old_current_epoch);
 						}
 
@@ -171,7 +171,7 @@ impl<
 						epoch_update_receiver.next().await
 					{
 						match update {
-							EpochUpdate::Current(info) => {
+							EpochUpdate::NewCurrent(info) => {
 								let (historic_signaller, historic_signal) = Signal::new();
 								let (expired_signaller, expired_signal) = Signal::new();
 
@@ -316,10 +316,10 @@ impl<
 					},
 					if let Some((epoch, block_hash, update)) = unmapped_epoch_update_receiver.next() => {
 						match update {
-							EpochUpdate::Current(info) => {
+							EpochUpdate::NewCurrent(info) => {
 								if let Some(mapped_info) = filter_map(state_chain_client.clone(), epoch, block_hash, info).await {
 									epochs.insert(epoch);
-									let _result = epoch_update_sender.broadcast((epoch, block_hash, EpochUpdate::Current(mapped_info)));
+									let _result = epoch_update_sender.broadcast((epoch, block_hash, EpochUpdate::NewCurrent(mapped_info)));
 								}
 							},
 							EpochUpdate::Historic(historic_info) => {
