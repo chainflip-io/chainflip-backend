@@ -59,7 +59,7 @@ pub const EPOCH_DURATION_BLOCKS: BlockNumber = 3 * HOURS;
 pub fn extra_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8>>)> {
 	vec![
 		(
-			hex_literal::hex!("a0edda1a4beee4fe2df32c0802aa6759da49ae6165fcdb5c40d7f4cd5a30db0e")
+			hex_literal::hex!("2efeb485320647a8d472503591f8fce9268cc3bf1bb8ad02efd2e905dcd1f31e")
 				.into(),
 			AccountRole::Broker,
 			100 * FLIPPERINOS_PER_FLIP,
