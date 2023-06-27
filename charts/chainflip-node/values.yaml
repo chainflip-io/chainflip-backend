@@ -62,7 +62,12 @@ ports:
   p2pPort: "30333"
   metricsPort: "9615"
 
+extraArgs: {}
+
 basePath: /etc/chainflip
 purgeChain: false
 
 bootnodes: ""
+
+persistence:
+  size: 50Gi

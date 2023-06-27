@@ -76,6 +76,9 @@ spec:
             - --unsafe-rpc-external
             - --rpc-methods=unsafe
             - --rpc-cors=all
+            {{- with .Values.extraArgs }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           ports:
             - name: ws
               containerPort: {{ .Values.ports.wsPort | default "9944" }}
@@ -115,4 +118,4 @@ spec:
         storageClassName: gp2
         resources:
           requests:
-            storage: 50Gi
+            storage: "{{ .Values.persistence.size }}"
