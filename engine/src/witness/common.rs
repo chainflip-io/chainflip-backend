@@ -24,6 +24,16 @@ impl<It: Iterator, St: Stream<Item = It::Item>> ActiveAndFuture<It, St> {
 		ActiveAndFuture { active: Box::new(self.active), future: Box::pin(self.future) }
 	}
 
+	pub async fn filter<Fut: Future<Output = bool>, F: Fn(&It::Item) -> Fut>(
+		self,
+		f: F,
+	) -> ActiveAndFuture<impl Iterator<Item = It::Item>, impl Stream<Item = It::Item>> {
+		ActiveAndFuture {
+			active: stream::iter(self.active).filter(&f).collect::<Vec<_>>().await.into_iter(),
+			future: self.future.filter(f),
+		}
+	}
+
 	pub async fn then<Fut: Future, F: Fn(It::Item) -> Fut>(
 		self,
 		f: F,
