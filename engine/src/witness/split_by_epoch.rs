@@ -3,7 +3,7 @@ use futures_util::StreamExt;
 
 use super::{
 	chain_source::{box_chain_stream, BoxChainStream, ChainSource},
-	common::BoxCurrentAndFuture,
+	common::BoxActiveAndFuture,
 	epoch_source::Epoch,
 };
 
@@ -13,7 +13,7 @@ use utilities::assert_stream_send;
 pub trait ChainSplitByEpoch<'a>: Sized + Send {
 	type UnderlyingChainSource: ChainSource;
 
-	async fn stream(self) -> BoxCurrentAndFuture<'a, Item<'a, Self::UnderlyingChainSource>>;
+	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>>;
 
 	async fn run(self) {
 		let stream = assert_stream_send(
@@ -38,7 +38,7 @@ type Item<'a, UnderlyingChainSource> = (
 
 pub struct SplitByEpoch<'a, UnderlyingChainSource> {
 	underlying_chain_source: &'a UnderlyingChainSource,
-	epochs: BoxCurrentAndFuture<'static, Epoch<(), ()>>,
+	epochs: BoxActiveAndFuture<'static, Epoch<(), ()>>,
 }
 #[async_trait::async_trait]
 impl<'a, UnderlyingChainSource: ChainSource> ChainSplitByEpoch<'a>
@@ -46,7 +46,7 @@ impl<'a, UnderlyingChainSource: ChainSource> ChainSplitByEpoch<'a>
 {
 	type UnderlyingChainSource = UnderlyingChainSource;
 
-	async fn stream(self) -> BoxCurrentAndFuture<'a, Item<'a, Self::UnderlyingChainSource>> {
+	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>> {
 		let underlying_chain_source = self.underlying_chain_source;
 		self.epochs
 			.then(move |epoch| async move {
