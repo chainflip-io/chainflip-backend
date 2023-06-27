@@ -10,7 +10,7 @@ use super::{
 use utilities::assert_stream_send;
 
 #[async_trait::async_trait]
-pub trait ChainSplitByEpoch<'a>: Sized {
+pub trait ChainSplitByEpoch<'a>: Sized + Send {
 	type UnderlyingChainSource: ChainSource;
 
 	async fn stream(self) -> BoxCurrentAndFuture<'a, Item<'a, Self::UnderlyingChainSource>>;

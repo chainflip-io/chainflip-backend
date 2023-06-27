@@ -10,7 +10,7 @@ use super::{
 use utilities::assert_stream_send;
 
 #[async_trait::async_trait]
-pub trait ChainSplitByVault<'a>: Sized
+pub trait ChainSplitByVault<'a>: Sized + Send
 where
 	state_chain_runtime::Runtime:
 		pallet_cf_vaults::Config<<Self::UnderlyingChainSource as ExternalChainSource>::Instance>,
