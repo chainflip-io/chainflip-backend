@@ -51,7 +51,7 @@ impl<'a, UnderlyingChainSource: ChainSource> ChainSplitByEpoch<'a>
 		self.epochs
 			.then(move |epoch| async move {
 				(
-					epoch.epoch,
+					epoch.index,
 					box_chain_stream(
 						underlying_chain_source
 							.stream()

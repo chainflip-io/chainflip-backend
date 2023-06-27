@@ -68,7 +68,7 @@ where
 				let (stream, client) = underlying_chain_source.stream_and_client().await;
 
 				(
-					vault.epoch,
+					vault.index,
 					vault.info.clone(),
 					box_chain_stream(stream.take_until(vault.expired_signal.wait()).filter(
 						move |header| {
