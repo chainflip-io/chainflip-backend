@@ -1,5 +1,7 @@
+use crate::Runtime;
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::RuntimeDebug;
+use pallet_cf_reputation::OffenceList;
 use pallet_grandpa::GrandpaEquivocationOffence;
 use scale_info::TypeInfo;
 
@@ -19,6 +21,17 @@ pub enum Offence {
 	MissedHeartbeat,
 	/// Grandpa equivocation detected.
 	GrandpaEquivocation,
+	/// A node failed to participate in key handover.
+	ParticipateKeyHandoverFailed,
+}
+
+/// Nodes should be excluded from keygen if they have been reported for any of the offences in this
+/// struct's implementation of [OffenceList].
+pub struct KeygenExclusionOffences;
+
+impl OffenceList<Runtime> for KeygenExclusionOffences {
+	const OFFENCES: &'static [Offence] =
+		&[Offence::MissedAuthorshipSlot, Offence::GrandpaEquivocation];
 }
 
 // Boilerplate
@@ -52,7 +65,8 @@ impl From<pallet_cf_vaults::PalletOffence> for Offence {
 	fn from(offences: pallet_cf_vaults::PalletOffence) -> Self {
 		match offences {
 			pallet_cf_vaults::PalletOffence::FailedKeygen => Self::ParticipateKeygenFailed,
-			pallet_cf_vaults::PalletOffence::FailedKeyHandover => Self::ParticipateKeygenFailed,
+			pallet_cf_vaults::PalletOffence::FailedKeyHandover =>
+				Self::ParticipateKeyHandoverFailed,
 		}
 	}
 }

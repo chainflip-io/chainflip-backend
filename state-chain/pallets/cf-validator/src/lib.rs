@@ -136,7 +136,7 @@ pub mod pallet {
 		>;
 
 		/// Criteria that need to be fulfilled to qualify as a validator node (authority or backup).
-		type KeygenQualification: QualifyNode<ValidatorId = ValidatorIdOf<Self>>;
+		type KeygenQualification: QualifyNode<<Self as Chainflip>::ValidatorId>;
 
 		/// For reporting missed authorship slots.
 		type OffenceReporter: OffenceReporter<
@@ -1129,18 +1129,15 @@ impl<T: Config> Pallet<T> {
 						10u128.pow(18),
 				);
 
-				let mut rotation_state =
-					RotationState::from_auction_outcome::<T>(auction_outcome.clone());
-
-				rotation_state.qualify_nodes::<T::KeygenQualification>();
-
 				// Without reading the full list of bidders we can't know the real number.
 				// Use the winners and losers as an approximation.
 				let weight = T::ValidatorWeightInfo::start_authority_rotation(
 					(auction_outcome.winners.len() + auction_outcome.losers.len()) as u32,
 				);
 
-				Self::start_vault_rotation(rotation_state);
+				Self::start_vault_rotation(RotationState::from_auction_outcome::<T>(
+					auction_outcome,
+				));
 
 				weight
 			},
@@ -1396,10 +1393,8 @@ impl<T: Config> OnKilledAccount<T::AccountId> for DeleteVanityName<T> {
 
 pub struct PeerMapping<T>(PhantomData<T>);
 
-impl<T: Config> QualifyNode for PeerMapping<T> {
-	type ValidatorId = ValidatorIdOf<T>;
-
-	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for PeerMapping<T> {
+	fn is_qualified(validator_id: &<T as Chainflip>::ValidatorId) -> bool {
 		AccountPeerMapping::<T>::contains_key(validator_id.into_ref())
 	}
 }
