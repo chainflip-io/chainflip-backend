@@ -81,9 +81,7 @@ impl<'a, 'env, StateChainClient: client::storage_api::StorageApi + Send + Sync +
 			let state_chain_client = state_chain_client.clone();
 			async move {
 				utilities::loop_select! {
-					if epoch_update_sender.is_closed() => let _ = futures::future::ready(()) => {
-						break Ok(())
-					},
+					if epoch_update_sender.is_closed() => break Ok(()),
 					if let Some((block_hash, _block_header)) = state_chain_stream.next() => {
 						let old_current_epoch = std::mem::replace(&mut current_epoch, state_chain_client
 							.storage_value::<pallet_cf_validator::CurrentEpoch<
@@ -311,9 +309,7 @@ impl<
 			let mut epochs = epochs.keys().cloned().collect::<BTreeSet<_>>();
 			async move {
 				utilities::loop_select! {
-					if epoch_update_sender.is_closed() => let _ = futures::future::ready(()) => {
-						break Ok(())
-					},
+					if epoch_update_sender.is_closed() => break Ok(()),
 					if let Some((epoch, block_hash, update)) = unmapped_epoch_update_receiver.next() => {
 						match update {
 							EpochUpdate::NewCurrent(info) => {
