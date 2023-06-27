@@ -9,15 +9,11 @@ use sp_core::{
 };
 use utilities::assert_ok;
 
+use super::{signer::PairSigner, *};
 use crate::{
 	constants::SIGNED_EXTRINSIC_LIFETIME,
-	state_chain_observer::client::{
-		base_rpc_api::MockBaseRpcApi,
-		extrinsic_api::signed::{signer::PairSigner, tests::test_header},
-	},
+	state_chain_observer::client::base_rpc_api::MockBaseRpcApi,
 };
-
-use super::*;
 
 const INITIAL_NONCE: Nonce = 10;
 const INITIAL_BLOCK_NUMBER: BlockNumber = 0;
@@ -32,6 +28,17 @@ lazy_static! {
 		)),
 		epoch_index: 0,
 	});
+}
+
+// TODO: deduplicate this with the one in the signer module
+fn test_header(number: u32) -> state_chain_runtime::Header {
+	state_chain_runtime::Header {
+		number,
+		parent_hash: H256::default(),
+		state_root: H256::default(),
+		extrinsics_root: H256::default(),
+		digest: sp_runtime::Digest { logs: Vec::new() },
+	}
 }
 
 #[tokio::test]
