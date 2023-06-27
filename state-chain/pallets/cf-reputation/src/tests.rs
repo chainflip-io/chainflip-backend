@@ -241,18 +241,24 @@ fn forgiveness() {
 		ReputationPallet::suspend_all(&[1, 2], &AllOffences::NotLockingYourComputer, u64::MAX);
 		ReputationPallet::suspend_all(&[1], &AllOffences::MissedHeartbeat, 15);
 		assert_eq!(
-			GetValidatorsExcludedFor::<Test, AllOffences>::get(),
+			Pallet::<Test>::validators_suspended_for(AllOffences::OFFENCES),
 			[1, 2, 3].into_iter().collect(),
 		);
 		<ReputationPallet as OffenceReporter>::forgive_all(AllOffences::ForgettingYourYubiKey);
 		assert_eq!(
-			GetValidatorsExcludedFor::<Test, AllOffences>::get(),
+			Pallet::<Test>::validators_suspended_for(AllOffences::OFFENCES),
 			[1, 2].into_iter().collect(),
 		);
 		<ReputationPallet as OffenceReporter>::forgive_all(AllOffences::NotLockingYourComputer);
-		assert_eq!(GetValidatorsExcludedFor::<Test, AllOffences>::get(), [1].into_iter().collect(),);
+		assert_eq!(
+			Pallet::<Test>::validators_suspended_for(AllOffences::OFFENCES),
+			[1].into_iter().collect(),
+		);
 		<ReputationPallet as OffenceReporter>::forgive_all(PalletOffence::MissedHeartbeat);
-		assert_eq!(GetValidatorsExcludedFor::<Test, AllOffences>::get(), [].into_iter().collect(),);
+		assert_eq!(
+			Pallet::<Test>::validators_suspended_for(AllOffences::OFFENCES),
+			[].into_iter().collect(),
+		);
 	});
 }
 
@@ -293,11 +299,8 @@ mod reporting_adapter_test {
 
 			// Offence for this time slot is not known, nobody has been reported yet.
 			assert!(!GrandpaOffenceReporter::is_known_offence(&[OFFENDER], &OFFENCE_TIME_SLOT));
-			assert!(GetValidatorsExcludedFor::<
-				Test,
-				GrandpaEquivocationOffence<IdentificationTuple>,
-			>::get()
-			.is_empty());
+			assert!(Pallet::<Test>::validators_suspended_for(&[AllOffences::UpsettingGrandpa])
+				.is_empty());
 			assert_eq!(MockSlasher::slash_count(OFFENDER.0), 0);
 
 			// Report the offence. It should now be known, and a duplicate report should not be
@@ -311,7 +314,7 @@ mod reporting_adapter_test {
 
 			// The offender is suspended and reputation reduced.
 			assert_eq!(
-				GetValidatorsExcludedFor::<Test, GrandpaEquivocationOffence<IdentificationTuple>>::get(),
+				Pallet::<Test>::validators_suspended_for(&[AllOffences::UpsettingGrandpa]),
 				[OFFENDER.0].into_iter().collect()
 			);
 			assert_eq!(

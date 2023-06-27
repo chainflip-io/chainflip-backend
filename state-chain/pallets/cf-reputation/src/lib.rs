@@ -8,7 +8,8 @@ mod mock;
 mod tests;
 
 use cf_traits::{
-	offence_reporting::*, Chainflip, Heartbeat, NetworkState, ReputationResetter, Slashing,
+	offence_reporting::*, Chainflip, Heartbeat, NetworkState, QualifyNode, ReputationResetter,
+	Slashing,
 };
 
 pub mod weights;
@@ -316,12 +317,10 @@ pub mod pallet {
 		}
 	}
 
-	impl<T: Config> QualifyNode for Pallet<T> {
-		type ValidatorId = T::ValidatorId;
-
+	impl<T: Config> QualifyNode<T::ValidatorId> for Pallet<T> {
 		/// A node is considered online, and therefore qualified if fewer than
 		/// [T::HeartbeatBlockInterval] blocks have elapsed since their last heartbeat submission.
-		fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+		fn is_qualified(validator_id: &T::ValidatorId) -> bool {
 			use sp_runtime::traits::Saturating;
 			if let Some(last_heartbeat) = LastHeartbeat::<T>::get(validator_id) {
 				frame_system::Pallet::<T>::current_block_number().saturating_sub(last_heartbeat) <
@@ -423,15 +422,18 @@ impl<T: Config> OffenceList<T> for () {
 	const OFFENCES: &'static [<T>::Offence] = &[];
 }
 
-pub struct GetValidatorsExcludedFor<T: Config, L: OffenceList<T>>(
-	sp_std::marker::PhantomData<(T, L)>,
-);
+pub struct ExclusionList<T, L>(PhantomData<(T, L)>);
 
-impl<T: Config, L: OffenceList<T>> Get<BTreeSet<T::ValidatorId>>
-	for GetValidatorsExcludedFor<T, L>
-{
-	fn get() -> BTreeSet<T::ValidatorId> {
-		Pallet::<T>::validators_suspended_for(L::OFFENCES)
+impl<T: Config, L: OffenceList<T>> QualifyNode<T::ValidatorId> for ExclusionList<T, L> {
+	fn is_qualified(validator_id: &T::ValidatorId) -> bool {
+		!Pallet::<T>::validators_suspended_for(L::OFFENCES).contains(validator_id)
+	}
+
+	fn filter_unqualified(validators: BTreeSet<T::ValidatorId>) -> BTreeSet<T::ValidatorId> {
+		validators
+			.difference(&Pallet::<T>::validators_suspended_for(L::OFFENCES))
+			.cloned()
+			.collect()
 	}
 }
 

@@ -528,41 +528,49 @@ pub trait WaivedFees {
 }
 
 /// Qualify what is considered as a potential authority for the network
-pub trait QualifyNode {
-	type ValidatorId;
+pub trait QualifyNode<Id: Ord> {
 	/// Is the node qualified to be an authority and meet our expectations of one
-	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
+	fn is_qualified(validator_id: &Id) -> bool;
+
+	/// Filter out the unqualified nodes from a list of potential nodes.
+	fn filter_unqualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
+		validators.into_iter().filter(|v| !Self::is_qualified(v)).collect()
+	}
 }
 
 /// Qualify if the node has registered
 pub struct SessionKeysRegistered<T, R>((PhantomData<T>, PhantomData<R>));
 
-impl<T, R: frame_support::traits::ValidatorRegistration<T>> QualifyNode
-	for SessionKeysRegistered<T, R>
+impl<T: Chainflip, R: frame_support::traits::ValidatorRegistration<T::ValidatorId>>
+	QualifyNode<T::ValidatorId> for SessionKeysRegistered<T, R>
 {
-	type ValidatorId = T;
-	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+	fn is_qualified(validator_id: &T::ValidatorId) -> bool {
 		R::is_registered(validator_id)
 	}
 }
 
-impl<A, B, C, D> QualifyNode for (A, B, C, D)
+impl<Id: Ord, A, B, C, D, E> QualifyNode<Id> for (A, B, C, D, E)
 where
-	A: QualifyNode<ValidatorId = B::ValidatorId>,
-	B: QualifyNode,
-	C: QualifyNode<ValidatorId = B::ValidatorId>,
-	D: QualifyNode<ValidatorId = B::ValidatorId>,
-	B::ValidatorId: Debug,
+	A: QualifyNode<Id>,
+	B: QualifyNode<Id>,
+	C: QualifyNode<Id>,
+	D: QualifyNode<Id>,
+	E: QualifyNode<Id>,
 {
-	type ValidatorId = A::ValidatorId;
-
-	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+	fn is_qualified(validator_id: &Id) -> bool {
 		A::is_qualified(validator_id) &&
 			B::is_qualified(validator_id) &&
 			C::is_qualified(validator_id) &&
 			D::is_qualified(validator_id)
 	}
+
+	fn filter_unqualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
+		E::filter_unqualified(D::filter_unqualified(C::filter_unqualified(B::filter_unqualified(
+			A::filter_unqualified(validators),
+		))))
+	}
 }
+
 /// Handles the check of execution conditions
 pub trait ExecutionCondition {
 	/// Returns true/false if the condition is satisfied
@@ -714,6 +722,8 @@ impl AddressDerivationApi<Polkadot> for () {
 
 pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn register_account_role(who: &T::AccountId, role: AccountRole) -> DispatchResult;
+
+	fn has_account_role(who: &T::AccountId, role: AccountRole) -> bool;
 
 	fn register_as_broker(account_id: &T::AccountId) -> DispatchResult {
 		Self::register_account_role(account_id, AccountRole::Broker)

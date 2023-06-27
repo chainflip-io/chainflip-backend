@@ -38,13 +38,13 @@ use cf_chains::{
 	TransactionBuilder,
 };
 use cf_primitives::{
-	chains::assets, Asset, BasisPoints, ChannelId, EgressId, ETHEREUM_ETH_ADDRESS,
+	chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId, ETHEREUM_ETH_ADDRESS,
 };
 use cf_traits::{
-	BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip, CommKeyBroadcaster,
-	DepositApi, DepositHandler, EgressApi, EpochInfo, Heartbeat, Issuance, KeyProvider,
-	OnBroadcastReady, OnRotationCallback, RewardsDistribution, RuntimeUpgrade,
-	VaultTransitionHandler,
+	AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip,
+	CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo, Heartbeat, Issuance,
+	KeyProvider, OnBroadcastReady, OnRotationCallback, QualifyNode, RewardsDistribution,
+	RuntimeUpgrade, VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -612,5 +612,13 @@ pub struct BitcoinFeeGetter;
 impl cf_traits::GetBitcoinFeeInfo for BitcoinFeeGetter {
 	fn bitcoin_fee_info() -> BitcoinFeeInfo {
 		BitcoinChainTracking::chain_state().unwrap_or(Default::default()).btc_fee_info
+	}
+}
+
+pub struct ValidatorRoleQualification;
+
+impl QualifyNode<<Runtime as Chainflip>::ValidatorId> for ValidatorRoleQualification {
+	fn is_qualified(id: &<Runtime as Chainflip>::ValidatorId) -> bool {
+		AccountRoles::has_account_role(id, AccountRole::Validator)
 	}
 }
