@@ -32,7 +32,7 @@ fn spawn_node(
 	let account_id = AccountId::new([idx as u8 + 1; 32]);
 
 	// Secret key does not implement clone:
-	let secret = { ed25519_dalek::SecretKey::from_bytes(&key.secret.to_bytes()).unwrap() };
+	let secret = ed25519_dalek::SecretKey::from_bytes(&key.secret.to_bytes()).unwrap();
 
 	let key = P2PKey::new(secret);
 	let (msg_sender, peer_update_sender, msg_receiver, own_peer_info_receiver, fut) =
@@ -156,7 +156,7 @@ async fn can_connect_after_pubkey_change() {
 	let pi2 = create_node_info(AccountId::new([2; 32]), &node_key2b, 8091);
 	let node2b = spawn_node(&node_key2b, 1, pi2.clone(), &[pi1.clone(), pi2.clone()]);
 
-	// Node 1 learn about Node 1's new key:
+	// Node 1 learn about Node 2's new key:
 	node1.peer_update_sender.send(PeerUpdate::Registered(pi2.clone())).unwrap();
 
 	// Node 2 should be able to send messages again:
