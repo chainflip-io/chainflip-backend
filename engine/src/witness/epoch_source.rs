@@ -13,32 +13,32 @@ use futures_core::{Future, Stream};
 use futures_util::stream;
 use utilities::task_scope::Scope;
 
-use super::common::{CurrentAndFuture, RuntimeHasInstance};
+use super::common::{ActiveAndFuture, RuntimeHasInstance};
 
-pub struct Epoch<ActiveState, HistoricState> {
+pub struct Epoch<Info, HistoricInfo> {
 	pub epoch: EpochIndex,
-	pub active_state: ActiveState,
-	pub historic_signal: Signal<HistoricState>,
+	pub info: Info,
+	pub historic_signal: Signal<HistoricInfo>,
 	pub expired_signal: Signal<()>,
 }
 
 #[derive(Clone)]
-enum EpochUpdate<ActiveState, HistoricState> {
-	Current(ActiveState),
-	Historic(HistoricState),
+enum EpochUpdate<Info, HistoricInfo> {
+	Current(Info),
+	Historic(HistoricInfo),
 	Expired,
 }
 
 #[derive(Clone)]
-pub struct EpochSource<'a, 'env, StateChainClient, ActiveState, HistoricState> {
+pub struct EpochSource<'a, 'env, StateChainClient, Info, HistoricInfo> {
 	scope: &'a Scope<'env, anyhow::Error>,
 	state_chain_client: Arc<StateChainClient>,
 	initial_block_hash: state_chain_runtime::Hash,
-	epochs: BTreeMap<EpochIndex, (ActiveState, Option<HistoricState>)>,
+	epochs: BTreeMap<EpochIndex, (Info, Option<HistoricInfo>)>,
 	epoch_update_receiver: async_broadcast::Receiver<(
 		EpochIndex,
 		state_chain_runtime::Hash,
-		EpochUpdate<ActiveState, HistoricState>,
+		EpochUpdate<Info, HistoricInfo>,
 	)>,
 }
 impl<'a, 'env, StateChainClient: client::storage_api::StorageApi + Send + Sync + 'static>
@@ -126,46 +126,44 @@ impl<
 		'a,
 		'env,
 		StateChainClient: client::storage_api::StorageApi + Send + Sync + 'static,
-		ActiveState: Clone + Send + Sync + 'static,
-		HistoricState: Clone + Send + Sync + 'static,
-	> EpochSource<'a, 'env, StateChainClient, ActiveState, HistoricState>
+		Info: Clone + Send + Sync + 'static,
+		HistoricInfo: Clone + Send + Sync + 'static,
+	> EpochSource<'a, 'env, StateChainClient, Info, HistoricInfo>
 {
 	pub async fn into_stream(
 		self,
-	) -> CurrentAndFuture<
-		impl Iterator<Item = Epoch<ActiveState, HistoricState>> + Send + 'static,
-		impl Stream<Item = Epoch<ActiveState, HistoricState>> + Send + 'static,
+	) -> ActiveAndFuture<
+		impl Iterator<Item = Epoch<Info, HistoricInfo>> + Send + 'static,
+		impl Stream<Item = Epoch<Info, HistoricInfo>> + Send + 'static,
 	> {
 		let mut historic_signallers = BTreeMap::new();
 		let mut expired_signallers = BTreeMap::new();
 
-		let current = self
-			.epochs
-			.into_iter()
-			.map(|(epoch, (active_state, option_historic_state))| {
-				let (expired_signaller, expired_signal) = Signal::new();
+		ActiveAndFuture {
+			active: self
+				.epochs
+				.into_iter()
+				.map(|(epoch, (info, option_historic_info))| {
+					let (expired_signaller, expired_signal) = Signal::new();
 
-				expired_signallers.insert(epoch, expired_signaller);
+					expired_signallers.insert(epoch, expired_signaller);
 
-				Epoch {
-					epoch,
-					active_state,
-					historic_signal: match option_historic_state {
-						Some(historic_state) => Signal::signalled(historic_state),
-						None => {
-							let (historic_signaller, historic_signal) = Signal::new();
-							historic_signallers.insert(epoch, historic_signaller);
-							historic_signal
+					Epoch {
+						epoch,
+						info,
+						historic_signal: match option_historic_info {
+							Some(historic_info) => Signal::signalled(historic_info),
+							None => {
+								let (historic_signaller, historic_signal) = Signal::new();
+								historic_signallers.insert(epoch, historic_signaller);
+								historic_signal
+							},
 						},
-					},
-					expired_signal,
-				}
-			})
-			.collect::<Vec<_>>()
-			.into_iter();
-
-		CurrentAndFuture {
-			current,
+						expired_signal,
+					}
+				})
+				.collect::<Vec<_>>()
+				.into_iter(),
 			future: stream::unfold(
 				(self.epoch_update_receiver, historic_signallers, expired_signallers),
 				|(mut epoch_update_receiver, mut historic_signallers, mut expired_signallers)| async move {
@@ -173,7 +171,7 @@ impl<
 						epoch_update_receiver.next().await
 					{
 						match update {
-							EpochUpdate::Current(active_state) => {
+							EpochUpdate::Current(info) => {
 								let (historic_signaller, historic_signal) = Signal::new();
 								let (expired_signaller, expired_signal) = Signal::new();
 
@@ -181,7 +179,7 @@ impl<
 								expired_signallers.insert(epoch, expired_signaller);
 
 								return Some((
-									Epoch { epoch, active_state, historic_signal, expired_signal },
+									Epoch { epoch, info, historic_signal, expired_signal },
 									(
 										epoch_update_receiver,
 										historic_signallers,
@@ -189,8 +187,8 @@ impl<
 									),
 								))
 							},
-							EpochUpdate::Historic(historic_state) => {
-								historic_signallers.remove(&epoch).unwrap().signal(historic_state);
+							EpochUpdate::Historic(historic_info) => {
+								historic_signallers.remove(&epoch).unwrap().signal(historic_info);
 							},
 							EpochUpdate::Expired => {
 								expired_signallers.remove(&epoch).unwrap().signal(());
@@ -207,12 +205,12 @@ impl<
 	pub async fn participating<Instance: 'static>(
 		self,
 		account_id: AccountId,
-	) -> EpochSource<'a, 'env, StateChainClient, ActiveState, HistoricState>
+	) -> EpochSource<'a, 'env, StateChainClient, Info, HistoricInfo>
 	where
 		state_chain_runtime::Runtime: RuntimeHasInstance<Instance>,
 	{
-		self.map(
-			move |state_chain_client, epoch, block_hash, active_state| {
+		self.filter_map(
+			move |state_chain_client, epoch, block_hash, info| {
 				let account_id = account_id.clone();
 				async move {
 					if state_chain_client
@@ -225,42 +223,42 @@ impl<
 						.iter()
 						.any(|participating_epoch| *participating_epoch == epoch)
 					{
-						Some(active_state)
+						Some(info)
 					} else {
 						None
 					}
 				}
 			},
-			|_state_chain_client, _epoch, _block_hash, historic_state| async move { historic_state },
+			|_state_chain_client, _epoch, _block_hash, historic_info| async move { historic_info },
 		)
 		.await
 	}
 
-	async fn map<
-		GetActiveState,
-		CSFut,
-		MappedActiveState,
-		GetHistoricState,
-		HSFut,
-		MappedHistoricState,
+	async fn filter_map<
+		FilterMapInfo,
+		InfoFut,
+		MappedInfo,
+		MapHistoricInfo,
+		HIFut,
+		MappedHistoricInfo,
 	>(
 		self,
-		get_active_state: GetActiveState,
-		get_historic_state: GetHistoricState,
-	) -> EpochSource<'a, 'env, StateChainClient, MappedActiveState, MappedHistoricState>
+		filter_map: FilterMapInfo,
+		map_historic_info: MapHistoricInfo,
+	) -> EpochSource<'a, 'env, StateChainClient, MappedInfo, MappedHistoricInfo>
 	where
-		GetActiveState: Fn(Arc<StateChainClient>, EpochIndex, state_chain_runtime::Hash, ActiveState) -> CSFut
+		FilterMapInfo: Fn(Arc<StateChainClient>, EpochIndex, state_chain_runtime::Hash, Info) -> InfoFut
 			+ Send
 			+ Sync
 			+ 'static,
-		CSFut: Future<Output = Option<MappedActiveState>> + Send + 'static,
-		MappedActiveState: Clone + Send + Sync + 'static,
-		GetHistoricState: Fn(Arc<StateChainClient>, EpochIndex, state_chain_runtime::Hash, HistoricState) -> HSFut
+		InfoFut: Future<Output = Option<MappedInfo>> + Send + 'static,
+		MappedInfo: Clone + Send + Sync + 'static,
+		MapHistoricInfo: Fn(Arc<StateChainClient>, EpochIndex, state_chain_runtime::Hash, HistoricInfo) -> HIFut
 			+ Send
 			+ Sync
 			+ 'static,
-		HSFut: Future<Output = MappedHistoricState> + Send + 'static,
-		MappedHistoricState: Clone + Send + Sync + 'static,
+		HIFut: Future<Output = MappedHistoricInfo> + Send + 'static,
+		MappedHistoricInfo: Clone + Send + Sync + 'static,
 	{
 		let EpochSource {
 			scope,
@@ -273,30 +271,26 @@ impl<
 		let (epoch_update_sender, epoch_update_receiver) = async_broadcast::broadcast(1);
 
 		let epochs: BTreeMap<_, _> = futures::stream::iter(unmapped_epochs)
-			.filter_map(|(epoch, (active_state, option_historic_state))| {
-				let get_active_state = &get_active_state;
-				let get_historic_state = &get_historic_state;
+			.filter_map(|(epoch, (info, option_historic_info))| {
+				let filter_map = &filter_map;
+				let map_historic_info = &map_historic_info;
 				let state_chain_client = &state_chain_client;
 				async move {
-					if let Some(mapped_active_state) = get_active_state(
-						state_chain_client.clone(),
-						epoch,
-						initial_block_hash,
-						active_state,
-					)
-					.await
+					if let Some(mapped_info) =
+						filter_map(state_chain_client.clone(), epoch, initial_block_hash, info)
+							.await
 					{
 						Some((
 							epoch,
 							(
-								mapped_active_state,
-								match option_historic_state {
-									Some(historic_state) => Some(
-										get_historic_state(
+								mapped_info,
+								match option_historic_info {
+									Some(historic_info) => Some(
+										map_historic_info(
 											state_chain_client.clone(),
 											epoch,
 											initial_block_hash,
-											historic_state,
+											historic_info,
 										)
 										.await,
 									),
@@ -322,18 +316,18 @@ impl<
 					},
 					if let Some((epoch, block_hash, update)) = unmapped_epoch_update_receiver.next() => {
 						match update {
-							EpochUpdate::Current(active_state) => {
-								if let Some(mapped_active_state) = get_active_state(state_chain_client.clone(), epoch, block_hash, active_state).await {
+							EpochUpdate::Current(info) => {
+								if let Some(mapped_info) = filter_map(state_chain_client.clone(), epoch, block_hash, info).await {
 									epochs.insert(epoch);
-									let _result = epoch_update_sender.broadcast((epoch, block_hash, EpochUpdate::Current(mapped_active_state)));
+									let _result = epoch_update_sender.broadcast((epoch, block_hash, EpochUpdate::Current(mapped_info)));
 								}
 							},
-							EpochUpdate::Historic(historic_state) => {
+							EpochUpdate::Historic(historic_info) => {
 								if epochs.contains(&epoch) {
 									let _result = epoch_update_sender.broadcast((
 										epoch,
 										block_hash,
-										EpochUpdate::Historic(get_historic_state(state_chain_client.clone(), epoch, block_hash, historic_state).await),
+										EpochUpdate::Historic(map_historic_info(state_chain_client.clone(), epoch, block_hash, historic_info).await),
 									));
 								}
 							},
@@ -372,7 +366,7 @@ impl<'a, 'env, StateChainClient: client::storage_api::StorageApi + Send + Sync +
 	where
 		state_chain_runtime::Runtime: RuntimeHasInstance<Instance>,
 	{
-		self.map(
+		self.filter_map(
 			|state_chain_client, epoch, block_hash, ()| async move {
 				state_chain_client
 					.storage_map_entry::<pallet_cf_vaults::Vaults<state_chain_runtime::Runtime, Instance>>(

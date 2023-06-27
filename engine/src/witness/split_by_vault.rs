@@ -3,7 +3,7 @@ use futures_util::StreamExt;
 
 use super::{
 	chain_source::{box_chain_stream, BoxChainStream, ChainSourceWithClient},
-	common::{BoxCurrentAndFuture, ExternalChainSource, RuntimeHasInstance},
+	common::{BoxActiveAndFuture, ExternalChainSource, RuntimeHasInstance},
 	epoch_source::Vault,
 };
 
@@ -17,7 +17,7 @@ where
 {
 	type UnderlyingChainSource: ExternalChainSource;
 
-	async fn stream(self) -> BoxCurrentAndFuture<'a, Item<'a, Self::UnderlyingChainSource>>;
+	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>>;
 
 	async fn run(self) {
 		let stream = assert_stream_send(
@@ -51,7 +51,7 @@ where
 	state_chain_runtime::Runtime: RuntimeHasInstance<UnderlyingChainSource::Instance>,
 {
 	underlying_chain_source: &'a UnderlyingChainSource,
-	vaults: BoxCurrentAndFuture<'static, Vault<UnderlyingChainSource::Instance>>,
+	vaults: BoxActiveAndFuture<'static, Vault<UnderlyingChainSource::Instance>>,
 }
 #[async_trait::async_trait]
 impl<'a, UnderlyingChainSource: ExternalChainSource> ChainSplitByVault<'a>
@@ -61,7 +61,7 @@ where
 {
 	type UnderlyingChainSource = UnderlyingChainSource;
 
-	async fn stream(self) -> BoxCurrentAndFuture<'a, Item<'a, Self::UnderlyingChainSource>> {
+	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>> {
 		let underlying_chain_source = self.underlying_chain_source;
 		self.vaults
 			.then(move |mut vault| async move {
@@ -69,11 +69,11 @@ where
 
 				(
 					vault.epoch,
-					vault.active_state.clone(),
+					vault.info.clone(),
 					box_chain_stream(stream.take_until(vault.expired_signal.wait()).filter(
 						move |header| {
 							futures::future::ready(
-								header.index >= vault.active_state.active_from_block &&
+								header.index >= vault.info.active_from_block &&
 									vault
 										.historic_signal
 										.get()
