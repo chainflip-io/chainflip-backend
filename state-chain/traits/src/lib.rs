@@ -715,6 +715,8 @@ impl AddressDerivationApi<Polkadot> for () {
 pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn register_account_role(who: &T::AccountId, role: AccountRole) -> DispatchResult;
 
+	fn has_account_role(who: &T::AccountId, role: AccountRole) -> bool;
+
 	fn register_as_broker(account_id: &T::AccountId) -> DispatchResult {
 		Self::register_account_role(account_id, AccountRole::Broker)
 	}

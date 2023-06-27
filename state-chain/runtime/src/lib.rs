@@ -174,11 +174,7 @@ impl pallet_cf_validator::Config for Runtime {
 	type KeygenQualification = (
 		Reputation,
 		pallet_cf_validator::PeerMapping<Self>,
-		SessionKeysRegistered<
-			<Self as frame_system::Config>::AccountId,
-			pallet_session::Pallet<Self>,
-		>,
-		AccountRoles,
+		chainflip::ValidatorRoleQualification,
 	);
 	type OffenceReporter = Reputation;
 	type Bonder = Bonder<Runtime>;

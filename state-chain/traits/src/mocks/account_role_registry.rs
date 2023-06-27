@@ -26,6 +26,12 @@ impl<T: Config> AccountRoleRegistry<T> for MockAccountRoleRegistry {
 		Ok(())
 	}
 
+	fn has_account_role(who: &<T as Config>::AccountId, role: AccountRole) -> bool {
+		<Self as MockPalletStorage>::get_storage::<_, AccountRole>(ACCOUNT_ROLES, who)
+			.unwrap_or(AccountRole::None) ==
+			role
+	}
+
 	fn ensure_account_role(
 		origin: <T as frame_system::Config>::RuntimeOrigin,
 		role: AccountRole,
