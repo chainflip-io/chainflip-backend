@@ -16,7 +16,7 @@ use utilities::task_scope::Scope;
 use super::common::{ActiveAndFuture, RuntimeHasInstance};
 
 pub struct Epoch<Info, HistoricInfo> {
-	pub epoch: EpochIndex,
+	pub index: EpochIndex,
 	pub info: Info,
 	pub historic_signal: Signal<HistoricInfo>,
 	pub expired_signal: Signal<()>,
@@ -143,19 +143,19 @@ impl<
 			active: self
 				.epochs
 				.into_iter()
-				.map(|(epoch, (info, option_historic_info))| {
+				.map(|(index, (info, option_historic_info))| {
 					let (expired_signaller, expired_signal) = Signal::new();
 
-					expired_signallers.insert(epoch, expired_signaller);
+					expired_signallers.insert(index, expired_signaller);
 
 					Epoch {
-						epoch,
+						index,
 						info,
 						historic_signal: match option_historic_info {
 							Some(historic_info) => Signal::signalled(historic_info),
 							None => {
 								let (historic_signaller, historic_signal) = Signal::new();
-								historic_signallers.insert(epoch, historic_signaller);
+								historic_signallers.insert(index, historic_signaller);
 								historic_signal
 							},
 						},
@@ -167,7 +167,7 @@ impl<
 			future: stream::unfold(
 				(self.epoch_update_receiver, historic_signallers, expired_signallers),
 				|(mut epoch_update_receiver, mut historic_signallers, mut expired_signallers)| async move {
-					while let Some((epoch, _block_hash, update)) =
+					while let Some((index, _block_hash, update)) =
 						epoch_update_receiver.next().await
 					{
 						match update {
@@ -175,11 +175,11 @@ impl<
 								let (historic_signaller, historic_signal) = Signal::new();
 								let (expired_signaller, expired_signal) = Signal::new();
 
-								historic_signallers.insert(epoch, historic_signaller);
-								expired_signallers.insert(epoch, expired_signaller);
+								historic_signallers.insert(index, historic_signaller);
+								expired_signallers.insert(index, expired_signaller);
 
 								return Some((
-									Epoch { epoch, info, historic_signal, expired_signal },
+									Epoch { index, info, historic_signal, expired_signal },
 									(
 										epoch_update_receiver,
 										historic_signallers,
@@ -188,10 +188,10 @@ impl<
 								))
 							},
 							EpochUpdate::Historic(historic_info) => {
-								historic_signallers.remove(&epoch).unwrap().signal(historic_info);
+								historic_signallers.remove(&index).unwrap().signal(historic_info);
 							},
 							EpochUpdate::Expired => {
-								expired_signallers.remove(&epoch).unwrap().signal(());
+								expired_signallers.remove(&index).unwrap().signal(());
 							},
 						}
 					}
