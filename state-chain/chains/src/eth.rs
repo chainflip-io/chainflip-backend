@@ -101,7 +101,7 @@ impl ChainCrypto for Ethereum {
 	) -> bool {
 		agg_key
 			.verify(payload.as_fixed_bytes(), signature)
-			.map_err(|e| log::debug!("Ethereum signature verification failed: {:?}.", e))
+			.map_err(|e| log::warn!("Ethereum signature verification failed: {:?}.", e))
 			.is_ok()
 	}
 

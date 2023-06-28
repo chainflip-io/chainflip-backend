@@ -88,7 +88,7 @@ impl ChainCrypto for Arbitrum {
 	) -> bool {
 		agg_key
 			.verify(payload.as_fixed_bytes(), signature)
-			.map_err(|e| log::debug!("Arbitrum signature verification failed: {:?}.", e))
+			.map_err(|e| log::warn!("Arbitrum signature verification failed: {:?}.", e))
 			.is_ok()
 	}
 
