@@ -3,9 +3,11 @@ use thiserror::Error;
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+
+use serde;
 use serde_json::json;
 
-use bitcoin::{Amount, Block, BlockHash, Txid};
+use bitcoin::{block::Version, Amount, Block, BlockHash, Txid};
 
 use crate::{settings, witnesser::LatestBlockNumber};
 
@@ -56,6 +58,33 @@ struct FeeRateResponse {
 	#[allow(dead_code)]
 	blocks: u32,
 }
+
+// // Copied from Bitcoin core rpc crate
+// #[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct GetBlockHeaderResult {
+// 	pub hash: bitcoin::BlockHash,
+// 	pub confirmations: i32,
+// 	pub height: usize,
+// 	pub version: Version,
+// 	#[serde(default, with = "crate::serde_hex::opt")]
+// 	pub version_hex: Option<Vec<u8>>,
+// 	#[serde(rename = "merkleroot")]
+// 	pub merkle_root: bitcoin::hash_types::TxMerkleNode,
+// 	pub time: usize,
+// 	#[serde(rename = "mediantime")]
+// 	pub median_time: Option<usize>,
+// 	pub nonce: u32,
+// 	pub bits: String,
+// 	pub difficulty: f64,
+// 	#[serde(with = "crate::serde_hex")]
+// 	pub chainwork: Vec<u8>,
+// 	pub n_tx: usize,
+// 	#[serde(rename = "previousblockhash")]
+// 	pub previous_block_hash: Option<bitcoin::BlockHash>,
+// 	#[serde(rename = "nextblockhash")]
+// 	pub next_block_hash: Option<bitcoin::BlockHash>,
+// }
 
 #[derive(Clone)]
 pub struct BtcRpcClient {
@@ -113,6 +142,34 @@ impl BtcRpcClient {
 	}
 }
 
+#[derive(Clone, PartialEq, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockHeader {
+	pub hash: bitcoin::BlockHash,
+	pub confirmations: i32,
+	pub height: u64,
+	pub version: Version,
+	// Don't care to write custom deserializer for this
+	#[serde(skip)]
+	pub version_hex: Option<Vec<u8>>,
+	#[serde(rename = "merkleroot")]
+	pub merkle_root: bitcoin::hash_types::TxMerkleNode,
+	pub time: usize,
+	#[serde(rename = "mediantime")]
+	pub median_time: Option<usize>,
+	pub nonce: u32,
+	pub bits: String,
+	pub difficulty: f64,
+	// Don't care to write custom deserializer for this
+	#[serde(skip)]
+	pub chainwork: Vec<u8>,
+	pub n_tx: usize,
+	#[serde(rename = "previousblockhash")]
+	pub previous_block_hash: Option<bitcoin::BlockHash>,
+	#[serde(rename = "nextblockhash")]
+	pub next_block_hash: Option<bitcoin::BlockHash>,
+}
+
 #[async_trait::async_trait]
 #[cfg_attr(test, automock)]
 pub trait BtcRpcApi {
@@ -126,6 +183,10 @@ pub trait BtcRpcApi {
 	async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> anyhow::Result<Txid>;
 
 	async fn next_block_fee_rate(&self) -> anyhow::Result<Option<cf_chains::btc::BtcAmount>>;
+
+	async fn best_block_hash(&self) -> anyhow::Result<BlockHash>;
+
+	async fn block_header(&self, block_hash: BlockHash) -> anyhow::Result<BlockHeader>;
 }
 
 #[async_trait::async_trait]
@@ -156,6 +217,16 @@ impl BtcRpcApi for BtcRpcClient {
 		let fee_rate_response: FeeRateResponse =
 			self.call_rpc("estimatesmartfee", vec![json!(1), json!("CONSERVATIVE")]).await?;
 		Ok(fee_rate_response.feerate.map(|f| f.to_sat()))
+	}
+
+	// TODO: Test
+	async fn best_block_hash(&self) -> anyhow::Result<BlockHash> {
+		Ok(self.call_rpc("getbestblockhash", vec![]).await?)
+	}
+
+	// TODO: test
+	async fn block_header(&self, block_hash: BlockHash) -> anyhow::Result<BlockHeader> {
+		Ok(self.call_rpc("getblockheader", vec![json!(block_hash)]).await?)
 	}
 }
 
