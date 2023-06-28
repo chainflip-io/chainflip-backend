@@ -92,6 +92,7 @@ impl<
 pub type BoxChainStream<'a, Index, Hash, Data> = Pin<
 	Box<
 		dyn ChainStream<Index = Index, Hash = Hash, Data = Data, Item = Header<Index, Hash, Data>>
+			+ Send
 			+ 'a,
 	>,
 >;
