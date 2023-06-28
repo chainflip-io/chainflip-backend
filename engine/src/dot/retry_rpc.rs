@@ -2,12 +2,14 @@ use crate::dot::PolkadotConfig;
 use cf_chains::dot::{PolkadotHash, RuntimeVersion};
 use cf_primitives::PolkadotBlockNumber;
 use core::time::Duration;
+use futures_core::Stream;
+use std::pin::Pin;
 use subxt::{events::Events, rpc::types::ChainBlockExtrinsic};
 use utilities::task_scope::Scope;
 
 use crate::rpc_retrier::RpcRetrierClient;
 
-use super::rpc::DotRpcClient;
+use super::rpc::{DotRpcClient, PolkadotHeader};
 
 use crate::dot::rpc::DotRpcApi;
 
@@ -88,6 +90,29 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 				let encoded_bytes = encoded_bytes.clone();
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.submit_raw_encoded_extrinsic(encoded_bytes).await })
+			}))
+			.await
+	}
+}
+
+#[async_trait::async_trait]
+pub trait DotRetrySubscribeApi {
+	async fn subscribe_best_heads(
+		&mut self,
+	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>>;
+}
+
+use crate::dot::rpc::DotSubscribeApi;
+
+#[async_trait::async_trait]
+impl DotRetrySubscribeApi for DotRetryRpcClient {
+	async fn subscribe_best_heads(
+		&mut self,
+	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>> {
+		self.retry_client
+			.request(Box::pin(move |mut client| {
+				#[allow(clippy::redundant_async_block)]
+				Box::pin(async move { client.subscribe_best_heads().await })
 			}))
 			.await
 	}

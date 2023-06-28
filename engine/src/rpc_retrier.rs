@@ -220,7 +220,7 @@ impl<RpcClient: Clone + Send + Sync + 'static> RpcRetrierClient<RpcClient> {
 	}
 
 	// Separate function so we can more easily test.
-	async fn send_request<T: Send + Clone + 'static>(
+	async fn send_request<T: Send + 'static>(
 		&self,
 		specific_closure: TypedFutureGenerator<T, RpcClient>,
 	) -> oneshot::Receiver<BoxAny> {
@@ -238,13 +238,13 @@ impl<RpcClient: Clone + Send + Sync + 'static> RpcRetrierClient<RpcClient> {
 	}
 
 	/// Requests something to be retried by the retry client.
-	pub async fn request<T: Send + Clone + 'static>(
+	pub async fn request<T: Send + 'static>(
 		&self,
 		specific_closure: TypedFutureGenerator<T, RpcClient>,
 	) -> T {
 		let rx = self.send_request(specific_closure).await;
 		let result: BoxAny = rx.await.unwrap();
-		result.downcast_ref::<T>().expect("We know we cast the T into an any, and it is a T that we are receiving. Hitting this is a programmer error.").clone()
+		*result.downcast::<T>().expect("We know we cast the T into an any, and it is a T that we are receiving. Hitting this is a programmer error.")
 	}
 }
 
