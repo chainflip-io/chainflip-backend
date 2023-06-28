@@ -3,11 +3,12 @@ use std::{pin::Pin, time::Duration};
 use cf_chains::dot::PolkadotHash;
 use cf_primitives::PolkadotBlockNumber;
 use futures_util::stream;
-use subxt::PolkadotConfig;
-use subxt::events::Events;
+use subxt::{events::Events, PolkadotConfig};
 
-use crate::dot::retry_rpc::DotRetryRpcApi;
-use crate::dot::{retry_rpc::DotRetrySubscribeApi, rpc::PolkadotHeader};
+use crate::dot::{
+	retry_rpc::{DotRetryRpcApi, DotRetrySubscribeApi},
+	rpc::PolkadotHeader,
+};
 use futures::{stream::StreamExt, Stream};
 
 use super::{BoxChainStream, ChainSource, Header};
@@ -29,7 +30,9 @@ const TIMEOUT: Duration = Duration::from_secs(20);
 const RESTART_STREAM_DELAY: Duration = Duration::from_secs(6);
 
 #[async_trait::async_trait]
-impl<C: DotRetrySubscribeApi + DotRetryRpcApi + Send + Sync + Clone> ChainSource for DotUnfinalisedSource<C> {
+impl<C: DotRetrySubscribeApi + DotRetryRpcApi + Send + Sync + Clone> ChainSource
+	for DotUnfinalisedSource<C>
+{
 	type Index = PolkadotBlockNumber;
 	type Hash = PolkadotHash;
 	type Data = Events<PolkadotConfig>;
@@ -59,7 +62,8 @@ impl<C: DotRetrySubscribeApi + DotRetryRpcApi + Send + Sync + Clone> ChainSource
 						))
 					}
 				}
-				// We don't want to spam retries if the node returns a stream that's empty immediately.
+				// We don't want to spam retries if the node returns a stream that's empty
+				// immediately.
 				tokio::time::sleep(RESTART_STREAM_DELAY).await;
 				let stream = state.client.subscribe_best_heads().await;
 				state = State { client: state.client, stream };

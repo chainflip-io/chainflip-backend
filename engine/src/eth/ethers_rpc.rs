@@ -2,7 +2,8 @@ use ethers::{prelude::*, signers::Signer, types::transaction::eip2718::TypedTran
 
 use crate::settings;
 use anyhow::{anyhow, Ok, Result};
-use std::{str::FromStr, sync::Arc};
+use futures::Stream;
+use std::{pin::Pin, str::FromStr, sync::Arc};
 use utilities::read_clean_and_decode_hex_str_file;
 
 #[cfg(test)]
@@ -11,6 +12,7 @@ use mockall::automock;
 #[derive(Clone)]
 pub struct EthersRpcClient<T: JsonRpcClient> {
 	signer: SignerMiddleware<Arc<Provider<T>>, LocalWallet>,
+	ws_provider: Provider<Ws>,
 }
 
 impl<T: JsonRpcClient + 'static> EthersRpcClient<T> {
@@ -22,7 +24,12 @@ impl<T: JsonRpcClient + 'static> EthersRpcClient<T> {
 		)?;
 		let chain_id = provider.get_chainid().await?;
 		let signer = SignerMiddleware::new(provider, wallet.with_chain_id(chain_id.as_u64()));
-		Ok(Self { signer })
+
+		// Use connect_with_reconnects here?
+		let ws_provider: Provider<Ws> =
+			Provider::new(Ws::connect(eth_settings.ws_node_endpoint.to_string()).await?);
+
+		Ok(Self { signer, ws_provider })
 	}
 }
 
@@ -107,20 +114,20 @@ impl<T: JsonRpcClient + 'static> EthersRpcApi for EthersRpcClient<T> {
 	}
 }
 
-#[derive(Clone)]
-pub struct EthersSubscriptionClient {
-	signer: SignerMiddleware<Provider<Ws>, LocalWallet>,
-}
-
 #[async_trait::async_trait]
 pub trait EthersSubscribeApi {
 	async fn subscribe_blocks(&self) -> Result<SubscriptionStream<Ws, Block<H256>>>;
 }
 
+// pub struct EthersStream {
+// 	client: EthersRpcClient<Http>,
+// 	stream: SubscriptionStream<Ws, Block<H256>>,
+// }
+
 #[async_trait::async_trait]
-impl EthersSubscribeApi for EthersSubscriptionClient {
+impl<T: JsonRpcClient> EthersSubscribeApi for EthersRpcClient<T> {
 	async fn subscribe_blocks(&self) -> Result<SubscriptionStream<Ws, Block<H256>>> {
-		Ok(self.signer.subscribe_blocks().await?)
+		Ok(self.ws_provider.subscribe_blocks().await?)
 	}
 }
 

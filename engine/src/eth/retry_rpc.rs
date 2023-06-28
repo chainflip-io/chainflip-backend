@@ -3,12 +3,12 @@ use ethers::{prelude::*, types::transaction::eip2718::TypedTransaction};
 use utilities::task_scope::Scope;
 
 use crate::{eth::ethers_rpc::EthersRpcApi, rpc_retrier::RpcRetrierClient};
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use super::ethers_rpc::EthersRpcClient;
 
 pub struct EthersRetryRpcClient<T: JsonRpcClient> {
-	retry_client: RpcRetrierClient<EthersRpcClient<T>>,
+	retry_client: RpcRetrierClient<Arc<EthersRpcClient<T>>>,
 }
 
 const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
@@ -19,7 +19,7 @@ impl<T: JsonRpcClient + Clone + Send + Sync + 'static> EthersRetryRpcClient<T> {
 		Self {
 			retry_client: RpcRetrierClient::new(
 				scope,
-				ethers_client,
+				Arc::new(ethers_client),
 				ETHERS_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
@@ -134,6 +134,27 @@ impl<T: JsonRpcClient + Clone + Send + Sync + 'static> EthersRetryRpcApi
 				Box::pin(async move {
 					client.fee_history(block_count, newest_block, &reward_percentiles).await
 				})
+			}))
+			.await
+	}
+}
+
+#[async_trait::async_trait]
+pub trait EthersRetrySubscribeApi {
+	async fn subscribe_blocks(&self) -> SubscriptionStream<Ws, Block<H256>>;
+}
+
+use crate::eth::ethers_rpc::EthersSubscribeApi;
+#[async_trait::async_trait]
+impl<T: JsonRpcClient + Clone + Send + Sync + 'static> EthersRetrySubscribeApi
+	for EthersRetryRpcClient<T>
+{
+	async fn subscribe_blocks(&'a self) -> SubscriptionStream<'a, Ws, Block<H256>> {
+		self.retry_client
+			.request(Box::pin(move |client| {
+				#[allow(clippy::redundant_async_block)]
+				let client = client.clone();
+				Box::pin(async move { client.subscribe_blocks().await })
 			}))
 			.await
 	}
