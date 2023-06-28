@@ -73,7 +73,7 @@ where
 			.stream()
 			.await
 			.filter(|(epoch, _)| {
-				futures::future::ready(epoch.historic_signal.clone().get().is_some())
+				futures::future::ready(epoch.historic_signal.clone().get().is_none())
 			})
 			.await
 			.then(move |(epoch, chain_stream)| {
