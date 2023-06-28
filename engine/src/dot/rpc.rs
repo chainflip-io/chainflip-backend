@@ -62,6 +62,10 @@ impl DotRpcClient {
 /// This trait defines any subscription interfaces to Polkadot.
 #[async_trait]
 pub trait DotSubscribeApi: Send + Sync {
+	async fn subscribe_best_heads(
+		&mut self,
+	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>>;
+
 	async fn subscribe_finalized_heads(
 		&mut self,
 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>>;
@@ -166,6 +170,16 @@ impl DotRpcApi for DotRpcClient {
 
 #[async_trait]
 impl DotSubscribeApi for DotRpcClient {
+	async fn subscribe_best_heads(
+		&mut self,
+	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
+		Ok(Box::pin(
+			refresh_connection_on_error!(self, blocks, subscribe_best)?
+				.map(|block| block.map(|block| block.header().clone()))
+				.map_err(|e| anyhow!("Error in best head stream: {e}")),
+		))
+	}
+
 	async fn subscribe_finalized_heads(
 		&mut self,
 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
