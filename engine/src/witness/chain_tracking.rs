@@ -1,3 +1,7 @@
+pub mod btc_chain_tracking;
+pub mod dot_chain_tracking;
+pub mod eth_chain_tracking;
+
 use std::{marker::PhantomData, sync::Arc};
 
 use futures::StreamExt;
