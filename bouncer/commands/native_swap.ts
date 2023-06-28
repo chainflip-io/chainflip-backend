@@ -1,9 +1,11 @@
-import { executeSwap, ExecuteSwapParams } from '@chainflip-io/cli';
+import { Asset, executeSwap, ExecuteSwapParams } from '@chainflip-io/cli';
 import { Wallet, getDefaultProvider } from 'ethers';
-import { Asset, chainFromAsset } from '../shared/utils';
+import { chainFromAsset } from '../shared/utils';
+import { getNextEthNonce } from '../shared/fund_eth';
+
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function executeNativeSwap(desetToken: Asset, destAddress: string) {
+export async function executeNativeSwap(destAsset: Asset, destAddress: string) {
 
     const wallet = Wallet.fromMnemonic(
         process.env.ETH_USDC_WHALE_MNEMONIC ??
@@ -11,6 +13,8 @@ export async function executeNativeSwap(desetToken: Asset, destAddress: string) 
     ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
 
     const destChain = chainFromAsset(destAsset);
+
+    const nonce = await getNextEthNonce();
 
     await executeSwap(
         {
@@ -23,6 +27,7 @@ export async function executeNativeSwap(desetToken: Asset, destAddress: string) 
         } as ExecuteSwapParams,
         {
             signer: wallet,
+            nonce,
             network: 'localnet',
             vaultContractAddress: '0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968',
         },
