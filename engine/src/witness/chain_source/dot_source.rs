@@ -1,37 +1,65 @@
+use std::{pin::Pin, time::Duration};
+
 use cf_chains::dot::PolkadotHash;
 use cf_primitives::PolkadotBlockNumber;
+use futures_util::stream;
 
-use crate::dot::rpc::DotSubscribeApi;
-use futures::stream::StreamExt;
+use crate::dot::{retry_rpc::DotRetrySubscribeApi, rpc::PolkadotHeader};
+use futures::{stream::StreamExt, Stream};
 
 use super::{BoxChainStream, ChainSource, Header};
 use subxt::config::Header as SubxtHeader;
 
-pub struct DotUnfinalisedSource<C: DotSubscribeApi> {
+use anyhow::Result;
+
+pub struct DotUnfinalisedSource<C: DotRetrySubscribeApi> {
 	client: C,
 }
 
-impl<C: DotSubscribeApi> DotUnfinalisedSource<C> {
+impl<C: DotRetrySubscribeApi> DotUnfinalisedSource<C> {
 	pub fn new(client: C) -> Self {
 		Self { client }
 	}
 }
 
+const TIMEOUT: Duration = Duration::from_secs(20);
+const RESTART_STREAM_DELAY: Duration = Duration::from_secs(6);
+
 #[async_trait::async_trait]
-impl<C: DotSubscribeApi + Clone> ChainSource for DotUnfinalisedSource<C> {
+impl<C: DotRetrySubscribeApi + Send + Sync + Clone> ChainSource for DotUnfinalisedSource<C> {
 	type Index = PolkadotBlockNumber;
 	type Hash = PolkadotHash;
 	type Data = ();
 
 	async fn stream(&self) -> BoxChainStream<'_, Self::Index, Self::Hash, Self::Data> {
+		pub struct State<C> {
+			client: C,
+			stream: Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>,
+		}
 		let mut client = self.client.clone();
-		Box::pin(client.subscribe_best_heads().await.unwrap().map(|header| {
-			let header = header.unwrap();
-			Header {
-				index: header.number,
-				hash: header.hash(),
-				parent_hash: Some(header.parent_hash),
-				data: (),
+
+		let stream = client.subscribe_best_heads().await;
+		Box::pin(stream::unfold(State { client, stream }, |mut state| async move {
+			loop {
+				while let Ok(Some(header)) =
+					tokio::time::timeout(TIMEOUT, state.stream.next()).await
+				{
+					if let Ok(header) = header {
+						return Some((
+							Header {
+								index: header.number,
+								hash: header.hash(),
+								parent_hash: Some(header.parent_hash),
+								data: (),
+							},
+							state,
+						))
+					}
+				}
+				// We don't want to spam retries if the node returns a stream that's empty immediately.
+				tokio::time::sleep(RESTART_STREAM_DELAY).await;
+				let stream = state.client.subscribe_best_heads().await;
+				state = State { client: state.client, stream };
 			}
 		}))
 	}
