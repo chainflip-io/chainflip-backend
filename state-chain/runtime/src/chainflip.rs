@@ -315,24 +315,25 @@ pub struct ArbEnvironment;
 impl EthEnvironmentProvider<Arbitrum> for ArbEnvironment {
 	fn token_address(asset: assets::arb::Asset) -> Option<H160> {
 		match asset {
-			assets::arb::Asset::ArbEth => todo!(),
+			assets::arb::Asset::ArbEth => Environment::supported_arb_assets(asset).map(Into::into),
 		}
 	}
 
 	fn contract_address(contract: EthereumContract) -> H160 {
 		match contract {
+			// we dont have a state chain gateway contract on arbitrum.
 			EthereumContract::StateChainGateway => unimplemented!(),
-			EthereumContract::KeyManager => todo!(),
-			EthereumContract::Vault => todo!(),
+			EthereumContract::KeyManager => Environment::arb_key_manager_address().into(),
+			EthereumContract::Vault => Environment::arb_vault_address().into(),
 		}
 	}
 
 	fn chain_id() -> eth::api::EthereumChainId {
-		todo!()
+		Environment::arbitrum_chain_id()
 	}
 
 	fn next_nonce() -> u64 {
-		todo!()
+		Environment::next_arbitrum_signature_nonce()
 	}
 }
 

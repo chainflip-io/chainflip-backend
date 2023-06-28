@@ -12,7 +12,10 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 };
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, EvmAddress, SemVer};
+use cf_primitives::{
+	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
+	BroadcastId, EvmAddress, SemVer,
+};
 use cf_traits::{CompatibleVersions, GetBitcoinFeeInfo, SafeMode};
 use frame_support::{
 	pallet_prelude::*,
@@ -91,6 +94,8 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Eth is not an Erc20 token, so its address can't be updated.
 		EthAddressNotUpdateable,
+		/// Arb is the native asset on Arbitrum, so its address can't be updated.
+		ArbAddressNotUpdateable,
 		/// Polkadot runtime version is lower than the currently stored version.
 		InvalidPolkadotRuntimeVersion,
 	}
@@ -181,6 +186,31 @@ pub mod pallet {
 	/// If this storage is set, a new version of Chainflip is available for upgrade.
 	pub type NextCompatibilityVersion<T> = StorageValue<_, Option<SemVer>, ValueQuery>;
 
+	// ARBITRUM CHAIN RELATED ENVIRONMENT ITEMS
+	#[pallet::storage]
+	#[pallet::getter(fn supported_arb_assets)]
+	/// Map of supported assets for ETH
+	pub type ArbitrumSupportedAssets<T: Config> =
+		StorageMap<_, Blake2_128Concat, ArbAsset, EvmAddress>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn arb_key_manager_address)]
+	/// The address of the ETH key manager contract
+	pub type ArbitrumKeyManagerAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn arb_vault_address)]
+	/// The address of the ETH vault contract
+	pub type ArbitrumVaultAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn arbitrum_chain_id)]
+	/// The ETH chain id
+	pub type ArbitrumChainId<T> = StorageValue<_, cf_chains::eth::api::EthereumChainId, ValueQuery>;
+
+	#[pallet::storage]
+	pub type ArbitrumSignatureNonce<T> = StorageValue<_, SignatureNonce, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
@@ -188,6 +218,10 @@ pub mod pallet {
 		AddedNewEthAsset(EthAsset, EvmAddress),
 		/// The address of an supported ETH asset was updated
 		UpdatedEthAsset(EthAsset, EvmAddress),
+		/// A new supported ARB asset was added
+		AddedNewArbAsset(ArbAsset, EvmAddress),
+		/// The address of an supported ARB asset was updated
+		UpdatedArbAsset(ArbAsset, EvmAddress),
 		/// Polkadot Vault Account is successfully set
 		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
 		/// The Polkadot Runtime Version stored on chain was updated.
@@ -255,6 +289,65 @@ pub mod pallet {
 				Event::AddedNewEthAsset(asset, address)
 			});
 			Ok(())
+		}
+
+		/// Adds or updates an asset address in the map of supported ARB assets.
+		///
+		/// ## Events
+		///
+		/// - [UpdatedArbAsset](Event::UpdatedArbAsset)
+		/// - [AddedNewArbAsset](Event::AddedNewArbAsset)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::weight(0)]
+		pub fn update_supported_arb_assets(
+			origin: OriginFor<T>,
+			asset: ArbAsset,
+			address: EvmAddress,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			ensure!(asset != ArbAsset::ArbEth, Error::<T>::ArbAddressNotUpdateable);
+			Self::deposit_event(if ArbitrumSupportedAssets::<T>::contains_key(asset) {
+				ArbitrumSupportedAssets::<T>::mutate(asset, |mapped_address| {
+					mapped_address.replace(address);
+				});
+				Event::UpdatedArbAsset(asset, address)
+			} else {
+				ArbitrumSupportedAssets::<T>::insert(asset, address);
+				Event::AddedNewArbAsset(asset, address)
+			});
+			Ok(().into())
+		}
+
+		/// Initiates the Polkadot Vault Creation Apicall. This governance action needs to be called
+		/// when the first rotation is initiated after polkadot activation. The rotation will stall
+		/// after keygen is completed and emit the event AwaitingGovernanceAction after which this
+		/// governance extrinsic needs to be called
+		///
+		/// ## Events
+		///
+		/// - [PolkadotVaultCreationCallInitiated](Event::PolkadotVaultCreationCallInitiated)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[allow(unused_variables)]
+		#[pallet::weight(0)]
+		pub fn create_polkadot_vault(
+			origin: OriginFor<T>,
+			dot_aggkey: PolkadotPublicKey,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			T::PolkadotBroadcaster::threshold_sign_and_broadcast(
+				T::CreatePolkadotVault::new_unsigned(),
+			);
+			Self::deposit_event(Event::<T>::PolkadotVaultCreationCallInitiated {
+				agg_key: dot_aggkey,
+			});
+			Ok(().into())
 		}
 
 		/// Manually initiates Polkadot vault key rotation completion steps so Epoch rotation can be
@@ -411,6 +504,10 @@ pub mod pallet {
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
 		pub polkadot_runtime_version: RuntimeVersion,
 		pub bitcoin_network: BitcoinNetwork,
+		pub arbeth_token_address: EvmAddress,
+		pub arb_key_manager_address: EvmAddress,
+		pub arb_vault_address: EvmAddress,
+		pub arbitrum_chain_id: u64,
 	}
 
 	/// Sets the genesis config
@@ -433,6 +530,11 @@ pub mod pallet {
 
 			BitcoinAvailableUtxos::<T>::set(vec![]);
 			BitcoinNetworkSelection::<T>::set(self.bitcoin_network);
+
+			ArbitrumKeyManagerAddress::<T>::set(self.arb_key_manager_address);
+			ArbitrumVaultAddress::<T>::set(self.arb_vault_address);
+			ArbitrumChainId::<T>::set(self.arbitrum_chain_id);
+			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbEth, self.arbeth_token_address);
 		}
 	}
 }
@@ -440,6 +542,12 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
 	pub fn next_ethereum_signature_nonce() -> SignatureNonce {
 		EthereumSignatureNonce::<T>::mutate(|nonce| {
+			*nonce += 1;
+			*nonce
+		})
+	}
+	pub fn next_arbitrum_signature_nonce() -> SignatureNonce {
+		ArbitrumSignatureNonce::<T>::mutate(|nonce| {
 			*nonce += 1;
 			*nonce
 		})
