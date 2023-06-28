@@ -40,7 +40,7 @@ jobs:
       - name: Set dockerfile name
         id: dockerfile
         run: |
-          if [[ "${{ inputs.environment }}" == "prod" || "${{ inputs.network }}" == "sisyphos" || "${{ inputs.network }}" == "perseverance" ]] ; then
+          if [[ "${{ inputs.environment }}" == "prod" || "${{ inputs.network }}" == "sisyphos" || "${{ inputs.network }}" == "perseverance" || "${{ inputs.network }}" == "partnernet" ]] ; then
             echo "dockerfile_path=ci/docker/prod" >> "$GITHUB_OUTPUT"
           else
             echo "dockerfile_path=ci/docker/dev" >> "$GITHUB_OUTPUT"
