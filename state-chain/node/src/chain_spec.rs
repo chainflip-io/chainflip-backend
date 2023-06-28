@@ -68,8 +68,12 @@ pub struct StateChainEnvironment {
 	state_chain_gateway_address: [u8; 20],
 	key_manager_address: [u8; 20],
 	eth_vault_address: [u8; 20],
+	arb_key_manager_address: [u8; 20],
+	arb_vault_address: [u8; 20],
+	arbeth_token_address: [u8; 20],
 	eth_address_checker_address: [u8; 20],
 	ethereum_chain_id: u64,
+	arbitrum_chain_id: u64,
 	eth_init_agg_key: [u8; 33],
 	ethereum_deployment_block: u64,
 	genesis_funding_amount: u128,
@@ -106,9 +110,13 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(clean_eth_address, STATE_CHAIN_GATEWAY_ADDRESS, state_chain_gateway_address);
 	from_env_var!(clean_eth_address, KEY_MANAGER_ADDRESS, key_manager_address);
 	from_env_var!(clean_eth_address, ETH_VAULT_ADDRESS, eth_vault_address);
+	from_env_var!(clean_eth_address, ARB_KEY_MANAGER_ADDRESS, arb_key_manager_address);
+	from_env_var!(clean_eth_address, ARB_VAULT_ADDRESS, arb_vault_address);
+	from_env_var!(clean_eth_address, ARBETH_TOKEN_ADDRESS, arbeth_token_address);
 	from_env_var!(clean_eth_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
 	from_env_var!(hex_decode, ETH_INIT_AGG_KEY, eth_init_agg_key);
 	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
+	from_env_var!(FromStr::from_str, ARBITRUM_CHAIN_ID, arbitrum_chain_id);
 	from_env_var!(FromStr::from_str, ETH_DEPLOYMENT_BLOCK, ethereum_deployment_block);
 	from_env_var!(FromStr::from_str, GENESIS_FUNDING, genesis_funding_amount);
 	from_env_var!(FromStr::from_str, ETH_BLOCK_SAFETY_MARGIN, eth_block_safety_margin);
@@ -138,8 +146,12 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		state_chain_gateway_address,
 		key_manager_address,
 		eth_vault_address,
+		arb_key_manager_address,
+		arb_vault_address,
+		arbeth_token_address,
 		eth_address_checker_address,
 		ethereum_chain_id,
+		arbitrum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
 		genesis_funding_amount,
@@ -170,8 +182,12 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		state_chain_gateway_address,
 		key_manager_address,
 		eth_vault_address,
+		arb_key_manager_address,
+		arb_vault_address,
+		arbeth_token_address,
 		eth_address_checker_address,
 		ethereum_chain_id,
+		arbitrum_chain_id,
 		eth_init_agg_key,
 		ethereum_deployment_block,
 		genesis_funding_amount,
@@ -236,8 +252,12 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					state_chain_gateway_address,
 					key_manager_address,
 					eth_vault_address,
+					arb_key_manager_address,
+					arb_vault_address,
+					arbeth_token_address,
 					eth_address_checker_address,
 					ethereum_chain_id,
+					arbitrum_chain_id,
 					cfe_settings: CfeSettings {
 						eth_block_safety_margin,
 						max_ceremony_stage_duration,
@@ -306,8 +326,12 @@ macro_rules! network_spec {
 					state_chain_gateway_address,
 					key_manager_address,
 					eth_vault_address,
+					arb_key_manager_address,
+					arb_vault_address,
+					arbeth_token_address,
 					eth_address_checker_address,
 					ethereum_chain_id,
+					arbitrum_chain_id,
 					eth_init_agg_key,
 					ethereum_deployment_block,
 					genesis_funding_amount,
@@ -355,8 +379,12 @@ macro_rules! network_spec {
 								state_chain_gateway_address,
 								key_manager_address,
 								eth_vault_address,
+								arb_key_manager_address,
+								arb_vault_address,
+								arbeth_token_address,
 								eth_address_checker_address,
 								ethereum_chain_id,
+								arbitrum_chain_id,
 								cfe_settings: CfeSettings {
 									eth_block_safety_margin,
 									max_ceremony_stage_duration,
