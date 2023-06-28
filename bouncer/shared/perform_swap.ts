@@ -25,13 +25,15 @@ function encodeDestinationAddress(address: string, destToken: Asset): string {
     return destAddress;
 }
 
-export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS: string, swapTag?: string) {
+export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS: string, swapTag?: string, messageMetadata?: CcmDepositMetadata) {
     const FEE = 100;
 
     const tag = swapTag ?? '';
 
     const chainflipApi = await getChainflipApi();
 
+    // TODO: It's problematic to search the deposit address by looking at the destination address
+    // as for CCMs we are testing to the same dstAddress.
     const addressPromise = observeEvent('swapping:SwapDepositAddressReady', chainflipApi,
         (swapInfo: any) => {
             // Find deposit address for the right swap by looking at destination address:
@@ -43,10 +45,9 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
             return destAddressEncoded.toLowerCase() === ADDRESS.toLowerCase()
         });
 
+    await newSwap(sourceToken, destToken, ADDRESS, FEE, messageMetadata ?? undefined);
 
-    await newSwap(sourceToken, destToken, ADDRESS, FEE);
-
-    console.log(`${tag} The args are:  ${sourceToken} ${destToken} ${ADDRESS} ${FEE}`);
+    console.log(`${tag} The args are:  ${sourceToken} ${destToken} ${ADDRESS} ${FEE} ${messageMetadata}`);
 
     let depositAddressToken = sourceToken;
     if (sourceToken === 'USDC') {
@@ -61,7 +62,7 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
     console.log(`${tag} The swap address is: ${swapAddress}`);
 
     if (sourceToken === 'BTC') {
-        console.log("Doing BTC address conversion");
+        console.log("BTC swapAddress : " + swapAddress)
         swapAddress = swapAddress.replace(/^0x/, '');
         swapAddress = Buffer.from(swapAddress, 'hex').toString();
     }
