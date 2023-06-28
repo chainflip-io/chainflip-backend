@@ -154,6 +154,23 @@ impl<T: JsonRpcClient + 'static> EthersRpcApi for EthersRpcClient<T> {
 	}
 }
 
+#[derive(Clone)]
+pub struct EthersSubscriptionClient {
+	signer: SignerMiddleware<Provider<Ws>, LocalWallet>,
+}
+
+#[async_trait::async_trait]
+pub trait EthersSubscribeApi {
+	async fn subscribe_blocks(&self) -> Result<SubscriptionStream<Ws, Block<H256>>>;
+}
+
+#[async_trait::async_trait]
+impl EthersSubscribeApi for EthersSubscriptionClient {
+	async fn subscribe_blocks(&self) -> Result<SubscriptionStream<Ws, Block<H256>>> {
+		Ok(self.signer.subscribe_blocks().await?)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 
