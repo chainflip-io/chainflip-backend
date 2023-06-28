@@ -1,7 +1,8 @@
 import { Asset, executeSwap, ExecuteSwapParams } from '@chainflip-io/cli';
 import { Wallet, getDefaultProvider } from 'ethers';
-import { chainFromAsset } from '../shared/utils';
+import { chainFromAsset, getAddress, getChainflipApi, observeBalanceIncrease, observeEvent } from '../shared/utils';
 import { getNextEthNonce } from '../shared/fund_eth';
+import { getBalance } from './get_balance';
 
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -32,4 +33,34 @@ export async function executeNativeSwap(destAsset: Asset, destAddress: string) {
             vaultContractAddress: '0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968',
         },
     );
+}
+
+export async function performNativeSwap(destAsset: Asset) {
+
+    const tag = `[contract ETH -> ${destAsset}]`;
+
+    const log = (msg: string) => {
+        console.log(`${tag} ${msg}`);
+    };
+
+    try {
+        const api = await getChainflipApi();
+        const addr = await getAddress(destAsset, 'never');
+        log(`Destination address: ${addr}`);
+
+        const oldBalance = await getBalance(destAsset, addr);
+        // Note that we start observing events before executing
+        // the swap to avoid race conditions:
+        log(`Executing native contract swap to(${destAsset}) ${addr}.Current balance: ${oldBalance}`)
+        const handle = observeEvent("swapping:SwapExecuted", api);
+        await executeNativeSwap(destAsset, addr);
+        await handle;
+        log(`Successfully observed event: swapping: SwapExecuted`);
+
+        const newBalance = await observeBalanceIncrease(destAsset, addr, oldBalance);
+        log(`Swap success! New balance: ${newBalance}`);
+    } catch (err) {
+        throw new Error(`${tag} ${err}`);
+    }
+
 }
