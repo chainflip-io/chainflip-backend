@@ -41,8 +41,12 @@ function getCachedSubstrateApi(defaultEndpoint: string) {
   };
 };
 
-export const getChainflipApi = getCachedSubstrateApi('ws://127.0.0.1:9944');
-export const getPolkadotApi = getCachedSubstrateApi('ws://127.0.0.1:9945');
+export const getChainflipApi = getCachedSubstrateApi(
+  process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944',
+);
+export const getPolkadotApi = getCachedSubstrateApi(
+  process.env.POLKADOT_ENDPOINT ?? 'ws://127.0.0.1:9945'
+  );
 
 export const polkadotSigningMutex = new Mutex();
 
