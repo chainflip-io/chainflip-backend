@@ -1,6 +1,5 @@
 import { Asset } from '@chainflip-io/cli';
-import { executeNativeSwap } from '../commands/native_swap';
-import { chainflipApi, getAddress as newAddress, getBalanceSync, observeBalanceIncrease, observeEvent, runWithTimeout } from '../shared/utils';
+import { executeNativeSwap } from '../shared/native_swap';
 
 async function testNativeSwap(destAsset: Asset) {
 
