@@ -253,25 +253,29 @@ where
 				}
 
 			},
-			Some(block) = block_stream.next().instrument(tracing::debug_span!("Block-Stream-Future")) => {
-				// This will be an error if the stream times out. When it does, we return
-				// an error so that we restart the witnesser.
-				let block = block.map_err(|e| {
-					error!("Error while getting block for witnesser: {:?}", e);
-				})?;
+			next = block_stream.next().instrument(tracing::debug_span!("Block-Stream-Future")) => {
+				if let Some(block) = next {
+					// This will be an error if the stream times out. When it does, we return
+					// an error so that we restart the witnesser.
+					let block = block.map_err(|e| {
+						error!("Error while getting block for witnesser: {:?}", e);
+					})?;
 
-				let block_number = block.block_number();
+					let block_number = block.block_number();
 
-				witnesser.do_witness(block, &mut state).await.map_err(|_| {
-					error!("Witnesser failed to process block")
-				})?;
+					witnesser.do_witness(block, &mut state).await.map_err(|_| {
+						error!("Witnesser failed to process block")
+					})?;
 
-				last_processed_block = Some(block_number);
+					last_processed_block = Some(block_number);
 
-				if should_end_witnessing::<Witnesser>(last_processed_block, last_block_number_for_epoch) {
-					break;
+					if should_end_witnessing::<Witnesser>(last_processed_block, last_block_number_for_epoch) {
+						break;
+					}
+				} else {
+					warn!("No more data on witnesser data stream. Exiting.");
+					return Err(());
 				}
-
 			},
 		}
 	}
