@@ -28,26 +28,36 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 		let highest_funded_qualified_backup_nodes =
 			Pallet::<T>::highest_funded_qualified_backup_nodes_lookup();
 
+		let primary_candidates = winners;
+		let secondary_candidates = losers
+			.into_iter()
+			// We only allow current authorities or backup validators to be secondary
+			// candidates.
+			.filter_map(|Bid { bidder_id, .. }| {
+				if highest_funded_qualified_backup_nodes.contains(&bidder_id) ||
+					authorities.contains(&bidder_id)
+				{
+					Some(bidder_id)
+				} else {
+					None
+				}
+			})
+			// Limit the number of secondary candidates according to the size of the
+			// backup_percentage and the fracction of that, which can be secondary candidates
+			.take(Pallet::<T>::backup_reward_nodes_limit() / SECONDARY_CANDIDATE_FRACTION)
+			.collect();
+
+		let banned = primary_candidates
+			.iter()
+			.chain(&secondary_candidates)
+			.filter(|id| !T::KeygenQualification::is_qualified(id))
+			.cloned()
+			.collect();
+
 		RotationState {
-			primary_candidates: winners,
-			secondary_candidates: losers
-				.into_iter()
-				// We only allow current authorities or backup validators to be secondary
-				// candidates.
-				.filter_map(|Bid { bidder_id, .. }| {
-					if highest_funded_qualified_backup_nodes.contains(&bidder_id) ||
-						authorities.contains(&bidder_id)
-					{
-						Some(bidder_id)
-					} else {
-						None
-					}
-				})
-				// Limit the number of secondary candidates according to the size of the
-				// backup_percentage and the fracction of that, which can be secondary candidates
-				.take(Pallet::<T>::backup_reward_nodes_limit() / SECONDARY_CANDIDATE_FRACTION)
-				.collect(),
-			banned: Default::default(),
+			primary_candidates,
+			secondary_candidates,
+			banned,
 			bond,
 			new_epoch_index: T::EpochInfo::epoch_index() + 1,
 		}
@@ -73,26 +83,18 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 		self.primary_candidates.len() as u32
 	}
 
-	pub fn filter_out_banned(&self, mut candidates: BTreeSet<Id>) -> BTreeSet<Id> {
-		candidates.retain(|id| !self.banned.contains(id));
-		candidates
-	}
-
-	/// Ban all candidates that don't meet the qualification criterion.
-	pub fn qualify_nodes<Q: QualifyNode<ValidatorId = Id>>(&mut self) {
-		for id in self.primary_candidates.iter().chain(&self.secondary_candidates) {
-			// Only incur the cost of the qualification check if the node is not already banned.
-			if !self.banned.contains(id) && !Q::is_qualified(id) {
-				self.banned.insert(id.clone());
-			}
-		}
+	pub fn unbanned_current_authorities<T: Config + Chainflip<ValidatorId = Id>>(
+		&self,
+	) -> BTreeSet<Id> {
+		Pallet::<T>::current_authorities()
+			.into_iter()
+			.filter(|id| !self.banned.contains(id))
+			.collect()
 	}
 }
 
 #[cfg(test)]
 mod rotation_state_tests {
-	use cf_traits::mocks::qualify_node::QualifyAll;
-
 	use super::*;
 
 	type Id = u64;
@@ -133,25 +135,5 @@ mod rotation_state_tests {
 		let candidates = rotation_state.authority_candidates();
 
 		assert_eq!(candidates, BTreeSet::from([0, 3, 5, 6, 7, 8, 9, 20, 21, 22]));
-	}
-
-	#[test]
-	fn qualification_is_additive() {
-		sp_io::TestExternalities::new_empty().execute_with(|| {
-			let mut rotation_state = RotationState::<Id, Amount> {
-				primary_candidates: (0..10).collect(),
-				secondary_candidates: (20..30).collect(),
-				banned: BTreeSet::from([0, 1, 3]),
-				bond: Default::default(),
-				new_epoch_index: 2,
-			};
-			QualifyAll::<Id>::except([1, 2, 4]);
-			rotation_state.qualify_nodes::<QualifyAll<_>>();
-
-			assert_eq!(
-				rotation_state.authority_candidates(),
-				BTreeSet::from([5, 6, 7, 8, 9, 20, 21, 22, 23, 24])
-			)
-		});
 	}
 }

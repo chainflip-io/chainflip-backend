@@ -5,10 +5,11 @@ use crate::{
 
 use super::{genesis, network, *};
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
-use cf_traits::EpochInfo;
+use cf_traits::{offence_reporting::OffenceReporter, EpochInfo};
 use mock_runtime::MIN_FUNDING;
 use pallet_cf_funding::pallet::Error;
-use pallet_cf_validator::Backups;
+use pallet_cf_validator::{Backups, CurrentRotationPhase};
+use state_chain_runtime::chainflip::Offence;
 
 #[test]
 // Nodes cannot redeem when we are out of the redeeming period (50% of the epoch)
@@ -79,10 +80,23 @@ fn cannot_redeem_funds_out_of_redemption_period() {
 
 			// Move to new epoch
 			testnet.move_to_next_epoch();
+			testnet.submit_heartbeat_all_engines();
+			// TODO: figure out how to avoid this.
+			<pallet_cf_reputation::Pallet<Runtime> as OffenceReporter>::forgive_all(
+				Offence::MissedAuthorshipSlot,
+			);
+			<pallet_cf_reputation::Pallet<Runtime> as OffenceReporter>::forgive_all(
+				Offence::GrandpaEquivocation,
+			);
 			// Run things to a successful vault rotation
 			testnet.move_forward_blocks(VAULT_ROTATION_BLOCKS);
 
-			assert_eq!(2, Validator::epoch_index(), "We are in a new epoch");
+			assert_eq!(
+				2,
+				Validator::epoch_index(),
+				"Rotation still in phase {:?}",
+				CurrentRotationPhase::<Runtime>::get(),
+			);
 
 			// We should be able to redeem again outside of the auction
 			// At the moment we have a pending redemption so we would expect an error here for
