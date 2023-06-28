@@ -1,8 +1,8 @@
 use super::eth::api::evm_all_batch_builder;
 use crate::{
 	eth::api::{
-		EthEnvironmentProvider, EthereumContract, EthereumReplayProtection,
-		EthereumTransactionBuilder,
+		common::EncodableTransferAssetParams, execute_x_swap_and_call, EthEnvironmentProvider,
+		EthereumContract, EthereumReplayProtection, EthereumTransactionBuilder,
 	},
 	*,
 };
@@ -37,6 +37,8 @@ impl FeeRefundCalculator<Arbitrum> for eth::Transaction {
 pub enum ArbitrumApi<Environment: 'static> {
 	SetAggKeyWithAggKey(EthereumTransactionBuilder<set_agg_key_with_agg_key::SetAggKeyWithAggKey>),
 	AllBatch(EthereumTransactionBuilder<all_batch::AllBatch>),
+	ExecutexSwapAndCall(EthereumTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAndCall>),
+	#[doc(hidden)]
 	#[doc(hidden)]
 	#[codec(skip)]
 	_Phantom(PhantomData<Environment>, Never),
@@ -80,12 +82,26 @@ where
 	E: EthEnvironmentProvider<Arbitrum>,
 {
 	fn new_unsigned(
-		_egress_id: EgressId,
-		_transfer_param: TransferAssetParams<Arbitrum>,
-		_source_address: ForeignChainAddress,
-		_message: Vec<u8>,
+		egress_id: EgressId,
+		transfer_param: TransferAssetParams<Arbitrum>,
+		source_address: ForeignChainAddress,
+		message: Vec<u8>,
 	) -> Result<Self, DispatchError> {
-		todo!()
+		let transfer_param = EncodableTransferAssetParams {
+			asset: E::token_address(transfer_param.asset).ok_or(DispatchError::CannotLookup)?,
+			to: transfer_param.to.into(),
+			amount: transfer_param.amount,
+		};
+
+		Ok(Self::ExecutexSwapAndCall(EthereumTransactionBuilder::new_unsigned(
+			E::replay_protection(EthereumContract::Vault),
+			execute_x_swap_and_call::ExecutexSwapAndCall::new(
+				egress_id,
+				transfer_param,
+				source_address,
+				message,
+			),
+		)))
 	}
 }
 
@@ -103,11 +119,20 @@ impl<E> From<EthereumTransactionBuilder<all_batch::AllBatch>> for ArbitrumApi<E>
 	}
 }
 
+impl<E> From<EthereumTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAndCall>>
+	for ArbitrumApi<E>
+{
+	fn from(tx: EthereumTransactionBuilder<execute_x_swap_and_call::ExecutexSwapAndCall>) -> Self {
+		Self::ExecutexSwapAndCall(tx)
+	}
+}
+
 impl<E> ArbitrumApi<E> {
 	pub fn replay_protection(&self) -> EthereumReplayProtection {
 		match self {
 			ArbitrumApi::SetAggKeyWithAggKey(tx) => tx.replay_protection(),
 			ArbitrumApi::AllBatch(tx) => tx.replay_protection(),
+			ArbitrumApi::ExecutexSwapAndCall(tx) => tx.replay_protection(),
 			ArbitrumApi::_Phantom(..) => unreachable!(),
 		}
 	}
@@ -118,6 +143,7 @@ impl<E> ApiCall<Arbitrum> for ArbitrumApi<E> {
 		match self {
 			ArbitrumApi::SetAggKeyWithAggKey(tx) => tx.threshold_signature_payload(),
 			ArbitrumApi::AllBatch(tx) => tx.threshold_signature_payload(),
+			ArbitrumApi::ExecutexSwapAndCall(tx) => tx.threshold_signature_payload(),
 			ArbitrumApi::_Phantom(..) => unreachable!(),
 		}
 	}
@@ -126,6 +152,7 @@ impl<E> ApiCall<Arbitrum> for ArbitrumApi<E> {
 		match self {
 			ArbitrumApi::SetAggKeyWithAggKey(call) => call.signed(threshold_signature).into(),
 			ArbitrumApi::AllBatch(call) => call.signed(threshold_signature).into(),
+			ArbitrumApi::ExecutexSwapAndCall(call) => call.signed(threshold_signature).into(),
 			ArbitrumApi::_Phantom(..) => unreachable!(),
 		}
 	}
@@ -134,6 +161,7 @@ impl<E> ApiCall<Arbitrum> for ArbitrumApi<E> {
 		match self {
 			ArbitrumApi::SetAggKeyWithAggKey(call) => call.chain_encoded(),
 			ArbitrumApi::AllBatch(call) => call.chain_encoded(),
+			ArbitrumApi::ExecutexSwapAndCall(call) => call.chain_encoded(),
 			ArbitrumApi::_Phantom(..) => unreachable!(),
 		}
 	}
@@ -142,6 +170,7 @@ impl<E> ApiCall<Arbitrum> for ArbitrumApi<E> {
 		match self {
 			ArbitrumApi::SetAggKeyWithAggKey(call) => call.is_signed(),
 			ArbitrumApi::AllBatch(call) => call.is_signed(),
+			ArbitrumApi::ExecutexSwapAndCall(call) => call.is_signed(),
 			ArbitrumApi::_Phantom(..) => unreachable!(),
 		}
 	}
@@ -150,6 +179,7 @@ impl<E> ApiCall<Arbitrum> for ArbitrumApi<E> {
 		match self {
 			ArbitrumApi::SetAggKeyWithAggKey(call) => call.transaction_out_id(),
 			ArbitrumApi::AllBatch(call) => call.transaction_out_id(),
+			ArbitrumApi::ExecutexSwapAndCall(call) => call.transaction_out_id(),
 			ArbitrumApi::_Phantom(..) => unreachable!(),
 		}
 	}
