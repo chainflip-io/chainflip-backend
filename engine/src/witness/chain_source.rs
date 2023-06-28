@@ -1,3 +1,6 @@
+pub mod btc_source;
+pub mod dot_source;
+pub mod eth_source;
 pub mod lag_safety;
 pub mod shared;
 pub mod strictly_monotonic;

@@ -4,7 +4,7 @@ use utilities::task_scope::Scope;
 use crate::rpc_retrier::RpcRetrierClient;
 use core::time::Duration;
 
-use super::rpc::{BtcRpcApi, BtcRpcClient};
+use super::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient};
 
 pub struct BtcRetryRpcClient {
 	retry_client: RpcRetrierClient<BtcRpcClient>,
@@ -35,6 +35,10 @@ pub trait BtcRetryRpcApi {
 	async fn send_raw_transaction(&self, transaction_bytes: Vec<u8>) -> Txid;
 
 	async fn next_block_fee_rate(&self) -> Option<cf_chains::btc::BtcAmount>;
+
+	async fn best_block_hash(&self) -> BlockHash;
+
+	async fn block_header(&self, block_hash: BlockHash) -> BlockHeader;
 }
 
 #[async_trait::async_trait]
@@ -72,6 +76,24 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.next_block_fee_rate().await })
+			}))
+			.await
+	}
+
+	async fn best_block_hash(&self) -> BlockHash {
+		self.retry_client
+			.request(Box::pin(move |client| {
+				#[allow(clippy::redundant_async_block)]
+				Box::pin(async move { client.best_block_hash().await })
+			}))
+			.await
+	}
+
+	async fn block_header(&self, block_hash: BlockHash) -> BlockHeader {
+		self.retry_client
+			.request(Box::pin(move |client| {
+				#[allow(clippy::redundant_async_block)]
+				Box::pin(async move { client.block_header(block_hash).await })
 			}))
 			.await
 	}
