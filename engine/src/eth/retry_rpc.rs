@@ -149,7 +149,7 @@ use crate::eth::ethers_rpc::EthersSubscribeApi;
 impl<T: JsonRpcClient + Clone + Send + Sync + 'static> EthersRetrySubscribeApi
 	for EthersRetryRpcClient<T>
 {
-	async fn subscribe_blocks(&'a self) -> SubscriptionStream<'a, Ws, Block<H256>> {
+	async fn subscribe_blocks(&self) -> SubscriptionStream<Ws, Block<H256>> {
 		self.retry_client
 			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
