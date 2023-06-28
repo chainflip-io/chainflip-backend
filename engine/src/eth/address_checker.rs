@@ -4,12 +4,12 @@ use std::sync::Arc;
 
 abigen!(AddressChecker, "eth-contract-abis/perseverance-rc17/IAddressChecker.json");
 
-pub struct AddressCheckerRpc {
-	inner_address_checker: AddressChecker<Provider<Http>>,
+pub struct AddressCheckerRpc<T> {
+	inner_address_checker: AddressChecker<Provider<T>>,
 }
 
-impl AddressCheckerRpc {
-	pub fn new(provider: Arc<Provider<Http>>, address_checker_contract_address: H160) -> Self {
+impl<T: JsonRpcClient> AddressCheckerRpc<T> {
+	pub fn new(provider: Arc<Provider<T>>, address_checker_contract_address: H160) -> Self {
 		let inner_address_checker = AddressChecker::new(address_checker_contract_address, provider);
 		Self { inner_address_checker }
 	}
@@ -27,7 +27,7 @@ pub trait AddressCheckerApi {
 }
 
 #[async_trait::async_trait]
-impl AddressCheckerApi for AddressCheckerRpc {
+impl<T: JsonRpcClient + 'static> AddressCheckerApi for AddressCheckerRpc<T> {
 	async fn address_states(
 		&self,
 		block_hash: H256,
