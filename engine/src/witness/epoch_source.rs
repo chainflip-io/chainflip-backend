@@ -15,6 +15,7 @@ use utilities::task_scope::Scope;
 
 use super::common::{ActiveAndFuture, RuntimeHasInstance};
 
+#[derive(Clone)]
 pub struct Epoch<Info, HistoricInfo> {
 	pub index: EpochIndex,
 	pub info: Info,

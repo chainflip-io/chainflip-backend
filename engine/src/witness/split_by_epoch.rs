@@ -1,4 +1,3 @@
-use cf_primitives::EpochIndex;
 use futures_util::StreamExt;
 
 use super::{
@@ -26,8 +25,8 @@ pub trait ChainSplitByEpoch<'a>: Sized + Send {
 	}
 }
 
-type Item<'a, UnderlyingChainSource> = (
-	EpochIndex,
+pub type Item<'a, UnderlyingChainSource> = (
+	Epoch<(), ()>,
 	BoxChainStream<
 		'a,
 		<UnderlyingChainSource as ChainSource>::Index,
@@ -40,6 +39,7 @@ pub struct SplitByEpoch<'a, UnderlyingChainSource> {
 	underlying_chain_source: &'a UnderlyingChainSource,
 	epochs: BoxActiveAndFuture<'static, Epoch<(), ()>>,
 }
+
 #[async_trait::async_trait]
 impl<'a, UnderlyingChainSource: ChainSource> ChainSplitByEpoch<'a>
 	for SplitByEpoch<'a, UnderlyingChainSource>
@@ -50,13 +50,11 @@ impl<'a, UnderlyingChainSource: ChainSource> ChainSplitByEpoch<'a>
 		let underlying_chain_source = self.underlying_chain_source;
 		self.epochs
 			.then(move |epoch| async move {
+				let historic_signal = epoch.historic_signal.clone();
 				(
-					epoch.index,
+					epoch,
 					box_chain_stream(
-						underlying_chain_source
-							.stream()
-							.await
-							.take_until(epoch.historic_signal.wait()),
+						underlying_chain_source.stream().await.take_until(historic_signal.wait()),
 					),
 				)
 			})
