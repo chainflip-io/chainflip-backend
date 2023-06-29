@@ -146,6 +146,8 @@ pub struct EpochStartData {
 	pub change_pubkey: AggKey,
 }
 
+// TODO: To make this work ScriptPubkey needs to implement copy - currently this is not possible
+// 🤷‍♂️.
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub struct BitcoinDepositAddress;
 
@@ -161,7 +163,7 @@ impl DepositAddressTrait for BitcoinDepositAddress {
 		todo!()
 	}
 
-	fn new(channel_id: u64, address: Self::Address) -> Self {
+	fn new(_channel_id: u64, _address: Self::Address) -> Self {
 		todo!()
 	}
 }

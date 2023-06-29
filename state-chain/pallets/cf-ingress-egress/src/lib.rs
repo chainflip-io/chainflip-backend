@@ -15,7 +15,7 @@ pub use weights::WeightInfo;
 
 use cf_primitives::{BasisPoints, EgressCounter, EgressId, ForeignChain};
 
-use cf_chains::{address::ForeignChainAddress, CcmDepositMetadata, ChannelIdConstructor};
+use cf_chains::{address::ForeignChainAddress, CcmDepositMetadata};
 
 use cf_chains::{
 	AllBatch, AllBatchError, Chain, ChainAbi, ChainCrypto, ExecutexSwapAndCall, FetchAssetParams,
@@ -426,7 +426,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					.drain_filter(|request| {
 						!DisabledEgressAssets::<T, I>::contains_key(request.asset()) &&
 							match request {
-								FetchOrTransfer::Fetch { channel_id, asset, deposit_address } => {
+								FetchOrTransfer::Fetch {
+									channel_id: _,
+									asset: _,
+									deposit_address,
+								} => {
 									let details = DepositAddressDetailsLookup::<T, I>::get(
 										deposit_address.clone(),
 									)
@@ -456,7 +460,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		for request in batch_to_send {
 			match request {
-				FetchOrTransfer::<T::TargetChain>::Fetch { channel_id, asset, deposit_address } => {
+				FetchOrTransfer::<T::TargetChain>::Fetch {
+					channel_id: _,
+					asset,
+					deposit_address,
+				} => {
 					// let deposit_fetch_id =
 					// 	InUseAddresses::<T, I>::get(channel_id).unwrap().get_deposit_fetch_id();
 					// let deposit_address =
@@ -465,7 +473,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						.unwrap()
 						.1;
 					fetch_params.push(FetchAssetParams {
-						deposit_fetch_id: details.get_deposit_fetch_id().into(),
+						deposit_fetch_id: details.get_deposit_fetch_id(),
 						asset,
 					});
 					addresses.push((details.get_deposit_fetch_id(), deposit_address.clone()));
@@ -630,17 +638,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		let (deposit_address_wrapper, channel_id) =
 			if let Some((channel_id, address)) = AddressPool::<T, I>::drain().next() {
-				(address.clone(), channel_id)
+				(address, channel_id)
 			} else {
 				let next_channel_id = ChannelIdCounter::<T, I>::get()
 					.checked_add(1)
 					.ok_or(Error::<T, I>::ChannelIdsExhausted)?;
 				let new_address: TargetChainAccount<T, I> =
 					T::AddressDerivation::generate_address(source_asset, next_channel_id)?;
-				let new_depo_address = <T::TargetChain as Chain>::DepositAddress::new(
-					next_channel_id,
-					new_address.clone(),
-				);
+				let new_depo_address =
+					<T::TargetChain as Chain>::DepositAddress::new(next_channel_id, new_address);
 				ChannelIdCounter::<T, I>::put(next_channel_id);
 				(new_depo_address, next_channel_id)
 			};

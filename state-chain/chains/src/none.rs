@@ -19,7 +19,7 @@ impl DepositAddress for NoneChainDepositAddress {
 		todo!()
 	}
 
-	fn new(channel_id: u64, address: Self::Address) -> Self {
+	fn new(_channel_id: u64, _address: Self::Address) -> Self {
 		todo!()
 	}
 }

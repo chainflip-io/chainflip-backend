@@ -1,12 +1,11 @@
 use crate::{
 	mock::*, AddressPool, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DepositAddressDetailsLookup, DepositFetchIdOf, DepositWitness, DisabledEgressAssets, Error,
-	Event as PalletEvent, FetchOrTransfer, FetchParamDetails, MinimumDeposit, Pallet,
-	ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
+	DepositAddressDetailsLookup, DepositWitness, DisabledEgressAssets, Error, Event as PalletEvent,
+	FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 };
 use cf_chains::{
 	eth::{DeploymentStatus, EthereumDepositAddress},
-	ChannelIdConstructor, DepositAddress, ExecutexSwapAndCall, TransferAssetParams,
+	DepositAddress, ExecutexSwapAndCall, TransferAssetParams,
 };
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
 use cf_test_utilities::assert_has_event;
@@ -18,7 +17,7 @@ use cf_traits::{
 	AddressDerivationApi, DepositApi, EgressApi,
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
-use sp_core::{serde::__private::de, H160};
+use sp_core::H160;
 
 const ALICE_ETH_ADDRESS: EthereumAddress = [100u8; 20];
 const BOB_ETH_ADDRESS: EthereumAddress = [101u8; 20];
@@ -206,11 +205,10 @@ fn helper_generate_address_for(
 	intent_id: u64,
 	asset: eth::Asset,
 ) -> <Ethereum as Chain>::ChainAccount {
-	let eth_address = <<Test as crate::Config>::AddressDerivation as AddressDerivationApi<
+	<<Test as crate::Config>::AddressDerivation as AddressDerivationApi<
 		Ethereum,
 	>>::generate_address(asset, intent_id)
-	.unwrap();
-	eth_address
+	.unwrap()
 }
 
 #[test]
@@ -737,10 +735,6 @@ fn handle_pending_deployment() {
 			RuntimeOrigin::root(),
 			vec![(cf_chains::eth::EthereumChannelId::UnDeployed(channel_id), deposit_address)]
 		));
-		let channel_id = DepositAddressDetailsLookup::<Test, _>::get(deposit_address)
-			.unwrap()
-			.0
-			.channel_id;
 		// Verify that the DepositFetchId was updated to deployed state after the first broadcast
 		// has succeed.
 		// assert_eq!(

@@ -8,7 +8,7 @@ pub mod deposit_address;
 use self::api::tokenizable::Tokenizable;
 use crate::*;
 pub use cf_primitives::chains::Ethereum;
-use cf_primitives::{chains::assets, ChannelId, EthereumAddress};
+use cf_primitives::{chains::assets, ChannelId};
 use codec::{Decode, Encode, MaxEncodedLen};
 use ethabi::ParamType;
 pub use ethabi::{
