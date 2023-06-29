@@ -64,7 +64,7 @@ secrets:
 
 cluster: ""
 chainspec: ""
-chainspecS3Url: "repo.chainflip.io/chainspecs"
+chainspecUrl: "repo.chainflip.io/chainspecs"
 downloadChainspec: false
 
 ports:
