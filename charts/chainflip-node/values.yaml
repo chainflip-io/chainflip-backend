@@ -63,8 +63,9 @@ secrets:
   existingOnePasswordSecret: chainflip-node-secrets
 
 cluster: ""
-chainspec: sisyphos.chainspec.json
-chainspecSecret: chainflip-node-chainspec
+chainspec: ""
+chainspecS3Url: "repo.chainflip.io/chainspecs"
+downloadChainspec: false
 
 ports:
   wsPort: "9944"
