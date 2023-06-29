@@ -76,7 +76,7 @@ async fn main() -> anyhow::Result<()> {
 				BtcRpcClient::new(&settings.btc).context("Failed to create Bitcoin Client")?;
 
 			state_chain_client
-				.submit_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
+				.finalize_signed_extrinsic(pallet_cf_validator::Call::cfe_version {
 					new_version: SemVer {
 						major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
 						minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),

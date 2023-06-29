@@ -288,7 +288,7 @@ impl EthContractWitnesser for Vault {
 			match call_from_event(event, state_chain_client.clone()).await {
 				Ok(call) => {
 					state_chain_client
-						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+						.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 							call: Box::new(call.into()),
 							epoch_index: epoch,
 						})

@@ -313,7 +313,7 @@ where
 			);
 
 		self.state_chain_client
-			.submit_signed_extrinsic(state_chain_runtime::RuntimeCall::Witnesser(
+			.finalize_signed_extrinsic(state_chain_runtime::RuntimeCall::Witnesser(
 				pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(state_chain_runtime::RuntimeCall::PolkadotChainTracking(
 						pallet_cf_chain_tracking::Call::update_chain_state {
@@ -330,7 +330,7 @@ where
 
 		for call in vault_key_rotated_calls {
 			self.state_chain_client
-				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+				.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call,
 					epoch_index: self.epoch_index,
 				})
@@ -361,7 +361,7 @@ where
 							info!("Witnessing transaction_succeeded. signature: {signature:?}");
 
 							self.state_chain_client
-								.submit_signed_extrinsic(
+								.finalize_signed_extrinsic(
 									pallet_cf_witnesser::Call::witness_at_epoch {
 										call:
 											Box::new(
@@ -393,7 +393,7 @@ where
 
 		if !deposit_witnesses.is_empty() {
 			self.state_chain_client
-				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+				.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(
 						pallet_cf_ingress_egress::Call::<_, PolkadotInstance>::process_deposits {
 							deposit_witnesses,

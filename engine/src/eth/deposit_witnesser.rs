@@ -126,7 +126,7 @@ where
 
 		if !deposit_witnesses.is_empty() {
 			self.state_chain_client
-				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+				.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(
 						pallet_cf_ingress_egress::Call::<_, EthereumInstance>::process_deposits {
 							deposit_witnesses,

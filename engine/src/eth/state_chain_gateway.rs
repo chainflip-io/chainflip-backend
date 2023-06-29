@@ -109,7 +109,7 @@ impl EthContractWitnesser for StateChainGateway {
 			match event.event_parameters {
 				StateChainGatewayEvent::Funded { account_id, amount, funder } => {
 					state_chain_client
-						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+						.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 							call: Box::new(
 								pallet_cf_funding::Call::funded {
 									account_id,
@@ -125,7 +125,7 @@ impl EthContractWitnesser for StateChainGateway {
 				},
 				StateChainGatewayEvent::RedemptionExecuted { account_id, amount } => {
 					state_chain_client
-						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+						.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 							call: Box::new(
 								pallet_cf_funding::Call::redeemed {
 									account_id,
@@ -140,7 +140,7 @@ impl EthContractWitnesser for StateChainGateway {
 				},
 				StateChainGatewayEvent::RedemptionExpired { account_id, amount: _ } => {
 					state_chain_client
-						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+						.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 							call: Box::new(
 								pallet_cf_funding::Call::redemption_expired {
 									account_id,

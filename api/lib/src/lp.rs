@@ -170,7 +170,7 @@ pub async fn mint_range_order(
 
 			// Submit the mint order
 			let (_tx_hash, events, ..) = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_mint_range_order {
+				.finalize_signed_extrinsic(pallet_cf_pools::Call::collect_and_mint_range_order {
 					unstable_asset: asset,
 					price_range_in_ticks: range,
 					liquidity: amount,
@@ -233,7 +233,7 @@ pub async fn burn_range_order(
 
 			// Submit the burn call
 			let (_tx_hash, events, ..) = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_burn_range_order {
+				.finalize_signed_extrinsic(pallet_cf_pools::Call::collect_and_burn_range_order {
 					unstable_asset: asset,
 					price_range_in_ticks: range,
 					liquidity: amount,

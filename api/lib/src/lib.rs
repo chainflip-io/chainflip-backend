@@ -105,8 +105,11 @@ where
 			)
 			.await?;
 
-			let (_tx_hash, events, header, ..) =
-				state_chain_client.submit_signed_extrinsic(call).await.until_finalized().await?;
+			let (_tx_hash, events, header, ..) = state_chain_client
+				.finalize_signed_extrinsic(call)
+				.await
+				.until_finalized()
+				.await?;
 
 			Ok((events, header.number))
 		}
@@ -137,7 +140,7 @@ pub async fn request_redemption(
 			}
 
 			let (tx_hash, ..) = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_funding::Call::redeem {
+				.finalize_signed_extrinsic(pallet_cf_funding::Call::redeem {
 					amount,
 					address: eth_address,
 				})
@@ -178,7 +181,7 @@ pub async fn register_account_role(
 			.await?;
 
 			let (tx_hash, ..) = state_chain_client
-				.submit_signed_extrinsic(call)
+				.finalize_signed_extrinsic(call)
 				.await
 				.until_finalized()
 				.await
@@ -215,7 +218,7 @@ pub async fn rotate_keys(state_chain_settings: &settings::StateChain) -> Result<
 			};
 
 			let (tx_hash, ..) = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_validator::Call::set_keys {
+				.finalize_signed_extrinsic(pallet_cf_validator::Call::set_keys {
 					keys: new_session_key,
 					proof: [0; 1].to_vec(),
 				})
@@ -245,9 +248,11 @@ pub async fn force_rotation(state_chain_settings: &settings::StateChain) -> Resu
 
 			println!("Submitting governance proposal for rotation.");
 			state_chain_client
-				.submit_signed_extrinsic(pallet_cf_governance::Call::propose_governance_extrinsic {
-					call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
-				})
+				.finalize_signed_extrinsic(
+					pallet_cf_governance::Call::propose_governance_extrinsic {
+						call: Box::new(pallet_cf_validator::Call::force_rotation {}.into()),
+					},
+				)
 				.await
 				.until_finalized()
 				.await
@@ -274,7 +279,7 @@ pub async fn stop_bidding(state_chain_settings: &settings::StateChain) -> Result
 			)
 			.await?;
 			let (tx_hash, ..) = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_funding::Call::stop_bidding {})
+				.finalize_signed_extrinsic(pallet_cf_funding::Call::stop_bidding {})
 				.await
 				.until_finalized()
 				.await
@@ -300,7 +305,7 @@ pub async fn start_bidding(state_chain_settings: &settings::StateChain) -> Resul
 			.await?;
 
 			let (tx_hash, ..) = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_funding::Call::start_bidding {})
+				.finalize_signed_extrinsic(pallet_cf_funding::Call::start_bidding {})
 				.await
 				.until_finalized()
 				.await
@@ -333,7 +338,7 @@ pub async fn set_vanity_name(
 			)
 			.await?;
 			let (tx_hash, ..) = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_validator::Call::set_vanity_name {
+				.finalize_signed_extrinsic(pallet_cf_validator::Call::set_vanity_name {
 					name: name.as_bytes().to_vec(),
 				})
 				.await
