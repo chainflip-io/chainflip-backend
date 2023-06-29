@@ -642,7 +642,7 @@ impl DepositAddress for EthereumDepositAddress {
 		}
 	}
 
-	fn maybe_recycle(self) -> bool
+	fn maybe_recycle(&self) -> bool
 	where
 		Self: Sized,
 	{

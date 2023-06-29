@@ -108,7 +108,6 @@ pub trait Chain: Member + Parameter {
 
 	type DepositAddress: Member
 		+ Parameter
-		+ Copy
 		+ DepositAddress<Address = Self::ChainAccount, DepositFetchId = Self::DepositFetchId>;
 }
 
@@ -388,7 +387,7 @@ pub trait DepositAddress {
 	{
 		self
 	}
-	fn maybe_recycle(self) -> bool
+	fn maybe_recycle(&self) -> bool
 	where
 		Self: Sized,
 	{

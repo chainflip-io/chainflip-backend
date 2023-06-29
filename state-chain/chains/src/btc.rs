@@ -148,26 +148,29 @@ pub struct EpochStartData {
 
 // TODO: To make this work ScriptPubkey needs to implement copy - currently this is not possible
 // 🤷‍♂️.
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
-pub struct BitcoinDepositAddress;
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
+pub struct BitcoinDepositAddress {
+	pub address: ScriptPubkey,
+	pub deposit_fetch_id: BitcoinFetchId,
+}
 
 impl DepositAddressTrait for BitcoinDepositAddress {
 	type Address = ScriptPubkey;
 	type DepositFetchId = BitcoinFetchId;
 
 	fn get_address(&self) -> Self::Address {
-		todo!()
+		self.address.clone()
 	}
 
 	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
-		todo!()
+		self.deposit_fetch_id
 	}
 
 	fn new(_channel_id: u64, _address: Self::Address) -> Self {
 		todo!()
 	}
 
-	fn maybe_recycle(self) -> bool
+	fn maybe_recycle(&self) -> bool
 	where
 		Self: Sized,
 	{

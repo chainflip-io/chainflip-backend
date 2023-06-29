@@ -673,7 +673,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ChannelActions::<T, I>::remove(&address);
 		if let Some(deposit_address_details) = DepositAddressDetailsLookup::<T, I>::get(&address) {
 			if deposit_address_details.1.maybe_recycle() {
-				AddressPool::<T, I>::insert(channel_id, deposit_address_details.1);
+				AddressPool::<T, I>::insert(channel_id, deposit_address_details.1.clone());
 			}
 			Self::deposit_event(Event::<T, I>::StopWitnessing {
 				deposit_address: address,
