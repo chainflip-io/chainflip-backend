@@ -133,8 +133,13 @@ spec:
             - name: chainspec
               mountPath: {{ .Values.basePath }}/{{ .Values.chainspec }}
               subPath: {{ .Values.chainspec }}
+              readOnly: true
             {{- end }}
       volumes:
+        - name: chaindata
+          emptyDir:
+            {}
+
         - name: keys
           secret:
             secretName: {{ .Values.secrets.existingOnePasswordSecret }}
