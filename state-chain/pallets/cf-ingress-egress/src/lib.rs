@@ -37,6 +37,7 @@ pub enum FetchOrTransfer<C: Chain> {
 	Fetch {
 		channel_id: ChannelId,
 		asset: C::ChainAsset,
+		deposit_address: C::ChainAccount,
 	},
 	Transfer {
 		egress_id: EgressId,
@@ -72,19 +73,6 @@ pub(crate) struct CrossChainMessage<C: Chain> {
 impl<C: Chain> CrossChainMessage<C> {
 	fn asset(&self) -> C::ChainAsset {
 		self.asset
-	}
-}
-
-#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum DeploymentStatus {
-	Deployed,   // an address that has already been deployed
-	Undeployed, // an address that has not been deployed yet
-	Pending,    // an address thats deployment is pending, but not yet confirmed
-}
-
-impl Default for DeploymentStatus {
-	fn default() -> Self {
-		Self::Undeployed
 	}
 }
 
@@ -200,7 +188,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		TargetChainAccount<T, I>,
-		DepositAddressDetails<T::TargetChain>,
+		(DepositAddressDetails<T::TargetChain>, DepositAddressOf<T, I>),
 		OptionQuery,
 	>;
 
@@ -244,9 +232,9 @@ pub mod pallet {
 		StorageMap<_, Twox64Concat, ChannelId, DepositAddressOf<T, I>>;
 
 	/// Stores the current addresses in use.
-	#[pallet::storage]
-	pub(crate) type InUseAddresses<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, ChannelId, DepositAddressOf<T, I>>;
+	// #[pallet::storage]
+	// pub(crate) type InUseAddresses<T: Config<I>, I: 'static = ()> =
+	// 	StorageMap<_, Twox64Concat, ChannelId, DepositAddressOf<T, I>>;
 
 	/// Map of channel id to the deposit fetch parameters.
 	#[pallet::storage]
@@ -348,11 +336,17 @@ pub mod pallet {
 		) -> DispatchResult {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 			for (_, deposit_address) in addresses {
-				let channel_id =
+				let deposit_details =
 					DepositAddressDetailsLookup::<T, I>::get(deposit_address.clone()).unwrap();
-				let new_state =
-					InUseAddresses::<T, I>::get(channel_id.channel_id).unwrap().finalize();
-				InUseAddresses::<T, I>::insert(channel_id.channel_id, new_state);
+				// let ad = DepositAddressDetailsLookup::<T, I>::get();
+				let new_state = deposit_details.1.finalize();
+				DepositAddressDetailsLookup::<T, I>::insert(
+					deposit_address,
+					(deposit_details.0, new_state),
+				);
+				// let new_state =
+				// 	InUseAddresses::<T, I>::get(channel_id.channel_id).unwrap().finalize();
+				// InUseAddresses::<T, I>::insert(channel_id.channel_id, new_state);
 			}
 			Ok(())
 		}
@@ -432,19 +426,17 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					.drain_filter(|request| {
 						!DisabledEgressAssets::<T, I>::contains_key(request.asset()) &&
 							match request {
-								FetchOrTransfer::Fetch { channel_id, .. } => {
-									let updated_state =
-										InUseAddresses::<T, I>::get(channel_id.clone())
-											.unwrap()
-											.process();
-									InUseAddresses::<T, I>::insert(
-										channel_id.clone(),
-										updated_state,
+								FetchOrTransfer::Fetch { channel_id, asset, deposit_address } => {
+									let details = DepositAddressDetailsLookup::<T, I>::get(
+										deposit_address.clone(),
+									)
+									.unwrap();
+									let (new_state, skip) = details.1.process_broadcast();
+									DepositAddressDetailsLookup::<T, I>::insert(
+										deposit_address.clone(),
+										(details.0, new_state),
 									);
-									let skip_it = InUseAddresses::<T, I>::get(channel_id.clone())
-										.unwrap()
-										.maybe_skip();
-									skip_it
+									skip
 								},
 								FetchOrTransfer::Transfer { .. } => true,
 							}
@@ -464,16 +456,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		for request in batch_to_send {
 			match request {
-				FetchOrTransfer::<T::TargetChain>::Fetch { channel_id, asset } => {
-					let deposit_fetch_id =
-						InUseAddresses::<T, I>::get(channel_id).unwrap().get_deposit_fetch_id();
-					let deposit_address =
-						InUseAddresses::<T, I>::get(channel_id).unwrap().get_address();
+				FetchOrTransfer::<T::TargetChain>::Fetch { channel_id, asset, deposit_address } => {
+					// let deposit_fetch_id =
+					// 	InUseAddresses::<T, I>::get(channel_id).unwrap().get_deposit_fetch_id();
+					// let deposit_address =
+					// 	InUseAddresses::<T, I>::get(channel_id).unwrap().get_address();
+					let details = DepositAddressDetailsLookup::<T, I>::get(deposit_address.clone())
+						.unwrap()
+						.1;
 					fetch_params.push(FetchAssetParams {
-						deposit_fetch_id: deposit_fetch_id.into(),
+						deposit_fetch_id: details.get_deposit_fetch_id().into(),
 						asset,
 					});
-					addresses.push((deposit_fetch_id, deposit_address.clone()));
+					addresses.push((details.get_deposit_fetch_id(), deposit_address.clone()));
 				},
 				FetchOrTransfer::<T::TargetChain>::Transfer {
 					asset,
@@ -559,7 +554,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> DispatchResult {
 		let DepositAddressDetails { channel_id, source_asset } =
 			DepositAddressDetailsLookup::<T, I>::get(&deposit_address)
-				.ok_or(Error::<T, I>::InvalidDepositAddress)?;
+				.ok_or(Error::<T, I>::InvalidDepositAddress)?
+				.0;
 		ensure!(source_asset == asset, Error::<T, I>::AssetMismatch);
 
 		if amount < MinimumDeposit::<T, I>::get(asset) {
@@ -576,6 +572,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<T::TargetChain>::Fetch {
 			channel_id,
 			asset,
+			deposit_address: deposit_address.clone(),
 		});
 
 		Self::deposit_event(Event::<T, I>::DepositFetchesScheduled { channel_id, asset });
@@ -662,7 +659,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// 	}
 		// }
 
-		InUseAddresses::<T, I>::insert(channel_id, deposit_address_wrapper.clone());
+		// InUseAddresses::<T, I>::insert(channel_id, deposit_address_wrapper.clone());
 
 		let new_address = deposit_address_wrapper.get_address();
 
@@ -671,7 +668,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		DepositAddressDetailsLookup::<T, I>::insert(
 			new_address.clone(),
-			DepositAddressDetails { channel_id, source_asset },
+			(DepositAddressDetails { channel_id, source_asset }, deposit_address_wrapper),
 		);
 
 		Ok((channel_id, new_address))
@@ -679,14 +676,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn close_channel(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
 		ChannelActions::<T, I>::remove(&address);
-		let dep_address = InUseAddresses::<T, I>::take(channel_id).unwrap();
-		if dep_address.maybe_recycle() {
-			AddressPool::<T, I>::insert(channel_id, dep_address);
-		}
-		if let Some(deposit_address_details) = DepositAddressDetailsLookup::<T, I>::take(&address) {
+		if let Some(deposit_address_details) = DepositAddressDetailsLookup::<T, I>::get(&address) {
+			if deposit_address_details.1.maybe_recycle() {
+				AddressPool::<T, I>::insert(channel_id, deposit_address_details.1);
+			}
 			Self::deposit_event(Event::<T, I>::StopWitnessing {
 				deposit_address: address,
-				source_asset: deposit_address_details.source_asset,
+				source_asset: deposit_address_details.0.source_asset,
 			});
 		} else {
 			log::error!("This should not error since we create the DepositAddressDetailsLookup at the time of opening the channel")

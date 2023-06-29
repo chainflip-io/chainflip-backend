@@ -20,10 +20,10 @@ benchmarks_instance_pallet! {
 		let deposit_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
 		let source_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
 		let deposit_amount: <<T as Config<I>>::TargetChain as Chain>::ChainAmount = BenchmarkValue::benchmark_value();
-		DepositAddressDetailsLookup::<T, I>::insert(&deposit_address, DepositAddressDetails {
-				channel_id: 1,
-				source_asset,
-			});
+		// DepositAddressDetailsLookup::<T, I>::insert(&deposit_address, DepositAddressDetails {
+		// 		channel_id: 1,
+		// 		source_asset,
+		// 	});
 		ChannelActions::<T, I>::insert(&deposit_address, ChannelAction::<T::AccountId>::LiquidityProvision {
 			lp_account: account("doogle", 0, 0)
 		});

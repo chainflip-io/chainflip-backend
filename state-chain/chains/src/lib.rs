@@ -374,21 +374,14 @@ pub trait DepositAddress {
 	/// Returns the deposit fetch id.
 	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId;
 
-	/// Indicates if we want to skip the broadcast.
-	fn maybe_skip(self) -> bool
+	/// Set the state of the
+	fn process_broadcast(self) -> (Self, bool)
 	where
 		Self: Sized,
 	{
-		false
+		(self, false)
 	}
 
-	/// Set the state of the
-	fn process(self) -> Self
-	where
-		Self: Sized,
-	{
-		self
-	}
 	fn finalize(self) -> Self
 	where
 		Self: Sized,

@@ -575,7 +575,7 @@ impl From<H256> for TransactionHash {
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
-enum DeploymentStatus {
+pub enum DeploymentStatus {
 	Deployed,
 	Pending,
 	Undeployed,
@@ -601,10 +601,10 @@ impl ChannelIdConstructor for EthereumChannelId {
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub struct EthereumDepositAddress {
-	address: H160,
-	channel_id: u64,
-	deployment_status: DeploymentStatus,
-	deposit_fetch_id: EthereumChannelId,
+	pub address: H160,
+	pub channel_id: u64,
+	pub deployment_status: DeploymentStatus,
+	pub deposit_fetch_id: EthereumChannelId,
 }
 
 impl DepositAddress for EthereumDepositAddress {
@@ -615,18 +615,18 @@ impl DepositAddress for EthereumDepositAddress {
 		self.address
 	}
 
-	fn process(mut self) -> Self
+	fn process_broadcast(mut self) -> (Self, bool)
 	where
 		Self: Sized,
 	{
 		match self.deployment_status {
-			DeploymentStatus::Deployed => {},
-			DeploymentStatus::Pending => {},
+			DeploymentStatus::Deployed => (self, true),
+			DeploymentStatus::Pending => (self, false),
 			DeploymentStatus::Undeployed => {
 				self.deployment_status = DeploymentStatus::Pending;
+				(self, true)
 			},
 		}
-		self
 	}
 
 	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
@@ -639,17 +639,6 @@ impl DepositAddress for EthereumDepositAddress {
 			channel_id,
 			deployment_status: DeploymentStatus::Undeployed,
 			deposit_fetch_id: EthereumChannelId::UnDeployed(channel_id),
-		}
-	}
-
-	fn maybe_skip(self) -> bool
-	where
-		Self: Sized,
-	{
-		match self.deployment_status {
-			DeploymentStatus::Deployed => false,
-			DeploymentStatus::Pending => true,
-			DeploymentStatus::Undeployed => false,
 		}
 	}
 
@@ -667,6 +656,7 @@ impl DepositAddress for EthereumDepositAddress {
 		match self.deployment_status {
 			DeploymentStatus::Pending => {
 				self.deposit_fetch_id = EthereumChannelId::Deployed(self.address);
+				self.deployment_status = DeploymentStatus::Deployed;
 			},
 			DeploymentStatus::Undeployed => self.deployment_status = DeploymentStatus::Pending,
 			_ => (),
