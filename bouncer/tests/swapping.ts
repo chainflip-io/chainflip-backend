@@ -6,6 +6,7 @@ import { getAddress, runWithTimeout } from "../shared/utils";
 import { BtcAddressType } from "../shared/new_btc_address";
 import { CcmDepositMetadata, ForeignChainAddress } from "../shared/new_swap";
 import Web3 from 'web3';
+import { randomAsNumber } from "@polkadot/util-crypto";
 
 let swapCount = 1;
 
@@ -27,62 +28,108 @@ async function testSwap(sourceToken: Asset, destToken: Asset, addressType?: BtcA
 }
 
 async function testAll() {
-    const regularSwaps =
-        Promise.all([
-            testSwap('DOT', 'BTC', 'P2PKH'),
-            testSwap('ETH', 'BTC', 'P2SH'),
-            testSwap('USDC', 'BTC', 'P2WPKH'),
-            testSwap('DOT', 'BTC', 'P2WSH'),
-            testSwap('BTC', 'DOT'),
-            testSwap('DOT', 'USDC'),
-            testSwap('DOT', 'ETH'),
-            testSwap('BTC', 'ETH'),
-            testSwap('BTC', 'USDC'),
-
-        ])
+    // await Promise.all([
+    //         testSwap('DOT', 'BTC', 'P2PKH'),
+    //         testSwap('ETH', 'BTC', 'P2SH'),
+    //         testSwap('USDC', 'BTC', 'P2WPKH'),
+    //         testSwap('DOT', 'BTC', 'P2WSH'),
+    //         testSwap('BTC', 'DOT'),
+    //         testSwap('DOT', 'USDC'),
+    //         testSwap('DOT', 'ETH'),
+    //         testSwap('BTC', 'ETH'),
+    //         testSwap('BTC', 'USDC'),
+    //     ])
     
-    // TODO: We can't do multiple CCM swaps in parallel from the same chain to ETH because
-    // we get either the same deposit address or we get an undefined one. It is parsed by
-    // dstAddress so since they both have the same dstAddress, the second one will fail.
-    const ccmSwaps = 
-        Promise.all([
-            // NOTE: Seems like having a CCM swap and another without CCM with the same
-            // src & dst chain fails. Needs to be investigated.
-            testSwap('BTC', 'ETH', undefined, {
-                message: 'BTC to ETH w/ CCM!!',
+    // NOTE: Doing the CCM swaps separately because of the nonce bug.
+    await Promise.all([
+        testSwap('BTC', 'ETH', undefined, {
+            message: new Web3().eth.abi.encodeParameter("string", "BTC to ETH w/ CCM!!"),
+            gas_budget: 1000000,
+            cf_parameters: [0],
+            source_address: ForeignChainAddress.Bitcoin,
+        }),
+    ])
+
+    await Promise.all([
+            testSwap('BTC', 'USDC', undefined, {
+                message: new Web3().eth.abi.encodeParameter("string", "BTC to USDC w/ CCM!!"),
                 gas_budget: 1000000,
                 cf_parameters: [0],
                 source_address: ForeignChainAddress.Bitcoin,
             }),
-            // testSwap('BTC', 'USDC', undefined, {
-            //     message: 'BTC to USDC w/ CCM!!',
-            //     gas_budget: 1000000,
-            //     cf_parameters: [0],
-            //     source_address: ForeignChainAddress.Bitcoin,
-            // }),
-            // testSwap('BTC', 'ETH', undefined, {
-            //     message: generateAbiEncodedMessage(),
-            //     gas_budget: 1000000,
-            //     cf_parameters: [0],
-            //     source_address: ForeignChainAddress.Bitcoin,
-            // }),            
-            // testSwap('DOT', 'ETH', undefined, {
-            //     message: 'DOT to ETH w/ CCM!!',
-            //     gas_budget: 1000000,
-            //     cf_parameters: [0],
-            //     source_address: ForeignChainAddress.Polkadot,
-            // }),            
+    ])
+
+    await Promise.all([
+            testSwap('BTC', 'ETH', undefined, {
+                message: getAbiEncodedMessage(),
+                gas_budget: 1000000,
+                cf_parameters: [0],
+                source_address: ForeignChainAddress.Bitcoin,
+            }),       
+    ])
+
+    await Promise.all([
+        testSwap('BTC', 'ETH', undefined, {
+            message: getAbiEncodedMessage(["address","uint256","bytes"]),
+            gas_budget: 1000000,
+            cf_parameters: [0],
+            source_address: ForeignChainAddress.Bitcoin,
+        }),       
+])
+
+    await Promise.all([
+            testSwap('DOT', 'ETH', undefined, {
+                message: getAbiEncodedMessage(["string","address"]),
+                gas_budget: 1000000,
+                cf_parameters: [0],
+                source_address: ForeignChainAddress.Polkadot,
+            }),            
         ])
-
-    await Promise.all([regularSwaps, ccmSwaps]);
+    await Promise.all([
+        testSwap('DOT', 'ETH', undefined, {
+            message: getAbiEncodedMessage(),
+            gas_budget: 1000000,
+            cf_parameters: [0],
+            source_address: ForeignChainAddress.Polkadot,
+        }),            
+    ])        
 }
 
 
-function generateAbiEncodedMessage(): string {
-    const web3 = new Web3();
-    return web3.eth.abi.encodeParameters(['uint256','string'], ['2345675643', 'Hello!%'])
-}
+function getAbiEncodedMessage(types?: string[]): string {
+    const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
 
+    const validSolidityTypes = ['uint256', 'string', 'bytes', 'address'];
+
+    if (types === undefined) {
+        types = [];
+        for (let i = 0; i < Math.floor(Math.random() * validSolidityTypes.length) + 1; i++) {
+            types.push(validSolidityTypes[Math.floor(Math.random() * validSolidityTypes.length)]);
+          }
+    }
+    const variables: any[] = [];
+    for (const type of types) {
+      switch (type) {
+        case 'uint256':
+          variables.push(randomAsNumber());
+          break;
+        case 'string':
+          variables.push(Math.random().toString(36).substring(2));
+          break;
+        case 'bytes':
+          variables.push(randomAsHex(Math.floor(Math.random() * 100) + 1));
+          break;
+        case 'address':
+          variables.push(randomAsHex(20));
+          break;
+        // Add more cases for other Solidity types as needed
+        default:
+          throw new Error(`Unsupported Solidity type: ${type}`);
+      }
+    }
+    const encodedMessage = web3.eth.abi.encodeParameters(types, variables);
+    return encodedMessage;
+  }
 
 runWithTimeout(testAll(), 1800000).then(() => {
     // Don't wait for the timeout future to finish:
