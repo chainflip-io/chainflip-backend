@@ -64,6 +64,7 @@ secrets:
 
 cluster: ""
 chainspec: sisyphos.chainspec.json
+chainspecSecret: chainflip-node-chainspec
 
 ports:
   wsPort: "9944"

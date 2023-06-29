@@ -121,7 +121,17 @@ spec:
               mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
             - name: keys
               mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/keys
+            {{- if .Values.chainspecSecret }}
+            - name: chainspec
+              mountPath: /etc/chainflip/{{ .Values.chainspec }}
+              subPath: {{ .Values.chainspec }}
+            {{- end }}
       volumes:
+        {{- if .Values.chainspecSecret }}
+        - name: chainspec
+          secret:
+            secretName: "{{ include "chainflip-node.fullname" . }}-chainspec"
+        {{- end }}
         - name: keys
           secret:
             secretName: {{ .Values.secrets.existingOnePasswordSecret }}
