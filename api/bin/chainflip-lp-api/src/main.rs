@@ -2,7 +2,7 @@ use cf_utilities::try_parse_number_or_hex;
 use chainflip_api::{
 	self,
 	lp::{self, BuyOrSellOrder, Tick},
-	primitives::{AccountRole, Asset},
+	primitives::{AccountRole, Asset, EncodedAddress},
 	settings::StateChain,
 };
 use clap::Parser;
@@ -21,6 +21,12 @@ pub trait Rpc {
 
 	#[method(name = "liquidityDeposit")]
 	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<String, Error>;
+
+	#[method(name = "registerEmergencyWithdrawalAddress")]
+	async fn register_emergency_withdrawal_address(
+		&self,
+		address: EncodedAddress,
+	) -> Result<String, Error>;
 
 	#[method(name = "withdrawAsset")]
 	async fn withdraw_asset(
@@ -89,6 +95,16 @@ impl RpcServer for RpcServerImpl {
 		lp::request_liquidity_deposit_address(&self.state_chain_settings, asset)
 			.await
 			.map(|address| address.to_string())
+			.map_err(|e| Error::Custom(e.to_string()))
+	}
+
+	async fn register_emergency_withdrawal_address(
+		&self,
+		address: EncodedAddress,
+	) -> Result<String, Error> {
+		lp::register_emergency_withdrawal_address(&self.state_chain_settings, address)
+			.await
+			.map(|tx_hash| tx_hash.to_string())
 			.map_err(|e| Error::Custom(e.to_string()))
 	}
 

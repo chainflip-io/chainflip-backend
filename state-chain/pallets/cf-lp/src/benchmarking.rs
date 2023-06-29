@@ -1,7 +1,7 @@
 #![cfg(feature = "runtime-benchmarks")]
 
 use super::*;
-use cf_chains::benchmarking_value::BenchmarkValue;
+use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
 use cf_primitives::Asset;
 use cf_traits::AccountRoleRegistry;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
@@ -13,6 +13,10 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
+		let _ = Pallet::<T>::register_emergency_withdrawal_address(
+			RawOrigin::Signed(caller.clone()).into(),
+			EncodedAddress::Eth(Default::default()),
+		);
 	}: _(RawOrigin::Signed(caller), Asset::Eth)
 
 	withdraw_asset {
@@ -42,6 +46,10 @@ benchmarks! {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
 		let _ = Pallet::<T>::register_lp_account(RawOrigin::Signed(caller.clone()).into());
+		let _ = Pallet::<T>::register_emergency_withdrawal_address(
+			RawOrigin::Signed(caller.clone()).into(),
+			EncodedAddress::Eth(Default::default()),
+		);
 		for i in 0..a {
 			assert_ok!(Pallet::<T>::request_liquidity_deposit_address(RawOrigin::Signed(caller.clone()).into(), Asset::Eth));
 		}
@@ -62,6 +70,15 @@ benchmarks! {
 		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());
 	} verify {
 		assert_eq!(crate::LpTTL::<T>::get(), ttl);
+	}
+
+	register_emergency_withdrawal_address {
+		let caller: T::AccountId = whitelisted_caller();
+		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
+		<T as Chainflip>::AccountRoleRegistry::register_as_liquidity_provider(&caller).unwrap();
+	}: _(RawOrigin::Signed(caller.clone()), EncodedAddress::Eth([0x01; 20]))
+	verify {
+		assert_eq!(EmergencyWithdrawalAddress::<T>::get(caller, ForeignChain::Ethereum), Some(ForeignChainAddress::Eth([0x01; 20])));
 	}
 
 	impl_benchmark_test_suite!(
