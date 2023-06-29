@@ -114,6 +114,6 @@ pub mod common {
 		use cf_chains::{btc::Bitcoin, Chain};
 
 		/// Number of blocks to wait for until we deem a BTC deposit to be safe.
-		pub const BLOCK_SAFETY_MARGIN: <Bitcoin as Chain>::ChainBlockNumber = 6;
+		pub const BLOCK_SAFETY_MARGIN: <Bitcoin as Chain>::ChainBlockNumber = 1;
 	}
 }
