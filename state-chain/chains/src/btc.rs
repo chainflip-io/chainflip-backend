@@ -166,6 +166,13 @@ impl DepositAddressTrait for BitcoinDepositAddress {
 	fn new(_channel_id: u64, _address: Self::Address) -> Self {
 		todo!()
 	}
+
+	fn maybe_recycle(self) -> bool
+	where
+		Self: Sized,
+	{
+		false
+	}
 }
 
 impl Chain for Bitcoin {

@@ -237,11 +237,11 @@ impl DepositAddress for PolkadotDepositAddress {
 	type DepositFetchId = PolkadotChannelId;
 
 	fn get_address(&self) -> Self::Address {
-		todo!()
+		self.address
 	}
 
 	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
-		todo!()
+		self.deposit_fetch_id
 	}
 
 	fn new(channel_id: u64, address: Self::Address) -> Self {

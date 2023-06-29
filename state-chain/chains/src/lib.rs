@@ -392,6 +392,6 @@ pub trait DepositAddress {
 	where
 		Self: Sized,
 	{
-		false
+		true
 	}
 }
