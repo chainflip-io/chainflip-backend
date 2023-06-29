@@ -72,7 +72,7 @@ impl HasBlockNumber for EthNumberBloom {
 	}
 }
 
-fn core_h256(h: web3::types::H256) -> sp_core::H256 {
+pub fn core_h256(h: web3::types::H256) -> sp_core::H256 {
 	h.0.into()
 }
 
@@ -182,6 +182,7 @@ macro_rules! retry_rpc_until_success {
 	}};
 }
 
+/// Wraps a web3 crate stream so it unsubscribes when dropped.
 pub struct ConscientiousEthWebsocketBlockHeaderStream {
 	stream: Option<
 		web3::api::SubscriptionStream<web3::transports::WebSocket, web3::types::BlockHeader>,
