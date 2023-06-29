@@ -7,10 +7,10 @@ use sp_core::{sr25519, H256};
 
 pub struct Config;
 
-pub const NETWORK_NAME: &str = "Chainflip-Testnet";
-pub const CHAIN_TYPE: ChainType = ChainType::Local;
+pub const NETWORK_NAME: &str = "Chainflip-Partnernet";
+pub const CHAIN_TYPE: ChainType = ChainType::Live;
 
-pub const BITCOIN_NETWORK: BitcoinNetwork = BitcoinNetwork::Regtest;
+pub const BITCOIN_NETWORK: BitcoinNetwork = BitcoinNetwork::Testnet;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	flip_token_address: hex_literal::hex!("Cf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"),
