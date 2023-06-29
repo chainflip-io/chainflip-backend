@@ -31,7 +31,7 @@ use crate::{
 	constants::ETH_BLOCK_SAFETY_MARGIN,
 	eth::{
 		ethers_rpc::EthersRpcApi,
-		rpc::{EthRpcApi, EthWsRpcApi},
+		rpc::{with_rpc_timeout, EthRpcApi, EthWsRpcApi},
 		ws_safe_stream::safe_ws_head_stream,
 	},
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
@@ -191,7 +191,7 @@ pub struct ConscientiousEthWebsocketBlockHeaderStream {
 
 impl Drop for ConscientiousEthWebsocketBlockHeaderStream {
 	fn drop(&mut self) {
-		println!("Dropping the ETH WS connection");
+		tracing::warn!("Dropping the ETH WS connection");
 		self.stream.take().unwrap().unsubscribe().now_or_never();
 	}
 }
@@ -218,7 +218,7 @@ pub async fn safe_block_subscription_from(
 where
 {
 	let header_stream = ConscientiousEthWebsocketBlockHeaderStream {
-		stream: Some(eth_ws_rpc.subscribe_new_heads().await?),
+		stream: Some(with_rpc_timeout(eth_ws_rpc.subscribe_new_heads()).await?),
 	};
 	Ok(eth_block_head_stream_from(
 		from_block,

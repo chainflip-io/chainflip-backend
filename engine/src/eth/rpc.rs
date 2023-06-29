@@ -99,7 +99,7 @@ pub trait EthRpcApi: Send + Sync {
 	) -> Result<FeeHistory>;
 }
 
-async fn with_rpc_timeout<F: Future, O, Err>(request_future: F) -> Result<O>
+pub async fn with_rpc_timeout<F: Future, O, Err>(request_future: F) -> Result<O>
 where
 	F: Future<Output = std::result::Result<O, Err>>,
 	Err: Into<anyhow::Error>,
