@@ -1,12 +1,10 @@
 use futures_util::StreamExt;
 use tokio::sync::oneshot;
 use utilities::{
-	loop_select,
+	loop_select, spmc,
 	task_scope::{Scope, OR_CANCEL},
 	UnendingStream,
 };
-
-use crate::common::spmc;
 
 use super::{box_chain_stream, BoxChainStream, ChainSourceWithClient, Header};
 
