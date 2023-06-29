@@ -66,12 +66,12 @@ spec:
           command:
             - /usr/local/bin/chainflip-lp-api
           args:
-            - --port={{ .Values.lpApi.containerPort | default 8080 }}
+            - --port={{ .Values.lpApi.containerPort | default 10589 }}
             - --state_chain.signing_key_file={{ .Values.signingKeyFile }}
             - --state_chain.ws_endpoint={{ .Values.stateChainWsEndpoint }}
           ports:
             - name: lp-api
-              containerPort: {{ .Values.lpApi.containerPort | default 8080 }}
+              containerPort: {{ .Values.lpApi.containerPort | default 10589 }}
               protocol: TCP
           {{ with .Values.lpApi.resources }}
           resources:
