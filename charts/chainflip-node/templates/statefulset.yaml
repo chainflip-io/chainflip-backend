@@ -59,6 +59,28 @@ spec:
             - name: keys
               mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/keys
         {{ end }}
+      {{- if .Values.lpApi.enabled }}
+        - name: {{ .Chart.Name }}-lp-api
+          image: "{{ .Values.lpApi.image.repository }}:{{ .Values.lpApi.image.tag | default "latest" }}"
+          imagePullPolicy: {{ .Values.lpApi.image.pullPolicy }}
+          command:
+            - /usr/local/bin/chainflip-lp-api
+          args:
+            - --port={{ .Values.lpApi.containerPort | default 10589 }}
+            - --state_chain.signing_key_file={{ .Values.signingKeyFile }}
+            - --state_chain.ws_endpoint={{ .Values.stateChainWsEndpoint }}
+          ports:
+            - name: lp-api
+              containerPort: {{ .Values.lpApi.containerPort | default 10589 }}
+              protocol: TCP
+          {{ with .Values.lpApi.resources }}
+          resources:
+          {{- toYaml .| nindent 12 }}
+          {{ end }}
+          volumeMounts:
+            - name: keys
+              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/keys
+        {{ end }}
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -99,7 +121,17 @@ spec:
               mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
             - name: keys
               mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/keys
+            {{- if .Values.chainspecSecret }}
+            - name: chainspec
+              mountPath: /etc/chainflip/{{ .Values.chainspec }}
+              subPath: {{ .Values.chainspec }}
+            {{- end }}
       volumes:
+        {{- if .Values.chainspecSecret }}
+        - name: chainspec
+          secret:
+            secretName: "{{ include "chainflip-node.fullname" . }}-chainspec"
+        {{- end }}
         - name: keys
           secret:
             secretName: {{ .Values.secrets.existingOnePasswordSecret }}
