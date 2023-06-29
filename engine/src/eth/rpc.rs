@@ -106,7 +106,7 @@ where
 {
 	tokio::time::timeout(ETH_HTTP_REQUEST_TIMEOUT, request_future)
 		.await
-		.context("RPC request timed out")?
+		.context("HTTP RPC request timed out")?
 		.map_err(|e| e.into())
 }
 
@@ -270,7 +270,9 @@ impl EthWsRpcApi for EthWsRpcClient {
 	async fn subscribe_new_heads(
 		&self,
 	) -> Result<SubscriptionStream<web3::transports::WebSocket, BlockHeader>> {
-		with_rpc_timeout(self.web3.eth_subscribe().subscribe_new_heads())
+		self.web3
+			.eth_subscribe()
+			.subscribe_new_heads()
 			.await
 			.context("Failed to subscribe to new heads with WS Client")
 	}

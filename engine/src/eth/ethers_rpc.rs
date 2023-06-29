@@ -1,10 +1,12 @@
 use ethers::{prelude::*, signers::Signer, types::transaction::eip2718::TypedTransaction};
+use web3::api::SubscriptionStream;
 
 use crate::settings;
 use anyhow::{anyhow, Ok, Result};
-use std::{str::FromStr, sync::Arc, time::Instant};
+use std::{str::FromStr, sync::Arc, pin::Pin, time::Instant};
 use tokio::sync::Mutex;
 
+use futures::Stream;
 use utilities::read_clean_and_decode_hex_str_file;
 
 #[cfg(test)]
@@ -14,6 +16,8 @@ struct NonceInfo {
 	next_nonce: U256,
 	requested_at: std::time::Instant,
 }
+
+use super::rpc::EthWsRpcClient;
 
 #[derive(Clone)]
 pub struct EthersRpcClient<T: JsonRpcClient> {
@@ -154,20 +158,33 @@ impl<T: JsonRpcClient + 'static> EthersRpcApi for EthersRpcClient<T> {
 	}
 }
 
-#[derive(Clone)]
-pub struct EthersSubscriptionClient {
-	signer: SignerMiddleware<Provider<Ws>, LocalWallet>,
+pub struct ReconnectSubscriptionClient {
+	eth_settings: settings::Eth,
+}
+
+impl ReconnectSubscriptionClient {
+	pub fn new(eth_settings: &settings::Eth) -> Self {
+		Self { eth_settings: eth_settings.clone() }
+	}
 }
 
 #[async_trait::async_trait]
-pub trait EthersSubscribeApi {
-	async fn subscribe_blocks(&self) -> Result<SubscriptionStream<Ws, Block<H256>>>;
+pub trait ReconnectSubscribeApi {
+	async fn subscribe_blocks(&self) -> Result<ConscientiousEthWebsocketBlockHeaderStream>;
 }
 
+use crate::eth::{rpc::EthWsRpcApi, ConscientiousEthWebsocketBlockHeaderStream};
+
 #[async_trait::async_trait]
-impl EthersSubscribeApi for EthersSubscriptionClient {
-	async fn subscribe_blocks(&self) -> Result<SubscriptionStream<Ws, Block<H256>>> {
-		Ok(self.signer.subscribe_blocks().await?)
+impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
+	async fn subscribe_blocks(&self) -> Result<ConscientiousEthWebsocketBlockHeaderStream> {
+		let web3_ws_client = EthWsRpcClient::new(&self.eth_settings, None).await?;
+
+		let header_stream = ConscientiousEthWebsocketBlockHeaderStream {
+			stream: Some(web3_ws_client.subscribe_new_heads().await?),
+		};
+
+		Ok(header_stream)
 	}
 }
 
