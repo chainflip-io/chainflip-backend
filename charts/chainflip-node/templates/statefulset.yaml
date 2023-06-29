@@ -38,8 +38,8 @@ spec:
         {{- end }}
         {{- if .Values.downloadChainspec }}
         - name: s3-downloader
-          image: amazon/aws-cli:latest
-          command: ["sh", "-c", "aws s3 cp s3://{{ .Values.chainspecS3Url }}/${{ .Values.chainspec }} {{ .Values.basePath }}/"]
+          image: curlimages/curl:latest
+          command: ["sh", "-c", "curl -L -o {{ .Values.basePath }}/{{ .Values.chainspec }} {{ .Values.chainspecUrl }}"]
           volumeMounts:
             - name: chainspec
               mountPath: {{ .Values.basePath }}
