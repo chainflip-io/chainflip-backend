@@ -45,13 +45,13 @@ export async function performNativeSwap(destAsset: Asset) {
 
     try {
         const api = await getChainflipApi();
-        const addr = await getAddress(destAsset, 'never');
+        const addr = await getAddress(destAsset, tag);
         log(`Destination address: ${addr}`);
 
         const oldBalance = await getBalance(destAsset, addr);
         // Note that we start observing events before executing
         // the swap to avoid race conditions:
-        log(`Executing native contract swap to(${destAsset}) ${addr}.Current balance: ${oldBalance}`)
+        log(`Executing native contract swap to(${destAsset}) ${addr}. Current balance: ${oldBalance}`)
         const handle = observeEvent("swapping:SwapExecuted", api);
         await executeNativeSwap(destAsset, addr);
         await handle;
