@@ -5,7 +5,11 @@ use utilities::task_scope::Scope;
 use crate::{eth::ethers_rpc::EthersRpcApi, rpc_retrier::RpcRetrierClient};
 use std::{sync::Arc, time::Duration};
 
-use super::{ethers_rpc::EthersRpcClient, rpc::EthWsRpcClient};
+use super::{
+	ethers_rpc::{EthersRpcClient, ReconnectSubscriptionClient},
+	rpc::EthWsRpcClient,
+	ConscientiousEthWebsocketBlockHeaderStream,
+};
 use web3::api::SubscriptionStream;
 
 pub struct EthersRetryRpcClient<T: JsonRpcClient> {
@@ -140,29 +144,24 @@ impl<T: JsonRpcClient + Clone + Send + Sync + 'static> EthersRetryRpcApi
 	}
 }
 
-pub struct EthersRetrySubscribeRpcClient {
-	retry_client: RpcRetrierClient<EthWsRpcClient>,
-}
+use crate::eth::ethers_rpc::ReconnectSubscribeApi;
 
-use super::rpc::EthWsRpcApi;
+pub struct EthersRetrySubscribeRpcClient {
+	retry_client: RpcRetrierClient<ReconnectSubscriptionClient>,
+}
 
 #[async_trait::async_trait]
 pub trait EthersRetrySubscribeApi {
-	async fn subscribe_blocks(
-		&self,
-	) -> SubscriptionStream<web3::transports::WebSocket, web3::types::BlockHeader>;
+	async fn subscribe_blocks(&self) -> ConscientiousEthWebsocketBlockHeaderStream;
 }
 
 #[async_trait::async_trait]
 impl EthersRetrySubscribeApi for EthersRetrySubscribeRpcClient {
-	async fn subscribe_blocks(
-		&self,
-	) -> SubscriptionStream<web3::transports::WebSocket, web3::types::BlockHeader> {
+	async fn subscribe_blocks(&self) -> ConscientiousEthWebsocketBlockHeaderStream {
 		self.retry_client
 			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
-				let client = client.clone();
-				Box::pin(async move { client.subscribe_new_heads().await })
+				Box::pin(async move { client.subscribe_blocks().await })
 			}))
 			.await
 	}

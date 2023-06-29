@@ -158,6 +158,7 @@ impl<T: JsonRpcClient + 'static> EthersRpcApi for EthersRpcClient<T> {
 	}
 }
 
+#[derive(Clone)]
 pub struct ReconnectSubscriptionClient {
 	eth_settings: settings::Eth,
 }
