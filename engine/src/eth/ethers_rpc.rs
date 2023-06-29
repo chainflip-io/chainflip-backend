@@ -157,14 +157,17 @@ impl<T: JsonRpcClient + 'static> EthersRpcApi for EthersRpcClient<T> {
 	}
 }
 
+/// On each subscription this will create a new WS connection.
 #[derive(Clone)]
 pub struct ReconnectSubscriptionClient {
-	eth_settings: settings::Eth,
+	ws_node_endpoint: String,
+	// This value comes from the SC.
+	chain_id: web3::types::U256,
 }
 
 impl ReconnectSubscriptionClient {
-	pub fn new(eth_settings: &settings::Eth) -> Self {
-		Self { eth_settings: eth_settings.clone() }
+	pub fn new(ws_node_endpoint: String, chain_id: web3::types::U256) -> Self {
+		Self { ws_node_endpoint, chain_id }
 	}
 }
 
@@ -178,7 +181,8 @@ use crate::eth::{rpc::EthWsRpcApi, ConscientiousEthWebsocketBlockHeaderStream};
 #[async_trait::async_trait]
 impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
 	async fn subscribe_blocks(&self) -> Result<ConscientiousEthWebsocketBlockHeaderStream> {
-		let web3_ws_client = EthWsRpcClient::new(&self.eth_settings, None).await?;
+		let web3_ws_client =
+			EthWsRpcClient::new(&self.ws_node_endpoint, Some(self.chain_id)).await?;
 
 		let header_stream = ConscientiousEthWebsocketBlockHeaderStream {
 			stream: Some(web3_ws_client.subscribe_new_heads().await?),
