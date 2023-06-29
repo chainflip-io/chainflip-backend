@@ -136,7 +136,7 @@ spec:
               readOnly: true
             {{- end }}
       volumes:
-        - name: chaindata
+        - name: chainspec
           emptyDir:
             {}
 
