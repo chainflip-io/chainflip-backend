@@ -1,5 +1,4 @@
 use ethers::{prelude::*, signers::Signer, types::transaction::eip2718::TypedTransaction};
-use web3::api::SubscriptionStream;
 
 use crate::settings;
 use anyhow::{anyhow, Ok, Result};

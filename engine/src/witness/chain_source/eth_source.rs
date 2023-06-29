@@ -3,9 +3,9 @@ use sp_core::H256;
 use crate::eth::{
 	core_h256, retry_rpc::EthersRetrySubscribeApi, ConscientiousEthWebsocketBlockHeaderStream,
 };
-use futures::{stream::StreamExt, Stream};
+use futures::{stream::StreamExt};
 use futures_util::stream;
-use std::{pin::Pin, time::Duration};
+use std::{time::Duration};
 
 use super::{BoxChainStream, ChainSource, Header};
 
