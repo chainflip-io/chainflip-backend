@@ -39,7 +39,7 @@ pub trait DotRetryRpcApi {
 
 	async fn extrinsics(&self, block_hash: PolkadotHash) -> Option<Vec<ChainBlockExtrinsic>>;
 
-	async fn events(&self, block_hash: PolkadotHash) -> Events<PolkadotConfig>;
+	async fn events(&self, block_hash: PolkadotHash) -> Option<Events<PolkadotConfig>>;
 
 	async fn current_runtime_version(&self) -> RuntimeVersion;
 
@@ -66,7 +66,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 			.await
 	}
 
-	async fn events(&self, block_hash: PolkadotHash) -> Events<PolkadotConfig> {
+	async fn events(&self, block_hash: PolkadotHash) -> Option<Events<PolkadotConfig>> {
 		self.retry_client
 			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]

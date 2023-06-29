@@ -89,7 +89,7 @@ pub trait DotRpcApi: Send + Sync {
 		block_hash: PolkadotHash,
 	) -> Result<Option<Vec<ChainBlockExtrinsic>>>;
 
-	async fn events(&self, block_hash: PolkadotHash) -> Result<Events<PolkadotConfig>>;
+	async fn events(&self, block_hash: PolkadotHash) -> Result<Option<Events<PolkadotConfig>>>;
 
 	async fn current_runtime_version(&self) -> Result<RuntimeVersion>;
 
@@ -117,7 +117,9 @@ impl DotRpcApi for DotRpcClient {
 			.map(|o| o.map(|b| b.block.extrinsics))
 	}
 
-	async fn events(&self, block_hash: PolkadotHash) -> Result<Events<PolkadotConfig>> {
+	/// Returns the events for a particular block hash.
+	/// If the block for the given block hash does not exist, then this returns `Ok(None)`.
+	async fn events(&self, block_hash: PolkadotHash) -> Result<Option<Events<PolkadotConfig>>> {
 		let chain_runtime_version = self.current_runtime_version().await?;
 
 		let client = self.online_client.read().await;
@@ -143,10 +145,14 @@ impl DotRpcApi for DotRpcClient {
 
 		// If we've succeeded in getting the current runtime version then we assume
 		// the connection is stable (or has just been refreshed), no need to retry again.
-		EventsClient::new(client.clone())
-			.at(Some(block_hash))
-			.await
-			.map_err(|e| anyhow!("Failed to query events for block {block_hash}, with error: {e}"))
+		match EventsClient::new(client.clone()).at(Some(block_hash)).await {
+			Ok(events) => Ok(Some(events)),
+			Err(e) => match e {
+				// If the block hash is not found, we want to return None.
+				subxt::Error::Block(_) => Ok(None),
+				_ => Err(e.into()),
+			},
+		}
 	}
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {

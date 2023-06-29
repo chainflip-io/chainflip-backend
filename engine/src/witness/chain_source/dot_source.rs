@@ -51,12 +51,16 @@ impl<C: DotRetrySubscribeApi + DotRetryRpcApi + Send + Sync + Clone> ChainSource
 					tokio::time::timeout(TIMEOUT, state.stream.next()).await
 				{
 					if let Ok(header) = header {
+						let Some(events) = state.client.events(header.hash()).await else {
+							continue;
+						};
+
 						return Some((
 							Header {
 								index: header.number,
 								hash: header.hash(),
 								parent_hash: Some(header.parent_hash),
-								data: state.client.events(header.hash()).await,
+								data: events,
 							},
 							state,
 						))
