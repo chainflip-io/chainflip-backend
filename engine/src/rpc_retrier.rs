@@ -2,6 +2,7 @@
 //!
 //! This module provides a generic RPC request retrier. It is used to retry RPC requests
 //! that may fail due to network issues or other transient errors.
+//! On each request it applies a timeout, such that requests cannot hang.
 //! It applies exponential backoff and jitter to the requests if they fail, and will retry them
 //! until they succeed.
 
