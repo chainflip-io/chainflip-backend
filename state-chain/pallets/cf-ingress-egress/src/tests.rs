@@ -27,8 +27,7 @@ const EXPIRY_BLOCK: u64 = 6;
 
 #[track_caller]
 fn expect_size_of_address_pool(size: usize) {
-	let free_addresses = AddressPool::<Test>::iter_keys().count();
-	assert_eq!(free_addresses, size, "Address pool size is incorrect!");
+	assert_eq!(AddressPool::<Test>::iter_keys().count(), size, "Address pool size is incorrect!");
 }
 
 fn mark_as_deployed(address: H160, channel_id: u64) {
