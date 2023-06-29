@@ -59,6 +59,28 @@ spec:
             - name: keys
               mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/keys
         {{ end }}
+      {{- if .Values.lpApi.enabled }}
+        - name: {{ .Chart.Name }}-lp-api
+          image: "{{ .Values.lpApi.image.repository }}:{{ .Values.lpApi.image.tag | default "latest" }}"
+          imagePullPolicy: {{ .Values.lpApi.image.pullPolicy }}
+          command:
+            - /usr/local/bin/chainflip-lp-api
+          args:
+            - --port={{ .Values.lpApi.containerPort | default 8080 }}
+            - --state_chain.signing_key_file={{ .Values.signingKeyFile }}
+            - --state_chain.ws_endpoint={{ .Values.stateChainWsEndpoint }}
+          ports:
+            - name: lp-api
+              containerPort: {{ .Values.lpApi.containerPort | default 8080 }}
+              protocol: TCP
+          {{ with .Values.lpApi.resources }}
+          resources:
+          {{- toYaml .| nindent 12 }}
+          {{ end }}
+          volumeMounts:
+            - name: keys
+              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/keys
+        {{ end }}
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
