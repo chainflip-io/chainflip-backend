@@ -110,3 +110,116 @@ impl UnsignedExtrinsicApi for UnsignedExtrinsicClient {
 			.expect(OR_CANCEL)
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::state_chain_observer::client::{
+		base_rpc_api::MockBaseRpcApi, extrinsic_api::signed::DUMMY_CALL,
+	};
+	use futures_util::FutureExt;
+	use utilities::task_scope::task_scope;
+
+	#[tokio::test]
+	async fn test_successful_unsigned_extrinsic() {
+		task_scope(|scope| {
+			async {
+				let mut mock_rpc_api = MockBaseRpcApi::new();
+
+				// Return a success with the hash of the extrinsic
+				mock_rpc_api.expect_submit_extrinsic().once().returning(|extrinsic| {
+					Ok(sp_runtime::traits::BlakeTwo256::hash_of(&extrinsic))
+				});
+
+				let client = UnsignedExtrinsicClient::new(scope, Arc::new(mock_rpc_api));
+
+				// Send the request
+				let (result_sender, result_receiver) = oneshot::channel();
+				client.request_sender.send((DUMMY_CALL.clone(), result_sender)).await.unwrap();
+
+				// Should get back the hash of the extrinsic
+				let expected_hash = sp_runtime::traits::BlakeTwo256::hash_of(
+					&state_chain_runtime::UncheckedExtrinsic::new_unsigned(DUMMY_CALL.clone()),
+				);
+				assert_eq!(result_receiver.await.unwrap(), expected_hash);
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
+
+	#[tokio::test]
+	async fn should_not_error_if_already_in_pool() {
+		task_scope(|scope| {
+			async {
+				let mut mock_rpc_api = MockBaseRpcApi::new();
+
+				// Return the 1013 error code
+				mock_rpc_api.expect_submit_extrinsic().once().returning(move |_| {
+					Err(jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(
+						jsonrpsee::types::ErrorObject::owned(
+							1013,
+							"Invalid Transaction",
+							Some("POOL_ALREADY_IMPORTED"),
+						),
+					)))
+				});
+
+				let client = UnsignedExtrinsicClient::new(scope, Arc::new(mock_rpc_api));
+
+				// Send the request
+				let (result_sender, result_receiver) = oneshot::channel();
+				client.request_sender.send((DUMMY_CALL.clone(), result_sender)).await.unwrap();
+
+				// Even with the error, we should still get back the hash of the extrinsic
+				let expected_hash = sp_runtime::traits::BlakeTwo256::hash_of(
+					&state_chain_runtime::UncheckedExtrinsic::new_unsigned(DUMMY_CALL.clone()),
+				);
+				assert_eq!(result_receiver.await.unwrap(), expected_hash);
+
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		.unwrap();
+	}
+
+	#[tokio::test]
+	async fn should_error_if_unexpected_error() {
+		task_scope::<(), anyhow::Error, _>(|scope| {
+			async {
+				let mut mock_rpc_api = MockBaseRpcApi::new();
+
+				// Return an unexpected error
+				mock_rpc_api.expect_submit_extrinsic().once().returning(move |_| {
+					Err(jsonrpsee::core::Error::Call(
+						jsonrpsee::types::error::CallError::InvalidParams(anyhow::Error::msg(
+							"🤷‍♂️",
+						)),
+					))
+				});
+
+				let client = UnsignedExtrinsicClient::new(scope, Arc::new(mock_rpc_api));
+
+				// Send the request
+				let (result_sender, result_receiver) = oneshot::channel();
+				client.request_sender.send((DUMMY_CALL.clone(), result_sender)).await.unwrap();
+
+				// Should be no result sent back
+				assert!(result_receiver.await.is_err());
+
+				// Must return an Ok here so that the `unwrap_err` on the scope will fail if the
+				// spawned task is not aborted.
+				Ok(())
+			}
+			.boxed()
+		})
+		.await
+		// The spawned task should aborted, so we expect an error
+		.unwrap_err();
+	}
+}
