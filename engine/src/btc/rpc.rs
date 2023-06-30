@@ -192,12 +192,10 @@ impl BtcRpcApi for BtcRpcClient {
 		Ok(fee_rate_response.feerate.map(|f| f.to_sat()))
 	}
 
-	// TODO: Test
 	async fn best_block_hash(&self) -> anyhow::Result<BlockHash> {
 		Ok(self.call_rpc("getbestblockhash", vec![]).await?)
 	}
 
-	// TODO: test
 	async fn block_header(&self, block_hash: BlockHash) -> anyhow::Result<BlockHeader> {
 		Ok(self.call_rpc("getblockheader", vec![json!(block_hash)]).await?)
 	}
@@ -230,7 +228,7 @@ mod tests {
 
 		println!("block_count: {:?}", block_count);
 
-		let block_hash_zero = client.block_hash(1500).await.unwrap();
+		let block_hash_zero = client.block_hash(block_count).await.unwrap();
 
 		println!("block_hash_zero: {:?}", block_hash_zero);
 
@@ -242,14 +240,24 @@ mod tests {
 
 		println!("next_block_fee_rate: {:?}", next_block_fee_rate);
 
+		let best_block_hash = client.best_block_hash().await.unwrap();
+
+		println!("best_block_hash: {:?}", best_block_hash);
+
+		let block_header = client.block_header(best_block_hash).await.unwrap();
+
+		println!("block_header: {:?}", block_header);
+
 		// Generate new hex bytes using ./bouncer/commands/create_raw_btc_tx.ts;
-		let hex_str =
-		"0200000000010133e287d3a464b226a1917303e1714af508a6bfe219265184a93c7f78851085a30000000000fdffffff0200e1f505000000001976a9149a1c78a507689f6f54b847ad1cef1e614ee23f1e88ac58d94a1f000000001600145baa7941ea1268fbd6279a0408a0419f8acd8245024730440220590dcc64661a362b54543f66d3cd24fdeae8a210643ad4f6fd39031281a9657902201f7a750d01f7cfc948ae4f8b76221b5c325f8ff82ac1b0d1d9a927632b40dd6001210386dc234ecbc4e677b927da260349cbd399c622507feb9dd2895a3537f6d4aa5d00000000";
+		// let hex_str =
+		// "0200000000010133e287d3a464b226a1917303e1714af508a6bfe219265184a93c7f78851085a30000000000fdffffff0200e1f505000000001976a9149a1c78a507689f6f54b847ad1cef1e614ee23f1e88ac58d94a1f000000001600145baa7941ea1268fbd6279a0408a0419f8acd8245024730440220590dcc64661a362b54543f66d3cd24fdeae8a210643ad4f6fd39031281a9657902201f7a750d01f7cfc948ae4f8b76221b5c325f8ff82ac1b0d1d9a927632b40dd6001210386dc234ecbc4e677b927da260349cbd399c622507feb9dd2895a3537f6d4aa5d00000000";
 
-		let bytes = hex::decode(hex_str).unwrap();
+		// let bytes = hex::decode(hex_str).unwrap();
 
-		let send_raw_transaction = client.send_raw_transaction(bytes).await.unwrap();
+		// let send_raw_transaction = client.send_raw_transaction(bytes).await.unwrap();
 
-		println!("tx_id: {:?}", send_raw_transaction);
+		// println!("tx_id: {:?}", send_raw_transaction);
+
+		// let best_
 	}
 }
