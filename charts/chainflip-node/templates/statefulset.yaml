@@ -34,7 +34,15 @@ spec:
                 rm -rf /etc/chainflip/chaindata/*
           volumeMounts:
             - name: {{ include "chainflip-node.fullname" . }}
-              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
+              mountPath: {{ .Values.basePath }}/chaindata
+        {{- end }}
+        {{- if .Values.downloadChainspec }}
+        - name: s3-downloader
+          image: curlimages/curl:latest
+          command: ["sh", "-c", "curl -L -o {{ .Values.basePath }}/{{ .Values.chainspec }} {{ .Values.chainspecUrl }}"]
+          volumeMounts:
+            - name: chainspec
+              mountPath: {{ .Values.basePath }}
         {{- end }}
       containers:
       {{- if .Values.brokerApi.enabled }}
@@ -57,7 +65,7 @@ spec:
           {{ end }}
           volumeMounts:
             - name: keys
-              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/keys
+              mountPath: {{ .Values.basePath }}/keys
         {{ end }}
       {{- if .Values.lpApi.enabled }}
         - name: {{ .Chart.Name }}-lp-api
@@ -79,7 +87,7 @@ spec:
           {{ end }}
           volumeMounts:
             - name: keys
-              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/keys
+              mountPath: {{ .Values.basePath }}/keys
         {{ end }}
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
@@ -87,10 +95,10 @@ spec:
           command:
             - /usr/local/bin/chainflip-node
           args:
-            - --base-path={{ .Values.basePath | default "/etc/chainflip" }}/chaindata
+            - --base-path={{ .Values.basePath }}/chaindata
             - --bootnodes={{ .Values.bootnodes }}
             - --chain=/etc/chainflip/{{ .Values.chainspec }}
-            - --node-key-file={{ .Values.basePath | default "/etc/chainflip" }}/keys/node_key_file
+            - --node-key-file={{ .Values.basePath }}/keys/node_key_file
             - --prometheus-external
             - --state-cache-size=0
             - --validator
@@ -118,20 +126,20 @@ spec:
           {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: {{ include "chainflip-node.fullname" . }}
-              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
+              mountPath: {{ .Values.basePath }}/chaindata
             - name: keys
-              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/keys
-            {{- if .Values.chainspecSecret }}
+              mountPath: {{ .Values.basePath }}/keys
+            {{- if .Values.downloadChainspec }}
             - name: chainspec
-              mountPath: /etc/chainflip/{{ .Values.chainspec }}
+              mountPath: {{ .Values.basePath }}/{{ .Values.chainspec }}
               subPath: {{ .Values.chainspec }}
+              readOnly: true
             {{- end }}
       volumes:
-        {{- if .Values.chainspecSecret }}
         - name: chainspec
-          secret:
-            secretName: "{{ include "chainflip-node.fullname" . }}-chainspec"
-        {{- end }}
+          emptyDir:
+            {}
+
         - name: keys
           secret:
             secretName: {{ .Values.secrets.existingOnePasswordSecret }}
