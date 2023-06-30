@@ -711,23 +711,28 @@ pub mod pallet {
 			let bundle_output = T::SwappingApi::swap_single_leg(direction, asset, bundle_input)?;
 
 			for swap in swaps {
-				let swap_output = multiply_by_rational_with_rounding(
+				if let Some(swap_output) = multiply_by_rational_with_rounding(
 					swap.swap_amount(direction).unwrap_or_default(),
 					bundle_output,
 					bundle_input,
 					Rounding::Down,
-				)
-				.expect("bundle_input >= swap_amount ∴ result can't overflow");
-
-				if swap_output > 0 {
-					swap.update_swap_result(direction, swap_output);
+				) {
+					if swap_output > 0 {
+						swap.update_swap_result(direction, swap_output);
+					} else {
+						// This is unlikely but theoretically possible if, for example, the initial
+						// swap input is so small compared to the total bundle size that it rounds
+						// down to zero when we do the division.
+						log::warn!(
+							"Swap {:?} in bundle {{ input: {bundle_input}, output: {bundle_output} }} resulted in swap output of zero.",
+							swap
+						);
+					}
 				} else {
-					// This is unlikely but theoretically possible if, for example, the initial swap
-					// input is so small compared to the total bundle size that it rounds down to
-					// zero when we do the division.
-					log::warn!(
-						"Swap {:?} in bundle {{ input: {bundle_input}, output: {bundle_output} }} resulted in swap output of zero.",
-						swap
+					log::error!(
+						"Unable to calculate swap output for swap {}. Swap amount: {}, bundle input/output: {bundle_input}/{bundle_output}", 
+						swap.swap_id,
+						swap.swap_amount(direction).unwrap_or_default()
 					);
 				}
 			}
@@ -856,7 +861,7 @@ pub mod pallet {
 
 			let encoded_destination_address =
 				T::AddressConverter::try_to_encoded_address(destination_address.clone())
-					.expect("what to expect here?");
+					.expect("destination address was created from encoded address");
 
 			if let Some(swap_id) =
 				Self::schedule_swap_from_channel_received(from, to, amount, destination_address)
