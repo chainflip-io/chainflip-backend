@@ -1,7 +1,5 @@
-use cf_chains::dot;
 use frame_system::AccountInfo;
 use jsonrpsee::types::ErrorObject;
-use lazy_static::lazy_static;
 use mockall::predicate::eq;
 use pallet_cf_chain_tracking::ChainState;
 use sp_core::{
@@ -18,21 +16,6 @@ use crate::{
 
 const INITIAL_NONCE: Nonce = 10;
 const INITIAL_BLOCK_NUMBER: BlockNumber = 0;
-
-lazy_static! {
-	// Just some dummy call to test with
-	static ref DUMMY_CALL: state_chain_runtime::RuntimeCall = state_chain_runtime::RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
-		call: Box::new(state_chain_runtime::RuntimeCall::PolkadotChainTracking(
-			pallet_cf_chain_tracking::Call::update_chain_state {
-				new_chain_state: ChainState {
-					block_height: 0,
-					tracked_data: dot::PolkadotTrackedData { median_tip: 0 },
-				},
-			},
-		)),
-		epoch_index: 0,
-	});
-}
 
 // TODO: deduplicate this with the one in the signer module
 fn test_header(number: u32) -> state_chain_runtime::Header {

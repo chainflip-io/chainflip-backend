@@ -322,6 +322,11 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 
 		self.cleanup_requests(block.header.number, requests).await?;
 
+		// `detect_nonce_fault_and_try_fix` must be called after cleanup. So that if the finalized
+		// nonce moved forward, the request map will be empty and this check will not do anything.
+		// Otherwise it could get stuck.
+		self.detect_nonce_fault_and_try_fix(requests).await?;
+
 		Ok(())
 	}
 
@@ -403,6 +408,8 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		requests: &mut BTreeMap<RequestID, Request>,
 	) {
 		self.submissions_by_nonce.retain(|nonce, submissions| {
+			// All submission should be completed in order, so `find_submission_and_process` should
+			// have removed any submission with a nonce up to the finalized nonce.
 			assert!(self.finalized_nonce <= *nonce, "{SUBSTRATE_BEHAVIOUR}");
 
 			submissions.retain(|submission| {
@@ -448,6 +455,66 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			if request.pending_submissions == 0 {
 				debug!("Resubmitting extrinsic as all existing submissions have expired.");
 				self.submit_extrinsic(request).await?;
+			}
+		}
+
+		Ok(())
+	}
+
+	async fn detect_nonce_fault_and_try_fix(
+		&mut self,
+		requests: &mut BTreeMap<u64, Request>,
+	) -> Result<()> {
+		// TODO: Handle possibility of stuck nonce caused submissions being dropped from the mempool
+		// or broken submissions either submitted here or externally when only using
+		// submit_signed_extrinsics
+		// TODO: Improve handling only submit_signed_extrinsic requests (using
+		// pending_extrinsics rpc call)
+		// TODO: Use system_accountNextIndex
+
+		// Shuffle the requests so we don't get stuck on a single broken request
+		let mut shuffled_requests = {
+			use rand::prelude::SliceRandom;
+			let mut requests = requests
+				.iter_mut()
+				.filter(|(_, request)| request.allow_resubmits)
+				.collect::<Vec<_>>();
+			requests.shuffle(&mut rand::thread_rng());
+			requests.into_iter()
+		};
+
+		if let Some((_, request)) = shuffled_requests.next() {
+			// TODO: Detect stuck state via getting all pending extrinsics, and checking for missing
+			// extrinsics above finalized nonce
+
+			// If a request exists, it should have already been submitted at the finalized nonce, so
+			// if we submit a random request at the finalized nonce and it succeeds, we know there
+			// is a gap.
+			match self.submit_extrinsic_at_nonce(request, self.finalized_nonce()).await? {
+				Ok(_) => {
+					// To patch the gap, we submit requests again progressing forward from the
+					// finalized nonce until we hit a NonceTooLow error, which will happen when we
+					// get to the nonce of the original submission.
+					debug!("Detected a gap in the account's submitted nonce values, pending extrinsics after this gap will not be including in blocks, unless the gap is filled. Attempting to resolve.");
+					self.anticipated_nonce = self.finalized_nonce() + 1;
+					for (_, request) in shuffled_requests {
+						match self
+							.submit_extrinsic_at_nonce(request, self.anticipated_nonce)
+							.await?
+						{
+							Ok(_) => {
+								self.anticipated_nonce += 1;
+							},
+							Err(SubmissionLogicError::NonceTooLow) => {
+								self.anticipated_nonce += 1;
+								break
+							},
+						}
+					}
+				},
+				Err(SubmissionLogicError::NonceTooLow) => {
+					// Expected case, so we ignore
+				},
 			}
 		}
 
