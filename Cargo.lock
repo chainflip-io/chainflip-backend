@@ -1171,11 +1171,14 @@ name = "chainflip-broker-api"
 version = "0.8.6"
 dependencies = [
  "anyhow",
+ "cf-chains",
  "chainflip-api",
  "clap 3.2.25",
  "hex",
  "jsonrpsee 0.16.2",
  "serde",
+ "sp-rpc",
+ "state-chain-runtime",
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.17",
