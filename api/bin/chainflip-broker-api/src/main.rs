@@ -15,7 +15,7 @@ use jsonrpsee::{
 use serde::{Deserialize, Serialize};
 use sp_rpc::number::NumberOrHex;
 use state_chain_runtime::chainflip::ChainAddressConverter;
-use std::path::PathBuf;
+use std::{path::PathBuf, vec};
 
 /// The response type expected by the broker api.
 ///
@@ -42,10 +42,25 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 #[derive(Serialize, Deserialize)]
 pub struct BrokerCcmDepositMetadata {
 	gas_budget: NumberOrHex,
-	message: Vec<u8>,
-	cf_parameters: Vec<u8>,
+	message: String,
 	source_address: String,
 	source_chain: ForeignChain,
+	cf_parameters: Option<String>,
+}
+
+fn try_convert_string_to_bytes(string: &str) -> Result<Vec<u8>, ()> {
+	hex::decode(if string.starts_with("0x") { &string[2..] } else { string }).or(Err(()))
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn test_decoding() {
+		assert_eq!(try_convert_string_to_bytes("0x00").unwrap(), vec![0]);
+		assert_eq!(try_convert_string_to_bytes("").unwrap(), Vec::<u8>::new());
+	}
 }
 
 impl TryInto<CcmDepositMetadata> for BrokerCcmDepositMetadata {
@@ -57,13 +72,16 @@ impl TryInto<CcmDepositMetadata> for BrokerCcmDepositMetadata {
 			.or(Err("Failed to parse source address"))?;
 		let source_address = ChainAddressConverter::try_from_encoded_address(encoded_address)
 			.or(Err("Failed to parse source address"))?;
+		let message =
+			try_convert_string_to_bytes(&self.message).or(Err("Failed to parse message"))?;
+		let cf_parameters = self
+			.cf_parameters
+			.map(|parameters| try_convert_string_to_bytes(&parameters))
+			.transpose()
+			.or(Err("Failed to parse cf parameters"))?
+			.unwrap_or(vec![]);
 
-		Ok(CcmDepositMetadata {
-			gas_budget,
-			message: self.message,
-			cf_parameters: self.cf_parameters,
-			source_address,
-		})
+		Ok(CcmDepositMetadata { gas_budget, message, cf_parameters, source_address })
 	}
 }
 
