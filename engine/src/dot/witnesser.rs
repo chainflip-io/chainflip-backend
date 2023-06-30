@@ -9,6 +9,7 @@ use cf_primitives::{chains::assets, EpochIndex, PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use frame_support::scale_info::TypeInfo;
 use futures::{stream, Stream, StreamExt, TryStreamExt};
+use pallet_cf_chain_tracking::ChainState;
 use pallet_cf_ingress_egress::DepositWitness;
 use sp_core::H256;
 use state_chain_runtime::PolkadotInstance;
@@ -317,9 +318,9 @@ where
 				pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(state_chain_runtime::RuntimeCall::PolkadotChainTracking(
 						pallet_cf_chain_tracking::Call::update_chain_state {
-							state: dot::PolkadotTrackedData {
+							new_chain_state: ChainState {
 								block_height: block_number,
-								median_tip,
+								tracked_data: dot::PolkadotTrackedData { median_tip },
 							},
 						},
 					)),
