@@ -278,7 +278,7 @@ pub trait EthContractWitnesser {
 }
 
 pub type DecodeLogClosure<EventParameters> =
-	Box<dyn Fn(H256, ethabi::RawLog) -> Result<EventParameters> + Send + Sync + 'static>;
+	Box<dyn Fn(ethabi::RawLog) -> Result<EventParameters> + Send + Sync + 'static>;
 
 const MAX_SECRET_CHARACTERS_REVEALED: usize = 3;
 const SCHEMA_PADDING_LEN: usize = 3;

@@ -36,13 +36,12 @@ impl<T: JsonRpcClient + 'static> VaultApi for VaultRpc<T> {
 }
 
 #[allow(unused)]
-enum CallFromEventError {
+pub enum CallFromEventError {
 	Network(anyhow::Error),
 	Decode(String),
 }
 
-#[allow(unused)]
-async fn call_from_event<StateChainClient>(
+pub async fn call_from_event<StateChainClient>(
 	event: Event<VaultEvents>,
 	state_chain_client: Arc<StateChainClient>,
 ) -> Result<pallet_cf_swapping::Call<state_chain_runtime::Runtime>, CallFromEventError>
