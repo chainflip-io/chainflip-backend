@@ -70,7 +70,7 @@ async function observeEvent(eventName: string, dataCheck: (data: any) => boolean
   return result;
 }
 
-async function setupEmergencyWithdrawalAddress(address: any): Promise<void> {
+export async function setupEmergencyWithdrawalAddress(address: any): Promise<void> {
   console.log('Registering Emergency Withdrawal Address. Address:' + address);
   await mutex.runExclusive(async () => {
     await chainflip.tx.liquidityProvider
@@ -215,13 +215,13 @@ async function main(): Promise<void> {
   lp = keyring.createFromUri(lpUri);
   
   // Register Emergency withdrawal address for all chains
-  const encoded_eth_addr = chainflip.createType('EncodedAddress', {"Eth": hexStringToBytesArray(await getAddress('ETH', 'LP_1'))});
-  const encoded_dot_addr = chainflip.createType('EncodedAddress', {"Dot": lp.publicKey});
-  const encoded_btc_addr = chainflip.createType('EncodedAddress', {"Btc": asciiStringToBytesArray(await getAddress('BTC', 'LP_1'))});
+  const encodedEthAddr = chainflip.createType('EncodedAddress', {"Eth": hexStringToBytesArray(await getAddress('ETH', 'LP_1'))});
+  const encodedDotAddr = chainflip.createType('EncodedAddress', {"Dot": lp.publicKey});
+  const encodedBtcAddr = chainflip.createType('EncodedAddress', {"Btc": asciiStringToBytesArray(await getAddress('BTC', 'LP_1'))});
 
-  await setupEmergencyWithdrawalAddress(encoded_eth_addr);
-  await setupEmergencyWithdrawalAddress(encoded_dot_addr);
-  await setupEmergencyWithdrawalAddress(encoded_btc_addr);
+  await setupEmergencyWithdrawalAddress(encodedEthAddr);
+  await setupEmergencyWithdrawalAddress(encodedDotAddr);
+  await setupEmergencyWithdrawalAddress(encodedBtcAddr);
 
   // We need USDC to complete before the others.
   await setupCurrency('usdc');

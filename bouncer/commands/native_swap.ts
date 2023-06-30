@@ -2,7 +2,7 @@ import { executeSwap, ExecuteSwapParams } from '@chainflip-io/cli';
 import { Wallet, getDefaultProvider } from 'ethers';
 import { Asset, chainFromAsset } from '../shared/utils';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export async function executeNativeSwap(desetToken: Asset, destAddress: string) {
 
     const wallet = Wallet.fromMnemonic(

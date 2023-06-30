@@ -48,7 +48,9 @@ async function main(): Promise<void> {
   });
 
   // Register Emergency Withdrawal Address before requesting reposit address.
-  const encoded_eth_addr = chainflip.createType('EncodedAddress', {"Eth": hexStringToBytesArray(await getAddress('ETH', 'LP_1'))});
+  const encodedEthAddr = chainflip.createType('EncodedAddress', {"Eth": hexStringToBytesArray(await getAddress('ETH', 'LP_1'))});
+  await chainflip.tx.liquidityProvider.registerEmergencyWithdrawalAddress(encodedEthAddr).signAndSend(lp);
+  
   await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress('Eth').signAndSend(lp);
   const ethIngressKey = (
     await observeEvent('liquidityProvider:LiquidityDepositAddressReady')
