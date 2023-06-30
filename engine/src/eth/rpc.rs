@@ -206,12 +206,12 @@ where
 
 impl EthWsRpcClient {
 	pub async fn new(
-		ws_node_endpoint: &String,
+		ws_node_endpoint: &str,
 		// TODO: make this non-optional once we remove integration tests (PRO-414)
 		expected_chain_id: Option<U256>,
 	) -> Result<Self> {
-		let client = Self::inner_new(&ws_node_endpoint, async {
-			context!(web3::transports::WebSocket::new(&ws_node_endpoint).await)
+		let client = Self::inner_new(ws_node_endpoint, async {
+			context!(web3::transports::WebSocket::new(ws_node_endpoint).await)
 		})
 		.await?;
 

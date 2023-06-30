@@ -32,7 +32,7 @@ impl<C: BtcRetryRpcApi + Clone + Send + Sync> ChainSource for BtcBlockStream<C> 
 						assert_eq!(header.hash, best_block_hash);
 						return Some((
 							Header {
-								index: header.height.into(),
+								index: header.height,
 								hash: header.hash,
 								parent_hash: header.previous_block_hash,
 								data: (),
