@@ -61,7 +61,7 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
     console.log(`${tag} The swap address is: ${swapAddress}`);
 
     if (sourceToken === 'BTC') {
-        console.log("BTC swapAddress : " + swapAddress)
+        console.log("Doing BTC address conversion");
         swapAddress = swapAddress.replace(/^0x/, '');
         swapAddress = Buffer.from(swapAddress, 'hex').toString();
     }
