@@ -1,5 +1,6 @@
 import { Asset, executeSwap, ExecuteSwapParams } from '@chainflip-io/cli';
 import { Wallet, getDefaultProvider } from 'ethers';
+import { randomAsHex } from "@polkadot/util-crypto";
 import { chainFromAsset, getAddress, getChainflipApi, observeBalanceIncrease, observeEvent } from '../shared/utils';
 import { getNextEthNonce } from '../shared/fund_eth';
 import { getBalance } from './get_balance';
@@ -45,10 +46,12 @@ export async function performNativeSwap(destAsset: Asset) {
 
     try {
         const api = await getChainflipApi();
-        const addr = await getAddress(destAsset, tag);
+        const seed = randomAsHex(32);
+        const addr = await getAddress(destAsset, seed);
         log(`Destination address: ${addr}`);
 
         const oldBalance = await getBalance(destAsset, addr);
+        log(`Old balance: ${addr}`);
         // Note that we start observing events before executing
         // the swap to avoid race conditions:
         log(`Executing native contract swap to(${destAsset}) ${addr}. Current balance: ${oldBalance}`)
