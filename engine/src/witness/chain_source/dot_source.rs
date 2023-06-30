@@ -16,11 +16,29 @@ use subxt::config::Header as SubxtHeader;
 
 use anyhow::Result;
 
+#[async_trait::async_trait]
+pub trait GetPolkadotStream {
+	async fn get_stream(
+		&mut self,
+	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>>;
+}
+
 pub struct DotUnfinalisedSource<C: DotRetrySubscribeApi + DotRetryRpcApi> {
 	client: C,
 }
 
-impl<C: DotRetrySubscribeApi + DotRetryRpcApi> DotUnfinalisedSource<C> {
+#[async_trait::async_trait]
+impl<C: DotRetrySubscribeApi + DotRetryRpcApi + Send + Sync> GetPolkadotStream
+	for DotUnfinalisedSource<C>
+{
+	async fn get_stream(
+		&mut self,
+	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>> {
+		self.client.subscribe_best_heads().await
+	}
+}
+
+impl<C: DotRetrySubscribeApi + DotRetryRpcApi + Send> DotUnfinalisedSource<C> {
 	pub fn new(client: C) -> Self {
 		Self { client }
 	}
@@ -30,48 +48,90 @@ const TIMEOUT: Duration = Duration::from_secs(20);
 const RESTART_STREAM_DELAY: Duration = Duration::from_secs(6);
 
 #[async_trait::async_trait]
-impl<C: DotRetrySubscribeApi + DotRetryRpcApi + Send + Sync + Clone> ChainSource
-	for DotUnfinalisedSource<C>
+impl<
+		C: GetPolkadotStream + DotRetryRpcApi + DotRetrySubscribeApi + Send + Sync + Clone + 'static,
+	> ChainSource for DotUnfinalisedSource<C>
 {
 	type Index = PolkadotBlockNumber;
 	type Hash = PolkadotHash;
 	type Data = Events<PolkadotConfig>;
 
 	async fn stream(&self) -> BoxChainStream<'_, Self::Index, Self::Hash, Self::Data> {
-		pub struct State<C> {
-			client: C,
-			stream: Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>,
-		}
-		let mut client = self.client.clone();
-
-		let stream = client.subscribe_best_heads().await;
-		Box::pin(stream::unfold(State { client, stream }, |mut state| async move {
-			loop {
-				while let Ok(Some(header)) =
-					tokio::time::timeout(TIMEOUT, state.stream.next()).await
-				{
-					if let Ok(header) = header {
-						let Some(events) = state.client.events(header.hash()).await else {
-							continue;
-						};
-
-						return Some((
-							Header {
-								index: header.number,
-								hash: header.hash(),
-								parent_hash: Some(header.parent_hash),
-								data: events,
-							},
-							state,
-						))
-					}
-				}
-				// We don't want to spam retries if the node returns a stream that's empty
-				// immediately.
-				tokio::time::sleep(RESTART_STREAM_DELAY).await;
-				let stream = state.client.subscribe_best_heads().await;
-				state = State { client: state.client, stream };
-			}
-		}))
+		polkadot_source(self.client.clone()).await
 	}
+}
+
+pub struct DotFinalisedSource<C: DotRetrySubscribeApi + DotRetryRpcApi> {
+	client: C,
+}
+
+impl<C: DotRetrySubscribeApi + DotRetryRpcApi + Send> DotFinalisedSource<C> {
+	pub fn new(client: C) -> Self {
+		Self { client }
+	}
+}
+
+#[async_trait::async_trait]
+impl<C: DotRetrySubscribeApi + DotRetryRpcApi + Send + Sync> GetPolkadotStream
+	for DotFinalisedSource<C>
+{
+	async fn get_stream(
+		&mut self,
+	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>> {
+		self.client.subscribe_finalized_heads().await
+	}
+}
+
+#[async_trait::async_trait]
+impl<
+		C: GetPolkadotStream + DotRetryRpcApi + DotRetrySubscribeApi + Send + Sync + Clone + 'static,
+	> ChainSource for DotFinalisedSource<C>
+{
+	type Index = PolkadotBlockNumber;
+	type Hash = PolkadotHash;
+	type Data = Events<PolkadotConfig>;
+
+	async fn stream(&self) -> BoxChainStream<'_, Self::Index, Self::Hash, Self::Data> {
+		polkadot_source(self.client.clone()).await
+	}
+}
+
+async fn polkadot_source<
+	'a,
+	C: GetPolkadotStream + DotRetrySubscribeApi + DotRetryRpcApi + Send + Sync + Clone + 'static,
+>(
+	client: C,
+) -> BoxChainStream<'a, PolkadotBlockNumber, PolkadotHash, Events<PolkadotConfig>> {
+	pub struct State<C> {
+		client: C,
+		stream: Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>,
+	}
+	let mut client = client.clone();
+	let stream = client.get_stream().await;
+	Box::pin(stream::unfold(State { client, stream }, |mut state| async move {
+		loop {
+			while let Ok(Some(header)) = tokio::time::timeout(TIMEOUT, state.stream.next()).await {
+				if let Ok(header) = header {
+					let Some(events) = state.client.events(header.hash()).await else {
+						continue;
+					};
+
+					return Some((
+						Header {
+							index: header.number,
+							hash: header.hash(),
+							parent_hash: Some(header.parent_hash),
+							data: events,
+						},
+						state,
+					))
+				}
+			}
+			// We don't want to spam retries if the node returns a stream that's empty
+			// immediately.
+			tokio::time::sleep(RESTART_STREAM_DELAY).await;
+			let stream = state.client.get_stream().await;
+			state = State { client: state.client, stream };
+		}
+	}))
 }

@@ -100,6 +100,10 @@ pub trait DotRetrySubscribeApi {
 	async fn subscribe_best_heads(
 		&mut self,
 	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>>;
+
+	async fn subscribe_finalized_heads(
+		&mut self,
+	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>>;
 }
 
 use crate::dot::rpc::DotSubscribeApi;
@@ -113,6 +117,17 @@ impl DotRetrySubscribeApi for DotRetryRpcClient {
 			.request(Box::pin(move |mut client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.subscribe_best_heads().await })
+			}))
+			.await
+	}
+
+	async fn subscribe_finalized_heads(
+		&mut self,
+	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>> {
+		self.retry_client
+			.request(Box::pin(move |mut client| {
+				#[allow(clippy::redundant_async_block)]
+				Box::pin(async move { client.subscribe_finalized_heads().await })
 			}))
 			.await
 	}
