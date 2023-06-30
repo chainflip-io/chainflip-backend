@@ -159,7 +159,6 @@ export async function observeBalanceIncrease(dstCcy: string, address: string, ol
 }
 
 export async function observeCcmReceived(sourceToken: string, destToken: string, address: string, messageMetadata: CcmDepositMetadata): Promise<void> {
-  // TODO: Convert string parameters into it's appropriate uints
   await observeEVMEvent(cfReceiverMockAbi, address, "ReceivedxSwapAndCall", [tokenToChain[sourceToken],'*',messageMetadata.message,tokenToEthAddress[destToken],'*','*'])
 }
 
@@ -167,7 +166,7 @@ export async function observeEVMEvent(contractAbi: any, address: string, eventNa
   const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
   const contract = new web3.eth.Contract(contractAbi, address);
 
-  // This gets all the event parameters as an array (e.g. ['srcChain','srcAddress','message','token','amount','nativeReceived'])
+  // Gets all the event parameter as an array
   const eventAbi = cfReceiverMockAbi.find((item) => item.type === 'event' && item.name === eventName);
 
   // Get the parameter names of the event
