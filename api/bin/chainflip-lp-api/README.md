@@ -86,6 +86,17 @@ Return:
 
 - Hex encoded deposit address.
 
+
+### `lp_registerEmergencyWithdrawalAddress`
+
+Parameters:
+
+- Address: Address to be used as Emergency Withdrawal Address. Format should be: <chain>:<addrress>. e.g. "Ethereum:1594300cbd587694AffD70c933B9eE9155B186d9"
+
+Return:
+
+- Transaction hash of the successful extrinsic.
+
 ### `lp_withdrawAsset`
 
 Parameters:
