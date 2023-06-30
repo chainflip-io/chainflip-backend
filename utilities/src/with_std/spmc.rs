@@ -55,3 +55,65 @@ impl<T: Clone> Stream for Receiver<T> {
 		self.0.poll_next_unpin(cx)
 	}
 }
+
+#[cfg(test)]
+mod test {
+	use futures::{future::join, FutureExt};
+
+	use super::*;
+
+	#[tokio::test]
+	async fn channel_allows_reconnection() {
+		let (mut sender, receiver) = channel(2);
+		drop(receiver);
+		assert!(matches!(sender.send(1).await, Err(_)));
+		let mut receiver = sender.receiver();
+		sender.send(1).await.unwrap();
+		sender.send(1).await.unwrap();
+		drop(sender);
+		assert_eq!(receiver.next().await, Some(1));
+		assert_eq!(receiver.next().await, Some(1));
+		assert_eq!(receiver.next().await, None);
+	}
+
+	#[tokio::test]
+	async fn broadcasts() {
+		let (mut sender, mut receiver_1) = channel(1);
+		let mut receiver_2 = sender.receiver();
+		let mut receiver_3 = receiver_1.clone();
+
+		sender.send(1).await.unwrap();
+
+		assert_eq!(receiver_1.next().await, Some(1));
+		assert_eq!(receiver_2.next().await, Some(1));
+		assert_eq!(receiver_3.next().await, Some(1));
+
+		drop(sender);
+
+		assert_eq!(receiver_1.next().await, None);
+		assert_eq!(receiver_2.next().await, None);
+		assert_eq!(receiver_3.next().await, None);
+	}
+
+	#[tokio::test]
+	async fn waiting_for_closed() {
+		let (mut sender, mut receiver_1) = channel(1);
+		let receiver_2 = sender.receiver();
+		let receiver_3 = receiver_1.clone();
+
+		assert!(sender.closed().now_or_never().is_none());
+
+		sender.send(1).await.unwrap();
+
+		join(
+			async move {
+				drop(receiver_2);
+				assert_eq!(receiver_1.next().await, Some(1));
+				drop(receiver_1);
+				drop(receiver_3);
+			},
+			sender.closed(),
+		)
+		.await;
+	}
+}
