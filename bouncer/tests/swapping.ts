@@ -69,7 +69,7 @@ async function testAll() {
     ])
 
     await Promise.all([
-        testSwap('BTC', 'ETH', undefined, {
+        testSwap('BTC', 'USDC', undefined, {
             message: getAbiEncodedMessage(["address","uint256","bytes"]),
             gas_budget: 1000000,
             cf_parameters: [0],
@@ -86,7 +86,7 @@ async function testAll() {
             }),            
         ])
     await Promise.all([
-        testSwap('DOT', 'ETH', undefined, {
+        testSwap('DOT', 'USDC', undefined, {
             message: getAbiEncodedMessage(),
             gas_budget: 1000000,
             cf_parameters: [0],
