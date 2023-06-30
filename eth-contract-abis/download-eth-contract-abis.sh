@@ -34,6 +34,7 @@ unzip -u ${ZIP_FILE} \
     'IKeyManager.json' \
     'Deposit_bytecode.json' \
     'IAddressChecker.json' \
+    'IERC20.json' \
     -d $TARGET_DIR
 
 rm ${ZIP_FILE}

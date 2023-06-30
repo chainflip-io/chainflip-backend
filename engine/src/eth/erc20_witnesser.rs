@@ -12,7 +12,7 @@ use crate::{
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi, witnesser::ItemMonitor,
 };
 
-abigen!(Erc20, "engine/src/eth/abis/IERC20.json");
+abigen!(Erc20, "eth-contract-abis/IERC20.json");
 
 use super::{
 	core_h256, event::Event, rpc::EthRpcApi, BlockWithItems, DecodeLogClosure, EthContractWitnesser,
