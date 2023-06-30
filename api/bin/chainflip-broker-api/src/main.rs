@@ -1,6 +1,9 @@
+use cf_chains::address::AddressConverter;
 use chainflip_api::{
 	self, clean_foreign_chain_address,
-	primitives::{AccountRole, Asset, BasisPoints, BlockNumber, CcmDepositMetadata, ChannelId},
+	primitives::{
+		AccountRole, Asset, BasisPoints, BlockNumber, CcmDepositMetadata, ChannelId, ForeignChain,
+	},
 	settings::StateChain,
 };
 use clap::Parser;
@@ -10,6 +13,8 @@ use jsonrpsee::{
 	server::ServerBuilder,
 };
 use serde::{Deserialize, Serialize};
+use sp_rpc::number::NumberOrHex;
+use state_chain_runtime::chainflip::ChainAddressConverter;
 use std::path::PathBuf;
 
 /// The response type expected by the broker api.
@@ -34,6 +39,34 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 	}
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct BrokerCcmDepositMetadata {
+	gas_budget: NumberOrHex,
+	message: Vec<u8>,
+	cf_parameters: Vec<u8>,
+	source_address: String,
+	source_chain: ForeignChain,
+}
+
+impl TryInto<CcmDepositMetadata> for BrokerCcmDepositMetadata {
+	type Error = &'static str;
+
+	fn try_into(self) -> Result<CcmDepositMetadata, Self::Error> {
+		let gas_budget = self.gas_budget.try_into().or(Err("Failed to parse gas budget"))?;
+		let encoded_address = clean_foreign_chain_address(self.source_chain, &self.source_address)
+			.or(Err("Failed to parse source address"))?;
+		let source_address = ChainAddressConverter::try_from_encoded_address(encoded_address)
+			.or(Err("Failed to parse source address"))?;
+
+		Ok(CcmDepositMetadata {
+			gas_budget,
+			message: self.message,
+			cf_parameters: self.cf_parameters,
+			source_address,
+		})
+	}
+}
+
 #[rpc(server, client, namespace = "broker")]
 pub trait Rpc {
 	#[method(name = "registerAccount")]
@@ -46,7 +79,7 @@ pub trait Rpc {
 		destination_asset: Asset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
-		message_metadata: Option<CcmDepositMetadata>,
+		message_metadata: Option<BrokerCcmDepositMetadata>,
 	) -> Result<BrokerSwapDepositAddress, Error>;
 }
 
@@ -73,8 +106,14 @@ impl RpcServer for RpcServerImpl {
 		destination_asset: Asset,
 		destination_address: String,
 		broker_commission_bps: BasisPoints,
-		message_metadata: Option<CcmDepositMetadata>,
+		message_metadata: Option<BrokerCcmDepositMetadata>,
 	) -> Result<BrokerSwapDepositAddress, Error> {
+		let message_metadata = if let Some(metadata) = message_metadata {
+			Some(TryInto::<CcmDepositMetadata>::try_into(metadata).map_err(anyhow::Error::msg)?)
+		} else {
+			None
+		};
+
 		Ok(chainflip_api::request_swap_deposit_address(
 			&self.state_chain_settings,
 			source_asset,
