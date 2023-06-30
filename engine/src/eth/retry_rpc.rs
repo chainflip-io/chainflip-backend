@@ -3,7 +3,7 @@ use ethers::{prelude::*, types::transaction::eip2718::TypedTransaction};
 use utilities::task_scope::Scope;
 
 use crate::{eth::ethers_rpc::EthersRpcApi, rpc_retrier::RpcRetrierClient};
-use std::{time::Duration};
+use std::time::Duration;
 
 use super::{
 	ethers_rpc::{EthersRpcClient, ReconnectSubscriptionClient},
