@@ -7,6 +7,7 @@ use chainflip_api::{
 	settings::StateChain,
 };
 use clap::Parser;
+use hex::FromHexError;
 use jsonrpsee::{
 	core::{async_trait, Error},
 	proc_macros::rpc,
@@ -48,8 +49,8 @@ pub struct BrokerCcmDepositMetadata {
 	cf_parameters: Option<String>,
 }
 
-fn try_convert_string_to_bytes(string: &str) -> Result<Vec<u8>, ()> {
-	hex::decode(if string.starts_with("0x") { &string[2..] } else { string }).or(Err(()))
+fn try_convert_string_to_bytes(string: &str) -> Result<Vec<u8>, FromHexError> {
+	hex::decode(string.strip_prefix("0x").unwrap_or(string))
 }
 
 #[cfg(test)]
