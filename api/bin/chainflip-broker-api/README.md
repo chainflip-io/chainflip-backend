@@ -33,6 +33,9 @@ Then in another terminal:
 
 # The result is the hex-encoded deposit address, expiry block, and the issued block.
 {"jsonrpc":"2.0","result":{"address":"0x4ef7608893d5a06c2689b8d15b4dc400be0954f2",expiry_block:12345},"id":1}
+
+# This request also accepts cross chain message metadata as an optional fifth parameter:
+{"gas_budget":"0x1000", message:[0,1,2,3,4], cf_parameters: [], source_address: "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", source_chain: "Bitcoin"}
 ```
 
 ## Command line arguments and defaults
