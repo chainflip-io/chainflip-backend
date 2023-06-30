@@ -2,7 +2,10 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use crate::{
 	btc::rpc::MockBtcRpcApi,
-	state_chain_observer::client::{extrinsic_api, StreamCache},
+	state_chain_observer::client::{
+		extrinsic_api::{self, signed::test_header},
+		StreamCache,
+	},
 };
 use cf_chains::{
 	dot::PolkadotAccountId,
@@ -16,11 +19,11 @@ use mockall::predicate::{self, eq};
 use multisig::SignatureToThresholdSignature;
 use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_vaults::Vault;
-use sp_runtime::{AccountId32, Digest};
+use sp_runtime::AccountId32;
 
 use crate::eth::ethers_rpc::MockEthersRpcApi;
 use sp_core::H256;
-use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance, Header};
+use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance};
 use tokio::sync::watch;
 use utilities::{assert_future_panics, MakeCachedStream};
 
@@ -41,16 +44,6 @@ use multisig::{
 use utilities::task_scope::task_scope;
 
 use super::{crypto_compat::CryptoCompat, EthAddressToMonitorSender};
-
-fn test_header(number: u32) -> Header {
-	Header {
-		number,
-		parent_hash: H256::default(),
-		state_root: H256::default(),
-		extrinsics_root: H256::default(),
-		digest: Digest { logs: Vec::new() },
-	}
-}
 
 const MOCK_ETH_TRANSACTION_OUT_ID: SchnorrVerificationComponents =
 	SchnorrVerificationComponents { s: [0; 32], k_times_g_address: [1; 20] };

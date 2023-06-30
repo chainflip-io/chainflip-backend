@@ -22,6 +22,11 @@ use super::{
 
 pub mod signer;
 mod submission_watcher;
+#[cfg(test)]
+mod tests;
+
+#[cfg(test)]
+pub use tests::{test_header, DUMMY_CALL};
 
 // Wrapper type to avoid await.await on submits/finalize calls being possible
 #[cfg_attr(test, mockall::automock)]

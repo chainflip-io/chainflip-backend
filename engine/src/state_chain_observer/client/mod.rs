@@ -24,6 +24,9 @@ use self::{
 	extrinsic_api::signed::{signer, SignedExtrinsicApi},
 };
 
+#[cfg(test)]
+pub use self::extrinsic_api::signed::test_header;
+
 /// For expressing an expectation regarding substrate's behaviour (Not our chain though)
 const SUBSTRATE_BEHAVIOUR: &str = "Unexpected state chain node behaviour";
 

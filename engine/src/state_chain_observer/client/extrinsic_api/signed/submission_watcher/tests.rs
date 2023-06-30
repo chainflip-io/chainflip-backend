@@ -1,7 +1,6 @@
 use frame_system::AccountInfo;
 use jsonrpsee::types::ErrorObject;
 use mockall::predicate::eq;
-use pallet_cf_chain_tracking::ChainState;
 use sp_core::{
 	storage::{StorageData, StorageKey},
 	Encode,
@@ -11,7 +10,9 @@ use utilities::assert_ok;
 use super::{signer::PairSigner, *};
 use crate::{
 	constants::SIGNED_EXTRINSIC_LIFETIME,
-	state_chain_observer::client::base_rpc_api::MockBaseRpcApi,
+	state_chain_observer::client::{
+		base_rpc_api::MockBaseRpcApi, extrinsic_api::signed::tests::DUMMY_CALL,
+	},
 };
 
 const INITIAL_NONCE: Nonce = 10;
@@ -647,4 +648,79 @@ async fn test_submit_request() {
 
 	// Should receive the hash of the submitted extrinsic
 	assert_eq!(result_receiver.try_recv().unwrap(), Default::default());
+}
+
+#[tokio::test]
+async fn should_fix_gap_in_submission_nonces() {
+	let mut mock_rpc_api = MockBaseRpcApi::new();
+	let signer = PairSigner::new(sp_core::Pair::generate().0);
+
+	// For this test we are pretending that the finalized nonce is 10, but there is a pretend
+	// existing submission at 11, so the gap must be filled.
+	const FINALIZED_NONCE: state_chain_runtime::Index = 10;
+	const EXISTING_SUBMISSION_NONCE: state_chain_runtime::Index = FINALIZED_NONCE + 1;
+
+	// It will submit an extrinsic at the finalized nonce. We return a success, this is where the
+	// fault is detected
+	mock_rpc_api.expect_submit_extrinsic().once().returning(move |extrinsic| {
+		let (_, _, (.., frame_system::CheckNonce(nonce), _, _)) = extrinsic.signature.unwrap();
+		assert_eq!(nonce, FINALIZED_NONCE);
+		Ok(Default::default())
+	});
+
+	// It will try and submit another extrinsic at the finalized nonce + 1. This will return an
+	// error because a submitted extrinsic with the same nonce already exists. The gap was filled
+	// and this is the confirmation.
+	mock_rpc_api.expect_submit_extrinsic().once().returning(move |extrinsic| {
+		let (_, _, (.., frame_system::CheckNonce(nonce), _, _)) = extrinsic.signature.unwrap();
+		assert_eq!(nonce, EXISTING_SUBMISSION_NONCE);
+		Err(jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(
+			ErrorObject::from(jsonrpsee::types::error::ErrorCode::ServerError(1014)),
+		)))
+	});
+
+	let (mut watcher, mut requests) = SubmissionWatcher::new(
+		signer,
+		FINALIZED_NONCE,
+		Default::default(),
+		0,
+		Default::default(),
+		Default::default(),
+		SIGNED_EXTRINSIC_LIFETIME,
+		Arc::new(mock_rpc_api),
+	);
+	assert_eq!(watcher.finalized_nonce, FINALIZED_NONCE);
+
+	// setting the anticipated_nonce forward to simulate a real world scenario
+	watcher.anticipated_nonce = EXISTING_SUBMISSION_NONCE + 1;
+
+	// We need 2 requests that allow resubmits to be able to fix the nonce gap of 1 in a single run
+	requests.insert(
+		1,
+		Request {
+			id: 1,
+			pending_submissions: 1,
+			allow_resubmits: true,
+			lifetime: ..=1,
+			call: DUMMY_CALL.clone(),
+			result_sender: oneshot::channel().0,
+		},
+	);
+	requests.insert(
+		2,
+		Request {
+			id: 2,
+			pending_submissions: 0,
+			allow_resubmits: true,
+			lifetime: ..=1,
+			call: DUMMY_CALL.clone(),
+			result_sender: oneshot::channel().0,
+		},
+	);
+
+	watcher.detect_nonce_fault_and_try_fix(&mut requests).await.unwrap();
+
+	// The next nonce that will be used should be EXISTING_SUBMISSION_NONCE + 1 because
+	// EXISTING_SUBMISSION_NONCE is already taken
+	assert_eq!(watcher.anticipated_nonce, EXISTING_SUBMISSION_NONCE + 1);
 }
