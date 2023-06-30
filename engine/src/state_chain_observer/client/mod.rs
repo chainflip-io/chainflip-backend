@@ -10,7 +10,7 @@ use futures::{StreamExt, TryStreamExt};
 
 use sp_core::{Pair, H256};
 use state_chain_runtime::AccountId;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use tracing::info;
 
 use utilities::{
@@ -24,10 +24,10 @@ use self::{
 	extrinsic_api::signed::{signer, SignedExtrinsicApi},
 };
 
-use crate::constants::SYNC_POLL_INTERVAL;
-
 /// For expressing an expectation regarding substrate's behaviour (Not our chain though)
 const SUBSTRATE_BEHAVIOUR: &str = "Unexpected state chain node behaviour";
+
+const SYNC_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
 #[derive(Clone)]
 pub struct StreamCache {
