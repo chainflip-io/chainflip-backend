@@ -33,8 +33,6 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
 
     const chainflipApi = await getChainflipApi();
 
-    // TODO: It's problematic to search the deposit address by looking at the destination address
-    // as for CCMs we are testing to the same dstAddress. That is a problem when swaps are in paralel
     const addressPromise = observeEvent('swapping:SwapDepositAddressReady', chainflipApi,
         (swapInfo: any) => {
             // Find deposit address for the right swap by looking at destination address:
@@ -48,7 +46,7 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
 
     await newSwap(sourceToken, destToken, ADDRESS, FEE, messageMetadata ?? undefined);
 
-    console.log(`${tag} The args are:  ${sourceToken} ${destToken} ${ADDRESS} ${FEE} ${messageMetadata ? `message` : ''}`);
+    console.log(`${tag} The args are:  ${sourceToken} ${destToken} ${ADDRESS} ${FEE} ${messageMetadata ? `someMessage` : ''}`);
 
     let depositAddressToken = sourceToken;
     if (sourceToken === 'USDC') {

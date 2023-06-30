@@ -13,6 +13,16 @@ import { CcmDepositMetadata } from './new_swap';
 import Web3 from 'web3';
 import cfReceiverMockAbi from '../../eth-contract-abis/perseverance-rc17/CFReceiverMock.json';
 
+export const tokenToChain = {
+  'ETH': '1',
+  'USDC': '1',
+  'DOT': '2',
+  'BTC': '3',
+};
+const tokenToEthAddress = {
+  'ETH': '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+  'USDC': '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0',
+};
 
 export const runWithTimeout = <T>(promise: Promise<T>, millis: number): Promise<T> =>
   Promise.race([
@@ -150,7 +160,7 @@ export async function observeBalanceIncrease(dstCcy: string, address: string, ol
 
 export async function observeCcmReceived(sourceToken: string, destToken: string, address: string, messageMetadata: CcmDepositMetadata): Promise<void> {
   // TODO: Convert string parameters into it's appropriate uints
-  await observeEVMEvent(cfReceiverMockAbi, address, "ReceivedxSwapAndCall", ['*','*',messageMetadata.message,'*','*','*'])
+  await observeEVMEvent(cfReceiverMockAbi, address, "ReceivedxSwapAndCall", [tokenToChain[sourceToken],'*',messageMetadata.message,tokenToEthAddress[destToken],'*','*'])
 }
 
 export async function observeEVMEvent(contractAbi: any, address: string, eventName: string, eventParametersExpected: string[]): Promise<void> {

@@ -5,8 +5,9 @@ import { performSwap } from "../shared/perform_swap";
 import { getAddress, runWithTimeout } from "../shared/utils";
 import { BtcAddressType } from "../shared/new_btc_address";
 import { CcmDepositMetadata, ForeignChainAddress } from "../shared/new_swap";
-import Web3 from 'web3';
 import { randomAsNumber } from "@polkadot/util-crypto";
+import { tokenToChain } from "../shared/utils";
+import Web3 from 'web3';
 
 let swapCount = 1;
 
@@ -15,11 +16,10 @@ async function testSwap(sourceToken: Asset, destToken: Asset, addressType?: BtcA
     const seed = randomAsHex(32);
     let address = await getAddress(destToken, seed, addressType);
     
-    // CCM to Ethereum happy path to the CF Receiver Mock. A CCM call to a random
-    // address will fail so we force the address to be the CF Receiver Mock address.
-    if (messageMetadata && (destToken === 'ETH' || destToken === 'USDC')) {
-        address = "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0"
-    } 
+    // For swaps with a message force the address to be the CF Receiver Mock address.
+    if (messageMetadata &&  tokenToChain[destToken] === '1'){
+        address = "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0";
+    }
 
     console.log(`Created new ${destToken} address: ${address}`);
     const tag = `[${swapCount++}: ${sourceToken}->${destToken}]`;
@@ -40,9 +40,7 @@ async function testAll() {
             testSwap('BTC', 'USDC'),
         ])
     
-    // NOTE: Doing the CCM swaps separately because of the nonce bug. Also because on
-    // observe event, we look for destination addresses which is problematic for CCMs
-    // as they all have the same destination address (cfReceiverMock)
+    // NOTE: Doing the CCM swaps separately because of the broadcasting nonce bug.
     await Promise.all([
         testSwap('BTC', 'ETH', undefined, {
             message: new Web3().eth.abi.encodeParameter("string", "BTC to ETH w/ CCM!!"),
