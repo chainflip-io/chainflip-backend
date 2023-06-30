@@ -1,21 +1,13 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use cf_chains::{address::EncodedAddress, include_abi_bytes, CcmDepositMetadata};
-use cf_primitives::{Asset, EpochIndex, EthereumAddress, ForeignChain};
+use cf_primitives::{Asset, EpochIndex, EthereumAddress};
 use ethers::{abi::RawLog, contract::EthLogDecode};
 use tracing::info;
-use web3::{
-	ethabi,
-	types::{H160, H256},
-};
+use web3::types::H160;
 
 use crate::{
-	eth::{
-		core_h160,
-		ethers_vault::{call_from_event, CallFromEventError, VaultEvents},
-		EventParseError,
-	},
+	eth::ethers_vault::{call_from_event, CallFromEventError, VaultEvents},
 	state_chain_observer::client::{
 		base_rpc_api::{BaseRpcClient, RawRpcApi},
 		extrinsic_api::signed::SignedExtrinsicApi,
@@ -23,16 +15,12 @@ use crate::{
 	},
 };
 
-use super::{
-	event::Event, rpc::EthRpcApi, utils::decode_log_param, BlockWithItems, EthContractWitnesser,
-	SignatureAndEvent,
-};
+use super::{event::Event, rpc::EthRpcApi, BlockWithItems, EthContractWitnesser};
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::Result;
 
 pub struct Vault {
 	pub deployed_address: H160,
-	contract: ethabi::Contract,
 }
 
 #[async_trait]
@@ -97,7 +85,7 @@ impl EthContractWitnesser for Vault {
 
 	fn decode_log_closure(&self) -> Result<super::DecodeLogClosure<Self::EventParameters>> {
 		Ok(Box::new(move |raw_log: RawLog| -> Result<Self::EventParameters> {
-			VaultEvents::decode_log(raw_log)
+			Ok(VaultEvents::decode_log(&raw_log)?)
 		}))
 	}
 
@@ -108,9 +96,6 @@ impl EthContractWitnesser for Vault {
 
 impl Vault {
 	pub fn new(deployed_address: H160) -> Self {
-		Self {
-			deployed_address,
-			contract: ethabi::Contract::load(include_abi_bytes!(IVault)).unwrap(),
-		}
+		Self { deployed_address }
 	}
 }

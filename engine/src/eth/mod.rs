@@ -18,12 +18,12 @@ pub mod ethers_rpc;
 pub mod ethers_vault;
 pub mod retry_rpc;
 pub mod rpc;
-pub mod utils;
 pub mod witnessing;
 
 use anyhow::{anyhow, Context, Result};
 
 use cf_primitives::EpochIndex;
+use ethers::abi::RawLog;
 use futures::FutureExt;
 use regex::Regex;
 
@@ -44,11 +44,7 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 };
-use thiserror::Error;
-use web3::{
-	ethabi::{self, Contract},
-	types::{Block, H160, H2048, H256, U256, U64},
-};
+use web3::types::{Block, H160, H2048, H256, U256, U64};
 
 use tokio_stream::Stream;
 
@@ -86,27 +82,6 @@ fn web3_h160(h: sp_core::H160) -> web3::types::H160 {
 
 pub fn core_h160(h: web3::types::H160) -> sp_core::H160 {
 	h.0.into()
-}
-
-#[derive(Error, Debug)]
-pub enum EventParseError {
-	#[error("Unexpected event signature in log subscription: {0:?}")]
-	UnexpectedEvent(H256),
-	#[error("Cannot decode missing parameter: '{0}'.")]
-	MissingParam(String),
-}
-
-// The signature is recalculated on each Event::signature() call, so we use this structure to cache
-// the signature
-pub struct SignatureAndEvent {
-	pub signature: H256,
-	pub event: ethabi::Event,
-}
-impl SignatureAndEvent {
-	pub fn new(contract: &Contract, name: &str) -> Result<Self> {
-		let event = contract.event(name)?;
-		Ok(Self { signature: event.signature(), event: event.clone() })
-	}
 }
 
 /// Helper that generates a broadcast channel with multiple receivers.
@@ -278,7 +253,7 @@ pub trait EthContractWitnesser {
 }
 
 pub type DecodeLogClosure<EventParameters> =
-	Box<dyn Fn(ethabi::RawLog) -> Result<EventParameters> + Send + Sync + 'static>;
+	Box<dyn Fn(RawLog) -> Result<EventParameters> + Send + Sync + 'static>;
 
 const MAX_SECRET_CHARACTERS_REVEALED: usize = 3;
 const SCHEMA_PADDING_LEN: usize = 3;
