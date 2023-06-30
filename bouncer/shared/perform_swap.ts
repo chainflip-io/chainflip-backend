@@ -48,7 +48,7 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
 
     await newSwap(sourceToken, destToken, ADDRESS, FEE, messageMetadata ?? undefined);
 
-    console.log(`${tag} The args are:  ${sourceToken} ${destToken} ${ADDRESS} ${FEE} ${messageMetadata}`);
+    console.log(`${tag} The args are:  ${sourceToken} ${destToken} ${ADDRESS} ${FEE} ${messageMetadata ? `message` : ''}`);
 
     let depositAddressToken = sourceToken;
     if (sourceToken === 'USDC') {
@@ -81,13 +81,14 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
 
     await swapExecutedHandle;
 
-    console.log(`${tag} Waiting for balance to update`);
-
     try {
         if (typeof messageMetadata !== 'undefined') {
-            await observeCcmReceived(destToken, ADDRESS, messageMetadata)
+            console.log(`${tag} Waiting for an event to be witnessed`);
+            await observeCcmReceived(sourceToken, destToken, ADDRESS, messageMetadata)
             console.log(`${tag} Event witnessed successfully!`);
         }     
+        console.log(`${tag} Waiting for balance to update`);
+
         const newBalance = await observeBalanceIncrease(destToken, ADDRESS, OLD_BALANCE);
 
         console.log(`${tag} Swap success! New balance: ${newBalance}!`);

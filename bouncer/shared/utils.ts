@@ -148,37 +148,9 @@ export async function observeBalanceIncrease(dstCcy: string, address: string, ol
   return Promise.reject(new Error("Failed to observe balance increase"));
 }
 
-// TODO: Convert parameters into the real uints for srcAddrs, dstToken...
-export async function observeCcmReceived(dstCcy: string, address: string, messageMetadata: CcmDepositMetadata): Promise<void> {
-  // await observeEVMEvent(cfReceiverMockAbi, address, "ReceivedxSwapAndCall", ['3','0x76a914000000000000000000000000000000000000000088ac','0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001342544320746f2045544820772f2043434d212100000000000000000000000000','0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE','399919033011484135','399919033011484135'])
-  // await observeEVMEvent(cfReceiverMockAbi, address, "ReceivedxSwapAndCall", ['*','*',messageMetadata.message,'*','*','*'])
-  await observeEVMEvent(cfReceiverMockAbi, address, "ReceivedxSwapAndCall", ['*','*','3','*','*','*'])
-
-
-  // const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
-  // const contract = new web3.eth.Contract(cfReceiverMockAbi, address);
-
-
-  // const initialBlock = await web3.eth.getBlockNumber();
-  // let eventWitnessed = false;
-
-  // for (let i = 0; i < 120 && !eventWitnessed; i++) {
-  //   const events = await contract.getPastEvents('ReceivedxSwapAndCall', {fromBlock: initialBlock, toBlock: 'latest'});
-  //   for (let i = 0; i < events.length; i++) {
-  //     // For now we only check that the message matches
-  //     if (events[i].returnValues.message === messageMetadata.message) {
-  //       eventWitnessed = true;
-  //       break;
-  //     }
-  //   }
-  //   await sleep(1000);
-  // }
-
-  // if (eventWitnessed) {
-  //   return Promise.resolve();
-  // } else {
-  //   return Promise.reject(new Error("Failed to observe the CCM Received event"));
-  // }
+export async function observeCcmReceived(sourceToken: string, destToken: string, address: string, messageMetadata: CcmDepositMetadata): Promise<void> {
+  // TODO: Convert string parameters into it's appropriate uints
+  await observeEVMEvent(cfReceiverMockAbi, address, "ReceivedxSwapAndCall", ['*','*',messageMetadata.message,'*','*','*'])
 }
 
 export async function observeEVMEvent(contractAbi: any, address: string, eventName: string, eventParametersExpected: string[]): Promise<void> {
@@ -196,27 +168,23 @@ export async function observeEVMEvent(contractAbi: any, address: string, eventNa
   
   for (let i = 0; i < 120 && !eventWitnessed; i++) {
     const events = await contract.getPastEvents(eventName, {fromBlock: initialBlock, toBlock: 'latest'});
-    for (let i = 0; i < events.length; i++) {
-      console.log(events[i].returnValues)
-      console.log(eventParametersExpected)
-      for (let i = 0; i < parameterNames.length; i++) {
-        console.log(events[i].returnValues[parameterNames[i]])
-        console.log(eventParametersExpected[i])
+    for (let j = 0; j < events.length && !eventWitnessed; j++) {
+      for (let k = 0; k < parameterNames.length; k++) {
         // Allow for wildcard matching
-        if (events[i].returnValues[parameterNames[i]] != eventParametersExpected[i] && eventParametersExpected[i] != '*') {
+        if (events[j].returnValues[k] != eventParametersExpected[k] && eventParametersExpected[k] != '*') {
+          break;
+        } else if (k === parameterNames.length - 1) {
+          eventWitnessed = true;
           break;
         }
-      eventWitnessed = true;
-      break;
       }
     }
-    await sleep(1000);
+    await sleep(5000);
   }
-
   if (eventWitnessed) {
     return Promise.resolve();
   } else {
-    return Promise.reject(new Error("Failed to observe the CCM Received event"));
+    return Promise.reject(new Error(`Failed to observe the ${eventName} event`));
   }
 
 }

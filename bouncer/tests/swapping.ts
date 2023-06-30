@@ -28,19 +28,21 @@ async function testSwap(sourceToken: Asset, destToken: Asset, addressType?: BtcA
 }
 
 async function testAll() {
-    // await Promise.all([
-    //         testSwap('DOT', 'BTC', 'P2PKH'),
-    //         testSwap('ETH', 'BTC', 'P2SH'),
-    //         testSwap('USDC', 'BTC', 'P2WPKH'),
-    //         testSwap('DOT', 'BTC', 'P2WSH'),
-    //         testSwap('BTC', 'DOT'),
-    //         testSwap('DOT', 'USDC'),
-    //         testSwap('DOT', 'ETH'),
-    //         testSwap('BTC', 'ETH'),
-    //         testSwap('BTC', 'USDC'),
-    //     ])
+    await Promise.all([
+            testSwap('DOT', 'BTC', 'P2PKH'),
+            testSwap('ETH', 'BTC', 'P2SH'),
+            testSwap('USDC', 'BTC', 'P2WPKH'),
+            testSwap('DOT', 'BTC', 'P2WSH'),
+            testSwap('BTC', 'DOT'),
+            testSwap('DOT', 'USDC'),
+            testSwap('DOT', 'ETH'),
+            testSwap('BTC', 'ETH'),
+            testSwap('BTC', 'USDC'),
+        ])
     
-    // NOTE: Doing the CCM swaps separately because of the nonce bug.
+    // NOTE: Doing the CCM swaps separately because of the nonce bug. Also because on
+    // observe event, we look for destination addresses which is problematic for CCMs
+    // as they all have the same destination address (cfReceiverMock)
     await Promise.all([
         testSwap('BTC', 'ETH', undefined, {
             message: new Web3().eth.abi.encodeParameter("string", "BTC to ETH w/ CCM!!"),
