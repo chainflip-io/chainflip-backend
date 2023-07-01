@@ -191,8 +191,10 @@ pub mod pallet {
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 			ensure!(
-				EmergencyWithdrawalAddress::<T>::get(&account_id, ForeignChain::from(asset))
-					.is_some(),
+				EmergencyWithdrawalAddress::<T>::contains_key(
+					&account_id,
+					ForeignChain::from(asset)
+				),
 				Error::<T>::NoEmergencyWithdrawalAddressRegistered
 			);
 
@@ -294,7 +296,7 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [On update](Event::LpTtlSet)
+		/// - [On Success](Event::EmergencyWithdrawalAddressRegistered)
 		#[pallet::weight(T::WeightInfo::register_emergency_withdrawal_address())]
 		pub fn register_emergency_withdrawal_address(
 			origin: OriginFor<T>,

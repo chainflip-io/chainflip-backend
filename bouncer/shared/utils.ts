@@ -146,20 +146,9 @@ export async function observeBalanceIncrease(dstCcy: string, address: string, ol
 
 // Converts s hex string into a bytes array. Support hex strings start with and without 0x
 export function hexStringToBytesArray(hex: string) {
-  const bytes = [];
-  let start = 0;
-  if(hex.substring(0, 2) === "0x") {
-    start = 2;
-  }
-  
-  for(let c = start; c < hex.length; c += 2) {
-    bytes.push(parseInt(hex.substring(c, c+2), 16));
-  }
-
-  return bytes;
+  return Array.from(Buffer.from(hex.replace(/^0x/, ''), 'hex'));
 };
 
 export function asciiStringToBytesArray(str: string) {
-  const encoder = new TextEncoder();
-  return encoder.encode(str);
+  return Array.from(Buffer.from(str.replace(/^0x/, '')));
 }

@@ -10,7 +10,7 @@ use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_core::H160;
-use sp_std::{str::FromStr, vec::Vec};
+use sp_std::vec::Vec;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -63,30 +63,6 @@ impl core::fmt::Display for EncodedAddress {
 						.unwrap_or("The address cant be decoded from the utf8 encoded bytes")
 				)
 			},
-		}
-	}
-}
-
-impl FromStr for EncodedAddress {
-	type Err = &'static str;
-
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		let (chain, addr) =
-			{
-				let split = s.split(':').collect::<Vec<&str>>();
-				if split.len() != 2 {
-					return Err("Wrong format. Encoded address should be in the format of '<chain>:<address>'");
-				}
-				(split[0].trim(), split[1].trim())
-			};
-		let decoded_chain = ForeignChain::from_str(chain)?;
-		match decoded_chain {
-			ForeignChain::Bitcoin =>
-				EncodedAddress::from_chain_bytes(ForeignChain::Bitcoin, addr.as_bytes().to_vec()),
-			_ => EncodedAddress::from_chain_bytes(
-				decoded_chain,
-				hex::decode(addr).map_err(|_| "Failed to decode input string as Hex address.")?,
-			),
 		}
 	}
 }
@@ -272,33 +248,5 @@ fn encode_and_decode_address() {
 		"1111111111111111111114oLvT2",
 	] {
 		test(addr, true);
-	}
-}
-
-#[test]
-fn can_create_encoded_address_from_str() {
-	let valid_input = vec![
-		(
-			"Ethereum:b0B267E4afCFbbA8A05961bD5F4607B6cdea0E37",
-			EncodedAddress::Eth(hex_literal::hex!("b0B267E4afCFbbA8A05961bD5F4607B6cdea0E37")),
-		),
-		(
-			"Polkadot:d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
-			EncodedAddress::Dot(hex_literal::hex!(
-				"d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d"
-			)),
-		),
-		(
-			"Bitcoin:12pdGSdrR1FEA3pgmLPjX4RvYWm4xAdnGp",
-			EncodedAddress::Btc("12pdGSdrR1FEA3pgmLPjX4RvYWm4xAdnGp".as_bytes().to_vec()),
-		),
-	];
-
-	for (input_str, result_address) in valid_input {
-		assert_eq!(
-			EncodedAddress::from_str(input_str)
-				.expect("String to EncodedAddress Conversion must succeed in valid cases."),
-			result_address
-		);
 	}
 }

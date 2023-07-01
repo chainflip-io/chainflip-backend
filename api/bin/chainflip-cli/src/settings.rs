@@ -1,5 +1,4 @@
-use cf_chains::address::EncodedAddress;
-use chainflip_api::primitives::{AccountRole, Asset, Hash};
+use chainflip_api::primitives::{AccountRole, Asset, ForeignChain, Hash};
 pub use chainflip_engine::settings::StateChain;
 use chainflip_engine::{
 	constants::{CONFIG_ROOT, DEFAULT_CONFIG_ROOT},
@@ -85,7 +84,7 @@ pub enum LiquidityProviderSubcommands {
 	},
 	/// Register a address as Emergency Withdrawal Address. An address must be
 	/// registered to request deposit address for each chain.
-	RegisterEmergencyWithdrawalAddress { address: EncodedAddress },
+	RegisterEmergencyWithdrawalAddress { chain: ForeignChain, address: String },
 }
 
 #[derive(Parser, Clone, Debug)]
