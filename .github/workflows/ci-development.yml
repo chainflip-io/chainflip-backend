@@ -53,7 +53,7 @@ jobs:
       environment: prod
     secrets: inherit
   publish-partnernet:
-    needs: [package, publish]
+    needs: [package, packag-partnernet, publish]
     uses: ./.github/workflows/_30_publish.yml
     with:
       version: partnernet
