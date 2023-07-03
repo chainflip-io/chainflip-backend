@@ -495,10 +495,6 @@ pub trait Broadcaster<Api: ChainAbi> {
 		api_call: Self::ApiCall,
 		callback: Self::Callback,
 	) -> (BroadcastId, ThresholdSignatureRequestId);
-
-	fn threshold_sign_and_broadcast_for_rotation(
-		api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId);
 }
 
 pub trait BroadcastCleanup<C: Chain> {
@@ -840,18 +836,6 @@ impl CcmHandler for () {
 		_destination_address: ForeignChainAddress,
 		_message_metadata: CcmDepositMetadata,
 	) {
-	}
-}
-
-pub trait OnRotationCallback<C: ChainCrypto> {
-	type Origin;
-	type Callback: UnfilteredDispatchable<RuntimeOrigin = Self::Origin>;
-
-	fn on_rotation(
-		_block_number: C::ChainBlockNumber,
-		_tx_out_id: C::TransactionOutId,
-	) -> Option<Self::Callback> {
-		None
 	}
 }
 

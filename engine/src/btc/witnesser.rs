@@ -159,7 +159,6 @@ where
 					call: Box::new(state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
 						pallet_cf_broadcast::Call::transaction_succeeded {
 							tx_out_id: tx_hash,
-							block_number,
 							signer_id: self.current_pubkey.clone(),
 							// TODO: Ideally we can submit an empty type here. For Bitcoin
 							// and some other chains fee tracking is not necessary. PRO-370.

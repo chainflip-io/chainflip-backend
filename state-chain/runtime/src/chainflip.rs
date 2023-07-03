@@ -12,7 +12,7 @@ use crate::{
 	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinVault,
 	BlockNumber, Emissions, Environment, EthereumBroadcaster, EthereumChainTracking,
 	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress, Runtime,
-	RuntimeCall, RuntimeOrigin, System, Validator,
+	RuntimeCall, System, Validator,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -43,8 +43,8 @@ use cf_primitives::{
 use cf_traits::{
 	impl_runtime_safe_mode, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey,
 	Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo,
-	Heartbeat, Issuance, KeyProvider, OnBroadcastReady, OnRotationCallback, QualifyNode,
-	RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
+	Heartbeat, Issuance, KeyProvider, OnBroadcastReady, QualifyNode, RewardsDistribution,
+	RuntimeUpgrade, VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -398,7 +398,6 @@ impl CommKeyBroadcaster for TokenholderGovernanceBroadcaster {
 		EthereumBroadcaster::threshold_sign_and_broadcast(
 			SetCommKeyWithAggKey::<Ethereum>::new_unsigned(new_key),
 			None::<RuntimeCall>,
-			false,
 		);
 	}
 }
@@ -556,33 +555,6 @@ impl AddressConverter for ChainAddressConverter {
 		encoded_address: EncodedAddress,
 	) -> Result<ForeignChainAddress, ()> {
 		try_from_encoded_address(encoded_address, Environment::bitcoin_network)
-	}
-}
-
-pub struct RotationCallbackProvider;
-impl OnRotationCallback<Ethereum> for RotationCallbackProvider {
-	type Origin = RuntimeOrigin;
-	type Callback = RuntimeCall;
-}
-impl OnRotationCallback<Polkadot> for RotationCallbackProvider {
-	type Origin = RuntimeOrigin;
-	type Callback = RuntimeCall;
-}
-impl OnRotationCallback<Bitcoin> for RotationCallbackProvider {
-	type Origin = RuntimeOrigin;
-	type Callback = RuntimeCall;
-
-	fn on_rotation(
-		block_number: <Bitcoin as Chain>::ChainBlockNumber,
-		tx_out_id: <Bitcoin as ChainCrypto>::TransactionOutId,
-	) -> Option<Self::Callback> {
-		Some(
-			pallet_cf_vaults::Call::<Runtime, crate::BitcoinInstance>::vault_key_rotated_out {
-				block_number,
-				tx_out_id,
-			}
-			.into(),
-		)
 	}
 }
 

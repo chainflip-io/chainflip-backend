@@ -6,12 +6,12 @@ use crate::{self as pallet_cf_broadcast, Instance1, PalletOffence};
 use cf_chains::{
 	eth::Ethereum,
 	mocks::{MockAggKey, MockApiCall, MockEthereum, MockTransactionBuilder},
-	Chain, ChainCrypto,
+	ChainCrypto,
 };
 use cf_traits::{
 	impl_mock_chainflip,
 	mocks::{signer_nomination::MockNominator, threshold_signer::MockThresholdSigner},
-	AccountRoleRegistry, EpochKey, KeyState, OnBroadcastReady, OnRotationCallback,
+	AccountRoleRegistry, EpochKey, KeyState, OnBroadcastReady,
 };
 use codec::{Decode, Encode};
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
@@ -90,7 +90,6 @@ pub const INVALID_AGG_KEY: MockAggKey = MockAggKey([1, 1, 1, 1]);
 
 thread_local! {
 	pub static SIGNATURE_REQUESTS: RefCell<Vec<<Ethereum as ChainCrypto>::Payload>> = RefCell::new(vec![]);
-	pub static ROTATION_CALLBACK: RefCell<Option<MockCallback>> = RefCell::new(None);
 	pub static CALLBACK_CALLED: RefCell<bool> = RefCell::new(false);
 }
 
@@ -105,26 +104,6 @@ impl cf_traits::KeyProvider<MockEthereum> for MockKeyProvider {
 			epoch_index: Default::default(),
 			key_state: KeyState::Unlocked,
 		})
-	}
-}
-
-pub struct MockRotationCallbackProvider;
-
-impl MockRotationCallbackProvider {
-	pub fn set_callback(callback: Option<MockCallback>) {
-		ROTATION_CALLBACK.with(|cell| *cell.borrow_mut() = callback);
-	}
-}
-
-impl OnRotationCallback<MockEthereum> for MockRotationCallbackProvider {
-	type Callback = MockCallback;
-	type Origin = RuntimeOrigin;
-
-	fn on_rotation(
-		_block_number: <MockEthereum as Chain>::ChainBlockNumber,
-		_tx_out_id: <MockEthereum as ChainCrypto>::TransactionOutId,
-	) -> Option<Self::Callback> {
-		ROTATION_CALLBACK.with(|cell| cell.borrow_mut().take())
 	}
 }
 
@@ -176,7 +155,6 @@ impl pallet_cf_broadcast::Config<Instance1> for Test {
 	type KeyProvider = MockKeyProvider;
 	type RuntimeOrigin = RuntimeOrigin;
 	type BroadcastCallable = MockCallback;
-	type RotationCallbackProvider = MockRotationCallbackProvider;
 	type BroadcastReadyProvider = MockBroadcastReadyProvider;
 }
 

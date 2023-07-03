@@ -168,12 +168,6 @@ impl Broadcaster<MockEthereum> for MockBroadcaster {
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		unimplemented!()
 	}
-
-	fn threshold_sign_and_broadcast_for_rotation(
-		_api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		(1, 2)
-	}
 }
 
 parameter_types! {

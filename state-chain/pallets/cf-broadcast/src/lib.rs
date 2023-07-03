@@ -67,10 +67,7 @@ pub enum PalletOffence {
 pub mod pallet {
 	use super::*;
 	use cf_chains::benchmarking_value::BenchmarkValue;
-	use cf_traits::{
-		AccountRoleRegistry, KeyProvider, OnBroadcastReady, OnRotationCallback,
-		SingleSignerNomination,
-	};
+	use cf_traits::{AccountRoleRegistry, KeyProvider, OnBroadcastReady, SingleSignerNomination};
 	use frame_support::{ensure, pallet_prelude::*, traits::EnsureOrigin};
 	use frame_system::pallet_prelude::*;
 
@@ -173,11 +170,6 @@ pub mod pallet {
 		/// Ensure that only threshold signature consensus can trigger a broadcast.
 		type EnsureThresholdSigned: EnsureOrigin<<Self as frame_system::Config>::RuntimeOrigin>;
 
-		type RotationCallbackProvider: OnRotationCallback<
-			Self::TargetChain,
-			Origin = <Self as frame_system::Config>::RuntimeOrigin,
-		>;
-
 		type BroadcastReadyProvider: OnBroadcastReady<Self::TargetChain, ApiCall = Self::ApiCall>;
 
 		/// The timeout duration for the broadcast, measured in number of blocks.
@@ -210,11 +202,6 @@ pub mod pallet {
 	#[pallet::getter(fn request_callback)]
 	pub type RequestCallbacks<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, BroadcastId, <T as Config<I>>::BroadcastCallable>;
-
-	#[pallet::storage]
-	#[pallet::getter(fn rotation_broadcast)]
-	pub type RotationBroadcast<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, BroadcastId, bool, ValueQuery>;
 
 	/// The last attempt number for a particular broadcast.
 	#[pallet::storage]
@@ -483,7 +470,6 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transaction_succeeded())]
 		pub fn transaction_succeeded(
 			origin: OriginFor<T>,
-			block_number: ChainBlockNumberFor<T, I>,
 			tx_out_id: TransactionOutIdFor<T, I>,
 			signer_id: SignerIdFor<T, I>,
 			tx_fee: TransactionFeeFor<T, I>,
@@ -519,26 +505,6 @@ pub mod pallet {
 						},
 					),
 				});
-			}
-
-			if RotationBroadcast::<T, I>::get(broadcast_id) {
-				if let Some(callback) =
-					T::RotationCallbackProvider::on_rotation(block_number, tx_out_id.clone())
-				{
-					Self::deposit_event(Event::<T, I>::RotationCallbackExecuted {
-						broadcast_id,
-						result: callback
-							.dispatch_bypass_filter(origin.clone())
-							.map(|_| ())
-							.map_err(|e| {
-								log::warn!(
-									"Callback execution has failed for broadcast {}.",
-									broadcast_id
-								);
-								e.error
-							}),
-					});
-				}
 			}
 
 			// Report the people who failed to broadcast this tx during its whole lifetime.
@@ -614,7 +580,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	pub fn threshold_sign_and_broadcast(
 		api_call: <T as Config<I>>::ApiCall,
 		maybe_callback: Option<<T as Config<I>>::BroadcastCallable>,
-		rotation_broadcast: bool,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		let broadcast_id = BroadcastIdCounter::<T, I>::mutate(|id| {
 			*id += 1;
@@ -623,7 +588,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		if let Some(callback) = maybe_callback {
 			RequestCallbacks::<T, I>::insert(broadcast_id, callback);
 		}
-		RotationBroadcast::<T, I>::insert(broadcast_id, rotation_broadcast);
 		let threshold_signature_payload = api_call.threshold_signature_payload();
 		let signature_request_id = T::ThresholdSigner::request_signature_with_callback(
 			threshold_signature_payload.clone(),
@@ -709,7 +673,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				Self::threshold_sign_and_broadcast(
 					api_call,
 					RequestCallbacks::<T, I>::get(broadcast_id),
-					RotationBroadcast::<T, I>::get(broadcast_id),
 				);
 				log::info!(
 					"Signature is invalid -> rescheduled threshold signature for broadcast id {}.",
@@ -773,20 +736,14 @@ impl<T: Config<I>, I: 'static> Broadcaster<T::TargetChain> for Pallet<T, I> {
 	fn threshold_sign_and_broadcast(
 		api_call: Self::ApiCall,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		Self::threshold_sign_and_broadcast(api_call, None, false)
+		Self::threshold_sign_and_broadcast(api_call, None)
 	}
 
 	fn threshold_sign_and_broadcast_with_callback(
 		api_call: Self::ApiCall,
 		callback: Self::Callback,
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		Self::threshold_sign_and_broadcast(api_call, Some(callback), false)
-	}
-
-	fn threshold_sign_and_broadcast_for_rotation(
-		api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		Self::threshold_sign_and_broadcast(api_call, None, true)
+		Self::threshold_sign_and_broadcast(api_call, Some(callback))
 	}
 }
 

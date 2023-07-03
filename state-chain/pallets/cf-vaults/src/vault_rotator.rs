@@ -140,15 +140,24 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 					.map(|call| (call, key_state, epoch_index))
 				}) {
 				let (_, threshold_request_id) =
-					T::Broadcaster::threshold_sign_and_broadcast_for_rotation(rotation_call);
-				debug_assert!(
-					matches!(key_state, KeyState::Unlocked),
-					"Current epoch key must be active to activate next key."
-				);
-				CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
-					epoch_index,
-					key_state: KeyState::Locked(threshold_request_id),
-				});
+					T::Broadcaster::threshold_sign_and_broadcast(rotation_call);
+				if <T::Chain as Chain>::KEY_HANDOVER_IS_REQUIRED {
+					Self::set_next_vault(new_public_key, todo!());
+					Pallet::<T, I>::deposit_event(Event::VaultRotationCompleted);
+					PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete);
+				} else {
+					debug_assert!(
+						matches!(key_state, KeyState::Unlocked),
+						"Current epoch key must be active to activate next key."
+					);
+					CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
+						epoch_index,
+						key_state: KeyState::Locked(threshold_request_id),
+					});
+					PendingVaultRotation::<T, I>::put(
+						VaultRotationStatus::<T, I>::AwaitingActivation { new_public_key },
+					);
+				}
 			} else {
 				// The block number value 1, which the vault is being set with is a dummy value
 				// and doesn't mean anything. It will be later modified to the real value when
@@ -156,9 +165,6 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				Self::set_vault_for_next_epoch(new_public_key, 1_u32.into());
 				Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation { new_public_key })
 			}
-			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingActivation {
-				new_public_key,
-			});
 		} else {
 			#[cfg(not(test))]
 			log::error!("activate key called before key handover completed");

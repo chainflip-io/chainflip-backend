@@ -371,7 +371,6 @@ where
 													PolkadotInstance,
 												>::transaction_succeeded {
 													tx_out_id: signature,
-													block_number,
 													signer_id: self.vault_account,
 													tx_fee,
 												}

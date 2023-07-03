@@ -149,7 +149,6 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 
 		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
-			2u32.into(),
 			MOCK_TRANSACTION_OUT_ID,
 			nominee,
 			ETH_TX_FEE,
@@ -282,7 +281,6 @@ fn test_sigdata_with_no_match_is_noop() {
 					*<Test as Chainflip>::EpochInfo::current_authorities().first().unwrap()
 				)
 				.into(),
-				2u32.into(),
 				MOCK_TRANSACTION_OUT_ID,
 				Default::default(),
 				ETH_TX_FEE,
@@ -313,7 +311,6 @@ fn transaction_succeeded_after_timeout_reports_failed_nodes() {
 
 		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
-			2u32.into(),
 			MOCK_TRANSACTION_OUT_ID,
 			Default::default(),
 			ETH_TX_FEE,
@@ -508,14 +505,13 @@ fn threshold_sign_and_broadcast_with_callback() {
 		};
 
 		let (broadcast_id, _threshold_request_id) =
-			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), Some(MockCallback), false);
+			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), Some(MockCallback));
 
 		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
 
 		assert_eq!(RequestCallbacks::<Test, Instance1>::get(broadcast_id), Some(MockCallback));
 		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
-			2u32.into(),
 			MOCK_TRANSACTION_OUT_ID,
 			Default::default(),
 			ETH_TX_FEE,
@@ -532,55 +528,6 @@ fn threshold_sign_and_broadcast_with_callback() {
 		assert_eq!(
 			events.pop().expect("an event").event,
 			RuntimeEvent::Broadcaster(crate::Event::BroadcastCallbackExecuted {
-				broadcast_id,
-				result: Ok(())
-			})
-		);
-	});
-}
-
-#[test]
-fn threshold_sign_and_broadcast_with_rotation_callback() {
-	new_test_ext().execute_with(|| {
-		// Bitcoin has a rotation callback.
-		MockRotationCallbackProvider::set_callback(Some(MockCallback));
-		assert!(!MockCallback::was_called());
-		let api_call = MockApiCall {
-			payload: Default::default(),
-			sig: Default::default(),
-			tx_out_id: MOCK_TRANSACTION_OUT_ID,
-		};
-
-		let (broadcast_id, _threshold_request_id) =
-			Broadcaster::threshold_sign_and_broadcast(api_call.clone(), None, true);
-
-		// Rotation callbacks are not the same as normal request callbacks, there are not stored in
-		// storage.
-		assert!(RequestCallbacks::<Test, Instance1>::get(broadcast_id).is_none());
-
-		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
-		assert_ok!(Broadcaster::transaction_succeeded(
-			RuntimeOrigin::root(),
-			2u32.into(),
-			MOCK_TRANSACTION_OUT_ID,
-			Default::default(),
-			ETH_TX_FEE,
-		));
-
-		// We should have called the rotation callback.
-		assert!(MockCallback::was_called());
-
-		let mut events = System::events();
-		assert_eq!(
-			events.pop().expect("an event").event,
-			RuntimeEvent::Broadcaster(crate::Event::BroadcastSuccess {
-				broadcast_id,
-				transaction_out_id: api_call.tx_out_id
-			})
-		);
-		assert_eq!(
-			events.pop().expect("an event").event,
-			RuntimeEvent::Broadcaster(crate::Event::RotationCallbackExecuted {
 				broadcast_id,
 				result: Ok(())
 			})
