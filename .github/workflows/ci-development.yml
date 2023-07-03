@@ -2,7 +2,6 @@
 name: Release Chainflip Development
 on:
   push:
-    
 concurrency:
   group: ${{ github.ref }}-release-development
   cancel-in-progress: true
@@ -53,7 +52,7 @@ jobs:
       network: partnernet
       environment: prod
     secrets: inherit
-  publish-public:
+  publish-partnernet:
     needs: [package, publish]
     uses: ./.github/workflows/_30_publish.yml
     with:
