@@ -38,6 +38,7 @@ async function testAll() {
             testSwap('DOT', 'ETH'),
             testSwap('BTC', 'ETH'),
             testSwap('BTC', 'USDC'),
+            testSwap('ETH', 'USDC'),
         ])
     
     // NOTE: Doing the CCM swaps separately because of the broadcasting nonce bug.
@@ -93,6 +94,14 @@ async function testAll() {
             source_address: ForeignChainAddress.Polkadot,
         }),            
     ])        
+    await Promise.all([
+        testSwap('USDC', 'ETH', undefined, {
+            message: getAbiEncodedMessage(),
+            gas_budget: 5000000,
+            cf_parameters: getAbiEncodedMessage(["address","uint256"]),
+            source_address: ForeignChainAddress.Ethereum,
+        }),            
+    ])      
 }
 
 
