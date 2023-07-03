@@ -122,3 +122,10 @@ assets = [
   ["target/release/chainflip-node", "usr/bin/", "755"],
   ["chainspecs/perseverance.chainspec.raw.json", "etc/chainflip/perseverance.chainspec.json", "644"],
 ]
+
+[package.metadata.deb.variants.partnernet]
+maintainer-scripts = "package/partnernet"
+assets = [
+  ["target/release/chainflip-node", "usr/bin/", "755"],
+  ["chainspecs/partnernet.chainspec.json", "etc/chainflip/partnernet.chainspec.json", "644"],
+]

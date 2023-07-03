@@ -46,6 +46,20 @@ jobs:
       version: ci/${{ github.sha }}/
       environment: dev
     secrets: inherit
+  packag-partnernet:
+    needs: [build, package]
+    uses: ./.github/workflows/_25_package.yml
+    with:
+      network: partnernet
+      environment: prod
+    secrets: inherit
+  publish-public:
+    needs: [package, publish]
+    uses: ./.github/workflows/_30_publish.yml
+    with:
+      version: partnernet
+      environment: prod
+    secrets: inherit
   merge-commit-summary:
     needs: [publish]
     uses: ./.github/workflows/_04_merge_commit_summary.yml
