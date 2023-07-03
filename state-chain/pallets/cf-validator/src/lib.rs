@@ -22,7 +22,7 @@ use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid,
 	BidderProvider, Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition,
 	FundingInfo, HistoricalEpoch, MissedAuthorshipSlots, OnAccountFunded, QualifyNode,
-	ReputationResetter, SafeMode, UpdateSafeModeForBenchmarking, VaultRotator,
+	ReputationResetter, SetSafeMode, VaultRotator,
 };
 
 use cf_utilities::Port;
@@ -94,7 +94,7 @@ pub enum PalletOffence {
 
 pub const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
 
-impl_pallet_safe_mode!(PalletSafeMode, do_authority_rotation);
+impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled);
 
 pub type Percentage = u8;
 #[frame_support::pallet]
@@ -154,7 +154,7 @@ pub mod pallet {
 		type ReputationResetter: ReputationResetter<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// Safe Mode access.
-		type SafeMode: Get<PalletSafeMode> + UpdateSafeModeForBenchmarking<PalletSafeMode>;
+		type SafeMode: Get<PalletSafeMode> + SetSafeMode<PalletSafeMode>;
 
 		/// Benchmark weights.
 		type ValidatorWeightInfo: WeightInfo;
@@ -1092,7 +1092,7 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn start_authority_rotation() -> Weight {
-		if T::SafeMode::get() == SafeMode::CODE_RED {
+		if !T::SafeMode::get().authority_rotation_enabled {
 			log::warn!(
 				target: "cf-validator",
 				"Can't start authority rotation. Runtime Safe Mode is in CODE RED."

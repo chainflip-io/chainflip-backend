@@ -166,7 +166,7 @@ impl GetBitcoinFeeInfo for MockBitcoinFeeInfo {
 	}
 }
 
-impl_pallet_safe_mode!(MockPalletSafeMode, flag1, flag2);
+impl_pallet_safe_mode!(MockPalletSafeMode; flag1, flag2);
 impl_mock_runtime_safe_mode!(mock: MockPalletSafeMode);
 
 impl pallet_cf_environment::Config for Test {

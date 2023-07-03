@@ -6,8 +6,8 @@ use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
-	offence_reporting::OffenceReporter, ActivateCodeRed, AsyncResult, Broadcaster, Chainflip,
-	CurrentEpochIndex, EpochKey, KeyProvider, KeyState, Slashing, ThresholdSigner,
+	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, Chainflip, CurrentEpochIndex,
+	EpochKey, KeyProvider, KeyState, SafeMode, SetSafeMode, Slashing, ThresholdSigner,
 	VaultKeyWitnessedHandler, VaultRotator, VaultStatus, VaultTransitionHandler,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
@@ -175,7 +175,7 @@ pub mod pallet {
 		type Slasher: Slashing<AccountId = Self::ValidatorId, BlockNumber = Self::BlockNumber>;
 
 		/// For activating Safe mode: CODE RED for the chain.
-		type SafeMode: ActivateCodeRed;
+		type SafeMode: SafeMode + SetSafeMode<Self::SafeMode>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -637,7 +637,7 @@ pub mod pallet {
 
 			Self::set_next_vault(new_public_key, block_number);
 
-			T::SafeMode::activate_code_red();
+			T::SafeMode::set_code_red();
 
 			Pallet::<T, I>::deposit_event(Event::VaultRotatedExternally(new_public_key));
 

@@ -157,7 +157,7 @@ pub enum CcmFailReason {
 	GasBudgetBelowMinimum,
 }
 
-impl_pallet_safe_mode!(PalletSafeMode, do_swaps, do_withdraw);
+impl_pallet_safe_mode!(PalletSafeMode; swaps_enabled, withdraw_enabled);
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum SwapOrigin {
 	DepositChannel { deposit_address: EncodedAddress, channel_id: ChannelId },
@@ -368,8 +368,8 @@ pub mod pallet {
 		SwapAmountTooLow,
 		/// The CCM's gas budget is below the minimum allowed.
 		CcmGasBudgetBelowMinimum,
-		/// The system Safe Mode is Code Red. Functionalities are halted.
-		RuntimeSafeModeIsCodeRed,
+		/// Withdrawals are disabled due to Safe Mode.
+		WithdrawsDisabled,
 	}
 
 	#[pallet::genesis_config]
@@ -414,7 +414,7 @@ pub mod pallet {
 
 		/// Execute all swaps in the SwapQueue
 		fn on_finalize(_n: BlockNumberFor<T>) {
-			if !T::SafeMode::get().do_swaps {
+			if !T::SafeMode::get().swaps_enabled {
 				return
 			}
 			// Wrap the entire swapping section as a transaction, any failed swap will rollback all
@@ -572,7 +572,7 @@ pub mod pallet {
 			asset: Asset,
 			destination_address: EncodedAddress,
 		) -> DispatchResult {
-			ensure!(T::SafeMode::get().do_withdraw, Error::<T>::RuntimeSafeModeIsCodeRed);
+			ensure!(T::SafeMode::get().withdraw_enabled, Error::<T>::WithdrawsDisabled);
 
 			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 

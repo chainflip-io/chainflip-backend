@@ -28,7 +28,7 @@ use cf_primitives::{chains::AnyChain, Asset};
 pub mod weights;
 pub use weights::WeightInfo;
 
-impl_pallet_safe_mode!(PalletSafeMode, do_emissions_sync);
+impl_pallet_safe_mode!(PalletSafeMode; emissions_sync_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -170,7 +170,7 @@ pub mod pallet {
 		fn on_initialize(current_block: BlockNumberFor<T>) -> Weight {
 			T::RewardsDistribution::distribute();
 			if Self::should_update_supply_at(current_block) {
-				if T::SafeMode::get().do_emissions_sync {
+				if T::SafeMode::get().emissions_sync_enabled {
 					let flip_to_burn = T::FlipToBurn::take_flip_to_burn();
 					T::EgressHandler::schedule_egress(
 						Asset::Flip,
@@ -189,7 +189,7 @@ pub mod pallet {
 					LastSupplyUpdateBlock::<T>::set(current_block);
 					return T::WeightInfo::rewards_minted()
 				} else {
-					log::info!("Runtime Safe Mode is CODE RED: skipping supply update broadcast.");
+					log::info!("Runtime Safe Mode is CODE RED: Flip total issuance update broadcast are paused for now.");
 				}
 			}
 			T::WeightInfo::rewards_not_minted()

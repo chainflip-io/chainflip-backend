@@ -18,7 +18,7 @@ use cf_traits::{
 		deposit_handler::{MockDepositHandler, SwapChannel},
 		egress_handler::{MockEgressHandler, MockEgressParameter},
 	},
-	CcmHandler, SafeMode, SwapDepositHandler, SwappingApi,
+	CcmHandler, SetSafeMode, SwapDepositHandler, SwappingApi,
 };
 use frame_support::{assert_noop, assert_ok, sp_std::iter};
 
@@ -1579,13 +1579,13 @@ fn cannot_swap_in_safe_mode() {
 		assert_eq!(SwapQueue::<Test>::decode_len(), Some(4));
 
 		// Activate code red
-		MockRuntimeSafeMode::set_safe_mode(SafeMode::CODE_RED);
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 
 		// No swap is done
 		Swapping::on_finalize(1);
 		assert_eq!(SwapQueue::<Test>::decode_len(), Some(4));
 
-		MockRuntimeSafeMode::set_safe_mode(SafeMode::CODE_GREEN);
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 
 		// Swaps are processed
 		Swapping::on_finalize(2);
@@ -1599,7 +1599,7 @@ fn cannot_withdraw_in_safe_mode() {
 		EarnedBrokerFees::<Test>::insert(ALICE, Asset::Eth, 200);
 
 		// Activate code red
-		MockRuntimeSafeMode::set_safe_mode(SafeMode::CODE_RED);
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 
 		// Cannot withdraw
 		assert_noop!(
@@ -1608,12 +1608,12 @@ fn cannot_withdraw_in_safe_mode() {
 				Asset::Eth,
 				EncodedAddress::Eth(Default::default()),
 			),
-			Error::<Test>::RuntimeSafeModeIsCodeRed
+			Error::<Test>::WithdrawsDisabled
 		);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, Asset::Eth), 200);
 
 		// Change back to code green
-		MockRuntimeSafeMode::set_safe_mode(SafeMode::CODE_GREEN);
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 
 		// withdraws are now alloed
 		assert_ok!(Swapping::withdraw(

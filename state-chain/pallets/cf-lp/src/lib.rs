@@ -25,7 +25,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-impl_pallet_safe_mode!(PalletSafeMode, do_issue_deposit_channel, do_withdraw);
+impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdraw_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -71,8 +71,10 @@ pub mod pallet {
 		UnauthorisedToModify,
 		// The Asset cannot be egressed to the destination chain.
 		InvalidEgressAddress,
-		// The runtime's Safe Mode is code red: Halt all operations.
-		RuntimeSafeModeIsCodeRed,
+		// Liquidity deposit is disabled due to Safe Mode.
+		LiquidityDepositDisabled,
+		// Withdraws are disabled due to Safe Mode.
+		WithdrawsDisabled,
 	}
 
 	#[pallet::hooks]
@@ -174,10 +176,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset: Asset,
 		) -> DispatchResult {
-			ensure!(
-				T::SafeMode::get().do_issue_deposit_channel,
-				Error::<T>::RuntimeSafeModeIsCodeRed
-			);
+			ensure!(T::SafeMode::get().deposit_enabled, Error::<T>::LiquidityDepositDisabled);
 
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			let (channel_id, deposit_address) =
@@ -208,7 +207,7 @@ pub mod pallet {
 			asset: Asset,
 			destination_address: EncodedAddress,
 		) -> DispatchResult {
-			ensure!(T::SafeMode::get().do_withdraw, Error::<T>::RuntimeSafeModeIsCodeRed);
+			ensure!(T::SafeMode::get().withdraw_enabled, Error::<T>::WithdrawsDisabled);
 			if amount > 0 {
 				let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 

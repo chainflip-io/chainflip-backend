@@ -21,7 +21,7 @@ use cf_primitives::AccountRole;
 use cf_primitives::EthereumAddress;
 use cf_traits::{
 	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Bid, BidderProvider, Broadcaster,
-	Chainflip, EpochInfo, FeePayment, Funding, SafeMode,
+	Chainflip, EpochInfo, FeePayment, Funding,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -44,7 +44,7 @@ use sp_std::{cmp::max, collections::btree_map::BTreeMap, prelude::*};
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
 
-impl_pallet_safe_mode!(PalletSafeMode, do_redeem);
+impl_pallet_safe_mode!(PalletSafeMode; redeem_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -283,8 +283,8 @@ pub mod pallet {
 		/// The account is bound to a withdrawal address.
 		AccountBindingRestrictionViolated,
 
-		/// The system Safe Mode is Code Red. Functionalities are halted.
-		RuntimeSafeModeIsCodeRed,
+		/// Redeem is disabled due to Safe Mode.
+		RedeemDisabled,
 	}
 
 	#[pallet::call]
@@ -357,10 +357,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 
-			ensure!(
-				T::SafeMode::get() == PalletSafeMode::CODE_GREEN,
-				Error::<T>::RuntimeSafeModeIsCodeRed
-			);
+			ensure!(T::SafeMode::get().redeem_enabled, Error::<T>::RedeemDisabled);
 
 			// Not allowed to redeem if we are an active bidder in the auction phase
 			if T::EpochInfo::is_auction_phase() {

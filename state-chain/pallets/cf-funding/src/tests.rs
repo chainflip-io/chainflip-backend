@@ -6,7 +6,7 @@ use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
 	mocks::account_role_registry::MockAccountRoleRegistry, AccountInfo, AccountRoleRegistry,
-	Bonding, SafeMode,
+	Bonding, SetSafeMode,
 };
 
 use crate::BoundAddress;
@@ -531,13 +531,13 @@ fn runtime_safe_mode_blocks_redemption_requests() {
 			Default::default(),
 		));
 
-		MockRuntimeSafeMode::set_safe_mode(SafeMode::CODE_RED);
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 		assert_noop!(
 			Funding::redeem(RuntimeOrigin::signed(ALICE), RedemptionAmount::Max, ETH_DUMMY_ADDR),
-			Error::<Test>::RuntimeSafeModeIsCodeRed
+			Error::<Test>::RedeemDisabled
 		);
 
-		MockRuntimeSafeMode::set_safe_mode(SafeMode::CODE_GREEN);
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 		assert_ok!(Funding::redeem(
 			RuntimeOrigin::signed(ALICE),
 			RedemptionAmount::Max,

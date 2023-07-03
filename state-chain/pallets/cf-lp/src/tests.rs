@@ -12,7 +12,7 @@ use cf_traits::{
 		address_converter::MockAddressConverter,
 		deposit_handler::{LpChannel, MockDepositHandler},
 	},
-	SafeMode,
+	SetSafeMode,
 };
 use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::Hooks};
 
@@ -74,7 +74,7 @@ fn cannot_deposit_and_withdrawal_during_safe_mode() {
 		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000);
 
 		// Activate Safe Mode: Code red
-		MockRuntimeSafeMode::set_safe_mode(SafeMode::CODE_RED);
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 
 		// Cannot request deposit address during Code red.
 		assert_noop!(
@@ -82,7 +82,7 @@ fn cannot_deposit_and_withdrawal_during_safe_mode() {
 				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				Asset::Eth,
 			),
-			crate::Error::<Test>::RuntimeSafeModeIsCodeRed,
+			crate::Error::<Test>::LiquidityDepositDisabled,
 		);
 
 		// Cannot withdraw liquidity during Code red.
@@ -93,11 +93,11 @@ fn cannot_deposit_and_withdrawal_during_safe_mode() {
 				Asset::Eth,
 				EncodedAddress::Eth(Default::default()),
 			),
-			crate::Error::<Test>::RuntimeSafeModeIsCodeRed,
+			crate::Error::<Test>::WithdrawsDisabled,
 		);
 
 		// Safe mode is now Code Green
-		MockRuntimeSafeMode::set_safe_mode(SafeMode::CODE_GREEN);
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 
 		// Deposit and withdrawal can now work as per normal.
 		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(

@@ -194,7 +194,7 @@ impl Slashing for MockSlasher {
 	fn slash_balance(_account_id: &Self::AccountId, _amount: sp_runtime::Percent) {}
 }
 
-impl_pallet_safe_mode!(MockPalletSafeMode, flag);
+impl_pallet_safe_mode!(MockPalletSafeMode; flag);
 impl_mock_runtime_safe_mode!(test: MockPalletSafeMode);
 
 impl pallet_cf_vaults::Config for MockRuntime {

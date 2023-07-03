@@ -7,7 +7,7 @@ use cf_traits::{
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 		vault_rotator::MockVaultRotatorA,
 	},
-	AccountRoleRegistry, AuctionOutcome, SafeMode,
+	AccountRoleRegistry, AuctionOutcome, SafeMode, SetSafeMode,
 };
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;
@@ -523,8 +523,8 @@ fn test_missing_author_punishment() {
 fn no_validator_rotation_during_safe_mode_code_red() {
 	new_test_ext().execute_with(|| {
 		// Activate Safe Mode: CODE RED
-		MockRuntimeSafeMode::set_safe_mode(SafeMode::CODE_RED);
-		assert!(<MockRuntimeSafeMode as Get<PalletSafeMode>>::get() == SafeMode::CODE_RED);
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
+		assert!(<MockRuntimeSafeMode as Get<PalletSafeMode>>::get() == PalletSafeMode::CODE_RED);
 
 		// Try to start a rotation.
 		ValidatorPallet::start_authority_rotation();
@@ -533,8 +533,8 @@ fn no_validator_rotation_during_safe_mode_code_red() {
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 
 		// Change safe mode to CODE GREEN
-		MockRuntimeSafeMode::set_safe_mode(SafeMode::CODE_GREEN);
-		assert!(<MockRuntimeSafeMode as Get<PalletSafeMode>>::get() == SafeMode::CODE_GREEN);
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
+		assert!(<MockRuntimeSafeMode as Get<PalletSafeMode>>::get() == PalletSafeMode::CODE_GREEN);
 
 		// Try to start a rotation.
 		MockBidderProvider::set_winning_bids();
