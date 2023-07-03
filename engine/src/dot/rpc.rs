@@ -1,6 +1,6 @@
 use std::pin::Pin;
 
-use crate::{common::Mutex, dot::safe_runtime_version_stream::safe_runtime_version_stream};
+use crate::dot::safe_runtime_version_stream::safe_runtime_version_stream;
 use async_trait::async_trait;
 use cf_chains::dot::{PolkadotHash, RuntimeVersion};
 use cf_primitives::PolkadotBlockNumber;
@@ -11,6 +11,7 @@ use subxt::{
 	rpc::types::{Bytes, ChainBlockExtrinsic},
 	rpc_params, Config, OnlineClient, PolkadotConfig,
 };
+use tokio::sync::RwLock;
 
 use anyhow::{anyhow, Result};
 
@@ -21,14 +22,13 @@ pub type PolkadotHeader = <PolkadotConfig as Config>::Header;
 
 #[derive(Clone)]
 pub struct DotRpcClient {
-	online_client: Arc<Mutex<OnlineClient<PolkadotConfig>>>,
+	online_client: Arc<RwLock<OnlineClient<PolkadotConfig>>>,
 	polkadot_network_ws_url: String,
 }
 
 macro_rules! refresh_connection_on_error {
     ($self:expr, $namespace:ident, $method:ident $(, $arg:expr)*) => {{
-		let mut online_client_guard = $self.online_client.lock().await;
-		match online_client_guard.$namespace().$method($($arg,)*).await {
+		match $self.online_client.read().await.$namespace().$method($($arg,)*).await {
 			Err(e) => {
 				tracing::warn!(
 					"Initial {} query failed with error: {e}, refreshing client and retrying", stringify!($method)
@@ -37,6 +37,7 @@ macro_rules! refresh_connection_on_error {
 				let new_client =
 					OnlineClient::<PolkadotConfig>::from_url(&$self.polkadot_network_ws_url).await?;
 				let result = new_client.$namespace().$method($($arg,)*).await.map_err(|e| anyhow!("Failed to query {} Polkadot with error: {e}", stringify!($method)));
+				let mut online_client_guard = $self.online_client.write().await;
 				*online_client_guard = new_client;
 				result
 			},
@@ -47,13 +48,13 @@ macro_rules! refresh_connection_on_error {
 
 impl DotRpcClient {
 	pub async fn new(polkadot_network_ws_url: &str) -> Result<Self> {
-		let online_client = Arc::new(Mutex::new(
+		let online_client = Arc::new(RwLock::new(
 			OnlineClient::<PolkadotConfig>::from_url(polkadot_network_ws_url).await?,
 		));
 		Ok(Self { online_client, polkadot_network_ws_url: polkadot_network_ws_url.to_string() })
 	}
 
-	async fn metadata(&mut self, block_hash: PolkadotHash) -> Result<subxt::Metadata> {
+	async fn metadata(&self, block_hash: PolkadotHash) -> Result<subxt::Metadata> {
 		refresh_connection_on_error!(self, rpc, metadata, Some(block_hash))
 	}
 }
@@ -121,7 +122,9 @@ impl DotRpcApi for DotRpcClient {
 	async fn events(&mut self, block_hash: PolkadotHash) -> Result<Events<PolkadotConfig>> {
 		let chain_runtime_version = self.current_runtime_version().await?;
 
-		let client_runtime_version = { self.online_client.lock().await.runtime_version() };
+		let client = self.online_client.read().await;
+
+		let client_runtime_version = client.runtime_version();
 
 		// We set the metadata and runtime version we need to decode this block's events.
 		// The metadata from the OnlineClient is used within the EventsClient to decode the
@@ -132,20 +135,17 @@ impl DotRpcApi for DotRpcClient {
 		{
 			let new_metadata = self.metadata(block_hash).await?;
 
-			{
-				let guard = self.online_client.lock().await;
-				guard.set_runtime_version(subxt::rpc::types::RuntimeVersion {
-					spec_version: chain_runtime_version.spec_version,
-					transaction_version: chain_runtime_version.transaction_version,
-					other: Default::default(),
-				});
-				guard.set_metadata(new_metadata);
-			}
+			client.set_runtime_version(subxt::rpc::types::RuntimeVersion {
+				spec_version: chain_runtime_version.spec_version,
+				transaction_version: chain_runtime_version.transaction_version,
+				other: Default::default(),
+			});
+			client.set_metadata(new_metadata);
 		}
 
 		// If we've succeeded in getting the current runtime version then we assume
 		// the connection is stable (or has just been refreshed), no need to retry again.
-		EventsClient::new(self.online_client.lock().await.clone())
+		EventsClient::new(client.clone())
 			.at(Some(block_hash))
 			.await
 			.map_err(|e| anyhow!("Failed to query events for block {block_hash}, with error: {e}"))
