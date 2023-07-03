@@ -9,7 +9,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_chains::{Age, Chain};
+use cf_chains::Chain;
 use cf_traits::Chainflip;
 use frame_support::dispatch::DispatchResultWithPostInfo;
 use frame_system::pallet_prelude::OriginFor;
@@ -39,17 +39,34 @@ pub mod pallet {
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
+	#[derive(
+		PartialEqNoBound,
+		EqNoBound,
+		CloneNoBound,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		DebugNoBound,
+	)]
+	#[scale_info(skip_type_params(T, I))]
+	pub struct ChainState<C: Chain> {
+		pub block_height: C::ChainBlockNumber,
+		pub tracked_data: C::TrackedData,
+	}
+
 	/// The tracked state of the external chain.
 	#[pallet::storage]
 	#[pallet::getter(fn chain_state)]
-	pub type ChainState<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, <T::TargetChain as Chain>::TrackedData>;
+	#[allow(clippy::type_complexity)]
+	pub type CurrentChainState<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, ChainState<T::TargetChain>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// The tracked state of this chain has been updated.
-		ChainStateUpdated { state: <T::TargetChain as Chain>::TrackedData },
+		ChainStateUpdated { new_chain_state: ChainState<T::TargetChain> },
 	}
 
 	#[pallet::error]
@@ -72,20 +89,23 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_chain_state())]
 		pub fn update_chain_state(
 			origin: OriginFor<T>,
-			state: <T::TargetChain as Chain>::TrackedData,
+			new_chain_state: ChainState<T::TargetChain>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			ChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|maybe_previous| {
-				if let Some(previous) = maybe_previous.replace(state.clone()) {
+			CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|maybe_previous| {
+				if let Some(previous_chain_state) = maybe_previous {
 					ensure!(
-						state.birth_block() > previous.birth_block(),
+						new_chain_state.block_height > previous_chain_state.block_height,
 						Error::<T, I>::StaleDataSubmitted
 					)
-				};
+				}
+
+				*maybe_previous = Some(new_chain_state.clone());
+
 				Ok(())
 			})?;
-			Self::deposit_event(Event::<T, I>::ChainStateUpdated { state });
+			Self::deposit_event(Event::<T, I>::ChainStateUpdated { new_chain_state });
 
 			Ok(().into())
 		}

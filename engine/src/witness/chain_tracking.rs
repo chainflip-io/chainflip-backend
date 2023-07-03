@@ -1,6 +1,7 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use futures::StreamExt;
+use pallet_cf_chain_tracking::ChainState;
 
 use crate::state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi;
 
@@ -12,7 +13,7 @@ use super::{
 
 #[async_trait::async_trait]
 pub trait GetChainTrackingData<C: cf_chains::Chain> {
-	async fn get_chain_tracking_data(&self) -> C::TrackedData;
+	async fn get_chain_tracking_data(&self) -> ChainState<C>;
 }
 
 pub struct ChainTracking<'a, C, I, InnerStream, StateChainClient, Client>
@@ -95,7 +96,7 @@ where
 													state_chain_runtime::Runtime,
 													I,
 												>::update_chain_state {
-													state: chain_tracking_data,
+													new_chain_state: chain_tracking_data,
 												}
 												.into(),
 											),
