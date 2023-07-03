@@ -16,55 +16,55 @@ pub trait GetTrackedData<C: cf_chains::Chain> {
 	async fn get_tracked_data(&self) -> ChainState<C>;
 }
 
-pub struct ChainTracking<'a, C, I, InnerStream, StateChainClient, Client>
+pub struct ChainTracking<'a, C, I, Underlying, StateChainClient, TrackedDataClient>
 where
-	InnerStream: ChainSplitByEpoch<'a>,
+	Underlying: ChainSplitByEpoch<'a>,
 	C: cf_chains::Chain,
 	I: 'static + Send + Sync,
-	Client: GetTrackedData<C>,
+	TrackedDataClient: GetTrackedData<C>,
 {
-	inner_stream: InnerStream,
-	client: Client,
+	inner_stream: Underlying,
+	client: TrackedDataClient,
 	state_chain_client: Arc<StateChainClient>,
 	phantom: PhantomData<(&'a (), C, I)>,
 }
 
-impl<'a, C, I, InnerStream, StateChainClient, Client>
-	ChainTracking<'a, C, I, InnerStream, StateChainClient, Client>
+impl<'a, C, I, Underlying, StateChainClient, TrackedDataClient>
+	ChainTracking<'a, C, I, Underlying, StateChainClient, TrackedDataClient>
 where
 	C: cf_chains::Chain,
 	I: 'static + Send + Sync,
-	Client: GetTrackedData<C>,
-	InnerStream: ChainSplitByEpoch<'a>,
+	TrackedDataClient: GetTrackedData<C>,
+	Underlying: ChainSplitByEpoch<'a>,
 	StateChainClient: SignedExtrinsicApi + Send,
 {
 	pub fn new(
-		inner_stream: InnerStream,
+		inner_stream: Underlying,
 		state_chain_client: Arc<StateChainClient>,
-		client: Client,
-	) -> ChainTracking<'a, C, I, InnerStream, StateChainClient, Client>
+		client: TrackedDataClient,
+	) -> ChainTracking<'a, C, I, Underlying, StateChainClient, TrackedDataClient>
 	where
-		InnerStream: ChainSplitByEpoch<'a>,
-		Client: GetTrackedData<C>,
+		Underlying: ChainSplitByEpoch<'a>,
+		TrackedDataClient: GetTrackedData<C>,
 	{
 		ChainTracking { inner_stream, state_chain_client, client, phantom: PhantomData }
 	}
 }
 
 #[async_trait::async_trait]
-impl<'a, C, I, InnerStream, StateChainClient, Client> ChainSplitByEpoch<'a>
-	for ChainTracking<'a, C, I, InnerStream, StateChainClient, Client>
+impl<'a, C, I, Underlying, StateChainClient, TrackedDataClient> ChainSplitByEpoch<'a>
+	for ChainTracking<'a, C, I, Underlying, StateChainClient, TrackedDataClient>
 where
 	C: cf_chains::Chain,
 	I: 'static + Send + Sync,
-	InnerStream: ChainSplitByEpoch<'a>,
-	Client: GetTrackedData<C> + Send + Sync + Clone + 'static,
+	Underlying: ChainSplitByEpoch<'a>,
+	TrackedDataClient: GetTrackedData<C> + Send + Sync + Clone + 'static,
 	StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,
 	state_chain_runtime::Runtime: pallet_cf_chain_tracking::Config<I, TargetChain = C>,
 	state_chain_runtime::RuntimeCall:
 		std::convert::From<pallet_cf_chain_tracking::Call<state_chain_runtime::Runtime, I>>,
 {
-	type UnderlyingChainSource = InnerStream::UnderlyingChainSource;
+	type UnderlyingChainSource = Underlying::UnderlyingChainSource;
 
 	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>> {
 		let state_chain_client = self.state_chain_client.clone();
