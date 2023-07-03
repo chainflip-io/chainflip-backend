@@ -44,7 +44,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			PendingVaultRotation::<T, I>::get()
 		{
 			match Self::current_epoch_key() {
-				Some(epoch_key) if <T::Chain as Chain>::KEY_HANDOVER_IS_REQUIRED => {
+				Some(epoch_key) if <T::Chain as Chain>::KeyHandoverIsRequired::get() => {
 					assert!(!sharing_participants.is_empty() && !receiving_participants.is_empty());
 
 					assert_ne!(Self::status(), AsyncResult::Pending);
@@ -141,7 +141,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				}) {
 				let (_, threshold_request_id) =
 					T::Broadcaster::threshold_sign_and_broadcast(rotation_call);
-				if <T::Chain as Chain>::OPTIMISTIC_ACTIVATION {
+				if <T::Chain as Chain>::OptimisticActivation::get() {
 					Self::set_next_vault(new_public_key, T::ChainTracking::get_block_height());
 					Pallet::<T, I>::deposit_event(Event::VaultRotationCompleted);
 					PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete);

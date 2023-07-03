@@ -19,13 +19,16 @@ use cf_primitives::{
 };
 use cf_utilities::SliceToArray;
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{sp_io::hashing::sha2_256, BoundedVec, RuntimeDebug};
+use frame_support::{
+	sp_io::hashing::sha2_256,
+	traits::{ConstBool, ConstU32},
+	BoundedVec, RuntimeDebug,
+};
 use itertools;
 use libsecp256k1::{curve::*, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
-use sp_core::ConstU32;
 use sp_std::{vec, vec::Vec};
 
 /// This salt is used to derive the change address for every vault. i.e. for every epoch.
@@ -138,8 +141,8 @@ pub struct EpochStartData {
 
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
-	const KEY_HANDOVER_IS_REQUIRED: bool = true;
-	const OPTIMISTIC_ACTIVATION: bool = true;
+	type KeyHandoverIsRequired = ConstBool<true>;
+	type OptimisticActivation = ConstBool<true>;
 	type ChainBlockNumber = BlockNumber;
 	type ChainAmount = BtcAmount;
 	type TransactionFee = Self::ChainAmount;
