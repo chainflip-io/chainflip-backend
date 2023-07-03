@@ -45,7 +45,7 @@ async function testAll() {
         testSwap('BTC', 'ETH', undefined, {
             message: new Web3().eth.abi.encodeParameter("string", "BTC to ETH w/ CCM!!"),
             gas_budget: 1000000,
-            cf_parameters: [0],
+            cf_parameters: "",
             source_address: ForeignChainAddress.Bitcoin,
         }),
     ])
@@ -53,8 +53,8 @@ async function testAll() {
     await Promise.all([
             testSwap('BTC', 'USDC', undefined, {
                 message: new Web3().eth.abi.encodeParameter("string", "BTC to USDC w/ CCM!!"),
-                gas_budget: 1000000,
-                cf_parameters: [0],
+                gas_budget: 600000,
+                cf_parameters: getAbiEncodedMessage(["uint256"]),
                 source_address: ForeignChainAddress.Bitcoin,
             }),
     ])
@@ -62,8 +62,8 @@ async function testAll() {
     await Promise.all([
             testSwap('BTC', 'ETH', undefined, {
                 message: getAbiEncodedMessage(),
-                gas_budget: 1000000,
-                cf_parameters: [0],
+                gas_budget: 750000,
+                cf_parameters: getAbiEncodedMessage([]),
                 source_address: ForeignChainAddress.Bitcoin,
             }),       
     ])
@@ -71,8 +71,8 @@ async function testAll() {
     await Promise.all([
         testSwap('BTC', 'USDC', undefined, {
             message: getAbiEncodedMessage(["address","uint256","bytes"]),
-            gas_budget: 1000000,
-            cf_parameters: [0],
+            gas_budget: 2000000,
+            cf_parameters: getAbiEncodedMessage(["string"]),
             source_address: ForeignChainAddress.Bitcoin,
         }),       
 ])
@@ -81,7 +81,7 @@ async function testAll() {
             testSwap('DOT', 'ETH', undefined, {
                 message: getAbiEncodedMessage(["string","address"]),
                 gas_budget: 1000000,
-                cf_parameters: [0],
+                cf_parameters: getAbiEncodedMessage(["string","string"]),
                 source_address: ForeignChainAddress.Polkadot,
             }),            
         ])
@@ -89,7 +89,7 @@ async function testAll() {
         testSwap('DOT', 'USDC', undefined, {
             message: getAbiEncodedMessage(),
             gas_budget: 1000000,
-            cf_parameters: [0],
+            cf_parameters: getAbiEncodedMessage(["address","uint256"]),
             source_address: ForeignChainAddress.Polkadot,
         }),            
     ])        

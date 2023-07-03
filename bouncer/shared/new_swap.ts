@@ -35,7 +35,7 @@ export async function newSwap(sourceToken: Asset, destToken: Asset,
 export interface CcmDepositMetadata {
     message: string;
     gas_budget: number;
-    cf_parameters: number[];
+    cf_parameters: string;
     source_address: ForeignChainAddress;
   }
 export enum ForeignChainAddress {
