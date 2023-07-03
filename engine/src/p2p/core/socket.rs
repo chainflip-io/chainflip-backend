@@ -5,10 +5,10 @@ use tracing::{debug, warn};
 use super::{KeyPair, PeerInfo};
 
 /// Wait this long until attempting to reconnect
-const RECONNECT_INTERVAL: Duration = Duration::from_millis(250);
+pub const RECONNECT_INTERVAL: Duration = Duration::from_millis(250);
 /// Reconnection uses exponential backoff: each reconnection attempt
 /// waits for twice as long as the previous attempt, up to this maximum
-const RECONNECT_INTERVAL_MAX: Duration = Duration::from_secs(5);
+pub const RECONNECT_INTERVAL_MAX: Duration = Duration::from_secs(30);
 
 /// Maximum incoming message size: if a remote tries sending a message larger than
 /// this they get disconnected (TODO: make sure this is slightly more that the
@@ -22,7 +22,7 @@ const CONNECTION_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 /// connection
 const CONNECTION_HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(30);
 /// An argument to set_linger on a socket that, when set, ensures that
-/// we don't attempt to deliver pending messages before destorying the
+/// we don't attempt to deliver pending messages before destroying the
 /// socket
 pub const DO_NOT_LINGER: i32 = 0;
 

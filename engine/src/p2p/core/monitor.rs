@@ -10,7 +10,7 @@
 
 use serde::{Deserialize, Serialize};
 use state_chain_runtime::AccountId;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::mpsc::UnboundedReceiver;
 use tracing::{info, info_span, trace, warn};
 
 use super::socket::DO_NOT_LINGER;
@@ -35,6 +35,11 @@ enum SocketType {
 
 pub struct MonitorHandle {
 	socket: zmq::Socket,
+}
+
+pub enum MonitorEvent {
+	ConnectionSuccess(AccountId),
+	ConnectionFailure(AccountId),
 }
 
 impl MonitorHandle {
@@ -68,28 +73,6 @@ impl MonitorHandle {
 	}
 }
 
-/// Creates a channel that delays delivery by `delay`
-fn create_delayed_reconnect_channel(
-	delay: std::time::Duration,
-) -> (UnboundedSender<AccountId>, UnboundedReceiver<AccountId>) {
-	let (reconnect_sender, mut reconnect_receiver) = tokio::sync::mpsc::unbounded_channel();
-
-	let (delayed_reconnect_sender, delayed_reconnect_receiver) =
-		tokio::sync::mpsc::unbounded_channel();
-
-	tokio::spawn(async move {
-		while let Some(peer_info) = reconnect_receiver.recv().await {
-			let sender = delayed_reconnect_sender.clone();
-			tokio::spawn(async move {
-				tokio::time::sleep(delay).await;
-				sender.send(peer_info).unwrap();
-			});
-		}
-	});
-
-	(reconnect_sender, delayed_reconnect_receiver)
-}
-
 fn stop_monitoring_for_peer(sockets_to_poll: &mut Vec<(zmq::Socket, SocketType)>, idx: usize) {
 	let account_id = match sockets_to_poll.remove(idx).1 {
 		SocketType::PeerReceiver => {
@@ -106,17 +89,15 @@ fn stop_monitoring_for_peer(sockets_to_poll: &mut Vec<(zmq::Socket, SocketType)>
 /// by p2p control loop to receive commands to reconnect to the peer)
 pub fn start_monitoring_thread(
 	context: zmq::Context,
-) -> (MonitorHandle, UnboundedReceiver<AccountId>) {
+) -> (MonitorHandle, UnboundedReceiver<MonitorEvent>) {
 	// This essentially opens a (ZMQ) channel that the monitor thread
 	// uses to receive new peer sockets to monitor
 	const PEER_INFO_ENDPOINT: &str = "inproc://peer_info_for_monitoring";
 	let monitor_socket = context.socket(zmq::PUSH).unwrap();
 	monitor_socket.connect(PEER_INFO_ENDPOINT).unwrap();
 
-	// A "delayed" channel is used to rate limit reconnection attempts
-	// TODO: a more elegant solution with exponential back-off strategy
-	let (reconnect_sender, reconnect_receiver) =
-		create_delayed_reconnect_channel(std::time::Duration::from_secs(1));
+	let (monitor_event_sender, monitor_event_receiver) =
+		tokio::sync::mpsc::unbounded_channel::<MonitorEvent>();
 
 	std::thread::spawn(move || {
 		let span = info_span!("p2p");
@@ -178,8 +159,16 @@ pub fn start_monitoring_thread(
 						let event_id = u16::from_le_bytes(message[0][0..2].try_into().unwrap());
 						match zmq::SocketEvent::from_raw(event_id) {
 							zmq::SocketEvent::HANDSHAKE_FAILED_AUTH => {
+								warn!("Socket event: handshake failed with {account_id}");
+								monitor_event_sender
+									.send(MonitorEvent::ConnectionFailure(account_id.clone()))
+									.unwrap();
+							},
+							zmq::SocketEvent::HANDSHAKE_FAILED_NO_DETAIL => {
 								warn!("Socket event: authentication failed with {account_id}");
-								reconnect_sender.send(account_id.clone()).unwrap();
+								monitor_event_sender
+									.send(MonitorEvent::ConnectionFailure(account_id.clone()))
+									.unwrap();
 							},
 							zmq::SocketEvent::MONITOR_STOPPED => {
 								// This event indicates that the socket of interest has
@@ -200,6 +189,9 @@ pub fn start_monitoring_thread(
 								// the monitor socket can block, which in turn can block ZMQ's
 								// internal event loop, seemingly blocking all other sockets.
 								trace!("Socket event: authentication success with {account_id}");
+								monitor_event_sender
+									.send(MonitorEvent::ConnectionSuccess(account_id.clone()))
+									.unwrap();
 							},
 							unknown_event => panic!(
 								"P2P AUTH MONITOR: unexpected socket event: {unknown_event:?}",
@@ -211,5 +203,5 @@ pub fn start_monitoring_thread(
 		}
 	});
 
-	(MonitorHandle { socket: monitor_socket }, reconnect_receiver)
+	(MonitorHandle { socket: monitor_socket }, monitor_event_receiver)
 }

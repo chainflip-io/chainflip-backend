@@ -21,9 +21,10 @@ use utilities::Port;
 use x25519_dalek::StaticSecret;
 
 use crate::p2p::OutgoingMultisigStageMessages;
+use monitor::MonitorEvent;
 use socket::OutgoingSocket;
 
-use self::socket::ConnectedOutgoingSocket;
+use self::socket::{ConnectedOutgoingSocket, RECONNECT_INTERVAL, RECONNECT_INTERVAL_MAX};
 
 type EdPublicKey = ed25519::Public;
 type XPublicKey = x25519_dalek::PublicKey;
@@ -117,6 +118,54 @@ pub fn ed25519_public_key_to_x25519_public_key(
 fn to_string(pk: &XPublicKey) -> String {
 	hex::encode(pk.as_bytes())
 }
+
+struct ReconnectContext {
+	reconnect_delays: BTreeMap<AccountId, std::time::Duration>,
+	reconnect_sender: UnboundedSender<AccountId>,
+}
+
+impl ReconnectContext {
+	fn new(reconnect_sender: UnboundedSender<AccountId>) -> Self {
+		ReconnectContext { reconnect_delays: BTreeMap::new(), reconnect_sender }
+	}
+
+	fn get_delay_for(&mut self, account_id: &AccountId) -> std::time::Duration {
+		use std::collections::btree_map::Entry;
+
+		match self.reconnect_delays.entry(account_id.clone()) {
+			Entry::Occupied(mut entry) => {
+				let new_delay = std::cmp::min(*entry.get() * 2, RECONNECT_INTERVAL_MAX);
+				*entry.get_mut() = new_delay;
+				new_delay
+			},
+			Entry::Vacant(entry) => {
+				let delay = RECONNECT_INTERVAL;
+				entry.insert(delay);
+				delay
+			},
+		}
+	}
+
+	fn schedule_reconnect(&mut self, account_id: AccountId) {
+		let delay = self.get_delay_for(&account_id);
+
+		tracing::debug!("Will reconnect to {} in {:?}", account_id, delay);
+
+		tokio::spawn({
+			let sender = self.reconnect_sender.clone();
+			async move {
+				tokio::time::sleep(delay).await;
+				sender.send(account_id).unwrap();
+			}
+		});
+	}
+
+	fn reset(&mut self, account_id: &AccountId) {
+		tracing::debug!("Resetting reconnection delay for {}", account_id);
+		self.reconnect_delays.remove(account_id);
+	}
+}
+
 /// The state a nodes needs for p2p
 struct P2PContext {
 	/// Our own key, used for initiating and accepting secure connections
@@ -130,9 +179,11 @@ struct P2PContext {
 	/// NOTE: this is used for incoming messages when we want to map them to account_id
 	/// NOTE: we don't use BTreeMap here because XPublicKey doesn't implement Ord.
 	x25519_to_account_id: HashMap<XPublicKey, AccountId>,
+	peer_infos: BTreeMap<AccountId, PeerInfo>,
 	/// Channel through which we send incoming messages to the multisig
 	incoming_message_sender: UnboundedSender<(AccountId, Vec<u8>)>,
 	own_peer_info_sender: UnboundedSender<PeerInfo>,
+	reconnect_context: ReconnectContext,
 	/// This is how we communicate with the "monitor" thread
 	monitor_handle: monitor::MonitorHandle,
 	/// Our own "registration" status on the network
@@ -177,7 +228,9 @@ pub fn start(
 	let (incoming_message_sender, incoming_message_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (monitor_handle, reconnect_receiver) =
+	let (reconnect_sender, reconnect_receiver) = tokio::sync::mpsc::unbounded_channel();
+
+	let (monitor_handle, monitor_event_receiver) =
 		monitor::start_monitoring_thread(zmq_context.clone());
 
 	// A channel used to notify whenever our own peer info changes on SC
@@ -190,6 +243,8 @@ pub fn start(
 		authenticator,
 		active_connections: Default::default(),
 		x25519_to_account_id: Default::default(),
+		peer_infos: Default::default(),
+		reconnect_context: ReconnectContext::new(reconnect_sender),
 		incoming_message_sender,
 		own_peer_info_sender,
 		our_account_id,
@@ -211,6 +266,7 @@ pub fn start(
 			out_msg_receiver,
 			incoming_message_receiver_ed25519,
 			peer_update_receiver,
+			monitor_event_receiver,
 			reconnect_receiver,
 		)
 		.instrument(info_span!("p2p"));
@@ -224,6 +280,7 @@ impl P2PContext {
 		mut outgoing_message_receiver: UnboundedReceiver<OutgoingMultisigStageMessages>,
 		mut incoming_message_receiver: UnboundedReceiver<(XPublicKey, Vec<u8>)>,
 		mut peer_update_receiver: UnboundedReceiver<PeerUpdate>,
+		mut monitor_event_receiver: UnboundedReceiver<MonitorEvent>,
 		mut reconnect_receiver: UnboundedReceiver<AccountId>,
 	) {
 		loop {
@@ -239,8 +296,11 @@ impl P2PContext {
 					// the x25519 pubkey to their account id here
 					self.forward_incoming_message(pubkey, payload);
 				}
+				Some(event) = monitor_event_receiver.recv() => {
+					self.handle_monitor_event(event);
+				}
 				Some(account_id) = reconnect_receiver.recv() => {
-					self.reconnect_to_peer(account_id);
+					self.reconnect_to_peer(&account_id);
 				}
 			}
 		}
@@ -314,18 +374,39 @@ impl P2PContext {
 		} else {
 			error!("Failed remove unknown peer: {account_id}");
 		}
+
+		if self.peer_infos.remove(&account_id).is_none() {
+			error!("Failed to remove peer info for unknown peer: {account_id}");
+		}
 	}
 
 	/// Reconnect to peer assuming that its peer info hasn't changed
-	fn reconnect_to_peer(&mut self, account_id: AccountId) {
-		info!("Reconnecting to peer: {account_id}");
+	fn handle_monitor_event(&mut self, event: MonitorEvent) {
+		match event {
+			MonitorEvent::ConnectionFailure(account_id) => {
+				let Some(_existing_socket) = self
+					.active_connections
+					.remove(&account_id) else {
+						// NOTE: this should not happen, but this guards against any surprising ZMQ behaviour
+						error!("Unexpected attempt to reconnect to an existing peer: {account_id}");
+						return;
+					};
 
-		let existing_socket = self
-			.active_connections
-			.remove(&account_id)
-			.expect("Can only reconnect to existing peers");
+				self.reconnect_context.schedule_reconnect(account_id);
+			},
+			MonitorEvent::ConnectionSuccess(account_id) => {
+				self.reconnect_context.reset(&account_id);
+			},
+		};
+	}
 
-		self.connect_to_peer(existing_socket.peer().clone());
+	fn reconnect_to_peer(&mut self, account_id: &AccountId) {
+		if let Some(peer_info) = self.peer_infos.get(&account_id) {
+			info!("Reconnecting to peer: {}", peer_info.account_id);
+			self.connect_to_peer(peer_info.clone());
+		} else {
+			error!("Failed to reconnect to peer {account_id}. (Peer info not found.)");
+		}
 	}
 
 	fn connect_to_peer(&mut self, peer: PeerInfo) {
@@ -373,6 +454,8 @@ impl P2PContext {
 		}
 
 		self.authenticator.add_peer(&peer);
+
+		self.peer_infos.insert(peer.account_id.clone(), peer.clone());
 
 		self.x25519_to_account_id.insert(peer.pubkey, peer.account_id.clone());
 
