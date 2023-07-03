@@ -236,6 +236,11 @@ pub mod pallet {
 	pub type ArbitrumVaultAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
 
 	#[pallet::storage]
+	#[pallet::getter(fn arb_address_checker_address)]
+	/// The address of the Address Checker contract on Arbitrum.
+	pub type ArbitrumAddressCheckerAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
+
+	#[pallet::storage]
 	#[pallet::getter(fn arbitrum_chain_id)]
 	/// The ETH chain id
 	pub type ArbitrumChainId<T> = StorageValue<_, cf_chains::eth::api::EthereumChainId, ValueQuery>;
