@@ -113,10 +113,10 @@ impl EthContractWitnesser for StateChainGateway {
 		self.deployed_address
 	}
 
-	fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>> {
-		Ok(Box::new(move |raw_log: RawLog| -> Result<Self::EventParameters> {
+	fn decode_log_closure(&self) -> DecodeLogClosure<Self::EventParameters> {
+		Box::new(move |raw_log: RawLog| -> Result<Self::EventParameters> {
 			Ok(StateChainGatewayEvents::decode_log(&raw_log)?)
-		}))
+		})
 	}
 }
 

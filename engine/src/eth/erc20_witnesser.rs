@@ -104,9 +104,9 @@ impl EthContractWitnesser for Erc20Witnesser {
 		self.deployed_address
 	}
 
-	fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>> {
-		Ok(Box::new(move |raw_log: RawLog| -> Result<Self::EventParameters> {
+	fn decode_log_closure(&self) -> DecodeLogClosure<Self::EventParameters> {
+		Box::new(move |raw_log: RawLog| -> Result<Self::EventParameters> {
 			Ok(Erc20Events::decode_log(&raw_log)?)
-		}))
+		})
 	}
 }

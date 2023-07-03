@@ -235,7 +235,7 @@ pub trait EthContractWitnesser {
 
 	fn contract_name(&self) -> String;
 
-	fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>>;
+	fn decode_log_closure(&self) -> DecodeLogClosure<Self::EventParameters>;
 
 	async fn handle_block_events<StateChainClient, EthRpcClient>(
 		&mut self,

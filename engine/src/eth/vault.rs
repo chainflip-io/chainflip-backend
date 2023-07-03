@@ -83,10 +83,10 @@ impl EthContractWitnesser for Vault {
 		Ok(())
 	}
 
-	fn decode_log_closure(&self) -> Result<super::DecodeLogClosure<Self::EventParameters>> {
-		Ok(Box::new(move |raw_log: RawLog| -> Result<Self::EventParameters> {
+	fn decode_log_closure(&self) -> super::DecodeLogClosure<Self::EventParameters> {
+		Box::new(move |raw_log: RawLog| -> Result<Self::EventParameters> {
 			Ok(VaultEvents::decode_log(&raw_log)?)
-		}))
+		})
 	}
 
 	fn contract_address(&self) -> H160 {

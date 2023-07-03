@@ -196,10 +196,10 @@ impl EthContractWitnesser for KeyManager {
 		Ok(())
 	}
 
-	fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>> {
-		Ok(Box::new(move |raw_log: RawLog| -> Result<KeyManagerEvents> {
+	fn decode_log_closure(&self) -> DecodeLogClosure<Self::EventParameters> {
+		Box::new(move |raw_log: RawLog| -> Result<KeyManagerEvents> {
 			Ok(KeyManagerEvents::decode_log(&raw_log)?)
-		}))
+		})
 	}
 
 	fn contract_address(&self) -> H160 {
