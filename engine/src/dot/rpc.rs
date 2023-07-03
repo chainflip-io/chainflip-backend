@@ -28,7 +28,10 @@ pub struct DotRpcClient {
 
 macro_rules! refresh_connection_on_error {
     ($self:expr, $namespace:ident, $method:ident $(, $arg:expr)*) => {{
-		match $self.online_client.read().await.$namespace().$method($($arg,)*).await {
+		// This is pulled out into a block to avoid a deadlock. Inlining this means that the guard, here as a temporary
+		// will be dropped after the match, and so we will wait at the write lock.
+		let result = { $self.online_client.read().await.$namespace().$method($($arg,)*).await };
+		match result {
 			Err(e) => {
 				tracing::warn!(
 					"Initial {} query failed with error: {e}, refreshing client and retrying", stringify!($method)
