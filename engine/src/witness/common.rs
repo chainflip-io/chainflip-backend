@@ -27,7 +27,7 @@ impl<It: Iterator, St: Stream<Item = It::Item>> ActiveAndFuture<It, St> {
 	pub async fn filter<Fut: Future<Output = bool>, F: Fn(&It::Item) -> Fut>(
 		self,
 		f: F,
-	) -> ActiveAndFuture<impl Iterator<Item = It::Item>, impl Stream<Item = It::Item>> {
+	) -> ActiveAndFuture<std::vec::IntoIter<It::Item>, stream::Filter<St, Fut, F>> {
 		ActiveAndFuture {
 			active: stream::iter(self.active).filter(&f).collect::<Vec<_>>().await.into_iter(),
 			future: self.future.filter(f),
@@ -37,7 +37,7 @@ impl<It: Iterator, St: Stream<Item = It::Item>> ActiveAndFuture<It, St> {
 	pub async fn then<Fut: Future, F: Fn(It::Item) -> Fut>(
 		self,
 		f: F,
-	) -> ActiveAndFuture<impl Iterator<Item = Fut::Output>, impl Stream<Item = Fut::Output>> {
+	) -> ActiveAndFuture<std::vec::IntoIter<Fut::Output>, stream::Then<St, Fut, F>> {
 		ActiveAndFuture {
 			active: stream::iter(self.active).then(&f).collect::<Vec<_>>().await.into_iter(),
 			future: self.future.then(f),
