@@ -64,7 +64,7 @@ spec:
           {{- toYaml .| nindent 12 }}
           {{ end }}
           volumeMounts:
-            - name: keys
+            - name: broker-keys
               mountPath: {{ .Values.basePath }}/keys
         {{ end }}
       {{- if .Values.lpApi.enabled }}
@@ -86,7 +86,7 @@ spec:
           {{- toYaml .| nindent 12 }}
           {{ end }}
           volumeMounts:
-            - name: keys
+            - name: lp-keys
               mountPath: {{ .Values.basePath }}/keys
         {{ end }}
         - name: {{ .Chart.Name }}
@@ -127,7 +127,7 @@ spec:
           volumeMounts:
             - name: {{ include "chainflip-node.fullname" . }}
               mountPath: {{ .Values.basePath }}/chaindata
-            - name: keys
+            - name: node-keys
               mountPath: {{ .Values.basePath }}/keys
             {{- if .Values.downloadChainspec }}
             - name: chainspec
@@ -139,15 +139,24 @@ spec:
         - name: chainspec
           emptyDir:
             {}
-
-        - name: keys
+        - name: node-keys
           secret:
             secretName: {{ .Values.secrets.existingOnePasswordSecret }}
             items:
-              - key: signing-key
-                path: signing_key_file
               - key: node-key
                 path: node_key_file
+        - name: broker-keys
+          secret:
+            secretName: {{ .Values.secrets.existingOnePasswordSecret }}
+            items:
+              - key: signing-key-broker
+                path: signing_key_file
+        - name: lp-keys
+          secret:
+            secretName: {{ .Values.secrets.existingOnePasswordSecret }}
+            items:
+              - key: signing-key-lp
+                path: signing_key_file
 
   volumeClaimTemplates:
     - metadata:
