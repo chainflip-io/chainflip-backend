@@ -371,7 +371,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 				Self::broadcast_gov_key::<Ethereum, EthereumBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Polkadot =>
 				Self::broadcast_gov_key::<Polkadot, PolkadotBroadcaster>(maybe_old_key, new_key),
-			ForeignChain::Bitcoin => todo!("Bitcoin govkey broadcast"),
+			ForeignChain::Bitcoin => Err(()),
 		}
 	}
 
@@ -379,7 +379,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 		match chain {
 			ForeignChain::Ethereum => Self::is_govkey_compatible::<Ethereum>(key),
 			ForeignChain::Polkadot => Self::is_govkey_compatible::<Polkadot>(key),
-			ForeignChain::Bitcoin => todo!("Bitcoin govkey compatibility"),
+			ForeignChain::Bitcoin => false,
 		}
 	}
 }
