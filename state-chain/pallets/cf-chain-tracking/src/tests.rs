@@ -1,5 +1,5 @@
 #![cfg(test)]
-use crate::{mock::*, Call as PalletCall, Error, Event as PalletEvent};
+use crate::{mock::*, Call as PalletCall, ChainState, Error, Event as PalletEvent};
 use cf_chains::mocks::MockTrackedData;
 use frame_support::{pallet_prelude::DispatchResult, traits::OriginTrait};
 
@@ -21,25 +21,23 @@ impl TestChainTracking for TestRunner<()> {
 			[(
 				OriginTrait::root(),
 				RuntimeCall::MockChainTracking(PalletCall::update_chain_state {
-					state: MockTrackedData::new(
-						external_block_height,
-						Default::default(),
-						Default::default(),
-					),
+					new_chain_state: ChainState {
+						block_height: external_block_height,
+						tracked_data: MockTrackedData::new(Default::default(), Default::default()),
+					},
 				}),
 				expectation,
 			)]
 		})
 		.then_process_events(|_, event| match event {
 			// If the update succeeded, we expect an event to be emitted.
-			RuntimeEvent::MockChainTracking(PalletEvent::ChainStateUpdated { state }) => {
+			RuntimeEvent::MockChainTracking(PalletEvent::ChainStateUpdated { new_chain_state }) => {
 				assert_eq!(
-					state,
-					MockTrackedData::new(
-						external_block_height,
-						Default::default(),
-						Default::default()
-					)
+					new_chain_state,
+					ChainState {
+						block_height: external_block_height,
+						tracked_data: MockTrackedData::new(Default::default(), Default::default())
+					}
 				);
 				None::<()>
 			},
