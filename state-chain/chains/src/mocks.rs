@@ -51,29 +51,20 @@ impl BenchmarkValueExtended for MockEthereumChannelId {
 	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
 pub struct MockTrackedData {
-	pub birth_block: u64,
 	pub base_fee: AssetAmount,
 	pub priority_fee: AssetAmount,
 }
 
 impl MockTrackedData {
-	pub fn new(birth_block: u64, base_fee: AssetAmount, priority_fee: AssetAmount) -> Self {
-		Self { birth_block, base_fee, priority_fee }
-	}
-}
-
-impl Age for MockTrackedData {
-	type BlockNumber = u64;
-
-	fn birth_block(&self) -> Self::BlockNumber {
-		self.birth_block
+	pub fn new(base_fee: AssetAmount, priority_fee: AssetAmount) -> Self {
+		Self { base_fee, priority_fee }
 	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for MockTrackedData {
 	fn benchmark_value() -> Self {
-		Self { birth_block: 1_000u64, base_fee: 1_000u128, priority_fee: 100u128 }
+		Self { base_fee: 1_000u128, priority_fee: 100u128 }
 	}
 }
 

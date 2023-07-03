@@ -30,27 +30,27 @@ impl WitnessDataExtraction for RuntimeCall {
 				Runtime,
 				EthereumInstance,
 			>::update_chain_state {
-				ref mut state,
+				ref mut new_chain_state,
 			}) => {
-				let priority_fee = mem::take(&mut state.priority_fee);
+				let priority_fee = mem::take(&mut new_chain_state.tracked_data.priority_fee);
 				Some(priority_fee.encode())
 			},
 			RuntimeCall::BitcoinChainTracking(pallet_cf_chain_tracking::Call::<
 				Runtime,
 				BitcoinInstance,
 			>::update_chain_state {
-				ref mut state,
+				ref mut new_chain_state,
 			}) => {
-				let fee_info = mem::take(&mut state.btc_fee_info);
+				let fee_info = mem::take(&mut new_chain_state.tracked_data.btc_fee_info);
 				Some(fee_info.encode())
 			},
 			RuntimeCall::PolkadotChainTracking(pallet_cf_chain_tracking::Call::<
 				Runtime,
 				PolkadotInstance,
 			>::update_chain_state {
-				ref mut state,
+				ref mut new_chain_state,
 			}) => {
-				let fee_info = mem::take(&mut state.median_tip);
+				let fee_info = mem::take(&mut new_chain_state.tracked_data.median_tip);
 				Some(fee_info.encode())
 			},
 			_ => None,
@@ -63,29 +63,29 @@ impl WitnessDataExtraction for RuntimeCall {
 				Runtime,
 				EthereumInstance,
 			>::update_chain_state {
-				state,
+				new_chain_state,
 			}) =>
 				if let Some(median) = select_median(data) {
-					state.priority_fee = median;
+					new_chain_state.tracked_data.priority_fee = median;
 				},
 			RuntimeCall::BitcoinChainTracking(pallet_cf_chain_tracking::Call::<
 				Runtime,
 				BitcoinInstance,
 			>::update_chain_state {
-				state,
+				new_chain_state,
 			}) => {
 				if let Some(median) = select_median(data) {
-					state.btc_fee_info = median;
+					new_chain_state.tracked_data.btc_fee_info = median;
 				};
 			},
 			RuntimeCall::PolkadotChainTracking(pallet_cf_chain_tracking::Call::<
 				Runtime,
 				PolkadotInstance,
 			>::update_chain_state {
-				state,
+				new_chain_state,
 			}) => {
 				if let Some(median) = select_median(data) {
-					state.median_tip = median;
+					new_chain_state.tracked_data.median_tip = median;
 				};
 			},
 			_ => {
@@ -108,6 +108,7 @@ mod tests {
 	use cf_primitives::{AccountRole, ForeignChain};
 	use cf_traits::EpochInfo;
 	use frame_support::{assert_ok, traits::Get, Hashable};
+	use pallet_cf_chain_tracking::ChainState;
 	use pallet_cf_witnesser::CallHash;
 	use sp_std::{collections::btree_set::BTreeSet, iter};
 
@@ -121,10 +122,12 @@ mod tests {
 					Runtime,
 					EthereumInstance,
 				>::update_chain_state {
-					state: EthereumTrackedData {
+					new_chain_state: ChainState {
 						block_height: BLOCK_HEIGHT,
-						base_fee: BASE_FEE,
-						priority_fee: fee.into(),
+						tracked_data: EthereumTrackedData {
+							base_fee: BASE_FEE,
+							priority_fee: fee.into(),
+						},
 					},
 				}),
 			ForeignChain::Bitcoin =>
@@ -132,9 +135,11 @@ mod tests {
 					Runtime,
 					BitcoinInstance,
 				>::update_chain_state {
-					state: BitcoinTrackedData {
+					new_chain_state: ChainState {
 						block_height: BLOCK_HEIGHT,
-						btc_fee_info: BitcoinFeeInfo::new(fee.into()),
+						tracked_data: BitcoinTrackedData {
+							btc_fee_info: BitcoinFeeInfo::new(fee.into()),
+						},
 					},
 				}),
 			ForeignChain::Polkadot =>
@@ -142,9 +147,9 @@ mod tests {
 					Runtime,
 					PolkadotInstance,
 				>::update_chain_state {
-					state: PolkadotTrackedData {
+					new_chain_state: ChainState {
 						block_height: BLOCK_HEIGHT as u32,
-						median_tip: fee.into(),
+						tracked_data: PolkadotTrackedData { median_tip: fee.into() },
 					},
 				}),
 		}
@@ -188,9 +193,9 @@ mod tests {
 	#[test]
 	fn test_priority_fee_witnessing() {
 		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
-			assert!(
-				pallet_cf_chain_tracking::ChainState::<Runtime, EthereumInstance>::get().is_none()
-			);
+			assert!(pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get(
+			)
+			.is_none());
 
 			let calls = [1u32, 100, 12, 10, 9, 11].map(chain_tracking_call_with_fee::<Ethereum>);
 
@@ -221,11 +226,11 @@ mod tests {
 			}
 
 			assert_eq!(
-				pallet_cf_chain_tracking::ChainState::<Runtime, EthereumInstance>::get().unwrap(),
-				EthereumTrackedData {
+				pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get()
+					.unwrap(),
+				ChainState {
 					block_height: BLOCK_HEIGHT,
-					base_fee: BASE_FEE,
-					priority_fee: 10
+					tracked_data: EthereumTrackedData { base_fee: BASE_FEE, priority_fee: 10 }
 				}
 			);
 		})

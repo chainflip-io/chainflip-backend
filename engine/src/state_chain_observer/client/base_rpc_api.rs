@@ -17,7 +17,10 @@ use state_chain_runtime::SignedBlock;
 use codec::Encode;
 use custom_rpc::CustomApiClient;
 use sc_rpc_api::{
-	author::AuthorApiClient, chain::ChainApiClient, state::StateApiClient, system::SystemApiClient,
+	author::AuthorApiClient,
+	chain::ChainApiClient,
+	state::StateApiClient,
+	system::{Health, SystemApiClient},
 };
 
 #[cfg(test)]
@@ -69,6 +72,8 @@ impl<
 #[cfg_attr(test, automock)]
 #[async_trait]
 pub trait BaseRpcApi {
+	async fn health(&self) -> RpcResult<Health>;
+
 	async fn submit_extrinsic(
 		&self,
 		extrinsic: state_chain_runtime::UncheckedExtrinsic,
@@ -135,6 +140,10 @@ fn unwrap_value<T>(list_or_value: sp_rpc::list::ListOrValue<T>) -> T {
 
 #[async_trait]
 impl<RawRpcClient: RawRpcApi + Send + Sync> BaseRpcApi for BaseRpcClient<RawRpcClient> {
+	async fn health(&self) -> RpcResult<Health> {
+		self.raw_rpc_client.system_health().await
+	}
+
 	async fn submit_extrinsic(
 		&self,
 		extrinsic: state_chain_runtime::UncheckedExtrinsic,

@@ -56,7 +56,7 @@ where
 		let events = block_to_events(
 			block,
 			core_h160(contract_address),
-			&self.contract.decode_log_closure().unwrap(),
+			&self.contract.decode_log_closure(),
 			&self.http_rpc,
 		)
 		.await?;

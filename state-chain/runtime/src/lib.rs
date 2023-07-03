@@ -695,7 +695,7 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, BitcoinInstance>;
 	type RotationCallbackProvider = RotationCallbackProvider;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
-	type BroadcastTimeout = ConstU32<{ 10 * MINUTES }>;
+	type BroadcastTimeout = ConstU32<{ 90 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type KeyProvider = BitcoinVault;
 }

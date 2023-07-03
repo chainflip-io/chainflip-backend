@@ -10,11 +10,11 @@ use futures::{StreamExt, TryStreamExt};
 
 use sp_core::{Pair, H256};
 use state_chain_runtime::AccountId;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use tracing::info;
 
 use utilities::{
-	read_clean_and_decode_hex_str_file,
+	make_periodic_tick, read_clean_and_decode_hex_str_file,
 	task_scope::{Scope, ScopedJoinHandle},
 	CachedStream, MakeCachedStream,
 };
@@ -26,6 +26,8 @@ use self::{
 
 /// For expressing an expectation regarding substrate's behaviour (Not our chain though)
 const SUBSTRATE_BEHAVIOUR: &str = "Unexpected state chain node behaviour";
+
+const SYNC_POLL_INTERVAL: Duration = Duration::from_secs(4);
 
 #[derive(Clone)]
 pub struct StreamCache {
@@ -156,6 +158,17 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 		base_rpc_client: Arc<BaseRpcClient>,
 		signed_extrinsic_client_builder: SignedExtrinsicClientBuilder,
 	) -> Result<(impl StateChainStreamApi + Clone, Arc<Self>)> {
+		{
+			let mut poll_interval = make_periodic_tick(SYNC_POLL_INTERVAL, false);
+			while base_rpc_client.health().await?.is_syncing {
+				info!(
+					"Waiting for Chainflip node to sync. Checking again in {:?} ...",
+					poll_interval.period(),
+				);
+				poll_interval.tick().await;
+			}
+		}
+
 		let genesis_hash = base_rpc_client.block_hash(0).await?.expect(SUBSTRATE_BEHAVIOUR);
 
 		let (mut state_chain_stream, block_producer) = {
