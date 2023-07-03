@@ -446,7 +446,7 @@ where
 		let dot_client_c = self.dot_client.clone();
 		let block_head_stream_from =
 			block_head_stream_from(from_block, safe_head_stream, move |block_number| {
-				let mut dot_client = dot_client_c.clone();
+				let dot_client = dot_client_c.clone();
 				Box::pin(async move {
 					let block_hash = dot_client
 						.block_hash(block_number)
@@ -461,7 +461,7 @@ where
 		// block
 		let dot_client_c = self.dot_client.clone();
 		let block_events_stream = take_while_ok(block_head_stream_from.then(move |mini_header| {
-			let mut dot_client = dot_client_c.clone();
+			let dot_client = dot_client_c.clone();
 			debug!("Fetching Polkadot events for block: {}", mini_header.block_number);
 			// TODO: This will not work if the block we are querying metadata has
 			// different metadata than the latest block since this client fetches
