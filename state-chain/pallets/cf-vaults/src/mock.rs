@@ -12,7 +12,7 @@ use cf_chains::{
 use cf_primitives::{BroadcastId, GENESIS_EPOCH};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
-	mocks::threshold_signer::MockThresholdSigner, AccountRoleRegistry,
+	mocks::threshold_signer::MockThresholdSigner, AccountRoleRegistry, GetBlockHeight,
 };
 use frame_support::{
 	construct_runtime, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
@@ -188,6 +188,16 @@ impl Slashing for MockSlasher {
 	fn slash_balance(_account_id: &Self::AccountId, _amount: sp_runtime::Percent) {}
 }
 
+pub struct BlockNumberProvider;
+
+pub const HANDOVER_ACTIVATION_BLOCK: u64 = 1337;
+
+impl GetBlockHeight<MockEthereum> for BlockNumberProvider {
+	fn get_block_height() -> u64 {
+		HANDOVER_ACTIVATION_BLOCK
+	}
+}
+
 impl_pallet_safe_mode!(MockPalletSafeMode; flag);
 impl_mock_runtime_safe_mode!(test: MockPalletSafeMode);
 
@@ -205,6 +215,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type Broadcaster = MockBroadcaster;
 	type SafeMode = MockRuntimeSafeMode;
 	type Slasher = MockSlasher;
+	type ChainTracking = BlockNumberProvider;
 }
 
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;

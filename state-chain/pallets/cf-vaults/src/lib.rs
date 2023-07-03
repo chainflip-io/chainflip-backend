@@ -122,7 +122,7 @@ pub struct VaultEpochAndState {
 #[frame_support::pallet]
 pub mod pallet {
 
-	use cf_traits::{AccountRoleRegistry, ThresholdSigner, VaultTransitionHandler};
+	use cf_traits::{AccountRoleRegistry, GetBlockHeight, ThresholdSigner, VaultTransitionHandler};
 	use sp_runtime::Percent;
 
 	use super::*;
@@ -176,6 +176,8 @@ pub mod pallet {
 
 		/// For activating Safe mode: CODE RED for the chain.
 		type SafeMode: SafeMode + SetSafeMode<Self::SafeMode>;
+
+		type ChainTracking: GetBlockHeight<Self::Chain>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;

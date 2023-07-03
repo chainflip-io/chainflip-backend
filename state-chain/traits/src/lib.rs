@@ -848,3 +848,7 @@ pub trait OnBroadcastReady<C: ChainAbi> {
 pub trait GetBitcoinFeeInfo {
 	fn bitcoin_fee_info() -> cf_chains::btc::BitcoinFeeInfo;
 }
+
+pub trait GetBlockHeight<C: Chain> {
+	fn get_block_height() -> C::ChainBlockNumber;
+}

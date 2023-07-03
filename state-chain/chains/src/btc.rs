@@ -139,6 +139,7 @@ pub struct EpochStartData {
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
 	const KEY_HANDOVER_IS_REQUIRED: bool = true;
+	const OPTIMISTIC_ACTIVATION: bool = true;
 	type ChainBlockNumber = BlockNumber;
 	type ChainAmount = BtcAmount;
 	type TransactionFee = Self::ChainAmount;

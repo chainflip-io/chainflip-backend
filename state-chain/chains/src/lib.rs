@@ -46,6 +46,7 @@ pub trait Chain: Member + Parameter {
 	const NAME: &'static str;
 
 	const KEY_HANDOVER_IS_REQUIRED: bool = false;
+	const OPTIMISTIC_ACTIVATION: bool = false;
 
 	type ChainBlockNumber: FullCodec
 		+ Member
