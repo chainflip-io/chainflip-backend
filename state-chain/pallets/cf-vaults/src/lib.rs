@@ -81,7 +81,7 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 		new_public_key: AggKeyFor<T, I>,
 	},
 	/// We are waiting for the key to be updated on the contract, and witnessed by the network.
-	AwaitingRotation { new_public_key: AggKeyFor<T, I> },
+	AwaitingActivation { new_public_key: AggKeyFor<T, I> },
 	/// The key has been successfully updated on the external chain, and/or funds rotated to new
 	/// key.
 	Complete,
@@ -887,7 +887,7 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 			PendingVaultRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
 
 		let new_public_key = ensure_variant!(
-			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key } => new_public_key,
+			VaultRotationStatus::<T, I>::AwaitingActivation { new_public_key } => new_public_key,
 			rotation,
 			Error::<T, I>::InvalidRotationStatus
 		);

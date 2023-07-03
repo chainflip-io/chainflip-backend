@@ -110,7 +110,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				VaultRotationStatusVariant::AwaitingKeyHandover => AsyncResult::Pending,
 				VaultRotationStatusVariant::KeyHandoverComplete =>
 					AsyncResult::Ready(VaultStatus::KeyHandoverComplete),
-				VaultRotationStatusVariant::AwaitingRotation => AsyncResult::Pending,
+				VaultRotationStatusVariant::AwaitingActivation => AsyncResult::Pending,
 				VaultRotationStatusVariant::Complete =>
 					AsyncResult::Ready(VaultStatus::RotationComplete),
 				VaultRotationStatusVariant::Failed => match PendingVaultRotation::<T, I>::get() {
@@ -156,7 +156,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				Self::set_vault_for_next_epoch(new_public_key, 1_u32.into());
 				Self::deposit_event(Event::<T, I>::AwaitingGovernanceActivation { new_public_key })
 			}
-			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingRotation {
+			PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::AwaitingActivation {
 				new_public_key,
 			});
 		} else {

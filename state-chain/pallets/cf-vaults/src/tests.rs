@@ -504,7 +504,7 @@ fn keygen_report_success() {
 		// Called by validator pallet
 		VaultsPallet::activate();
 
-		assert!(matches!(PendingVaultRotation::<MockRuntime, _>::get().unwrap(), VaultRotationStatus::AwaitingRotation { .. }));
+		assert!(matches!(PendingVaultRotation::<MockRuntime, _>::get().unwrap(), VaultRotationStatus::AwaitingActivation { .. }));
 
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		assert_eq!(
@@ -514,7 +514,7 @@ fn keygen_report_success() {
 
 		assert!(matches!(
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
-			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == NEW_AGG_PUB_KEY_POST_HANDOVER
+			VaultRotationStatus::<MockRuntime, _>::AwaitingActivation { new_public_key: k } if k == NEW_AGG_PUB_KEY_POST_HANDOVER
 		));
 
 		assert_last_event!(crate::Event::KeyHandoverSuccess { .. });
