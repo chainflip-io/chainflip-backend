@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use futures::StreamExt;
+use pallet_cf_chain_tracking::ChainState;
 use std::{sync::Arc, time::Duration};
 use tokio_stream::wrappers::IntervalStream;
 
@@ -40,7 +41,7 @@ where
 		None,
 		Arc::new(Mutex::new(epoch_start_receiver)),
 		ChainDataWitnesserGenerator { eth_rpc, state_chain_client, cfe_settings_update_receiver },
-		EthereumTrackedData::default(),
+		ChainState { block_height: 0, tracked_data: EthereumTrackedData::default() },
 	)
 	.instrument(info_span!("Eth-Chain-Data-Witnesser"))
 	.await
@@ -65,7 +66,7 @@ where
 {
 	type Chain = Ethereum;
 	type Data = ();
-	type StaticState = EthereumTrackedData;
+	type StaticState = ChainState<Ethereum>;
 
 	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = false;
 
@@ -91,7 +92,7 @@ where
 	async fn do_witness(
 		&mut self,
 		_data: Self::Data,
-		last_witnessed_data: &mut EthereumTrackedData,
+		last_witnessed_data: &mut ChainState<Ethereum>,
 	) -> anyhow::Result<()> {
 		let priority_fee = self.cfe_settings_update_receiver.borrow().eth_priority_fee_percentile;
 		let latest_data = get_tracked_data(&self.eth_rpc, priority_fee)
@@ -103,14 +104,14 @@ where
 			.context("Failed to get tracked data.")?;
 
 		if latest_data.block_height > last_witnessed_data.block_height ||
-			latest_data.base_fee != last_witnessed_data.base_fee
+			latest_data.tracked_data.base_fee != last_witnessed_data.tracked_data.base_fee
 		{
 			self.state_chain_client
 				.finalize_signed_extrinsic(state_chain_runtime::RuntimeCall::Witnesser(
 					pallet_cf_witnesser::Call::witness_at_epoch {
 						call: Box::new(state_chain_runtime::RuntimeCall::EthereumChainTracking(
 							pallet_cf_chain_tracking::Call::update_chain_state {
-								state: latest_data,
+								new_chain_state: latest_data.clone(),
 							},
 						)),
 						epoch_index: self.current_epoch.epoch_index,
@@ -163,7 +164,7 @@ where
 async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
 	rpc: &EthRpcClient,
 	priority_fee_percentile: u8,
-) -> anyhow::Result<EthereumTrackedData> {
+) -> anyhow::Result<ChainState<Ethereum>> {
 	let fee_history = rpc
 		.fee_history(
 			U256::one(),
@@ -173,14 +174,17 @@ async fn get_tracked_data<EthRpcClient: EthRpcApi + Send + Sync>(
 		.await?;
 
 	if let BlockNumber::Number(block_number) = fee_history.oldest_block {
-		Ok(EthereumTrackedData {
+		Ok(ChainState {
 			block_height: block_number.as_u64(),
-			base_fee: (*context!(fee_history.base_fee_per_gas.first())?)
-				.try_into()
-				.expect("Base fee should fit u128"),
-			priority_fee: (*context!(context!(context!(fee_history.reward)?.first())?.first())?)
-				.try_into()
-				.expect("Priority fee should fit u128"),
+			tracked_data: EthereumTrackedData {
+				base_fee: (*context!(fee_history.base_fee_per_gas.first())?)
+					.try_into()
+					.expect("Base fee should fit u128"),
+				priority_fee:
+					(*context!(context!(context!(fee_history.reward)?.first())?.first())?)
+						.try_into()
+						.expect("Priority fee should fit u128"),
+			},
 		})
 	} else {
 		Err(anyhow::anyhow!("fee_history did not return `oldest_block` as a number"))
@@ -216,10 +220,12 @@ mod tests {
 
 		assert_eq!(
 			get_tracked_data(&rpc, 50).await.unwrap(),
-			EthereumTrackedData {
+			ChainState {
 				block_height: BLOCK_HEIGHT,
-				base_fee: BASE_FEE,
-				priority_fee: PRIORITY_FEE,
+				tracked_data: EthereumTrackedData {
+					base_fee: BASE_FEE,
+					priority_fee: PRIORITY_FEE,
+				}
 			}
 		);
 	}
