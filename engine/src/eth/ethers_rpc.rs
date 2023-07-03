@@ -1,22 +1,20 @@
 use ethers::{prelude::*, signers::Signer, types::transaction::eip2718::TypedTransaction};
 
-use anyhow::{anyhow, Ok, Result};
-use std::str::FromStr;
-
 use crate::settings;
+use anyhow::{anyhow, Ok, Result};
+use std::{str::FromStr, sync::Arc};
 use utilities::read_clean_and_decode_hex_str_file;
 
 #[cfg(test)]
 use mockall::automock;
 
 #[derive(Clone)]
-pub struct EthersRpcClient {
-	signer: SignerMiddleware<Provider<Http>, LocalWallet>,
+pub struct EthersRpcClient<T: JsonRpcClient> {
+	signer: SignerMiddleware<Arc<Provider<T>>, LocalWallet>,
 }
 
-impl EthersRpcClient {
-	pub async fn new(eth_settings: &settings::Eth) -> Result<Self> {
-		let provider = Provider::<Http>::try_from(eth_settings.http_node_endpoint.to_string())?;
+impl<T: JsonRpcClient + 'static> EthersRpcClient<T> {
+	pub async fn new(provider: Arc<Provider<T>>, eth_settings: &settings::Eth) -> Result<Self> {
 		let wallet = read_clean_and_decode_hex_str_file(
 			&eth_settings.private_key_file,
 			"Ethereum Private Key",
@@ -59,7 +57,7 @@ pub trait EthersRpcApi: Send + Sync {
 }
 
 #[async_trait::async_trait]
-impl EthersRpcApi for EthersRpcClient {
+impl<T: JsonRpcClient + 'static> EthersRpcApi for EthersRpcClient<T> {
 	fn address(&self) -> H160 {
 		self.signer.address()
 	}
@@ -111,6 +109,7 @@ impl EthersRpcApi for EthersRpcClient {
 
 #[cfg(test)]
 mod tests {
+
 	use crate::settings::Settings;
 
 	use super::*;
@@ -119,7 +118,10 @@ mod tests {
 	#[ignore = "Requires correct settings"]
 	async fn ethers_rpc_test() {
 		let settings = Settings::new_test().unwrap();
-		let client = EthersRpcClient::new(&settings.eth).await.unwrap();
+
+		let provider =
+			Provider::<Http>::try_from(settings.eth.http_node_endpoint.to_string()).unwrap();
+		let client = EthersRpcClient::new(Arc::new(provider), &settings.eth).await.unwrap();
 		let chain_id = client.chain_id().await.unwrap();
 		println!("{:?}", chain_id);
 

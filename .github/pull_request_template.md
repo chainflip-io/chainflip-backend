@@ -4,7 +4,7 @@ Closes: PRO-xxx
 
 ## Checklist
 
-Please conduct a through self-review before opening the PR.
+Please conduct a thorough self-review before opening the PR.
 
 - [ ] I am confident that the code works.
 - [ ] I have updated documentation where appropriate.

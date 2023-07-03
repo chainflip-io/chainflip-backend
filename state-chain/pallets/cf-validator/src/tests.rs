@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use crate::{mock::*, Error, *};
-use cf_test_utilities::last_event;
+use cf_test_utilities::{assert_event_sequence, last_event};
 use cf_traits::{
 	mocks::{
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
@@ -664,5 +664,83 @@ fn test_expect_validator_register_fails() {
 			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(3),),
 			crate::Error::<Test>::NotEnoughFunds
 		);
+	});
+}
+
+#[test]
+fn key_handover_should_repeat_until_below_authority_threshold() {
+	fn failed_handover_with_offenders(offenders: impl IntoIterator<Item = u64>) {
+		CurrentAuthorities::<Test>::set((0..10).collect());
+		CurrentRotationPhase::<Test>::put(RotationPhase::KeygensInProgress(
+			RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
+				winners: (4..14).collect(),
+				losers: Default::default(),
+				bond: Default::default(),
+			}),
+		));
+		MockVaultRotatorA::keygen_success();
+		System::reset_events();
+		Pallet::<Test>::on_initialize(1);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::KeyHandoversInProgress(..)
+		));
+		MockVaultRotatorA::failed(offenders);
+		System::reset_events();
+		Pallet::<Test>::on_initialize(2);
+	}
+
+	new_test_ext().execute_with_unchecked_invariants(|| {
+		// Still enough current authorities available, we should try again.
+		failed_handover_with_offenders(0..3);
+		assert!(
+			matches!(
+				CurrentRotationPhase::<Test>::get(),
+				RotationPhase::KeyHandoversInProgress(..)
+			),
+			"Expected KeyHandoversInProgress, got {:?}",
+			CurrentRotationPhase::<Test>::get(),
+		);
+	});
+	new_test_ext().execute_with_unchecked_invariants(|| {
+		// Too many current authorities banned, we abort.
+		failed_handover_with_offenders(0..4);
+		assert!(
+			matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::Idle),
+			"Expected Idle, got {:?}",
+			CurrentRotationPhase::<Test>::get(),
+		);
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
+				new_phase: RotationPhase::Idle
+			}),
+			RuntimeEvent::ValidatorPallet(Event::RotationAborted)
+		);
+	});
+	new_test_ext().execute_with_unchecked_invariants(|| {
+		// Above the threshold, old validators, and any new validators, we abort.
+		failed_handover_with_offenders(0..5);
+		assert!(
+			matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::Idle),
+			"Expected Idle, got {:?}",
+			CurrentRotationPhase::<Test>::get(),
+		);
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
+				new_phase: RotationPhase::Idle
+			}),
+			RuntimeEvent::ValidatorPallet(Event::RotationAborted)
+		);
+	});
+	new_test_ext().execute_with_unchecked_invariants(|| {
+		// If even one new validator fails, but all old validators were well-behaved,
+		// we revert to keygen.
+		failed_handover_with_offenders(4..5);
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::KeygensInProgress(..)
+		));
 	});
 }

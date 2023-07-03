@@ -7,15 +7,15 @@ use std::time::Duration;
 
 use super::ethers_rpc::EthersRpcClient;
 
-pub struct EthersRetryRpcClient {
-	retry_client: RpcRetrierClient<EthersRpcClient>,
+pub struct EthersRetryRpcClient<T: JsonRpcClient> {
+	retry_client: RpcRetrierClient<EthersRpcClient<T>>,
 }
 
 const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
-impl EthersRetryRpcClient {
-	pub fn new(scope: &Scope<'_, anyhow::Error>, ethers_client: EthersRpcClient) -> Self {
+impl<T: JsonRpcClient + Clone + Send + Sync + 'static> EthersRetryRpcClient<T> {
+	pub fn new(scope: &Scope<'_, anyhow::Error>, ethers_client: EthersRpcClient<T>) -> Self {
 		Self {
 			retry_client: RpcRetrierClient::new(
 				scope,
@@ -52,7 +52,9 @@ pub trait EthersRetryRpcApi: Send + Sync {
 }
 
 #[async_trait::async_trait]
-impl EthersRetryRpcApi for EthersRetryRpcClient {
+impl<T: JsonRpcClient + Clone + Send + Sync + 'static> EthersRetryRpcApi
+	for EthersRetryRpcClient<T>
+{
 	async fn estimate_gas(&self, req: TypedTransaction) -> U256 {
 		self.retry_client
 			.request(Box::pin(move |client| {
@@ -141,6 +143,7 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 mod tests {
 	use crate::settings::Settings;
 	use futures::FutureExt;
+	use std::sync::Arc;
 	use utilities::task_scope::task_scope;
 
 	use super::*;
@@ -151,7 +154,14 @@ mod tests {
 		task_scope(|scope| {
 			async move {
 				let settings = Settings::new_test().unwrap();
-				let client = EthersRpcClient::new(&settings.eth).await.unwrap();
+				let client = EthersRpcClient::new(
+					Arc::new(Provider::<Http>::try_from(
+						settings.eth.http_node_endpoint.to_string(),
+					)?),
+					&settings.eth,
+				)
+				.await
+				.unwrap();
 
 				let retry_client = EthersRetryRpcClient::new(scope, client);
 

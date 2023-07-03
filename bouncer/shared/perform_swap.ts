@@ -58,7 +58,6 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
     const destAddress = extractDestinationAddress(swapInfo, destToken);
 
     console.log(`${tag} Destination address is: ${destAddress}`);
-    console.log(`${tag} The swap address is: ${swapAddress}`);
 
     if (sourceToken === 'BTC') {
         console.log("Doing BTC address conversion");

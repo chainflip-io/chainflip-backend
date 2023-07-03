@@ -38,13 +38,14 @@ use cf_chains::{
 	TransactionBuilder,
 };
 use cf_primitives::{
-	chains::assets, Asset, BasisPoints, ChannelId, EgressId, ETHEREUM_ETH_ADDRESS,
+	chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId, ETHEREUM_ETH_ADDRESS,
 };
 use cf_traits::{
-	impl_runtime_safe_mode, BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip,
-	CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo, Heartbeat, Issuance,
-	KeyProvider, OnBroadcastReady, OnRotationCallback, RewardsDistribution, RuntimeUpgrade,
-	SafeMode, SystemStateInfo, SystemStateManager, VaultTransitionHandler,
+	impl_runtime_safe_mode, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey,
+	Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo,
+	Heartbeat, Issuance, KeyProvider, OnBroadcastReady, OnRotationCallback, QualifyNode,
+	RewardsDistribution, RuntimeUpgrade, SafeMode, SystemStateInfo, SystemStateManager,
+	VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -401,7 +402,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 				Self::broadcast_gov_key::<Ethereum, EthereumBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Polkadot =>
 				Self::broadcast_gov_key::<Polkadot, PolkadotBroadcaster>(maybe_old_key, new_key),
-			ForeignChain::Bitcoin => todo!("Bitcoin govkey broadcast"),
+			ForeignChain::Bitcoin => Err(()),
 		}
 	}
 
@@ -409,7 +410,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 		match chain {
 			ForeignChain::Ethereum => Self::is_govkey_compatible::<Ethereum>(key),
 			ForeignChain::Polkadot => Self::is_govkey_compatible::<Polkadot>(key),
-			ForeignChain::Bitcoin => todo!("Bitcoin govkey compatibility"),
+			ForeignChain::Bitcoin => false,
 		}
 	}
 }
@@ -640,5 +641,13 @@ pub struct BitcoinFeeGetter;
 impl cf_traits::GetBitcoinFeeInfo for BitcoinFeeGetter {
 	fn bitcoin_fee_info() -> BitcoinFeeInfo {
 		BitcoinChainTracking::chain_state().unwrap_or(Default::default()).btc_fee_info
+	}
+}
+
+pub struct ValidatorRoleQualification;
+
+impl QualifyNode<<Runtime as Chainflip>::ValidatorId> for ValidatorRoleQualification {
+	fn is_qualified(id: &<Runtime as Chainflip>::ValidatorId) -> bool {
+		AccountRoles::has_account_role(id, AccountRole::Validator)
 	}
 }
