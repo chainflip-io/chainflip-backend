@@ -38,11 +38,12 @@ impl<T: JsonRpcClient + 'static> EthersRpcClient<T> {
 
 		const NONCE_LIFETIME: std::time::Duration = std::time::Duration::from_secs(120);
 
-		// Reset nonce if too old
-		if match nonce_info_lock.as_ref() {
-			Some(nonce_info) => nonce_info.requested_at.elapsed() > NONCE_LIFETIME,
-			None => true,
-		} {
+		// Reset nonce if too old to ensure that we never
+		// get stuck with an incorrect nonce for some reason
+		if nonce_info_lock
+			.as_ref()
+			.is_some_and(|nonce| nonce.requested_at.elapsed() > NONCE_LIFETIME)
+		{
 			*nonce_info_lock = None;
 		}
 
