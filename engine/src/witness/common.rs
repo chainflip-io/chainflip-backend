@@ -51,10 +51,36 @@ pub type BoxActiveAndFuture<'a, T> =
 
 pub trait RuntimeHasChain<TChain: ExternalChain>:
 	pallet_cf_vaults::Config<<TChain as PalletInstanceAlias>::Instance, Chain = TChain>
+	+ pallet_cf_chain_tracking::Config<
+		<TChain as PalletInstanceAlias>::Instance,
+		TargetChain = TChain,
+	>
 {
 }
 impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Runtime where
 	Self: pallet_cf_vaults::Config<<TChain as PalletInstanceAlias>::Instance, Chain = TChain>
+		+ pallet_cf_chain_tracking::Config<
+			<TChain as PalletInstanceAlias>::Instance,
+			TargetChain = TChain,
+		>
+{
+}
+
+pub trait RuntimeCallHasChain<Runtime: RuntimeHasChain<TChain>, TChain: ExternalChain>:
+	std::convert::From<pallet_cf_vaults::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>>
+	+ std::convert::From<
+		pallet_cf_chain_tracking::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
+	>
+{
+}
+impl<Runtime: RuntimeHasChain<TChain>, TChain: ExternalChain> RuntimeCallHasChain<Runtime, TChain>
+	for state_chain_runtime::RuntimeCall
+where
+	Self: std::convert::From<
+			pallet_cf_vaults::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
+		> + std::convert::From<
+			pallet_cf_chain_tracking::Call<Runtime, <TChain as PalletInstanceAlias>::Instance>,
+		>,
 {
 }
 
