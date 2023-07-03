@@ -48,7 +48,7 @@ pub async fn call_from_event<StateChainClient>(
 where
 	StateChainClient: EthAssetApi,
 {
-	fn into_encoded_address_or_ignore(
+	fn try_into_encoded_address(
 		chain: ForeignChain,
 		bytes: Vec<u8>,
 	) -> Result<EncodedAddress, CallFromEventError> {
@@ -57,7 +57,7 @@ where
 		})
 	}
 
-	fn into_or_ignore<Primitive: std::fmt::Debug + TryInto<CfType> + Copy, CfType>(
+	fn try_into_primitive<Primitive: std::fmt::Debug + TryInto<CfType> + Copy, CfType>(
 		from: Primitive,
 	) -> Result<CfType, CallFromEventError>
 	where
@@ -82,10 +82,10 @@ where
 		}) => Ok(
 			pallet_cf_swapping::Call::<state_chain_runtime::Runtime>::schedule_swap_from_contract {
 				from: Asset::Eth,
-				to: into_or_ignore(dst_token)?,
-				deposit_amount: into_or_ignore(amount)?,
-				destination_address: into_encoded_address_or_ignore(
-					into_or_ignore(dst_chain)?,
+				to: try_into_primitive(dst_token)?,
+				deposit_amount: try_into_primitive(amount)?,
+				destination_address: try_into_encoded_address(
+					try_into_primitive(dst_chain)?,
 					dst_address.to_vec(),
 				)?,
 				tx_hash: event.tx_hash.into(),
@@ -109,10 +109,10 @@ where
 					))
 				})?
 				.ok_or(CallFromEventError::Decode(format!("Source token {src_token} not found")))?,
-			to: into_or_ignore(dst_token)?,
-			deposit_amount: into_or_ignore(amount)?,
-			destination_address: into_encoded_address_or_ignore(
-				into_or_ignore(dst_chain)?,
+			to: try_into_primitive(dst_token)?,
+			deposit_amount: try_into_primitive(amount)?,
+			destination_address: try_into_encoded_address(
+				try_into_primitive(dst_chain)?,
 				dst_address.to_vec(),
 			)?,
 			tx_hash: event.tx_hash.into(),
@@ -128,15 +128,15 @@ where
 			cf_parameters,
 		}) => Ok(pallet_cf_swapping::Call::ccm_deposit {
 			source_asset: Asset::Eth,
-			destination_asset: into_or_ignore(dst_token)?,
-			deposit_amount: into_or_ignore(amount)?,
-			destination_address: into_encoded_address_or_ignore(
-				into_or_ignore(dst_chain)?,
+			destination_asset: try_into_primitive(dst_token)?,
+			deposit_amount: try_into_primitive(amount)?,
+			destination_address: try_into_encoded_address(
+				try_into_primitive(dst_chain)?,
 				dst_address.to_vec(),
 			)?,
 			message_metadata: CcmDepositMetadata {
 				message: message.to_vec(),
-				gas_budget: into_or_ignore(gas_amount)?,
+				gas_budget: try_into_primitive(gas_amount)?,
 				cf_parameters: cf_parameters.0.to_vec(),
 				source_address: sender.into(),
 			},
@@ -161,15 +161,15 @@ where
 					))
 				})?
 				.ok_or(CallFromEventError::Decode(format!("Source token {src_token} not found")))?,
-			destination_asset: into_or_ignore(dst_token)?,
-			deposit_amount: into_or_ignore(amount)?,
-			destination_address: into_encoded_address_or_ignore(
-				into_or_ignore(dst_chain)?,
+			destination_asset: try_into_primitive(dst_token)?,
+			deposit_amount: try_into_primitive(amount)?,
+			destination_address: try_into_encoded_address(
+				try_into_primitive(dst_chain)?,
 				dst_address.to_vec(),
 			)?,
 			message_metadata: CcmDepositMetadata {
 				message: message.to_vec(),
-				gas_budget: into_or_ignore(gas_amount)?,
+				gas_budget: try_into_primitive(gas_amount)?,
 				cf_parameters: cf_parameters.0.to_vec(),
 				source_address: sender.into(),
 			},
