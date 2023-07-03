@@ -1,6 +1,7 @@
-use cf_chains::Chain;
+use cf_chains::{Chain, ChainAbi};
 use futures_core::{stream::BoxStream, Future, Stream};
 use futures_util::{stream, StreamExt};
+use state_chain_runtime::PalletInstanceAlias;
 
 use super::chain_source::ChainSourceWithClient;
 
@@ -48,15 +49,22 @@ impl<It: Iterator, St: Stream<Item = It::Item>> ActiveAndFuture<It, St> {
 pub type BoxActiveAndFuture<'a, T> =
 	ActiveAndFuture<Box<dyn Iterator<Item = T> + Send + 'a>, BoxStream<'a, T>>;
 
-pub trait RuntimeHasInstance<Instance: 'static>: pallet_cf_vaults::Config<Instance> {}
-impl<Instance: 'static> RuntimeHasInstance<Instance> for state_chain_runtime::Runtime where
-	Self: pallet_cf_vaults::Config<Instance>
+pub trait RuntimeHasChain<TChain: ExternalChain>:
+	pallet_cf_vaults::Config<<TChain as PalletInstanceAlias>::Instance, Chain = TChain>
+{
+}
+impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Runtime where
+	Self: pallet_cf_vaults::Config<<TChain as PalletInstanceAlias>::Instance, Chain = TChain>
 {
 }
 
-pub trait ExternalChainSource: ChainSourceWithClient<Index = <<state_chain_runtime::Runtime as pallet_cf_vaults::Config<Self::Instance>>::Chain as Chain>::ChainBlockNumber>
+pub trait ExternalChain: ChainAbi + PalletInstanceAlias {}
+impl<T: ChainAbi + PalletInstanceAlias> ExternalChain for T {}
+
+pub trait ExternalChainSource:
+	ChainSourceWithClient<Index = <Self::Chain as Chain>::ChainBlockNumber>
 where
-	state_chain_runtime::Runtime: RuntimeHasInstance<Self::Instance>,
+	state_chain_runtime::Runtime: RuntimeHasChain<Self::Chain>,
 {
-	type Instance: 'static;
+	type Chain: ExternalChain;
 }

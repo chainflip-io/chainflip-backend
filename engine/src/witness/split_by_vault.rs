@@ -3,7 +3,7 @@ use futures_util::StreamExt;
 
 use super::{
 	chain_source::{box_chain_stream, BoxChainStream, ChainSourceWithClient},
-	common::{BoxActiveAndFuture, ExternalChainSource, RuntimeHasInstance},
+	common::{BoxActiveAndFuture, ExternalChainSource, RuntimeHasChain},
 	epoch_source::Vault,
 };
 
@@ -13,7 +13,7 @@ use utilities::assert_stream_send;
 pub trait ChainSplitByVault<'a>: Sized + Send
 where
 	state_chain_runtime::Runtime:
-		pallet_cf_vaults::Config<<Self::UnderlyingChainSource as ExternalChainSource>::Instance>,
+		RuntimeHasChain<<Self::UnderlyingChainSource as ExternalChainSource>::Chain>,
 {
 	type UnderlyingChainSource: ExternalChainSource;
 
@@ -32,11 +32,7 @@ where
 
 type Item<'a, UnderlyingChainSource> = (
 	EpochIndex,
-	pallet_cf_vaults::Vault<
-		<state_chain_runtime::Runtime as pallet_cf_vaults::Config<
-			<UnderlyingChainSource as ExternalChainSource>::Instance,
-		>>::Chain,
-	>,
+	pallet_cf_vaults::Vault<<UnderlyingChainSource as ExternalChainSource>::Chain>,
 	BoxChainStream<
 		'a,
 		<UnderlyingChainSource as ChainSourceWithClient>::Index,
@@ -48,16 +44,16 @@ type Item<'a, UnderlyingChainSource> = (
 
 pub struct SplitByVault<'a, UnderlyingChainSource: ExternalChainSource>
 where
-	state_chain_runtime::Runtime: RuntimeHasInstance<UnderlyingChainSource::Instance>,
+	state_chain_runtime::Runtime: RuntimeHasChain<UnderlyingChainSource::Chain>,
 {
 	underlying_chain_source: &'a UnderlyingChainSource,
-	vaults: BoxActiveAndFuture<'static, Vault<UnderlyingChainSource::Instance>>,
+	vaults: BoxActiveAndFuture<'static, Vault<UnderlyingChainSource::Chain>>,
 }
 #[async_trait::async_trait]
 impl<'a, UnderlyingChainSource: ExternalChainSource> ChainSplitByVault<'a>
 	for SplitByVault<'a, UnderlyingChainSource>
 where
-	state_chain_runtime::Runtime: RuntimeHasInstance<UnderlyingChainSource::Instance>,
+	state_chain_runtime::Runtime: RuntimeHasChain<UnderlyingChainSource::Chain>,
 {
 	type UnderlyingChainSource = UnderlyingChainSource;
 
