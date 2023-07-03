@@ -93,7 +93,7 @@ fn cannot_deposit_and_withdrawal_during_safe_mode() {
 				Asset::Eth,
 				EncodedAddress::Eth(Default::default()),
 			),
-			crate::Error::<Test>::WithdrawsDisabled,
+			crate::Error::<Test>::WithdrawalsDisabled,
 		);
 
 		// Safe mode is now Code Green

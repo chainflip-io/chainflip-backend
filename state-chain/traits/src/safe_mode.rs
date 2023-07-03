@@ -94,7 +94,7 @@ macro_rules! impl_runtime_safe_mode {
 				impl SetSafeMode<$pallet_safe_mode> for $runtime_safe_mode {
 					fn set_safe_mode(mode: $pallet_safe_mode) {
 						<$root_storage as StorageValue<_>>::mutate(|current|{
-							current.$name = mode.clone();
+							current.$name = mode;
 						});
 					}
 				}
@@ -125,47 +125,35 @@ macro_rules! impl_runtime_safe_mode {
 ///     function_3_enabled,
 /// }
 /// ```
-///
-/// If multiple impl_pallet_safe_mode! are invoked in the same scope, a inner
-/// mod name is required to avoid conflict. Default inner mod name is "__pallet_inner".
-///
-/// ```ignore
-/// impl_pallet_safe_mode! {
-///     PalletSafeMode2, __inner_safe_mode_2;
-///     function_enabled,
-/// }
-/// ```
 #[macro_export]
 macro_rules! impl_pallet_safe_mode {
 	(
 		$pallet_safe_mode:ident; $($flag:ident),+ $(,)?
 	) => {
-		impl_pallet_safe_mode!($pallet_safe_mode, __pallet_inner; $($flag),+);
-	};
+		#[derive(codec::Encode, codec::Decode, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::RuntimeDebug)]
+		pub struct $pallet_safe_mode {
+			$(
+				pub $flag: bool,
+			)+
+		}
 
-	(
-		$pallet_safe_mode:ident, $inner_name:ident; $($flag:ident),+ $(,)?
-	) => {
-		pub use $inner_name::$pallet_safe_mode;
-		mod $inner_name {
-			use $crate::SafeMode;
-			use codec::{Encode, Decode, MaxEncodedLen};
-			use scale_info::TypeInfo;
-			use frame_support::RuntimeDebug;
-
-			#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Copy, Clone, PartialEq, Eq, RuntimeDebug)]
-			pub struct $pallet_safe_mode { $(pub $flag: bool,)+ }
-
-			impl Default for $pallet_safe_mode {
-				fn default() -> Self {
-					<Self as SafeMode>::CODE_GREEN
-				}
+		impl Default for $pallet_safe_mode {
+			fn default() -> Self {
+				<Self as $crate::SafeMode>::CODE_GREEN
 			}
+		}
 
-			impl SafeMode for $pallet_safe_mode {
-				const CODE_RED: Self = Self { $($flag: false,)+ };
-				const CODE_GREEN: Self = Self { $($flag: true,)+ };
-			}
+		impl $crate::SafeMode for $pallet_safe_mode {
+			const CODE_RED: Self = Self {
+				$(
+					$flag: false
+				),+
+			};
+			const CODE_GREEN: Self = Self {
+				$(
+					$flag: true
+				),+
+			};
 		}
 	}
 }
@@ -206,7 +194,7 @@ pub(crate) mod test {
 	impl_pallet_safe_mode!(TestPalletSafeMode; flag_1, flag_2);
 
 	// Multiple `impl_pallet_safe_mode` calls within the same scope requires a different mod name.
-	impl_pallet_safe_mode!(TestPalletSafeMode2, __test_mode_2; flag_1, flag_2,);
+	impl_pallet_safe_mode!(TestPalletSafeMode2; flag_1, flag_2,);
 
 	impl_runtime_safe_mode! {
 		TestRuntimeSafeMode,

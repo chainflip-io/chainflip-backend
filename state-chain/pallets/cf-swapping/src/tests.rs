@@ -1608,7 +1608,7 @@ fn cannot_withdraw_in_safe_mode() {
 				Asset::Eth,
 				EncodedAddress::Eth(Default::default()),
 			),
-			Error::<Test>::WithdrawsDisabled
+			Error::<Test>::WithdrawalsDisabled
 		);
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, Asset::Eth), 200);
 

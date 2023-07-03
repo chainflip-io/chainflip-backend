@@ -25,7 +25,7 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdraw_enabled);
+impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -73,8 +73,8 @@ pub mod pallet {
 		InvalidEgressAddress,
 		// Liquidity deposit is disabled due to Safe Mode.
 		LiquidityDepositDisabled,
-		// Withdraws are disabled due to Safe Mode.
-		WithdrawsDisabled,
+		// Withdrawals are disabled due to Safe Mode.
+		WithdrawalsDisabled,
 	}
 
 	#[pallet::hooks]
@@ -207,7 +207,7 @@ pub mod pallet {
 			asset: Asset,
 			destination_address: EncodedAddress,
 		) -> DispatchResult {
-			ensure!(T::SafeMode::get().withdraw_enabled, Error::<T>::WithdrawsDisabled);
+			ensure!(T::SafeMode::get().withdrawal_enabled, Error::<T>::WithdrawalsDisabled);
 			if amount > 0 {
 				let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
