@@ -12,8 +12,8 @@ use super::{
 };
 
 #[async_trait::async_trait]
-pub trait GetChainTrackingData<C: cf_chains::Chain> {
-	async fn get_chain_tracking_data(&self) -> ChainState<C>;
+pub trait GetTrackedData<C: cf_chains::Chain> {
+	async fn get_tracked_data(&self) -> ChainState<C>;
 }
 
 pub struct ChainTracking<'a, C, I, InnerStream, StateChainClient, Client>
@@ -21,7 +21,7 @@ where
 	InnerStream: ChainSplitByEpoch<'a>,
 	C: cf_chains::Chain,
 	I: 'static + Send + Sync,
-	Client: GetChainTrackingData<C>,
+	Client: GetTrackedData<C>,
 {
 	inner_stream: InnerStream,
 	client: Client,
@@ -34,7 +34,7 @@ impl<'a, C, I, InnerStream, StateChainClient, Client>
 where
 	C: cf_chains::Chain,
 	I: 'static + Send + Sync,
-	Client: GetChainTrackingData<C>,
+	Client: GetTrackedData<C>,
 	InnerStream: ChainSplitByEpoch<'a>,
 	StateChainClient: SignedExtrinsicApi + Send,
 {
@@ -45,7 +45,7 @@ where
 	) -> ChainTracking<'a, C, I, InnerStream, StateChainClient, Client>
 	where
 		InnerStream: ChainSplitByEpoch<'a>,
-		Client: GetChainTrackingData<C>,
+		Client: GetTrackedData<C>,
 	{
 		ChainTracking { inner_stream, state_chain_client, client, phantom: PhantomData }
 	}
@@ -58,7 +58,7 @@ where
 	C: cf_chains::Chain,
 	I: 'static + Send + Sync,
 	InnerStream: ChainSplitByEpoch<'a>,
-	Client: GetChainTrackingData<C> + Send + Sync + Clone + 'static,
+	Client: GetTrackedData<C> + Send + Sync + Clone + 'static,
 	StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,
 	state_chain_runtime::Runtime: pallet_cf_chain_tracking::Config<I, TargetChain = C>,
 	state_chain_runtime::RuntimeCall:
@@ -87,7 +87,7 @@ where
 							let state_chain_client = state_chain_client.clone();
 							let client = client.clone();
 							async move {
-								let chain_tracking_data = client.get_chain_tracking_data().await;
+								let chain_tracking_data = client.get_tracked_data().await;
 								state_chain_client
 									.submit_signed_extrinsic(
 										pallet_cf_witnesser::Call::witness_at_epoch {
