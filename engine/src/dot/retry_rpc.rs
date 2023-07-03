@@ -1,10 +1,17 @@
-use crate::dot::PolkadotConfig;
+use crate::{
+	dot::PolkadotConfig,
+	witness::chain_source::{ChainClient, Header},
+};
 use cf_chains::dot::{PolkadotHash, RuntimeVersion};
 use cf_primitives::PolkadotBlockNumber;
 use core::time::Duration;
 use futures_core::Stream;
 use std::pin::Pin;
-use subxt::{events::Events, rpc::types::ChainBlockExtrinsic};
+use subxt::{
+	config::Header as SubxtHeader,
+	events::Events,
+	rpc::types::{ChainBlockExtrinsic, ChainBlockResponse},
+};
 use utilities::task_scope::Scope;
 
 use crate::rpc_retrier::RpcRetrierClient;
@@ -37,6 +44,8 @@ impl DotRetryRpcClient {
 pub trait DotRetryRpcApi {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
 
+	async fn block(&self, block_hash: PolkadotHash) -> Option<ChainBlockResponse<PolkadotConfig>>;
+
 	async fn extrinsics(&self, block_hash: PolkadotHash) -> Option<Vec<ChainBlockExtrinsic>>;
 
 	async fn events(&self, block_hash: PolkadotHash) -> Option<Events<PolkadotConfig>>;
@@ -53,6 +62,15 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.block_hash(block_number).await })
+			}))
+			.await
+	}
+
+	async fn block(&self, block_hash: PolkadotHash) -> Option<ChainBlockResponse<PolkadotConfig>> {
+		self.retry_client
+			.request(Box::pin(move |client| {
+				#[allow(clippy::redundant_async_block)]
+				Box::pin(async move { client.block(block_hash).await })
 			}))
 			.await
 	}
@@ -98,11 +116,11 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 #[async_trait::async_trait]
 pub trait DotRetrySubscribeApi {
 	async fn subscribe_best_heads(
-		&mut self,
+		&self,
 	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>>;
 
 	async fn subscribe_finalized_heads(
-		&mut self,
+		&self,
 	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>>;
 }
 
@@ -111,10 +129,10 @@ use crate::dot::rpc::DotSubscribeApi;
 #[async_trait::async_trait]
 impl DotRetrySubscribeApi for DotRetryRpcClient {
 	async fn subscribe_best_heads(
-		&mut self,
+		&self,
 	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>> {
 		self.retry_client
-			.request(Box::pin(move |mut client| {
+			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.subscribe_best_heads().await })
 			}))
@@ -122,14 +140,37 @@ impl DotRetrySubscribeApi for DotRetryRpcClient {
 	}
 
 	async fn subscribe_finalized_heads(
-		&mut self,
+		&self,
 	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>> {
 		self.retry_client
-			.request(Box::pin(move |mut client| {
+			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.subscribe_finalized_heads().await })
 			}))
 			.await
+	}
+}
+
+#[async_trait::async_trait]
+impl ChainClient for DotRetryRpcClient {
+	type Index = PolkadotBlockNumber;
+	type Hash = PolkadotHash;
+	type Data = Events<PolkadotConfig>;
+
+	// This needs to return an Option?
+	async fn header_at_index(
+		&self,
+		index: Self::Index,
+	) -> Header<Self::Index, Self::Hash, Self::Data> {
+		let block_hash = self.block_hash(index).await.unwrap();
+		let header = self.block(block_hash).await.unwrap().block.header;
+		let events = self.events(block_hash).await.unwrap();
+		Header {
+			index: header.number,
+			hash: header.hash(),
+			parent_hash: Some(header.parent_hash),
+			data: events,
+		}
 	}
 }
 
