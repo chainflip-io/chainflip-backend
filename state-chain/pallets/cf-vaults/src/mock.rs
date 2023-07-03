@@ -11,8 +11,8 @@ use cf_chains::{
 };
 use cf_primitives::{BroadcastId, GENESIS_EPOCH};
 use cf_traits::{
-	impl_mock_callback, impl_mock_chainflip, mocks::threshold_signer::MockThresholdSigner,
-	AccountRoleRegistry,
+	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
+	mocks::threshold_signer::MockThresholdSigner, AccountRoleRegistry,
 };
 use frame_support::{
 	construct_runtime, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
@@ -31,8 +31,6 @@ pub type ValidatorId = u64;
 
 thread_local! {
 	pub static BAD_VALIDATORS: RefCell<Vec<ValidatorId>> = RefCell::new(vec![]);
-	pub static CURRENT_SYSTEM_STATE: RefCell<SystemState> = RefCell::new(SystemState::Normal);
-
 	pub static SET_AGG_KEY_WITH_AGG_KEY_REQUIRED: RefCell<bool> = RefCell::new(true);
 }
 
@@ -51,37 +49,8 @@ parameter_types! {
 	pub const BlockHashCount: u64 = 250;
 }
 
-#[derive(Clone, Eq, PartialEq, Copy, Debug)]
-pub enum SystemState {
-	Normal,
-	Maintenance,
-}
-
 pub const ETH_DUMMY_SIG: eth::SchnorrVerificationComponents =
 	eth::SchnorrVerificationComponents { s: [0xcf; 32], k_times_g_address: [0xcf; 20] };
-
-// do not know how to solve this mock
-pub struct MockSystemStateManager;
-
-impl MockSystemStateManager {
-	pub fn set_system_state(state: SystemState) {
-		CURRENT_SYSTEM_STATE.with(|cell| {
-			*cell.borrow_mut() = state;
-		});
-	}
-}
-
-impl SystemStateManager for MockSystemStateManager {
-	fn activate_maintenance_mode() {
-		Self::set_system_state(SystemState::Maintenance);
-	}
-}
-
-impl MockSystemStateManager {
-	pub fn get_current_system_state() -> SystemState {
-		CURRENT_SYSTEM_STATE.with(|cell| *cell.borrow())
-	}
-}
 
 impl frame_system::Config for MockRuntime {
 	type BaseCallFilter = frame_support::traits::Everything;
@@ -225,6 +194,9 @@ impl Slashing for MockSlasher {
 	fn slash_balance(_account_id: &Self::AccountId, _amount: sp_runtime::Percent) {}
 }
 
+impl_pallet_safe_mode!(MockPalletSafeMode; flag);
+impl_mock_runtime_safe_mode!(test: MockPalletSafeMode);
+
 impl pallet_cf_vaults::Config for MockRuntime {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = PalletOffence;
@@ -237,7 +209,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type VaultTransitionHandler = MockVaultTransitionHandler;
 	type WeightInfo = ();
 	type Broadcaster = MockBroadcaster;
-	type SystemStateManager = MockSystemStateManager;
+	type SafeMode = MockRuntimeSafeMode;
 	type Slasher = MockSlasher;
 }
 

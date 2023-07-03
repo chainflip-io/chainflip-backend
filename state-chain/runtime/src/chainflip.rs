@@ -44,8 +44,7 @@ use cf_traits::{
 	impl_runtime_safe_mode, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey,
 	Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo,
 	Heartbeat, Issuance, KeyProvider, OnBroadcastReady, OnRotationCallback, QualifyNode,
-	RewardsDistribution, RuntimeUpgrade, SafeMode, SystemStateInfo, SystemStateManager,
-	VaultTransitionHandler,
+	RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -69,7 +68,6 @@ impl Chainflip for Runtime {
 	type EnsureWitnessedAtCurrentEpoch = pallet_cf_witnesser::EnsureWitnessedAtCurrentEpoch;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type EpochInfo = Validator;
-	type SystemState = SystemStateDeprecated;
 	type AccountRoleRegistry = AccountRoles;
 	type FundingInfo = Flip;
 }
@@ -78,34 +76,11 @@ impl_runtime_safe_mode! {
 	RuntimeSafeMode,
 	pallet_cf_environment::RuntimeSafeMode<Runtime>,
 	emissions: pallet_cf_emissions::PalletSafeMode,
+	funding: pallet_cf_funding::PalletSafeMode,
+	swapping: pallet_cf_swapping::PalletSafeMode,
+	liquidity_provider: pallet_cf_lp::PalletSafeMode,
+	validator: pallet_cf_validator::PalletSafeMode,
 }
-
-/// Legacy System State - to be deleted when all pallets are updated to use SafeMode.
-pub struct SystemStateDeprecated;
-
-impl SystemStateInfo for SystemStateDeprecated {
-	fn ensure_no_maintenance() -> sp_runtime::DispatchResult {
-		if pallet_cf_environment::RuntimeSafeMode::<Runtime>::get() == SafeMode::CODE_GREEN {
-			Ok(())
-		} else {
-			Err(DispatchError::from("Maintenance mode is active."))
-		}
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn activate_maintenance_mode() {
-		<Self as SystemStateManager>::activate_maintenance_mode();
-	}
-}
-
-impl SystemStateManager for SystemStateDeprecated {
-	fn activate_maintenance_mode() {
-		pallet_cf_environment::RuntimeSafeMode::<Runtime>::put(
-			<RuntimeSafeMode as SafeMode>::CODE_RED,
-		);
-	}
-}
-
 struct BackupNodeEmissions;
 
 impl RewardsDistribution for BackupNodeEmissions {

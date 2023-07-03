@@ -11,9 +11,8 @@ use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
 		deposit_handler::{LpChannel, MockDepositHandler},
-		system_state_info::MockSystemStateInfo,
 	},
-	SystemStateInfo,
+	SetSafeMode,
 };
 use frame_support::{assert_noop, assert_ok, error::BadOrigin, traits::Hooks};
 
@@ -70,24 +69,23 @@ fn liquidity_providers_can_withdraw_asset() {
 }
 
 #[test]
-fn cannot_deposit_and_withdrawal_during_maintenance() {
+fn cannot_deposit_and_withdrawal_during_safe_mode() {
 	new_test_ext().execute_with(|| {
 		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000);
 
-		// Activate maintenance mode
-		MockSystemStateInfo::set_maintenance(true);
-		assert!(MockSystemStateInfo::is_maintenance_mode());
+		// Activate Safe Mode: Code red
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 
-		// Cannot request deposit address during maintenance.
+		// Cannot request deposit address during Code red.
 		assert_noop!(
 			LiquidityProvider::request_liquidity_deposit_address(
 				RuntimeOrigin::signed(LP_ACCOUNT.into()),
 				Asset::Eth,
 			),
-			"We are in maintenance!"
+			crate::Error::<Test>::LiquidityDepositDisabled,
 		);
 
-		// Cannot withdraw liquidity during maintenance.
+		// Cannot withdraw liquidity during Code red.
 		assert_noop!(
 			LiquidityProvider::withdraw_asset(
 				RuntimeOrigin::signed(LP_ACCOUNT.into()),
@@ -95,12 +93,11 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 				Asset::Eth,
 				EncodedAddress::Eth(Default::default()),
 			),
-			"We are in maintenance!"
+			crate::Error::<Test>::WithdrawalsDisabled,
 		);
 
-		// Deactivate maintenance mode
-		MockSystemStateInfo::set_maintenance(false);
-		assert!(!MockSystemStateInfo::is_maintenance_mode());
+		// Safe mode is now Code Green
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
 
 		// Deposit and withdrawal can now work as per normal.
 		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(

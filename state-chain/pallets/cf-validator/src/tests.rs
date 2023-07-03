@@ -5,9 +5,9 @@ use cf_test_utilities::{assert_event_sequence, last_event};
 use cf_traits::{
 	mocks::{
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
-		system_state_info::MockSystemStateInfo, vault_rotator::MockVaultRotatorA,
+		vault_rotator::MockVaultRotatorA,
 	},
-	AccountRoleRegistry, AuctionOutcome, SystemStateInfo,
+	AccountRoleRegistry, AuctionOutcome, SafeMode, SetSafeMode,
 };
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;
@@ -520,23 +520,21 @@ fn test_missing_author_punishment() {
 }
 
 #[test]
-fn no_auction_during_maintenance() {
+fn no_validator_rotation_during_safe_mode_code_red() {
 	new_test_ext().execute_with(|| {
-		// Activate maintenance mode
-		MockSystemStateInfo::set_maintenance(true);
-		// Assert that we are in maintenance mode
-		assert!(MockSystemStateInfo::is_maintenance_mode());
+		// Activate Safe Mode: CODE RED
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
+		assert!(<MockRuntimeSafeMode as Get<PalletSafeMode>>::get() == PalletSafeMode::CODE_RED);
+
 		// Try to start a rotation.
 		ValidatorPallet::start_authority_rotation();
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 		ValidatorPallet::force_rotation(RawOrigin::Root.into()).unwrap();
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 
-		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
-
-		// Deactivate maintenance mode
-		MockSystemStateInfo::set_maintenance(false);
-		assert!(!MockSystemStateInfo::is_maintenance_mode());
+		// Change safe mode to CODE GREEN
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
+		assert!(<MockRuntimeSafeMode as Get<PalletSafeMode>>::get() == PalletSafeMode::CODE_GREEN);
 
 		// Try to start a rotation.
 		MockBidderProvider::set_winning_bids();
