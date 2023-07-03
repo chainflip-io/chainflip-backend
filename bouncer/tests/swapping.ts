@@ -53,7 +53,7 @@ async function testAll() {
 
     await Promise.all([
             testSwap('BTC', 'USDC', undefined, {
-                message: new Web3().eth.abi.encodeParameter("string", "BTC to USDC w/ CCM!!"),
+                message: "BTC to USDC w/ CCM!!",
                 gas_budget: 600000,
                 cf_parameters: getAbiEncodedMessage(["uint256"]),
                 source_address: ForeignChainAddress.Bitcoin,
