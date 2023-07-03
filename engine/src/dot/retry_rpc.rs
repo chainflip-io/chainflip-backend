@@ -33,58 +33,58 @@ impl DotRetryRpcClient {
 
 #[async_trait::async_trait]
 pub trait DotRetryRpcApi {
-	async fn block_hash(&mut self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
+	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
 
-	async fn extrinsics(&mut self, block_hash: PolkadotHash) -> Option<Vec<ChainBlockExtrinsic>>;
+	async fn extrinsics(&self, block_hash: PolkadotHash) -> Option<Vec<ChainBlockExtrinsic>>;
 
-	async fn events(&mut self, block_hash: PolkadotHash) -> Events<PolkadotConfig>;
+	async fn events(&self, block_hash: PolkadotHash) -> Events<PolkadotConfig>;
 
-	async fn current_runtime_version(&mut self) -> RuntimeVersion;
+	async fn current_runtime_version(&self) -> RuntimeVersion;
 
-	async fn submit_raw_encoded_extrinsic(&mut self, encoded_bytes: Vec<u8>) -> PolkadotHash;
+	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> PolkadotHash;
 }
 
 #[async_trait::async_trait]
 impl DotRetryRpcApi for DotRetryRpcClient {
-	async fn block_hash(&mut self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash> {
+	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash> {
 		self.retry_client
-			.request(Box::pin(move |mut client| {
+			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.block_hash(block_number).await })
 			}))
 			.await
 	}
 
-	async fn extrinsics(&mut self, block_hash: PolkadotHash) -> Option<Vec<ChainBlockExtrinsic>> {
+	async fn extrinsics(&self, block_hash: PolkadotHash) -> Option<Vec<ChainBlockExtrinsic>> {
 		self.retry_client
-			.request(Box::pin(move |mut client| {
+			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.extrinsics(block_hash).await })
 			}))
 			.await
 	}
 
-	async fn events(&mut self, block_hash: PolkadotHash) -> Events<PolkadotConfig> {
+	async fn events(&self, block_hash: PolkadotHash) -> Events<PolkadotConfig> {
 		self.retry_client
-			.request(Box::pin(move |mut client| {
+			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.events(block_hash).await })
 			}))
 			.await
 	}
 
-	async fn current_runtime_version(&mut self) -> RuntimeVersion {
+	async fn current_runtime_version(&self) -> RuntimeVersion {
 		self.retry_client
-			.request(Box::pin(move |mut client| {
+			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.current_runtime_version().await })
 			}))
 			.await
 	}
 
-	async fn submit_raw_encoded_extrinsic(&mut self, encoded_bytes: Vec<u8>) -> PolkadotHash {
+	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> PolkadotHash {
 		self.retry_client
-			.request(Box::pin(move |mut client| {
+			.request(Box::pin(move |client| {
 				let encoded_bytes = encoded_bytes.clone();
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.submit_raw_encoded_extrinsic(encoded_bytes).await })
@@ -107,7 +107,7 @@ mod tests {
 		task_scope(|scope| {
 			async move {
 				let dot_client = DotRpcClient::new("ws://127.0.0.1:9945").await.unwrap();
-				let mut dot_retry_rpc_client = DotRetryRpcClient::new(scope, dot_client);
+				let dot_retry_rpc_client = DotRetryRpcClient::new(scope, dot_client);
 
 				let hash = dot_retry_rpc_client.block_hash(1).await.unwrap();
 				println!("Block hash: {}", hash);
