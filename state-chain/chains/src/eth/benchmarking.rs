@@ -94,7 +94,7 @@ impl BenchmarkValue for Transaction {
 
 impl BenchmarkValue for EthereumTrackedData {
 	fn benchmark_value() -> Self {
-		Self { block_height: 1000, base_fee: 10_000_000_000, priority_fee: 2_000_000_000 }
+		Self { base_fee: 10_000_000_000, priority_fee: 2_000_000_000 }
 	}
 }
 

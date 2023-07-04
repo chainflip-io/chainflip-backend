@@ -11,8 +11,8 @@ use cf_primitives::{
 	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
 };
 use cf_traits::{
-	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, BroadcastCleanup,
-	Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
+	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
+	BroadcastCleanup, Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
 };
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
 use sp_core::H256;
@@ -166,7 +166,8 @@ impl GetBitcoinFeeInfo for MockBitcoinFeeInfo {
 	}
 }
 
-impl_mock_runtime_safe_mode!();
+impl_pallet_safe_mode!(MockPalletSafeMode; flag1, flag2);
+impl_mock_runtime_safe_mode!(mock: MockPalletSafeMode);
 
 impl pallet_cf_environment::Config for Test {
 	type RuntimeEvent = RuntimeEvent;

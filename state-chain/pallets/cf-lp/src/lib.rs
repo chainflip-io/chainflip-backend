@@ -9,7 +9,8 @@ use sp_runtime::DispatchResult;
 
 use cf_chains::{address::AddressConverter, AnyChain};
 use cf_traits::{
-	liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi, EgressApi, SystemStateInfo,
+	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
+	EgressApi,
 };
 use sp_runtime::{traits::BlockNumberProvider, Saturating};
 use sp_std::vec::Vec;
@@ -23,6 +24,8 @@ mod tests;
 
 pub mod weights;
 pub use weights::WeightInfo;
+
+impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -51,6 +54,9 @@ pub mod pallet {
 		/// representation.
 		type AddressConverter: AddressConverter;
 
+		/// Safe Mode access.
+		type SafeMode: Get<PalletSafeMode>;
+
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 	}
@@ -65,6 +71,10 @@ pub mod pallet {
 		UnauthorisedToModify,
 		// The Asset cannot be egressed to the destination chain.
 		InvalidEgressAddress,
+		// Liquidity deposit is disabled due to Safe Mode.
+		LiquidityDepositDisabled,
+		// Withdrawals are disabled due to Safe Mode.
+		WithdrawalsDisabled,
 	}
 
 	#[pallet::hooks]
@@ -166,7 +176,8 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset: Asset,
 		) -> DispatchResult {
-			T::SystemState::ensure_no_maintenance()?;
+			ensure!(T::SafeMode::get().deposit_enabled, Error::<T>::LiquidityDepositDisabled);
+
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			let (channel_id, deposit_address) =
 				T::DepositHandler::request_liquidity_deposit_address(account_id, asset)?;
@@ -196,8 +207,8 @@ pub mod pallet {
 			asset: Asset,
 			destination_address: EncodedAddress,
 		) -> DispatchResult {
+			ensure!(T::SafeMode::get().withdrawal_enabled, Error::<T>::WithdrawalsDisabled);
 			if amount > 0 {
-				T::SystemState::ensure_no_maintenance()?;
 				let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 				let destination_address_internal =

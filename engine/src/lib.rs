@@ -5,6 +5,7 @@
 #![feature(map_try_insert)]
 #![feature(step_trait)]
 #![feature(result_option_inspect)]
+#![feature(is_some_and)]
 
 pub mod common;
 pub mod constants;

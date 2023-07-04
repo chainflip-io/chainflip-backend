@@ -8,12 +8,6 @@ macro_rules! impl_mock_runtime_safe_mode {
 			frame_support::pallet_prelude::ValueQuery
 		>;
 
-		impl MockRuntimeSafeMode {
-			pub fn set_safe_mode(value: Self) {
-				MockSafeModeStorage::put(value);
-			}
-		}
-
 		$crate::impl_runtime_safe_mode! {
 			MockRuntimeSafeMode,
 			MockSafeModeStorage,
@@ -28,7 +22,7 @@ macro_rules! impl_mock_runtime_safe_mode {
 mod test {
 	use crate::{
 		safe_mode::test::{ExampleSafeModeA, ExampleSafeModeB},
-		SafeMode,
+		SafeMode, SetSafeMode,
 	};
 
 	impl_mock_runtime_safe_mode!(a: ExampleSafeModeA, b: ExampleSafeModeB);

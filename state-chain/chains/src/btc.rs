@@ -7,7 +7,7 @@ extern crate alloc;
 use core::mem::size_of;
 
 use self::deposit_address::DepositAddress;
-use crate::{Age, Chain, ChainAbi, ChainCrypto, ChannelIdConstructor, FeeRefundCalculator};
+use crate::{Chain, ChainAbi, ChainCrypto, ChannelIdConstructor, FeeRefundCalculator};
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use base58::{FromBase58, ToBase58};
@@ -89,7 +89,6 @@ impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 )]
 #[codec(mel_bound())]
 pub struct BitcoinTrackedData {
-	pub block_height: BlockNumber,
 	pub btc_fee_info: BitcoinFeeInfo,
 }
 
@@ -129,14 +128,6 @@ impl BitcoinFeeInfo {
 				.saturating_mul(MINIMUM_BTC_TX_SIZE_IN_BYTES) /
 				BYTES_PER_KILOBYTE,
 		}
-	}
-}
-
-impl Age for BitcoinTrackedData {
-	type BlockNumber = BlockNumber;
-
-	fn birth_block(&self) -> Self::BlockNumber {
-		self.block_height
 	}
 }
 

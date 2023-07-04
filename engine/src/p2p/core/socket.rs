@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use tracing::{debug, warn};
 
-use super::{KeyPair, PeerInfo};
+use super::{PeerInfo, X25519KeyPair};
 
 /// Wait this long until attempting to reconnect
 pub const RECONNECT_INTERVAL: Duration = Duration::from_millis(250);
@@ -32,7 +32,7 @@ pub struct OutgoingSocket {
 }
 
 impl OutgoingSocket {
-	pub fn new(context: &zmq::Context, key: &KeyPair) -> Self {
+	pub fn new(context: &zmq::Context, key: &X25519KeyPair) -> Self {
 		let socket = context.socket(zmq::SocketType::DEALER).unwrap();
 
 		// Discard any pending messages when disconnecting a socket

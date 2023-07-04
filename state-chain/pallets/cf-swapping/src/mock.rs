@@ -1,8 +1,8 @@
-use crate::{self as pallet_cf_swapping, WeightInfo};
+use crate::{self as pallet_cf_swapping, PalletSafeMode, WeightInfo};
 use cf_chains::AnyChain;
 use cf_primitives::{Asset, AssetAmount, SwapLeg, STABLE_ASSET};
 use cf_traits::{
-	impl_mock_chainflip,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
 		egress_handler::MockEgressHandler,
@@ -67,6 +67,7 @@ impl system::Config for Test {
 }
 
 impl_mock_chainflip!(Test);
+impl_mock_runtime_safe_mode! { swapping: PalletSafeMode }
 
 parameter_types! {
 	pub static NetworkFee: Percent = Percent::from_percent(0);
@@ -142,9 +143,10 @@ impl pallet_cf_swapping::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type DepositHandler = MockDepositHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;
-	type WeightInfo = MockWeightInfo;
 	type AddressConverter = MockAddressConverter;
 	type SwappingApi = MockSwappingApi;
+	type SafeMode = MockRuntimeSafeMode;
+	type WeightInfo = MockWeightInfo;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
