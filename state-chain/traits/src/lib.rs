@@ -403,8 +403,11 @@ impl<Key> EpochKey<Key> {
 
 /// Provides the currently valid key for multisig ceremonies.
 pub trait KeyProvider<C: ChainCrypto> {
-	/// Get the chain's current agg key, the epoch index for the current key and the state of that
-	/// key. If no key has been set, returns None.
+	/// Get the chain's active agg key, key state and associated epoch index. If no key is active,
+	/// returns None.
+	///
+	/// Note that the epoch may not be the current epoch: a key can be activated before the start of
+	/// the epoch.
 	fn active_epoch_key() -> Option<EpochKey<C::AggKey>>;
 
 	#[cfg(feature = "runtime-benchmarks")]
