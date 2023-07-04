@@ -4,6 +4,7 @@
 #![feature(drain_filter)]
 #![feature(map_try_insert)]
 #![feature(result_option_inspect)]
+#![feature(is_some_and)]
 
 pub mod common;
 pub mod constants;
