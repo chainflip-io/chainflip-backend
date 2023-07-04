@@ -406,10 +406,6 @@ pub mod pallet {
 					.checked_sub(1)
 					.expect("We must have at least one authority")
 			{
-				Self::clean_up_broadcast_storage(
-					signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
-				);
-
 				Self::deposit_event(Event::<T, I>::BroadcastAborted {
 					broadcast_id: signing_attempt
 						.broadcast_attempt
