@@ -54,8 +54,6 @@ where
 		+ GetPolkadotStream
 		+ DotRetryRpcApi
 		+ DotRetrySubscribeApi
-		+ Send
-		+ Sync
 		+ Clone
 		+ 'static,
 {
@@ -101,8 +99,6 @@ impl<
 			> + GetPolkadotStream
 			+ DotRetryRpcApi
 			+ DotRetrySubscribeApi
-			+ Send
-			+ Sync
 			+ Clone
 			+ 'static,
 	> ChainSourceWithClient for DotFinalisedSource<C>
@@ -125,8 +121,6 @@ async fn polkadot_source<
 		+ GetPolkadotStream
 		+ DotRetrySubscribeApi
 		+ DotRetryRpcApi
-		+ Send
-		+ Sync
 		+ Clone
 		+ 'static,
 >(

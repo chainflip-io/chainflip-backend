@@ -12,11 +12,11 @@ use std::time::Duration;
 
 use super::{BoxChainStream, Header};
 
-pub struct EthSource<C: EthersRetrySubscribeApi> {
+pub struct EthSource<C> {
 	client: C,
 }
 
-impl<C: EthersRetrySubscribeApi> EthSource<C> {
+impl<C> EthSource<C> {
 	pub fn new(client: C) -> Self {
 		Self { client }
 	}
