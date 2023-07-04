@@ -6,7 +6,7 @@ import { getAddress, runWithTimeout } from "../shared/utils";
 import { BtcAddressType } from "../shared/new_btc_address";
 import { CcmDepositMetadata, ForeignChainAddress } from "../shared/new_swap";
 import { randomAsNumber } from "@polkadot/util-crypto";
-import { tokenToChain } from "../shared/utils";
+import { chainFromAsset, getEthContractAddress } from "../shared/utils";
 import Web3 from 'web3';
 
 let swapCount = 1;
@@ -17,8 +17,8 @@ async function testSwap(sourceToken: Asset, destToken: Asset, addressType?: BtcA
     let address = await getAddress(destToken, seed, addressType);
     
     // For swaps with a message force the address to be the CF Receiver Mock address.
-    if (messageMetadata &&  tokenToChain[destToken] === '1'){
-        address = "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0";
+    if (messageMetadata &&  chainFromAsset(destToken) === chainFromAsset('ETH')){
+        address = getEthContractAddress('CFRECEIVER');
     }
 
     console.log(`Created new ${destToken} address: ${address}`);
@@ -53,7 +53,7 @@ async function testAll() {
 
     await Promise.all([
             testSwap('BTC', 'USDC', undefined, {
-                message: "BTC to USDC w/ CCM!!",
+                message: '0x' + Buffer.from("BTC to ETH w/ CCM!!", 'ascii').toString('hex'),
                 gas_budget: 600000,
                 cf_parameters: getAbiEncodedMessage(["uint256"]),
                 source_address: ForeignChainAddress.Bitcoin,

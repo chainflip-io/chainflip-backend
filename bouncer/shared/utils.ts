@@ -4,7 +4,7 @@ import Module from "node:module";
 
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
-import { Chain, Asset, assetChains } from '@chainflip-io/cli';
+import { Chain, Asset, assetChains, getTokenContractAddress } from '@chainflip-io/cli';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
@@ -13,16 +13,37 @@ import { CcmDepositMetadata } from './new_swap';
 import Web3 from 'web3';
 import cfReceiverMockAbi from '../../eth-contract-abis/perseverance-rc17/CFReceiverMock.json';
 
-export const tokenToChain = {
-  'ETH': '1',
-  'USDC': '1',
-  'DOT': '2',
-  'BTC': '3',
-};
-const tokenToEthAddress = {
-  'ETH': '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
-  'USDC': '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0',
-};
+// TODO: Import this from the chainflip-io/cli package once it's exported in future versions.
+export function assetToChain(asset: Asset): number {
+  switch (asset) {
+    case 'ETH':
+    case 'FLIP': 
+    case 'USDC': 
+      return 1; // Ethereum
+    case 'DOT': 
+      return 2; // Polkadot
+    case 'BTC':
+      return 3; // Bitcoin
+    default:
+      throw new Error(`Unsupported asset: ${asset}`);
+  }
+}
+
+// TODO: Import this from the chainflip-io/cli package once it's exported in future versions.
+export function getEthContractAddress(contract: string): string {
+  switch (contract) {
+    case 'ETH':
+      return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
+    case 'FLIP': 
+      return '0x10C6E9530F1C1AF873a391030a1D9E8ed0630D26'; 
+    case 'USDC': 
+      return '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
+    case 'CFRECEIVER': 
+      return '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
+    default:
+      throw new Error(`Unsupported contract: ${contract}`);
+  }
+}
 
 export const runWithTimeout = <T>(promise: Promise<T>, millis: number): Promise<T> =>
   Promise.race([
@@ -158,13 +179,14 @@ export async function observeBalanceIncrease(dstCcy: string, address: string, ol
   return Promise.reject(new Error("Failed to observe balance increase"));
 }
 
-export async function observeCcmReceived(sourceToken: string, destToken: string, address: string, messageMetadata: CcmDepositMetadata): Promise<void> {
-  await observeEVMEvent(cfReceiverMockAbi, address, "ReceivedxSwapAndCall", [tokenToChain[sourceToken],'*',messageMetadata.message,tokenToEthAddress[destToken],'*','*'])
+export async function observeCcmReceived(sourceToken: Asset, destToken: Asset, address: string, messageMetadata: CcmDepositMetadata): Promise<void> {
+  await observeEVMEvent(cfReceiverMockAbi, address, "ReceivedxSwapAndCall", [assetToChain(sourceToken).toString(),'*',messageMetadata.message,getEthContractAddress(destToken.toString()),'*','*'])
 }
 
-export async function observeEVMEvent(contractAbi: any, address: string, eventName: string, eventParametersExpected: string[]): Promise<void> {
+export async function observeEVMEvent(contractAbi: any, address: string, eventName: string, eventParametersExpected: string[], initialBlockNumber?:number): Promise<void> {
   const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
   const contract = new web3.eth.Contract(contractAbi, address);
+  initialBlockNumber = initialBlockNumber ?? await web3.eth.getBlockNumber();
 
   // Gets all the event parameter as an array
   const eventAbi = cfReceiverMockAbi.find((item) => item.type === 'event' && item.name === eventName);
@@ -172,24 +194,28 @@ export async function observeEVMEvent(contractAbi: any, address: string, eventNa
   // Get the parameter names of the event
   const parameterNames = eventAbi.inputs.map((input) => input.name);
 
-  const initialBlock = await web3.eth.getBlockNumber();
   let eventWitnessed = false;
   
   for (let i = 0; i < 120 && !eventWitnessed; i++) {
-    const events = await contract.getPastEvents(eventName, {fromBlock: initialBlock, toBlock: 'latest'});
-    for (let j = 0; j < events.length && !eventWitnessed; j++) {
-      for (let k = 0; k < parameterNames.length; k++) {
-        // Allow for wildcard matching
-        if (events[j].returnValues[k] != eventParametersExpected[k] && eventParametersExpected[k] != '*') {
-          break;
-        } else if (k === parameterNames.length - 1) {
-          eventWitnessed = true;
-          break;
+    let currentBlockNumber = await web3.eth.getBlockNumber();
+    if (currentBlockNumber > initialBlockNumber) {
+      const events = await contract.getPastEvents(eventName, {fromBlock: initialBlockNumber, toBlock: currentBlockNumber});
+      for (let j = 0; j < events.length && !eventWitnessed; j++) {
+        for (let k = 0; k < parameterNames.length; k++) {
+          // Allow for wildcard matching
+          if (events[j].returnValues[k] != eventParametersExpected[k] && eventParametersExpected[k] != '*') {
+            break;
+          } else if (k === parameterNames.length - 1) {
+            eventWitnessed = true;
+            break;
+          }
         }
-      }
+      }    
+      initialBlockNumber = currentBlockNumber + 1;
     }
-    await sleep(5000);
+    await sleep(2500);
   }
+
   if (eventWitnessed) {
     return Promise.resolve();
   } else {
