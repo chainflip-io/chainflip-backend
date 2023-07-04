@@ -9,7 +9,7 @@ benchmarks_instance_pallet! {
 	disable_asset_egress {
 		let origin = T::EnsureGovernance::successful_origin();
 		let destination_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
-	} : { let _ = Pallet::<T, I>::disable_asset_egress(origin, destination_asset, true); }
+	} : { let _ = Pallet::<T, I>::toggle_asset_egress(origin, destination_asset, true); }
 	verify {
 		assert!(DisabledEgressAssets::<T, I>::get(
 			destination_asset,

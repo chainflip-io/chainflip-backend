@@ -271,7 +271,7 @@ pub mod pallet {
 			amount: TargetChainAmount<T, I>,
 			tx_id: <T::TargetChain as ChainCrypto>::TransactionInId,
 		},
-		AssetEgressDisabled {
+		AssetEgressStatusChanged {
 			asset: TargetChainAsset<T, I>,
 			disabled: bool,
 		},
@@ -376,22 +376,32 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [On update](Event::AssetEgressDisabled)
+		/// - [On update](Event::AssetEgressStatusChanged)
 		#[pallet::weight(T::WeightInfo::disable_asset_egress())]
-		pub fn disable_asset_egress(
+		pub fn toggle_asset_egress(
 			origin: OriginFor<T>,
 			asset: TargetChainAsset<T, I>,
-			disabled: bool,
+			set_disabled: bool,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			if disabled {
+			let is_currently_disabled = DisabledEgressAssets::<T, I>::get(asset).is_some();
+
+			let do_disable = !is_currently_disabled && set_disabled;
+			let do_enable = is_currently_disabled && !set_disabled;
+
+			if do_disable {
 				DisabledEgressAssets::<T, I>::insert(asset, ());
-			} else {
+			} else if do_enable {
 				DisabledEgressAssets::<T, I>::remove(asset);
 			}
 
-			Self::deposit_event(Event::<T, I>::AssetEgressDisabled { asset, disabled });
+			if do_disable || do_enable {
+				Self::deposit_event(Event::<T, I>::AssetEgressStatusChanged {
+					asset,
+					disabled: set_disabled,
+				});
+			}
 
 			Ok(())
 		}
