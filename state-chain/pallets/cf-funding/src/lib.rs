@@ -20,9 +20,10 @@ use cf_chains::RegisterRedemption;
 use cf_primitives::AccountRole;
 use cf_primitives::EthereumAddress;
 use cf_traits::{
-	AccountInfo, AccountRoleRegistry, Bid, BidderProvider, Broadcaster, Chainflip, EpochInfo,
-	FeePayment, Funding, SystemStateInfo,
+	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Bid, BidderProvider, Broadcaster,
+	Chainflip, EpochInfo, FeePayment, Funding,
 };
+use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
@@ -34,18 +35,16 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
+use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{CheckedSub, UniqueSaturatedInto, Zero},
 	Saturating,
 };
-use sp_std::cmp::max;
-
-// use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Saturating, Zero};
-use sp_std::prelude::*;
-
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::{cmp::max, collections::btree_map::BTreeMap, prelude::*};
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+
+impl_pallet_safe_mode!(PalletSafeMode; redeem_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -104,6 +103,9 @@ pub mod pallet {
 
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
+
+		/// Safe Mode access.
+		type SafeMode: Get<PalletSafeMode>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -280,6 +282,9 @@ pub mod pallet {
 
 		/// The account is bound to a withdrawal address.
 		AccountBindingRestrictionViolated,
+
+		/// Redeem is disabled due to Safe Mode.
+		RedeemDisabled,
 	}
 
 	#[pallet::call]
@@ -352,7 +357,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 
-			T::SystemState::ensure_no_maintenance()?;
+			ensure!(T::SafeMode::get().redeem_enabled, Error::<T>::RedeemDisabled);
 
 			// Not allowed to redeem if we are an active bidder in the auction phase
 			if T::EpochInfo::is_auction_phase() {

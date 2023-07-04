@@ -38,13 +38,13 @@ use cf_chains::{
 	TransactionBuilder,
 };
 use cf_primitives::{
-	chains::assets, Asset, BasisPoints, ChannelId, EgressId, ETHEREUM_ETH_ADDRESS,
+	chains::assets, AccountRole, Asset, BasisPoints, ChannelId, EgressId, ETHEREUM_ETH_ADDRESS,
 };
 use cf_traits::{
-	impl_runtime_safe_mode, BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip,
-	CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo, Heartbeat, Issuance,
-	KeyProvider, OnBroadcastReady, OnRotationCallback, RewardsDistribution, RuntimeUpgrade,
-	SafeMode, SystemStateInfo, SystemStateManager, VaultTransitionHandler,
+	impl_runtime_safe_mode, AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey,
+	Broadcaster, Chainflip, CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo,
+	Heartbeat, Issuance, KeyProvider, OnBroadcastReady, OnRotationCallback, QualifyNode,
+	RewardsDistribution, RuntimeUpgrade, VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -53,6 +53,7 @@ use frame_support::{
 };
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
+use pallet_cf_chain_tracking::ChainState;
 use scale_info::TypeInfo;
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
@@ -67,7 +68,6 @@ impl Chainflip for Runtime {
 	type EnsureWitnessedAtCurrentEpoch = pallet_cf_witnesser::EnsureWitnessedAtCurrentEpoch;
 	type EnsureGovernance = pallet_cf_governance::EnsureGovernance;
 	type EpochInfo = Validator;
-	type SystemState = SystemStateDeprecated;
 	type AccountRoleRegistry = AccountRoles;
 	type FundingInfo = Flip;
 }
@@ -76,34 +76,11 @@ impl_runtime_safe_mode! {
 	RuntimeSafeMode,
 	pallet_cf_environment::RuntimeSafeMode<Runtime>,
 	emissions: pallet_cf_emissions::PalletSafeMode,
+	funding: pallet_cf_funding::PalletSafeMode,
+	swapping: pallet_cf_swapping::PalletSafeMode,
+	liquidity_provider: pallet_cf_lp::PalletSafeMode,
+	validator: pallet_cf_validator::PalletSafeMode,
 }
-
-/// Legacy System State - to be deleted when all pallets are updated to use SafeMode.
-pub struct SystemStateDeprecated;
-
-impl SystemStateInfo for SystemStateDeprecated {
-	fn ensure_no_maintenance() -> sp_runtime::DispatchResult {
-		if pallet_cf_environment::RuntimeSafeMode::<Runtime>::get() == SafeMode::CODE_GREEN {
-			Ok(())
-		} else {
-			Err(DispatchError::from("Maintenance mode is active."))
-		}
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn activate_maintenance_mode() {
-		<Self as SystemStateManager>::activate_maintenance_mode();
-	}
-}
-
-impl SystemStateManager for SystemStateDeprecated {
-	fn activate_maintenance_mode() {
-		pallet_cf_environment::RuntimeSafeMode::<Runtime>::put(
-			<RuntimeSafeMode as SafeMode>::CODE_RED,
-		);
-	}
-}
-
 struct BackupNodeEmissions;
 
 impl RewardsDistribution for BackupNodeEmissions {
@@ -177,15 +154,17 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 	}
 
 	fn refresh_unsigned_data(unsigned_tx: &mut <Ethereum as ChainAbi>::Transaction) {
-		if let Some(chain_state) = EthereumChainTracking::chain_state() {
+		if let Some(ChainState { tracked_data, .. }) = EthereumChainTracking::chain_state() {
 			// double the last block's base fee. This way we know it'll be selectable for at least 6
 			// blocks (12.5% increase on each block)
-			let max_fee_per_gas =
-				chain_state.base_fee.saturating_mul(2).saturating_add(chain_state.priority_fee);
+			let max_fee_per_gas = tracked_data
+				.base_fee
+				.saturating_mul(2)
+				.saturating_add(tracked_data.priority_fee);
 			unsigned_tx.max_fee_per_gas = Some(U256::from(max_fee_per_gas));
-			unsigned_tx.max_priority_fee_per_gas = Some(U256::from(chain_state.priority_fee));
+			unsigned_tx.max_priority_fee_per_gas = Some(U256::from(tracked_data.priority_fee));
 		}
-		// if we don't have ChainState, we leave it unmodified
+		// if we don't have CurrentChainState, we leave it unmodified
 	}
 
 	fn is_valid_for_rebroadcast(
@@ -401,7 +380,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 				Self::broadcast_gov_key::<Ethereum, EthereumBroadcaster>(maybe_old_key, new_key),
 			ForeignChain::Polkadot =>
 				Self::broadcast_gov_key::<Polkadot, PolkadotBroadcaster>(maybe_old_key, new_key),
-			ForeignChain::Bitcoin => todo!("Bitcoin govkey broadcast"),
+			ForeignChain::Bitcoin => Err(()),
 		}
 	}
 
@@ -409,7 +388,7 @@ impl BroadcastAnyChainGovKey for TokenholderGovernanceBroadcaster {
 		match chain {
 			ForeignChain::Ethereum => Self::is_govkey_compatible::<Ethereum>(key),
 			ForeignChain::Polkadot => Self::is_govkey_compatible::<Polkadot>(key),
-			ForeignChain::Bitcoin => todo!("Bitcoin govkey compatibility"),
+			ForeignChain::Bitcoin => false,
 		}
 	}
 }
@@ -639,6 +618,16 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 pub struct BitcoinFeeGetter;
 impl cf_traits::GetBitcoinFeeInfo for BitcoinFeeGetter {
 	fn bitcoin_fee_info() -> BitcoinFeeInfo {
-		BitcoinChainTracking::chain_state().unwrap_or(Default::default()).btc_fee_info
+		BitcoinChainTracking::chain_state()
+			.map(|chain_state| chain_state.tracked_data.btc_fee_info)
+			.unwrap_or(Default::default())
+	}
+}
+
+pub struct ValidatorRoleQualification;
+
+impl QualifyNode<<Runtime as Chainflip>::ValidatorId> for ValidatorRoleQualification {
+	fn is_qualified(id: &<Runtime as Chainflip>::ValidatorId) -> bool {
+		AccountRoles::has_account_role(id, AccountRole::Validator)
 	}
 }

@@ -10,12 +10,13 @@ use cf_primitives::GENESIS_EPOCH;
 use cf_test_utilities::{last_event, maybe_last_event};
 use cf_traits::{
 	mocks::threshold_signer::MockThresholdSigner, AccountRoleRegistry, AsyncResult, Chainflip,
-	EpochInfo, KeyProvider, VaultRotator, VaultStatus,
+	EpochInfo, KeyProvider, SafeMode, VaultRotator, VaultStatus,
 };
 use frame_support::{
 	assert_noop, assert_ok, pallet_prelude::DispatchResultWithPostInfo, traits::Hooks,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
+use sp_core::Get;
 use sp_std::collections::btree_set::BTreeSet;
 
 pub type EthMockThresholdSigner = MockThresholdSigner<Ethereum, crate::mock::RuntimeCall>;
@@ -745,17 +746,17 @@ fn vault_key_rotated() {
 }
 
 #[test]
-fn test_vault_key_rotated_externally() {
+fn test_vault_key_rotated_externally_triggers_code_red() {
 	new_test_ext().execute_with(|| {
 		const TX_HASH: [u8; 4] = [0xab; 4];
-		assert_eq!(MockSystemStateManager::get_current_system_state(), SystemState::Normal);
+		assert_eq!(<MockRuntimeSafeMode as Get<MockPalletSafeMode>>::get(), SafeMode::CODE_GREEN);
 		assert_ok!(VaultsPallet::vault_key_rotated_externally(
 			RuntimeOrigin::root(),
 			NEW_AGG_PUB_KEY_POST_HANDOVER,
 			1,
 			TX_HASH,
 		));
-		assert_eq!(MockSystemStateManager::get_current_system_state(), SystemState::Maintenance);
+		assert_eq!(<MockRuntimeSafeMode as Get<MockPalletSafeMode>>::get(), SafeMode::CODE_RED);
 		assert_last_event!(crate::Event::VaultRotatedExternally(..));
 	});
 }

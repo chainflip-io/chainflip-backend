@@ -19,11 +19,12 @@ mod rotation_state;
 pub use auction_resolver::*;
 use cf_primitives::{AuthorityCount, EpochIndex};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidderProvider, Bonding,
-	Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch,
-	MissedAuthorshipSlots, OnAccountFunded, QualifyNode, ReputationResetter, SystemStateInfo,
-	VaultRotator,
+	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid,
+	BidderProvider, Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition,
+	FundingInfo, HistoricalEpoch, MissedAuthorshipSlots, OnAccountFunded, QualifyNode,
+	ReputationResetter, SetSafeMode, VaultRotator,
 };
+
 use cf_utilities::Port;
 use frame_support::{
 	pallet_prelude::*,
@@ -93,6 +94,8 @@ pub enum PalletOffence {
 
 pub const MAX_LENGTH_FOR_VANITY_NAME: usize = 64;
 
+impl_pallet_safe_mode!(PalletSafeMode; authority_rotation_enabled);
+
 pub type Percentage = u8;
 #[frame_support::pallet]
 pub mod pallet {
@@ -136,7 +139,7 @@ pub mod pallet {
 		>;
 
 		/// Criteria that need to be fulfilled to qualify as a validator node (authority or backup).
-		type KeygenQualification: QualifyNode<ValidatorId = ValidatorIdOf<Self>>;
+		type KeygenQualification: QualifyNode<<Self as Chainflip>::ValidatorId>;
 
 		/// For reporting missed authorship slots.
 		type OffenceReporter: OffenceReporter<
@@ -149,6 +152,9 @@ pub mod pallet {
 
 		/// This is used to reset the validator's reputation
 		type ReputationResetter: ReputationResetter<ValidatorId = ValidatorIdOf<Self>>;
+
+		/// Safe Mode access.
+		type SafeMode: Get<PalletSafeMode> + SetSafeMode<PalletSafeMode>;
 
 		/// Benchmark weights.
 		type ValidatorWeightInfo: WeightInfo;
@@ -362,18 +368,23 @@ pub mod pallet {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {
 						AsyncResult::Ready(VaultStatus::KeygenComplete) => {
-							let authority_candidates = rotation_state.authority_candidates();
-							// We want to exclude nodes who have been banned from the key handover (but may not be in the authority_candidates)
-							let non_banned_current_authorities = rotation_state.filter_out_banned(Self::current_authorities());
-							T::VaultRotator::key_handover(helpers::select_sharing_participants(non_banned_current_authorities, &authority_candidates, block_number.unique_saturated_into()), authority_candidates, rotation_state.new_epoch_index);
-							Self::set_rotation_phase(RotationPhase::KeyHandoversInProgress(rotation_state));
+							Self::start_key_handover(rotation_state, block_number);
 						},
 						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
 							// TODO: Punish a bit more here? Some of these nodes are already an authority and have failed to participate in handover.
 							// So given they're already not going to be in the set, excluding them from the set may not be enough punishment.
 							rotation_state.ban(offenders);
 
-							Self::start_vault_rotation(rotation_state);
+							if rotation_state.unbanned_current_authorities::<T>().len() as u32 <=
+								Self::current_consensus_threshold() {
+								log::warn!(
+									target: "cf-validator",
+									"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
+								);
+								Self::abort_rotation();
+							} else {
+								Self::start_vault_rotation(rotation_state);
+							}
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting keygen completion");
@@ -384,13 +395,14 @@ pub mod pallet {
 								"Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}"
 							);
 							log::error!(target: "cf-validator", "Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}");
+							Self::deposit_event(Event::<T>::RotationAborted);
 							// TODO: We should put the chain into safe mode here.
-							Self::set_rotation_phase(RotationPhase::Idle);
+							Self::abort_rotation();
 						},
 					};
 					T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
 				},
-				RotationPhase::KeyHandoversInProgress(rotation_state) => {
+				RotationPhase::KeyHandoversInProgress(mut rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
 					match T::VaultRotator::status() {
 						AsyncResult::Ready(VaultStatus::KeyHandoverComplete) => {
@@ -398,6 +410,28 @@ pub mod pallet {
 							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
 							T::VaultRotator::activate();
 							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
+						},
+						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
+							let num_failed_candidates = offenders.intersection(&rotation_state.authority_candidates()).count();
+							rotation_state.ban(offenders);
+							if rotation_state.unbanned_current_authorities::<T>().len() as u32 <= Self::current_consensus_threshold() {
+								log::warn!(
+									target: "cf-validator",
+									"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
+								);
+								Self::abort_rotation();
+							} else if num_failed_candidates > 0 {
+								log::warn!(
+									"{} authority candidate(s) failed to participate in key handover. Retrying from keygen.",
+									num_failed_candidates,
+								);
+								Self::start_vault_rotation(rotation_state);
+							} else {
+								log::warn!(
+									"Key handover attempt failed. Retrying with a new participant set.",
+								);
+								Self::start_key_handover(rotation_state, block_number)
+							};
 						},
 						AsyncResult::Pending => {
 							log::debug!(target: "cf-validator", "awaiting key handover completion");
@@ -409,7 +443,7 @@ pub mod pallet {
 							);
 							log::error!(target: "cf-validator", "Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}");
 							// TODO: We should put the chain into safe mode here.
-							Self::set_rotation_phase(RotationPhase::Idle);
+							Self::abort_rotation();
 						},
 					}
 					// TODO: Use correct weight
@@ -432,7 +466,7 @@ pub mod pallet {
 								"Pending, or Ready(RotationComplete) possible. Got: {async_result:?}"
 							);
 							log::error!(target: "cf-validator", "Pending and Ready(RotationComplete) possible. Got {async_result:?}");
-							Self::set_rotation_phase(RotationPhase::Idle);
+							Self::abort_rotation();
 						},
 					}
 					T::ValidatorWeightInfo::rotation_phase_activating_keys(num_primary_candidates)
@@ -1048,19 +1082,28 @@ impl<T: Config> Pallet<T> {
 		Self::deposit_event(Event::RotationPhaseUpdated { new_phase });
 	}
 
+	fn abort_rotation() {
+		log::warn!(
+			target: "cf-validator",
+			"Aborting rotation at phase: {:?}.", CurrentRotationPhase::<T>::get()
+		);
+		Self::set_rotation_phase(RotationPhase::Idle);
+		Self::deposit_event(Event::<T>::RotationAborted);
+	}
+
 	fn start_authority_rotation() -> Weight {
-		if T::SystemState::is_maintenance_mode() {
+		if !T::SafeMode::get().authority_rotation_enabled {
 			log::warn!(
 				target: "cf-validator",
-				"Can't start authority rotation. System is in maintenance mode."
+				"Can't start authority rotation. Runtime Safe Mode is in CODE RED."
 			);
-			return T::ValidatorWeightInfo::start_authority_rotation_in_maintenance_mode()
+			return T::ValidatorWeightInfo::start_authority_rotation_in_safe_mode_code_red()
 		} else if !matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle) {
 			log::error!(
 				target: "cf-validator",
 				"Can't start authority rotation. Authority rotation already in progress."
 			);
-			return T::ValidatorWeightInfo::start_authority_rotation_in_maintenance_mode()
+			return T::ValidatorWeightInfo::start_authority_rotation_in_safe_mode_code_red()
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
 
@@ -1092,18 +1135,15 @@ impl<T: Config> Pallet<T> {
 						10u128.pow(18),
 				);
 
-				let mut rotation_state =
-					RotationState::from_auction_outcome::<T>(auction_outcome.clone());
-
-				rotation_state.qualify_nodes::<T::KeygenQualification>();
-
 				// Without reading the full list of bidders we can't know the real number.
 				// Use the winners and losers as an approximation.
 				let weight = T::ValidatorWeightInfo::start_authority_rotation(
 					(auction_outcome.winners.len() + auction_outcome.losers.len()) as u32,
 				);
 
-				Self::start_vault_rotation(rotation_state);
+				Self::start_vault_rotation(RotationState::from_auction_outcome::<T>(
+					auction_outcome,
+				));
 
 				weight
 			},
@@ -1127,11 +1167,34 @@ impl<T: Config> Pallet<T> {
 				candidates.len(),
 				min_size
 			);
-			Self::set_rotation_phase(RotationPhase::Idle);
+			Self::abort_rotation();
 		} else {
 			T::VaultRotator::keygen(candidates, rotation_state.new_epoch_index);
 			Self::set_rotation_phase(RotationPhase::KeygensInProgress(rotation_state));
 			log::info!(target: "cf-validator", "Vault rotation initiated.");
+		}
+	}
+
+	fn start_key_handover(rotation_state: RuntimeRotationState<T>, block_number: T::BlockNumber) {
+		let authority_candidates = rotation_state.authority_candidates();
+		if let Some(sharing_participants) = helpers::select_sharing_participants(
+			Self::current_consensus_threshold(),
+			rotation_state.unbanned_current_authorities::<T>(),
+			&authority_candidates,
+			block_number.unique_saturated_into(),
+		) {
+			T::VaultRotator::key_handover(
+				sharing_participants,
+				authority_candidates,
+				rotation_state.new_epoch_index,
+			);
+			Self::set_rotation_phase(RotationPhase::KeyHandoversInProgress(rotation_state));
+		} else {
+			log::warn!(
+				target: "cf-validator",
+				"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
+			);
+			Self::abort_rotation();
 		}
 	}
 
@@ -1193,6 +1256,12 @@ impl<T: Config> Pallet<T> {
 		)?;
 		AuctionParameters::<T>::put(new_parameters);
 		Ok(())
+	}
+
+	///Note that the resulting threshold is the maximum number of parties not enough to generate a
+	/// signature, i.e. at least t+1 parties are required.
+	fn current_consensus_threshold() -> AuthorityCount {
+		cf_utilities::threshold_from_share_count(Self::current_authority_count())
 	}
 }
 
@@ -1330,10 +1399,8 @@ impl<T: Config> OnKilledAccount<T::AccountId> for DeleteVanityName<T> {
 
 pub struct PeerMapping<T>(PhantomData<T>);
 
-impl<T: Config> QualifyNode for PeerMapping<T> {
-	type ValidatorId = ValidatorIdOf<T>;
-
-	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+impl<T: Config> QualifyNode<<T as Chainflip>::ValidatorId> for PeerMapping<T> {
+	fn is_qualified(validator_id: &<T as Chainflip>::ValidatorId) -> bool {
 		AccountPeerMapping::<T>::contains_key(validator_id.into_ref())
 	}
 }

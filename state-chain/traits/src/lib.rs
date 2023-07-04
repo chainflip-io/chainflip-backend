@@ -2,8 +2,9 @@
 
 mod async_result;
 pub mod liquidity;
-pub mod safe_mode;
 pub use liquidity::*;
+pub mod safe_mode;
+pub use safe_mode::*;
 
 pub mod mocks;
 pub mod offence_reporting;
@@ -11,7 +12,6 @@ pub mod offence_reporting;
 use core::fmt::Debug;
 
 pub use async_result::AsyncResult;
-pub use safe_mode::SafeMode;
 
 use cf_chains::{
 	address::ForeignChainAddress, dot::PolkadotPublicKey, eth::Address, ApiCall,
@@ -76,8 +76,6 @@ pub trait Chainflip: frame_system::Config {
 	type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 	/// Information about the current Epoch.
 	type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
-	/// Access to information about the current system state
-	type SystemState: SystemStateInfo;
 	/// For registering and checking account roles.
 	type AccountRoleRegistry: AccountRoleRegistry<Self>;
 	/// For checking nodes' current balances.
@@ -535,41 +533,49 @@ pub trait WaivedFees {
 }
 
 /// Qualify what is considered as a potential authority for the network
-pub trait QualifyNode {
-	type ValidatorId;
+pub trait QualifyNode<Id: Ord> {
 	/// Is the node qualified to be an authority and meet our expectations of one
-	fn is_qualified(validator_id: &Self::ValidatorId) -> bool;
+	fn is_qualified(validator_id: &Id) -> bool;
+
+	/// Filter out the unqualified nodes from a list of potential nodes.
+	fn filter_unqualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
+		validators.into_iter().filter(|v| !Self::is_qualified(v)).collect()
+	}
 }
 
 /// Qualify if the node has registered
 pub struct SessionKeysRegistered<T, R>((PhantomData<T>, PhantomData<R>));
 
-impl<T, R: frame_support::traits::ValidatorRegistration<T>> QualifyNode
-	for SessionKeysRegistered<T, R>
+impl<T: Chainflip, R: frame_support::traits::ValidatorRegistration<T::ValidatorId>>
+	QualifyNode<T::ValidatorId> for SessionKeysRegistered<T, R>
 {
-	type ValidatorId = T;
-	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+	fn is_qualified(validator_id: &T::ValidatorId) -> bool {
 		R::is_registered(validator_id)
 	}
 }
 
-impl<A, B, C, D> QualifyNode for (A, B, C, D)
+impl<Id: Ord, A, B, C, D, E> QualifyNode<Id> for (A, B, C, D, E)
 where
-	A: QualifyNode<ValidatorId = B::ValidatorId>,
-	B: QualifyNode,
-	C: QualifyNode<ValidatorId = B::ValidatorId>,
-	D: QualifyNode<ValidatorId = B::ValidatorId>,
-	B::ValidatorId: Debug,
+	A: QualifyNode<Id>,
+	B: QualifyNode<Id>,
+	C: QualifyNode<Id>,
+	D: QualifyNode<Id>,
+	E: QualifyNode<Id>,
 {
-	type ValidatorId = A::ValidatorId;
-
-	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
+	fn is_qualified(validator_id: &Id) -> bool {
 		A::is_qualified(validator_id) &&
 			B::is_qualified(validator_id) &&
 			C::is_qualified(validator_id) &&
 			D::is_qualified(validator_id)
 	}
+
+	fn filter_unqualified(validators: BTreeSet<Id>) -> BTreeSet<Id> {
+		E::filter_unqualified(D::filter_unqualified(C::filter_unqualified(B::filter_unqualified(
+			A::filter_unqualified(validators),
+		))))
+	}
 }
+
 /// Handles the check of execution conditions
 pub trait ExecutionCondition {
 	/// Returns true/false if the condition is satisfied
@@ -621,28 +627,6 @@ pub trait CeremonyIdProvider {
 pub trait MissedAuthorshipSlots {
 	/// Get a list of slots that were missed.
 	fn missed_slots() -> sp_std::ops::Range<u64>;
-}
-
-/// Something that manages access to the system state.
-pub trait SystemStateInfo {
-	/// Ensure that the network is **not** in maintenance mode.
-	fn ensure_no_maintenance() -> DispatchResult;
-
-	/// Check if the network is in maintenance mode.
-	fn is_maintenance_mode() -> bool {
-		Self::ensure_no_maintenance().is_err()
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn activate_maintenance_mode() {
-		unimplemented!()
-	}
-}
-
-/// Something that can manipulate the system state.
-pub trait SystemStateManager {
-	/// Turn system maintenance on.
-	fn activate_maintenance_mode();
 }
 
 /// Allows accounts to pay for things by burning fees.
@@ -721,6 +705,8 @@ impl AddressDerivationApi<Polkadot> for () {
 
 pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn register_account_role(who: &T::AccountId, role: AccountRole) -> DispatchResult;
+
+	fn has_account_role(who: &T::AccountId, role: AccountRole) -> bool;
 
 	fn register_as_broker(account_id: &T::AccountId) -> DispatchResult {
 		Self::register_account_role(account_id, AccountRole::Broker)

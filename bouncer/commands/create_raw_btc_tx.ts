@@ -2,6 +2,7 @@
 // Usage: pnpm tsx create_raw_btc_tx.js <bitcoin_address> <btc_amount>
 
 import Module from "node:module";
+
 const require = Module.createRequire(import.meta.url);
 
 const Client = require('bitcoin-core');

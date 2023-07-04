@@ -76,8 +76,12 @@ function getCachedSubstrateApi(defaultEndpoint: string) {
   };
 };
 
-export const getChainflipApi = getCachedSubstrateApi('ws://127.0.0.1:9944');
-export const getPolkadotApi = getCachedSubstrateApi('ws://127.0.0.1:9945');
+export const getChainflipApi = getCachedSubstrateApi(
+  process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944',
+);
+export const getPolkadotApi = getCachedSubstrateApi(
+  process.env.POLKADOT_ENDPOINT ?? 'ws://127.0.0.1:9945'
+  );
 
 export const polkadotSigningMutex = new Mutex();
 
@@ -186,7 +190,7 @@ export async function observeCcmReceived(sourceToken: Asset, destToken: Asset, a
 export async function observeEVMEvent(contractAbi: any, address: string, eventName: string, eventParametersExpected: string[], initialBlockNumber?:number): Promise<void> {
   const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
   const contract = new web3.eth.Contract(contractAbi, address);
-  initialBlockNumber = initialBlockNumber ?? await web3.eth.getBlockNumber();
+  let initBlockNumber = initialBlockNumber ?? await web3.eth.getBlockNumber();
 
   // Gets all the event parameter as an array
   const eventAbi = cfReceiverMockAbi.find((item) => item.type === 'event' && item.name === eventName);
@@ -198,8 +202,8 @@ export async function observeEVMEvent(contractAbi: any, address: string, eventNa
   
   for (let i = 0; i < 120 && !eventWitnessed; i++) {
     let currentBlockNumber = await web3.eth.getBlockNumber();
-    if (currentBlockNumber > initialBlockNumber) {
-      const events = await contract.getPastEvents(eventName, {fromBlock: initialBlockNumber, toBlock: currentBlockNumber});
+    if (currentBlockNumber > initBlockNumber) {
+      const events = await contract.getPastEvents(eventName, {fromBlock: initBlockNumber, toBlock: currentBlockNumber});
       for (let j = 0; j < events.length && !eventWitnessed; j++) {
         for (let k = 0; k < parameterNames.length; k++) {
           // Allow for wildcard matching
@@ -211,7 +215,7 @@ export async function observeEVMEvent(contractAbi: any, address: string, eventNa
           }
         }
       }    
-      initialBlockNumber = currentBlockNumber + 1;
+      initBlockNumber = currentBlockNumber + 1;
     }
     await sleep(2500);
   }
@@ -224,3 +228,11 @@ export async function observeEVMEvent(contractAbi: any, address: string, eventNa
 
 }
 
+// Converts s hex string into a bytes array. Support hex strings start with and without 0x
+export function hexStringToBytesArray(hex: string) {
+  return Array.from(Buffer.from(hex.replace(/^0x/, ''), 'hex'));
+};
+
+export function asciiStringToBytesArray(str: string) {
+  return Array.from(Buffer.from(str.replace(/^0x/, '')));
+}

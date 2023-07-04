@@ -11,7 +11,7 @@ import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { exec } from 'child_process';
 import { Mutex } from 'async-mutex';
 import type { KeyringPair } from '@polkadot/keyring/types';
-import { runWithTimeout, sleep } from '../shared/utils';
+import { runWithTimeout, sleep, getAddress, hexStringToBytesArray, asciiStringToBytesArray } from '../shared/utils';
 
 const deposits = {
   dot: 10000,
@@ -68,6 +68,15 @@ async function observeEvent(eventName: string, dataCheck: (data: any) => boolean
     await sleep(1000);
   }
   return result;
+}
+
+export async function setupEmergencyWithdrawalAddress(address: any): Promise<void> {
+  console.log('Registering Emergency Withdrawal Address. Address:' + address);
+  await mutex.runExclusive(async () => {
+    await chainflip.tx.liquidityProvider
+      .registerEmergencyWithdrawalAddress(address)
+      .signAndSend(lp, { nonce: -1 });
+  });
 }
 
 async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
@@ -184,6 +193,15 @@ async function main(): Promise<void> {
   chainflip = await ApiPromise.create({
     provider: new WsProvider(cfNodeEndpoint),
     noInitWarn: true,
+    types: {
+      EncodedAddress: {
+        _enum: {
+          Eth: '[u8; 20]',
+          Dot: '[u8; 32]',
+          Btc: '[u8; 34]',
+        }
+      }
+    }
   });
   await cryptoWaitReady();
 
@@ -195,6 +213,15 @@ async function main(): Promise<void> {
 
   const lpUri = process.env.LP_URI ?? '//LP_1';
   lp = keyring.createFromUri(lpUri);
+  
+  // Register Emergency withdrawal address for all chains
+  const encodedEthAddr = chainflip.createType('EncodedAddress', {"Eth": hexStringToBytesArray(await getAddress('ETH', 'LP_1'))});
+  const encodedDotAddr = chainflip.createType('EncodedAddress', {"Dot": lp.publicKey});
+  const encodedBtcAddr = chainflip.createType('EncodedAddress', {"Btc": asciiStringToBytesArray(await getAddress('BTC', 'LP_1'))});
+
+  await setupEmergencyWithdrawalAddress(encodedEthAddr);
+  await setupEmergencyWithdrawalAddress(encodedDotAddr);
+  await setupEmergencyWithdrawalAddress(encodedBtcAddr);
 
   // We need USDC to complete before the others.
   await setupCurrency('usdc');

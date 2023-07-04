@@ -30,6 +30,7 @@ impl ForeignChainAddress {
 	}
 }
 
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, PartialOrd, Ord)]
 pub enum EncodedAddress {
 	Eth([u8; 20]),

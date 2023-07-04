@@ -9,6 +9,7 @@ import { randomAsNumber } from "@polkadot/util-crypto";
 import Web3 from 'web3';
 import { Keyring } from "@polkadot/api";
 import { u8aToHex } from "@polkadot/util";
+import { performNativeSwap } from "../shared/native_swap";
 
 let swapCount = 1;
 
@@ -29,7 +30,14 @@ async function testSwap(sourceToken: Asset, destToken: Asset, addressType?: BtcA
 }
 
 async function testAll() {
-    await Promise.all([
+    const nativeContractSwaps = Promise.all([
+        performNativeSwap('DOT'),
+        performNativeSwap('USDC'),
+        performNativeSwap('BTC'),
+    ]);
+
+    const regularSwaps =
+        Promise.all([
             testSwap('DOT', 'BTC', 'P2PKH'),
             testSwap('ETH', 'BTC', 'P2SH'),
             testSwap('USDC', 'BTC', 'P2WPKH'),
@@ -41,7 +49,9 @@ async function testAll() {
             testSwap('BTC', 'USDC'),
             testSwap('ETH', 'USDC'),
         ])
-    
+
+    await Promise.all([nativeContractSwaps, regularSwaps]);
+
     // NOTE: Doing the CCM swaps separately because of the broadcasting nonce bug.
     await Promise.all([
         testSwap('BTC', 'ETH', undefined, {
@@ -76,7 +86,7 @@ async function testAll() {
             cf_parameters: getAbiEncodedMessage(["string"]),
             source_address: { 'BTC': {'P2WSH': await getAddress('BTC', randomAsHex(32), 'P2WSH').then((btcAddress) => { Buffer.from(btcAddress.replace(/^0x/, ''), 'hex').toString()})}},
         }),       
-])
+    ])
 
     await Promise.all([
             testSwap('DOT', 'ETH', undefined, {
@@ -102,6 +112,7 @@ async function testAll() {
             source_address: {'ETH': await getAddress('ETH', randomAsHex(32))},
         }),            
     ])      
+
 }
 
 

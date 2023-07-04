@@ -9,7 +9,7 @@ pub mod weights;
 use weights::WeightInfo;
 
 use cf_primitives::AccountRole;
-use cf_traits::{AccountRoleRegistry, QualifyNode};
+use cf_traits::AccountRoleRegistry;
 use frame_support::{
 	error::BadOrigin,
 	pallet_prelude::DispatchResult,
@@ -153,6 +153,10 @@ impl<T: Config> AccountRoleRegistry<T> for Pallet<T> {
 		}
 	}
 
+	fn has_account_role(id: &T::AccountId, role: AccountRole) -> bool {
+		AccountRoles::<T>::get(id).unwrap_or_default() == role
+	}
+
 	fn ensure_account_role(
 		origin: T::RuntimeOrigin,
 		role: AccountRole,
@@ -184,18 +188,6 @@ impl<T: Config> OnKilledAccount<T::AccountId> for Pallet<T> {
 impl<T: Config> OnNewAccount<T::AccountId> for Pallet<T> {
 	fn on_new_account(who: &T::AccountId) {
 		AccountRoles::<T>::insert(who, AccountRole::default());
-	}
-}
-
-impl<T: Config> QualifyNode for Pallet<T> {
-	type ValidatorId = T::AccountId;
-
-	fn is_qualified(validator_id: &Self::ValidatorId) -> bool {
-		if let Some(role) = AccountRoles::<T>::get(validator_id) {
-			AccountRole::Validator == role
-		} else {
-			false
-		}
 	}
 }
 

@@ -7,9 +7,10 @@ use frame_system::pallet_prelude::*;
 pub use pallet::*;
 use sp_runtime::DispatchResult;
 
-use cf_chains::{address::AddressConverter, AnyChain};
+use cf_chains::{address::AddressConverter, AnyChain, ForeignChainAddress};
 use cf_traits::{
-	liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi, EgressApi, SystemStateInfo,
+	impl_pallet_safe_mode, liquidity::LpBalanceApi, AccountRoleRegistry, Chainflip, DepositApi,
+	EgressApi,
 };
 use sp_runtime::{traits::BlockNumberProvider, Saturating};
 use sp_std::vec::Vec;
@@ -23,6 +24,8 @@ mod tests;
 
 pub mod weights;
 pub use weights::WeightInfo;
+
+impl_pallet_safe_mode!(PalletSafeMode; deposit_enabled, withdrawal_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -51,6 +54,9 @@ pub mod pallet {
 		/// representation.
 		type AddressConverter: AddressConverter;
 
+		/// Safe Mode access.
+		type SafeMode: Get<PalletSafeMode>;
+
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 	}
@@ -65,6 +71,15 @@ pub mod pallet {
 		UnauthorisedToModify,
 		// The Asset cannot be egressed to the destination chain.
 		InvalidEgressAddress,
+		// Then given encoded address cannot be decoded into a valid ForeignChainAddress.
+		InvalidEncodedAddress,
+		// An emergency withdrawal address must be set by the user for the chain before
+		// deposit address can be requested.
+		NoEmergencyWithdrawalAddressRegistered,
+		// Liquidity deposit is disabled due to Safe Mode.
+		LiquidityDepositDisabled,
+		// Withdrawals are disabled due to Safe Mode.
+		WithdrawalsDisabled,
 	}
 
 	#[pallet::hooks]
@@ -112,6 +127,11 @@ pub mod pallet {
 		LpTtlSet {
 			ttl: T::BlockNumber,
 		},
+		EmergencyWithdrawalAddressRegistered {
+			account_id: T::AccountId,
+			chain: ForeignChain,
+			address: ForeignChainAddress,
+		},
 	}
 
 	#[pallet::genesis_config]
@@ -153,6 +173,17 @@ pub mod pallet {
 		ValueQuery,
 	>;
 
+	/// Stores the registered energency withdrawal address for an Account
+	#[pallet::storage]
+	pub type EmergencyWithdrawalAddress<T: Config> = StorageDoubleMap<
+		_,
+		Identity,
+		T::AccountId,
+		Twox64Concat,
+		ForeignChain,
+		ForeignChainAddress,
+	>;
+
 	/// The TTL for liquidity channels.
 	#[pallet::storage]
 	pub type LpTTL<T: Config> = StorageValue<_, T::BlockNumber, ValueQuery>;
@@ -166,8 +197,18 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset: Asset,
 		) -> DispatchResult {
-			T::SystemState::ensure_no_maintenance()?;
+			ensure!(T::SafeMode::get().deposit_enabled, Error::<T>::LiquidityDepositDisabled);
+
 			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
+			ensure!(
+				EmergencyWithdrawalAddress::<T>::contains_key(
+					&account_id,
+					ForeignChain::from(asset)
+				),
+				Error::<T>::NoEmergencyWithdrawalAddressRegistered
+			);
+
 			let (channel_id, deposit_address) =
 				T::DepositHandler::request_liquidity_deposit_address(account_id, asset)?;
 
@@ -196,8 +237,8 @@ pub mod pallet {
 			asset: Asset,
 			destination_address: EncodedAddress,
 		) -> DispatchResult {
+			ensure!(T::SafeMode::get().withdrawal_enabled, Error::<T>::WithdrawalsDisabled);
 			if amount > 0 {
-				T::SystemState::ensure_no_maintenance()?;
 				let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 
 				let destination_address_internal =
@@ -258,6 +299,36 @@ pub mod pallet {
 			LpTTL::<T>::set(ttl);
 
 			Self::deposit_event(Event::<T>::LpTtlSet { ttl });
+			Ok(())
+		}
+
+		/// Registers an Emergency Withdrawal Address (EWA) for an account.
+		/// To request deposit address for a chain, an EWA must be registered for that chain.
+		///
+		/// ## Events
+		///
+		/// - [On Success](Event::EmergencyWithdrawalAddressRegistered)
+		#[pallet::weight(T::WeightInfo::register_emergency_withdrawal_address())]
+		pub fn register_emergency_withdrawal_address(
+			origin: OriginFor<T>,
+			address: EncodedAddress,
+		) -> DispatchResult {
+			let account_id = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
+			let decoded_address = T::AddressConverter::try_from_encoded_address(address)
+				.map_err(|()| Error::<T>::InvalidEncodedAddress)?;
+
+			EmergencyWithdrawalAddress::<T>::insert(
+				&account_id,
+				decoded_address.chain(),
+				decoded_address.clone(),
+			);
+
+			Self::deposit_event(Event::<T>::EmergencyWithdrawalAddressRegistered {
+				account_id,
+				chain: decoded_address.chain(),
+				address: decoded_address,
+			});
 			Ok(())
 		}
 	}

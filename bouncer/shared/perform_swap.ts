@@ -58,10 +58,8 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
     const destAddress = extractDestinationAddress(swapInfo, destToken);
 
     console.log(`${tag} Destination address is: ${destAddress}`);
-    console.log(`${tag} The swap address is: ${swapAddress}`);
 
     if (sourceToken === 'BTC') {
-        console.log("Doing BTC address conversion");
         swapAddress = swapAddress.replace(/^0x/, '');
         swapAddress = Buffer.from(swapAddress, 'hex').toString();
     }
@@ -91,7 +89,7 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
         console.log(`${tag} Swap success! New balance: ${newBalance}!`);
     }
     catch (err) {
-        console.error(`${tag}: ${err}`);
+        throw new Error(`${tag} ${err}`);
     }
 
 }

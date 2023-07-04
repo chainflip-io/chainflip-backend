@@ -3,6 +3,17 @@ pub trait SafeMode {
 	const CODE_GREEN: Self;
 }
 
+/// Trait for setting the value of current runtime Safe Mode.
+pub trait SetSafeMode<SafeModeType: SafeMode> {
+	fn set_safe_mode(mode: SafeModeType);
+	fn set_code_red() {
+		Self::set_safe_mode(SafeModeType::CODE_RED);
+	}
+	fn set_code_green() {
+		Self::set_safe_mode(SafeModeType::CODE_GREEN);
+	}
+}
+
 /// Implements the top-level RuntimeSafeMode struct.
 ///
 /// The macros takes the following arguments:
@@ -32,7 +43,7 @@ macro_rules! impl_runtime_safe_mode {
 		/// Hides imports.
 		mod __inner {
 			use super::*;
-			use $crate::SafeMode;
+			use $crate::{SafeMode, SetSafeMode};
 			use codec::{Encode, Decode, MaxEncodedLen};
 			use frame_support::{
 				storage::StorageValue,
@@ -67,15 +78,84 @@ macro_rules! impl_runtime_safe_mode {
 				};
 			}
 
+			impl SetSafeMode<$runtime_safe_mode> for $runtime_safe_mode {
+				fn set_safe_mode(mode: Self) {
+					<$root_storage as StorageValue<_>>::put(mode);
+				}
+			}
+
 			$(
 				impl Get<$pallet_safe_mode> for $runtime_safe_mode {
 					fn get() -> $pallet_safe_mode {
 						<Self as Get<Self>>::get().$name
 					}
 				}
+
+				impl SetSafeMode<$pallet_safe_mode> for $runtime_safe_mode {
+					fn set_safe_mode(mode: $pallet_safe_mode) {
+						<$root_storage as StorageValue<_>>::mutate(|current|{
+							current.$name = mode;
+						});
+					}
+				}
 			)*
 		}
 	};
+}
+
+/// Implements a basic SafeMode struct for a pallet.
+/// Creats a struct made up of a list of bools.
+/// For pallets that requires more complex logic, SafeMode can be implemented
+/// manually with custom logic.
+///
+/// Params:
+/// - The name of the pallet's SafeMode struct.
+/// - A list of the names of bool flags used to control functionalities.
+///
+/// Code red sets all bool flags to `false`
+/// Code gree sets all bool flags to `true`
+///
+/// For example:
+///
+/// ```ignore
+/// impl_pallet_safe_mode! {
+///     PalletSafeMode;
+///     function_1_enabled,
+///     function_2_enabled,
+///     function_3_enabled,
+/// }
+/// ```
+#[macro_export]
+macro_rules! impl_pallet_safe_mode {
+	(
+		$pallet_safe_mode:ident; $($flag:ident),+ $(,)?
+	) => {
+		#[derive(codec::Encode, codec::Decode, codec::MaxEncodedLen, scale_info::TypeInfo, Copy, Clone, PartialEq, Eq, frame_support::RuntimeDebug)]
+		pub struct $pallet_safe_mode {
+			$(
+				pub $flag: bool,
+			)+
+		}
+
+		impl Default for $pallet_safe_mode {
+			fn default() -> Self {
+				<Self as $crate::SafeMode>::CODE_GREEN
+			}
+		}
+
+		impl $crate::SafeMode for $pallet_safe_mode {
+			const CODE_RED: Self = Self {
+				$(
+					$flag: false
+				),+
+			};
+			const CODE_GREEN: Self = Self {
+				$(
+					$flag: true
+				),+
+			};
+		}
+	}
 }
 
 #[cfg(test)]
@@ -88,6 +168,7 @@ pub(crate) mod test {
 	#[storage_alias]
 	pub type SafeModeStorage = StorageValue<Mock, TestRuntimeSafeMode, ValueQuery>;
 
+	// SafeMode struct can be defined manually
 	#[derive(Encode, Decode, MaxEncodedLen, TypeInfo, Clone, PartialEq, Eq, Debug)]
 	pub struct ExampleSafeModeA {
 		safe: bool,
@@ -109,22 +190,33 @@ pub(crate) mod test {
 		const CODE_GREEN: Self = Self::Safe;
 	}
 
+	// Use this macro to define a basic safe mode struct with a list of bool flags.
+	impl_pallet_safe_mode!(TestPalletSafeMode; flag_1, flag_2);
+
+	// Multiple `impl_pallet_safe_mode` calls within the same scope requires a different mod name.
+	impl_pallet_safe_mode!(TestPalletSafeMode2; flag_1, flag_2,);
+
 	impl_runtime_safe_mode! {
 		TestRuntimeSafeMode,
 		SafeModeStorage,
 		example_a: ExampleSafeModeA,
 		example_b: ExampleSafeModeB,
+		pallet: TestPalletSafeMode,
+		pallet_2: TestPalletSafeMode2,
 	}
 
 	#[test]
 	fn test_safe_mode() {
 		use frame_support::traits::Get;
 		sp_io::TestExternalities::default().execute_with(|| {
+			// Default to code green
 			assert!(
 				<TestRuntimeSafeMode as Get<TestRuntimeSafeMode>>::get() ==
 					TestRuntimeSafeMode {
 						example_a: ExampleSafeModeA::CODE_GREEN,
 						example_b: ExampleSafeModeB::CODE_GREEN,
+						pallet: SafeMode::CODE_GREEN,
+						pallet_2: SafeMode::CODE_GREEN,
 					}
 			);
 			assert!(
@@ -135,14 +227,21 @@ pub(crate) mod test {
 				<TestRuntimeSafeMode as Get<ExampleSafeModeB>>::get() ==
 					ExampleSafeModeB::CODE_GREEN
 			);
+			assert!(
+				<TestRuntimeSafeMode as Get<TestPalletSafeMode>>::get() ==
+					TestPalletSafeMode::CODE_GREEN
+			);
 
-			SafeModeStorage::put(TestRuntimeSafeMode::CODE_RED);
+			// Activate Code Red for all
+			<TestRuntimeSafeMode as SetSafeMode<TestRuntimeSafeMode>>::set_code_red();
 
 			assert!(
 				<TestRuntimeSafeMode as Get<TestRuntimeSafeMode>>::get() ==
 					TestRuntimeSafeMode {
 						example_a: ExampleSafeModeA::CODE_RED,
 						example_b: ExampleSafeModeB::CODE_RED,
+						pallet: SafeMode::CODE_RED,
+						pallet_2: SafeMode::CODE_RED,
 					}
 			);
 			assert_eq!(
@@ -152,6 +251,32 @@ pub(crate) mod test {
 			assert_eq!(
 				<TestRuntimeSafeMode as Get<ExampleSafeModeB>>::get(),
 				ExampleSafeModeB::CODE_RED
+			);
+			assert!(
+				<TestRuntimeSafeMode as Get<TestPalletSafeMode>>::get() ==
+					TestPalletSafeMode::CODE_RED
+			);
+
+			// Code Amber
+			TestRuntimeSafeMode::set_safe_mode(TestRuntimeSafeMode {
+				example_a: ExampleSafeModeA::CODE_RED,
+				example_b: ExampleSafeModeB::CODE_RED,
+				pallet: TestPalletSafeMode { flag_1: true, flag_2: false },
+				pallet_2: TestPalletSafeMode2 { flag_1: false, flag_2: true },
+			});
+			assert!(
+				<TestRuntimeSafeMode as Get<TestPalletSafeMode>>::get() ==
+					TestPalletSafeMode { flag_1: true, flag_2: false },
+			);
+			assert!(
+				<TestRuntimeSafeMode as Get<TestPalletSafeMode2>>::get() ==
+					TestPalletSafeMode2 { flag_1: false, flag_2: true },
+			);
+
+			<TestRuntimeSafeMode as SetSafeMode<ExampleSafeModeA>>::set_code_green();
+			assert!(
+				<TestRuntimeSafeMode as Get<ExampleSafeModeA>>::get() ==
+					ExampleSafeModeA::CODE_GREEN,
 			);
 		});
 	}
