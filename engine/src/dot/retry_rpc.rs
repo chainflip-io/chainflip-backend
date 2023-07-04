@@ -157,20 +157,37 @@ impl ChainClient for DotRetryRpcClient {
 	type Hash = PolkadotHash;
 	type Data = Events<PolkadotConfig>;
 
-	// This needs to return an Option?
 	async fn header_at_index(
 		&self,
 		index: Self::Index,
 	) -> Header<Self::Index, Self::Hash, Self::Data> {
-		let block_hash = self.block_hash(index).await.unwrap();
-		let header = self.block(block_hash).await.unwrap().block.header;
-		let events = self.events(block_hash).await.unwrap();
-		Header {
-			index: header.number,
-			hash: header.hash(),
-			parent_hash: Some(header.parent_hash),
-			data: events,
-		}
+		self.retry_client
+			.request(Box::pin(move |client| {
+				#[allow(clippy::redundant_async_block)]
+				Box::pin(async move {
+					let block_hash = client
+						.block_hash(index)
+						.await?
+						.ok_or(anyhow::anyhow!("No block hash found for index {index}"))?;
+					let header = client
+						.block(block_hash)
+						.await?
+						.ok_or(anyhow::anyhow!("No block found for block hash {block_hash}"))?
+						.block
+						.header;
+					let events = client
+						.events(block_hash)
+						.await?
+						.ok_or(anyhow::anyhow!("No events found for block hash {block_hash}"))?;
+					Ok(Header {
+						index,
+						hash: header.hash(),
+						parent_hash: Some(header.parent_hash),
+						data: events,
+					})
+				})
+			}))
+			.await
 	}
 }
 
