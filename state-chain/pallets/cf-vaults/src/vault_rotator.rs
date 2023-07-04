@@ -43,7 +43,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		if let Some(VaultRotationStatus::<T, I>::KeygenVerificationComplete { new_public_key }) =
 			PendingVaultRotation::<T, I>::get()
 		{
-			match Self::current_epoch_key() {
+			match Self::active_epoch_key() {
 				Some(epoch_key) if <T::Chain as Chain>::KeyHandoverIsRequired::get() => {
 					assert!(!sharing_participants.is_empty() && !receiving_participants.is_empty());
 
@@ -130,7 +130,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		if let Some(VaultRotationStatus::<T, I>::KeyHandoverComplete { new_public_key }) =
 			PendingVaultRotation::<T, I>::get()
 		{
-			if let Some((rotation_call, key_state, epoch_index)) = Self::current_epoch_key()
+			if let Some((rotation_call, key_state, epoch_index)) = Self::active_epoch_key()
 				.and_then(|EpochKey { key, epoch_index, key_state }| {
 					<T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
 						Some(key),

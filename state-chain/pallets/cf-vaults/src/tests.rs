@@ -96,7 +96,7 @@ fn keygen_handover_request_emitted() {
 				// It should be incremented when the request is made.
 				ceremony_id: ceremony_id + 1,
 				from_epoch: current_epoch,
-				key_to_share: VaultsPallet::current_epoch_key().unwrap().key,
+				key_to_share: VaultsPallet::active_epoch_key().unwrap().key,
 				sharing_participants: candidates.clone(),
 				receiving_participants: candidates,
 				new_key: Default::default(),

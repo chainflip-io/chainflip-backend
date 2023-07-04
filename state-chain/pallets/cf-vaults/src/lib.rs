@@ -854,7 +854,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 }
 
 impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
-	fn current_epoch_key() -> Option<EpochKey<<T::Chain as ChainCrypto>::AggKey>> {
+	fn active_epoch_key() -> Option<EpochKey<<T::Chain as ChainCrypto>::AggKey>> {
 		CurrentVaultEpochAndState::<T, I>::get().map(|current_vault_epoch_and_state| {
 			EpochKey {
 				key: Vaults::<T, I>::get(current_vault_epoch_and_state.epoch_index)

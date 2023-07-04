@@ -634,7 +634,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let broadcast_id = broadcast_attempt.broadcast_attempt_id.broadcast_id;
 
 		if let Some((api_call, signature)) = ThresholdSignatureData::<T, I>::get(broadcast_id) {
-			let EpochKey { key, .. } = T::KeyProvider::current_epoch_key()
+			let EpochKey { key, .. } = T::KeyProvider::active_epoch_key()
 				.expect("Epoch key must exist if we made a broadcast.");
 
 			if T::TransactionBuilder::is_valid_for_rebroadcast(

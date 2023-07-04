@@ -262,7 +262,7 @@ fn keygen_verification_ceremony_calls_callback_on_failure() {
 		.execute_with(|| {
 			const PAYLOAD: &[u8; 4] = b"OHAI";
 			let EpochKey { key, .. } =
-				<Test as crate::Config<_>>::KeyProvider::current_epoch_key().unwrap();
+				<Test as crate::Config<_>>::KeyProvider::active_epoch_key().unwrap();
 			let request_id = EthereumThresholdSigner::request_keygen_verification_signature(
 				*PAYLOAD,
 				NOMINEES.into_iter().collect(),
@@ -542,7 +542,7 @@ mod unsigned_validation {
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
 				let ceremony_id = MockCeremonyIdProvider::get();
 				let EpochKey { key: current_key, .. } =
-					<Test as crate::Config<_>>::KeyProvider::current_epoch_key().unwrap();
+					<Test as crate::Config<_>>::KeyProvider::active_epoch_key().unwrap();
 
 				assert!(
 					Test::validate_unsigned(
@@ -552,7 +552,7 @@ mod unsigned_validation {
 					)
 					.is_ok(),
 					"Validation Failed: {:?} / {:?}",
-					<Test as crate::Config<_>>::KeyProvider::current_epoch_key(),
+					<Test as crate::Config<_>>::KeyProvider::active_epoch_key(),
 					current_key
 				);
 			});

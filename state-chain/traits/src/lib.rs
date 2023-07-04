@@ -405,7 +405,7 @@ impl<Key> EpochKey<Key> {
 pub trait KeyProvider<C: ChainCrypto> {
 	/// Get the chain's current agg key, the epoch index for the current key and the state of that
 	/// key. If no key has been set, returns None.
-	fn current_epoch_key() -> Option<EpochKey<C::AggKey>>;
+	fn active_epoch_key() -> Option<EpochKey<C::AggKey>>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_key(_key: C::AggKey) {
