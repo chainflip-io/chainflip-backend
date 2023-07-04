@@ -1,7 +1,10 @@
 use bitcoin::{Block, BlockHash, Txid};
 use utilities::task_scope::Scope;
 
-use crate::rpc_retrier::RpcRetrierClient;
+use crate::{
+	rpc_retrier::RpcRetrierClient,
+	witness::chain_source::{ChainClient, Header},
+};
 use core::time::Duration;
 
 use super::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient};
@@ -94,6 +97,38 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.block_header(block_hash).await })
+			}))
+			.await
+	}
+}
+
+#[async_trait::async_trait]
+impl ChainClient for BtcRetryRpcClient {
+	type Index = u64;
+
+	type Hash = BlockHash;
+
+	type Data = ();
+
+	async fn header_at_index(
+		&self,
+		index: Self::Index,
+	) -> Header<Self::Index, Self::Hash, Self::Data> {
+		self.retry_client
+			.request(Box::pin(move |client| {
+				#[allow(clippy::redundant_async_block)]
+				Box::pin(async move {
+					let block_hash = client.block_hash(index).await?;
+					let block_header = client.block_header(block_hash).await?;
+					assert_eq!(block_header.height, index);
+
+					Ok(Header {
+						index,
+						hash: block_hash,
+						parent_hash: block_header.previous_block_hash,
+						data: (),
+					})
+				})
 			}))
 			.await
 	}

@@ -175,6 +175,9 @@ impl ChainClient for DotRetryRpcClient {
 						.ok_or(anyhow::anyhow!("No block found for block hash {block_hash}"))?
 						.block
 						.header;
+
+					assert_eq!(index, header.number);
+
 					let events = client
 						.events(block_hash)
 						.await?
