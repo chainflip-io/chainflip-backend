@@ -1,10 +1,13 @@
 use super::{PeerInfo, PeerUpdate};
-use crate::p2p::OutgoingMultisigStageMessages;
+use crate::p2p::{OutgoingMultisigStageMessages, P2PKey};
 use sp_core::ed25519::Public;
 use state_chain_runtime::AccountId;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, Instrument};
-use utilities::{testing::expect_recv_with_timeout, Port};
+use utilities::{
+	testing::{expect_recv_with_custom_timeout, expect_recv_with_timeout},
+	Port,
+};
 
 fn create_node_info(id: AccountId, node_key: &ed25519_dalek::Keypair, port: Port) -> PeerInfo {
 	use std::net::Ipv4Addr;
@@ -16,6 +19,7 @@ fn create_node_info(id: AccountId, node_key: &ed25519_dalek::Keypair, port: Port
 struct Node {
 	msg_sender: UnboundedSender<OutgoingMultisigStageMessages>,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
+	_own_peer_info_receiver: UnboundedReceiver<PeerInfo>,
 	msg_receiver: UnboundedReceiver<(AccountId, Vec<u8>)>,
 }
 
@@ -26,12 +30,22 @@ fn spawn_node(
 	peer_infos: &[PeerInfo],
 ) -> Node {
 	let account_id = AccountId::new([idx as u8 + 1; 32]);
-	let (msg_sender, peer_update_sender, msg_receiver, _, fut) =
-		super::start(key, our_peer_info.port, peer_infos.to_vec(), account_id);
+
+	// Secret key does not implement clone:
+	let secret = ed25519_dalek::SecretKey::from_bytes(&key.secret.to_bytes()).unwrap();
+
+	let key = P2PKey::new(secret);
+	let (msg_sender, peer_update_sender, msg_receiver, own_peer_info_receiver, fut) =
+		super::start(&key, our_peer_info.port, peer_infos.to_vec(), account_id);
 
 	tokio::spawn(fut.instrument(info_span!("node", idx = idx)));
 
-	Node { msg_sender, peer_update_sender, msg_receiver }
+	Node {
+		msg_sender,
+		peer_update_sender,
+		_own_peer_info_receiver: own_peer_info_receiver,
+		msg_receiver,
+	}
 }
 
 // Create an x25519 keypair along with the corresponding ed25519 public key
@@ -104,4 +118,55 @@ async fn connect_two_nodes() {
 		.unwrap();
 
 	let _ = expect_recv_with_timeout(&mut node2.msg_receiver).await;
+}
+
+#[tokio::test]
+async fn can_connect_after_pubkey_change() {
+	use std::time::Duration;
+
+	const MAX_CONNECTION_DELAY: Duration = Duration::from_millis(200);
+
+	let node_key1 = create_keypair();
+	let node_key2 = create_keypair();
+
+	// TODO: automatically select ports to avoid any potential conflicts
+	// with other tests
+	let pi1 = create_node_info(AccountId::new([1; 32]), &node_key1, 8089);
+	let pi2 = create_node_info(AccountId::new([2; 32]), &node_key2, 8090);
+
+	let mut node1 = spawn_node(&node_key1, 0, pi1.clone(), &[pi1.clone(), pi2.clone()]);
+	let node2 = spawn_node(&node_key2, 1, pi2.clone(), &[pi1.clone(), pi2.clone()]);
+
+	// Check that node 2 can communicate with node 1:
+	node2
+		.msg_sender
+		.send(OutgoingMultisigStageMessages::Private(vec![(
+			pi1.account_id.clone(),
+			b"test".to_vec(),
+		)]))
+		.unwrap();
+
+	let _ = expect_recv_with_custom_timeout(&mut node1.msg_receiver, MAX_CONNECTION_DELAY).await;
+
+	// Node 2 disconnects:
+	drop(node2);
+
+	// Node 2 connects with a different key:
+	let node_key2b = create_keypair();
+	let pi2 = create_node_info(AccountId::new([2; 32]), &node_key2b, 8091);
+	let node2b = spawn_node(&node_key2b, 1, pi2.clone(), &[pi1.clone(), pi2.clone()]);
+
+	// Node 1 learn about Node 2's new key:
+	node1.peer_update_sender.send(PeerUpdate::Registered(pi2.clone())).unwrap();
+
+	// Node 2 should be able to send messages again:
+	node2b
+		.msg_sender
+		.send(OutgoingMultisigStageMessages::Private(vec![(
+			pi1.account_id.clone(),
+			b"test".to_vec(),
+		)]))
+		.unwrap();
+
+	let _ = expect_recv_with_custom_timeout(&mut node1.msg_receiver, MAX_CONNECTION_DELAY).await;
 }

@@ -10,7 +10,7 @@ use tokio::{
 };
 
 use async_trait::async_trait;
-use tracing::{error, info, Instrument};
+use tracing::{error, info, warn, Instrument};
 
 use utilities::task_scope::{task_scope, ScopedJoinHandle};
 
@@ -205,16 +205,24 @@ where
 			Ok(_) = &mut end_witnessing_receiver => {
 				break;
 			},
-			Some(data) = data_stream.next() => {
+			next = data_stream.next() => {
 				// This will be an error if the stream times out. When it does, we return
 				// an error so that we restart the witnesser
-
-				witnesser.do_witness(data.map_err(|e| {
-						error!("Error while getting data for witnesser: {:?}", e);
-					})?,
-					&mut state).await.map_err(|_| {
-					error!("Witnesser failed to process data")
-				})?;
+				if let Some(data) = next {
+					witnesser.do_witness(
+						data.map_err(|e| {
+							error!("Error while getting data for witnesser: {:?}", e);
+						})?,
+						&mut state
+					)
+					.await
+					.map_err(|e| {
+						error!("Witnesser failed to process data: {:?}", e);
+					})?;
+				} else {
+					warn!("No more data on witnesser data stream. Exiting.");
+					return Err(());
+				}
 			},
 		}
 	}

@@ -1,8 +1,9 @@
 use crate as pallet_cf_lp;
+use crate::PalletSafeMode;
 use cf_chains::{AnyChain, Chain, Ethereum};
 use cf_primitives::{chains::assets, AccountId, ChannelId};
 use cf_traits::{
-	impl_mock_chainflip,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
 		egress_handler::MockEgressHandler,
@@ -84,11 +85,13 @@ parameter_types! {
 	pub const NetworkFee: Permill = Permill::from_percent(0);
 }
 
+impl_mock_runtime_safe_mode!(liquidity_provider: PalletSafeMode);
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type DepositHandler = MockDepositHandler<AnyChain, Self>;
 	type EgressHandler = MockEgressHandler<AnyChain>;
 	type AddressConverter = MockAddressConverter;
+	type SafeMode = MockRuntimeSafeMode;
 	type WeightInfo = ();
 }
 

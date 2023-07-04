@@ -34,7 +34,15 @@ spec:
                 rm -rf /etc/chainflip/chaindata/*
           volumeMounts:
             - name: {{ include "chainflip-node.fullname" . }}
-              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
+              mountPath: {{ .Values.basePath }}/chaindata
+        {{- end }}
+        {{- if .Values.downloadChainspec }}
+        - name: s3-downloader
+          image: curlimages/curl:latest
+          command: ["sh", "-c", "curl -L -o {{ .Values.basePath }}/{{ .Values.chainspec }} {{ .Values.chainspecUrl }}"]
+          volumeMounts:
+            - name: chainspec
+              mountPath: {{ .Values.basePath }}
         {{- end }}
       containers:
       {{- if .Values.brokerApi.enabled }}
@@ -56,8 +64,30 @@ spec:
           {{- toYaml .| nindent 12 }}
           {{ end }}
           volumeMounts:
-            - name: keys
-              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/keys
+            - name: broker-keys
+              mountPath: {{ .Values.basePath }}/keys
+        {{ end }}
+      {{- if .Values.lpApi.enabled }}
+        - name: {{ .Chart.Name }}-lp-api
+          image: "{{ .Values.lpApi.image.repository }}:{{ .Values.lpApi.image.tag | default "latest" }}"
+          imagePullPolicy: {{ .Values.lpApi.image.pullPolicy }}
+          command:
+            - /usr/local/bin/chainflip-lp-api
+          args:
+            - --port={{ .Values.lpApi.containerPort | default 10589 }}
+            - --state_chain.signing_key_file={{ .Values.signingKeyFile }}
+            - --state_chain.ws_endpoint={{ .Values.stateChainWsEndpoint }}
+          ports:
+            - name: lp-api
+              containerPort: {{ .Values.lpApi.containerPort | default 10589 }}
+              protocol: TCP
+          {{ with .Values.lpApi.resources }}
+          resources:
+          {{- toYaml .| nindent 12 }}
+          {{ end }}
+          volumeMounts:
+            - name: lp-keys
+              mountPath: {{ .Values.basePath }}/keys
         {{ end }}
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
@@ -65,10 +95,10 @@ spec:
           command:
             - /usr/local/bin/chainflip-node
           args:
-            - --base-path={{ .Values.basePath | default "/etc/chainflip" }}/chaindata
+            - --base-path={{ .Values.basePath }}/chaindata
             - --bootnodes={{ .Values.bootnodes }}
             - --chain=/etc/chainflip/{{ .Values.chainspec }}
-            - --node-key-file={{ .Values.basePath | default "/etc/chainflip" }}/keys/node_key_file
+            - --node-key-file={{ .Values.basePath }}/keys/node_key_file
             - --prometheus-external
             - --state-cache-size=0
             - --validator
@@ -96,18 +126,37 @@ spec:
           {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: {{ include "chainflip-node.fullname" . }}
-              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/chaindata
-            - name: keys
-              mountPath: {{ .Values.basePath | default "/etc/chainflip" }}/keys
+              mountPath: {{ .Values.basePath }}/chaindata
+            - name: node-keys
+              mountPath: {{ .Values.basePath }}/keys
+            {{- if .Values.downloadChainspec }}
+            - name: chainspec
+              mountPath: {{ .Values.basePath }}/{{ .Values.chainspec }}
+              subPath: {{ .Values.chainspec }}
+              readOnly: true
+            {{- end }}
       volumes:
-        - name: keys
+        - name: chainspec
+          emptyDir:
+            {}
+        - name: node-keys
           secret:
             secretName: {{ .Values.secrets.existingOnePasswordSecret }}
             items:
-              - key: signing-key
-                path: signing_key_file
               - key: node-key
                 path: node_key_file
+        - name: broker-keys
+          secret:
+            secretName: {{ .Values.secrets.existingOnePasswordSecret }}
+            items:
+              - key: signing-key-broker
+                path: signing_key_file
+        - name: lp-keys
+          secret:
+            secretName: {{ .Values.secrets.existingOnePasswordSecret }}
+            items:
+              - key: signing-key-lp
+                path: signing_key_file
 
   volumeClaimTemplates:
     - metadata:

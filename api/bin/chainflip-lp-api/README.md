@@ -21,7 +21,7 @@ Then in another terminal:
 ```sh
 > curl -H "Content-Type: application/json" \
     -d '{"id":1, "jsonrpc":"2.0", "method": "lp_registerAccount", "params": [0]}' \
-    http://localhost:10589
+    http://localhost:80
 
 {"jsonrpc":"2.0","result":null,"id":1}
 
@@ -85,6 +85,19 @@ Parameters:
 Return:
 
 - Hex encoded deposit address.
+
+
+### `lp_registerEmergencyWithdrawalAddress`
+
+Parameters:
+- Chain: the forein chain where the address belongs to
+- Address: Address to be used as Emergency Withdrawal Address.
+
+e.g. ["Ethereum", "1594300cbd587694AffD70c933B9eE9155B186d9"]
+
+Return:
+
+- Transaction hash of the successful extrinsic.
 
 ### `lp_withdrawAsset`
 

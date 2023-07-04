@@ -6,7 +6,6 @@ import { getNextEthNonce } from '../shared/fund_eth';
 import { getBalance } from './get_balance';
 
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function executeNativeSwap(destAsset: Asset, destAddress: string) {
 
     const wallet = Wallet.fromMnemonic(

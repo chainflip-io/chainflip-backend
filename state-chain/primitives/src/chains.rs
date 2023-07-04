@@ -1,5 +1,6 @@
 use super::*;
 use frame_support::traits::Get;
+use sp_std::str::FromStr;
 
 pub mod assets;
 
@@ -65,6 +66,19 @@ impl ForeignChain {
 			ForeignChain::Ethereum => assets::any::Asset::Eth,
 			ForeignChain::Polkadot => assets::any::Asset::Dot,
 			ForeignChain::Bitcoin => assets::any::Asset::Btc,
+		}
+	}
+}
+
+impl FromStr for ForeignChain {
+	type Err = &'static str;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		match s.to_lowercase().as_str() {
+			"ethereum" => Ok(ForeignChain::Ethereum),
+			"bitcoin" => Ok(ForeignChain::Bitcoin),
+			"polkadot" => Ok(ForeignChain::Polkadot),
+			_ => Err("Unrecognized Chain"),
 		}
 	}
 }

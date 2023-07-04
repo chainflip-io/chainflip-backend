@@ -18,6 +18,7 @@ serde_json = "1.0"
 # Local Deps
 chainflip-engine = { path = "../../../engine/" }
 chainflip-api = { path = "../../lib" }
+cf-chains = { path = "../../../state-chain/chains" }
 utilities = { path = "../../../utilities" }
 
 [build-dependencies]

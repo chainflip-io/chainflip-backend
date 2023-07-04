@@ -13,7 +13,7 @@ use tracing::{info, info_span, trace, warn};
 
 use super::{socket::DO_NOT_LINGER, PeerInfo};
 
-use super::{to_string, XPublicKey};
+use super::{pk_to_string, XPublicKey};
 
 /// These values are ZMQ convention
 const ZAP_AUTH_SUCCESS: &str = "200";
@@ -42,7 +42,7 @@ impl Authenticator {
 		trace!(
 			"Adding to the list of allowed peers: {} (public key: {})",
 			peer.account_id,
-			to_string(&peer.pubkey)
+			pk_to_string(&peer.pubkey)
 		);
 		self.allowed_pubkeys
 			.write()
@@ -54,7 +54,7 @@ impl Authenticator {
 		if let Some(account_id) = self.allowed_pubkeys.write().unwrap().remove(peer_pubkey) {
 			trace!(
 				"Removed from the list of allowed peers: {account_id} (public key: {})",
-				to_string(peer_pubkey)
+				pk_to_string(peer_pubkey)
 			);
 		}
 	}
@@ -70,7 +70,7 @@ impl Authenticator {
 		} else {
 			warn!(
 				"Declining an incoming connection for an unknown pubkey: {}",
-				to_string(&req.pubkey)
+				pk_to_string(&req.pubkey)
 			);
 			send_auth_response(socket, &req.request_id, ZAP_AUTH_FAILURE, &req.pubkey)
 		}
