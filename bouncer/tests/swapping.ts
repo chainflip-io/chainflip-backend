@@ -52,7 +52,8 @@ async function testAll() {
 
     await Promise.all([nativeContractSwaps, regularSwaps]);
 
-    // NOTE: Doing the CCM swaps separately because of the broadcasting nonce bug.
+    // NOTE: Doing the CCM swaps separately because they have the same dstAddress and that can cause issues
+    // with observing the SwapDepositAddressReady event and with observeBalanceIncrease.
     await Promise.all([
         testSwap('BTC', 'ETH', undefined, {
             message: new Web3().eth.abi.encodeParameter("string", "BTC to ETH w/ CCM!!"),
