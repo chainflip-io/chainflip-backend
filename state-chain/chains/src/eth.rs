@@ -646,7 +646,11 @@ impl DepositAddress for EthereumDepositAddress {
 	where
 		Self: Sized,
 	{
-		true
+		if self.deployment_status == DeploymentStatus::Deployed {
+			true
+		} else {
+			false
+		}
 	}
 
 	fn finalize(mut self) -> Self
