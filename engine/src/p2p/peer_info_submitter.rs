@@ -19,8 +19,10 @@ use crate::{
 	},
 };
 
+use super::P2PKey;
+
 async fn update_registered_peer_id<StateChainClient>(
-	node_key: &ed25519_dalek::Keypair,
+	p2p_key: &P2PKey,
 	state_chain_client: &Arc<StateChainClient>,
 	previous_registered_peer_info: &Option<PeerInfo>,
 	ip_address: Ipv6Addr,
@@ -39,15 +41,15 @@ async fn update_registered_peer_id<StateChainClient>(
 	};
 
 	info!(
-		"Registering node's ip address, and port number [{ip_address}]:{cfe_port}. {extra_info}.",
-	);
+		"Registering node's peer info. Address: [{ip_address}]:{cfe_port}, x25519 public key: {}. {extra_info}.",
+	super::pk_to_string(&p2p_key.encryption_key.public_key));
 
-	let peer_id = sp_core::ed25519::Public(node_key.public.to_bytes());
+	let peer_id = sp_core::ed25519::Public(p2p_key.signing_key.public.to_bytes());
 
 	let signature = {
 		use ed25519_dalek::Signer;
 		let payload = &state_chain_client.account_id().encode();
-		node_key.sign(payload)
+		p2p_key.signing_key.sign(payload)
 	};
 
 	state_chain_client
@@ -61,8 +63,8 @@ async fn update_registered_peer_id<StateChainClient>(
 		.await;
 }
 
-pub async fn start<StateChainClient>(
-	node_key: ed25519_dalek::Keypair,
+pub(super) async fn start<StateChainClient>(
+	p2p_key: P2PKey,
 	state_chain_client: Arc<StateChainClient>,
 	ip_address: IpAddr,
 	cfe_port: Port,
@@ -77,6 +79,8 @@ where
 		IpAddr::V6(ipv6) => ipv6,
 	};
 
+	let public_encryption_key = &p2p_key.encryption_key.public_key;
+
 	let mut update_interval = make_periodic_tick(Duration::from_secs(60), true);
 
 	// Periodically try to update our address on chain until we receive
@@ -87,12 +91,12 @@ where
 				previous_registered_peer_info = Some(own_info);
 			}
 			_ = update_interval.tick() => {
-				if Some((ip_address, cfe_port)) != previous_registered_peer_info
+				if Some((ip_address, cfe_port, public_encryption_key)) != previous_registered_peer_info
 					.as_ref()
-					.map(|pi| (pi.ip, pi.port))
+					.map(|pi| (pi.ip, pi.port, &pi.pubkey))
 				{
 					update_registered_peer_id(
-						&node_key,
+						&p2p_key,
 						&state_chain_client,
 						&previous_registered_peer_info,
 						ip_address,
