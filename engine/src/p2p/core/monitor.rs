@@ -37,6 +37,7 @@ pub struct MonitorHandle {
 	socket: zmq::Socket,
 }
 
+#[derive(Debug)]
 pub enum MonitorEvent {
 	ConnectionSuccess(AccountId),
 	ConnectionFailure(AccountId),
