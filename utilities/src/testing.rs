@@ -36,14 +36,29 @@ pub fn new_temp_directory_with_nonexistent_file() -> (TempDir, PathBuf) {
 }
 
 pub async fn recv_with_timeout<I>(receiver: &mut UnboundedReceiver<I>) -> Option<I> {
-	tokio::time::timeout(CHANNEL_TIMEOUT, receiver.recv()).await.ok()?
+	recv_with_custom_timeout(receiver, CHANNEL_TIMEOUT).await
+}
+
+pub async fn recv_with_custom_timeout<I>(
+	receiver: &mut UnboundedReceiver<I>,
+	timeout: std::time::Duration,
+) -> Option<I> {
+	tokio::time::timeout(timeout, receiver.recv()).await.ok()?
 }
 
 #[track_caller]
 pub async fn expect_recv_with_timeout<Item: std::fmt::Debug>(
 	receiver: &mut UnboundedReceiver<Item>,
 ) -> Item {
-	match recv_with_timeout(receiver).await {
+	expect_recv_with_custom_timeout(receiver, CHANNEL_TIMEOUT).await
+}
+
+#[track_caller]
+pub async fn expect_recv_with_custom_timeout<Item: std::fmt::Debug>(
+	receiver: &mut UnboundedReceiver<Item>,
+	timeout: std::time::Duration,
+) -> Item {
+	match recv_with_custom_timeout(receiver, timeout).await {
 		Some(i) => i,
 		None => panic!("Timeout waiting for message, expected {}", std::any::type_name::<Item>()),
 	}
