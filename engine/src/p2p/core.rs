@@ -401,7 +401,7 @@ impl P2PContext {
 	}
 
 	fn reconnect_to_peer(&mut self, account_id: &AccountId) {
-		if let Some(peer_info) = self.peer_infos.get(&account_id) {
+		if let Some(peer_info) = self.peer_infos.get(account_id) {
 			info!("Reconnecting to peer: {}", peer_info.account_id);
 			self.connect_to_peer(peer_info.clone());
 		} else {
