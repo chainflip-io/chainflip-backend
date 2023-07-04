@@ -2,10 +2,9 @@ use ethers::{prelude::*, signers::Signer, types::transaction::eip2718::TypedTran
 
 use crate::settings;
 use anyhow::{anyhow, Ok, Result};
-use std::{str::FromStr, sync::Arc, pin::Pin, time::Instant};
+use std::{str::FromStr, sync::Arc, time::Instant};
 use tokio::sync::Mutex;
 
-use futures::Stream;
 use utilities::read_clean_and_decode_hex_str_file;
 
 #[cfg(test)]
