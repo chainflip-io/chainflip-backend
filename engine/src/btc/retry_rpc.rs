@@ -5,6 +5,7 @@ use crate::{
 	rpc_retrier::RpcRetrierClient,
 	witness::chain_source::{ChainClient, Header},
 };
+use cf_chains::Bitcoin;
 use core::time::Duration;
 
 use super::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient};
@@ -98,10 +99,8 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 
 #[async_trait::async_trait]
 impl ChainClient for BtcRetryRpcClient {
-	type Index = u64;
-
+	type Index = <Bitcoin as cf_chains::Chain>::ChainBlockNumber;
 	type Hash = BlockHash;
-
 	type Data = ();
 
 	async fn header_at_index(

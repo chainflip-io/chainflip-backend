@@ -2,7 +2,10 @@ use crate::{
 	dot::PolkadotConfig,
 	witness::chain_source::{ChainClient, Header},
 };
-use cf_chains::dot::{PolkadotHash, RuntimeVersion};
+use cf_chains::{
+	dot::{PolkadotHash, RuntimeVersion},
+	Polkadot,
+};
 use cf_primitives::PolkadotBlockNumber;
 use core::time::Duration;
 use futures_core::Stream;
@@ -153,7 +156,7 @@ impl DotRetrySubscribeApi for DotRetryRpcClient {
 
 #[async_trait::async_trait]
 impl ChainClient for DotRetryRpcClient {
-	type Index = PolkadotBlockNumber;
+	type Index = <Polkadot as cf_chains::Chain>::ChainBlockNumber;
 	type Hash = PolkadotHash;
 	type Data = Events<PolkadotConfig>;
 

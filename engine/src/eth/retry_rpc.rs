@@ -14,6 +14,7 @@ use super::{
 	ConscientiousEthWebsocketBlockHeaderStream,
 };
 use crate::eth::ethers_rpc::ReconnectSubscribeApi;
+use cf_chains::Ethereum;
 
 pub struct EthersRetryRpcClient<T: JsonRpcClient> {
 	rpc_retry_client: RpcRetrierClient<EthersRpcClient<T>>,
@@ -178,7 +179,7 @@ impl<T: JsonRpcClient + Clone> EthersRetrySubscribeApi for EthersRetryRpcClient<
 
 #[async_trait::async_trait]
 impl<T: JsonRpcClient + Clone + Send + Sync + 'static> ChainClient for EthersRetryRpcClient<T> {
-	type Index = u64;
+	type Index = <Ethereum as cf_chains::Chain>::ChainBlockNumber;
 
 	type Hash = H256;
 
