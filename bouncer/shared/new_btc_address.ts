@@ -1,12 +1,12 @@
 import Module from "node:module";
 
-const require = Module.createRequire(import.meta.url);
-
 import { ECPairFactory } from 'ecpair';
 import bitcoin from 'bitcoinjs-lib';
 import axios from 'axios';
-import { sha256 } from '../shared/utils';
 import { Mutex } from "async-mutex";
+import { sha256 } from '../shared/utils';
+
+const require = Module.createRequire(import.meta.url);
 
 const btcWalletMutex = new Mutex();
 

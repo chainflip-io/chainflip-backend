@@ -35,6 +35,7 @@ pub trait WeightInfo {
 	fn register_lp_account() -> Weight;
 	fn on_initialize(a: u32, ) -> Weight;
 	fn set_lp_ttl() -> Weight;
+	fn register_emergency_withdrawal_address() -> Weight;
 }
 
 /// Weights for pallet_cf_lp using the Substrate node and recommended hardware.
@@ -97,6 +98,9 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 		Weight::from_ref_time(14_000_000)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
+	fn register_emergency_withdrawal_address() -> Weight {
+		Weight::from_ref_time(1_000_000)
+	}
 }
 
 // For backwards compatibility and tests
@@ -157,5 +161,8 @@ impl WeightInfo for () {
 		// Minimum execution time: 13_000 nanoseconds.
 		Weight::from_ref_time(14_000_000)
 			.saturating_add(RocksDbWeight::get().writes(1))
+	}
+	fn register_emergency_withdrawal_address() -> Weight {
+		Weight::from_ref_time(1_000_000)
 	}
 }
