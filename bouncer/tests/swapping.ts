@@ -2,11 +2,10 @@
 import { randomAsHex } from "@polkadot/util-crypto";
 import { Asset } from "@chainflip-io/cli/.";
 import { performSwap } from "../shared/perform_swap";
-import { getAddress, runWithTimeout } from "../shared/utils";
+import { getAddress, runWithTimeout, chainFromAsset, getEthContractAddress } from "../shared/utils";
 import { BtcAddressType } from "../shared/new_btc_address";
 import { CcmDepositMetadata, ForeignChainAddress } from "../shared/new_swap";
 import { randomAsNumber } from "@polkadot/util-crypto";
-import { chainFromAsset, getEthContractAddress } from "../shared/utils";
 import Web3 from 'web3';
 
 let swapCount = 1;

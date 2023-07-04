@@ -4,6 +4,7 @@ import { cryptoWaitReady } from "@polkadot/util-crypto";
 import { Mutex } from "async-mutex";
 import { Asset } from "@chainflip-io/cli/.";
 import { getChainflipApi } from "./utils";
+import { getAddress } from "../shared/utils";
 
 const mutex = new Mutex();
 

@@ -4,7 +4,7 @@ import Module from "node:module";
 
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
-import { Chain, Asset, assetChains, getTokenContractAddress } from '@chainflip-io/cli';
+import { Chain, Asset, assetChains } from '@chainflip-io/cli';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';

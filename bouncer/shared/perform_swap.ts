@@ -76,22 +76,17 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
 
     const ccmEventEmitted = messageMetadata
     ? observeCcmReceived(sourceToken, destToken, ADDRESS, messageMetadata)
-    : undefined;
+    : Promise.resolve();
 
     await fund(sourceToken, swapAddress.toLowerCase())
     console.log(`${tag} Funded the address`);
 
     await swapExecutedHandle;
-
-    if (ccmEventEmitted) {
-        console.log(`${tag} Waiting for balance to update`);
-        await ccmEventEmitted;
-    }
-   
+  
     console.log(`${tag} Waiting for balance to update`);
 
     try {
-        const newBalance = await observeBalanceIncrease(destToken, ADDRESS, OLD_BALANCE);
+        const [newBalance,] = await Promise.all([observeBalanceIncrease(destToken, ADDRESS, OLD_BALANCE), ccmEventEmitted]);
 
         console.log(`${tag} Swap success! New balance: ${newBalance}!`);
     }
