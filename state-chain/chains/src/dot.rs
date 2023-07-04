@@ -232,7 +232,7 @@ pub struct PolkadotDepositAddress {
 	pub deposit_fetch_id: PolkadotChannelId,
 }
 
-impl DepositAddress for PolkadotDepositAddress {
+impl DepositChannel for PolkadotDepositAddress {
 	type Address = PolkadotAccountId;
 	type DepositFetchId = PolkadotChannelId;
 

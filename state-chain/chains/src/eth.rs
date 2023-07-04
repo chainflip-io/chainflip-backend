@@ -607,7 +607,7 @@ pub struct EthereumDepositAddress {
 	pub deposit_fetch_id: EthereumChannelId,
 }
 
-impl DepositAddress for EthereumDepositAddress {
+impl DepositChannel for EthereumDepositAddress {
 	type Address = H160;
 	type DepositFetchId = EthereumChannelId;
 

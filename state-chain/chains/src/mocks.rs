@@ -15,7 +15,7 @@ pub type MockEthereumChannelId = u128;
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub struct MockDepositAddress;
 
-impl DepositAddress for MockDepositAddress {
+impl DepositChannel for MockDepositAddress {
 	type Address = u64;
 	type DepositFetchId = u128;
 

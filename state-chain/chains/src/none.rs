@@ -7,7 +7,7 @@ pub enum NoneChain {}
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub struct NoneChainDepositAddress;
 
-impl DepositAddress for NoneChainDepositAddress {
+impl DepositChannel for NoneChainDepositAddress {
 	type Address = ForeignChainAddress;
 	type DepositFetchId = ();
 

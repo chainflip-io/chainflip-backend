@@ -4,11 +4,12 @@ pub mod deposit_address;
 pub mod utxo_selection;
 
 extern crate alloc;
-use crate::DepositAddress as DepositAddressTrait;
 use core::mem::size_of;
 
 use self::deposit_address::DepositAddress;
-use crate::{Age, Chain, ChainAbi, ChainCrypto, ChannelIdConstructor, FeeRefundCalculator};
+use crate::{
+	Age, Chain, ChainAbi, ChainCrypto, ChannelIdConstructor, DepositChannel, FeeRefundCalculator,
+};
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use base58::{FromBase58, ToBase58};
@@ -146,15 +147,13 @@ pub struct EpochStartData {
 	pub change_pubkey: AggKey,
 }
 
-// TODO: To make this work ScriptPubkey needs to implement copy - currently this is not possible
-// 🤷‍♂️.
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
 pub struct BitcoinDepositAddress {
 	pub address: ScriptPubkey,
 	pub deposit_fetch_id: BitcoinFetchId,
 }
 
-impl DepositAddressTrait for BitcoinDepositAddress {
+impl DepositChannel for BitcoinDepositAddress {
 	type Address = ScriptPubkey;
 	type DepositFetchId = BitcoinFetchId;
 

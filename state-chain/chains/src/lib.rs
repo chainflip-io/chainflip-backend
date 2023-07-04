@@ -108,7 +108,7 @@ pub trait Chain: Member + Parameter {
 
 	type DepositAddress: Member
 		+ Parameter
-		+ DepositAddress<Address = Self::ChainAccount, DepositFetchId = Self::DepositFetchId>;
+		+ DepositChannel<Address = Self::ChainAccount, DepositFetchId = Self::DepositFetchId>;
 }
 
 /// Measures the age of items associated with the Chain.
@@ -331,37 +331,9 @@ pub struct CcmDepositMetadata {
 	pub source_address: ForeignChainAddress,
 }
 
-// pub trait DepositAddress {
-// 	type FetchParams;
-// 	type Address;
-
-// 	/// Called at the end when we want to recycle a deposit address.
-// 	fn maybe_recycle(self) -> Option<Self>
-// 	where
-// 		Self: Sized,
-// 	{
-// 		None
-// 	}
-
-// 	fn get_address(&self) -> Self::Address;
-
-// 	fn construct_api_call() {}
-
-// 	/// Called when the first threshold has succeeded.
-// 	fn fetch_params() -> Self::FetchParams;
-
-// 	/// Called when we check for the address status.
-// 	fn skip_fetch(self) -> bool
-// 	where
-// 		Self: Sized,
-// 	{
-// 		false
-// 	}
-// }
-
 /// Deposit address trait. This traits defines the interface for chain specific aspects of deposit
 /// address management.
-pub trait DepositAddress {
+pub trait DepositChannel {
 	type Address;
 	type DepositFetchId;
 

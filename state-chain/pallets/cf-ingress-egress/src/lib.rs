@@ -10,7 +10,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 pub mod weights;
-use cf_chains::DepositAddress;
+use cf_chains::DepositChannel;
 pub use weights::WeightInfo;
 
 use cf_primitives::{BasisPoints, EgressCounter, EgressId, ForeignChain};
