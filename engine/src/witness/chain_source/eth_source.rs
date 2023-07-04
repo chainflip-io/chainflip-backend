@@ -28,9 +28,7 @@ const RESTART_STREAM_DELAY: Duration = Duration::from_secs(6);
 #[async_trait::async_trait]
 impl<C> ChainSourceWithClient for EthSource<C>
 where
-	C: EthersRetrySubscribeApi
-		+ ChainClient<Index = u64, Hash = H256, Data = ()>
-		+ Clone
+	C: EthersRetrySubscribeApi + ChainClient<Index = u64, Hash = H256, Data = ()> + Clone,
 {
 	type Index = <C as ChainClient>::Index;
 	type Hash = <C as ChainClient>::Hash;
