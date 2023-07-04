@@ -272,7 +272,7 @@ pub mod pallet {
 	/// The epoch whose authorities control the current vault key.
 	#[pallet::storage]
 	#[pallet::getter(fn current_keyholders_epoch)]
-	pub type CurrentVaultEpochAndState<T: Config<I>, I: 'static = ()> =
+	pub type ActiveVaultEpochAndState<T: Config<I>, I: 'static = ()> =
 		StorageValue<_, VaultEpochAndState>;
 
 	/// Vault rotation statuses for the current epoch rotation.
@@ -792,7 +792,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			current_vault_and_state.epoch_index,
 			Vault { public_key: new_public_key, active_from_block },
 		);
-		CurrentVaultEpochAndState::<T, I>::put(current_vault_and_state);
+		ActiveVaultEpochAndState::<T, I>::put(current_vault_and_state);
 	}
 
 	// Once we've successfully generated the key, we want to do a signing ceremony to verify that
@@ -855,10 +855,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
 	fn active_epoch_key() -> Option<EpochKey<<T::Chain as ChainCrypto>::AggKey>> {
-		CurrentVaultEpochAndState::<T, I>::get().map(|current_vault_epoch_and_state| {
+		ActiveVaultEpochAndState::<T, I>::get().map(|current_vault_epoch_and_state| {
 			EpochKey {
 				key: Vaults::<T, I>::get(current_vault_epoch_and_state.epoch_index)
-					.expect("Key must exist if CurrentVaultEpochAndState exists since they get set at the same place: set_next_vault()").public_key,
+					.expect("Key must exist if ActiveVaultEpochAndState exists since they get set at the same place: set_next_vault()").public_key,
 				epoch_index: current_vault_epoch_and_state.epoch_index,
 				key_state: current_vault_epoch_and_state.key_state,
 			}
@@ -887,13 +887,13 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 
 		// Unlock the key that was used to authorise the activation.
 		// TODO: use broadcast callbacks for this.
-		CurrentVaultEpochAndState::<T, I>::try_mutate(|state: &mut Option<VaultEpochAndState>| {
+		ActiveVaultEpochAndState::<T, I>::try_mutate(|state: &mut Option<VaultEpochAndState>| {
 			state
 				.as_mut()
 				.map(|VaultEpochAndState { key_state, .. }| key_state.unlock())
 				.ok_or(())
 		})
-		.expect("CurrentVaultEpochAndState must exist for the locked key, otherwise we couldn't have signed.");
+		.expect("ActiveVaultEpochAndState must exist for the locked key, otherwise we couldn't have signed.");
 
 		Self::activate_new_key(new_public_key, block_number);
 

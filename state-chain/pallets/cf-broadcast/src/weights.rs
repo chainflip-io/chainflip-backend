@@ -81,7 +81,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(5))
 	}
 	// Storage: EthereumBroadcaster ThresholdSignatureData (r:1 w:0)
-	// Storage: EthereumVault CurrentVaultEpochAndState (r:1 w:0)
+	// Storage: EthereumVault ActiveVaultEpochAndState (r:1 w:0)
 	// Storage: EthereumVault Vaults (r:1 w:0)
 	// Storage: EthereumBroadcaster BroadcastAttemptCount (r:1 w:1)
 	// Storage: EthereumChainTracking CurrentChainState (r:1 w:0)
@@ -154,7 +154,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(5))
 	}
 	// Storage: EthereumBroadcaster ThresholdSignatureData (r:1 w:0)
-	// Storage: EthereumVault CurrentVaultEpochAndState (r:1 w:0)
+	// Storage: EthereumVault ActiveVaultEpochAndState (r:1 w:0)
 	// Storage: EthereumVault Vaults (r:1 w:0)
 	// Storage: EthereumBroadcaster BroadcastAttemptCount (r:1 w:1)
 	// Storage: EthereumChainTracking CurrentChainState (r:1 w:0)
