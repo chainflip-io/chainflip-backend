@@ -7,6 +7,7 @@ use cf_primitives::PolkadotBlockNumber;
 use futures::{Stream, StreamExt, TryStreamExt};
 use std::sync::Arc;
 use subxt::{
+	error::BlockError,
 	events::{Events, EventsClient},
 	rpc::types::{Bytes, ChainBlockExtrinsic, ChainBlockResponse},
 	rpc_params, Config, OnlineClient, PolkadotConfig,
@@ -160,8 +161,7 @@ impl DotRpcApi for DotRpcClient {
 		match EventsClient::new(client.clone()).at(Some(block_hash)).await {
 			Ok(events) => Ok(Some(events)),
 			Err(e) => match e {
-				// If the block hash is not found, we want to return None.
-				subxt::Error::Block(_) => Ok(None),
+				subxt::Error::Block(BlockError::BlockHashNotFound(_)) => Ok(None),
 				_ => Err(e.into()),
 			},
 		}
