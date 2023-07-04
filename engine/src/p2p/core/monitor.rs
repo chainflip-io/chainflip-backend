@@ -59,7 +59,12 @@ impl MonitorHandle {
 		// These are the only events we are interested in
 		let flags = zmq::SocketEvent::HANDSHAKE_FAILED_AUTH.to_raw() |
 			zmq::SocketEvent::MONITOR_STOPPED.to_raw() |
-			zmq::SocketEvent::HANDSHAKE_SUCCEEDED.to_raw();
+			zmq::SocketEvent::HANDSHAKE_SUCCEEDED.to_raw() |
+			zmq::SocketEvent::HANDSHAKE_FAILED_PROTOCOL.to_raw() |
+			zmq::SocketEvent::HANDSHAKE_FAILED_NO_DETAIL.to_raw() |
+			zmq::SocketEvent::CONNECTED.to_raw() |
+			zmq::SocketEvent::DISCONNECTED.to_raw() |
+			zmq::SocketEvent::CONNECT_RETRIED.to_raw();
 
 		// This makes ZMQ publish socket events
 		socket_to_monitor.enable_socket_events(&monitor_endpoint, flags);
@@ -157,16 +162,17 @@ pub fn start_monitoring_thread(
 					SocketType::PeerMonitor(account_id) => {
 						// We are only interested in the event id (the first two bytes of the first
 						// message)
-						let event_id = u16::from_le_bytes(message[0][0..2].try_into().unwrap());
-						match zmq::SocketEvent::from_raw(event_id) {
-							zmq::SocketEvent::HANDSHAKE_FAILED_AUTH => {
-								warn!("Socket event: handshake failed with {account_id}");
-								monitor_event_sender
-									.send(MonitorEvent::ConnectionFailure(account_id.clone()))
-									.unwrap();
-							},
-							zmq::SocketEvent::HANDSHAKE_FAILED_NO_DETAIL => {
-								warn!("Socket event: authentication failed with {account_id}");
+						let event = zmq::SocketEvent::from_raw(u16::from_le_bytes(
+							message[0][0..2].try_into().unwrap(),
+						));
+						let data: [u8; 4] = message[0][2..6].try_into().unwrap();
+						match event {
+							zmq::SocketEvent::HANDSHAKE_FAILED_AUTH |
+							zmq::SocketEvent::HANDSHAKE_FAILED_NO_DETAIL |
+							zmq::SocketEvent::HANDSHAKE_FAILED_PROTOCOL => {
+								warn!(
+									"Socket event: handshake failed with {account_id} ({event:?})"
+								);
 								monitor_event_sender
 									.send(MonitorEvent::ConnectionFailure(account_id.clone()))
 									.unwrap();
@@ -194,9 +200,21 @@ pub fn start_monitoring_thread(
 									.send(MonitorEvent::ConnectionSuccess(account_id.clone()))
 									.unwrap();
 							},
-							unknown_event => panic!(
-								"P2P AUTH MONITOR: unexpected socket event: {unknown_event:?}",
-							),
+							zmq::SocketEvent::CONNECT_RETRIED => {
+								let interval = u32::from_le_bytes(data);
+								trace!("Socket event: retried connecting to {account_id} after {interval}ms");
+							},
+							zmq::SocketEvent::CONNECTED => {
+								trace!("Socket event: connected to {account_id}");
+							},
+							zmq::SocketEvent::DISCONNECTED => {
+								trace!("Socket event: disconnected from {account_id}");
+							},
+							unknown_event => {
+								panic!(
+									"P2P AUTH MONITOR: unexpected socket event: {unknown_event:?}",
+								)
+							},
 						}
 					},
 				}
