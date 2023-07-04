@@ -112,7 +112,7 @@ impl DotRpcApi for DotRpcClient {
 		&self,
 		block_hash: PolkadotHash,
 	) -> Result<Option<ChainBlockResponse<PolkadotConfig>>> {
-		Ok(self.online_client.read().await.rpc().block(Some(block_hash)).await?)
+		refresh_connection_on_error!(self, rpc, block, Some(block_hash))
 	}
 
 	async fn current_runtime_version(&self) -> Result<RuntimeVersion> {
