@@ -141,6 +141,8 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				}) {
 				let (_, threshold_request_id) =
 					T::Broadcaster::threshold_sign_and_broadcast(rotation_call);
+				// Optimistic activation means we don't need to wait for the activation
+				// transaction to succeed before using the new key.
 				if <T::Chain as Chain>::OptimisticActivation::get() {
 					Self::set_next_vault(new_public_key, T::ChainTracking::get_block_height());
 					Pallet::<T, I>::deposit_event(Event::VaultRotationCompleted);
