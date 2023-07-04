@@ -6,9 +6,10 @@ use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, Chainflip, CurrentEpochIndex,
-	EpochKey, KeyProvider, KeyState, SafeMode, SetSafeMode, Slashing, ThresholdSigner,
-	VaultKeyWitnessedHandler, VaultRotator, VaultStatus, VaultTransitionHandler,
+	offence_reporting::OffenceReporter, AccountRoleRegistry, AsyncResult, Broadcaster, Chainflip,
+	CurrentEpochIndex, EpochKey, GetBlockHeight, KeyProvider, KeyState, SafeMode, SetSafeMode,
+	Slashing, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus,
+	VaultTransitionHandler,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
@@ -121,8 +122,6 @@ pub struct VaultEpochAndState {
 
 #[frame_support::pallet]
 pub mod pallet {
-
-	use cf_traits::{AccountRoleRegistry, GetBlockHeight, ThresholdSigner, VaultTransitionHandler};
 	use sp_runtime::Percent;
 
 	use super::*;
@@ -846,6 +845,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		Self::deposit_event(event);
 	}
+
+	fn activate_new_key(new_agg_key: AggKeyFor<T, I>, block_number: ChainBlockNumberFor<T, I>) {
+		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete);
+		Self::set_next_vault(new_agg_key, block_number);
+		Self::deposit_event(Event::VaultRotationCompleted);
+	}
 }
 
 impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
@@ -880,8 +885,6 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 			Error::<T, I>::InvalidRotationStatus
 		);
 
-		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete);
-
 		// Unlock the key that was used to authorise the activation.
 		// TODO: use broadcast callbacks for this.
 		CurrentVaultEpochAndState::<T, I>::try_mutate(|state: &mut Option<VaultEpochAndState>| {
@@ -892,9 +895,7 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 		})
 		.expect("CurrentVaultEpochAndState must exist for the locked key, otherwise we couldn't have signed.");
 
-		Self::set_next_vault(new_public_key, block_number);
-
-		Pallet::<T, I>::deposit_event(Event::VaultRotationCompleted);
+		Self::activate_new_key(new_public_key, block_number);
 
 		Ok(().into())
 	}

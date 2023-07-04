@@ -144,9 +144,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				// Optimistic activation means we don't need to wait for the activation
 				// transaction to succeed before using the new key.
 				if <T::Chain as Chain>::OptimisticActivation::get() {
-					Self::set_next_vault(new_public_key, T::ChainTracking::get_block_height());
-					Pallet::<T, I>::deposit_event(Event::VaultRotationCompleted);
-					PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete);
+					Self::activate_new_key(new_public_key, T::ChainTracking::get_block_height());
 				} else {
 					debug_assert!(
 						matches!(key_state, KeyState::Unlocked),
