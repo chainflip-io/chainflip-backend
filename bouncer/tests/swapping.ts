@@ -4,6 +4,7 @@ import { Asset } from "@chainflip-io/cli/.";
 import { performSwap } from "../shared/perform_swap";
 import { getAddress, runWithTimeout } from "../shared/utils";
 import { BtcAddressType } from "../shared/new_btc_address";
+import { performNativeSwap } from "../shared/native_swap";
 
 let swapCount = 1;
 
@@ -20,16 +21,24 @@ async function testSwap(sourceToken: Asset, destToken: Asset, addressType?: BtcA
 
 async function testAll() {
 
-    await Promise.all([
-        testSwap('DOT', 'BTC', 'P2PKH'),
-        testSwap('ETH', 'BTC', 'P2SH'),
-        testSwap('USDC', 'BTC', 'P2WPKH'),
-        testSwap('DOT', 'BTC', 'P2WSH'),
-        testSwap('BTC', 'DOT'),
-        testSwap('DOT', 'USDC'),
-        testSwap('BTC', 'ETH'),
-    ])
+    const nativeContractSwaps = Promise.all([
+        performNativeSwap('DOT'),
+        performNativeSwap('USDC'),
+        performNativeSwap('BTC'),
+    ]);
 
+    const regularSwaps =
+        Promise.all([
+            testSwap('DOT', 'BTC', 'P2PKH'),
+            testSwap('ETH', 'BTC', 'P2SH'),
+            testSwap('USDC', 'BTC', 'P2WPKH'),
+            testSwap('DOT', 'BTC', 'P2WSH'),
+            testSwap('BTC', 'DOT'),
+            testSwap('DOT', 'USDC'),
+            testSwap('BTC', 'ETH'),
+        ])
+
+    await Promise.all([nativeContractSwaps, regularSwaps]);
 }
 
 runWithTimeout(testAll(), 1800000).then(() => {
