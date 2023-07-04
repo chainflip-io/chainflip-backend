@@ -31,8 +31,6 @@ where
 	C: EthersRetrySubscribeApi
 		+ ChainClient<Index = u64, Hash = H256, Data = ()>
 		+ Clone
-		+ Send
-		+ Sync,
 {
 	type Index = <C as ChainClient>::Index;
 	type Hash = <C as ChainClient>::Hash;
