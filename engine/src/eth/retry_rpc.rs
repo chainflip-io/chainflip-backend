@@ -193,17 +193,17 @@ impl<T: JsonRpcClient + Clone + Send + Sync + 'static> ChainClient for EthersRet
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move {
 					let block = client.block(index.into()).await?;
-					if block.number.is_none() || block.hash.is_none() {
+					let (Some(block_number), Some(block_hash)) = (block.number, block.hash) else {
 						return Err(anyhow::anyhow!(
 							"Block number or hash is none for block number: {}",
 							index
 						))
-					}
+					};
 
-					assert_eq!(block.number.unwrap().as_u64(), index);
+					assert_eq!(block_number.as_u64(), index);
 					Ok(Header {
 						index,
-						hash: block.hash.unwrap(),
+						hash: block_hash,
 						parent_hash: Some(block.parent_hash),
 						data: (),
 					})
