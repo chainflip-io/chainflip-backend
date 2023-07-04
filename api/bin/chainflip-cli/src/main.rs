@@ -13,6 +13,7 @@ use api::{
 	primitives::{AccountRole, Asset, Hash, RedemptionAmount},
 	AccountId32, KeyPair,
 };
+use cf_chains::ForeignChain;
 use chainflip_api as api;
 use utilities::clean_eth_address;
 
@@ -57,6 +58,10 @@ async fn run_cli() -> Result<()> {
 		LiquidityProvider(LiquidityProviderSubcommands::RequestLiquidityDepositAddress {
 			asset,
 		}) => request_liquidity_deposit_address(&cli_settings.state_chain, asset).await,
+		LiquidityProvider(LiquidityProviderSubcommands::RegisterEmergencyWithdrawalAddress {
+			chain,
+			address,
+		}) => register_emergency_withdrawal_address(&cli_settings.state_chain, chain, address).await,
 		Redeem { amount, eth_address } =>
 			request_redemption(amount, &eth_address, &cli_settings).await,
 		RegisterAccountRole { role } => register_account_role(role, &cli_settings).await,
@@ -88,6 +93,18 @@ pub async fn request_swap_deposit_address(
 	.await?;
 	println!("Deposit Address: {address}");
 	println!("Address expires at block {expiry_block}");
+	Ok(())
+}
+
+pub async fn register_emergency_withdrawal_address(
+	state_chain_settings: &settings::StateChain,
+	chain: ForeignChain,
+	address: String,
+) -> Result<()> {
+	let ewa_address = chainflip_api::clean_foreign_chain_address(chain, &address)?;
+	let tx_hash =
+		api::lp::register_emergency_withdrawal_address(state_chain_settings, ewa_address).await?;
+	println!("Emergency Withdrawal Address registered. Tx hash: {tx_hash}");
 	Ok(())
 }
 

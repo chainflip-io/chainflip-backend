@@ -1190,6 +1190,7 @@ name = "chainflip-cli"
 version = "0.8.6"
 dependencies = [
  "anyhow",
+ "cf-chains",
  "chainflip-api",
  "chainflip-engine",
  "clap 3.2.25",

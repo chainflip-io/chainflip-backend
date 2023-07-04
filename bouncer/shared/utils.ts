@@ -102,3 +102,12 @@ export async function observeBalanceIncrease(dstCcy: string, address: string, ol
 
   return Promise.reject(new Error("Failed to observe balance increase"));
 }
+
+// Converts s hex string into a bytes array. Support hex strings start with and without 0x
+export function hexStringToBytesArray(hex: string) {
+  return Array.from(Buffer.from(hex.replace(/^0x/, ''), 'hex'));
+};
+
+export function asciiStringToBytesArray(str: string) {
+  return Array.from(Buffer.from(str.replace(/^0x/, '')));
+}
