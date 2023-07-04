@@ -281,10 +281,6 @@ pub mod pallet {
 		/// A signature accepted event on the target chain has been witnessed and the callback was
 		/// executed.
 		BroadcastCallbackExecuted { broadcast_id: BroadcastId, result: DispatchResult },
-
-		/// Some rotations are completed when the broadcast is completed. These have a separate
-		/// rotation callback.
-		RotationCallbackExecuted { broadcast_id: BroadcastId, result: DispatchResult },
 	}
 
 	#[pallet::error]
