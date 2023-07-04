@@ -1,14 +1,13 @@
 
-import { randomAsHex } from "@polkadot/util-crypto";
+import { randomAsHex , randomAsNumber } from "@polkadot/util-crypto";
 import { Asset } from "@chainflip-io/cli/.";
+import Web3 from 'web3';
+import { Keyring } from "@polkadot/api";
+import { u8aToHex } from "@polkadot/util";
 import { performSwap } from "../shared/perform_swap";
 import { getAddress, runWithTimeout, chainFromAsset, getEthContractAddress } from "../shared/utils";
 import { BtcAddressType } from "../shared/new_btc_address";
 import { CcmDepositMetadata } from "../shared/new_swap";
-import { randomAsNumber } from "@polkadot/util-crypto";
-import Web3 from 'web3';
-import { Keyring } from "@polkadot/api";
-import { u8aToHex } from "@polkadot/util";
 import { performNativeSwap } from "../shared/native_swap";
 
 let swapCount = 1;

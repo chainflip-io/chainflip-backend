@@ -5,12 +5,12 @@ import Module from "node:module";
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
 import { Chain, Asset, assetChains } from '@chainflip-io/cli';
+import Web3 from 'web3';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
 import { newEthAddress } from './new_eth_address';
 import { CcmDepositMetadata } from './new_swap';
-import Web3 from 'web3';
 import cfReceiverMockAbi from '../../eth-contract-abis/perseverance-rc17/CFReceiverMock.json';
 
 // TODO: Import this from the chainflip-io/cli package once it's exported in future versions.
@@ -201,7 +201,7 @@ export async function observeEVMEvent(contractAbi: any, address: string, eventNa
   let eventWitnessed = false;
   
   for (let i = 0; i < 120 && !eventWitnessed; i++) {
-    let currentBlockNumber = await web3.eth.getBlockNumber();
+    const currentBlockNumber = await web3.eth.getBlockNumber();
     if (currentBlockNumber > initBlockNumber) {
       const events = await contract.getPastEvents(eventName, {fromBlock: initBlockNumber, toBlock: currentBlockNumber});
       for (let j = 0; j < events.length && !eventWitnessed; j++) {
@@ -222,9 +222,9 @@ export async function observeEVMEvent(contractAbi: any, address: string, eventNa
 
   if (eventWitnessed) {
     return Promise.resolve();
-  } else {
+  } 
     return Promise.reject(new Error(`Failed to observe the ${eventName} event`));
-  }
+  
 
 }
 
