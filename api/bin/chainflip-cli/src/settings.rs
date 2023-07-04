@@ -82,8 +82,8 @@ pub enum LiquidityProviderSubcommands {
 		/// Asset to deposit.
 		asset: Asset,
 	},
-	/// Register a address as Emergency Withdrawal Address. An address must be
-	/// registered to request deposit address for each chain.
+	/// Register an Emergency Withdrawal Address for the given chain. An address must be
+	/// registered to request a deposit address for the given chain.
 	RegisterEmergencyWithdrawalAddress { chain: ForeignChain, address: String },
 }
 

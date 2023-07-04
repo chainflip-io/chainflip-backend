@@ -22,7 +22,7 @@ pub trait Rpc {
 	#[method(name = "liquidityDeposit")]
 	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<String, Error>;
 
-	#[method(name = "registerEwa")]
+	#[method(name = "registerEmergencyWithdrawalAddress")]
 	async fn register_emergency_withdrawal_address(
 		&self,
 		chain: ForeignChain,
