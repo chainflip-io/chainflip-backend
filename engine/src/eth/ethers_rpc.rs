@@ -40,10 +40,10 @@ impl<T: JsonRpcClient + 'static> EthersRpcClient<T> {
 
 		// Reset nonce if too old to ensure that we never
 		// get stuck with an incorrect nonce for some reason
-		if nonce_info_lock
-			.as_ref()
-			.is_some_and(|nonce| nonce.requested_at.elapsed() > NONCE_LIFETIME)
-		{
+		if nonce_info_lock.as_ref().is_some_and(|nonce| {
+			Instant::now().checked_duration_since(nonce.requested_at).unwrap_or_default() >
+				NONCE_LIFETIME
+		}) {
 			*nonce_info_lock = None;
 		}
 
@@ -53,7 +53,7 @@ impl<T: JsonRpcClient + 'static> EthersRpcClient<T> {
 			None => {
 				let tx_count = self.signer.get_transaction_count(self.address(), None).await?;
 				nonce_info_lock
-					.get_or_insert(NonceInfo { next_nonce: tx_count, requested_at: Instant::now() })
+					.insert(NonceInfo { next_nonce: tx_count, requested_at: Instant::now() })
 			},
 		};
 
