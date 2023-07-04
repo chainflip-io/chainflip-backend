@@ -4,7 +4,6 @@ import { cryptoWaitReady } from "@polkadot/util-crypto";
 import { Mutex } from "async-mutex";
 import { Asset } from "@chainflip-io/cli/.";
 import { getChainflipApi } from "./utils";
-import { getAddress } from "../shared/utils";
 
 const mutex = new Mutex();
 
@@ -37,10 +36,5 @@ export interface CcmDepositMetadata {
     message: string;
     gas_budget: number;
     cf_parameters: string;
-    source_address: ForeignChainAddress;
+    source_address: any;
   }
-export enum ForeignChainAddress {
-    Ethereum,
-    Polkadot,
-    Bitcoin,
-}

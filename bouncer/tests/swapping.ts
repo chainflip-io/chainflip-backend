@@ -4,9 +4,11 @@ import { Asset } from "@chainflip-io/cli/.";
 import { performSwap } from "../shared/perform_swap";
 import { getAddress, runWithTimeout, chainFromAsset, getEthContractAddress } from "../shared/utils";
 import { BtcAddressType } from "../shared/new_btc_address";
-import { CcmDepositMetadata, ForeignChainAddress } from "../shared/new_swap";
+import { CcmDepositMetadata } from "../shared/new_swap";
 import { randomAsNumber } from "@polkadot/util-crypto";
 import Web3 from 'web3';
+import { Keyring } from "@polkadot/api";
+import { u8aToHex } from "@polkadot/util";
 
 let swapCount = 1;
 
@@ -46,16 +48,15 @@ async function testAll() {
             message: new Web3().eth.abi.encodeParameter("string", "BTC to ETH w/ CCM!!"),
             gas_budget: 1000000,
             cf_parameters: "",
-            source_address: ForeignChainAddress.Bitcoin,
+            source_address: { 'BTC': {'P2PKH': await getAddress('BTC', randomAsHex(32), 'P2PKH').then((btcAddress) => { Buffer.from(btcAddress.replace(/^0x/, ''), 'hex').toString()})}},
         }),
     ])
-
     await Promise.all([
             testSwap('BTC', 'USDC', undefined, {
                 message: '0x' + Buffer.from("BTC to ETH w/ CCM!!", 'ascii').toString('hex'),
                 gas_budget: 600000,
                 cf_parameters: getAbiEncodedMessage(["uint256"]),
-                source_address: ForeignChainAddress.Bitcoin,
+                source_address: { 'BTC': {'P2SH': await getAddress('BTC', randomAsHex(32), 'P2SH').then((btcAddress) => { Buffer.from(btcAddress.replace(/^0x/, ''), 'hex').toString()})}},
             }),
     ])
 
@@ -64,7 +65,7 @@ async function testAll() {
                 message: getAbiEncodedMessage(),
                 gas_budget: 750000,
                 cf_parameters: getAbiEncodedMessage([]),
-                source_address: ForeignChainAddress.Bitcoin,
+                source_address: { 'BTC': {'P2WPKH': await getAddress('BTC', randomAsHex(32), 'P2WPKH').then((btcAddress) => { Buffer.from(btcAddress.replace(/^0x/, ''), 'hex').toString()})}},
             }),       
     ])
 
@@ -73,7 +74,7 @@ async function testAll() {
             message: getAbiEncodedMessage(["address","uint256","bytes"]),
             gas_budget: 2000000,
             cf_parameters: getAbiEncodedMessage(["string"]),
-            source_address: ForeignChainAddress.Bitcoin,
+            source_address: { 'BTC': {'P2WSH': await getAddress('BTC', randomAsHex(32), 'P2WSH').then((btcAddress) => { Buffer.from(btcAddress.replace(/^0x/, ''), 'hex').toString()})}},
         }),       
 ])
 
@@ -82,7 +83,7 @@ async function testAll() {
                 message: getAbiEncodedMessage(["string","address"]),
                 gas_budget: 1000000,
                 cf_parameters: getAbiEncodedMessage(["string","string"]),
-                source_address: ForeignChainAddress.Polkadot,
+                source_address: { 'DOT': await getAddress('DOT', randomAsHex(32)).then((dotAddress) => { u8aToHex(new Keyring({type:'sr25519'}).decodeAddress(dotAddress))})},
             }),            
         ])
     await Promise.all([
@@ -90,7 +91,7 @@ async function testAll() {
             message: getAbiEncodedMessage(),
             gas_budget: 1000000,
             cf_parameters: getAbiEncodedMessage(["address","uint256"]),
-            source_address: ForeignChainAddress.Polkadot,
+            source_address: { 'DOT': await getAddress('DOT', randomAsHex(32)).then((dotAddress) => { u8aToHex(new Keyring({type:'sr25519'}).decodeAddress(dotAddress))})},
         }),            
     ])        
     await Promise.all([
@@ -98,7 +99,7 @@ async function testAll() {
             message: getAbiEncodedMessage(),
             gas_budget: 5000000,
             cf_parameters: getAbiEncodedMessage(["address","uint256"]),
-            source_address: ForeignChainAddress.Ethereum,
+            source_address: {'ETH': await getAddress('ETH', randomAsHex(32))},
         }),            
     ])      
 }
