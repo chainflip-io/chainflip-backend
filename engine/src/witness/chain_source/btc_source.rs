@@ -31,20 +31,17 @@ where
 				|(client, last_block_hash_yielded)| async move {
 					loop {
 						tokio::time::sleep(POLL_INTERVAL).await;
-						let best_block_hash = client.best_block_hash().await;
-						if last_block_hash_yielded.is_some_and(|hash| best_block_hash != hash) ||
-							last_block_hash_yielded.is_none()
-						{
-							let header = client.block_header(best_block_hash).await;
-							assert_eq!(header.hash, best_block_hash);
+
+						let best_block_header = client.best_block_header().await;
+						if last_block_hash_yielded != Some(best_block_header.hash) {
 							return Some((
 								Header {
-									index: header.height,
-									hash: header.hash,
-									parent_hash: header.previous_block_hash,
+									index: best_block_header.height,
+									hash: best_block_header.hash,
+									parent_hash: best_block_header.previous_block_hash,
 									data: (),
 								},
-								(client, Some(best_block_hash)),
+								(client, Some(best_block_header.hash)),
 							))
 						}
 					}
