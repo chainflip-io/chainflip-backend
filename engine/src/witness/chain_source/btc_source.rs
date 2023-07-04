@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use bitcoin::BlockHash;
 use futures_util::stream;
+use utilities::make_periodic_tick;
 
 use super::{ChainClient, ChainSourceWithClient, Header};
 use crate::{btc::retry_rpc::BtcRetryRpcApi, witness::chain_source::BoxChainStream};
@@ -27,10 +28,10 @@ where
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
 		(
 			Box::pin(stream::unfold(
-				(self.client.clone(), None),
-				|(client, last_block_hash_yielded)| async move {
+				(self.client.clone(), None, make_periodic_tick(POLL_INTERVAL, true)),
+				|(client, last_block_hash_yielded, mut tick)| async move {
 					loop {
-						tokio::time::sleep(POLL_INTERVAL).await;
+						tick.tick().await;
 
 						let best_block_header = client.best_block_header().await;
 						if last_block_hash_yielded != Some(best_block_header.hash) {
@@ -41,7 +42,7 @@ where
 									parent_hash: best_block_header.previous_block_hash,
 									data: (),
 								},
-								(client, Some(best_block_header.hash)),
+								(client, Some(best_block_header.hash), tick),
 							))
 						}
 					}
