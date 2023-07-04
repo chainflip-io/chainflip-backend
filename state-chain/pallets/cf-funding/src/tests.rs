@@ -5,10 +5,8 @@ use crate::{
 use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
-	mocks::{
-		account_role_registry::MockAccountRoleRegistry, system_state_info::MockSystemStateInfo,
-	},
-	AccountInfo, AccountRoleRegistry, Bonding,
+	mocks::account_role_registry::MockAccountRoleRegistry, AccountInfo, AccountRoleRegistry,
+	Bonding, SetSafeMode,
 };
 
 use crate::BoundAddress;
@@ -523,14 +521,28 @@ fn redemption_expiry_removes_redemption() {
 }
 
 #[test]
-fn maintenance_mode_blocks_redemption_requests() {
+fn runtime_safe_mode_blocks_redemption_requests() {
 	new_test_ext().execute_with(|| {
-		MockSystemStateInfo::set_maintenance(true);
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			1_000,
+			Default::default(),
+			Default::default(),
+		));
+
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 		assert_noop!(
 			Funding::redeem(RuntimeOrigin::signed(ALICE), RedemptionAmount::Max, ETH_DUMMY_ADDR),
-			DispatchError::Other("We are in maintenance!")
+			Error::<Test>::RedeemDisabled
 		);
-		MockSystemStateInfo::set_maintenance(false);
+
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			RedemptionAmount::Max,
+			ETH_DUMMY_ADDR
+		));
 	});
 }
 

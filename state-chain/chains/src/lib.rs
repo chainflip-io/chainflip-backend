@@ -61,7 +61,8 @@ pub trait Chain: Member + Parameter {
 		+ Display
 		+ CheckedSub
 		+ Unpin
-		+ Step;
+		+ Step
+		+ BenchmarkValue;
 
 	type ChainAmount: Member
 		+ Parameter
@@ -76,12 +77,7 @@ pub trait Chain: Member + Parameter {
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
-	type TrackedData: Member
-		+ Parameter
-		+ MaxEncodedLen
-		+ Clone
-		+ Age<BlockNumber = Self::ChainBlockNumber>
-		+ BenchmarkValue;
+	type TrackedData: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
 	type ChainAsset: Member
 		+ Parameter
@@ -108,22 +104,6 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValue
 		+ BenchmarkValueExtended
 		+ ChannelIdConstructor<Address = Self::ChainAccount>;
-}
-
-/// Measures the age of items associated with the Chain.
-pub trait Age {
-	type BlockNumber;
-
-	/// The creation block of this item.
-	fn birth_block(&self) -> Self::BlockNumber;
-}
-
-impl Age for () {
-	type BlockNumber = u64;
-
-	fn birth_block(&self) -> Self::BlockNumber {
-		unimplemented!()
-	}
 }
 
 /// Common crypto-related types and operations for some external chain.

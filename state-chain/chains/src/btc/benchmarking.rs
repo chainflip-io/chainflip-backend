@@ -82,7 +82,7 @@ impl<E> BenchmarkValue for BitcoinApi<E> {
 
 impl BenchmarkValue for BitcoinTrackedData {
 	fn benchmark_value() -> Self {
-		BitcoinTrackedData { block_height: 120, btc_fee_info: BitcoinFeeInfo::new(4321) }
+		BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(4321) }
 	}
 }
 

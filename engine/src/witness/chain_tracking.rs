@@ -1,69 +1,53 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use futures::StreamExt;
+use pallet_cf_chain_tracking::ChainState;
+use state_chain_runtime::PalletInstanceAlias;
 
 use crate::state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi;
 
 use super::{
 	chain_source::box_chain_stream,
-	common::BoxActiveAndFuture,
+	common::{BoxActiveAndFuture, ExternalChainSource, RuntimeCallHasChain, RuntimeHasChain},
 	split_by_epoch::{ChainSplitByEpoch, Item},
 };
 
 #[async_trait::async_trait]
-pub trait GetChainTrackingData<C: cf_chains::Chain> {
-	async fn get_chain_tracking_data(&self) -> C::TrackedData;
+pub trait GetTrackedData<C: cf_chains::Chain>: Send + Sync + Clone {
+	async fn get_tracked_data(&self) -> ChainState<C>;
 }
 
-pub struct ChainTracking<'a, C, I, InnerStream, StateChainClient, Client>
-where
-	InnerStream: ChainSplitByEpoch<'a>,
-	C: cf_chains::Chain,
-	I: 'static + Send + Sync,
-	Client: GetChainTrackingData<C>,
-{
-	inner_stream: InnerStream,
-	client: Client,
+pub struct ChainTracking<'a, Underlying, StateChainClient, TrackedDataClient> {
+	inner_stream: Underlying,
+	client: TrackedDataClient,
 	state_chain_client: Arc<StateChainClient>,
-	phantom: PhantomData<(&'a (), C, I)>,
+	_phantom: PhantomData<&'a ()>,
 }
 
-impl<'a, C, I, InnerStream, StateChainClient, Client>
-	ChainTracking<'a, C, I, InnerStream, StateChainClient, Client>
-where
-	C: cf_chains::Chain,
-	I: 'static + Send + Sync,
-	Client: GetChainTrackingData<C>,
-	InnerStream: ChainSplitByEpoch<'a>,
-	StateChainClient: SignedExtrinsicApi + Send,
+impl<'a, Underlying, StateChainClient, TrackedDataClient>
+	ChainTracking<'a, Underlying, StateChainClient, TrackedDataClient>
 {
 	pub fn new(
-		inner_stream: InnerStream,
+		inner_stream: Underlying,
 		state_chain_client: Arc<StateChainClient>,
-		client: Client,
-	) -> ChainTracking<'a, C, I, InnerStream, StateChainClient, Client>
-	where
-		InnerStream: ChainSplitByEpoch<'a>,
-		Client: GetChainTrackingData<C>,
-	{
-		ChainTracking { inner_stream, state_chain_client, client, phantom: PhantomData }
+		client: TrackedDataClient,
+	) -> ChainTracking<'a, Underlying, StateChainClient, TrackedDataClient> {
+		ChainTracking { inner_stream, state_chain_client, client, _phantom: PhantomData }
 	}
 }
 
 #[async_trait::async_trait]
-impl<'a, C, I, InnerStream, StateChainClient, Client> ChainSplitByEpoch<'a>
-	for ChainTracking<'a, C, I, InnerStream, StateChainClient, Client>
+impl<'a, Underlying, StateChainClient, TrackedDataClient> ChainSplitByEpoch<'a>
+	for ChainTracking<'a, Underlying, StateChainClient, TrackedDataClient>
 where
-	C: cf_chains::Chain,
-	I: 'static + Send + Sync,
-	InnerStream: ChainSplitByEpoch<'a>,
-	Client: GetChainTrackingData<C> + Send + Sync + Clone + 'static,
+	Underlying: ChainSplitByEpoch<'a>,
+	<Underlying as ChainSplitByEpoch<'a>>::UnderlyingChainSource: ExternalChainSource,
 	StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,
-	state_chain_runtime::Runtime: pallet_cf_chain_tracking::Config<I, TargetChain = C>,
-	state_chain_runtime::RuntimeCall:
-		std::convert::From<pallet_cf_chain_tracking::Call<state_chain_runtime::Runtime, I>>,
+	TrackedDataClient: GetTrackedData<<<Underlying as ChainSplitByEpoch<'a>>::UnderlyingChainSource as ExternalChainSource>::Chain> + 'a,
+	state_chain_runtime::Runtime: RuntimeHasChain<<<Underlying as ChainSplitByEpoch<'a>>::UnderlyingChainSource as ExternalChainSource>::Chain>,
+	state_chain_runtime::RuntimeCall: RuntimeCallHasChain<state_chain_runtime::Runtime, <<Underlying as ChainSplitByEpoch<'a>>::UnderlyingChainSource as ExternalChainSource>::Chain>
 {
-	type UnderlyingChainSource = InnerStream::UnderlyingChainSource;
+	type UnderlyingChainSource = Underlying::UnderlyingChainSource;
 
 	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>> {
 		let state_chain_client = self.state_chain_client.clone();
@@ -86,19 +70,17 @@ where
 							let state_chain_client = state_chain_client.clone();
 							let client = client.clone();
 							async move {
-								let chain_tracking_data = client.get_chain_tracking_data().await;
+								// Unclear error when this is inlined "error: higher-ranked lifetime error"
+								let call: Box<state_chain_runtime::RuntimeCall> = Box::new(pallet_cf_chain_tracking::Call::<
+										state_chain_runtime::Runtime,
+										<<<Underlying as ChainSplitByEpoch<'a>>::UnderlyingChainSource as ExternalChainSource>::Chain as PalletInstanceAlias>::Instance,
+									>::update_chain_state {
+										new_chain_state: client.get_tracked_data().await,
+									}.into());
 								state_chain_client
 									.submit_signed_extrinsic(
 										pallet_cf_witnesser::Call::witness_at_epoch {
-											call: Box::new(
-												pallet_cf_chain_tracking::Call::<
-													state_chain_runtime::Runtime,
-													I,
-												>::update_chain_state {
-													state: chain_tracking_data,
-												}
-												.into(),
-											),
+											call,
 											epoch_index: epoch.index,
 										},
 									)
