@@ -471,7 +471,10 @@ where
 				Result::<_, anyhow::Error>::Ok((
 					mini_header.block_hash,
 					mini_header.block_number,
-					dot_client.events(mini_header.block_hash).await?,
+					dot_client.events(mini_header.block_hash).await?.ok_or(anyhow::anyhow!(
+						"Failed to fetch events for block: {}",
+						mini_header.block_number
+					))?,
 				))
 			}
 		}))

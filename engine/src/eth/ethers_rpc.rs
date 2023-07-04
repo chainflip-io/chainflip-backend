@@ -15,6 +15,8 @@ struct NonceInfo {
 	requested_at: std::time::Instant,
 }
 
+use super::rpc::EthWsRpcClient;
+
 #[derive(Clone)]
 pub struct EthersRpcClient<T: JsonRpcClient> {
 	signer: SignerMiddleware<Arc<Provider<T>>, LocalWallet>,
@@ -151,6 +153,41 @@ impl<T: JsonRpcClient + 'static> EthersRpcApi for EthersRpcClient<T> {
 		reward_percentiles: &[f64],
 	) -> Result<FeeHistory> {
 		Ok(self.signer.fee_history(block_count, last_block, reward_percentiles).await?)
+	}
+}
+
+/// On each subscription this will create a new WS connection.
+#[derive(Clone)]
+pub struct ReconnectSubscriptionClient {
+	ws_node_endpoint: String,
+	// This value comes from the SC.
+	chain_id: web3::types::U256,
+}
+
+impl ReconnectSubscriptionClient {
+	pub fn new(ws_node_endpoint: String, chain_id: web3::types::U256) -> Self {
+		Self { ws_node_endpoint, chain_id }
+	}
+}
+
+#[async_trait::async_trait]
+pub trait ReconnectSubscribeApi {
+	async fn subscribe_blocks(&self) -> Result<ConscientiousEthWebsocketBlockHeaderStream>;
+}
+
+use crate::eth::{rpc::EthWsRpcApi, ConscientiousEthWebsocketBlockHeaderStream};
+
+#[async_trait::async_trait]
+impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
+	async fn subscribe_blocks(&self) -> Result<ConscientiousEthWebsocketBlockHeaderStream> {
+		let web3_ws_client =
+			EthWsRpcClient::new(&self.ws_node_endpoint, Some(self.chain_id)).await?;
+
+		let header_stream = ConscientiousEthWebsocketBlockHeaderStream {
+			stream: Some(web3_ws_client.subscribe_new_heads().await?),
+		};
+
+		Ok(header_stream)
 	}
 }
 

@@ -207,7 +207,7 @@ pub async fn start<
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
 	eth_broadcaster: EthBroadcaster<EthRpc>,
-	mut dot_broadcaster: DotBroadcaster<DotRpc>,
+	dot_broadcaster: DotBroadcaster<DotRpc>,
 	btc_broadcaster: BtcBroadcaster<BtcRpc>,
 	eth_multisig_client: EthMultisigClient,
 	dot_multisig_client: PolkadotMultisigClient,

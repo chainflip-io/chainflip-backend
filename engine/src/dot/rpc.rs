@@ -7,8 +7,9 @@ use cf_primitives::PolkadotBlockNumber;
 use futures::{Stream, StreamExt, TryStreamExt};
 use std::sync::Arc;
 use subxt::{
+	error::BlockError,
 	events::{Events, EventsClient},
-	rpc::types::{Bytes, ChainBlockExtrinsic},
+	rpc::types::{Bytes, ChainBlockExtrinsic, ChainBlockResponse},
 	rpc_params, Config, OnlineClient, PolkadotConfig,
 };
 use tokio::sync::RwLock;
@@ -65,6 +66,10 @@ impl DotRpcClient {
 /// This trait defines any subscription interfaces to Polkadot.
 #[async_trait]
 pub trait DotSubscribeApi: Send + Sync {
+	async fn subscribe_best_heads(
+		&self,
+	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>>;
+
 	async fn subscribe_finalized_heads(
 		&self,
 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>>;
@@ -80,12 +85,17 @@ pub trait DotSubscribeApi: Send + Sync {
 pub trait DotRpcApi: Send + Sync {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Result<Option<PolkadotHash>>;
 
+	async fn block(
+		&self,
+		block_hash: PolkadotHash,
+	) -> Result<Option<ChainBlockResponse<PolkadotConfig>>>;
+
 	async fn extrinsics(
 		&self,
 		block_hash: PolkadotHash,
 	) -> Result<Option<Vec<ChainBlockExtrinsic>>>;
 
-	async fn events(&self, block_hash: PolkadotHash) -> Result<Events<PolkadotConfig>>;
+	async fn events(&self, block_hash: PolkadotHash) -> Result<Option<Events<PolkadotConfig>>>;
 
 	async fn current_runtime_version(&self) -> Result<RuntimeVersion>;
 
@@ -96,6 +106,13 @@ pub trait DotRpcApi: Send + Sync {
 impl DotRpcApi for DotRpcClient {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Result<Option<PolkadotHash>> {
 		refresh_connection_on_error!(self, rpc, block_hash, Some(block_number.into()))
+	}
+
+	async fn block(
+		&self,
+		block_hash: PolkadotHash,
+	) -> Result<Option<ChainBlockResponse<PolkadotConfig>>> {
+		refresh_connection_on_error!(self, rpc, block, Some(block_hash))
 	}
 
 	async fn current_runtime_version(&self) -> Result<RuntimeVersion> {
@@ -113,7 +130,9 @@ impl DotRpcApi for DotRpcClient {
 			.map(|o| o.map(|b| b.block.extrinsics))
 	}
 
-	async fn events(&self, block_hash: PolkadotHash) -> Result<Events<PolkadotConfig>> {
+	/// Returns the events for a particular block hash.
+	/// If the block for the given block hash does not exist, then this returns `Ok(None)`.
+	async fn events(&self, block_hash: PolkadotHash) -> Result<Option<Events<PolkadotConfig>>> {
 		let chain_runtime_version = self.current_runtime_version().await?;
 
 		let client = self.online_client.read().await;
@@ -139,10 +158,13 @@ impl DotRpcApi for DotRpcClient {
 
 		// If we've succeeded in getting the current runtime version then we assume
 		// the connection is stable (or has just been refreshed), no need to retry again.
-		EventsClient::new(client.clone())
-			.at(Some(block_hash))
-			.await
-			.map_err(|e| anyhow!("Failed to query events for block {block_hash}, with error: {e}"))
+		match EventsClient::new(client.clone()).at(Some(block_hash)).await {
+			Ok(events) => Ok(Some(events)),
+			Err(e) => match e {
+				subxt::Error::Block(BlockError::BlockHashNotFound(_)) => Ok(None),
+				_ => Err(e.into()),
+			},
+		}
 	}
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
@@ -159,6 +181,16 @@ impl DotRpcApi for DotRpcClient {
 
 #[async_trait]
 impl DotSubscribeApi for DotRpcClient {
+	async fn subscribe_best_heads(
+		&self,
+	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
+		Ok(Box::pin(
+			refresh_connection_on_error!(self, blocks, subscribe_best)?
+				.map(|block| block.map(|block| block.header().clone()))
+				.map_err(|e| anyhow!("Error in best head stream: {e}")),
+		))
+	}
+
 	async fn subscribe_finalized_heads(
 		&self,
 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
@@ -199,7 +231,7 @@ mod tests {
 	#[tokio::test]
 	#[ignore = "Testing raw broadcast to live network"]
 	async fn broadcast_tx() {
-		let mut dot_broadcaster = DotBroadcaster::new(DotRpcClient::new("URL").await.unwrap());
+		let dot_broadcaster = DotBroadcaster::new(DotRpcClient::new("URL").await.unwrap());
 
 		// Can get these bytes from the `create_test_extrinsic()` in state-chain/chains/src/dot.rs
 		// Will have to ensure the nonce for the account is correct and westend versions are correct
