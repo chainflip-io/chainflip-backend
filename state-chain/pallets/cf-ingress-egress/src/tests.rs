@@ -12,7 +12,7 @@ use cf_traits::{
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
 		ccm_handler::{CcmRequest, MockCcmHandler},
 	},
-	AddressDerivationApi, DepositApi, EgressApi,
+	AddressDerivationApi, DepositApi, EgressApi, GetBlockHeight,
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_core::H160;
@@ -438,10 +438,16 @@ fn can_process_ccm_deposit() {
 			Some(ccm.clone()),
 		));
 
+		let opened_at = BlockNumberProvider::get_block_height();
+
 		// CCM action is stored.
 		let deposit_address = hex_literal::hex!("c6b749fe356b08fdde333b41bc77955482380836").into();
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::StartWitnessing { deposit_address, source_asset: from_asset },
+			crate::Event::<Test>::StartWitnessing {
+				deposit_address,
+				source_asset: from_asset,
+				opened_at,
+			},
 		));
 
 		// Making a deposit should trigger CcmHandler.
