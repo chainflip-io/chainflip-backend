@@ -59,7 +59,7 @@ async fn should_wait_for_account_role() {
 			>::hashed_key_for(&signer.account_id))),
 		)
 		.once()
-		.return_once(move |_, _| Ok(None));
+		.return_once(|_, _| Ok(None));
 
 	// We expect the client to request again, so return a role this time
 	mock_rpc_api
@@ -71,7 +71,7 @@ async fn should_wait_for_account_role() {
 			>::hashed_key_for(&signer.account_id))),
 		)
 		.once()
-		.return_once(move |_, _| Ok(Some(StorageData(REQUIRED_ROLE.encode()))));
+		.return_once(|_, _| Ok(Some(StorageData(REQUIRED_ROLE.encode()))));
 
 	// Setup an empty block stream
 	const BLOCK_CAPACITY: usize = 10;
@@ -118,7 +118,7 @@ async fn should_error_if_no_account_role() {
 			>::hashed_key_for(&signer.account_id))),
 		)
 		.once()
-		.return_once(move |_, _| Ok(None));
+		.return_once(|_, _| Ok(None));
 
 	// Setup an empty block stream
 	const BLOCK_CAPACITY: usize = 10;
@@ -163,7 +163,7 @@ async fn should_error_if_incorrect_account_role() {
 			>::hashed_key_for(&signer.account_id))),
 		)
 		.once()
-		.return_once(move |_, _| Ok(Some(StorageData(INCORRECT_ROLE.encode()))));
+		.return_once(|_, _| Ok(Some(StorageData(INCORRECT_ROLE.encode()))));
 
 	// Setup an empty block stream
 	const BLOCK_CAPACITY: usize = 10;

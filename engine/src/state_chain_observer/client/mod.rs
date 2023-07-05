@@ -2,6 +2,9 @@ pub mod base_rpc_api;
 pub mod extrinsic_api;
 pub mod storage_api;
 
+#[cfg(test)]
+mod tests;
+
 use async_trait::async_trait;
 
 use anyhow::{anyhow, Context, Result};
@@ -260,7 +263,7 @@ async fn get_consecutive_headers<BaseRpcClient: base_rpc_api::BaseRpcApi>(
 	base_rpc_client: &Arc<BaseRpcClient>,
 ) -> Result<impl Iterator<Item = Result<Header, anyhow::Error>>, anyhow::Error> {
 	let intervening_headers =
-		get_intervening_headers(from_header.number + 1, to_header.number, &base_rpc_client).await?;
+		get_intervening_headers(from_header.number + 1, to_header.number, base_rpc_client).await?;
 
 	// Make sure that the intervening headers fill the gap between the headers perfectly by checking
 	// parent hashes
