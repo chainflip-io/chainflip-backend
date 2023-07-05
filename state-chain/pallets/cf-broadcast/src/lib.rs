@@ -406,10 +406,6 @@ pub mod pallet {
 					.checked_sub(1)
 					.expect("We must have at least one authority")
 			{
-				Self::clean_up_broadcast_storage(
-					signing_attempt.broadcast_attempt.broadcast_attempt_id.broadcast_id,
-				);
-
 				Self::deposit_event(Event::<T, I>::BroadcastAborted {
 					broadcast_id: signing_attempt
 						.broadcast_attempt
@@ -545,6 +541,14 @@ pub mod pallet {
 				}
 			}
 
+			// Report the people who failed to broadcast this tx during its whole lifetime.
+			if let Some(failed_signers) = FailedBroadcasters::<T, I>::take(broadcast_id) {
+				T::OffenceReporter::report_many(
+					PalletOffence::FailedToBroadcastTransaction,
+					&failed_signers,
+				);
+			}
+
 			Self::clean_up_broadcast_storage(broadcast_id);
 
 			Self::deposit_event(Event::<T, I>::BroadcastSuccess {
@@ -586,13 +590,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		for attempt_count in first_attempt..=(BroadcastAttemptCount::<T, I>::take(broadcast_id)) {
 			AwaitingBroadcast::<T, I>::remove(BroadcastAttemptId { broadcast_id, attempt_count });
 		}
-		// Report the people who failed to broadcast this tx during its whole lifetime.
-		if let Some(failed_signers) = FailedBroadcasters::<T, I>::take(broadcast_id) {
-			T::OffenceReporter::report_many(
-				PalletOffence::FailedToBroadcastTransaction,
-				&failed_signers,
-			);
-		}
+
 		RequestCallbacks::<T, I>::remove(broadcast_id);
 		ThresholdSignatureData::<T, I>::remove(broadcast_id);
 	}
