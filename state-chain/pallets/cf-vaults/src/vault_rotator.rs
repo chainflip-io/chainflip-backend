@@ -152,7 +152,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 								"Current epoch key must be active to activate next key."
 							);
 							// The key needs to be locked until activation is complete.
-							ActiveVaultEpochAndState::<T, I>::mutate(|epoch_end_key| {
+							CurrentVaultEpochAndState::<T, I>::mutate(|epoch_end_key| {
 								epoch_end_key
 									.as_mut()
 									.expect("Checked above at if let Some")

@@ -176,10 +176,10 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 	// Storage: PolkadotVault PendingVaultRotation (r:1 w:1)
 	// Storage: BitcoinVault PendingVaultRotation (r:1 w:1)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
-	// Storage: EthereumVault ActiveVaultEpochAndState (r:1 w:0)
+	// Storage: EthereumVault CurrentVaultEpochAndState (r:1 w:0)
 	// Storage: EthereumVault Vaults (r:1 w:0)
-	// Storage: PolkadotVault ActiveVaultEpochAndState (r:1 w:0)
-	// Storage: BitcoinVault ActiveVaultEpochAndState (r:1 w:0)
+	// Storage: PolkadotVault CurrentVaultEpochAndState (r:1 w:0)
+	// Storage: BitcoinVault CurrentVaultEpochAndState (r:1 w:0)
 	/// The range of component `a` is `[3, 150]`.
 	fn rotation_phase_keygen(_a: u32, ) -> Weight {
 		// Minimum execution time: 95_000 nanoseconds.
@@ -349,10 +349,10 @@ impl WeightInfo for () {
 	// Storage: PolkadotVault PendingVaultRotation (r:1 w:1)
 	// Storage: BitcoinVault PendingVaultRotation (r:1 w:1)
 	// Storage: Validator CurrentAuthorities (r:1 w:0)
-	// Storage: EthereumVault ActiveVaultEpochAndState (r:1 w:0)
+	// Storage: EthereumVault CurrentVaultEpochAndState (r:1 w:0)
 	// Storage: EthereumVault Vaults (r:1 w:0)
-	// Storage: PolkadotVault ActiveVaultEpochAndState (r:1 w:0)
-	// Storage: BitcoinVault ActiveVaultEpochAndState (r:1 w:0)
+	// Storage: PolkadotVault CurrentVaultEpochAndState (r:1 w:0)
+	// Storage: BitcoinVault CurrentVaultEpochAndState (r:1 w:0)
 	/// The range of component `a` is `[3, 150]`.
 	fn rotation_phase_keygen(_a: u32, ) -> Weight {
 		// Minimum execution time: 95_000 nanoseconds.
