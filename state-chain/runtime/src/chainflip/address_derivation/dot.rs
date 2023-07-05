@@ -58,9 +58,10 @@ pub struct PolkadotDepositAddress {
 	pub deposit_fetch_id: PolkadotChannelId,
 }
 
-impl DepositChannel for PolkadotDepositAddress {
+impl DepositChannel<Polkadot> for PolkadotDepositAddress {
 	type Address = PolkadotAccountId;
 	type DepositFetchId = PolkadotChannelId;
+	type AddressDerivation = AddressDerivation;
 
 	fn get_address(&self) -> Self::Address {
 		self.address

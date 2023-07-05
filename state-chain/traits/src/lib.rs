@@ -881,10 +881,10 @@ pub trait GetBitcoinFeeInfo {
 
 // /// Deposit address trait. This traits defines the interface for chain specific aspects of
 // deposit /// address management.
-pub trait DepositChannel {
+pub trait DepositChannel<C: Chain> {
 	type Address;
 	type DepositFetchId;
-	// type AddressDerivation: AddressDerivationApi<Chain>;
+	type AddressDerivation: AddressDerivationApi<C>;
 
 	fn new(channel_id: u64, address: Self::Address) -> Self;
 

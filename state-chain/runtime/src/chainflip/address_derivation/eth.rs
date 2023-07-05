@@ -44,9 +44,10 @@ pub struct EthereumDepositAddress {
 	pub deposit_fetch_id: EthereumChannelId,
 }
 
-impl DepositChannel for EthereumDepositAddress {
+impl DepositChannel<Ethereum> for EthereumDepositAddress {
 	type Address = H160;
 	type DepositFetchId = EthereumChannelId;
+	type AddressDerivation = AddressDerivation;
 
 	fn get_address(&self) -> Self::Address {
 		self.address

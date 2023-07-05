@@ -37,9 +37,10 @@ pub struct BitcoinDepositAddress {
 	pub deposit_fetch_id: BitcoinFetchId,
 }
 
-impl DepositChannel for BitcoinDepositAddress {
+impl DepositChannel<Bitcoin> for BitcoinDepositAddress {
 	type Address = ScriptPubkey;
 	type DepositFetchId = BitcoinFetchId;
+	type AddressDerivation = AddressDerivation;
 
 	fn get_address(&self) -> Self::Address {
 		self.address.clone()

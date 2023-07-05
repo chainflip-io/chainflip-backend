@@ -179,6 +179,7 @@ pub mod pallet {
 		type DepositAddress: Member
 			+ Parameter
 			+ DepositChannel<
+				Self::TargetChain,
 				Address = <<Self as Config<I>>::TargetChain as Chain>::ChainAccount,
 				DepositFetchId = <<Self as Config<I>>::TargetChain as Chain>::DepositFetchId,
 			>;

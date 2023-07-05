@@ -1,11 +1,13 @@
+use core::ops::Add;
+
 use crate::DepositWitness;
 pub use crate::{self as pallet_cf_ingress_egress};
-use cf_chains::eth::EthereumChannelId;
 pub use cf_chains::{
 	address::ForeignChainAddress,
 	eth::api::{EthereumApi, EthereumReplayProtection},
 	CcmDepositMetadata, Chain, ChainAbi, ChainEnvironment,
 };
+use cf_chains::{eth::EthereumChannelId, mocks::MockEthereum};
 use cf_primitives::ChannelId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
@@ -18,7 +20,7 @@ use cf_traits::{
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
 	},
-	DepositApi, DepositChannel, DepositHandler,
+	AddressDerivationApi, DepositApi, DepositChannel, DepositHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::traits::{OriginTrait, UnfilteredDispatchable};
@@ -75,6 +77,17 @@ impl system::Config for Test {
 impl_mock_chainflip!(Test);
 impl_mock_callback!(RuntimeOrigin);
 
+pub struct MockAddressDerivation;
+
+impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
+	fn generate_address(
+		source_asset: <Ethereum as Chain>::ChainAsset,
+		channel_id: ChannelId,
+	) -> Result<<Ethereum as Chain>::ChainAccount, sp_runtime::DispatchError> {
+		todo!()
+	}
+}
+
 pub struct MockDepositHandler;
 impl DepositHandler<Ethereum> for MockDepositHandler {}
 
@@ -84,9 +97,10 @@ pub type MockEgressBroadcaster =
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub struct MockDepositChannel;
 
-impl DepositChannel for MockDepositChannel {
+impl DepositChannel<Ethereum> for MockDepositChannel {
 	type Address = H160;
 	type DepositFetchId = EthereumChannelId;
+	type AddressDerivation = MockAddressDerivation;
 
 	fn new(channel_id: u64, address: Self::Address) -> Self {
 		todo!()
