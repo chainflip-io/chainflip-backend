@@ -11,8 +11,8 @@ mod signer_nomination;
 use crate::{
 	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinVault,
 	BlockNumber, Emissions, Environment, EthereumBroadcaster, EthereumChainTracking,
-	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress, Runtime,
-	RuntimeCall, RuntimeOrigin, System, Validator,
+	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress,
+	PolkadotInstance, Runtime, RuntimeCall, System, Validator,
 };
 
 use cf_chains::{
@@ -43,8 +43,8 @@ use cf_primitives::{
 use cf_traits::{
 	AccountRoleRegistry, BlockEmissions, BroadcastAnyChainGovKey, Broadcaster, Chainflip,
 	CommKeyBroadcaster, DepositApi, DepositHandler, EgressApi, EpochInfo, Heartbeat, Issuance,
-	KeyProvider, OnBroadcastReady, OnRotationCallback, QualifyNode, RewardsDistribution,
-	RuntimeUpgrade, VaultTransitionHandler,
+	KeyProvider, OnBroadcastReady, QualifyNode, RewardsDistribution, RuntimeUpgrade,
+	VaultTransitionHandler,
 };
 use codec::{Decode, Encode};
 use frame_support::{
@@ -54,6 +54,7 @@ use frame_support::{
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
 use pallet_cf_chain_tracking::ChainState;
+use pallet_cf_vaults::VaultRotationStatus;
 use scale_info::TypeInfo;
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
@@ -297,8 +298,19 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 		use crate::PolkadotVault;
 		match query {
 			cf_chains::dot::api::SystemAccounts::Proxy =>
-				<PolkadotVault as KeyProvider<Polkadot>>::current_epoch_key()
-					.map(|epoch_key| epoch_key.key),
+				<PolkadotVault as KeyProvider<Polkadot>>::active_epoch_key()
+					.map(|epoch_key| epoch_key.key)
+					// This is temporary workaround to make the dot key available for the
+					// createPure request.
+					// TODO: remove createPure.
+					.or_else(|| {
+						pallet_cf_vaults::PendingVaultRotation::<Runtime, PolkadotInstance>::get()
+							.and_then(|rotation| match rotation {
+								VaultRotationStatus::AwaitingActivation { new_public_key } =>
+									Some(new_public_key),
+								_ => None,
+							})
+					}),
 			cf_chains::dot::api::SystemAccounts::Vault => Environment::polkadot_vault_account(),
 		}
 	}
@@ -320,7 +332,7 @@ impl ChainEnvironment<UtxoSelectionType, SelectedUtxosAndChangeAmount> for BtcEn
 
 impl ChainEnvironment<(), cf_chains::btc::AggKey> for BtcEnvironment {
 	fn lookup(_: ()) -> Option<cf_chains::btc::AggKey> {
-		<BitcoinVault as KeyProvider<Bitcoin>>::current_epoch_key().map(|epoch_key| epoch_key.key)
+		<BitcoinVault as KeyProvider<Bitcoin>>::active_epoch_key().map(|epoch_key| epoch_key.key)
 	}
 }
 
@@ -392,7 +404,6 @@ impl CommKeyBroadcaster for TokenholderGovernanceBroadcaster {
 		EthereumBroadcaster::threshold_sign_and_broadcast(
 			SetCommKeyWithAggKey::<Ethereum>::new_unsigned(new_key),
 			None::<RuntimeCall>,
-			false,
 		);
 	}
 }
@@ -550,33 +561,6 @@ impl AddressConverter for ChainAddressConverter {
 		encoded_address: EncodedAddress,
 	) -> Result<ForeignChainAddress, ()> {
 		try_from_encoded_address(encoded_address, Environment::bitcoin_network)
-	}
-}
-
-pub struct RotationCallbackProvider;
-impl OnRotationCallback<Ethereum> for RotationCallbackProvider {
-	type Origin = RuntimeOrigin;
-	type Callback = RuntimeCall;
-}
-impl OnRotationCallback<Polkadot> for RotationCallbackProvider {
-	type Origin = RuntimeOrigin;
-	type Callback = RuntimeCall;
-}
-impl OnRotationCallback<Bitcoin> for RotationCallbackProvider {
-	type Origin = RuntimeOrigin;
-	type Callback = RuntimeCall;
-
-	fn on_rotation(
-		block_number: <Bitcoin as Chain>::ChainBlockNumber,
-		tx_out_id: <Bitcoin as ChainCrypto>::TransactionOutId,
-	) -> Option<Self::Callback> {
-		Some(
-			pallet_cf_vaults::Call::<Runtime, crate::BitcoinInstance>::vault_key_rotated_out {
-				block_number,
-				tx_out_id,
-			}
-			.into(),
-		)
 	}
 }
 

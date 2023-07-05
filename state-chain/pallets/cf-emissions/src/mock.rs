@@ -197,12 +197,6 @@ impl Broadcaster<MockEthereum> for MockBroadcast {
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		unimplemented!()
 	}
-
-	fn threshold_sign_and_broadcast_for_rotation(
-		_api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		unimplemented!()
-	}
 }
 
 impl pallet_cf_emissions::Config for Test {
