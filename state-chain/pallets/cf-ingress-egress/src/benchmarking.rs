@@ -23,6 +23,7 @@ benchmarks_instance_pallet! {
 		DepositAddressDetailsLookup::<T, I>::insert(&deposit_address, DepositAddressDetails {
 				channel_id: 1,
 				source_asset,
+				opened_at: BenchmarkValue::benchmark_value(),
 			});
 		ChannelActions::<T, I>::insert(&deposit_address, ChannelAction::<T::AccountId>::LiquidityProvision {
 			lp_account: account("doogle", 0, 0)
