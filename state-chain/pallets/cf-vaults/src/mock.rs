@@ -188,11 +188,11 @@ impl Slashing for MockSlasher {
 	fn slash_balance(_account_id: &Self::AccountId, _amount: sp_runtime::Percent) {}
 }
 
-pub struct BlockNumberProvider;
+pub struct BlockHeightProvider;
 
 pub const HANDOVER_ACTIVATION_BLOCK: u64 = 1337;
 
-impl GetBlockHeight<MockEthereum> for BlockNumberProvider {
+impl GetBlockHeight<MockEthereum> for BlockHeightProvider {
 	fn get_block_height() -> u64 {
 		HANDOVER_ACTIVATION_BLOCK
 	}
@@ -215,7 +215,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type Broadcaster = MockBroadcaster;
 	type SafeMode = MockRuntimeSafeMode;
 	type Slasher = MockSlasher;
-	type ChainTracking = BlockNumberProvider;
+	type ChainTracking = BlockHeightProvider;
 }
 
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;
