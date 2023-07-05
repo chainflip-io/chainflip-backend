@@ -59,15 +59,24 @@ fn test_float() {
 		let upper_start = (start >> 128).low_u128();
 		let upper_end = (end >> 128).low_u128();
 
-		let upper = rand::distributions::Uniform::new_inclusive(upper_start, upper_end).sample(rng);
-		let lower = if upper_start < upper && upper < upper_end {
-			rng.gen()
+		if upper_start == upper_end {
+			U256::from(
+				rand::distributions::Uniform::new_inclusive(start.low_u128(), end.low_u128())
+					.sample(rng),
+			)
 		} else {
-			rand::distributions::Uniform::new_inclusive(start.low_u128(), end.low_u128())
-				.sample(rng)
-		};
+			let upper =
+				rand::distributions::Uniform::new_inclusive(upper_start, upper_end).sample(rng);
+			let lower = if upper_start < upper && upper < upper_end {
+				rng.gen()
+			} else if upper_start == upper {
+				rand::distributions::Uniform::new_inclusive(start.low_u128(), u128::MAX).sample(rng)
+			} else {
+				rand::distributions::Uniform::new_inclusive(0u128, end.low_u128()).sample(rng)
+			};
 
-		(U256::from(upper) << 128) + U256::from(lower)
+			(U256::from(upper) << 128) + U256::from(lower)
+		}
 	}
 
 	fn rng_u256_numerator_denominator(rng: &mut impl rand::Rng) -> (U256, U256) {
