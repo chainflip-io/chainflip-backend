@@ -709,7 +709,8 @@ where
                                     state_chain_runtime::RuntimeEvent::EthereumIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
                                             deposit_address,
-                                            source_asset
+                                            source_asset,
+                                            ..
                                         }
                                     ) => {
                                         use cf_primitives::chains::assets::eth;
@@ -747,7 +748,8 @@ where
                                     state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
                                             deposit_address,
-                                            source_asset
+                                            source_asset,
+                                            ..
                                         }
                                     ) => {
                                         assert_eq!(source_asset, cf_primitives::chains::assets::dot::Asset::Dot);
@@ -765,7 +767,8 @@ where
                                     state_chain_runtime::RuntimeEvent::BitcoinIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
                                             deposit_address,
-                                            source_asset
+                                            source_asset,
+                                            ..
                                         }
                                     ) => {
                                         assert_eq!(source_asset, cf_primitives::chains::assets::btc::Asset::Btc);
