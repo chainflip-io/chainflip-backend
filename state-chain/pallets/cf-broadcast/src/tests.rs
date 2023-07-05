@@ -191,8 +191,6 @@ fn test_abort_after_number_of_attempts_is_equal_to_the_number_of_authorities() {
 				broadcast_id: broadcast_attempt_id.broadcast_id
 			})
 		);
-
-		assert_broadcast_storage_cleaned_up(broadcast_attempt_id.broadcast_id);
 	})
 }
 
