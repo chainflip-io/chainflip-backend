@@ -35,12 +35,11 @@ fn blacklisted_asset_will_not_egress_via_batch_all() {
 
 		// Cannot egress assets that are blacklisted.
 		assert!(DisabledEgressAssets::<Test>::get(asset).is_none());
-		assert_ok!(IngressEgress::disable_asset_egress(RuntimeOrigin::root(), asset, true));
+		assert_ok!(IngressEgress::enable_or_disable_egress(RuntimeOrigin::root(), asset, true));
 		assert!(DisabledEgressAssets::<Test>::get(asset).is_some());
-		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::AssetEgressDisabled {
-			asset,
-			disabled: true,
-		}));
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::AssetEgressStatusChanged { asset, disabled: true },
+		));
 
 		// Eth should be blocked while Flip can be sent
 		IngressEgress::schedule_egress(asset, 1_000, ALICE_ETH_ADDRESS.into(), None);
@@ -60,12 +59,11 @@ fn blacklisted_asset_will_not_egress_via_batch_all() {
 		);
 
 		// re-enable the asset for Egress
-		assert_ok!(IngressEgress::disable_asset_egress(RuntimeOrigin::root(), asset, false));
+		assert_ok!(IngressEgress::enable_or_disable_egress(RuntimeOrigin::root(), asset, false));
 		assert!(DisabledEgressAssets::<Test>::get(asset).is_none());
-		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::AssetEgressDisabled {
-			asset,
-			disabled: false,
-		}));
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::AssetEgressStatusChanged { asset, disabled: false },
+		));
 
 		IngressEgress::on_finalize(1);
 
@@ -86,7 +84,7 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 		};
 
 		assert!(DisabledEgressAssets::<Test>::get(asset).is_none());
-		assert_ok!(IngressEgress::disable_asset_egress(RuntimeOrigin::root(), asset, true));
+		assert_ok!(IngressEgress::enable_or_disable_egress(RuntimeOrigin::root(), asset, true));
 
 		// Eth should be blocked while Flip can be sent
 		IngressEgress::schedule_egress(asset, 1_000, ALICE_ETH_ADDRESS.into(), Some(ccm.clone()));
@@ -114,7 +112,7 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 		);
 
 		// re-enable the asset for Egress
-		assert_ok!(IngressEgress::disable_asset_egress(RuntimeOrigin::root(), asset, false));
+		assert_ok!(IngressEgress::enable_or_disable_egress(RuntimeOrigin::root(), asset, false));
 
 		IngressEgress::on_finalize(2);
 
