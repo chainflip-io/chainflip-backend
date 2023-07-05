@@ -16,7 +16,7 @@ async function testSwap(sourceToken: Asset, destToken: Asset, addressType?: BtcA
     let address = await getAddress(destToken, seed, addressType);
     
     // For swaps with a message force the address to be the CF Receiver Mock address.
-    if (messageMetadata &&  chainFromAsset(destToken) === chainFromAsset('ETH')){
+    if (messageMetadata && chainFromAsset(destToken) === chainFromAsset('ETH')){
         address = getEthContractAddress('CFRECEIVER');
     }
 
@@ -47,69 +47,49 @@ async function testAll() {
             testSwap('ETH', 'USDC'),
         ])
 
-    await Promise.all([nativeContractSwaps, regularSwaps]);
-
-    // NOTE: Doing the CCM swaps separately because they have the same dstAddress and that can cause issues
-    // with observing the SwapDepositAddressReady event and with observeBalanceIncrease.
-    await Promise.all([
+    // NOTE: Parallelized ccm swaps with the same sourceToken and destToken won't work because
+    // all ccm swaps have the same destination address (cfReceiver) and then it will get a
+    // potentially incorrect depositAddress.
+    const ccmSwaps = Promise.all([
         testSwap('BTC', 'ETH', undefined, {
             message: new Web3().eth.abi.encodeParameter("string", "BTC to ETH w/ CCM!!"),
             gas_budget: 1000000,
             cf_parameters: "",
             source_address: { 'BTC': {'P2PKH': await getAddress('BTC', randomAsHex(32), 'P2PKH').then((btcAddress) => {encodeBtcAddressForContract(btcAddress)})}},
         }),
-    ])
-    await Promise.all([
-            testSwap('BTC', 'USDC', undefined, {
-                message: '0x' + Buffer.from("BTC to ETH w/ CCM!!", 'ascii').toString('hex'),
-                gas_budget: 600000,
-                cf_parameters: getAbiEncodedMessage(["uint256"]),
-                source_address: { 'BTC': {'P2SH': await getAddress('BTC', randomAsHex(32), 'P2SH').then((btcAddress) => {encodeBtcAddressForContract(btcAddress)})}},
-            }),
-    ])
-
-    await Promise.all([
-            testSwap('BTC', 'ETH', undefined, {
-                message: getAbiEncodedMessage(),
-                gas_budget: 750000,
-                cf_parameters: getAbiEncodedMessage([]),
-                source_address: { 'BTC': {'P2WPKH': await getAddress('BTC', randomAsHex(32), 'P2WPKH').then((btcAddress) => {encodeBtcAddressForContract(btcAddress)})}},
-            }),       
-    ])
-
-    await Promise.all([
         testSwap('BTC', 'USDC', undefined, {
-            message: getAbiEncodedMessage(["address","uint256","bytes"]),
-            gas_budget: 2000000,
-            cf_parameters: getAbiEncodedMessage(["string"]),
-            source_address: { 'BTC': {'P2WSH': await getAddress('BTC', randomAsHex(32), 'P2WSH').then((btcAddress) => {encodeBtcAddressForContract(btcAddress)})}},
-        }),       
-    ])
-
-    await Promise.all([
-            testSwap('DOT', 'ETH', undefined, {
-                message: getAbiEncodedMessage(["string","address"]),
-                gas_budget: 1000000,
-                cf_parameters: getAbiEncodedMessage(["string","string"]),
-                source_address: { 'DOT': await getAddress('DOT', randomAsHex(32)).then((dotAddress) => { encodeDotAddressForContract(dotAddress)})},
-            }),            
-        ])
-    await Promise.all([
+            message: '0x' + Buffer.from("BTC to ETH w/ CCM!!", 'ascii').toString('hex'),
+            gas_budget: 600000,
+            cf_parameters: getAbiEncodedMessage(["uint256"]),
+            source_address: { 'BTC': {'P2SH': await getAddress('BTC', randomAsHex(32), 'P2SH').then((btcAddress) => {encodeBtcAddressForContract(btcAddress)})}},
+        }),
+        testSwap('DOT', 'ETH', undefined, {
+            message: getAbiEncodedMessage(["string","address"]),
+            gas_budget: 1000000,
+            cf_parameters: getAbiEncodedMessage(["string","string"]),
+            source_address: { 'DOT': await getAddress('DOT', randomAsHex(32)).then((dotAddress) => { encodeDotAddressForContract(dotAddress)})},
+        }),            
         testSwap('DOT', 'USDC', undefined, {
             message: getAbiEncodedMessage(),
             gas_budget: 1000000,
             cf_parameters: getAbiEncodedMessage(["address","uint256"]),
             source_address: { 'DOT': await getAddress('DOT', randomAsHex(32)).then((dotAddress) => { encodeDotAddressForContract(dotAddress)})},
         }),            
-    ])        
-    await Promise.all([
         testSwap('USDC', 'ETH', undefined, {
             message: getAbiEncodedMessage(),
             gas_budget: 5000000,
+            cf_parameters: getAbiEncodedMessage(["bytes","uint256"]),
+            source_address: {'ETH': await getAddress('ETH', randomAsHex(32))},
+        }),    
+        testSwap('ETH', 'USDC', undefined, {
+            message: getAbiEncodedMessage(["address","uint256","bytes"]),
+            gas_budget: 5000000,
             cf_parameters: getAbiEncodedMessage(["address","uint256"]),
             source_address: {'ETH': await getAddress('ETH', randomAsHex(32))},
-        }),            
-    ])      
+        })            
+    ])   
+
+    await Promise.all([nativeContractSwaps, regularSwaps, ccmSwaps]);
 
 }
 

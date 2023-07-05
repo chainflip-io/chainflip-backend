@@ -40,8 +40,12 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
             if (!destAddress) return false;
 
             const destAddressEncoded = encodeDestinationAddress(destAddress, destToken);
+            
+            const destTokenMatches = swapInfo[4].charAt(0) + swapInfo[4].slice(1).toUpperCase() == destToken;
+            const sourceTokenMatches = swapInfo[3].charAt(0) + swapInfo[3].slice(1).toUpperCase() == sourceToken;
+            const destAddressMatches = destAddressEncoded.toLowerCase() === ADDRESS.toLowerCase();
 
-            return destAddressEncoded.toLowerCase() === ADDRESS.toLowerCase()
+            return destAddressMatches && destTokenMatches && sourceTokenMatches;
         });
 
     await newSwap(sourceToken, destToken, ADDRESS, FEE, messageMetadata);
