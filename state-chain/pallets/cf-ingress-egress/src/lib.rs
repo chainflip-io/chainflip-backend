@@ -378,14 +378,14 @@ pub mod pallet {
 		///
 		/// - [On update](Event::AssetEgressStatusChanged)
 		#[pallet::weight(T::WeightInfo::disable_asset_egress())]
-		pub fn toggle_asset_egress(
+		pub fn enable_or_disable_egress(
 			origin: OriginFor<T>,
 			asset: TargetChainAsset<T, I>,
 			set_disabled: bool,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			let is_currently_disabled = DisabledEgressAssets::<T, I>::get(asset).is_some();
+			let is_currently_disabled = DisabledEgressAssets::<T, I>::contains_key(asset);
 
 			let do_disable = !is_currently_disabled && set_disabled;
 			let do_enable = is_currently_disabled && !set_disabled;
