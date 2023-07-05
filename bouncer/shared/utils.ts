@@ -245,5 +245,5 @@ export function encodeBtcAddressForContract(address: any) {
 
 export function encodeDotAddressForContract(address: string, keyring_encode?: any ) {
   const keyring = keyring_encode ?? new Keyring({ type: 'sr25519' });
-  u8aToHex(keyring.decodeAddress(address))
+  return u8aToHex(keyring.decodeAddress(address))
 }
