@@ -173,6 +173,12 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 						);
 					},
 					Err(SetAggKeyWithAggKeyError::Failed) => {
+						#[cfg(test)]
+						panic!(
+							"Unexpected failure during {} vault activation.",
+							<T::Chain as cf_chains::Chain>::NAME,
+						);
+						#[cfg(not(test))]
 						log::error!(
 							"Unexpected failure during {} vault activation.",
 							<T::Chain as cf_chains::Chain>::NAME,
