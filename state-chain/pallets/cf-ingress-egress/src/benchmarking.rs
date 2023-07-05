@@ -23,7 +23,7 @@ benchmarks_instance_pallet! {
 		DepositAddressDetailsLookup::<T, I>::insert(&deposit_address, (DepositAddressDetails {
 				channel_id: 1,
 				source_asset,
-			}, <T::TargetChain as Chain>::DepositAddress::new(
+			}, T::DepositAddress::new(
 				1,
 				deposit_address.clone(),
 			)));
@@ -56,7 +56,7 @@ benchmarks_instance_pallet! {
 			DepositAddressDetailsLookup::<T, I>::insert(deposit_address.clone(), (DepositAddressDetails {
 				channel_id: a as u64,
 				source_asset,
-			}, <T::TargetChain as Chain>::DepositAddress::new(
+			}, T::DepositAddress::new(
 				a as u64,
 				deposit_address.clone(),
 			)));

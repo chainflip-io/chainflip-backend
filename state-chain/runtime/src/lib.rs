@@ -19,10 +19,8 @@ use crate::{
 use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::{
 	btc::BitcoinNetwork,
-	dot,
-	dot::{api::PolkadotApi, PolkadotHash},
-	eth,
-	eth::{api::EthereumApi, Ethereum},
+	dot::{self, api::PolkadotApi, PolkadotHash},
+	eth::{self, api::EthereumApi, Ethereum},
 	Bitcoin, Polkadot,
 };
 use pallet_transaction_payment::Multiplier;
@@ -79,9 +77,13 @@ pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
-	epoch_transition::ChainflipEpochTransitions, BroadcastReadyProvider, BtcEnvironment,
-	BtcVaultTransitionHandler, ChainAddressConverter, ChainflipHeartbeat, EthEnvironment,
-	EthVaultTransitionHandler, RotationCallbackProvider, TokenholderGovernanceBroadcaster,
+	address_derivation::{
+		btc::BitcoinDepositAddress, dot::PolkadotDepositAddress, eth::EthereumDepositAddress,
+	},
+	epoch_transition::ChainflipEpochTransitions,
+	BroadcastReadyProvider, BtcEnvironment, BtcVaultTransitionHandler, ChainAddressConverter,
+	ChainflipHeartbeat, EthEnvironment, EthVaultTransitionHandler, RotationCallbackProvider,
+	TokenholderGovernanceBroadcaster,
 };
 
 use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
@@ -155,7 +157,6 @@ pub fn native_version() -> NativeVersion {
 
 parameter_types! {
 	pub const MinEpoch: BlockNumber = 1;
-
 }
 
 impl pallet_cf_validator::Config for Runtime {
@@ -281,6 +282,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type Broadcaster = EthereumBroadcaster;
 	type DepositHandler = chainflip::EthDepositHandler;
 	type CcmHandler = Swapping;
+	type DepositAddress = EthereumDepositAddress;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
 
@@ -295,6 +297,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type Broadcaster = PolkadotBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::DotDepositHandler;
+	type DepositAddress = PolkadotDepositAddress;
 	type CcmHandler = Swapping;
 }
 
@@ -309,6 +312,7 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type Broadcaster = BitcoinBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::BtcDepositHandler;
+	type DepositAddress = BitcoinDepositAddress;
 	type CcmHandler = Swapping;
 }
 

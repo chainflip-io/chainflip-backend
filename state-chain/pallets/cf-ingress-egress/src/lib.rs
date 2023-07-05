@@ -10,7 +10,7 @@ mod mock;
 #[cfg(test)]
 mod tests;
 pub mod weights;
-use cf_chains::DepositChannel;
+use cf_traits::DepositChannel;
 pub use weights::WeightInfo;
 
 use cf_primitives::{BasisPoints, EgressCounter, EgressId, ForeignChain};
@@ -100,9 +100,6 @@ pub mod pallet {
 	pub(crate) type DepositFetchIdOf<T, I> =
 		<<T as Config<I>>::TargetChain as Chain>::DepositFetchId;
 
-	pub(crate) type DepositAddressOf<T, I> =
-		<<T as Config<I>>::TargetChain as Chain>::DepositAddress;
-
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct DepositWitness<C: Chain + ChainCrypto> {
 		pub deposit_address: C::ChainAccount,
@@ -179,6 +176,13 @@ pub mod pallet {
 		/// Provides callbacks for deposit lifecycle events.
 		type DepositHandler: DepositHandler<Self::TargetChain>;
 
+		type DepositAddress: Member
+			+ Parameter
+			+ DepositChannel<
+				Address = <<Self as Config<I>>::TargetChain as Chain>::ChainAccount,
+				DepositFetchId = <<Self as Config<I>>::TargetChain as Chain>::DepositFetchId,
+			>;
+
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;
 	}
@@ -188,7 +192,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		TargetChainAccount<T, I>,
-		(DepositAddressDetails<T::TargetChain>, DepositAddressOf<T, I>),
+		(DepositAddressDetails<T::TargetChain>, T::DepositAddress),
 		OptionQuery,
 	>;
 
@@ -229,12 +233,12 @@ pub mod pallet {
 	/// Stores address ready for use.
 	#[pallet::storage]
 	pub(crate) type AddressPool<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, ChannelId, DepositAddressOf<T, I>>;
+		StorageMap<_, Twox64Concat, ChannelId, T::DepositAddress>;
 
 	/// Map of channel id to the deposit fetch parameters.
 	#[pallet::storage]
 	pub(crate) type FetchParamDetails<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, ChannelId, (DepositFetchIdOf<T, I>, TargetChainAccount<T, I>)>;
+		StorageMap<_, Twox64Concat, ChannelId, (T::DepositAddress, TargetChainAccount<T, I>)>;
 
 	/// Defines the minimum amount of Deposit allowed for each asset.
 	#[pallet::storage]
@@ -648,7 +652,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					.ok_or(Error::<T, I>::ChannelIdsExhausted)?;
 				ChannelIdCounter::<T, I>::put(next_channel_id);
 				(
-					<T::TargetChain as Chain>::DepositAddress::new(
+					T::DepositAddress::new(
 						next_channel_id,
 						T::AddressDerivation::generate_address(source_asset, next_channel_id)?,
 					),

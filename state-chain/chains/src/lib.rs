@@ -105,10 +105,6 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValue
 		+ BenchmarkValueExtended
 		+ ChannelIdConstructor<Address = Self::ChainAccount>;
-
-	type DepositAddress: Member
-		+ Parameter
-		+ DepositChannel<Address = Self::ChainAccount, DepositFetchId = Self::DepositFetchId>;
 }
 
 /// Measures the age of items associated with the Chain.
@@ -331,38 +327,39 @@ pub struct CcmDepositMetadata {
 	pub source_address: ForeignChainAddress,
 }
 
-/// Deposit address trait. This traits defines the interface for chain specific aspects of deposit
-/// address management.
-pub trait DepositChannel {
-	type Address;
-	type DepositFetchId;
+// // /// Deposit address trait. This traits defines the interface for chain specific aspects of
+// // deposit /// address management.
+// pub trait DepositChannel {
+// 	type Address;
+// 	type DepositFetchId;
+// 	type AddressDerivation: AddressDerivationApi<Chain>;
 
-	fn new(channel_id: u64, address: Self::Address) -> Self;
+// 	fn new(channel_id: u64, address: Self::Address) -> Self;
 
-	/// Returns the actual address raw address.
-	fn get_address(&self) -> Self::Address;
+// 	/// Returns the actual address raw address.
+// 	fn get_address(&self) -> Self::Address;
 
-	/// Returns the deposit fetch id.
-	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId;
+// 	/// Returns the deposit fetch id.
+// 	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId;
 
-	/// Set the state of the
-	fn process_broadcast(self) -> (Self, bool)
-	where
-		Self: Sized,
-	{
-		(self, false)
-	}
+// 	/// Set the state of the
+// 	fn process_broadcast(self) -> (Self, bool)
+// 	where
+// 		Self: Sized,
+// 	{
+// 		(self, false)
+// 	}
 
-	fn finalize(self) -> Self
-	where
-		Self: Sized,
-	{
-		self
-	}
-	fn maybe_recycle(&self) -> bool
-	where
-		Self: Sized,
-	{
-		true
-	}
-}
+// 	fn finalize(self) -> Self
+// 	where
+// 		Self: Sized,
+// 	{
+// 		self
+// 	}
+// 	fn maybe_recycle(&self) -> bool
+// 	where
+// 		Self: Sized,
+// 	{
+// 		true
+// 	}
+// }

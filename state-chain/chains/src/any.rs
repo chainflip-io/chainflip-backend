@@ -1,6 +1,4 @@
-use crate::{
-	address::ForeignChainAddress, none::NoneChainDepositAddress, Chain, ChannelIdConstructor,
-};
+use crate::{address::ForeignChainAddress, Chain, ChannelIdConstructor};
 
 use cf_primitives::{
 	chains::{assets, AnyChain},
@@ -17,7 +15,6 @@ impl Chain for AnyChain {
 	type ChainAccount = ForeignChainAddress;
 	type EpochStartData = ();
 	type DepositFetchId = ();
-	type DepositAddress = NoneChainDepositAddress;
 }
 
 impl ChannelIdConstructor for () {

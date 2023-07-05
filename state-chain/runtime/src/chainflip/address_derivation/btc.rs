@@ -1,8 +1,13 @@
 use super::AddressDerivation;
 use crate::{BitcoinVault, Validator};
-use cf_chains::{btc::deposit_address::DepositAddress, Bitcoin, Chain};
+use cf_chains::{
+	btc::{deposit_address::DepositAddress, BitcoinFetchId, ScriptPubkey},
+	Bitcoin, Chain,
+};
 use cf_primitives::{chains::assets::btc, ChannelId};
-use cf_traits::{AddressDerivationApi, EpochInfo};
+use cf_traits::{AddressDerivationApi, DepositChannel, EpochInfo};
+use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 use sp_runtime::DispatchError;
 
 impl AddressDerivationApi<Bitcoin> for AddressDerivation {
@@ -23,6 +28,36 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 			channel_id,
 		)
 		.script_pubkey())
+	}
+}
+
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
+pub struct BitcoinDepositAddress {
+	pub address: ScriptPubkey,
+	pub deposit_fetch_id: BitcoinFetchId,
+}
+
+impl DepositChannel for BitcoinDepositAddress {
+	type Address = ScriptPubkey;
+	type DepositFetchId = BitcoinFetchId;
+
+	fn get_address(&self) -> Self::Address {
+		self.address.clone()
+	}
+
+	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
+		self.deposit_fetch_id
+	}
+
+	fn new(_channel_id: u64, _address: Self::Address) -> Self {
+		todo!()
+	}
+
+	fn maybe_recycle(&self) -> bool
+	where
+		Self: Sized,
+	{
+		false
 	}
 }
 

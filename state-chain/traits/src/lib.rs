@@ -878,3 +878,40 @@ pub trait OnBroadcastReady<C: ChainAbi> {
 pub trait GetBitcoinFeeInfo {
 	fn bitcoin_fee_info() -> cf_chains::btc::BitcoinFeeInfo;
 }
+
+// /// Deposit address trait. This traits defines the interface for chain specific aspects of
+// deposit /// address management.
+pub trait DepositChannel {
+	type Address;
+	type DepositFetchId;
+	// type AddressDerivation: AddressDerivationApi<Chain>;
+
+	fn new(channel_id: u64, address: Self::Address) -> Self;
+
+	/// Returns the actual address raw address.
+	fn get_address(&self) -> Self::Address;
+
+	/// Returns the deposit fetch id.
+	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId;
+
+	/// Set the state of the
+	fn process_broadcast(self) -> (Self, bool)
+	where
+		Self: Sized,
+	{
+		(self, false)
+	}
+
+	fn finalize(self) -> Self
+	where
+		Self: Sized,
+	{
+		self
+	}
+	fn maybe_recycle(&self) -> bool
+	where
+		Self: Sized,
+	{
+		true
+	}
+}

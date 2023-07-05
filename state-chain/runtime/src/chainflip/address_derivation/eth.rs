@@ -1,10 +1,16 @@
 use crate::{Environment, EthEnvironment};
 use cf_chains::{
-	eth::{api::EthEnvironmentProvider, deposit_address::get_create_2_address},
+	eth::{
+		api::EthEnvironmentProvider, deposit_address::get_create_2_address, Address,
+		EthereumChannelId,
+	},
 	Chain, Ethereum,
 };
 use cf_primitives::{chains::assets::eth, ChannelId};
-use cf_traits::AddressDerivationApi;
+use cf_traits::{AddressDerivationApi, DepositChannel};
+use codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
+use sp_core::H160;
 use sp_runtime::DispatchError;
 
 use super::AddressDerivation;
@@ -20,6 +26,83 @@ impl AddressDerivationApi<Ethereum> for AddressDerivation {
 			channel_id,
 		)
 		.into())
+	}
+}
+
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
+pub enum DeploymentStatus {
+	Deployed,
+	Pending,
+	Undeployed,
+}
+
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
+pub struct EthereumDepositAddress {
+	pub address: H160,
+	pub channel_id: u64,
+	pub deployment_status: DeploymentStatus,
+	pub deposit_fetch_id: EthereumChannelId,
+}
+
+impl DepositChannel for EthereumDepositAddress {
+	type Address = H160;
+	type DepositFetchId = EthereumChannelId;
+
+	fn get_address(&self) -> Self::Address {
+		self.address
+	}
+
+	fn process_broadcast(mut self) -> (Self, bool)
+	where
+		Self: Sized,
+	{
+		match self.deployment_status {
+			DeploymentStatus::Deployed => (self, true),
+			DeploymentStatus::Pending => (self, false),
+			DeploymentStatus::Undeployed => {
+				self.deployment_status = DeploymentStatus::Pending;
+				(self, true)
+			},
+		}
+	}
+
+	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
+		self.deposit_fetch_id
+	}
+
+	fn new(channel_id: u64, address: Self::Address) -> Self {
+		EthereumDepositAddress {
+			address,
+			channel_id,
+			deployment_status: DeploymentStatus::Undeployed,
+			deposit_fetch_id: EthereumChannelId::UnDeployed(channel_id),
+		}
+	}
+
+	fn maybe_recycle(&self) -> bool
+	where
+		Self: Sized,
+	{
+		if self.deployment_status == DeploymentStatus::Deployed {
+			true
+		} else {
+			false
+		}
+	}
+
+	fn finalize(mut self) -> Self
+	where
+		Self: Sized,
+	{
+		match self.deployment_status {
+			DeploymentStatus::Pending => {
+				self.deposit_fetch_id = EthereumChannelId::Deployed(self.address);
+				self.deployment_status = DeploymentStatus::Deployed;
+			},
+			DeploymentStatus::Undeployed => self.deployment_status = DeploymentStatus::Pending,
+			_ => (),
+		}
+		self
 	}
 }
 

@@ -1,7 +1,12 @@
 use crate::Vec;
-use cf_chains::{dot::PolkadotAccountId, Chain, Polkadot};
+use cf_chains::{
+	dot::{PolkadotAccountId, PolkadotChannelId},
+	Chain, Polkadot,
+};
 use cf_primitives::{chains::assets::dot, ChannelId};
-use cf_traits::AddressDerivationApi;
+use cf_traits::{AddressDerivationApi, DepositChannel};
+use codec::{Decode, Encode};
+use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{BlakeTwo256, Hash},
 	DispatchError,
@@ -43,6 +48,30 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 		let payload_hash = BlakeTwo256::hash(&payload);
 
 		Ok(PolkadotAccountId::from_aliased(*payload_hash.as_fixed_bytes()))
+	}
+}
+
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
+pub struct PolkadotDepositAddress {
+	pub channel_id: PolkadotChannelId,
+	pub address: PolkadotAccountId,
+	pub deposit_fetch_id: PolkadotChannelId,
+}
+
+impl DepositChannel for PolkadotDepositAddress {
+	type Address = PolkadotAccountId;
+	type DepositFetchId = PolkadotChannelId;
+
+	fn get_address(&self) -> Self::Address {
+		self.address
+	}
+
+	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
+		self.deposit_fetch_id
+	}
+
+	fn new(channel_id: u64, address: Self::Address) -> Self {
+		PolkadotDepositAddress { channel_id, address, deposit_fetch_id: channel_id }
 	}
 }
 

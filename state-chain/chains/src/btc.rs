@@ -7,9 +7,7 @@ extern crate alloc;
 use core::mem::size_of;
 
 use self::deposit_address::DepositAddress;
-use crate::{
-	Age, Chain, ChainAbi, ChainCrypto, ChannelIdConstructor, DepositChannel, FeeRefundCalculator,
-};
+use crate::{Age, Chain, ChainAbi, ChainCrypto, ChannelIdConstructor, FeeRefundCalculator};
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use base58::{FromBase58, ToBase58};
@@ -147,35 +145,35 @@ pub struct EpochStartData {
 	pub change_pubkey: AggKey,
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
-pub struct BitcoinDepositAddress {
-	pub address: ScriptPubkey,
-	pub deposit_fetch_id: BitcoinFetchId,
-}
+// #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
+// pub struct BitcoinDepositAddress {
+// 	pub address: ScriptPubkey,
+// 	pub deposit_fetch_id: BitcoinFetchId,
+// }
 
-impl DepositChannel for BitcoinDepositAddress {
-	type Address = ScriptPubkey;
-	type DepositFetchId = BitcoinFetchId;
+// impl DepositChannel for BitcoinDepositAddress {
+// 	type Address = ScriptPubkey;
+// 	type DepositFetchId = BitcoinFetchId;
 
-	fn get_address(&self) -> Self::Address {
-		self.address.clone()
-	}
+// 	fn get_address(&self) -> Self::Address {
+// 		self.address.clone()
+// 	}
 
-	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
-		self.deposit_fetch_id
-	}
+// 	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
+// 		self.deposit_fetch_id
+// 	}
 
-	fn new(_channel_id: u64, _address: Self::Address) -> Self {
-		todo!()
-	}
+// 	fn new(_channel_id: u64, _address: Self::Address) -> Self {
+// 		todo!()
+// 	}
 
-	fn maybe_recycle(&self) -> bool
-	where
-		Self: Sized,
-	{
-		false
-	}
-}
+// 	fn maybe_recycle(&self) -> bool
+// 	where
+// 		Self: Sized,
+// 	{
+// 		false
+// 	}
+// }
 
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
@@ -188,7 +186,6 @@ impl Chain for Bitcoin {
 	type ChainAccount = ScriptPubkey;
 	type EpochStartData = EpochStartData;
 	type DepositFetchId = BitcoinFetchId;
-	type DepositAddress = BitcoinDepositAddress;
 }
 
 #[derive(Clone, Copy, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]

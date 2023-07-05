@@ -225,29 +225,29 @@ impl Age for PolkadotTrackedData {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
-pub struct PolkadotDepositAddress {
-	pub channel_id: PolkadotChannelId,
-	pub address: PolkadotAccountId,
-	pub deposit_fetch_id: PolkadotChannelId,
-}
+// #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
+// pub struct PolkadotDepositAddress {
+// 	pub channel_id: PolkadotChannelId,
+// 	pub address: PolkadotAccountId,
+// 	pub deposit_fetch_id: PolkadotChannelId,
+// }
 
-impl DepositChannel for PolkadotDepositAddress {
-	type Address = PolkadotAccountId;
-	type DepositFetchId = PolkadotChannelId;
+// impl DepositChannel for PolkadotDepositAddress {
+// 	type Address = PolkadotAccountId;
+// 	type DepositFetchId = PolkadotChannelId;
 
-	fn get_address(&self) -> Self::Address {
-		self.address
-	}
+// 	fn get_address(&self) -> Self::Address {
+// 		self.address
+// 	}
 
-	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
-		self.deposit_fetch_id
-	}
+// 	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
+// 		self.deposit_fetch_id
+// 	}
 
-	fn new(channel_id: u64, address: Self::Address) -> Self {
-		PolkadotDepositAddress { channel_id, address, deposit_fetch_id: channel_id }
-	}
-}
+// 	fn new(channel_id: u64, address: Self::Address) -> Self {
+// 		PolkadotDepositAddress { channel_id, address, deposit_fetch_id: channel_id }
+// 	}
+// }
 
 impl Chain for Polkadot {
 	const NAME: &'static str = "Polkadot";
@@ -259,7 +259,6 @@ impl Chain for Polkadot {
 	type ChainAsset = assets::dot::Asset;
 	type EpochStartData = EpochStartData;
 	type DepositFetchId = PolkadotChannelId;
-	type DepositAddress = PolkadotDepositAddress;
 }
 
 impl ChainCrypto for Polkadot {

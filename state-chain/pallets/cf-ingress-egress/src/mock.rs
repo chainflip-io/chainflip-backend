@@ -1,5 +1,6 @@
 use crate::DepositWitness;
 pub use crate::{self as pallet_cf_ingress_egress};
+use cf_chains::eth::EthereumChannelId;
 pub use cf_chains::{
 	address::ForeignChainAddress,
 	eth::api::{EthereumApi, EthereumReplayProtection},
@@ -17,11 +18,13 @@ use cf_traits::{
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
 	},
-	DepositApi, DepositHandler,
+	DepositApi, DepositChannel, DepositHandler,
 };
+use codec::{Decode, Encode};
 use frame_support::traits::{OriginTrait, UnfilteredDispatchable};
 use frame_system as system;
-use sp_core::H256;
+use scale_info::TypeInfo;
+use sp_core::{H160, H256};
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup, Zero},
@@ -78,6 +81,26 @@ impl DepositHandler<Ethereum> for MockDepositHandler {}
 pub type MockEgressBroadcaster =
 	MockBroadcaster<(MockEthereumApiCall<MockEthEnvironment>, RuntimeCall)>;
 
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
+pub struct MockDepositChannel;
+
+impl DepositChannel for MockDepositChannel {
+	type Address = H160;
+	type DepositFetchId = EthereumChannelId;
+
+	fn new(channel_id: u64, address: Self::Address) -> Self {
+		todo!()
+	}
+
+	fn get_address(&self) -> Self::Address {
+		todo!()
+	}
+
+	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
+		todo!()
+	}
+}
+
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
@@ -88,8 +111,9 @@ impl crate::Config for Test {
 	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
-	type WeightInfo = ();
 	type CcmHandler = MockCcmHandler;
+	type DepositAddress = MockDepositChannel;
+	type WeightInfo = ();
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;
