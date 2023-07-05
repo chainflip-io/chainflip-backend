@@ -1,4 +1,5 @@
 use super::*;
+use cf_chains::SetAggKeyWithAggKeyError;
 use cf_traits::{CeremonyIdProvider, GetBlockHeight};
 use sp_runtime::traits::BlockNumberProvider;
 
@@ -130,39 +131,66 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		if let Some(VaultRotationStatus::<T, I>::KeyHandoverComplete { new_public_key }) =
 			PendingVaultRotation::<T, I>::get()
 		{
-			if let Some((rotation_call, key_state, epoch_index)) = Self::active_epoch_key()
-				.and_then(|EpochKey { key, epoch_index, key_state }| {
-					<T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
-						Some(key),
-						new_public_key,
-					)
-					.ok()
-					.map(|call| (call, key_state, epoch_index))
-				}) {
-				let (_, threshold_request_id) =
-					T::Broadcaster::threshold_sign_and_broadcast(rotation_call);
-				// Optimistic activation means we don't need to wait for the activation
-				// transaction to succeed before using the new key.
-				if <T::Chain as Chain>::OptimisticActivation::get() {
-					Self::activate_new_key(new_public_key, T::ChainTracking::get_block_height());
-				} else {
-					debug_assert!(
-						matches!(key_state, KeyState::Unlocked),
-						"Current epoch key must be active to activate next key."
-					);
-					CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
-						epoch_index,
-						key_state: KeyState::Locked(threshold_request_id),
-					});
-					PendingVaultRotation::<T, I>::put(
-						VaultRotationStatus::<T, I>::AwaitingActivation { new_public_key },
-					);
+			if let Some(EpochKey { key, key_state, .. }) = Self::active_epoch_key() {
+				match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
+					Some(key),
+					new_public_key,
+				) {
+					Ok(activation_call) => {
+						let (_, threshold_request_id) =
+							T::Broadcaster::threshold_sign_and_broadcast(activation_call);
+						if <T::Chain as Chain>::OptimisticActivation::get() {
+							// Optimistic activation means we don't need to wait for the activation
+							// transaction to succeed before using the new key.
+							Self::activate_new_key(
+								new_public_key,
+								T::ChainTracking::get_block_height(),
+							);
+						} else {
+							debug_assert!(
+								matches!(key_state, KeyState::Unlocked),
+								"Current epoch key must be active to activate next key."
+							);
+							// The key needs to be locked until activation is complete.
+							ActiveVaultEpochAndState::<T, I>::mutate(|epoch_end_key| {
+								epoch_end_key
+									.as_mut()
+									.expect("Checked above at if let Some")
+									.key_state
+									.lock(threshold_request_id)
+							});
+							PendingVaultRotation::<T, I>::put(
+								VaultRotationStatus::<T, I>::AwaitingActivation { new_public_key },
+							);
+						}
+					},
+					Err(SetAggKeyWithAggKeyError::NotRequired) => {
+						// This can happen if, for example, on a utxo chain there are no funds that
+						// need to be swept.
+						Self::activate_new_key(
+							new_public_key,
+							T::ChainTracking::get_block_height(),
+						);
+					},
+					Err(SetAggKeyWithAggKeyError::Failed) => {
+						log::error!(
+							"Unexpected failure during {} vault activation.",
+							<T::Chain as cf_chains::Chain>::NAME,
+						);
+					},
 				}
 			} else {
-				// The block number value 1, which the vault is being set with is a dummy value
-				// and doesn't mean anything. It will be later modified to the real value when
-				// we witness the vault rotation manually via governance
-				Self::set_vault_for_next_epoch(new_public_key, 1_u32.into());
+				// No active key means we are bootstrapping the vault.
+				// Block height will be zero and will be updated by governance.
+				// TODO [Dan]: We should remove the requirement to set the key here, it's imposed by
+				//   the current polkadot bootstrapping implementation.
+				Self::set_vault_key_for_epoch(
+					CurrentEpochIndex::<T>::get().saturating_add(1),
+					Vault {
+						public_key: new_public_key,
+						active_from_block: T::ChainTracking::get_block_height(),
+					},
+				);
 				PendingVaultRotation::<T, I>::put(
 					VaultRotationStatus::<T, I>::AwaitingActivation { new_public_key },
 				);

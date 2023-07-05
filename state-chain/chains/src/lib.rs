@@ -224,13 +224,18 @@ pub trait ChainEnvironment<
 	fn lookup(s: LookupKey) -> Option<LookupValue>;
 }
 
+pub enum SetAggKeyWithAggKeyError {
+	Failed,
+	NotRequired,
+}
+
 /// Constructs the `SetAggKeyWithAggKey` api call.
 #[allow(clippy::result_unit_err)]
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		maybe_old_key: Option<<Abi as ChainCrypto>::AggKey>,
 		new_key: <Abi as ChainCrypto>::AggKey,
-	) -> Result<Self, ()>;
+	) -> Result<Self, SetAggKeyWithAggKeyError>;
 }
 
 #[allow(clippy::result_unit_err)]

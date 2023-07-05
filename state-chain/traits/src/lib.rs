@@ -386,6 +386,10 @@ impl KeyState {
 	pub fn unlock(&mut self) {
 		*self = KeyState::Unlocked;
 	}
+
+	pub fn lock(&mut self, request_id: ThresholdSignatureRequestId) {
+		*self = KeyState::Locked(request_id);
+	}
 }
 
 #[derive(Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]

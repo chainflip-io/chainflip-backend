@@ -622,7 +622,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
-			Self::set_next_vault(new_public_key, block_number);
+			Self::activate_new_key(new_public_key, block_number);
 
 			T::SafeMode::set_code_red();
 
@@ -682,13 +682,9 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
 			if let Some(vault_key) = self.vault_key {
-				Pallet::<T, I>::set_vault_for_epoch(
-					VaultEpochAndState {
-						epoch_index: cf_primitives::GENESIS_EPOCH,
-						key_state: KeyState::Unlocked,
-					},
-					vault_key,
-					self.deployment_block,
+				Pallet::<T, I>::set_vault_key_for_epoch(
+					cf_primitives::GENESIS_EPOCH,
+					Vault { public_key: vault_key, active_from_block: self.deployment_block },
 				);
 			} else {
 				log::info!("No genesis vault key configured for {}.", Pallet::<T, I>::name());
@@ -761,38 +757,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		weight
 	}
 
-	fn set_next_vault(
-		new_public_key: AggKeyFor<T, I>,
-		rotated_at_block_number: ChainBlockNumberFor<T, I>,
-	) {
-		Self::set_vault_for_next_epoch(new_public_key, rotated_at_block_number);
-		T::VaultTransitionHandler::on_new_vault();
-	}
-
-	fn set_vault_for_next_epoch(
-		new_public_key: AggKeyFor<T, I>,
-		rotated_at_block_number: ChainBlockNumberFor<T, I>,
-	) {
-		Self::set_vault_for_epoch(
-			VaultEpochAndState {
-				epoch_index: CurrentEpochIndex::<T>::get().saturating_add(1),
-				key_state: KeyState::Unlocked,
-			},
-			new_public_key,
-			rotated_at_block_number.saturating_add(ChainBlockNumberFor::<T, I>::one()),
-		);
-	}
-
-	fn set_vault_for_epoch(
-		current_vault_and_state: VaultEpochAndState,
-		new_public_key: AggKeyFor<T, I>,
-		active_from_block: ChainBlockNumberFor<T, I>,
-	) {
-		Vaults::<T, I>::insert(
-			current_vault_and_state.epoch_index,
-			Vault { public_key: new_public_key, active_from_block },
-		);
-		ActiveVaultEpochAndState::<T, I>::put(current_vault_and_state);
+	fn set_vault_key_for_epoch(epoch_index: EpochIndex, vault: Vault<T::Chain>) {
+		Vaults::<T, I>::insert(epoch_index, vault);
+		ActiveVaultEpochAndState::<T, I>::put(VaultEpochAndState {
+			epoch_index,
+			key_state: KeyState::Unlocked,
+		});
 	}
 
 	// Once we've successfully generated the key, we want to do a signing ceremony to verify that
@@ -848,7 +818,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 	fn activate_new_key(new_agg_key: AggKeyFor<T, I>, block_number: ChainBlockNumberFor<T, I>) {
 		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete);
-		Self::set_next_vault(new_agg_key, block_number);
+		Self::set_vault_key_for_epoch(
+			CurrentEpochIndex::<T>::get().saturating_add(1),
+			Vault {
+				public_key: new_agg_key,
+				active_from_block: block_number.saturating_add(One::one()),
+			},
+		);
+		T::VaultTransitionHandler::on_new_vault();
 		Self::deposit_event(Event::VaultRotationCompleted);
 	}
 }

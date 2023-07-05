@@ -850,7 +850,7 @@ fn set_keygen_response_timeout_works() {
 }
 
 #[test]
-fn when_set_agg_key_with_agg_key_not_required_we_wait_for_governance() {
+fn when_set_agg_key_with_agg_key_not_required_we_skip_to_completion() {
 	new_test_ext().execute_with(|| {
 		PendingVaultRotation::put(VaultRotationStatus::<MockRuntime, _>::KeyHandoverComplete {
 			new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER,
@@ -859,12 +859,10 @@ fn when_set_agg_key_with_agg_key_not_required_we_wait_for_governance() {
 		MockSetAggKeyWithAggKey::set_required(false);
 
 		VaultsPallet::activate();
-		assert_eq!(
-			last_event::<MockRuntime>(),
-			PalletEvent::<MockRuntime, _>::AwaitingGovernanceActivation {
-				new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER
-			}
-			.into()
-		);
+
+		assert!(matches!(
+			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
+			VaultRotationStatus::Complete
+		))
 	})
 }
