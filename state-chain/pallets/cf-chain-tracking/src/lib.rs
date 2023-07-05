@@ -10,8 +10,8 @@ pub mod weights;
 pub use weights::WeightInfo;
 
 use cf_chains::Chain;
-use cf_traits::Chainflip;
-use frame_support::dispatch::DispatchResultWithPostInfo;
+use cf_traits::{Chainflip, GetBlockHeight};
+use frame_support::{dispatch::DispatchResultWithPostInfo, sp_runtime::traits::Zero};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::marker::PhantomData;
@@ -109,5 +109,13 @@ pub mod pallet {
 
 			Ok(().into())
 		}
+	}
+}
+
+impl<T: Config<I>, I: 'static> GetBlockHeight<T::TargetChain> for Pallet<T, I> {
+	fn get_block_height() -> <T::TargetChain as Chain>::ChainBlockNumber {
+		CurrentChainState::<T, I>::get()
+			.map(|state| state.block_height)
+			.unwrap_or(Zero::zero())
 	}
 }

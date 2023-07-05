@@ -6,9 +6,10 @@ use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
 use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, Broadcaster, Chainflip, CurrentEpochIndex,
-	EpochKey, KeyProvider, KeyState, SafeMode, SetSafeMode, Slashing, ThresholdSigner,
-	VaultKeyWitnessedHandler, VaultRotator, VaultStatus, VaultTransitionHandler,
+	offence_reporting::OffenceReporter, AccountRoleRegistry, AsyncResult, Broadcaster, Chainflip,
+	CurrentEpochIndex, EpochKey, GetBlockHeight, KeyProvider, KeyState, SafeMode, SetSafeMode,
+	Slashing, ThresholdSigner, VaultKeyWitnessedHandler, VaultRotator, VaultStatus,
+	VaultTransitionHandler,
 };
 use frame_support::{pallet_prelude::*, traits::StorageVersion};
 use frame_system::pallet_prelude::*;
@@ -81,7 +82,7 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 		new_public_key: AggKeyFor<T, I>,
 	},
 	/// We are waiting for the key to be updated on the contract, and witnessed by the network.
-	AwaitingRotation { new_public_key: AggKeyFor<T, I> },
+	AwaitingActivation { new_public_key: AggKeyFor<T, I> },
 	/// The key has been successfully updated on the external chain, and/or funds rotated to new
 	/// key.
 	Complete,
@@ -121,8 +122,6 @@ pub struct VaultEpochAndState {
 
 #[frame_support::pallet]
 pub mod pallet {
-
-	use cf_traits::{AccountRoleRegistry, ThresholdSigner, VaultTransitionHandler};
 	use sp_runtime::Percent;
 
 	use super::*;
@@ -176,6 +175,8 @@ pub mod pallet {
 
 		/// For activating Safe mode: CODE RED for the chain.
 		type SafeMode: SafeMode + SetSafeMode<Self::SafeMode>;
+
+		type ChainTracking: GetBlockHeight<Self::Chain>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -593,20 +594,6 @@ pub mod pallet {
 			Self::on_new_key_activated(block_number)
 		}
 
-		#[pallet::weight(T::WeightInfo::vault_key_rotated())]
-		pub fn vault_key_rotated_out(
-			origin: OriginFor<T>,
-			block_number: ChainBlockNumberFor<T, I>,
-
-			// This field is primarily required to ensure the witness calls are unique per
-			// transaction (on the external chain)
-			_tx_out_id: TransactionOutIdFor<T, I>,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
-
-			Self::on_new_key_activated(block_number)
-		}
-
 		/// The vault's key has been updated externally, outside of the rotation
 		/// cycle. This is an unexpected event as far as our chain is concerned, and
 		/// the only thing we can do is to halt and wait for further governance
@@ -635,7 +622,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 
-			Self::set_next_vault(new_public_key, block_number);
+			Self::activate_new_key(new_public_key, block_number);
 
 			T::SafeMode::set_code_red();
 
@@ -695,13 +682,9 @@ pub mod pallet {
 	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
 		fn build(&self) {
 			if let Some(vault_key) = self.vault_key {
-				Pallet::<T, I>::set_vault_for_epoch(
-					VaultEpochAndState {
-						epoch_index: cf_primitives::GENESIS_EPOCH,
-						key_state: KeyState::Unlocked,
-					},
-					vault_key,
-					self.deployment_block,
+				Pallet::<T, I>::set_vault_key_for_epoch(
+					cf_primitives::GENESIS_EPOCH,
+					Vault { public_key: vault_key, active_from_block: self.deployment_block },
 				);
 			} else {
 				log::info!("No genesis vault key configured for {}.", Pallet::<T, I>::name());
@@ -774,38 +757,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		weight
 	}
 
-	fn set_next_vault(
-		new_public_key: AggKeyFor<T, I>,
-		rotated_at_block_number: ChainBlockNumberFor<T, I>,
-	) {
-		Self::set_vault_for_next_epoch(new_public_key, rotated_at_block_number);
-		T::VaultTransitionHandler::on_new_vault();
-	}
-
-	fn set_vault_for_next_epoch(
-		new_public_key: AggKeyFor<T, I>,
-		rotated_at_block_number: ChainBlockNumberFor<T, I>,
-	) {
-		Self::set_vault_for_epoch(
-			VaultEpochAndState {
-				epoch_index: CurrentEpochIndex::<T>::get().saturating_add(1),
-				key_state: KeyState::Unlocked,
-			},
-			new_public_key,
-			rotated_at_block_number.saturating_add(ChainBlockNumberFor::<T, I>::one()),
-		);
-	}
-
-	fn set_vault_for_epoch(
-		current_vault_and_state: VaultEpochAndState,
-		new_public_key: AggKeyFor<T, I>,
-		active_from_block: ChainBlockNumberFor<T, I>,
-	) {
-		Vaults::<T, I>::insert(
-			current_vault_and_state.epoch_index,
-			Vault { public_key: new_public_key, active_from_block },
-		);
-		CurrentVaultEpochAndState::<T, I>::put(current_vault_and_state);
+	fn set_vault_key_for_epoch(epoch_index: EpochIndex, vault: Vault<T::Chain>) {
+		Vaults::<T, I>::insert(epoch_index, vault);
+		CurrentVaultEpochAndState::<T, I>::put(VaultEpochAndState {
+			epoch_index,
+			key_state: KeyState::Unlocked,
+		});
 	}
 
 	// Once we've successfully generated the key, we want to do a signing ceremony to verify that
@@ -858,10 +815,23 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		});
 		Self::deposit_event(event);
 	}
+
+	fn activate_new_key(new_agg_key: AggKeyFor<T, I>, block_number: ChainBlockNumberFor<T, I>) {
+		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete);
+		Self::set_vault_key_for_epoch(
+			CurrentEpochIndex::<T>::get().saturating_add(1),
+			Vault {
+				public_key: new_agg_key,
+				active_from_block: block_number.saturating_add(One::one()),
+			},
+		);
+		T::VaultTransitionHandler::on_new_vault();
+		Self::deposit_event(Event::VaultRotationCompleted);
+	}
 }
 
 impl<T: Config<I>, I: 'static> KeyProvider<T::Chain> for Pallet<T, I> {
-	fn current_epoch_key() -> Option<EpochKey<<T::Chain as ChainCrypto>::AggKey>> {
+	fn active_epoch_key() -> Option<EpochKey<<T::Chain as ChainCrypto>::AggKey>> {
 		CurrentVaultEpochAndState::<T, I>::get().map(|current_vault_epoch_and_state| {
 			EpochKey {
 				key: Vaults::<T, I>::get(current_vault_epoch_and_state.epoch_index)
@@ -887,12 +857,10 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 			PendingVaultRotation::<T, I>::get().ok_or(Error::<T, I>::NoActiveRotation)?;
 
 		let new_public_key = ensure_variant!(
-			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key } => new_public_key,
+			VaultRotationStatus::<T, I>::AwaitingActivation { new_public_key } => new_public_key,
 			rotation,
 			Error::<T, I>::InvalidRotationStatus
 		);
-
-		PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete);
 
 		// Unlock the key that was used to authorise the activation.
 		// TODO: use broadcast callbacks for this.
@@ -904,9 +872,7 @@ impl<T: Config<I>, I: 'static> VaultKeyWitnessedHandler<T::Chain> for Pallet<T, 
 		})
 		.expect("CurrentVaultEpochAndState must exist for the locked key, otherwise we couldn't have signed.");
 
-		Self::set_next_vault(new_public_key, block_number);
-
-		Pallet::<T, I>::deposit_event(Event::VaultRotationCompleted);
+		Self::activate_new_key(new_public_key, block_number);
 
 		Ok(().into())
 	}
