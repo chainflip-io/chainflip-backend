@@ -2,10 +2,8 @@
 import { randomAsHex , randomAsNumber } from "@polkadot/util-crypto";
 import { Asset } from "@chainflip-io/cli/.";
 import Web3 from 'web3';
-import { Keyring } from "@polkadot/api";
-import { u8aToHex } from "@polkadot/util";
 import { performSwap } from "../shared/perform_swap";
-import { getAddress, runWithTimeout, chainFromAsset, getEthContractAddress } from "../shared/utils";
+import { getAddress, runWithTimeout, chainFromAsset, getEthContractAddress, encodeBtcAddressForContract, encodeDotAddressForContract } from "../shared/utils";
 import { BtcAddressType } from "../shared/new_btc_address";
 import { CcmDepositMetadata } from "../shared/new_swap";
 import { performNativeSwap } from "../shared/native_swap";
@@ -58,7 +56,7 @@ async function testAll() {
             message: new Web3().eth.abi.encodeParameter("string", "BTC to ETH w/ CCM!!"),
             gas_budget: 1000000,
             cf_parameters: "",
-            source_address: { 'BTC': {'P2PKH': await getAddress('BTC', randomAsHex(32), 'P2PKH').then((btcAddress) => { Buffer.from(btcAddress.replace(/^0x/, ''), 'hex').toString()})}},
+            source_address: { 'BTC': {'P2PKH': await getAddress('BTC', randomAsHex(32), 'P2PKH').then((btcAddress) => {encodeBtcAddressForContract(btcAddress)})}},
         }),
     ])
     await Promise.all([
@@ -66,7 +64,7 @@ async function testAll() {
                 message: '0x' + Buffer.from("BTC to ETH w/ CCM!!", 'ascii').toString('hex'),
                 gas_budget: 600000,
                 cf_parameters: getAbiEncodedMessage(["uint256"]),
-                source_address: { 'BTC': {'P2SH': await getAddress('BTC', randomAsHex(32), 'P2SH').then((btcAddress) => { Buffer.from(btcAddress.replace(/^0x/, ''), 'hex').toString()})}},
+                source_address: { 'BTC': {'P2SH': await getAddress('BTC', randomAsHex(32), 'P2SH').then((btcAddress) => {encodeBtcAddressForContract(btcAddress)})}},
             }),
     ])
 
@@ -75,7 +73,7 @@ async function testAll() {
                 message: getAbiEncodedMessage(),
                 gas_budget: 750000,
                 cf_parameters: getAbiEncodedMessage([]),
-                source_address: { 'BTC': {'P2WPKH': await getAddress('BTC', randomAsHex(32), 'P2WPKH').then((btcAddress) => { Buffer.from(btcAddress.replace(/^0x/, ''), 'hex').toString()})}},
+                source_address: { 'BTC': {'P2WPKH': await getAddress('BTC', randomAsHex(32), 'P2WPKH').then((btcAddress) => {encodeBtcAddressForContract(btcAddress)})}},
             }),       
     ])
 
@@ -84,7 +82,7 @@ async function testAll() {
             message: getAbiEncodedMessage(["address","uint256","bytes"]),
             gas_budget: 2000000,
             cf_parameters: getAbiEncodedMessage(["string"]),
-            source_address: { 'BTC': {'P2WSH': await getAddress('BTC', randomAsHex(32), 'P2WSH').then((btcAddress) => { Buffer.from(btcAddress.replace(/^0x/, ''), 'hex').toString()})}},
+            source_address: { 'BTC': {'P2WSH': await getAddress('BTC', randomAsHex(32), 'P2WSH').then((btcAddress) => {encodeBtcAddressForContract(btcAddress)})}},
         }),       
     ])
 
@@ -93,7 +91,7 @@ async function testAll() {
                 message: getAbiEncodedMessage(["string","address"]),
                 gas_budget: 1000000,
                 cf_parameters: getAbiEncodedMessage(["string","string"]),
-                source_address: { 'DOT': await getAddress('DOT', randomAsHex(32)).then((dotAddress) => { u8aToHex(new Keyring({type:'sr25519'}).decodeAddress(dotAddress))})},
+                source_address: { 'DOT': await getAddress('DOT', randomAsHex(32)).then((dotAddress) => { encodeDotAddressForContract(dotAddress)})},
             }),            
         ])
     await Promise.all([
@@ -101,7 +99,7 @@ async function testAll() {
             message: getAbiEncodedMessage(),
             gas_budget: 1000000,
             cf_parameters: getAbiEncodedMessage(["address","uint256"]),
-            source_address: { 'DOT': await getAddress('DOT', randomAsHex(32)).then((dotAddress) => { u8aToHex(new Keyring({type:'sr25519'}).decodeAddress(dotAddress))})},
+            source_address: { 'DOT': await getAddress('DOT', randomAsHex(32)).then((dotAddress) => { encodeDotAddressForContract(dotAddress)})},
         }),            
     ])        
     await Promise.all([
@@ -123,7 +121,8 @@ function getAbiEncodedMessage(types?: string[]): string {
 
     if (types === undefined) {
         types = [];
-        for (let i = 0; i < Math.floor(Math.random() * validSolidityTypes.length) + 1; i++) {
+        const numElements = Math.floor(Math.random() * validSolidityTypes.length) + 1
+        for (let i = 0; i < numElements; i++) {
             types.push(validSolidityTypes[Math.floor(Math.random() * validSolidityTypes.length)]);
           }
     }

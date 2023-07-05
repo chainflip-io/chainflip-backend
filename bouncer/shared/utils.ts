@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import { setTimeout as sleep } from 'timers/promises';
 import Module from "node:module";
 
-import { ApiPromise, WsProvider } from '@polkadot/api';
+import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
 import { Chain, Asset, assetChains } from '@chainflip-io/cli';
 import Web3 from 'web3';
@@ -12,6 +12,7 @@ import { getBalance } from './get_balance';
 import { newEthAddress } from './new_eth_address';
 import { CcmDepositMetadata } from './new_swap';
 import cfReceiverMockAbi from '../../eth-contract-abis/perseverance-rc17/CFReceiverMock.json';
+import { u8aToHex } from "@polkadot/util";
 
 // TODO: Import this from the chainflip-io/cli package once it's exported in future versions.
 export function assetToChain(asset: Asset): number {
@@ -202,7 +203,7 @@ export async function observeEVMEvent(contractAbi: any, address: string, eventNa
   
   for (let i = 0; i < 120 && !eventWitnessed; i++) {
     const currentBlockNumber = await web3.eth.getBlockNumber();
-    if (currentBlockNumber > initBlockNumber) {
+    if (currentBlockNumber >= initBlockNumber) {
       const events = await contract.getPastEvents(eventName, {fromBlock: initBlockNumber, toBlock: currentBlockNumber});
       for (let j = 0; j < events.length && !eventWitnessed; j++) {
         for (let k = 0; k < parameterNames.length; k++) {
@@ -228,11 +229,21 @@ export async function observeEVMEvent(contractAbi: any, address: string, eventNa
 
 }
 
-// Converts s hex string into a bytes array. Support hex strings start with and without 0x
+// Converts a hex string into a bytes array. Support hex strings start with and without 0x
 export function hexStringToBytesArray(hex: string) {
   return Array.from(Buffer.from(hex.replace(/^0x/, ''), 'hex'));
 };
 
 export function asciiStringToBytesArray(str: string) {
   return Array.from(Buffer.from(str.replace(/^0x/, '')));
+}
+
+export function encodeBtcAddressForContract(address: any) {
+  address = address.replace(/^0x/, '');
+  return Buffer.from(address, 'hex').toString();
+}
+
+export function encodeDotAddressForContract(address: string, keyring_encode?: any ) {
+  const keyring = keyring_encode ?? new Keyring({ type: 'sr25519' });
+  u8aToHex(keyring.decodeAddress(address))
 }

@@ -3,7 +3,7 @@ import { Asset } from '@chainflip-io/cli/.';
 import { newSwap } from './new_swap';
 import { fund } from './fund';
 import { getBalance } from './get_balance';
-import { getChainflipApi, observeBalanceIncrease, observeEvent, observeCcmReceived } from '../shared/utils';
+import { getChainflipApi, observeBalanceIncrease, observeEvent, observeCcmReceived, encodeBtcAddressForContract } from '../shared/utils';
 import { CcmDepositMetadata } from "../shared/new_swap";
 
 function extractDestinationAddress(swapInfo: any, destToken: Asset): string | undefined {
@@ -60,8 +60,7 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
     console.log(`${tag} Destination address is: ${destAddress}`);
 
     if (sourceToken === 'BTC') {
-        swapAddress = swapAddress.replace(/^0x/, '');
-        swapAddress = Buffer.from(swapAddress, 'hex').toString();
+        swapAddress = encodeBtcAddressForContract(swapAddress);
     }
 
     console.log(`${tag} Swap address: ${swapAddress}`);

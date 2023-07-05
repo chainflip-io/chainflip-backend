@@ -1,9 +1,8 @@
-import { Keyring } from "@polkadot/api";
-import { u8aToHex } from "@polkadot/util";
 import { cryptoWaitReady } from "@polkadot/util-crypto";
+import { Keyring } from "@polkadot/api";
 import { Mutex } from "async-mutex";
 import { Asset } from "@chainflip-io/cli/.";
-import { getChainflipApi } from "./utils";
+import { getChainflipApi, encodeDotAddressForContract } from "./utils";
 
 const mutex = new Mutex();
 
@@ -14,7 +13,7 @@ export async function newSwap(sourceToken: Asset, destToken: Asset,
 
     const chainflip = await getChainflipApi();
     const destinationAddress =
-        destToken === 'DOT' ? u8aToHex(keyring.decodeAddress(destAddress)) : destAddress;
+        destToken === 'DOT' ? encodeDotAddressForContract(destAddress, keyring) : destAddress;
     const brokerUri = process.env.BROKER_URI ?? '//BROKER_1';
     const broker = keyring.createFromUri(brokerUri);
 
