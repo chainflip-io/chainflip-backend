@@ -9,11 +9,11 @@ const mutex = new Mutex();
 export async function newSwap(sourceToken: Asset, destToken: Asset,
     destAddress: string, fee: any, messageMetadata?: CcmDepositMetadata): Promise<void> {
     await cryptoWaitReady();
-    const keyring = new Keyring({ type: 'sr25519' });
 
     const chainflip = await getChainflipApi();
     const destinationAddress =
-        destToken === 'DOT' ? encodeDotAddressForContract(destAddress, keyring) : destAddress;
+        destToken === 'DOT' ? encodeDotAddressForContract(destAddress) : destAddress;
+    const keyring = new Keyring({ type: 'sr25519' });
     const brokerUri = process.env.BROKER_URI ?? '//BROKER_1';
     const broker = keyring.createFromUri(brokerUri);
 

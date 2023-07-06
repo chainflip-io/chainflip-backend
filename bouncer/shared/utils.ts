@@ -243,7 +243,7 @@ export function encodeBtcAddressForContract(address: any) {
   return Buffer.from(address, 'hex').toString();
 }
 
-export function encodeDotAddressForContract(address: string, keyring_encode?: any ) {
-  const keyring = keyring_encode ?? new Keyring({ type: 'sr25519' });
+export function encodeDotAddressForContract(address: string) {
+  const keyring = new Keyring({ type: 'sr25519' });
   return u8aToHex(keyring.decodeAddress(address))
 }
