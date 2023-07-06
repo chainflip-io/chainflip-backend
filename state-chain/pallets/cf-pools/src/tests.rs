@@ -1,8 +1,9 @@
 use crate::{
 	mock::*, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, Pools, STABLE_ASSET,
 };
-use cf_amm::common::{sqrt_price_at_tick, Tick};
+use cf_amm::common::{sqrt_price_at_tick, SideMap, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
+use cf_test_utilities::assert_events_match;
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_runtime::Permill;
 
@@ -126,6 +127,44 @@ fn test_buy_back_flip_no_funds_available() {
 		CollectedNetworkFee::<Test>::set(30);
 		LiquidityPools::on_initialize(8);
 		assert_eq!(FlipToBurn::<Test>::get(), 0);
+	});
+}
+
+#[test]
+fn test_buy_back_flip_2() {
+	new_test_ext().execute_with(|| {
+		const POSITION: core::ops::Range<Tick> = -100_000..100_000;
+		const FLIP: Asset = Asset::Flip;
+
+		// Create a new pool.
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			FLIP,
+			Default::default(),
+			sqrt_price_at_tick(0),
+		));
+		assert_ok!(LiquidityPools::collect_and_mint_range_order_by_amount(
+			RuntimeOrigin::signed(ALICE),
+			FLIP,
+			POSITION,
+			SideMap::from_array([1_000_000, 1_000_000]),
+			SideMap::from_array([900_000, 900_000]),
+		));
+		let liquidity = assert_events_match!(
+			Test,
+			RuntimeEvent::LiquidityPools(
+				crate::Event::RangeOrderMinted {
+					liquidity,
+					..
+				},
+			) => liquidity
+		);
+		assert_ok!(LiquidityPools::collect_and_burn_range_order(
+			RuntimeOrigin::signed(ALICE),
+			FLIP,
+			POSITION,
+			liquidity
+		));
 	});
 }
 

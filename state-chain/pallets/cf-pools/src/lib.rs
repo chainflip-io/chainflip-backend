@@ -31,7 +31,7 @@ pub mod pallet {
 	use cf_amm::{
 		common::{OneToZero, Side, SqrtPriceQ64F96, Tick, ZeroToOne},
 		limit_orders,
-		range_orders::{self, Liquidity},
+		range_orders::{self, AmountsToLiquidityError, Liquidity},
 	};
 	use cf_traits::{AccountRoleRegistry, LpBalanceApi};
 	use frame_system::pallet_prelude::BlockNumberFor;
@@ -173,6 +173,10 @@ pub mod pallet {
 		InsufficientLiquidity,
 		/// The swap output is past the maximum allowed amount.
 		OutputOverflow,
+		/// Calculated Amounts are below the requested minimum
+		BelowMinimumAmount,
+		/// Minimum must be below desired amount
+		DesiredBelowMinimumAmount,
 	}
 
 	#[pallet::event]
@@ -374,6 +378,81 @@ pub mod pallet {
 		) -> DispatchResult {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
+				Self::try_collect_and_mint_range_order(
+					pool_state,
+					unstable_asset,
+					lp,
+					price_range_in_ticks,
+					liquidity,
+				)
+			})
+		}
+
+		/// Collects and mints a range order.
+		///
+		/// ## Events
+		///
+		/// - [On success](Event::RangeOrderMinted)
+		/// - [On success](Event::AccountDebited)
+		/// - [On success](Event::AccountCredited)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_system::BadOrigin)
+		/// - [PoolDoesNotExist](pallet_cf_pools::Error::PoolDoesNotExist)
+		/// - [PoolDisabled](pallet_cf_pools::Error::PoolDisabled)
+		/// - [InvalidTickRange](pallet_cf_pools::Error::InvalidTickRange)
+		/// - [PositionDoesNotExist](pallet_cf_pools::Error::PositionDoesNotExist)
+		/// - [MaximumGrossLiquidity](pallet_cf_pools::Error::MaximumGrossLiquidity)
+		/// - [InsufficientBalance](pallet_cf_lp::Error::InsufficientBalance)
+		/// - [BelowMinimumAmount](pallet_cf_lp::Error::BelowMinimumAmount)
+		#[pallet::weight(T::WeightInfo::collect_and_mint_range_order())]
+		pub fn collect_and_mint_range_order_by_amount(
+			origin: OriginFor<T>,
+			unstable_asset: any::Asset,
+			price_range_in_ticks: core::ops::Range<Tick>,
+			desired_amounts: SideMap<AssetAmount>,
+			minimum_amounts: SideMap<AssetAmount>,
+		) -> DispatchResult {
+			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
+			let desired_amounts = desired_amounts.map(|_side, amount| amount.into());
+			let minimum_amounts = minimum_amounts.map(|_side, amount| amount.into());
+
+			ensure!(
+				desired_amounts[Side::Zero] >= minimum_amounts[Side::Zero] &&
+					desired_amounts[Side::One] >= minimum_amounts[Side::One],
+				Error::<T>::DesiredBelowMinimumAmount
+			);
+
+			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
+				let liquidity = pool_state
+					.range_orders
+					.desired_amounts_to_liquidity(
+						price_range_in_ticks.start,
+						price_range_in_ticks.end,
+						desired_amounts,
+					)
+					.map_err(|error| match error {
+						AmountsToLiquidityError::InvalidTickRange => Error::<T>::InvalidTickRange,
+					})?;
+
+				let true_amounts = pool_state
+					.range_orders
+					.liquidity_to_amounts::<false>(
+						liquidity,
+						price_range_in_ticks.start,
+						price_range_in_ticks.end,
+					)
+					.unwrap()
+					.0;
+
+				ensure!(
+					true_amounts[Side::Zero] >= minimum_amounts[Side::Zero] &&
+						true_amounts[Side::One] >= minimum_amounts[Side::One],
+					Error::<T>::BelowMinimumAmount
+				);
+
 				Self::try_collect_and_mint_range_order(
 					pool_state,
 					unstable_asset,
