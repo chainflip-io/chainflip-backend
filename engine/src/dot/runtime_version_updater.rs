@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use anyhow::anyhow;
 use async_trait::async_trait;
 use cf_chains::{dot::RuntimeVersion, Polkadot};
 use futures::StreamExt;
@@ -37,19 +36,12 @@ where
 	// When this witnesser starts up, we should check that the runtime version is up to
 	// date with the chain. This is in case we missed a Polkadot runtime upgrade when
 	// we were down.
-	let on_chain_runtime_version = match state_chain_client
+	let on_chain_runtime_version = state_chain_client
 		.storage_value::<pallet_cf_environment::PolkadotRuntimeVersion<state_chain_runtime::Runtime>>(
 			latest_block_hash,
 		)
 		.await
-	{
-		Ok(version) => version,
-		Err(e) =>
-			return Err(EpochProcessRunnerError::Other(anyhow!(
-				"Failed to get on-chain runtime version: {}",
-				e
-			))),
-	};
+		.ok();
 
 	start_epoch_process_runner(
 		None,
@@ -77,7 +69,7 @@ where
 	type Chain = Polkadot;
 
 	// Last version witnessed
-	type StaticState = RuntimeVersion;
+	type StaticState = Option<RuntimeVersion>;
 
 	const SHOULD_PROCESS_HISTORICAL_EPOCHS: bool = false;
 
@@ -101,9 +93,12 @@ where
 	async fn do_witness(
 		&mut self,
 		new_runtime_version: RuntimeVersion,
-		last_version_witnessed: &mut RuntimeVersion,
+		last_version_witnessed: &mut Option<RuntimeVersion>,
 	) -> anyhow::Result<()> {
-		if new_runtime_version.spec_version > last_version_witnessed.spec_version {
+		if last_version_witnessed.is_none() {
+			*last_version_witnessed = Some(new_runtime_version);
+		}
+		if new_runtime_version.spec_version > last_version_witnessed.unwrap().spec_version {
 			self.state_chain_client
 				.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(
@@ -116,7 +111,7 @@ where
 				})
 				.await;
 			info!("Polkadot runtime version update submitted, version witnessed: {new_runtime_version:?}");
-			*last_version_witnessed = new_runtime_version;
+			*last_version_witnessed = Some(new_runtime_version);
 		}
 
 		Ok(())
