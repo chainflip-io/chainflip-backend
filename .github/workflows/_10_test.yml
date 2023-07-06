@@ -3,7 +3,7 @@ on:
     inputs:
       coverage:
         type: boolean
-        default: false
+        default: true
 
 env:
   RUSTC_WRAPPER: sccache
