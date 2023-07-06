@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use cf_primitives::{Asset, EpochIndex, EthereumAddress};
-use ethers::{abi::RawLog, contract::EthLogDecode};
 use tracing::info;
 use web3::types::H160;
 
@@ -81,12 +80,6 @@ impl EthContractWitnesser for Vault {
 			}
 		}
 		Ok(())
-	}
-
-	fn decode_log_closure(&self) -> super::DecodeLogClosure<Self::EventParameters> {
-		Box::new(move |raw_log: RawLog| -> Result<Self::EventParameters> {
-			Ok(VaultEvents::decode_log(&raw_log)?)
-		})
 	}
 
 	fn contract_address(&self) -> H160 {
