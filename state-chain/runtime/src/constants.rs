@@ -63,10 +63,8 @@ pub mod common {
 		KEYGEN_TIMEOUT_BUFFER_SECONDS) /
 		SECONDS_PER_BLOCK as u32;
 
-	pub const SECS_PER_MINUTE: u64 = 60;
-	// This should be the same as the `REDEMPTION_DELAY` in:
-	// https://github.com/chainflip-io/chainflip-eth-contracts/blob/master/contracts/StateChainGateway.sol
-	pub const REDEMPTION_DELAY_SECS: u64 = 5 * SECS_PER_MINUTE;
+	// This must be longer than the `REDEMPTION_DELAY` on the StateChainGateway contract.
+	pub const REDEMPTION_TTL_SECS: u64 = 10 * 60;
 
 	// NOTE: Currently it is not possible to change the slot duration after the chain has started.
 	//       Attempting to do so will brick block production.
