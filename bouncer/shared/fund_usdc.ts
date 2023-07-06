@@ -1,6 +1,7 @@
 import { Mutex } from "async-mutex";
 import Web3 from "web3";
 import { getNextEthNonce } from "./fund_eth";
+import { getEthContractAddress } from "./utils";
 
 const erc20TransferABI = [
     // transfer
@@ -42,7 +43,7 @@ export async function fundUsdc(ethereumAddress: string, usdcAmount: string) {
     const web3 = new Web3(ethEndpoint);
 
     const usdcContractAddress =
-        process.env.ETH_USDC_ADDRESS ?? '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
+        process.env.ETH_USDC_ADDRESS ?? getEthContractAddress('USDC');
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const usdcContract = new web3.eth.Contract(erc20TransferABI as any, usdcContractAddress);
