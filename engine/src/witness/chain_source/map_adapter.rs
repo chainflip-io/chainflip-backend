@@ -1,4 +1,4 @@
-use super::{aliases, BoxChainStream, ChainSourceWithClient, Header};
+use super::{aliases, BoxChainStream, ChainSource, Header};
 
 use futures::Future;
 use futures_util::StreamExt;
@@ -18,14 +18,14 @@ impl<Underlying, MapFn> MapAdapter<Underlying, MapFn> {
 
 #[async_trait::async_trait]
 impl<
-		Underlying: ChainSourceWithClient,
+		Underlying: ChainSource,
 		MappedTo: aliases::Data,
 		FutMappedTo: Future<Output = MappedTo> + Send + Sync,
 		MapFn: Fn(Header<Underlying::Index, Underlying::Hash, Underlying::Data>) -> FutMappedTo
 			+ Send
 			+ Sync
 			+ Clone,
-	> ChainSourceWithClient for MapAdapter<Underlying, MapFn>
+	> ChainSource for MapAdapter<Underlying, MapFn>
 {
 	type Index = Underlying::Index;
 	type Hash = Underlying::Hash;

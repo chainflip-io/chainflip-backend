@@ -5,20 +5,20 @@ use futures_util::StreamExt;
 
 use crate::witness::chain_source::ChainClient;
 
-use super::{BoxChainStream, ChainSourceWithClient, Header};
+use super::{BoxChainStream, ChainSource, Header};
 
-pub struct LagSafety<Underlying: ChainSourceWithClient> {
+pub struct LagSafety<Underlying: ChainSource> {
 	underlying: Underlying,
 	margin: usize,
 }
-impl<Underlying: ChainSourceWithClient> LagSafety<Underlying> {
+impl<Underlying: ChainSource> LagSafety<Underlying> {
 	pub fn new(margin: usize, underlying: Underlying) -> Self {
 		Self { underlying, margin }
 	}
 }
 
 #[async_trait::async_trait]
-impl<Underlying: ChainSourceWithClient> ChainSourceWithClient for LagSafety<Underlying>
+impl<Underlying: ChainSource> ChainSource for LagSafety<Underlying>
 where
 	Underlying::Client: Clone,
 {
@@ -41,9 +41,9 @@ where
 					chain_client.clone(),
 					VecDeque::<
 						Header<
-							<Self as ChainSourceWithClient>::Index,
-							<Self as ChainSourceWithClient>::Hash,
-							<Self as ChainSourceWithClient>::Data,
+							<Self as ChainSource>::Index,
+							<Self as ChainSource>::Hash,
+							<Self as ChainSource>::Data,
 						>,
 					>::new(),
 				),

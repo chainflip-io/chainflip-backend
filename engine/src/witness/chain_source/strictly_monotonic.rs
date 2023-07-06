@@ -2,7 +2,7 @@ use std::task::Poll;
 
 use futures::Stream;
 
-use super::{BoxChainStream, ChainSourceWithClient, ChainStream};
+use super::{BoxChainStream, ChainSource, ChainStream};
 
 #[pin_project::pin_project]
 pub struct StrictlyMonotonicStream<Underlying: ChainStream> {
@@ -30,16 +30,16 @@ impl<Underlying: ChainStream> Stream for StrictlyMonotonicStream<Underlying> {
 	}
 }
 
-pub struct StrictlyMonotonic<Underlying: ChainSourceWithClient> {
+pub struct StrictlyMonotonic<Underlying: ChainSource> {
 	underlying: Underlying,
 }
-impl<Underlying: ChainSourceWithClient> StrictlyMonotonic<Underlying> {
+impl<Underlying: ChainSource> StrictlyMonotonic<Underlying> {
 	pub fn new(underlying: Underlying) -> Self {
 		Self { underlying }
 	}
 }
 #[async_trait::async_trait]
-impl<Underlying: ChainSourceWithClient> ChainSourceWithClient for StrictlyMonotonic<Underlying> {
+impl<Underlying: ChainSource> ChainSource for StrictlyMonotonic<Underlying> {
 	type Index = Underlying::Index;
 	type Hash = Underlying::Hash;
 	type Data = Underlying::Data;

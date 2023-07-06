@@ -2,7 +2,7 @@ use cf_primitives::EpochIndex;
 use futures_util::StreamExt;
 
 use super::{
-	chain_source::{box_chain_stream, BoxChainStream, ChainSourceWithClient},
+	chain_source::{box_chain_stream, BoxChainStream, ChainSource},
 	common::{BoxActiveAndFuture, ExternalChainSource, RuntimeHasChain},
 	epoch_source::Vault,
 };
@@ -35,11 +35,11 @@ type Item<'a, UnderlyingChainSource> = (
 	pallet_cf_vaults::Vault<<UnderlyingChainSource as ExternalChainSource>::Chain>,
 	BoxChainStream<
 		'a,
-		<UnderlyingChainSource as ChainSourceWithClient>::Index,
-		<UnderlyingChainSource as ChainSourceWithClient>::Hash,
-		<UnderlyingChainSource as ChainSourceWithClient>::Data,
+		<UnderlyingChainSource as ChainSource>::Index,
+		<UnderlyingChainSource as ChainSource>::Hash,
+		<UnderlyingChainSource as ChainSource>::Data,
 	>,
-	<UnderlyingChainSource as ChainSourceWithClient>::Client,
+	<UnderlyingChainSource as ChainSource>::Client,
 );
 
 pub struct SplitByVault<'a, UnderlyingChainSource: ExternalChainSource>

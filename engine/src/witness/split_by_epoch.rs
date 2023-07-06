@@ -54,7 +54,11 @@ impl<'a, UnderlyingChainSource: ChainSource> ChainSplitByEpoch<'a>
 				(
 					epoch,
 					box_chain_stream(
-						underlying_chain_source.stream().await.take_until(historic_signal.wait()),
+						underlying_chain_source
+							.stream_and_client()
+							.await
+							.0
+							.take_until(historic_signal.wait()),
 					),
 				)
 			})

@@ -6,26 +6,26 @@ use utilities::{
 	UnendingStream,
 };
 
-use super::{box_chain_stream, BoxChainStream, ChainSourceWithClient, Header};
+use super::{box_chain_stream, BoxChainStream, ChainSource, Header};
 
 type SharedStreamReceiver<UnderlyingSource> = spmc::Receiver<
 	Header<
-		<UnderlyingSource as ChainSourceWithClient>::Index,
-		<UnderlyingSource as ChainSourceWithClient>::Hash,
-		<UnderlyingSource as ChainSourceWithClient>::Data,
+		<UnderlyingSource as ChainSource>::Index,
+		<UnderlyingSource as ChainSource>::Hash,
+		<UnderlyingSource as ChainSource>::Data,
 	>,
 >;
 
 type Request<UnderlyingSource> = tokio::sync::oneshot::Sender<(
 	SharedStreamReceiver<UnderlyingSource>,
-	<UnderlyingSource as ChainSourceWithClient>::Client,
+	<UnderlyingSource as ChainSource>::Client,
 )>;
 
 #[derive(Clone)]
-pub struct SharedSource<UnderlyingSource: ChainSourceWithClient> {
+pub struct SharedSource<UnderlyingSource: ChainSource> {
 	request_sender: tokio::sync::mpsc::Sender<Request<UnderlyingSource>>,
 }
-impl<UnderlyingSource: ChainSourceWithClient> SharedSource<UnderlyingSource>
+impl<UnderlyingSource: ChainSource> SharedSource<UnderlyingSource>
 where
 	UnderlyingSource::Client: Clone,
 	UnderlyingSource::Data: Clone,
@@ -73,8 +73,7 @@ where
 }
 
 #[async_trait::async_trait]
-impl<UnderlyingSource: ChainSourceWithClient> ChainSourceWithClient
-	for SharedSource<UnderlyingSource>
+impl<UnderlyingSource: ChainSource> ChainSource for SharedSource<UnderlyingSource>
 where
 	UnderlyingSource::Client: Clone,
 	UnderlyingSource::Data: Clone,
