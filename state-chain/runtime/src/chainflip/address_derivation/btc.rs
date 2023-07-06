@@ -4,7 +4,7 @@ use cf_chains::{
 	btc::{deposit_address::DepositAddress, BitcoinFetchId, ScriptPubkey},
 	Bitcoin, Chain,
 };
-use cf_primitives::{chains::assets::btc, Asset, ChannelId};
+use cf_primitives::{chains::assets::btc, ChannelId};
 use cf_traits::{AddressDerivationApi, DepositChannel, EpochInfo};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;

@@ -1,14 +1,11 @@
 use crate::{Environment, EthEnvironment};
 use cf_chains::{
-	eth::{
-		api::EthEnvironmentProvider, deposit_address::get_create_2_address, Address,
-		EthereumChannelId,
-	},
+	eth::{api::EthEnvironmentProvider, deposit_address::get_create_2_address, EthereumChannelId},
 	Chain, Ethereum,
 };
-use cf_primitives::{chains::assets::eth, Asset, ChannelId};
+use cf_primitives::{chains::assets::eth, ChannelId};
 use cf_traits::{AddressDerivationApi, DepositChannel};
-use codec::{Decode, Encode, MaxEncodedLen};
+use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_core::H160;
 use sp_runtime::DispatchError;

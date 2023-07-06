@@ -3,7 +3,7 @@ use cf_chains::{
 	dot::{PolkadotAccountId, PolkadotChannelId},
 	Chain, Polkadot,
 };
-use cf_primitives::{chains::assets::dot, Asset, ChannelId};
+use cf_primitives::{chains::assets::dot, ChannelId};
 use cf_traits::{AddressDerivationApi, DepositChannel};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
