@@ -22,7 +22,7 @@ use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid,
 	BidderProvider, Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition,
 	FundingInfo, HistoricalEpoch, MissedAuthorshipSlots, OnAccountFunded, QualifyNode,
-	ReputationResetter, SetSafeMode, VaultRotator,
+	ReputationResetter, VaultRotator,
 };
 
 use cf_utilities::Port;
@@ -100,7 +100,7 @@ pub type Percentage = u8;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AccountRoleRegistry, VaultStatus};
+	use cf_traits::{AccountRoleRegistry, SetSafeMode, VaultStatus};
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -395,59 +395,65 @@ pub mod pallet {
 								"Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}"
 							);
 							log::error!(target: "cf-validator", "Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}");
-							Self::deposit_event(Event::<T>::RotationAborted);
-							// TODO: We should put the chain into safe mode here.
 							Self::abort_rotation();
 						},
 					};
 					T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
 				},
 				RotationPhase::KeyHandoversInProgress(mut rotation_state) => {
-					let num_primary_candidates = rotation_state.num_primary_candidates();
-					match T::VaultRotator::status() {
-						AsyncResult::Ready(VaultStatus::KeyHandoverComplete) => {
-							let new_authorities = rotation_state.authority_candidates();
-							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
-							T::VaultRotator::activate();
-							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
-						},
-						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
-							let num_failed_candidates = offenders.intersection(&rotation_state.authority_candidates()).count();
-							rotation_state.ban(offenders);
-							if rotation_state.unbanned_current_authorities::<T>().len() as u32 <= Self::current_consensus_threshold() {
-								log::warn!(
-									target: "cf-validator",
-									"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
+					if !T::SafeMode::get().authority_rotation_enabled {
+						log::warn!(
+							target: "cf-validator",
+							"Key Activation failed: Runtime Safe Mode is in CODE RED. Aborting Authority rotation."
+						);
+						Self::abort_rotation();
+						T::ValidatorWeightInfo::rotation_phase_keygen(0u32)
+					} else {
+						let num_primary_candidates = rotation_state.num_primary_candidates();
+						match T::VaultRotator::status() {
+							AsyncResult::Ready(VaultStatus::KeyHandoverComplete) => {
+								let new_authorities = rotation_state.authority_candidates();
+								HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
+								T::VaultRotator::activate();
+								Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
+							},
+							AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
+								let num_failed_candidates = offenders.intersection(&rotation_state.authority_candidates()).count();
+								rotation_state.ban(offenders);
+								if rotation_state.unbanned_current_authorities::<T>().len() as u32 <= Self::current_consensus_threshold() {
+									log::warn!(
+										target: "cf-validator",
+										"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
+									);
+									Self::abort_rotation();
+								} else if num_failed_candidates > 0 {
+									log::warn!(
+										"{} authority candidate(s) failed to participate in key handover. Retrying from keygen.",
+										num_failed_candidates,
+									);
+									Self::start_vault_rotation(rotation_state);
+								} else {
+									log::warn!(
+										"Key handover attempt failed. Retrying with a new participant set.",
+									);
+									Self::start_key_handover(rotation_state, block_number)
+								};
+							},
+							AsyncResult::Pending => {
+								log::debug!(target: "cf-validator", "awaiting key handover completion");
+							},
+							async_result => {
+								debug_assert!(
+									false,
+									"Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}"
 								);
+								log::error!(target: "cf-validator", "Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}");
 								Self::abort_rotation();
-							} else if num_failed_candidates > 0 {
-								log::warn!(
-									"{} authority candidate(s) failed to participate in key handover. Retrying from keygen.",
-									num_failed_candidates,
-								);
-								Self::start_vault_rotation(rotation_state);
-							} else {
-								log::warn!(
-									"Key handover attempt failed. Retrying with a new participant set.",
-								);
-								Self::start_key_handover(rotation_state, block_number)
-							};
-						},
-						AsyncResult::Pending => {
-							log::debug!(target: "cf-validator", "awaiting key handover completion");
-						},
-						async_result => {
-							debug_assert!(
-								false,
-								"Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}"
-							);
-							log::error!(target: "cf-validator", "Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}");
-							// TODO: We should put the chain into safe mode here.
-							Self::abort_rotation();
-						},
+							},
+						}
+						// TODO: Use correct weight
+						T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
 					}
-					// TODO: Use correct weight
-					T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
 				}
 				RotationPhase::ActivatingKeys(rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
@@ -1176,6 +1182,15 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn start_key_handover(rotation_state: RuntimeRotationState<T>, block_number: T::BlockNumber) {
+		if !T::SafeMode::get().authority_rotation_enabled {
+			log::warn!(
+				target: "cf-validator",
+				"Key Handover failed: Runtime Safe Mode is in CODE RED. Aborting Authority rotation."
+			);
+			Self::abort_rotation();
+			return
+		}
+
 		let authority_candidates = rotation_state.authority_candidates();
 		if let Some(sharing_participants) = helpers::select_sharing_participants(
 			Self::current_consensus_threshold(),

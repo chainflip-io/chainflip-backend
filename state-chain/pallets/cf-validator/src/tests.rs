@@ -742,3 +742,72 @@ fn key_handover_should_repeat_until_below_authority_threshold() {
 		));
 	});
 }
+
+#[test]
+fn safe_mode_code_red_aborts_authority_rotation() {
+	new_test_ext().execute_with(|| {
+		// Set code red during Key Gen aborts the rotation
+		MockBidderProvider::set_winning_bids();
+		ValidatorPallet::start_authority_rotation();
+		assert!(matches!(
+			CurrentRotationPhase::<Test>::get(),
+			RotationPhase::<Test>::KeygensInProgress(..)
+		));
+		MockVaultRotatorA::keygen_success();
+
+		System::reset_events();
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
+		ValidatorPallet::on_initialize(1);
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
+				new_phase: RotationPhase::Idle
+			}),
+			RuntimeEvent::ValidatorPallet(Event::RotationAborted)
+		);
+		assert!(matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle));
+
+		// Set code red during Key Handover aborts the rotation
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
+		ValidatorPallet::start_authority_rotation();
+		MockVaultRotatorA::keygen_success();
+		ValidatorPallet::on_initialize(1);
+		MockVaultRotatorA::key_handover_success();
+
+		System::reset_events();
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
+		ValidatorPallet::on_initialize(1);
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
+				new_phase: RotationPhase::Idle
+			}),
+			RuntimeEvent::ValidatorPallet(Event::RotationAborted)
+		);
+		assert!(matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle));
+
+		// After key is activated, safe mode does not halt the rotation
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
+		ValidatorPallet::start_authority_rotation();
+		MockVaultRotatorA::keygen_success();
+		ValidatorPallet::on_initialize(1);
+		MockVaultRotatorA::key_handover_success();
+		ValidatorPallet::on_initialize(1);
+		MockVaultRotatorA::keys_activated();
+
+		System::reset_events();
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
+		ValidatorPallet::on_initialize(1);
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::ValidatorPallet(Event::RotationPhaseUpdated {
+				new_phase: RotationPhase::NewKeysActivated(..)
+			}),
+		);
+
+		// Authority and Session rotation can be fully completed after previous aborts.
+		Session::rotate_session();
+		Session::rotate_session();
+		assert!(matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle));
+	});
+}
