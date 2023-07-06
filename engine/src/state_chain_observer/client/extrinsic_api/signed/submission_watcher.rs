@@ -1,7 +1,4 @@
-use std::{
-	collections::{BTreeMap, HashMap},
-	sync::Arc,
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::{anyhow, bail, Result};
 use cf_primitives::BlockNumber;
@@ -274,52 +271,6 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			.storage_value::<frame_system::Events<state_chain_runtime::Runtime>>(block_hash)
 			.await?;
 
-		self.update_finalized_data(block_hash, block.header.number).await?;
-
-		// Find any events that have an extrinsic index
-		let event_vec: Vec<_> = events
-			.into_iter()
-			.filter_map(|event_record| match *event_record {
-				frame_system::EventRecord {
-					phase: frame_system::Phase::ApplyExtrinsic(extrinsic_index),
-					event,
-					..
-				} => Some((extrinsic_index, event)),
-				_ => None,
-			})
-			.sorted_by_key(|(extrinsic_index, _)| *extrinsic_index)
-			.collect();
-
-		// Group the events by extrinsic index
-		let events_for_extrinsic: HashMap<u32, Vec<_>> = event_vec
-			.into_iter()
-			.group_by(|(extrinsic_index, _)| *extrinsic_index)
-			.into_iter()
-			.map(|(extrinsic_index, extrinsic_events)| {
-				(extrinsic_index, extrinsic_events.map(|(_, event)| event).collect())
-			})
-			.collect();
-
-		// Process the extrinsic events
-		events_for_extrinsic
-			.into_iter()
-			.for_each(|(extrinsic_index, extrinsic_events)| {
-				let extrinsic = &block.extrinsics[extrinsic_index as usize];
-				self.find_submission_and_process(extrinsic, extrinsic_events, requests, &block);
-			});
-
-		self.cleanup_submissions(block.header.number, requests);
-
-		self.cleanup_requests(block.header.number, requests).await?;
-
-		Ok(())
-	}
-
-	async fn update_finalized_data(
-		&mut self,
-		block_hash: H256,
-		block_number: BlockNumber,
-	) -> Result<()> {
 		// Get our account nonce and compare it to the finalized nonce
 		let nonce = self
 			.base_rpc_client
@@ -335,7 +286,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		}
 
 		// Update the finalized data
-		self.finalized_block_number = block_number;
+		self.finalized_block_number = block.header.number;
 		self.finalized_block_hash = block_hash;
 		self.finalized_nonce = nonce;
 
@@ -344,6 +295,33 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 		// Fast forward the anticipated nonce to the finalized nonce if it is behind
 		self.anticipated_nonce = Nonce::max(self.anticipated_nonce, nonce);
 
+		for (extrinsic_index, extrinsic_events) in events
+			.into_iter()
+			.filter_map(|event_record| match *event_record {
+				// Find any events that have an extrinsic index
+				frame_system::EventRecord {
+					phase: frame_system::Phase::ApplyExtrinsic(extrinsic_index),
+					event,
+					..
+				} => Some((extrinsic_index, event)),
+				_ => None,
+			})
+			// Group the found events by extrinsic index
+			.sorted_by_key(|(extrinsic_index, _)| *extrinsic_index)
+			.group_by(|(extrinsic_index, _)| *extrinsic_index)
+			.into_iter()
+			.map(|(extrinsic_index, extrinsic_events)| {
+				(extrinsic_index, extrinsic_events.map(|(_extrinsics_index, event)| event))
+			}) {
+			// Process the extrinsic events
+			let extrinsic = &block.extrinsics[extrinsic_index as usize];
+			self.find_submission_and_process(extrinsic, extrinsic_events, requests, &block);
+		}
+
+		self.cleanup_submissions(block.header.number, requests);
+
+		self.cleanup_requests(block.header.number, requests).await?;
+
 		Ok(())
 	}
 
@@ -351,7 +329,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 	fn find_submission_and_process(
 		&mut self,
 		extrinsic: &state_chain_runtime::UncheckedExtrinsic,
-		extrinsic_events: Vec<state_chain_runtime::RuntimeEvent>,
+		extrinsic_events: impl Iterator<Item = state_chain_runtime::RuntimeEvent>,
 		requests: &mut BTreeMap<RequestID, Request>,
 		block: &state_chain_runtime::Block,
 	) {
@@ -390,6 +368,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 				{
 					// We expect to find a Success or Failed event, grab the dispatch info and send
 					// it with the events, completing the request.
+					let extrinsic_events = extrinsic_events.collect::<Vec<_>>();
 					let _result = matching_request.result_sender.send({
 						extrinsic_events
 							.iter()
@@ -462,7 +441,9 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static>
 			)));
 		}
 
-		// Resubmit any expired requests that are left
+		// Resubmit any expired requests that are left.
+		// Has to be a separate loop from the above due to not being able to await inside
+		// drain_filter
 		for (_request_id, request) in requests.iter_mut() {
 			if request.pending_submissions == 0 {
 				debug!("Resubmitting extrinsic as all existing submissions have expired.");

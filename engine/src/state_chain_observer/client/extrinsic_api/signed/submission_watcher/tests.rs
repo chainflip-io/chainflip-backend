@@ -417,7 +417,21 @@ async fn test_update_finalized_data() {
 	let signer = PairSigner::new(sp_core::Pair::generate().0);
 	let new_hash = H256::random();
 
-	// The `update_finalized_data` function should request account info for an up-to-date nonce.
+	// The watcher should request the block info for an up-to-date block number
+	mock_rpc_api.expect_block().once().return_once(|_| {
+		Ok(Some(state_chain_runtime::SignedBlock {
+			block: state_chain_runtime::Block {
+				header: test_header(TEST_BLOCK_NUMBER),
+				extrinsics: vec![],
+			},
+			justifications: None,
+		}))
+	});
+
+	// The watcher will request the events, not relevant for this test
+	mock_rpc_api.expect_storage().once().return_once(move |_, _| Ok(None));
+
+	// The watcher should request account info for an up-to-date nonce.
 	let account_info = AccountInfo {
 		nonce: NEW_NONCE,
 		consumers: 0,
@@ -436,7 +450,7 @@ async fn test_update_finalized_data() {
 		.once()
 		.return_once(move |_, _| Ok(Some(StorageData(account_info.encode()))));
 
-	let (mut watcher, _requests) = SubmissionWatcher::new(
+	let (mut watcher, mut requests) = SubmissionWatcher::new(
 		signer,
 		INITIAL_NONCE,
 		Default::default(),
@@ -453,7 +467,7 @@ async fn test_update_finalized_data() {
 	assert_eq!(watcher.finalized_block_hash, Default::default());
 	assert_eq!(watcher.finalized_block_number, INITIAL_BLOCK_NUMBER);
 
-	watcher.update_finalized_data(new_hash, TEST_BLOCK_NUMBER).await.unwrap();
+	watcher.on_block_finalized(&mut requests, new_hash).await.unwrap();
 
 	// All values should have been updated
 	assert_eq!(watcher.finalized_nonce, NEW_NONCE);
@@ -467,6 +481,20 @@ async fn should_error_if_account_nonce_falls_back() {
 	let mut mock_rpc_api = MockBaseRpcApi::new();
 	let signer = PairSigner::new(sp_core::Pair::generate().0);
 	let new_hash = H256::random();
+
+	// The watcher should request the block info for an up-to-date block number
+	mock_rpc_api.expect_block().once().return_once(|_| {
+		Ok(Some(state_chain_runtime::SignedBlock {
+			block: state_chain_runtime::Block {
+				header: test_header(INITIAL_BLOCK_NUMBER + 1),
+				extrinsics: vec![],
+			},
+			justifications: None,
+		}))
+	});
+
+	// The watcher will request the events, not relevant for this test
+	mock_rpc_api.expect_storage().once().return_once(move |_, _| Ok(None));
 
 	// Return a nonce that is below the watchers finalized nonce (INITIAL_NONCE)
 	let account_info = AccountInfo {
@@ -487,7 +515,7 @@ async fn should_error_if_account_nonce_falls_back() {
 		.once()
 		.return_once(move |_, _| Ok(Some(StorageData(account_info.encode()))));
 
-	let (mut watcher, _requests) = SubmissionWatcher::new(
+	let (mut watcher, mut requests) = SubmissionWatcher::new(
 		signer,
 		INITIAL_NONCE,
 		Default::default(),
@@ -500,11 +528,8 @@ async fn should_error_if_account_nonce_falls_back() {
 
 	assert_eq!(watcher.finalized_nonce, INITIAL_NONCE);
 
-	// The update should fail
-	watcher
-		.update_finalized_data(new_hash, INITIAL_BLOCK_NUMBER + 1)
-		.await
-		.unwrap_err();
+	// The function should return an error
+	watcher.on_block_finalized(&mut requests, new_hash).await.unwrap_err();
 }
 
 #[test]
@@ -574,7 +599,7 @@ fn test_find_submission_and_process() {
 		base_rpc_client: Arc::new(mock_rpc_api),
 	};
 
-	watcher.find_submission_and_process(&extrinsic, events.clone(), &mut requests, &block);
+	watcher.find_submission_and_process(&extrinsic, events.iter().cloned(), &mut requests, &block);
 
 	// The request and submission should have completed and we should receive the events
 	assert!(requests.is_empty());
