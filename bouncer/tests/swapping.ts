@@ -6,7 +6,7 @@ import { performSwap } from "../shared/perform_swap";
 import { getAddress, runWithTimeout, chainFromAsset, getEthContractAddress, encodeBtcAddressForContract, encodeDotAddressForContract } from "../shared/utils";
 import { BtcAddressType } from "../shared/new_btc_address";
 import { CcmDepositMetadata } from "../shared/new_swap";
-import { performNativeSwap } from "../shared/native_swap";
+import { performSwapViaSmartContract } from "../shared/native_swap";
 
 let swapCount = 1;
 
@@ -28,10 +28,14 @@ async function testSwap(sourceToken: Asset, destToken: Asset, addressType?: BtcA
 
 async function testAll() {
     const nativeContractSwaps = Promise.all([
-        performNativeSwap('DOT'),
-        performNativeSwap('USDC'),
-        performNativeSwap('BTC'),
+        performSwapViaSmartContract('ETH','DOT'),
+        performSwapViaSmartContract('ETH','USDC'),
+        performSwapViaSmartContract('ETH','BTC'),
+        performSwapViaSmartContract('USDC','DOT'),
+        performSwapViaSmartContract('USDC','ETH'),
+        performSwapViaSmartContract('USDC','BTC'),
     ]);
+    await Promise.all([nativeContractSwaps]);
 
     const regularSwaps =
         Promise.all([

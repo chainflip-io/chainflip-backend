@@ -1,8 +1,8 @@
-import { performNativeSwap } from '../shared/native_swap';
+import { performSwapViaSmartContract } from '../shared/native_swap';
 import { runWithTimeout } from '../shared/utils';
 
 async function testAllNativeSwaps() {
-    await Promise.all([performNativeSwap('DOT'), performNativeSwap('USDC'), performNativeSwap('BTC')]);
+    await Promise.all([performSwapViaSmartContract('DOT'), performSwapViaSmartContract('USDC'), performSwapViaSmartContract('BTC')]);
 }
 
 // A successful execution usually takes ~150 seconds
