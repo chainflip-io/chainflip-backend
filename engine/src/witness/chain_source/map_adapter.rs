@@ -21,7 +21,7 @@ impl<
 		Underlying: ChainSourceWithClient,
 		MappedTo: aliases::Data,
 		FutMappedTo: Future<Output = MappedTo> + Send + Sync,
-		MapFn: Fn(Underlying::Index, Underlying::Hash, Underlying::Data) -> FutMappedTo
+		MapFn: Fn(Header<Underlying::Index, Underlying::Hash, Underlying::Data>) -> FutMappedTo
 			+ Send
 			+ Sync
 			+ Clone,
@@ -38,10 +38,14 @@ impl<
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
 		let (underlying_stream, client) = self.underlying_stream.stream_and_client().await;
 
-		let mapped_stream =
-			underlying_stream.then(move |Header { index, hash, parent_hash, data }| async move {
-				Header { index, hash, parent_hash, data: (self.map_fn)(index, hash, data).await }
-			});
+		let mapped_stream = underlying_stream.then(move |header| async move {
+			Header {
+				index: header.index,
+				hash: header.hash,
+				parent_hash: header.parent_hash,
+				data: (self.map_fn)(header).await,
+			}
+		});
 
 		(Box::pin(mapped_stream), MappedClient::new(client, self.map_fn.clone()))
 	}
@@ -64,9 +68,7 @@ impl<
 		MappedTo: aliases::Data,
 		FutMappedTo: Future<Output = MappedTo> + Send + Sync,
 		MapFn: Fn(
-				UnderlyingClient::Index,
-				UnderlyingClient::Hash,
-				UnderlyingClient::Data,
+				Header<UnderlyingClient::Index, UnderlyingClient::Hash, UnderlyingClient::Data>,
 			) -> FutMappedTo
 			+ Send
 			+ Sync
@@ -81,9 +83,13 @@ impl<
 		&self,
 		index: Self::Index,
 	) -> Header<Self::Index, Self::Hash, Self::Data> {
-		let Header { index, hash, parent_hash, data } =
-			self.underlying_client.header_at_index(index).await;
+		let header = self.underlying_client.header_at_index(index).await;
 
-		Header { index, hash, parent_hash, data: (self.map_fn)(index, hash, data).await }
+		Header {
+			index: header.index,
+			hash: header.hash,
+			parent_hash: header.parent_hash,
+			data: (self.map_fn)(header).await,
+		}
 	}
 }
