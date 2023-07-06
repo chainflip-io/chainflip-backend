@@ -12,26 +12,6 @@ pub struct MockEthereum;
 
 pub type MockEthereumChannelId = u128;
 
-// #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
-// pub struct MockDepositAddress;
-
-// impl DepositChannel for MockDepositAddress {
-// 	type Address = u64;
-// 	type DepositFetchId = u128;
-
-// 	fn get_address(&self) -> Self::Address {
-// 		todo!()
-// 	}
-
-// 	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
-// 		todo!()
-// 	}
-
-// 	fn new(_channel_id: u64, _address: Self::Address) -> Self {
-// 		todo!()
-// 	}
-// }
-
 // Chain implementation used for testing.
 impl Chain for MockEthereum {
 	const NAME: &'static str = "MockEthereum";

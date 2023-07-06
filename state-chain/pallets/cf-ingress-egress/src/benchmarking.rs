@@ -23,10 +23,10 @@ benchmarks_instance_pallet! {
 		DepositAddressDetailsLookup::<T, I>::insert(&deposit_address, (DepositAddressDetails {
 				channel_id: 1,
 				source_asset,
-			}, T::DepositAddress::new(
+			}, T::DepositChannel::new(
 				1,
 				source_asset,
-			)));
+			).unwrap()));
 		ChannelActions::<T, I>::insert(&deposit_address, ChannelAction::<T::AccountId>::LiquidityProvision {
 			lp_account: account("doogle", 0, 0)
 		});
@@ -56,10 +56,10 @@ benchmarks_instance_pallet! {
 			DepositAddressDetailsLookup::<T, I>::insert(deposit_address.clone(), (DepositAddressDetails {
 				channel_id: a as u64,
 				source_asset,
-			}, T::DepositAddress::new(
+			}, T::DepositChannel::new(
 				a as u64,
 				source_asset,
-			)));
+			).unwrap()));
 			addresses.push((deposit_fetch_id, deposit_address));
 		}
 	}: { let _ = Pallet::<T, I>::finalise_ingress(origin, addresses); }

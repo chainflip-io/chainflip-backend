@@ -282,7 +282,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type Broadcaster = EthereumBroadcaster;
 	type DepositHandler = chainflip::EthDepositHandler;
 	type CcmHandler = Swapping;
-	type DepositAddress = EthereumDepositAddress;
+	type DepositChannel = EthereumDepositAddress;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
 
@@ -297,7 +297,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type Broadcaster = PolkadotBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::DotDepositHandler;
-	type DepositAddress = PolkadotDepositAddress;
+	type DepositChannel = PolkadotDepositAddress;
 	type CcmHandler = Swapping;
 }
 
@@ -312,7 +312,7 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type Broadcaster = BitcoinBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::BtcDepositHandler;
-	type DepositAddress = BitcoinDepositAddress;
+	type DepositChannel = BitcoinDepositAddress;
 	type CcmHandler = Swapping;
 }
 

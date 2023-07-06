@@ -4,26 +4,6 @@ use super::*;
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum NoneChain {}
 
-// #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
-// pub struct NoneChainDepositAddress;
-
-// impl DepositChannel for NoneChainDepositAddress {
-// 	type Address = ForeignChainAddress;
-// 	type DepositFetchId = ();
-
-// 	fn get_address(&self) -> Self::Address {
-// 		todo!()
-// 	}
-
-// 	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
-// 		todo!()
-// 	}
-
-// 	fn new(_channel_id: u64, _address: Self::Address) -> Self {
-// 		todo!()
-// 	}
-// }
-
 impl Chain for NoneChain {
 	const NAME: &'static str = "NONE";
 	type ChainBlockNumber = u64;

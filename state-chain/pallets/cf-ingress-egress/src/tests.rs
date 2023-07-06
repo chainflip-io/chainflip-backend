@@ -1,7 +1,7 @@
 use crate::{
-	mock::*, AddressPool, ChannelIdCounter, CrossChainMessage, DepositAddressDetailsLookup,
-	DepositWitness, DisabledEgressAssets, Error, Event as PalletEvent, FetchOrTransfer,
-	MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
+	mock::*, AddressPool, ChannelAction, ChannelIdCounter, CrossChainMessage,
+	DepositAddressDetailsLookup, DepositWitness, DisabledEgressAssets, Error, Event as PalletEvent,
+	FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 };
 use cf_chains::{ExecutexSwapAndCall, TransferAssetParams};
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
@@ -440,29 +440,35 @@ fn create_new_address_while_pool_is_empty() {
 	});
 }
 
-// #[test]
-// fn reused_address_channel_id_matches() {
-// 	new_test_ext().execute_with(|| {
-// 		const INTENT_ID: ChannelId = 0;
-// 		let eth_address = <<Test as crate::Config>::AddressDerivation as AddressDerivationApi<
-// 			Ethereum,
-// 		>>::generate_address(eth::Asset::Eth, INTENT_ID)
-// 		.unwrap();
-// 		let new_address = <<Test as crate::Config>::DepositAddress as DepositChannel::new(
-// 			INTENT_ID,
-// 			eth_address,
-// 		);
-// 		AddressPool::<Test, _>::insert(INTENT_ID, new_address);
-// 		let (reused_channel_id, reused_address) = IngressEgress::open_channel(
-// 			eth::Asset::Eth,
-// 			ChannelAction::LiquidityProvision { lp_account: 0 },
-// 		)
-// 		.unwrap();
-// 		// The reused details should be the same as before.
-// 		assert_eq!(reused_channel_id, INTENT_ID);
-// 		assert_eq!(eth_address, reused_address);
-// 	});
-// }
+#[test]
+fn reused_address_channel_id_matches() {
+	new_test_ext().execute_with(|| {
+		const INTENT_ID: ChannelId = 0;
+		let eth_address = <<Test as crate::Config>::AddressDerivation as AddressDerivationApi<
+			Ethereum,
+		>>::generate_address(eth::Asset::Eth, INTENT_ID)
+		.unwrap();
+		// let new_address = <<Test as crate::Config>::DepositChannel as DepositChannel::new(
+		// 	INTENT_ID,
+		// 	eth_address,
+		// ).unwrap();
+		let new_address =
+			<<Test as crate::Config>::DepositChannel as DepositChannel<Ethereum>>::new(
+				INTENT_ID,
+				eth::Asset::Eth,
+			)
+			.unwrap();
+		AddressPool::<Test, _>::insert(INTENT_ID, new_address);
+		let (reused_channel_id, reused_address) = IngressEgress::open_channel(
+			eth::Asset::Eth,
+			ChannelAction::LiquidityProvision { lp_account: 0 },
+		)
+		.unwrap();
+		// The reused details should be the same as before.
+		assert_eq!(reused_channel_id, INTENT_ID);
+		assert_eq!(eth_address, reused_address);
+	});
+}
 
 #[test]
 fn can_process_ccm_deposit() {

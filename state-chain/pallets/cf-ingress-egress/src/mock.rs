@@ -126,16 +126,18 @@ pub mod eth_mock_deposit_channel {
 			self.deposit_fetch_id
 		}
 
-		fn new(channel_id: u64, asset: <Ethereum as Chain>::ChainAsset) -> Self {
+		fn new(
+			channel_id: u64,
+			asset: <Ethereum as Chain>::ChainAsset,
+		) -> Result<MockDepositChannel, sp_runtime::DispatchError> {
 			let address =
-				<() as AddressDerivationApi<Ethereum>>::generate_address(asset, channel_id)
-					.unwrap();
-			MockDepositChannel {
+				<() as AddressDerivationApi<Ethereum>>::generate_address(asset, channel_id)?;
+			Ok(Self {
 				address,
 				channel_id,
 				deployment_status: DeploymentStatus::Undeployed,
 				deposit_fetch_id: EthereumChannelId::UnDeployed(channel_id),
-			}
+			})
 		}
 
 		fn maybe_recycle(&self) -> bool
@@ -173,7 +175,7 @@ impl crate::Config for Test {
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
 	type CcmHandler = MockCcmHandler;
-	type DepositAddress = eth_mock_deposit_channel::MockDepositChannel;
+	type DepositChannel = eth_mock_deposit_channel::MockDepositChannel;
 	type WeightInfo = ();
 }
 

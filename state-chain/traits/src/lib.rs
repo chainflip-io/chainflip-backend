@@ -879,14 +879,16 @@ pub trait GetBitcoinFeeInfo {
 	fn bitcoin_fee_info() -> cf_chains::btc::BitcoinFeeInfo;
 }
 
-// /// Deposit address trait. This traits defines the interface for chain specific aspects of
-// deposit /// address management.
+/// Deposit address trait. This traits defines the interface for chain specific aspects of address
+/// management.
 pub trait DepositChannel<C: Chain> {
 	type Address;
 	type DepositFetchId;
 	type AddressDerivation: AddressDerivationApi<C>;
 
-	fn new(channel_id: u64, asset: C::ChainAsset) -> Self;
+	fn new(channel_id: u64, asset: C::ChainAsset) -> Result<Self, DispatchError>
+	where
+		Self: Sized;
 
 	/// Returns the actual address raw address.
 	fn get_address(&self) -> Self::Address;

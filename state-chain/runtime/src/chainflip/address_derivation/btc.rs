@@ -50,8 +50,14 @@ impl DepositChannel<Bitcoin> for BitcoinDepositAddress {
 		self.deposit_fetch_id
 	}
 
-	fn new(_channel_id: u64, _asset: <Bitcoin as Chain>::ChainAsset) -> Self {
-		todo!()
+	fn new(channel_id: u64, asset: <Bitcoin as Chain>::ChainAsset) -> Result<Self, DispatchError>
+	where
+		Self: Sized,
+	{
+		let address = <AddressDerivation as AddressDerivationApi<Bitcoin>>::generate_address(
+			asset, channel_id,
+		)?;
+		Ok(Self { address, deposit_fetch_id: BitcoinFetchId(channel_id) })
 	}
 
 	fn maybe_recycle(&self) -> bool

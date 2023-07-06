@@ -71,12 +71,14 @@ impl DepositChannel<Polkadot> for PolkadotDepositAddress {
 		self.deposit_fetch_id
 	}
 
-	fn new(channel_id: u64, asset: <Polkadot as Chain>::ChainAsset) -> Self {
+	fn new(channel_id: u64, asset: <Polkadot as Chain>::ChainAsset) -> Result<Self, DispatchError>
+	where
+		Self: Sized,
+	{
 		let address = <AddressDerivation as AddressDerivationApi<Polkadot>>::generate_address(
 			asset, channel_id,
-		)
-		.unwrap();
-		PolkadotDepositAddress { channel_id, address, deposit_fetch_id: channel_id }
+		)?;
+		Ok(PolkadotDepositAddress { channel_id, address, deposit_fetch_id: channel_id })
 	}
 }
 

@@ -176,7 +176,7 @@ pub mod pallet {
 		/// Provides callbacks for deposit lifecycle events.
 		type DepositHandler: DepositHandler<Self::TargetChain>;
 
-		type DepositAddress: Member
+		type DepositChannel: Member
 			+ Parameter
 			+ DepositChannel<
 				Self::TargetChain,
@@ -193,7 +193,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		TargetChainAccount<T, I>,
-		(DepositAddressDetails<T::TargetChain>, T::DepositAddress),
+		(DepositAddressDetails<T::TargetChain>, T::DepositChannel),
 		OptionQuery,
 	>;
 
@@ -234,12 +234,12 @@ pub mod pallet {
 	/// Stores address ready for use.
 	#[pallet::storage]
 	pub(crate) type AddressPool<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, ChannelId, T::DepositAddress>;
+		StorageMap<_, Twox64Concat, ChannelId, T::DepositChannel>;
 
 	/// Map of channel id to the deposit fetch parameters.
 	#[pallet::storage]
 	pub(crate) type FetchParamDetails<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, ChannelId, (T::DepositAddress, TargetChainAccount<T, I>)>;
+		StorageMap<_, Twox64Concat, ChannelId, (T::DepositChannel, TargetChainAccount<T, I>)>;
 
 	/// Defines the minimum amount of Deposit allowed for each asset.
 	#[pallet::storage]
@@ -651,9 +651,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				let next_channel_id = ChannelIdCounter::<T, I>::get()
 					.checked_add(1)
 					.ok_or(Error::<T, I>::ChannelIdsExhausted)?;
-				// T::DepositAddress::generate_address(source_asset, next_channel_id)?;
 				ChannelIdCounter::<T, I>::put(next_channel_id);
-				(T::DepositAddress::new(next_channel_id, source_asset), next_channel_id)
+				(T::DepositChannel::new(next_channel_id, source_asset)?, next_channel_id)
 			};
 
 		let new_address = deposit_address_wrapper.get_address();

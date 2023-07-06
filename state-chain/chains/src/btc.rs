@@ -38,7 +38,7 @@ pub const MAX_BITCOIN_SCRIPT_LENGTH: u32 = 128;
 pub type BlockNumber = u64;
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Copy)]
-pub struct BitcoinFetchId(u64);
+pub struct BitcoinFetchId(pub u64);
 
 pub type BtcAmount = u64;
 
@@ -144,36 +144,6 @@ impl Age for BitcoinTrackedData {
 pub struct EpochStartData {
 	pub change_pubkey: AggKey,
 }
-
-// #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
-// pub struct BitcoinDepositAddress {
-// 	pub address: ScriptPubkey,
-// 	pub deposit_fetch_id: BitcoinFetchId,
-// }
-
-// impl DepositChannel for BitcoinDepositAddress {
-// 	type Address = ScriptPubkey;
-// 	type DepositFetchId = BitcoinFetchId;
-
-// 	fn get_address(&self) -> Self::Address {
-// 		self.address.clone()
-// 	}
-
-// 	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
-// 		self.deposit_fetch_id
-// 	}
-
-// 	fn new(_channel_id: u64, _address: Self::Address) -> Self {
-// 		todo!()
-// 	}
-
-// 	fn maybe_recycle(&self) -> bool
-// 	where
-// 		Self: Sized,
-// 	{
-// 		false
-// 	}
-// }
 
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";

@@ -68,17 +68,19 @@ impl DepositChannel<Ethereum> for EthereumDepositAddress {
 		self.deposit_fetch_id
 	}
 
-	fn new(channel_id: u64, asset: <Ethereum as Chain>::ChainAsset) -> Self {
+	fn new(channel_id: u64, asset: <Ethereum as Chain>::ChainAsset) -> Result<Self, DispatchError>
+	where
+		Self: Sized,
+	{
 		let address = <AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
 			asset, channel_id,
-		)
-		.unwrap();
-		EthereumDepositAddress {
+		)?;
+		Ok(EthereumDepositAddress {
 			address,
 			channel_id,
 			deployment_status: DeploymentStatus::Undeployed,
 			deposit_fetch_id: EthereumChannelId::UnDeployed(channel_id),
-		}
+		})
 	}
 
 	fn maybe_recycle(&self) -> bool
