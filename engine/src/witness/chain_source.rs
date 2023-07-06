@@ -2,6 +2,7 @@ pub mod btc_source;
 pub mod dot_source;
 pub mod eth_source;
 pub mod lag_safety;
+pub mod map_adapter;
 pub mod shared;
 pub mod strictly_monotonic;
 
@@ -20,7 +21,7 @@ pub mod aliases {
 	}
 
 	define_trait_alias!(pub trait Index: Step + PartialEq + Eq + PartialOrd + Ord + Clone + Copy + Send + Sync + Unpin + 'static);
-	define_trait_alias!(pub trait Hash: PartialEq + Eq + Clone + Send + Sync + Unpin + 'static);
+	define_trait_alias!(pub trait Hash: PartialEq + Eq + Clone + Copy + Send + Sync + Unpin + 'static);
 	define_trait_alias!(pub trait Data: Send + Sync + Unpin + 'static);
 }
 
