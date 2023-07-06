@@ -886,7 +886,7 @@ pub trait DepositChannel<C: Chain> {
 	type DepositFetchId;
 	type AddressDerivation: AddressDerivationApi<C>;
 
-	fn new(channel_id: u64, address: Self::Address) -> Self;
+	fn new(channel_id: u64, asset: C::ChainAsset) -> Self;
 
 	/// Returns the actual address raw address.
 	fn get_address(&self) -> Self::Address;

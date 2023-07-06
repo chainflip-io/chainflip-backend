@@ -3,7 +3,7 @@ use cf_chains::{
 	dot::{PolkadotAccountId, PolkadotChannelId},
 	Chain, Polkadot,
 };
-use cf_primitives::{chains::assets::dot, ChannelId};
+use cf_primitives::{chains::assets::dot, Asset, ChannelId};
 use cf_traits::{AddressDerivationApi, DepositChannel};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
@@ -71,7 +71,12 @@ impl DepositChannel<Polkadot> for PolkadotDepositAddress {
 		self.deposit_fetch_id
 	}
 
-	fn new(channel_id: u64, address: Self::Address) -> Self {
+	fn new(channel_id: u64, asset: <Polkadot as Chain>::ChainAsset) -> Self {
+		let address = <AddressDerivation as AddressDerivationApi<Polkadot>>::generate_address(
+			asset.into(),
+			channel_id,
+		)
+		.unwrap();
 		PolkadotDepositAddress { channel_id, address, deposit_fetch_id: channel_id }
 	}
 }

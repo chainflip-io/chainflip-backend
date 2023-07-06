@@ -4,7 +4,7 @@ use cf_chains::{
 	btc::{deposit_address::DepositAddress, BitcoinFetchId, ScriptPubkey},
 	Bitcoin, Chain,
 };
-use cf_primitives::{chains::assets::btc, ChannelId};
+use cf_primitives::{chains::assets::btc, Asset, ChannelId};
 use cf_traits::{AddressDerivationApi, DepositChannel, EpochInfo};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
@@ -50,7 +50,7 @@ impl DepositChannel<Bitcoin> for BitcoinDepositAddress {
 		self.deposit_fetch_id
 	}
 
-	fn new(_channel_id: u64, _address: Self::Address) -> Self {
+	fn new(_channel_id: u64, _asset: <Bitcoin as Chain>::ChainAsset) -> Self {
 		todo!()
 	}
 

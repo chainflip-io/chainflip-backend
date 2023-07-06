@@ -6,7 +6,7 @@ use cf_chains::{
 	},
 	Chain, Ethereum,
 };
-use cf_primitives::{chains::assets::eth, ChannelId};
+use cf_primitives::{chains::assets::eth, Asset, ChannelId};
 use cf_traits::{AddressDerivationApi, DepositChannel};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -71,7 +71,11 @@ impl DepositChannel<Ethereum> for EthereumDepositAddress {
 		self.deposit_fetch_id
 	}
 
-	fn new(channel_id: u64, address: Self::Address) -> Self {
+	fn new(channel_id: u64, asset: <Ethereum as Chain>::ChainAsset) -> Self {
+		let address = <AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
+			asset, channel_id,
+		)
+		.unwrap();
 		EthereumDepositAddress {
 			address,
 			channel_id,

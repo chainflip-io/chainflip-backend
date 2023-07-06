@@ -102,7 +102,7 @@ impl DepositChannel<Ethereum> for MockDepositChannel {
 	type DepositFetchId = EthereumChannelId;
 	type AddressDerivation = MockAddressDerivation;
 
-	fn new(channel_id: u64, address: Self::Address) -> Self {
+	fn new(channel_id: u64, asset: <Ethereum as Chain>::ChainAsset) -> Self {
 		todo!()
 	}
 
