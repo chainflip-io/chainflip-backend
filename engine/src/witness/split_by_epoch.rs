@@ -1,7 +1,7 @@
 use futures_util::StreamExt;
 
 use super::{
-	chain_source::{box_chain_stream, BoxChainStream, ChainSource},
+	chain_source::{box_chain_stream, BoxChainStream, ChainSourceWithClient},
 	common::BoxActiveAndFuture,
 	epoch_source::Epoch,
 };
@@ -10,7 +10,7 @@ use utilities::assert_stream_send;
 
 #[async_trait::async_trait]
 pub trait ChainSplitByEpoch<'a>: Sized + Send {
-	type UnderlyingChainSource: ChainSource;
+	type UnderlyingChainSource: ChainSourceWithClient;
 
 	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>>;
 
@@ -29,9 +29,9 @@ pub type Item<'a, UnderlyingChainSource> = (
 	Epoch<(), ()>,
 	BoxChainStream<
 		'a,
-		<UnderlyingChainSource as ChainSource>::Index,
-		<UnderlyingChainSource as ChainSource>::Hash,
-		<UnderlyingChainSource as ChainSource>::Data,
+		<UnderlyingChainSource as ChainSourceWithClient>::Index,
+		<UnderlyingChainSource as ChainSourceWithClient>::Hash,
+		<UnderlyingChainSource as ChainSourceWithClient>::Data,
 	>,
 );
 
@@ -41,7 +41,7 @@ pub struct SplitByEpoch<'a, UnderlyingChainSource> {
 }
 
 #[async_trait::async_trait]
-impl<'a, UnderlyingChainSource: ChainSource> ChainSplitByEpoch<'a>
+impl<'a, UnderlyingChainSource: ChainSourceWithClient> ChainSplitByEpoch<'a>
 	for SplitByEpoch<'a, UnderlyingChainSource>
 {
 	type UnderlyingChainSource = UnderlyingChainSource;
@@ -54,7 +54,11 @@ impl<'a, UnderlyingChainSource: ChainSource> ChainSplitByEpoch<'a>
 				(
 					epoch,
 					box_chain_stream(
-						underlying_chain_source.stream().await.take_until(historic_signal.wait()),
+						underlying_chain_source
+							.stream_and_client()
+							.await
+							.0
+							.take_until(historic_signal.wait()),
 					),
 				)
 			})

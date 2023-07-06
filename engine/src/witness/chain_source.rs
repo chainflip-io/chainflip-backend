@@ -34,15 +34,6 @@ pub struct Header<Index, Hash, Data> {
 }
 
 #[async_trait::async_trait]
-pub trait ChainSource: Send + Sync {
-	type Index: aliases::Index;
-	type Hash: aliases::Hash;
-	type Data: aliases::Data;
-
-	async fn stream(&self) -> BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>;
-}
-
-#[async_trait::async_trait]
 pub trait ChainSourceWithClient: Send + Sync {
 	type Index: aliases::Index;
 	type Hash: aliases::Hash;
@@ -53,17 +44,6 @@ pub trait ChainSourceWithClient: Send + Sync {
 	async fn stream_and_client(
 		&self,
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client);
-}
-
-#[async_trait::async_trait]
-impl<T: ChainSourceWithClient> ChainSource for T {
-	type Index = T::Index;
-	type Hash = T::Hash;
-	type Data = T::Data;
-
-	async fn stream(&self) -> BoxChainStream<'_, Self::Index, Self::Hash, Self::Data> {
-		self.stream_and_client().await.0
-	}
 }
 
 #[async_trait::async_trait]
