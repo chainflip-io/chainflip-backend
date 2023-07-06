@@ -8,6 +8,7 @@
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { getChainflipApi, getPolkadotApi, sleep } from '../shared/utils';
+import { AddressOrPair } from '@polkadot/api/types';
 
 async function main(): Promise<void> {
   await cryptoWaitReady();
@@ -64,76 +65,104 @@ async function main(): Promise<void> {
   const dotKeyAddress = keyring.encodeAddress(dotKey as string, 0);
 
   // Step 3
-  console.log('Transferring 100 DOT to Polkadot AggKey');
-  await polkadot.tx.balances.transfer(dotKeyAddress, 1000000000000).signAndSend(alice);
+  console.log('Requesting Polkadot Vault creation');
+  const createPolkadotVault = async () => {
+    let vaultAddress: AddressOrPair | undefined;
+    let vaultExtrinsicIndex: number | undefined;
+    let vaultBlockHash: any | undefined;
+    const unsubscribe = await polkadot.tx.proxy
+      .createPure(polkadot.createType('ProxyType', 'Any'), 0, 0)
+      .signAndSend(alice, { nonce: -1 }, (result) => {
+        if (result.isInBlock) {
+          console.log('Polkadot Vault created');
+          // TODO: figure out type inference so we don't have to coerce using `any`
+          const pureCreated: any = result.findRecord('proxy', 'PureCreated')!;
+          vaultAddress = pureCreated.event.data[0];
+          vaultExtrinsicIndex = result.txIndex!;
+          vaultBlockHash = result.dispatchInfo!.createdAtHash!;
+          unsubscribe();
+        }
+      });
+    const vaultBlockNumber = (await polkadot.rpc.chain.getHeader(vaultBlockHash)).number.toNumber();
+    return { vaultAddress, vaultExtrinsicIndex, vaultBlockNumber };
+  }
+  const { vaultAddress, vaultExtrinsicIndex, vaultBlockNumber } = await createPolkadotVault();
 
   // Step 4
-  console.log('Requesting Polkadot Vault creation');
-  const createCommand = chainflip.tx.environment.createPolkadotVault(dotKey);
-  const mytx = chainflip.tx.governance.proposeGovernanceExtrinsic(createCommand);
-  await mytx.signAndSend(snowwhite);
+  console.log('Rotating Proxy and Funding Accounts.');
+  const rotate_and_fund = async () => {
+    const rotation = polkadot.tx.proxy.proxy(
+      polkadot.createType('MultiAddress', vaultAddress),
+      null,
+      polkadot.tx.utility.batchAll([
+        polkadot.tx.proxy.addProxy(
+          polkadot.createType('MultiAddress', dotKeyAddress),
+          polkadot.createType('ProxyType', 'Any'),
+          0
+        ),
+        polkadot.tx.proxy.removeProxy(
+          polkadot.createType('MultiAddress', alice.address),
+          polkadot.createType('ProxyType', 'Any'),
+          0
+        ),
+      ])
+    );
 
-  // Step 5
-  console.log('Waiting for Vault address on Polkadot chain');
-  let vaultAddress: string | undefined;
-  let vaultBlock: number | undefined;
-  let vaultEventIndex: number | undefined;
-  let waitingForEvent = true;
-  unsubscribe = await polkadot.rpc.chain.subscribeNewHeads(async (header) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const events: any[] = await polkadot.query.system.events.at(header.hash);
-    events.forEach((record, index) => {
-      const { event } = record;
-      if (event.section === 'proxy' && event.method === 'PureCreated') {
-        vaultAddress = event.data[0];
-        vaultBlock = header.number.toNumber();
-        vaultEventIndex = index;
+    const unsubscribe = await polkadot.tx.utility.batchAll([
+      rotation,
+      polkadot.tx.balances.transfer(dotKeyAddress, 1000000000000),
+      polkadot.tx.balances.transfer(vaultAddress, 1000000000000),
+    ]).signAndSend(alice, { nonce: -1 }, ({ status }) => {
+      if (status.isInBlock) {
+        console.log("Proxy rotated and accounts funded.");
         unsubscribe();
-        waitingForEvent = false;
       }
     });
-  });
-  while (waitingForEvent) {
-    await sleep(1000);
   }
-  console.log('Found DOT Vault with address ' + (vaultAddress as string));
+  await rotate_and_fund();
 
-  // Step 7
-  console.log('Transferring 100 DOT to Polkadot Vault');
-  await polkadot.tx.balances.transfer(vaultAddress, 1000000000000).signAndSend(alice);
-
-  // Step 8
+  // Step 5
   console.log('Registering Vaults with state chain');
-  const txid = { blockNumber: vaultBlock, extrinsicIndex: vaultEventIndex };
-  const dotWitnessing = chainflip.tx.environment.witnessPolkadotVaultCreation(
-    vaultAddress,
-    dotKey,
-    txid,
-    1,
-  );
-  const myDotTx = chainflip.tx.governance.proposeGovernanceExtrinsic(dotWitnessing);
-  await myDotTx.signAndSend(snowwhite, { nonce: -1 });
-
-  const btcWitnessing = chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(1, btcKey);
-  const myBtcTx = chainflip.tx.governance.proposeGovernanceExtrinsic(btcWitnessing);
-  await myBtcTx.signAndSend(snowwhite, { nonce: -1 });
+  const snow_white_nonce = (await chainflip.rpc.system.accountNextIndex(snowwhite.address)).toNumber();
+  const dotVaultCreation = async () => {
+    const unsubscribe = await chainflip.tx.governance.proposeGovernanceExtrinsic(
+      chainflip.tx.environment.witnessPolkadotVaultCreation(
+        vaultAddress,
+        { blockNumber: vaultBlockNumber, extrinsicIndex: vaultExtrinsicIndex },
+      )
+    ).signAndSend(snowwhite, { nonce: snow_white_nonce }, (result) => {
+      if (result.isInBlock) {
+        console.log('DOT Vault registered');
+        unsubscribe();
+      }
+    });
+  }
+  const btcVaultCreation = async () => {
+    const unsubscribe = await chainflip.tx.governance.proposeGovernanceExtrinsic(
+      chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(1, btcKey)
+    ).signAndSend(snowwhite, { nonce: snow_white_nonce + 1 }, (result) => {
+      if (result.isInBlock) {
+        console.log('BTC Vault registered');
+        unsubscribe();
+      }
+    });
+  }
+  await Promise.all([
+    dotVaultCreation(),
+    btcVaultCreation(),
+  ]);
 
   // Confirmation
   console.log('Waiting for new epoch');
-  waitingForEvent = true;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   unsubscribe = await chainflip.query.system.events((events: any[]) => {
     events.forEach((record) => {
       const { event } = record;
       if (event.section === 'validator' && event.method === 'NewEpoch') {
         unsubscribe();
-        waitingForEvent = false;
       }
     });
   });
-  while (waitingForEvent) {
-    await sleep(1000);
-  }
   console.log('=== Vault Setup completed ===');
   process.exit(0);
 }

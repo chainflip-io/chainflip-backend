@@ -12,7 +12,7 @@ use cf_primitives::{
 };
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
-	BroadcastCleanup, Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
+	Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
 };
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
 use sp_core::H256;
@@ -122,12 +122,6 @@ impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 		unimplemented!()
 	}
 }
-impl BroadcastCleanup<Polkadot> for MockPolkadotBroadcaster {
-	fn clean_up_broadcast(_broadcast_id: BroadcastId) -> sp_runtime::DispatchResult {
-		unimplemented!()
-	}
-}
-
 pub struct MockPolkadotVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler {
 	fn on_new_key_activated(
@@ -165,8 +159,6 @@ impl_mock_runtime_safe_mode!(mock: MockPalletSafeMode);
 
 impl pallet_cf_environment::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type CreatePolkadotVault = MockCreatePolkadotVault;
-	type PolkadotBroadcaster = MockPolkadotBroadcaster;
 	type BitcoinNetwork = BitcoinNetworkParam;
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;

@@ -504,11 +504,6 @@ pub trait Broadcaster<Api: ChainAbi> {
 	) -> (BroadcastId, ThresholdSignatureRequestId);
 }
 
-pub trait BroadcastCleanup<C: Chain> {
-	/// Triggers any necessary cleanup.
-	fn clean_up_broadcast(broadcast_id: BroadcastId) -> DispatchResult;
-}
-
 /// The heartbeat of the network
 pub trait Heartbeat {
 	type ValidatorId;
