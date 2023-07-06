@@ -1,9 +1,9 @@
 use crate::{
-	mock::*, AddressPool, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DepositAddressDetailsLookup, DepositWitness, DisabledEgressAssets, Error, Event as PalletEvent,
-	FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
+	mock::*, AddressPool, ChannelIdCounter, CrossChainMessage, DepositAddressDetailsLookup,
+	DepositWitness, DisabledEgressAssets, Error, Event as PalletEvent, FetchOrTransfer,
+	MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 };
-use cf_chains::{eth::DeploymentStatus, ExecutexSwapAndCall, TransferAssetParams};
+use cf_chains::{ExecutexSwapAndCall, TransferAssetParams};
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
 use cf_test_utilities::assert_has_event;
 use cf_traits::{
@@ -27,17 +27,17 @@ fn expect_size_of_address_pool(size: usize) {
 	assert_eq!(AddressPool::<Test>::iter_keys().count(), size, "Address pool size is incorrect!");
 }
 
-// fn mark_as_deployed(address: H160, channel_id: u64) {
-// 	let deposit_channel =
-// 		DepositAddressDetailsLookup::<Test>::get(address).expect("Channel not found");
-// 	let new_eth_depo_addr = EthereumDepositAddress {
-// 		address,
-// 		channel_id,
-// 		deployment_status: DeploymentStatus::Deployed,
-// 		deposit_fetch_id: deposit_channel.1.get_deposit_fetch_id(),
-// 	};
-// 	DepositAddressDetailsLookup::<Test>::insert(address, (deposit_channel.0, new_eth_depo_addr));
-// }
+fn mark_as_deployed(address: H160, channel_id: u64) {
+	let deposit_channel =
+		DepositAddressDetailsLookup::<Test>::get(address).expect("Channel not found");
+	let new_eth_depo_addr = eth_mock_deposit_channel::MockDepositChannel {
+		address,
+		channel_id,
+		deployment_status: eth_mock_deposit_channel::DeploymentStatus::Deployed,
+		deposit_fetch_id: deposit_channel.1.get_deposit_fetch_id(),
+	};
+	DepositAddressDetailsLookup::<Test>::insert(address, (deposit_channel.0, new_eth_depo_addr));
+}
 
 #[test]
 fn blacklisted_asset_will_not_egress_via_batch_all() {
@@ -617,7 +617,7 @@ fn multi_use_deposit_same_block() {
 	new_test_ext()
 		.then_execute_at_next_block(|_| {
 			let (_, deposit_address) = request_address_and_deposit(ALICE, ETH);
-			// mark_as_deployed(deposit_address, 1);
+			mark_as_deployed(deposit_address, 1);
 			Pallet::<Test, _>::process_single_deposit(deposit_address, ETH, 1, Default::default())
 				.unwrap();
 		})

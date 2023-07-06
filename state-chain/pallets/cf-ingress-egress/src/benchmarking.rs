@@ -25,7 +25,7 @@ benchmarks_instance_pallet! {
 				source_asset,
 			}, T::DepositAddress::new(
 				1,
-				source_asset.into(),
+				source_asset,
 			)));
 		ChannelActions::<T, I>::insert(&deposit_address, ChannelAction::<T::AccountId>::LiquidityProvision {
 			lp_account: account("doogle", 0, 0)
@@ -58,7 +58,7 @@ benchmarks_instance_pallet! {
 				source_asset,
 			}, T::DepositAddress::new(
 				a as u64,
-				source_asset.into(),
+				source_asset,
 			)));
 			addresses.push((deposit_fetch_id, deposit_address));
 		}

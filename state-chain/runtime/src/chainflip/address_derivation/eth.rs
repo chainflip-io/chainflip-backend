@@ -85,11 +85,7 @@ impl DepositChannel<Ethereum> for EthereumDepositAddress {
 	where
 		Self: Sized,
 	{
-		if self.deployment_status == DeploymentStatus::Deployed {
-			true
-		} else {
-			false
-		}
+		self.deployment_status == DeploymentStatus::Deployed
 	}
 
 	fn finalize(mut self) -> Self

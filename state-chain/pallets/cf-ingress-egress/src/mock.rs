@@ -1,13 +1,11 @@
-use core::ops::Add;
-
 use crate::DepositWitness;
 pub use crate::{self as pallet_cf_ingress_egress};
+use cf_chains::eth::EthereumChannelId;
 pub use cf_chains::{
 	address::ForeignChainAddress,
 	eth::api::{EthereumApi, EthereumReplayProtection},
 	CcmDepositMetadata, Chain, ChainAbi, ChainEnvironment,
 };
-use cf_chains::{eth::EthereumChannelId, mocks::MockEthereum};
 use cf_primitives::ChannelId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
@@ -77,41 +75,90 @@ impl system::Config for Test {
 impl_mock_chainflip!(Test);
 impl_mock_callback!(RuntimeOrigin);
 
-pub struct MockAddressDerivation;
-
-impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
-	fn generate_address(
-		source_asset: <Ethereum as Chain>::ChainAsset,
-		channel_id: ChannelId,
-	) -> Result<<Ethereum as Chain>::ChainAccount, sp_runtime::DispatchError> {
-		todo!()
-	}
-}
-
 pub struct MockDepositHandler;
 impl DepositHandler<Ethereum> for MockDepositHandler {}
 
 pub type MockEgressBroadcaster =
 	MockBroadcaster<(MockEthereumApiCall<MockEthEnvironment>, RuntimeCall)>;
 
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
-pub struct MockDepositChannel;
+pub mod eth_mock_deposit_channel {
+	use super::*;
 
-impl DepositChannel<Ethereum> for MockDepositChannel {
-	type Address = H160;
-	type DepositFetchId = EthereumChannelId;
-	type AddressDerivation = MockAddressDerivation;
-
-	fn new(channel_id: u64, asset: <Ethereum as Chain>::ChainAsset) -> Self {
-		todo!()
+	#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
+	pub enum DeploymentStatus {
+		Deployed,
+		Pending,
+		Undeployed,
 	}
 
-	fn get_address(&self) -> Self::Address {
-		todo!()
+	#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
+	pub struct MockDepositChannel {
+		pub address: H160,
+		pub channel_id: u64,
+		pub deployment_status: DeploymentStatus,
+		pub deposit_fetch_id: EthereumChannelId,
 	}
 
-	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
-		todo!()
+	impl DepositChannel<Ethereum> for MockDepositChannel {
+		type Address = H160;
+		type DepositFetchId = EthereumChannelId;
+		type AddressDerivation = ();
+
+		fn get_address(&self) -> Self::Address {
+			self.address
+		}
+
+		fn process_broadcast(mut self) -> (Self, bool)
+		where
+			Self: Sized,
+		{
+			match self.deployment_status {
+				DeploymentStatus::Deployed => (self, true),
+				DeploymentStatus::Pending => (self, false),
+				DeploymentStatus::Undeployed => {
+					self.deployment_status = DeploymentStatus::Pending;
+					(self, true)
+				},
+			}
+		}
+
+		fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
+			self.deposit_fetch_id
+		}
+
+		fn new(channel_id: u64, asset: <Ethereum as Chain>::ChainAsset) -> Self {
+			let address =
+				<() as AddressDerivationApi<Ethereum>>::generate_address(asset, channel_id)
+					.unwrap();
+			MockDepositChannel {
+				address,
+				channel_id,
+				deployment_status: DeploymentStatus::Undeployed,
+				deposit_fetch_id: EthereumChannelId::UnDeployed(channel_id),
+			}
+		}
+
+		fn maybe_recycle(&self) -> bool
+		where
+			Self: Sized,
+		{
+			self.deployment_status == DeploymentStatus::Deployed
+		}
+
+		fn finalize(mut self) -> Self
+		where
+			Self: Sized,
+		{
+			match self.deployment_status {
+				DeploymentStatus::Pending => {
+					self.deposit_fetch_id = EthereumChannelId::Deployed(self.address);
+					self.deployment_status = DeploymentStatus::Deployed;
+				},
+				DeploymentStatus::Undeployed => self.deployment_status = DeploymentStatus::Pending,
+				_ => (),
+			}
+			self
+		}
 	}
 }
 
@@ -126,7 +173,7 @@ impl crate::Config for Test {
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
 	type CcmHandler = MockCcmHandler;
-	type DepositAddress = MockDepositChannel;
+	type DepositAddress = eth_mock_deposit_channel::MockDepositChannel;
 	type WeightInfo = ();
 }
 

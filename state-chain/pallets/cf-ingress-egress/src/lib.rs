@@ -653,7 +653,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					.ok_or(Error::<T, I>::ChannelIdsExhausted)?;
 				// T::DepositAddress::generate_address(source_asset, next_channel_id)?;
 				ChannelIdCounter::<T, I>::put(next_channel_id);
-				(T::DepositAddress::new(next_channel_id, source_asset.into()), next_channel_id)
+				(T::DepositAddress::new(next_channel_id, source_asset), next_channel_id)
 			};
 
 		let new_address = deposit_address_wrapper.get_address();
