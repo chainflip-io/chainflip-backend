@@ -1,6 +1,6 @@
 use super::event::Event;
 use anyhow::{anyhow, Result};
-use cf_chains::{address::EncodedAddress, CcmDepositMetadata};
+use cf_chains::{address::EncodedAddress, CcmDepositMetadata, ForeignChainAddress};
 use cf_primitives::{Asset, ForeignChain};
 use ethers::prelude::*;
 use std::sync::Arc;
@@ -138,7 +138,7 @@ where
 				message: message.to_vec(),
 				gas_budget: try_into_primitive(gas_amount)?,
 				cf_parameters: cf_parameters.0.to_vec(),
-				source_address: cf_chains::ForeignChainAddress::Eth(sender.into()),
+				source_address: ForeignChainAddress::Eth(sender.into()),
 			},
 		}),
 		VaultEvents::XcallTokenFilter(XcallTokenFilter {
@@ -171,7 +171,7 @@ where
 				message: message.to_vec(),
 				gas_budget: try_into_primitive(gas_amount)?,
 				cf_parameters: cf_parameters.0.to_vec(),
-				source_address: cf_chains::ForeignChainAddress::Eth(sender.into()),
+				source_address: ForeignChainAddress::Eth(sender.into()),
 			},
 		}),
 		unhandled_event => Err(CallFromEventError::Decode(format!(
