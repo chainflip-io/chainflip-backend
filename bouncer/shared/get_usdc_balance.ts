@@ -1,26 +1,6 @@
 import Web3 from "web3";
 import { getEthContractAddress } from "./utils";
-
-const erc20BalanceABI = [
-    // balanceOf
-    {
-        constant: true,
-        inputs: [
-            {
-                name: 'account',
-                type: 'address',
-            },
-        ],
-        name: 'balanceOf',
-        outputs: [
-            {
-                name: 'balance',
-                type: 'uint256',
-            },
-        ],
-        type: 'function',
-    },
-];
+import erc20abi from '../../eth-contract-abis/IERC20.json';
 
 export async function getUsdcBalance(ethereumAddress: string): Promise<string> {
 
@@ -29,7 +9,7 @@ export async function getUsdcBalance(ethereumAddress: string): Promise<string> {
     const usdcContractAddress =
         process.env.ETH_USDC_ADDRESS ?? getEthContractAddress('USDC');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const usdcContract = new web3.eth.Contract(erc20BalanceABI as any, usdcContractAddress);
+    const usdcContract = new web3.eth.Contract(erc20abi as any, usdcContractAddress);
 
     const rawBalance: string = await usdcContract.methods.balanceOf(ethereumAddress).call();
     const balanceLen = rawBalance.length;
