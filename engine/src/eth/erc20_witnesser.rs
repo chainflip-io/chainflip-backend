@@ -6,7 +6,7 @@ use state_chain_runtime::EthereumInstance;
 use tokio::sync::Mutex;
 use web3::types::H160;
 
-use ethers::{abi::RawLog, prelude::*};
+use ethers::prelude::*;
 
 use crate::{
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi, witnesser::ItemMonitor,
@@ -14,9 +14,7 @@ use crate::{
 
 abigen!(Erc20, "eth-contract-abis/IERC20.json");
 
-use super::{
-	core_h256, event::Event, rpc::EthRpcApi, BlockWithItems, DecodeLogClosure, EthContractWitnesser,
-};
+use super::{core_h256, event::Event, rpc::EthRpcApi, BlockWithItems, EthContractWitnesser};
 use pallet_cf_ingress_egress::DepositWitness;
 
 use anyhow::Result;
@@ -102,11 +100,5 @@ impl EthContractWitnesser for Erc20Witnesser {
 
 	fn contract_address(&self) -> H160 {
 		self.deployed_address
-	}
-
-	fn decode_log_closure(&self) -> DecodeLogClosure<Self::EventParameters> {
-		Box::new(move |raw_log: RawLog| -> Result<Self::EventParameters> {
-			Ok(Erc20Events::decode_log(&raw_log)?)
-		})
 	}
 }
