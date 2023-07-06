@@ -18,7 +18,7 @@ pub trait GetTrackedData<C: cf_chains::Chain>: Send + Sync + Clone {
 }
 
 pub struct ChainTracking<'a, Underlying, StateChainClient, TrackedDataClient> {
-	inner_stream: Underlying,
+	underlying_stream: Underlying,
 	client: TrackedDataClient,
 	state_chain_client: Arc<StateChainClient>,
 	_phantom: PhantomData<&'a ()>,
@@ -28,11 +28,11 @@ impl<'a, Underlying, StateChainClient, TrackedDataClient>
 	ChainTracking<'a, Underlying, StateChainClient, TrackedDataClient>
 {
 	pub fn new(
-		inner_stream: Underlying,
+		underlying_stream: Underlying,
 		state_chain_client: Arc<StateChainClient>,
 		client: TrackedDataClient,
 	) -> ChainTracking<'a, Underlying, StateChainClient, TrackedDataClient> {
-		ChainTracking { inner_stream, state_chain_client, client, _phantom: PhantomData }
+		ChainTracking { underlying_stream, state_chain_client, client, _phantom: PhantomData }
 	}
 }
 
@@ -53,7 +53,7 @@ where
 		let state_chain_client = self.state_chain_client.clone();
 		let client = self.client.clone();
 
-		self.inner_stream
+		self.underlying_stream
 			.stream()
 			.await
 			.filter(|(epoch, _)| {
