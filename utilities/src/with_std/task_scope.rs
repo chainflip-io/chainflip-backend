@@ -169,7 +169,6 @@ impl<Task: Future + Unpin + 'static> Future for TaskWrapper<Task> {
 }
 
 /// An object used to spawn tasks into the associated scope
-#[derive(Clone)]
 pub struct Scope<'env, Error: Send + 'static> {
 	sender: async_channel::Sender<(TaskProperties, TaskFuture<Error>)>,
 	/// Invariance over 'env, to make sure 'env cannot shrink,

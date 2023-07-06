@@ -1,4 +1,6 @@
 #[doc(hidden)]
+pub use futures::future::ready as internal_ready;
+#[doc(hidden)]
 pub use tokio::select as internal_tokio_select;
 
 #[macro_export]
@@ -74,6 +76,17 @@ macro_rules! inner_loop_select {
 					if let $pattern = x {
 						$body
 					} else { break $extra }
+				},
+            }
+            $($unprocessed)*
+		)
+    };
+	({ $($processed:tt)* } if $expression:expr => break $($extra:expr)?, $($unprocessed:tt)*) => {
+        $crate::inner_loop_select!(
+            {
+                $($processed)*
+                _ = $crate::loop_select::internal_ready(()), if $expression => {
+					break $($extra)?
 				},
             }
             $($unprocessed)*

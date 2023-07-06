@@ -5,17 +5,21 @@ use crate::{
 	KeygenFailureVoters, KeygenResolutionPendingSince, KeygenResponseTimeout, KeygenSuccessVoters,
 	PalletOffence, PendingVaultRotation, Vault, VaultRotationStatus, Vaults,
 };
-use cf_chains::{eth::Ethereum, mocks::MockAggKey};
+use cf_chains::{
+	eth::Ethereum,
+	mocks::{MockAggKey, MockOptimisticActivation},
+};
 use cf_primitives::GENESIS_EPOCH;
 use cf_test_utilities::{last_event, maybe_last_event};
 use cf_traits::{
 	mocks::threshold_signer::MockThresholdSigner, AccountRoleRegistry, AsyncResult, Chainflip,
-	EpochInfo, KeyProvider, VaultRotator, VaultStatus,
+	EpochInfo, KeyProvider, SafeMode, VaultRotator, VaultStatus,
 };
 use frame_support::{
 	assert_noop, assert_ok, pallet_prelude::DispatchResultWithPostInfo, traits::Hooks,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
+use sp_core::Get;
 use sp_std::collections::btree_set::BTreeSet;
 
 pub type EthMockThresholdSigner = MockThresholdSigner<Ethereum, crate::mock::RuntimeCall>;
@@ -92,7 +96,7 @@ fn keygen_handover_request_emitted() {
 				// It should be incremented when the request is made.
 				ceremony_id: ceremony_id + 1,
 				from_epoch: current_epoch,
-				key_to_share: VaultsPallet::current_epoch_key().unwrap().key,
+				key_to_share: VaultsPallet::active_epoch_key().unwrap().key,
 				sharing_participants: candidates.clone(),
 				receiving_participants: candidates,
 				new_key: Default::default(),
@@ -503,7 +507,7 @@ fn keygen_report_success() {
 		// Called by validator pallet
 		VaultsPallet::activate();
 
-		assert!(matches!(PendingVaultRotation::<MockRuntime, _>::get().unwrap(), VaultRotationStatus::AwaitingRotation { .. }));
+		assert!(matches!(PendingVaultRotation::<MockRuntime, _>::get().unwrap(), VaultRotationStatus::AwaitingActivation { .. }));
 
 		assert!(!KeygenResolutionPendingSince::<MockRuntime, _>::exists());
 		assert_eq!(
@@ -513,7 +517,7 @@ fn keygen_report_success() {
 
 		assert!(matches!(
 			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
-			VaultRotationStatus::<MockRuntime, _>::AwaitingRotation { new_public_key: k } if k == NEW_AGG_PUB_KEY_POST_HANDOVER
+			VaultRotationStatus::<MockRuntime, _>::AwaitingActivation { new_public_key: k } if k == NEW_AGG_PUB_KEY_POST_HANDOVER
 		));
 
 		assert_last_event!(crate::Event::KeyHandoverSuccess { .. });
@@ -651,111 +655,161 @@ fn test_key_handover_timeout_period() {
 
 #[test]
 fn vault_key_rotated() {
-	new_test_ext().execute_with(|| {
-		const ROTATION_BLOCK_NUMBER: u64 = 42;
-		const TX_HASH: [u8; 4] = [0xab; 4];
+	const ACTIVATION_BLOCK_NUMBER: u64 = 42;
+	const TX_HASH: [u8; 4] = [0xab; 4];
 
-		let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
+	fn setup() -> sp_io::TestExternalities {
+		let mut ext = new_test_ext();
+		ext.execute_with(|| {
+			let btree_candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
 
-		let rotation_epoch_index = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
+			let rotation_epoch_index = <MockRuntime as Chainflip>::EpochInfo::epoch_index() + 1;
 
-		assert_noop!(
-			VaultsPallet::vault_key_rotated(RuntimeOrigin::root(), ROTATION_BLOCK_NUMBER, TX_HASH,),
-			Error::<MockRuntime, _>::NoActiveRotation
-		);
+			assert_noop!(
+				VaultsPallet::vault_key_rotated(
+					RuntimeOrigin::root(),
+					ACTIVATION_BLOCK_NUMBER,
+					TX_HASH,
+				),
+				Error::<MockRuntime, _>::NoActiveRotation
+			);
 
-		<VaultsPallet as VaultRotator>::keygen(btree_candidates.clone(), GENESIS_EPOCH);
-		let ceremony_id = current_ceremony_id();
-		VaultsPallet::trigger_keygen_verification(
-			ceremony_id,
-			NEW_AGG_PUB_KEY_PRE_HANDOVER,
-			btree_candidates.clone(),
-			rotation_epoch_index,
-		);
+			<VaultsPallet as VaultRotator>::keygen(btree_candidates.clone(), GENESIS_EPOCH);
+			let ceremony_id = current_ceremony_id();
+			VaultsPallet::trigger_keygen_verification(
+				ceremony_id,
+				NEW_AGG_PUB_KEY_PRE_HANDOVER,
+				btree_candidates.clone(),
+				rotation_epoch_index,
+			);
 
-		EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(ETH_DUMMY_SIG));
-
-		VaultsPallet::key_handover(
-			btree_candidates.clone(),
-			btree_candidates.clone(),
-			rotation_epoch_index,
-		);
-
-		for candidate in btree_candidates {
-			assert_ok!(VaultsPallet::report_key_handover_outcome(
-				RuntimeOrigin::signed(candidate),
-				current_ceremony_id(),
-				Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)
+			EthMockThresholdSigner::execute_signature_result_against_last_request(Ok(
+				ETH_DUMMY_SIG,
 			));
-		}
 
-		VaultsPallet::on_initialize(1);
+			VaultsPallet::key_handover(
+				btree_candidates.clone(),
+				btree_candidates.clone(),
+				rotation_epoch_index,
+			);
 
-		// validator pallet kicks this off
+			for candidate in btree_candidates {
+				assert_ok!(VaultsPallet::report_key_handover_outcome(
+					RuntimeOrigin::signed(candidate),
+					current_ceremony_id(),
+					Ok(NEW_AGG_PUB_KEY_POST_HANDOVER)
+				));
+			}
+
+			VaultsPallet::on_initialize(1);
+		});
+		ext
+	}
+
+	fn final_checks(ext: &mut sp_io::TestExternalities, expected_activation_block: u64) {
+		ext.execute_with(|| {
+			// Can't repeat.
+			assert_noop!(
+				VaultsPallet::vault_key_rotated(
+					RuntimeOrigin::root(),
+					expected_activation_block,
+					TX_HASH,
+				),
+				Error::<MockRuntime, _>::InvalidRotationStatus
+			);
+
+			let current_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index();
+
+			let Vault { public_key, active_from_block } =
+				Vaults::<MockRuntime, _>::get(current_epoch).expect("Ethereum Vault should exist");
+			assert_eq!(
+				public_key, GENESIS_AGG_PUB_KEY,
+				"we should have the old agg key in the genesis vault"
+			);
+			assert_eq!(
+				active_from_block, 0,
+				"we should have set the from block for the genesis or current epoch"
+			);
+
+			// The next epoch
+			let next_epoch = current_epoch + 1;
+			let Vault { public_key, active_from_block } = Vaults::<MockRuntime, _>::get(next_epoch)
+				.expect("Ethereum Vault should exist in the next epoch");
+			assert_eq!(
+				public_key, NEW_AGG_PUB_KEY_POST_HANDOVER,
+				"we should have the new public key in the new vault for the next epoch"
+			);
+			assert_eq!(
+				active_from_block,
+				expected_activation_block.saturating_add(1),
+				"we should have set the starting point for the new vault's active window as the next
+				after the reported block number"
+			);
+
+			// Status is complete.
+			assert_eq!(
+				PendingVaultRotation::<MockRuntime, _>::get(),
+				Some(VaultRotationStatus::Complete),
+			);
+			assert_last_event!(crate::Event::VaultRotationCompleted { .. });
+		});
+	}
+
+	// Non-optimistic activation is the default.
+	let mut non_optimistic_activation = setup();
+	non_optimistic_activation.execute_with(|| {
+		MockOptimisticActivation::set(false);
 		VaultsPallet::activate();
+
+		assert!(matches!(
+			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
+			VaultRotationStatus::AwaitingActivation { .. }
+		));
 
 		assert_ok!(VaultsPallet::vault_key_rotated(
 			RuntimeOrigin::root(),
-			ROTATION_BLOCK_NUMBER,
+			ACTIVATION_BLOCK_NUMBER,
 			TX_HASH,
 		));
+	});
+	final_checks(&mut non_optimistic_activation, ACTIVATION_BLOCK_NUMBER);
 
-		// Can't repeat.
+	// Test with optimistic activation.
+	let mut optimistic_activation = setup();
+	optimistic_activation.execute_with(|| {
+		MockOptimisticActivation::set(true);
+		VaultsPallet::activate();
+
+		// No need to call vault_key_rotated.
 		assert_noop!(
-			VaultsPallet::vault_key_rotated(RuntimeOrigin::root(), ROTATION_BLOCK_NUMBER, TX_HASH,),
+			VaultsPallet::vault_key_rotated(
+				RuntimeOrigin::root(),
+				ACTIVATION_BLOCK_NUMBER,
+				TX_HASH,
+			),
 			Error::<MockRuntime, _>::InvalidRotationStatus
 		);
 
-		// We have yet to move to the new epoch
-		let current_epoch = <MockRuntime as Chainflip>::EpochInfo::epoch_index();
-
-		let Vault { public_key, active_from_block } =
-			Vaults::<MockRuntime, _>::get(current_epoch).expect("Ethereum Vault should exist");
-		assert_eq!(
-			public_key, GENESIS_AGG_PUB_KEY,
-			"we should have the old agg key in the genesis vault"
-		);
-		assert_eq!(
-			active_from_block, 0,
-			"we should have set the from block for the genesis or current epoch"
-		);
-
-		// The next epoch
-		let next_epoch = current_epoch + 1;
-		let Vault { public_key, active_from_block } = Vaults::<MockRuntime, _>::get(next_epoch)
-			.expect("Ethereum Vault should exist in the next epoch");
-		assert_eq!(
-			public_key, NEW_AGG_PUB_KEY_POST_HANDOVER,
-			"we should have the new public key in the new vault for the next epoch"
-		);
-		assert_eq!(
-			active_from_block,
-			ROTATION_BLOCK_NUMBER.saturating_add(1),
-			"we should have set the starting point for the new vault's active window as the next
-			after the reported block number"
-		);
-
-		// Status is complete.
-		assert_eq!(
-			PendingVaultRotation::<MockRuntime, _>::get(),
-			Some(VaultRotationStatus::Complete),
-		);
-		assert_last_event!(crate::Event::VaultRotationCompleted { .. });
+		assert!(matches!(
+			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
+			VaultRotationStatus::Complete,
+		));
 	});
+	final_checks(&mut optimistic_activation, HANDOVER_ACTIVATION_BLOCK);
 }
 
 #[test]
-fn test_vault_key_rotated_externally() {
+fn test_vault_key_rotated_externally_triggers_code_red() {
 	new_test_ext().execute_with(|| {
 		const TX_HASH: [u8; 4] = [0xab; 4];
-		assert_eq!(MockSystemStateManager::get_current_system_state(), SystemState::Normal);
+		assert_eq!(<MockRuntimeSafeMode as Get<MockPalletSafeMode>>::get(), SafeMode::CODE_GREEN);
 		assert_ok!(VaultsPallet::vault_key_rotated_externally(
 			RuntimeOrigin::root(),
 			NEW_AGG_PUB_KEY_POST_HANDOVER,
 			1,
 			TX_HASH,
 		));
-		assert_eq!(MockSystemStateManager::get_current_system_state(), SystemState::Maintenance);
+		assert_eq!(<MockRuntimeSafeMode as Get<MockPalletSafeMode>>::get(), SafeMode::CODE_RED);
 		assert_last_event!(crate::Event::VaultRotatedExternally(..));
 	});
 }
@@ -796,7 +850,7 @@ fn set_keygen_response_timeout_works() {
 }
 
 #[test]
-fn when_set_agg_key_with_agg_key_not_required_we_wait_for_governance() {
+fn when_set_agg_key_with_agg_key_not_required_we_skip_to_completion() {
 	new_test_ext().execute_with(|| {
 		PendingVaultRotation::put(VaultRotationStatus::<MockRuntime, _>::KeyHandoverComplete {
 			new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER,
@@ -805,12 +859,10 @@ fn when_set_agg_key_with_agg_key_not_required_we_wait_for_governance() {
 		MockSetAggKeyWithAggKey::set_required(false);
 
 		VaultsPallet::activate();
-		assert_eq!(
-			last_event::<MockRuntime>(),
-			PalletEvent::<MockRuntime, _>::AwaitingGovernanceActivation {
-				new_public_key: NEW_AGG_PUB_KEY_POST_HANDOVER
-			}
-			.into()
-		);
+
+		assert!(matches!(
+			PendingVaultRotation::<MockRuntime, _>::get().unwrap(),
+			VaultRotationStatus::Complete
+		))
 	})
 }

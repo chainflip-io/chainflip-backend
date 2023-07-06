@@ -4,11 +4,11 @@ use cf_chains::{
 	CcmDepositMetadata,
 };
 use cf_primitives::{Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, STABLE_ASSET};
-use cf_traits::{liquidity::SwappingApi, CcmHandler, DepositApi, SystemStateInfo};
+use cf_traits::{impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi};
 use frame_support::{
 	pallet_prelude::*,
 	sp_runtime::{
-		traits::{BlockNumberProvider, Saturating},
+		traits::{BlockNumberProvider, Get, Saturating},
 		DispatchError, Permill,
 	},
 	storage::with_storage_layer,
@@ -157,6 +157,8 @@ pub enum CcmFailReason {
 	GasBudgetBelowMinimum,
 }
 
+impl_pallet_safe_mode!(PalletSafeMode; swaps_enabled, withdrawals_enabled);
+
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum SwapOrigin {
 	DepositChannel { deposit_address: EncodedAddress, channel_id: ChannelId },
@@ -192,6 +194,9 @@ pub mod pallet {
 		/// A converter to convert address to and from human readable to internal address
 		/// representation.
 		type AddressConverter: AddressConverter;
+
+		/// Safe mode access.
+		type SafeMode: Get<PalletSafeMode>;
 
 		/// The Weight information.
 		type WeightInfo: WeightInfo;
@@ -364,6 +369,8 @@ pub mod pallet {
 		SwapAmountTooLow,
 		/// The CCM's gas budget is below the minimum allowed.
 		CcmGasBudgetBelowMinimum,
+		/// Withdrawals are disabled due to Safe Mode.
+		WithdrawalsDisabled,
 	}
 
 	#[pallet::genesis_config]
@@ -408,6 +415,9 @@ pub mod pallet {
 
 		/// Execute all swaps in the SwapQueue
 		fn on_finalize(_n: BlockNumberFor<T>) {
+			if !T::SafeMode::get().swaps_enabled {
+				return
+			}
 			// Wrap the entire swapping section as a transaction, any failed swap will rollback all
 			// storage changes.
 			if let Err(failed_swap) = with_storage_layer(|| -> Result<(), BatchExecutionError> {
@@ -563,7 +573,8 @@ pub mod pallet {
 			asset: Asset,
 			destination_address: EncodedAddress,
 		) -> DispatchResult {
-			T::SystemState::ensure_no_maintenance()?;
+			ensure!(T::SafeMode::get().withdrawals_enabled, Error::<T>::WithdrawalsDisabled);
+
 			let account_id = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 			let destination_address_internal =

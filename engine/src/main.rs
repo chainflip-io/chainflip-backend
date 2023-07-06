@@ -19,6 +19,7 @@ use chainflip_engine::{
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
+use ethers::prelude::*;
 use futures::FutureExt;
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 use pallet_cf_validator::SemVer;
@@ -220,7 +221,15 @@ async fn main() -> anyhow::Result<()> {
 			scope.spawn(state_chain_observer::start(
 				state_chain_client.clone(),
 				state_chain_stream.clone(),
-				EthBroadcaster::new(EthersRpcClient::new(&settings.eth).await?),
+				EthBroadcaster::new(
+					EthersRpcClient::new(
+						Arc::new(Provider::<Http>::try_from(
+							settings.eth.http_node_endpoint.to_string(),
+						)?),
+						&settings.eth,
+					)
+					.await?,
+				),
 				DotBroadcaster::new(dot_rpc_client.clone()),
 				BtcBroadcaster::new(btc_rpc_client.clone()),
 				eth_multisig_client,

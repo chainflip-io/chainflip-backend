@@ -1,0 +1,15 @@
+[Unit]
+Description=Chainflip LP Api
+
+[Service]
+Restart=always
+RestartSec=5
+Type=simple
+
+ExecStart=/usr/bin/chainflip-lp-api \
+      --state_chain.ws_endpoint=ws://localhost:9944 \
+      --state_chain.signing_key_file /etc/chainflip/keys/signing_key_file \
+      --port 10589
+
+[Install]
+WantedBy=multi-user.target

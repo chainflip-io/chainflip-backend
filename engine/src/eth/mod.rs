@@ -11,16 +11,19 @@ pub mod event;
 
 mod ws_safe_stream;
 
+pub mod address_checker;
 pub mod broadcaster;
+pub mod eth_ingresses_at_block;
 pub mod ethers_rpc;
+pub mod ethers_vault;
 pub mod retry_rpc;
 pub mod rpc;
-pub mod utils;
 pub mod witnessing;
 
 use anyhow::{anyhow, Context, Result};
 
 use cf_primitives::EpochIndex;
+use ethers::abi::RawLog;
 use futures::FutureExt;
 use regex::Regex;
 
@@ -28,7 +31,7 @@ use crate::{
 	constants::ETH_BLOCK_SAFETY_MARGIN,
 	eth::{
 		ethers_rpc::EthersRpcApi,
-		rpc::{EthRpcApi, EthWsRpcApi},
+		rpc::{with_rpc_timeout, EthRpcApi, EthWsRpcApi},
 		ws_safe_stream::safe_ws_head_stream,
 	},
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
@@ -41,11 +44,7 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 };
-use thiserror::Error;
-use web3::{
-	ethabi::{self, Contract},
-	types::{Block, H160, H2048, H256, U256, U64},
-};
+use web3::types::{Block, H160, H2048, H256, U256, U64};
 
 use tokio_stream::Stream;
 
@@ -73,7 +72,7 @@ impl HasBlockNumber for EthNumberBloom {
 	}
 }
 
-fn core_h256(h: web3::types::H256) -> sp_core::H256 {
+pub fn core_h256(h: web3::types::H256) -> sp_core::H256 {
 	h.0.into()
 }
 
@@ -83,27 +82,6 @@ fn web3_h160(h: sp_core::H160) -> web3::types::H160 {
 
 pub fn core_h160(h: web3::types::H160) -> sp_core::H160 {
 	h.0.into()
-}
-
-#[derive(Error, Debug)]
-pub enum EventParseError {
-	#[error("Unexpected event signature in log subscription: {0:?}")]
-	UnexpectedEvent(H256),
-	#[error("Cannot decode missing parameter: '{0}'.")]
-	MissingParam(String),
-}
-
-// The signature is recalculated on each Event::signature() call, so we use this structure to cache
-// the signature
-pub struct SignatureAndEvent {
-	pub signature: H256,
-	pub event: ethabi::Event,
-}
-impl SignatureAndEvent {
-	pub fn new(contract: &Contract, name: &str) -> Result<Self> {
-		let event = contract.event(name)?;
-		Ok(Self { signature: event.signature(), event: event.clone() })
-	}
 }
 
 /// Helper that generates a broadcast channel with multiple receivers.
@@ -204,6 +182,31 @@ macro_rules! retry_rpc_until_success {
 	}};
 }
 
+/// Wraps a web3 crate stream so it unsubscribes when dropped.
+pub struct ConscientiousEthWebsocketBlockHeaderStream {
+	stream: Option<
+		web3::api::SubscriptionStream<web3::transports::WebSocket, web3::types::BlockHeader>,
+	>,
+}
+
+impl Drop for ConscientiousEthWebsocketBlockHeaderStream {
+	fn drop(&mut self) {
+		tracing::warn!("Dropping the ETH WS connection");
+		self.stream.take().unwrap().unsubscribe().now_or_never();
+	}
+}
+
+impl Stream for ConscientiousEthWebsocketBlockHeaderStream {
+	type Item = Result<web3::types::BlockHeader, web3::Error>;
+
+	fn poll_next(
+		mut self: Pin<&mut Self>,
+		cx: &mut std::task::Context<'_>,
+	) -> std::task::Poll<Option<Self::Item>> {
+		Pin::new(self.stream.as_mut().unwrap()).poll_next(cx)
+	}
+}
+
 /// Returns a safe stream of blocks from the latest block onward,
 /// using a WS rpc subscription. Prepends the current head of the 'subscription' streams
 /// with historical blocks from a given block number.
@@ -214,34 +217,9 @@ pub async fn safe_block_subscription_from(
 ) -> Result<Pin<Box<dyn Stream<Item = EthNumberBloom> + Send + 'static>>>
 where
 {
-	struct ConscientiousEthWebsocketBlockHeaderStream {
-		stream: Option<
-			web3::api::SubscriptionStream<web3::transports::WebSocket, web3::types::BlockHeader>,
-		>,
-	}
-
-	impl Drop for ConscientiousEthWebsocketBlockHeaderStream {
-		fn drop(&mut self) {
-			println!("Dropping the ETH WS connection");
-			self.stream.take().unwrap().unsubscribe().now_or_never();
-		}
-	}
-
-	impl Stream for ConscientiousEthWebsocketBlockHeaderStream {
-		type Item = Result<web3::types::BlockHeader, web3::Error>;
-
-		fn poll_next(
-			mut self: Pin<&mut Self>,
-			cx: &mut std::task::Context<'_>,
-		) -> std::task::Poll<Option<Self::Item>> {
-			Pin::new(self.stream.as_mut().unwrap()).poll_next(cx)
-		}
-	}
-
 	let header_stream = ConscientiousEthWebsocketBlockHeaderStream {
-		stream: Some(eth_ws_rpc.subscribe_new_heads().await?),
+		stream: Some(with_rpc_timeout(eth_ws_rpc.subscribe_new_heads()).await?),
 	};
-
 	Ok(eth_block_head_stream_from(
 		from_block,
 		safe_ws_head_stream(header_stream, ETH_BLOCK_SAFETY_MARGIN),
@@ -257,7 +235,7 @@ pub trait EthContractWitnesser {
 
 	fn contract_name(&self) -> String;
 
-	fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>>;
+	fn decode_log_closure(&self) -> DecodeLogClosure<Self::EventParameters>;
 
 	async fn handle_block_events<StateChainClient, EthRpcClient>(
 		&mut self,
@@ -275,7 +253,7 @@ pub trait EthContractWitnesser {
 }
 
 pub type DecodeLogClosure<EventParameters> =
-	Box<dyn Fn(H256, ethabi::RawLog) -> Result<EventParameters> + Send + Sync + 'static>;
+	Box<dyn Fn(RawLog) -> Result<EventParameters> + Send + Sync + 'static>;
 
 const MAX_SECRET_CHARACTERS_REVEALED: usize = 3;
 const SCHEMA_PADDING_LEN: usize = 3;

@@ -3,6 +3,7 @@ use frame_system::AccountInfo;
 use jsonrpsee::types::ErrorObject;
 use lazy_static::lazy_static;
 use mockall::predicate::eq;
+use pallet_cf_chain_tracking::ChainState;
 use sp_core::{
 	storage::{StorageData, StorageKey},
 	Encode,
@@ -23,7 +24,10 @@ lazy_static! {
 	static ref DUMMY_CALL: state_chain_runtime::RuntimeCall = state_chain_runtime::RuntimeCall::Witnesser(pallet_cf_witnesser::Call::witness_at_epoch {
 		call: Box::new(state_chain_runtime::RuntimeCall::PolkadotChainTracking(
 			pallet_cf_chain_tracking::Call::update_chain_state {
-				state: dot::PolkadotTrackedData { block_height: 0, median_tip: 0 },
+				new_chain_state: ChainState {
+					block_height: 0,
+					tracked_data: dot::PolkadotTrackedData { median_tip: 0 },
+				},
 			},
 		)),
 		epoch_index: 0,

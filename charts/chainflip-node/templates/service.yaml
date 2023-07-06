@@ -39,3 +39,22 @@ spec:
   selector:
   {{- include "chainflip-node.selectorLabels" . | nindent 4 }}
 {{- end }}
+---
+{{- if .Values.lpApi.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "chainflip-node.fullname" . }}-lp-api
+  labels:
+  {{- include "chainflip-node.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  sessionAffinity: ClientIP
+  ports:
+    - port: 80
+      targetPort: lp-api
+      protocol: TCP
+      name: http
+  selector:
+  {{- include "chainflip-node.selectorLabels" . | nindent 4 }}
+{{- end }}

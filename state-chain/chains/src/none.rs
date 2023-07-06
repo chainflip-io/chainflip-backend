@@ -1,4 +1,5 @@
 use super::*;
+use frame_support::traits::ConstBool;
 
 /// A Chain that can't be constructed.
 #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -6,6 +7,8 @@ pub enum NoneChain {}
 
 impl Chain for NoneChain {
 	const NAME: &'static str = "NONE";
+	type KeyHandoverIsRequired = ConstBool<false>;
+	type OptimisticActivation = ConstBool<true>;
 	type ChainBlockNumber = u64;
 	type ChainAmount = u64;
 	type TransactionFee = u64;

@@ -7,7 +7,7 @@ extern crate alloc;
 use core::mem::size_of;
 
 use self::deposit_address::DepositAddress;
-use crate::{Age, Chain, ChainAbi, ChainCrypto, ChannelIdConstructor, FeeRefundCalculator};
+use crate::{Chain, ChainAbi, ChainCrypto, ChannelIdConstructor, FeeRefundCalculator};
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use base58::{FromBase58, ToBase58};
@@ -19,13 +19,16 @@ use cf_primitives::{
 };
 use cf_utilities::SliceToArray;
 use codec::{Decode, Encode, MaxEncodedLen};
-use frame_support::{sp_io::hashing::sha2_256, BoundedVec, RuntimeDebug};
+use frame_support::{
+	sp_io::hashing::sha2_256,
+	traits::{ConstBool, ConstU32},
+	BoundedVec, RuntimeDebug,
+};
 use itertools;
 use libsecp256k1::{curve::*, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
-use sp_core::ConstU32;
 use sp_std::{vec, vec::Vec};
 
 /// This salt is used to derive the change address for every vault. i.e. for every epoch.
@@ -89,7 +92,6 @@ impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 )]
 #[codec(mel_bound())]
 pub struct BitcoinTrackedData {
-	pub block_height: BlockNumber,
 	pub btc_fee_info: BitcoinFeeInfo,
 }
 
@@ -132,14 +134,6 @@ impl BitcoinFeeInfo {
 	}
 }
 
-impl Age for BitcoinTrackedData {
-	type BlockNumber = BlockNumber;
-
-	fn birth_block(&self) -> Self::BlockNumber {
-		self.block_height
-	}
-}
-
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
 pub struct EpochStartData {
 	pub change_pubkey: AggKey,
@@ -147,7 +141,8 @@ pub struct EpochStartData {
 
 impl Chain for Bitcoin {
 	const NAME: &'static str = "Bitcoin";
-	const KEY_HANDOVER_IS_REQUIRED: bool = true;
+	type KeyHandoverIsRequired = ConstBool<true>;
+	type OptimisticActivation = ConstBool<true>;
 	type ChainBlockNumber = BlockNumber;
 	type ChainAmount = BtcAmount;
 	type TransactionFee = Self::ChainAmount;

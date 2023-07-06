@@ -139,7 +139,6 @@ benchmarks_instance_pallet! {
 		insert_transaction_broadcast_attempt::<T, I>(whitelisted_caller(), broadcast_attempt_id);
 		let call = Call::<T, I>::transaction_succeeded{
 			tx_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
-			block_number: 2_u32.into(),
 			signer_id,
 			tx_fee: TransactionFeeFor::<T, I>::benchmark_value(),
 		};

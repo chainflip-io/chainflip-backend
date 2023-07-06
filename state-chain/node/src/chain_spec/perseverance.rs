@@ -17,17 +17,17 @@ pub const CHAIN_TYPE: ChainType = ChainType::Live;
 pub const BITCOIN_NETWORK: BitcoinNetwork = BitcoinNetwork::Testnet;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
-	flip_token_address: hex_literal::hex!("9ada116ec46a6a0501bCFFC3E4C027a640a8536e"),
+	flip_token_address: hex_literal::hex!("1194C91d47Fc1b65bE18db38380B5344682b67db"),
 	eth_usdc_address: hex_literal::hex!("07865c6e87b9f70255377e024ace6630c1eaa37f"),
-	state_chain_gateway_address: hex_literal::hex!("0e30aFE29222c093aac54E77AD97d49FFA51cc54"),
-	key_manager_address: hex_literal::hex!("50E436B37F69b6C4Ef11BfDB62575c1992c49464"),
-	eth_vault_address: hex_literal::hex!("53685A9158255dE80FbC91846c0Ae0C5F3070A91"),
+	state_chain_gateway_address: hex_literal::hex!("C960C4eEe4ADf40d24374D85094f3219cf2DD8EB"),
+	key_manager_address: hex_literal::hex!("56a10b82180D4b8F6203541FEaF2c88a3999e847"),
+	eth_vault_address: hex_literal::hex!("F1B061aCCDAa4B7c029128b49aBc047F89D5CB8d"),
 	eth_address_checker_address: hex_literal::hex!("e7f1725E7734CE288F8367e1Bb143E90bb3F0512"),
 	ethereum_chain_id: CHAIN_ID_GOERLI,
 	eth_init_agg_key: hex_literal::hex!(
-		"0238de34ff83a64fe33bfc888d2736d10f1d0776cd1845382ae345dd3dad6d2f13"
+		"036e4e4d5e5b36c66ad380541929a66bb1f7eaa267b3fa07b342ef390f9a271093"
 	),
-	ethereum_deployment_block: 9184114u64,
+	ethereum_deployment_block: 9216168u64,
 	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
 	min_funding: MIN_FUNDING,
 	eth_block_safety_margin: eth::BLOCK_SAFETY_MARGIN as u32,
@@ -126,7 +126,7 @@ fn phoenix_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8
 			"⍜ Chainflip Validator",
 			19566972903661520235503,
 		),
-		("cFLdopvNB7LaiBbJoNdNC26e9Gc1FNJKFtvNZjAmXAAVnzCk4", "dopey", 11430744594105204499021),
+		("cFLdopvNB7LaiBbJoNdNC26e9Gc1FNJKFtvNZjAmXAAVnzCk4", "dopey", 21430744594105204499021),
 		(
 			"cFLx7uzuKwb5JwW64CSghgPww1GCJXew87ohYMPTExz7HbnWH",
 			"banghj#9194",
@@ -566,7 +566,7 @@ fn phoenix_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8
 		("cFLWYACk2N6Vzdbj2Faxhs41wXCHo3cwTVnMBWJhSdanJ2gk3", "Kratos#3842", 17710161831497964924),
 		("cFK3m4NsmFDxL43eJddjXgLcifh5qJR8aWT4P43NTkJVg62JU", "teolider", 14498350276876723466945),
 		("cFK254S4MXbtkSt6UnUbvbP3yjyhKLNeeLY5w2c7kBJLX23fK", "SERHIO", 22313526172771099824),
-		("cFLdocJo3bjT7JbT7R46cA89QfvoitrKr9P3TsMcdkVWeeVLa", "doc", 11185384281868071438691),
+		("cFLdocJo3bjT7JbT7R46cA89QfvoitrKr9P3TsMcdkVWeeVLa", "doc", 21185384281868071438691),
 		("cFPPaPvjH11CZ93K8mYaSgDpZce3PqrXoarYEise791cvck8q", "Lizard", 1734335435008338864456),
 		("cFJL1kQBVfEcDeN9W9wLWdjbMzygrk9AtGaEC1rpTu8WYBP5C", "liluwei", 92164348467672213812),
 		(
@@ -698,7 +698,7 @@ fn phoenix_accounts() -> Vec<(AccountId, AccountRole, FlipBalance, Option<Vec<u8
 			"KeeJef#7335",
 			18438502689199850967533,
 		),
-		("cFLbassb4hwQ9iA7dzdVdyumRqkaXnkdYECrThhmrqjFukdVo", "bashful", 12688664848117008169133),
+		("cFLbassb4hwQ9iA7dzdVdyumRqkaXnkdYECrThhmrqjFukdVo", "bashful", 22688664848117008169133),
 		(
 			"cFK9tUyq2TFogm5LKoha4ciLSMZnBPkVVQVfGvnQRWkfvfAm5",
 			"Sleipnir_1",

@@ -32,7 +32,7 @@ impl<C: ChainCrypto> MockKeyProvider<C> {
 }
 
 impl<C: ChainCrypto> crate::KeyProvider<C> for MockKeyProvider<C> {
-	fn current_epoch_key() -> Option<EpochKey<C::AggKey>> {
+	fn active_epoch_key() -> Option<EpochKey<C::AggKey>> {
 		Self::get_value(EPOCH_KEY)
 	}
 }

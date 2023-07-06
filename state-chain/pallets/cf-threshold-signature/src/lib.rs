@@ -666,7 +666,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			} else {
 				(
 					if let Some(EpochKey { key, epoch_index, .. }) =
-						T::KeyProvider::current_epoch_key().filter(
+						T::KeyProvider::active_epoch_key().filter(
 							|EpochKey { key_state, .. }| {
 								key_state.is_available_for_request(request_id)
 							},
