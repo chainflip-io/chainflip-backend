@@ -35,7 +35,6 @@ async function testAll() {
         performSwapViaSmartContract('USDC','ETH'),
         performSwapViaSmartContract('USDC','BTC'),
     ]);
-    await Promise.all([nativeContractSwaps]);
 
     const regularSwaps =
         Promise.all([

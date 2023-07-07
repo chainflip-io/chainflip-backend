@@ -23,7 +23,7 @@ export async function executeNativeSwap(srcAsset: Asset, destAsset: Asset, destA
             destAsset,
             // It is important that this is large enough to result in
             // an amount larger than existential (e.g. on Polkadot):
-            amount: srcAsset==='USDC' ? '100000000' : '1000000000000000000',
+            amount: srcAsset==='USDC' ? '50000000' : '1000000000000000000',
             destAddress,
             ...srcAsset!=='ETH' ? {srcAsset: srcAsset} : {},
         } as ExecuteSwapParams,
