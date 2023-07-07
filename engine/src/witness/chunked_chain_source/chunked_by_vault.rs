@@ -23,30 +23,33 @@ where
 pub type Item<'a, UnderlyingChainSource> = super::Item<
 	'a,
 	UnderlyingChainSource,
-	pallet_cf_vaults::Vault<<UnderlyingChainSource as ExternalChainSource>::Chain>,
-	<<UnderlyingChainSource as ExternalChainSource>::Chain as Chain>::ChainBlockNumber,
+	VaultInfo<UnderlyingChainSource>,
+	VaultEnd<UnderlyingChainSource>,
 >;
+
+pub type VaultInfo<UnderlyingChainSource> =
+	pallet_cf_vaults::Vault<<UnderlyingChainSource as ExternalChainSource>::Chain>;
+pub type VaultEnd<UnderlyingChainSource> =
+	<<UnderlyingChainSource as ExternalChainSource>::Chain as Chain>::ChainBlockNumber;
 
 #[async_trait::async_trait]
 impl<
-	'a,
-	TUnderlyingChainSource: ExternalChainSource,
-	T: ChunkedChainSource<
 		'a,
-		Info = pallet_cf_vaults::Vault<<TUnderlyingChainSource as ExternalChainSource>::Chain>,
-		HistoricInfo = <<TUnderlyingChainSource as ExternalChainSource>::Chain as Chain>::ChainBlockNumber,
-		UnderlyingChainSource = TUnderlyingChainSource
-	>
-> ChunkedByVault<'a> for T where
-state_chain_runtime::Runtime:
-	RuntimeHasChain<<TUnderlyingChainSource as ExternalChainSource>::Chain>, {
-
+		TUnderlyingChainSource: ExternalChainSource,
+		T: ChunkedChainSource<
+			'a,
+			Info = VaultInfo<TUnderlyingChainSource>,
+			HistoricInfo = VaultEnd<TUnderlyingChainSource>,
+			UnderlyingChainSource = TUnderlyingChainSource,
+		>,
+	> ChunkedByVault<'a> for T
+where
+	state_chain_runtime::Runtime:
+		RuntimeHasChain<<TUnderlyingChainSource as ExternalChainSource>::Chain>,
+{
 	type UnderlyingChainSource = TUnderlyingChainSource;
 
-	async fn stream(
-		self,
-	) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>>
-	{
+	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>> {
 		<Self as ChunkedChainSource<'a>>::stream(self).await
 	}
 }
@@ -63,9 +66,8 @@ where
 	state_chain_runtime::Runtime:
 		RuntimeHasChain<<T::UnderlyingChainSource as ExternalChainSource>::Chain>,
 {
-	type Info = pallet_cf_vaults::Vault<<TUnderlyingChainSource as ExternalChainSource>::Chain>;
-	type HistoricInfo =
-		<<TUnderlyingChainSource as ExternalChainSource>::Chain as Chain>::ChainBlockNumber;
+	type Info = VaultInfo<TUnderlyingChainSource>;
+	type HistoricInfo = VaultEnd<TUnderlyingChainSource>;
 
 	type UnderlyingChainSource = TUnderlyingChainSource;
 
