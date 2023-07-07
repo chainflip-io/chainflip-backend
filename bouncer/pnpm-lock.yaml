@@ -1,4 +1,4 @@
-lockfileVersion: '6.1'
+lockfileVersion: '6.0'
 
 settings:
   autoInstallPeers: true
@@ -6,8 +6,8 @@ settings:
 
 dependencies:
   '@chainflip-io/cli':
-    specifier: ^0.0.16
-    version: 0.0.16
+    specifier: ^0.0.17
+    version: 0.0.17
   '@polkadot/api':
     specifier: 10.7.2
     version: 10.7.2
@@ -91,8 +91,8 @@ devDependencies:
 
 packages:
 
-  /@chainflip-io/cli@0.0.16:
-    resolution: {integrity: sha512-ZcVIyd8+/gRPUrNNna8WnpbpgoN69VcinsmLh2/f3ZWuxGGkyGcgaSOXxiJCli7FxhoZntR4nYQqUlfJsORdYA==, tarball: https://npm.pkg.github.com/download/@chainflip-io/cli/0.0.16/d89daf677044b5ca0ed2efe18a8c3aac19c8b6a8}
+  /@chainflip-io/cli@0.0.17:
+    resolution: {integrity: sha512-l8EQPMhFTM42LdJMIcmV6zwTzCcJ2AlwmRWoQ8S99Mrd+fpUODJhWv08ctrXJBrgMxW+NC0fM1wLr5vVR4Bd0A==, tarball: https://npm.pkg.github.com/download/@chainflip-io/cli/0.0.17/83f6ebf836d9bb7585c3cf18a23a55d3f6be5a33}
     hasBin: true
     dependencies:
       ethers: 5.7.2
