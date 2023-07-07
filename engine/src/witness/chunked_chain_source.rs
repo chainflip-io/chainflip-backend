@@ -15,11 +15,11 @@ use utilities::assert_stream_send;
 pub trait ChunkedChainSource<'a>: Sized + Send {
 	type Info: Clone;
 	type HistoricInfo: Clone;
-	type InnerChainSource: ChainSource;
+	type ChainSource: ChainSource;
 
 	async fn stream(
 		self,
-	) -> BoxActiveAndFuture<'a, Item<'a, Self::InnerChainSource, Self::Info, Self::HistoricInfo>>;
+	) -> BoxActiveAndFuture<'a, Item<'a, Self::ChainSource, Self::Info, Self::HistoricInfo>>;
 
 	async fn run(self) {
 		let stream = assert_stream_send(
@@ -32,13 +32,13 @@ pub trait ChunkedChainSource<'a>: Sized + Send {
 	}
 }
 
-pub type Item<'a, InnerChainSource, Info, HistoricInfo> = (
+pub type Item<'a, TChainSource, Info, HistoricInfo> = (
 	Epoch<Info, HistoricInfo>,
 	BoxChainStream<
 		'a,
-		<InnerChainSource as ChainSource>::Index,
-		<InnerChainSource as ChainSource>::Hash,
-		<InnerChainSource as ChainSource>::Data,
+		<TChainSource as ChainSource>::Index,
+		<TChainSource as ChainSource>::Hash,
+		<TChainSource as ChainSource>::Data,
 	>,
-	<InnerChainSource as ChainSource>::Client,
+	<TChainSource as ChainSource>::Client,
 );
