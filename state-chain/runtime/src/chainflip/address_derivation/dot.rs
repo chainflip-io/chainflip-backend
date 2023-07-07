@@ -79,7 +79,7 @@ impl DepositChannel<Polkadot> for PolkadotDepositAddress {
 		let address = <AddressDerivation as AddressDerivationApi<Polkadot>>::generate_address(
 			asset, channel_id,
 		)?;
-		Ok(Self { channel_id, address, deposit_fetch_id: channel_id, asset: asset.into() })
+		Ok(Self { channel_id, address, deposit_fetch_id: channel_id, asset })
 	}
 
 	fn get_channel_id(&self) -> u64 {
@@ -87,7 +87,7 @@ impl DepositChannel<Polkadot> for PolkadotDepositAddress {
 	}
 
 	fn get_asset(&self) -> <Polkadot as Chain>::ChainAsset {
-		self.asset.into()
+		self.asset
 	}
 }
 
