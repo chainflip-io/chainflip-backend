@@ -404,7 +404,7 @@ pub mod pallet {
 					if !T::SafeMode::get().authority_rotation_enabled {
 						log::warn!(
 							target: "cf-validator",
-							"Key Activation failed: Runtime Safe Mode is in CODE RED. Aborting Authority rotation."
+							"Failed to start Key Activation: Runtime Safe Mode is in CODE RED. Aborting Authority rotation."
 						);
 						Self::abort_rotation();
 						T::ValidatorWeightInfo::rotation_phase_keygen(0u32)
@@ -1101,13 +1101,13 @@ impl<T: Config> Pallet<T> {
 		if !T::SafeMode::get().authority_rotation_enabled {
 			log::warn!(
 				target: "cf-validator",
-				"Can't start authority rotation. Runtime Safe Mode is in CODE RED."
+				"Failed to start authority rotation: Runtime Safe Mode is in CODE RED."
 			);
 			return T::ValidatorWeightInfo::start_authority_rotation_in_safe_mode_code_red()
 		} else if !matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle) {
 			log::error!(
 				target: "cf-validator",
-				"Can't start authority rotation. Authority rotation already in progress."
+				"Failed to start authority rotation: Authority rotation already in progress."
 			);
 			return T::ValidatorWeightInfo::start_authority_rotation_in_safe_mode_code_red()
 		}
@@ -1185,7 +1185,7 @@ impl<T: Config> Pallet<T> {
 		if !T::SafeMode::get().authority_rotation_enabled {
 			log::warn!(
 				target: "cf-validator",
-				"Key Handover failed: Runtime Safe Mode is in CODE RED. Aborting Authority rotation."
+				"Failed to start Key Handover: Runtime Safe Mode is in CODE RED. Aborting Authority rotation."
 			);
 			Self::abort_rotation();
 			return
