@@ -10,11 +10,7 @@ use crate::witness::{
 use super::ChunkedChainSource;
 
 #[async_trait::async_trait]
-pub trait ChunkedByVault<'a>: Sized + Send
-where
-	state_chain_runtime::Runtime:
-		RuntimeHasChain<<Self::InnerChainSource as ExternalChainSource>::Chain>,
-{
+pub trait ChunkedByVault<'a>: Sized + Send {
 	type InnerChainSource: ExternalChainSource;
 
 	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::InnerChainSource>>;
@@ -39,9 +35,6 @@ impl<
 			InnerChainSource = TInnerChainSource,
 		>,
 	> ChunkedByVault<'a> for T
-where
-	state_chain_runtime::Runtime:
-		RuntimeHasChain<<TInnerChainSource as ExternalChainSource>::Chain>,
 {
 	type InnerChainSource = TInnerChainSource;
 
@@ -58,9 +51,6 @@ impl<
 		TInnerChainSource: ExternalChainSource,
 		T: ChunkedByVault<'a, InnerChainSource = TInnerChainSource>,
 	> ChunkedChainSource<'a> for Generic<T>
-where
-	state_chain_runtime::Runtime:
-		RuntimeHasChain<<T::InnerChainSource as ExternalChainSource>::Chain>,
 {
 	type Info = VaultInfo<TInnerChainSource>;
 	type HistoricInfo = VaultEnd<TInnerChainSource>;

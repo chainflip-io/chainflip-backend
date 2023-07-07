@@ -89,8 +89,6 @@ impl<T: ChainAbi + PalletInstanceAlias> ExternalChain for T {}
 
 pub trait ExternalChainSource:
 	ChainSource<Index = <Self::Chain as Chain>::ChainBlockNumber>
-where
-	state_chain_runtime::Runtime: RuntimeHasChain<Self::Chain>,
 {
 	type Chain: ExternalChain;
 }
