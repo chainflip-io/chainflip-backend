@@ -1,3 +1,5 @@
+pub mod chain_tracking;
+
 use futures_util::StreamExt;
 
 use crate::witness::{
