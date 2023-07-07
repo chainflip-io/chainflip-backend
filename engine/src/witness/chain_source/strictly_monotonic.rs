@@ -5,20 +5,20 @@ use futures::Stream;
 use super::{BoxChainStream, ChainSource, ChainStream};
 
 #[pin_project::pin_project]
-pub struct StrictlyMonotonicStream<Inner: ChainStream> {
+pub struct StrictlyMonotonicStream<InnerStream: ChainStream> {
 	#[pin]
-	inner: Inner,
-	last_output: Option<Inner::Index>,
+	inner_stream: InnerStream,
+	last_output: Option<InnerStream::Index>,
 }
-impl<Inner: ChainStream> Stream for StrictlyMonotonicStream<Inner> {
-	type Item = Inner::Item;
+impl<InnerStream: ChainStream> Stream for StrictlyMonotonicStream<InnerStream> {
+	type Item = InnerStream::Item;
 
 	fn poll_next(
 		self: std::pin::Pin<&mut Self>,
 		cx: &mut std::task::Context<'_>,
 	) -> Poll<Option<Self::Item>> {
 		let this = self.project();
-		match this.inner.poll_next(cx) {
+		match this.inner_stream.poll_next(cx) {
 			Poll::Ready(Some(header)) => Poll::Ready(if Some(header.index) > *this.last_output {
 				*this.last_output = Some(header.index);
 				Some(header)
@@ -30,26 +30,26 @@ impl<Inner: ChainStream> Stream for StrictlyMonotonicStream<Inner> {
 	}
 }
 
-pub struct StrictlyMonotonic<Inner: ChainSource> {
-	inner: Inner,
+pub struct StrictlyMonotonic<InnerSource: ChainSource> {
+	inner_source: InnerSource,
 }
-impl<Inner: ChainSource> StrictlyMonotonic<Inner> {
-	pub fn new(inner: Inner) -> Self {
-		Self { inner }
+impl<InnerSource: ChainSource> StrictlyMonotonic<InnerSource> {
+	pub fn new(inner_source: InnerSource) -> Self {
+		Self { inner_source }
 	}
 }
 #[async_trait::async_trait]
-impl<Inner: ChainSource> ChainSource for StrictlyMonotonic<Inner> {
-	type Index = Inner::Index;
-	type Hash = Inner::Hash;
-	type Data = Inner::Data;
+impl<InnerSource: ChainSource> ChainSource for StrictlyMonotonic<InnerSource> {
+	type Index = InnerSource::Index;
+	type Hash = InnerSource::Hash;
+	type Data = InnerSource::Data;
 
-	type Client = Inner::Client;
+	type Client = InnerSource::Client;
 
 	async fn stream_and_client(
 		&self,
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
-		let (chain_stream, chain_client) = self.inner.stream_and_client().await;
-		(Box::pin(StrictlyMonotonicStream { inner: chain_stream, last_output: None }), chain_client)
+		let (inner_stream, inner_client) = self.inner_source.stream_and_client().await;
+		(Box::pin(StrictlyMonotonicStream { inner_stream, last_output: None }), inner_client)
 	}
 }

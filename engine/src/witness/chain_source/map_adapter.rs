@@ -5,35 +5,38 @@ use futures_util::StreamExt;
 
 use crate::witness::chain_source::ChainClient;
 
-pub struct MapAdapter<Inner, MapFn> {
-	inner_stream: Inner,
+pub struct MapAdapter<InnerSource, MapFn> {
+	inner_source: InnerSource,
 	map_fn: MapFn,
 }
 
-impl<Inner, MapFn> MapAdapter<Inner, MapFn> {
-	pub fn new(inner_stream: Inner, map_fn: MapFn) -> Self {
-		Self { inner_stream, map_fn }
+impl<InnerSource, MapFn> MapAdapter<InnerSource, MapFn> {
+	pub fn new(inner_source: InnerSource, map_fn: MapFn) -> Self {
+		Self { inner_source, map_fn }
 	}
 }
 
 #[async_trait::async_trait]
 impl<
-		Inner: ChainSource,
+		InnerSource: ChainSource,
 		MappedTo: aliases::Data,
 		FutMappedTo: Future<Output = MappedTo> + Send + Sync,
-		MapFn: Fn(Header<Inner::Index, Inner::Hash, Inner::Data>) -> FutMappedTo + Send + Sync + Clone,
-	> ChainSource for MapAdapter<Inner, MapFn>
+		MapFn: Fn(Header<InnerSource::Index, InnerSource::Hash, InnerSource::Data>) -> FutMappedTo
+			+ Send
+			+ Sync
+			+ Clone,
+	> ChainSource for MapAdapter<InnerSource, MapFn>
 {
-	type Index = Inner::Index;
-	type Hash = Inner::Hash;
+	type Index = InnerSource::Index;
+	type Hash = InnerSource::Hash;
 	type Data = MappedTo;
 
-	type Client = MappedClient<Inner::Client, MapFn>;
+	type Client = MappedClient<InnerSource::Client, MapFn>;
 
 	async fn stream_and_client(
 		&self,
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
-		let (inner_stream, client) = self.inner_stream.stream_and_client().await;
+		let (inner_stream, inner_client) = self.inner_source.stream_and_client().await;
 
 		let mapped_stream = inner_stream.then(move |header| async move {
 			Header {
@@ -44,7 +47,7 @@ impl<
 			}
 		});
 
-		(Box::pin(mapped_stream), MappedClient::new(client, self.map_fn.clone()))
+		(Box::pin(mapped_stream), MappedClient::new(inner_client, self.map_fn.clone()))
 	}
 }
 
