@@ -494,6 +494,22 @@ where
                                             participants,
                                         ).await;
                                     }
+                                    state_chain_runtime::RuntimeEvent::ArbitrumVault(
+                                        pallet_cf_vaults::Event::KeygenRequest {
+                                            ceremony_id,
+                                            participants,
+                                            epoch_index
+                                        }
+                                    ) => {
+                                        handle_keygen_request::<_, _, _, EthereumInstance>(
+                                            scope,
+                                            &eth_multisig_client,
+                                            state_chain_client.clone(),
+                                            ceremony_id,
+                                            epoch_index,
+                                            participants,
+                                        ).await;
+                                    }
                                     state_chain_runtime::RuntimeEvent::EthereumThresholdSigner(
                                         pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
                                             request_id: _,
