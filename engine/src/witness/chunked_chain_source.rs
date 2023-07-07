@@ -1,5 +1,6 @@
 pub mod chunked_by_time;
 pub mod chunked_by_vault;
+pub mod map;
 
 use futures_util::StreamExt;
 
@@ -13,8 +14,8 @@ use utilities::assert_stream_send;
 
 #[async_trait::async_trait]
 pub trait ChunkedChainSource<'a>: Sized + Send {
-	type Info: Clone;
-	type HistoricInfo: Clone;
+	type Info: Clone + Send + Sync + 'static;
+	type HistoricInfo: Clone + Send + Sync + 'static;
 	type ChainSource: ChainSource;
 
 	async fn stream(
