@@ -8,37 +8,34 @@ use utilities::{
 
 use super::{box_chain_stream, BoxChainStream, ChainSource, Header};
 
-type SharedStreamReceiver<UnderlyingSource> = spmc::Receiver<
+type SharedStreamReceiver<InnerSource> = spmc::Receiver<
 	Header<
-		<UnderlyingSource as ChainSource>::Index,
-		<UnderlyingSource as ChainSource>::Hash,
-		<UnderlyingSource as ChainSource>::Data,
+		<InnerSource as ChainSource>::Index,
+		<InnerSource as ChainSource>::Hash,
+		<InnerSource as ChainSource>::Data,
 	>,
 >;
 
-type Request<UnderlyingSource> = tokio::sync::oneshot::Sender<(
-	SharedStreamReceiver<UnderlyingSource>,
-	<UnderlyingSource as ChainSource>::Client,
+type Request<InnerSource> = tokio::sync::oneshot::Sender<(
+	SharedStreamReceiver<InnerSource>,
+	<InnerSource as ChainSource>::Client,
 )>;
 
 #[derive(Clone)]
-pub struct SharedSource<UnderlyingSource: ChainSource> {
-	request_sender: tokio::sync::mpsc::Sender<Request<UnderlyingSource>>,
+pub struct SharedSource<InnerSource: ChainSource> {
+	request_sender: tokio::sync::mpsc::Sender<Request<InnerSource>>,
 }
-impl<UnderlyingSource: ChainSource> SharedSource<UnderlyingSource>
+impl<InnerSource: ChainSource> SharedSource<InnerSource>
 where
-	UnderlyingSource::Client: Clone,
-	UnderlyingSource::Data: Clone,
+	InnerSource::Client: Clone,
+	InnerSource::Data: Clone,
 {
-	pub fn new<'a, 'env>(
-		scope: &'a Scope<'env, anyhow::Error>,
-		underlying_source: UnderlyingSource,
-	) -> Self
+	pub fn new<'a, 'env>(scope: &'a Scope<'env, anyhow::Error>, inner_source: InnerSource) -> Self
 	where
-		UnderlyingSource: 'env,
+		InnerSource: 'env,
 	{
 		let (request_sender, request_receiver) =
-			tokio::sync::mpsc::channel::<Request<UnderlyingSource>>(1);
+			tokio::sync::mpsc::channel::<Request<InnerSource>>(1);
 
 		scope.spawn(async move {
 			let mut request_receiver =
@@ -49,17 +46,16 @@ where
 					break
 				};
 
-				let (mut underlying_stream, underlying_client) =
-					underlying_source.stream_and_client().await;
+				let (mut inner_stream, inner_client) = inner_source.stream_and_client().await;
 				let (mut sender, receiver) = spmc::channel(1);
-				let _result = response_sender.send((receiver, underlying_client.clone()));
+				let _result = response_sender.send((receiver, inner_client.clone()));
 
 				loop_select!(
 					if let Some(response_sender) = request_receiver.next() => {
 						let receiver = sender.receiver();
-						let _result = response_sender.send((receiver, underlying_client.clone()));
+						let _result = response_sender.send((receiver, inner_client.clone()));
 					},
-					let item = underlying_stream.next_or_pending() => {
+					let item = inner_stream.next_or_pending() => {
 						let _result = sender.send(item).await;
 					},
 					let _ = sender.closed() => { break },
@@ -73,16 +69,16 @@ where
 }
 
 #[async_trait::async_trait]
-impl<UnderlyingSource: ChainSource> ChainSource for SharedSource<UnderlyingSource>
+impl<InnerSource: ChainSource> ChainSource for SharedSource<InnerSource>
 where
-	UnderlyingSource::Client: Clone,
-	UnderlyingSource::Data: Clone,
+	InnerSource::Client: Clone,
+	InnerSource::Data: Clone,
 {
-	type Index = UnderlyingSource::Index;
-	type Hash = UnderlyingSource::Hash;
-	type Data = UnderlyingSource::Data;
+	type Index = InnerSource::Index;
+	type Hash = InnerSource::Hash;
+	type Data = InnerSource::Data;
 
-	type Client = UnderlyingSource::Client;
+	type Client = InnerSource::Client;
 
 	async fn stream_and_client(
 		&self,

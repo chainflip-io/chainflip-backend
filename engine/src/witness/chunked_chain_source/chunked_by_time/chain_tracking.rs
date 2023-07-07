@@ -18,43 +18,43 @@ pub trait GetTrackedData<C: cf_chains::Chain>: Send + Sync + Clone {
 	async fn get_tracked_data(&self) -> ChainState<C>;
 }
 
-pub struct ChainTracking<'a, Underlying, StateChainClient, TrackedDataClient> {
-	underlying_stream: Underlying,
+pub struct ChainTracking<'a, Inner, StateChainClient, TrackedDataClient> {
+	inner_stream: Inner,
 	client: TrackedDataClient,
 	state_chain_client: Arc<StateChainClient>,
 	_phantom: PhantomData<&'a ()>,
 }
 
-impl<'a, Underlying, StateChainClient, TrackedDataClient>
-	ChainTracking<'a, Underlying, StateChainClient, TrackedDataClient>
+impl<'a, Inner, StateChainClient, TrackedDataClient>
+	ChainTracking<'a, Inner, StateChainClient, TrackedDataClient>
 {
 	pub fn new(
-		underlying_stream: Underlying,
+		inner_stream: Inner,
 		state_chain_client: Arc<StateChainClient>,
 		client: TrackedDataClient,
-	) -> ChainTracking<'a, Underlying, StateChainClient, TrackedDataClient> {
-		ChainTracking { underlying_stream, state_chain_client, client, _phantom: PhantomData }
+	) -> ChainTracking<'a, Inner, StateChainClient, TrackedDataClient> {
+		ChainTracking { inner_stream, state_chain_client, client, _phantom: PhantomData }
 	}
 }
 
 #[async_trait::async_trait]
-impl<'a, Underlying, StateChainClient, TrackedDataClient> ChunkedByTime<'a>
-	for ChainTracking<'a, Underlying, StateChainClient, TrackedDataClient>
+impl<'a, Inner, StateChainClient, TrackedDataClient> ChunkedByTime<'a>
+	for ChainTracking<'a, Inner, StateChainClient, TrackedDataClient>
 where
-	Underlying: ChunkedByTime<'a>,
-	<Underlying as ChunkedByTime<'a>>::UnderlyingChainSource: ExternalChainSource,
+	Inner: ChunkedByTime<'a>,
+	<Inner as ChunkedByTime<'a>>::InnerChainSource: ExternalChainSource,
 	StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,
-	TrackedDataClient: GetTrackedData<<<Underlying as ChunkedByTime<'a>>::UnderlyingChainSource as ExternalChainSource>::Chain> + 'a,
-	state_chain_runtime::Runtime: RuntimeHasChain<<<Underlying as ChunkedByTime<'a>>::UnderlyingChainSource as ExternalChainSource>::Chain>,
-	state_chain_runtime::RuntimeCall: RuntimeCallHasChain<state_chain_runtime::Runtime, <<Underlying as ChunkedByTime<'a>>::UnderlyingChainSource as ExternalChainSource>::Chain>
+	TrackedDataClient: GetTrackedData<<<Inner as ChunkedByTime<'a>>::InnerChainSource as ExternalChainSource>::Chain> + 'a,
+	state_chain_runtime::Runtime: RuntimeHasChain<<<Inner as ChunkedByTime<'a>>::InnerChainSource as ExternalChainSource>::Chain>,
+	state_chain_runtime::RuntimeCall: RuntimeCallHasChain<state_chain_runtime::Runtime, <<Inner as ChunkedByTime<'a>>::InnerChainSource as ExternalChainSource>::Chain>
 {
-	type UnderlyingChainSource = Underlying::UnderlyingChainSource;
+	type InnerChainSource = Inner::InnerChainSource;
 
-	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>> {
+	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::InnerChainSource>> {
 		let state_chain_client = self.state_chain_client.clone();
 		let client = self.client.clone();
 
-		self.underlying_stream
+		self.inner_stream
 			.stream()
 			.await
 			.filter(|(epoch, _)| {
@@ -74,7 +74,7 @@ where
 								// Unclear error when this is inlined "error: higher-ranked lifetime error"
 								let call: Box<state_chain_runtime::RuntimeCall> = Box::new(pallet_cf_chain_tracking::Call::<
 										state_chain_runtime::Runtime,
-										<<<Underlying as ChunkedByTime<'a>>::UnderlyingChainSource as ExternalChainSource>::Chain as PalletInstanceAlias>::Instance,
+										<<<Inner as ChunkedByTime<'a>>::InnerChainSource as ExternalChainSource>::Chain as PalletInstanceAlias>::Instance,
 									>::update_chain_state {
 										new_chain_state: client.get_tracked_data().await,
 									}.into());

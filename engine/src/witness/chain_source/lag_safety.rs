@@ -7,31 +7,31 @@ use crate::witness::chain_source::ChainClient;
 
 use super::{BoxChainStream, ChainSource, Header};
 
-pub struct LagSafety<Underlying: ChainSource> {
-	underlying: Underlying,
+pub struct LagSafety<Inner: ChainSource> {
+	inner: Inner,
 	margin: usize,
 }
-impl<Underlying: ChainSource> LagSafety<Underlying> {
-	pub fn new(margin: usize, underlying: Underlying) -> Self {
-		Self { underlying, margin }
+impl<Inner: ChainSource> LagSafety<Inner> {
+	pub fn new(margin: usize, inner: Inner) -> Self {
+		Self { inner, margin }
 	}
 }
 
 #[async_trait::async_trait]
-impl<Underlying: ChainSource> ChainSource for LagSafety<Underlying>
+impl<Inner: ChainSource> ChainSource for LagSafety<Inner>
 where
-	Underlying::Client: Clone,
+	Inner::Client: Clone,
 {
-	type Index = Underlying::Index;
-	type Hash = Underlying::Hash;
-	type Data = Underlying::Data;
+	type Index = Inner::Index;
+	type Hash = Inner::Hash;
+	type Data = Inner::Data;
 
-	type Client = Underlying::Client;
+	type Client = Inner::Client;
 
 	async fn stream_and_client(
 		&self,
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
-		let (chain_stream, chain_client) = self.underlying.stream_and_client().await;
+		let (chain_stream, chain_client) = self.inner.stream_and_client().await;
 		let margin = self.margin;
 
 		(

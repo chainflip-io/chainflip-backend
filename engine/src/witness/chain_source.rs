@@ -87,9 +87,9 @@ pub fn box_chain_stream<
 	Index: aliases::Index,
 	Hash: aliases::Hash,
 	Data: aliases::Data,
-	Underlying: Stream<Item = Header<Index, Hash, Data>> + Send + 'a,
+	Inner: Stream<Item = Header<Index, Hash, Data>> + Send + 'a,
 >(
-	underlying: Underlying,
+	inner: Inner,
 ) -> BoxChainStream<'a, Index, Hash, Data> {
-	Box::pin(underlying)
+	Box::pin(inner)
 }

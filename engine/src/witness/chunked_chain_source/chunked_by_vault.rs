@@ -13,43 +13,39 @@ use super::ChunkedChainSource;
 pub trait ChunkedByVault<'a>: Sized + Send
 where
 	state_chain_runtime::Runtime:
-		RuntimeHasChain<<Self::UnderlyingChainSource as ExternalChainSource>::Chain>,
+		RuntimeHasChain<<Self::InnerChainSource as ExternalChainSource>::Chain>,
 {
-	type UnderlyingChainSource: ExternalChainSource;
+	type InnerChainSource: ExternalChainSource;
 
-	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>>;
+	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::InnerChainSource>>;
 }
 
-pub type Item<'a, UnderlyingChainSource> = super::Item<
-	'a,
-	UnderlyingChainSource,
-	VaultInfo<UnderlyingChainSource>,
-	VaultEnd<UnderlyingChainSource>,
->;
+pub type Item<'a, InnerChainSource> =
+	super::Item<'a, InnerChainSource, VaultInfo<InnerChainSource>, VaultEnd<InnerChainSource>>;
 
-pub type VaultInfo<UnderlyingChainSource> =
-	pallet_cf_vaults::Vault<<UnderlyingChainSource as ExternalChainSource>::Chain>;
-pub type VaultEnd<UnderlyingChainSource> =
-	<<UnderlyingChainSource as ExternalChainSource>::Chain as Chain>::ChainBlockNumber;
+pub type VaultInfo<InnerChainSource> =
+	pallet_cf_vaults::Vault<<InnerChainSource as ExternalChainSource>::Chain>;
+pub type VaultEnd<InnerChainSource> =
+	<<InnerChainSource as ExternalChainSource>::Chain as Chain>::ChainBlockNumber;
 
 #[async_trait::async_trait]
 impl<
 		'a,
-		TUnderlyingChainSource: ExternalChainSource,
+		TInnerChainSource: ExternalChainSource,
 		T: ChunkedChainSource<
 			'a,
-			Info = VaultInfo<TUnderlyingChainSource>,
-			HistoricInfo = VaultEnd<TUnderlyingChainSource>,
-			UnderlyingChainSource = TUnderlyingChainSource,
+			Info = VaultInfo<TInnerChainSource>,
+			HistoricInfo = VaultEnd<TInnerChainSource>,
+			InnerChainSource = TInnerChainSource,
 		>,
 	> ChunkedByVault<'a> for T
 where
 	state_chain_runtime::Runtime:
-		RuntimeHasChain<<TUnderlyingChainSource as ExternalChainSource>::Chain>,
+		RuntimeHasChain<<TInnerChainSource as ExternalChainSource>::Chain>,
 {
-	type UnderlyingChainSource = TUnderlyingChainSource;
+	type InnerChainSource = TInnerChainSource;
 
-	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>> {
+	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::InnerChainSource>> {
 		<Self as ChunkedChainSource<'a>>::stream(self).await
 	}
 }
@@ -59,43 +55,43 @@ pub struct Generic<T>(T);
 #[async_trait::async_trait]
 impl<
 		'a,
-		TUnderlyingChainSource: ExternalChainSource,
-		T: ChunkedByVault<'a, UnderlyingChainSource = TUnderlyingChainSource>,
+		TInnerChainSource: ExternalChainSource,
+		T: ChunkedByVault<'a, InnerChainSource = TInnerChainSource>,
 	> ChunkedChainSource<'a> for Generic<T>
 where
 	state_chain_runtime::Runtime:
-		RuntimeHasChain<<T::UnderlyingChainSource as ExternalChainSource>::Chain>,
+		RuntimeHasChain<<T::InnerChainSource as ExternalChainSource>::Chain>,
 {
-	type Info = VaultInfo<TUnderlyingChainSource>;
-	type HistoricInfo = VaultEnd<TUnderlyingChainSource>;
+	type Info = VaultInfo<TInnerChainSource>;
+	type HistoricInfo = VaultEnd<TInnerChainSource>;
 
-	type UnderlyingChainSource = TUnderlyingChainSource;
+	type InnerChainSource = TInnerChainSource;
 
-	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>> {
+	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::InnerChainSource>> {
 		self.0.stream().await
 	}
 }
 
-pub struct ChunkByVault<'a, UnderlyingChainSource: ExternalChainSource>
+pub struct ChunkByVault<'a, InnerChainSource: ExternalChainSource>
 where
-	state_chain_runtime::Runtime: RuntimeHasChain<UnderlyingChainSource::Chain>,
+	state_chain_runtime::Runtime: RuntimeHasChain<InnerChainSource::Chain>,
 {
-	underlying_chain_source: &'a UnderlyingChainSource,
-	vaults: BoxActiveAndFuture<'static, epoch_source::Vault<UnderlyingChainSource::Chain>>,
+	inner_chain_source: &'a InnerChainSource,
+	vaults: BoxActiveAndFuture<'static, epoch_source::Vault<InnerChainSource::Chain>>,
 }
 #[async_trait::async_trait]
-impl<'a, UnderlyingChainSource: ExternalChainSource> ChunkedByVault<'a>
-	for ChunkByVault<'a, UnderlyingChainSource>
+impl<'a, InnerChainSource: ExternalChainSource> ChunkedByVault<'a>
+	for ChunkByVault<'a, InnerChainSource>
 where
-	state_chain_runtime::Runtime: RuntimeHasChain<UnderlyingChainSource::Chain>,
+	state_chain_runtime::Runtime: RuntimeHasChain<InnerChainSource::Chain>,
 {
-	type UnderlyingChainSource = UnderlyingChainSource;
+	type InnerChainSource = InnerChainSource;
 
-	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>> {
-		let underlying_chain_source = self.underlying_chain_source;
+	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::InnerChainSource>> {
+		let inner_chain_source = self.inner_chain_source;
 		self.vaults
 			.then(move |mut vault| async move {
-				let (stream, client) = underlying_chain_source.stream_and_client().await;
+				let (stream, client) = inner_chain_source.stream_and_client().await;
 
 				(
 					vault.clone(),
