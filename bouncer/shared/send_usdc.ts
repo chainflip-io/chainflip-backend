@@ -1,9 +1,9 @@
 import Web3 from "web3";
-import { getNextEthNonce } from "./fund_eth";
+import { getNextEthNonce } from "./send_eth";
 import { getEthContractAddress } from "./utils";
 import erc20abi from '../../eth-contract-abis/IERC20.json';
 
-export async function fundUsdc(ethereumAddress: string, usdcAmount: string) {
+export async function sendUsdc(ethereumAddress: string, usdcAmount: string) {
 
     const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
 
@@ -30,5 +30,11 @@ export async function fundUsdc(ethereumAddress: string, usdcAmount: string) {
     const tx = { to: usdcContractAddress, data: txData, gas: 2000000, nonce };
 
     const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
-    await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string);
+    const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string, ((error, hash) => {
+        if (error) {
+            console.error("Ethereum transaction failure:", error);
+        }
+    }));
+
+    console.log("Transaction complete, tx_hash: " + receipt.transactionHash + " blockNumber: " + receipt.blockNumber + " blockHash: " + receipt.blockHash);
 }

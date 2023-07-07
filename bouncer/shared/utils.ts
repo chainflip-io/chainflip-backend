@@ -23,7 +23,7 @@ export function assetToChain(asset: Asset): number {
       return 1; // Ethereum
     case 'DOT': 
       return 2; // Polkadot
-    case 'BTC':
+    case 'BTC': 
       return 3; // Bitcoin
     default:
       throw new Error(`Unsupported asset: ${asset}`);
@@ -41,6 +41,8 @@ export function getEthContractAddress(contract: string): string {
       return '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
     case 'CFRECEIVER': 
       return '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
+    case 'GATEWAY':
+      return '0xeEBe00Ac0756308ac4AaBfD76c05c4F3088B8883';
     default:
       throw new Error(`Unsupported contract: ${contract}`);
   }
@@ -246,4 +248,21 @@ export function encodeBtcAddressForContract(address: any) {
 export function encodeDotAddressForContract(address: string) {
   const keyring = new Keyring({ type: 'sr25519' });
   return u8aToHex(keyring.decodeAddress(address))
+}
+
+export function handleSubstrateError(api: any) {
+  return (arg: any) => {
+    var {status, events, dispatchError} = arg
+    if(dispatchError){
+      var error;
+      if(dispatchError.isModule){
+        const {docs, name, section} = api.registry.findMetaError(dispatchError.asModule);
+        error = section + '.' + name + ' ' + docs;
+      } else {
+        error = dispatchError.toString();
+      }
+      console.log("Extrinsic failed: " + error);
+      process.exit(1);
+    }
+  };
 }

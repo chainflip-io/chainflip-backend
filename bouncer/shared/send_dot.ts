@@ -3,7 +3,7 @@ import Keyring from "@polkadot/keyring";
 import { cryptoWaitReady } from "@polkadot/util-crypto";
 import { polkadotSigningMutex, sleep } from "./utils";
 
-export async function fundDot(address: string, amount: string) {
+export async function sendDot(address: string, amount: string) {
 
     const polkadot_endpoint = process.env.POLKADOT_ENDPOINT || 'ws://127.0.0.1:9945';
 

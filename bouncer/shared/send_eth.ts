@@ -19,7 +19,7 @@ export async function getNextEthNonce(): Promise<number> {
     });
 }
 
-export async function fundEth(ethereumAddress: string, ethAmount: string) {
+export async function sendEth(ethereumAddress: string, ethAmount: string) {
 
     const ethEndpoint = process.env.ETH_ENDPOINT || "http://127.0.0.1:8545";
     const web3 = new Web3(ethEndpoint);
@@ -46,7 +46,7 @@ export async function fundEth(ethereumAddress: string, ethAmount: string) {
     const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
     const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string, ((error, hash) => {
         if (error) {
-            console.error("Eth transaction failure:", error);
+            console.error("Ethereum transaction failure:", error);
         }
     }));
 

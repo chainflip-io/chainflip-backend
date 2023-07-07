@@ -11,7 +11,7 @@ import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { exec } from 'child_process';
 import { Mutex } from 'async-mutex';
 import type { KeyringPair } from '@polkadot/keyring/types';
-import { runWithTimeout, sleep, getAddress, hexStringToBytesArray, asciiStringToBytesArray } from '../shared/utils';
+import { runWithTimeout, sleep, getAddress, hexStringToBytesArray, asciiStringToBytesArray, handleSubstrateError } from '../shared/utils';
 
 const deposits = {
   dot: 10000,
@@ -75,7 +75,7 @@ export async function setupEmergencyWithdrawalAddress(address: any): Promise<voi
   await mutex.runExclusive(async () => {
     await chainflip.tx.liquidityProvider
       .registerEmergencyWithdrawalAddress(address)
-      .signAndSend(lp, { nonce: -1 });
+      .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
   });
 }
 
@@ -84,7 +84,7 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
   await mutex.runExclusive(async () => {
     await chainflip.tx.liquidityProvider
       .requestLiquidityDepositAddress(ccy)
-      .signAndSend(lp, { nonce: -1 });
+      .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const checkCcy = (data: any): boolean => {
@@ -104,7 +104,7 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
   }
   console.log('Received ' + ccy + ' address: ' + ingressAddress);
   exec(
-    'pnpm tsx ./commands/fund_' + ccy + '.ts' + ' ' + ingressAddress + ' ' + deposits[ccy],
+    'pnpm tsx ./commands/send_' + ccy + '.ts' + ' ' + ingressAddress + ' ' + deposits[ccy],
     { timeout: 30000 },
     (err, stdout, stderr) => {
       if (stderr !== '') process.stdout.write(stderr);
@@ -129,7 +129,7 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
   await mutex.runExclusive(async () => {
     await chainflip.tx.governance
       .proposeGovernanceExtrinsic(chainflip.tx.liquidityPools.newPool(ccy, 100, price))
-      .signAndSend(snowwhite, { nonce: -1 });
+      .signAndSend(snowwhite, { nonce: -1 }, handleSubstrateError(chainflip));
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const checkPool = (data: any): boolean => data.unstableAsset.toJSON().toLowerCase() === ccy;
@@ -146,22 +146,7 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
   await mutex.runExclusive(async () => {
     await chainflip.tx.liquidityPools
       .collectAndMintLimitOrder(ccy, 'Buy', priceTick, buyPosition)
-      .signAndSend(lp, { nonce: -1 }, ({ status, dispatchError }) => {
-        if (dispatchError !== undefined) {
-          if (dispatchError.isModule) {
-            const decoded = chainflip.registry.findMetaError(dispatchError.asModule);
-            const { docs, name, section } = decoded;
-            console.log(
-              `Placing Buy Limit order for ${ccy} failed: ${section}.${name}: ${docs.join(' ')}`,
-            );
-          } else {
-            console.log(
-              `Placing Buy Limit order for ${ccy} failed: Error: ` + dispatchError.toString(),
-            );
-          }
-          process.exit(-1);
-        }
-      });
+      .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
   });
   console.log(
     'Placing Sell Limit order for ' + deposits[ccy] + ' ' + ccy + ' at ' + values[ccy] + ' USDC.',
@@ -170,22 +155,7 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
   await mutex.runExclusive(async () => {
     await chainflip.tx.liquidityPools
       .collectAndMintLimitOrder(ccy, 'Sell', priceTick, sellPosition)
-      .signAndSend(lp, { nonce: -1 }, ({ status, dispatchError }) => {
-        if (dispatchError !== undefined) {
-          if (dispatchError.isModule) {
-            const decoded = chainflip.registry.findMetaError(dispatchError.asModule);
-            const { docs, name, section } = decoded;
-            console.log(
-              `Placing Sell Limit order for ${ccy} failed:${section}.${name}: ${docs.join(' ')}`,
-            );
-          } else {
-            console.log(
-              `Placing Sell Limit order for ${ccy} failed: Error: ` + dispatchError.toString(),
-            );
-          }
-          process.exit(-1);
-        }
-      });
+      .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
   });
 }
 

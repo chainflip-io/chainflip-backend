@@ -1,7 +1,7 @@
 import { encodeAddress } from '@polkadot/util-crypto';
 import { Asset } from '@chainflip-io/cli/.';
 import { newSwap } from './new_swap';
-import { fund } from './fund';
+import { send } from './send';
 import { getBalance } from './get_balance';
 import { getChainflipApi, observeBalanceIncrease, observeEvent, observeCcmReceived, encodeBtcAddressForContract } from '../shared/utils';
 import { CcmDepositMetadata } from "../shared/new_swap";
@@ -79,7 +79,7 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
     ? observeCcmReceived(sourceToken, destToken, ADDRESS, messageMetadata)
     : Promise.resolve();
 
-    await fund(sourceToken, swapAddress.toLowerCase())
+    await send(sourceToken, swapAddress.toLowerCase())
     console.log(`${tag} Funded the address`);
 
     await swapExecutedHandle;

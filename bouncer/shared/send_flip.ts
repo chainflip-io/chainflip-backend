@@ -1,0 +1,40 @@
+import Web3 from "web3";
+import { getNextEthNonce } from "./send_eth";
+import { getEthContractAddress } from "./utils";
+import erc20abi from '../../eth-contract-abis/IERC20.json';
+
+export async function sendFlip(ethereumAddress: string, flipAmount: string) {
+
+    const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
+
+    let flipperinoAmount;
+    if (!flipAmount.includes('.')) {
+        flipperinoAmount = flipAmount + '000000000000000000';
+    } else {
+        const amountParts = flipAmount.split('.');
+        flipperinoAmount = amountParts[0] + amountParts[1].padEnd(18, '0').substr(0, 18);
+    }
+
+    const web3 = new Web3(ethEndpoint);
+
+    const flipContractAddress =
+        process.env.ETH_FLIP_ADDRESS ?? getEthContractAddress('FLIP');
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const flipContract = new web3.eth.Contract(erc20abi as any, flipContractAddress);
+    const txData = flipContract.methods.transfer(ethereumAddress, flipperinoAmount).encodeABI();
+    const whaleKey = process.env.ETH_USDC_WHALE || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+    console.log('Transferring ' + flipAmount + ' FLIP to ' + ethereumAddress);
+
+    const nonce = await getNextEthNonce()
+    const tx = { to: flipContractAddress, data: txData, gas: 2000000, nonce };
+
+    const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
+    const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string, ((error, hash) => {
+        if (error) {
+            console.error("Ethereum transaction failure:", error);
+        }
+    }));
+
+    console.log("Transaction complete, tx_hash: " + receipt.transactionHash + " blockNumber: " + receipt.blockNumber + " blockHash: " + receipt.blockHash);
+}

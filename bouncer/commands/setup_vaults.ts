@@ -7,7 +7,7 @@
 
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { getChainflipApi, getPolkadotApi, sleep } from '../shared/utils';
+import { getChainflipApi, getPolkadotApi, sleep, handleSubstrateError } from '../shared/utils';
 
 async function main(): Promise<void> {
   await cryptoWaitReady();
@@ -28,7 +28,7 @@ async function main(): Promise<void> {
   console.log('Forcing rotation');
   await chainflip.tx.governance
     .proposeGovernanceExtrinsic(chainflip.tx.validator.forceRotation())
-    .signAndSend(snowwhite);
+    .signAndSend(snowwhite, {nonce: -1}, handleSubstrateError(chainflip));
 
   // Step 2
   console.log('Waiting for new keys');
@@ -65,13 +65,13 @@ async function main(): Promise<void> {
 
   // Step 3
   console.log('Transferring 100 DOT to Polkadot AggKey');
-  await polkadot.tx.balances.transfer(dotKeyAddress, 1000000000000).signAndSend(alice);
+  await polkadot.tx.balances.transfer(dotKeyAddress, 1000000000000).signAndSend(alice, {nonce: -1}, handleSubstrateError(polkadot));
 
   // Step 4
   console.log('Requesting Polkadot Vault creation');
   const createCommand = chainflip.tx.environment.createPolkadotVault(dotKey);
   const mytx = chainflip.tx.governance.proposeGovernanceExtrinsic(createCommand);
-  await mytx.signAndSend(snowwhite);
+  await mytx.signAndSend(snowwhite, {nonce: -1}, handleSubstrateError(chainflip));
 
   // Step 5
   console.log('Waiting for Vault address on Polkadot chain');
@@ -100,7 +100,7 @@ async function main(): Promise<void> {
 
   // Step 7
   console.log('Transferring 100 DOT to Polkadot Vault');
-  await polkadot.tx.balances.transfer(vaultAddress, 1000000000000).signAndSend(alice);
+  await polkadot.tx.balances.transfer(vaultAddress, 1000000000000).signAndSend(alice, {nonce: -1}, handleSubstrateError(polkadot));
 
   // Step 8
   console.log('Registering Vaults with state chain');
@@ -112,11 +112,11 @@ async function main(): Promise<void> {
     1,
   );
   const myDotTx = chainflip.tx.governance.proposeGovernanceExtrinsic(dotWitnessing);
-  await myDotTx.signAndSend(snowwhite, { nonce: -1 });
+  await myDotTx.signAndSend(snowwhite, { nonce: -1 }, handleSubstrateError(chainflip));
 
   const btcWitnessing = chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(1, btcKey);
   const myBtcTx = chainflip.tx.governance.proposeGovernanceExtrinsic(btcWitnessing);
-  await myBtcTx.signAndSend(snowwhite, { nonce: -1 });
+  await myBtcTx.signAndSend(snowwhite, { nonce: -1 }, handleSubstrateError(chainflip));
 
   // Confirmation
   console.log('Waiting for new epoch');
