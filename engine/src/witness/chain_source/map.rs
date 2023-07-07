@@ -20,7 +20,7 @@ impl<InnerSource, MapFn> Map<InnerSource, MapFn> {
 impl<
 		InnerSource: ChainSource,
 		MappedTo: aliases::Data,
-		FutMappedTo: Future<Output = MappedTo> + Send + Sync,
+		FutMappedTo: Future<Output = MappedTo> + Send,
 		MapFn: Fn(Header<InnerSource::Index, InnerSource::Hash, InnerSource::Data>) -> FutMappedTo
 			+ Send
 			+ Sync
@@ -66,7 +66,7 @@ impl<InnerClient, MapFn> MappedClient<InnerClient, MapFn> {
 impl<
 		InnerClient: ChainClient,
 		MappedTo: aliases::Data,
-		FutMappedTo: Future<Output = MappedTo> + Send + Sync,
+		FutMappedTo: Future<Output = MappedTo> + Send,
 		MapFn: Fn(Header<InnerClient::Index, InnerClient::Hash, InnerClient::Data>) -> FutMappedTo
 			+ Send
 			+ Sync

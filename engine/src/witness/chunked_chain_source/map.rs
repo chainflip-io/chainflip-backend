@@ -23,7 +23,7 @@ impl<'a, Inner: ChunkedChainSource<'a>, MappedTo, FutMappedTo, MapFn> ChunkedCha
 where
 	Self: 'a,
 	MappedTo: aliases::Data,
-	FutMappedTo: Future<Output = MappedTo> + Send + Sync,
+	FutMappedTo: Future<Output = MappedTo> + Send,
 	MapFn: Fn(
 			Header<
 				<Inner::ChainSource as ChainSource>::Index,
