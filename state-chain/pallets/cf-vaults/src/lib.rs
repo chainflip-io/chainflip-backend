@@ -412,8 +412,6 @@ pub mod pallet {
 		InvalidRespondent,
 		/// There is no threshold signature available
 		ThresholdSignatureUnavailable,
-		/// A reported offender is not participating in the ceremony.
-		InvalidBlame,
 	}
 
 	macro_rules! handle_key_ceremony_report {
@@ -446,12 +444,19 @@ pub mod pallet {
 					response_status.add_success_vote(&reporter, key);
 					$success_event(reporter)
 				},
-				Err(blamed) => {
-					ensure!(
-						blamed.is_subset(response_status.candidates()),
-						Error::<T, I>::InvalidBlame
-					);
-					response_status.add_failure_vote(&reporter, blamed);
+				Err(offenders) => {
+					// Remove any offenders that are not part of the ceremony and log them
+					let (valid_offenders, non_candidate_offenders): (BTreeSet<_>, BTreeSet<_>) =
+					offenders.into_iter().partition(|id| response_status.candidates().contains(id));
+					if !non_candidate_offenders.is_empty() {
+						log::warn!(
+							"Invalid offenders reported {:?} for ceremony {}.",
+							non_candidate_offenders,
+							$ceremony_id
+						);
+					}
+
+					response_status.add_failure_vote(&reporter, valid_offenders);
 					$failure_event(reporter)
 				},
 			});

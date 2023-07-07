@@ -143,7 +143,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 							state_chain_runtime::Runtime,
 							I,
 						>::report_signature_failed {
-							id: ceremony_id,
+							ceremony_id,
 							offenders: BTreeSet::from_iter(bad_account_ids),
 						})
 						.await;

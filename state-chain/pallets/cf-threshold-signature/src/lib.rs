@@ -384,8 +384,6 @@ pub mod pallet {
 		InvalidRespondent,
 		/// The request Id is stale or not yet valid.
 		InvalidRequestId,
-		/// A reported offender is not participating in the ceremony.
-		InvalidBlame,
 	}
 
 	#[pallet::hooks]
@@ -566,12 +564,12 @@ pub mod pallet {
 		#[pallet::weight(T::Weights::report_signature_failed(offenders.len() as u32))]
 		pub fn report_signature_failed(
 			origin: OriginFor<T>,
-			id: CeremonyId,
+			ceremony_id: CeremonyId,
 			offenders: BTreeSet<<T as Chainflip>::ValidatorId>,
 		) -> DispatchResultWithPostInfo {
 			let reporter_id = T::AccountRoleRegistry::ensure_validator(origin)?.into();
 
-			PendingCeremonies::<T, I>::try_mutate(id, |maybe_context| {
+			PendingCeremonies::<T, I>::try_mutate(ceremony_id, |maybe_context| {
 				maybe_context
 					.as_mut()
 					.ok_or(Error::<T, I>::InvalidCeremonyId)
@@ -580,22 +578,30 @@ pub mod pallet {
 							return Err(Error::<T, I>::InvalidRespondent)
 						}
 
-						if !offenders.is_subset(&context.candidates) {
-							return Err(Error::<T, I>::InvalidBlame)
+						// Remove any offenders that are not part of the ceremony and log them
+						let (valid_offenders, non_candidate_offenders): (BTreeSet<_>, BTreeSet<_>) =
+							offenders.into_iter().partition(|id| context.candidates.contains(id));
+
+						if !non_candidate_offenders.is_empty() {
+							log::warn!(
+								"Invalid offenders reported {:?} for ceremony {}.",
+								non_candidate_offenders,
+								ceremony_id
+							);
 						}
 
-						for id in offenders {
+						for id in valid_offenders {
 							(*context.blame_counts.entry(id).or_default()) += 1;
 						}
 
 						if context.remaining_respondents.is_empty() {
 							// No more respondents waiting: we can retry on the next block.
-							Self::schedule_ceremony_retry(id, 1u32.into());
+							Self::schedule_ceremony_retry(ceremony_id, 1u32.into());
 						}
 
 						Self::deposit_event(Event::<T, I>::FailureReportProcessed {
 							request_id: context.request_context.request_id,
-							ceremony_id: id,
+							ceremony_id,
 							reporter_id,
 						});
 

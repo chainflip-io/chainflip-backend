@@ -1,5 +1,7 @@
 #![cfg(test)]
 
+use core::panic;
+
 use crate::{
 	mock::*, CeremonyId, Error, Event as PalletEvent, KeyHandoverResolutionPendingSince,
 	KeygenFailureVoters, KeygenResolutionPendingSince, KeygenResponseTimeout, KeygenSuccessVoters,
@@ -340,17 +342,24 @@ fn can_only_report_keygen_candidates() {
 		);
 
 		let non_candidate = u64::MAX;
+		let valid_offender = BOB;
 		assert!(!ALL_CANDIDATES.contains(&non_candidate));
-		assert_noop!(
-			VaultsPallet::report_keygen_outcome(
-				RuntimeOrigin::signed(ALICE),
-				current_ceremony_id(),
-				// Report the non-candidate
-				Err(BTreeSet::from_iter([non_candidate]))
-			),
-			Error::<MockRuntime, _>::InvalidBlame
-		);
-		assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
+
+		VaultsPallet::report_keygen_outcome(
+			RuntimeOrigin::signed(ALICE),
+			current_ceremony_id(),
+			// Report both the valid_offender and the non-candidate
+			Err(BTreeSet::from_iter([valid_offender, non_candidate])),
+		)
+		.unwrap();
+
+		match PendingVaultRotation::<MockRuntime, _>::get().unwrap() {
+			VaultRotationStatus::AwaitingKeygen { response_status, .. } => {
+				assert!(!response_status.blame_votes().contains_key(&non_candidate));
+				assert!(response_status.blame_votes().contains_key(&valid_offender));
+			},
+			_ => panic!("Expected to be in AwaitingKeygen state"),
+		}
 	});
 }
 
