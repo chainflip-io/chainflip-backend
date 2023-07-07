@@ -2,7 +2,7 @@ use futures_core::Future;
 use futures_util::StreamExt;
 
 use crate::witness::{
-	chain_source::{self, aliases, box_chain_stream, map::MappedClient, ChainSource, Header},
+	chain_source::{aliases, box_chain_stream, map::MappedClient, Header},
 	common::BoxActiveAndFuture,
 };
 
@@ -24,25 +24,22 @@ where
 	Self: 'a,
 	MappedTo: aliases::Data,
 	FutMappedTo: Future<Output = MappedTo> + Send,
-	MapFn: Fn(
-			Header<
-				<Inner::ChainSource as ChainSource>::Index,
-				<Inner::ChainSource as ChainSource>::Hash,
-				<Inner::ChainSource as ChainSource>::Data,
-			>,
-		) -> FutMappedTo
-		+ Send
-		+ Sync
-		+ Clone,
+	MapFn: Fn(Header<Inner::Index, Inner::Hash, Inner::Data>) -> FutMappedTo + Send + Sync + Clone,
 {
-	type ChainSource = chain_source::map::Map<Inner::ChainSource, MapFn>;
 	type Info = Inner::Info;
 	type HistoricInfo = Inner::HistoricInfo;
 
+	type Index = Inner::Index;
+	type Hash = Inner::Hash;
+	type Data = MappedTo;
+
+	type Client = MappedClient<Inner::Client, MapFn>;
+
+	type Chain = Inner::Chain;
+
 	async fn stream(
 		self,
-	) -> BoxActiveAndFuture<'a, super::Item<'a, Self::ChainSource, Self::Info, Self::HistoricInfo>>
-	{
+	) -> BoxActiveAndFuture<'a, super::Item<'a, Self, Self::Info, Self::HistoricInfo>> {
 		self.inner
 			.stream()
 			.await

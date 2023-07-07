@@ -3,8 +3,8 @@ pub mod chain_tracking;
 use futures_util::StreamExt;
 
 use crate::witness::{
-	chain_source::{box_chain_stream, ChainSource},
-	common::BoxActiveAndFuture,
+	chain_source::{aliases, box_chain_stream, BoxChainStream, ChainClient},
+	common::{BoxActiveAndFuture, ExternalChain, ExternalChainSource},
 	epoch_source::Epoch,
 };
 
@@ -12,23 +12,39 @@ use super::ChunkedChainSource;
 
 #[async_trait::async_trait]
 pub trait ChunkedByTime<'a>: Sized + Send {
-	type ChainSource: ChainSource;
+	type Index: aliases::Index;
+	type Hash: aliases::Hash;
+	type Data: aliases::Data;
 
-	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::ChainSource>>;
+	type Client: ChainClient<Index = Self::Index, Hash = Self::Hash, Data = Self::Data>;
+
+	type Chain: ExternalChain<ChainBlockNumber = Self::Index>;
+
+	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self>>;
 }
 
-pub type Item<'a, TChainSource> = super::Item<'a, TChainSource, (), ()>;
+pub type Item<'a, T> = (
+	Epoch<(), ()>,
+	BoxChainStream<
+		'a,
+		<T as ChunkedByTime<'a>>::Index,
+		<T as ChunkedByTime<'a>>::Hash,
+		<T as ChunkedByTime<'a>>::Data,
+	>,
+	<T as ChunkedByTime<'a>>::Client,
+);
 
 #[async_trait::async_trait]
-impl<
-		'a,
-		TChainSource: ChainSource,
-		T: ChunkedChainSource<'a, Info = (), HistoricInfo = (), ChainSource = TChainSource>,
-	> ChunkedByTime<'a> for T
-{
-	type ChainSource = TChainSource;
+impl<'a, T: ChunkedChainSource<'a, Info = (), HistoricInfo = ()>> ChunkedByTime<'a> for T {
+	type Index = T::Index;
+	type Hash = T::Hash;
+	type Data = T::Data;
 
-	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::ChainSource>> {
+	type Client = T::Client;
+
+	type Chain = T::Chain;
+
+	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self>> {
 		<Self as ChunkedByTime<'a>>::stream(self).await
 	}
 }
@@ -36,15 +52,19 @@ impl<
 /// Wraps a specific impl of ChunkedByTime, and impls ChunkedChainSource for it
 pub struct Generic<T>(T);
 #[async_trait::async_trait]
-impl<'a, TChainSource: ChainSource, T: ChunkedByTime<'a, ChainSource = TChainSource>>
-	ChunkedChainSource<'a> for Generic<T>
-{
+impl<'a, T: ChunkedByTime<'a>> ChunkedChainSource<'a> for Generic<T> {
 	type Info = ();
 	type HistoricInfo = ();
 
-	type ChainSource = TChainSource;
+	type Index = T::Index;
+	type Hash = T::Hash;
+	type Data = T::Data;
 
-	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::ChainSource>> {
+	type Client = T::Client;
+
+	type Chain = T::Chain;
+
+	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self>> {
 		self.0.stream().await
 	}
 }
@@ -62,10 +82,16 @@ impl<'a, TChainSource> ChunkByTime<'a, TChainSource> {
 	}
 }
 #[async_trait::async_trait]
-impl<'a, TChainSource: ChainSource> ChunkedByTime<'a> for ChunkByTime<'a, TChainSource> {
-	type ChainSource = TChainSource;
+impl<'a, TChainSource: ExternalChainSource> ChunkedByTime<'a> for ChunkByTime<'a, TChainSource> {
+	type Index = TChainSource::Index;
+	type Hash = TChainSource::Hash;
+	type Data = TChainSource::Data;
 
-	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::ChainSource>> {
+	type Client = TChainSource::Client;
+
+	type Chain = TChainSource::Chain;
+
+	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self>> {
 		let chain_source = self.chain_source;
 		self.epochs
 			.then(move |epoch| async move {
