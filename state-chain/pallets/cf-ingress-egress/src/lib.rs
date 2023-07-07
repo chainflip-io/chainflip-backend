@@ -176,6 +176,7 @@ pub mod pallet {
 		/// Provides callbacks for deposit lifecycle events.
 		type DepositHandler: DepositHandler<Self::TargetChain>;
 
+		/// Manages the chain specific deposit channel.
 		type DepositChannel: Member
 			+ Parameter
 			+ DepositChannel<
@@ -188,15 +189,12 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
+	/// Lookup table for addresses to correpsponding deposit channels.
 	#[pallet::storage]
-	pub type DepositAddressDetailsLookup<T: Config<I>, I: 'static = ()> = StorageMap<
-		_,
-		Twox64Concat,
-		TargetChainAccount<T, I>,
-		(DepositAddressDetails<T::TargetChain>, T::DepositChannel),
-		OptionQuery,
-	>;
+	pub type DepositChannelLookup<T: Config<I>, I: 'static = ()> =
+		StorageMap<_, Twox64Concat, TargetChainAccount<T, I>, T::DepositChannel, OptionQuery>;
 
+	/// Stores the channel action against the address
 	#[pallet::storage]
 	pub type ChannelActions<T: Config<I>, I: 'static = ()> = StorageMap<
 		_,
@@ -337,11 +335,11 @@ pub mod pallet {
 			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
 			for (_, deposit_address) in addresses {
 				if let Some(deposit_details) =
-					DepositAddressDetailsLookup::<T, I>::get(deposit_address.clone())
+					DepositChannelLookup::<T, I>::get(deposit_address.clone())
 				{
-					DepositAddressDetailsLookup::<T, I>::insert(
+					DepositChannelLookup::<T, I>::insert(
 						deposit_address,
-						(deposit_details.0, deposit_details.1.finalize()),
+						deposit_details.finalize(),
 					);
 				} else {
 					log::error!(
@@ -433,14 +431,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 									asset: _,
 									deposit_address,
 								} => {
-									if let Some(details) = DepositAddressDetailsLookup::<T, I>::get(
-										deposit_address.clone(),
-									) {
+									if let Some(details) =
+										DepositChannelLookup::<T, I>::get(deposit_address.clone())
+									{
 										let (updated_deposit_channel, skip) =
-											details.1.process_broadcast();
-										DepositAddressDetailsLookup::<T, I>::insert(
+											details.process_broadcast();
+										DepositChannelLookup::<T, I>::insert(
 											deposit_address.clone(),
-											(details.0, updated_deposit_channel),
+											updated_deposit_channel,
 										);
 										skip
 									} else {
@@ -472,13 +470,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					deposit_address,
 				} => {
 					if let Some(details) =
-						DepositAddressDetailsLookup::<T, I>::get(deposit_address.clone())
+						DepositChannelLookup::<T, I>::get(deposit_address.clone())
 					{
 						fetch_params.push(FetchAssetParams {
-							deposit_fetch_id: details.1.get_deposit_fetch_id(),
+							deposit_fetch_id: details.get_deposit_fetch_id(),
 							asset,
 						});
-						addresses.push((details.1.get_deposit_fetch_id(), deposit_address.clone()));
+						addresses.push((details.get_deposit_fetch_id(), deposit_address.clone()));
 					} else {
 						log::error!(
 							"Deposit address {:?} not found in DepositAddressDetailsLookup",
@@ -568,10 +566,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		amount: TargetChainAmount<T, I>,
 		tx_id: <T::TargetChain as ChainCrypto>::TransactionInId,
 	) -> DispatchResult {
-		let DepositAddressDetails { channel_id, source_asset } =
-			DepositAddressDetailsLookup::<T, I>::get(&deposit_address)
-				.ok_or(Error::<T, I>::InvalidDepositAddress)?
-				.0;
+		let deposit_channel = DepositChannelLookup::<T, I>::get(&deposit_address)
+			.ok_or(Error::<T, I>::InvalidDepositAddress)?;
+
+		let source_asset = deposit_channel.get_asset();
+		let channel_id = deposit_channel.get_channel_id();
+
 		ensure!(source_asset == asset, Error::<T, I>::AssetMismatch);
 
 		if amount < MinimumDeposit::<T, I>::get(asset) {
@@ -660,23 +660,20 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ChannelActions::<T, I>::insert(&new_address, channel_action);
 		T::DepositHandler::on_channel_opened(new_address.clone(), channel_id)?;
 
-		DepositAddressDetailsLookup::<T, I>::insert(
-			new_address.clone(),
-			(DepositAddressDetails { channel_id, source_asset }, deposit_address_wrapper),
-		);
+		DepositChannelLookup::<T, I>::insert(new_address.clone(), deposit_address_wrapper);
 
 		Ok((channel_id, new_address))
 	}
 
 	fn close_channel(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
 		ChannelActions::<T, I>::remove(&address);
-		if let Some(deposit_address_details) = DepositAddressDetailsLookup::<T, I>::get(&address) {
-			if deposit_address_details.1.maybe_recycle() {
-				AddressPool::<T, I>::insert(channel_id, deposit_address_details.1.clone());
+		if let Some(deposit_address_details) = DepositChannelLookup::<T, I>::get(&address) {
+			if deposit_address_details.maybe_recycle() {
+				AddressPool::<T, I>::insert(channel_id, deposit_address_details.clone());
 			}
 			Self::deposit_event(Event::<T, I>::StopWitnessing {
 				deposit_address: address,
-				source_asset: deposit_address_details.0.source_asset,
+				source_asset: deposit_address_details.get_asset(),
 			});
 		} else {
 			log::error!("This should not error since we create the DepositAddressDetailsLookup at the time of opening the channel")

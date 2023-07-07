@@ -37,6 +37,7 @@ pub enum DeploymentStatus {
 pub struct EthereumDepositAddress {
 	pub address: H160,
 	pub channel_id: u64,
+	pub asset: eth::Asset,
 	pub deployment_status: DeploymentStatus,
 	pub deposit_fetch_id: EthereumChannelId,
 }
@@ -75,11 +76,12 @@ impl DepositChannel<Ethereum> for EthereumDepositAddress {
 		let address = <AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
 			asset, channel_id,
 		)?;
-		Ok(EthereumDepositAddress {
+		Ok(Self {
 			address,
 			channel_id,
 			deployment_status: DeploymentStatus::Undeployed,
 			deposit_fetch_id: EthereumChannelId::UnDeployed(channel_id),
+			asset,
 		})
 	}
 
@@ -103,6 +105,14 @@ impl DepositChannel<Ethereum> for EthereumDepositAddress {
 			_ => (),
 		}
 		self
+	}
+
+	fn get_channel_id(&self) -> u64 {
+		self.channel_id
+	}
+
+	fn get_asset(&self) -> <Ethereum as Chain>::ChainAsset {
+		self.asset
 	}
 }
 

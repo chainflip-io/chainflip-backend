@@ -108,14 +108,14 @@ pub async fn start(
 		.expect("FLIP address must exist at genesis");
 
 	let eth_chain_deposit_addresses = state_chain_client
-		.storage_map::<pallet_cf_ingress_egress::DepositAddressDetailsLookup<
+		.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
 			state_chain_runtime::Runtime,
 			state_chain_runtime::EthereumInstance,
 		>>(initial_block_hash)
 		.await
 		.context("Failed to get initial deposit details")?
 		.into_iter()
-		.map(|(address, channel_details)| (channel_details.0.source_asset, address))
+		.map(|(address, channel_details)| (channel_details.asset, address))
 		.into_group_map();
 
 	fn monitored_addresses_from_all_eth(

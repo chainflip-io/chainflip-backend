@@ -35,6 +35,8 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 pub struct BitcoinDepositAddress {
 	pub address: ScriptPubkey,
 	pub deposit_fetch_id: BitcoinFetchId,
+	pub channel_id: u64,
+	pub asset: btc::Asset,
 }
 
 impl DepositChannel<Bitcoin> for BitcoinDepositAddress {
@@ -57,7 +59,7 @@ impl DepositChannel<Bitcoin> for BitcoinDepositAddress {
 		let address = <AddressDerivation as AddressDerivationApi<Bitcoin>>::generate_address(
 			asset, channel_id,
 		)?;
-		Ok(Self { address, deposit_fetch_id: BitcoinFetchId(channel_id) })
+		Ok(Self { address, deposit_fetch_id: BitcoinFetchId(channel_id), asset, channel_id })
 	}
 
 	fn maybe_recycle(&self) -> bool
@@ -65,6 +67,14 @@ impl DepositChannel<Bitcoin> for BitcoinDepositAddress {
 		Self: Sized,
 	{
 		false
+	}
+
+	fn get_channel_id(&self) -> u64 {
+		self.channel_id
+	}
+
+	fn get_asset(&self) -> <Bitcoin as Chain>::ChainAsset {
+		self.asset
 	}
 }
 

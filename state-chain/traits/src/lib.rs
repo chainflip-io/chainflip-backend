@@ -885,17 +885,14 @@ pub trait DepositChannel<C: Chain> {
 	type Address;
 	type DepositFetchId;
 	type AddressDerivation: AddressDerivationApi<C>;
-
+	/// Constructs a new deposit channel.
 	fn new(channel_id: u64, asset: C::ChainAsset) -> Result<Self, DispatchError>
 	where
 		Self: Sized;
-
-	/// Returns the actual address raw address.
+	/// Returns the actual address.
 	fn get_address(&self) -> Self::Address;
-
 	/// Returns the deposit fetch id.
 	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId;
-
 	/// Set the state of the
 	fn process_broadcast(self) -> (Self, bool)
 	where
@@ -903,17 +900,22 @@ pub trait DepositChannel<C: Chain> {
 	{
 		(self, false)
 	}
-
+	/// Gets called when a broadcast succeeds.
 	fn finalize(self) -> Self
 	where
 		Self: Sized,
 	{
 		self
 	}
+	/// CHecks if a address should get reused or not.
 	fn maybe_recycle(&self) -> bool
 	where
 		Self: Sized,
 	{
 		true
 	}
+	/// Returns the channel id.
+	fn get_channel_id(&self) -> u64;
+	/// Returns the asset.
+	fn get_asset(&self) -> C::ChainAsset;
 }

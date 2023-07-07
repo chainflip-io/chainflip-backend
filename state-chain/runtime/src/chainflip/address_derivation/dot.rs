@@ -56,6 +56,7 @@ pub struct PolkadotDepositAddress {
 	pub channel_id: PolkadotChannelId,
 	pub address: PolkadotAccountId,
 	pub deposit_fetch_id: PolkadotChannelId,
+	pub asset: dot::Asset,
 }
 
 impl DepositChannel<Polkadot> for PolkadotDepositAddress {
@@ -78,7 +79,15 @@ impl DepositChannel<Polkadot> for PolkadotDepositAddress {
 		let address = <AddressDerivation as AddressDerivationApi<Polkadot>>::generate_address(
 			asset, channel_id,
 		)?;
-		Ok(PolkadotDepositAddress { channel_id, address, deposit_fetch_id: channel_id })
+		Ok(Self { channel_id, address, deposit_fetch_id: channel_id, asset: asset.into() })
+	}
+
+	fn get_channel_id(&self) -> u64 {
+		self.channel_id
+	}
+
+	fn get_asset(&self) -> <Polkadot as Chain>::ChainAsset {
+		self.asset.into()
 	}
 }
 

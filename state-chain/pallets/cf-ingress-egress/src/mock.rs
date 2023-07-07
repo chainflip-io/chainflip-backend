@@ -97,6 +97,7 @@ pub mod eth_mock_deposit_channel {
 		pub channel_id: u64,
 		pub deployment_status: DeploymentStatus,
 		pub deposit_fetch_id: EthereumChannelId,
+		pub asset: <Ethereum as Chain>::ChainAsset,
 	}
 
 	impl DepositChannel<Ethereum> for MockDepositChannel {
@@ -135,6 +136,7 @@ pub mod eth_mock_deposit_channel {
 			Ok(Self {
 				address,
 				channel_id,
+				asset,
 				deployment_status: DeploymentStatus::Undeployed,
 				deposit_fetch_id: EthereumChannelId::UnDeployed(channel_id),
 			})
@@ -160,6 +162,14 @@ pub mod eth_mock_deposit_channel {
 				_ => (),
 			}
 			self
+		}
+
+		fn get_channel_id(&self) -> u64 {
+			self.channel_id
+		}
+
+		fn get_asset(&self) -> <Ethereum as Chain>::ChainAsset {
+			self.asset
 		}
 	}
 }

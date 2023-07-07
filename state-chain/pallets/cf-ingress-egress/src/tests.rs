@@ -1,7 +1,7 @@
 use crate::{
-	mock::*, AddressPool, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DepositAddressDetailsLookup, DepositWitness, DisabledEgressAssets, Error, Event as PalletEvent,
-	FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
+	mock::*, AddressPool, ChannelAction, ChannelIdCounter, CrossChainMessage, DepositChannelLookup,
+	DepositWitness, DisabledEgressAssets, Error, Event as PalletEvent, FetchOrTransfer,
+	MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 };
 use cf_chains::{ExecutexSwapAndCall, TransferAssetParams};
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
@@ -28,15 +28,15 @@ fn expect_size_of_address_pool(size: usize) {
 }
 
 fn mark_as_deployed(address: H160, channel_id: u64) {
-	let deposit_channel =
-		DepositAddressDetailsLookup::<Test>::get(address).expect("Channel not found");
+	let deposit_channel = DepositChannelLookup::<Test>::get(address).expect("Channel not found");
 	let new_eth_depo_addr = eth_mock_deposit_channel::MockDepositChannel {
 		address,
 		channel_id,
 		deployment_status: eth_mock_deposit_channel::DeploymentStatus::Deployed,
-		deposit_fetch_id: deposit_channel.1.get_deposit_fetch_id(),
+		deposit_fetch_id: deposit_channel.get_deposit_fetch_id(),
+		asset: deposit_channel.get_asset(),
 	};
-	DepositAddressDetailsLookup::<Test>::insert(address, (deposit_channel.0, new_eth_depo_addr));
+	DepositChannelLookup::<Test>::insert(address, new_eth_depo_addr);
 }
 
 #[test]
@@ -448,10 +448,6 @@ fn reused_address_channel_id_matches() {
 			Ethereum,
 		>>::generate_address(eth::Asset::Eth, INTENT_ID)
 		.unwrap();
-		// let new_address = <<Test as crate::Config>::DepositChannel as DepositChannel::new(
-		// 	INTENT_ID,
-		// 	eth_address,
-		// ).unwrap();
 		let new_address =
 			<<Test as crate::Config>::DepositChannel as DepositChannel<Ethereum>>::new(
 				INTENT_ID,
@@ -598,8 +594,6 @@ fn multi_use_deposit_address_different_blocks() {
 			channel
 		})
 		.then_execute_at_next_block(|(channel_id, deposit_address)| {
-			// Set the address to deployed.
-			// mark_as_deployed(deposit_address, channel_id);
 			// Closing the channel should invalidate the deposit address.
 			IngressEgress::close_channel(channel_id, deposit_address);
 			assert_noop!(
