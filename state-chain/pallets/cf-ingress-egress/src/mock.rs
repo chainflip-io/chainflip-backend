@@ -18,7 +18,7 @@ use cf_traits::{
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
 	},
-	AddressDerivationApi, DepositApi, DepositChannel, DepositHandler,
+	AddressDerivationApi, DepositApi, DepositChannel, DepositHandler, GetBlockHeight,
 };
 use codec::{Decode, Encode};
 use frame_support::traits::{OriginTrait, UnfilteredDispatchable};
@@ -80,7 +80,6 @@ impl DepositHandler<Ethereum> for MockDepositHandler {}
 
 pub type MockEgressBroadcaster =
 	MockBroadcaster<(MockEthereumApiCall<MockEthEnvironment>, RuntimeCall)>;
-
 pub mod eth_mock_deposit_channel {
 	use super::*;
 
@@ -174,6 +173,16 @@ pub mod eth_mock_deposit_channel {
 	}
 }
 
+pub struct BlockNumberProvider;
+
+pub const OPEN_INGRESS_AT: u64 = 420;
+
+impl GetBlockHeight<Ethereum> for BlockNumberProvider {
+	fn get_block_height() -> u64 {
+		OPEN_INGRESS_AT
+	}
+}
+
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
@@ -186,6 +195,7 @@ impl crate::Config for Test {
 	type DepositHandler = MockDepositHandler;
 	type CcmHandler = MockCcmHandler;
 	type DepositChannel = eth_mock_deposit_channel::MockDepositChannel;
+	type ChainTracking = BlockNumberProvider;
 	type WeightInfo = ();
 }
 

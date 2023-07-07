@@ -3,7 +3,8 @@ import { Asset } from '@chainflip-io/cli/.';
 import { newSwap } from './new_swap';
 import { fund } from './fund';
 import { getBalance } from './get_balance';
-import { getChainflipApi, observeBalanceIncrease, observeEvent } from '../shared/utils';
+import { getChainflipApi, observeBalanceIncrease, observeEvent, observeCcmReceived, encodeBtcAddressForContract } from '../shared/utils';
+import { CcmDepositMetadata } from "../shared/new_swap";
 
 function extractDestinationAddress(swapInfo: any, destToken: Asset): string | undefined {
     const token = (destToken === 'USDC') ? 'ETH' : destToken;
@@ -25,7 +26,7 @@ function encodeDestinationAddress(address: string, destToken: Asset): string {
     return destAddress;
 }
 
-export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS: string, swapTag?: string) {
+export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS: string, swapTag?: string, messageMetadata?: CcmDepositMetadata) {
     const FEE = 100;
 
     const tag = swapTag ?? '';
@@ -39,14 +40,17 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
             if (!destAddress) return false;
 
             const destAddressEncoded = encodeDestinationAddress(destAddress, destToken);
+            
+            const destTokenMatches = swapInfo[4].charAt(0) + swapInfo[4].slice(1).toUpperCase() == destToken;
+            const sourceTokenMatches = swapInfo[3].charAt(0) + swapInfo[3].slice(1).toUpperCase() == sourceToken;
+            const destAddressMatches = destAddressEncoded.toLowerCase() === ADDRESS.toLowerCase();
 
-            return destAddressEncoded.toLowerCase() === ADDRESS.toLowerCase()
+            return destAddressMatches && destTokenMatches && sourceTokenMatches;
         });
 
+    await newSwap(sourceToken, destToken, ADDRESS, FEE, messageMetadata);
 
-    await newSwap(sourceToken, destToken, ADDRESS, FEE);
-
-    console.log(`${tag} The args are:  ${sourceToken} ${destToken} ${ADDRESS} ${FEE}`);
+    console.log(`${tag} The args are:  ${sourceToken} ${destToken} ${ADDRESS} ${FEE} ${messageMetadata ? `someMessage` : ''}`);
 
     let depositAddressToken = sourceToken;
     if (sourceToken === 'USDC') {
@@ -58,12 +62,9 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
     const destAddress = extractDestinationAddress(swapInfo, destToken);
 
     console.log(`${tag} Destination address is: ${destAddress}`);
-    console.log(`${tag} The swap address is: ${swapAddress}`);
 
     if (sourceToken === 'BTC') {
-        console.log("Doing BTC address conversion");
-        swapAddress = swapAddress.replace(/^0x/, '');
-        swapAddress = Buffer.from(swapAddress, 'hex').toString();
+        swapAddress = encodeBtcAddressForContract(swapAddress);
     }
 
     console.log(`${tag} Swap address: ${swapAddress}`);
@@ -74,19 +75,24 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
 
     const swapExecutedHandle = observeEvent('swapping:SwapExecuted', chainflipApi);
 
+    const ccmEventEmitted = messageMetadata
+    ? observeCcmReceived(sourceToken, destToken, ADDRESS, messageMetadata)
+    : Promise.resolve();
+
     await fund(sourceToken, swapAddress.toLowerCase())
     console.log(`${tag} Funded the address`);
 
     await swapExecutedHandle;
-
+  
     console.log(`${tag} Waiting for balance to update`);
 
     try {
-        const newBalance = await observeBalanceIncrease(destToken, ADDRESS, OLD_BALANCE);
+        const [newBalance,] = await Promise.all([observeBalanceIncrease(destToken, ADDRESS, OLD_BALANCE), ccmEventEmitted]);
+
         console.log(`${tag} Swap success! New balance: ${newBalance}!`);
     }
     catch (err) {
-        console.error(`${tag}: ${err}`);
+        throw new Error(`${tag} ${err}`);
     }
 
 }

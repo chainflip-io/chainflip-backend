@@ -165,9 +165,10 @@ pub async fn start(
 			// We create a new RPC on each call to the future, since one common reason for
 			// failure is that the WS connection has been dropped. This ensures that we create a
 			// new client, and therefore create a new connection.
-			let ws_rpc = EthWsRpcClient::new(&eth_settings, Some(expected_chain_id))
-				.await
-				.map_err(|err| tracing::error!("Failed to create EthWsRpcClient: {:?}", err))?;
+			let ws_rpc =
+				EthWsRpcClient::new(&eth_settings.ws_node_endpoint, Some(expected_chain_id))
+					.await
+					.map_err(|err| tracing::error!("Failed to create EthWsRpcClient: {:?}", err))?;
 
 			let http_rpc = EthHttpRpcClient::new(&eth_settings, Some(expected_chain_id))
 				.await

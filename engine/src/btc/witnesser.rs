@@ -21,6 +21,7 @@ use cf_chains::{
 };
 use cf_primitives::{chains::assets::btc, EpochIndex};
 use futures::StreamExt;
+use pallet_cf_chain_tracking::ChainState;
 use pallet_cf_ingress_egress::DepositWitness;
 use state_chain_runtime::BitcoinInstance;
 use std::sync::Arc;
@@ -158,7 +159,6 @@ where
 					call: Box::new(state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
 						pallet_cf_broadcast::Call::transaction_succeeded {
 							tx_out_id: tx_hash,
-							block_number,
 							signer_id: self.current_pubkey.clone(),
 							// TODO: Ideally we can submit an empty type here. For Bitcoin
 							// and some other chains fee tracking is not necessary. PRO-370.
@@ -176,9 +176,11 @@ where
 				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(state_chain_runtime::RuntimeCall::BitcoinChainTracking(
 						pallet_cf_chain_tracking::Call::update_chain_state {
-							state: BitcoinTrackedData {
+							new_chain_state: ChainState {
 								block_height: block_number,
-								btc_fee_info: BitcoinFeeInfo::new(fee_rate_sats_per_kilo_byte),
+								tracked_data: BitcoinTrackedData {
+									btc_fee_info: BitcoinFeeInfo::new(fee_rate_sats_per_kilo_byte),
+								},
 							},
 						},
 					)),

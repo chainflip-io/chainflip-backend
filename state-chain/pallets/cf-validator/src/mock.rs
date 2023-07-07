@@ -2,8 +2,9 @@
 
 use super::*;
 use crate as pallet_cf_validator;
+use crate::PalletSafeMode;
 use cf_traits::{
-	impl_mock_chainflip,
+	impl_mock_chainflip, impl_mock_runtime_safe_mode,
 	mocks::{
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 		vault_rotator::MockVaultRotatorA,
@@ -196,12 +197,12 @@ impl BidderProvider for MockBidderProvider {
 	}
 }
 
+impl_mock_runtime_safe_mode!(validator: PalletSafeMode);
 impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = PalletOffence;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
 	type MinEpoch = MinEpoch;
-	type ValidatorWeightInfo = ();
 	type VaultRotator = MockVaultRotatorA;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
 	type BidderProvider = MockBidderProvider;
@@ -209,6 +210,8 @@ impl Config for Test {
 	type Bonder = MockBonder;
 	type ReputationResetter = MockReputationResetter<Self>;
 	type KeygenQualification = QualifyAll<ValidatorId>;
+	type SafeMode = MockRuntimeSafeMode;
+	type ValidatorWeightInfo = ();
 }
 
 /// Session pallet requires a set of validators at genesis.
@@ -261,7 +264,6 @@ impl TestExternalitiesWithCheck {
 	pub fn execute_with_unchecked_invariants<R>(&mut self, execute: impl FnOnce() -> R) -> R {
 		self.ext.execute_with(|| {
 			System::set_block_number(1);
-			QualifyAll::<u64>::except([UNQUALIFIED_NODE]);
 			execute()
 		})
 	}

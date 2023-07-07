@@ -188,3 +188,58 @@ mod test_restart_on_failure {
 		assert_eq!(*restart_count.lock().unwrap(), TARGET);
 	}
 }
+
+pub struct Signaller<T> {
+	sender: async_broadcast::Sender<T>,
+}
+impl<T: Clone + Send + 'static> Signaller<T> {
+	pub fn signal(self, t: T) {
+		assert!(matches!(
+			self.sender.try_broadcast(t),
+			Ok(None) | Err(async_broadcast::TrySendError::Closed(_))
+		));
+	}
+}
+
+#[derive(Clone)]
+pub enum Signal<T> {
+	Pending(async_broadcast::Receiver<T>),
+	Signalled(T),
+}
+impl<T: Clone + Send + 'static> Signal<T> {
+	pub fn new() -> (Signaller<T>, Self) {
+		let (sender, receiver) = async_broadcast::broadcast(1);
+
+		(Signaller { sender }, Self::Pending(receiver))
+	}
+
+	pub fn signalled(t: T) -> Self {
+		Self::Signalled(t)
+	}
+
+	pub fn get(&mut self) -> Option<&T> {
+		match self {
+			Signal::Pending(receiver) => match receiver.try_recv() {
+				Ok(t) => {
+					*self = Self::Signalled(t);
+					match self {
+						Signal::Pending(_) => unreachable!(),
+						Signal::Signalled(t) => Some(t),
+					}
+				},
+				Err(_err) => None,
+			},
+			Signal::Signalled(t) => Some(t),
+		}
+	}
+
+	pub async fn wait(self) -> T {
+		match self {
+			Signal::Pending(mut receiver) => match receiver.recv().await {
+				Ok(t) => t,
+				Err(_err) => futures::future::pending().await,
+			},
+			Signal::Signalled(t) => t,
+		}
+	}
+}

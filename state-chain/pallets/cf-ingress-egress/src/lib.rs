@@ -15,6 +15,8 @@ pub use weights::WeightInfo;
 
 use cf_primitives::{BasisPoints, EgressCounter, EgressId, ForeignChain};
 
+use cf_traits::GetBlockHeight;
+
 use cf_chains::{address::ForeignChainAddress, CcmDepositMetadata};
 
 use cf_chains::{
@@ -94,8 +96,9 @@ pub mod pallet {
 	pub(crate) type TargetChainAsset<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAsset;
 	pub(crate) type TargetChainAccount<T, I> =
 		<<T as Config<I>>::TargetChain as Chain>::ChainAccount;
-
 	pub(crate) type TargetChainAmount<T, I> = <<T as Config<I>>::TargetChain as Chain>::ChainAmount;
+	pub(crate) type TargetChainBlockNumber<T, I> =
+		<<T as Config<I>>::TargetChain as Chain>::ChainBlockNumber;
 
 	pub(crate) type DepositFetchIdOf<T, I> =
 		<<T as Config<I>>::TargetChain as Chain>::DepositFetchId;
@@ -112,7 +115,14 @@ pub mod pallet {
 	pub struct DepositAddressDetails<C: Chain> {
 		pub channel_id: ChannelId,
 		pub source_asset: C::ChainAsset,
+		pub opened_at: C::ChainBlockNumber,
 	}
+
+	// #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	// pub struct DepositChannelDetails<C: Chain, Channel: DepositChannel<C>> {
+	// 	pub deposit_channel: Channel,
+	// 	pub opened_at: C::ChainBlockNumber,
+	// }
 
 	/// Determines the action to take when a deposit is made to a channel.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -165,6 +175,9 @@ pub mod pallet {
 
 		/// The type of the chain-native transaction.
 		type ChainApiCall: AllBatch<Self::TargetChain> + ExecutexSwapAndCall<Self::TargetChain>;
+
+		/// Get the latest block height of the target chain via Chain Tracking.
+		type ChainTracking: GetBlockHeight<Self::TargetChain>;
 
 		/// A broadcaster instance.
 		type Broadcaster: Broadcaster<
@@ -250,6 +263,7 @@ pub mod pallet {
 		StartWitnessing {
 			deposit_address: TargetChainAccount<T, I>,
 			source_asset: TargetChainAsset<T, I>,
+			opened_at: TargetChainBlockNumber<T, I>,
 		},
 		StopWitnessing {
 			deposit_address: TargetChainAccount<T, I>,
@@ -261,7 +275,7 @@ pub mod pallet {
 			amount: TargetChainAmount<T, I>,
 			tx_id: <T::TargetChain as ChainCrypto>::TransactionInId,
 		},
-		AssetEgressDisabled {
+		AssetEgressStatusChanged {
 			asset: TargetChainAsset<T, I>,
 			disabled: bool,
 		},
@@ -356,22 +370,32 @@ pub mod pallet {
 		///
 		/// ## Events
 		///
-		/// - [On update](Event::AssetEgressDisabled)
+		/// - [On update](Event::AssetEgressStatusChanged)
 		#[pallet::weight(T::WeightInfo::disable_asset_egress())]
-		pub fn disable_asset_egress(
+		pub fn enable_or_disable_egress(
 			origin: OriginFor<T>,
 			asset: TargetChainAsset<T, I>,
-			disabled: bool,
+			set_disabled: bool,
 		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			if disabled {
+			let is_currently_disabled = DisabledEgressAssets::<T, I>::contains_key(asset);
+
+			let do_disable = !is_currently_disabled && set_disabled;
+			let do_enable = is_currently_disabled && !set_disabled;
+
+			if do_disable {
 				DisabledEgressAssets::<T, I>::insert(asset, ());
-			} else {
+			} else if do_enable {
 				DisabledEgressAssets::<T, I>::remove(asset);
 			}
 
-			Self::deposit_event(Event::<T, I>::AssetEgressDisabled { asset, disabled });
+			if do_disable || do_enable {
+				Self::deposit_event(Event::<T, I>::AssetEgressStatusChanged {
+					asset,
+					disabled: set_disabled,
+				});
+			}
 
 			Ok(())
 		}
@@ -636,6 +660,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	}
 
 	/// Opens a channel for the given asset and registers it with the given action.
+	/// Emits the `StartWitnessing` event so CFEs can start watching for deposits to the address.
 	///
 	/// May re-use an existing deposit address, depending on chain configuration.
 	fn open_channel(
@@ -659,6 +684,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
 		ChannelActions::<T, I>::insert(&new_address, channel_action);
 		T::DepositHandler::on_channel_opened(new_address.clone(), channel_id)?;
+
+		let opened_at = T::ChainTracking::get_block_height();
+
+		Self::deposit_event(Event::StartWitnessing {
+			deposit_address: deposit_address_wrapper.get_address(),
+			source_asset,
+			opened_at,
+		});
 
 		DepositChannelLookup::<T, I>::insert(new_address.clone(), deposit_address_wrapper);
 
@@ -735,11 +768,6 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		let (channel_id, deposit_address) =
 			Self::open_channel(source_asset, ChannelAction::LiquidityProvision { lp_account })?;
 
-		Self::deposit_event(Event::StartWitnessing {
-			deposit_address: deposit_address.clone(),
-			source_asset,
-		});
-
 		Ok((channel_id, deposit_address.into()))
 	}
 
@@ -768,11 +796,6 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 				},
 			},
 		)?;
-
-		Self::deposit_event(Event::StartWitnessing {
-			deposit_address: deposit_address.clone(),
-			source_asset,
-		});
 
 		Ok((channel_id, deposit_address.into()))
 	}

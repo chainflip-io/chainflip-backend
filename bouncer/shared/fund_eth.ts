@@ -44,11 +44,11 @@ export async function fundEth(ethereumAddress: string, ethAmount: string) {
     };
 
     const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
-    await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string, ((error, hash) => {
+    const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string, ((error, hash) => {
         if (error) {
             console.error("Eth transaction failure:", error);
         }
     }));
 
-
+    console.log("Transaction complete, tx_hash: " + receipt.transactionHash + " blockNumber: " + receipt.blockNumber + " blockHash: " + receipt.blockHash);
 }

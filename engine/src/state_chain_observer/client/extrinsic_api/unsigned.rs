@@ -68,6 +68,18 @@ impl UnsignedExtrinsicClient {
 										);
 										expected_hash
 									},
+									// POOL_TEMPORARILY_BANNED error is not entirely understood, we
+									// believe it has a similiar meaning to POOL_ALREADY_IMPORTED,
+									// but we don't know. We believe there maybe cases where we need
+									// to resubmit if this error occurs.
+									jsonrpsee::core::Error::Call(
+										jsonrpsee::types::error::CallError::Custom(ref obj),
+									) if obj.code() == 1012 => {
+										tracing::debug!(
+											"Transaction is temporarily banned with tx_hash: {expected_hash:#x}."
+										);
+										expected_hash
+									},
 									_ => return Err(rpc_err.into()),
 								}
 							},

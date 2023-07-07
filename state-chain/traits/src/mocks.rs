@@ -25,7 +25,6 @@ pub mod qualify_node;
 pub mod reputation_resetter;
 pub mod safe_mode;
 pub mod signer_nomination;
-pub mod system_state_info;
 pub mod threshold_signer;
 pub mod time_source;
 pub mod vault_rotator;
@@ -39,7 +38,6 @@ macro_rules! impl_mock_chainflip {
 			mocks::{
 				account_role_registry::MockAccountRoleRegistry,
 				ensure_origin_mock::NeverFailingOriginCheck, funding_info::MockFundingInfo,
-				system_state_info::MockSystemStateInfo,
 			},
 			Chainflip,
 		};
@@ -59,7 +57,6 @@ macro_rules! impl_mock_chainflip {
 			type EnsureWitnessedAtCurrentEpoch = NeverFailingOriginCheck<Self>;
 			type EnsureGovernance = NeverFailingOriginCheck<Self>;
 			type EpochInfo = MockEpochInfo;
-			type SystemState = MockSystemStateInfo;
 			type AccountRoleRegistry = MockAccountRoleRegistry;
 			type FundingInfo = MockFundingInfo<Self>;
 		}

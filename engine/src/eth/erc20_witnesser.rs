@@ -1,34 +1,21 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use cf_primitives::{chains::assets::eth, EpochIndex, EthAmount};
+use cf_primitives::{chains::assets::eth, EpochIndex};
 use state_chain_runtime::EthereumInstance;
 use tokio::sync::Mutex;
-use web3::{
-	ethabi::{self, RawLog},
-	types::H160,
-};
+use web3::types::H160;
+
+use ethers::prelude::*;
 
 use crate::{
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi, witnesser::ItemMonitor,
 };
 
-use super::{
-	core_h160, core_h256, event::Event, rpc::EthRpcApi, utils::decode_log_param, BlockWithItems,
-	DecodeLogClosure, EthContractWitnesser, SignatureAndEvent,
-};
-use pallet_cf_ingress_egress::DepositWitness;
+abigen!(Erc20, "eth-contract-abis/IERC20.json");
 
-// These are the two events that must be supported as part of the ERC20 standard
-// https://eips.ethereum.org/EIPS/eip-20#events
-#[derive(Debug)]
-pub enum Erc20Event {
-	Transfer { from: ethabi::Address, to: ethabi::Address, value: EthAmount },
-	Approval { owner: ethabi::Address, spender: ethabi::Address, value: EthAmount },
-	// A contract adhering to the ERC20 standard may also emit *more* than the standard events.
-	// We don't care about these ones.
-	Other(RawLog),
-}
+use super::{core_h256, event::Event, rpc::EthRpcApi, BlockWithItems, EthContractWitnesser};
+use pallet_cf_ingress_egress::DepositWitness;
 
 use anyhow::Result;
 
@@ -37,7 +24,6 @@ use anyhow::Result;
 pub struct Erc20Witnesser {
 	pub deployed_address: H160,
 	asset: eth::Asset,
-	contract: ethabi::Contract,
 	address_monitor: Arc<Mutex<ItemMonitor<sp_core::H160, sp_core::H160, ()>>>,
 }
 
@@ -48,18 +34,13 @@ impl Erc20Witnesser {
 		asset: eth::Asset,
 		address_monitor: Arc<Mutex<ItemMonitor<sp_core::H160, sp_core::H160, ()>>>,
 	) -> Self {
-		Self {
-			deployed_address,
-			asset,
-			contract: ethabi::Contract::load(include_bytes!("abis/IERC20.json").as_ref()).unwrap(),
-			address_monitor,
-		}
+		Self { deployed_address, asset, address_monitor }
 	}
 }
 
 #[async_trait]
 impl EthContractWitnesser for Erc20Witnesser {
-	type EventParameters = Erc20Event;
+	type EventParameters = Erc20Events;
 
 	fn contract_name(&self) -> String {
 		format!("ERC20-{:?}", self.asset)
@@ -86,11 +67,13 @@ impl EthContractWitnesser for Erc20Witnesser {
 			.block_items
 			.into_iter()
 			.filter_map(|event| match event.event_parameters {
-				Erc20Event::Transfer { to, value, from: _ }
-					if address_monitor.contains(&core_h160(to)) =>
+				Erc20Events::TransferFilter(TransferFilter { to, value, from: _ })
+					if address_monitor.contains(&to) =>
 					Some(DepositWitness {
-						deposit_address: core_h160(to),
-						amount: value,
+						deposit_address: to,
+						amount: value.try_into().expect(
+							"Any ERC20 tokens we support should have amounts that fit into a u128",
+						),
 						asset: self.asset,
 						tx_id: core_h256(event.tx_hash),
 					}),
@@ -117,188 +100,5 @@ impl EthContractWitnesser for Erc20Witnesser {
 
 	fn contract_address(&self) -> H160 {
 		self.deployed_address
-	}
-
-	fn decode_log_closure(&self) -> Result<DecodeLogClosure<Self::EventParameters>> {
-		let transfer = SignatureAndEvent::new(&self.contract, "Transfer")?;
-		let approval = SignatureAndEvent::new(&self.contract, "Approval")?;
-
-		Ok(Box::new(
-			move |event_signature: web3::types::H256,
-			      raw_log: RawLog|
-			      -> Result<Self::EventParameters> {
-				Ok(if event_signature == transfer.signature {
-					let log = transfer.event.parse_log(raw_log)?;
-					Erc20Event::Transfer {
-						from: decode_log_param(&log, "from")?,
-						to: decode_log_param(&log, "to")?,
-						value: decode_log_param::<ethabi::Uint>(&log, "value")?
-							.try_into()
-							.expect("Transfer value should fit u128"),
-					}
-				} else if event_signature == approval.signature {
-					let log = approval.event.parse_log(raw_log)?;
-					Erc20Event::Approval {
-						owner: decode_log_param(&log, "owner")?,
-						spender: decode_log_param(&log, "spender")?,
-						value: decode_log_param::<ethabi::Uint>(&log, "value")?
-							.try_into()
-							// Approvals can fail to fit in a u128 - it's common to approve
-							// `U256::MAX`. If parsing fails, we saturate.
-							.unwrap_or(u128::MAX),
-					}
-				} else {
-					Erc20Event::Other(raw_log)
-				})
-			},
-		))
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use std::str::FromStr;
-
-	use web3::types::H256;
-
-	use super::*;
-
-	// Convenience test to allow us to generate the signatures of the events, allowing us
-	// to manually query the contract for the events
-	// current signatures below:
-	// transfer: 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef
-	// approval: 0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925
-	#[test]
-	fn generate_signatures() {
-		let contract = Erc20Witnesser::new(
-			H160::default(),
-			eth::Asset::Flip,
-			Arc::new(Mutex::new(ItemMonitor::new(Default::default()).1)),
-		)
-		.contract;
-
-		let transfer = SignatureAndEvent::new(&contract, "Transfer").unwrap();
-		println!("transfer: {:?}", transfer.signature);
-		let approval = SignatureAndEvent::new(&contract, "Approval").unwrap();
-		println!("approval: {:?}", approval.signature);
-	}
-
-	#[test]
-	fn test_load_contract() {
-		Erc20Witnesser::new(
-			H160::default(),
-			eth::Asset::Flip,
-			Arc::new(Mutex::new(ItemMonitor::new(Default::default()).1)),
-		);
-	}
-
-	#[test]
-	fn test_transfer_log_parsing() {
-		let erc20_witnesser = Erc20Witnesser::new(
-			H160::default(),
-			eth::Asset::Flip,
-			Arc::new(Mutex::new(ItemMonitor::new(Default::default()).1)),
-		);
-		let decode_log = erc20_witnesser.decode_log_closure().unwrap();
-
-		let transfer_event_signature =
-			H256::from_str("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
-				.unwrap();
-
-		// RawLog taken from event on FLIP contract (which adheres to ERC20 standard)
-		match decode_log(
-			transfer_event_signature,
-			RawLog {
-				topics: vec![
-					transfer_event_signature,
-					H256::from_str(
-						"0x0000000000000000000000000000000000000000000000000000000000000000",
-					)
-					.unwrap(),
-					H256::from_str(
-						"0x0000000000000000000000009fe46736679d2d9a65f0992f2272de9f3c7fa6e0",
-					)
-					.unwrap(),
-				],
-				data: hex::decode(
-					"0000000000000000000000000000000000000000000034f086f3b33b68400000",
-				)
-				.unwrap(),
-			},
-		)
-		.unwrap()
-		{
-			Erc20Event::Transfer { from, to, value } => {
-				assert_eq!(
-					from,
-					web3::types::H160::from_str("0x0000000000000000000000000000000000000000")
-						.unwrap(),
-					"from address not matching"
-				);
-				assert_eq!(
-					to,
-					web3::types::H160::from_str("0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0")
-						.unwrap(),
-					"to address not matching"
-				);
-				assert_eq!(value, 250000000000000000000000u128, "value not matching");
-			},
-			_ => panic!("Expected Erc20Eevent::Transfer, got a different variant"),
-		}
-	}
-
-	#[test]
-	fn test_approval_log_parsing() {
-		let erc20_witnesser = Erc20Witnesser::new(
-			H160::default(),
-			eth::Asset::Flip,
-			Arc::new(Mutex::new(ItemMonitor::new(Default::default()).1)),
-		);
-		let decode_log = erc20_witnesser.decode_log_closure().unwrap();
-
-		let approval_event_signature =
-			H256::from_str("0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925")
-				.unwrap();
-
-		// RawLog taken from event on FLIP contract (which adheres to ERC20 standard)
-		match decode_log(
-			approval_event_signature,
-			RawLog {
-				topics: vec![
-					approval_event_signature,
-					H256::from_str(
-						"0x00000000000000000000000070997970c51812dc3a010c7d01b50e0d17dc79c8",
-					)
-					.unwrap(),
-					H256::from_str(
-						"0x0000000000000000000000009fe46736679d2d9a65f0992f2272de9f3c7fa6e0",
-					)
-					.unwrap(),
-				],
-				data: hex::decode(
-					"000000000000000000000000000000000000000000084595161401484a000000",
-				)
-				.unwrap(),
-			},
-		)
-		.unwrap()
-		{
-			Erc20Event::Approval { owner, spender, value } => {
-				assert_eq!(
-					owner,
-					web3::types::H160::from_str("0x70997970c51812dc3a010c7d01b50e0d17dc79c8")
-						.unwrap(),
-					"owner address not matching"
-				);
-				assert_eq!(
-					spender,
-					web3::types::H160::from_str("0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0")
-						.unwrap(),
-					"spender address not matching"
-				);
-				assert_eq!(value, 10000000000000000000000000u128, "value not matching");
-			},
-			_ => panic!("Expected Erc20Event::Approval, got a different variant"),
-		}
 	}
 }

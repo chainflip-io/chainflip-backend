@@ -150,7 +150,7 @@ benchmarks_instance_pallet! {
 	vault_key_rotated {
 		let new_public_key = AggKeyFor::<T, I>::benchmark_value();
 		PendingVaultRotation::<T, I>::put(
-			VaultRotationStatus::<T, I>::AwaitingRotation { new_public_key },
+			VaultRotationStatus::<T, I>::AwaitingActivation { new_public_key },
 		);
 		let call = Call::<T, I>::vault_key_rotated {
 			block_number: 5u32.into(),

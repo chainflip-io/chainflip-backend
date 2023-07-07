@@ -42,4 +42,5 @@ benchmarks! {
 	verify {
 		assert_eq!(RuntimeSafeMode::<T>::get(), SafeMode::CODE_RED);
 	}
+	impl_benchmark_test_suite!(Pallet, crate::mock::new_test_ext(), crate::mock::Test);
 }

@@ -9,6 +9,7 @@ use cf_primitives::{chains::assets, EpochIndex, PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use frame_support::scale_info::TypeInfo;
 use futures::{stream, Stream, StreamExt, TryStreamExt};
+use pallet_cf_chain_tracking::ChainState;
 use pallet_cf_ingress_egress::DepositWitness;
 use sp_core::H256;
 use state_chain_runtime::PolkadotInstance;
@@ -317,9 +318,9 @@ where
 				pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(state_chain_runtime::RuntimeCall::PolkadotChainTracking(
 						pallet_cf_chain_tracking::Call::update_chain_state {
-							state: dot::PolkadotTrackedData {
+							new_chain_state: ChainState {
 								block_height: block_number,
-								median_tip,
+								tracked_data: dot::PolkadotTrackedData { median_tip },
 							},
 						},
 					)),
@@ -370,7 +371,6 @@ where
 													PolkadotInstance,
 												>::transaction_succeeded {
 													tx_out_id: signature,
-													block_number,
 													signer_id: self.vault_account,
 													tx_fee,
 												}
@@ -445,7 +445,7 @@ where
 		let dot_client_c = self.dot_client.clone();
 		let block_head_stream_from =
 			block_head_stream_from(from_block, safe_head_stream, move |block_number| {
-				let mut dot_client = dot_client_c.clone();
+				let dot_client = dot_client_c.clone();
 				Box::pin(async move {
 					let block_hash = dot_client
 						.block_hash(block_number)
@@ -460,7 +460,7 @@ where
 		// block
 		let dot_client_c = self.dot_client.clone();
 		let block_events_stream = take_while_ok(block_head_stream_from.then(move |mini_header| {
-			let mut dot_client = dot_client_c.clone();
+			let dot_client = dot_client_c.clone();
 			debug!("Fetching Polkadot events for block: {}", mini_header.block_number);
 			// TODO: This will not work if the block we are querying metadata has
 			// different metadata than the latest block since this client fetches
@@ -470,7 +470,10 @@ where
 				Result::<_, anyhow::Error>::Ok((
 					mini_header.block_hash,
 					mini_header.block_number,
-					dot_client.events(mini_header.block_hash).await?,
+					dot_client.events(mini_header.block_hash).await?.ok_or(anyhow::anyhow!(
+						"Failed to fetch events for block: {}",
+						mini_header.block_number
+					))?,
 				))
 			}
 		}))
