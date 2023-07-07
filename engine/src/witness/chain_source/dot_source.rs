@@ -23,7 +23,7 @@ pub trait GetPolkadotStream {
 	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>>;
 }
 
-pub struct DotUnfinalisedSource<C: DotRetrySubscribeApi + DotRetryRpcApi> {
+pub struct DotUnfinalisedSource<C> {
 	client: C,
 }
 
@@ -38,7 +38,7 @@ impl<C: DotRetrySubscribeApi + DotRetryRpcApi + Send + Sync> GetPolkadotStream
 	}
 }
 
-impl<C: DotRetrySubscribeApi + DotRetryRpcApi + Send> DotUnfinalisedSource<C> {
+impl<C> DotUnfinalisedSource<C> {
 	pub fn new(client: C) -> Self {
 		Self { client }
 	}
@@ -69,11 +69,11 @@ where
 	}
 }
 
-pub struct DotFinalisedSource<C: DotRetrySubscribeApi + DotRetryRpcApi> {
+pub struct DotFinalisedSource<C> {
 	client: C,
 }
 
-impl<C: DotRetrySubscribeApi + DotRetryRpcApi + Send> DotFinalisedSource<C> {
+impl<C> DotFinalisedSource<C> {
 	pub fn new(client: C) -> Self {
 		Self { client }
 	}

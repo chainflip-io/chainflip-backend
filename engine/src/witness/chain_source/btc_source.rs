@@ -7,7 +7,7 @@ use utilities::make_periodic_tick;
 use super::{ChainClient, ChainSource, Header};
 use crate::{btc::retry_rpc::BtcRetryRpcApi, witness::chain_source::BoxChainStream};
 
-pub struct BtcBlockStream<C: BtcRetryRpcApi> {
+pub struct BtcBlockStream<C> {
 	client: C,
 }
 

@@ -7,11 +7,11 @@ use crate::witness::chain_source::ChainClient;
 
 use super::{BoxChainStream, ChainSource, Header};
 
-pub struct LagSafety<InnerSource: ChainSource> {
+pub struct LagSafety<InnerSource> {
 	inner_source: InnerSource,
 	margin: usize,
 }
-impl<InnerSource: ChainSource> LagSafety<InnerSource> {
+impl<InnerSource> LagSafety<InnerSource> {
 	pub fn new(margin: usize, inner_source: InnerSource) -> Self {
 		Self { inner_source, margin }
 	}
