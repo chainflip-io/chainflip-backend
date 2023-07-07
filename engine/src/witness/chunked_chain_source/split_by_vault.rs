@@ -1,12 +1,13 @@
 use cf_chains::Chain;
 use futures_util::StreamExt;
 
-use super::{
+use crate::witness::{
 	chain_source::box_chain_stream,
-	chunked_chain_source::{self, ChunkedChainSource},
 	common::{BoxActiveAndFuture, ExternalChainSource, RuntimeHasChain},
-	epoch_source::Vault,
+	epoch_source,
 };
+
+use super::ChunkedChainSource;
 
 #[async_trait::async_trait]
 pub trait ChainSplitByVault<'a>: Sized + Send
@@ -19,7 +20,7 @@ where
 	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>>;
 }
 
-pub type Item<'a, UnderlyingChainSource> = chunked_chain_source::Item<
+pub type Item<'a, UnderlyingChainSource> = super::Item<
 	'a,
 	UnderlyingChainSource,
 	pallet_cf_vaults::Vault<<UnderlyingChainSource as ExternalChainSource>::Chain>,
@@ -78,7 +79,7 @@ where
 	state_chain_runtime::Runtime: RuntimeHasChain<UnderlyingChainSource::Chain>,
 {
 	underlying_chain_source: &'a UnderlyingChainSource,
-	vaults: BoxActiveAndFuture<'static, Vault<UnderlyingChainSource::Chain>>,
+	vaults: BoxActiveAndFuture<'static, epoch_source::Vault<UnderlyingChainSource::Chain>>,
 }
 #[async_trait::async_trait]
 impl<'a, UnderlyingChainSource: ExternalChainSource> ChainSplitByVault<'a>

@@ -1,11 +1,12 @@
 use futures_util::StreamExt;
 
-use super::{
+use crate::witness::{
 	chain_source::{box_chain_stream, ChainSource},
-	chunked_chain_source::{self, ChunkedChainSource},
 	common::BoxActiveAndFuture,
 	epoch_source::Epoch,
 };
+
+use super::ChunkedChainSource;
 
 #[async_trait::async_trait]
 pub trait ChainSplitByEpoch<'a>: Sized + Send {
@@ -14,8 +15,7 @@ pub trait ChainSplitByEpoch<'a>: Sized + Send {
 	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>>;
 }
 
-pub type Item<'a, UnderlyingChainSource> =
-	chunked_chain_source::Item<'a, UnderlyingChainSource, (), ()>;
+pub type Item<'a, UnderlyingChainSource> = super::Item<'a, UnderlyingChainSource, (), ()>;
 
 #[async_trait::async_trait]
 impl<
