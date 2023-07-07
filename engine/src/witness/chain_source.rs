@@ -1,6 +1,7 @@
 pub mod btc_source;
 pub mod dot_source;
 pub mod eth_source;
+pub mod extension;
 pub mod lag_safety;
 pub mod map;
 pub mod shared;
