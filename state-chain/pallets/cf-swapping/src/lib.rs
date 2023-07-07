@@ -285,6 +285,14 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 			origin: SwapOrigin,
 		},
+		/// Swaps are scheduled due to a Ccm deposit.
+		CcmSwapScheduled {
+			swap_type: SwapType,
+			swap_id: u64,
+			source_asset: Asset,
+			amount: AssetAmount,
+			destination_asset: Asset,
+		},
 		/// A swap has been executed.
 		SwapExecuted {
 			swap_id: u64,
@@ -1012,12 +1020,20 @@ pub mod pallet {
 					swap_output.principal = Some(principal_swap_amount);
 					None
 				} else {
-					Some(Self::schedule_swap(
+					let swap_id = Self::schedule_swap(
 						source_asset,
 						destination_asset,
 						principal_swap_amount,
 						SwapType::CcmPrincipal(ccm_id),
-					))
+					);
+					Self::deposit_event(Event::<T>::CcmSwapScheduled {
+						swap_type: SwapType::CcmPrincipal(ccm_id),
+						swap_id,
+						source_asset,
+						amount: principal_swap_amount,
+						destination_asset,
+					});
+					Some(swap_id)
 				};
 
 			let output_gas_asset = ForeignChain::from(destination_asset).gas_asset();
@@ -1026,12 +1042,20 @@ pub mod pallet {
 				swap_output.gas = Some(message_metadata.gas_budget);
 				None
 			} else {
-				Some(Self::schedule_swap(
+				let swap_id = Self::schedule_swap(
 					source_asset,
 					output_gas_asset,
 					message_metadata.gas_budget,
 					SwapType::CcmGas(ccm_id),
-				))
+				);
+				Self::deposit_event(Event::<T>::CcmSwapScheduled {
+					swap_type: SwapType::CcmGas(ccm_id),
+					swap_id,
+					source_asset,
+					amount: message_metadata.gas_budget,
+					destination_asset: output_gas_asset,
+				});
+				Some(swap_id)
 			};
 
 			Self::deposit_event(Event::<T>::CcmDepositReceived {

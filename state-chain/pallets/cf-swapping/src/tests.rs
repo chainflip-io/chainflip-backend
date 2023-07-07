@@ -529,7 +529,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 			EncodedAddress::Eth(Default::default()),
 			0,
 			Some(ccm.clone())
-		),);
+		));
 		Swapping::on_ccm_deposit(
 			Asset::Dot,
 			deposit_amount,
@@ -1622,5 +1622,105 @@ fn cannot_withdraw_in_safe_mode() {
 			EncodedAddress::Eth(Default::default()),
 		));
 		assert_eq!(EarnedBrokerFees::<Test>::get(ALICE, Asset::Eth), 0);
+	});
+}
+
+#[test]
+fn ccm_swaps_emits_events() {
+	new_test_ext().execute_with(|| {
+		let ccm = CcmDepositMetadata {
+			message: vec![0x01],
+			gas_budget: 1_000,
+			cf_parameters: vec![],
+			source_address: ForeignChainAddress::Eth(Default::default()),
+		};
+
+		// Test when both principal and gas need to be swapped.
+		System::reset_events();
+		Swapping::on_ccm_deposit(
+			Asset::Flip,
+			10_000,
+			Asset::Usdc,
+			ForeignChainAddress::Eth(Default::default()),
+			ccm.clone(),
+		);
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::Swapping(Event::CcmSwapScheduled {
+				swap_type: SwapType::CcmPrincipal(1),
+				swap_id: 1,
+				source_asset: Asset::Flip,
+				amount: 9_000,
+				destination_asset: Asset::Usdc,
+			}),
+			RuntimeEvent::Swapping(Event::CcmSwapScheduled {
+				swap_type: SwapType::CcmGas(1),
+				swap_id: 2,
+				source_asset: Asset::Flip,
+				amount: 1_000,
+				destination_asset: Asset::Eth,
+			}),
+			RuntimeEvent::Swapping(Event::CcmDepositReceived {
+				ccm_id: 1,
+				principal_swap_id: Some(1),
+				gas_swap_id: Some(2),
+				deposit_amount: 10_000,
+				..
+			}),
+		);
+
+		// Test when only principal needs to be swapped.
+		System::reset_events();
+		Swapping::on_ccm_deposit(
+			Asset::Eth,
+			10_000,
+			Asset::Usdc,
+			ForeignChainAddress::Eth(Default::default()),
+			ccm.clone(),
+		);
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::Swapping(Event::CcmSwapScheduled {
+				swap_type: SwapType::CcmPrincipal(2),
+				swap_id: 3,
+				source_asset: Asset::Eth,
+				amount: 9_000,
+				destination_asset: Asset::Usdc,
+			}),
+			RuntimeEvent::Swapping(Event::CcmDepositReceived {
+				ccm_id: 2,
+				principal_swap_id: Some(3),
+				gas_swap_id: None,
+				deposit_amount: 10_000,
+				..
+			}),
+		);
+
+		// Test when only gas needs to be swapped.
+		System::reset_events();
+		Swapping::on_ccm_deposit(
+			Asset::Flip,
+			10_000,
+			Asset::Flip,
+			ForeignChainAddress::Eth(Default::default()),
+			ccm,
+		);
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::Swapping(Event::CcmSwapScheduled {
+				swap_type: SwapType::CcmGas(3),
+				swap_id: 4,
+				source_asset: Asset::Flip,
+				amount: 1_000,
+				destination_asset: Asset::Eth,
+			}),
+			RuntimeEvent::Swapping(Event::CcmDepositReceived {
+				ccm_id: 3,
+				principal_swap_id: None,
+				gas_swap_id: Some(4),
+				deposit_amount: 10_000,
+				..
+			}),
+		);
 	});
 }
