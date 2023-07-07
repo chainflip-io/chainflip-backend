@@ -6,7 +6,7 @@ import { getNextEthNonce } from '../shared/fund_eth';
 import { getBalance } from './get_balance';
 
 
-export async function executeNativeSwap(srcAsset: Asset, destAsset: Asset, destAddress: string) {
+export async function executeContractSwap(srcAsset: Asset, destAsset: Asset, destAddress: string) {
 
     const wallet = Wallet.fromMnemonic(
         process.env.ETH_USDC_WHALE_MNEMONIC ??
@@ -37,7 +37,7 @@ export async function executeNativeSwap(srcAsset: Asset, destAsset: Asset, destA
     );
 }
 
-export async function performSwapViaSmartContract(sourceAsset: Asset, destAsset: Asset) {
+export async function performSwapViaContract(sourceAsset: Asset, destAsset: Asset) {
 
     const tag = `[contract ${sourceAsset} -> ${destAsset}]`;
 
@@ -57,7 +57,7 @@ export async function performSwapViaSmartContract(sourceAsset: Asset, destAsset:
         // the swap to avoid race conditions:
         log(`Executing (${sourceAsset}) contract swap to(${destAsset}) ${addr}. Current balance: ${oldBalance}`)
         const handle = observeEvent("swapping:SwapExecuted", api);
-        await executeNativeSwap(sourceAsset, destAsset, addr);
+        await executeContractSwap(sourceAsset, destAsset, addr);
         await handle;
         log(`Successfully observed event: swapping: SwapExecuted`);
 
