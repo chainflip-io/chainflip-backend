@@ -6,8 +6,22 @@ localnets.
 
 ## Installation / Setup
 
-You need NodeJS and JQ on your machine:
- brew install node jq
+You need [NodeJS](https://github.com/nvm-sh/nvm#installing-and-updating) and JQ
+on your machine:
+
+```sh
+brew install jq
+```
+
+You will need to create a personal access token in GitHub with the
+`read:packages` scope to access our internally published packages and create the
+following `.npmrc` file at your user home directory (`~/.npmrc`):
+
+```
+//npm.pkg.github.com/:_authToken=ghp_YOUR-AUTH-TOKEN-HERE
+@chainflip-io:registry=https://npm.pkg.github.com/
+```
+
 
 Then you need to install the dependencies:
 
@@ -16,7 +30,6 @@ cd bouncer
 npm install -g pnpm
 pnpm install
 ```
-
 Note: If npm does not install outdated version of pnpm, you can use corepack to install the latest version:
 `corepack prepare pnpm@latest --activate`
 
