@@ -1,39 +1,59 @@
 use futures_util::StreamExt;
 
 use super::{
-	chain_source::{box_chain_stream, BoxChainStream, ChainSource},
+	chain_source::{box_chain_stream, ChainSource},
+	chunked_chain_source::{self, ChunkedChainSource},
 	common::BoxActiveAndFuture,
 	epoch_source::Epoch,
 };
-
-use utilities::assert_stream_send;
 
 #[async_trait::async_trait]
 pub trait ChainSplitByEpoch<'a>: Sized + Send {
 	type UnderlyingChainSource: ChainSource;
 
 	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>>;
+}
 
-	async fn run(self) {
-		let stream = assert_stream_send(
-			self.stream()
-				.await
-				.into_stream()
-				.flat_map_unordered(None, |(_, chain_stream)| chain_stream),
-		);
-		stream.for_each(|_| futures::future::ready(())).await;
+pub type Item<'a, UnderlyingChainSource> =
+	chunked_chain_source::Item<'a, UnderlyingChainSource, (), ()>;
+
+#[async_trait::async_trait]
+impl<
+		'a,
+		TUnderlyingChainSource: ChainSource,
+		T: ChunkedChainSource<
+			'a,
+			Info = (),
+			HistoricInfo = (),
+			UnderlyingChainSource = TUnderlyingChainSource,
+		>,
+	> ChainSplitByEpoch<'a> for T
+{
+	type UnderlyingChainSource = TUnderlyingChainSource;
+
+	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>> {
+		<Self as ChainSplitByEpoch<'a>>::stream(self).await
 	}
 }
 
-pub type Item<'a, UnderlyingChainSource> = (
-	Epoch<(), ()>,
-	BoxChainStream<
+/// Wraps a specific impl of ChainSplitByEpoch, and impls ChunkedChainSource for it
+pub struct Generic<T>(T);
+#[async_trait::async_trait]
+impl<
 		'a,
-		<UnderlyingChainSource as ChainSource>::Index,
-		<UnderlyingChainSource as ChainSource>::Hash,
-		<UnderlyingChainSource as ChainSource>::Data,
-	>,
-);
+		TUnderlyingChainSource: ChainSource,
+		T: ChainSplitByEpoch<'a, UnderlyingChainSource = TUnderlyingChainSource>,
+	> ChunkedChainSource<'a> for Generic<T>
+{
+	type Info = ();
+	type HistoricInfo = ();
+
+	type UnderlyingChainSource = TUnderlyingChainSource;
+
+	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>> {
+		self.0.stream().await
+	}
+}
 
 pub struct SplitByEpoch<'a, UnderlyingChainSource> {
 	underlying_chain_source: &'a UnderlyingChainSource,
@@ -50,17 +70,9 @@ impl<'a, UnderlyingChainSource: ChainSource> ChainSplitByEpoch<'a>
 		let underlying_chain_source = self.underlying_chain_source;
 		self.epochs
 			.then(move |epoch| async move {
+				let (stream, client) = underlying_chain_source.stream_and_client().await;
 				let historic_signal = epoch.historic_signal.clone();
-				(
-					epoch,
-					box_chain_stream(
-						underlying_chain_source
-							.stream_and_client()
-							.await
-							.0
-							.take_until(historic_signal.wait()),
-					),
-				)
+				(epoch, box_chain_stream(stream.take_until(historic_signal.wait())), client)
 			})
 			.await
 			.into_box()

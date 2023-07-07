@@ -2,12 +2,11 @@ use cf_chains::Chain;
 use futures_util::StreamExt;
 
 use super::{
-	chain_source::{box_chain_stream, BoxChainStream, ChainSource},
+	chain_source::box_chain_stream,
+	chunked_chain_source::{self, ChunkedChainSource},
 	common::{BoxActiveAndFuture, ExternalChainSource, RuntimeHasChain},
-	epoch_source::{Epoch, Vault},
+	epoch_source::Vault,
 };
-
-use utilities::assert_stream_send;
 
 #[async_trait::async_trait]
 pub trait ChainSplitByVault<'a>: Sized + Send
@@ -18,31 +17,61 @@ where
 	type UnderlyingChainSource: ExternalChainSource;
 
 	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>>;
+}
 
-	async fn run(self) {
-		let stream = assert_stream_send(
-			self.stream()
-				.await
-				.into_stream()
-				.flat_map_unordered(None, |(_, chain_stream, _)| chain_stream),
-		);
-		stream.for_each(|_| futures::future::ready(())).await;
+pub type Item<'a, UnderlyingChainSource> = chunked_chain_source::Item<
+	'a,
+	UnderlyingChainSource,
+	pallet_cf_vaults::Vault<<UnderlyingChainSource as ExternalChainSource>::Chain>,
+	<<UnderlyingChainSource as ExternalChainSource>::Chain as Chain>::ChainBlockNumber,
+>;
+
+#[async_trait::async_trait]
+impl<
+	'a,
+	TUnderlyingChainSource: ExternalChainSource,
+	T: ChunkedChainSource<
+		'a,
+		Info = pallet_cf_vaults::Vault<<TUnderlyingChainSource as ExternalChainSource>::Chain>,
+		HistoricInfo = <<TUnderlyingChainSource as ExternalChainSource>::Chain as Chain>::ChainBlockNumber,
+		UnderlyingChainSource = TUnderlyingChainSource
+	>
+> ChainSplitByVault<'a> for T where
+state_chain_runtime::Runtime:
+	RuntimeHasChain<<TUnderlyingChainSource as ExternalChainSource>::Chain>, {
+
+	type UnderlyingChainSource = TUnderlyingChainSource;
+
+	async fn stream(
+		self,
+	) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>>
+	{
+		<Self as ChunkedChainSource<'a>>::stream(self).await
 	}
 }
 
-type Item<'a, UnderlyingChainSource> = (
-	Epoch<
-		pallet_cf_vaults::Vault<<UnderlyingChainSource as ExternalChainSource>::Chain>,
-		<<UnderlyingChainSource as ExternalChainSource>::Chain as Chain>::ChainBlockNumber,
-	>,
-	BoxChainStream<
+/// Wraps a specific impl of ChainSplitByVault, and impls ChunkedChainSource for it
+pub struct Generic<T>(T);
+#[async_trait::async_trait]
+impl<
 		'a,
-		<UnderlyingChainSource as ChainSource>::Index,
-		<UnderlyingChainSource as ChainSource>::Hash,
-		<UnderlyingChainSource as ChainSource>::Data,
-	>,
-	<UnderlyingChainSource as ChainSource>::Client,
-);
+		TUnderlyingChainSource: ExternalChainSource,
+		T: ChainSplitByVault<'a, UnderlyingChainSource = TUnderlyingChainSource>,
+	> ChunkedChainSource<'a> for Generic<T>
+where
+	state_chain_runtime::Runtime:
+		RuntimeHasChain<<T::UnderlyingChainSource as ExternalChainSource>::Chain>,
+{
+	type Info = pallet_cf_vaults::Vault<<TUnderlyingChainSource as ExternalChainSource>::Chain>;
+	type HistoricInfo =
+		<<TUnderlyingChainSource as ExternalChainSource>::Chain as Chain>::ChainBlockNumber;
+
+	type UnderlyingChainSource = TUnderlyingChainSource;
+
+	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>> {
+		self.0.stream().await
+	}
+}
 
 pub struct SplitByVault<'a, UnderlyingChainSource: ExternalChainSource>
 where
