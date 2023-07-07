@@ -53,7 +53,14 @@ pub struct ChunkByTime<'a, TChainSource> {
 	chain_source: &'a TChainSource,
 	epochs: BoxActiveAndFuture<'static, Epoch<(), ()>>,
 }
-
+impl<'a, TChainSource> ChunkByTime<'a, TChainSource> {
+	pub fn new(
+		chain_source: &'a TChainSource,
+		epochs: BoxActiveAndFuture<'static, Epoch<(), ()>>,
+	) -> Self {
+		Self { chain_source, epochs }
+	}
+}
 #[async_trait::async_trait]
 impl<'a, TChainSource: ChainSource> ChunkedByTime<'a> for ChunkByTime<'a, TChainSource> {
 	type ChainSource = TChainSource;

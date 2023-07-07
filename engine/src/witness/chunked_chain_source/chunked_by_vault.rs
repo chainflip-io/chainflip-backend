@@ -66,6 +66,17 @@ where
 	chain_source: &'a TChainSource,
 	vaults: BoxActiveAndFuture<'static, epoch_source::Vault<TChainSource::Chain>>,
 }
+impl<'a, TChainSource: ExternalChainSource> ChunkByVault<'a, TChainSource>
+where
+	state_chain_runtime::Runtime: RuntimeHasChain<TChainSource::Chain>,
+{
+	pub fn new(
+		chain_source: &'a TChainSource,
+		vaults: BoxActiveAndFuture<'static, epoch_source::Vault<TChainSource::Chain>>,
+	) -> Self {
+		Self { chain_source, vaults }
+	}
+}
 #[async_trait::async_trait]
 impl<'a, TChainSource: ExternalChainSource> ChunkedByVault<'a> for ChunkByVault<'a, TChainSource>
 where
