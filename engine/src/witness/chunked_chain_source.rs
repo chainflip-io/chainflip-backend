@@ -1,5 +1,5 @@
-pub mod split_by_time;
-pub mod split_by_vault;
+pub mod chunked_by_time;
+pub mod chunked_by_vault;
 
 use futures_util::StreamExt;
 
