@@ -1,4 +1,4 @@
-pub mod split_by_epoch;
+pub mod split_by_time;
 pub mod split_by_vault;
 
 use futures_util::StreamExt;
