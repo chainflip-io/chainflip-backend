@@ -21,7 +21,7 @@ pub trait ChainSourceExt: ChainSource {
 	where
 		Self: Sized,
 	{
-		LagSafety::new(margin, self)
+		LagSafety::new(self, margin)
 	}
 
 	fn shared<'env>(self, scope: &Scope<'env, anyhow::Error>) -> SharedSource<Self>
@@ -30,7 +30,7 @@ pub trait ChainSourceExt: ChainSource {
 		Self::Client: Clone,
 		Self::Data: Clone,
 	{
-		SharedSource::new(scope, self)
+		SharedSource::new(self, scope)
 	}
 
 	fn strictly_monotonic(self) -> StrictlyMonotonic<Self>

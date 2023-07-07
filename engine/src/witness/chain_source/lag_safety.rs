@@ -12,7 +12,7 @@ pub struct LagSafety<InnerSource> {
 	margin: usize,
 }
 impl<InnerSource> LagSafety<InnerSource> {
-	pub fn new(margin: usize, inner_source: InnerSource) -> Self {
+	pub fn new(inner_source: InnerSource, margin: usize) -> Self {
 		Self { inner_source, margin }
 	}
 }

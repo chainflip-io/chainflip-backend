@@ -30,7 +30,7 @@ where
 	InnerSource::Client: Clone,
 	InnerSource::Data: Clone,
 {
-	pub fn new<'a, 'env>(scope: &'a Scope<'env, anyhow::Error>, inner_source: InnerSource) -> Self
+	pub fn new<'a, 'env>(inner_source: InnerSource, scope: &'a Scope<'env, anyhow::Error>) -> Self
 	where
 		InnerSource: 'env,
 	{
