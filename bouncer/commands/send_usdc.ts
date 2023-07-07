@@ -8,15 +8,15 @@
 // will send 1.2 USDC to account 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6
 
 import { runWithTimeout } from '../shared/utils';
-import { sendUsdc } from '../shared/send_usdc';
+import { sendErc20 } from '../shared/send_erc20';
+import { getEthContractAddress } from '../shared/utils';
 
 async function main(): Promise<void> {
   const ethereumAddress = process.argv[2];
   const usdcAmount = process.argv[3].trim();
 
-  console.log("Submitting transaction to transfer USDC to " + ethereumAddress + " for " + usdcAmount + " USDC")
-
-  await sendUsdc(ethereumAddress, usdcAmount);
+  const contractAddress = getEthContractAddress('USDC');
+  await sendErc20(ethereumAddress, contractAddress, usdcAmount);
 
   process.exit(0);
 }

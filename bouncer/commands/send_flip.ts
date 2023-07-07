@@ -8,16 +8,15 @@
 // will send 5.5 FLIP to the account with address 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6
 
 import { runWithTimeout } from '../shared/utils';
-import { sendFlip } from '../shared/send_flip';
+import { sendErc20 } from '../shared/send_erc20';
+import { getEthContractAddress } from '../shared/utils';
 
 async function main(): Promise<void> {
-  var address = process.argv[2];
-  if(address.substr(0,2) != '0x'){
-    address = "0x" + address
-  }
+  const ethereumAddress = process.argv[2];
   const flipAmount = process.argv[3].trim();
 
-  await sendFlip(address, flipAmount);
+  const contractAddress = getEthContractAddress('FLIP');
+  await sendErc20(ethereumAddress, contractAddress, flipAmount);
 
   process.exit(0);
 }

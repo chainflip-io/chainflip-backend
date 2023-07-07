@@ -7,10 +7,12 @@
 // might print: 100.2
 
 import { runWithTimeout } from '../shared/utils';
-import { getFlipBalance } from '../shared/get_flip_balance';
+import { getErc20Balance } from '../shared/get_erc20_balance';
+import { getEthContractAddress } from '../shared/utils';
 
 async function getFlipBalanceCommand(ethereumAddress: string) {
-  const balance = await getFlipBalance(ethereumAddress);
+  const contractAddress = getEthContractAddress('FLIP');
+  const balance = await getErc20Balance(ethereumAddress, contractAddress);
   console.log(balance);
   process.exit(0);
 }

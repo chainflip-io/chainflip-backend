@@ -10,7 +10,6 @@
 
 import { runWithTimeout } from '../shared/utils';
 import { fundFlip } from '../shared/fund_flip';
-import { observeEvent } from '../shared/utils';
 
 async function main(): Promise<void> {
   var pubkey = process.argv[2];

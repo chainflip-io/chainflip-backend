@@ -40,10 +40,11 @@ async function range_order(){
 	const current_sqrt_price = (await chainflip.query.liquidityPools.pools(ccy)).toJSON().poolState.rangeOrders.currentSqrtPrice;
 	const price = Math.round(current_sqrt_price/Math.pow(2,96)*Number(fine_amount));
 	console.log("Setting up " + ccy + " range order");
-	await chainflip.tx.liquidityPools.collectAndMintRangeOrder(ccy, [-887272, 887272], price).signAndSend(lp, {nonce: -1}, handleSubstrateError(chainflip));
-    await observeEvent('liquidityPools:RangeOrderMinted', chainflip, (data) => {
+	const event = observeEvent('liquidityPools:RangeOrderMinted', chainflip, (data) => {
 		return data[0] == lp.address && data[1].toLowerCase() == ccy;
 	});
+	await chainflip.tx.liquidityPools.collectAndMintRangeOrder(ccy, [-887272, 887272], price).signAndSend(lp, {nonce: -1}, handleSubstrateError(chainflip));
+    await event;
 	process.exit(0);
 }
 

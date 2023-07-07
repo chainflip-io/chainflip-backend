@@ -7,10 +7,12 @@
 // might print: 100.2
 
 import { runWithTimeout } from '../shared/utils';
-import { getUsdcBalance } from '../shared/get_usdc_balance';
+import { getErc20Balance } from '../shared/get_erc20_balance';
+import { getEthContractAddress } from '../shared/utils';
 
 async function getUsdcBalanceCommand(ethereumAddress: string) {
-  const balance = await getUsdcBalance(ethereumAddress);
+  const contractAddress = getEthContractAddress('USDC');
+  const balance = await getErc20Balance(ethereumAddress, contractAddress);
   console.log(balance);
   process.exit(0);
 }

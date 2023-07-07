@@ -31,10 +31,11 @@ async function createLpPool(){
 
 	const price = BigInt(Math.round(Math.sqrt(initial_price/Math.pow(10, decimals.get(ccy)!-decimals.get("usdc")!))*Math.pow(2,96)));
 	console.log("Setting up " + ccy + " pool with an initial price of " + initial_price + " usdc/" + ccy);
-	await chainflip.tx.governance.proposeGovernanceExtrinsic(chainflip.tx.liquidityPools.newPool(ccy, 0, price)).signAndSend(snowwhite, {nonce: -1}, handleSubstrateError(chainflip));
-	await observeEvent('liquidityPools:NewPoolCreated', chainflip, (data) => {
+	let event = observeEvent('liquidityPools:NewPoolCreated', chainflip, (data) => {
 		return data[0].toLowerCase() == ccy;
 	});
+	await chainflip.tx.governance.proposeGovernanceExtrinsic(chainflip.tx.liquidityPools.newPool(ccy, 0, price)).signAndSend(snowwhite, {nonce: -1}, handleSubstrateError(chainflip));
+	await event;
 	process.exit(0);
 }
 

@@ -32,10 +32,11 @@ async function main(){
 	const lp = keyring.createFromUri(lp_uri);
 
 	console.log("Requesting " + ccy + " deposit address");
-	await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress(ccy).signAndSend(lp, {nonce: -1}, handleSubstrateError(chainflip));
-	var ingress_key = (await observeEvent('liquidityProvider:LiquidityDepositAddressReady', chainflip, (data) => {
+	var event = observeEvent('liquidityProvider:LiquidityDepositAddressReady', chainflip, (data) => {
 		return data[1][chain.get(ccy)!] != undefined;
-	})).depositAddress.toJSON()[chain.get(ccy)!];
+	});
+	await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress(ccy).signAndSend(lp, {nonce: -1}, handleSubstrateError(chainflip));
+	var ingress_key = (await event).depositAddress.toJSON()[chain.get(ccy)!];
     var ingress_address = ingress_key;
 	if(ccy == 'btc'){
 		ingress_address = '';
@@ -45,10 +46,11 @@ async function main(){
 	}
 	console.log("Received " + ccy + " address: " + ingress_address);
 	console.log("Sending " + amount + " " + ccy + " to " + ingress_address);
-    send(ccy.toUpperCase() as Asset, ingress_address, amount);
-	await observeEvent('liquidityProvider:AccountCredited', chainflip, (data) => {
+	event = observeEvent('liquidityProvider:AccountCredited', chainflip, (data) => {
 		return data[1].toLowerCase() == ccy;
 	});
+	send(ccy.toUpperCase() as Asset, ingress_address, amount);
+	await event;
 	process.exit(0);
 }
 
