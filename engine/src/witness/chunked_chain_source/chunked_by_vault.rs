@@ -10,7 +10,7 @@ use crate::witness::{
 use super::ChunkedChainSource;
 
 #[async_trait::async_trait]
-pub trait ChainSplitByVault<'a>: Sized + Send
+pub trait ChunkedByVault<'a>: Sized + Send
 where
 	state_chain_runtime::Runtime:
 		RuntimeHasChain<<Self::UnderlyingChainSource as ExternalChainSource>::Chain>,
@@ -37,7 +37,7 @@ impl<
 		HistoricInfo = <<TUnderlyingChainSource as ExternalChainSource>::Chain as Chain>::ChainBlockNumber,
 		UnderlyingChainSource = TUnderlyingChainSource
 	>
-> ChainSplitByVault<'a> for T where
+> ChunkedByVault<'a> for T where
 state_chain_runtime::Runtime:
 	RuntimeHasChain<<TUnderlyingChainSource as ExternalChainSource>::Chain>, {
 
@@ -51,13 +51,13 @@ state_chain_runtime::Runtime:
 	}
 }
 
-/// Wraps a specific impl of ChainSplitByVault, and impls ChunkedChainSource for it
+/// Wraps a specific impl of ChunkedByVault, and impls ChunkedChainSource for it
 pub struct Generic<T>(T);
 #[async_trait::async_trait]
 impl<
 		'a,
 		TUnderlyingChainSource: ExternalChainSource,
-		T: ChainSplitByVault<'a, UnderlyingChainSource = TUnderlyingChainSource>,
+		T: ChunkedByVault<'a, UnderlyingChainSource = TUnderlyingChainSource>,
 	> ChunkedChainSource<'a> for Generic<T>
 where
 	state_chain_runtime::Runtime:
@@ -74,7 +74,7 @@ where
 	}
 }
 
-pub struct SplitByVault<'a, UnderlyingChainSource: ExternalChainSource>
+pub struct ChunkByVault<'a, UnderlyingChainSource: ExternalChainSource>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<UnderlyingChainSource::Chain>,
 {
@@ -82,8 +82,8 @@ where
 	vaults: BoxActiveAndFuture<'static, epoch_source::Vault<UnderlyingChainSource::Chain>>,
 }
 #[async_trait::async_trait]
-impl<'a, UnderlyingChainSource: ExternalChainSource> ChainSplitByVault<'a>
-	for SplitByVault<'a, UnderlyingChainSource>
+impl<'a, UnderlyingChainSource: ExternalChainSource> ChunkedByVault<'a>
+	for ChunkByVault<'a, UnderlyingChainSource>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<UnderlyingChainSource::Chain>,
 {

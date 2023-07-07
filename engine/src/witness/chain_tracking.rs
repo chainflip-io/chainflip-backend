@@ -10,7 +10,7 @@ use crate::state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicA
 use super::{
 	chain_source::box_chain_stream,
 	common::{BoxActiveAndFuture, ExternalChainSource, RuntimeCallHasChain, RuntimeHasChain},
-	split_by_epoch::{ChainSplitByEpoch, Item},
+	split_by_epoch::{ChunkedByTime, Item},
 };
 
 #[async_trait::async_trait]
@@ -38,15 +38,15 @@ impl<'a, Underlying, StateChainClient, TrackedDataClient>
 }
 
 #[async_trait::async_trait]
-impl<'a, Underlying, StateChainClient, TrackedDataClient> ChainSplitByEpoch<'a>
+impl<'a, Underlying, StateChainClient, TrackedDataClient> ChunkedByTime<'a>
 	for ChainTracking<'a, Underlying, StateChainClient, TrackedDataClient>
 where
-	Underlying: ChainSplitByEpoch<'a>,
-	<Underlying as ChainSplitByEpoch<'a>>::UnderlyingChainSource: ExternalChainSource,
+	Underlying: ChunkedByTime<'a>,
+	<Underlying as ChunkedByTime<'a>>::UnderlyingChainSource: ExternalChainSource,
 	StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,
-	TrackedDataClient: GetTrackedData<<<Underlying as ChainSplitByEpoch<'a>>::UnderlyingChainSource as ExternalChainSource>::Chain> + 'a,
-	state_chain_runtime::Runtime: RuntimeHasChain<<<Underlying as ChainSplitByEpoch<'a>>::UnderlyingChainSource as ExternalChainSource>::Chain>,
-	state_chain_runtime::RuntimeCall: RuntimeCallHasChain<state_chain_runtime::Runtime, <<Underlying as ChainSplitByEpoch<'a>>::UnderlyingChainSource as ExternalChainSource>::Chain>
+	TrackedDataClient: GetTrackedData<<<Underlying as ChunkedByTime<'a>>::UnderlyingChainSource as ExternalChainSource>::Chain> + 'a,
+	state_chain_runtime::Runtime: RuntimeHasChain<<<Underlying as ChunkedByTime<'a>>::UnderlyingChainSource as ExternalChainSource>::Chain>,
+	state_chain_runtime::RuntimeCall: RuntimeCallHasChain<state_chain_runtime::Runtime, <<Underlying as ChunkedByTime<'a>>::UnderlyingChainSource as ExternalChainSource>::Chain>
 {
 	type UnderlyingChainSource = Underlying::UnderlyingChainSource;
 
@@ -74,7 +74,7 @@ where
 								// Unclear error when this is inlined "error: higher-ranked lifetime error"
 								let call: Box<state_chain_runtime::RuntimeCall> = Box::new(pallet_cf_chain_tracking::Call::<
 										state_chain_runtime::Runtime,
-										<<<Underlying as ChainSplitByEpoch<'a>>::UnderlyingChainSource as ExternalChainSource>::Chain as PalletInstanceAlias>::Instance,
+										<<<Underlying as ChunkedByTime<'a>>::UnderlyingChainSource as ExternalChainSource>::Chain as PalletInstanceAlias>::Instance,
 									>::update_chain_state {
 										new_chain_state: client.get_tracked_data().await,
 									}.into());

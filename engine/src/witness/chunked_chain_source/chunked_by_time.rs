@@ -9,7 +9,7 @@ use crate::witness::{
 use super::ChunkedChainSource;
 
 #[async_trait::async_trait]
-pub trait ChainSplitByEpoch<'a>: Sized + Send {
+pub trait ChunkedByTime<'a>: Sized + Send {
 	type UnderlyingChainSource: ChainSource;
 
 	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>>;
@@ -27,22 +27,22 @@ impl<
 			HistoricInfo = (),
 			UnderlyingChainSource = TUnderlyingChainSource,
 		>,
-	> ChainSplitByEpoch<'a> for T
+	> ChunkedByTime<'a> for T
 {
 	type UnderlyingChainSource = TUnderlyingChainSource;
 
 	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::UnderlyingChainSource>> {
-		<Self as ChainSplitByEpoch<'a>>::stream(self).await
+		<Self as ChunkedByTime<'a>>::stream(self).await
 	}
 }
 
-/// Wraps a specific impl of ChainSplitByEpoch, and impls ChunkedChainSource for it
+/// Wraps a specific impl of ChunkedByTime, and impls ChunkedChainSource for it
 pub struct Generic<T>(T);
 #[async_trait::async_trait]
 impl<
 		'a,
 		TUnderlyingChainSource: ChainSource,
-		T: ChainSplitByEpoch<'a, UnderlyingChainSource = TUnderlyingChainSource>,
+		T: ChunkedByTime<'a, UnderlyingChainSource = TUnderlyingChainSource>,
 	> ChunkedChainSource<'a> for Generic<T>
 {
 	type Info = ();
@@ -55,14 +55,14 @@ impl<
 	}
 }
 
-pub struct SplitByEpoch<'a, UnderlyingChainSource> {
+pub struct ChunkByTime<'a, UnderlyingChainSource> {
 	underlying_chain_source: &'a UnderlyingChainSource,
 	epochs: BoxActiveAndFuture<'static, Epoch<(), ()>>,
 }
 
 #[async_trait::async_trait]
-impl<'a, UnderlyingChainSource: ChainSource> ChainSplitByEpoch<'a>
-	for SplitByEpoch<'a, UnderlyingChainSource>
+impl<'a, UnderlyingChainSource: ChainSource> ChunkedByTime<'a>
+	for ChunkByTime<'a, UnderlyingChainSource>
 {
 	type UnderlyingChainSource = UnderlyingChainSource;
 
