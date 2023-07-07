@@ -5,12 +5,12 @@ use futures_util::StreamExt;
 
 use crate::witness::chain_source::ChainClient;
 
-pub struct MapAdapter<InnerSource, MapFn> {
+pub struct Map<InnerSource, MapFn> {
 	inner_source: InnerSource,
 	map_fn: MapFn,
 }
 
-impl<InnerSource, MapFn> MapAdapter<InnerSource, MapFn> {
+impl<InnerSource, MapFn> Map<InnerSource, MapFn> {
 	pub fn new(inner_source: InnerSource, map_fn: MapFn) -> Self {
 		Self { inner_source, map_fn }
 	}
@@ -25,7 +25,7 @@ impl<
 			+ Send
 			+ Sync
 			+ Clone,
-	> ChainSource for MapAdapter<InnerSource, MapFn>
+	> ChainSource for Map<InnerSource, MapFn>
 {
 	type Index = InnerSource::Index;
 	type Hash = InnerSource::Hash;
