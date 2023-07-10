@@ -118,11 +118,11 @@ pub mod pallet {
 		pub opened_at: C::ChainBlockNumber,
 	}
 
-	// #[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	// pub struct DepositChannelDetails<C: Chain, Channel: DepositChannel<C>> {
-	// 	pub deposit_channel: Channel,
-	// 	pub opened_at: C::ChainBlockNumber,
-	// }
+	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+	pub struct DepositChannelDetails<C: Chain, Channel: DepositChannel<C>> {
+		pub deposit_channel: Channel,
+		pub opened_at: C::ChainBlockNumber,
+	}
 
 	/// Determines the action to take when a deposit is made to a channel.
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
@@ -204,8 +204,13 @@ pub mod pallet {
 
 	/// Lookup table for addresses to correpsponding deposit channels.
 	#[pallet::storage]
-	pub type DepositChannelLookup<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, TargetChainAccount<T, I>, T::DepositChannel, OptionQuery>;
+	pub type DepositChannelLookup<T: Config<I>, I: 'static = ()> = StorageMap<
+		_,
+		Twox64Concat,
+		TargetChainAccount<T, I>,
+		DepositChannelDetails<T::TargetChain, T::DepositChannel>,
+		OptionQuery,
+	>;
 
 	/// Stores the channel action against the address
 	#[pallet::storage]
@@ -353,7 +358,10 @@ pub mod pallet {
 				{
 					DepositChannelLookup::<T, I>::insert(
 						deposit_address,
-						deposit_details.finalize(),
+						DepositChannelDetails {
+							opened_at: deposit_details.opened_at,
+							deposit_channel: deposit_details.deposit_channel.finalize(),
+						},
 					);
 				} else {
 					log::error!(
@@ -459,10 +467,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 										DepositChannelLookup::<T, I>::get(deposit_address.clone())
 									{
 										let (updated_deposit_channel, skip) =
-											details.process_broadcast();
+											details.clone().deposit_channel.process_broadcast();
 										DepositChannelLookup::<T, I>::insert(
-											deposit_address.clone(),
-											updated_deposit_channel,
+											updated_deposit_channel.get_address(),
+											DepositChannelDetails {
+												opened_at: details.opened_at,
+												deposit_channel: updated_deposit_channel,
+											},
 										);
 										skip
 									} else {
@@ -497,10 +508,13 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						DepositChannelLookup::<T, I>::get(deposit_address.clone())
 					{
 						fetch_params.push(FetchAssetParams {
-							deposit_fetch_id: details.get_deposit_fetch_id(),
+							deposit_fetch_id: details.deposit_channel.get_deposit_fetch_id(),
 							asset,
 						});
-						addresses.push((details.get_deposit_fetch_id(), deposit_address.clone()));
+						addresses.push((
+							details.deposit_channel.get_deposit_fetch_id(),
+							deposit_address.clone(),
+						));
 					} else {
 						log::error!(
 							"Deposit address {:?} not found in DepositAddressDetailsLookup",
@@ -590,11 +604,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		amount: TargetChainAmount<T, I>,
 		tx_id: <T::TargetChain as ChainCrypto>::TransactionInId,
 	) -> DispatchResult {
-		let deposit_channel = DepositChannelLookup::<T, I>::get(&deposit_address)
+		let deposit_channel_details = DepositChannelLookup::<T, I>::get(&deposit_address)
 			.ok_or(Error::<T, I>::InvalidDepositAddress)?;
 
-		let source_asset = deposit_channel.get_asset();
-		let channel_id = deposit_channel.get_channel_id();
+		let source_asset = deposit_channel_details.deposit_channel.get_asset();
+		let channel_id = deposit_channel_details.deposit_channel.get_channel_id();
 
 		ensure!(source_asset == asset, Error::<T, I>::AssetMismatch);
 
@@ -669,7 +683,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 	) -> Result<(ChannelId, TargetChainAccount<T, I>), DispatchError> {
 		// We have an address available, so we can just use it.
 
-		let (deposit_address_wrapper, channel_id) =
+		let (deposit_channel, channel_id) =
 			if let Some((channel_id, address)) = AddressPool::<T, I>::drain().next() {
 				(address, channel_id)
 			} else {
@@ -680,7 +694,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				(T::DepositChannel::new(next_channel_id, source_asset)?, next_channel_id)
 			};
 
-		let new_address = deposit_address_wrapper.get_address();
+		let new_address = deposit_channel.get_address();
 
 		ChannelActions::<T, I>::insert(&new_address, channel_action);
 		T::DepositHandler::on_channel_opened(new_address.clone(), channel_id)?;
@@ -688,25 +702,31 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		let opened_at = T::ChainTracking::get_block_height();
 
 		Self::deposit_event(Event::StartWitnessing {
-			deposit_address: deposit_address_wrapper.get_address(),
+			deposit_address: deposit_channel.get_address(),
 			source_asset,
 			opened_at,
 		});
 
-		DepositChannelLookup::<T, I>::insert(new_address.clone(), deposit_address_wrapper);
+		DepositChannelLookup::<T, I>::insert(
+			new_address.clone(),
+			DepositChannelDetails { deposit_channel, opened_at },
+		);
 
 		Ok((channel_id, new_address))
 	}
 
 	fn close_channel(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
 		ChannelActions::<T, I>::remove(&address);
-		if let Some(deposit_address_details) = DepositChannelLookup::<T, I>::get(&address) {
-			if deposit_address_details.maybe_recycle() {
-				AddressPool::<T, I>::insert(channel_id, deposit_address_details.clone());
+		if let Some(deposit_channel_details) = DepositChannelLookup::<T, I>::get(&address) {
+			if deposit_channel_details.deposit_channel.maybe_recycle() {
+				AddressPool::<T, I>::insert(
+					channel_id,
+					deposit_channel_details.deposit_channel.clone(),
+				);
 			}
 			Self::deposit_event(Event::<T, I>::StopWitnessing {
 				deposit_address: address,
-				source_asset: deposit_address_details.get_asset(),
+				source_asset: deposit_channel_details.deposit_channel.get_asset(),
 			});
 		} else {
 			log::error!("This should not error since we create the DepositAddressDetailsLookup at the time of opening the channel")

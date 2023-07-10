@@ -115,7 +115,7 @@ pub async fn start(
 		.await
 		.context("Failed to get initial deposit details")?
 		.into_iter()
-		.map(|(address, channel_details)| (channel_details.asset, address))
+		.map(|(address, channel_details)| (channel_details.deposit_channel.asset, address))
 		.into_group_map();
 
 	fn monitored_addresses_from_all_eth(

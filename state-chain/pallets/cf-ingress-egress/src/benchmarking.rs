@@ -20,10 +20,13 @@ benchmarks_instance_pallet! {
 		let deposit_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
 		let source_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
 		let deposit_amount: <<T as Config<I>>::TargetChain as Chain>::ChainAmount = BenchmarkValue::benchmark_value();
-		DepositChannelLookup::<T, I>::insert(&deposit_address, T::DepositChannel::new(
+		DepositChannelLookup::<T, I>::insert(&deposit_address, DepositChannelDetails {
+			opened_at: TargetChainBlockNumber::<T, I>::benchmark_value(),
+			deposit_channel: T::DepositChannel::new(
 				1,
 				source_asset,
-			).unwrap());
+			).unwrap()
+		});
 		ChannelActions::<T, I>::insert(&deposit_address, ChannelAction::<T::AccountId>::LiquidityProvision {
 			lp_account: account("doogle", 0, 0)
 		});
@@ -50,11 +53,14 @@ benchmarks_instance_pallet! {
 			let deposit_address = <<T as Config<I>>::TargetChain as Chain>::ChainAccount::benchmark_value_by_id(a as u8);
 			let deposit_fetch_id = <<T as Config<I>>::TargetChain as Chain>::DepositFetchId::benchmark_value_by_id(a as u8);
 			let source_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
-			DepositChannelLookup::<T, I>::insert(deposit_address.clone(),
-			T::DepositChannel::new(
-				a as u64,
-				source_asset,
-			).unwrap());
+			let new = DepositChannelDetails {
+				opened_at: TargetChainBlockNumber::<T, I>::benchmark_value(),
+				deposit_channel: T::DepositChannel::new(
+					1,
+					source_asset,
+				).unwrap()
+			};
+			DepositChannelLookup::<T, I>::insert(deposit_address.clone(), new);
 			addresses.push((deposit_fetch_id, deposit_address));
 		}
 	}: { let _ = Pallet::<T, I>::finalise_ingress(origin, addresses); }

@@ -45,7 +45,9 @@ pub async fn start(
 			.context("Failed to get initial deposit details")?
 			.into_iter()
 			.filter_map(|(address, channel_details)| {
-				if channel_details.asset == cf_primitives::chains::assets::dot::Asset::Dot {
+				if channel_details.deposit_channel.asset ==
+					cf_primitives::chains::assets::dot::Asset::Dot
+				{
 					Some(address)
 				} else {
 					None

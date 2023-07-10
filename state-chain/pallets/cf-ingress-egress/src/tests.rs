@@ -1,7 +1,8 @@
 use crate::{
-	mock::*, AddressPool, ChannelAction, ChannelIdCounter, CrossChainMessage, DepositChannelLookup,
-	DepositWitness, DisabledEgressAssets, Error, Event as PalletEvent, FetchOrTransfer,
-	MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
+	mock::*, AddressPool, ChannelAction, ChannelIdCounter, CrossChainMessage,
+	DepositChannelDetails, DepositChannelLookup, DepositWitness, DisabledEgressAssets, Error,
+	Event as PalletEvent, FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm,
+	ScheduledEgressFetchOrTransfer,
 };
 use cf_chains::{ExecutexSwapAndCall, TransferAssetParams};
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
@@ -33,10 +34,16 @@ fn mark_as_deployed(address: H160, channel_id: u64) {
 		address,
 		channel_id,
 		deployment_status: eth_mock_deposit_channel::DeploymentStatus::Deployed,
-		deposit_fetch_id: deposit_channel.get_deposit_fetch_id(),
-		asset: deposit_channel.get_asset(),
+		deposit_fetch_id: deposit_channel.deposit_channel.get_deposit_fetch_id(),
+		asset: deposit_channel.deposit_channel.get_asset(),
 	};
-	DepositChannelLookup::<Test>::insert(address, new_eth_depo_addr);
+	DepositChannelLookup::<Test>::insert(
+		address,
+		DepositChannelDetails {
+			deposit_channel: new_eth_depo_addr,
+			opened_at: 1, //TargetChainBlockNumber::<Test, Instance1>::from(1),
+		},
+	);
 }
 
 #[test]
