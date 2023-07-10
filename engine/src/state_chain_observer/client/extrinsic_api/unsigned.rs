@@ -69,7 +69,7 @@ impl UnsignedExtrinsicClient {
 										expected_hash
 									},
 									// POOL_TEMPORARILY_BANNED error is not entirely understood, we
-									// believe it has a similiar meaning to POOL_ALREADY_IMPORTED,
+									// believe it has a similar meaning to POOL_ALREADY_IMPORTED,
 									// but we don't know. We believe there maybe cases where we need
 									// to resubmit if this error occurs.
 									jsonrpsee::core::Error::Call(
@@ -152,18 +152,29 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn should_not_error_if_already_in_pool() {
+	async fn should_not_error_if_tx_is_already_in_pool() {
+		test_error_code(1013).await;
+	}
+
+	#[tokio::test]
+	async fn should_not_error_if_tx_is_temporarily_banned() {
+		test_error_code(1012).await;
+	}
+
+	/// Test that the given error code does not result in an error, but instead returns the hash of
+	/// the extrinsic
+	async fn test_error_code(error_code: i32) {
 		task_scope(|scope| {
 			async {
 				let mut mock_rpc_api = MockBaseRpcApi::new();
 
-				// Return the 1013 error code
+				// Return the error code. The other `ErrorObject` details do not matter.
 				mock_rpc_api.expect_submit_extrinsic().once().returning(move |_| {
 					Err(jsonrpsee::core::Error::Call(jsonrpsee::types::error::CallError::Custom(
 						jsonrpsee::types::ErrorObject::owned(
-							1013,
+							error_code,
 							"Invalid Transaction",
-							Some("POOL_ALREADY_IMPORTED"),
+							Some("some error"),
 						),
 					)))
 				});
@@ -195,7 +206,7 @@ mod tests {
 				let mut mock_rpc_api = MockBaseRpcApi::new();
 
 				// Return an unexpected error
-				mock_rpc_api.expect_submit_extrinsic().once().returning(move |_| {
+				mock_rpc_api.expect_submit_extrinsic().once().returning(|_| {
 					Err(jsonrpsee::core::Error::Call(
 						jsonrpsee::types::error::CallError::InvalidParams(anyhow::Error::msg(
 							"🤷‍♂️",
