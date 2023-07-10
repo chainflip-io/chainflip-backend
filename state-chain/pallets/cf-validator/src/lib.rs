@@ -100,7 +100,7 @@ pub type Percentage = u8;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_traits::{AccountRoleRegistry, SetSafeMode, VaultStatus};
+	use cf_traits::{AccountRoleRegistry, VaultStatus};
 	use frame_system::pallet_prelude::*;
 	use pallet_session::WeightInfo as SessionWeightInfo;
 	use sp_runtime::app_crypto::RuntimePublic;
@@ -154,7 +154,7 @@ pub mod pallet {
 		type ReputationResetter: ReputationResetter<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// Safe Mode access.
-		type SafeMode: Get<PalletSafeMode> + SetSafeMode<PalletSafeMode>;
+		type SafeMode: Get<PalletSafeMode>;
 
 		/// Benchmark weights.
 		type ValidatorWeightInfo: WeightInfo;
@@ -337,6 +337,8 @@ pub mod pallet {
 		NotEnoughBidders,
 		/// Not enough funds to register as a validator.
 		NotEnoughFunds,
+		/// Rotations are currently disabled through SafeMode.
+		RotationsDisabled,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -566,6 +568,7 @@ pub mod pallet {
 				CurrentRotationPhase::<T>::get() == RotationPhase::Idle,
 				Error::<T>::RotationInProgress
 			);
+			ensure!(T::SafeMode::get().authority_rotation_enabled, Error::<T>::RotationsDisabled,);
 			Self::start_authority_rotation();
 
 			Ok(().into())

@@ -529,7 +529,10 @@ fn no_validator_rotation_during_safe_mode_code_red() {
 		// Try to start a rotation.
 		ValidatorPallet::start_authority_rotation();
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
-		ValidatorPallet::force_rotation(RawOrigin::Root.into()).unwrap();
+		assert_noop!(
+			ValidatorPallet::force_rotation(RawOrigin::Root.into()),
+			Error::<Test>::RotationsDisabled
+		);
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 
 		// Change safe mode to CODE GREEN
