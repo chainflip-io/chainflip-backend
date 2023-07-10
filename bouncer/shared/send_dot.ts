@@ -1,19 +1,13 @@
 import { ApiPromise, WsProvider } from "@polkadot/api";
 import Keyring from "@polkadot/keyring";
 import { cryptoWaitReady } from "@polkadot/util-crypto";
-import { polkadotSigningMutex, sleep } from "./utils";
+import { polkadotSigningMutex, sleep, amountToFineAmount, assetToDecimals } from "./utils";
 
 export async function sendDot(address: string, amount: string) {
 
     const polkadot_endpoint = process.env.POLKADOT_ENDPOINT || 'ws://127.0.0.1:9945';
 
-    let planckAmount: any;
-    if (!amount.includes('.')) {
-        planckAmount = amount + '0000000000';
-    } else {
-        const amount_parts = amount.split('.');
-        planckAmount = amount_parts[0] + amount_parts[1].padEnd(10, '0').substring(0, 10);
-    }
+    const planckAmount = amountToFineAmount(amount, assetToDecimals.get("DOT")!);
     await cryptoWaitReady();
     const keyring = new Keyring({ type: 'sr25519' });
     const alice = keyring.createFromUri('//Alice');

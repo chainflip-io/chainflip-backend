@@ -6,29 +6,15 @@
 
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { observeEvent, getChainflipApi, runWithTimeout, handleSubstrateError } from '../shared/utils';
+import { observeEvent, getChainflipApi, runWithTimeout, handleSubstrateError, assetToDecimals, amountToFineAmount } from '../shared/utils';
+import { Asset } from '@chainflip-io/cli';
 
 const cf_node_endpoint = process.env.CF_NODE_ENDPOINT || 'ws://127.0.0.1:9944';
 
-const decimals = new Map<string, number>([
-	["dot", 10],
-	["eth", 18],
-	["btc", 8],
-	["usdc", 6],
-	["flip", 18]
-]);
-
 async function range_order(){
-	const ccy = process.argv[2];
+	const ccy = process.argv[2].toUpperCase() as Asset;
 	const amount = process.argv[3].trim();
-	var fine_amount = '';
-	if(amount.indexOf('.') == -1){
-		fine_amount = amount + "0".repeat(decimals.get(ccy)!);
-	} else {
-		const amount_parts = amount.split('.');
-		fine_amount = amount_parts[0] + amount_parts[1].padEnd(decimals.get(ccy)!,'0').substr(0, decimals.get(ccy)!);
-	}
-	const liquidity = Math.sqrt(Number(fine_amount))
+	const fine_amount = amountToFineAmount(amount, assetToDecimals.get(ccy)!);
 	const chainflip = await getChainflipApi(process.env.CF_NODE_ENDPOINT);
 	await cryptoWaitReady();
 
@@ -37,13 +23,13 @@ async function range_order(){
 	const lp_uri = process.env.LP_URI || '//LP_1';
 	const lp = keyring.createFromUri(lp_uri);
 
-	const current_sqrt_price = (await chainflip.query.liquidityPools.pools(ccy)).toJSON().poolState.rangeOrders.currentSqrtPrice;
+	const current_sqrt_price = (await chainflip.query.liquidityPools.pools(ccy.toLowerCase())).toJSON()!.poolState.rangeOrders.currentSqrtPrice;
 	const price = Math.round(current_sqrt_price/Math.pow(2,96)*Number(fine_amount));
 	console.log("Setting up " + ccy + " range order");
 	const event = observeEvent('liquidityPools:RangeOrderMinted', chainflip, (data) => {
-		return data[0] == lp.address && data[1].toLowerCase() == ccy;
+		return data[0] == lp.address && data[1].toUpperCase() == ccy;
 	});
-	await chainflip.tx.liquidityPools.collectAndMintRangeOrder(ccy, [-887272, 887272], price).signAndSend(lp, {nonce: -1}, handleSubstrateError(chainflip));
+	await chainflip.tx.liquidityPools.collectAndMintRangeOrder(ccy.toLowerCase(), [-887272, 887272], price).signAndSend(lp, {nonce: -1}, handleSubstrateError(chainflip));
     await event;
 	process.exit(0);
 }

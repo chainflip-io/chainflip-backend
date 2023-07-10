@@ -1,8 +1,9 @@
-import { Token, getBalance } from "../shared/get_balance";
+import { getBalance } from "../shared/get_balance";
+import { Asset } from "@chainflip-io/cli/.";
 
 async function get_balance(ccy: string, address: string) {
     address = address.trim();
-    const result = await getBalance(ccy.toUpperCase() as Token, address);
+    const result = await getBalance(ccy.toUpperCase() as Asset, address);
     const result_str = result.toString().trim();
     console.log(result_str);
 }

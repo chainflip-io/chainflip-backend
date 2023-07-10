@@ -1,6 +1,7 @@
 import Web3 from "web3";
 import { getNextEthNonce } from "./send_eth";
 import erc20abi from '../../eth-contract-abis/IERC20.json';
+import { amountToFineAmount } from "./utils";
 
 export async function sendErc20(destinationAddress: string, contractAddress: string, amount: string) {
 
@@ -12,14 +13,8 @@ export async function sendErc20(destinationAddress: string, contractAddress: str
     const decimals = await contract.methods.decimals().call();
     const symbol = await contract.methods.symbol().call();
 
-    let fineAmount;
-    if (!amount.includes('.')) {
-        fineAmount = amount + '0'.repeat(decimals);
-    } else {
-        const amountParts = amount.split('.');
-        fineAmount = amountParts[0] + amountParts[1].padEnd(decimals, '0').substr(0, decimals);
-    }
-
+    const fineAmount = amountToFineAmount(amount, decimals);
+    
     const txData = contract.methods.transfer(destinationAddress, fineAmount).encodeABI();
     const whaleKey = process.env.ETH_USDC_WHALE || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
     console.log('Transferring ' + amount + ' ' + symbol + ' to ' + destinationAddress);

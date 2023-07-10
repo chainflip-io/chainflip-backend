@@ -1,5 +1,6 @@
 import Web3 from "web3";
 import erc20abi from '../../eth-contract-abis/IERC20.json';
+import { fineAmountToAmount } from "./utils";
 
 export async function getErc20Balance(walletAddress: string, contractAddress: string): Promise<string> {
 
@@ -11,14 +12,5 @@ export async function getErc20Balance(walletAddress: string, contractAddress: st
 
     const decimals = await contract.methods.decimals().call();
     const fineBalance: string = await contract.methods.balanceOf(walletAddress).call();
-    const balanceLen = fineBalance.length;
-    let balance;
-    if (balanceLen > decimals) {
-        const decimalLocation = balanceLen - decimals;
-        balance = fineBalance.slice(0, decimalLocation) + '.' + fineBalance.slice(decimalLocation);
-    } else {
-        balance = '0.' + fineBalance.padStart(decimals, '0');
-    }
-
-    return balance;
+    return fineAmountToAmount(fineBalance, decimals);
 }

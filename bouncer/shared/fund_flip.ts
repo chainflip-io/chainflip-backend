@@ -5,7 +5,7 @@ import { getNextEthNonce } from "./send_eth";
 import { getEthContractAddress } from "./utils";
 import erc20abi from '../../eth-contract-abis/IERC20.json';
 import gatewayabi from '../../eth-contract-abis/perseverance-rc17/IStateChainGateway.json';
-import { observeEvent, getChainflipApi, hexStringToBytesArray } from '../shared/utils';
+import { observeEvent, getChainflipApi, hexStringToBytesArray, assetToDecimals, amountToFineAmount } from '../shared/utils';
 
 export async function fundFlip(pubkey: string, flipAmount: string) {
 
@@ -14,13 +14,7 @@ export async function fundFlip(pubkey: string, flipAmount: string) {
     await cryptoWaitReady();
     const keyring = new Keyring();
 
-    let flipperinoAmount;
-    if (!flipAmount.includes('.')) {
-        flipperinoAmount = flipAmount + '000000000000000000';
-    } else {
-        const amountParts = flipAmount.split('.');
-        flipperinoAmount = amountParts[0] + amountParts[1].padEnd(18, '0').substr(0, 18);
-    }
+    const flipperinoAmount = amountToFineAmount(flipAmount, assetToDecimals.get('FLIP')!);
 
     const web3 = new Web3(ethEndpoint);
 

@@ -13,16 +13,16 @@ import { observeEvent, getChainflipApi, runWithTimeout, handleSubstrateError } f
 import { send } from '../shared/send';
 import { Asset } from "@chainflip-io/cli/.";
 
-const chain = new Map<string, string>([
-	["dot", "dot"],
-	["eth", "eth"],
-	["btc", "btc"],
-	["usdc", "eth"],
-	["flip", "eth"]
+const chain = new Map<Asset, string>([
+	["DOT", "dot"],
+	["ETH", "eth"],
+	["BTC", "btc"],
+	["USDC", "eth"],
+	["FLIP", "eth"]
 ]);
 
 async function main(){
-	const ccy = process.argv[2];
+	const ccy = process.argv[2].toUpperCase() as Asset;
 	const amount = process.argv[3];
 	const chainflip = await getChainflipApi(process.env.CF_NODE_ENDPOINT);
 	await cryptoWaitReady();
@@ -35,10 +35,10 @@ async function main(){
 	var event = observeEvent('liquidityProvider:LiquidityDepositAddressReady', chainflip, (data) => {
 		return data[1][chain.get(ccy)!] != undefined;
 	});
-	await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress(ccy).signAndSend(lp, {nonce: -1}, handleSubstrateError(chainflip));
+	await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress(ccy.toLowerCase()).signAndSend(lp, {nonce: -1}, handleSubstrateError(chainflip));
 	var ingress_key = (await event).depositAddress.toJSON()[chain.get(ccy)!];
     var ingress_address = ingress_key;
-	if(ccy == 'btc'){
+	if(ccy == "BTC"){
 		ingress_address = '';
 		for(var n=2; n<ingress_key.length; n+=2){
 			ingress_address += String.fromCharCode(parseInt(ingress_key.substr(n, 2), 16));
@@ -47,9 +47,9 @@ async function main(){
 	console.log("Received " + ccy + " address: " + ingress_address);
 	console.log("Sending " + amount + " " + ccy + " to " + ingress_address);
 	event = observeEvent('liquidityProvider:AccountCredited', chainflip, (data) => {
-		return data[1].toLowerCase() == ccy;
+		return data[1].toUpperCase() == ccy;
 	});
-	send(ccy.toUpperCase() as Asset, ingress_address, amount);
+	send(ccy, ingress_address, amount);
 	await event;
 	process.exit(0);
 }

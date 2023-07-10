@@ -1,12 +1,11 @@
-import { Token, getEthContractAddress } from "./utils";
+import { getEthContractAddress } from "./utils";
 import { getBtcBalance } from "./get_btc_balance";
 import { getDotBalance } from "./get_dot_balance";
 import { getEthBalance } from "./get_eth_balance";
 import { getErc20Balance } from "./get_erc20_balance";
+import { Asset } from '@chainflip-io/cli';
 
-export type Token = 'USDC' | 'ETH' | 'DOT' | 'FLIP' | 'BTC';
-
-export async function getBalance(token: Token, address: string): Promise<number> {
+export async function getBalance(token: Asset, address: string): Promise<number> {
     address = address.trim();
     let result: any;
     switch (token) {

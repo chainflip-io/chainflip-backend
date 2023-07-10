@@ -30,6 +30,14 @@ export function assetToChain(asset: Asset): number {
   }
 }
 
+export const assetToDecimals = new Map<Asset, number>([
+	["DOT", 10],
+	["ETH", 18],
+	["BTC", 8],
+	["USDC", 6],
+	["FLIP", 18]
+]);
+
 // TODO: Import this from the chainflip-io/cli package once it's exported in future versions.
 export function getEthContractAddress(contract: string): string {
   switch (contract) {
@@ -46,6 +54,28 @@ export function getEthContractAddress(contract: string): string {
     default:
       throw new Error(`Unsupported contract: ${contract}`);
   }
+}
+
+export function amountToFineAmount(amount: string, decimals: number): string {
+  let fine_amount = '';
+	if(amount.indexOf('.') == -1){
+		fine_amount = amount + "0".repeat(decimals);
+	} else {
+		const amount_parts = amount.split('.');
+		fine_amount = amount_parts[0] + amount_parts[1].padEnd(decimals,'0').substr(0, decimals);
+	}
+  return fine_amount;
+}
+
+export function fineAmountToAmount(fineAmount: string, decimals: number): string {
+  let balance = '';
+  if (fineAmount.length > decimals) {
+      const decimalLocation = fineAmount.length - 10;
+      balance = fineAmount.slice(0, decimalLocation) + '.' + fineAmount.slice(decimalLocation);
+  } else {
+      balance = '0.' + fineAmount.padStart(10, '0');
+  }
+  return balance;
 }
 
 export const runWithTimeout = <T>(promise: Promise<T>, millis: number): Promise<T> =>
