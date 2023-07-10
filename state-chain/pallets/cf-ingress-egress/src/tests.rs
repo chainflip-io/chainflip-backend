@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, AddressPool, ChannelAction, ChannelIdCounter, CrossChainMessage,
-	DepositChannelDetails, DepositChannelLookup, DepositWitness, DisabledEgressAssets, Error,
+	mock::*, ChannelAction, ChannelIdCounter, CrossChainMessage, DepositChannelDetails,
+	DepositChannelLookup, DepositChannelPool, DepositWitness, DisabledEgressAssets, Error,
 	Event as PalletEvent, FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm,
 	ScheduledEgressFetchOrTransfer,
 };
@@ -25,7 +25,11 @@ const EXPIRY_BLOCK: u64 = 6;
 
 #[track_caller]
 fn expect_size_of_address_pool(size: usize) {
-	assert_eq!(AddressPool::<Test>::iter_keys().count(), size, "Address pool size is incorrect!");
+	assert_eq!(
+		DepositChannelPool::<Test>::iter_keys().count(),
+		size,
+		"Address pool size is incorrect!"
+	);
 }
 
 fn mark_as_deployed(address: H160, channel_id: u64) {
@@ -387,7 +391,10 @@ fn addresses_are_getting_reused() {
 		.inspect_storage(|(channel_id, address, _asset)| {
 			expect_size_of_address_pool(1);
 			// Address 1 is free to use and in the pool of available addresses
-			assert_eq!(AddressPool::<Test, _>::get(channel_id).unwrap().get_address(), *address);
+			assert_eq!(
+				DepositChannelPool::<Test, _>::get(channel_id).unwrap().get_address(),
+				*address
+			);
 		})
 		.request_deposit_addresses(&[(ALICE, eth::Asset::Eth)])
 		// The address should have been taken from the pool and the id counter unchanged.
@@ -459,7 +466,7 @@ fn reused_address_channel_id_matches() {
 				eth::Asset::Eth,
 			)
 			.unwrap();
-		AddressPool::<Test, _>::insert(INTENT_ID, new_address);
+		DepositChannelPool::<Test, _>::insert(INTENT_ID, new_address);
 		let (reused_channel_id, reused_address) = IngressEgress::open_channel(
 			eth::Asset::Eth,
 			ChannelAction::LiquidityProvision { lp_account: 0 },

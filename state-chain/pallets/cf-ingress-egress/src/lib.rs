@@ -249,7 +249,7 @@ pub mod pallet {
 
 	/// Stores address ready for use.
 	#[pallet::storage]
-	pub(crate) type AddressPool<T: Config<I>, I: 'static = ()> =
+	pub(crate) type DepositChannelPool<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, ChannelId, T::DepositChannel>;
 
 	/// Map of channel id to the deposit fetch parameters.
@@ -684,7 +684,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		// We have an address available, so we can just use it.
 
 		let (deposit_channel, channel_id) =
-			if let Some((channel_id, address)) = AddressPool::<T, I>::drain().next() {
+			if let Some((channel_id, address)) = DepositChannelPool::<T, I>::drain().next() {
 				(address, channel_id)
 			} else {
 				let next_channel_id = ChannelIdCounter::<T, I>::get()
@@ -719,7 +719,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		ChannelActions::<T, I>::remove(&address);
 		if let Some(deposit_channel_details) = DepositChannelLookup::<T, I>::get(&address) {
 			if deposit_channel_details.deposit_channel.maybe_recycle() {
-				AddressPool::<T, I>::insert(
+				DepositChannelPool::<T, I>::insert(
 					channel_id,
 					deposit_channel_details.deposit_channel.clone(),
 				);
