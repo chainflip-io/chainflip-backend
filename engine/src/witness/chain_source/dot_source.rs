@@ -5,9 +5,12 @@ use cf_primitives::PolkadotBlockNumber;
 use futures_util::stream;
 use subxt::{events::Events, PolkadotConfig};
 
-use crate::dot::{
-	retry_rpc::{DotRetryRpcApi, DotRetrySubscribeApi},
-	rpc::PolkadotHeader,
+use crate::{
+	dot::{
+		retry_rpc::{DotRetryRpcApi, DotRetrySubscribeApi},
+		rpc::PolkadotHeader,
+	},
+	witness::common::ExternalChainSource,
 };
 use futures::{stream::StreamExt, Stream};
 
@@ -113,6 +116,21 @@ impl<
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
 		(polkadot_source(self.client.clone()).await, self.client.clone())
 	}
+}
+
+impl<
+		C: ChainClient<
+				Index = PolkadotBlockNumber,
+				Hash = PolkadotHash,
+				Data = Events<PolkadotConfig>,
+			> + GetPolkadotStream
+			+ DotRetryRpcApi
+			+ DotRetrySubscribeApi
+			+ Clone
+			+ 'static,
+	> ExternalChainSource for DotFinalisedSource<C>
+{
+	type Chain = cf_chains::Polkadot;
 }
 
 async fn polkadot_source<

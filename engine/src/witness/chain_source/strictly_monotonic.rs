@@ -2,6 +2,8 @@ use std::task::Poll;
 
 use futures::Stream;
 
+use crate::witness::common::ExternalChainSource;
+
 use super::{BoxChainStream, ChainSource, ChainStream};
 
 #[pin_project::pin_project]
@@ -52,4 +54,8 @@ impl<InnerSource: ChainSource> ChainSource for StrictlyMonotonic<InnerSource> {
 		let (inner_stream, inner_client) = self.inner_source.stream_and_client().await;
 		(Box::pin(StrictlyMonotonicStream { inner_stream, last_output: None }), inner_client)
 	}
+}
+
+impl<InnerSource: ExternalChainSource> ExternalChainSource for StrictlyMonotonic<InnerSource> {
+	type Chain = InnerSource::Chain;
 }

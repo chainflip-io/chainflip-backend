@@ -3,7 +3,7 @@ use std::{collections::VecDeque, iter::Step};
 use futures::stream;
 use futures_util::StreamExt;
 
-use crate::witness::chain_source::ChainClient;
+use crate::witness::{chain_source::ChainClient, common::ExternalChainSource};
 
 use super::{BoxChainStream, ChainSource, Header};
 
@@ -71,4 +71,11 @@ where
 			chain_client,
 		)
 	}
+}
+
+impl<InnerSource: ExternalChainSource> ExternalChainSource for LagSafety<InnerSource>
+where
+	InnerSource::Client: Clone,
+{
+	type Chain = InnerSource::Chain;
 }

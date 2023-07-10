@@ -6,6 +6,8 @@ use utilities::{
 	UnendingStream,
 };
 
+use crate::witness::common::ExternalChainSource;
+
 use super::{BoxChainStream, ChainSource, ChainStream, Header};
 
 type SharedStreamReceiver<InnerSource> = spmc::Receiver<
@@ -90,4 +92,12 @@ where
 		let (stream, client) = receiver.await.expect(OR_CANCEL);
 		(stream.into_box(), client)
 	}
+}
+
+impl<InnerSource: ExternalChainSource> ExternalChainSource for SharedSource<InnerSource>
+where
+	InnerSource::Client: Clone,
+	InnerSource::Data: Clone,
+{
+	type Chain = InnerSource::Chain;
 }

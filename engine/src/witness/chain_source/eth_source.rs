@@ -5,7 +5,10 @@ use crate::{
 	eth::{
 		core_h256, retry_rpc::EthersRetrySubscribeApi, ConscientiousEthWebsocketBlockHeaderStream,
 	},
-	witness::chain_source::{ChainClient, ChainSource},
+	witness::{
+		chain_source::{ChainClient, ChainSource},
+		common::ExternalChainSource,
+	},
 };
 use futures::stream::StreamExt;
 use futures_util::stream;
@@ -79,4 +82,11 @@ where
 			self.client.clone(),
 		)
 	}
+}
+
+impl<C> ExternalChainSource for EthSource<C>
+where
+	C: EthersRetrySubscribeApi + ChainClient<Index = u64, Hash = H256, Data = Bloom> + Clone,
+{
+	type Chain = cf_chains::Ethereum;
 }
