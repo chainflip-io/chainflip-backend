@@ -89,6 +89,34 @@ spec:
             - name: lp-keys
               mountPath: {{ .Values.basePath }}/keys
         {{ end }}
+        {{- if .Values.engine.enabled }}
+        - name: chainflip-engine
+          image: "{{ .Values.engine.image.repository }}:{{ .Values.engine.image.tag | default "latest" }}"
+          ports:
+            - containerPort: 5555
+              name: healthcheck
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: healthcheck
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: healthcheck
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          volumeMounts:
+            - name: {{ include "chainflip-node.fullname" . }}
+              mountPath: {{ .Values.basePath }}/data.db
+        {{- end }}
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}

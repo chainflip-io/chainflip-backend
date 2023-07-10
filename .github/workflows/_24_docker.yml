@@ -54,12 +54,17 @@ jobs:
         target:
           - chainflip-node
           - chainflip-engine
+          - chainflip-engine-1-node
+          - chainflip-engine-3-node
           - chainflip-cli
           - chainflip-broker-api
           - chainflip-lp-api
           - generate-genesis-keys
         docker-repo:
           - ghcr.io/${{ github.repository }}
+        include:
+          - target: chainflip-engine-3-node
+            engine_db: [bashful, doc, dopey]
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout 🏁
