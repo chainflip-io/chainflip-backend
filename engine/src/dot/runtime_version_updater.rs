@@ -95,10 +95,13 @@ where
 		new_runtime_version: RuntimeVersion,
 		last_version_witnessed: &mut Option<RuntimeVersion>,
 	) -> anyhow::Result<()> {
-		if last_version_witnessed.is_none() {
-			*last_version_witnessed = Some(new_runtime_version);
-		}
-		if new_runtime_version.spec_version > last_version_witnessed.unwrap().spec_version {
+		let do_update_runtime_version = if let Some(last_version_witnessed) = last_version_witnessed
+		{
+			new_runtime_version.spec_version > last_version_witnessed.spec_version
+		} else {
+			true
+		};
+		if do_update_runtime_version {
 			self.state_chain_client
 				.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(
