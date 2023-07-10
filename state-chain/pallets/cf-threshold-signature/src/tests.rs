@@ -621,8 +621,11 @@ mod unsigned_validation {
 	fn can_only_report_candidates() {
 		const NOMINEES: [u64; 3] = [1, 2, 3];
 		const AUTHORITIES: [u64; 5] = [1, 2, 3, 4, 5];
-		const NON_CANDIDATE_OFFENDER: u64 = 6;
-		const VALID_OFFENDER: u64 = NOMINEES[1];
+
+		let valid_blames = BTreeSet::from_iter([NOMINEES[1], NOMINEES[2]]);
+		// AUTHORITIES[4] is not a candidate in the ceremony and u64::MAX is not an id of any
+		// authority.
+		let invalid_blames = BTreeSet::from_iter([AUTHORITIES[4], u64::MAX]);
 
 		ExtBuilder::new()
 			.with_authorities(AUTHORITIES)
@@ -634,15 +637,16 @@ mod unsigned_validation {
 				EthereumThresholdSigner::report_signature_failed(
 					RuntimeOrigin::signed(NOMINEES[0]),
 					ceremony_id,
-					BTreeSet::from_iter([VALID_OFFENDER, NON_CANDIDATE_OFFENDER]),
+					valid_blames.iter().cloned().chain(invalid_blames.clone()).collect(),
 				)
 				.unwrap();
 
 				let CeremonyContext::<Test, Instance1> { blame_counts, .. } =
 					EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+				let blamed: BTreeSet<_> = blame_counts.keys().cloned().collect();
 
-				assert!(!blame_counts.contains_key(&NON_CANDIDATE_OFFENDER));
-				assert!(blame_counts.contains_key(&VALID_OFFENDER));
+				assert_eq!(&valid_blames, &blamed);
+				assert!(invalid_blames.is_disjoint(&blamed));
 			});
 	}
 }
