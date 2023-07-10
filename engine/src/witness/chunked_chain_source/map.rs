@@ -1,10 +1,10 @@
-use cf_primitives::EpochIndex;
 use futures_core::Future;
 use futures_util::StreamExt;
 
 use crate::witness::{
 	chain_source::{aliases, ChainClient, ChainStream, Header},
 	common::BoxActiveAndFuture,
+	epoch_source::Epoch,
 };
 
 use super::ChunkedChainSource;
@@ -24,7 +24,10 @@ impl<Inner: ChunkedChainSource, MappedTo, FutMappedTo, MapFn> ChunkedChainSource
 where
 	MappedTo: aliases::Data,
 	FutMappedTo: Future<Output = MappedTo> + Send,
-	MapFn: Fn(EpochIndex, Inner::Info, Header<Inner::Index, Inner::Hash, Inner::Data>) -> FutMappedTo
+	MapFn: Fn(
+			Epoch<Inner::Info, Inner::HistoricInfo>,
+			Header<Inner::Index, Inner::Hash, Inner::Data>,
+		) -> FutMappedTo
 		+ Send
 		+ Sync
 		+ Clone,
@@ -52,29 +55,27 @@ where
 			.then(move |(epoch, chain_stream, chain_client)| {
 				let map_fn = self.map_fn.clone();
 				async move {
-					let epoch_index = epoch.index;
-					let epoch_info = epoch.info.clone();
 					(
-						epoch,
+						epoch.clone(),
 						chain_stream
 							.then({
 								let map_fn = map_fn.clone();
-								let epoch_info = epoch_info.clone();
+								let epoch = epoch.clone();
 								move |header| {
 									let map_fn = map_fn.clone();
-									let epoch_info = epoch_info.clone();
+									let epoch = epoch.clone();
 									async move {
 										Header {
 											index: header.index,
 											hash: header.hash,
 											parent_hash: header.parent_hash,
-											data: (map_fn)(epoch_index, epoch_info, header).await,
+											data: (map_fn)(epoch, header).await,
 										}
 									}
 								}
 							})
 							.into_box(),
-						MappedClient::new(chain_client, map_fn.clone(), epoch_index, epoch_info),
+						MappedClient::new(chain_client, map_fn.clone(), epoch),
 					)
 				}
 			})
@@ -86,17 +87,15 @@ where
 pub struct MappedClient<Inner: ChunkedChainSource, MapFn> {
 	inner_client: Inner::Client,
 	map_fn: MapFn,
-	index: EpochIndex,
-	info: Inner::Info,
+	epoch: Epoch<Inner::Info, Inner::HistoricInfo>,
 }
 impl<Inner: ChunkedChainSource, MapFn> MappedClient<Inner, MapFn> {
 	pub fn new(
 		inner_client: Inner::Client,
 		map_fn: MapFn,
-		index: EpochIndex,
-		info: Inner::Info,
+		epoch: Epoch<Inner::Info, Inner::HistoricInfo>,
 	) -> Self {
-		Self { inner_client, map_fn, index, info }
+		Self { inner_client, map_fn, epoch }
 	}
 }
 #[async_trait::async_trait]
@@ -105,8 +104,7 @@ impl<
 		MappedTo: aliases::Data,
 		FutMappedTo: Future<Output = MappedTo> + Send,
 		MapFn: Fn(
-				EpochIndex,
-				Inner::Info,
+				Epoch<Inner::Info, Inner::HistoricInfo>,
 				Header<Inner::Index, Inner::Hash, Inner::Data>,
 			) -> FutMappedTo
 			+ Send
@@ -128,7 +126,7 @@ impl<
 			index: header.index,
 			hash: header.hash,
 			parent_hash: header.parent_hash,
-			data: (self.map_fn)(self.index, self.info.clone(), header).await,
+			data: (self.map_fn)(self.epoch.clone(), header).await,
 		}
 	}
 }
