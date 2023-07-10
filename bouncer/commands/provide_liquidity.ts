@@ -4,12 +4,12 @@
 //
 // This command takes two arguments.
 // It will fund liquidity of the given currency and amount
-// For example: ./commands/provide_liquidity.sh btc 1.5
+// For example: pnpm ./commands/provide_liquidity.ts btc 1.5
 
 
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { observeEvent, getChainflipApi, runWithTimeout, handleSubstrateError } from '../shared/utils';
+import { observeEvent, getChainflipApi, runWithTimeout, handleSubstrateError, encodeBtcAddressForContract } from '../shared/utils';
 import { send } from '../shared/send';
 import { Asset } from "@chainflip-io/cli/.";
 
@@ -32,17 +32,13 @@ async function main(){
 	const lp = keyring.createFromUri(lp_uri);
 
 	console.log("Requesting " + ccy + " deposit address");
-	var event = observeEvent('liquidityProvider:LiquidityDepositAddressReady', chainflip, (data) => {
+	let event = observeEvent('liquidityProvider:LiquidityDepositAddressReady', chainflip, (data) => {
 		return data[1][chain.get(ccy)!] != undefined;
 	});
 	await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress(ccy.toLowerCase()).signAndSend(lp, {nonce: -1}, handleSubstrateError(chainflip));
-	var ingress_key = (await event).depositAddress.toJSON()[chain.get(ccy)!];
-    var ingress_address = ingress_key;
+	let ingress_address = (await event).depositAddress.toJSON()[chain.get(ccy)!];
 	if(ccy == "BTC"){
-		ingress_address = '';
-		for(var n=2; n<ingress_key.length; n+=2){
-			ingress_address += String.fromCharCode(parseInt(ingress_key.substr(n, 2), 16));
-		}
+		ingress_address = encodeBtcAddressForContract(ingress_address);
 	}
 	console.log("Received " + ccy + " address: " + ingress_address);
 	console.log("Sending " + amount + " " + ccy + " to " + ingress_address);

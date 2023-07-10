@@ -12,7 +12,7 @@ import { runWithTimeout } from '../shared/utils';
 import { fundFlip } from '../shared/fund_flip';
 
 async function main(): Promise<void> {
-  var pubkey = process.argv[2];
+  let pubkey = process.argv[2];
   if(pubkey.substr(0,2) != '0x'){
     pubkey = "0x" + pubkey
   }

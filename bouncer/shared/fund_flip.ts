@@ -28,14 +28,14 @@ export async function fundFlip(pubkey: string, flipAmount: string) {
     const flipContract = new web3.eth.Contract(erc20abi as any, flipContractAddress);
     const gatewayContract = new web3.eth.Contract(gatewayabi as any, gatewayContractAddress);
 
-    var txData = flipContract.methods.approve(gatewayContractAddress, flipperinoAmount).encodeABI();
+    let txData = flipContract.methods.approve(gatewayContractAddress, flipperinoAmount).encodeABI();
     const whaleKey = process.env.ETH_USDC_WHALE || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
     console.log('Approving ' + flipAmount + ' FLIP to State Chain Gateway');
 
-    var nonce = await getNextEthNonce()
-    var tx = { to: flipContractAddress, data: txData, gas: 2000000, nonce };
-    var signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
-    var receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string, ((error, hash) => {
+    let nonce = await getNextEthNonce()
+    let tx = { to: flipContractAddress, data: txData, gas: 2000000, nonce };
+    let signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
+    let receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string, ((error, hash) => {
         if (error) {
             console.error("Ethereum transaction failure:", error);
         }

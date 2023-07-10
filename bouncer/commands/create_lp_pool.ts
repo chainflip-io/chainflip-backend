@@ -3,7 +3,7 @@
 // This command takes two arguments.
 // It will create a new liquidity pool for the given currency and
 // initial price in USDC
-// For example: ./commands/create_pool.sh btc 10000
+// For example: pnpm tsx ./commands/create_pool.ts btc 10000
 
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';

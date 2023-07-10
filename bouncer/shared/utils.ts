@@ -226,7 +226,7 @@ export async function observeEVMEvent(contractAbi: any, address: string, eventNa
   let initBlockNumber = initialBlockNumber ?? await web3.eth.getBlockNumber();
 
   // Gets all the event parameter as an array
-  const eventAbi = cfReceiverMockAbi.find((item) => item.type === 'event' && item.name === eventName);
+  const eventAbi = cfReceiverMockAbi.find((item) => item.type === 'event' && item.name === eventName)!;
 
   // Get the parameter names of the event
   const parameterNames = eventAbi.inputs.map((input) => input.name);
@@ -282,9 +282,9 @@ export function encodeDotAddressForContract(address: string) {
 
 export function handleSubstrateError(api: any) {
   return (arg: any) => {
-    var {status, events, dispatchError} = arg
+    let {status, events, dispatchError} = arg
     if(dispatchError){
-      var error;
+      let error;
       if(dispatchError.isModule){
         const {docs, name, section} = api.registry.findMetaError(dispatchError.asModule);
         error = section + '.' + name + ' ' + docs;

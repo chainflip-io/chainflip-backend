@@ -198,7 +198,6 @@ async function main(): Promise<void> {
     setupCurrency('DOT'),
     setupCurrency('ETH'),
     setupCurrency('BTC'),
-    setupCurrency('FLIP'),
   ]);
   process.exit(0);
 }
