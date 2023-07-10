@@ -1270,25 +1270,30 @@ fn bond_should_count_toward_restricted_balance() {
 
 #[test]
 fn skip_redemption_of_zero_flip() {
-	new_test_ext().execute_with(|| {
-		const TOTAL_FUNDS: FlipBalance = 100;
-		assert_ok!(Funding::funded(
-			RuntimeOrigin::root(),
-			ALICE,
-			TOTAL_FUNDS,
-			Default::default(),
-			Default::default(),
-		));
-		assert_ok!(Funding::redeem(
-			RuntimeOrigin::signed(ALICE),
-			RedemptionAmount::Exact(0),
-			Default::default()
-		));
-		assert_event_sequence! {
-			Test,
-			_,
-			RuntimeEvent::Funding(crate::Event::Funded {..}),
-			RuntimeEvent::Funding(crate::Event::RedemptionAmountZero {..}),
-		}
-	})
+	#[track_caller]
+	fn inner_test(funding_amount: FlipBalance, redemption_amount: RedemptionAmount<FlipBalance>) {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Funding::funded(
+				RuntimeOrigin::root(),
+				ALICE,
+				funding_amount,
+				Default::default(),
+				Default::default(),
+			));
+			assert_ok!(Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				redemption_amount,
+				Default::default()
+			));
+			assert_event_sequence! {
+				Test,
+				_,
+				RuntimeEvent::Funding(crate::Event::Funded {..}),
+				RuntimeEvent::Funding(crate::Event::RedemptionAmountZero {..}),
+			};
+		});
+	}
+
+	inner_test(100, RedemptionAmount::Exact(0));
+	inner_test(REDEMPTION_TAX, RedemptionAmount::Max);
 }
