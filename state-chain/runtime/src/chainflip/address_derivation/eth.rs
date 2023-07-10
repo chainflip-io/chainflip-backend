@@ -51,7 +51,7 @@ impl DepositChannel<Ethereum> for EthereumDepositAddress {
 		self.address
 	}
 
-	fn process_broadcast(mut self) -> (Self, bool)
+	fn skip_broadcast(mut self) -> (Self, bool)
 	where
 		Self: Sized,
 	{

@@ -870,8 +870,8 @@ pub trait DepositChannel<C: Chain> {
 	fn get_address(&self) -> Self::Address;
 	/// Returns the deposit fetch id.
 	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId;
-	/// Set the state of the
-	fn process_broadcast(self) -> (Self, bool)
+	/// Decides if we skip broadcasting.
+	fn skip_broadcast(self) -> (Self, bool)
 	where
 		Self: Sized,
 	{
@@ -884,7 +884,7 @@ pub trait DepositChannel<C: Chain> {
 	{
 		self
 	}
-	/// CHecks if a address should get reused or not.
+	/// Checks if a address should get reused or not.
 	fn maybe_recycle(&self) -> bool
 	where
 		Self: Sized,

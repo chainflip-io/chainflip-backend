@@ -108,7 +108,7 @@ pub mod eth_mock_deposit_channel {
 			self.address
 		}
 
-		fn process_broadcast(mut self) -> (Self, bool)
+		fn skip_broadcast(mut self) -> (Self, bool)
 		where
 			Self: Sized,
 		{

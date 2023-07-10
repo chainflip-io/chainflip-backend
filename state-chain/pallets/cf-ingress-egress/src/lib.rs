@@ -467,7 +467,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 										DepositChannelLookup::<T, I>::get(deposit_address.clone())
 									{
 										let (updated_deposit_channel, skip) =
-											details.clone().deposit_channel.process_broadcast();
+											details.clone().deposit_channel.skip_broadcast();
 										DepositChannelLookup::<T, I>::insert(
 											updated_deposit_channel.get_address(),
 											DepositChannelDetails {
