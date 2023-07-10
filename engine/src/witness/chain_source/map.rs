@@ -3,7 +3,7 @@ use super::{aliases, BoxChainStream, ChainSource, Header};
 use futures::Future;
 use futures_util::StreamExt;
 
-use crate::witness::chain_source::ChainClient;
+use crate::witness::{chain_source::ChainClient, common::ExternalChainSource};
 
 pub struct Map<InnerSource, MapFn> {
 	inner_source: InnerSource,
@@ -49,6 +49,19 @@ impl<
 
 		(Box::pin(mapped_stream), MappedClient::new(inner_client, self.map_fn.clone()))
 	}
+}
+
+impl<
+		InnerSource: ExternalChainSource,
+		MappedTo: aliases::Data,
+		FutMappedTo: Future<Output = MappedTo> + Send,
+		MapFn: Fn(Header<InnerSource::Index, InnerSource::Hash, InnerSource::Data>) -> FutMappedTo
+			+ Send
+			+ Sync
+			+ Clone,
+	> ExternalChainSource for Map<InnerSource, MapFn>
+{
+	type Chain = InnerSource::Chain;
 }
 
 pub struct MappedClient<InnerClient, MapFn> {

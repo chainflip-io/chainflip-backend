@@ -5,7 +5,10 @@ use futures_util::stream;
 use utilities::make_periodic_tick;
 
 use super::{ChainClient, ChainSource, Header};
-use crate::{btc::retry_rpc::BtcRetryRpcApi, witness::chain_source::BoxChainStream};
+use crate::{
+	btc::retry_rpc::BtcRetryRpcApi,
+	witness::{chain_source::BoxChainStream, common::ExternalChainSource},
+};
 
 pub struct BtcBlockStream<C> {
 	client: C,
@@ -51,4 +54,11 @@ where
 			self.client.clone(),
 		)
 	}
+}
+
+impl<C> ExternalChainSource for BtcBlockStream<C>
+where
+	C: BtcRetryRpcApi + ChainClient<Index = u64, Hash = BlockHash, Data = ()> + Clone,
+{
+	type Chain = cf_chains::Bitcoin;
 }
