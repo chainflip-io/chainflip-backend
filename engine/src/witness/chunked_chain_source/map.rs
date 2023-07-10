@@ -19,10 +19,9 @@ impl<Inner, MapFn> Map<Inner, MapFn> {
 	}
 }
 #[async_trait::async_trait]
-impl<'a, Inner: ChunkedChainSource<'a>, MappedTo, FutMappedTo, MapFn> ChunkedChainSource<'a>
+impl<Inner: ChunkedChainSource, MappedTo, FutMappedTo, MapFn> ChunkedChainSource
 	for Map<Inner, MapFn>
 where
-	Self: 'a,
 	MappedTo: aliases::Data,
 	FutMappedTo: Future<Output = MappedTo> + Send,
 	MapFn: Fn(EpochIndex, Inner::Info, Header<Inner::Index, Inner::Hash, Inner::Data>) -> FutMappedTo
@@ -37,15 +36,18 @@ where
 	type Hash = Inner::Hash;
 	type Data = MappedTo;
 
-	type Client = MappedClient<'a, Inner, MapFn>;
+	type Client = MappedClient<Inner, MapFn>;
 
 	type Chain = Inner::Chain;
 
+	type Parameters = Inner::Parameters;
+
 	async fn stream(
-		self,
-	) -> BoxActiveAndFuture<'a, super::Item<'a, Self, Self::Info, Self::HistoricInfo>> {
+		&self,
+		parameters: Self::Parameters,
+	) -> BoxActiveAndFuture<'_, super::Item<'_, Self, Self::Info, Self::HistoricInfo>> {
 		self.inner
-			.stream()
+			.stream(parameters)
 			.await
 			.then(move |(epoch, chain_stream, chain_client)| {
 				let map_fn = self.map_fn.clone();
@@ -79,13 +81,13 @@ where
 	}
 }
 
-pub struct MappedClient<'a, Inner: ChunkedChainSource<'a>, MapFn> {
+pub struct MappedClient<Inner: ChunkedChainSource, MapFn> {
 	inner_client: Inner::Client,
 	map_fn: MapFn,
 	index: EpochIndex,
 	info: Inner::Info,
 }
-impl<'a, Inner: ChunkedChainSource<'a>, MapFn> MappedClient<'a, Inner, MapFn> {
+impl<Inner: ChunkedChainSource, MapFn> MappedClient<Inner, MapFn> {
 	pub fn new(
 		inner_client: Inner::Client,
 		map_fn: MapFn,
@@ -97,8 +99,7 @@ impl<'a, Inner: ChunkedChainSource<'a>, MapFn> MappedClient<'a, Inner, MapFn> {
 }
 #[async_trait::async_trait]
 impl<
-		'a,
-		Inner: ChunkedChainSource<'a>,
+		Inner: ChunkedChainSource,
 		MappedTo: aliases::Data,
 		FutMappedTo: Future<Output = MappedTo> + Send,
 		MapFn: Fn(
@@ -109,7 +110,7 @@ impl<
 			+ Send
 			+ Sync
 			+ Clone,
-	> ChainClient for MappedClient<'a, Inner, MapFn>
+	> ChainClient for MappedClient<Inner, MapFn>
 {
 	type Index = Inner::Index;
 	type Hash = Inner::Hash;

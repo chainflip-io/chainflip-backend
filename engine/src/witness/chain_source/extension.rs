@@ -2,7 +2,11 @@ use futures_core::Future;
 use utilities::task_scope::Scope;
 
 use crate::witness::{
-	chunked_chain_source::{chunked_by_time::ChunkByTime, chunked_by_vault::ChunkByVault},
+	chunked_chain_source::{
+		self,
+		chunked_by_time::{self, ChunkByTime},
+		chunked_by_vault::{self, ChunkByVault},
+	},
 	common::{ExternalChainSource, RuntimeHasChain},
 	epoch_source::{EpochSource, VaultSource},
 };
@@ -47,24 +51,30 @@ pub trait ChainSourceExt: ChainSource {
 		StrictlyMonotonic::new(self)
 	}
 
-	async fn chunk_by_time<'a, 'b, 'env, StateChainClient: Send + Sync>(
-		&'a self,
+	async fn chunk_by_time<'b, 'env, StateChainClient: Send + Sync>(
+		self,
 		epochs: EpochSource<'b, 'env, StateChainClient, (), ()>,
-	) -> ChunkByTime<'a, Self>
+	) -> chunked_chain_source::Builder<chunked_by_time::Generic<ChunkByTime<Self>>>
 	where
-		Self: Sized,
+		Self: ExternalChainSource + Sized,
 	{
-		ChunkByTime::new(self, epochs.into_stream().await.into_box())
+		chunked_chain_source::Builder::new(
+			chunked_by_time::Generic(ChunkByTime::new(self)),
+			epochs.into_stream().await.into_box(),
+		)
 	}
 
-	async fn chunk_by_vault<'a, 'b, 'env, StateChainClient: Send + Sync>(
-		&'a self,
+	async fn chunk_by_vault<'b, 'env, StateChainClient: Send + Sync>(
+		self,
 		vaults: VaultSource<'b, 'env, StateChainClient, Self::Chain>,
-	) -> ChunkByVault<'a, Self>
+	) -> chunked_chain_source::Builder<chunked_by_vault::Generic<ChunkByVault<Self>>>
 	where
-		Self: Sized + ExternalChainSource,
+		Self: ExternalChainSource + Sized,
 		state_chain_runtime::Runtime: RuntimeHasChain<Self::Chain>,
 	{
-		ChunkByVault::new(self, vaults.into_stream().await.into_box())
+		chunked_chain_source::Builder::new(
+			chunked_by_vault::Generic(ChunkByVault::new(self)),
+			vaults.into_stream().await.into_box(),
+		)
 	}
 }

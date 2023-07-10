@@ -13,7 +13,7 @@ use super::{
 use utilities::assert_stream_send;
 
 #[async_trait::async_trait]
-pub trait ChunkedChainSource<'a>: Sized + Send {
+pub trait ChunkedChainSource: Sized + Send + Sync {
 	type Info: Clone + Send + Sync + 'static;
 	type HistoricInfo: Clone + Send + Sync + 'static;
 
@@ -25,12 +25,38 @@ pub trait ChunkedChainSource<'a>: Sized + Send {
 
 	type Chain: ExternalChain<ChainBlockNumber = Self::Index>;
 
-	async fn stream(self)
-		-> BoxActiveAndFuture<'a, Item<'a, Self, Self::Info, Self::HistoricInfo>>;
+	type Parameters: Send;
 
-	async fn run(self) {
+	async fn stream(
+		&self,
+		parameters: Self::Parameters,
+	) -> BoxActiveAndFuture<'_, Item<'_, Self, Self::Info, Self::HistoricInfo>>;
+}
+
+pub type Item<'a, T, Info, HistoricInfo> = (
+	Epoch<Info, HistoricInfo>,
+	BoxChainStream<
+		'a,
+		<T as ChunkedChainSource>::Index,
+		<T as ChunkedChainSource>::Hash,
+		<T as ChunkedChainSource>::Data,
+	>,
+	<T as ChunkedChainSource>::Client,
+);
+
+pub struct Builder<T: ChunkedChainSource> {
+	source: T,
+	parameters: T::Parameters,
+}
+impl<T: ChunkedChainSource> Builder<T> {
+	pub fn new(source: T, parameters: T::Parameters) -> Self {
+		Self { source, parameters }
+	}
+
+	pub async fn run(self) {
 		let stream = assert_stream_send(
-			self.stream()
+			self.source
+				.stream(self.parameters)
 				.await
 				.into_stream()
 				.flat_map_unordered(None, |(_epoch, chain_stream, _chain_client)| chain_stream),
@@ -38,14 +64,3 @@ pub trait ChunkedChainSource<'a>: Sized + Send {
 		stream.for_each(|_| futures::future::ready(())).await;
 	}
 }
-
-pub type Item<'a, T, Info, HistoricInfo> = (
-	Epoch<Info, HistoricInfo>,
-	BoxChainStream<
-		'a,
-		<T as ChunkedChainSource<'a>>::Index,
-		<T as ChunkedChainSource<'a>>::Hash,
-		<T as ChunkedChainSource<'a>>::Data,
-	>,
-	<T as ChunkedChainSource<'a>>::Client,
-);
