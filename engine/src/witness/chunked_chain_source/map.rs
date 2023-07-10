@@ -3,7 +3,7 @@ use futures_core::Future;
 use futures_util::StreamExt;
 
 use crate::witness::{
-	chain_source::{aliases, box_chain_stream, ChainClient, Header},
+	chain_source::{aliases, ChainClient, ChainStream, Header},
 	common::BoxActiveAndFuture,
 };
 
@@ -56,22 +56,24 @@ where
 					let epoch_info = epoch.info.clone();
 					(
 						epoch,
-						box_chain_stream(chain_stream.then({
-							let map_fn = map_fn.clone();
-							let epoch_info = epoch_info.clone();
-							move |header| {
+						chain_stream
+							.then({
 								let map_fn = map_fn.clone();
 								let epoch_info = epoch_info.clone();
-								async move {
-									Header {
-										index: header.index,
-										hash: header.hash,
-										parent_hash: header.parent_hash,
-										data: (map_fn)(epoch_index, epoch_info, header).await,
+								move |header| {
+									let map_fn = map_fn.clone();
+									let epoch_info = epoch_info.clone();
+									async move {
+										Header {
+											index: header.index,
+											hash: header.hash,
+											parent_hash: header.parent_hash,
+											data: (map_fn)(epoch_index, epoch_info, header).await,
+										}
 									}
 								}
-							}
-						})),
+							})
+							.into_box(),
 						MappedClient::new(chain_client, map_fn.clone(), epoch_index, epoch_info),
 					)
 				}

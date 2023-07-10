@@ -2,7 +2,7 @@ use cf_chains::Chain;
 use futures_util::StreamExt;
 
 use crate::witness::{
-	chain_source::{aliases, box_chain_stream, BoxChainStream, ChainClient},
+	chain_source::{aliases, BoxChainStream, ChainClient, ChainStream},
 	common::{BoxActiveAndFuture, ExternalChain, ExternalChainSource, RuntimeHasChain},
 	epoch_source::{self, Epoch},
 };
@@ -121,8 +121,9 @@ where
 
 				(
 					vault.clone(),
-					box_chain_stream(stream.take_until(vault.expired_signal.wait()).filter(
-						move |header| {
+					stream
+						.take_until(vault.expired_signal.wait())
+						.filter(move |header| {
 							futures::future::ready(
 								header.index >= vault.info.active_from_block &&
 									vault
@@ -130,8 +131,8 @@ where
 										.get()
 										.map_or(true, |end_index| header.index < *end_index),
 							)
-						},
-					)),
+						})
+						.into_box(),
 					client,
 				)
 			})

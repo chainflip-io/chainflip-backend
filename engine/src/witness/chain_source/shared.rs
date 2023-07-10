@@ -6,7 +6,7 @@ use utilities::{
 	UnendingStream,
 };
 
-use super::{box_chain_stream, BoxChainStream, ChainSource, Header};
+use super::{BoxChainStream, ChainSource, ChainStream, Header};
 
 type SharedStreamReceiver<InnerSource> = spmc::Receiver<
 	Header<
@@ -88,6 +88,6 @@ where
 			let _result = self.request_sender.send(sender).await;
 		}
 		let (stream, client) = receiver.await.expect(OR_CANCEL);
-		(box_chain_stream(stream), client)
+		(stream.into_box(), client)
 	}
 }

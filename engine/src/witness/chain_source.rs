@@ -57,12 +57,28 @@ pub trait ChainClient: Send + Sync {
 		&self,
 		index: Self::Index,
 	) -> Header<Self::Index, Self::Hash, Self::Data>;
+
+	fn into_box<'a>(self) -> BoxChainClient<'a, Self::Index, Self::Hash, Self::Data>
+	where
+		Self: 'a + Sized,
+	{
+		Box::new(self)
+	}
 }
+pub type BoxChainClient<'a, Index, Hash, Data> =
+	Box<dyn ChainClient<Index = Index, Hash = Hash, Data = Data> + 'a>;
 
 pub trait ChainStream: Stream<Item = Header<Self::Index, Self::Hash, Self::Data>> + Send {
 	type Index: aliases::Index;
 	type Hash: aliases::Hash;
 	type Data: aliases::Data;
+
+	fn into_box<'a>(self) -> BoxChainStream<'a, Self::Index, Self::Hash, Self::Data>
+	where
+		Self: 'a + Sized,
+	{
+		Box::pin(self)
+	}
 }
 impl<
 		Index: aliases::Index,
@@ -82,15 +98,3 @@ pub type BoxChainStream<'a, Index, Hash, Data> = Pin<
 			+ 'a,
 	>,
 >;
-
-pub fn box_chain_stream<
-	'a,
-	Index: aliases::Index,
-	Hash: aliases::Hash,
-	Data: aliases::Data,
-	InnerStream: Stream<Item = Header<Index, Hash, Data>> + Send + 'a,
->(
-	inner_stream: InnerStream,
-) -> BoxChainStream<'a, Index, Hash, Data> {
-	Box::pin(inner_stream)
-}

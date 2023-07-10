@@ -8,7 +8,6 @@ use state_chain_runtime::PalletInstanceAlias;
 use crate::state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi;
 
 use super::{
-	chain_source::box_chain_stream,
 	common::{BoxActiveAndFuture, ExternalChainSource, RuntimeCallHasChain, RuntimeHasChain},
 	split_by_epoch::{ChunkedByTime, Item},
 };
@@ -67,7 +66,7 @@ where
 				async move {
 					(
 						epoch.clone(),
-						box_chain_stream(chain_stream.then(move |header| {
+						chain_stream.then(move |header| {
 							let state_chain_client = state_chain_client.clone();
 							let client = client.clone();
 							async move {
@@ -88,7 +87,8 @@ where
 									.await;
 								header
 							}
-						})),
+						})
+						.into_box(),
 					)
 				}
 			})

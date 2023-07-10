@@ -3,7 +3,7 @@ pub mod chain_tracking;
 use futures_util::StreamExt;
 
 use crate::witness::{
-	chain_source::{aliases, box_chain_stream, BoxChainStream, ChainClient},
+	chain_source::{aliases, BoxChainStream, ChainClient, ChainStream},
 	common::{BoxActiveAndFuture, ExternalChain, ExternalChainSource},
 	epoch_source::Epoch,
 };
@@ -100,7 +100,7 @@ impl<TChainSource: ExternalChainSource> ChunkedByTime for ChunkByTime<TChainSour
 			.then(move |epoch| async move {
 				let (stream, client) = self.chain_source.stream_and_client().await;
 				let historic_signal = epoch.historic_signal.clone();
-				(epoch, box_chain_stream(stream.take_until(historic_signal.wait())), client)
+				(epoch, stream.take_until(historic_signal.wait()).into_box(), client)
 			})
 			.await
 			.into_box()
