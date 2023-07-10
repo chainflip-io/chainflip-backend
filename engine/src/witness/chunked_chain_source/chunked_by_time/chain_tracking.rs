@@ -1,94 +1,115 @@
-/*
-use std::{marker::PhantomData, sync::Arc};
+use std::sync::Arc;
 
+use crate::witness::chain_source::ChainStream;
 use futures::StreamExt;
 use pallet_cf_chain_tracking::ChainState;
 use state_chain_runtime::PalletInstanceAlias;
 
-use crate::state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi;
-
-use super::{
-	common::{BoxActiveAndFuture, ExternalChainSource, RuntimeCallHasChain, RuntimeHasChain},
-	split_by_epoch::{ChunkedByTime, Item},
+use crate::{
+	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
+	witness::common::{BoxActiveAndFuture, RuntimeCallHasChain, RuntimeHasChain},
 };
+
+use super::{ChunkedByTime, Item};
 
 #[async_trait::async_trait]
 pub trait GetTrackedData<C: cf_chains::Chain>: Send + Sync + Clone {
-	async fn get_tracked_data(&self) -> ChainState<C>;
+	async fn get_tracked_data(&self, block_number: C::ChainBlockNumber) -> C::TrackedData;
 }
 
-pub struct ChainTracking<'a, Inner, StateChainClient, TrackedDataClient> {
-	inner_stream: Inner,
-	client: TrackedDataClient,
+pub struct ChainTracking<Inner, StateChainClient, TrackedDataClient> {
+	inner: Inner,
+	tracked_data_client: TrackedDataClient,
 	state_chain_client: Arc<StateChainClient>,
-	_phantom: PhantomData<&'a ()>,
 }
 
-impl<'a, Inner, StateChainClient, TrackedDataClient>
-	ChainTracking<'a, Inner, StateChainClient, TrackedDataClient>
+impl<Inner, StateChainClient, TrackedDataClient>
+	ChainTracking<Inner, StateChainClient, TrackedDataClient>
 {
 	pub fn new(
-		inner_stream: Inner,
+		inner: Inner,
 		state_chain_client: Arc<StateChainClient>,
-		client: TrackedDataClient,
-	) -> ChainTracking<'a, Inner, StateChainClient, TrackedDataClient> {
-		ChainTracking { inner_stream, state_chain_client, client, _phantom: PhantomData }
+		tracked_data_client: TrackedDataClient,
+	) -> ChainTracking<Inner, StateChainClient, TrackedDataClient> {
+		ChainTracking { inner, state_chain_client, tracked_data_client }
 	}
 }
 
 #[async_trait::async_trait]
-impl<'a, Inner, StateChainClient, TrackedDataClient> ChunkedByTime<'a>
-	for ChainTracking<'a, Inner, StateChainClient, TrackedDataClient>
+impl<Inner, StateChainClient, TrackedDataClient> ChunkedByTime
+	for ChainTracking<Inner, StateChainClient, TrackedDataClient>
 where
-	Inner: ChunkedByTime<'a>,
-	<Inner as ChunkedByTime<'a>>::InnerChainSource: ExternalChainSource,
+	Inner: ChunkedByTime,
 	StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,
-	TrackedDataClient: GetTrackedData<<<Inner as ChunkedByTime<'a>>::InnerChainSource as ExternalChainSource>::Chain> + 'a,
-	state_chain_runtime::Runtime: RuntimeHasChain<<<Inner as ChunkedByTime<'a>>::InnerChainSource as ExternalChainSource>::Chain>,
-	state_chain_runtime::RuntimeCall: RuntimeCallHasChain<state_chain_runtime::Runtime, <<Inner as ChunkedByTime<'a>>::InnerChainSource as ExternalChainSource>::Chain>
+	TrackedDataClient: GetTrackedData<Inner::Chain>,
+	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
+	state_chain_runtime::RuntimeCall:
+		RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 {
-	type InnerChainSource = Inner::InnerChainSource;
+	type Index = Inner::Index;
+	type Hash = Inner::Hash;
+	type Data = Inner::Data;
 
-	async fn stream(self) -> BoxActiveAndFuture<'a, Item<'a, Self::InnerChainSource>> {
+	type Client = Inner::Client;
+
+	type Chain = Inner::Chain;
+
+	type Parameters = Inner::Parameters;
+
+	async fn stream(
+		&self,
+		parameters: Inner::Parameters,
+	) -> BoxActiveAndFuture<'_, Item<'_, Self>> {
 		let state_chain_client = self.state_chain_client.clone();
-		let client = self.client.clone();
+		let tracked_data_client = self.tracked_data_client.clone();
 
-		self.inner_stream
-			.stream()
+		self.inner
+			.stream(parameters)
 			.await
-			.filter(|(epoch, _)| {
+			.filter(|(epoch, _, _)| {
 				futures::future::ready(epoch.historic_signal.clone().get().is_none())
 			})
 			.await
-			.then(move |(epoch, chain_stream)| {
+			.then(move |(epoch, chain_stream, chain_client)| {
 				let state_chain_client = state_chain_client.clone();
-				let client = client.clone();
+				let tracked_data_client = tracked_data_client.clone();
 				async move {
 					(
 						epoch.clone(),
-						chain_stream.then(move |header| {
-							let state_chain_client = state_chain_client.clone();
-							let client = client.clone();
-							async move {
-								// Unclear error when this is inlined "error: higher-ranked lifetime error"
-								let call: Box<state_chain_runtime::RuntimeCall> = Box::new(pallet_cf_chain_tracking::Call::<
-										state_chain_runtime::Runtime,
-										<<<Inner as ChunkedByTime<'a>>::InnerChainSource as ExternalChainSource>::Chain as PalletInstanceAlias>::Instance,
-									>::update_chain_state {
-										new_chain_state: client.get_tracked_data().await,
-									}.into());
-								state_chain_client
-									.submit_signed_extrinsic(
-										pallet_cf_witnesser::Call::witness_at_epoch {
-											call,
-											epoch_index: epoch.index,
-										},
-									)
-									.await;
-								header
-							}
-						})
-						.into_box(),
+						chain_stream
+							.then(move |header| {
+								let state_chain_client = state_chain_client.clone();
+								let tracked_data_client = tracked_data_client.clone();
+								async move {
+									// Unclear error when this is inlined "error: higher-ranked
+									// lifetime error"
+									let call: Box<state_chain_runtime::RuntimeCall> = Box::new(
+										pallet_cf_chain_tracking::Call::<
+											state_chain_runtime::Runtime,
+											<Inner::Chain as PalletInstanceAlias>::Instance,
+										>::update_chain_state {
+											new_chain_state: ChainState {
+												block_height: header.index,
+												tracked_data: tracked_data_client
+													.get_tracked_data(header.index)
+													.await,
+											},
+										}
+										.into(),
+									);
+									state_chain_client
+										.submit_signed_extrinsic(
+											pallet_cf_witnesser::Call::witness_at_epoch {
+												call,
+												epoch_index: epoch.index,
+											},
+										)
+										.await;
+									header
+								}
+							})
+							.into_box(),
+						chain_client,
 					)
 				}
 			})
@@ -96,4 +117,3 @@ where
 			.into_box()
 	}
 }
-*/
