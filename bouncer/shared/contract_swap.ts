@@ -1,4 +1,4 @@
-import { Asset, executeSwap, ExecuteSwapParams } from '@chainflip-io/cli';
+import { Asset, executeSwap, ExecuteSwapParams, approveVault} from '@chainflip-io/cli';
 import { Wallet, getDefaultProvider } from 'ethers';
 import { randomAsHex } from "@polkadot/util-crypto";
 import { chainFromAsset, getAddress, getChainflipApi, observeBalanceIncrease, observeEvent, getEthContractAddress } from '../shared/utils';
@@ -52,7 +52,7 @@ export async function performSwapViaContract(sourceAsset: Asset, destAsset: Asse
         log(`Destination address: ${addr}`);
 
         const oldBalance = await getBalance(destAsset, addr);
-        log(`Old balance: ${addr}`);
+        log(`Old balance: ${oldBalance}`);
         // Note that we start observing events before executing
         // the swap to avoid race conditions:
         log(`Executing (${sourceAsset}) contract swap to(${destAsset}) ${addr}. Current balance: ${oldBalance}`)
@@ -66,5 +66,28 @@ export async function performSwapViaContract(sourceAsset: Asset, destAsset: Asse
     } catch (err) {
         throw new Error(`${tag} ${err}`);
     }
-
 }
+
+export async function approveTokenVault(srcAsset: Asset, amount: string) {
+    const wallet = Wallet.fromMnemonic(
+        process.env.ETH_USDC_WHALE_MNEMONIC ??
+        'test test test test test test test test test test test junk',
+    ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
+
+    let nonce = await getNextEthNonce();
+
+    return approveVault(
+        {
+            amount: amount,
+            srcAsset: srcAsset,
+        } as ExecuteSwapParams,
+        {
+            signer: wallet,
+            nonce,
+            network: 'localnet',
+            vaultContractAddress: getEthContractAddress('VAULT'),
+            srcTokenContractAddress: getEthContractAddress(srcAsset)
+        },
+    )
+}
+

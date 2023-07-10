@@ -6,7 +6,7 @@ import { performSwap } from "../shared/perform_swap";
 import { getAddress, runWithTimeout, chainFromAsset, getEthContractAddress, encodeBtcAddressForContract, encodeDotAddressForContract } from "../shared/utils";
 import { BtcAddressType } from "../shared/new_btc_address";
 import { CcmDepositMetadata } from "../shared/new_swap";
-import { performSwapViaContract } from "../shared/contract_swap";
+import { performSwapViaContract, approveTokenVault } from "../shared/contract_swap";
 
 let swapCount = 1;
 
@@ -27,6 +27,9 @@ async function testSwap(sourceToken: Asset, destToken: Asset, addressType?: BtcA
 }
 
 async function testAll() {
+    // Single approval of all the tokens swapped in contractsSwaps to avoid overlapping async approvals.
+    await approveTokenVault('USDC', (500000000*3).toString());
+
     const contractSwaps = Promise.all([
         performSwapViaContract('ETH','DOT'),
         performSwapViaContract('ETH','USDC'),
