@@ -1,3 +1,4 @@
+pub mod http_rpc;
 pub mod retry_rpc;
 pub mod rpc;
 pub mod runtime_version_updater;
@@ -25,10 +26,7 @@ where
 		Self { rpc }
 	}
 
-	pub async fn send(
-		&mut self,
-		encoded_bytes: Vec<u8>,
-	) -> Result<<PolkadotConfig as Config>::Hash> {
+	pub async fn send(&self, encoded_bytes: Vec<u8>) -> Result<<PolkadotConfig as Config>::Hash> {
 		self.rpc.submit_raw_encoded_extrinsic(encoded_bytes).await
 	}
 }

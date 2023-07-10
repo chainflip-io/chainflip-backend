@@ -1,31 +1,7 @@
-import { Mutex } from "async-mutex";
 import Web3 from "web3";
 import { getNextEthNonce } from "./fund_eth";
-
-const erc20TransferABI = [
-    // transfer
-    {
-        constant: false,
-        inputs: [
-            {
-                name: '_to',
-                type: 'address',
-            },
-            {
-                name: '_value',
-                type: 'uint256',
-            },
-        ],
-        name: 'transfer',
-        outputs: [
-            {
-                name: '',
-                type: 'bool',
-            },
-        ],
-        type: 'function',
-    },
-];
+import { getEthContractAddress } from "./utils";
+import erc20abi from '../../eth-contract-abis/IERC20.json';
 
 export async function fundUsdc(ethereumAddress: string, usdcAmount: string) {
 
@@ -42,10 +18,10 @@ export async function fundUsdc(ethereumAddress: string, usdcAmount: string) {
     const web3 = new Web3(ethEndpoint);
 
     const usdcContractAddress =
-        process.env.ETH_USDC_ADDRESS ?? '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
+        process.env.ETH_USDC_ADDRESS ?? getEthContractAddress('USDC');
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const usdcContract = new web3.eth.Contract(erc20TransferABI as any, usdcContractAddress);
+    const usdcContract = new web3.eth.Contract(erc20abi as any, usdcContractAddress);
     const txData = usdcContract.methods.transfer(ethereumAddress, microusdcAmount).encodeABI();
     const whaleKey = process.env.ETH_USDC_WHALE || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
     console.log('Transferring ' + usdcAmount + ' USDC to ' + ethereumAddress);

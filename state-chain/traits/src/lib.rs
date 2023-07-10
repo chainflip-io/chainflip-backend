@@ -386,6 +386,10 @@ impl KeyState {
 	pub fn unlock(&mut self) {
 		*self = KeyState::Unlocked;
 	}
+
+	pub fn lock(&mut self, request_id: ThresholdSignatureRequestId) {
+		*self = KeyState::Locked(request_id);
+	}
 }
 
 #[derive(Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
@@ -403,9 +407,12 @@ impl<Key> EpochKey<Key> {
 
 /// Provides the currently valid key for multisig ceremonies.
 pub trait KeyProvider<C: ChainCrypto> {
-	/// Get the chain's current agg key, the epoch index for the current key and the state of that
-	/// key. If no key has been set, returns None.
-	fn current_epoch_key() -> Option<EpochKey<C::AggKey>>;
+	/// Get the chain's active agg key, key state and associated epoch index. If no key is active,
+	/// returns None.
+	///
+	/// Note that the epoch may not be the current epoch: a key can be activated before the start of
+	/// the epoch.
+	fn active_epoch_key() -> Option<EpochKey<C::AggKey>>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_key(_key: C::AggKey) {
@@ -494,10 +501,6 @@ pub trait Broadcaster<Api: ChainAbi> {
 	fn threshold_sign_and_broadcast_with_callback(
 		api_call: Self::ApiCall,
 		callback: Self::Callback,
-	) -> (BroadcastId, ThresholdSignatureRequestId);
-
-	fn threshold_sign_and_broadcast_for_rotation(
-		api_call: Self::ApiCall,
 	) -> (BroadcastId, ThresholdSignatureRequestId);
 }
 
@@ -843,18 +846,6 @@ impl CcmHandler for () {
 	}
 }
 
-pub trait OnRotationCallback<C: ChainCrypto> {
-	type Origin;
-	type Callback: UnfilteredDispatchable<RuntimeOrigin = Self::Origin>;
-
-	fn on_rotation(
-		_block_number: C::ChainBlockNumber,
-		_tx_out_id: C::TransactionOutId,
-	) -> Option<Self::Callback> {
-		None
-	}
-}
-
 pub trait OnBroadcastReady<C: ChainAbi> {
 	type ApiCall: ApiCall<C>;
 
@@ -863,4 +854,8 @@ pub trait OnBroadcastReady<C: ChainAbi> {
 
 pub trait GetBitcoinFeeInfo {
 	fn bitcoin_fee_info() -> cf_chains::btc::BitcoinFeeInfo;
+}
+
+pub trait GetBlockHeight<C: Chain> {
+	fn get_block_height() -> C::ChainBlockNumber;
 }

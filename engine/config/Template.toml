@@ -20,6 +20,7 @@ private_key_file = "/etc/chainflip/keys/eth_private_key_file"
 [dot]
 # NB: You will need to manually add :443 to the url provided by the provider, as jsonrpsee wants one.
 ws_node_endpoint = "wss://my_fake_polkadot_rpc:443/<secret_key>"
+http_node_endpoint = "https://my_fake_polkadot_rpc:443/<secret_key>"
 
 [signing]
 db_file = "/etc/chainflip/data.db"
