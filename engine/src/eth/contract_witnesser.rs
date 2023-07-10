@@ -11,7 +11,7 @@ use crate::{
 
 use super::{
 	core_h160, eth_block_witnessing::BlockProcessor, event::Event, rpc::EthHttpRpcClient,
-	vault::EthAssetApi, BlockWithItems, DecodeLogClosure, EthContractWitnesser, EthNumberBloom,
+	vault::EthAssetApi, BlockWithItems, EthContractWitnesser, EthNumberBloom,
 };
 
 pub struct ContractWitnesser<Contract, StateChainClient> {
@@ -53,13 +53,7 @@ where
 
 		let contract_address = self.contract.contract_address();
 
-		let events = block_to_events(
-			block,
-			core_h160(contract_address),
-			&self.contract.decode_log_closure(),
-			&self.http_rpc,
-		)
-		.await?;
+		let events = block_to_events(block, core_h160(contract_address), &self.http_rpc).await?;
 
 		self.contract
 			.handle_block_events(
@@ -79,11 +73,10 @@ where
 pub async fn block_to_events<'a, EventParameters>(
 	header: &'a EthNumberBloom,
 	contract_address: H160,
-	decode_log_fn: &DecodeLogClosure<EventParameters>,
 	eth_rpc: &'a EthHttpRpcClient,
 ) -> anyhow::Result<Vec<Event<EventParameters>>>
 where
-	EventParameters: core::fmt::Debug + Send + Sync + 'static,
+	EventParameters: core::fmt::Debug + ethers::contract::EthLogDecode + Send + Sync + 'static,
 {
 	use crate::eth::rpc::EthRpcApi;
 	use ethbloom::{Bloom, Input};
@@ -109,7 +102,7 @@ where
 
 		logs.into_iter()
 			.map(|unparsed_log| -> anyhow::Result<Event<EventParameters>> {
-				Event::<EventParameters>::new_from_unparsed_logs(decode_log_fn, unparsed_log)
+				Event::<EventParameters>::new_from_unparsed_logs(unparsed_log)
 			})
 			.collect::<anyhow::Result<Vec<_>>>()
 	} else {

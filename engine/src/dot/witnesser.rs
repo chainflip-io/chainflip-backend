@@ -371,7 +371,6 @@ where
 													PolkadotInstance,
 												>::transaction_succeeded {
 													tx_out_id: signature,
-													block_number,
 													signer_id: self.vault_account,
 													tx_fee,
 												}
@@ -540,7 +539,8 @@ mod tests {
 	use std::collections::BTreeSet;
 
 	use crate::{
-		dot::rpc::DotRpcClient, state_chain_observer::client::mocks::MockStateChainClient,
+		dot::{http_rpc::DotHttpRpcClient, rpc::DotRpcClient},
+		state_chain_observer::client::mocks::MockStateChainClient,
 		witnesser::MonitorCommand,
 	};
 
@@ -785,7 +785,8 @@ mod tests {
 		let url = "ws://localhost:9944";
 
 		println!("Connecting to: {url}");
-		let dot_rpc_client = DotRpcClient::new(url).await.unwrap();
+		let dot_http_client = DotHttpRpcClient::new(url).await.unwrap();
+		let dot_rpc_client = DotRpcClient::new(url, dot_http_client).await.unwrap();
 
 		let (epoch_starts_sender, epoch_starts_receiver) = async_broadcast::broadcast(10);
 

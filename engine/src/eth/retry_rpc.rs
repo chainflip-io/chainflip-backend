@@ -16,6 +16,7 @@ use super::{
 use crate::eth::ethers_rpc::ReconnectSubscribeApi;
 use cf_chains::Ethereum;
 
+#[derive(Clone)]
 pub struct EthersRetryRpcClient<T: JsonRpcClient> {
 	rpc_retry_client: RpcRetrierClient<EthersRpcClient<T>>,
 	sub_retry_client: RpcRetrierClient<ReconnectSubscriptionClient>,

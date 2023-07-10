@@ -1,3 +1,4 @@
+pub mod http_rpc;
 pub mod retry_rpc;
 pub mod rpc;
 pub mod runtime_version_updater;

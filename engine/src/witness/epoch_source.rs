@@ -125,7 +125,7 @@ impl<'a, 'env, StateChainClient: client::storage_api::StorageApi + Send + Sync +
 impl<
 		'a,
 		'env,
-		StateChainClient: client::storage_api::StorageApi + Send + Sync + 'static,
+		StateChainClient,
 		Info: Clone + Send + Sync + 'static,
 		HistoricInfo: Clone + Send + Sync + 'static,
 	> EpochSource<'a, 'env, StateChainClient, Info, HistoricInfo>
@@ -201,7 +201,16 @@ impl<
 			),
 		}
 	}
+}
 
+impl<
+		'a,
+		'env,
+		StateChainClient: client::storage_api::StorageApi + Send + Sync + 'static,
+		Info: Clone + Send + Sync + 'static,
+		HistoricInfo: Clone + Send + Sync + 'static,
+	> EpochSource<'a, 'env, StateChainClient, Info, HistoricInfo>
+{
 	pub async fn participating(
 		self,
 		account_id: AccountId,

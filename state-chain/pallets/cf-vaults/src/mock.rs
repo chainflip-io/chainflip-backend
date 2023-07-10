@@ -7,12 +7,12 @@ use crate as pallet_cf_vaults;
 use cf_chains::{
 	eth,
 	mocks::{MockAggKey, MockEthereum},
-	ApiCall,
+	ApiCall, SetAggKeyWithAggKeyError,
 };
 use cf_primitives::{BroadcastId, GENESIS_EPOCH};
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
-	mocks::threshold_signer::MockThresholdSigner, AccountRoleRegistry,
+	mocks::threshold_signer::MockThresholdSigner, AccountRoleRegistry, GetBlockHeight,
 };
 use frame_support::{
 	construct_runtime, parameter_types, traits::UnfilteredDispatchable, StorageHasher,
@@ -100,12 +100,12 @@ impl SetAggKeyWithAggKey<MockEthereum> for MockSetAggKeyWithAggKey {
 	fn new_unsigned(
 		old_key: Option<<MockEthereum as ChainCrypto>::AggKey>,
 		new_key: <MockEthereum as ChainCrypto>::AggKey,
-	) -> Result<Self, ()> {
+	) -> Result<Self, SetAggKeyWithAggKeyError> {
 		if !SET_AGG_KEY_WITH_AGG_KEY_REQUIRED.with(|cell| *cell.borrow()) {
-			return Err(())
+			return Err(SetAggKeyWithAggKeyError::NotRequired)
 		}
 
-		Ok(Self { old_key: old_key.ok_or(())?, new_key })
+		Ok(Self { old_key: old_key.ok_or(SetAggKeyWithAggKeyError::Failed)?, new_key })
 	}
 }
 
@@ -168,12 +168,6 @@ impl Broadcaster<MockEthereum> for MockBroadcaster {
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		unimplemented!()
 	}
-
-	fn threshold_sign_and_broadcast_for_rotation(
-		_api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		(1, 2)
-	}
 }
 
 parameter_types! {
@@ -194,6 +188,16 @@ impl Slashing for MockSlasher {
 	fn slash_balance(_account_id: &Self::AccountId, _amount: sp_runtime::Percent) {}
 }
 
+pub struct BlockHeightProvider;
+
+pub const HANDOVER_ACTIVATION_BLOCK: u64 = 1337;
+
+impl GetBlockHeight<MockEthereum> for BlockHeightProvider {
+	fn get_block_height() -> u64 {
+		HANDOVER_ACTIVATION_BLOCK
+	}
+}
+
 impl_pallet_safe_mode!(MockPalletSafeMode; flag);
 impl_mock_runtime_safe_mode!(test: MockPalletSafeMode);
 
@@ -211,6 +215,7 @@ impl pallet_cf_vaults::Config for MockRuntime {
 	type Broadcaster = MockBroadcaster;
 	type SafeMode = MockRuntimeSafeMode;
 	type Slasher = MockSlasher;
+	type ChainTracking = BlockHeightProvider;
 }
 
 pub const ALICE: <MockRuntime as frame_system::Config>::AccountId = 123u64;

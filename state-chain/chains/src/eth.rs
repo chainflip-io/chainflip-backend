@@ -20,6 +20,7 @@ use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
+use sp_core::ConstBool;
 use sp_runtime::{
 	traits::{Hash, Keccak256},
 	RuntimeDebug,
@@ -38,6 +39,8 @@ pub const CHAIN_ID_KOVAN: u64 = 42;
 
 impl Chain for Ethereum {
 	const NAME: &'static str = "Ethereum";
+	type KeyHandoverIsRequired = ConstBool<false>;
+	type OptimisticActivation = ConstBool<false>;
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
 	type TransactionFee = eth::TransactionFee;
