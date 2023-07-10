@@ -520,7 +520,7 @@ fn test_missing_author_punishment() {
 }
 
 #[test]
-fn no_validator_rotation_during_safe_mode_code_red() {
+fn no_validator_rotation_when_disabled_by_safe_mode() {
 	new_test_ext().execute_with(|| {
 		// Activate Safe Mode: CODE RED
 		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();

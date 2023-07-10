@@ -22,7 +22,7 @@ use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid,
 	BidderProvider, Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition,
 	FundingInfo, HistoricalEpoch, MissedAuthorshipSlots, OnAccountFunded, QualifyNode,
-	ReputationResetter, VaultRotator,
+	ReputationResetter, SetSafeMode, VaultRotator,
 };
 
 use cf_utilities::Port;
@@ -154,7 +154,7 @@ pub mod pallet {
 		type ReputationResetter: ReputationResetter<ValidatorId = ValidatorIdOf<Self>>;
 
 		/// Safe Mode access.
-		type SafeMode: Get<PalletSafeMode>;
+		type SafeMode: Get<PalletSafeMode> + SetSafeMode<PalletSafeMode>;
 
 		/// Benchmark weights.
 		type ValidatorWeightInfo: WeightInfo;
