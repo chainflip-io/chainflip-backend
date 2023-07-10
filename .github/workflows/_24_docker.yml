@@ -64,7 +64,7 @@ jobs:
           - ghcr.io/${{ github.repository }}
         include:
           - target: chainflip-engine-3-node
-            engine_db: [bashful, doc, dopey]
+            genesis: [bashful, doc, dopey]
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout 🏁
@@ -123,6 +123,7 @@ jobs:
             BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
             VCS_REF=${{ github.sha }}
             CHAINSPEC=${{ inputs.network }}
+            GENESIS=${{ matrix.genesis }}
 
   public-images:
     if: inputs.publish_public_images
