@@ -182,7 +182,7 @@ impl ChainClient for EthersRetryRpcClient {
 
 	type Hash = H256;
 
-	type Data = ();
+	type Data = Bloom;
 
 	async fn header_at_index(
 		&self,
@@ -205,7 +205,7 @@ impl ChainClient for EthersRetryRpcClient {
 						index,
 						hash: block_hash,
 						parent_hash: Some(block.parent_hash),
-						data: (),
+						data: block.logs_bloom.unwrap_or(Bloom::repeat_byte(0xFFu8)).0.into(),
 					})
 				})
 			}))
