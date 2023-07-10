@@ -19,23 +19,39 @@ use utilities::task_scope::Scope;
 
 use crate::rpc_retrier::RpcRetrierClient;
 
-use super::rpc::{DotRpcClient, PolkadotHeader};
+use super::{
+	http_rpc::DotHttpRpcClient,
+	rpc::{DotRpcClient, PolkadotHeader},
+};
 
 use crate::dot::rpc::DotRpcApi;
 
 pub struct DotRetryRpcClient {
-	retry_client: RpcRetrierClient<DotRpcClient>,
+	rpc_retry_client: RpcRetrierClient<DotHttpRpcClient>,
+	// TODO: this will become just the subscription client, once we no longer need the unified
+	// client after we merge the witnessing refactor
+	sub_retry_client: RpcRetrierClient<DotRpcClient>,
 }
 
 const POLKADOT_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
 impl DotRetryRpcClient {
-	pub fn new(scope: &Scope<'_, anyhow::Error>, dot_client: DotRpcClient) -> Self {
+	pub fn new(
+		scope: &Scope<'_, anyhow::Error>,
+		dot_rpc_client: DotHttpRpcClient,
+		dot_sub_client: DotRpcClient,
+	) -> Self {
 		Self {
-			retry_client: RpcRetrierClient::new(
+			rpc_retry_client: RpcRetrierClient::new(
 				scope,
-				dot_client,
+				dot_rpc_client,
+				POLKADOT_RPC_TIMEOUT,
+				MAX_CONCURRENT_SUBMISSIONS,
+			),
+			sub_retry_client: RpcRetrierClient::new(
+				scope,
+				dot_sub_client,
 				POLKADOT_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
@@ -61,7 +77,7 @@ pub trait DotRetryRpcApi {
 #[async_trait::async_trait]
 impl DotRetryRpcApi for DotRetryRpcClient {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash> {
-		self.retry_client
+		self.rpc_retry_client
 			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.block_hash(block_number).await })
@@ -70,7 +86,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 	}
 
 	async fn block(&self, block_hash: PolkadotHash) -> Option<ChainBlockResponse<PolkadotConfig>> {
-		self.retry_client
+		self.rpc_retry_client
 			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.block(block_hash).await })
@@ -79,7 +95,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 	}
 
 	async fn extrinsics(&self, block_hash: PolkadotHash) -> Option<Vec<ChainBlockExtrinsic>> {
-		self.retry_client
+		self.rpc_retry_client
 			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.extrinsics(block_hash).await })
@@ -88,7 +104,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 	}
 
 	async fn events(&self, block_hash: PolkadotHash) -> Option<Events<PolkadotConfig>> {
-		self.retry_client
+		self.rpc_retry_client
 			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.events(block_hash).await })
@@ -97,7 +113,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 	}
 
 	async fn current_runtime_version(&self) -> RuntimeVersion {
-		self.retry_client
+		self.rpc_retry_client
 			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.current_runtime_version().await })
@@ -106,7 +122,7 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 	}
 
 	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> PolkadotHash {
-		self.retry_client
+		self.rpc_retry_client
 			.request(Box::pin(move |client| {
 				let encoded_bytes = encoded_bytes.clone();
 				#[allow(clippy::redundant_async_block)]
@@ -134,7 +150,7 @@ impl DotRetrySubscribeApi for DotRetryRpcClient {
 	async fn subscribe_best_heads(
 		&self,
 	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>> {
-		self.retry_client
+		self.sub_retry_client
 			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.subscribe_best_heads().await })
@@ -145,7 +161,7 @@ impl DotRetrySubscribeApi for DotRetryRpcClient {
 	async fn subscribe_finalized_heads(
 		&self,
 	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>> {
-		self.retry_client
+		self.sub_retry_client
 			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.subscribe_finalized_heads().await })
@@ -164,13 +180,14 @@ impl ChainClient for DotRetryRpcClient {
 		&self,
 		index: Self::Index,
 	) -> Header<Self::Index, Self::Hash, Self::Data> {
-		self.retry_client
+		self.rpc_retry_client
 			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move {
 					let block_hash = client
 						.block_hash(index)
 						.await?
+						// TODO: Make these just return Result?
 						.ok_or(anyhow::anyhow!("No block hash found for index {index}"))?;
 					let header = client
 						.block(block_hash)
@@ -210,8 +227,11 @@ mod tests {
 	async fn my_test() {
 		task_scope(|scope| {
 			async move {
-				let dot_client = DotRpcClient::new("ws://127.0.0.1:9945").await.unwrap();
-				let dot_retry_rpc_client = DotRetryRpcClient::new(scope, dot_client);
+				let url = "ws://127.0.0.1:9945";
+				let dot_http_rpc_client = DotHttpRpcClient::new(url).await.unwrap();
+				let dot_client = DotRpcClient::new(url, dot_http_rpc_client.clone()).await.unwrap();
+				let dot_retry_rpc_client =
+					DotRetryRpcClient::new(scope, dot_http_rpc_client, dot_client);
 
 				let hash = dot_retry_rpc_client.block_hash(1).await.unwrap();
 				println!("Block hash: {}", hash);

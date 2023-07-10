@@ -3,7 +3,7 @@ use cf_primitives::AccountRole;
 use chainflip_engine::{
 	btc::{self, rpc::BtcRpcClient, BtcBroadcaster},
 	db::{KeyStore, PersistentKeyDB},
-	dot::{self, rpc::DotRpcClient, DotBroadcaster},
+	dot::{self, http_rpc::DotHttpRpcClient, DotBroadcaster},
 	eth::{
 		self, broadcaster::EthBroadcaster, build_broadcast_channel, ethers_rpc::EthersRpcClient,
 	},
@@ -66,10 +66,6 @@ async fn main() -> anyhow::Result<()> {
 					.await
 					.context("Failed to get EthereumChainId from state chain")?,
 			);
-
-			let dot_rpc_client = DotRpcClient::new(&settings.dot.ws_node_endpoint)
-				.await
-				.context("Failed to create Polkadot Client")?;
 
 			let btc_rpc_client =
 				BtcRpcClient::new(&settings.btc).context("Failed to create Bitcoin Client")?;
@@ -230,7 +226,7 @@ async fn main() -> anyhow::Result<()> {
 					)
 					.await?,
 				),
-				DotBroadcaster::new(dot_rpc_client.clone()),
+				DotBroadcaster::new(DotHttpRpcClient::new(&settings.dot.http_node_endpoint).await?),
 				BtcBroadcaster::new(btc_rpc_client.clone()),
 				eth_multisig_client,
 				dot_multisig_client,
