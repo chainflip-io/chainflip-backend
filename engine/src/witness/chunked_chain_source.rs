@@ -1,5 +1,6 @@
 pub mod chunked_by_time;
 pub mod chunked_by_vault;
+pub mod extension;
 pub mod map;
 
 use futures_util::StreamExt;

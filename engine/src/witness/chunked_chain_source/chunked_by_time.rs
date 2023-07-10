@@ -25,6 +25,33 @@ pub trait ChunkedByTime: Sized + Send + Sync {
 	async fn stream(&self, parameters: Self::Parameters) -> BoxActiveAndFuture<'_, Item<'_, Self>>;
 }
 
+pub trait ChunkedByTimeAlias:
+	ChunkedByTime
+	+ ChunkedChainSource<
+		Info = (),
+		HistoricInfo = (),
+		Index = <Self as ChunkedByTime>::Index,
+		Hash = <Self as ChunkedByTime>::Hash,
+		Data = <Self as ChunkedByTime>::Data,
+		Client = <Self as ChunkedByTime>::Client,
+		Chain = <Self as ChunkedByTime>::Chain,
+	>
+{
+}
+impl<T> ChunkedByTimeAlias for T where
+	T: ChunkedByTime
+		+ ChunkedChainSource<
+			Info = (),
+			HistoricInfo = (),
+			Index = <Self as ChunkedByTime>::Index,
+			Hash = <Self as ChunkedByTime>::Hash,
+			Data = <Self as ChunkedByTime>::Data,
+			Client = <Self as ChunkedByTime>::Client,
+			Chain = <Self as ChunkedByTime>::Chain,
+		>
+{
+}
+
 pub type Item<'a, T> = (
 	Epoch<(), ()>,
 	BoxChainStream<

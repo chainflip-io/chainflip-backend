@@ -24,6 +24,33 @@ pub trait ChunkedByVault: Sized + Send + Sync {
 	async fn stream(&self, parameters: Self::Parameters) -> BoxActiveAndFuture<'_, Item<'_, Self>>;
 }
 
+pub trait ChunkedByVaultAlias:
+	ChunkedByVault
+	+ ChunkedChainSource<
+		Info = pallet_cf_vaults::Vault<<Self as ChunkedByVault>::Chain>,
+		HistoricInfo = <<Self as ChunkedByVault>::Chain as Chain>::ChainBlockNumber,
+		Index = <Self as ChunkedByVault>::Index,
+		Hash = <Self as ChunkedByVault>::Hash,
+		Data = <Self as ChunkedByVault>::Data,
+		Client = <Self as ChunkedByVault>::Client,
+		Chain = <Self as ChunkedByVault>::Chain,
+	>
+{
+}
+impl<T> ChunkedByVaultAlias for T where
+	T: ChunkedByVault
+		+ ChunkedChainSource<
+			Info = pallet_cf_vaults::Vault<<Self as ChunkedByVault>::Chain>,
+			HistoricInfo = <<Self as ChunkedByVault>::Chain as Chain>::ChainBlockNumber,
+			Index = <Self as ChunkedByVault>::Index,
+			Hash = <Self as ChunkedByVault>::Hash,
+			Data = <Self as ChunkedByVault>::Data,
+			Client = <Self as ChunkedByVault>::Client,
+			Chain = <Self as ChunkedByVault>::Chain,
+		>
+{
+}
+
 pub type Item<'a, T> = (
 	Epoch<
 		pallet_cf_vaults::Vault<<T as ChunkedByVault>::Chain>,
