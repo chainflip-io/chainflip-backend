@@ -1,3 +1,4 @@
+use ethers::types::Bloom;
 use sp_core::H256;
 
 use crate::{
@@ -28,7 +29,7 @@ const RESTART_STREAM_DELAY: Duration = Duration::from_secs(6);
 #[async_trait::async_trait]
 impl<C> ChainSource for EthSource<C>
 where
-	C: EthersRetrySubscribeApi + ChainClient<Index = u64, Hash = H256, Data = ()> + Clone,
+	C: EthersRetrySubscribeApi + ChainClient<Index = u64, Hash = H256, Data = Bloom> + Clone,
 {
 	type Index = <C as ChainClient>::Index;
 	type Hash = <C as ChainClient>::Hash;
@@ -61,7 +62,7 @@ where
 									index: header.number.unwrap().as_u64(),
 									hash: core_h256(header.hash.unwrap()),
 									parent_hash: Some(core_h256(header.parent_hash)),
-									data: (),
+									data: header.logs_bloom.0.into(),
 								},
 								state,
 							))
