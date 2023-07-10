@@ -21,7 +21,7 @@ use utilities::task_scope::Scope;
 
 use crate::dot::witnesser;
 
-use super::{rpc::DotRpcClient, runtime_version_updater};
+use super::{http_rpc::DotHttpRpcClient, rpc::DotRpcClient, runtime_version_updater};
 
 pub async fn start(
 	scope: &Scope<'_, anyhow::Error>,
@@ -80,10 +80,16 @@ pub async fn start(
 		let signature_monitor = signature_monitor.clone();
 		let state_chain_client = state_chain_client_c.clone();
 		async move {
-			let dot_rpc_client =
-				DotRpcClient::new(&dot_settings.ws_node_endpoint).await.map_err(|err| {
-					tracing::error!("Failed to create DotRpcClient: {:?}", err);
-				})?;
+			let dot_rpc_client = DotRpcClient::new(
+				&dot_settings.ws_node_endpoint,
+				DotHttpRpcClient::new(&dot_settings.http_node_endpoint).await.map_err(|e| {
+					tracing::error!("Dot HTTP RPC Client failed to be initialised: {e:?}");
+				})?,
+			)
+			.await
+			.map_err(|err| {
+				tracing::error!("Failed to create DotRpcClient: {:?}", err);
+			})?;
 			witnesser::start(
 				resume_at_epoch,
 				epoch_start_receiver_1,
@@ -109,10 +115,16 @@ pub async fn start(
 			let epoch_start_receiver_2 = epoch_start_receiver_2.clone();
 			let state_chain_client = state_chain_client.clone();
 			async move {
-				let dot_rpc_client =
-					DotRpcClient::new(&dot_settings.ws_node_endpoint).await.map_err(|err| {
-						tracing::error!("Failed to create DotRpcClient: {:?}", err);
-					})?;
+				let dot_rpc_client = DotRpcClient::new(
+					&dot_settings.ws_node_endpoint,
+					DotHttpRpcClient::new(&dot_settings.http_node_endpoint).await.map_err(|e| {
+						tracing::error!("Dot HTTP RPC Client failed to be initialised: {e:?}");
+					})?,
+				)
+				.await
+				.map_err(|err| {
+					tracing::error!("Failed to create DotRpcClient: {:?}", err);
+				})?;
 
 				runtime_version_updater::start(
 					epoch_start_receiver_2,
