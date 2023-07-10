@@ -44,6 +44,7 @@ type BoxAny = Box<dyn Any + Send>;
 type RequestPackage<RpcClient> = (oneshot::Sender<BoxAny>, FutureAnyGenerator<RpcClient>);
 
 /// Tracks all the retries
+#[derive(Clone)]
 pub struct RpcRetrierClient<RpcClient> {
 	// The channel to send requests to the client.
 	request_sender: mpsc::Sender<RequestPackage<RpcClient>>,
