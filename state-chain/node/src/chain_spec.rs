@@ -81,6 +81,7 @@ pub struct StateChainEnvironment {
 	dot_genesis_hash: PolkadotHash,
 	dot_vault_account_id: Option<PolkadotAccountId>,
 	dot_runtime_version: RuntimeVersion,
+	redemption_delay_secs: u64,
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -113,6 +114,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(FromStr::from_str, ETH_BLOCK_SAFETY_MARGIN, eth_block_safety_margin);
 	from_env_var!(FromStr::from_str, MAX_CEREMONY_STAGE_DURATION, max_ceremony_stage_duration);
 	from_env_var!(FromStr::from_str, MIN_FUNDING, min_funding);
+	from_env_var!(FromStr::from_str, REDEMPTION_DELAY_SECS, redemption_delay_secs);
 
 	let dot_genesis_hash = match env::var("DOT_GENESIS_HASH") {
 		Ok(s) => hex_decode::<32>(&s).unwrap().into(),
@@ -151,6 +153,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 			spec_version: dot_spec_version,
 			transaction_version: dot_transaction_version,
 		},
+		redemption_delay_secs,
 	}
 }
 
@@ -180,6 +183,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		dot_genesis_hash,
 		dot_vault_account_id,
 		dot_runtime_version,
+		redemption_delay_secs,
 	} = get_environment_or_defaults(testnet::ENV);
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
@@ -255,7 +259,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				min_funding,
 				common::REDEMPTION_TAX,
 				8 * common::HOURS,
-				common::REDEMPTION_DELAY_SECS,
+				redemption_delay_secs,
 				common::CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 				common::BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 				common::EXPIRY_SPAN_IN_SECONDS,
@@ -316,6 +320,7 @@ macro_rules! network_spec {
 					dot_genesis_hash,
 					dot_vault_account_id,
 					dot_runtime_version,
+					redemption_delay_secs,
 				} = env_override.unwrap_or(ENV);
 				Ok(ChainSpec::from_genesis(
 					NETWORK_NAME,
@@ -374,7 +379,7 @@ macro_rules! network_spec {
 							min_funding,
 							REDEMPTION_TAX,
 							EPOCH_DURATION_BLOCKS,
-							REDEMPTION_DELAY_SECS,
+							redemption_delay_secs,
 							CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL,
 							BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 							EXPIRY_SPAN_IN_SECONDS,

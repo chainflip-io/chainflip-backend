@@ -111,7 +111,7 @@ impl ExtBuilder {
 				genesis_accounts: self.genesis_accounts.clone(),
 				redemption_tax: MIN_FUNDING / 2,
 				minimum_funding: MIN_FUNDING,
-				redemption_ttl: core::time::Duration::from_secs(3 * REDEMPTION_DELAY_SECS),
+				redemption_ttl: core::time::Duration::from_secs(2 * SECS_PER_MINUTE),
 			},
 			reputation: ReputationConfig {
 				accrual_ratio: ACCRUAL_RATIO,
