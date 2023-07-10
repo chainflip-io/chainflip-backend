@@ -27,12 +27,11 @@ use utilities::MakeCachedStream;
 use crate::{
 	btc::BtcBroadcaster,
 	dot::{rpc::MockDotRpcApi, DotBroadcaster},
-	eth::{broadcaster::EthBroadcaster, ethers_rpc::EthersRpcClient},
+	eth::broadcaster::EthBroadcaster,
 	settings::Settings,
 	state_chain_observer::{client::mocks::MockStateChainClient, sc_observer},
 	witnesser::EpochStart,
 };
-use ethers::prelude::MockProvider;
 use multisig::{
 	client::{KeygenFailureReason, MockMultisigClientApi, SigningFailureReason},
 	eth::EthSigning,
@@ -1717,16 +1716,7 @@ async fn run_the_sc_observer() {
 			sc_observer::start(
 				state_chain_client,
 				sc_block_stream,
-				EthBroadcaster::new(
-					EthersRpcClient::new(
-						Arc::new(ethers::prelude::Provider::<MockProvider>::new(
-							MockProvider::new(),
-						)),
-						&settings.eth,
-					)
-					.await
-					.unwrap(),
-				),
+				EthBroadcaster::new(MockEthersRpcApi::new()),
 				DotBroadcaster::new(MockDotRpcApi::new()),
 				BtcBroadcaster::new(MockBtcRpcApi::new()),
 				MockMultisigClientApi::new(),
