@@ -4,17 +4,17 @@ use bitcoin::BlockHash;
 use futures_util::stream;
 use utilities::make_periodic_tick;
 
-use super::{ChainClient, ChainSourceWithClient, Header};
+use super::{ChainClient, ChainSource, Header};
 use crate::{btc::retry_rpc::BtcRetryRpcApi, witness::chain_source::BoxChainStream};
 
-pub struct BtcBlockStream<C: BtcRetryRpcApi> {
+pub struct BtcBlockStream<C> {
 	client: C,
 }
 
 const POLL_INTERVAL: Duration = Duration::from_secs(10);
 
 #[async_trait::async_trait]
-impl<C> ChainSourceWithClient for BtcBlockStream<C>
+impl<C> ChainSource for BtcBlockStream<C>
 where
 	C: BtcRetryRpcApi + ChainClient<Index = u64, Hash = BlockHash, Data = ()> + Clone,
 {

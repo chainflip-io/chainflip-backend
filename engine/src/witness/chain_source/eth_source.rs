@@ -4,7 +4,7 @@ use crate::{
 	eth::{
 		core_h256, retry_rpc::EthersRetrySubscribeApi, ConscientiousEthWebsocketBlockHeaderStream,
 	},
-	witness::chain_source::{ChainClient, ChainSourceWithClient},
+	witness::chain_source::{ChainClient, ChainSource},
 };
 use futures::stream::StreamExt;
 use futures_util::stream;
@@ -26,7 +26,7 @@ const TIMEOUT: Duration = Duration::from_secs(60);
 const RESTART_STREAM_DELAY: Duration = Duration::from_secs(6);
 
 #[async_trait::async_trait]
-impl<C> ChainSourceWithClient for EthSource<C>
+impl<C> ChainSource for EthSource<C>
 where
 	C: EthersRetrySubscribeApi + ChainClient<Index = u64, Hash = H256, Data = ()> + Clone,
 {

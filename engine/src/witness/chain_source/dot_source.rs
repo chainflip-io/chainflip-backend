@@ -11,7 +11,7 @@ use crate::dot::{
 };
 use futures::{stream::StreamExt, Stream};
 
-use super::{BoxChainStream, ChainClient, ChainSourceWithClient, Header};
+use super::{BoxChainStream, ChainClient, ChainSource, Header};
 use subxt::config::Header as SubxtHeader;
 
 use anyhow::Result;
@@ -23,7 +23,7 @@ pub trait GetPolkadotStream {
 	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>>;
 }
 
-pub struct DotUnfinalisedSource<C: DotRetrySubscribeApi + DotRetryRpcApi> {
+pub struct DotUnfinalisedSource<C> {
 	client: C,
 }
 
@@ -38,7 +38,7 @@ impl<C: DotRetrySubscribeApi + DotRetryRpcApi + Send + Sync> GetPolkadotStream
 	}
 }
 
-impl<C: DotRetrySubscribeApi + DotRetryRpcApi + Send> DotUnfinalisedSource<C> {
+impl<C> DotUnfinalisedSource<C> {
 	pub fn new(client: C) -> Self {
 		Self { client }
 	}
@@ -48,7 +48,7 @@ const TIMEOUT: Duration = Duration::from_secs(20);
 const RESTART_STREAM_DELAY: Duration = Duration::from_secs(6);
 
 #[async_trait::async_trait]
-impl<C> ChainSourceWithClient for DotUnfinalisedSource<C>
+impl<C> ChainSource for DotUnfinalisedSource<C>
 where
 	C: ChainClient<Index = PolkadotBlockNumber, Hash = PolkadotHash, Data = Events<PolkadotConfig>>
 		+ GetPolkadotStream
@@ -69,11 +69,11 @@ where
 	}
 }
 
-pub struct DotFinalisedSource<C: DotRetrySubscribeApi + DotRetryRpcApi> {
+pub struct DotFinalisedSource<C> {
 	client: C,
 }
 
-impl<C: DotRetrySubscribeApi + DotRetryRpcApi + Send> DotFinalisedSource<C> {
+impl<C> DotFinalisedSource<C> {
 	pub fn new(client: C) -> Self {
 		Self { client }
 	}
@@ -101,7 +101,7 @@ impl<
 			+ DotRetrySubscribeApi
 			+ Clone
 			+ 'static,
-	> ChainSourceWithClient for DotFinalisedSource<C>
+	> ChainSource for DotFinalisedSource<C>
 {
 	type Index = <C as ChainClient>::Index;
 	type Hash = <C as ChainClient>::Hash;

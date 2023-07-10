@@ -1,8 +1,9 @@
 pub mod btc_source;
 pub mod dot_source;
 pub mod eth_source;
+pub mod extension;
 pub mod lag_safety;
-pub mod map_adapter;
+pub mod map;
 pub mod shared;
 pub mod strictly_monotonic;
 
@@ -39,31 +40,11 @@ pub trait ChainSource: Send + Sync {
 	type Hash: aliases::Hash;
 	type Data: aliases::Data;
 
-	async fn stream(&self) -> BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>;
-}
-
-#[async_trait::async_trait]
-pub trait ChainSourceWithClient: Send + Sync {
-	type Index: aliases::Index;
-	type Hash: aliases::Hash;
-	type Data: aliases::Data;
-
 	type Client: ChainClient<Index = Self::Index, Hash = Self::Hash, Data = Self::Data>;
 
 	async fn stream_and_client(
 		&self,
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client);
-}
-
-#[async_trait::async_trait]
-impl<T: ChainSourceWithClient> ChainSource for T {
-	type Index = T::Index;
-	type Hash = T::Hash;
-	type Data = T::Data;
-
-	async fn stream(&self) -> BoxChainStream<'_, Self::Index, Self::Hash, Self::Data> {
-		self.stream_and_client().await.0
-	}
 }
 
 #[async_trait::async_trait]
@@ -76,12 +57,28 @@ pub trait ChainClient: Send + Sync {
 		&self,
 		index: Self::Index,
 	) -> Header<Self::Index, Self::Hash, Self::Data>;
+
+	fn into_box<'a>(self) -> BoxChainClient<'a, Self::Index, Self::Hash, Self::Data>
+	where
+		Self: 'a + Sized,
+	{
+		Box::new(self)
+	}
 }
+pub type BoxChainClient<'a, Index, Hash, Data> =
+	Box<dyn ChainClient<Index = Index, Hash = Hash, Data = Data> + 'a>;
 
 pub trait ChainStream: Stream<Item = Header<Self::Index, Self::Hash, Self::Data>> + Send {
 	type Index: aliases::Index;
 	type Hash: aliases::Hash;
 	type Data: aliases::Data;
+
+	fn into_box<'a>(self) -> BoxChainStream<'a, Self::Index, Self::Hash, Self::Data>
+	where
+		Self: 'a + Sized,
+	{
+		Box::pin(self)
+	}
 }
 impl<
 		Index: aliases::Index,
@@ -101,15 +98,3 @@ pub type BoxChainStream<'a, Index, Hash, Data> = Pin<
 			+ 'a,
 	>,
 >;
-
-pub fn box_chain_stream<
-	'a,
-	Index: aliases::Index,
-	Hash: aliases::Hash,
-	Data: aliases::Data,
-	Underlying: Stream<Item = Header<Index, Hash, Data>> + Send + 'a,
->(
-	underlying: Underlying,
-) -> BoxChainStream<'a, Index, Hash, Data> {
-	Box::pin(underlying)
-}

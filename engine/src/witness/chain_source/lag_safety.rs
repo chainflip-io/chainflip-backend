@@ -5,33 +5,33 @@ use futures_util::StreamExt;
 
 use crate::witness::chain_source::ChainClient;
 
-use super::{BoxChainStream, ChainSourceWithClient, Header};
+use super::{BoxChainStream, ChainSource, Header};
 
-pub struct LagSafety<Underlying: ChainSourceWithClient> {
-	underlying: Underlying,
+pub struct LagSafety<InnerSource> {
+	inner_source: InnerSource,
 	margin: usize,
 }
-impl<Underlying: ChainSourceWithClient> LagSafety<Underlying> {
-	pub fn new(margin: usize, underlying: Underlying) -> Self {
-		Self { underlying, margin }
+impl<InnerSource> LagSafety<InnerSource> {
+	pub fn new(inner_source: InnerSource, margin: usize) -> Self {
+		Self { inner_source, margin }
 	}
 }
 
 #[async_trait::async_trait]
-impl<Underlying: ChainSourceWithClient> ChainSourceWithClient for LagSafety<Underlying>
+impl<InnerSource: ChainSource> ChainSource for LagSafety<InnerSource>
 where
-	Underlying::Client: Clone,
+	InnerSource::Client: Clone,
 {
-	type Index = Underlying::Index;
-	type Hash = Underlying::Hash;
-	type Data = Underlying::Data;
+	type Index = InnerSource::Index;
+	type Hash = InnerSource::Hash;
+	type Data = InnerSource::Data;
 
-	type Client = Underlying::Client;
+	type Client = InnerSource::Client;
 
 	async fn stream_and_client(
 		&self,
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
-		let (chain_stream, chain_client) = self.underlying.stream_and_client().await;
+		let (chain_stream, chain_client) = self.inner_source.stream_and_client().await;
 		let margin = self.margin;
 
 		(
@@ -41,9 +41,9 @@ where
 					chain_client.clone(),
 					VecDeque::<
 						Header<
-							<Self as ChainSourceWithClient>::Index,
-							<Self as ChainSourceWithClient>::Hash,
-							<Self as ChainSourceWithClient>::Data,
+							<Self as ChainSource>::Index,
+							<Self as ChainSource>::Hash,
+							<Self as ChainSource>::Data,
 						>,
 					>::new(),
 				),
