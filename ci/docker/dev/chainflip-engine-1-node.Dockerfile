@@ -1,7 +1,6 @@
 FROM debian:bullseye
 ARG BUILD_DATETIME
 ARG VCS_REF
-ARG GENESIS_NODE
 
 LABEL org.opencontainers.image.authors="dev@chainflip.io"
 LABEL org.opencontainers.image.vendor="Chainflip Labs GmbH"
