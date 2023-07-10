@@ -78,3 +78,4 @@ pub trait ChainSourceExt: ChainSource {
 		)
 	}
 }
+impl<T: ChainSource> ChainSourceExt for T {}

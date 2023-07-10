@@ -26,6 +26,7 @@ use super::{
 
 use crate::dot::rpc::DotRpcApi;
 
+#[derive(Clone)]
 pub struct DotRetryRpcClient {
 	rpc_retry_client: RpcRetrierClient<DotHttpRpcClient>,
 	// TODO: this will become just the subscription client, once we no longer need the unified
