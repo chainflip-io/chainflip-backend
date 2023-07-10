@@ -401,59 +401,50 @@ pub mod pallet {
 					T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
 				},
 				RotationPhase::KeyHandoversInProgress(mut rotation_state) => {
-					if !T::SafeMode::get().authority_rotation_enabled {
-						log::warn!(
-							target: "cf-validator",
-							"Failed to start Key Activation: Runtime Safe Mode is in CODE RED. Aborting Authority rotation."
-						);
-						Self::abort_rotation();
-						T::ValidatorWeightInfo::rotation_phase_keygen(0u32)
-					} else {
-						let num_primary_candidates = rotation_state.num_primary_candidates();
-						match T::VaultRotator::status() {
-							AsyncResult::Ready(VaultStatus::KeyHandoverComplete) => {
-								let new_authorities = rotation_state.authority_candidates();
-								HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
-								T::VaultRotator::activate();
-								Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
-							},
-							AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
-								let num_failed_candidates = offenders.intersection(&rotation_state.authority_candidates()).count();
-								rotation_state.ban(offenders);
-								if rotation_state.unbanned_current_authorities::<T>().len() as u32 <= Self::current_consensus_threshold() {
-									log::warn!(
-										target: "cf-validator",
-										"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
-									);
-									Self::abort_rotation();
-								} else if num_failed_candidates > 0 {
-									log::warn!(
-										"{} authority candidate(s) failed to participate in key handover. Retrying from keygen.",
-										num_failed_candidates,
-									);
-									Self::start_vault_rotation(rotation_state);
-								} else {
-									log::warn!(
-										"Key handover attempt failed. Retrying with a new participant set.",
-									);
-									Self::start_key_handover(rotation_state, block_number)
-								};
-							},
-							AsyncResult::Pending => {
-								log::debug!(target: "cf-validator", "awaiting key handover completion");
-							},
-							async_result => {
-								debug_assert!(
-									false,
-									"Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}"
+					let num_primary_candidates = rotation_state.num_primary_candidates();
+					match T::VaultRotator::status() {
+						AsyncResult::Ready(VaultStatus::KeyHandoverComplete) => {
+							let new_authorities = rotation_state.authority_candidates();
+							HistoricalAuthorities::<T>::insert(rotation_state.new_epoch_index, new_authorities);
+							T::VaultRotator::activate();
+							Self::set_rotation_phase(RotationPhase::ActivatingKeys(rotation_state));
+						},
+						AsyncResult::Ready(VaultStatus::Failed(offenders)) => {
+							let num_failed_candidates = offenders.intersection(&rotation_state.authority_candidates()).count();
+							rotation_state.ban(offenders);
+							if rotation_state.unbanned_current_authorities::<T>().len() as u32 <= Self::current_consensus_threshold() {
+								log::warn!(
+									target: "cf-validator",
+									"Too many authorities have been banned from keygen. Key handover would fail. Aborting rotation."
 								);
-								log::error!(target: "cf-validator", "Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}");
 								Self::abort_rotation();
-							},
-						}
-						// TODO: Use correct weight
-						T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
+							} else if num_failed_candidates > 0 {
+								log::warn!(
+									"{} authority candidate(s) failed to participate in key handover. Retrying from keygen.",
+									num_failed_candidates,
+								);
+								Self::start_vault_rotation(rotation_state);
+							} else {
+								log::warn!(
+									"Key handover attempt failed. Retrying with a new participant set.",
+								);
+								Self::start_key_handover(rotation_state, block_number)
+							};
+						},
+						AsyncResult::Pending => {
+							log::debug!(target: "cf-validator", "awaiting key handover completion");
+						},
+						async_result => {
+							debug_assert!(
+								false,
+								"Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}"
+							);
+							log::error!(target: "cf-validator", "Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}");
+							Self::abort_rotation();
+						},
 					}
+					// TODO: Use correct weight
+					T::ValidatorWeightInfo::rotation_phase_keygen(num_primary_candidates)
 				}
 				RotationPhase::ActivatingKeys(rotation_state) => {
 					let num_primary_candidates = rotation_state.num_primary_candidates();
@@ -1101,15 +1092,16 @@ impl<T: Config> Pallet<T> {
 		if !T::SafeMode::get().authority_rotation_enabled {
 			log::warn!(
 				target: "cf-validator",
-				"Failed to start authority rotation: Runtime Safe Mode is in CODE RED."
+				"Failed to start Authority Rotation: Disabled due to Runtime Safe Mode."
 			);
-			return T::ValidatorWeightInfo::start_authority_rotation_in_safe_mode_code_red()
-		} else if !matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle) {
+			return T::ValidatorWeightInfo::start_authority_rotation_while_disabled_by_safe_mode()
+		}
+		if !matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle) {
 			log::error!(
 				target: "cf-validator",
 				"Failed to start authority rotation: Authority rotation already in progress."
 			);
-			return T::ValidatorWeightInfo::start_authority_rotation_in_safe_mode_code_red()
+			return T::ValidatorWeightInfo::start_authority_rotation_while_disabled_by_safe_mode()
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
 
@@ -1185,7 +1177,7 @@ impl<T: Config> Pallet<T> {
 		if !T::SafeMode::get().authority_rotation_enabled {
 			log::warn!(
 				target: "cf-validator",
-				"Failed to start Key Handover: Runtime Safe Mode is in CODE RED. Aborting Authority rotation."
+				"Failed to start Key Handover: Disabled due to Runtime Safe Mode. Aborting Authority rotation."
 			);
 			Self::abort_rotation();
 			return
