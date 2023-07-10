@@ -446,17 +446,17 @@ pub mod pallet {
 				},
 				Err(offenders) => {
 					// Remove any offenders that are not part of the ceremony and log them
-					let (valid_offenders, non_candidate_offenders): (BTreeSet<_>, BTreeSet<_>) =
+					let (valid_blames, invalid_blames): (BTreeSet<_>, BTreeSet<_>) =
 					offenders.into_iter().partition(|id| response_status.candidates().contains(id));
-					if !non_candidate_offenders.is_empty() {
+					if !invalid_blames.is_empty() {
 						log::warn!(
 							"Invalid offenders reported {:?} for ceremony {}.",
-							non_candidate_offenders,
+							invalid_blames,
 							$ceremony_id
 						);
 					}
 
-					response_status.add_failure_vote(&reporter, valid_offenders);
+					response_status.add_failure_vote(&reporter, valid_blames);
 					$failure_event(reporter)
 				},
 			});

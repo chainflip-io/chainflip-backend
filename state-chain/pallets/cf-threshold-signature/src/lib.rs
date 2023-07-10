@@ -579,18 +579,18 @@ pub mod pallet {
 						}
 
 						// Remove any offenders that are not part of the ceremony and log them
-						let (valid_offenders, non_candidate_offenders): (BTreeSet<_>, BTreeSet<_>) =
+						let (valid_blames, invalid_blames): (BTreeSet<_>, BTreeSet<_>) =
 							offenders.into_iter().partition(|id| context.candidates.contains(id));
 
-						if !non_candidate_offenders.is_empty() {
+						if !invalid_blames.is_empty() {
 							log::warn!(
 								"Invalid offenders reported {:?} for ceremony {}.",
-								non_candidate_offenders,
+								invalid_blames,
 								ceremony_id
 							);
 						}
 
-						for id in valid_offenders {
+						for id in valid_blames {
 							(*context.blame_counts.entry(id).or_default()) += 1;
 						}
 
