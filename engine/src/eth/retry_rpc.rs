@@ -4,7 +4,7 @@ use utilities::task_scope::Scope;
 
 use crate::{
 	eth::ethers_rpc::EthersRpcApi,
-	rpc_retrier::RpcRetrierClient,
+	retrier::RetrierClient,
 	witness::chain_source::{ChainClient, Header},
 };
 use std::time::Duration;
@@ -18,8 +18,8 @@ use cf_chains::Ethereum;
 
 #[derive(Clone)]
 pub struct EthersRetryRpcClient {
-	rpc_retry_client: RpcRetrierClient<EthersRpcClient>,
-	sub_retry_client: RpcRetrierClient<ReconnectSubscriptionClient>,
+	rpc_retry_client: RetrierClient<EthersRpcClient>,
+	sub_retry_client: RetrierClient<ReconnectSubscriptionClient>,
 }
 
 const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
@@ -33,13 +33,13 @@ impl EthersRetryRpcClient {
 		chain_id: web3::types::U256,
 	) -> Self {
 		Self {
-			rpc_retry_client: RpcRetrierClient::new(
+			rpc_retry_client: RetrierClient::new(
 				scope,
 				ethers_client,
 				ETHERS_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
-			sub_retry_client: RpcRetrierClient::new(
+			sub_retry_client: RetrierClient::new(
 				scope,
 				ReconnectSubscriptionClient::new(ws_node_endpoint, chain_id),
 				ETHERS_RPC_TIMEOUT,
@@ -182,7 +182,7 @@ impl ChainClient for EthersRetryRpcClient {
 
 	type Hash = H256;
 
-	type Data = ();
+	type Data = Bloom;
 
 	async fn header_at_index(
 		&self,
@@ -205,7 +205,7 @@ impl ChainClient for EthersRetryRpcClient {
 						index,
 						hash: block_hash,
 						parent_hash: Some(block.parent_hash),
-						data: (),
+						data: block.logs_bloom.unwrap_or(Bloom::repeat_byte(0xFFu8)).0.into(),
 					})
 				})
 			}))

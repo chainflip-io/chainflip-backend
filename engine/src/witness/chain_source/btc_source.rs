@@ -10,14 +10,14 @@ use crate::{
 	witness::{chain_source::BoxChainStream, common::ExternalChainSource},
 };
 
-pub struct BtcBlockStream<C> {
+pub struct BtcSource<C> {
 	client: C,
 }
 
 const POLL_INTERVAL: Duration = Duration::from_secs(10);
 
 #[async_trait::async_trait]
-impl<C> ChainSource for BtcBlockStream<C>
+impl<C> ChainSource for BtcSource<C>
 where
 	C: BtcRetryRpcApi + ChainClient<Index = u64, Hash = BlockHash, Data = ()> + Clone,
 {
@@ -56,7 +56,7 @@ where
 	}
 }
 
-impl<C> ExternalChainSource for BtcBlockStream<C>
+impl<C> ExternalChainSource for BtcSource<C>
 where
 	C: BtcRetryRpcApi + ChainClient<Index = u64, Hash = BlockHash, Data = ()> + Clone,
 {
