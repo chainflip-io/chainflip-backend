@@ -12,6 +12,7 @@ import { exec } from 'child_process';
 import { Mutex } from 'async-mutex';
 import type { KeyringPair } from '@polkadot/keyring/types';
 import { runWithTimeout, sleep, getAddress, hexStringToBytesArray, asciiStringToBytesArray } from '../shared/utils';
+import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 
 const deposits = {
   dot: 10000,
@@ -43,7 +44,6 @@ const chain = {
 const cfNodeEndpoint = process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944';
 let chainflip: ApiPromise;
 let keyring: Keyring;
-let snowwhite: KeyringPair;
 let lp: KeyringPair;
 const mutex = new Mutex();
 
@@ -126,11 +126,9 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
     Math.round(Math.sqrt(values[ccy] / 10 ** (decimals[ccy] - decimals.usdc)) * 2 ** 96),
   );
   console.log('Setting up ' + ccy + ' pool');
-  await mutex.runExclusive(async () => {
-    await chainflip.tx.governance
-      .proposeGovernanceExtrinsic(chainflip.tx.liquidityPools.newPool(ccy, 100, price))
-      .signAndSend(snowwhite, { nonce: -1 });
-  });
+
+  await submitGovernanceExtrinsic(chainflip.tx.liquidityPools.newPool(ccy, 100, price));
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const checkPool = (data: any): boolean => data.unstableAsset.toJSON().toLowerCase() === ccy;
 
@@ -206,18 +204,14 @@ async function main(): Promise<void> {
   await cryptoWaitReady();
 
   keyring = new Keyring({ type: 'sr25519' });
-  const snowwhiteUri =
-    process.env.SNOWWHITE_URI ??
-    'market outdoor rubber basic simple banana resist quarter lab random hurdle cruise';
-  snowwhite = keyring.createFromUri(snowwhiteUri);
 
   const lpUri = process.env.LP_URI ?? '//LP_1';
   lp = keyring.createFromUri(lpUri);
-  
+
   // Register Emergency withdrawal address for all chains
-  const encodedEthAddr = chainflip.createType('EncodedAddress', {"Eth": hexStringToBytesArray(await getAddress('ETH', 'LP_1'))});
-  const encodedDotAddr = chainflip.createType('EncodedAddress', {"Dot": lp.publicKey});
-  const encodedBtcAddr = chainflip.createType('EncodedAddress', {"Btc": asciiStringToBytesArray(await getAddress('BTC', 'LP_1'))});
+  const encodedEthAddr = chainflip.createType('EncodedAddress', { "Eth": hexStringToBytesArray(await getAddress('ETH', 'LP_1')) });
+  const encodedDotAddr = chainflip.createType('EncodedAddress', { "Dot": lp.publicKey });
+  const encodedBtcAddr = chainflip.createType('EncodedAddress', { "Btc": asciiStringToBytesArray(await getAddress('BTC', 'LP_1')) });
 
   await setupEmergencyWithdrawalAddress(encodedEthAddr);
   await setupEmergencyWithdrawalAddress(encodedDotAddr);
