@@ -6,13 +6,13 @@ import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
 import { Chain, Asset, assetChains } from '@chainflip-io/cli';
 import Web3 from 'web3';
-import { u8aToHex } from "@polkadot/util";
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
 import { newEthAddress } from './new_eth_address';
 import { CcmDepositMetadata } from './new_swap';
-import { cfReceiverMockAbi } from './eth_abis';
+import cfReceiverMockAbi from '../../eth-contract-abis/perseverance-rc17/CFReceiverMock.json';
+import { u8aToHex } from "@polkadot/util";
 
 // TODO: Import this from the chainflip-io/cli package once it's exported in future versions.
 export function assetToChain(asset: Asset): number {
