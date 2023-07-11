@@ -4,7 +4,7 @@ use utilities::task_scope::Scope;
 
 use crate::{
 	eth::ethers_rpc::EthersRpcApi,
-	rpc_retrier::RetrierClient,
+	retrier::RetrierClient,
 	witness::chain_source::{ChainClient, Header},
 };
 use std::time::Duration;

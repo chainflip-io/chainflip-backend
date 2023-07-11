@@ -2,7 +2,7 @@ use bitcoin::{Block, BlockHash, Txid};
 use utilities::task_scope::Scope;
 
 use crate::{
-	rpc_retrier::RetrierClient,
+	retrier::RetrierClient,
 	witness::chain_source::{ChainClient, Header},
 };
 use cf_chains::Bitcoin;

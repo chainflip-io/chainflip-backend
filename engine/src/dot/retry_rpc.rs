@@ -17,7 +17,7 @@ use subxt::{
 };
 use utilities::task_scope::Scope;
 
-use crate::rpc_retrier::RetrierClient;
+use crate::retrier::RetrierClient;
 
 use super::{
 	http_rpc::DotHttpRpcClient,
