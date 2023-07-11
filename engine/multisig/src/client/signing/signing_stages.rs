@@ -4,10 +4,12 @@ use crate::{
 	client::{
 		self,
 		ceremony_manager::SigningCeremony,
-		common::{try_deserialize, DelayDeserialization, SigningFailureReason, SigningStageName},
+		common::{
+			try_deserialize, DelayDeserialization, Point, SigningFailureReason, SigningStageName,
+		},
 		signing::{self, signing_data::LocalSig3Inner, PayloadAndKey},
 	},
-	crypto::CryptoScheme,
+	crypto::ChainSigning,
 };
 
 use async_trait::async_trait;
@@ -37,17 +39,17 @@ type SigningStageResult<Crypto> = StageResult<SigningCeremony<Crypto>>;
 
 /// Stage 1: Generate an broadcast our secret nonce pair
 /// and collect those from all other parties
-pub struct AwaitCommitments1<Crypto: CryptoScheme> {
+pub struct AwaitCommitments1<Crypto: ChainSigning> {
 	common: CeremonyCommon,
 	signing_common: SigningStateCommonInfo<Crypto>,
 	// TODO: The reason to keep nonces in a Box was to
 	// ensure they are allocated on the heap to avoid leaving
 	// copies on the stack when the data is moved. We can probably
 	// remove `Box` now that the items are stored in Vec
-	nonces: Vec<Box<SecretNoncePair<Crypto::Point>>>,
+	nonces: Vec<Box<SecretNoncePair<Point<Crypto>>>>,
 }
 
-impl<Crypto: CryptoScheme> AwaitCommitments1<Crypto> {
+impl<Crypto: ChainSigning> AwaitCommitments1<Crypto> {
 	pub fn new(mut common: CeremonyCommon, signing_common: SigningStateCommonInfo<Crypto>) -> Self {
 		let nonces = (0..signing_common.payload_count())
 			.map(|_| SecretNoncePair::sample_random(&mut common.rng))
@@ -57,20 +59,20 @@ impl<Crypto: CryptoScheme> AwaitCommitments1<Crypto> {
 	}
 }
 
-derive_display_as_type_name!(AwaitCommitments1<Crypto: CryptoScheme>);
+derive_display_as_type_name!(AwaitCommitments1<Crypto: ChainSigning>);
 
 #[async_trait]
-impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
+impl<Crypto: ChainSigning> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	for AwaitCommitments1<Crypto>
 {
-	type Message = Comm1<Crypto::Point>;
+	type Message = Comm1<Point<Crypto>>;
 	const NAME: SigningStageName = SigningStageName::AwaitCommitments1;
 
 	fn init(&mut self) -> DataToSend<Self::Message> {
 		let comm1: Vec<_> = self
 			.nonces
 			.iter()
-			.map(|nonce| SigningCommitment::<Crypto::Point> { d: nonce.d_pub, e: nonce.e_pub })
+			.map(|nonce| SigningCommitment::<Point<Crypto>> { d: nonce.d_pub, e: nonce.e_pub })
 			.collect();
 		DataToSend::Broadcast(DelayDeserialization::new(&comm1))
 	}
@@ -97,29 +99,29 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 // ************
 
 /// Stage 2: Verifying data broadcast during stage 1
-struct VerifyCommitmentsBroadcast2<Crypto: CryptoScheme> {
+struct VerifyCommitmentsBroadcast2<Crypto: ChainSigning> {
 	common: CeremonyCommon,
 	signing_common: SigningStateCommonInfo<Crypto>,
 	// Our nonce pair generated in the previous stage
-	nonces: Vec<Box<SecretNoncePair<Crypto::Point>>>,
+	nonces: Vec<Box<SecretNoncePair<Point<Crypto>>>>,
 	// Public nonce commitments collected in the previous stage
-	commitments: BTreeMap<AuthorityCount, Option<Comm1<Crypto::Point>>>,
+	commitments: BTreeMap<AuthorityCount, Option<Comm1<Point<Crypto>>>>,
 }
 
-derive_display_as_type_name!(VerifyCommitmentsBroadcast2<Crypto: CryptoScheme>);
+derive_display_as_type_name!(VerifyCommitmentsBroadcast2<Crypto: ChainSigning>);
 
 /// Data derived for a single payload from initial commitments
-pub struct DerivedSignatureData<C: CryptoScheme> {
-	group_commitment: SchnorrCommitment<C>,
-	bindings: BTreeMap<AuthorityCount, NonceBinding<C>>,
-	bound_commitments: BTreeMap<AuthorityCount, SchnorrCommitment<C>>,
+pub struct DerivedSignatureData<C: ChainSigning> {
+	group_commitment: SchnorrCommitment<C::CryptoScheme>,
+	bindings: BTreeMap<AuthorityCount, NonceBinding<C::CryptoScheme>>,
+	bound_commitments: BTreeMap<AuthorityCount, SchnorrCommitment<C::CryptoScheme>>,
 }
 
 #[async_trait]
-impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
+impl<Crypto: ChainSigning> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	for VerifyCommitmentsBroadcast2<Crypto>
 {
-	type Message = VerifyComm2<Crypto::Point>;
+	type Message = VerifyComm2<Point<Crypto>>;
 	const NAME: SigningStageName = SigningStageName::VerifyCommitmentsBroadcast2;
 
 	/// Simply report all data that we have received from
@@ -197,7 +199,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 					})
 					.collect::<BTreeMap<_, _>>();
 
-				let bindings = signing_detail::generate_bindings::<Crypto>(
+				let bindings = signing_detail::generate_bindings::<Crypto::CryptoScheme>(
 					payload,
 					&commitments,
 					&self.common.all_idxs,
@@ -230,21 +232,21 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 }
 
 /// Stage 3: Generating and broadcasting signature response shares
-struct LocalSigStage3<Crypto: CryptoScheme> {
+struct LocalSigStage3<Crypto: ChainSigning> {
 	common: CeremonyCommon,
 	signing_common: SigningStateCommonInfo<Crypto>,
 	// Our nonce pair generated in the previous stage
-	nonces: Vec<Box<SecretNoncePair<Crypto::Point>>>,
+	nonces: Vec<Box<SecretNoncePair<Point<Crypto>>>>,
 	signature_data: Vec<DerivedSignatureData<Crypto>>,
 }
 
-derive_display_as_type_name!(LocalSigStage3<Crypto: CryptoScheme>);
+derive_display_as_type_name!(LocalSigStage3<Crypto: ChainSigning>);
 
 #[async_trait]
-impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
+impl<Crypto: ChainSigning> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	for LocalSigStage3<Crypto>
 {
-	type Message = LocalSig3<Crypto::Point>;
+	type Message = LocalSig3<Point<Crypto>>;
 	const NAME: SigningStageName = SigningStageName::LocalSigStage3;
 
 	/// With all nonce commitments verified, and the group commitment computed,
@@ -255,7 +257,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 				let PayloadAndKey { payload, key } = &self.signing_common.payloads_and_keys[i];
 				let signature_data = &self.signature_data[i];
 
-				signing_detail::generate_local_sig::<Crypto>(
+				signing_detail::generate_local_sig::<Crypto::CryptoScheme>(
 					payload,
 					&key.key_share,
 					&self.nonces[i],
@@ -268,7 +270,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 			.collect();
 
 		let data =
-			DataToSend::Broadcast(DelayDeserialization::new(&LocalSig3Inner::<Crypto::Point> {
+			DataToSend::Broadcast(DelayDeserialization::new(&LocalSig3Inner::<Point<Crypto>> {
 				responses,
 			}));
 
@@ -303,21 +305,21 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 }
 
 /// Stage 4: Verifying the broadcasting of signature shares
-struct VerifyLocalSigsBroadcastStage4<Crypto: CryptoScheme> {
+struct VerifyLocalSigsBroadcastStage4<Crypto: ChainSigning> {
 	common: CeremonyCommon,
 	signing_common: SigningStateCommonInfo<Crypto>,
 	signature_data: Vec<DerivedSignatureData<Crypto>>,
 	/// Signature shares sent to us (NOT verified to be correctly broadcast)
-	local_sigs: BTreeMap<AuthorityCount, Option<LocalSig3<Crypto::Point>>>,
+	local_sigs: BTreeMap<AuthorityCount, Option<LocalSig3<Point<Crypto>>>>,
 }
 
-derive_display_as_type_name!(VerifyLocalSigsBroadcastStage4<Crypto: CryptoScheme>);
+derive_display_as_type_name!(VerifyLocalSigsBroadcastStage4<Crypto: ChainSigning>);
 
 #[async_trait]
-impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
+impl<Crypto: ChainSigning> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	for VerifyLocalSigsBroadcastStage4<Crypto>
 {
-	type Message = VerifyLocalSig4<Crypto::Point>;
+	type Message = VerifyLocalSig4<Point<Crypto>>;
 	const NAME: SigningStageName = SigningStageName::VerifyLocalSigsBroadcastStage4;
 
 	/// Broadcast all signature shares sent to us
@@ -385,7 +387,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 		let lagrange_coefficients: BTreeMap<_, _> = all_idxs
 			.iter()
 			.map(|signer_idx| {
-				(*signer_idx, get_lagrange_coeff::<Crypto::Point>(*signer_idx, all_idxs))
+				(*signer_idx, get_lagrange_coeff::<Point<Crypto>>(*signer_idx, all_idxs))
 			})
 			.collect();
 
@@ -418,7 +420,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 
 				let payload_data = &self.signature_data[i];
 
-				signing_detail::aggregate_signature::<Crypto>(
+				signing_detail::aggregate_signature::<Crypto::CryptoScheme>(
 					payload,
 					all_idxs,
 					key.get_agg_public_key_point(),

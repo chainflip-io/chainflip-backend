@@ -4,7 +4,7 @@ use chainflip_engine::db::PersistentKeyDB;
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use multisig::{
 	bitcoin::BtcSigning, client::keygen::generate_key_data, eth::EthSigning,
-	polkadot::PolkadotSigning, CanonicalEncoding, CryptoScheme, KeyId, Rng,
+	polkadot::PolkadotSigning, CanonicalEncoding, ChainSigning, KeyId, Rng,
 };
 use rand::SeedableRng;
 use state_chain_runtime::AccountId;
@@ -85,7 +85,7 @@ fn main() {
 
 // We just return the PublicKeyBytes (as hex) here. The chain_spec only needs to read this. At
 // genesis it knows that the starting epoch index is the Genesis index.
-fn generate_and_save_keys<Crypto: CryptoScheme>(
+fn generate_and_save_keys<Crypto: ChainSigning>(
 	node_id_to_name_map: &HashMap<AccountId, String>,
 ) -> String {
 	let (public_key, key_shares) = generate_key_data::<Crypto>(

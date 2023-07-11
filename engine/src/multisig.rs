@@ -1,7 +1,7 @@
 use anyhow::Result;
 use cf_primitives::CeremonyId;
 
-use multisig::{CryptoScheme, MultisigClient};
+use multisig::{ChainSigning, MultisigClient};
 use tracing::{info, info_span, Instrument};
 
 use crate::{
@@ -11,11 +11,11 @@ use crate::{
 use state_chain_runtime::AccountId;
 
 /// Start the multisig client, which listens for p2p messages and requests from the SC
-pub fn start_client<C: CryptoScheme>(
+pub fn start_client<C: ChainSigning>(
 	my_account_id: AccountId,
 	key_store: KeyStore<C>,
-	incoming_p2p_message_receiver: MultisigMessageReceiver<<C as CryptoScheme>::Chain>,
-	outgoing_p2p_message_sender: MultisigMessageSender<<C as CryptoScheme>::Chain>,
+	incoming_p2p_message_receiver: MultisigMessageReceiver<<C as ChainSigning>::Chain>,
+	outgoing_p2p_message_sender: MultisigMessageSender<<C as ChainSigning>::Chain>,
 	latest_ceremony_id: CeremonyId,
 ) -> (MultisigClient<C, KeyStore<C>>, impl futures::Future<Output = Result<()>> + Send) {
 	info!("Starting {} MultisigClient", C::NAME);

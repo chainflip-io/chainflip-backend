@@ -7,7 +7,8 @@ use crate::{
 	bitcoin,
 	client::{
 		common::{
-			BroadcastFailureReason, DelayDeserialization, SigningFailureReason, SigningStageName,
+			BroadcastFailureReason, DelayDeserialization, Point as ChainPoint,
+			SigningFailureReason, SigningPayload, SigningStageName,
 		},
 		helpers::{
 			gen_dummy_local_sig, gen_dummy_signing_comm1, new_nodes, new_signing_ceremony,
@@ -19,7 +20,7 @@ use crate::{
 	},
 	crypto::bitcoin::BtcSigning,
 	eth::EthSigning,
-	CryptoScheme, Rng,
+	ChainSigning, CryptoScheme, Rng,
 };
 
 // We choose (arbitrarily) to use eth crypto for unit tests.
@@ -196,7 +197,7 @@ mod local_signatures_stage {
 	}
 }
 
-async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayload]) {
+async fn test_sign_multiple_payloads<C: ChainSigning>(payloads: &[SigningPayload<C>]) {
 	let mut rng = Rng::from_seed([0; 32]);
 	let (key, key_data) =
 		generate_key_data::<C>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()), &mut rng);
@@ -217,9 +218,9 @@ async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayl
 	let messages = run_stages!(
 		signing_ceremony,
 		messages,
-		signing_data::VerifyComm2<C::Point>,
-		signing_data::LocalSig3<C::Point>,
-		signing_data::VerifyLocalSig4<C::Point>
+		signing_data::VerifyComm2<ChainPoint<C>>,
+		signing_data::LocalSig3<ChainPoint<C>>,
+		signing_data::VerifyLocalSig4<ChainPoint<C>>
 	);
 	signing_ceremony.distribute_messages(messages).await;
 	let signature = signing_ceremony
@@ -227,7 +228,7 @@ async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayl
 		.into_iter()
 		.next()
 		.expect("should have exactly one signature");
-	assert!(C::verify_signature(&signature, &key, &payloads[0]).is_ok());
+	assert!(C::CryptoScheme::verify_signature(&signature, &key, &payloads[0]).is_ok());
 }
 
 #[tokio::test]
@@ -240,7 +241,7 @@ async fn should_sign_multiple_payloads() {
 	test_sign_multiple_payloads::<BtcSigning>(&payloads).await;
 }
 
-async fn should_sign_with_all_parties<C: CryptoScheme>(participants: &BTreeSet<AccountId>) {
+async fn should_sign_with_all_parties<C: ChainSigning>(participants: &BTreeSet<AccountId>) {
 	// This seed ensures that the initially
 	// generated key is incompatible to increase
 	// test coverage
@@ -255,7 +256,11 @@ async fn should_sign_with_all_parties<C: CryptoScheme>(participants: &BTreeSet<A
 		let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
 			new_nodes(participants.clone()),
 			DEFAULT_SIGNING_CEREMONY_ID,
-			vec![PayloadAndKeyData::new(C::signing_payload_for_test(), key.clone(), key_data)],
+			vec![PayloadAndKeyData::new(
+				C::CryptoScheme::signing_payload_for_test(),
+				key.clone(),
+				key_data,
+			)],
 			Rng::from_seed(nonce_seed),
 		);
 
@@ -263,9 +268,9 @@ async fn should_sign_with_all_parties<C: CryptoScheme>(participants: &BTreeSet<A
 		let messages = run_stages!(
 			signing_ceremony,
 			messages,
-			signing_data::VerifyComm2<C::Point>,
-			signing_data::LocalSig3<C::Point>,
-			signing_data::VerifyLocalSig4<C::Point>
+			signing_data::VerifyComm2<ChainPoint<C>>,
+			signing_data::LocalSig3<ChainPoint<C>>,
+			signing_data::VerifyLocalSig4<ChainPoint<C>>
 		);
 		signing_ceremony.distribute_messages(messages).await;
 		let signature = signing_ceremony
@@ -273,7 +278,12 @@ async fn should_sign_with_all_parties<C: CryptoScheme>(participants: &BTreeSet<A
 			.into_iter()
 			.next()
 			.expect("should have exactly one signature");
-		assert!(C::verify_signature(&signature, &key, &C::signing_payload_for_test()).is_ok());
+		assert!(C::CryptoScheme::verify_signature(
+			&signature,
+			&key,
+			&C::CryptoScheme::signing_payload_for_test()
+		)
+		.is_ok());
 	}
 }
 
@@ -294,7 +304,7 @@ async fn should_sign_with_different_keys() {
 	// For now, only bitcoin can have multiple payloads. The other chains will fail the message size
 	// check
 	type C = BtcSigning;
-	type Point = <C as CryptoScheme>::Point;
+	type Point = <<C as ChainSigning>::CryptoScheme as CryptoScheme>::Point;
 
 	let mut rng = Rng::from_seed([1; 32]);
 	let account_ids = BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned());
@@ -310,8 +320,16 @@ async fn should_sign_with_different_keys() {
 		new_nodes(account_ids),
 		DEFAULT_SIGNING_CEREMONY_ID,
 		vec![
-			PayloadAndKeyData::new(C::signing_payload_for_test(), key_1, key_data_1),
-			PayloadAndKeyData::new(C::signing_payload_for_test(), key_2, key_data_2),
+			PayloadAndKeyData::new(
+				<<C as ChainSigning>::CryptoScheme as CryptoScheme>::signing_payload_for_test(),
+				key_1,
+				key_data_1,
+			),
+			PayloadAndKeyData::new(
+				<<C as ChainSigning>::CryptoScheme as CryptoScheme>::signing_payload_for_test(),
+				key_2,
+				key_data_2,
+			),
 		],
 		rng,
 	);
@@ -331,8 +349,18 @@ async fn should_sign_with_different_keys() {
 	assert_eq!(signatures.len(), 2);
 
 	// Signatures should be correct w.r.t. corresponding keys:
-	assert!(C::verify_signature(&signatures[0], &key_1, &C::signing_payload_for_test()).is_ok());
-	assert!(C::verify_signature(&signatures[1], &key_2, &C::signing_payload_for_test()).is_ok());
+	assert!(<<C as ChainSigning>::CryptoScheme as CryptoScheme>::verify_signature(
+		&signatures[0],
+		&key_1,
+		&<<C as ChainSigning>::CryptoScheme as CryptoScheme>::signing_payload_for_test()
+	)
+	.is_ok());
+	assert!(<<C as ChainSigning>::CryptoScheme as CryptoScheme>::verify_signature(
+		&signatures[1],
+		&key_2,
+		&<<C as ChainSigning>::CryptoScheme as CryptoScheme>::signing_payload_for_test()
+	)
+	.is_ok());
 }
 
 mod timeout {

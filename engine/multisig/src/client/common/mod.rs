@@ -26,19 +26,21 @@ use serde::{Deserialize, Serialize};
 
 use thiserror::Error;
 
-use crate::{
-	crypto::{ECPoint, KeyShare},
-	CryptoScheme,
-};
+use crate::crypto::{ChainSigning, CryptoScheme, ECPoint, KeyShare};
 
 use super::{signing::get_lagrange_coeff, utils::PartyIdxMapping, ThresholdParameters};
 
+pub type Point<C> = <<C as ChainSigning>::CryptoScheme as CryptoScheme>::Point;
+pub type PublicKey<C> = <<C as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey;
+pub type SigningPayload<C> = <<C as ChainSigning>::CryptoScheme as CryptoScheme>::SigningPayload;
+pub type Signature<C> = <<C as ChainSigning>::CryptoScheme as CryptoScheme>::Signature;
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct KeygenResult<C: CryptoScheme> {
+pub struct KeygenResult<C: ChainSigning> {
 	#[serde(bound = "")]
-	pub key_share: KeyShare<C::Point>,
+	pub key_share: KeyShare<Point<C>>,
 	#[serde(bound = "")]
-	pub party_public_keys: BTreeMap<AccountId, C::Point>,
+	pub party_public_keys: BTreeMap<AccountId, Point<C>>,
 	// NOTE: making this private ensures that the only
 	// way to create the struct is through the "constructor",
 	// which is important for ensuring its compatibility
@@ -47,30 +49,30 @@ pub struct KeygenResult<C: CryptoScheme> {
 
 /// This computes a scalar, multiplying by which the public key will become compatible
 /// according to [`multisig::CryptoScheme::is_pubkey_compatible`].
-fn compute_compatibility_factor<C: CryptoScheme>(
-	pubkey: &C::Point,
-) -> <C::Point as ECPoint>::Scalar {
+fn compute_compatibility_factor<C: ChainSigning>(
+	pubkey: &Point<C>,
+) -> <Point<C> as ECPoint>::Scalar {
 	let mut factor = 1;
 	let mut product = *pubkey;
-	while !C::is_pubkey_compatible(&product) {
+	while !C::CryptoScheme::is_pubkey_compatible(&product) {
 		factor += 1;
 		product = product + *pubkey;
 	}
 
-	<C::Point as ECPoint>::Scalar::from(factor)
+	<Point<C> as ECPoint>::Scalar::from(factor)
 }
 
-impl<C: CryptoScheme> KeygenResult<C> {
+impl<C: ChainSigning> KeygenResult<C> {
 	/// Create keygen result, ensuring that the public key is "contract compatible" (mostly relevant
 	/// for Ethereum keys/contracts, see [`multisig::CryptoScheme::is_pubkey_compatible`]).
 	/// Note that the keys might be modified as part of this procedure. However, the result is
 	/// guaranteed to produce a valid multisig share as long as all ceremony participants use the
 	/// same procedure.
 	pub fn new_compatible(
-		key_share: KeyShare<C::Point>,
-		party_public_keys: BTreeMap<AccountId, C::Point>,
+		key_share: KeyShare<Point<C>>,
+		party_public_keys: BTreeMap<AccountId, Point<C>>,
 	) -> Self {
-		let factor: <C::Point as ECPoint>::Scalar = compute_compatibility_factor::<C>(&key_share.y);
+		let factor: <Point<C> as ECPoint>::Scalar = compute_compatibility_factor::<C>(&key_share.y);
 
 		// Scale all components by `factor`, which should give us another valid multisig share
 		// (w.r.t. the scaled aggregate key):
@@ -82,18 +84,18 @@ impl<C: CryptoScheme> KeygenResult<C> {
 	}
 }
 
-impl<C: CryptoScheme> KeygenResult<C> {
-	pub fn get_agg_public_key_point(&self) -> C::Point {
+impl<C: ChainSigning> KeygenResult<C> {
+	pub fn get_agg_public_key_point(&self) -> Point<C> {
 		self.key_share.y
 	}
 
-	pub fn get_agg_public_key(&self) -> C::PublicKey {
-		C::pubkey_from_point(&self.get_agg_public_key_point())
+	pub fn get_agg_public_key(&self) -> PublicKey<C> {
+		C::CryptoScheme::pubkey_from_point(&self.get_agg_public_key_point())
 	}
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct KeygenResultInfo<C: CryptoScheme> {
+pub struct KeygenResultInfo<C: ChainSigning> {
 	#[serde(bound = "")]
 	pub key: Arc<KeygenResult<C>>,
 	pub validator_mapping: Arc<PartyIdxMapping>,
@@ -102,12 +104,12 @@ pub struct KeygenResultInfo<C: CryptoScheme> {
 
 /// Our own secret share and the public keys of all other participants
 /// scaled by corresponding lagrange coefficients.
-type SecretShare<C> = <<C as CryptoScheme>::Point as ECPoint>::Scalar;
-type PublicKeyShares<C> = BTreeMap<AccountId, <C as CryptoScheme>::Point>;
+type SecretShare<C> = <Point<C> as ECPoint>::Scalar;
+type PublicKeyShares<C> = BTreeMap<AccountId, Point<C>>;
 
 /// Holds state relevant to the role in the handover ceremony.
 #[derive(Debug)]
-pub enum ParticipantStatus<C: CryptoScheme> {
+pub enum ParticipantStatus<C: ChainSigning> {
 	Sharing {
 		secret_share: SecretShare<C>,
 		public_key_shares: PublicKeyShares<C>,
@@ -119,7 +121,7 @@ pub enum ParticipantStatus<C: CryptoScheme> {
 }
 
 #[derive(Debug)]
-pub struct ResharingContext<C: CryptoScheme> {
+pub struct ResharingContext<C: ChainSigning> {
 	/// Participants who contribute their (existing) secret shares
 	pub sharing_participants: BTreeSet<AuthorityCount>,
 	/// Participants who receive new shares
@@ -130,7 +132,7 @@ pub struct ResharingContext<C: CryptoScheme> {
 	pub future_index_mapping: PartyIdxMapping,
 }
 
-impl<C: CryptoScheme> ResharingContext<C> {
+impl<C: ChainSigning> ResharingContext<C> {
 	/// `participants` are a subset of the holders of the original key
 	/// that are sufficient to reconstruct or, in this case, create
 	/// new shares for the key.
@@ -155,9 +157,9 @@ impl<C: CryptoScheme> ResharingContext<C> {
 		// If we are not a participant, we simply set our secret to 0, otherwise
 		// we use our key share scaled by the lagrange coefficient:
 		let secret_share = if sharing_participants.contains(own_id) {
-			get_lagrange_coeff::<C::Point>(own_idx, &all_idxs) * &key.key.key_share.x_i
+			get_lagrange_coeff::<Point<C>>(own_idx, &all_idxs) * &key.key.key_share.x_i
 		} else {
-			<C::Point as ECPoint>::Scalar::zero()
+			<Point<C> as ECPoint>::Scalar::zero()
 		};
 
 		let public_key_shares = key
@@ -169,14 +171,14 @@ impl<C: CryptoScheme> ResharingContext<C> {
 				// and thus their public key share should be a point at infinity:
 				let expected_pubkey_share = if sharing_participants.contains(id) {
 					let idx = key.validator_mapping.get_idx(id).expect("id must be present");
-					let coeff = get_lagrange_coeff::<C::Point>(idx, &all_idxs);
+					let coeff = get_lagrange_coeff::<Point<C>>(idx, &all_idxs);
 					*key.key
 						.party_public_keys
 						.get(id)
 						.expect("should have a public key for this party") *
 						&coeff
 				} else {
-					C::Point::point_at_infinity()
+					Point::<C>::point_at_infinity()
 				};
 
 				(id.clone(), expected_pubkey_share)

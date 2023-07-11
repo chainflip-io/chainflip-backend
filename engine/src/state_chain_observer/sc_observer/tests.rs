@@ -13,7 +13,7 @@ use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use frame_system::Phase;
 use futures::{FutureExt, StreamExt};
 use mockall::predicate::{self, eq};
-use multisig::SignatureToThresholdSignature;
+use multisig::{ChainSigning, SignatureToThresholdSignature};
 use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_vaults::Vault;
 use sp_runtime::{AccountId32, Digest};
@@ -1460,20 +1460,20 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 
 async fn should_handle_signing_request<C, I>()
 where
-	C: CryptoScheme + Send + Sync,
+	C: ChainSigning + Send + Sync,
 	I: 'static + Send + Sync,
 	state_chain_runtime::Runtime: pallet_cf_threshold_signature::Config<I>,
 	state_chain_runtime::RuntimeCall:
 		std::convert::From<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>,
 	<<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain as
-ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signature>,
-	Vec<C::Signature>: SignatureToThresholdSignature<
+ChainCrypto>::ThresholdSignature: std::convert::From<<<C as ChainSigning>::CryptoScheme as CryptoScheme>::Signature>,
+	Vec<<<C as ChainSigning>::CryptoScheme as CryptoScheme>::Signature>: SignatureToThresholdSignature<
 		<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain
 	>,
 {
 	let first_ceremony_id = 1;
 	let key_id = KeyId::new(1, [0u8; 32]);
-	let payload = C::signing_payload_for_test();
+	let payload = C::CryptoScheme::signing_payload_for_test();
 	let our_account_id = AccountId32::new([0; 32]);
 	let not_our_account_id = AccountId32::new([1u8; 32]);
 	assert_ne!(our_account_id, not_our_account_id);
@@ -1567,7 +1567,7 @@ mod dot_signing {
 
 async fn should_handle_keygen_request<C, I>()
 where
-	C: CryptoScheme<Chain = <state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain>
+	C: ChainSigning<Chain = <state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain>
 		+ Send
 		+ Sync,
 	I: CryptoCompat<C, C::Chain> + 'static + Send + Sync,

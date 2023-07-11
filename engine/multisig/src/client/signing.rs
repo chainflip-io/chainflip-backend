@@ -7,9 +7,9 @@ mod tests;
 
 use std::sync::Arc;
 
-use crate::CryptoScheme;
+use crate::crypto::ChainSigning;
 
-use super::common::KeygenResult;
+use super::common::{KeygenResult, SigningPayload};
 
 pub use signing_data::{
 	Comm1, LocalSig3, LocalSig3Inner, SigningCommitment, SigningData, VerifyComm2, VerifyLocalSig4,
@@ -25,17 +25,17 @@ pub use signing_data::{gen_signing_data_stage1, gen_signing_data_stage2, gen_sig
 pub use signing_detail::get_lagrange_coeff;
 
 /// Payload and the key that should be used to sign over the payload
-pub struct PayloadAndKey<C: CryptoScheme> {
-	pub payload: C::SigningPayload,
+pub struct PayloadAndKey<C: ChainSigning> {
+	pub payload: SigningPayload<C>,
 	pub key: Arc<KeygenResult<C>>,
 }
 
 /// Data common for signing stages
-pub struct SigningStateCommonInfo<C: CryptoScheme> {
+pub struct SigningStateCommonInfo<C: ChainSigning> {
 	pub payloads_and_keys: Vec<PayloadAndKey<C>>,
 }
 
-impl<C: CryptoScheme> SigningStateCommonInfo<C> {
+impl<C: ChainSigning> SigningStateCommonInfo<C> {
 	pub fn payload_count(&self) -> usize {
 		self.payloads_and_keys.len()
 	}

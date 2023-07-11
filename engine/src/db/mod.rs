@@ -5,26 +5,26 @@ pub use persistent::PersistentKeyDB;
 
 use multisig::{
 	client::{key_store_api::KeyStoreAPI, KeygenResultInfo},
-	CryptoScheme, KeyId,
+	ChainSigning, KeyId,
 };
 
 /// A gateway for accessing key data from persistent memory
 pub struct KeyStore<C>
 where
-	C: CryptoScheme,
+	C: ChainSigning,
 {
 	keys: HashMap<KeyId, KeygenResultInfo<C>>,
 	db: Arc<PersistentKeyDB>,
 }
 
-impl<C: CryptoScheme> KeyStore<C> {
+impl<C: ChainSigning> KeyStore<C> {
 	/// Load the keys from persistent memory and put them into a new keystore
 	pub fn new(db: Arc<PersistentKeyDB>) -> Self {
 		KeyStore { keys: db.load_keys::<C>(), db }
 	}
 }
 
-impl<C: CryptoScheme> KeyStoreAPI<C> for KeyStore<C> {
+impl<C: ChainSigning> KeyStoreAPI<C> for KeyStore<C> {
 	fn get_key(&self, key_id: &KeyId) -> Option<KeygenResultInfo<C>> {
 		self.keys.get(key_id).cloned()
 	}

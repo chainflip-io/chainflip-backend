@@ -33,7 +33,7 @@ fn should_save_and_load_checkpoint() {
 	}
 }
 
-fn get_single_key_data<C: CryptoScheme>() -> KeygenResultInfo<C> {
+fn get_single_key_data<C: ChainSigning>() -> KeygenResultInfo<C> {
 	get_key_data_for_test::<C>(BTreeSet::from_iter([AccountId32::new([0; 32])]))
 }
 
@@ -43,13 +43,13 @@ fn can_use_multiple_crypto_schemes() {
 	type Scheme2 = PolkadotSigning;
 	type Scheme3 = BtcSigning;
 
-	fn add_key_for_scheme<Scheme: CryptoScheme>(db: &PersistentKeyDB) -> KeyId {
+	fn add_key_for_scheme<Scheme: ChainSigning>(db: &PersistentKeyDB) -> KeyId {
 		let key_id = KeyId::new(GENESIS_EPOCH, rand::random::<[u8; 32]>());
 		db.update_key(&key_id, &get_single_key_data::<Scheme>());
 		key_id
 	}
 
-	fn ensure_loaded_one_key<Scheme: CryptoScheme>(db: &PersistentKeyDB, expected_key: &KeyId) {
+	fn ensure_loaded_one_key<Scheme: ChainSigning>(db: &PersistentKeyDB, expected_key: &KeyId) {
 		let keys = db.load_keys::<Scheme>();
 		assert_eq!(keys.len(), 1, "Incorrect number of keys loaded");
 		assert!(keys.contains_key(expected_key), "Incorrect key id");
