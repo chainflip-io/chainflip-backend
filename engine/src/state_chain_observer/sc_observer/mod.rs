@@ -45,7 +45,7 @@ use crate::{
 };
 use multisig::{
 	bitcoin::BtcSigning, client::MultisigClientApi, eth::EthSigning, polkadot::PolkadotSigning,
-	CryptoScheme, KeyId, SignatureToThresholdSignature,
+	ChainSigning, CryptoScheme, KeyId, SignatureToThresholdSignature,
 };
 use utilities::task_scope::{task_scope, Scope};
 
@@ -68,7 +68,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 	state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
-	C: CryptoScheme<Chain = <state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain>
+	C: ChainSigning<Chain = <state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain>
 		+ 'static,
 	I: CryptoCompat<C, C::Chain> + 'static + Sync + Send,
 	state_chain_runtime::RuntimeCall:
@@ -156,18 +156,19 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
 	signers: BTreeSet<AccountId>,
-	signing_info: Vec<(KeyId, C::SigningPayload)>,
+	signing_info: Vec<(KeyId, <<C as ChainSigning>::CryptoScheme as CryptoScheme>::SigningPayload)>,
 ) where
 	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: SignedExtrinsicApi + UnsignedExtrinsicApi + 'static + Send + Sync,
-	C: CryptoScheme,
+	C: ChainSigning,
 	I: 'static + Sync + Send,
 	state_chain_runtime::Runtime: pallet_cf_threshold_signature::Config<I>,
 	state_chain_runtime::RuntimeCall:
 		std::convert::From<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>,
-	Vec<C::Signature>: SignatureToThresholdSignature<
-		<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain,
-	>,
+	Vec<<<C as ChainSigning>::CryptoScheme as CryptoScheme>::Signature>:
+		SignatureToThresholdSignature<
+			<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain,
+		>,
 {
 	if signers.contains(&state_chain_client.account_id()) {
 		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order

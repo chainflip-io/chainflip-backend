@@ -13,7 +13,7 @@ use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use frame_system::Phase;
 use futures::{FutureExt, StreamExt};
 use mockall::predicate::eq;
-use multisig::SignatureToThresholdSignature;
+use multisig::{ChainSigning, SignatureToThresholdSignature};
 use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_environment::PolkadotVaultAccountId;
 use pallet_cf_validator::{CurrentEpoch, HistoricalActiveEpochs};
@@ -1054,19 +1054,21 @@ async fn only_encodes_and_signs_when_specified() {
 /// Test all 3 cases of handling a signing request: not participating, failure, and success.
 async fn should_handle_signing_request<C, I>()
 where
-	C: CryptoScheme + Send + Sync,
+	C: ChainSigning + Send + Sync,
 	I: 'static + Send + Sync,
+
 	Runtime: pallet_cf_threshold_signature::Config<I>,
 	RuntimeCall:
 		std::convert::From<pallet_cf_threshold_signature::Call<Runtime, I>>,
 	<<Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain as
-ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signature>,
-	Vec<C::Signature>: SignatureToThresholdSignature<
+ChainCrypto>::ThresholdSignature: std::convert::From<<<C as ChainSigning>::CryptoScheme as CryptoScheme>::Signature>,
+	Vec<<<C as ChainSigning>::CryptoScheme as CryptoScheme>::Signature>: SignatureToThresholdSignature<
 		<Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain
+
 	>,
 {
 	let key_id = KeyId::new(1, [0u8; 32]);
-	let payload = C::signing_payload_for_test();
+	let payload = C::CryptoScheme::signing_payload_for_test();
 	let our_account_id = AccountId32::new([0; 32]);
 	let not_our_account_id = AccountId32::new([1u8; 32]);
 	assert_ne!(our_account_id, not_our_account_id);
@@ -1116,7 +1118,7 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 
 	// ceremony_id_3 is a success and should submit an unsigned extrinsic
 	let ceremony_id_3 = ceremony_id_2 + 1;
-	let signatures = vec![C::signature_for_test()];
+	let signatures = vec![C::CryptoScheme::signature_for_test()];
 	let signatures_clone = signatures.clone();
 	multisig_client
 		.expect_initiate_signing()
@@ -1204,7 +1206,7 @@ mod dot_signing {
 
 async fn should_handle_keygen_request<C, I>()
 where
-	C: CryptoScheme<Chain = <Runtime as pallet_cf_vaults::Config<I>>::Chain> + Send + Sync,
+	C: ChainSigning<Chain = <Runtime as pallet_cf_vaults::Config<I>>::Chain> + Send + Sync,
 	I: CryptoCompat<C, C::Chain> + 'static + Send + Sync,
 	Runtime: pallet_cf_vaults::Config<I>,
 	RuntimeCall: std::convert::From<pallet_cf_vaults::Call<Runtime, I>>,

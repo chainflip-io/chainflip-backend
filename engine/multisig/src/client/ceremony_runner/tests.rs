@@ -9,7 +9,7 @@ use crate::{
 		},
 		SigningFailureReason,
 	},
-	crypto::CryptoScheme,
+	crypto::{ChainSigning, CryptoScheme},
 	eth::{EthSigning, Point},
 	p2p::OutgoingMultisigStageMessages,
 	Rng,
@@ -122,7 +122,7 @@ async fn should_delay_stage_1_message_while_unauthorised() {
 		participants.clone(),
 		vec![(
 			get_key_data_for_test::<EthSigning>(participants),
-			EthSigning::signing_payload_for_test(),
+			<EthSigning as ChainSigning>::CryptoScheme::signing_payload_for_test(),
 		)],
 		&outgoing_p2p_sender,
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
@@ -210,7 +210,7 @@ async fn gen_stage_1_signing_state(
 		BTreeSet::from_iter(participants.clone()),
 		vec![(
 			get_key_data_for_test::<EthSigning>(BTreeSet::from_iter(participants)),
-			EthSigning::signing_payload_for_test(),
+			<EthSigning as ChainSigning>::CryptoScheme::signing_payload_for_test(),
 		)],
 		&outgoing_p2p_sender,
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
@@ -364,7 +364,7 @@ async fn should_timeout_authorised_ceremony() {
 				get_key_data_for_test::<EthSigning>(BTreeSet::from_iter(
 					ACCOUNT_IDS.iter().cloned(),
 				)),
-				EthSigning::signing_payload_for_test(),
+				<EthSigning as ChainSigning>::CryptoScheme::signing_payload_for_test(),
 			)],
 			&outgoing_p2p_sender,
 			Rng::from_seed(DEFAULT_SIGNING_SEED),

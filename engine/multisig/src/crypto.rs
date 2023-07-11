@@ -107,15 +107,8 @@ pub trait ECPoint:
 		self == &Self::point_at_infinity()
 	}
 }
-
-pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
-	type Point: ECPoint;
-
-	type Signature: Debug + Clone + PartialEq + Sync + Send;
-
-	type PublicKey: CanonicalEncoding + Debug + Clone + Sync + Send;
-
-	type SigningPayload: Display + Debug + Sync + Send + Clone + PartialEq + Eq + AsRef<[u8]>;
+pub trait ChainSigning: 'static + Clone + Send + Sync + Debug + PartialEq {
+	type CryptoScheme: CryptoScheme;
 
 	type Chain: cf_chains::ChainCrypto;
 
@@ -125,6 +118,24 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 	/// A unique tag used to identify the chain.
 	/// Used in both p2p and database storage.
 	const CHAIN_TAG: ChainTag;
+}
+pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
+	type Point: ECPoint;
+
+	type Signature: Debug + Clone + PartialEq + Sync + Send;
+
+	type PublicKey: CanonicalEncoding + Debug + Clone + Sync + Send;
+
+	type SigningPayload: Display + Debug + Sync + Send + Clone + PartialEq + Eq + AsRef<[u8]>;
+
+	// type Chain: cf_chains::ChainCrypto;
+
+	// /// Friendly name of the scheme used for logging
+	// const NAME: &'static str;
+
+	// /// A unique tag used to identify the chain.
+	// /// Used in both p2p and database storage.
+	// const CHAIN_TAG: ChainTag;
 
 	fn build_signature(
 		z: <Self::Point as ECPoint>::Scalar,

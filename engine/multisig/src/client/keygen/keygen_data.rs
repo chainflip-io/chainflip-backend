@@ -12,8 +12,7 @@ use crate::{
 		BroadcastVerificationMessage, DelayDeserialization, KeygenStageName,
 		PreProcessStageDataCheck,
 	},
-	crypto::ECPoint,
-	CryptoScheme,
+	crypto::{ChainSigning, ECPoint},
 };
 
 use super::keygen_detail::{ShamirShare, MAX_COEFF_COMM_3_SIZE};
@@ -61,7 +60,7 @@ impl<P: ECPoint> std::fmt::Display for KeygenData<P> {
 }
 
 impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
-	fn data_size_is_valid<C: CryptoScheme>(&self, num_of_parties: AuthorityCount) -> bool {
+	fn data_size_is_valid<C: ChainSigning>(&self, num_of_parties: AuthorityCount) -> bool {
 		let num_of_parties = num_of_parties as usize;
 		match self {
 			KeygenData::PubkeyShares0(_) | KeygenData::HashComm1(_) =>
@@ -111,7 +110,7 @@ impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
 		}
 	}
 
-	fn initial_stage_data_size_is_valid<C: CryptoScheme>(&self) -> bool {
+	fn initial_stage_data_size_is_valid<C: ChainSigning>(&self) -> bool {
 		match self {
 			KeygenData::PubkeyShares0(message) => message.0.len() <= MAX_AUTHORITIES as usize,
 			KeygenData::HashComm1(_) => true,

@@ -32,7 +32,7 @@ use crate::{
 		signing, KeygenResultInfo,
 	},
 	crypto::{ECPoint, Rng},
-	CryptoScheme,
+	ChainSigning, CryptoScheme,
 };
 use crate::{
 	client::{keygen, MultisigMessage},
@@ -75,10 +75,10 @@ macro_rules! test_all_crypto_schemes {
 		({
 			use $crate::{
 				bitcoin::BtcSigning, ed25519::Ed25519Signing, eth::EthSigning,
-				polkadot::PolkadotSigning, CryptoScheme,
+				polkadot::PolkadotSigning, ChainSigning,
 			};
 
-			fn test<C: CryptoScheme>() {
+			fn test<C: ChainSigning>() {
 				if let Err(err) = std::panic::catch_unwind(|| $test_function::<C>($($lt)*) ) {
 					println!("Test failed with {} CryptoScheme", C::NAME);
 					std::panic::resume_unwind(err);
@@ -99,18 +99,18 @@ fn test_all_crypto_schemes_macro() {
 	// Run the macro using all 3 function that only panic on a single scheme to make sure the macro
 	// is calling the function for each scheme.
 
-	fn panic_function_eth<C: CryptoScheme>() {
-		if matches!(<C as CryptoScheme>::CHAIN_TAG, crate::ChainTag::Ethereum) {
+	fn panic_function_eth<C: ChainSigning>() {
+		if matches!(<C as ChainSigning>::CHAIN_TAG, crate::ChainTag::Ethereum) {
 			panic!();
 		}
 	}
-	fn panic_function_dot<C: CryptoScheme>() {
-		if matches!(<C as CryptoScheme>::CHAIN_TAG, crate::ChainTag::Polkadot) {
+	fn panic_function_dot<C: ChainSigning>() {
+		if matches!(<C as ChainSigning>::CHAIN_TAG, crate::ChainTag::Polkadot) {
 			panic!();
 		}
 	}
-	fn panic_function_btc<C: CryptoScheme>() {
-		if matches!(<C as CryptoScheme>::CHAIN_TAG, crate::ChainTag::Bitcoin) {
+	fn panic_function_btc<C: ChainSigning>() {
+		if matches!(<C as ChainSigning>::CHAIN_TAG, crate::ChainTag::Bitcoin) {
 			panic!();
 		}
 	}
@@ -171,13 +171,13 @@ fn new_node<C: CeremonyTrait>(account_id: AccountId) -> Node<C> {
 	}
 }
 
-pub struct PayloadAndKeygenResultInfo<C: CryptoScheme> {
-	pub payload: C::SigningPayload,
+pub struct PayloadAndKeygenResultInfo<C: ChainSigning> {
+	pub payload: SigningPayload<C>,
 	pub keygen_result_info: KeygenResultInfo<C>,
 }
 
 // Exists so some of the tests can easily modify signing requests
-struct SigningCeremonyDetails<C: CryptoScheme> {
+struct SigningCeremonyDetails<C: ChainSigning> {
 	pub rng: Rng,
 	pub ceremony_id: CeremonyId,
 	pub signers: BTreeSet<AccountId>,
@@ -223,7 +223,7 @@ impl<C: CeremonyTrait> Node<C> {
 	}
 }
 
-impl<C: CryptoScheme> Node<SigningCeremony<C>> {
+impl<C: ChainSigning> Node<SigningCeremony<C>> {
 	async fn request_signing(&mut self, signing_ceremony_details: SigningCeremonyDetails<C>) {
 		let SigningCeremonyDetails { rng, ceremony_id, signers, payloads } =
 			signing_ceremony_details;
@@ -249,7 +249,7 @@ impl<C: CryptoScheme> Node<SigningCeremony<C>> {
 	}
 }
 
-impl<C: CryptoScheme> Node<KeygenCeremony<C>> {
+impl<C: ChainSigning> Node<KeygenCeremony<C>> {
 	pub async fn request_key_handover(
 		&mut self,
 		keygen_ceremony_details: KeygenCeremonyDetails,
@@ -661,7 +661,7 @@ pub(crate) use run_stages;
 
 use super::{
 	ceremony_manager::{deserialize_for_version, prepare_key_handover_request},
-	common::{DelayDeserialization, ResharingContext},
+	common::{DelayDeserialization, PublicKey, ResharingContext, SigningPayload},
 	keygen::SharingParameters,
 	signing::Comm1,
 	ThresholdParameters,
@@ -670,10 +670,10 @@ use super::{
 pub type KeygenCeremonyRunner<C> = CeremonyTestRunner<(), KeygenCeremony<C>>;
 
 #[async_trait]
-impl<C: CryptoScheme> CeremonyRunnerStrategy for KeygenCeremonyRunner<C> {
+impl<C: ChainSigning> CeremonyRunnerStrategy for KeygenCeremonyRunner<C> {
 	type CeremonyType = KeygenCeremony<C>;
 	type CheckedOutput =
-		(C::PublicKey, HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>);
+		(PublicKey<C>, HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>);
 	type InitialStageData = keygen::HashComm1;
 
 	fn post_successful_complete_check(
@@ -685,7 +685,7 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for KeygenCeremonyRunner<C> {
 		}))
 		.expect("Generated keys don't match");
 
-		(C::pubkey_from_point(&public_key_point), outputs)
+		(C::CryptoScheme::pubkey_from_point(&public_key_point), outputs)
 	}
 
 	async fn request_ceremony(&mut self, node_id: &AccountId) {
@@ -698,7 +698,7 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for KeygenCeremonyRunner<C> {
 			.await;
 	}
 }
-impl<C: CryptoScheme> KeygenCeremonyRunner<C> {
+impl<C: ChainSigning> KeygenCeremonyRunner<C> {
 	pub fn new(
 		nodes: HashMap<AccountId, Node<KeygenCeremony<C>>>,
 		ceremony_id: CeremonyId,
@@ -727,33 +727,34 @@ impl<C: CryptoScheme> KeygenCeremonyRunner<C> {
 	}
 }
 
-pub struct PayloadAndKeyData<C: CryptoScheme> {
-	payload: C::SigningPayload,
-	public_key: C::PublicKey,
+pub struct PayloadAndKeyData<C: ChainSigning> {
+	payload: SigningPayload<C>,
+	public_key: PublicKey<C>,
 	key_data: HashMap<AccountId, KeygenResultInfo<C>>,
 }
 
-impl<C: CryptoScheme> PayloadAndKeyData<C> {
+impl<C: ChainSigning> PayloadAndKeyData<C> {
 	pub fn new(
-		payload: C::SigningPayload,
-		public_key: C::PublicKey,
+		payload: SigningPayload<C>,
+		public_key: PublicKey<C>,
 		key_data: HashMap<AccountId, KeygenResultInfo<C>>,
 	) -> Self {
 		PayloadAndKeyData { payload, public_key, key_data }
 	}
 }
 
-pub struct SigningCeremonyRunnerData<C: CryptoScheme> {
+pub struct SigningCeremonyRunnerData<C: ChainSigning> {
 	pub data: Vec<PayloadAndKeyData<C>>,
 }
 pub type SigningCeremonyRunner<C> =
 	CeremonyTestRunner<SigningCeremonyRunnerData<C>, SigningCeremony<C>>;
 
 #[async_trait]
-impl<C: CryptoScheme> CeremonyRunnerStrategy for SigningCeremonyRunner<C> {
+impl<C: ChainSigning> CeremonyRunnerStrategy for SigningCeremonyRunner<C> {
 	type CeremonyType = SigningCeremony<C>;
 	type CheckedOutput = <SigningCeremony<C> as CeremonyTrait>::Output;
-	type InitialStageData = signing::Comm1<C::Point>;
+	type InitialStageData =
+		signing::Comm1<<<C as ChainSigning>::CryptoScheme as CryptoScheme>::Point>;
 
 	fn post_successful_complete_check(
 		&self,
@@ -766,7 +767,7 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for SigningCeremonyRunner<C> {
 		// TODO: use batch verification here?
 		for (i, signature) in signatures.iter().enumerate() {
 			let data = &self.ceremony_runner_data.data[i];
-			C::verify_signature(signature, &data.public_key, &data.payload)
+			C::CryptoScheme::verify_signature(signature, &data.public_key, &data.payload)
 				.expect("Should be valid signature");
 		}
 
@@ -784,7 +785,7 @@ impl<C: CryptoScheme> CeremonyRunnerStrategy for SigningCeremonyRunner<C> {
 	}
 }
 
-impl<C: CryptoScheme> SigningCeremonyRunner<C> {
+impl<C: ChainSigning> SigningCeremonyRunner<C> {
 	pub fn new_with_all_signers(
 		nodes: HashMap<AccountId, Node<SigningCeremony<C>>>,
 		ceremony_id: CeremonyId,
@@ -836,7 +837,7 @@ impl<C: CryptoScheme> SigningCeremonyRunner<C> {
 	}
 }
 
-pub async fn new_signing_ceremony<C: CryptoScheme>(
+pub async fn new_signing_ceremony<C: ChainSigning>(
 ) -> (SigningCeremonyRunner<C>, HashMap<AccountId, Node<SigningCeremony<C>>>) {
 	let (public_key, key_data) = generate_key_data::<C>(
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
@@ -846,21 +847,25 @@ pub async fn new_signing_ceremony<C: CryptoScheme>(
 	SigningCeremonyRunner::new_with_threshold_subset_of_signers(
 		new_nodes(ACCOUNT_IDS.clone()),
 		DEFAULT_SIGNING_CEREMONY_ID,
-		vec![PayloadAndKeyData::new(C::signing_payload_for_test(), public_key, key_data)],
+		vec![PayloadAndKeyData::new(
+			C::CryptoScheme::signing_payload_for_test(),
+			public_key,
+			key_data,
+		)],
 		Rng::from_seed(DEFAULT_SIGNING_SEED),
 	)
 }
 
-pub async fn standard_signing<C: CryptoScheme>(
+pub async fn standard_signing<C: ChainSigning>(
 	signing_ceremony: &mut SigningCeremonyRunner<C>,
 ) -> <SigningCeremony<C> as CeremonyTrait>::Output {
 	let stage_1_messages = signing_ceremony.request().await;
 	let messages = run_stages!(
 		signing_ceremony,
 		stage_1_messages,
-		signing::VerifyComm2<C::Point>,
-		signing::LocalSig3<C::Point>,
-		signing::VerifyLocalSig4<C::Point>
+		signing::VerifyComm2<<<C as ChainSigning>::CryptoScheme as CryptoScheme>::Point>,
+		signing::LocalSig3<<<C as ChainSigning>::CryptoScheme as CryptoScheme>::Point>,
+		signing::VerifyLocalSig4<<<C as ChainSigning>::CryptoScheme as CryptoScheme>::Point>
 	);
 	signing_ceremony.distribute_messages(messages).await;
 	signing_ceremony.complete()
@@ -869,7 +874,10 @@ pub async fn standard_signing<C: CryptoScheme>(
 pub async fn run_keygen(
 	nodes: HashMap<AccountId, Node<KeygenCeremonyEth>>,
 	ceremony_id: CeremonyId,
-) -> (<EthSigning as CryptoScheme>::PublicKey, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
+) -> (
+	<<EthSigning as ChainSigning>::CryptoScheme as CryptoScheme>::PublicKey,
+	HashMap<AccountId, KeygenResultInfo<EthSigning>>,
+) {
 	let mut keygen_ceremony = KeygenCeremonyRunner::<EthSigning>::new(
 		nodes,
 		ceremony_id,

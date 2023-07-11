@@ -7,7 +7,7 @@ use std::{cmp::Ordering, collections::HashMap, path::Path};
 use tracing::{debug, info, info_span};
 
 use crate::witnesser::checkpointing::WitnessedUntil;
-use multisig::{client::KeygenResultInfo, ChainTag, CryptoScheme, KeyId, CHAIN_TAG_SIZE};
+use multisig::{client::KeygenResultInfo, ChainSigning, ChainTag, KeyId, CHAIN_TAG_SIZE};
 
 use anyhow::{anyhow, bail, Context, Result};
 
@@ -99,7 +99,7 @@ impl PersistentKeyDB {
 	}
 
 	/// Write the keyshare to the db, indexed by the key id
-	pub fn update_key<C: CryptoScheme>(
+	pub fn update_key<C: ChainSigning>(
 		&self,
 		key_id: &KeyId,
 		keygen_result_info: &KeygenResultInfo<C>,
@@ -109,7 +109,7 @@ impl PersistentKeyDB {
 			.unwrap_or_else(|e| panic!("Failed to update key {}. Error: {}", &key_id, e));
 	}
 
-	pub fn load_keys<C: CryptoScheme>(&self) -> HashMap<KeyId, KeygenResultInfo<C>> {
+	pub fn load_keys<C: ChainSigning>(&self) -> HashMap<KeyId, KeygenResultInfo<C>> {
 		let span = info_span!("PersistentKeyDB");
 		let _entered = span.enter();
 
@@ -178,7 +178,7 @@ impl PersistentKeyDB {
 	}
 }
 
-fn keygen_data_prefix<C: CryptoScheme>() -> Vec<u8> {
+fn keygen_data_prefix<C: ChainSigning>() -> Vec<u8> {
 	[&KEYGEN_DATA_PARTIAL_PREFIX[..], &(C::CHAIN_TAG.to_bytes())[..]].concat()
 }
 

@@ -8,8 +8,8 @@ use crate::{
 		BroadcastVerificationMessage, DelayDeserialization, PreProcessStageDataCheck,
 		SigningStageName,
 	},
-	crypto::{ECPoint, MAX_POINT_SIZE, MAX_SCALAR_SIZE},
-	ChainTag, CryptoScheme,
+	crypto::{ChainSigning, ECPoint, MAX_POINT_SIZE, MAX_SCALAR_SIZE},
+	ChainTag,
 };
 
 #[cfg(test)]
@@ -39,15 +39,18 @@ pub const LOCAL_SIG_MAX_SIZE: usize = MAX_SCALAR_SIZE + 8;
 mod serialisation {
 	use super::*;
 	use crate::{
-		client::helpers::{self, test_all_crypto_schemes},
-		CryptoScheme,
+		client::{
+			common::Point,
+			helpers::{self, test_all_crypto_schemes},
+		},
+		crypto::ChainSigning,
 	};
 	use rand::SeedableRng;
 
-	fn test_signing_commitment_size_for_scheme<C: CryptoScheme>() {
+	fn test_signing_commitment_size_for_scheme<C: ChainSigning>() {
 		let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
-		let comm1 = helpers::gen_dummy_signing_comm1::<C::Point>(&mut rng, 1);
-		if matches!(<C as CryptoScheme>::CHAIN_TAG, ChainTag::Ethereum) {
+		let comm1 = helpers::gen_dummy_signing_comm1::<Point<C>>(&mut rng, 1);
+		if matches!(<C as ChainSigning>::CHAIN_TAG, ChainTag::Ethereum) {
 			// The constants are defined as to exactly match Ethereum/secp256k1,
 			// which we demonstrate here:
 			assert!(comm1.payload.len() == SIGNING_COMMITMENT_MAX_SIZE);
@@ -62,11 +65,11 @@ mod serialisation {
 		test_all_crypto_schemes!(test_signing_commitment_size_for_scheme());
 	}
 
-	fn test_local_sig_size_for_scheme<C: CryptoScheme>() {
+	fn test_local_sig_size_for_scheme<C: ChainSigning>() {
 		let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
-		let sig = helpers::gen_dummy_local_sig::<C::Point>(&mut rng);
+		let sig = helpers::gen_dummy_local_sig::<Point<C>>(&mut rng);
 
-		if matches!(<C as CryptoScheme>::CHAIN_TAG, ChainTag::Ethereum) {
+		if matches!(<C as ChainSigning>::CHAIN_TAG, ChainTag::Ethereum) {
 			// The constants are defined as to exactly match Ethereum/secp256k1,
 			// which we demonstrate here:
 			assert!(sig.payload.len() == LOCAL_SIG_MAX_SIZE);
@@ -132,7 +135,7 @@ impl<P: ECPoint> Display for SigningData<P> {
 }
 
 impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
-	fn data_size_is_valid<C: CryptoScheme>(&self, num_of_parties: AuthorityCount) -> bool {
+	fn data_size_is_valid<C: ChainSigning>(&self, num_of_parties: AuthorityCount) -> bool {
 		match self {
 			SigningData::CommStage1(_) => self.initial_stage_data_size_is_valid::<C>(),
 			SigningData::BroadcastVerificationStage2(message) =>
@@ -149,7 +152,7 @@ impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
 		}
 	}
 
-	fn initial_stage_data_size_is_valid<C: CryptoScheme>(&self) -> bool {
+	fn initial_stage_data_size_is_valid<C: ChainSigning>(&self) -> bool {
 		match self {
 			SigningData::CommStage1(message) => match C::CHAIN_TAG {
 				ChainTag::Ethereum | ChainTag::Polkadot | ChainTag::Ed25519 =>

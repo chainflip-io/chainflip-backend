@@ -7,7 +7,7 @@ use crate::{
 			CeremonyHandle, CeremonyManager, CeremonyRequestState, SigningCeremony,
 		},
 		ceremony_runner::CeremonyRunner,
-		common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
+		common::{BroadcastFailureReason, Signature, SigningFailureReason, SigningStageName},
 		gen_keygen_data_hash_comm1, get_key_data_for_test,
 		helpers::{
 			ACCOUNT_IDS, CEREMONY_TIMEOUT_DURATION, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
@@ -19,6 +19,7 @@ use crate::{
 	crypto::{CryptoScheme, Rng},
 	eth::EthSigning,
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
+	ChainSigning,
 };
 use anyhow::Result;
 use cf_primitives::{AccountId, CeremonyId};
@@ -33,13 +34,11 @@ use super::CEREMONY_ID_WINDOW;
 
 /// Run on_request_to_sign on a ceremony manager, using a dummy key and default ceremony id and
 /// data.
-async fn run_on_request_to_sign<C: CryptoScheme>(
+async fn run_on_request_to_sign<C: ChainSigning>(
 	ceremony_manager: &mut CeremonyManager<C>,
 	participants: BTreeSet<sp_runtime::AccountId32>,
 	ceremony_id: CeremonyId,
-) -> oneshot::Receiver<
-	Result<Vec<<C as CryptoScheme>::Signature>, (BTreeSet<AccountId32>, SigningFailureReason)>,
-> {
+) -> oneshot::Receiver<Result<Vec<Signature<C>>, (BTreeSet<AccountId32>, SigningFailureReason)>> {
 	let (result_sender, result_receiver) = oneshot::channel();
 	task_scope(|scope| {
 		let future: Pin<Box<dyn Future<Output = Result<()>> + Send>> = async {
@@ -48,7 +47,7 @@ async fn run_on_request_to_sign<C: CryptoScheme>(
 				participants,
 				vec![(
 					get_key_data_for_test::<C>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned())),
-					C::signing_payload_for_test(),
+					C::CryptoScheme::signing_payload_for_test(),
 				)],
 				Rng::from_seed(DEFAULT_SIGNING_SEED),
 				result_sender,
@@ -77,12 +76,12 @@ fn new_ceremony_manager_for_test(
 }
 
 /// Sends a signing request to the ceremony manager with a dummy key and some default values.
-fn send_signing_request<C: CryptoScheme>(
+fn send_signing_request<C: ChainSigning>(
 	ceremony_request_sender: &tokio::sync::mpsc::UnboundedSender<CeremonyRequest<C>>,
 	participants: BTreeSet<AccountId32>,
 	ceremony_id: CeremonyId,
 ) -> tokio::sync::oneshot::Receiver<
-	Result<Vec<C::Signature>, (BTreeSet<AccountId32>, SigningFailureReason)>,
+	Result<Vec<Signature<C>>, (BTreeSet<AccountId32>, SigningFailureReason)>,
 > {
 	let (result_sender, result_receiver) = oneshot::channel();
 
@@ -92,7 +91,7 @@ fn send_signing_request<C: CryptoScheme>(
 			participants,
 			signing_info: vec![(
 				get_key_data_for_test::<C>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned())),
-				C::signing_payload_for_test(),
+				C::CryptoScheme::signing_payload_for_test(),
 			)],
 			rng: Rng::from_seed(DEFAULT_SIGNING_SEED),
 			result_sender,
@@ -104,7 +103,7 @@ fn send_signing_request<C: CryptoScheme>(
 	result_receiver
 }
 
-fn spawn_ceremony_manager<C: CryptoScheme>(
+fn spawn_ceremony_manager<C: ChainSigning>(
 	our_account_id: AccountId,
 	latest_ceremony_id: CeremonyId,
 ) -> (

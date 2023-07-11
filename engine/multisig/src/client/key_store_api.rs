@@ -1,11 +1,11 @@
 use super::KeygenResultInfo;
-use crate::crypto::{CryptoScheme, KeyId};
+use crate::crypto::{ChainSigning, KeyId};
 
 #[cfg(test)]
 use mockall::automock;
 
 #[cfg_attr(test, automock)]
-pub trait KeyStoreAPI<C: CryptoScheme>: Send + Sync {
+pub trait KeyStoreAPI<C: ChainSigning>: Send + Sync {
 	/// Get the key for the given key id
 	fn get_key(&self, key_id: &KeyId) -> Option<KeygenResultInfo<C>>;
 
