@@ -12,20 +12,20 @@ use crate::witness::{
 };
 
 use super::{
-	aliases, lag_safety::LagSafety, map::Map, shared::SharedSource,
+	aliases, lag_safety::LagSafety, map::Then, shared::SharedSource,
 	strictly_monotonic::StrictlyMonotonic, ChainSource, Header,
 };
 
 #[async_trait::async_trait]
 pub trait ChainSourceExt: ChainSource {
-	fn map<MappedTo, FutMappedTo, MapFn>(self, map_fn: MapFn) -> Map<Self, MapFn>
+	fn then<Output, Fut, ThenFn>(self, then_fn: ThenFn) -> Then<Self, ThenFn>
 	where
 		Self: Sized,
-		MappedTo: aliases::Data,
-		FutMappedTo: Future<Output = MappedTo> + Send + Sync,
-		MapFn: Fn(Header<Self::Index, Self::Hash, Self::Data>) -> FutMappedTo + Send + Sync + Clone,
+		Output: aliases::Data,
+		Fut: Future<Output = Output> + Send + Sync,
+		ThenFn: Fn(Header<Self::Index, Self::Hash, Self::Data>) -> Fut + Send + Sync + Clone,
 	{
-		Map::new(self, map_fn)
+		Then::new(self, then_fn)
 	}
 
 	fn lag_safety(self, margin: usize) -> LagSafety<Self>
