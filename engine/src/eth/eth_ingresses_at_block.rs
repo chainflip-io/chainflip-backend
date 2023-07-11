@@ -168,10 +168,11 @@ mod tests {
 
 		let settings = Settings::new_test().unwrap();
 
+		let client = EthersRpcClient::new(&settings.eth).await.unwrap();
+
 		let provider = Arc::new(
 			Provider::<Http>::try_from(settings.eth.http_node_endpoint.to_string()).unwrap(),
 		);
-		let client = EthersRpcClient::new(provider.clone(), &settings.eth).await.unwrap();
 
 		let vault_rpc = VaultRpc::new(provider.clone(), vault_address);
 

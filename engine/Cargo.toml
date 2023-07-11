@@ -49,8 +49,10 @@ hex = "0.4.3"
 httparse = "1.4.1"
 itertools = "0.10"
 
-# Same version of jsonrpsee as substrate
+# Same version of jsonrpsee as the substrate version our StateChain is on.
 jsonrpsee = {version = "0.15.1", features = ["full"]}
+
+jsonrpsee_subxt = { package = "jsonrpsee", version = "0.16.0", features = ["full"] }
 
 dyn-clone = "1.0.4"
 ethbloom = "0.12.1"

@@ -64,11 +64,14 @@ impl Eth {
 #[derive(Debug, Deserialize, Clone, Default, PartialEq, Eq)]
 pub struct Dot {
 	pub ws_node_endpoint: String,
+	pub http_node_endpoint: String,
 }
 
 impl Dot {
 	pub fn validate_settings(&self) -> Result<(), ConfigError> {
 		validate_websocket_endpoint(&self.ws_node_endpoint)
+			.map_err(|e| ConfigError::Message(e.to_string()))?;
+		validate_http_endpoint(&self.http_node_endpoint)
 			.map_err(|e| ConfigError::Message(e.to_string()))?;
 		Ok(())
 	}
@@ -136,6 +139,8 @@ pub struct EthOptions {
 pub struct DotOptions {
 	#[clap(long = "dot.ws_node_endpoint")]
 	pub dot_ws_node_endpoint: Option<String>,
+	#[clap(long = "dot.http_node_endpoint")]
+	pub dot_http_node_endpoint: Option<String>,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -385,11 +390,7 @@ impl Source for CommandLineOptions {
 
 		self.eth_opts.insert_all(&mut map);
 
-		insert_command_line_option(
-			&mut map,
-			"dot.ws_node_endpoint",
-			&self.dot_opts.dot_ws_node_endpoint,
-		);
+		self.dot_opts.insert_all(&mut map);
 
 		self.btc_opts.insert_all(&mut map);
 
@@ -470,6 +471,13 @@ impl BtcOptions {
 	}
 }
 
+impl DotOptions {
+	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
+		insert_command_line_option(map, "dot.ws_node_endpoint", &self.dot_ws_node_endpoint);
+		insert_command_line_option(map, "dot.http_node_endpoint", &self.dot_http_node_endpoint);
+	}
+}
+
 impl Settings {
 	/// New settings loaded from "$base_config_path/config/Settings.toml",
 	/// environment and `CommandLineOptions`
@@ -528,7 +536,10 @@ mod tests {
 
 	use utilities::assert_ok;
 
-	use crate::constants::{BTC_HTTP_NODE_ENDPOINT, BTC_RPC_PASSWORD, BTC_RPC_USER};
+	use crate::constants::{
+		BTC_HTTP_NODE_ENDPOINT, BTC_RPC_PASSWORD, BTC_RPC_USER, DOT_HTTP_NODE_ENDPOINT,
+		DOT_WS_NODE_ENDPOINT,
+	};
 
 	use super::*;
 	use std::env;
@@ -544,16 +555,19 @@ mod tests {
 		env::set_var(BTC_RPC_USER, "user");
 		env::set_var(BTC_RPC_PASSWORD, "password");
 
-		env::set_var("DOT__WS_NODE_ENDPOINT", "wss://my_fake_polkadot_rpc:443/<secret_key>");
+		env::set_var(DOT_WS_NODE_ENDPOINT, "wss://my_fake_polkadot_rpc:443/<secret_key>");
+		env::set_var(DOT_HTTP_NODE_ENDPOINT, "https://my_fake_polkadot_rpc:443/<secret_key>");
 	}
 
 	#[test]
 	fn init_default_config() {
 		set_test_env();
 
-		let settings = Settings::new(CommandLineOptions::default()).unwrap();
+		let settings = Settings::new(CommandLineOptions::default())
+			.expect("Check that the test environment is set correctly");
 		assert_eq!(settings.state_chain.ws_endpoint, "ws://localhost:9944");
 		assert_eq!(settings.eth.http_node_endpoint, "http://localhost:8545");
+		assert_eq!(settings.dot.ws_node_endpoint, "wss://my_fake_polkadot_rpc:443/<secret_key>");
 	}
 
 	#[test]
@@ -613,12 +627,13 @@ mod tests {
 		})
 		.unwrap();
 
-		let default_settings = Settings::new(CommandLineOptions::default()).unwrap();
-
 		// Check that the settings file at "config/testing/config/Settings.toml" was loaded by
 		// by comparing it to the default settings. Note: This check will fail if the
 		// Settings.toml contains only default or no values.
-		assert_ne!(custom_base_path_settings, default_settings);
+		assert_ne!(
+			custom_base_path_settings,
+			Settings::new(CommandLineOptions::default()).unwrap()
+		);
 
 		// Check that a key file is a child of the custom base path.
 		// Note: This check will break if the `node_p2p.node_key_file` settings is set in
@@ -653,7 +668,10 @@ mod tests {
 				eth_http_node_endpoint: Some("http://endpoint:4321".to_owned()),
 				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
 			},
-			dot_opts: DotOptions { dot_ws_node_endpoint: Some("ws://endpoint:4321".to_owned()) },
+			dot_opts: DotOptions {
+				dot_ws_node_endpoint: Some("ws://endpoint:4321".to_owned()),
+				dot_http_node_endpoint: Some("http://endpoint:4321".to_owned()),
+			},
 			btc_opts: BtcOptions {
 				btc_http_node_endpoint: Some("http://btc-endpoint:4321".to_owned()),
 				btc_rpc_user: Some("my_username".to_owned()),
@@ -687,6 +705,7 @@ mod tests {
 		assert_eq!(opts.eth_opts.eth_private_key_file.unwrap(), settings.eth.private_key_file);
 
 		assert_eq!(opts.dot_opts.dot_ws_node_endpoint.unwrap(), settings.dot.ws_node_endpoint);
+		assert_eq!(opts.dot_opts.dot_http_node_endpoint.unwrap(), settings.dot.http_node_endpoint);
 
 		assert_eq!(opts.btc_opts.btc_http_node_endpoint.unwrap(), settings.btc.http_node_endpoint);
 		assert_eq!(opts.btc_opts.btc_rpc_user.unwrap(), settings.btc.rpc_user);
