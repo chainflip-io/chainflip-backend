@@ -337,6 +337,8 @@ pub mod pallet {
 		NotEnoughBidders,
 		/// Not enough funds to register as a validator.
 		NotEnoughFunds,
+		/// Rotations are currently disabled through SafeMode.
+		RotationsDisabled,
 	}
 
 	/// Pallet implements [`Hooks`] trait
@@ -395,8 +397,6 @@ pub mod pallet {
 								"Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}"
 							);
 							log::error!(target: "cf-validator", "Ready(KeygenComplete), Ready(Failed), Pending possible. Got: {async_result:?}");
-							Self::deposit_event(Event::<T>::RotationAborted);
-							// TODO: We should put the chain into safe mode here.
 							Self::abort_rotation();
 						},
 					};
@@ -442,7 +442,6 @@ pub mod pallet {
 								"Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}"
 							);
 							log::error!(target: "cf-validator", "Ready(KeyHandoverComplete), Pending possible. Got: {async_result:?}");
-							// TODO: We should put the chain into safe mode here.
 							Self::abort_rotation();
 						},
 					}
@@ -569,6 +568,7 @@ pub mod pallet {
 				CurrentRotationPhase::<T>::get() == RotationPhase::Idle,
 				Error::<T>::RotationInProgress
 			);
+			ensure!(T::SafeMode::get().authority_rotation_enabled, Error::<T>::RotationsDisabled,);
 			Self::start_authority_rotation();
 
 			Ok(().into())
@@ -1095,15 +1095,16 @@ impl<T: Config> Pallet<T> {
 		if !T::SafeMode::get().authority_rotation_enabled {
 			log::warn!(
 				target: "cf-validator",
-				"Can't start authority rotation. Runtime Safe Mode is in CODE RED."
+				"Failed to start Authority Rotation: Disabled due to Runtime Safe Mode."
 			);
-			return T::ValidatorWeightInfo::start_authority_rotation_in_safe_mode_code_red()
-		} else if !matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle) {
+			return T::ValidatorWeightInfo::start_authority_rotation_while_disabled_by_safe_mode()
+		}
+		if !matches!(CurrentRotationPhase::<T>::get(), RotationPhase::Idle) {
 			log::error!(
 				target: "cf-validator",
-				"Can't start authority rotation. Authority rotation already in progress."
+				"Failed to start authority rotation: Authority rotation already in progress."
 			);
-			return T::ValidatorWeightInfo::start_authority_rotation_in_safe_mode_code_red()
+			return T::ValidatorWeightInfo::start_authority_rotation_while_disabled_by_safe_mode()
 		}
 		log::info!(target: "cf-validator", "Starting rotation");
 
@@ -1176,6 +1177,15 @@ impl<T: Config> Pallet<T> {
 	}
 
 	fn start_key_handover(rotation_state: RuntimeRotationState<T>, block_number: T::BlockNumber) {
+		if !T::SafeMode::get().authority_rotation_enabled {
+			log::warn!(
+				target: "cf-validator",
+				"Failed to start Key Handover: Disabled due to Runtime Safe Mode. Aborting Authority rotation."
+			);
+			Self::abort_rotation();
+			return
+		}
+
 		let authority_candidates = rotation_state.authority_candidates();
 		if let Some(sharing_participants) = helpers::select_sharing_participants(
 			Self::current_consensus_threshold(),

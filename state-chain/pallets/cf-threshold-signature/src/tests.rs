@@ -103,16 +103,6 @@ impl MockCfe {
 							Error::<Test, Instance1>::InvalidCeremonyId
 						);
 
-						// Can't report a non-candidate
-						assert_noop!(
-							EthereumThresholdSigner::report_signature_failed(
-								RuntimeOrigin::signed(self.id),
-								ceremony_id,
-								bad.iter().cloned().chain([1234]).collect(),
-							),
-							Error::<Test, Instance1>::InvalidBlame
-						);
-
 						// Unsolicited responses are rejected.
 						assert_noop!(
 							EthereumThresholdSigner::report_signature_failed(
@@ -616,12 +606,48 @@ mod unsigned_validation {
 			assert_eq!(
 				EthereumThresholdSigner::validate_unsigned(
 					TransactionSource::External,
-					&PalletCall::report_signature_failed { id: 0, offenders: Default::default() }
+					&PalletCall::report_signature_failed {
+						ceremony_id: 0,
+						offenders: Default::default()
+					}
 				)
 				.unwrap_err(),
 				InvalidTransaction::Call.into()
 			);
 		});
+	}
+
+	#[test]
+	fn can_only_report_candidates() {
+		const NOMINEES: [u64; 3] = [1, 2, 3];
+		const AUTHORITIES: [u64; 5] = [1, 2, 3, 4, 5];
+
+		let valid_blames = BTreeSet::from_iter([NOMINEES[1], NOMINEES[2]]);
+		// AUTHORITIES[4] is not a candidate in the ceremony and u64::MAX is not an id of any
+		// authority.
+		let invalid_blames = BTreeSet::from_iter([AUTHORITIES[4], u64::MAX]);
+
+		ExtBuilder::new()
+			.with_authorities(AUTHORITIES)
+			.with_nominees(NOMINEES)
+			.with_request(b"OHAI")
+			.build()
+			.execute_with(|| {
+				let ceremony_id = MockCeremonyIdProvider::get();
+				EthereumThresholdSigner::report_signature_failed(
+					RuntimeOrigin::signed(NOMINEES[0]),
+					ceremony_id,
+					valid_blames.iter().cloned().chain(invalid_blames.clone()).collect(),
+				)
+				.unwrap();
+
+				let CeremonyContext::<Test, Instance1> { blame_counts, .. } =
+					EthereumThresholdSigner::pending_ceremonies(ceremony_id).unwrap();
+				let blamed: BTreeSet<_> = blame_counts.keys().cloned().collect();
+
+				assert_eq!(&valid_blames, &blamed);
+				assert!(invalid_blames.is_disjoint(&blamed));
+			});
 	}
 }
 

@@ -30,22 +30,7 @@ setup() {
   echo "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"
   docker login ghcr.io
 
-  ONEPASSWORD_FILES=$(ls $LOCALNET_INIT_DIR/onepassword)
-  mkdir -p "$LOCALNET_INIT_DIR/secrets"
-  for file in $ONEPASSWORD_FILES; do
-    if [ -f $LOCALNET_INIT_DIR/secrets/$file ]; then
-      echo "$file exists, skipping"
-      continue
-    else
-      echo "🤫 Loading $file from OnePassword. Don't worry, this won't be committed to the repo."
-      if ! op inject -i $LOCALNET_INIT_DIR/onepassword/$file -o $LOCALNET_INIT_DIR/secrets/$file -f; then
-        echo "❌  Couldn't generate the required secrets file."
-        echo "🧑🏻‍🦰 Ask Tom or Assem what's up"
-        exit 1
-      fi
-    fi
-  done
-  touch $LOCALNET_INIT_DIR/secrets/.setup_complete
+  touch localnet/.setup_complete
 }
 
 get-workflow() {
@@ -220,7 +205,7 @@ if [[ $CI == true ]]; then
   exit 0
 fi
 
-if [ ! -f ./$LOCALNET_INIT_DIR/secrets/.setup_complete ]; then
+if [ ! -f ./localnet/.setup_complete ]; then
   setup
 else
   echo "✅ Set up already complete"

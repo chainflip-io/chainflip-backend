@@ -1,12 +1,12 @@
-import { Asset, executeSwap, ExecuteSwapParams } from '@chainflip-io/cli';
+import { Asset, executeSwap, ExecuteSwapParams, approveVault} from '@chainflip-io/cli';
 import { Wallet, getDefaultProvider } from 'ethers';
 import { randomAsHex } from "@polkadot/util-crypto";
-import { chainFromAsset, getAddress, getChainflipApi, observeBalanceIncrease, observeEvent } from '../shared/utils';
+import { chainFromAsset, getAddress, getChainflipApi, observeBalanceIncrease, observeEvent, getEthContractAddress } from '../shared/utils';
 import { getNextEthNonce } from '../shared/fund_eth';
 import { getBalance } from './get_balance';
 
 
-export async function executeNativeSwap(destAsset: Asset, destAddress: string) {
+export async function executeContractSwap(srcAsset: Asset, destAsset: Asset, destAddress: string) {
 
     const wallet = Wallet.fromMnemonic(
         process.env.ETH_USDC_WHALE_MNEMONIC ??
@@ -23,21 +23,23 @@ export async function executeNativeSwap(destAsset: Asset, destAddress: string) {
             destAsset,
             // It is important that this is large enough to result in
             // an amount larger than existential (e.g. on Polkadot):
-            amount: '100000000000000000',
+            amount: srcAsset==='USDC' ? '500000000' : '1000000000000000000',
             destAddress,
+            ...srcAsset!=='ETH' ? {srcAsset} : {},
         } as ExecuteSwapParams,
         {
             signer: wallet,
             nonce,
             network: 'localnet',
-            vaultContractAddress: '0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968',
+            vaultContractAddress: getEthContractAddress('VAULT'),
+            ...srcAsset!=='ETH' ? {srcTokenContractAddress: getEthContractAddress(srcAsset)} : {},
         },
     );
 }
 
-export async function performNativeSwap(destAsset: Asset) {
+export async function performSwapViaContract(sourceAsset: Asset, destAsset: Asset) {
 
-    const tag = `[contract ETH -> ${destAsset}]`;
+    const tag = `[contract ${sourceAsset} -> ${destAsset}]`;
 
     const log = (msg: string) => {
         console.log(`${tag} ${msg}`);
@@ -50,12 +52,12 @@ export async function performNativeSwap(destAsset: Asset) {
         log(`Destination address: ${addr}`);
 
         const oldBalance = await getBalance(destAsset, addr);
-        log(`Old balance: ${addr}`);
+        log(`Old balance: ${oldBalance}`);
         // Note that we start observing events before executing
         // the swap to avoid race conditions:
-        log(`Executing native contract swap to(${destAsset}) ${addr}. Current balance: ${oldBalance}`)
+        log(`Executing (${sourceAsset}) contract swap to(${destAsset}) ${addr}. Current balance: ${oldBalance}`)
         const handle = observeEvent("swapping:SwapExecuted", api);
-        await executeNativeSwap(destAsset, addr);
+        await executeContractSwap(sourceAsset, destAsset, addr);
         await handle;
         log(`Successfully observed event: swapping: SwapExecuted`);
 
@@ -64,5 +66,27 @@ export async function performNativeSwap(destAsset: Asset) {
     } catch (err) {
         throw new Error(`${tag} ${err}`);
     }
-
 }
+
+export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: string) {
+    const wallet = Wallet.fromMnemonic(
+        process.env.ETH_USDC_WHALE_MNEMONIC ??
+        'test test test test test test test test test test test junk',
+    ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
+
+    const nonce = await getNextEthNonce();
+    return approveVault(
+        {
+            amount,
+            srcAsset,
+        },
+        {
+            signer: wallet,
+            nonce,
+            network: 'localnet',
+            vaultContractAddress: getEthContractAddress('VAULT'),
+            srcTokenContractAddress: getEthContractAddress(srcAsset)
+        },
+    )
+}
+
