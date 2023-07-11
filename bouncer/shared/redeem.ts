@@ -6,6 +6,7 @@ import Keyring from "@polkadot/keyring";
 import { executeRedemption, getRedemptionDelay } from "@chainflip-io/cli";
 import { getAddress, getChainflipApi, observeBalanceIncrease, observeEvent, sleep } from "./utils";
 import { getFlipBalance } from "./get_balance";
+import { Mutex } from "async-mutex";
 
 const gatewayContractAddress = "0xeEBe00Ac0756308ac4AaBfD76c05c4F3088B8883".toLowerCase();
 
@@ -19,6 +20,8 @@ async function getBashfulSigningKey(): Promise<KeyringPair> {
 
     return keyring.createFromPair(bashfulKey);
 }
+
+const bashfulSigningMutex = new Mutex();
 
 export async function redeemTest() {
 
@@ -36,8 +39,9 @@ export async function redeemTest() {
 
     const amount = 1000;
 
-    // TODO: add mutex here
-    await chainflip.tx.funding.redeem({ "exact": amount }, redeemAddress).signAndSend(bashful, { nonce: -1 });
+    await bashfulSigningMutex.runExclusive(async () => {
+        return chainflip.tx.funding.redeem({ "exact": amount }, redeemAddress).signAndSend(bashful, { nonce: -1 });
+    });
 
     await observeEvent('funding:RedemptionRequested', chainflip, (event) => {
         return event[0] === bashful.address;
@@ -59,6 +63,7 @@ export async function redeemTest() {
     console.log(`Executing redemption`);
     const accountIdHex = `0x${Buffer.from(bashful.addressRaw).toString('hex')}`;
 
+    // TODO: specify nonce manually once this functionality is available
     await executeRedemption(accountIdHex as any, options);
 
     await observeEvent('funding:RedemptionSettled', chainflip, (event) => {
