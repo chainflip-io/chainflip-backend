@@ -70,10 +70,10 @@ export function amountToFineAmount(amount: string, decimals: number): string {
 export function fineAmountToAmount(fineAmount: string, decimals: number): string {
   let balance = '';
   if (fineAmount.length > decimals) {
-      const decimalLocation = fineAmount.length - 10;
+      const decimalLocation = fineAmount.length - decimals;
       balance = fineAmount.slice(0, decimalLocation) + '.' + fineAmount.slice(decimalLocation);
   } else {
-      balance = '0.' + fineAmount.padStart(10, '0');
+      balance = '0.' + fineAmount.padStart(decimals, '0');
   }
   return balance;
 }
@@ -205,7 +205,6 @@ export async function observeBalanceIncrease(dstCcy: string, address: string, ol
 
   for (let i = 0; i < 120; i++) {
     const newBalance = await getBalance(dstCcy as Asset, address);
-
     if (newBalance > oldBalance) {
       return Number(newBalance);
     }

@@ -27,11 +27,12 @@ async function testSwap(sourceToken: Asset, destToken: Asset, addressType?: BtcA
 }
 
 async function testAll() {
+    
     const nativeContractSwaps = Promise.all([
         performNativeSwap('DOT'),
         performNativeSwap('USDC'),
         performNativeSwap('BTC'),
-    ]);
+    ]); 
 
     const regularSwaps =
         Promise.all([
@@ -50,7 +51,7 @@ async function testAll() {
     // NOTE: Parallelized ccm swaps with the same sourceToken and destToken won't work because
     // all ccm swaps have the same destination address (cfReceiver) and then it will get a
     // potentially incorrect depositAddress.
-    /*const ccmSwaps = Promise.all([
+    const ccmSwaps = Promise.all([
         testSwap('BTC', 'ETH', undefined, {
             message: new Web3().eth.abi.encodeParameter("string", "BTC to ETH w/ CCM!!"),
             gas_budget: 1000000,
@@ -87,9 +88,9 @@ async function testAll() {
             cf_parameters: getAbiEncodedMessage(["address","uint256"]),
             source_address: {'ETH': await getAddress('ETH', randomAsHex(32))},
         })            
-    ])   */
+    ])   
 
-    await Promise.all([nativeContractSwaps, regularSwaps/*, ccmSwaps*/]);
+    await Promise.all([nativeContractSwaps, regularSwaps, ccmSwaps]);
 
 }
 

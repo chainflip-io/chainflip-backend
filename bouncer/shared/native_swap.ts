@@ -50,7 +50,7 @@ export async function performNativeSwap(destAsset: Asset) {
         log(`Destination address: ${addr}`);
 
         const oldBalance = await getBalance(destAsset, addr);
-        log(`Old balance: ${addr}`);
+        log(`Old balance: ${oldBalance}`);
         // Note that we start observing events before executing
         // the swap to avoid race conditions:
         log(`Executing native contract swap to(${destAsset}) ${addr}. Current balance: ${oldBalance}`)

@@ -53,7 +53,7 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
     console.log(`${tag} The args are:  ${sourceToken} ${destToken} ${ADDRESS} ${FEE} ${messageMetadata ? `someMessage` : ''}`);
 
     let depositAddressToken = sourceToken;
-    if (sourceToken === 'USDC') {
+    if (sourceToken === 'USDC' || sourceToken === 'FLIP') {
         depositAddressToken = 'ETH';
     }
 
@@ -73,7 +73,7 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
 
     console.log(`${tag} Old balance: ${OLD_BALANCE}`);
 
-    const swapExecutedHandle = observeEvent('swapping:SwapExecuted', chainflipApi);
+    const swapExecutedHandle = observeEvent('swapping:SwapScheduled', chainflipApi);
 
     const ccmEventEmitted = messageMetadata
     ? observeCcmReceived(sourceToken, destToken, ADDRESS, messageMetadata)
