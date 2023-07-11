@@ -1164,6 +1164,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 // TODO: Test that when we return None for polkadot vault
 // witnessing isn't started for dot, but is started for ETH
 
+/// Test all 3 cases of handling a signing request: not participating, failure, and success.
 async fn should_handle_signing_request<C, I>()
 where
 	C: CryptoScheme + Send + Sync,
@@ -1177,7 +1178,6 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 		<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain
 	>,
 {
-	let first_ceremony_id = 1;
 	let key_id = KeyId::new(1, [0u8; 32]);
 	let payload = C::signing_payload_for_test();
 	let our_account_id = AccountId32::new([0; 32]);
@@ -1185,28 +1185,28 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 	assert_ne!(our_account_id, not_our_account_id);
 
 	let mut state_chain_client = MockStateChainClient::new();
+	let mut multisig_client = MockMultisigClientApi::<C>::new();
+
+	// All 3 signing requests will ask for the account id
 	state_chain_client
 		.expect_account_id()
-		.times(2)
+		.times(3)
 		.return_const(our_account_id.clone());
-	state_chain_client.
-		expect_submit_signed_extrinsic::<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>()
-		.once()
-		.return_once(|_| (H256::default(), extrinsic_api::signed::MockUntilFinalized::new()));
-	let state_chain_client = Arc::new(state_chain_client);
 
-	let mut multisig_client = MockMultisigClientApi::<C>::new();
+	// ceremony_id_1 is a non-participating ceremony and should update the latest ceremony id
+	let ceremony_id_1 = 1;
 	multisig_client
 		.expect_update_latest_ceremony_id()
-		.with(predicate::eq(first_ceremony_id))
+		.with(predicate::eq(ceremony_id_1))
 		.once()
 		.returning(|_| ());
 
-	let next_ceremony_id = first_ceremony_id + 1;
+	// ceremony_id_2 is a failure and should submit a signed extrinsic
+	let ceremony_id_2 = ceremony_id_1 + 1;
 	multisig_client
 		.expect_initiate_signing()
 		.with(
-			predicate::eq(next_ceremony_id),
+			predicate::eq(ceremony_id_2),
 			predicate::eq(BTreeSet::from_iter([our_account_id.clone()])),
 			predicate::eq(vec![(key_id.clone(), payload.clone())]),
 		)
@@ -1218,7 +1218,44 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 			)))
 			.boxed()
 		});
+	state_chain_client.
+		expect_submit_signed_extrinsic::<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>()
+		.with(predicate::eq(pallet_cf_threshold_signature::Call::<
+			state_chain_runtime::Runtime,
+			I,
+		>::report_signature_failed {
+			ceremony_id: ceremony_id_2,
+			offenders: BTreeSet::default(),
+		}))
+		.once()
+		.return_once(|_| (H256::default(), extrinsic_api::signed::MockUntilFinalized::new()));
 
+	// ceremony_id_3 is a success and should submit an unsigned extrinsic
+	let ceremony_id_3 = ceremony_id_2 + 1;
+	let signatures = vec![C::signature_for_test()];
+	let signatures_clone = signatures.clone();
+	multisig_client
+		.expect_initiate_signing()
+		.with(
+			predicate::eq(ceremony_id_3),
+			predicate::eq(BTreeSet::from_iter([our_account_id.clone()])),
+			predicate::eq(vec![(key_id.clone(), payload.clone())]),
+		)
+		.once()
+		.return_once(move |_, _, _| futures::future::ready(Ok(signatures_clone)).boxed());
+	state_chain_client.expect_submit_unsigned_extrinsic().with(
+		predicate::eq(pallet_cf_threshold_signature::Call::<
+			state_chain_runtime::Runtime,
+			I,
+		>::signature_success {
+			ceremony_id: ceremony_id_3,
+			signature: signatures.to_threshold_signature(),
+		})
+	).once().return_once(
+		|_: pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>| H256::default(),
+	);
+
+	let state_chain_client = Arc::new(state_chain_client);
 	task_scope(|scope| {
 		async {
 			// Handle a signing request that we are not participating in
@@ -1226,18 +1263,31 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 				scope,
 				&multisig_client,
 				state_chain_client.clone(),
-				first_ceremony_id,
+				ceremony_id_1,
 				BTreeSet::from_iter([not_our_account_id.clone()]),
 				vec![(key_id.clone(), payload.clone())],
 			)
 			.await;
 
-			// Handle a signing request that we are participating in
+			// Handle a signing request that we are participating in.
+			// This one will return an error.
 			sc_observer::handle_signing_request::<_, _, C, I>(
 				scope,
 				&multisig_client,
 				state_chain_client.clone(),
-				next_ceremony_id,
+				ceremony_id_2,
+				BTreeSet::from_iter([our_account_id.clone()]),
+				vec![(key_id.clone(), payload.clone())],
+			)
+			.await;
+
+			// Handle another signing request that we are participating in.
+			// This one will return success.
+			sc_observer::handle_signing_request::<_, _, C, I>(
+				scope,
+				&multisig_client,
+				state_chain_client.clone(),
+				ceremony_id_3,
 				BTreeSet::from_iter([our_account_id]),
 				vec![(key_id, payload)],
 			)
