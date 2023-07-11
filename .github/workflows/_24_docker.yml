@@ -54,17 +54,13 @@ jobs:
         target:
           - chainflip-node
           - chainflip-engine
-          - chainflip-engine-1-node
-          - chainflip-engine-3-node
           - chainflip-cli
           - chainflip-broker-api
           - chainflip-lp-api
           - generate-genesis-keys
+          - chainflip-engine-databases
         docker-repo:
           - ghcr.io/${{ github.repository }}
-        include:
-          - target: chainflip-engine-3-node
-            genesis: [bashful, doc, dopey]
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout 🏁
@@ -123,7 +119,6 @@ jobs:
             BUILD_DATETIME=${{ needs.get-date-time.outputs.date }} ${{ needs.get-date-time.outputs.time }}
             VCS_REF=${{ github.sha }}
             CHAINSPEC=${{ inputs.network }}
-            GENESIS=${{ matrix.genesis }}
 
   public-images:
     if: inputs.publish_public_images

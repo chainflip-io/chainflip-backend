@@ -44,6 +44,22 @@ spec:
             - name: chainspec
               mountPath: {{ .Values.basePath }}
         {{- end }}
+        - name: inject-keys
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          volumeMounts:
+            - name: chainspec
+              mountPath: {{ .Values.basePath }}
+            - name: node-keys
+              mountPath: {{ .Values.basePath }}/keys
+            - name: {{ include "chainflip-node.fullname" . }}
+              mountPath: {{ .Values.basePath }}/chaindata
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -x
+              chainflip-node key insert --key-type 'aura' --scheme sr25519 --chain {{ .Values.chain }} --suri "0x$(cat {{ .Values.basePath }}/keys/signing_key_file)" --base-path {{ .Values.basePath }}/chaindata
+              chainflip-node key insert --key-type 'gran' --scheme ed25519 --chain {{ .Values.chain }} --suri "0x$(cat {{ .Values.basePath }}/keys/signing_key_file)" --base-path {{ .Values.basePath }}/chaindata
       containers:
       {{- if .Values.brokerApi.enabled }}
         - name: {{ .Chart.Name }}-broker-api
@@ -89,43 +105,22 @@ spec:
             - name: lp-keys
               mountPath: {{ .Values.basePath }}/keys
         {{ end }}
-        {{- if .Values.engine.enabled }}
-        - name: chainflip-engine
-          image: "{{ .Values.engine.image.repository }}:{{ .Values.engine.image.tag | default "latest" }}"
-          ports:
-            - containerPort: 5555
-              name: healthcheck
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: healthcheck
-            initialDelaySeconds: 60
-            periodSeconds: 10
-            timeoutSeconds: 5
-            successThreshold: 1
-            failureThreshold: 3
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: healthcheck
-            initialDelaySeconds: 10
-            periodSeconds: 10
-            timeoutSeconds: 5
-            successThreshold: 1
-            failureThreshold: 3
-          volumeMounts:
-            - name: {{ include "chainflip-node.fullname" . }}
-              mountPath: {{ .Values.basePath }}/data.db
-        {{- end }}
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if not .Values.downloadChainspec }}
+          envFrom:
+            - secretRef:
+                name: "{{ include "chainflip-node.fullname" .}}-{{ .Values.secrets.ethEnvOnePasswordSecret }}"
+          {{- end }}
           command:
             - /usr/local/bin/chainflip-node
           args:
             - --base-path={{ .Values.basePath }}/chaindata
-            - --bootnodes={{ .Values.bootnodes }}
-            - --chain=/etc/chainflip/{{ .Values.chainspec }}
+            {{- range .Values.bootnodes }}
+            - --bootnodes={{ . }}
+            {{- end }}
+            - --chain={{ .Values.chain }}
             - --node-key-file={{ .Values.basePath }}/keys/node_key_file
             - --prometheus-external
             - --state-cache-size=0
@@ -134,6 +129,7 @@ spec:
             - --unsafe-rpc-external
             - --rpc-methods=unsafe
             - --rpc-cors=all
+            - --force-authoring
             {{- with .Values.extraArgs }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -169,19 +165,21 @@ spec:
             {}
         - name: node-keys
           secret:
-            secretName: {{ .Values.secrets.existingOnePasswordSecret }}
+            secretName: {{ include "chainflip-node.fullname" .}}-{{ .Values.secrets.existingOnePasswordSecret }}
             items:
               - key: node-key
                 path: node_key_file
+              - key: signing-key
+                path: signing_key_file
         - name: broker-keys
           secret:
-            secretName: {{ .Values.secrets.existingOnePasswordSecret }}
+            secretName: {{ include "chainflip-node.fullname" .}}-{{ .Values.secrets.existingOnePasswordSecret }}
             items:
               - key: signing-key-broker
                 path: signing_key_file
         - name: lp-keys
           secret:
-            secretName: {{ .Values.secrets.existingOnePasswordSecret }}
+            secretName: {{ include "chainflip-node.fullname" .}}-{{ .Values.secrets.existingOnePasswordSecret }}
             items:
               - key: signing-key-lp
                 path: signing_key_file

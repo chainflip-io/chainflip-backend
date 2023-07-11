@@ -1,0 +1,113 @@
+{{- if .Values.engine.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "chainflip-node.fullname" . }}-engine
+  labels:
+    app: {{ include "chainflip-node.fullname" . }}-engine
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      name: {{ include "chainflip-node.fullname" . }}-engine
+      labels:
+        app: {{ include "chainflip-node.fullname" . }}-engine
+    spec:
+      imagePullSecrets:
+        {{ .Values.imagePullSecrets | toYaml | nindent 8 }}
+      initContainers:
+        - name: port-check
+          image: alpine:latest
+          command:
+            - sh
+            - -c
+            - |
+              set -x
+              while true; do
+                nc -zv {{ include "chainflip-node.fullname" . }} {{ .Values.ports.rpcPort }}
+                if [ $? -eq 0 ]; then
+                  exit 0
+                fi
+                sleep 1
+              done
+        {{- if .Values.engine.existingDbPath }}
+        - name: copy-datadb
+          imagePullPolicy: Always
+          image: "ghcr.io/chainflip-io/chainflip-backend/chainflip-engine-databases:{{ .Values.engine.image.tag | default "latest" }}"
+          command:
+            - sh
+            - -c
+            - |
+              set -x
+              if ! [ -f {{ .Values.basePath }}/data.db/LOCK ]; then
+                cp -R {{ .Values.engine.existingDbPath }}/* {{ .Values.basePath }}/data.db/
+              fi
+          volumeMounts:
+            - name: datadb
+              mountPath: {{ .Values.basePath }}/data.db
+        {{- end }}
+      containers:
+        - name: chainflip-engine
+          image: "{{ .Values.engine.image.repository }}:{{ .Values.engine.image.tag | default "latest" }}"
+          command:
+            - sh
+            - -c
+            - /usr/local/bin/chainflip-engine
+          args:
+            - --config-root={{ .Values.basePath }}
+          ports:
+            - containerPort: 5555
+              name: healthcheck
+            - containerPort: {{ .Values.ports.ipPort }}
+              name: ip
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: healthcheck
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: healthcheck
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          volumeMounts:
+            - name: datadb
+              mountPath: {{ .Values.basePath }}/data.db
+            - name: node-keys
+              mountPath: {{ .Values.basePath }}/keys
+            - name: settings
+              mountPath: {{ .Values.basePath }}/config
+              readOnly: true
+      restartPolicy: Always
+      volumes:
+        - name: datadb
+          persistentVolumeClaim:
+            claimName: {{ include "chainflip-node.fullname" . }}-engine-datadb
+        - name: settings
+          configMap:
+            name: {{ include "chainflip-node.fullname" . }}-engine-settings
+        - name: node-keys
+          secret:
+            secretName: {{ include "chainflip-node.fullname" .}}-{{ .Values.secrets.existingOnePasswordSecret }}
+            items:
+              - key: node-key
+                path: node_key_file
+              - key: signing-key
+                path: signing_key_file
+              - key: ethereum-key
+                path: ethereum_key_file
+  selector:
+    matchLabels:
+      app: {{ include "chainflip-node.fullname" . }}-engine
+{{- end }}
