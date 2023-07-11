@@ -245,7 +245,7 @@ benchmarks! {
 		));
 	}
 
-	start_authority_rotation_in_safe_mode_code_red {
+	start_authority_rotation_while_disabled_by_safe_mode {
 		<T as Config>::SafeMode::set_code_red();
 	}: {
 		Pallet::<T>::start_authority_rotation();

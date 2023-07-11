@@ -4,7 +4,6 @@ use crate::{
 };
 use cf_chains::eth::{SchnorrVerificationComponents, TransactionFee};
 use cf_primitives::EpochIndex;
-use ethers::{abi::RawLog, contract::EthLogDecode};
 use state_chain_runtime::EthereumInstance;
 use std::sync::Arc;
 use tracing::{info, trace};
@@ -20,7 +19,7 @@ use std::fmt::Debug;
 
 use async_trait::async_trait;
 
-use super::{event::Event, BlockWithItems, DecodeLogClosure, EthContractWitnesser};
+use super::{event::Event, BlockWithItems, EthContractWitnesser};
 
 use ethers::prelude::*;
 use num_traits::Zero;
@@ -193,12 +192,6 @@ impl EthContractWitnesser for KeyManager {
 		}
 
 		Ok(())
-	}
-
-	fn decode_log_closure(&self) -> DecodeLogClosure<Self::EventParameters> {
-		Box::new(move |raw_log: RawLog| -> Result<KeyManagerEvents> {
-			Ok(KeyManagerEvents::decode_log(&raw_log)?)
-		})
 	}
 
 	fn contract_address(&self) -> H160 {

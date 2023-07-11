@@ -10,6 +10,7 @@ use core::time::Duration;
 
 use super::rpc::{BlockHeader, BtcRpcApi, BtcRpcClient};
 
+#[derive(Clone)]
 pub struct BtcRetryRpcClient {
 	retry_client: RpcRetrierClient<BtcRpcClient>,
 }
