@@ -52,32 +52,27 @@ where
 		self.inner
 			.stream(parameters)
 			.await
-			.then(move |(epoch, chain_stream, chain_client)| {
-				let map_fn = self.map_fn.clone();
-				async move {
-					(
-						epoch.clone(),
-						chain_stream
-							.then({
-								let map_fn = map_fn.clone();
+			.then(move |(epoch, chain_stream, chain_client)| async move {
+				(
+					epoch.clone(),
+					chain_stream
+						.then({
+							let epoch = epoch.clone();
+							move |header| {
 								let epoch = epoch.clone();
-								move |header| {
-									let map_fn = map_fn.clone();
-									let epoch = epoch.clone();
-									async move {
-										Header {
-											index: header.index,
-											hash: header.hash,
-											parent_hash: header.parent_hash,
-											data: (map_fn)(epoch, header).await,
-										}
+								async move {
+									Header {
+										index: header.index,
+										hash: header.hash,
+										parent_hash: header.parent_hash,
+										data: (self.map_fn)(epoch, header).await,
 									}
 								}
-							})
-							.into_box(),
-						MappedClient::new(chain_client, map_fn.clone(), epoch),
-					)
-				}
+							}
+						})
+						.into_box(),
+					MappedClient::new(chain_client, self.map_fn.clone(), epoch),
+				)
 			})
 			.await
 			.into_box()
