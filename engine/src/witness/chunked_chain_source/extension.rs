@@ -5,18 +5,18 @@ use crate::witness::{
 	epoch_source::Epoch,
 };
 
-use super::{map::Map, Builder, ChunkedChainSource};
+use super::{map::Then, Builder, ChunkedChainSource};
 
 impl<T: ChunkedChainSource> Builder<T> {
-	pub fn map<MappedTo, FutMappedTo, MapFn>(self, map_fn: MapFn) -> Builder<Map<T, MapFn>>
+	pub fn then<Output, Fut, ThenFn>(self, then_fn: ThenFn) -> Builder<Then<T, ThenFn>>
 	where
-		MappedTo: aliases::Data,
-		FutMappedTo: Future<Output = MappedTo> + Send,
-		MapFn: Fn(Epoch<T::Info, T::HistoricInfo>, Header<T::Index, T::Hash, T::Data>) -> FutMappedTo
+		Output: aliases::Data,
+		Fut: Future<Output = Output> + Send,
+		ThenFn: Fn(Epoch<T::Info, T::HistoricInfo>, Header<T::Index, T::Hash, T::Data>) -> Fut
 			+ Send
 			+ Sync
 			+ Clone,
 	{
-		Builder { source: Map::new(self.source, map_fn), parameters: self.parameters }
+		Builder { source: Then::new(self.source, then_fn), parameters: self.parameters }
 	}
 }

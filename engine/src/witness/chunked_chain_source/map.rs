@@ -9,25 +9,24 @@ use crate::witness::{
 
 use super::ChunkedChainSource;
 
-pub struct Map<Inner, MapFn> {
+pub struct Then<Inner, ThenFn> {
 	inner: Inner,
-	map_fn: MapFn,
+	then_fn: ThenFn,
 }
-impl<Inner, MapFn> Map<Inner, MapFn> {
-	pub fn new(inner: Inner, map_fn: MapFn) -> Self {
-		Self { inner, map_fn }
+impl<Inner, ThenFn> Then<Inner, ThenFn> {
+	pub fn new(inner: Inner, then_fn: ThenFn) -> Self {
+		Self { inner, then_fn }
 	}
 }
 #[async_trait::async_trait]
-impl<Inner: ChunkedChainSource, MappedTo, FutMappedTo, MapFn> ChunkedChainSource
-	for Map<Inner, MapFn>
+impl<Inner: ChunkedChainSource, Output, Fut, ThenFn> ChunkedChainSource for Then<Inner, ThenFn>
 where
-	MappedTo: aliases::Data,
-	FutMappedTo: Future<Output = MappedTo> + Send,
-	MapFn: Fn(
+	Output: aliases::Data,
+	Fut: Future<Output = Output> + Send,
+	ThenFn: Fn(
 			Epoch<Inner::Info, Inner::HistoricInfo>,
 			Header<Inner::Index, Inner::Hash, Inner::Data>,
-		) -> FutMappedTo
+		) -> Fut
 		+ Send
 		+ Sync
 		+ Clone,
@@ -37,9 +36,9 @@ where
 
 	type Index = Inner::Index;
 	type Hash = Inner::Hash;
-	type Data = MappedTo;
+	type Data = Output;
 
-	type Client = MappedClient<Inner, MapFn>;
+	type Client = ThenClient<Inner, ThenFn>;
 
 	type Chain = Inner::Chain;
 
@@ -65,13 +64,13 @@ where
 										index: header.index,
 										hash: header.hash,
 										parent_hash: header.parent_hash,
-										data: (self.map_fn)(epoch, header).await,
+										data: (self.then_fn)(epoch, header).await,
 									}
 								}
 							}
 						})
 						.into_box(),
-					MappedClient::new(chain_client, self.map_fn.clone(), epoch),
+					ThenClient::new(chain_client, self.then_fn.clone(), epoch),
 				)
 			})
 			.await
@@ -79,37 +78,37 @@ where
 	}
 }
 
-pub struct MappedClient<Inner: ChunkedChainSource, MapFn> {
+pub struct ThenClient<Inner: ChunkedChainSource, ThenFn> {
 	inner_client: Inner::Client,
-	map_fn: MapFn,
+	then_fn: ThenFn,
 	epoch: Epoch<Inner::Info, Inner::HistoricInfo>,
 }
-impl<Inner: ChunkedChainSource, MapFn> MappedClient<Inner, MapFn> {
+impl<Inner: ChunkedChainSource, ThenFn> ThenClient<Inner, ThenFn> {
 	pub fn new(
 		inner_client: Inner::Client,
-		map_fn: MapFn,
+		then_fn: ThenFn,
 		epoch: Epoch<Inner::Info, Inner::HistoricInfo>,
 	) -> Self {
-		Self { inner_client, map_fn, epoch }
+		Self { inner_client, then_fn, epoch }
 	}
 }
 #[async_trait::async_trait]
 impl<
 		Inner: ChunkedChainSource,
-		MappedTo: aliases::Data,
-		FutMappedTo: Future<Output = MappedTo> + Send,
-		MapFn: Fn(
+		Output: aliases::Data,
+		Fut: Future<Output = Output> + Send,
+		ThenFn: Fn(
 				Epoch<Inner::Info, Inner::HistoricInfo>,
 				Header<Inner::Index, Inner::Hash, Inner::Data>,
-			) -> FutMappedTo
+			) -> Fut
 			+ Send
 			+ Sync
 			+ Clone,
-	> ChainClient for MappedClient<Inner, MapFn>
+	> ChainClient for ThenClient<Inner, ThenFn>
 {
 	type Index = Inner::Index;
 	type Hash = Inner::Hash;
-	type Data = MappedTo;
+	type Data = Output;
 
 	async fn header_at_index(
 		&self,
@@ -121,7 +120,7 @@ impl<
 			index: header.index,
 			hash: header.hash,
 			parent_hash: header.parent_hash,
-			data: (self.map_fn)(self.epoch.clone(), header).await,
+			data: (self.then_fn)(self.epoch.clone(), header).await,
 		}
 	}
 }
