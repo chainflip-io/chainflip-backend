@@ -1296,6 +1296,97 @@ mod dot_keygen {
 }
 
 #[tokio::test]
+async fn should_handle_key_handover_request()
+where
+	Runtime: pallet_cf_vaults::Config<BitcoinInstance>,
+	RuntimeCall: std::convert::From<pallet_cf_vaults::Call<Runtime, BitcoinInstance>>,
+{
+	use multisig::bitcoin::BtcSigning;
+
+	let first_ceremony_id = 1;
+	let our_account_id = AccountId32::new([0; 32]);
+	let not_our_account_id = AccountId32::new([1u8; 32]);
+	assert_ne!(our_account_id, not_our_account_id);
+
+	let mut state_chain_client = MockStateChainClient::new();
+	let mut multisig_client = MockMultisigClientApi::<BtcSigning>::new();
+
+	// Both requests will ask for the account id
+	state_chain_client
+		.expect_account_id()
+		.times(2)
+		.return_const(our_account_id.clone());
+
+	// The first ceremony is a non-participating ceremony so it should update the latest ceremony id
+	multisig_client
+		.expect_update_latest_ceremony_id()
+		.with(eq(first_ceremony_id))
+		.once()
+		.return_once(|_| ());
+
+	// The second ceremony is a failure and should submit a signed extrinsic
+	let next_ceremony_id = first_ceremony_id + 1;
+	let key_to_share = cf_chains::btc::AggKey::default();
+	multisig_client
+		.expect_initiate_key_handover()
+		.with(
+			eq(next_ceremony_id),
+			eq(KeyId::new(GENESIS_EPOCH, key_to_share.current)),
+			eq(GENESIS_EPOCH + 1),
+			eq(BTreeSet::from_iter([our_account_id.clone()])),
+			eq(BTreeSet::from_iter([our_account_id.clone()])),
+		)
+		.once()
+		.return_once(|_, _, _, _, _| {
+			futures::future::ready(Err((BTreeSet::new(), KeygenFailureReason::InvalidParticipants)))
+				.boxed()
+		});
+	state_chain_client
+		.expect_submit_signed_extrinsic::<pallet_cf_vaults::Call<Runtime, BitcoinInstance>>()
+		.once()
+		.return_once(|_| (H256::default(), extrinsic_api::signed::MockUntilFinalized::new()));
+
+	let state_chain_client = Arc::new(state_chain_client);
+	task_scope(|scope| {
+		async {
+			// Handle the key handover request that we are not participating in
+			sc_observer::handle_key_handover_request::<_, _>(
+				scope,
+				&multisig_client,
+				state_chain_client.clone(),
+				first_ceremony_id,
+				GENESIS_EPOCH,
+				GENESIS_EPOCH + 1,
+				BTreeSet::from_iter([not_our_account_id.clone()]),
+				BTreeSet::from_iter([not_our_account_id.clone()]),
+				key_to_share,
+				Default::default(),
+			)
+			.await;
+
+			// Handle the key handover request that we are participating in
+			sc_observer::handle_key_handover_request::<_, _>(
+				scope,
+				&multisig_client,
+				state_chain_client.clone(),
+				next_ceremony_id,
+				GENESIS_EPOCH,
+				GENESIS_EPOCH + 1,
+				BTreeSet::from_iter([our_account_id.clone()]),
+				BTreeSet::from_iter([our_account_id.clone()]),
+				key_to_share,
+				Default::default(),
+			)
+			.await;
+			Ok(())
+		}
+		.boxed()
+	})
+	.await
+	.unwrap();
+}
+
+#[tokio::test]
 #[ignore = "runs forever, useful for testing without having to start the whole CFE"]
 async fn run_the_sc_observer() {
 	task_scope(|scope| {
