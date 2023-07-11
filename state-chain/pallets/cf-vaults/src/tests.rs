@@ -1,5 +1,7 @@
 #![cfg(test)]
 
+use core::panic;
+
 use crate::{
 	mock::*, CeremonyId, Error, Event as PalletEvent, KeyHandoverResolutionPendingSince,
 	KeygenFailureVoters, KeygenResolutionPendingSince, KeygenResponseTimeout, KeygenSuccessVoters,
@@ -332,25 +334,33 @@ fn only_candidates_can_report_keygen_outcome() {
 }
 
 #[test]
-fn can_only_report_keygen_candidates() {
+fn can_only_blame_keygen_candidates() {
 	new_test_ext().execute_with(|| {
-		<VaultsPallet as VaultRotator>::keygen(
-			BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned()),
-			GENESIS_EPOCH,
-		);
+		let candidates = BTreeSet::from_iter(ALL_CANDIDATES.iter().cloned());
+		let valid_blames = BTreeSet::from_iter([BOB, CHARLIE]);
+		let invalid_blames = BTreeSet::from_iter([u64::MAX - 1, u64::MAX]);
+		assert!(valid_blames.is_subset(&candidates));
+		assert!(invalid_blames.is_disjoint(&candidates));
 
-		let non_candidate = u64::MAX;
-		assert!(!ALL_CANDIDATES.contains(&non_candidate));
-		assert_noop!(
-			VaultsPallet::report_keygen_outcome(
-				RuntimeOrigin::signed(ALICE),
-				current_ceremony_id(),
-				// Report the non-candidate
-				Err(BTreeSet::from_iter([non_candidate]))
-			),
-			Error::<MockRuntime, _>::InvalidBlame
-		);
-		assert_eq!(<VaultsPallet as VaultRotator>::status(), AsyncResult::Pending);
+		<VaultsPallet as VaultRotator>::keygen(candidates, GENESIS_EPOCH);
+
+		VaultsPallet::report_keygen_outcome(
+			RuntimeOrigin::signed(ALICE),
+			current_ceremony_id(),
+			// Report both the valid and invalid offenders
+			Err(valid_blames.iter().cloned().chain(invalid_blames.clone()).collect()),
+		)
+		.unwrap();
+
+		match PendingVaultRotation::<MockRuntime, _>::get().unwrap() {
+			VaultRotationStatus::AwaitingKeygen { response_status, .. } => {
+				let blamed: BTreeSet<_> = response_status.blame_votes().keys().cloned().collect();
+
+				assert_eq!(&valid_blames, &blamed);
+				assert!(invalid_blames.is_disjoint(&blamed));
+			},
+			_ => panic!("Expected to be in AwaitingKeygen state"),
+		}
 	});
 }
 
