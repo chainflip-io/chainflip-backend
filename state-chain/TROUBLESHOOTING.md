@@ -10,19 +10,21 @@ As of yet there is no real structure - this isn't intended to be a document to r
 
 ## Runtime upgrades / Try-runtime
 
-First, build the runtime node with all features enabled:
+First, build the runtime node with all `try-runtime` enabled.
+
+The `try-runtime` features for the Chainflip runtime upgrade utilities are currently incompatible with WASM builds, so use `SKIP_WASM_BUILD` to avoid compiler errors.
 
 > *Note: you need to tweak the `spec_version` of the local runtime to match that of the remote chain.*
 
 ```sh
-cargo build --release --all-features
+SKIP_WASM_BUILD=1 cargo build --release --features=try-runtime
 ```
 
 Now you can run your tests like so (using an appropriate public rpc node):
 
 ```sh
 ./target/release/chainflip-node try-runtime --execution native \
-    on-runtime-upgrade live --uri wss://perseverance-rpc.chainflip.io:443
+    on-runtime-upgrade live --uri wss://perseverance.chainflip.xyz:443
 ```
 
 Sometimes this doesn't work. In this case you run a local rpc node and connect to that instead.

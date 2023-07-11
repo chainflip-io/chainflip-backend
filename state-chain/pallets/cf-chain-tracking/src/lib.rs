@@ -3,6 +3,7 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 mod benchmarking;
+mod migrations;
 mod mock;
 mod tests;
 
@@ -11,15 +12,19 @@ pub use weights::WeightInfo;
 
 use cf_chains::Chain;
 use cf_traits::{Chainflip, GetBlockHeight};
-use frame_support::{dispatch::DispatchResultWithPostInfo, sp_runtime::traits::Zero};
+use frame_support::{
+	dispatch::DispatchResultWithPostInfo, pallet_prelude::*, sp_runtime::traits::Zero,
+	traits::OnRuntimeUpgrade,
+};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::marker::PhantomData;
 
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -36,8 +41,26 @@ pub mod pallet {
 	}
 
 	#[pallet::pallet]
+	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
+
+	#[pallet::hooks]
+	impl<T: Config<I>, I: 'static> Hooks<T::BlockNumber> for Pallet<T, I> {
+		fn on_runtime_upgrade() -> Weight {
+			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, &'static str> {
+			migrations::PalletMigration::<T, I>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+			migrations::PalletMigration::<T, I>::post_upgrade(state)
+		}
+	}
 
 	#[derive(
 		PartialEqNoBound,
