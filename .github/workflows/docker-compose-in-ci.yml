@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   bouncer:
-    runs-on: [hetzner]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout chainflip-backend
         uses: actions/checkout@v3
