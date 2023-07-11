@@ -5,7 +5,7 @@ use crate::witness::{
 	epoch_source::Epoch,
 };
 
-use super::{map::Then, Builder, ChunkedChainSource};
+use super::{then::Then, Builder, ChunkedChainSource};
 
 impl<T: ChunkedChainSource> Builder<T> {
 	pub fn then<Output, Fut, ThenFn>(self, then_fn: ThenFn) -> Builder<Then<T, ThenFn>>
