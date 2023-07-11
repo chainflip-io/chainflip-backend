@@ -20,8 +20,8 @@ jobs:
 
       - name: Start a localnet
         run: |
-          cp -R $LOCALNET_INIT_DIR/keyshare/1-node /tmp/chainflip/
-          cp -R $LOCALNET_INIT_DIR/data/ /tmp/chainflip/data
+          cp -R ./localnet/init/keyshare/1-node /tmp/chainflip/
+          cp -R ./localnet/init/data/ /tmp/chainflip/data
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up -d
 
       - name: Clean Up docker containers 🧹
