@@ -33,6 +33,8 @@ export function assetToChain(asset: Asset): number {
 // TODO: Import this from the chainflip-io/cli package once it's exported in future versions.
 export function getEthContractAddress(contract: string): string {
   switch (contract) {
+    case 'VAULT':
+      return '0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968';
     case 'ETH':
       return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
     case 'FLIP': 
