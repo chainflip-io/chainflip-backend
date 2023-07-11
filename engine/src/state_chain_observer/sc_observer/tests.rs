@@ -12,15 +12,20 @@ use cf_chains::{
 use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use frame_system::Phase;
 use futures::{FutureExt, StreamExt};
-use mockall::predicate::{self, eq};
+use mockall::predicate::eq;
 use multisig::SignatureToThresholdSignature;
 use pallet_cf_broadcast::BroadcastAttemptId;
-use pallet_cf_vaults::Vault;
+use pallet_cf_environment::PolkadotVaultAccountId;
+use pallet_cf_validator::{CurrentEpoch, HistoricalActiveEpochs};
+use pallet_cf_vaults::{Vault, Vaults};
 use sp_runtime::{AccountId32, Digest};
 
 use crate::eth::ethers_rpc::MockEthersRpcApi;
 use sp_core::H256;
-use state_chain_runtime::{AccountId, CfeSettings, EthereumInstance, Header};
+use state_chain_runtime::{
+	AccountId, BitcoinInstance, CfeSettings, EthereumInstance, Header, PolkadotInstance, Runtime,
+	RuntimeCall, RuntimeEvent,
+};
 use tokio::sync::watch;
 use utilities::MakeCachedStream;
 
@@ -137,21 +142,18 @@ async fn starts_witnessing_when_current_authority() {
 		|| account_id
 	});
 
-	state_chain_client.
-expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client
+		.expect_storage_map_entry::<HistoricalActiveEpochs<Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id))
 		.once()
 		.return_once(move |_, _| Ok(vec![initial_epoch]));
 	state_chain_client
-		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<CurrentEpoch<Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(move |_| Ok(initial_epoch));
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::EthereumInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
 		.with(eq(initial_block_hash), eq(initial_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -162,10 +164,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::PolkadotInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
 		.with(eq(initial_block_hash), eq(initial_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -173,10 +172,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::BitcoinInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
 		.with(eq(initial_block_hash), eq(initial_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -184,12 +180,10 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-				state_chain_runtime::Runtime,
-			>>()
-			.with(eq(initial_block_hash))
-			.once()
-			.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
+		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
+		.with(eq(initial_block_hash))
+		.once()
+		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	// No blocks in the stream
 	let sc_block_stream = tokio_stream::iter(vec![]).make_cached(
@@ -239,21 +233,18 @@ async fn starts_witnessing_when_historic_on_startup() {
 		|| account_id
 	});
 
-	state_chain_client.
-expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client
+		.expect_storage_map_entry::<HistoricalActiveEpochs<Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id))
 		.once()
 		.return_once(move |_, _| Ok(vec![active_epoch]));
 	state_chain_client
-		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<CurrentEpoch<Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(move |_| Ok(current_epoch));
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::EthereumInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
 		.with(eq(initial_block_hash), eq(active_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -264,10 +255,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::PolkadotInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
 		.with(eq(initial_block_hash), eq(active_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -278,18 +266,13 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-			state_chain_runtime::Runtime,
-		>>()
+		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::BitcoinInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
 		.with(eq(initial_block_hash), eq(active_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -297,10 +280,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::EthereumInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
 		.with(eq(initial_block_hash), eq(current_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -311,10 +291,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::PolkadotInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
 		.with(eq(initial_block_hash), eq(current_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -325,20 +302,18 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::BitcoinInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
 		.with(eq(initial_block_hash), eq(current_epoch))
 		.once()
 		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: current_epoch_from_block_btc
-})) 		});
+			Ok(Some(Vault {
+				public_key: Default::default(),
+				active_from_block: current_epoch_from_block_btc,
+			}))
+		});
 
 	state_chain_client
-		.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-			state_chain_runtime::Runtime,
-		>>()
+		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
@@ -393,21 +368,18 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		|| account_id
 	});
 
-	state_chain_client.
-expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client
+		.expect_storage_map_entry::<HistoricalActiveEpochs<Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id))
 		.once()
 		.return_once(move |_, _| Ok(vec![]));
 	state_chain_client
-		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<CurrentEpoch<Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(move |_| Ok(initial_epoch));
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::EthereumInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
 		.with(eq(initial_block_hash), eq(3))
 		.once()
 		.return_once(move |_, _| {
@@ -418,10 +390,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::PolkadotInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
 		.with(eq(initial_block_hash), eq(3))
 		.once()
 		.return_once(move |_, _| {
@@ -429,18 +398,13 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-			state_chain_runtime::Runtime,
-		>>()
+		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::BitcoinInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
 		.with(eq(initial_block_hash), eq(initial_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -494,21 +458,18 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 		|| account_id
 	});
 
-	state_chain_client.
-expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client
+		.expect_storage_map_entry::<HistoricalActiveEpochs<Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _| Ok(vec![initial_epoch]));
 	state_chain_client
-		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<CurrentEpoch<Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(move |_| Ok(initial_epoch));
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::EthereumInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
 		.with(eq(initial_block_hash), eq(initial_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -519,10 +480,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::PolkadotInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
 		.with(eq(initial_block_hash), eq(initial_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -533,23 +491,21 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-			state_chain_runtime::Runtime,
-		>>()
+		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::BitcoinInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
 		.with(eq(initial_block_hash), eq(initial_epoch))
 		.once()
 		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: initial_epoch_from_block_btc
-})) 		});
+			Ok(Some(Vault {
+				public_key: Default::default(),
+				active_from_block: initial_epoch_from_block_btc,
+			}))
+		});
 
 	let empty_block_header = test_header(20);
 	let new_epoch_block_header = test_header(21);
@@ -565,29 +521,24 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 				)| StreamCache { block_hash: *block_hash, block_number: block_header.number },
 			);
 	state_chain_client
-		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<frame_system::Events<Runtime>>()
 		.with(eq(empty_block_header.hash()))
 		.once()
 		.return_once(move |_| Ok(vec![]));
 	state_chain_client
-		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<frame_system::Events<Runtime>>()
 		.with(eq(new_epoch_block_header_hash))
 		.once()
 		.return_once(move |_| {
 			Ok(vec![Box::new(frame_system::EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: state_chain_runtime::RuntimeEvent::Validator(
-					pallet_cf_validator::Event::NewEpoch(new_epoch),
-				),
+				event: RuntimeEvent::Validator(pallet_cf_validator::Event::NewEpoch(new_epoch)),
 				topics: vec![H256::default()],
 			})])
 		});
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::EthereumInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
 		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -598,10 +549,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::PolkadotInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
 		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -612,26 +560,24 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::BitcoinInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
 		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
 		.once()
 		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: initial_epoch_from_block_btc
-})) 		});
+			Ok(Some(Vault {
+				public_key: Default::default(),
+				active_from_block: initial_epoch_from_block_btc,
+			}))
+		});
 
 	state_chain_client
-	.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-		state_chain_runtime::Runtime,
-	>>()
-	.with(eq(new_epoch_block_header_hash))
-	.once()
-	.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
+		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
+		.with(eq(new_epoch_block_header_hash))
+		.once()
+		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
-	state_chain_client.
-expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
+	state_chain_client
+		.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(5), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _, _| Ok(Some(1)));
@@ -680,21 +626,18 @@ async fn not_historical_to_authority_on_new_epoch() {
 		|| account_id
 	});
 
-	state_chain_client.
-expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client
+		.expect_storage_map_entry::<HistoricalActiveEpochs<Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _| Ok(vec![]));
 	state_chain_client
-		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<CurrentEpoch<Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(move |_| Ok(initial_epoch));
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::EthereumInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
 		.with(eq(initial_block_hash), eq(initial_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -705,10 +648,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::PolkadotInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
 		.with(eq(initial_block_hash), eq(initial_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -716,18 +656,13 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-			state_chain_runtime::Runtime,
-		>>()
+		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::BitcoinInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
 		.with(eq(initial_block_hash), eq(initial_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -748,29 +683,24 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 				)| StreamCache { block_hash: *block_hash, block_number: block_header.number },
 			);
 	state_chain_client
-		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<frame_system::Events<Runtime>>()
 		.with(eq(empty_block_header.hash()))
 		.once()
 		.return_once(move |_| Ok(vec![]));
 	state_chain_client
-		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<frame_system::Events<Runtime>>()
 		.with(eq(new_epoch_block_header_hash))
 		.once()
 		.return_once(move |_| {
 			Ok(vec![Box::new(frame_system::EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: state_chain_runtime::RuntimeEvent::Validator(
-					pallet_cf_validator::Event::NewEpoch(new_epoch),
-				),
+				event: RuntimeEvent::Validator(pallet_cf_validator::Event::NewEpoch(new_epoch)),
 				topics: vec![H256::default()],
 			})])
 		});
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::EthereumInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
 		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -781,10 +711,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::PolkadotInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
 		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -792,26 +719,21 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-			state_chain_runtime::Runtime,
-		>>()
+		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
 		.with(eq(new_epoch_block_header_hash))
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::BitcoinInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
 		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
 		.once()
 		.return_once(move |_, _| {
 			Ok(Some(Vault { public_key: Default::default(), active_from_block: 120 }))
 		});
 
-	state_chain_client.
-expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
+	state_chain_client
+		.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(new_epoch), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _, _| Ok(Some(1)));
@@ -860,21 +782,18 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 		|| account_id
 	});
 
-	state_chain_client.
-expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client
+		.expect_storage_map_entry::<HistoricalActiveEpochs<Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _| Ok(vec![initial_epoch]));
 	state_chain_client
-		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<CurrentEpoch<Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(move |_| Ok(initial_epoch));
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::EthereumInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
 		.with(eq(initial_block_hash), eq(3))
 		.once()
 		.return_once(move |_, _| {
@@ -885,10 +804,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::PolkadotInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
 		.with(eq(initial_block_hash), eq(initial_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -896,18 +812,13 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-			state_chain_runtime::Runtime,
-		>>()
+		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::BitcoinInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
 		.with(eq(initial_block_hash), eq(initial_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -929,29 +840,24 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 			);
 
 	state_chain_client
-		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<frame_system::Events<Runtime>>()
 		.with(eq(empty_block_header.hash()))
 		.once()
 		.return_once(move |_| Ok(vec![]));
 	state_chain_client
-		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<frame_system::Events<Runtime>>()
 		.with(eq(new_epoch_block_header_hash))
 		.once()
 		.return_once(move |_| {
 			Ok(vec![Box::new(frame_system::EventRecord {
 				phase: Phase::ApplyExtrinsic(0),
-				event: state_chain_runtime::RuntimeEvent::Validator(
-					pallet_cf_validator::Event::NewEpoch(new_epoch),
-				),
+				event: RuntimeEvent::Validator(pallet_cf_validator::Event::NewEpoch(new_epoch)),
 				topics: vec![H256::default()],
 			})])
 		});
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::EthereumInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
 		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -962,10 +868,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::PolkadotInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
 		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -973,26 +876,21 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-			.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-				state_chain_runtime::Runtime,
-			>>()
-			.with(eq(new_epoch_block_header_hash))
-			.once()
-			.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
+		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
+		.with(eq(new_epoch_block_header_hash))
+		.once()
+		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	state_chain_client
-			.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-				state_chain_runtime::Runtime,
-				state_chain_runtime::BitcoinInstance,
-			>>()
-			.with(eq(new_epoch_block_header_hash), eq(new_epoch))
-			.once()
-			.return_once(move |_, _| {
-				Ok(Some(Vault { public_key: Default::default(), active_from_block: 120 }))
-			});
+		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
+		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
+		.once()
+		.return_once(move |_, _| {
+			Ok(Some(Vault { public_key: Default::default(), active_from_block: 120 }))
+		});
 
-	state_chain_client.
-expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<state_chain_runtime::Runtime>>()
+	state_chain_client
+		.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<Runtime>>()
 		.with(eq(new_epoch_block_header_hash), eq(4), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _, _| Ok(None));
@@ -1042,21 +940,18 @@ async fn only_encodes_and_signs_when_specified() {
 	let initial_epoch = 3;
 	let initial_epoch_from_block_eth = 30;
 
-	state_chain_client.
-expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_chain_runtime::Runtime>>()
+	state_chain_client
+		.expect_storage_map_entry::<HistoricalActiveEpochs<Runtime>>()
 		.with(eq(initial_block_hash), eq(account_id.clone()))
 		.once()
 		.return_once(move |_, _| Ok(vec![initial_epoch]));
 	state_chain_client
-		.expect_storage_value::<pallet_cf_validator::CurrentEpoch<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<CurrentEpoch<Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(move |_| Ok(initial_epoch));
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::EthereumInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
 		.with(eq(initial_block_hash), eq(initial_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -1067,10 +962,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::PolkadotInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, PolkadotInstance>>()
 		.with(eq(initial_block_hash), eq(initial_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -1078,18 +970,13 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		});
 
 	state_chain_client
-		.expect_storage_value::<pallet_cf_environment::PolkadotVaultAccountId<
-			state_chain_runtime::Runtime,
-		>>()
+		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	state_chain_client
-		.expect_storage_map_entry::<pallet_cf_vaults::Vaults<
-			state_chain_runtime::Runtime,
-			state_chain_runtime::BitcoinInstance,
-		>>()
+		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
 		.with(eq(initial_block_hash), eq(initial_epoch))
 		.once()
 		.return_once(move |_, _| {
@@ -1108,14 +995,14 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 		);
 
 	state_chain_client
-		.expect_storage_value::<frame_system::Events<state_chain_runtime::Runtime>>()
+		.expect_storage_value::<frame_system::Events<Runtime>>()
 		.with(eq(block_header.hash()))
 		.once()
 		.return_once(move |_| {
 			Ok(vec![
 				Box::new(frame_system::EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: state_chain_runtime::RuntimeEvent::EthereumBroadcaster(
+					event: RuntimeEvent::EthereumBroadcaster(
 						pallet_cf_broadcast::Event::TransactionBroadcastRequest {
 							broadcast_attempt_id: BroadcastAttemptId::default(),
 							nominee: account_id,
@@ -1127,7 +1014,7 @@ expect_storage_map_entry::<pallet_cf_validator::HistoricalActiveEpochs<state_cha
 				}),
 				Box::new(frame_system::EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: state_chain_runtime::RuntimeEvent::EthereumBroadcaster(
+					event: RuntimeEvent::EthereumBroadcaster(
 						pallet_cf_broadcast::Event::TransactionBroadcastRequest {
 							broadcast_attempt_id: BroadcastAttemptId::default(),
 							nominee: AccountId32::new([1; 32]), // NOT OUR ACCOUNT ID
@@ -1169,13 +1056,13 @@ async fn should_handle_signing_request<C, I>()
 where
 	C: CryptoScheme + Send + Sync,
 	I: 'static + Send + Sync,
-	state_chain_runtime::Runtime: pallet_cf_threshold_signature::Config<I>,
-	state_chain_runtime::RuntimeCall:
-		std::convert::From<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>,
-	<<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain as
+	Runtime: pallet_cf_threshold_signature::Config<I>,
+	RuntimeCall:
+		std::convert::From<pallet_cf_threshold_signature::Call<Runtime, I>>,
+	<<Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain as
 ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signature>,
 	Vec<C::Signature>: SignatureToThresholdSignature<
-		<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain
+		<Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain
 	>,
 {
 	let key_id = KeyId::new(1, [0u8; 32]);
@@ -1197,7 +1084,7 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 	let ceremony_id_1 = 1;
 	multisig_client
 		.expect_update_latest_ceremony_id()
-		.with(predicate::eq(ceremony_id_1))
+		.with(eq(ceremony_id_1))
 		.once()
 		.returning(|_| ());
 
@@ -1206,9 +1093,9 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 	multisig_client
 		.expect_initiate_signing()
 		.with(
-			predicate::eq(ceremony_id_2),
-			predicate::eq(BTreeSet::from_iter([our_account_id.clone()])),
-			predicate::eq(vec![(key_id.clone(), payload.clone())]),
+			eq(ceremony_id_2),
+			eq(BTreeSet::from_iter([our_account_id.clone()])),
+			eq(vec![(key_id.clone(), payload.clone())]),
 		)
 		.once()
 		.return_once(|_, _, _| {
@@ -1218,12 +1105,9 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 			)))
 			.boxed()
 		});
-	state_chain_client.
-		expect_submit_signed_extrinsic::<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>()
-		.with(predicate::eq(pallet_cf_threshold_signature::Call::<
-			state_chain_runtime::Runtime,
-			I,
-		>::report_signature_failed {
+	state_chain_client
+		.expect_submit_signed_extrinsic::<pallet_cf_threshold_signature::Call<Runtime, I>>()
+		.with(eq(pallet_cf_threshold_signature::Call::<Runtime, I>::report_signature_failed {
 			ceremony_id: ceremony_id_2,
 			offenders: BTreeSet::default(),
 		}))
@@ -1237,23 +1121,20 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 	multisig_client
 		.expect_initiate_signing()
 		.with(
-			predicate::eq(ceremony_id_3),
-			predicate::eq(BTreeSet::from_iter([our_account_id.clone()])),
-			predicate::eq(vec![(key_id.clone(), payload.clone())]),
+			eq(ceremony_id_3),
+			eq(BTreeSet::from_iter([our_account_id.clone()])),
+			eq(vec![(key_id.clone(), payload.clone())]),
 		)
 		.once()
 		.return_once(move |_, _, _| futures::future::ready(Ok(signatures_clone)).boxed());
-	state_chain_client.expect_submit_unsigned_extrinsic().with(
-		predicate::eq(pallet_cf_threshold_signature::Call::<
-			state_chain_runtime::Runtime,
-			I,
-		>::signature_success {
+	state_chain_client
+		.expect_submit_unsigned_extrinsic()
+		.with(eq(pallet_cf_threshold_signature::Call::<Runtime, I>::signature_success {
 			ceremony_id: ceremony_id_3,
 			signature: signatures.to_threshold_signature(),
-		})
-	).once().return_once(
-		|_: pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>| H256::default(),
-	);
+		}))
+		.once()
+		.return_once(|_: pallet_cf_threshold_signature::Call<Runtime, I>| H256::default());
 
 	let state_chain_client = Arc::new(state_chain_client);
 	task_scope(|scope| {
@@ -1313,7 +1194,7 @@ mod dot_signing {
 	use multisig::polkadot::PolkadotSigning;
 
 	use super::*;
-	use state_chain_runtime::PolkadotInstance;
+	use PolkadotInstance;
 
 	#[tokio::test]
 	async fn should_handle_signing_request_dot() {
@@ -1323,13 +1204,10 @@ mod dot_signing {
 
 async fn should_handle_keygen_request<C, I>()
 where
-	C: CryptoScheme<Chain = <state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain>
-		+ Send
-		+ Sync,
+	C: CryptoScheme<Chain = <Runtime as pallet_cf_vaults::Config<I>>::Chain> + Send + Sync,
 	I: CryptoCompat<C, C::Chain> + 'static + Send + Sync,
-	state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
-	state_chain_runtime::RuntimeCall:
-		std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>,
+	Runtime: pallet_cf_vaults::Config<I>,
+	RuntimeCall: std::convert::From<pallet_cf_vaults::Call<Runtime, I>>,
 {
 	let first_ceremony_id = 1;
 	let our_account_id = AccountId32::new([0; 32]);
@@ -1342,7 +1220,7 @@ where
 		.times(2)
 		.return_const(our_account_id.clone());
 	state_chain_client
-		.expect_submit_signed_extrinsic::<pallet_cf_vaults::Call<state_chain_runtime::Runtime, I>>()
+		.expect_submit_signed_extrinsic::<pallet_cf_vaults::Call<Runtime, I>>()
 		.once()
 		.return_once(|_| (H256::default(), extrinsic_api::signed::MockUntilFinalized::new()));
 	let state_chain_client = Arc::new(state_chain_client);
@@ -1350,7 +1228,7 @@ where
 	let mut multisig_client = MockMultisigClientApi::<C>::new();
 	multisig_client
 		.expect_update_latest_ceremony_id()
-		.with(predicate::eq(first_ceremony_id))
+		.with(eq(first_ceremony_id))
 		.once()
 		.return_once(|_| ());
 
@@ -1360,9 +1238,9 @@ where
 	multisig_client
 		.expect_initiate_keygen()
 		.with(
-			predicate::eq(next_ceremony_id),
-			predicate::eq(GENESIS_EPOCH),
-			predicate::eq(BTreeSet::from_iter([our_account_id.clone()])),
+			eq(next_ceremony_id),
+			eq(GENESIS_EPOCH),
+			eq(BTreeSet::from_iter([our_account_id.clone()])),
 		)
 		.once()
 		.return_once(|_, _, _| {
@@ -1410,7 +1288,7 @@ mod dot_keygen {
 	use multisig::polkadot::PolkadotSigning;
 
 	use super::*;
-	use state_chain_runtime::PolkadotInstance;
+	use PolkadotInstance;
 	#[tokio::test]
 	async fn should_handle_keygen_request_dot() {
 		should_handle_keygen_request::<PolkadotSigning, PolkadotInstance>().await;
