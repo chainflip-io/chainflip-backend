@@ -12,8 +12,8 @@ use crate::witness::{
 };
 
 use super::{
-	aliases, lag_safety::LagSafety, map::Then, shared::SharedSource,
-	strictly_monotonic::StrictlyMonotonic, ChainSource, Header,
+	aliases, lag_safety::LagSafety, shared::SharedSource, strictly_monotonic::StrictlyMonotonic,
+	then::Then, ChainSource, Header,
 };
 
 #[async_trait::async_trait]
