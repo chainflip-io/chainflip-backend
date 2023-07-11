@@ -1,0 +1,34 @@
+name: Post build checks
+
+on: push
+
+permissions:
+  packages: read
+  contents: read
+
+jobs:
+  bouncer:
+    runs-on: [hetzner]
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20-ubuntu-20.04"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    steps:
+      - name: Checkout chainflip-backend
+        uses: actions/checkout@v3
+
+      - name: Start a localnet
+        run: |
+          cp -R $LOCALNET_INIT_DIR/keyshare/1-node /tmp/chainflip/
+          cp -R $LOCALNET_INIT_DIR/data/ /tmp/chainflip/data
+          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up -d
+
+      - name: Clean Up docker containers 🧹
+        if: always()
+        continue-on-error: true
+        run: |
+          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
+          rm -rf /tmp/chainflip
+
