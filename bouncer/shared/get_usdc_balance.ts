@@ -1,7 +1,6 @@
 import Web3 from "web3";
 import { getEthContractAddress } from "./utils";
-import { erc20abi } from "./eth_abis";
-
+import erc20abi from '../../eth-contract-abis/IERC20.json';
 
 export async function getUsdcBalance(ethereumAddress: string): Promise<string> {
 
