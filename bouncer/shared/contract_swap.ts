@@ -25,7 +25,7 @@ export async function executeContractSwap(srcAsset: Asset, destAsset: Asset, des
             // an amount larger than existential (e.g. on Polkadot):
             amount: srcAsset==='USDC' ? '500000000' : '1000000000000000000',
             destAddress,
-            ...srcAsset!=='ETH' ? {srcAsset: srcAsset} : {},
+            ...srcAsset!=='ETH' ? {srcAsset} : {},
         } as ExecuteSwapParams,
         {
             signer: wallet,
@@ -68,19 +68,18 @@ export async function performSwapViaContract(sourceAsset: Asset, destAsset: Asse
     }
 }
 
-export async function approveTokenVault(srcAsset: Asset, amount: string) {
+export async function approveTokenVault(srcAsset: 'FLIP' | 'USDC', amount: string) {
     const wallet = Wallet.fromMnemonic(
         process.env.ETH_USDC_WHALE_MNEMONIC ??
         'test test test test test test test test test test test junk',
     ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
 
-    let nonce = await getNextEthNonce();
-
+    const nonce = await getNextEthNonce();
     return approveVault(
         {
-            amount: amount,
-            srcAsset: srcAsset,
-        } as ExecuteSwapParams,
+            amount,
+            srcAsset,
+        },
         {
             signer: wallet,
             nonce,
