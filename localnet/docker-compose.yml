@@ -1,33 +1,54 @@
-version: "3.8"
-
+version: "3.9"
 services:
-  geth:
-    image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-rc17-1-node
-    pull_policy: always
-    stop_grace_period: 5s
-    stop_signal: SIGINT
-    container_name: geth
-    platform: linux/amd64
-    restart: unless-stopped
+  redis:
+    image: redis:6.2.6
     ports:
-      - 30303:30303
-      - 30303:30303/udp
-      - 8545:8545
-      - 8546:8546
-      - 8551:8551
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl",
-          "-H 'Content-Type: application/json'",
-          "--data '{\"jsonrpc\":\"2.0\",\"method\":\"net_version\",\"params\":[],\"id\":67}'",
-          "http://localhost:8545"
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - "/tmp/chainflip/data/redis/data:/data"
+
+  geth:
+    image: ghcr.io/chainflip-io/nitro-testnode/geth:perseverance-rc17-1-node
+    platform: linux/amd64
+    ports:
+      - "127.0.0.1:8545:8545"
+      - "127.0.0.1:8551:8551"
+      - "127.0.0.1:8546:8546"
+      - "127.0.0.1:30303:30303"
+    volumes:
+      - "/tmp/chainflip/data/l1data/datadir:/datadir"
+      - "/tmp/chainflip/data/l1keystore/keystore:/keystore"
+      - "/tmp/chainflip/data/config/config:/config"
+
+  sequencer:
+    pid: host # allow debugging
+    image: ghcr.io/chainflip-io/nitro-testnode/testnode-sequencer:latest
+    ports:
+      - "127.0.0.1:8547:8547"
+      - "127.0.0.1:8548:8548"
+      - "127.0.0.1:9642:9642"
+    volumes:
+      - "/tmp/chainflip/data/seqdata/home/user/.arbirtum/local/nitro:/home/user/.arbitrum/local/nitro"
+      - "/tmp/chainflip/data/config/config:/config"
+    command: --conf.file /config/sequencer_config.json --node.feed.output.enable --node.feed.output.port 9642  --http.api net,web3,eth,txpool,debug --node.seq-coordinator.my-url  ws://sequencer:8548 --graphql.enable --graphql.vhosts * --graphql.corsdomain *
+    depends_on:
+      - geth
+      - redis
+
+  staker-unsafe:
+    pid: host # allow debugging
+    image: ghcr.io/chainflip-io/nitro-testnode/testnode-staker:latest
+    ports:
+      - "127.0.0.1:8047:8547"
+      - "127.0.0.1:8048:8548"
+    volumes:
+      - "/tmp/chainflip/data/unsafestaker-data/home/user/.arbitrum/local/nitro:/home/user/.arbitrum/local/nitro"
+      - "/tmp/chainflip/data/l1keystore/home/user/l1keystore:/home/user/l1keystore"
+      - "/tmp/chainflip/data/config/config:/config"
+    command: --conf.file /config/unsafe_staker_config.json
+    depends_on:
+      - sequencer
+      - redis
 
   polkadot:
     container_name: polkadot

@@ -24,37 +24,6 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
-    env:
-      POLKADOT_ENDPOINT: ws://polkadot:9944
-      BTC_ENDPOINT: http://bitcoin:8332
-      ETH_ENDPOINT: http://geth:8545
-    services:
-      bitcoin:
-        credentials:
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-        image: ghcr.io/chainflip-io/chainflip-bitcoin-regtest:v24.0.1
-        ports:
-          - 8332:8332
-      polkadot:
-        credentials:
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-        image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v0.9.36-ci
-        ports:
-          - 9934:9933
-          - 9945:9944
-      geth:
-        credentials:
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-        image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-rc17-1-node
-        ports:
-          - 30303:30303
-          - 30303:30303/udp
-          - 8545:8545
-          - 8546:8546
-          - 8551:8551
     steps:
       - name: Checkout chainflip-backend
         uses: actions/checkout@v3
@@ -146,6 +115,13 @@ jobs:
           name: localnet-logs
           path: |
             /tmp/chainflip/chainflip-*.log
+
+      - name: Clean Up docker containers 🧹
+        if: always()
+        continue-on-error: true
+        run: |
+          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
+          rm -rf /tmp/chainflip
 
       - name: Notify on failed bouncer
         if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'
