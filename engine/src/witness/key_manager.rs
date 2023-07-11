@@ -6,17 +6,14 @@ use cf_chains::{
 };
 use ethers::{
 	abi::ethereum_types::BloomInput,
-	types::{Bloom, Log},
+	types::{Bloom, Log, TransactionReceipt},
 };
 use sp_core::{H160, H256, U256};
 use state_chain_runtime::EthereumInstance;
 use tracing::{info, trace};
 
 use crate::{
-	eth::{
-		key_manager::*,
-		retry_rpc::{EthersRetryRpcApi, SafeTransactionReceipt},
-	},
+	eth::{key_manager::*, retry_rpc::EthersRetryRpcApi},
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
 };
 
@@ -72,7 +69,7 @@ pub async fn events_at_block<EventParameters, EthRpcClient>(
 	header: Header<u64, H256, Bloom>,
 	contract_address: H160,
 	eth_rpc: &EthRpcClient,
-) -> Vec<Event<EventParameters>>
+) -> Result<Vec<Event<EventParameters>>>
 where
 	EventParameters: std::fmt::Debug + ethers::contract::EthLogDecode + Send + Sync + 'static,
 	EthRpcClient: EthersRetryRpcApi + ChainClient,
@@ -82,10 +79,17 @@ where
 
 	// if we have logs for this block, fetch them.
 	if header.data.contains_bloom(&contract_bloom) {
-		eth_rpc.events::<EventParameters>(header.hash, contract_address).await
+		eth_rpc
+			.get_logs(header.hash, contract_address)
+			.await
+			.into_iter()
+			.map(|unparsed_log| -> anyhow::Result<Event<EventParameters>> {
+				Event::<EventParameters>::new_from_unparsed_logs(unparsed_log)
+			})
+			.collect::<anyhow::Result<Vec<_>>>()
 	} else {
 		// we know there won't be interesting logs, so don't fetch for events
-		vec![]
+		anyhow::Result::Ok(vec![])
 	}
 }
 
@@ -103,12 +107,13 @@ impl<Inner: ChunkedByVault> Builder<Generic<Inner>> {
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom, Chain = Ethereum>,
 		StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,
 	{
-		self.map(move |epoch, header| {
+		self.map::<Result<Bloom>, _, _>(move |epoch, header| {
 			let state_chain_client = state_chain_client.clone();
 			let eth_rpc = eth_rpc.clone();
 			async move {
 				for event in
-					events_at_block::<KeyManagerEvents, _>(header, contract_address, &eth_rpc).await
+					events_at_block::<KeyManagerEvents, _>(header, contract_address, &eth_rpc)
+						.await?
 				{
 					info!("Handling event: {event}");
 					match event.event_parameters {
@@ -153,9 +158,26 @@ impl<Inner: ChunkedByVault> Builder<Generic<Inner>> {
 							sig_data,
 							..
 						}) => {
-							let SafeTransactionReceipt {
-								gas_used, effective_gas_price, from, ..
-							} = eth_rpc.safe_transaction_receipt(event.tx_hash).await;
+							let TransactionReceipt { gas_used, effective_gas_price, from, .. } =
+								eth_rpc.transaction_receipt(event.tx_hash).await;
+
+							let gas_used = gas_used
+								.ok_or_else(|| {
+									anyhow::anyhow!(
+										"No gas_used on Transaction receipt for tx_hash: {}",
+										event.tx_hash
+									)
+								})?
+								.try_into()
+								.map_err(anyhow::Error::msg)?;
+							let effective_gas_price = effective_gas_price
+								.ok_or_else(|| {
+									anyhow::anyhow!(
+										"No effective_gas_price on Transaction receipt for tx_hash: {}"
+									, event.tx_hash)
+								})?
+								.try_into()
+								.map_err(anyhow::Error::msg)?;
 							state_chain_client
 									.submit_signed_extrinsic(
 										pallet_cf_witnesser::Call::witness_at_epoch {
@@ -198,7 +220,7 @@ impl<Inner: ChunkedByVault> Builder<Generic<Inner>> {
 					}
 				}
 
-				header.data
+				Result::Ok(header.data)
 			}
 		})
 	}

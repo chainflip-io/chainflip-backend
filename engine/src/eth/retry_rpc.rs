@@ -1,14 +1,14 @@
-use ethers::{prelude::*, types::transaction::eip2718::TypedTransaction};
+use ethers::{
+	prelude::*,
+	types::{transaction::eip2718::TypedTransaction, TransactionReceipt},
+};
 
 use utilities::task_scope::Scope;
 
 use crate::{
 	eth::ethers_rpc::EthersRpcApi,
 	rpc_retrier::RpcRetrierClient,
-	witness::{
-		chain_source::{ChainClient, Header},
-		key_manager::Event,
-	},
+	witness::chain_source::{ChainClient, Header},
 };
 use std::time::Duration;
 
@@ -58,17 +58,11 @@ pub trait EthersRetryRpcApi: Send + Sync {
 
 	async fn send_transaction(&self, tx: TransactionRequest) -> TxHash;
 
-	async fn events<
-		EventParameters: std::fmt::Debug + ethers::contract::EthLogDecode + Send + Sync + 'static,
-	>(
-		&self,
-		block_hash: H256,
-		contract_address: H160,
-	) -> Vec<Event<EventParameters>>;
+	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log>;
 
 	async fn chain_id(&self) -> U256;
 
-	async fn safe_transaction_receipt(&self, tx_hash: H256) -> SafeTransactionReceipt;
+	async fn transaction_receipt(&self, tx_hash: H256) -> TransactionReceipt;
 
 	async fn block(&self, block_number: U64) -> Block<H256>;
 
@@ -80,16 +74,6 @@ pub trait EthersRetryRpcApi: Send + Sync {
 		newest_block: BlockNumber,
 		reward_percentiles: Vec<f64>,
 	) -> FeeHistory;
-}
-
-/// Transaction receipt that contains the details we need from the receipt, and does not contain
-/// optional values.
-pub struct SafeTransactionReceipt {
-	pub tx_hash: H256,
-	pub gas_used: u128,
-	pub effective_gas_price: u128,
-	pub from: H160,
-	pub is_success: bool,
 }
 
 #[async_trait::async_trait]
@@ -114,25 +98,14 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 			.await
 	}
 
-	async fn events<
-		EventParameters: std::fmt::Debug + ethers::contract::EthLogDecode + Send + Sync + 'static,
-	>(
-		&self,
-		block_hash: H256,
-		contract_address: H160,
-	) -> Vec<Event<EventParameters>> {
+	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log> {
 		self.rpc_retry_client
 			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move {
 					client
 						.get_logs(Filter::new().address(contract_address).at_block_hash(block_hash))
-						.await?
-						.into_iter()
-						.map(|unparsed_log| -> anyhow::Result<Event<EventParameters>> {
-							Event::<EventParameters>::new_from_unparsed_logs(unparsed_log)
-						})
-						.collect::<anyhow::Result<Vec<_>>>()
+						.await
 				})
 			}))
 			.await
@@ -147,41 +120,11 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 			.await
 	}
 
-	async fn safe_transaction_receipt(&self, tx_hash: H256) -> SafeTransactionReceipt {
+	async fn transaction_receipt(&self, tx_hash: H256) -> TransactionReceipt {
 		self.rpc_retry_client
 			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move {
-					let TransactionReceipt { gas_used, effective_gas_price, from, status, .. } =
-						client.transaction_receipt(tx_hash).await?;
-					let gas_used = gas_used
-						.ok_or_else(|| {
-							anyhow::anyhow!(
-								"No gas_used on Transaction receipt for tx_hash: {tx_hash}"
-							)
-						})?
-						.try_into()
-						.map_err(anyhow::Error::msg)?;
-					let effective_gas_price = effective_gas_price
-						.ok_or_else(|| {
-							anyhow::anyhow!(
-								"No effective_gas_price on Transaction receipt for tx_hash: {tx_hash}"
-							)
-						})?
-						.try_into()
-						.map_err(anyhow::Error::msg)?;
-					let is_success = status
-						.ok_or_else(|| anyhow::anyhow!("No status in receipt"))?
-						.as_u64() == 1;
-
-					Ok(SafeTransactionReceipt {
-						tx_hash,
-						gas_used,
-						effective_gas_price,
-						from,
-						is_success,
-					})
-				})
+				Box::pin(async move { client.transaction_receipt(tx_hash).await })
 			}))
 			.await
 	}
