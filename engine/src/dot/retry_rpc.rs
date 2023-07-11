@@ -17,7 +17,7 @@ use subxt::{
 };
 use utilities::task_scope::Scope;
 
-use crate::rpc_retrier::RpcRetrierClient;
+use crate::retrier::RetrierClient;
 
 use super::{
 	http_rpc::DotHttpRpcClient,
@@ -28,10 +28,10 @@ use crate::dot::rpc::DotRpcApi;
 
 #[derive(Clone)]
 pub struct DotRetryRpcClient {
-	rpc_retry_client: RpcRetrierClient<DotHttpRpcClient>,
+	rpc_retry_client: RetrierClient<DotHttpRpcClient>,
 	// TODO: this will become just the subscription client, once we no longer need the unified
 	// client after we merge the witnessing refactor
-	sub_retry_client: RpcRetrierClient<DotRpcClient>,
+	sub_retry_client: RetrierClient<DotRpcClient>,
 }
 
 const POLKADOT_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
@@ -44,13 +44,13 @@ impl DotRetryRpcClient {
 		dot_sub_client: DotRpcClient,
 	) -> Self {
 		Self {
-			rpc_retry_client: RpcRetrierClient::new(
+			rpc_retry_client: RetrierClient::new(
 				scope,
 				dot_rpc_client,
 				POLKADOT_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
-			sub_retry_client: RpcRetrierClient::new(
+			sub_retry_client: RetrierClient::new(
 				scope,
 				dot_sub_client,
 				POLKADOT_RPC_TIMEOUT,
