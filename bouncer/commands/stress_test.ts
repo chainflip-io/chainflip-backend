@@ -9,7 +9,7 @@
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { runWithTimeout } from '../shared/utils';
+import { runWithTimeout, handleSubstrateError } from '../shared/utils';
 
 async function main(): Promise<void> {
   const cfNodeEndpoint = process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944';
@@ -27,7 +27,7 @@ async function main(): Promise<void> {
   const stressTest = api.tx.ethereumBroadcaster.stressTest(signaturesCount);
   const sudoCall = api.tx.governance.callAsSudo(stressTest);
   const proposal = api.tx.governance.proposeGovernanceExtrinsic(sudoCall);
-  await proposal.signAndSend(snowwhite);
+  await proposal.signAndSend(snowwhite, {nonce: -1}, handleSubstrateError(api));
 
   console.log("Requesting " + signaturesCount + " ETH signatures");
 

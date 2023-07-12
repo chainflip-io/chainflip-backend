@@ -7,7 +7,7 @@
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { runWithTimeout } from '../shared/utils';
+import { runWithTimeout, handleSubstrateError } from '../shared/utils';
 
 async function main(): Promise<void> {
   const cfNodeEndpoint = process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944';
@@ -25,7 +25,7 @@ async function main(): Promise<void> {
   console.log('Forcing rotation');
   await chainflip.tx.governance
     .proposeGovernanceExtrinsic(chainflip.tx.validator.forceRotation())
-    .signAndSend(snowwhite);
+    .signAndSend(snowwhite, {nonce: -1}, handleSubstrateError(chainflip));
 
   process.exit(0);
 }

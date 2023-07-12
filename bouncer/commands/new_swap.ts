@@ -8,13 +8,14 @@
 // Argument 4 is the broker fee in basis points
 // For example: pnpm tsx ./commands/new_swap.ts dot btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX 100
 
-import { Token, runWithTimeout } from '../shared/utils';
+import { runWithTimeout } from '../shared/utils';
+import { Asset } from '@chainflip-io/cli/.';
 import { newSwap } from '../shared/new_swap';
 
 async function newSwapCommand() {
 
-  const sourceToken = process.argv[2].toUpperCase() as Token;
-  const destToken = process.argv[3].toUpperCase() as Token;
+  const sourceToken = process.argv[2].toUpperCase() as Asset;
+  const destToken = process.argv[3].toUpperCase() as Asset;
   const destAddress = process.argv[4];
   const fee = process.argv[5];
 

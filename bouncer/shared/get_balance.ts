@@ -1,17 +1,18 @@
-import { Token } from "./utils";
+import { getEthContractAddress } from "./utils";
 import { getBtcBalance } from "./get_btc_balance";
 import { getDotBalance } from "./get_dot_balance";
 import { getEthBalance } from "./get_eth_balance";
-import { getUsdcBalance } from "./get_usdc_balance";
+import { getErc20Balance } from "./get_erc20_balance";
+import { Asset } from '@chainflip-io/cli';
 
-export type Token = 'USDC' | 'ETH' | 'DOT' | 'FLIP' | 'BTC';
-
-export async function getBalance(token: Token, address: string): Promise<number> {
+export async function getBalance(token: Asset, address: string): Promise<number> {
     address = address.trim();
     let result: any;
     switch (token) {
+        case 'FLIP':
         case 'USDC':
-            result = await getUsdcBalance(address);
+            const contractAddress = getEthContractAddress(token);
+            result = await getErc20Balance(address, contractAddress);
             break;
         case 'ETH':
             result = await getEthBalance(address);

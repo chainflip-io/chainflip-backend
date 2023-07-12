@@ -22,6 +22,7 @@ async function main(): Promise<void> {
   });
 
   console.log('=== Testing expiry of funded LP deposit address ===');
+  const originalExpiryTime = Number(await chainflip.query.liquidityProvider.lpTTL());
   console.log('Setting expiry time for LP addresses to 10 blocks');
   await chainflip.tx.governance
     .proposeGovernanceExtrinsic(chainflip.tx.liquidityProvider.setLpTtl(10))
@@ -42,7 +43,7 @@ async function main(): Promise<void> {
 
   console.log('Funding BTC LP deposit address of ' + ingressAddress + ' with 1 BTC');
   exec(
-    'pnpm tsx ./commands/fund_btc.ts ' + ingressAddress + ' 1',
+    'pnpm tsx ./commands/send_btc.ts ' + ingressAddress + ' 1',
     { timeout: 30000 },
     (err, stdout, stderr) => {
       if (stderr !== '') process.stdout.write(stderr);
@@ -54,9 +55,9 @@ async function main(): Promise<void> {
     },
   );
   await observeEvent('liquidityProvider:LiquidityDepositAddressExpired', chainflip);
-  console.log('Setting expiry time for LP addresses to 100 blocks');
+  console.log('Restoring expiry time for LP addresses to ' + originalExpiryTime + ' blocks');
   await chainflip.tx.governance
-    .proposeGovernanceExtrinsic(chainflip.tx.liquidityProvider.setLpTtl(100))
+    .proposeGovernanceExtrinsic(chainflip.tx.liquidityProvider.setLpTtl(originalExpiryTime))
     .signAndSend(snowwhite, { nonce: -1 });
   await observeEvent('liquidityProvider:LpTtlSet', chainflip);
   console.log('=== Test complete ===');

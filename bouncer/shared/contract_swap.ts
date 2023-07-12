@@ -2,7 +2,7 @@ import { Asset, executeSwap, ExecuteSwapParams, approveVault} from '@chainflip-i
 import { Wallet, getDefaultProvider } from 'ethers';
 import { randomAsHex } from "@polkadot/util-crypto";
 import { chainFromAsset, getAddress, getChainflipApi, observeBalanceIncrease, observeEvent, getEthContractAddress } from '../shared/utils';
-import { getNextEthNonce } from '../shared/fund_eth';
+import { getNextEthNonce } from './send_eth';
 import { getBalance } from './get_balance';
 
 
