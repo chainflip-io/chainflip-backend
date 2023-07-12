@@ -210,7 +210,7 @@ export async function observeEVMEvent(contractAbi: any, address: string, eventNa
       for (let j = 0; j < events.length && !eventWitnessed; j++) {
         for (let k = 0; k < parameterNames.length; k++) {
           // Allow for wildcard matching
-          if (events[j].returnValues[k] != eventParametersExpected[k] && eventParametersExpected[k] != '*') {
+          if (events[j].returnValues[k] !== eventParametersExpected[k] && eventParametersExpected[k] !== '*') {
             break;
           } else if (k === parameterNames.length - 1) {
             eventWitnessed = true;
