@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-use core::fmt::Display;
+#![feature(step_trait)]
+use core::{fmt::Display, iter::Step};
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 pub use address::ForeignChainAddress;
@@ -7,6 +8,7 @@ use cf_primitives::{chains::assets, AssetAmount, EgressId, EthAmount};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
+	traits::Get,
 	Blake2_256, Parameter, RuntimeDebug, StorageHasher,
 };
 use scale_info::TypeInfo;
@@ -44,7 +46,8 @@ pub mod mocks;
 pub trait Chain: Member + Parameter {
 	const NAME: &'static str;
 
-	const KEY_HANDOVER_IS_REQUIRED: bool = false;
+	type KeyHandoverIsRequired: Get<bool>;
+	type OptimisticActivation: Get<bool>;
 
 	type ChainBlockNumber: FullCodec
 		+ Member
@@ -58,7 +61,10 @@ pub trait Chain: Member + Parameter {
 		+ Into<u64>
 		+ MaxEncodedLen
 		+ Display
-		+ CheckedSub;
+		+ CheckedSub
+		+ Unpin
+		+ Step
+		+ BenchmarkValue;
 
 	type ChainAmount: Member
 		+ Parameter
@@ -73,12 +79,7 @@ pub trait Chain: Member + Parameter {
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
-	type TrackedData: Member
-		+ Parameter
-		+ MaxEncodedLen
-		+ Clone
-		+ Age<BlockNumber = Self::ChainBlockNumber>
-		+ BenchmarkValue;
+	type TrackedData: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
 	type ChainAsset: Member
 		+ Parameter
@@ -105,22 +106,6 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValue
 		+ BenchmarkValueExtended
 		+ ChannelIdConstructor<Address = Self::ChainAccount>;
-}
-
-/// Measures the age of items associated with the Chain.
-pub trait Age {
-	type BlockNumber;
-
-	/// The creation block of this item.
-	fn birth_block(&self) -> Self::BlockNumber;
-}
-
-impl Age for () {
-	type BlockNumber = u64;
-
-	fn birth_block(&self) -> Self::BlockNumber {
-		unimplemented!()
-	}
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -239,13 +224,18 @@ pub trait ChainEnvironment<
 	fn lookup(s: LookupKey) -> Option<LookupValue>;
 }
 
+pub enum SetAggKeyWithAggKeyError {
+	Failed,
+	NotRequired,
+}
+
 /// Constructs the `SetAggKeyWithAggKey` api call.
 #[allow(clippy::result_unit_err)]
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		maybe_old_key: Option<<Abi as ChainCrypto>::AggKey>,
 		new_key: <Abi as ChainCrypto>::AggKey,
-	) -> Result<Self, ()>;
+	) -> Result<Self, SetAggKeyWithAggKeyError>;
 }
 
 #[allow(clippy::result_unit_err)]

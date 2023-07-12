@@ -9,6 +9,7 @@ use cf_primitives::{chains::assets, EpochIndex, PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use frame_support::scale_info::TypeInfo;
 use futures::{stream, Stream, StreamExt, TryStreamExt};
+use pallet_cf_chain_tracking::ChainState;
 use pallet_cf_ingress_egress::DepositWitness;
 use sp_core::H256;
 use state_chain_runtime::PolkadotInstance;
@@ -35,7 +36,7 @@ use crate::{
 
 use anyhow::{Context, Result};
 
-use super::rpc::DotRpcApi;
+use super::rpc::{DotRpcApi, DotSubscribeApi};
 
 #[derive(Debug, Clone, Copy)]
 pub struct MiniHeader {
@@ -248,7 +249,7 @@ pub async fn start<StateChainClient, DotRpc>(
 ) -> std::result::Result<(), EpochProcessRunnerError<Polkadot>>
 where
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
-	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
+	DotRpc: DotSubscribeApi + DotRpcApi + 'static + Send + Sync + Clone,
 {
 	start_epoch_process_runner(
 		resume_at,
@@ -317,9 +318,9 @@ where
 				pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(state_chain_runtime::RuntimeCall::PolkadotChainTracking(
 						pallet_cf_chain_tracking::Call::update_chain_state {
-							state: dot::PolkadotTrackedData {
+							new_chain_state: ChainState {
 								block_height: block_number,
-								median_tip,
+								tracked_data: dot::PolkadotTrackedData { median_tip },
 							},
 						},
 					)),
@@ -340,9 +341,9 @@ where
 		if !interesting_indices.is_empty() {
 			info!("We got an interesting block at block: {block_number}, hash: {block_hash:?}");
 
-			let block = self
+			let extrinsics = self
 				.dot_client
-				.block(block_hash)
+				.extrinsics(block_hash)
 				.await
 				.context("Failed fetching block from DOT RPC")?
 				.context(
@@ -351,7 +352,7 @@ where
 
 			signature_monitor.sync_items();
 			for (extrinsic_index, tx_fee) in interesting_indices {
-				let xt = block.extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
+				let xt = extrinsics.get(extrinsic_index as usize).expect("We know this exists since we got this index from the event, from the block we are querying.");
 				let xt_encoded = xt.0.encode();
 				let mut xt_bytes = xt_encoded.as_slice();
 				let unchecked = PolkadotUncheckedExtrinsic::decode(&mut xt_bytes);
@@ -370,7 +371,6 @@ where
 													PolkadotInstance,
 												>::transaction_succeeded {
 													tx_out_id: signature,
-													block_number,
 													signer_id: self.vault_account,
 													tx_fee,
 												}
@@ -419,7 +419,7 @@ impl<StateChainClient, DotRpc> BlockWitnesserGenerator
 	for DotWitnesserGenerator<StateChainClient, DotRpc>
 where
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
-	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
+	DotRpc: DotRpcApi + DotSubscribeApi + 'static + Send + Sync + Clone,
 {
 	type Witnesser = DotBlockWitnesser<StateChainClient, DotRpc>;
 
@@ -445,7 +445,7 @@ where
 		let dot_client_c = self.dot_client.clone();
 		let block_head_stream_from =
 			block_head_stream_from(from_block, safe_head_stream, move |block_number| {
-				let mut dot_client = dot_client_c.clone();
+				let dot_client = dot_client_c.clone();
 				Box::pin(async move {
 					let block_hash = dot_client
 						.block_hash(block_number)
@@ -460,7 +460,7 @@ where
 		// block
 		let dot_client_c = self.dot_client.clone();
 		let block_events_stream = take_while_ok(block_head_stream_from.then(move |mini_header| {
-			let mut dot_client = dot_client_c.clone();
+			let dot_client = dot_client_c.clone();
 			debug!("Fetching Polkadot events for block: {}", mini_header.block_number);
 			// TODO: This will not work if the block we are querying metadata has
 			// different metadata than the latest block since this client fetches

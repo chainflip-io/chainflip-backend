@@ -169,7 +169,7 @@ impl Engine {
 							pallet_cf_funding::Call::funded {
 								account_id: validator_id.clone(),
 								amount: *amount,
-								withdrawal_address: ETH_ZERO_ADDRESS,
+								funder: ETH_ZERO_ADDRESS,
 								tx_hash: TX_HASH,
 							}
 							.into(),
@@ -292,7 +292,7 @@ impl Engine {
 									Box::new(pallet_cf_vaults::Call::<_, BitcoinInstance>::vault_key_rotated {
 										block_number: 100,
 										tx_id: UtxoId {
-											tx_hash: [2u8; 32],
+											tx_id: [2u8; 32],
 											vout: 1,
 										},
 									}.into()),

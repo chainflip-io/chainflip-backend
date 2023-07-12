@@ -103,6 +103,16 @@ impl MockCfe {
 							Error::<Test, Instance1>::InvalidCeremonyId
 						);
 
+						// Can't report a non-candidate
+						assert_noop!(
+							EthereumThresholdSigner::report_signature_failed(
+								RuntimeOrigin::signed(self.id),
+								ceremony_id,
+								bad.iter().cloned().chain([1234]).collect(),
+							),
+							Error::<Test, Instance1>::InvalidBlame
+						);
+
 						// Unsolicited responses are rejected.
 						assert_noop!(
 							EthereumThresholdSigner::report_signature_failed(
@@ -252,7 +262,7 @@ fn keygen_verification_ceremony_calls_callback_on_failure() {
 		.execute_with(|| {
 			const PAYLOAD: &[u8; 4] = b"OHAI";
 			let EpochKey { key, .. } =
-				<Test as crate::Config<_>>::KeyProvider::current_epoch_key().unwrap();
+				<Test as crate::Config<_>>::KeyProvider::active_epoch_key().unwrap();
 			let request_id = EthereumThresholdSigner::request_keygen_verification_signature(
 				*PAYLOAD,
 				NOMINEES.into_iter().collect(),
@@ -532,7 +542,7 @@ mod unsigned_validation {
 				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
 				let ceremony_id = MockCeremonyIdProvider::get();
 				let EpochKey { key: current_key, .. } =
-					<Test as crate::Config<_>>::KeyProvider::current_epoch_key().unwrap();
+					<Test as crate::Config<_>>::KeyProvider::active_epoch_key().unwrap();
 
 				assert!(
 					Test::validate_unsigned(
@@ -542,7 +552,7 @@ mod unsigned_validation {
 					)
 					.is_ok(),
 					"Validation Failed: {:?} / {:?}",
-					<Test as crate::Config<_>>::KeyProvider::current_epoch_key(),
+					<Test as crate::Config<_>>::KeyProvider::active_epoch_key(),
 					current_key
 				);
 			});
@@ -558,11 +568,13 @@ mod unsigned_validation {
 			.build()
 			.execute_with(|| {
 				const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
+				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
 				assert_eq!(
 					Test::validate_unsigned(
 						TransactionSource::External,
 						&PalletCall::signature_success {
-							ceremony_id: 1234,
+							// Incorrect ceremony id
+							ceremony_id: MockCeremonyIdProvider::get() + 1,
 							signature: sign(PAYLOAD)
 						}
 						.into()
@@ -580,16 +592,14 @@ mod unsigned_validation {
 		ExtBuilder::new()
 			.with_authorities(AUTHORITIES)
 			.with_nominees(NOMINEES)
+			.with_request(b"OHAI")
 			.build()
 			.execute_with(|| {
-				const PAYLOAD: <MockEthereum as ChainCrypto>::Payload = *b"OHAI";
-				<EthereumThresholdSigner as ThresholdSigner<_>>::request_signature(PAYLOAD);
-				let ceremony_id = MockCeremonyIdProvider::get();
 				assert_eq!(
 					Test::validate_unsigned(
 						TransactionSource::External,
 						&PalletCall::signature_success {
-							ceremony_id,
+							ceremony_id: MockCeremonyIdProvider::get(),
 							signature: INVALID_SIGNATURE
 						}
 						.into()
@@ -633,7 +643,7 @@ mod failure_reporting {
 			key: MockAggKey(AGG_KEY),
 			remaining_respondents: BTreeSet::from_iter(validator_set),
 			blame_counts: Default::default(),
-			participant_count: 5,
+			candidates: BTreeSet::from_iter(validator_set),
 		}
 	}
 

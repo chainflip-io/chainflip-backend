@@ -20,7 +20,7 @@ use crate::{
 	},
 };
 
-use super::rpc::DotRpcApi;
+use super::rpc::{DotRpcApi, DotSubscribeApi};
 
 // TODO: Pass in the version here?
 pub async fn start<StateChainClient, DotRpc>(
@@ -31,7 +31,7 @@ pub async fn start<StateChainClient, DotRpc>(
 ) -> Result<(), EpochProcessRunnerError<Polkadot>>
 where
 	StateChainClient: SignedExtrinsicApi + StorageApi + 'static + Send + Sync,
-	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
+	DotRpc: DotRpcApi + DotSubscribeApi + 'static + Send + Sync + Clone,
 {
 	// When this witnesser starts up, we should check that the runtime version is up to
 	// date with the chain. This is in case we missed a Polkadot runtime upgrade when
@@ -131,7 +131,7 @@ impl<StateChainClient, DotRpc> EpochProcessGenerator
 	for RuntimeVersionUpdaterGenerator<StateChainClient, DotRpc>
 where
 	StateChainClient: SignedExtrinsicApi + StorageApi + 'static + Send + Sync,
-	DotRpc: DotRpcApi + 'static + Send + Sync + Clone,
+	DotRpc: DotSubscribeApi + 'static + Send + Sync + Clone,
 {
 	type Witnesser = RuntimeVersionUpdater<StateChainClient>;
 	async fn init(

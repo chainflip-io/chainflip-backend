@@ -7,7 +7,7 @@ use crate::mock_runtime::{
 
 use super::*;
 use cf_primitives::AccountRole;
-use cf_traits::{EpochInfo, Funding, QualifyNode};
+use cf_traits::{AccountInfo, EpochInfo, QualifyNode};
 use state_chain_runtime::{BitcoinVault, EthereumVault, PolkadotVault};
 pub const GENESIS_BALANCE: FlipBalance = TOTAL_ISSUANCE / 100;
 
@@ -33,7 +33,7 @@ fn state_of_genesis_is_as_expected() {
 		let accounts = [AccountId::from(CHARLIE), AccountId::from(BOB), AccountId::from(ALICE)];
 
 		for account in accounts.iter() {
-			assert_eq!(Flip::account_balance(account), GENESIS_BALANCE,);
+			assert_eq!(<Flip as AccountInfo<_>>::balance(account), GENESIS_BALANCE,);
 		}
 
 		assert_eq!(Validator::bond(), GENESIS_BALANCE);

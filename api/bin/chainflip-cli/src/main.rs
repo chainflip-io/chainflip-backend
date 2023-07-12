@@ -1,5 +1,5 @@
 #![feature(absolute_path)]
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use serde::Serialize;
 use settings::GenerateKeysOutputType;
@@ -13,6 +13,7 @@ use api::{
 	primitives::{AccountRole, Asset, Hash, RedemptionAmount},
 	AccountId32, KeyPair,
 };
+use cf_chains::ForeignChain;
 use chainflip_api as api;
 use utilities::clean_eth_address;
 
@@ -40,7 +41,10 @@ async fn run_cli() -> Result<()> {
 		return generate_keys(output_type)
 	}
 
-	let cli_settings = CLISettings::new(command_line_opts.clone()).map_err(|err| anyhow!("Please ensure your config file path is configured correctly and the file is valid. You can also just set all configurations required command line arguments.\n{}", err))?;
+	let cli_settings = CLISettings::new(command_line_opts.clone()).context(
+		r#"Please ensure your config file path is configured correctly and the file is valid.
+			You can also just set all configurations required as command line arguments."#,
+	)?;
 
 	println!(
 		"Connecting to state chain node at: `{}` and using private key located at: `{}`",
@@ -54,6 +58,10 @@ async fn run_cli() -> Result<()> {
 		LiquidityProvider(LiquidityProviderSubcommands::RequestLiquidityDepositAddress {
 			asset,
 		}) => request_liquidity_deposit_address(&cli_settings.state_chain, asset).await,
+		LiquidityProvider(LiquidityProviderSubcommands::RegisterEmergencyWithdrawalAddress {
+			chain,
+			address,
+		}) => register_emergency_withdrawal_address(&cli_settings.state_chain, chain, address).await,
 		Redeem { amount, eth_address } =>
 			request_redemption(amount, &eth_address, &cli_settings).await,
 		RegisterAccountRole { role } => register_account_role(role, &cli_settings).await,
@@ -85,6 +93,18 @@ pub async fn request_swap_deposit_address(
 	.await?;
 	println!("Deposit Address: {address}");
 	println!("Address expires at block {expiry_block}");
+	Ok(())
+}
+
+pub async fn register_emergency_withdrawal_address(
+	state_chain_settings: &settings::StateChain,
+	chain: ForeignChain,
+	address: String,
+) -> Result<()> {
+	let ewa_address = chainflip_api::clean_foreign_chain_address(chain, &address)?;
+	let tx_hash =
+		api::lp::register_emergency_withdrawal_address(state_chain_settings, ewa_address).await?;
+	println!("Emergency Withdrawal Address registered. Tx hash: {tx_hash}");
 	Ok(())
 }
 
@@ -141,9 +161,8 @@ async fn request_redemption(
 	settings: &CLISettings,
 ) -> Result<()> {
 	// Sanitise data
-
-	let eth_address = clean_eth_address(eth_address)
-		.map_err(|error| anyhow!("You supplied an invalid ETH address: {}", error))
+	let eth_address: [u8; 20] = clean_eth_address(eth_address)
+		.context("Invalid ETH address supplied")
 		.and_then(|eth_address|
 			if eth_address == [0; 20] {
 				Err(anyhow!("Cannot submit redemption to the zero address. If you really want to do this, use 0x000000000000000000000000000000000000dead instead."))

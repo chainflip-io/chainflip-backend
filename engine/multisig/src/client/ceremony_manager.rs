@@ -307,7 +307,7 @@ fn map_ceremony_parties(
 	// Check that signer ids are known for this key
 	let signer_idxs = validator_mapping
 		.get_all_idxs(participants)
-		.map_err(|_| "invalid participants")?;
+		.map_err(|()| "Failed to map ceremony parties: invalid participants")?;
 
 	Ok((our_idx, signer_idxs))
 }
@@ -634,9 +634,9 @@ impl<C: CryptoScheme> CeremonyManager<C> {
 
 /// Create unique deterministic context used for generating a ZKP to prevent replay attacks
 fn generate_keygen_context(ceremony_id: CeremonyId, signers: BTreeSet<AccountId>) -> HashContext {
-	use sha2::{Digest, Sha256};
+	use blake2::{Blake2b, Digest};
 
-	let mut hasher = Sha256::new();
+	let mut hasher = Blake2b::<typenum::U32>::new();
 
 	hasher.update(ceremony_id.to_be_bytes());
 

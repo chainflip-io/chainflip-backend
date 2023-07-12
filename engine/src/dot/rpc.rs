@@ -5,36 +5,44 @@ use async_trait::async_trait;
 use cf_chains::dot::{PolkadotHash, RuntimeVersion};
 use cf_primitives::PolkadotBlockNumber;
 use futures::{Stream, StreamExt, TryStreamExt};
+use std::sync::Arc;
 use subxt::{
 	events::{Events, EventsClient},
-	rpc::types::{Bytes, ChainBlock},
+	rpc::types::{Bytes, ChainBlockExtrinsic},
 	rpc_params, Config, OnlineClient, PolkadotConfig,
 };
+use tokio::sync::RwLock;
 
 use anyhow::{anyhow, Result};
 
 #[cfg(test)]
 use mockall::automock;
 
-type PolkadotHeader = <PolkadotConfig as Config>::Header;
+pub type PolkadotHeader = <PolkadotConfig as Config>::Header;
 
 #[derive(Clone)]
 pub struct DotRpcClient {
-	online_client: OnlineClient<PolkadotConfig>,
+	online_client: Arc<RwLock<OnlineClient<PolkadotConfig>>>,
 	polkadot_network_ws_url: String,
 }
 
 macro_rules! refresh_connection_on_error {
     ($self:expr, $namespace:ident, $method:ident $(, $arg:expr)*) => {{
-		match $self.online_client.$namespace().$method($($arg,)*).await {
+		// This is pulled out into a block to avoid a deadlock. Inlining this means that the guard, here as a temporary
+		// will be dropped after the match, and so we will wait at the write lock.
+		let result = { $self.online_client.read().await.$namespace().$method($($arg,)*).await };
+		match result {
 			Err(e) => {
 				tracing::warn!(
 					"Initial {} query failed with error: {e}, refreshing client and retrying", stringify!($method)
 				);
-				$self.refresh_client()
-					.await
-					.map_err(|e| anyhow!("Failed to refresh client: {e}"))?;
-				$self.online_client.$namespace().$method($($arg,)*).await.map_err(|e| anyhow!("Failed to query {} Polkadot with error: {e}", stringify!($method)))
+
+				let new_client =
+					OnlineClient::<PolkadotConfig>::from_url(&$self.polkadot_network_ws_url).await?;
+				let result = new_client.$namespace().$method($($arg,)*).await.map_err(|e| anyhow!("Failed to query {} Polkadot with error: {e}", stringify!($method)));
+				let mut online_client_guard = $self.online_client.write().await;
+				*online_client_guard = new_client;
+				result
 			},
 			Ok(ok) => Ok(ok),
 		}
@@ -43,57 +51,116 @@ macro_rules! refresh_connection_on_error {
 
 impl DotRpcClient {
 	pub async fn new(polkadot_network_ws_url: &str) -> Result<Self> {
-		let online_client =
-			OnlineClient::<PolkadotConfig>::from_url(polkadot_network_ws_url).await?;
+		let online_client = Arc::new(RwLock::new(
+			OnlineClient::<PolkadotConfig>::from_url(polkadot_network_ws_url).await?,
+		));
 		Ok(Self { online_client, polkadot_network_ws_url: polkadot_network_ws_url.to_string() })
 	}
 
-	pub async fn refresh_client(&mut self) -> Result<()> {
-		self.online_client =
-			OnlineClient::<PolkadotConfig>::from_url(&self.polkadot_network_ws_url).await?;
-		Ok(())
-	}
-
-	async fn metadata(&mut self, block_hash: PolkadotHash) -> Result<subxt::Metadata> {
+	async fn metadata(&self, block_hash: PolkadotHash) -> Result<subxt::Metadata> {
 		refresh_connection_on_error!(self, rpc, metadata, Some(block_hash))
 	}
 }
 
-#[cfg_attr(test, automock)]
+/// This trait defines any subscription interfaces to Polkadot.
 #[async_trait]
-pub trait DotRpcApi: Send + Sync {
-	async fn block_hash(
-		&mut self,
-		block_number: PolkadotBlockNumber,
-	) -> Result<Option<PolkadotHash>>;
-
-	async fn block(
-		&mut self,
-		block_hash: PolkadotHash,
-	) -> Result<Option<ChainBlock<PolkadotConfig>>>;
-
-	async fn events(&mut self, block_hash: PolkadotHash) -> Result<Events<PolkadotConfig>>;
-
-	async fn current_runtime_version(&mut self) -> Result<RuntimeVersion>;
-
+pub trait DotSubscribeApi: Send + Sync {
 	async fn subscribe_finalized_heads(
-		&mut self,
+		&self,
 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>>;
 
 	async fn subscribe_runtime_version(
-		&mut self,
+		&self,
 	) -> Result<Pin<Box<dyn Stream<Item = RuntimeVersion> + Send>>>;
+}
 
-	async fn submit_raw_encoded_extrinsic(
-		&mut self,
-		encoded_bytes: Vec<u8>,
-	) -> Result<PolkadotHash>;
+/// The trait that defines the stateless / non-subscription requests to Polkadot.
+#[cfg_attr(test, automock)]
+#[async_trait]
+pub trait DotRpcApi: Send + Sync {
+	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Result<Option<PolkadotHash>>;
+
+	async fn extrinsics(
+		&self,
+		block_hash: PolkadotHash,
+	) -> Result<Option<Vec<ChainBlockExtrinsic>>>;
+
+	async fn events(&self, block_hash: PolkadotHash) -> Result<Events<PolkadotConfig>>;
+
+	async fn current_runtime_version(&self) -> Result<RuntimeVersion>;
+
+	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash>;
 }
 
 #[async_trait]
 impl DotRpcApi for DotRpcClient {
+	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Result<Option<PolkadotHash>> {
+		refresh_connection_on_error!(self, rpc, block_hash, Some(block_number.into()))
+	}
+
+	async fn current_runtime_version(&self) -> Result<RuntimeVersion> {
+		refresh_connection_on_error!(self, rpc, runtime_version, None).map(|rv| RuntimeVersion {
+			spec_version: rv.spec_version,
+			transaction_version: rv.transaction_version,
+		})
+	}
+
+	async fn extrinsics(
+		&self,
+		block_hash: PolkadotHash,
+	) -> Result<Option<Vec<ChainBlockExtrinsic>>> {
+		refresh_connection_on_error!(self, rpc, block, Some(block_hash))
+			.map(|o| o.map(|b| b.block.extrinsics))
+	}
+
+	async fn events(&self, block_hash: PolkadotHash) -> Result<Events<PolkadotConfig>> {
+		let chain_runtime_version = self.current_runtime_version().await?;
+
+		let client = self.online_client.read().await;
+
+		let client_runtime_version = client.runtime_version();
+
+		// We set the metadata and runtime version we need to decode this block's events.
+		// The metadata from the OnlineClient is used within the EventsClient to decode the
+		// events.
+		if chain_runtime_version.spec_version != client_runtime_version.spec_version ||
+			chain_runtime_version.transaction_version !=
+				client_runtime_version.transaction_version
+		{
+			let new_metadata = self.metadata(block_hash).await?;
+
+			client.set_runtime_version(subxt::rpc::types::RuntimeVersion {
+				spec_version: chain_runtime_version.spec_version,
+				transaction_version: chain_runtime_version.transaction_version,
+				other: Default::default(),
+			});
+			client.set_metadata(new_metadata);
+		}
+
+		// If we've succeeded in getting the current runtime version then we assume
+		// the connection is stable (or has just been refreshed), no need to retry again.
+		EventsClient::new(client.clone())
+			.at(Some(block_hash))
+			.await
+			.map_err(|e| anyhow!("Failed to query events for block {block_hash}, with error: {e}"))
+	}
+
+	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
+		let encoded_bytes: Bytes = encoded_bytes.into();
+		refresh_connection_on_error!(
+			self,
+			rpc,
+			request,
+			"author_submitExtrinsic",
+			rpc_params![encoded_bytes.clone()]
+		)
+	}
+}
+
+#[async_trait]
+impl DotSubscribeApi for DotRpcClient {
 	async fn subscribe_finalized_heads(
-		&mut self,
+		&self,
 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
 		Ok(Box::pin(
 			refresh_connection_on_error!(self, blocks, subscribe_finalized)?
@@ -102,22 +169,8 @@ impl DotRpcApi for DotRpcClient {
 		))
 	}
 
-	async fn block_hash(
-		&mut self,
-		block_number: PolkadotBlockNumber,
-	) -> Result<Option<PolkadotHash>> {
-		refresh_connection_on_error!(self, rpc, block_hash, Some(block_number.into()))
-	}
-
-	async fn current_runtime_version(&mut self) -> Result<RuntimeVersion> {
-		refresh_connection_on_error!(self, rpc, runtime_version, None).map(|rv| RuntimeVersion {
-			spec_version: rv.spec_version,
-			transaction_version: rv.transaction_version,
-		})
-	}
-
 	async fn subscribe_runtime_version(
-		&mut self,
+		&self,
 	) -> Result<Pin<Box<dyn Stream<Item = RuntimeVersion> + Send>>> {
 		safe_runtime_version_stream(
 			self.current_runtime_version().await?,
@@ -133,57 +186,6 @@ impl DotRpcApi for DotRpcClient {
 		)
 		.await
 		.map_err(|e| anyhow!("Failed to subscribe to Polkadot runtime version with error: {e}"))
-	}
-
-	async fn block(
-		&mut self,
-		block_hash: PolkadotHash,
-	) -> Result<Option<ChainBlock<PolkadotConfig>>> {
-		refresh_connection_on_error!(self, rpc, block, Some(block_hash)).map(|o| o.map(|b| b.block))
-	}
-
-	async fn events(&mut self, block_hash: PolkadotHash) -> Result<Events<PolkadotConfig>> {
-		let chain_runtime_version = self.current_runtime_version().await?;
-
-		let client_runtime_version = self.online_client.runtime_version();
-
-		// We set the metadata and runtime version we need to decode this block's events.
-		// The metadata from the OnlineClient is used within the EventsClient to decode the
-		// events.
-		if chain_runtime_version.spec_version != client_runtime_version.spec_version ||
-			chain_runtime_version.transaction_version !=
-				client_runtime_version.transaction_version
-		{
-			let new_metadata = self.metadata(block_hash).await?;
-
-			self.online_client.set_runtime_version(subxt::rpc::types::RuntimeVersion {
-				spec_version: chain_runtime_version.spec_version,
-				transaction_version: chain_runtime_version.transaction_version,
-				other: Default::default(),
-			});
-			self.online_client.set_metadata(new_metadata);
-		}
-
-		// If we've succeeded in getting the current runtime version then we assume
-		// the connection is stable (or has just been refreshed), no need to retry again.
-		EventsClient::new(self.online_client.clone())
-			.at(Some(block_hash))
-			.await
-			.map_err(|e| anyhow!("Failed to query events for block {block_hash}, with error: {e}"))
-	}
-
-	async fn submit_raw_encoded_extrinsic(
-		&mut self,
-		encoded_bytes: Vec<u8>,
-	) -> Result<PolkadotHash> {
-		let encoded_bytes: Bytes = encoded_bytes.into();
-		refresh_connection_on_error!(
-			self,
-			rpc,
-			request,
-			"author_submitExtrinsic",
-			rpc_params![encoded_bytes.clone()]
-		)
 	}
 }
 

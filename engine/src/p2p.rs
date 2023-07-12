@@ -9,11 +9,14 @@ use std::{
 };
 
 use crate::{
+	p2p::core::ed25519_secret_key_to_x25519_secret_key,
 	settings::P2P as P2PSettings,
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
 	},
 };
+
+use self::core::X25519KeyPair;
 
 pub use self::{
 	core::{PeerInfo, PeerUpdate},
@@ -25,12 +28,15 @@ use cf_primitives::AccountId;
 use futures::{Future, FutureExt};
 use multisig::p2p::OutgoingMultisigStageMessages;
 use muxer::P2PMuxer;
-use sp_core::H256;
+use sp_core::{ed25519, H256};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{info_span, Instrument};
 use zeroize::Zeroizing;
 
 use utilities::{read_clean_and_decode_hex_str_file, task_scope::task_scope};
+
+type EdPublicKey = ed25519::Public;
+type XPublicKey = x25519_dalek::PublicKey;
 
 pub struct MultisigMessageSender<C: Chain>(
 	pub UnboundedSender<OutgoingMultisigStageMessages>,
@@ -51,6 +57,31 @@ impl<C: Chain> MultisigMessageReceiver<C> {
 	pub fn new(receiver: UnboundedReceiver<(AccountId, VersionedCeremonyMessage)>) -> Self {
 		MultisigMessageReceiver(receiver, PhantomData)
 	}
+}
+
+struct P2PKey {
+	signing_key: ed25519_dalek::Keypair,
+	encryption_key: X25519KeyPair,
+}
+
+impl P2PKey {
+	fn new(ed25519_secret_key: ed25519_dalek::SecretKey) -> Self {
+		let x_secret_key = ed25519_secret_key_to_x25519_secret_key(&ed25519_secret_key);
+		P2PKey {
+			signing_key: ed25519_dalek::Keypair {
+				public: (&ed25519_secret_key).into(),
+				secret: ed25519_secret_key,
+			},
+			encryption_key: X25519KeyPair {
+				public_key: (&x_secret_key).into(),
+				secret_key: x_secret_key,
+			},
+		}
+	}
+}
+
+fn pk_to_string(pk: &XPublicKey) -> String {
+	hex::encode(pk.as_bytes())
 }
 
 pub async fn start<StateChainClient>(
@@ -79,16 +110,16 @@ where
 	}
 
 	let node_key = {
-		let secret =
+		let ed_secret_key =
 			read_clean_and_decode_hex_str_file(&settings.node_key_file, "Node Key", |str| {
 				ed25519_dalek::SecretKey::from_bytes(
-					&Zeroizing::new(hex::decode(str).map_err(anyhow::Error::new)?)[..],
+					&Zeroizing::new(hex::decode(str).map_err(anyhow::Error::msg)?)[..],
 				)
-				.map_err(anyhow::Error::new)
-			})?;
+				.map_err(anyhow::Error::msg)
+			})
+			.context("Failed to build key from file.")?;
 
-		let public = (&secret).into();
-		ed25519_dalek::Keypair { secret, public }
+		P2PKey::new(ed_secret_key)
 	};
 
 	let current_peers =

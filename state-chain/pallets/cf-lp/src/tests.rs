@@ -1,10 +1,10 @@
-use crate::{mock::*, FreeBalances, LiquidityChannelExpiries, LpTTL};
+use crate::{mock::*, EmergencyWithdrawalAddress, FreeBalances, LiquidityChannelExpiries, LpTTL};
 
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
-	AnyChain,
+	AnyChain, ForeignChainAddress,
 };
-use cf_primitives::{AccountId, Asset};
+use cf_primitives::{AccountId, Asset, ForeignChain};
 
 use cf_test_utilities::assert_events_match;
 use cf_traits::{
@@ -73,6 +73,10 @@ fn liquidity_providers_can_withdraw_asset() {
 fn cannot_deposit_and_withdrawal_during_maintenance() {
 	new_test_ext().execute_with(|| {
 		FreeBalances::<Test>::insert(AccountId::from(LP_ACCOUNT), Asset::Eth, 1_000);
+		assert_ok!(LiquidityProvider::register_emergency_withdrawal_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			EncodedAddress::Eth(Default::default()),
+		));
 
 		// Activate maintenance mode
 		MockSystemStateInfo::set_maintenance(true);
@@ -120,6 +124,10 @@ fn cannot_deposit_and_withdrawal_during_maintenance() {
 #[test]
 fn deposit_channel_expires() {
 	new_test_ext().execute_with(|| {
+		assert_ok!(LiquidityProvider::register_emergency_withdrawal_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			EncodedAddress::Eth(Default::default()),
+		));
 		// Expiry = current (1) + ttl
 		let expiry = LpTTL::<Test>::get() + 1;
 		let asset = Asset::Eth;
@@ -176,5 +184,110 @@ fn can_set_lp_ttl() {
 		assert_eq!(LpTTL::<Test>::get(), 1_200);
 		assert_ok!(LiquidityProvider::set_lp_ttl(RuntimeOrigin::root(), 10));
 		assert_eq!(LpTTL::<Test>::get(), 10);
+	});
+}
+
+#[test]
+fn can_register_and_deregister_emergency_withdrawal_address() {
+	new_test_ext().execute_with(|| {
+		let account_id = AccountId::from(LP_ACCOUNT);
+		let encoded_address = EncodedAddress::Eth([0x01; 20]);
+		let decoded_address = ForeignChainAddress::Eth([0x01; 20]);
+		assert!(
+			EmergencyWithdrawalAddress::<Test>::get(&account_id, ForeignChain::Ethereum).is_none()
+		);
+
+		// Can register EWA
+		assert_ok!(LiquidityProvider::register_emergency_withdrawal_address(
+			RuntimeOrigin::signed(account_id.clone()),
+			encoded_address
+		));
+		assert_eq!(
+			EmergencyWithdrawalAddress::<Test>::get(&account_id, ForeignChain::Ethereum),
+			Some(decoded_address.clone())
+		);
+		// Other chain should be unaffected.
+		assert!(
+			EmergencyWithdrawalAddress::<Test>::get(&account_id, ForeignChain::Polkadot).is_none()
+		);
+		assert!(
+			EmergencyWithdrawalAddress::<Test>::get(&account_id, ForeignChain::Bitcoin).is_none()
+		);
+
+		System::assert_last_event(RuntimeEvent::LiquidityProvider(
+			crate::Event::<Test>::EmergencyWithdrawalAddressRegistered {
+				account_id: account_id.clone(),
+				chain: ForeignChain::Ethereum,
+				address: decoded_address,
+			},
+		));
+
+		// Can reaplce the registered EWA with a new one.
+		let encoded_address = EncodedAddress::Eth([0x05; 20]);
+		let decoded_address = ForeignChainAddress::Eth([0x05; 20]);
+
+		assert_ok!(LiquidityProvider::register_emergency_withdrawal_address(
+			RuntimeOrigin::signed(account_id.clone()),
+			encoded_address,
+		));
+		assert_eq!(
+			EmergencyWithdrawalAddress::<Test>::get(&account_id, ForeignChain::Ethereum),
+			Some(decoded_address.clone()),
+		);
+		System::assert_last_event(RuntimeEvent::LiquidityProvider(
+			crate::Event::<Test>::EmergencyWithdrawalAddressRegistered {
+				account_id,
+				chain: ForeignChain::Ethereum,
+				address: decoded_address,
+			},
+		));
+	});
+}
+
+#[test]
+fn cannot_request_deposit_address_without_registering_emergency_withdrawal_address() {
+	new_test_ext().execute_with(|| {
+		assert_noop!(LiquidityProvider::request_liquidity_deposit_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			Asset::Eth,
+		), crate::Error::<Test>::NoEmergencyWithdrawalAddressRegistered);
+
+		// Register EWA
+		assert_ok!(LiquidityProvider::register_emergency_withdrawal_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			EncodedAddress::Eth([0x01; 20])
+		));
+
+		// Now the LPer should be able to request deposit channel for assets of the Ethereum chain.
+		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			Asset::Eth,
+		));
+		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			Asset::Flip,
+		));
+		assert_ok!(LiquidityProvider::request_liquidity_deposit_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			Asset::Usdc,
+		));
+		assert_events_match!(Test, RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
+			..
+		}) => (),
+		RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
+			..
+		}) => (),
+		RuntimeEvent::LiquidityProvider(crate::Event::LiquidityDepositAddressReady {
+			..
+		}) => ());
+		// Requesting deposit address for other chains will fail.
+		assert_noop!(LiquidityProvider::request_liquidity_deposit_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			Asset::Btc,
+		), crate::Error::<Test>::NoEmergencyWithdrawalAddressRegistered);
+		assert_noop!(LiquidityProvider::request_liquidity_deposit_address(
+			RuntimeOrigin::signed(LP_ACCOUNT.into()),
+			Asset::Dot,
+		), crate::Error::<Test>::NoEmergencyWithdrawalAddressRegistered);
 	});
 }

@@ -1,4 +1,5 @@
 use cf_amm::common::SqrtPriceQ64F96;
+use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::api::EthereumChainId};
 use cf_primitives::{Asset, EthereumAddress, SwapOutput};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
@@ -10,7 +11,7 @@ use sp_runtime::AccountId32;
 use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
-	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi},
+	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi, Environment},
 };
 use std::{marker::PhantomData, sync::Arc};
 
@@ -23,7 +24,6 @@ pub struct RpcAccountInfo {
 	pub is_activated: bool,
 	pub online_credits: u32,
 	pub reputation_points: i32,
-	pub withdrawal_address: String,
 	pub state: ChainflipAccountStateWithPassive,
 }
 
@@ -34,7 +34,6 @@ pub struct RpcAccountInfoV2 {
 	pub last_heartbeat: u32,
 	pub online_credits: u32,
 	pub reputation_points: i32,
-	pub withdrawal_address: String,
 	pub keyholder_epochs: Vec<u32>,
 	pub is_current_authority: bool,
 	pub is_current_backup: bool,
@@ -73,6 +72,23 @@ impl From<SwapOutput> for RpcSwapOutput {
 		Self {
 			intermediary: swap_output.intermediary.map(NumberOrHex::from),
 			output: NumberOrHex::from(swap_output.output),
+		}
+	}
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcEnvironment {
+	bitcoin_network: BitcoinNetwork,
+	ethereum_chain_id: EthereumChainId,
+	polkadot_genesis_hash: PolkadotHash,
+}
+
+impl From<Environment> for RpcEnvironment {
+	fn from(environment: Environment) -> Self {
+		Self {
+			bitcoin_network: environment.bitcoin_network,
+			ethereum_chain_id: environment.ethereum_chain_id,
+			polkadot_genesis_hash: environment.polkadot_genesis_hash,
 		}
 	}
 }
@@ -184,6 +200,8 @@ pub trait CustomApi {
 		amount: NumberOrHex,
 		at: Option<state_chain_runtime::Hash>,
 	) -> RpcResult<RpcSwapOutput>;
+	#[method(name = "environment")]
+	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
 }
 
 /// An RPC extension for the state chain node.
@@ -367,7 +385,6 @@ where
 			is_activated: account_info.is_activated,
 			online_credits: account_info.online_credits,
 			reputation_points: account_info.reputation_points,
-			withdrawal_address: hex::encode(account_info.withdrawal_address),
 			state: account_info.state,
 		})
 	}
@@ -388,7 +405,6 @@ where
 			last_heartbeat: account_info.last_heartbeat,
 			online_credits: account_info.online_credits,
 			reputation_points: account_info.reputation_points,
-			withdrawal_address: hex::encode(account_info.withdrawal_address),
 			keyholder_epochs: account_info.keyholder_epochs,
 			is_current_authority: account_info.is_current_authority,
 			is_current_backup: account_info.is_current_backup,
@@ -481,8 +497,16 @@ where
 			)
 			.map_err(to_rpc_error)
 			.and_then(|r| {
-				r.map_err(|e| jsonrpsee::core::Error::Custom(<&'static str>::from(e).into()))
+				r.ok_or(jsonrpsee::core::Error::from(anyhow::anyhow!("Unable to process swap.")))
 			})
 			.map(RpcSwapOutput::from)
+	}
+
+	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment> {
+		self.client
+			.runtime_api()
+			.cf_environment(&self.query_block_id(at))
+			.map_err(to_rpc_error)
+			.map(RpcEnvironment::from)
 	}
 }

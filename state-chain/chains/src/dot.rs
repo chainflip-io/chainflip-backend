@@ -9,7 +9,7 @@ use cf_primitives::{PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use core::str::FromStr;
 use scale_info::TypeInfo;
-use sp_core::{sr25519, H256};
+use sp_core::{sr25519, ConstBool, H256};
 use sp_runtime::{
 	generic::{Era, SignedPayload, UncheckedExtrinsic},
 	traits::{
@@ -213,20 +213,13 @@ pub struct EpochStartData {
 
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
 pub struct PolkadotTrackedData {
-	pub block_height: PolkadotBlockNumber,
 	pub median_tip: PolkadotBalance,
-}
-
-impl Age for PolkadotTrackedData {
-	type BlockNumber = PolkadotBlockNumber;
-
-	fn birth_block(&self) -> PolkadotBlockNumber {
-		self.block_height
-	}
 }
 
 impl Chain for Polkadot {
 	const NAME: &'static str = "Polkadot";
+	type KeyHandoverIsRequired = ConstBool<false>;
+	type OptimisticActivation = ConstBool<false>;
 	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = PolkadotBalance;
 	type TrackedData = PolkadotTrackedData;

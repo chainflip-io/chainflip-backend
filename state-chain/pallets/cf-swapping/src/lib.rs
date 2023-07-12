@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::{
-	address::{AddressConverter, ForeignChainAddress},
+	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
 	CcmDepositMetadata,
 };
 use cf_primitives::{Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, STABLE_ASSET};
@@ -11,6 +11,7 @@ use frame_support::{
 		traits::{BlockNumberProvider, Saturating},
 		DispatchError, Permill,
 	},
+	storage::with_storage_layer,
 };
 use frame_system::pallet_prelude::*;
 pub use pallet::*;
@@ -89,6 +90,14 @@ impl Swap {
 			SwapLeg::FromStable => self.final_output = Some(output),
 		}
 	}
+
+	fn intermediate_amount(&self) -> Option<AssetAmount> {
+		if self.from == STABLE_ASSET || self.to == STABLE_ASSET {
+			None
+		} else {
+			self.stable_amount
+		}
+	}
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -104,6 +113,18 @@ pub type TransactionHash = [u8; 32];
 pub(crate) struct CcmSwapOutput {
 	principal: Option<AssetAmount>,
 	gas: Option<AssetAmount>,
+}
+
+enum BatchExecutionError {
+	SwapLegFailed { asset: Asset, direction: SwapLeg, amount: AssetAmount },
+	DispatchError { error: DispatchError },
+}
+
+/// This impl is never used. This is purely used to satisfy trait requirment
+impl From<DispatchError> for BatchExecutionError {
+	fn from(error: DispatchError) -> Self {
+		Self::DispatchError { error }
+	}
 }
 
 impl CcmSwapOutput {
@@ -136,9 +157,9 @@ pub enum CcmFailReason {
 	GasBudgetBelowMinimum,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 pub enum SwapOrigin {
-	DepositChannel { deposit_address: ForeignChainAddress, channel_id: ChannelId },
+	DepositChannel { deposit_address: EncodedAddress, channel_id: ChannelId },
 	Vault { tx_hash: TransactionHash },
 }
 
@@ -246,6 +267,9 @@ pub mod pallet {
 			deposit_address: EncodedAddress,
 			destination_address: EncodedAddress,
 			expiry_block: T::BlockNumber,
+			source_asset: Asset,
+			destination_asset: Asset,
+			channel_id: ChannelId,
 		},
 		/// A swap deposit has been received.
 		SwapScheduled {
@@ -256,9 +280,14 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 			origin: SwapOrigin,
 		},
-		/// A swap has been fully completed.
+		/// A swap has been executed.
 		SwapExecuted {
 			swap_id: u64,
+			source_asset: Asset,
+			deposit_amount: AssetAmount,
+			destination_asset: Asset,
+			egress_amount: AssetAmount,
+			intermediate_amount: Option<AssetAmount>,
 		},
 		/// A swap egress has been scheduled.
 		SwapEgressScheduled {
@@ -269,20 +298,24 @@ pub mod pallet {
 		},
 		/// A broker fee withdrawal has been requested.
 		WithdrawalRequested {
-			amount: AssetAmount,
-			address: EncodedAddress,
 			egress_id: EgressId,
+			egress_amount: AssetAmount,
+			destination_address: EncodedAddress,
 		},
+		/// Most likely cause of this error is that there are insufficient
+		/// liquidity in the Pool. Also this could happen if the result overflowed u128::MAX
 		BatchSwapFailed {
 			asset: Asset,
 			direction: SwapLeg,
+			amount: AssetAmount,
 		},
 		CcmEgressScheduled {
 			ccm_id: u64,
 			egress_id: EgressId,
 		},
 		SwapDepositAddressExpired {
-			deposit_address: ForeignChainAddress,
+			deposit_address: EncodedAddress,
+			channel_id: ChannelId,
 		},
 		SwapTtlSet {
 			ttl: T::BlockNumber,
@@ -292,7 +325,7 @@ pub mod pallet {
 			principal_swap_id: Option<u64>,
 			gas_swap_id: Option<u64>,
 			deposit_amount: AssetAmount,
-			destination_address: ForeignChainAddress,
+			destination_address: EncodedAddress,
 		},
 		MinimumSwapAmountSet {
 			asset: Asset,
@@ -305,11 +338,11 @@ pub mod pallet {
 		SwapAmountTooLow {
 			asset: Asset,
 			amount: AssetAmount,
-			destination_address: ForeignChainAddress,
+			destination_address: EncodedAddress,
 		},
 		CcmFailed {
 			reason: CcmFailReason,
-			destination_address: ForeignChainAddress,
+			destination_address: EncodedAddress,
 			message_metadata: CcmDepositMetadata,
 		},
 	}
@@ -336,19 +369,24 @@ pub mod pallet {
 	#[pallet::genesis_config]
 	pub struct GenesisConfig<T: Config> {
 		pub swap_ttl: T::BlockNumber,
+		pub minimum_swap_amounts: Vec<(Asset, AssetAmount)>,
 	}
 
 	#[pallet::genesis_build]
 	impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
 		fn build(&self) {
 			SwapTTL::<T>::put(self.swap_ttl);
+			for (asset, min) in &self.minimum_swap_amounts {
+				MinimumSwapAmount::<T>::insert(asset, min);
+			}
 		}
 	}
 
 	#[cfg(feature = "std")]
 	impl<T: Config> Default for GenesisConfig<T> {
 		fn default() -> Self {
-			Self { swap_ttl: T::BlockNumber::from(1200u32) }
+			// 1200 = 2 hours (6 sec per block)
+			Self { swap_ttl: T::BlockNumber::from(1_200u32), minimum_swap_amounts: vec![] }
 		}
 	}
 
@@ -361,7 +399,8 @@ pub mod pallet {
 			for (channel_id, address) in expired {
 				T::DepositHandler::expire_channel(channel_id, address.clone());
 				Self::deposit_event(Event::<T>::SwapDepositAddressExpired {
-					deposit_address: address,
+					deposit_address: T::AddressConverter::to_encoded_address(address),
+					channel_id,
 				});
 			}
 			T::WeightInfo::on_initialize(expired_count as u32)
@@ -369,80 +408,86 @@ pub mod pallet {
 
 		/// Execute all swaps in the SwapQueue
 		fn on_finalize(_n: BlockNumberFor<T>) {
-			let swaps = SwapQueue::<T>::take();
-			let mut unprocessed_swaps = vec![];
-			// Helper function that splits swaps of a given direction, group them by asset and do
-			// the swaps of a given direction. Processed and unprocessed swaps are returned.
-			let mut do_group_and_swap = |swaps: Vec<Swap>, direction: SwapLeg| {
-				let (swap_groups, mut remaining) = Self::split_and_group_swaps(swaps, direction);
+			// Wrap the entire swapping section as a transaction, any failed swap will rollback all
+			// storage changes.
+			if let Err(failed_swap) = with_storage_layer(|| -> Result<(), BatchExecutionError> {
+				let mut swaps = SwapQueue::<T>::take();
 
-				for (asset, mut swaps) in swap_groups {
-					match Self::execute_group_of_swaps(&mut swaps, asset, direction) {
-						Ok(()) => remaining.extend(swaps),
-						Err(_) => {
-							// If the swaps failed to execute, add them back into the queue.
-							Self::deposit_event(Event::<T>::BatchSwapFailed { asset, direction });
-							unprocessed_swaps.extend(swaps);
-						},
-					};
+				// Swap into Stable asset first.
+				Self::do_group_and_swap(&mut swaps, SwapLeg::ToStable)?;
+
+				// Take NetworkFee for all swaps
+				for swap in swaps.iter_mut() {
+					debug_assert!(
+						swap.stable_amount.is_some(),
+						"All swaps should have Stable amount set here"
+					);
+					let stable_amount = swap.stable_amount.get_or_insert_with(Default::default);
+					*stable_amount = T::SwappingApi::take_network_fee(*stable_amount);
 				}
-				remaining
-			};
 
-			// Swap into Stable asset first.
-			let mut remaining_swaps = do_group_and_swap(swaps, SwapLeg::ToStable);
+				// Swap from Stable asset, and complete the swap logic.
+				Self::do_group_and_swap(&mut swaps, SwapLeg::FromStable)?;
 
-			// Take NetworkFee for all swaps
-			for swap in remaining_swaps.iter_mut() {
-				debug_assert!(
-					swap.stable_amount.is_some(),
-					"All swaps should have Stable amount set here"
-				);
-				let stable_amount =
-					T::SwappingApi::take_network_fee(swap.stable_amount.unwrap_or_default());
-				swap.stable_amount = Some(stable_amount);
-			}
+				for swap in swaps {
+					if let Some(egress_amount) = swap.final_output {
+						Self::deposit_event(Event::<T>::SwapExecuted {
+							swap_id: swap.swap_id,
+							source_asset: swap.from,
+							destination_asset: swap.to,
+							deposit_amount: swap.amount,
+							egress_amount,
+							intermediate_amount: swap.intermediate_amount(),
+						});
+						// Handle swap completion logic.
+						match &swap.swap_type {
+							SwapType::Swap(destination_address) => {
+								let egress_id = T::EgressHandler::schedule_egress(
+									swap.to,
+									egress_amount,
+									destination_address.clone(),
+									None,
+								);
 
-			// Swap from Stable asset, and complete the swap logic.
-			for swap in do_group_and_swap(remaining_swaps, SwapLeg::FromStable) {
-				if let Some(output_amount) = swap.final_output {
-					Self::deposit_event(Event::<T>::SwapExecuted { swap_id: swap.swap_id });
-					// Handle swap completion logic.
-					match &swap.swap_type {
-						SwapType::Swap(destination_address) => {
-							let egress_id = T::EgressHandler::schedule_egress(
-								swap.to,
-								output_amount,
-								destination_address.clone(),
-								None,
-							);
-
-							Self::deposit_event(Event::<T>::SwapEgressScheduled {
-								swap_id: swap.swap_id,
-								egress_id,
-								asset: swap.to,
-								amount: output_amount,
-							});
-						},
-						SwapType::CcmPrincipal(ccm_id) => {
-							Self::handle_ccm_swap_result(
-								*ccm_id,
-								output_amount,
-								CcmSwapLeg::Principal,
-							);
-						},
-						SwapType::CcmGas(ccm_id) => {
-							Self::handle_ccm_swap_result(*ccm_id, output_amount, CcmSwapLeg::Gas);
-						},
-					};
-				} else {
-					debug_assert!(false, "Swap is not completed yet!");
+								Self::deposit_event(Event::<T>::SwapEgressScheduled {
+									swap_id: swap.swap_id,
+									egress_id,
+									asset: swap.to,
+									amount: egress_amount,
+								});
+							},
+							SwapType::CcmPrincipal(ccm_id) => {
+								Self::handle_ccm_swap_result(
+									*ccm_id,
+									egress_amount,
+									CcmSwapLeg::Principal,
+								);
+							},
+							SwapType::CcmGas(ccm_id) => {
+								Self::handle_ccm_swap_result(
+									*ccm_id,
+									egress_amount,
+									CcmSwapLeg::Gas,
+								);
+							},
+						};
+					} else {
+						debug_assert!(false, "Swap is not completed yet!");
+					}
 				}
-			}
-
-			// Reinsert unprocessed swaps back into the map.
-			if !unprocessed_swaps.is_empty() {
-				SwapQueue::<T>::put(unprocessed_swaps);
+				Ok(())
+			}) {
+				match failed_swap {
+					BatchExecutionError::SwapLegFailed { asset, direction, amount } =>
+						Self::deposit_event(Event::<T>::BatchSwapFailed {
+							asset,
+							direction,
+							amount,
+						}),
+					BatchExecutionError::DispatchError { error } => {
+						log::error!("Failed to execute swap batch: {:?}", error);
+					},
+				}
 			}
 		}
 	}
@@ -496,9 +541,12 @@ pub mod pallet {
 			SwapChannelExpiries::<T>::append(expiry_block, (channel_id, deposit_address.clone()));
 
 			Self::deposit_event(Event::<T>::SwapDepositAddressReady {
-				deposit_address: T::AddressConverter::try_to_encoded_address(deposit_address)?,
+				deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 				destination_address,
 				expiry_block,
+				source_asset,
+				destination_asset,
+				channel_id,
 			});
 
 			Ok(())
@@ -521,15 +569,15 @@ pub mod pallet {
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, asset)?;
 
-			let amount = EarnedBrokerFees::<T>::take(account_id, asset);
-			ensure!(amount != 0, Error::<T>::NoFundsAvailable);
+			let egress_amount = EarnedBrokerFees::<T>::take(account_id, asset);
+			ensure!(egress_amount != 0, Error::<T>::NoFundsAvailable);
 
 			Self::deposit_event(Event::<T>::WithdrawalRequested {
-				amount,
-				address: destination_address,
+				egress_amount,
+				destination_address,
 				egress_id: T::EgressHandler::schedule_egress(
 					asset,
-					amount,
+					egress_amount,
 					destination_address_internal,
 					None,
 				),
@@ -688,13 +736,30 @@ pub mod pallet {
 			Ok(destination_address_internal)
 		}
 
-		/// Bundle the given swaps and do a single swap of a given direction.
-		/// Return the remaining swaps as a vec.
-		pub fn execute_group_of_swaps(
+		// Helper function that splits swaps of a given direction, group them by asset
+		// and do the swaps of a given direction. Processed and unprocessed swaps are
+		// returned.
+		fn do_group_and_swap(
 			swaps: &mut Vec<Swap>,
+			direction: SwapLeg,
+		) -> Result<(), BatchExecutionError> {
+			let swap_groups = Self::split_and_group_swaps(swaps, direction);
+
+			for (asset, swaps) in swap_groups {
+				Self::execute_group_of_swaps(swaps, asset, direction).map_err(|amount| {
+					BatchExecutionError::SwapLegFailed { asset, direction, amount }
+				})?;
+			}
+			Ok(())
+		}
+
+		/// Bundle the given swaps and do a single swap of a given direction. Updates the given
+		/// swaps in-place. If batch swap failed, return the input amount.
+		fn execute_group_of_swaps(
+			swaps: Vec<&mut Swap>,
 			asset: Asset,
 			direction: SwapLeg,
-		) -> DispatchResult {
+		) -> Result<(), AssetAmount> {
 			// Stable -> stable swap should never be called.
 			debug_assert_ne!(asset, STABLE_ASSET);
 			debug_assert!(
@@ -708,7 +773,8 @@ pub mod pallet {
 			debug_assert!(bundle_input > 0, "Swap input of zero is invalid.");
 
 			// Process the swap leg as a bundle. No network fee is taken here.
-			let bundle_output = T::SwappingApi::swap_single_leg(direction, asset, bundle_input)?;
+			let bundle_output = T::SwappingApi::swap_single_leg(direction, asset, bundle_input)
+				.map_err(|_| bundle_input)?;
 
 			for swap in swaps {
 				if let Some(swap_output) = multiply_by_rational_with_rounding(
@@ -763,20 +829,18 @@ pub mod pallet {
 		/// Split all swaps of a given direction, and group them by asset into a BTreeMap and return
 		/// the rest
 		fn split_and_group_swaps(
-			swaps: Vec<Swap>,
+			swaps: &mut Vec<Swap>,
 			direction: SwapLeg,
-		) -> (BTreeMap<Asset, Vec<Swap>>, Vec<Swap>) {
+		) -> BTreeMap<Asset, Vec<&mut Swap>> {
 			let mut grouped_swaps = BTreeMap::new();
-			let mut remaining = vec![];
 
 			for swap in swaps {
 				if let Some(asset) = swap.swap_asset(direction) {
 					grouped_swaps.entry(asset).or_insert(vec![]).push(swap);
-				} else {
-					remaining.push(swap);
 				}
 			}
-			(grouped_swaps, remaining)
+
+			grouped_swaps
 		}
 
 		fn schedule_swap(from: Asset, to: Asset, amount: AssetAmount, swap_type: SwapType) -> u64 {
@@ -828,7 +892,9 @@ pub mod pallet {
 				Self::deposit_event(Event::<T>::SwapAmountTooLow {
 					asset: from,
 					amount,
-					destination_address,
+					destination_address: T::AddressConverter::to_encoded_address(
+						destination_address,
+					),
 				});
 				None
 			} else {
@@ -860,8 +926,7 @@ pub mod pallet {
 			});
 
 			let encoded_destination_address =
-				T::AddressConverter::try_to_encoded_address(destination_address.clone())
-					.expect("destination address was created from encoded address");
+				T::AddressConverter::to_encoded_address(destination_address.clone());
 
 			if let Some(swap_id) =
 				Self::schedule_swap_from_channel_received(from, to, amount, destination_address)
@@ -872,7 +937,10 @@ pub mod pallet {
 					deposit_amount: amount,
 					destination_asset: to,
 					destination_address: encoded_destination_address,
-					origin: SwapOrigin::DepositChannel { deposit_address, channel_id },
+					origin: SwapOrigin::DepositChannel {
+						deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
+						channel_id,
+					},
 				});
 			}
 		}
@@ -886,6 +954,8 @@ pub mod pallet {
 			destination_address: ForeignChainAddress,
 			message_metadata: CcmDepositMetadata,
 		) {
+			let encoded_destination_address =
+				T::AddressConverter::to_encoded_address(destination_address.clone());
 			// Caller should ensure that assets and addresses are compatible.
 			debug_assert!(destination_address.chain() == ForeignChain::from(destination_asset));
 
@@ -918,7 +988,7 @@ pub mod pallet {
 
 				Self::deposit_event(Event::<T>::CcmFailed {
 					reason,
-					destination_address,
+					destination_address: encoded_destination_address,
 					message_metadata,
 				});
 				return
@@ -963,7 +1033,7 @@ pub mod pallet {
 				principal_swap_id,
 				gas_swap_id,
 				deposit_amount,
-				destination_address: destination_address.clone(),
+				destination_address: encoded_destination_address,
 			});
 
 			// If no swap is required, egress the CCM.

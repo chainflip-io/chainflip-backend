@@ -12,12 +12,46 @@ pub struct MockEthereum;
 
 pub type MockEthereumChannelId = u128;
 
+thread_local! {
+	static MOCK_KEY_HANDOVER_IS_REQUIRED: RefCell<bool> = RefCell::new(true);
+	static MOCK_OPTIMISTICE_ACTIVATION: RefCell<bool> = RefCell::new(false);
+}
+
+pub struct MockKeyHandoverIsRequired;
+
+impl MockKeyHandoverIsRequired {
+	pub fn set(value: bool) {
+		MOCK_KEY_HANDOVER_IS_REQUIRED.with(|v| *v.borrow_mut() = value);
+	}
+}
+
+impl Get<bool> for MockKeyHandoverIsRequired {
+	fn get() -> bool {
+		MOCK_KEY_HANDOVER_IS_REQUIRED.with(|v| *v.borrow())
+	}
+}
+
+pub struct MockOptimisticActivation;
+
+impl MockOptimisticActivation {
+	pub fn set(value: bool) {
+		MOCK_OPTIMISTICE_ACTIVATION.with(|v| *v.borrow_mut() = value);
+	}
+}
+
+impl Get<bool> for MockOptimisticActivation {
+	fn get() -> bool {
+		MOCK_OPTIMISTICE_ACTIVATION.with(|v| *v.borrow())
+	}
+}
+
 // Chain implementation used for testing.
 impl Chain for MockEthereum {
 	const NAME: &'static str = "MockEthereum";
-	// Even though ethereum doesn't handover, we are able to easily get more unit test coverage this
-	// way.
-	const KEY_HANDOVER_IS_REQUIRED: bool = true;
+
+	type KeyHandoverIsRequired = MockKeyHandoverIsRequired;
+	type OptimisticActivation = MockOptimisticActivation;
+
 	type DepositFetchId = MockEthereumChannelId;
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
@@ -51,32 +85,20 @@ impl BenchmarkValueExtended for MockEthereumChannelId {
 	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
 )]
 pub struct MockTrackedData {
-	pub age: u64,
 	pub base_fee: AssetAmount,
 	pub priority_fee: AssetAmount,
 }
 
 impl MockTrackedData {
-	pub fn new(age: u64, base_fee: AssetAmount, priority_fee: AssetAmount) -> Self {
-		Self { age, base_fee, priority_fee }
-	}
-	pub fn from_age(age: u64) -> Self {
-		Self { age, base_fee: 0, priority_fee: 0 }
-	}
-}
-
-impl Age for MockTrackedData {
-	type BlockNumber = u64;
-
-	fn birth_block(&self) -> Self::BlockNumber {
-		self.age
+	pub fn new(base_fee: AssetAmount, priority_fee: AssetAmount) -> Self {
+		Self { base_fee, priority_fee }
 	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for MockTrackedData {
 	fn benchmark_value() -> Self {
-		Self { age: 1_000u64, base_fee: 1_000u128, priority_fee: 100u128 }
+		Self { base_fee: 1_000u128, priority_fee: 100u128 }
 	}
 }
 

@@ -1,49 +1,66 @@
 #![cfg(test)]
-
-use crate::{mock::*, Error};
+use crate::{mock::*, Call as PalletCall, ChainState, Error, Event as PalletEvent};
 use cf_chains::mocks::MockTrackedData;
-use frame_support::{assert_noop, assert_ok};
+use frame_support::{pallet_prelude::DispatchResult, traits::OriginTrait};
 
-#[test]
-fn test_update_chain_state_within_age_limit() {
-	new_test_ext().execute_with(|| {
-		const LATEST_BLOCK: u64 = 1000;
-		assert_ok!(MockChainTracking::update_chain_state(
-			RuntimeOrigin::signed(0),
-			MockTrackedData::from_age(LATEST_BLOCK)
-		));
-		assert_ok!(MockChainTracking::update_chain_state(
-			RuntimeOrigin::signed(0),
-			MockTrackedData::from_age(LATEST_BLOCK - AGE_LIMIT + 1)
-		));
-		assert_ok!(MockChainTracking::update_chain_state(
-			RuntimeOrigin::signed(0),
-			MockTrackedData::from_age(LATEST_BLOCK + AGE_LIMIT * 100)
-		));
-	})
+trait TestChainTracking {
+	fn test_chain_tracking_update(
+		self,
+		external_block_height: u64,
+		expectation: DispatchResult,
+	) -> Self;
+}
+
+impl TestChainTracking for TestRunner<()> {
+	fn test_chain_tracking_update(
+		self,
+		external_block_height: u64,
+		expectation: DispatchResult,
+	) -> Self {
+		self.then_apply_extrinsics(|_| {
+			[(
+				OriginTrait::root(),
+				RuntimeCall::MockChainTracking(PalletCall::update_chain_state {
+					new_chain_state: ChainState {
+						block_height: external_block_height,
+						tracked_data: MockTrackedData::new(Default::default(), Default::default()),
+					},
+				}),
+				expectation,
+			)]
+		})
+		.then_process_events(|_, event| match event {
+			// If the update succeeded, we expect an event to be emitted.
+			RuntimeEvent::MockChainTracking(PalletEvent::ChainStateUpdated { new_chain_state }) => {
+				assert_eq!(
+					new_chain_state,
+					ChainState {
+						block_height: external_block_height,
+						tracked_data: MockTrackedData::new(Default::default(), Default::default())
+					}
+				);
+				None::<()>
+			},
+			_ => None,
+		})
+		.map_context(|_| ())
+	}
 }
 
 #[test]
-fn test_update_chain_state_outside_of_age_limit() {
-	new_test_ext().execute_with(|| {
-		const LATEST_BLOCK: u64 = 1000;
-		assert_ok!(MockChainTracking::update_chain_state(
-			RuntimeOrigin::signed(0),
-			MockTrackedData::from_age(LATEST_BLOCK)
-		));
-		assert_noop!(
-			MockChainTracking::update_chain_state(
-				RuntimeOrigin::signed(0),
-				MockTrackedData::from_age(LATEST_BLOCK - AGE_LIMIT)
-			),
-			Error::<Test>::StaleDataSubmitted
-		);
-		assert_noop!(
-			MockChainTracking::update_chain_state(
-				RuntimeOrigin::signed(0),
-				MockTrackedData::from_age(0)
-			),
-			Error::<Test>::StaleDataSubmitted
-		);
-	})
+fn chain_tracking_can_only_advance() {
+	const START_BLOCK: u64 = 1000;
+
+	new_test_ext()
+		.test_chain_tracking_update(START_BLOCK, Ok(()))
+		.test_chain_tracking_update(START_BLOCK, Err(Error::<Test>::StaleDataSubmitted.into()))
+		.test_chain_tracking_update(START_BLOCK - 1, Err(Error::<Test>::StaleDataSubmitted.into()))
+		.test_chain_tracking_update(START_BLOCK + 1, Ok(()))
+		.test_chain_tracking_update(START_BLOCK, Err(Error::<Test>::StaleDataSubmitted.into()))
+		.test_chain_tracking_update(START_BLOCK + 1, Err(Error::<Test>::StaleDataSubmitted.into()))
+		.test_chain_tracking_update(START_BLOCK + 2, Ok(()))
+		// We can skip ahead but then we can't go back again
+		.test_chain_tracking_update(START_BLOCK + 10, Ok(()))
+		.test_chain_tracking_update(START_BLOCK + 10, Err(Error::<Test>::StaleDataSubmitted.into()))
+		.test_chain_tracking_update(START_BLOCK + 9, Err(Error::<Test>::StaleDataSubmitted.into()));
 }

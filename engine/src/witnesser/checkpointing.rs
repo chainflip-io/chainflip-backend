@@ -1,15 +1,12 @@
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use cf_primitives::EpochIndex;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
 use super::HasChainTag;
 use crate::db::PersistentKeyDB;
-use multisig::ChainTag;
-
-mod migrations;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct WitnessedUntil {
@@ -34,16 +31,7 @@ where
 	<<Chain as cf_chains::Chain>::ChainBlockNumber as TryFrom<u64>>::Error: std::fmt::Debug,
 {
 	let chain_tag = Chain::CHAIN_TAG;
-	let mut loaded_checkpoint = db.load_checkpoint(chain_tag)?;
-
-	// Eth witnessers are the only ones that used the legacy checkpointing files.
-	// Only go ahead with the migration if no checkpoint is found in the db.
-	if matches!(chain_tag, ChainTag::Ethereum) && loaded_checkpoint.is_none() {
-		migrations::run_eth_migration(chain_tag, db.clone(), &std::env::current_dir().unwrap())
-			.await
-			.with_context(|| "Failed to perform Eth witnesser checkpointing migration")?;
-		loaded_checkpoint = db.load_checkpoint(chain_tag)?;
-	}
+	let loaded_checkpoint = db.load_checkpoint(chain_tag)?;
 
 	// Use the loaded checkpoint or the default if none was found
 	let witnessed_until = match loaded_checkpoint {
@@ -99,6 +87,8 @@ where
 
 #[cfg(test)]
 mod tests {
+	use multisig::ChainTag;
+
 	use super::*;
 
 	/// This test covers:

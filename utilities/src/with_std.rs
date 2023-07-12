@@ -1,27 +1,31 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use core::{fmt, time::Duration};
 use futures::{stream, Stream};
 #[doc(hidden)]
 pub use lazy_format::lazy_format as internal_lazy_format;
 use sp_rpc::number::NumberOrHex;
 use std::path::PathBuf;
-#[doc(hidden)]
-pub use tokio::select as internal_tokio_select;
 use tracing_subscriber::fmt::format::FmtSpan;
 use warp::{Filter, Reply};
 
+pub mod loop_select;
 pub mod task_scope;
+pub mod unending_stream;
+pub use unending_stream::UnendingStream;
 
-pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN], &'static str> {
+mod cached_stream;
+pub use cached_stream::{CachedStream, MakeCachedStream};
+
+pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN], anyhow::Error> {
 	let address_hex_str = match address_str.strip_prefix("0x") {
 		Some(address_stripped) => address_stripped,
 		None => address_str,
 	};
 
 	let address: [u8; LEN] = hex::decode(address_hex_str)
-		.map_err(|_| "Invalid hex")?
+		.context("Invalid hex")?
 		.try_into()
-		.map_err(|_| "Invalid address length")?;
+		.map_err(|_| anyhow::anyhow!("Invalid address length"))?;
 
 	Ok(address)
 }
@@ -40,12 +44,12 @@ pub fn try_parse_number_or_hex(amount: NumberOrHex) -> anyhow::Result<u128> {
 		})
 }
 
-pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], &'static str> {
-	clean_hex_address(dirty_eth_address)
+pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], anyhow::Error> {
+	clean_hex_address(dirty_eth_address).context("Failed to parse Ethereum address.")
 }
 
-pub fn clean_dot_address(dirty_dot_address: &str) -> Result<[u8; 32], &'static str> {
-	clean_hex_address(dirty_dot_address)
+pub fn clean_dot_address(dirty_dot_address: &str) -> Result<[u8; 32], anyhow::Error> {
+	clean_hex_address(dirty_dot_address).context("Failed to parse Polkadot address.")
 }
 
 #[test]
@@ -94,78 +98,6 @@ pub fn assert_stream_send<'u, R>(
 	stream: impl 'u + Send + Stream<Item = R>,
 ) -> impl 'u + Send + Stream<Item = R> {
 	stream
-}
-
-pub trait CachedStream: Stream {
-	type Cache;
-
-	fn cache(&self) -> &Self::Cache;
-}
-
-#[derive(Clone)]
-#[pin_project::pin_project]
-pub struct InnerCachedStream<Stream, Cache, F> {
-	#[pin]
-	stream: Stream,
-	cache: Cache,
-	f: F,
-}
-impl<St, Cache, F> Stream for InnerCachedStream<St, Cache, F>
-where
-	St: Stream,
-	F: FnMut(&St::Item) -> Cache,
-{
-	type Item = St::Item;
-
-	fn poll_next(
-		self: core::pin::Pin<&mut Self>,
-		cx: &mut core::task::Context<'_>,
-	) -> core::task::Poll<Option<Self::Item>> {
-		let this = self.project();
-		let poll = this.stream.poll_next(cx);
-
-		if let core::task::Poll::Ready(Some(item)) = &poll {
-			*this.cache = (this.f)(item);
-		}
-
-		poll
-	}
-
-	fn size_hint(&self) -> (usize, Option<usize>) {
-		self.stream.size_hint()
-	}
-}
-impl<St, Cache, F> CachedStream for InnerCachedStream<St, Cache, F>
-where
-	St: Stream,
-	F: FnMut(&St::Item) -> Cache,
-{
-	type Cache = Cache;
-
-	fn cache(&self) -> &Self::Cache {
-		&self.cache
-	}
-}
-pub trait MakeCachedStream: Stream {
-	fn make_cached<Cache, F: FnMut(&<Self as Stream>::Item) -> Cache>(
-		self,
-		initial: Cache,
-		f: F,
-	) -> InnerCachedStream<Self, Cache, F>
-	where
-		Self: Sized;
-}
-impl<T: Stream> MakeCachedStream for T {
-	fn make_cached<Cache, F: FnMut(&<Self as Stream>::Item) -> Cache>(
-		self,
-		initial: Cache,
-		f: F,
-	) -> InnerCachedStream<Self, Cache, F>
-	where
-		Self: Sized,
-	{
-		InnerCachedStream { stream: self, cache: initial, f }
-	}
 }
 
 /// Makes a tick that outputs every duration and if ticks are "missed" (as tick() wasn't called for
@@ -499,10 +431,8 @@ pub fn read_clean_and_decode_hex_str_file<V, T: FnOnce(&str) -> Result<V, anyhow
 	context: &str,
 	t: T,
 ) -> Result<V, anyhow::Error> {
-	use anyhow::Context;
-
 	std::fs::read_to_string(file)
-		.map_err(|e| anyhow!("Failed to read {context} file at {}: {e}", file.display()))
+		.with_context(|| format!("Failed to read {context} file at {}", file.display()))
 		.and_then(|string| {
 			let mut str = string.as_str();
 			str = str.trim();
@@ -545,60 +475,4 @@ mod tests_read_clean_and_decode_hex_str_file {
 			);
 		});
 	}
-}
-
-#[macro_export]
-macro_rules! inner_loop_select {
-    ({ $($processed:tt)* } let $pattern:pat = $expression:expr => $body:block, $($unprocessed:tt)*) => {
-        $crate::inner_loop_select!(
-            {
-                $($processed)*
-                x = $expression => {
-					let $pattern = x;
-					$body
-				},
-            }
-            $($unprocessed)*
-		)
-    };
-    ({ $($processed:tt)* } if let $pattern:pat = $expression:expr => $body:block, $($unprocessed:tt)*) => {
-        $crate::inner_loop_select!(
-            {
-                $($processed)*
-                x = $expression => {
-					if let $pattern = x {
-						$body
-					} else { break }
-				},
-            }
-            $($unprocessed)*
-		)
-    };
-    ({ $($processed:tt)* } if let $pattern:pat = $expression:expr => $body:block else break $extra:expr, $($unprocessed:tt)*) => {
-        $crate::inner_loop_select!(
-            {
-                $($processed)*
-                x = $expression => {
-					if let $pattern = x {
-						$body
-					} else { break $extra }
-				},
-            }
-            $($unprocessed)*
-		)
-    };
-    ({ $($processed:tt)+ }) => {
-		loop {
-			$crate::internal_tokio_select!(
-				$($processed)+
-			)
-		}
-    };
-}
-
-#[macro_export]
-macro_rules! loop_select {
-    ($($cases:tt)+) => {
-        $crate::inner_loop_select!({} $($cases)+)
-    }
 }

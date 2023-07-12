@@ -15,9 +15,6 @@ mod archived {
 
 	use frame_support::pallet_prelude::ValueQuery;
 
-	// Note this is valid only perseverance.
-	pub const REDEMPTION_DELAY_BUFFER_SECONDS: u64 = 80;
-
 	// This is added in 0.7 but then removed in 0.8.
 	#[frame_support::storage_alias]
 	pub type RedemptionDelayBufferSeconds<T: Config> = StorageValue<Pallet<T>, u64, ValueQuery>;
@@ -29,7 +26,6 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 		for account in accounts {
 			PendingRedemptions::<T>::insert(account, ());
 		}
-		archived::RedemptionDelayBufferSeconds::<T>::put(archived::REDEMPTION_DELAY_BUFFER_SECONDS);
 		Weight::zero()
 	}
 

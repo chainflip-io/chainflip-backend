@@ -20,6 +20,7 @@ use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
+use sp_core::ConstBool;
 use sp_runtime::{
 	traits::{Hash, Keccak256},
 	RuntimeDebug,
@@ -38,6 +39,8 @@ pub const CHAIN_ID_KOVAN: u64 = 42;
 
 impl Chain for Ethereum {
 	const NAME: &'static str = "Ethereum";
+	type KeyHandoverIsRequired = ConstBool<false>;
+	type OptimisticActivation = ConstBool<false>;
 	type ChainBlockNumber = u64;
 	type ChainAmount = EthAmount;
 	type TransactionFee = eth::TransactionFee;
@@ -79,17 +82,8 @@ impl ChainCrypto for Ethereum {
 )]
 #[codec(mel_bound())]
 pub struct EthereumTrackedData {
-	pub block_height: <Ethereum as Chain>::ChainBlockNumber,
 	pub base_fee: <Ethereum as Chain>::ChainAmount,
 	pub priority_fee: <Ethereum as Chain>::ChainAmount,
-}
-
-impl Age for EthereumTrackedData {
-	type BlockNumber = <Ethereum as Chain>::ChainBlockNumber;
-
-	fn birth_block(&self) -> <Ethereum as Chain>::ChainBlockNumber {
-		self.block_height
-	}
 }
 
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq)]
@@ -100,6 +94,22 @@ pub enum AggKeyVerificationError {
 	InvalidPubkey,
 	/// The recovered `k_times_g_address` does not match the expected value.
 	NoMatch,
+}
+
+impl Display for AggKeyVerificationError {
+	fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+		write!(
+			f,
+			"{}",
+			match self {
+				Self::InvalidSignature =>
+					"InvalidSignature: The provided signature is not a valid private key",
+				Self::InvalidPubkey => "InvalidPubkey: The agg_key is not a valid public key.",
+				Self::NoMatch =>
+					"NoMatch: The recovered `k_times_g_address` does not match the expected value.",
+			}
+		)
+	}
 }
 
 /// A parity bit can be either odd or even, but can have different representations depending on its

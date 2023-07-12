@@ -3,7 +3,7 @@ use std::path::Path;
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
 use serde::{de::DeserializeOwned, Serialize};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 
 /// A static length prefix is used on the `DATA_COLUMN`
 pub const PREFIX_SIZE: usize = 10;
@@ -43,8 +43,7 @@ impl RocksDBKeyValueStore {
 
 		// Open the db or create a new one if it doesn't exist
 		let db = DB::open_cf_descriptors(&open_options, db_path, column_families)
-			.map_err(anyhow::Error::msg)
-			.context(format!("Failed to open database at: {}", db_path.display()))?;
+			.with_context(|| format!("Failed to open database at: {}", db_path.display()))?;
 
 		Ok(RocksDBKeyValueStore { db })
 	}
@@ -64,9 +63,7 @@ impl RocksDBKeyValueStore {
 				key_with_prefix,
 				bincode::serialize(value).expect("Serialization is not expected to fail"),
 			)
-			.map_err(|e| {
-				anyhow::anyhow!("Failed to write data to database. Error: {}", e.to_string())
-			})
+			.context("Failed to write data to database.")
 	}
 
 	pub fn get_data<K: Serialize, T: DeserializeOwned>(
@@ -80,9 +77,7 @@ impl RocksDBKeyValueStore {
 
 		self.db
 			.get_cf(get_data_column_handle(&self.db), key_with_prefix)?
-			.map(|data| {
-				bincode::deserialize(&data).map_err(|e| anyhow!("Deserialization failure: {}", e))
-			})
+			.map(|data| bincode::deserialize(&data).context("Deserialization failed"))
 			.transpose()
 	}
 
@@ -106,9 +101,9 @@ impl RocksDBKeyValueStore {
 	where
 		V: AsRef<[u8]>,
 	{
-		self.db.put_cf(get_metadata_column_handle(&self.db), key, value).map_err(|e| {
-			anyhow::anyhow!("Failed to write metadata to database. Error: {}", e.to_string())
-		})
+		self.db
+			.put_cf(get_metadata_column_handle(&self.db), key, value)
+			.context("Failed to write metadata to database.")
 	}
 
 	pub fn get_metadata(&self, key: &[u8]) -> Option<Vec<u8>> {

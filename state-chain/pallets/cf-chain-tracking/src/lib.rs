@@ -9,9 +9,9 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_chains::{Age, Chain};
-use cf_traits::Chainflip;
-use frame_support::dispatch::DispatchResultWithPostInfo;
+use cf_chains::Chain;
+use cf_traits::{Chainflip, GetBlockHeight};
+use frame_support::{dispatch::DispatchResultWithPostInfo, sp_runtime::traits::Zero};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::marker::PhantomData;
@@ -33,27 +33,40 @@ pub mod pallet {
 
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
-
-		/// Determines the maximum age of tracked data submissions.
-		#[pallet::constant]
-		type AgeLimit: Get<<Self::TargetChain as Chain>::ChainBlockNumber>;
 	}
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
+	#[derive(
+		PartialEqNoBound,
+		EqNoBound,
+		CloneNoBound,
+		Encode,
+		Decode,
+		TypeInfo,
+		MaxEncodedLen,
+		DebugNoBound,
+	)]
+	#[scale_info(skip_type_params(T, I))]
+	pub struct ChainState<C: Chain> {
+		pub block_height: C::ChainBlockNumber,
+		pub tracked_data: C::TrackedData,
+	}
+
 	/// The tracked state of the external chain.
 	#[pallet::storage]
 	#[pallet::getter(fn chain_state)]
-	pub type ChainState<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, <T::TargetChain as Chain>::TrackedData>;
+	#[allow(clippy::type_complexity)]
+	pub type CurrentChainState<T: Config<I>, I: 'static = ()> =
+		StorageValue<_, ChainState<T::TargetChain>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config<I>, I: 'static = ()> {
 		/// The tracked state of this chain has been updated.
-		ChainStateUpdated { state: <T::TargetChain as Chain>::TrackedData },
+		ChainStateUpdated { new_chain_state: ChainState<T::TargetChain> },
 	}
 
 	#[pallet::error]
@@ -76,25 +89,33 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::update_chain_state())]
 		pub fn update_chain_state(
 			origin: OriginFor<T>,
-			state: <T::TargetChain as Chain>::TrackedData,
+			new_chain_state: ChainState<T::TargetChain>,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			ChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|maybe_previous| {
-				if let Some(previous) = maybe_previous.replace(state.clone()) {
+			CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|maybe_previous| {
+				if let Some(previous_chain_state) = maybe_previous {
 					ensure!(
-						sp_runtime::traits::Saturating::saturating_sub(
-							previous.birth_block(),
-							state.birth_block()
-						) < T::AgeLimit::get(),
+						new_chain_state.block_height > previous_chain_state.block_height,
 						Error::<T, I>::StaleDataSubmitted
 					)
-				};
+				}
+
+				*maybe_previous = Some(new_chain_state.clone());
+
 				Ok(())
 			})?;
-			Self::deposit_event(Event::<T, I>::ChainStateUpdated { state });
+			Self::deposit_event(Event::<T, I>::ChainStateUpdated { new_chain_state });
 
 			Ok(().into())
 		}
+	}
+}
+
+impl<T: Config<I>, I: 'static> GetBlockHeight<T::TargetChain> for Pallet<T, I> {
+	fn get_block_height() -> <T::TargetChain as Chain>::ChainBlockNumber {
+		CurrentChainState::<T, I>::get()
+			.map(|state| state.block_height)
+			.unwrap_or(Zero::zero())
 	}
 }

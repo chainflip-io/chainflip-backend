@@ -7,8 +7,8 @@ use crate::{
 	witnesser::{EpochStart, ItemMonitor, LatestBlockNumber, MonitorCommand},
 };
 use anyhow::{Context, Result};
-use cf_chains::{btc::BitcoinScriptBounded, Bitcoin};
-use futures::TryFutureExt;
+use cf_chains::{btc::ScriptPubkey, Bitcoin};
+use futures_util::FutureExt;
 use sp_core::H256;
 use utilities::task_scope::Scope;
 
@@ -22,7 +22,7 @@ pub async fn start(
 	initial_block_hash: H256,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<(
-	tokio::sync::mpsc::UnboundedSender<MonitorCommand<BitcoinScriptBounded>>,
+	tokio::sync::mpsc::UnboundedSender<MonitorCommand<ScriptPubkey>>,
 	tokio::sync::mpsc::UnboundedSender<MonitorCommand<[u8; 32]>>,
 )> {
 	let btc_rpc = BtcRpcClient::new(btc_settings)?;
@@ -77,7 +77,7 @@ pub async fn start(
 			tx_hash_monitor,
 			db,
 		)
-		.map_err(|_| anyhow::anyhow!("btc::witnesser::start failed")),
+		.map(|result| result.context("Btc Witnesser failed to start")),
 	);
 
 	Ok((address_monitor_command_sender, tx_hash_monitor_sender))

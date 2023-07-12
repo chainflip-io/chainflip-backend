@@ -97,8 +97,8 @@ pub mod pallet {
 		pub remaining_respondents: BTreeSet<T::ValidatorId>,
 		/// The number of blame votes (accusations) each authority has received.
 		pub blame_counts: BTreeMap<T::ValidatorId, AuthorityCount>,
-		/// The total number of signing participants (ie. the threshold set size).
-		pub participant_count: AuthorityCount,
+		/// The candidates participating in the signing ceremony (ie. the threshold set).
+		pub candidates: BTreeSet<T::ValidatorId>,
 		/// The epoch in which the ceremony was started.
 		pub epoch: EpochIndex,
 		/// The key we want to sign with.
@@ -168,10 +168,10 @@ pub mod pallet {
 		pub fn offenders(&self) -> Vec<T::ValidatorId> {
 			// A threshold for number of blame 'accusations' that are required for someone to be
 			// punished.
-			let blame_threshold = self.participant_count.saturating_mul(2) / 3;
+			let blame_threshold = (self.candidates.len() as AuthorityCount).saturating_mul(2) / 3;
 			// The maximum number of offenders we are willing to report without risking the liveness
 			// of the network.
-			let liveness_threshold = self.participant_count / 2;
+			let liveness_threshold = self.candidates.len() / 2;
 
 			let mut to_report = self
 				.blame_counts
@@ -187,7 +187,7 @@ pub mod pallet {
 
 			let to_report = to_report.into_iter().collect::<Vec<_>>();
 
-			if to_report.len() <= liveness_threshold as usize {
+			if to_report.len() <= liveness_threshold {
 				to_report
 			} else {
 				Vec::new()
@@ -384,6 +384,8 @@ pub mod pallet {
 		InvalidRespondent,
 		/// The request Id is stale or not yet valid.
 		InvalidRequestId,
+		/// A reported offender is not participating in the ceremony.
+		InvalidBlame,
 	}
 
 	#[pallet::hooks]
@@ -578,6 +580,10 @@ pub mod pallet {
 							return Err(Error::<T, I>::InvalidRespondent)
 						}
 
+						if !offenders.is_subset(&context.candidates) {
+							return Err(Error::<T, I>::InvalidBlame)
+						}
+
 						for id in offenders {
 							(*context.blame_counts.entry(id).or_default()) += 1;
 						}
@@ -660,7 +666,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			} else {
 				(
 					if let Some(EpochKey { key, epoch_index, .. }) =
-						T::KeyProvider::current_epoch_key().filter(
+						T::KeyProvider::active_epoch_key().filter(
 							|EpochKey { key_state, .. }| {
 								key_state.is_available_for_request(request_id)
 							},
@@ -685,8 +691,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			Ok((epoch, key, participants)) => {
 				let ceremony_id = T::CeremonyIdProvider::increment_ceremony_id();
 				PendingCeremonies::<T, I>::insert(ceremony_id, {
-					let remaining_respondents: BTreeSet<_> =
-						participants.clone().into_iter().collect();
 					CeremonyContext {
 						request_context: RequestContext {
 							request_id,
@@ -697,8 +701,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						epoch,
 						key,
 						blame_counts: BTreeMap::new(),
-						participant_count: remaining_respondents.len() as AuthorityCount,
-						remaining_respondents,
+						candidates: participants.clone(),
+						remaining_respondents: participants.clone(),
 					}
 				});
 				Self::schedule_ceremony_retry(

@@ -4,11 +4,14 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	address::EncodedAddress, CcmDepositMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress,
+	address::{AddressConverter, EncodedAddress},
+	CcmDepositMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress,
 };
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount, STABLE_ASSET};
 use cf_test_utilities::{assert_events_eq, assert_events_match};
-use cf_traits::{AccountRoleRegistry, AddressDerivationApi, EpochInfo, LpBalanceApi};
+use cf_traits::{
+	AccountRoleRegistry, AddressDerivationApi, EpochInfo, GetBlockHeight, LpBalanceApi,
+};
 use frame_support::{
 	assert_ok,
 	traits::{OnFinalize, OnIdle, OnNewAccount},
@@ -17,10 +20,12 @@ use pallet_cf_ingress_egress::DepositWitness;
 use pallet_cf_pools::Order;
 use pallet_cf_swapping::{CcmIdCounter, SwapOrigin};
 use state_chain_runtime::{
-	chainflip::address_derivation::AddressDerivation, AccountRoles, EthereumInstance,
-	LiquidityPools, LiquidityProvider, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Swapping,
-	System, Timestamp, Validator, Weight, Witnesser,
+	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter},
+	AccountRoles, EthereumInstance, LiquidityPools, LiquidityProvider, Runtime, RuntimeCall,
+	RuntimeEvent, RuntimeOrigin, Swapping, System, Timestamp, Validator, Weight, Witnesser,
 };
+
+use state_chain_runtime::EthereumChainTracking;
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
 const ZION: AccountId = AccountId::new([0x22; 32]);
@@ -214,8 +219,11 @@ fn basic_pool_setup_provision_and_swap() {
 			cf_primitives::chains::assets::eth::Asset::Eth,
 			pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
 		).unwrap();
+
+		let opened_at = EthereumChainTracking::get_block_height();
+
 		assert_events_eq!(Runtime, RuntimeEvent::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Event::StartWitnessing { deposit_address, source_asset: cf_primitives::chains::assets::eth::Asset::Eth },
+			pallet_cf_ingress_egress::Event::StartWitnessing { deposit_address, source_asset: cf_primitives::chains::assets::eth::Asset::Eth, opened_at },
 		));
 		System::reset_events();
 
@@ -243,7 +251,7 @@ fn basic_pool_setup_provision_and_swap() {
 				..
 			},
 			..
-		}) if <Ethereum as Chain>::ChainAccount::try_from(events_deposit_address.clone()).unwrap() == deposit_address => swap_id);
+		}) if <Ethereum as Chain>::ChainAccount::try_from(ChainAddressConverter::try_from_encoded_address(events_deposit_address.clone()).expect("we created the deposit address above so it should be valid")).unwrap() == deposit_address => swap_id);
 
 		assert_ok!(Timestamp::set(RuntimeOrigin::none(), Timestamp::now()));
 		state_chain_runtime::AllPalletsWithoutSystem::on_finalize(2);
@@ -268,6 +276,7 @@ fn basic_pool_setup_provision_and_swap() {
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
 					swap_id: executed_swap_id,
+					..
 				},
 			) if executed_swap_id == swap_id => (),
 			RuntimeEvent::Swapping(
@@ -365,6 +374,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
 					swap_id,
+					..
 				},
 			) if swap_id == principal_swap_id => (),
 			RuntimeEvent::LiquidityPools(
@@ -377,6 +387,7 @@ fn can_process_ccm_via_swap_deposit_address() {
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
 					swap_id,
+					..
 				},
 			) if swap_id == gas_swap_id => (),
 			RuntimeEvent::Swapping(
@@ -454,6 +465,7 @@ fn can_process_ccm_via_direct_deposit() {
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
 					swap_id,
+					..
 				},
 			) if swap_id == principal_swap_id => (),
 			RuntimeEvent::LiquidityPools(
@@ -466,6 +478,7 @@ fn can_process_ccm_via_direct_deposit() {
 			RuntimeEvent::Swapping(
 				pallet_cf_swapping::Event::SwapExecuted {
 					swap_id,
+					..
 				},
 			) if swap_id == gas_swap_id => (),
 			RuntimeEvent::Swapping(
@@ -484,6 +497,163 @@ fn can_process_ccm_via_direct_deposit() {
 					..
 				},
 			) if actual_egress_id == egress_id => ()
+		);
+	});
+}
+
+#[test]
+fn failed_swaps_are_rolled_back() {
+	super::genesis::default().build().execute_with(|| {
+		setup_pool_and_accounts(vec![Asset::Eth, Asset::Btc]);
+
+		// Get current pool's liquidity
+		let eth_sqrt_pice = LiquidityPools::current_sqrt_price(Asset::Eth, STABLE_ASSET)
+			.expect("Eth pool should be set up with liquidity.");
+		let btc_sqrt_pice = LiquidityPools::current_sqrt_price(Asset::Btc, STABLE_ASSET)
+			.expect("Btc pool should be set up with liquidity.");
+
+		let witness_swap_ingress =
+			|from: Asset, to: Asset, amount: AssetAmount, destination_address: EncodedAddress| {
+				let swap_call = Box::new(RuntimeCall::Swapping(
+					pallet_cf_swapping::Call::schedule_swap_from_contract {
+						from,
+						to,
+						deposit_amount: amount,
+						destination_address,
+						tx_hash: Default::default(),
+					},
+				));
+				let current_epoch = Validator::current_epoch();
+				for node in Validator::current_authorities() {
+					assert_ok!(Witnesser::witness_at_epoch(
+						RuntimeOrigin::signed(node),
+						swap_call.clone(),
+						current_epoch
+					));
+				}
+			};
+
+		witness_swap_ingress(
+			Asset::Eth,
+			Asset::Flip,
+			1_000,
+			EncodedAddress::Eth(Default::default()),
+		);
+		witness_swap_ingress(
+			Asset::Eth,
+			Asset::Btc,
+			1_000,
+			EncodedAddress::Btc("1JmRyKDGoGKu8dj1VAJZgMqWKa3muTyacB".as_bytes().to_vec()),
+		);
+		witness_swap_ingress(
+			Asset::Btc,
+			Asset::Usdc,
+			1_000,
+			EncodedAddress::Eth(Default::default()),
+		);
+		System::reset_events();
+
+		// Usdc -> Flip swap will fail. All swaps are stalled.
+		Swapping::on_finalize(1);
+
+		assert_events_match!(
+			Runtime,
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::BatchSwapFailed {
+					asset: Asset::Flip,
+					direction: cf_primitives::SwapLeg::FromStable,
+					amount: 998
+				},
+			) => ()
+		);
+
+		// Repeatedly processing Failed swaps should not impact pool liquidity
+		assert_eq!(
+			Some(eth_sqrt_pice),
+			LiquidityPools::current_sqrt_price(Asset::Eth, STABLE_ASSET)
+		);
+		assert_eq!(
+			Some(btc_sqrt_pice),
+			LiquidityPools::current_sqrt_price(Asset::Btc, STABLE_ASSET)
+		);
+
+		// Subsequent swaps will also fail. No swaps should be processed and the Pool liquidity
+		// shouldn't be drained.
+		Swapping::on_finalize(2);
+		assert_eq!(
+			Some(eth_sqrt_pice),
+			LiquidityPools::current_sqrt_price(Asset::Eth, STABLE_ASSET)
+		);
+		assert_eq!(
+			Some(btc_sqrt_pice),
+			LiquidityPools::current_sqrt_price(Asset::Btc, STABLE_ASSET)
+		);
+
+		// All swaps can continue once the problematic pool is fixed
+		setup_pool_and_accounts(vec![Asset::Flip]);
+		System::reset_events();
+
+		Swapping::on_finalize(3);
+
+		assert_ne!(
+			Some(eth_sqrt_pice),
+			LiquidityPools::current_sqrt_price(Asset::Eth, STABLE_ASSET)
+		);
+		assert_ne!(
+			Some(btc_sqrt_pice),
+			LiquidityPools::current_sqrt_price(Asset::Btc, STABLE_ASSET)
+		);
+
+		assert_events_match!(
+			Runtime,
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from: Asset:: Eth,
+					to: Asset::Usdc,
+					input_amount: 2_000,
+					..
+				},
+			) => (),
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from: Asset:: Btc,
+					to: Asset::Usdc,
+					input_amount: 1_000,
+					..
+				},
+			) => (),
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from: Asset::Usdc,
+					to: Asset::Flip,
+					..
+				},
+			) => (),
+			RuntimeEvent::LiquidityPools(
+				pallet_cf_pools::Event::AssetSwapped {
+					from: Asset::Usdc,
+					to: Asset::Btc,
+					..
+				},
+			) => (),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::SwapExecuted {
+					swap_id: 1,
+					..
+				},
+			) => (),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::SwapExecuted {
+					swap_id: 2,
+					..
+				},
+			) => (),
+			RuntimeEvent::Swapping(
+				pallet_cf_swapping::Event::SwapExecuted {
+					swap_id: 3,
+					..
+				},
+			) => ()
 		);
 	});
 }

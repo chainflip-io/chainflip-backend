@@ -86,6 +86,19 @@ Return:
 
 - Hex encoded deposit address.
 
+
+### `lp_registerEmergencyWithdrawalAddress`
+
+Parameters:
+- Chain: the forein chain where the address belongs to
+- Address: Address to be used as Emergency Withdrawal Address.
+
+e.g. ["Ethereum", "1594300cbd587694AffD70c933B9eE9155B186d9"]
+
+Return:
+
+- Transaction hash of the successful extrinsic.
+
 ### `lp_withdrawAsset`
 
 Parameters:
@@ -133,6 +146,36 @@ Return:
 - fees_harvested
   - Asset_0
   - Asset_1
+
+### `lp_mintLimitOrder`
+
+Parameters:
+
+- Asset as a camel-case string, eg "Eth" or "Dot"
+- Order as a camel-case string, "Buy" or "Sell"
+- Price tick as i32
+- Asset amount as u128
+
+Return:
+
+- assets_debited
+- collected_fees
+- swapped_liquidity
+
+### `lp_burnLimitOrder`
+
+Parameters:
+
+- Asset as a camel-case string, eg "Eth" or "Dot"
+- Order as a camel-case string, "Buy" or "Sell"
+- Price tick as i32
+- Asset amount as u128
+
+Return:
+
+- assets_credited
+- collected_fees
+- swapped_liquidity
 
 ### `lp_tokenBalances`
 

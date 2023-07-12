@@ -63,7 +63,7 @@ impl BlockWitnesser for EthBlockWitnesser {
 		.collect::<anyhow::Result<Vec<()>>>()
 		.map_err(|err| {
 			tracing::error!("Eth witnesser failed to process block: {err}");
-			err
+			err.context("Eth witnesser failed to process block.")
 		})?;
 
 		Ok(())
@@ -96,14 +96,14 @@ impl BlockWitnesserGenerator for EthBlockWitnesserGenerator {
 			safe_block_subscription_from(from_block, self.ws_rpc.clone(), self.http_rpc.clone())
 				.await
 				.map_err(|err| {
-					tracing::error!("Subscription error: {err}");
-					err
+					tracing::error!("Eth witnesser failed to get block stream: {err}");
+					anyhow::anyhow!("{err}")
 				})?;
 		let block_stream = tokio_stream::StreamExt::timeout(
 			block_stream,
 			Duration::from_secs(ETH_AVERAGE_BLOCK_TIME_SECONDS * BLOCK_PULL_TIMEOUT_MULTIPLIER),
 		)
-		.map_err(anyhow::Error::msg);
+		.map_err(|_elapsed| anyhow::anyhow!("Eth witnesser failed to get latest block."));
 
 		Ok(Box::pin(block_stream))
 	}

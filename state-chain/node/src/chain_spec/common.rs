@@ -1,4 +1,4 @@
-use cf_primitives::AuthorityCount;
+use cf_primitives::{Asset, AssetAmount, AuthorityCount};
 pub use state_chain_runtime::constants::common::*;
 use state_chain_runtime::{chainflip::Offence, BlockNumber, FlipBalance};
 
@@ -10,13 +10,6 @@ pub const MIN_AUTHORITIES: AuthorityCount = 2;
 
 /// Percent of the epoch we are allowed to redeem
 pub const PERCENT_OF_EPOCH_PERIOD_REDEEMABLE: u8 = 50;
-
-/// Most Ethereum blocks are validated in around 12 seconds. This is a conservative
-/// time, in case things go wrong.
-pub const CONSERVATIVE_BLOCK_TIME_SECS: u64 = 20;
-
-pub const REDEMPTION_DELAY_BUFFER_SECS: u64 =
-	CONSERVATIVE_BLOCK_TIME_SECS * eth::BLOCK_SAFETY_MARGIN;
 
 // Consider the equation (1 + x/1_000_000_000)^n = 1 + inf/100
 // where inf is the target yearly inflation (percent), n is the number of compundings that
@@ -46,4 +39,13 @@ pub const PENALTIES: &[(Offence, (i32, BlockNumber))] = &[
 	// so there is no need to suspend them further.
 	(Offence::FailedToBroadcastTransaction, (10, 0)),
 	(Offence::GrandpaEquivocation, (50, HEARTBEAT_BLOCK_INTERVAL * 5)),
+];
+
+pub const SWAP_TTL: BlockNumber = 2 * HOURS;
+pub const MINIMUM_SWAP_AMOUNTS: &[(Asset, AssetAmount)] = &[
+	(Asset::Eth, 580_000_000_000_000u128), // 1usd worth of Eth = 0.00058 * 18 d.p
+	(Asset::Flip, FLIPPERINOS_PER_FLIP),   // 1 Flip
+	(Asset::Usdc, 1_000_000u128),          // USDC = 6 d.p
+	(Asset::Dot, 2_000_000_000u128),       // 1 USD worth of DOT = 0.2 * 10 d.p
+	(Asset::Btc, 390_000u128),             // 1 USD worth of BTC = 0.000039 * 10 d.p
 ];

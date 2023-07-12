@@ -167,20 +167,11 @@ impl Broadcaster<Ethereum> for MockBroadcaster {
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		unimplemented!()
 	}
-
-	fn threshold_sign_and_broadcast_for_rotation(
-		_api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		unimplemented!()
-	}
 }
-
-pub const REDEMPTION_DELAY_BUFFER_SECS: u64 = 10;
 
 impl pallet_cf_funding::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type TimeSource = time_source::Mock;
-	type Balance = u128;
 	type Flip = Flip;
 	type WeightInfo = ();
 	type FunderId = AccountId;
@@ -198,6 +189,8 @@ pub const BOB: AccountId = AccountId32::new([0xb0; 32]);
 pub const CHARLIE: AccountId = AccountId32::new([0xc1; 32]);
 
 pub const MIN_FUNDING: u128 = 10;
+pub const REDEMPTION_TAX: u128 = MIN_FUNDING / 2;
+
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
@@ -205,10 +198,9 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 		flip: FlipConfig { total_issuance: 1_000_000 },
 		funding: FundingConfig {
 			genesis_accounts: vec![(CHARLIE, AccountRole::Validator, MIN_FUNDING)],
-			redemption_tax: MIN_FUNDING / 2,
+			redemption_tax: REDEMPTION_TAX,
 			minimum_funding: MIN_FUNDING,
 			redemption_ttl: Duration::from_secs(REDEMPTION_TTL_SECS),
-			redemption_delay_buffer_seconds: REDEMPTION_DELAY_BUFFER_SECS,
 		},
 	};
 

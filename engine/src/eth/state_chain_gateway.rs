@@ -114,7 +114,7 @@ impl EthContractWitnesser for StateChainGateway {
 								pallet_cf_funding::Call::funded {
 									account_id,
 									amount,
-									withdrawal_address: funder.into(),
+									funder: funder.into(),
 									tx_hash: event.tx_hash.into(),
 								}
 								.into(),
@@ -185,7 +185,7 @@ impl EthContractWitnesser for StateChainGateway {
 				let node_id_from_log = |log| {
 					let account_bytes: [u8; 32] =
 						decode_log_param::<ethabi::FixedBytes>(log, "nodeID")?.try_into().map_err(
-							|_| anyhow!("Could not cast FixedBytes nodeID into [u8;32]"),
+							|_| anyhow!("Could not cast FixedBytes nodeID into [u8;32]."),
 						)?;
 					Result::<_, anyhow::Error>::Ok(AccountId32::new(account_bytes))
 				};

@@ -30,10 +30,7 @@ use sp_std::marker::PhantomData;
 
 /// Weight functions needed for pallet_cf_ingress_egress.
 pub trait WeightInfo {
-	fn destination_assets(n: u32, ) -> Weight;
-	fn egress_ccm(n: u32, ) -> Weight;
 	fn disable_asset_egress() -> Weight;
-	fn on_idle_with_nothing_to_send() -> Weight;
 	fn process_single_deposit() -> Weight;
 	fn set_minimum_deposit() -> Weight;
 	fn finalise_ingress(a: u32, ) -> Weight;
@@ -42,82 +39,14 @@ pub trait WeightInfo {
 /// Weights for pallet_cf_ingress_egress using the Substrate node and recommended hardware.
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
-	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
-	// Storage: EthereumIngressEgress DisabledEgressAssets (r:1 w:0)
-	// Storage: EthereumIngressEgress FetchParamDetails (r:1 w:0)
-	// Storage: EthereumIngressEgress AddressStatus (r:1 w:0)
-	// Storage: Environment EthereumSignatureNonce (r:1 w:1)
-	// Storage: Environment EthereumChainId (r:1 w:0)
-	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
-	// Storage: Environment EthereumVaultAddress (r:1 w:0)
-	// Storage: EthereumBroadcaster BroadcastIdCounter (r:1 w:1)
-	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
-	// Storage: EthereumVault CurrentVaultEpochAndState (r:1 w:0)
-	// Storage: EthereumVault Vaults (r:1 w:0)
-	// Storage: Validator HistoricalAuthorities (r:1 w:0)
-	// Storage: Reputation Suspensions (r:3 w:0)
-	// Storage: EthereumVault CeremonyIdCounter (r:1 w:1)
-	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:0)
-	// Storage: EthereumThresholdSigner CeremonyRetryQueues (r:1 w:1)
-	// Storage: EthereumIngressEgress ScheduledEgressCcm (r:1 w:1)
-	// Storage: EthereumThresholdSigner Signature (r:0 w:1)
-	// Storage: EthereumThresholdSigner PendingCeremonies (r:0 w:1)
-	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
-	// Storage: EthereumBroadcaster RequestCallbacks (r:0 w:1)
-	// Storage: EthereumBroadcaster RotationBroadcast (r:0 w:1)
-	/// The range of component `n` is `[1, 254]`.
-	fn destination_assets(n: u32, ) -> Weight {
-		// Minimum execution time: 183_088 nanoseconds.
-		Weight::from_ref_time(187_489_884)
-			// Standard Error: 14_069
-			.saturating_add(Weight::from_ref_time(6_115_263).saturating_mul(n.into()))
-			.saturating_add(T::DbWeight::get().reads(19))
-			.saturating_add(T::DbWeight::get().writes(12))
-	}
-	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:0)
-	// Storage: EthereumIngressEgress ScheduledEgressCcm (r:1 w:1)
-	// Storage: EthereumIngressEgress DisabledEgressAssets (r:1 w:0)
-	// Storage: Environment EthereumSignatureNonce (r:1 w:1)
-	// Storage: Environment EthereumChainId (r:1 w:0)
-	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
-	// Storage: Environment EthereumVaultAddress (r:1 w:0)
-	// Storage: EthereumBroadcaster BroadcastIdCounter (r:1 w:1)
-	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
-	// Storage: EthereumVault CurrentVaultEpochAndState (r:1 w:0)
-	// Storage: EthereumVault Vaults (r:1 w:0)
-	// Storage: Validator HistoricalAuthorities (r:1 w:0)
-	// Storage: Reputation Suspensions (r:3 w:0)
-	// Storage: EthereumVault CeremonyIdCounter (r:1 w:1)
-	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:0)
-	// Storage: EthereumThresholdSigner CeremonyRetryQueues (r:1 w:1)
-	// Storage: EthereumThresholdSigner Signature (r:0 w:1)
-	// Storage: EthereumThresholdSigner PendingCeremonies (r:0 w:1)
-	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
-	// Storage: EthereumBroadcaster RotationBroadcast (r:0 w:1)
-	/// The range of component `n` is `[1, 254]`.
-	fn egress_ccm(n: u32, ) -> Weight {
-		// Minimum execution time: 159_980 nanoseconds.
-		Weight::from_ref_time(54_241_444)
-			// Standard Error: 80_033
-			.saturating_add(Weight::from_ref_time(72_833_143).saturating_mul(n.into()))
-			.saturating_add(T::DbWeight::get().reads(18))
-			.saturating_add(T::DbWeight::get().writes(6))
-			.saturating_add(T::DbWeight::get().writes((4_u64).saturating_mul(n.into())))
-	}
+	
 	// Storage: EthereumIngressEgress DisabledEgressAssets (r:0 w:1)
 	fn disable_asset_egress() -> Weight {
 		// Minimum execution time: 24_580 nanoseconds.
 		Weight::from_ref_time(25_346_000)
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
-	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:0)
-	// Storage: EthereumIngressEgress ScheduledEgressCcm (r:1 w:1)
-	fn on_idle_with_nothing_to_send() -> Weight {
-		// Minimum execution time: 17_238 nanoseconds.
-		Weight::from_ref_time(17_836_000)
-			.saturating_add(T::DbWeight::get().reads(2))
-			.saturating_add(T::DbWeight::get().writes(1))
-	}
+
 	// Storage: EthereumIngressEgress DepositAddressDetailsLookup (r:1 w:0)
 	// Storage: EthereumIngressEgress MinimumDeposit (r:1 w:0)
 	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
@@ -150,82 +79,14 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)
-	// Storage: EthereumIngressEgress DisabledEgressAssets (r:1 w:0)
-	// Storage: EthereumIngressEgress FetchParamDetails (r:1 w:0)
-	// Storage: EthereumIngressEgress AddressStatus (r:1 w:0)
-	// Storage: Environment EthereumSignatureNonce (r:1 w:1)
-	// Storage: Environment EthereumChainId (r:1 w:0)
-	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
-	// Storage: Environment EthereumVaultAddress (r:1 w:0)
-	// Storage: EthereumBroadcaster BroadcastIdCounter (r:1 w:1)
-	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
-	// Storage: EthereumVault CurrentVaultEpochAndState (r:1 w:0)
-	// Storage: EthereumVault Vaults (r:1 w:0)
-	// Storage: Validator HistoricalAuthorities (r:1 w:0)
-	// Storage: Reputation Suspensions (r:3 w:0)
-	// Storage: EthereumVault CeremonyIdCounter (r:1 w:1)
-	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:0)
-	// Storage: EthereumThresholdSigner CeremonyRetryQueues (r:1 w:1)
-	// Storage: EthereumIngressEgress ScheduledEgressCcm (r:1 w:1)
-	// Storage: EthereumThresholdSigner Signature (r:0 w:1)
-	// Storage: EthereumThresholdSigner PendingCeremonies (r:0 w:1)
-	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
-	// Storage: EthereumBroadcaster RequestCallbacks (r:0 w:1)
-	// Storage: EthereumBroadcaster RotationBroadcast (r:0 w:1)
-	/// The range of component `n` is `[1, 254]`.
-	fn destination_assets(n: u32, ) -> Weight {
-		// Minimum execution time: 183_088 nanoseconds.
-		Weight::from_ref_time(187_489_884)
-			// Standard Error: 14_069
-			.saturating_add(Weight::from_ref_time(6_115_263).saturating_mul(n.into()))
-			.saturating_add(RocksDbWeight::get().reads(19))
-			.saturating_add(RocksDbWeight::get().writes(12))
-	}
-	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:0)
-	// Storage: EthereumIngressEgress ScheduledEgressCcm (r:1 w:1)
-	// Storage: EthereumIngressEgress DisabledEgressAssets (r:1 w:0)
-	// Storage: Environment EthereumSignatureNonce (r:1 w:1)
-	// Storage: Environment EthereumChainId (r:1 w:0)
-	// Storage: Environment EthereumKeyManagerAddress (r:1 w:0)
-	// Storage: Environment EthereumVaultAddress (r:1 w:0)
-	// Storage: EthereumBroadcaster BroadcastIdCounter (r:1 w:1)
-	// Storage: EthereumThresholdSigner ThresholdSignatureRequestIdCounter (r:1 w:1)
-	// Storage: EthereumVault CurrentVaultEpochAndState (r:1 w:0)
-	// Storage: EthereumVault Vaults (r:1 w:0)
-	// Storage: Validator HistoricalAuthorities (r:1 w:0)
-	// Storage: Reputation Suspensions (r:3 w:0)
-	// Storage: EthereumVault CeremonyIdCounter (r:1 w:1)
-	// Storage: EthereumThresholdSigner ThresholdSignatureResponseTimeout (r:1 w:0)
-	// Storage: EthereumThresholdSigner CeremonyRetryQueues (r:1 w:1)
-	// Storage: EthereumThresholdSigner Signature (r:0 w:1)
-	// Storage: EthereumThresholdSigner PendingCeremonies (r:0 w:1)
-	// Storage: EthereumThresholdSigner RequestCallback (r:0 w:1)
-	// Storage: EthereumBroadcaster RotationBroadcast (r:0 w:1)
-	/// The range of component `n` is `[1, 254]`.
-	fn egress_ccm(n: u32, ) -> Weight {
-		// Minimum execution time: 159_980 nanoseconds.
-		Weight::from_ref_time(54_241_444)
-			// Standard Error: 80_033
-			.saturating_add(Weight::from_ref_time(72_833_143).saturating_mul(n.into()))
-			.saturating_add(RocksDbWeight::get().reads(18))
-			.saturating_add(RocksDbWeight::get().writes(6))
-			.saturating_add(RocksDbWeight::get().writes((4_u64).saturating_mul(n.into())))
-	}
+	
 	// Storage: EthereumIngressEgress DisabledEgressAssets (r:0 w:1)
 	fn disable_asset_egress() -> Weight {
 		// Minimum execution time: 24_580 nanoseconds.
 		Weight::from_ref_time(25_346_000)
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
-	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:0)
-	// Storage: EthereumIngressEgress ScheduledEgressCcm (r:1 w:1)
-	fn on_idle_with_nothing_to_send() -> Weight {
-		// Minimum execution time: 17_238 nanoseconds.
-		Weight::from_ref_time(17_836_000)
-			.saturating_add(RocksDbWeight::get().reads(2))
-			.saturating_add(RocksDbWeight::get().writes(1))
-	}
+
 	// Storage: EthereumIngressEgress DepositAddressDetailsLookup (r:1 w:0)
 	// Storage: EthereumIngressEgress MinimumDeposit (r:1 w:0)
 	// Storage: EthereumIngressEgress ScheduledEgressFetchOrTransfer (r:1 w:1)

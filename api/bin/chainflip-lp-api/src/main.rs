@@ -1,8 +1,8 @@
 use cf_utilities::try_parse_number_or_hex;
 use chainflip_api::{
 	self,
-	lp::{self, Tick},
-	primitives::{AccountRole, Asset},
+	lp::{self, BuyOrSellOrder, Tick},
+	primitives::{AccountRole, Asset, ForeignChain},
 	settings::StateChain,
 };
 use clap::Parser;
@@ -21,6 +21,13 @@ pub trait Rpc {
 
 	#[method(name = "liquidityDeposit")]
 	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<String, Error>;
+
+	#[method(name = "registerEmergencyWithdrawalAddress")]
+	async fn register_emergency_withdrawal_address(
+		&self,
+		chain: ForeignChain,
+		address: &str,
+	) -> Result<String, Error>;
 
 	#[method(name = "withdrawAsset")]
 	async fn withdraw_asset(
@@ -48,6 +55,24 @@ pub trait Rpc {
 		amount: NumberOrHex,
 	) -> Result<String, Error>;
 
+	#[method(name = "mintLimitOrder")]
+	async fn mint_limit_order(
+		&self,
+		asset: Asset,
+		order: BuyOrSellOrder,
+		price: Tick,
+		amount: NumberOrHex,
+	) -> Result<String, Error>;
+
+	#[method(name = "burnLimitOrder")]
+	async fn burn_limit_order(
+		&self,
+		asset: Asset,
+		order: BuyOrSellOrder,
+		price: Tick,
+		amount: NumberOrHex,
+	) -> Result<String, Error>;
+
 	#[method(name = "assetBalances")]
 	async fn asset_balances(&self) -> Result<String, Error>;
 
@@ -71,6 +96,19 @@ impl RpcServer for RpcServerImpl {
 		lp::request_liquidity_deposit_address(&self.state_chain_settings, asset)
 			.await
 			.map(|address| address.to_string())
+			.map_err(|e| Error::Custom(e.to_string()))
+	}
+
+	async fn register_emergency_withdrawal_address(
+		&self,
+		chain: ForeignChain,
+		address: &str,
+	) -> Result<String, Error> {
+		let ewa_address = chainflip_api::clean_foreign_chain_address(chain, address)
+			.map_err(|e| Error::Custom(e.to_string()))?;
+		lp::register_emergency_withdrawal_address(&self.state_chain_settings, ewa_address)
+			.await
+			.map(|tx_hash| tx_hash.to_string())
 			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
@@ -157,6 +195,48 @@ impl RpcServer for RpcServerImpl {
 			&self.state_chain_settings,
 			asset,
 			Range { start, end },
+			try_parse_number_or_hex(amount)?,
+		)
+		.await
+		.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
+		.map_err(|e| Error::Custom(e.to_string()))
+	}
+
+	/// Creates or adds liquidity to a limit order.
+	/// Returns the assets debited, fees harvested and swapped liquidity.
+	async fn mint_limit_order(
+		&self,
+		asset: Asset,
+		order: BuyOrSellOrder,
+		price: Tick,
+		amount: NumberOrHex,
+	) -> Result<String, Error> {
+		lp::mint_limit_order(
+			&self.state_chain_settings,
+			asset,
+			order,
+			price,
+			try_parse_number_or_hex(amount)?,
+		)
+		.await
+		.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
+		.map_err(|e| Error::Custom(e.to_string()))
+	}
+
+	/// Removes liquidity from a limit order.
+	/// Returns the assets credited, fees harvested and swapped liquidity.
+	async fn burn_limit_order(
+		&self,
+		asset: Asset,
+		order: BuyOrSellOrder,
+		price: Tick,
+		amount: NumberOrHex,
+	) -> Result<String, Error> {
+		lp::burn_limit_order(
+			&self.state_chain_settings,
+			asset,
+			order,
+			price,
 			try_parse_number_or_hex(amount)?,
 		)
 		.await

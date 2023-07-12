@@ -1,12 +1,13 @@
 use crate::chainflip::Offence;
 use cf_amm::common::SqrtPriceQ64F96;
+use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::api::EthereumChainId};
 use cf_primitives::{Asset, AssetAmount, EpochIndex, EthereumAddress, SwapOutput};
 use codec::{Decode, Encode};
 use pallet_cf_governance::GovCallHash;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_api::decl_runtime_apis;
-use sp_runtime::{AccountId32, DispatchError};
+use sp_runtime::AccountId32;
 use sp_std::vec::Vec;
 
 type VanityName = Vec<u8>;
@@ -35,7 +36,6 @@ pub struct RuntimeApiAccountInfo {
 	pub is_activated: bool,
 	pub online_credits: u32,
 	pub reputation_points: i32,
-	pub withdrawal_address: EthereumAddress,
 	pub state: ChainflipAccountStateWithPassive,
 }
 
@@ -46,7 +46,6 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub last_heartbeat: u32, // can *maybe* remove this - check with Andrew
 	pub online_credits: u32,
 	pub reputation_points: i32,
-	pub withdrawal_address: EthereumAddress,
 	pub keyholder_epochs: Vec<EpochIndex>,
 	pub is_current_authority: bool,
 	pub is_current_backup: bool,
@@ -68,6 +67,13 @@ pub struct AuctionState {
 	pub redemption_period_as_percentage: u8,
 	pub min_funding: u128,
 	pub auction_size_range: (u32, u32),
+}
+
+#[derive(Encode, Decode, Eq, PartialEq)]
+pub struct Environment {
+	pub bitcoin_network: BitcoinNetwork,
+	pub ethereum_chain_id: EthereumChainId,
+	pub polkadot_genesis_hash: PolkadotHash,
 }
 
 decl_runtime_apis!(
@@ -100,10 +106,8 @@ decl_runtime_apis!(
 		fn cf_generate_gov_key_call_hash(call: Vec<u8>) -> GovCallHash;
 		fn cf_auction_state() -> AuctionState;
 		fn cf_pool_sqrt_price(from: Asset, to: Asset) -> Option<SqrtPriceQ64F96>;
-		fn cf_pool_simulate_swap(
-			from: Asset,
-			to: Asset,
-			amount: AssetAmount,
-		) -> Result<SwapOutput, DispatchError>;
+		fn cf_pool_simulate_swap(from: Asset, to: Asset, amount: AssetAmount)
+			-> Option<SwapOutput>;
+		fn cf_environment() -> Environment;
 	}
 );

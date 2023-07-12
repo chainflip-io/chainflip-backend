@@ -3,10 +3,10 @@ use async_trait::async_trait;
 use cf_chains::{
 	address::EncodedAddress, eth::to_ethereum_address, CcmDepositMetadata, ForeignChain,
 };
-use cf_primitives::{AccountRole, Asset, BasisPoints};
+use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId};
 use futures::FutureExt;
 use pallet_cf_validator::MAX_LENGTH_FOR_VANITY_NAME;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{ed25519::Public as EdPublic, sr25519::Public as SrPublic, Bytes, Pair, H256};
 use sp_finality_grandpa::AuthorityId as GrandpaId;
@@ -53,7 +53,7 @@ impl<
 			.raw_rpc_client
 			.cf_is_auction_phase(None)
 			.await
-			.map_err(Into::into)
+			.context("Error RPC query: is_auction_phase")
 	}
 }
 
@@ -348,11 +348,11 @@ pub async fn set_vanity_name(
 	.await
 }
 
-#[derive(Serialize, Deserialize)]
 pub struct SwapDepositAddress {
 	pub address: String,
 	pub expiry_block: state_chain_runtime::BlockNumber,
 	pub issued_block: state_chain_runtime::BlockNumber,
+	pub channel_id: ChannelId,
 }
 
 pub async fn request_swap_deposit_address(
@@ -378,7 +378,10 @@ pub async fn request_swap_deposit_address(
 
 	if let Some(state_chain_runtime::RuntimeEvent::Swapping(
 		pallet_cf_swapping::Event::SwapDepositAddressReady {
-			deposit_address, expiry_block, ..
+			deposit_address,
+			expiry_block,
+			channel_id,
+			..
 		},
 	)) = events.iter().find(|event| {
 		matches!(
@@ -392,6 +395,7 @@ pub async fn request_swap_deposit_address(
 			address: deposit_address.to_string(),
 			expiry_block: *expiry_block,
 			issued_block: block_number,
+			channel_id: *channel_id,
 		})
 	} else {
 		panic!("SwapDepositAddressReady must have been generated");
@@ -402,10 +406,8 @@ pub async fn request_swap_deposit_address(
 /// chain.
 pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result<EncodedAddress> {
 	Ok(match chain {
-		ForeignChain::Ethereum =>
-			EncodedAddress::Eth(clean_eth_address(address).map_err(anyhow::Error::msg)?),
-		ForeignChain::Polkadot =>
-			EncodedAddress::Dot(clean_dot_address(address).map_err(anyhow::Error::msg)?),
+		ForeignChain::Ethereum => EncodedAddress::Eth(clean_eth_address(address)?),
+		ForeignChain::Polkadot => EncodedAddress::Dot(clean_dot_address(address)?),
 		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
 	})
 }
@@ -467,7 +469,7 @@ pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(KeyPair, Strin
 				pair.public().into(),
 			)
 		})
-		.map_err(|_| anyhow::Error::msg("Invalid seed phrase"))
+		.map_err(|e| anyhow!("Failed to generate signing key - invalid seed phrase. Error: {e:?}"))
 }
 
 /// Generate a new random ethereum key.

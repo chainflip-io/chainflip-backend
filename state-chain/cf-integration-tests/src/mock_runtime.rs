@@ -11,7 +11,6 @@ use state_chain_runtime::{
 
 pub const CURRENT_AUTHORITY_EMISSION_INFLATION_PERBILL: u32 = 28;
 pub const BACKUP_NODE_EMISSION_INFLATION_PERBILL: u32 = 6;
-pub const REDEMPTION_DELAY_BUFFER_SECS: u64 = 10;
 pub const SUPPLY_UPDATE_INTERVAL_DEFAULT: u32 = 14_400;
 pub const MIN_FUNDING: FlipBalance = 10 * FLIPPERINOS_PER_FLIP;
 
@@ -113,7 +112,6 @@ impl ExtBuilder {
 				redemption_tax: MIN_FUNDING / 2,
 				minimum_funding: MIN_FUNDING,
 				redemption_ttl: core::time::Duration::from_secs(3 * REDEMPTION_DELAY_SECS),
-				redemption_delay_buffer_seconds: REDEMPTION_DELAY_BUFFER_SECS,
 			},
 			reputation: ReputationConfig {
 				accrual_ratio: ACCRUAL_RATIO,
