@@ -233,6 +233,9 @@ pub mod pallet {
 
 		/// The redemption amount was zero, so no redemption was made. The tax was still levied.
 		RedemptionAmountZero { account_id: AccountId<T> },
+
+		/// An account has been bound to an address.
+		BoundRedeemAddress { account_id: AccountId<T>, address: EthereumAddress },
 	}
 
 	#[pallet::error]
@@ -635,6 +638,7 @@ pub mod pallet {
 			let account_id = ensure_signed(origin)?;
 			ensure!(!BoundAddress::<T>::contains_key(&account_id), Error::<T>::AccountAlreadyBound);
 			BoundAddress::<T>::insert(&account_id, address);
+			Self::deposit_event(Event::BoundRedeemAddress { account_id, address });
 			Ok(().into())
 		}
 
