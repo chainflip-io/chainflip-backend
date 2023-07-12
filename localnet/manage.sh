@@ -92,7 +92,7 @@ build-localnet() {
   while true; do
       output=$(check_endpoint_health 'http://localhost:5555/health')
       if [[ $output == "RUNNING" ]]; then
-          echo "Command is running!"
+          echo "🧘 chainflip-engine is running and healthy!"
           break
       fi
       sleep 1
@@ -138,7 +138,7 @@ build-localnet-in-ci() {
   while true; do
       output=$(check_endpoint_health 'http://localhost:5555/health')
       if [[ $output == "RUNNING" ]]; then
-          echo "Command is running!"
+          echo "🧘 chainflip-engine is running and healthy!"
           break
       fi
       sleep 1

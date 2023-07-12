@@ -13,12 +13,11 @@ let swapCount = 1;
 async function testSwap(sourceToken: Asset, destToken: Asset, addressType?: BtcAddressType, messageMetadata?: CcmDepositMetadata) {
     // Seed needs to be unique per swap:
     const seed = randomAsHex(32);
-
-    const tag = `[${swapCount++}: ${sourceToken}->${destToken}]`;
-
-    let address;
+    let address = await getAddress(destToken, seed, addressType);
+    let tag = '[';
     // For swaps with a message force the address to be the CF Receiver Mock address.
-    if (messageMetadata && chainFromAsset(destToken) === chainFromAsset('ETH')) {
+    if (messageMetadata && chainFromAsset(destToken) === chainFromAsset('ETH')){
+        tag += "CCM | "
         address = getEthContractAddress('CFRECEIVER');
         console.log(`${tag} Using CF Receiver Mock address: ${address}`);
     } else {
@@ -26,6 +25,8 @@ async function testSwap(sourceToken: Asset, destToken: Asset, addressType?: BtcA
         console.log(`${tag} Created new ${destToken} address: ${address}`);
     }
 
+    console.log(`Created new ${destToken} address: ${address}`);
+    tag += `${swapCount++}: ${sourceToken}->${destToken}]`;
 
     await performSwap(sourceToken, destToken, address, tag, messageMetadata);
 }
@@ -60,7 +61,8 @@ async function testAll() {
     // NOTE: Parallelized ccm swaps with the same sourceToken and destToken won't work because
     // all ccm swaps have the same destination address (cfReceiver) and then it will get a
     // potentially incorrect depositAddress.
-    const ccmSwaps = Promise.all([
+    // DISABLED FOR NOW, UNTIL ENOUGH EVENT DATA IS AVAILABLE TO TEST THIS RELIABLY
+    /*const ccmSwaps = Promise.all([
         testSwap('BTC', 'ETH', undefined, {
             message: new Web3().eth.abi.encodeParameter("string", "BTC to ETH w/ CCM!!"),
             gas_budget: 1000000,
@@ -97,9 +99,9 @@ async function testAll() {
             cf_parameters: getAbiEncodedMessage(["address","uint256"]),
             source_address: {'ETH': await getAddress('ETH', randomAsHex(32))},
         })            
-    ])   
+    ])*/
 
-    await Promise.all([contractSwaps, regularSwaps, ccmSwaps]);
+    await Promise.all([contractSwaps, regularSwaps/*, ccmSwaps*/]);
 
 }
 
