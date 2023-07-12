@@ -23,7 +23,7 @@ services:
   sequencer:
     pid: host # allow debugging
     platform: linux/amd64
-    image: ghcr.io/chainflip-io/nitro-testnode/testnode-sequencer:latest
+    image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
     ports:
       - "127.0.0.1:8547:8547"
       - "127.0.0.1:8548:8548"
@@ -39,7 +39,7 @@ services:
   staker-unsafe:
     pid: host # allow debugging
     platform: linux/amd64
-    image: ghcr.io/chainflip-io/nitro-testnode/testnode-staker:latest
+    image: offchainlabs/nitro-node:v2.0.14-2baa834-dev
     ports:
       - "127.0.0.1:8047:8547"
       - "127.0.0.1:8048:8548"
