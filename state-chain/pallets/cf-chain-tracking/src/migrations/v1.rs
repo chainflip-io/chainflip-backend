@@ -1,5 +1,7 @@
 use crate::*;
 use sp_std::marker::PhantomData;
+#[cfg(feature = "try-runtime")]
+use sp_std::prelude::Vec;
 
 pub struct Migration<T: Config<I>, I: 'static>(PhantomData<(T, I)>);
 
