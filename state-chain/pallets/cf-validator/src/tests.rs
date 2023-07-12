@@ -4,7 +4,7 @@ use crate::{mock::*, Error, *};
 use cf_test_utilities::{assert_event_sequence, last_event};
 use cf_traits::{
 	mocks::{
-		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
+		funding_info::MockFundingInfo, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotator::MockVaultRotatorA,
 	},
 	AccountRoleRegistry, AuctionOutcome, SystemStateInfo,
@@ -42,32 +42,27 @@ fn simple_rotation_state(
 	RuntimeRotationState::<Test>::from_auction_outcome::<Test>(AuctionOutcome {
 		winners: auction_winners,
 		bond: bond.unwrap_or(100),
-		losers: AUCTION_LOSERS.zip(LOSING_BIDS).map(Into::into).to_vec(),
+		losers: AUCTION_LOSERS.to_vec(),
 	})
 }
 
 #[test]
 fn changing_epoch_block_size() {
 	new_test_ext().execute_with(|| {
-		let min_duration = <Test as Config>::MinEpoch::get();
-		assert_eq!(min_duration, 1);
-		// Throw up an error if we supply anything less than this
 		assert_noop!(
-			ValidatorPallet::set_blocks_for_epoch(RuntimeOrigin::root(), min_duration - 1),
-			Error::<Test>::InvalidEpoch
+			ValidatorPallet::update_pallet_config(
+				RuntimeOrigin::root(),
+				PalletConfigUpdate::EpochDuration { blocks: 0 }
+			),
+			Error::<Test>::InvalidEpochDuration
 		);
-		assert_ok!(ValidatorPallet::set_blocks_for_epoch(RuntimeOrigin::root(), min_duration));
+		const UPDATE: PalletConfigUpdate = PalletConfigUpdate::EpochDuration { blocks: 100 };
+		assert_ok!(ValidatorPallet::update_pallet_config(RuntimeOrigin::root(), UPDATE));
 		assert_eq!(
 			last_event::<Test>(),
-			mock::RuntimeEvent::ValidatorPallet(crate::Event::EpochDurationChanged(
-				EPOCH_DURATION,
-				min_duration
-			)),
-		);
-		// We throw up an error if we try to set it to the current
-		assert_noop!(
-			ValidatorPallet::set_blocks_for_epoch(RuntimeOrigin::root(), min_duration),
-			Error::<Test>::InvalidEpoch
+			mock::RuntimeEvent::ValidatorPallet(crate::Event::PalletConfigUpdated {
+				update: UPDATE
+			}),
 		);
 	});
 }
@@ -84,7 +79,7 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 		assert_eq!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle);
 
 		// Now that we have bidders, we should succeed the auction, and complete the rotation
-		MockBidderProvider::set_winning_bids();
+		MockBidderProvider::set_default_test_bids();
 
 		move_forward_blocks(1);
 		assert!(matches!(
@@ -115,7 +110,7 @@ fn should_retry_rotation_until_success_with_failing_auctions() {
 #[test]
 fn should_be_unable_to_force_rotation_during_a_rotation() {
 	new_test_ext().execute_with(|| {
-		MockBidderProvider::set_winning_bids();
+		MockBidderProvider::set_default_test_bids();
 		ValidatorPallet::start_authority_rotation();
 		assert_noop!(
 			ValidatorPallet::force_rotation(RuntimeOrigin::root()),
@@ -127,7 +122,7 @@ fn should_be_unable_to_force_rotation_during_a_rotation() {
 #[test]
 fn should_rotate_when_forced() {
 	new_test_ext().execute_with(|| {
-		MockBidderProvider::set_winning_bids();
+		MockBidderProvider::set_default_test_bids();
 		assert_ok!(ValidatorPallet::force_rotation(RuntimeOrigin::root()));
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
@@ -150,7 +145,7 @@ fn auction_winners_should_be_the_new_authorities_on_new_epoch() {
 			"the current authorities should be the genesis authorities"
 		);
 		// Run to the epoch boundary.
-		MockBidderProvider::set_winning_bids();
+		MockBidderProvider::set_default_test_bids();
 		run_to_block(EPOCH_DURATION);
 		assert_eq!(
 			ValidatorPallet::current_authorities(),
@@ -411,19 +406,41 @@ fn register_peer_id() {
 fn rerun_auction_if_not_enough_participants() {
 	new_test_ext().execute_with_unchecked_invariants(|| {
 		// Unqualify one of the auction winners
-		QualifyAll::<u64>::except([AUCTION_WINNERS[0]]);
 		// Change the auction parameters to simulate a shortage in available candidates
-		assert_ok!(ValidatorPallet::set_auction_parameters(
+		MockBidderProvider::set_default_test_bids();
+		let num_bidders = <MockBidderProvider as BidderProvider>::get_bidders().len() as u32;
+
+		assert_ok!(ValidatorPallet::update_pallet_config(
 			RuntimeOrigin::root(),
-			SetSizeParameters { min_size: 3, max_size: 3, max_expansion: 3 }
+			PalletConfigUpdate::AuctionParameters {
+				parameters: SetSizeParameters {
+					min_size: num_bidders + 1,
+					max_size: 150,
+					max_expansion: 150
+				}
+			}
 		));
 		// Run to the epoch boundary
-		MockBidderProvider::set_winning_bids();
 		run_to_block(EPOCH_DURATION);
+		cf_test_utilities::assert_has_event::<Test>(RuntimeEvent::ValidatorPallet(
+			Event::RotationAborted,
+		));
 		// Assert that we still in the idle phase
-		assert!(matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle));
-		// Set some over node to requalify the first auction winner
-		QualifyAll::<u64>::except([AUCTION_LOSERS[0]]);
+		assert!(
+			matches!(CurrentRotationPhase::<Test>::get(), RotationPhase::<Test>::Idle),
+			"Expected idle phase, got {:?}",
+			CurrentRotationPhase::<Test>::get()
+		);
+		assert_ok!(ValidatorPallet::update_pallet_config(
+			RuntimeOrigin::root(),
+			PalletConfigUpdate::AuctionParameters {
+				parameters: SetSizeParameters {
+					min_size: num_bidders - 1,
+					max_size: 150,
+					max_expansion: 150
+				}
+			}
+		));
 		// Run to the next block - we expect and immediate retry
 		run_to_block(EPOCH_DURATION + 1);
 		// Expect a resolved auction and kickedoff key-gen
@@ -539,7 +556,7 @@ fn no_auction_during_maintenance() {
 		assert!(!MockSystemStateInfo::is_maintenance_mode());
 
 		// Try to start a rotation.
-		MockBidderProvider::set_winning_bids();
+		MockBidderProvider::set_default_test_bids();
 		ValidatorPallet::start_authority_rotation();
 		assert!(matches!(
 			CurrentRotationPhase::<Test>::get(),
@@ -551,7 +568,7 @@ fn no_auction_during_maintenance() {
 #[test]
 fn rotating_during_rotation_is_noop() {
 	new_test_ext().execute_with_unchecked_invariants(|| {
-		MockBidderProvider::set_winning_bids();
+		MockBidderProvider::set_default_test_bids();
 		ValidatorPallet::force_rotation(RawOrigin::Root.into()).unwrap();
 		// We attempt an auction when we force a rotation
 		assert!(matches!(
@@ -630,21 +647,23 @@ mod bond_expiry {
 fn auction_params_must_be_valid_when_set() {
 	new_test_ext().execute_with(|| {
 		assert_noop!(
-			ValidatorPallet::set_auction_parameters(
+			ValidatorPallet::update_pallet_config(
 				RuntimeOrigin::root(),
-				SetSizeParameters::default()
+				PalletConfigUpdate::AuctionParameters { parameters: SetSizeParameters::default() }
 			),
 			Error::<Test>::InvalidAuctionParameters
 		);
 
-		assert_ok!(ValidatorPallet::set_auction_parameters(
+		assert_ok!(ValidatorPallet::update_pallet_config(
 			RuntimeOrigin::root(),
-			SetSizeParameters { min_size: 3, max_size: 10, max_expansion: 10 }
+			PalletConfigUpdate::AuctionParameters {
+				parameters: SetSizeParameters { min_size: 3, max_size: 10, max_expansion: 10 }
+			}
 		));
 		// Confirm we have an event
 		assert!(matches!(
 			last_event::<Test>(),
-			mock::RuntimeEvent::ValidatorPallet(crate::Event::AuctionParametersChanged(..)),
+			mock::RuntimeEvent::ValidatorPallet(crate::Event::PalletConfigUpdated { .. }),
 		));
 	});
 }
@@ -659,11 +678,19 @@ fn test_validator_registration_min_balance() {
 #[test]
 fn test_expect_validator_register_fails() {
 	new_test_ext().execute_with(|| {
-		Backups::<Test>::put(BTreeMap::from_iter([(ALICE, 100), (BOB, 80)]));
+		assert_ok!(ValidatorPallet::update_pallet_config(
+			RawOrigin::Root.into(),
+			PalletConfigUpdate::RegistrationBondPercentage {
+				percentage: Percent::from_percent(60),
+			},
+		));
+		MockFundingInfo::<Test>::credit_funds(&42, Percent::from_percent(40) * GENESIS_BOND);
 		assert_noop!(
-			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(3),),
+			Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(42),),
 			crate::Error::<Test>::NotEnoughFunds
 		);
+		MockFundingInfo::<Test>::credit_funds(&42, Percent::from_percent(20) * GENESIS_BOND);
+		assert_ok!(Pallet::<Test>::register_as_validator(RuntimeOrigin::signed(42),));
 	});
 }
 

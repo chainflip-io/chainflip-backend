@@ -8,12 +8,9 @@ use cf_traits::{
 		qualify_node::QualifyAll, reputation_resetter::MockReputationResetter,
 		vault_rotator::MockVaultRotatorA,
 	},
-	AccountRoleRegistry, Bid, RuntimeAuctionOutcome,
+	AccountRoleRegistry, Bid,
 };
-use frame_support::{
-	construct_runtime, parameter_types,
-	traits::{OnInitialize, ValidatorRegistration},
-};
+use frame_support::{construct_runtime, parameter_types, traits::OnInitialize};
 use sp_core::H256;
 use sp_runtime::{
 	impl_opaque_keys,
@@ -102,25 +99,7 @@ pub const AUCTION_LOSERS: [ValidatorId; 3] = [5, 6, 7];
 pub const UNQUALIFIED_NODE: ValidatorId = 8;
 pub const UNQUALIFIED_NODE_BID: Amount = 200;
 pub const LOSING_BIDS: [Amount; 3] = [99, 90, 74];
-pub const EXPECTED_BOND: Amount = 105;
-
-thread_local! {
-	pub static NEXT_AUCTION_OUTCOME: RefCell<Result<RuntimeAuctionOutcome<Test>, &'static str>> = RefCell::new(Ok(
-		RuntimeAuctionOutcome::<Test> {
-			winners: AUCTION_WINNERS.to_vec(),
-			losers: AUCTION_LOSERS.zip(LOSING_BIDS).map(Into::into).to_vec(),
-			bond: *WINNING_BIDS.iter().min().unwrap(),
-		}
-	));
-
-	pub static NUMBER_OF_AUCTIONS_ATTEMPTED: RefCell<u8> = RefCell::new(0);
-}
-
-impl ValidatorRegistration<ValidatorId> for Test {
-	fn is_registered(_id: &ValidatorId) -> bool {
-		true
-	}
-}
+pub const EXPECTED_BOND: Amount = WINNING_BIDS[WINNING_BIDS.len() - 1];
 
 pub struct TestEpochTransitionHandler;
 
@@ -150,11 +129,6 @@ impl MissedAuthorshipSlots for MockMissedAuthorshipSlots {
 	}
 }
 
-parameter_types! {
-	pub const MinEpoch: u64 = 1;
-
-}
-
 pub struct MockBonder;
 
 impl Bonding for MockBonder {
@@ -174,7 +148,7 @@ impl MockBidderProvider {
 		BIDDERS.with(|cell| *cell.borrow_mut() = bids);
 	}
 
-	pub fn set_winning_bids() {
+	pub fn set_default_test_bids() {
 		BIDDERS.with(|cell| {
 			*cell.borrow_mut() = AUCTION_WINNERS
 				.zip(WINNING_BIDS)
@@ -200,7 +174,6 @@ impl Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type Offence = PalletOffence;
 	type EpochTransitionHandler = TestEpochTransitionHandler;
-	type MinEpoch = MinEpoch;
 	type ValidatorWeightInfo = ();
 	type VaultRotator = MockVaultRotatorA;
 	type MissedAuthorshipSlots = MockMissedAuthorshipSlots;
@@ -213,8 +186,8 @@ impl Config for Test {
 
 /// Session pallet requires a set of validators at genesis.
 pub const GENESIS_AUTHORITIES: [u64; 3] = [u64::MAX, u64::MAX - 1, u64::MAX - 2];
-pub const REDEMPTION_PERCENTAGE_AT_GENESIS: Percentage = 50;
-pub const GENESIS_BOND: Amount = 1;
+pub const REDEMPTION_PERCENTAGE_AT_GENESIS: Percent = Percent::from_percent(50);
+pub const GENESIS_BOND: Amount = 100;
 pub const EPOCH_DURATION: u64 = 10;
 pub(crate) struct TestExternalitiesWithCheck {
 	ext: sp_io::TestExternalities,
@@ -267,8 +240,8 @@ impl TestExternalitiesWithCheck {
 }
 
 pub const MIN_AUTHORITY_SIZE: u32 = 1;
-pub const MAX_AUTHORITY_SIZE: u32 = 5;
-pub const MAX_AUTHORITY_SET_EXPANSION: u32 = 5;
+pub const MAX_AUTHORITY_SIZE: u32 = WINNING_BIDS.len() as u32;
+pub const MAX_AUTHORITY_SET_EXPANSION: u32 = WINNING_BIDS.len() as u32;
 
 pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 	log::debug!("Initializing TestExternalitiesWithCheck with GenesisConfig.");
@@ -294,7 +267,7 @@ pub(crate) fn new_test_ext() -> TestExternalitiesWithCheck {
 					blocks_per_epoch: EPOCH_DURATION,
 					bond: GENESIS_BOND,
 					redemption_period_as_percentage: REDEMPTION_PERCENTAGE_AT_GENESIS,
-					backup_reward_node_percentage: 34,
+					backup_reward_node_percentage: Percent::from_percent(34),
 					authority_set_min_size: MIN_AUTHORITY_SIZE,
 					min_size: MIN_AUTHORITY_SIZE,
 					max_size: MAX_AUTHORITY_SIZE,

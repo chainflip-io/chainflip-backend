@@ -146,10 +146,10 @@ impl<Id, Amount> From<(Id, Amount)> for Bid<Id, Amount> {
 /// The outcome of a successful auction.
 #[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
 pub struct AuctionOutcome<Id, Amount> {
-	/// The auction winners, sorted by in descending bid order.
+	/// The auction winners, sorted by descending bid order.
 	pub winners: Vec<Id>,
-	/// The auction losers and their bids, sorted in descending bid order.
-	pub losers: Vec<Bid<Id, Amount>>,
+	/// The auction losers, sorted by descending bid order.
+	pub losers: Vec<Id>,
 	/// The resulting bond for the next epoch.
 	pub bond: Amount,
 }
@@ -217,10 +217,17 @@ pub trait ReputationResetter {
 
 /// Providing bidders for an auction
 pub trait BidderProvider {
-	type ValidatorId;
+	type ValidatorId: Ord;
 	type Amount;
 	/// Provide a list of validators whose accounts are in the `bidding` state.
 	fn get_bidders() -> Vec<Bid<Self::ValidatorId, Self::Amount>>;
+	fn get_qualified_bidders<Q: QualifyNode<Self::ValidatorId>>(
+	) -> Vec<Bid<Self::ValidatorId, Self::Amount>> {
+		Self::get_bidders()
+			.into_iter()
+			.filter(|Bid { ref bidder_id, .. }| Q::is_qualified(bidder_id))
+			.collect()
+	}
 }
 
 pub trait OnAccountFunded {
