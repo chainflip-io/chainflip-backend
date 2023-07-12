@@ -1,14 +1,12 @@
-import fs from 'fs/promises';
 import { Asset } from "@chainflip-io/cli/.";
 import { getBtcBalance } from "./get_btc_balance";
 import { getDotBalance } from "./get_dot_balance";
 import { getEthBalance } from "./get_eth_balance";
 import { getUsdcBalance } from "./get_usdc_balance";
 import { BigNumber, ethers } from "ethers";
+import erc20abi from '../../eth-contract-abis/IERC20.json';
 
 export type Token = 'USDC' | 'ETH' | 'DOT' | 'FLIP' | 'BTC';
-
-const erc20abi = await fs.readFile('../eth-contract-abis/IERC20.json', 'utf-8');
 
 export async function getFlipBalance(address: string): Promise<BigNumber> {
     const flipContractAddress = "10C6E9530F1C1AF873a391030a1D9E8ed0630D26".toLowerCase();
