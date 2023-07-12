@@ -1,4 +1,3 @@
-use futures::future;
 use futures_core::Future;
 use futures_util::{stream, FutureExt, StreamExt};
 use utilities::loop_select;
@@ -59,9 +58,10 @@ where
 					(
 						epoch.clone(),
 						stream::unfold(
-							(epoch.clone(), chain_stream),
-							move |(epoch, mut chain_stream)| {
+							(epoch.clone(), chain_stream, None),
+							move |(epoch, mut chain_stream, mut option_pending_then)| {
 								async move {
+									// skip forward to newest header
 									let option_header = if let Some(option_header) =
 										std::iter::repeat(())
 											.map_while(|_| chain_stream.next().now_or_never())
@@ -73,57 +73,41 @@ where
 									};
 
 									if let Some(header) = option_header {
-										let option_then_header = future::select(
-											async {
-												// This doesn't get cancelled by new items to ensure
-												// stream will produce items even if the inner
-												// stream produces items faster than then_fn can run
-												Some(Header {
+										let apply_then = |header: Header<_, _, _>| {
+											let epoch = epoch.clone();
+											async move {
+												Header {
 													index: header.index,
 													hash: header.hash,
 													parent_hash: header.parent_hash,
-													data: (self.then_fn)(epoch.clone(), header)
-														.await,
-												})
-											}
-											.boxed(),
-											async {
-												if let Some(mut header) = chain_stream.next().await
-												{
-													loop_select!(
-														if let Some(new_header) = chain_stream.next() => {
-															header = new_header;
-														} else break None,
-														let then_header = async {
-															Header {
-																index: header.index,
-																hash: header.hash,
-																parent_hash: header.parent_hash,
-																data: (self.then_fn)(epoch.clone(), header).await,
-															}
-														} => {
-															break Some(then_header)
-														},
-													)
-												} else {
-													// If inner stream ends the outer stream will
-													// end, even if there are currently running
-													// then_fn instances
-													None
+													data: (self.then_fn)(epoch, header).await,
 												}
 											}
-											.boxed(),
-										)
-										.await
-										.factor_first()
-										.0;
+											.boxed()
+										};
 
-										option_then_header
-											.map(move |header| (header, (epoch, chain_stream)))
+										let mut pending_then = apply_then(header);
+
+										// We use two strategies concurrently:
+										loop_select!(
+											// We take an item and run then_fn for it, and wait for that to finish before starting a new then_fn run
+											let mapped_header = &mut pending_then => {
+												// We keep the future from the cancelling strategy (option_pending_then), so we can continue running it
+												break Some((mapped_header, (epoch, chain_stream, option_pending_then)))
+											},
+											// We take an item and run then_fn for it, and cancel it if the stream produces a new header (and then run then_fn for that new header)
+											if let Some(new_header) = chain_stream.next() => {
+												option_pending_then = Some(apply_then(new_header));
+											} else break None,
+											if option_pending_then.is_some() => let mapped_header = option_pending_then.as_mut().unwrap() => {
+												break Some((mapped_header, (epoch, chain_stream, None)))
+											},
+										)
 									} else {
 										None
 									}
 								}
+								.boxed()
 							},
 						)
 						.into_box(),
