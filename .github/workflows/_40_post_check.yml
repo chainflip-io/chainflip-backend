@@ -32,10 +32,10 @@ jobs:
 
       - name: Setup ngrok
         run: |
-          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | tee /etc/apt/sources.list.d/ngrok.list
-          apt update
-          apt install ngrok
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt update
+          sudo apt install ngrok
 
       - name: Configure NodeJS
         uses: actions/setup-node@v3
@@ -53,8 +53,8 @@ jobs:
 
       - name: Install system packages
         run: |
-          apt-get update
-          apt-get install -y bc xxd
+          sudo apt update
+          sudo apt install -y bc xxd
 
       - name: Download binaries
         uses: actions/download-artifact@v3
