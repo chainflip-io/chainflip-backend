@@ -3,8 +3,8 @@ use cf_chains::{
 	btc::{api::UtxoSelectionType, deposit_address::DepositAddress, ScriptPubkey, Utxo},
 	dot::{RuntimeVersion, TEST_RUNTIME_VERSION},
 };
-use cf_primitives::chains::assets::eth::Asset;
-use cf_traits::SafeMode;
+use cf_primitives::{chains::assets::eth::Asset, Compatibility, SemVer};
+use cf_traits::{CompatibleCfeVersions, SafeMode};
 use frame_support::{assert_noop, assert_ok, traits::OriginTrait};
 
 use crate::{EthereumSupportedAssets, RuntimeSafeMode, SafeModeUpdate};
@@ -147,5 +147,82 @@ fn update_safe_mode() {
 				safe_mode: SafeModeUpdate::CodeAmber(mock_code_amber),
 			},
 		));
+	});
+}
+
+#[test]
+fn can_set_next_cfe_version() {
+	new_test_ext().execute_with(|| {
+		assert!(Environment::next_version().is_none());
+
+		// Set the next cfe version
+		let version = Some(SemVer::new(1u8, 3u8, 10u8));
+		assert_ok!(Environment::set_next_cfe_version(RuntimeOrigin::root(), version));
+		assert_eq!(Environment::next_version(), version);
+		System::assert_last_event(RuntimeEvent::Environment(
+			crate::Event::<Test>::NextCfeVersionSet { version },
+		));
+
+		// Unset the net cfe version
+		assert_ok!(Environment::set_next_cfe_version(RuntimeOrigin::root(), None));
+		assert!(Environment::next_version().is_none());
+		System::assert_last_event(RuntimeEvent::Environment(
+			crate::Event::<Test>::NextCfeVersionSet { version: None },
+		));
+	});
+}
+
+#[test]
+fn version_compatibility_check_is_correct() {
+	new_test_ext().execute_with(|| {
+		// Current version = 1.9.1, Next version = None
+		assert_eq!(
+			Environment::is_compatible(SemVer::new(0u8, 255u8, 255u8)),
+			Compatibility::Incompatible
+		);
+		assert_eq!(
+			Environment::is_compatible(SemVer::new(1u8, 8u8, 255u8)),
+			Compatibility::Incompatible
+		);
+
+		assert_eq!(Environment::is_compatible(SemVer::new(2u8, 0u8, 0u8)), Compatibility::UpToDate);
+		assert_eq!(
+			Environment::is_compatible(SemVer::new(1u8, 10u8, 0u8)),
+			Compatibility::UpToDate
+		);
+
+		assert_eq!(
+			Environment::is_compatible(SemVer::new(1u8, 9u8, 0u8)),
+			Compatibility::ShouldUpdate
+		);
+		assert_eq!(Environment::is_compatible(SemVer::new(1u8, 9u8, 1u8)), Compatibility::UpToDate);
+		assert_eq!(
+			Environment::is_compatible(SemVer::new(1u8, 9u8, 255u8)),
+			Compatibility::UpToDate
+		);
+
+		// When next version becomes available.
+		assert_ok!(Environment::set_next_cfe_version(
+			RuntimeOrigin::root(),
+			Some(SemVer::new(2u8, 1u8, 1u8))
+		));
+
+		// Current version = 1.9.1, Next version = 2.1.1
+		assert_eq!(
+			Environment::is_compatible(SemVer::new(1u8, 8u8, 255u8)),
+			Compatibility::Incompatible
+		);
+
+		assert_eq!(
+			Environment::is_compatible(SemVer::new(1u8, 9u8, 1u8)),
+			Compatibility::MustUpdate
+		);
+		assert_eq!(
+			Environment::is_compatible(SemVer::new(2u8, 1u8, 0u8)),
+			Compatibility::MustUpdate
+		);
+
+		assert_eq!(Environment::is_compatible(SemVer::new(2u8, 1u8, 1u8)), Compatibility::UpToDate);
+		assert_eq!(Environment::is_compatible(SemVer::new(2u8, 1u8, 2u8)), Compatibility::UpToDate);
 	});
 }

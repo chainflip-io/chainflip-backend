@@ -11,7 +11,10 @@ use sp_runtime::{
 	MultiSignature, RuntimeDebug,
 };
 
-use sp_std::vec::Vec;
+use sp_std::{
+	cmp::{Ord, Ordering, PartialOrd},
+	vec::Vec,
+};
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -146,3 +149,47 @@ pub enum SwapLeg {
 }
 
 pub type TransactionHash = [u8; 32];
+
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct SemVer {
+	pub major: u8,
+	pub minor: u8,
+	pub patch: u8,
+}
+
+impl SemVer {
+	pub fn new(major: u8, minor: u8, patch: u8) -> Self {
+		Self { major, minor, patch }
+	}
+}
+
+impl PartialOrd for SemVer {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+impl Ord for SemVer {
+	fn cmp(&self, other: &Self) -> Ordering {
+		if self.major != other.major {
+			self.major.cmp(&other.major)
+		} else if self.minor != other.minor {
+			self.minor.cmp(&other.minor)
+		} else {
+			self.patch.cmp(&other.patch)
+		}
+	}
+}
+
+/// Indicates the level of compatibility between CFE and the Statechain
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub enum Compatibility {
+	// Up to date, everything is fine
+	UpToDate,
+	// Run normally, but should update if possible.
+	ShouldUpdate,
+	// Run in idle mode, must update before returning to normal.
+	MustUpdate,
+	// Completely incompatible, should not start at all.
+	Incompatible,
+}
