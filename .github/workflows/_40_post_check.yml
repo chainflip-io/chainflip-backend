@@ -59,7 +59,7 @@ jobs:
       - name: Download binaries
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-bin-ubuntu-20.04
+          name: chainflip-backend-bin-ubuntu-22.04
 
       - name: Install node dependencies
         working-directory: bouncer
@@ -122,8 +122,8 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
+          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
-          rm -rf /tmp/chainflip
 
       - name: Notify on failed bouncer
         if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'
