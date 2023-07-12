@@ -6,3 +6,4 @@ pub mod dot_chain_tracking;
 pub mod epoch_source;
 pub mod eth_chain_tracking;
 pub mod key_manager;
+pub mod contract_common;
