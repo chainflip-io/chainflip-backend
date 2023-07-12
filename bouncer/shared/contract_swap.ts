@@ -2,11 +2,11 @@ import { Asset, executeSwap, ExecuteSwapParams, approveVault} from '@chainflip-i
 import { Wallet, getDefaultProvider } from 'ethers';
 import { randomAsHex } from "@polkadot/util-crypto";
 import { chainFromAsset, getAddress, getChainflipApi, observeBalanceIncrease, observeEvent, getEthContractAddress } from '../shared/utils';
-import { getNextEthNonce } from '../shared/fund_eth';
+import { getNextEthNonce } from './send_eth';
 import { getBalance } from './get_balance';
 
 
-export async function executeContractSwap(srcAsset: Asset, destAsset: Asset, destAddress: string) {
+export async function executeContractSwap(srcAsset: Asset, destAsset: Asset, destAddress: string): Promise<any> {
 
     const wallet = Wallet.fromMnemonic(
         process.env.ETH_USDC_WHALE_MNEMONIC ??
@@ -17,7 +17,7 @@ export async function executeContractSwap(srcAsset: Asset, destAsset: Asset, des
 
     const nonce = await getNextEthNonce();
 
-    await executeSwap(
+    const receipt = await executeSwap(
         {
             destChain,
             destAsset,
@@ -35,6 +35,7 @@ export async function executeContractSwap(srcAsset: Asset, destAsset: Asset, des
             ...srcAsset!=='ETH' ? {srcTokenContractAddress: getEthContractAddress(srcAsset)} : {},
         },
     );
+    return receipt;
 }
 
 export async function performSwapViaContract(sourceAsset: Asset, destAsset: Asset) {
@@ -53,13 +54,19 @@ export async function performSwapViaContract(sourceAsset: Asset, destAsset: Asse
 
         const oldBalance = await getBalance(destAsset, addr);
         log(`Old balance: ${oldBalance}`);
-        // Note that we start observing events before executing
-        // the swap to avoid race conditions:
-        log(`Executing (${sourceAsset}) contract swap to(${destAsset}) ${addr}. Current balance: ${oldBalance}`)
-        const handle = observeEvent("swapping:SwapExecuted", api);
-        await executeContractSwap(sourceAsset, destAsset, addr);
-        await handle;
-        log(`Successfully observed event: swapping: SwapExecuted`);
+        log(`Executing (${sourceAsset}) contract swap to(${destAsset}) ${addr}. Current balance: ${oldBalance}`);
+        // To uniquely identify the contractSwap, we need to use the TX hash. This is only known
+        // after sending the transaction, so we send it first and observe the events afterwards.
+        // There are still multiple blocks of safety margin inbetween before the event is emitted
+        const receipt = await executeContractSwap(sourceAsset, destAsset, addr);
+        await observeEvent("swapping:SwapScheduled", api, (event) => {
+            if('vault' in event[5]){
+                return event[5].vault.txHash == receipt.transactionHash;
+            }
+            // Otherwise it was a swap scheduled by requesting a deposit address
+            return false;
+        });
+        log(`Successfully observed event: swapping: SwapScheduled`);
 
         const newBalance = await observeBalanceIncrease(destAsset, addr, oldBalance);
         log(`Swap success! New balance: ${newBalance}`);

@@ -1,4 +1,7 @@
-use ethers::{prelude::*, types::transaction::eip2718::TypedTransaction};
+use ethers::{
+	prelude::*,
+	types::{transaction::eip2718::TypedTransaction, TransactionReceipt},
+};
 
 use utilities::task_scope::Scope;
 
@@ -55,7 +58,7 @@ pub trait EthersRetryRpcApi: Send + Sync {
 
 	async fn send_transaction(&self, tx: TransactionRequest) -> TxHash;
 
-	async fn get_logs(&self, filter: Filter) -> Vec<Log>;
+	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log>;
 
 	async fn chain_id(&self) -> U256;
 
@@ -95,12 +98,15 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 			.await
 	}
 
-	async fn get_logs(&self, filter: Filter) -> Vec<Log> {
+	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log> {
 		self.rpc_retry_client
 			.request(Box::pin(move |client| {
-				let filter = filter.clone();
 				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move { client.get_logs(filter).await })
+				Box::pin(async move {
+					client
+						.get_logs(Filter::new().address(contract_address).at_block_hash(block_hash))
+						.await
+				})
 			}))
 			.await
 	}

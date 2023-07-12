@@ -5,11 +5,9 @@ import { KeyringPair } from "@polkadot/keyring/types";
 import Keyring from "@polkadot/keyring";
 import { executeRedemption, getRedemptionDelay } from "@chainflip-io/cli";
 import { Mutex } from "async-mutex";
-import { getAddress, getChainflipApi, observeBalanceIncrease, observeEvent, sleep } from "./utils";
-import { getFlipBalance } from "./get_balance";
-import { getNextEthNonce } from "./fund_eth";
-
-const gatewayContractAddress = "0xeEBe00Ac0756308ac4AaBfD76c05c4F3088B8883".toLowerCase();
+import { getAddress, getChainflipApi, observeBalanceIncrease, observeEvent, sleep, handleSubstrateError, getEthContractAddress} from "./utils";
+import { getBalance } from "./get_balance";
+import { getNextEthNonce } from "./send_eth";
 
 async function getBashfulSigningKey(): Promise<KeyringPair> {
     await cryptoWaitReady();
@@ -31,7 +29,7 @@ export async function redeemTest() {
     const redeemAddress = await getAddress('FLIP', 'redeem');
     console.log(`Redeem address ${redeemAddress}`);
 
-    const initBalance = await getFlipBalance(redeemAddress);
+    const initBalance = await getBalance('FLIP', redeemAddress);
 
     console.log(`Initial FLIP balance: ${initBalance.toString()}`);
 
@@ -40,7 +38,8 @@ export async function redeemTest() {
 
     const amount = 1000;
 
-    await bashfulSigningMutex.runExclusive(async () => chainflip.tx.funding.redeem({ "exact": amount }, redeemAddress).signAndSend(bashful, { nonce: -1 }));
+    await bashfulSigningMutex.runExclusive(async () => {
+        chainflip.tx.funding.redeem({ "exact": amount }, redeemAddress).signAndSend(bashful, { nonce: -1 }, handleSubstrateError(chainflip))});
 
     await observeEvent('funding:RedemptionRequested', chainflip, (event) => event[0] === bashful.address);
     console.log("Observed RedemptionRequested event");
@@ -50,7 +49,7 @@ export async function redeemTest() {
         'test test test test test test test test test test test junk',
     ).connect(ethers.getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
 
-    const options: any = { signer: wallet, network: 'localnet', stateChainGatewayContractAddress: gatewayContractAddress };
+    const options: any = { signer: wallet, network: 'localnet', stateChainGatewayContractAddress: getEthContractAddress('GATEWAY') };
 
     // Add 20 seconds extra to guard against any race conditions
     const delay = await getRedemptionDelay(options) + 20;
@@ -68,7 +67,9 @@ export async function redeemTest() {
 
     console.log('Observed RedemptionSettled event');
 
-    const newBalance = await observeBalanceIncrease('FLIP', redeemAddress, initBalance.toNumber());
+    const newBalance = await observeBalanceIncrease('FLIP', redeemAddress, initBalance);
 
     console.log(`Redemption success! New balance: ${newBalance.toString()}`);
 }
+
+redeemTest()

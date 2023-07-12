@@ -20,7 +20,9 @@ pub struct EthSource<C> {
 	client: C,
 }
 
-impl<C> EthSource<C> {
+impl<C: EthersRetrySubscribeApi + ChainClient<Index = u64, Hash = H256, Data = Bloom> + Clone>
+	EthSource<C>
+{
 	pub fn new(client: C) -> Self {
 		Self { client }
 	}
