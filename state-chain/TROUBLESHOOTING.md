@@ -10,7 +10,7 @@ As of yet there is no real structure - this isn't intended to be a document to r
 
 ## Runtime upgrades / Try-runtime
 
-First, build the runtime node with all `try-runtime` enabled.
+First, build the runtime node with `try-runtime` enabled.
 
 The `try-runtime` features for the Chainflip runtime upgrade utilities are currently incompatible with WASM builds, so use `SKIP_WASM_BUILD` to avoid compiler errors.
 
