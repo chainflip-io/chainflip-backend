@@ -107,7 +107,7 @@ impl<Inner: ChunkedByVault> Builder<Generic<Inner>> {
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom, Chain = Ethereum>,
 		StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,
 	{
-		self.map::<Result<Bloom>, _, _>(move |epoch, header| {
+		self.then::<Result<Bloom>, _, _>(move |epoch, header| {
 			let state_chain_client = state_chain_client.clone();
 			let eth_rpc = eth_rpc.clone();
 			async move {

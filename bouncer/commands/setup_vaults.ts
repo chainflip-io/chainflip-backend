@@ -7,16 +7,13 @@
 
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { getChainflipApi, getPolkadotApi, sleep } from '../shared/utils';
+import { getChainflipApi, getPolkadotApi, sleep, handleSubstrateError } from '../shared/utils';
 import { AddressOrPair } from '@polkadot/api/types';
+import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 
 async function main(): Promise<void> {
   await cryptoWaitReady();
   const keyring = new Keyring({ type: 'sr25519' });
-  const snowwhiteUri =
-    process.env.SNOWWHITE_URI ??
-    'market outdoor rubber basic simple banana resist quarter lab random hurdle cruise';
-  const snowwhite = keyring.createFromUri(snowwhiteUri);
   const alice_uri = process.env.POLKADOT_ALICE_URI || "//Alice";
   const alice = keyring.createFromUri(alice_uri);
 
@@ -27,9 +24,7 @@ async function main(): Promise<void> {
 
   // Step 1
   console.log('Forcing rotation');
-  await chainflip.tx.governance
-    .proposeGovernanceExtrinsic(chainflip.tx.validator.forceRotation())
-    .signAndSend(snowwhite);
+  await submitGovernanceExtrinsic(chainflip.tx.validator.forceRotation());
 
   // Step 2
   console.log('Waiting for new keys');

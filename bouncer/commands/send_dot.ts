@@ -7,14 +7,14 @@
 // For example: pnpm tsx ./commands/fund_dot.ts 12QTpTMELPfdz2xr9AeeavstY8uMcpUqeKWDWiwarskk4hSB 1.2
 // will send 1.2 DOT to account 12QTpTMELPfdz2xr9AeeavstY8uMcpUqeKWDWiwarskk4hSB
 
-import { fundDot } from '../shared/fund_dot';
+import { sendDot } from '../shared/send_dot';
 import { runWithTimeout } from '../shared/utils';
 
 async function main() {
   const polkadotAddress = process.argv[2];
   const dotAmount = process.argv[3].trim();
 
-  await fundDot(polkadotAddress, dotAmount);
+  await sendDot(polkadotAddress, dotAmount);
   process.exit(0);
 
 }
