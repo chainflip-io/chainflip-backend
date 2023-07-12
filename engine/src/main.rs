@@ -6,7 +6,7 @@ use cf_primitives::AccountRole;
 use chainflip_engine::{
 	btc::{self, rpc::BtcRpcClient, BtcBroadcaster},
 	db::{KeyStore, PersistentKeyDB},
-	dot::{self, rpc::DotRpcClient, DotBroadcaster},
+	dot::{rpc::LoggingRpcClient, DotBroadcaster},
 	eth::{self, broadcaster::EthBroadcaster, build_broadcast_channel},
 	health, p2p,
 	settings::{CommandLineOptions, Settings},
@@ -19,6 +19,7 @@ use chainflip_engine::{
 	},
 };
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
+use tracing::log;
 use utilities::task_scope::task_scope;
 
 use crate::eth::ethers_rpc::EthersRpcClient;
@@ -69,10 +70,6 @@ async fn main() -> anyhow::Result<()> {
 					.context("Failed to get EthereumChainId from state chain")?,
 			);
 
-			let dot_rpc_client = DotRpcClient::new(&settings.dot.ws_node_endpoint)
-				.await
-				.context("Failed to create Polkadot Client")?;
-
 			let btc_rpc_client =
 				BtcRpcClient::new(&settings.btc).context("Failed to create Bitcoin Client")?;
 
@@ -92,7 +89,7 @@ async fn main() -> anyhow::Result<()> {
 			let (epoch_start_sender, [epoch_start_receiver_1, epoch_start_receiver_2]) =
 				build_broadcast_channel(10);
 
-			let (dot_epoch_start_sender, [dot_epoch_start_receiver_1, dot_epoch_start_receiver_2]) =
+			let (dot_epoch_start_sender, [mut dot_epoch_start_receiver]) =
 				build_broadcast_channel(10);
 
 			let (btc_epoch_start_sender, [btc_epoch_start_receiver]) = build_broadcast_channel(10);
@@ -208,23 +205,44 @@ async fn main() -> anyhow::Result<()> {
 			)
 			.await?;
 
-			let (dot_monitor_address_sender, dot_monitor_signature_sender) =
-				dot::witnessing::start(
-					scope,
-					state_chain_client.clone(),
-					&settings.dot,
-					dot_epoch_start_receiver_1,
-					dot_epoch_start_receiver_2,
-					state_chain_stream.cache().block_hash,
-					db.clone(),
-				)
-				.await?;
+			let (dot_monitor_address_sender, mut dot_monitor_address_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+			let (dot_monitor_signature_sender, mut dot_monitor_signature_receiver) =
+				tokio::sync::mpsc::unbounded_channel();
+
+			scope.spawn(async move {
+				loop {
+					tokio::select! {
+						opt = dot_monitor_address_receiver.recv() => {
+							match opt {
+								Some(a) => log::debug!("Ignoring dot monitor address {a:?}"),
+								None => {
+									log::debug!("dot monitor address channel closed");
+									break Ok(())
+								},
+							};
+						},
+						opt = dot_monitor_signature_receiver.recv() => {
+							match opt {
+								Some(s) => log::debug!("Ignoring dot monitor signature {s:?}"),
+								None => {
+									log::debug!("dot monitor signature channel closed");
+									break Ok(())
+								},
+							};
+						},
+						_ = dot_epoch_start_receiver.recv() => {
+							log::debug!("Ignoring dot epoch start");
+						},
+					}
+				}
+			});
 
 			scope.spawn(state_chain_observer::start(
 				state_chain_client.clone(),
 				state_chain_stream.clone(),
 				EthBroadcaster::new(EthersRpcClient::new(&settings.eth).await?),
-				DotBroadcaster::new(dot_rpc_client.clone()),
+				DotBroadcaster::new(LoggingRpcClient),
 				BtcBroadcaster::new(btc_rpc_client.clone()),
 				eth_multisig_client,
 				dot_multisig_client,

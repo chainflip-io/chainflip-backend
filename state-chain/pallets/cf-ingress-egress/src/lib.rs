@@ -308,6 +308,13 @@ pub mod pallet {
 			amount: TargetChainAmount<T, I>,
 			tx_id: <T::TargetChain as ChainCrypto>::TransactionInId,
 		},
+		// Temporary event, don't check into main.
+		EgressDisabledForChain {
+			id: EgressId,
+			asset: TargetChainAsset<T, I>,
+			amount: AssetAmount,
+			destination_address: TargetChainAccount<T, I>,
+		},
 	}
 
 	#[pallet::error]
@@ -318,6 +325,9 @@ pub mod pallet {
 		AssetMismatch,
 		/// Channel ID has reached maximum
 		ChannelIdsExhausted,
+
+		/// The chain is disabled.
+		ChainDisabled,
 	}
 
 	#[pallet::hooks]
@@ -656,6 +666,9 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		source_asset: TargetChainAsset<T, I>,
 		channel_action: ChannelAction<T::AccountId>,
 	) -> Result<(ChannelId, TargetChainAccount<T, I>), DispatchError> {
+		if <T::TargetChain as Chain>::CANCELLED {
+			return Err(Error::<T, I>::ChainDisabled.into())
+		}
 		// We have an address available, so we can just use it.
 		let (address, channel_id, deposit_fetch_id) = if let Some((channel_id, address)) =
 			AddressPool::<T, I>::drain().next()
@@ -716,6 +729,15 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 			*id
 		});
 		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
+		if <T::TargetChain as Chain>::CANCELLED {
+			Self::deposit_event(Event::<T, I>::EgressDisabledForChain {
+				id: egress_id,
+				asset,
+				amount: amount.into(),
+				destination_address,
+			});
+			return egress_id
+		}
 		match maybe_message {
 			Some(CcmDepositMetadata { message, cf_parameters, source_address, .. }) =>
 				ScheduledEgressCcm::<T, I>::append(CrossChainMessage {

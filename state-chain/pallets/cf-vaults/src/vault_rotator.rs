@@ -131,6 +131,20 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 		if let Some(VaultRotationStatus::<T, I>::KeyHandoverComplete { new_public_key }) =
 			PendingVaultRotation::<T, I>::get()
 		{
+			// --- START OF PERSEVERANCE 0.8-ONLY SECTION ---
+			// --- DO NOT MERGE THIS TO MAIN. ---
+			if <T::Chain as Chain>::CANCELLED {
+				log::info!("Chain is cancelled, skipping activation.");
+				Self::set_vault_key_for_epoch(
+					CurrentEpochIndex::<T>::get().saturating_add(1),
+					Vault {
+						public_key: new_public_key,
+						active_from_block: T::ChainTracking::get_block_height(),
+					},
+				);
+				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete);
+			}
+			// --- END OF PERSEVERANCE 0.8-ONLY SECTION ---
 			if let Some(EpochKey { key, key_state, .. }) = Self::active_epoch_key() {
 				match <T::SetAggKeyWithAggKey as SetAggKeyWithAggKey<_>>::new_unsigned(
 					Some(key),
