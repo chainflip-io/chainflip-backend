@@ -11,9 +11,8 @@ async function main(): Promise<void> {
 
   const chainflip = await getChainflipApi();
 
-  await submitGovernanceExtrinsic(chainflip.tx.validator.forceRotation());
-
   console.log('Forcing rotation');
+  await submitGovernanceExtrinsic(chainflip.tx.validator.forceRotation());
 
   process.exit(0);
 }

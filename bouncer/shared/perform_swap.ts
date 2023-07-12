@@ -1,7 +1,7 @@
 import { encodeAddress } from '@polkadot/util-crypto';
 import { Asset } from '@chainflip-io/cli/.';
 import { newSwap } from './new_swap';
-import { fund } from './fund';
+import { send } from './send';
 import { getBalance } from './get_balance';
 import { getChainflipApi, observeBalanceIncrease, observeEvent, observeCcmReceived, encodeBtcAddressForContract } from '../shared/utils';
 import { CcmDepositMetadata } from "../shared/new_swap";
@@ -41,8 +41,8 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
 
             const destAddressEncoded = encodeDestinationAddress(destAddress, destToken);
             
-            const destTokenMatches = swapInfo[4].charAt(0) + swapInfo[4].slice(1).toUpperCase() == destToken;
-            const sourceTokenMatches = swapInfo[3].charAt(0) + swapInfo[3].slice(1).toUpperCase() == sourceToken;
+            const destTokenMatches = swapInfo[4].charAt(0) + swapInfo[4].slice(1).toUpperCase() === destToken;
+            const sourceTokenMatches = swapInfo[3].charAt(0) + swapInfo[3].slice(1).toUpperCase() === sourceToken;
             const destAddressMatches = destAddressEncoded.toLowerCase() === ADDRESS.toLowerCase();
 
             return destAddressMatches && destTokenMatches && sourceTokenMatches;
@@ -53,7 +53,7 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
     console.log(`${tag} The args are:  ${sourceToken} ${destToken} ${ADDRESS} ${FEE} ${messageMetadata ? `someMessage` : ''}`);
 
     let depositAddressToken = sourceToken;
-    if (sourceToken === 'USDC') {
+    if (sourceToken === 'USDC' || sourceToken === 'FLIP') {
         depositAddressToken = 'ETH';
     }
 
@@ -73,13 +73,13 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
 
     console.log(`${tag} Old balance: ${OLD_BALANCE}`);
 
-    const swapExecutedHandle = observeEvent('swapping:SwapExecuted', chainflipApi);
+    const swapExecutedHandle = observeEvent('swapping:SwapScheduled', chainflipApi);
 
     const ccmEventEmitted = messageMetadata
     ? observeCcmReceived(sourceToken, destToken, ADDRESS, messageMetadata)
     : Promise.resolve();
 
-    await fund(sourceToken, swapAddress.toLowerCase())
+    await send(sourceToken, swapAddress.toLowerCase())
     console.log(`${tag} Funded the address`);
 
     await swapExecutedHandle;

@@ -7,7 +7,7 @@
 
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { getChainflipApi, getPolkadotApi, sleep } from '../shared/utils';
+import { getChainflipApi, getPolkadotApi, sleep, handleSubstrateError } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 
 async function main(): Promise<void> {
@@ -60,7 +60,7 @@ async function main(): Promise<void> {
 
   // Step 3
   console.log('Transferring 100 DOT to Polkadot AggKey');
-  await polkadot.tx.balances.transfer(dotKeyAddress, 1000000000000).signAndSend(alice);
+  await polkadot.tx.balances.transfer(dotKeyAddress, 1000000000000).signAndSend(alice, {nonce: -1}, handleSubstrateError(polkadot));
 
   // Step 4
   console.log('Requesting Polkadot Vault creation');
@@ -93,7 +93,7 @@ async function main(): Promise<void> {
 
   // Step 7
   console.log('Transferring 100 DOT to Polkadot Vault');
-  await polkadot.tx.balances.transfer(vaultAddress, 1000000000000).signAndSend(alice);
+  await polkadot.tx.balances.transfer(vaultAddress, 1000000000000).signAndSend(alice, {nonce: -1}, handleSubstrateError(polkadot));
 
   // Step 8
   console.log('Registering Vaults with state chain');

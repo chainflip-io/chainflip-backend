@@ -1,7 +1,7 @@
 import Web3 from "web3";
 import { getNextEthNonce } from "./fund_eth";
 import { getEthContractAddress } from "./utils";
-import { erc20abi } from "./eth_abis";
+import erc20abi from '../../eth-contract-abis/IERC20.json';
 
 export async function fundUsdc(ethereumAddress: string, usdcAmount: string) {
 

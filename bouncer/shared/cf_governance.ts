@@ -1,5 +1,5 @@
 import { SubmittableExtrinsic } from "@polkadot/api/types";
-import { getChainflipApi } from "./utils";
+import { getChainflipApi, handleSubstrateError } from "./utils";
 import Keyring from "@polkadot/keyring";
 import { Mutex } from "async-mutex";
 import { cryptoWaitReady } from "@polkadot/util-crypto";
@@ -22,6 +22,6 @@ export async function submitGovernanceExtrinsic(extrinsic: SubmittableExtrinsic<
     return await snowWhiteMutex.runExclusive(async () => {
         return chainflip.tx.governance
             .proposeGovernanceExtrinsic(extrinsic)
-            .signAndSend(snowWhite, { nonce: -1 });
+            .signAndSend(snowWhite, { nonce: -1 }, handleSubstrateError(chainflip));
     });
 }

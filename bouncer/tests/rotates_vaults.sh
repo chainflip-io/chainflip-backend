@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 echo "Running test case \"Rotates vaults\""
 pnpm tsx ./commands/vault_rotation.ts
