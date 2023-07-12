@@ -45,7 +45,7 @@ spec:
               mountPath: {{ .Values.basePath }}
         {{- end }}
         - name: inject-keys
-          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}
           volumeMounts:
             - name: chainspec
               mountPath: {{ .Values.basePath }}
