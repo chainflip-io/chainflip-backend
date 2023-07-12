@@ -148,18 +148,52 @@ build-localnet-in-ci() {
 
 destroy() {
   echo "💣 Destroying network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --remove-orphans
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
   for pid in $(ps -ef | grep chainflip | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
   rm -rf /tmp/chainflip
 }
 
 yeet() {
     destroy
-    read -p "🚨💣 WARNING 💣🚨 Do you want to delete all Docker images and containers on your machine? [y/N] " YEET
+    read -p "🚨💣 WARNING 💣🚨 Do you want to delete all Docker images and containers on your machine? [yesPleaseYeetAll/N] " YEET
     YEET=${YEET:-"N"}
-    if [ $YEET == "y" ]; then
-      docker system prune -af
-    fi
+    if [ $YEET == "yesPleaseYeetAll" ]; then
+      echo "🚨💣🚨💣 Yeeting all docker containers and images 🚨💣🚨💣"
+      # Stop all running Docker containers
+      if [ "$(docker ps -q -a)" ]; then
+          docker stop $(docker ps -a -q)
+      else
+          echo "No Docker containers found, skipping..."
+      fi
+
+      # Remove all Docker containers
+      if [ "$(docker ps -q -a)" ]; then
+          docker rm $(docker ps -a -q)
+      else
+          echo "No Docker containers found, skipping..."
+      fi
+
+      # Remove all Docker images
+      if [ "$(docker images -q -a)" ]; then
+          docker rmi $(docker images -a -q)
+      else
+          echo "No Docker images found, skipping..."
+      fi
+
+      # Remove all Docker networks
+      if [ "$(docker network ls -q)" ]; then
+          docker network prune -f
+      else
+          echo "No Docker networks found, skipping..."
+      fi
+
+      # Remove all Docker volumes
+      if [ "$(docker volume ls -q)" ]; then
+          docker volume prune -f
+      else
+          echo "No Docker volumes found, skipping..."
+      fi
+  fi
 }
 
 logs() {
