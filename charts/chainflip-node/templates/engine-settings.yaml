@@ -1,3 +1,4 @@
+{{- if .Values.engine.enabled }}
 {{- $node_endpoint := printf "ws://%s:%s" (include "chainflip-node.fullname" .) .Values.ports.wsPort -}}
 apiVersion: v1
 kind: ConfigMap
@@ -38,3 +39,4 @@ data:
     http_node_endpoint = "{{ .Values.engine.settings.btc.http_node_endpoint | default "http://bitcoin-node:80" }}"
     rpc_user = "{{ .Values.engine.settings.btc.rpc_user }}"
     rpc_password = "{{ .Values.engine.settings.btc.rpc_password }}"
+{{- end }}

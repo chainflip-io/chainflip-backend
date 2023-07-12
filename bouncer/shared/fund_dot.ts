@@ -6,6 +6,7 @@ import { polkadotSigningMutex, sleep } from "./utils";
 export async function fundDot(address: string, amount: string) {
 
     const polkadot_endpoint = process.env.POLKADOT_ENDPOINT || 'ws://127.0.0.1:9945';
+    const alice_uri = process.env.POLKADOT_ALICE_URI || '//Alice';
 
     let planckAmount: any;
     if (!amount.includes('.')) {
@@ -16,7 +17,7 @@ export async function fundDot(address: string, amount: string) {
     }
     await cryptoWaitReady();
     const keyring = new Keyring({ type: 'sr25519' });
-    const alice = keyring.createFromUri('//Alice');
+    const alice = keyring.createFromUri(alice_uri);
     const polkadot = await ApiPromise.create({ provider: new WsProvider(polkadot_endpoint), noInitWarn: true });
 
     let resolve: any;
