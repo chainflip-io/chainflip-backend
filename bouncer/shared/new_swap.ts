@@ -2,7 +2,7 @@ import { cryptoWaitReady } from "@polkadot/util-crypto";
 import { Keyring } from "@polkadot/api";
 import { Mutex } from "async-mutex";
 import { Asset } from "@chainflip-io/cli/.";
-import { getChainflipApi, encodeDotAddressForContract } from "./utils";
+import { getChainflipApi, encodeDotAddressForContract, handleSubstrateError } from "./utils";
 
 const mutex = new Mutex();
 
@@ -26,7 +26,7 @@ export async function newSwap(sourceToken: Asset, destToken: Asset,
                 fee,
                 messageMetadata ?? null,
             )
-            .signAndSend(broker, { nonce: -1 });
+            .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
     })
 
 }

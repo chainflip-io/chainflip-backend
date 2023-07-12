@@ -1,10 +1,13 @@
-use ethers::{prelude::*, types::transaction::eip2718::TypedTransaction};
+use ethers::{
+	prelude::*,
+	types::{transaction::eip2718::TypedTransaction, TransactionReceipt},
+};
 
 use utilities::task_scope::Scope;
 
 use crate::{
 	eth::ethers_rpc::EthersRpcApi,
-	rpc_retrier::RpcRetrierClient,
+	retrier::RetrierClient,
 	witness::chain_source::{ChainClient, Header},
 };
 use std::time::Duration;
@@ -18,8 +21,8 @@ use cf_chains::Ethereum;
 
 #[derive(Clone)]
 pub struct EthersRetryRpcClient {
-	rpc_retry_client: RpcRetrierClient<EthersRpcClient>,
-	sub_retry_client: RpcRetrierClient<ReconnectSubscriptionClient>,
+	rpc_retry_client: RetrierClient<EthersRpcClient>,
+	sub_retry_client: RetrierClient<ReconnectSubscriptionClient>,
 }
 
 const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
@@ -33,13 +36,13 @@ impl EthersRetryRpcClient {
 		chain_id: web3::types::U256,
 	) -> Self {
 		Self {
-			rpc_retry_client: RpcRetrierClient::new(
+			rpc_retry_client: RetrierClient::new(
 				scope,
 				ethers_client,
 				ETHERS_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
-			sub_retry_client: RpcRetrierClient::new(
+			sub_retry_client: RetrierClient::new(
 				scope,
 				ReconnectSubscriptionClient::new(ws_node_endpoint, chain_id),
 				ETHERS_RPC_TIMEOUT,
@@ -55,7 +58,7 @@ pub trait EthersRetryRpcApi: Send + Sync {
 
 	async fn send_transaction(&self, tx: TransactionRequest) -> TxHash;
 
-	async fn get_logs(&self, filter: Filter) -> Vec<Log>;
+	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log>;
 
 	async fn chain_id(&self) -> U256;
 
@@ -95,12 +98,15 @@ impl EthersRetryRpcApi for EthersRetryRpcClient {
 			.await
 	}
 
-	async fn get_logs(&self, filter: Filter) -> Vec<Log> {
+	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log> {
 		self.rpc_retry_client
 			.request(Box::pin(move |client| {
-				let filter = filter.clone();
 				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move { client.get_logs(filter).await })
+				Box::pin(async move {
+					client
+						.get_logs(Filter::new().address(contract_address).at_block_hash(block_hash))
+						.await
+				})
 			}))
 			.await
 	}
