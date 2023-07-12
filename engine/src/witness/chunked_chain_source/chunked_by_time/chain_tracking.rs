@@ -3,6 +3,8 @@ use std::sync::Arc;
 use pallet_cf_chain_tracking::ChainState;
 use state_chain_runtime::PalletInstanceAlias;
 
+use crate::witness::chain_source::Header;
+
 use crate::witness::chunked_chain_source::Builder;
 
 use crate::{
@@ -13,10 +15,10 @@ use crate::{
 use super::{ChunkedByTime, ChunkedByTimeAlias, Generic};
 
 #[async_trait::async_trait]
-pub trait GetTrackedData<C: cf_chains::Chain>: Send + Sync + Clone {
+pub trait GetTrackedData<C: cf_chains::Chain, Hash, Data>: Send + Sync + Clone {
 	async fn get_tracked_data(
 		&self,
-		block_number: C::ChainBlockNumber,
+		header: &Header<C::ChainBlockNumber, Hash, Data>,
 	) -> Result<C::TrackedData, anyhow::Error>;
 }
 
@@ -29,7 +31,7 @@ impl<Inner: ChunkedByTime> Builder<Generic<Inner>> {
 	where
 		Inner: ChunkedByTime,
 		StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,
-		TrackedDataClient: GetTrackedData<Inner::Chain>,
+		TrackedDataClient: GetTrackedData<Inner::Chain, Inner::Hash, Inner::Data>,
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
@@ -45,9 +47,7 @@ impl<Inner: ChunkedByTime> Builder<Generic<Inner>> {
 					>::update_chain_state {
 						new_chain_state: ChainState {
 							block_height: header.index,
-							tracked_data: tracked_data_client
-								.get_tracked_data(header.index)
-								.await?,
+							tracked_data: tracked_data_client.get_tracked_data(&header).await?,
 						},
 					}
 					.into(),
