@@ -1141,6 +1141,13 @@ fn can_bind_redeem_address() {
 	new_test_ext().execute_with(|| {
 		const REDEEM_ADDRESS: EthereumAddress = [0x01; 20];
 		assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(ALICE), REDEEM_ADDRESS));
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::Funding(crate::Event::BoundRedeemAddress {
+				account_id: ALICE,
+				address: REDEEM_ADDRESS,
+			})
+		);
 		assert!(BoundAddress::<Test>::contains_key(ALICE));
 		assert_eq!(BoundAddress::<Test>::get(ALICE).unwrap(), REDEEM_ADDRESS);
 	});
