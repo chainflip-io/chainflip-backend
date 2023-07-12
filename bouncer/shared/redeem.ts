@@ -4,9 +4,10 @@ import { Wallet, ethers } from "ethers";
 import { KeyringPair } from "@polkadot/keyring/types";
 import Keyring from "@polkadot/keyring";
 import { executeRedemption, getRedemptionDelay } from "@chainflip-io/cli";
+import { Mutex } from "async-mutex";
 import { getAddress, getChainflipApi, observeBalanceIncrease, observeEvent, sleep } from "./utils";
 import { getFlipBalance } from "./get_balance";
-import { Mutex } from "async-mutex";
+import { getNextEthNonce } from "./fund_eth";
 
 const gatewayContractAddress = "0xeEBe00Ac0756308ac4AaBfD76c05c4F3088B8883".toLowerCase();
 
@@ -39,13 +40,9 @@ export async function redeemTest() {
 
     const amount = 1000;
 
-    await bashfulSigningMutex.runExclusive(async () => {
-        return chainflip.tx.funding.redeem({ "exact": amount }, redeemAddress).signAndSend(bashful, { nonce: -1 });
-    });
+    await bashfulSigningMutex.runExclusive(async () => chainflip.tx.funding.redeem({ "exact": amount }, redeemAddress).signAndSend(bashful, { nonce: -1 }));
 
-    await observeEvent('funding:RedemptionRequested', chainflip, (event) => {
-        return event[0] === bashful.address;
-    });
+    await observeEvent('funding:RedemptionRequested', chainflip, (event) => event[0] === bashful.address);
     console.log("Observed RedemptionRequested event");
 
     const wallet = Wallet.fromMnemonic(
@@ -63,12 +60,11 @@ export async function redeemTest() {
     console.log(`Executing redemption`);
     const accountIdHex = `0x${Buffer.from(bashful.addressRaw).toString('hex')}`;
 
-    // TODO: specify nonce manually once this functionality is available
-    await executeRedemption(accountIdHex as any, options);
+    const nonce = await getNextEthNonce();
 
-    await observeEvent('funding:RedemptionSettled', chainflip, (event) => {
-        return event[0] === bashful.address && event[1] === amount;
-    });
+    await executeRedemption(accountIdHex as any, { nonce, ...options });
+
+    await observeEvent('funding:RedemptionSettled', chainflip, (event) => event[0] === bashful.address && event[1] === amount);
 
     console.log('Observed RedemptionSettled event');
 
