@@ -15,7 +15,6 @@ export async function getNextEthNonce(): Promise<number> {
             const address = web3.eth.accounts.privateKeyToAccount(whaleKey).address;
             const txCount = await web3.eth.getTransactionCount(address);
             nextNonce = txCount;
-            return nextNonce;
         }
         return nextNonce++;
     });
