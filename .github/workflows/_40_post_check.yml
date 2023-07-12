@@ -17,16 +17,18 @@ permissions:
 
 jobs:
   bouncer:
-    runs-on: [hetzner]
-    container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20-ubuntu-20.04"
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+    runs-on: [digitalocean]
     timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       - name: Checkout chainflip-backend
         uses: actions/checkout@v3
+
+      - name: Login to Github Container Registry 🔑
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup ngrok
         run: |

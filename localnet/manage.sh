@@ -117,7 +117,7 @@ build-localnet-in-ci() {
   done
 
   echo "🏗 Building network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up -d
+  docker compose -f ./localnet/docker-compose.yml -p "chainflip-localnet" up --quiet-pull -d
 
   echo "🪙 Waiting for Bitcoin node to start"
   check_endpoint_health --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332 > /dev/null
