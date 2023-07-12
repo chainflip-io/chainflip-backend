@@ -14,14 +14,15 @@ async function testSwap(sourceToken: Asset, destToken: Asset, addressType?: BtcA
     // Seed needs to be unique per swap:
     const seed = randomAsHex(32);
     let address = await getAddress(destToken, seed, addressType);
-    
+    let tag = '[';
     // For swaps with a message force the address to be the CF Receiver Mock address.
     if (messageMetadata && chainFromAsset(destToken) === chainFromAsset('ETH')){
+        tag += "CCM | "
         address = getEthContractAddress('CFRECEIVER');
     }
 
     console.log(`Created new ${destToken} address: ${address}`);
-    const tag = `[${swapCount++}: ${sourceToken}->${destToken}]`;
+    tag += `${swapCount++}: ${sourceToken}->${destToken}]`;
 
     await performSwap(sourceToken, destToken, address, tag, messageMetadata);
 }

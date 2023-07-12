@@ -7,7 +7,7 @@ import { getChainflipApi, observeBalanceIncrease, observeEvent, observeCcmReceiv
 import { CcmDepositMetadata } from "../shared/new_swap";
 
 function extractDestinationAddress(swapInfo: any, destToken: Asset): string | undefined {
-    const token = (destToken === 'USDC') ? 'ETH' : destToken;
+    const token = (destToken === 'USDC' || destToken == 'FLIP') ? 'ETH' : destToken;
     return swapInfo[1][token.toLowerCase()];
 }
 
@@ -60,8 +60,9 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
     const swapInfo = JSON.parse((await addressPromise).toString());
     let swapAddress = swapInfo[0][depositAddressToken.toLowerCase()];
     const destAddress = extractDestinationAddress(swapInfo, destToken);
+    const channelId = Number(swapInfo[5]);
 
-    console.log(`${tag} Destination address is: ${destAddress}`);
+    console.log(`${tag} Destination address is: ${destAddress} Channel ID is: ${channelId}`);
 
     if (sourceToken === 'BTC') {
         swapAddress = encodeBtcAddressForContract(swapAddress);
@@ -73,7 +74,17 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
 
     console.log(`${tag} Old balance: ${OLD_BALANCE}`);
 
-    const swapExecutedHandle = observeEvent('swapping:SwapScheduled', chainflipApi);
+    const isCCM = !!messageMetadata;
+    console.log("Is CCM? " + isCCM);
+    const swapExecutedHandle = messageMetadata ? Promise.resolve() : observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
+        if('depositChannel' in event[5]){
+            const channelMatches = Number(event[5].depositChannel.channelId) == channelId;
+            const assetMatches = sourceToken === event[1].toUpperCase() as Asset;
+            return channelMatches && assetMatches;
+        }
+        // Otherwise it was a swap scheduled by interacting with the ETH smart contract
+        return false;
+    });
 
     const ccmEventEmitted = messageMetadata
     ? observeCcmReceived(sourceToken, destToken, ADDRESS, messageMetadata)
