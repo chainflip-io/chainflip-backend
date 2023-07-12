@@ -31,7 +31,7 @@ impl<Inner: ChunkedByTime> Builder<Generic<Inner>> {
 		state_chain_runtime::RuntimeCall:
 			RuntimeCallHasChain<state_chain_runtime::Runtime, Inner::Chain>,
 	{
-		self.map(move |epoch, header| {
+		self.then(move |epoch, header| {
 			let state_chain_client = state_chain_client.clone();
 			let tracked_data_client = tracked_data_client.clone();
 			async move {
