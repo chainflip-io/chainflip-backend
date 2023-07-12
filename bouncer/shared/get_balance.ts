@@ -1,13 +1,14 @@
+import { Asset } from '@chainflip-io/cli';
 import { getEthContractAddress } from "./utils";
 import { getBtcBalance } from "./get_btc_balance";
 import { getDotBalance } from "./get_dot_balance";
 import { getEthBalance } from "./get_eth_balance";
 import { getErc20Balance } from "./get_erc20_balance";
-import { Asset } from '@chainflip-io/cli';
 
-export async function getBalance(token: Asset, address: string): Promise<number> {
+export async function getBalance(token: Asset, address: string): Promise<string> {
+    // eslint-disable-next-line no-param-reassign
     address = address.trim();
-    let result: any;
+    let result: string;
     switch (token) {
         case 'FLIP':
         case 'USDC':
@@ -21,10 +22,10 @@ export async function getBalance(token: Asset, address: string): Promise<number>
             result = await getDotBalance(address);
             break;
         case "BTC":
-            result = await getBtcBalance(address);
+            result = (await getBtcBalance(address)).toString().trim();
             break;
         default:
             throw new Error(`Unexpected token: ${token}`);
     }
-    return result.toString().trim();
+    return result;
 }
