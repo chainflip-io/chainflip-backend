@@ -74,8 +74,6 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
 
     console.log(`${tag} Old balance: ${OLD_BALANCE}`);
 
-    const isCCM = !!messageMetadata;
-    console.log("Is CCM? " + isCCM);
     const swapExecutedHandle = messageMetadata ? Promise.resolve() : observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
         if('depositChannel' in event[5]){
             const channelMatches = Number(event[5].depositChannel.channelId) == channelId;
