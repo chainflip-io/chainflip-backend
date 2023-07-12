@@ -4,28 +4,15 @@
 // It will force a rotation on the chainflip state-chain
 // For example: pnpm tsx ./commands/vault_rotation.ts
 
-import { ApiPromise, WsProvider } from '@polkadot/api';
-import { Keyring } from '@polkadot/keyring';
-import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { runWithTimeout, handleSubstrateError } from '../shared/utils';
+import { submitGovernanceExtrinsic } from '../shared/cf_governance';
+import { getChainflipApi, runWithTimeout } from '../shared/utils';
 
 async function main(): Promise<void> {
-  const cfNodeEndpoint = process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944';
-  await cryptoWaitReady();
-  const keyring = new Keyring({ type: 'sr25519' });
-  const snowwhiteUri =
-    process.env.SNOWWHITE_URI ??
-    'market outdoor rubber basic simple banana resist quarter lab random hurdle cruise';
-  const snowwhite = keyring.createFromUri(snowwhiteUri);
-  const chainflip = await ApiPromise.create({
-    provider: new WsProvider(cfNodeEndpoint),
-    noInitWarn: true,
-  });
+
+  const chainflip = await getChainflipApi();
 
   console.log('Forcing rotation');
-  await chainflip.tx.governance
-    .proposeGovernanceExtrinsic(chainflip.tx.validator.forceRotation())
-    .signAndSend(snowwhite, {nonce: -1}, handleSubstrateError(chainflip));
+  await submitGovernanceExtrinsic(chainflip.tx.validator.forceRotation());
 
   process.exit(0);
 }
