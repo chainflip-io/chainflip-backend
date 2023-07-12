@@ -143,6 +143,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 					},
 				);
 				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete);
+				return
 			}
 			// --- END OF PERSEVERANCE 0.8-ONLY SECTION ---
 			if let Some(EpochKey { key, key_state, .. }) = Self::active_epoch_key() {
