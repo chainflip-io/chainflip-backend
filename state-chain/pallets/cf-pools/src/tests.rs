@@ -1,8 +1,10 @@
 use crate::{
-	mock::*, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, Pools, STABLE_ASSET,
+	mock::*, utilities, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, Pools,
+	RangeOrderSize, STABLE_ASSET,
 };
-use cf_amm::common::{sqrt_price_at_tick, Tick};
+use cf_amm::common::{sqrt_price_at_tick, SideMap, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
+use cf_test_utilities::assert_events_match;
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_runtime::Permill;
 
@@ -84,7 +86,7 @@ fn can_enable_disable_trading_pool() {
 				RuntimeOrigin::signed(ALICE),
 				unstable_asset,
 				range.clone(),
-				1_000_000,
+				RangeOrderSize::Liquidity(1_000_000),
 			),
 			Error::<Test>::PoolDisabled
 		);
@@ -103,7 +105,7 @@ fn can_enable_disable_trading_pool() {
 			RuntimeOrigin::signed(ALICE),
 			unstable_asset,
 			range,
-			1_000_000,
+			RangeOrderSize::Liquidity(1_000_000),
 		));
 	});
 }
@@ -130,6 +132,46 @@ fn test_buy_back_flip_no_funds_available() {
 }
 
 #[test]
+fn test_buy_back_flip_2() {
+	new_test_ext().execute_with(|| {
+		const POSITION: core::ops::Range<Tick> = -100_000..100_000;
+		const FLIP: Asset = Asset::Flip;
+
+		// Create a new pool.
+		assert_ok!(LiquidityPools::new_pool(
+			RuntimeOrigin::root(),
+			FLIP,
+			Default::default(),
+			sqrt_price_at_tick(0),
+		));
+		assert_ok!(LiquidityPools::collect_and_mint_range_order(
+			RuntimeOrigin::signed(ALICE),
+			FLIP,
+			POSITION,
+			RangeOrderSize::AssetAmounts {
+				desired: SideMap::from_array([1_000_000, 1_000_000]),
+				minimum: SideMap::from_array([900_000, 900_000]),
+			}
+		));
+		let liquidity = assert_events_match!(
+			Test,
+			RuntimeEvent::LiquidityPools(
+				crate::Event::RangeOrderMinted {
+					liquidity,
+					..
+				},
+			) => liquidity
+		);
+		assert_ok!(LiquidityPools::collect_and_burn_range_order(
+			RuntimeOrigin::signed(ALICE),
+			FLIP,
+			POSITION,
+			liquidity
+		));
+	});
+}
+
+#[test]
 fn test_buy_back_flip() {
 	new_test_ext().execute_with(|| {
 		const INTERVAL: <Test as frame_system::Config>::BlockNumber = 5;
@@ -147,7 +189,7 @@ fn test_buy_back_flip() {
 			RuntimeOrigin::signed(ALICE),
 			FLIP,
 			POSITION,
-			1_000_000,
+			RangeOrderSize::Liquidity(1_000_000),
 		));
 
 		// Swapping should cause the network fee to be collected.
@@ -181,25 +223,22 @@ fn test_buy_back_flip() {
 fn test_network_fee_calculation() {
 	new_test_ext().execute_with(|| {
 		// Show we can never overflow and panic
-		LiquidityPools::calculate_network_fee(Permill::from_percent(100), AssetAmount::MAX);
+		utilities::calculate_network_fee(Permill::from_percent(100), AssetAmount::MAX);
 		// 200 bps (2%) of 100 = 2
-		assert_eq!(
-			LiquidityPools::calculate_network_fee(Permill::from_percent(2u32), 100),
-			(98, 2)
-		);
+		assert_eq!(utilities::calculate_network_fee(Permill::from_percent(2u32), 100), (98, 2));
 		// 2220 bps = 22 % of 199 = 43,78
 		assert_eq!(
-			LiquidityPools::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), 199),
+			utilities::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), 199),
 			(155, 44)
 		);
 		// 2220 bps = 22 % of 234 = 51,26
 		assert_eq!(
-			LiquidityPools::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), 233),
+			utilities::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), 233),
 			(181, 52)
 		);
 		// 10 bps = 0,1% of 3000 = 3
 		assert_eq!(
-			LiquidityPools::calculate_network_fee(Permill::from_rational(1u32, 1000u32), 3000),
+			utilities::calculate_network_fee(Permill::from_rational(1u32, 1000u32), 3000),
 			(2997, 3)
 		);
 	});
