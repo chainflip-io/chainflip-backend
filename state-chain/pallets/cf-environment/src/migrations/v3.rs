@@ -14,14 +14,6 @@ pub mod types {
 		// Salt used to create the address that this utxo was sent to.
 		pub salt: u32,
 	}
-
-	#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq)]
-	pub struct UtxoId {
-		// Tx hash of the transaction this utxo was a part of
-		pub tx_hash: [u8; 32],
-		// The index of the output for this utxo
-		pub vout: u32,
-	}
 }
 
 impl<T: Config> OnRuntimeUpgrade for Migration<T> {

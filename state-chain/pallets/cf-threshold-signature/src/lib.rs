@@ -9,6 +9,7 @@ pub mod mock;
 mod tests;
 
 mod benchmarking;
+mod migrations;
 
 pub mod weights;
 
@@ -27,7 +28,7 @@ use cf_traits::{
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	ensure,
-	traits::{EnsureOrigin, Get, StorageVersion},
+	traits::{EnsureOrigin, Get, OnRuntimeUpgrade, StorageVersion},
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
@@ -71,7 +72,7 @@ pub enum ThresholdCeremonyType {
 	KeygenVerification,
 }
 
-pub const PALLET_VERSION: StorageVersion = StorageVersion::new(2);
+pub const PALLET_VERSION: StorageVersion = StorageVersion::new(3);
 
 const THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 
@@ -457,7 +458,16 @@ pub mod pallet {
 					*timeout = THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT.into();
 				}
 			});
-			Default::default()
+			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
+		}
+		#[cfg(feature = "try-runtime")]
+		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, &'static str> {
+			migrations::PalletMigration::<T, I>::pre_upgrade()
+		}
+
+		#[cfg(feature = "try-runtime")]
+		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+			migrations::PalletMigration::<T, I>::post_upgrade(state)
 		}
 	}
 
