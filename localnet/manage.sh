@@ -8,6 +8,14 @@ source ./localnet/helper.sh
 
 set -eo pipefail
 
+if [ $CI == true ]; then
+  additional_docker_compose_up_args="--quiet-pull"
+  additional_docker_compose_down_args="--volumes --remove-orphans --rmi all"
+else
+  additional_docker_compose_up_args=""
+  additional_docker_compose_down_args="--volumes --remove-orphans"
+fi
+
 setup() {
   echo "🤗 Welcome to Localnet manager"
   sleep 2
@@ -64,7 +72,7 @@ build-localnet() {
   done
 
   echo "🏗 Building network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up -d
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" up -d $additional_docker_compose_up_args
 
   echo "🪙 Waiting for Bitcoin node to start"
   check_endpoint_health -s --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332 > /dev/null
@@ -117,7 +125,7 @@ build-localnet-in-ci() {
   done
 
   echo "🏗 Building network"
-  docker compose -f ./localnet/docker-compose.yml -p "chainflip-localnet" up --quiet-pull -d
+  docker compose -f ./localnet/docker-compose.yml -p "chainflip-localnet" up -d $additional_docker_compose_up_args
 
   echo "🪙 Waiting for Bitcoin node to start"
   check_endpoint_health --user flip:flip -H 'Content-Type: text/plain;' --data '{"jsonrpc":"1.0", "id": "1", "method": "getblockchaininfo", "params" : []}' http://localhost:8332 > /dev/null
@@ -148,7 +156,7 @@ build-localnet-in-ci() {
 
 destroy() {
   echo "💣 Destroying network"
-  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
+  docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down $additional_docker_compose_down_args
   for pid in $(ps -ef | grep chainflip | grep -v grep | awk '{print $2}'); do kill -9 $pid; done
   rm -rf /tmp/chainflip
 }
