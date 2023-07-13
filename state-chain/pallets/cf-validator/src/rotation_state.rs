@@ -16,10 +16,9 @@ impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amo
 	pub fn from_auction_outcome<T: Config>(
 		AuctionOutcome { winners, losers, bond }: AuctionOutcome<Id, Amount>,
 	) -> Self {
-		let loser_limit = AuctionLoserCutoffPercentage::<T>::get() * winners.len();
 		RotationState {
 			primary_candidates: winners,
-			secondary_candidates: losers.into_iter().take(loser_limit).collect(),
+			secondary_candidates: losers,
 			banned: Default::default(),
 			bond,
 			new_epoch_index: T::EpochInfo::epoch_index() + 1,
