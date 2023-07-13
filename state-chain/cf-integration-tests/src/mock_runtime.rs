@@ -2,7 +2,7 @@ use chainflip_node::test_account_from_seed;
 use frame_support::sp_io::TestExternalities;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_finality_grandpa::AuthorityId as GrandpaId;
-use sp_runtime::BuildStorage;
+use sp_runtime::{BuildStorage, Percent};
 use state_chain_runtime::{
 	chainflip::Offence, constants::common::*, opaque::SessionKeys, AccountId, AccountRolesConfig,
 	EmissionsConfig, EthereumVaultConfig, FlipConfig, FundingConfig, GovernanceConfig,
@@ -140,8 +140,10 @@ impl ExtBuilder {
 				genesis_vanity_names: Default::default(),
 				blocks_per_epoch: self.blocks_per_epoch,
 				bond: self.genesis_accounts.iter().map(|(.., amount)| *amount).min().unwrap(),
-				redemption_period_as_percentage: PERCENT_OF_EPOCH_PERIOD_REDEEMABLE,
-				backup_reward_node_percentage: 34,
+				redemption_period_as_percentage: Percent::from_percent(
+					PERCENT_OF_EPOCH_PERIOD_REDEEMABLE,
+				),
+				backup_reward_node_percentage: Percent::from_percent(34),
 				authority_set_min_size: self.min_authorities,
 				min_size: self.min_authorities,
 				max_size: self.max_authorities,

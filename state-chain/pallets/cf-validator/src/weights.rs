@@ -31,7 +31,7 @@ use sp_std::marker::PhantomData;
 /// Weight functions needed for pallet_cf_validator.
 pub trait WeightInfo {
 	fn set_blocks_for_epoch() -> Weight;
-	fn set_backup_reward_node_percentage() -> Weight;
+	fn update_pallet_config() -> Weight;
 	fn set_authority_set_min_size() -> Weight;
 	fn cfe_version() -> Weight;
 	fn register_peer_id() -> Weight;
@@ -59,7 +59,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 			.saturating_add(T::DbWeight::get().writes(1))
 	}
 	// Storage: Validator BackupRewardNodePercentage (r:0 w:1)
-	fn set_backup_reward_node_percentage() -> Weight {
+	fn update_pallet_config() -> Weight {
 		// Minimum execution time: 23_284 nanoseconds.
 		Weight::from_ref_time(23_709_000)
 			.saturating_add(T::DbWeight::get().writes(1))
@@ -247,7 +247,7 @@ impl WeightInfo for () {
 			.saturating_add(RocksDbWeight::get().writes(1))
 	}
 	// Storage: Validator BackupRewardNodePercentage (r:0 w:1)
-	fn set_backup_reward_node_percentage() -> Weight {
+	fn update_pallet_config() -> Weight {
 		// Minimum execution time: 23_284 nanoseconds.
 		Weight::from_ref_time(23_709_000)
 			.saturating_add(RocksDbWeight::get().writes(1))

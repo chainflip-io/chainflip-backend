@@ -1,9 +1,6 @@
 use crate::*;
-use cf_traits::{AuctionOutcome, Bid};
 use sp_runtime::traits::AtLeast32BitUnsigned;
 use sp_std::collections::btree_set::BTreeSet;
-
-pub(crate) const SECONDARY_CANDIDATE_FRACTION: usize = 3;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
 pub struct RotationState<Id, Amount> {
@@ -15,49 +12,13 @@ pub struct RotationState<Id, Amount> {
 }
 
 impl<Id: Ord + Clone, Amount: AtLeast32BitUnsigned + Copy> RotationState<Id, Amount> {
-	pub fn from_auction_outcome<T>(
+	pub fn from_auction_outcome<T: Config>(
 		AuctionOutcome { winners, losers, bond }: AuctionOutcome<Id, Amount>,
-	) -> Self
-	where
-		T: Config<Amount = Amount> + Chainflip<ValidatorId = Id>,
-	{
-		debug_assert!(losers.is_sorted_by_key(|&Bid { amount, .. }| Reverse(amount)));
-		let authorities = Pallet::<T>::current_authorities().into_iter().collect::<BTreeSet<_>>();
-
-		// We don't want backups with too low a balance to be in the authority set.
-		let highest_funded_qualified_backup_nodes =
-			Pallet::<T>::highest_funded_qualified_backup_nodes_lookup();
-
-		let primary_candidates = winners;
-		let secondary_candidates = losers
-			.into_iter()
-			// We only allow current authorities or backup validators to be secondary
-			// candidates.
-			.filter_map(|Bid { bidder_id, .. }| {
-				if highest_funded_qualified_backup_nodes.contains(&bidder_id) ||
-					authorities.contains(&bidder_id)
-				{
-					Some(bidder_id)
-				} else {
-					None
-				}
-			})
-			// Limit the number of secondary candidates according to the size of the
-			// backup_percentage and the fracction of that, which can be secondary candidates
-			.take(Pallet::<T>::backup_reward_nodes_limit() / SECONDARY_CANDIDATE_FRACTION)
-			.collect();
-
-		let banned = primary_candidates
-			.iter()
-			.chain(&secondary_candidates)
-			.filter(|id| !T::KeygenQualification::is_qualified(id))
-			.cloned()
-			.collect();
-
+	) -> Self {
 		RotationState {
-			primary_candidates,
-			secondary_candidates,
-			banned,
+			primary_candidates: winners,
+			secondary_candidates: losers,
+			banned: Default::default(),
 			bond,
 			new_epoch_index: T::EpochInfo::epoch_index() + 1,
 		}

@@ -6,7 +6,7 @@ use pallet_cf_funding::Config as FundingConfig;
 use pallet_cf_reputation::Config as ReputationConfig;
 use pallet_session::Config as SessionConfig;
 
-use cf_traits::{AccountRoleRegistry, AuctionOutcome, VaultStatus};
+use cf_traits::{AccountRoleRegistry, VaultStatus};
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{
 	assert_ok, dispatch::UnfilteredDispatchable, storage_alias, traits::OnNewAccount,
@@ -91,7 +91,6 @@ pub fn start_vault_rotation<T: RuntimeConfig>(
 	Pallet::<T>::start_vault_rotation(RotationState::from_auction_outcome::<T>(AuctionOutcome {
 		winners: bidder_set::<T, ValidatorIdOf<T>, _>(primary_candidates, epoch).collect(),
 		losers: bidder_set::<T, ValidatorIdOf<T>, _>(secondary_candidates, epoch + LARGE_OFFSET)
-			.map(|id| (id, 90_000u32.into()).into())
 			.collect(),
 		bond: 100u32.into(),
 	}));
@@ -105,34 +104,25 @@ benchmarks! {
 			T: RuntimeConfig
 	}
 
-	set_blocks_for_epoch {
-		let b = 2_u32;
-		let call = Call::<T>::set_blocks_for_epoch { number_of_blocks: b.into() };
+	update_pallet_config {
+		let parameters = SetSizeParameters {
+			min_size: 150,
+			max_size: 150,
+			max_expansion: 150,
+		};
+		let call = Call::<T>::update_pallet_config {
+			update: PalletConfigUpdate::AuctionParameters {
+				parameters,
+			}
+		};
 		let o = T::EnsureGovernance::successful_origin();
 	}: {
 		call.dispatch_bypass_filter(o)?
 	}
 	verify {
-		assert_eq!(Pallet::<T>::blocks_per_epoch(), 2_u32.into())
+		assert_eq!(Pallet::<T>::auction_parameters(), parameters)
 	}
-	set_backup_reward_node_percentage {
-		let call = Call::<T>::set_backup_reward_node_percentage { percentage: 20 };
-		let o = T::EnsureGovernance::successful_origin();
-	}: {
-		call.dispatch_bypass_filter(o)?
-	}
-	verify {
-		assert_eq!(Pallet::<T>::backup_reward_node_percentage(), 20u8)
-	}
-	set_authority_set_min_size {
-		let call = Call::<T>::set_authority_set_min_size { min_size: 1 };
-		let o = T::EnsureGovernance::successful_origin();
-	}: {
-		call.dispatch_bypass_filter(o)?
-	}
-	verify {
-		assert_eq!(Pallet::<T>::authority_set_min_size(), 1u32)
-	}
+
 	cfe_version {
 		let caller: T::AccountId = whitelisted_caller();
 		<T as frame_system::Config>::OnNewAccount::on_new_account(&caller);
@@ -319,22 +309,6 @@ benchmarks! {
 			CurrentRotationPhase::<T>::get(),
 			RotationPhase::NewKeysActivated(..)
 		));
-	}
-
-	set_auction_parameters {
-		let origin = T::EnsureGovernance::successful_origin();
-		let params = SetSizeParameters {
-			min_size: 3,
-			max_size: 150,
-			max_expansion: 15,
-		};
-		let call = Call::<T>::set_auction_parameters{parameters: params};
-	}: { call.dispatch_bypass_filter(origin)? }
-	verify {
-		assert_eq!(
-			Pallet::<T>::auction_parameters(),
-			params
-		);
 	}
 
 	register_as_validator {
