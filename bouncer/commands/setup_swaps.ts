@@ -213,11 +213,11 @@ async function main(): Promise<void> {
 
   const lpUri = process.env.LP_URI ?? '//LP_1';
   lp = keyring.createFromUri(lpUri);
-  
+
   // Register Emergency withdrawal address for all chains
-  const encodedEthAddr = chainflip.createType('EncodedAddress', {"Eth": hexStringToBytesArray(await getAddress('ETH', 'LP_1'))});
-  const encodedDotAddr = chainflip.createType('EncodedAddress', {"Dot": lp.publicKey});
-  const encodedBtcAddr = chainflip.createType('EncodedAddress', {"Btc": asciiStringToBytesArray(await getAddress('BTC', 'LP_1'))});
+  const encodedEthAddr = chainflip.createType('EncodedAddress', { "Eth": hexStringToBytesArray(await getAddress('ETH', 'LP_1')) });
+  const encodedDotAddr = chainflip.createType('EncodedAddress', { "Dot": lp.publicKey });
+  const encodedBtcAddr = chainflip.createType('EncodedAddress', { "Btc": asciiStringToBytesArray(await getAddress('BTC', 'LP_1')) });
 
   await setupEmergencyWithdrawalAddress(encodedEthAddr);
   await setupEmergencyWithdrawalAddress(encodedDotAddr);
@@ -227,7 +227,6 @@ async function main(): Promise<void> {
   await setupCurrency('usdc');
 
   await Promise.all([
-    setupCurrency('dot'),
     setupCurrency('eth'),
     setupCurrency('btc'),
   ]);
