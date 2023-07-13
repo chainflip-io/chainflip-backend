@@ -12,6 +12,8 @@ signingKeyFile: /etc/chainflip/keys/signing_key_file
 nodeKeyFile: /etc/chainflip/keys/node_key_file
 stateChainWsEndpoint: ws://localhost:9944
 
+role: "archive" # genesis, archive, validator
+
 engine:
   enabled: false
   image:

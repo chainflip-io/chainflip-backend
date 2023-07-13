@@ -44,6 +44,7 @@ spec:
             - name: chainspec
               mountPath: {{ .Values.basePath }}
         {{- end }}
+        {{- if eq .Values.role "genesis" }}
         - name: inject-keys
           image: {{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}
           volumeMounts:
@@ -60,6 +61,7 @@ spec:
               set -x
               chainflip-node key insert --key-type 'aura' --scheme sr25519 --chain {{ .Values.chain }} --suri "0x$(cat {{ .Values.basePath }}/keys/signing_key_file)" --base-path {{ .Values.basePath }}/chaindata
               chainflip-node key insert --key-type 'gran' --scheme ed25519 --chain {{ .Values.chain }} --suri "0x$(cat {{ .Values.basePath }}/keys/signing_key_file)" --base-path {{ .Values.basePath }}/chaindata
+        {{- end }}
       containers:
       {{- if .Values.brokerApi.enabled }}
         - name: {{ .Chart.Name }}-broker-api
@@ -121,15 +123,21 @@ spec:
             - --bootnodes={{ . }}
             {{- end }}
             - --chain={{ .Values.chain }}
-            - --node-key-file={{ .Values.basePath }}/keys/node_key_file
             - --prometheus-external
             - --state-cache-size=0
+            {{- if or (eq .Values.role "validator") (eq .Values.role "genesis") }}
+            - --node-key-file={{ .Values.basePath }}/keys/node_key_file
+            - --force-authoring
             - --validator
-            - --unsafe-ws-external
+            {{- end }}
+            {{- if eq .Values.role "archive" }}
+            - --blocks-pruning=archive
+            - --state-pruning=archive
             - --unsafe-rpc-external
+            - --unsafe-ws-external
             - --rpc-methods=unsafe
             - --rpc-cors=all
-            - --force-authoring
+            {{- end }}
             {{- with .Values.extraArgs }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -151,18 +159,25 @@ spec:
           volumeMounts:
             - name: {{ include "chainflip-node.fullname" . }}
               mountPath: {{ .Values.basePath }}/chaindata
+          {{- if or (eq .Values.role "validator") (eq .Values.role "genesis") }}
             - name: node-keys
               mountPath: {{ .Values.basePath }}/keys
-            {{- if .Values.downloadChainspec }}
+          {{- end }}
+          {{- if .Values.downloadChainspec }}
             - name: chainspec
               mountPath: {{ .Values.basePath }}/{{ .Values.chainspec }}
               subPath: {{ .Values.chainspec }}
               readOnly: true
-            {{- end }}
+          {{- end }}
+      {{- if or (eq .Values.role "validator") (eq .Values.role "genesis") (.Values.downloadChainspec) }}
       volumes:
+      {{- end }}
+        {{- if .Values.downloadChainspec }}
         - name: chainspec
           emptyDir:
             {}
+        {{- end }}
+        {{- if or (eq .Values.role "validator") (eq .Values.role "genesis") }}
         - name: node-keys
           secret:
             secretName: {{ include "chainflip-node.fullname" .}}-{{ .Values.secrets.existingOnePasswordSecret }}
@@ -171,19 +186,23 @@ spec:
                 path: node_key_file
               - key: signing-key
                 path: signing_key_file
+        {{- end }}
+        {{- if .Values.brokerApi.enabled }}
         - name: broker-keys
           secret:
             secretName: {{ include "chainflip-node.fullname" .}}-{{ .Values.secrets.existingOnePasswordSecret }}
             items:
               - key: signing-key-broker
                 path: signing_key_file
+        {{- end }}
+        {{- if .Values.lpApi.enabled }}
         - name: lp-keys
           secret:
             secretName: {{ include "chainflip-node.fullname" .}}-{{ .Values.secrets.existingOnePasswordSecret }}
             items:
               - key: signing-key-lp
                 path: signing_key_file
-
+        {{- end }}
   volumeClaimTemplates:
     - metadata:
         name: {{ include "chainflip-node.fullname" . }}
