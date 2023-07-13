@@ -12,31 +12,39 @@ import { exec } from 'child_process';
 import { Mutex } from 'async-mutex';
 import type { KeyringPair } from '@polkadot/keyring/types';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
-import { runWithTimeout, sleep, getAddress, hexStringToBytesArray, asciiStringToBytesArray, assetToDecimals, handleSubstrateError } from '../shared/utils';
-import { Asset } from "@chainflip-io/cli/.";
+import {
+  runWithTimeout,
+  sleep,
+  getAddress,
+  hexStringToBytesArray,
+  asciiStringToBytesArray,
+  assetToDecimals,
+  handleSubstrateError,
+} from '../shared/utils';
+import { Asset } from '@chainflip-io/cli/.';
 
 const deposits = new Map<Asset, number>([
-	["DOT", 10000],
-	["ETH", 100],
-	["BTC", 10],
-	["USDC", 1000000],
-	["FLIP", 10000]
+  ['DOT', 10000],
+  ['ETH', 100],
+  ['BTC', 10],
+  ['USDC', 1000000],
+  ['FLIP', 10000],
 ]);
 
 const values = new Map<Asset, number>([
-	["DOT", 10],
-	["ETH", 1000],
-	["BTC", 10000],
-	["USDC", 1],
-	["FLIP", 10]
+  ['DOT', 10],
+  ['ETH', 1000],
+  ['BTC', 10000],
+  ['USDC', 1],
+  ['FLIP', 10],
 ]);
 
 const chain = new Map<Asset, string>([
-	["DOT", "dot"],
-	["ETH", "eth"],
-	["BTC", "btc"],
-	["USDC", "eth"],
-	["FLIP", "flip"]
+  ['DOT', 'dot'],
+  ['ETH', 'eth'],
+  ['BTC', 'btc'],
+  ['USDC', 'eth'],
+  ['FLIP', 'flip'],
 ]);
 
 const cfNodeEndpoint = process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944';
@@ -102,7 +110,13 @@ async function setupCurrency(ccy: Asset): Promise<void> {
   }
   console.log('Received ' + ccy + ' address: ' + ingressAddress);
   exec(
-    'pnpm tsx ./commands/send_' + ccy.toLowerCase() + '.ts' + ' ' + ingressAddress + ' ' + deposits.get(ccy),
+    'pnpm tsx ./commands/send_' +
+      ccy.toLowerCase() +
+      '.ts' +
+      ' ' +
+      ingressAddress +
+      ' ' +
+      deposits.get(ccy),
     { timeout: 30000 },
     (err, stdout, stderr) => {
       if (stderr !== '') process.stdout.write(stderr);
@@ -121,7 +135,12 @@ async function setupCurrency(ccy: Asset): Promise<void> {
     return;
   }
   const price = BigInt(
-    Math.round(Math.sqrt(values.get(ccy)! / 10 ** (assetToDecimals.get(ccy)! - assetToDecimals.get("USDC")!)) * 2 ** 96),
+    Math.round(
+      Math.sqrt(
+        values.get(ccy)! / 10 ** (assetToDecimals.get(ccy)! - assetToDecimals.get('USDC')!),
+      ) *
+        2 ** 96,
+    ),
   );
   console.log('Setting up ' + ccy + ' pool');
 
@@ -132,12 +151,21 @@ async function setupCurrency(ccy: Asset): Promise<void> {
 
   await observeEvent('liquidityPools:NewPoolCreated', checkPool);
   const priceTick = Math.round(
-    Math.log(Math.sqrt(values.get(ccy)! / 10 ** (assetToDecimals.get(ccy)! - assetToDecimals.get("USDC")!))) /
-    Math.log(Math.sqrt(1.0001)),
+    Math.log(
+      Math.sqrt(
+        values.get(ccy)! / 10 ** (assetToDecimals.get(ccy)! - assetToDecimals.get('USDC')!),
+      ),
+    ) / Math.log(Math.sqrt(1.0001)),
   );
   const buyPosition = deposits.get(ccy)! * values.get(ccy)! * 1000000;
   console.log(
-    'Placing Buy Limit order for ' + deposits.get(ccy)! + ' ' + ccy + ' at ' + values.get(ccy)! + ' USDC.',
+    'Placing Buy Limit order for ' +
+      deposits.get(ccy)! +
+      ' ' +
+      ccy +
+      ' at ' +
+      values.get(ccy)! +
+      ' USDC.',
   );
   await mutex.runExclusive(async () => {
     await chainflip.tx.liquidityPools
@@ -145,7 +173,13 @@ async function setupCurrency(ccy: Asset): Promise<void> {
       .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
   });
   console.log(
-    'Placing Sell Limit order for ' + deposits.get(ccy)! + ' ' + ccy + ' at ' + values.get(ccy)! + ' USDC.',
+    'Placing Sell Limit order for ' +
+      deposits.get(ccy)! +
+      ' ' +
+      ccy +
+      ' at ' +
+      values.get(ccy)! +
+      ' USDC.',
   );
   const sellPosition = BigInt(deposits.get(ccy)! * 10 ** assetToDecimals.get(ccy)!);
   await mutex.runExclusive(async () => {
@@ -165,9 +199,9 @@ async function main(): Promise<void> {
           Eth: '[u8; 20]',
           Dot: '[u8; 32]',
           Btc: '[u8; 34]',
-        }
-      }
-    }
+        },
+      },
+    },
   });
   await cryptoWaitReady();
 
@@ -177,9 +211,13 @@ async function main(): Promise<void> {
   lp = keyring.createFromUri(lpUri);
 
   // Register Emergency withdrawal address for all chains
-  const encodedEthAddr = chainflip.createType('EncodedAddress', { "Eth": hexStringToBytesArray(await getAddress('ETH', 'LP_1')) });
-  const encodedDotAddr = chainflip.createType('EncodedAddress', { "Dot": lp.publicKey });
-  const encodedBtcAddr = chainflip.createType('EncodedAddress', { "Btc": asciiStringToBytesArray(await getAddress('BTC', 'LP_1')) });
+  const encodedEthAddr = chainflip.createType('EncodedAddress', {
+    Eth: hexStringToBytesArray(await getAddress('ETH', 'LP_1')),
+  });
+  const encodedDotAddr = chainflip.createType('EncodedAddress', { Dot: lp.publicKey });
+  const encodedBtcAddr = chainflip.createType('EncodedAddress', {
+    Btc: asciiStringToBytesArray(await getAddress('BTC', 'LP_1')),
+  });
 
   await setupEmergencyWithdrawalAddress(encodedEthAddr);
   await setupEmergencyWithdrawalAddress(encodedDotAddr);
@@ -188,11 +226,7 @@ async function main(): Promise<void> {
   // We need USDC to complete before the others.
   await setupCurrency('USDC');
 
-  await Promise.all([
-    setupCurrency('DOT'),
-    setupCurrency('ETH'),
-    setupCurrency('BTC'),
-  ]);
+  await Promise.all([setupCurrency('DOT'), setupCurrency('ETH'), setupCurrency('BTC')]);
   process.exit(0);
 }
 

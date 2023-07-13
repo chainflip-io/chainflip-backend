@@ -13,7 +13,7 @@ import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 async function main(): Promise<void> {
   await cryptoWaitReady();
   const keyring = new Keyring({ type: 'sr25519' });
-  const alice_uri = process.env.POLKADOT_ALICE_URI || "//Alice";
+  const alice_uri = process.env.POLKADOT_ALICE_URI || '//Alice';
   const alice = keyring.createFromUri(alice_uri);
 
   const chainflip = await getChainflipApi(process.env.CF_NODE_ENDPOINT);
@@ -60,7 +60,9 @@ async function main(): Promise<void> {
 
   // Step 3
   console.log('Transferring 100 DOT to Polkadot AggKey');
-  await polkadot.tx.balances.transfer(dotKeyAddress, 1000000000000).signAndSend(alice, {nonce: -1}, handleSubstrateError(polkadot));
+  await polkadot.tx.balances
+    .transfer(dotKeyAddress, 1000000000000)
+    .signAndSend(alice, { nonce: -1 }, handleSubstrateError(polkadot));
 
   // Step 4
   console.log('Requesting Polkadot Vault creation');
@@ -93,22 +95,21 @@ async function main(): Promise<void> {
 
   // Step 7
   console.log('Transferring 100 DOT to Polkadot Vault');
-  await polkadot.tx.balances.transfer(vaultAddress, 1000000000000).signAndSend(alice, {nonce: -1}, handleSubstrateError(polkadot));
+  await polkadot.tx.balances
+    .transfer(vaultAddress, 1000000000000)
+    .signAndSend(alice, { nonce: -1 }, handleSubstrateError(polkadot));
 
   // Step 8
   console.log('Registering Vaults with state chain');
   const txid = { blockNumber: vaultBlock, extrinsicIndex: vaultEventIndex };
 
   await submitGovernanceExtrinsic(
-    chainflip.tx.environment.witnessPolkadotVaultCreation(
-      vaultAddress,
-      dotKey,
-      txid,
-      1
-    )
+    chainflip.tx.environment.witnessPolkadotVaultCreation(vaultAddress, dotKey, txid, 1),
   );
 
-  await submitGovernanceExtrinsic(chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(1, btcKey));
+  await submitGovernanceExtrinsic(
+    chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(1, btcKey),
+  );
 
   // Confirmation
   console.log('Waiting for new epoch');

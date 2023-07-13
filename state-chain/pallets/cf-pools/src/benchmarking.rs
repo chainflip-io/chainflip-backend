@@ -69,7 +69,15 @@ benchmarks! {
 			Asset::Usdc,
 			1_000_000,
 		));
-	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, -100..100, 1_000_000)
+	}: _(
+			RawOrigin::Signed(caller.clone()),
+			Asset::Eth,
+			-100..100,
+			RangeOrderSize::AssetAmounts {
+				desired: SideMap::from_array([1_000_000, 1_000_000]),
+				minimum: SideMap::from_array([500_000, 500_000]),
+			}
+	)
 	verify {}
 
 	collect_and_burn_range_order {
@@ -85,7 +93,12 @@ benchmarks! {
 			Asset::Usdc,
 			1_000_000,
 		));
-		assert_ok!(Pallet::<T>::collect_and_mint_range_order(RawOrigin::Signed(caller.clone()).into(), Asset::Eth, -100..100, 1_000));
+		assert_ok!(Pallet::<T>::collect_and_mint_range_order(
+			RawOrigin::Signed(caller.clone()).into(),
+			Asset::Eth,
+			-100..100,
+			RangeOrderSize::Liquidity(1_000),
+		));
 	}: _(RawOrigin::Signed(caller.clone()), Asset::Eth, -100..100, 1_000)
 	verify {}
 

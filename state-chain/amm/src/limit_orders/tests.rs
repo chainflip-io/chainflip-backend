@@ -3,12 +3,13 @@
 use crate::{
 	common::{mul_div, sqrt_price_at_tick, tick_at_sqrt_price, MAX_TICK, MIN_TICK},
 	limit_orders, range_orders,
+	test_utilities::rng_u256_inclusive_bound,
 };
 
 use super::*;
 
 use cf_utilities::{assert_ok, assert_panics};
-use rand::{prelude::Distribution, Rng, SeedableRng};
+use rand::{Rng, SeedableRng};
 
 type LiquidityProvider = cf_primitives::AccountId;
 type PoolState = super::PoolState<LiquidityProvider>;
@@ -47,27 +48,6 @@ fn test_float() {
 
 	fn rng_u256(rng: &mut impl rand::Rng) -> U256 {
 		U256([(); 4].map(|()| rng.gen()))
-	}
-
-	fn rng_u256_inclusive_bound(
-		rng: &mut impl rand::Rng,
-		bound: std::ops::RangeInclusive<U256>,
-	) -> U256 {
-		let start = bound.start();
-		let end = bound.end();
-
-		let upper_start = (start >> 128).low_u128();
-		let upper_end = (end >> 128).low_u128();
-
-		let upper = rand::distributions::Uniform::new_inclusive(upper_start, upper_end).sample(rng);
-		let lower = if upper_start < upper && upper < upper_end {
-			rng.gen()
-		} else {
-			rand::distributions::Uniform::new_inclusive(start.low_u128(), end.low_u128())
-				.sample(rng)
-		};
-
-		(U256::from(upper) << 128) + U256::from(lower)
 	}
 
 	fn rng_u256_numerator_denominator(rng: &mut impl rand::Rng) -> (U256, U256) {

@@ -4,7 +4,7 @@
 use super::*;
 
 use cf_traits::{AccountRoleRegistry, Chainflip};
-use frame_benchmarking::{benchmarks, whitelisted_caller};
+use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
 	traits::{EnsureOrigin, OnNewAccount},
@@ -188,6 +188,13 @@ benchmarks! {
 	update_restricted_addresses {
 		let a in 1 .. 100;
 		let b in 1 .. 100;
+		let c in 1 .. 100;
+		for i in 0 .. c {
+			let some_balance = FlipBalance::<T>::from(100_u32);
+			let some_account: AccountId<T> = account("doogle", 0, i);
+			let balances: BTreeMap<EthereumAddress, FlipBalance<T>> = BTreeMap::from([([42u8; 20], some_balance)]);
+			RestrictedBalances::<T>::insert(some_account, balances);
+		}
 		let call = Call::<T>::update_restricted_addresses {
 			addresses_to_add: (1 .. a as u32).map(|_| [42u8; 20]).collect::<Vec<_>>(),
 			addresses_to_remove: (1 .. b as u32).map(|_| [42u8; 20]).collect::<Vec<_>>()
