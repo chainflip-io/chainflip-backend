@@ -2,7 +2,7 @@
 //
 // This command takes two arguments.
 // It will create a zero to infinity range order for the currency and amount given
-// For example: pnpm tsx ./commands/rangeOrder.ts btc 10
+// For example: pnpm tsx ./commands/range_order.ts btc 10
 
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
