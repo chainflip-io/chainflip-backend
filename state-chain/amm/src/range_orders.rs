@@ -23,14 +23,13 @@ mod tests;
 
 use sp_std::{collections::btree_map::BTreeMap, convert::Infallible};
 
-use cf_utilities::assert_ok;
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_core::{U256, U512};
 
 use crate::common::{
 	is_sqrt_price_valid, mul_div_ceil, mul_div_floor, sqrt_price_at_tick, tick_at_sqrt_price,
-	Amount, OneToZero, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_TICK, MIN_TICK,
+	Amount, OneToZero, Side, SideMap, SqrtPriceQ64F96, Tick, ZeroToOne, MAX_TICK, MIN_TICK,
 	ONE_IN_HUNDREDTH_PIPS, SQRT_PRICE_FRACTIONAL_BITS,
 };
 
@@ -332,6 +331,20 @@ pub enum BurnError {
 #[derive(Debug)]
 pub enum CollectError {}
 
+#[derive(Debug)]
+pub enum LiquidityToAmountsError {
+	/// Invalid Tick range
+	InvalidTickRange,
+	/// The specified liquidity is greater than the maximum
+	InvalidLiquidityAmount,
+}
+
+#[derive(Debug)]
+pub enum AmountsToLiquidityError {
+	/// Invalid Tick range
+	InvalidTickRange,
+}
+
 #[derive(Default, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
 pub struct CollectedFees {
 	pub fees: SideMap<Amount>,
@@ -477,8 +490,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				&upper_delta,
 			);
 
-			let (amounts_required, current_liquidity_delta) =
-				self.liquidity_to_amounts::<true>(minted_liquidity, lower_tick, upper_tick);
+			let (amounts_required, current_liquidity_delta) = self
+				.liquidity_to_amounts::<true>(minted_liquidity, lower_tick, upper_tick)
+				.unwrap();
 
 			let t = try_debit(amounts_required)
 				.map_err(|err| PositionError::Other(MintError::CallbackFailed(err)))?;
@@ -535,8 +549,9 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 					&upper_delta,
 				);
 
-				let (amounts_owed, current_liquidity_delta) =
-					self.liquidity_to_amounts::<false>(burnt_liquidity, lower_tick, upper_tick);
+				let (amounts_owed, current_liquidity_delta) = self
+					.liquidity_to_amounts::<false>(burnt_liquidity, lower_tick, upper_tick)
+					.unwrap();
 				// Will not underflow as current_liquidity_delta must have previously been added to
 				// current_liquidity for it to need to be substrated now
 				self.current_liquidity -= current_liquidity_delta;
@@ -757,17 +772,20 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 	/// Returns the value of a range order, and the liquidity that would contribute to the current
 	/// liquidity level given the current price.
 	///
-	/// This function will panic if the tick range or liquidity are out of bounds.
+	/// This function never panics
 	pub fn liquidity_to_amounts<const ROUND_UP: bool>(
 		&self,
 		liquidity: Liquidity,
 		lower_tick: Tick,
 		upper_tick: Tick,
-	) -> (SideMap<Amount>, Liquidity) {
-		assert!(liquidity <= MAX_TICK_GROSS_LIQUIDITY);
-		assert_ok!(Self::validate_position_range::<Infallible>(lower_tick, upper_tick));
+	) -> Result<(SideMap<Amount>, Liquidity), LiquidityToAmountsError> {
+		(liquidity <= MAX_TICK_GROSS_LIQUIDITY)
+			.then_some(())
+			.ok_or(LiquidityToAmountsError::InvalidLiquidityAmount)?;
+		Self::validate_position_range::<Infallible>(lower_tick, upper_tick)
+			.map_err(|_err| LiquidityToAmountsError::InvalidTickRange)?;
 
-		if self.current_tick < lower_tick {
+		Ok(if self.current_tick < lower_tick {
 			(
 				SideMap::from_array([
 					(if ROUND_UP { zero_amount_delta_ceil } else { zero_amount_delta_floor })(
@@ -807,7 +825,73 @@ impl<LiquidityProvider: Clone + Ord> PoolState<LiquidityProvider> {
 				]),
 				0,
 			)
+		})
+	}
+
+	/// Returns the maximum possible liquidity given an amount of assets, in a particular range,
+	/// given the current price, and considering the existing liquidity in the pool
+	///
+	/// This function never panics
+	pub fn desired_amounts_to_liquidity(
+		&self,
+		lower_tick: Tick,
+		upper_tick: Tick,
+		amounts: SideMap<Amount>,
+	) -> Result<Liquidity, AmountsToLiquidityError> {
+		// Inverse of `zero_amount_delta_ceil`
+		fn zero_amount_to_liquidity(
+			lower_sqrt_price: SqrtPriceQ64F96,
+			upper_sqrt_price: SqrtPriceQ64F96,
+			amounts: SideMap<Amount>,
+		) -> Liquidity {
+			((U512::saturating_mul(
+				amounts[Side::Zero].into(),
+				U256::full_mul(lower_sqrt_price, upper_sqrt_price),
+			) / U512::from(upper_sqrt_price - lower_sqrt_price)) >>
+				SQRT_PRICE_FRACTIONAL_BITS)
+				.try_into()
+				.map(|liquidity| core::cmp::min(liquidity, MAX_TICK_GROSS_LIQUIDITY))
+				.unwrap_or(MAX_TICK_GROSS_LIQUIDITY)
 		}
+
+		// Inverse of `one_amount_delta_ceil`
+		fn one_amount_to_liquidity(
+			lower_sqrt_price: SqrtPriceQ64F96,
+			upper_sqrt_price: SqrtPriceQ64F96,
+			amounts: SideMap<Amount>,
+		) -> Liquidity {
+			(U256::full_mul(amounts[Side::One], U256::one() << SQRT_PRICE_FRACTIONAL_BITS) /
+				(upper_sqrt_price - lower_sqrt_price))
+				.try_into()
+				.map(|liquidity| core::cmp::min(liquidity, MAX_TICK_GROSS_LIQUIDITY))
+				.unwrap_or(MAX_TICK_GROSS_LIQUIDITY)
+		}
+
+		Self::validate_position_range::<Infallible>(lower_tick, upper_tick)
+			.map_err(|_err| AmountsToLiquidityError::InvalidTickRange)?;
+
+		let [lower_sqrt_price, upper_sqrt_price] = [lower_tick, upper_tick].map(sqrt_price_at_tick);
+
+		Ok(core::cmp::min(
+			MAX_TICK_GROSS_LIQUIDITY -
+				[lower_tick, upper_tick]
+					.into_iter()
+					.filter_map(|tick| {
+						self.liquidity_map.get(&tick).map(|tick_delta| tick_delta.liquidity_gross)
+					})
+					.max()
+					.unwrap_or(0),
+			if self.current_sqrt_price <= lower_sqrt_price {
+				zero_amount_to_liquidity(lower_sqrt_price, upper_sqrt_price, amounts)
+			} else if self.current_sqrt_price < upper_sqrt_price {
+				core::cmp::min(
+					zero_amount_to_liquidity(self.current_sqrt_price, upper_sqrt_price, amounts),
+					one_amount_to_liquidity(lower_sqrt_price, self.current_sqrt_price, amounts),
+				)
+			} else {
+				one_amount_to_liquidity(lower_sqrt_price, upper_sqrt_price, amounts)
+			},
+		))
 	}
 }
 
