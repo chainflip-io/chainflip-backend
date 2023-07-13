@@ -8,14 +8,14 @@ import { rangeOrder } from '../shared/range_order';
 import { runWithTimeout } from '../shared/utils';
 import { Asset } from '@chainflip-io/cli';
 
-async function main(){
-	const ccy = process.argv[2].toUpperCase() as Asset;
-	const amount = parseFloat(process.argv[3].trim());
-	await rangeOrder(ccy, amount);
-	process.exit(0);
+async function main() {
+  const ccy = process.argv[2].toUpperCase() as Asset;
+  const amount = parseFloat(process.argv[3].trim());
+  await rangeOrder(ccy, amount);
+  process.exit(0);
 }
 
 runWithTimeout(main(), 120000).catch((error) => {
-	console.error(error);
-	process.exit(-1);
+  console.error(error);
+  process.exit(-1);
 });

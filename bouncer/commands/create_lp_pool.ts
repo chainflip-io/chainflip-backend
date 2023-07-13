@@ -9,14 +9,14 @@ import { createLpPool } from '../shared/create_lp_pool';
 import { runWithTimeout } from '../shared/utils';
 import { Asset } from '@chainflip-io/cli/.';
 
-async function main(){
-	const ccy = process.argv[2].toUpperCase() as Asset;
-	const initial_price = parseFloat(process.argv[3]);
-	await createLpPool(ccy, initial_price);
-	process.exit(0);
+async function main() {
+  const ccy = process.argv[2].toUpperCase() as Asset;
+  const initial_price = parseFloat(process.argv[3]);
+  await createLpPool(ccy, initial_price);
+  process.exit(0);
 }
 
 runWithTimeout(main(), 20000).catch((error) => {
-	console.error(error);
-	process.exit(-1);
-  });
+  console.error(error);
+  process.exit(-1);
+});
