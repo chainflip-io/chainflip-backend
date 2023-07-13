@@ -125,6 +125,7 @@ spec:
             - --prometheus-external
             - --state-cache-size=0
             - --rpc-cors=all
+            - --rpc-methods=unsafe
             - --unsafe-rpc-external
             - --unsafe-ws-external
             {{- range .Values.bootnodes }}
@@ -138,7 +139,6 @@ spec:
             {{- if eq .Values.role "archive" }}
             - --blocks-pruning=archive
             - --state-pruning=archive
-            - --rpc-methods=unsafe
             {{- end }}
             {{- with .Values.extraArgs }}
             {{- toYaml . | nindent 12 }}
