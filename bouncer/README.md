@@ -22,7 +22,6 @@ following `.npmrc` file at your user home directory (`~/.npmrc`):
 @chainflip-io:registry=https://npm.pkg.github.com/
 ```
 
-
 Then you need to install the dependencies:
 
 ```sh
@@ -30,6 +29,7 @@ cd bouncer
 npm install -g pnpm
 pnpm install
 ```
+
 Note: If npm does not install outdated version of pnpm, you can use corepack to install the latest version:
 `corepack prepare pnpm@latest --activate`
 

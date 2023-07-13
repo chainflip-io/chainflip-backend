@@ -10,7 +10,6 @@ import { runWithTimeout } from '../shared/utils';
 import { getEthBalance } from '../shared/get_eth_balance';
 
 export async function getEthBalanceCommand(address: string) {
-
   const balance = await getEthBalance(address);
   console.log(balance);
   process.exit(0);
