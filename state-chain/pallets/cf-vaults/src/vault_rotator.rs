@@ -135,14 +135,7 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 			// --- DO NOT MERGE THIS TO MAIN. ---
 			if <T::Chain as Chain>::CANCELLED {
 				log::info!("Chain is cancelled, skipping activation.");
-				Self::set_vault_key_for_epoch(
-					CurrentEpochIndex::<T>::get().saturating_add(1),
-					Vault {
-						public_key: new_public_key,
-						active_from_block: T::ChainTracking::get_block_height(),
-					},
-				);
-				PendingVaultRotation::<T, I>::put(VaultRotationStatus::<T, I>::Complete);
+				Self::activate_new_key(new_public_key, T::ChainTracking::get_block_height());
 				return
 			}
 			// --- END OF PERSEVERANCE 0.8-ONLY SECTION ---
