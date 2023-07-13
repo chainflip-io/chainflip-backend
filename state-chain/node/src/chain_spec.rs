@@ -26,7 +26,10 @@ use state_chain_runtime::{
 use std::{collections::BTreeMap, env, marker::PhantomData, str::FromStr};
 use utilities::clean_eth_address;
 
-use sp_runtime::traits::{IdentifyAccount, Verify};
+use sp_runtime::{
+	traits::{IdentifyAccount, Verify},
+	Percent,
+};
 
 pub mod common;
 pub mod perseverance;
@@ -260,7 +263,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				common::BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 				common::EXPIRY_SPAN_IN_SECONDS,
 				common::ACCRUAL_RATIO,
-				common::PERCENT_OF_EPOCH_PERIOD_REDEEMABLE,
+				Percent::from_percent(common::PERCENT_OF_EPOCH_PERIOD_REDEEMABLE),
 				common::SUPPLY_UPDATE_INTERVAL,
 				common::PENALTIES.to_vec(),
 				common::KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
@@ -379,7 +382,7 @@ macro_rules! network_spec {
 							BACKUP_NODE_EMISSION_INFLATION_PERBILL,
 							EXPIRY_SPAN_IN_SECONDS,
 							ACCRUAL_RATIO,
-							PERCENT_OF_EPOCH_PERIOD_REDEEMABLE,
+							Percent::from_percent(PERCENT_OF_EPOCH_PERIOD_REDEEMABLE),
 							SUPPLY_UPDATE_INTERVAL,
 							PENALTIES.to_vec(),
 							KEYGEN_CEREMONY_TIMEOUT_BLOCKS,
@@ -433,7 +436,7 @@ fn testnet_genesis(
 	backup_node_emission_inflation_perbill: u32,
 	expiry_span: u64,
 	accrual_ratio: (i32, u32),
-	percent_of_epoch_period_redeemable: u8,
+	redemption_period_as_percentage: Percent,
 	supply_update_interval: u32,
 	penalties: Vec<(Offence, (i32, BlockNumber))>,
 	keygen_ceremony_timeout_blocks: BlockNumber,
@@ -528,8 +531,8 @@ fn testnet_genesis(
 				.collect(),
 			genesis_vanity_names,
 			blocks_per_epoch,
-			redemption_period_as_percentage: percent_of_epoch_period_redeemable,
-			backup_reward_node_percentage: 20,
+			redemption_period_as_percentage,
+			backup_reward_node_percentage: Percent::from_percent(33),
 			bond: all_accounts
 				.iter()
 				.filter_map(|(id, _, funds)| authority_ids.contains(id).then_some(*funds))
