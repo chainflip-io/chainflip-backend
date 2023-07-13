@@ -76,12 +76,12 @@ where
 
 									let (
 										// The future for the first header we see
-										mut option_persistent_then_fut,
+										mut option_first_then_fut,
 										// The future for the newest header we've seen
-										mut option_replaceable_then_fut
+										mut option_newest_then_fut
 									) = {
 										// skip forward to newest ready item
-										let option_latest = {
+										let option_latest_fut = {
 											let mut option_latest = None;
 											loop {
 												match chain_stream.next().now_or_never() {
@@ -90,9 +90,7 @@ where
 													None => break option_latest
 												}
 											}
-										};
-
-										let option_latest_fut = option_latest.map(apply_then);
+										}.map(apply_then);
 
 										match option_old_then_fut {
 											Some(old_then_fut) => (Some(old_then_fut), option_latest_fut),
@@ -102,17 +100,17 @@ where
 
 									loop_select!(
 										if let Some(newest_header) = chain_stream.next() => {
-											*if option_persistent_then_fut.is_none() {
-												&mut option_persistent_then_fut
+											*if option_first_then_fut.is_none() {
+												&mut option_first_then_fut
 											} else {
-												&mut option_replaceable_then_fut
+												&mut option_newest_then_fut
 											} = Some(apply_then(newest_header));
 										} else break None,
-										if option_persistent_then_fut.is_some() => let mapped_header = option_persistent_then_fut.as_mut().unwrap() => {
+										if option_first_then_fut.is_some() => let mapped_header = option_first_then_fut.as_mut().unwrap() => {
 											// Keep replaceable_then_fut as it is from a newer header than persistent_then_fut
-											break Some((mapped_header, (epoch, chain_stream, option_replaceable_then_fut)))
+											break Some((mapped_header, (epoch, chain_stream, option_newest_then_fut)))
 										},
-										if option_replaceable_then_fut.is_some() => let mapped_header = option_replaceable_then_fut.as_mut().unwrap() => {
+										if option_newest_then_fut.is_some() => let mapped_header = option_newest_then_fut.as_mut().unwrap() => {
 											// Don't keep persistent_then_fut as it is from an older header than replaceable_then_fut
 											break Some((mapped_header, (epoch, chain_stream, None)))
 										},
@@ -130,6 +128,3 @@ where
 			.into_box()
 	}
 }
-
-// create issue for egress witnessing (lag/race condition)
-// issue for multiple clients
