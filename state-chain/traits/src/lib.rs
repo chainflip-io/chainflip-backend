@@ -19,8 +19,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, ChannelId, Compatibility, EgressId, EpochIndex, ForeignChain, SemVer,
-	ThresholdSignatureRequestId,
+	CeremonyId, ChannelId, EgressId, EpochIndex, ForeignChain, SemVer, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -862,8 +861,7 @@ pub trait GetBitcoinFeeInfo {
 pub trait GetBlockHeight<C: Chain> {
 	fn get_block_height() -> C::ChainBlockNumber;
 }
-pub trait CompatibleCfeVersions {
+pub trait CompatibleVersions {
 	fn current_version() -> SemVer;
 	fn next_version() -> Option<SemVer>;
-	fn is_compatible(ver: SemVer) -> Compatibility;
 }

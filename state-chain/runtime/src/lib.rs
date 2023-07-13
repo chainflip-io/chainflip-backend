@@ -192,7 +192,7 @@ parameter_types! {
 
 	pub const BitcoinNetworkParam: BitcoinNetwork = BitcoinNetwork::Testnet;
 
-	pub CurrentCfeVersion: SemVer = SemVer::new(0u8, 9u8, 0u8);
+	pub CurrentVersion: SemVer = SemVer::new(0u8, 9u8, 0u8);
 }
 
 impl pallet_cf_environment::Config for Runtime {
@@ -204,7 +204,7 @@ impl pallet_cf_environment::Config for Runtime {
 	type BitcoinNetwork = BitcoinNetworkParam;
 	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
 	type RuntimeSafeMode = chainflip::RuntimeSafeMode;
-	type CurrentCfeVersion = CurrentCfeVersion;
+	type CurrentVersion = CurrentVersion;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 

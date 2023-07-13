@@ -13,10 +13,8 @@ use cf_chains::{
 	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 	ChainCrypto,
 };
-use cf_primitives::{
-	chains::assets::eth::Asset as EthAsset, BroadcastId, Compatibility, EthereumAddress, SemVer,
-};
-use cf_traits::{CompatibleCfeVersions, GetBitcoinFeeInfo, SafeMode};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, BroadcastId, EthereumAddress, SemVer};
+use cf_traits::{CompatibleVersions, GetBitcoinFeeInfo, SafeMode};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{OnRuntimeUpgrade, StorageVersion},
@@ -88,7 +86,7 @@ pub mod pallet {
 		type BitcoinFeeInfo: cf_traits::GetBitcoinFeeInfo;
 
 		#[pallet::constant]
-		type CurrentCfeVersion: Get<SemVer>;
+		type CurrentVersion: Get<SemVer>;
 
 		/// Weight information
 		type WeightInfo: WeightInfo;
@@ -184,9 +182,9 @@ pub mod pallet {
 	pub type RuntimeSafeMode<T> = StorageValue<_, <T as Config>::RuntimeSafeMode, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn next_cfe_version)]
-	/// If this storage is set, a new version of Chainflip Engine is available to be upgraded.
-	pub type NextCfeVersion<T> = StorageValue<_, Option<SemVer>, ValueQuery>;
+	#[pallet::getter(fn next_version)]
+	/// If this storage is set, a new version of Chainflip is available for upgrade.
+	pub type NextVersion<T> = StorageValue<_, Option<SemVer>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -206,7 +204,7 @@ pub mod pallet {
 		/// The Safe Mode settings for the chain has been updated
 		RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate<T> },
 		/// The next CFE version available to update to.
-		NextCfeVersionSet { version: Option<SemVer> },
+		NextVersionSet { version: Option<SemVer> },
 	}
 
 	#[pallet::hooks]
@@ -408,27 +406,24 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets the next CFE version.
+		/// Sets the next ChainFlip version.
 		///
 		/// Requires governance origin.
 		///
 		/// ## Events
 		///
-		/// - [Success](Event::NextCfeVersionSet)
+		/// - [Success](Event::NextVersionSet)
 		///
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(T::WeightInfo::set_next_cfe_version())]
-		pub fn set_next_cfe_version(
-			origin: OriginFor<T>,
-			version: Option<SemVer>,
-		) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::set_next_version())]
+		pub fn set_next_version(origin: OriginFor<T>, version: Option<SemVer>) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			NextCfeVersion::<T>::put(version);
+			NextVersion::<T>::put(version);
 
-			Self::deposit_event(Event::<T>::NextCfeVersionSet { version });
+			Self::deposit_event(Event::<T>::NextVersionSet { version });
 
 			Ok(())
 		}
@@ -571,27 +566,11 @@ impl<T: Config> Pallet<T> {
 	}
 }
 
-impl<T: Config> CompatibleCfeVersions for Pallet<T> {
+impl<T: Config> CompatibleVersions for Pallet<T> {
 	fn current_version() -> SemVer {
-		<T as Config>::CurrentCfeVersion::get()
+		<T as Config>::CurrentVersion::get()
 	}
 	fn next_version() -> Option<SemVer> {
-		NextCfeVersion::<T>::get()
-	}
-	fn is_compatible(ver: SemVer) -> Compatibility {
-		let current = Self::current_version();
-		if ver.major == current.major && ver.minor == current.minor && ver.patch < current.patch {
-			Compatibility::ShouldUpdate
-		} else if ver < current {
-			Compatibility::Incompatible
-		} else if let Some(max_version) = Self::next_version() {
-			if ver < max_version {
-				Compatibility::MustUpdate
-			} else {
-				Compatibility::UpToDate
-			}
-		} else {
-			Compatibility::UpToDate
-		}
+		NextVersion::<T>::get()
 	}
 }

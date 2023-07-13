@@ -161,14 +161,27 @@ impl SemVer {
 	pub fn new(major: u8, minor: u8, patch: u8) -> Self {
 		Self { major, minor, patch }
 	}
-}
 
-impl PartialOrd for SemVer {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		Some(self.cmp(other))
+	/// Check if Self is compatible with the given version. Return true if:
+	/// `major` and `minor` are higher than `target`. Patch version is ignored.
+	pub fn is_compatible(&self, target: &Self) -> bool {
+		self.partial_cmp(target) != Some(Ordering::Less)
 	}
 }
 
+/// Partial comparison of the Version. Only compare `major` and `minor`, `patch` is ignored.
+impl PartialOrd for SemVer {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		if self.major != other.major {
+			Some(self.major.cmp(&other.major))
+		} else {
+			Some(self.minor.cmp(&other.minor))
+		}
+	}
+}
+
+/// Full comparison of the versions.
+/// Compares 'major`, `minor`, and `patch`.
 impl Ord for SemVer {
 	fn cmp(&self, other: &Self) -> Ordering {
 		if self.major != other.major {
@@ -179,17 +192,4 @@ impl Ord for SemVer {
 			self.patch.cmp(&other.patch)
 		}
 	}
-}
-
-/// Indicates the level of compatibility between CFE and the Statechain
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
-pub enum Compatibility {
-	// Up to date, everything is fine
-	UpToDate,
-	// Run normally, but should update if possible.
-	ShouldUpdate,
-	// Run in idle mode, must update before returning to normal.
-	MustUpdate,
-	// Completely incompatible, should not start at all.
-	Incompatible,
 }
