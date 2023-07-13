@@ -1,6 +1,6 @@
 use crate::{
-	mock::*, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, Pools, RangeOrderSize,
-	STABLE_ASSET,
+	mock::*, utilities, CollectedNetworkFee, Error, FlipBuyInterval, FlipToBurn, Pools,
+	RangeOrderSize, STABLE_ASSET,
 };
 use cf_amm::common::{sqrt_price_at_tick, SideMap, Tick};
 use cf_primitives::{chains::assets::any::Asset, AssetAmount};
@@ -223,25 +223,22 @@ fn test_buy_back_flip() {
 fn test_network_fee_calculation() {
 	new_test_ext().execute_with(|| {
 		// Show we can never overflow and panic
-		LiquidityPools::calculate_network_fee(Permill::from_percent(100), AssetAmount::MAX);
+		utilities::calculate_network_fee(Permill::from_percent(100), AssetAmount::MAX);
 		// 200 bps (2%) of 100 = 2
-		assert_eq!(
-			LiquidityPools::calculate_network_fee(Permill::from_percent(2u32), 100),
-			(98, 2)
-		);
+		assert_eq!(utilities::calculate_network_fee(Permill::from_percent(2u32), 100), (98, 2));
 		// 2220 bps = 22 % of 199 = 43,78
 		assert_eq!(
-			LiquidityPools::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), 199),
+			utilities::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), 199),
 			(155, 44)
 		);
 		// 2220 bps = 22 % of 234 = 51,26
 		assert_eq!(
-			LiquidityPools::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), 233),
+			utilities::calculate_network_fee(Permill::from_rational(2220u32, 10000u32), 233),
 			(181, 52)
 		);
 		// 10 bps = 0,1% of 3000 = 3
 		assert_eq!(
-			LiquidityPools::calculate_network_fee(Permill::from_rational(1u32, 1000u32), 3000),
+			utilities::calculate_network_fee(Permill::from_rational(1u32, 1000u32), 3000),
 			(2997, 3)
 		);
 	});
