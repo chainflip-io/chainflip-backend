@@ -48,8 +48,10 @@ spec:
         - name: inject-keys
           image: {{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}
           volumeMounts:
+        {{- if .Values.chainspec }}
             - name: chainspec
               mountPath: {{ .Values.basePath }}
+        {{- end }}
             - name: node-keys
               mountPath: {{ .Values.basePath }}/keys
             - name: {{ include "chainflip-node.fullname" . }}
@@ -59,8 +61,8 @@ spec:
             - -c
             - |
               set -x
-              chainflip-node key insert --key-type 'aura' --scheme sr25519 --chain {{ .Values.chain }} --suri "0x$(cat {{ .Values.basePath }}/keys/signing_key_file)" --base-path {{ .Values.basePath }}/chaindata
-              chainflip-node key insert --key-type 'gran' --scheme ed25519 --chain {{ .Values.chain }} --suri "0x$(cat {{ .Values.basePath }}/keys/signing_key_file)" --base-path {{ .Values.basePath }}/chaindata
+              chainflip-node key insert --key-type 'aura' --scheme sr25519 --chain {{ .Values.chain | default .Values.chainspec }} --suri "0x$(cat {{ .Values.basePath }}/keys/signing_key_file)" --base-path {{ .Values.basePath }}/chaindata
+              chainflip-node key insert --key-type 'gran' --scheme ed25519 --chain {{ .Values.chain | default .Values.chainspec}} --suri "0x$(cat {{ .Values.basePath }}/keys/signing_key_file)" --base-path {{ .Values.basePath }}/chaindata
         {{- end }}
       containers:
       {{- if .Values.brokerApi.enabled }}
