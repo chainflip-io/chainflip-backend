@@ -13,7 +13,7 @@ import { fundFlip } from '../shared/fund_flip';
 
 async function main(): Promise<void> {
   let pubkey = process.argv[2];
-  if (pubkey.substr(0, 2) != '0x') {
+  if (pubkey.substr(0, 2) !== '0x') {
     pubkey = '0x' + pubkey;
   }
   const flipAmount = process.argv[3].trim();

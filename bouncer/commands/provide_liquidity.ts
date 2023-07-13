@@ -8,6 +8,7 @@
 
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
+import { Asset } from '@chainflip-io/cli/.';
 import {
   observeEvent,
   getChainflipApi,
@@ -16,7 +17,6 @@ import {
   encodeBtcAddressForContract,
 } from '../shared/utils';
 import { send } from '../shared/send';
-import { Asset } from '@chainflip-io/cli/.';
 
 const chain = new Map<Asset, string>([
   ['DOT', 'dot'],
@@ -33,26 +33,30 @@ async function main() {
   await cryptoWaitReady();
 
   const keyring = new Keyring({ type: 'sr25519' });
-  const lp_uri = process.env.SNOWWHITE_URI || '//LP_1';
-  const lp = keyring.createFromUri(lp_uri);
+  const lpUri = process.env.SNOWWHITE_URI || '//LP_1';
+  const lp = keyring.createFromUri(lpUri);
 
   console.log('Requesting ' + ccy + ' deposit address');
-  let event = observeEvent('liquidityProvider:LiquidityDepositAddressReady', chainflip, (data) => {
-    return data[1][chain.get(ccy)!] != undefined;
-  });
+  let event = observeEvent(
+    'liquidityProvider:LiquidityDepositAddressReady',
+    chainflip,
+    (data) => data[1][chain.get(ccy)!] !== undefined,
+  );
   await chainflip.tx.liquidityProvider
     .requestLiquidityDepositAddress(ccy.toLowerCase())
     .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
-  let ingress_address = (await event).depositAddress.toJSON()[chain.get(ccy)!];
-  if (ccy == 'BTC') {
-    ingress_address = encodeBtcAddressForContract(ingress_address);
+  let ingressAddress = (await event).depositAddress.toJSON()[chain.get(ccy)!];
+  if (ccy === 'BTC') {
+    ingressAddress = encodeBtcAddressForContract(ingressAddress);
   }
-  console.log('Received ' + ccy + ' address: ' + ingress_address);
-  console.log('Sending ' + amount + ' ' + ccy + ' to ' + ingress_address);
-  event = observeEvent('liquidityProvider:AccountCredited', chainflip, (data) => {
-    return data[1].toUpperCase() == ccy;
-  });
-  send(ccy, ingress_address, amount);
+  console.log('Received ' + ccy + ' address: ' + ingressAddress);
+  console.log('Sending ' + amount + ' ' + ccy + ' to ' + ingressAddress);
+  event = observeEvent(
+    'liquidityProvider:AccountCredited',
+    chainflip,
+    (data) => data[1].toUpperCase() === ccy,
+  );
+  send(ccy, ingressAddress, amount);
   await event;
   process.exit(0);
 }

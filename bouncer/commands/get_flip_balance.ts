@@ -6,9 +6,8 @@
 // For example: pnpm tsx ./commands/get_flip_balance.ts 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6
 // might print: 100.2
 
-import { runWithTimeout } from '../shared/utils';
+import { runWithTimeout, getEthContractAddress } from '../shared/utils';
 import { getErc20Balance } from '../shared/get_erc20_balance';
-import { getEthContractAddress } from '../shared/utils';
 
 async function getFlipBalanceCommand(ethereumAddress: string) {
   const contractAddress = getEthContractAddress('FLIP');

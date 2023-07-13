@@ -1,5 +1,5 @@
-import { performSwap } from '../shared/perform_swap';
 import { Asset } from '@chainflip-io/cli/.';
+import { performSwap } from '../shared/perform_swap';
 
 async function main() {
   const SRC_CCY = process.argv[2].toUpperCase() as Asset;

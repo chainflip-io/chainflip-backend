@@ -11,6 +11,7 @@ import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { exec } from 'child_process';
 import { Mutex } from 'async-mutex';
 import type { KeyringPair } from '@polkadot/keyring/types';
+import { Asset } from '@chainflip-io/cli/.';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import {
   runWithTimeout,
@@ -21,7 +22,6 @@ import {
   assetToDecimals,
   handleSubstrateError,
 } from '../shared/utils';
-import { Asset } from '@chainflip-io/cli/.';
 
 const deposits = new Map<Asset, number>([
   ['DOT', 10000],
@@ -76,6 +76,7 @@ async function observeEvent(eventName: string, dataCheck: (data: any) => boolean
   return result;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function setupEmergencyWithdrawalAddress(address: any): Promise<void> {
   console.log('Registering Emergency Withdrawal Address. Address:' + address);
   await mutex.runExclusive(async () => {
