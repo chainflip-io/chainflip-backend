@@ -36,7 +36,7 @@ spec:
             - name: {{ include "chainflip-node.fullname" . }}
               mountPath: {{ .Values.basePath }}/chaindata
         {{- end }}
-        {{- if .Values.downloadChainspec }}
+        {{- if .Values.chainspec }}
         - name: s3-downloader
           image: curlimages/curl:latest
           command: ["sh", "-c", "curl -L -o {{ .Values.basePath }}/{{ .Values.chainspec }} {{ .Values.chainspecUrl }}"]
@@ -110,7 +110,7 @@ spec:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default "latest" }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          {{- if not .Values.downloadChainspec }}
+          {{- if not .Values.chainspec }}
           envFrom:
             - secretRef:
                 name: "{{ include "chainflip-node.fullname" .}}-{{ .Values.secrets.ethEnvOnePasswordSecret }}"
@@ -122,7 +122,7 @@ spec:
             {{- range .Values.bootnodes }}
             - --bootnodes={{ . }}
             {{- end }}
-            - --chain={{ .Values.chain }}
+            - --chain={{ .Values.chain | default .Values.chainspec }}
             - --prometheus-external
             - --state-cache-size=0
             {{- if or (eq .Values.role "validator") (eq .Values.role "genesis") }}
@@ -163,15 +163,16 @@ spec:
             - name: node-keys
               mountPath: {{ .Values.basePath }}/keys
           {{- end }}
-          {{- if .Values.downloadChainspec }}
+          {{- if .Values.chainspec }}
             - name: chainspec
               mountPath: {{ .Values.basePath }}/{{ .Values.chainspec }}
               subPath: {{ .Values.chainspec }}
               readOnly: true
           {{- end }}
-      {{- if or (eq .Values.role "validator") (eq .Values.role "genesis") (.Values.downloadChainspec) }}
       volumes:
-      {{- end }}
+        - name: placeholder
+          emptyDir:
+              {}
         {{- if .Values.downloadChainspec }}
         - name: chainspec
           emptyDir:

@@ -106,7 +106,6 @@ cluster: ""
 chain: ""
 chainspec: ""
 chainspecUrl: ""
-downloadChainspec: false
 
 ports:
   ipPort: "8078"
