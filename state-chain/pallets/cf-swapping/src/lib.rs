@@ -1,9 +1,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::{
-	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
-	CcmDepositMetadata,
+	address::{AddressConverter, ForeignChainAddress},
+	CcmDepositMetadata, SwapOrigin,
 };
-use cf_primitives::{Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, STABLE_ASSET};
+use cf_primitives::{
+	Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, TransactionHash, STABLE_ASSET,
+};
 use cf_traits::{impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi};
 use frame_support::{
 	pallet_prelude::*,
@@ -106,8 +108,6 @@ pub(crate) enum CcmSwapLeg {
 	Gas,
 }
 
-pub type TransactionHash = [u8; 32];
-
 /// Struct denoting swap status of a cross-chain message.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub(crate) struct CcmSwapOutput {
@@ -159,12 +159,6 @@ pub enum CcmFailReason {
 
 impl_pallet_safe_mode!(PalletSafeMode; swaps_enabled, withdrawals_enabled);
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum SwapOrigin {
-	DepositChannel { deposit_address: EncodedAddress, channel_id: ChannelId },
-	Vault { tx_hash: TransactionHash },
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 
@@ -191,6 +185,7 @@ pub mod pallet {
 
 		/// An interface to the AMM api implementation.
 		type SwappingApi: SwappingApi;
+
 		/// A converter to convert address to and from human readable to internal address
 		/// representation.
 		type AddressConverter: AddressConverter;
@@ -292,6 +287,7 @@ pub mod pallet {
 			source_asset: Asset,
 			amount: AssetAmount,
 			destination_asset: Asset,
+			origin: SwapOrigin,
 		},
 		/// A swap has been executed.
 		SwapExecuted {
@@ -653,6 +649,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			message_metadata: CcmDepositMetadata,
+			tx_hash: TransactionHash,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
@@ -665,6 +662,7 @@ pub mod pallet {
 				destination_asset,
 				destination_address_internal,
 				message_metadata,
+				SwapOrigin::Vault { tx_hash },
 			);
 
 			Ok(())
@@ -967,6 +965,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			message_metadata: CcmDepositMetadata,
+			origin: SwapOrigin,
 		) {
 			let encoded_destination_address =
 				T::AddressConverter::to_encoded_address(destination_address.clone());
@@ -1032,6 +1031,7 @@ pub mod pallet {
 						source_asset,
 						amount: principal_swap_amount,
 						destination_asset,
+						origin: origin.clone(),
 					});
 					Some(swap_id)
 				};
@@ -1054,6 +1054,7 @@ pub mod pallet {
 					source_asset,
 					amount: message_metadata.gas_budget,
 					destination_asset: output_gas_asset,
+					origin,
 				});
 				Some(swap_id)
 			};

@@ -71,7 +71,14 @@ fn assert_failed_ccm(
 	ccm: CcmDepositMetadata,
 	reason: CcmFailReason,
 ) {
-	Swapping::on_ccm_deposit(from, amount, output, destination_address.clone(), ccm.clone());
+	Swapping::on_ccm_deposit(
+		from,
+		amount,
+		output,
+		destination_address.clone(),
+		ccm.clone(),
+		SwapOrigin::Vault { tx_hash: Default::default() },
+	);
 	System::assert_last_event(RuntimeEvent::Swapping(Event::CcmFailed {
 		reason,
 		destination_address: MockAddressConverter::to_encoded_address(destination_address),
@@ -388,7 +395,8 @@ fn reject_invalid_ccm_deposit() {
 				1_000_000,
 				Asset::Eth,
 				EncodedAddress::Dot(Default::default()),
-				ccm.clone()
+				ccm.clone(),
+				Default::default(),
 			),
 			Error::<Test>::IncompatibleAssetAndAddress
 		);
@@ -400,7 +408,8 @@ fn reject_invalid_ccm_deposit() {
 				1_000_000,
 				Asset::Eth,
 				EncodedAddress::Dot(Default::default()),
-				ccm.clone()
+				ccm.clone(),
+				Default::default(),
 			),
 			Error::<Test>::IncompatibleAssetAndAddress
 		);
@@ -536,6 +545,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 			Asset::Eth,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm.clone(),
+			SwapOrigin::Vault { tx_hash: Default::default() },
 		);
 
 		assert_eq!(
@@ -613,7 +623,8 @@ fn can_process_ccms_via_extrinsic() {
 			deposit_amount,
 			Asset::Usdc,
 			EncodedAddress::Eth(Default::default()),
-			ccm.clone()
+			ccm.clone(),
+			Default::default(),
 		));
 
 		assert_eq!(
@@ -695,7 +706,8 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 			deposit_amount,
 			Asset::Usdc,
 			EncodedAddress::Eth(Default::default()),
-			ccm.clone()
+			ccm.clone(),
+			Default::default(),
 		));
 
 		assert_eq!(
@@ -778,7 +790,8 @@ fn can_handle_ccms_with_native_gas_asset() {
 			deposit_amount,
 			Asset::Usdc,
 			EncodedAddress::Eth(Default::default()),
-			ccm.clone()
+			ccm.clone(),
+			Default::default(),
 		));
 
 		assert_eq!(
@@ -856,7 +869,8 @@ fn can_handle_ccms_with_no_swaps_needed() {
 			deposit_amount,
 			Asset::Eth,
 			EncodedAddress::Eth(Default::default()),
-			ccm
+			ccm,
+			Default::default(),
 		));
 
 		assert_eq!(PendingCcms::<Test>::get(1), None);
@@ -1160,6 +1174,7 @@ fn ccm_via_exintrincs_below_minimum_gas_budget_are_rejected() {
 			to,
 			EncodedAddress::Eth(Default::default()),
 			ccm.clone(),
+			Default::default(),
 		));
 
 		// Verify the CCM failed
@@ -1183,6 +1198,7 @@ fn ccm_via_exintrincs_below_minimum_gas_budget_are_rejected() {
 			to,
 			EncodedAddress::Eth(Default::default()),
 			ccm,
+			Default::default(),
 		));
 
 		// Verify the CCM succeeded
@@ -1258,6 +1274,7 @@ fn ccm_via_deposit_with_principal_below_minimum_are_rejected() {
 			to,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm,
+			SwapOrigin::Vault { tx_hash: Default::default() },
 		);
 
 		// Verify the CCM is processed successfully
@@ -1302,6 +1319,7 @@ fn ccm_via_extrinsic_with_principal_below_minimum_are_rejected() {
 			to,
 			EncodedAddress::Eth(Default::default()),
 			ccm.clone(),
+			Default::default(),
 		));
 
 		// Verify the ccm is rejected
@@ -1328,6 +1346,7 @@ fn ccm_via_extrinsic_with_principal_below_minimum_are_rejected() {
 			to,
 			EncodedAddress::Eth(Default::default()),
 			ccm,
+			Default::default(),
 		));
 
 		// Verify the CCM is processed successfully
@@ -1379,6 +1398,7 @@ fn ccm_without_principal_swaps_are_accepted() {
 			flip,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm.clone(),
+			SwapOrigin::Vault { tx_hash: Default::default() },
 		);
 
 		// Verify the CCM is processed successfully
@@ -1408,6 +1428,7 @@ fn ccm_without_principal_swaps_are_accepted() {
 			eth,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm,
+			SwapOrigin::Vault { tx_hash: Default::default() },
 		);
 
 		// Verify the CCM is processed successfully
@@ -1455,6 +1476,7 @@ fn ccm_with_gas_below_minimum_swap_amount_allowed() {
 			flip,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm,
+			SwapOrigin::Vault { tx_hash: Default::default() },
 		);
 
 		// Verify the CCM is processed successfully
@@ -1635,6 +1657,8 @@ fn ccm_swaps_emits_events() {
 			source_address: ForeignChainAddress::Eth(Default::default()),
 		};
 
+		const ORIGIN: SwapOrigin = SwapOrigin::Vault { tx_hash: [0x11; 32] };
+
 		// Test when both principal and gas need to be swapped.
 		System::reset_events();
 		Swapping::on_ccm_deposit(
@@ -1643,6 +1667,7 @@ fn ccm_swaps_emits_events() {
 			Asset::Usdc,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm.clone(),
+			ORIGIN,
 		);
 		assert_event_sequence!(
 			Test,
@@ -1652,6 +1677,7 @@ fn ccm_swaps_emits_events() {
 				source_asset: Asset::Flip,
 				amount: 9_000,
 				destination_asset: Asset::Usdc,
+				origin: ORIGIN,
 			}),
 			RuntimeEvent::Swapping(Event::CcmSwapScheduled {
 				swap_type: SwapType::CcmGas(1),
@@ -1659,6 +1685,7 @@ fn ccm_swaps_emits_events() {
 				source_asset: Asset::Flip,
 				amount: 1_000,
 				destination_asset: Asset::Eth,
+				origin: ORIGIN,
 			}),
 			RuntimeEvent::Swapping(Event::CcmDepositReceived {
 				ccm_id: 1,
@@ -1677,6 +1704,7 @@ fn ccm_swaps_emits_events() {
 			Asset::Usdc,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm.clone(),
+			ORIGIN,
 		);
 		assert_event_sequence!(
 			Test,
@@ -1686,6 +1714,7 @@ fn ccm_swaps_emits_events() {
 				source_asset: Asset::Eth,
 				amount: 9_000,
 				destination_asset: Asset::Usdc,
+				origin: ORIGIN,
 			}),
 			RuntimeEvent::Swapping(Event::CcmDepositReceived {
 				ccm_id: 2,
@@ -1704,6 +1733,7 @@ fn ccm_swaps_emits_events() {
 			Asset::Flip,
 			ForeignChainAddress::Eth(Default::default()),
 			ccm,
+			ORIGIN,
 		);
 		assert_event_sequence!(
 			Test,
@@ -1713,6 +1743,7 @@ fn ccm_swaps_emits_events() {
 				source_asset: Asset::Flip,
 				amount: 1_000,
 				destination_asset: Asset::Eth,
+				origin: ORIGIN,
 			}),
 			RuntimeEvent::Swapping(Event::CcmDepositReceived {
 				ccm_id: 3,

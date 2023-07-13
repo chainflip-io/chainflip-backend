@@ -14,11 +14,13 @@ pub use weights::WeightInfo;
 
 use cf_primitives::{BasisPoints, EgressCounter, EgressId, ForeignChain};
 
-use cf_chains::{address::ForeignChainAddress, CcmDepositMetadata, ChannelIdConstructor};
+use cf_chains::{
+	address::ForeignChainAddress, CcmDepositMetadata, ChannelIdConstructor, SwapOrigin,
+};
 
 use cf_chains::{
-	AllBatch, AllBatchError, Chain, ChainAbi, ChainCrypto, ExecutexSwapAndCall, FetchAssetParams,
-	TransferAssetParams,
+	address::AddressConverter, AllBatch, AllBatchError, Chain, ChainAbi, ChainCrypto,
+	ExecutexSwapAndCall, FetchAssetParams, TransferAssetParams,
 };
 use cf_primitives::{Asset, AssetAmount, ChannelId};
 use cf_traits::{
@@ -164,6 +166,10 @@ pub mod pallet {
 
 		/// Generates deposit addresses.
 		type AddressDerivation: AddressDerivationApi<Self::TargetChain>;
+
+		/// A converter to convert address to and from human readable to internal address
+		/// representation.
+		type AddressConverter: AddressConverter;
 
 		/// Pallet responsible for managing Liquidity Providers.
 		type LpBalance: LpBalanceApi<AccountId = Self::AccountId>;
@@ -630,6 +636,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				destination_asset,
 				destination_address,
 				message_metadata,
+				SwapOrigin::DepositChannel {
+					deposit_address: T::AddressConverter::to_encoded_address(
+						deposit_address.clone().into(),
+					),
+					channel_id,
+				},
 			),
 		};
 

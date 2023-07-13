@@ -15,7 +15,7 @@ pub use async_result::AsyncResult;
 
 use cf_chains::{
 	address::ForeignChainAddress, dot::PolkadotPublicKey, eth::Address, ApiCall,
-	CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot,
+	CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot, SwapOrigin,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
@@ -829,6 +829,7 @@ pub trait CcmHandler {
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
 		message_metadata: CcmDepositMetadata,
+		origin: SwapOrigin,
 	);
 }
 
@@ -839,6 +840,7 @@ impl CcmHandler for () {
 		_destination_asset: Asset,
 		_destination_address: ForeignChainAddress,
 		_message_metadata: CcmDepositMetadata,
+		_origin: SwapOrigin,
 	) {
 	}
 }
