@@ -37,7 +37,7 @@ spec:
               mountPath: {{ .Values.basePath }}/chaindata
         {{- end }}
         {{- if .Values.chainspec }}
-        - name: s3-downloader
+        - name: download-chainspec
           image: curlimages/curl:latest
           command: ["sh", "-c", "curl -L -o {{ .Values.basePath }}/{{ .Values.chainspec }} {{ .Values.chainspecUrl }}"]
           volumeMounts:
@@ -173,7 +173,7 @@ spec:
         - name: placeholder
           emptyDir:
               {}
-        {{- if .Values.downloadChainspec }}
+        {{- if .Values.chainspec }}
         - name: chainspec
           emptyDir:
             {}
