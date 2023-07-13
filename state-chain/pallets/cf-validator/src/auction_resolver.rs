@@ -30,6 +30,17 @@ pub enum AuctionError {
 	NotEnoughBidders,
 }
 
+/// The outcome of a successful auction.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
+pub struct AuctionOutcome<Id, Amount> {
+	/// The auction winners, sorted by descending bid.
+	pub winners: Vec<Id>,
+	/// The auction losers, sorted by descending bid.
+	pub losers: Vec<Id>,
+	/// The resulting bond for the next epoch.
+	pub bond: Amount,
+}
+
 impl<T: Config> From<AuctionError> for Error<T> {
 	fn from(err: AuctionError) -> Self {
 		match err {

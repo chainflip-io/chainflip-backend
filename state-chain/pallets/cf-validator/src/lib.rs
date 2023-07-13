@@ -19,8 +19,8 @@ mod rotation_state;
 pub use auction_resolver::*;
 use cf_primitives::{AuthorityCount, EpochIndex};
 use cf_traits::{
-	offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid, BidderProvider, Bonding,
-	Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch,
+	offence_reporting::OffenceReporter, AsyncResult, Bid, BidderProvider, Bonding, Chainflip,
+	EpochInfo, EpochTransitionHandler, ExecutionCondition, FundingInfo, HistoricalEpoch,
 	MissedAuthorshipSlots, OnAccountFunded, QualifyNode, ReputationResetter, SystemStateInfo,
 	VaultRotator,
 };

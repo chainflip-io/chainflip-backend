@@ -143,30 +143,6 @@ impl<Id, Amount> From<(Id, Amount)> for Bid<Id, Amount> {
 	}
 }
 
-/// The outcome of a successful auction.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, TypeInfo, RuntimeDebug)]
-pub struct AuctionOutcome<Id, Amount> {
-	/// The auction winners, sorted by descending bid.
-	pub winners: Vec<Id>,
-	/// The auction losers, sorted by descending bid.
-	pub losers: Vec<Id>,
-	/// The resulting bond for the next epoch.
-	pub bond: Amount,
-}
-
-pub type RuntimeAuctionOutcome<T> =
-	AuctionOutcome<<T as Chainflip>::ValidatorId, <T as Chainflip>::Amount>;
-
-impl<CandidateId, BidAmount: Default> Default for AuctionOutcome<CandidateId, BidAmount> {
-	fn default() -> Self {
-		AuctionOutcome {
-			winners: Default::default(),
-			losers: Default::default(),
-			bond: Default::default(),
-		}
-	}
-}
-
 #[derive(PartialEq, Eq, Clone, Debug, Decode, Encode)]
 pub enum VaultStatus<ValidatorId> {
 	KeygenComplete,

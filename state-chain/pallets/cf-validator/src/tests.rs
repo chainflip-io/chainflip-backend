@@ -7,7 +7,7 @@ use cf_traits::{
 		funding_info::MockFundingInfo, reputation_resetter::MockReputationResetter,
 		system_state_info::MockSystemStateInfo, vault_rotator::MockVaultRotatorA,
 	},
-	AccountRoleRegistry, AuctionOutcome, SystemStateInfo,
+	AccountRoleRegistry, SystemStateInfo,
 };
 use frame_support::{assert_noop, assert_ok};
 use frame_system::RawOrigin;
