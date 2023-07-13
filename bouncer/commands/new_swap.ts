@@ -13,7 +13,6 @@ import { Asset } from '@chainflip-io/cli/.';
 import { newSwap } from '../shared/new_swap';
 
 async function newSwapCommand() {
-
   const sourceToken = process.argv[2].toUpperCase() as Asset;
   const destToken = process.argv[3].toUpperCase() as Asset;
   const destAddress = process.argv[4];

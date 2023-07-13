@@ -42,15 +42,19 @@ async function main(): Promise<void> {
           Eth: '[u8; 20]',
           Dot: '[u8; 32]',
           Btc: '[u8; 34]',
-        }
-      }
-    }
+        },
+      },
+    },
   });
 
   // Register Emergency Withdrawal Address before requesting reposit address.
-  const encodedEthAddr = chainflip.createType('EncodedAddress', {"Eth": hexStringToBytesArray(await getAddress('ETH', 'LP_1'))});
-  await chainflip.tx.liquidityProvider.registerEmergencyWithdrawalAddress(encodedEthAddr).signAndSend(lp);
-  
+  const encodedEthAddr = chainflip.createType('EncodedAddress', {
+    Eth: hexStringToBytesArray(await getAddress('ETH', 'LP_1')),
+  });
+  await chainflip.tx.liquidityProvider
+    .registerEmergencyWithdrawalAddress(encodedEthAddr)
+    .signAndSend(lp);
+
   await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress('Eth').signAndSend(lp);
   const ethIngressKey = (
     await observeEvent('liquidityProvider:LiquidityDepositAddressReady')

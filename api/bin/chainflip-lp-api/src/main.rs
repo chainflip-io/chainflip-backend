@@ -1,7 +1,8 @@
+use anyhow::anyhow;
 use cf_utilities::try_parse_number_or_hex;
 use chainflip_api::{
 	self,
-	lp::{self, BuyOrSellOrder, Tick},
+	lp::{self, BuyOrSellOrder, MintRangeOrderReturn, Tick},
 	primitives::{AccountRole, Asset, ForeignChain},
 	settings::StateChain,
 };
@@ -13,6 +14,58 @@ use jsonrpsee::{
 };
 use sp_rpc::number::NumberOrHex;
 use std::{ops::Range, path::PathBuf};
+
+/// Contains RPC interface types that differ from internal types.
+pub mod rpc_types {
+	use chainflip_api::{lp, primitives::AssetAmount};
+	use serde::{Deserialize, Serialize};
+	use sp_rpc::number::NumberOrHex;
+
+	#[derive(Serialize, Deserialize)]
+	pub struct AssetAmounts {
+		/// The amount of the unstable asset.
+		///
+		/// This is side `zero` in the AMM.
+		unstable: NumberOrHex,
+		/// The amount of the stable asset (USDC).
+		///
+		/// This is side `one` in the AMM.
+		stable: NumberOrHex,
+	}
+
+	impl TryFrom<AssetAmounts> for lp::SideMap<AssetAmount> {
+		type Error = <u128 as TryFrom<NumberOrHex>>::Error;
+
+		fn try_from(value: AssetAmounts) -> Result<Self, Self::Error> {
+			Ok(lp::SideMap::from_array([value.unstable.try_into()?, value.stable.try_into()?]))
+		}
+	}
+
+	/// Range Orders can be specified in terms of either asset amounts or pool liquidity.
+	///
+	/// If `AssetAmounts` is specified, the order requires desired and minimum amounts of the assets
+	/// pairs. This will attempt a mint of up to `desired` amounts of the assets, but will not mint
+	/// less than `minimum` amounts.
+	#[derive(Serialize, Deserialize)]
+	pub enum RangeOrderSize {
+		AssetAmounts { desired: AssetAmounts, minimum: AssetAmounts },
+		PoolLiquidity(NumberOrHex),
+	}
+
+	impl TryFrom<RangeOrderSize> for lp::RangeOrderSize {
+		type Error = <u128 as TryFrom<NumberOrHex>>::Error;
+
+		fn try_from(value: RangeOrderSize) -> Result<Self, Self::Error> {
+			Ok(match value {
+				RangeOrderSize::AssetAmounts { desired, minimum } => Self::AssetAmounts {
+					desired: desired.try_into()?,
+					minimum: minimum.try_into()?,
+				},
+				RangeOrderSize::PoolLiquidity(liquidity) => Self::Liquidity(liquidity.try_into()?),
+			})
+		}
+	}
+}
 
 #[rpc(server, client, namespace = "lp")]
 pub trait Rpc {
@@ -43,8 +96,8 @@ pub trait Rpc {
 		asset: Asset,
 		lower_tick: Tick,
 		upper_tick: Tick,
-		amount: NumberOrHex,
-	) -> Result<String, Error>;
+		order_size: rpc_types::RangeOrderSize,
+	) -> Result<MintRangeOrderReturn, Error>;
 
 	#[method(name = "burnRangeOrder")]
 	async fn burn_range_order(
@@ -161,8 +214,8 @@ impl RpcServer for RpcServerImpl {
 		asset: Asset,
 		start: Tick,
 		end: Tick,
-		amount: NumberOrHex,
-	) -> Result<String, Error> {
+		order_size: rpc_types::RangeOrderSize,
+	) -> Result<MintRangeOrderReturn, Error> {
 		if start >= end {
 			return Err(Error::Custom("Invalid tick range".to_string()))
 		}
@@ -171,14 +224,13 @@ impl RpcServer for RpcServerImpl {
 			&self.state_chain_settings,
 			asset,
 			Range { start, end },
-			try_parse_number_or_hex(amount)?,
+			order_size.try_into().map_err(|_| anyhow!("Invalid order size."))?,
 		)
 		.await
-		.map(|data| serde_json::to_string(&data).expect("should serialize return struct"))
 		.map_err(|e| Error::Custom(e.to_string()))
 	}
 
-	/// Removes liquidity from a rage order.
+	/// Removes liquidity from a range order.
 	/// Returns the assets returned and fees harvested.
 	async fn burn_range_order(
 		&self,

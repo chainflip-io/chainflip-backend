@@ -16,7 +16,6 @@ async function main() {
 
   await sendDot(polkadotAddress, dotAmount);
   process.exit(0);
-
 }
 
 runWithTimeout(main(), 20000).catch((error) => {
