@@ -32,7 +32,6 @@ spec:
                 fi
                 sleep 1
               done
-        {{- if .Values.engine.existingDbPath }}
         - name: copy-datadb
           imagePullPolicy: Always
           image: "ghcr.io/chainflip-io/chainflip-backend/chainflip-engine-databases:{{ .Values.engine.image.tag | default "latest" }}"
@@ -41,13 +40,15 @@ spec:
             - -c
             - |
               set -x
-              if ! [ -f {{ .Values.basePath }}/data.db/LOCK ]; then
+              if ! [ "$(ls -A {{ .Values.basePath }}/data.db/LOCK )" ]; then
                 cp -R {{ .Values.engine.existingDbPath }}/* {{ .Values.basePath }}/data.db/
+                echo "Copied existing database"
+              else
+                echo "Database already exists"
               fi
           volumeMounts:
             - name: datadb
               mountPath: {{ .Values.basePath }}/data.db
-        {{- end }}
       containers:
         - name: chainflip-engine
           image: "{{ .Values.engine.image.repository }}:{{ .Values.engine.image.tag | default "latest" }}"

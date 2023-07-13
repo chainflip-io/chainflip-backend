@@ -21,6 +21,7 @@ engine:
   containerPort: 5555
   resources: {}
   existingDbPath: ""
+  syncDb: false
   settings:
     node_p2p:
       node_key_file: /etc/chainflip/keys/node_key_file
