@@ -8,6 +8,7 @@ use cf_primitives::{chains::assets, AssetAmount, ChannelId, EgressId, EthAmount,
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
+	traits::Get,
 	Blake2_256, Parameter, RuntimeDebug, StorageHasher,
 };
 use scale_info::TypeInfo;
@@ -45,7 +46,8 @@ pub mod mocks;
 pub trait Chain: Member + Parameter {
 	const NAME: &'static str;
 
-	const KEY_HANDOVER_IS_REQUIRED: bool = false;
+	type KeyHandoverIsRequired: Get<bool>;
+	type OptimisticActivation: Get<bool>;
 
 	type ChainBlockNumber: FullCodec
 		+ Member
@@ -222,13 +224,18 @@ pub trait ChainEnvironment<
 	fn lookup(s: LookupKey) -> Option<LookupValue>;
 }
 
+pub enum SetAggKeyWithAggKeyError {
+	Failed,
+	NotRequired,
+}
+
 /// Constructs the `SetAggKeyWithAggKey` api call.
 #[allow(clippy::result_unit_err)]
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		maybe_old_key: Option<<Abi as ChainCrypto>::AggKey>,
 		new_key: <Abi as ChainCrypto>::AggKey,
-	) -> Result<Self, ()>;
+	) -> Result<Self, SetAggKeyWithAggKeyError>;
 }
 
 #[allow(clippy::result_unit_err)]

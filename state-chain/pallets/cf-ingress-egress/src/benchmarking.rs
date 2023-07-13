@@ -9,7 +9,7 @@ benchmarks_instance_pallet! {
 	disable_asset_egress {
 		let origin = T::EnsureGovernance::successful_origin();
 		let destination_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
-	} : { let _ = Pallet::<T, I>::disable_asset_egress(origin, destination_asset, true); }
+	} : { let _ = Pallet::<T, I>::enable_or_disable_egress(origin, destination_asset, true); }
 	verify {
 		assert!(DisabledEgressAssets::<T, I>::get(
 			destination_asset,
@@ -23,6 +23,7 @@ benchmarks_instance_pallet! {
 		DepositAddressDetailsLookup::<T, I>::insert(&deposit_address, DepositAddressDetails {
 				channel_id: 1,
 				source_asset,
+				opened_at: BenchmarkValue::benchmark_value(),
 			});
 		ChannelActions::<T, I>::insert(&deposit_address, ChannelAction::<T::AccountId>::LiquidityProvision {
 			lp_account: account("doogle", 0, 0)

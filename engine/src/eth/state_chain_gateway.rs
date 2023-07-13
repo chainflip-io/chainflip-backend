@@ -1,11 +1,9 @@
-use super::{event::Event, BlockWithItems, DecodeLogClosure, EthContractWitnesser};
+use super::{event::Event, BlockWithItems, EthContractWitnesser};
 use crate::{
 	eth::EthRpcApi, state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
 };
-use anyhow::Result;
 use async_trait::async_trait;
 use cf_primitives::EpochIndex;
-use ethers::{abi::RawLog, contract::EthLogDecode};
 use std::sync::Arc;
 use tracing::{info, trace};
 use web3::types::H160;
@@ -111,12 +109,6 @@ impl EthContractWitnesser for StateChainGateway {
 
 	fn contract_address(&self) -> H160 {
 		self.deployed_address
-	}
-
-	fn decode_log_closure(&self) -> DecodeLogClosure<Self::EventParameters> {
-		Box::new(move |raw_log: RawLog| -> Result<Self::EventParameters> {
-			Ok(StateChainGatewayEvents::decode_log(&raw_log)?)
-		})
 	}
 }
 

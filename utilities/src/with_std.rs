@@ -32,17 +32,9 @@ pub fn clean_hex_address<const LEN: usize>(address_str: &str) -> Result<[u8; LEN
 }
 
 pub fn try_parse_number_or_hex(amount: NumberOrHex) -> anyhow::Result<u128> {
-	u128::try_from(amount)
-		.map_err(|_| {
-			anyhow!("Error parsing amount. Please use a valid number or hex string as input.")
-		})
-		.and_then(|amount| {
-			if amount == 0 {
-				Err(anyhow!("Zero is not a valid withdrawal amount."))
-			} else {
-				Ok(amount)
-			}
-		})
+	u128::try_from(amount).map_err(|_| {
+		anyhow!("Error parsing amount. Please use a valid number or hex string as input.")
+	})
 }
 
 pub fn clean_eth_address(dirty_eth_address: &str) -> Result<[u8; 20], anyhow::Error> {

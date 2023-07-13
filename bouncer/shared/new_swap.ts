@@ -1,21 +1,19 @@
-import { Keyring } from "@polkadot/api";
-import { u8aToHex } from "@polkadot/util";
 import { cryptoWaitReady } from "@polkadot/util-crypto";
+import { Keyring } from "@polkadot/api";
 import { Mutex } from "async-mutex";
 import { Asset } from "@chainflip-io/cli/.";
-import { getChainflipApi } from "./utils";
+import { getChainflipApi, encodeDotAddressForContract, handleSubstrateError } from "./utils";
 
 const mutex = new Mutex();
 
 export async function newSwap(sourceToken: Asset, destToken: Asset,
-    destAddress: string, fee: any): Promise<void> {
+    destAddress: string, fee: any, messageMetadata?: CcmDepositMetadata): Promise<void> {
     await cryptoWaitReady();
-    const keyring = new Keyring({ type: 'sr25519' });
 
     const chainflip = await getChainflipApi();
     const destinationAddress =
-        destToken === 'DOT' ? u8aToHex(keyring.decodeAddress(destAddress)) : destAddress;
-
+        destToken === 'DOT' ? encodeDotAddressForContract(destAddress) : destAddress;
+    const keyring = new Keyring({ type: 'sr25519' });
     const brokerUri = process.env.BROKER_URI ?? '//BROKER_1';
     const broker = keyring.createFromUri(brokerUri);
 
@@ -26,9 +24,16 @@ export async function newSwap(sourceToken: Asset, destToken: Asset,
                 destToken,
                 { [destToken === 'USDC' ? 'ETH' : destToken]: destinationAddress },
                 fee,
-                null,
+                messageMetadata ?? null,
             )
-            .signAndSend(broker, { nonce: -1 });
+            .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
     })
 
 }
+
+export interface CcmDepositMetadata {
+    message: string;
+    gas_budget: number;
+    cf_parameters: string;
+    source_address: any;
+  }

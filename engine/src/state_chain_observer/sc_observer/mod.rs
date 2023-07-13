@@ -57,17 +57,6 @@ pub struct EthAddressToMonitorSender {
 	pub usdc: EthMonitorCommandSender,
 }
 
-/// Panic if any of the reported parties are not participants in the ceremony
-pub fn ensure_reported_parties_are_participants(
-	reported_parties: &BTreeSet<AccountId>,
-	participants: &BTreeSet<AccountId>,
-) {
-	let non_participants = reported_parties.difference(participants).collect::<BTreeSet<_>>();
-	if !non_participants.is_empty() {
-		panic!("Trying to report non-participant {}", utilities::format_iterator(non_participants));
-	}
-}
-
 async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,
 	multisig_client: &'a MultisigClient,
@@ -88,7 +77,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	if keygen_participants.contains(&state_chain_client.account_id()) {
 		// We initiate keygen outside of the spawn to avoid requesting ceremonies out of order
 		let keygen_result_future =
-			multisig_client.initiate_keygen(ceremony_id, epoch_index, keygen_participants.clone());
+			multisig_client.initiate_keygen(ceremony_id, epoch_index, keygen_participants);
 		scope.spawn(async move {
 			state_chain_client
                 .submit_signed_extrinsic(pallet_cf_vaults::Call::<
@@ -99,10 +88,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
                     reported_outcome: keygen_result_future
                         .await
                         .map(I::pubkey_to_aggkey)
-                        .map_err(|(bad_account_ids, _reason)| {
-                            ensure_reported_parties_are_participants(&bad_account_ids, &keygen_participants);
-                            bad_account_ids
-                }),
+                        .map_err(|(bad_account_ids, _reason)| bad_account_ids),
                 })
                 .await;
 			Ok(())
@@ -110,6 +96,56 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	} else {
 		// If we are not participating, just send an empty ceremony request (needed for ceremony id
 		// tracking)
+		multisig_client.update_latest_ceremony_id(ceremony_id);
+	}
+}
+
+async fn handle_key_handover_request<'a, StateChainClient, MultisigClient>(
+	scope: &Scope<'a, anyhow::Error>,
+	multisig_client: &'a MultisigClient,
+	state_chain_client: Arc<StateChainClient>,
+	ceremony_id: CeremonyId,
+	from_epoch: EpochIndex,
+	to_epoch: EpochIndex,
+	sharing_participants: BTreeSet<AccountId32>,
+	receiving_participants: BTreeSet<AccountId32>,
+	key_to_share: btc::AggKey,
+	mut new_key: btc::AggKey,
+) where
+	MultisigClient: MultisigClientApi<BtcSigning>,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
+	state_chain_runtime::Runtime: pallet_cf_vaults::Config<BitcoinInstance>,
+	state_chain_runtime::RuntimeCall:
+		std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, BitcoinInstance>>,
+{
+	let account_id = &state_chain_client.account_id();
+	if sharing_participants.contains(account_id) || receiving_participants.contains(account_id) {
+		let key_handover_result_future = multisig_client.initiate_key_handover(
+			ceremony_id,
+			KeyId::new(from_epoch, key_to_share.current),
+			to_epoch,
+			sharing_participants,
+			receiving_participants,
+		);
+		scope.spawn(async move {
+			let _result = state_chain_client
+				.submit_signed_extrinsic(pallet_cf_vaults::Call::<
+					state_chain_runtime::Runtime,
+					BitcoinInstance,
+				>::report_key_handover_outcome {
+					ceremony_id,
+					reported_outcome: key_handover_result_future
+						.await
+						.map(move |handover_key| {
+							assert!(new_key.previous.replace(handover_key.serialize()).is_none());
+							new_key
+						})
+						.map_err(|(bad_account_ids, _reason)| bad_account_ids),
+				})
+				.await;
+			Ok(())
+		});
+	} else {
 		multisig_client.update_latest_ceremony_id(ceremony_id);
 	}
 }
@@ -136,7 +172,7 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	if signers.contains(&state_chain_client.account_id()) {
 		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
 		let signing_result_future =
-			multisig_client.initiate_signing(ceremony_id, signers.clone(), signing_info);
+			multisig_client.initiate_signing(ceremony_id, signers, signing_info);
 
 		scope.spawn(async move {
 			match signing_result_future.await {
@@ -152,13 +188,12 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 						.await;
 				},
 				Err((bad_account_ids, _reason)) => {
-					ensure_reported_parties_are_participants(&bad_account_ids, &signers);
 					state_chain_client
 						.submit_signed_extrinsic(pallet_cf_threshold_signature::Call::<
 							state_chain_runtime::Runtime,
 							I,
 						>::report_signature_failed {
-							id: ceremony_id,
+							ceremony_id,
 							offenders: BTreeSet::from_iter(bad_account_ids),
 						})
 						.await;
@@ -549,54 +584,22 @@ where
                                            from_epoch,
                                            sharing_participants,
                                            receiving_participants,
-                                           mut new_key,
+                                           new_key,
                                            to_epoch,
                                         },
                                     ) => {
-                                        let all_participants = sharing_participants
-                                            .iter()
-                                            .chain(receiving_participants.iter())
-                                            .cloned()
-                                            .collect::<BTreeSet<_>>();
-                                        if all_participants.contains(&account_id) {
-                                            let key_handover_result_future = btc_multisig_client.initiate_key_handover(
-                                                ceremony_id,
-                                                KeyId::new(from_epoch, key_to_share.current),
-                                                to_epoch,
-                                                sharing_participants.clone(),
-                                                receiving_participants.clone(),
-                                            );
-                                            let state_chain_client = state_chain_client.clone();
-                                            scope.spawn(async move {
-                                                let _result =
-                                                    state_chain_client
-                                                        .submit_signed_extrinsic(pallet_cf_vaults::Call::<
-                                                            state_chain_runtime::Runtime,
-                                                            BitcoinInstance,
-                                                        >::report_key_handover_outcome {
-                                                            ceremony_id,
-                                                            reported_outcome: key_handover_result_future
-                                                                .await
-                                                                .map(move |handover_key| {
-                                                                    assert!(
-                                                                        new_key.previous.replace(handover_key.serialize()).is_none()
-                                                                    );
-                                                                    new_key
-                                                                })
-                                                                .map_err(|(bad_account_ids, _reason)| {
-                                                                    ensure_reported_parties_are_participants(
-                                                                        &bad_account_ids,
-                                                                        &all_participants,
-                                                                    );
-                                                                    bad_account_ids
-                                                                }),
-                                                        })
-                                                        .await;
-                                                Ok(())
-                                            });
-                                        } else {
-                                            btc_multisig_client.update_latest_ceremony_id(ceremony_id);
-                                        }
+                                        handle_key_handover_request::<_, _>(
+                                            scope,
+                                            &btc_multisig_client,
+                                            state_chain_client.clone(),
+                                            ceremony_id,
+                                            from_epoch,
+                                            to_epoch,
+                                            sharing_participants,
+                                            receiving_participants,
+                                            key_to_share,
+                                            new_key,
+                                        ).await;
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumVault(
                                         pallet_cf_vaults::Event::KeyHandoverRequest {
@@ -707,7 +710,8 @@ where
                                     state_chain_runtime::RuntimeEvent::EthereumIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
                                             deposit_address,
-                                            source_asset
+                                            source_asset,
+                                            ..
                                         }
                                     ) => {
                                         use cf_primitives::chains::assets::eth;
@@ -745,7 +749,8 @@ where
                                     state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
                                             deposit_address,
-                                            source_asset
+                                            source_asset,
+                                            ..
                                         }
                                     ) => {
                                         assert_eq!(source_asset, cf_primitives::chains::assets::dot::Asset::Dot);
@@ -763,7 +768,8 @@ where
                                     state_chain_runtime::RuntimeEvent::BitcoinIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {
                                             deposit_address,
-                                            source_asset
+                                            source_asset,
+                                            ..
                                         }
                                     ) => {
                                         assert_eq!(source_asset, cf_primitives::chains::assets::btc::Asset::Btc);

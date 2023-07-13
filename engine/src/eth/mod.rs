@@ -23,7 +23,6 @@ pub mod witnessing;
 use anyhow::{anyhow, Context, Result};
 
 use cf_primitives::EpochIndex;
-use ethers::abi::RawLog;
 use futures::FutureExt;
 use regex::Regex;
 
@@ -231,11 +230,9 @@ where
 
 #[async_trait]
 pub trait EthContractWitnesser {
-	type EventParameters: Debug + Send + Sync + 'static;
+	type EventParameters: ethers::contract::EthLogDecode + Debug + Send + Sync + 'static;
 
 	fn contract_name(&self) -> String;
-
-	fn decode_log_closure(&self) -> DecodeLogClosure<Self::EventParameters>;
 
 	async fn handle_block_events<StateChainClient, EthRpcClient>(
 		&mut self,
@@ -251,9 +248,6 @@ pub trait EthContractWitnesser {
 
 	fn contract_address(&self) -> H160;
 }
-
-pub type DecodeLogClosure<EventParameters> =
-	Box<dyn Fn(RawLog) -> Result<EventParameters> + Send + Sync + 'static>;
 
 const MAX_SECRET_CHARACTERS_REVEALED: usize = 3;
 const SCHEMA_PADDING_LEN: usize = 3;
