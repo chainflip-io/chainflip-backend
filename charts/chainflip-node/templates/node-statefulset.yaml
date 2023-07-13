@@ -121,12 +121,13 @@ spec:
             - /usr/local/bin/chainflip-node
           args:
             - --base-path={{ .Values.basePath }}/chaindata
-            {{- range .Values.bootnodes }}
-            - --bootnodes={{ . }}
-            {{- end }}
             - --chain={{ .Values.chain | default .Values.chainspec }}
             - --prometheus-external
             - --state-cache-size=0
+            - --rpc-cors=all
+            {{- range .Values.bootnodes }}
+            - --bootnodes={{ . }}
+            {{- end }}
             {{- if or (eq .Values.role "validator") (eq .Values.role "genesis") }}
             - --node-key-file={{ .Values.basePath }}/keys/node_key_file
             - --force-authoring
@@ -138,7 +139,6 @@ spec:
             - --unsafe-rpc-external
             - --unsafe-ws-external
             - --rpc-methods=unsafe
-            - --rpc-cors=all
             {{- end }}
             {{- with .Values.extraArgs }}
             {{- toYaml . | nindent 12 }}
