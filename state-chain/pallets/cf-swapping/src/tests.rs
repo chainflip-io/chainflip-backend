@@ -303,7 +303,7 @@ fn can_swap_using_witness_origin() {
 			destination_asset: to,
 			destination_address: EncodedAddress::Eth(Default::default()),
 			origin: SwapOrigin::Vault { tx_hash: Default::default() },
-			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default()))
+			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 		}));
 	});
 }
@@ -1008,7 +1008,7 @@ fn swap_by_witnesser_happy_path() {
 			destination_asset: to,
 			destination_address: EncodedAddress::Eth(Default::default()),
 			origin: SwapOrigin::Vault { tx_hash: Default::default() },
-			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default()))
+			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 		}));
 
 		// Confiscated fund is unchanged
@@ -1083,7 +1083,7 @@ fn swap_by_deposit_happy_path() {
 				deposit_address: EncodedAddress::Eth(Default::default()),
 				channel_id: 1,
 			},
-			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default()))
+			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default())),
 		}));
 
 		// Confiscated fund is unchanged

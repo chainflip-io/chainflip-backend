@@ -627,7 +627,7 @@ pub mod pallet {
 					destination_asset: to,
 					destination_address,
 					origin: SwapOrigin::Vault { tx_hash },
-					swap_type: SwapType::Swap(destination_address_internal)
+					swap_type: SwapType::Swap(destination_address_internal),
 				});
 			}
 			Ok(())
@@ -933,9 +933,12 @@ pub mod pallet {
 			let encoded_destination_address =
 				T::AddressConverter::to_encoded_address(destination_address.clone());
 
-			if let Some(swap_id) =
-				Self::schedule_swap_from_channel_received(from, to, amount, destination_address.clone())
-			{
+			if let Some(swap_id) = Self::schedule_swap_from_channel_received(
+				from,
+				to,
+				amount,
+				destination_address.clone(),
+			) {
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
 					source_asset: from,
