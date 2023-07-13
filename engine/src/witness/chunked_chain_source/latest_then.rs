@@ -59,53 +59,64 @@ where
 						epoch.clone(),
 						stream::unfold(
 							(epoch.clone(), chain_stream, None),
-							move |(epoch, mut chain_stream, mut option_pending_then)| {
+							move |(epoch, mut chain_stream, option_old_then_fut)| {
 								async move {
-									// skip forward to newest header
-									let option_header = if let Some(option_header) =
-										std::iter::repeat(())
-											.map_while(|_| chain_stream.next().now_or_never())
-											.last()
-									{
-										option_header
-									} else {
-										chain_stream.next().await
+									let apply_then = |header: Header<_, _, _>| {
+										let epoch = epoch.clone();
+										async move {
+											Header {
+												index: header.index,
+												hash: header.hash,
+												parent_hash: header.parent_hash,
+												data: (self.then_fn)(epoch, header).await,
+											}
+										}
+										.boxed()
 									};
 
-									if let Some(header) = option_header {
-										let apply_then = |header: Header<_, _, _>| {
-											let epoch = epoch.clone();
-											async move {
-												Header {
-													index: header.index,
-													hash: header.hash,
-													parent_hash: header.parent_hash,
-													data: (self.then_fn)(epoch, header).await,
+									let (
+										// The future for the first header we see
+										mut option_persistent_then_fut,
+										// The future for the newest header we've seen
+										mut option_replaceable_then_fut
+									) = {
+										// skip forward to newest ready item
+										let option_latest = {
+											let mut option_latest = None;
+											loop {
+												match chain_stream.next().now_or_never() {
+													Some(None) => return None,
+													Some(Some(item)) => option_latest = Some(item),
+													None => break option_latest
 												}
 											}
-											.boxed()
 										};
 
-										let mut pending_then = apply_then(header);
+										let option_latest_fut = option_latest.map(apply_then);
 
-										// We use two strategies concurrently:
-										loop_select!(
-											// We take an item and run then_fn for it, and wait for that to finish before starting a new then_fn run
-											let mapped_header = &mut pending_then => {
-												// We keep the future from the cancelling strategy (option_pending_then), so we can continue running it
-												break Some((mapped_header, (epoch, chain_stream, option_pending_then)))
-											},
-											// We take an item and run then_fn for it, and cancel it if the stream produces a new header (and then run then_fn for that new header)
-											if let Some(new_header) = chain_stream.next() => {
-												option_pending_then = Some(apply_then(new_header));
-											} else break None,
-											if option_pending_then.is_some() => let mapped_header = option_pending_then.as_mut().unwrap() => {
-												break Some((mapped_header, (epoch, chain_stream, None)))
-											},
-										)
-									} else {
-										None
-									}
+										match option_old_then_fut {
+											Some(old_then_fut) => (Some(old_then_fut), option_latest_fut),
+											None => (option_latest_fut, None),
+										}
+									};
+
+									loop_select!(
+										if let Some(newest_header) = chain_stream.next() => {
+											*if option_persistent_then_fut.is_none() {
+												&mut option_persistent_then_fut
+											} else {
+												&mut option_replaceable_then_fut
+											} = Some(apply_then(newest_header));
+										} else break None,
+										if option_persistent_then_fut.is_some() => let mapped_header = option_persistent_then_fut.as_mut().unwrap() => {
+											// Keep replaceable_then_fut as it is from a newer header than persistent_then_fut
+											break Some((mapped_header, (epoch, chain_stream, option_replaceable_then_fut)))
+										},
+										if option_replaceable_then_fut.is_some() => let mapped_header = option_replaceable_then_fut.as_mut().unwrap() => {
+											// Don't keep persistent_then_fut as it is from an older header than replaceable_then_fut
+											break Some((mapped_header, (epoch, chain_stream, None)))
+										},
+									)
 								}
 								.boxed()
 							},
@@ -119,3 +130,6 @@ where
 			.into_box()
 	}
 }
+
+// create issue for egress witnessing (lag/race condition)
+// issue for multiple clients
