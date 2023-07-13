@@ -100,6 +100,56 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	}
 }
 
+async fn handle_key_handover_request<'a, StateChainClient, MultisigClient>(
+	scope: &Scope<'a, anyhow::Error>,
+	multisig_client: &'a MultisigClient,
+	state_chain_client: Arc<StateChainClient>,
+	ceremony_id: CeremonyId,
+	from_epoch: EpochIndex,
+	to_epoch: EpochIndex,
+	sharing_participants: BTreeSet<AccountId32>,
+	receiving_participants: BTreeSet<AccountId32>,
+	key_to_share: btc::AggKey,
+	mut new_key: btc::AggKey,
+) where
+	MultisigClient: MultisigClientApi<BtcSigning>,
+	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
+	state_chain_runtime::Runtime: pallet_cf_vaults::Config<BitcoinInstance>,
+	state_chain_runtime::RuntimeCall:
+		std::convert::From<pallet_cf_vaults::Call<state_chain_runtime::Runtime, BitcoinInstance>>,
+{
+	let account_id = &state_chain_client.account_id();
+	if sharing_participants.contains(account_id) || receiving_participants.contains(account_id) {
+		let key_handover_result_future = multisig_client.initiate_key_handover(
+			ceremony_id,
+			KeyId::new(from_epoch, key_to_share.current),
+			to_epoch,
+			sharing_participants,
+			receiving_participants,
+		);
+		scope.spawn(async move {
+			let _result = state_chain_client
+				.submit_signed_extrinsic(pallet_cf_vaults::Call::<
+					state_chain_runtime::Runtime,
+					BitcoinInstance,
+				>::report_key_handover_outcome {
+					ceremony_id,
+					reported_outcome: key_handover_result_future
+						.await
+						.map(move |handover_key| {
+							assert!(new_key.previous.replace(handover_key.serialize()).is_none());
+							new_key
+						})
+						.map_err(|(bad_account_ids, _reason)| bad_account_ids),
+				})
+				.await;
+			Ok(())
+		});
+	} else {
+		multisig_client.update_latest_ceremony_id(ceremony_id);
+	}
+}
+
 async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	scope: &Scope<'a, anyhow::Error>,
 	multisig_client: &'a MultisigClient,
@@ -534,43 +584,22 @@ where
                                            from_epoch,
                                            sharing_participants,
                                            receiving_participants,
-                                           mut new_key,
+                                           new_key,
                                            to_epoch,
                                         },
                                     ) => {
-                                        if sharing_participants.contains(&account_id) || receiving_participants.contains(&account_id){
-                                            let key_handover_result_future = btc_multisig_client.initiate_key_handover(
-                                                ceremony_id,
-                                                KeyId::new(from_epoch, key_to_share.current),
-                                                to_epoch,
-                                                sharing_participants.clone(),
-                                                receiving_participants.clone(),
-                                            );
-                                            let state_chain_client = state_chain_client.clone();
-                                            scope.spawn(async move {
-                                                let _result =
-                                                    state_chain_client
-                                                        .submit_signed_extrinsic(pallet_cf_vaults::Call::<
-                                                            state_chain_runtime::Runtime,
-                                                            BitcoinInstance,
-                                                        >::report_key_handover_outcome {
-                                                            ceremony_id,
-                                                            reported_outcome: key_handover_result_future
-                                                                .await
-                                                                .map(move |handover_key| {
-                                                                    assert!(
-                                                                        new_key.previous.replace(handover_key.serialize()).is_none()
-                                                                    );
-                                                                    new_key
-                                                                })
-                                                                .map_err(|(bad_account_ids, _reason)| bad_account_ids),
-                                                        })
-                                                        .await;
-                                                Ok(())
-                                            });
-                                        } else {
-                                            btc_multisig_client.update_latest_ceremony_id(ceremony_id);
-                                        }
+                                        handle_key_handover_request::<_, _>(
+                                            scope,
+                                            &btc_multisig_client,
+                                            state_chain_client.clone(),
+                                            ceremony_id,
+                                            from_epoch,
+                                            to_epoch,
+                                            sharing_participants,
+                                            receiving_participants,
+                                            key_to_share,
+                                            new_key,
+                                        ).await;
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumVault(
                                         pallet_cf_vaults::Event::KeyHandoverRequest {

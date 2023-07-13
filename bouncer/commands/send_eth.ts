@@ -8,14 +8,14 @@
 // will send 1.2 ETH to account 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6
 
 import { runWithTimeout } from '../shared/utils';
-import { fundEth } from '../shared/fund_eth';
+import { sendEth } from '../shared/send_eth';
 
 async function main() {
   const ethereumAddress = process.argv[2];
   const ethAmount = process.argv[3].trim();
 
   console.log('Transferring ' + ethAmount + ' ETH to ' + ethereumAddress);
-  await fundEth(ethereumAddress, ethAmount);
+  await sendEth(ethereumAddress, ethAmount);
 
   process.exit(0);
 }

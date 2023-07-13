@@ -14,7 +14,10 @@ use super::{ChunkedByTime, ChunkedByTimeAlias, Generic};
 
 #[async_trait::async_trait]
 pub trait GetTrackedData<C: cf_chains::Chain>: Send + Sync + Clone {
-	async fn get_tracked_data(&self, block_number: C::ChainBlockNumber) -> C::TrackedData;
+	async fn get_tracked_data(
+		&self,
+		block_number: C::ChainBlockNumber,
+	) -> Result<C::TrackedData, anyhow::Error>;
 }
 
 impl<Inner: ChunkedByTime> Builder<Generic<Inner>> {
@@ -42,7 +45,9 @@ impl<Inner: ChunkedByTime> Builder<Generic<Inner>> {
 					>::update_chain_state {
 						new_chain_state: ChainState {
 							block_height: header.index,
-							tracked_data: tracked_data_client.get_tracked_data(header.index).await,
+							tracked_data: tracked_data_client
+								.get_tracked_data(header.index)
+								.await?,
 						},
 					}
 					.into(),
@@ -54,7 +59,7 @@ impl<Inner: ChunkedByTime> Builder<Generic<Inner>> {
 					})
 					.await;
 
-				header.data
+				Ok::<_, anyhow::Error>(header.data)
 			}
 		})
 	}
