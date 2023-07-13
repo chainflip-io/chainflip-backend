@@ -203,12 +203,13 @@ export function chainFromAsset(asset: Asset): Chain {
   throw new Error('unexpected asset');
 }
 
-export async function observeBalanceIncrease(dstCcy: string, address: string, oldBalance: number): Promise<number> {
+export async function observeBalanceIncrease(dstCcy: string, address: string, oldBalance: string): Promise<number> {
+
 
   for (let i = 0; i < 120; i++) {
-    const newBalance = await getBalance(dstCcy as Asset, address);
-    if (newBalance > oldBalance) {
-      return Number(newBalance);
+    const newBalance = Number(await getBalance(dstCcy as Asset, address));
+    if (newBalance > Number(oldBalance)) {
+      return newBalance;
     }
 
     await sleep(1000);
