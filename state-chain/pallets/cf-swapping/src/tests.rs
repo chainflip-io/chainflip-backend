@@ -1656,6 +1656,7 @@ fn ccm_swaps_emits_events() {
 			cf_parameters: vec![],
 			source_address: ForeignChainAddress::Eth(Default::default()),
 		};
+		let destination_address = ForeignChainAddress::Eth(Default::default());
 
 		const ORIGIN: SwapOrigin = SwapOrigin::Vault { tx_hash: [0x11; 32] };
 
@@ -1665,27 +1666,27 @@ fn ccm_swaps_emits_events() {
 			Asset::Flip,
 			10_000,
 			Asset::Usdc,
-			ForeignChainAddress::Eth(Default::default()),
+			destination_address.clone(),
 			ccm.clone(),
 			ORIGIN,
 		);
 		assert_event_sequence!(
 			Test,
-			RuntimeEvent::Swapping(Event::CcmSwapScheduled {
-				swap_type: SwapType::CcmPrincipal(1),
+			RuntimeEvent::Swapping(Event::SwapScheduled {
 				swap_id: 1,
 				source_asset: Asset::Flip,
-				amount: 9_000,
+				deposit_amount: 9_000,
 				destination_asset: Asset::Usdc,
 				origin: ORIGIN,
+				..
 			}),
-			RuntimeEvent::Swapping(Event::CcmSwapScheduled {
-				swap_type: SwapType::CcmGas(1),
+			RuntimeEvent::Swapping(Event::SwapScheduled {
 				swap_id: 2,
 				source_asset: Asset::Flip,
-				amount: 1_000,
+				deposit_amount: 1_000,
 				destination_asset: Asset::Eth,
 				origin: ORIGIN,
+				..
 			}),
 			RuntimeEvent::Swapping(Event::CcmDepositReceived {
 				ccm_id: 1,
@@ -1702,19 +1703,19 @@ fn ccm_swaps_emits_events() {
 			Asset::Eth,
 			10_000,
 			Asset::Usdc,
-			ForeignChainAddress::Eth(Default::default()),
+			destination_address.clone(),
 			ccm.clone(),
 			ORIGIN,
 		);
 		assert_event_sequence!(
 			Test,
-			RuntimeEvent::Swapping(Event::CcmSwapScheduled {
-				swap_type: SwapType::CcmPrincipal(2),
+			RuntimeEvent::Swapping(Event::SwapScheduled {
 				swap_id: 3,
 				source_asset: Asset::Eth,
-				amount: 9_000,
+				deposit_amount: 9_000,
 				destination_asset: Asset::Usdc,
 				origin: ORIGIN,
+				..
 			}),
 			RuntimeEvent::Swapping(Event::CcmDepositReceived {
 				ccm_id: 2,
@@ -1731,19 +1732,19 @@ fn ccm_swaps_emits_events() {
 			Asset::Flip,
 			10_000,
 			Asset::Flip,
-			ForeignChainAddress::Eth(Default::default()),
+			destination_address,
 			ccm,
 			ORIGIN,
 		);
 		assert_event_sequence!(
 			Test,
-			RuntimeEvent::Swapping(Event::CcmSwapScheduled {
-				swap_type: SwapType::CcmGas(3),
+			RuntimeEvent::Swapping(Event::SwapScheduled {
 				swap_id: 4,
 				source_asset: Asset::Flip,
-				amount: 1_000,
+				deposit_amount: 1_000,
 				destination_asset: Asset::Eth,
 				origin: ORIGIN,
+				..
 			}),
 			RuntimeEvent::Swapping(Event::CcmDepositReceived {
 				ccm_id: 3,

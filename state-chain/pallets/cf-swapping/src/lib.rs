@@ -280,15 +280,6 @@ pub mod pallet {
 			destination_address: EncodedAddress,
 			origin: SwapOrigin,
 		},
-		/// Swaps are scheduled due to a Ccm deposit.
-		CcmSwapScheduled {
-			swap_type: SwapType,
-			swap_id: u64,
-			source_asset: Asset,
-			amount: AssetAmount,
-			destination_asset: Asset,
-			origin: SwapOrigin,
-		},
 		/// A swap has been executed.
 		SwapExecuted {
 			swap_id: u64,
@@ -1025,12 +1016,12 @@ pub mod pallet {
 						principal_swap_amount,
 						SwapType::CcmPrincipal(ccm_id),
 					);
-					Self::deposit_event(Event::<T>::CcmSwapScheduled {
-						swap_type: SwapType::CcmPrincipal(ccm_id),
+					Self::deposit_event(Event::<T>::SwapScheduled {
 						swap_id,
 						source_asset,
-						amount: principal_swap_amount,
+						deposit_amount: principal_swap_amount,
 						destination_asset,
+						destination_address: encoded_destination_address.clone(),
 						origin: origin.clone(),
 					});
 					Some(swap_id)
@@ -1048,12 +1039,12 @@ pub mod pallet {
 					message_metadata.gas_budget,
 					SwapType::CcmGas(ccm_id),
 				);
-				Self::deposit_event(Event::<T>::CcmSwapScheduled {
-					swap_type: SwapType::CcmGas(ccm_id),
+				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
 					source_asset,
-					amount: message_metadata.gas_budget,
+					deposit_amount: message_metadata.gas_budget,
 					destination_asset: output_gas_asset,
+					destination_address: encoded_destination_address.clone(),
 					origin,
 				});
 				Some(swap_id)
