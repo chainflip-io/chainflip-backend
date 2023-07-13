@@ -140,6 +140,68 @@ impl DotRpcApi for DotRpcClient {
 	}
 }
 
+#[derive(Clone)]
+pub struct DotSubClient {
+	pub ws_endpoint: String,
+}
+
+impl DotSubClient {
+	pub async fn new(ws_endpoint: &str) -> Result<Self> {
+		Ok(Self { ws_endpoint: ws_endpoint.to_string() })
+	}
+}
+
+#[async_trait]
+impl DotSubscribeApi for DotSubClient {
+	async fn subscribe_best_heads(
+		&self,
+	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
+		let client = OnlineClient::<PolkadotConfig>::from_url(self.ws_endpoint.clone()).await?;
+		Ok(Box::pin(
+			client
+				.blocks()
+				.subscribe_best()
+				.await?
+				.map(|block| block.map(|block| block.header().clone()))
+				.map_err(|e| anyhow!("Error in best head stream: {e}")),
+		))
+	}
+
+	async fn subscribe_finalized_heads(
+		&self,
+	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>> {
+		let client = OnlineClient::<PolkadotConfig>::from_url(self.ws_endpoint.clone()).await?;
+		Ok(Box::pin(
+			client
+				.blocks()
+				.subscribe_finalized()
+				.await?
+				.map(|block| block.map(|block| block.header().clone()))
+				.map_err(|e| anyhow!("Error in finalised head stream: {e}")),
+		))
+	}
+
+	async fn subscribe_runtime_version(
+		&self,
+	) -> Result<Pin<Box<dyn Stream<Item = RuntimeVersion> + Send>>> {
+		let client = OnlineClient::<PolkadotConfig>::from_url(self.ws_endpoint.clone()).await?;
+		let subxt_v_to_sc_v = |v: subxt::rpc::types::RuntimeVersion| RuntimeVersion {
+			spec_version: v.spec_version,
+			transaction_version: v.transaction_version,
+		};
+		let current_runtime_version =
+			client.rpc().runtime_version(None).await.map(subxt_v_to_sc_v)?;
+		let raw_runtime_version_stream = client
+			.rpc()
+			.subscribe_runtime_version()
+			.await?
+			.map(move |item| item.map_err(anyhow::Error::new).map(subxt_v_to_sc_v));
+		safe_runtime_version_stream(current_runtime_version, raw_runtime_version_stream)
+			.await
+			.map_err(|e| anyhow!("Failed to subscribe to Polkadot runtime version with error: {e}"))
+	}
+}
+
 #[async_trait]
 impl DotSubscribeApi for DotRpcClient {
 	async fn subscribe_best_heads(
