@@ -1,8 +1,5 @@
 {
-  "env": {
-    "es2021": true,
-    "node": true
-  },
+  "env": { "jest": true },
   "extends": ["airbnb-base", "plugin:@typescript-eslint/recommended", "prettier"],
   "overrides": [],
   "parser": "@typescript-eslint/parser",
@@ -13,6 +10,24 @@
   },
   "plugins": ["@typescript-eslint"],
   "rules": {
+    "no-underscore-dangle": "off",
+    "@typescript-eslint/array-type": "error",
+    "no-unused-vars": "off",
+    "@typescript-eslint/no-unused-vars": [
+      "error",
+      { "argsIgnorePattern": "^_", "ignoreRestSiblings": true }
+    ],
+    "no-use-before-define": "off",
+    "@typescript-eslint/no-use-before-define": ["error"],
+    "no-shadow": "off",
+    "@typescript-eslint/no-shadow": ["error"],
+    "default-param-last": "off",
+    "@typescript-eslint/default-param-last": ["error"],
+    "@typescript-eslint/no-non-null-assertion": "off",
+    "no-useless-constructor": "off",
+    "@typescript-eslint/no-useless-constructor": ["error"],
+    "lines-between-class-members": "off",
+    "@typescript-eslint/lines-between-class-members": ["error"],
     "import/extensions": "off",
     "import/prefer-default-export": "off",
     "import/no-unresolved": "off",
@@ -23,5 +38,6 @@
     "prefer-template": "off",
     "radix": "off"
   },
+  "globals": { "jest": true },
   "reportUnusedDisableDirectives": true
 }
