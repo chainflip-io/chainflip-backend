@@ -7,9 +7,8 @@
 // For example: pnpm tsx ./commands/fund_usdc.ts 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6 1.2
 // will send 1.2 USDC to account 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6
 
-import { runWithTimeout } from '../shared/utils';
+import { runWithTimeout, getEthContractAddress } from '../shared/utils';
 import { sendErc20 } from '../shared/send_erc20';
-import { getEthContractAddress } from '../shared/utils';
 
 async function main(): Promise<void> {
   const ethereumAddress = process.argv[2];

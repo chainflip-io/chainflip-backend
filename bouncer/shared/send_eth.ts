@@ -44,7 +44,7 @@ export async function sendEth(ethereumAddress: string, ethAmount: string) {
   const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
   const receipt = await web3.eth.sendSignedTransaction(
     signedTx.rawTransaction as string,
-    (error, hash) => {
+    (error) => {
       if (error) {
         console.error('Ethereum transaction failure:', error);
       }

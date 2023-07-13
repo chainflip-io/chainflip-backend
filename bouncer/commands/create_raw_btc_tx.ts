@@ -18,14 +18,14 @@ const client = new Client({
   wallet: 'whale',
 });
 
-const createRawTransaction = async (toAddress, amountInBtc) => {
+const createRawTransaction = async (toAddress: string, amountInBtc: number) => {
   try {
     const feeInBtc = 0.00001;
 
     // List unspent UTXOs
     const utxos = await client.listUnspent();
 
-    const utxo = utxos.find((utxo) => utxo.amount >= amountInBtc + feeInBtc);
+    const utxo = utxos.find((u: { amount: number }) => u.amount >= amountInBtc + feeInBtc);
     if (!utxo) throw new Error('Insufficient funds');
 
     // Prepare the transaction inputs and outputs

@@ -1,14 +1,14 @@
-import { randomAsHex, randomAsNumber } from '@polkadot/util-crypto';
+import { randomAsHex /* randomAsNumber */ } from '@polkadot/util-crypto';
 import { Asset } from '@chainflip-io/cli/.';
-import Web3 from 'web3';
+// import Web3 from 'web3';
 import { performSwap } from '../shared/perform_swap';
 import {
   getAddress,
   runWithTimeout,
   chainFromAsset,
   getEthContractAddress,
-  encodeBtcAddressForContract,
-  encodeDotAddressForContract,
+  /* encodeBtcAddressForContract,
+  encodeDotAddressForContract, */
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
@@ -73,7 +73,7 @@ async function testAll() {
   // all ccm swaps have the same destination address (cfReceiver) and then it will get a
   // potentially incorrect depositAddress.
   // DISABLED FOR NOW, UNTIL ENOUGH EVENT DATA IS AVAILABLE TO TEST THIS RELIABLY
-  /*const ccmSwaps = Promise.all([
+  /* const ccmSwaps = Promise.all([
         testSwap('BTC', 'ETH', undefined, {
             message: new Web3().eth.abi.encodeParameter("string", "BTC to ETH w/ CCM!!"),
             gas_budget: 1000000,
@@ -110,12 +110,12 @@ async function testAll() {
             cf_parameters: getAbiEncodedMessage(["address","uint256"]),
             source_address: {'ETH': await getAddress('ETH', randomAsHex(32))},
         })            
-    ])*/
+    ]) */
 
-  await Promise.all([contractSwaps, regularSwaps /*, ccmSwaps*/]);
+  await Promise.all([contractSwaps, regularSwaps /* ccmSwaps */]);
 }
 
-function getAbiEncodedMessage(types?: string[]): string {
+/* function getAbiEncodedMessage(types?: string[]): string {
   const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
 
   const validSolidityTypes = ['uint256', 'string', 'bytes', 'address'];
@@ -149,7 +149,7 @@ function getAbiEncodedMessage(types?: string[]): string {
   }
   const encodedMessage = web3.eth.abi.encodeParameters(types, variables);
   return encodedMessage;
-}
+} */
 
 runWithTimeout(testAll(), 1800000)
   .then(() => {
