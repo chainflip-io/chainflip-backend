@@ -57,7 +57,7 @@ impl SetSizeMaximisingAuctionResolver {
 	pub fn resolve_auction<CandidateId: Clone, BidAmount: Copy + AtLeast32BitUnsigned>(
 		&self,
 		mut auction_candidates: Vec<Bid<CandidateId, BidAmount>>,
-		loser_cutoff_percentage: Percent,
+		auction_bid_cutoff_percentage: Percent,
 	) -> Result<AuctionOutcome<CandidateId, BidAmount>, AuctionError> {
 		ensure!(auction_candidates.len() as u32 >= self.parameters.min_size, {
 			log::error!(
@@ -82,7 +82,7 @@ impl SetSizeMaximisingAuctionResolver {
 			.map(|bid| bid.amount)
 			.expect("Can't run auction with no candidates, and candidates must be funded > 0.");
 		let winners = auction_candidates.into_iter().map(|bid| bid.bidder_id).collect();
-		let cutoff_bid = loser_cutoff_percentage * bond;
+		let cutoff_bid = auction_bid_cutoff_percentage * bond;
 
 		debug_assert!(losers.is_sorted_by_key(|&Bid { amount, .. }| Reverse(amount)));
 

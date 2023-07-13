@@ -61,7 +61,7 @@ pub type Ipv6Addr = u128;
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub enum PalletConfigUpdate {
 	RegistrationBondPercentage { percentage: Percent },
-	AuctionLoserCutoffPercentage { percentage: Percent },
+	AuctionBidCutoffPercentage { percentage: Percent },
 	RedemptionPeriodAsPercentage { percentage: Percent },
 	BackupRewardNodePercentage { percentage: Percent },
 	EpochDuration { blocks: u32 },
@@ -277,8 +277,8 @@ pub mod pallet {
 	/// Auction losers whose bids are below this percentage of the MAB will not be excluded from
 	/// participating in Keygen.
 	#[pallet::storage]
-	#[pallet::getter(fn auction_loser_cutoff_percentage)]
-	pub(super) type AuctionLoserCutoffPercentage<T: Config> = StorageValue<_, Percent, ValueQuery>;
+	#[pallet::getter(fn auction_bid_cutoff_percentage)]
+	pub(super) type AuctionBidCutoffPercentage<T: Config> = StorageValue<_, Percent, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub (super) fn deposit_event)]
@@ -492,8 +492,8 @@ pub mod pallet {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			match update {
-				PalletConfigUpdate::AuctionLoserCutoffPercentage { percentage } => {
-					<AuctionLoserCutoffPercentage<T>>::put(percentage);
+				PalletConfigUpdate::AuctionBidCutoffPercentage { percentage } => {
+					<AuctionBidCutoffPercentage<T>>::put(percentage);
 				},
 				PalletConfigUpdate::RedemptionPeriodAsPercentage { percentage } => {
 					<RedemptionPeriodAsPercentage<T>>::put(percentage);
@@ -1005,7 +1005,7 @@ impl<T: Config> Pallet<T> {
 		.and_then(|resolver| {
 			resolver.resolve_auction(
 				T::BidderProvider::get_qualified_bidders::<T::KeygenQualification>(),
-				AuctionLoserCutoffPercentage::<T>::get(),
+				AuctionBidCutoffPercentage::<T>::get(),
 			)
 		}) {
 			Ok(auction_outcome) => {
