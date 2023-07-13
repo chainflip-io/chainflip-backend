@@ -19,7 +19,6 @@ import { runWithTimeout } from '../shared/utils';
 const args = minimist(process.argv.slice(2));
 
 async function main(): Promise<void> {
-
   const cfNodeEndpoint = process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944';
   const expectedEvents = args.succeed_on.split(',');
   const printEvent = expectedEvents.length === 1;

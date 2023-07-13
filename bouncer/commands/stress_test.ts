@@ -18,7 +18,7 @@ async function main(): Promise<void> {
 
   await submitGovernanceExtrinsic(sudoCall);
 
-  console.log("Requesting " + signaturesCount + " ETH signatures");
+  console.log('Requesting ' + signaturesCount + ' ETH signatures');
 
   process.exit(0);
 }
