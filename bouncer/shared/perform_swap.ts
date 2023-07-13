@@ -74,11 +74,7 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
 
     console.log(`${tag} Old balance: ${OLD_BALANCE}`);
 
-    const swapExecutedHandle = messageMetadata ? 
-    observeEvent('swapping:CcmDepositReceived', chainflipApi, (event) => {
-        return event[4].eth === destAddress;
-    })
-    : observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
+    const swapScheduledHandle = observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
         if('depositChannel' in event[5]){
             const channelMatches = Number(event[5].depositChannel.channelId) == channelId;
             const assetMatches = sourceToken === event[1].toUpperCase() as Asset;
@@ -95,7 +91,7 @@ export async function performSwap(sourceToken: Asset, destToken: Asset, ADDRESS:
     await send(sourceToken, swapAddress.toLowerCase())
     console.log(`${tag} Funded the address`);
 
-    await swapExecutedHandle;
+    await swapScheduledHandle;
   
     console.log(`${tag} Waiting for balance to update`);
 

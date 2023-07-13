@@ -231,14 +231,15 @@ fn expect_swap_id_to_be_emitted() {
 			}) if expiry_block == SwapTTL::<Test>::get() + System::current_block_number(),
 			RuntimeEvent::Swapping(Event::SwapScheduled {
 				swap_id: 1,
-				deposit_amount: 500,
 				source_asset: Asset::Eth,
+				deposit_amount: 500,
 				destination_asset: Asset::Usdc,
 				destination_address: EncodedAddress::Eth(..),
 				origin: SwapOrigin::DepositChannel {
 					deposit_address: EncodedAddress::Eth(..),
 					channel_id: 1
-				}
+				},
+				swap_type: SwapType::Swap(ForeignChainAddress::Eth(..))
 			}),
 			RuntimeEvent::Swapping(Event::SwapExecuted { swap_id: 1, .. }),
 			RuntimeEvent::Swapping(Event::SwapEgressScheduled {
@@ -302,6 +303,7 @@ fn can_swap_using_witness_origin() {
 			destination_asset: to,
 			destination_address: EncodedAddress::Eth(Default::default()),
 			origin: SwapOrigin::Vault { tx_hash: Default::default() },
+			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default()))
 		}));
 	});
 }
@@ -1006,6 +1008,7 @@ fn swap_by_witnesser_happy_path() {
 			destination_asset: to,
 			destination_address: EncodedAddress::Eth(Default::default()),
 			origin: SwapOrigin::Vault { tx_hash: Default::default() },
+			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default()))
 		}));
 
 		// Confiscated fund is unchanged
@@ -1080,6 +1083,7 @@ fn swap_by_deposit_happy_path() {
 				deposit_address: EncodedAddress::Eth(Default::default()),
 				channel_id: 1,
 			},
+			swap_type: SwapType::Swap(ForeignChainAddress::Eth(Default::default()))
 		}));
 
 		// Confiscated fund is unchanged
@@ -1677,14 +1681,17 @@ fn ccm_swaps_emits_events() {
 				source_asset: Asset::Flip,
 				deposit_amount: 9_000,
 				destination_asset: Asset::Usdc,
+				destination_address: EncodedAddress::Eth(..),
 				origin: ORIGIN,
-				..
+				swap_type: SwapType::CcmPrincipal(1),
 			}),
 			RuntimeEvent::Swapping(Event::SwapScheduled {
+				swap_type: SwapType::CcmGas(1),
 				swap_id: 2,
 				source_asset: Asset::Flip,
 				deposit_amount: 1_000,
 				destination_asset: Asset::Eth,
+				destination_address: EncodedAddress::Eth(..),
 				origin: ORIGIN,
 				..
 			}),
@@ -1710,10 +1717,12 @@ fn ccm_swaps_emits_events() {
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapScheduled {
+				swap_type: SwapType::CcmPrincipal(2),
 				swap_id: 3,
 				source_asset: Asset::Eth,
 				deposit_amount: 9_000,
 				destination_asset: Asset::Usdc,
+				destination_address: EncodedAddress::Eth(..),
 				origin: ORIGIN,
 				..
 			}),
@@ -1739,10 +1748,12 @@ fn ccm_swaps_emits_events() {
 		assert_event_sequence!(
 			Test,
 			RuntimeEvent::Swapping(Event::SwapScheduled {
+				swap_type: SwapType::CcmGas(3),
 				swap_id: 4,
 				source_asset: Asset::Flip,
 				deposit_amount: 1_000,
 				destination_asset: Asset::Eth,
+				destination_address: EncodedAddress::Eth(..),
 				origin: ORIGIN,
 				..
 			}),

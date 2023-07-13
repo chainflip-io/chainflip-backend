@@ -279,6 +279,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			origin: SwapOrigin,
+			swap_type: SwapType,
 		},
 		/// A swap has been executed.
 		SwapExecuted {
@@ -617,7 +618,7 @@ pub mod pallet {
 				from,
 				to,
 				deposit_amount,
-				destination_address_internal,
+				destination_address_internal.clone(),
 			) {
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
@@ -626,6 +627,7 @@ pub mod pallet {
 					destination_asset: to,
 					destination_address,
 					origin: SwapOrigin::Vault { tx_hash },
+					swap_type: SwapType::Swap(destination_address_internal)
 				});
 			}
 			Ok(())
@@ -932,7 +934,7 @@ pub mod pallet {
 				T::AddressConverter::to_encoded_address(destination_address.clone());
 
 			if let Some(swap_id) =
-				Self::schedule_swap_from_channel_received(from, to, amount, destination_address)
+				Self::schedule_swap_from_channel_received(from, to, amount, destination_address.clone())
 			{
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
@@ -944,6 +946,7 @@ pub mod pallet {
 						deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 						channel_id,
 					},
+					swap_type: SwapType::Swap(destination_address),
 				});
 			}
 		}
@@ -1023,6 +1026,7 @@ pub mod pallet {
 						destination_asset,
 						destination_address: encoded_destination_address.clone(),
 						origin: origin.clone(),
+						swap_type: SwapType::CcmPrincipal(ccm_id),
 					});
 					Some(swap_id)
 				};
@@ -1046,6 +1050,7 @@ pub mod pallet {
 					destination_asset: output_gas_asset,
 					destination_address: encoded_destination_address.clone(),
 					origin,
+					swap_type: SwapType::CcmGas(ccm_id),
 				});
 				Some(swap_id)
 			};
