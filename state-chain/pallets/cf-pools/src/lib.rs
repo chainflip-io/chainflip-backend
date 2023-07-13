@@ -415,7 +415,7 @@ pub mod pallet {
 								price_range_in_ticks.start,
 								price_range_in_ticks.end,
 							)
-							.unwrap()
+							.expect("Cannot fail because liquidity input was calculated above, and therefore the tick range and liquidity must be valid.")
 							.0;
 
 						let minimum = minimum.map(|_side, amount| amount.into());
