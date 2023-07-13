@@ -5,11 +5,12 @@ import { polkadotSigningMutex, sleep, amountToFineAmount, assetToDecimals } from
 
 export async function sendDot(address: string, amount: string) {
   const polkadot_endpoint = process.env.POLKADOT_ENDPOINT || 'ws://127.0.0.1:9945';
+  const alice_uri = process.env.POLKADOT_ALICE_URI || '//Alice';
 
   const planckAmount = amountToFineAmount(amount, assetToDecimals.get('DOT')!);
   await cryptoWaitReady();
   const keyring = new Keyring({ type: 'sr25519' });
-  const alice = keyring.createFromUri('//Alice');
+  const alice = keyring.createFromUri(alice_uri);
   const polkadot = await ApiPromise.create({
     provider: new WsProvider(polkadot_endpoint),
     noInitWarn: true,
