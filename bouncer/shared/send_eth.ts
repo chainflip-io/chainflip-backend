@@ -4,10 +4,10 @@ import { amountToFineAmount, assetToDecimals } from "./utils";
 
 let nextNonce: number | undefined;
 
-const mutex = new Mutex();
+const ethNonceMutex = new Mutex();
 
 export async function getNextEthNonce(): Promise<number> {
-    return mutex.runExclusive(async () => {
+    return ethNonceMutex.runExclusive(async () => {
         if (nextNonce === undefined) {
             const ethEndpoint = process.env.ETH_ENDPOINT || "http://127.0.0.1:8545";
             const web3 = new Web3(ethEndpoint);
@@ -21,7 +21,6 @@ export async function getNextEthNonce(): Promise<number> {
 }
 
 export async function sendEth(ethereumAddress: string, ethAmount: string) {
-
     const ethEndpoint = process.env.ETH_ENDPOINT || "http://127.0.0.1:8545";
     const web3 = new Web3(ethEndpoint);
 
