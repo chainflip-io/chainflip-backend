@@ -50,6 +50,6 @@ The values for your network can be found in the `eth-contracts` vault in 1Passwo
 The following commands should be executed from the bouncer directory.
 
 - Check formatting:<br>
-  - `pnpm prettier:check`
+  `pnpm prettier:check`
 - Format code:<br>
-  - `pnpm prettier:write`
+  `pnpm prettier:write`
