@@ -18,8 +18,8 @@ use chainflip_engine::{
 };
 pub use core::ops::Range;
 use futures::FutureExt;
-pub use pallet_cf_pools::Order as BuyOrSellOrder;
-use serde::Serialize;
+pub use pallet_cf_pools::{utilities as pool_utilities, Order as BuyOrSellOrder, RangeOrderSize};
+use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use state_chain_runtime::RuntimeCall;
 use utilities::{task_scope::task_scope, CachedStream};
@@ -180,7 +180,7 @@ pub async fn get_range_orders(
 	.await
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct MintRangeOrderReturn {
 	assets_debited: SideMap<AssetAmount>,
 	collected_fees: SideMap<AssetAmount>,
@@ -190,7 +190,7 @@ pub async fn mint_range_order(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 	range: Range<Tick>,
-	amount: AssetAmount,
+	order_size: RangeOrderSize,
 ) -> Result<MintRangeOrderReturn> {
 	task_scope(|scope| {
 		async {
@@ -209,7 +209,7 @@ pub async fn mint_range_order(
 				.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_mint_range_order {
 					unstable_asset: asset,
 					price_range_in_ticks: range,
-					liquidity: amount,
+					order_size,
 				})
 				.await
 				.until_finalized()
