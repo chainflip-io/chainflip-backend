@@ -7,15 +7,12 @@
 
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { getChainflipApi, getPolkadotApi, sleep } from '../shared/utils';
+import { getChainflipApi, getPolkadotApi, sleep, handleSubstrateError } from '../shared/utils';
+import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 
 async function main(): Promise<void> {
   await cryptoWaitReady();
   const keyring = new Keyring({ type: 'sr25519' });
-  const snowwhiteUri =
-    process.env.SNOWWHITE_URI ??
-    'market outdoor rubber basic simple banana resist quarter lab random hurdle cruise';
-  const snowwhite = keyring.createFromUri(snowwhiteUri);
   const alice_uri = process.env.POLKADOT_ALICE_URI || "//Alice";
   const alice = keyring.createFromUri(alice_uri);
 
@@ -26,9 +23,7 @@ async function main(): Promise<void> {
 
   // Step 1
   console.log('Forcing rotation');
-  await chainflip.tx.governance
-    .proposeGovernanceExtrinsic(chainflip.tx.validator.forceRotation())
-    .signAndSend(snowwhite);
+  await submitGovernanceExtrinsic(chainflip.tx.validator.forceRotation());
 
   // Step 2
   console.log('Waiting for new keys');
@@ -65,13 +60,11 @@ async function main(): Promise<void> {
 
   // Step 3
   console.log('Transferring 100 DOT to Polkadot AggKey');
-  await polkadot.tx.balances.transfer(dotKeyAddress, 1000000000000).signAndSend(alice);
+  await polkadot.tx.balances.transfer(dotKeyAddress, 1000000000000).signAndSend(alice, {nonce: -1}, handleSubstrateError(polkadot));
 
   // Step 4
   console.log('Requesting Polkadot Vault creation');
-  const createCommand = chainflip.tx.environment.createPolkadotVault(dotKey);
-  const mytx = chainflip.tx.governance.proposeGovernanceExtrinsic(createCommand);
-  await mytx.signAndSend(snowwhite);
+  await submitGovernanceExtrinsic(chainflip.tx.environment.createPolkadotVault(dotKey));
 
   // Step 5
   console.log('Waiting for Vault address on Polkadot chain');
@@ -100,23 +93,22 @@ async function main(): Promise<void> {
 
   // Step 7
   console.log('Transferring 100 DOT to Polkadot Vault');
-  await polkadot.tx.balances.transfer(vaultAddress, 1000000000000).signAndSend(alice);
+  await polkadot.tx.balances.transfer(vaultAddress, 1000000000000).signAndSend(alice, {nonce: -1}, handleSubstrateError(polkadot));
 
   // Step 8
   console.log('Registering Vaults with state chain');
   const txid = { blockNumber: vaultBlock, extrinsicIndex: vaultEventIndex };
-  const dotWitnessing = chainflip.tx.environment.witnessPolkadotVaultCreation(
-    vaultAddress,
-    dotKey,
-    txid,
-    1,
-  );
-  const myDotTx = chainflip.tx.governance.proposeGovernanceExtrinsic(dotWitnessing);
-  await myDotTx.signAndSend(snowwhite, { nonce: -1 });
 
-  const btcWitnessing = chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(1, btcKey);
-  const myBtcTx = chainflip.tx.governance.proposeGovernanceExtrinsic(btcWitnessing);
-  await myBtcTx.signAndSend(snowwhite, { nonce: -1 });
+  await submitGovernanceExtrinsic(
+    chainflip.tx.environment.witnessPolkadotVaultCreation(
+      vaultAddress,
+      dotKey,
+      txid,
+      1
+    )
+  );
+
+  await submitGovernanceExtrinsic(chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(1, btcKey));
 
   // Confirmation
   console.log('Waiting for new epoch');
