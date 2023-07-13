@@ -148,7 +148,7 @@ impl<Id, Amount> From<(Id, Amount)> for Bid<Id, Amount> {
 pub struct AuctionOutcome<Id, Amount> {
 	/// The auction winners, sorted by descending bid order.
 	pub winners: Vec<Id>,
-	/// The auction losers, sorted by descending bid order.
+	/// The auction losers, sorted by descending bid.
 	pub losers: Vec<Id>,
 	/// The resulting bond for the next epoch.
 	pub bond: Amount,
