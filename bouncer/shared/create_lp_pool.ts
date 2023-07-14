@@ -1,16 +1,6 @@
-import {
-  observeEvent,
-  getChainflipApi,
-  handleSubstrateError,
-  assetToDecimals,
-  hexStringToBytesArray,
-  getAddress,
-} from '../shared/utils';
+import { observeEvent, getChainflipApi, assetToDecimals } from '../shared/utils';
 import { Asset } from '@chainflip-io/cli';
-import { Mutex } from 'async-mutex';
 import { submitGovernanceExtrinsic } from './cf_governance';
-
-const lpMutex = new Mutex();
 
 export async function createLpPool(ccy: Asset, initial_price: number) {
   const chainflip = await getChainflipApi(process.env.CF_NODE_ENDPOINT);

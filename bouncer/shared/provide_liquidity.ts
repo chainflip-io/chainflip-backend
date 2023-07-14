@@ -8,10 +8,10 @@ import {
   assetToChain,
   handleSubstrateError,
   encodeBtcAddressForContract,
+  lpMutex,
 } from '../shared/utils';
 import { send } from '../shared/send';
 import { Asset } from '@chainflip-io/cli/.';
-import { Mutex } from 'async-mutex';
 
 const chain = new Map<Asset, string>([
   ['DOT', 'dot'],
@@ -20,8 +20,6 @@ const chain = new Map<Asset, string>([
   ['USDC', 'eth'],
   ['FLIP', 'eth'],
 ]);
-
-const lpMutex = new Mutex();
 
 export async function provideLiquidity(ccy: Asset, amount: number) {
   const chainflip = await getChainflipApi(process.env.CF_NODE_ENDPOINT);

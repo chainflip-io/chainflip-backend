@@ -1,8 +1,5 @@
-import { Mutex } from 'async-mutex';
 import Module from 'node:module';
-import { sleep } from './utils';
-
-const btcClientMutex = new Mutex();
+import { sleep, btcClientMutex } from './utils';
 
 export async function sendBtc(address: string, amount: any) {
   const require = Module.createRequire(import.meta.url);

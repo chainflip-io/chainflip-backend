@@ -3,12 +3,9 @@ import Module from 'node:module';
 import { ECPairFactory } from 'ecpair';
 import bitcoin from 'bitcoinjs-lib';
 import axios from 'axios';
-import { Mutex } from 'async-mutex';
-import { sha256 } from '../shared/utils';
+import { sha256, btcClientMutex } from '../shared/utils';
 
 const require = Module.createRequire(import.meta.url);
-
-const btcWalletMutex = new Mutex();
 
 export type BtcAddressType = 'P2PKH' | 'P2SH' | 'P2WPKH' | 'P2WSH';
 
@@ -76,7 +73,7 @@ export async function newBtcAddress(seed: string, type: BtcAddressType): Promise
 
   // Would get a "Wallet is currently rescanning error"
   // if this is called concurrently
-  await btcWalletMutex.runExclusive(async () => {
+  await btcClientMutex.runExclusive(async () => {
     await axios.post(btcEndpoint + '/wallet/watch', registerAddressData, axiosConfig);
   });
 
