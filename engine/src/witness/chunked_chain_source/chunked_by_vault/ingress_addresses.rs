@@ -7,10 +7,7 @@ use crate::witness::{
 use cf_chains::Chain;
 use futures::FutureExt;
 use futures_core::FusedStream;
-use futures_util::{
-	stream::{self, Fuse},
-	StreamExt,
-};
+use futures_util::{stream, StreamExt};
 use pallet_cf_ingress_egress::DepositAddressDetails;
 use state_chain_runtime::PalletInstanceAlias;
 use tokio::sync::watch;
@@ -23,7 +20,7 @@ use utilities::{
 use crate::{
 	state_chain_observer::client::{storage_api::StorageApi, StateChainStreamApi},
 	witness::{
-		chain_source::{BoxChainStream, Header},
+		chain_source::Header,
 		common::{RuntimeHasChain, STATE_CHAIN_CONNECTION},
 	},
 };
@@ -146,15 +143,14 @@ impl<Inner: ChunkedByVault> ChunkedByVault for IngressAddresses<Inner> {
 			.stream(parameters)
 			.await
 			.then(move |(epoch, chain_stream, chain_client)| async move {
-				struct State<'a, Inner: ChunkedByVault> {
+				struct State<Inner: ChunkedByVault> {
 					receiver:
 						tokio::sync::watch::Receiver<(Option<ChainState<Inner>>, Addresses<Inner>)>,
-					chain_stream: Fuse<BoxChainStream<'a, Inner::Index, Inner::Hash, Inner::Data>>,
 					pending_headers: Vec<Header<Inner::Index, Inner::Hash, Inner::Data>>,
 					ready_headers:
 						Vec<Header<Inner::Index, Inner::Hash, (Inner::Data, Addresses<Inner>)>>,
 				}
-				impl<'a, Inner: ChunkedByVault> State<'a, Inner> {
+				impl<Inner: ChunkedByVault> State<Inner> {
 					fn add_headers<
 						It: IntoIterator<Item = Header<Inner::Index, Inner::Hash, Inner::Data>>,
 					>(
@@ -191,17 +187,19 @@ impl<Inner: ChunkedByVault> ChunkedByVault for IngressAddresses<Inner> {
 				(
 					epoch,
 					stream::unfold(
-						State::<'_, Inner> {
-							receiver: self.receiver.clone(),
-							chain_stream: chain_stream.fuse(),
-							pending_headers: vec![],
-							ready_headers: vec![],
-						},
-						|mut state| async move {
+						(
+							chain_stream.fuse(),
+							State::<Inner> {
+								receiver: self.receiver.clone(),
+								pending_headers: vec![],
+								ready_headers: vec![],
+							}
+						),
+						|(mut chain_stream, mut state)| async move {
 							loop_select!(
-								if !state.ready_headers.is_empty() => break Some((state.ready_headers.pop().unwrap(), state)),
-								if state.chain_stream.is_terminated() && state.pending_headers.is_empty() => break None,
-								let header = state.chain_stream.next_or_pending() => {
+								if !state.ready_headers.is_empty() => break Some((state.ready_headers.pop().unwrap(), (chain_stream, state))),
+								if chain_stream.is_terminated() && state.pending_headers.is_empty() => break None,
+								let header = chain_stream.next_or_pending() => {
 									state.add_headers(std::iter::once(header));
 								},
 								let _ = state.receiver.changed().map(|result| result.expect(OR_CANCEL)) => {
