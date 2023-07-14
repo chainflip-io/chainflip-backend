@@ -103,6 +103,10 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
     }
   }
   console.log('Received ' + ccy + ' address: ' + ingressAddress);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const checkDeposit = (data: any): boolean => data.asset.toJSON().toLowerCase() === ccy;
+
+  let observer = observeEvent('liquidityProvider:AccountCredited', checkDeposit);
   exec(
     'pnpm tsx ./commands/fund_' + ccy + '.ts' + ' ' + ingressAddress + ' ' + deposits[ccy],
     { timeout: 30000 },
@@ -115,10 +119,7 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
       if (stdout !== '') process.stdout.write(stdout);
     },
   );
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const checkDeposit = (data: any): boolean => data.asset.toJSON().toLowerCase() === ccy;
-
-  await observeEvent('liquidityProvider:AccountCredited', checkDeposit);
+  await observer;
   if (ccy === 'usdc') {
     return;
   }

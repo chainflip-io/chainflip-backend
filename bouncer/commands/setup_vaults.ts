@@ -50,7 +50,28 @@ async function main(): Promise<void> {
   }
 
   // Step 8
+  // Fake the dot aggkey and vault.
   console.log('Registering Vaults with state chain');
+  const txid = { blockNumber: 1, extrinsicIndex: 1 };
+  const dotWitnessing = chainflip.tx.environment.witnessPolkadotVaultCreation(
+    "cfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcf",
+    "cfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcf",
+    txid,
+    1,
+  );
+  const myDotTx = chainflip.tx.governance.proposeGovernanceExtrinsic(dotWitnessing);
+  let done = false;
+  unsubscribe = await myDotTx.signAndSend(snowwhite, { nonce: -1 }, (result) => {
+    if (result.status.isInBlock) {
+      console.log(`Dot vault registered at blockHash ${result.status.asInBlock}`);
+      unsubscribe();
+      done = true;
+    }
+  });
+  while (!done) {
+    await sleep(1000);
+  }
+
   const btcWitnessing = chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(1, btcKey);
   const myBtcTx = chainflip.tx.governance.proposeGovernanceExtrinsic(btcWitnessing);
   await myBtcTx.signAndSend(snowwhite, { nonce: -1 });

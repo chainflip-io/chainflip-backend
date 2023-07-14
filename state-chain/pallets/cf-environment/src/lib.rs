@@ -362,13 +362,11 @@ pub mod pallet {
 		pub fn witness_polkadot_vault_creation(
 			origin: OriginFor<T>,
 			dot_pure_proxy_vault_key: PolkadotAccountId,
-			dot_witnessed_aggkey: PolkadotPublicKey,
-			tx_id: TxId,
-			broadcast_id: BroadcastId,
-		) -> DispatchResultWithPostInfo {
+			_dot_witnessed_aggkey: PolkadotPublicKey,
+			_tx_id: TxId,
+			_broadcast_id: BroadcastId,
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
-
-			use cf_traits::VaultKeyWitnessedHandler;
 
 			// Set Polkadot Pure Proxy Vault Account
 			PolkadotVaultAccountId::<T>::put(dot_pure_proxy_vault_key);
@@ -376,20 +374,7 @@ pub mod pallet {
 				polkadot_vault_account_id: dot_pure_proxy_vault_key,
 			});
 
-			// The initial polkadot vault creation is special in that the *new* aggkey submits the
-			// creating transaction. So the aggkey account does not need to be reset.
-			// However, `on_new_key_activated` indirectly resets the nonce. So we get it here and
-			// then we can set it again below.
-			let correct_nonce = PolkadotProxyAccountNonce::<T>::get();
-
-			// Witness the agg_key rotation manually in the vaults pallet for polkadot
-			let dispatch_result =
-				T::PolkadotVaultKeyWitnessedHandler::on_new_key_activated(tx_id.block_number)?;
-			// Clean up the broadcast state.
-			T::PolkadotBroadcaster::clean_up_broadcast(broadcast_id)?;
-
-			PolkadotProxyAccountNonce::<T>::set(correct_nonce);
-			Ok(dispatch_result)
+			Ok(())
 		}
 
 		/// Manually witnesses the current Bitcoin block number to complete the pending vault

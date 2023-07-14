@@ -211,31 +211,27 @@ async fn main() -> anyhow::Result<()> {
 				tokio::sync::mpsc::unbounded_channel();
 
 			scope.spawn(async move {
-				loop {
-					tokio::select! {
-						opt = dot_monitor_address_receiver.recv() => {
-							match opt {
-								Some(a) => log::debug!("Ignoring dot monitor address {a:?}"),
-								None => {
-									log::debug!("dot monitor address channel closed");
-									break Ok(())
-								},
-							};
-						},
-						opt = dot_monitor_signature_receiver.recv() => {
-							match opt {
-								Some(s) => log::debug!("Ignoring dot monitor signature {s:?}"),
-								None => {
-									log::debug!("dot monitor signature channel closed");
-									break Ok(())
-								},
-							};
-						},
-						_ = dot_epoch_start_receiver.recv() => {
-							log::debug!("Ignoring dot epoch start");
-						},
-					}
+				while let Some(a) = dot_monitor_address_receiver.recv().await {
+					log::debug!("Ignoring dot monitor address {a:?}");
 				}
+				log::debug!("dot monitor address channel closed");
+				Ok(())
+			});
+
+			scope.spawn(async move {
+				while let Some(s) = dot_monitor_signature_receiver.recv().await {
+					log::debug!("Ignoring dot monitor signature {s:?}");
+				}
+				log::debug!("dot monitor signature channel closed");
+				Ok(())
+			});
+
+			scope.spawn(async move {
+				while let Ok(e) = dot_epoch_start_receiver.recv().await {
+					log::debug!("Ignoring dot epoch start {e:?}");
+				}
+				log::debug!("dot epoch start channel closed");
+				Ok(())
 			});
 
 			scope.spawn(state_chain_observer::start(
