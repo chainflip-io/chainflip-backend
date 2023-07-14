@@ -22,4 +22,5 @@ spec:
       protocol: TCP
   selector:
     app: {{ include "chainflip-node.fullname" . }}-engine
+    chainflip.io/unit: engine
 {{- end }}

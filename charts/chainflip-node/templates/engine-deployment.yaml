@@ -5,6 +5,7 @@ metadata:
   name: {{ include "chainflip-node.fullname" . }}-engine
   labels:
     app: {{ include "chainflip-node.fullname" . }}-engine
+    chainflip.io/unit: engine
 spec:
   replicas: 1
   strategy:
@@ -14,6 +15,7 @@ spec:
       name: {{ include "chainflip-node.fullname" . }}-engine
       labels:
         app: {{ include "chainflip-node.fullname" . }}-engine
+        chainflip.io/unit: engine
     spec:
       imagePullSecrets:
         {{ .Values.imagePullSecrets | toYaml | nindent 8 }}
