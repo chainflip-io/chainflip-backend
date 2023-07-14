@@ -1,13 +1,14 @@
 #![cfg(test)]
 
+use rand::{prelude::Distribution, Rng, SeedableRng};
+
 #[cfg(feature = "slow-tests")]
-use crate::common::{Side, MIN_SQRT_PRICE};
+use crate::common::MIN_SQRT_PRICE;
+use crate::{common::Side, test_utilities::rng_u256_inclusive_bound};
 
 use super::*;
 
-#[cfg(feature = "slow-tests")]
 type LiquidityProvider = cf_primitives::AccountId;
-#[cfg(feature = "slow-tests")]
 type PoolState = super::PoolState<LiquidityProvider>;
 
 #[test]
@@ -98,4 +99,85 @@ fn maximum_liquidity_swap() {
 	let (output, _remaining) = pool_state.swap::<OneToZero>(Amount::MAX, None);
 
 	assert!(((minted_amounts[Side::Zero] - (MAX_TICK - MIN_TICK) /* Maximum rounding down by one per swap iteration */)..minted_amounts[Side::Zero]).contains(&output));
+}
+
+#[test]
+fn test_amounts_to_liquidity() {
+	fn rng_tick_range(rng: &mut impl rand::Rng) -> (Tick, Tick) {
+		let tick = rand::distributions::Uniform::new_inclusive(MIN_TICK, MAX_TICK).sample(rng);
+
+		let upper_range = tick + 1..MAX_TICK + 1;
+		let low_range = MIN_TICK..tick;
+
+		if !upper_range.is_empty() {
+			(tick, rng.gen_range(upper_range.start, upper_range.end))
+		} else {
+			assert!(!low_range.is_empty());
+
+			(rng.gen_range(low_range.start, low_range.end), tick)
+		}
+	}
+
+	std::thread::scope(|scope| {
+		for i in 0..1 {
+			scope.spawn(move || {
+				let mut rng: rand::rngs::StdRng = rand::rngs::StdRng::from_seed([i; 32]);
+
+				// Iterations have been decreased to ensure tests run in a reasonable time, but
+				// this has been run 100 billion times
+				for _i in 0..1000000 {
+					let tick = rng.gen_range(MIN_TICK, MAX_TICK);
+
+					let pool_state = PoolState::new(
+						0,
+						rng_u256_inclusive_bound(
+							&mut rng,
+							if tick > MIN_TICK {
+								sqrt_price_at_tick(tick - 1)..=sqrt_price_at_tick(tick)
+							} else {
+								sqrt_price_at_tick(tick)..=sqrt_price_at_tick(tick + 1)
+							},
+						),
+					)
+					.unwrap();
+
+					let (lower, upper) = rng_tick_range(&mut rng);
+
+					let original_liquidity =
+						rand::distributions::Uniform::new_inclusive(0, MAX_TICK_GROSS_LIQUIDITY)
+							.sample(&mut rng);
+
+					let amounts = pool_state
+						.liquidity_to_amounts::<false>(original_liquidity, lower, upper)
+						.unwrap()
+						.0;
+
+					let resultant_liquidity =
+						pool_state.desired_amounts_to_liquidity(lower, upper, amounts).unwrap();
+
+					let maximum_error_from_rounding_amount =
+						[amounts[Side::Zero], amounts[Side::One]]
+							.into_iter()
+							.filter(|amount| !amount.is_zero())
+							.map(|amount| {
+								1f64 / (2f64.powf((256f64 - amount.leading_zeros() as f64) - 1f64))
+							})
+							.fold(0f64, f64::max);
+
+					let maximum_error_from_rounding_liquidity = 1f64 / original_liquidity as f64;
+
+					let error = u128::rem_euclid(
+						u128::abs_diff(resultant_liquidity, original_liquidity),
+						original_liquidity,
+					) as f64 / (original_liquidity as f64);
+
+					assert!(
+						error <=
+							maximum_error_from_rounding_amount +
+								maximum_error_from_rounding_liquidity,
+					);
+				}
+			});
+		}
+	});
 }

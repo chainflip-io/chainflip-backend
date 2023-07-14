@@ -1,8 +1,7 @@
 import { SubmittableExtrinsic } from '@polkadot/api/types';
 import Keyring from '@polkadot/keyring';
-import { Mutex } from 'async-mutex';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { getChainflipApi, handleSubstrateError } from './utils';
+import { getChainflipApi, handleSubstrateError, snowWhiteMutex } from './utils';
 
 const chainflip = await getChainflipApi();
 
@@ -15,8 +14,6 @@ await cryptoWaitReady();
 const keyring = new Keyring({ type: 'sr25519' });
 
 const snowWhite = keyring.createFromUri(snowWhiteUri);
-
-const snowWhiteMutex = new Mutex();
 
 export async function submitGovernanceExtrinsic(extrinsic: SubmittableExtrinsic<'promise'>) {
   return snowWhiteMutex.runExclusive(async () =>

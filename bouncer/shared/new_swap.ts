@@ -1,8 +1,12 @@
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { Keyring } from '@polkadot/api';
-import { Mutex } from 'async-mutex';
 import { Asset } from '@chainflip-io/cli/.';
-import { getChainflipApi, encodeDotAddressForContract, handleSubstrateError } from './utils';
+import {
+  getChainflipApi,
+  encodeDotAddressForContract,
+  handleSubstrateError,
+  brokerMutex,
+} from './utils';
 
 export interface CcmDepositMetadata {
   message: string;
@@ -11,8 +15,6 @@ export interface CcmDepositMetadata {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   source_address: any;
 }
-
-const mutex = new Mutex();
 
 export async function newSwap(
   sourceToken: Asset,
@@ -30,7 +32,7 @@ export async function newSwap(
   const brokerUri = process.env.BROKER_URI ?? '//BROKER_1';
   const broker = keyring.createFromUri(brokerUri);
 
-  await mutex.runExclusive(async () => {
+  await brokerMutex.runExclusive(async () => {
     await chainflip.tx.swapping
       .requestSwapDepositAddress(
         sourceToken,

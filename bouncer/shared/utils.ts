@@ -14,6 +14,12 @@ import { newEthAddress } from './new_eth_address';
 import { CcmDepositMetadata } from './new_swap';
 import cfReceiverMockAbi from '../../eth-contract-abis/perseverance-rc17/CFReceiverMock.json';
 
+export const lpMutex = new Mutex();
+export const ethNonceMutex = new Mutex();
+export const btcClientMutex = new Mutex();
+export const brokerMutex = new Mutex();
+export const snowWhiteMutex = new Mutex();
+
 // TODO: Import this from the chainflip-io/cli package once it's exported in future versions.
 export function assetToChain(asset: Asset): number {
   switch (asset) {
