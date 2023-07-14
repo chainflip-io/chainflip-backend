@@ -35,6 +35,7 @@ sp-runtime = { git = "https://github.com/chainflip-io/substrate.git", tag = "cha
 [dev-dependencies]
 sp-io = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
 sp-core = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
+cf-test-utilities = { path = '../../test-utilities' }
 
 [features]
 default = ['std']

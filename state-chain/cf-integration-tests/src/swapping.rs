@@ -17,7 +17,7 @@ use frame_support::{
 	traits::{OnFinalize, OnIdle, OnNewAccount},
 };
 use pallet_cf_ingress_egress::DepositWitness;
-use pallet_cf_pools::Order;
+use pallet_cf_pools::{Order, RangeOrderSize};
 use pallet_cf_swapping::CcmIdCounter;
 use state_chain_runtime::{
 	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter},
@@ -94,7 +94,7 @@ fn mint_range_order(
 		RuntimeOrigin::signed(account_id.clone()),
 		unstable_asset,
 		range,
-		liquidity,
+		RangeOrderSize::Liquidity(liquidity),
 	));
 	let new_unstable_balance =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
