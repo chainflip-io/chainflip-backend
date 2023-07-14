@@ -3,14 +3,17 @@ import Module from 'node:module';
 import { ECPairFactory } from 'ecpair';
 import bitcoin from 'bitcoinjs-lib';
 import axios from 'axios';
-import { Mutex } from 'async-mutex';
-import { sha256 } from '../shared/utils';
+import { sha256, btcClientMutex } from '../shared/utils';
 
 const require = Module.createRequire(import.meta.url);
 
-const btcWalletMutex = new Mutex();
+const btcAddressTypes = ['P2PKH', 'P2SH', 'P2WPKH', 'P2WSH'] as const;
+export type BtcAddressType = (typeof btcAddressTypes)[number];
 
-export type BtcAddressType = 'P2PKH' | 'P2SH' | 'P2WPKH' | 'P2WSH';
+export const isValidBtcAddressType = (type: string): type is BtcAddressType =>
+  // unfortunately, we need to cast to any here
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  btcAddressTypes.includes(type as any);
 
 export async function newBtcAddress(seed: string, type: BtcAddressType): Promise<string> {
   const btcEndpoint = process.env.BTC_ENDPOINT ?? 'http://127.0.0.1:8332';
@@ -76,7 +79,7 @@ export async function newBtcAddress(seed: string, type: BtcAddressType): Promise
 
   // Would get a "Wallet is currently rescanning error"
   // if this is called concurrently
-  await btcWalletMutex.runExclusive(async () => {
+  await btcClientMutex.runExclusive(async () => {
     await axios.post(btcEndpoint + '/wallet/watch', registerAddressData, axiosConfig);
   });
 

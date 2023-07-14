@@ -13,6 +13,7 @@ pub use cf_primitives::{
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip,
 	mocks::{
+		address_converter::MockAddressConverter,
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
@@ -93,6 +94,7 @@ impl crate::Config for Test {
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;
 	type AddressDerivation = ();
+	type AddressConverter = MockAddressConverter;
 	type LpBalance = Self;
 	type SwapDepositHandler = Self;
 	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;

@@ -82,11 +82,11 @@ impl StaticEvent for Transfer {
 
 /// This event must match the TransactionFeePaid event definition of the Polkadot chain.
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-struct TransactionFeePaid {
-	who: PolkadotAccountId,
+pub struct TransactionFeePaid {
+	pub who: PolkadotAccountId,
 	// includes the tip
-	actual_fee: PolkadotBalance,
-	tip: PolkadotBalance,
+	pub actual_fee: PolkadotBalance,
+	pub tip: PolkadotBalance,
 }
 
 impl StaticEvent for TransactionFeePaid {
@@ -95,7 +95,7 @@ impl StaticEvent for TransactionFeePaid {
 }
 
 #[derive(Clone)]
-enum EventWrapper {
+pub enum EventWrapper {
 	ProxyAdded(ProxyAdded),
 	Transfer(Transfer),
 	TransactionFeePaid(TransactionFeePaid),

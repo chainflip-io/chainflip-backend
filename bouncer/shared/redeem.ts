@@ -63,6 +63,7 @@ export async function redeemTest() {
       'test test test test test test test test test test test junk',
   ).connect(ethers.getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const options: any = {
     signer: wallet,
     network: 'localnet',
@@ -79,6 +80,7 @@ export async function redeemTest() {
 
   const nonce = await getNextEthNonce();
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await executeRedemption(accountIdHex as any, { nonce, ...options });
 
   await observeEvent(

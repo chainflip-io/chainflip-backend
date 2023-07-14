@@ -1,10 +1,7 @@
-import { Mutex } from 'async-mutex';
 import Web3 from 'web3';
-import { amountToFineAmount, assetToDecimals } from './utils';
+import { amountToFineAmount, assetToDecimals, ethNonceMutex } from './utils';
 
 let nextNonce: number | undefined;
-
-const ethNonceMutex = new Mutex();
 
 export async function getNextEthNonce(): Promise<number> {
   return ethNonceMutex.runExclusive(async () => {
@@ -44,7 +41,7 @@ export async function sendEth(ethereumAddress: string, ethAmount: string) {
   const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
   const receipt = await web3.eth.sendSignedTransaction(
     signedTx.rawTransaction as string,
-    (error, hash) => {
+    (error) => {
       if (error) {
         console.error('Ethereum transaction failure:', error);
       }
