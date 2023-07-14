@@ -13,7 +13,7 @@ import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 async function main(): Promise<void> {
   await cryptoWaitReady();
   const keyring = new Keyring({ type: 'sr25519' });
-  const aliceUri = process.env.POLKADOT_aliceUri || '//Alice';
+  const aliceUri = process.env.POLKADOT_ALICE_URI || '//Alice';
   const alice = keyring.createFromUri(aliceUri);
 
   const chainflip = await getChainflipApi(process.env.CF_NODE_ENDPOINT);
