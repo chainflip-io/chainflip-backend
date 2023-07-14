@@ -46,6 +46,8 @@ pub mod mocks;
 pub trait Chain: Member + Parameter {
 	const NAME: &'static str;
 
+	const CANCELLED: bool = false;
+
 	type KeyHandoverIsRequired: Get<bool>;
 	type OptimisticActivation: Get<bool>;
 

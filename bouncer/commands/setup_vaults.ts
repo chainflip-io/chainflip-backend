@@ -7,7 +7,7 @@
 
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { getChainflipApi, getPolkadotApi, sleep } from '../shared/utils';
+import { getChainflipApi, sleep } from '../shared/utils';
 
 async function main(): Promise<void> {
   await cryptoWaitReady();
@@ -20,7 +20,6 @@ async function main(): Promise<void> {
   const alice = keyring.createFromUri(alice_uri);
 
   const chainflip = await getChainflipApi(process.env.CF_NODE_ENDPOINT);
-  const polkadot = await getPolkadotApi(process.env.POLKADOT_ENDPOINT);
 
   console.log('=== Performing initial Vault setup ===');
 
@@ -32,87 +31,46 @@ async function main(): Promise<void> {
 
   // Step 2
   console.log('Waiting for new keys');
-  let dotKey: string | undefined;
   let btcKey: string | undefined;
-  let waitingForDotKey = true;
   let waitingForBtcKey = true;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let unsubscribe: any = await chainflip.query.system.events((events: any[]) => {
     events.forEach((record) => {
       const { event } = record;
-      if (event.section === 'polkadotVault' && event.method === 'AwaitingGovernanceActivation') {
-        dotKey = event.data[0];
-        if (!waitingForBtcKey) {
-          unsubscribe();
-        }
-        console.log('Found DOT AggKey');
-        waitingForDotKey = false;
-      }
       if (event.section === 'bitcoinVault' && event.method === 'AwaitingGovernanceActivation') {
         btcKey = event.data[0];
-        if (!waitingForDotKey) {
-          unsubscribe();
-        }
+        unsubscribe();
         console.log('Found BTC AggKey');
         waitingForBtcKey = false;
       }
     });
   });
-  while (waitingForBtcKey || waitingForDotKey) {
+  while (waitingForBtcKey) {
     await sleep(1000);
   }
-  const dotKeyAddress = keyring.encodeAddress(dotKey as string, 0);
-
-  // Step 3
-  console.log('Transferring 100 DOT to Polkadot AggKey');
-  await polkadot.tx.balances.transfer(dotKeyAddress, 1000000000000).signAndSend(alice);
-
-  // Step 4
-  console.log('Requesting Polkadot Vault creation');
-  const createCommand = chainflip.tx.environment.createPolkadotVault(dotKey);
-  const mytx = chainflip.tx.governance.proposeGovernanceExtrinsic(createCommand);
-  await mytx.signAndSend(snowwhite);
-
-  // Step 5
-  console.log('Waiting for Vault address on Polkadot chain');
-  let vaultAddress: string | undefined;
-  let vaultBlock: number | undefined;
-  let vaultEventIndex: number | undefined;
-  let waitingForEvent = true;
-  unsubscribe = await polkadot.rpc.chain.subscribeNewHeads(async (header) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const events: any[] = await polkadot.query.system.events.at(header.hash);
-    events.forEach((record, index) => {
-      const { event } = record;
-      if (event.section === 'proxy' && event.method === 'PureCreated') {
-        vaultAddress = event.data[0];
-        vaultBlock = header.number.toNumber();
-        vaultEventIndex = index;
-        unsubscribe();
-        waitingForEvent = false;
-      }
-    });
-  });
-  while (waitingForEvent) {
-    await sleep(1000);
-  }
-  console.log('Found DOT Vault with address ' + (vaultAddress as string));
-
-  // Step 7
-  console.log('Transferring 100 DOT to Polkadot Vault');
-  await polkadot.tx.balances.transfer(vaultAddress, 1000000000000).signAndSend(alice);
 
   // Step 8
+  // Fake the dot aggkey and vault.
   console.log('Registering Vaults with state chain');
-  const txid = { blockNumber: vaultBlock, extrinsicIndex: vaultEventIndex };
+  const txid = { blockNumber: 1, extrinsicIndex: 1 };
   const dotWitnessing = chainflip.tx.environment.witnessPolkadotVaultCreation(
-    vaultAddress,
-    dotKey,
+    "cfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcf",
+    "cfcfcfcfcfcfcfcfcfcfcfcfcfcfcfcf",
     txid,
     1,
   );
   const myDotTx = chainflip.tx.governance.proposeGovernanceExtrinsic(dotWitnessing);
-  await myDotTx.signAndSend(snowwhite, { nonce: -1 });
+  let done = false;
+  unsubscribe = await myDotTx.signAndSend(snowwhite, { nonce: -1 }, (result) => {
+    if (result.status.isInBlock) {
+      console.log(`Dot vault registered at blockHash ${result.status.asInBlock}`);
+      unsubscribe();
+      done = true;
+    }
+  });
+  while (!done) {
+    await sleep(1000);
+  }
 
   const btcWitnessing = chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(1, btcKey);
   const myBtcTx = chainflip.tx.governance.proposeGovernanceExtrinsic(btcWitnessing);
@@ -120,7 +78,7 @@ async function main(): Promise<void> {
 
   // Confirmation
   console.log('Waiting for new epoch');
-  waitingForEvent = true;
+  let waitingForEvent = true;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   unsubscribe = await chainflip.query.system.events((events: any[]) => {
     events.forEach((record) => {

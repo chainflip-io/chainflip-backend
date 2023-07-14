@@ -4,6 +4,7 @@ use crate::dot::safe_runtime_version_stream::safe_runtime_version_stream;
 use async_trait::async_trait;
 use cf_chains::dot::{PolkadotHash, RuntimeVersion};
 use cf_primitives::PolkadotBlockNumber;
+use frame_support::{Blake2_256, StorageHasher};
 use futures::{Stream, StreamExt, TryStreamExt};
 use std::sync::Arc;
 use subxt::{
@@ -12,6 +13,7 @@ use subxt::{
 	rpc_params, Config, OnlineClient, PolkadotConfig,
 };
 use tokio::sync::RwLock;
+use tracing::log;
 
 use anyhow::{anyhow, Result};
 
@@ -186,6 +188,40 @@ impl DotSubscribeApi for DotRpcClient {
 		)
 		.await
 		.map_err(|e| anyhow!("Failed to subscribe to Polkadot runtime version with error: {e}"))
+	}
+}
+
+pub struct LoggingRpcClient;
+
+#[async_trait]
+impl DotRpcApi for LoggingRpcClient {
+	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Result<Option<PolkadotHash>> {
+		log::debug!("block_hash({:?})", block_number);
+		Ok(None)
+	}
+
+	async fn current_runtime_version(&self) -> Result<RuntimeVersion> {
+		log::debug!("current_runtime_version()");
+		Ok(RuntimeVersion { spec_version: 9360, transaction_version: 19 })
+	}
+
+	async fn extrinsics(
+		&self,
+		block_hash: PolkadotHash,
+	) -> Result<Option<Vec<ChainBlockExtrinsic>>> {
+		log::debug!("extrinsics({:?})", block_hash);
+		Ok(None)
+	}
+
+	async fn events(&self, block_hash: PolkadotHash) -> Result<Events<PolkadotConfig>> {
+		log::debug!("events({:?})", block_hash);
+		Err(anyhow!("Not implemented"))
+	}
+
+	async fn submit_raw_encoded_extrinsic(&self, encoded_bytes: Vec<u8>) -> Result<PolkadotHash> {
+		let encoded_bytes: Bytes = encoded_bytes.into();
+		log::debug!("submit_raw_encoded_extrinsic({:?})", encoded_bytes);
+		Ok(Blake2_256::hash(&encoded_bytes[..]).into())
 	}
 }
 

@@ -103,6 +103,10 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
     }
   }
   console.log('Received ' + ccy + ' address: ' + ingressAddress);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const checkDeposit = (data: any): boolean => data.asset.toJSON().toLowerCase() === ccy;
+
+  let observer = observeEvent('liquidityProvider:AccountCredited', checkDeposit);
   exec(
     'pnpm tsx ./commands/fund_' + ccy + '.ts' + ' ' + ingressAddress + ' ' + deposits[ccy],
     { timeout: 30000 },
@@ -115,10 +119,7 @@ async function setupCurrency(ccy: keyof typeof chain): Promise<void> {
       if (stdout !== '') process.stdout.write(stdout);
     },
   );
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const checkDeposit = (data: any): boolean => data.asset.toJSON().toLowerCase() === ccy;
-
-  await observeEvent('liquidityProvider:AccountCredited', checkDeposit);
+  await observer;
   if (ccy === 'usdc') {
     return;
   }
@@ -213,11 +214,11 @@ async function main(): Promise<void> {
 
   const lpUri = process.env.LP_URI ?? '//LP_1';
   lp = keyring.createFromUri(lpUri);
-  
+
   // Register Emergency withdrawal address for all chains
-  const encodedEthAddr = chainflip.createType('EncodedAddress', {"Eth": hexStringToBytesArray(await getAddress('ETH', 'LP_1'))});
-  const encodedDotAddr = chainflip.createType('EncodedAddress', {"Dot": lp.publicKey});
-  const encodedBtcAddr = chainflip.createType('EncodedAddress', {"Btc": asciiStringToBytesArray(await getAddress('BTC', 'LP_1'))});
+  const encodedEthAddr = chainflip.createType('EncodedAddress', { "Eth": hexStringToBytesArray(await getAddress('ETH', 'LP_1')) });
+  const encodedDotAddr = chainflip.createType('EncodedAddress', { "Dot": lp.publicKey });
+  const encodedBtcAddr = chainflip.createType('EncodedAddress', { "Btc": asciiStringToBytesArray(await getAddress('BTC', 'LP_1')) });
 
   await setupEmergencyWithdrawalAddress(encodedEthAddr);
   await setupEmergencyWithdrawalAddress(encodedDotAddr);
@@ -227,7 +228,6 @@ async function main(): Promise<void> {
   await setupCurrency('usdc');
 
   await Promise.all([
-    setupCurrency('dot'),
     setupCurrency('eth'),
     setupCurrency('btc'),
   ]);

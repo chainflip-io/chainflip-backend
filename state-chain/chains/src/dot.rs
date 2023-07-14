@@ -218,8 +218,9 @@ pub struct PolkadotTrackedData {
 
 impl Chain for Polkadot {
 	const NAME: &'static str = "Polkadot";
+	const CANCELLED: bool = true;
 	type KeyHandoverIsRequired = ConstBool<false>;
-	type OptimisticActivation = ConstBool<false>;
+	type OptimisticActivation = ConstBool<true>;
 	type ChainBlockNumber = PolkadotBlockNumber;
 	type ChainAmount = PolkadotBalance;
 	type TrackedData = PolkadotTrackedData;

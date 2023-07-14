@@ -30,22 +30,7 @@ setup() {
   echo "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token"
   docker login ghcr.io
 
-  ONEPASSWORD_FILES=$(ls $LOCALNET_INIT_DIR/onepassword)
-  mkdir -p "$LOCALNET_INIT_DIR/secrets"
-  for file in $ONEPASSWORD_FILES; do
-    if [ -f $LOCALNET_INIT_DIR/secrets/$file ]; then
-      echo "$file exists, skipping"
-      continue
-    else
-      echo "🤫 Loading $file from OnePassword. Don't worry, this won't be committed to the repo."
-      if ! op inject -i $LOCALNET_INIT_DIR/onepassword/$file -o $LOCALNET_INIT_DIR/secrets/$file -f; then
-        echo "❌  Couldn't generate the required secrets file."
-        echo "🧑🏻‍🦰 Ask Tom or Assem what's up"
-        exit 1
-      fi
-    fi
-  done
-  touch $LOCALNET_INIT_DIR/secrets/.setup_complete
+  touch localnet/.setup_complete
 }
 
 get-workflow() {
@@ -87,8 +72,9 @@ build-localnet() {
   REPLY=$(check_endpoint_health -H "Content-Type: application/json" -s -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params":[0]}' 'http://localhost:9945') || [ -z $(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*') ]
 
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
-  DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
+
   echo "🚧 Waiting for chainflip-node to start"
+  DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
   check_endpoint_health -s -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null
 
   echo "🕺 Starting Broker API ..."
@@ -143,7 +129,7 @@ build-localnet-in-ci() {
   DOT_GENESIS_HASH=$(echo $REPLY | grep -o '\"result\":\"0x[^"]*' | grep -o '0x.*')
   DOT_GENESIS_HASH=${DOT_GENESIS_HASH:2} ./$LOCALNET_INIT_DIR/scripts/start-node.sh $BINARIES_LOCATION
   echo "🚧 Waiting for chainflip-node to start"
-  check_endpoint_health -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933' > /dev/null
+  check_endpoint_health -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlock"}' 'http://localhost:9933'
 
   ./$LOCALNET_INIT_DIR/scripts/start-engine.sh $BINARIES_LOCATION
   echo "🚗 Waiting for chainflip-engine to start"
@@ -219,7 +205,7 @@ if [[ $CI == true ]]; then
   exit 0
 fi
 
-if [ ! -f ./$LOCALNET_INIT_DIR/secrets/.setup_complete ]; then
+if [ ! -f ./localnet/.setup_complete ]; then
   setup
 else
   echo "✅ Set up already complete"
