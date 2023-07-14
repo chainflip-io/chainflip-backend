@@ -36,5 +36,7 @@ pub async fn start<StateChainClient, StateChainStream>(
 	)
 	.await;
 
-	super::btc::start(scope, &settings.btc, state_chain_client, epoch_source).await;
+	super::btc::start(scope, &settings.btc, state_chain_client.clone(), epoch_source.clone()).await;
+
+	super::dot::start(scope, &settings.dot, state_chain_client, epoch_source).await;
 }
