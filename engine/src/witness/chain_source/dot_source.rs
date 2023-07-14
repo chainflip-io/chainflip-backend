@@ -15,9 +15,8 @@ use crate::{
 use futures::{stream::StreamExt, Stream};
 
 use super::{BoxChainStream, ChainClient, ChainSource, Header};
-use subxt::config::Header as SubxtHeader;
-
 use anyhow::Result;
+use subxt::{self, config::Header as SubxtHeader};
 
 macro_rules! polkadot_source {
 	($self:expr, $func: ident) => {{
