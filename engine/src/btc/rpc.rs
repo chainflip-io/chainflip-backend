@@ -204,9 +204,7 @@ impl BtcRpcApi for BtcRpcClient {
 		// https://developer.bitcoin.org/reference/rpc/getblockstats.html
 		#[derive(Deserialize, Serialize)]
 		pub struct BlockStats {
-			#[serde(
-				with = "bitcoin::amount::serde::as_sat"
-			)]
+			#[serde(with = "bitcoin::amount::serde::as_sat")]
 			pub avgfeerate: bitcoin::Amount,
 		}
 
