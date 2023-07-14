@@ -1,3 +1,5 @@
+pub mod ingress_addresses;
+
 use cf_chains::Chain;
 use futures_util::StreamExt;
 
