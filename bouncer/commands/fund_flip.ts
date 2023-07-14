@@ -8,6 +8,7 @@
 // will fund 5.5 FLIP to the account with public key 0x5f2b0c89b9f7f240c2aab5cc3118f51f8ba7d4dfb9cd2a1abd6ea4d327bcd34c
 // (That would be account cFL2GAaTbP6UHgfQwJuJ7Naq6gh7ZxZiWQ8EcmdYeopGhpziQ)
 
+import { HexString } from '@polkadot/util/types';
 import { runWithTimeout } from '../shared/utils';
 import { fundFlip } from '../shared/fund_flip';
 
@@ -18,7 +19,7 @@ async function main(): Promise<void> {
   }
   const flipAmount = process.argv[3].trim();
 
-  await fundFlip(pubkey, flipAmount);
+  await fundFlip(pubkey as HexString, flipAmount);
 
   process.exit(0);
 }
