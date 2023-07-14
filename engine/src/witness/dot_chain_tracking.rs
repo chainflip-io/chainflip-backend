@@ -36,16 +36,7 @@ impl<T: DotRetryRpcApi + Send + Sync + Clone>
 		Ok(PolkadotTrackedData {
 			median_tip: {
 				tips.sort();
-				tips.get({
-					let len = tips.len();
-					if len % 2 == 0 {
-						(len / 2).saturating_sub(1)
-					} else {
-						len / 2
-					}
-				})
-				.cloned()
-				.unwrap_or_default()
+				tips.get(tips.len().saturating_sub(1) / 2).cloned().unwrap_or_default()
 			},
 		})
 	}
