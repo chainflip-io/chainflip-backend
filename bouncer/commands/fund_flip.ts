@@ -9,11 +9,14 @@
 // (That would be account cFL2GAaTbP6UHgfQwJuJ7Naq6gh7ZxZiWQ8EcmdYeopGhpziQ)
 
 import { HexString } from '@polkadot/util/types';
-import { runWithTimeout } from '../shared/utils';
+import { runWithTimeout, encodeFlipAddressForContract } from '../shared/utils';
 import { fundFlip } from '../shared/fund_flip';
 
 async function main(): Promise<void> {
   let pubkey = process.argv[2];
+  try {
+    pubkey = encodeFlipAddressForContract(pubkey);
+  } catch (e) {}
   if (pubkey.substr(0, 2) != '0x') {
     pubkey = '0x' + pubkey;
   }
