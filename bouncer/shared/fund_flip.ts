@@ -41,12 +41,13 @@ export async function fundFlip(pubkey: HexString, flipAmount: string) {
   const signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
   const receipt = await web3.eth.sendSignedTransaction(
     signedTx.rawTransaction as string,
-    (error, hash) => {
+    (error) => {
       if (error) {
         console.error('Ethereum transaction failure:', error);
       }
     },
   );
+
   console.log(
     'Transaction complete, tx_hash: ' +
       receipt.transactionHash +
@@ -61,11 +62,12 @@ export async function fundFlip(pubkey: HexString, flipAmount: string) {
       'test test test test test test test test test test test junk',
   ).connect(ethers.getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const options: any = {
     signer: wallet,
     network: 'localnet',
-    stateChainGatewayContractAddress: getEthContractAddress('GATEWAY'),
-    flipContractAddress: getEthContractAddress('FLIP'),
+    stateChainGatewayContractAddress: gatewayContractAddress,
+    flipContractAddress,
   };
 
   // TODO: provide nonce manually once it is supported in the SDK/CLI

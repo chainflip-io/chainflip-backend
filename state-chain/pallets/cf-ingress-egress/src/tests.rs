@@ -4,11 +4,15 @@ use crate::{
 	DisabledEgressAssets, Error, Event as PalletEvent, FetchOrTransfer, FetchParamDetails,
 	MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 };
-use cf_chains::{ChannelIdConstructor, ExecutexSwapAndCall, TransferAssetParams};
+use cf_chains::{
+	address::AddressConverter, ChannelIdConstructor, ExecutexSwapAndCall, SwapOrigin,
+	TransferAssetParams,
+};
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
 use cf_test_utilities::assert_has_event;
 use cf_traits::{
 	mocks::{
+		address_converter::MockAddressConverter,
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
 		ccm_handler::{CcmRequest, MockCcmHandler},
 	},
@@ -462,7 +466,13 @@ fn can_process_ccm_deposit() {
 				deposit_amount: amount,
 				destination_asset: to_asset,
 				destination_address,
-				message_metadata: ccm
+				message_metadata: ccm,
+				origin: SwapOrigin::DepositChannel {
+					deposit_address: MockAddressConverter::to_encoded_address(
+						deposit_address.into()
+					),
+					channel_id: 1,
+				}
 			}]
 		);
 	});

@@ -17,7 +17,7 @@ async function main(): Promise<void> {
   try {
     pubkey = encodeFlipAddressForContract(pubkey);
   } catch (e) {}
-  if (pubkey.substr(0, 2) != '0x') {
+  if (pubkey.substr(0, 2) !== '0x') {
     pubkey = '0x' + pubkey;
   }
   const flipAmount = process.argv[3].trim();

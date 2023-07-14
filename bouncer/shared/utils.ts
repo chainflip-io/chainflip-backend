@@ -6,13 +6,19 @@ import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
 import { Chain, Asset, assetChains } from '@chainflip-io/cli';
 import Web3 from 'web3';
+import { u8aToHex } from '@polkadot/util';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
 import { newEthAddress } from './new_eth_address';
 import { CcmDepositMetadata } from './new_swap';
 import cfReceiverMockAbi from '../../eth-contract-abis/perseverance-rc17/CFReceiverMock.json';
-import { u8aToHex } from '@polkadot/util';
+
+export const lpMutex = new Mutex();
+export const ethNonceMutex = new Mutex();
+export const btcClientMutex = new Mutex();
+export const brokerMutex = new Mutex();
+export const snowWhiteMutex = new Mutex();
 
 // TODO: Import this from the chainflip-io/cli package once it's exported in future versions.
 export function assetToChain(asset: Asset): number {
@@ -59,14 +65,14 @@ export function getEthContractAddress(contract: string): string {
 }
 
 export function amountToFineAmount(amount: string, decimals: number): string {
-  let fine_amount = '';
-  if (amount.indexOf('.') == -1) {
-    fine_amount = amount + '0'.repeat(decimals);
+  let fineAmount = '';
+  if (amount.indexOf('.') === -1) {
+    fineAmount = amount + '0'.repeat(decimals);
   } else {
-    const amount_parts = amount.split('.');
-    fine_amount = amount_parts[0] + amount_parts[1].padEnd(decimals, '0').substr(0, decimals);
+    const amountParts = amount.split('.');
+    fineAmount = amountParts[0] + amountParts[1].padEnd(decimals, '0').substr(0, decimals);
   }
-  return fine_amount;
+  return fineAmount;
 }
 
 export function fineAmountToAmount(fineAmount: string, decimals: number): string {
@@ -120,6 +126,7 @@ export const getPolkadotApi = getCachedSubstrateApi(
 
 export const polkadotSigningMutex = new Mutex();
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getBtcClient(btcEndpoint?: string): any {
   const require = Module.createRequire(import.meta.url);
 
@@ -139,11 +146,11 @@ export function getBtcClient(btcEndpoint?: string): any {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type EventQuery = (data: any) => boolean;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function observeEvent(
   eventName: string,
   chainflip: ApiPromise,
   eventQuery?: EventQuery,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
   let result;
   let waiting = true;
@@ -224,23 +231,8 @@ export async function observeBalanceIncrease(
   return Promise.reject(new Error('Failed to observe balance increase'));
 }
 
-export async function observeCcmReceived(
-  sourceToken: Asset,
-  destToken: Asset,
-  address: string,
-  messageMetadata: CcmDepositMetadata,
-): Promise<void> {
-  await observeEVMEvent(cfReceiverMockAbi, address, 'ReceivedxSwapAndCall', [
-    assetToChain(sourceToken).toString(),
-    '*',
-    messageMetadata.message,
-    getEthContractAddress(destToken.toString()),
-    '*',
-    '*',
-  ]);
-}
-
 export async function observeEVMEvent(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contractAbi: any,
   address: string,
   eventName: string,
@@ -293,6 +285,22 @@ export async function observeEVMEvent(
   return Promise.reject(new Error(`Failed to observe the ${eventName} event`));
 }
 
+export async function observeCcmReceived(
+  sourceToken: Asset,
+  destToken: Asset,
+  address: string,
+  messageMetadata: CcmDepositMetadata,
+): Promise<void> {
+  await observeEVMEvent(cfReceiverMockAbi, address, 'ReceivedxSwapAndCall', [
+    assetToChain(sourceToken).toString(),
+    '*',
+    messageMetadata.message,
+    getEthContractAddress(destToken.toString()),
+    '*',
+    '*',
+  ]);
+}
+
 // Converts a hex string into a bytes array. Support hex strings start with and without 0x
 export function hexStringToBytesArray(hex: string) {
   return Array.from(Buffer.from(hex.replace(/^0x/, ''), 'hex'));
@@ -302,9 +310,9 @@ export function asciiStringToBytesArray(str: string) {
   return Array.from(Buffer.from(str.replace(/^0x/, '')));
 }
 
-export function encodeBtcAddressForContract(address: any) {
-  address = address.replace(/^0x/, '');
-  return Buffer.from(address, 'hex').toString();
+export function encodeBtcAddressForContract(address: string) {
+  const addressHex = address.replace(/^0x/, '');
+  return Buffer.from(addressHex, 'hex').toString();
 }
 
 export function encodeDotAddressForContract(address: string) {
@@ -324,9 +332,11 @@ export function hexPubkeyToFlipAddress(hexPubkey: string) {
   return keyring.encodeAddress(hexPubkey);
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function handleSubstrateError(api: any) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (arg: any) => {
-    let { status, events, dispatchError } = arg;
+    const { dispatchError } = arg;
     if (dispatchError) {
       let error;
       if (dispatchError.isModule) {

@@ -5,7 +5,7 @@ use cf_amm::{
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
-	CcmDepositMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress,
+	CcmDepositMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress, SwapOrigin,
 };
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount, STABLE_ASSET};
 use cf_test_utilities::{assert_events_eq, assert_events_match};
@@ -18,7 +18,7 @@ use frame_support::{
 };
 use pallet_cf_ingress_egress::DepositWitness;
 use pallet_cf_pools::{Order, RangeOrderSize};
-use pallet_cf_swapping::{CcmIdCounter, SwapOrigin};
+use pallet_cf_swapping::CcmIdCounter;
 use state_chain_runtime::{
 	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter},
 	AccountRoles, EthereumInstance, LiquidityPools, LiquidityProvider, Runtime, RuntimeCall,
@@ -430,6 +430,7 @@ fn can_process_ccm_via_direct_deposit() {
 			destination_asset: Asset::Usdc,
 			destination_address: EncodedAddress::Eth([0x02; 20]),
 			message_metadata: message,
+			tx_hash: Default::default(),
 		}));
 		let current_epoch = Validator::current_epoch();
 		for node in Validator::current_authorities() {
