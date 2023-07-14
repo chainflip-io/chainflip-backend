@@ -207,7 +207,9 @@ spec:
                 path: signing_key_file
         {{- end }}
   volumeClaimTemplates:
-    - metadata:
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
         name: {{ include "chainflip-node.fullname" . }}
         labels:
           {{ include "chainflip-node.labels" . | nindent 8 }}
