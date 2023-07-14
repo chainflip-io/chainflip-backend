@@ -1,7 +1,6 @@
 import * as crypto from 'crypto';
 import { setTimeout as sleep } from 'timers/promises';
-import Module from 'node:module';
-
+import Client from 'bitcoin-core';
 import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
 import { Chain, Asset, assetChains } from '@chainflip-io/cli';
@@ -126,13 +125,8 @@ export const getPolkadotApi = getCachedSubstrateApi(
 
 export const polkadotSigningMutex = new Mutex();
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function getBtcClient(btcEndpoint?: string): any {
-  const require = Module.createRequire(import.meta.url);
-
+export function getBtcClient(btcEndpoint?: string): Client {
   const BTC_ENDPOINT = btcEndpoint || 'http://127.0.0.1:8332';
-
-  const Client = require('bitcoin-core');
 
   return new Client({
     host: BTC_ENDPOINT.split(':')[1].slice(2),
