@@ -36,7 +36,7 @@ pub async fn start<StateChainClient, StateChainStream>(
 
 	let eth_client = EthersRetryRpcClient::new(
 		scope,
-		EthersRpcClient::new(&settings).await.unwrap(),
+		EthersRpcClient::new(settings).await.unwrap(),
 		settings.ws_node_endpoint.clone(),
 		expected_chain_id,
 	);
