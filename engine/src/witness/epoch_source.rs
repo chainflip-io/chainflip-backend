@@ -31,7 +31,6 @@ enum EpochUpdate<Info, HistoricInfo> {
 	Expired,
 }
 
-#[derive(Clone)]
 pub struct EpochSource<'a, 'env, StateChainClient, Info, HistoricInfo> {
 	scope: &'a Scope<'env, anyhow::Error>,
 	state_chain_client: Arc<StateChainClient>,
@@ -42,6 +41,19 @@ pub struct EpochSource<'a, 'env, StateChainClient, Info, HistoricInfo> {
 		state_chain_runtime::Hash,
 		EpochUpdate<Info, HistoricInfo>,
 	)>,
+}
+impl<'a, 'env, StateChainClient, Info: Clone, HistoricInfo: Clone> Clone
+	for EpochSource<'a, 'env, StateChainClient, Info, HistoricInfo>
+{
+	fn clone(&self) -> Self {
+		Self {
+			scope: self.scope,
+			state_chain_client: self.state_chain_client.clone(),
+			initial_block_hash: self.initial_block_hash,
+			epochs: self.epochs.clone(),
+			epoch_update_receiver: self.epoch_update_receiver.clone(),
+		}
+	}
 }
 impl<'a, 'env, StateChainClient: client::storage_api::StorageApi + Send + Sync + 'static>
 	EpochSource<'a, 'env, StateChainClient, (), ()>

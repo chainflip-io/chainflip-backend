@@ -276,7 +276,7 @@ impl<Inner: ChunkedByVault> ChainClient for IngressAddressesClient<Inner> {
 		self.inner_client
 			.header_at_index(index)
 			.await
-			.map(|header| (header.data, addresses))
+			.map_data(|header| (header.data, addresses))
 	}
 }
 
