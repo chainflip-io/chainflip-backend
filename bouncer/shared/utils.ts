@@ -91,13 +91,17 @@ export function defaultAssetAmounts(asset: Asset): string {
   }
 }
 
-export const runWithTimeout = <T>(promise: Promise<T>, millis: number): Promise<T> =>
-  Promise.race([
+export const runWithTimeout = <T>(promise: Promise<T>, millis: number): Promise<T> => {
+  const controller = new AbortController();
+  const result = Promise.race([
     promise,
-    sleep(millis).then(() => {
+    sleep(millis, { signal: AbortController }).then(() => {
       throw new Error(`Timed out after ${millis} ms.`);
     }),
   ]);
+  controller.abort();
+  return result;
+};
 
 export const sha256 = (data: string): Buffer => crypto.createHash('sha256').update(data).digest();
 
