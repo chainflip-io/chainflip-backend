@@ -30,6 +30,8 @@ use crate::{
 
 use super::{ChunkedByVault, ChunkedByVaultAlias, Generic};
 
+/// This helps ensure the set of ingress addresses witnessed at each block are consistent across
+/// every validator
 #[allow(clippy::type_complexity)]
 pub struct IngressAddresses<Inner: ChunkedByVault> {
 	inner: Inner,
@@ -39,6 +41,9 @@ pub struct IngressAddresses<Inner: ChunkedByVault> {
 	)>,
 }
 impl<Inner: ChunkedByVault> IngressAddresses<Inner> {
+	// We wait for the chain_tracking to pass a blocks height before assessing the addresses that
+	// should be witnessed at that block to ensure, the set of addresses each engine attempts to
+	// witness at a given block is consistent
 	fn is_header_ready(
 		index: Inner::Index,
 		chain_state: &pallet_cf_chain_tracking::ChainState<Inner::Chain>,
@@ -46,6 +51,8 @@ impl<Inner: ChunkedByVault> IngressAddresses<Inner> {
 		index < chain_state.block_height
 	}
 
+	// FOr a given header we only witness addresses opened at or before the header, the set of
+	// addresses each engine attempts to witness at a given block is consistent
 	fn addresses_for_header(index: Inner::Index, addresses: &Addresses<Inner>) -> Addresses<Inner> {
 		addresses
 			.iter()
@@ -107,6 +114,7 @@ impl<Inner: ChunkedByVault> IngressAddresses<Inner> {
             utilities::loop_select! {
                 let _ = sender.closed() => { break Ok(()) },
                 if let Some((_block_hash, _block_header)) = state_chain_stream.next() => {
+					// Note it is still possible for engines to inconsistently select addresses to witness for a block due to how the SC expiries ingress addresses
                     let _result = sender.send(Self::get_chain_state_and_addresses(&*state_chain_client, state_chain_stream.cache().block_hash).await);
                 } else break Ok(()),
             }
