@@ -1,4 +1,3 @@
-pub mod chain_data_witnesser;
 pub mod contract_witnesser;
 pub mod deposit_witnesser;
 pub mod erc20_witnesser;

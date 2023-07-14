@@ -5,8 +5,6 @@ use std::{
 
 use cf_chains::Ethereum;
 use cf_primitives::chains::assets;
-use futures::TryFutureExt;
-use pallet_cf_environment::cfe;
 use sp_core::{H160, H256};
 use tokio::sync::Mutex;
 
@@ -24,7 +22,6 @@ use crate::{
 use utilities::task_scope::Scope;
 
 use super::{
-	chain_data_witnesser,
 	contract_witnesser::ContractWitnesser,
 	erc20_witnesser::Erc20Witnesser,
 	eth_block_witnessing::{self},
@@ -54,20 +51,8 @@ pub async fn start(
 	expected_chain_id: web3::types::U256,
 	initial_block_hash: H256,
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
-	epoch_start_receiver_2: async_broadcast::Receiver<EpochStart<Ethereum>>,
-	cfe_settings_update_receiver: tokio::sync::watch::Receiver<cfe::CfeSettings>,
 	db: Arc<PersistentKeyDB>,
 ) -> anyhow::Result<EthAddressToMonitorSender> {
-	scope.spawn(
-		chain_data_witnesser::start(
-			EthHttpRpcClient::new(eth_settings, Some(expected_chain_id)).await.unwrap(),
-			state_chain_client.clone(),
-			epoch_start_receiver_2,
-			cfe_settings_update_receiver,
-		)
-		.map_err(|()| anyhow::anyhow!("eth::chain_data_witnesser::start failed")),
-	);
-
 	let state_chain_gateway_address = state_chain_client
 		.storage_value::<pallet_cf_environment::EthereumStateChainGatewayAddress<state_chain_runtime::Runtime>>(
 			initial_block_hash,
