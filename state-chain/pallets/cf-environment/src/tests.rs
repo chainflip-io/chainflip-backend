@@ -156,7 +156,7 @@ fn can_set_next_version() {
 		assert!(Environment::next_version().is_none());
 
 		// Set the next cfe version
-		let version = Some(SemVer::new(1u8, 3u8, 10u8));
+		let version = Some(SemVer { major: 1u8, minor: 3u8, patch: 10u8 });
 		assert_ok!(Environment::set_next_version(RuntimeOrigin::root(), version));
 		assert_eq!(Environment::next_version(), version);
 		System::assert_last_event(RuntimeEvent::Environment(

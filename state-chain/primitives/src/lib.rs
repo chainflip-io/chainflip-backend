@@ -4,6 +4,9 @@
 //!
 //! Primitive types to be used across Chainflip's various crates
 
+#[cfg(test)]
+mod tests;
+
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -150,7 +153,20 @@ pub enum SwapLeg {
 
 pub type TransactionHash = [u8; 32];
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+)]
 pub struct SemVer {
 	pub major: u8,
 	pub minor: u8,
@@ -158,38 +174,18 @@ pub struct SemVer {
 }
 
 impl SemVer {
-	pub fn new(major: u8, minor: u8, patch: u8) -> Self {
-		Self { major, minor, patch }
-	}
-
 	/// Check if Self is compatible with the given version. Return true if:
 	/// `major` and `minor` are higher than `target`. Patch version is ignored.
 	pub fn is_compatible(&self, target: &Self) -> bool {
-		self.partial_cmp(target) != Some(Ordering::Less)
+		self.cmp_ignore_patch(target) != Ordering::Less
 	}
-}
 
-/// Partial comparison of the Version. Only compare `major` and `minor`, `patch` is ignored.
-impl PartialOrd for SemVer {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		if self.major != other.major {
-			Some(self.major.cmp(&other.major))
+	/// Compare using only `major` and `minor`, ignore `patch` version.
+	pub fn cmp_ignore_patch(&self, target: &Self) -> Ordering {
+		if self.major != target.major {
+			self.major.cmp(&target.major)
 		} else {
-			Some(self.minor.cmp(&other.minor))
-		}
-	}
-}
-
-/// Full comparison of the versions.
-/// Compares 'major`, `minor`, and `patch`.
-impl Ord for SemVer {
-	fn cmp(&self, other: &Self) -> Ordering {
-		if self.major != other.major {
-			self.major.cmp(&other.major)
-		} else if self.minor != other.minor {
-			self.minor.cmp(&other.minor)
-		} else {
-			self.patch.cmp(&other.patch)
+			self.minor.cmp(&target.minor)
 		}
 	}
 }

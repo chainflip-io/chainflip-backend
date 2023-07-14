@@ -192,7 +192,11 @@ parameter_types! {
 
 	pub const BitcoinNetworkParam: BitcoinNetwork = BitcoinNetwork::Testnet;
 
-	pub CurrentVersion: SemVer = SemVer::new(0u8, 9u8, 0u8);
+	pub CurrentVersion: SemVer = SemVer {
+		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().expect("Cargo version must be set"),
+		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().expect("Cargo version must be set"),
+		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().expect("Cargo version must be set"),
+	};
 }
 
 impl pallet_cf_environment::Config for Runtime {

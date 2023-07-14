@@ -220,6 +220,8 @@ pub mod pallet {
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
+			NextVersion::<T>::put(Option::<SemVer>::None);
+			Self::deposit_event(Event::<T>::NextVersionSet { version: None });
 			migrations::PalletMigration::<T>::post_upgrade(state)
 		}
 	}
@@ -406,7 +408,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets the next ChainFlip version.
+		/// Sets the next Chainflip version.
 		///
 		/// Requires governance origin.
 		///

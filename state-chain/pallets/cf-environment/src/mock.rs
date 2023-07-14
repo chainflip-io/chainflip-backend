@@ -147,7 +147,11 @@ impl VaultKeyWitnessedHandler<Bitcoin> for MockBitcoinVaultKeyWitnessedHandler {
 
 parameter_types! {
 	pub const BitcoinNetworkParam: BitcoinNetwork = BitcoinNetwork::Testnet;
-	pub CurrentVersion: SemVer = SemVer::new(1u8, 9u8, 1u8);
+	pub CurrentVersion: SemVer = SemVer {
+		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
+		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
+		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
+	};
 }
 
 pub struct MockBitcoinFeeInfo;

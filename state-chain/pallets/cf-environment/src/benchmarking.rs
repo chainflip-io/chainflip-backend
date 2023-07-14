@@ -35,7 +35,7 @@ benchmarks! {
 
 	set_next_version {
 		let origin = T::EnsureGovernance::successful_origin();
-		let version = SemVer::new(1u8, 1u8, 1u8);
+		let version = SemVer { major: 1u8, minor: 1u8, patch: 1u8 };
 		let call = Call::<T>::set_next_version { version: Some(version) };
 	}: { call.dispatch_bypass_filter(origin)? }
 	verify {
