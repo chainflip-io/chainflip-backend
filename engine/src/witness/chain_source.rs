@@ -35,17 +35,12 @@ pub struct Header<Index, Hash, Data> {
 	pub parent_hash: Option<Hash>,
 	pub data: Data,
 }
-impl<Index, Hash, Data> Header<Index, Hash, Data> {
-	pub fn map<MappedData, F: FnOnce(Data) -> MappedData>(
+impl<Index: aliases::Index, Hash: aliases::Hash, Data: aliases::Data> Header<Index, Hash, Data> {
+	pub fn map_data<MappedData, F: FnOnce(Self) -> MappedData>(
 		self,
 		f: F,
 	) -> Header<Index, Hash, MappedData> {
-		Header {
-			index: self.index,
-			hash: self.hash,
-			parent_hash: self.parent_hash,
-			data: f(self.data),
-		}
+		Header { index: self.index, hash: self.hash, parent_hash: self.parent_hash, data: f(self) }
 	}
 }
 
