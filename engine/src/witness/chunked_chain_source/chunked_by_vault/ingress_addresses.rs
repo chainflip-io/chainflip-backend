@@ -6,7 +6,10 @@
 
 use std::sync::Arc;
 
-use crate::witness::chain_source::{ChainClient, ChainStream};
+use crate::witness::{
+	chain_source::{ChainClient, ChainStream},
+	chunked_chain_source::Builder,
+};
 use cf_chains::Chain;
 use futures::FutureExt;
 use futures_core::FusedStream;
@@ -31,7 +34,7 @@ use crate::{
 	},
 };
 
-use super::ChunkedByVault;
+use super::{ChunkedByVault, ChunkedByVaultAlias, Generic};
 
 #[allow(clippy::type_complexity)]
 pub struct IngressAddresses<Inner: ChunkedByVault> {
@@ -51,7 +54,7 @@ impl<Inner: ChunkedByVault> IngressAddresses<Inner> {
 		scope: &Scope<'env, anyhow::Error>,
 		mut state_chain_stream: StateChainStream,
 		state_chain_client: Arc<StateChainClient>,
-	) -> Result<Self, anyhow::Error>
+	) -> Self
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 	{
@@ -90,7 +93,7 @@ impl<Inner: ChunkedByVault> IngressAddresses<Inner> {
             }
         });
 
-		Ok(Self { inner, receiver })
+		Self { inner, receiver }
 	}
 }
 #[async_trait::async_trait]
@@ -236,5 +239,27 @@ impl<Inner: ChunkedByVault> ChainClient for IngressAddressesClient<Inner> {
 		};
 
 		self.inner_client.header_at_index(index).await.map(|data| (data, addresses))
+	}
+}
+
+impl<Inner: ChunkedByVault> Builder<Generic<Inner>> {
+	pub async fn ingress_addresses<'env, StateChainStream, StateChainClient>(
+		self,
+		scope: &Scope<'env, anyhow::Error>,
+		state_chain_stream: StateChainStream,
+		state_chain_client: Arc<StateChainClient>,
+	) -> Builder<impl ChunkedByVaultAlias>
+	where
+		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
+		StateChainStream: StateChainStreamApi,
+		StateChainClient: StorageApi + Send + Sync + 'static,
+	{
+		Builder {
+			source: Generic(
+				IngressAddresses::new(self.source, scope, state_chain_stream, state_chain_client)
+					.await,
+			),
+			parameters: self.parameters,
+		}
 	}
 }
