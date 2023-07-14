@@ -30,6 +30,7 @@ export async function fundFlip(pubkey: string, flipAmount: string) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const flipContract = new web3.eth.Contract(erc20abi as any, flipContractAddress);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const gatewayContract = new web3.eth.Contract(gatewayabi as any, gatewayContractAddress);
 
   let txData = flipContract.methods.approve(gatewayContractAddress, flipperinoAmount).encodeABI();
@@ -41,14 +42,11 @@ export async function fundFlip(pubkey: string, flipAmount: string) {
   let nonce = await getNextEthNonce();
   let tx = { to: flipContractAddress, data: txData, gas: 2000000, nonce };
   let signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
-  let receipt = await web3.eth.sendSignedTransaction(
-    signedTx.rawTransaction as string,
-    (error, hash) => {
-      if (error) {
-        console.error('Ethereum transaction failure:', error);
-      }
-    },
-  );
+  let receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string, (error) => {
+    if (error) {
+      console.error('Ethereum transaction failure:', error);
+    }
+  });
   console.log(
     'Transaction complete, tx_hash: ' +
       receipt.transactionHash +
@@ -64,14 +62,11 @@ export async function fundFlip(pubkey: string, flipAmount: string) {
   nonce = await getNextEthNonce();
   tx = { to: gatewayContractAddress, data: txData, gas: 2000000, nonce };
   signedTx = await web3.eth.accounts.signTransaction(tx, whaleKey);
-  receipt = await web3.eth.sendSignedTransaction(
-    signedTx.rawTransaction as string,
-    (error, hash) => {
-      if (error) {
-        console.error('Ethereum transaction failure:', error);
-      }
-    },
-  );
+  receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction as string, (error) => {
+    if (error) {
+      console.error('Ethereum transaction failure:', error);
+    }
+  });
   console.log(
     'Transaction complete, tx_hash: ' +
       receipt.transactionHash +
@@ -80,10 +75,11 @@ export async function fundFlip(pubkey: string, flipAmount: string) {
       ' blockHash: ' +
       receipt.blockHash,
   );
-  await observeEvent('funding:Funded', chainflip, (data) => {
-    return (
-      Array.from(keyring.decodeAddress(data[0])).toString() ==
-      hexStringToBytesArray(pubkey).toString()
-    );
-  });
+  await observeEvent(
+    'funding:Funded',
+    chainflip,
+    (data) =>
+      Array.from(keyring.decodeAddress(data[0])).toString() ===
+      hexStringToBytesArray(pubkey).toString(),
+  );
 }

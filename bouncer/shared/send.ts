@@ -17,9 +17,12 @@ export async function send(token: Asset, address: string, amount?: string) {
       await sendDot(address, amount ?? '50');
       break;
     case 'USDC':
-    case 'FLIP':
+    case 'FLIP': {
       const contractAddress = getEthContractAddress(token);
       await sendErc20(address, contractAddress, amount ?? '500');
       break;
+    }
+    default:
+      throw new Error(`Unsupported token type: ${token}`);
   }
 }

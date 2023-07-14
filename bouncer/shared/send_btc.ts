@@ -1,7 +1,7 @@
 import Module from 'node:module';
 import { sleep, btcClientMutex } from './utils';
 
-export async function sendBtc(address: string, amount: any) {
+export async function sendBtc(address: string, amount: number | string) {
   const require = Module.createRequire(import.meta.url);
   const Client = require('bitcoin-core');
   const BTC_ENDPOINT = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';

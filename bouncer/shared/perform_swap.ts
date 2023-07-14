@@ -12,8 +12,9 @@ import {
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractDestinationAddress(swapInfo: any, destToken: Asset): string | undefined {
-  const token = destToken === 'USDC' || destToken == 'FLIP' ? 'ETH' : destToken;
+  const token = destToken === 'USDC' || destToken === 'FLIP' ? 'ETH' : destToken;
   return swapInfo[1][token.toLowerCase()];
 }
 
@@ -47,6 +48,7 @@ export async function performSwap(
   const addressPromise = observeEvent(
     'swapping:SwapDepositAddressReady',
     chainflipApi,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (swapInfo: any) => {
       // Find deposit address for the right swap by looking at destination address:
       const destAddress = extractDestinationAddress(swapInfo, destToken);
@@ -96,7 +98,7 @@ export async function performSwap(
 
   const swapScheduledHandle = observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
     if ('depositChannel' in event[5]) {
-      const channelMatches = Number(event[5].depositChannel.channelId) == channelId;
+      const channelMatches = Number(event[5].depositChannel.channelId) === channelId;
       const assetMatches = sourceToken === (event[1].toUpperCase() as Asset);
       return channelMatches && assetMatches;
     }

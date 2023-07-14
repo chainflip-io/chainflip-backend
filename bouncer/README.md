@@ -53,3 +53,7 @@ The following commands should be executed from the bouncer directory.
   `pnpm prettier:check`
 - Format code:<br>
   `pnpm prettier:write`
+- Check linting:<br>
+  `pnpm eslint:check`
+- Fix linting:<br>
+  `pnpm eslint:fix`

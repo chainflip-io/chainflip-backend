@@ -5,8 +5,8 @@
 // For example: pnpm tsx ./commands/setup_swaps.ts
 
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { runWithTimeout } from '../shared/utils';
 import { Asset } from '@chainflip-io/cli/.';
+import { runWithTimeout } from '../shared/utils';
 import { createLpPool } from '../shared/create_lp_pool';
 import { provideLiquidity } from '../shared/provide_liquidity';
 import { rangeOrder } from '../shared/range_order';
@@ -25,14 +25,6 @@ const price = new Map<Asset, number>([
   ['BTC', 10000],
   ['USDC', 1],
   ['FLIP', 10],
-]);
-
-const chain = new Map<Asset, string>([
-  ['DOT', 'dot'],
-  ['ETH', 'eth'],
-  ['BTC', 'btc'],
-  ['USDC', 'eth'],
-  ['FLIP', 'eth'],
 ]);
 
 async function main(): Promise<void> {

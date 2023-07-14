@@ -77,6 +77,10 @@ jobs:
         working-directory: bouncer
         run: pnpm prettier:check
 
+      - name: Run eslint check
+        working-directory: bouncer
+        run: pnpm eslint:check
+
   lint-ci-workflows:
     runs-on: ubuntu-20.04
     steps:

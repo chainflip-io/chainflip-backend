@@ -5,14 +5,14 @@
 // initial price in USDC
 // For example: pnpm tsx ./commands/create_pool.ts btc 10000
 
+import { Asset } from '@chainflip-io/cli/.';
 import { createLpPool } from '../shared/create_lp_pool';
 import { runWithTimeout } from '../shared/utils';
-import { Asset } from '@chainflip-io/cli/.';
 
 async function main() {
   const ccy = process.argv[2].toUpperCase() as Asset;
-  const initial_price = parseFloat(process.argv[3]);
-  await createLpPool(ccy, initial_price);
+  const initialPrice = parseFloat(process.argv[3]);
+  await createLpPool(ccy, initialPrice);
   process.exit(0);
 }
 

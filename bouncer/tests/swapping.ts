@@ -16,6 +16,45 @@ import { performSwapViaContract, approveTokenVault } from '../shared/contract_sw
 
 let swapCount = 1;
 
+function getAbiEncodedMessage(types?: string[]): string {
+  const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
+
+  const validSolidityTypes = ['uint256', 'string', 'bytes', 'address'];
+  let typesArray: string[] = [];
+  if (types === undefined) {
+    const numElements = Math.floor(Math.random() * validSolidityTypes.length) + 1;
+    for (let i = 0; i < numElements; i++) {
+      typesArray.push(validSolidityTypes[Math.floor(Math.random() * validSolidityTypes.length)]);
+    }
+  } else {
+    typesArray = types;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const variables: any[] = [];
+
+  for (let i = 0; i < typesArray.length; i++) {
+    switch (typesArray[i]) {
+      case 'uint256':
+        variables.push(randomAsNumber());
+        break;
+      case 'string':
+        variables.push(Math.random().toString(36).substring(2));
+        break;
+      case 'bytes':
+        variables.push(randomAsHex(Math.floor(Math.random() * 100) + 1));
+        break;
+      case 'address':
+        variables.push(randomAsHex(20));
+        break;
+      // Add more cases for other Solidity types as needed
+      default:
+        throw new Error(`Unsupported Solidity type: ${typesArray[i]}`);
+    }
+  }
+  const encodedMessage = web3.eth.abi.encodeParameters(typesArray, variables);
+  return encodedMessage;
+}
+
 async function testSwap(
   sourceToken: Asset,
   destToken: Asset,
@@ -132,42 +171,6 @@ async function testAll() {
   ]);
 
   await Promise.all([contractSwaps, regularSwaps, ccmSwaps]);
-}
-
-function getAbiEncodedMessage(types?: string[]): string {
-  const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
-
-  const validSolidityTypes = ['uint256', 'string', 'bytes', 'address'];
-
-  if (types === undefined) {
-    types = [];
-    const numElements = Math.floor(Math.random() * validSolidityTypes.length) + 1;
-    for (let i = 0; i < numElements; i++) {
-      types.push(validSolidityTypes[Math.floor(Math.random() * validSolidityTypes.length)]);
-    }
-  }
-  const variables: any[] = [];
-  for (const type of types) {
-    switch (type) {
-      case 'uint256':
-        variables.push(randomAsNumber());
-        break;
-      case 'string':
-        variables.push(Math.random().toString(36).substring(2));
-        break;
-      case 'bytes':
-        variables.push(randomAsHex(Math.floor(Math.random() * 100) + 1));
-        break;
-      case 'address':
-        variables.push(randomAsHex(20));
-        break;
-      // Add more cases for other Solidity types as needed
-      default:
-        throw new Error(`Unsupported Solidity type: ${type}`);
-    }
-  }
-  const encodedMessage = web3.eth.abi.encodeParameters(types, variables);
-  return encodedMessage;
 }
 
 runWithTimeout(testAll(), 1800000)

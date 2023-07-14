@@ -8,11 +8,19 @@ import {
   brokerMutex,
 } from './utils';
 
+export interface CcmDepositMetadata {
+  message: string;
+  gas_budget: number;
+  cf_parameters: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  source_address: any;
+}
+
 export async function newSwap(
   sourceToken: Asset,
   destToken: Asset,
   destAddress: string,
-  fee: any,
+  fee: number,
   messageMetadata?: CcmDepositMetadata,
 ): Promise<void> {
   await cryptoWaitReady();
@@ -35,11 +43,4 @@ export async function newSwap(
       )
       .signAndSend(broker, { nonce: -1 }, handleSubstrateError(chainflip));
   });
-}
-
-export interface CcmDepositMetadata {
-  message: string;
-  gas_budget: number;
-  cf_parameters: string;
-  source_address: any;
 }

@@ -1,5 +1,6 @@
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
+import { Asset } from '@chainflip-io/cli/.';
 import {
   observeEvent,
   getAddress,
@@ -11,7 +12,6 @@ import {
   lpMutex,
 } from '../shared/utils';
 import { send } from '../shared/send';
-import { Asset } from '@chainflip-io/cli/.';
 
 const chain = new Map<Asset, string>([
   ['DOT', 'dot'],
@@ -26,8 +26,8 @@ export async function provideLiquidity(ccy: Asset, amount: number) {
   await cryptoWaitReady();
 
   const keyring = new Keyring({ type: 'sr25519' });
-  const lp_uri = process.env.LP_URI || '//LP_1';
-  const lp = keyring.createFromUri(lp_uri);
+  const lpUri = process.env.LP_URI || '//LP_1';
+  const lp = keyring.createFromUri(lpUri);
 
   // If no emergency withdrawal address is registered, then do that now
   if (
@@ -53,29 +53,35 @@ export async function provideLiquidity(ccy: Asset, amount: number) {
   console.log('Requesting ' + ccy + ' deposit address');
   let eventHandle =
     chain.get(ccy) === 'eth'
-      ? observeEvent('ethereumIngressEgress:StartWitnessing', chainflip, (data) => {
-          return data[1].toUpperCase() === ccy;
-        })
-      : observeEvent('liquidityProvider:LiquidityDepositAddressReady', chainflip, (data) => {
-          return data[1][chain.get(ccy)!] != undefined;
-        });
+      ? observeEvent(
+          'ethereumIngressEgress:StartWitnessing',
+          chainflip,
+          (data) => data[1].toUpperCase() === ccy,
+        )
+      : observeEvent(
+          'liquidityProvider:LiquidityDepositAddressReady',
+          chainflip,
+          (data) => data[1][chain.get(ccy)!] !== undefined,
+        );
   await lpMutex.runExclusive(async () => {
     await chainflip.tx.liquidityProvider
       .requestLiquidityDepositAddress(ccy.toLowerCase())
       .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
   });
-  let ingress_address =
+  let ingressAddress =
     chain.get(ccy) === 'eth'
       ? (await eventHandle).depositAddress.toJSON()
       : (await eventHandle).depositAddress.toJSON()[chain.get(ccy)!];
-  if (ccy == 'BTC') {
-    ingress_address = encodeBtcAddressForContract(ingress_address);
+  if (ccy === 'BTC') {
+    ingressAddress = encodeBtcAddressForContract(ingressAddress);
   }
-  console.log('Received ' + ccy + ' address: ' + ingress_address);
-  console.log('Sending ' + amount + ' ' + ccy + ' to ' + ingress_address);
-  eventHandle = observeEvent('liquidityProvider:AccountCredited', chainflip, (data) => {
-    return data[1].toUpperCase() == ccy;
-  });
-  send(ccy, ingress_address, String(amount));
+  console.log('Received ' + ccy + ' address: ' + ingressAddress);
+  console.log('Sending ' + amount + ' ' + ccy + ' to ' + ingressAddress);
+  eventHandle = observeEvent(
+    'liquidityProvider:AccountCredited',
+    chainflip,
+    (data) => data[1].toUpperCase() === ccy,
+  );
+  send(ccy, ingressAddress, String(amount));
   await eventHandle;
 }

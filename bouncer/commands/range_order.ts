@@ -4,9 +4,9 @@
 // It will create a zero to infinity range order for the currency and amount given
 // For example: pnpm tsx ./commands/range_order.ts btc 10
 
+import { Asset } from '@chainflip-io/cli';
 import { rangeOrder } from '../shared/range_order';
 import { runWithTimeout } from '../shared/utils';
-import { Asset } from '@chainflip-io/cli';
 
 async function main() {
   const ccy = process.argv[2].toUpperCase() as Asset;
