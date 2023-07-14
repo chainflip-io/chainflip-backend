@@ -245,6 +245,7 @@ logs() {
 bouncer() {
   (
     cd ./bouncer
+    pnpm install
     ./run.sh
   )
 }
