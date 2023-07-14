@@ -16,7 +16,9 @@ async function main(): Promise<void> {
   let pubkey = process.argv[2];
   try {
     pubkey = encodeFlipAddressForContract(pubkey);
-  } catch (e) {}
+  } finally {
+    // comment to satisfy eslint on empty code block
+  }
   if (pubkey.substr(0, 2) !== '0x') {
     pubkey = '0x' + pubkey;
   }
