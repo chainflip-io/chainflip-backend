@@ -7,7 +7,13 @@ import { sha256, btcClientMutex } from '../shared/utils';
 
 const require = Module.createRequire(import.meta.url);
 
-export type BtcAddressType = 'P2PKH' | 'P2SH' | 'P2WPKH' | 'P2WSH';
+const btcAddressTypes = ['P2PKH', 'P2SH', 'P2WPKH', 'P2WSH'] as const;
+export type BtcAddressType = (typeof btcAddressTypes)[number];
+
+export const isValidBtcAddressType = (type: string): type is BtcAddressType =>
+  // unfortunately, we need to cast to any here
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  btcAddressTypes.includes(type as any);
 
 export async function newBtcAddress(seed: string, type: BtcAddressType): Promise<string> {
   const btcEndpoint = process.env.BTC_ENDPOINT ?? 'http://127.0.0.1:8332';
