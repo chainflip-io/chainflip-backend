@@ -1,8 +1,7 @@
 import Web3 from 'web3';
-import Keyring from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { getNextEthNonce } from './send_eth';
-import { getEthContractAddress } from './utils';
+import { getEthContractAddress, hexPubkeyToFlipAddress } from './utils';
 import erc20abi from '../../eth-contract-abis/IERC20.json';
 import gatewayabi from '../../eth-contract-abis/perseverance-rc17/IStateChainGateway.json';
 import {
@@ -17,7 +16,6 @@ export async function fundFlip(pubkey: string, flipAmount: string) {
   const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
-  const keyring = new Keyring();
 
   const flipperinoAmount = amountToFineAmount(flipAmount, assetToDecimals.get('FLIP')!);
 
@@ -80,10 +78,9 @@ export async function fundFlip(pubkey: string, flipAmount: string) {
       ' blockHash: ' +
       receipt.blockHash,
   );
-  await observeEvent('funding:Funded', chainflip, (data) => {
-    return (
-      Array.from(keyring.decodeAddress(data[0])).toString() ==
-      hexStringToBytesArray(pubkey).toString()
-    );
-  });
+  await observeEvent(
+    'funding:Funded',
+    chainflip,
+    (data) => hexPubkeyToFlipAddress(pubkey) === data[0],
+  );
 }

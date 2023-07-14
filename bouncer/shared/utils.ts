@@ -312,6 +312,18 @@ export function encodeDotAddressForContract(address: string) {
   return u8aToHex(keyring.decodeAddress(address));
 }
 
+export function encodeFlipAddressForContract(address: string) {
+  const keyring = new Keyring({ type: 'sr25519' });
+  keyring.setSS58Format(2112);
+  return u8aToHex(keyring.decodeAddress(address));
+}
+
+export function hexPubkeyToFlipAddress(hexPubkey: string) {
+  const keyring = new Keyring({ type: 'sr25519' });
+  keyring.setSS58Format(2112);
+  return keyring.encodeAddress(hexPubkey);
+}
+
 export function handleSubstrateError(api: any) {
   return (arg: any) => {
     let { status, events, dispatchError } = arg;
