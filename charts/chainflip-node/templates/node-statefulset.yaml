@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: StatefulSet
+  kind: StatefulSet
 metadata:
   name: {{ include "chainflip-node.fullname" . }}
   labels:
@@ -209,6 +209,8 @@ spec:
   volumeClaimTemplates:
     - metadata:
         name: {{ include "chainflip-node.fullname" . }}
+        labels:
+          {{ include "chainflip-node.labels" . | nindent 8 }}
       spec:
         accessModes:
           - ReadWriteOnce
