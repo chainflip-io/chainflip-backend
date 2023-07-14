@@ -42,7 +42,7 @@ spec:
             - -c
             - |
               set -x
-              if ! [ "$(ls -A {{ .Values.basePath }}/data.db )" ]; then
+              if ! ls {{ .Values.basePath }}/data.db/LOCK; then
                 cp -R {{ .Values.engine.existingDbPath }}/* {{ .Values.basePath }}/data.db/
                 echo "Copied existing database"
               else
