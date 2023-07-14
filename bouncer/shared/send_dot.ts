@@ -4,13 +4,13 @@ import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { polkadotSigningMutex, sleep, amountToFineAmount, assetToDecimals } from './utils';
 
 export async function sendDot(address: string, amount: string) {
-  const alice_uri = process.env.POLKADOT_ALICE_URI || '//Alice';
+  const aliceUri = process.env.POLKADOT_ALICE_URI || '//Alice';
   const polkadotEndpoint = process.env.POLKADOT_ENDPOINT || 'ws://127.0.0.1:9945';
 
   const planckAmount = amountToFineAmount(amount, assetToDecimals.get('DOT')!);
   await cryptoWaitReady();
   const keyring = new Keyring({ type: 'sr25519' });
-  const alice = keyring.createFromUri(alice_uri);
+  const alice = keyring.createFromUri(aliceUri);
   const polkadot = await ApiPromise.create({
     provider: new WsProvider(polkadotEndpoint),
     noInitWarn: true,
