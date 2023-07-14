@@ -9,6 +9,8 @@ use crate::{
 	},
 };
 
+use super::epoch_source::EpochSource;
+
 /// Starts all the witnessing tasks.
 pub async fn start<StateChainClient, StateChainStream>(
 	scope: &Scope<'_, anyhow::Error>,
@@ -19,5 +21,20 @@ pub async fn start<StateChainClient, StateChainStream>(
 	StateChainStream: StateChainStreamApi,
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
-	super::eth::start(scope, &settings.eth, state_chain_client, state_chain_stream).await;
+	let initial_block_hash = state_chain_stream.cache().block_hash;
+	let epoch_source = EpochSource::new(scope, state_chain_stream, state_chain_client.clone())
+		.await
+		.participating(state_chain_client.account_id())
+		.await;
+
+	super::eth::start(
+		scope,
+		&settings.eth,
+		state_chain_client.clone(),
+		epoch_source.clone(),
+		initial_block_hash,
+	)
+	.await;
+
+	super::btc::start(scope, &settings.btc, state_chain_client, epoch_source).await;
 }
