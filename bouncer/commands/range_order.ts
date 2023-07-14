@@ -25,7 +25,7 @@ async function rangeOrder() {
 
   const keyring = new Keyring({ type: 'sr25519' });
   keyring.setSS58Format(2112);
-  const lpUri = process.env.lpUri || '//LP_1';
+  const lpUri = process.env.LP_URI || '//LP_1';
   const lp = keyring.createFromUri(lpUri);
 
   const currentSqrtPrice = (await chainflip.query.liquidityPools.pools(ccy.toLowerCase())).toJSON()!
