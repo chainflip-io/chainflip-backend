@@ -26,7 +26,6 @@ export async function rangeOrder(ccy: Asset, amount: number) {
   const liquidity = BigInt(
     Math.round((current_sqrt_price / Math.pow(2, 96)) * Number(fine_amount)),
   );
-  console.log(liquidity);
   console.log('Setting up ' + ccy + ' range order');
   const event = observeEvent('liquidityPools:RangeOrderMinted', chainflip, (data) => {
     return data[0] == lp.address && data[1].toUpperCase() == ccy;
