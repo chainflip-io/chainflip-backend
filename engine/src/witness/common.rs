@@ -54,12 +54,18 @@ pub trait RuntimeHasChain<TChain: ExternalChain>:
 	+ pallet_cf_chain_tracking::Config<
 		<TChain as PalletInstanceAlias>::Instance,
 		TargetChain = TChain,
+	> + pallet_cf_ingress_egress::Config<
+		<TChain as PalletInstanceAlias>::Instance,
+		TargetChain = TChain,
 	>
 {
 }
 impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Runtime where
 	Self: pallet_cf_vaults::Config<<TChain as PalletInstanceAlias>::Instance, Chain = TChain>
 		+ pallet_cf_chain_tracking::Config<
+			<TChain as PalletInstanceAlias>::Instance,
+			TargetChain = TChain,
+		> + pallet_cf_ingress_egress::Config<
 			<TChain as PalletInstanceAlias>::Instance,
 			TargetChain = TChain,
 		>

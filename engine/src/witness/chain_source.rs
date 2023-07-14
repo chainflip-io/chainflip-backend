@@ -14,6 +14,8 @@ use futures_core::Stream;
 pub mod aliases {
 	use std::iter::Step;
 
+	use codec::FullCodec;
+
 	macro_rules! define_trait_alias {
 		(pub trait $name:ident: $($traits:tt)+) => {
 			pub trait $name: $($traits)+ {}
@@ -21,7 +23,7 @@ pub mod aliases {
 		}
 	}
 
-	define_trait_alias!(pub trait Index: Step + PartialEq + Eq + PartialOrd + Ord + Clone + Copy + Send + Sync + Unpin + 'static);
+	define_trait_alias!(pub trait Index: FullCodec + Step + PartialEq + Eq + PartialOrd + Ord + Clone + Copy + Send + Sync + Unpin + 'static);
 	define_trait_alias!(pub trait Hash: PartialEq + Eq + Clone + Copy + Send + Sync + Unpin + 'static);
 	define_trait_alias!(pub trait Data: Send + Sync + Unpin + 'static);
 }
@@ -32,6 +34,19 @@ pub struct Header<Index, Hash, Data> {
 	pub hash: Hash,
 	pub parent_hash: Option<Hash>,
 	pub data: Data,
+}
+impl<Index, Hash, Data> Header<Index, Hash, Data> {
+	pub fn map<MappedData, F: FnOnce(Data) -> MappedData>(
+		self,
+		f: F,
+	) -> Header<Index, Hash, MappedData> {
+		Header {
+			index: self.index,
+			hash: self.hash,
+			parent_hash: self.parent_hash,
+			data: f(self.data),
+		}
+	}
 }
 
 #[async_trait::async_trait]

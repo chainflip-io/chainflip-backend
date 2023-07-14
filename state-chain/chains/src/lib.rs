@@ -86,8 +86,10 @@ pub trait Chain: Member + Parameter {
 		+ MaxEncodedLen
 		+ Copy
 		+ BenchmarkValue
+		+ FullCodec
 		+ Into<cf_primitives::Asset>
-		+ Into<cf_primitives::ForeignChain>;
+		+ Into<cf_primitives::ForeignChain>
+		+ Unpin;
 
 	type ChainAccount: Member
 		+ Parameter
@@ -96,7 +98,8 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValueExtended
 		+ Debug
 		+ TryFrom<ForeignChainAddress>
-		+ Into<ForeignChainAddress>;
+		+ Into<ForeignChainAddress>
+		+ Unpin;
 
 	type EpochStartData: Member + Parameter + MaxEncodedLen;
 
