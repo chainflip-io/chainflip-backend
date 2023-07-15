@@ -33,9 +33,8 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
 pub struct BitcoinDepositAddress {
-	pub address: ScriptPubkey,
-	pub deposit_fetch_id: BitcoinFetchId,
 	pub channel_id: u64,
+	pub address: ScriptPubkey,
 	pub asset: btc::Asset,
 }
 
@@ -44,32 +43,28 @@ impl DepositChannel<Bitcoin> for BitcoinDepositAddress {
 	type DepositFetchId = BitcoinFetchId;
 	type AddressDerivation = AddressDerivation;
 
-	fn get_address(&self) -> Self::Address {
-		self.address.clone()
-	}
-
-	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
-		self.deposit_fetch_id
-	}
-
-	fn new(channel_id: u64, asset: <Bitcoin as Chain>::ChainAsset) -> Result<Self, DispatchError>
+	fn new(
+		channel_id: ChannelId,
+		asset: <Bitcoin as Chain>::ChainAsset,
+	) -> Result<Self, DispatchError>
 	where
 		Self: Sized,
 	{
 		let address = <AddressDerivation as AddressDerivationApi<Bitcoin>>::generate_address(
 			asset, channel_id,
 		)?;
-		Ok(Self { address, deposit_fetch_id: BitcoinFetchId(channel_id), asset, channel_id })
+		Ok(Self { address, asset, channel_id })
 	}
 
-	fn maybe_recycle(&self) -> bool
-	where
-		Self: Sized,
-	{
-		false
+	fn get_address(&self) -> Self::Address {
+		self.address.clone()
 	}
 
-	fn get_channel_id(&self) -> u64 {
+	fn get_fetch_id(&self) -> Option<Self::DepositFetchId> {
+		Some(BitcoinFetchId(self.channel_id))
+	}
+
+	fn get_channel_id(&self) -> ChannelId {
 		self.channel_id
 	}
 

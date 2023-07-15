@@ -55,22 +55,11 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 pub struct PolkadotDepositAddress {
 	pub channel_id: PolkadotChannelId,
 	pub address: PolkadotAccountId,
-	pub deposit_fetch_id: PolkadotChannelId,
 	pub asset: dot::Asset,
 }
 
 impl DepositChannel<Polkadot> for PolkadotDepositAddress {
-	type Address = PolkadotAccountId;
-	type DepositFetchId = PolkadotChannelId;
 	type AddressDerivation = AddressDerivation;
-
-	fn get_address(&self) -> Self::Address {
-		self.address
-	}
-
-	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
-		self.deposit_fetch_id
-	}
 
 	fn new(channel_id: u64, asset: <Polkadot as Chain>::ChainAsset) -> Result<Self, DispatchError>
 	where
@@ -79,7 +68,15 @@ impl DepositChannel<Polkadot> for PolkadotDepositAddress {
 		let address = <AddressDerivation as AddressDerivationApi<Polkadot>>::generate_address(
 			asset, channel_id,
 		)?;
-		Ok(Self { channel_id, address, deposit_fetch_id: channel_id, asset })
+		Ok(Self { channel_id, address, asset })
+	}
+
+	fn get_address(&self) -> Self::Address {
+		self.address
+	}
+
+	fn get_fetch_id(&self) -> Option<Self::DepositFetchId> {
+		Some(self.channel_id)
 	}
 
 	fn get_channel_id(&self) -> u64 {

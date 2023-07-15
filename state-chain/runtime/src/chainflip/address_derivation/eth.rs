@@ -35,76 +35,24 @@ pub enum DeploymentStatus {
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub struct EthereumDepositAddress {
-	pub address: H160,
 	pub channel_id: u64,
+	pub address: H160,
 	pub asset: eth::Asset,
 	pub deployment_status: DeploymentStatus,
-	pub deposit_fetch_id: EthereumChannelId,
 }
 
 impl DepositChannel<Ethereum> for EthereumDepositAddress {
-	type Address = H160;
-	type DepositFetchId = EthereumChannelId;
 	type AddressDerivation = AddressDerivation;
 
-	fn get_address(&self) -> Self::Address {
-		self.address
-	}
-
-	fn skip_broadcast(mut self) -> (Self, bool)
-	where
-		Self: Sized,
-	{
-		match self.deployment_status {
-			DeploymentStatus::Deployed => (self, true),
-			DeploymentStatus::Pending => (self, false),
-			DeploymentStatus::Undeployed => {
-				self.deployment_status = DeploymentStatus::Pending;
-				(self, true)
-			},
-		}
-	}
-
-	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
-		self.deposit_fetch_id
-	}
-
-	fn new(channel_id: u64, asset: <Ethereum as Chain>::ChainAsset) -> Result<Self, DispatchError>
-	where
-		Self: Sized,
-	{
+	fn new(channel_id: u64, asset: <Ethereum as Chain>::ChainAsset) -> Result<Self, DispatchError> {
 		let address = <AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
 			asset, channel_id,
 		)?;
-		Ok(Self {
-			address,
-			channel_id,
-			deployment_status: DeploymentStatus::Undeployed,
-			deposit_fetch_id: EthereumChannelId::UnDeployed(channel_id),
-			asset,
-		})
+		Ok(Self { address, channel_id, deployment_status: DeploymentStatus::Undeployed, asset })
 	}
 
-	fn maybe_recycle(&self) -> bool
-	where
-		Self: Sized,
-	{
-		self.deployment_status == DeploymentStatus::Deployed
-	}
-
-	fn finalize(mut self) -> Self
-	where
-		Self: Sized,
-	{
-		match self.deployment_status {
-			DeploymentStatus::Pending => {
-				self.deposit_fetch_id = EthereumChannelId::Deployed(self.address);
-				self.deployment_status = DeploymentStatus::Deployed;
-			},
-			DeploymentStatus::Undeployed => self.deployment_status = DeploymentStatus::Pending,
-			_ => (),
-		}
-		self
+	fn get_address(&self) -> Self::Address {
+		self.address
 	}
 
 	fn get_channel_id(&self) -> u64 {
@@ -113,6 +61,55 @@ impl DepositChannel<Ethereum> for EthereumDepositAddress {
 
 	fn get_asset(&self) -> <Ethereum as Chain>::ChainAsset {
 		self.asset
+	}
+
+	fn get_fetch_id(&self) -> Option<Self::DepositFetchId> {
+		match self.deployment_status {
+			DeploymentStatus::Undeployed => Some(EthereumChannelId::UnDeployed(self.channel_id)),
+			DeploymentStatus::Pending => None,
+			DeploymentStatus::Deployed => Some(EthereumChannelId::Deployed(self.address)),
+		}
+	}
+
+	/// The address needs to be marked as Pending until the fetch is made.
+	fn on_fetch_broadcast(&mut self) -> bool {
+		match self.deployment_status {
+			DeploymentStatus::Undeployed => {
+				self.deployment_status = DeploymentStatus::Pending;
+				true
+			},
+			_ => false,
+		}
+	}
+
+	/// Undeployed Addresses should not be recycled.
+	/// Other address types *can* be recycled.
+	fn maybe_recycle(self) -> Option<Self> {
+		if self.deployment_status == DeploymentStatus::Undeployed {
+			None
+		} else {
+			Some(Self { deployment_status: DeploymentStatus::Deployed, ..self })
+		}
+	}
+
+	/// A completed fetch should be in either the pending or deployed state. Confirmation of a fetch
+	/// implies that the address is now deployed.
+	fn on_fetch_completed(&mut self) -> bool {
+		Self {
+			deployment_status: match self.deployment_status {
+				DeploymentStatus::Pending | DeploymentStatus::Deployed =>
+					DeploymentStatus::Deployed,
+				DeploymentStatus::Undeployed => {
+					#[cfg(test)]
+					{
+						panic!("Cannot finalize fetch to an undeployed address")
+					}
+					log::error!("Cannot finalize fetch to an undeployed address");
+					DeploymentStatus::Undeployed
+				},
+			},
+			..self
+		}
 	}
 }
 

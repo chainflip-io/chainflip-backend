@@ -858,46 +858,43 @@ pub trait GetBitcoinFeeInfo {
 	fn bitcoin_fee_info() -> cf_chains::btc::BitcoinFeeInfo;
 }
 
-/// Deposit address trait. This traits defines the interface for chain specific aspects of address
-/// management.
-pub trait DepositChannel<C: Chain> {
-	type Address;
-	type DepositFetchId;
+/// Defines the interface for chain-specific aspects of address management.
+pub trait DepositChannel<C: Chain>: Sized {
+	type Address = C::ChainAccount;
+	type DepositFetchId = C::DepositFetchId;
 	type AddressDerivation: AddressDerivationApi<C>;
+
 	/// Constructs a new deposit channel.
-	fn new(channel_id: u64, asset: C::ChainAsset) -> Result<Self, DispatchError>
-	where
-		Self: Sized;
+	fn new(channel_id: ChannelId, asset: C::ChainAsset) -> Result<Self, DispatchError>;
+
 	/// Returns the actual address.
 	fn get_address(&self) -> Self::Address;
-	/// Returns the deposit fetch id.
-	fn get_deposit_fetch_id(&self) -> Self::DepositFetchId;
-	/// Decides if we skip broadcasting.
-	fn skip_broadcast(self) -> (Self, bool)
-	where
-		Self: Sized,
-	{
-		(self, false)
-	}
-	/// Gets called when a broadcast succeeds.
-	fn finalize(self) -> Self
-	where
-		Self: Sized,
-	{
-		self
-	}
-	/// Checks if a address should get reused or not.
-	fn maybe_recycle(&self) -> bool
-	where
-		Self: Sized,
-	{
-		true
-	}
+
 	/// Returns the channel id.
-	fn get_channel_id(&self) -> u64;
+	fn get_channel_id(&self) -> ChannelId;
+
 	/// Returns the asset.
 	fn get_asset(&self) -> C::ChainAsset;
+
+	/// Returns the deposit fetch id if it's available in the current state.
+	fn get_fetch_id(&self) -> Option<Self::DepositFetchId>;
+
+	/// Call when a fetch is broadcasted. Should return true if self was mutated.
+	fn on_fetch_broadcast(&mut self) -> bool {
+		false
+	}
+
+	/// Call when a fetch is completed. Should return true if self was mutated.
+	fn on_fetch_completed(&mut self) -> bool {
+		false
+	}
+
+	/// Returns Some(_) if the address can be re-used, otherwise None and the address is discarded.
+	fn maybe_recycle(self) -> Option<Self> {
+		None
+	}
 }
+
 pub trait GetBlockHeight<C: Chain> {
 	fn get_block_height() -> C::ChainBlockNumber;
 }
