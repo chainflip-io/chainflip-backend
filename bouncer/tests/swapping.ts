@@ -229,7 +229,12 @@ async function testAll() {
   await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps]);
 }
 
-runWithTimeout(testAll(), 1800000).catch((error) => {
-  console.error(error);
-  process.exit(-1);
-});
+runWithTimeout(testAll(), 1800000)
+  .then(() => {
+    // there are some dangling resources that prevent the process from exiting
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exit(-1);
+  });
