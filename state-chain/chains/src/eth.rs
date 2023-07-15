@@ -577,7 +577,7 @@ pub enum DeploymentStatus {
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub enum EthereumChannelId {
 	Deployed(Address),
-	UnDeployed(ChannelId),
+	Undeployed(ChannelId),
 }
 
 impl ChannelIdConstructor for EthereumChannelId {
@@ -588,7 +588,7 @@ impl ChannelIdConstructor for EthereumChannelId {
 	}
 
 	fn undeployed(channel_id: u64, _address: Self::Address) -> Self {
-		Self::UnDeployed(channel_id)
+		Self::Undeployed(channel_id)
 	}
 }
 

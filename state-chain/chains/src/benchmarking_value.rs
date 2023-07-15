@@ -103,14 +103,14 @@ impl BenchmarkValue for EncodedAddress {
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValue for EthereumChannelId {
 	fn benchmark_value() -> Self {
-		Self::UnDeployed(1)
+		Self::Undeployed(1)
 	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]
 impl BenchmarkValueExtended for EthereumChannelId {
 	fn benchmark_value_by_id(id: u8) -> Self {
-		Self::UnDeployed(id as u64)
+		Self::Undeployed(id as u64)
 	}
 }
 

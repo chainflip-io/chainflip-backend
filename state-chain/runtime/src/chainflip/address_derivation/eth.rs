@@ -65,7 +65,7 @@ impl DepositChannel<Ethereum> for EthereumDepositAddress {
 
 	fn get_fetch_id(&self) -> Option<Self::DepositFetchId> {
 		match self.deployment_status {
-			DeploymentStatus::Undeployed => Some(EthereumChannelId::UnDeployed(self.channel_id)),
+			DeploymentStatus::Undeployed => Some(EthereumChannelId::Undeployed(self.channel_id)),
 			DeploymentStatus::Pending => None,
 			DeploymentStatus::Deployed => Some(EthereumChannelId::Deployed(self.address)),
 		}

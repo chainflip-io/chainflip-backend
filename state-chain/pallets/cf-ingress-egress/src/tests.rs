@@ -417,7 +417,7 @@ fn proof_address_pool_integrity() {
 		for (id, address) in channel_details {
 			assert_ok!(IngressEgress::finalise_ingress(
 				RuntimeOrigin::root(),
-				vec![(cf_chains::eth::EthereumChannelId::UnDeployed(id), address)]
+				vec![(cf_chains::eth::EthereumChannelId::Undeployed(id), address)]
 			));
 			IngressEgress::close_channel(id, address);
 		}
@@ -439,7 +439,7 @@ fn create_new_address_while_pool_is_empty() {
 		for (id, address) in channel_details {
 			assert_ok!(IngressEgress::finalise_ingress(
 				RuntimeOrigin::root(),
-				vec![(cf_chains::eth::EthereumChannelId::UnDeployed(id), address)]
+				vec![(cf_chains::eth::EthereumChannelId::Undeployed(id), address)]
 			));
 			IngressEgress::close_channel(id, address);
 		}
@@ -737,7 +737,7 @@ fn handle_pending_deployment() {
 		// Now finalize the first fetch and deploy the address with that.
 		assert_ok!(IngressEgress::finalise_ingress(
 			RuntimeOrigin::root(),
-			vec![(cf_chains::eth::EthereumChannelId::UnDeployed(channel_id), deposit_address)]
+			vec![(cf_chains::eth::EthereumChannelId::Undeployed(channel_id), deposit_address)]
 		));
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 1);
 		// Process deposit again amd expect the fetch request to be picked up.
@@ -772,7 +772,7 @@ fn handle_pending_deployment_same_block() {
 		// Simulate the finalization of the first fetch request.
 		assert_ok!(IngressEgress::finalise_ingress(
 			RuntimeOrigin::root(),
-			vec![(cf_chains::eth::EthereumChannelId::UnDeployed(channel_id), deposit_address)]
+			vec![(cf_chains::eth::EthereumChannelId::Undeployed(channel_id), deposit_address)]
 		));
 		// Process deposit (again).
 		IngressEgress::on_finalize(3);

@@ -138,7 +138,7 @@ pub mod eth_mock_deposit_channel {
 				channel_id,
 				asset,
 				deployment_status: DeploymentStatus::Undeployed,
-				deposit_fetch_id: EthereumChannelId::UnDeployed(channel_id),
+				deposit_fetch_id: EthereumChannelId::Undeployed(channel_id),
 			})
 		}
 

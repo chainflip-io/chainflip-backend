@@ -371,7 +371,7 @@ where
 				match deposit_fetch_id {
 					EthereumChannelId::Deployed(contract_address) => fetch_only_params
 						.push(EncodableFetchAssetParams { contract_address, asset: token_address }),
-					EthereumChannelId::UnDeployed(channel_id) => fetch_deploy_params
+					EthereumChannelId::Undeployed(channel_id) => fetch_deploy_params
 						.push(EncodableFetchDeployAssetParams { channel_id, asset: token_address }),
 				};
 			} else {
