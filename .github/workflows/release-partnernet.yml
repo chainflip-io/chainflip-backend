@@ -1,4 +1,4 @@
-name: Release Chainflip Sisyphos
+name: Release Chainflip Partnernet
 on:
   push:
     branches:
