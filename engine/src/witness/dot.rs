@@ -41,6 +41,7 @@ where
 	);
 
 	let dot_chain_tracking = DotUnfinalisedSource::new(dot_client.clone())
+		.shared(scope)
 		.then(|header| async move {
 			header
 				.data

@@ -45,6 +45,7 @@ where
 	);
 
 	let eth_chain_tracking = EthSource::new(eth_client.clone())
+		.shared(scope)
 		.chunk_by_time(epoch_source)
 		.await
 		.chain_tracking(state_chain_client, eth_client)
