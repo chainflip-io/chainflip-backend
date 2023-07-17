@@ -147,8 +147,8 @@ pub struct DotSubClient {
 }
 
 impl DotSubClient {
-	pub async fn new(ws_endpoint: &str) -> Result<Self> {
-		Ok(Self { ws_endpoint: ws_endpoint.to_string() })
+	pub fn new(ws_endpoint: &str) -> Self {
+		Self { ws_endpoint: ws_endpoint.to_string() }
 	}
 }
 

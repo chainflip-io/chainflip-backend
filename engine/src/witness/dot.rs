@@ -37,7 +37,7 @@ where
 	let dot_client = DotRetryRpcClient::new(
 		scope,
 		DotHttpRpcClient::new(&settings.http_node_endpoint).await?,
-		DotSubClient::new(&settings.ws_node_endpoint).await?,
+		DotSubClient::new(&settings.ws_node_endpoint),
 	);
 
 	let dot_chain_tracking = DotUnfinalisedSource::new(dot_client.clone())
