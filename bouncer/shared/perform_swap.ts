@@ -1,5 +1,5 @@
 import { encodeAddress } from '@polkadot/util-crypto';
-import { Asset } from '@chainflip-io/cli/.';
+import { Asset } from '@chainflip-io/cli';
 import { newSwap } from './new_swap';
 import { send } from './send';
 import { getBalance } from './get_balance';
