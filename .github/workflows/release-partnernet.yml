@@ -2,7 +2,7 @@ name: Release Chainflip Sisyphos
 on:
   push:
     branches:
-      - 'partnernet'
+      - 'release/partnernet'
 
 concurrency:
   group: ${{ github.ref }}-release-partnernet
