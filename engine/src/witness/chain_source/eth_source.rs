@@ -58,14 +58,14 @@ where
 						tokio::time::timeout(TIMEOUT, state.stream.next()).await
 					{
 						if let Ok(header) = header {
-							if header.number.is_none() || header.hash.is_none() {
-								continue
-							}
+							let (Some(index), Some(hash)) = (header.number, header.hash) else {
+								continue;
+							};
 
 							return Some((
 								Header {
-									index: header.number.unwrap().as_u64(),
-									hash: core_h256(header.hash.unwrap()),
+									index: index.as_u64(),
+									hash: core_h256(hash),
 									parent_hash: Some(core_h256(header.parent_hash)),
 									data: header.logs_bloom.0.into(),
 								},
