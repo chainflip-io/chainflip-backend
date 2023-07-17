@@ -7,7 +7,7 @@ use crate::{
 		common::{try_deserialize, DelayDeserialization, SigningFailureReason, SigningStageName},
 		signing::{self, signing_data::LocalSig3Inner, PayloadAndKey},
 	},
-	CryptoScheme,
+	crypto::CryptoScheme,
 };
 
 use async_trait::async_trait;

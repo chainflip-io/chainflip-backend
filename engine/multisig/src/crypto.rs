@@ -123,7 +123,7 @@ pub trait ChainSigning: 'static + Clone + Send + Sync + Debug + PartialEq {
 
 	type Chain: cf_chains::ChainCrypto;
 
-	/// Friendly name of the scheme used for logging
+	/// Name of the Chain
 	const NAME: &'static str;
 
 	/// A unique tag used to identify the chain.
