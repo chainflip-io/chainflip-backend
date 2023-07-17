@@ -23,10 +23,9 @@ use sp_runtime::{AccountId32, Digest};
 use crate::eth::ethers_rpc::MockEthersRpcApi;
 use sp_core::H256;
 use state_chain_runtime::{
-	AccountId, BitcoinInstance, CfeSettings, EthereumInstance, Header, PolkadotInstance, Runtime,
-	RuntimeCall, RuntimeEvent,
+	AccountId, BitcoinInstance, EthereumInstance, Header, PolkadotInstance, Runtime, RuntimeCall,
+	RuntimeEvent,
 };
-use tokio::sync::watch;
 use utilities::MakeCachedStream;
 
 use crate::{
@@ -70,8 +69,6 @@ async fn start_sc_observer_and_get_epoch_start_events<
 		tokio::sync::mpsc::unbounded_channel();
 
 	let (epoch_start_sender, epoch_start_receiver) = async_broadcast::broadcast(10);
-
-	let (cfe_settings_update_sender, _) = watch::channel::<CfeSettings>(CfeSettings::default());
 
 	let (eth_monitor_command_sender, _eth_monitor_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -120,7 +117,6 @@ async fn start_sc_observer_and_get_epoch_start_events<
 		btc_epoch_start_sender,
 		btc_address_monitor_sender,
 		btc_tx_hash_monitor_sender,
-		cfe_settings_update_sender,
 	)
 	.await
 	.unwrap_err();
@@ -1409,9 +1405,6 @@ async fn run_the_sc_observer() {
 
 			let (epoch_start_sender, _epoch_start_receiver) = async_broadcast::broadcast(10);
 
-			let (cfe_settings_update_sender, _) =
-				watch::channel::<CfeSettings>(CfeSettings::default());
-
 			let (eth_monitor_command_sender, _eth_monitor_command_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
@@ -1461,7 +1454,6 @@ async fn run_the_sc_observer() {
 				btc_epoch_start_sender,
 				btc_address_monitor_sender,
 				btc_tx_hash_monitor_sender,
-				cfe_settings_update_sender,
 			)
 			.await
 			.unwrap_err();
