@@ -156,6 +156,7 @@ where
 				cf_parameters: cf_parameters.0.to_vec(),
 				source_address: sender.into(),
 			},
+			tx_hash: event.tx_hash.into(),
 		}),
 		VaultEvents::XcallTokenFilter(XcallTokenFilter {
 			dst_chain,
@@ -189,6 +190,7 @@ where
 				cf_parameters: cf_parameters.0.to_vec(),
 				source_address: sender.into(),
 			},
+			tx_hash: event.tx_hash.into(),
 		}),
 		unhandled_event => Err(CallFromEventError::Decode(format!(
 			"Unhandled vault contract event: {unhandled_event:?}"
