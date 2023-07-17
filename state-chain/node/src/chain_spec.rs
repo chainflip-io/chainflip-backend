@@ -29,9 +29,9 @@ use utilities::clean_eth_address;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 
 pub mod common;
+pub mod partnernet;
 pub mod perseverance;
 pub mod sisyphos;
-pub mod partnernet;
 pub mod testnet;
 
 /// Generate a crypto pair from seed.
