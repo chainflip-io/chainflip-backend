@@ -26,7 +26,7 @@ pub async fn start<StateChainClient>(
 where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
-	let btc_client = BtcRetryRpcClient::new(scope, BtcRpcClient::new(settings).unwrap());
+	let btc_client = BtcRetryRpcClient::new(scope, BtcRpcClient::new(settings)?);
 
 	let btc_witnessing = BtcSource::new(btc_client.clone())
 		.shared(scope)
