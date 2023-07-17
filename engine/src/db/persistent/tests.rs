@@ -4,6 +4,7 @@ use tempfile::TempDir;
 
 use multisig::{
 	bitcoin::BtcSigning, client::get_key_data_for_test, eth::EthSigning, polkadot::PolkadotSigning,
+	CryptoScheme,
 };
 
 use super::*;
@@ -33,7 +34,7 @@ fn should_save_and_load_checkpoint() {
 	}
 }
 
-fn get_single_key_data<C: ChainSigning>() -> KeygenResultInfo<C> {
+fn get_single_key_data<C: CryptoScheme>() -> KeygenResultInfo<C> {
 	get_key_data_for_test::<C>(BTreeSet::from_iter([AccountId32::new([0; 32])]))
 }
 
@@ -45,7 +46,7 @@ fn can_use_multiple_crypto_schemes() {
 
 	fn add_key_for_scheme<Scheme: ChainSigning>(db: &PersistentKeyDB) -> KeyId {
 		let key_id = KeyId::new(GENESIS_EPOCH, rand::random::<[u8; 32]>());
-		db.update_key(&key_id, &get_single_key_data::<Scheme>());
+		db.update_key::<Scheme>(&key_id, &get_single_key_data::<Scheme::CryptoScheme>());
 		key_id
 	}
 
@@ -88,7 +89,10 @@ fn can_load_keys_with_current_keygen_info() {
 	{
 		let p_db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
 
-		p_db.update_key::<Scheme>(&key_id, &get_single_key_data::<Scheme>());
+		p_db.update_key::<Scheme>(
+			&key_id,
+			&get_single_key_data::<<Scheme as ChainSigning>::CryptoScheme>(),
+		);
 	}
 
 	{
@@ -113,7 +117,10 @@ fn can_update_key() {
 	// there should be no key [0; 33] yet
 	assert!(keys_before.get(&key_id).is_none());
 
-	p_db.update_key::<Scheme>(&key_id, &get_single_key_data::<Scheme>());
+	p_db.update_key::<Scheme>(
+		&key_id,
+		&get_single_key_data::<<Scheme as ChainSigning>::CryptoScheme>(),
+	);
 
 	let keys_before = p_db.load_keys::<Scheme>();
 	assert!(keys_before.get(&key_id).is_some());
@@ -149,7 +156,10 @@ fn can_load_key_from_backup() {
 	{
 		let p_db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
 
-		p_db.update_key::<Scheme>(&key_id, &get_single_key_data::<Scheme>());
+		p_db.update_key::<Scheme>(
+			&key_id,
+			&get_single_key_data::<<Scheme as ChainSigning>::CryptoScheme>(),
+		);
 	}
 
 	// Do a backup of the db,

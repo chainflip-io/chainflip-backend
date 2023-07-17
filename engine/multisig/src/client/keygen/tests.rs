@@ -17,9 +17,9 @@ use crate::{
 		keygen::{self, Complaints6, VerifyComplaints7, VerifyHashComm2},
 		utils::PartyIdxMapping,
 	},
-	crypto::{bitcoin::BtcSigning, ECPoint, Rng},
-	eth::EthSigning,
-	ChainSigning, CryptoScheme,
+	crypto::{ECPoint, Rng},
+	eth::EvmCryptoScheme,
+	CryptoScheme,
 };
 
 use crate::crypto::eth::Point;
@@ -29,7 +29,7 @@ type SecretShare5 = keygen::SecretShare5<Point>;
 type BlameResponse8 = keygen::BlameResponse8<Point>;
 type VerifyBlameResponses9 = keygen::VerifyBlameResponses9<Point>;
 type KeygenData = keygen::KeygenData<Point>;
-pub type KeygenCeremonyRunnerEth = KeygenCeremonyRunner<EthSigning>;
+pub type KeygenCeremonyRunnerEth = KeygenCeremonyRunner<EvmCryptoScheme>;
 
 /// If all nodes are honest and behave as expected we should
 /// generate a key without entering a blaming stage
@@ -43,7 +43,7 @@ async fn should_keygen_with_single_party_on_all_schemes() {
 	test_all_crypto_schemes_async!(should_keygen_with_single_party());
 }
 
-async fn should_keygen_with_single_party<C: ChainSigning>() {
+async fn should_keygen_with_single_party<C: CryptoScheme>() {
 	let participants = BTreeSet::from_iter(vec![ACCOUNT_IDS[0].clone()]);
 
 	let mut keygen_ceremony = KeygenCeremonyRunner::<C>::new(
@@ -286,7 +286,7 @@ async fn should_report_on_inconsistent_broadcast_hash_comm() {
 // those parties reported.
 #[tokio::test]
 async fn should_report_on_invalid_hash_comm() {
-	type Point = <<EthSigning as ChainSigning>::CryptoScheme as CryptoScheme>::Point;
+	type Point = <EvmCryptoScheme as CryptoScheme>::Point;
 	let mut ceremony = KeygenCeremonyRunnerEth::new_with_default();
 
 	let messages = ceremony.request().await;
@@ -944,20 +944,20 @@ mod timeout {
 
 #[tokio::test]
 async fn genesis_keys_can_sign() {
-	use crate::crypto::eth::EthSigning;
+	use crate::crypto::eth::EvmCryptoScheme;
 
 	let account_ids: BTreeSet<_> = [1, 2, 3, 4].iter().map(|i| AccountId::new([*i; 32])).collect();
 
 	let mut rng = Rng::from_entropy();
 	let (public_key_bytes, key_data) =
-		keygen::generate_key_data::<EthSigning>(account_ids.clone(), &mut rng);
+		keygen::generate_key_data::<EvmCryptoScheme>(account_ids.clone(), &mut rng);
 
 	let (mut signing_ceremony, _non_signing_nodes) =
-		SigningCeremonyRunner::<EthSigning>::new_with_threshold_subset_of_signers(
+		SigningCeremonyRunner::<EvmCryptoScheme>::new_with_threshold_subset_of_signers(
 			new_nodes(account_ids),
 			DEFAULT_SIGNING_CEREMONY_ID,
 			vec![PayloadAndKeyData::new(
-				<EthSigning as ChainSigning>::CryptoScheme::signing_payload_for_test(),
+				EvmCryptoScheme::signing_payload_for_test(),
 				public_key_bytes,
 				key_data,
 			)],
@@ -971,7 +971,7 @@ async fn genesis_keys_can_sign() {
 // was correctly turned into a compatible one, which can be used for
 // multiparty signing.
 async fn initially_incompatible_keys_can_sign() {
-	use crate::crypto::eth::EthSigning;
+	use crate::crypto::eth::EvmCryptoScheme;
 
 	let account_ids: BTreeSet<_> = [1, 2, 3, 4].iter().map(|i| AccountId::new([*i; 32])).collect();
 
@@ -980,11 +980,11 @@ async fn initially_incompatible_keys_can_sign() {
 		keygen::generate_key_data_with_initial_incompatibility(account_ids.clone(), &mut rng);
 
 	let (mut signing_ceremony, _non_signing_nodes) =
-		SigningCeremonyRunner::<EthSigning>::new_with_threshold_subset_of_signers(
+		SigningCeremonyRunner::<EvmCryptoScheme>::new_with_threshold_subset_of_signers(
 			new_nodes(account_ids),
 			DEFAULT_SIGNING_CEREMONY_ID,
 			vec![PayloadAndKeyData::new(
-				<EthSigning as ChainSigning>::CryptoScheme::signing_payload_for_test(),
+				EvmCryptoScheme::signing_payload_for_test(),
 				public_key_bytes,
 				key_data,
 			)],
@@ -994,7 +994,7 @@ async fn initially_incompatible_keys_can_sign() {
 }
 
 mod key_handover {
-	use crate::client::common::{Point as ChainPoint, PublicKey};
+	use crate::bitcoin::BtcCryptoScheme;
 
 	use super::*;
 
@@ -1007,12 +1007,12 @@ mod key_handover {
 		nodes_sharing_invalid_secret: BTreeSet<AccountId>,
 	}
 
-	async fn prepare_handover_test<Scheme: ChainSigning>(
+	async fn prepare_handover_test<Scheme: CryptoScheme>(
 		original_set: BTreeSet<AccountId>,
 		sharing_subset: BTreeSet<AccountId>,
 		receiving_set: BTreeSet<AccountId>,
 		options: HandoverTestOptions,
-	) -> (KeygenCeremonyRunner<Scheme>, PublicKey<Scheme>) {
+	) -> (KeygenCeremonyRunner<Scheme>, Scheme::PublicKey) {
 		use crate::client::common::ParticipantStatus;
 
 		assert!(sharing_subset.is_subset(&original_set));
@@ -1053,8 +1053,8 @@ mod key_handover {
 				// Adding a small tweak to the share to make it incorrect
 				match &mut context.party_status {
 					ParticipantStatus::Sharing { secret_share, .. } => {
-						*secret_share = secret_share.clone() +
-							&<ChainPoint<Scheme> as ECPoint>::Scalar::from(1);
+						*secret_share =
+							secret_share.clone() + &<Scheme::Point as ECPoint>::Scalar::from(1);
 					},
 					_ => panic!("Unexpected status"),
 				}
@@ -1073,7 +1073,7 @@ mod key_handover {
 		sharing_subset: BTreeSet<AccountId>,
 		receiving_set: BTreeSet<AccountId>,
 	) {
-		type Scheme = <BtcSigning as ChainSigning>::CryptoScheme;
+		type Scheme = BtcCryptoScheme;
 		// The high level idea of this test is to generate some key with some
 		// nodes, then introduce new nodes who the key will be handed over to.
 		// The resulting aggregate keys should match, and the new nodes should
@@ -1107,7 +1107,7 @@ mod key_handover {
 		assert_eq!(new_key, initial_key);
 
 		// Ensure that the new key shares can be used for signing:
-		let mut signing_ceremony = SigningCeremonyRunner::<BtcSigning>::new_with_all_signers(
+		let mut signing_ceremony = SigningCeremonyRunner::<Scheme>::new_with_all_signers(
 			new_nodes(receiving_set),
 			DEFAULT_SIGNING_CEREMONY_ID,
 			vec![PayloadAndKeyData::new(Scheme::signing_payload_for_test(), new_key, new_shares)],
@@ -1197,8 +1197,8 @@ mod key_handover {
 
 	#[tokio::test]
 	async fn should_recover_if_agree_on_values_stage0() {
-		type Scheme = BtcSigning;
-		type Point = <<Scheme as ChainSigning>::CryptoScheme as CryptoScheme>::Point;
+		type Scheme = BtcCryptoScheme;
+		type Point = <Scheme as CryptoScheme>::Point;
 
 		let original_set = to_account_id_set([1, 2, 3, 4]);
 
@@ -1245,11 +1245,7 @@ mod key_handover {
 		let mut signing_ceremony = SigningCeremonyRunner::<Scheme>::new_with_all_signers(
 			new_nodes(receiving_set),
 			DEFAULT_SIGNING_CEREMONY_ID,
-			vec![PayloadAndKeyData::new(
-				<Scheme as ChainSigning>::CryptoScheme::signing_payload_for_test(),
-				new_key,
-				new_shares,
-			)],
+			vec![PayloadAndKeyData::new(Scheme::signing_payload_for_test(), new_key, new_shares)],
 			Rng::from_entropy(),
 		);
 		standard_signing(&mut signing_ceremony).await;
@@ -1259,8 +1255,8 @@ mod key_handover {
 	// (commits to an unexpected secret) gets reported
 	#[tokio::test]
 	async fn key_handover_with_incorrect_commitment() {
-		type Scheme = BtcSigning;
-		type Point = <<Scheme as ChainSigning>::CryptoScheme as CryptoScheme>::Point;
+		type Scheme = BtcCryptoScheme;
+		type Point = <Scheme as CryptoScheme>::Point;
 
 		// Accounts (1), (2) and (3) will hold the original key
 		let original_set = to_account_id_set([1, 2, 3]);

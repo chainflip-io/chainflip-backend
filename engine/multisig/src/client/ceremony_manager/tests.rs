@@ -7,7 +7,7 @@ use crate::{
 			CeremonyHandle, CeremonyManager, CeremonyRequestState, SigningCeremony,
 		},
 		ceremony_runner::CeremonyRunner,
-		common::{BroadcastFailureReason, Signature, SigningFailureReason, SigningStageName},
+		common::{BroadcastFailureReason, SigningFailureReason, SigningStageName},
 		gen_keygen_data_hash_comm1, get_key_data_for_test,
 		helpers::{
 			ACCOUNT_IDS, CEREMONY_TIMEOUT_DURATION, DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_SEED,
@@ -17,9 +17,8 @@ use crate::{
 		SigningRequestDetails,
 	},
 	crypto::{CryptoScheme, Rng},
-	eth::EthSigning,
+	eth::EvmCryptoScheme,
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
-	ChainSigning,
 };
 use anyhow::Result;
 use cf_primitives::{AccountId, CeremonyId};
@@ -34,11 +33,13 @@ use super::CEREMONY_ID_WINDOW;
 
 /// Run on_request_to_sign on a ceremony manager, using a dummy key and default ceremony id and
 /// data.
-async fn run_on_request_to_sign<C: ChainSigning>(
+async fn run_on_request_to_sign<C: CryptoScheme>(
 	ceremony_manager: &mut CeremonyManager<C>,
 	participants: BTreeSet<sp_runtime::AccountId32>,
 	ceremony_id: CeremonyId,
-) -> oneshot::Receiver<Result<Vec<Signature<C>>, (BTreeSet<AccountId32>, SigningFailureReason)>> {
+) -> oneshot::Receiver<
+	Result<Vec<<C as CryptoScheme>::Signature>, (BTreeSet<AccountId32>, SigningFailureReason)>,
+> {
 	let (result_sender, result_receiver) = oneshot::channel();
 	task_scope(|scope| {
 		let future: Pin<Box<dyn Future<Output = Result<()>> + Send>> = async {
@@ -47,7 +48,7 @@ async fn run_on_request_to_sign<C: ChainSigning>(
 				participants,
 				vec![(
 					get_key_data_for_test::<C>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned())),
-					C::CryptoScheme::signing_payload_for_test(),
+					C::signing_payload_for_test(),
 				)],
 				Rng::from_seed(DEFAULT_SIGNING_SEED),
 				result_sender,
@@ -67,8 +68,8 @@ async fn run_on_request_to_sign<C: ChainSigning>(
 fn new_ceremony_manager_for_test(
 	our_account_id: AccountId,
 	latest_ceremony_id: CeremonyId,
-) -> CeremonyManager<EthSigning> {
-	CeremonyManager::<EthSigning>::new(
+) -> CeremonyManager<EvmCryptoScheme> {
+	CeremonyManager::<EvmCryptoScheme>::new(
 		our_account_id,
 		tokio::sync::mpsc::unbounded_channel().0,
 		latest_ceremony_id,
@@ -76,12 +77,12 @@ fn new_ceremony_manager_for_test(
 }
 
 /// Sends a signing request to the ceremony manager with a dummy key and some default values.
-fn send_signing_request<C: ChainSigning>(
+fn send_signing_request<C: CryptoScheme>(
 	ceremony_request_sender: &tokio::sync::mpsc::UnboundedSender<CeremonyRequest<C>>,
 	participants: BTreeSet<AccountId32>,
 	ceremony_id: CeremonyId,
 ) -> tokio::sync::oneshot::Receiver<
-	Result<Vec<Signature<C>>, (BTreeSet<AccountId32>, SigningFailureReason)>,
+	Result<Vec<C::Signature>, (BTreeSet<AccountId32>, SigningFailureReason)>,
 > {
 	let (result_sender, result_receiver) = oneshot::channel();
 
@@ -91,7 +92,7 @@ fn send_signing_request<C: ChainSigning>(
 			participants,
 			signing_info: vec![(
 				get_key_data_for_test::<C>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned())),
-				C::CryptoScheme::signing_payload_for_test(),
+				C::signing_payload_for_test(),
 			)],
 			rng: Rng::from_seed(DEFAULT_SIGNING_SEED),
 			result_sender,
@@ -103,7 +104,7 @@ fn send_signing_request<C: ChainSigning>(
 	result_receiver
 }
 
-fn spawn_ceremony_manager<C: ChainSigning>(
+fn spawn_ceremony_manager<C: CryptoScheme>(
 	our_account_id: AccountId,
 	latest_ceremony_id: CeremonyId,
 ) -> (
@@ -240,7 +241,7 @@ async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
 	let stage_1_data = MultisigData::Keygen(gen_keygen_data_hash_comm1());
 
 	// Create a new ceremony manager and set the latest_ceremony_id
-	let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
+	let mut ceremony_manager = CeremonyManager::<EvmCryptoScheme>::new(
 		ACCOUNT_IDS[0].clone(),
 		tokio::sync::mpsc::unbounded_channel().0,
 		latest_ceremony_id,
@@ -291,7 +292,10 @@ async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
 #[tokio::test(start_paused = true)]
 async fn should_send_outcome_of_authorised_ceremony() {
 	let (ceremony_request_sender, _incoming_p2p_sender, _outgoing_p2p_receiver) =
-		spawn_ceremony_manager::<EthSigning>(ACCOUNT_IDS[0].clone(), INITIAL_LATEST_CEREMONY_ID);
+		spawn_ceremony_manager::<EvmCryptoScheme>(
+			ACCOUNT_IDS[0].clone(),
+			INITIAL_LATEST_CEREMONY_ID,
+		);
 
 	// Send a signing request in order to create an authorised ceremony
 	let mut result_receiver = send_signing_request(
@@ -328,7 +332,7 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
 			let (outgoing_p2p_sender, _outgoing_p2p_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
-			let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
+			let mut ceremony_manager = CeremonyManager::<EvmCryptoScheme>::new(
 				our_account_id.clone(),
 				outgoing_p2p_sender,
 				INITIAL_LATEST_CEREMONY_ID,
@@ -342,7 +346,7 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
 			const CEREMONY_ID: CeremonyId = INITIAL_LATEST_CEREMONY_ID + 1;
 
 			let task_handle =
-				scope.spawn_with_handle(CeremonyRunner::<SigningCeremony<EthSigning>>::run(
+				scope.spawn_with_handle(CeremonyRunner::<SigningCeremony<EvmCryptoScheme>>::run(
 					CEREMONY_ID,
 					ceremony_runner_p2p_receiver,
 					ceremony_runner_request_receiver,
@@ -401,7 +405,10 @@ async fn should_route_p2p_message() {
 	let sender_account_id = ACCOUNT_IDS[1].clone();
 
 	let (ceremony_request_sender, incoming_p2p_sender, mut outgoing_p2p_receiver) =
-		spawn_ceremony_manager::<EthSigning>(our_account_id.clone(), INITIAL_LATEST_CEREMONY_ID);
+		spawn_ceremony_manager::<EvmCryptoScheme>(
+			our_account_id.clone(),
+			INITIAL_LATEST_CEREMONY_ID,
+		);
 
 	// Send a keygen request with only 2 participants, us and one other node.
 	// So we will only need to receive one p2p message to complete the stage and advance.

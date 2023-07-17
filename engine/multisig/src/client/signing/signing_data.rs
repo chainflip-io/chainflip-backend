@@ -39,11 +39,8 @@ pub const LOCAL_SIG_MAX_SIZE: usize = MAX_SCALAR_SIZE + 8;
 mod serialisation {
 	use super::*;
 	use crate::{
-		client::{
-			common::Point,
-			helpers::{self, test_all_crypto_schemes},
-		},
-		crypto::{ChainSigning, CryptoTag},
+		client::helpers::{self, test_all_crypto_schemes},
+		crypto::CryptoTag,
 	};
 	use rand::SeedableRng;
 
@@ -192,11 +189,11 @@ impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
 mod tests {
 
 	use crate::{
-		bitcoin::BtcSigning,
+		bitcoin::BtcCryptoScheme,
 		client::helpers::{gen_dummy_local_sig, gen_dummy_signing_comm1},
 		crypto::eth::Point,
-		eth::EthSigning,
-		polkadot::PolkadotSigning,
+		eth::EvmCryptoScheme,
+		polkadot::PolkadotCryptoScheme,
 		Rng,
 	};
 
@@ -230,12 +227,14 @@ mod tests {
 	#[test]
 	fn check_data_size_stage1() {
 		// Should only pass if the message contains exactly one commitment for ethereum and Polkadot
-		assert!(gen_signing_data_stage1(1).initial_stage_data_size_is_valid::<EthSigning>());
-		assert!(!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<EthSigning>());
-		assert!(!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<PolkadotSigning>());
+		assert!(gen_signing_data_stage1(1).initial_stage_data_size_is_valid::<EvmCryptoScheme>());
+		assert!(!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<EvmCryptoScheme>());
+		assert!(
+			!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<PolkadotCryptoScheme>()
+		);
 
 		// No limit on bitcoin for now
-		assert!(gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<BtcSigning>());
+		assert!(gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<BtcCryptoScheme>());
 	}
 
 	#[test]
@@ -244,9 +243,9 @@ mod tests {
 		let data_to_check = gen_signing_data_stage2(test_size);
 
 		// Should fail on sizes larger or smaller than expected
-		assert!(data_to_check.data_size_is_valid::<EthSigning>(test_size));
-		assert!(!data_to_check.data_size_is_valid::<EthSigning>(test_size - 1));
-		assert!(!data_to_check.data_size_is_valid::<EthSigning>(test_size + 1));
+		assert!(data_to_check.data_size_is_valid::<EvmCryptoScheme>(test_size));
+		assert!(!data_to_check.data_size_is_valid::<EvmCryptoScheme>(test_size - 1));
+		assert!(!data_to_check.data_size_is_valid::<EvmCryptoScheme>(test_size + 1));
 	}
 
 	#[test]
@@ -255,9 +254,9 @@ mod tests {
 		let data_to_check = gen_signing_data_stage4(test_size);
 
 		// Should fail on sizes larger or smaller than expected
-		assert!(data_to_check.data_size_is_valid::<EthSigning>(test_size));
-		assert!(!data_to_check.data_size_is_valid::<EthSigning>(test_size - 1));
-		assert!(!data_to_check.data_size_is_valid::<EthSigning>(test_size + 1));
+		assert!(data_to_check.data_size_is_valid::<EvmCryptoScheme>(test_size));
+		assert!(!data_to_check.data_size_is_valid::<EvmCryptoScheme>(test_size - 1));
+		assert!(!data_to_check.data_size_is_valid::<EvmCryptoScheme>(test_size + 1));
 	}
 
 	#[test]

@@ -40,7 +40,11 @@ mod tests {
 	use super::*;
 	use crate::db::PersistentKeyDB;
 	use cf_primitives::AccountId;
-	use multisig::{client::keygen, eth::EthSigning, Rng};
+	use multisig::{
+		client::keygen,
+		eth::{EthSigning, EvmCryptoScheme},
+		Rng,
+	};
 	use rand::SeedableRng;
 	use std::collections::BTreeSet;
 
@@ -50,7 +54,7 @@ mod tests {
 	#[tokio::test]
 	async fn should_load_keys_on_creation() {
 		// Generate a key to use in this test
-		let (public_key, key_data) = keygen::generate_key_data::<EthSigning>(
+		let (public_key, key_data) = keygen::generate_key_data::<EvmCryptoScheme>(
 			BTreeSet::from([AccountId::new([1; 32])]),
 			&mut Rng::from_entropy(),
 		);

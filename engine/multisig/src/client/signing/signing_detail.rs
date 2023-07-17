@@ -215,9 +215,8 @@ mod tests {
 	use super::*;
 
 	use crate::{
-		crypto::eth::{EthSigning, Point, Scalar},
-		eth::SigningPayload,
-		ChainSigning,
+		crypto::eth::{Point, Scalar},
+		eth::{EvmCryptoScheme, SigningPayload},
 	};
 
 	const SECRET_KEY: &str = "fbcb47bc85b881e0dfb31c872d4e06848f80530ccbd18fc016a27c4a744d0eba";
@@ -241,7 +240,7 @@ mod tests {
 		let private_key = Scalar::from_hex(SECRET_KEY);
 		let public_key = Point::from_scalar(&private_key);
 
-		let response = generate_schnorr_response::<EthSigning>(
+		let response = generate_schnorr_response::<EvmCryptoScheme>(
 			&private_key,
 			public_key,
 			commitment,
@@ -252,15 +251,13 @@ mod tests {
 		assert_eq!(hex::encode(response.as_bytes()), EXPECTED_SIGMA);
 
 		// Build the challenge again to match how it is done on the receiving side
-		let challenge = <EthSigning as ChainSigning>::CryptoScheme::build_challenge(
-			public_key, commitment, &payload,
-		);
+		let challenge = EvmCryptoScheme::build_challenge(public_key, commitment, &payload);
 
 		// A lambda that has no effect on the computation (as a way to adapt multi-party
 		// signing to work for a single party)
 		let dummy_lambda = Scalar::from(1);
 
-		assert!(<EthSigning as ChainSigning>::CryptoScheme::is_party_response_valid(
+		assert!(EvmCryptoScheme::is_party_response_valid(
 			&public_key,
 			&dummy_lambda,
 			&commitment,
@@ -285,11 +282,7 @@ mod tests {
 			})
 			.collect();
 
-		let bindings = generate_bindings::<<EthSigning as ChainSigning>::CryptoScheme>(
-			&payload,
-			&commitments,
-			&idxs,
-		);
+		let bindings = generate_bindings::<EvmCryptoScheme>(&payload, &commitments, &idxs);
 
 		// Compare the generated bindings with existing bindings to confirm that the hashing in
 		// `gen_rho_i` has not changed.

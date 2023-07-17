@@ -309,9 +309,7 @@ mod serialisation {
 
 	#[cfg(test)]
 	mod tests {
-		use crate::{
-			client::helpers::test_all_crypto_schemes, crypto::CryptoTag, ChainTag, CryptoScheme,
-		};
+		use crate::{client::helpers::test_all_crypto_schemes, crypto::CryptoTag, CryptoScheme};
 
 		#[test]
 		fn check_comm3_max_size() {
@@ -554,7 +552,7 @@ mod tests {
 
 	use utilities::assert_ok;
 
-	use crate::eth::EthSigning;
+	use crate::eth::EvmCryptoScheme;
 
 	use super::*;
 
@@ -605,7 +603,7 @@ mod tests {
 			((idx, dkg_commitment), (idx, HashComm1(hash_commitment)), (idx, shares))
 		}));
 
-		let coeff_commitments = assert_ok!(validate_commitments::<EthSigning>(
+		let coeff_commitments = assert_ok!(validate_commitments::<EvmCryptoScheme>(
 			commitments,
 			hash_commitments,
 			None,
