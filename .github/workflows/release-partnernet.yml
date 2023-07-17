@@ -27,13 +27,13 @@ jobs:
     secrets: inherit
     with:
       network: partnernet
-      environment: dev
+      environment: prod
   package:
     needs: [build]
     uses: ./.github/workflows/_25_package.yml
     with:
       network: "partnernet"
-      environment: dev
+      environment: prod
     secrets: inherit
   post-check:
     needs: [build]
@@ -44,5 +44,5 @@ jobs:
     uses: ./.github/workflows/_30_publish.yml
     with:
       version: "partnernet/"
-      environment: dev
+      environment: prod
     secrets: inherit
