@@ -10,7 +10,12 @@ node_key_file = "node_key_file"
 signing_key_file = "signing_key_file"
 
 [eth]
+# Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
 private_key_file = "eth_private_key_file"
+
+[arb]
+# Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
+private_key_file = "./localnet/init/keys/eth_private_key_file"
 
 [health_check]
 hostname = "0.0.0.0"

@@ -8,7 +8,6 @@ allow_local_ip = true
 signing_key_file = "./tests/test_keystore/alice_key"
 
 [eth]
-# Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
 http_node_endpoint = "http://localhost:8545"
 ws_node_endpoint = "ws://localhost:8545"
 
@@ -16,6 +15,10 @@ ws_node_endpoint = "ws://localhost:8545"
 # NB: You will need to manually add :443 to the url provided by the provider, as jsonrpsee wants one.
 ws_node_endpoint = "wss://my_fake_polkadot_rpc:443/<secret_key>"
 http_node_endpoint = "http://my_fake_polkadot_rpc:443/<secret_key>"
+
+[arb]
+ws_node_endpoint = "ws://localhost:8547" # what to put here?
+http_node_endpoint = "http://localhost:8547"
 
 [health_check]
 hostname = "127.0.0.1"

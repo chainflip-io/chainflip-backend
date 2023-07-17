@@ -112,6 +112,7 @@ pub struct Settings {
 	pub eth: Eth,
 	pub dot: Dot,
 	pub btc: Btc,
+	pub arb: Eth,
 
 	pub health_check: Option<HealthCheck>,
 	pub signing: Signing,
@@ -187,6 +188,9 @@ pub struct CommandLineOptions {
 	#[clap(flatten)]
 	btc_opts: BtcOptions,
 
+	#[clap(flatten)]
+	arb_opts: EthOptions,
+
 	// Health Check Settings
 	#[clap(long = "health_check.hostname")]
 	health_check_hostname: Option<String>,
@@ -207,6 +211,7 @@ impl Default for CommandLineOptions {
 			eth_opts: EthOptions::default(),
 			dot_opts: DotOptions::default(),
 			btc_opts: BtcOptions::default(),
+			arb_opts: EthOptions::default(),
 			health_check_hostname: None,
 			health_check_port: None,
 			signing_db_file: None,
@@ -222,6 +227,7 @@ const STATE_CHAIN_WS_ENDPOINT: &str = "state_chain.ws_endpoint";
 const STATE_CHAIN_SIGNING_KEY_FILE: &str = "state_chain.signing_key_file";
 
 const ETH_PRIVATE_KEY_FILE: &str = "eth.private_key_file";
+const ARB_PRIVATE_KEY_FILE: &str = "arb.private_key_file";
 
 const SIGNING_DB_FILE: &str = "signing.db_file";
 
@@ -331,6 +337,8 @@ impl CfSettings for Settings {
 
 		self.btc.validate_settings()?;
 
+		self.arb.validate_settings()?;
+
 		self.state_chain.validate_settings()?;
 
 		is_valid_db_path(self.signing.db_file.as_path())
@@ -367,6 +375,13 @@ impl CfSettings for Settings {
 					.expect("Invalid eth_private_key path"),
 			)?
 			.set_default(
+				ARB_PRIVATE_KEY_FILE,
+				PathBuf::from(config_root)
+					.join("keys/eth_private_key")
+					.to_str()
+					.expect("Invalid arb_private_key path"),
+			)?
+			.set_default(
 				SIGNING_DB_FILE,
 				PathBuf::from(config_root)
 					.join("data.db")
@@ -393,6 +408,8 @@ impl Source for CommandLineOptions {
 		self.dot_opts.insert_all(&mut map);
 
 		self.btc_opts.insert_all(&mut map);
+
+		self.arb_opts.insert_all(&mut map);
 
 		insert_command_line_option(&mut map, "health_check.hostname", &self.health_check_hostname);
 		insert_command_line_option(&mut map, "health_check.port", &self.health_check_port);
@@ -537,8 +554,8 @@ mod tests {
 	use utilities::assert_ok;
 
 	use crate::constants::{
-		BTC_HTTP_NODE_ENDPOINT, BTC_RPC_PASSWORD, BTC_RPC_USER, DOT_HTTP_NODE_ENDPOINT,
-		DOT_WS_NODE_ENDPOINT,
+		ARB_HTTP_NODE_ENDPOINT, ARB_WS_NODE_ENDPOINT, BTC_HTTP_NODE_ENDPOINT, BTC_RPC_PASSWORD,
+		BTC_RPC_USER, DOT_HTTP_NODE_ENDPOINT, DOT_WS_NODE_ENDPOINT,
 	};
 
 	use super::*;
@@ -549,6 +566,8 @@ mod tests {
 
 		env::set_var(ETH_HTTP_NODE_ENDPOINT, "http://localhost:8545");
 		env::set_var(ETH_WS_NODE_ENDPOINT, "ws://localhost:8545");
+		env::set_var(ARB_HTTP_NODE_ENDPOINT, "http://localhost:8547");
+		env::set_var(ARB_WS_NODE_ENDPOINT, "ws://localhost:8547");
 		env::set_var(NODE_P2P_IP_ADDRESS, "1.1.1.1");
 
 		env::set_var(BTC_HTTP_NODE_ENDPOINT, "http://localhost:18443");
@@ -676,6 +695,11 @@ mod tests {
 				btc_http_node_endpoint: Some("http://btc-endpoint:4321".to_owned()),
 				btc_rpc_user: Some("my_username".to_owned()),
 				btc_rpc_password: Some("my_password".to_owned()),
+			},
+			arb_opts: EthOptions {
+				eth_ws_node_endpoint: Some("ws://endpoint:4321".to_owned()),
+				eth_http_node_endpoint: Some("http://endpoint:4321".to_owned()),
+				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
 			},
 			health_check_hostname: Some("health_check_hostname".to_owned()),
 			health_check_port: Some(1337),

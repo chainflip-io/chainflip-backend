@@ -276,6 +276,7 @@ async fn start(
 		EthBroadcaster::new(EthersRpcClient::new(&settings.eth).await?),
 		DotBroadcaster::new(DotHttpRpcClient::new(&settings.dot.http_node_endpoint).await?),
 		BtcBroadcaster::new(btc_rpc_client.clone()),
+		EthBroadcaster::new(EthersRpcClient::new(&settings.arb).await?),
 		eth_multisig_client,
 		dot_multisig_client,
 		btc_multisig_client,
