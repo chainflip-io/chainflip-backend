@@ -7,6 +7,7 @@ use super::chain_source::ChainSource;
 
 pub const STATE_CHAIN_CONNECTION: &str = "State Chain client connection failed"; // TODO Replace with infallible SCC requests
 
+#[derive(Clone)]
 pub struct ActiveAndFuture<It: Iterator, St: Stream<Item = It::Item>> {
 	pub active: It,
 	pub future: St,

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use utilities::task_scope::Scope;
 
 use crate::{
+	eth::ethers_vault::EthAssetApi,
 	settings::Settings,
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
@@ -22,7 +23,7 @@ pub async fn start<StateChainClient, StateChainStream>(
 ) -> Result<()>
 where
 	StateChainStream: StateChainStreamApi,
-	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: StorageApi + EthAssetApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
 	let initial_block_hash = state_chain_stream.cache().block_hash;
 	let epoch_source = EpochSource::builder(scope, state_chain_stream, state_chain_client.clone())

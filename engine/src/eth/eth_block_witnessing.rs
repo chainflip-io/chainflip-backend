@@ -51,12 +51,9 @@ impl BlockWitnesser for EthBlockWitnesser {
 		tracing::trace!("Eth block witnessers are processing block {}", block.block_number);
 
 		futures::future::join_all([
-			witnessers.key_manager.process_block(&self.epoch, &block),
-			witnessers.state_chain_gateway.process_block(&self.epoch, &block),
 			witnessers.eth_deposits.process_block(&self.epoch, &block),
 			witnessers.flip_deposits.process_block(&self.epoch, &block),
 			witnessers.usdc_deposits.process_block(&self.epoch, &block),
-			witnessers.vault.process_block(&self.epoch, &block),
 		])
 		.await
 		.into_iter()

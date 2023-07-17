@@ -5,7 +5,7 @@ use ethers::types::Bloom;
 use sp_core::{H160, H256};
 
 use crate::{
-	eth::{retry_rpc::EthersRetryRpcApi, vault::EthAssetApi},
+	eth::{ethers_vault::EthAssetApi, retry_rpc::EthersRetryRpcApi},
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
 };
 

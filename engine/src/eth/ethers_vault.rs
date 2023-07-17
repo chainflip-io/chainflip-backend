@@ -1,13 +1,21 @@
+use crate::state_chain_observer::client::{
+	base_rpc_api::{BaseRpcClient, RawRpcApi},
+	StateChainClient,
+};
+
 use super::event::Event;
 use anyhow::{anyhow, Result};
 use cf_chains::{address::EncodedAddress, CcmDepositMetadata};
-use cf_primitives::{Asset, ForeignChain};
+use cf_primitives::{Asset, EthereumAddress, ForeignChain};
 use ethers::prelude::*;
 use std::sync::Arc;
 
-use super::vault::EthAssetApi;
-
 abigen!(Vault, "eth-contract-abis/perseverance-rc17/IVault.json");
+
+#[async_trait::async_trait]
+pub trait EthAssetApi {
+	async fn asset(&self, token_address: EthereumAddress) -> Result<Option<Asset>>;
+}
 
 pub struct VaultRpc<T> {
 	inner_vault: Vault<Provider<T>>,
@@ -32,6 +40,19 @@ impl<T: JsonRpcClient + 'static> VaultApi for VaultRpc<T> {
 			self.inner_vault.event::<FetchedNativeFilter>().at_block_hash(block_hash);
 
 		Ok(fetched_native_events.query().await?)
+	}
+}
+
+#[async_trait::async_trait]
+impl<RawRpcClient: RawRpcApi + Send + Sync + 'static, SignedExtrinsicClient: Send + Sync>
+	EthAssetApi for StateChainClient<SignedExtrinsicClient, BaseRpcClient<RawRpcClient>>
+{
+	async fn asset(&self, token_address: EthereumAddress) -> Result<Option<Asset>> {
+		self.base_rpc_client
+			.raw_rpc_client
+			.cf_eth_asset(None, token_address)
+			.await
+			.map_err(Into::into)
 	}
 }
 

@@ -25,9 +25,6 @@ use super::{
 	contract_witnesser::ContractWitnesser,
 	erc20_witnesser::Erc20Witnesser,
 	eth_block_witnessing::{self},
-	key_manager::KeyManager,
-	state_chain_gateway::StateChainGateway,
-	vault::Vault,
 };
 use itertools::Itertools;
 
@@ -36,9 +33,6 @@ use crate::state_chain_observer::client::storage_api::StorageApi;
 use anyhow::Context;
 
 pub struct AllWitnessers {
-	pub key_manager: ContractWitnesser<KeyManager, StateChainClient>,
-	pub state_chain_gateway: ContractWitnesser<StateChainGateway, StateChainClient>,
-	pub vault: ContractWitnesser<Vault, StateChainClient>,
 	pub eth_deposits: DepositWitnesser<StateChainClient>,
 	pub flip_deposits: ContractWitnesser<Erc20Witnesser, StateChainClient>,
 	pub usdc_deposits: ContractWitnesser<Erc20Witnesser, StateChainClient>,
@@ -53,27 +47,6 @@ pub async fn start(
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Ethereum>>,
 	db: Arc<PersistentKeyDB>,
 ) -> anyhow::Result<EthAddressToMonitorSender> {
-	let state_chain_gateway_address = state_chain_client
-		.storage_value::<pallet_cf_environment::EthereumStateChainGatewayAddress<state_chain_runtime::Runtime>>(
-			initial_block_hash,
-		)
-		.await
-		.context("Failed to get StateChainGateway address from SC")?;
-
-	let key_manager_address = state_chain_client
-		.storage_value::<pallet_cf_environment::EthereumKeyManagerAddress<state_chain_runtime::Runtime>>(
-			initial_block_hash,
-		)
-		.await
-		.context("Failed to get KeyManager address from SC")?;
-
-	let vault_address = state_chain_client
-		.storage_value::<pallet_cf_environment::EthereumVaultAddress<state_chain_runtime::Runtime>>(
-			initial_block_hash,
-		)
-		.await
-		.context("Failed to get Vault contract address from SC")?;
-
 	let usdc_address = state_chain_client
 		.storage_map_entry::<pallet_cf_environment::EthereumSupportedAssets<state_chain_runtime::Runtime>>(
 			initial_block_hash,
@@ -163,24 +136,6 @@ pub async fn start(
 				resume_at_epoch,
 				epoch_start_receiver,
 				AllWitnessers {
-					key_manager: ContractWitnesser::new(
-						KeyManager::new(key_manager_address.into()),
-						state_chain_client.clone(),
-						http_rpc.clone(),
-						false,
-					),
-					state_chain_gateway: ContractWitnesser::new(
-						StateChainGateway::new(state_chain_gateway_address.into()),
-						state_chain_client.clone(),
-						http_rpc.clone(),
-						true,
-					),
-					vault: ContractWitnesser::new(
-						Vault::new(vault_address.into()),
-						state_chain_client.clone(),
-						http_rpc.clone(),
-						true,
-					),
 					eth_deposits: DepositWitnesser::new(
 						state_chain_client.clone(),
 						http_rpc.clone(),
