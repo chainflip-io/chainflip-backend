@@ -12,6 +12,44 @@ signingKeyFile: /etc/chainflip/keys/signing_key_file
 nodeKeyFile: /etc/chainflip/keys/node_key_file
 stateChainWsEndpoint: ws://localhost:9944
 
+role: "archive" # genesis, archive, validator
+
+engine:
+  enabled: false
+  image:
+    tag: "latest"
+    repository: ghcr.io/chainflip-io/chainflip-backend/chainflip-engine
+    pullPolicy: IfNotPresent
+  containerPort: 5555
+  resources: {}
+  existingDbPath: ""
+  syncDb: false
+  settings:
+    node_p2p:
+      node_key_file: /etc/chainflip/keys/node_key_file
+      ip_address: ""
+      port: 8078
+      allow_local_ip: true
+    state_chain:
+      ws_endpoint: ""
+      signing_key_file: /etc/chainflip/keys/signing_key_file
+    eth:
+      ws_node_endpoint: ""
+      http_node_endpoint: ""
+      private_key_file: /etc/chainflip/keys/ethereum_key_file
+    health_check:
+      hostname: "0.0.0.0"
+      port: 5555
+    signing:
+      db_file: /etc/chainflip/data.db
+    dot:
+      ws_node_endpoint: ""
+      http_node_endpoint: ""
+    btc:
+      http_node_endpoint: ""
+      rpc_user: "flip"
+      rpc_password: "flip"
+
 brokerApi:
   enabled: false
   image:
@@ -46,6 +84,7 @@ service:
 
 ingress:
   enabled: false
+  ingressClassName: ""
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt
   hosts: []
@@ -60,14 +99,16 @@ resources:
     memory: 1024Mi
 
 secrets:
-  existingOnePasswordSecret: chainflip-node-secrets
+  existingOnePasswordSecret: ""
+  ethEnvOnePasswordSecret: ""
 
 cluster: ""
+chain: ""
 chainspec: ""
 chainspecUrl: ""
-downloadChainspec: false
 
 ports:
+  ipPort: "8078"
   wsPort: "9944"
   rpcPort: "9933"
   p2pPort: "30333"
@@ -78,7 +119,9 @@ extraArgs: {}
 basePath: /etc/chainflip
 purgeChain: false
 
-bootnodes: ""
+datadbUrl: ""
+
+bootnodes: []
 
 persistence:
   size: 50Gi
