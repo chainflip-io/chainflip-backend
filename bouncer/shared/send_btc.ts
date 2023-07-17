@@ -11,6 +11,10 @@ export async function sendBtc(address: string, amount: number | string) {
     wallet: 'whale',
   });
 
+  // Give the CFE time to start monitoring the new BTC address before we send funds to it
+  // This is only necessary on partnernet bouncer, because of the 1 block safety margin for BTC
+  await sleep(10000);
+
   // BTC client has a limit on the number of concurrent requests
   const txid = await btcClientMutex.runExclusive(async () =>
     client.sendToAddress(address, amount, '', '', false, true, null, 'unset', null, 1),
