@@ -21,7 +21,12 @@ use chainflip_engine::{
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use futures::FutureExt;
-use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
+use multisig::{
+	self,
+	bitcoin::BtcSigning,
+	eth::{ArbSigning, EthSigning},
+	polkadot::PolkadotSigning,
+};
 use pallet_cf_validator::SemVer;
 use std::sync::{atomic::AtomicBool, Arc};
 use utilities::{task_scope::task_scope, CachedStream};
@@ -105,6 +110,8 @@ async fn main() -> anyhow::Result<()> {
 				dot_incoming_receiver,
 				btc_outgoing_sender,
 				btc_incoming_receiver,
+				arb_outgoing_sender,
+				arb_incoming_receiver,
 				peer_update_sender,
 				p2p_fut,
 			) = p2p::start(
@@ -168,6 +175,23 @@ async fn main() -> anyhow::Result<()> {
 
 			scope.spawn(btc_multisig_client_backend_future);
 
+			let (arb_multisig_client, arb_multisig_client_backend_future) =
+				chainflip_engine::multisig::start_client::<ArbSigning>(
+					state_chain_client.account_id(),
+					KeyStore::new(db.clone()),
+					arb_incoming_receiver,
+					arb_outgoing_sender,
+					state_chain_client
+						.storage_value::<pallet_cf_vaults::CeremonyIdCounter<
+							state_chain_runtime::Runtime,
+							state_chain_runtime::ArbitrumInstance,
+						>>(state_chain_stream.cache().block_hash)
+						.await
+						.context("Failed to get Arbitrum CeremonyIdCounter from SC")?,
+				);
+
+			scope.spawn(arb_multisig_client_backend_future);
+
 			let eth_address_to_monitor = eth::witnessing::start(
 				scope,
 				&settings.eth,
@@ -218,6 +242,7 @@ async fn main() -> anyhow::Result<()> {
 				eth_multisig_client,
 				dot_multisig_client,
 				btc_multisig_client,
+				arb_multisig_client,
 				peer_update_sender,
 				epoch_start_sender,
 				eth_address_to_monitor,

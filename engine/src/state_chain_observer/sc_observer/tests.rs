@@ -104,6 +104,7 @@ async fn start_sc_observer_and_get_epoch_start_events<
 		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
 		MockMultisigClientApi::new(),
+		MockMultisigClientApi::new(),
 		account_peer_mapping_change_sender,
 		epoch_start_sender,
 		EthAddressToMonitorSender {
@@ -1440,6 +1441,7 @@ async fn run_the_sc_observer() {
 				EthBroadcaster::new(MockEthersRpcApi::new()),
 				DotBroadcaster::new(MockDotRpcApi::new()),
 				BtcBroadcaster::new(MockBtcRpcApi::new()),
+				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),
 				MockMultisigClientApi::new(),
