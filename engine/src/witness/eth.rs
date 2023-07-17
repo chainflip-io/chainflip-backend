@@ -16,13 +16,16 @@ use super::{
 	epoch_source::EpochSource,
 };
 
+use anyhow::Result;
+
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	settings: &settings::Eth,
 	state_chain_client: Arc<StateChainClient>,
 	epoch_source: EpochSource<'_, '_, StateChainClient, (), ()>,
 	initial_block_hash: state_chain_runtime::Hash,
-) where
+) -> Result<()>
+where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
 	let expected_chain_id = web3::types::U256::from(
@@ -36,7 +39,7 @@ pub async fn start<StateChainClient>(
 
 	let eth_client = EthersRetryRpcClient::new(
 		scope,
-		EthersRpcClient::new(settings).await.unwrap(),
+		EthersRpcClient::new(settings).await?,
 		settings.ws_node_endpoint.clone(),
 		expected_chain_id,
 	);
@@ -51,4 +54,6 @@ pub async fn start<StateChainClient>(
 		eth_chain_tracking.await;
 		Ok(())
 	});
+
+	Ok(())
 }

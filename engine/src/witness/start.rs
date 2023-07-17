@@ -11,13 +11,16 @@ use crate::{
 
 use super::epoch_source::EpochSource;
 
+use anyhow::Result;
+
 /// Starts all the witnessing tasks.
 pub async fn start<StateChainClient, StateChainStream>(
 	scope: &Scope<'_, anyhow::Error>,
 	settings: &Settings,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
-) where
+) -> Result<()>
+where
 	StateChainStream: StateChainStreamApi,
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
@@ -34,9 +37,12 @@ pub async fn start<StateChainClient, StateChainStream>(
 		epoch_source.clone(),
 		initial_block_hash,
 	)
-	.await;
+	.await?;
 
-	super::btc::start(scope, &settings.btc, state_chain_client.clone(), epoch_source.clone()).await;
+	super::btc::start(scope, &settings.btc, state_chain_client.clone(), epoch_source.clone())
+		.await?;
 
-	super::dot::start(scope, &settings.dot, state_chain_client, epoch_source).await;
+	super::dot::start(scope, &settings.dot, state_chain_client, epoch_source).await?;
+
+	Ok(())
 }

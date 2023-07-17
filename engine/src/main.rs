@@ -207,7 +207,7 @@ async fn main() -> anyhow::Result<()> {
 				state_chain_client.clone(),
 				state_chain_stream.clone(),
 			)
-			.await;
+			.await?;
 
 			scope.spawn(state_chain_observer::start(
 				state_chain_client.clone(),

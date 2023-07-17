@@ -15,12 +15,15 @@ use super::{
 	epoch_source::EpochSource,
 };
 
+use anyhow::Result;
+
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	settings: &settings::Btc,
 	state_chain_client: Arc<StateChainClient>,
 	epoch_source: EpochSource<'_, '_, StateChainClient, (), ()>,
-) where
+) -> Result<()>
+where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
 	let btc_client = BtcRetryRpcClient::new(scope, BtcRpcClient::new(settings).unwrap());
@@ -35,5 +38,7 @@ pub async fn start<StateChainClient>(
 	scope.spawn(async move {
 		btc_witnessing.await;
 		Ok(())
-	})
+	});
+
+	Ok(())
 }

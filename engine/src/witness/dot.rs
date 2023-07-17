@@ -23,18 +23,21 @@ use crate::{
 	},
 };
 
+use anyhow::Result;
+
 pub async fn start<StateChainClient>(
 	scope: &Scope<'_, anyhow::Error>,
 	settings: &settings::Dot,
 	state_chain_client: Arc<StateChainClient>,
 	epoch_source: EpochSource<'_, '_, StateChainClient, (), ()>,
-) where
+) -> Result<()>
+where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
 	let dot_client = DotRetryRpcClient::new(
 		scope,
-		DotHttpRpcClient::new(&settings.http_node_endpoint).await.unwrap(),
-		DotSubClient::new(&settings.ws_node_endpoint).await.unwrap(),
+		DotHttpRpcClient::new(&settings.http_node_endpoint).await?,
+		DotSubClient::new(&settings.ws_node_endpoint).await?,
 	);
 
 	let dot_chain_tracking = DotUnfinalisedSource::new(dot_client.clone())
@@ -78,4 +81,5 @@ pub async fn start<StateChainClient>(
 		dot_chain_tracking.await;
 		Ok(())
 	});
+	Ok(())
 }
