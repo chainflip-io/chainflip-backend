@@ -28,6 +28,9 @@ maintainer-scripts = "package/sisyphos"
 [package.metadata.deb.variants.perseverance]
 maintainer-scripts = "package/perseverance"
 
+[package.metadata.deb.variants.partnernet]
+maintainer-scripts = "package/partnernet"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
