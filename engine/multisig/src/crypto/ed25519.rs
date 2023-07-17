@@ -1,5 +1,6 @@
 use super::{
-	curve25519::edwards::Point, CanonicalEncoding, ChainSigning, ChainTag, CryptoScheme, ECPoint,
+	curve25519::edwards::Point, CanonicalEncoding, ChainSigning, ChainTag, CryptoScheme, CryptoTag,
+	ECPoint,
 };
 use ed25519_consensus::VerificationKeyBytes;
 use serde::{Deserialize, Serialize};
@@ -66,6 +67,10 @@ impl CryptoScheme for Ed25519CryptoScheme {
 	type PublicKey = VerificationKeyBytes;
 
 	type SigningPayload = SigningPayload;
+
+	const CRYPTO_TAG: CryptoTag = CryptoTag::Ed25519;
+
+	const NAME: &'static str = "Ed25519 Crypto Scheme";
 
 	fn build_signature(
 		z: <Self::Point as super::ECPoint>::Scalar,

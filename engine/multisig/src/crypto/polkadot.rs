@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 
 use super::{
-	curve25519::ristretto::Point, CanonicalEncoding, ChainSigning, ChainTag, CryptoScheme, ECPoint,
-	SignatureToThresholdSignature,
+	curve25519::ristretto::Point, CanonicalEncoding, ChainSigning, ChainTag, CryptoScheme,
+	CryptoTag, ECPoint, SignatureToThresholdSignature,
 };
 use cf_chains::{ChainCrypto, Polkadot};
 use schnorrkel::context::{SigningContext, SigningTranscript};
@@ -76,6 +76,8 @@ impl CryptoScheme for PolkadotCryptoScheme {
 	type Signature = PolkadotSignature;
 	type PublicKey = schnorrkel::PublicKey;
 	type SigningPayload = SigningPayload;
+	const CRYPTO_TAG: CryptoTag = CryptoTag::Polkadot;
+	const NAME: &'static str = "Polkadot Crypto Scheme";
 
 	fn build_signature(
 		z: <Self::Point as super::ECPoint>::Scalar,

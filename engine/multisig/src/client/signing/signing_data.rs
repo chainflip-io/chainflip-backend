@@ -8,8 +8,8 @@ use crate::{
 		BroadcastVerificationMessage, DelayDeserialization, PreProcessStageDataCheck,
 		SigningStageName,
 	},
-	crypto::{ChainSigning, ECPoint, MAX_POINT_SIZE, MAX_SCALAR_SIZE},
-	ChainTag,
+	crypto::{CryptoTag, ECPoint, MAX_POINT_SIZE, MAX_SCALAR_SIZE},
+	CryptoScheme,
 };
 
 #[cfg(test)]
@@ -43,14 +43,14 @@ mod serialisation {
 			common::Point,
 			helpers::{self, test_all_crypto_schemes},
 		},
-		crypto::ChainSigning,
+		crypto::{ChainSigning, CryptoTag},
 	};
 	use rand::SeedableRng;
 
-	fn test_signing_commitment_size_for_scheme<C: ChainSigning>() {
+	fn test_signing_commitment_size_for_scheme<C: CryptoScheme>() {
 		let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
-		let comm1 = helpers::gen_dummy_signing_comm1::<Point<C>>(&mut rng, 1);
-		if matches!(<C as ChainSigning>::CHAIN_TAG, ChainTag::Ethereum) {
+		let comm1 = helpers::gen_dummy_signing_comm1::<C::Point>(&mut rng, 1);
+		if matches!(<C as CryptoScheme>::CRYPTO_TAG, CryptoTag::Evm) {
 			// The constants are defined as to exactly match Ethereum/secp256k1,
 			// which we demonstrate here:
 			assert!(comm1.payload.len() == SIGNING_COMMITMENT_MAX_SIZE);
@@ -65,11 +65,11 @@ mod serialisation {
 		test_all_crypto_schemes!(test_signing_commitment_size_for_scheme());
 	}
 
-	fn test_local_sig_size_for_scheme<C: ChainSigning>() {
+	fn test_local_sig_size_for_scheme<C: CryptoScheme>() {
 		let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
-		let sig = helpers::gen_dummy_local_sig::<Point<C>>(&mut rng);
+		let sig = helpers::gen_dummy_local_sig::<C::Point>(&mut rng);
 
-		if matches!(<C as ChainSigning>::CHAIN_TAG, ChainTag::Ethereum) {
+		if matches!(<C as CryptoScheme>::CRYPTO_TAG, CryptoTag::Evm) {
 			// The constants are defined as to exactly match Ethereum/secp256k1,
 			// which we demonstrate here:
 			assert!(sig.payload.len() == LOCAL_SIG_MAX_SIZE);
@@ -135,31 +135,31 @@ impl<P: ECPoint> Display for SigningData<P> {
 }
 
 impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
-	fn data_size_is_valid<C: ChainSigning>(&self, num_of_parties: AuthorityCount) -> bool {
+	fn data_size_is_valid<C: CryptoScheme>(&self, num_of_parties: AuthorityCount) -> bool {
 		match self {
 			SigningData::CommStage1(_) => self.initial_stage_data_size_is_valid::<C>(),
 			SigningData::BroadcastVerificationStage2(message) =>
 				message.data.len() == num_of_parties as usize,
-			SigningData::LocalSigStage3(message) => match C::CHAIN_TAG {
-				ChainTag::Ethereum | ChainTag::Polkadot | ChainTag::Ed25519 =>
+			SigningData::LocalSigStage3(message) => match C::CRYPTO_TAG {
+				CryptoTag::Evm | CryptoTag::Polkadot | CryptoTag::Ed25519 =>
 					message.payload.len() <= LOCAL_SIG_MAX_SIZE,
 				// TODO: Find out what a realistic maximum is for the number of payloads we
 				// can handle is for btc
-				ChainTag::Bitcoin => true,
+				CryptoTag::Bitcoin => true,
 			},
 			SigningData::VerifyLocalSigsStage4(message) =>
 				message.data.len() == num_of_parties as usize,
 		}
 	}
 
-	fn initial_stage_data_size_is_valid<C: ChainSigning>(&self) -> bool {
+	fn initial_stage_data_size_is_valid<C: CryptoScheme>(&self) -> bool {
 		match self {
-			SigningData::CommStage1(message) => match C::CHAIN_TAG {
-				ChainTag::Ethereum | ChainTag::Polkadot | ChainTag::Ed25519 =>
+			SigningData::CommStage1(message) => match C::CRYPTO_TAG {
+				CryptoTag::Evm | CryptoTag::Polkadot | CryptoTag::Ed25519 =>
 					message.payload.len() <= SIGNING_COMMITMENT_MAX_SIZE,
 				// TODO: Find out what a realistic maximum is for the number of payloads we
 				// can handle is for btc
-				ChainTag::Bitcoin => true,
+				CryptoTag::Bitcoin => true,
 			},
 			_ => panic!("unexpected stage"),
 		}

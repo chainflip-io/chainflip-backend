@@ -11,10 +11,10 @@ use zeroize::Zeroize;
 
 use crate::{
 	client::{
-		common::{KeygenFailureReason, ParticipantStatus, Point, ResharingContext},
+		common::{KeygenFailureReason, ParticipantStatus, ResharingContext},
 		KeygenResult, KeygenResultInfo, PartyIdxMapping, ThresholdParameters,
 	},
-	crypto::{ChainSigning, ECPoint, ECScalar, KeyShare, Rng},
+	crypto::{ECPoint, ECScalar, KeyShare, Rng},
 	CryptoScheme,
 };
 
@@ -147,7 +147,7 @@ pub struct SharingParameters {
 }
 
 impl SharingParameters {
-	pub fn for_key_handover<C: ChainSigning>(
+	pub fn for_key_handover<C: CryptoScheme>(
 		// Parameters for the new key
 		key_params: ThresholdParameters,
 		context: &ResharingContext<C>,
@@ -309,14 +309,16 @@ mod serialisation {
 
 	#[cfg(test)]
 	mod tests {
-		use crate::{client::helpers::test_all_crypto_schemes, ChainSigning, ChainTag};
+		use crate::{
+			client::helpers::test_all_crypto_schemes, crypto::CryptoTag, ChainTag, CryptoScheme,
+		};
 
 		#[test]
 		fn check_comm3_max_size() {
 			test_all_crypto_schemes!(check_comm3_size_for_scheme());
 		}
 
-		fn check_comm3_size_for_scheme<C: ChainSigning>() {
+		fn check_comm3_size_for_scheme<C: CryptoScheme>() {
 			// Generate Comm3 data for MAX_AUTHORITIES and check
 			// that its size is no greater than MAX_COEFF_COMM_3_SIZE
 			// for a given scheme:
@@ -332,21 +334,22 @@ mod serialisation {
 
 			let context = HashContext([0; 32]);
 
-			let (secret, shares_commitments, _shares) = generate_secret_and_shares::<Point<C>>(
-				&mut rng,
-				&SharingParameters::for_keygen(params),
-				None,
-			);
+			let (secret, shares_commitments, _shares) =
+				generate_secret_and_shares::<<C as CryptoScheme>::Point>(
+					&mut rng,
+					&SharingParameters::for_keygen(params),
+					None,
+				);
 			// Zero-knowledge proof of `secret`
 			let zkp = generate_zkp_of_secret(&mut rng, secret, &context, 1 /* own index */);
 			let zkp_bytes = bincode::serialize(&zkp).unwrap();
 
 			let dkg_commitment = DKGUnverifiedCommitment { commitments: shares_commitments, zkp };
 
-			let comm3: CoeffComm3<<<C as ChainSigning>::CryptoScheme as CryptoScheme>::Point> =
+			let comm3: CoeffComm3<<C as CryptoScheme>::Point> =
 				DelayDeserialization::new(&dkg_commitment);
 
-			if matches!(<C as ChainSigning>::CHAIN_TAG, ChainTag::Ethereum) {
+			if matches!(<C as CryptoScheme>::CRYPTO_TAG, CryptoTag::Evm) {
 				// The constants are defined as to exactly match Ethereum/secp256k1,
 				// which we demonstrate here:
 				assert!(comm3.payload.len() == MAX_COEFF_COMM_3_SIZE);
@@ -374,14 +377,14 @@ fn is_valid_hash_commitment<P: ECPoint>(
 }
 
 // (Figure 1: Round 1, Step 5)
-pub fn validate_commitments<C: ChainSigning>(
-	public_coefficients: BTreeMap<AuthorityCount, DKGUnverifiedCommitment<Point<C>>>,
+pub fn validate_commitments<C: CryptoScheme>(
+	public_coefficients: BTreeMap<AuthorityCount, DKGUnverifiedCommitment<C::Point>>,
 	hash_commitments: BTreeMap<AuthorityCount, HashComm1>,
 	resharing_context: Option<&ResharingContext<C>>,
 	context: &HashContext,
 	validator_mapping: Arc<PartyIdxMapping>,
 ) -> Result<
-	BTreeMap<AuthorityCount, DKGCommitment<Point<C>>>,
+	BTreeMap<AuthorityCount, DKGCommitment<C::Point>>,
 	(BTreeSet<AuthorityCount>, KeygenFailureReason),
 > {
 	let invalid_idxs: BTreeSet<_> = public_coefficients
@@ -449,10 +452,10 @@ pub struct ValidAggregateKey<P: ECPoint>(pub P);
 
 /// Derive aggregate pubkey from party commitments. The resulting
 /// key might be incompatible according to [C::is_pubkey_compatible].
-pub fn derive_aggregate_pubkey<C: ChainSigning>(
-	commitments: &BTreeMap<AuthorityCount, DKGCommitment<Point<C>>>,
-) -> ValidAggregateKey<Point<C>> {
-	let pubkey: Point<C> = commitments.iter().map(|(_idx, c)| c.commitments.0[0]).sum();
+pub fn derive_aggregate_pubkey<C: CryptoScheme>(
+	commitments: &BTreeMap<AuthorityCount, DKGCommitment<C::Point>>,
+) -> ValidAggregateKey<C::Point> {
+	let pubkey: C::Point = commitments.iter().map(|(_idx, c)| c.commitments.0[0]).sum();
 
 	if check_high_degree_commitments(commitments) {
 		// Sanity check (the chance of this failing is infinitesimal due to the
@@ -641,27 +644,23 @@ pub mod genesis {
 	use std::collections::HashMap;
 
 	use super::*;
-	use crate::{
-		client::{common::PublicKey, PartyIdxMapping},
-		crypto::ChainSigning,
-		eth::EthSigning,
-	};
+	use crate::{client::PartyIdxMapping, eth::EvmCryptoScheme};
 	use state_chain_runtime::AccountId;
 
 	/// Generate keys for all participants in a centralised manner.
 	/// (Useful for testing and genesis keygen)
-	fn generate_key_data_detail<C: ChainSigning>(
+	fn generate_key_data_detail<C: CryptoScheme>(
 		participants: BTreeSet<AccountId>,
 		initial_key_must_be_incompatible: bool,
 		rng: &mut Rng,
-	) -> (PublicKey<C>, HashMap<AccountId, KeygenResultInfo<C>>) {
+	) -> (C::PublicKey, HashMap<AccountId, KeygenResultInfo<C>>) {
 		let params = ThresholdParameters::from_share_count(participants.len() as AuthorityCount);
 
 		let (commitments, outgoing_secret_shares, agg_pubkey) = loop {
 			let (commitments, outgoing_secret_shares): (BTreeMap<_, _>, BTreeMap<_, _>) = (1..=
 				params.share_count)
 				.map(|idx| {
-					let (_secret, commitments, shares) = generate_secret_and_shares::<Point<C>>(
+					let (_secret, commitments, shares) = generate_secret_and_shares::<C::Point>(
 						rng,
 						&SharingParameters::for_keygen(params),
 						None,
@@ -672,9 +671,7 @@ pub mod genesis {
 
 			let agg_pubkey = derive_aggregate_pubkey::<C>(&commitments);
 
-			if !initial_key_must_be_incompatible ||
-				!C::CryptoScheme::is_pubkey_compatible(&agg_pubkey.0)
-			{
+			if !initial_key_must_be_incompatible || !C::is_pubkey_compatible(&agg_pubkey.0) {
 				break (commitments, outgoing_secret_shares, agg_pubkey)
 			}
 		};
@@ -683,7 +680,7 @@ pub mod genesis {
 
 		// Local pubkeys for parties are the same for all parties,
 		// so we derive them only once:
-		let local_pubkeys: BTreeMap<_, _> = derive_local_pubkeys_for_parties::<Point<C>>(
+		let local_pubkeys: BTreeMap<_, _> = derive_local_pubkeys_for_parties::<C::Point>(
 			&SharingParameters::for_keygen(params),
 			&commitments,
 		)
@@ -716,22 +713,25 @@ pub mod genesis {
 			})
 			.collect();
 
-		let agg_key: PublicKey<C> =
+		let agg_key: C::PublicKey =
 			keygen_result_infos.values().next().unwrap().key.get_agg_public_key();
 		(agg_key, keygen_result_infos)
 	}
 
-	pub fn generate_key_data<C: ChainSigning>(
+	pub fn generate_key_data<C: CryptoScheme>(
 		signers: BTreeSet<AccountId>,
 		rng: &mut Rng,
-	) -> (PublicKey<C>, HashMap<AccountId, KeygenResultInfo<C>>) {
+	) -> (C::PublicKey, HashMap<AccountId, KeygenResultInfo<C>>) {
 		generate_key_data_detail(signers, false, rng)
 	}
 
 	pub fn generate_key_data_with_initial_incompatibility(
 		signers: BTreeSet<AccountId>,
 		rng: &mut Rng,
-	) -> (PublicKey<EthSigning>, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
+	) -> (
+		<EvmCryptoScheme as CryptoScheme>::PublicKey,
+		HashMap<AccountId, KeygenResultInfo<EvmCryptoScheme>>,
+	) {
 		generate_key_data_detail(signers, true, rng)
 	}
 }
@@ -739,7 +739,7 @@ pub mod genesis {
 /// Generates key data using a default seed and returns the KeygenResultInfo for the
 /// first signer.
 #[cfg(feature = "test")]
-pub fn get_key_data_for_test<C: crate::crypto::ChainSigning>(
+pub fn get_key_data_for_test<C: CryptoScheme>(
 	signers: BTreeSet<cf_primitives::AccountId>,
 ) -> KeygenResultInfo<C> {
 	super::generate_key_data::<C>(

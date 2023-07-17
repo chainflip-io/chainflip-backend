@@ -1,6 +1,8 @@
 use crate::crypto::ECScalar;
 
-use super::{ChainSigning, ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature};
+use super::{
+	ChainSigning, ChainTag, CryptoScheme, CryptoTag, ECPoint, SignatureToThresholdSignature,
+};
 
 // NOTE: for now, we re-export these to make it
 // clear that these a the primitives used by ethereum.
@@ -68,6 +70,8 @@ impl CryptoScheme for EvmCryptoScheme {
 	type Signature = EthSchnorrSignature;
 	type PublicKey = cf_chains::eth::AggKey;
 	type SigningPayload = SigningPayload;
+	const CRYPTO_TAG: CryptoTag = CryptoTag::Evm;
+	const NAME: &'static str = "Evm Crypto Scheme";
 
 	fn build_signature(z: Scalar, group_commitment: Self::Point) -> Self::Signature {
 		EthSchnorrSignature { s: *z.as_bytes(), r: group_commitment.get_element() }

@@ -44,8 +44,9 @@ use crate::{
 	witnesser::{EpochStart, MonitorCommand},
 };
 use multisig::{
-	bitcoin::BtcSigning, client::MultisigClientApi, eth::EthSigning, polkadot::PolkadotSigning,
-	ChainSigning, CryptoScheme, KeyId, SignatureToThresholdSignature,
+	bitcoin::BtcCryptoScheme, client::MultisigClientApi, eth::EvmCryptoScheme,
+	polkadot::PolkadotCryptoScheme, ChainSigning, CryptoScheme, KeyId,
+	SignatureToThresholdSignature,
 };
 use utilities::task_scope::{task_scope, Scope};
 
@@ -65,7 +66,7 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	epoch_index: EpochIndex,
 	keygen_participants: BTreeSet<AccountId32>,
 ) where
-	MultisigClient: MultisigClientApi<C>,
+	MultisigClient: MultisigClientApi<C::CryptoScheme>,
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 	state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
 	C: ChainSigning<Chain = <state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain>
@@ -112,7 +113,7 @@ async fn handle_key_handover_request<'a, StateChainClient, MultisigClient>(
 	key_to_share: btc::AggKey,
 	mut new_key: btc::AggKey,
 ) where
-	MultisigClient: MultisigClientApi<BtcSigning>,
+	MultisigClient: MultisigClientApi<BtcCryptoScheme>,
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 	state_chain_runtime::Runtime: pallet_cf_vaults::Config<BitcoinInstance>,
 	state_chain_runtime::RuntimeCall:
@@ -156,19 +157,18 @@ async fn handle_signing_request<'a, StateChainClient, MultisigClient, C, I>(
 	state_chain_client: Arc<StateChainClient>,
 	ceremony_id: CeremonyId,
 	signers: BTreeSet<AccountId>,
-	signing_info: Vec<(KeyId, <<C as ChainSigning>::CryptoScheme as CryptoScheme>::SigningPayload)>,
+	signing_info: Vec<(KeyId, C::SigningPayload)>,
 ) where
 	MultisigClient: MultisigClientApi<C>,
 	StateChainClient: SignedExtrinsicApi + UnsignedExtrinsicApi + 'static + Send + Sync,
-	C: ChainSigning,
+	C: CryptoScheme,
 	I: 'static + Sync + Send,
 	state_chain_runtime::Runtime: pallet_cf_threshold_signature::Config<I>,
 	state_chain_runtime::RuntimeCall:
 		std::convert::From<pallet_cf_threshold_signature::Call<state_chain_runtime::Runtime, I>>,
-	Vec<<<C as ChainSigning>::CryptoScheme as CryptoScheme>::Signature>:
-		SignatureToThresholdSignature<
-			<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain,
-		>,
+	Vec<C::Signature>: SignatureToThresholdSignature<
+		<state_chain_runtime::Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain,
+	>,
 {
 	if signers.contains(&state_chain_client.account_id()) {
 		// We initiate signing outside of the spawn to avoid requesting ceremonies out of order
@@ -268,9 +268,9 @@ where
 	EthRpc: EthersRpcApi + Send + Sync + 'static,
 	DotRpc: DotRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRpcApi + Send + Sync + 'static,
-	EthMultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
-	PolkadotMultisigClient: MultisigClientApi<PolkadotSigning> + Send + Sync + 'static,
-	BitcoinMultisigClient: MultisigClientApi<BtcSigning> + Send + Sync + 'static,
+	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
+	PolkadotMultisigClient: MultisigClientApi<PolkadotCryptoScheme> + Send + Sync + 'static,
+	BitcoinMultisigClient: MultisigClientApi<BtcCryptoScheme> + Send + Sync + 'static,
 	StateChainClient:
 		StorageApi + UnsignedExtrinsicApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
@@ -530,7 +530,7 @@ where
                                             payload,
                                         },
                                     ) => {
-                                        handle_signing_request::<_, _, PolkadotSigning, PolkadotInstance>(
+                                        handle_signing_request::<_, _, _, PolkadotInstance>(
                                                 scope,
                                                 &dot_multisig_client,
                                             state_chain_client.clone(),

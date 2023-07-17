@@ -88,7 +88,7 @@ fn main() {
 fn generate_and_save_keys<Crypto: ChainSigning>(
 	node_id_to_name_map: &HashMap<AccountId, String>,
 ) -> String {
-	let (public_key, key_shares) = generate_key_data::<Crypto>(
+	let (public_key, key_shares) = generate_key_data::<Crypto::CryptoScheme>(
 		BTreeSet::from_iter(node_id_to_name_map.keys().cloned()),
 		&mut Rng::from_entropy(),
 	);

@@ -13,7 +13,7 @@ pub struct KeyStore<C>
 where
 	C: ChainSigning,
 {
-	keys: HashMap<KeyId, KeygenResultInfo<C>>,
+	keys: HashMap<KeyId, KeygenResultInfo<C::CryptoScheme>>,
 	db: Arc<PersistentKeyDB>,
 }
 
@@ -25,11 +25,11 @@ impl<C: ChainSigning> KeyStore<C> {
 }
 
 impl<C: ChainSigning> KeyStoreAPI<C> for KeyStore<C> {
-	fn get_key(&self, key_id: &KeyId) -> Option<KeygenResultInfo<C>> {
+	fn get_key(&self, key_id: &KeyId) -> Option<KeygenResultInfo<C::CryptoScheme>> {
 		self.keys.get(key_id).cloned()
 	}
 
-	fn set_key(&mut self, key_id: KeyId, key: KeygenResultInfo<C>) {
+	fn set_key(&mut self, key_id: KeyId, key: KeygenResultInfo<C::CryptoScheme>) {
 		self.db.update_key::<C>(&key_id, &key);
 		self.keys.insert(key_id, key);
 	}

@@ -102,14 +102,14 @@ impl PersistentKeyDB {
 	pub fn update_key<C: ChainSigning>(
 		&self,
 		key_id: &KeyId,
-		keygen_result_info: &KeygenResultInfo<C>,
+		keygen_result_info: &KeygenResultInfo<C::CryptoScheme>,
 	) {
 		self.kv_db
 			.put_data(&keygen_data_prefix::<C>(), &key_id, &keygen_result_info)
 			.unwrap_or_else(|e| panic!("Failed to update key {}. Error: {}", &key_id, e));
 	}
 
-	pub fn load_keys<C: ChainSigning>(&self) -> HashMap<KeyId, KeygenResultInfo<C>> {
+	pub fn load_keys<C: ChainSigning>(&self) -> HashMap<KeyId, KeygenResultInfo<C::CryptoScheme>> {
 		let span = info_span!("PersistentKeyDB");
 		let _entered = span.enter();
 

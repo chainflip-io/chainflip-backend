@@ -1,5 +1,7 @@
 pub use super::secp256k1::{Point, Scalar};
-use super::{ChainSigning, ChainTag, CryptoScheme, ECPoint, SignatureToThresholdSignature};
+use super::{
+	ChainSigning, ChainTag, CryptoScheme, CryptoTag, ECPoint, SignatureToThresholdSignature,
+};
 use crate::crypto::ECScalar;
 use anyhow::Context;
 use cf_chains::Bitcoin;
@@ -69,6 +71,8 @@ impl CryptoScheme for BtcCryptoScheme {
 	type Signature = BtcSchnorrSignature;
 	type PublicKey = secp256k1::XOnlyPublicKey;
 	type SigningPayload = SigningPayload;
+	const CRYPTO_TAG: CryptoTag = CryptoTag::Bitcoin;
+	const NAME: &'static str = "Bitcoin Crypto Scheme";
 
 	fn build_signature(z: Scalar, group_commitment: Self::Point) -> Self::Signature {
 		BtcSchnorrSignature { s: z, r: group_commitment }

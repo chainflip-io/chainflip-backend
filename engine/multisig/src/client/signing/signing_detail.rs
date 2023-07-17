@@ -241,7 +241,7 @@ mod tests {
 		let private_key = Scalar::from_hex(SECRET_KEY);
 		let public_key = Point::from_scalar(&private_key);
 
-		let response = generate_schnorr_response::<<EthSigning as ChainSigning>::CryptoScheme>(
+		let response = generate_schnorr_response::<EthSigning>(
 			&private_key,
 			public_key,
 			commitment,

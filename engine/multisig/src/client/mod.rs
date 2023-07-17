@@ -61,7 +61,7 @@ use self::{
 };
 
 use super::{
-	crypto::{ChainSigning, ECPoint, KeyId},
+	crypto::{ChainSigning, CryptoScheme, ECPoint, KeyId},
 	Rng,
 };
 
@@ -115,13 +115,13 @@ pub struct MultisigMessage<P: ECPoint> {
 /// ceremony to complete allows the requests to all be sent synchronously which is required as we
 /// expect the requests to be ordered by ceremony_id
 #[cfg_attr(feature = "test", automock)]
-pub trait MultisigClientApi<C: ChainSigning> {
+pub trait MultisigClientApi<C: CryptoScheme> {
 	fn initiate_keygen(
 		&self,
 		ceremony_id: CeremonyId,
 		epoch_index: EpochIndex,
 		participants: BTreeSet<AccountId>,
-	) -> BoxFuture<'_, Result<PublicKey<C>, (BTreeSet<AccountId>, KeygenFailureReason)>>;
+	) -> BoxFuture<'_, Result<C::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>>;
 
 	fn initiate_key_handover(
 		&self,
@@ -130,14 +130,14 @@ pub trait MultisigClientApi<C: ChainSigning> {
 		epoch_index: EpochIndex,
 		sharing_participants: BTreeSet<AccountId>,
 		new_participants: BTreeSet<AccountId>,
-	) -> BoxFuture<'_, Result<PublicKey<C>, (BTreeSet<AccountId>, KeygenFailureReason)>>;
+	) -> BoxFuture<'_, Result<C::PublicKey, (BTreeSet<AccountId>, KeygenFailureReason)>>;
 
 	fn initiate_signing(
 		&self,
 		ceremony_id: CeremonyId,
 		signers: BTreeSet<AccountId>,
-		signing_info: Vec<(KeyId, SigningPayload<C>)>,
-	) -> BoxFuture<'_, Result<Vec<Signature<C>>, (BTreeSet<AccountId>, SigningFailureReason)>>;
+		signing_info: Vec<(KeyId, C::SigningPayload)>,
+	) -> BoxFuture<'_, Result<Vec<C::Signature>, (BTreeSet<AccountId>, SigningFailureReason)>>;
 
 	fn update_latest_ceremony_id(&self, ceremony_id: CeremonyId);
 }
@@ -145,21 +145,21 @@ pub trait MultisigClientApi<C: ChainSigning> {
 /// The ceremony details are optional to alow the updating of the ceremony id tracking
 /// when we are not participating in the ceremony.
 #[derive(Debug)]
-pub struct CeremonyRequest<C: ChainSigning> {
+pub struct CeremonyRequest<C: CryptoScheme> {
 	pub ceremony_id: CeremonyId,
 	pub details: Option<CeremonyRequestDetails<C>>,
 }
 #[derive(Debug)]
 pub enum CeremonyRequestDetails<C>
 where
-	C: ChainSigning,
+	C: CryptoScheme,
 {
 	Keygen(KeygenRequestDetails<C>),
 	Sign(SigningRequestDetails<C>),
 }
 
 #[derive(Debug)]
-pub struct KeygenRequestDetails<C: ChainSigning> {
+pub struct KeygenRequestDetails<C: CryptoScheme> {
 	pub participants: BTreeSet<AccountId>,
 	pub rng: Rng,
 	pub result_sender: CeremonyResultSender<KeygenCeremony<C>>,
@@ -171,10 +171,10 @@ pub struct KeygenRequestDetails<C: ChainSigning> {
 #[derive(Debug)]
 pub struct SigningRequestDetails<C>
 where
-	C: ChainSigning,
+	C: CryptoScheme,
 {
 	pub participants: BTreeSet<AccountId>,
-	pub signing_info: Vec<(KeygenResultInfo<C>, SigningPayload<C>)>,
+	pub signing_info: Vec<(KeygenResultInfo<C>, C::SigningPayload)>,
 	pub rng: Rng,
 	pub result_sender: CeremonyResultSender<SigningCeremony<C>>,
 }
@@ -184,7 +184,7 @@ where
 /// persistently storing generated keys and providing them to the signing ceremonies.
 pub struct MultisigClient<C: ChainSigning, KeyStore: KeyStoreAPI<C>> {
 	my_account_id: AccountId,
-	ceremony_request_sender: UnboundedSender<CeremonyRequest<C>>,
+	ceremony_request_sender: UnboundedSender<CeremonyRequest<C::CryptoScheme>>,
 	key_store: std::sync::Mutex<KeyStore>,
 }
 
@@ -192,7 +192,7 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClient<C, KeyStore> {
 	pub fn new(
 		my_account_id: AccountId,
 		key_store: KeyStore,
-		ceremony_request_sender: UnboundedSender<CeremonyRequest<C>>,
+		ceremony_request_sender: UnboundedSender<CeremonyRequest<C::CryptoScheme>>,
 	) -> Self {
 		MultisigClient {
 			my_account_id,
@@ -207,7 +207,7 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClient<C, KeyStore> {
 		// The epoch the key will be associated with if successful.
 		epoch_index: EpochIndex,
 		participants: BTreeSet<AccountId>,
-		resharing_context: Option<ResharingContext<C>>,
+		resharing_context: Option<ResharingContext<C::CryptoScheme>>,
 	) -> BoxFuture<'_, Result<PublicKey<C>, (BTreeSet<AccountId>, KeygenFailureReason)>> {
 		use rand::SeedableRng;
 		let rng = Rng::from_entropy();
@@ -247,7 +247,7 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClient<C, KeyStore> {
 	}
 }
 
-impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
+impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C::CryptoScheme>
 	for MultisigClient<C, KeyStore>
 {
 	fn initiate_keygen(
@@ -258,8 +258,10 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 		participants: BTreeSet<AccountId>,
 	) -> BoxFuture<'_, Result<PublicKey<C>, (BTreeSet<AccountId>, KeygenFailureReason)>> {
 		assert!(participants.contains(&self.my_account_id));
-		let span =
-			info_span!("Keygen Ceremony", ceremony_id = ceremony_id_string::<C>(ceremony_id));
+		let span = info_span!(
+			"Keygen Ceremony",
+			ceremony_id = ceremony_id_string::<C::CryptoScheme>(ceremony_id)
+		);
 		let _entered = span.enter();
 
 		info!(
@@ -280,8 +282,10 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 		sharing_participants: BTreeSet<AccountId>,
 		receiving_participants: BTreeSet<AccountId>,
 	) -> BoxFuture<'_, Result<PublicKey<C>, (BTreeSet<AccountId>, KeygenFailureReason)>> {
-		let span =
-			info_span!("Key Handover Ceremony", ceremony_id = ceremony_id_string::<C>(ceremony_id));
+		let span = info_span!(
+			"Key Handover Ceremony",
+			ceremony_id = ceremony_id_string::<C::CryptoScheme>(ceremony_id)
+		);
 		let _entered = span.enter();
 
 		debug!(
@@ -323,8 +327,10 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 		signers: BTreeSet<AccountId>,
 		signing_info: Vec<(KeyId, SigningPayload<C>)>,
 	) -> BoxFuture<'_, Result<Vec<Signature<C>>, (BTreeSet<AccountId>, SigningFailureReason)>> {
-		let span =
-			info_span!("Signing Ceremony", ceremony_id = ceremony_id_string::<C>(ceremony_id));
+		let span = info_span!(
+			"Signing Ceremony",
+			ceremony_id = ceremony_id_string::<C::CryptoScheme>(ceremony_id)
+		);
 		let _entered = span.enter();
 
 		assert!(signers.contains(&self.my_account_id));
@@ -391,6 +397,6 @@ impl<C: ChainSigning, KeyStore: KeyStoreAPI<C>> MultisigClientApi<C>
 
 /// Outputs the ceremony id with the name of the crypto scheme to make it visibly unique in the
 /// logs.
-pub fn ceremony_id_string<C: ChainSigning>(ceremony_id: CeremonyId) -> String {
+pub fn ceremony_id_string<C: CryptoScheme>(ceremony_id: CeremonyId) -> String {
 	format!("{}({ceremony_id})", C::NAME)
 }

@@ -25,7 +25,7 @@ use crate::{
 		signing::PayloadAndKey,
 		CeremonyRequestDetails,
 	},
-	crypto::{ChainSigning, CryptoScheme, Rng},
+	crypto::{CryptoScheme, Rng},
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage},
 };
 use cf_primitives::{AuthorityCount, CeremonyId};
@@ -42,8 +42,8 @@ use client::common::{
 
 use super::{
 	common::{
-		CeremonyStage, KeygenStageName, Point, PreProcessStageDataCheck, ResharingContext,
-		Signature, SigningPayload, SigningStageName,
+		CeremonyStage, KeygenStageName, PreProcessStageDataCheck, ResharingContext,
+		SigningStageName,
 	},
 	keygen::{HashCommitments1, HashContext, KeygenData, PubkeySharesStage0},
 	signing::SigningData,
@@ -61,17 +61,15 @@ pub type CeremonyResultReceiver<Ceremony> = oneshot::Receiver<CeremonyOutcome<Ce
 /// Ceremony trait combines type parameters that are often used together
 pub trait CeremonyTrait: 'static {
 	// Determines which curve and signing method to use
-	type Crypto: ChainSigning;
+	type Crypto: CryptoScheme;
 	// The type of data that will be used in p2p for this ceremony type
 	type Data: Debug
 		+ Display
 		+ PreProcessStageDataCheck<Self::CeremonyStageName>
 		+ TryFrom<
-			MultisigData<<<Self::Crypto as ChainSigning>::CryptoScheme as CryptoScheme>::Point>,
-			Error = MultisigData<
-				<<Self::Crypto as ChainSigning>::CryptoScheme as CryptoScheme>::Point,
-			>,
-		> + Into<MultisigData<<<Self::Crypto as ChainSigning>::CryptoScheme as CryptoScheme>::Point>>
+			MultisigData<<Self::Crypto as CryptoScheme>::Point>,
+			Error = MultisigData<<Self::Crypto as CryptoScheme>::Point>,
+		> + Into<MultisigData<<Self::Crypto as CryptoScheme>::Point>>
 		+ Send
 		+ Ord
 		+ Serialize
@@ -87,9 +85,9 @@ pub struct KeygenCeremony<C> {
 	_phantom: PhantomData<C>,
 }
 
-impl<C: ChainSigning> CeremonyTrait for KeygenCeremony<C> {
+impl<C: CryptoScheme> CeremonyTrait for KeygenCeremony<C> {
 	type Crypto = C;
-	type Data = KeygenData<Point<C>>;
+	type Data = KeygenData<<C as CryptoScheme>::Point>;
 	type Request = CeremonyRequest<C>;
 	type Output = KeygenResultInfo<C>;
 	type FailureReason = KeygenFailureReason;
@@ -100,18 +98,18 @@ pub struct SigningCeremony<C> {
 	_phantom: PhantomData<C>,
 }
 
-impl<C: ChainSigning> CeremonyTrait for SigningCeremony<C> {
+impl<C: CryptoScheme> CeremonyTrait for SigningCeremony<C> {
 	type Crypto = C;
-	type Data = SigningData<Point<C>>;
+	type Data = SigningData<<C as CryptoScheme>::Point>;
 	type Request = CeremonyRequest<C>;
-	type Output = Vec<Signature<C>>;
+	type Output = Vec<<C as CryptoScheme>::Signature>;
 	type FailureReason = SigningFailureReason;
 	type CeremonyStageName = SigningStageName;
 }
 
 /// Responsible for mapping ceremonies to the corresponding states and
 /// generating signer indexes based on the list of parties
-pub struct CeremonyManager<C: ChainSigning> {
+pub struct CeremonyManager<C: CryptoScheme> {
 	my_account_id: AccountId,
 	outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
 	signing_states: CeremonyStates<SigningCeremony<C>>,
@@ -129,7 +127,7 @@ pub struct PreparedRequest<C: CeremonyTrait> {
 
 // Checks if all keys have the same parameters (including validator indices mapping), which
 // should be the case if they have been generated for the same set of validators
-fn are_key_parameters_same<'a, Crypto: ChainSigning>(
+fn are_key_parameters_same<'a, Crypto: CryptoScheme>(
 	keys: impl IntoIterator<Item = &'a KeygenResultInfo<Crypto>>,
 ) -> bool {
 	let mut keys_iter = keys.into_iter();
@@ -140,11 +138,11 @@ fn are_key_parameters_same<'a, Crypto: ChainSigning>(
 }
 
 // Initial checks and setup before sending the request to the `CeremonyRunner`
-pub fn prepare_signing_request<Crypto: ChainSigning>(
+pub fn prepare_signing_request<Crypto: CryptoScheme>(
 	ceremony_id: CeremonyId,
 	own_account_id: &AccountId,
 	signers: BTreeSet<AccountId>,
-	signing_info: Vec<(KeygenResultInfo<Crypto>, SigningPayload<Crypto>)>,
+	signing_info: Vec<(KeygenResultInfo<Crypto>, Crypto::SigningPayload)>,
 	outgoing_p2p_message_sender: &UnboundedSender<OutgoingMultisigStageMessages>,
 	rng: Rng,
 ) -> Result<PreparedRequest<SigningCeremony<Crypto>>, SigningFailureReason> {
@@ -208,7 +206,7 @@ pub fn prepare_signing_request<Crypto: ChainSigning>(
 	Ok(PreparedRequest { initial_stage })
 }
 
-pub fn prepare_key_handover_request<Crypto: ChainSigning>(
+pub fn prepare_key_handover_request<Crypto: CryptoScheme>(
 	ceremony_id: CeremonyId,
 	own_account_id: &AccountId,
 	participants: BTreeSet<AccountId>,
@@ -251,7 +249,7 @@ pub fn prepare_key_handover_request<Crypto: ChainSigning>(
 }
 
 // Initial checks and setup before sending the request to the `CeremonyRunner`
-pub fn prepare_keygen_request<Crypto: ChainSigning>(
+pub fn prepare_keygen_request<Crypto: CryptoScheme>(
 	ceremony_id: CeremonyId,
 	own_account_id: &AccountId,
 	participants: BTreeSet<AccountId>,
@@ -314,18 +312,18 @@ fn map_ceremony_parties(
 	Ok((our_idx, signer_idxs))
 }
 
-pub fn deserialize_for_version<C: ChainSigning>(
+pub fn deserialize_for_version<C: CryptoScheme>(
 	message: VersionedCeremonyMessage,
-) -> Result<MultisigMessage<Point<C>>> {
+) -> Result<MultisigMessage<C::Point>> {
 	match message.version {
-		1 => bincode::deserialize::<'_, MultisigMessage<Point<C>>>(&message.payload).map_err(|e| {
+		1 => bincode::deserialize::<'_, MultisigMessage<C::Point>>(&message.payload).map_err(|e| {
 			anyhow!("Failed to deserialize message (version: {}): {:?}", message.version, e)
 		}),
 		_ => Err(anyhow!("Unsupported message version: {}", message.version)),
 	}
 }
 
-impl<C: ChainSigning> CeremonyManager<C> {
+impl<C: CryptoScheme> CeremonyManager<C> {
 	pub fn new(
 		my_account_id: AccountId,
 		outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
@@ -537,7 +535,7 @@ impl<C: ChainSigning> CeremonyManager<C> {
 		&mut self,
 		ceremony_id: CeremonyId,
 		signers: BTreeSet<AccountId>,
-		signing_info: Vec<(KeygenResultInfo<C>, SigningPayload<C>)>,
+		signing_info: Vec<(KeygenResultInfo<C>, C::SigningPayload)>,
 		rng: Rng,
 		result_sender: CeremonyResultSender<SigningCeremony<C>>,
 		scope: &Scope<'_, anyhow::Error>,
@@ -590,7 +588,7 @@ impl<C: ChainSigning> CeremonyManager<C> {
 	fn process_p2p_message(
 		&mut self,
 		sender_id: AccountId,
-		message: MultisigMessage<Point<C>>,
+		message: MultisigMessage<C::Point>,
 		scope: &Scope<'_, anyhow::Error>,
 	) {
 		match message {
