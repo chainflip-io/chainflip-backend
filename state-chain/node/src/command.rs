@@ -41,6 +41,7 @@ impl SubstrateCli for Cli {
 				chain_spec::get_environment_or_defaults(testnet::ENV),
 			))?),
 			"sisyphos-new" => Box::new(chain_spec::sisyphos::Config::build_spec(None)?),
+			"partnernet-new" => Box::new(chain_spec::partnernet::Config::build_spec(None)?),
 			"perseverance-new" => Box::new(chain_spec::perseverance::Config::build_spec(None)?),
 			"sisyphos" => Box::new(chain_spec::ChainSpec::from_json_bytes(
 				include_bytes!("../chainspecs/sisyphos.chainspec.raw.json").as_slice(),

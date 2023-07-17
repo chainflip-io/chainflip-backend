@@ -29,6 +29,7 @@ use utilities::clean_eth_address;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 
 pub mod common;
+pub mod partnernet;
 pub mod perseverance;
 pub mod sisyphos;
 pub mod testnet;
@@ -383,6 +384,7 @@ macro_rules! network_spec {
 }
 
 network_spec!(testnet);
+network_spec!(partnernet);
 network_spec!(sisyphos);
 network_spec!(perseverance);
 
