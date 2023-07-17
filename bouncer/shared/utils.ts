@@ -35,14 +35,6 @@ export function assetToChain(asset: Asset): number {
   }
 }
 
-export const assetToDecimals = new Map<Asset, number>([
-  ['DOT', 10],
-  ['ETH', 18],
-  ['BTC', 8],
-  ['USDC', 6],
-  ['FLIP', 18],
-]);
-
 // TODO: Import this from the chainflip-io/cli package once it's exported in future versions.
 export function getEthContractAddress(contract: string): string {
   switch (contract) {

@@ -1,5 +1,6 @@
 import Web3 from 'web3';
-import { amountToFineAmount, assetToDecimals, ethNonceMutex } from './utils';
+import { assetDecimals, Asset } from '@chainflip-io/cli';
+import { amountToFineAmount, ethNonceMutex } from './utils';
 
 let nextNonce: number | undefined;
 
@@ -23,7 +24,7 @@ export async function sendEth(ethereumAddress: string, ethAmount: string) {
   const ethEndpoint = process.env.ETH_ENDPOINT || 'http://127.0.0.1:8545';
   const web3 = new Web3(ethEndpoint);
 
-  const weiAmount = amountToFineAmount(ethAmount, assetToDecimals.get('ETH')!);
+  const weiAmount = amountToFineAmount(ethAmount, assetDecimals['ETH' as Asset]);
 
   const whaleKey =
     process.env.ETH_USDC_WHALE ||

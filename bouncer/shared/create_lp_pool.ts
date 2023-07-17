@@ -1,5 +1,5 @@
-import { Asset } from '@chainflip-io/cli';
-import { observeEvent, getChainflipApi, assetToDecimals } from '../shared/utils';
+import { assetDecimals, Asset } from '@chainflip-io/cli';
+import { observeEvent, getChainflipApi } from '../shared/utils';
 import { submitGovernanceExtrinsic } from './cf_governance';
 
 export async function createLpPool(ccy: Asset, initialPrice: number) {
@@ -7,7 +7,7 @@ export async function createLpPool(ccy: Asset, initialPrice: number) {
 
   const price = BigInt(
     Math.round(
-      Math.sqrt(initialPrice / 10 ** (assetToDecimals.get(ccy)! - assetToDecimals.get('USDC')!)) *
+      Math.sqrt(initialPrice / 10 ** (assetDecimals[ccy] - assetDecimals['USDC' as Asset])) *
         2 ** 96,
     ),
   );

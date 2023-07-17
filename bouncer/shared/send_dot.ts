@@ -1,12 +1,13 @@
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import Keyring from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { polkadotSigningMutex, sleep, amountToFineAmount, assetToDecimals } from './utils';
+import { assetDecimals, Asset } from '@chainflip-io/cli';
+import { polkadotSigningMutex, sleep, amountToFineAmount } from './utils';
 
 export async function sendDot(address: string, amount: string) {
   const polkadotEndpoint = process.env.POLKADOT_ENDPOINT || 'ws://127.0.0.1:9945';
 
-  const planckAmount = amountToFineAmount(amount, assetToDecimals.get('DOT')!);
+  const planckAmount = amountToFineAmount(amount, assetDecimals['DOT' as Asset]);
   await cryptoWaitReady();
   const keyring = new Keyring({ type: 'sr25519' });
   const alice = keyring.createFromUri('//Alice');

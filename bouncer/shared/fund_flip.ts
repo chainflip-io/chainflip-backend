@@ -1,24 +1,19 @@
 import Web3 from 'web3';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { HexString } from '@polkadot/util/types';
-import { fundStateChainAccount } from '@chainflip-io/cli';
+import { assetDecimals, Asset, fundStateChainAccount } from '@chainflip-io/cli';
 import { Wallet, ethers } from 'ethers';
 import { getNextEthNonce } from './send_eth';
 import { getEthContractAddress, hexPubkeyToFlipAddress } from './utils';
 import erc20abi from '../../eth-contract-abis/IERC20.json';
-import {
-  observeEvent,
-  getChainflipApi,
-  assetToDecimals,
-  amountToFineAmount,
-} from '../shared/utils';
+import { observeEvent, getChainflipApi, amountToFineAmount } from '../shared/utils';
 
 export async function fundFlip(pubkey: HexString, flipAmount: string) {
   const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
 
-  const flipperinoAmount = amountToFineAmount(flipAmount, assetToDecimals.get('FLIP')!);
+  const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals['FLIP' as Asset]);
 
   const web3 = new Web3(ethEndpoint);
 
