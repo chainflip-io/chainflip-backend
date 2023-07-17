@@ -31,6 +31,7 @@ use sp_runtime::traits::{IdentifyAccount, Verify};
 pub mod common;
 pub mod perseverance;
 pub mod sisyphos;
+pub mod partnernet;
 pub mod testnet;
 
 /// Generate a crypto pair from seed.
@@ -383,6 +384,7 @@ macro_rules! network_spec {
 }
 
 network_spec!(testnet);
+network_spec!(partnernet);
 network_spec!(sisyphos);
 network_spec!(perseverance);
 
