@@ -493,7 +493,13 @@ where
 				&self.query_block_id(at),
 				from,
 				to,
-				cf_utilities::try_parse_number_or_hex(amount)?,
+				cf_utilities::try_parse_number_or_hex(amount).and_then(|amount| {
+					if amount == 0 {
+						Err(anyhow::anyhow!("Swap input amount cannot be zero."))
+					} else {
+						Ok(amount)
+					}
+				})?,
 			)
 			.map_err(to_rpc_error)
 			.and_then(|r| {

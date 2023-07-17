@@ -41,7 +41,6 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_system::offchain::SendTransactionTypes;
-pub use pallet_cf_environment::cfe::CfeSettings;
 use pallet_cf_funding::MinimumFunding;
 use pallet_grandpa::{
 	fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
@@ -278,6 +277,7 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;
 	type AddressDerivation = AddressDerivation;
+	type AddressConverter = ChainAddressConverter;
 	type LpBalance = LiquidityProvider;
 	type SwapDepositHandler = Swapping;
 	type ChainApiCall = eth::api::EthereumApi<EthEnvironment>;
@@ -294,6 +294,7 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Polkadot;
 	type AddressDerivation = AddressDerivation;
+	type AddressConverter = ChainAddressConverter;
 	type LpBalance = LiquidityProvider;
 	type SwapDepositHandler = Swapping;
 	type ChainApiCall = dot::api::PolkadotApi<chainflip::DotEnvironment>;
@@ -310,6 +311,7 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Bitcoin;
 	type AddressDerivation = AddressDerivation;
+	type AddressConverter = ChainAddressConverter;
 	type LpBalance = LiquidityProvider;
 	type SwapDepositHandler = Swapping;
 	type ChainApiCall = cf_chains::btc::api::BitcoinApi<chainflip::BtcEnvironment>;

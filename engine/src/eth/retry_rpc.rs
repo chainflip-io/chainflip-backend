@@ -1,10 +1,13 @@
-use ethers::{prelude::*, types::transaction::eip2718::TypedTransaction};
+use ethers::{
+	prelude::*,
+	types::{transaction::eip2718::TypedTransaction, TransactionReceipt},
+};
 
 use utilities::task_scope::Scope;
 
 use crate::{
 	eth::ethers_rpc::EthersRpcApi,
-	rpc_retrier::RpcRetrierClient,
+	retrier::RetrierClient,
 	witness::chain_source::{ChainClient, Header},
 };
 use std::time::Duration;
@@ -16,29 +19,30 @@ use super::{
 use crate::eth::ethers_rpc::ReconnectSubscribeApi;
 use cf_chains::Ethereum;
 
-pub struct EthersRetryRpcClient<T: JsonRpcClient> {
-	rpc_retry_client: RpcRetrierClient<EthersRpcClient<T>>,
-	sub_retry_client: RpcRetrierClient<ReconnectSubscriptionClient>,
+#[derive(Clone)]
+pub struct EthersRetryRpcClient {
+	rpc_retry_client: RetrierClient<EthersRpcClient>,
+	sub_retry_client: RetrierClient<ReconnectSubscriptionClient>,
 }
 
 const ETHERS_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
 const MAX_CONCURRENT_SUBMISSIONS: u32 = 100;
 
-impl<T: JsonRpcClient + Clone + Send + Sync + 'static> EthersRetryRpcClient<T> {
+impl EthersRetryRpcClient {
 	pub fn new(
 		scope: &Scope<'_, anyhow::Error>,
-		ethers_client: EthersRpcClient<T>,
+		ethers_client: EthersRpcClient,
 		ws_node_endpoint: String,
 		chain_id: web3::types::U256,
 	) -> Self {
 		Self {
-			rpc_retry_client: RpcRetrierClient::new(
+			rpc_retry_client: RetrierClient::new(
 				scope,
 				ethers_client,
 				ETHERS_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
-			sub_retry_client: RpcRetrierClient::new(
+			sub_retry_client: RetrierClient::new(
 				scope,
 				ReconnectSubscriptionClient::new(ws_node_endpoint, chain_id),
 				ETHERS_RPC_TIMEOUT,
@@ -54,7 +58,7 @@ pub trait EthersRetryRpcApi: Send + Sync {
 
 	async fn send_transaction(&self, tx: TransactionRequest) -> TxHash;
 
-	async fn get_logs(&self, filter: Filter) -> Vec<Log>;
+	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log>;
 
 	async fn chain_id(&self) -> U256;
 
@@ -73,9 +77,7 @@ pub trait EthersRetryRpcApi: Send + Sync {
 }
 
 #[async_trait::async_trait]
-impl<T: JsonRpcClient + Clone + Send + Sync + 'static> EthersRetryRpcApi
-	for EthersRetryRpcClient<T>
-{
+impl EthersRetryRpcApi for EthersRetryRpcClient {
 	async fn estimate_gas(&self, req: TypedTransaction) -> U256 {
 		self.rpc_retry_client
 			.request(Box::pin(move |client| {
@@ -96,12 +98,15 @@ impl<T: JsonRpcClient + Clone + Send + Sync + 'static> EthersRetryRpcApi
 			.await
 	}
 
-	async fn get_logs(&self, filter: Filter) -> Vec<Log> {
+	async fn get_logs(&self, block_hash: H256, contract_address: H160) -> Vec<Log> {
 		self.rpc_retry_client
 			.request(Box::pin(move |client| {
-				let filter = filter.clone();
 				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move { client.get_logs(filter).await })
+				Box::pin(async move {
+					client
+						.get_logs(Filter::new().address(contract_address).at_block_hash(block_hash))
+						.await
+				})
 			}))
 			.await
 	}
@@ -166,7 +171,7 @@ pub trait EthersRetrySubscribeApi {
 }
 
 #[async_trait::async_trait]
-impl<T: JsonRpcClient + Clone> EthersRetrySubscribeApi for EthersRetryRpcClient<T> {
+impl EthersRetrySubscribeApi for EthersRetryRpcClient {
 	async fn subscribe_blocks(&self) -> ConscientiousEthWebsocketBlockHeaderStream {
 		self.sub_retry_client
 			.request(Box::pin(move |client| {
@@ -178,12 +183,12 @@ impl<T: JsonRpcClient + Clone> EthersRetrySubscribeApi for EthersRetryRpcClient<
 }
 
 #[async_trait::async_trait]
-impl<T: JsonRpcClient + Clone + Send + Sync + 'static> ChainClient for EthersRetryRpcClient<T> {
+impl ChainClient for EthersRetryRpcClient {
 	type Index = <Ethereum as cf_chains::Chain>::ChainBlockNumber;
 
 	type Hash = H256;
 
-	type Data = ();
+	type Data = Bloom;
 
 	async fn header_at_index(
 		&self,
@@ -206,7 +211,7 @@ impl<T: JsonRpcClient + Clone + Send + Sync + 'static> ChainClient for EthersRet
 						index,
 						hash: block_hash,
 						parent_hash: Some(block.parent_hash),
-						data: (),
+						data: block.logs_bloom.unwrap_or(Bloom::repeat_byte(0xFFu8)).0.into(),
 					})
 				})
 			}))
@@ -218,7 +223,6 @@ impl<T: JsonRpcClient + Clone + Send + Sync + 'static> ChainClient for EthersRet
 mod tests {
 	use crate::settings::Settings;
 	use futures::FutureExt;
-	use std::sync::Arc;
 	use utilities::task_scope::task_scope;
 
 	use super::*;
@@ -229,14 +233,7 @@ mod tests {
 		task_scope(|scope| {
 			async move {
 				let settings = Settings::new_test().unwrap();
-				let client = EthersRpcClient::new(
-					Arc::new(Provider::<Http>::try_from(
-						settings.eth.http_node_endpoint.to_string(),
-					)?),
-					&settings.eth,
-				)
-				.await
-				.unwrap();
+				let client = EthersRpcClient::new(&settings.eth).await.unwrap();
 
 				let retry_client = EthersRetryRpcClient::new(
 					scope,

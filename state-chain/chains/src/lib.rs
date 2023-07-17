@@ -4,7 +4,7 @@ use core::{fmt::Display, iter::Step};
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 pub use address::ForeignChainAddress;
-use cf_primitives::{chains::assets, AssetAmount, EgressId, EthAmount};
+use cf_primitives::{chains::assets, AssetAmount, ChannelId, EgressId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -86,8 +86,10 @@ pub trait Chain: Member + Parameter {
 		+ MaxEncodedLen
 		+ Copy
 		+ BenchmarkValue
+		+ FullCodec
 		+ Into<cf_primitives::Asset>
-		+ Into<cf_primitives::ForeignChain>;
+		+ Into<cf_primitives::ForeignChain>
+		+ Unpin;
 
 	type ChainAccount: Member
 		+ Parameter
@@ -96,7 +98,8 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValueExtended
 		+ Debug
 		+ TryFrom<ForeignChainAddress>
-		+ Into<ForeignChainAddress>;
+		+ Into<ForeignChainAddress>
+		+ Unpin;
 
 	type EpochStartData: Member + Parameter + MaxEncodedLen;
 
@@ -315,4 +318,10 @@ pub struct CcmDepositMetadata {
 	pub cf_parameters: Vec<u8>,
 	/// The address the deposit was sent from.
 	pub source_address: ForeignChainAddress,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum SwapOrigin {
+	DepositChannel { deposit_address: address::EncodedAddress, channel_id: ChannelId },
+	Vault { tx_hash: TransactionHash },
 }

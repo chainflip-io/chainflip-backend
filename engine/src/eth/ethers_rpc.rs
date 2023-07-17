@@ -18,13 +18,15 @@ struct NonceInfo {
 use super::rpc::EthWsRpcClient;
 
 #[derive(Clone)]
-pub struct EthersRpcClient<T: JsonRpcClient> {
-	signer: SignerMiddleware<Arc<Provider<T>>, LocalWallet>,
+pub struct EthersRpcClient {
+	signer: SignerMiddleware<Arc<Provider<Http>>, LocalWallet>,
 	nonce_info: Arc<Mutex<Option<NonceInfo>>>,
 }
 
-impl<T: JsonRpcClient + 'static> EthersRpcClient<T> {
-	pub async fn new(provider: Arc<Provider<T>>, eth_settings: &settings::Eth) -> Result<Self> {
+impl EthersRpcClient {
+	pub async fn new(eth_settings: &settings::Eth) -> Result<Self> {
+		let provider =
+			Arc::new(Provider::<Http>::try_from(eth_settings.http_node_endpoint.to_string())?);
 		let wallet = read_clean_and_decode_hex_str_file(
 			&eth_settings.private_key_file,
 			"Ethereum Private Key",
@@ -96,7 +98,7 @@ pub trait EthersRpcApi: Send + Sync {
 }
 
 #[async_trait::async_trait]
-impl<T: JsonRpcClient + 'static> EthersRpcApi for EthersRpcClient<T> {
+impl EthersRpcApi for EthersRpcClient {
 	fn address(&self) -> H160 {
 		self.signer.address()
 	}
@@ -203,9 +205,7 @@ mod tests {
 	async fn ethers_rpc_test() {
 		let settings = Settings::new_test().unwrap();
 
-		let provider =
-			Provider::<Http>::try_from(settings.eth.http_node_endpoint.to_string()).unwrap();
-		let client = EthersRpcClient::new(Arc::new(provider), &settings.eth).await.unwrap();
+		let client = EthersRpcClient::new(&settings.eth).await.unwrap();
 		let chain_id = client.chain_id().await.unwrap();
 		println!("{:?}", chain_id);
 

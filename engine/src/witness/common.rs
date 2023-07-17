@@ -3,7 +3,7 @@ use futures_core::{stream::BoxStream, Future, Stream};
 use futures_util::{stream, StreamExt};
 use state_chain_runtime::PalletInstanceAlias;
 
-use super::chain_source::ChainSourceWithClient;
+use super::chain_source::ChainSource;
 
 pub const STATE_CHAIN_CONNECTION: &str = "State Chain client connection failed"; // TODO Replace with infallible SCC requests
 
@@ -54,12 +54,18 @@ pub trait RuntimeHasChain<TChain: ExternalChain>:
 	+ pallet_cf_chain_tracking::Config<
 		<TChain as PalletInstanceAlias>::Instance,
 		TargetChain = TChain,
+	> + pallet_cf_ingress_egress::Config<
+		<TChain as PalletInstanceAlias>::Instance,
+		TargetChain = TChain,
 	>
 {
 }
 impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Runtime where
 	Self: pallet_cf_vaults::Config<<TChain as PalletInstanceAlias>::Instance, Chain = TChain>
 		+ pallet_cf_chain_tracking::Config<
+			<TChain as PalletInstanceAlias>::Instance,
+			TargetChain = TChain,
+		> + pallet_cf_ingress_egress::Config<
 			<TChain as PalletInstanceAlias>::Instance,
 			TargetChain = TChain,
 		>
@@ -88,9 +94,7 @@ pub trait ExternalChain: ChainAbi + PalletInstanceAlias {}
 impl<T: ChainAbi + PalletInstanceAlias> ExternalChain for T {}
 
 pub trait ExternalChainSource:
-	ChainSourceWithClient<Index = <Self::Chain as Chain>::ChainBlockNumber>
-where
-	state_chain_runtime::Runtime: RuntimeHasChain<Self::Chain>,
+	ChainSource<Index = <Self::Chain as Chain>::ChainBlockNumber>
 {
 	type Chain: ExternalChain;
 }

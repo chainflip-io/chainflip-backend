@@ -6,30 +6,19 @@
 // For example: pnpm tsx ./commands/stress_test.ts 3
 // will initiate a stress test generating 3 signatures
 
-import { ApiPromise, WsProvider } from '@polkadot/api';
-import { Keyring } from '@polkadot/keyring';
-import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { runWithTimeout } from '../shared/utils';
+import { getChainflipApi, runWithTimeout } from '../shared/utils';
+import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 
 async function main(): Promise<void> {
-  const cfNodeEndpoint = process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944';
   const signaturesCount = process.argv[2];
-  await cryptoWaitReady();
-  const keyring = new Keyring({ type: 'sr25519' });
-  const snowwhiteUri =
-    process.env.SNOWWHITE_URI ??
-    'market outdoor rubber basic simple banana resist quarter lab random hurdle cruise';
-  const snowwhite = keyring.createFromUri(snowwhiteUri);
-  const api = await ApiPromise.create({
-    provider: new WsProvider(cfNodeEndpoint),
-    noInitWarn: true,
-  });
+
+  const api = await getChainflipApi();
   const stressTest = api.tx.ethereumBroadcaster.stressTest(signaturesCount);
   const sudoCall = api.tx.governance.callAsSudo(stressTest);
-  const proposal = api.tx.governance.proposeGovernanceExtrinsic(sudoCall);
-  await proposal.signAndSend(snowwhite);
 
-  console.log("Requesting " + signaturesCount + " ETH signatures");
+  await submitGovernanceExtrinsic(sudoCall);
+
+  console.log('Requesting ' + signaturesCount + ' ETH signatures');
 
   process.exit(0);
 }

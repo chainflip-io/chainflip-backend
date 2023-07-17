@@ -5,40 +5,69 @@ use cf_primitives::PolkadotBlockNumber;
 use futures_util::stream;
 use subxt::{events::Events, PolkadotConfig};
 
-use crate::dot::{
-	retry_rpc::{DotRetryRpcApi, DotRetrySubscribeApi},
-	rpc::PolkadotHeader,
+use crate::{
+	dot::{
+		retry_rpc::{DotRetryRpcApi, DotRetrySubscribeApi},
+		rpc::PolkadotHeader,
+	},
+	witness::common::ExternalChainSource,
 };
 use futures::{stream::StreamExt, Stream};
 
-use super::{BoxChainStream, ChainClient, ChainSourceWithClient, Header};
-use subxt::config::Header as SubxtHeader;
-
+use super::{BoxChainStream, ChainClient, ChainSource, Header};
 use anyhow::Result;
+use subxt::{self, config::Header as SubxtHeader};
 
-#[async_trait::async_trait]
-pub trait GetPolkadotStream {
-	async fn get_stream(
-		&self,
-	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>>;
+macro_rules! polkadot_source {
+	($self:expr, $func: ident) => {{
+		struct State<C> {
+			client: C,
+			stream: Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>,
+		}
+
+		let client = $self.client.clone();
+		let stream = client.$func().await;
+
+		(
+			Box::pin(stream::unfold(State { client, stream }, |mut state| async move {
+				loop {
+					while let Ok(Some(header)) =
+						tokio::time::timeout(TIMEOUT, state.stream.next()).await
+					{
+						if let Ok(header) = header {
+							let Some(events) = state.client.events(header.hash()).await else {
+
+								continue;
+							};
+
+							return Some((
+								Header {
+									index: header.number,
+									hash: header.hash(),
+									parent_hash: Some(header.parent_hash),
+									data: events,
+								},
+								state,
+							))
+						}
+					}
+					// We don't want to spam retries if the node returns a stream that's empty
+					// immediately.
+					tokio::time::sleep(RESTART_STREAM_DELAY).await;
+					let stream = state.client.$func().await;
+					state = State { client: state.client, stream };
+				}
+			})),
+			$self.client.clone(),
+		)
+	}};
 }
 
-pub struct DotUnfinalisedSource<C: DotRetrySubscribeApi + DotRetryRpcApi> {
+pub struct DotUnfinalisedSource<C> {
 	client: C,
 }
 
-#[async_trait::async_trait]
-impl<C: DotRetrySubscribeApi + DotRetryRpcApi + Send + Sync> GetPolkadotStream
-	for DotUnfinalisedSource<C>
-{
-	async fn get_stream(
-		&self,
-	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>> {
-		self.client.subscribe_best_heads().await
-	}
-}
-
-impl<C: DotRetrySubscribeApi + DotRetryRpcApi + Send> DotUnfinalisedSource<C> {
+impl<C> DotUnfinalisedSource<C> {
 	pub fn new(client: C) -> Self {
 		Self { client }
 	}
@@ -48,10 +77,9 @@ const TIMEOUT: Duration = Duration::from_secs(20);
 const RESTART_STREAM_DELAY: Duration = Duration::from_secs(6);
 
 #[async_trait::async_trait]
-impl<C> ChainSourceWithClient for DotUnfinalisedSource<C>
+impl<C> ChainSource for DotUnfinalisedSource<C>
 where
 	C: ChainClient<Index = PolkadotBlockNumber, Hash = PolkadotHash, Data = Events<PolkadotConfig>>
-		+ GetPolkadotStream
 		+ DotRetryRpcApi
 		+ DotRetrySubscribeApi
 		+ Clone
@@ -65,28 +93,31 @@ where
 	async fn stream_and_client(
 		&self,
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
-		(polkadot_source(self.client.clone()).await, self.client.clone())
+		polkadot_source!(self, subscribe_best_heads)
 	}
 }
 
-pub struct DotFinalisedSource<C: DotRetrySubscribeApi + DotRetryRpcApi> {
+impl<
+		C: ChainClient<
+				Index = PolkadotBlockNumber,
+				Hash = PolkadotHash,
+				Data = Events<PolkadotConfig>,
+			> + DotRetryRpcApi
+			+ DotRetrySubscribeApi
+			+ Clone
+			+ 'static,
+	> ExternalChainSource for DotUnfinalisedSource<C>
+{
+	type Chain = cf_chains::Polkadot;
+}
+
+pub struct DotFinalisedSource<C> {
 	client: C,
 }
 
-impl<C: DotRetrySubscribeApi + DotRetryRpcApi + Send> DotFinalisedSource<C> {
+impl<C> DotFinalisedSource<C> {
 	pub fn new(client: C) -> Self {
 		Self { client }
-	}
-}
-
-#[async_trait::async_trait]
-impl<C: DotRetrySubscribeApi + DotRetryRpcApi + Send + Sync> GetPolkadotStream
-	for DotFinalisedSource<C>
-{
-	async fn get_stream(
-		&self,
-	) -> Pin<Box<dyn Stream<Item = anyhow::Result<PolkadotHeader>> + Send>> {
-		self.client.subscribe_finalized_heads().await
 	}
 }
 
@@ -96,12 +127,11 @@ impl<
 				Index = PolkadotBlockNumber,
 				Hash = PolkadotHash,
 				Data = Events<PolkadotConfig>,
-			> + GetPolkadotStream
-			+ DotRetryRpcApi
+			> + DotRetryRpcApi
 			+ DotRetrySubscribeApi
 			+ Clone
 			+ 'static,
-	> ChainSourceWithClient for DotFinalisedSource<C>
+	> ChainSource for DotFinalisedSource<C>
 {
 	type Index = <C as ChainClient>::Index;
 	type Hash = <C as ChainClient>::Hash;
@@ -111,51 +141,20 @@ impl<
 	async fn stream_and_client(
 		&self,
 	) -> (BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>, Self::Client) {
-		(polkadot_source(self.client.clone()).await, self.client.clone())
+		polkadot_source!(self, subscribe_finalized_heads)
 	}
 }
 
-async fn polkadot_source<
-	'a,
-	C: ChainClient<Index = PolkadotBlockNumber, Hash = PolkadotHash, Data = Events<PolkadotConfig>>
-		+ GetPolkadotStream
-		+ DotRetrySubscribeApi
-		+ DotRetryRpcApi
-		+ Clone
-		+ 'static,
->(
-	client: C,
-) -> BoxChainStream<'a, C::Index, C::Hash, C::Data> {
-	pub struct State<C> {
-		client: C,
-		stream: Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>,
-	}
-	let client = client.clone();
-	let stream = client.get_stream().await;
-	Box::pin(stream::unfold(State { client, stream }, |mut state| async move {
-		loop {
-			while let Ok(Some(header)) = tokio::time::timeout(TIMEOUT, state.stream.next()).await {
-				if let Ok(header) = header {
-					let Some(events) = state.client.events(header.hash()).await else {
-						continue;
-					};
-
-					return Some((
-						Header {
-							index: header.number,
-							hash: header.hash(),
-							parent_hash: Some(header.parent_hash),
-							data: events,
-						},
-						state,
-					))
-				}
-			}
-			// We don't want to spam retries if the node returns a stream that's empty
-			// immediately.
-			tokio::time::sleep(RESTART_STREAM_DELAY).await;
-			let stream = state.client.get_stream().await;
-			state = State { client: state.client, stream };
-		}
-	}))
+impl<
+		C: ChainClient<
+				Index = PolkadotBlockNumber,
+				Hash = PolkadotHash,
+				Data = Events<PolkadotConfig>,
+			> + DotRetryRpcApi
+			+ DotRetrySubscribeApi
+			+ Clone
+			+ 'static,
+	> ExternalChainSource for DotFinalisedSource<C>
+{
+	type Chain = cf_chains::Polkadot;
 }

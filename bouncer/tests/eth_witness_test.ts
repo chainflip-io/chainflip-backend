@@ -45,14 +45,18 @@ async function main(): Promise<void> {
   )[1].toJSON().eth as string;
   console.log(`Found ETH address: ${ethIngressKey}`);
 
-  exec(`pnpm tsx ./commands/fund_eth.ts ${ethIngressKey} 10`, { timeout: 20000 }, (err, stdout, stderr) => {
-    if (stderr !== '') process.stdout.write(stderr);
-    if (err !== null) {
-      console.error(err);
-      process.exit(1);
-    }
-    if (stdout !== '') process.stdout.write(stdout);
-  });
+  exec(
+    `pnpm tsx ./commands/send_eth.ts ${ethIngressKey} 10`,
+    { timeout: 20000 },
+    (err, stdout, stderr) => {
+      if (stderr !== '') process.stdout.write(stderr);
+      if (err !== null) {
+        console.error(err);
+        process.exit(1);
+      }
+      if (stdout !== '') process.stdout.write(stdout);
+    },
+  );
   await observeEvent('liquidityProvider:AccountCredited');
   console.log('Successfully witnessed transfer!');
   process.exit(0);

@@ -42,15 +42,19 @@ async function main(): Promise<void> {
           Eth: '[u8; 20]',
           Dot: '[u8; 32]',
           Btc: '[u8; 34]',
-        }
-      }
-    }
+        },
+      },
+    },
   });
 
   // Register Emergency Withdrawal Address before requesting reposit address.
-  const encodedEthAddr = chainflip.createType('EncodedAddress', {"Eth": hexStringToBytesArray(await getAddress('ETH', 'LP_1'))});
-  await chainflip.tx.liquidityProvider.registerEmergencyWithdrawalAddress(encodedEthAddr).signAndSend(lp);
-  
+  const encodedEthAddr = chainflip.createType('EncodedAddress', {
+    Eth: hexStringToBytesArray(await getAddress('ETH', 'LP_1')),
+  });
+  await chainflip.tx.liquidityProvider
+    .registerEmergencyWithdrawalAddress(encodedEthAddr)
+    .signAndSend(lp);
+
   await chainflip.tx.liquidityProvider.requestLiquidityDepositAddress('Eth').signAndSend(lp);
   const ethIngressKey = (
     await observeEvent('liquidityProvider:LiquidityDepositAddressReady')
@@ -58,7 +62,7 @@ async function main(): Promise<void> {
   console.log('ETH ingress address: ' + ethIngressKey);
   await sleep(8000); // sleep for 8 seconds to give the engine a chance to start witnessing
   exec(
-    'pnpm tsx  ./commands/fund_eth.ts ' + ethIngressKey + ' 10',
+    'pnpm tsx  ./commands/send_eth.ts ' + ethIngressKey + ' 10',
     { timeout: 10000 },
     (err, stdout, stderr) => {
       if (stderr !== '') process.stdout.write(stderr);
@@ -71,7 +75,7 @@ async function main(): Promise<void> {
   );
   await observeEvent('liquidityProvider:AccountCredited');
   exec(
-    'pnpm tsx  ./commands/fund_eth.ts ' + ethIngressKey + ' 10',
+    'pnpm tsx  ./commands/send_eth.ts ' + ethIngressKey + ' 10',
     { timeout: 10000 },
     (err, stdout, stderr) => {
       if (stderr !== '') process.stdout.write(stderr);
