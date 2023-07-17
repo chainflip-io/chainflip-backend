@@ -179,7 +179,6 @@ pub mod pallet {
 		/// It is no longer possible to mint limit orders due to reaching the maximum pool
 		/// instances, other than for ticks where a fixed pool currently exists.
 		MaximumPoolInstances,
-
 		/// The pool does not have enough liquidity left to process the swap.
 		InsufficientLiquidity,
 		/// The swap output is past the maximum allowed amount.
@@ -780,6 +779,10 @@ impl<T: Config> Pallet<T> {
 				}
 			},
 		})
+	}
+
+	pub fn get_pool(asset: Asset) -> Option<Pool<T::AccountId>> {
+		Pools::<T>::get(asset)
 	}
 
 	fn try_credit_single_asset(

@@ -23,6 +23,7 @@ pub use frame_system::Call as SystemCall;
 use pallet_cf_governance::GovCallHash;
 use pallet_cf_reputation::ExclusionList;
 use pallet_transaction_payment::{ConstFeeMultiplier, Multiplier};
+use sp_runtime::AccountId32;
 
 use crate::runtime_apis::RuntimeApiAccountInfoV2;
 
@@ -1029,6 +1030,10 @@ impl_runtime_apis! {
 				ethereum_chain_id: Environment::ethereum_chain_id(),
 				polkadot_genesis_hash: Environment::polkadot_genesis_hash(),
 			}
+		}
+
+		fn cf_get_pools(asset: Asset) -> Option<pallet_cf_pools::Pool<AccountId32>> {
+			LiquidityPools::get_pool(asset)
 		}
 	}
 

@@ -1,8 +1,9 @@
 use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::api::EthereumChainId};
-use cf_primitives::{Asset, EthereumAddress, SwapOutput};
+use cf_primitives::{chains::assets::any, Asset, EthereumAddress, SwapOutput};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
+use pallet_cf_pools::Pool;
 use sc_client_api::HeaderBackend;
 use serde::{Deserialize, Serialize};
 use sp_api::BlockT;
@@ -12,8 +13,20 @@ use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi, Environment},
+	LiquidityProvider,
 };
 use std::{marker::PhantomData, sync::Arc};
+
+#[derive(Serialize, Deserialize)]
+pub struct RpcPoolInfo {
+	// pub pool_state: SqrtPriceQ64F96,
+}
+
+impl From<Option<Pool<AccountId32>>> for RpcPoolInfo {
+	fn from(pool_info: Option<Pool<AccountId32>>) -> Self {
+		todo!()
+	}
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
@@ -124,6 +137,14 @@ pub trait CustomApi {
 	/// Returns the eth vault in the form [agg_key, active_from_eth_block]
 	#[method(name = "eth_vault")]
 	fn cf_eth_vault(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<(String, u32)>;
+
+	#[method(name = "pools")]
+	fn cf_pools(
+		&self,
+		assert: any::Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcPoolInfo>;
+
 	#[method(name = "tx_fee_multiplier")]
 	fn cf_tx_fee_multiplier(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u64>;
 	// Returns the Auction params in the form [min_set_size, max_set_size]
@@ -518,6 +539,18 @@ where
 			.cf_environment(&self.query_block_id(at))
 			.map_err(to_rpc_error)
 			.map(RpcEnvironment::from)
+	}
+
+	fn cf_pools(
+		&self,
+		asset: any::Asset,
+		at: Option<state_chain_runtime::Hash>,
+	) -> RpcResult<RpcPoolInfo> {
+		self.client
+			.runtime_api()
+			.cf_get_pools(&self.query_block_id(at), asset)
+			.map_err(to_rpc_error)
+			.map(RpcPoolInfo::from)
 	}
 
 	fn cf_current_compatibility_version(&self) -> RpcResult<Vec<u8>> {

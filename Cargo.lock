@@ -2011,6 +2011,7 @@ dependencies = [
  "hex",
  "jsonrpsee 0.15.1",
  "pallet-cf-governance",
+ "pallet-cf-pools",
  "sc-client-api",
  "serde",
  "sp-api",
