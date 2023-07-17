@@ -13,5 +13,5 @@ build-chainspec-perseverance:
 .PHONY: build-chainspec-partnernet
 build-chainspec-partnernet:
 	cargo cf-build-ci
-	./target/release/chainflip-node build-spec --chain partnernet --disable-default-bootnode > state-chain/node/chainspecs/partnernet.chainspec.json
+	./target/release/chainflip-node build-spec --chain partnernet-new --disable-default-bootnode > state-chain/node/chainspecs/partnernet.chainspec.json
 	./target/release/chainflip-node build-spec --chain ./state-chain/node/chainspecs/partnernet.chainspec.json --raw --disable-default-bootnode > state-chain/node/chainspecs/partnernet.chainspec.raw.json
