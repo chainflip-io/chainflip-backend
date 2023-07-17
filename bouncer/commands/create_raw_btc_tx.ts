@@ -1,11 +1,7 @@
 // Constructs a very simple Raw BTC transaction. Can be used for manual testing a raw broadcast for example.
 // Usage: pnpm tsx create_raw_btc_tx.js <bitcoin_address> <btc_amount>
 
-import Module from 'node:module';
-
-const require = Module.createRequire(import.meta.url);
-
-const Client = require('bitcoin-core');
+import Client from 'bitcoin-core';
 
 const BTC_ENDPOINT = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
 console.log(`BTC_ENDPOINT is set to '${BTC_ENDPOINT}'`);
@@ -18,14 +14,14 @@ const client = new Client({
   wallet: 'whale',
 });
 
-const createRawTransaction = async (toAddress, amountInBtc) => {
+const createRawTransaction = async (toAddress: string, amountInBtc: number | string) => {
   try {
     const feeInBtc = 0.00001;
 
     // List unspent UTXOs
     const utxos = await client.listUnspent();
 
-    const utxo = utxos.find((utxo) => utxo.amount >= amountInBtc + feeInBtc);
+    const utxo = utxos.find((u) => u.amount >= Number(amountInBtc) + feeInBtc);
     if (!utxo) throw new Error('Insufficient funds');
 
     // Prepare the transaction inputs and outputs
@@ -36,7 +32,7 @@ const createRawTransaction = async (toAddress, amountInBtc) => {
       },
     ];
 
-    const changeAmount = utxo.amount - amountInBtc - feeInBtc;
+    const changeAmount = utxo.amount - Number(amountInBtc) - feeInBtc;
     const changeAddress = await client.getNewAddress();
     const outputs = {
       [toAddress]: amountInBtc,

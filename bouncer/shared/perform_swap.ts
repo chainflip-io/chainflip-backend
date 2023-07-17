@@ -12,8 +12,9 @@ import {
 } from '../shared/utils';
 import { CcmDepositMetadata } from '../shared/new_swap';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractDestinationAddress(swapInfo: any, destToken: Asset): string | undefined {
-  const token = destToken === 'USDC' || destToken == 'FLIP' ? 'ETH' : destToken;
+  const token = destToken === 'USDC' || destToken === 'FLIP' ? 'ETH' : destToken;
   return swapInfo[1][token.toLowerCase()];
 }
 
@@ -47,6 +48,7 @@ export async function performSwap(
   const addressPromise = observeEvent(
     'swapping:SwapDepositAddressReady',
     chainflipApi,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (swapInfo: any) => {
       // Find deposit address for the right swap by looking at destination address:
       const destAddress = extractDestinationAddress(swapInfo, destToken);
@@ -94,19 +96,15 @@ export async function performSwap(
 
   console.log(`${tag} Old balance: ${OLD_BALANCE}`);
 
-  const swapExecutedHandle = messageMetadata
-    ? observeEvent('swapping:CcmDepositReceived', chainflipApi, (event) => {
-        return event[4].eth === destAddress;
-      })
-    : observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
-        if ('depositChannel' in event[5]) {
-          const channelMatches = Number(event[5].depositChannel.channelId) == channelId;
-          const assetMatches = sourceToken === (event[1].toUpperCase() as Asset);
-          return channelMatches && assetMatches;
-        }
-        // Otherwise it was a swap scheduled by interacting with the ETH smart contract
-        return false;
-      });
+  const swapScheduledHandle = observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
+    if ('depositChannel' in event[5]) {
+      const channelMatches = Number(event[5].depositChannel.channelId) === channelId;
+      const assetMatches = sourceToken === (event[1].toUpperCase() as Asset);
+      return channelMatches && assetMatches;
+    }
+    // Otherwise it was a swap scheduled by interacting with the ETH smart contract
+    return false;
+  });
 
   const ccmEventEmitted = messageMetadata
     ? observeCcmReceived(sourceToken, destToken, ADDRESS, messageMetadata)
@@ -115,7 +113,7 @@ export async function performSwap(
   await send(sourceToken, swapAddress.toLowerCase());
   console.log(`${tag} Funded the address`);
 
-  await swapExecutedHandle;
+  await swapScheduledHandle;
 
   console.log(`${tag} Waiting for balance to update`);
 

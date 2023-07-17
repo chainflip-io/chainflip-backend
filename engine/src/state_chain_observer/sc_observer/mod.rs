@@ -14,9 +14,7 @@ use crypto_compat::CryptoCompat;
 use futures::{FutureExt, StreamExt};
 use sp_core::{H160, H256};
 use sp_runtime::AccountId32;
-use state_chain_runtime::{
-	AccountId, BitcoinInstance, CfeSettings, EthereumInstance, PolkadotInstance,
-};
+use state_chain_runtime::{AccountId, BitcoinInstance, EthereumInstance, PolkadotInstance};
 use std::{
 	collections::BTreeSet,
 	sync::{
@@ -25,7 +23,7 @@ use std::{
 	},
 	time::Duration,
 };
-use tokio::sync::{mpsc::UnboundedSender, watch};
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
@@ -260,7 +258,6 @@ pub async fn start<
 	btc_epoch_start_sender: async_broadcast::Sender<EpochStart<Bitcoin>>,
 	btc_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<MonitorCommand<ScriptPubkey>>,
 	btc_tx_hash_sender: tokio::sync::mpsc::UnboundedSender<MonitorCommand<[u8; 32]>>,
-	cfe_settings_update_sender: watch::Sender<CfeSettings>,
 ) -> Result<(), anyhow::Error>
 where
 	BlockStream: StateChainStreamApi,
@@ -700,12 +697,6 @@ where
                                         pallet_cf_broadcast::Event::BroadcastSuccess { broadcast_id: _, transaction_out_id }
                                     ) => {
                                         btc_tx_hash_sender.send(MonitorCommand::Remove(transaction_out_id)).unwrap();
-                                    }
-                                    state_chain_runtime::RuntimeEvent::Environment(
-                                        pallet_cf_environment::Event::CfeSettingsUpdated {
-                                            new_cfe_settings
-                                        }) => {
-                                            cfe_settings_update_sender.send(new_cfe_settings).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {

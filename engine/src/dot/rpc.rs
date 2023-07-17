@@ -66,6 +66,7 @@ impl DotRpcClient {
 }
 
 /// This trait defines any subscription interfaces to Polkadot.
+#[cfg_attr(test, automock)]
 #[async_trait]
 pub trait DotSubscribeApi: Send + Sync {
 	async fn subscribe_best_heads(
@@ -146,8 +147,8 @@ pub struct DotSubClient {
 }
 
 impl DotSubClient {
-	pub async fn new(ws_endpoint: &str) -> Result<Self> {
-		Ok(Self { ws_endpoint: ws_endpoint.to_string() })
+	pub fn new(ws_endpoint: &str) -> Self {
+		Self { ws_endpoint: ws_endpoint.to_string() }
 	}
 }
 

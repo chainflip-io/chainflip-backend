@@ -16,6 +16,7 @@ export async function executeContractSwap(
   srcAsset: Asset,
   destAsset: Asset,
   destAddress: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): Promise<any> {
   const wallet = Wallet.fromMnemonic(
     process.env.ETH_USDC_WHALE_MNEMONIC ??
@@ -71,7 +72,7 @@ export async function performSwapViaContract(sourceAsset: Asset, destAsset: Asse
     const receipt = await executeContractSwap(sourceAsset, destAsset, addr);
     await observeEvent('swapping:SwapScheduled', api, (event) => {
       if ('vault' in event[5]) {
-        return event[5].vault.txHash == receipt.transactionHash;
+        return event[5].vault.txHash === receipt.transactionHash;
       }
       // Otherwise it was a swap scheduled by requesting a deposit address
       return false;

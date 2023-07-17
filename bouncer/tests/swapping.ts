@@ -16,6 +16,45 @@ import { performSwapViaContract, approveTokenVault } from '../shared/contract_sw
 
 let swapCount = 1;
 
+function getAbiEncodedMessage(types?: string[]): string {
+  const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
+
+  const validSolidityTypes = ['uint256', 'string', 'bytes', 'address'];
+  let typesArray: string[] = [];
+  if (types === undefined) {
+    const numElements = Math.floor(Math.random() * validSolidityTypes.length) + 1;
+    for (let i = 0; i < numElements; i++) {
+      typesArray.push(validSolidityTypes[Math.floor(Math.random() * validSolidityTypes.length)]);
+    }
+  } else {
+    typesArray = types;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const variables: any[] = [];
+
+  for (let i = 0; i < typesArray.length; i++) {
+    switch (typesArray[i]) {
+      case 'uint256':
+        variables.push(randomAsNumber());
+        break;
+      case 'string':
+        variables.push(Math.random().toString(36).substring(2));
+        break;
+      case 'bytes':
+        variables.push(randomAsHex(Math.floor(Math.random() * 100) + 1));
+        break;
+      case 'address':
+        variables.push(randomAsHex(20));
+        break;
+      // Add more cases for other Solidity types as needed
+      default:
+        throw new Error(`Unsupported Solidity type: ${typesArray[i]}`);
+    }
+  }
+  const encodedMessage = web3.eth.abi.encodeParameters(typesArray, variables);
+  return encodedMessage;
+}
+
 async function testSwap(
   sourceToken: Asset,
   destToken: Asset,
@@ -72,83 +111,66 @@ async function testAll() {
   // NOTE: Parallelized ccm swaps with the same sourceToken and destToken won't work because
   // all ccm swaps have the same destination address (cfReceiver) and then it will get a
   // potentially incorrect depositAddress.
-  // DISABLED FOR NOW, UNTIL ENOUGH EVENT DATA IS AVAILABLE TO TEST THIS RELIABLY
-  /*const ccmSwaps = Promise.all([
-        testSwap('BTC', 'ETH', undefined, {
-            message: new Web3().eth.abi.encodeParameter("string", "BTC to ETH w/ CCM!!"),
-            gas_budget: 1000000,
-            cf_parameters: "",
-            source_address: { 'BTC': {'P2PKH': await getAddress('BTC', randomAsHex(32), 'P2PKH').then((btcAddress) => {encodeBtcAddressForContract(btcAddress)})}},
+  const ccmSwaps = Promise.all([
+    testSwap('BTC', 'ETH', undefined, {
+      message: new Web3().eth.abi.encodeParameter('string', 'BTC to ETH w/ CCM!!'),
+      gas_budget: 1000000,
+      cf_parameters: '',
+      source_address: {
+        BTC: {
+          P2PKH: await getAddress('BTC', randomAsHex(32), 'P2PKH').then((btcAddress) => {
+            encodeBtcAddressForContract(btcAddress);
+          }),
+        },
+      },
+    }),
+    testSwap('BTC', 'USDC', undefined, {
+      message: '0x' + Buffer.from('BTC to ETH w/ CCM!!', 'ascii').toString('hex'),
+      gas_budget: 600000,
+      cf_parameters: getAbiEncodedMessage(['uint256']),
+      source_address: {
+        BTC: {
+          P2SH: await getAddress('BTC', randomAsHex(32), 'P2SH').then((btcAddress) => {
+            encodeBtcAddressForContract(btcAddress);
+          }),
+        },
+      },
+    }),
+    testSwap('DOT', 'ETH', undefined, {
+      message: getAbiEncodedMessage(['string', 'address']),
+      gas_budget: 1000000,
+      cf_parameters: getAbiEncodedMessage(['string', 'string']),
+      source_address: {
+        DOT: await getAddress('DOT', randomAsHex(32)).then((dotAddress) => {
+          encodeDotAddressForContract(dotAddress);
         }),
-        testSwap('BTC', 'USDC', undefined, {
-            message: '0x' + Buffer.from("BTC to ETH w/ CCM!!", 'ascii').toString('hex'),
-            gas_budget: 600000,
-            cf_parameters: getAbiEncodedMessage(["uint256"]),
-            source_address: { 'BTC': {'P2SH': await getAddress('BTC', randomAsHex(32), 'P2SH').then((btcAddress) => {encodeBtcAddressForContract(btcAddress)})}},
+      },
+    }),
+    testSwap('DOT', 'USDC', undefined, {
+      message: getAbiEncodedMessage(),
+      gas_budget: 1000000,
+      cf_parameters: getAbiEncodedMessage(['address', 'uint256']),
+      source_address: {
+        DOT: await getAddress('DOT', randomAsHex(32)).then((dotAddress) => {
+          encodeDotAddressForContract(dotAddress);
         }),
-        testSwap('DOT', 'ETH', undefined, {
-            message: getAbiEncodedMessage(["string","address"]),
-            gas_budget: 1000000,
-            cf_parameters: getAbiEncodedMessage(["string","string"]),
-            source_address: { 'DOT': await getAddress('DOT', randomAsHex(32)).then((dotAddress) => { encodeDotAddressForContract(dotAddress)})},
-        }),            
-        testSwap('DOT', 'USDC', undefined, {
-            message: getAbiEncodedMessage(),
-            gas_budget: 1000000,
-            cf_parameters: getAbiEncodedMessage(["address","uint256"]),
-            source_address: { 'DOT': await getAddress('DOT', randomAsHex(32)).then((dotAddress) => { encodeDotAddressForContract(dotAddress)})},
-        }),            
-        testSwap('USDC', 'ETH', undefined, {
-            message: getAbiEncodedMessage(),
-            gas_budget: 5000000,
-            cf_parameters: getAbiEncodedMessage(["bytes","uint256"]),
-            source_address: {'ETH': await getAddress('ETH', randomAsHex(32))},
-        }),    
-        testSwap('ETH', 'USDC', undefined, {
-            message: getAbiEncodedMessage(["address","uint256","bytes"]),
-            gas_budget: 5000000,
-            cf_parameters: getAbiEncodedMessage(["address","uint256"]),
-            source_address: {'ETH': await getAddress('ETH', randomAsHex(32))},
-        })            
-    ])*/
+      },
+    }),
+    testSwap('USDC', 'ETH', undefined, {
+      message: getAbiEncodedMessage(),
+      gas_budget: 5000000,
+      cf_parameters: getAbiEncodedMessage(['bytes', 'uint256']),
+      source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
+    }),
+    testSwap('ETH', 'USDC', undefined, {
+      message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
+      gas_budget: 5000000,
+      cf_parameters: getAbiEncodedMessage(['address', 'uint256']),
+      source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
+    }),
+  ]);
 
-  await Promise.all([contractSwaps, regularSwaps /*, ccmSwaps*/]);
-}
-
-function getAbiEncodedMessage(types?: string[]): string {
-  const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
-
-  const validSolidityTypes = ['uint256', 'string', 'bytes', 'address'];
-
-  if (types === undefined) {
-    types = [];
-    const numElements = Math.floor(Math.random() * validSolidityTypes.length) + 1;
-    for (let i = 0; i < numElements; i++) {
-      types.push(validSolidityTypes[Math.floor(Math.random() * validSolidityTypes.length)]);
-    }
-  }
-  const variables: any[] = [];
-  for (const type of types) {
-    switch (type) {
-      case 'uint256':
-        variables.push(randomAsNumber());
-        break;
-      case 'string':
-        variables.push(Math.random().toString(36).substring(2));
-        break;
-      case 'bytes':
-        variables.push(randomAsHex(Math.floor(Math.random() * 100) + 1));
-        break;
-      case 'address':
-        variables.push(randomAsHex(20));
-        break;
-      // Add more cases for other Solidity types as needed
-      default:
-        throw new Error(`Unsupported Solidity type: ${type}`);
-    }
-  }
-  const encodedMessage = web3.eth.abi.encodeParameters(types, variables);
-  return encodedMessage;
+  await Promise.all([contractSwaps, regularSwaps, ccmSwaps]);
 }
 
 runWithTimeout(testAll(), 1800000)

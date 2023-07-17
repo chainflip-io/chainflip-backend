@@ -14,6 +14,12 @@ pub struct BtcSource<C> {
 	client: C,
 }
 
+impl<C> BtcSource<C> {
+	pub fn new(client: C) -> Self {
+		Self { client }
+	}
+}
+
 const POLL_INTERVAL: Duration = Duration::from_secs(10);
 
 #[async_trait::async_trait]

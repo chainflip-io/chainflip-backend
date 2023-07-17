@@ -11,10 +11,11 @@ export async function getBalance(token: Asset, address: string): Promise<string>
   let result: string;
   switch (token) {
     case 'FLIP':
-    case 'USDC':
+    case 'USDC': {
       const contractAddress = getEthContractAddress(token);
       result = await getErc20Balance(address, contractAddress);
       break;
+    }
     case 'ETH':
       result = await getEthBalance(address);
       break;
