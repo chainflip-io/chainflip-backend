@@ -16,6 +16,7 @@ use chainflip_engine::{
 			storage_api::StorageApi,
 		},
 	},
+	witness,
 };
 use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
@@ -82,23 +83,12 @@ async fn main() -> anyhow::Result<()> {
 				.await
 				.context("Failed to submit version to state chain")?;
 
-			let (epoch_start_sender, [epoch_start_receiver_1, epoch_start_receiver_2]) =
-				build_broadcast_channel(10);
+			let (epoch_start_sender, [epoch_start_receiver_1]) = build_broadcast_channel(10);
 
 			let (dot_epoch_start_sender, [dot_epoch_start_receiver_1, dot_epoch_start_receiver_2]) =
 				build_broadcast_channel(10);
 
 			let (btc_epoch_start_sender, [btc_epoch_start_receiver]) = build_broadcast_channel(10);
-
-			let cfe_settings = state_chain_client
-				.storage_value::<pallet_cf_environment::CfeSettings<state_chain_runtime::Runtime>>(
-					state_chain_stream.cache().block_hash,
-				)
-				.await
-				.context("Failed to get on chain CFE settings from SC")?;
-
-			let (cfe_settings_update_sender, cfe_settings_update_receiver) =
-				tokio::sync::watch::channel(cfe_settings);
 
 			let db = Arc::new(
 				PersistentKeyDB::open_and_migrate_to_latest(
@@ -119,7 +109,7 @@ async fn main() -> anyhow::Result<()> {
 				p2p_fut,
 			) = p2p::start(
 				state_chain_client.clone(),
-				settings.node_p2p,
+				settings.node_p2p.clone(),
 				state_chain_stream.cache().block_hash,
 			)
 			.await
@@ -185,8 +175,6 @@ async fn main() -> anyhow::Result<()> {
 				expected_chain_id,
 				state_chain_stream.cache().block_hash,
 				epoch_start_receiver_1,
-				epoch_start_receiver_2,
-				cfe_settings_update_receiver,
 				db.clone(),
 			)
 			.await?;
@@ -213,6 +201,14 @@ async fn main() -> anyhow::Result<()> {
 				)
 				.await?;
 
+			witness::start::start(
+				scope,
+				&settings,
+				state_chain_client.clone(),
+				state_chain_stream.clone(),
+			)
+			.await?;
+
 			scope.spawn(state_chain_observer::start(
 				state_chain_client.clone(),
 				state_chain_stream.clone(),
@@ -231,7 +227,6 @@ async fn main() -> anyhow::Result<()> {
 				btc_epoch_start_sender,
 				btc_monitor_command_sender,
 				btc_tx_hash_sender,
-				cfe_settings_update_sender,
 			));
 
 			has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);
