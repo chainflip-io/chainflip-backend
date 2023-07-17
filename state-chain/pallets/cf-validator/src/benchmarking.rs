@@ -6,7 +6,7 @@ use pallet_cf_funding::Config as FundingConfig;
 use pallet_cf_reputation::Config as ReputationConfig;
 use pallet_session::Config as SessionConfig;
 
-use cf_traits::{AccountRoleRegistry, AuctionOutcome, VaultStatus};
+use cf_traits::{AccountRoleRegistry, AuctionOutcome, SafeMode, SetSafeMode, VaultStatus};
 use frame_benchmarking::{account, benchmarks, whitelisted_caller};
 use frame_support::{
 	assert_ok, dispatch::UnfilteredDispatchable, storage_alias, traits::OnNewAccount,
@@ -245,12 +245,16 @@ benchmarks! {
 		));
 	}
 
-	start_authority_rotation_in_maintenance_mode {
-		T::SystemState::activate_maintenance_mode();
+	start_authority_rotation_while_disabled_by_safe_mode {
+		<T as Config>::SafeMode::set_code_red();
 	}: {
 		Pallet::<T>::start_authority_rotation();
 	}
 	verify {
+		assert!(matches!(
+			<T as Config>::SafeMode::get(),
+			SafeMode::CODE_RED
+		));
 		assert!(matches!(
 			CurrentRotationPhase::<T>::get(),
 			RotationPhase::Idle

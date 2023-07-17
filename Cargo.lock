@@ -1172,11 +1172,14 @@ name = "chainflip-broker-api"
 version = "0.9.0"
 dependencies = [
  "anyhow",
+ "cf-chains",
  "chainflip-api",
  "clap 3.2.25",
  "hex",
  "jsonrpsee 0.16.2",
  "serde",
+ "sp-rpc",
+ "state-chain-runtime",
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.17",
@@ -1188,6 +1191,7 @@ name = "chainflip-cli"
 version = "0.9.0"
 dependencies = [
  "anyhow",
+ "cf-chains",
  "chainflip-api",
  "chainflip-engine",
  "clap 3.2.25",
@@ -1237,6 +1241,7 @@ dependencies = [
  "httparse",
  "itertools",
  "jsonrpsee 0.15.1",
+ "jsonrpsee 0.16.2",
  "lazy_static",
  "mockall",
  "multisig",
@@ -1301,6 +1306,7 @@ dependencies = [
  "clap 3.2.25",
  "hex",
  "jsonrpsee 0.16.2",
+ "serde",
  "serde_json",
  "sp-rpc",
  "tokio",
@@ -2962,6 +2968,7 @@ dependencies = [
  "bytes",
  "enr",
  "ethers-core",
+ "futures-channel",
  "futures-core",
  "futures-timer",
  "futures-util",
@@ -6510,6 +6517,7 @@ version = "0.1.0"
 dependencies = [
  "cf-amm",
  "cf-primitives",
+ "cf-test-utilities",
  "cf-traits",
  "frame-benchmarking",
  "frame-support",
@@ -12019,6 +12027,7 @@ name = "utilities"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-broadcast",
  "async-channel",
  "futures",
  "hex",

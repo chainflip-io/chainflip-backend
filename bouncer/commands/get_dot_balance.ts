@@ -10,7 +10,6 @@ import { runWithTimeout } from '../shared/utils';
 import { getDotBalance } from '../shared/get_dot_balance';
 
 async function getDotBalanceCommand(address: string) {
-
   console.log(await getDotBalance(address));
   process.exit(0);
 }

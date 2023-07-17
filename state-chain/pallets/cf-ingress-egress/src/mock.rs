@@ -13,11 +13,12 @@ pub use cf_primitives::{
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip,
 	mocks::{
+		address_converter::MockAddressConverter,
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
 	},
-	DepositApi, DepositHandler,
+	DepositApi, DepositHandler, GetBlockHeight,
 };
 use frame_support::traits::{OriginTrait, UnfilteredDispatchable};
 use frame_system as system;
@@ -78,11 +79,22 @@ impl DepositHandler<Ethereum> for MockDepositHandler {}
 pub type MockEgressBroadcaster =
 	MockBroadcaster<(MockEthereumApiCall<MockEthEnvironment>, RuntimeCall)>;
 
+pub struct BlockNumberProvider;
+
+pub const OPEN_INGRESS_AT: u64 = 420;
+
+impl GetBlockHeight<Ethereum> for BlockNumberProvider {
+	fn get_block_height() -> u64 {
+		OPEN_INGRESS_AT
+	}
+}
+
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;
 	type AddressDerivation = ();
+	type AddressConverter = MockAddressConverter;
 	type LpBalance = Self;
 	type SwapDepositHandler = Self;
 	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;
@@ -90,6 +102,7 @@ impl crate::Config for Test {
 	type DepositHandler = MockDepositHandler;
 	type WeightInfo = ();
 	type CcmHandler = MockCcmHandler;
+	type ChainTracking = BlockNumberProvider;
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

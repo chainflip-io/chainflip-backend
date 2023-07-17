@@ -2,8 +2,9 @@
 
 mod async_result;
 pub mod liquidity;
-pub mod safe_mode;
 pub use liquidity::*;
+pub mod safe_mode;
+pub use safe_mode::*;
 
 pub mod mocks;
 pub mod offence_reporting;
@@ -11,11 +12,10 @@ pub mod offence_reporting;
 use core::fmt::Debug;
 
 pub use async_result::AsyncResult;
-pub use safe_mode::SafeMode;
 
 use cf_chains::{
 	address::ForeignChainAddress, dot::PolkadotPublicKey, eth::Address, ApiCall,
-	CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot,
+	CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot, SwapOrigin,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
@@ -76,8 +76,6 @@ pub trait Chainflip: frame_system::Config {
 	type EnsureGovernance: EnsureOrigin<Self::RuntimeOrigin>;
 	/// Information about the current Epoch.
 	type EpochInfo: EpochInfo<ValidatorId = Self::ValidatorId, Amount = Self::Amount>;
-	/// Access to information about the current system state
-	type SystemState: SystemStateInfo;
 	/// For registering and checking account roles.
 	type AccountRoleRegistry: AccountRoleRegistry<Self>;
 	/// For checking nodes' current balances.
@@ -388,6 +386,10 @@ impl KeyState {
 	pub fn unlock(&mut self) {
 		*self = KeyState::Unlocked;
 	}
+
+	pub fn lock(&mut self, request_id: ThresholdSignatureRequestId) {
+		*self = KeyState::Locked(request_id);
+	}
 }
 
 #[derive(Debug, TypeInfo, Decode, Encode, Clone, Copy, PartialEq, Eq)]
@@ -405,9 +407,12 @@ impl<Key> EpochKey<Key> {
 
 /// Provides the currently valid key for multisig ceremonies.
 pub trait KeyProvider<C: ChainCrypto> {
-	/// Get the chain's current agg key, the epoch index for the current key and the state of that
-	/// key. If no key has been set, returns None.
-	fn current_epoch_key() -> Option<EpochKey<C::AggKey>>;
+	/// Get the chain's active agg key, key state and associated epoch index. If no key is active,
+	/// returns None.
+	///
+	/// Note that the epoch may not be the current epoch: a key can be activated before the start of
+	/// the epoch.
+	fn active_epoch_key() -> Option<EpochKey<C::AggKey>>;
 
 	#[cfg(feature = "runtime-benchmarks")]
 	fn set_key(_key: C::AggKey) {
@@ -496,10 +501,6 @@ pub trait Broadcaster<Api: ChainAbi> {
 	fn threshold_sign_and_broadcast_with_callback(
 		api_call: Self::ApiCall,
 		callback: Self::Callback,
-	) -> (BroadcastId, ThresholdSignatureRequestId);
-
-	fn threshold_sign_and_broadcast_for_rotation(
-		api_call: Self::ApiCall,
 	) -> (BroadcastId, ThresholdSignatureRequestId);
 }
 
@@ -629,28 +630,6 @@ pub trait CeremonyIdProvider {
 pub trait MissedAuthorshipSlots {
 	/// Get a list of slots that were missed.
 	fn missed_slots() -> sp_std::ops::Range<u64>;
-}
-
-/// Something that manages access to the system state.
-pub trait SystemStateInfo {
-	/// Ensure that the network is **not** in maintenance mode.
-	fn ensure_no_maintenance() -> DispatchResult;
-
-	/// Check if the network is in maintenance mode.
-	fn is_maintenance_mode() -> bool {
-		Self::ensure_no_maintenance().is_err()
-	}
-
-	#[cfg(feature = "runtime-benchmarks")]
-	fn activate_maintenance_mode() {
-		unimplemented!()
-	}
-}
-
-/// Something that can manipulate the system state.
-pub trait SystemStateManager {
-	/// Turn system maintenance on.
-	fn activate_maintenance_mode();
 }
 
 /// Allows accounts to pay for things by burning fees.
@@ -853,6 +832,7 @@ pub trait CcmHandler {
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
 		message_metadata: CcmDepositMetadata,
+		origin: SwapOrigin,
 	);
 }
 
@@ -863,19 +843,8 @@ impl CcmHandler for () {
 		_destination_asset: Asset,
 		_destination_address: ForeignChainAddress,
 		_message_metadata: CcmDepositMetadata,
+		_origin: SwapOrigin,
 	) {
-	}
-}
-
-pub trait OnRotationCallback<C: ChainCrypto> {
-	type Origin;
-	type Callback: UnfilteredDispatchable<RuntimeOrigin = Self::Origin>;
-
-	fn on_rotation(
-		_block_number: C::ChainBlockNumber,
-		_tx_out_id: C::TransactionOutId,
-	) -> Option<Self::Callback> {
-		None
 	}
 }
 
@@ -887,4 +856,8 @@ pub trait OnBroadcastReady<C: ChainAbi> {
 
 pub trait GetBitcoinFeeInfo {
 	fn bitcoin_fee_info() -> cf_chains::btc::BitcoinFeeInfo;
+}
+
+pub trait GetBlockHeight<C: Chain> {
+	fn get_block_height() -> C::ChainBlockNumber;
 }

@@ -5,23 +5,27 @@ use cf_amm::{
 };
 use cf_chains::{
 	address::{AddressConverter, EncodedAddress},
-	CcmDepositMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress,
+	CcmDepositMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress, SwapOrigin,
 };
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount, STABLE_ASSET};
 use cf_test_utilities::{assert_events_eq, assert_events_match};
-use cf_traits::{AccountRoleRegistry, AddressDerivationApi, EpochInfo, LpBalanceApi};
+use cf_traits::{
+	AccountRoleRegistry, AddressDerivationApi, EpochInfo, GetBlockHeight, LpBalanceApi,
+};
 use frame_support::{
 	assert_ok,
 	traits::{OnFinalize, OnIdle, OnNewAccount},
 };
 use pallet_cf_ingress_egress::DepositWitness;
-use pallet_cf_pools::Order;
-use pallet_cf_swapping::{CcmIdCounter, SwapOrigin};
+use pallet_cf_pools::{Order, RangeOrderSize};
+use pallet_cf_swapping::CcmIdCounter;
 use state_chain_runtime::{
 	chainflip::{address_derivation::AddressDerivation, ChainAddressConverter},
 	AccountRoles, EthereumInstance, LiquidityPools, LiquidityProvider, Runtime, RuntimeCall,
 	RuntimeEvent, RuntimeOrigin, Swapping, System, Timestamp, Validator, Weight, Witnesser,
 };
+
+use state_chain_runtime::EthereumChainTracking;
 
 const DORIS: AccountId = AccountId::new([0x11; 32]);
 const ZION: AccountId = AccountId::new([0x22; 32]);
@@ -90,7 +94,7 @@ fn mint_range_order(
 		RuntimeOrigin::signed(account_id.clone()),
 		unstable_asset,
 		range,
-		liquidity,
+		RangeOrderSize::Liquidity(liquidity),
 	));
 	let new_unstable_balance =
 		pallet_cf_lp::FreeBalances::<Runtime>::get(account_id, unstable_asset).unwrap_or_default();
@@ -215,8 +219,11 @@ fn basic_pool_setup_provision_and_swap() {
 			cf_primitives::chains::assets::eth::Asset::Eth,
 			pallet_cf_ingress_egress::ChannelIdCounter::<Runtime, EthereumInstance>::get(),
 		).unwrap();
+
+		let opened_at = EthereumChainTracking::get_block_height();
+
 		assert_events_eq!(Runtime, RuntimeEvent::EthereumIngressEgress(
-			pallet_cf_ingress_egress::Event::StartWitnessing { deposit_address, source_asset: cf_primitives::chains::assets::eth::Asset::Eth },
+			pallet_cf_ingress_egress::Event::StartWitnessing { deposit_address, source_asset: cf_primitives::chains::assets::eth::Asset::Eth, opened_at },
 		));
 		System::reset_events();
 
@@ -423,6 +430,7 @@ fn can_process_ccm_via_direct_deposit() {
 			destination_asset: Asset::Usdc,
 			destination_address: EncodedAddress::Eth([0x02; 20]),
 			message_metadata: message,
+			tx_hash: Default::default(),
 		}));
 		let current_epoch = Validator::current_epoch();
 		for node in Validator::current_authorities() {

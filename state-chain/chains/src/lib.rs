@@ -4,10 +4,11 @@ use core::{fmt::Display, iter::Step};
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
 pub use address::ForeignChainAddress;
-use cf_primitives::{chains::assets, AssetAmount, EgressId, EthAmount};
+use cf_primitives::{chains::assets, AssetAmount, ChannelId, EgressId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
+	traits::Get,
 	Blake2_256, Parameter, RuntimeDebug, StorageHasher,
 };
 use scale_info::TypeInfo;
@@ -45,7 +46,8 @@ pub mod mocks;
 pub trait Chain: Member + Parameter {
 	const NAME: &'static str;
 
-	const KEY_HANDOVER_IS_REQUIRED: bool = false;
+	type KeyHandoverIsRequired: Get<bool>;
+	type OptimisticActivation: Get<bool>;
 
 	type ChainBlockNumber: FullCodec
 		+ Member
@@ -61,7 +63,8 @@ pub trait Chain: Member + Parameter {
 		+ Display
 		+ CheckedSub
 		+ Unpin
-		+ Step;
+		+ Step
+		+ BenchmarkValue;
 
 	type ChainAmount: Member
 		+ Parameter
@@ -76,20 +79,17 @@ pub trait Chain: Member + Parameter {
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
-	type TrackedData: Member
-		+ Parameter
-		+ MaxEncodedLen
-		+ Clone
-		+ Age<BlockNumber = Self::ChainBlockNumber>
-		+ BenchmarkValue;
+	type TrackedData: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
 	type ChainAsset: Member
 		+ Parameter
 		+ MaxEncodedLen
 		+ Copy
 		+ BenchmarkValue
+		+ FullCodec
 		+ Into<cf_primitives::Asset>
-		+ Into<cf_primitives::ForeignChain>;
+		+ Into<cf_primitives::ForeignChain>
+		+ Unpin;
 
 	type ChainAccount: Member
 		+ Parameter
@@ -98,7 +98,8 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValueExtended
 		+ Debug
 		+ TryFrom<ForeignChainAddress>
-		+ Into<ForeignChainAddress>;
+		+ Into<ForeignChainAddress>
+		+ Unpin;
 
 	type EpochStartData: Member + Parameter + MaxEncodedLen;
 
@@ -108,22 +109,6 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValue
 		+ BenchmarkValueExtended
 		+ ChannelIdConstructor<Address = Self::ChainAccount>;
-}
-
-/// Measures the age of items associated with the Chain.
-pub trait Age {
-	type BlockNumber;
-
-	/// The creation block of this item.
-	fn birth_block(&self) -> Self::BlockNumber;
-}
-
-impl Age for () {
-	type BlockNumber = u64;
-
-	fn birth_block(&self) -> Self::BlockNumber {
-		unimplemented!()
-	}
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -242,13 +227,18 @@ pub trait ChainEnvironment<
 	fn lookup(s: LookupKey) -> Option<LookupValue>;
 }
 
+pub enum SetAggKeyWithAggKeyError {
+	Failed,
+	NotRequired,
+}
+
 /// Constructs the `SetAggKeyWithAggKey` api call.
 #[allow(clippy::result_unit_err)]
 pub trait SetAggKeyWithAggKey<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
 		maybe_old_key: Option<<Abi as ChainCrypto>::AggKey>,
 		new_key: <Abi as ChainCrypto>::AggKey,
-	) -> Result<Self, ()>;
+	) -> Result<Self, SetAggKeyWithAggKeyError>;
 }
 
 #[allow(clippy::result_unit_err)]
@@ -328,4 +318,10 @@ pub struct CcmDepositMetadata {
 	pub cf_parameters: Vec<u8>,
 	/// The address the deposit was sent from.
 	pub source_address: ForeignChainAddress,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum SwapOrigin {
+	DepositChannel { deposit_address: address::EncodedAddress, channel_id: ChannelId },
+	Vault { tx_hash: TransactionHash },
 }

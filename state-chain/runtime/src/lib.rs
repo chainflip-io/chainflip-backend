@@ -80,7 +80,7 @@ pub use chainflip::chain_instances::*;
 use chainflip::{
 	epoch_transition::ChainflipEpochTransitions, BroadcastReadyProvider, BtcEnvironment,
 	BtcVaultTransitionHandler, ChainAddressConverter, ChainflipHeartbeat, EthEnvironment,
-	EthVaultTransitionHandler, RotationCallbackProvider, TokenholderGovernanceBroadcaster,
+	EthVaultTransitionHandler, TokenholderGovernanceBroadcaster,
 };
 
 use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
@@ -175,6 +175,7 @@ impl pallet_cf_validator::Config for Runtime {
 	);
 	type OffenceReporter = Reputation;
 	type Bonder = Bonder<Runtime>;
+	type SafeMode = chainflip::RuntimeSafeMode;
 	type ReputationResetter = Reputation;
 }
 
@@ -211,6 +212,7 @@ impl pallet_cf_swapping::Config for Runtime {
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type SwappingApi = LiquidityPools;
 	type AddressConverter = ChainAddressConverter;
+	type SafeMode = chainflip::RuntimeSafeMode;
 	type WeightInfo = pallet_cf_swapping::weights::PalletWeight<Runtime>;
 }
 
@@ -227,7 +229,8 @@ impl pallet_cf_vaults::Config<EthereumInstance> for Runtime {
 	type Broadcaster = EthereumBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
-	type SystemStateManager = chainflip::SystemStateDeprecated;
+	type ChainTracking = EthereumChainTracking;
+	type SafeMode = chainflip::RuntimeSafeMode;
 	type Slasher = FlipSlasher<Self>;
 }
 
@@ -244,7 +247,8 @@ impl pallet_cf_vaults::Config<PolkadotInstance> for Runtime {
 	type Broadcaster = PolkadotBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
-	type SystemStateManager = chainflip::SystemStateDeprecated;
+	type ChainTracking = PolkadotChainTracking;
+	type SafeMode = chainflip::RuntimeSafeMode;
 	type Slasher = FlipSlasher<Self>;
 }
 
@@ -261,7 +265,8 @@ impl pallet_cf_vaults::Config<BitcoinInstance> for Runtime {
 	type Broadcaster = BitcoinBroadcaster;
 	type OffenceReporter = Reputation;
 	type WeightInfo = pallet_cf_vaults::weights::PalletWeight<Runtime>;
-	type SystemStateManager = chainflip::SystemStateDeprecated;
+	type ChainTracking = BitcoinChainTracking;
+	type SafeMode = chainflip::RuntimeSafeMode;
 	type Slasher = FlipSlasher<Self>;
 }
 
@@ -272,12 +277,14 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;
 	type AddressDerivation = AddressDerivation;
+	type AddressConverter = ChainAddressConverter;
 	type LpBalance = LiquidityProvider;
 	type SwapDepositHandler = Swapping;
 	type ChainApiCall = eth::api::EthereumApi<EthEnvironment>;
 	type Broadcaster = EthereumBroadcaster;
 	type DepositHandler = chainflip::EthDepositHandler;
 	type CcmHandler = Swapping;
+	type ChainTracking = EthereumChainTracking;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
 
@@ -286,12 +293,14 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Polkadot;
 	type AddressDerivation = AddressDerivation;
+	type AddressConverter = ChainAddressConverter;
 	type LpBalance = LiquidityProvider;
 	type SwapDepositHandler = Swapping;
 	type ChainApiCall = dot::api::PolkadotApi<chainflip::DotEnvironment>;
 	type Broadcaster = PolkadotBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::DotDepositHandler;
+	type ChainTracking = PolkadotChainTracking;
 	type CcmHandler = Swapping;
 }
 
@@ -300,12 +309,14 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Bitcoin;
 	type AddressDerivation = AddressDerivation;
+	type AddressConverter = ChainAddressConverter;
 	type LpBalance = LiquidityProvider;
 	type SwapDepositHandler = Swapping;
 	type ChainApiCall = cf_chains::btc::api::BitcoinApi<chainflip::BtcEnvironment>;
 	type Broadcaster = BitcoinBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::BtcDepositHandler;
+	type ChainTracking = BitcoinChainTracking;
 	type CcmHandler = Swapping;
 }
 
@@ -325,6 +336,7 @@ impl pallet_cf_lp::Config for Runtime {
 	type DepositHandler = chainflip::AnyChainIngressEgressHandler;
 	type EgressHandler = chainflip::AnyChainIngressEgressHandler;
 	type AddressConverter = ChainAddressConverter;
+	type SafeMode = chainflip::RuntimeSafeMode;
 	type WeightInfo = pallet_cf_lp::weights::PalletWeight<Runtime>;
 }
 
@@ -520,6 +532,7 @@ impl pallet_cf_funding::Config for Runtime {
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, Instance1>;
 	type RegisterRedemption = EthereumApi<EthEnvironment>;
 	type TimeSource = Timestamp;
+	type SafeMode = chainflip::RuntimeSafeMode;
 	type WeightInfo = pallet_cf_funding::weights::PalletWeight<Runtime>;
 }
 
@@ -647,7 +660,6 @@ impl pallet_cf_broadcast::Config<EthereumInstance> for Runtime {
 	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, EthereumInstance>;
-	type RotationCallbackProvider = RotationCallbackProvider;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
 	type BroadcastTimeout = ConstU32<{ 10 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
@@ -668,7 +680,6 @@ impl pallet_cf_broadcast::Config<PolkadotInstance> for Runtime {
 	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, PolkadotInstance>;
-	type RotationCallbackProvider = RotationCallbackProvider;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
 	type BroadcastTimeout = ConstU32<{ 10 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
@@ -689,9 +700,8 @@ impl pallet_cf_broadcast::Config<BitcoinInstance> for Runtime {
 	type OffenceReporter = Reputation;
 	type EnsureThresholdSigned =
 		pallet_cf_threshold_signature::EnsureThresholdSigned<Self, BitcoinInstance>;
-	type RotationCallbackProvider = RotationCallbackProvider;
 	type BroadcastReadyProvider = BroadcastReadyProvider;
-	type BroadcastTimeout = ConstU32<{ 10 * MINUTES }>;
+	type BroadcastTimeout = ConstU32<{ 90 * MINUTES }>;
 	type WeightInfo = pallet_cf_broadcast::weights::PalletWeight<Runtime>;
 	type KeyProvider = BitcoinVault;
 }

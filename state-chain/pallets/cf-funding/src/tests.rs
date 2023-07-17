@@ -5,10 +5,8 @@ use crate::{
 use cf_primitives::FlipBalance;
 use cf_test_utilities::assert_event_sequence;
 use cf_traits::{
-	mocks::{
-		account_role_registry::MockAccountRoleRegistry, system_state_info::MockSystemStateInfo,
-	},
-	AccountInfo, AccountRoleRegistry, Bonding,
+	mocks::account_role_registry::MockAccountRoleRegistry, AccountInfo, AccountRoleRegistry,
+	Bonding, SetSafeMode,
 };
 
 use crate::BoundAddress;
@@ -523,14 +521,28 @@ fn redemption_expiry_removes_redemption() {
 }
 
 #[test]
-fn maintenance_mode_blocks_redemption_requests() {
+fn runtime_safe_mode_blocks_redemption_requests() {
 	new_test_ext().execute_with(|| {
-		MockSystemStateInfo::set_maintenance(true);
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			1_000,
+			Default::default(),
+			Default::default(),
+		));
+
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_red();
 		assert_noop!(
 			Funding::redeem(RuntimeOrigin::signed(ALICE), RedemptionAmount::Max, ETH_DUMMY_ADDR),
-			DispatchError::Other("We are in maintenance!")
+			Error::<Test>::RedeemDisabled
 		);
-		MockSystemStateInfo::set_maintenance(false);
+
+		<MockRuntimeSafeMode as SetSafeMode<MockRuntimeSafeMode>>::set_code_green();
+		assert_ok!(Funding::redeem(
+			RuntimeOrigin::signed(ALICE),
+			RedemptionAmount::Max,
+			ETH_DUMMY_ADDR
+		));
 	});
 }
 
@@ -1253,5 +1265,66 @@ fn bond_should_count_toward_restricted_balance() {
 			pallet::RedemptionAmount::Exact(AMOUNT / 2),
 			RESTRICTED_ADDRESS
 		));
+	});
+}
+
+#[test]
+fn skip_redemption_of_zero_flip() {
+	#[track_caller]
+	fn inner_test(funding_amount: FlipBalance, redemption_amount: RedemptionAmount<FlipBalance>) {
+		new_test_ext().execute_with(|| {
+			assert_ok!(Funding::funded(
+				RuntimeOrigin::root(),
+				ALICE,
+				funding_amount,
+				Default::default(),
+				Default::default(),
+			));
+			assert_ok!(Funding::redeem(
+				RuntimeOrigin::signed(ALICE),
+				redemption_amount,
+				Default::default()
+			));
+			assert_event_sequence! {
+				Test,
+				_,
+				RuntimeEvent::Funding(crate::Event::Funded {..}),
+				RuntimeEvent::Funding(crate::Event::RedemptionAmountZero {..}),
+			};
+		});
+	}
+
+	inner_test(100, RedemptionAmount::Exact(0));
+	inner_test(REDEMPTION_TAX, RedemptionAmount::Max);
+}
+
+#[test]
+fn check_restricted_balances_are_getting_removed() {
+	new_test_ext().execute_with(|| {
+		// - Fund account with some restricted balances.
+		const AMOUNT: FlipBalance = 50;
+		const RESTRICTED_ADDRESS: EthereumAddress = [0x02; 20];
+		// Set restricted addresses.
+		assert_ok!(Funding::update_restricted_addresses(
+			RuntimeOrigin::root(),
+			vec![RESTRICTED_ADDRESS],
+			Default::default(),
+		));
+		// Fund the restricted address.
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			RESTRICTED_ADDRESS,
+			Default::default(),
+		));
+		assert!(RestrictedBalances::<Test>::contains_key(ALICE));
+		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS), Some(&AMOUNT));
+		assert_ok!(Funding::update_restricted_addresses(
+			RuntimeOrigin::root(),
+			vec![],
+			vec![RESTRICTED_ADDRESS],
+		));
+		assert!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).is_none());
 	});
 }

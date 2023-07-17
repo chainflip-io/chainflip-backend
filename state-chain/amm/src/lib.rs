@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub mod test_utilities;
 mod tests;
 
 use codec::{Decode, Encode};

@@ -174,6 +174,15 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 
 	#[cfg(feature = "test")]
 	fn signing_payload_for_test() -> Self::SigningPayload;
+
+	#[cfg(feature = "test")]
+	/// Get an invalid signature for testing purposes
+	fn signature_for_test() -> Self::Signature {
+		use rand::{rngs::StdRng, SeedableRng};
+		let scalar = <Self::Point as ECPoint>::Scalar::random(&mut StdRng::from_seed([0_u8; 32]));
+		let point = <Self::Point as ECPoint>::from_scalar(&scalar);
+		Self::build_signature(scalar, point)
+	}
 }
 
 pub trait ECScalar:

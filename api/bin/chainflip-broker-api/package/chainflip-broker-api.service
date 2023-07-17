@@ -11,8 +11,5 @@ ExecStart=/usr/bin/chainflip-broker-api \
       --state_chain.signing_key_file /etc/chainflip/keys/signing_key_file \
       --port 10997
 
-StandardOutput=append:/var/log/chainflip-broker-api.log
-StandardError=append:/var/log/chainflip-broker-api.log
-
 [Install]
 WantedBy=multi-user.target

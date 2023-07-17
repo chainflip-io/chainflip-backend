@@ -2,19 +2,31 @@ use ethers::{prelude::*, signers::Signer, types::transaction::eip2718::TypedTran
 
 use crate::settings;
 use anyhow::{anyhow, Ok, Result};
-use std::{str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc, time::Instant};
+use tokio::sync::Mutex;
+
 use utilities::read_clean_and_decode_hex_str_file;
 
 #[cfg(test)]
 use mockall::automock;
 
-#[derive(Clone)]
-pub struct EthersRpcClient<T: JsonRpcClient> {
-	signer: SignerMiddleware<Arc<Provider<T>>, LocalWallet>,
+struct NonceInfo {
+	next_nonce: U256,
+	requested_at: std::time::Instant,
 }
 
-impl<T: JsonRpcClient + 'static> EthersRpcClient<T> {
-	pub async fn new(provider: Arc<Provider<T>>, eth_settings: &settings::Eth) -> Result<Self> {
+use super::rpc::EthWsRpcClient;
+
+#[derive(Clone)]
+pub struct EthersRpcClient {
+	signer: SignerMiddleware<Arc<Provider<Http>>, LocalWallet>,
+	nonce_info: Arc<Mutex<Option<NonceInfo>>>,
+}
+
+impl EthersRpcClient {
+	pub async fn new(eth_settings: &settings::Eth) -> Result<Self> {
+		let provider =
+			Arc::new(Provider::<Http>::try_from(eth_settings.http_node_endpoint.to_string())?);
 		let wallet = read_clean_and_decode_hex_str_file(
 			&eth_settings.private_key_file,
 			"Ethereum Private Key",
@@ -22,7 +34,36 @@ impl<T: JsonRpcClient + 'static> EthersRpcClient<T> {
 		)?;
 		let chain_id = provider.get_chainid().await?;
 		let signer = SignerMiddleware::new(provider, wallet.with_chain_id(chain_id.as_u64()));
-		Ok(Self { signer })
+		Ok(Self { signer, nonce_info: Arc::new(Mutex::new(None)) })
+	}
+
+	async fn get_next_nonce(&self) -> Result<U256> {
+		let mut nonce_info_lock = self.nonce_info.lock().await;
+
+		const NONCE_LIFETIME: std::time::Duration = std::time::Duration::from_secs(120);
+
+		// Reset nonce if too old to ensure that we never
+		// get stuck with an incorrect nonce for some reason
+		if nonce_info_lock.as_ref().is_some_and(|nonce| {
+			Instant::now().checked_duration_since(nonce.requested_at).unwrap_or_default() >
+				NONCE_LIFETIME
+		}) {
+			*nonce_info_lock = None;
+		}
+
+		// Re-request nonce if set to None
+		let nonce_info = match nonce_info_lock.as_mut() {
+			Some(nonce_info) => nonce_info,
+			None => {
+				let tx_count = self.signer.get_transaction_count(self.address(), None).await?;
+				nonce_info_lock
+					.insert(NonceInfo { next_nonce: tx_count, requested_at: Instant::now() })
+			},
+		};
+
+		let result = nonce_info.next_nonce;
+		nonce_info.next_nonce += U256::from(1);
+		Ok(result)
 	}
 }
 
@@ -57,7 +98,7 @@ pub trait EthersRpcApi: Send + Sync {
 }
 
 #[async_trait::async_trait]
-impl<T: JsonRpcClient + 'static> EthersRpcApi for EthersRpcClient<T> {
+impl EthersRpcApi for EthersRpcClient {
 	fn address(&self) -> H160 {
 		self.signer.address()
 	}
@@ -66,8 +107,18 @@ impl<T: JsonRpcClient + 'static> EthersRpcApi for EthersRpcClient<T> {
 		Ok(self.signer.estimate_gas(req, None).await?)
 	}
 
-	async fn send_transaction(&self, tx: TransactionRequest) -> Result<TxHash> {
-		Ok(self.signer.send_transaction(tx, None).await?.tx_hash())
+	async fn send_transaction(&self, mut tx: TransactionRequest) -> Result<TxHash> {
+		tx.nonce = Some(self.get_next_nonce().await?);
+
+		let res = self.signer.send_transaction(tx, None).await;
+
+		if res.is_err() {
+			// Reset the nonce just in case (it will be re-requested during next broadcast)
+			tracing::warn!("Resetting eth broadcaster nonce due to error");
+			*self.nonce_info.lock().await = None;
+		}
+
+		Ok(res?.tx_hash())
 	}
 
 	async fn get_logs(&self, filter: Filter) -> Result<Vec<Log>> {
@@ -107,6 +158,41 @@ impl<T: JsonRpcClient + 'static> EthersRpcApi for EthersRpcClient<T> {
 	}
 }
 
+/// On each subscription this will create a new WS connection.
+#[derive(Clone)]
+pub struct ReconnectSubscriptionClient {
+	ws_node_endpoint: String,
+	// This value comes from the SC.
+	chain_id: web3::types::U256,
+}
+
+impl ReconnectSubscriptionClient {
+	pub fn new(ws_node_endpoint: String, chain_id: web3::types::U256) -> Self {
+		Self { ws_node_endpoint, chain_id }
+	}
+}
+
+#[async_trait::async_trait]
+pub trait ReconnectSubscribeApi {
+	async fn subscribe_blocks(&self) -> Result<ConscientiousEthWebsocketBlockHeaderStream>;
+}
+
+use crate::eth::{rpc::EthWsRpcApi, ConscientiousEthWebsocketBlockHeaderStream};
+
+#[async_trait::async_trait]
+impl ReconnectSubscribeApi for ReconnectSubscriptionClient {
+	async fn subscribe_blocks(&self) -> Result<ConscientiousEthWebsocketBlockHeaderStream> {
+		let web3_ws_client =
+			EthWsRpcClient::new(&self.ws_node_endpoint, Some(self.chain_id)).await?;
+
+		let header_stream = ConscientiousEthWebsocketBlockHeaderStream {
+			stream: Some(web3_ws_client.subscribe_new_heads().await?),
+		};
+
+		Ok(header_stream)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -119,9 +205,7 @@ mod tests {
 	async fn ethers_rpc_test() {
 		let settings = Settings::new_test().unwrap();
 
-		let provider =
-			Provider::<Http>::try_from(settings.eth.http_node_endpoint.to_string()).unwrap();
-		let client = EthersRpcClient::new(Arc::new(provider), &settings.eth).await.unwrap();
+		let client = EthersRpcClient::new(&settings.eth).await.unwrap();
 		let chain_id = client.chain_id().await.unwrap();
 		println!("{:?}", chain_id);
 

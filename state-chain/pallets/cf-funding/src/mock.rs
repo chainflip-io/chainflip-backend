@@ -1,9 +1,10 @@
 use crate as pallet_cf_funding;
+use crate::PalletSafeMode;
 use cf_chains::{ApiCall, Chain, ChainCrypto, Ethereum};
 use cf_primitives::{AccountRole, BroadcastId, ThresholdSignatureRequestId};
 use cf_traits::{
-	impl_mock_callback, impl_mock_chainflip, impl_mock_waived_fees, mocks::time_source,
-	AccountRoleRegistry, Broadcaster, WaivedFees,
+	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_mock_waived_fees,
+	mocks::time_source, AccountRoleRegistry, Broadcaster, WaivedFees,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use core::cell::RefCell;
@@ -167,14 +168,9 @@ impl Broadcaster<Ethereum> for MockBroadcaster {
 	) -> (BroadcastId, ThresholdSignatureRequestId) {
 		unimplemented!()
 	}
-
-	fn threshold_sign_and_broadcast_for_rotation(
-		_api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		unimplemented!()
-	}
 }
 
+impl_mock_runtime_safe_mode! { funding: PalletSafeMode }
 impl pallet_cf_funding::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type TimeSource = time_source::Mock;
@@ -184,6 +180,7 @@ impl pallet_cf_funding::Config for Test {
 	type Broadcaster = MockBroadcaster;
 	type ThresholdCallable = RuntimeCall;
 	type EnsureThresholdSigned = NeverFailingOriginCheck<Self>;
+	type SafeMode = MockRuntimeSafeMode;
 	type RegisterRedemption = MockRegisterRedemption;
 }
 

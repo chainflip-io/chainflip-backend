@@ -144,3 +144,5 @@ pub enum SwapLeg {
 	FromStable,
 	ToStable,
 }
+
+pub type TransactionHash = [u8; 32];

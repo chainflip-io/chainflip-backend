@@ -55,12 +55,6 @@ impl<
 		Self::put_storage(b"CALLBACKS", id, callback);
 		ids
 	}
-
-	fn threshold_sign_and_broadcast_for_rotation(
-		api_call: Self::ApiCall,
-	) -> (BroadcastId, ThresholdSignatureRequestId) {
-		Self::threshold_sign_and_broadcast(api_call)
-	}
 }
 
 impl<

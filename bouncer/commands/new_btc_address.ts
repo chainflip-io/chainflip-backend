@@ -6,14 +6,17 @@
 // For example: pnpm tsx ./commands/new_btc_address.ts foobar P2PKH
 // returns: mhTU7Bz4wv8ESLdB1GdXGs5kE1MBGvdSyb
 
-import { newBtcAddress } from "../shared/new_btc_address";
+import assert from 'assert';
+import { isValidBtcAddressType, newBtcAddress } from '../shared/new_btc_address';
 
 async function main(): Promise<void> {
   const seed = process.argv[2] ?? '';
   const type = process.argv[3] ?? 'P2PKH';
 
+  assert(isValidBtcAddressType(type));
+
   try {
-    const address = await newBtcAddress(seed, type)
+    const address = await newBtcAddress(seed, type);
     console.log(address);
     process.exit(0);
   } catch (err) {

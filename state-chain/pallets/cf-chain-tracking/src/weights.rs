@@ -36,7 +36,7 @@ pub trait WeightInfo {
 /// Weights for pallet_cf_chain_tracking using the Substrate node and recommended hardware.
 pub struct PalletWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
-	// Storage: EthereumChainTracking ChainState (r:1 w:1)
+	// Storage: EthereumChainTracking CurrentChainState (r:1 w:1)
 	fn update_chain_state() -> Weight {
 		// Minimum execution time: 14_000 nanoseconds.
 		Weight::from_ref_time(15_000_000)
@@ -47,7 +47,7 @@ impl<T: frame_system::Config> WeightInfo for PalletWeight<T> {
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
-	// Storage: EthereumChainTracking ChainState (r:1 w:1)
+	// Storage: EthereumChainTracking CurrentChainState (r:1 w:1)
 	fn update_chain_state() -> Weight {
 		// Minimum execution time: 14_000 nanoseconds.
 		Weight::from_ref_time(15_000_000)

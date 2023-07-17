@@ -1,5 +1,11 @@
+pub mod btc_source;
+pub mod dot_source;
+pub mod eth_source;
+pub mod extension;
 pub mod lag_safety;
+pub mod shared;
 pub mod strictly_monotonic;
+pub mod then;
 
 use std::pin::Pin;
 
@@ -8,6 +14,8 @@ use futures_core::Stream;
 pub mod aliases {
 	use std::iter::Step;
 
+	use codec::FullCodec;
+
 	macro_rules! define_trait_alias {
 		(pub trait $name:ident: $($traits:tt)+) => {
 			pub trait $name: $($traits)+ {}
@@ -15,8 +23,8 @@ pub mod aliases {
 		}
 	}
 
-	define_trait_alias!(pub trait Index: Step + PartialEq + Eq + PartialOrd + Ord + Clone + Copy + Send + Sync + Unpin + 'static);
-	define_trait_alias!(pub trait Hash: PartialEq + Eq + Clone + Send + Sync + Unpin + 'static);
+	define_trait_alias!(pub trait Index: FullCodec + Step + PartialEq + Eq + PartialOrd + Ord + Clone + Copy + Send + Sync + Unpin + 'static);
+	define_trait_alias!(pub trait Hash: PartialEq + Eq + Clone + Copy + Send + Sync + Unpin + 'static);
 	define_trait_alias!(pub trait Data: Send + Sync + Unpin + 'static);
 }
 
@@ -27,18 +35,17 @@ pub struct Header<Index, Hash, Data> {
 	pub parent_hash: Option<Hash>,
 	pub data: Data,
 }
-
-#[async_trait::async_trait]
-pub trait ChainSource: Send + Sync {
-	type Index: aliases::Index;
-	type Hash: aliases::Hash;
-	type Data: aliases::Data;
-
-	async fn stream(&self) -> BoxChainStream<'_, Self::Index, Self::Hash, Self::Data>;
+impl<Index: aliases::Index, Hash: aliases::Hash, Data: aliases::Data> Header<Index, Hash, Data> {
+	pub fn map_data<MappedData, F: FnOnce(Self) -> MappedData>(
+		self,
+		f: F,
+	) -> Header<Index, Hash, MappedData> {
+		Header { index: self.index, hash: self.hash, parent_hash: self.parent_hash, data: f(self) }
+	}
 }
 
 #[async_trait::async_trait]
-pub trait ChainSourceWithClient: Send + Sync {
+pub trait ChainSource: Send + Sync {
 	type Index: aliases::Index;
 	type Hash: aliases::Hash;
 	type Data: aliases::Data;
@@ -51,17 +58,6 @@ pub trait ChainSourceWithClient: Send + Sync {
 }
 
 #[async_trait::async_trait]
-impl<T: ChainSourceWithClient> ChainSource for T {
-	type Index = T::Index;
-	type Hash = T::Hash;
-	type Data = T::Data;
-
-	async fn stream(&self) -> BoxChainStream<'_, Self::Index, Self::Hash, Self::Data> {
-		self.stream_and_client().await.0
-	}
-}
-
-#[async_trait::async_trait]
 pub trait ChainClient: Send + Sync {
 	type Index: aliases::Index;
 	type Hash: aliases::Hash;
@@ -71,12 +67,28 @@ pub trait ChainClient: Send + Sync {
 		&self,
 		index: Self::Index,
 	) -> Header<Self::Index, Self::Hash, Self::Data>;
+
+	fn into_box<'a>(self) -> BoxChainClient<'a, Self::Index, Self::Hash, Self::Data>
+	where
+		Self: 'a + Sized,
+	{
+		Box::new(self)
+	}
 }
+pub type BoxChainClient<'a, Index, Hash, Data> =
+	Box<dyn ChainClient<Index = Index, Hash = Hash, Data = Data> + 'a>;
 
 pub trait ChainStream: Stream<Item = Header<Self::Index, Self::Hash, Self::Data>> + Send {
 	type Index: aliases::Index;
 	type Hash: aliases::Hash;
 	type Data: aliases::Data;
+
+	fn into_box<'a>(self) -> BoxChainStream<'a, Self::Index, Self::Hash, Self::Data>
+	where
+		Self: 'a + Sized,
+	{
+		Box::pin(self)
+	}
 }
 impl<
 		Index: aliases::Index,
@@ -96,15 +108,3 @@ pub type BoxChainStream<'a, Index, Hash, Data> = Pin<
 			+ 'a,
 	>,
 >;
-
-pub fn box_chain_stream<
-	'a,
-	Index: aliases::Index,
-	Hash: aliases::Hash,
-	Data: aliases::Data,
-	Underlying: Stream<Item = Header<Index, Hash, Data>> + Send + 'a,
->(
-	underlying: Underlying,
-) -> BoxChainStream<'a, Index, Hash, Data> {
-	Box::pin(underlying)
-}

@@ -20,9 +20,10 @@ use cf_chains::RegisterRedemption;
 use cf_primitives::AccountRole;
 use cf_primitives::EthereumAddress;
 use cf_traits::{
-	AccountInfo, AccountRoleRegistry, Bid, BidderProvider, Broadcaster, Chainflip, EpochInfo,
-	FeePayment, Funding, SystemStateInfo,
+	impl_pallet_safe_mode, AccountInfo, AccountRoleRegistry, Bid, BidderProvider, Broadcaster,
+	Chainflip, EpochInfo, FeePayment, Funding,
 };
+use codec::{Decode, Encode};
 use frame_support::{
 	dispatch::DispatchResultWithPostInfo,
 	ensure,
@@ -34,18 +35,16 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
+use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{CheckedSub, UniqueSaturatedInto, Zero},
 	Saturating,
 };
-use sp_std::cmp::max;
-
-// use sp_runtime::traits::{AtLeast32BitUnsigned, CheckedSub, Saturating, Zero};
-use sp_std::prelude::*;
-
-use sp_std::collections::btree_map::BTreeMap;
+use sp_std::{cmp::max, collections::btree_map::BTreeMap, prelude::*};
 
 pub const PALLET_VERSION: StorageVersion = StorageVersion::new(1);
+
+impl_pallet_safe_mode!(PalletSafeMode; redeem_enabled);
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -104,6 +103,9 @@ pub mod pallet {
 
 		/// Something that provides the current time.
 		type TimeSource: UnixTime;
+
+		/// Safe Mode access.
+		type SafeMode: Get<PalletSafeMode>;
 
 		/// Benchmark stuff
 		type WeightInfo: WeightInfo;
@@ -228,6 +230,9 @@ pub mod pallet {
 
 		/// The Withdrawal Tax has been updated.
 		RedemptionTaxAmountUpdated { amount: T::Amount },
+
+		/// The redemption amount was zero, so no redemption was made. The tax was still levied.
+		RedemptionAmountZero { account_id: AccountId<T> },
 	}
 
 	#[pallet::error]
@@ -257,14 +262,8 @@ pub mod pallet {
 		/// When requesting a redemption, you must not have an amount below the minimum.
 		BelowMinimumFunding,
 
-		/// The redemption signature could not be found.
-		SignatureNotReady,
-
 		/// There are not enough unrestricted funds to process the redemption.
 		InsufficientUnrestrictedFunds,
-
-		/// The requested redemption amount is too low to pay for the redemption tax.
-		RedemptionAmountTooLow,
 
 		/// Minimum funding amount must be greater than the redemption tax.
 		InvalidMinimumFundingUpdate,
@@ -280,6 +279,9 @@ pub mod pallet {
 
 		/// The account is bound to a withdrawal address.
 		AccountBindingRestrictionViolated,
+
+		/// Redeem is disabled due to Safe Mode.
+		RedeemDisabled,
 	}
 
 	#[pallet::call]
@@ -352,7 +354,7 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			let account_id = ensure_signed(origin)?;
 
-			T::SystemState::ensure_no_maintenance()?;
+			ensure!(T::SafeMode::get().redeem_enabled, Error::<T>::RedeemDisabled);
 
 			// Not allowed to redeem if we are an active bidder in the auction phase
 			if T::EpochInfo::is_auction_phase() {
@@ -420,25 +422,30 @@ pub mod pallet {
 			);
 
 			// Update the account balance.
-			T::Flip::try_initiate_redemption(&account_id, net_amount)?;
+			if net_amount > Zero::zero() {
+				T::Flip::try_initiate_redemption(&account_id, net_amount)?;
 
-			// Send the transaction.
-			let contract_expiry = T::TimeSource::now().as_secs() + RedemptionTTLSeconds::<T>::get();
-			let call = T::RegisterRedemption::new_unsigned(
-				<T as Config>::FunderId::from_ref(&account_id).as_ref(),
-				net_amount.unique_saturated_into(),
-				&address,
-				contract_expiry,
-			);
+				// Send the transaction.
+				let contract_expiry =
+					T::TimeSource::now().as_secs() + RedemptionTTLSeconds::<T>::get();
+				let call = T::RegisterRedemption::new_unsigned(
+					<T as Config>::FunderId::from_ref(&account_id).as_ref(),
+					net_amount.unique_saturated_into(),
+					&address,
+					contract_expiry,
+				);
 
-			PendingRedemptions::<T>::insert(&account_id, ());
+				PendingRedemptions::<T>::insert(&account_id, ());
 
-			Self::deposit_event(Event::RedemptionRequested {
-				account_id,
-				amount: net_amount,
-				broadcast_id: T::Broadcaster::threshold_sign_and_broadcast(call).0,
-				expiry_time: contract_expiry,
-			});
+				Self::deposit_event(Event::RedemptionRequested {
+					account_id,
+					amount: net_amount,
+					broadcast_id: T::Broadcaster::threshold_sign_and_broadcast(call).0,
+					expiry_time: contract_expiry,
+				});
+			} else {
+				Self::deposit_event(Event::RedemptionAmountZero { account_id })
+			}
 
 			Ok(().into())
 		}
@@ -608,6 +615,13 @@ pub mod pallet {
 			}
 			for address in addresses_to_remove {
 				RestrictedAddresses::<T>::remove(address);
+				for account_id in RestrictedBalances::<T>::iter_keys() {
+					RestrictedBalances::<T>::mutate(&account_id, |balances| {
+						if balances.contains_key(&address) {
+							balances.remove(&address);
+						}
+					});
+				}
 				Self::deposit_event(Event::RemovedRestrictedAddress { address });
 			}
 			Ok(().into())

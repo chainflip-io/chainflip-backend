@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 pub use cf_amm::{
 	common::{SideMap, Tick},
 	range_orders::Liquidity,
@@ -18,12 +18,46 @@ use chainflip_engine::{
 };
 pub use core::ops::Range;
 use futures::FutureExt;
-use serde::Serialize;
+pub use pallet_cf_pools::{utilities as pool_utilities, Order as BuyOrSellOrder, RangeOrderSize};
+use serde::{Deserialize, Serialize};
+use sp_core::H256;
+use state_chain_runtime::RuntimeCall;
 use utilities::{task_scope::task_scope, CachedStream};
 
-pub use pallet_cf_pools::Order as BuyOrSellOrder;
-
 use crate::connect_submit_and_get_events;
+
+pub async fn register_emergency_withdrawal_address(
+	state_chain_settings: &settings::StateChain,
+	address: EncodedAddress,
+) -> Result<H256> {
+	task_scope(|scope| {
+		async {
+			let call =
+				RuntimeCall::from(pallet_cf_lp::Call::register_emergency_withdrawal_address {
+					address,
+				});
+
+			let (_, state_chain_client) = StateChainClient::connect_with_account(
+				scope,
+				&state_chain_settings.ws_endpoint,
+				&state_chain_settings.signing_key_file,
+				AccountRole::LiquidityProvider,
+				false,
+			)
+			.await?;
+
+			let (tx_hash, ..) = state_chain_client
+				.submit_signed_extrinsic(call)
+				.await
+				.until_finalized()
+				.await
+				.context("Registration for Emergency Withdrawal address failed.")?;
+			Ok(tx_hash)
+		}
+		.boxed()
+	})
+	.await
+}
 
 pub async fn request_liquidity_deposit_address(
 	state_chain_settings: &settings::StateChain,
@@ -146,7 +180,7 @@ pub async fn get_range_orders(
 	.await
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct MintRangeOrderReturn {
 	assets_debited: SideMap<AssetAmount>,
 	collected_fees: SideMap<AssetAmount>,
@@ -156,7 +190,7 @@ pub async fn mint_range_order(
 	state_chain_settings: &settings::StateChain,
 	asset: Asset,
 	range: Range<Tick>,
-	amount: AssetAmount,
+	order_size: RangeOrderSize,
 ) -> Result<MintRangeOrderReturn> {
 	task_scope(|scope| {
 		async {
@@ -175,7 +209,7 @@ pub async fn mint_range_order(
 				.submit_signed_extrinsic(pallet_cf_pools::Call::collect_and_mint_range_order {
 					unstable_asset: asset,
 					price_range_in_ticks: range,
-					liquidity: amount,
+					order_size,
 				})
 				.await
 				.until_finalized()

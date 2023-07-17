@@ -4,15 +4,19 @@ use crate::{
 	DisabledEgressAssets, Error, Event as PalletEvent, FetchOrTransfer, FetchParamDetails,
 	MinimumDeposit, Pallet, ScheduledEgressCcm, ScheduledEgressFetchOrTransfer,
 };
-use cf_chains::{ChannelIdConstructor, ExecutexSwapAndCall, TransferAssetParams};
+use cf_chains::{
+	address::AddressConverter, ChannelIdConstructor, ExecutexSwapAndCall, SwapOrigin,
+	TransferAssetParams,
+};
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
 use cf_test_utilities::assert_has_event;
 use cf_traits::{
 	mocks::{
+		address_converter::MockAddressConverter,
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
 		ccm_handler::{CcmRequest, MockCcmHandler},
 	},
-	AddressDerivationApi, DepositApi, EgressApi,
+	AddressDerivationApi, DepositApi, EgressApi, GetBlockHeight,
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_core::H160;
@@ -35,12 +39,11 @@ fn blacklisted_asset_will_not_egress_via_batch_all() {
 
 		// Cannot egress assets that are blacklisted.
 		assert!(DisabledEgressAssets::<Test>::get(asset).is_none());
-		assert_ok!(IngressEgress::disable_asset_egress(RuntimeOrigin::root(), asset, true));
+		assert_ok!(IngressEgress::enable_or_disable_egress(RuntimeOrigin::root(), asset, true));
 		assert!(DisabledEgressAssets::<Test>::get(asset).is_some());
-		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::AssetEgressDisabled {
-			asset,
-			disabled: true,
-		}));
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::AssetEgressStatusChanged { asset, disabled: true },
+		));
 
 		// Eth should be blocked while Flip can be sent
 		IngressEgress::schedule_egress(asset, 1_000, ALICE_ETH_ADDRESS.into(), None);
@@ -60,12 +63,11 @@ fn blacklisted_asset_will_not_egress_via_batch_all() {
 		);
 
 		// re-enable the asset for Egress
-		assert_ok!(IngressEgress::disable_asset_egress(RuntimeOrigin::root(), asset, false));
+		assert_ok!(IngressEgress::enable_or_disable_egress(RuntimeOrigin::root(), asset, false));
 		assert!(DisabledEgressAssets::<Test>::get(asset).is_none());
-		System::assert_last_event(RuntimeEvent::IngressEgress(crate::Event::AssetEgressDisabled {
-			asset,
-			disabled: false,
-		}));
+		System::assert_last_event(RuntimeEvent::IngressEgress(
+			crate::Event::AssetEgressStatusChanged { asset, disabled: false },
+		));
 
 		IngressEgress::on_finalize(1);
 
@@ -86,7 +88,7 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 		};
 
 		assert!(DisabledEgressAssets::<Test>::get(asset).is_none());
-		assert_ok!(IngressEgress::disable_asset_egress(RuntimeOrigin::root(), asset, true));
+		assert_ok!(IngressEgress::enable_or_disable_egress(RuntimeOrigin::root(), asset, true));
 
 		// Eth should be blocked while Flip can be sent
 		IngressEgress::schedule_egress(asset, 1_000, ALICE_ETH_ADDRESS.into(), Some(ccm.clone()));
@@ -114,7 +116,7 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 		);
 
 		// re-enable the asset for Egress
-		assert_ok!(IngressEgress::disable_asset_egress(RuntimeOrigin::root(), asset, false));
+		assert_ok!(IngressEgress::enable_or_disable_egress(RuntimeOrigin::root(), asset, false));
 
 		IngressEgress::on_finalize(2);
 
@@ -438,10 +440,16 @@ fn can_process_ccm_deposit() {
 			Some(ccm.clone()),
 		));
 
+		let opened_at = BlockNumberProvider::get_block_height();
+
 		// CCM action is stored.
 		let deposit_address = hex_literal::hex!("c6b749fe356b08fdde333b41bc77955482380836").into();
 		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::StartWitnessing { deposit_address, source_asset: from_asset },
+			crate::Event::<Test>::StartWitnessing {
+				deposit_address,
+				source_asset: from_asset,
+				opened_at,
+			},
 		));
 
 		// Making a deposit should trigger CcmHandler.
@@ -458,7 +466,13 @@ fn can_process_ccm_deposit() {
 				deposit_amount: amount,
 				destination_asset: to_asset,
 				destination_address,
-				message_metadata: ccm
+				message_metadata: ccm,
+				origin: SwapOrigin::DepositChannel {
+					deposit_address: MockAddressConverter::to_encoded_address(
+						deposit_address.into()
+					),
+					channel_id: 1,
+				}
 			}]
 		);
 	});

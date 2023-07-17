@@ -99,14 +99,14 @@ pub trait EthRpcApi: Send + Sync {
 	) -> Result<FeeHistory>;
 }
 
-async fn with_rpc_timeout<F: Future, O, Err>(request_future: F) -> Result<O>
+pub async fn with_rpc_timeout<F: Future, O, Err>(request_future: F) -> Result<O>
 where
 	F: Future<Output = std::result::Result<O, Err>>,
 	Err: Into<anyhow::Error>,
 {
 	tokio::time::timeout(ETH_HTTP_REQUEST_TIMEOUT, request_future)
 		.await
-		.context("RPC request timed out")?
+		.context("HTTP RPC request timed out")?
 		.map_err(|e| e.into())
 }
 
@@ -206,12 +206,12 @@ where
 
 impl EthWsRpcClient {
 	pub async fn new(
-		eth_settings: &settings::Eth,
+		ws_node_endpoint: &str,
 		// TODO: make this non-optional once we remove integration tests (PRO-414)
 		expected_chain_id: Option<U256>,
 	) -> Result<Self> {
-		let client = Self::inner_new(&eth_settings.ws_node_endpoint, async {
-			context!(web3::transports::WebSocket::new(&eth_settings.ws_node_endpoint).await)
+		let client = Self::inner_new(ws_node_endpoint, async {
+			context!(web3::transports::WebSocket::new(ws_node_endpoint).await)
 		})
 		.await?;
 
@@ -270,7 +270,9 @@ impl EthWsRpcApi for EthWsRpcClient {
 	async fn subscribe_new_heads(
 		&self,
 	) -> Result<SubscriptionStream<web3::transports::WebSocket, BlockHeader>> {
-		with_rpc_timeout(self.web3.eth_subscribe().subscribe_new_heads())
+		self.web3
+			.eth_subscribe()
+			.subscribe_new_heads()
 			.await
 			.context("Failed to subscribe to new heads with WS Client")
 	}
