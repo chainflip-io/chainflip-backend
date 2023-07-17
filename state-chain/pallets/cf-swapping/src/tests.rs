@@ -725,7 +725,7 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
 				principal_swap_id: Some(1),
-				gas_swap_id: Some(2),
+				gas_swap_id: None,
 			})
 		);
 
@@ -810,8 +810,8 @@ fn can_handle_ccms_with_native_gas_asset() {
 				destination_asset: Asset::Usdc,
 				destination_address: ForeignChainAddress::Eth(Default::default()),
 				message_metadata: ccm,
-				principal_swap_id: Some(1),
-				gas_swap_id: Some(2),
+				principal_swap_id: None,
+				gas_swap_id: Some(1),
 			})
 		);
 
