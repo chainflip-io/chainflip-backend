@@ -292,6 +292,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		state_chain_client: Arc<StateChainClient>,
 	) -> ChunkedByVaultBuilder<IngressAddresses<Inner>>
 	where
+		Inner: ChunkedByVault,
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 		StateChainStream: StateChainStreamApi,
 		StateChainClient: StorageApi + Send + Sync + 'static,
@@ -300,5 +301,5 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			IngressAddresses::new(self.source, scope, state_chain_stream, state_chain_client).await,
 			self.parameters,
 		)
-	}
+
 }
