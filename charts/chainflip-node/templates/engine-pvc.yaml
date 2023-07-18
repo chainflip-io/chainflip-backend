@@ -1,0 +1,15 @@
+{{- if .Values.engine.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "chainflip-node.fullname" . }}-engine-datadb
+  labels:
+    chainflip.io/unit: engine
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: gp2
+{{- end }}

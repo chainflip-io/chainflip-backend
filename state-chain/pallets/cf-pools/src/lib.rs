@@ -30,7 +30,7 @@ pub mod pallet {
 	use cf_amm::{
 		common::{OneToZero, Side, SqrtPriceQ64F96, Tick, ZeroToOne},
 		limit_orders,
-		range_orders::{self, Liquidity},
+		range_orders::{self, AmountsToLiquidityError, Liquidity},
 	};
 	use cf_traits::{AccountRoleRegistry, LpBalanceApi};
 	use frame_system::pallet_prelude::BlockNumberFor;
@@ -48,6 +48,13 @@ pub mod pallet {
 	pub enum Order {
 		Buy,
 		Sell,
+	}
+
+	#[derive(Copy, Clone, Debug, Encode, Decode, TypeInfo, MaxEncodedLen, PartialEq, Eq)]
+	#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
+	pub enum RangeOrderSize {
+		AssetAmounts { desired: SideMap<AssetAmount>, minimum: SideMap<AssetAmount> },
+		Liquidity(Liquidity),
 	}
 
 	#[pallet::config]
@@ -171,6 +178,10 @@ pub mod pallet {
 		InsufficientLiquidity,
 		/// The swap output is past the maximum allowed amount.
 		OutputOverflow,
+		/// Calculated Amounts are below the requested minimum
+		BelowMinimumAmount,
+		/// Minimum must be below desired amount
+		DesiredBelowMinimumAmount,
 	}
 
 	#[pallet::event]
@@ -363,15 +374,60 @@ pub mod pallet {
 		/// - [PositionDoesNotExist](pallet_cf_pools::Error::PositionDoesNotExist)
 		/// - [MaximumGrossLiquidity](pallet_cf_pools::Error::MaximumGrossLiquidity)
 		/// - [InsufficientBalance](pallet_cf_lp::Error::InsufficientBalance)
+		/// - [BelowMinimumAmount](pallet_cf_lp::Error::BelowMinimumAmount)
+		/// - [DesiredBelowMinimumAmount](pallet_cf_lp::Error::DesiredBelowMinimumAmount)
 		#[pallet::weight(T::WeightInfo::collect_and_mint_range_order())]
 		pub fn collect_and_mint_range_order(
 			origin: OriginFor<T>,
 			unstable_asset: any::Asset,
 			price_range_in_ticks: core::ops::Range<Tick>,
-			liquidity: Liquidity,
+			order_size: RangeOrderSize,
 		) -> DispatchResult {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
+
 			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
+				let liquidity = match order_size {
+					RangeOrderSize::Liquidity(liquidity) => liquidity,
+					RangeOrderSize::AssetAmounts { desired, minimum } => {
+						ensure!(
+							desired[Side::Zero] >= minimum[Side::Zero] &&
+								desired[Side::One] >= minimum[Side::One],
+							Error::<T>::DesiredBelowMinimumAmount
+						);
+
+						let liquidity = pool_state
+							.range_orders
+							.desired_amounts_to_liquidity(
+								price_range_in_ticks.start,
+								price_range_in_ticks.end,
+								desired.map(|_side, amount| amount.into()),
+							)
+							.map_err(|error| match error {
+								AmountsToLiquidityError::InvalidTickRange =>
+									Error::<T>::InvalidTickRange,
+							})?;
+
+						let true_amounts = pool_state
+							.range_orders
+							.liquidity_to_amounts::<false>(
+								liquidity,
+								price_range_in_ticks.start,
+								price_range_in_ticks.end,
+							)
+							.expect("Cannot fail because liquidity input was calculated above, and therefore the tick range and liquidity must be valid.")
+							.0;
+
+						let minimum = minimum.map(|_side, amount| amount.into());
+						ensure!(
+							true_amounts[Side::Zero] >= minimum[Side::Zero] &&
+								true_amounts[Side::One] >= minimum[Side::One],
+							Error::<T>::BelowMinimumAmount
+						);
+
+						liquidity
+					},
+				};
+
 				let (assets_debited, range_orders::CollectedFees { fees }) = pool_state
 					.range_orders
 					.collect_and_mint(
@@ -496,7 +552,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
-				let side = Self::order_to_side(order);
+				let side = utilities::order_to_side(order);
 
 				Self::try_debit_single_asset(&lp, unstable_asset, side, amount)?;
 
@@ -563,7 +619,7 @@ pub mod pallet {
 		) -> DispatchResult {
 			let lp = T::AccountRoleRegistry::ensure_liquidity_provider(origin)?;
 			Self::try_mutate_pool_state(unstable_asset, |pool_state| {
-				let side = Self::order_to_side(order);
+				let side = utilities::order_to_side(order);
 
 				let (assets_credited, limit_orders::CollectedAmounts { fees, swapped_liquidity }) =
 					(match side {
@@ -608,7 +664,7 @@ impl<T: Config> SwappingApi for Pallet<T> {
 		if input.is_zero() {
 			return input
 		}
-		let (remaining, fee) = Self::calculate_network_fee(T::NetworkFee::get(), input);
+		let (remaining, fee) = utilities::calculate_network_fee(T::NetworkFee::get(), input);
 		CollectedNetworkFee::<T>::mutate(|total| {
 			total.saturating_accrue(fee);
 		});
@@ -625,7 +681,6 @@ impl<T: Config> SwappingApi for Pallet<T> {
 		Self::try_mutate_pool_state(unstable_asset, |pool_state| {
 			let (from, to, output_amount) = match leg {
 				SwapLeg::FromStable => (STABLE_ASSET, unstable_asset, {
-					debug_assert_eq!(Self::side_to_asset(unstable_asset, Side::One), STABLE_ASSET);
 					let (output_amount, remaining_amount) =
 						pool_state.swap::<cf_amm::common::OneToZero>(input_amount.into(), None);
 					remaining_amount
@@ -635,10 +690,6 @@ impl<T: Config> SwappingApi for Pallet<T> {
 					output_amount
 				}),
 				SwapLeg::ToStable => (unstable_asset, STABLE_ASSET, {
-					debug_assert_eq!(
-						Self::side_to_asset(unstable_asset, Side::Zero),
-						unstable_asset
-					);
 					let (output_amount, remaining_amount) =
 						pool_state.swap::<cf_amm::common::ZeroToOne>(input_amount.into(), None);
 					remaining_amount
@@ -709,7 +760,7 @@ impl<T: Config> Pallet<T> {
 		let assets_credited = amount.try_into()?;
 		T::LpBalance::try_credit_account(
 			lp,
-			Self::side_to_asset(unstable_asset, side),
+			utilities::side_to_asset(unstable_asset, side),
 			assets_credited,
 		)?;
 		Ok(assets_credited)
@@ -730,7 +781,7 @@ impl<T: Config> Pallet<T> {
 		side: Side,
 		amount: AssetAmount,
 	) -> DispatchResult {
-		T::LpBalance::try_debit_account(lp, Self::side_to_asset(unstable_asset, side), amount)
+		T::LpBalance::try_debit_account(lp, utilities::side_to_asset(unstable_asset, side), amount)
 	}
 
 	fn try_debit_both_assets(
@@ -743,28 +794,6 @@ impl<T: Config> Pallet<T> {
 			Self::try_debit_single_asset(lp, unstable_asset, side, assets_debited)?;
 			Ok(assets_debited)
 		})
-	}
-
-	fn side_to_asset(unstable_asset: Asset, side: Side) -> Asset {
-		match side {
-			Side::Zero => unstable_asset,
-			Side::One => STABLE_ASSET,
-		}
-	}
-
-	fn order_to_side(order: Order) -> Side {
-		match order {
-			Order::Buy => Side::One,
-			Order::Sell => Side::Zero,
-		}
-	}
-
-	fn calculate_network_fee(
-		fee_percentage: Permill,
-		input: AssetAmount,
-	) -> (AssetAmount, AssetAmount) {
-		let fee = fee_percentage * input;
-		(input - fee, fee)
 	}
 
 	fn try_mutate_pool_state<
@@ -784,17 +813,37 @@ impl<T: Config> Pallet<T> {
 
 	pub fn current_sqrt_price(from: Asset, to: Asset) -> Option<SqrtPriceQ64F96> {
 		match (from, to) {
-			(STABLE_ASSET, unstable_asset) => {
-				debug_assert_eq!(Self::side_to_asset(unstable_asset, Side::One), STABLE_ASSET);
-				Pools::<T>::get(unstable_asset)
-					.and_then(|mut pool| pool.pool_state.current_sqrt_price::<OneToZero>())
-			},
-			(unstable_asset, STABLE_ASSET) => {
-				debug_assert_eq!(Self::side_to_asset(unstable_asset, Side::Zero), unstable_asset);
-				Pools::<T>::get(unstable_asset)
-					.and_then(|mut pool| pool.pool_state.current_sqrt_price::<ZeroToOne>())
-			},
+			(STABLE_ASSET, unstable_asset) => Pools::<T>::get(unstable_asset)
+				.and_then(|mut pool| pool.pool_state.current_sqrt_price::<OneToZero>()),
+			(unstable_asset, STABLE_ASSET) => Pools::<T>::get(unstable_asset)
+				.and_then(|mut pool| pool.pool_state.current_sqrt_price::<ZeroToOne>()),
 			_ => None,
 		}
+	}
+}
+
+pub mod utilities {
+	use super::*;
+
+	pub fn side_to_asset(unstable_asset: Asset, side: Side) -> Asset {
+		match side {
+			Side::Zero => unstable_asset,
+			Side::One => STABLE_ASSET,
+		}
+	}
+
+	pub fn order_to_side(order: Order) -> Side {
+		match order {
+			Order::Buy => Side::One,
+			Order::Sell => Side::Zero,
+		}
+	}
+
+	pub fn calculate_network_fee(
+		fee_percentage: Permill,
+		input: AssetAmount,
+	) -> (AssetAmount, AssetAmount) {
+		let fee = fee_percentage * input;
+		(input - fee, fee)
 	}
 }

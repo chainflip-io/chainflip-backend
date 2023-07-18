@@ -1,55 +1,35 @@
 import * as crypto from 'crypto';
 import { setTimeout as sleep } from 'timers/promises';
-import Module from "node:module";
-
+import Client from 'bitcoin-core';
 import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
-import { Chain, Asset, assetChains } from '@chainflip-io/cli';
+import { Chain, Asset, assetChains, chainContractIds } from '@chainflip-io/cli';
 import Web3 from 'web3';
+import { u8aToHex } from '@polkadot/util';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
 import { newEthAddress } from './new_eth_address';
 import { CcmDepositMetadata } from './new_swap';
 import cfReceiverMockAbi from '../../eth-contract-abis/perseverance-rc17/CFReceiverMock.json';
-import { u8aToHex } from "@polkadot/util";
 
-// TODO: Import this from the chainflip-io/cli package once it's exported in future versions.
-export function assetToChain(asset: Asset): number {
-  switch (asset) {
-    case 'ETH':
-    case 'FLIP': 
-    case 'USDC': 
-      return 1; // Ethereum
-    case 'DOT': 
-      return 2; // Polkadot
-    case 'BTC': 
-      return 3; // Bitcoin
-    default:
-      throw new Error(`Unsupported asset: ${asset}`);
-  }
-}
+export const lpMutex = new Mutex();
+export const ethNonceMutex = new Mutex();
+export const btcClientMutex = new Mutex();
+export const brokerMutex = new Mutex();
+export const snowWhiteMutex = new Mutex();
 
-export const assetToDecimals = new Map<Asset, number>([
-	["DOT", 10],
-	["ETH", 18],
-	["BTC", 8],
-	["USDC", 6],
-	["FLIP", 18]
-]);
-
-// TODO: Import this from the chainflip-io/cli package once it's exported in future versions.
 export function getEthContractAddress(contract: string): string {
   switch (contract) {
     case 'VAULT':
       return '0xb7a5bd0345ef1cc5e66bf61bdec17d2461fbd968';
     case 'ETH':
       return '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
-    case 'FLIP': 
-      return process.env.ETH_FLIP_ADDRESS ??'0x10C6E9530F1C1AF873a391030a1D9E8ed0630D26'; 
-    case 'USDC': 
+    case 'FLIP':
+      return process.env.ETH_FLIP_ADDRESS ?? '0x10C6E9530F1C1AF873a391030a1D9E8ed0630D26';
+    case 'USDC':
       return process.env.ETH_USDC_ADDRESS ?? '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
-    case 'CFRECEIVER': 
+    case 'CFRECEIVER':
       return '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
     case 'GATEWAY':
       return process.env.ETH_GATEWAY_ADDRESS ?? '0xeEBe00Ac0756308ac4AaBfD76c05c4F3088B8883';
@@ -59,23 +39,23 @@ export function getEthContractAddress(contract: string): string {
 }
 
 export function amountToFineAmount(amount: string, decimals: number): string {
-  let fine_amount = '';
-	if(amount.indexOf('.') == -1){
-		fine_amount = amount + "0".repeat(decimals);
-	} else {
-		const amount_parts = amount.split('.');
-		fine_amount = amount_parts[0] + amount_parts[1].padEnd(decimals,'0').substr(0, decimals);
-	}
-  return fine_amount;
+  let fineAmount = '';
+  if (amount.indexOf('.') === -1) {
+    fineAmount = amount + '0'.repeat(decimals);
+  } else {
+    const amountParts = amount.split('.');
+    fineAmount = amountParts[0] + amountParts[1].padEnd(decimals, '0').substr(0, decimals);
+  }
+  return fineAmount;
 }
 
 export function fineAmountToAmount(fineAmount: string, decimals: number): string {
   let balance = '';
   if (fineAmount.length > decimals) {
-      const decimalLocation = fineAmount.length - decimals;
-      balance = fineAmount.slice(0, decimalLocation) + '.' + fineAmount.slice(decimalLocation);
+    const decimalLocation = fineAmount.length - decimals;
+    balance = fineAmount.slice(0, decimalLocation) + '.' + fineAmount.slice(decimalLocation);
   } else {
-      balance = '0.' + fineAmount.padStart(decimals, '0');
+    balance = '0.' + fineAmount.padStart(decimals, '0');
   }
   return balance;
 }
@@ -109,24 +89,19 @@ function getCachedSubstrateApi(defaultEndpoint: string) {
 
     return api;
   };
-};
+}
 
 export const getChainflipApi = getCachedSubstrateApi(
   process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944',
 );
 export const getPolkadotApi = getCachedSubstrateApi(
-  process.env.POLKADOT_ENDPOINT ?? 'ws://127.0.0.1:9945'
-  );
+  process.env.POLKADOT_ENDPOINT ?? 'ws://127.0.0.1:9945',
+);
 
 export const polkadotSigningMutex = new Mutex();
 
-export function getBtcClient(btcEndpoint?: string): any {
-
-  const require = Module.createRequire(import.meta.url);
-
+export function getBtcClient(btcEndpoint?: string): Client {
   const BTC_ENDPOINT = btcEndpoint || 'http://127.0.0.1:8332';
-
-  const Client = require('bitcoin-core');
 
   return new Client({
     host: BTC_ENDPOINT.split(':')[1].slice(2),
@@ -140,8 +115,12 @@ export function getBtcClient(btcEndpoint?: string): any {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type EventQuery = (data: any) => boolean;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function observeEvent(eventName: string, chainflip: ApiPromise, eventQuery?: EventQuery): Promise<any> {
+export async function observeEvent(
+  eventName: string,
+  chainflip: ApiPromise,
+  eventQuery?: EventQuery,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any> {
   let result;
   let waiting = true;
 
@@ -154,7 +133,6 @@ export async function observeEvent(eventName: string, chainflip: ApiPromise, eve
       const { event } = record;
 
       if (event.section === expectedSection && event.method === expectedMethod) {
-
         const data = event.data.toJSON();
 
         if (query(data)) {
@@ -162,9 +140,7 @@ export async function observeEvent(eventName: string, chainflip: ApiPromise, eve
           waiting = false;
           unsubscribe();
         }
-
       }
-
     });
   });
   while (waiting) {
@@ -173,7 +149,11 @@ export async function observeEvent(eventName: string, chainflip: ApiPromise, eve
   return result;
 }
 
-export async function getAddress(asset: Asset, seed: string, type?: BtcAddressType): Promise<string> {
+export async function getAddress(
+  asset: Asset,
+  seed: string,
+  type?: BtcAddressType,
+): Promise<string> {
   let rawAddress;
 
   switch (asset) {
@@ -186,10 +166,10 @@ export async function getAddress(asset: Asset, seed: string, type?: BtcAddressTy
       rawAddress = await newDotAddress(seed);
       break;
     case 'BTC':
-      rawAddress = await newBtcAddress(seed, type ?? 'P2PKH')
+      rawAddress = await newBtcAddress(seed, type ?? 'P2PKH');
       break;
     default:
-      throw new Error("unexpected token");
+      throw new Error('unexpected token');
   }
 
   return String(rawAddress).trim();
@@ -203,52 +183,66 @@ export function chainFromAsset(asset: Asset): Chain {
   throw new Error('unexpected asset');
 }
 
-export async function observeBalanceIncrease(dstCcy: string, address: string, oldBalance: number): Promise<number> {
-
+export async function observeBalanceIncrease(
+  dstCcy: string,
+  address: string,
+  oldBalance: string,
+): Promise<number> {
   for (let i = 0; i < 120; i++) {
-    const newBalance = await getBalance(dstCcy as Asset, address);
-    if (newBalance > oldBalance) {
-      return Number(newBalance);
+    const newBalance = Number(await getBalance(dstCcy as Asset, address));
+    if (newBalance > Number(oldBalance)) {
+      return newBalance;
     }
 
     await sleep(1000);
   }
 
-  return Promise.reject(new Error("Failed to observe balance increase"));
+  return Promise.reject(new Error('Failed to observe balance increase'));
 }
 
-export async function observeCcmReceived(sourceToken: Asset, destToken: Asset, address: string, messageMetadata: CcmDepositMetadata): Promise<void> {
-  await observeEVMEvent(cfReceiverMockAbi, address, "ReceivedxSwapAndCall", [assetToChain(sourceToken).toString(),'*',messageMetadata.message,getEthContractAddress(destToken.toString()),'*','*'])
-}
-
-export async function observeEVMEvent(contractAbi: any, address: string, eventName: string, eventParametersExpected: string[], initialBlockNumber?:number): Promise<void> {
+export async function observeEVMEvent(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  contractAbi: any,
+  address: string,
+  eventName: string,
+  eventParametersExpected: string[],
+  initialBlockNumber?: number,
+): Promise<void> {
   const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
   const contract = new web3.eth.Contract(contractAbi, address);
-  let initBlockNumber = initialBlockNumber ?? await web3.eth.getBlockNumber();
+  let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
 
   // Gets all the event parameter as an array
-  const eventAbi = cfReceiverMockAbi.find((item) => item.type === 'event' && item.name === eventName)!;
+  const eventAbi = cfReceiverMockAbi.find(
+    (item) => item.type === 'event' && item.name === eventName,
+  )!;
 
   // Get the parameter names of the event
   const parameterNames = eventAbi.inputs.map((input) => input.name);
 
   let eventWitnessed = false;
-  
+
   for (let i = 0; i < 120 && !eventWitnessed; i++) {
     const currentBlockNumber = await web3.eth.getBlockNumber();
     if (currentBlockNumber >= initBlockNumber) {
-      const events = await contract.getPastEvents(eventName, {fromBlock: initBlockNumber, toBlock: currentBlockNumber});
+      const events = await contract.getPastEvents(eventName, {
+        fromBlock: initBlockNumber,
+        toBlock: currentBlockNumber,
+      });
       for (let j = 0; j < events.length && !eventWitnessed; j++) {
         for (let k = 0; k < parameterNames.length; k++) {
           // Allow for wildcard matching
-          if (events[j].returnValues[k] != eventParametersExpected[k] && eventParametersExpected[k] != '*') {
+          if (
+            events[j].returnValues[k] !== eventParametersExpected[k] &&
+            eventParametersExpected[k] !== '*'
+          ) {
             break;
           } else if (k === parameterNames.length - 1) {
             eventWitnessed = true;
             break;
           }
         }
-      }    
+      }
       initBlockNumber = currentBlockNumber + 1;
     }
     await sleep(2500);
@@ -256,43 +250,71 @@ export async function observeEVMEvent(contractAbi: any, address: string, eventNa
 
   if (eventWitnessed) {
     return Promise.resolve();
-  } 
-    return Promise.reject(new Error(`Failed to observe the ${eventName} event`));
-  
+  }
+  return Promise.reject(new Error(`Failed to observe the ${eventName} event`));
+}
 
+export async function observeCcmReceived(
+  sourceToken: Asset,
+  destToken: Asset,
+  address: string,
+  messageMetadata: CcmDepositMetadata,
+): Promise<void> {
+  await observeEVMEvent(cfReceiverMockAbi, address, 'ReceivedxSwapAndCall', [
+    chainContractIds[assetChains[sourceToken]].toString(),
+    '*',
+    messageMetadata.message,
+    getEthContractAddress(destToken.toString()),
+    '*',
+    '*',
+  ]);
 }
 
 // Converts a hex string into a bytes array. Support hex strings start with and without 0x
 export function hexStringToBytesArray(hex: string) {
   return Array.from(Buffer.from(hex.replace(/^0x/, ''), 'hex'));
-};
+}
 
 export function asciiStringToBytesArray(str: string) {
   return Array.from(Buffer.from(str.replace(/^0x/, '')));
 }
 
-export function encodeBtcAddressForContract(address: any) {
-  address = address.replace(/^0x/, '');
-  return Buffer.from(address, 'hex').toString();
+export function encodeBtcAddressForContract(address: string) {
+  const addressHex = address.replace(/^0x/, '');
+  return Buffer.from(addressHex, 'hex').toString();
 }
 
 export function encodeDotAddressForContract(address: string) {
   const keyring = new Keyring({ type: 'sr25519' });
-  return u8aToHex(keyring.decodeAddress(address))
+  return u8aToHex(keyring.decodeAddress(address));
 }
 
+export function encodeFlipAddressForContract(address: string) {
+  const keyring = new Keyring({ type: 'sr25519' });
+  keyring.setSS58Format(2112);
+  return u8aToHex(keyring.decodeAddress(address));
+}
+
+export function hexPubkeyToFlipAddress(hexPubkey: string) {
+  const keyring = new Keyring({ type: 'sr25519' });
+  keyring.setSS58Format(2112);
+  return keyring.encodeAddress(hexPubkey);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function handleSubstrateError(api: any) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (arg: any) => {
-    let {status, events, dispatchError} = arg
-    if(dispatchError){
+    const { dispatchError } = arg;
+    if (dispatchError) {
       let error;
-      if(dispatchError.isModule){
-        const {docs, name, section} = api.registry.findMetaError(dispatchError.asModule);
+      if (dispatchError.isModule) {
+        const { docs, name, section } = api.registry.findMetaError(dispatchError.asModule);
         error = section + '.' + name + ' ' + docs;
       } else {
         error = dispatchError.toString();
       }
-      console.log("Extrinsic failed: " + error);
+      console.log('Extrinsic failed: ' + error);
       process.exit(1);
     }
   };

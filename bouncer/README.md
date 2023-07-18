@@ -22,7 +22,6 @@ following `.npmrc` file at your user home directory (`~/.npmrc`):
 @chainflip-io:registry=https://npm.pkg.github.com/
 ```
 
-
 Then you need to install the dependencies:
 
 ```sh
@@ -30,6 +29,7 @@ cd bouncer
 npm install -g pnpm
 pnpm install
 ```
+
 Note: If npm does not install outdated version of pnpm, you can use corepack to install the latest version:
 `corepack prepare pnpm@latest --activate`
 
@@ -44,3 +44,16 @@ To connect to a remote network such as a Devnet, you need to set the following e
 ```
 
 The values for your network can be found in the `eth-contracts` vault in 1Password.
+
+### Useful commands
+
+The following commands should be executed from the bouncer directory.
+
+- Check formatting:<br>
+  `pnpm prettier:check`
+- Format code:<br>
+  `pnpm prettier:write`
+- Check linting:<br>
+  `pnpm eslint:check`
+- Fix linting:<br>
+  `pnpm eslint:fix`

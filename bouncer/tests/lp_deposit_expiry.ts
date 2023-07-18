@@ -1,9 +1,13 @@
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { runWithTimeout, observeEvent, getChainflipApi, encodeBtcAddressForContract } from '../shared/utils';
+import {
+  runWithTimeout,
+  observeEvent,
+  getChainflipApi,
+  encodeBtcAddressForContract,
+} from '../shared/utils';
 import { sendBtc } from '../shared/send_btc';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
-
 
 async function main(): Promise<void> {
   await cryptoWaitReady();
@@ -25,7 +29,10 @@ async function main(): Promise<void> {
     .requestLiquidityDepositAddress('Btc')
     .signAndSend(lp, { nonce: -1 });
 
-  const depositEventResult = await observeEvent('liquidityProvider:LiquidityDepositAddressReady', chainflip);
+  const depositEventResult = await observeEvent(
+    'liquidityProvider:LiquidityDepositAddressReady',
+    chainflip,
+  );
   const ingressKey = depositEventResult[1].toJSON().btc;
 
   const ingressAddress = encodeBtcAddressForContract(ingressKey);
@@ -36,8 +43,8 @@ async function main(): Promise<void> {
   await observeEvent('liquidityProvider:LiquidityDepositAddressExpired', chainflip);
 
   console.log('Restoring expiry time for LP addresses to ' + originalExpiryTime + ' blocks');
-  await submitGovernanceExtrinsic(chainflip.tx.liquidityProvider.setLpTtl(originalExpiryTime))
-  
+  await submitGovernanceExtrinsic(chainflip.tx.liquidityProvider.setLpTtl(originalExpiryTime));
+
   await observeEvent('liquidityProvider:LpTtlSet', chainflip);
   console.log('=== Test complete ===');
   process.exit(0);

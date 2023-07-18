@@ -17,54 +17,25 @@ permissions:
 
 jobs:
   bouncer:
-    runs-on: [hetzner]
-    container:
-      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20-ubuntu-20.04"
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+    runs-on: [digitalocean]
     timeout-minutes: ${{ inputs.timeout-minutes }}
-    env:
-      POLKADOT_ENDPOINT: ws://polkadot:9944
-      BTC_ENDPOINT: http://bitcoin:8332
-      ETH_ENDPOINT: http://geth:8545
-    services:
-      bitcoin:
-        credentials:
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-        image: ghcr.io/chainflip-io/chainflip-bitcoin-regtest:v24.0.1
-        ports:
-          - 8332:8332
-      polkadot:
-        credentials:
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-        image: ghcr.io/chainflip-io/chainflip-private-polkadot/polkadot:v0.9.36-ci
-        ports:
-          - 9934:9933
-          - 9945:9944
-      geth:
-        credentials:
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-        image: ghcr.io/chainflip-io/chainflip-eth-contracts/geth:perseverance-rc17-1-node
-        ports:
-          - 30303:30303
-          - 30303:30303/udp
-          - 8545:8545
-          - 8546:8546
-          - 8551:8551
     steps:
       - name: Checkout chainflip-backend
         uses: actions/checkout@v3
 
+      - name: Login to Github Container Registry 🔑
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Setup ngrok
         run: |
-          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | tee /etc/apt/sources.list.d/ngrok.list
-          apt update
-          apt install ngrok
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt update
+          sudo apt install ngrok
 
       - name: Configure NodeJS
         uses: actions/setup-node@v3
@@ -82,13 +53,13 @@ jobs:
 
       - name: Install system packages
         run: |
-          apt-get update
-          apt-get install -y bc xxd
+          sudo apt update
+          sudo apt install -y bc xxd
 
       - name: Download binaries
         uses: actions/download-artifact@v3
         with:
-          name: chainflip-backend-bin-ubuntu-20.04
+          name: chainflip-backend-bin-ubuntu-22.04
 
       - name: Install node dependencies
         working-directory: bouncer
@@ -107,7 +78,7 @@ jobs:
         continue-on-error: true
         run: |
           ngrok http http://localhost:9944 --log-format=logfmt --log=/tmp/ngrok-chainflip-node.log &
-          ngrok http http://polkadot:9944 --log-format=logfmt --log=/tmp/ngrok-polkadot.log &
+          ngrok http http://localhost:9945 --log-format=logfmt --log=/tmp/ngrok-polkadot.log &
           sleep 10
 
       - name: Get ngrok URLs
@@ -146,6 +117,13 @@ jobs:
           name: localnet-logs
           path: |
             /tmp/chainflip/chainflip-*.log
+
+      - name: Clean Up docker containers 🧹
+        if: always()
+        continue-on-error: true
+        run: |
+          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs
+          docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
 
       - name: Notify on failed bouncer
         if: failure() && github.ref_name == 'main' || cancelled() && github.ref_name == 'main'

@@ -1,0 +1,26 @@
+{{- if .Values.engine.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "chainflip-node.fullname" . }}-engine
+  annotations:
+    {{ .Values.service.annotations | toYaml | nindent 4 }}
+  labels:
+  {{- include "chainflip-node.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  sessionAffinity: ClientIP
+  clusterIP: {{ .Values.engine.settings.node_p2p.ip_address | required "You must set an IP address for the node_p2p section e.g. 172.20.220.1" }}
+  ports:
+    - name: ip
+      port: {{ .Values.ports.ipPort }}
+      targetPort: ip
+      protocol: TCP
+    - name: healthcheck
+      port: 5555
+      targetPort: healthcheck
+      protocol: TCP
+  selector:
+    app: {{ include "chainflip-node.fullname" . }}-engine
+    chainflip.io/unit: engine
+{{- end }}
