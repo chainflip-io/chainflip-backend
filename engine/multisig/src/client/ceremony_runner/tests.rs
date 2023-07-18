@@ -157,7 +157,7 @@ async fn should_process_delayed_messages_after_finishing_a_stage() {
 		ceremony_runner
 			.process_or_delay_message(
 				sender_account_id.clone(),
-				gen_signing_data_stage2(participants.len() as AuthorityCount)
+				gen_signing_data_stage2(participants.len() as AuthorityCount, 1)
 			)
 			.await,
 		None
@@ -263,7 +263,7 @@ async fn should_ignore_duplicate_delayed_message() {
 		stage_1_state
 			.process_or_delay_message(
 				sender_account_id.clone(),
-				gen_signing_data_stage2(participants.len() as u32)
+				gen_signing_data_stage2(participants.len() as u32, 1)
 			)
 			.await,
 		None
@@ -276,7 +276,7 @@ async fn should_ignore_duplicate_delayed_message() {
 		stage_1_state
 			.process_or_delay_message(
 				sender_account_id.clone(),
-				gen_signing_data_stage2(participants.len() as u32)
+				gen_signing_data_stage2(participants.len() as u32, 1)
 			)
 			.await,
 		None
@@ -333,7 +333,7 @@ async fn should_ignore_message_from_unexpected_stage() {
 	ensure_message_is_ignored(
 		&mut stage_1_state,
 		sender_account_id,
-		gen_signing_data_stage4(participants.len() as u32),
+		gen_signing_data_stage4(participants.len() as u32, 1),
 	)
 	.await;
 }

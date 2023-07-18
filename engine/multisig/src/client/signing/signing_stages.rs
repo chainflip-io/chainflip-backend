@@ -438,3 +438,108 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	use crate::{
+		bitcoin::BtcSigning,
+		client::{
+			signing::{gen_signing_data_stage2, SigningData},
+			PartyIdxMapping,
+		},
+		crypto::Rng,
+	};
+	use cf_primitives::AccountId;
+	use rand::SeedableRng;
+	use signing::gen_signing_data_stage4;
+	use std::{sync::Arc, vec};
+
+	#[tokio::test]
+	async fn should_report_on_invalid_number_of_commitments() {
+		// Just one participant for this test, so we don't get an inconsistency error
+		let participants: BTreeSet<AccountId> = BTreeSet::from_iter([AccountId::from([0; 32])]);
+		const OWN_IDX: AuthorityCount = 1;
+		// For this test we will have 2 signing payloads
+		const NUMBER_OF_PAYLOADS: usize = 2;
+
+		let common = CeremonyCommon {
+			own_idx: OWN_IDX,
+			outgoing_p2p_message_sender: tokio::sync::mpsc::unbounded_channel().0,
+			number_of_signing_payloads: Some(NUMBER_OF_PAYLOADS),
+			ceremony_id: Default::default(),
+			validator_mapping: Arc::new(PartyIdxMapping::from_participants(participants)),
+			all_idxs: BTreeSet::new(),
+			rng: Rng::from_seed([0; 32]),
+		};
+
+		// Create the dummy stage 2 with the common data
+		let stage: VerifyCommitmentsBroadcast2<BtcSigning> = VerifyCommitmentsBroadcast2 {
+			common,
+			signing_common: SigningStateCommonInfo { payloads_and_keys: vec![] },
+			nonces: vec![],
+			commitments: BTreeMap::new(),
+		};
+
+		// Generate stage 2 data with too many commitments (3)
+		if let SigningData::<<BtcSigning as CryptoScheme>::Point>::BroadcastVerificationStage2(bv) =
+			gen_signing_data_stage2(1, NUMBER_OF_PAYLOADS + 1)
+		{
+			let messages = BTreeMap::from_iter([(OWN_IDX, Some(bv))]);
+			// Process the message and check that we get the correct error
+			if let SigningStageResult::Error(blamed, reason) = stage.process(messages).await {
+				assert_eq!(reason, SigningFailureReason::InvalidNumberOfPayloads);
+				assert_eq!(blamed, BTreeSet::from_iter([OWN_IDX]));
+			} else {
+				panic!("Unexpected SigningStageResult");
+			};
+		} else {
+			panic!("Expected a SigningData::BroadcastVerificationStage2");
+		}
+	}
+
+	#[tokio::test]
+	async fn should_report_on_invalid_number_of_local_signatures() {
+		// Just one participant for this test, so we don't get an inconsistency error
+		let participants: BTreeSet<AccountId> = BTreeSet::from_iter([AccountId::from([0; 32])]);
+		const OWN_IDX: AuthorityCount = 1;
+		// For this test we will have 2 signing payloads
+		const NUMBER_OF_PAYLOADS: usize = 2;
+
+		let common = CeremonyCommon {
+			own_idx: OWN_IDX,
+			outgoing_p2p_message_sender: tokio::sync::mpsc::unbounded_channel().0,
+			// Set the number of payloads to 2
+			number_of_signing_payloads: Some(NUMBER_OF_PAYLOADS),
+			ceremony_id: Default::default(),
+			validator_mapping: Arc::new(PartyIdxMapping::from_participants(participants)),
+			all_idxs: BTreeSet::new(),
+			rng: Rng::from_seed([0; 32]),
+		};
+
+		// Create the dummy stage 4 with the common data
+		let stage: VerifyLocalSigsBroadcastStage4<BtcSigning> = VerifyLocalSigsBroadcastStage4 {
+			common,
+			signing_common: SigningStateCommonInfo { payloads_and_keys: vec![] },
+			signature_data: vec![],
+			local_sigs: BTreeMap::new(),
+		};
+
+		// Generate stage 4 data with too many local sigs (3)
+		if let SigningData::<<BtcSigning as CryptoScheme>::Point>::VerifyLocalSigsStage4(bv) =
+			gen_signing_data_stage4(1, NUMBER_OF_PAYLOADS + 1)
+		{
+			let messages = BTreeMap::from_iter([(OWN_IDX, Some(bv))]);
+			// Process the message and check that we get the correct error
+			if let SigningStageResult::Error(blamed, reason) = stage.process(messages).await {
+				assert_eq!(reason, SigningFailureReason::InvalidNumberOfPayloads);
+				assert_eq!(blamed, BTreeSet::from_iter([OWN_IDX]));
+			} else {
+				panic!("Unexpected SigningStageResult");
+			};
+		} else {
+			panic!("Expected a SigningData::BroadcastVerificationStage2");
+		}
+	}
+}
