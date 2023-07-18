@@ -109,13 +109,6 @@ pub mod pallet {
 	}
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-	pub struct DepositAddressDetails<C: Chain> {
-		pub channel_id: ChannelId,
-		pub source_asset: C::ChainAsset,
-		pub opened_at: C::ChainBlockNumber,
-	}
-
-	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 	pub struct DepositChannelDetails<C: Chain, Channel: DepositChannel<C>> {
 		pub deposit_channel: Channel,
 		pub opened_at: C::ChainBlockNumber,
@@ -253,11 +246,6 @@ pub mod pallet {
 	pub(crate) type DepositChannelPool<T: Config<I>, I: 'static = ()> =
 		StorageMap<_, Twox64Concat, ChannelId, T::DepositChannel>;
 
-	/// Map of channel id to the deposit fetch parameters.
-	#[pallet::storage]
-	pub(crate) type FetchParamDetails<T: Config<I>, I: 'static = ()> =
-		StorageMap<_, Twox64Concat, ChannelId, (T::DepositChannel, TargetChainAccount<T, I>)>;
-
 	/// Defines the minimum amount of Deposit allowed for each asset.
 	#[pallet::storage]
 	pub type MinimumDeposit<T: Config<I>, I: 'static = ()> =
@@ -366,7 +354,7 @@ pub mod pallet {
 					);
 				} else {
 					log::error!(
-						"Deposit address {:?} not found in DepositAddressDetailsLookup",
+						"Deposit address {:?} not found in DepositChannelLookup",
 						deposit_address
 					);
 				}
@@ -425,7 +413,7 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets the minimum deposit ammount allowed for an asset.
+		/// Sets the minimum deposit amount allowed for an asset.
 		/// Requires governance
 		///
 		/// ## Events
@@ -478,7 +466,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 										);
 										skip
 									} else {
-										log::error!("Deposit address {:?} not found in DepositAddressDetailsLookup", deposit_address);
+										log::error!("Deposit address {:?} not found in DepositChannelLookup", deposit_address);
 										false
 									}
 								},
@@ -518,7 +506,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 						));
 					} else {
 						log::error!(
-							"Deposit address {:?} not found in DepositAddressDetailsLookup",
+							"Deposit address {:?} not found in DepositChannelLookup",
 							deposit_address
 						);
 					}
@@ -736,7 +724,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				source_asset: deposit_channel_details.deposit_channel.get_asset(),
 			});
 		} else {
-			log::error!("This should not error since we create the DepositAddressDetailsLookup at the time of opening the channel")
+			log::error!("This should not error since we create the DepositChannelLookup at the time of opening the channel")
 		}
 	}
 }
