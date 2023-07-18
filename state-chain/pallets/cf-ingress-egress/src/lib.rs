@@ -197,7 +197,7 @@ pub mod pallet {
 				Self::TargetChain,
 				Address = <<Self as Config<I>>::TargetChain as Chain>::ChainAccount,
 				DepositFetchId = <<Self as Config<I>>::TargetChain as Chain>::DepositFetchId,
-			>;
+			> + Unpin;
 
 		/// Benchmark weights
 		type WeightInfo: WeightInfo;

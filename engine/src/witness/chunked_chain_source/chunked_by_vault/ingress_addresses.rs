@@ -8,7 +8,7 @@ use cf_chains::Chain;
 use futures::FutureExt;
 use futures_core::FusedStream;
 use futures_util::{stream, StreamExt};
-use pallet_cf_ingress_egress::{DepositAddressDetails, DepositChannelDetails};
+use pallet_cf_ingress_egress::DepositChannelDetails;
 use state_chain_runtime::PalletInstanceAlias;
 use tokio::sync::watch;
 use utilities::{
@@ -30,14 +30,28 @@ use super::{ChunkedByVault, ChunkedByVaultAlias, Generic};
 /// This helps ensure the set of ingress addresses witnessed at each block are consistent across
 /// every validator
 #[allow(clippy::type_complexity)]
-pub struct IngressAddresses<Inner: ChunkedByVault> {
+pub struct IngressAddresses<Inner: ChunkedByVault>
+where
+	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
+{
 	inner: Inner,
 	receiver: tokio::sync::watch::Receiver<(
 		Option<pallet_cf_chain_tracking::ChainState<Inner::Chain>>,
-		Vec<(<Inner::Chain as Chain>::ChainAccount, DepositAddressDetails<Inner::Chain>)>,
+		Vec<(
+			<Inner::Chain as Chain>::ChainAccount,
+			DepositChannelDetails<
+				Inner::Chain,
+				<state_chain_runtime::Runtime as pallet_cf_ingress_egress::Config<
+					<Inner::Chain as PalletInstanceAlias>::Instance,
+				>>::DepositChannel,
+			>,
+		)>,
 	)>,
 }
-impl<Inner: ChunkedByVault> IngressAddresses<Inner> {
+impl<Inner: ChunkedByVault> IngressAddresses<Inner>
+where
+	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
+{
 	// We wait for the chain_tracking to pass a blocks height before assessing the addresses that
 	// should be witnessed at that block to ensure, the set of addresses each engine attempts to
 	// witness at a given block is consistent
@@ -66,7 +80,10 @@ impl<Inner: ChunkedByVault> IngressAddresses<Inner> {
 		Vec<(
 			<Inner::Chain as Chain>::ChainAccount,
 			DepositChannelDetails<
-				Inner::Chain, /* pallet_cf_chain_tracking::Config<state_chain_runtime::Runtime>>::DepositChannel, */
+				Inner::Chain,
+				<state_chain_runtime::Runtime as pallet_cf_ingress_egress::Config<
+					<Inner::Chain as PalletInstanceAlias>::Instance,
+				>>::DepositChannel,
 			>,
 		)>,
 	)
@@ -126,12 +143,23 @@ impl<Inner: ChunkedByVault> IngressAddresses<Inner> {
 	}
 }
 #[async_trait::async_trait]
-impl<Inner: ChunkedByVault> ChunkedByVault for IngressAddresses<Inner> {
+impl<Inner: ChunkedByVault> ChunkedByVault for IngressAddresses<Inner>
+where
+	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
+{
 	type Index = Inner::Index;
 	type Hash = Inner::Hash;
 	type Data = (
 		Inner::Data,
-		Vec<(<Inner::Chain as Chain>::ChainAccount, DepositAddressDetails<Inner::Chain>)>,
+		Vec<(
+			<Inner::Chain as Chain>::ChainAccount,
+			DepositChannelDetails<
+				Inner::Chain,
+				<state_chain_runtime::Runtime as pallet_cf_ingress_egress::Config<
+					<Inner::Chain as PalletInstanceAlias>::Instance,
+				>>::DepositChannel,
+			>,
+		)>,
 	);
 
 	type Client = IngressAddressesClient<Inner>;
@@ -148,14 +176,16 @@ impl<Inner: ChunkedByVault> ChunkedByVault for IngressAddresses<Inner> {
 			.stream(parameters)
 			.await
 			.then(move |(epoch, chain_stream, chain_client)| async move {
-				struct State<Inner: ChunkedByVault> {
+				struct State<Inner: ChunkedByVault> where
+				state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain> {
 					receiver:
 						tokio::sync::watch::Receiver<(Option<ChainState<Inner>>, Addresses<Inner>)>,
 					pending_headers: Vec<Header<Inner::Index, Inner::Hash, Inner::Data>>,
 					ready_headers:
 						Vec<Header<Inner::Index, Inner::Hash, (Inner::Data, Addresses<Inner>)>>,
 				}
-				impl<Inner: ChunkedByVault> State<Inner> {
+				impl<Inner: ChunkedByVault> State<Inner> where
+				state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain> {
 					fn add_headers<
 						It: IntoIterator<Item = Header<Inner::Index, Inner::Hash, Inner::Data>>,
 					>(
@@ -227,17 +257,28 @@ type ChainState<Inner> = pallet_cf_chain_tracking::ChainState<<Inner as ChunkedB
 
 type Addresses<Inner> = Vec<(
 	<<Inner as ChunkedByVault>::Chain as Chain>::ChainAccount,
-	DepositAddressDetails<<Inner as ChunkedByVault>::Chain>,
+	DepositChannelDetails<
+		<Inner as ChunkedByVault>::Chain,
+		<state_chain_runtime::Runtime as pallet_cf_ingress_egress::Config<
+			<<Inner as ChunkedByVault>::Chain as PalletInstanceAlias>::Instance,
+		>>::DepositChannel,
+	>,
 )>;
 
-pub struct IngressAddressesClient<Inner: ChunkedByVault> {
+pub struct IngressAddressesClient<Inner: ChunkedByVault>
+where
+	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
+{
 	inner_client: Inner::Client,
 	receiver: tokio::sync::watch::Receiver<(
 		Option<pallet_cf_chain_tracking::ChainState<Inner::Chain>>,
 		Addresses<Inner>,
 	)>,
 }
-impl<Inner: ChunkedByVault> IngressAddressesClient<Inner> {
+impl<Inner: ChunkedByVault> IngressAddressesClient<Inner>
+where
+	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
+{
 	pub fn new(
 		inner_client: Inner::Client,
 		receiver: tokio::sync::watch::Receiver<(
@@ -249,12 +290,23 @@ impl<Inner: ChunkedByVault> IngressAddressesClient<Inner> {
 	}
 }
 #[async_trait::async_trait]
-impl<Inner: ChunkedByVault> ChainClient for IngressAddressesClient<Inner> {
+impl<Inner: ChunkedByVault> ChainClient for IngressAddressesClient<Inner>
+where
+	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
+{
 	type Index = Inner::Index;
 	type Hash = Inner::Hash;
 	type Data = (
 		Inner::Data,
-		Vec<(<Inner::Chain as Chain>::ChainAccount, DepositAddressDetails<Inner::Chain>)>,
+		Vec<(
+			<Inner::Chain as Chain>::ChainAccount,
+			DepositChannelDetails<
+				Inner::Chain,
+				<state_chain_runtime::Runtime as pallet_cf_ingress_egress::Config<
+					<Inner::Chain as PalletInstanceAlias>::Instance,
+				>>::DepositChannel,
+			>,
+		)>,
 	);
 
 	async fn header_at_index(
