@@ -44,14 +44,14 @@ fn can_use_multiple_crypto_schemes() {
 	type Scheme2 = PolkadotSigning;
 	type Scheme3 = BtcSigning;
 
-	fn add_key_for_scheme<Scheme: ChainSigning>(db: &PersistentKeyDB) -> KeyId {
+	fn add_key_for_scheme<C: ChainSigning>(db: &PersistentKeyDB) -> KeyId {
 		let key_id = KeyId::new(GENESIS_EPOCH, rand::random::<[u8; 32]>());
-		db.update_key::<Scheme>(&key_id, &get_single_key_data::<Scheme::CryptoScheme>());
+		db.update_key::<C>(&key_id, &get_single_key_data::<C::CryptoScheme>());
 		key_id
 	}
 
-	fn ensure_loaded_one_key<Scheme: ChainSigning>(db: &PersistentKeyDB, expected_key: &KeyId) {
-		let keys = db.load_keys::<Scheme>();
+	fn ensure_loaded_one_key<C: ChainSigning>(db: &PersistentKeyDB, expected_key: &KeyId) {
+		let keys = db.load_keys::<C>();
 		assert_eq!(keys.len(), 1, "Incorrect number of keys loaded");
 		assert!(keys.contains_key(expected_key), "Incorrect key id");
 	}

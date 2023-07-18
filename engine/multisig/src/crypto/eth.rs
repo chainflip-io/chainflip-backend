@@ -71,7 +71,7 @@ impl CryptoScheme for EvmCryptoScheme {
 	type PublicKey = cf_chains::eth::AggKey;
 	type SigningPayload = SigningPayload;
 	const CRYPTO_TAG: CryptoTag = CryptoTag::Evm;
-	const NAME: &'static str = "Evm Crypto Scheme";
+	const NAME: &'static str = "Evm Crypto";
 
 	fn build_signature(z: Scalar, group_commitment: Self::Point) -> Self::Signature {
 		EthSchnorrSignature { s: *z.as_bytes(), r: group_commitment.get_element() }

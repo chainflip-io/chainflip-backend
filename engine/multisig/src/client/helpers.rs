@@ -81,7 +81,7 @@ macro_rules! test_all_crypto_schemes {
 
 			fn test<C: CryptoScheme>() {
 				if let Err(err) = std::panic::catch_unwind(|| $test_function::<C>($($lt)*) ) {
-					println!("Test failed with {} CryptoScheme", C::NAME);
+					println!("Test failed with {} Scheme", C::NAME);
 					std::panic::resume_unwind(err);
 				}
 			}

@@ -70,7 +70,7 @@ impl CryptoScheme for Ed25519CryptoScheme {
 
 	const CRYPTO_TAG: CryptoTag = CryptoTag::Ed25519;
 
-	const NAME: &'static str = "Ed25519 Crypto Scheme";
+	const NAME: &'static str = "Ed25519 Crypto";
 
 	fn build_signature(
 		z: <Self::Point as super::ECPoint>::Scalar,

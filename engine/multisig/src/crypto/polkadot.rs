@@ -77,7 +77,7 @@ impl CryptoScheme for PolkadotCryptoScheme {
 	type PublicKey = schnorrkel::PublicKey;
 	type SigningPayload = SigningPayload;
 	const CRYPTO_TAG: CryptoTag = CryptoTag::Polkadot;
-	const NAME: &'static str = "Polkadot Crypto Scheme";
+	const NAME: &'static str = "Polkadot Crypto";
 
 	fn build_signature(
 		z: <Self::Point as super::ECPoint>::Scalar,
@@ -167,8 +167,6 @@ fn signature_should_be_valid() {
 	use crate::crypto::Rng;
 	use rand::SeedableRng;
 	use utilities::assert_ok;
-
-	type PolkadotCryptoScheme = <PolkadotSigning as ChainSigning>::CryptoScheme;
 
 	let mut rng = Rng::from_seed([0; 32]);
 

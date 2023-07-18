@@ -72,7 +72,7 @@ impl CryptoScheme for BtcCryptoScheme {
 	type PublicKey = secp256k1::XOnlyPublicKey;
 	type SigningPayload = SigningPayload;
 	const CRYPTO_TAG: CryptoTag = CryptoTag::Bitcoin;
-	const NAME: &'static str = "Bitcoin Crypto Scheme";
+	const NAME: &'static str = "Bitcoin Crypto";
 
 	fn build_signature(z: Scalar, group_commitment: Self::Point) -> Self::Signature {
 		BtcSchnorrSignature { s: z, r: group_commitment }
