@@ -7,7 +7,7 @@ use crate::{
 	witnesser::{EpochStart, ItemMonitor, LatestBlockNumber, MonitorCommand},
 };
 use anyhow::{Context, Result};
-use cf_chains::{btc::ScriptPubkey, Bitcoin};
+use cf_chains::Bitcoin;
 use futures_util::FutureExt;
 use sp_core::H256;
 use utilities::task_scope::Scope;
@@ -21,10 +21,7 @@ pub async fn start(
 	epoch_start_receiver: async_broadcast::Receiver<EpochStart<Bitcoin>>,
 	initial_block_hash: H256,
 	db: Arc<PersistentKeyDB>,
-) -> Result<(
-	tokio::sync::mpsc::UnboundedSender<MonitorCommand<ScriptPubkey>>,
-	tokio::sync::mpsc::UnboundedSender<MonitorCommand<[u8; 32]>>,
-)> {
+) -> Result<tokio::sync::mpsc::UnboundedSender<MonitorCommand<[u8; 32]>>> {
 	let btc_rpc = BtcRpcClient::new(btc_settings)?;
 
 	// We do a simple initial query here to test the connection. Else it's possible the connection
@@ -35,27 +32,6 @@ pub async fn start(
 		.latest_block_number()
 		.await
 		.context("Initial query for BTC latest block number failed.")?;
-
-	let (address_monitor_command_sender, address_monitor) = ItemMonitor::new(
-		state_chain_client
-			.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
-				state_chain_runtime::Runtime,
-				state_chain_runtime::BitcoinInstance,
-			>>(initial_block_hash)
-			.await
-			.context("Failed to get initial BTC deposit details")?
-			.into_iter()
-			.filter_map(|(address, channel_details)| {
-				if channel_details.deposit_channel.asset ==
-					cf_primitives::chains::assets::btc::Asset::Btc
-				{
-					Some(address)
-				} else {
-					None
-				}
-			})
-			.collect(),
-	);
 
 	let (tx_hash_monitor_sender, tx_hash_monitor) = ItemMonitor::new(
 		state_chain_client
@@ -75,12 +51,11 @@ pub async fn start(
 			epoch_start_receiver,
 			state_chain_client,
 			btc_rpc,
-			address_monitor,
 			tx_hash_monitor,
 			db,
 		)
 		.map(|result| result.context("Btc Witnesser failed to start")),
 	);
 
-	Ok((address_monitor_command_sender, tx_hash_monitor_sender))
+	Ok(tx_hash_monitor_sender)
 }

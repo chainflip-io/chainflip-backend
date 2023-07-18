@@ -89,9 +89,6 @@ async fn start_sc_observer_and_get_epoch_start_events<
 
 	let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
-	let (btc_address_monitor_sender, _btc_address_monitor_receiver) =
-		tokio::sync::mpsc::unbounded_channel();
-
 	let (btc_tx_hash_monitor_sender, _btc_tx_hash_monitor_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
@@ -115,7 +112,6 @@ async fn start_sc_observer_and_get_epoch_start_events<
 		dot_monitor_command_sender,
 		dot_monitor_signature_sender,
 		btc_epoch_start_sender,
-		btc_address_monitor_sender,
 		btc_tx_hash_monitor_sender,
 	)
 	.await
@@ -1428,9 +1424,6 @@ async fn run_the_sc_observer() {
 			let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) =
 				async_broadcast::broadcast(10);
 
-			let (btc_address_monitor_sender, _btc_address_monitor_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
 			let (btc_tx_hash_monitor_sender, _btc_tx_hash_monitor_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
@@ -1454,7 +1447,6 @@ async fn run_the_sc_observer() {
 				dot_monitor_command_sender,
 				dot_monitor_signature_sender,
 				btc_epoch_start_sender,
-				btc_address_monitor_sender,
 				btc_tx_hash_monitor_sender,
 			)
 			.await
