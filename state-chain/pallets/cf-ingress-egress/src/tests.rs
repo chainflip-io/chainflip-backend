@@ -4,10 +4,7 @@ use crate::{
 	Event as PalletEvent, FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm,
 	ScheduledEgressFetchOrTransfer,
 };
-use cf_chains::{
-	address::AddressConverter, ChannelIdConstructor, ExecutexSwapAndCall, SwapOrigin,
-	TransferAssetParams,
-};
+use cf_chains::{address::AddressConverter, ExecutexSwapAndCall, SwapOrigin, TransferAssetParams};
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
 use cf_test_utilities::assert_has_event;
 use cf_traits::{
