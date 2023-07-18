@@ -2,8 +2,10 @@
 mod tests;
 
 /// The number of ceremonies ahead of the latest authorized ceremony that
-/// are allowed to create unauthorized ceremonies (delayed messages)
+/// are allowed to create unauthorized ceremonies (delayed messages).
 const CEREMONY_ID_WINDOW: u64 = 6000;
+/// The window is smaller for bitcoin because it supports multiple signing payloads
+const CEREMONY_ID_WINDOW_BTC: u64 = 1500;
 
 use anyhow::{anyhow, bail, Context, Result};
 use futures::FutureExt;
@@ -27,6 +29,7 @@ use crate::{
 	},
 	crypto::{CryptoScheme, Rng},
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage},
+	ChainTag,
 };
 use cf_primitives::{AuthorityCount, CeremonyId};
 use state_chain_runtime::AccountId;
@@ -684,7 +687,11 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 			// Only a ceremony id that is within the ceremony id window can create unauthorised
 			// ceremonies
 			let ceremony_id_string = ceremony_id_string::<Ceremony::Crypto>(ceremony_id);
-			if ceremony_id > latest_ceremony_id + CEREMONY_ID_WINDOW {
+			let ceremony_id_window = match <Ceremony::Crypto as CryptoScheme>::CHAIN_TAG {
+				ChainTag::Ethereum | ChainTag::Polkadot | ChainTag::Ed25519 => CEREMONY_ID_WINDOW,
+				ChainTag::Bitcoin => CEREMONY_ID_WINDOW_BTC,
+			};
+			if ceremony_id > latest_ceremony_id + ceremony_id_window {
 				warn!("Ignoring data: unexpected future ceremony id {ceremony_id_string}",);
 				return
 			} else if ceremony_id <= latest_ceremony_id {
