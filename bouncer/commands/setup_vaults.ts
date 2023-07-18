@@ -7,9 +7,14 @@
 
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { getChainflipApi, getPolkadotApi, getBtcClient, sleep, handleSubstrateError } from '../shared/utils';
+import {
+  getChainflipApi,
+  getPolkadotApi,
+  getBtcClient,
+  sleep,
+  handleSubstrateError,
+} from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
-
 
 async function main(): Promise<void> {
   await cryptoWaitReady();
@@ -110,7 +115,10 @@ async function main(): Promise<void> {
   );
 
   await submitGovernanceExtrinsic(
-    chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(await client.getBlockCount(), btcKey),
+    chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(
+      await client.getBlockCount(),
+      btcKey,
+    ),
   );
 
   // Confirmation
