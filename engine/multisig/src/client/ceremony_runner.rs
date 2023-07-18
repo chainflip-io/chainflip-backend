@@ -232,6 +232,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 				// Check that the number of elements in the data is what we expect
 				if !data.data_size_is_valid::<Ceremony::Crypto>(
 					stage.ceremony_common().all_idxs.len() as AuthorityCount,
+					stage.ceremony_common().number_of_signing_payloads,
 				) {
 					debug!(
 						from_id = sender_id.to_string(),

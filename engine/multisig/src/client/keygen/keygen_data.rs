@@ -61,53 +61,42 @@ impl<P: ECPoint> std::fmt::Display for KeygenData<P> {
 }
 
 impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
-	fn data_size_is_valid<C: CryptoScheme>(&self, num_of_parties: AuthorityCount) -> bool {
+	fn data_size_is_valid<C: CryptoScheme>(
+		&self,
+		num_of_parties: AuthorityCount,
+		_num_of_payloads: Option<usize>,
+	) -> bool {
 		let num_of_parties = num_of_parties as usize;
 		match self {
 			KeygenData::PubkeyShares0(_) | KeygenData::HashComm1(_) =>
 				self.initial_stage_data_size_is_valid::<C>(),
 			KeygenData::VerifyHashComm2(message) => message.data.len() == num_of_parties,
 			KeygenData::CoeffComm3(message) => message.payload.len() <= MAX_COEFF_COMM_3_SIZE,
-			KeygenData::VerifyCoeffComm4(message) => {
-				if message
-					.data
-					.values()
-					.filter_map(|x| x.as_ref())
-					.all(|comm3| comm3.payload.len() > MAX_COEFF_COMM_3_SIZE)
-				{
-					return false
-				}
-
-				message.data.len() == num_of_parties
-			},
+			KeygenData::VerifyCoeffComm4(message) =>
+				message.data_size_is_valid(num_of_parties, MAX_COEFF_COMM_3_SIZE),
 			KeygenData::SecretShares5(_) => true,
 			KeygenData::Complaints6(complaints) => {
 				// The complaints are optional, so we just check the max length
 				complaints.0.len() <= num_of_parties
 			},
-			KeygenData::VerifyComplaints7(message) => {
-				for complaints in message.data.values().flatten() {
-					if complaints.0.len() > num_of_parties {
-						return false
-					}
-				}
-				message.data.len() == num_of_parties
-			},
+			KeygenData::VerifyComplaints7(message) =>
+				message.data.len() == num_of_parties &&
+					!message
+						.data
+						.values()
+						.flatten()
+						.any(|complaints| complaints.0.len() > num_of_parties),
 			KeygenData::BlameResponse8(blame_response) => {
 				// The blame response will only contain a subset, so we just check the max length
 				blame_response.0.len() <= num_of_parties
 			},
-			KeygenData::VerifyBlameResponses9(message) => {
-				if message
-					.data
-					.values()
-					.flatten()
-					.any(|blame_response| blame_response.0.len() > num_of_parties)
-				{
-					return false
-				}
-				message.data.len() == num_of_parties
-			},
+			KeygenData::VerifyBlameResponses9(message) =>
+				message.data.len() == num_of_parties &&
+					!message
+						.data
+						.values()
+						.flatten()
+						.any(|blame_response| blame_response.0.len() > num_of_parties),
 		}
 	}
 

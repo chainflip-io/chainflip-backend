@@ -188,6 +188,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 			own_idx,
 			all_idxs: signer_idxs,
 			rng,
+			number_of_signing_payloads: Some(signing_info.len()),
 		};
 
 		let processor = AwaitCommitments1::<Crypto>::new(
@@ -234,6 +235,7 @@ pub fn prepare_key_handover_request<Crypto: CryptoScheme>(
 			own_idx: our_idx,
 			all_idxs: signer_idxs,
 			rng,
+			number_of_signing_payloads: None,
 		};
 
 		let processor = PubkeySharesStage0::new(
@@ -276,6 +278,7 @@ pub fn prepare_keygen_request<Crypto: CryptoScheme>(
 			own_idx: our_idx,
 			all_idxs: signer_idxs,
 			rng,
+			number_of_signing_payloads: None,
 		};
 
 		let keygen_common = client::keygen::KeygenCommon::new(

@@ -13,6 +13,9 @@ pub mod client;
 /// Provides cryptographic primitives used by the multisig client
 mod crypto;
 
+/// Maximum number of payloads in a single bitcoin signing ceremony
+pub const MAX_BTC_SIGNING_PAYLOADS: usize = 1000;
+
 pub mod p2p {
 	use cf_primitives::AccountId;
 
