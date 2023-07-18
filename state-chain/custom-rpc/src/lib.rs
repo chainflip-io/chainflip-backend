@@ -13,7 +13,6 @@ use state_chain_runtime::{
 	chainflip::Offence,
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi, Environment},
-	LiquidityProvider,
 };
 use std::{marker::PhantomData, sync::Arc};
 
@@ -23,7 +22,8 @@ pub struct RpcPoolInfo {
 }
 
 impl From<Option<Pool<AccountId32>>> for RpcPoolInfo {
-	fn from(pool_info: Option<Pool<AccountId32>>) -> Self {
+	fn from(_pool_info: Option<Pool<AccountId32>>) -> Self {
+		// Note: to construct the type we need to finish PRO-123 first.
 		todo!()
 	}
 }
