@@ -1,6 +1,6 @@
 import Web3 from 'web3';
 import { getNextEthNonce } from './send_eth';
-import erc20abi from '../../eth-contract-abis/IERC20.json';
+import erc20abi from './IERC20_bouncer.json';
 import { amountToFineAmount } from './utils';
 
 export async function sendErc20(

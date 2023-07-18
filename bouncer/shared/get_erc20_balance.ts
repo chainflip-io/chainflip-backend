@@ -1,5 +1,5 @@
 import Web3 from 'web3';
-import erc20abi from '../../eth-contract-abis/IERC20.json';
+import erc20abi from './IERC20_bouncer.json';
 import { fineAmountToAmount } from './utils';
 
 export async function getErc20Balance(
