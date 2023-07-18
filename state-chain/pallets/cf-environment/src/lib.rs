@@ -189,18 +189,18 @@ pub mod pallet {
 	// ARBITRUM CHAIN RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
 	#[pallet::getter(fn supported_arb_assets)]
-	/// Map of supported assets for ETH
+	/// Map of supported assets for ARB
 	pub type ArbitrumSupportedAssets<T: Config> =
 		StorageMap<_, Blake2_128Concat, ArbAsset, EvmAddress>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn arb_key_manager_address)]
-	/// The address of the ETH key manager contract
+	/// The address of the ARB key manager contract
 	pub type ArbitrumKeyManagerAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn arb_vault_address)]
-	/// The address of the ETH vault contract
+	/// The address of the ARB vault contract
 	pub type ArbitrumVaultAddress<T> = StorageValue<_, EvmAddress, ValueQuery>;
 
 	#[pallet::storage]
@@ -210,7 +210,7 @@ pub mod pallet {
 
 	#[pallet::storage]
 	#[pallet::getter(fn arbitrum_chain_id)]
-	/// The ETH chain id
+	/// The ARB chain id
 	pub type ArbitrumChainId<T> = StorageValue<_, cf_chains::eth::api::EthereumChainId, ValueQuery>;
 
 	#[pallet::storage]
@@ -509,7 +509,7 @@ pub mod pallet {
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
 		pub polkadot_runtime_version: RuntimeVersion,
 		pub bitcoin_network: BitcoinNetwork,
-		pub arbeth_token_address: EvmAddress,
+		pub arbusdc_token_address: EvmAddress,
 		pub arb_key_manager_address: EvmAddress,
 		pub arb_vault_address: EvmAddress,
 		pub arbitrum_chain_id: u64,
@@ -539,7 +539,7 @@ pub mod pallet {
 			ArbitrumKeyManagerAddress::<T>::set(self.arb_key_manager_address);
 			ArbitrumVaultAddress::<T>::set(self.arb_vault_address);
 			ArbitrumChainId::<T>::set(self.arbitrum_chain_id);
-			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbEth, self.arbeth_token_address);
+			ArbitrumSupportedAssets::<T>::insert(ArbAsset::ArbUsdc, self.arbusdc_token_address);
 		}
 	}
 }

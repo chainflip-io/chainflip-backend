@@ -71,7 +71,7 @@ pub struct StateChainEnvironment {
 	eth_vault_address: [u8; 20],
 	arb_key_manager_address: [u8; 20],
 	arb_vault_address: [u8; 20],
-	arbeth_token_address: [u8; 20],
+	arbusdc_token_address: [u8; 20],
 	eth_address_checker_address: [u8; 20],
 	ethereum_chain_id: u64,
 	arbitrum_chain_id: u64,
@@ -109,7 +109,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(clean_eth_address, ETH_VAULT_ADDRESS, eth_vault_address);
 	from_env_var!(clean_eth_address, ARB_KEY_MANAGER_ADDRESS, arb_key_manager_address);
 	from_env_var!(clean_eth_address, ARB_VAULT_ADDRESS, arb_vault_address);
-	from_env_var!(clean_eth_address, ARBETH_TOKEN_ADDRESS, arbeth_token_address);
+	from_env_var!(clean_eth_address, ARBUSDC_TOKEN_ADDRESS, arbusdc_token_address);
 	from_env_var!(clean_eth_address, ADDRESS_CHECKER_ADDRESS, eth_address_checker_address);
 	from_env_var!(hex_decode, ETH_INIT_AGG_KEY, eth_init_agg_key);
 	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
@@ -143,7 +143,7 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		eth_vault_address,
 		arb_key_manager_address,
 		arb_vault_address,
-		arbeth_token_address,
+		arbusdc_token_address,
 		eth_address_checker_address,
 		ethereum_chain_id,
 		arbitrum_chain_id,
@@ -177,7 +177,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		eth_vault_address,
 		arb_key_manager_address,
 		arb_vault_address,
-		arbeth_token_address,
+		arbusdc_token_address,
 		eth_address_checker_address,
 		ethereum_chain_id,
 		arbitrum_chain_id,
@@ -245,7 +245,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					eth_vault_address,
 					arb_key_manager_address,
 					arb_vault_address,
-					arbeth_token_address,
+					arbusdc_token_address,
 					eth_address_checker_address,
 					ethereum_chain_id,
 					arbitrum_chain_id,
@@ -313,7 +313,7 @@ macro_rules! network_spec {
 					eth_vault_address,
 					arb_key_manager_address,
 					arb_vault_address,
-					arbeth_token_address,
+					arbusdc_token_address,
 					eth_address_checker_address,
 					ethereum_chain_id,
 					arbitrum_chain_id,
@@ -364,7 +364,7 @@ macro_rules! network_spec {
 								eth_vault_address,
 								arb_key_manager_address,
 								arb_vault_address,
-								arbeth_token_address,
+								arbusdc_token_address,
 								eth_address_checker_address,
 								ethereum_chain_id,
 								arbitrum_chain_id,

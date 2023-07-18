@@ -315,7 +315,8 @@ pub struct ArbEnvironment;
 impl EthEnvironmentProvider<Arbitrum> for ArbEnvironment {
 	fn token_address(asset: assets::arb::Asset) -> Option<H160> {
 		match asset {
-			assets::arb::Asset::ArbEth => Environment::supported_arb_assets(asset).map(Into::into),
+			assets::arb::Asset::ArbEth => Some(ETHEREUM_ETH_ADDRESS.into()),
+			assets::arb::Asset::ArbUsdc => Environment::supported_arb_assets(asset).map(Into::into),
 		}
 	}
 
