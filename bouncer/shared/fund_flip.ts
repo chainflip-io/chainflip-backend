@@ -63,9 +63,9 @@ export async function fundFlip(pubkey: HexString, flipAmount: string) {
     network: 'localnet',
     stateChainGatewayContractAddress: gatewayContractAddress,
     flipContractAddress,
+    nonce: await getNextEthNonce(),
   };
 
-  // TODO: provide nonce manually once it is supported in the SDK/CLI
   const receipt2 = await fundStateChainAccount(pubkey, flipperinoAmount, options);
 
   console.log('Funding ' + flipAmount + ' FLIP to ' + pubkey);
