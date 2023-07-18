@@ -7,10 +7,8 @@ pub mod event;
 
 mod ws_safe_stream;
 
-pub mod address_checker;
 pub mod broadcaster;
 pub mod ethers_rpc;
-pub mod ethers_vault;
 pub mod retry_rpc;
 pub mod rpc;
 pub mod witnessing;

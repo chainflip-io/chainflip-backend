@@ -3,14 +3,13 @@ use std::sync::Arc;
 use utilities::task_scope::Scope;
 
 use crate::{
-	eth::ethers_vault::EthAssetApi,
 	settings::Settings,
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
 	},
 };
 
-use super::epoch_source::EpochSource;
+use super::{epoch_source::EpochSource, vault::EthAssetApi};
 
 use anyhow::Result;
 

@@ -3,9 +3,7 @@ use std::sync::Arc;
 use utilities::task_scope::Scope;
 
 use crate::{
-	eth::{
-		ethers_rpc::EthersRpcClient, ethers_vault::EthAssetApi, retry_rpc::EthersRetryRpcClient,
-	},
+	eth::{ethers_rpc::EthersRpcClient, retry_rpc::EthersRetryRpcClient},
 	settings,
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
@@ -16,6 +14,7 @@ use super::{
 	chain_source::{eth_source::EthSource, extension::ChainSourceExt},
 	common::STATE_CHAIN_CONNECTION,
 	epoch_source::{EpochSourceBuilder},
+	vault::EthAssetApi,
 };
 
 use anyhow::{Context, Result};
