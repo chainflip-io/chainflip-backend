@@ -1,7 +1,7 @@
 import Web3 from 'web3';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { HexString } from '@polkadot/util/types';
-import { assetDecimals, Asset, fundStateChainAccount } from '@chainflip-io/cli';
+import { assetDecimals, fundStateChainAccount } from '@chainflip-io/cli';
 import { Wallet, ethers } from 'ethers';
 import { getNextEthNonce } from './send_eth';
 import { getEthContractAddress, hexPubkeyToFlipAddress } from './utils';
@@ -13,7 +13,7 @@ export async function fundFlip(pubkey: HexString, flipAmount: string) {
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
 
-  const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals['FLIP' as Asset]);
+  const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals.FLIP);
 
   const web3 = new Web3(ethEndpoint);
 

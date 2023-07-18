@@ -6,10 +6,7 @@ export async function createLpPool(ccy: Asset, initialPrice: number) {
   const chainflip = await getChainflipApi(process.env.CF_NODE_ENDPOINT);
 
   const price = BigInt(
-    Math.round(
-      Math.sqrt(initialPrice / 10 ** (assetDecimals[ccy] - assetDecimals['USDC' as Asset])) *
-        2 ** 96,
-    ),
+    Math.round(Math.sqrt(initialPrice / 10 ** (assetDecimals[ccy] - assetDecimals.USDC)) * 2 ** 96),
   );
   console.log(
     'Setting up ' + ccy + ' pool with an initial price of ' + initialPrice + ' USDC per ' + ccy,

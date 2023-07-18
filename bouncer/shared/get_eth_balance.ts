@@ -1,5 +1,5 @@
 import Web3 from 'web3';
-import { assetDecimals, Asset } from '@chainflip-io/cli';
+import { assetDecimals } from '@chainflip-io/cli';
 import { fineAmountToAmount } from './utils';
 
 export async function getEthBalance(address: string): Promise<string> {
@@ -8,5 +8,5 @@ export async function getEthBalance(address: string): Promise<string> {
   const web3 = new Web3(ethEndpoint);
 
   const weiBalance: string = await web3.eth.getBalance(address);
-  return fineAmountToAmount(weiBalance, assetDecimals['ETH' as Asset]);
+  return fineAmountToAmount(weiBalance, assetDecimals.ETH);
 }
