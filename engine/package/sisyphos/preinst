@@ -36,6 +36,8 @@ if [ -z "$ENGINE_CONFIG_LOCATION" ]; then
   exit 0
 fi
 
+echo "chainflip-engine: Migration completed successfully"
+
 #DEBHELPER#
 
 exit 0
