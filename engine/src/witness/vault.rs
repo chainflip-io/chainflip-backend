@@ -11,10 +11,7 @@ use crate::{
 
 use super::{
 	chain_source::ChainClient,
-	chunked_chain_source::{
-		chunked_by_vault::{ChunkedByVault, ChunkedByVaultAlias, Generic},
-		Builder,
-	},
+	chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
 	contract_common::{events_at_block, Event},
 };
 
@@ -198,7 +195,7 @@ where
 	}
 }
 
-impl<Inner: ChunkedByVault> Builder<Generic<Inner>> {
+impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub fn vault_witnessing<
 		StateChainClient,
 		EthRpcClient: EthersRetryRpcApi + ChainClient + Clone,
@@ -207,7 +204,7 @@ impl<Inner: ChunkedByVault> Builder<Generic<Inner>> {
 		state_chain_client: Arc<StateChainClient>,
 		eth_rpc: EthRpcClient,
 		contract_address: H160,
-	) -> Builder<impl ChunkedByVaultAlias>
+	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
 	where
 		Inner: ChunkedByVault<Index = u64, Hash = H256, Data = Bloom, Chain = Ethereum>,
 		StateChainClient: SignedExtrinsicApi + EthAssetApi + Send + Sync + 'static,

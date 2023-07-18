@@ -1,3 +1,4 @@
+pub mod builder;
 pub mod chain_tracking;
 
 use futures_util::StreamExt;
@@ -25,33 +26,6 @@ pub trait ChunkedByTime: Sized + Send + Sync {
 	async fn stream(&self, parameters: Self::Parameters) -> BoxActiveAndFuture<'_, Item<'_, Self>>;
 }
 
-pub trait ChunkedByTimeAlias:
-	ChunkedByTime
-	+ ChunkedChainSource<
-		Info = (),
-		HistoricInfo = (),
-		Index = <Self as ChunkedByTime>::Index,
-		Hash = <Self as ChunkedByTime>::Hash,
-		Data = <Self as ChunkedByTime>::Data,
-		Client = <Self as ChunkedByTime>::Client,
-		Chain = <Self as ChunkedByTime>::Chain,
-	>
-{
-}
-impl<T> ChunkedByTimeAlias for T where
-	T: ChunkedByTime
-		+ ChunkedChainSource<
-			Info = (),
-			HistoricInfo = (),
-			Index = <Self as ChunkedByTime>::Index,
-			Hash = <Self as ChunkedByTime>::Hash,
-			Data = <Self as ChunkedByTime>::Data,
-			Client = <Self as ChunkedByTime>::Client,
-			Chain = <Self as ChunkedByTime>::Chain,
-		>
-{
-}
-
 pub type Item<'a, T> = (
 	Epoch<(), ()>,
 	BoxChainStream<
@@ -77,28 +51,6 @@ impl<T: ChunkedChainSource<Info = (), HistoricInfo = ()>> ChunkedByTime for T {
 
 	async fn stream(&self, parameters: Self::Parameters) -> BoxActiveAndFuture<'_, Item<'_, Self>> {
 		<Self as ChunkedByTime>::stream(self, parameters).await
-	}
-}
-
-/// Wraps a specific impl of ChunkedByTime, and impls ChunkedChainSource for it
-pub struct Generic<T>(pub T);
-#[async_trait::async_trait]
-impl<T: ChunkedByTime> ChunkedChainSource for Generic<T> {
-	type Info = ();
-	type HistoricInfo = ();
-
-	type Index = T::Index;
-	type Hash = T::Hash;
-	type Data = T::Data;
-
-	type Client = T::Client;
-
-	type Chain = T::Chain;
-
-	type Parameters = T::Parameters;
-
-	async fn stream(&self, parameters: Self::Parameters) -> BoxActiveAndFuture<'_, Item<'_, Self>> {
-		self.0.stream(parameters).await
 	}
 }
 
