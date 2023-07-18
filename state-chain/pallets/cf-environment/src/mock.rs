@@ -180,7 +180,7 @@ pub const ETH_KEY_MANAGER_ADDRESS: [u8; 20] = [1u8; 20];
 pub const ETH_VAULT_ADDRESS: [u8; 20] = [2u8; 20];
 pub const ARB_KEY_MANAGER_ADDRESS: [u8; 20] = [3u8; 20];
 pub const ARB_VAULT_ADDRESS: [u8; 20] = [4u8; 20];
-pub const ARBETH_TOKEN_ADDRESS: [u8; 20] = [5u8; 20];
+pub const ARBUSDC_TOKEN_ADDRESS: [u8; 20] = [5u8; 20];
 pub const ADDRESS_CHECKER: [u8; 20] = [3u8; 20];
 pub const ETH_CHAIN_ID: u64 = 1;
 pub const ARB_CHAIN_ID: u64 = 2;
@@ -197,7 +197,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			eth_vault_address: ETH_VAULT_ADDRESS,
 			arb_key_manager_address: ARB_KEY_MANAGER_ADDRESS,
 			arb_vault_address: ARB_VAULT_ADDRESS,
-			arbeth_token_address: ARBETH_TOKEN_ADDRESS,
+			arbusdc_token_address: ARBUSDC_TOKEN_ADDRESS,
 			eth_address_checker_address: ADDRESS_CHECKER,
 			flip_token_address: [0u8; 20],
 			eth_usdc_address: [0x2; 20],

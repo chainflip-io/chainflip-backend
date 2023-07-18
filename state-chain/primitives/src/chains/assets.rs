@@ -57,6 +57,7 @@ pub mod any {
 		Dot = 4u32,
 		Btc = 5u32,
 		ArbEth = 6u32,
+		ArbUsdc = 7u32,
 	}
 
 	impl TryFrom<u32> for Asset {
@@ -70,6 +71,7 @@ pub mod any {
 				x if x == Self::Dot as u32 => Ok(Self::Dot),
 				x if x == Self::Btc as u32 => Ok(Self::Btc),
 				x if x == Self::ArbEth as u32 => Ok(Self::ArbEth),
+				x if x == Self::ArbUsdc as u32 => Ok(Self::ArbUsdc),
 				_ => Err("Invalid asset id"),
 			}
 		}
@@ -91,6 +93,7 @@ pub mod any {
 				Asset::Dot => Self::Polkadot,
 				Asset::Btc => Self::Bitcoin,
 				Asset::ArbEth => Self::Arbitrum,
+				Asset::ArbUsdc => Self::Arbitrum,
 			}
 		}
 	}
@@ -106,6 +109,7 @@ pub mod any {
 				"dot" => Ok(Asset::Dot),
 				"btc" => Ok(Asset::Btc),
 				"arbeth" => Ok(Asset::ArbEth),
+				"arbusdc" => Ok(Asset::ArbUsdc),
 				_ => Err("Unrecognized asset"),
 			}
 		}
@@ -197,7 +201,7 @@ macro_rules! chain_assets {
 chain_assets!(eth, Ethereum, Eth, Flip, Usdc);
 chain_assets!(dot, Polkadot, Dot);
 chain_assets!(btc, Bitcoin, Btc);
-chain_assets!(arb, Arbitrum, ArbEth);
+chain_assets!(arb, Arbitrum, ArbEth, ArbUsdc);
 
 #[cfg(test)]
 mod test_assets {
@@ -225,6 +229,7 @@ mod test_assets {
 		assert_eq!(Asset::try_from(4).unwrap(), Asset::Dot);
 		assert_eq!(Asset::try_from(5).unwrap(), Asset::Btc);
 		assert_eq!(Asset::try_from(6).unwrap(), Asset::ArbEth);
+		assert_eq!(Asset::try_from(7).unwrap(), Asset::ArbUsdc);
 	}
 
 	#[test]
@@ -235,6 +240,7 @@ mod test_assets {
 		assert_conversion!(dot, Dot);
 		assert_conversion!(btc, Btc);
 		assert_conversion!(arb, ArbEth);
+		assert_conversion!(arb, ArbUsdc);
 
 		assert_incompatible!(eth, Dot);
 		assert_incompatible!(dot, Eth);
