@@ -19,8 +19,7 @@ systemd-units = { unit-name = "chainflip-engine", enable = false }
 [package.metadata.deb.variants.development]
 maintainer-scripts = "package/development"
 assets = [
-    ["target/release/chainflip-engine", "usr/bin/", "755"],
-    ["start-engine.sh", "/etc/chainflip/start-engine.sh", "755"]
+    ["target/release/chainflip-engine", "usr/bin/", "755"]
   ]
 
 [package.metadata.deb.variants.sisyphos]
@@ -33,7 +32,8 @@ assets = [
 [package.metadata.deb.variants.perseverance]
 maintainer-scripts = "package/perseverance"
 assets = [
-    ["target/release/chainflip-engine", "usr/bin/", "755"]
+    ["target/release/chainflip-engine", "usr/bin/", "755"],
+    ["start-engine.sh", "/etc/chainflip/start-engine.sh", "755"]
   ]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
