@@ -1,14 +1,14 @@
 #!/bin/sh
 
 ENGINE_VERSION="0.8.5"
-CURRENT_RUNTIME_VERSION=3
+CURRENT_RUNTIME_VERSION=7
 
 _get_runtime_version() {
   curl -H "Content-Type: application/json" -d '{"id":1, "jsonrpc":"2.0", "method": "state_getRuntimeVersion", "params": []}' http://localhost:9933
 }
 
 _run_old_version() {
-  /usr/local/bin/chainflip/$ENGINE_VERSION/chainflip-engine --config-path /etc/chainflip/config/Settings.toml
+  /usr/local/bin/chainflip/$ENGINE_VERSION/chainflip-engine --config-root /etc/chainflip/
 }
 
 _run_new_version() {
