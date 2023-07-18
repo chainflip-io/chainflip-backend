@@ -142,6 +142,11 @@ impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
 					message.payload.len() <= LOCAL_SIG_MAX_SIZE,
 				// TODO: Find out what a realistic maximum is for the number of payloads we
 				// can handle is for btc
+				// TODO: Technically, this condition is on the Bitcoin chain rather than the Bitcoin
+				// Crypto Scheme so we might want to address this. However, in practice this will
+				// only matter if we want to have different limits on the number of payloads
+				// depending on chain that have the same crypto scheme (that is, the bitcoin crypto
+				// scheme).
 				CryptoTag::Bitcoin => true,
 			},
 			SigningData::VerifyLocalSigsStage4(message) =>
@@ -156,6 +161,11 @@ impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
 					message.payload.len() <= SIGNING_COMMITMENT_MAX_SIZE,
 				// TODO: Find out what a realistic maximum is for the number of payloads we
 				// can handle is for btc
+				// TODO: Technically, this condition is on the Bitcoin chain rather than the Bitcoin
+				// Crypto Scheme so we might want to address this. However, in practice this will
+				// only matter if we want to have different limits on the number of payloads
+				// depending on chain that have the same crypto scheme (that is, the bitcoin crypto
+				// scheme).
 				CryptoTag::Bitcoin => true,
 			},
 			_ => panic!("unexpected stage"),
