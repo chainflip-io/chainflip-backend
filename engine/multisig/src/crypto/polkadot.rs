@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 
 use super::{
-	curve25519::ristretto::Point, CanonicalEncoding, ChainTag, CryptoScheme, ECPoint,
-	SignatureToThresholdSignature,
+	curve25519::ristretto::Point, CanonicalEncoding, ChainSigning, ChainTag, CryptoScheme,
+	CryptoTag, ECPoint, SignatureToThresholdSignature,
 };
 use cf_chains::{ChainCrypto, Polkadot};
 use schnorrkel::context::{SigningContext, SigningTranscript};
@@ -61,16 +61,23 @@ impl CanonicalEncoding for schnorrkel::PublicKey {
 		self.to_bytes().to_vec()
 	}
 }
+#[derive(Clone, Debug, PartialEq)]
+pub struct PolkadotCryptoScheme;
 
-impl CryptoScheme for PolkadotSigning {
+impl ChainSigning for PolkadotSigning {
+	type CryptoScheme = PolkadotCryptoScheme;
+	type Chain = cf_chains::Polkadot;
+	const NAME: &'static str = "Polkadot";
+	const CHAIN_TAG: ChainTag = ChainTag::Polkadot;
+}
+
+impl CryptoScheme for PolkadotCryptoScheme {
 	type Point = Point;
 	type Signature = PolkadotSignature;
 	type PublicKey = schnorrkel::PublicKey;
 	type SigningPayload = SigningPayload;
-	type Chain = cf_chains::Polkadot;
-
-	const NAME: &'static str = "Polkadot";
-	const CHAIN_TAG: ChainTag = ChainTag::Polkadot;
+	const CRYPTO_TAG: CryptoTag = CryptoTag::Polkadot;
+	const NAME: &'static str = "Polkadot Crypto";
 
 	fn build_signature(
 		z: <Self::Point as super::ECPoint>::Scalar,
@@ -168,19 +175,20 @@ fn signature_should_be_valid() {
 	let public_key = Point::from_scalar(&secret_key);
 
 	// Message to sign
-	let payload = PolkadotSigning::signing_payload_for_test();
+	let payload = PolkadotCryptoScheme::signing_payload_for_test();
 
 	let signature = {
 		// Pick random nonce and commit to it
 		let nonce = Scalar::random(&mut rng);
 		let nonce_commitment = Point::from_scalar(&nonce);
 
-		let challenge = PolkadotSigning::build_challenge(public_key, nonce_commitment, &payload);
+		let challenge =
+			PolkadotCryptoScheme::build_challenge(public_key, nonce_commitment, &payload);
 
 		let response =
-			PolkadotSigning::build_response(nonce, nonce_commitment, &secret_key, challenge);
+			PolkadotCryptoScheme::build_response(nonce, nonce_commitment, &secret_key, challenge);
 
-		PolkadotSigning::build_signature(response, nonce_commitment)
+		PolkadotCryptoScheme::build_signature(response, nonce_commitment)
 	};
 
 	assert_ok!(schnorrkel::PublicKey::from_point(public_key.get_element()).verify_simple(
