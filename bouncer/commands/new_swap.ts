@@ -8,7 +8,7 @@
 // Argument 4 is the broker fee in basis points
 // For example: pnpm tsx ./commands/new_swap.ts dot btc n1ocq2FF95qopwbEsjUTy3ZrawwXDJ6UsX 100
 
-import { Asset } from '@chainflip-io/cli/.';
+import { Asset } from '@chainflip-io/cli';
 import { runWithTimeout } from '../shared/utils';
 import { newSwap } from '../shared/new_swap';
 

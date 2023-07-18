@@ -1,5 +1,5 @@
 import { randomAsHex, randomAsNumber } from '@polkadot/util-crypto';
-import { Asset } from '@chainflip-io/cli/.';
+import { Asset } from '@chainflip-io/cli';
 import Web3 from 'web3';
 import { performSwap } from '../shared/perform_swap';
 import {
