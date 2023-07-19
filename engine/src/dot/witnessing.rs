@@ -11,10 +11,7 @@ use crate::{
 use crate::state_chain_observer::client::storage_api::StorageApi;
 
 use anyhow::{Context, Result};
-use cf_chains::{
-	dot::{PolkadotAccountId, PolkadotSignature},
-	Polkadot,
-};
+use cf_chains::{dot::PolkadotSignature, Polkadot};
 use sp_core::H256;
 use tokio::sync::Mutex;
 use utilities::task_scope::Scope;
@@ -31,31 +28,7 @@ pub async fn start(
 	epoch_start_receiver_2: async_broadcast::Receiver<EpochStart<Polkadot>>,
 	initial_block_hash: H256,
 	db: Arc<PersistentKeyDB>,
-) -> Result<(
-	tokio::sync::mpsc::UnboundedSender<MonitorCommand<PolkadotAccountId>>,
-	tokio::sync::mpsc::UnboundedSender<MonitorCommand<PolkadotSignature>>,
-)> {
-	let (monitor_address_sender, address_monitor) = ItemMonitor::new(
-		state_chain_client
-			.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
-				state_chain_runtime::Runtime,
-				state_chain_runtime::PolkadotInstance,
-			>>(initial_block_hash)
-			.await
-			.context("Failed to get initial deposit details")?
-			.into_iter()
-			.filter_map(|(address, channel_details)| {
-				if channel_details.deposit_channel.asset ==
-					cf_primitives::chains::assets::dot::Asset::Dot
-				{
-					Some(address)
-				} else {
-					None
-				}
-			})
-			.collect(),
-	);
-
+) -> Result<tokio::sync::mpsc::UnboundedSender<MonitorCommand<PolkadotSignature>>> {
 	let (monitor_signature_sender, signature_monitor) = ItemMonitor::new(
 		state_chain_client
 			.storage_map::<pallet_cf_broadcast::TransactionOutIdToBroadcastId<
@@ -69,7 +42,6 @@ pub async fn start(
 			.collect(),
 	);
 
-	let address_monitor = Arc::new(Mutex::new(address_monitor));
 	let signature_monitor = Arc::new(Mutex::new(signature_monitor));
 
 	let dot_settings_c = dot_settings.clone();
@@ -78,7 +50,6 @@ pub async fn start(
 		let dot_settings = dot_settings_c.clone();
 		let epoch_start_receiver_1 = epoch_start_receiver_1.clone();
 		let db = db.clone();
-		let address_monitor = address_monitor.clone();
 		let signature_monitor = signature_monitor.clone();
 		let state_chain_client = state_chain_client_c.clone();
 		async move {
@@ -96,7 +67,6 @@ pub async fn start(
 				resume_at_epoch,
 				epoch_start_receiver_1,
 				dot_rpc_client,
-				address_monitor,
 				signature_monitor,
 				state_chain_client,
 				db,
@@ -143,5 +113,5 @@ pub async fn start(
 		Ok(())
 	});
 
-	Ok((monitor_address_sender, monitor_signature_sender))
+	Ok(monitor_signature_sender)
 }

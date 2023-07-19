@@ -5,11 +5,10 @@ use cf_chains::dot::{
 	Polkadot, PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash,
 	PolkadotProxyType, PolkadotSignature, PolkadotUncheckedExtrinsic,
 };
-use cf_primitives::{chains::assets, EpochIndex, PolkadotBlockNumber, TxId};
+use cf_primitives::{EpochIndex, PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use frame_support::scale_info::TypeInfo;
 use futures::{stream, Stream, StreamExt, TryStreamExt};
-use pallet_cf_ingress_egress::DepositWitness;
 use sp_core::H256;
 use state_chain_runtime::PolkadotInstance;
 use subxt::{
@@ -133,14 +132,7 @@ fn check_for_interesting_events_in_block(
 	block_events: Vec<(Phase, EventWrapper)>,
 	block_number: PolkadotBlockNumber,
 	our_vault: &PolkadotAccountId,
-	address_monitor: &mut Arc<Mutex<ItemMonitor<PolkadotAccountId, PolkadotAccountId, ()>>>,
-) -> (
-	Vec<(PolkadotExtrinsicIndex, PolkadotBalance)>,
-	Vec<DepositWitness<Polkadot>>,
-	Vec<Box<state_chain_runtime::RuntimeCall>>,
-) {
-	// to contain all the deposit witnesses for this block
-	let mut deposit_witnesses = Vec::new();
+) -> (Vec<(PolkadotExtrinsicIndex, PolkadotBalance)>, Vec<Box<state_chain_runtime::RuntimeCall>>) {
 	// We only want to attempt to decode extrinsics that were sent by us. Since
 	// a) we know how to decode calls we create (but not necessarily all calls on Polkadot)
 	// b) these are the only extrinsics we are interested in
@@ -148,8 +140,6 @@ fn check_for_interesting_events_in_block(
 	let mut vault_key_rotated_calls: Vec<Box<_>> = Vec::new();
 	let mut fee_paid_for_xt_at_index = HashMap::new();
 	let events_iter = block_events.iter();
-
-	let mut address_monitor = address_monitor.try_lock().expect("should have exclusive ownership");
 
 	for (phase, wrapped_event) in events_iter {
 		if let Phase::ApplyExtrinsic(extrinsic_index) = *phase {
@@ -171,21 +161,7 @@ fn check_for_interesting_events_in_block(
 						.into(),
 					));
 				},
-				EventWrapper::Transfer(Transfer { to, amount, from }) => {
-					// When we get a transfer event, we want to check that we have
-					// pulled the latest addresses to monitor from the chain first
-					address_monitor.sync_items();
-
-					if address_monitor.contains(to) {
-						info!("Witnessing DOT Ingress {{ amount: {amount:?}, to: {to:?} }}");
-						deposit_witnesses.push(DepositWitness {
-							deposit_address: *to,
-							asset: assets::dot::Asset::Dot,
-							amount: *amount,
-							deposit_details: (),
-						});
-					}
-
+				EventWrapper::Transfer(Transfer { to, amount: _, from }) => {
 					// if `from` is our_vault then we're doing an egress
 					// if `to` is our_vault then we're doing a "deposit fetch"
 					if from == our_vault || to == our_vault {
@@ -205,7 +181,6 @@ fn check_for_interesting_events_in_block(
 			.into_iter()
 			.map(|index| (index, *fee_paid_for_xt_at_index.get(&index).unwrap()))
 			.collect(),
-		deposit_witnesses,
 		vault_key_rotated_calls,
 	)
 }
@@ -221,7 +196,6 @@ pub async fn start<StateChainClient, DotRpc>(
 	resume_at: Option<EpochStart<Polkadot>>,
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Polkadot>>,
 	dot_client: DotRpc,
-	address_monitor: Arc<Mutex<ItemMonitor<PolkadotAccountId, PolkadotAccountId, ()>>>,
 	signature_monitor: Arc<Mutex<ItemMonitor<PolkadotSignature, PolkadotSignature, ()>>>,
 	state_chain_client: Arc<StateChainClient>,
 	db: Arc<PersistentKeyDB>,
@@ -237,7 +211,7 @@ where
 			generator: DotWitnesserGenerator { state_chain_client, dot_client },
 			db,
 		},
-		(address_monitor, signature_monitor),
+		signature_monitor,
 	)
 	.instrument(info_span!("Dot-Witnesser"))
 	.await
@@ -268,15 +242,12 @@ where
 {
 	type Chain = Polkadot;
 	type Block = (H256, u32, Vec<(Phase, EventWrapper)>);
-	type StaticState = (
-		Arc<Mutex<ItemMonitor<PolkadotAccountId, PolkadotAccountId, ()>>>,
-		Arc<Mutex<ItemMonitor<PolkadotSignature, PolkadotSignature, ()>>>,
-	);
+	type StaticState = Arc<Mutex<ItemMonitor<PolkadotSignature, PolkadotSignature, ()>>>;
 
 	async fn process_block(
 		&mut self,
 		data: Self::Block,
-		(address_monitor, signature_monitor): &mut Self::StaticState,
+		signature_monitor: &mut Self::StaticState,
 	) -> anyhow::Result<()> {
 		let (block_hash, block_number, block_event_details) = data;
 		trace!("Checking block: {block_number}, with hash: {block_hash:?} for interesting events");
@@ -284,13 +255,11 @@ where
 		let mut signature_monitor =
 			signature_monitor.try_lock().expect("should have exclusive ownership");
 
-		let (interesting_indices, deposit_witnesses, vault_key_rotated_calls) =
-			check_for_interesting_events_in_block(
-				block_event_details,
-				block_number,
-				&self.vault_account,
-				address_monitor,
-			);
+		let (interesting_indices, vault_key_rotated_calls) = check_for_interesting_events_in_block(
+			block_event_details,
+			block_number,
+			&self.vault_account,
+		);
 
 		for call in vault_key_rotated_calls {
 			self.state_chain_client
@@ -352,21 +321,6 @@ where
 					debug!("Failed to decode UncheckedExtrinsic {unchecked:?}");
 				}
 			}
-		}
-
-		if !deposit_witnesses.is_empty() {
-			self.state_chain_client
-				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-					call: Box::new(
-						pallet_cf_ingress_egress::Call::<_, PolkadotInstance>::process_deposits {
-							deposit_witnesses,
-							block_height: block_number,
-						}
-						.into(),
-					),
-					epoch_index: self.epoch_index,
-				})
-				.await;
 		}
 
 		Ok(())
@@ -559,83 +513,15 @@ mod tests {
 			(3u32, mock_tx_fee_paid(20000)),
 		]);
 
-		let (mut interesting_indices, deposit_witnesses, vault_key_rotated_calls) =
+		let (mut interesting_indices, vault_key_rotated_calls) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				Default::default(),
 				&our_vault,
-				&mut Arc::new(Mutex::new(ItemMonitor::new(Default::default()).1)),
 			);
 
 		assert_eq!(vault_key_rotated_calls.len(), 1);
 		assert_eq!(interesting_indices.pop().unwrap(), (our_proxy_added_index, fee_paid));
-		assert!(deposit_witnesses.is_empty());
-	}
-
-	#[test]
-	fn witness_deposits_for_addresses_we_monitor() {
-		// we want two monitors, one sent through at start, and one sent through channel
-		const TRANSFER_1_INDEX: u32 = 1;
-		let transfer_1_deposit_address = PolkadotAccountId::from_aliased([1; 32]);
-		const TRANSFER_1_AMOUNT: PolkadotBalance = 10000;
-
-		const TRANSFER_2_INDEX: u32 = 2;
-		let transfer_2_deposit_address = PolkadotAccountId::from_aliased([2; 32]);
-		const TRANSFER_2_AMOUNT: PolkadotBalance = 20000;
-
-		let block_event_details = phase_and_events(&[
-			// we'll be witnessing this from the start
-			(
-				TRANSFER_1_INDEX,
-				mock_transfer(
-					&PolkadotAccountId::from_aliased([7; 32]),
-					&transfer_1_deposit_address,
-					TRANSFER_1_AMOUNT,
-				),
-			),
-			// we'll receive this address from the channel
-			(
-				TRANSFER_2_INDEX,
-				mock_transfer(
-					&PolkadotAccountId::from_aliased([7; 32]),
-					&transfer_2_deposit_address,
-					TRANSFER_2_AMOUNT,
-				),
-			),
-			// this one is not for us
-			(
-				19,
-				mock_transfer(
-					&PolkadotAccountId::from_aliased([7; 32]),
-					&PolkadotAccountId::from_aliased([9; 32]),
-					93232,
-				),
-			),
-		]);
-
-		let (monitor_command_sender, address_monitor) =
-			ItemMonitor::new(BTreeSet::from([transfer_1_deposit_address]));
-
-		monitor_command_sender
-			.send(MonitorCommand::Add(transfer_2_deposit_address))
-			.unwrap();
-
-		let (interesting_indices, deposit_witnesses, vault_key_rotated_calls) =
-			check_for_interesting_events_in_block(
-				block_event_details,
-				20,
-				// arbitrary, not focus of the test
-				&PolkadotAccountId::from_aliased([0xda; 32]),
-				&mut Arc::new(Mutex::new(address_monitor)),
-			);
-
-		assert_eq!(deposit_witnesses.len(), 2);
-		assert_eq!(deposit_witnesses.get(0).unwrap().amount, TRANSFER_1_AMOUNT);
-		assert_eq!(deposit_witnesses.get(1).unwrap().amount, TRANSFER_2_AMOUNT);
-
-		// We don't need to submit signature accepted for deposit witnesses
-		assert_eq!(interesting_indices.len(), 0);
-		assert!(vault_key_rotated_calls.is_empty());
 	}
 
 	#[test]
@@ -678,14 +564,12 @@ mod tests {
 			),
 		]);
 
-		let (interesting_indices, deposit_witnesses, vault_key_rotated_calls) =
-			check_for_interesting_events_in_block(
-				block_event_details,
-				20,
-				// arbitrary, not focus of the test
-				&our_vault,
-				&mut Arc::new(Mutex::new(ItemMonitor::new(BTreeSet::default()).1)),
-			);
+		let (interesting_indices, vault_key_rotated_calls) = check_for_interesting_events_in_block(
+			block_event_details,
+			20,
+			// arbitrary, not focus of the test
+			&our_vault,
+		);
 
 		assert!(
 			interesting_indices.contains(&(egress_index, egress_amount)) &&
@@ -693,7 +577,6 @@ mod tests {
 		);
 
 		assert!(vault_key_rotated_calls.is_empty());
-		assert!(deposit_witnesses.is_empty());
 	}
 
 	#[ignore = "This test is helpful for local testing. Requires connection to westend"]
@@ -764,7 +647,6 @@ mod tests {
 			None,
 			epoch_starts_receiver,
 			dot_rpc_client,
-			Arc::new(Mutex::new(ItemMonitor::new(Default::default()).1)),
 			Arc::new(Mutex::new(signature_monitor)),
 			state_chain_client,
 			Arc::new(db),

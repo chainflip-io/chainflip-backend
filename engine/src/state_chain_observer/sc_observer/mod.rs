@@ -5,7 +5,7 @@ mod tests;
 use anyhow::{anyhow, Context};
 use cf_chains::{
 	btc::{self, PreviousOrCurrent},
-	dot::{self, PolkadotAccountId, PolkadotSignature},
+	dot::{self, PolkadotSignature},
 	eth::Ethereum,
 	Polkadot,
 };
@@ -250,9 +250,6 @@ pub async fn start<
 	eth_epoch_start_sender: async_broadcast::Sender<EpochStart<Ethereum>>,
 	eth_address_to_monitor_sender: EthAddressToMonitorSender,
 	dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
-	dot_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<
-		MonitorCommand<PolkadotAccountId>,
-	>,
 	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<
 		MonitorCommand<PolkadotSignature>,
 	>,
@@ -707,25 +704,6 @@ where
                                                 &eth_address_to_monitor_sender.usdc
                                             }
                                         }.send(MonitorCommand::Remove(deposit_address)).unwrap();
-                                    }
-                                    state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
-                                        pallet_cf_ingress_egress::Event::StartWitnessing {
-                                            deposit_address,
-                                            source_asset,
-                                            ..
-                                        }
-                                    ) => {
-                                        assert_eq!(source_asset, cf_primitives::chains::assets::dot::Asset::Dot);
-                                        dot_monitor_command_sender.send(MonitorCommand::Add(deposit_address)).unwrap();
-                                    }
-                                    state_chain_runtime::RuntimeEvent::PolkadotIngressEgress(
-                                        pallet_cf_ingress_egress::Event::StopWitnessing {
-                                            deposit_address,
-                                            source_asset
-                                        }
-                                    ) => {
-                                        assert_eq!(source_asset, cf_primitives::chains::assets::dot::Asset::Dot);
-                                        dot_monitor_command_sender.send(MonitorCommand::Remove(deposit_address)).unwrap();
                                     }
                                 }}}}
                                 Err(error) => {

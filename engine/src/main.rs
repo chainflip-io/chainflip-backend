@@ -229,7 +229,7 @@ async fn start(
 	)
 	.await?;
 
-	let (dot_monitor_address_sender, dot_monitor_signature_sender) = dot::witnessing::start(
+	let dot_monitor_signature_sender = dot::witnessing::start(
 		scope,
 		state_chain_client.clone(),
 		&settings.dot,
@@ -253,7 +253,6 @@ async fn start(
 		epoch_start_sender,
 		eth_address_to_monitor,
 		dot_epoch_start_sender,
-		dot_monitor_address_sender,
 		dot_monitor_signature_sender,
 	));
 

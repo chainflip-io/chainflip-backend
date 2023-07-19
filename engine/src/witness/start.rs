@@ -47,7 +47,7 @@ where
 		scope,
 		&settings.btc,
 		state_chain_client.clone(),
-		state_chain_stream,
+		state_chain_stream.clone(),
 		epoch_source.clone(),
 		db,
 	)
