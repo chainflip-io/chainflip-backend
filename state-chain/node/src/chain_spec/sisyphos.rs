@@ -13,14 +13,14 @@ pub const CHAIN_TYPE: ChainType = ChainType::Live;
 pub const BITCOIN_NETWORK: BitcoinNetwork = BitcoinNetwork::Testnet;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
-	flip_token_address: hex_literal::hex!("5DdcBdE1B92a9E082958bCc15643732616A3Fe6A"),
+	flip_token_address: hex_literal::hex!("36235A94325F60307388e70C4b8459762d37E82D"),
 	eth_usdc_address: hex_literal::hex!("07865c6e87b9f70255377e024ace6630c1eaa37f"),
-	state_chain_gateway_address: hex_literal::hex!("94f7462A77Fbb109b4256E73a142521445BB539B"),
-	key_manager_address: hex_literal::hex!("1140cf1BeA74eCEd16c55444358f636302d9fDB6"),
-	eth_vault_address: hex_literal::hex!("86BCc53eA5187B7bB304B4835e626e338332e9A0"),
+	state_chain_gateway_address: hex_literal::hex!("dC3f6C02270aEBA4F4F4f36f5947Ad414F21B27f"),
+	key_manager_address: hex_literal::hex!("F654371F5A17238bbB91D476Fee91ed62B2863F6"),
+	eth_vault_address: hex_literal::hex!("1146d5cb573b5070ab4858cf631d344B10997Fe7"),
 	ethereum_chain_id: CHAIN_ID_GOERLI,
 	eth_init_agg_key: hex_literal::hex!(
-		"021b6e07088eec2d92d8f4e0e56d89efae5732d94b9d6395528fa54e60c22a7b22"
+		"027f5853c609bd974c085dc94de239d777ac034b31ef0889d7b05e77eed58fc6c8"
 	),
 	ethereum_deployment_block: 9182803u64,
 	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
