@@ -51,6 +51,7 @@ get-workflow() {
 build-localnet() {
   cp -R $LOCALNET_INIT_DIR/keyshare/1-node /tmp/chainflip/
   cp -R $LOCALNET_INIT_DIR/data/ /tmp/chainflip/data
+  chmod -R 777 /tmp/chainflip/data
   echo
 
   if [ -z "${BINARIES_LOCATION}" ]; then
@@ -112,6 +113,7 @@ build-localnet() {
 build-localnet-in-ci() {
   cp -R $LOCALNET_INIT_DIR/keyshare/1-node /tmp/chainflip/
   cp -R $LOCALNET_INIT_DIR/data/ /tmp/chainflip/data
+  chown -R 1000:1000 /tmp/chainflip/data
 
   if [ ! -d $BINARIES_LOCATION ]; then
     echo "❌  Couldn't find directory at $BINARIES_LOCATION"
