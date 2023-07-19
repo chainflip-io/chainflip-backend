@@ -36,5 +36,5 @@
     "tsx": "^3.12.7",
     "typescript": "^5.0.4"
   },
-  "type": "module"
+  "type": "commonjs"
 }
