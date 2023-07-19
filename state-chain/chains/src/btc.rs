@@ -123,21 +123,17 @@ impl BitcoinFeeInfo {
 	pub fn new(sats_per_kilo_byte: BtcAmount) -> Self {
 		Self {
 			// Our input utxos are approximately 178 bytes each in the Btc transaction
-			fee_per_input_utxo: max(
+			fee_per_input_utxo: max(sats_per_kilo_byte, BYTES_PER_KILOBYTE)
+				.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) /
 				BYTES_PER_KILOBYTE,
-				sats_per_kilo_byte.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_KILOBYTE,
-			),
 			// Our output utxos are approximately 34 bytes each in the Btc transaction
-			fee_per_output_utxo: max(
+			fee_per_output_utxo: max(BYTES_PER_KILOBYTE, sats_per_kilo_byte)
+				.saturating_mul(OUTPUT_UTXO_SIZE_IN_BYTES) /
 				BYTES_PER_KILOBYTE,
-				sats_per_kilo_byte.saturating_mul(OUTPUT_UTXO_SIZE_IN_BYTES) / BYTES_PER_KILOBYTE,
-			),
 			// Minimum size of tx that does not scale with input and output utxos is 12 bytes
-			min_fee_required_per_tx: max(
+			min_fee_required_per_tx: max(BYTES_PER_KILOBYTE, sats_per_kilo_byte)
+				.saturating_mul(MINIMUM_BTC_TX_SIZE_IN_BYTES) /
 				BYTES_PER_KILOBYTE,
-				sats_per_kilo_byte.saturating_mul(MINIMUM_BTC_TX_SIZE_IN_BYTES) /
-					BYTES_PER_KILOBYTE,
-			),
 		}
 	}
 }
