@@ -444,7 +444,7 @@ mod tests {
 	use super::*;
 
 	use crate::{
-		bitcoin::BtcSigning,
+		bitcoin::BtcCryptoScheme,
 		client::{
 			signing::{gen_signing_data_stage2, SigningData},
 			PartyIdxMapping,
@@ -475,7 +475,7 @@ mod tests {
 		};
 
 		// Create the dummy stage 2 with the common data
-		let stage: VerifyCommitmentsBroadcast2<BtcSigning> = VerifyCommitmentsBroadcast2 {
+		let stage: VerifyCommitmentsBroadcast2<BtcCryptoScheme> = VerifyCommitmentsBroadcast2 {
 			common,
 			signing_common: SigningStateCommonInfo { payloads_and_keys: vec![] },
 			nonces: vec![],
@@ -483,7 +483,7 @@ mod tests {
 		};
 
 		// Generate stage 2 data with too many commitments (3)
-		if let SigningData::<<BtcSigning as CryptoScheme>::Point>::BroadcastVerificationStage2(bv) =
+		if let SigningData::<<BtcCryptoScheme as CryptoScheme>::Point>::BroadcastVerificationStage2(bv) =
 			gen_signing_data_stage2(1, NUMBER_OF_PAYLOADS + 1)
 		{
 			let messages = BTreeMap::from_iter([(OWN_IDX, Some(bv))]);
@@ -519,15 +519,16 @@ mod tests {
 		};
 
 		// Create the dummy stage 4 with the common data
-		let stage: VerifyLocalSigsBroadcastStage4<BtcSigning> = VerifyLocalSigsBroadcastStage4 {
-			common,
-			signing_common: SigningStateCommonInfo { payloads_and_keys: vec![] },
-			signature_data: vec![],
-			local_sigs: BTreeMap::new(),
-		};
+		let stage: VerifyLocalSigsBroadcastStage4<BtcCryptoScheme> =
+			VerifyLocalSigsBroadcastStage4 {
+				common,
+				signing_common: SigningStateCommonInfo { payloads_and_keys: vec![] },
+				signature_data: vec![],
+				local_sigs: BTreeMap::new(),
+			};
 
 		// Generate stage 4 data with too many local sigs (3)
-		if let SigningData::<<BtcSigning as CryptoScheme>::Point>::VerifyLocalSigsStage4(bv) =
+		if let SigningData::<<BtcCryptoScheme as CryptoScheme>::Point>::VerifyLocalSigsStage4(bv) =
 			gen_signing_data_stage4(1, NUMBER_OF_PAYLOADS + 1)
 		{
 			let messages = BTreeMap::from_iter([(OWN_IDX, Some(bv))]);

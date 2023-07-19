@@ -27,9 +27,8 @@ use crate::{
 		signing::PayloadAndKey,
 		CeremonyRequestDetails,
 	},
-	crypto::{CryptoScheme, Rng},
+	crypto::{CryptoScheme, CryptoTag, Rng},
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage},
-	ChainTag,
 };
 use cf_primitives::{AuthorityCount, CeremonyId};
 use state_chain_runtime::AccountId;
@@ -687,9 +686,9 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 			// Only a ceremony id that is within the ceremony id window can create unauthorised
 			// ceremonies
 			let ceremony_id_string = ceremony_id_string::<Ceremony::Crypto>(ceremony_id);
-			let ceremony_id_window = match <Ceremony::Crypto as CryptoScheme>::CHAIN_TAG {
-				ChainTag::Ethereum | ChainTag::Polkadot | ChainTag::Ed25519 => CEREMONY_ID_WINDOW,
-				ChainTag::Bitcoin => CEREMONY_ID_WINDOW_BTC,
+			let ceremony_id_window = match <Ceremony::Crypto as CryptoScheme>::CRYPTO_TAG {
+				CryptoTag::Evm | CryptoTag::Polkadot | CryptoTag::Ed25519 => CEREMONY_ID_WINDOW,
+				CryptoTag::Bitcoin => CEREMONY_ID_WINDOW_BTC,
 			};
 			if ceremony_id > latest_ceremony_id + ceremony_id_window {
 				warn!("Ignoring data: unexpected future ceremony id {ceremony_id_string}",);

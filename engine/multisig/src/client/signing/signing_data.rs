@@ -81,7 +81,6 @@ mod serialisation {
 			assert!(sig.payload.len() == local_sig_payload_size(1));
 		} else {
 			// Other chains might use a more compact serialization of primitives:
-			println!("{} - {}", sig.payload.len(), <C as CryptoScheme>::CHAIN_TAG);
 			assert!(sig.payload.len() <= local_sig_payload_size(1));
 		}
 	}
@@ -168,7 +167,7 @@ impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
 
 	fn initial_stage_data_size_is_valid<C: CryptoScheme>(&self) -> bool {
 		match self {
-			SigningData::CommStage1(message) => match C::CHAIN_TAG {
+			SigningData::CommStage1(message) => match C::CRYPTO_TAG {
 				CryptoTag::Evm | CryptoTag::Polkadot | CryptoTag::Ed25519 =>
 					message.payload.len() <= signing_commitment_payload_size(1),
 				// TODO: Technically, this condition is on the Bitcoin chain rather than the Bitcoin
