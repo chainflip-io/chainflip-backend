@@ -98,6 +98,7 @@ benchmarks! {
 			destination_asset: Asset::Eth,
 			destination_address: EncodedAddress::benchmark_value(),
 			message_metadata: metadata,
+			tx_hash: Default::default(),
 		};
 	}: {
 		call.dispatch_bypass_filter(origin)?;

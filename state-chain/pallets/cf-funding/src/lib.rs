@@ -618,6 +618,13 @@ pub mod pallet {
 			}
 			for address in addresses_to_remove {
 				RestrictedAddresses::<T>::remove(address);
+				for account_id in RestrictedBalances::<T>::iter_keys() {
+					RestrictedBalances::<T>::mutate(&account_id, |balances| {
+						if balances.contains_key(&address) {
+							balances.remove(&address);
+						}
+					});
+				}
 				Self::deposit_event(Event::RemovedRestrictedAddress { address });
 			}
 			Ok(().into())

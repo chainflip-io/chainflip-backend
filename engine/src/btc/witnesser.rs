@@ -13,15 +13,11 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use bitcoin::{hashes::Hash, Transaction};
 use cf_chains::{
-	btc::{
-		deposit_address::DepositAddress, BitcoinFeeInfo, BitcoinTrackedData, ScriptPubkey, UtxoId,
-		CHANGE_ADDRESS_SALT,
-	},
+	btc::{deposit_address::DepositAddress, ScriptPubkey, UtxoId, CHANGE_ADDRESS_SALT},
 	Bitcoin,
 };
 use cf_primitives::{chains::assets::btc, EpochIndex};
 use futures::StreamExt;
-use pallet_cf_chain_tracking::ChainState;
 use pallet_cf_ingress_egress::DepositWitness;
 use state_chain_runtime::BitcoinInstance;
 use std::sync::Arc;
@@ -163,25 +159,6 @@ where
 							// TODO: Ideally we can submit an empty type here. For Bitcoin
 							// and some other chains fee tracking is not necessary. PRO-370.
 							tx_fee: Default::default(),
-						},
-					)),
-					epoch_index: self.epoch_index,
-				})
-				.await;
-		}
-
-		if let Some(fee_rate_sats_per_kilo_byte) = self.btc_rpc.next_block_fee_rate().await? {
-			debug!("Submitting fee rate of {fee_rate_sats_per_kilo_byte} sats/kB to state chain");
-			self.state_chain_client
-				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-					call: Box::new(state_chain_runtime::RuntimeCall::BitcoinChainTracking(
-						pallet_cf_chain_tracking::Call::update_chain_state {
-							new_chain_state: ChainState {
-								block_height: block_number,
-								tracked_data: BitcoinTrackedData {
-									btc_fee_info: BitcoinFeeInfo::new(fee_rate_sats_per_kilo_byte),
-								},
-							},
 						},
 					)),
 					epoch_index: self.epoch_index,

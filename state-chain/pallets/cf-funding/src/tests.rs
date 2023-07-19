@@ -1304,3 +1304,34 @@ fn skip_redemption_of_zero_flip() {
 	inner_test(100, RedemptionAmount::Exact(0));
 	inner_test(REDEMPTION_TAX, RedemptionAmount::Max);
 }
+
+#[test]
+fn check_restricted_balances_are_getting_removed() {
+	new_test_ext().execute_with(|| {
+		// - Fund account with some restricted balances.
+		const AMOUNT: FlipBalance = 50;
+		const RESTRICTED_ADDRESS: EthereumAddress = [0x02; 20];
+		// Set restricted addresses.
+		assert_ok!(Funding::update_restricted_addresses(
+			RuntimeOrigin::root(),
+			vec![RESTRICTED_ADDRESS],
+			Default::default(),
+		));
+		// Fund the restricted address.
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			RESTRICTED_ADDRESS,
+			Default::default(),
+		));
+		assert!(RestrictedBalances::<Test>::contains_key(ALICE));
+		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS), Some(&AMOUNT));
+		assert_ok!(Funding::update_restricted_addresses(
+			RuntimeOrigin::root(),
+			vec![],
+			vec![RESTRICTED_ADDRESS],
+		));
+		assert!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).is_none());
+	});
+}

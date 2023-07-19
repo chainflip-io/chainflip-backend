@@ -26,8 +26,6 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	ethereum_deployment_block: 8304200u64,
 	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
 	min_funding: MIN_FUNDING,
-	eth_block_safety_margin: eth::BLOCK_SAFETY_MARGIN as u32,
-	max_ceremony_stage_duration: 300,
 	dot_genesis_hash: H256(hex_literal::hex!(
 		"1665348821496e14ed56718d4d078e7f85b163bf4e45fa9afbeb220b34ed475a"
 	)),

@@ -1,0 +1,18 @@
+=============== Jul 14, 2023 (UTC) ===============
+12:58:17.147478 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+12:58:17.159670 db@open opening
+12:58:17.161265 version@stat F·[] S·0B[] Sc·[]
+12:58:17.165890 db@janitor F·2 G·0
+12:58:17.165910 db@open done T·6.221069ms
+=============== Jul 14, 2023 (UTC) ===============
+13:31:17.014664 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+13:31:17.017534 version@stat F·[] S·0B[] Sc·[]
+13:31:17.017907 db@open opening
+13:31:17.019108 journal@recovery F·1
+13:31:17.022018 journal@recovery recovering @1
+13:31:17.027172 memdb@flush created L0@2 N·2 S·181B "loc..seq,v2":"version,v1"
+13:31:17.031000 version@stat F·[1] S·181B[181B] Sc·[0.25]
+13:31:17.037778 db@janitor F·3 G·0
+13:31:17.038077 db@open done T·19.17275ms
+13:54:23.459721 db@close closing
+13:54:23.468386 db@close done T·8.656084ms

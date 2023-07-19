@@ -1,9 +1,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::{
-	address::{AddressConverter, EncodedAddress, ForeignChainAddress},
-	CcmDepositMetadata,
+	address::{AddressConverter, ForeignChainAddress},
+	CcmDepositMetadata, SwapOrigin,
 };
-use cf_primitives::{Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, STABLE_ASSET};
+use cf_primitives::{
+	Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, TransactionHash, STABLE_ASSET,
+};
 use cf_traits::{impl_pallet_safe_mode, liquidity::SwappingApi, CcmHandler, DepositApi};
 use frame_support::{
 	pallet_prelude::*,
@@ -106,8 +108,6 @@ pub(crate) enum CcmSwapLeg {
 	Gas,
 }
 
-pub type TransactionHash = [u8; 32];
-
 /// Struct denoting swap status of a cross-chain message.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
 pub(crate) struct CcmSwapOutput {
@@ -147,6 +147,8 @@ pub(crate) struct CcmSwap {
 	destination_asset: Asset,
 	destination_address: ForeignChainAddress,
 	message_metadata: CcmDepositMetadata,
+	principal_swap_id: Option<u64>,
+	gas_swap_id: Option<u64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -158,12 +160,6 @@ pub enum CcmFailReason {
 }
 
 impl_pallet_safe_mode!(PalletSafeMode; swaps_enabled, withdrawals_enabled);
-
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub enum SwapOrigin {
-	DepositChannel { deposit_address: EncodedAddress, channel_id: ChannelId },
-	Vault { tx_hash: TransactionHash },
-}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -191,6 +187,7 @@ pub mod pallet {
 
 		/// An interface to the AMM api implementation.
 		type SwappingApi: SwappingApi;
+
 		/// A converter to convert address to and from human readable to internal address
 		/// representation.
 		type AddressConverter: AddressConverter;
@@ -284,6 +281,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			origin: SwapOrigin,
+			swap_type: SwapType,
 		},
 		/// A swap has been executed.
 		SwapExecuted {
@@ -622,7 +620,7 @@ pub mod pallet {
 				from,
 				to,
 				deposit_amount,
-				destination_address_internal,
+				destination_address_internal.clone(),
 			) {
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
@@ -631,6 +629,7 @@ pub mod pallet {
 					destination_asset: to,
 					destination_address,
 					origin: SwapOrigin::Vault { tx_hash },
+					swap_type: SwapType::Swap(destination_address_internal),
 				});
 			}
 			Ok(())
@@ -645,6 +644,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			message_metadata: CcmDepositMetadata,
+			tx_hash: TransactionHash,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
@@ -657,6 +657,7 @@ pub mod pallet {
 				destination_asset,
 				destination_address_internal,
 				message_metadata,
+				SwapOrigin::Vault { tx_hash },
 			);
 
 			Ok(())
@@ -866,11 +867,9 @@ pub mod pallet {
 			ccm_swap: CcmSwap,
 			(ccm_output_principal, ccm_output_gas): (AssetAmount, AssetAmount),
 		) {
+			let gas_asset = ForeignChain::from(ccm_swap.destination_asset).gas_asset();
 			// Insert gas budget into storage.
-			CcmGasBudget::<T>::insert(
-				ccm_id,
-				(ForeignChain::from(ccm_swap.destination_asset).gas_asset(), ccm_output_gas),
-			);
+			CcmGasBudget::<T>::insert(ccm_id, (gas_asset, ccm_output_gas));
 
 			// Schedule the given ccm to be egressed and deposit a event.
 			let egress_id = T::EgressHandler::schedule_egress(
@@ -879,6 +878,22 @@ pub mod pallet {
 				ccm_swap.destination_address.clone(),
 				Some(ccm_swap.message_metadata),
 			);
+			if let Some(swap_id) = ccm_swap.principal_swap_id {
+				Self::deposit_event(Event::<T>::SwapEgressScheduled {
+					swap_id,
+					egress_id,
+					asset: ccm_swap.destination_asset,
+					amount: ccm_output_principal,
+				});
+			}
+			if let Some(swap_id) = ccm_swap.gas_swap_id {
+				Self::deposit_event(Event::<T>::SwapEgressScheduled {
+					swap_id,
+					egress_id,
+					asset: gas_asset,
+					amount: ccm_output_gas,
+				});
+			}
 			Self::deposit_event(Event::<T>::CcmEgressScheduled { ccm_id, egress_id });
 		}
 
@@ -934,9 +949,12 @@ pub mod pallet {
 			let encoded_destination_address =
 				T::AddressConverter::to_encoded_address(destination_address.clone());
 
-			if let Some(swap_id) =
-				Self::schedule_swap_from_channel_received(from, to, amount, destination_address)
-			{
+			if let Some(swap_id) = Self::schedule_swap_from_channel_received(
+				from,
+				to,
+				amount,
+				destination_address.clone(),
+			) {
 				Self::deposit_event(Event::<T>::SwapScheduled {
 					swap_id,
 					source_asset: from,
@@ -947,6 +965,7 @@ pub mod pallet {
 						deposit_address: T::AddressConverter::to_encoded_address(deposit_address),
 						channel_id,
 					},
+					swap_type: SwapType::Swap(destination_address),
 				});
 			}
 		}
@@ -959,6 +978,7 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
 			message_metadata: CcmDepositMetadata,
+			origin: SwapOrigin,
 		) {
 			let encoded_destination_address =
 				T::AddressConverter::to_encoded_address(destination_address.clone());
@@ -1012,12 +1032,22 @@ pub mod pallet {
 					swap_output.principal = Some(principal_swap_amount);
 					None
 				} else {
-					Some(Self::schedule_swap(
+					let swap_id = Self::schedule_swap(
 						source_asset,
 						destination_asset,
 						principal_swap_amount,
 						SwapType::CcmPrincipal(ccm_id),
-					))
+					);
+					Self::deposit_event(Event::<T>::SwapScheduled {
+						swap_id,
+						source_asset,
+						deposit_amount: principal_swap_amount,
+						destination_asset,
+						destination_address: encoded_destination_address.clone(),
+						origin: origin.clone(),
+						swap_type: SwapType::CcmPrincipal(ccm_id),
+					});
+					Some(swap_id)
 				};
 
 			let output_gas_asset = ForeignChain::from(destination_asset).gas_asset();
@@ -1026,12 +1056,22 @@ pub mod pallet {
 				swap_output.gas = Some(message_metadata.gas_budget);
 				None
 			} else {
-				Some(Self::schedule_swap(
+				let swap_id = Self::schedule_swap(
 					source_asset,
 					output_gas_asset,
 					message_metadata.gas_budget,
 					SwapType::CcmGas(ccm_id),
-				))
+				);
+				Self::deposit_event(Event::<T>::SwapScheduled {
+					swap_id,
+					source_asset,
+					deposit_amount: message_metadata.gas_budget,
+					destination_asset: output_gas_asset,
+					destination_address: encoded_destination_address.clone(),
+					origin,
+					swap_type: SwapType::CcmGas(ccm_id),
+				});
+				Some(swap_id)
 			};
 
 			Self::deposit_event(Event::<T>::CcmDepositReceived {
@@ -1049,6 +1089,8 @@ pub mod pallet {
 				destination_asset,
 				destination_address,
 				message_metadata,
+				principal_swap_id,
+				gas_swap_id,
 			};
 			if let Some((principal, gas)) = swap_output.completed_result() {
 				Self::schedule_ccm_egress(ccm_id, ccm_swap, (principal, gas));

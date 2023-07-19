@@ -157,6 +157,11 @@ pub trait BtcRpcApi {
 
 	async fn next_block_fee_rate(&self) -> anyhow::Result<Option<cf_chains::btc::BtcAmount>>;
 
+	async fn average_block_fee_rate(
+		&self,
+		block_hash: BlockHash,
+	) -> anyhow::Result<cf_chains::btc::BtcAmount>;
+
 	async fn best_block_hash(&self) -> anyhow::Result<BlockHash>;
 
 	async fn block_header(&self, block_hash: BlockHash) -> anyhow::Result<BlockHeader>;
@@ -190,6 +195,24 @@ impl BtcRpcApi for BtcRpcClient {
 		let fee_rate_response: FeeRateResponse =
 			self.call_rpc("estimatesmartfee", vec![json!(1), json!("CONSERVATIVE")]).await?;
 		Ok(fee_rate_response.feerate.map(|f| f.to_sat()))
+	}
+
+	async fn average_block_fee_rate(
+		&self,
+		block_hash: BlockHash,
+	) -> anyhow::Result<cf_chains::btc::BtcAmount> {
+		// https://developer.bitcoin.org/reference/rpc/getblockstats.html
+		#[derive(Deserialize, Serialize)]
+		pub struct BlockStats {
+			#[serde(with = "bitcoin::amount::serde::as_sat")]
+			pub avgfeerate: bitcoin::Amount,
+		}
+
+		let block_stats: BlockStats = self
+			.call_rpc("getblockstats", vec![json!(block_hash), json!(["avgfeerate"])])
+			.await?;
+
+		Ok(block_stats.avgfeerate.to_sat().saturating_mul(1024))
 	}
 
 	async fn best_block_hash(&self) -> anyhow::Result<BlockHash> {
@@ -239,6 +262,10 @@ mod tests {
 		let next_block_fee_rate = client.next_block_fee_rate().await.unwrap();
 
 		println!("next_block_fee_rate: {:?}", next_block_fee_rate);
+
+		let average_block_fee_rate = client.average_block_fee_rate(block_hash_zero).await.unwrap();
+
+		println!("average_block_fee_rate: {}", average_block_fee_rate);
 
 		let best_block_hash = client.best_block_hash().await.unwrap();
 

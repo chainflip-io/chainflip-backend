@@ -14,9 +14,7 @@ use crypto_compat::CryptoCompat;
 use futures::{FutureExt, StreamExt};
 use sp_core::{H160, H256};
 use sp_runtime::AccountId32;
-use state_chain_runtime::{
-	AccountId, BitcoinInstance, CfeSettings, EthereumInstance, PolkadotInstance,
-};
+use state_chain_runtime::{AccountId, BitcoinInstance, EthereumInstance, PolkadotInstance};
 use std::{
 	collections::BTreeSet,
 	sync::{
@@ -25,7 +23,7 @@ use std::{
 	},
 	time::Duration,
 };
-use tokio::sync::{mpsc::UnboundedSender, watch};
+use tokio::sync::mpsc::UnboundedSender;
 use tracing::{debug, error, info, info_span, trace, Instrument};
 
 use crate::{
@@ -44,8 +42,9 @@ use crate::{
 	witnesser::{EpochStart, MonitorCommand},
 };
 use multisig::{
-	bitcoin::BtcSigning, client::MultisigClientApi, eth::EthSigning, polkadot::PolkadotSigning,
-	CryptoScheme, KeyId, SignatureToThresholdSignature,
+	bitcoin::BtcCryptoScheme, client::MultisigClientApi, eth::EvmCryptoScheme,
+	polkadot::PolkadotCryptoScheme, ChainSigning, CryptoScheme, KeyId,
+	SignatureToThresholdSignature,
 };
 use utilities::task_scope::{task_scope, Scope};
 
@@ -65,10 +64,10 @@ async fn handle_keygen_request<'a, StateChainClient, MultisigClient, C, I>(
 	epoch_index: EpochIndex,
 	keygen_participants: BTreeSet<AccountId32>,
 ) where
-	MultisigClient: MultisigClientApi<C>,
+	MultisigClient: MultisigClientApi<C::CryptoScheme>,
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 	state_chain_runtime::Runtime: pallet_cf_vaults::Config<I>,
-	C: CryptoScheme<Chain = <state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain>
+	C: ChainSigning<Chain = <state_chain_runtime::Runtime as pallet_cf_vaults::Config<I>>::Chain>
 		+ 'static,
 	I: CryptoCompat<C, C::Chain> + 'static + Sync + Send,
 	state_chain_runtime::RuntimeCall:
@@ -112,7 +111,7 @@ async fn handle_key_handover_request<'a, StateChainClient, MultisigClient>(
 	key_to_share: btc::AggKey,
 	mut new_key: btc::AggKey,
 ) where
-	MultisigClient: MultisigClientApi<BtcSigning>,
+	MultisigClient: MultisigClientApi<BtcCryptoScheme>,
 	StateChainClient: SignedExtrinsicApi + 'static + Send + Sync,
 	state_chain_runtime::Runtime: pallet_cf_vaults::Config<BitcoinInstance>,
 	state_chain_runtime::RuntimeCall:
@@ -260,16 +259,15 @@ pub async fn start<
 	btc_epoch_start_sender: async_broadcast::Sender<EpochStart<Bitcoin>>,
 	btc_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<MonitorCommand<ScriptPubkey>>,
 	btc_tx_hash_sender: tokio::sync::mpsc::UnboundedSender<MonitorCommand<[u8; 32]>>,
-	cfe_settings_update_sender: watch::Sender<CfeSettings>,
 ) -> Result<(), anyhow::Error>
 where
 	BlockStream: StateChainStreamApi,
 	EthRpc: EthersRpcApi + Send + Sync + 'static,
 	DotRpc: DotRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRpcApi + Send + Sync + 'static,
-	EthMultisigClient: MultisigClientApi<EthSigning> + Send + Sync + 'static,
-	PolkadotMultisigClient: MultisigClientApi<PolkadotSigning> + Send + Sync + 'static,
-	BitcoinMultisigClient: MultisigClientApi<BtcSigning> + Send + Sync + 'static,
+	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
+	PolkadotMultisigClient: MultisigClientApi<PolkadotCryptoScheme> + Send + Sync + 'static,
+	BitcoinMultisigClient: MultisigClientApi<BtcCryptoScheme> + Send + Sync + 'static,
 	StateChainClient:
 		StorageApi + UnsignedExtrinsicApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
@@ -529,7 +527,7 @@ where
                                             payload,
                                         },
                                     ) => {
-                                        handle_signing_request::<_, _, PolkadotSigning, PolkadotInstance>(
+                                        handle_signing_request::<_, _, _, PolkadotInstance>(
                                                 scope,
                                                 &dot_multisig_client,
                                             state_chain_client.clone(),
@@ -700,12 +698,6 @@ where
                                         pallet_cf_broadcast::Event::BroadcastSuccess { broadcast_id: _, transaction_out_id }
                                     ) => {
                                         btc_tx_hash_sender.send(MonitorCommand::Remove(transaction_out_id)).unwrap();
-                                    }
-                                    state_chain_runtime::RuntimeEvent::Environment(
-                                        pallet_cf_environment::Event::CfeSettingsUpdated {
-                                            new_cfe_settings
-                                        }) => {
-                                            cfe_settings_update_sender.send(new_cfe_settings).unwrap();
                                     }
                                     state_chain_runtime::RuntimeEvent::EthereumIngressEgress(
                                         pallet_cf_ingress_egress::Event::StartWitnessing {

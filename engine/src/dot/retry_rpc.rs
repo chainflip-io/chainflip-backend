@@ -21,7 +21,7 @@ use crate::retrier::RetrierClient;
 
 use super::{
 	http_rpc::DotHttpRpcClient,
-	rpc::{DotRpcClient, PolkadotHeader},
+	rpc::{DotSubClient, PolkadotHeader},
 };
 
 use crate::dot::rpc::DotRpcApi;
@@ -29,9 +29,7 @@ use crate::dot::rpc::DotRpcApi;
 #[derive(Clone)]
 pub struct DotRetryRpcClient {
 	rpc_retry_client: RetrierClient<DotHttpRpcClient>,
-	// TODO: this will become just the subscription client, once we no longer need the unified
-	// client after we merge the witnessing refactor
-	sub_retry_client: RetrierClient<DotRpcClient>,
+	sub_retry_client: RetrierClient<DotSubClient>,
 }
 
 const POLKADOT_RPC_TIMEOUT: Duration = Duration::from_millis(1000);
@@ -41,7 +39,7 @@ impl DotRetryRpcClient {
 	pub fn new(
 		scope: &Scope<'_, anyhow::Error>,
 		dot_rpc_client: DotHttpRpcClient,
-		dot_sub_client: DotRpcClient,
+		dot_sub_client: DotSubClient,
 	) -> Self {
 		Self {
 			rpc_retry_client: RetrierClient::new(
@@ -228,11 +226,11 @@ mod tests {
 	async fn my_test() {
 		task_scope(|scope| {
 			async move {
-				let url = "ws://127.0.0.1:9945";
-				let dot_http_rpc_client = DotHttpRpcClient::new(url).await.unwrap();
-				let dot_client = DotRpcClient::new(url, dot_http_rpc_client.clone()).await.unwrap();
+				let dot_http_rpc_client =
+					DotHttpRpcClient::new("http://127.0.0.1:9945").await.unwrap();
+				let dot_sub_client = DotSubClient::new("ws://127.0.0.1:9945");
 				let dot_retry_rpc_client =
-					DotRetryRpcClient::new(scope, dot_http_rpc_client, dot_client);
+					DotRetryRpcClient::new(scope, dot_http_rpc_client, dot_sub_client);
 
 				let hash = dot_retry_rpc_client.block_hash(1).await.unwrap();
 				println!("Block hash: {}", hash);

@@ -49,6 +49,38 @@ jobs:
       - name: Check Linting
         run: cargo cf-clippy-ci
 
+  lint-bouncer:
+    runs-on: [hetzner]
+    container:
+      image: "ghcr.io/${{ github.repository }}/rust-base:nightly-2023-03-20-ubuntu-20.04"
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout chainflip-backend
+        uses: actions/checkout@v3
+
+      - name: Configure NodeJS
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+          cache: "pnpm"
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@chainflip-io"
+          cache-dependency-path: "bouncer/pnpm-lock.yaml"
+
+      - name: Install node dependencies
+        working-directory: bouncer
+        run: pnpm install
+
+      - name: Run prettier check
+        working-directory: bouncer
+        run: pnpm prettier:check
+
+      - name: Run eslint check
+        working-directory: bouncer
+        run: pnpm eslint:check
+
   lint-ci-workflows:
     runs-on: ubuntu-20.04
     steps:
@@ -100,19 +132,3 @@ jobs:
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: ci/docker/prod/${{ matrix.dockerfile }}.Dockerfile
-
-  check-docker-image-tags:
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Checkout 🏁
-        uses: actions/checkout@v3
-
-      - name: Setup Python 🐍
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.9
-
-      - name: Check 🐳🕵️‍♂️
-        run: |
-          pip install PyYAML
-          python ci/scripts/check_docker_image_tags.py

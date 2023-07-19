@@ -1,0 +1,48 @@
+name: Release Chainflip Partnernet
+on:
+  push:
+    branches:
+      - 'release/partnernet'
+
+concurrency:
+  group: ${{ github.ref }}-release-partnernet
+  cancel-in-progress: true
+
+jobs:
+  pre-check:
+    uses: ./.github/workflows/_01_pre_check.yml
+    secrets: inherit
+  test:
+    uses: ./.github/workflows/_10_test.yml
+    secrets: inherit
+  build:
+    needs: [test]
+    uses: ./.github/workflows/_20_build.yml
+    secrets: inherit
+    with:
+      network: partnernet
+  docker:
+    needs: [build]
+    uses: ./.github/workflows/_24_docker.yml
+    secrets: inherit
+    with:
+      network: partnernet
+      environment: prod
+  package:
+    needs: [build]
+    uses: ./.github/workflows/_25_package.yml
+    with:
+      network: "partnernet"
+      environment: prod
+    secrets: inherit
+  post-check:
+    needs: [build]
+    uses: ./.github/workflows/_40_post_check.yml
+    secrets: inherit
+  publish:
+    needs: [package]
+    uses: ./.github/workflows/_30_publish.yml
+    with:
+      version: "partnernet/"
+      environment: prod
+    secrets: inherit

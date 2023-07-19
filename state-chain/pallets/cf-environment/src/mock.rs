@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::{self as pallet_cf_environment, cfe, Decode, Encode, TypeInfo};
+use crate::{self as pallet_cf_environment, Decode, Encode, TypeInfo};
 use cf_chains::{
 	btc::{BitcoinFeeInfo, BitcoinNetwork},
 	dot::{api::CreatePolkadotVault, TEST_RUNTIME_VERSION},
@@ -181,12 +181,6 @@ pub const VAULT_ADDRESS: [u8; 20] = [2u8; 20];
 pub const ADDRESS_CHECKER: [u8; 20] = [3u8; 20];
 pub const ETH_CHAIN_ID: u64 = 1;
 
-pub const CFE_SETTINGS: cfe::CfeSettings = cfe::CfeSettings {
-	eth_block_safety_margin: 1,
-	max_ceremony_stage_duration: 1,
-	eth_priority_fee_percentile: 50,
-};
-
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
 	let config = GenesisConfig {
@@ -197,7 +191,6 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			ethereum_chain_id: ETH_CHAIN_ID,
 			eth_vault_address: VAULT_ADDRESS,
 			eth_address_checker_address: ADDRESS_CHECKER,
-			cfe_settings: CFE_SETTINGS,
 			flip_token_address: [0u8; 20],
 			eth_usdc_address: [0x2; 20],
 			polkadot_genesis_hash: H256([0u8; 32]),

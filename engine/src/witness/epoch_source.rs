@@ -31,7 +31,6 @@ enum EpochUpdate<Info, HistoricInfo> {
 	Expired,
 }
 
-#[derive(Clone)]
 pub struct EpochSource<'a, 'env, StateChainClient, Info, HistoricInfo> {
 	scope: &'a Scope<'env, anyhow::Error>,
 	state_chain_client: Arc<StateChainClient>,
@@ -42,6 +41,19 @@ pub struct EpochSource<'a, 'env, StateChainClient, Info, HistoricInfo> {
 		state_chain_runtime::Hash,
 		EpochUpdate<Info, HistoricInfo>,
 	)>,
+}
+impl<'a, 'env, StateChainClient, Info: Clone, HistoricInfo: Clone> Clone
+	for EpochSource<'a, 'env, StateChainClient, Info, HistoricInfo>
+{
+	fn clone(&self) -> Self {
+		Self {
+			scope: self.scope,
+			state_chain_client: self.state_chain_client.clone(),
+			initial_block_hash: self.initial_block_hash,
+			epochs: self.epochs.clone(),
+			epoch_update_receiver: self.epoch_update_receiver.clone(),
+		}
+	}
 }
 impl<'a, 'env, StateChainClient: client::storage_api::StorageApi + Send + Sync + 'static>
 	EpochSource<'a, 'env, StateChainClient, (), ()>
@@ -92,8 +104,8 @@ impl<'a, 'env, StateChainClient: client::storage_api::StorageApi + Send + Sync +
 							.await
 							.expect(STATE_CHAIN_CONNECTION));
 						if old_current_epoch != current_epoch {
-							let _result = epoch_update_sender.broadcast((old_current_epoch, block_hash, EpochUpdate::Historic(())));
-							let _result = epoch_update_sender.broadcast((current_epoch, block_hash, EpochUpdate::NewCurrent(())));
+							let _result = epoch_update_sender.broadcast((old_current_epoch, block_hash, EpochUpdate::Historic(()))).await;
+							let _result = epoch_update_sender.broadcast((current_epoch, block_hash, EpochUpdate::NewCurrent(()))).await;
 							historic_epochs.insert(old_current_epoch);
 						}
 
@@ -105,7 +117,7 @@ impl<'a, 'env, StateChainClient: client::storage_api::StorageApi + Send + Sync +
 						assert!(!historic_epochs.contains(&current_epoch));
 						assert!(old_historic_epochs.is_superset(&historic_epochs));
 						for expired_epoch in old_historic_epochs.difference(&historic_epochs) {
-							let _result = epoch_update_sender.broadcast((*expired_epoch, block_hash, EpochUpdate::Expired));
+							let _result = epoch_update_sender.broadcast((*expired_epoch, block_hash, EpochUpdate::Expired)).await;
 						}
 					} else break Ok(()),
 				}
@@ -323,7 +335,7 @@ impl<
 							EpochUpdate::NewCurrent(info) => {
 								if let Some(mapped_info) = filter_map(state_chain_client.clone(), epoch, block_hash, info).await {
 									epochs.insert(epoch);
-									let _result = epoch_update_sender.broadcast((epoch, block_hash, EpochUpdate::NewCurrent(mapped_info)));
+									let _result = epoch_update_sender.broadcast((epoch, block_hash, EpochUpdate::NewCurrent(mapped_info))).await;
 								}
 							},
 							EpochUpdate::Historic(historic_info) => {
@@ -332,7 +344,7 @@ impl<
 										epoch,
 										block_hash,
 										EpochUpdate::Historic(map_historic_info(state_chain_client.clone(), epoch, block_hash, historic_info).await),
-									));
+									)).await;
 								}
 							},
 							EpochUpdate::Expired => {

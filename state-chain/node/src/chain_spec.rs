@@ -16,7 +16,7 @@ use sp_core::{
 use sp_finality_grandpa::AuthorityId as GrandpaId;
 use state_chain_runtime::{
 	chainflip::Offence, opaque::SessionKeys, AccountId, AccountRolesConfig, AuraConfig,
-	BitcoinThresholdSignerConfig, BitcoinVaultConfig, BlockNumber, CfeSettings, EmissionsConfig,
+	BitcoinThresholdSignerConfig, BitcoinVaultConfig, BlockNumber, EmissionsConfig,
 	EnvironmentConfig, EthereumThresholdSignerConfig, EthereumVaultConfig, FlipBalance, FlipConfig,
 	FundingConfig, GenesisConfig, GovernanceConfig, GrandpaConfig, PolkadotThresholdSignerConfig,
 	PolkadotVaultConfig, ReputationConfig, SessionConfig, Signature, SwappingConfig, SystemConfig,
@@ -29,6 +29,7 @@ use utilities::clean_eth_address;
 use sp_runtime::traits::{IdentifyAccount, Verify};
 
 pub mod common;
+pub mod partnernet;
 pub mod perseverance;
 pub mod sisyphos;
 pub mod testnet;
@@ -74,10 +75,6 @@ pub struct StateChainEnvironment {
 	genesis_funding_amount: u128,
 	/// Note: Minimum funding should be expressed in Flipperinos.
 	min_funding: u128,
-	// CFE config values starts here
-	eth_block_safety_margin: u32,
-	max_ceremony_stage_duration: u32,
-
 	dot_genesis_hash: PolkadotHash,
 	dot_vault_account_id: Option<PolkadotAccountId>,
 	dot_runtime_version: RuntimeVersion,
@@ -110,8 +107,6 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 	from_env_var!(FromStr::from_str, ETHEREUM_CHAIN_ID, ethereum_chain_id);
 	from_env_var!(FromStr::from_str, ETH_DEPLOYMENT_BLOCK, ethereum_deployment_block);
 	from_env_var!(FromStr::from_str, GENESIS_FUNDING, genesis_funding_amount);
-	from_env_var!(FromStr::from_str, ETH_BLOCK_SAFETY_MARGIN, eth_block_safety_margin);
-	from_env_var!(FromStr::from_str, MAX_CEREMONY_STAGE_DURATION, max_ceremony_stage_duration);
 	from_env_var!(FromStr::from_str, MIN_FUNDING, min_funding);
 
 	let dot_genesis_hash = match env::var("DOT_GENESIS_HASH") {
@@ -142,8 +137,6 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		eth_init_agg_key,
 		ethereum_deployment_block,
 		genesis_funding_amount,
-		eth_block_safety_margin,
-		max_ceremony_stage_duration,
 		min_funding,
 		dot_genesis_hash,
 		dot_vault_account_id,
@@ -174,8 +167,6 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		eth_init_agg_key,
 		ethereum_deployment_block,
 		genesis_funding_amount,
-		eth_block_safety_margin,
-		max_ceremony_stage_duration,
 		min_funding,
 		dot_genesis_hash,
 		dot_vault_account_id,
@@ -237,12 +228,6 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					eth_vault_address,
 					eth_address_checker_address,
 					ethereum_chain_id,
-					cfe_settings: CfeSettings {
-						eth_block_safety_margin,
-						max_ceremony_stage_duration,
-						eth_priority_fee_percentile: common::ETH_PRIORITY_FEE_PERCENTILE,
-					},
-
 					polkadot_genesis_hash: dot_genesis_hash,
 					polkadot_vault_account_id: dot_vault_account_id,
 					polkadot_runtime_version: dot_runtime_version,
@@ -310,8 +295,6 @@ macro_rules! network_spec {
 					eth_init_agg_key,
 					ethereum_deployment_block,
 					genesis_funding_amount,
-					eth_block_safety_margin,
-					max_ceremony_stage_duration,
 					min_funding,
 					dot_genesis_hash,
 					dot_vault_account_id,
@@ -356,12 +339,6 @@ macro_rules! network_spec {
 								eth_vault_address,
 								eth_address_checker_address,
 								ethereum_chain_id,
-								cfe_settings: CfeSettings {
-									eth_block_safety_margin,
-									max_ceremony_stage_duration,
-									eth_priority_fee_percentile: ETH_PRIORITY_FEE_PERCENTILE,
-								},
-
 								polkadot_genesis_hash: dot_genesis_hash,
 								polkadot_vault_account_id: dot_vault_account_id.clone(),
 								polkadot_runtime_version: dot_runtime_version,
@@ -407,6 +384,7 @@ macro_rules! network_spec {
 }
 
 network_spec!(testnet);
+network_spec!(partnernet);
 network_spec!(sisyphos);
 network_spec!(perseverance);
 
