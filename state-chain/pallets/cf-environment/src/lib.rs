@@ -583,7 +583,7 @@ impl<T: Config> Pallet<T> {
 }
 
 impl<T: Config> CompatibleVersions for Pallet<T> {
-	fn current_version() -> SemVer {
+	fn current_compatibility_version() -> SemVer {
 		<T as Config>::CurrentCompatibilityVersion::get()
 	}
 	fn next_compatibility_version() -> Option<SemVer> {

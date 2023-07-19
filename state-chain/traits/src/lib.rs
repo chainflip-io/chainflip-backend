@@ -862,6 +862,6 @@ pub trait GetBlockHeight<C: Chain> {
 	fn get_block_height() -> C::ChainBlockNumber;
 }
 pub trait CompatibleVersions {
-	fn current_version() -> SemVer;
+	fn current_compatibility_version() -> SemVer;
 	fn next_compatibility_version() -> Option<SemVer>;
 }
