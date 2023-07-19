@@ -413,7 +413,7 @@
           ],
           "pub_key_y_parity": "Even"
         },
-        "deploymentBlock": 9182803,
+        "deploymentBlock": 9371930,
         "keygenResponseTimeout": 90
       },
       "polkadotVault": {

@@ -22,7 +22,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 	eth_init_agg_key: hex_literal::hex!(
 		"027f5853c609bd974c085dc94de239d777ac034b31ef0889d7b05e77eed58fc6c8"
 	),
-	ethereum_deployment_block: 9182803u64,
+	ethereum_deployment_block: 9371930u64,
 	genesis_funding_amount: GENESIS_FUNDING_AMOUNT,
 	min_funding: MIN_FUNDING,
 	eth_block_safety_margin: eth::BLOCK_SAFETY_MARGIN as u32,
