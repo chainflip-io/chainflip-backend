@@ -1,4 +1,4 @@
-import { Asset } from '@chainflip-io/cli/.';
+import { Asset } from '@chainflip-io/cli';
 import { sendDot } from './send_dot';
 import { sendBtc } from './send_btc';
 import { sendErc20 } from './send_erc20';

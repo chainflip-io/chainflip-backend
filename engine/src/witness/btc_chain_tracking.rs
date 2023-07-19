@@ -13,13 +13,14 @@ impl<T: BtcRetryRpcApi + Send + Sync + Clone> GetTrackedData<cf_chains::Bitcoin,
 {
 	async fn get_tracked_data(
 		&self,
-		_header: &Header<<cf_chains::Bitcoin as cf_chains::Chain>::ChainBlockNumber, BlockHash, ()>,
+		header: &Header<<cf_chains::Bitcoin as cf_chains::Chain>::ChainBlockNumber, BlockHash, ()>,
 	) -> Result<<cf_chains::Bitcoin as cf_chains::Chain>::TrackedData, anyhow::Error> {
-		// TODO: Bitcoin should return something every block. PRO-481
-		if let Some(next_block_fee_rate) = self.next_block_fee_rate().await {
-			Ok(BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(next_block_fee_rate) })
+		let fee_rate = if let Some(next_block_fee_rate) = self.next_block_fee_rate().await {
+			next_block_fee_rate
 		} else {
-			Err(anyhow::anyhow!("No fee rate returned"))
-		}
+			self.average_block_fee_rate(header.hash).await
+		};
+
+		Ok(BitcoinTrackedData { btc_fee_info: BitcoinFeeInfo::new(fee_rate) })
 	}
 }

@@ -1,3 +1,4 @@
+pub mod builder;
 pub mod ingress_addresses;
 
 use cf_chains::Chain;
@@ -24,33 +25,6 @@ pub trait ChunkedByVault: Sized + Send + Sync {
 	type Parameters: Send;
 
 	async fn stream(&self, parameters: Self::Parameters) -> BoxActiveAndFuture<'_, Item<'_, Self>>;
-}
-
-pub trait ChunkedByVaultAlias:
-	ChunkedByVault
-	+ ChunkedChainSource<
-		Info = pallet_cf_vaults::Vault<<Self as ChunkedByVault>::Chain>,
-		HistoricInfo = <<Self as ChunkedByVault>::Chain as Chain>::ChainBlockNumber,
-		Index = <Self as ChunkedByVault>::Index,
-		Hash = <Self as ChunkedByVault>::Hash,
-		Data = <Self as ChunkedByVault>::Data,
-		Client = <Self as ChunkedByVault>::Client,
-		Chain = <Self as ChunkedByVault>::Chain,
-	>
-{
-}
-impl<T> ChunkedByVaultAlias for T where
-	T: ChunkedByVault
-		+ ChunkedChainSource<
-			Info = pallet_cf_vaults::Vault<<Self as ChunkedByVault>::Chain>,
-			HistoricInfo = <<Self as ChunkedByVault>::Chain as Chain>::ChainBlockNumber,
-			Index = <Self as ChunkedByVault>::Index,
-			Hash = <Self as ChunkedByVault>::Hash,
-			Data = <Self as ChunkedByVault>::Data,
-			Client = <Self as ChunkedByVault>::Client,
-			Chain = <Self as ChunkedByVault>::Chain,
-		>
-{
 }
 
 pub type Item<'a, T> = (
@@ -89,28 +63,6 @@ impl<
 
 	async fn stream(&self, parameters: Self::Parameters) -> BoxActiveAndFuture<'_, Item<'_, Self>> {
 		<Self as ChunkedChainSource>::stream(self, parameters).await
-	}
-}
-
-/// Wraps a specific impl of ChunkedByVault, and impls ChunkedChainSource for it
-pub struct Generic<T>(pub T);
-#[async_trait::async_trait]
-impl<T: ChunkedByVault> ChunkedChainSource for Generic<T> {
-	type Info = pallet_cf_vaults::Vault<T::Chain>;
-	type HistoricInfo = <T::Chain as Chain>::ChainBlockNumber;
-
-	type Index = T::Index;
-	type Hash = T::Hash;
-	type Data = T::Data;
-
-	type Client = T::Client;
-
-	type Chain = T::Chain;
-
-	type Parameters = T::Parameters;
-
-	async fn stream(&self, parameters: Self::Parameters) -> BoxActiveAndFuture<'_, Item<'_, Self>> {
-		self.0.stream(parameters).await
 	}
 }
 

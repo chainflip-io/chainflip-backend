@@ -1,24 +1,19 @@
 import Web3 from 'web3';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { HexString } from '@polkadot/util/types';
-import { fundStateChainAccount } from '@chainflip-io/cli';
+import { assetDecimals, fundStateChainAccount } from '@chainflip-io/cli';
 import { Wallet, ethers } from 'ethers';
 import { getNextEthNonce } from './send_eth';
 import { getEthContractAddress, hexPubkeyToFlipAddress } from './utils';
 import erc20abi from '../../eth-contract-abis/IERC20.json';
-import {
-  observeEvent,
-  getChainflipApi,
-  assetToDecimals,
-  amountToFineAmount,
-} from '../shared/utils';
+import { observeEvent, getChainflipApi, amountToFineAmount } from '../shared/utils';
 
 export async function fundFlip(pubkey: HexString, flipAmount: string) {
   const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
   const chainflip = await getChainflipApi();
   await cryptoWaitReady();
 
-  const flipperinoAmount = amountToFineAmount(flipAmount, assetToDecimals.get('FLIP')!);
+  const flipperinoAmount = amountToFineAmount(flipAmount, assetDecimals.FLIP);
 
   const web3 = new Web3(ethEndpoint);
 
@@ -68,9 +63,9 @@ export async function fundFlip(pubkey: HexString, flipAmount: string) {
     network: 'localnet',
     stateChainGatewayContractAddress: gatewayContractAddress,
     flipContractAddress,
+    nonce: await getNextEthNonce(),
   };
 
-  // TODO: provide nonce manually once it is supported in the SDK/CLI
   const receipt2 = await fundStateChainAccount(pubkey, flipperinoAmount, options);
 
   console.log('Funding ' + flipAmount + ' FLIP to ' + pubkey);

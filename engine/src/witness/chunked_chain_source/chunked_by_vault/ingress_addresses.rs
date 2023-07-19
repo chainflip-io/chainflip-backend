@@ -1,9 +1,6 @@
 use std::sync::Arc;
 
-use crate::witness::{
-	chain_source::{ChainClient, ChainStream},
-	chunked_chain_source::Builder,
-};
+use crate::witness::chain_source::{ChainClient, ChainStream};
 use cf_chains::Chain;
 use futures::FutureExt;
 use futures_core::FusedStream;
@@ -25,7 +22,7 @@ use crate::{
 	},
 };
 
-use super::{ChunkedByVault, ChunkedByVaultAlias, Generic};
+use super::{builder::ChunkedByVaultBuilder, ChunkedByVault};
 
 /// This helps ensure the set of ingress addresses witnessed at each block are consistent across
 /// every validator
@@ -335,24 +332,21 @@ where
 	}
 }
 
-impl<Inner: ChunkedByVault> Builder<Generic<Inner>> {
+impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 	pub async fn ingress_addresses<'env, StateChainStream, StateChainClient>(
 		self,
 		scope: &Scope<'env, anyhow::Error>,
 		state_chain_stream: StateChainStream,
 		state_chain_client: Arc<StateChainClient>,
-	) -> Builder<impl ChunkedByVaultAlias>
+	) -> ChunkedByVaultBuilder<IngressAddresses<Inner>>
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 		StateChainStream: StateChainStreamApi,
 		StateChainClient: StorageApi + Send + Sync + 'static,
 	{
-		Builder {
-			source: Generic(
-				IngressAddresses::new(self.source, scope, state_chain_stream, state_chain_client)
-					.await,
-			),
-			parameters: self.parameters,
-		}
+		ChunkedByVaultBuilder::new(
+			IngressAddresses::new(self.source, scope, state_chain_stream, state_chain_client).await,
+			self.parameters,
+		)
 	}
 }

@@ -13,7 +13,19 @@ spec:
     - port: {{ .Values.service.port }}
       targetPort: ws
       protocol: TCP
+      name: ws-external
+    - port: {{ .Values.ports.wsPort }}
+      targetPort: ws
+      protocol: TCP
       name: ws
+    - name: rpc
+      port: {{ .Values.ports.rpcPort }}
+      targetPort: rpc
+      protocol: TCP
+    - name: p2p
+      port: {{ .Values.ports.p2pPort }}
+      targetPort: p2p
+      protocol: TCP
     - name: metrics
       port: {{ .Values.ports.metricsPort }}
       targetPort: metrics
@@ -38,8 +50,8 @@ spec:
       name: http
   selector:
   {{- include "chainflip-node.selectorLabels" . | nindent 4 }}
-{{- end }}
 ---
+{{- end }}
 {{- if .Values.lpApi.enabled }}
 apiVersion: v1
 kind: Service

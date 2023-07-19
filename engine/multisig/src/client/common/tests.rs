@@ -1,6 +1,6 @@
 use crate::{
 	client::{helpers::ACCOUNT_IDS, keygen::generate_key_data},
-	eth::EthSigning,
+	eth::EvmCryptoScheme,
 };
 
 use rand::{rngs::StdRng, SeedableRng};
@@ -50,7 +50,7 @@ fn ensure_keygen_result_info_serialization_is_consistent() {
 	];
 
 	let keygen_result_info =
-		generate_key_data::<EthSigning>(BTreeSet::from_iter(ACCOUNT_IDS.clone()), &mut rng)
+		generate_key_data::<EvmCryptoScheme>(BTreeSet::from_iter(ACCOUNT_IDS.clone()), &mut rng)
 			.1
 			.get(&ACCOUNT_IDS[0])
 			.expect("should get keygen for an account")

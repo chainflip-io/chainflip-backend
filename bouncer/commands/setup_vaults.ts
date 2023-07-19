@@ -7,7 +7,13 @@
 
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { getChainflipApi, getPolkadotApi, sleep, handleSubstrateError } from '../shared/utils';
+import {
+  getChainflipApi,
+  getPolkadotApi,
+  getBtcClient,
+  sleep,
+  handleSubstrateError,
+} from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 
 async function main(): Promise<void> {
@@ -15,6 +21,7 @@ async function main(): Promise<void> {
   const keyring = new Keyring({ type: 'sr25519' });
   const aliceUri = process.env.POLKADOT_ALICE_URI || '//Alice';
   const alice = keyring.createFromUri(aliceUri);
+  const client = getBtcClient(process.env.BTC_ENDPOINT);
 
   const chainflip = await getChainflipApi(process.env.CF_NODE_ENDPOINT);
   const polkadot = await getPolkadotApi(process.env.POLKADOT_ENDPOINT);
@@ -108,7 +115,10 @@ async function main(): Promise<void> {
   );
 
   await submitGovernanceExtrinsic(
-    chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(1, btcKey),
+    chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(
+      await client.getBlockCount(),
+      btcKey,
+    ),
   );
 
   // Confirmation

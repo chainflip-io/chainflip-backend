@@ -6,7 +6,7 @@
 // It will fund liquidity of the given currency and amount
 // For example: pnpm ./commands/provide_liquidity.ts btc 1.5
 
-import { Asset } from '@chainflip-io/cli/.';
+import { Asset } from '@chainflip-io/cli';
 import { runWithTimeout } from '../shared/utils';
 import { provideLiquidity } from '../shared/provide_liquidity';
 

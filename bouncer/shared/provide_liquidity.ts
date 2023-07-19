@@ -1,12 +1,11 @@
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { Asset } from '@chainflip-io/cli/.';
+import { Asset, assetChains, chainContractIds } from '@chainflip-io/cli';
 import {
   observeEvent,
   getAddress,
   getChainflipApi,
   encodeDotAddressForContract,
-  assetToChain,
   handleSubstrateError,
   encodeBtcAddressForContract,
   lpMutex,
@@ -34,7 +33,7 @@ export async function provideLiquidity(ccy: Asset, amount: number) {
     (
       await chainflip.query.liquidityProvider.emergencyWithdrawalAddress(
         lp.address,
-        assetToChain(ccy),
+        chainContractIds[assetChains[ccy]],
       )
     ).toJSON() === null
   ) {
