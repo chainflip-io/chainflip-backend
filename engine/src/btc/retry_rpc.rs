@@ -41,6 +41,8 @@ pub trait BtcRetryRpcApi {
 
 	async fn next_block_fee_rate(&self) -> Option<cf_chains::btc::BtcAmount>;
 
+	async fn average_block_fee_rate(&self, block_hash: BlockHash) -> cf_chains::btc::BtcAmount;
+
 	async fn best_block_header(&self) -> BlockHeader;
 }
 
@@ -79,6 +81,15 @@ impl BtcRetryRpcApi for BtcRetryRpcClient {
 			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move { client.next_block_fee_rate().await })
+			}))
+			.await
+	}
+
+	async fn average_block_fee_rate(&self, block_hash: BlockHash) -> cf_chains::btc::BtcAmount {
+		self.retry_client
+			.request(Box::pin(move |client| {
+				#[allow(clippy::redundant_async_block)]
+				Box::pin(async move { client.average_block_fee_rate(block_hash).await })
 			}))
 			.await
 	}

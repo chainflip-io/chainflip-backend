@@ -3,7 +3,7 @@ import { setTimeout as sleep } from 'timers/promises';
 import Client from 'bitcoin-core';
 import { ApiPromise, WsProvider, Keyring } from '@polkadot/api';
 import { Mutex } from 'async-mutex';
-import { Chain, Asset, assetChains } from '@chainflip-io/cli';
+import { Chain, Asset, assetChains, chainContractIds } from '@chainflip-io/cli';
 import Web3 from 'web3';
 import { u8aToHex } from '@polkadot/util';
 import { newDotAddress } from './new_dot_address';
@@ -19,31 +19,6 @@ export const btcClientMutex = new Mutex();
 export const brokerMutex = new Mutex();
 export const snowWhiteMutex = new Mutex();
 
-// TODO: Import this from the chainflip-io/cli package once it's exported in future versions.
-export function assetToChain(asset: Asset): number {
-  switch (asset) {
-    case 'ETH':
-    case 'FLIP':
-    case 'USDC':
-      return 1; // Ethereum
-    case 'DOT':
-      return 2; // Polkadot
-    case 'BTC':
-      return 3; // Bitcoin
-    default:
-      throw new Error(`Unsupported asset: ${asset}`);
-  }
-}
-
-export const assetToDecimals = new Map<Asset, number>([
-  ['DOT', 10],
-  ['ETH', 18],
-  ['BTC', 8],
-  ['USDC', 6],
-  ['FLIP', 18],
-]);
-
-// TODO: Import this from the chainflip-io/cli package once it's exported in future versions.
 export function getEthContractAddress(contract: string): string {
   switch (contract) {
     case 'VAULT':
@@ -286,7 +261,7 @@ export async function observeCcmReceived(
   messageMetadata: CcmDepositMetadata,
 ): Promise<void> {
   await observeEVMEvent(cfReceiverMockAbi, address, 'ReceivedxSwapAndCall', [
-    assetToChain(sourceToken).toString(),
+    chainContractIds[assetChains[sourceToken]].toString(),
     '*',
     messageMetadata.message,
     getEthContractAddress(destToken.toString()),

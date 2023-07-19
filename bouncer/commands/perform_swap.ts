@@ -1,4 +1,4 @@
-import { Asset } from '@chainflip-io/cli/.';
+import { Asset } from '@chainflip-io/cli';
 import { performSwap } from '../shared/perform_swap';
 
 async function main() {

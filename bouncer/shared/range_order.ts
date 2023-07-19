@@ -1,17 +1,16 @@
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { Asset } from '@chainflip-io/cli';
+import { assetDecimals, Asset } from '@chainflip-io/cli';
 import {
   observeEvent,
   getChainflipApi,
   handleSubstrateError,
-  assetToDecimals,
   amountToFineAmount,
   lpMutex,
 } from '../shared/utils';
 
 export async function rangeOrder(ccy: Asset, amount: number) {
-  const fineAmount = amountToFineAmount(String(amount), assetToDecimals.get(ccy)!);
+  const fineAmount = amountToFineAmount(String(amount), assetDecimals[ccy]);
   const chainflip = await getChainflipApi(process.env.CF_NODE_ENDPOINT);
   await cryptoWaitReady();
 

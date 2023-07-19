@@ -112,6 +112,8 @@ The script will ask you to log in to our Docker container registry. You will nee
 a [Classic PAT](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token#creating-a-personal-access-token-classic)
 for this.
 
+You only need to enable the `packages:read` permission.
+
 ### Creating a Localnet
 
 Localnets use binaries built locally. To create a Localnet for your current branch, you will first need to build.

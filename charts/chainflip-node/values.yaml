@@ -24,6 +24,10 @@ engine:
   resources: {}
   existingDbPath: ""
   syncDb: false
+  service:
+    type: ClusterIP
+    port: 80
+    annotations: {}
   settings:
     node_p2p:
       node_key_file: /etc/chainflip/keys/node_key_file

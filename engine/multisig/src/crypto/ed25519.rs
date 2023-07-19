@@ -1,4 +1,7 @@
-use super::{curve25519::edwards::Point, CanonicalEncoding, ChainTag, CryptoScheme, ECPoint};
+use super::{
+	curve25519::edwards::Point, CanonicalEncoding, ChainSigning, ChainTag, CryptoScheme, CryptoTag,
+	ECPoint,
+};
 use ed25519_consensus::VerificationKeyBytes;
 use serde::{Deserialize, Serialize};
 
@@ -40,16 +43,11 @@ impl AsRef<[u8]> for SigningPayload {
 		self.0.as_ref()
 	}
 }
+#[derive(Clone, Debug, PartialEq)]
+pub struct Ed25519CryptoScheme;
 
-impl CryptoScheme for Ed25519Signing {
-	type Point = super::curve25519::edwards::Point;
-
-	type Signature = Signature;
-
-	type PublicKey = VerificationKeyBytes;
-
-	type SigningPayload = SigningPayload;
-
+impl ChainSigning for Ed25519Signing {
+	type CryptoScheme = Ed25519CryptoScheme;
 	// This scheme isn't implemented on the state chain.
 	type Chain = cf_chains::none::NoneChain;
 
@@ -59,6 +57,20 @@ impl CryptoScheme for Ed25519Signing {
 	// multiple chains, so we might want to decouple
 	// "scheme" from "chain".
 	const CHAIN_TAG: ChainTag = ChainTag::Ed25519;
+}
+
+impl CryptoScheme for Ed25519CryptoScheme {
+	type Point = super::curve25519::edwards::Point;
+
+	type Signature = Signature;
+
+	type PublicKey = VerificationKeyBytes;
+
+	type SigningPayload = SigningPayload;
+
+	const CRYPTO_TAG: CryptoTag = CryptoTag::Ed25519;
+
+	const NAME: &'static str = "Ed25519 Crypto";
 
 	fn build_signature(
 		z: <Self::Point as super::ECPoint>::Scalar,

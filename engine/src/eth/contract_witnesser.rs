@@ -100,11 +100,12 @@ where
 			)
 			.await?;
 
-		logs.into_iter()
-			.map(|unparsed_log| -> anyhow::Result<Event<EventParameters>> {
-				Event::<EventParameters>::new_from_unparsed_logs(unparsed_log)
+		Ok(logs
+			.into_iter()
+			.filter_map(|unparsed_log| -> Option<Event<EventParameters>> {
+				Event::<EventParameters>::new_from_unparsed_logs(unparsed_log).ok()
 			})
-			.collect::<anyhow::Result<Vec<_>>>()
+			.collect::<Vec<_>>())
 	} else {
 		// we know there won't be interesting logs, so don't fetch for events
 		Ok(vec![])
