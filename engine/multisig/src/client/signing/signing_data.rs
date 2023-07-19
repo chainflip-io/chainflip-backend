@@ -140,14 +140,14 @@ impl<P: ECPoint> Display for SigningData<P> {
 }
 
 impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
-	fn data_size_is_valid<C: CryptoScheme>(
+	fn is_data_size_valid<C: CryptoScheme>(
 		&self,
 		num_of_parties: AuthorityCount,
 		num_of_payloads: Option<usize>,
 	) -> bool {
 		let num_of_parties = num_of_parties as usize;
 		match self {
-			SigningData::CommStage1(_) => self.initial_stage_data_size_is_valid::<C>(),
+			SigningData::CommStage1(_) => self.is_initial_stage_data_size_valid::<C>(),
 			// It is safe to unwrap after the first stage because the number of payloads is always
 			// known from then on (only for signing ceremonies)
 			SigningData::BroadcastVerificationStage2(message) => message.is_data_size_valid(
@@ -162,7 +162,7 @@ impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
 		}
 	}
 
-	fn initial_stage_data_size_is_valid<C: CryptoScheme>(&self) -> bool {
+	fn is_initial_stage_data_size_valid<C: CryptoScheme>(&self) -> bool {
 		match self {
 			SigningData::CommStage1(message) => match C::CRYPTO_TAG {
 				CryptoTag::Evm | CryptoTag::Polkadot | CryptoTag::Ed25519 =>
@@ -269,19 +269,19 @@ mod tests {
 	#[test]
 	fn check_data_size_stage1() {
 		// Should only pass if the message contains exactly one commitment for ethereum and Polkadot
-		assert!(gen_signing_data_stage1(1).initial_stage_data_size_is_valid::<EvmCryptoScheme>());
-		assert!(!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<EvmCryptoScheme>());
+		assert!(gen_signing_data_stage1(1).is_initial_stage_data_size_valid::<EvmCryptoScheme>());
+		assert!(!gen_signing_data_stage1(2).is_initial_stage_data_size_valid::<EvmCryptoScheme>());
 		assert!(
-			!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<PolkadotCryptoScheme>()
+			!gen_signing_data_stage1(2).is_initial_stage_data_size_valid::<PolkadotCryptoScheme>()
 		);
 
 		// Because we might not know the number of payloads yet, we limit btc to a constant
 		assert!(gen_signing_data_stage1(MAX_BTC_SIGNING_PAYLOADS as u64)
-			.initial_stage_data_size_is_valid::<BtcCryptoScheme>());
+			.is_initial_stage_data_size_valid::<BtcCryptoScheme>());
 		assert!(gen_signing_data_stage1((MAX_BTC_SIGNING_PAYLOADS - 1) as u64)
-			.initial_stage_data_size_is_valid::<BtcCryptoScheme>());
+			.is_initial_stage_data_size_valid::<BtcCryptoScheme>());
 		assert!(!gen_signing_data_stage1((MAX_BTC_SIGNING_PAYLOADS + 1) as u64)
-			.initial_stage_data_size_is_valid::<BtcCryptoScheme>());
+			.is_initial_stage_data_size_valid::<BtcCryptoScheme>());
 	}
 
 	#[test]
@@ -291,17 +291,17 @@ mod tests {
 
 		// Outer collection should fail on sizes larger or smaller than expected
 		assert!(gen_signing_data_stage2(PARTIES, PAYLOAD_COUNT)
-			.data_size_is_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
 		assert!(!gen_signing_data_stage2(PARTIES - 1, PAYLOAD_COUNT)
-			.data_size_is_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
 		assert!(!gen_signing_data_stage2(PARTIES + 1, PAYLOAD_COUNT)
-			.data_size_is_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
 
 		// Inner collection should fail on sizes larger than the maximum size
 		assert!(gen_signing_data_stage2(PARTIES, PAYLOAD_COUNT - 1)
-			.data_size_is_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
 		assert!(!gen_signing_data_stage2(PARTIES, PAYLOAD_COUNT + 1)
-			.data_size_is_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
 	}
 
 	#[test]
@@ -311,11 +311,11 @@ mod tests {
 
 		// Should fail if it has too many responses
 		assert!(gen_signing_data_stage3(PAYLOAD_COUNT)
-			.data_size_is_valid::<EvmCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<EvmCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
 		assert!(gen_signing_data_stage3(PAYLOAD_COUNT - 1)
-			.data_size_is_valid::<EvmCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<EvmCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
 		assert!(!gen_signing_data_stage3(PAYLOAD_COUNT + 1)
-			.data_size_is_valid::<EvmCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<EvmCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
 	}
 
 	#[test]
@@ -325,17 +325,17 @@ mod tests {
 
 		// Outer collection should fail on sizes larger or smaller than expected
 		assert!(gen_signing_data_stage4(PARTIES, PAYLOAD_COUNT)
-			.data_size_is_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
 		assert!(!gen_signing_data_stage4(PARTIES - 1, PAYLOAD_COUNT)
-			.data_size_is_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
 		assert!(!gen_signing_data_stage4(PARTIES + 1, PAYLOAD_COUNT)
-			.data_size_is_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
 
 		// Inner collection should fail on sizes larger than the maximum size
 		assert!(gen_signing_data_stage4(PARTIES, PAYLOAD_COUNT - 1)
-			.data_size_is_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
 		assert!(!gen_signing_data_stage4(PARTIES, PAYLOAD_COUNT + 1)
-			.data_size_is_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
+			.is_data_size_valid::<BtcCryptoScheme>(PARTIES, Some(PAYLOAD_COUNT)));
 	}
 
 	#[test]
