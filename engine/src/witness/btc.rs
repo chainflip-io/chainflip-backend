@@ -57,10 +57,9 @@ where
 		Ok(())
 	});
 
-	let btc_safe_source = btc_source.lag_safety(SAFETY_MARGIN);
-
 	let btc_client = btc_client.clone();
-	let btc_ingress_witnesser = btc_safe_source
+	let btc_ingress_witnesser = btc_source
+		.lag_safety(SAFETY_MARGIN)
 		.then(move |header| {
 			let btc_client = btc_client.clone();
 			async move {

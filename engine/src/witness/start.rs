@@ -27,10 +27,11 @@ where
 	StateChainClient: StorageApi + EthAssetApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
 	let initial_block_hash = state_chain_stream.cache().block_hash;
-	let epoch_source = EpochSource::builder(scope, state_chain_stream.clone(), state_chain_client.clone())
-		.await
-		.participating(state_chain_client.account_id())
-		.await;
+	let epoch_source =
+		EpochSource::builder(scope, state_chain_stream.clone(), state_chain_client.clone())
+			.await
+			.participating(state_chain_client.account_id())
+			.await;
 
 	super::eth::start(
 		scope,
