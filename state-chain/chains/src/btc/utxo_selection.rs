@@ -124,14 +124,11 @@ fn test_utxo_selection() {
 	// max amount that can be spent with the given utxos.
 	assert_eq!(
 		select_utxos_from_pool(&mut available_utxos.clone(), FEE_PER_UTXO, 2485),
-		Some((all_selected_utxos.clone(), 2485))
+		Some((all_selected_utxos, 2485))
 	);
 	// entering the amount greater than the max spendable amount will
 	// cause the function to return no utxos
-	assert_eq!(
-		select_utxos_from_pool(&mut available_utxos.clone(), FEE_PER_UTXO, 100000),
-		None
-	);
+	assert_eq!(select_utxos_from_pool(&mut available_utxos.clone(), FEE_PER_UTXO, 100000), None);
 
 	// choosing the fee to spend the input utxo as greater than the amounts in the 2 smallest utxos
 	// will cause the algorithm to skip the selection of those 2 utxos and adding it to the list of
