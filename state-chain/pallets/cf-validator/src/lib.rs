@@ -287,6 +287,8 @@ pub mod pallet {
 		RotationAborted,
 		/// A new epoch has started \[epoch_index\]
 		NewEpoch(EpochIndex),
+		/// [DEPRECATED] The number of blocks has changed for our epoch \[from, to\]
+		EpochDurationChanged(T::BlockNumber, T::BlockNumber),
 		/// Rotation phase updated.
 		RotationPhaseUpdated { new_phase: RotationPhase<T> },
 		/// The CFE version has been updated.
@@ -300,8 +302,14 @@ pub mod pallet {
 		PeerIdRegistered(T::AccountId, Ed25519PublicKey, Port, Ipv6Addr),
 		/// A authority has unregistered her current PeerId \[account_id, public_key\]
 		PeerIdUnregistered(T::AccountId, Ed25519PublicKey),
+		/// [DEPRECATED] Ratio of redemption period updated \[percentage\]
+		RedemptionPeriodUpdated(u8),
 		/// Vanity Name for a node has been set \[account_id, vanity_name\]
 		VanityNameSet(T::AccountId, VanityName),
+		/// [DEPRECATED] The backup node percentage has been updated \[percentage\].
+		BackupRewardNodePercentageUpdated(u8),
+		/// [DEPRECATED] The minimum authority set size has been updated.
+		AuthoritySetMinSizeUpdated { min_size: AuthorityCount },
 		/// An auction has a set of winners \[winners, bond\]
 		AuctionCompleted(Vec<ValidatorIdOf<T>>, T::Amount),
 		/// Some pallet configuration has been updated.
@@ -477,6 +485,13 @@ pub mod pallet {
 
 	#[pallet::call]
 	impl<T: Config> Pallet<T> {
+		/// [DEPRECATED] TODO: Remove this. It's a placeholder to preserve CFE compatibility.
+		#[pallet::weight(T::ValidatorWeightInfo::update_pallet_config())]
+		pub fn dummy(origin: OriginFor<T>) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			Ok(())
+		}
+
 		/// [GOVERNANCE] Update a pallet config item.
 		///
 		/// The dispatch origin of this function must be governance.

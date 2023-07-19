@@ -594,6 +594,21 @@ pub mod pallet {
 			Self::on_new_key_activated(block_number)
 		}
 
+		/// [DEPRECATED]
+		#[pallet::weight(T::WeightInfo::vault_key_rotated())]
+		pub fn vault_key_rotated_out(
+			origin: OriginFor<T>,
+			block_number: ChainBlockNumberFor<T, I>,
+
+			// This field is primarily required to ensure the witness calls are unique per
+			// transaction (on the external chain)
+			_tx_out_id: TransactionOutIdFor<T, I>,
+		) -> DispatchResultWithPostInfo {
+			T::EnsureWitnessedAtCurrentEpoch::ensure_origin(origin)?;
+
+			Self::on_new_key_activated(block_number)
+		}
+
 		/// The vault's key has been updated externally, outside of the rotation
 		/// cycle. This is an unexpected event as far as our chain is concerned, and
 		/// the only thing we can do is to halt and wait for further governance

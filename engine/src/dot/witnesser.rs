@@ -370,6 +370,7 @@ where
 													_,
 													PolkadotInstance,
 												>::transaction_succeeded {
+													block_number: Default::default(),
 													tx_out_id: signature,
 													signer_id: self.vault_account,
 													tx_fee,

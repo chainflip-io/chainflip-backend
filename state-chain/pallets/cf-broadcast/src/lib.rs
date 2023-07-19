@@ -466,6 +466,8 @@ pub mod pallet {
 		#[pallet::weight(T::WeightInfo::transaction_succeeded())]
 		pub fn transaction_succeeded(
 			origin: OriginFor<T>,
+			// [DEPRECATED] TODO: REMOVE THIS
+			_block_number: ChainBlockNumberFor<T, I>,
 			tx_out_id: TransactionOutIdFor<T, I>,
 			signer_id: SignerIdFor<T, I>,
 			tx_fee: TransactionFeeFor<T, I>,

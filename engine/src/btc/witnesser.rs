@@ -158,6 +158,7 @@ where
 				.finalize_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 					call: Box::new(state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
 						pallet_cf_broadcast::Call::transaction_succeeded {
+							block_number: Default::default(),
 							tx_out_id: tx_hash,
 							signer_id: self.current_pubkey.clone(),
 							// TODO: Ideally we can submit an empty type here. For Bitcoin

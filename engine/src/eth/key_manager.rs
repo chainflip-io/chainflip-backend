@@ -242,6 +242,7 @@ impl EthContractWitnesser for KeyManager {
 							pallet_cf_witnesser::Call::witness_at_epoch {
 								call: Box::new(
 									pallet_cf_broadcast::Call::<_, EthereumInstance>::transaction_succeeded {
+										block_number: Default::default(),
 										tx_out_id: SchnorrVerificationComponents {
 											s: sig_data.sig.into(),
 											k_times_g_address: sig_data.k_times_g_address.into(),
