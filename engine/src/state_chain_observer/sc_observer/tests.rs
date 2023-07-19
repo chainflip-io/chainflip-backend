@@ -13,7 +13,7 @@ use cf_primitives::{AccountRole, GENESIS_EPOCH};
 use frame_system::Phase;
 use futures::{FutureExt, StreamExt};
 use mockall::predicate::eq;
-use multisig::SignatureToThresholdSignature;
+use multisig::{eth::EvmCryptoScheme, ChainSigning, SignatureToThresholdSignature};
 use pallet_cf_broadcast::BroadcastAttemptId;
 use pallet_cf_environment::PolkadotVaultAccountId;
 use pallet_cf_validator::{CurrentEpoch, HistoricalActiveEpochs};
@@ -1052,6 +1052,7 @@ async fn should_handle_signing_request<C, I>()
 where
 	C: CryptoScheme + Send + Sync,
 	I: 'static + Send + Sync,
+
 	Runtime: pallet_cf_threshold_signature::Config<I>,
 	RuntimeCall:
 		std::convert::From<pallet_cf_threshold_signature::Call<Runtime, I>>,
@@ -1059,6 +1060,7 @@ where
 ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signature>,
 	Vec<C::Signature>: SignatureToThresholdSignature<
 		<Runtime as pallet_cf_threshold_signature::Config<I>>::TargetChain
+
 	>,
 {
 	let key_id = KeyId::new(1, [0u8; 32]);
@@ -1182,25 +1184,25 @@ ChainCrypto>::ThresholdSignature: std::convert::From<<C as CryptoScheme>::Signat
 // depending on whether we are participating in the ceremony or not.
 #[tokio::test]
 async fn should_handle_signing_request_eth() {
-	should_handle_signing_request::<EthSigning, EthereumInstance>().await;
+	should_handle_signing_request::<EvmCryptoScheme, EthereumInstance>().await;
 }
 
 mod dot_signing {
 
-	use multisig::polkadot::PolkadotSigning;
+	use multisig::polkadot::PolkadotCryptoScheme;
 
 	use super::*;
 	use PolkadotInstance;
 
 	#[tokio::test]
 	async fn should_handle_signing_request_dot() {
-		should_handle_signing_request::<PolkadotSigning, PolkadotInstance>().await;
+		should_handle_signing_request::<PolkadotCryptoScheme, PolkadotInstance>().await;
 	}
 }
 
 async fn should_handle_keygen_request<C, I>()
 where
-	C: CryptoScheme<Chain = <Runtime as pallet_cf_vaults::Config<I>>::Chain> + Send + Sync,
+	C: ChainSigning<Chain = <Runtime as pallet_cf_vaults::Config<I>>::Chain> + Send + Sync,
 	I: CryptoCompat<C, C::Chain> + 'static + Send + Sync,
 	Runtime: pallet_cf_vaults::Config<I>,
 	RuntimeCall: std::convert::From<pallet_cf_vaults::Call<Runtime, I>>,
@@ -1221,7 +1223,7 @@ where
 		.return_once(|_| (H256::default(), extrinsic_api::signed::MockUntilFinalized::new()));
 	let state_chain_client = Arc::new(state_chain_client);
 
-	let mut multisig_client = MockMultisigClientApi::<C>::new();
+	let mut multisig_client = MockMultisigClientApi::<C::CryptoScheme>::new();
 	multisig_client
 		.expect_update_latest_ceremony_id()
 		.with(eq(first_ceremony_id))
@@ -1297,7 +1299,7 @@ where
 	Runtime: pallet_cf_vaults::Config<BitcoinInstance>,
 	RuntimeCall: std::convert::From<pallet_cf_vaults::Call<Runtime, BitcoinInstance>>,
 {
-	use multisig::bitcoin::BtcSigning;
+	use multisig::bitcoin::BtcCryptoScheme;
 
 	let first_ceremony_id = 1;
 	let our_account_id = AccountId32::new([0; 32]);
@@ -1305,7 +1307,7 @@ where
 	assert_ne!(our_account_id, not_our_account_id);
 
 	let mut state_chain_client = MockStateChainClient::new();
-	let mut multisig_client = MockMultisigClientApi::<BtcSigning>::new();
+	let mut multisig_client = MockMultisigClientApi::<BtcCryptoScheme>::new();
 
 	// Both requests will ask for the account id
 	state_chain_client

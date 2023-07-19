@@ -309,7 +309,7 @@ mod serialisation {
 
 	#[cfg(test)]
 	mod tests {
-		use crate::{client::helpers::test_all_crypto_schemes, ChainTag, CryptoScheme};
+		use crate::{client::helpers::test_all_crypto_schemes, crypto::CryptoTag, CryptoScheme};
 
 		#[test]
 		fn check_comm3_max_size() {
@@ -347,7 +347,7 @@ mod serialisation {
 			let comm3: CoeffComm3<<C as CryptoScheme>::Point> =
 				DelayDeserialization::new(&dkg_commitment);
 
-			if matches!(<C as CryptoScheme>::CHAIN_TAG, ChainTag::Ethereum) {
+			if matches!(<C as CryptoScheme>::CRYPTO_TAG, CryptoTag::Evm) {
 				// The constants are defined as to exactly match Ethereum/secp256k1,
 				// which we demonstrate here:
 				assert!(comm3.payload.len() == MAX_COEFF_COMM_3_SIZE);
@@ -552,7 +552,7 @@ mod tests {
 
 	use utilities::assert_ok;
 
-	use crate::eth::EthSigning;
+	use crate::eth::EvmCryptoScheme;
 
 	use super::*;
 
@@ -603,7 +603,7 @@ mod tests {
 			((idx, dkg_commitment), (idx, HashComm1(hash_commitment)), (idx, shares))
 		}));
 
-		let coeff_commitments = assert_ok!(validate_commitments::<EthSigning>(
+		let coeff_commitments = assert_ok!(validate_commitments::<EvmCryptoScheme>(
 			commitments,
 			hash_commitments,
 			None,
@@ -642,7 +642,7 @@ pub mod genesis {
 	use std::collections::HashMap;
 
 	use super::*;
-	use crate::{client::PartyIdxMapping, eth::EthSigning};
+	use crate::{client::PartyIdxMapping, eth::EvmCryptoScheme};
 	use state_chain_runtime::AccountId;
 
 	/// Generate keys for all participants in a centralised manner.
@@ -726,8 +726,10 @@ pub mod genesis {
 	pub fn generate_key_data_with_initial_incompatibility(
 		signers: BTreeSet<AccountId>,
 		rng: &mut Rng,
-	) -> (<EthSigning as CryptoScheme>::PublicKey, HashMap<AccountId, KeygenResultInfo<EthSigning>>)
-	{
+	) -> (
+		<EvmCryptoScheme as CryptoScheme>::PublicKey,
+		HashMap<AccountId, KeygenResultInfo<EvmCryptoScheme>>,
+	) {
 		generate_key_data_detail(signers, true, rng)
 	}
 }

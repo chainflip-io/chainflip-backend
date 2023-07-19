@@ -8,8 +8,8 @@ use crate::{
 		BroadcastVerificationMessage, DelayDeserialization, PreProcessStageDataCheck,
 		SigningStageName,
 	},
-	crypto::{ECPoint, MAX_POINT_SIZE, MAX_SCALAR_SIZE},
-	ChainTag, CryptoScheme, MAX_BTC_SIGNING_PAYLOADS,
+	crypto::{CryptoTag, ECPoint, MAX_POINT_SIZE, MAX_SCALAR_SIZE},
+	CryptoScheme, MAX_BTC_SIGNING_PAYLOADS,
 };
 
 #[cfg(test)]
@@ -49,14 +49,14 @@ mod serialisation {
 	use super::*;
 	use crate::{
 		client::helpers::{self, test_all_crypto_schemes},
-		CryptoScheme,
+		crypto::CryptoTag,
 	};
 	use rand::SeedableRng;
 
 	fn test_signing_commitment_size_for_scheme<C: CryptoScheme>() {
 		let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
 		let comm1 = helpers::gen_dummy_signing_comm1::<C::Point>(&mut rng, 1);
-		if matches!(<C as CryptoScheme>::CHAIN_TAG, ChainTag::Ethereum) {
+		if matches!(<C as CryptoScheme>::CRYPTO_TAG, CryptoTag::Evm) {
 			// The constants are defined as to exactly match Ethereum/secp256k1,
 			// which we demonstrate here:
 			assert!(comm1.payload.len() == signing_commitment_payload_size(1));
@@ -75,7 +75,7 @@ mod serialisation {
 		let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
 		let sig = helpers::gen_dummy_local_sig::<C::Point>(&mut rng, 1);
 
-		if matches!(<C as CryptoScheme>::CHAIN_TAG, ChainTag::Ethereum) {
+		if matches!(<C as CryptoScheme>::CRYPTO_TAG, CryptoTag::Evm) {
 			// The constants are defined as to exactly match Ethereum/secp256k1,
 			// which we demonstrate here:
 			assert!(sig.payload.len() == local_sig_payload_size(1));
@@ -169,9 +169,14 @@ impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
 	fn initial_stage_data_size_is_valid<C: CryptoScheme>(&self) -> bool {
 		match self {
 			SigningData::CommStage1(message) => match C::CHAIN_TAG {
-				ChainTag::Ethereum | ChainTag::Polkadot | ChainTag::Ed25519 =>
+				CryptoTag::Evm | CryptoTag::Polkadot | CryptoTag::Ed25519 =>
 					message.payload.len() <= signing_commitment_payload_size(1),
-				ChainTag::Bitcoin =>
+				// TODO: Technically, this condition is on the Bitcoin chain rather than the Bitcoin
+				// Crypto Scheme so we might want to address this. However, in practice this will
+				// only matter if we want to have different limits on the number of payloads
+				// depending on chain that have the same crypto scheme (that is, the bitcoin crypto
+				// scheme).
+				CryptoTag::Bitcoin =>
 				// At this stage we may not know the number of payloads, so we use a maximum
 					message.payload.len() <=
 						signing_commitment_payload_size(MAX_BTC_SIGNING_PAYLOADS),
@@ -207,11 +212,11 @@ impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
 mod tests {
 
 	use crate::{
-		bitcoin::BtcSigning,
+		bitcoin::BtcCryptoScheme,
 		client::helpers::{gen_dummy_local_sig, gen_dummy_signing_comm1},
 		crypto::eth::Point,
-		eth::EthSigning,
-		polkadot::PolkadotSigning,
+		eth::EvmCryptoScheme,
+		polkadot::PolkadotCryptoScheme,
 		Rng,
 	};
 
@@ -261,17 +266,19 @@ mod tests {
 	#[test]
 	fn check_data_size_stage1() {
 		// Should only pass if the message contains exactly one commitment for ethereum and Polkadot
-		assert!(gen_signing_data_stage1(1).initial_stage_data_size_is_valid::<EthSigning>());
-		assert!(!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<EthSigning>());
-		assert!(!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<PolkadotSigning>());
+		assert!(gen_signing_data_stage1(1).initial_stage_data_size_is_valid::<EvmCryptoScheme>());
+		assert!(!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<EvmCryptoScheme>());
+		assert!(
+			!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<PolkadotCryptoScheme>()
+		);
 
 		// Because we might not know the number of payloads yet, we limit btc to a constant
 		assert!(gen_signing_data_stage1(MAX_BTC_SIGNING_PAYLOADS as u64)
-			.initial_stage_data_size_is_valid::<BtcSigning>());
+			.initial_stage_data_size_is_valid::<BtcCryptoScheme>());
 		assert!(gen_signing_data_stage1((MAX_BTC_SIGNING_PAYLOADS - 1) as u64)
-			.initial_stage_data_size_is_valid::<BtcSigning>());
+			.initial_stage_data_size_is_valid::<BtcCryptoScheme>());
 		assert!(!gen_signing_data_stage1((MAX_BTC_SIGNING_PAYLOADS + 1) as u64)
-			.initial_stage_data_size_is_valid::<BtcSigning>());
+			.initial_stage_data_size_is_valid::<BtcCryptoScheme>());
 	}
 
 	#[test]
@@ -281,23 +288,23 @@ mod tests {
 
 		// For Ethereum and Polkadot, the inner collection should fail on sizes larger 1
 		assert!(gen_signing_data_stage2(participant_count, 1)
-			.data_size_is_valid::<EthSigning>(participant_count, Some(1)));
+			.data_size_is_valid::<EvmCryptoScheme>(participant_count, Some(1)));
 		assert!(!gen_signing_data_stage2(participant_count, 2)
-			.data_size_is_valid::<EthSigning>(participant_count, Some(1)));
+			.data_size_is_valid::<EvmCryptoScheme>(participant_count, Some(1)));
 
 		// Outer collection should fail on sizes larger or smaller than expected
 		assert!(gen_signing_data_stage2(participant_count, payload_count)
-			.data_size_is_valid::<BtcSigning>(participant_count, Some(payload_count)));
+			.data_size_is_valid::<BtcCryptoScheme>(participant_count, Some(payload_count)));
 		assert!(!gen_signing_data_stage2(participant_count - 1, payload_count)
-			.data_size_is_valid::<BtcSigning>(participant_count, Some(payload_count)));
+			.data_size_is_valid::<BtcCryptoScheme>(participant_count, Some(payload_count)));
 		assert!(!gen_signing_data_stage2(participant_count + 1, payload_count)
-			.data_size_is_valid::<BtcSigning>(participant_count, Some(payload_count)));
+			.data_size_is_valid::<BtcCryptoScheme>(participant_count, Some(payload_count)));
 
 		// Inner collection should fail on sizes larger than the maximum size
 		assert!(gen_signing_data_stage2(participant_count, payload_count - 1)
-			.data_size_is_valid::<BtcSigning>(participant_count, Some(payload_count)));
+			.data_size_is_valid::<BtcCryptoScheme>(participant_count, Some(payload_count)));
 		assert!(!gen_signing_data_stage2(participant_count, payload_count + 1)
-			.data_size_is_valid::<BtcSigning>(participant_count, Some(payload_count)));
+			.data_size_is_valid::<BtcCryptoScheme>(participant_count, Some(payload_count)));
 	}
 
 	#[test]
@@ -307,23 +314,23 @@ mod tests {
 
 		// For Ethereum and Polkadot, the inner collection should fail on sizes larger 1
 		assert!(gen_signing_data_stage4(participant_count, 1)
-			.data_size_is_valid::<EthSigning>(participant_count, Some(1)));
+			.data_size_is_valid::<EvmCryptoScheme>(participant_count, Some(1)));
 		assert!(!gen_signing_data_stage4(participant_count, 2)
-			.data_size_is_valid::<EthSigning>(participant_count, Some(1)));
+			.data_size_is_valid::<EvmCryptoScheme>(participant_count, Some(1)));
 
 		// Outer collection should fail on sizes larger or smaller than expected
 		assert!(gen_signing_data_stage4(participant_count, payload_count)
-			.data_size_is_valid::<BtcSigning>(participant_count, Some(payload_count)));
+			.data_size_is_valid::<BtcCryptoScheme>(participant_count, Some(payload_count)));
 		assert!(!gen_signing_data_stage4(participant_count - 1, payload_count)
-			.data_size_is_valid::<BtcSigning>(participant_count, Some(payload_count)));
+			.data_size_is_valid::<BtcCryptoScheme>(participant_count, Some(payload_count)));
 		assert!(!gen_signing_data_stage4(participant_count + 1, payload_count)
-			.data_size_is_valid::<BtcSigning>(participant_count, Some(payload_count)));
+			.data_size_is_valid::<BtcCryptoScheme>(participant_count, Some(payload_count)));
 
 		// Inner collection should fail on sizes larger than the maximum size
 		assert!(gen_signing_data_stage4(participant_count, payload_count - 1)
-			.data_size_is_valid::<BtcSigning>(participant_count, Some(payload_count)));
+			.data_size_is_valid::<BtcCryptoScheme>(participant_count, Some(payload_count)));
 		assert!(!gen_signing_data_stage4(participant_count, payload_count + 1)
-			.data_size_is_valid::<BtcSigning>(participant_count, Some(payload_count)));
+			.data_size_is_valid::<BtcCryptoScheme>(participant_count, Some(payload_count)));
 	}
 
 	#[test]

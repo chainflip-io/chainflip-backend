@@ -17,7 +17,7 @@ use crate::{
 		SigningRequestDetails,
 	},
 	crypto::{CryptoScheme, Rng},
-	eth::EthSigning,
+	eth::EvmCryptoScheme,
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
 };
 use anyhow::Result;
@@ -68,8 +68,8 @@ async fn run_on_request_to_sign<C: CryptoScheme>(
 fn new_ceremony_manager_for_test(
 	our_account_id: AccountId,
 	latest_ceremony_id: CeremonyId,
-) -> CeremonyManager<EthSigning> {
-	CeremonyManager::<EthSigning>::new(
+) -> CeremonyManager<EvmCryptoScheme> {
+	CeremonyManager::<EvmCryptoScheme>::new(
 		our_account_id,
 		tokio::sync::mpsc::unbounded_channel().0,
 		latest_ceremony_id,
@@ -241,7 +241,7 @@ async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
 	let stage_1_data = MultisigData::Keygen(gen_keygen_data_hash_comm1());
 
 	// Create a new ceremony manager and set the latest_ceremony_id
-	let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
+	let mut ceremony_manager = CeremonyManager::<EvmCryptoScheme>::new(
 		ACCOUNT_IDS[0].clone(),
 		tokio::sync::mpsc::unbounded_channel().0,
 		latest_ceremony_id,
@@ -292,7 +292,10 @@ async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
 #[tokio::test(start_paused = true)]
 async fn should_send_outcome_of_authorised_ceremony() {
 	let (ceremony_request_sender, _incoming_p2p_sender, _outgoing_p2p_receiver) =
-		spawn_ceremony_manager::<EthSigning>(ACCOUNT_IDS[0].clone(), INITIAL_LATEST_CEREMONY_ID);
+		spawn_ceremony_manager::<EvmCryptoScheme>(
+			ACCOUNT_IDS[0].clone(),
+			INITIAL_LATEST_CEREMONY_ID,
+		);
 
 	// Send a signing request in order to create an authorised ceremony
 	let mut result_receiver = send_signing_request(
@@ -329,7 +332,7 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
 			let (outgoing_p2p_sender, _outgoing_p2p_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
-			let mut ceremony_manager = CeremonyManager::<EthSigning>::new(
+			let mut ceremony_manager = CeremonyManager::<EvmCryptoScheme>::new(
 				our_account_id.clone(),
 				outgoing_p2p_sender,
 				INITIAL_LATEST_CEREMONY_ID,
@@ -343,7 +346,7 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
 			const CEREMONY_ID: CeremonyId = INITIAL_LATEST_CEREMONY_ID + 1;
 
 			let task_handle =
-				scope.spawn_with_handle(CeremonyRunner::<SigningCeremony<EthSigning>>::run(
+				scope.spawn_with_handle(CeremonyRunner::<SigningCeremony<EvmCryptoScheme>>::run(
 					CEREMONY_ID,
 					ceremony_runner_p2p_receiver,
 					ceremony_runner_request_receiver,
@@ -402,7 +405,10 @@ async fn should_route_p2p_message() {
 	let sender_account_id = ACCOUNT_IDS[1].clone();
 
 	let (ceremony_request_sender, incoming_p2p_sender, mut outgoing_p2p_receiver) =
-		spawn_ceremony_manager::<EthSigning>(our_account_id.clone(), INITIAL_LATEST_CEREMONY_ID);
+		spawn_ceremony_manager::<EvmCryptoScheme>(
+			our_account_id.clone(),
+			INITIAL_LATEST_CEREMONY_ID,
+		);
 
 	// Send a keygen request with only 2 participants, us and one other node.
 	// So we will only need to receive one p2p message to complete the stage and advance.
