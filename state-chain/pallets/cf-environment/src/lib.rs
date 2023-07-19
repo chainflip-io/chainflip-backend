@@ -85,8 +85,9 @@ pub mod pallet {
 		/// Get Bitcoin Fee info from chain tracking
 		type BitcoinFeeInfo: cf_traits::GetBitcoinFeeInfo;
 
+		/// Used to determine compatibility between the runtime and the CFE.
 		#[pallet::constant]
-		type CurrentVersion: Get<SemVer>;
+		type CurrentCompatibilityVersion: Get<SemVer>;
 
 		/// Weight information
 		type WeightInfo: WeightInfo;
@@ -570,7 +571,7 @@ impl<T: Config> Pallet<T> {
 
 impl<T: Config> CompatibleVersions for Pallet<T> {
 	fn current_version() -> SemVer {
-		<T as Config>::CurrentVersion::get()
+		<T as Config>::CurrentCompatibilityVersion::get()
 	}
 	fn next_version() -> Option<SemVer> {
 		NextVersion::<T>::get()
