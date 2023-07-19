@@ -2,11 +2,7 @@
 
 //! Chainflip Primitives
 //!
-//! Primitive types to be used across Chainflip's various crates
-
-#[cfg(test)]
-mod tests;
-
+//! Primitive types to be used across Chainflip's various crates.
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -15,7 +11,7 @@ use sp_runtime::{
 };
 
 use sp_std::{
-	cmp::{Ord, Ordering, PartialOrd},
+	cmp::{Ord, PartialOrd},
 	vec::Vec,
 };
 
@@ -171,21 +167,4 @@ pub struct SemVer {
 	pub major: u8,
 	pub minor: u8,
 	pub patch: u8,
-}
-
-impl SemVer {
-	/// Check if Self is compatible with the given version. Return true if:
-	/// `major` and `minor` are higher than `target`. Patch version is ignored.
-	pub fn is_compatible(&self, target: &Self) -> bool {
-		self.cmp_ignore_patch(target) != Ordering::Less
-	}
-
-	/// Compare using only `major` and `minor`, ignore `patch` version.
-	pub fn cmp_ignore_patch(&self, target: &Self) -> Ordering {
-		if self.major != target.major {
-			self.major.cmp(&target.major)
-		} else {
-			self.minor.cmp(&target.minor)
-		}
-	}
 }
