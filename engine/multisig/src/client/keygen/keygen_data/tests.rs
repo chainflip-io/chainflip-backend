@@ -166,120 +166,124 @@ fn check_data_size_pubkey_shares0() {
 
 #[test]
 fn check_data_size_verify_hash_comm2() {
-	let expected_len: AuthorityCount = 4;
+	const PARTIES: AuthorityCount = 4;
 
 	// Should pass with the correct data length
-	assert!(gen_keygen_data_verify_hash_comm2(expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
+	assert!(gen_keygen_data_verify_hash_comm2(PARTIES)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
 
 	// Should fail on sizes larger or smaller than expected
-	assert!(!gen_keygen_data_verify_hash_comm2(expected_len + 1)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
-	assert!(!gen_keygen_data_verify_hash_comm2(expected_len - 1)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
+	assert!(!gen_keygen_data_verify_hash_comm2(PARTIES + 1)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
+	assert!(!gen_keygen_data_verify_hash_comm2(PARTIES - 1)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
 }
 
 #[test]
 fn check_data_size_coeff_comm3() {
-	let expected_len: AuthorityCount = 4;
+	const PARTIES: AuthorityCount = 4;
 
-	assert!(gen_keygen_data_coeff_comm3(expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
+	assert!(
+		gen_keygen_data_coeff_comm3(PARTIES).data_size_is_valid::<EvmCryptoScheme>(PARTIES, None)
+	);
 
 	assert!(!gen_keygen_data_coeff_comm3(MAX_AUTHORITIES + 1)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
 }
 
 #[test]
 fn check_data_size_verify_coeff_comm4() {
-	let expected_len: AuthorityCount = 4;
+	const PARTIES: AuthorityCount = 4;
 
 	// Should pass when both collections are the correct size
-	assert!(gen_keygen_data_verify_coeff_comm4(expected_len, expected_len, expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
+	assert!(gen_keygen_data_verify_coeff_comm4(PARTIES, PARTIES, PARTIES)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
 
 	// Should fail if the outer collection is larger than expected
-	assert!(!gen_keygen_data_verify_coeff_comm4(expected_len + 1, expected_len, expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
+	assert!(!gen_keygen_data_verify_coeff_comm4(PARTIES + 1, PARTIES, PARTIES)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
 
 	// Should fail if the outer collection is smaller than expected
-	assert!(!gen_keygen_data_verify_coeff_comm4(expected_len - 1, expected_len, expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
+	assert!(!gen_keygen_data_verify_coeff_comm4(PARTIES - 1, PARTIES, PARTIES)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
 
 	// The nested collection should fail if any of its elements are larger than the max size
-	assert!(!gen_keygen_data_verify_coeff_comm4(expected_len, expected_len, MAX_AUTHORITIES + 1)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
+	assert!(!gen_keygen_data_verify_coeff_comm4(PARTIES, PARTIES, MAX_AUTHORITIES + 1)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
 }
 
 #[test]
 fn check_data_size_complaints6() {
-	let expected_len: AuthorityCount = 4;
+	const NUM_OF_PARTIES: AuthorityCount = 4;
 
-	assert!(gen_keygen_data_complaints6(expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
+	assert!(gen_keygen_data_complaints6(NUM_OF_PARTIES)
+		.data_size_is_valid::<EvmCryptoScheme>(NUM_OF_PARTIES, None));
 	assert!(
-		gen_keygen_data_complaints6(0).data_size_is_valid::<EvmCryptoScheme>(expected_len, None)
+		gen_keygen_data_complaints6(0).data_size_is_valid::<EvmCryptoScheme>(NUM_OF_PARTIES, None)
 	);
 
 	// Should fail on sizes larger than expected
-	assert!(!gen_keygen_data_complaints6(expected_len + 1)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
+	assert!(!gen_keygen_data_complaints6(NUM_OF_PARTIES + 1)
+		.data_size_is_valid::<EvmCryptoScheme>(NUM_OF_PARTIES, None));
 }
 
 #[test]
 fn check_data_size_verify_complaints7() {
-	let expected_len: AuthorityCount = 4;
+	const PARTIES: AuthorityCount = 4;
 
 	// Should pass when both collections are the correct size
-	assert!(gen_keygen_data_verify_complaints7(expected_len, expected_len, expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
-	assert!(gen_keygen_data_verify_complaints7(expected_len, expected_len, 0)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
+	assert!(gen_keygen_data_verify_complaints7(PARTIES, PARTIES, PARTIES)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
+	assert!(gen_keygen_data_verify_complaints7(PARTIES, PARTIES, 0)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
 
 	// The outer collection should fail if larger or smaller than expected
-	assert!(!gen_keygen_data_verify_complaints7(expected_len + 1, expected_len, expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
-	assert!(!gen_keygen_data_verify_complaints7(expected_len - 1, expected_len, expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
+	assert!(!gen_keygen_data_verify_complaints7(PARTIES + 1, PARTIES, PARTIES)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
+	assert!(!gen_keygen_data_verify_complaints7(PARTIES - 1, PARTIES, PARTIES)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
 
 	// The nested collection should fail if larger than expected
-	assert!(!gen_keygen_data_verify_complaints7(expected_len, expected_len, expected_len + 1)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
+	assert!(!gen_keygen_data_verify_complaints7(PARTIES, PARTIES, PARTIES + 1)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
+	assert!(gen_keygen_data_verify_complaints7(PARTIES, PARTIES, PARTIES - 1)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
 }
 
 #[test]
 fn check_data_size_blame_response8() {
-	let expected_len: AuthorityCount = 4;
+	const PARTIES: AuthorityCount = 4;
 
-	assert!(gen_keygen_data_blame_response8(expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
-	assert!(gen_keygen_data_blame_response8(0)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
+	assert!(gen_keygen_data_blame_response8(PARTIES)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
+	assert!(gen_keygen_data_blame_response8(0).data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
 
 	// Should fail on sizes larger than expected
-	assert!(!gen_keygen_data_blame_response8(expected_len + 1)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
+	assert!(!gen_keygen_data_blame_response8(PARTIES + 1)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
 }
 
 #[test]
 fn check_data_size_verify_blame_responses9() {
-	let expected_len: AuthorityCount = 4;
+	const PARTIES: AuthorityCount = 4;
 
 	// Should pass when both collections are the correct size
-	assert!(gen_keygen_data_verify_blame_response9(expected_len, expected_len, expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
-	assert!(gen_keygen_data_verify_blame_response9(expected_len, expected_len, 0)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
+	assert!(gen_keygen_data_verify_blame_response9(PARTIES, PARTIES, PARTIES)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
+	assert!(gen_keygen_data_verify_blame_response9(PARTIES, PARTIES, 0)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
 
 	// The outer collection should fail if larger or smaller than expected
-	assert!(!gen_keygen_data_verify_blame_response9(expected_len + 1, expected_len, expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
-	assert!(!gen_keygen_data_verify_blame_response9(expected_len - 1, expected_len, expected_len)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
+	assert!(!gen_keygen_data_verify_blame_response9(PARTIES + 1, PARTIES, PARTIES)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
+	assert!(!gen_keygen_data_verify_blame_response9(PARTIES - 1, PARTIES, PARTIES)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
 
 	// The nested collection should fail if larger than expected
-	assert!(!gen_keygen_data_verify_blame_response9(expected_len, expected_len, expected_len + 1)
-		.data_size_is_valid::<EvmCryptoScheme>(expected_len, None));
+	assert!(!gen_keygen_data_verify_blame_response9(PARTIES, PARTIES, PARTIES + 1)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
+	assert!(gen_keygen_data_verify_blame_response9(PARTIES, PARTIES, PARTIES - 1)
+		.data_size_is_valid::<EvmCryptoScheme>(PARTIES, None));
 }
 
 #[test]

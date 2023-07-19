@@ -912,7 +912,6 @@ pub fn get_dummy_hash_comm(rng: &mut Rng) -> keygen::HashComm1 {
 	HashComm1(H256::from(buffer))
 }
 
-// TODO: Make these member functions of the CeremonyRunner
 pub fn gen_dummy_keygen_comm3<P: ECPoint>(
 	rng: &mut Rng,
 	share_count: AuthorityCount,

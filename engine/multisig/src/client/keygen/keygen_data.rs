@@ -73,7 +73,7 @@ impl<P: ECPoint> PreProcessStageDataCheck<KeygenStageName> for KeygenData<P> {
 			KeygenData::VerifyHashComm2(message) => message.data.len() == num_of_parties,
 			KeygenData::CoeffComm3(message) => message.payload.len() <= MAX_COEFF_COMM_3_SIZE,
 			KeygenData::VerifyCoeffComm4(message) =>
-				message.data_size_is_valid(num_of_parties, MAX_COEFF_COMM_3_SIZE),
+				message.is_data_size_valid(num_of_parties, MAX_COEFF_COMM_3_SIZE),
 			KeygenData::SecretShares5(_) => true,
 			KeygenData::Complaints6(complaints) => {
 				// The complaints are optional, so we just check the max length
