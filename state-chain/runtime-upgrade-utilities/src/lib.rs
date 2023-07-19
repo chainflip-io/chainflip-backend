@@ -99,7 +99,7 @@ mod try_runtime_helpers {
 			Default::default()
 		}
 
-		pub fn save_state<T: PalletInfoAccess, const FROM: u16, const TO: u16>(s: Vec<u8>) {
+		pub fn save_state<T: PalletInfoAccess, const FROM: u16, const TO: u16>(_s: Vec<u8>) {
 			log::warn!("❗️ Runtime upgrade utilities are not supported in no-std.");
 		}
 

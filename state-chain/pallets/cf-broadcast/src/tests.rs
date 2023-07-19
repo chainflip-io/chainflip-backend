@@ -149,6 +149,7 @@ fn transaction_succeeded_results_in_refund_for_signer() {
 
 		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
+			Default::default(),
 			MOCK_TRANSACTION_OUT_ID,
 			nominee,
 			ETH_TX_FEE,
@@ -281,6 +282,7 @@ fn test_sigdata_with_no_match_is_noop() {
 					*<Test as Chainflip>::EpochInfo::current_authorities().first().unwrap()
 				)
 				.into(),
+				Default::default(),
 				MOCK_TRANSACTION_OUT_ID,
 				Default::default(),
 				ETH_TX_FEE,
@@ -311,6 +313,7 @@ fn transaction_succeeded_after_timeout_reports_failed_nodes() {
 
 		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
+			Default::default(),
 			MOCK_TRANSACTION_OUT_ID,
 			Default::default(),
 			ETH_TX_FEE,
@@ -512,6 +515,7 @@ fn threshold_sign_and_broadcast_with_callback() {
 		assert_eq!(RequestCallbacks::<Test, Instance1>::get(broadcast_id), Some(MockCallback));
 		assert_ok!(Broadcaster::transaction_succeeded(
 			RuntimeOrigin::root(),
+			Default::default(),
 			MOCK_TRANSACTION_OUT_ID,
 			Default::default(),
 			ETH_TX_FEE,

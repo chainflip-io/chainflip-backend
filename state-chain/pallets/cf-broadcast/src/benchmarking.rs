@@ -7,6 +7,7 @@ use cf_traits::ThresholdSigner;
 use frame_benchmarking::{benchmarks_instance_pallet, whitelisted_caller};
 use frame_support::{
 	dispatch::UnfilteredDispatchable,
+	sp_runtime::traits::Zero,
 	traits::{EnsureOrigin, OnInitialize},
 };
 use frame_system::RawOrigin;
@@ -138,6 +139,7 @@ benchmarks_instance_pallet! {
 		};
 		insert_transaction_broadcast_attempt::<T, I>(whitelisted_caller(), broadcast_attempt_id);
 		let call = Call::<T, I>::transaction_succeeded{
+			block_number: Zero::zero(),
 			tx_out_id: TransactionOutIdFor::<T, I>::benchmark_value(),
 			signer_id,
 			tx_fee: TransactionFeeFor::<T, I>::benchmark_value(),
