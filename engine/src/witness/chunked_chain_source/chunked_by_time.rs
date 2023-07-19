@@ -50,7 +50,7 @@ impl<T: ChunkedChainSource<Info = (), HistoricInfo = ()>> ChunkedByTime for T {
 	type Parameters = T::Parameters;
 
 	async fn stream(&self, parameters: Self::Parameters) -> BoxActiveAndFuture<'_, Item<'_, Self>> {
-		<Self as ChunkedByTime>::stream(self, parameters).await
+		<Self as ChunkedChainSource>::stream(self, parameters).await
 	}
 }
 
