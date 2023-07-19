@@ -183,9 +183,9 @@ pub mod pallet {
 	pub type RuntimeSafeMode<T> = StorageValue<_, <T as Config>::RuntimeSafeMode, ValueQuery>;
 
 	#[pallet::storage]
-	#[pallet::getter(fn next_version)]
+	#[pallet::getter(fn next_compatibility_version)]
 	/// If this storage is set, a new version of Chainflip is available for upgrade.
-	pub type NextVersion<T> = StorageValue<_, Option<SemVer>, ValueQuery>;
+	pub type NextCompatibilityVersion<T> = StorageValue<_, Option<SemVer>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -204,8 +204,8 @@ pub mod pallet {
 		BitcoinBlockNumberSetForVault { block_number: cf_chains::btc::BlockNumber },
 		/// The Safe Mode settings for the chain has been updated
 		RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate<T> },
-		/// The next CFE version available to update to.
-		NextVersionSet { version: Option<SemVer> },
+		/// A new Chainflip runtime will soon be deployed at this version.
+		NextCompatibilityVersionSet { version: Option<SemVer> },
 	}
 
 	#[pallet::hooks]
@@ -221,8 +221,8 @@ pub mod pallet {
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
-			NextVersion::<T>::put(Option::<SemVer>::None);
-			Self::deposit_event(Event::<T>::NextVersionSet { version: None });
+			NextCompatibilityVersion::<T>::put(Option::<SemVer>::None);
+			Self::deposit_event(Event::<T>::NextCompatibilityVersionSet { version: None });
 			migrations::PalletMigration::<T>::post_upgrade(state)
 		}
 	}
@@ -409,24 +409,30 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Sets the next Chainflip version.
+		/// Sets the next Chainflip compatiblity version.
+		///
+		/// This is used to signal to CFE operators that a new version of the runtime will soon be
+		/// deployed.
 		///
 		/// Requires governance origin.
 		///
 		/// ## Events
 		///
-		/// - [Success](Event::NextVersionSet)
+		/// - [Success](Event::NextCompatibilityVersionSet)
 		///
 		/// ## Errors
 		///
 		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(T::WeightInfo::set_next_version())]
-		pub fn set_next_version(origin: OriginFor<T>, version: Option<SemVer>) -> DispatchResult {
+		#[pallet::weight(T::WeightInfo::set_next_compatibility_version())]
+		pub fn set_next_compatibility_version(
+			origin: OriginFor<T>,
+			version: Option<SemVer>,
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
-			NextVersion::<T>::put(version);
+			NextCompatibilityVersion::<T>::put(version);
 
-			Self::deposit_event(Event::<T>::NextVersionSet { version });
+			Self::deposit_event(Event::<T>::NextCompatibilityVersionSet { version });
 
 			Ok(())
 		}
@@ -573,7 +579,7 @@ impl<T: Config> CompatibleVersions for Pallet<T> {
 	fn current_version() -> SemVer {
 		<T as Config>::CurrentCompatibilityVersion::get()
 	}
-	fn next_version() -> Option<SemVer> {
-		NextVersion::<T>::get()
+	fn next_compatibility_version() -> Option<SemVer> {
+		NextCompatibilityVersion::<T>::get()
 	}
 }
