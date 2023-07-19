@@ -8,8 +8,8 @@ use crate::{
 		BroadcastVerificationMessage, DelayDeserialization, PreProcessStageDataCheck,
 		SigningStageName,
 	},
-	crypto::{ECPoint, MAX_POINT_SIZE, MAX_SCALAR_SIZE},
-	ChainTag, CryptoScheme,
+	crypto::{CryptoTag, ECPoint, MAX_POINT_SIZE, MAX_SCALAR_SIZE},
+	CryptoScheme,
 };
 
 #[cfg(test)]
@@ -40,14 +40,14 @@ mod serialisation {
 	use super::*;
 	use crate::{
 		client::helpers::{self, test_all_crypto_schemes},
-		CryptoScheme,
+		crypto::CryptoTag,
 	};
 	use rand::SeedableRng;
 
 	fn test_signing_commitment_size_for_scheme<C: CryptoScheme>() {
 		let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
 		let comm1 = helpers::gen_dummy_signing_comm1::<C::Point>(&mut rng, 1);
-		if matches!(<C as CryptoScheme>::CHAIN_TAG, ChainTag::Ethereum) {
+		if matches!(<C as CryptoScheme>::CRYPTO_TAG, CryptoTag::Evm) {
 			// The constants are defined as to exactly match Ethereum/secp256k1,
 			// which we demonstrate here:
 			assert!(comm1.payload.len() == SIGNING_COMMITMENT_MAX_SIZE);
@@ -66,7 +66,7 @@ mod serialisation {
 		let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
 		let sig = helpers::gen_dummy_local_sig::<C::Point>(&mut rng);
 
-		if matches!(<C as CryptoScheme>::CHAIN_TAG, ChainTag::Ethereum) {
+		if matches!(<C as CryptoScheme>::CRYPTO_TAG, CryptoTag::Evm) {
 			// The constants are defined as to exactly match Ethereum/secp256k1,
 			// which we demonstrate here:
 			assert!(sig.payload.len() == LOCAL_SIG_MAX_SIZE);
@@ -137,12 +137,17 @@ impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
 			SigningData::CommStage1(_) => self.initial_stage_data_size_is_valid::<C>(),
 			SigningData::BroadcastVerificationStage2(message) =>
 				message.data.len() == num_of_parties as usize,
-			SigningData::LocalSigStage3(message) => match C::CHAIN_TAG {
-				ChainTag::Ethereum | ChainTag::Polkadot | ChainTag::Ed25519 =>
+			SigningData::LocalSigStage3(message) => match C::CRYPTO_TAG {
+				CryptoTag::Evm | CryptoTag::Polkadot | CryptoTag::Ed25519 =>
 					message.payload.len() <= LOCAL_SIG_MAX_SIZE,
 				// TODO: Find out what a realistic maximum is for the number of payloads we
 				// can handle is for btc
-				ChainTag::Bitcoin => true,
+				// TODO: Technically, this condition is on the Bitcoin chain rather than the Bitcoin
+				// Crypto Scheme so we might want to address this. However, in practice this will
+				// only matter if we want to have different limits on the number of payloads
+				// depending on chain that have the same crypto scheme (that is, the bitcoin crypto
+				// scheme).
+				CryptoTag::Bitcoin => true,
 			},
 			SigningData::VerifyLocalSigsStage4(message) =>
 				message.data.len() == num_of_parties as usize,
@@ -151,12 +156,17 @@ impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
 
 	fn initial_stage_data_size_is_valid<C: CryptoScheme>(&self) -> bool {
 		match self {
-			SigningData::CommStage1(message) => match C::CHAIN_TAG {
-				ChainTag::Ethereum | ChainTag::Polkadot | ChainTag::Ed25519 =>
+			SigningData::CommStage1(message) => match C::CRYPTO_TAG {
+				CryptoTag::Evm | CryptoTag::Polkadot | CryptoTag::Ed25519 =>
 					message.payload.len() <= SIGNING_COMMITMENT_MAX_SIZE,
 				// TODO: Find out what a realistic maximum is for the number of payloads we
 				// can handle is for btc
-				ChainTag::Bitcoin => true,
+				// TODO: Technically, this condition is on the Bitcoin chain rather than the Bitcoin
+				// Crypto Scheme so we might want to address this. However, in practice this will
+				// only matter if we want to have different limits on the number of payloads
+				// depending on chain that have the same crypto scheme (that is, the bitcoin crypto
+				// scheme).
+				CryptoTag::Bitcoin => true,
 			},
 			_ => panic!("unexpected stage"),
 		}
@@ -189,11 +199,11 @@ impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
 mod tests {
 
 	use crate::{
-		bitcoin::BtcSigning,
+		bitcoin::BtcCryptoScheme,
 		client::helpers::{gen_dummy_local_sig, gen_dummy_signing_comm1},
 		crypto::eth::Point,
-		eth::EthSigning,
-		polkadot::PolkadotSigning,
+		eth::EvmCryptoScheme,
+		polkadot::PolkadotCryptoScheme,
 		Rng,
 	};
 
@@ -227,12 +237,14 @@ mod tests {
 	#[test]
 	fn check_data_size_stage1() {
 		// Should only pass if the message contains exactly one commitment for ethereum and Polkadot
-		assert!(gen_signing_data_stage1(1).initial_stage_data_size_is_valid::<EthSigning>());
-		assert!(!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<EthSigning>());
-		assert!(!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<PolkadotSigning>());
+		assert!(gen_signing_data_stage1(1).initial_stage_data_size_is_valid::<EvmCryptoScheme>());
+		assert!(!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<EvmCryptoScheme>());
+		assert!(
+			!gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<PolkadotCryptoScheme>()
+		);
 
 		// No limit on bitcoin for now
-		assert!(gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<BtcSigning>());
+		assert!(gen_signing_data_stage1(2).initial_stage_data_size_is_valid::<BtcCryptoScheme>());
 	}
 
 	#[test]
@@ -241,9 +253,9 @@ mod tests {
 		let data_to_check = gen_signing_data_stage2(test_size);
 
 		// Should fail on sizes larger or smaller than expected
-		assert!(data_to_check.data_size_is_valid::<EthSigning>(test_size));
-		assert!(!data_to_check.data_size_is_valid::<EthSigning>(test_size - 1));
-		assert!(!data_to_check.data_size_is_valid::<EthSigning>(test_size + 1));
+		assert!(data_to_check.data_size_is_valid::<EvmCryptoScheme>(test_size));
+		assert!(!data_to_check.data_size_is_valid::<EvmCryptoScheme>(test_size - 1));
+		assert!(!data_to_check.data_size_is_valid::<EvmCryptoScheme>(test_size + 1));
 	}
 
 	#[test]
@@ -252,9 +264,9 @@ mod tests {
 		let data_to_check = gen_signing_data_stage4(test_size);
 
 		// Should fail on sizes larger or smaller than expected
-		assert!(data_to_check.data_size_is_valid::<EthSigning>(test_size));
-		assert!(!data_to_check.data_size_is_valid::<EthSigning>(test_size - 1));
-		assert!(!data_to_check.data_size_is_valid::<EthSigning>(test_size + 1));
+		assert!(data_to_check.data_size_is_valid::<EvmCryptoScheme>(test_size));
+		assert!(!data_to_check.data_size_is_valid::<EvmCryptoScheme>(test_size - 1));
+		assert!(!data_to_check.data_size_is_valid::<EvmCryptoScheme>(test_size + 1));
 	}
 
 	#[test]

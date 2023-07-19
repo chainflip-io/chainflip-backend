@@ -10,7 +10,7 @@ use crate::{
 		},
 		CeremonyRequestDetails, KeyId,
 	},
-	eth::EthSigning,
+	eth::{EthSigning, EvmCryptoScheme},
 };
 use mockall::predicate;
 
@@ -41,7 +41,7 @@ async fn should_ignore_rts_for_unknown_key() {
 	let signing_request_fut = client.initiate_signing(
 		DEFAULT_SIGNING_CEREMONY_ID,
 		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
-		vec![(KeyId::new(GENESIS_EPOCH, [0u8; 32]), EthSigning::signing_payload_for_test())],
+		vec![(KeyId::new(GENESIS_EPOCH, [0u8; 32]), EvmCryptoScheme::signing_payload_for_test())],
 	);
 
 	// Check that the signing request fails immediately with an "unknown key" error
