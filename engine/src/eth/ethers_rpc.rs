@@ -55,7 +55,10 @@ impl EthersRpcClient {
 		let nonce_info = match nonce_info_lock.as_mut() {
 			Some(nonce_info) => nonce_info,
 			None => {
-				let tx_count = self.signer.get_transaction_count(self.address(), None).await?;
+				let tx_count = self
+					.signer
+					.get_transaction_count(self.address(), Some(BlockNumber::Pending.into()))
+					.await?;
 				nonce_info_lock
 					.insert(NonceInfo { next_nonce: tx_count, requested_at: Instant::now() })
 			},
