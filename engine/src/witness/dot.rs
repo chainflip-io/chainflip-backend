@@ -25,11 +25,11 @@ use crate::{
 
 use anyhow::Result;
 
-pub async fn start<StateChainClient>(
+pub async fn start<StateChainClient, Epochs: Into<EpochSource<(), ()>>>(
 	scope: &Scope<'_, anyhow::Error>,
 	settings: &settings::Dot,
 	state_chain_client: Arc<StateChainClient>,
-	epoch_source: EpochSource<'_, '_, StateChainClient, (), ()>,
+	epoch_source: Epochs,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
@@ -74,7 +74,6 @@ where
 				.collect()
 		})
 		.chunk_by_time(epoch_source)
-		.await
 		.chain_tracking(state_chain_client, dot_client)
 		.run();
 
