@@ -102,7 +102,7 @@ where
 
 		Ok(logs
 			.into_iter()
-			.filter_map(|unparsed_log| -> Option<Event<EventParameters>> {
+			.filter_map(|unparsed_log| {
 				Event::<EventParameters>::new_from_unparsed_logs(unparsed_log).ok()
 			})
 			.collect::<Vec<_>>())
