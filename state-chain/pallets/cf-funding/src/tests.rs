@@ -844,7 +844,7 @@ mod test_restricted_balances {
 	fn run_test<E: Into<DispatchError>>(
 		bond: FlipBalance,
 		redeem_amount: RedemptionAmount<FlipBalance>,
-		redeem_address: EthereumAddress,
+		bound_redeem_address: EthereumAddress,
 		maybe_error: Option<E>,
 	) {
 		new_test_ext().execute_with(|| {
@@ -875,7 +875,7 @@ mod test_restricted_balances {
 					assert_ok!(Funding::redeem(
 						RuntimeOrigin::signed(ALICE),
 						redeem_amount,
-						redeem_address
+						bound_redeem_address
 					));
 					let expected_redeemed_amount =
 						initial_balance - Flip::balance(&ALICE) - RedemptionTax::<Test>::get();
@@ -892,7 +892,7 @@ mod test_restricted_balances {
 						Funding::redeem(
 							RuntimeOrigin::signed(ALICE),
 							redeem_amount,
-							redeem_address
+							bound_redeem_address
 						),
 						e.into(),
 					);
