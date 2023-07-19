@@ -2,13 +2,13 @@ import {
   Asset,
   executeSwap,
   executeCall,
-  ExecuteSwapParams,
   ExecuteCallParams,
+  ExecuteSwapParams,
   approveVault,
+  assetChains,
 } from '@chainflip-io/cli';
 import { Wallet, getDefaultProvider } from 'ethers';
 import {
-  chainFromAsset,
   getChainflipApi,
   observeBalanceIncrease,
   observeEvent,
@@ -25,57 +25,46 @@ export async function executeContractSwap(
   destAsset: Asset,
   destAddress: string,
   messageMetadata?: CcmDepositMetadata,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<any> {
+): ReturnType<typeof executeSwap> {
   const wallet = Wallet.fromMnemonic(
     process.env.ETH_USDC_WHALE_MNEMONIC ??
       'test test test test test test test test test test test junk',
   ).connect(getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
 
-  const destChain = chainFromAsset(destAsset);
+  const destChain = assetChains[destAsset];
 
   const nonce = await getNextEthNonce();
+  const options = {
+    signer: wallet,
+    nonce,
+    network: 'localnet',
+    vaultContractAddress: getEthContractAddress('VAULT'),
+    ...(srcAsset !== 'ETH' ? { srcTokenContractAddress: getEthContractAddress(srcAsset) } : {}),
+  } as const;
+
+  const params = {
+    destChain,
+    destAsset,
+    // It is important that this is large enough to result in
+    // an amount larger than existential (e.g. on Polkadot):
+    amount: srcAsset === 'USDC' ? '500000000' : '1000000000000000000',
+    destAddress,
+    srcAsset,
+    srcChain: assetChains[srcAsset],
+  } as ExecuteSwapParams;
 
   let receipt;
   if (!messageMetadata) {
-    receipt = await executeSwap(
-      {
-        destChain,
-        destAsset,
-        // It is important that this is large enough to result in
-        // an amount larger than existential (e.g. on Polkadot):
-        amount: srcAsset === 'USDC' ? '500000000' : '1000000000000000000',
-        destAddress,
-        ...(srcAsset !== 'ETH' ? { srcAsset } : {}),
-      } as ExecuteSwapParams,
-      {
-        signer: wallet,
-        nonce,
-        network: 'localnet',
-        vaultContractAddress: getEthContractAddress('VAULT'),
-        ...(srcAsset !== 'ETH' ? { srcTokenContractAddress: getEthContractAddress(srcAsset) } : {}),
-      },
-    );
+    receipt = await executeSwap(params, options);
   } else {
     receipt = await executeCall(
       {
-        destChain,
-        destAsset,
-        // It is important that this is large enough to result in
-        // an amount larger than existential (e.g. on Polkadot):
-        amount: srcAsset === 'USDC' ? '500000000' : '1000000000000000000',
-        destAddress,
-        ...(srcAsset !== 'ETH' ? { srcAsset } : {}),
+        ...params,
+        srcChain: assetChains[srcAsset],
         gasAmount: messageMetadata.gas_budget.toString(),
         message: messageMetadata.message,
       } as ExecuteCallParams,
-      {
-        signer: wallet,
-        nonce,
-        network: 'localnet',
-        vaultContractAddress: getEthContractAddress('VAULT'),
-        ...(srcAsset !== 'ETH' ? { srcTokenContractAddress: getEthContractAddress(srcAsset) } : {}),
-      },
+      options,
     );
   }
 
