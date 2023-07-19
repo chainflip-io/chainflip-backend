@@ -508,7 +508,7 @@ impl<T: Config> Pallet<T> {
 				})
 			},
 			UtxoSelectionType::Some { output_amount, number_of_outputs } =>
-				BitcoinAvailableUtxos::<T>::mutate(|available_utxos| {
+				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
 					select_utxos_from_pool(
 						available_utxos,
 						fee_per_input_utxo,
@@ -516,7 +516,9 @@ impl<T: Config> Pallet<T> {
 							number_of_outputs * fee_per_output_utxo +
 							min_fee_required_per_tx,
 					)
+					.ok_or(())
 				})
+				.ok()
 				.map(|(selected_utxos, total_input_spendable_amount)| {
 					(
 						selected_utxos,

@@ -41,7 +41,7 @@ pub fn select_utxos_from_pool<UTXO: GetUtxoAmount + Clone>(
 				skipped_utxos.push(current_smallest_utxo.clone());
 			}
 		} else {
-			break
+			return None
 		}
 	}
 
@@ -127,10 +127,10 @@ fn test_utxo_selection() {
 		Some((all_selected_utxos.clone(), 2485))
 	);
 	// entering the amount greater than the max spendable amount will
-	// cause the function to select all available utxos
+	// cause the function to return no utxos
 	assert_eq!(
 		select_utxos_from_pool(&mut available_utxos.clone(), FEE_PER_UTXO, 100000),
-		Some((all_selected_utxos, 2485))
+		None
 	);
 
 	// choosing the fee to spend the input utxo as greater than the amounts in the 2 smallest utxos
