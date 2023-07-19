@@ -5,6 +5,7 @@ import {
   ExecuteSwapParams,
   ExecuteCallParams,
   approveVault,
+  ExecuteOptions,
 } from '@chainflip-io/cli';
 import { Wallet, getDefaultProvider } from 'ethers';
 import {
@@ -37,6 +38,14 @@ export async function executeContractSwap(
   const nonce = await getNextEthNonce();
 
   let receipt;
+  const opts = {
+    signer: wallet,
+    nonce,
+    network: 'localnet',
+    vaultContractAddress: getEthContractAddress('VAULT'),
+    ...(srcAsset !== 'ETH' ? { srcTokenContractAddress: getEthContractAddress(srcAsset) } : {}),
+  } as ExecuteOptions;
+
   if (!messageMetadata) {
     receipt = await executeSwap(
       {
@@ -48,13 +57,7 @@ export async function executeContractSwap(
         destAddress,
         ...(srcAsset !== 'ETH' ? { srcAsset } : {}),
       } as ExecuteSwapParams,
-      {
-        signer: wallet,
-        nonce,
-        network: 'localnet',
-        vaultContractAddress: getEthContractAddress('VAULT'),
-        ...(srcAsset !== 'ETH' ? { srcTokenContractAddress: getEthContractAddress(srcAsset) } : {}),
-      },
+      opts,
     );
   } else {
     receipt = await executeCall(
@@ -69,13 +72,7 @@ export async function executeContractSwap(
         gasAmount: messageMetadata.gas_budget.toString(),
         message: messageMetadata.message,
       } as ExecuteCallParams,
-      {
-        signer: wallet,
-        nonce,
-        network: 'localnet',
-        vaultContractAddress: getEthContractAddress('VAULT'),
-        ...(srcAsset !== 'ETH' ? { srcTokenContractAddress: getEthContractAddress(srcAsset) } : {}),
-      },
+      opts,
     );
   }
 
