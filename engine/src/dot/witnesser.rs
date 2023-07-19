@@ -69,9 +69,9 @@ impl StaticEvent for ProxyAdded {
 /// This event must match the Transfer event definition of the Polkadot chain.
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub struct Transfer {
-	from: PolkadotAccountId,
-	to: PolkadotAccountId,
-	amount: PolkadotBalance,
+	pub from: PolkadotAccountId,
+	pub to: PolkadotAccountId,
+	pub amount: PolkadotBalance,
 }
 
 impl StaticEvent for Transfer {
@@ -93,7 +93,7 @@ impl StaticEvent for TransactionFeePaid {
 	const EVENT: &'static str = "TransactionFeePaid";
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum EventWrapper {
 	ProxyAdded(ProxyAdded),
 	Transfer(Transfer),
