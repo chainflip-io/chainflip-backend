@@ -1,11 +1,12 @@
 use super::AddressDerivation;
 use crate::{BitcoinVault, Validator};
 use cf_chains::{
+	address::AddressDerivationApi,
 	btc::{deposit_address::DepositAddress, BitcoinFetchId, ScriptPubkey},
 	Bitcoin, Chain,
 };
 use cf_primitives::{chains::assets::btc, ChannelId};
-use cf_traits::{AddressDerivationApi, DepositChannel, EpochInfo};
+use cf_traits::{DepositChannel, EpochInfo};
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::DispatchError;

@@ -14,7 +14,7 @@ use cf_traits::DepositChannel;
 pub use weights::WeightInfo;
 
 use cf_chains::{
-	address::{AddressConverter, ForeignChainAddress},
+	address::{AddressConverter, AddressDerivationApi, ForeignChainAddress},
 	AllBatch, AllBatchError, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, ExecutexSwapAndCall,
 	FetchAssetParams, SwapOrigin, TransferAssetParams,
 };
@@ -22,8 +22,8 @@ use cf_primitives::{
 	Asset, AssetAmount, BasisPoints, ChannelId, EgressCounter, EgressId, ForeignChain,
 };
 use cf_traits::{
-	liquidity::LpBalanceApi, AddressDerivationApi, Broadcaster, CcmHandler, Chainflip, DepositApi,
-	DepositHandler, EgressApi, GetBlockHeight, SwapDepositHandler,
+	liquidity::LpBalanceApi, Broadcaster, CcmHandler, Chainflip, DepositApi, DepositHandler,
+	EgressApi, GetBlockHeight, SwapDepositHandler,
 };
 use frame_support::{pallet_prelude::*, sp_runtime::DispatchError};
 pub use pallet::*;

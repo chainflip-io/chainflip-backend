@@ -4,7 +4,10 @@ use crate::{
 	Event as PalletEvent, FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm,
 	ScheduledEgressFetchOrTransfer,
 };
-use cf_chains::{address::AddressConverter, ExecutexSwapAndCall, SwapOrigin, TransferAssetParams};
+use cf_chains::{
+	address::{AddressConverter, AddressDerivationApi},
+	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
+};
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
 use cf_test_utilities::assert_has_event;
 use cf_traits::{
@@ -13,7 +16,7 @@ use cf_traits::{
 		api_call::{MockEthEnvironment, MockEthereumApiCall},
 		ccm_handler::{CcmRequest, MockCcmHandler},
 	},
-	AddressDerivationApi, DepositApi, DepositChannel, EgressApi, GetBlockHeight,
+	DepositApi, DepositChannel, EgressApi, GetBlockHeight,
 };
 use frame_support::{assert_noop, assert_ok, traits::Hooks};
 use sp_core::H160;

@@ -1,10 +1,11 @@
 use crate::Vec;
 use cf_chains::{
+	address::AddressDerivationApi,
 	dot::{PolkadotAccountId, PolkadotChannelId},
 	Chain, Polkadot,
 };
 use cf_primitives::{chains::assets::dot, ChannelId};
-use cf_traits::{AddressDerivationApi, DepositChannel};
+use cf_traits::DepositChannel;
 use codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::{

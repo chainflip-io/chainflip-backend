@@ -2,7 +2,7 @@ use crate::DepositWitness;
 pub use crate::{self as pallet_cf_ingress_egress};
 use cf_chains::eth::EthereumChannelId;
 pub use cf_chains::{
-	address::ForeignChainAddress,
+	address::{AddressDerivationApi, ForeignChainAddress},
 	eth::api::{EthereumApi, EthereumReplayProtection},
 	CcmDepositMetadata, Chain, ChainAbi, ChainEnvironment,
 };
@@ -19,7 +19,7 @@ use cf_traits::{
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
 	},
-	AddressDerivationApi, DepositApi, DepositChannel, DepositHandler, GetBlockHeight,
+	DepositApi, DepositChannel, DepositHandler, GetBlockHeight,
 };
 use codec::{Decode, Encode};
 use frame_support::traits::{OriginTrait, UnfilteredDispatchable};
