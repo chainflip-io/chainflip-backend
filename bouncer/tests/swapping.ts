@@ -55,16 +55,17 @@ function getAbiEncodedMessage(types?: string[]): string {
   return encodedMessage;
 }
 
-async function testSwap(
+export async function getDestinationAddress(
   sourceToken: Asset,
   destToken: Asset,
   addressType?: BtcAddressType,
   messageMetadata?: CcmDepositMetadata,
+  tagIni?: string,
 ) {
   // Seed needs to be unique per swap:
   const seed = randomAsHex(32);
 
-  let tag = '[';
+  let tag = tagIni ?? '[';
   let address;
   // For swaps with a message force the address to be the CF Receiver Mock address.
   if (messageMetadata && chainFromAsset(destToken) === chainFromAsset('ETH')) {
@@ -76,14 +77,46 @@ async function testSwap(
     console.log(`${tag} Created new ${destToken} address: ${address}`);
   }
 
-  console.log(`Created new ${destToken} address: ${address}`);
   tag += `${swapCount++}: ${sourceToken}->${destToken}]`;
+  return { address, tag };
+}
 
+async function testSwap(
+  sourceToken: Asset,
+  destToken: Asset,
+  addressType?: BtcAddressType,
+  messageMetadata?: CcmDepositMetadata,
+) {
+  const { address, tag } = await getDestinationAddress(
+    sourceToken,
+    destToken,
+    addressType,
+    messageMetadata,
+  );
   await performSwap(sourceToken, destToken, address, tag, messageMetadata);
 }
 
 async function testAll() {
+  await approveTokenVault('USDC', (500000000 * 4).toString());
+
+  const ccmContractSwaps = Promise.all([
+    performSwapViaContract('ETH', 'USDC', {
+      message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
+      gas_budget: 5000000,
+      cf_parameters: getAbiEncodedMessage(['address', 'uint256']),
+      source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
+    }),
+    performSwapViaContract('USDC', 'ETH', {
+      message: getAbiEncodedMessage(),
+      gas_budget: 5000000,
+      cf_parameters: getAbiEncodedMessage(['bytes', 'uint256']),
+      source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
+    }),
+  ]);
+
   // Single approval of all the tokens swapped in contractsSwaps to avoid overlapping async approvals.
+  // Make sure to to set the allowance to the same amount of total token swapped in contractsSwaps,
+  // otherwise in subsequent approvals the broker might not send the transaction confusing the eth nonce.
   await approveTokenVault('USDC', (500000000 * 3).toString());
 
   const contractSwaps = Promise.all([
@@ -170,7 +203,7 @@ async function testAll() {
     }),
   ]);
 
-  await Promise.all([contractSwaps, regularSwaps, ccmSwaps]);
+  await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps]);
 }
 
 runWithTimeout(testAll(), 1800000)
