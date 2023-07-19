@@ -7,6 +7,9 @@ if [ "$1" != "upgrade" ]; then
   exit 0
 fi
 
+echo "Removing systemd override file"
+rm -f /etc/systemd/system/chainflip-engine.service.d/override.conf
+
 # Find and save to a var the location of the chainflip-engine binary.
 CF_BIN_ROOT=$(which chainflip-engine | xargs dirname)
 
