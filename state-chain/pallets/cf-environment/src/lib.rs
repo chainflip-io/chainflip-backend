@@ -211,18 +211,25 @@ pub mod pallet {
 	#[pallet::hooks]
 	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T>::on_runtime_upgrade()
+			let weight = migrations::PalletMigration::<T>::on_runtime_upgrade();
+			NextCompatibilityVersion::<T>::kill();
+			weight
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, &'static str> {
+			if let Some(next_version) = NextCompatibilityVersion::<T>::get() {
+				if next_version != T::CurrentCompatibilityVersion::get() {
+					return Err("NextCompatibilityVersion does not match the current runtime")
+				}
+			} else {
+				return Err("NextCompatibilityVersion is not set")
+			}
 			migrations::PalletMigration::<T>::pre_upgrade()
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn post_upgrade(state: sp_std::vec::Vec<u8>) -> Result<(), &'static str> {
-			NextCompatibilityVersion::<T>::put(Option::<SemVer>::None);
-			Self::deposit_event(Event::<T>::NextCompatibilityVersionSet { version: None });
 			migrations::PalletMigration::<T>::post_upgrade(state)
 		}
 	}
