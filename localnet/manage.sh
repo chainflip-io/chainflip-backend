@@ -51,7 +51,6 @@ get-workflow() {
 build-localnet() {
   cp -R $LOCALNET_INIT_DIR/keyshare/1-node /tmp/chainflip/
   cp -R $LOCALNET_INIT_DIR/data/ /tmp/chainflip/data
-  chmod -R 777 /tmp/chainflip/data
   echo
 
   if [ -z "${BINARIES_LOCATION}" ]; then
