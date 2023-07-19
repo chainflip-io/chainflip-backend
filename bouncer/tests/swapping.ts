@@ -97,6 +97,9 @@ async function testSwap(
 }
 
 async function testAll() {
+  // Single approval of all the tokens swapped in contractsSwaps to avoid overlapping async approvals.
+  // Make sure to to set the allowance to the same amount of total token swapped in contractsSwaps,
+  // otherwise in subsequent approvals the broker might not send the transaction confusing the eth nonce.
   await approveTokenVault('USDC', (500000000 * 4).toString());
 
   const ccmContractSwaps = Promise.all([
@@ -113,11 +116,6 @@ async function testAll() {
       source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
     }),
   ]);
-
-  // Single approval of all the tokens swapped in contractsSwaps to avoid overlapping async approvals.
-  // Make sure to to set the allowance to the same amount of total token swapped in contractsSwaps,
-  // otherwise in subsequent approvals the broker might not send the transaction confusing the eth nonce.
-  await approveTokenVault('USDC', (500000000 * 3).toString());
 
   const contractSwaps = Promise.all([
     performSwapViaContract('ETH', 'DOT'),
