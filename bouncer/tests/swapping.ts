@@ -58,8 +58,8 @@ function getAbiEncodedMessage(types?: string[]): string {
 }
 
 export async function prepareSwap(
-  sourceToken: Asset,
-  destToken: Asset,
+  sourceAsset: Asset,
+  destAsset: Asset,
   addressType?: BtcAddressType,
   messageMetadata?: CcmDepositMetadata,
   tagPrefix?: string,
@@ -68,29 +68,34 @@ export async function prepareSwap(
   const seed = randomAsHex(32);
 
   let tag = tagPrefix ?? '[';
-  let address;
+  let destAddress;
   // For swaps with a message force the address to be the CF Receiver Mock address.
-  if (messageMetadata && chainFromAsset(destToken) === chainFromAsset('ETH')) {
+  if (messageMetadata && chainFromAsset(destAsset) === chainFromAsset('ETH')) {
     tag += 'CCM | ';
-    address = getEthContractAddress('CFRECEIVER');
-    console.log(`${tag} Using CF Receiver Mock address: ${address}`);
+    destAddress = getEthContractAddress('CFRECEIVER');
+    console.log(`${tag} Using CF Receiver Mock address: ${destAddress}`);
   } else {
-    address = await getAddress(destToken, seed, addressType);
-    console.log(`${tag} Created new ${destToken} address: ${address}`);
+    destAddress = await getAddress(destAsset, seed, addressType);
+    console.log(`${tag} Created new ${destAsset} address: ${destAddress}`);
   }
 
-  tag += `${swapCount++}: ${sourceToken}->${destToken}]`;
-  return { address, tag };
+  tag += `${swapCount++}: ${sourceAsset}->${destAsset}]`;
+  return { destAddress, tag };
 }
 
 async function testSwap(
-  sourceToken: Asset,
-  destToken: Asset,
+  sourceAsset: Asset,
+  destAsset: Asset,
   addressType?: BtcAddressType,
   messageMetadata?: CcmDepositMetadata,
 ) {
-  const { address, tag } = await prepareSwap(sourceToken, destToken, addressType, messageMetadata);
-  await performSwap(sourceToken, destToken, address, tag, messageMetadata);
+  const { destAddress, tag } = await prepareSwap(
+    sourceAsset,
+    destAsset,
+    addressType,
+    messageMetadata,
+  );
+  await performSwap(sourceAsset, destAsset, destAddress, tag, messageMetadata);
 }
 
 async function testSwapViaContract(
@@ -98,19 +103,19 @@ async function testSwapViaContract(
   destAsset: Asset,
   messageMetadata?: CcmDepositMetadata,
 ) {
-  const { address, tag } = await prepareSwap(
+  const { destAddress, tag } = await prepareSwap(
     sourceAsset,
     destAsset,
     undefined,
     messageMetadata,
     `[contract `,
   );
-  await performSwapViaContract(sourceAsset, destAsset, address, tag, messageMetadata);
+  await performSwapViaContract(sourceAsset, destAsset, destAddress, tag, messageMetadata);
 }
 
 async function testAll() {
-  // Single approval of all the tokens swapped in contractsSwaps to avoid overlapping async approvals.
-  // Make sure to to set the allowance to the same amount of total token swapped in contractsSwaps,
+  // Single approval of all the assets swapped in contractsSwaps to avoid overlapping async approvals.
+  // Make sure to to set the allowance to the same amount of total asset swapped in contractsSwaps,
   // otherwise in subsequent approvals the broker might not send the transaction confusing the eth nonce.
   await approveTokenVault(
     'USDC',
@@ -156,7 +161,7 @@ async function testAll() {
     testSwap('ETH', 'USDC'),
   ]);
 
-  // NOTE: Parallelized ccm swaps with the same sourceToken and destToken won't work because
+  // NOTE: Parallelized ccm swaps with the same sourceAsset and destAsset won't work because
   // all ccm swaps have the same destination address (cfReceiver) and then it will get a
   // potentially incorrect depositAddress.
   const ccmSwaps = Promise.all([
