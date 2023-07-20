@@ -5,7 +5,8 @@ use chainflip_engine::state_chain_observer::client::storage_api::StorageApi;
 use serde::Deserialize;
 use state_chain_runtime::PalletInstanceAlias;
 use std::{collections::BTreeMap, sync::Arc};
-use utilities::CachedStream;
+use tracing::log;
+use utilities::{task_scope, CachedStream};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwapChannelInfo {
@@ -15,25 +16,22 @@ pub struct SwapChannelInfo {
 }
 
 /// Returns the storage query api and latest block hash.
-pub async fn connect(
+pub async fn connect<'a>(
+	scope: &task_scope::Scope<'a, anyhow::Error>,
 	state_chain_settings: &settings::StateChain,
 ) -> Result<(Arc<impl StorageApi>, state_chain_runtime::Hash)> {
-	task_scope(|scope| {
-		async {
-			let (state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
-				scope,
-				&state_chain_settings.ws_endpoint,
-				&state_chain_settings.signing_key_file,
-				AccountRole::None,
-				false,
-			)
-			.await?;
+	log::debug!("Connecting to state chain at: {}", state_chain_settings.ws_endpoint);
 
-			Ok((state_chain_client, state_chain_stream.cache().block_hash))
-		}
-		.boxed()
-	})
-	.await
+	let (state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
+		scope,
+		&state_chain_settings.ws_endpoint,
+		&state_chain_settings.signing_key_file,
+		AccountRole::None,
+		false,
+	)
+	.await?;
+
+	Ok((state_chain_client, state_chain_stream.cache().block_hash))
 }
 
 pub async fn get_open_swap_channels<C: Chain + PalletInstanceAlias>(
