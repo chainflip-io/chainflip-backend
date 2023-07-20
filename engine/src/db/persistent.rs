@@ -4,6 +4,7 @@ mod tests;
 
 use std::{cmp::Ordering, collections::HashMap, path::Path};
 
+use cf_primitives::EpochIndex;
 use tracing::{debug, info, info_span};
 
 use crate::witnesser::checkpointing::WitnessedUntil;
@@ -28,6 +29,9 @@ const KEYGEN_DATA_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"key_____";
 /// The Witnesser checkpoint uses a prefix that is a combination of a checkpoint prefix and the
 /// chain tag
 const WITNESSER_CHECKPOINT_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"check___";
+/// The continuous adapter uses a prefix that is a combination of a prefix, and the
+/// witnesser name
+const PROCESSED_BLOCKS_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"seen____";
 
 /// Key used to store the `LATEST_SCHEMA_VERSION` value in the `METADATA_COLUMN`
 const DB_SCHEMA_VERSION_KEY: &[u8; 17] = b"db_schema_version";
@@ -142,6 +146,42 @@ impl PersistentKeyDB {
 			.context("Failed to load {chain_tag} checkpoint")
 	}
 
+	pub fn update_processed_blocks(
+		&self,
+		witnesser_name: &str,
+		epoch: EpochIndex,
+		map: &roaring::RoaringTreemap,
+	) -> Result<()> {
+		(|| {
+			let mut bytes = vec![];
+			map.serialize_into(&mut bytes)?;
+			self.kv_db.put_data(&processed_blocks_prefix(witnesser_name), &epoch, &bytes)
+		})()
+		.with_context(|| {
+			format!("Failed to update processed blocks for {witnesser_name} at epoch: {epoch}")
+		})
+	}
+
+	pub fn load_processed_blocks(
+		&self,
+		witnesser_name: &str,
+		epoch: EpochIndex,
+	) -> Result<Option<roaring::RoaringTreemap>> {
+		self.kv_db
+			.get_data::<_, Vec<u8>>(&processed_blocks_prefix(witnesser_name), &epoch)
+			.and_then(|option| {
+				option
+					.map(|bytes| {
+						roaring::RoaringTreemap::deserialize_from(&bytes[..])
+							.map_err(anyhow::Error::new)
+					})
+					.transpose()
+			})
+			.with_context(|| {
+				format!("Failed to load processed blocks for {witnesser_name} at epoch: {epoch}")
+			})
+	}
+
 	/// Get the genesis hash from the metadata column in the db.
 	pub fn get_genesis_hash(&self) -> Result<Option<state_chain_runtime::Hash>> {
 		match self.kv_db.get_metadata(GENESIS_HASH_KEY) {
@@ -184,6 +224,10 @@ fn keygen_data_prefix<C: ChainSigning>() -> Vec<u8> {
 
 fn checkpoint_prefix(chain_tag: ChainTag) -> Vec<u8> {
 	[WITNESSER_CHECKPOINT_PARTIAL_PREFIX, &(chain_tag.to_bytes())[..]].concat()
+}
+
+fn processed_blocks_prefix(witnessner_name: &str) -> Vec<u8> {
+	[PROCESSED_BLOCKS_PARTIAL_PREFIX, witnessner_name.as_bytes()].concat()
 }
 
 /// Reads the schema version and migrates the db to the latest schema version if required

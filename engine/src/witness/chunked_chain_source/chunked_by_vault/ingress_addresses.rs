@@ -229,6 +229,12 @@ where
 		Addresses<Inner>,
 	)>,
 }
+impl<Inner: ChunkedByVault> Clone for IngressAddressesClient<Inner> {
+	fn clone(&self) -> Self {
+		Self { inner_client: self.inner_client.clone(), receiver: self.receiver.clone() }
+	}
+}
+
 impl<Inner: ChunkedByVault> IngressAddressesClient<Inner>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
