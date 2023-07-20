@@ -1,9 +1,9 @@
 use crate::DepositWitness;
 pub use crate::{self as pallet_cf_ingress_egress};
 pub use cf_chains::{
-	address::ForeignChainAddress,
+	address::{AddressDerivationApi, ForeignChainAddress},
 	eth::api::{EthereumApi, EthereumReplayProtection},
-	CcmDepositMetadata, Chain, ChainAbi, ChainEnvironment,
+	CcmDepositMetadata, Chain, ChainAbi, ChainEnvironment, DepositChannel,
 };
 use cf_primitives::ChannelId;
 pub use cf_primitives::{
@@ -89,20 +89,31 @@ impl GetBlockHeight<Ethereum> for BlockNumberProvider {
 	}
 }
 
+pub struct MockAddressDerivation;
+
+impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
+	fn generate_address(
+		_source_asset: assets::eth::Asset,
+		channel_id: ChannelId,
+	) -> Result<<Ethereum as Chain>::ChainAccount, sp_runtime::DispatchError> {
+		Ok([channel_id as u8; 20].into())
+	}
+}
+
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;
-	type AddressDerivation = ();
+	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;
 	type LpBalance = Self;
 	type SwapDepositHandler = Self;
 	type ChainApiCall = MockEthereumApiCall<MockEthEnvironment>;
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
-	type WeightInfo = ();
 	type CcmHandler = MockCcmHandler;
 	type ChainTracking = BlockNumberProvider;
+	type WeightInfo = ();
 }
 
 pub const ALICE: <Test as frame_system::Config>::AccountId = 123u64;

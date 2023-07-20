@@ -58,7 +58,7 @@ impl<
 }
 
 impl<
-		A: Decode,
+		A: Decode + 'static,
 		O: OriginTrait,
 		C: UnfilteredDispatchable<RuntimeOrigin = O> + Member + Parameter,
 	> MockBroadcaster<(A, C)>
@@ -69,16 +69,31 @@ impl<
 			// Use root origin as proxy for witness origin.
 			Self::take_storage::<_, C>(b"CALLBACKS", &id)
 				.expect("Expected a callback.")
-				.dispatch_bypass_filter(OriginTrait::root()),
+				.dispatch_bypass_filter(OriginTrait::root())
 		);
+	}
+
+	#[track_caller]
+	pub fn dispatch_all_callbacks() {
+		for callback in Self::take_pending_callbacks() {
+			frame_support::assert_ok!(callback.dispatch_bypass_filter(OriginTrait::root()));
+		}
 	}
 
 	pub fn get_pending_api_calls() -> Vec<A> {
 		Self::get_value(b"API_CALLS").unwrap_or(Default::default())
 	}
 
+	pub fn take_pending_callbacks() -> Vec<C> {
+		Self::pending_callbacks(Self::take_storage)
+	}
+
 	pub fn get_pending_callbacks() -> Vec<C> {
+		Self::pending_callbacks(Self::get_storage)
+	}
+
+	fn pending_callbacks(mut f: impl FnMut(&[u8], u32) -> Option<C> + 'static) -> Vec<C> {
 		let max = Self::get_value(b"BROADCAST_ID").unwrap_or(1);
-		(0u32..=max).filter_map(|id| Self::take_storage(b"CALLBACKS", id)).collect()
+		(0u32..=max).filter_map(move |id| f(b"CALLBACKS", id)).collect()
 	}
 }

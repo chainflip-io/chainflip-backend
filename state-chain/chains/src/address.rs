@@ -3,14 +3,25 @@ extern crate alloc;
 use crate::{
 	btc::{BitcoinNetwork, ScriptPubkey},
 	dot::PolkadotAccountId,
+	Chain,
 };
-use cf_primitives::{EthereumAddress, ForeignChain};
+use cf_primitives::{ChannelId, EthereumAddress, ForeignChain};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 use sp_core::H160;
-use sp_std::vec::Vec;
+use sp_runtime::DispatchError;
+use sp_std::{fmt::Debug, vec::Vec};
+
+/// Generates a deterministic deposit address for some combination of asset, chain and channel id.
+pub trait AddressDerivationApi<C: Chain> {
+	// TODO: should also take root pubkey (vault) as an argument?
+	fn generate_address(
+		source_asset: C::ChainAsset,
+		channel_id: ChannelId,
+	) -> Result<C::ChainAccount, DispatchError>;
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen, PartialOrd, Ord)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]

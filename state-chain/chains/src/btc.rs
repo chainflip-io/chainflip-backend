@@ -7,7 +7,7 @@ extern crate alloc;
 use core::mem::size_of;
 
 use self::deposit_address::DepositAddress;
-use crate::{Chain, ChainAbi, ChainCrypto, ChannelIdConstructor, FeeRefundCalculator};
+use crate::{Chain, ChainAbi, ChainCrypto, DepositChannel, FeeRefundCalculator};
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use base58::{FromBase58, ToBase58};
@@ -41,7 +41,7 @@ pub const MAX_BITCOIN_SCRIPT_LENGTH: u32 = 128;
 pub type BlockNumber = u64;
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Copy)]
-pub struct BitcoinFetchId(u64);
+pub struct BitcoinFetchId(pub u64);
 
 pub type BtcAmount = u64;
 
@@ -151,6 +151,7 @@ impl Chain for Bitcoin {
 	type ChainAccount = ScriptPubkey;
 	type EpochStartData = EpochStartData;
 	type DepositFetchId = BitcoinFetchId;
+	type DepositChannelState = ();
 }
 
 #[derive(Clone, Copy, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
@@ -256,15 +257,9 @@ pub struct UtxoId {
 	pub vout: u32,
 }
 
-impl ChannelIdConstructor for BitcoinFetchId {
-	type Address = ScriptPubkey;
-
-	fn deployed(channel_id: u64, _address: Self::Address) -> Self {
-		BitcoinFetchId(channel_id)
-	}
-
-	fn undeployed(channel_id: u64, _address: Self::Address) -> Self {
-		BitcoinFetchId(channel_id)
+impl From<&DepositChannel<Bitcoin>> for BitcoinFetchId {
+	fn from(channel: &DepositChannel<Bitcoin>) -> Self {
+		BitcoinFetchId(channel.channel_id)
 	}
 }
 
