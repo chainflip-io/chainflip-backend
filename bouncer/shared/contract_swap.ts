@@ -6,6 +6,7 @@ import {
   ExecuteSwapParams,
   approveVault,
   assetChains,
+  assetDecimals,
 } from '@chainflip-io/cli';
 import { Wallet, getDefaultProvider } from 'ethers';
 import {
@@ -14,11 +15,12 @@ import {
   observeEvent,
   getEthContractAddress,
   observeCcmReceived,
+  amountToFineAmount,
+  defaultAssetAmounts,
 } from './utils';
 import { getNextEthNonce } from './send_eth';
 import { getBalance } from './get_balance';
 import { CcmDepositMetadata } from '../shared/new_swap';
-import { getDestinationAddress } from '../tests/swapping';
 
 export async function executeContractSwap(
   srcAsset: Asset,
@@ -47,7 +49,7 @@ export async function executeContractSwap(
     destAsset,
     // It is important that this is large enough to result in
     // an amount larger than existential (e.g. on Polkadot):
-    amount: srcAsset === 'USDC' ? '500000000' : '1000000000000000000',
+    amount: amountToFineAmount(defaultAssetAmounts(srcAsset), assetDecimals[srcAsset]),
     destAddress,
     srcAsset,
     srcChain: assetChains[srcAsset],
@@ -73,17 +75,13 @@ export async function executeContractSwap(
 export async function performSwapViaContract(
   sourceAsset: Asset,
   destAsset: Asset,
+  address: string,
+  swapTag?: string,
   messageMetadata?: CcmDepositMetadata,
 ) {
   const api = await getChainflipApi();
 
-  const { address, tag } = await getDestinationAddress(
-    sourceAsset,
-    destAsset,
-    undefined,
-    messageMetadata,
-    `[contract `,
-  );
+  const tag = swapTag ?? '';
 
   try {
     const oldBalance = await getBalance(destAsset, address);

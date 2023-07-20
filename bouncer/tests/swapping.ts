@@ -1,5 +1,5 @@
 import { randomAsHex, randomAsNumber } from '@polkadot/util-crypto';
-import { Asset } from '@chainflip-io/cli';
+import { Asset, assetDecimals } from '@chainflip-io/cli';
 import Web3 from 'web3';
 import { performSwap } from '../shared/perform_swap';
 import {
@@ -9,6 +9,8 @@ import {
   getEthContractAddress,
   encodeBtcAddressForContract,
   encodeDotAddressForContract,
+  amountToFineAmount,
+  defaultAssetAmounts,
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
@@ -55,17 +57,17 @@ function getAbiEncodedMessage(types?: string[]): string {
   return encodedMessage;
 }
 
-export async function getDestinationAddress(
+export async function prepareSwap(
   sourceToken: Asset,
   destToken: Asset,
   addressType?: BtcAddressType,
   messageMetadata?: CcmDepositMetadata,
-  tagIni?: string,
+  tagPrefix?: string,
 ) {
   // Seed needs to be unique per swap:
   const seed = randomAsHex(32);
 
-  let tag = tagIni ?? '[';
+  let tag = tagPrefix ?? '[';
   let address;
   // For swaps with a message force the address to be the CF Receiver Mock address.
   if (messageMetadata && chainFromAsset(destToken) === chainFromAsset('ETH')) {
@@ -87,29 +89,44 @@ async function testSwap(
   addressType?: BtcAddressType,
   messageMetadata?: CcmDepositMetadata,
 ) {
-  const { address, tag } = await getDestinationAddress(
-    sourceToken,
-    destToken,
-    addressType,
-    messageMetadata,
-  );
+  const { address, tag } = await prepareSwap(sourceToken, destToken, addressType, messageMetadata);
   await performSwap(sourceToken, destToken, address, tag, messageMetadata);
+}
+
+async function testSwapViaContract(
+  sourceAsset: Asset,
+  destAsset: Asset,
+  messageMetadata?: CcmDepositMetadata,
+) {
+  const { address, tag } = await prepareSwap(
+    sourceAsset,
+    destAsset,
+    undefined,
+    messageMetadata,
+    `[contract `,
+  );
+  await performSwapViaContract(sourceAsset, destAsset, address, tag, messageMetadata);
 }
 
 async function testAll() {
   // Single approval of all the tokens swapped in contractsSwaps to avoid overlapping async approvals.
   // Make sure to to set the allowance to the same amount of total token swapped in contractsSwaps,
   // otherwise in subsequent approvals the broker might not send the transaction confusing the eth nonce.
-  await approveTokenVault('USDC', (500000000 * 4).toString());
+  await approveTokenVault(
+    'USDC',
+    (
+      parseInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC), 10) * 4
+    ).toString(),
+  );
 
   const ccmContractSwaps = Promise.all([
-    performSwapViaContract('ETH', 'USDC', {
+    testSwapViaContract('ETH', 'USDC', {
       message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
       gas_budget: 5000000,
       cf_parameters: getAbiEncodedMessage(['address', 'uint256']),
       source_address: { ETH: await getAddress('ETH', randomAsHex(32)) },
     }),
-    performSwapViaContract('USDC', 'ETH', {
+    testSwapViaContract('USDC', 'ETH', {
       message: getAbiEncodedMessage(),
       gas_budget: 5000000,
       cf_parameters: getAbiEncodedMessage(['bytes', 'uint256']),
@@ -118,12 +135,12 @@ async function testAll() {
   ]);
 
   const contractSwaps = Promise.all([
-    performSwapViaContract('ETH', 'DOT'),
-    performSwapViaContract('ETH', 'USDC'),
-    performSwapViaContract('ETH', 'BTC'),
-    performSwapViaContract('USDC', 'DOT'),
-    performSwapViaContract('USDC', 'ETH'),
-    performSwapViaContract('USDC', 'BTC'),
+    testSwapViaContract('ETH', 'DOT'),
+    testSwapViaContract('ETH', 'USDC'),
+    testSwapViaContract('ETH', 'BTC'),
+    testSwapViaContract('USDC', 'DOT'),
+    testSwapViaContract('USDC', 'ETH'),
+    testSwapViaContract('USDC', 'BTC'),
   ]);
 
   const regularSwaps = Promise.all([
