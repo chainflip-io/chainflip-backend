@@ -11,7 +11,6 @@ use crate::{
 	witness::chain_source::{ChainClient, ChainStream},
 };
 use futures::{FutureExt, StreamExt};
-use futures_core::FusedStream;
 use utilities::UnendingStream;
 
 pub trait Storage: Send + Sync {
