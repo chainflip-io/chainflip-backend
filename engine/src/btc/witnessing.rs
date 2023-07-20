@@ -38,7 +38,7 @@ pub async fn start(
 
 	let (address_monitor_command_sender, address_monitor) = ItemMonitor::new(
 		state_chain_client
-			.storage_map::<pallet_cf_ingress_egress::DepositAddressDetailsLookup<
+			.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
 				state_chain_runtime::Runtime,
 				state_chain_runtime::BitcoinInstance,
 			>>(initial_block_hash)
@@ -46,7 +46,9 @@ pub async fn start(
 			.context("Failed to get initial BTC deposit details")?
 			.into_iter()
 			.filter_map(|(address, channel_details)| {
-				if channel_details.source_asset == cf_primitives::chains::assets::btc::Asset::Btc {
+				if channel_details.deposit_channel.asset ==
+					cf_primitives::chains::assets::btc::Asset::Btc
+				{
 					Some(address)
 				} else {
 					None

@@ -1,7 +1,6 @@
 use crate::Vec;
-use cf_chains::{dot::PolkadotAccountId, Chain, Polkadot};
+use cf_chains::{address::AddressDerivationApi, dot::PolkadotAccountId, Chain, Polkadot};
 use cf_primitives::{chains::assets::dot, ChannelId};
-use cf_traits::AddressDerivationApi;
 use sp_runtime::{
 	traits::{BlakeTwo256, Hash},
 	DispatchError,
@@ -25,6 +24,7 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 			.ok_or(DispatchError::Other("Vault Account does not exist."))?;
 
 		// Because we re-use addresses, we don't expect to hit this case in the wild.
+		// TODO: investigate this claim - we don't re-use addresses for Polkadot.
 		if channel_id > u16::MAX.into() {
 			return Err(DispatchError::Other(
 				"Intent ID too large. Polkadot can only support up to u16 addresses",
