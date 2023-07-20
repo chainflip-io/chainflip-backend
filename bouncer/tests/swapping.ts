@@ -62,16 +62,22 @@ export async function prepareSwap(
   destAsset: Asset,
   addressType?: BtcAddressType,
   messageMetadata?: CcmDepositMetadata,
-  tagPrefix?: string,
+  tagSuffix?: string,
 ) {
   // Seed needs to be unique per swap:
   const seed = randomAsHex(32);
 
-  let tag = tagPrefix ?? '[';
   let destAddress;
+
+  let tag = `[${(swapCount++).toString().padEnd(2, ' ')}: ${sourceAsset}->${destAsset}`;
+  // let tag = `[${swapCount++}: ${sourceAsset}->${destAsset}`;
+  tag += messageMetadata ? ' CCM' : '';
+  tag += tagSuffix ? `${tagSuffix}` : '';
+
+  tag += ']';
+
   // For swaps with a message force the address to be the CF Receiver Mock address.
   if (messageMetadata && chainFromAsset(destAsset) === chainFromAsset('ETH')) {
-    tag += 'CCM | ';
     destAddress = getEthContractAddress('CFRECEIVER');
     console.log(`${tag} Using CF Receiver Mock address: ${destAddress}`);
   } else {
@@ -79,7 +85,6 @@ export async function prepareSwap(
     console.log(`${tag} Created new ${destAsset} address: ${destAddress}`);
   }
 
-  tag += `${swapCount++}: ${sourceAsset}->${destAsset}]`;
   return { destAddress, tag };
 }
 
@@ -108,7 +113,7 @@ async function testSwapViaContract(
     destAsset,
     undefined,
     messageMetadata,
-    `[contract `,
+    ' Contract',
   );
   await performSwapViaContract(sourceAsset, destAsset, destAddress, tag, messageMetadata);
 }

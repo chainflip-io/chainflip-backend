@@ -85,9 +85,9 @@ export async function performSwapViaContract(
 
   try {
     const oldBalance = await getBalance(destAsset, destAddress);
-    console.log(`Old balance: ${oldBalance}`);
+    console.log(`${tag} Old balance: ${oldBalance}`);
     console.log(
-      `Executing (${sourceAsset}) contract swap to(${destAsset}) ${destAddress}. Current balance: ${oldBalance}`,
+      `${tag} Executing (${sourceAsset}) contract swap to(${destAsset}) ${destAddress}. Current balance: ${oldBalance}`,
     );
     // To uniquely identify the contractSwap, we need to use the TX hash. This is only known
     // after sending the transaction, so we send it first and observe the events afterwards.
@@ -100,7 +100,7 @@ export async function performSwapViaContract(
       // Otherwise it was a swap scheduled by requesting a deposit address
       return false;
     });
-    console.log(`Successfully observed event: swapping: SwapScheduled`);
+    console.log(`${tag} Successfully observed event: swapping: SwapScheduled`);
 
     const ccmEventEmitted = messageMetadata
       ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata)

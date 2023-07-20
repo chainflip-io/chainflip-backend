@@ -92,9 +92,9 @@ export async function performSwap(
 
   console.log(`${tag} Swap address: ${depositAddress}`);
 
-  const OLD_BALANCE = await getBalance(destAsset, destAddress);
+  const oldBalance = await getBalance(destAsset, destAddress);
 
-  console.log(`${tag} Old balance: ${OLD_BALANCE}`);
+  console.log(`${tag} Old balance: ${oldBalance}`);
 
   const swapScheduledHandle = observeEvent('swapping:SwapScheduled', chainflipApi, (event) => {
     if ('depositChannel' in event[5]) {
@@ -119,7 +119,7 @@ export async function performSwap(
 
   try {
     const [newBalance] = await Promise.all([
-      observeBalanceIncrease(destAsset, destAddress, OLD_BALANCE),
+      observeBalanceIncrease(destAsset, destAddress, oldBalance),
       ccmEventEmitted,
     ]);
 
