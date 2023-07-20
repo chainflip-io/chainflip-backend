@@ -108,6 +108,8 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValue
 		+ BenchmarkValueExtended
 		+ Debug
+		+ Ord
+		+ PartialOrd
 		+ TryFrom<ForeignChainAddress>
 		+ Into<ForeignChainAddress>
 		+ Unpin;
