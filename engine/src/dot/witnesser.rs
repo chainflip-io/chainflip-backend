@@ -5,7 +5,7 @@ use cf_chains::dot::{
 	Polkadot, PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash,
 	PolkadotProxyType, PolkadotSignature, PolkadotUncheckedExtrinsic,
 };
-use cf_primitives::{EpochIndex, PolkadotBlockNumber, TxId};
+use cf_primitives::{EpochIndex, PolkadotBlockNumber};
 use codec::{Decode, Encode};
 use frame_support::scale_info::TypeInfo;
 use futures::{stream, Stream, StreamExt, TryStreamExt};
@@ -54,10 +54,10 @@ impl HasBlockNumber for MiniHeader {
 /// to the new aggregrate at this event.
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
 pub struct ProxyAdded {
-	delegator: PolkadotAccountId,
-	delegatee: PolkadotAccountId,
-	proxy_type: PolkadotProxyType,
-	delay: PolkadotBlockNumber,
+	pub delegator: PolkadotAccountId,
+	pub delegatee: PolkadotAccountId,
+	pub proxy_type: PolkadotProxyType,
+	pub delay: PolkadotBlockNumber,
 }
 
 impl StaticEvent for ProxyAdded {
@@ -132,34 +132,23 @@ fn check_for_interesting_events_in_block(
 	block_events: Vec<(Phase, EventWrapper)>,
 	block_number: PolkadotBlockNumber,
 	our_vault: &PolkadotAccountId,
-) -> (Vec<(PolkadotExtrinsicIndex, PolkadotBalance)>, Vec<Box<state_chain_runtime::RuntimeCall>>) {
+) -> Vec<(PolkadotExtrinsicIndex, PolkadotBalance)> {
 	// We only want to attempt to decode extrinsics that were sent by us. Since
 	// a) we know how to decode calls we create (but not necessarily all calls on Polkadot)
 	// b) these are the only extrinsics we are interested in
 	let mut interesting_indices = Vec::new();
-	let mut vault_key_rotated_calls: Vec<Box<_>> = Vec::new();
 	let mut fee_paid_for_xt_at_index = HashMap::new();
 	let events_iter = block_events.iter();
 
 	for (phase, wrapped_event) in events_iter {
 		if let Phase::ApplyExtrinsic(extrinsic_index) = *phase {
 			match wrapped_event {
-				EventWrapper::ProxyAdded(ProxyAdded { delegator, delegatee, .. }) => {
+				EventWrapper::ProxyAdded(ProxyAdded { delegator, .. }) => {
 					if delegator != our_vault {
 						continue
 					}
 
 					interesting_indices.push(extrinsic_index);
-
-					info!("Witnessing ProxyAdded. new delegatee: {delegatee:?} at block number {block_number} and extrinsic_index; {extrinsic_index}");
-
-					vault_key_rotated_calls.push(Box::new(
-						pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
-							block_number,
-							tx_id: TxId { block_number, extrinsic_index },
-						}
-						.into(),
-					));
 				},
 				EventWrapper::Transfer(Transfer { to, amount: _, from }) => {
 					// if `from` is our_vault then we're doing an egress
@@ -176,13 +165,10 @@ fn check_for_interesting_events_in_block(
 		}
 	}
 
-	(
-		interesting_indices
-			.into_iter()
-			.map(|index| (index, *fee_paid_for_xt_at_index.get(&index).unwrap()))
-			.collect(),
-		vault_key_rotated_calls,
-	)
+	interesting_indices
+		.into_iter()
+		.map(|index| (index, *fee_paid_for_xt_at_index.get(&index).unwrap()))
+		.collect()
 }
 
 /// Polkadot witnesser
@@ -255,20 +241,11 @@ where
 		let mut signature_monitor =
 			signature_monitor.try_lock().expect("should have exclusive ownership");
 
-		let (interesting_indices, vault_key_rotated_calls) = check_for_interesting_events_in_block(
+		let interesting_indices = check_for_interesting_events_in_block(
 			block_event_details,
 			block_number,
 			&self.vault_account,
 		);
-
-		for call in vault_key_rotated_calls {
-			self.state_chain_client
-				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-					call,
-					epoch_index: self.epoch_index,
-				})
-				.await;
-		}
 
 		if !interesting_indices.is_empty() {
 			info!("We got an interesting block at block: {block_number}, hash: {block_hash:?}");
@@ -461,18 +438,6 @@ mod tests {
 		witnesser::MonitorCommand,
 	};
 
-	fn mock_proxy_added(
-		delegator: &PolkadotAccountId,
-		delegatee: &PolkadotAccountId,
-	) -> EventWrapper {
-		EventWrapper::ProxyAdded(ProxyAdded {
-			delegator: *delegator,
-			delegatee: *delegatee,
-			proxy_type: PolkadotProxyType::Any,
-			delay: 0,
-		})
-	}
-
 	fn mock_tx_fee_paid(actual_fee: PolkadotBalance) -> EventWrapper {
 		EventWrapper::TransactionFeePaid(TransactionFeePaid {
 			actual_fee,
@@ -496,32 +461,6 @@ mod tests {
 			.iter()
 			.map(|(xt_index, event)| (Phase::ApplyExtrinsic(*xt_index), event.clone()))
 			.collect()
-	}
-
-	#[test]
-	fn proxy_added_event_for_our_vault_witnessed() {
-		let our_vault = PolkadotAccountId::from_aliased([0; 32]);
-		let other_acct = PolkadotAccountId::from_aliased([1; 32]);
-		let our_proxy_added_index = 1u32;
-		let fee_paid = 10000;
-		let block_event_details = phase_and_events(&[
-			// we should witness this one
-			(our_proxy_added_index, mock_proxy_added(&our_vault, &other_acct)),
-			(our_proxy_added_index, mock_tx_fee_paid(fee_paid)),
-			// we should not witness this one
-			(3u32, mock_proxy_added(&other_acct, &our_vault)),
-			(3u32, mock_tx_fee_paid(20000)),
-		]);
-
-		let (mut interesting_indices, vault_key_rotated_calls) =
-			check_for_interesting_events_in_block(
-				block_event_details,
-				Default::default(),
-				&our_vault,
-			);
-
-		assert_eq!(vault_key_rotated_calls.len(), 1);
-		assert_eq!(interesting_indices.pop().unwrap(), (our_proxy_added_index, fee_paid));
 	}
 
 	#[test]
@@ -564,7 +503,7 @@ mod tests {
 			),
 		]);
 
-		let (interesting_indices, vault_key_rotated_calls) = check_for_interesting_events_in_block(
+		let interesting_indices = check_for_interesting_events_in_block(
 			block_event_details,
 			20,
 			// arbitrary, not focus of the test
@@ -575,8 +514,6 @@ mod tests {
 			interesting_indices.contains(&(egress_index, egress_amount)) &&
 				interesting_indices.contains(&(deposit_fetch_index, deposit_fetch_amount))
 		);
-
-		assert!(vault_key_rotated_calls.is_empty());
 	}
 
 	#[ignore = "This test is helpful for local testing. Requires connection to westend"]

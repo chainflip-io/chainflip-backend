@@ -26,7 +26,7 @@ use crate::{
 
 use anyhow::Result;
 
-use super::{chain_source::dot_source::DotFinalisedSource, epoch_source::EpochSourceBuilder};
+use super::{chain_source::dot_source::DotFinalisedSource, epoch_source::EpochSourceBuilder, common::STATE_CHAIN_CONNECTION};
 
 fn filter_map_events(
 	res_event_details: Result<EventDetails, subxt::Error>,
@@ -61,7 +61,7 @@ pub async fn start<StateChainClient, StateChainStream>(
 ) -> Result<()>
 where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
-	StateChainStream: StateChainStreamApi,
+	StateChainStream: StateChainStreamApi + Clone,
 {
 	let dot_client = DotRetryRpcClient::new(
 		scope,
@@ -90,17 +90,19 @@ where
 		.ingress_addresses(scope, state_chain_stream, state_chain_client.clone())
 		.await
 		// Deposit witnessing
-		.then(move |epoch, header| {
+		.then({
 			let state_chain_client = state_chain_client.clone();
-			async move {
-				let (events, addresses_and_details) = header.data;
+			move |epoch, header| {
+				let state_chain_client = state_chain_client.clone();
+				async move {
+					let (events, addresses_and_details) = header.data;
 
-				let addresses = address_and_details_to_addresses(addresses_and_details);
+					let addresses = address_and_details_to_addresses(addresses_and_details);
 
-				let deposit_witnesses = deposit_witnesses(header.index, addresses, events);
+					let deposit_witnesses = deposit_witnesses(header.index, addresses, &events);
 
-				if !deposit_witnesses.is_empty() {
-					state_chain_client
+					if !deposit_witnesses.is_empty() {
+						state_chain_client
 						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 							call: Box::new(
 								pallet_cf_ingress_egress::Call::<_, PolkadotInstance>::process_deposits {
@@ -108,6 +110,34 @@ where
 								}
 								.into(),
 							),
+							epoch_index: epoch.index,
+						})
+						.await;
+					}
+
+					events
+				}
+			}
+		})
+		// Proxy added witnessing
+		.then(move |epoch, header| {
+			let state_chain_client = state_chain_client.clone();
+			async move {
+				let events = header.data;
+
+				// TODO: Pass this through with the epoch
+				let our_vault = state_chain_client
+					.storage_value::<pallet_cf_environment::PolkadotVaultAccountId<state_chain_runtime::Runtime>>(
+						epoch.block_hash,
+					)
+					.await
+					.expect(STATE_CHAIN_CONNECTION)
+					.expect("If we got here, then we have a vault");
+				let vault_key_rotated_calls = proxy_addeds(header.index, &events, &our_vault);
+				for call in vault_key_rotated_calls {
+					state_chain_client
+						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
+							call,
 							epoch_index: epoch.index,
 						})
 						.await;
@@ -139,35 +169,62 @@ fn address_and_details_to_addresses(
 fn deposit_witnesses(
 	block_number: PolkadotBlockNumber,
 	monitored_addresses: Vec<PolkadotAccountId>,
-	events: Vec<(Phase, EventWrapper)>,
+	events: &Vec<(Phase, EventWrapper)>,
 ) -> Vec<DepositWitness<Polkadot>> {
 	let mut deposit_witnesses = vec![];
 	// TODO: We might as well add the proxy added here too.
 	for (phase, wrapped_event) in events {
 		if let Phase::ApplyExtrinsic(extrinsic_index) = phase {
-			match wrapped_event {
-				EventWrapper::Transfer(Transfer { to, amount, from: _ }) => {
-					if monitored_addresses.contains(&to) {
-						deposit_witnesses.push(DepositWitness {
-							deposit_address: to,
-							asset: assets::dot::Asset::Dot,
-							amount,
-							tx_id: TxId { block_number, extrinsic_index },
-						});
-					}
-				},
-				evt => {
-					println!("Ignoring event: {:?}", evt);
-				},
+			if let EventWrapper::Transfer(Transfer { to, amount, from: _ }) = wrapped_event {
+				if monitored_addresses.contains(to) {
+					deposit_witnesses.push(DepositWitness {
+						deposit_address: *to,
+						asset: assets::dot::Asset::Dot,
+						amount: *amount,
+						tx_id: TxId { block_number, extrinsic_index: *extrinsic_index },
+					});
+				}
 			}
 		}
 	}
 	deposit_witnesses
 }
 
+#[allow(clippy::vec_box)]
+fn proxy_addeds(
+	block_number: PolkadotBlockNumber,
+	events: &Vec<(Phase, EventWrapper)>,
+	our_vault: &PolkadotAccountId,
+) -> Vec<Box<state_chain_runtime::RuntimeCall>> {
+	let mut vault_key_rotated_calls = vec![];
+	for (phase, wrapped_event) in events {
+		if let Phase::ApplyExtrinsic(extrinsic_index) = *phase {
+			match wrapped_event {
+				EventWrapper::ProxyAdded(ProxyAdded { delegator, delegatee, .. }) => {
+					if delegator != our_vault {
+						continue
+					}
+
+					tracing::info!("Witnessing ProxyAdded. new delegatee: {delegatee:?} at block number {block_number} and extrinsic_index; {extrinsic_index}");
+
+					vault_key_rotated_calls.push(Box::new(
+						pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
+							block_number,
+							tx_id: TxId { block_number, extrinsic_index },
+						}
+						.into(),
+					));
+				},
+				_ => {},
+			}
+		}
+	}
+	vault_key_rotated_calls
+}
+
 #[cfg(test)]
 mod test {
-	use cf_chains::dot::{PolkadotBalance, PolkadotExtrinsicIndex};
+	use cf_chains::dot::{PolkadotBalance, PolkadotExtrinsicIndex, PolkadotProxyType};
 
 	use super::*;
 
@@ -186,6 +243,26 @@ mod test {
 			.iter()
 			.map(|(xt_index, event)| (Phase::ApplyExtrinsic(*xt_index), event.clone()))
 			.collect()
+	}
+
+	fn mock_proxy_added(
+		delegator: &PolkadotAccountId,
+		delegatee: &PolkadotAccountId,
+	) -> EventWrapper {
+		EventWrapper::ProxyAdded(ProxyAdded {
+			delegator: *delegator,
+			delegatee: *delegatee,
+			proxy_type: PolkadotProxyType::Any,
+			delay: 0,
+		})
+	}
+
+	fn mock_tx_fee_paid(actual_fee: PolkadotBalance) -> EventWrapper {
+		EventWrapper::TransactionFeePaid(TransactionFeePaid {
+			actual_fee,
+			who: PolkadotAccountId::from_aliased([0xab; 32]),
+			tip: Default::default(),
+		})
 	}
 
 	#[test]
@@ -232,11 +309,31 @@ mod test {
 		let deposit_witnesses = deposit_witnesses(
 			20,
 			vec![transfer_1_deposit_address, transfer_2_deposit_address],
-			block_event_details,
+			&block_event_details,
 		);
 
 		assert_eq!(deposit_witnesses.len(), 2);
 		assert_eq!(deposit_witnesses.get(0).unwrap().amount, TRANSFER_1_AMOUNT);
 		assert_eq!(deposit_witnesses.get(1).unwrap().amount, TRANSFER_2_AMOUNT);
+	}
+
+	#[test]
+	fn proxy_added_event_for_our_vault_witnessed() {
+		let our_vault = PolkadotAccountId::from_aliased([0; 32]);
+		let other_acct = PolkadotAccountId::from_aliased([1; 32]);
+		let our_proxy_added_index = 1u32;
+		let fee_paid = 10000;
+		let block_event_details = phase_and_events(&[
+			// we should witness this one
+			(our_proxy_added_index, mock_proxy_added(&our_vault, &other_acct)),
+			(our_proxy_added_index, mock_tx_fee_paid(fee_paid)),
+			// we should not witness this one
+			(3u32, mock_proxy_added(&other_acct, &our_vault)),
+			(3u32, mock_tx_fee_paid(20000)),
+		]);
+
+		let vault_key_rotated_calls = proxy_addeds(20, &block_event_details, &our_vault);
+
+		assert_eq!(vault_key_rotated_calls.len(), 1);
 	}
 }

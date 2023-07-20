@@ -19,6 +19,7 @@ use super::common::{ActiveAndFuture, ExternalChain, RuntimeHasChain};
 #[derive(Clone)]
 pub struct Epoch<Info, HistoricInfo> {
 	pub index: EpochIndex,
+	pub block_hash: state_chain_runtime::Hash,
 	pub info: Info,
 	pub historic_signal: Signal<HistoricInfo>,
 	pub expired_signal: Signal<()>,
@@ -179,6 +180,8 @@ impl<Info: Clone + Send + Sync + 'static, HistoricInfo: Clone + Send + Sync + 's
 
 					Epoch {
 						index,
+						// TODO: Fix this.
+						block_hash: Default::default(),
 						info,
 						historic_signal: match option_historic_info {
 							Some(historic_info) => Signal::signalled(historic_info),
@@ -196,8 +199,7 @@ impl<Info: Clone + Send + Sync + 'static, HistoricInfo: Clone + Send + Sync + 's
 			future: stream::unfold(
 				(self.epoch_update_receiver, historic_signallers, expired_signallers),
 				|(mut epoch_update_receiver, mut historic_signallers, mut expired_signallers)| async move {
-					while let Some((index, _block_hash, update)) =
-						epoch_update_receiver.next().await
+					while let Some((index, block_hash, update)) = epoch_update_receiver.next().await
 					{
 						match update {
 							EpochUpdate::NewCurrent(info) => {
@@ -208,7 +210,13 @@ impl<Info: Clone + Send + Sync + 'static, HistoricInfo: Clone + Send + Sync + 's
 								expired_signallers.insert(index, expired_signaller);
 
 								return Some((
-									Epoch { index, info, historic_signal, expired_signal },
+									Epoch {
+										index,
+										block_hash,
+										info,
+										historic_signal,
+										expired_signal,
+									},
 									(
 										epoch_update_receiver,
 										historic_signallers,
@@ -269,7 +277,7 @@ impl<
 		.await
 	}
 
-	async fn filter_map<
+	pub async fn filter_map<
 		FilterMapInfo,
 		InfoFut,
 		MappedInfo,
