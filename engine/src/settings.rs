@@ -155,6 +155,16 @@ pub struct BtcOptions {
 }
 
 #[derive(Parser, Debug, Clone, Default)]
+pub struct ArbOptions {
+	#[clap(long = "arb.ws_node_endpoint")]
+	pub arb_ws_node_endpoint: Option<String>,
+	#[clap(long = "arb.http_node_endpoint")]
+	pub arb_http_node_endpoint: Option<String>,
+	#[clap(long = "arb.private_key_file")]
+	pub arb_private_key_file: Option<PathBuf>,
+}
+
+#[derive(Parser, Debug, Clone, Default)]
 pub struct P2POptions {
 	#[clap(long = "p2p.node_key_file", parse(from_os_str))]
 	node_key_file: Option<PathBuf>,
@@ -189,7 +199,7 @@ pub struct CommandLineOptions {
 	btc_opts: BtcOptions,
 
 	#[clap(flatten)]
-	arb_opts: EthOptions,
+	arb_opts: ArbOptions,
 
 	// Health Check Settings
 	#[clap(long = "health_check.hostname")]
@@ -211,7 +221,7 @@ impl Default for CommandLineOptions {
 			eth_opts: EthOptions::default(),
 			dot_opts: DotOptions::default(),
 			btc_opts: BtcOptions::default(),
-			arb_opts: EthOptions::default(),
+			arb_opts: ArbOptions::default(),
 			health_check_hostname: None,
 			health_check_port: None,
 			signing_db_file: None,
@@ -495,6 +505,15 @@ impl DotOptions {
 	}
 }
 
+impl ArbOptions {
+	/// Inserts all the Arb Options into the given map (if Some)
+	pub fn insert_all(&self, map: &mut HashMap<String, Value>) {
+		insert_command_line_option(map, "arb.ws_node_endpoint", &self.arb_ws_node_endpoint);
+		insert_command_line_option(map, "arb.http_node_endpoint", &self.arb_http_node_endpoint);
+		insert_command_line_option_path(map, ETH_PRIVATE_KEY_FILE, &self.arb_private_key_file);
+	}
+}
+
 impl Settings {
 	/// New settings loaded from "$base_config_path/config/Settings.toml",
 	/// environment and `CommandLineOptions`
@@ -696,10 +715,10 @@ mod tests {
 				btc_rpc_user: Some("my_username".to_owned()),
 				btc_rpc_password: Some("my_password".to_owned()),
 			},
-			arb_opts: EthOptions {
-				eth_ws_node_endpoint: Some("ws://endpoint:4321".to_owned()),
-				eth_http_node_endpoint: Some("http://endpoint:4321".to_owned()),
-				eth_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
+			arb_opts: ArbOptions {
+				arb_ws_node_endpoint: Some("ws://endpoint:4321".to_owned()),
+				arb_http_node_endpoint: Some("http://endpoint:4321".to_owned()),
+				arb_private_key_file: Some(PathBuf::from_str("eth_key_file").unwrap()),
 			},
 			health_check_hostname: Some("health_check_hostname".to_owned()),
 			health_check_port: Some(1337),
