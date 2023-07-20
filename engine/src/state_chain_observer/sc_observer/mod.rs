@@ -551,7 +551,8 @@ where
                                         },
                                     ) => {
                                         if payloads.len() > multisig::MAX_BTC_SIGNING_PAYLOADS{
-                                            error!("Too many payloads, ignoring Bitcoin signing request ({}/{})", payloads.len(), multisig::MAX_BTC_SIGNING_PAYLOADS);
+                                            error!(ceremony_id = ceremony_id, "Too many payloads, ignoring Bitcoin signing request ({}/{})", payloads.len(), multisig::MAX_BTC_SIGNING_PAYLOADS);
+                                            btc_multisig_client.update_latest_ceremony_id(ceremony_id);
                                         }else{
                                             let signing_info = payloads.into_iter().map(|(previous_or_current, payload)| {
                                                     (
