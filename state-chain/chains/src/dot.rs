@@ -228,7 +228,17 @@ impl Chain for Polkadot {
 	type ChainAsset = assets::dot::Asset;
 	type EpochStartData = EpochStartData;
 	type DepositFetchId = PolkadotChannelId;
-	type DepositChannelState = ();
+	type DepositChannelState = PolkadotChannelState;
+}
+
+#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq, Default)]
+pub struct PolkadotChannelState;
+
+/// Polkadot channels should always be recycled because we are limited to u16::MAX channels.
+impl ChannelLifecycleHooks for PolkadotChannelState {
+	fn maybe_recycle(self) -> Option<Self> {
+		Some(self)
+	}
 }
 
 impl ChainCrypto for Polkadot {
