@@ -17,7 +17,7 @@ ws_node_endpoint = "wss://my_fake_polkadot_rpc:443/<secret_key>"
 http_node_endpoint = "http://my_fake_polkadot_rpc:443/<secret_key>"
 
 [arb]
-ws_node_endpoint = "ws://localhost:8547" # what to put here?
+ws_node_endpoint = "ws://localhost:8547"
 http_node_endpoint = "http://localhost:8547"
 
 [health_check]
