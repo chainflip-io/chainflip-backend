@@ -15,10 +15,8 @@ use crate::{
 use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::{
 	btc::BitcoinNetwork,
-	dot,
-	dot::{api::PolkadotApi, PolkadotHash},
-	eth,
-	eth::{api::EthereumApi, Ethereum},
+	dot::{self, api::PolkadotApi, PolkadotHash},
+	eth::{self, api::EthereumApi, Ethereum},
 	Bitcoin, Polkadot,
 };
 pub use frame_system::Call as SystemCall;
@@ -153,7 +151,6 @@ pub fn native_version() -> NativeVersion {
 
 parameter_types! {
 	pub const MinEpoch: BlockNumber = 1;
-
 }
 
 impl pallet_cf_validator::Config for Runtime {

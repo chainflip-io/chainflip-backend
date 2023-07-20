@@ -60,18 +60,20 @@ impl Chain for MockEthereum {
 	type ChainAccount = u64;
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
+	type DepositChannelState = MockLifecycleHooks;
 }
 
-impl ChannelIdConstructor for MockEthereumChannelId {
-	type Address = u64;
-
-	fn deployed(_channel_id: u64, _address: Self::Address) -> Self {
-		unimplemented!()
+impl From<&DepositChannel<MockEthereum>> for MockEthereumChannelId {
+	fn from(channel: &DepositChannel<MockEthereum>) -> Self {
+		channel.channel_id as u128
 	}
+}
 
-	fn undeployed(_channel_id: u64, _address: Self::Address) -> Self {
-		unimplemented!()
-	}
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
+pub struct MockLifecycleHooks;
+
+impl ChannelLifecycleHooks for MockLifecycleHooks {
+	// Default implementation is fine.
 }
 
 #[cfg(feature = "runtime-benchmarks")]
