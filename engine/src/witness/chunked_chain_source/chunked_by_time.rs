@@ -6,7 +6,7 @@ use futures_util::StreamExt;
 use crate::witness::{
 	chain_source::{aliases, BoxChainStream, ChainClient, ChainStream},
 	common::{BoxActiveAndFuture, ExternalChain, ExternalChainSource},
-	epoch_source::Epoch,
+	epoch_source::{Epoch, EpochSource},
 };
 
 use super::ChunkedChainSource;
@@ -72,10 +72,12 @@ impl<TChainSource: ExternalChainSource> ChunkedByTime for ChunkByTime<TChainSour
 
 	type Chain = TChainSource::Chain;
 
-	type Parameters = BoxActiveAndFuture<'static, Epoch<(), ()>>;
+	type Parameters = EpochSource<(), ()>;
 
 	async fn stream(&self, epochs: Self::Parameters) -> BoxActiveAndFuture<'_, Item<'_, Self>> {
 		epochs
+			.into_stream()
+			.await
 			.then(move |epoch| async move {
 				let (stream, client) = self.chain_source.stream_and_client().await;
 				let historic_signal = epoch.historic_signal.clone();
