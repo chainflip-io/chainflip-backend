@@ -62,7 +62,7 @@ export async function executeContractSwap(
     receipt = await executeCall(
       {
         ...params,
-        gasAmount: messageMetadata.gas_budget.toString(),
+        gasAmount: messageMetadata.gasBudget.toString(),
         message: messageMetadata.message,
       } as ExecuteCallParams,
       options,
