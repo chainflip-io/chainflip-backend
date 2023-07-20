@@ -202,6 +202,8 @@ pub trait CustomApi {
 	) -> RpcResult<RpcSwapOutput>;
 	#[method(name = "environment")]
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
+	#[method(name = "current_compatibility_version")]
+	fn cf_current_compatibility_version(&self) -> RpcResult<Vec<u8>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -514,5 +516,14 @@ where
 			.cf_environment(&self.query_block_id(at))
 			.map_err(to_rpc_error)
 			.map(RpcEnvironment::from)
+	}
+
+	fn cf_current_compatibility_version(&self) -> RpcResult<Vec<u8>> {
+		use sp_api::Encode;
+		self.client
+			.runtime_api()
+			.cf_current_compatibility_version(&self.query_block_id(None))
+			.map(|ver| ver.encode())
+			.map_err(to_rpc_error)
 	}
 }
