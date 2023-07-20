@@ -516,7 +516,10 @@ impl<T: Config> Pallet<T> {
 							number_of_outputs * fee_per_output_utxo +
 							min_fee_required_per_tx,
 					)
-					.ok_or(())
+					.ok_or_else(|| {
+						log::error!("Unable to select desired amount from available utxos.");
+						()
+					})
 				})
 				.ok()
 				.map(|(selected_utxos, total_input_spendable_amount)| {
