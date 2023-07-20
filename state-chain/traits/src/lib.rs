@@ -14,8 +14,8 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{
-	address::{AddressDerivationApi, ForeignChainAddress},
-	ApiCall, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot, SwapOrigin,
+	address::ForeignChainAddress, ApiCall, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto,
+	Ethereum, Polkadot, SwapOrigin,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
@@ -830,43 +830,6 @@ pub trait OnBroadcastReady<C: ChainAbi> {
 
 pub trait GetBitcoinFeeInfo {
 	fn bitcoin_fee_info() -> cf_chains::btc::BitcoinFeeInfo;
-}
-
-/// Defines the interface for chain-specific aspects of address management.
-pub trait DepositChannel<C: Chain>: Sized {
-	type Address = C::ChainAccount;
-	type DepositFetchId = C::DepositFetchId;
-	type AddressDerivation: AddressDerivationApi<C>;
-
-	/// Constructs a new deposit channel.
-	fn new(channel_id: ChannelId, asset: C::ChainAsset) -> Result<Self, DispatchError>;
-
-	/// Returns the actual address.
-	fn get_address(&self) -> Self::Address;
-
-	/// Returns the channel id.
-	fn get_channel_id(&self) -> ChannelId;
-
-	/// Returns the asset.
-	fn get_asset(&self) -> C::ChainAsset;
-
-	/// Returns the deposit fetch id if it's available in the current state.
-	fn get_fetch_id(&self) -> Option<Self::DepositFetchId>;
-
-	/// Call when a fetch is broadcasted. Should return true if self was mutated.
-	fn on_fetch_broadcast(&mut self) -> bool {
-		false
-	}
-
-	/// Call when a fetch is completed. Should return true if self was mutated.
-	fn on_fetch_completed(&mut self) -> bool {
-		false
-	}
-
-	/// Returns Some(_) if the address can be re-used, otherwise None and the address is discarded.
-	fn maybe_recycle(self) -> Option<Self> {
-		None
-	}
 }
 
 pub trait GetBlockHeight<C: Chain> {

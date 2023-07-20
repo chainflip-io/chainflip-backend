@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use crate::witness::chain_source::{ChainClient, ChainStream};
-use cf_chains::Chain;
 use futures::FutureExt;
 use futures_core::FusedStream;
 use futures_util::{stream, StreamExt};
@@ -34,15 +33,7 @@ where
 	inner: Inner,
 	receiver: tokio::sync::watch::Receiver<(
 		Option<pallet_cf_chain_tracking::ChainState<Inner::Chain>>,
-		Vec<(
-			<Inner::Chain as Chain>::ChainAccount,
-			DepositChannelDetails<
-				Inner::Chain,
-				<state_chain_runtime::Runtime as pallet_cf_ingress_egress::Config<
-					<Inner::Chain as PalletInstanceAlias>::Instance,
-				>>::DepositChannel,
-			>,
-		)>,
+		Addresses<Inner>,
 	)>,
 }
 impl<Inner: ChunkedByVault> IngressAddresses<Inner>
@@ -62,28 +53,13 @@ where
 	// FOr a given header we only witness addresses opened at or before the header, the set of
 	// addresses each engine attempts to witness at a given block is consistent
 	fn addresses_for_header(index: Inner::Index, addresses: &Addresses<Inner>) -> Addresses<Inner> {
-		addresses
-			.iter()
-			.filter(|(_, details)| details.opened_at <= index)
-			.cloned()
-			.collect()
+		addresses.iter().filter(|details| details.opened_at <= index).cloned().collect()
 	}
 
 	async fn get_chain_state_and_addresses<StateChainClient: StorageApi + Send + Sync + 'static>(
 		state_chain_client: &StateChainClient,
 		block_hash: state_chain_runtime::Hash,
-	) -> (
-		Option<pallet_cf_chain_tracking::ChainState<Inner::Chain>>,
-		Vec<(
-			<Inner::Chain as Chain>::ChainAccount,
-			DepositChannelDetails<
-				Inner::Chain,
-				<state_chain_runtime::Runtime as pallet_cf_ingress_egress::Config<
-					<Inner::Chain as PalletInstanceAlias>::Instance,
-				>>::DepositChannel,
-			>,
-		)>,
-	)
+	) -> (Option<pallet_cf_chain_tracking::ChainState<Inner::Chain>>, Addresses<Inner>)
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 	{
@@ -96,7 +72,7 @@ where
 				.await
 				.expect(STATE_CHAIN_CONNECTION),
 			state_chain_client
-				.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
+				.storage_map_values::<pallet_cf_ingress_egress::DepositChannelLookup<
 					state_chain_runtime::Runtime,
 					<Inner::Chain as PalletInstanceAlias>::Instance,
 				>>(block_hash)
@@ -146,18 +122,7 @@ where
 {
 	type Index = Inner::Index;
 	type Hash = Inner::Hash;
-	type Data = (
-		Inner::Data,
-		Vec<(
-			<Inner::Chain as Chain>::ChainAccount,
-			DepositChannelDetails<
-				Inner::Chain,
-				<state_chain_runtime::Runtime as pallet_cf_ingress_egress::Config<
-					<Inner::Chain as PalletInstanceAlias>::Instance,
-				>>::DepositChannel,
-			>,
-		)>,
-	);
+	type Data = (Inner::Data, Addresses<Inner>);
 
 	type Client = IngressAddressesClient<Inner>;
 
@@ -252,15 +217,7 @@ where
 
 type ChainState<Inner> = pallet_cf_chain_tracking::ChainState<<Inner as ChunkedByVault>::Chain>;
 
-type Addresses<Inner> = Vec<(
-	<<Inner as ChunkedByVault>::Chain as Chain>::ChainAccount,
-	DepositChannelDetails<
-		<Inner as ChunkedByVault>::Chain,
-		<state_chain_runtime::Runtime as pallet_cf_ingress_egress::Config<
-			<<Inner as ChunkedByVault>::Chain as PalletInstanceAlias>::Instance,
-		>>::DepositChannel,
-	>,
-)>;
+type Addresses<Inner> = Vec<DepositChannelDetails<<Inner as ChunkedByVault>::Chain>>;
 
 pub struct IngressAddressesClient<Inner: ChunkedByVault>
 where
@@ -293,18 +250,7 @@ where
 {
 	type Index = Inner::Index;
 	type Hash = Inner::Hash;
-	type Data = (
-		Inner::Data,
-		Vec<(
-			<Inner::Chain as Chain>::ChainAccount,
-			DepositChannelDetails<
-				Inner::Chain,
-				<state_chain_runtime::Runtime as pallet_cf_ingress_egress::Config<
-					<Inner::Chain as PalletInstanceAlias>::Instance,
-				>>::DepositChannel,
-			>,
-		)>,
-	);
+	type Data = (Inner::Data, Addresses<Inner>);
 
 	async fn header_at_index(
 		&self,

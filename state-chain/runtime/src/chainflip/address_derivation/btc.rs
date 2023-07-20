@@ -1,14 +1,10 @@
 use super::AddressDerivation;
 use crate::{BitcoinVault, Validator};
 use cf_chains::{
-	address::AddressDerivationApi,
-	btc::{deposit_address::DepositAddress, BitcoinFetchId, ScriptPubkey},
-	Bitcoin, Chain,
+	address::AddressDerivationApi, btc::deposit_address::DepositAddress, Bitcoin, Chain,
 };
 use cf_primitives::{chains::assets::btc, ChannelId};
-use cf_traits::{DepositChannel, EpochInfo};
-use codec::{Decode, Encode};
-use scale_info::TypeInfo;
+use cf_traits::EpochInfo;
 use sp_runtime::DispatchError;
 
 impl AddressDerivationApi<Bitcoin> for AddressDerivation {
@@ -17,11 +13,13 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 		channel_id: ChannelId,
 	) -> Result<<Bitcoin as Chain>::ChainAccount, DispatchError> {
 		// We don't expect to hit this case in the wild because we reuse addresses.
+		// TODO: investigate this claim - we don't re-use addresses for Bitcoin.
 		let channel_id: u32 = channel_id
 			.try_into()
 			.map_err(|_| "Intent ID is too large for BTC address derivation")?;
 
 		Ok(DepositAddress::new(
+			// TODO: Check if this is correct. Should maybe use CurrentVaultEpochAndState.
 			BitcoinVault::vaults(Validator::epoch_index())
 				.ok_or(DispatchError::Other("No vault for epoch"))?
 				.public_key
@@ -29,48 +27,6 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 			channel_id,
 		)
 		.script_pubkey())
-	}
-}
-
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
-pub struct BitcoinDepositAddress {
-	pub channel_id: u64,
-	pub address: ScriptPubkey,
-	pub asset: btc::Asset,
-}
-
-impl DepositChannel<Bitcoin> for BitcoinDepositAddress {
-	type Address = ScriptPubkey;
-	type DepositFetchId = BitcoinFetchId;
-	type AddressDerivation = AddressDerivation;
-
-	fn new(
-		channel_id: ChannelId,
-		asset: <Bitcoin as Chain>::ChainAsset,
-	) -> Result<Self, DispatchError>
-	where
-		Self: Sized,
-	{
-		let address = <AddressDerivation as AddressDerivationApi<Bitcoin>>::generate_address(
-			asset, channel_id,
-		)?;
-		Ok(Self { address, asset, channel_id })
-	}
-
-	fn get_address(&self) -> Self::Address {
-		self.address.clone()
-	}
-
-	fn get_fetch_id(&self) -> Option<Self::DepositFetchId> {
-		Some(BitcoinFetchId(self.channel_id))
-	}
-
-	fn get_channel_id(&self) -> ChannelId {
-		self.channel_id
-	}
-
-	fn get_asset(&self) -> <Bitcoin as Chain>::ChainAsset {
-		self.asset
 	}
 }
 

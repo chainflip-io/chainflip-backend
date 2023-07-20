@@ -75,13 +75,9 @@ pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
 
 pub use chainflip::chain_instances::*;
 use chainflip::{
-	address_derivation::{
-		btc::BitcoinDepositAddress, dot::PolkadotDepositAddress, eth::EthereumDepositAddress,
-	},
-	epoch_transition::ChainflipEpochTransitions,
-	BroadcastReadyProvider, BtcEnvironment, BtcVaultTransitionHandler, ChainAddressConverter,
-	ChainflipHeartbeat, EthEnvironment, EthVaultTransitionHandler,
-	TokenholderGovernanceBroadcaster,
+	epoch_transition::ChainflipEpochTransitions, BroadcastReadyProvider, BtcEnvironment,
+	BtcVaultTransitionHandler, ChainAddressConverter, ChainflipHeartbeat, EthEnvironment,
+	EthVaultTransitionHandler, TokenholderGovernanceBroadcaster,
 };
 
 use chainflip::{all_vaults_rotator::AllVaultRotator, DotEnvironment, DotVaultTransitionHandler};
@@ -284,7 +280,6 @@ impl pallet_cf_ingress_egress::Config<EthereumInstance> for Runtime {
 	type Broadcaster = EthereumBroadcaster;
 	type DepositHandler = chainflip::EthDepositHandler;
 	type CcmHandler = Swapping;
-	type DepositChannel = EthereumDepositAddress;
 	type ChainTracking = EthereumChainTracking;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 }
@@ -301,7 +296,6 @@ impl pallet_cf_ingress_egress::Config<PolkadotInstance> for Runtime {
 	type Broadcaster = PolkadotBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::DotDepositHandler;
-	type DepositChannel = PolkadotDepositAddress;
 	type ChainTracking = PolkadotChainTracking;
 	type CcmHandler = Swapping;
 }
@@ -318,7 +312,6 @@ impl pallet_cf_ingress_egress::Config<BitcoinInstance> for Runtime {
 	type Broadcaster = BitcoinBroadcaster;
 	type WeightInfo = pallet_cf_ingress_egress::weights::PalletWeight<Runtime>;
 	type DepositHandler = chainflip::BtcDepositHandler;
-	type DepositChannel = BitcoinDepositAddress;
 	type ChainTracking = BitcoinChainTracking;
 	type CcmHandler = Swapping;
 }

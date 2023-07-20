@@ -15,7 +15,6 @@ pub use ethabi::{
 	ethereum_types::{H256, U256},
 	Address, Hash as TxHash, Token, Uint, Word,
 };
-use ethereum_types::H160;
 use libsecp256k1::{curve::Scalar, PublicKey, SecretKey};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -49,6 +48,7 @@ impl Chain for Ethereum {
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
 	type DepositFetchId = EthereumFetchId;
+	type DepositChannelState = DeploymentStatus;
 }
 
 impl ChainCrypto for Ethereum {
@@ -567,11 +567,64 @@ impl From<H256> for TransactionHash {
 	}
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
+#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug, Default)]
 pub enum DeploymentStatus {
-	Deployed,
-	Pending,
+	#[default]
 	Undeployed,
+	Pending,
+	Deployed,
+}
+
+impl ChannelLifecycleHooks for DeploymentStatus {
+	/// Addresses that are Pending cannot be fetched.
+	fn can_fetch(&self) -> bool {
+		*self != Self::Pending
+	}
+
+	/// Undeployed addresses need to be marked as Pending until the fetch is made.
+	fn on_fetch_scheduled(&mut self) -> bool {
+		match self {
+			Self::Undeployed => {
+				*self = Self::Pending;
+				true
+			},
+			_ => false,
+		}
+	}
+
+	/// A completed fetch should be in either the pending or deployed state. Confirmation of a fetch
+	/// implies that the address is now deployed.
+	fn on_fetch_completed(&mut self) -> bool {
+		match self {
+			Self::Pending => {
+				*self = Self::Deployed;
+				true
+			},
+			Self::Deployed => false,
+			Self::Undeployed => {
+				#[cfg(test)]
+				{
+					panic!("Cannot finalize fetch to an undeployed address")
+				}
+				#[cfg(not(test))]
+				{
+					log::error!("Cannot finalize fetch to an undeployed address");
+					*self = Self::Deployed;
+					false
+				}
+			},
+		}
+	}
+
+	/// Undeployed Addresses should not be recycled.
+	/// Other address types *can* be recycled.
+	fn maybe_recycle(self) -> Option<Self> {
+		if self == Self::Undeployed {
+			None
+		} else {
+			Some(Self::Deployed)
+		}
+	}
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
@@ -580,15 +633,13 @@ pub enum EthereumFetchId {
 	Undeployed(ChannelId),
 }
 
-impl ChannelIdConstructor for EthereumFetchId {
-	type Address = H160;
-
-	fn deployed(_channel_id: u64, address: Self::Address) -> Self {
-		Self::Deployed(address)
-	}
-
-	fn undeployed(channel_id: u64, _address: Self::Address) -> Self {
-		Self::Undeployed(channel_id)
+impl From<&DepositChannel<Ethereum>> for EthereumFetchId {
+	fn from(channel: &DepositChannel<Ethereum>) -> Self {
+		match channel.state {
+			DeploymentStatus::Undeployed => EthereumFetchId::Undeployed(channel.channel_id),
+			DeploymentStatus::Pending => EthereumFetchId::Deployed(channel.address),
+			DeploymentStatus::Deployed => EthereumFetchId::Deployed(channel.address),
+		}
 	}
 }
 
@@ -723,5 +774,40 @@ mod verification_tests {
 			),
 			AggKeyVerificationError::NoMatch
 		);
+	}
+}
+
+#[cfg(test)]
+mod lifecycle_tests {
+	use super::*;
+	#[test]
+	fn eth_deposit_address_lifecycle() {
+		// Initial state is undeployed.
+		let mut state = DeploymentStatus::default();
+		assert_eq!(state, DeploymentStatus::Undeployed);
+		assert!(state.can_fetch());
+
+		// Pending channels can't be fetched from.
+		assert!(state.on_fetch_scheduled());
+		assert_eq!(state, DeploymentStatus::Pending);
+		assert!(!state.can_fetch());
+
+		// Trying to schedule the fetch on a pending channel has no effect.
+		assert!(!state.on_fetch_scheduled());
+		assert_eq!(state, DeploymentStatus::Pending);
+		assert!(!state.can_fetch());
+
+		// On completion, the pending channel is now deployed and be fetched from again.
+		assert!(state.on_fetch_completed());
+		assert_eq!(state, DeploymentStatus::Deployed);
+		assert!(state.can_fetch());
+
+		// Channel is now in its final deployed state and be fetched from at any time.
+		assert!(!state.on_fetch_scheduled());
+		assert!(state.can_fetch());
+		assert!(!state.on_fetch_completed());
+		assert!(state.can_fetch());
+		assert_eq!(state, DeploymentStatus::Deployed);
+		assert!(!state.on_fetch_scheduled());
 	}
 }

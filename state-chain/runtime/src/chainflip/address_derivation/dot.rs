@@ -1,13 +1,6 @@
 use crate::Vec;
-use cf_chains::{
-	address::AddressDerivationApi,
-	dot::{PolkadotAccountId, PolkadotChannelId},
-	Chain, Polkadot,
-};
+use cf_chains::{address::AddressDerivationApi, dot::PolkadotAccountId, Chain, Polkadot};
 use cf_primitives::{chains::assets::dot, ChannelId};
-use cf_traits::DepositChannel;
-use codec::{Decode, Encode};
-use scale_info::TypeInfo;
 use sp_runtime::{
 	traits::{BlakeTwo256, Hash},
 	DispatchError,
@@ -31,6 +24,7 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 			.ok_or(DispatchError::Other("Vault Account does not exist."))?;
 
 		// Because we re-use addresses, we don't expect to hit this case in the wild.
+		// TODO: investigate this claim - we don't re-use addresses for Polkadot.
 		if channel_id > u16::MAX.into() {
 			return Err(DispatchError::Other(
 				"Intent ID too large. Polkadot can only support up to u16 addresses",
@@ -49,43 +43,6 @@ impl AddressDerivationApi<Polkadot> for AddressDerivation {
 		let payload_hash = BlakeTwo256::hash(&payload);
 
 		Ok(PolkadotAccountId::from_aliased(*payload_hash.as_fixed_bytes()))
-	}
-}
-
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
-pub struct PolkadotDepositAddress {
-	pub channel_id: PolkadotChannelId,
-	pub address: PolkadotAccountId,
-	pub asset: dot::Asset,
-}
-
-impl DepositChannel<Polkadot> for PolkadotDepositAddress {
-	type AddressDerivation = AddressDerivation;
-
-	fn new(channel_id: u64, asset: <Polkadot as Chain>::ChainAsset) -> Result<Self, DispatchError>
-	where
-		Self: Sized,
-	{
-		let address = <AddressDerivation as AddressDerivationApi<Polkadot>>::generate_address(
-			asset, channel_id,
-		)?;
-		Ok(Self { channel_id, address, asset })
-	}
-
-	fn get_address(&self) -> Self::Address {
-		self.address
-	}
-
-	fn get_fetch_id(&self) -> Option<Self::DepositFetchId> {
-		Some(self.channel_id)
-	}
-
-	fn get_channel_id(&self) -> u64 {
-		self.channel_id
-	}
-
-	fn get_asset(&self) -> <Polkadot as Chain>::ChainAsset {
-		self.asset
 	}
 }
 

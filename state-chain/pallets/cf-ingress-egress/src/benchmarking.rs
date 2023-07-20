@@ -2,7 +2,10 @@
 
 use super::*;
 use crate::DisabledEgressAssets;
-use cf_chains::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
+use cf_chains::{
+	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
+	DepositChannel,
+};
 use frame_benchmarking::{account, benchmarks_instance_pallet};
 
 benchmarks_instance_pallet! {
@@ -22,7 +25,7 @@ benchmarks_instance_pallet! {
 		let deposit_amount: <<T as Config<I>>::TargetChain as Chain>::ChainAmount = BenchmarkValue::benchmark_value();
 		DepositChannelLookup::<T, I>::insert(&deposit_address, DepositChannelDetails {
 			opened_at: TargetChainBlockNumber::<T, I>::benchmark_value(),
-			deposit_channel: T::DepositChannel::new(
+			deposit_channel: DepositChannel::generate_new::<<T as Config<I>>::AddressDerivation>(
 				1,
 				source_asset,
 			).unwrap()
@@ -55,13 +58,13 @@ benchmarks_instance_pallet! {
 			let source_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
 			let new = DepositChannelDetails {
 				opened_at: TargetChainBlockNumber::<T, I>::benchmark_value(),
-				deposit_channel: T::DepositChannel::new(
+				deposit_channel: DepositChannel::generate_new::<<T as Config<I>>::AddressDerivation>(
 					1,
 					source_asset,
 				).unwrap()
 			};
 			DepositChannelLookup::<T, I>::insert(deposit_address.clone(), new);
-			addresses.push((deposit_fetch_id, deposit_address));
+			addresses.push(deposit_address);
 		}
 	}: { let _ = Pallet::<T, I>::finalise_ingress(origin, addresses); }
 

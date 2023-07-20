@@ -165,6 +165,18 @@ pub trait StorageApi {
 		&self,
 		block_hash: state_chain_runtime::Hash,
 	) -> RpcResult<Vec<(<StorageMap as StorageMapAssociatedTypes>::Key, StorageMap::Value)>>;
+
+	async fn storage_map_values<StorageMap: StorageMapAssociatedTypes + 'static>(
+		&self,
+		block_hash: state_chain_runtime::Hash,
+	) -> RpcResult<Vec<StorageMap::Value>> {
+		Ok(self
+			.storage_map::<StorageMap>(block_hash)
+			.await?
+			.into_iter()
+			.map(|(_k, v)| v)
+			.collect())
+	}
 }
 
 #[async_trait]

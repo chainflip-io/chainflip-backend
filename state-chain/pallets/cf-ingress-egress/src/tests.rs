@@ -1,24 +1,27 @@
 use crate::{
-	mock::*, ChannelAction, ChannelIdCounter, CrossChainMessage, DepositChannelDetails,
+	mock::*, Call as PalletCall, ChannelAction, ChannelIdCounter, CrossChainMessage,
 	DepositChannelLookup, DepositChannelPool, DepositWitness, DisabledEgressAssets, Error,
 	Event as PalletEvent, FetchOrTransfer, MinimumDeposit, Pallet, ScheduledEgressCcm,
 	ScheduledEgressFetchOrTransfer,
 };
 use cf_chains::{
-	address::{AddressConverter, AddressDerivationApi},
-	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
+	address::AddressConverter, eth::EthereumFetchId, DepositChannel, ExecutexSwapAndCall,
+	SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
 use cf_test_utilities::assert_has_event;
 use cf_traits::{
 	mocks::{
 		address_converter::MockAddressConverter,
-		api_call::{MockEthEnvironment, MockEthereumApiCall},
+		api_call::{MockAllBatch, MockEthEnvironment, MockEthereumApiCall},
 		ccm_handler::{CcmRequest, MockCcmHandler},
 	},
-	DepositApi, DepositChannel, EgressApi, GetBlockHeight,
+	DepositApi, EgressApi, GetBlockHeight,
 };
-use frame_support::{assert_noop, assert_ok, traits::Hooks};
+use frame_support::{
+	assert_noop, assert_ok,
+	traits::{Hooks, OriginTrait},
+};
 use sp_core::H160;
 
 const ALICE_ETH_ADDRESS: EthereumAddress = [100u8; 20];
@@ -33,24 +36,6 @@ fn expect_size_of_address_pool(size: usize) {
 		DepositChannelPool::<Test>::iter_keys().count(),
 		size,
 		"Address pool size is incorrect!"
-	);
-}
-
-fn mark_as_deployed(address: H160, channel_id: u64) {
-	let deposit_channel = DepositChannelLookup::<Test>::get(address).expect("Channel not found");
-	let new_eth_depo_addr = eth_mock_deposit_channel::MockDepositChannel {
-		address,
-		channel_id,
-		deployment_status: eth_mock_deposit_channel::DeploymentStatus::Deployed,
-		deposit_fetch_id: deposit_channel.deposit_channel.get_deposit_fetch_id(),
-		asset: deposit_channel.deposit_channel.get_asset(),
-	};
-	DepositChannelLookup::<Test>::insert(
-		address,
-		DepositChannelDetails {
-			deposit_channel: new_eth_depo_addr,
-			opened_at: 1, //TargetChainBlockNumber::<Test, Instance1>::from(1),
-		},
 	);
 }
 
@@ -210,16 +195,6 @@ fn request_address_and_deposit(
 	(id, address)
 }
 
-fn helper_generate_address_for(
-	intent_id: u64,
-	asset: eth::Asset,
-) -> <Ethereum as Chain>::ChainAccount {
-	<<Test as crate::Config>::AddressDerivation as AddressDerivationApi<
-		Ethereum,
-	>>::generate_address(asset, intent_id)
-	.unwrap()
-}
-
 #[test]
 fn can_schedule_deposit_fetch() {
 	new_test_ext().execute_with(|| {
@@ -229,26 +204,14 @@ fn can_schedule_deposit_fetch() {
 		request_address_and_deposit(2u64, eth::Asset::Eth);
 		request_address_and_deposit(3u64, eth::Asset::Flip);
 
-		assert_eq!(
-			ScheduledEgressFetchOrTransfer::<Test>::get(),
-			vec![
-				FetchOrTransfer::<Ethereum>::Fetch {
-					channel_id: 1u64,
-					asset: ETH_ETH,
-					deposit_address: helper_generate_address_for(1u64, eth::Asset::Eth)
-				},
-				FetchOrTransfer::<Ethereum>::Fetch {
-					channel_id: 2u64,
-					asset: ETH_ETH,
-					deposit_address: helper_generate_address_for(2u64, eth::Asset::Eth)
-				},
-				FetchOrTransfer::<Ethereum>::Fetch {
-					channel_id: 3u64,
-					asset: ETH_FLIP,
-					deposit_address: helper_generate_address_for(3u64, eth::Asset::Flip)
-				},
+		assert!(matches!(
+			&ScheduledEgressFetchOrTransfer::<Test>::get()[..],
+			&[
+				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_ETH, .. },
+				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_ETH, .. },
+				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_FLIP, .. },
 			]
-		);
+		));
 
 		assert_has_event::<Test>(RuntimeEvent::IngressEgress(
 			crate::Event::DepositFetchesScheduled { channel_id: 1, asset: eth::Asset::Eth },
@@ -256,31 +219,15 @@ fn can_schedule_deposit_fetch() {
 
 		request_address_and_deposit(4u64, eth::Asset::Eth);
 
-		assert_eq!(
-			ScheduledEgressFetchOrTransfer::<Test>::get(),
-			vec![
-				FetchOrTransfer::<Ethereum>::Fetch {
-					channel_id: 1u64,
-					asset: ETH_ETH,
-					deposit_address: helper_generate_address_for(1u64, eth::Asset::Eth)
-				},
-				FetchOrTransfer::<Ethereum>::Fetch {
-					channel_id: 2u64,
-					asset: ETH_ETH,
-					deposit_address: helper_generate_address_for(2u64, eth::Asset::Eth)
-				},
-				FetchOrTransfer::<Ethereum>::Fetch {
-					channel_id: 3u64,
-					asset: ETH_FLIP,
-					deposit_address: helper_generate_address_for(3u64, eth::Asset::Flip)
-				},
-				FetchOrTransfer::<Ethereum>::Fetch {
-					channel_id: 4u64,
-					asset: ETH_ETH,
-					deposit_address: helper_generate_address_for(4u64, eth::Asset::Eth)
-				},
+		assert!(matches!(
+			&ScheduledEgressFetchOrTransfer::<Test>::get()[..],
+			&[
+				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_ETH, .. },
+				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_ETH, .. },
+				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_FLIP, .. },
+				FetchOrTransfer::<Ethereum>::Fetch { asset: ETH_ETH, .. },
 			]
-		);
+		));
 	});
 }
 
@@ -395,10 +342,7 @@ fn addresses_are_getting_reused() {
 		.inspect_storage(|(channel_id, address, _asset)| {
 			expect_size_of_address_pool(1);
 			// Address 1 is free to use and in the pool of available addresses
-			assert_eq!(
-				DepositChannelPool::<Test, _>::get(channel_id).unwrap().get_address(),
-				*address
-			);
+			assert_eq!(DepositChannelPool::<Test, _>::get(channel_id).unwrap().address, *address);
 		})
 		.request_deposit_addresses(&[(ALICE, eth::Asset::Eth)])
 		// The address should have been taken from the pool and the id counter unchanged.
@@ -418,10 +362,7 @@ fn proof_address_pool_integrity() {
 		expect_size_of_address_pool(0);
 		IngressEgress::on_finalize(1);
 		for (id, address) in channel_details {
-			assert_ok!(IngressEgress::finalise_ingress(
-				RuntimeOrigin::root(),
-				vec![(cf_chains::eth::EthereumChannelId::Undeployed(id), address)]
-			));
+			assert_ok!(IngressEgress::finalise_ingress(RuntimeOrigin::root(), vec![address]));
 			IngressEgress::close_channel(id, address);
 		}
 		// Expect all addresses to be available
@@ -440,10 +381,7 @@ fn create_new_address_while_pool_is_empty() {
 			.collect::<Vec<_>>();
 		IngressEgress::on_finalize(1);
 		for (id, address) in channel_details {
-			assert_ok!(IngressEgress::finalise_ingress(
-				RuntimeOrigin::root(),
-				vec![(cf_chains::eth::EthereumChannelId::Undeployed(id), address)]
-			));
+			assert_ok!(IngressEgress::finalise_ingress(RuntimeOrigin::root(), vec![address]));
 			IngressEgress::close_channel(id, address);
 		}
 		IngressEgress::on_initialize(EXPIRY_BLOCK);
@@ -459,26 +397,20 @@ fn create_new_address_while_pool_is_empty() {
 #[test]
 fn reused_address_channel_id_matches() {
 	new_test_ext().execute_with(|| {
-		const INTENT_ID: ChannelId = 0;
-		let eth_address = <<Test as crate::Config>::AddressDerivation as AddressDerivationApi<
-			Ethereum,
-		>>::generate_address(eth::Asset::Eth, INTENT_ID)
+		const CHANNEL_ID: ChannelId = 0;
+		let new_channel = DepositChannel::<Ethereum>::generate_new::<
+			<Test as crate::Config>::AddressDerivation,
+		>(CHANNEL_ID, eth::Asset::Eth)
 		.unwrap();
-		let new_address =
-			<<Test as crate::Config>::DepositChannel as DepositChannel<Ethereum>>::new(
-				INTENT_ID,
-				eth::Asset::Eth,
-			)
-			.unwrap();
-		DepositChannelPool::<Test, _>::insert(INTENT_ID, new_address);
+		DepositChannelPool::<Test, _>::insert(CHANNEL_ID, new_channel.clone());
 		let (reused_channel_id, reused_address) = IngressEgress::open_channel(
 			eth::Asset::Eth,
 			ChannelAction::LiquidityProvision { lp_account: 0 },
 		)
 		.unwrap();
 		// The reused details should be the same as before.
-		assert_eq!(reused_channel_id, INTENT_ID);
-		assert_eq!(eth_address, reused_address);
+		assert_eq!(new_channel.channel_id, reused_channel_id);
+		assert_eq!(new_channel.address, reused_address);
 	});
 }
 
@@ -506,17 +438,15 @@ fn can_process_ccm_deposit() {
 			Some(ccm.clone()),
 		));
 
-		let opened_at = BlockNumberProvider::get_block_height();
-
 		// CCM action is stored.
-		let deposit_address = hex_literal::hex!("c6b749fe356b08fdde333b41bc77955482380836").into();
-		System::assert_last_event(RuntimeEvent::IngressEgress(
-			crate::Event::<Test>::StartWitnessing {
+		let deposit_address = cf_test_utilities::assert_events_match!(
+			Test,
+			RuntimeEvent::IngressEgress(crate::Event::<Test>::StartWitnessing {
 				deposit_address,
-				source_asset: from_asset,
 				opened_at,
-			},
-		));
+				..
+			}) if opened_at == BlockNumberProvider::get_block_height() => deposit_address
+		);
 
 		// Making a deposit should trigger CcmHandler.
 		assert_ok!(IngressEgress::process_single_deposit(
@@ -643,16 +573,116 @@ fn multi_use_deposit_address_different_blocks() {
 fn multi_use_deposit_same_block() {
 	const ETH: eth::Asset = eth::Asset::Eth;
 	new_test_ext()
-		.then_execute_at_next_block(|_| {
-			let (_, deposit_address) = request_address_and_deposit(ALICE, ETH);
-			mark_as_deployed(deposit_address, 1);
-			Pallet::<Test, _>::process_single_deposit(deposit_address, ETH, 1, Default::default())
-				.unwrap();
+		.request_deposit_addresses(&[(ALICE, ETH)])
+		.map_context(|mut ctx| {
+			assert!(ctx.len() == 1);
+			ctx.pop().unwrap()
 		})
-		.inspect_storage(|_| {
+		.inspect_storage(|(_, deposit_address, _)| {
+			assert!(
+				DepositChannelLookup::<Test, _>::get(deposit_address)
+					.unwrap()
+					.deposit_channel
+					.state == cf_chains::eth::DeploymentStatus::Undeployed
+			);
+		})
+		.then_apply_extrinsics(|&(_, deposit_address, asset)| {
+			[(
+				OriginTrait::root(),
+				PalletCall::<Test, _>::process_deposits {
+					deposit_witnesses: vec![
+						DepositWitness {
+							deposit_address,
+							asset,
+							amount: MinimumDeposit::<Test>::get(asset),
+							tx_id: Default::default(),
+						},
+						DepositWitness {
+							deposit_address,
+							asset,
+							amount: MinimumDeposit::<Test>::get(asset),
+							tx_id: Default::default(),
+						},
+					],
+				},
+				Ok(()),
+			)]
+		})
+		.inspect_storage(|(channel_id, deposit_address, _)| {
 			assert_eq!(
-				ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(),
-				0
+				DepositChannelLookup::<Test, _>::get(deposit_address)
+					.unwrap()
+					.deposit_channel
+					.state,
+				cf_chains::eth::DeploymentStatus::Pending
+			);
+			let scheduled_fetches = ScheduledEgressFetchOrTransfer::<Test, _>::get();
+			let pending_api_calls = MockEgressBroadcaster::get_pending_api_calls();
+			let pending_callbacks = MockEgressBroadcaster::get_pending_callbacks();
+			assert!(scheduled_fetches.len() == 1);
+			assert!(pending_api_calls.len() == 1);
+			assert!(pending_callbacks.len() == 1);
+			assert!(
+				matches!(
+					scheduled_fetches.last().unwrap(),
+					FetchOrTransfer::Fetch {
+						asset: ETH,
+						..
+					}
+				),
+				"Expected one pending fetch to still be scheduled for the deposit address, got: {:?}",
+				scheduled_fetches
+			);
+			assert!(
+				matches!(
+					pending_api_calls.last().unwrap(),
+					MockEthereumApiCall::AllBatch(MockAllBatch {
+						fetch_params,
+						..
+					}) if matches!(
+						fetch_params.last().unwrap().deposit_fetch_id,
+						EthereumFetchId::Undeployed(id) if id == *channel_id
+					)
+				),
+				"Expected one AllBatch apicall to be scheduled for address deployment, got {:?}.",
+				pending_api_calls
+			);
+			assert!(matches!(
+				pending_callbacks.last().unwrap(),
+				RuntimeCall::IngressEgress(PalletCall::finalise_ingress { .. })
+			));
+		})
+		.then_execute_at_next_block(|ctx| {
+			MockEgressBroadcaster::dispatch_all_callbacks();
+			ctx
+		})
+		.inspect_storage(|(_, deposit_address, _)| {
+			assert_eq!(
+				DepositChannelLookup::<Test, _>::get(deposit_address)
+					.unwrap()
+					.deposit_channel
+					.state,
+				cf_chains::eth::DeploymentStatus::Deployed
+			);
+			let scheduled_fetches = ScheduledEgressFetchOrTransfer::<Test, _>::get();
+			let pending_api_calls = MockEgressBroadcaster::get_pending_api_calls();
+			let pending_callbacks = MockEgressBroadcaster::get_pending_callbacks();
+			assert!(scheduled_fetches.is_empty());
+			assert!(pending_api_calls.len() == 2);
+			assert!(pending_callbacks.len() == 1);
+			assert!(
+				matches!(
+					&pending_api_calls[1],
+					MockEthereumApiCall::AllBatch(MockAllBatch {
+						fetch_params,
+						..
+					}) if matches!(
+						fetch_params.last().unwrap().deposit_fetch_id,
+						EthereumFetchId::Deployed(address) if address == *deposit_address
+					)
+				),
+				"Expected a new AllBatch apicall to be scheduled to fetch from a deployed address, got {:?}.",
+				pending_api_calls
 			);
 		});
 }
@@ -722,7 +752,7 @@ fn handle_pending_deployment() {
 	const ETH: eth::Asset = eth::Asset::Eth;
 	new_test_ext().execute_with(|| {
 		// Initial request.
-		let (channel_id, deposit_address) = request_address_and_deposit(ALICE, eth::Asset::Eth);
+		let (_, deposit_address) = request_address_and_deposit(ALICE, eth::Asset::Eth);
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 1);
 		// Process deposits.
 		IngressEgress::on_finalize(1);
@@ -738,10 +768,7 @@ fn handle_pending_deployment() {
 		IngressEgress::on_finalize(1);
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 1);
 		// Now finalize the first fetch and deploy the address with that.
-		assert_ok!(IngressEgress::finalise_ingress(
-			RuntimeOrigin::root(),
-			vec![(cf_chains::eth::EthereumChannelId::Undeployed(channel_id), deposit_address)]
-		));
+		assert_ok!(IngressEgress::finalise_ingress(RuntimeOrigin::root(), vec![deposit_address]));
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 1);
 		// Process deposit again amd expect the fetch request to be picked up.
 		IngressEgress::on_finalize(1);
@@ -753,7 +780,7 @@ fn handle_pending_deployment() {
 fn handle_pending_deployment_same_block() {
 	new_test_ext().execute_with(|| {
 		// Initial request.
-		let (channel_id, deposit_address) = request_address_and_deposit(ALICE, eth::Asset::Eth);
+		let (_, deposit_address) = request_address_and_deposit(ALICE, eth::Asset::Eth);
 		Pallet::<Test, _>::process_single_deposit(
 			deposit_address,
 			eth::Asset::Eth,
@@ -773,10 +800,7 @@ fn handle_pending_deployment_same_block() {
 		// Expect the request still to be in the queue.
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 1);
 		// Simulate the finalization of the first fetch request.
-		assert_ok!(IngressEgress::finalise_ingress(
-			RuntimeOrigin::root(),
-			vec![(cf_chains::eth::EthereumChannelId::Undeployed(channel_id), deposit_address)]
-		));
+		assert_ok!(IngressEgress::finalise_ingress(RuntimeOrigin::root(), vec![deposit_address]));
 		// Process deposit (again).
 		IngressEgress::on_finalize(3);
 		// All fetch requests should be processed.

@@ -1,10 +1,9 @@
 use crate::DepositWitness;
 pub use crate::{self as pallet_cf_ingress_egress};
-use cf_chains::eth::EthereumChannelId;
 pub use cf_chains::{
 	address::{AddressDerivationApi, ForeignChainAddress},
 	eth::api::{EthereumApi, EthereumReplayProtection},
-	CcmDepositMetadata, Chain, ChainAbi, ChainEnvironment,
+	CcmDepositMetadata, Chain, ChainAbi, ChainEnvironment, DepositChannel,
 };
 use cf_primitives::ChannelId;
 pub use cf_primitives::{
@@ -19,13 +18,11 @@ use cf_traits::{
 		broadcaster::MockBroadcaster,
 		ccm_handler::MockCcmHandler,
 	},
-	DepositApi, DepositChannel, DepositHandler, GetBlockHeight,
+	DepositApi, DepositHandler, GetBlockHeight,
 };
-use codec::{Decode, Encode};
 use frame_support::traits::{OriginTrait, UnfilteredDispatchable};
 use frame_system as system;
-use scale_info::TypeInfo;
-use sp_core::{H160, H256};
+use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
 	traits::{BlakeTwo256, IdentityLookup, Zero},
@@ -81,98 +78,6 @@ impl DepositHandler<Ethereum> for MockDepositHandler {}
 
 pub type MockEgressBroadcaster =
 	MockBroadcaster<(MockEthereumApiCall<MockEthEnvironment>, RuntimeCall)>;
-pub mod eth_mock_deposit_channel {
-	use super::*;
-
-	#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
-	pub enum DeploymentStatus {
-		Deployed,
-		Pending,
-		Undeployed,
-	}
-
-	#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
-	pub struct MockDepositChannel {
-		pub address: H160,
-		pub channel_id: u64,
-		pub deployment_status: DeploymentStatus,
-		pub deposit_fetch_id: EthereumChannelId,
-		pub asset: <Ethereum as Chain>::ChainAsset,
-	}
-
-	impl DepositChannel<Ethereum> for MockDepositChannel {
-		type Address = H160;
-		type DepositFetchId = EthereumChannelId;
-		type AddressDerivation = ();
-
-		fn get_address(&self) -> Self::Address {
-			self.address
-		}
-
-		fn skip_broadcast(mut self) -> (Self, bool)
-		where
-			Self: Sized,
-		{
-			match self.deployment_status {
-				DeploymentStatus::Deployed => (self, true),
-				DeploymentStatus::Pending => (self, false),
-				DeploymentStatus::Undeployed => {
-					self.deployment_status = DeploymentStatus::Pending;
-					(self, true)
-				},
-			}
-		}
-
-		fn get_deposit_fetch_id(&self) -> Self::DepositFetchId {
-			self.deposit_fetch_id
-		}
-
-		fn new(
-			channel_id: u64,
-			asset: <Ethereum as Chain>::ChainAsset,
-		) -> Result<MockDepositChannel, sp_runtime::DispatchError> {
-			let address =
-				<() as AddressDerivationApi<Ethereum>>::generate_address(asset, channel_id)?;
-			Ok(Self {
-				address,
-				channel_id,
-				asset,
-				deployment_status: DeploymentStatus::Undeployed,
-				deposit_fetch_id: EthereumChannelId::Undeployed(channel_id),
-			})
-		}
-
-		fn maybe_recycle(&self) -> bool
-		where
-			Self: Sized,
-		{
-			self.deployment_status == DeploymentStatus::Deployed
-		}
-
-		fn finalize(mut self) -> Self
-		where
-			Self: Sized,
-		{
-			match self.deployment_status {
-				DeploymentStatus::Pending => {
-					self.deposit_fetch_id = EthereumChannelId::Deployed(self.address);
-					self.deployment_status = DeploymentStatus::Deployed;
-				},
-				DeploymentStatus::Undeployed => self.deployment_status = DeploymentStatus::Pending,
-				_ => (),
-			}
-			self
-		}
-
-		fn get_channel_id(&self) -> u64 {
-			self.channel_id
-		}
-
-		fn get_asset(&self) -> <Ethereum as Chain>::ChainAsset {
-			self.asset
-		}
-	}
-}
 
 pub struct BlockNumberProvider;
 
@@ -184,11 +89,22 @@ impl GetBlockHeight<Ethereum> for BlockNumberProvider {
 	}
 }
 
+pub struct MockAddressDerivation;
+
+impl AddressDerivationApi<Ethereum> for MockAddressDerivation {
+	fn generate_address(
+		_source_asset: assets::eth::Asset,
+		channel_id: ChannelId,
+	) -> Result<<Ethereum as Chain>::ChainAccount, sp_runtime::DispatchError> {
+		Ok([channel_id as u8; 20].into())
+	}
+}
+
 impl crate::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type RuntimeCall = RuntimeCall;
 	type TargetChain = Ethereum;
-	type AddressDerivation = ();
+	type AddressDerivation = MockAddressDerivation;
 	type AddressConverter = MockAddressConverter;
 	type LpBalance = Self;
 	type SwapDepositHandler = Self;
@@ -196,7 +112,6 @@ impl crate::Config for Test {
 	type Broadcaster = MockEgressBroadcaster;
 	type DepositHandler = MockDepositHandler;
 	type CcmHandler = MockCcmHandler;
-	type DepositChannel = eth_mock_deposit_channel::MockDepositChannel;
 	type ChainTracking = BlockNumberProvider;
 	type WeightInfo = ();
 }
