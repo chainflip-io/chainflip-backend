@@ -132,7 +132,7 @@ benchmarks! {
 			minor: 2,
 			patch: 3
 		};
-	}: _(RawOrigin::Signed(caller.clone()), version.clone())
+	}: _(RawOrigin::Signed(caller.clone()), version)
 	verify {
 		let validator_id: ValidatorIdOf<T> = caller.into();
 		assert_eq!(Pallet::<T>::node_cfe_version(validator_id), version)

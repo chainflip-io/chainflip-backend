@@ -1,7 +1,8 @@
-use crate::{address::ForeignChainAddress, Chain, ChannelIdConstructor};
+use crate::{address::ForeignChainAddress, Chain};
+
 use cf_primitives::{
 	chains::{assets, AnyChain},
-	AssetAmount,
+	AssetAmount, ChannelId,
 };
 use frame_support::traits::ConstBool;
 
@@ -16,17 +17,6 @@ impl Chain for AnyChain {
 	type ChainAsset = assets::any::Asset;
 	type ChainAccount = ForeignChainAddress;
 	type EpochStartData = ();
-	type DepositFetchId = ();
-}
-
-impl ChannelIdConstructor for () {
-	type Address = ForeignChainAddress;
-
-	fn deployed(_channel_id: u64, _address: Self::Address) -> Self {
-		unreachable!()
-	}
-
-	fn undeployed(_channel_id: u64, _address: Self::Address) -> Self {
-		unreachable!()
-	}
+	type DepositFetchId = ChannelId;
+	type DepositChannelState = ();
 }

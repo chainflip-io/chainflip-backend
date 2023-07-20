@@ -1,4 +1,5 @@
 pub mod builder;
+pub mod continuous;
 pub mod ingress_addresses;
 
 use cf_chains::Chain;
@@ -7,7 +8,7 @@ use futures_util::StreamExt;
 use crate::witness::{
 	chain_source::{aliases, BoxChainStream, ChainClient, ChainStream},
 	common::{BoxActiveAndFuture, ExternalChain, ExternalChainSource, RuntimeHasChain},
-	epoch_source::{self, Epoch},
+	epoch_source::{Epoch, VaultSource},
 };
 
 use super::ChunkedChainSource;
@@ -93,10 +94,12 @@ where
 
 	type Chain = TChainSource::Chain;
 
-	type Parameters = BoxActiveAndFuture<'static, epoch_source::Vault<TChainSource::Chain>>;
+	type Parameters = VaultSource<TChainSource::Chain>;
 
 	async fn stream(&self, vaults: Self::Parameters) -> BoxActiveAndFuture<'_, Item<'_, Self>> {
 		vaults
+			.into_stream()
+			.await
 			.then(move |mut vault| async move {
 				let (stream, client) = self.chain_source.stream_and_client().await;
 

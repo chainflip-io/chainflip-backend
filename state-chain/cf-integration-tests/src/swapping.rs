@@ -4,14 +4,12 @@ use cf_amm::{
 	range_orders::Liquidity,
 };
 use cf_chains::{
-	address::{AddressConverter, EncodedAddress},
+	address::{AddressConverter, AddressDerivationApi, EncodedAddress},
 	CcmDepositMetadata, Chain, Ethereum, ForeignChain, ForeignChainAddress, SwapOrigin,
 };
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount, STABLE_ASSET};
 use cf_test_utilities::{assert_events_eq, assert_events_match};
-use cf_traits::{
-	AccountRoleRegistry, AddressDerivationApi, EpochInfo, GetBlockHeight, LpBalanceApi,
-};
+use cf_traits::{AccountRoleRegistry, EpochInfo, GetBlockHeight, LpBalanceApi};
 use frame_support::{
 	assert_ok,
 	traits::{OnFinalize, OnIdle, OnNewAccount},

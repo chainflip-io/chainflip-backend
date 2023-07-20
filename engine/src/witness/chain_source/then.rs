@@ -64,6 +64,7 @@ impl<
 	type Chain = InnerSource::Chain;
 }
 
+#[derive(Clone)]
 pub struct MappedClient<InnerClient, ThenFn> {
 	inner_client: InnerClient,
 	then_fn: ThenFn,
