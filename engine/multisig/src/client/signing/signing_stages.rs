@@ -535,6 +535,8 @@ mod tests {
 			// Process the message and check that we get the correct error
 			if let SigningStageResult::Error(blamed, reason) = stage.process(messages).await {
 				assert_eq!(reason, SigningFailureReason::InvalidNumberOfPayloads);
+				// For this test we report our own index because we are the only participant. This
+				// does not matter, the code is the same.
 				assert_eq!(blamed, BTreeSet::from_iter([OWN_IDX]));
 			} else {
 				panic!("Unexpected SigningStageResult");

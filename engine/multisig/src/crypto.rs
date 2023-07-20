@@ -145,6 +145,11 @@ pub trait CryptoScheme: 'static + Clone + Send + Sync + Debug + PartialEq {
 	/// Friendly name of the scheme used for logging
 	const NAME: &'static str;
 
+	/// The number of ceremonies ahead of the latest authorized ceremony that
+	/// are allowed to create unauthorized ceremonies (delayed messages).
+	// TODO: Move this to the ChainSigning trait
+	const CEREMONY_ID_WINDOW: u64 = 6000;
+
 	fn build_signature(
 		z: <Self::Point as ECPoint>::Scalar,
 		group_commitment: Self::Point,

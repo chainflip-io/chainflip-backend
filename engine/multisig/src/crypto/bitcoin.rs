@@ -74,6 +74,10 @@ impl CryptoScheme for BtcCryptoScheme {
 	const CRYPTO_TAG: CryptoTag = CryptoTag::Bitcoin;
 	const NAME: &'static str = "Bitcoin Crypto";
 
+	/// The window is smaller for bitcoin because its block time is a lot slower and it supports
+	/// multiple signing payloads
+	const CEREMONY_ID_WINDOW: u64 = 1500;
+
 	fn build_signature(z: Scalar, group_commitment: Self::Point) -> Self::Signature {
 		BtcSchnorrSignature { s: z, r: group_commitment }
 	}

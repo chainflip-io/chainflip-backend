@@ -1,12 +1,6 @@
 #[cfg(test)]
 mod tests;
 
-/// The number of ceremonies ahead of the latest authorized ceremony that
-/// are allowed to create unauthorized ceremonies (delayed messages).
-const CEREMONY_ID_WINDOW: u64 = 6000;
-/// The window is smaller for bitcoin because it supports multiple signing payloads
-const CEREMONY_ID_WINDOW_BTC: u64 = 1500;
-
 use anyhow::{anyhow, bail, Context, Result};
 use futures::FutureExt;
 use serde::Serialize;
@@ -27,7 +21,7 @@ use crate::{
 		signing::PayloadAndKey,
 		CeremonyRequestDetails,
 	},
-	crypto::{CryptoScheme, CryptoTag, Rng},
+	crypto::{CryptoScheme, Rng},
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage},
 };
 use cf_primitives::{AuthorityCount, CeremonyId};
@@ -686,11 +680,9 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 			// Only a ceremony id that is within the ceremony id window can create unauthorised
 			// ceremonies
 			let ceremony_id_string = ceremony_id_string::<Ceremony::Crypto>(ceremony_id);
-			let ceremony_id_window = match <Ceremony::Crypto as CryptoScheme>::CRYPTO_TAG {
-				CryptoTag::Evm | CryptoTag::Polkadot | CryptoTag::Ed25519 => CEREMONY_ID_WINDOW,
-				CryptoTag::Bitcoin => CEREMONY_ID_WINDOW_BTC,
-			};
-			if ceremony_id > latest_ceremony_id + ceremony_id_window {
+			if ceremony_id >
+				latest_ceremony_id + <Ceremony::Crypto as CryptoScheme>::CEREMONY_ID_WINDOW
+			{
 				warn!("Ignoring data: unexpected future ceremony id {ceremony_id_string}",);
 				return
 			} else if ceremony_id <= latest_ceremony_id {

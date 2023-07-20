@@ -164,14 +164,10 @@ impl<P: ECPoint> PreProcessStageDataCheck<SigningStageName> for SigningData<P> {
 
 	fn is_initial_stage_data_size_valid<C: CryptoScheme>(&self) -> bool {
 		match self {
+			// TODO: Use ChainSigning::CHAIN_TAG instead of CRYPTO_TAG
 			SigningData::CommStage1(message) => match C::CRYPTO_TAG {
 				CryptoTag::Evm | CryptoTag::Polkadot | CryptoTag::Ed25519 =>
 					message.payload.len() <= max_signing_commitments_size(1),
-				// TODO: Technically, this condition is on the Bitcoin chain rather than the Bitcoin
-				// Crypto Scheme so we might want to address this. However, in practice this will
-				// only matter if we want to have different limits on the number of payloads
-				// depending on chain that have the same crypto scheme (that is, the bitcoin crypto
-				// scheme).
 				CryptoTag::Bitcoin =>
 				// At this stage we may not know the number of payloads, so we use a maximum
 					message.payload.len() <= max_signing_commitments_size(MAX_BTC_SIGNING_PAYLOADS),
@@ -367,5 +363,27 @@ mod tests {
 				}
 			}
 		}
+	}
+
+	#[test]
+	/// Check that each chain does not exceed an acceptable limit to the amount of ceremony data
+	/// that a single node can force us to store as delayed initial stage messages.
+	fn should_not_exceed_spam_limits() {
+		const MULTI_PAYLOAD_SPAM_LIMIT_BYTES: u64 = 100_000_000; // 100mb
+		assert!(
+			max_signing_commitments_size(MAX_BTC_SIGNING_PAYLOADS) as u64 *
+				BtcCryptoScheme::CEREMONY_ID_WINDOW <=
+				MULTI_PAYLOAD_SPAM_LIMIT_BYTES
+		);
+
+		const SINGLE_PAYLOAD_SPAM_LIMIT_BYTES: u64 = 500_000; // 0.5mb
+		assert!(
+			max_signing_commitments_size(1) as u64 * EvmCryptoScheme::CEREMONY_ID_WINDOW <=
+				SINGLE_PAYLOAD_SPAM_LIMIT_BYTES
+		);
+		assert!(
+			max_signing_commitments_size(1) as u64 * PolkadotCryptoScheme::CEREMONY_ID_WINDOW <=
+				SINGLE_PAYLOAD_SPAM_LIMIT_BYTES
+		);
 	}
 }
