@@ -7,7 +7,7 @@ use cf_chains::{
 	ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
 use cf_primitives::{
-	BroadcastId, ThresholdSignatureRequestId, INPUT_UTXO_SIZE_IN_BYTES,
+	BroadcastId, SemVer, ThresholdSignatureRequestId, INPUT_UTXO_SIZE_IN_BYTES,
 	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
 };
 use cf_traits::{
@@ -147,6 +147,11 @@ impl VaultKeyWitnessedHandler<Bitcoin> for MockBitcoinVaultKeyWitnessedHandler {
 
 parameter_types! {
 	pub const BitcoinNetworkParam: BitcoinNetwork = BitcoinNetwork::Testnet;
+	pub CurrentCompatibilityVersion: SemVer = SemVer {
+		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
+		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
+		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
+	};
 }
 
 pub struct MockBitcoinFeeInfo;
@@ -172,6 +177,7 @@ impl pallet_cf_environment::Config for Test {
 	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 	type BitcoinFeeInfo = MockBitcoinFeeInfo;
 	type RuntimeSafeMode = MockRuntimeSafeMode;
+	type CurrentCompatibilityVersion = CurrentCompatibilityVersion;
 	type WeightInfo = ();
 }
 
