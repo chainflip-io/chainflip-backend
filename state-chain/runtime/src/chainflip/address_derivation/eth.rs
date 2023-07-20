@@ -1,7 +1,7 @@
 use crate::{Environment, EthEnvironment};
 use cf_chains::{
 	address::AddressDerivationApi,
-	eth::{api::EthEnvironmentProvider, deposit_address::get_create_2_address, EthereumChannelId},
+	eth::{api::EthEnvironmentProvider, deposit_address::get_create_2_address},
 	Chain, Ethereum,
 };
 use cf_primitives::{chains::assets::eth, ChannelId};

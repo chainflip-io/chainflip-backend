@@ -48,7 +48,7 @@ impl Chain for Ethereum {
 	type ChainAccount = eth::Address;
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
-	type DepositFetchId = EthereumChannelId;
+	type DepositFetchId = EthereumFetchId;
 }
 
 impl ChainCrypto for Ethereum {
@@ -575,12 +575,12 @@ pub enum DeploymentStatus {
 }
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
-pub enum EthereumChannelId {
+pub enum EthereumFetchId {
 	Deployed(Address),
 	Undeployed(ChannelId),
 }
 
-impl ChannelIdConstructor for EthereumChannelId {
+impl ChannelIdConstructor for EthereumFetchId {
 	type Address = H160;
 
 	fn deployed(_channel_id: u64, address: Self::Address) -> Self {
