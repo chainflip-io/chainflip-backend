@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::witness::chain_source::{ChainClient, ChainStream};
+use frame_support::CloneNoBound;
 use futures::FutureExt;
 use futures_core::FusedStream;
 use futures_util::{stream, StreamExt};
@@ -219,6 +220,7 @@ type ChainState<Inner> = pallet_cf_chain_tracking::ChainState<<Inner as ChunkedB
 
 type Addresses<Inner> = Vec<DepositChannelDetails<<Inner as ChunkedByVault>::Chain>>;
 
+#[derive(CloneNoBound)]
 pub struct IngressAddressesClient<Inner: ChunkedByVault>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
@@ -228,11 +230,6 @@ where
 		Option<pallet_cf_chain_tracking::ChainState<Inner::Chain>>,
 		Addresses<Inner>,
 	)>,
-}
-impl<Inner: ChunkedByVault> Clone for IngressAddressesClient<Inner> {
-	fn clone(&self) -> Self {
-		Self { inner_client: self.inner_client.clone(), receiver: self.receiver.clone() }
-	}
 }
 
 impl<Inner: ChunkedByVault> IngressAddressesClient<Inner>
