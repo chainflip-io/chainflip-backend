@@ -563,7 +563,6 @@ impl<T: Config> Pallet<T> {
 					)
 					.ok_or_else(|| {
 						log::error!("Unable to select desired amount from available utxos.");
-						()
 					})
 				})
 				.ok()
