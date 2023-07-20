@@ -229,6 +229,12 @@ pub struct IngressAddressesClient<Inner: ChunkedByVault> {
 		Addresses<Inner>,
 	)>,
 }
+impl<Inner: ChunkedByVault> Clone for IngressAddressesClient<Inner> {
+	fn clone(&self) -> Self {
+		Self { inner_client: self.inner_client.clone(), receiver: self.receiver.clone() }
+	}
+}
+
 impl<Inner: ChunkedByVault> IngressAddressesClient<Inner> {
 	pub fn new(
 		inner_client: Inner::Client,
