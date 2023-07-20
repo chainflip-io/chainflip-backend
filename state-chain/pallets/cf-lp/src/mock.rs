@@ -1,6 +1,6 @@
 use crate as pallet_cf_lp;
 use crate::PalletSafeMode;
-use cf_chains::{AnyChain, Chain, Ethereum};
+use cf_chains::{address::AddressDerivationApi, AnyChain, Chain, Ethereum};
 use cf_primitives::{chains::assets, AccountId, ChannelId};
 use cf_traits::{
 	impl_mock_chainflip, impl_mock_runtime_safe_mode,
@@ -8,7 +8,7 @@ use cf_traits::{
 		address_converter::MockAddressConverter, deposit_handler::MockDepositHandler,
 		egress_handler::MockEgressHandler,
 	},
-	AccountRoleRegistry, AddressDerivationApi,
+	AccountRoleRegistry,
 };
 use frame_support::{parameter_types, sp_runtime::app_crypto::sp_core::H160};
 use frame_system as system;
