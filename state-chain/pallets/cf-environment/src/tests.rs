@@ -116,6 +116,24 @@ fn test_btc_utxo_selection() {
 				.unwrap(),
 			(vec![utxo(5000000), utxo(120080),], 5116060)
 		);
+
+		// add some more utxos to the list
+		Environment::add_bitcoin_utxo_to_list(5000, Default::default(), SCRIPT_PUBKEY);
+		Environment::add_bitcoin_utxo_to_list(15000, Default::default(), SCRIPT_PUBKEY);
+
+		// request a larger amount than what is available
+		assert!(Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::Some {
+			output_amount: 20100,
+			number_of_outputs: 1
+		})
+		.is_none());
+
+		// Ensure the previous failure didn't wipe the utxo list
+		assert_eq!(
+			Environment::select_and_take_bitcoin_utxos(UtxoSelectionType::SelectAllForRotation)
+				.unwrap(),
+			(vec![utxo(5000), utxo(15000),], 15980)
+		);
 	});
 }
 
