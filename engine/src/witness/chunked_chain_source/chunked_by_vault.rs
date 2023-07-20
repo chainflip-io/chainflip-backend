@@ -1,4 +1,5 @@
 pub mod builder;
+pub mod continuous;
 pub mod ingress_addresses;
 
 use cf_chains::Chain;

@@ -51,6 +51,7 @@ futures-util = "0.3.14"
 hex = "0.4.3"
 httparse = "1.4.1"
 itertools = "0.10"
+roaring = "0.10.1"
 
 # Same version of jsonrpsee as the substrate version our StateChain is on.
 jsonrpsee = {version = "0.15.1", features = ["full"]}
