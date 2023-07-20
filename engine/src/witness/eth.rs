@@ -3,6 +3,7 @@ use std::sync::Arc;
 use utilities::task_scope::Scope;
 
 use crate::{
+	db::PersistentKeyDB,
 	eth::{ethers_rpc::EthersRpcClient, retry_rpc::EthersRetryRpcClient},
 	settings,
 	state_chain_observer::client::{
@@ -27,6 +28,7 @@ pub async fn start<StateChainClient>(
 	state_chain_client: Arc<StateChainClient>,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
 	initial_block_hash: state_chain_runtime::Hash,
+	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi + EthAssetApi + SignedExtrinsicApi + 'static + Send + Sync,
@@ -93,6 +95,7 @@ where
 	let key_manager_witnesser = eth_safe_vault_source
 		.clone()
 		.key_manager_witnessing(state_chain_client.clone(), eth_client.clone(), key_manager_address)
+		.continuous("KeyManager".to_string(), db.clone())
 		.run();
 
 	scope.spawn(async move {
@@ -107,6 +110,7 @@ where
 			eth_client.clone(),
 			state_chain_gateway_address,
 		)
+		.continuous("StateChainGateway".to_string(), db.clone())
 		.run();
 
 	scope.spawn(async move {
@@ -116,6 +120,7 @@ where
 
 	let vault_witnesser = eth_safe_vault_source
 		.vault_witnessing(state_chain_client.clone(), eth_client.clone(), vault_address)
+		.continuous("Vault".to_string(), db)
 		.run();
 
 	scope.spawn(async move {

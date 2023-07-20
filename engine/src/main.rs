@@ -177,6 +177,14 @@ async fn start(
 
 	scope.spawn(eth_multisig_client_backend_future);
 
+			witness::start::start(
+				scope,
+				&settings,
+				state_chain_client.clone(),
+				state_chain_stream.clone(),
+				db.clone(),
+			)
+			.await?;
 	let (dot_multisig_client, dot_multisig_client_backend_future) =
 		chainflip_engine::multisig::start_client::<PolkadotSigning>(
 			state_chain_client.account_id(),
