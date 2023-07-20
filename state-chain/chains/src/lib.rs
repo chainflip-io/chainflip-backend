@@ -3,8 +3,9 @@
 use core::{fmt::Display, iter::Step};
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
+use address::AddressDerivationApi;
 pub use address::ForeignChainAddress;
-use cf_primitives::{chains::assets, AssetAmount, EgressId, EthAmount};
+use cf_primitives::{chains::assets, AssetAmount, ChannelId, EgressId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
@@ -38,6 +39,8 @@ pub mod eth;
 pub mod none;
 
 pub mod address;
+pub mod deposit_channel;
+pub use deposit_channel::*;
 
 pub mod mocks;
 
@@ -86,8 +89,10 @@ pub trait Chain: Member + Parameter {
 		+ MaxEncodedLen
 		+ Copy
 		+ BenchmarkValue
+		+ FullCodec
 		+ Into<cf_primitives::Asset>
-		+ Into<cf_primitives::ForeignChain>;
+		+ Into<cf_primitives::ForeignChain>
+		+ Unpin;
 
 	type ChainAccount: Member
 		+ Parameter
@@ -96,7 +101,8 @@ pub trait Chain: Member + Parameter {
 		+ BenchmarkValueExtended
 		+ Debug
 		+ TryFrom<ForeignChainAddress>
-		+ Into<ForeignChainAddress>;
+		+ Into<ForeignChainAddress>
+		+ Unpin;
 
 	type EpochStartData: Member + Parameter + MaxEncodedLen;
 
@@ -105,7 +111,9 @@ pub trait Chain: Member + Parameter {
 		+ Copy
 		+ BenchmarkValue
 		+ BenchmarkValueExtended
-		+ ChannelIdConstructor<Address = Self::ChainAccount>;
+		+ for<'a> From<&'a DepositChannel<Self>>;
+
+	type DepositChannelState: Member + Parameter + Default + ChannelLifecycleHooks + Unpin;
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -294,15 +302,6 @@ pub trait FeeRefundCalculator<C: Chain> {
 	) -> <C as Chain>::ChainAmount;
 }
 
-/// Helper trait to avoid matching over chains in the generic pallet.
-pub trait ChannelIdConstructor {
-	type Address;
-	/// Constructs the ChannelId for the deployed case.
-	fn deployed(channel_id: u64, address: Self::Address) -> Self;
-	/// Constructs the ChannelId for the undeployed case.
-	fn undeployed(channel_id: u64, address: Self::Address) -> Self;
-}
-
 /// Metadata as part of a Cross Chain Message.
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -315,4 +314,10 @@ pub struct CcmDepositMetadata {
 	pub cf_parameters: Vec<u8>,
 	/// The address the deposit was sent from.
 	pub source_address: ForeignChainAddress,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode, TypeInfo)]
+pub enum SwapOrigin {
+	DepositChannel { deposit_address: address::EncodedAddress, channel_id: ChannelId },
+	Vault { tx_hash: TransactionHash },
 }

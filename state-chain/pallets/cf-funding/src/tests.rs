@@ -844,7 +844,7 @@ mod test_restricted_balances {
 	fn run_test<E: Into<DispatchError>>(
 		bond: FlipBalance,
 		redeem_amount: RedemptionAmount<FlipBalance>,
-		redeem_address: EthereumAddress,
+		bound_redeem_address: EthereumAddress,
 		maybe_error: Option<E>,
 	) {
 		new_test_ext().execute_with(|| {
@@ -875,7 +875,7 @@ mod test_restricted_balances {
 					assert_ok!(Funding::redeem(
 						RuntimeOrigin::signed(ALICE),
 						redeem_amount,
-						redeem_address
+						bound_redeem_address
 					));
 					let expected_redeemed_amount =
 						initial_balance - Flip::balance(&ALICE) - RedemptionTax::<Test>::get();
@@ -892,7 +892,7 @@ mod test_restricted_balances {
 						Funding::redeem(
 							RuntimeOrigin::signed(ALICE),
 							redeem_amount,
-							redeem_address
+							bound_redeem_address
 						),
 						e.into(),
 					);
@@ -1141,6 +1141,13 @@ fn can_bind_redeem_address() {
 	new_test_ext().execute_with(|| {
 		const REDEEM_ADDRESS: EthereumAddress = [0x01; 20];
 		assert_ok!(Funding::bind_redeem_address(RuntimeOrigin::signed(ALICE), REDEEM_ADDRESS));
+		assert_event_sequence!(
+			Test,
+			RuntimeEvent::Funding(crate::Event::BoundRedeemAddress {
+				account_id: ALICE,
+				address: REDEEM_ADDRESS,
+			})
+		);
 		assert!(BoundAddress::<Test>::contains_key(ALICE));
 		assert_eq!(BoundAddress::<Test>::get(ALICE).unwrap(), REDEEM_ADDRESS);
 	});
@@ -1296,4 +1303,35 @@ fn skip_redemption_of_zero_flip() {
 
 	inner_test(100, RedemptionAmount::Exact(0));
 	inner_test(REDEMPTION_TAX, RedemptionAmount::Max);
+}
+
+#[test]
+fn check_restricted_balances_are_getting_removed() {
+	new_test_ext().execute_with(|| {
+		// - Fund account with some restricted balances.
+		const AMOUNT: FlipBalance = 50;
+		const RESTRICTED_ADDRESS: EthereumAddress = [0x02; 20];
+		// Set restricted addresses.
+		assert_ok!(Funding::update_restricted_addresses(
+			RuntimeOrigin::root(),
+			vec![RESTRICTED_ADDRESS],
+			Default::default(),
+		));
+		// Fund the restricted address.
+		assert_ok!(Funding::funded(
+			RuntimeOrigin::root(),
+			ALICE,
+			AMOUNT,
+			RESTRICTED_ADDRESS,
+			Default::default(),
+		));
+		assert!(RestrictedBalances::<Test>::contains_key(ALICE));
+		assert_eq!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS), Some(&AMOUNT));
+		assert_ok!(Funding::update_restricted_addresses(
+			RuntimeOrigin::root(),
+			vec![],
+			vec![RESTRICTED_ADDRESS],
+		));
+		assert!(RestrictedBalances::<Test>::get(ALICE).get(&RESTRICTED_ADDRESS).is_none());
+	});
 }

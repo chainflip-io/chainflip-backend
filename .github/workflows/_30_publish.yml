@@ -49,7 +49,7 @@ jobs:
           sudo dpkg -i /tmp/aptly_${APTLY_VERSION}_amd64.deb
 
       - name: Configure AWS credentials using OIDC
-        uses: aws-actions/configure-aws-credentials@v1
+        uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-region: eu-central-1
           role-to-assume: arn:aws:iam::962042992619:role/chainflip-github-bot

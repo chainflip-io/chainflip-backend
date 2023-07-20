@@ -14,6 +14,8 @@ use futures_core::Stream;
 pub mod aliases {
 	use std::iter::Step;
 
+	use codec::FullCodec;
+
 	macro_rules! define_trait_alias {
 		(pub trait $name:ident: $($traits:tt)+) => {
 			pub trait $name: $($traits)+ {}
@@ -21,7 +23,7 @@ pub mod aliases {
 		}
 	}
 
-	define_trait_alias!(pub trait Index: Step + PartialEq + Eq + PartialOrd + Ord + Clone + Copy + Send + Sync + Unpin + 'static);
+	define_trait_alias!(pub trait Index: FullCodec + Step + PartialEq + Eq + PartialOrd + Ord + Clone + Copy + Send + Sync + Unpin + TryFrom<u64> + Into<u64> + 'static);
 	define_trait_alias!(pub trait Hash: PartialEq + Eq + Clone + Copy + Send + Sync + Unpin + 'static);
 	define_trait_alias!(pub trait Data: Send + Sync + Unpin + 'static);
 }
@@ -32,6 +34,14 @@ pub struct Header<Index, Hash, Data> {
 	pub hash: Hash,
 	pub parent_hash: Option<Hash>,
 	pub data: Data,
+}
+impl<Index: aliases::Index, Hash: aliases::Hash, Data: aliases::Data> Header<Index, Hash, Data> {
+	pub fn map_data<MappedData, F: FnOnce(Self) -> MappedData>(
+		self,
+		f: F,
+	) -> Header<Index, Hash, MappedData> {
+		Header { index: self.index, hash: self.hash, parent_hash: self.parent_hash, data: f(self) }
+	}
 }
 
 #[async_trait::async_trait]
@@ -48,7 +58,7 @@ pub trait ChainSource: Send + Sync {
 }
 
 #[async_trait::async_trait]
-pub trait ChainClient: Send + Sync {
+pub trait ChainClient: Send + Sync + Clone {
 	type Index: aliases::Index;
 	type Hash: aliases::Hash;
 	type Data: aliases::Data;
@@ -57,16 +67,7 @@ pub trait ChainClient: Send + Sync {
 		&self,
 		index: Self::Index,
 	) -> Header<Self::Index, Self::Hash, Self::Data>;
-
-	fn into_box<'a>(self) -> BoxChainClient<'a, Self::Index, Self::Hash, Self::Data>
-	where
-		Self: 'a + Sized,
-	{
-		Box::new(self)
-	}
 }
-pub type BoxChainClient<'a, Index, Hash, Data> =
-	Box<dyn ChainClient<Index = Index, Hash = Hash, Data = Data> + 'a>;
 
 pub trait ChainStream: Stream<Item = Header<Self::Index, Self::Hash, Self::Data>> + Send {
 	type Index: aliases::Index;

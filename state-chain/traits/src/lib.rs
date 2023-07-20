@@ -14,12 +14,12 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{
-	address::ForeignChainAddress, dot::PolkadotPublicKey, eth::Address, ApiCall,
-	CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, Ethereum, Polkadot,
+	address::ForeignChainAddress, ApiCall, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto,
+	Ethereum, Polkadot, SwapOrigin,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
-	CeremonyId, ChannelId, EgressId, EpochIndex, ForeignChain, ThresholdSignatureRequestId,
+	CeremonyId, ChannelId, EgressId, EpochIndex, ForeignChain, SemVer, ThresholdSignatureRequestId,
 };
 use codec::{Decode, Encode, MaxEncodedLen};
 use frame_support::{
@@ -675,32 +675,6 @@ pub trait DepositApi<C: Chain> {
 	fn expire_channel(channel_id: ChannelId, address: C::ChainAccount);
 }
 
-/// Generates a deterministic deposit address for some combination of asset, chain and channel id.
-pub trait AddressDerivationApi<C: Chain> {
-	fn generate_address(
-		source_asset: C::ChainAsset,
-		channel_id: ChannelId,
-	) -> Result<C::ChainAccount, DispatchError>;
-}
-
-impl AddressDerivationApi<Ethereum> for () {
-	fn generate_address(
-		source_asset: <Ethereum as Chain>::ChainAsset,
-		channel_id: ChannelId,
-	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
-		Ok(Address::from_slice(&(source_asset, channel_id).encode().blake2_256()[..20]))
-	}
-}
-
-impl AddressDerivationApi<Polkadot> for () {
-	fn generate_address(
-		source_asset: <Polkadot as Chain>::ChainAsset,
-		channel_id: ChannelId,
-	) -> Result<<Polkadot as Chain>::ChainAccount, DispatchError> {
-		Ok(PolkadotPublicKey::from_aliased((source_asset, channel_id).encode().blake2_256()))
-	}
-}
-
 pub trait AccountRoleRegistry<T: frame_system::Config> {
 	fn register_account_role(who: &T::AccountId, role: AccountRole) -> DispatchResult;
 
@@ -827,6 +801,7 @@ pub trait CcmHandler {
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
 		message_metadata: CcmDepositMetadata,
+		origin: SwapOrigin,
 	);
 }
 
@@ -837,6 +812,7 @@ impl CcmHandler for () {
 		_destination_asset: Asset,
 		_destination_address: ForeignChainAddress,
 		_message_metadata: CcmDepositMetadata,
+		_origin: SwapOrigin,
 	) {
 	}
 }
@@ -853,4 +829,8 @@ pub trait GetBitcoinFeeInfo {
 
 pub trait GetBlockHeight<C: Chain> {
 	fn get_block_height() -> C::ChainBlockNumber;
+}
+pub trait CompatibleVersions {
+	fn current_compatibility_version() -> SemVer;
+	fn next_compatibility_version() -> Option<SemVer>;
 }

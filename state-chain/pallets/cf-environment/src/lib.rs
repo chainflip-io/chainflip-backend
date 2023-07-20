@@ -12,8 +12,8 @@ use cf_chains::{
 	},
 	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 };
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, EthereumAddress};
-use cf_traits::{GetBitcoinFeeInfo, SafeMode};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, EthereumAddress, SemVer};
+use cf_traits::{CompatibleVersions, GetBitcoinFeeInfo, SafeMode};
 use frame_support::{
 	pallet_prelude::*,
 	traits::{OnRuntimeUpgrade, StorageVersion},
@@ -49,33 +49,6 @@ pub enum SafeModeUpdate<T: Config> {
 	CodeAmber(T::RuntimeSafeMode),
 }
 
-pub mod cfe {
-	use super::*;
-	/// On chain CFE settings
-	#[derive(Encode, Decode, TypeInfo, MaxEncodedLen, Clone, RuntimeDebug, PartialEq, Eq, Copy)]
-	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-	pub struct CfeSettings {
-		/// Number of blocks we wait until we consider the ethereum witnesser stream finalized.
-		pub eth_block_safety_margin: u32,
-		/// The percentile of priority fee we want to fetch from fee_history (expressed
-		/// as a number between 0 and 100)
-		pub eth_priority_fee_percentile: u8,
-		/// Maximum duration a ceremony stage can last
-		pub max_ceremony_stage_duration: u32,
-	}
-
-	/// Sensible default values for the CFE setting.
-	impl Default for CfeSettings {
-		fn default() -> Self {
-			Self {
-				eth_block_safety_margin: 6,
-				eth_priority_fee_percentile: 50,
-				max_ceremony_stage_duration: 300,
-			}
-		}
-	}
-}
-
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -106,14 +79,16 @@ pub mod pallet {
 		/// Get Bitcoin Fee info from chain tracking
 		type BitcoinFeeInfo: cf_traits::GetBitcoinFeeInfo;
 
+		/// Used to determine compatibility between the runtime and the CFE.
+		#[pallet::constant]
+		type CurrentCompatibilityVersion: Get<SemVer>;
+
 		/// Weight information
 		type WeightInfo: WeightInfo;
 	}
 
 	#[pallet::error]
 	pub enum Error<T> {
-		/// The settings provided were invalid.
-		InvalidCfeSettings,
 		/// Eth is not an Erc20 token, so its address can't be updated.
 		EthAddressNotUpdateable,
 		/// Polkadot runtime version is lower than the currently stored version.
@@ -124,12 +99,6 @@ pub mod pallet {
 	#[pallet::storage_version(PALLET_VERSION)]
 	#[pallet::without_storage_info]
 	pub struct Pallet<T>(PhantomData<T>);
-
-	// CHAINFLIP RELATED ENVIRONMENT ITEMS
-	#[pallet::storage]
-	#[pallet::getter(fn cfe_settings)]
-	/// The settings used by the CFE
-	pub type CfeSettings<T> = StorageValue<_, cfe::CfeSettings, ValueQuery>;
 
 	// ETHEREUM CHAIN RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
@@ -207,11 +176,14 @@ pub mod pallet {
 	/// Stores the current safe mode state for the runtime.
 	pub type RuntimeSafeMode<T> = StorageValue<_, <T as Config>::RuntimeSafeMode, ValueQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn next_compatibility_version)]
+	/// If this storage is set, a new version of Chainflip is available for upgrade.
+	pub type NextCompatibilityVersion<T> = StorageValue<_, Option<SemVer>, ValueQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// The on-chain CFE settings have been updated
-		CfeSettingsUpdated { new_cfe_settings: cfe::CfeSettings },
 		/// A new supported ETH asset was added
 		AddedNewEthAsset(EthAsset, EthereumAddress),
 		/// The address of an supported ETH asset was updated
@@ -224,16 +196,27 @@ pub mod pallet {
 		BitcoinBlockNumberSetForVault { block_number: cf_chains::btc::BlockNumber },
 		/// The Safe Mode settings for the chain has been updated
 		RuntimeSafeModeUpdated { safe_mode: SafeModeUpdate<T> },
+		/// A new Chainflip runtime will soon be deployed at this version.
+		NextCompatibilityVersionSet { version: Option<SemVer> },
 	}
 
 	#[pallet::hooks]
 	impl<T: Config> Hooks<T::BlockNumber> for Pallet<T> {
 		fn on_runtime_upgrade() -> Weight {
-			migrations::PalletMigration::<T>::on_runtime_upgrade()
+			let weight = migrations::PalletMigration::<T>::on_runtime_upgrade();
+			NextCompatibilityVersion::<T>::kill();
+			weight
 		}
 
 		#[cfg(feature = "try-runtime")]
 		fn pre_upgrade() -> Result<sp_std::vec::Vec<u8>, &'static str> {
+			if let Some(next_version) = NextCompatibilityVersion::<T>::get() {
+				if next_version != T::CurrentCompatibilityVersion::get() {
+					return Err("NextCompatibilityVersion does not match the current runtime")
+				}
+			} else {
+				return Err("NextCompatibilityVersion is not set")
+			}
 			migrations::PalletMigration::<T>::pre_upgrade()
 		}
 
@@ -259,7 +242,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset: EthAsset,
 			address: EthereumAddress,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 			ensure!(asset != EthAsset::Eth, Error::<T>::EthAddressNotUpdateable);
 			Self::deposit_event(if EthereumSupportedAssets::<T>::contains_key(asset) {
@@ -271,31 +254,7 @@ pub mod pallet {
 				EthereumSupportedAssets::<T>::insert(asset, address);
 				Event::AddedNewEthAsset(asset, address)
 			});
-			Ok(().into())
-		}
-
-		/// Sets the current on-chain CFE settings
-		///
-		/// ## Events
-		///
-		/// - [CfeSettingsUpdated](Event::CfeSettingsUpdated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[pallet::weight(T::WeightInfo::set_cfe_settings())]
-		pub fn set_cfe_settings(
-			origin: OriginFor<T>,
-			cfe_settings: cfe::CfeSettings,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureGovernance::ensure_origin(origin)?;
-			ensure!(
-				cfe_settings.eth_priority_fee_percentile <= 100,
-				Error::<T>::InvalidCfeSettings
-			);
-			CfeSettings::<T>::put(cfe_settings);
-			Self::deposit_event(Event::<T>::CfeSettingsUpdated { new_cfe_settings: cfe_settings });
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Manually initiates Polkadot vault key rotation completion steps so Epoch rotation can be
@@ -372,7 +331,7 @@ pub mod pallet {
 		pub fn update_polkadot_runtime_version(
 			origin: OriginFor<T>,
 			runtime_version: RuntimeVersion,
-		) -> DispatchResultWithPostInfo {
+		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
 			// If the `transaction_version` is bumped, the `spec_version` must also be bumped.
@@ -386,7 +345,7 @@ pub mod pallet {
 			PolkadotRuntimeVersion::<T>::put(runtime_version);
 			Self::deposit_event(Event::<T>::PolkadotRuntimeVersionUpdated { runtime_version });
 
-			Ok(().into())
+			Ok(())
 		}
 
 		/// Update the current safe mode status.
@@ -395,10 +354,7 @@ pub mod pallet {
 		///
 		/// See [SafeModeUpdate] for the different options.
 		#[pallet::weight(T::WeightInfo::update_safe_mode())]
-		pub fn update_safe_mode(
-			origin: OriginFor<T>,
-			update: SafeModeUpdate<T>,
-		) -> DispatchResultWithPostInfo {
+		pub fn update_safe_mode(origin: OriginFor<T>, update: SafeModeUpdate<T>) -> DispatchResult {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
 			RuntimeSafeMode::<T>::put(match update.clone() {
@@ -409,7 +365,35 @@ pub mod pallet {
 
 			Self::deposit_event(Event::<T>::RuntimeSafeModeUpdated { safe_mode: update });
 
-			Ok(().into())
+			Ok(())
+		}
+
+		/// Sets the next Chainflip compatiblity version.
+		///
+		/// This is used to signal to CFE operators that a new version of the runtime will soon be
+		/// deployed.
+		///
+		/// Requires governance origin.
+		///
+		/// ## Events
+		///
+		/// - [Success](Event::NextCompatibilityVersionSet)
+		///
+		/// ## Errors
+		///
+		/// - [BadOrigin](frame_support::error::BadOrigin)
+		#[pallet::weight(T::WeightInfo::set_next_compatibility_version())]
+		pub fn set_next_compatibility_version(
+			origin: OriginFor<T>,
+			version: Option<SemVer>,
+		) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+
+			NextCompatibilityVersion::<T>::put(version);
+
+			Self::deposit_event(Event::<T>::NextCompatibilityVersionSet { version });
+
+			Ok(())
 		}
 	}
 
@@ -423,7 +407,6 @@ pub mod pallet {
 		pub eth_vault_address: EthereumAddress,
 		pub eth_address_checker_address: EthereumAddress,
 		pub ethereum_chain_id: u64,
-		pub cfe_settings: cfe::CfeSettings,
 		pub polkadot_genesis_hash: PolkadotHash,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
 		pub polkadot_runtime_version: RuntimeVersion,
@@ -440,7 +423,6 @@ pub mod pallet {
 			EthereumAddressCheckerAddress::<T>::set(self.eth_address_checker_address);
 
 			EthereumChainId::<T>::set(self.ethereum_chain_id);
-			CfeSettings::<T>::set(self.cfe_settings);
 			EthereumSupportedAssets::<T>::insert(EthAsset::Flip, self.flip_token_address);
 			EthereumSupportedAssets::<T>::insert(EthAsset::Usdc, self.eth_usdc_address);
 
@@ -523,7 +505,7 @@ impl<T: Config> Pallet<T> {
 				})
 			},
 			UtxoSelectionType::Some { output_amount, number_of_outputs } =>
-				BitcoinAvailableUtxos::<T>::mutate(|available_utxos| {
+				BitcoinAvailableUtxos::<T>::try_mutate(|available_utxos| {
 					select_utxos_from_pool(
 						available_utxos,
 						fee_per_input_utxo,
@@ -531,7 +513,11 @@ impl<T: Config> Pallet<T> {
 							number_of_outputs * fee_per_output_utxo +
 							min_fee_required_per_tx,
 					)
+					.ok_or_else(|| {
+						log::error!("Unable to select desired amount from available utxos.");
+					})
 				})
+				.ok()
 				.map(|(selected_utxos, total_input_spendable_amount)| {
 					(
 						selected_utxos,
@@ -549,5 +535,14 @@ impl<T: Config> Pallet<T> {
 		pubkey: [u8; 32],
 	) {
 		BitcoinActiveDepositAddressDetails::<T>::insert(script_pubkey, (salt, pubkey));
+	}
+}
+
+impl<T: Config> CompatibleVersions for Pallet<T> {
+	fn current_compatibility_version() -> SemVer {
+		<T as Config>::CurrentCompatibilityVersion::get()
+	}
+	fn next_compatibility_version() -> Option<SemVer> {
+		NextCompatibilityVersion::<T>::get()
 	}
 }

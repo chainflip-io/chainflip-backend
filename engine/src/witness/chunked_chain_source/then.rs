@@ -83,6 +83,17 @@ pub struct ThenClient<Inner: ChunkedChainSource, ThenFn> {
 	then_fn: ThenFn,
 	epoch: Epoch<Inner::Info, Inner::HistoricInfo>,
 }
+
+impl<Inner: ChunkedChainSource, ThenFn: Clone> Clone for ThenClient<Inner, ThenFn> {
+	fn clone(&self) -> Self {
+		Self {
+			inner_client: self.inner_client.clone(),
+			then_fn: self.then_fn.clone(),
+			epoch: self.epoch.clone(),
+		}
+	}
+}
+
 impl<Inner: ChunkedChainSource, ThenFn> ThenClient<Inner, ThenFn> {
 	pub fn new(
 		inner_client: Inner::Client,

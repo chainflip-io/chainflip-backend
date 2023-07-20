@@ -1,17 +1,13 @@
 pub mod chunked_by_time;
 pub mod chunked_by_vault;
-pub mod extension;
+pub mod latest_then;
 pub mod then;
-
-use futures_util::StreamExt;
 
 use super::{
 	chain_source::{aliases, BoxChainStream, ChainClient},
 	common::{BoxActiveAndFuture, ExternalChain},
 	epoch_source::Epoch,
 };
-
-use utilities::assert_stream_send;
 
 #[async_trait::async_trait]
 pub trait ChunkedChainSource: Sized + Send + Sync {
@@ -44,24 +40,3 @@ pub type Item<'a, T, Info, HistoricInfo> = (
 	>,
 	<T as ChunkedChainSource>::Client,
 );
-
-pub struct Builder<T: ChunkedChainSource> {
-	source: T,
-	parameters: T::Parameters,
-}
-impl<T: ChunkedChainSource> Builder<T> {
-	pub fn new(source: T, parameters: T::Parameters) -> Self {
-		Self { source, parameters }
-	}
-
-	pub async fn run(self) {
-		let stream = assert_stream_send(
-			self.source
-				.stream(self.parameters)
-				.await
-				.into_stream()
-				.flat_map_unordered(None, |(_epoch, chain_stream, _chain_client)| chain_stream),
-		);
-		stream.for_each(|_| futures::future::ready(())).await;
-	}
-}

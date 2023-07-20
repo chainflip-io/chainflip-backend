@@ -56,9 +56,9 @@ impl ApiCall<Ethereum> for MockEthereumApiCall<MockEthEnvironment> {
 
 #[derive(CloneNoBound, DebugNoBound, PartialEqNoBound, Default, Eq, Encode, Decode, TypeInfo)]
 pub struct MockAllBatch<MockEthEnvironment> {
-	nonce: <Ethereum as ChainAbi>::ReplayProtection,
-	fetch_params: Vec<FetchAssetParams<Ethereum>>,
-	transfer_params: Vec<TransferAssetParams<Ethereum>>,
+	pub nonce: <Ethereum as ChainAbi>::ReplayProtection,
+	pub fetch_params: Vec<FetchAssetParams<Ethereum>>,
+	pub transfer_params: Vec<TransferAssetParams<Ethereum>>,
 	_phantom: PhantomData<MockEthEnvironment>,
 }
 

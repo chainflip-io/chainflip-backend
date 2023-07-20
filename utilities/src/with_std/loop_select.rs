@@ -47,7 +47,7 @@ macro_rules! inner_loop_select {
         $crate::inner_loop_select!(
             {
                 $($processed)*
-                x = $expression, if $enable_expression => {
+                x = async { $expression.await }, if $enable_expression => {
 					let $pattern = x;
 					$body
 				},
@@ -59,7 +59,7 @@ macro_rules! inner_loop_select {
         $crate::inner_loop_select!(
             {
                 $($processed)*
-                x = $expression, if $enable_expression => {
+                x = async { $expression.await }, if $enable_expression => {
 					if let $pattern = x {
 						$body
 					} else { break }
@@ -72,7 +72,7 @@ macro_rules! inner_loop_select {
         $crate::inner_loop_select!(
             {
                 $($processed)*
-                x = $expression, if $enable_expression => {
+                x = async { $expression.await }, if $enable_expression => {
 					if let $pattern = x {
 						$body
 					} else { break $extra }

@@ -1,0 +1,42 @@
+{{- if .Values.engine.enabled }}
+{{- $node_endpoint := printf "ws://%s:%s" (include "chainflip-node.fullname" .) .Values.ports.wsPort -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "chainflip-node.fullname" . }}-engine-settings
+data:
+  Settings.toml: |
+    # Default configurations for the CFE
+    [node_p2p]
+    node_key_file = "{{ .Values.engine.settings.node_p2p.node_key_file }}"
+    ip_address = "{{ .Values.engine.settings.node_p2p.ip_address | required "You must set an IP address for the node_p2p section e.g. 172.20.220.1" }}"
+    port = {{ .Values.engine.settings.node_p2p.port | default .Values.ports.ipPort }}
+    allow_local_ip = {{ .Values.engine.settings.node_p2p.allow_local_ip }}
+
+    [state_chain]
+    # 32 byte hex secret key - associated with the node's public id (public key)
+    signing_key_file = "{{ .Values.engine.settings.state_chain.signing_key_file }}"
+    ws_endpoint = "{{ .Values.engine.settings.state_chain.ws_endpoint | default $node_endpoint }}"
+
+    [eth]
+    # Ethereum private key file path. Default is the docker secrets path. This file should contain a hex-encoded private key.
+    private_key_file = "{{ .Values.engine.settings.eth.private_key_file }}"
+    ws_node_endpoint = "{{ .Values.engine.settings.eth.ws_node_endpoint | default "ws://geth-node-service:8546" }}"
+    http_node_endpoint = "{{ .Values.engine.settings.eth.http_node_endpoint | default "http://geth-node-service:8545" }}"
+
+    [health_check]
+    hostname = "{{ .Values.engine.settings.health_check.hostname }}"
+    port = {{ .Values.engine.settings.health_check.port }}
+
+    [signing]
+    db_file = "{{ .Values.engine.settings.signing.db_file | default (printf "%s/%s" .Values.basePath "data.db" )}}"
+
+    [dot]
+    ws_node_endpoint = "{{ .Values.engine.settings.dot.ws_node_endpoint | default "ws://polkadot-validator-0-node:9944" }}"
+    http_node_endpoint = "{{ .Values.engine.settings.dot.http_node_endpoint | default "http://polkadot-validator-0-node:9933" }}"
+
+    [btc]
+    http_node_endpoint = "{{ .Values.engine.settings.btc.http_node_endpoint | default "http://bitcoin-node:80" }}"
+    rpc_user = "{{ .Values.engine.settings.btc.rpc_user }}"
+    rpc_password = "{{ .Values.engine.settings.btc.rpc_password }}"
+{{- end }}

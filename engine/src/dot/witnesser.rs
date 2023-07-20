@@ -2,14 +2,13 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use cf_chains::dot::{
-	self, Polkadot, PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash,
+	Polkadot, PolkadotAccountId, PolkadotBalance, PolkadotExtrinsicIndex, PolkadotHash,
 	PolkadotProxyType, PolkadotSignature, PolkadotUncheckedExtrinsic,
 };
 use cf_primitives::{chains::assets, EpochIndex, PolkadotBlockNumber, TxId};
 use codec::{Decode, Encode};
 use frame_support::scale_info::TypeInfo;
 use futures::{stream, Stream, StreamExt, TryStreamExt};
-use pallet_cf_chain_tracking::ChainState;
 use pallet_cf_ingress_egress::DepositWitness;
 use sp_core::H256;
 use state_chain_runtime::PolkadotInstance;
@@ -82,11 +81,11 @@ impl StaticEvent for Transfer {
 
 /// This event must match the TransactionFeePaid event definition of the Polkadot chain.
 #[derive(Debug, Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
-struct TransactionFeePaid {
-	who: PolkadotAccountId,
+pub struct TransactionFeePaid {
+	pub who: PolkadotAccountId,
 	// includes the tip
-	actual_fee: PolkadotBalance,
-	tip: PolkadotBalance,
+	pub actual_fee: PolkadotBalance,
+	pub tip: PolkadotBalance,
 }
 
 impl StaticEvent for TransactionFeePaid {
@@ -95,7 +94,7 @@ impl StaticEvent for TransactionFeePaid {
 }
 
 #[derive(Clone)]
-enum EventWrapper {
+pub enum EventWrapper {
 	ProxyAdded(ProxyAdded),
 	Transfer(Transfer),
 	TransactionFeePaid(TransactionFeePaid),
@@ -139,8 +138,6 @@ fn check_for_interesting_events_in_block(
 	Vec<(PolkadotExtrinsicIndex, PolkadotBalance)>,
 	Vec<DepositWitness<Polkadot>>,
 	Vec<Box<state_chain_runtime::RuntimeCall>>,
-	// Median tip of all extrinsics in this block
-	u128,
 ) {
 	// to contain all the deposit witnesses for this block
 	let mut deposit_witnesses = Vec::new();
@@ -151,7 +148,6 @@ fn check_for_interesting_events_in_block(
 	let mut vault_key_rotated_calls: Vec<Box<_>> = Vec::new();
 	let mut fee_paid_for_xt_at_index = HashMap::new();
 	let events_iter = block_events.iter();
-	let mut tips = Vec::<PolkadotBalance>::new();
 
 	let mut address_monitor = address_monitor.try_lock().expect("should have exclusive ownership");
 
@@ -197,28 +193,12 @@ fn check_for_interesting_events_in_block(
 						interesting_indices.push(extrinsic_index);
 					}
 				},
-				EventWrapper::TransactionFeePaid(TransactionFeePaid {
-					actual_fee, tip, ..
-				}) => {
+				EventWrapper::TransactionFeePaid(TransactionFeePaid { actual_fee, .. }) => {
 					fee_paid_for_xt_at_index.insert(extrinsic_index, *actual_fee);
-					tips.push(*tip);
 				},
 			}
 		}
 	}
-
-	tips.sort();
-	let median_tip = tips
-		.get({
-			let len = tips.len();
-			if len % 2 == 0 {
-				(len / 2).saturating_sub(1)
-			} else {
-				len / 2
-			}
-		})
-		.cloned()
-		.unwrap_or_default();
 
 	(
 		interesting_indices
@@ -227,7 +207,6 @@ fn check_for_interesting_events_in_block(
 			.collect(),
 		deposit_witnesses,
 		vault_key_rotated_calls,
-		median_tip,
 	)
 }
 
@@ -305,29 +284,13 @@ where
 		let mut signature_monitor =
 			signature_monitor.try_lock().expect("should have exclusive ownership");
 
-		let (interesting_indices, deposit_witnesses, vault_key_rotated_calls, median_tip) =
+		let (interesting_indices, deposit_witnesses, vault_key_rotated_calls) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				block_number,
 				&self.vault_account,
 				address_monitor,
 			);
-
-		self.state_chain_client
-			.submit_signed_extrinsic(state_chain_runtime::RuntimeCall::Witnesser(
-				pallet_cf_witnesser::Call::witness_at_epoch {
-					call: Box::new(state_chain_runtime::RuntimeCall::PolkadotChainTracking(
-						pallet_cf_chain_tracking::Call::update_chain_state {
-							new_chain_state: ChainState {
-								block_height: block_number,
-								tracked_data: dot::PolkadotTrackedData { median_tip },
-							},
-						},
-					)),
-					epoch_index: self.epoch_index,
-				},
-			))
-			.await;
 
 		for call in vault_key_rotated_calls {
 			self.state_chain_client
@@ -535,7 +498,6 @@ mod tests {
 	use super::*;
 
 	use cf_chains::dot::{self, PolkadotAccountId};
-	use itertools::Itertools;
 	use std::collections::BTreeSet;
 
 	use crate::{
@@ -561,14 +523,6 @@ mod tests {
 			actual_fee,
 			who: PolkadotAccountId::from_aliased([0xab; 32]),
 			tip: Default::default(),
-		})
-	}
-
-	fn mock_tx_fee_paid_tip(tip: PolkadotBalance) -> EventWrapper {
-		EventWrapper::TransactionFeePaid(TransactionFeePaid {
-			actual_fee: Default::default(),
-			who: PolkadotAccountId::from_aliased([0xab; 32]),
-			tip,
 		})
 	}
 
@@ -604,7 +558,7 @@ mod tests {
 			(3u32, mock_tx_fee_paid(20000)),
 		]);
 
-		let (mut interesting_indices, deposit_witnesses, vault_key_rotated_calls, _) =
+		let (mut interesting_indices, deposit_witnesses, vault_key_rotated_calls) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				Default::default(),
@@ -665,7 +619,7 @@ mod tests {
 			.send(MonitorCommand::Add(transfer_2_deposit_address))
 			.unwrap();
 
-		let (interesting_indices, deposit_witnesses, vault_key_rotated_calls, _) =
+		let (interesting_indices, deposit_witnesses, vault_key_rotated_calls) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				20,
@@ -723,7 +677,7 @@ mod tests {
 			),
 		]);
 
-		let (interesting_indices, deposit_witnesses, vault_key_rotated_calls, _) =
+		let (interesting_indices, deposit_witnesses, vault_key_rotated_calls) =
 			check_for_interesting_events_in_block(
 				block_event_details,
 				20,
@@ -739,44 +693,6 @@ mod tests {
 
 		assert!(vault_key_rotated_calls.is_empty());
 		assert!(deposit_witnesses.is_empty());
-	}
-
-	#[test]
-	fn test_median_tip_calculation() {
-		test_median_tip_calculated_from_events_correctly(&[], 0);
-		test_median_tip_calculated_from_events_correctly(&[10], 10);
-		test_median_tip_calculated_from_events_correctly(&[10, 100], 10);
-		test_median_tip_calculated_from_events_correctly(&[10, 100, 1000], 100);
-		test_median_tip_calculated_from_events_correctly(&[10, 100, 1000, 1000], 100);
-	}
-
-	fn test_median_tip_calculated_from_events_correctly(
-		test_case: &[PolkadotBalance],
-		expected_median: PolkadotBalance,
-	) {
-		let num_permutations = if test_case.is_empty() { 1 } else { test_case.len() };
-		for tips in test_case.iter().permutations(num_permutations) {
-			let block_event_details = phase_and_events(
-				(1..)
-					.zip(&tips)
-					.map(|(i, &&tip)| (i, mock_tx_fee_paid_tip(tip)))
-					.collect::<Vec<_>>()
-					.as_slice(),
-			);
-
-			let (.., median_tip) = check_for_interesting_events_in_block(
-				block_event_details,
-				20,
-				// arbitrary, not focus of the test
-				&PolkadotAccountId::from_aliased([0xda; 32]),
-				&mut Arc::new(Mutex::new(ItemMonitor::new(BTreeSet::default()).1)),
-			);
-
-			assert_eq!(
-				median_tip, expected_median,
-				"Incorrect median value for input {tips:?}. Expected {expected_median:?}",
-			);
-		}
 	}
 
 	#[ignore = "This test is helpful for local testing. Requires connection to westend"]

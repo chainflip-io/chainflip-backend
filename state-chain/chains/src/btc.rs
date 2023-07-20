@@ -4,10 +4,10 @@ pub mod deposit_address;
 pub mod utxo_selection;
 
 extern crate alloc;
-use core::mem::size_of;
+use core::{cmp::max, mem::size_of};
 
 use self::deposit_address::DepositAddress;
-use crate::{Chain, ChainAbi, ChainCrypto, ChannelIdConstructor, FeeRefundCalculator};
+use crate::{Chain, ChainAbi, ChainCrypto, DepositChannel, FeeRefundCalculator};
 use alloc::{collections::VecDeque, string::String};
 use arrayref::array_ref;
 use base58::{FromBase58, ToBase58};
@@ -41,7 +41,7 @@ pub const MAX_BITCOIN_SCRIPT_LENGTH: u32 = 128;
 pub type BlockNumber = u64;
 
 #[derive(Encode, Decode, TypeInfo, Clone, RuntimeDebug, PartialEq, Eq, Copy)]
-pub struct BitcoinFetchId(u64);
+pub struct BitcoinFetchId(pub u64);
 
 pub type BtcAmount = u64;
 
@@ -118,16 +118,20 @@ impl Default for BitcoinFeeInfo {
 }
 
 impl BitcoinFeeInfo {
+	/// Calculate the fees necessary based on the provided fee rate.
+	/// We ensure that a minimum of 1 sat per vByte is set for each of the fees.
 	pub fn new(sats_per_kilo_byte: BtcAmount) -> Self {
 		Self {
 			// Our input utxos are approximately 178 bytes each in the Btc transaction
-			fee_per_input_utxo: sats_per_kilo_byte.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) /
+			fee_per_input_utxo: max(sats_per_kilo_byte, BYTES_PER_KILOBYTE)
+				.saturating_mul(INPUT_UTXO_SIZE_IN_BYTES) /
 				BYTES_PER_KILOBYTE,
 			// Our output utxos are approximately 34 bytes each in the Btc transaction
-			fee_per_output_utxo: sats_per_kilo_byte.saturating_mul(OUTPUT_UTXO_SIZE_IN_BYTES) /
+			fee_per_output_utxo: max(BYTES_PER_KILOBYTE, sats_per_kilo_byte)
+				.saturating_mul(OUTPUT_UTXO_SIZE_IN_BYTES) /
 				BYTES_PER_KILOBYTE,
 			// Minimum size of tx that does not scale with input and output utxos is 12 bytes
-			min_fee_required_per_tx: sats_per_kilo_byte
+			min_fee_required_per_tx: max(BYTES_PER_KILOBYTE, sats_per_kilo_byte)
 				.saturating_mul(MINIMUM_BTC_TX_SIZE_IN_BYTES) /
 				BYTES_PER_KILOBYTE,
 		}
@@ -151,6 +155,7 @@ impl Chain for Bitcoin {
 	type ChainAccount = ScriptPubkey;
 	type EpochStartData = EpochStartData;
 	type DepositFetchId = BitcoinFetchId;
+	type DepositChannelState = ();
 }
 
 #[derive(Clone, Copy, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
@@ -256,15 +261,9 @@ pub struct UtxoId {
 	pub vout: u32,
 }
 
-impl ChannelIdConstructor for BitcoinFetchId {
-	type Address = ScriptPubkey;
-
-	fn deployed(channel_id: u64, _address: Self::Address) -> Self {
-		BitcoinFetchId(channel_id)
-	}
-
-	fn undeployed(channel_id: u64, _address: Self::Address) -> Self {
-		BitcoinFetchId(channel_id)
+impl From<&DepositChannel<Bitcoin>> for BitcoinFetchId {
+	fn from(channel: &DepositChannel<Bitcoin>) -> Self {
+		BitcoinFetchId(channel.channel_id)
 	}
 }
 

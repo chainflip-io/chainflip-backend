@@ -2,7 +2,10 @@
 
 use super::*;
 use crate::DisabledEgressAssets;
-use cf_chains::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
+use cf_chains::{
+	benchmarking_value::{BenchmarkValue, BenchmarkValueExtended},
+	DepositChannel,
+};
 use frame_benchmarking::{account, benchmarks_instance_pallet};
 
 benchmarks_instance_pallet! {
@@ -20,11 +23,13 @@ benchmarks_instance_pallet! {
 		let deposit_address: <<T as Config<I>>::TargetChain as Chain>::ChainAccount = BenchmarkValue::benchmark_value();
 		let source_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
 		let deposit_amount: <<T as Config<I>>::TargetChain as Chain>::ChainAmount = BenchmarkValue::benchmark_value();
-		DepositAddressDetailsLookup::<T, I>::insert(&deposit_address, DepositAddressDetails {
-				channel_id: 1,
+		DepositChannelLookup::<T, I>::insert(&deposit_address, DepositChannelDetails {
+			opened_at: TargetChainBlockNumber::<T, I>::benchmark_value(),
+			deposit_channel: DepositChannel::generate_new::<<T as Config<I>>::AddressDerivation>(
+				1,
 				source_asset,
-				opened_at: BenchmarkValue::benchmark_value(),
-			});
+			).unwrap()
+		});
 		ChannelActions::<T, I>::insert(&deposit_address, ChannelAction::<T::AccountId>::LiquidityProvision {
 			lp_account: account("doogle", 0, 0)
 		});
@@ -50,8 +55,16 @@ benchmarks_instance_pallet! {
 		for i in 1..a {
 			let deposit_address = <<T as Config<I>>::TargetChain as Chain>::ChainAccount::benchmark_value_by_id(a as u8);
 			let deposit_fetch_id = <<T as Config<I>>::TargetChain as Chain>::DepositFetchId::benchmark_value_by_id(a as u8);
-			AddressStatus::<T, I>::insert(deposit_address.clone(), DeploymentStatus::Pending);
-			addresses.push((deposit_fetch_id, deposit_address));
+			let source_asset: <<T as Config<I>>::TargetChain as Chain>::ChainAsset = BenchmarkValue::benchmark_value();
+			let new = DepositChannelDetails {
+				opened_at: TargetChainBlockNumber::<T, I>::benchmark_value(),
+				deposit_channel: DepositChannel::generate_new::<<T as Config<I>>::AddressDerivation>(
+					1,
+					source_asset,
+				).unwrap()
+			};
+			DepositChannelLookup::<T, I>::insert(deposit_address.clone(), new);
+			addresses.push(deposit_address);
 		}
 	}: { let _ = Pallet::<T, I>::finalise_ingress(origin, addresses); }
 

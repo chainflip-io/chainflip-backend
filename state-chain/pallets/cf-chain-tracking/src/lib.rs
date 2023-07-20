@@ -49,7 +49,6 @@ pub mod pallet {
 		MaxEncodedLen,
 		DebugNoBound,
 	)]
-	#[scale_info(skip_type_params(T, I))]
 	pub struct ChainState<C: Chain> {
 		pub block_height: C::ChainBlockNumber,
 		pub tracked_data: C::TrackedData,

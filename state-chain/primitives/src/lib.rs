@@ -2,8 +2,7 @@
 
 //! Chainflip Primitives
 //!
-//! Primitive types to be used across Chainflip's various crates
-
+//! Primitive types to be used across Chainflip's various crates.
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -11,7 +10,10 @@ use sp_runtime::{
 	MultiSignature, RuntimeDebug,
 };
 
-use sp_std::vec::Vec;
+use sp_std::{
+	cmp::{Ord, PartialOrd},
+	vec::Vec,
+};
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -143,4 +145,26 @@ impl From<AssetAmount> for SwapOutput {
 pub enum SwapLeg {
 	FromStable,
 	ToStable,
+}
+
+pub type TransactionHash = [u8; 32];
+
+#[derive(
+	Copy,
+	Clone,
+	Debug,
+	Default,
+	PartialEq,
+	Eq,
+	PartialOrd,
+	Ord,
+	Encode,
+	Decode,
+	TypeInfo,
+	MaxEncodedLen,
+)]
+pub struct SemVer {
+	pub major: u8,
+	pub minor: u8,
+	pub patch: u8,
 }
