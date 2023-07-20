@@ -52,6 +52,7 @@ pub struct RuntimeApiAccountInfoV2 {
 	pub is_qualified: bool,
 	pub is_online: bool,
 	pub is_bidding: bool,
+	pub bound_redeem_address: Option<EthereumAddress>,
 }
 
 #[derive(Encode, Decode, Eq, PartialEq)]

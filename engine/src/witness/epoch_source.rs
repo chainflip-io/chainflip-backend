@@ -31,7 +31,26 @@ enum EpochUpdate<Info, HistoricInfo> {
 	Expired,
 }
 
-pub struct EpochSource<'a, 'env, StateChainClient, Info, HistoricInfo> {
+#[derive(Clone)]
+pub struct EpochSource<Info, HistoricInfo> {
+	epochs: BTreeMap<EpochIndex, (Info, Option<HistoricInfo>)>,
+	epoch_update_receiver: async_broadcast::Receiver<(
+		EpochIndex,
+		state_chain_runtime::Hash,
+		EpochUpdate<Info, HistoricInfo>,
+	)>,
+}
+
+impl<'a, 'env, StateChainClient, Info, HistoricInfo>
+	From<EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>>
+	for EpochSource<Info, HistoricInfo>
+{
+	fn from(value: EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>) -> Self {
+		Self { epochs: value.epochs, epoch_update_receiver: value.epoch_update_receiver }
+	}
+}
+
+pub struct EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo> {
 	scope: &'a Scope<'env, anyhow::Error>,
 	state_chain_client: Arc<StateChainClient>,
 	initial_block_hash: state_chain_runtime::Hash,
@@ -43,7 +62,7 @@ pub struct EpochSource<'a, 'env, StateChainClient, Info, HistoricInfo> {
 	)>,
 }
 impl<'a, 'env, StateChainClient, Info: Clone, HistoricInfo: Clone> Clone
-	for EpochSource<'a, 'env, StateChainClient, Info, HistoricInfo>
+	for EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>
 {
 	fn clone(&self) -> Self {
 		Self {
@@ -55,14 +74,17 @@ impl<'a, 'env, StateChainClient, Info: Clone, HistoricInfo: Clone> Clone
 		}
 	}
 }
-impl<'a, 'env, StateChainClient: client::storage_api::StorageApi + Send + Sync + 'static>
-	EpochSource<'a, 'env, StateChainClient, (), ()>
-{
-	pub async fn new<StateChainStream: client::StateChainStreamApi>(
+impl EpochSource<(), ()> {
+	pub async fn builder<
+		'a,
+		'env,
+		StateChainStream: client::StateChainStreamApi,
+		StateChainClient: client::storage_api::StorageApi + Send + Sync + 'static,
+	>(
 		scope: &'a Scope<'env, anyhow::Error>,
 		mut state_chain_stream: StateChainStream,
 		state_chain_client: Arc<StateChainClient>,
-	) -> EpochSource<'a, 'env, StateChainClient, (), ()> {
+	) -> EpochSourceBuilder<'a, 'env, StateChainClient, (), ()> {
 		let (epoch_update_sender, epoch_update_receiver) = async_broadcast::broadcast(1);
 
 		let initial_block_hash = state_chain_stream.cache().block_hash;
@@ -124,7 +146,7 @@ impl<'a, 'env, StateChainClient: client::storage_api::StorageApi + Send + Sync +
 			}
 		});
 
-		Self {
+		EpochSourceBuilder {
 			scope,
 			state_chain_client,
 			initial_block_hash,
@@ -134,13 +156,8 @@ impl<'a, 'env, StateChainClient: client::storage_api::StorageApi + Send + Sync +
 	}
 }
 
-impl<
-		'a,
-		'env,
-		StateChainClient,
-		Info: Clone + Send + Sync + 'static,
-		HistoricInfo: Clone + Send + Sync + 'static,
-	> EpochSource<'a, 'env, StateChainClient, Info, HistoricInfo>
+impl<Info: Clone + Send + Sync + 'static, HistoricInfo: Clone + Send + Sync + 'static>
+	EpochSource<Info, HistoricInfo>
 {
 	pub async fn into_stream(
 		self,
@@ -221,12 +238,12 @@ impl<
 		StateChainClient: client::storage_api::StorageApi + Send + Sync + 'static,
 		Info: Clone + Send + Sync + 'static,
 		HistoricInfo: Clone + Send + Sync + 'static,
-	> EpochSource<'a, 'env, StateChainClient, Info, HistoricInfo>
+	> EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>
 {
 	pub async fn participating(
 		self,
 		account_id: AccountId,
-	) -> EpochSource<'a, 'env, StateChainClient, Info, HistoricInfo> {
+	) -> EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo> {
 		self.filter_map(
 			move |state_chain_client, epoch, block_hash, info| {
 				let account_id = account_id.clone();
@@ -263,7 +280,7 @@ impl<
 		self,
 		filter_map: FilterMapInfo,
 		map_historic_info: MapHistoricInfo,
-	) -> EpochSource<'a, 'env, StateChainClient, MappedInfo, MappedHistoricInfo>
+	) -> EpochSourceBuilder<'a, 'env, StateChainClient, MappedInfo, MappedHistoricInfo>
 	where
 		FilterMapInfo: Fn(Arc<StateChainClient>, EpochIndex, state_chain_runtime::Hash, Info) -> InfoFut
 			+ Send
@@ -278,7 +295,7 @@ impl<
 		HIFut: Future<Output = MappedHistoricInfo> + Send + 'static,
 		MappedHistoricInfo: Clone + Send + Sync + 'static,
 	{
-		let EpochSource {
+		let EpochSourceBuilder {
 			scope,
 			state_chain_client,
 			initial_block_hash,
@@ -356,27 +373,34 @@ impl<
 			}
 		});
 
-		EpochSource { scope, state_chain_client, initial_block_hash, epochs, epoch_update_receiver }
+		EpochSourceBuilder {
+			scope,
+			state_chain_client,
+			initial_block_hash,
+			epochs,
+			epoch_update_receiver,
+		}
 	}
 }
 
 pub type Vault<TChain> =
 	Epoch<pallet_cf_vaults::Vault<TChain>, <TChain as Chain>::ChainBlockNumber>;
 
-pub type VaultSource<'a, 'env, StateChainClient, TChain> = EpochSource<
-	'a,
-	'env,
-	StateChainClient,
-	pallet_cf_vaults::Vault<TChain>,
-	<TChain as Chain>::ChainBlockNumber,
->;
+pub type VaultSource<TChain> =
+	EpochSource<pallet_cf_vaults::Vault<TChain>, <TChain as Chain>::ChainBlockNumber>;
 
 impl<'a, 'env, StateChainClient: client::storage_api::StorageApi + Send + Sync + 'static>
-	EpochSource<'a, 'env, StateChainClient, (), ()>
+	EpochSourceBuilder<'a, 'env, StateChainClient, (), ()>
 {
 	pub async fn vaults<TChain: ExternalChain>(
 		self,
-	) -> VaultSource<'a, 'env, StateChainClient, TChain>
+	) -> EpochSourceBuilder<
+		'a,
+		'env,
+		StateChainClient,
+		pallet_cf_vaults::Vault<TChain>,
+		<TChain as Chain>::ChainBlockNumber,
+	>
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<TChain>,
 	{

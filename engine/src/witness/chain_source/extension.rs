@@ -50,25 +50,25 @@ pub trait ChainSourceExt: ChainSource {
 		StrictlyMonotonic::new(self)
 	}
 
-	async fn chunk_by_time<'b, 'env, StateChainClient: Send + Sync>(
+	fn chunk_by_time<Epochs: Into<EpochSource<(), ()>>>(
 		self,
-		epochs: EpochSource<'b, 'env, StateChainClient, (), ()>,
+		epochs: Epochs,
 	) -> ChunkedByTimeBuilder<ChunkByTime<Self>>
 	where
 		Self: ExternalChainSource + Sized,
 	{
-		ChunkedByTimeBuilder::new(ChunkByTime::new(self), epochs.into_stream().await.into_box())
+		ChunkedByTimeBuilder::new(ChunkByTime::new(self), epochs.into())
 	}
 
-	async fn chunk_by_vault<'b, 'env, StateChainClient: Send + Sync>(
+	fn chunk_by_vault<Vaults: Into<VaultSource<Self::Chain>>>(
 		self,
-		vaults: VaultSource<'b, 'env, StateChainClient, Self::Chain>,
+		vaults: Vaults,
 	) -> ChunkedByVaultBuilder<ChunkByVault<Self>>
 	where
 		Self: ExternalChainSource + Sized,
 		state_chain_runtime::Runtime: RuntimeHasChain<Self::Chain>,
 	{
-		ChunkedByVaultBuilder::new(ChunkByVault::new(self), vaults.into_stream().await.into_box())
+		ChunkedByVaultBuilder::new(ChunkByVault::new(self), vaults.into())
 	}
 }
 impl<T: ChainSource> ChainSourceExt for T {}

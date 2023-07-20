@@ -122,6 +122,7 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
+          ls -alR /tmp/chainflip
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs
           docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" down --rmi all --volumes --remove-orphans
 

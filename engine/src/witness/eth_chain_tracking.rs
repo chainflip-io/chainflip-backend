@@ -72,7 +72,7 @@ pub async fn test<StateChainClient, StateChainStream>(
 			let eth_source = EthSource::new(eth_client.clone());
 
 			let epoch_source =
-				EpochSource::new(scope, state_chain_stream, state_chain_client.clone())
+				EpochSource::builder(scope, state_chain_stream, state_chain_client.clone())
 					.await
 					.participating(state_chain_client.account_id())
 					.await;
@@ -80,7 +80,6 @@ pub async fn test<StateChainClient, StateChainStream>(
 			eth_source
 				.shared(scope)
 				.chunk_by_time(epoch_source)
-				.await
 				.chain_tracking(state_chain_client, eth_client)
 				.run()
 				.await;

@@ -60,6 +60,22 @@ export function fineAmountToAmount(fineAmount: string, decimals: number): string
   return balance;
 }
 
+export function defaultAssetAmounts(asset: Asset): string {
+  switch (asset) {
+    case 'BTC':
+      return '0.05';
+    case 'ETH':
+      return '5';
+    case 'DOT':
+      return '50';
+    case 'USDC':
+    case 'FLIP':
+      return '500';
+    default:
+      throw new Error(`Unsupported asset: ${asset}`);
+  }
+}
+
 export const runWithTimeout = <T>(promise: Promise<T>, millis: number): Promise<T> =>
   Promise.race([
     promise,

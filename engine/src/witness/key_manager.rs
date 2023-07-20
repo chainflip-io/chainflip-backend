@@ -217,14 +217,13 @@ mod tests {
 					.unwrap();
 
 				let vault_source =
-					EpochSource::new(scope, state_chain_stream, state_chain_client.clone())
+					EpochSource::builder(scope, state_chain_stream, state_chain_client.clone())
 						.await
 						.vaults()
 						.await;
 
 				EthSource::new(retry_client.clone())
 					.chunk_by_vault(vault_source)
-					.await
 					.key_manager_witnessing(
 						state_chain_client,
 						retry_client,

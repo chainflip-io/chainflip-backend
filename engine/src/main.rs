@@ -1,5 +1,5 @@
 use anyhow::Context;
-use cf_primitives::AccountRole;
+use cf_primitives::{AccountRole, SemVer};
 use chainflip_engine::{
 	btc::{self, rpc::BtcRpcClient, BtcBroadcaster},
 	db::{KeyStore, PersistentKeyDB},
@@ -22,7 +22,6 @@ use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
 use clap::Parser;
 use futures::FutureExt;
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
-use pallet_cf_validator::SemVer;
 use std::sync::{atomic::AtomicBool, Arc};
 use utilities::{task_scope::task_scope, CachedStream};
 use web3::types::U256;
