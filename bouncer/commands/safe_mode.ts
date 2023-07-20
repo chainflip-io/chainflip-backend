@@ -4,7 +4,7 @@
 // It will set the SafeMode state of the chain to the value provided by the first argument.
 // Valid arguments are "green", "amber" and "red".
 // For example: pnpm tsx ./commands/safe_mode.ts green
-// For "amber" mode, you can specify which features should remain enabled. For this, as the second argument 
+// For "amber" mode, you can specify which features should remain enabled. For this, as the second argument
 // provide a comma separated list (without spaces!) of the features that should remain enabled.
 // Available features are:
 // emissions_emissionsSyncEnabled, funding_redeemEnabled, swapping_swapsEnabled, swapping_withdrawalsEnabled,
