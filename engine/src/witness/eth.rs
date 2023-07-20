@@ -18,11 +18,11 @@ use super::{
 
 use anyhow::Result;
 
-pub async fn start<StateChainClient>(
+pub async fn start<StateChainClient, Epochs: Into<EpochSource<(), ()>>>(
 	scope: &Scope<'_, anyhow::Error>,
 	settings: &settings::Eth,
 	state_chain_client: Arc<StateChainClient>,
-	epoch_source: EpochSource<'_, '_, StateChainClient, (), ()>,
+	epoch_source: Epochs,
 	initial_block_hash: state_chain_runtime::Hash,
 ) -> Result<()>
 where
@@ -47,7 +47,6 @@ where
 	let eth_chain_tracking = EthSource::new(eth_client.clone())
 		.shared(scope)
 		.chunk_by_time(epoch_source)
-		.await
 		.chain_tracking(state_chain_client, eth_client)
 		.run();
 

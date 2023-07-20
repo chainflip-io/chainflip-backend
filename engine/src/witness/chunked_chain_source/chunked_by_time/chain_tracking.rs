@@ -5,14 +5,12 @@ use state_chain_runtime::PalletInstanceAlias;
 
 use crate::witness::chain_source::Header;
 
-use crate::witness::chunked_chain_source::Builder;
-
 use crate::{
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
 	witness::common::{RuntimeCallHasChain, RuntimeHasChain},
 };
 
-use super::{ChunkedByTime, ChunkedByTimeAlias, Generic};
+use super::{builder::ChunkedByTimeBuilder, ChunkedByTime};
 
 #[async_trait::async_trait]
 pub trait GetTrackedData<C: cf_chains::Chain, Hash, Data>: Send + Sync + Clone {
@@ -22,12 +20,12 @@ pub trait GetTrackedData<C: cf_chains::Chain, Hash, Data>: Send + Sync + Clone {
 	) -> Result<C::TrackedData, anyhow::Error>;
 }
 
-impl<Inner: ChunkedByTime> Builder<Generic<Inner>> {
+impl<Inner: ChunkedByTime> ChunkedByTimeBuilder<Inner> {
 	pub fn chain_tracking<StateChainClient, TrackedDataClient>(
 		self,
 		state_chain_client: Arc<StateChainClient>,
 		tracked_data_client: TrackedDataClient,
-	) -> Builder<impl ChunkedByTimeAlias>
+	) -> ChunkedByTimeBuilder<impl ChunkedByTime>
 	where
 		Inner: ChunkedByTime,
 		StateChainClient: SignedExtrinsicApi + Send + Sync + 'static,

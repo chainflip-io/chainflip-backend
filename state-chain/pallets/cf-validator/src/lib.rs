@@ -17,7 +17,7 @@ mod benchmarking;
 mod rotation_state;
 
 pub use auction_resolver::*;
-use cf_primitives::{AuthorityCount, EpochIndex};
+use cf_primitives::{AuthorityCount, EpochIndex, SemVer};
 use cf_traits::{
 	impl_pallet_safe_mode, offence_reporting::OffenceReporter, AsyncResult, AuctionOutcome, Bid,
 	BidderProvider, Bonding, Chainflip, EpochInfo, EpochTransitionHandler, ExecutionCondition,
@@ -44,15 +44,6 @@ use sp_std::{
 use crate::rotation_state::RotationState;
 
 type SessionIndex = u32;
-
-#[derive(
-	Clone, Debug, Default, PartialEq, Eq, PartialOrd, Encode, Decode, TypeInfo, MaxEncodedLen,
-)]
-pub struct SemVer {
-	pub major: u8,
-	pub minor: u8,
-	pub patch: u8,
-}
 
 type Version = SemVer;
 type Ed25519PublicKey = ed25519::Public;
@@ -700,8 +691,8 @@ pub mod pallet {
 				if *current_version != new_version {
 					Self::deposit_event(Event::CFEVersionUpdated {
 						account_id: validator_id.clone(),
-						old_version: current_version.clone(),
-						new_version: new_version.clone(),
+						old_version: *current_version,
+						new_version,
 					});
 					*current_version = new_version;
 				}

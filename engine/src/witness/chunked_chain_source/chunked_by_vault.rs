@@ -1,3 +1,4 @@
+pub mod builder;
 pub mod ingress_addresses;
 
 use cf_chains::Chain;
@@ -6,7 +7,7 @@ use futures_util::StreamExt;
 use crate::witness::{
 	chain_source::{aliases, BoxChainStream, ChainClient, ChainStream},
 	common::{BoxActiveAndFuture, ExternalChain, ExternalChainSource, RuntimeHasChain},
-	epoch_source::{self, Epoch},
+	epoch_source::{Epoch, VaultSource},
 };
 
 use super::ChunkedChainSource;
@@ -24,33 +25,6 @@ pub trait ChunkedByVault: Sized + Send + Sync {
 	type Parameters: Send;
 
 	async fn stream(&self, parameters: Self::Parameters) -> BoxActiveAndFuture<'_, Item<'_, Self>>;
-}
-
-pub trait ChunkedByVaultAlias:
-	ChunkedByVault
-	+ ChunkedChainSource<
-		Info = pallet_cf_vaults::Vault<<Self as ChunkedByVault>::Chain>,
-		HistoricInfo = <<Self as ChunkedByVault>::Chain as Chain>::ChainBlockNumber,
-		Index = <Self as ChunkedByVault>::Index,
-		Hash = <Self as ChunkedByVault>::Hash,
-		Data = <Self as ChunkedByVault>::Data,
-		Client = <Self as ChunkedByVault>::Client,
-		Chain = <Self as ChunkedByVault>::Chain,
-	>
-{
-}
-impl<T> ChunkedByVaultAlias for T where
-	T: ChunkedByVault
-		+ ChunkedChainSource<
-			Info = pallet_cf_vaults::Vault<<Self as ChunkedByVault>::Chain>,
-			HistoricInfo = <<Self as ChunkedByVault>::Chain as Chain>::ChainBlockNumber,
-			Index = <Self as ChunkedByVault>::Index,
-			Hash = <Self as ChunkedByVault>::Hash,
-			Data = <Self as ChunkedByVault>::Data,
-			Client = <Self as ChunkedByVault>::Client,
-			Chain = <Self as ChunkedByVault>::Chain,
-		>
-{
 }
 
 pub type Item<'a, T> = (
@@ -92,28 +66,6 @@ impl<
 	}
 }
 
-/// Wraps a specific impl of ChunkedByVault, and impls ChunkedChainSource for it
-pub struct Generic<T>(pub T);
-#[async_trait::async_trait]
-impl<T: ChunkedByVault> ChunkedChainSource for Generic<T> {
-	type Info = pallet_cf_vaults::Vault<T::Chain>;
-	type HistoricInfo = <T::Chain as Chain>::ChainBlockNumber;
-
-	type Index = T::Index;
-	type Hash = T::Hash;
-	type Data = T::Data;
-
-	type Client = T::Client;
-
-	type Chain = T::Chain;
-
-	type Parameters = T::Parameters;
-
-	async fn stream(&self, parameters: Self::Parameters) -> BoxActiveAndFuture<'_, Item<'_, Self>> {
-		self.0.stream(parameters).await
-	}
-}
-
 pub struct ChunkByVault<TChainSource: ExternalChainSource>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<TChainSource::Chain>,
@@ -141,10 +93,12 @@ where
 
 	type Chain = TChainSource::Chain;
 
-	type Parameters = BoxActiveAndFuture<'static, epoch_source::Vault<TChainSource::Chain>>;
+	type Parameters = VaultSource<TChainSource::Chain>;
 
 	async fn stream(&self, vaults: Self::Parameters) -> BoxActiveAndFuture<'_, Item<'_, Self>> {
 		vaults
+			.into_stream()
+			.await
 			.then(move |mut vault| async move {
 				let (stream, client) = self.chain_source.stream_and_client().await;
 

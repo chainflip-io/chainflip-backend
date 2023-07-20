@@ -206,7 +206,7 @@ yeet() {
 
 logs() {
   echo "🤖 Which service would you like to tail?"
-  select SERVICE in node engine broker lp polkadot geth bitcoin sequencer staker all; do
+  select SERVICE in node engine broker lp polkadot geth bitcoin poster sequencer staker all; do
     if [ $SERVICE == "all" ]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow
       tail -f /tmp/chainflip/chainflip-*.log
@@ -219,6 +219,9 @@ logs() {
     fi
     if [ $SERVICE == "bitcoin" ]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow bitcoin
+    fi
+    if [ $SERVICE == "poster" ]; then
+      docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow poster
     fi
     if [ $SERVICE == "sequencer" ]; then
       docker compose -f localnet/docker-compose.yml -p "chainflip-localnet" logs --follow sequencer

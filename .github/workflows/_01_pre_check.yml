@@ -69,6 +69,11 @@ jobs:
           scope: "@chainflip-io"
           cache-dependency-path: "bouncer/pnpm-lock.yaml"
 
+      - name: Set NPM registry
+        run: |
+          pnpm set @chainflip-io:registry=https://npm.pkg.github.com/
+          pnpm set //npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}
+
       - name: Install node dependencies
         working-directory: bouncer
         run: pnpm install
