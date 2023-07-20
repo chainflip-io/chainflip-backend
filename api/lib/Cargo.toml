@@ -31,6 +31,7 @@ custom-rpc = { path = "../../state-chain/custom-rpc" }
 pallet-cf-account-roles = { path = '../../state-chain/pallets/cf-account-roles' }
 pallet-cf-environment = { path = "../../state-chain/pallets/cf-environment" }
 pallet-cf-governance = { path = "../../state-chain/pallets/cf-governance" }
+pallet-cf-ingress-egress = { path = "../../state-chain/pallets/cf-ingress-egress" }
 pallet-cf-lp = { path = '../../state-chain/pallets/cf-lp' }
 pallet-cf-pools = { path = '../../state-chain/pallets/cf-pools' }
 pallet-cf-funding = { path = "../../state-chain/pallets/cf-funding" }

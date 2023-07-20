@@ -3,7 +3,11 @@ use cf_utilities::try_parse_number_or_hex;
 use chainflip_api::{
 	self,
 	lp::{self, BuyOrSellOrder, MintRangeOrderReturn, Tick},
-	primitives::{AccountRole, Asset, ForeignChain},
+	primitives::{
+		chains::{Bitcoin, Ethereum, Polkadot},
+		AccountRole, Asset, ForeignChain,
+	},
+	queries::SwapChannelInfo,
 	settings::StateChain,
 };
 use clap::Parser;
@@ -131,6 +135,9 @@ pub trait Rpc {
 
 	#[method(name = "getRangeOrders")]
 	async fn get_range_orders(&self) -> Result<String, Error>;
+
+	#[method(name = "getOpenSwapChannels")]
+	async fn get_open_swap_channels(&self) -> Result<Vec<SwapChannelInfo>, Error>;
 }
 pub struct RpcServerImpl {
 	state_chain_settings: StateChain,
@@ -305,6 +312,20 @@ impl RpcServer for RpcServerImpl {
 		.await
 		.map(|tx_hash| format!("{tx_hash:#x}"))
 		.map_err(|e| Error::Custom(e.to_string()))
+	}
+
+	async fn get_open_swap_channels(&self) -> Result<Vec<SwapChannelInfo>, Error> {
+		let (client, latest_hash) =
+			chainflip_api::queries::connect(&self.state_chain_settings).await?;
+
+		let (eth_result, btc_result, dot_result) = tokio::try_join!(
+			chainflip_api::queries::get_open_swap_channels::<Ethereum>(client.clone(), latest_hash,),
+			chainflip_api::queries::get_open_swap_channels::<Bitcoin>(client.clone(), latest_hash,),
+			chainflip_api::queries::get_open_swap_channels::<Polkadot>(client, latest_hash),
+		)
+		.map_err(|e| Error::Custom(e.to_string()))?;
+
+		Ok([eth_result, btc_result, dot_result].into_iter().flatten().collect())
 	}
 }
 

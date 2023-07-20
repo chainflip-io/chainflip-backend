@@ -26,6 +26,7 @@ pub mod primitives {
 }
 
 pub mod lp;
+pub mod queries;
 
 pub use chainflip_engine::settings;
 pub use chainflip_node::chain_spec::use_chainflip_account_id_encoding;
