@@ -26,7 +26,7 @@ async function main() {
       break;
     }
     case 'AMBER': {
-      const options: string[] = process.argv[3] !== undefined ? process.argv[3].split(',') : [];
+      const options: string[] = process.argv[3] ? process.argv[3].split(',') : [];
       await setSafeModeToAmber(options);
       break;
     }

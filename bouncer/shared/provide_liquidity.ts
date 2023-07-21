@@ -21,7 +21,7 @@ const chain = new Map<Asset, string>([
 ]);
 
 export async function provideLiquidity(ccy: Asset, amount: number) {
-  const chainflip = await getChainflipApi(process.env.CF_NODE_ENDPOINT);
+  const chainflip = await getChainflipApi();
   await cryptoWaitReady();
 
   const keyring = new Keyring({ type: 'sr25519' });
