@@ -273,18 +273,30 @@ impl Engine {
 									Validator::epoch_index()
 								);
 
-
-								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
-									RuntimeOrigin::signed(self.node_id.clone()),
-									Box::new(pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
-										block_number: 100,
-										tx_id: TxId {
-											block_number: 2,
-											extrinsic_index: 1,
+								if Validator::epoch_index() == GENESIS_EPOCH {
+									let _result = state_chain_runtime::Environment::witness_polkadot_vault_creation(
+										pallet_cf_governance::RawOrigin::GovernanceApproval.into(),
+										// Use a dummy key for polkadot - we don't sign anything with it
+										// in these tests.
+										Default::default(),
+										TxId {
+											block_number: 1,
+											extrinsic_index: 0,
 										},
-									}.into()),
-									Validator::epoch_index()
-								);
+									);
+								}else {
+									let _result = state_chain_runtime::Witnesser::witness_at_epoch(
+										RuntimeOrigin::signed(self.node_id.clone()),
+										Box::new(pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
+											block_number: 100,
+											tx_id: TxId {
+												block_number: 2,
+												extrinsic_index: 1,
+											},
+										}.into()),
+										Validator::epoch_index()
+									);
+								}
 
 
 								let _result = state_chain_runtime::Witnesser::witness_at_epoch(
