@@ -162,9 +162,9 @@ async function main(): Promise<void> {
 
   // Confirmation
   console.log('Waiting for new epoch...');
-  await observeEvent('validator:NewEpoch', chainflip, (e) => {
+  await observeEvent('validator:NewEpoch', chainflip, (observedEvent) => {
     console.log('=== New Epoch ===');
-    console.error(e);
+    console.log(observedEvent);
     return true;
   });
   console.log('=== Vault Setup completed ===');
