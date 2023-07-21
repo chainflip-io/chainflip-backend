@@ -5,6 +5,7 @@ use sp_std::collections::btree_map::BTreeMap;
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 use sp_core::{U256, U512};
 
 use crate::common::{
@@ -30,6 +31,7 @@ fn sqrt_price_to_price(sqrt_price: SqrtPriceQ64F96) -> Price {
 
 /// Represents a number exclusively between 0 and 1.
 #[derive(Clone, Debug, PartialEq, Eq, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 struct FloatBetweenZeroAndOne {
 	normalised_mantissa: U256,
 	negative_exponent: U256,
@@ -256,6 +258,7 @@ pub struct CollectedAmounts {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 struct Position {
 	pool_instance: u128,
 	amount: Amount,
@@ -263,6 +266,7 @@ struct Position {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 pub struct FixedPool {
 	pool_instance: u128,
 	available: Amount,
@@ -270,7 +274,8 @@ pub struct FixedPool {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-pub struct PoolState<LiquidityProvider> {
+#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
+pub struct PoolState<LiquidityProvider: Ord> {
 	fee_hundredth_pips: u32,
 	next_pool_instance: u128,
 	fixed_pools: SideMap<BTreeMap<SqrtPriceQ64F96, FixedPool>>,

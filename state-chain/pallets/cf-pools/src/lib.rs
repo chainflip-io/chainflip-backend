@@ -40,7 +40,8 @@ pub mod pallet {
 	use super::*;
 
 	#[derive(Clone, Debug, Encode, Decode, TypeInfo)]
-	pub struct Pool<LiquidityProvider> {
+	#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
+	pub struct Pool<LiquidityProvider: Ord> {
 		pub enabled: bool,
 		pub pool_state: PoolState<LiquidityProvider>,
 	}

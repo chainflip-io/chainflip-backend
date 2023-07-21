@@ -7,12 +7,15 @@ use codec::{Decode, Encode};
 use common::{Amount, SqrtPriceQ64F96};
 use scale_info::TypeInfo;
 
+use serde::{Deserialize, Serialize};
+
 pub mod common;
 pub mod limit_orders;
 pub mod range_orders;
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-pub struct PoolState<LiquidityProvider> {
+#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
+pub struct PoolState<LiquidityProvider: Ord> {
 	pub limit_orders: limit_orders::PoolState<LiquidityProvider>,
 	pub range_orders: range_orders::PoolState<LiquidityProvider>,
 }
