@@ -3,14 +3,13 @@ Description=Chainflip Validator Engine
 After=chainflip-node.service
 
 [Service]
-Environment=RUST_LOG="chainflip_engine=debug,multisig=debug,warn,chainflip_engine::p2p=error"
-
 Restart=always
 RestartSec=30
 Type=simple
 
-ExecStart=/usr/bin/chainflip-engine --config-root /etc/chainflip/
+WorkingDirectory=/etc/chainflip/
 
+ExecStart=/bin/sh start-engine.sh
 LimitNOFILE=16000
 LimitNOFILESoft=16000
 
