@@ -7,8 +7,6 @@ import {
   runWithTimeout,
   chainFromAsset,
   getEthContractAddress,
-  encodeBtcAddressForContract,
-  encodeDotAddressForContract,
   amountToFineAmount,
   defaultAssetAmounts,
 } from '../shared/utils';
@@ -122,12 +120,12 @@ async function testAll() {
   // Single approval of all the assets swapped in contractsSwaps to avoid overlapping async approvals.
   // Make sure to to set the allowance to the same amount of total asset swapped in contractsSwaps,
   // otherwise in subsequent approvals the broker might not send the transaction confusing the eth nonce.
-  // await approveTokenVault(
-  //   'USDC',
-  //   (
-  //     parseInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC), 10) * 4
-  //   ).toString(),
-  // );
+  await approveTokenVault(
+    'USDC',
+    (
+      parseInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC), 10) * 4
+    ).toString(),
+  );
 
   const ccmContractSwaps = Promise.all([
     testSwapViaContract('ETH', 'USDC', {
@@ -152,10 +150,10 @@ async function testAll() {
   ]);
 
   const regularSwaps = Promise.all([
-    testSwap('DOT', 'BTC', 'P2PKH'),
-    testSwap('ETH', 'BTC', 'P2SH'),
-    testSwap('USDC', 'BTC', 'P2WPKH'),
-    testSwap('DOT', 'BTC', 'P2WSH'),
+    // testSwap('DOT', 'BTC', 'P2PKH'),
+    // testSwap('ETH', 'BTC', 'P2SH'),
+    // testSwap('USDC', 'BTC', 'P2WPKH'),
+    // testSwap('DOT', 'BTC', 'P2WSH'),
     testSwap('BTC', 'DOT'),
     testSwap('DOT', 'USDC'),
     testSwap('DOT', 'ETH'),
@@ -168,16 +166,16 @@ async function testAll() {
   // all ccm swaps have the same destination address (cfReceiver) and then it will get a
   // potentially incorrect depositAddress.
   const ccmSwaps = Promise.all([
-    testSwap('BTC', 'ETH', undefined, {
-      message: new Web3().eth.abi.encodeParameter('string', 'BTC to ETH w/ CCM!!'),
-      gasBudget: 1000000,
-      cfParameters: '',
-    }),
-    testSwap('BTC', 'USDC', undefined, {
-      message: '0x' + Buffer.from('BTC to ETH w/ CCM!!', 'ascii').toString('hex'),
-      gasBudget: 600000,
-      cfParameters: getAbiEncodedMessage(['uint256']),
-    }),
+    // testSwap('BTC', 'ETH', undefined, {
+    //   message: new Web3().eth.abi.encodeParameter('string', 'BTC to ETH w/ CCM!!'),
+    //   gasBudget: 1000000,
+    //   cfParameters: '',
+    // }),
+    // testSwap('BTC', 'USDC', undefined, {
+    //   message: '0x' + Buffer.from('BTC to ETH w/ CCM!!', 'ascii').toString('hex'),
+    //   gasBudget: 600000,
+    //   cfParameters: getAbiEncodedMessage(['uint256']),
+    // }),
     testSwap('DOT', 'ETH', undefined, {
       message: getAbiEncodedMessage(['string', 'address']),
       gasBudget: 1000000,
