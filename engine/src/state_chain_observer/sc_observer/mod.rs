@@ -14,7 +14,9 @@ use crypto_compat::CryptoCompat;
 use futures::{FutureExt, StreamExt};
 use sp_core::{H160, H256};
 use sp_runtime::AccountId32;
-use state_chain_runtime::{AccountId, BitcoinInstance, EthereumInstance, PolkadotInstance};
+use state_chain_runtime::{
+	AccountId, ArbitrumInstance, BitcoinInstance, EthereumInstance, PolkadotInstance,
+};
 use std::{
 	collections::BTreeSet,
 	sync::{
@@ -235,8 +237,9 @@ pub async fn start<
 	DotRpc,
 	BtcRpc,
 	EthMultisigClient,
-	PolkadotMultisigClient,
-	BitcoinMultisigClient,
+	DotMultisigClient,
+	BtcMultisigClient,
+	ArbMultisigClient,
 >(
 	state_chain_client: Arc<StateChainClient>,
 	sc_block_stream: BlockStream,
@@ -244,8 +247,9 @@ pub async fn start<
 	dot_broadcaster: DotBroadcaster<DotRpc>,
 	btc_broadcaster: BtcBroadcaster<BtcRpc>,
 	eth_multisig_client: EthMultisigClient,
-	dot_multisig_client: PolkadotMultisigClient,
-	btc_multisig_client: BitcoinMultisigClient,
+	dot_multisig_client: DotMultisigClient,
+	btc_multisig_client: BtcMultisigClient,
+	arb_multisig_client: ArbMultisigClient,
 	peer_update_sender: UnboundedSender<PeerUpdate>,
 	eth_epoch_start_sender: async_broadcast::Sender<EpochStart<Ethereum>>,
 	eth_address_to_monitor_sender: EthAddressToMonitorSender,
@@ -266,8 +270,9 @@ where
 	DotRpc: DotRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
-	PolkadotMultisigClient: MultisigClientApi<PolkadotCryptoScheme> + Send + Sync + 'static,
-	BitcoinMultisigClient: MultisigClientApi<BtcCryptoScheme> + Send + Sync + 'static,
+	DotMultisigClient: MultisigClientApi<PolkadotCryptoScheme> + Send + Sync + 'static,
+	BtcMultisigClient: MultisigClientApi<BtcCryptoScheme> + Send + Sync + 'static,
+	ArbMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,
 	StateChainClient:
 		StorageApi + UnsignedExtrinsicApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
@@ -501,9 +506,9 @@ where
                                             epoch_index
                                         }
                                     ) => {
-                                        handle_keygen_request::<_, _, _, EthereumInstance>(
+                                        handle_keygen_request::<_, _, _, ArbitrumInstance>(
                                             scope,
-                                            &eth_multisig_client,
+                                            &arb_multisig_client,
                                             state_chain_client.clone(),
                                             ceremony_id,
                                             epoch_index,
@@ -590,6 +595,28 @@ where
                                             signing_info,
                                         ).await;
                                     }
+                                    state_chain_runtime::RuntimeEvent::ArbitrumThresholdSigner(
+                                        pallet_cf_threshold_signature::Event::ThresholdSignatureRequest{
+                                            request_id: _,
+                                            ceremony_id,
+                                            epoch,
+                                            key,
+                                            signatories,
+                                            payload,
+                                        },
+                                    ) => {
+                                        handle_signing_request::<_, _, _, ArbitrumInstance>(
+                                                scope,
+                                                &arb_multisig_client,
+                                            state_chain_client.clone(),
+                                            ceremony_id,
+                                            signatories,
+                                            vec![(
+                                                KeyId::new(epoch, key),
+                                                multisig::eth::SigningPayload(payload.0)
+                                            )],
+                                        ).await;
+                                    }
                                     // ======= KEY HANDOVER =======
                                     state_chain_runtime::RuntimeEvent::BitcoinVault(
                                         pallet_cf_vaults::Event::KeyHandoverRequest {
@@ -628,6 +655,13 @@ where
                                         },
                                     ) => {
                                         panic!("There should be no key handover requests made for Polkadot")
+                                    }
+                                    state_chain_runtime::RuntimeEvent::ArbitrumVault(
+                                        pallet_cf_vaults::Event::KeyHandoverRequest {
+                                           ..
+                                        },
+                                    ) => {
+                                        panic!("There should be no key handover requests made for Arbitrum")
                                     }
 
                                     state_chain_runtime::RuntimeEvent::EthereumBroadcaster(
