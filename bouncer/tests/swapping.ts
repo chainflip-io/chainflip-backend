@@ -147,7 +147,6 @@ async function testAll() {
   ]);
 
   const regularSwaps = Promise.all([
-    // All these work
     testSwap('ETH', 'BTC', 'P2PKH'),
     testSwap('ETH', 'BTC', 'P2WSH'),
     testSwap('ETH', 'BTC', 'P2SH'),
@@ -165,11 +164,10 @@ async function testAll() {
     testSwap('DOT', 'ETH'),
     testSwap('DOT', 'USDC'),
 
-    //  TODO: Fixed in: https://github.com/chainflip-io/chainflip-sdk-monorepo/pull/67
-    // testSwap('DOT', 'BTC', 'P2PKH'),
-    // testSwap('DOT', 'BTC', 'P2WSH'),
-    // testSwap('DOT', 'BTC', 'P2SH'),
-    // testSwap('DOT', 'BTC', 'P2WPKH'),
+    testSwap('DOT', 'BTC', 'P2PKH'),
+    testSwap('DOT', 'BTC', 'P2WSH'),
+    testSwap('DOT', 'BTC', 'P2SH'),
+    testSwap('DOT', 'BTC', 'P2WPKH'),
   ]);
 
   // NOTE: Parallelized ccm swaps with the same sourceAsset and destAsset won't work because
