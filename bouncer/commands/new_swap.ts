@@ -13,14 +13,14 @@ import { runWithTimeout } from '../shared/utils';
 import { newSwap } from '../shared/new_swap';
 
 async function newSwapCommand() {
-  const sourceToken = process.argv[2].toUpperCase() as Asset;
-  const destToken = process.argv[3].toUpperCase() as Asset;
+  const sourceAsset = process.argv[2].toUpperCase() as Asset;
+  const destAsset = process.argv[3].toUpperCase() as Asset;
   const destAddress = process.argv[4];
   const fee = parseFloat(process.argv[5]);
 
-  console.log(`Requesting swap ${sourceToken} -> ${destToken}`);
+  console.log(`Requesting swap ${sourceAsset} -> ${destAsset}`);
 
-  await newSwap(sourceToken, destToken, destAddress, fee);
+  await newSwap(sourceAsset, destAsset, destAddress, fee);
 
   process.exit(0);
 }

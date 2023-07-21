@@ -185,7 +185,7 @@ export async function getAddress(
       rawAddress = await newBtcAddress(seed, type ?? 'P2PKH');
       break;
     default:
-      throw new Error('unexpected token');
+      throw new Error('unexpected asset');
   }
 
   return String(rawAddress).trim();
@@ -271,16 +271,16 @@ export async function observeEVMEvent(
 }
 
 export async function observeCcmReceived(
-  sourceToken: Asset,
-  destToken: Asset,
+  sourceAsset: Asset,
+  destAsset: Asset,
   address: string,
   messageMetadata: CcmDepositMetadata,
 ): Promise<void> {
   await observeEVMEvent(cfReceiverMockAbi, address, 'ReceivedxSwapAndCall', [
-    chainContractIds[assetChains[sourceToken]].toString(),
+    chainContractIds[assetChains[sourceAsset]].toString(),
     '*',
     messageMetadata.message,
-    getEthContractAddress(destToken.toString()),
+    getEthContractAddress(destAsset.toString()),
     '*',
     '*',
   ]);

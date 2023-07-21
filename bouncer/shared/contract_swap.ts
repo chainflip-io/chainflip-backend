@@ -75,7 +75,7 @@ export async function executeContractSwap(
 export async function performSwapViaContract(
   sourceAsset: Asset,
   destAsset: Asset,
-  address: string,
+  destAddress: string,
   swapTag?: string,
   messageMetadata?: CcmDepositMetadata,
 ) {
@@ -84,15 +84,15 @@ export async function performSwapViaContract(
   const tag = swapTag ?? '';
 
   try {
-    const oldBalance = await getBalance(destAsset, address);
-    console.log(`Old balance: ${oldBalance}`);
+    const oldBalance = await getBalance(destAsset, destAddress);
+    console.log(`${tag} Old balance: ${oldBalance}`);
     console.log(
-      `Executing (${sourceAsset}) contract swap to(${destAsset}) ${address}. Current balance: ${oldBalance}`,
+      `${tag} Executing (${sourceAsset}) contract swap to(${destAsset}) ${destAddress}. Current balance: ${oldBalance}`,
     );
     // To uniquely identify the contractSwap, we need to use the TX hash. This is only known
     // after sending the transaction, so we send it first and observe the events afterwards.
     // There are still multiple blocks of safety margin inbetween before the event is emitted
-    const receipt = await executeContractSwap(sourceAsset, destAsset, address, messageMetadata);
+    const receipt = await executeContractSwap(sourceAsset, destAsset, destAddress, messageMetadata);
     await observeEvent('swapping:SwapScheduled', api, (event) => {
       if ('vault' in event[5]) {
         return event[5].vault.txHash === receipt.transactionHash;
@@ -100,14 +100,14 @@ export async function performSwapViaContract(
       // Otherwise it was a swap scheduled by requesting a deposit address
       return false;
     });
-    console.log(`Successfully observed event: swapping: SwapScheduled`);
+    console.log(`${tag} Successfully observed event: swapping: SwapScheduled`);
 
     const ccmEventEmitted = messageMetadata
-      ? observeCcmReceived(sourceAsset, destAsset, address, messageMetadata)
+      ? observeCcmReceived(sourceAsset, destAsset, destAddress, messageMetadata)
       : Promise.resolve();
 
     const [newBalance] = await Promise.all([
-      observeBalanceIncrease(destAsset, address, oldBalance),
+      observeBalanceIncrease(destAsset, destAddress, oldBalance),
       ccmEventEmitted,
     ]);
     console.log(`${tag} Swap success! New balance: ${newBalance}!`);
