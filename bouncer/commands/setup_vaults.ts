@@ -14,7 +14,11 @@ import {
   sleep,
   handleSubstrateError,
 } from '../shared/utils';
-import { AddressOrPair, SubmittableExtrinsic, SubmittableExtrinsicFunction } from '@polkadot/api/types';
+import {
+  AddressOrPair,
+  SubmittableExtrinsic,
+  SubmittableExtrinsicFunction,
+} from '@polkadot/api/types';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 
 async function main(): Promise<void> {
@@ -93,7 +97,7 @@ async function main(): Promise<void> {
       await sleep(3000);
     }
     return { vaultAddress, vaultExtrinsicIndex, vaultBlockNumber };
-  }
+  };
   const { vaultAddress, vaultExtrinsicIndex, vaultBlockNumber } = await createPolkadotVault();
 
   // Step 4
@@ -107,43 +111,49 @@ async function main(): Promise<void> {
         polkadot.tx.proxy.addProxy(
           polkadot.createType('MultiAddress', dotKeyAddress),
           polkadot.createType('ProxyType', 'Any'),
-          0
+          0,
         ),
         polkadot.tx.proxy.removeProxy(
           polkadot.createType('MultiAddress', alice.address),
           polkadot.createType('ProxyType', 'Any'),
-          0
+          0,
         ),
-      ])
+      ]),
     );
 
-    const unsubscribe = await polkadot.tx.utility.batchAll([
-      rotation,
-      polkadot.tx.balances.transfer(dotKeyAddress, 1000000000000),
-      polkadot.tx.balances.transfer(vaultAddress, 1000000000000),
-    ]).signAndSend(alice, { nonce: -1 }, (result) => {
-      if (result.isError) {
-        handleSubstrateError(result);
-      }
-      if (result.isInBlock) {
-        console.log("Proxy rotated and accounts funded.");
-        unsubscribe();
-        done = true;
-      }
-    });
+    const unsubscribe = await polkadot.tx.utility
+      .batchAll([
+        rotation,
+        polkadot.tx.balances.transfer(dotKeyAddress, 1000000000000),
+        polkadot.tx.balances.transfer(vaultAddress, 1000000000000),
+      ])
+      .signAndSend(alice, { nonce: -1 }, (result) => {
+        if (result.isError) {
+          handleSubstrateError(result);
+        }
+        if (result.isInBlock) {
+          console.log('Proxy rotated and accounts funded.');
+          unsubscribe();
+          done = true;
+        }
+      });
     while (!done) {
       await sleep(3000);
     }
-  }
+  };
   await rotate_and_fund();
 
   // Step 5
   console.log('Registering Vaults with state chain');
-  await submitGovernanceExtrinsic(chainflip.tx.environment.witnessPolkadotVaultCreation(
-    vaultAddress,
-    { blockNumber: vaultBlockNumber, extrinsicIndex: vaultExtrinsicIndex },
-  ));
-  await submitGovernanceExtrinsic(chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(1, btcKey));
+  await submitGovernanceExtrinsic(
+    chainflip.tx.environment.witnessPolkadotVaultCreation(vaultAddress, {
+      blockNumber: vaultBlockNumber,
+      extrinsicIndex: vaultExtrinsicIndex,
+    }),
+  );
+  await submitGovernanceExtrinsic(
+    chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(1, btcKey),
+  );
 
   // Confirmation
   console.log('Waiting for new epoch...');
