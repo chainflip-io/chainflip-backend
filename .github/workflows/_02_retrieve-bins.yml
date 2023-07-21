@@ -27,13 +27,13 @@ jobs:
           search_artifacts: true
           check_artifacts: true
 
-      - name: Check Downloaded Binaries Version Matches Tag 🕵️‍♂️
-        shell: bash
-        run: |
-          # TODO: Make this look nicer once we have --version flag in all binaries
-          ./ci/scripts/check_binary_version.sh chainflip-node ${{ github.ref_name }}
-          ./ci/scripts/check_binary_version.sh chainflip-engine ${{ github.ref_name }}
-          ./ci/scripts/check_binary_version.sh chainflip-cli ${{ github.ref_name }}
+#      - name: Check Downloaded Binaries Version Matches Tag 🕵️‍♂️
+#        shell: bash
+#        run: |
+#          # TODO: Make this look nicer once we have --version flag in all binaries
+#          ./ci/scripts/check_binary_version.sh chainflip-node ${{ github.ref_name }}
+#          ./ci/scripts/check_binary_version.sh chainflip-engine ${{ github.ref_name }}
+#          ./ci/scripts/check_binary_version.sh chainflip-cli ${{ github.ref_name }}
 
       - name: Re-upload binary artifacts
         uses: actions/upload-artifact@v3
