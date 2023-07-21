@@ -72,15 +72,15 @@ impl TryInto<CcmDepositMetadata> for BrokerCcmDepositMetadata {
 		let gas_budget = self
 			.gas_budget
 			.try_into()
-			.or_else(|_| Err(anyhow!("Failed to parse {:?} as gas budget", self.gas_budget)))?;
-		let message = parse_hex_bytes(&self.message)
-			.or_else(|e| Err(anyhow!("Failed to parse message: {e}")))?;
+			.map_err(|_| anyhow!("Failed to parse {:?} as gas budget", self.gas_budget))?;
+		let message =
+			parse_hex_bytes(&self.message).map_err(|e| anyhow!("Failed to parse message: {e}"))?;
 
 		let cf_parameters = self
 			.cf_parameters
 			.map(|parameters| parse_hex_bytes(&parameters))
 			.transpose()
-			.or_else(|e| Err(anyhow!("Failed to parse cf parameters: {e}")))?
+			.map_err(|e| anyhow!("Failed to parse cf parameters: {e}"))?
 			.unwrap_or_default();
 
 		Ok(CcmDepositMetadata {
@@ -88,10 +88,7 @@ impl TryInto<CcmDepositMetadata> for BrokerCcmDepositMetadata {
 			message,
 			cf_parameters,
 			// This is temporary until we remove the deprecated field.
-			source_address: ForeignChainAddress::Eth(
-				<[u8; 20]>::try_from(*b"deprecateddeprecated")
-					.expect("'deprecateddeprecated' has exactly 20 characters"),
-			),
+			source_address: ForeignChainAddress::Eth(*b"deprecateddeprecated"),
 		})
 	}
 }
