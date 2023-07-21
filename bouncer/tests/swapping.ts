@@ -68,11 +68,8 @@ export async function prepareSwap(
   let destAddress;
 
   let tag = `[${(swapCount++).toString().padEnd(2, ' ')}: ${sourceAsset}->${destAsset}`;
-  // let tag = `[${swapCount++}: ${sourceAsset}->${destAsset}`;
   tag += messageMetadata ? ' CCM' : '';
-  tag += tagSuffix ? `${tagSuffix}` : '';
-
-  tag += ']';
+  tag += tagSuffix ? `${tagSuffix}]` : ']';
 
   // For swaps with a message force the address to be the CF Receiver Mock address.
   if (messageMetadata && chainFromAsset(destAsset) === chainFromAsset('ETH')) {
@@ -168,19 +165,18 @@ async function testAll() {
     testSwap('DOT', 'ETH'),
     testSwap('DOT', 'USDC'),
 
-    // These don't work
-    // testSwap('DOT', 'BTC', 'P2SH'),
-    // testSwap('DOT', 'BTC', 'P2WPKH'),
+    //  TODO: Fixed in: https://github.com/chainflip-io/chainflip-sdk-monorepo/pull/67
     // testSwap('DOT', 'BTC', 'P2PKH'),
     // testSwap('DOT', 'BTC', 'P2WSH'),
+    // testSwap('DOT', 'BTC', 'P2SH'),
+    // testSwap('DOT', 'BTC', 'P2WPKH'),
   ]);
 
   // NOTE: Parallelized ccm swaps with the same sourceAsset and destAsset won't work because
   // all ccm swaps have the same destination address (cfReceiver) and then it will get a
   // potentially incorrect depositAddress.
   const ccmSwaps = Promise.all([
-    // NOTE: These two tests will be fixed in https://github.com/chainflip-io/chainflip-backend/pull/3708
-
+    // TODO: These two tests will be fixed in https://github.com/chainflip-io/chainflip-backend/pull/3708
     // testSwap('BTC', 'ETH', undefined, {
     //   message: new Web3().eth.abi.encodeParameter('string', 'BTC to ETH w/ CCM!!'),
     //   gasBudget: 1000000,
