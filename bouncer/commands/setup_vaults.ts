@@ -7,9 +7,7 @@
 
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import {
-  AddressOrPair,
-} from '@polkadot/api/types';
+import { AddressOrPair } from '@polkadot/api/types';
 import {
   getChainflipApi,
   getPolkadotApi,
@@ -137,7 +135,9 @@ async function main(): Promise<void> {
           handleSubstrateError(result);
         }
         if (result.isInBlock) {
-          console.log(`Proxy rotated and accounts funded at block {result.dispatchInfo?.createdAtHash}.`);
+          console.log(
+            `Proxy rotated and accounts funded at block {result.dispatchInfo?.createdAtHash}.`,
+          );
           unsubscribe();
           done = true;
         }
@@ -164,7 +164,7 @@ async function main(): Promise<void> {
   console.log('Waiting for new epoch...');
   await observeEvent('validator:NewEpoch', chainflip, (e) => {
     console.log('=== New Epoch ===');
-    return true
+    return true;
   });
   console.log('=== Vault Setup completed ===');
   process.exit(0);
