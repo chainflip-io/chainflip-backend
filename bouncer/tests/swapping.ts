@@ -70,11 +70,8 @@ export async function prepareSwap(
   let destAddress;
 
   let tag = `[${(swapCount++).toString().padEnd(2, ' ')}: ${sourceAsset}->${destAsset}`;
-  // let tag = `[${swapCount++}: ${sourceAsset}->${destAsset}`;
   tag += messageMetadata ? ' CCM' : '';
-  tag += tagSuffix ? `${tagSuffix}` : '';
-
-  tag += ']';
+  tag += tagSuffix ? `${tagSuffix}]` : ']';
 
   // For swaps with a message force the address to be the CF Receiver Mock address.
   if (messageMetadata && chainFromAsset(destAsset) === chainFromAsset('ETH')) {
