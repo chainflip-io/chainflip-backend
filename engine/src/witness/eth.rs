@@ -14,7 +14,7 @@ use crate::{
 use super::{
 	chain_source::{eth_source::EthSource, extension::ChainSourceExt},
 	common::STATE_CHAIN_CONNECTION,
-	epoch_source::{EpochSourceBuilder},
+	epoch_source::EpochSourceBuilder,
 	vault::EthAssetApi,
 };
 

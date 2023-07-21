@@ -19,13 +19,10 @@ pub struct ChunkedByTimeBuilder<Inner: ChunkedByTime> {
 
 impl<Inner: ChunkedByTime + Clone> Clone for ChunkedByTimeBuilder<Inner>
 where
-	Inner::Parameters: Clone
-	{
+	Inner::Parameters: Clone,
+{
 	fn clone(&self) -> Self {
-		Self {
-			source: self.source.clone(),
-			parameters: self.parameters.clone(),
-		}
+		Self { source: self.source.clone(), parameters: self.parameters.clone() }
 	}
 }
 

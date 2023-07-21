@@ -18,15 +18,12 @@ pub struct ChunkedByVaultBuilder<Inner: ChunkedByVault> {
 	pub parameters: Inner::Parameters,
 }
 
-impl<Inner: ChunkedByVault + Clone> Clone for ChunkedByVaultBuilder<Inner> 
+impl<Inner: ChunkedByVault + Clone> Clone for ChunkedByVaultBuilder<Inner>
 where
-	Inner::Parameters: Clone
-	{
+	Inner::Parameters: Clone,
+{
 	fn clone(&self) -> Self {
-		Self {
-			source: self.source.clone(),
-			parameters: self.parameters.clone(),
-		}
+		Self { source: self.source.clone(), parameters: self.parameters.clone() }
 	}
 }
 
