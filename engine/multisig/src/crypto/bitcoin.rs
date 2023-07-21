@@ -74,7 +74,7 @@ impl CryptoScheme for BtcCryptoScheme {
 	const CRYPTO_TAG: CryptoTag = CryptoTag::Bitcoin;
 	const NAME: &'static str = "Bitcoin Crypto";
 
-	/// The window is smaller for bitcoin because its block time is a lot slower and it supports
+	/// The window is smaller for bitcoin because its block time is a lot longer and it supports
 	/// multiple signing payloads
 	const CEREMONY_ID_WINDOW: u64 = 1500;
 

@@ -369,14 +369,14 @@ mod tests {
 	/// Check that each chain does not exceed an acceptable limit to the amount of ceremony data
 	/// that a single node can force us to store as delayed initial stage messages.
 	fn should_not_exceed_spam_limits() {
-		const MULTI_PAYLOAD_SPAM_LIMIT_BYTES: u64 = 100_000_000; // 100mb
+		const MULTI_PAYLOAD_SPAM_LIMIT_BYTES: u64 = 100_000_000; // ~100mb
 		assert!(
 			max_signing_commitments_size(MAX_BTC_SIGNING_PAYLOADS) as u64 *
 				BtcCryptoScheme::CEREMONY_ID_WINDOW <=
 				MULTI_PAYLOAD_SPAM_LIMIT_BYTES
 		);
 
-		const SINGLE_PAYLOAD_SPAM_LIMIT_BYTES: u64 = 500_000; // 0.5mb
+		const SINGLE_PAYLOAD_SPAM_LIMIT_BYTES: u64 = 500_000; // ~0.5mb
 		assert!(
 			max_signing_commitments_size(1) as u64 * EvmCryptoScheme::CEREMONY_ID_WINDOW <=
 				SINGLE_PAYLOAD_SPAM_LIMIT_BYTES
