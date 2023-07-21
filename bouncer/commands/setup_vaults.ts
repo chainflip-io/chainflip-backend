@@ -7,18 +7,8 @@
 
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import {
-  getChainflipApi,
-  getPolkadotApi,
-  getBtcClient,
-  sleep,
-  handleSubstrateError,
-} from '../shared/utils';
-import {
-  AddressOrPair,
-  SubmittableExtrinsic,
-  SubmittableExtrinsicFunction,
-} from '@polkadot/api/types';
+import { AddressOrPair } from '@polkadot/api/types';
+import { getChainflipApi, getPolkadotApi, sleep, handleSubstrateError } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 
 async function main(): Promise<void> {
@@ -26,7 +16,6 @@ async function main(): Promise<void> {
   const keyring = new Keyring({ type: 'sr25519' });
   const aliceUri = process.env.POLKADOT_ALICE_URI || '//Alice';
   const alice = keyring.createFromUri(aliceUri);
-  const client = getBtcClient(process.env.BTC_ENDPOINT);
 
   const chainflip = await getChainflipApi(process.env.CF_NODE_ENDPOINT);
   const polkadot = await getPolkadotApi(process.env.POLKADOT_ENDPOINT);
@@ -39,35 +28,42 @@ async function main(): Promise<void> {
 
   // Step 2
   console.log('Waiting for new keys');
-  let dotKey: string | undefined;
-  let btcKey: string | undefined;
-  let waitingForDotKey = true;
-  let waitingForBtcKey = true;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let unsubscribe: any = await chainflip.query.system.events((events: any[]) => {
-    events.forEach((record) => {
-      const { event } = record;
-      if (event.section === 'polkadotVault' && event.method === 'AwaitingGovernanceActivation') {
-        dotKey = event.data[0];
-        if (!waitingForBtcKey) {
-          unsubscribe();
+
+  const observeAggKeyCreation = async () => {
+    let dotKey: string | undefined;
+    let btcKey: string | undefined;
+    let waitingForDotKey = true;
+    let waitingForBtcKey = true;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const unsubscribe: any = await chainflip.query.system.events((events: any[]) => {
+      events.forEach((record) => {
+        const { event } = record;
+        if (event.section === 'polkadotVault' && event.method === 'AwaitingGovernanceActivation') {
+          dotKey = event.data[0];
+          if (!waitingForBtcKey) {
+            unsubscribe();
+          }
+          console.log('Found DOT AggKey');
+          waitingForDotKey = false;
         }
-        console.log('Found DOT AggKey');
-        waitingForDotKey = false;
-      }
-      if (event.section === 'bitcoinVault' && event.method === 'AwaitingGovernanceActivation') {
-        btcKey = event.data[0];
-        if (!waitingForDotKey) {
-          unsubscribe();
+        if (event.section === 'bitcoinVault' && event.method === 'AwaitingGovernanceActivation') {
+          btcKey = event.data[0];
+          if (!waitingForDotKey) {
+            unsubscribe();
+          }
+          console.log('Found BTC AggKey');
+          waitingForBtcKey = false;
         }
-        console.log('Found BTC AggKey');
-        waitingForBtcKey = false;
-      }
+      });
     });
-  });
-  while (waitingForBtcKey || waitingForDotKey) {
-    await sleep(1000);
-  }
+    while (waitingForBtcKey || waitingForDotKey) {
+      await sleep(1000);
+    }
+    return { dotKey, btcKey };
+  };
+
+  const { dotKey, btcKey } = await observeAggKeyCreation();
+
   const dotKeyAddress = keyring.encodeAddress(dotKey as string, 0);
 
   // Step 3
@@ -75,7 +71,7 @@ async function main(): Promise<void> {
   const createPolkadotVault = async () => {
     let vaultAddress: AddressOrPair | undefined;
     let vaultExtrinsicIndex: number | undefined;
-    let vaultBlockHash: any | undefined;
+    let vaultBlockHash: Uint8Array | undefined;
     const unsubscribe = await polkadot.tx.proxy
       .createPure(polkadot.createType('ProxyType', 'Any'), 0, 0)
       .signAndSend(alice, { nonce: -1 }, (result) => {
@@ -85,8 +81,8 @@ async function main(): Promise<void> {
         if (result.isInBlock) {
           console.log('Polkadot Vault created');
           // TODO: figure out type inference so we don't have to coerce using `any`
-          const pureCreated: any = result.findRecord('proxy', 'PureCreated')!;
-          vaultAddress = pureCreated.event.data[0];
+          const pureCreated = result.findRecord('proxy', 'PureCreated')!;
+          vaultAddress = pureCreated.event.data[0] as AddressOrPair;
           vaultExtrinsicIndex = result.txIndex!;
           vaultBlockHash = result.dispatchInfo!.createdAtHash!;
           unsubscribe();
@@ -102,7 +98,7 @@ async function main(): Promise<void> {
 
   // Step 4
   console.log('Rotating Proxy and Funding Accounts.');
-  const rotate_and_fund = async () => {
+  const rotateAndFund = async () => {
     let done = false;
     const rotation = polkadot.tx.proxy.proxy(
       polkadot.createType('MultiAddress', vaultAddress),
@@ -141,7 +137,7 @@ async function main(): Promise<void> {
       await sleep(3000);
     }
   };
-  await rotate_and_fund();
+  await rotateAndFund();
 
   // Step 5
   console.log('Registering Vaults with state chain');
@@ -157,8 +153,8 @@ async function main(): Promise<void> {
 
   // Confirmation
   console.log('Waiting for new epoch...');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let done = false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await chainflip.query.system.events((events: any[]) => {
     events.forEach((record) => {
       const { event } = record;
