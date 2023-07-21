@@ -17,18 +17,6 @@ use state_chain_runtime::{
 use std::{marker::PhantomData, sync::Arc};
 
 #[derive(Serialize, Deserialize)]
-pub struct RpcPoolInfo {
-	// pub pool_state: SqrtPriceQ64F96,
-}
-
-impl From<Option<Pool<AccountId32>>> for RpcPoolInfo {
-	fn from(_pool_info: Option<Pool<AccountId32>>) -> Self {
-		// Note: to construct the type we need to finish PRO-123 first.
-		todo!()
-	}
-}
-
-#[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
 	pub balance: NumberOrHex,
 	pub bond: NumberOrHex,
@@ -142,7 +130,7 @@ pub trait CustomApi {
 		&self,
 		assert: any::Asset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcPoolInfo>;
+	) -> RpcResult<Option<Pool<AccountId32>>>;
 
 	#[method(name = "tx_fee_multiplier")]
 	fn cf_tx_fee_multiplier(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u64>;
@@ -541,11 +529,10 @@ where
 		&self,
 		asset: any::Asset,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<RpcPoolInfo> {
+	) -> RpcResult<Option<Pool<AccountId32>>> {
 		self.client
 			.runtime_api()
 			.cf_get_pools(&self.query_block_id(at), asset)
 			.map_err(to_rpc_error)
-			.map(RpcPoolInfo::from)
 	}
 }

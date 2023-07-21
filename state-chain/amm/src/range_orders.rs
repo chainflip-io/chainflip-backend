@@ -25,6 +25,7 @@ use sp_std::{collections::btree_map::BTreeMap, convert::Infallible};
 
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 use sp_core::{U256, U512};
 
 use crate::common::{
@@ -39,12 +40,13 @@ type FeeGrowthQ128F128 = U256;
 const MAX_TICK_GROSS_LIQUIDITY: Liquidity = Liquidity::MAX / ((1 + MAX_TICK - MIN_TICK) as u128);
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 struct Position {
 	liquidity: Liquidity,
 	last_fee_growth_inside: SideMap<FeeGrowthQ128F128>,
 }
 impl Position {
-	fn collect_fees<LiquidityProvider>(
+	fn collect_fees<LiquidityProvider: Ord>(
 		&mut self,
 		pool_state: &PoolState<LiquidityProvider>,
 		lower_tick: Tick,
@@ -88,7 +90,7 @@ impl Position {
 		collected_fees
 	}
 
-	fn set_liquidity<LiquidityProvider>(
+	fn set_liquidity<LiquidityProvider: Ord>(
 		&mut self,
 		pool_state: &PoolState<LiquidityProvider>,
 		new_liquidity: Liquidity,
@@ -105,6 +107,7 @@ impl Position {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode, MaxEncodedLen)]
+#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
 pub struct TickDelta {
 	liquidity_delta: i128,
 	liquidity_gross: u128,
@@ -112,7 +115,8 @@ pub struct TickDelta {
 }
 
 #[derive(Clone, Debug, TypeInfo, Encode, Decode)]
-pub struct PoolState<LiquidityProvider> {
+#[cfg_attr(feature = "std", derive(Deserialize, Serialize))]
+pub struct PoolState<LiquidityProvider: Ord> {
 	fee_hundredth_pips: u32,
 	// Note the current_sqrt_price can reach MAX_SQRT_PRICE, but only if the tick is MAX_TICK
 	current_sqrt_price: SqrtPriceQ64F96,
