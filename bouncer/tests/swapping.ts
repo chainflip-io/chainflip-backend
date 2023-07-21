@@ -150,22 +150,37 @@ async function testAll() {
   ]);
 
   const regularSwaps = Promise.all([
-    // testSwap('DOT', 'BTC', 'P2PKH'),
+    // All these work
+    testSwap('ETH', 'BTC', 'P2PKH'),
+    testSwap('ETH', 'BTC', 'P2WSH'),
     testSwap('ETH', 'BTC', 'P2SH'),
+    testSwap('ETH', 'BTC', 'P2WPKH'),
+
+    testSwap('USDC', 'BTC', 'P2PKH'),
+    testSwap('USDC', 'BTC', 'P2WSH'),
+    testSwap('USDC', 'BTC', 'P2SH'),
     testSwap('USDC', 'BTC', 'P2WPKH'),
-    // testSwap('DOT', 'BTC', 'P2WSH'),
-    testSwap('BTC', 'DOT'),
-    testSwap('DOT', 'USDC'),
-    testSwap('DOT', 'ETH'),
+
     testSwap('BTC', 'ETH'),
     testSwap('BTC', 'USDC'),
-    testSwap('ETH', 'USDC'),
+    testSwap('BTC', 'DOT'),
+
+    testSwap('DOT', 'ETH'),
+    testSwap('DOT', 'USDC'),
+
+    // These don't work
+    // testSwap('DOT', 'BTC', 'P2SH'),
+    // testSwap('DOT', 'BTC', 'P2WPKH'),
+    // testSwap('DOT', 'BTC', 'P2PKH'),
+    // testSwap('DOT', 'BTC', 'P2WSH'),
   ]);
 
   // NOTE: Parallelized ccm swaps with the same sourceAsset and destAsset won't work because
   // all ccm swaps have the same destination address (cfReceiver) and then it will get a
   // potentially incorrect depositAddress.
   const ccmSwaps = Promise.all([
+    // NOTE: These two tests will be fixed in https://github.com/chainflip-io/chainflip-backend/pull/3708
+
     // testSwap('BTC', 'ETH', undefined, {
     //   message: new Web3().eth.abi.encodeParameter('string', 'BTC to ETH w/ CCM!!'),
     //   gasBudget: 1000000,
