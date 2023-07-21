@@ -11,7 +11,7 @@ import {
 
 export async function rangeOrder(ccy: Asset, amount: number) {
   const fineAmount = amountToFineAmount(String(amount), assetDecimals[ccy]);
-  const chainflip = await getChainflipApi(process.env.CF_NODE_ENDPOINT);
+  const chainflip = await getChainflipApi();
   await cryptoWaitReady();
 
   const keyring = new Keyring({ type: 'sr25519' });

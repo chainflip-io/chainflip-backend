@@ -10,10 +10,9 @@ use cf_chains::{
 		Bitcoin, BitcoinFeeInfo, BitcoinNetwork, BtcAmount, ScriptPubkey, Utxo, UtxoId,
 		CHANGE_ADDRESS_SALT,
 	},
-	dot::{api::CreatePolkadotVault, Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
-	ChainCrypto,
+	dot::{Polkadot, PolkadotAccountId, PolkadotHash, PolkadotIndex},
 };
-use cf_primitives::{chains::assets::eth::Asset as EthAsset, BroadcastId, EthereumAddress, SemVer};
+use cf_primitives::{chains::assets::eth::Asset as EthAsset, EthereumAddress, SemVer};
 use cf_traits::{CompatibleVersions, GetBitcoinFeeInfo, SafeMode};
 use frame_support::{
 	pallet_prelude::*,
@@ -55,10 +54,10 @@ pub mod pallet {
 	use super::*;
 	use cf_chains::{
 		btc::{ScriptPubkey, Utxo},
-		dot::{PolkadotPublicKey, RuntimeVersion},
+		dot::RuntimeVersion,
 	};
 	use cf_primitives::TxId;
-	use cf_traits::{BroadcastCleanup, Broadcaster, VaultKeyWitnessedHandler};
+	use cf_traits::VaultKeyWitnessedHandler;
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -66,11 +65,6 @@ pub mod pallet {
 		/// Because we want to emit events when there is a config change during
 		/// an runtime upgrade
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-		/// Polkadot Vault Creation Apicall
-		type CreatePolkadotVault: CreatePolkadotVault;
-		/// Polkadot broadcaster
-		type PolkadotBroadcaster: Broadcaster<Polkadot, ApiCall = Self::CreatePolkadotVault>
-			+ BroadcastCleanup<Polkadot>;
 		/// On new key witnessed handler for Polkadot
 		type PolkadotVaultKeyWitnessedHandler: VaultKeyWitnessedHandler<Polkadot>;
 		/// On new key witnessed handler for Bitcoin
@@ -194,8 +188,6 @@ pub mod pallet {
 		AddedNewEthAsset(EthAsset, EthereumAddress),
 		/// The address of an supported ETH asset was updated
 		UpdatedEthAsset(EthAsset, EthereumAddress),
-		/// Polkadot Vault Creation Call was initiated
-		PolkadotVaultCreationCallInitiated { agg_key: <Polkadot as ChainCrypto>::AggKey },
 		/// Polkadot Vault Account is successfully set
 		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
 		/// The Polkadot Runtime Version stored on chain was updated.
@@ -265,35 +257,6 @@ pub mod pallet {
 			Ok(())
 		}
 
-		/// Initiates the Polkadot Vault Creation Apicall. This governance action needs to be called
-		/// when the first rotation is initiated after polkadot activation. The rotation will stall
-		/// after keygen is completed and emit the event AwaitingGovernanceAction after which this
-		/// governance extrinsic needs to be called
-		///
-		/// ## Events
-		///
-		/// - [PolkadotVaultCreationCallInitiated](Event::PolkadotVaultCreationCallInitiated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[allow(unused_variables)]
-		#[pallet::weight(0)]
-		pub fn create_polkadot_vault(
-			origin: OriginFor<T>,
-			dot_aggkey: PolkadotPublicKey,
-		) -> DispatchResult {
-			T::EnsureGovernance::ensure_origin(origin)?;
-
-			T::PolkadotBroadcaster::threshold_sign_and_broadcast(
-				T::CreatePolkadotVault::new_unsigned(),
-			);
-			Self::deposit_event(Event::<T>::PolkadotVaultCreationCallInitiated {
-				agg_key: dot_aggkey,
-			});
-			Ok(())
-		}
-
 		/// Manually initiates Polkadot vault key rotation completion steps so Epoch rotation can be
 		/// continued and sets the Polkadot Pure Proxy Vault in environment pallet. The extrinsic
 		/// takes in the dot_pure_proxy_vault_key, which is obtained from the Polkadot blockchain as
@@ -315,9 +278,7 @@ pub mod pallet {
 		pub fn witness_polkadot_vault_creation(
 			origin: OriginFor<T>,
 			dot_pure_proxy_vault_key: PolkadotAccountId,
-			dot_witnessed_aggkey: PolkadotPublicKey,
 			tx_id: TxId,
-			broadcast_id: BroadcastId,
 		) -> DispatchResultWithPostInfo {
 			T::EnsureGovernance::ensure_origin(origin)?;
 
@@ -329,19 +290,10 @@ pub mod pallet {
 				polkadot_vault_account_id: dot_pure_proxy_vault_key,
 			});
 
-			// The initial polkadot vault creation is special in that the *new* aggkey submits the
-			// creating transaction. So the aggkey account does not need to be reset.
-			// However, `on_new_key_activated` indirectly resets the nonce. So we get it here and
-			// then we can set it again below.
-			let correct_nonce = PolkadotProxyAccountNonce::<T>::get();
-
 			// Witness the agg_key rotation manually in the vaults pallet for polkadot
 			let dispatch_result =
 				T::PolkadotVaultKeyWitnessedHandler::on_new_key_activated(tx_id.block_number)?;
-			// Clean up the broadcast state.
-			T::PolkadotBroadcaster::clean_up_broadcast(broadcast_id)?;
 
-			PolkadotProxyAccountNonce::<T>::set(correct_nonce);
 			Ok(dispatch_result)
 		}
 

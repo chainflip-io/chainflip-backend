@@ -1,5 +1,7 @@
 {
-  "env": { "jest": true },
+  "env": {
+    "jest": true
+  },
   "extends": ["airbnb-base", "plugin:@typescript-eslint/recommended", "prettier"],
   "overrides": [],
   "parser": "@typescript-eslint/parser",
@@ -15,7 +17,10 @@
     "no-unused-vars": "off",
     "@typescript-eslint/no-unused-vars": [
       "error",
-      { "argsIgnorePattern": "^_", "ignoreRestSiblings": true }
+      {
+        "argsIgnorePattern": "^_",
+        "ignoreRestSiblings": true
+      }
     ],
     "no-use-before-define": "off",
     "@typescript-eslint/no-use-before-define": ["error"],
@@ -38,6 +43,8 @@
     "prefer-template": "off",
     "radix": "off"
   },
-  "globals": { "jest": true },
+  "globals": {
+    "jest": true
+  },
   "reportUnusedDisableDirectives": true
 }

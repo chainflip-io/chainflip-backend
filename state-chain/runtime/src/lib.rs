@@ -15,7 +15,7 @@ use crate::{
 use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::{
 	btc::BitcoinNetwork,
-	dot::{self, api::PolkadotApi, PolkadotHash},
+	dot::{self, PolkadotHash},
 	eth::{self, api::EthereumApi, Ethereum},
 	Bitcoin, Polkadot,
 };
@@ -193,8 +193,6 @@ parameter_types! {
 
 impl pallet_cf_environment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type CreatePolkadotVault = PolkadotApi<DotEnvironment>;
-	type PolkadotBroadcaster = PolkadotBroadcaster;
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type BitcoinNetwork = BitcoinNetworkParam;
@@ -885,6 +883,10 @@ impl_runtime_apis! {
 		}
 		fn cf_current_epoch() -> u32 {
 			Validator::current_epoch()
+		}
+		fn cf_current_compatibility_version() -> SemVer {
+			use cf_traits::CompatibleVersions;
+			Environment::current_compatibility_version()
 		}
 		fn cf_epoch_duration() -> u32 {
 			Validator::blocks_per_epoch()
