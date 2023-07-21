@@ -12,9 +12,10 @@ use std::pin::Pin;
 use futures_core::Stream;
 
 pub mod aliases {
-	use std::iter::Step;
-
 	use codec::FullCodec;
+	use num_traits::Bounded;
+	use serde::{de::DeserializeOwned, Serialize};
+	use std::iter::Step;
 
 	macro_rules! define_trait_alias {
 		(pub trait $name:ident: $($traits:tt)+) => {
@@ -23,7 +24,7 @@ pub mod aliases {
 		}
 	}
 
-	define_trait_alias!(pub trait Index: FullCodec + Step + PartialEq + Eq + PartialOrd + Ord + Clone + Copy + Send + Sync + Unpin + TryFrom<u64> + Into<u64> + 'static);
+	define_trait_alias!(pub trait Index: Bounded + DeserializeOwned + Serialize + FullCodec + Step + PartialEq + Eq + PartialOrd + Ord + Clone + Copy + Send + Sync + Unpin + TryFrom<u64> + Into<u64> + 'static);
 	define_trait_alias!(pub trait Hash: PartialEq + Eq + Clone + Copy + Send + Sync + Unpin + 'static);
 	define_trait_alias!(pub trait Data: Send + Sync + Unpin + 'static);
 }

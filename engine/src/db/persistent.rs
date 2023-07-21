@@ -5,7 +5,9 @@ mod tests;
 use std::{cmp::Ordering, collections::HashMap, path::Path};
 
 use cf_primitives::EpochIndex;
+use serde::{de::DeserializeOwned, Serialize};
 use tracing::{debug, info, info_span};
+use utilities::rle_bitmap::RleBitmap;
 
 use crate::witnesser::checkpointing::WitnessedUntil;
 use multisig::{client::KeygenResultInfo, ChainSigning, ChainTag, KeyId, CHAIN_TAG_SIZE};
@@ -146,37 +148,26 @@ impl PersistentKeyDB {
 			.context("Failed to load {chain_tag} checkpoint")
 	}
 
-	pub fn update_processed_blocks(
+	pub fn update_processed_blocks<Index: Ord + Serialize>(
 		&self,
 		witnesser_name: &str,
 		epoch: EpochIndex,
-		map: &roaring::RoaringTreemap,
+		map: &RleBitmap<Index>,
 	) -> Result<()> {
-		(|| {
-			let mut bytes = vec![];
-			map.serialize_into(&mut bytes)?;
-			self.kv_db.put_data(&processed_blocks_prefix(witnesser_name), &epoch, &bytes)
-		})()
-		.with_context(|| {
-			format!("Failed to update processed blocks for {witnesser_name} at epoch: {epoch}")
-		})
+		self.kv_db
+			.put_data(&processed_blocks_prefix(witnesser_name), &epoch, &map)
+			.with_context(|| {
+				format!("Failed to update processed blocks for {witnesser_name} at epoch: {epoch}")
+			})
 	}
 
-	pub fn load_processed_blocks(
+	pub fn load_processed_blocks<Index: Ord + DeserializeOwned>(
 		&self,
 		witnesser_name: &str,
 		epoch: EpochIndex,
-	) -> Result<Option<roaring::RoaringTreemap>> {
+	) -> Result<Option<RleBitmap<Index>>> {
 		self.kv_db
-			.get_data::<_, Vec<u8>>(&processed_blocks_prefix(witnesser_name), &epoch)
-			.and_then(|option| {
-				option
-					.map(|bytes| {
-						roaring::RoaringTreemap::deserialize_from(&bytes[..])
-							.map_err(anyhow::Error::new)
-					})
-					.transpose()
-			})
+			.get_data::<_, RleBitmap<Index>>(&processed_blocks_prefix(witnesser_name), &epoch)
 			.with_context(|| {
 				format!("Failed to load processed blocks for {witnesser_name} at epoch: {epoch}")
 			})
