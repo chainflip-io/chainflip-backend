@@ -7,8 +7,15 @@
 
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import { AddressOrPair } from '@polkadot/api/types';
-import { getChainflipApi, getPolkadotApi, sleep, handleSubstrateError } from '../shared/utils';
+import {
+  AddressOrPair,
+} from '@polkadot/api/types';
+import {
+  getChainflipApi,
+  getPolkadotApi,
+  sleep,
+  handleSubstrateError,
+} from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 
 async function main(): Promise<void> {
@@ -154,7 +161,7 @@ async function main(): Promise<void> {
   // Confirmation
   console.log('Waiting for new epoch...');
   let done = false;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   await chainflip.query.system.events((events: any[]) => {
     events.forEach((record) => {
       const { event } = record;
