@@ -1,9 +1,10 @@
+#!/usr/bin/env pnpm tsx
 // INSTRUCTIONS
 //
 // This command takes one argument.
 // It will print the Flip(ERC20) balance of the address provided as the first argument.
 //
-// For example: pnpm tsx ./commands/get_flip_balance.ts 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6
+// For example: ./commands/get_flip_balance.ts 0xcf1dc766fc2c62bef0b67a8de666c8e67acf35f6
 // might print: 100.2
 
 import { runWithTimeout, getEthContractAddress } from '../shared/utils';

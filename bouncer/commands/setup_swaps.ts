@@ -1,8 +1,9 @@
+#!/usr/bin/env pnpm tsx
 // INSTRUCTIONS
 //
 // This command takes no arguments.
 // It will setup pools and zero to infinity range orders for all currencies
-// For example: pnpm tsx ./commands/setup_swaps.ts
+// For example: ./commands/setup_swaps.ts
 
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { Asset } from '@chainflip-io/cli';

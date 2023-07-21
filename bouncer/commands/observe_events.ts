@@ -1,3 +1,4 @@
+#!/usr/bin/env pnpm tsx
 // INSTRUCTIONS
 //
 // Arguments:
@@ -10,7 +11,7 @@
 // If only a single event is listed as the succeed_on parameter, the event data will be printed
 // to stdout when it is observed
 //
-// For example: pnpm tsx ./commands/observe_events.ts --succeed_on ethereumThresholdSigner:ThresholdSignatureSuccess --fail_on ethereumThresholdSigner:SignersUnavailable
+// For example: ./commands/observe_events.ts --succeed_on ethereumThresholdSigner:ThresholdSignatureSuccess --fail_on ethereumThresholdSigner:SignersUnavailable
 
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import minimist from 'minimist';

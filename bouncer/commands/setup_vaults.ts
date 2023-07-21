@@ -1,9 +1,10 @@
+#!/usr/bin/env pnpm tsx
 // INSTRUCTIONS
 //
 // This command takes no arguments.
 // It will perform the initial polkadot vault setup procedure described here
 // https://www.notion.so/chainflip/Polkadot-Vault-Initialisation-Steps-36d6ab1a24ed4343b91f58deed547559
-// For example: pnpm tsx ./commands/setup_vaults.ts
+// For example: ./commands/setup_vaults.ts
 
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';

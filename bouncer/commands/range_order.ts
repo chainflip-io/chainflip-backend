@@ -1,8 +1,9 @@
+#!/usr/bin/env pnpm tsx
 // INSTRUCTIONS
 //
 // This command takes two arguments.
 // It will create a zero to infinity range order for the currency and amount given
-// For example: pnpm tsx ./commands/range_order.ts btc 10
+// For example: ./commands/range_order.ts btc 10
 
 import { Asset } from '@chainflip-io/cli';
 import { rangeOrder } from '../shared/range_order';
