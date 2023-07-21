@@ -22,7 +22,6 @@ name = "chainflip-broker-api"
 [dependencies]
 chainflip-api = { path = "../../lib" }
 utilities = { path = "../../../utilities" }
-state-chain-runtime = { path = '../../../state-chain/runtime' }
 cf-chains = { path = '../../../state-chain/chains', default-features = false }
 
 anyhow = "1.0.66"
@@ -30,7 +29,7 @@ clap = { version = "3.2.23", features = ["derive"] }
 hex = "0.4.3"
 jsonrpsee = { version = "0.16.2", features = ["full"] }
 serde = { version = '1.0', features = ['derive'] }
-sp-rpc = {git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2"}
+sp-rpc = { git = "https://github.com/chainflip-io/substrate.git", tag = "chainflip-monthly-2022-12+2" }
 tokio = "1.20.1"
 tracing = "0.1.34"
 tracing-subscriber = { version = "0.3.3", features = ["env-filter"] }
