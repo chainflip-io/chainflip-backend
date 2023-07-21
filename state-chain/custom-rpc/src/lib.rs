@@ -14,7 +14,7 @@ use state_chain_runtime::{
 	constants::common::TX_FEE_MULTIPLIER,
 	runtime_apis::{ChainflipAccountStateWithPassive, CustomRuntimeApi, Environment},
 };
-use std::{marker::PhantomData, sync::Arc};
+use std::{collections::HashMap, marker::PhantomData, sync::Arc};
 
 #[derive(Serialize, Deserialize)]
 pub struct RpcAccountInfo {
@@ -125,14 +125,12 @@ pub trait CustomApi {
 	/// Returns the eth vault in the form [agg_key, active_from_eth_block]
 	#[method(name = "eth_vault")]
 	fn cf_eth_vault(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<(String, u32)>;
-
 	#[method(name = "pools")]
 	fn cf_pools(
 		&self,
-		assert: any::Asset,
+		assert: Option<Asset>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Pool<AccountId32>>>;
-
+	) -> RpcResult<HashMap<any::Asset, Option<Pool<AccountId32>>>>;
 	#[method(name = "tx_fee_multiplier")]
 	fn cf_tx_fee_multiplier(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<u64>;
 	// Returns the Auction params in the form [min_set_size, max_set_size]
@@ -531,13 +529,31 @@ where
 
 	fn cf_pools(
 		&self,
-		asset: any::Asset,
+		asset: Option<Asset>,
 		at: Option<state_chain_runtime::Hash>,
-	) -> RpcResult<Option<Pool<AccountId32>>> {
-		self.client
-			.runtime_api()
-			.cf_get_pools(&self.query_block_id(at), asset)
-			.map_err(to_rpc_error)
+	) -> RpcResult<HashMap<Asset, Option<Pool<AccountId32>>>> {
+		let mut pools = HashMap::<Asset, Option<Pool<AccountId32>>>::new();
+		if let Some(asset) = asset {
+			pools.insert(
+				asset,
+				self.client
+					.runtime_api()
+					.cf_get_pools(&self.query_block_id(at), asset)
+					.map_err(to_rpc_error)?,
+			);
+		} else {
+			let assets = vec![Asset::Dot, Asset::Eth, Asset::Flip, Asset::Usdc, Asset::Btc];
+			for asset in assets {
+				pools.insert(
+					asset,
+					self.client
+						.runtime_api()
+						.cf_get_pools(&self.query_block_id(at), asset)
+						.map_err(to_rpc_error)?,
+				);
+			}
+		}
+		Ok(pools)
 	}
 
 	fn cf_current_compatibility_version(&self) -> RpcResult<Vec<u8>> {
