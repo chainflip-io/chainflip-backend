@@ -37,9 +37,6 @@ where
 impl<Inner: ChunkedByVault> EgressItems<Inner>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
-	state_chain_runtime::Runtime: pallet_cf_broadcast::Config<
-		<<Inner as ChunkedByVault>::Chain as PalletInstanceAlias>::Instance,
-	>,
 {
 	pub async fn get_transaction_out_ids<StateChainClient: StorageApi + Send + Sync + 'static>(
 		state_chain_client: &StateChainClient,
