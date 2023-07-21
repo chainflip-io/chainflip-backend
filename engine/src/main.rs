@@ -59,7 +59,10 @@ async fn main() -> anyhow::Result<()> {
 						.unwrap();
 					SemVer::decode(&mut bytes.as_slice()).unwrap()
 				};
-				tracing::info!("Current runtime version version: {:?}", current_runtime_version);
+				tracing::info!(
+					"Current runtime compatibility version: {:?}",
+					current_runtime_version
+				);
 
 				// TODO: check if actually compatible
 				let is_compatible = true;
