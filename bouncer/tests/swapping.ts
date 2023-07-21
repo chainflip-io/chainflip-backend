@@ -130,38 +130,38 @@ async function testAll() {
   // );
 
   const ccmContractSwaps = Promise.all([
-    // testSwapViaContract('ETH', 'USDC', {
-    //   message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
-    //   gasBudget: 5000000,
-    //   cfParameters: getAbiEncodedMessage(['address', 'uint256']),
-    // }),
-    // testSwapViaContract('USDC', 'ETH', {
-    //   message: getAbiEncodedMessage(),
-    //   gasBudget: 5000000,
-    //   cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
-    // }),
+    testSwapViaContract('ETH', 'USDC', {
+      message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
+      gasBudget: 5000000,
+      cfParameters: getAbiEncodedMessage(['address', 'uint256']),
+    }),
+    testSwapViaContract('USDC', 'ETH', {
+      message: getAbiEncodedMessage(),
+      gasBudget: 5000000,
+      cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
+    }),
   ]);
 
   const contractSwaps = Promise.all([
-    // testSwapViaContract('ETH', 'DOT'),
-    // testSwapViaContract('ETH', 'USDC'),
-    // testSwapViaContract('ETH', 'BTC'),
-    // testSwapViaContract('USDC', 'DOT'),
-    // testSwapViaContract('USDC', 'ETH'),
-    // testSwapViaContract('USDC', 'BTC'),
+    testSwapViaContract('ETH', 'DOT'),
+    testSwapViaContract('ETH', 'USDC'),
+    testSwapViaContract('ETH', 'BTC'),
+    testSwapViaContract('USDC', 'DOT'),
+    testSwapViaContract('USDC', 'ETH'),
+    testSwapViaContract('USDC', 'BTC'),
   ]);
 
   const regularSwaps = Promise.all([
-    // testSwap('DOT', 'BTC', 'P2PKH'), //TODO: BTC as dstAddress is problematic
-    // testSwap('ETH', 'BTC', 'P2SH'),
-    // testSwap('USDC', 'BTC', 'P2WPKH'),
-    // testSwap('DOT', 'BTC', 'P2WSH'),
-    // testSwap('BTC', 'DOT'),
-    // testSwap('DOT', 'USDC'),
-    // testSwap('DOT', 'ETH'),
-    // testSwap('BTC', 'ETH'),
-    // testSwap('BTC', 'USDC'),
-    // testSwap('ETH', 'USDC'),
+    testSwap('DOT', 'BTC', 'P2PKH'),
+    testSwap('ETH', 'BTC', 'P2SH'),
+    testSwap('USDC', 'BTC', 'P2WPKH'),
+    testSwap('DOT', 'BTC', 'P2WSH'),
+    testSwap('BTC', 'DOT'),
+    testSwap('DOT', 'USDC'),
+    testSwap('DOT', 'ETH'),
+    testSwap('BTC', 'ETH'),
+    testSwap('BTC', 'USDC'),
+    testSwap('ETH', 'USDC'),
   ]);
 
   // NOTE: Parallelized ccm swaps with the same sourceAsset and destAsset won't work because
@@ -173,31 +173,31 @@ async function testAll() {
       gasBudget: 1000000,
       cfParameters: '',
     }),
-    // testSwap('BTC', 'USDC', undefined, {
-    //   message: '0x' + Buffer.from('BTC to ETH w/ CCM!!', 'ascii').toString('hex'),
-    //   gasBudget: 600000,
-    //   cfParameters: getAbiEncodedMessage(['uint256']),
-    // }),
-    // testSwap('DOT', 'ETH', undefined, {
-    //   message: getAbiEncodedMessage(['string', 'address']),
-    //   gasBudget: 1000000,
-    //   cfParameters: getAbiEncodedMessage(['string', 'string']),
-    // }),
-    // testSwap('DOT', 'USDC', undefined, {
-    //   message: getAbiEncodedMessage(),
-    //   gasBudget: 1000000,
-    //   cfParameters: getAbiEncodedMessage(['address', 'uint256']),
-    // }),
-    // testSwap('USDC', 'ETH', undefined, {
-    //   message: getAbiEncodedMessage(),
-    //   gasBudget: 5000000,
-    //   cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
-    // }),
-    // testSwap('ETH', 'USDC', undefined, {
-    //   message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
-    //   gasBudget: 5000000,
-    //   cfParameters: getAbiEncodedMessage(['address', 'uint256']),
-    // }),
+    testSwap('BTC', 'USDC', undefined, {
+      message: '0x' + Buffer.from('BTC to ETH w/ CCM!!', 'ascii').toString('hex'),
+      gasBudget: 600000,
+      cfParameters: getAbiEncodedMessage(['uint256']),
+    }),
+    testSwap('DOT', 'ETH', undefined, {
+      message: getAbiEncodedMessage(['string', 'address']),
+      gasBudget: 1000000,
+      cfParameters: getAbiEncodedMessage(['string', 'string']),
+    }),
+    testSwap('DOT', 'USDC', undefined, {
+      message: getAbiEncodedMessage(),
+      gasBudget: 1000000,
+      cfParameters: getAbiEncodedMessage(['address', 'uint256']),
+    }),
+    testSwap('USDC', 'ETH', undefined, {
+      message: getAbiEncodedMessage(),
+      gasBudget: 5000000,
+      cfParameters: getAbiEncodedMessage(['bytes', 'uint256']),
+    }),
+    testSwap('ETH', 'USDC', undefined, {
+      message: getAbiEncodedMessage(['address', 'uint256', 'bytes']),
+      gasBudget: 5000000,
+      cfParameters: getAbiEncodedMessage(['address', 'uint256']),
+    }),
   ]);
 
   await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps]);
