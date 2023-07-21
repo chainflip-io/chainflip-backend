@@ -678,7 +678,7 @@ fn multi_use_deposit_same_block() {
 						..
 					}) if matches!(
 						fetch_params.last().unwrap().deposit_fetch_id,
-						EthereumFetchId::Deployed(address) if address == *deposit_address
+						EthereumFetchId::Deployed(address) if address == (*deposit_address).into()
 					)
 				),
 				"Expected a new AllBatch apicall to be scheduled to fetch from a deployed address, got {:?}.",

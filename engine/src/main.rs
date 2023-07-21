@@ -29,7 +29,6 @@ use multisig::{
 	eth::{ArbSigning, EthSigning},
 	polkadot::PolkadotSigning,
 };
-use pallet_cf_validator::SemVer;
 use std::sync::{atomic::AtomicBool, Arc};
 use utilities::{
 	task_scope::{self, task_scope},

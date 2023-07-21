@@ -14,7 +14,7 @@ use cf_chains::{
 };
 use cf_primitives::{
 	chains::assets::{arb::Asset as ArbAsset, eth::Asset as EthAsset},
-	BroadcastId, EvmAddress, SemVer,
+	EvmAddress, SemVer,
 };
 use cf_traits::{CompatibleVersions, GetBitcoinFeeInfo, SafeMode};
 use frame_support::{
@@ -322,35 +322,6 @@ pub mod pallet {
 			} else {
 				ArbitrumSupportedAssets::<T>::insert(asset, address);
 				Event::AddedNewArbAsset(asset, address)
-			});
-			Ok(().into())
-		}
-
-		/// Initiates the Polkadot Vault Creation Apicall. This governance action needs to be called
-		/// when the first rotation is initiated after polkadot activation. The rotation will stall
-		/// after keygen is completed and emit the event AwaitingGovernanceAction after which this
-		/// governance extrinsic needs to be called
-		///
-		/// ## Events
-		///
-		/// - [PolkadotVaultCreationCallInitiated](Event::PolkadotVaultCreationCallInitiated)
-		///
-		/// ## Errors
-		///
-		/// - [BadOrigin](frame_support::error::BadOrigin)
-		#[allow(unused_variables)]
-		#[pallet::weight(0)]
-		pub fn create_polkadot_vault(
-			origin: OriginFor<T>,
-			dot_aggkey: PolkadotPublicKey,
-		) -> DispatchResultWithPostInfo {
-			T::EnsureGovernance::ensure_origin(origin)?;
-
-			T::PolkadotBroadcaster::threshold_sign_and_broadcast(
-				T::CreatePolkadotVault::new_unsigned(),
-			);
-			Self::deposit_event(Event::<T>::PolkadotVaultCreationCallInitiated {
-				agg_key: dot_aggkey,
 			});
 			Ok(().into())
 		}

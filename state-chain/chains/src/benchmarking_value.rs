@@ -9,6 +9,8 @@ use crate::address::EncodedAddress;
 #[cfg(feature = "runtime-benchmarks")]
 use crate::address::ForeignChainAddress;
 #[cfg(feature = "runtime-benchmarks")]
+use crate::eth::EthereumAddress;
+#[cfg(feature = "runtime-benchmarks")]
 use crate::eth::EthereumFetchId;
 
 /// Ensure type specifies a value to be used for benchmarking purposes.
