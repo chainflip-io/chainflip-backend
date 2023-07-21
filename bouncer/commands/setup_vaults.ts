@@ -15,6 +15,7 @@ import {
   getPolkadotApi,
   sleep,
   handleSubstrateError,
+  observeEvent,
 } from '../shared/utils';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 
@@ -126,16 +127,17 @@ async function main(): Promise<void> {
 
     const unsubscribe = await polkadot.tx.utility
       .batchAll([
-        rotation,
-        polkadot.tx.balances.transfer(dotKeyAddress, 1000000000000),
+        // Note the vault needs to be funded before we rotate.
         polkadot.tx.balances.transfer(vaultAddress, 1000000000000),
+        polkadot.tx.balances.transfer(dotKeyAddress, 1000000000000),
+        rotation,
       ])
       .signAndSend(alice, { nonce: -1 }, (result) => {
         if (result.isError) {
           handleSubstrateError(result);
         }
         if (result.isInBlock) {
-          console.log('Proxy rotated and accounts funded.');
+          console.log(`Proxy rotated and accounts funded at block {result.dispatchInfo?.createdAtHash}.`);
           unsubscribe();
           done = true;
         }
@@ -160,20 +162,10 @@ async function main(): Promise<void> {
 
   // Confirmation
   console.log('Waiting for new epoch...');
-  let done = false;
-
-  await chainflip.query.system.events((events: any[]) => {
-    events.forEach((record) => {
-      const { event } = record;
-      if (event.section === 'validator' && event.method === 'NewEpoch') {
-        console.log('=== New Epoch ===');
-        done = true;
-      }
-    });
+  await observeEvent('validator:NewEpoch', chainflip, (e) => {
+    console.log('=== New Epoch ===');
+    return true
   });
-  while (!done) {
-    await sleep(3000);
-  }
   console.log('=== Vault Setup completed ===');
   process.exit(0);
 }
