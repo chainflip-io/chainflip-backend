@@ -57,7 +57,7 @@ jobs:
             chainflip-node
             generate-genesis-keys
 
-      - name: Re-upload binary artifacts
+      - name: Re-upload runtime artifacts
         uses: actions/upload-artifact@v3
         with:
           name: chainflip-node-runtime-ubuntu-${{ matrix.ubuntu_version }}
