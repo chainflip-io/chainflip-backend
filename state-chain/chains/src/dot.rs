@@ -228,6 +228,7 @@ impl Chain for Polkadot {
 	type ChainAsset = assets::dot::Asset;
 	type EpochStartData = EpochStartData;
 	type DepositFetchId = PolkadotChannelId;
+	type DepositChannelState = ();
 }
 
 impl ChainCrypto for Polkadot {
@@ -842,18 +843,6 @@ pub type PolkadotPublicKey = PolkadotAccountId;
 pub struct PolkadotReplayProtection {
 	pub genesis_hash: PolkadotHash,
 	pub nonce: PolkadotIndex,
-}
-
-impl ChannelIdConstructor for PolkadotChannelId {
-	type Address = PolkadotAccountId;
-
-	fn deployed(channel_id: u64, _address: Self::Address) -> Self {
-		channel_id
-	}
-
-	fn undeployed(channel_id: u64, _address: Self::Address) -> Self {
-		channel_id
-	}
 }
 
 #[cfg(feature = "runtime-benchmarks")]

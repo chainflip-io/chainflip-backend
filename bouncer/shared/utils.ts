@@ -60,6 +60,22 @@ export function fineAmountToAmount(fineAmount: string, decimals: number): string
   return balance;
 }
 
+export function defaultAssetAmounts(asset: Asset): string {
+  switch (asset) {
+    case 'BTC':
+      return '0.05';
+    case 'ETH':
+      return '5';
+    case 'DOT':
+      return '50';
+    case 'USDC':
+    case 'FLIP':
+      return '500';
+    default:
+      throw new Error(`Unsupported asset: ${asset}`);
+  }
+}
+
 export const runWithTimeout = <T>(promise: Promise<T>, millis: number): Promise<T> =>
   Promise.race([
     promise,
@@ -169,7 +185,7 @@ export async function getAddress(
       rawAddress = await newBtcAddress(seed, type ?? 'P2PKH');
       break;
     default:
-      throw new Error('unexpected token');
+      throw new Error('unexpected asset');
   }
 
   return String(rawAddress).trim();
@@ -255,16 +271,16 @@ export async function observeEVMEvent(
 }
 
 export async function observeCcmReceived(
-  sourceToken: Asset,
-  destToken: Asset,
+  sourceAsset: Asset,
+  destAsset: Asset,
   address: string,
   messageMetadata: CcmDepositMetadata,
 ): Promise<void> {
   await observeEVMEvent(cfReceiverMockAbi, address, 'ReceivedxSwapAndCall', [
-    chainContractIds[assetChains[sourceToken]].toString(),
+    chainContractIds[assetChains[sourceAsset]].toString(),
     '*',
     messageMetadata.message,
-    getEthContractAddress(destToken.toString()),
+    getEthContractAddress(destAsset.toString()),
     '*',
     '*',
   ]);

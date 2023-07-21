@@ -7,12 +7,12 @@ use cf_chains::{
 	ApiCall, Bitcoin, Chain, ChainCrypto, Polkadot,
 };
 use cf_primitives::{
-	BroadcastId, ThresholdSignatureRequestId, INPUT_UTXO_SIZE_IN_BYTES,
+	BroadcastId, SemVer, ThresholdSignatureRequestId, INPUT_UTXO_SIZE_IN_BYTES,
 	MINIMUM_BTC_TX_SIZE_IN_BYTES, OUTPUT_UTXO_SIZE_IN_BYTES,
 };
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip, impl_mock_runtime_safe_mode, impl_pallet_safe_mode,
-	BroadcastCleanup, Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
+	Broadcaster, GetBitcoinFeeInfo, VaultKeyWitnessedHandler,
 };
 use frame_support::{parameter_types, traits::UnfilteredDispatchable};
 use sp_core::H256;
@@ -122,12 +122,6 @@ impl Broadcaster<Polkadot> for MockPolkadotBroadcaster {
 		unimplemented!()
 	}
 }
-impl BroadcastCleanup<Polkadot> for MockPolkadotBroadcaster {
-	fn clean_up_broadcast(_broadcast_id: BroadcastId) -> sp_runtime::DispatchResult {
-		unimplemented!()
-	}
-}
-
 pub struct MockPolkadotVaultKeyWitnessedHandler;
 impl VaultKeyWitnessedHandler<Polkadot> for MockPolkadotVaultKeyWitnessedHandler {
 	fn on_new_key_activated(
@@ -147,6 +141,11 @@ impl VaultKeyWitnessedHandler<Bitcoin> for MockBitcoinVaultKeyWitnessedHandler {
 
 parameter_types! {
 	pub const BitcoinNetworkParam: BitcoinNetwork = BitcoinNetwork::Testnet;
+	pub CurrentCompatibilityVersion: SemVer = SemVer {
+		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().unwrap(),
+		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().unwrap(),
+		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().unwrap(),
+	};
 }
 
 pub struct MockBitcoinFeeInfo;
@@ -165,13 +164,12 @@ impl_mock_runtime_safe_mode!(mock: MockPalletSafeMode);
 
 impl pallet_cf_environment::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type CreatePolkadotVault = MockCreatePolkadotVault;
-	type PolkadotBroadcaster = MockPolkadotBroadcaster;
 	type BitcoinNetwork = BitcoinNetworkParam;
 	type PolkadotVaultKeyWitnessedHandler = MockPolkadotVaultKeyWitnessedHandler;
 	type BitcoinVaultKeyWitnessedHandler = MockBitcoinVaultKeyWitnessedHandler;
 	type BitcoinFeeInfo = MockBitcoinFeeInfo;
 	type RuntimeSafeMode = MockRuntimeSafeMode;
+	type CurrentCompatibilityVersion = CurrentCompatibilityVersion;
 	type WeightInfo = ();
 }
 

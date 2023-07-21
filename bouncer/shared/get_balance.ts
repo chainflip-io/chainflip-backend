@@ -5,14 +5,14 @@ import { getDotBalance } from './get_dot_balance';
 import { getEthBalance } from './get_eth_balance';
 import { getErc20Balance } from './get_erc20_balance';
 
-export async function getBalance(token: Asset, address: string): Promise<string> {
+export async function getBalance(asset: Asset, address: string): Promise<string> {
   // eslint-disable-next-line no-param-reassign
   address = address.trim();
   let result: string;
-  switch (token) {
+  switch (asset) {
     case 'FLIP':
     case 'USDC': {
-      const contractAddress = getEthContractAddress(token);
+      const contractAddress = getEthContractAddress(asset);
       result = await getErc20Balance(address, contractAddress);
       break;
     }
@@ -26,7 +26,7 @@ export async function getBalance(token: Asset, address: string): Promise<string>
       result = (await getBtcBalance(address)).toString().trim();
       break;
     default:
-      throw new Error(`Unexpected token: ${token}`);
+      throw new Error(`Unexpected asset: ${asset}`);
   }
   return result;
 }

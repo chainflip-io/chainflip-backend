@@ -15,10 +15,8 @@ use crate::{
 use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::{
 	btc::BitcoinNetwork,
-	dot,
-	dot::{api::PolkadotApi, PolkadotHash},
-	eth,
-	eth::{api::EthereumApi, Ethereum},
+	dot::{self, PolkadotHash},
+	eth::{self, api::EthereumApi, Ethereum},
 	Bitcoin, Polkadot,
 };
 pub use frame_system::Call as SystemCall;
@@ -72,7 +70,7 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 pub use cf_primitives::{
-	Asset, AssetAmount, BlockNumber, EthereumAddress, FlipBalance, SwapOutput,
+	Asset, AssetAmount, BlockNumber, EthereumAddress, FlipBalance, SemVer, SwapOutput,
 };
 pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
 
@@ -154,7 +152,6 @@ pub fn native_version() -> NativeVersion {
 
 parameter_types! {
 	pub const MinEpoch: BlockNumber = 1;
-
 }
 
 impl pallet_cf_validator::Config for Runtime {
@@ -192,17 +189,22 @@ parameter_types! {
 	// )
 
 	pub const BitcoinNetworkParam: BitcoinNetwork = BitcoinNetwork::Testnet;
+
+	pub CurrentCompatibilityVersion: SemVer = SemVer {
+		major: env!("CARGO_PKG_VERSION_MAJOR").parse::<u8>().expect("Cargo version must be set"),
+		minor: env!("CARGO_PKG_VERSION_MINOR").parse::<u8>().expect("Cargo version must be set"),
+		patch: env!("CARGO_PKG_VERSION_PATCH").parse::<u8>().expect("Cargo version must be set"),
+	};
 }
 
 impl pallet_cf_environment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type CreatePolkadotVault = PolkadotApi<DotEnvironment>;
-	type PolkadotBroadcaster = PolkadotBroadcaster;
 	type PolkadotVaultKeyWitnessedHandler = PolkadotVault;
 	type BitcoinVaultKeyWitnessedHandler = BitcoinVault;
 	type BitcoinNetwork = BitcoinNetworkParam;
 	type BitcoinFeeInfo = chainflip::BitcoinFeeGetter;
 	type RuntimeSafeMode = chainflip::RuntimeSafeMode;
+	type CurrentCompatibilityVersion = CurrentCompatibilityVersion;
 	type WeightInfo = pallet_cf_environment::weights::PalletWeight<Runtime>;
 }
 
@@ -888,6 +890,10 @@ impl_runtime_apis! {
 		fn cf_current_epoch() -> u32 {
 			Validator::current_epoch()
 		}
+		fn cf_current_compatibility_version() -> SemVer {
+			use cf_traits::CompatibleVersions;
+			Environment::current_compatibility_version()
+		}
 		fn cf_epoch_duration() -> u32 {
 			Validator::blocks_per_epoch()
 		}
@@ -918,7 +924,8 @@ impl_runtime_apis! {
 			let is_qualified = <<Runtime as pallet_cf_validator::Config>::KeygenQualification as QualifyNode<_>>::is_qualified(&account_id);
 			let is_current_authority = pallet_cf_validator::CurrentAuthorities::<Runtime>::get().contains(&account_id);
 			let is_bidding = pallet_cf_funding::ActiveBidder::<Runtime>::get(&account_id);
-			let account_info_v1 = Self::cf_account_info(account_id);
+			let account_info_v1 = Self::cf_account_info(account_id.clone());
+			let bound_redeem_address = pallet_cf_funding::BoundAddress::<Runtime>::get(&account_id);
 			RuntimeApiAccountInfoV2 {
 				balance: account_info_v1.balance,
 				bond: account_info_v1.bond,
@@ -931,6 +938,7 @@ impl_runtime_apis! {
 				is_qualified: is_bidding && is_qualified,
 				is_online: account_info_v1.is_live,
 				is_bidding,
+				bound_redeem_address,
 			}
 		}
 		fn cf_account_info(account_id: AccountId) -> RuntimeApiAccountInfo {

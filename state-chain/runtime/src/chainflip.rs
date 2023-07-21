@@ -11,8 +11,8 @@ mod signer_nomination;
 use crate::{
 	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinVault,
 	BlockNumber, Emissions, Environment, EthereumBroadcaster, EthereumChainTracking,
-	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress,
-	PolkadotInstance, Runtime, RuntimeCall, System, Validator,
+	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress, Runtime,
+	RuntimeCall, System, Validator,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -54,7 +54,6 @@ use frame_support::{
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
 use pallet_cf_chain_tracking::ChainState;
-use pallet_cf_vaults::VaultRotationStatus;
 use scale_info::TypeInfo;
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
@@ -305,18 +304,7 @@ impl ChainEnvironment<cf_chains::dot::api::SystemAccounts, PolkadotAccountId> fo
 		match query {
 			cf_chains::dot::api::SystemAccounts::Proxy =>
 				<PolkadotVault as KeyProvider<Polkadot>>::active_epoch_key()
-					.map(|epoch_key| epoch_key.key)
-					// This is temporary workaround to make the dot key available for the
-					// createPure request.
-					// TODO: remove createPure.
-					.or_else(|| {
-						pallet_cf_vaults::PendingVaultRotation::<Runtime, PolkadotInstance>::get()
-							.and_then(|rotation| match rotation {
-								VaultRotationStatus::AwaitingActivation { new_public_key } =>
-									Some(new_public_key),
-								_ => None,
-							})
-					}),
+					.map(|epoch_key| epoch_key.key),
 			cf_chains::dot::api::SystemAccounts::Vault => Environment::polkadot_vault_account(),
 		}
 	}

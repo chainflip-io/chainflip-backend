@@ -37,7 +37,7 @@ pub async fn start(
 )> {
 	let (monitor_address_sender, address_monitor) = ItemMonitor::new(
 		state_chain_client
-			.storage_map::<pallet_cf_ingress_egress::DepositAddressDetailsLookup<
+			.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
 				state_chain_runtime::Runtime,
 				state_chain_runtime::PolkadotInstance,
 			>>(initial_block_hash)
@@ -45,7 +45,9 @@ pub async fn start(
 			.context("Failed to get initial deposit details")?
 			.into_iter()
 			.filter_map(|(address, channel_details)| {
-				if channel_details.source_asset == cf_primitives::chains::assets::dot::Asset::Dot {
+				if channel_details.deposit_channel.asset ==
+					cf_primitives::chains::assets::dot::Asset::Dot
+				{
 					Some(address)
 				} else {
 					None

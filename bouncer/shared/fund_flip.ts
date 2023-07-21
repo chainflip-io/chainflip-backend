@@ -52,10 +52,10 @@ export async function fundFlip(pubkey: HexString, flipAmount: string) {
       receipt.blockHash,
   );
 
-  const wallet = Wallet.fromMnemonic(
-    process.env.ETH_USDC_WHALE_MNEMONIC ??
-      'test test test test test test test test test test test junk',
-  ).connect(ethers.getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'));
+  const wallet = new Wallet(
+    whaleKey,
+    ethers.getDefaultProvider(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545'),
+  );
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const options: any = {
@@ -63,12 +63,12 @@ export async function fundFlip(pubkey: HexString, flipAmount: string) {
     network: 'localnet',
     stateChainGatewayContractAddress: gatewayContractAddress,
     flipContractAddress,
+    nonce: await getNextEthNonce(),
   };
 
-  // TODO: provide nonce manually once it is supported in the SDK/CLI
-  const receipt2 = await fundStateChainAccount(pubkey, flipperinoAmount, options);
-
   console.log('Funding ' + flipAmount + ' FLIP to ' + pubkey);
+
+  const receipt2 = await fundStateChainAccount(pubkey, flipperinoAmount, options);
 
   console.log(
     'Transaction complete, tx_hash: ' +

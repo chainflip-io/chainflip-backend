@@ -25,7 +25,7 @@ where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
 	let initial_block_hash = state_chain_stream.cache().block_hash;
-	let epoch_source = EpochSource::new(scope, state_chain_stream, state_chain_client.clone())
+	let epoch_source = EpochSource::builder(scope, state_chain_stream, state_chain_client.clone())
 		.await
 		.participating(state_chain_client.account_id())
 		.await;

@@ -17,8 +17,8 @@ export interface CcmDepositMetadata {
 }
 
 export async function newSwap(
-  sourceToken: Asset,
-  destToken: Asset,
+  sourceAsset: Asset,
+  destAsset: Asset,
   destAddress: string,
   fee: number,
   messageMetadata?: CcmDepositMetadata,
@@ -27,7 +27,7 @@ export async function newSwap(
 
   const chainflip = await getChainflipApi();
   const destinationAddress =
-    destToken === 'DOT' ? encodeDotAddressForContract(destAddress) : destAddress;
+    destAsset === 'DOT' ? encodeDotAddressForContract(destAddress) : destAddress;
   const keyring = new Keyring({ type: 'sr25519' });
   const brokerUri = process.env.BROKER_URI ?? '//BROKER_1';
   const broker = keyring.createFromUri(brokerUri);
@@ -35,9 +35,9 @@ export async function newSwap(
   await brokerMutex.runExclusive(async () => {
     await chainflip.tx.swapping
       .requestSwapDepositAddress(
-        sourceToken,
-        destToken,
-        { [destToken === 'USDC' ? 'ETH' : destToken]: destinationAddress },
+        sourceAsset,
+        destAsset,
+        { [destAsset === 'USDC' ? 'ETH' : destAsset]: destinationAddress },
         fee,
         messageMetadata ?? null,
       )

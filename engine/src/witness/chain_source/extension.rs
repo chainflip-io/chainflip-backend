@@ -3,9 +3,8 @@ use utilities::task_scope::Scope;
 
 use crate::witness::{
 	chunked_chain_source::{
-		self,
-		chunked_by_time::{self, ChunkByTime},
-		chunked_by_vault::{self, ChunkByVault},
+		chunked_by_time::{builder::ChunkedByTimeBuilder, ChunkByTime},
+		chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkByVault},
 	},
 	common::{ExternalChainSource, RuntimeHasChain},
 	epoch_source::{EpochSource, VaultSource},
@@ -51,31 +50,25 @@ pub trait ChainSourceExt: ChainSource {
 		StrictlyMonotonic::new(self)
 	}
 
-	async fn chunk_by_time<'b, 'env, StateChainClient: Send + Sync>(
+	fn chunk_by_time<Epochs: Into<EpochSource<(), ()>>>(
 		self,
-		epochs: EpochSource<'b, 'env, StateChainClient, (), ()>,
-	) -> chunked_chain_source::Builder<chunked_by_time::Generic<ChunkByTime<Self>>>
+		epochs: Epochs,
+	) -> ChunkedByTimeBuilder<ChunkByTime<Self>>
 	where
 		Self: ExternalChainSource + Sized,
 	{
-		chunked_chain_source::Builder::new(
-			chunked_by_time::Generic(ChunkByTime::new(self)),
-			epochs.into_stream().await.into_box(),
-		)
+		ChunkedByTimeBuilder::new(ChunkByTime::new(self), epochs.into())
 	}
 
-	async fn chunk_by_vault<'b, 'env, StateChainClient: Send + Sync>(
+	fn chunk_by_vault<Vaults: Into<VaultSource<Self::Chain>>>(
 		self,
-		vaults: VaultSource<'b, 'env, StateChainClient, Self::Chain>,
-	) -> chunked_chain_source::Builder<chunked_by_vault::Generic<ChunkByVault<Self>>>
+		vaults: Vaults,
+	) -> ChunkedByVaultBuilder<ChunkByVault<Self>>
 	where
 		Self: ExternalChainSource + Sized,
 		state_chain_runtime::Runtime: RuntimeHasChain<Self::Chain>,
 	{
-		chunked_chain_source::Builder::new(
-			chunked_by_vault::Generic(ChunkByVault::new(self)),
-			vaults.into_stream().await.into_box(),
-		)
+		ChunkedByVaultBuilder::new(ChunkByVault::new(self), vaults.into())
 	}
 }
 impl<T: ChainSource> ChainSourceExt for T {}

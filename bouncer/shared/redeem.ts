@@ -95,5 +95,3 @@ export async function redeemTest() {
 
   console.log(`Redemption success! New balance: ${newBalance.toString()}`);
 }
-
-redeemTest();

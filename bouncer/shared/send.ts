@@ -3,26 +3,26 @@ import { sendDot } from './send_dot';
 import { sendBtc } from './send_btc';
 import { sendErc20 } from './send_erc20';
 import { sendEth } from './send_eth';
-import { getEthContractAddress } from './utils';
+import { getEthContractAddress, defaultAssetAmounts } from './utils';
 
-export async function send(token: Asset, address: string, amount?: string) {
-  switch (token) {
+export async function send(asset: Asset, address: string, amount?: string) {
+  switch (asset) {
     case 'BTC':
-      await sendBtc(address, amount ?? '0.05');
+      await sendBtc(address, amount ?? defaultAssetAmounts(asset));
       break;
     case 'ETH':
-      await sendEth(address, amount ?? '5');
+      await sendEth(address, amount ?? defaultAssetAmounts(asset));
       break;
     case 'DOT':
-      await sendDot(address, amount ?? '50');
+      await sendDot(address, amount ?? defaultAssetAmounts(asset));
       break;
     case 'USDC':
     case 'FLIP': {
-      const contractAddress = getEthContractAddress(token);
-      await sendErc20(address, contractAddress, amount ?? '500');
+      const contractAddress = getEthContractAddress(asset);
+      await sendErc20(address, contractAddress, amount ?? defaultAssetAmounts(asset));
       break;
     }
     default:
-      throw new Error(`Unsupported token type: ${token}`);
+      throw new Error(`Unsupported asset type: ${asset}`);
   }
 }

@@ -5,31 +5,31 @@ pub use persistent::PersistentKeyDB;
 
 use multisig::{
 	client::{key_store_api::KeyStoreAPI, KeygenResultInfo},
-	CryptoScheme, KeyId,
+	ChainSigning, KeyId,
 };
 
 /// A gateway for accessing key data from persistent memory
 pub struct KeyStore<C>
 where
-	C: CryptoScheme,
+	C: ChainSigning,
 {
-	keys: HashMap<KeyId, KeygenResultInfo<C>>,
+	keys: HashMap<KeyId, KeygenResultInfo<C::CryptoScheme>>,
 	db: Arc<PersistentKeyDB>,
 }
 
-impl<C: CryptoScheme> KeyStore<C> {
+impl<C: ChainSigning> KeyStore<C> {
 	/// Load the keys from persistent memory and put them into a new keystore
 	pub fn new(db: Arc<PersistentKeyDB>) -> Self {
 		KeyStore { keys: db.load_keys::<C>(), db }
 	}
 }
 
-impl<C: CryptoScheme> KeyStoreAPI<C> for KeyStore<C> {
-	fn get_key(&self, key_id: &KeyId) -> Option<KeygenResultInfo<C>> {
+impl<C: ChainSigning> KeyStoreAPI<C> for KeyStore<C> {
+	fn get_key(&self, key_id: &KeyId) -> Option<KeygenResultInfo<C::CryptoScheme>> {
 		self.keys.get(key_id).cloned()
 	}
 
-	fn set_key(&mut self, key_id: KeyId, key: KeygenResultInfo<C>) {
+	fn set_key(&mut self, key_id: KeyId, key: KeygenResultInfo<C::CryptoScheme>) {
 		self.db.update_key::<C>(&key_id, &key);
 		self.keys.insert(key_id, key);
 	}
@@ -40,7 +40,11 @@ mod tests {
 	use super::*;
 	use crate::db::PersistentKeyDB;
 	use cf_primitives::AccountId;
-	use multisig::{client::keygen, eth::EthSigning, Rng};
+	use multisig::{
+		client::keygen,
+		eth::{EthSigning, EvmCryptoScheme},
+		Rng,
+	};
 	use rand::SeedableRng;
 	use std::collections::BTreeSet;
 
@@ -50,7 +54,7 @@ mod tests {
 	#[tokio::test]
 	async fn should_load_keys_on_creation() {
 		// Generate a key to use in this test
-		let (public_key, key_data) = keygen::generate_key_data::<EthSigning>(
+		let (public_key, key_data) = keygen::generate_key_data::<EvmCryptoScheme>(
 			BTreeSet::from([AccountId::new([1; 32])]),
 			&mut Rng::from_entropy(),
 		);

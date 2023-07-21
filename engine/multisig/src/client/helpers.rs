@@ -31,14 +31,15 @@ use crate::{
 		keygen::{generate_key_data, HashComm1, HashContext},
 		signing, KeygenResultInfo,
 	},
-	crypto::{ECPoint, Rng},
+	crypto::{CryptoTag, ECPoint, Rng},
+	eth::EvmCryptoScheme,
 	CryptoScheme,
 };
 use crate::{
 	client::{keygen, MultisigMessage},
 	// This determines which crypto scheme will be used in tests
 	// (we make arbitrary choice to use eth)
-	crypto::eth::{EthSigning, Point},
+	crypto::eth::Point,
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
 };
 
@@ -74,21 +75,21 @@ macro_rules! test_all_crypto_schemes {
 	($test_function:ident ($($lt:tt),*)) => {
 		({
 			use $crate::{
-				bitcoin::BtcSigning, ed25519::Ed25519Signing, eth::EthSigning,
-				polkadot::PolkadotSigning, CryptoScheme,
+				bitcoin::BtcCryptoScheme, ed25519::Ed25519CryptoScheme, eth::EvmCryptoScheme,
+				polkadot::PolkadotCryptoScheme,
 			};
 
 			fn test<C: CryptoScheme>() {
 				if let Err(err) = std::panic::catch_unwind(|| $test_function::<C>($($lt)*) ) {
-					println!("Test failed with {} CryptoScheme", C::NAME);
+					println!("Test failed with {} Scheme", C::NAME);
 					std::panic::resume_unwind(err);
 				}
 			}
 			// Run the test on all CryptoSchemes
-			test::<EthSigning>();
-			test::<PolkadotSigning>();
-			test::<BtcSigning>();
-			test::<Ed25519Signing>();
+			test::<EvmCryptoScheme>();
+			test::<PolkadotCryptoScheme>();
+			test::<BtcCryptoScheme>();
+			test::<Ed25519CryptoScheme>();
 		})
 	};
 }
@@ -100,17 +101,17 @@ fn test_all_crypto_schemes_macro() {
 	// is calling the function for each scheme.
 
 	fn panic_function_eth<C: CryptoScheme>() {
-		if matches!(<C as CryptoScheme>::CHAIN_TAG, crate::ChainTag::Ethereum) {
+		if matches!(<C as CryptoScheme>::CRYPTO_TAG, CryptoTag::Evm) {
 			panic!();
 		}
 	}
 	fn panic_function_dot<C: CryptoScheme>() {
-		if matches!(<C as CryptoScheme>::CHAIN_TAG, crate::ChainTag::Polkadot) {
+		if matches!(<C as CryptoScheme>::CRYPTO_TAG, CryptoTag::Polkadot) {
 			panic!();
 		}
 	}
 	fn panic_function_btc<C: CryptoScheme>() {
-		if matches!(<C as CryptoScheme>::CHAIN_TAG, crate::ChainTag::Bitcoin) {
+		if matches!(<C as CryptoScheme>::CRYPTO_TAG, CryptoTag::Bitcoin) {
 			panic!();
 		}
 	}
@@ -126,14 +127,14 @@ macro_rules! test_all_crypto_schemes_async {
 	($test_function:ident ($($lt:tt),*)) => {
 		({
 			use crate::{
-				bitcoin::BtcSigning, ed25519::Ed25519Signing, eth::EthSigning,
-				polkadot::PolkadotSigning,
+				bitcoin::BtcCryptoScheme, ed25519::Ed25519CryptoScheme, eth::EvmCryptoScheme,
+				polkadot::PolkadotCryptoScheme,
 			};
 			// Run the test on all CryptoSchemes
-			$test_function::<EthSigning>($($lt)*).await;
-			$test_function::<PolkadotSigning>($($lt)*).await;
-			$test_function::<BtcSigning>($($lt)*).await;
-			$test_function::<Ed25519Signing>($($lt)*).await;
+			$test_function::<EvmCryptoScheme>($($lt)*).await;
+			$test_function::<PolkadotCryptoScheme>($($lt)*).await;
+			$test_function::<BtcCryptoScheme>($($lt)*).await;
+			$test_function::<Ed25519CryptoScheme>($($lt)*).await;
 		})
 	};
 }
@@ -144,7 +145,7 @@ lazy_static! {
 }
 
 pub type StageMessages<T> = HashMap<AccountId, HashMap<AccountId, T>>;
-type KeygenCeremonyEth = KeygenCeremony<EthSigning>;
+type KeygenCeremonyEth = KeygenCeremony<EvmCryptoScheme>;
 
 pub struct Node<C: CeremonyTrait> {
 	own_account_id: AccountId,
@@ -869,8 +870,11 @@ pub async fn standard_signing<C: CryptoScheme>(
 pub async fn run_keygen(
 	nodes: HashMap<AccountId, Node<KeygenCeremonyEth>>,
 	ceremony_id: CeremonyId,
-) -> (<EthSigning as CryptoScheme>::PublicKey, HashMap<AccountId, KeygenResultInfo<EthSigning>>) {
-	let mut keygen_ceremony = KeygenCeremonyRunner::<EthSigning>::new(
+) -> (
+	<EvmCryptoScheme as CryptoScheme>::PublicKey,
+	HashMap<AccountId, KeygenResultInfo<EvmCryptoScheme>>,
+) {
+	let mut keygen_ceremony = KeygenCeremonyRunner::<EvmCryptoScheme>::new(
 		nodes,
 		ceremony_id,
 		Rng::from_seed(DEFAULT_KEYGEN_SEED),

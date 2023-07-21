@@ -4,6 +4,7 @@ use tempfile::TempDir;
 
 use multisig::{
 	bitcoin::BtcSigning, client::get_key_data_for_test, eth::EthSigning, polkadot::PolkadotSigning,
+	CryptoScheme,
 };
 
 use super::*;
@@ -43,14 +44,14 @@ fn can_use_multiple_crypto_schemes() {
 	type Scheme2 = PolkadotSigning;
 	type Scheme3 = BtcSigning;
 
-	fn add_key_for_scheme<Scheme: CryptoScheme>(db: &PersistentKeyDB) -> KeyId {
+	fn add_key_for_scheme<C: ChainSigning>(db: &PersistentKeyDB) -> KeyId {
 		let key_id = KeyId::new(GENESIS_EPOCH, rand::random::<[u8; 32]>());
-		db.update_key(&key_id, &get_single_key_data::<Scheme>());
+		db.update_key::<C>(&key_id, &get_single_key_data::<C::CryptoScheme>());
 		key_id
 	}
 
-	fn ensure_loaded_one_key<Scheme: CryptoScheme>(db: &PersistentKeyDB, expected_key: &KeyId) {
-		let keys = db.load_keys::<Scheme>();
+	fn ensure_loaded_one_key<C: ChainSigning>(db: &PersistentKeyDB, expected_key: &KeyId) {
+		let keys = db.load_keys::<C>();
 		assert_eq!(keys.len(), 1, "Incorrect number of keys loaded");
 		assert!(keys.contains_key(expected_key), "Incorrect key id");
 	}
@@ -88,7 +89,10 @@ fn can_load_keys_with_current_keygen_info() {
 	{
 		let p_db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
 
-		p_db.update_key::<Scheme>(&key_id, &get_single_key_data::<Scheme>());
+		p_db.update_key::<Scheme>(
+			&key_id,
+			&get_single_key_data::<<Scheme as ChainSigning>::CryptoScheme>(),
+		);
 	}
 
 	{
@@ -113,7 +117,10 @@ fn can_update_key() {
 	// there should be no key [0; 33] yet
 	assert!(keys_before.get(&key_id).is_none());
 
-	p_db.update_key::<Scheme>(&key_id, &get_single_key_data::<Scheme>());
+	p_db.update_key::<Scheme>(
+		&key_id,
+		&get_single_key_data::<<Scheme as ChainSigning>::CryptoScheme>(),
+	);
 
 	let keys_before = p_db.load_keys::<Scheme>();
 	assert!(keys_before.get(&key_id).is_some());
@@ -149,7 +156,10 @@ fn can_load_key_from_backup() {
 	{
 		let p_db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
 
-		p_db.update_key::<Scheme>(&key_id, &get_single_key_data::<Scheme>());
+		p_db.update_key::<Scheme>(
+			&key_id,
+			&get_single_key_data::<<Scheme as ChainSigning>::CryptoScheme>(),
+		);
 	}
 
 	// Do a backup of the db,

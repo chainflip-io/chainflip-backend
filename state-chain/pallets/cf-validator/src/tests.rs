@@ -205,16 +205,14 @@ fn send_cfe_version() {
 		let authority = GENESIS_AUTHORITIES[0];
 
 		let version = SemVer { major: 4, ..Default::default() };
-		assert_ok!(
-			ValidatorPallet::cfe_version(RuntimeOrigin::signed(authority), version.clone(),)
-		);
+		assert_ok!(ValidatorPallet::cfe_version(RuntimeOrigin::signed(authority), version,));
 
 		assert_eq!(
 			last_event::<Test>(),
 			mock::RuntimeEvent::ValidatorPallet(crate::Event::CFEVersionUpdated {
 				account_id: authority,
 				old_version: SemVer::default(),
-				new_version: version.clone(),
+				new_version: version,
 			}),
 			"should emit event on updated version"
 		);
@@ -227,17 +225,14 @@ fn send_cfe_version() {
 
 		// We submit a new version
 		let new_version = SemVer { major: 5, ..Default::default() };
-		assert_ok!(ValidatorPallet::cfe_version(
-			RuntimeOrigin::signed(authority),
-			new_version.clone()
-		));
+		assert_ok!(ValidatorPallet::cfe_version(RuntimeOrigin::signed(authority), new_version));
 
 		assert_eq!(
 			last_event::<Test>(),
 			mock::RuntimeEvent::ValidatorPallet(crate::Event::CFEVersionUpdated {
 				account_id: authority,
 				old_version: version,
-				new_version: new_version.clone(),
+				new_version,
 			}),
 			"should emit event on updated version"
 		);
@@ -250,10 +245,7 @@ fn send_cfe_version() {
 
 		// When we submit the same version we should see no `CFEVersionUpdated` event
 		frame_system::Pallet::<Test>::reset_events();
-		assert_ok!(ValidatorPallet::cfe_version(
-			RuntimeOrigin::signed(authority),
-			new_version.clone()
-		));
+		assert_ok!(ValidatorPallet::cfe_version(RuntimeOrigin::signed(authority), new_version));
 
 		assert_eq!(
 			0,
