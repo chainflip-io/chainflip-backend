@@ -23,7 +23,7 @@ async function main(): Promise<void> {
   const alice = keyring.createFromUri(aliceUri);
   const client = getBtcClient(process.env.BTC_ENDPOINT);
 
-  const chainflip = await getChainflipApi(process.env.CF_NODE_ENDPOINT);
+  const chainflip = await getChainflipApi();
   const polkadot = await getPolkadotApi(process.env.POLKADOT_ENDPOINT);
 
   console.log('=== Performing initial Vault setup ===');
