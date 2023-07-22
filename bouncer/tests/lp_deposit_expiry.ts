@@ -1,10 +1,10 @@
+#!/usr/bin/env pnpm tsx
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import {
   runWithTimeout,
   observeEvent,
   getChainflipApi,
-  encodeBtcAddressForContract,
 } from '../shared/utils';
 import { sendBtc } from '../shared/send_btc';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
@@ -33,9 +33,7 @@ async function main(): Promise<void> {
     'liquidityProvider:LiquidityDepositAddressReady',
     chainflip,
   );
-  const ingressKey = depositEventResult[1].toJSON().btc;
-
-  const ingressAddress = encodeBtcAddressForContract(ingressKey);
+  const ingressAddress = depositEventResult.data.depositAddress.Btc;
 
   console.log('Funding BTC LP deposit address of ' + ingressAddress + ' with 1 BTC');
 

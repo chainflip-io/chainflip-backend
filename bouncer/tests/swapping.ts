@@ -1,3 +1,4 @@
+#!/usr/bin/env pnpm tsx
 import { randomAsHex, randomAsNumber } from '@polkadot/util-crypto';
 import { Asset, assetDecimals } from '@chainflip-io/cli';
 import Web3 from 'web3';
@@ -8,7 +9,7 @@ import {
   chainFromAsset,
   getEthContractAddress,
   encodeBtcAddressForContract,
-  encodeDotAddressForContract,
+  decodeDotAddressForContract,
   amountToFineAmount,
   defaultAssetAmounts,
 } from '../shared/utils';
@@ -197,7 +198,7 @@ async function testAll() {
       cf_parameters: getAbiEncodedMessage(['string', 'string']),
       source_address: {
         DOT: await getAddress('DOT', randomAsHex(32)).then((dotAddress) => {
-          encodeDotAddressForContract(dotAddress);
+          decodeDotAddressForContract(dotAddress);
         }),
       },
     }),
@@ -207,7 +208,7 @@ async function testAll() {
       cf_parameters: getAbiEncodedMessage(['address', 'uint256']),
       source_address: {
         DOT: await getAddress('DOT', randomAsHex(32)).then((dotAddress) => {
-          encodeDotAddressForContract(dotAddress);
+          decodeDotAddressForContract(dotAddress);
         }),
       },
     }),

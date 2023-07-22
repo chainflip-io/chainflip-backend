@@ -10,13 +10,13 @@
 // (That would be account cFL2GAaTbP6UHgfQwJuJ7Naq6gh7ZxZiWQ8EcmdYeopGhpziQ)
 
 import { HexString } from '@polkadot/util/types';
-import { runWithTimeout, encodeFlipAddressForContract } from '../shared/utils';
+import { runWithTimeout, decodeFlipAddressForContract } from '../shared/utils';
 import { fundFlip } from '../shared/fund_flip';
 
 async function main(): Promise<void> {
   let pubkey = process.argv[2];
   try {
-    pubkey = encodeFlipAddressForContract(pubkey);
+    pubkey = decodeFlipAddressForContract(pubkey);
   } catch {
     // ignore error
   }

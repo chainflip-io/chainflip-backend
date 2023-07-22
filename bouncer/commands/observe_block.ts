@@ -8,16 +8,11 @@
 // For example: ./commands/observe_block.ts 3
 // will wait until block number 3 has appeared on the state chain
 
-import { ApiPromise, WsProvider } from '@polkadot/api';
-import { runWithTimeout, sleep } from '../shared/utils';
+import { runWithTimeout, sleep, getChainflipApi } from '../shared/utils';
 
 async function main(): Promise<void> {
-  const cfNodeEndpoint = process.env.CF_NODE_ENDPOINT ?? 'ws://127.0.0.1:9944';
+  const api = await getChainflipApi();
   const expectedBlock = process.argv[2];
-  const api = await ApiPromise.create({
-    provider: new WsProvider(cfNodeEndpoint),
-    noInitWarn: true,
-  });
   while ((await api.rpc.chain.getBlockHash(expectedBlock)).every((e) => e === 0)) {
     await sleep(1000);
   }
