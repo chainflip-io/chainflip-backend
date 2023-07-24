@@ -23,7 +23,7 @@ impl<T: Ord + Copy + Step + Bounded> RleBitmap<T> {
 	}
 
 	pub fn set_range<Range: RangeBounds<T>>(&mut self, range: Range, value: bool) {
-		let (exclusive_start, inclusive_start) = match range.start_bound() {
+		let (option_exclusive_start, inclusive_start) = match range.start_bound() {
 			core::ops::Bound::Included(t) => (<T as Step>::backward_checked(*t, 1), *t),
 			core::ops::Bound::Excluded(t) => (
 				Some(*t),
@@ -38,15 +38,15 @@ impl<T: Ord + Copy + Step + Bounded> RleBitmap<T> {
 				<T as Step>::forward_checked(*t, 1)
 			},
 			core::ops::Bound::Excluded(t) => {
-				assert!(inclusive_start < *t);
+				assert!(inclusive_start <= *t);
 				Some(*t)
 			},
 			core::ops::Bound::Unbounded => None,
 		};
 
 		if option_exclusive_end != Some(inclusive_start) {
-			let does_start_value_match = exclusive_start
-				.map_or(false, |exclusive_start| self.get(&exclusive_start) == value);
+			let does_start_value_match = option_exclusive_start
+				.map_or(false, |option_exclusive_start| self.get(&option_exclusive_start) == value);
 			let does_end_value_match = option_exclusive_end
 				.map_or(true, |exclusive_end| self.get(&exclusive_end) == value);
 
@@ -133,7 +133,7 @@ mod tests {
 	use super::RleBitmap;
 
 	#[test]
-	fn basic_tests() {
+	fn basic_set_tests() {
 		let mut bitmap = RleBitmap::<u32>::new(true);
 
 		assert!(bitmap.iter(false).next().is_none());
@@ -181,5 +181,40 @@ mod tests {
 		bitmap.set(0, false);
 
 		assert!(Iterator::eq(bitmap.iter(true), [1, 9, 10, 11, 12, 15],));
+	}
+
+	#[test]
+	fn basic_set_range_tests() {
+		let mut bitmap = RleBitmap::<u32>::new(false);
+
+		assert!(bitmap.iter(true).next().is_none());
+
+		bitmap.set_range(10..13, true);
+
+		assert!(Iterator::eq(bitmap.iter(true), [10, 11, 12],));
+
+		bitmap.set_range(12..15, true);
+
+		assert!(Iterator::eq(bitmap.iter(true), [10, 11, 12, 13, 14],));
+
+		bitmap.set_range(11..=13, false);
+
+		assert!(Iterator::eq(bitmap.iter(true), [10, 14],));
+
+		bitmap.set_range(8..10, true);
+
+		assert!(Iterator::eq(bitmap.iter(true), [8, 9, 10, 14],));
+
+		bitmap.set_range(15..16, true);
+
+		assert!(Iterator::eq(bitmap.iter(true), [8, 9, 10, 14, 15],));
+
+		bitmap.set_range(7..=17, true);
+
+		assert!(Iterator::eq(bitmap.iter(true), [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],));
+
+		bitmap.invert();
+
+		assert!(Iterator::eq(bitmap.iter(false), [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],));
 	}
 }
