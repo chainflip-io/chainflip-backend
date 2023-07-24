@@ -1,11 +1,7 @@
 #!/usr/bin/env pnpm tsx
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
-import {
-  runWithTimeout,
-  observeEvent,
-  getChainflipApi,
-} from '../shared/utils';
+import { runWithTimeout, observeEvent, getChainflipApi } from '../shared/utils';
 import { sendBtc } from '../shared/send_btc';
 import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 

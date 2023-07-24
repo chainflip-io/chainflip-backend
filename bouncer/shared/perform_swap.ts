@@ -41,12 +41,17 @@ export async function performSwap(
 
     (event) => {
       // Find deposit address for the right swap by looking at destination address:
-      const destAddressEvent = encodeDestinationAddress(event.data.destinationAddress[assetToChain(destAsset)], destAsset);
+      const destAddressEvent = encodeDestinationAddress(
+        event.data.destinationAddress[assetToChain(destAsset)],
+        destAsset,
+      );
       if (!destAddressEvent) return false;
 
       const destAssetMatches = event.data.destinationAsset.toUpperCase() === destAsset;
       const sourceAssetMatches = event.data.sourceAsset.toUpperCase() === sourceAsset;
-      const destAddressMatches = destAddressEvent.toLowerCase() === encodeDestinationAddress(destAddress, destAsset).toLowerCase();
+      const destAddressMatches =
+        destAddressEvent.toLowerCase() ===
+        encodeDestinationAddress(destAddress, destAsset).toLowerCase();
 
       return destAddressMatches && destAssetMatches && sourceAssetMatches;
     },
@@ -61,7 +66,7 @@ export async function performSwap(
   );
 
   const swapInfo = (await addressPromise).data;
-  let depositAddress = swapInfo.depositAddress[assetToChain(sourceAsset)];
+  const depositAddress = swapInfo.depositAddress[assetToChain(sourceAsset)];
   const channelDestAddress = swapInfo.destinationAddress[assetToChain(destAsset)];
   const channelId = Number(swapInfo.channelId);
 

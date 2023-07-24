@@ -39,7 +39,7 @@ export function getEthContractAddress(contract: string): string {
 }
 
 export function assetToChain(asset: Asset): string {
-  switch(asset){
+  switch (asset) {
     case 'DOT':
       return 'Dot';
     case 'ETH':
@@ -48,6 +48,8 @@ export function assetToChain(asset: Asset): string {
       return 'Eth';
     case 'BTC':
       return 'Btc';
+    default:
+      return '';
   }
 }
 

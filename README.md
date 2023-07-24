@@ -1,5 +1,6 @@
 [![Gitpod ready-to-code](https://img.shields.io/badge/Gitpod-ready--to--code-blue?logo=gitpod)](https://gitpod.io/#https://github.com/chainflip-io/chainflip-backend)
 [![codecov](https://codecov.io/gh/chainflip-io/chainflip-backend/branch/main/graph/badge.svg?token=20X24B8IXC)](https://codecov.io/gh/chainflip-io/chainflip-backend)
+
 # Chainflip
 
 This repo contains everything you need to run a validator node on the Chainflip network.
@@ -68,20 +69,20 @@ The following commands should be executed from the repo root directory.
 - Check formatting:<br>
   `cargo fmt --check`
 - Format code:<br>
-    - `cargo fmt -- <filename>`
-    - `cargo fmt --all` (format all packages)
+  - `cargo fmt -- <filename>`
+  - `cargo fmt --all` (format all packages)
 - Check the state-chain and cfe compile:
-    - `cargo cf-clippy`
-    - `cargo cf-clippy-ci` (This is used by the CI, but you don't typically need it)
+  - `cargo cf-clippy`
+  - `cargo cf-clippy-ci` (This is used by the CI, but you don't typically need it)
 - Run all unit tests:<br>
   `cargo cf-test`
 - Expand macros for a given part of the code. You'll need to pipe output to a file.<br>
   Requires _cargo-expand_ (`cargo install cargo-expand`):<br>
   `cargo expand <options>`
 - Clean up old build objects (sometimes this will fix compile problems):
-    - `cargo clean`
-    - `cargo clean -p <package>`
-- Audit external dependencies (The CI runs this https://github.com/chainflip-io/chainflip-backend/issues/1175):<br>
+  - `cargo clean`
+  - `cargo clean -p <package>`
+- Audit external dependencies (The CI runs this <https://github.com/chainflip-io/chainflip-backend/issues/1175>):<br>
   `cargo audit`
 
 ## Localnet
@@ -139,24 +140,26 @@ After set up completion, you will see the following:
 4) logs
 5) yeet
 ```
+
 > **Note:** All chaindata and signing DBs will be under`/tmp/chainflip`
 
-* **build** - Create a new testnet using a path to the binaries you provide.
-* **recreate** - This will simply run destroy, followed by build. You have the option to change the path to the binaries.
-* **destroy** - Destroy your current Localnet and deletes chaindata.
-* **logs** - Tail the logs for your current Localnet.
-* **yeet** - Destroy your current Localnet, and remove all data including docker images. You should use this if you are getting some weird caching issues.
+- **build** - Create a new testnet using a path to the binaries you provide.
+- **recreate** - This will simply run destroy, followed by build. You have the option to change the path to the binaries.
+- **destroy** - Destroy your current Localnet and deletes chaindata.
+- **logs** - Tail the logs for your current Localnet.
+- **yeet** - Destroy your current Localnet, and remove all data including docker images. You should use this if you are getting some weird caching issues.
 
 ### Log Filtering
 
 These commands can be used to control which logs the engine outputs at runtime.
-  - `curl -X GET 127.0.0.1:36079/tracing` (Returns the current filtering directives)
-  - `curl --json '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"' (Sets the filter directives so the default is DEBUG, and the logging in modules warp, hyper, jsonrpc, web3, and reqwest is turned off)
-  - `curl -X POST -H 'Content-Type: application/json' -d '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"' 127.0.0.1:36079/tracing` (Equivalent to the above, but without using the --sjon short-hand)
+
+- `curl -X GET 127.0.0.1:36079/tracing` (Returns the current filtering directives)
+- `curl --json '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"' (Sets the filter directives so the default is DEBUG, and the logging in modules warp, hyper, jsonrpc, web3, and reqwest is turned off)
+- `curl -X POST -H 'Content-Type: application/json' -d '"debug,warp=off,hyper=off,jsonrpc=off,web3=off,reqwest=off"' 127.0.0.1:36079/tracing` (Equivalent to the above, but without using the --sjon short-hand)
 
 The `RUST_LOG` environment variable controls the initial filtering directives if specified at engine startup.
 
-The syntax for specifying filtering directives is given here: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html
+The syntax for specifying filtering directives is given here: <https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html>
 
 ## Testnet
 

@@ -38,7 +38,7 @@ impl<Key: Ord + Copy, Fut: Future + Unpin> FutureMap<Key, Fut> {
 	}
 
 	pub fn remove(&mut self, key: Key) -> Option<Fut> {
-		if self.keys.contains(&key) {
+		if self.keys.remove(&key) {
 			let mut cancelled_future = None;
 
 			let futures = std::mem::take(&mut self.futures).into_iter();
@@ -51,7 +51,6 @@ impl<Key: Ord + Copy, Fut: Future + Unpin> FutureMap<Key, Fut> {
 					cancelled_future = Some(future.future);
 				}
 			}
-
 			cancelled_future
 		} else {
 			None
@@ -80,5 +79,32 @@ impl<Key: Ord + Copy, Fut: Future + Unpin> Stream for FutureMap<Key, Fut> {
 				(key, output)
 			})
 		})
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use futures::{future::ready, FutureExt};
+
+	#[test]
+	fn test_insert_and_remove() {
+		let mut map: FutureMap<i32, _> = Default::default();
+
+		// Initially, map should be empty
+		assert_eq!(map.len(), 0);
+
+		const TEST_KEY: i32 = 1;
+		const FUT_OUTPUT: i32 = 100;
+
+		map.insert(TEST_KEY, ready(FUT_OUTPUT));
+		assert_eq!(map.len(), 1);
+		assert!(!map.is_empty());
+
+		// Remove the inserted future
+		let removed_future = map.remove(TEST_KEY);
+		assert!(removed_future.is_some());
+		assert_eq!(removed_future.unwrap().now_or_never(), Some(FUT_OUTPUT));
+		assert!(map.is_empty());
 	}
 }

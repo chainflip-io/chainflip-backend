@@ -895,11 +895,11 @@ pub async fn run_keygen(
 }
 
 /// Generate an invalid local sig for stage3
-pub fn gen_dummy_local_sig<P: ECPoint>(rng: &mut Rng) -> LocalSig3<P> {
+pub fn gen_dummy_local_sig<P: ECPoint>(rng: &mut Rng, number_of_responses: u64) -> LocalSig3<P> {
 	use crate::crypto::ECScalar;
 
 	DelayDeserialization::new(&signing::LocalSig3Inner::<P> {
-		responses: vec![P::Scalar::random(rng)],
+		responses: (0..number_of_responses).map(|_| P::Scalar::random(rng)).collect(),
 	})
 }
 
@@ -912,8 +912,7 @@ pub fn get_dummy_hash_comm(rng: &mut Rng) -> keygen::HashComm1 {
 	HashComm1(H256::from(buffer))
 }
 
-// Make these member functions of the CeremonyRunner
-pub fn gen_dummy_keygen_comm1<P: ECPoint>(
+pub fn gen_dummy_keygen_comm3<P: ECPoint>(
 	rng: &mut Rng,
 	share_count: AuthorityCount,
 ) -> DKGUnverifiedCommitment<P> {
