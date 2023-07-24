@@ -545,13 +545,13 @@ pub struct ChainAddressConverter;
 
 impl AddressConverter for ChainAddressConverter {
 	fn to_encoded_address(address: ForeignChainAddress) -> EncodedAddress {
-		to_encoded_address(address, Environment::bitcoin_network)
+		to_encoded_address(address, Environment::network_environment)
 	}
 
 	fn try_from_encoded_address(
 		encoded_address: EncodedAddress,
 	) -> Result<ForeignChainAddress, ()> {
-		try_from_encoded_address(encoded_address, Environment::bitcoin_network)
+		try_from_encoded_address(encoded_address, Environment::network_environment)
 	}
 }
 

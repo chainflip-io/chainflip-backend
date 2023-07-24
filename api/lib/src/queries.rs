@@ -1,7 +1,9 @@
 use super::*;
 use cf_chains::{Chain, ForeignChainAddress};
 use cf_primitives::chains::assets::any;
-use chainflip_engine::state_chain_observer::client::storage_api::StorageApi;
+use chainflip_engine::state_chain_observer::client::{
+	storage_api::StorageApi, StateChainStreamApi,
+};
 use serde::Deserialize;
 use state_chain_runtime::PalletInstanceAlias;
 use std::{collections::BTreeMap, sync::Arc};
@@ -35,27 +37,32 @@ pub async fn connect<'a>(
 }
 
 pub async fn get_open_swap_channels<C: Chain + PalletInstanceAlias>(
-	client: Arc<impl StorageApi>,
-	block_hash: state_chain_runtime::Hash,
-) -> Result<Vec<SwapChannelInfo>, anyhow::Error>
+	&self,
+	block_hash: Option<state_chain_runtime::Hash>,
+) -> Result<Vec<SwapChannelInfo<C>>, anyhow::Error>
 where
-	state_chain_runtime::Runtime: pallet_cf_ingress_egress::Config<C::Instance>,
+	state_chain_runtime::Runtime: pallet_cf_ingress_egress::Config<C::Instance, TargetChain = C>,
 {
-	let channel_details =
-		client
+	let block_hash = block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
+
+	let (channel_details, channel_actions, network_environment) = tokio::try_join!(
+		self.state_chain_client
 			.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
 				state_chain_runtime::Runtime,
 				C::Instance,
 			>>(block_hash)
-			.await?
-			.into_iter()
-			.collect::<BTreeMap<_, _>>();
-
-	let channel_actions = client
-		.storage_map::<pallet_cf_ingress_egress::ChannelActions<state_chain_runtime::Runtime, C::Instance>>(
-			block_hash,
-		)
-		.await?;
+			.map(|result| {
+				result.map(|channels| channels.into_iter().collect::<BTreeMap<_, _>>())
+			}),
+		self.state_chain_client
+			.storage_map::<pallet_cf_ingress_egress::ChannelActions<state_chain_runtime::Runtime, C::Instance>>(
+				block_hash,
+			),
+		self.state_chain_client
+			.storage_value::<pallet_cf_environment::ChainflipNetworkEnvironment<state_chain_runtime::Runtime>>(
+				block_hash
+			),
+	)?;
 
 	Ok(channel_actions
 		.iter()
