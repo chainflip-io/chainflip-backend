@@ -5,7 +5,7 @@ mod tests;
 use anyhow::{anyhow, Context};
 use cf_chains::{
 	btc::{self, PreviousOrCurrent},
-	dot::{self, PolkadotSignature},
+	dot::{self},
 	eth::Ethereum,
 	Polkadot,
 };
@@ -250,9 +250,6 @@ pub async fn start<
 	eth_epoch_start_sender: async_broadcast::Sender<EpochStart<Ethereum>>,
 	eth_address_to_monitor_sender: EthAddressToMonitorSender,
 	dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
-	dot_monitor_signature_sender: tokio::sync::mpsc::UnboundedSender<
-		MonitorCommand<PolkadotSignature>,
-	>,
 ) -> Result<(), anyhow::Error>
 where
 	BlockStream: StateChainStreamApi,
@@ -620,10 +617,9 @@ where
                                             broadcast_attempt_id,
                                             nominee,
                                             transaction_payload,
-                                            transaction_out_id,
+                                            transaction_out_id: _,
                                         },
                                     ) => {
-                                        dot_monitor_signature_sender.send(MonitorCommand::Add(transaction_out_id)).unwrap();
                                         if nominee == account_id {
                                             match dot_broadcaster.send(transaction_payload.encoded_extrinsic).await {
                                                 Ok(tx_hash) => info!("Polkadot TransactionBroadcastRequest {broadcast_attempt_id:?} success: tx_hash: {tx_hash:#x}"),
