@@ -24,7 +24,7 @@ pub mod aliases {
 		}
 	}
 
-	define_trait_alias!(pub trait Index: Bounded + DeserializeOwned + Serialize + FullCodec + Step + PartialEq + Eq + PartialOrd + Ord + Clone + Copy + Send + Sync + Unpin + TryFrom<u64> + Into<u64> + 'static);
+	define_trait_alias!(pub trait Index: Bounded + DeserializeOwned + Serialize + FullCodec + Step + PartialEq + Eq + PartialOrd + Ord + Clone + Copy + Send + Sync + Unpin + 'static);
 	define_trait_alias!(pub trait Hash: PartialEq + Eq + Clone + Copy + Send + Sync + Unpin + 'static);
 	define_trait_alias!(pub trait Data: Send + Sync + Unpin + 'static);
 }
