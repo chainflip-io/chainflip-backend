@@ -10,7 +10,7 @@ use cf_chains::{
 	dot::PolkadotAccountId,
 	AnyChain, CcmDepositMetadata,
 };
-use cf_primitives::{Asset, AssetAmount, ForeignChain};
+use cf_primitives::{Asset, AssetAmount, ForeignChain, NetworkEnvironment};
 use cf_test_utilities::{assert_event_sequence, assert_events_match};
 use cf_traits::{
 	mocks::{
@@ -491,7 +491,9 @@ fn rejects_invalid_swap_by_witnesser() {
 		.unwrap();
 
 		let btc_encoded_address =
-			to_encoded_address(ForeignChainAddress::Btc(script_pubkey), || BitcoinNetwork::Mainnet);
+			to_encoded_address(ForeignChainAddress::Btc(script_pubkey), || {
+				NetworkEnvironment::Mainnet
+			});
 
 		// Is valid Bitcoin address, but asset is Dot, so not compatible
 		assert_noop!(

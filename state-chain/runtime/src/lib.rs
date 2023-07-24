@@ -1025,7 +1025,7 @@ impl_runtime_apis! {
 
 		fn cf_environment() -> runtime_apis::Environment {
 			runtime_apis::Environment {
-				bitcoin_network: Environment::bitcoin_network(),
+				bitcoin_network: Environment::network_environment().into(),
 				ethereum_chain_id: Environment::ethereum_chain_id(),
 				polkadot_genesis_hash: Environment::polkadot_genesis_hash(),
 			}
