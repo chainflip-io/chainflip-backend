@@ -1,8 +1,9 @@
-use cf_chains::address::AddressConverter;
+use anyhow::anyhow;
 use chainflip_api::{
 	self, clean_foreign_chain_address,
 	primitives::{
-		AccountRole, Asset, BasisPoints, BlockNumber, CcmDepositMetadata, ChannelId, ForeignChain,
+		AccountRole, Asset, BasisPoints, BlockNumber, CcmDepositMetadata, ChannelId,
+		ForeignChainAddress,
 	},
 	settings::StateChain,
 };
@@ -15,8 +16,7 @@ use jsonrpsee::{
 };
 use serde::{Deserialize, Serialize};
 use sp_rpc::number::NumberOrHex;
-use state_chain_runtime::chainflip::ChainAddressConverter;
-use std::{path::PathBuf, vec};
+use std::path::PathBuf;
 
 /// The response type expected by the broker api.
 ///
@@ -44,45 +44,52 @@ impl From<chainflip_api::SwapDepositAddress> for BrokerSwapDepositAddress {
 pub struct BrokerCcmDepositMetadata {
 	gas_budget: NumberOrHex,
 	message: String,
-	source_address: String,
-	source_chain: ForeignChain,
 	cf_parameters: Option<String>,
 }
 
-fn try_convert_string_to_bytes(string: &str) -> Result<Vec<u8>, FromHexError> {
+fn parse_hex_bytes(string: &str) -> Result<Vec<u8>, FromHexError> {
 	hex::decode(string.strip_prefix("0x").unwrap_or(string))
 }
 
 #[cfg(test)]
 mod test {
+	use utilities::assert_err;
+
 	use super::*;
 
 	#[test]
 	fn test_decoding() {
-		assert_eq!(try_convert_string_to_bytes("0x00").unwrap(), vec![0]);
-		assert_eq!(try_convert_string_to_bytes("").unwrap(), Vec::<u8>::new());
+		assert_eq!(parse_hex_bytes("0x00").unwrap(), b"00");
+		assert_eq!(parse_hex_bytes("").unwrap(), b"");
+		assert_err!(parse_hex_bytes("abc"));
 	}
 }
 
 impl TryInto<CcmDepositMetadata> for BrokerCcmDepositMetadata {
-	type Error = &'static str;
+	type Error = anyhow::Error;
 
 	fn try_into(self) -> Result<CcmDepositMetadata, Self::Error> {
-		let gas_budget = self.gas_budget.try_into().or(Err("Failed to parse gas budget"))?;
-		let encoded_address = clean_foreign_chain_address(self.source_chain, &self.source_address)
-			.or(Err("Failed to parse source address"))?;
-		let source_address = ChainAddressConverter::try_from_encoded_address(encoded_address)
-			.or(Err("Failed to parse source address"))?;
+		let gas_budget = self
+			.gas_budget
+			.try_into()
+			.map_err(|_| anyhow!("Failed to parse {:?} as gas budget", self.gas_budget))?;
 		let message =
-			try_convert_string_to_bytes(&self.message).or(Err("Failed to parse message"))?;
+			parse_hex_bytes(&self.message).map_err(|e| anyhow!("Failed to parse message: {e}"))?;
+
 		let cf_parameters = self
 			.cf_parameters
-			.map(|parameters| try_convert_string_to_bytes(&parameters))
+			.map(|parameters| parse_hex_bytes(&parameters))
 			.transpose()
-			.or(Err("Failed to parse cf parameters"))?
-			.unwrap_or(vec![]);
+			.map_err(|e| anyhow!("Failed to parse cf parameters: {e}"))?
+			.unwrap_or_default();
 
-		Ok(CcmDepositMetadata { gas_budget, message, cf_parameters, source_address })
+		Ok(CcmDepositMetadata {
+			gas_budget,
+			message,
+			cf_parameters,
+			// This is temporary until we remove the deprecated field.
+			source_address: ForeignChainAddress::Eth(*b"deprecateddeprecated"),
+		})
 	}
 }
 
@@ -127,11 +134,7 @@ impl RpcServer for RpcServerImpl {
 		broker_commission_bps: BasisPoints,
 		message_metadata: Option<BrokerCcmDepositMetadata>,
 	) -> Result<BrokerSwapDepositAddress, Error> {
-		let message_metadata = if let Some(metadata) = message_metadata {
-			Some(TryInto::<CcmDepositMetadata>::try_into(metadata).map_err(anyhow::Error::msg)?)
-		} else {
-			None
-		};
+		let message_metadata = message_metadata.map(TryInto::try_into).transpose()?;
 
 		Ok(chainflip_api::request_swap_deposit_address(
 			&self.state_chain_settings,

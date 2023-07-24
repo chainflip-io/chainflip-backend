@@ -314,9 +314,9 @@ pub struct CcmDepositMetadata {
 	pub message: Vec<u8>,
 	/// User funds designated to be used for gas.
 	pub gas_budget: AssetAmount,
-	/// The address refunds will go to.
+	/// Additonal parameters for the cross chain message.
 	pub cf_parameters: Vec<u8>,
-	/// The address the deposit was sent from.
+	/// [DEPRECATED PRO-634] The address the deposit was sent from.
 	pub source_address: ForeignChainAddress,
 }
 
