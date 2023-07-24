@@ -4,7 +4,7 @@
 // This command takes two arguments.
 // It will create a new liquidity pool for the given currency and
 // initial price in USDC
-// For example: ./commands/create_pool.ts btc 10000
+// For example: ./commands/create_lp_pool.ts btc 10000
 
 import { Asset } from '@chainflip-io/cli';
 import { createLpPool } from '../shared/create_lp_pool';
