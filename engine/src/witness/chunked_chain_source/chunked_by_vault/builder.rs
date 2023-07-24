@@ -5,13 +5,13 @@ use utilities::assert_stream_send;
 use crate::witness::{
 	chain_source::{aliases, Header},
 	chunked_chain_source::{latest_then::LatestThen, then::Then, ChunkedChainSource},
-	epoch_source::Epoch,
+	epoch_source::Vault,
 };
 
 use crate::witness::common::BoxActiveAndFuture;
 use cf_chains::Chain;
 
-use super::{ChunkedByVault, Item};
+use super::ChunkedByVault;
 
 pub struct ChunkedByVaultBuilder<Inner: ChunkedByVault> {
 	pub source: Inner,
@@ -43,10 +43,7 @@ impl<T: ChunkedByVault> ChunkedByVaultBuilder<T> {
 		Output: aliases::Data,
 		Fut: Future<Output = Output> + Send,
 		ThenFn: Fn(
-				Epoch<
-					<Generic<T> as ChunkedChainSource>::Info,
-					<Generic<T> as ChunkedChainSource>::HistoricInfo,
-				>,
+				Vault<T::Chain, T::ExtraInfo, T::ExtraHistoricInfo>,
 				Header<T::Index, T::Hash, T::Data>,
 			) -> Fut
 			+ Send
@@ -67,10 +64,7 @@ impl<T: ChunkedByVault> ChunkedByVaultBuilder<T> {
 		Output: aliases::Data,
 		Fut: Future<Output = Output> + Send,
 		ThenFn: Fn(
-				Epoch<
-					<Generic<T> as ChunkedChainSource>::Info,
-					<Generic<T> as ChunkedChainSource>::HistoricInfo,
-				>,
+				Vault<T::Chain, T::ExtraInfo, T::ExtraHistoricInfo>,
 				Header<T::Index, T::Hash, T::Data>,
 			) -> Fut
 			+ Send
@@ -88,8 +82,8 @@ impl<T: ChunkedByVault> ChunkedByVaultBuilder<T> {
 pub struct Generic<T>(pub T);
 #[async_trait::async_trait]
 impl<T: ChunkedByVault> ChunkedChainSource for Generic<T> {
-	type Info = pallet_cf_vaults::Vault<T::Chain>;
-	type HistoricInfo = <T::Chain as Chain>::ChainBlockNumber;
+	type Info = (pallet_cf_vaults::Vault<T::Chain>, T::ExtraInfo);
+	type HistoricInfo = (<T::Chain as Chain>::ChainBlockNumber, T::ExtraHistoricInfo);
 
 	type Index = T::Index;
 	type Hash = T::Hash;
@@ -101,7 +95,10 @@ impl<T: ChunkedByVault> ChunkedChainSource for Generic<T> {
 
 	type Parameters = T::Parameters;
 
-	async fn stream(&self, parameters: Self::Parameters) -> BoxActiveAndFuture<'_, Item<'_, Self>> {
+	async fn stream(
+		&self,
+		parameters: Self::Parameters,
+	) -> BoxActiveAndFuture<'_, super::super::Item<'_, Self, Self::Info, Self::HistoricInfo>> {
 		self.0.stream(parameters).await
 	}
 }

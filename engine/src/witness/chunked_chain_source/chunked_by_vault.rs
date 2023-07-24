@@ -16,6 +16,9 @@ use super::ChunkedChainSource;
 
 #[async_trait::async_trait]
 pub trait ChunkedByVault: Sized + Send + Sync {
+	type ExtraInfo: Clone + Send + Sync + 'static;
+	type ExtraHistoricInfo: Clone + Send + Sync + 'static;
+
 	type Index: aliases::Index;
 	type Hash: aliases::Hash;
 	type Data: aliases::Data;
@@ -31,8 +34,11 @@ pub trait ChunkedByVault: Sized + Send + Sync {
 
 pub type Item<'a, T> = (
 	Epoch<
-		pallet_cf_vaults::Vault<<T as ChunkedByVault>::Chain>,
-		<<T as ChunkedByVault>::Chain as Chain>::ChainBlockNumber,
+		(pallet_cf_vaults::Vault<<T as ChunkedByVault>::Chain>, <T as ChunkedByVault>::ExtraInfo),
+		(
+			<<T as ChunkedByVault>::Chain as Chain>::ChainBlockNumber,
+			<T as ChunkedByVault>::ExtraHistoricInfo,
+		),
 	>,
 	BoxChainStream<
 		'a,
@@ -45,14 +51,19 @@ pub type Item<'a, T> = (
 
 #[async_trait::async_trait]
 impl<
+		TExtraInfo: Clone + Send + Sync + 'static,
+		TExtraHistoricInfo: Clone + Send + Sync + 'static,
 		TChain: ExternalChain<ChainBlockNumber = T::Index>,
 		T: ChunkedChainSource<
-			Info = pallet_cf_vaults::Vault<TChain>,
-			HistoricInfo = <TChain as Chain>::ChainBlockNumber,
+			Info = (pallet_cf_vaults::Vault<TChain>, TExtraInfo),
+			HistoricInfo = (<TChain as Chain>::ChainBlockNumber, TExtraHistoricInfo),
 			Chain = TChain,
 		>,
 	> ChunkedByVault for T
 {
+	type ExtraInfo = TExtraInfo;
+	type ExtraHistoricInfo = TExtraHistoricInfo;
+
 	type Index = T::Index;
 	type Hash = T::Hash;
 	type Data = T::Data;
@@ -68,25 +79,33 @@ impl<
 	}
 }
 
-pub struct ChunkByVault<TChainSource: ExternalChainSource>
+pub struct ChunkByVault<TChainSource: ExternalChainSource, Info, HistoricInfo>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<TChainSource::Chain>,
 {
 	chain_source: TChainSource,
+	_phantom: std::marker::PhantomData<(Info, HistoricInfo)>,
 }
-impl<TChainSource: ExternalChainSource> ChunkByVault<TChainSource>
+impl<TChainSource: ExternalChainSource, Info, HistoricInfo>
+	ChunkByVault<TChainSource, Info, HistoricInfo>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<TChainSource::Chain>,
 {
 	pub fn new(chain_source: TChainSource) -> Self {
-		Self { chain_source }
+		Self { chain_source, _phantom: Default::default() }
 	}
 }
 #[async_trait::async_trait]
-impl<TChainSource: ExternalChainSource> ChunkedByVault for ChunkByVault<TChainSource>
+impl<TChainSource: ExternalChainSource, ExtraInfo, ExtraHistoricInfo> ChunkedByVault
+	for ChunkByVault<TChainSource, ExtraInfo, ExtraHistoricInfo>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<TChainSource::Chain>,
+	ExtraInfo: Clone + Send + Sync + 'static,
+	ExtraHistoricInfo: Clone + Send + Sync + 'static,
 {
+	type ExtraInfo = ExtraInfo;
+	type ExtraHistoricInfo = ExtraHistoricInfo;
+
 	type Index = TChainSource::Index;
 	type Hash = TChainSource::Hash;
 	type Data = TChainSource::Data;
@@ -95,7 +114,7 @@ where
 
 	type Chain = TChainSource::Chain;
 
-	type Parameters = VaultSource<TChainSource::Chain>;
+	type Parameters = VaultSource<TChainSource::Chain, ExtraInfo, ExtraHistoricInfo>;
 
 	async fn stream(&self, vaults: Self::Parameters) -> BoxActiveAndFuture<'_, Item<'_, Self>> {
 		vaults
@@ -110,11 +129,13 @@ where
 						.take_until(vault.expired_signal.wait())
 						.filter(move |header| {
 							futures::future::ready(
-								header.index >= vault.info.active_from_block &&
+								header.index >= vault.info.0.active_from_block &&
 									vault
 										.historic_signal
 										.get()
-										.map_or(true, |end_index| header.index < *end_index),
+										.map_or(true, |(end_index, _)| {
+											header.index < *end_index
+										}),
 							)
 						})
 						.into_box(),

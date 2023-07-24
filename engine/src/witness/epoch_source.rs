@@ -383,14 +383,23 @@ impl<
 	}
 }
 
-pub type Vault<TChain> =
-	Epoch<pallet_cf_vaults::Vault<TChain>, <TChain as Chain>::ChainBlockNumber>;
+pub type Vault<TChain, Info, HistoricInfo> = Epoch<
+	(pallet_cf_vaults::Vault<TChain>, Info),
+	(<TChain as Chain>::ChainBlockNumber, HistoricInfo),
+>;
 
-pub type VaultSource<TChain> =
-	EpochSource<pallet_cf_vaults::Vault<TChain>, <TChain as Chain>::ChainBlockNumber>;
+pub type VaultSource<TChain, Info, HistoricInfo> = EpochSource<
+	(pallet_cf_vaults::Vault<TChain>, Info),
+	(<TChain as Chain>::ChainBlockNumber, HistoricInfo),
+>;
 
-impl<'a, 'env, StateChainClient: client::storage_api::StorageApi + Send + Sync + 'static>
-	EpochSourceBuilder<'a, 'env, StateChainClient, (), ()>
+impl<
+		'a,
+		'env,
+		StateChainClient: client::storage_api::StorageApi + Send + Sync + 'static,
+		Info,
+		HistoricInfo,
+	> EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>
 {
 	pub async fn vaults<TChain: ExternalChain>(
 		self,
@@ -398,14 +407,16 @@ impl<'a, 'env, StateChainClient: client::storage_api::StorageApi + Send + Sync +
 		'a,
 		'env,
 		StateChainClient,
-		pallet_cf_vaults::Vault<TChain>,
-		<TChain as Chain>::ChainBlockNumber,
+		(pallet_cf_vaults::Vault<TChain>, Info),
+		(<TChain as Chain>::ChainBlockNumber, HistoricInfo),
 	>
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<TChain>,
+		Info: Clone + Send + Sync + 'static,
+		HistoricInfo: Clone + Send + Sync + 'static,
 	{
 		self.filter_map(
-			|state_chain_client, epoch, block_hash, ()| async move {
+			|state_chain_client, epoch, block_hash, info| async move {
 				state_chain_client
 					.storage_map_entry::<pallet_cf_vaults::Vaults<
 						state_chain_runtime::Runtime,
@@ -413,17 +424,21 @@ impl<'a, 'env, StateChainClient: client::storage_api::StorageApi + Send + Sync +
 					>>(block_hash, &epoch)
 					.await
 					.expect(STATE_CHAIN_CONNECTION)
+					.map(|vault| (vault, info))
 			},
-			|state_chain_client, epoch, block_hash, ()| async move {
-				state_chain_client
-					.storage_map_entry::<pallet_cf_vaults::Vaults<
-						state_chain_runtime::Runtime,
-						<TChain as PalletInstanceAlias>::Instance,
-					>>(block_hash, &(epoch + 1))
-					.await
-					.expect(STATE_CHAIN_CONNECTION)
-					.expect("We know the epoch ended, so the next vault must exist.")
-					.active_from_block
+			|state_chain_client, epoch, block_hash, historic_info| async move {
+				(
+					state_chain_client
+						.storage_map_entry::<pallet_cf_vaults::Vaults<
+							state_chain_runtime::Runtime,
+							<TChain as PalletInstanceAlias>::Instance,
+						>>(block_hash, &(epoch + 1))
+						.await
+						.expect(STATE_CHAIN_CONNECTION)
+						.expect("We know the epoch ended, so the next vault must exist.")
+						.active_from_block,
+					historic_info,
+				)
 			},
 		)
 		.await

@@ -60,13 +60,19 @@ pub trait ChainSourceExt: ChainSource {
 		ChunkedByTimeBuilder::new(ChunkByTime::new(self), epochs.into())
 	}
 
-	fn chunk_by_vault<Vaults: Into<VaultSource<Self::Chain>>>(
+	fn chunk_by_vault<
+		ExtraInfo,
+		ExtraHistoricInfo,
+		Vaults: Into<VaultSource<Self::Chain, ExtraInfo, ExtraHistoricInfo>>,
+	>(
 		self,
 		vaults: Vaults,
-	) -> ChunkedByVaultBuilder<ChunkByVault<Self>>
+	) -> ChunkedByVaultBuilder<ChunkByVault<Self, ExtraInfo, ExtraHistoricInfo>>
 	where
 		Self: ExternalChainSource + Sized,
 		state_chain_runtime::Runtime: RuntimeHasChain<Self::Chain>,
+		ExtraInfo: Clone + Send + Sync + 'static,
+		ExtraHistoricInfo: Clone + Send + Sync + 'static,
 	{
 		ChunkedByVaultBuilder::new(ChunkByVault::new(self), vaults.into())
 	}
