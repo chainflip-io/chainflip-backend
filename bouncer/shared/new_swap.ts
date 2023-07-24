@@ -3,7 +3,7 @@ import { Keyring } from '@polkadot/api';
 import { Asset } from '@chainflip-io/cli';
 import {
   getChainflipApi,
-  encodeDotAddressForContract,
+  decodeDotAddressForContract,
   handleSubstrateError,
   brokerMutex,
 } from './utils';
@@ -27,7 +27,7 @@ export async function newSwap(
 
   const chainflip = await getChainflipApi();
   const destinationAddress =
-    destAsset === 'DOT' ? encodeDotAddressForContract(destAddress) : destAddress;
+    destAsset === 'DOT' ? decodeDotAddressForContract(destAddress) : destAddress;
   const keyring = new Keyring({ type: 'sr25519' });
   const brokerUri = process.env.BROKER_URI ?? '//BROKER_1';
   const broker = keyring.createFromUri(brokerUri);

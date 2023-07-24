@@ -54,7 +54,7 @@ export async function redeemTest() {
   await observeEvent(
     'funding:RedemptionRequested',
     chainflip,
-    (event) => event[0] === bashful.address,
+    (event) => event.data.accountId === bashful.address,
   );
   console.log('Observed RedemptionRequested event');
 
@@ -86,7 +86,7 @@ export async function redeemTest() {
   await observeEvent(
     'funding:RedemptionSettled',
     chainflip,
-    (event) => event[0] === bashful.address && event[1] === amount,
+    (event) => event.data[0] === bashful.address && event.data[1] === amount,
   );
 
   console.log('Observed RedemptionSettled event');

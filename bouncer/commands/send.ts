@@ -1,3 +1,4 @@
+#!/usr/bin/env -S pnpm tsx
 import { Asset } from '@chainflip-io/cli';
 import { send } from '../shared/send';
 
