@@ -1,0 +1,82 @@
+use super::*;
+use cf_chains::{Chain, ForeignChainAddress};
+use cf_primitives::chains::assets::any;
+use chainflip_engine::state_chain_observer::client::storage_api::StorageApi;
+use serde::Deserialize;
+use state_chain_runtime::PalletInstanceAlias;
+use std::{collections::BTreeMap, sync::Arc};
+use tracing::log;
+use utilities::{task_scope, CachedStream};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SwapChannelInfo {
+	deposit_address: ForeignChainAddress,
+	source_asset: any::Asset,
+	destination_asset: any::Asset,
+}
+
+/// Returns the storage query api and latest block hash.
+pub async fn connect<'a>(
+	scope: &task_scope::Scope<'a, anyhow::Error>,
+	state_chain_settings: &settings::StateChain,
+) -> Result<(Arc<impl StorageApi>, state_chain_runtime::Hash)> {
+	log::debug!("Connecting to state chain at: {}", state_chain_settings.ws_endpoint);
+
+	let (state_chain_stream, state_chain_client) = StateChainClient::connect_with_account(
+		scope,
+		&state_chain_settings.ws_endpoint,
+		&state_chain_settings.signing_key_file,
+		AccountRole::None,
+		false,
+	)
+	.await?;
+
+	Ok((state_chain_client, state_chain_stream.cache().block_hash))
+}
+
+pub async fn get_open_swap_channels<C: Chain + PalletInstanceAlias>(
+	client: Arc<impl StorageApi>,
+	block_hash: state_chain_runtime::Hash,
+) -> Result<Vec<SwapChannelInfo>, anyhow::Error>
+where
+	state_chain_runtime::Runtime: pallet_cf_ingress_egress::Config<C::Instance>,
+{
+	let channel_details =
+		client
+			.storage_map::<pallet_cf_ingress_egress::DepositChannelLookup<
+				state_chain_runtime::Runtime,
+				C::Instance,
+			>>(block_hash)
+			.await?
+			.into_iter()
+			.collect::<BTreeMap<_, _>>();
+
+	let channel_actions = client
+		.storage_map::<pallet_cf_ingress_egress::ChannelActions<state_chain_runtime::Runtime, C::Instance>>(
+			block_hash,
+		)
+		.await?;
+
+	Ok(channel_actions
+		.iter()
+		.filter_map(|(address, action)| {
+			match action {
+				pallet_cf_ingress_egress::ChannelAction::Swap { destination_asset, .. } |
+				pallet_cf_ingress_egress::ChannelAction::CcmTransfer {
+					destination_asset, ..
+				} => Some(destination_asset),
+				_ => None,
+			}
+			.and_then(|destination_asset| {
+				channel_details
+					.get(address)
+					.map(|details| (destination_asset, details.deposit_channel.clone()))
+			})
+			.map(|(&destination_asset, deposit_channel)| SwapChannelInfo {
+				deposit_address: deposit_channel.address.into(),
+				source_asset: deposit_channel.asset.into(),
+				destination_asset,
+			})
+		})
+		.collect::<Vec<_>>())
+}

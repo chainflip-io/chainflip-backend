@@ -1,12 +1,17 @@
 use anyhow::anyhow;
-use cf_utilities::try_parse_number_or_hex;
+use cf_utilities::{task_scope::task_scope, try_parse_number_or_hex};
 use chainflip_api::{
 	self,
 	lp::{self, BuyOrSellOrder, MintRangeOrderReturn, Tick},
-	primitives::{AccountRole, Asset, ForeignChain},
+	primitives::{
+		chains::{Bitcoin, Ethereum, Polkadot},
+		AccountRole, Asset, ForeignChain,
+	},
+	queries::SwapChannelInfo,
 	settings::StateChain,
 };
 use clap::Parser;
+use futures::FutureExt;
 use jsonrpsee::{
 	core::{async_trait, Error, __reexports::serde_json},
 	proc_macros::rpc,
@@ -131,6 +136,9 @@ pub trait Rpc {
 
 	#[method(name = "getRangeOrders")]
 	async fn get_range_orders(&self) -> Result<String, Error>;
+
+	#[method(name = "getOpenSwapChannels")]
+	async fn get_open_swap_channels(&self) -> Result<Vec<SwapChannelInfo>, Error>;
 }
 pub struct RpcServerImpl {
 	state_chain_settings: StateChain,
@@ -304,6 +312,33 @@ impl RpcServer for RpcServerImpl {
 		)
 		.await
 		.map(|tx_hash| format!("{tx_hash:#x}"))
+		.map_err(|e| Error::Custom(e.to_string()))
+	}
+
+	async fn get_open_swap_channels(&self) -> Result<Vec<SwapChannelInfo>, Error> {
+		task_scope(|scope| {
+			async move {
+				let (client, latest_hash) =
+					chainflip_api::queries::connect(&scope, &self.state_chain_settings).await?;
+
+				tokio::try_join!(
+					chainflip_api::queries::get_open_swap_channels::<Ethereum>(
+						client.clone(),
+						latest_hash,
+					),
+					chainflip_api::queries::get_open_swap_channels::<Bitcoin>(
+						client.clone(),
+						latest_hash,
+					),
+					chainflip_api::queries::get_open_swap_channels::<Polkadot>(client, latest_hash),
+				)
+				.map(|(eth_result, btc_result, dot_result)| {
+					[eth_result, btc_result, dot_result].into_iter().flatten().collect::<Vec<_>>()
+				})
+			}
+			.boxed()
+		})
+		.await
 		.map_err(|e| Error::Custom(e.to_string()))
 	}
 }
