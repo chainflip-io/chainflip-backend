@@ -35,6 +35,7 @@ enum EpochUpdate<Info, HistoricInfo> {
 #[derive(Clone)]
 pub struct EpochSource<Info, HistoricInfo> {
 	epochs: BTreeMap<EpochIndex, (Info, Option<HistoricInfo>)>,
+	initial_block_hash: state_chain_runtime::Hash,
 	epoch_update_receiver: async_broadcast::Receiver<(
 		EpochIndex,
 		state_chain_runtime::Hash,
@@ -46,8 +47,12 @@ impl<'a, 'env, StateChainClient, Info, HistoricInfo>
 	From<EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>>
 	for EpochSource<Info, HistoricInfo>
 {
-	fn from(value: EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>) -> Self {
-		Self { epochs: value.epochs, epoch_update_receiver: value.epoch_update_receiver }
+	fn from(builder: EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>) -> Self {
+		Self {
+			epochs: builder.epochs,
+			initial_block_hash: builder.initial_block_hash,
+			epoch_update_receiver: builder.epoch_update_receiver,
+		}
 	}
 }
 
@@ -180,8 +185,7 @@ impl<Info: Clone + Send + Sync + 'static, HistoricInfo: Clone + Send + Sync + 's
 
 					Epoch {
 						index,
-						// TODO: Fix this.
-						block_hash: Default::default(),
+						block_hash: self.initial_block_hash,
 						info,
 						historic_signal: match option_historic_info {
 							Some(historic_info) => Signal::signalled(historic_info),
