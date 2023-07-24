@@ -16,8 +16,8 @@ use super::ChunkedChainSource;
 
 #[async_trait::async_trait]
 pub trait ChunkedByVault: Sized + Send + Sync {
-	type Info: Clone + Send + Sync + 'static;
-	type HistoricInfo: Clone + Send + Sync + 'static;
+	type ExtraInfo: Clone + Send + Sync + 'static;
+	type ExtraHistoricInfo: Clone + Send + Sync + 'static;
 
 	type Index: aliases::Index;
 	type Hash: aliases::Hash;
@@ -34,10 +34,10 @@ pub trait ChunkedByVault: Sized + Send + Sync {
 
 pub type Item<'a, T> = (
 	Epoch<
-		(pallet_cf_vaults::Vault<<T as ChunkedByVault>::Chain>, <T as ChunkedByVault>::Info),
+		(pallet_cf_vaults::Vault<<T as ChunkedByVault>::Chain>, <T as ChunkedByVault>::ExtraInfo),
 		(
 			<<T as ChunkedByVault>::Chain as Chain>::ChainBlockNumber,
-			<T as ChunkedByVault>::HistoricInfo,
+			<T as ChunkedByVault>::ExtraHistoricInfo,
 		),
 	>,
 	BoxChainStream<
@@ -61,8 +61,8 @@ impl<
 		>,
 	> ChunkedByVault for T
 {
-	type Info = TExtraInfo;
-	type HistoricInfo = TExtraHistoricInfo;
+	type ExtraInfo = TExtraInfo;
+	type ExtraHistoricInfo = TExtraHistoricInfo;
 
 	type Index = T::Index;
 	type Hash = T::Hash;
@@ -96,15 +96,15 @@ where
 	}
 }
 #[async_trait::async_trait]
-impl<TChainSource: ExternalChainSource, Info, HistoricInfo> ChunkedByVault
-	for ChunkByVault<TChainSource, Info, HistoricInfo>
+impl<TChainSource: ExternalChainSource, ExtraInfo, ExtraHistoricInfo> ChunkedByVault
+	for ChunkByVault<TChainSource, ExtraInfo, ExtraHistoricInfo>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<TChainSource::Chain>,
-	Info: Clone + Send + Sync + 'static,
-	HistoricInfo: Clone + Send + Sync + 'static,
+	ExtraInfo: Clone + Send + Sync + 'static,
+	ExtraHistoricInfo: Clone + Send + Sync + 'static,
 {
-	type Info = Info;
-	type HistoricInfo = HistoricInfo;
+	type ExtraInfo = ExtraInfo;
+	type ExtraHistoricInfo = ExtraHistoricInfo;
 
 	type Index = TChainSource::Index;
 	type Hash = TChainSource::Hash;
@@ -114,7 +114,7 @@ where
 
 	type Chain = TChainSource::Chain;
 
-	type Parameters = VaultSource<TChainSource::Chain, Info, HistoricInfo>;
+	type Parameters = VaultSource<TChainSource::Chain, ExtraInfo, ExtraHistoricInfo>;
 
 	async fn stream(&self, vaults: Self::Parameters) -> BoxActiveAndFuture<'_, Item<'_, Self>> {
 		vaults

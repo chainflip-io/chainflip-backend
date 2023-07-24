@@ -121,8 +121,8 @@ impl<Inner: ChunkedByVault> ChunkedByVault for IngressAddresses<Inner>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 {
-	type Info = Inner::Info;
-	type HistoricInfo = Inner::HistoricInfo;
+	type ExtraInfo = Inner::ExtraInfo;
+	type ExtraHistoricInfo = Inner::ExtraHistoricInfo;
 
 	type Index = Inner::Index;
 	type Hash = Inner::Hash;

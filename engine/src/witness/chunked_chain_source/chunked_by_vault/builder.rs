@@ -42,7 +42,10 @@ impl<T: ChunkedByVault> ChunkedByVaultBuilder<T> {
 	where
 		Output: aliases::Data,
 		Fut: Future<Output = Output> + Send,
-		ThenFn: Fn(Vault<T::Chain, T::Info, T::HistoricInfo>, Header<T::Index, T::Hash, T::Data>) -> Fut
+		ThenFn: Fn(
+				Vault<T::Chain, T::ExtraInfo, T::ExtraHistoricInfo>,
+				Header<T::Index, T::Hash, T::Data>,
+			) -> Fut
 			+ Send
 			+ Sync
 			+ Clone,
@@ -60,7 +63,10 @@ impl<T: ChunkedByVault> ChunkedByVaultBuilder<T> {
 	where
 		Output: aliases::Data,
 		Fut: Future<Output = Output> + Send,
-		ThenFn: Fn(Vault<T::Chain, T::Info, T::HistoricInfo>, Header<T::Index, T::Hash, T::Data>) -> Fut
+		ThenFn: Fn(
+				Vault<T::Chain, T::ExtraInfo, T::ExtraHistoricInfo>,
+				Header<T::Index, T::Hash, T::Data>,
+			) -> Fut
 			+ Send
 			+ Sync
 			+ Clone,
@@ -76,8 +82,8 @@ impl<T: ChunkedByVault> ChunkedByVaultBuilder<T> {
 pub struct Generic<T>(pub T);
 #[async_trait::async_trait]
 impl<T: ChunkedByVault> ChunkedChainSource for Generic<T> {
-	type Info = (pallet_cf_vaults::Vault<T::Chain>, T::Info);
-	type HistoricInfo = (<T::Chain as Chain>::ChainBlockNumber, T::HistoricInfo);
+	type Info = (pallet_cf_vaults::Vault<T::Chain>, T::ExtraInfo);
+	type HistoricInfo = (<T::Chain as Chain>::ChainBlockNumber, T::ExtraHistoricInfo);
 
 	type Index = T::Index;
 	type Hash = T::Hash;

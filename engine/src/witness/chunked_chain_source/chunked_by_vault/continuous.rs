@@ -43,8 +43,8 @@ impl<Inner: ChunkedByVault, Store: Storage<Inner::Index>> ChunkedByVault
 where
 	Inner::Client: Clone,
 {
-	type Info = Inner::Info;
-	type HistoricInfo = Inner::HistoricInfo;
+	type ExtraInfo = Inner::ExtraInfo;
+	type ExtraHistoricInfo = Inner::ExtraHistoricInfo;
 
 	type Index = Inner::Index;
 	type Hash = Inner::Hash;
