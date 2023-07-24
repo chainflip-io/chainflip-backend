@@ -79,6 +79,7 @@ impl<
 	}
 }
 
+#[derive(Clone)]
 pub struct ChunkByVault<TChainSource: ExternalChainSource, Info, HistoricInfo>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<TChainSource::Chain>,

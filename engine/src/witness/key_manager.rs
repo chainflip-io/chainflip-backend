@@ -4,21 +4,42 @@ use cf_chains::{
 	eth::{SchnorrVerificationComponents, TransactionFee},
 	Ethereum,
 };
-use ethers::types::{Bloom, TransactionReceipt};
+use ethers::{
+	prelude::abigen,
+	types::{Bloom, TransactionReceipt},
+};
 use sp_core::{H160, H256};
 use state_chain_runtime::EthereumInstance;
 use tracing::{info, trace};
-
-use crate::{
-	eth::{key_manager::*, retry_rpc::EthersRetryRpcApi},
-	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
-};
 
 use super::{
 	chain_source::ChainClient,
 	chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
 	contract_common::events_at_block,
 };
+use crate::{
+	eth::retry_rpc::EthersRetryRpcApi,
+	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
+};
+use num_traits::Zero;
+
+abigen!(KeyManager, "eth-contract-abis/perseverance-rc17/IKeyManager.json");
+
+// This type is generated in the macro above.
+//`Key(uint256,uint8)`
+impl Key {
+	/// 1 byte of pub_key_y_parity followed by 32 bytes of pub_key_x
+	/// Equivalent to secp256k1::PublicKey.serialize()
+	pub fn serialize(&self) -> [u8; 33] {
+		let mut bytes: [u8; 33] = [0; 33];
+		self.pub_key_x.to_big_endian(&mut bytes[1..]);
+		bytes[0] = match self.pub_key_y_parity.is_zero() {
+			true => 2,
+			false => 3,
+		};
+		bytes
+	}
+}
 
 use anyhow::Result;
 

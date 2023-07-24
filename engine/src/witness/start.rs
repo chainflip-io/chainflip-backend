@@ -3,13 +3,14 @@ use std::sync::Arc;
 use utilities::task_scope::Scope;
 
 use crate::{
+	db::PersistentKeyDB,
 	settings::Settings,
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
 	},
 };
 
-use super::epoch_source::EpochSource;
+use super::{epoch_source::EpochSource, vault::EthAssetApi};
 
 use anyhow::Result;
 
@@ -19,10 +20,11 @@ pub async fn start<StateChainClient, StateChainStream>(
 	settings: &Settings,
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
+	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
 	StateChainStream: StateChainStreamApi,
-	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
+	StateChainClient: StorageApi + EthAssetApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
 	let initial_block_hash = state_chain_stream.cache().block_hash;
 	let epoch_source = EpochSource::builder(scope, state_chain_stream, state_chain_client.clone())
@@ -36,6 +38,7 @@ where
 		state_chain_client.clone(),
 		epoch_source.clone(),
 		initial_block_hash,
+		db,
 	)
 	.await?;
 

@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
-use crate::eth::address_checker::*;
 use ethers::prelude::*;
 use itertools::Itertools;
 use sp_core::U256;
+
+use crate::witness::address_checker::*;
 
 use crate::witness::vault::FetchedNativeFilter;
 

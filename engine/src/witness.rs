@@ -1,3 +1,4 @@
+pub mod address_checker;
 pub mod btc;
 pub mod btc_chain_tracking;
 pub mod chain_source;
