@@ -29,8 +29,6 @@ use sp_runtime::AccountId32;
 use tokio::sync::{mpsc, oneshot};
 use utilities::{task_scope::task_scope, threshold_from_share_count};
 
-use super::CEREMONY_ID_WINDOW;
-
 /// Run on_request_to_sign on a ceremony manager, using a dummy key and default ceremony id and
 /// data.
 async fn run_on_request_to_sign<C: CryptoScheme>(
@@ -234,8 +232,8 @@ async fn should_ignore_rts_with_unknown_signer_id() {
 async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
 	let latest_ceremony_id = 1; // Invalid, because the CeremonyManager starts with this value as the latest
 	let past_ceremony_id = latest_ceremony_id; // Invalid, because it was used already (<=latest_ceremony_id)
-	let future_ceremony_id = latest_ceremony_id + CEREMONY_ID_WINDOW; // Valid, because its within the window
-	let future_ceremony_id_too_large = latest_ceremony_id + CEREMONY_ID_WINDOW + 1; // Invalid, because its too far in the future
+	let future_ceremony_id = latest_ceremony_id + EvmCryptoScheme::CEREMONY_ID_WINDOW; // Valid, because its within the window
+	let future_ceremony_id_too_large = latest_ceremony_id + EvmCryptoScheme::CEREMONY_ID_WINDOW + 1; // Invalid, because its too far in the future
 
 	// Dummy stage 1 data to use for the test
 	let stage_1_data = MultisigData::Keygen(gen_keygen_data_hash_comm1());

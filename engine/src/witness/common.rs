@@ -57,7 +57,7 @@ pub trait RuntimeHasChain<TChain: ExternalChain>:
 	> + pallet_cf_ingress_egress::Config<
 		<TChain as PalletInstanceAlias>::Instance,
 		TargetChain = TChain,
-	>
+	> + pallet_cf_broadcast::Config<<TChain as PalletInstanceAlias>::Instance, TargetChain = TChain>
 {
 }
 impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Runtime where
@@ -68,7 +68,7 @@ impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Run
 		> + pallet_cf_ingress_egress::Config<
 			<TChain as PalletInstanceAlias>::Instance,
 			TargetChain = TChain,
-		>
+		> + pallet_cf_broadcast::Config<<TChain as PalletInstanceAlias>::Instance, TargetChain = TChain>
 {
 }
 

@@ -48,6 +48,22 @@ pub struct BroadcastVerificationMessage<T: Clone> {
 	pub data: BTreeMap<AuthorityCount, Option<T>>,
 }
 
+impl<T: Clone> BroadcastVerificationMessage<DelayDeserialization<T>> {
+	/// Checks that there is the correct number of payloads and all payloads are smaller than the
+	/// given max size (without deserializing them)
+	pub fn is_data_size_valid(
+		&self,
+		number_of_parties: usize,
+		max_payload_size_bytes: usize,
+	) -> bool {
+		self.data.len() == number_of_parties &&
+			self.data
+				.values()
+				.filter_map(|x| x.as_ref())
+				.all(|d| d.payload.len() <= max_payload_size_bytes)
+	}
+}
+
 /// Check that the reported indexes match the expected ones exactly
 fn check_verification_message_indexes<T>(
 	message: &BroadcastVerificationMessage<T>,
