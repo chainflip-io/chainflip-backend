@@ -17,11 +17,11 @@ use super::{
 
 use anyhow::Result;
 
-pub async fn start<StateChainClient>(
+pub async fn start<StateChainClient, Epochs: Into<EpochSource<(), ()>>>(
 	scope: &Scope<'_, anyhow::Error>,
 	settings: &settings::Btc,
 	state_chain_client: Arc<StateChainClient>,
-	epoch_source: EpochSource<'_, '_, StateChainClient, (), ()>,
+	epoch_source: Epochs,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
@@ -31,7 +31,6 @@ where
 	let btc_witnessing = BtcSource::new(btc_client.clone())
 		.shared(scope)
 		.chunk_by_time(epoch_source)
-		.await
 		.chain_tracking(state_chain_client, btc_client)
 		.run();
 

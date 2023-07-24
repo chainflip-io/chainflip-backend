@@ -232,3 +232,31 @@ where
 		&self.common
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::{
+		client::{
+			ceremony_manager::KeygenCeremony, helpers::get_dummy_hash_comm, keygen::KeygenData,
+		},
+		eth::EvmCryptoScheme,
+	};
+	use rand::{rngs::StdRng, SeedableRng};
+
+	#[test]
+	/// If the structure or serialization of `MultisigMessage` changes, a new protocol version is
+	/// needed.
+	fn multisig_message_serialization_is_backwards_compatibility() {
+		let rng = &mut StdRng::from_seed([0_u8; 32]);
+		let data = KeygenData::HashComm1(get_dummy_hash_comm(rng));
+		let serialized_data = serialize_for_version::<KeygenCeremony<EvmCryptoScheme>>(
+			1,
+			data,
+			CURRENT_PROTOCOL_VERSION,
+		);
+
+		// Compare the serialized data with previously generated data using protocol version 1
+		assert_eq!(hex::encode(serialized_data), "010000000000000000000000010000004200000000000000307839626634396136613037353566393533383131666365313235663236383364353034323963336262343965303734313437653030383961353265616531353566");
+	}
+}

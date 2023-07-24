@@ -187,16 +187,6 @@ impl<T: Config<I>, I: 'static> VaultRotator for Pallet<T, I> {
 				}
 			} else {
 				// No active key means we are bootstrapping the vault.
-				// Block height will be zero and will be updated by governance.
-				// TODO [Dan]: We should remove the requirement to set the key here, it's imposed by
-				//   the current polkadot bootstrapping implementation.
-				Self::set_vault_key_for_epoch(
-					CurrentEpochIndex::<T>::get().saturating_add(1),
-					Vault {
-						public_key: new_public_key,
-						active_from_block: T::ChainTracking::get_block_height(),
-					},
-				);
 				PendingVaultRotation::<T, I>::put(
 					VaultRotationStatus::<T, I>::AwaitingActivation { new_public_key },
 				);

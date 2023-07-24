@@ -3,7 +3,7 @@ import { observeEvent, getChainflipApi } from '../shared/utils';
 import { submitGovernanceExtrinsic } from './cf_governance';
 
 export async function createLpPool(ccy: Asset, initialPrice: number) {
-  const chainflip = await getChainflipApi(process.env.CF_NODE_ENDPOINT);
+  const chainflip = await getChainflipApi();
 
   const price = BigInt(
     Math.round(Math.sqrt(initialPrice / 10 ** (assetDecimals[ccy] - assetDecimals.USDC)) * 2 ** 96),
@@ -11,12 +11,12 @@ export async function createLpPool(ccy: Asset, initialPrice: number) {
   console.log(
     'Setting up ' + ccy + ' pool with an initial price of ' + initialPrice + ' USDC per ' + ccy,
   );
-  const event = observeEvent(
+  const poolCreatedEvent = observeEvent(
     'liquidityPools:NewPoolCreated',
     chainflip,
-    (data) => data[0].toUpperCase() === ccy,
+    (event) => event.data.unstableAsset.toUpperCase() === ccy,
   );
   const extrinsic = chainflip.tx.liquidityPools.newPool(ccy.toLowerCase(), 0, price);
   await submitGovernanceExtrinsic(extrinsic);
-  await event;
+  await poolCreatedEvent;
 }

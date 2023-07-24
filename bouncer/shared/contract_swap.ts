@@ -94,8 +94,8 @@ export async function performSwapViaContract(
     // There are still multiple blocks of safety margin inbetween before the event is emitted
     const receipt = await executeContractSwap(sourceAsset, destAsset, destAddress, messageMetadata);
     await observeEvent('swapping:SwapScheduled', api, (event) => {
-      if ('vault' in event[5]) {
-        return event[5].vault.txHash === receipt.transactionHash;
+      if ('Vault' in event.data.origin) {
+        return event.data.origin.Vault.txHash === receipt.transactionHash;
       }
       // Otherwise it was a swap scheduled by requesting a deposit address
       return false;

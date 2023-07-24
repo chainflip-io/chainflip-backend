@@ -3,6 +3,7 @@
 use core::{fmt::Display, iter::Step};
 
 use crate::benchmarking_value::{BenchmarkValue, BenchmarkValueExtended};
+use address::AddressDerivationApi;
 pub use address::ForeignChainAddress;
 use cf_primitives::{chains::assets, AssetAmount, ChannelId, EgressId, EthAmount, TransactionHash};
 use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
@@ -38,6 +39,8 @@ pub mod eth;
 pub mod none;
 
 pub mod address;
+pub mod deposit_channel;
+pub use deposit_channel::*;
 
 pub mod mocks;
 
@@ -108,7 +111,9 @@ pub trait Chain: Member + Parameter {
 		+ Copy
 		+ BenchmarkValue
 		+ BenchmarkValueExtended
-		+ ChannelIdConstructor<Address = Self::ChainAccount>;
+		+ for<'a> From<&'a DepositChannel<Self>>;
+
+	type DepositChannelState: Member + Parameter + Default + ChannelLifecycleHooks + Unpin;
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -129,7 +134,7 @@ pub trait ChainCrypto: Chain {
 	type TransactionInId: Member + Parameter + BenchmarkValue;
 
 	/// Uniquely identifies a transaction on the outoing direction.
-	type TransactionOutId: Member + Parameter + BenchmarkValue;
+	type TransactionOutId: Member + Parameter + Unpin + BenchmarkValue;
 
 	type GovKey: Member + Parameter + Copy + BenchmarkValue;
 
@@ -295,15 +300,6 @@ pub trait FeeRefundCalculator<C: Chain> {
 		&self,
 		fee_paid: <C as Chain>::TransactionFee,
 	) -> <C as Chain>::ChainAmount;
-}
-
-/// Helper trait to avoid matching over chains in the generic pallet.
-pub trait ChannelIdConstructor {
-	type Address;
-	/// Constructs the ChannelId for the deployed case.
-	fn deployed(channel_id: u64, address: Self::Address) -> Self;
-	/// Constructs the ChannelId for the undeployed case.
-	fn undeployed(channel_id: u64, address: Self::Address) -> Self;
 }
 
 /// Metadata as part of a Cross Chain Message.

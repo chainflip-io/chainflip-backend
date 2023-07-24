@@ -40,6 +40,7 @@ pub struct RpcAccountInfoV2 {
 	pub is_qualified: bool,
 	pub is_online: bool,
 	pub is_bidding: bool,
+	pub bound_redeem_address: Option<EthereumAddress>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -202,6 +203,8 @@ pub trait CustomApi {
 	) -> RpcResult<RpcSwapOutput>;
 	#[method(name = "environment")]
 	fn cf_environment(&self, at: Option<state_chain_runtime::Hash>) -> RpcResult<RpcEnvironment>;
+	#[method(name = "current_compatibility_version")]
+	fn cf_current_compatibility_version(&self) -> RpcResult<Vec<u8>>;
 }
 
 /// An RPC extension for the state chain node.
@@ -411,6 +414,7 @@ where
 			is_qualified: account_info.is_qualified,
 			is_online: account_info.is_online,
 			is_bidding: account_info.is_bidding,
+			bound_redeem_address: account_info.bound_redeem_address,
 		})
 	}
 	fn cf_penalties(
@@ -514,5 +518,14 @@ where
 			.cf_environment(&self.query_block_id(at))
 			.map_err(to_rpc_error)
 			.map(RpcEnvironment::from)
+	}
+
+	fn cf_current_compatibility_version(&self) -> RpcResult<Vec<u8>> {
+		use sp_api::Encode;
+		self.client
+			.runtime_api()
+			.cf_current_compatibility_version(&self.query_block_id(None))
+			.map(|ver| ver.encode())
+			.map_err(to_rpc_error)
 	}
 }

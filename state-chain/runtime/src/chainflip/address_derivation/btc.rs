@@ -1,8 +1,10 @@
 use super::AddressDerivation;
 use crate::{BitcoinVault, Validator};
-use cf_chains::{btc::deposit_address::DepositAddress, Bitcoin, Chain};
+use cf_chains::{
+	address::AddressDerivationApi, btc::deposit_address::DepositAddress, Bitcoin, Chain,
+};
 use cf_primitives::{chains::assets::btc, ChannelId};
-use cf_traits::{AddressDerivationApi, EpochInfo};
+use cf_traits::EpochInfo;
 use sp_runtime::DispatchError;
 
 impl AddressDerivationApi<Bitcoin> for AddressDerivation {
@@ -11,11 +13,13 @@ impl AddressDerivationApi<Bitcoin> for AddressDerivation {
 		channel_id: ChannelId,
 	) -> Result<<Bitcoin as Chain>::ChainAccount, DispatchError> {
 		// We don't expect to hit this case in the wild because we reuse addresses.
+		// TODO: investigate this claim - we don't re-use addresses for Bitcoin.
 		let channel_id: u32 = channel_id
 			.try_into()
 			.map_err(|_| "Intent ID is too large for BTC address derivation")?;
 
 		Ok(DepositAddress::new(
+			// TODO: Check if this is correct. Should maybe use CurrentVaultEpochAndState.
 			BitcoinVault::vaults(Validator::epoch_index())
 				.ok_or(DispatchError::Other("No vault for epoch"))?
 				.public_key

@@ -8,7 +8,9 @@ use std::path::PathBuf;
 use tracing_subscriber::fmt::format::FmtSpan;
 use warp::{Filter, Reply};
 
+pub mod future_map;
 pub mod loop_select;
+pub mod rle_bitmap;
 pub mod spmc;
 pub mod task_scope;
 pub mod unending_stream;

@@ -12034,6 +12034,7 @@ dependencies = [
  "itertools",
  "lazy_format",
  "mockall",
+ "num-traits",
  "pin-project",
  "predicates",
  "serde",
