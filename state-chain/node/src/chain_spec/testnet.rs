@@ -8,7 +8,7 @@ use sp_core::{sr25519, H256};
 pub struct Config;
 
 pub const NETWORK_NAME: &str = "Chainflip-Testnet";
-pub const CHAIN_TYPE: ChainType = ChainType::Local;
+pub const CHAIN_TYPE: ChainType = ChainType::Development;
 pub const NETWORK_ENVIRONMENT: NetworkEnvironment = NetworkEnvironment::Development;
 
 pub const ENV: StateChainEnvironment = StateChainEnvironment {
