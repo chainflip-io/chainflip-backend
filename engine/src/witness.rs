@@ -9,6 +9,7 @@ pub mod dot_chain_tracking;
 pub mod epoch_source;
 pub mod eth;
 pub mod eth_chain_tracking;
+pub mod eth_ingresses_at_block;
 pub mod key_manager;
 pub mod start;
 pub mod state_chain_gateway;

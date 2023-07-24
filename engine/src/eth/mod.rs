@@ -12,7 +12,6 @@ mod ws_safe_stream;
 
 pub mod address_checker;
 pub mod broadcaster;
-pub mod eth_ingresses_at_block;
 pub mod ethers_rpc;
 pub mod ethers_vault;
 pub mod retry_rpc;
