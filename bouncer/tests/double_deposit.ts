@@ -1,4 +1,4 @@
-#!/usr/bin/env pnpm tsx
+#!/usr/bin/env -S pnpm tsx
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';

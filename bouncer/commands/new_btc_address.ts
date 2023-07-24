@@ -1,4 +1,4 @@
-#!/usr/bin/env pnpm tsx
+#!/usr/bin/env -S pnpm tsx
 // INSTRUCTIONS
 //
 // This command takes one or two arguments

@@ -1,4 +1,4 @@
-#!/usr/bin/env pnpm tsx
+#!/usr/bin/env -S pnpm tsx
 // Constructs a very simple Raw BTC transaction. Can be used for manual testing a raw broadcast for example.
 // Usage: ./commands/create_raw_btc_tx.ts <bitcoin_address> <btc_amount>
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env pnpm tsx
+#!/usr/bin/env -S pnpm tsx
 import { Asset } from '@chainflip-io/cli';
 import { getBalance as getBalanceShared } from '../shared/get_balance';
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env pnpm tsx
+#!/usr/bin/env -S pnpm tsx
 import { randomAsHex, randomAsNumber } from '@polkadot/util-crypto';
 import { Asset, assetDecimals } from '@chainflip-io/cli';
 import Web3 from 'web3';
