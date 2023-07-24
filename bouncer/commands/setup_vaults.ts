@@ -110,7 +110,8 @@ async function main(): Promise<void> {
         }
         if (result.isInBlock) {
           console.log(
-            `Proxy rotated and accounts funded at block `, result.toHuman().status.InBlock
+            `Proxy rotated and accounts funded at block `,
+            result.toHuman().status.InBlock,
           );
           unsubscribe();
           done = true;
