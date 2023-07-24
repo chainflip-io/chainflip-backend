@@ -61,18 +61,18 @@ pub trait ChainSourceExt: ChainSource {
 	}
 
 	fn chunk_by_vault<
-		Info,
-		HistoricInfo,
-		Vaults: Into<VaultSource<Self::Chain, Info, HistoricInfo>>,
+		ExtraInfo,
+		ExtraHistoricInfo,
+		Vaults: Into<VaultSource<Self::Chain, ExtraInfo, ExtraHistoricInfo>>,
 	>(
 		self,
 		vaults: Vaults,
-	) -> ChunkedByVaultBuilder<ChunkByVault<Self, Info, HistoricInfo>>
+	) -> ChunkedByVaultBuilder<ChunkByVault<Self, ExtraInfo, ExtraHistoricInfo>>
 	where
 		Self: ExternalChainSource + Sized,
 		state_chain_runtime::Runtime: RuntimeHasChain<Self::Chain>,
-		Info: Clone + Send + Sync + 'static,
-		HistoricInfo: Clone + Send + Sync + 'static,
+		ExtraInfo: Clone + Send + Sync + 'static,
+		ExtraHistoricInfo: Clone + Send + Sync + 'static,
 	{
 		ChunkedByVaultBuilder::new(ChunkByVault::new(self), vaults.into())
 	}

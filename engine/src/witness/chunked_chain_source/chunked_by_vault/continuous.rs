@@ -115,7 +115,7 @@ where
 								if epoch.historic_signal.get().is_some() && processed_indices.is_superset(&{
 									let mut bitmap = RleBitmap::new(true);
 									bitmap.set_range(..epoch.info.0.active_from_block, false);
-									bitmap.set_range((*epoch.historic_signal.get().unwrap()).0.., false);
+									bitmap.set_range(epoch.historic_signal.get().unwrap().0.., false);
 									bitmap
 								}) => break None,
 								let (_, header) = inprogress_indices.next_or_pending() => {
