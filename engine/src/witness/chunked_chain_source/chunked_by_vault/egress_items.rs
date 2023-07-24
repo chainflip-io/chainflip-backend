@@ -113,6 +113,9 @@ impl<Inner: ChunkedByVault> ChunkedByVault for EgressItems<Inner>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 {
+	type Info = Inner::Info;
+	type HistoricInfo = Inner::HistoricInfo;
+
 	type Index = Inner::Index;
 	type Hash = Inner::Hash;
 	type Data = (Inner::Data, TxOutIds<Inner>);
