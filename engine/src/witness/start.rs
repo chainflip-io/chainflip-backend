@@ -39,7 +39,7 @@ where
 		state_chain_client.clone(),
 		epoch_source.clone(),
 		initial_block_hash,
-		db,
+		db.clone(),
 	)
 	.await?;
 
@@ -49,6 +49,7 @@ where
 		state_chain_client.clone(),
 		state_chain_stream,
 		epoch_source.clone(),
+		db,
 	)
 	.await?;
 

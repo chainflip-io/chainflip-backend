@@ -16,6 +16,7 @@ use crate::{
 		retry_rpc::{BtcRetryRpcApi, BtcRetryRpcClient},
 		rpc::BtcRpcClient,
 	},
+	db::PersistentKeyDB,
 	settings::{self},
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
@@ -37,6 +38,7 @@ pub async fn start<StateChainClient, StateChainStream>(
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
+	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
@@ -96,6 +98,7 @@ where
 				}
 			}
 		})
+		.continuous("Bitcoin".to_string(), db)
 		.run();
 
 	scope.spawn(async move {
