@@ -1,13 +1,15 @@
 use std::collections::BTreeMap;
 
-use super::{address_checker::*, ethers_vault::*};
+use crate::eth::address_checker::*;
 use ethers::prelude::*;
 use itertools::Itertools;
 use sp_core::U256;
 
+use crate::witness::vault::FetchedNativeFilter;
+
 // TODO: Write a comment describing why we do this once this has stabilised a bit: PRO-573
 #[allow(unused)]
-fn eth_ingresses_at_block(
+pub fn eth_ingresses_at_block(
 	addresses: Vec<H160>,
 	previous_block_balances: Vec<U256>,
 	address_states: Vec<AddressState>,
@@ -58,6 +60,7 @@ mod tests {
 	use crate::{
 		eth::ethers_rpc::{EthersRpcApi, EthersRpcClient},
 		settings::Settings,
+		witness::vault::{VaultApi, VaultRpc},
 	};
 
 	use super::*;
