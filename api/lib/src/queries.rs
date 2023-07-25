@@ -85,13 +85,23 @@ where
 pub async fn get_pools(
 	client: Arc<impl StorageApi>,
 	block_hash: state_chain_runtime::Hash,
+	asset: Option<Asset>,
 ) -> Result<BTreeMap<Asset, Pool<AccountId32>>, anyhow::Error>
 where
 	state_chain_runtime::Runtime: pallet_cf_pools::Config,
 {
-	Ok(client
-		.storage_map::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>>(block_hash)
-		.await?
-		.into_iter()
-		.collect::<BTreeMap<_, _>>())
+	if let Some(asset) = asset {
+		let single_asset = client
+			.storage_map_entry::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>>(
+				block_hash, &asset,
+			)
+			.await?;
+		Ok(BTreeMap::from([(asset, single_asset.unwrap())]))
+	} else {
+		Ok(client
+			.storage_map::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>>(block_hash)
+			.await?
+			.into_iter()
+			.collect::<BTreeMap<_, _>>())
+	}
 }
