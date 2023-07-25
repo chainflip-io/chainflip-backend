@@ -1,6 +1,7 @@
 pub mod base_rpc_api;
 pub mod extrinsic_api;
 pub mod storage_api;
+pub mod error_decoder;
 
 use async_trait::async_trait;
 
