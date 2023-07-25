@@ -231,7 +231,7 @@ async function testAll() {
 
 runWithTimeout(testAll(), 1800000)
   .then(() => {
-    // Don't wait for the timeout future to finish:
+    // there are some dangling resources that prevent the process from exiting
     process.exit(0);
   })
   .catch((error) => {
