@@ -383,14 +383,14 @@ impl<
 	}
 }
 
-pub type Vault<TChain, Info, HistoricInfo> = Epoch<
-	(pallet_cf_vaults::Vault<TChain>, Info),
-	(<TChain as Chain>::ChainBlockNumber, HistoricInfo),
+pub type Vault<TChain, ExtraInfo, ExtraHistoricInfo> = Epoch<
+	(pallet_cf_vaults::Vault<TChain>, ExtraInfo),
+	(<TChain as Chain>::ChainBlockNumber, ExtraHistoricInfo),
 >;
 
-pub type VaultSource<TChain, Info, HistoricInfo> = EpochSource<
-	(pallet_cf_vaults::Vault<TChain>, Info),
-	(<TChain as Chain>::ChainBlockNumber, HistoricInfo),
+pub type VaultSource<TChain, ExtraInfo, ExtraHistoricInfo> = EpochSource<
+	(pallet_cf_vaults::Vault<TChain>, ExtraInfo),
+	(<TChain as Chain>::ChainBlockNumber, ExtraHistoricInfo),
 >;
 
 impl<
