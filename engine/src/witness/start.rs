@@ -23,14 +23,15 @@ pub async fn start<StateChainClient, StateChainStream>(
 	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
-	StateChainStream: StateChainStreamApi,
+	StateChainStream: StateChainStreamApi + Clone,
 	StateChainClient: StorageApi + EthAssetApi + SignedExtrinsicApi + 'static + Send + Sync,
 {
 	let initial_block_hash = state_chain_stream.cache().block_hash;
-	let epoch_source = EpochSource::builder(scope, state_chain_stream, state_chain_client.clone())
-		.await
-		.participating(state_chain_client.account_id())
-		.await;
+	let epoch_source =
+		EpochSource::builder(scope, state_chain_stream.clone(), state_chain_client.clone())
+			.await
+			.participating(state_chain_client.account_id())
+			.await;
 
 	super::eth::start(
 		scope,
@@ -38,12 +39,19 @@ where
 		state_chain_client.clone(),
 		epoch_source.clone(),
 		initial_block_hash,
-		db,
+		db.clone(),
 	)
 	.await?;
 
-	super::btc::start(scope, &settings.btc, state_chain_client.clone(), epoch_source.clone())
-		.await?;
+	super::btc::start(
+		scope,
+		&settings.btc,
+		state_chain_client.clone(),
+		state_chain_stream,
+		epoch_source.clone(),
+		db,
+	)
+	.await?;
 
 	super::dot::start(scope, &settings.dot, state_chain_client, epoch_source).await?;
 

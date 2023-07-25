@@ -156,7 +156,7 @@ async fn start(
 		state_chain_stream.cache().block_hash,
 	)
 	.await
-	.context("Failed to start p2p module")?;
+	.context("Failed to start p2p")?;
 
 	scope.spawn(p2p_fut);
 
@@ -231,7 +231,7 @@ async fn start(
 	)
 	.await?;
 
-	let (btc_monitor_command_sender, btc_tx_hash_sender) = btc::witnessing::start(
+	let btc_tx_hash_sender = btc::witnessing::start(
 		scope,
 		state_chain_client.clone(),
 		&settings.btc,
@@ -268,7 +268,6 @@ async fn start(
 		dot_monitor_address_sender,
 		dot_monitor_signature_sender,
 		btc_epoch_start_sender,
-		btc_monitor_command_sender,
 		btc_tx_hash_sender,
 	));
 
