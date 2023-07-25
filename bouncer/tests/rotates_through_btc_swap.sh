@@ -4,7 +4,7 @@ set -e
 echo "=== Testing BTC swaps through vault rotations ==="
 MY_ADDRESS=`./commands/new_dot_address.ts foo`
 echo "Generated DOT address " $MY_ADDRESS
-./commands/new_swap.ts btc dot $MY_ADDRESS 100
+./commands/new_swap.ts btc dot $MY_ADDRESS
 SWAP_ADDRESS=`./commands/observe_events.ts --timeout 10000 --succeed_on swapping:SwapDepositAddressReady --fail_on foo:bar | jq  -r ".data.depositAddress.Btc"`
 ./tests/rotates_vaults.sh
 OLD_BALKANCE=`./commands/get_dot_balance.ts $MY_ADDRESS`
@@ -26,7 +26,7 @@ fi
 ./tests/rotates_vaults.sh
 MY_ADDRESS=`./commands/new_btc_address.ts bar`
 echo "Generated BTC address " $MY_ADDRESS
-./commands/new_swap.ts dot btc $MY_ADDRESS 100
+./commands/new_swap.ts dot btc $MY_ADDRESS
 SWAP_ADDRESS=`./commands/observe_events.ts --timeout 10000 --succeed_on swapping:SwapDepositAddressReady --fail_on foo:bar | jq  -r ".data.depositAddress.Dot"`
 OLD_BALANCE=`./commands/get_btc_balance.ts $MY_ADDRESS`
 ./commands/send_dot.ts $SWAP_ADDRESS 1000
