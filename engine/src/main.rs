@@ -1,7 +1,7 @@
 use anyhow::Context;
 use cf_primitives::{AccountRole, SemVer};
 use chainflip_engine::{
-	btc::{self, rpc::BtcRpcClient, BtcBroadcaster},
+	btc::{rpc::BtcRpcClient, BtcBroadcaster},
 	db::{KeyStore, PersistentKeyDB},
 	dot::{self, http_rpc::DotHttpRpcClient, DotBroadcaster},
 	eth::{
@@ -131,8 +131,6 @@ async fn start(
 	let (dot_epoch_start_sender, [dot_epoch_start_receiver_1, dot_epoch_start_receiver_2]) =
 		build_broadcast_channel(10);
 
-	let (btc_epoch_start_sender, [btc_epoch_start_receiver]) = build_broadcast_channel(10);
-
 	let db = Arc::new(
 		PersistentKeyDB::open_and_migrate_to_latest(
 			settings.signing.db_file.as_path(),
@@ -231,16 +229,6 @@ async fn start(
 	)
 	.await?;
 
-	let btc_tx_hash_sender = btc::witnessing::start(
-		scope,
-		state_chain_client.clone(),
-		&settings.btc,
-		btc_epoch_start_receiver,
-		state_chain_stream.cache().block_hash,
-		db.clone(),
-	)
-	.await?;
-
 	let (dot_monitor_address_sender, dot_monitor_signature_sender) = dot::witnessing::start(
 		scope,
 		state_chain_client.clone(),
@@ -267,8 +255,6 @@ async fn start(
 		dot_epoch_start_sender,
 		dot_monitor_address_sender,
 		dot_monitor_signature_sender,
-		btc_epoch_start_sender,
-		btc_tx_hash_sender,
 	));
 
 	has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);

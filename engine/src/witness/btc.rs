@@ -111,7 +111,7 @@ where
 			async move {
 				let (txs, monitored_tx_hashes) = header.data;
 
-				for tx_hash in success_witnesses(monitored_tx_hashes, &txs) {
+				for tx_hash in success_witnesses(&monitored_tx_hashes, &txs) {
 					state_chain_client
 						.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
 							call: Box::new(state_chain_runtime::RuntimeCall::BitcoinBroadcaster(
@@ -182,7 +182,7 @@ fn script_addresses(
 		.collect()
 }
 
-fn success_witnesses(monitored_tx_hashes: Vec<[u8; 32]>, txs: &Vec<Transaction>) -> Vec<[u8; 32]> {
+fn success_witnesses(monitored_tx_hashes: &[[u8; 32]], txs: &Vec<Transaction>) -> Vec<[u8; 32]> {
 	let mut successful_witnesses = Vec::new();
 	for tx in txs {
 		let tx_hash = tx.txid().as_raw_hash().to_byte_array();
@@ -301,5 +301,33 @@ mod tests {
 		assert_eq!(deposit_witnesses.len(), 2);
 		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
 		assert_eq!(deposit_witnesses[1].amount, UTXO_WITNESSED_2);
+	}
+
+	#[test]
+	fn witnesses_tx_hash_successfully() {
+		let txs = vec![
+			fake_transaction(vec![]),
+			fake_transaction(vec![TxOut {
+				value: 2324,
+				script_pubkey: ScriptBuf::from(vec![0, 32, 121, 9]),
+			}]),
+			fake_transaction(vec![TxOut {
+				value: 232232,
+				script_pubkey: ScriptBuf::from(vec![32, 32, 121, 9]),
+			}]),
+		];
+
+		let tx_hashes = txs
+			.iter()
+			.map(|tx| tx.txid().to_raw_hash().to_byte_array())
+			// Only watch for the first 2.
+			.take(2)
+			.collect::<Vec<_>>();
+
+		let success_witnesses = success_witnesses(&tx_hashes, &txs);
+
+		assert_eq!(success_witnesses.len(), 2);
+		assert_eq!(success_witnesses[0], tx_hashes[0]);
+		assert_eq!(success_witnesses[1], tx_hashes[1]);
 	}
 }
