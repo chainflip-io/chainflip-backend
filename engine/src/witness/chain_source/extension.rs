@@ -21,7 +21,7 @@ pub trait ChainSourceExt: ChainSource {
 	where
 		Self: Sized,
 		Output: aliases::Data,
-		Fut: Future<Output = Output> + Send + Sync,
+		Fut: Future<Output = Output> + Send,
 		ThenFn: Fn(Header<Self::Index, Self::Hash, Self::Data>) -> Fut + Send + Sync + Clone,
 	{
 		Then::new(self, then_fn)

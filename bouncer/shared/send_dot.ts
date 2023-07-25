@@ -2,7 +2,7 @@ import { ApiPromise, WsProvider } from '@polkadot/api';
 import Keyring from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { assetDecimals } from '@chainflip-io/cli';
-import { polkadotSigningMutex, sleep, amountToFineAmount } from './utils';
+import { polkadotSigningMutex, amountToFineAmount } from './utils';
 
 export async function sendDot(address: string, amount: string) {
   const aliceUri = process.env.POLKADOT_ALICE_URI || '//Alice';
@@ -16,19 +16,12 @@ export async function sendDot(address: string, amount: string) {
     provider: new WsProvider(polkadotEndpoint),
     noInitWarn: true,
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let resolve: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let reject: any;
-  const promise = new Promise((resolve_, reject_) => {
-    resolve = resolve_;
-    reject = reject_;
+  let resolve: () => void;
+  let reject: (reason: Error) => void;
+  const promise = new Promise<void>((res, rej) => {
+    resolve = res;
+    reject = rej;
   });
-
-  // Ensure that both of these have been assigned from the callback above
-  while (!resolve || !reject) {
-    await sleep(1);
-  }
 
   // The mutex ensures that we use the right nonces by eliminating certain
   // race conditions (this doesn't impact performance significantly as

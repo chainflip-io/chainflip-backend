@@ -13,13 +13,11 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use bitcoin::{hashes::Hash, Transaction};
 use cf_chains::{
-	btc::{deposit_address::DepositAddress, ScriptPubkey, UtxoId, CHANGE_ADDRESS_SALT},
+	btc::{deposit_address::DepositAddress, ScriptPubkey, CHANGE_ADDRESS_SALT},
 	Bitcoin,
 };
-use cf_primitives::{chains::assets::btc, EpochIndex};
+use cf_primitives::EpochIndex;
 use futures::StreamExt;
-use pallet_cf_ingress_egress::DepositWitness;
-use state_chain_runtime::BitcoinInstance;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{debug, info_span, trace, Instrument};
@@ -39,15 +37,11 @@ use super::rpc::{BtcRpcApi, BtcRpcClient};
 // monitored addresses.
 pub fn filter_interesting_utxos(
 	txs: Vec<Transaction>,
-	address_monitor: &mut ItemMonitor<ScriptPubkey, Vec<u8>, ScriptPubkey>,
 	tx_hash_monitor: &mut ItemMonitor<[u8; 32], [u8; 32], ()>,
-) -> (Vec<DepositWitness<Bitcoin>>, Vec<[u8; 32]>) {
-	address_monitor.sync_items();
+) -> Vec<[u8; 32]> {
 	tx_hash_monitor.sync_items();
-	let mut deposit_witnesses = vec![];
 	let mut tx_success_witnesses = vec![];
 
-	debug!("looking for addresses: {:?}", address_monitor);
 	debug!("looking for hashes: {:?}", tx_hash_monitor);
 
 	for tx in txs {
@@ -56,28 +50,14 @@ pub fn filter_interesting_utxos(
 			// TODO: We shouldn't need to add a fee
 			tx_success_witnesses.push(tx_hash);
 		}
-		for (vout, tx_out) in (0u32..).zip(tx.output) {
-			if tx_out.value > 0 {
-				let script_pubkey_bytes = tx_out.script_pubkey.to_bytes();
-				if let Some(bitcoin_script) = address_monitor.get(&script_pubkey_bytes) {
-					deposit_witnesses.push(DepositWitness {
-						deposit_address: bitcoin_script,
-						asset: btc::Asset::Btc,
-						amount: tx_out.value,
-						tx_id: UtxoId { tx_id: tx_hash, vout },
-					});
-				}
-			}
-		}
 	}
-	(deposit_witnesses, tx_success_witnesses)
+	tx_success_witnesses
 }
 
 pub async fn start<StateChainClient>(
 	epoch_starts_receiver: async_broadcast::Receiver<EpochStart<Bitcoin>>,
 	state_chain_client: Arc<StateChainClient>,
 	btc_rpc: BtcRpcClient,
-	address_monitor: ItemMonitor<ScriptPubkey, Vec<u8>, ScriptPubkey>,
 	tx_hash_monitor: ItemMonitor<[u8; 32], [u8; 32], ()>,
 	db: Arc<PersistentKeyDB>,
 ) -> Result<(), anyhow::Error>
@@ -91,7 +71,7 @@ where
 			db,
 			generator: BtcWitnesserGenerator { state_chain_client, btc_rpc },
 		},
-		(address_monitor, tx_hash_monitor),
+		tx_hash_monitor,
 	)
 	.instrument(info_span!("BTC-Witnesser"))
 	.await
@@ -114,40 +94,23 @@ where
 {
 	type Chain = Bitcoin;
 	type Block = ChainBlockNumber<Self::Chain>;
-	type StaticState =
-		(ItemMonitor<ScriptPubkey, Vec<u8>, ScriptPubkey>, ItemMonitor<[u8; 32], [u8; 32], ()>);
+	type StaticState = ItemMonitor<[u8; 32], [u8; 32], ()>;
 
 	async fn process_block(
 		&mut self,
 		block_number: ChainBlockNumber<Bitcoin>,
-		(address_monitor, tx_hash_monitor): &mut Self::StaticState,
+		tx_hash_monitor: &mut Self::StaticState,
 	) -> anyhow::Result<()> {
 		let block = self.btc_rpc.block(self.btc_rpc.block_hash(block_number).await?).await?;
 
 		trace!("Checking BTC block: {block_number} for interesting UTXOs");
 
-		let (deposit_witnesses, tx_success_witnesses) =
-			filter_interesting_utxos(block.txdata, address_monitor, tx_hash_monitor);
+		let tx_success_witnesses = filter_interesting_utxos(block.txdata, tx_hash_monitor);
 
 		debug!(
-			"Found {} successful transactions and {} deposit utxos in block {block_number}.",
+			"Found {} successful transactions in block {block_number}.",
 			tx_success_witnesses.len(),
-			deposit_witnesses.len(),
 		);
-
-		if !deposit_witnesses.is_empty() {
-			self.state_chain_client
-				.submit_signed_extrinsic(pallet_cf_witnesser::Call::witness_at_epoch {
-					call: Box::new(
-						pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::process_deposits {
-							deposit_witnesses,
-						}
-						.into(),
-					),
-					epoch_index: self.epoch_index,
-				})
-				.await;
-		}
 
 		for tx_hash in tx_success_witnesses {
 			self.state_chain_client
@@ -265,7 +228,6 @@ mod tests {
 			state_chain_client,
 			rpc,
 			ItemMonitor::new(BTreeSet::new()).1,
-			ItemMonitor::new(BTreeSet::new()).1,
 			Arc::new(db),
 		)
 		.await
@@ -282,7 +244,6 @@ mod test_utxo_filtering {
 		absolute::{Height, LockTime},
 		ScriptBuf, Transaction, TxOut,
 	};
-	use cf_chains::btc::ScriptPubkey;
 
 	fn fake_transaction(tx_outs: Vec<TxOut>) -> Transaction {
 		Transaction {
@@ -291,98 +252,6 @@ mod test_utxo_filtering {
 			input: vec![],
 			output: tx_outs,
 		}
-	}
-
-	#[test]
-	fn filter_interesting_utxos_no_utxos() {
-		let txs = vec![fake_transaction(vec![]), fake_transaction(vec![])];
-
-		let (deposit_witnesses, success_witnesses) = filter_interesting_utxos(
-			txs,
-			&mut ItemMonitor::new(BTreeSet::new()).1,
-			&mut ItemMonitor::new(BTreeSet::new()).1,
-		);
-
-		assert!(deposit_witnesses.is_empty());
-		assert!(success_witnesses.is_empty());
-	}
-
-	#[test]
-	fn filter_interesting_utxos_several_same_tx() {
-		const UTXO_WITNESSED_1: u64 = 2324;
-		const UTXO_WITNESSED_2: u64 = 1234;
-
-		let btc_deposit_script: ScriptPubkey = DepositAddress::new([0; 32], 9).script_pubkey();
-
-		let txs = vec![
-			fake_transaction(vec![
-				TxOut {
-					value: UTXO_WITNESSED_1,
-					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
-				},
-				TxOut { value: 12223, script_pubkey: ScriptBuf::from(vec![0, 32, 121, 9]) },
-				TxOut {
-					value: UTXO_WITNESSED_2,
-					script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
-				},
-			]),
-			fake_transaction(vec![]),
-		];
-
-		let (deposit_witnesses, ..) = filter_interesting_utxos(
-			txs,
-			&mut ItemMonitor::new(BTreeSet::from([btc_deposit_script])).1,
-			&mut ItemMonitor::new(BTreeSet::new()).1,
-		);
-		assert_eq!(deposit_witnesses.len(), 2);
-		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
-		assert_eq!(deposit_witnesses[1].amount, UTXO_WITNESSED_2);
-	}
-
-	#[test]
-	fn filter_interesting_utxos_several_diff_tx() {
-		let btc_deposit_script: ScriptPubkey = DepositAddress::new([0; 32], 9).script_pubkey();
-
-		const UTXO_WITNESSED_1: u64 = 2324;
-		const UTXO_WITNESSED_2: u64 = 1234;
-		let txs = vec![
-			fake_transaction(vec![
-				TxOut { value: 2324, script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()) },
-				TxOut { value: 12223, script_pubkey: ScriptBuf::from(vec![0, 32, 121, 9]) },
-			]),
-			fake_transaction(vec![TxOut {
-				value: 1234,
-				script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()),
-			}]),
-		];
-
-		let (deposit_witnesses, ..) = filter_interesting_utxos(
-			txs,
-			&mut ItemMonitor::new(BTreeSet::from([btc_deposit_script])).1,
-			&mut ItemMonitor::new(BTreeSet::new()).1,
-		);
-		assert_eq!(deposit_witnesses.len(), 2);
-		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
-		assert_eq!(deposit_witnesses[1].amount, UTXO_WITNESSED_2);
-	}
-
-	#[test]
-	fn filter_out_value_0() {
-		let btc_deposit_script: ScriptPubkey = DepositAddress::new([0; 32], 9).script_pubkey();
-
-		const UTXO_WITNESSED_1: u64 = 2324;
-		let txs = vec![fake_transaction(vec![
-			TxOut { value: 2324, script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()) },
-			TxOut { value: 0, script_pubkey: ScriptBuf::from(btc_deposit_script.bytes()) },
-		])];
-
-		let (deposit_witnesses, ..) = filter_interesting_utxos(
-			txs,
-			&mut ItemMonitor::new(BTreeSet::from([btc_deposit_script])).1,
-			&mut ItemMonitor::new(BTreeSet::new()).1,
-		);
-		assert_eq!(deposit_witnesses.len(), 1);
-		assert_eq!(deposit_witnesses[0].amount, UTXO_WITNESSED_1);
 	}
 
 	#[test]
@@ -397,13 +266,11 @@ mod test_utxo_filtering {
 		let tx_hashes =
 			txs.iter().map(|tx| tx.txid().to_raw_hash().to_byte_array()).collect::<Vec<_>>();
 
-		let (deposit_witnesses, success_witnesses) = filter_interesting_utxos(
+		let success_witnesses = filter_interesting_utxos(
 			txs,
-			&mut ItemMonitor::new(BTreeSet::new()).1,
 			&mut ItemMonitor::new(BTreeSet::from_iter(tx_hashes.clone())).1,
 		);
 
-		assert!(deposit_witnesses.is_empty());
 		assert_eq!(success_witnesses.len(), 2);
 		assert_eq!(success_witnesses[0], tx_hashes[0]);
 		assert_eq!(success_witnesses[1], tx_hashes[1]);
