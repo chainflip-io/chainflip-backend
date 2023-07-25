@@ -3,7 +3,7 @@
 
 use super::*;
 
-use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue};
+use cf_chains::{address::EncodedAddress, benchmarking_value::BenchmarkValue, ChainOrAddress};
 use cf_traits::{AccountRoleRegistry, Chainflip};
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{dispatch::UnfilteredDispatchable, traits::OnNewAccount};
@@ -90,7 +90,7 @@ benchmarks! {
 			message: vec![0x00],
 			gas_budget: 1,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::benchmark_value(),
+			source_address: ChainOrAddress::Address(ForeignChainAddress::benchmark_value()),
 		};
 		let call = Call::<T>::ccm_deposit{
 			source_asset: Asset::Usdc,

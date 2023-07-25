@@ -28,20 +28,22 @@ impl ExecutexSwapAndCall {
 	pub(crate) fn new(
 		egress_id: EgressId,
 		transfer_param: EncodableTransferAssetParams,
-		source_address: ForeignChainAddress,
+		source_address: ChainOrAddress,
 		message: Vec<u8>,
 	) -> Self {
 		let (source_chain, source_address) = Self::destructure_address(source_address);
 		Self { egress_id, transfer_param, source_chain, source_address, message }
 	}
 
-	fn destructure_address(address: ForeignChainAddress) -> (u32, Vec<u8>) {
+	fn destructure_address(address: ChainOrAddress) -> (u32, Vec<u8>) {
 		match address {
-			ForeignChainAddress::Eth(source_address) =>
+			ChainOrAddress::Chain(chain) => (chain as u32, vec![]),
+			ChainOrAddress::Address(ForeignChainAddress::Eth(source_address)) =>
 				(ForeignChain::Ethereum as u32, source_address.to_vec()),
-			ForeignChainAddress::Dot(source_address) =>
+			ChainOrAddress::Address(ForeignChainAddress::Dot(source_address)) =>
 				(ForeignChain::Polkadot as u32, source_address.aliased_ref().to_vec()),
-			ForeignChainAddress::Btc(script) => (ForeignChain::Bitcoin as u32, script.bytes()),
+			ChainOrAddress::Address(ForeignChainAddress::Btc(script)) =>
+				(ForeignChain::Bitcoin as u32, script.bytes()),
 		}
 	}
 
@@ -99,8 +101,9 @@ mod test_execute_x_swap_and_execute {
 			amount: 10,
 		};
 
-		let dummy_src_address =
-			ForeignChainAddress::Dot(PolkadotAccountId::from_aliased([0xff; 32]));
+		let dummy_src_address = ChainOrAddress::Address(ForeignChainAddress::Dot(
+			PolkadotAccountId::from_aliased([0xff; 32]),
+		));
 		let (dummy_chain, dummy_address) =
 			super::ExecutexSwapAndCall::destructure_address(dummy_src_address.clone());
 		let dummy_message = vec![0x00, 0x01, 0x02, 0x03, 0x04];

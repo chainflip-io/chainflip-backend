@@ -5,8 +5,8 @@ use crate::{
 	ScheduledEgressFetchOrTransfer,
 };
 use cf_chains::{
-	address::AddressConverter, eth::EthereumFetchId, DepositChannel, ExecutexSwapAndCall,
-	SwapOrigin, TransferAssetParams,
+	address::AddressConverter, eth::EthereumFetchId, ChainOrAddress, DepositChannel,
+	ExecutexSwapAndCall, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{chains::assets::eth, ChannelId, ForeignChain};
 use cf_test_utilities::assert_has_event;
@@ -91,7 +91,7 @@ fn blacklisted_asset_will_not_egress_via_ccm() {
 			message: vec![0x00, 0x01, 0x02],
 			gas_budget: 1_000,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+			source_address: ChainOrAddress::Address(ForeignChainAddress::Eth([0xcf; 20])),
 		};
 
 		assert!(DisabledEgressAssets::<Test>::get(asset).is_none());
@@ -424,7 +424,7 @@ fn can_process_ccm_deposit() {
 			message: vec![0x00, 0x01, 0x02],
 			gas_budget: 1_000,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+			source_address: ChainOrAddress::Address(ForeignChainAddress::Eth([0xcf; 20])),
 		};
 		let amount = 5_000;
 
@@ -483,7 +483,7 @@ fn can_egress_ccm() {
 			message: vec![0x00, 0x01, 0x02],
 			gas_budget: 1_000,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+			source_address: ChainOrAddress::Address(ForeignChainAddress::Eth([0xcf; 20])),
 		};
 		let amount = 5_000;
 		let egress_id = IngressEgress::schedule_egress(
@@ -502,7 +502,7 @@ fn can_egress_ccm() {
 				destination_address,
 				message: ccm.message.clone(),
 				cf_parameters: vec![],
-				source_address: ForeignChainAddress::Eth([0xcf; 20]),
+				source_address: ChainOrAddress::Address(ForeignChainAddress::Eth([0xcf; 20])),
 			}
 		]);
 		System::assert_last_event(RuntimeEvent::IngressEgress(
@@ -525,7 +525,7 @@ fn can_egress_ccm() {
 				amount,
 				to: destination_address
 			},
-			ForeignChainAddress::Eth([0xcf; 20]),
+			ChainOrAddress::Address(ForeignChainAddress::Eth([0xcf; 20])),
 			ccm.message,
 		).unwrap()]);
 

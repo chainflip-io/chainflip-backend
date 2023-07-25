@@ -14,7 +14,7 @@ pub use weights::WeightInfo;
 
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi},
-	AllBatch, AllBatchError, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto,
+	AllBatch, AllBatchError, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, ChainOrAddress,
 	ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FetchAssetParams,
 	ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
@@ -63,8 +63,8 @@ pub(crate) struct CrossChainMessage<C: Chain> {
 	pub amount: C::ChainAmount,
 	pub destination_address: C::ChainAccount,
 	pub message: Vec<u8>,
-	// The sender of the deposit transaction.
-	pub source_address: ForeignChainAddress,
+	// The sender of the deposit transaction. Can be a Chain or an Address.
+	pub source_address: ChainOrAddress,
 	// Where funds might be returned to if the message fails.
 	pub cf_parameters: Vec<u8>,
 }

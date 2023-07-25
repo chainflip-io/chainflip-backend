@@ -8,7 +8,7 @@ use cf_chains::{
 	address::{to_encoded_address, AddressConverter, EncodedAddress, ForeignChainAddress},
 	btc::{BitcoinNetwork, ScriptPubkey},
 	dot::PolkadotAccountId,
-	AnyChain, CcmDepositMetadata,
+	AnyChain, CcmDepositMetadata, ChainOrAddress, RequestDepositCcmMetadata,
 };
 use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use cf_test_utilities::{assert_event_sequence, assert_events_match};
@@ -387,7 +387,7 @@ fn reject_invalid_ccm_deposit() {
 			message: vec![0x00],
 			gas_budget,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+			source_address: ChainOrAddress::Address(ForeignChainAddress::Eth([0xcf; 20])),
 		};
 
 		assert_noop!(
@@ -448,12 +448,8 @@ fn reject_invalid_ccm_deposit() {
 fn rejects_invalid_swap_deposit() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
-		let ccm = CcmDepositMetadata {
-			message: vec![0x00],
-			gas_budget,
-			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
-		};
+		let ccm =
+			RequestDepositCcmMetadata { message: vec![0x00], gas_budget, cf_parameters: vec![] };
 
 		assert_noop!(
 			Swapping::request_swap_deposit_address(
@@ -525,12 +521,12 @@ fn can_process_ccms_via_swap_deposit_address() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
 		let deposit_amount = 10_000;
-		let ccm = CcmDepositMetadata {
-			message: vec![0x01],
-			gas_budget,
-			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
-		};
+		let request_ccm =
+			RequestDepositCcmMetadata { message: vec![0x01], gas_budget, cf_parameters: vec![] };
+		let ccm = RequestDepositCcmMetadata::into_ccm_metadata_with_chain(
+			request_ccm.clone(),
+			ForeignChain::Ethereum,
+		);
 
 		// Can process CCM via Swap deposit
 		assert_ok!(Swapping::request_swap_deposit_address(
@@ -539,7 +535,7 @@ fn can_process_ccms_via_swap_deposit_address() {
 			Asset::Eth,
 			EncodedAddress::Eth(Default::default()),
 			0,
-			Some(ccm.clone())
+			Some(request_ccm)
 		));
 		Swapping::on_ccm_deposit(
 			Asset::Dot,
@@ -617,7 +613,7 @@ fn can_process_ccms_via_extrinsic() {
 			message: vec![0x02],
 			gas_budget,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+			source_address: ChainOrAddress::Address(ForeignChainAddress::Eth([0xcf; 20])),
 		};
 
 		// Can process CCM directly via Pallet Extrinsic.
@@ -704,7 +700,7 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 			message: vec![0x00],
 			gas_budget,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+			source_address: ChainOrAddress::Address(ForeignChainAddress::Eth([0xcf; 20])),
 		};
 		assert_ok!(Swapping::ccm_deposit(
 			RuntimeOrigin::root(),
@@ -789,7 +785,7 @@ fn can_handle_ccms_with_native_gas_asset() {
 			message: vec![0x00],
 			gas_budget,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+			source_address: ChainOrAddress::Address(ForeignChainAddress::Eth([0xcf; 20])),
 		};
 
 		assert_ok!(Swapping::ccm_deposit(
@@ -869,7 +865,7 @@ fn can_handle_ccms_with_no_swaps_needed() {
 			message: vec![0x00],
 			gas_budget,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth([0xcf; 20]),
+			source_address: ChainOrAddress::Address(ForeignChainAddress::Eth([0xcf; 20])),
 		};
 
 		// Ccm without need for swapping are egressed directly.
@@ -1105,12 +1101,8 @@ fn cannot_register_ccm_deposit_below_minimum_gas_budget() {
 		let gas_budget = 1_000;
 		let from: Asset = Asset::Eth;
 		let to: Asset = Asset::Flip;
-		let ccm = CcmDepositMetadata {
-			message: vec![0x01],
-			gas_budget,
-			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth(Default::default()),
-		};
+		let request_ccm =
+			RequestDepositCcmMetadata { message: vec![0x01], gas_budget, cf_parameters: vec![] };
 
 		// Set minimum gas budget to be above gas amount
 		assert_ok!(Swapping::set_minimum_ccm_gas_budget(
@@ -1127,7 +1119,7 @@ fn cannot_register_ccm_deposit_below_minimum_gas_budget() {
 				to,
 				EncodedAddress::Eth(Default::default()),
 				0,
-				Some(ccm.clone())
+				Some(request_ccm.clone())
 			),
 			Error::<Test>::CcmGasBudgetBelowMinimum
 		);
@@ -1142,7 +1134,7 @@ fn cannot_register_ccm_deposit_below_minimum_gas_budget() {
 			to,
 			EncodedAddress::Eth(Default::default()),
 			0,
-			Some(ccm)
+			Some(request_ccm)
 		));
 
 		// Verify the CCM is reigstered
@@ -1168,7 +1160,7 @@ fn ccm_via_exintrincs_below_minimum_gas_budget_are_rejected() {
 			message: vec![0x01],
 			gas_budget,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth(Default::default()),
+			source_address: ChainOrAddress::Address(ForeignChainAddress::Eth(Default::default())),
 		};
 
 		// Set minimum gas budget to be above gas amount
@@ -1235,12 +1227,12 @@ fn ccm_via_deposit_with_principal_below_minimum_are_rejected() {
 		let principal_amount = 2_000;
 		let from: Asset = Asset::Eth;
 		let to: Asset = Asset::Flip;
-		let ccm = CcmDepositMetadata {
-			message: vec![0x01],
-			gas_budget,
-			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth(Default::default()),
-		};
+		let request_ccm: RequestDepositCcmMetadata =
+			RequestDepositCcmMetadata { message: vec![0x01], gas_budget, cf_parameters: vec![] };
+		let ccm = RequestDepositCcmMetadata::into_ccm_metadata_with_chain(
+			request_ccm.clone(),
+			ForeignChain::Ethereum,
+		);
 
 		// Set minimum gas budget to be above gas amount
 		assert_ok!(Swapping::set_minimum_swap_amount(
@@ -1256,7 +1248,7 @@ fn ccm_via_deposit_with_principal_below_minimum_are_rejected() {
 			to,
 			EncodedAddress::Eth(Default::default()),
 			0,
-			Some(ccm.clone())
+			Some(request_ccm)
 		));
 
 		assert_failed_ccm(
@@ -1313,7 +1305,7 @@ fn ccm_via_extrinsic_with_principal_below_minimum_are_rejected() {
 			message: vec![0x01],
 			gas_budget,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth(Default::default()),
+			source_address: ChainOrAddress::Address(ForeignChainAddress::Eth(Default::default())),
 		};
 
 		// Set minimum gas budget to be above gas amount
@@ -1385,7 +1377,7 @@ fn ccm_without_principal_swaps_are_accepted() {
 			message: vec![0x01],
 			gas_budget,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth(Default::default()),
+			source_address: ChainOrAddress::Address(ForeignChainAddress::Eth(Default::default())),
 		};
 
 		// Set minimum swap and gas budget.
@@ -1473,7 +1465,7 @@ fn ccm_with_gas_below_minimum_swap_amount_allowed() {
 			message: vec![0x01],
 			gas_budget,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth(Default::default()),
+			source_address: ChainOrAddress::Address(ForeignChainAddress::Eth(Default::default())),
 		};
 
 		// Set minimum swap and gas budget.
@@ -1666,7 +1658,7 @@ fn ccm_swaps_emits_events() {
 			message: vec![0x01],
 			gas_budget: 1_000,
 			cf_parameters: vec![],
-			source_address: ForeignChainAddress::Eth(Default::default()),
+			source_address: ChainOrAddress::Address(ForeignChainAddress::Eth(Default::default())),
 		};
 		let destination_address = ForeignChainAddress::Eth(Default::default());
 

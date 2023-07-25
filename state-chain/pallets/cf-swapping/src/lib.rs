@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 use cf_chains::{
 	address::{AddressConverter, ForeignChainAddress},
-	CcmDepositMetadata, SwapOrigin,
+	CcmDepositMetadata, RequestDepositCcmMetadata, SwapOrigin,
 };
 use cf_primitives::{
 	Asset, AssetAmount, ChannelId, ForeignChain, SwapLeg, TransactionHash, STABLE_ASSET,
@@ -514,14 +514,14 @@ pub mod pallet {
 			destination_asset: Asset,
 			destination_address: EncodedAddress,
 			broker_commission_bps: BasisPoints,
-			message_metadata: Option<CcmDepositMetadata>,
+			message_metadata: Option<RequestDepositCcmMetadata>,
 		) -> DispatchResult {
 			let broker = T::AccountRoleRegistry::ensure_broker(origin)?;
 
 			let destination_address_internal =
 				Self::validate_destination_address(&destination_address, destination_asset)?;
 
-			if let Some(CcmDepositMetadata { gas_budget, .. }) = message_metadata {
+			if let Some(RequestDepositCcmMetadata { gas_budget, .. }) = message_metadata {
 				// Currently only Ethereum supports CCM.
 				ensure!(
 					ForeignChain::Ethereum == destination_asset.into(),
@@ -535,13 +535,20 @@ pub mod pallet {
 				)
 			}
 
+			let maybe_ccm_metadata = message_metadata.map(|metadata| {
+				RequestDepositCcmMetadata::into_ccm_metadata_with_chain(
+					metadata,
+					source_asset.into(),
+				)
+			});
+
 			let (channel_id, deposit_address) = T::DepositHandler::request_swap_deposit_address(
 				source_asset,
 				destination_asset,
 				destination_address_internal,
 				broker_commission_bps,
 				broker,
-				message_metadata,
+				maybe_ccm_metadata,
 			)?;
 
 			let expiry_block = frame_system::Pallet::<T>::current_block_number()

@@ -1185,7 +1185,6 @@ dependencies = [
  "jsonrpsee 0.16.2",
  "serde",
  "sp-rpc",
- "state-chain-runtime",
  "tokio",
  "tracing",
  "tracing-subscriber 0.3.17",
