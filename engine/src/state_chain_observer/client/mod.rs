@@ -346,7 +346,7 @@ impl<BaseRpcClient: base_rpc_api::BaseRpcApi + Send + Sync + 'static, SignedExtr
 	}
 
 	pub fn latest_finalized_hash(&self) -> state_chain_runtime::Hash {
-		self.latest_block_hash_watcher.borrow().clone()
+		*self.latest_block_hash_watcher.borrow()
 	}
 }
 
