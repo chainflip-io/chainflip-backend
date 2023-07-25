@@ -119,12 +119,24 @@ where
 	});
 
 	let vault_witnesser = eth_safe_vault_source
+		.clone()
 		.vault_witnessing(state_chain_client.clone(), eth_client.clone(), vault_address)
-		.continuous("Vault".to_string(), db)
+		.continuous("Vault".to_string(), db.clone())
 		.run();
 
 	scope.spawn(async move {
 		vault_witnesser.await;
+		Ok(())
+	});
+
+
+	let ethereum_deposit_witnesser = eth_safe_vault_source
+		.ethereum_deposits(state_chain_client.clone(), address_checker_rpc, vault_rpc)
+		.continuous("EthereumDeposits".to_string(), db)
+		.run();
+
+	scope.spawn(async move {
+		ethereum_deposit_witnesser.await;
 		Ok(())
 	});
 
