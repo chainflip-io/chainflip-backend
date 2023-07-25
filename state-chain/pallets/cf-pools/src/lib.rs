@@ -81,7 +81,7 @@ pub mod pallet {
 	/// Pools are indexed by single asset since USDC is implicit.
 	/// The STABLE_ASSET is always PoolSide::Asset1
 	#[pallet::storage]
-	pub(super) type Pools<T: Config> =
+	pub type Pools<T: Config> =
 		StorageMap<_, Twox64Concat, any::Asset, Pool<T::AccountId>, OptionQuery>;
 
 	/// FLIP ready to be burned.

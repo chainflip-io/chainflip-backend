@@ -1310,11 +1310,13 @@ name = "chainflip-lp-api"
 version = "0.9.0"
 dependencies = [
  "anyhow",
+ "cf-primitives",
  "chainflip-api",
  "clap 3.2.25",
  "futures",
  "hex",
  "jsonrpsee 0.16.2",
+ "pallet-cf-pools",
  "serde",
  "serde_json",
  "sp-rpc",

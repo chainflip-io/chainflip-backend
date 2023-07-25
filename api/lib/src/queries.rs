@@ -2,6 +2,7 @@ use super::*;
 use cf_chains::{Chain, ForeignChainAddress};
 use cf_primitives::chains::assets::any;
 use chainflip_engine::state_chain_observer::client::storage_api::StorageApi;
+use pallet_cf_pools::Pool;
 use serde::Deserialize;
 use state_chain_runtime::PalletInstanceAlias;
 use std::{collections::BTreeMap, sync::Arc};
@@ -79,4 +80,18 @@ where
 			})
 		})
 		.collect::<Vec<_>>())
+}
+
+pub async fn get_pools(
+	client: Arc<impl StorageApi>,
+	block_hash: state_chain_runtime::Hash,
+) -> Result<BTreeMap<Asset, Pool<AccountId32>>, anyhow::Error>
+where
+	state_chain_runtime::Runtime: pallet_cf_pools::Config,
+{
+	Ok(client
+		.storage_map::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>>(block_hash)
+		.await?
+		.into_iter()
+		.collect::<BTreeMap<_, _>>())
 }

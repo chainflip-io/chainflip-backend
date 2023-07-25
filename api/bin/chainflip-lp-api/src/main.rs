@@ -9,6 +9,7 @@ use chainflip_api::{
 	},
 	queries::SwapChannelInfo,
 	settings::StateChain,
+	AccountId32,
 };
 use clap::Parser;
 use futures::FutureExt;
@@ -17,8 +18,9 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	server::ServerBuilder,
 };
+use pallet_cf_pools::Pool;
 use sp_rpc::number::NumberOrHex;
-use std::{ops::Range, path::PathBuf};
+use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 
 /// Contains RPC interface types that differ from internal types.
 pub mod rpc_types {
@@ -139,6 +141,9 @@ pub trait Rpc {
 
 	#[method(name = "getOpenSwapChannels")]
 	async fn get_open_swap_channels(&self) -> Result<Vec<SwapChannelInfo>, Error>;
+
+	#[method(name = "getPools")]
+	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error>;
 }
 pub struct RpcServerImpl {
 	state_chain_settings: StateChain,
@@ -319,7 +324,7 @@ impl RpcServer for RpcServerImpl {
 		task_scope(|scope| {
 			async move {
 				let (client, latest_hash) =
-					chainflip_api::queries::connect(&scope, &self.state_chain_settings).await?;
+					chainflip_api::queries::connect(scope, &self.state_chain_settings).await?;
 
 				tokio::try_join!(
 					chainflip_api::queries::get_open_swap_channels::<Ethereum>(
@@ -335,6 +340,19 @@ impl RpcServer for RpcServerImpl {
 				.map(|(eth_result, btc_result, dot_result)| {
 					[eth_result, btc_result, dot_result].into_iter().flatten().collect::<Vec<_>>()
 				})
+			}
+			.boxed()
+		})
+		.await
+		.map_err(|e| Error::Custom(e.to_string()))
+	}
+
+	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
+		task_scope(|scope| {
+			async move {
+				let (client, latest_hash) =
+					chainflip_api::queries::connect(scope, &self.state_chain_settings).await?;
+				chainflip_api::queries::get_pools(client, latest_hash).await
 			}
 			.boxed()
 		})
