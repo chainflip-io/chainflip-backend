@@ -60,7 +60,7 @@ impl<Ceremony: CeremonyTrait> CeremonyRunner<Ceremony> {
 	) -> Result<()> {
 		let span = tracing::info_span!(
 			"CeremonyRunner",
-			ceremony_id = ceremony_id_string::<Ceremony::Crypto>(ceremony_id)
+			ceremony_id = ceremony_id_string::<Ceremony::Chain>(ceremony_id)
 		);
 
 		// We always create unauthorised first, it can get promoted to

@@ -8,6 +8,7 @@ use crate::{
 		signing::{self, signing_data::LocalSig3Inner, PayloadAndKey},
 	},
 	crypto::CryptoScheme,
+	ChainSigning,
 };
 
 use async_trait::async_trait;
@@ -31,7 +32,7 @@ use super::{
 	SigningCommitment,
 };
 
-type SigningStageResult<Crypto> = StageResult<SigningCeremony<Crypto>>;
+type SigningStageResult<Chain> = StageResult<SigningCeremony<Chain>>;
 
 // *********** Await Commitments1 *************
 
@@ -60,17 +61,20 @@ impl<Crypto: CryptoScheme> AwaitCommitments1<Crypto> {
 derive_display_as_type_name!(AwaitCommitments1<Crypto: CryptoScheme>);
 
 #[async_trait]
-impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
-	for AwaitCommitments1<Crypto>
+impl<Chain: ChainSigning> BroadcastStageProcessor<SigningCeremony<Chain>>
+	for AwaitCommitments1<Chain::CryptoScheme>
 {
-	type Message = Comm1<Crypto::Point>;
+	type Message = Comm1<<Chain::CryptoScheme as CryptoScheme>::Point>;
 	const NAME: SigningStageName = SigningStageName::AwaitCommitments1;
 
 	fn init(&mut self) -> DataToSend<Self::Message> {
 		let comm1: Vec<_> = self
 			.nonces
 			.iter()
-			.map(|nonce| SigningCommitment::<Crypto::Point> { d: nonce.d_pub, e: nonce.e_pub })
+			.map(|nonce| SigningCommitment::<<Chain::CryptoScheme as CryptoScheme>::Point> {
+				d: nonce.d_pub,
+				e: nonce.e_pub,
+			})
 			.collect();
 		DataToSend::Broadcast(DelayDeserialization::new(&comm1))
 	}
@@ -78,10 +82,10 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	async fn process(
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-	) -> SigningStageResult<Crypto> {
+	) -> SigningStageResult<Chain> {
 		// No verification is necessary here, just generating new stage
 
-		let processor = VerifyCommitmentsBroadcast2::<Crypto> {
+		let processor = VerifyCommitmentsBroadcast2::<Chain::CryptoScheme> {
 			common: self.common.clone(),
 			signing_common: self.signing_common,
 			nonces: self.nonces,
@@ -116,10 +120,10 @@ pub struct DerivedSignatureData<C: CryptoScheme> {
 }
 
 #[async_trait]
-impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
-	for VerifyCommitmentsBroadcast2<Crypto>
+impl<Chain: ChainSigning> BroadcastStageProcessor<SigningCeremony<Chain>>
+	for VerifyCommitmentsBroadcast2<Chain::CryptoScheme>
 {
-	type Message = VerifyComm2<Crypto::Point>;
+	type Message = VerifyComm2<<Chain::CryptoScheme as CryptoScheme>::Point>;
 	const NAME: SigningStageName = SigningStageName::VerifyCommitmentsBroadcast2;
 
 	/// Simply report all data that we have received from
@@ -134,13 +138,16 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	async fn process(
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-	) -> SigningStageResult<Crypto> {
+	) -> SigningStageResult<Chain> {
 		let verified_commitments = match verify_broadcasts_non_blocking(messages).await {
 			Ok(comms) => comms,
 			Err((reported_parties, abort_reason)) =>
 				return SigningStageResult::Error(
 					reported_parties,
-					SigningFailureReason::BroadcastFailure(abort_reason, Self::NAME),
+					SigningFailureReason::BroadcastFailure(
+						abort_reason,
+						<Self as BroadcastStageProcessor<SigningCeremony<Chain>>>::NAME,
+					),
 				),
 		};
 
@@ -182,7 +189,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 			)
 		}
 
-		debug!("{} is successful", Self::NAME);
+		debug!("{} is successful", <Self as BroadcastStageProcessor<SigningCeremony<Chain>>>::NAME);
 
 		let signature_data = self
 			.signing_common
@@ -197,7 +204,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 					})
 					.collect::<BTreeMap<_, _>>();
 
-				let bindings = signing_detail::generate_bindings::<Crypto>(
+				let bindings = signing_detail::generate_bindings::<Chain::CryptoScheme>(
 					payload,
 					&commitments,
 					&self.common.all_idxs,
@@ -216,7 +223,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 			})
 			.collect();
 
-		let processor = LocalSigStage3::<Crypto> {
+		let processor = LocalSigStage3::<Chain::CryptoScheme> {
 			common: self.common.clone(),
 			signing_common: self.signing_common,
 			nonces: self.nonces,
@@ -241,10 +248,10 @@ struct LocalSigStage3<Crypto: CryptoScheme> {
 derive_display_as_type_name!(LocalSigStage3<Crypto: CryptoScheme>);
 
 #[async_trait]
-impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
-	for LocalSigStage3<Crypto>
+impl<Chain: ChainSigning> BroadcastStageProcessor<SigningCeremony<Chain>>
+	for LocalSigStage3<Chain::CryptoScheme>
 {
-	type Message = LocalSig3<Crypto::Point>;
+	type Message = LocalSig3<<Chain::CryptoScheme as CryptoScheme>::Point>;
 	const NAME: SigningStageName = SigningStageName::LocalSigStage3;
 
 	/// With all nonce commitments verified, and the group commitment computed,
@@ -255,7 +262,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 				let PayloadAndKey { payload, key } = &self.signing_common.payloads_and_keys[i];
 				let signature_data = &self.signature_data[i];
 
-				signing_detail::generate_local_sig::<Crypto>(
+				signing_detail::generate_local_sig::<Chain::CryptoScheme>(
 					payload,
 					&key.key_share,
 					&self.nonces[i],
@@ -267,10 +274,11 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 			})
 			.collect();
 
-		let data =
-			DataToSend::Broadcast(DelayDeserialization::new(&LocalSig3Inner::<Crypto::Point> {
-				responses,
-			}));
+		let data = DataToSend::Broadcast(DelayDeserialization::new(&LocalSig3Inner::<
+			<Chain::CryptoScheme as CryptoScheme>::Point,
+		> {
+			responses,
+		}));
 
 		use zeroize::Zeroize;
 
@@ -288,8 +296,8 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	async fn process(
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-	) -> SigningStageResult<Crypto> {
-		let processor = VerifyLocalSigsBroadcastStage4::<Crypto> {
+	) -> SigningStageResult<Chain> {
+		let processor = VerifyLocalSigsBroadcastStage4::<Chain::CryptoScheme> {
 			common: self.common.clone(),
 			signing_common: self.signing_common,
 			signature_data: self.signature_data,
@@ -314,10 +322,10 @@ struct VerifyLocalSigsBroadcastStage4<Crypto: CryptoScheme> {
 derive_display_as_type_name!(VerifyLocalSigsBroadcastStage4<Crypto: CryptoScheme>);
 
 #[async_trait]
-impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
-	for VerifyLocalSigsBroadcastStage4<Crypto>
+impl<Chain: ChainSigning> BroadcastStageProcessor<SigningCeremony<Chain>>
+	for VerifyLocalSigsBroadcastStage4<Chain::CryptoScheme>
 {
-	type Message = VerifyLocalSig4<Crypto::Point>;
+	type Message = VerifyLocalSig4<<Chain::CryptoScheme as CryptoScheme>::Point>;
 	const NAME: SigningStageName = SigningStageName::VerifyLocalSigsBroadcastStage4;
 
 	/// Broadcast all signature shares sent to us
@@ -332,13 +340,16 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 	async fn process(
 		self,
 		messages: BTreeMap<AuthorityCount, Option<Self::Message>>,
-	) -> SigningStageResult<Crypto> {
+	) -> SigningStageResult<Chain> {
 		let local_sigs = match verify_broadcasts_non_blocking(messages).await {
 			Ok(sigs) => sigs,
 			Err((reported_parties, abort_reason)) =>
 				return SigningStageResult::Error(
 					reported_parties,
-					SigningFailureReason::BroadcastFailure(abort_reason, Self::NAME),
+					SigningFailureReason::BroadcastFailure(
+						abort_reason,
+						<Self as BroadcastStageProcessor<SigningCeremony<Chain>>>::NAME,
+					),
 				),
 		};
 
@@ -378,14 +389,20 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 			)
 		}
 
-		debug!("{} is successful", Self::NAME);
+		debug!("{} is successful", <Self as BroadcastStageProcessor<SigningCeremony<Chain>>>::NAME);
 
 		let all_idxs = &self.common.all_idxs;
 
 		let lagrange_coefficients: BTreeMap<_, _> = all_idxs
 			.iter()
 			.map(|signer_idx| {
-				(*signer_idx, get_lagrange_coeff::<Crypto::Point>(*signer_idx, all_idxs))
+				(
+					*signer_idx,
+					get_lagrange_coeff::<<Chain::CryptoScheme as CryptoScheme>::Point>(
+						*signer_idx,
+						all_idxs,
+					),
+				)
 			})
 			.collect();
 
@@ -418,7 +435,7 @@ impl<Crypto: CryptoScheme> BroadcastStageProcessor<SigningCeremony<Crypto>>
 
 				let payload_data = &self.signature_data[i];
 
-				signing_detail::aggregate_signature::<Crypto>(
+				signing_detail::aggregate_signature::<Chain::CryptoScheme>(
 					payload,
 					all_idxs,
 					key.get_agg_public_key_point(),
@@ -444,7 +461,7 @@ mod tests {
 	use super::*;
 
 	use crate::{
-		bitcoin::BtcCryptoScheme,
+		bitcoin::{BtcCryptoScheme, BtcSigning},
 		client::{
 			signing::{gen_signing_data_stage2, SigningData},
 			PartyIdxMapping,
@@ -488,7 +505,7 @@ mod tests {
 		{
 			let messages = BTreeMap::from_iter([(OWN_IDX, Some(bv))]);
 			// Process the message and check that we get the correct error
-			if let SigningStageResult::Error(blamed, reason) = stage.process(messages).await {
+			if let SigningStageResult::<BtcSigning>::Error(blamed, reason) = stage.process(messages).await {
 				assert_eq!(reason, SigningFailureReason::InvalidNumberOfPayloads);
 				assert_eq!(blamed, BTreeSet::from_iter([OWN_IDX]));
 			} else {
@@ -533,7 +550,9 @@ mod tests {
 		{
 			let messages = BTreeMap::from_iter([(OWN_IDX, Some(bv))]);
 			// Process the message and check that we get the correct error
-			if let SigningStageResult::Error(blamed, reason) = stage.process(messages).await {
+			if let SigningStageResult::<BtcSigning>::Error(blamed, reason) =
+				stage.process(messages).await
+			{
 				assert_eq!(reason, SigningFailureReason::InvalidNumberOfPayloads);
 				// For this test we report our own index because we are the only participant. This
 				// does not matter, the code is the same.
