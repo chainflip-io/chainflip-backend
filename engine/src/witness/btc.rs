@@ -61,6 +61,7 @@ where
 
 	let btc_client = btc_client.clone();
 	let btc_ingress_witnesser = btc_source
+		.strictly_monotonic()
 		.lag_safety(SAFETY_MARGIN)
 		.then(move |header| {
 			let btc_client = btc_client.clone();
