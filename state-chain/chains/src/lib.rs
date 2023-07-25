@@ -345,19 +345,6 @@ impl RequestDepositCcmMetadata {
 			source_address: ChainOrAddress::Chain(chain),
 		}
 	}
-
-	/// Builds `CcmDepositMetadata` with a Address as the `source_address`.
-	pub fn into_ccm_metadata_with_address(
-		self,
-		address: ForeignChainAddress,
-	) -> CcmDepositMetadata {
-		CcmDepositMetadata {
-			message: self.message,
-			gas_budget: self.gas_budget,
-			cf_parameters: self.cf_parameters,
-			source_address: ChainOrAddress::Address(address),
-		}
-	}
 }
 
 /// Enum that contains a ForeignChain or a ForeignChainAddress.
