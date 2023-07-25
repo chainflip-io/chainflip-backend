@@ -32,6 +32,7 @@ impl<InnerStream: ChainStream> Stream for StrictlyMonotonicStream<InnerStream> {
 	}
 }
 
+#[derive(Clone)]
 pub struct StrictlyMonotonic<InnerSource: ChainSource> {
 	inner_source: InnerSource,
 }

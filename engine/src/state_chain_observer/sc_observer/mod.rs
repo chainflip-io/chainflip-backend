@@ -4,7 +4,7 @@ mod tests;
 
 use anyhow::{anyhow, Context};
 use cf_chains::{
-	btc::{self, PreviousOrCurrent, ScriptPubkey},
+	btc::{self, PreviousOrCurrent},
 	dot::{self, PolkadotAccountId, PolkadotSignature},
 	eth::Ethereum,
 	Bitcoin, Polkadot,
@@ -257,7 +257,6 @@ pub async fn start<
 		MonitorCommand<PolkadotSignature>,
 	>,
 	btc_epoch_start_sender: async_broadcast::Sender<EpochStart<Bitcoin>>,
-	btc_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<MonitorCommand<ScriptPubkey>>,
 	btc_tx_hash_sender: tokio::sync::mpsc::UnboundedSender<MonitorCommand<[u8; 32]>>,
 ) -> Result<(), anyhow::Error>
 where
@@ -761,25 +760,6 @@ where
                                     ) => {
                                         assert_eq!(source_asset, cf_primitives::chains::assets::dot::Asset::Dot);
                                         dot_monitor_command_sender.send(MonitorCommand::Remove(deposit_address)).unwrap();
-                                    }
-                                    state_chain_runtime::RuntimeEvent::BitcoinIngressEgress(
-                                        pallet_cf_ingress_egress::Event::StartWitnessing {
-                                            deposit_address,
-                                            source_asset,
-                                            ..
-                                        }
-                                    ) => {
-                                        assert_eq!(source_asset, cf_primitives::chains::assets::btc::Asset::Btc);
-                                        btc_monitor_command_sender.send(MonitorCommand::Add(deposit_address)).unwrap();
-                                    }
-                                    state_chain_runtime::RuntimeEvent::BitcoinIngressEgress(
-                                        pallet_cf_ingress_egress::Event::StopWitnessing {
-                                            deposit_address,
-                                            source_asset
-                                        }
-                                    ) => {
-                                        assert_eq!(source_asset, cf_primitives::chains::assets::btc::Asset::Btc);
-                                        btc_monitor_command_sender.send(MonitorCommand::Remove(deposit_address)).unwrap();
                                     }
                                 }}}}
                                 Err(error) => {
