@@ -151,7 +151,10 @@ pub trait Rpc {
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error>;
 
 	#[method(name = "getPools")]
-	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error>;
+	async fn get_pools(
+		&self,
+		asset: Option<Asset>,
+	) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error>;
 }
 pub struct RpcServerImpl {
 	state_chain_settings: StateChain,
@@ -352,13 +355,16 @@ impl RpcServer for RpcServerImpl {
 		.map_err(|e| Error::Custom(e.to_string()))
 	}
 
-	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
+	async fn get_pools(
+		&self,
+		asset: Option<Asset>,
+	) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
 		task_scope(|scope| {
 			async move {
 				let api =
 					chainflip_api::queries::QueryApi::connect(scope, &self.state_chain_settings)
 						.await?;
-				api.get_pools(None).await
+				api.get_pools(None, asset).await
 			}
 			.boxed()
 		})
