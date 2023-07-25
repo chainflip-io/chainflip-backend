@@ -693,9 +693,9 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 		if !self.ceremony_handles.contains_key(&ceremony_id) {
 			// Only a ceremony id that is within the ceremony id window can create unauthorised
 			// ceremonies
-			let ceremony_id_string = ceremony_id_string::<Ceremony::Crypto>(ceremony_id);
+			let ceremony_id_string = ceremony_id_string::<Ceremony::Chain>(ceremony_id);
 			if ceremony_id >
-				latest_ceremony_id + <Ceremony::Crypto as CryptoScheme>::CEREMONY_ID_WINDOW
+				latest_ceremony_id + <Ceremony::Chain as ChainSigning>::CEREMONY_ID_WINDOW
 			{
 				warn!("Ignoring data: unexpected future ceremony id {ceremony_id_string}",);
 				return

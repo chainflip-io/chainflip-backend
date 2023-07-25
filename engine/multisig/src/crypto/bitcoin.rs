@@ -64,6 +64,10 @@ impl ChainSigning for BtcSigning {
 	type Chain = cf_chains::Bitcoin;
 	const NAME: &'static str = "Bitcoin";
 	const CHAIN_TAG: ChainTag = ChainTag::Bitcoin;
+
+	/// The window is smaller for bitcoin because its block time is a lot longer and it supports
+	/// multiple signing payloads
+	const CEREMONY_ID_WINDOW: u64 = 1500;
 }
 
 impl CryptoScheme for BtcCryptoScheme {
@@ -73,10 +77,6 @@ impl CryptoScheme for BtcCryptoScheme {
 	type SigningPayload = SigningPayload;
 	const CRYPTO_TAG: CryptoTag = CryptoTag::Bitcoin;
 	const NAME: &'static str = "Bitcoin Crypto";
-
-	/// The window is smaller for bitcoin because its block time is a lot longer and it supports
-	/// multiple signing payloads
-	const CEREMONY_ID_WINDOW: u64 = 1500;
 
 	fn build_signature(z: Scalar, group_commitment: Self::Point) -> Self::Signature {
 		BtcSchnorrSignature { s: z, r: group_commitment }
