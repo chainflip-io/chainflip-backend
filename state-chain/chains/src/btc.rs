@@ -156,6 +156,7 @@ impl Chain for Bitcoin {
 	type EpochStartData = EpochStartData;
 	type DepositFetchId = BitcoinFetchId;
 	type DepositChannelState = ();
+	type DepositDetails = UtxoId;
 }
 
 #[derive(Clone, Copy, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
@@ -173,9 +174,7 @@ impl ChainCrypto for Bitcoin {
 	// The response from a threshold signing ceremony over multiple payloads
 	// is multiple signatures
 	type ThresholdSignature = Vec<Signature>;
-
-	type TransactionInId = UtxoId;
-
+	type TransactionInId = Hash;
 	type TransactionOutId = Hash;
 
 	type GovKey = Self::AggKey;

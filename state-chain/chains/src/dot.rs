@@ -229,6 +229,7 @@ impl Chain for Polkadot {
 	type EpochStartData = EpochStartData;
 	type DepositFetchId = PolkadotChannelId;
 	type DepositChannelState = PolkadotChannelState;
+	type DepositDetails = ();
 }
 
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq, Default)]

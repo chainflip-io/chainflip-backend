@@ -528,7 +528,7 @@ impl DepositHandler<Polkadot> for DotDepositHandler {}
 pub struct BtcDepositHandler;
 impl DepositHandler<Bitcoin> for BtcDepositHandler {
 	fn on_deposit_made(
-		utxo_id: <Bitcoin as ChainCrypto>::TransactionInId,
+		utxo_id: <Bitcoin as Chain>::DepositDetails,
 		amount: <Bitcoin as Chain>::ChainAmount,
 		address: <Bitcoin as Chain>::ChainAccount,
 		_asset: <Bitcoin as Chain>::ChainAsset,

@@ -6,7 +6,6 @@ use crate::threshold_signing::{
 };
 use cf_chains::{dot::PolkadotSignature, eth::SchnorrVerificationComponents, ChainCrypto};
 
-use cf_chains::btc::UtxoId;
 use cf_primitives::{AccountRole, CeremonyId, EpochIndex, FlipBalance, TxId, GENESIS_EPOCH};
 use cf_traits::{AccountRoleRegistry, EpochInfo};
 use chainflip_node::test_account_from_seed;
@@ -291,10 +290,7 @@ impl Engine {
 									RuntimeOrigin::signed(self.node_id.clone()),
 									Box::new(pallet_cf_vaults::Call::<_, BitcoinInstance>::vault_key_rotated {
 										block_number: 100,
-										tx_id: UtxoId {
-											tx_id: [2u8; 32],
-											vout: 1,
-										},
+										tx_id: [2u8; 32],
 									}.into()),
 									Validator::epoch_index()
 								);

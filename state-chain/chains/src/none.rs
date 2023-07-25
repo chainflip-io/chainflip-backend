@@ -18,6 +18,7 @@ impl Chain for NoneChain {
 	type EpochStartData = ();
 	type DepositFetchId = ChannelId;
 	type DepositChannelState = ();
+	type DepositDetails = ();
 }
 
 impl ChainCrypto for NoneChain {
