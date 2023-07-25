@@ -10,11 +10,7 @@ use cf_primitives::PolkadotBlockNumber;
 use core::time::Duration;
 use futures_core::Stream;
 use std::pin::Pin;
-use subxt::{
-	config::Header as SubxtHeader,
-	events::Events,
-	rpc::types::{ChainBlockExtrinsic, ChainBlockResponse},
-};
+use subxt::{config::Header as SubxtHeader, events::Events, rpc::types::ChainBlockExtrinsic};
 use utilities::task_scope::Scope;
 
 use crate::retrier::RetrierClient;
@@ -62,7 +58,8 @@ impl DotRetryRpcClient {
 pub trait DotRetryRpcApi {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
 
-	async fn block(&self, block_hash: PolkadotHash) -> Option<ChainBlockResponse<PolkadotConfig>>;
+	// async fn block(&self, block_hash: PolkadotHash) ->
+	// Option<ChainBlockResponse<PolkadotConfig>>;
 
 	async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<ChainBlockExtrinsic>;
 
@@ -84,24 +81,14 @@ impl DotRetryRpcApi for DotRetryRpcClient {
 			.await
 	}
 
-	async fn block(&self, block_hash: PolkadotHash) -> Option<ChainBlockResponse<PolkadotConfig>> {
-		self.rpc_retry_client
-			.request(Box::pin(move |client| {
-				#[allow(clippy::redundant_async_block)]
-				Box::pin(async move { client.block(block_hash).await })
-			}))
-			.await
-	}
-
 	async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<ChainBlockExtrinsic> {
 		self.rpc_retry_client
 			.request(Box::pin(move |client| {
 				#[allow(clippy::redundant_async_block)]
 				Box::pin(async move {
-					client
-						.extrinsics(block_hash)
-						.await?
-						.ok_or(anyhow::anyhow!("No extrinsics found for block hash {block_hash}"))
+					client.extrinsics(block_hash).await?.ok_or(anyhow::anyhow!(
+						"Block not found when querying for extrinsics at block hash {block_hash}"
+					))
 				})
 			}))
 			.await
