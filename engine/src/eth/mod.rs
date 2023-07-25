@@ -2,19 +2,13 @@ pub mod contract_witnesser;
 pub mod deposit_witnesser;
 pub mod erc20_witnesser;
 pub mod eth_block_witnessing;
-pub mod key_manager;
-pub mod state_chain_gateway;
-pub mod vault;
 
 pub mod event;
 
 mod ws_safe_stream;
 
-pub mod address_checker;
 pub mod broadcaster;
-pub mod eth_ingresses_at_block;
 pub mod ethers_rpc;
-pub mod ethers_vault;
 pub mod retry_rpc;
 pub mod rpc;
 pub mod witnessing;
@@ -50,10 +44,7 @@ use event::Event;
 
 use async_trait::async_trait;
 
-use self::{
-	rpc::{EthHttpRpcClient, EthWsRpcClient},
-	vault::EthAssetApi,
-};
+use self::rpc::{EthHttpRpcClient, EthWsRpcClient};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct EthNumberBloom {
@@ -243,7 +234,7 @@ pub trait EthContractWitnesser {
 	) -> anyhow::Result<()>
 	where
 		EthRpcClient: EthRpcApi + Sync + Send,
-		StateChainClient: SignedExtrinsicApi + EthAssetApi + Send + Sync;
+		StateChainClient: SignedExtrinsicApi + Send + Sync;
 
 	fn contract_address(&self) -> H160;
 }

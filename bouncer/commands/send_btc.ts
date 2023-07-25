@@ -1,3 +1,4 @@
+#!/usr/bin/env -S pnpm tsx
 import { sendBtc } from '../shared/send_btc';
 
 const bitcoinAddress = process.argv[2];

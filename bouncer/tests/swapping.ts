@@ -1,3 +1,4 @@
+#!/usr/bin/env -S pnpm tsx
 import { randomAsHex, randomAsNumber } from '@polkadot/util-crypto';
 import { Asset, assetDecimals } from '@chainflip-io/cli';
 import Web3 from 'web3';
@@ -8,7 +9,7 @@ import {
   chainFromAsset,
   getEthContractAddress,
   encodeBtcAddressForContract,
-  encodeDotAddressForContract,
+  decodeDotAddressForContract,
   amountToFineAmount,
   defaultAssetAmounts,
 } from '../shared/utils';
@@ -197,7 +198,7 @@ async function testAll() {
       cf_parameters: getAbiEncodedMessage(['string', 'string']),
       source_address: {
         DOT: await getAddress('DOT', randomAsHex(32)).then((dotAddress) => {
-          encodeDotAddressForContract(dotAddress);
+          decodeDotAddressForContract(dotAddress);
         }),
       },
     }),
@@ -207,7 +208,7 @@ async function testAll() {
       cf_parameters: getAbiEncodedMessage(['address', 'uint256']),
       source_address: {
         DOT: await getAddress('DOT', randomAsHex(32)).then((dotAddress) => {
-          encodeDotAddressForContract(dotAddress);
+          decodeDotAddressForContract(dotAddress);
         }),
       },
     }),
@@ -230,7 +231,7 @@ async function testAll() {
 
 runWithTimeout(testAll(), 1800000)
   .then(() => {
-    // Don't wait for the timeout future to finish:
+    // there are some dangling resources that prevent the process from exiting
     process.exit(0);
   })
   .catch((error) => {

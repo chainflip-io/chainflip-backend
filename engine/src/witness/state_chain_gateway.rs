@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use cf_chains::Ethereum;
-use ethers::types::Bloom;
+use ethers::{prelude::abigen, types::Bloom};
 use sp_core::{H160, H256};
 use tracing::{info, trace};
 
@@ -15,7 +15,8 @@ use super::{
 	chunked_chain_source::chunked_by_vault::{builder::ChunkedByVaultBuilder, ChunkedByVault},
 	contract_common::events_at_block,
 };
-use crate::eth::state_chain_gateway::*;
+
+abigen!(StateChainGateway, "eth-contract-abis/perseverance-rc17/IStateChainGateway.json");
 
 use anyhow::Result;
 

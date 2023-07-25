@@ -7,6 +7,7 @@ use super::chain_source::ChainSource;
 
 pub const STATE_CHAIN_CONNECTION: &str = "State Chain client connection failed"; // TODO Replace with infallible SCC requests
 
+#[derive(Clone)]
 pub struct ActiveAndFuture<It: Iterator, St: Stream<Item = It::Item>> {
 	pub active: It,
 	pub future: St,
@@ -57,7 +58,7 @@ pub trait RuntimeHasChain<TChain: ExternalChain>:
 	> + pallet_cf_ingress_egress::Config<
 		<TChain as PalletInstanceAlias>::Instance,
 		TargetChain = TChain,
-	>
+	> + pallet_cf_broadcast::Config<<TChain as PalletInstanceAlias>::Instance, TargetChain = TChain>
 {
 }
 impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Runtime where
@@ -68,7 +69,7 @@ impl<TChain: ExternalChain> RuntimeHasChain<TChain> for state_chain_runtime::Run
 		> + pallet_cf_ingress_egress::Config<
 			<TChain as PalletInstanceAlias>::Instance,
 			TargetChain = TChain,
-		>
+		> + pallet_cf_broadcast::Config<<TChain as PalletInstanceAlias>::Instance, TargetChain = TChain>
 {
 }
 

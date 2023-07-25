@@ -1,30 +1,33 @@
+#!/usr/bin/env -S pnpm tsx
 // INSTRUCTIONS
 //
 // This command takes no arguments.
 // It will perform the initial polkadot vault setup procedure described here
 // https://www.notion.so/chainflip/Polkadot-Vault-Initialisation-Steps-36d6ab1a24ed4343b91f58deed547559
-// For example: pnpm tsx ./commands/setup_vaults.ts
+// For example: ./commands/setup_vaults.ts
 
 import { Keyring } from '@polkadot/keyring';
 import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { AddressOrPair } from '@polkadot/api/types';
+import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 import {
   getChainflipApi,
   getPolkadotApi,
+  getBtcClient,
+  observeEvent,
   sleep,
   handleSubstrateError,
-  observeEvent,
 } from '../shared/utils';
-import { submitGovernanceExtrinsic } from '../shared/cf_governance';
 
 async function main(): Promise<void> {
+  const btcClient = getBtcClient();
   await cryptoWaitReady();
   const keyring = new Keyring({ type: 'sr25519' });
   const aliceUri = process.env.POLKADOT_ALICE_URI || '//Alice';
   const alice = keyring.createFromUri(aliceUri);
 
   const chainflip = await getChainflipApi();
-  const polkadot = await getPolkadotApi(process.env.POLKADOT_ENDPOINT);
+  const polkadot = await getPolkadotApi();
 
   console.log('=== Performing initial Vault setup ===');
 
@@ -35,42 +38,13 @@ async function main(): Promise<void> {
   // Step 2
   console.log('Waiting for new keys');
 
-  const observeAggKeyCreation = async () => {
-    let dotKey: string | undefined;
-    let btcKey: string | undefined;
-    let waitingForDotKey = true;
-    let waitingForBtcKey = true;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const unsubscribe: any = await chainflip.query.system.events((events: any[]) => {
-      events.forEach((record) => {
-        const { event } = record;
-        if (event.section === 'polkadotVault' && event.method === 'AwaitingGovernanceActivation') {
-          dotKey = event.data[0];
-          if (!waitingForBtcKey) {
-            unsubscribe();
-          }
-          console.log('Found DOT AggKey');
-          waitingForDotKey = false;
-        }
-        if (event.section === 'bitcoinVault' && event.method === 'AwaitingGovernanceActivation') {
-          btcKey = event.data[0];
-          if (!waitingForDotKey) {
-            unsubscribe();
-          }
-          console.log('Found BTC AggKey');
-          waitingForBtcKey = false;
-        }
-      });
-    });
-    while (waitingForBtcKey || waitingForDotKey) {
-      await sleep(1000);
-    }
-    return { dotKey, btcKey };
-  };
-
-  const { dotKey, btcKey } = await observeAggKeyCreation();
-
-  const dotKeyAddress = keyring.encodeAddress(dotKey as string, 0);
+  const btcActivationRequest = observeEvent(
+    'polkadotVault:AwaitingGovernanceActivation',
+    chainflip,
+  );
+  const dotActivationRequest = observeEvent('bitcoinVault:AwaitingGovernanceActivation', chainflip);
+  const dotKey = (await btcActivationRequest).data.newPublicKey;
+  const btcKey = (await dotActivationRequest).data.newPublicKey;
 
   // Step 3
   console.log('Requesting Polkadot Vault creation');
@@ -111,7 +85,7 @@ async function main(): Promise<void> {
       null,
       polkadot.tx.utility.batchAll([
         polkadot.tx.proxy.addProxy(
-          polkadot.createType('MultiAddress', dotKeyAddress),
+          polkadot.createType('MultiAddress', dotKey),
           polkadot.createType('ProxyType', 'Any'),
           0,
         ),
@@ -127,7 +101,7 @@ async function main(): Promise<void> {
       .batchAll([
         // Note the vault needs to be funded before we rotate.
         polkadot.tx.balances.transfer(vaultAddress, 1000000000000),
-        polkadot.tx.balances.transfer(dotKeyAddress, 1000000000000),
+        polkadot.tx.balances.transfer(dotKey, 1000000000000),
         rotation,
       ])
       .signAndSend(alice, { nonce: -1 }, (result) => {
@@ -136,7 +110,8 @@ async function main(): Promise<void> {
         }
         if (result.isInBlock) {
           console.log(
-            `Proxy rotated and accounts funded at block {result.dispatchInfo?.createdAtHash}.`,
+            `Proxy rotated and accounts funded at block `,
+            result.toHuman().status.InBlock,
           );
           unsubscribe();
           done = true;
@@ -157,15 +132,16 @@ async function main(): Promise<void> {
     }),
   );
   await submitGovernanceExtrinsic(
-    chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(1, btcKey),
+    chainflip.tx.environment.witnessCurrentBitcoinBlockNumberForKey(
+      await btcClient.getBlockCount(),
+      btcKey,
+    ),
   );
 
   // Confirmation
   console.log('Waiting for new epoch...');
-  await observeEvent('validator:NewEpoch', chainflip, (e) => {
-    console.log('=== New Epoch ===');
-    return true;
-  });
+  await observeEvent('validator:NewEpoch', chainflip);
+  console.log('=== New Epoch ===');
   console.log('=== Vault Setup completed ===');
   process.exit(0);
 }

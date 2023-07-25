@@ -81,6 +81,6 @@ export async function fundFlip(pubkey: HexString, flipAmount: string) {
   await observeEvent(
     'funding:Funded',
     chainflip,
-    (data) => hexPubkeyToFlipAddress(pubkey) === data[0],
+    (event) => hexPubkeyToFlipAddress(pubkey) === event.data.accountId,
   );
 }

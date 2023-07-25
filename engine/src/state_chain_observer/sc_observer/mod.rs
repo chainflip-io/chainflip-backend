@@ -4,7 +4,7 @@ mod tests;
 
 use anyhow::{anyhow, Context};
 use cf_chains::{
-	btc::{self, PreviousOrCurrent, ScriptPubkey},
+	btc::{self, PreviousOrCurrent},
 	dot::{self, PolkadotAccountId, PolkadotSignature},
 	eth::Ethereum,
 	Bitcoin, Polkadot,
@@ -257,7 +257,6 @@ pub async fn start<
 		MonitorCommand<PolkadotSignature>,
 	>,
 	btc_epoch_start_sender: async_broadcast::Sender<EpochStart<Bitcoin>>,
-	btc_monitor_command_sender: tokio::sync::mpsc::UnboundedSender<MonitorCommand<ScriptPubkey>>,
 	btc_tx_hash_sender: tokio::sync::mpsc::UnboundedSender<MonitorCommand<[u8; 32]>>,
 ) -> Result<(), anyhow::Error>
 where
@@ -550,29 +549,34 @@ where
                                             payload: payloads,
                                         },
                                     ) => {
-                                        let signing_info = payloads.into_iter().map(|(previous_or_current, payload)| {
-                                                (
-                                                    KeyId::new(
-                                                        epoch,
-                                                        match previous_or_current {
-                                                            PreviousOrCurrent::Current => key.current,
-                                                            PreviousOrCurrent::Previous => key.previous
-                                                                .expect("Cannot be asked to sign with previous key if none exists."),
-                                                        },
-                                                    ),
-                                                    multisig::bitcoin::SigningPayload(payload),
-                                                )
-                                            })
-                                            .collect::<Vec<_>>();
+                                        if payloads.len() > multisig::MAX_BTC_SIGNING_PAYLOADS{
+                                            error!(ceremony_id = ceremony_id, "Too many payloads, ignoring Bitcoin signing request ({}/{})", payloads.len(), multisig::MAX_BTC_SIGNING_PAYLOADS);
+                                            btc_multisig_client.update_latest_ceremony_id(ceremony_id);
+                                        }else{
+                                            let signing_info = payloads.into_iter().map(|(previous_or_current, payload)| {
+                                                    (
+                                                        KeyId::new(
+                                                            epoch,
+                                                            match previous_or_current {
+                                                                PreviousOrCurrent::Current => key.current,
+                                                                PreviousOrCurrent::Previous => key.previous
+                                                                    .expect("Cannot be asked to sign with previous key if none exists."),
+                                                            },
+                                                        ),
+                                                        multisig::bitcoin::SigningPayload(payload),
+                                                    )
+                                                })
+                                                .collect::<Vec<_>>();
 
-                                        handle_signing_request::<_, _, _, BitcoinInstance>(
-                                                scope,
-                                                &btc_multisig_client,
-                                            state_chain_client.clone(),
-                                            ceremony_id,
-                                            signatories,
-                                            signing_info,
-                                        ).await;
+                                            handle_signing_request::<_, _, _, BitcoinInstance>(
+                                                    scope,
+                                                    &btc_multisig_client,
+                                                state_chain_client.clone(),
+                                                ceremony_id,
+                                                signatories,
+                                                signing_info,
+                                            ).await;
+                                        }
                                     }
                                     // ======= KEY HANDOVER =======
                                     state_chain_runtime::RuntimeEvent::BitcoinVault(
@@ -756,25 +760,6 @@ where
                                     ) => {
                                         assert_eq!(source_asset, cf_primitives::chains::assets::dot::Asset::Dot);
                                         dot_monitor_command_sender.send(MonitorCommand::Remove(deposit_address)).unwrap();
-                                    }
-                                    state_chain_runtime::RuntimeEvent::BitcoinIngressEgress(
-                                        pallet_cf_ingress_egress::Event::StartWitnessing {
-                                            deposit_address,
-                                            source_asset,
-                                            ..
-                                        }
-                                    ) => {
-                                        assert_eq!(source_asset, cf_primitives::chains::assets::btc::Asset::Btc);
-                                        btc_monitor_command_sender.send(MonitorCommand::Add(deposit_address)).unwrap();
-                                    }
-                                    state_chain_runtime::RuntimeEvent::BitcoinIngressEgress(
-                                        pallet_cf_ingress_egress::Event::StopWitnessing {
-                                            deposit_address,
-                                            source_asset
-                                        }
-                                    ) => {
-                                        assert_eq!(source_asset, cf_primitives::chains::assets::btc::Asset::Btc);
-                                        btc_monitor_command_sender.send(MonitorCommand::Remove(deposit_address)).unwrap();
                                     }
                                 }}}}
                                 Err(error) => {

@@ -54,9 +54,11 @@ impl<T: ChunkedChainSource<Info = (), HistoricInfo = ()>> ChunkedByTime for T {
 	}
 }
 
+#[derive(Clone)]
 pub struct ChunkByTime<TChainSource> {
 	chain_source: TChainSource,
 }
+
 impl<TChainSource> ChunkByTime<TChainSource> {
 	pub fn new(chain_source: TChainSource) -> Self {
 		Self { chain_source }

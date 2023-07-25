@@ -134,7 +134,7 @@ pub trait ChainCrypto: Chain {
 	type TransactionInId: Member + Parameter + BenchmarkValue;
 
 	/// Uniquely identifies a transaction on the outoing direction.
-	type TransactionOutId: Member + Parameter + BenchmarkValue;
+	type TransactionOutId: Member + Parameter + Unpin + BenchmarkValue;
 
 	type GovKey: Member + Parameter + Copy + BenchmarkValue;
 

@@ -6,6 +6,7 @@ import { Mutex } from 'async-mutex';
 import { Chain, Asset, assetChains, chainContractIds } from '@chainflip-io/cli';
 import Web3 from 'web3';
 import { u8aToHex } from '@polkadot/util';
+import { BigNumber } from 'bignumber.js';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
@@ -38,26 +39,27 @@ export function getEthContractAddress(contract: string): string {
   }
 }
 
-export function amountToFineAmount(amount: string, decimals: number): string {
-  let fineAmount = '';
-  if (amount.indexOf('.') === -1) {
-    fineAmount = amount + '0'.repeat(decimals);
-  } else {
-    const amountParts = amount.split('.');
-    fineAmount = amountParts[0] + amountParts[1].padEnd(decimals, '0').substr(0, decimals);
+export function assetToChain(asset: Asset): string {
+  switch (asset) {
+    case 'DOT':
+      return 'Dot';
+    case 'ETH':
+    case 'FLIP':
+    case 'USDC':
+      return 'Eth';
+    case 'BTC':
+      return 'Btc';
+    default:
+      return '';
   }
-  return fineAmount;
+}
+
+export function amountToFineAmount(amount: string, decimals: number): string {
+  return new BigNumber(amount).shiftedBy(decimals).toFixed();
 }
 
 export function fineAmountToAmount(fineAmount: string, decimals: number): string {
-  let balance = '';
-  if (fineAmount.length > decimals) {
-    const decimalLocation = fineAmount.length - decimals;
-    balance = fineAmount.slice(0, decimalLocation) + '.' + fineAmount.slice(decimalLocation);
-  } else {
-    balance = '0.' + fineAmount.padStart(decimals, '0');
-  }
-  return balance;
+  return new BigNumber(fineAmount).shiftedBy(-decimals).toFixed();
 }
 
 export function defaultAssetAmounts(asset: Asset): string {
@@ -76,13 +78,17 @@ export function defaultAssetAmounts(asset: Asset): string {
   }
 }
 
-export const runWithTimeout = <T>(promise: Promise<T>, millis: number): Promise<T> =>
-  Promise.race([
+export const runWithTimeout = async <T>(promise: Promise<T>, millis: number): Promise<T> => {
+  const controller = new AbortController();
+  const result = await Promise.race([
     promise,
-    sleep(millis).then(() => {
+    sleep(millis, { signal: AbortController }).then(() => {
       throw new Error(`Timed out after ${millis} ms.`);
     }),
   ]);
+  controller.abort();
+  return result;
+};
 
 export const sha256 = (data: string): Buffer => crypto.createHash('sha256').update(data).digest();
 
@@ -116,12 +122,12 @@ export const getPolkadotApi = getCachedSubstrateApi(
 
 export const polkadotSigningMutex = new Mutex();
 
-export function getBtcClient(btcEndpoint?: string): Client {
-  const BTC_ENDPOINT = btcEndpoint || 'http://127.0.0.1:8332';
+export function getBtcClient(): Client {
+  const endpoint = process.env.BTC_ENDPOINT || 'http://127.0.0.1:8332';
 
   return new Client({
-    host: BTC_ENDPOINT.split(':')[1].slice(2),
-    port: Number(BTC_ENDPOINT.split(':')[2]),
+    host: endpoint.split(':')[1].slice(2),
+    port: Number(endpoint.split(':')[2]),
     username: 'flip',
     password: 'flip',
     wallet: 'watch',
@@ -130,29 +136,32 @@ export function getBtcClient(btcEndpoint?: string): Client {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type EventQuery = (data: any) => boolean;
-
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Event = { data: any; block: number; event_index: number };
 export async function observeEvent(
   eventName: string,
-  chainflip: ApiPromise,
+  api: ApiPromise,
   eventQuery?: EventQuery,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-): Promise<any> {
-  let result;
+): Promise<Event> {
+  let result: Event | undefined;
   let waiting = true;
 
   const query = eventQuery ?? (() => true);
 
   const [expectedSection, expectedMethod] = eventName.split(':');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const unsubscribe: any = await chainflip.query.system.events((events: any[]) => {
-    events.forEach((record) => {
+  const unsubscribe: any = await api.rpc.chain.subscribeNewHeads(async (header) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const events: any[] = await api.query.system.events.at(header.hash);
+    events.forEach((record, index) => {
       const { event } = record;
-
-      if (event.section === expectedSection && event.method === expectedMethod) {
-        const data = event.data.toJSON();
-
-        if (query(data)) {
-          result = event.data;
+      if (waiting && event.section === expectedSection && event.method === expectedMethod) {
+        result = {
+          data: event.toHuman().data,
+          block: header.number.toNumber(),
+          event_index: index,
+        };
+        if (query(result)) {
           waiting = false;
           unsubscribe();
         }
@@ -162,7 +171,7 @@ export async function observeEvent(
   while (waiting) {
     await sleep(1000);
   }
-  return result;
+  return result as Event;
 }
 
 export async function getAddress(
@@ -300,12 +309,12 @@ export function encodeBtcAddressForContract(address: string) {
   return Buffer.from(addressHex, 'hex').toString();
 }
 
-export function encodeDotAddressForContract(address: string) {
+export function decodeDotAddressForContract(address: string) {
   const keyring = new Keyring({ type: 'sr25519' });
   return u8aToHex(keyring.decodeAddress(address));
 }
 
-export function encodeFlipAddressForContract(address: string) {
+export function decodeFlipAddressForContract(address: string) {
   const keyring = new Keyring({ type: 'sr25519' });
   keyring.setSS58Format(2112);
   return u8aToHex(keyring.decodeAddress(address));

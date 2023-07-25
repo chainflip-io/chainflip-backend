@@ -5,8 +5,12 @@ use ethers::types::Bloom;
 use sp_core::{H160, H256};
 
 use crate::{
-	eth::{retry_rpc::EthersRetryRpcApi, vault::EthAssetApi},
-	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
+	eth::retry_rpc::EthersRetryRpcApi,
+	state_chain_observer::client::{
+		base_rpc_api::{BaseRpcClient, RawRpcApi},
+		extrinsic_api::signed::SignedExtrinsicApi,
+		StateChainClient,
+	},
 };
 
 use super::{
@@ -17,10 +21,28 @@ use super::{
 
 use anyhow::{anyhow, Result};
 use cf_chains::{address::EncodedAddress, CcmDepositMetadata};
-use cf_primitives::{Asset, ForeignChain};
+use cf_primitives::{Asset, EthereumAddress, ForeignChain};
 use ethers::prelude::*;
 
 abigen!(Vault, "eth-contract-abis/perseverance-rc17/IVault.json");
+
+#[async_trait::async_trait]
+pub trait EthAssetApi {
+	async fn asset(&self, token_address: EthereumAddress) -> Result<Option<Asset>>;
+}
+
+#[async_trait::async_trait]
+impl<RawRpcClient: RawRpcApi + Send + Sync + 'static, SignedExtrinsicClient: Send + Sync>
+	EthAssetApi for StateChainClient<SignedExtrinsicClient, BaseRpcClient<RawRpcClient>>
+{
+	async fn asset(&self, token_address: EthereumAddress) -> Result<Option<Asset>> {
+		self.base_rpc_client
+			.raw_rpc_client
+			.cf_eth_asset(None, token_address)
+			.await
+			.map_err(Into::into)
+	}
+}
 
 pub struct VaultRpc<T> {
 	inner_vault: Vault<Provider<T>>,
