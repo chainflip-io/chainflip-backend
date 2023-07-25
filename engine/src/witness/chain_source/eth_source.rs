@@ -16,6 +16,7 @@ use std::time::Duration;
 
 use super::{BoxChainStream, Header};
 
+#[derive(Clone)]
 pub struct EthSource<C> {
 	client: C,
 }

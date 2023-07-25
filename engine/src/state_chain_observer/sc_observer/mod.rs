@@ -550,29 +550,34 @@ where
                                             payload: payloads,
                                         },
                                     ) => {
-                                        let signing_info = payloads.into_iter().map(|(previous_or_current, payload)| {
-                                                (
-                                                    KeyId::new(
-                                                        epoch,
-                                                        match previous_or_current {
-                                                            PreviousOrCurrent::Current => key.current,
-                                                            PreviousOrCurrent::Previous => key.previous
-                                                                .expect("Cannot be asked to sign with previous key if none exists."),
-                                                        },
-                                                    ),
-                                                    multisig::bitcoin::SigningPayload(payload),
-                                                )
-                                            })
-                                            .collect::<Vec<_>>();
+                                        if payloads.len() > multisig::MAX_BTC_SIGNING_PAYLOADS{
+                                            error!(ceremony_id = ceremony_id, "Too many payloads, ignoring Bitcoin signing request ({}/{})", payloads.len(), multisig::MAX_BTC_SIGNING_PAYLOADS);
+                                            btc_multisig_client.update_latest_ceremony_id(ceremony_id);
+                                        }else{
+                                            let signing_info = payloads.into_iter().map(|(previous_or_current, payload)| {
+                                                    (
+                                                        KeyId::new(
+                                                            epoch,
+                                                            match previous_or_current {
+                                                                PreviousOrCurrent::Current => key.current,
+                                                                PreviousOrCurrent::Previous => key.previous
+                                                                    .expect("Cannot be asked to sign with previous key if none exists."),
+                                                            },
+                                                        ),
+                                                        multisig::bitcoin::SigningPayload(payload),
+                                                    )
+                                                })
+                                                .collect::<Vec<_>>();
 
-                                        handle_signing_request::<_, _, _, BitcoinInstance>(
-                                                scope,
-                                                &btc_multisig_client,
-                                            state_chain_client.clone(),
-                                            ceremony_id,
-                                            signatories,
-                                            signing_info,
-                                        ).await;
+                                            handle_signing_request::<_, _, _, BitcoinInstance>(
+                                                    scope,
+                                                    &btc_multisig_client,
+                                                state_chain_client.clone(),
+                                                ceremony_id,
+                                                signatories,
+                                                signing_info,
+                                            ).await;
+                                        }
                                     }
                                     // ======= KEY HANDOVER =======
                                     state_chain_runtime::RuntimeEvent::BitcoinVault(

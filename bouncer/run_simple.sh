@@ -1,2 +1,3 @@
-pnpm tsx ./commands/observe_block.ts 1 &&
-pnpm tsx ./commands/stress_test.ts 3
+set -e
+./commands/observe_block.ts 1
+./commands/stress_test.ts 3

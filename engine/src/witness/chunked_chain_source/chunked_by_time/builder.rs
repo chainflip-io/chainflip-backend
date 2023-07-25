@@ -16,6 +16,16 @@ pub struct ChunkedByTimeBuilder<Inner: ChunkedByTime> {
 	pub source: Inner,
 	pub parameters: Inner::Parameters,
 }
+
+impl<Inner: ChunkedByTime + Clone> Clone for ChunkedByTimeBuilder<Inner>
+where
+	Inner::Parameters: Clone,
+{
+	fn clone(&self) -> Self {
+		Self { source: self.source.clone(), parameters: self.parameters.clone() }
+	}
+}
+
 impl<Inner: ChunkedByTime> ChunkedByTimeBuilder<Inner> {
 	pub fn new(source: Inner, parameters: Inner::Parameters) -> Self {
 		Self { source, parameters }

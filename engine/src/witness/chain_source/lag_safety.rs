@@ -7,6 +7,7 @@ use crate::witness::{chain_source::ChainClient, common::ExternalChainSource};
 
 use super::{BoxChainStream, ChainSource, Header};
 
+#[derive(Clone)]
 pub struct LagSafety<InnerSource> {
 	inner_source: InnerSource,
 	margin: usize,

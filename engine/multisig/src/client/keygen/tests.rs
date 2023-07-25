@@ -9,7 +9,7 @@ use crate::{
 			ResharingContext,
 		},
 		helpers::{
-			gen_dummy_keygen_comm1, get_dummy_hash_comm, new_nodes, run_keygen, run_stages,
+			gen_dummy_keygen_comm3, get_dummy_hash_comm, new_nodes, run_keygen, run_stages,
 			standard_signing, test_all_crypto_schemes_async, KeygenCeremonyRunner,
 			PayloadAndKeyData, SigningCeremonyRunner, ACCOUNT_IDS, DEFAULT_KEYGEN_CEREMONY_ID,
 			DEFAULT_KEYGEN_SEED, DEFAULT_SIGNING_CEREMONY_ID,
@@ -235,7 +235,7 @@ async fn should_report_on_inconsistent_broadcast_coeff_comm() {
 
 	// Make one of the nodes send a different commitment to half of the others
 	// Note: the bad node must send different comm1 to more than 1/3 of the participants
-	let commitment = DelayDeserialization::new(&gen_dummy_keygen_comm1::<Point>(
+	let commitment = DelayDeserialization::new(&gen_dummy_keygen_comm3::<Point>(
 		&mut ceremony.rng,
 		ACCOUNT_IDS.len() as AuthorityCount,
 	));
@@ -1041,7 +1041,7 @@ mod key_handover {
 
 		for (id, node) in &mut ceremony.nodes {
 			// Give the right context type depending on whether they have keys
-			let mut context = if sharing_subset.contains(id) {
+			let mut context: ResharingContext<Scheme> = if sharing_subset.contains(id) {
 				let key_info = key_infos.remove(id).unwrap();
 				ResharingContext::from_key(&key_info, id, &sharing_subset, &receiving_set)
 			} else {

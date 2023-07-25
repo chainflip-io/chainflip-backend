@@ -1,10 +1,6 @@
 #[cfg(test)]
 mod tests;
 
-/// The number of ceremonies ahead of the latest authorized ceremony that
-/// are allowed to create unauthorized ceremonies (delayed messages)
-const CEREMONY_ID_WINDOW: u64 = 6000;
-
 use anyhow::{anyhow, bail, Context, Result};
 use futures::FutureExt;
 use serde::Serialize;
@@ -188,6 +184,7 @@ pub fn prepare_signing_request<Crypto: CryptoScheme>(
 			own_idx,
 			all_idxs: signer_idxs,
 			rng,
+			number_of_signing_payloads: Some(signing_info.len()),
 		};
 
 		let processor = AwaitCommitments1::<Crypto>::new(
@@ -234,6 +231,7 @@ pub fn prepare_key_handover_request<Crypto: CryptoScheme>(
 			own_idx: our_idx,
 			all_idxs: signer_idxs,
 			rng,
+			number_of_signing_payloads: None,
 		};
 
 		let processor = PubkeySharesStage0::new(
@@ -276,6 +274,7 @@ pub fn prepare_keygen_request<Crypto: CryptoScheme>(
 			own_idx: our_idx,
 			all_idxs: signer_idxs,
 			rng,
+			number_of_signing_payloads: None,
 		};
 
 		let keygen_common = client::keygen::KeygenCommon::new(
@@ -681,7 +680,9 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 			// Only a ceremony id that is within the ceremony id window can create unauthorised
 			// ceremonies
 			let ceremony_id_string = ceremony_id_string::<Ceremony::Crypto>(ceremony_id);
-			if ceremony_id > latest_ceremony_id + CEREMONY_ID_WINDOW {
+			if ceremony_id >
+				latest_ceremony_id + <Ceremony::Crypto as CryptoScheme>::CEREMONY_ID_WINDOW
+			{
 				warn!("Ignoring data: unexpected future ceremony id {ceremony_id_string}",);
 				return
 			} else if ceremony_id <= latest_ceremony_id {

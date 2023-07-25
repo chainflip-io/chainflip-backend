@@ -23,15 +23,15 @@ export async function rangeOrder(ccy: Asset, amount: number) {
     .poolState.rangeOrders.currentSqrtPrice;
   const liquidity = BigInt(Math.round((currentSqrtPrice / 2 ** 96) * Number(fineAmount)));
   console.log('Setting up ' + ccy + ' range order');
-  const event = observeEvent(
+  const orderCreatedEvent = observeEvent(
     'liquidityPools:RangeOrderMinted',
     chainflip,
-    (data) => data[0] === lp.address && data[1].toUpperCase() === ccy,
+    (event) => event.data.lp === lp.address && event.data.unstableAsset.toUpperCase() === ccy,
   );
   await lpMutex.runExclusive(async () => {
     await chainflip.tx.liquidityPools
       .collectAndMintRangeOrder(ccy.toLowerCase(), [-887272, 887272], { Liquidity: liquidity })
       .signAndSend(lp, { nonce: -1 }, handleSubstrateError(chainflip));
   });
-  await event;
+  await orderCreatedEvent;
 }
