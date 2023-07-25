@@ -9,7 +9,7 @@ use futures_util::StreamExt;
 use crate::witness::{
 	chain_source::{aliases, BoxChainStream, ChainClient, ChainStream},
 	common::{BoxActiveAndFuture, ExternalChain, ExternalChainSource, RuntimeHasChain},
-	epoch_source::{Epoch, VaultSource},
+	epoch_source::{Vault, VaultSource},
 };
 
 use super::ChunkedChainSource;
@@ -33,12 +33,10 @@ pub trait ChunkedByVault: Sized + Send + Sync {
 }
 
 pub type Item<'a, T> = (
-	Epoch<
-		(pallet_cf_vaults::Vault<<T as ChunkedByVault>::Chain>, <T as ChunkedByVault>::ExtraInfo),
-		(
-			<<T as ChunkedByVault>::Chain as Chain>::ChainBlockNumber,
-			<T as ChunkedByVault>::ExtraHistoricInfo,
-		),
+	Vault<
+		<T as ChunkedByVault>::Chain,
+		<T as ChunkedByVault>::ExtraInfo,
+		<T as ChunkedByVault>::ExtraHistoricInfo,
 	>,
 	BoxChainStream<
 		'a,
