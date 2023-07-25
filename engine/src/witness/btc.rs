@@ -90,6 +90,7 @@ where
 							call: Box::new(
 								pallet_cf_ingress_egress::Call::<_, BitcoinInstance>::process_deposits {
 									deposit_witnesses,
+									block_height: header.index,
 								}
 								.into(),
 							),
@@ -125,7 +126,7 @@ fn deposit_witnesses(
 						deposit_address: bitcoin_script.clone(),
 						asset: btc::Asset::Btc,
 						amount: tx_out.value,
-						tx_id: UtxoId { tx_id: tx_hash, vout },
+						deposit_details: UtxoId { tx_id: tx_hash, vout },
 					});
 				}
 			}

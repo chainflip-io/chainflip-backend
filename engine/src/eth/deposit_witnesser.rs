@@ -7,7 +7,7 @@ use state_chain_runtime::EthereumInstance;
 use tokio::sync::Mutex;
 
 use crate::{
-	eth::{core_h160, core_h256},
+	eth::core_h160,
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi,
 	witnesser::{EpochStart, ItemMonitor},
 };
@@ -120,7 +120,7 @@ where
 					.value
 					.try_into()
 					.expect("Ingress witness transfer value should fit u128"),
-				tx_id: core_h256(tx.hash),
+				deposit_details: (),
 			})
 			.collect::<Vec<DepositWitness<Ethereum>>>();
 
@@ -130,6 +130,7 @@ where
 					call: Box::new(
 						pallet_cf_ingress_egress::Call::<_, EthereumInstance>::process_deposits {
 							deposit_witnesses,
+							block_height: block.block_number.as_u64(),
 						}
 						.into(),
 					),

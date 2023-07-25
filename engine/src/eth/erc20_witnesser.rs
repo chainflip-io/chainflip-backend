@@ -14,7 +14,7 @@ use crate::{
 
 abigen!(Erc20, "eth-contract-abis/IERC20.json");
 
-use super::{core_h256, event::Event, rpc::EthRpcApi, BlockWithItems, EthContractWitnesser};
+use super::{event::Event, rpc::EthRpcApi, BlockWithItems, EthContractWitnesser};
 use pallet_cf_ingress_egress::DepositWitness;
 
 use anyhow::Result;
@@ -49,7 +49,7 @@ impl EthContractWitnesser for Erc20Witnesser {
 	async fn handle_block_events<StateChainClient, EthRpcClient>(
 		&mut self,
 		epoch: EpochIndex,
-		_block_number: u64,
+		block_number: u64,
 		block: BlockWithItems<Event<Self::EventParameters>>,
 		state_chain_client: Arc<StateChainClient>,
 		_eth_rpc: &EthRpcClient,
@@ -75,7 +75,7 @@ impl EthContractWitnesser for Erc20Witnesser {
 							"Any ERC20 tokens we support should have amounts that fit into a u128",
 						),
 						asset: self.asset,
-						tx_id: core_h256(event.tx_hash),
+						deposit_details: (),
 					}),
 				_ => None,
 			})
@@ -87,6 +87,7 @@ impl EthContractWitnesser for Erc20Witnesser {
 					call: Box::new(
 						pallet_cf_ingress_egress::Call::<_, EthereumInstance>::process_deposits {
 							deposit_witnesses,
+							block_height: block_number,
 						}
 						.into(),
 					),
