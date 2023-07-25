@@ -7,7 +7,9 @@ use chainflip_api::{
 		chains::{Bitcoin, Ethereum, Polkadot},
 		AccountRole, Asset, ForeignChain,
 	},
+	queries::Pool,
 	settings::StateChain,
+	AccountId32,
 };
 use clap::Parser;
 use futures::FutureExt;
@@ -18,7 +20,7 @@ use jsonrpsee::{
 };
 use rpc_types::OpenSwapChannels;
 use sp_rpc::number::NumberOrHex;
-use std::{ops::Range, path::PathBuf};
+use std::{collections::BTreeMap, ops::Range, path::PathBuf};
 
 /// Contains RPC interface types that differ from internal types.
 pub mod rpc_types {
@@ -147,6 +149,9 @@ pub trait Rpc {
 
 	#[method(name = "getOpenSwapChannels")]
 	async fn get_open_swap_channels(&self) -> Result<OpenSwapChannels, Error>;
+
+	#[method(name = "getPools")]
+	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error>;
 }
 pub struct RpcServerImpl {
 	state_chain_settings: StateChain,
@@ -340,6 +345,20 @@ impl RpcServer for RpcServerImpl {
 					bitcoin,
 					polkadot,
 				})
+			}
+			.boxed()
+		})
+		.await
+		.map_err(|e| Error::Custom(e.to_string()))
+	}
+
+	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
+		task_scope(|scope| {
+			async move {
+				let api =
+					chainflip_api::queries::QueryApi::connect(scope, &self.state_chain_settings)
+						.await?;
+				api.get_pools(None).await
 			}
 			.boxed()
 		})
