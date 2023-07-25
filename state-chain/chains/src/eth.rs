@@ -49,13 +49,13 @@ impl Chain for Ethereum {
 	type EpochStartData = ();
 	type DepositFetchId = EthereumFetchId;
 	type DepositChannelState = DeploymentStatus;
+	type DepositDetails = ();
 }
 
 impl ChainCrypto for Ethereum {
 	type AggKey = eth::AggKey;
 	type Payload = H256;
 	type ThresholdSignature = SchnorrVerificationComponents;
-	type DepositDetails = ();
 	type TransactionInId = H256;
 	// We can't use the hash since we don't know it for Ethereum, as we must select an individaul
 	// authority to sign the transaction.

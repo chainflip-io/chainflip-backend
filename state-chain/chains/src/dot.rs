@@ -229,6 +229,7 @@ impl Chain for Polkadot {
 	type EpochStartData = EpochStartData;
 	type DepositFetchId = PolkadotChannelId;
 	type DepositChannelState = PolkadotChannelState;
+	type DepositDetails = ();
 }
 
 #[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq, Default)]
@@ -245,7 +246,6 @@ impl ChainCrypto for Polkadot {
 	type AggKey = PolkadotPublicKey;
 	type Payload = EncodedPolkadotPayload;
 	type ThresholdSignature = PolkadotSignature;
-	type DepositDetails = ();
 	type TransactionInId = TxId;
 	type TransactionOutId = PolkadotSignature;
 

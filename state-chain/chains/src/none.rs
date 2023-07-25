@@ -18,13 +18,13 @@ impl Chain for NoneChain {
 	type EpochStartData = ();
 	type DepositFetchId = ChannelId;
 	type DepositChannelState = ();
+	type DepositDetails = ();
 }
 
 impl ChainCrypto for NoneChain {
 	type AggKey = ();
 	type Payload = ();
 	type ThresholdSignature = ();
-	type DepositDetails = ();
 	type TransactionInId = ();
 	type TransactionOutId = ();
 	type GovKey = ();

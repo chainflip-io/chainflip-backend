@@ -61,6 +61,7 @@ impl Chain for MockEthereum {
 	type ChainAsset = assets::eth::Asset;
 	type EpochStartData = ();
 	type DepositChannelState = MockLifecycleHooks;
+	type DepositDetails = [u8; 4];
 }
 
 impl From<&DepositChannel<MockEthereum>> for MockEthereumChannelId {
@@ -143,7 +144,6 @@ impl ChainCrypto for MockEthereum {
 	type AggKey = MockAggKey;
 	type Payload = [u8; 4];
 	type ThresholdSignature = MockThresholdSignature<Self::AggKey, Self::Payload>;
-	type DepositDetails = [u8; 4];
 	type TransactionInId = [u8; 4];
 	// TODO: Use a different type here? So we can get better coverage
 	type TransactionOutId = [u8; 4];

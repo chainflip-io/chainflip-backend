@@ -19,4 +19,5 @@ impl Chain for AnyChain {
 	type EpochStartData = ();
 	type DepositFetchId = ChannelId;
 	type DepositChannelState = ();
+	type DepositDetails = ();
 }

@@ -114,6 +114,9 @@ pub trait Chain: Member + Parameter {
 		+ for<'a> From<&'a DepositChannel<Self>>;
 
 	type DepositChannelState: Member + Parameter + Default + ChannelLifecycleHooks + Unpin;
+
+	/// Extra data associated with a deposit.
+	type DepositDetails: Member + Parameter + BenchmarkValue;
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -129,9 +132,7 @@ pub trait ChainCrypto: Chain {
 	type Payload: Member + Parameter + BenchmarkValue;
 	type ThresholdSignature: Member + Parameter + BenchmarkValue;
 
-	type DepositDetails: Member + Parameter + BenchmarkValue;
-
-	/// Uniquely identifies a transaction on the ingoing direction.
+	/// Uniquely identifies a transaction on the incoming direction.
 	type TransactionInId: Member + Parameter + Unpin + BenchmarkValue;
 
 	/// Uniquely identifies a transaction on the outoing direction.
