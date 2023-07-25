@@ -79,6 +79,7 @@ const THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT: u32 = 10;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
+	use cf_primitives::ForeignChain;
 	use cf_traits::{
 		AccountRoleRegistry, AsyncResult, CeremonyIdProvider, ThresholdSignerNomination,
 	};
@@ -217,7 +218,7 @@ pub mod pallet {
 			+ UnfilteredDispatchable<RuntimeOrigin = <Self as Config<I>>::RuntimeOrigin>;
 
 		/// A marker trait identifying the chain that we are signing for.
-		type TargetChain: ChainCrypto;
+		type TargetChain: ChainCrypto + Get<ForeignChain>;
 
 		/// Signer nomination.
 		type ThresholdSignerNomination: ThresholdSignerNomination<SignerId = Self::ValidatorId>;
@@ -458,6 +459,9 @@ pub mod pallet {
 					*timeout = THRESHOLD_SIGNATURE_RESPONSE_TIMEOUT_DEFAULT.into();
 				}
 			});
+			if matches!(T::TargetChain::get(), ForeignChain::Polkadot) {
+				RequestRetryQueue::<T, I>::drain().for_each(|_| {});
+			}
 			migrations::PalletMigration::<T, I>::on_runtime_upgrade()
 		}
 		#[cfg(feature = "try-runtime")]
