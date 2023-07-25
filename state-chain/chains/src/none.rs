@@ -24,6 +24,7 @@ impl ChainCrypto for NoneChain {
 	type AggKey = ();
 	type Payload = ();
 	type ThresholdSignature = ();
+	type DepositDetails = ();
 	type TransactionInId = ();
 	type TransactionOutId = ();
 	type GovKey = ();

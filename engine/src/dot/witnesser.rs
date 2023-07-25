@@ -182,7 +182,7 @@ fn check_for_interesting_events_in_block(
 							deposit_address: *to,
 							asset: assets::dot::Asset::Dot,
 							amount: *amount,
-							tx_id: TxId { block_number, extrinsic_index },
+							deposit_details: (),
 						});
 					}
 
@@ -360,6 +360,7 @@ where
 					call: Box::new(
 						pallet_cf_ingress_egress::Call::<_, PolkadotInstance>::process_deposits {
 							deposit_witnesses,
+							block_height: block_number,
 						}
 						.into(),
 					),

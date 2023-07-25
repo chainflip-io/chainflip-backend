@@ -245,6 +245,7 @@ impl ChainCrypto for Polkadot {
 	type AggKey = PolkadotPublicKey;
 	type Payload = EncodedPolkadotPayload;
 	type ThresholdSignature = PolkadotSignature;
+	type DepositDetails = ();
 	type TransactionInId = TxId;
 	type TransactionOutId = PolkadotSignature;
 

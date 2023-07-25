@@ -128,10 +128,11 @@ pub trait ChainCrypto: Chain {
 		+ BenchmarkValue;
 	type Payload: Member + Parameter + BenchmarkValue;
 	type ThresholdSignature: Member + Parameter + BenchmarkValue;
-	/// Must uniquely identify a transaction. On most chains this will be a transaction hash.
-	/// However, for example, in the case of Polkadot, the blocknumber-extrinsic-index is the unique
-	/// identifier.
-	type TransactionInId: Member + Parameter + BenchmarkValue;
+
+	type DepositDetails: Member + Parameter + BenchmarkValue;
+
+	/// Uniquely identifies a transaction on the ingoing direction.
+	type TransactionInId: Member + Parameter + Unpin + BenchmarkValue;
 
 	/// Uniquely identifies a transaction on the outoing direction.
 	type TransactionOutId: Member + Parameter + Unpin + BenchmarkValue;

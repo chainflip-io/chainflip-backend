@@ -102,7 +102,7 @@ pub mod pallet {
 		pub deposit_address: C::ChainAccount,
 		pub asset: C::ChainAsset,
 		pub amount: C::ChainAmount,
-		pub tx_id: <C as ChainCrypto>::TransactionInId,
+		pub deposit_details: <C as ChainCrypto>::DepositDetails,
 	}
 
 	#[derive(Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, TypeInfo, MaxEncodedLen)]
@@ -255,7 +255,7 @@ pub mod pallet {
 			deposit_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
-			tx_id: <T::TargetChain as ChainCrypto>::TransactionInId,
+			deposit_details: <T::TargetChain as ChainCrypto>::DepositDetails,
 		},
 		AssetEgressStatusChanged {
 			asset: TargetChainAsset<T, I>,
@@ -292,7 +292,7 @@ pub mod pallet {
 			deposit_address: TargetChainAccount<T, I>,
 			asset: TargetChainAsset<T, I>,
 			amount: TargetChainAmount<T, I>,
-			tx_id: <T::TargetChain as ChainCrypto>::TransactionInId,
+			deposit_details: <T::TargetChain as ChainCrypto>::DepositDetails,
 		},
 	}
 
@@ -388,11 +388,14 @@ pub mod pallet {
 		pub fn process_deposits(
 			origin: OriginFor<T>,
 			deposit_witnesses: Vec<DepositWitness<T::TargetChain>>,
+			_block_height: <T::TargetChain as Chain>::ChainBlockNumber,
 		) -> DispatchResult {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			for DepositWitness { deposit_address, asset, amount, tx_id } in deposit_witnesses {
-				Self::process_single_deposit(deposit_address, asset, amount, tx_id)?;
+			for DepositWitness { deposit_address, asset, amount, deposit_details } in
+				deposit_witnesses
+			{
+				Self::process_single_deposit(deposit_address, asset, amount, deposit_details)?;
 			}
 			Ok(())
 		}
@@ -565,7 +568,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		deposit_address: TargetChainAccount<T, I>,
 		asset: TargetChainAsset<T, I>,
 		amount: TargetChainAmount<T, I>,
-		tx_id: <T::TargetChain as ChainCrypto>::TransactionInId,
+		deposit_details: <T::TargetChain as ChainCrypto>::DepositDetails,
 	) -> DispatchResult {
 		let deposit_channel_details = DepositChannelLookup::<T, I>::get(&deposit_address)
 			.ok_or(Error::<T, I>::InvalidDepositAddress)?;
@@ -581,7 +584,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				deposit_address,
 				asset,
 				amount,
-				tx_id,
+				deposit_details,
 			});
 			return Ok(())
 		}
@@ -637,9 +640,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			),
 		};
 
-		T::DepositHandler::on_deposit_made(tx_id.clone(), amount, deposit_address.clone(), asset);
+		T::DepositHandler::on_deposit_made(
+			deposit_details.clone(),
+			amount,
+			deposit_address.clone(),
+			asset,
+		);
 
-		Self::deposit_event(Event::DepositReceived { deposit_address, asset, amount, tx_id });
+		Self::deposit_event(Event::DepositReceived {
+			deposit_address,
+			asset,
+			amount,
+			deposit_details,
+		});
 		Ok(())
 	}
 
