@@ -142,6 +142,20 @@ where
 		Ok(())
 	});
 
+	let epoch_source = epoch_source
+		.filter_map(
+			|state_chain_client, _epoch_index, hash, _info| async move {
+				state_chain_client
+					.storage_value::<pallet_cf_environment::PolkadotVaultAccountId<state_chain_runtime::Runtime>>(
+						hash,
+					)
+					.await
+					.expect(STATE_CHAIN_CONNECTION)
+			},
+			|_state_chain_client, _epoch, _block_hash, historic_info| async move { historic_info },
+		)
+		.await;
+
 	let dot_ingress_witnessing = DotFinalisedSource::new(dot_client.clone())
 		.shared(scope)
 		.strictly_monotonic()
@@ -161,17 +175,8 @@ where
 
 					let addresses = address_and_details_to_addresses(addresses_and_details);
 
-					// TODO: Pass this through with the epoch
-					let our_vault = state_chain_client
-						.storage_value::<pallet_cf_environment::PolkadotVaultAccountId<state_chain_runtime::Runtime>>(
-							epoch.block_hash,
-						)
-						.await
-						.expect(STATE_CHAIN_CONNECTION)
-						.expect("If we got here, then we have a vault");
-
 					let (deposit_witnesses, broadcast_indices) =
-						deposit_witnesses(header.index, addresses, &events, &our_vault);
+						deposit_witnesses(header.index, addresses, &events, &epoch.info.1);
 
 					if !deposit_witnesses.is_empty() {
 						state_chain_client
@@ -199,16 +204,7 @@ where
 				async move {
 					let (events, mut broadcast_indices) = header.data;
 
-					// TODO: Pass this through with the epoch
-					let our_vault = state_chain_client
-						.storage_value::<pallet_cf_environment::PolkadotVaultAccountId<state_chain_runtime::Runtime>>(
-							epoch.block_hash,
-						)
-						.await
-						.expect(STATE_CHAIN_CONNECTION)
-						.expect("If we got here, then we have a vault");
-
-					let (vault_key_rotated_calls, mut proxy_added_broadcasts) = proxy_addeds(header.index, &events, &our_vault);
+					let (vault_key_rotated_calls, mut proxy_added_broadcasts) = proxy_addeds(header.index, &events, &epoch.info.1);
 					broadcast_indices.append(&mut proxy_added_broadcasts);
 
 					for call in vault_key_rotated_calls {
@@ -238,15 +234,6 @@ where
 				async move {
 					let ((events, broadcast_indices), monitored_egress_ids) = header.data;
 
-					// TODO: Pass this through with the epoch
-					let our_vault = state_chain_client
-					.storage_value::<pallet_cf_environment::PolkadotVaultAccountId<state_chain_runtime::Runtime>>(
-						epoch.block_hash,
-					)
-					.await
-					.expect(STATE_CHAIN_CONNECTION)
-					.expect("If we got here, then we have a vault");
-
 					let extrinsics = dot_client
 						.extrinsics(header.hash)
 						.await;
@@ -270,7 +257,7 @@ where
 															PolkadotInstance,
 														>::transaction_succeeded {
 															tx_out_id: signature,
-															signer_id: our_vault,
+															signer_id: epoch.info.1,
 															tx_fee,
 														}
 														.into(),
