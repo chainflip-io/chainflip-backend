@@ -29,8 +29,6 @@ export async function performSwap(
   swapTag?: string,
   messageMetadata?: CcmDepositMetadata,
 ) {
-  const FEE = 100;
-
   const tag = swapTag ?? '';
 
   const chainflipApi = await getChainflipApi();
@@ -60,7 +58,7 @@ export async function performSwap(
   await newSwap(sourceAsset, destAsset, destAddress, messageMetadata);
 
   console.log(
-    `${tag} The args are:  ${sourceAsset} ${destAsset} ${destAddress} ${FEE} ${
+    `${tag} The args are:  ${sourceAsset} ${destAsset} ${destAddress} ${
       messageMetadata ? `someMessage` : ''
     }`,
   );
