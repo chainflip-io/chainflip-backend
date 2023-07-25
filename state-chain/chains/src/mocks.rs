@@ -64,6 +64,17 @@ impl Chain for MockEthereum {
 	type DepositDetails = [u8; 4];
 }
 
+impl ToHumanreadableAddress for u64 {
+	type Humanreadable = u64;
+
+	fn to_humanreadable(
+		&self,
+		_network_environment: cf_primitives::NetworkEnvironment,
+	) -> Self::Humanreadable {
+		*self
+	}
+}
+
 impl From<&DepositChannel<MockEthereum>> for MockEthereumChannelId {
 	fn from(channel: &DepositChannel<MockEthereum>) -> Self {
 		channel.channel_id as u128

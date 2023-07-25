@@ -170,7 +170,7 @@ pub struct SemVer {
 }
 
 /// The network environment, used to determine which chains the Chainflip network is connected to.
-#[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo, Default)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub enum NetworkEnvironment {
 	/// Chainflip is connected to public mainnet chains.

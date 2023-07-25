@@ -1,11 +1,15 @@
 extern crate alloc;
 
-use crate::{btc::ScriptPubkey, dot::PolkadotAccountId, Chain};
+use crate::{
+	btc::{BitcoinNetwork, ScriptPubkey},
+	dot::PolkadotAccountId,
+	Chain,
+};
 use cf_primitives::{ChannelId, EthereumAddress, ForeignChain, NetworkEnvironment};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use sp_core::H160;
 use sp_runtime::DispatchError;
 use sp_std::{fmt::Debug, vec::Vec};
@@ -217,6 +221,80 @@ pub fn try_from_encoded_address<GetNetwork: FnOnce() -> NetworkEnvironment>(
 			)
 			.map_err(|_| ())?,
 		)),
+	}
+}
+
+pub trait ToHumanreadableAddress {
+	#[cfg(feature = "std")]
+	/// A type that serializes the address in a human-readable way.
+	type Humanreadable: Serialize + DeserializeOwned + Send + Sync + Debug + Clone;
+
+	#[cfg(feature = "std")]
+	fn to_humanreadable(&self, network_environment: NetworkEnvironment) -> Self::Humanreadable;
+}
+
+impl ToHumanreadableAddress for ScriptPubkey {
+	#[cfg(feature = "std")]
+	type Humanreadable = String;
+
+	#[cfg(feature = "std")]
+	fn to_humanreadable(&self, network_environment: NetworkEnvironment) -> Self::Humanreadable {
+		self.to_address(&network_environment.into())
+	}
+}
+
+impl ToHumanreadableAddress for EthereumAddress {
+	#[cfg(feature = "std")]
+	type Humanreadable = crate::eth::Address;
+
+	#[cfg(feature = "std")]
+	fn to_humanreadable(&self, _network_environment: NetworkEnvironment) -> Self::Humanreadable {
+		self.into()
+	}
+}
+
+impl ToHumanreadableAddress for crate::eth::Address {
+	#[cfg(feature = "std")]
+	type Humanreadable = crate::eth::Address;
+
+	#[cfg(feature = "std")]
+	fn to_humanreadable(&self, _network_environment: NetworkEnvironment) -> Self::Humanreadable {
+		self.clone()
+	}
+}
+
+impl ToHumanreadableAddress for PolkadotAccountId {
+	#[cfg(feature = "std")]
+	type Humanreadable = Self;
+
+	#[cfg(feature = "std")]
+	fn to_humanreadable(&self, _network_environment: NetworkEnvironment) -> Self::Humanreadable {
+		self.clone()
+	}
+}
+
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ForeignChainAddressHumanreadable {
+	Eth(<EthereumAddress as ToHumanreadableAddress>::Humanreadable),
+	Dot(<PolkadotAccountId as ToHumanreadableAddress>::Humanreadable),
+	Btc(<ScriptPubkey as ToHumanreadableAddress>::Humanreadable),
+}
+
+impl ToHumanreadableAddress for ForeignChainAddress {
+	#[cfg(feature = "std")]
+	type Humanreadable = ForeignChainAddressHumanreadable;
+
+	#[cfg(feature = "std")]
+	fn to_humanreadable(&self, network_environment: NetworkEnvironment) -> Self::Humanreadable {
+		match self {
+			ForeignChainAddress::Eth(address) =>
+				ForeignChainAddressHumanreadable::Eth(address.to_humanreadable(network_environment)),
+			ForeignChainAddress::Dot(address) =>
+				ForeignChainAddressHumanreadable::Dot(address.to_humanreadable(network_environment)),
+			ForeignChainAddress::Btc(address) =>
+				ForeignChainAddressHumanreadable::Btc(address.to_humanreadable(network_environment)),
+		}
 	}
 }
 
