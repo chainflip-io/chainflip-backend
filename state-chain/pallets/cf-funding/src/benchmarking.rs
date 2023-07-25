@@ -15,7 +15,7 @@ benchmarks! {
 
 	funded {
 		let amount: T::Amount = T::Amount::from(100u32);
-		let withdrawal_address: EthereumAddress = [42u8; 20];
+		let withdrawal_address: EthereumAddress = Default::default();
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
 		let caller: T::AccountId = whitelisted_caller();
 
@@ -37,7 +37,7 @@ benchmarks! {
 		// will fail.
 		let balance_to_redeem = RedemptionAmount::Exact(T::Amount::from(2u32));
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
-		let withdrawal_address: EthereumAddress = [42u8; 20];
+		let withdrawal_address: EthereumAddress = Default::default();
 
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = T::EnsureWitnessed::successful_origin();
@@ -55,7 +55,7 @@ benchmarks! {
 		assert!(PendingRedemptions::<T>::contains_key(&caller));
 	}
 	redeem_all {
-		let withdrawal_address: EthereumAddress = [42u8; 20];
+		let withdrawal_address: EthereumAddress = Default::default();
 		let caller: T::AccountId = whitelisted_caller();
 
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
@@ -81,7 +81,7 @@ benchmarks! {
 
 	redeemed {
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
-		let withdrawal_address: EthereumAddress = [42u8; 20];
+		let withdrawal_address: EthereumAddress = Default::default();
 
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = T::EnsureWitnessed::successful_origin();
@@ -111,7 +111,7 @@ benchmarks! {
 
 	redemption_expired {
 		let tx_hash: pallet::EthTransactionHash = [211u8; 32];
-		let withdrawal_address: EthereumAddress = [42u8; 20];
+		let withdrawal_address: EthereumAddress = Default::default();
 
 		let caller: T::AccountId = whitelisted_caller();
 		let origin = T::EnsureWitnessed::successful_origin();
@@ -180,7 +180,7 @@ benchmarks! {
 
 	bind_redeem_address {
 		let caller: T::AccountId = whitelisted_caller();
-	}:_(RawOrigin::Signed(caller.clone()), [42u8; 20])
+	}:_(RawOrigin::Signed(caller.clone()), Default::default())
 	verify {
 		assert!(BoundAddress::<T>::contains_key(&caller));
 	}
@@ -192,12 +192,12 @@ benchmarks! {
 		for i in 0 .. c {
 			let some_balance = FlipBalance::<T>::from(100_u32);
 			let some_account: AccountId<T> = account("doogle", 0, i);
-			let balances: BTreeMap<EthereumAddress, FlipBalance<T>> = BTreeMap::from([([42u8; 20], some_balance)]);
+			let balances: BTreeMap<EthereumAddress, FlipBalance<T>> = BTreeMap::from([(Default::default(), some_balance)]);
 			RestrictedBalances::<T>::insert(some_account, balances);
 		}
 		let call = Call::<T>::update_restricted_addresses {
-			addresses_to_add: (1 .. a as u32).map(|_| [42u8; 20]).collect::<Vec<_>>(),
-			addresses_to_remove: (1 .. b as u32).map(|_| [42u8; 20]).collect::<Vec<_>>()
+			addresses_to_add: (1 .. a as u32).map(|_| Default::default()).collect::<Vec<_>>(),
+			addresses_to_remove: (1 .. b as u32).map(|_| Default::default()).collect::<Vec<_>>()
 		};
 	}: {
 		let _ = call.dispatch_bypass_filter(T::EnsureGovernance::successful_origin());

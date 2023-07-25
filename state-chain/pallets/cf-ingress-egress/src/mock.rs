@@ -2,13 +2,16 @@ use crate::DepositWitness;
 pub use crate::{self as pallet_cf_ingress_egress};
 pub use cf_chains::{
 	address::{AddressDerivationApi, ForeignChainAddress},
-	eth::api::{EthereumApi, EthereumReplayProtection},
+	eth::{
+		api::{EthereumApi, EthereumReplayProtection},
+		Address as EthereumAddress,
+	},
 	CcmDepositMetadata, Chain, ChainAbi, ChainEnvironment, DepositChannel,
 };
 use cf_primitives::ChannelId;
 pub use cf_primitives::{
 	chains::{assets, Ethereum},
-	Asset, AssetAmount, EthereumAddress, ETHEREUM_ETH_ADDRESS,
+	Asset, AssetAmount,
 };
 use cf_traits::{
 	impl_mock_callback, impl_mock_chainflip,

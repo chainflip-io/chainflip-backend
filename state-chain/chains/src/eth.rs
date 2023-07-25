@@ -193,12 +193,10 @@ pub struct AggKey {
 	pub pub_key_y_parity: ParityBit,
 }
 
-pub fn to_ethereum_address(pubkey: PublicKey) -> [u8; 20] {
+pub fn to_ethereum_address(pubkey: PublicKey) -> eth::Address {
 	let [_, k_times_g @ ..] = pubkey.serialize();
 	let h = Keccak256::hash(&k_times_g[..]);
-	let mut res = [0u8; 20];
-	res.copy_from_slice(&h.0[12..]);
-	res
+	eth::Address::from_slice(&h.0[12..])
 }
 
 impl AggKey {
@@ -281,7 +279,7 @@ impl AggKey {
 
 		// Compute s = (k - d * e) % Q
 		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(sig_nonce));
-		let e = self.message_challenge_scalar(msg_hash, &k_times_g_address);
+		let e = self.message_challenge_scalar(msg_hash, k_times_g_address.as_fixed_bytes());
 
 		let d: Scalar = (*secret).into();
 		let k: Scalar = (*sig_nonce).into();
@@ -741,7 +739,8 @@ mod verification_tests {
 		let signature = agg_key.sign(&msg, &agg_key_secret_key, &sig_nonce);
 
 		// Construct components for verification
-		let sig = SchnorrVerificationComponents { s: signature, k_times_g_address };
+		let sig =
+			SchnorrVerificationComponents { s: signature, k_times_g_address: k_times_g_address.0 };
 
 		// Verify signature
 		assert_ok!(agg_key.verify(&msg, &sig));
@@ -754,7 +753,7 @@ mod verification_tests {
 
 		let k = SecretKey::parse(&SIG_NONCE).expect("Valid signature nonce");
 		let k_times_g_address = to_ethereum_address(PublicKey::from_secret_key(&k));
-		let sig = SchnorrVerificationComponents { s: SIG, k_times_g_address };
+		let sig = SchnorrVerificationComponents { s: SIG, k_times_g_address: k_times_g_address.0 };
 
 		// This should pass.
 		assert_ok!(agg_key.verify(&MSG_HASH, &sig));
@@ -774,7 +773,10 @@ mod verification_tests {
 		assert!(agg_key
 			.verify(
 				&MSG_HASH,
-				&SchnorrVerificationComponents { s: SIG.map(|i| i + 1), k_times_g_address }
+				&SchnorrVerificationComponents {
+					s: SIG.map(|i| i + 1),
+					k_times_g_address: k_times_g_address.0
+				}
 			)
 			.is_err(),);
 
@@ -784,7 +786,7 @@ mod verification_tests {
 				&MSG_HASH,
 				&SchnorrVerificationComponents {
 					s: SIG,
-					k_times_g_address: k_times_g_address.map(|i| i + 1),
+					k_times_g_address: k_times_g_address.0.map(|i| i + 1),
 				}
 			),
 			AggKeyVerificationError::NoMatch

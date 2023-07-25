@@ -16,10 +16,9 @@ impl AddressDerivationApi<Ethereum> for AddressDerivation {
 	) -> Result<<Ethereum as Chain>::ChainAccount, DispatchError> {
 		Ok(get_create_2_address(
 			Environment::eth_vault_address(),
-			EthEnvironment::token_address(source_asset).map(|address| address.to_fixed_bytes()),
+			EthEnvironment::token_address(source_asset),
 			channel_id,
-		)
-		.into())
+		))
 	}
 }
 
@@ -38,7 +37,7 @@ fn test_address_generation() {
 		)
 		.is_ok());
 		// The genesis build is not running, so we have to add it manually
-		EthereumSupportedAssets::<Runtime>::insert(Asset::Flip, [0; 20]);
+		EthereumSupportedAssets::<Runtime>::insert(Asset::Flip, sp_core::H160([1; 20]));
 		// Expect address generation to be successfully for ERC20 Flip token
 		assert!(<AddressDerivation as AddressDerivationApi<Ethereum>>::generate_address(
 			eth::Asset::Flip,

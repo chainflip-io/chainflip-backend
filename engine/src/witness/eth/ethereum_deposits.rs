@@ -52,16 +52,14 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 				state_chain_client.latest_finalized_hash(),
 			)
 			.await
-			.expect(STATE_CHAIN_CONNECTION)
-			.into();
+			.expect(STATE_CHAIN_CONNECTION);
 
 		let vault_address = state_chain_client
 			.storage_value::<pallet_cf_environment::EthereumVaultAddress<state_chain_runtime::Runtime>>(
 				state_chain_client.latest_finalized_hash(),
 			)
 			.await
-			.expect(STATE_CHAIN_CONNECTION)
-			.into();
+			.expect(STATE_CHAIN_CONNECTION);
 
 		self.then(move |epoch, header| {
 			let eth_rpc = eth_rpc.clone();

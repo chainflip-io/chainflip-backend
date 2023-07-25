@@ -1,6 +1,10 @@
 use cf_amm::common::SqrtPriceQ64F96;
-use cf_chains::{btc::BitcoinNetwork, dot::PolkadotHash, eth::api::EthereumChainId};
-use cf_primitives::{Asset, EthereumAddress, SemVer, SwapOutput};
+use cf_chains::{
+	btc::BitcoinNetwork,
+	dot::PolkadotHash,
+	eth::{api::EthereumChainId, Address as EthereumAddress},
+};
+use cf_primitives::{Asset, SemVer, SwapOutput};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc, types::error::CallError};
 use pallet_cf_governance::GovCallHash;
 use sc_client_api::HeaderBackend;

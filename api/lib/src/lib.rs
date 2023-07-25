@@ -1,7 +1,9 @@
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use cf_chains::{
-	address::EncodedAddress, eth::to_ethereum_address, CcmChannelMetadata, ForeignChain,
+	address::EncodedAddress,
+	eth::{to_ethereum_address, Address as EthereumAddress},
+	CcmChannelMetadata, ForeignChain,
 };
 use cf_primitives::{AccountRole, Asset, BasisPoints, ChannelId};
 use futures::FutureExt;
@@ -36,7 +38,7 @@ use chainflip_engine::state_chain_observer::client::{
 	extrinsic_api::signed::{SignedExtrinsicApi, UntilFinalized},
 	DefaultRpcClient, StateChainClient,
 };
-use utilities::{clean_dot_address, clean_eth_address, task_scope::task_scope};
+use utilities::{clean_hex_address, task_scope::task_scope};
 
 #[async_trait]
 trait AuctionPhaseApi {
@@ -118,7 +120,7 @@ where
 
 pub async fn request_redemption(
 	amount: primitives::RedemptionAmount,
-	eth_address: [u8; 20],
+	address: EthereumAddress,
 	state_chain_settings: &settings::StateChain,
 ) -> Result<H256> {
 	task_scope(|scope| {
@@ -138,10 +140,7 @@ pub async fn request_redemption(
 			}
 
 			let (tx_hash, ..) = state_chain_client
-				.submit_signed_extrinsic(pallet_cf_funding::Call::redeem {
-					amount,
-					address: eth_address,
-				})
+				.submit_signed_extrinsic(pallet_cf_funding::Call::redeem { amount, address })
 				.await
 				.until_finalized()
 				.await?;
@@ -407,8 +406,8 @@ pub async fn request_swap_deposit_address(
 /// chain.
 pub fn clean_foreign_chain_address(chain: ForeignChain, address: &str) -> Result<EncodedAddress> {
 	Ok(match chain {
-		ForeignChain::Ethereum => EncodedAddress::Eth(clean_eth_address(address)?),
-		ForeignChain::Polkadot => EncodedAddress::Dot(clean_dot_address(address)?),
+		ForeignChain::Ethereum => EncodedAddress::Eth(clean_hex_address(address)?),
+		ForeignChain::Polkadot => EncodedAddress::Dot(clean_hex_address(address)?),
 		ForeignChain::Bitcoin => EncodedAddress::Btc(address.as_bytes().to_vec()),
 	})
 }
@@ -483,7 +482,9 @@ pub fn generate_signing_key(seed_phrase: Option<&str>) -> Result<(String, KeyPai
 /// Note this is *not* a general-purpose utility for deriving Ethereum addresses. You should
 /// not expect to be able to recover this address in any mainstream wallet. Notably, this
 /// does *not* use BIP44 derivation paths.
-pub fn generate_ethereum_key(seed_phrase: Option<&str>) -> Result<(String, KeyPair, [u8; 20])> {
+pub fn generate_ethereum_key(
+	seed_phrase: Option<&str>,
+) -> Result<(String, KeyPair, EthereumAddress)> {
 	use bip39::{Language, Mnemonic, MnemonicType, Seed};
 
 	let mnemonic = seed_phrase
@@ -541,7 +542,7 @@ mod test_key_generation {
 			hex::encode(generated.1.secret_key)
 		);
 		assert_eq!(
-			(generated.0, generated.2.to_vec()),
+			(generated.0, generated.2.as_bytes().to_vec()),
 			(
 				SEED_PHRASE.to_string(),
 				hex::decode("e01156ca92d904cc67ff47517bf3a3500b418280").unwrap()

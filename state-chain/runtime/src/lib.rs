@@ -16,7 +16,7 @@ use cf_amm::common::SqrtPriceQ64F96;
 use cf_chains::{
 	btc::BitcoinNetwork,
 	dot::{self, PolkadotHash},
-	eth::{self, api::EthereumApi, Ethereum},
+	eth::{self, api::EthereumApi, Address as EthereumAddress, Ethereum},
 	Bitcoin, Polkadot,
 };
 pub use frame_system::Call as SystemCall;
@@ -68,9 +68,7 @@ use sp_std::prelude::*;
 use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
-pub use cf_primitives::{
-	Asset, AssetAmount, BlockNumber, EthereumAddress, FlipBalance, SemVer, SwapOutput,
-};
+pub use cf_primitives::{Asset, AssetAmount, BlockNumber, FlipBalance, SemVer, SwapOutput};
 pub use cf_traits::{EpochInfo, QualifyNode, SessionKeysRegistered, SwappingApi};
 
 pub use chainflip::chain_instances::*;
