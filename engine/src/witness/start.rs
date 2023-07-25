@@ -53,8 +53,15 @@ where
 	)
 	.await?;
 
-	super::dot::start(scope, &settings.dot, state_chain_client, state_chain_stream, epoch_source)
-		.await?;
+	super::dot::start(
+		scope,
+		&settings.dot,
+		state_chain_client,
+		state_chain_stream,
+		epoch_source,
+		db,
+	)
+	.await?;
 
 	Ok(())
 }

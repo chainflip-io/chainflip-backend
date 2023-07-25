@@ -19,6 +19,7 @@ use std::{collections::BTreeSet, sync::Arc};
 use utilities::task_scope::Scope;
 
 use crate::{
+	db::PersistentKeyDB,
 	dot::{
 		http_rpc::DotHttpRpcClient,
 		retry_rpc::{DotRetryRpcApi, DotRetryRpcClient},
@@ -117,6 +118,7 @@ pub async fn start<StateChainClient, StateChainStream>(
 	state_chain_client: Arc<StateChainClient>,
 	state_chain_stream: StateChainStream,
 	epoch_source: EpochSourceBuilder<'_, '_, StateChainClient, (), ()>,
+	db: Arc<PersistentKeyDB>,
 ) -> Result<()>
 where
 	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
@@ -142,6 +144,7 @@ where
 
 	let dot_ingress_witnessing = DotFinalisedSource::new(dot_client.clone())
 		.shared(scope)
+		.strictly_monotonic()
 		.then(|header| async move {
 			header.data.iter().filter_map(filter_map_events).collect::<Vec<_>>()
 		})
@@ -289,6 +292,7 @@ where
 				}
 			}
 			)
+			.continuous("Polkadot".to_string(), db)
 		.run();
 
 	scope.spawn(async move {
@@ -372,25 +376,23 @@ fn proxy_addeds(
 	let mut extrinsic_indices = BTreeSet::new();
 	for (phase, wrapped_event) in events {
 		if let Phase::ApplyExtrinsic(extrinsic_index) = *phase {
-			match wrapped_event {
-				EventWrapper::ProxyAdded(ProxyAdded { delegator, delegatee, .. }) => {
-					if delegator != our_vault {
-						continue
+			if let EventWrapper::ProxyAdded(ProxyAdded { delegator, delegatee, .. }) = wrapped_event
+			{
+				if delegator != our_vault {
+					continue
+				}
+
+				tracing::info!("Witnessing ProxyAdded. new delegatee: {delegatee:?} at block number {block_number} and extrinsic_index; {extrinsic_index}");
+
+				vault_key_rotated_calls.push(Box::new(
+					pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
+						block_number,
+						tx_id: TxId { block_number, extrinsic_index },
 					}
+					.into(),
+				));
 
-					tracing::info!("Witnessing ProxyAdded. new delegatee: {delegatee:?} at block number {block_number} and extrinsic_index; {extrinsic_index}");
-
-					vault_key_rotated_calls.push(Box::new(
-						pallet_cf_vaults::Call::<_, PolkadotInstance>::vault_key_rotated {
-							block_number,
-							tx_id: TxId { block_number, extrinsic_index },
-						}
-						.into(),
-					));
-
-					extrinsic_indices.insert(extrinsic_index);
-				},
-				_ => {},
+				extrinsic_indices.insert(extrinsic_index);
 			}
 		}
 	}
