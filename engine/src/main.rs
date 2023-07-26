@@ -128,8 +128,7 @@ async fn start(
 
 	let (epoch_start_sender, [epoch_start_receiver_1]) = build_broadcast_channel(10);
 
-	let (dot_epoch_start_sender, [dot_epoch_start_receiver_1, dot_epoch_start_receiver_2]) =
-		build_broadcast_channel(10);
+	let (dot_epoch_start_sender, [dot_epoch_start_receiver_1]) = build_broadcast_channel(10);
 
 	let db = Arc::new(
 		PersistentKeyDB::open_and_migrate_to_latest(
@@ -229,14 +228,12 @@ async fn start(
 	)
 	.await?;
 
-	let (dot_monitor_address_sender, dot_monitor_signature_sender) = dot::witnessing::start(
+	dot::witnessing::start(
 		scope,
 		state_chain_client.clone(),
 		&settings.dot,
 		dot_epoch_start_receiver_1,
-		dot_epoch_start_receiver_2,
 		state_chain_stream.cache().block_hash,
-		db.clone(),
 	)
 	.await?;
 
@@ -253,8 +250,6 @@ async fn start(
 		epoch_start_sender,
 		eth_address_to_monitor,
 		dot_epoch_start_sender,
-		dot_monitor_address_sender,
-		dot_monitor_signature_sender,
 	));
 
 	has_completed_initialising.store(true, std::sync::atomic::Ordering::Relaxed);
