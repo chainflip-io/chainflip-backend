@@ -184,6 +184,7 @@ where
 							call: Box::new(
 								pallet_cf_ingress_egress::Call::<_, PolkadotInstance>::process_deposits {
 									deposit_witnesses,
+									block_height: header.index,
 								}
 								.into(),
 							),
@@ -320,7 +321,7 @@ fn deposit_witnesses(
 						deposit_address: *to,
 						asset: assets::dot::Asset::Dot,
 						amount: *amount,
-						tx_id: TxId { block_number, extrinsic_index: *extrinsic_index },
+						deposit_details: (),
 					});
 				}
 
