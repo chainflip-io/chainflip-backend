@@ -8,11 +8,14 @@ use frame_support::{assert_ok, dispatch::UnfilteredDispatchable, traits::EnsureO
 
 benchmarks_instance_pallet! {
 	update_chain_state {
+
+		let new_chain_state = ChainState {
+			block_height: 32u32.into(),
+			tracked_data: BenchmarkValue::benchmark_value(),
+		};
+
 		let call = Call::<T, I>::update_chain_state {
-			new_chain_state: ChainState {
-				block_height: BenchmarkValue::benchmark_value(),
-				tracked_data: BenchmarkValue::benchmark_value(),
-			}
+			new_chain_state: new_chain_state.clone(),
 		};
 
 		let origin = T::EnsureWitnessed::successful_origin();
@@ -22,9 +25,6 @@ benchmarks_instance_pallet! {
 	}: {
 		let _ = call.dispatch_bypass_filter(origin);
 	} verify {
-		assert!(CurrentChainState::<T,I>::get() == ChainState {
-			block_height: BenchmarkValue::benchmark_value(),
-			tracked_data: BenchmarkValue::benchmark_value(),
-		});
+		assert_eq!(CurrentChainState::<T,I>::get(), new_chain_state);
 	}
 }
