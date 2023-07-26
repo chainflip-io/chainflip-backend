@@ -3,7 +3,9 @@
 #![doc = include_str!("../../cf-doc-head.md")]
 
 use cf_chains::{Chain, ChainAbi, ChainCrypto, SetAggKeyWithAggKey};
-use cf_primitives::{AuthorityCount, CeremonyId, EpochIndex, ThresholdSignatureRequestId};
+use cf_primitives::{
+	AuthorityCount, CeremonyId, EpochIndex, ForeignChain, ThresholdSignatureRequestId,
+};
 use cf_runtime_utilities::{EnumVariant, StorageDecodeVariant};
 use cf_traits::{
 	offence_reporting::OffenceReporter, AccountRoleRegistry, AsyncResult, Broadcaster, Chainflip,
@@ -68,26 +70,36 @@ pub enum VaultRotationStatus<T: Config<I>, I: 'static = ()> {
 	},
 	/// We are waiting for the nodes who generated the new key to complete a signing ceremony to
 	/// verify the new key.
-	AwaitingKeygenVerification { new_public_key: AggKeyFor<T, I> },
+	AwaitingKeygenVerification {
+		new_public_key: AggKeyFor<T, I>,
+	},
 	/// Keygen verification is complete for key
-	KeygenVerificationComplete { new_public_key: AggKeyFor<T, I> },
+	KeygenVerificationComplete {
+		new_public_key: AggKeyFor<T, I>,
+	},
 	AwaitingKeyHandover {
 		ceremony_id: CeremonyId,
 		response_status: KeyHandoverResponseStatus<T, I>,
-		// NB: This is NOT the key handed over. It is the new key for the *next* epoch.
 		new_public_key: AggKeyFor<T, I>,
 	},
 	KeyHandoverComplete {
-		// NB: This is NOT the key handed over. It is the new key for the *next* epoch.
 		new_public_key: AggKeyFor<T, I>,
 	},
 	/// We are waiting for the key to be updated on the contract, and witnessed by the network.
-	AwaitingActivation { new_public_key: AggKeyFor<T, I> },
+	AwaitingActivation {
+		new_public_key: AggKeyFor<T, I>,
+	},
 	/// The key has been successfully updated on the external chain, and/or funds rotated to new
 	/// key.
 	Complete,
 	/// The rotation has failed at one of the above stages.
-	Failed { offenders: BTreeSet<T::ValidatorId> },
+	Failed {
+		offenders: BTreeSet<T::ValidatorId>,
+	},
+	KeyHandoverFailed {
+		new_public_key: AggKeyFor<T, I>,
+		offenders: BTreeSet<T::ValidatorId>,
+	},
 }
 
 impl<T: Config<I>, I: 'static> cf_traits::CeremonyIdProvider for Pallet<T, I> {
@@ -122,6 +134,7 @@ pub struct VaultEpochAndState {
 
 #[frame_support::pallet]
 pub mod pallet {
+	use cf_chains::btc;
 	use sp_runtime::Percent;
 
 	use super::*;
@@ -146,7 +159,7 @@ pub mod pallet {
 		type Offence: From<PalletOffence>;
 
 		/// The chain that is managed by this vault must implement the api types.
-		type Chain: ChainAbi;
+		type Chain: ChainAbi + Get<ForeignChain>;
 
 		/// The supported api calls for the chain.
 		type SetAggKeyWithAggKey: SetAggKeyWithAggKey<Self::Chain>;
@@ -258,6 +271,36 @@ pub mod pallet {
 				KeygenResponseTimeout::<T, I>::set(
 					KEYGEN_CEREMONY_RESPONSE_TIMEOUT_BLOCKS_DEFAULT.into(),
 				);
+			}
+			if <T as Config<I>>::Chain::get() == ForeignChain::Bitcoin {
+				if let Some(VaultRotationStatus::Failed { offenders }) =
+					PendingVaultRotation::<T, I>::get()
+				{
+					let raw_encoded_key = btc::AggKey {
+						previous: Some([
+							4, 138, 214, 208, 48, 161, 50, 52, 157, 236, 166, 62, 192, 126, 95,
+							215, 219, 152, 137, 124, 78, 13, 67, 216, 251, 42, 51, 36, 81, 183,
+							212, 132,
+						]),
+						current: [
+							251, 213, 193, 245, 91, 162, 196, 254, 140, 63, 221, 164, 93, 67, 125,
+							24, 111, 52, 114, 114, 164, 11, 254, 162, 35, 57, 219, 22, 207, 221,
+							37, 85,
+						],
+					}
+					.encode();
+					if let Ok(new_public_key) =
+						<<T as Config<I>>::Chain as ChainCrypto>::AggKey::decode(
+							&mut &raw_encoded_key[..],
+						) {
+						PendingVaultRotation::<T, I>::put(VaultRotationStatus::KeyHandoverFailed {
+							new_public_key,
+							offenders,
+						})
+					} else {
+						log::error!("Runtime upgrade btc::AggKey decode failed");
+					}
+				}
 			}
 			Weight::zero()
 		}
