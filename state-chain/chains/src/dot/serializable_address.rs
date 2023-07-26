@@ -25,13 +25,13 @@ impl serde::Serialize for SubstrateNetworkAddress {
 impl<'de> serde::Deserialize<'de> for SubstrateNetworkAddress {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
-	D: serde::Deserializer<'de>,
+		D: serde::Deserializer<'de>,
 	{
 		use sp_core::crypto::Ss58Codec;
 		let s = String::deserialize(deserializer)?;
 		<AccountId32 as Ss58Codec>::from_ss58check_with_version(&s)
-		.map(|(account_id, format_specifier)| Self { format_specifier, account_id })
-		.map_err(|_| serde::de::Error::custom("Invalid SS58 address"))
+			.map(|(account_id, format_specifier)| Self { format_specifier, account_id })
+			.map_err(|_| serde::de::Error::custom("Invalid SS58 address"))
 	}
 }
 
