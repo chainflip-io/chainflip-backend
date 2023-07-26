@@ -22,9 +22,9 @@ benchmarks_instance_pallet! {
 	}: {
 		let _ = call.dispatch_bypass_filter(origin);
 	} verify {
-		assert!(CurrentChainState::<T,I>::get() == Some(ChainState {
+		assert!(CurrentChainState::<T,I>::get() == ChainState {
 			block_height: BenchmarkValue::benchmark_value(),
 			tracked_data: BenchmarkValue::benchmark_value(),
-		}));
+		});
 	}
 }

@@ -33,7 +33,7 @@ where
 {
 	inner: Inner,
 	receiver: tokio::sync::watch::Receiver<(
-		Option<pallet_cf_chain_tracking::ChainState<Inner::Chain>>,
+		pallet_cf_chain_tracking::ChainState<Inner::Chain>,
 		Addresses<Inner>,
 	)>,
 }
@@ -60,7 +60,7 @@ where
 	async fn get_chain_state_and_addresses<StateChainClient: StorageApi + Send + Sync + 'static>(
 		state_chain_client: &StateChainClient,
 		block_hash: state_chain_runtime::Hash,
-	) -> (Option<pallet_cf_chain_tracking::ChainState<Inner::Chain>>, Addresses<Inner>)
+	) -> (pallet_cf_chain_tracking::ChainState<Inner::Chain>, Addresses<Inner>)
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 	{
@@ -145,7 +145,7 @@ where
 				struct State<Inner: ChunkedByVault> where
 				state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain> {
 					receiver:
-						tokio::sync::watch::Receiver<(Option<ChainState<Inner>>, Addresses<Inner>)>,
+						tokio::sync::watch::Receiver<(ChainState<Inner>, Addresses<Inner>)>,
 					pending_headers: Vec<Header<Inner::Index, Inner::Hash, Inner::Data>>,
 					ready_headers:
 						Vec<Header<Inner::Index, Inner::Hash, (Inner::Data, Addresses<Inner>)>>,
@@ -159,28 +159,24 @@ where
 						headers: It,
 					) {
 						let chain_state_and_addresses = self.receiver.borrow();
-						let (option_chain_state, addresses) = &*chain_state_and_addresses;
-						if let Some(chain_state) = option_chain_state {
-							for header in headers {
-								if IngressAddresses::<Inner>::is_header_ready(
-									header.index,
-									chain_state,
-								) {
-									self.ready_headers.push(header.map_data(|header| {
-										(
-											header.data,
-											IngressAddresses::<Inner>::addresses_for_header(
-												header.index,
-												addresses,
-											),
-										)
-									}));
-								} else {
-									self.pending_headers.push(header);
-								}
+						let (chain_state, addresses) = &*chain_state_and_addresses;
+						for header in headers {
+							if IngressAddresses::<Inner>::is_header_ready(
+								header.index,
+								chain_state,
+							) {
+								self.ready_headers.push(header.map_data(|header| {
+									(
+										header.data,
+										IngressAddresses::<Inner>::addresses_for_header(
+											header.index,
+											addresses,
+										),
+									)
+								}));
+							} else {
+								self.pending_headers.push(header);
 							}
-						} else {
-							self.pending_headers.extend(headers);
 						}
 					}
 				}
@@ -230,7 +226,7 @@ where
 {
 	inner_client: Inner::Client,
 	receiver: tokio::sync::watch::Receiver<(
-		Option<pallet_cf_chain_tracking::ChainState<Inner::Chain>>,
+		pallet_cf_chain_tracking::ChainState<Inner::Chain>,
 		Addresses<Inner>,
 	)>,
 }
@@ -242,7 +238,7 @@ where
 	pub fn new(
 		inner_client: Inner::Client,
 		receiver: tokio::sync::watch::Receiver<(
-			Option<pallet_cf_chain_tracking::ChainState<Inner::Chain>>,
+			pallet_cf_chain_tracking::ChainState<Inner::Chain>,
 			Addresses<Inner>,
 		)>,
 	) -> Self {
@@ -266,10 +262,8 @@ where
 
 		let addresses = {
 			let chain_state_and_addresses = receiver
-				.wait_for(|(option_chain_state, _addresses)| {
-					option_chain_state.as_ref().is_some_and(|chain_state| {
-						IngressAddresses::<Inner>::is_header_ready(index, chain_state)
-					})
+				.wait_for(|(chain_state, _addresses)| {
+					IngressAddresses::<Inner>::is_header_ready(index, chain_state)
 				})
 				.await
 				.expect(OR_CANCEL);

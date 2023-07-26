@@ -149,7 +149,10 @@ mod tests {
 				>::update_chain_state {
 					new_chain_state: ChainState {
 						block_height: BLOCK_HEIGHT as u32,
-						tracked_data: PolkadotTrackedData { median_tip: fee.into() },
+						tracked_data: PolkadotTrackedData {
+							median_tip: fee.into(),
+							runtime_version: Default::default(),
+						},
 					},
 				}),
 		}
@@ -193,10 +196,6 @@ mod tests {
 	#[test]
 	fn test_priority_fee_witnessing() {
 		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
-			assert!(pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get(
-			)
-			.is_none());
-
 			let calls = [1u32, 100, 12, 10, 9, 11].map(chain_tracking_call_with_fee::<Ethereum>);
 
 			let authorities =
@@ -226,8 +225,7 @@ mod tests {
 			}
 
 			assert_eq!(
-				pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get()
-					.unwrap(),
+				pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get(),
 				ChainState {
 					block_height: BLOCK_HEIGHT,
 					tracked_data: EthereumTrackedData { base_fee: BASE_FEE, priority_fee: 10 }

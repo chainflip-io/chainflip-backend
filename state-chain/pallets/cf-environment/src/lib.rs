@@ -91,8 +91,6 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Eth is not an Erc20 token, so its address can't be updated.
 		EthAddressNotUpdateable,
-		/// Polkadot runtime version is lower than the currently stored version.
-		InvalidPolkadotRuntimeVersion,
 	}
 
 	#[pallet::pallet]
@@ -150,10 +148,6 @@ pub mod pallet {
 	/// Current Nonce of the current Polkadot Proxy Account
 	pub type PolkadotProxyAccountNonce<T> = StorageValue<_, PolkadotIndex, ValueQuery>;
 
-	#[pallet::storage]
-	#[pallet::getter(fn polkadot_runtime_version)]
-	pub type PolkadotRuntimeVersion<T> = StorageValue<_, RuntimeVersion, ValueQuery>;
-
 	// BITCOIN CHAIN RELATED ENVIRONMENT ITEMS
 	#[pallet::storage]
 	/// The set of available UTXOs available in our Bitcoin Vault.
@@ -190,8 +184,6 @@ pub mod pallet {
 		UpdatedEthAsset(EthAsset, EthereumAddress),
 		/// Polkadot Vault Account is successfully set
 		PolkadotVaultAccountSet { polkadot_vault_account_id: PolkadotAccountId },
-		/// The Polkadot Runtime Version stored on chain was updated.
-		PolkadotRuntimeVersionUpdated { runtime_version: RuntimeVersion },
 		/// The starting block number for the new Bitcoin vault was set
 		BitcoinBlockNumberSetForVault { block_number: cf_chains::btc::BlockNumber },
 		/// The Safe Mode settings for the chain has been updated
@@ -327,27 +319,6 @@ pub mod pallet {
 			Ok(dispatch_result)
 		}
 
-		#[pallet::weight(T::WeightInfo::update_polkadot_runtime_version())]
-		pub fn update_polkadot_runtime_version(
-			origin: OriginFor<T>,
-			runtime_version: RuntimeVersion,
-		) -> DispatchResult {
-			T::EnsureWitnessed::ensure_origin(origin)?;
-
-			// If the `transaction_version` is bumped, the `spec_version` must also be bumped.
-			// So we only need to check the `spec_version` here.
-			// https://paritytech.github.io/substrate/master/sp_version/struct.RuntimeVersion.html#structfield.transaction_version
-			ensure!(
-				runtime_version.spec_version > PolkadotRuntimeVersion::<T>::get().spec_version,
-				Error::<T>::InvalidPolkadotRuntimeVersion
-			);
-
-			PolkadotRuntimeVersion::<T>::put(runtime_version);
-			Self::deposit_event(Event::<T>::PolkadotRuntimeVersionUpdated { runtime_version });
-
-			Ok(())
-		}
-
 		/// Update the current safe mode status.
 		///
 		/// Can only be dispatched from the governance origin.
@@ -428,7 +399,6 @@ pub mod pallet {
 
 			PolkadotGenesisHash::<T>::set(self.polkadot_genesis_hash);
 			PolkadotVaultAccountId::<T>::set(self.polkadot_vault_account_id);
-			PolkadotRuntimeVersion::<T>::set(self.polkadot_runtime_version);
 			PolkadotProxyAccountNonce::<T>::set(0);
 
 			BitcoinAvailableUtxos::<T>::set(vec![]);

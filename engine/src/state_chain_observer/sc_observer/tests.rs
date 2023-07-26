@@ -79,8 +79,6 @@ async fn start_sc_observer_and_get_epoch_start_events<
 	let (eth_monitor_usdc_command_sender, _eth_monitor_usdc_command_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
-	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
-
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -97,7 +95,6 @@ async fn start_sc_observer_and_get_epoch_start_events<
 			flip: eth_monitor_flip_command_sender,
 			usdc: eth_monitor_usdc_command_sender,
 		},
-		dot_epoch_start_sender,
 	)
 	.await
 	.unwrap_err();
@@ -1296,9 +1293,6 @@ async fn run_the_sc_observer() {
 			let (eth_monitor_usdc_command_sender, _eth_monitor_usdc_command_receiver) =
 				tokio::sync::mpsc::unbounded_channel();
 
-			let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) =
-				async_broadcast::broadcast(10);
-
 			sc_observer::start(
 				state_chain_client,
 				sc_block_stream,
@@ -1315,7 +1309,6 @@ async fn run_the_sc_observer() {
 					flip: eth_monitor_flip_command_sender,
 					usdc: eth_monitor_usdc_command_sender,
 				},
-				dot_epoch_start_sender,
 			)
 			.await
 			.unwrap_err();

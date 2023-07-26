@@ -53,6 +53,7 @@ pub trait Chain: Member + Parameter {
 	type OptimisticActivation: Get<bool>;
 
 	type ChainBlockNumber: FullCodec
+		+ Default
 		+ Member
 		+ Parameter
 		+ Copy
@@ -82,7 +83,7 @@ pub trait Chain: Member + Parameter {
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
-	type TrackedData: Member + Parameter + MaxEncodedLen + Unpin + BenchmarkValue;
+	type TrackedData: Default + Member + Parameter + MaxEncodedLen + Unpin + BenchmarkValue;
 
 	type ChainAsset: Member
 		+ Parameter

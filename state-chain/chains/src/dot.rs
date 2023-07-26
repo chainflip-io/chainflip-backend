@@ -114,7 +114,7 @@ pub type PolkadotCallHasher = BlakeTwo256;
 
 pub type PolkadotCallHash = <PolkadotCallHasher as Hash>::Output;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Default)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, TypeInfo, Default, MaxEncodedLen)]
 #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 pub struct RuntimeVersion {
 	pub spec_version: PolkadotSpecVersion,
@@ -211,9 +211,10 @@ pub struct EpochStartData {
 	pub vault_account: PolkadotAccountId,
 }
 
-#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
+#[derive(Default, Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
 pub struct PolkadotTrackedData {
 	pub median_tip: PolkadotBalance,
+	pub runtime_version: RuntimeVersion,
 }
 
 impl Chain for Polkadot {

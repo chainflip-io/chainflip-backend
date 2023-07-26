@@ -160,7 +160,10 @@ async fn new_watcher_and_submit_test_extrinsic(
 				pallet_cf_chain_tracking::Call::update_chain_state {
 					new_chain_state: ChainState {
 						block_height: 0,
-						tracked_data: dot::PolkadotTrackedData { median_tip: 0 },
+						tracked_data: dot::PolkadotTrackedData {
+							median_tip: 0,
+							runtime_version: Default::default(),
+						},
 					},
 				},
 			)),

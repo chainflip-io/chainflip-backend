@@ -19,7 +19,7 @@ use sp_std::marker::PhantomData;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::*;
+	use frame_support::pallet_prelude::{ValueQuery, *};
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -54,12 +54,18 @@ pub mod pallet {
 		pub tracked_data: C::TrackedData,
 	}
 
+	impl<C: Chain> Default for ChainState<C> {
+		fn default() -> Self {
+			Self { block_height: Zero::zero(), tracked_data: Default::default() }
+		}
+	}
+
 	/// The tracked state of the external chain.
 	#[pallet::storage]
 	#[pallet::getter(fn chain_state)]
 	#[allow(clippy::type_complexity)]
 	pub type CurrentChainState<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, ChainState<T::TargetChain>>;
+		StorageValue<_, ChainState<T::TargetChain>, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -92,15 +98,12 @@ pub mod pallet {
 		) -> DispatchResultWithPostInfo {
 			T::EnsureWitnessed::ensure_origin(origin)?;
 
-			CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|maybe_previous| {
-				if let Some(previous_chain_state) = maybe_previous {
-					ensure!(
-						new_chain_state.block_height > previous_chain_state.block_height,
-						Error::<T, I>::StaleDataSubmitted
-					)
-				}
-
-				*maybe_previous = Some(new_chain_state.clone());
+			CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|previous_chain_state| {
+				ensure!(
+					new_chain_state.block_height > previous_chain_state.block_height,
+					Error::<T, I>::StaleDataSubmitted
+				);
+				*previous_chain_state = new_chain_state.clone();
 
 				Ok(())
 			})?;
@@ -113,8 +116,6 @@ pub mod pallet {
 
 impl<T: Config<I>, I: 'static> GetBlockHeight<T::TargetChain> for Pallet<T, I> {
 	fn get_block_height() -> <T::TargetChain as Chain>::ChainBlockNumber {
-		CurrentChainState::<T, I>::get()
-			.map(|state| state.block_height)
-			.unwrap_or(Zero::zero())
+		CurrentChainState::<T, I>::get().block_height
 	}
 }
