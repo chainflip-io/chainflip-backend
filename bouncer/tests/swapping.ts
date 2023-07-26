@@ -236,9 +236,7 @@ async function testAll() {
   const broadcastAborted = monitorEvent(
     'Broadcaster::BroadcastAborted',
     await getChainflipApi(),
-    () => {
-      return monitoring;
-    },
+    () => monitoring,
   );
   await testAllSwaps();
   monitoring = false;
