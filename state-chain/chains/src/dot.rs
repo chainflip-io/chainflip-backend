@@ -16,7 +16,7 @@ use sp_runtime::{
 		AccountIdLookup, BlakeTwo256, DispatchInfoOf, Hash, SignedExtension, StaticLookup, Verify,
 	},
 	transaction_validity::{TransactionValidity, TransactionValidityError, ValidTransaction},
-	MultiAddress, MultiSignature,
+	AccountId32, MultiAddress, MultiSignature,
 };
 
 #[cfg_attr(feature = "std", derive(Hash))]
@@ -91,7 +91,73 @@ impl PolkadotPair {
 	MaxEncodedLen,
 )]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(
+	feature = "std",
+	serde(try_from = "SubstrateNetworkAddress", into = "SubstrateNetworkAddress")
+)]
 pub struct PolkadotAccountId([u8; 32]);
+
+#[derive(Debug, Clone)]
+#[cfg(feature = "std")]
+pub struct SubstrateNetworkAddress {
+	format_specifier: ss58_registry::Ss58AddressFormat,
+	account_id: AccountId32,
+}
+
+#[cfg(feature = "std")]
+impl SubstrateNetworkAddress {
+	pub fn polkadot(account_id: impl Into<AccountId32>) -> Self {
+		Self {
+			format_specifier: ss58_registry::Ss58AddressFormatRegistry::PolkadotAccount.into(),
+			account_id: account_id.into(),
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl serde::Serialize for SubstrateNetworkAddress {
+	fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		use sp_core::crypto::Ss58Codec;
+		serializer.serialize_str(&self.account_id.to_ss58check_with_version(self.format_specifier))
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'de> serde::Deserialize<'de> for SubstrateNetworkAddress {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+	D: serde::Deserializer<'de>,
+	{
+		use sp_core::crypto::Ss58Codec;
+		let s = String::deserialize(deserializer)?;
+		<AccountId32 as Ss58Codec>::from_ss58check_with_version(&s)
+		.map(|(account_id, format_specifier)| Self { format_specifier, account_id })
+		.map_err(|_| serde::de::Error::custom("Invalid SS58 address"))
+	}
+}
+
+#[cfg(feature = "std")]
+impl TryFrom<SubstrateNetworkAddress> for PolkadotAccountId {
+	type Error = sp_core::crypto::PublicError;
+
+	fn try_from(substrate_address: SubstrateNetworkAddress) -> Result<Self, Self::Error> {
+		if substrate_address.format_specifier ==
+			ss58_registry::Ss58AddressFormatRegistry::PolkadotAccount.into()
+		{
+			Ok(Self::from_aliased(*substrate_address.account_id.as_ref()))
+		} else {
+			Err(sp_core::crypto::PublicError::FormatNotAllowed)
+		}
+	}
+}
+
+#[cfg(feature = "std")]
+impl From<PolkadotAccountId> for SubstrateNetworkAddress {
+	fn from(account_id: PolkadotAccountId) -> Self {
+		Self::polkadot(account_id.0)
+	}
+}
+
 impl PolkadotAccountId {
 	pub const fn from_aliased(account_id: [u8; 32]) -> Self {
 		Self(account_id)
@@ -99,12 +165,6 @@ impl PolkadotAccountId {
 
 	pub fn aliased_ref(&self) -> &[u8; 32] {
 		&self.0
-	}
-
-	#[cfg(feature = "std")]
-	pub fn from_ss58check(s: &str) -> Result<Self, sp_core::crypto::PublicError> {
-		use sp_core::crypto::Ss58Codec;
-		sp_runtime::AccountId32::from_ss58check(s).map(|id| Self(*id.as_ref()))
 	}
 }
 
@@ -916,43 +976,6 @@ mod test_polkadot_extrinsics {
 		println!(
 			"encoded extrinsic: {:?}",
 			extrinsic_builder.get_signed_unchecked_extrinsic().unwrap().encode()
-		);
-	}
-
-	#[ignore]
-	#[test]
-	fn get_public_keys() {
-		println!(
-			"Public Key 1: {:?}",
-			PolkadotAccountId::from_ss58check("5E2WfQFeafdktJ5AAF6ZGZ71Yj4fiJnHWRomVmeoStMNhoZe")
-				.unwrap()
-		);
-		println!(
-			"Public Key 2: {:?}",
-			PolkadotAccountId::from_ss58check("5GNn92C9ngX4sNp3UjqGzPbdRfbbV8hyyVVNZaH2z9e5kzxA")
-				.unwrap()
-		);
-
-		println!(
-			"Public Key 3: {:?}",
-			PolkadotAccountId::from_ss58check("5CLpD6DBg2hFToBJYKDB7bPVAf4TKw2F1Q2xbnzdHSikH3uK")
-				.unwrap()
-		);
-
-		let keypair_1 = PolkadotPair::from_seed(&RAW_SEED_1);
-		let account_id_1 = keypair_1.public_key();
-
-		assert_eq!(
-			account_id_1,
-			PolkadotAccountId::from_ss58check("5E2WfQFeafdktJ5AAF6ZGZ71Yj4fiJnHWRomVmeoStMNhoZe")
-				.unwrap()
-		);
-
-		assert_eq!(
-			PolkadotAccountId::from_aliased(hex_literal::hex!(
-				"56cc4af8ff9fb97c60320ae43d35bd831b14f0b7065f3385db0dbf4cb5d8766f"
-			)),
-			account_id_1
 		);
 	}
 }
