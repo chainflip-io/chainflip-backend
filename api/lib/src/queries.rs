@@ -108,20 +108,20 @@ impl QueryApi {
 		let block_hash =
 			block_hash.unwrap_or_else(|| self.state_chain_client.latest_finalized_hash());
 
-		if let Some(asset) = asset {
-			let single_asset = client
+		Ok(if let Some(asset) = asset {
+			self.state_chain_client
 				.storage_map_entry::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>>(
 					block_hash, &asset,
 				)
-				.await?;
-			Ok(BTreeMap::from([(asset, single_asset.unwrap())]))
+				.await?
+				.map(|pool| BTreeMap::from([(asset, pool)]))
+				.unwrap_or_default()
 		} else {
-			Ok(self
-				.state_chain_client
+			self.state_chain_client
 				.storage_map::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>>(block_hash)
 				.await?
 				.into_iter()
-				.collect::<BTreeMap<_, _>>())
-		}
+				.collect::<BTreeMap<_, _>>()
+		})
 	}
 }
