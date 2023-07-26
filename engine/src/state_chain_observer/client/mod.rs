@@ -1,4 +1,5 @@
 pub mod base_rpc_api;
+pub mod error_decoder;
 pub mod extrinsic_api;
 pub mod storage_api;
 
