@@ -6,6 +6,7 @@ import {
   decodeDotAddressForContract,
   handleSubstrateError,
   brokerMutex,
+  assetToChain,
 } from './utils';
 
 export interface CcmDepositMetadata {
@@ -37,7 +38,7 @@ export async function newSwap(
       .requestSwapDepositAddress(
         sourceAsset,
         destAsset,
-        { [destAsset === 'USDC' ? 'ETH' : destAsset]: destinationAddress },
+        { [assetToChain(destAsset)]: destinationAddress },
         fee,
         messageMetadata ?? null,
       )
