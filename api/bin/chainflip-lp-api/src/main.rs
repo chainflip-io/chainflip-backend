@@ -143,10 +143,10 @@ pub trait Rpc {
 	async fn get_open_swap_channels(&self) -> Result<Vec<SwapChannelInfo>, Error>;
 
 	#[method(name = "getPools")]
-	async fn get_pools(
-		&self,
-		asset: Option<Asset>,
-	) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error>;
+	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error>;
+
+	#[method(name = "getPool")]
+	async fn get_pool(&self, asset: Asset) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error>;
 }
 pub struct RpcServerImpl {
 	state_chain_settings: StateChain,
@@ -350,15 +350,25 @@ impl RpcServer for RpcServerImpl {
 		.map_err(|e| Error::Custom(e.to_string()))
 	}
 
-	async fn get_pools(
-		&self,
-		asset: Option<Asset>,
-	) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
+	async fn get_pool(&self, asset: Asset) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
 		task_scope(|scope| {
 			async move {
 				let (client, latest_hash) =
 					chainflip_api::queries::connect(scope, &self.state_chain_settings).await?;
-				chainflip_api::queries::get_pools(client, latest_hash, asset).await
+				chainflip_api::queries::get_pools(client, latest_hash, Some(asset)).await
+			}
+			.boxed()
+		})
+		.await
+		.map_err(|e| Error::Custom(e.to_string()))
+	}
+
+	async fn get_pools(&self) -> Result<BTreeMap<Asset, Pool<AccountId32>>, Error> {
+		task_scope(|scope| {
+			async move {
+				let (client, latest_hash) =
+					chainflip_api::queries::connect(scope, &self.state_chain_settings).await?;
+				chainflip_api::queries::get_pools(client, latest_hash, None).await
 			}
 			.boxed()
 		})

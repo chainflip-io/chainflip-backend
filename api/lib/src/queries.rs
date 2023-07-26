@@ -91,12 +91,17 @@ where
 	state_chain_runtime::Runtime: pallet_cf_pools::Config,
 {
 	if let Some(asset) = asset {
-		let single_asset = client
+		if let Some(res) = client
 			.storage_map_entry::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>>(
 				block_hash, &asset,
 			)
-			.await?;
-		Ok(BTreeMap::from([(asset, single_asset.unwrap())]))
+			.await?
+		{
+			Ok(BTreeMap::from([(asset, res)]))
+		} else {
+			// If asset is none we return an empty map
+			Ok(BTreeMap::new())
+		}
 	} else {
 		Ok(client
 			.storage_map::<pallet_cf_pools::Pools<state_chain_runtime::Runtime>>(block_hash)
