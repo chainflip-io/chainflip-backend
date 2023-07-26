@@ -187,6 +187,37 @@ export async function observeEvent(
   return result as Event;
 }
 
+type Callback = () => boolean;
+export async function monitorEvent(
+  eventName: string,
+  api: ApiPromise,
+  monitor?: Callback,
+): Promise<void> {
+  let waiting = true;
+
+  const monitoring = monitor ?? (() => true);
+
+  const [expectedSection, expectedMethod] = eventName.split(':');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const unsubscribe: any = await api.rpc.chain.subscribeNewHeads(async (header) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const events: any[] = await api.query.system.events.at(header.hash);
+    events.forEach((record, _) => {
+      const { event } = record;
+      if (waiting && event.section === expectedSection && event.method === expectedMethod) {
+        throw new Error(eventName + ' was observed. This event should not have been emitted.');
+      }
+    });
+  });
+  while (waiting) {
+    if (!monitoring()) {
+      waiting = false;
+      unsubscribe();
+    }
+    await sleep(6000);
+  }
+}
+
 export async function getAddress(
   asset: Asset,
   seed: string,
