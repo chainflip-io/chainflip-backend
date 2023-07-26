@@ -123,13 +123,13 @@ async function testAll() {
   await approveTokenVault(
     'USDC',
     (
-      BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * BigInt(5)
+      BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * BigInt(6)
     ).toString(),
   );
   await approveTokenVault(
     'FLIP',
     (
-      BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * BigInt(5)
+      BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * BigInt(6)
     ).toString(),
   );
 
