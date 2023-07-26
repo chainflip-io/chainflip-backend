@@ -58,9 +58,6 @@ impl DotRetryRpcClient {
 pub trait DotRetryRpcApi {
 	async fn block_hash(&self, block_number: PolkadotBlockNumber) -> Option<PolkadotHash>;
 
-	// async fn block(&self, block_hash: PolkadotHash) ->
-	// Option<ChainBlockResponse<PolkadotConfig>>;
-
 	async fn extrinsics(&self, block_hash: PolkadotHash) -> Vec<ChainBlockExtrinsic>;
 
 	async fn events(&self, block_hash: PolkadotHash) -> Option<Events<PolkadotConfig>>;
