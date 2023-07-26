@@ -148,11 +148,15 @@ async function testAll() {
   ]);
 
   const regularSwaps = Promise.all([
+    testSwap('ETH', 'DOT'),
+    testSwap('ETH', 'USDC'),
     testSwap('ETH', 'BTC', 'P2PKH'),
     testSwap('ETH', 'BTC', 'P2WSH'),
     testSwap('ETH', 'BTC', 'P2SH'),
     testSwap('ETH', 'BTC', 'P2WPKH'),
 
+    testSwap('USDC', 'DOT'),
+    testSwap('USDC', 'ETH'),
     testSwap('USDC', 'BTC', 'P2PKH'),
     testSwap('USDC', 'BTC', 'P2WSH'),
     testSwap('USDC', 'BTC', 'P2SH'),
@@ -164,7 +168,6 @@ async function testAll() {
 
     testSwap('DOT', 'ETH'),
     testSwap('DOT', 'USDC'),
-
     testSwap('DOT', 'BTC', 'P2PKH'),
     testSwap('DOT', 'BTC', 'P2WSH'),
     testSwap('DOT', 'BTC', 'P2SH'),
