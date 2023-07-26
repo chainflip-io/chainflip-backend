@@ -4,7 +4,10 @@ use utilities::task_scope::Scope;
 
 use crate::{
 	db::PersistentKeyDB,
-	eth::{ethers_rpc::EthersRpcClient, retry_rpc::EthersRetryRpcClient},
+	eth::{
+		ethers_rpc::{EthersRpcClient, ReconnectSubscriptionClient},
+		retry_rpc::EthersRetryRpcClient,
+	},
 	settings,
 	state_chain_observer::client::{
 		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi,
@@ -69,8 +72,7 @@ where
 	let eth_client = EthersRetryRpcClient::new(
 		scope,
 		EthersRpcClient::new(settings).await?,
-		settings.ws_node_endpoint.clone(),
-		expected_chain_id,
+		ReconnectSubscriptionClient::new(settings.ws_node_endpoint.clone(), expected_chain_id),
 	);
 
 	let eth_source = EthSource::new(eth_client.clone()).shared(scope);

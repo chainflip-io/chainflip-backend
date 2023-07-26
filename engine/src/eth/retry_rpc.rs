@@ -34,8 +34,7 @@ impl EthersRetryRpcClient {
 	pub fn new(
 		scope: &Scope<'_, anyhow::Error>,
 		ethers_client: EthersRpcClient,
-		ws_node_endpoint: String,
-		chain_id: web3::types::U256,
+		sub_client: ReconnectSubscriptionClient,
 	) -> Self {
 		Self {
 			rpc_retry_client: RetrierClient::new(
@@ -46,7 +45,7 @@ impl EthersRetryRpcClient {
 			),
 			sub_retry_client: RetrierClient::new(
 				scope,
-				ReconnectSubscriptionClient::new(ws_node_endpoint, chain_id),
+				sub_client,
 				ETHERS_RPC_TIMEOUT,
 				MAX_CONCURRENT_SUBMISSIONS,
 			),
@@ -235,13 +234,14 @@ mod tests {
 		task_scope(|scope| {
 			async move {
 				let settings = Settings::new_test().unwrap();
-				let client = EthersRpcClient::new(&settings.eth).await.unwrap();
 
 				let retry_client = EthersRetryRpcClient::new(
 					scope,
-					client,
-					settings.eth.ws_node_endpoint,
-					web3::types::U256::from(1337),
+					EthersRpcClient::new(&settings.eth).await.unwrap(),
+					ReconnectSubscriptionClient::new(
+						settings.eth.ws_node_endpoint,
+						web3::types::U256::from(1337),
+					),
 				);
 
 				let chain_id = retry_client.chain_id().await;
