@@ -268,7 +268,7 @@ pub mod pallet {
 									offenders,
 								},
 							);
-							Self::deposit_event(Event::KeyHandoverFailure { ceremony_id });
+							Self::deposit_event(Event::KeygenFailure(ceremony_id));
 						},
 					);
 				},
