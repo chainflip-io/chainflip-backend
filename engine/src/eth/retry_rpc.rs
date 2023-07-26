@@ -1,3 +1,5 @@
+pub mod address_checker;
+
 use ethers::{
 	prelude::*,
 	types::{transaction::eip2718::TypedTransaction, TransactionReceipt},

@@ -1,3 +1,5 @@
+pub mod address_checker;
+
 use ethers::{prelude::*, signers::Signer, types::transaction::eip2718::TypedTransaction};
 
 use crate::settings;
