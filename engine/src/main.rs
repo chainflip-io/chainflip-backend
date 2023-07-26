@@ -26,10 +26,22 @@ use jsonrpsee_subxt::core::client::ClientT;
 use multisig::{self, bitcoin::BtcSigning, eth::EthSigning, polkadot::PolkadotSigning};
 use std::sync::{atomic::AtomicBool, Arc};
 use utilities::{
-	task_scope::{self, task_scope},
+	task_scope::{self, task_scope, ScopedJoinHandle},
 	CachedStream,
 };
 use web3::types::U256;
+
+const COMPATIBLE_RUNTIME_VERSION: SemVer = SemVer { major: 0, minor: 9, patch: 0 };
+
+fn is_compatible_with_runtime(version: SemVer) -> bool {
+	version.major == COMPATIBLE_RUNTIME_VERSION.major &&
+		version.minor == COMPATIBLE_RUNTIME_VERSION.minor
+}
+
+enum CfeStatus {
+	Active(ScopedJoinHandle<()>),
+	Idle,
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -51,6 +63,8 @@ async fn main() -> anyhow::Result<()> {
 				.build(&settings.state_chain.ws_endpoint)
 				.await?;
 
+			let mut cfe_status = CfeStatus::Idle;
+
 			loop {
 				let current_runtime_version = {
 					let bytes: Vec<u8> = ws_rpc_client
@@ -59,22 +73,32 @@ async fn main() -> anyhow::Result<()> {
 						.unwrap();
 					SemVer::decode(&mut bytes.as_slice()).unwrap()
 				};
-				tracing::info!(
-					"Current runtime compatibility version: {:?}",
-					current_runtime_version
-				);
 
-				// TODO: check if actually compatible
-				let is_compatible = true;
-				if is_compatible {
-					tracing::info!("Runtime version is compatible, starting the engine!");
-					break
-				} else {
-					tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+				let compatible = is_compatible_with_runtime(current_runtime_version);
+
+				match cfe_status {
+					CfeStatus::Active(_) =>
+						if !compatible {
+							tracing::info!(
+								"Runtime version ({current_runtime_version:?}) is no longer compatible, shutting down the engine!"
+							);
+							// This will exit the scope, dropping the handle and thus terminating
+							// the main task
+							break Err(anyhow::anyhow!("Incompatible runtime version"))
+						},
+					CfeStatus::Idle =>
+						if compatible {
+							tracing::info!("Runtime version ({current_runtime_version:?}) is compatible, starting the engine!");
+
+							let handle = scope.spawn_with_handle({
+								let settings = settings.clone();
+								async { task_scope(|scope| start(scope, settings).boxed()).await }
+							});
+
+							cfe_status = CfeStatus::Active(handle);
+						},
 				}
 			}
-
-			start(scope, settings).await
 		}
 		.boxed()
 	})
