@@ -2,7 +2,7 @@ extern crate alloc;
 
 use crate::{
 	btc::{BitcoinNetwork, ScriptPubkey},
-	dot::PolkadotAccountId,
+	dot::{PolkadotAccountId},
 	Chain,
 };
 use cf_primitives::{ChannelId, EthereumAddress, ForeignChain, NetworkEnvironment};
@@ -259,17 +259,17 @@ impl ToHumanreadableAddress for crate::eth::Address {
 
 	#[cfg(feature = "std")]
 	fn to_humanreadable(&self, _network_environment: NetworkEnvironment) -> Self::Humanreadable {
-		self.clone()
+		*self
 	}
 }
 
 impl ToHumanreadableAddress for PolkadotAccountId {
 	#[cfg(feature = "std")]
-	type Humanreadable = Self;
+	type Humanreadable = crate::dot::SubstrateNetworkAddress;
 
 	#[cfg(feature = "std")]
 	fn to_humanreadable(&self, _network_environment: NetworkEnvironment) -> Self::Humanreadable {
-		self.clone()
+		crate::dot::SubstrateNetworkAddress::polkadot(*self.aliased_ref())
 	}
 }
 
