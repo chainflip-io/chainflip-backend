@@ -52,10 +52,7 @@ pub enum SafeModeUpdate<T: Config> {
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use cf_chains::{
-		btc::{ScriptPubkey, Utxo},
-		dot::RuntimeVersion,
-	};
+	use cf_chains::btc::{ScriptPubkey, Utxo};
 	use cf_primitives::TxId;
 	use cf_traits::VaultKeyWitnessedHandler;
 
@@ -380,7 +377,6 @@ pub mod pallet {
 		pub ethereum_chain_id: u64,
 		pub polkadot_genesis_hash: PolkadotHash,
 		pub polkadot_vault_account_id: Option<PolkadotAccountId>,
-		pub polkadot_runtime_version: RuntimeVersion,
 		pub bitcoin_network: BitcoinNetwork,
 	}
 

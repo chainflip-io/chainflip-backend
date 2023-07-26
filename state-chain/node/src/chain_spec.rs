@@ -1,6 +1,6 @@
 use cf_chains::{
 	btc::BitcoinNetwork,
-	dot::{PolkadotAccountId, PolkadotHash, RuntimeVersion},
+	dot::{PolkadotAccountId, PolkadotHash},
 	eth,
 };
 use cf_primitives::{chains::assets, AccountRole, AssetAmount, AuthorityCount};
@@ -77,7 +77,6 @@ pub struct StateChainEnvironment {
 	min_funding: u128,
 	dot_genesis_hash: PolkadotHash,
 	dot_vault_account_id: Option<PolkadotAccountId>,
-	dot_runtime_version: RuntimeVersion,
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -117,14 +116,6 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		Ok(s) => Some(PolkadotAccountId::from_aliased(hex_decode::<32>(&s).unwrap())),
 		Err(_) => defaults.dot_vault_account_id,
 	};
-	let dot_spec_version: u32 = match env::var("DOT_SPEC_VERSION") {
-		Ok(s) => s.parse().unwrap(),
-		Err(_) => defaults.dot_runtime_version.spec_version,
-	};
-	let dot_transaction_version: u32 = match env::var("DOT_TRANSACTION_VERSION") {
-		Ok(s) => s.parse().unwrap(),
-		Err(_) => defaults.dot_runtime_version.transaction_version,
-	};
 
 	StateChainEnvironment {
 		flip_token_address,
@@ -140,10 +131,6 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		min_funding,
 		dot_genesis_hash,
 		dot_vault_account_id,
-		dot_runtime_version: RuntimeVersion {
-			spec_version: dot_spec_version,
-			transaction_version: dot_transaction_version,
-		},
 	}
 }
 
@@ -170,7 +157,6 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		min_funding,
 		dot_genesis_hash,
 		dot_vault_account_id,
-		dot_runtime_version,
 	} = get_environment_or_defaults(testnet::ENV);
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
@@ -230,7 +216,6 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 					ethereum_chain_id,
 					polkadot_genesis_hash: dot_genesis_hash,
 					polkadot_vault_account_id: dot_vault_account_id,
-					polkadot_runtime_version: dot_runtime_version,
 					bitcoin_network: BitcoinNetwork::Regtest,
 				},
 				eth_init_agg_key,
@@ -298,7 +283,6 @@ macro_rules! network_spec {
 					min_funding,
 					dot_genesis_hash,
 					dot_vault_account_id,
-					dot_runtime_version,
 				} = env_override.unwrap_or(ENV);
 				Ok(ChainSpec::from_genesis(
 					NETWORK_NAME,
@@ -341,7 +325,6 @@ macro_rules! network_spec {
 								ethereum_chain_id,
 								polkadot_genesis_hash: dot_genesis_hash,
 								polkadot_vault_account_id: dot_vault_account_id.clone(),
-								polkadot_runtime_version: dot_runtime_version,
 								bitcoin_network: BITCOIN_NETWORK,
 							},
 							eth_init_agg_key,
