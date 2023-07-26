@@ -19,7 +19,6 @@ use super::common::{ActiveAndFuture, ExternalChain, RuntimeHasChain};
 #[derive(Clone)]
 pub struct Epoch<Info, HistoricInfo> {
 	pub index: EpochIndex,
-	pub block_hash: state_chain_runtime::Hash,
 	pub info: Info,
 	pub historic_signal: Signal<HistoricInfo>,
 	pub expired_signal: Signal<()>,
@@ -35,7 +34,6 @@ enum EpochUpdate<Info, HistoricInfo> {
 #[derive(Clone)]
 pub struct EpochSource<Info, HistoricInfo> {
 	epochs: BTreeMap<EpochIndex, (Info, Option<HistoricInfo>)>,
-	initial_block_hash: state_chain_runtime::Hash,
 	epoch_update_receiver: async_broadcast::Receiver<(
 		EpochIndex,
 		state_chain_runtime::Hash,
@@ -48,11 +46,7 @@ impl<'a, 'env, StateChainClient, Info, HistoricInfo>
 	for EpochSource<Info, HistoricInfo>
 {
 	fn from(builder: EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>) -> Self {
-		Self {
-			epochs: builder.epochs,
-			initial_block_hash: builder.initial_block_hash,
-			epoch_update_receiver: builder.epoch_update_receiver,
-		}
+		Self { epochs: builder.epochs, epoch_update_receiver: builder.epoch_update_receiver }
 	}
 }
 
@@ -185,7 +179,6 @@ impl<Info: Clone + Send + Sync + 'static, HistoricInfo: Clone + Send + Sync + 's
 
 					Epoch {
 						index,
-						block_hash: self.initial_block_hash,
 						info,
 						historic_signal: match option_historic_info {
 							Some(historic_info) => Signal::signalled(historic_info),
@@ -203,7 +196,8 @@ impl<Info: Clone + Send + Sync + 'static, HistoricInfo: Clone + Send + Sync + 's
 			future: stream::unfold(
 				(self.epoch_update_receiver, historic_signallers, expired_signallers),
 				|(mut epoch_update_receiver, mut historic_signallers, mut expired_signallers)| async move {
-					while let Some((index, block_hash, update)) = epoch_update_receiver.next().await
+					while let Some((index, _block_hash, update)) =
+						epoch_update_receiver.next().await
 					{
 						match update {
 							EpochUpdate::NewCurrent(info) => {
@@ -214,13 +208,7 @@ impl<Info: Clone + Send + Sync + 'static, HistoricInfo: Clone + Send + Sync + 's
 								expired_signallers.insert(index, expired_signaller);
 
 								return Some((
-									Epoch {
-										index,
-										block_hash,
-										info,
-										historic_signal,
-										expired_signal,
-									},
+									Epoch { index, info, historic_signal, expired_signal },
 									(
 										epoch_update_receiver,
 										historic_signallers,
