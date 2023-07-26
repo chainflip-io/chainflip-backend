@@ -92,7 +92,7 @@ async fn main() -> anyhow::Result<()> {
 
 							let handle = scope.spawn_with_handle({
 								let settings = settings.clone();
-								async { task_scope(|scope| start(scope, settings).boxed()).await }
+								task_scope(|scope| start(scope, settings).boxed())
 							});
 
 							cfe_status = CfeStatus::Active(handle);
