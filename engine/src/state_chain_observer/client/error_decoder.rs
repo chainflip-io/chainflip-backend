@@ -6,7 +6,7 @@ pub struct ErrorDecoder {
 	errors: BTreeMap<u8, (String, BTreeMap<u8, (String, Vec<String>)>)>,
 }
 
-impl Default for ErrorDecoder{
+impl Default for ErrorDecoder {
 	fn default() -> Self {
 		let metadata = state_chain_runtime::Runtime::metadata();
 
