@@ -9,8 +9,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use tracing::{debug, info, info_span};
 use utilities::rle_bitmap::RleBitmap;
 
-use crate::witnesser::checkpointing::WitnessedUntil;
-use multisig::{client::KeygenResultInfo, ChainSigning, ChainTag, KeyId, CHAIN_TAG_SIZE};
+use multisig::{client::KeygenResultInfo, ChainSigning, KeyId, CHAIN_TAG_SIZE};
 
 use anyhow::{anyhow, bail, Context, Result};
 
@@ -28,9 +27,6 @@ const PARTIAL_PREFIX_SIZE: usize = PREFIX_SIZE - CHAIN_TAG_SIZE;
 
 /// Keygen data uses a prefix that is a combination of a keygen data prefix and the chain tag
 const KEYGEN_DATA_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"key_____";
-/// The Witnesser checkpoint uses a prefix that is a combination of a checkpoint prefix and the
-/// chain tag
-const WITNESSER_CHECKPOINT_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"check___";
 /// The continuous adapter uses a prefix that is a combination of a prefix, and the
 /// witnesser name
 const PROCESSED_BLOCKS_PARTIAL_PREFIX: &[u8; PARTIAL_PREFIX_SIZE] = b"seen____";
@@ -51,8 +47,6 @@ pub struct PersistentKeyDB {
 	/// Underlying key-value database instance
 	kv_db: RocksDBKeyValueStore,
 }
-
-const CHECKPOINTING_KEY: () = ();
 
 impl PersistentKeyDB {
 	/// Open a key database or create one if it doesn't exist. If the schema version of the
@@ -133,21 +127,6 @@ impl PersistentKeyDB {
 		keys
 	}
 
-	/// Write the witnesser checkpoint to the db
-	pub fn update_checkpoint(&self, chain_tag: ChainTag, checkpoint: &WitnessedUntil) {
-		self.kv_db
-			.put_data(&checkpoint_prefix(chain_tag), &CHECKPOINTING_KEY, checkpoint)
-			.unwrap_or_else(|e| {
-				panic!("Failed to update {chain_tag} witnesser checkpoint. Error: {e}")
-			});
-	}
-
-	pub fn load_checkpoint(&self, chain_tag: ChainTag) -> Result<Option<WitnessedUntil>> {
-		self.kv_db
-			.get_data(&checkpoint_prefix(chain_tag), &CHECKPOINTING_KEY)
-			.context("Failed to load {chain_tag} checkpoint")
-	}
-
 	pub fn update_processed_blocks<Index: Ord + Serialize>(
 		&self,
 		witnesser_name: &str,
@@ -211,10 +190,6 @@ impl PersistentKeyDB {
 
 fn keygen_data_prefix<C: ChainSigning>() -> Vec<u8> {
 	[&KEYGEN_DATA_PARTIAL_PREFIX[..], &(C::CHAIN_TAG.to_bytes())[..]].concat()
-}
-
-fn checkpoint_prefix(chain_tag: ChainTag) -> Vec<u8> {
-	[WITNESSER_CHECKPOINT_PARTIAL_PREFIX, &(chain_tag.to_bytes())[..]].concat()
 }
 
 fn processed_blocks_prefix(witnessner_name: &str) -> Vec<u8> {

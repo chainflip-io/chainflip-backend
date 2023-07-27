@@ -4,7 +4,7 @@ use anyhow::{Ok, Result};
 
 use super::EthersRpcClient;
 
-abigen!(AddressChecker, "eth-contract-abis/perseverance-rc17/IAddressChecker.json");
+abigen!(AddressChecker, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IAddressChecker.json");
 
 #[async_trait::async_trait]
 pub trait AddressCheckerRpcApi {

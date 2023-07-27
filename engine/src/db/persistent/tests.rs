@@ -11,29 +11,6 @@ use super::*;
 use cf_primitives::GENESIS_EPOCH;
 use utilities::{assert_ok, testing::new_temp_directory_with_nonexistent_file};
 
-#[test]
-fn should_save_and_load_checkpoint() {
-	let (_dir, db_path) = new_temp_directory_with_nonexistent_file();
-	let test_checkpoint = WitnessedUntil { epoch_index: 69, block_number: 420 };
-
-	let chain = ChainTag::Ethereum;
-	// Open a fresh db and write the checkpoint to it
-	{
-		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
-
-		assert!(db.load_checkpoint(chain).unwrap().is_none());
-
-		db.update_checkpoint(chain, &test_checkpoint);
-	}
-
-	// Open the db file again and load the checkpoint
-	{
-		let db = PersistentKeyDB::open_and_migrate_to_latest(&db_path, None).unwrap();
-
-		assert_eq!(db.load_checkpoint(chain).unwrap(), Some(test_checkpoint));
-	}
-}
-
 fn get_single_key_data<C: CryptoScheme>() -> KeygenResultInfo<C> {
 	get_key_data_for_test::<C>(BTreeSet::from_iter([AccountId32::new([0; 32])]))
 }
