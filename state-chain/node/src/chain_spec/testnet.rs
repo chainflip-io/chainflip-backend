@@ -1,6 +1,6 @@
 pub use super::common::*;
 use super::{get_account_id_from_seed, StateChainEnvironment};
-use cf_chains::{btc::BitcoinNetwork, eth::CHAIN_ID_GOERLI};
+use cf_chains::{btc::BitcoinNetwork, dot::RuntimeVersion, eth::CHAIN_ID_GOERLI};
 use cf_primitives::{AccountId, AccountRole, BlockNumber, FlipBalance};
 use sc_service::ChainType;
 use sp_core::{sr25519, H256};
@@ -30,6 +30,7 @@ pub const ENV: StateChainEnvironment = StateChainEnvironment {
 		"63c94acc94e3275e480d9290f60ebb70338f63fdedeacc1a6d2551c7fc67ac0a"
 	)),
 	dot_vault_account_id: None,
+	dot_runtime_version: RuntimeVersion { spec_version: 9360, transaction_version: 19 },
 };
 
 pub const EPOCH_DURATION_BLOCKS: BlockNumber = 3 * HOURS;

@@ -84,6 +84,7 @@ pub struct StateChainEnvironment {
 	min_funding: u128,
 	dot_genesis_hash: PolkadotHash,
 	dot_vault_account_id: Option<PolkadotAccountId>,
+	dot_runtime_version: RuntimeVersion,
 }
 
 /// Get the values from the State Chain's environment variables. Else set them via the defaults
@@ -124,6 +125,15 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		Err(_) => defaults.dot_vault_account_id,
 	};
 
+	let dot_spec_version: u32 = match env::var("DOT_SPEC_VERSION") {
+		Ok(s) => s.parse().unwrap(),
+		Err(_) => defaults.dot_runtime_version.spec_version,
+	};
+	let dot_transaction_version: u32 = match env::var("DOT_TRANSACTION_VERSION") {
+		Ok(s) => s.parse().unwrap(),
+		Err(_) => defaults.dot_runtime_version.transaction_version,
+	};
+
 	StateChainEnvironment {
 		flip_token_address,
 		eth_usdc_address,
@@ -138,6 +148,10 @@ pub fn get_environment_or_defaults(defaults: StateChainEnvironment) -> StateChai
 		min_funding,
 		dot_genesis_hash,
 		dot_vault_account_id,
+		dot_runtime_version: RuntimeVersion {
+			spec_version: dot_spec_version,
+			transaction_version: dot_transaction_version,
+		},
 	}
 }
 
@@ -164,6 +178,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 		min_funding,
 		dot_genesis_hash,
 		dot_vault_account_id,
+		dot_runtime_version,
 	} = get_environment_or_defaults(testnet::ENV);
 	Ok(ChainSpec::from_genesis(
 		"CF Develop",
@@ -244,6 +259,7 @@ pub fn cf_development_config() -> Result<ChainSpec, String> {
 				common::THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
 				common::SWAP_TTL,
 				common::MINIMUM_SWAP_AMOUNTS.to_vec(),
+				dot_runtime_version,
 			)
 		},
 		// Bootnodes
@@ -290,6 +306,7 @@ macro_rules! network_spec {
 					min_funding,
 					dot_genesis_hash,
 					dot_vault_account_id,
+					dot_runtime_version,
 				} = env_override.unwrap_or(ENV);
 				Ok(ChainSpec::from_genesis(
 					NETWORK_NAME,
@@ -353,6 +370,7 @@ macro_rules! network_spec {
 							THRESHOLD_SIGNATURE_CEREMONY_TIMEOUT_BLOCKS,
 							SWAP_TTL,
 							MINIMUM_SWAP_AMOUNTS.to_vec(),
+							dot_runtime_version,
 						)
 					},
 					// Bootnodes
@@ -408,6 +426,7 @@ fn testnet_genesis(
 	threshold_signature_ceremony_timeout_blocks: BlockNumber,
 	swap_ttl: BlockNumber,
 	minimum_swap_amounts: Vec<(assets::any::Asset, AssetAmount)>,
+	dot_runtime_version: RuntimeVersion,
 ) -> GenesisConfig {
 	// Sanity Checks
 	for (account_id, aura_id, grandpa_id) in initial_authorities.iter() {
@@ -596,7 +615,7 @@ fn testnet_genesis(
 				block_height: 0,
 				tracked_data: PolkadotTrackedData {
 					median_tip: 0,
-					runtime_version: RuntimeVersion { spec_version: 17, transaction_version: 17 },
+					runtime_version: dot_runtime_version,
 				},
 			},
 		},
