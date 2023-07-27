@@ -40,7 +40,11 @@ type OptionalCeremonyReturn<C> = Option<
 	>,
 >;
 
-pub struct CeremonyRunner<Ceremony: CeremonyTrait, Chain: ChainSigning> {
+pub struct CeremonyRunner<Ceremony, Chain>
+where
+	Ceremony: CeremonyTrait,
+	Chain: ChainSigning<CryptoScheme = Ceremony::Crypto>,
+{
 	// `None` means that the ceremony is not yet authorised (but may start delaying messages)
 	stage: Option<DynStage<Ceremony>>,
 	// Note that because we use a map here, the number of messages
@@ -52,7 +56,11 @@ pub struct CeremonyRunner<Ceremony: CeremonyTrait, Chain: ChainSigning> {
 	_phantom: std::marker::PhantomData<Chain>,
 }
 
-impl<Ceremony: CeremonyTrait, Chain: ChainSigning> CeremonyRunner<Ceremony, Chain> {
+impl<Ceremony, Chain> CeremonyRunner<Ceremony, Chain>
+where
+	Ceremony: CeremonyTrait,
+	Chain: ChainSigning<CryptoScheme = Ceremony::Crypto>,
+{
 	/// Listen for requests until the ceremony is finished
 	/// Returns the id of the ceremony to make it easier to identify
 	/// which ceremony is finished when many are running
@@ -338,7 +346,11 @@ impl<Ceremony: CeremonyTrait, Chain: ChainSigning> CeremonyRunner<Ceremony, Chai
 }
 
 #[cfg(test)]
-impl<Ceremony: CeremonyTrait, Chain: ChainSigning> CeremonyRunner<Ceremony, Chain> {
+impl<Ceremony, Chain> CeremonyRunner<Ceremony, Chain>
+where
+	Ceremony: CeremonyTrait,
+	Chain: ChainSigning<CryptoScheme = Ceremony::Crypto>,
+{
 	/// This is to allow calling a private method from tests
 	pub fn new_unauthorised_for_test() -> Self {
 		Self::new_unauthorised(tokio::sync::mpsc::unbounded_channel().0)

@@ -682,7 +682,9 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 		data: Ceremony::Data,
 		latest_ceremony_id: CeremonyId,
 		scope: &Scope<'_, anyhow::Error>,
-	) {
+	) where
+		Chain: ChainSigning<CryptoScheme = Ceremony::Crypto>,
+	{
 		debug!("Received data {data} from [{sender_id}]");
 
 		// If no ceremony exists, create an unauthorised one (with ceremony id tracking
@@ -730,7 +732,10 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 		&mut self,
 		ceremony_id: CeremonyId,
 		scope: &Scope<'_, anyhow::Error>,
-	) -> &mut CeremonyHandle<Ceremony> {
+	) -> &mut CeremonyHandle<Ceremony>
+	where
+		Chain: ChainSigning<CryptoScheme = Ceremony::Crypto>,
+	{
 		self.ceremony_handles.entry(ceremony_id).or_insert_with(|| {
 			CeremonyHandle::spawn::<Chain>(ceremony_id, self.outcome_sender.clone(), scope)
 		})
@@ -794,7 +799,10 @@ impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
 		ceremony_id: CeremonyId,
 		outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
 		scope: &Scope<'_, anyhow::Error>,
-	) -> Self {
+	) -> Self
+	where
+		Chain: ChainSigning<CryptoScheme = Ceremony::Crypto>,
+	{
 		let (message_sender, message_receiver) = mpsc::unbounded_channel();
 		let (request_sender, request_receiver) = oneshot::channel();
 

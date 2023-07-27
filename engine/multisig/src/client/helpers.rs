@@ -174,7 +174,11 @@ lazy_static! {
 pub type StageMessages<T> = HashMap<AccountId, HashMap<AccountId, T>>;
 type KeygenCeremonyEth = KeygenCeremony<EvmCryptoScheme>;
 
-pub struct Node<C: CeremonyTrait, Chain: ChainSigning> {
+pub struct Node<C, Chain>
+where
+	C: CeremonyTrait,
+	Chain: ChainSigning<CryptoScheme = C::Crypto>,
+{
 	own_account_id: AccountId,
 	outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
 	pub ceremony_runner: CeremonyRunner<C, Chain>,
@@ -184,7 +188,11 @@ pub struct Node<C: CeremonyTrait, Chain: ChainSigning> {
 	outcome: Option<CeremonyOutcome<C>>,
 }
 
-fn new_node<C: CeremonyTrait, Chain: ChainSigning>(account_id: AccountId) -> Node<C, Chain> {
+fn new_node<C, Chain>(account_id: AccountId) -> Node<C, Chain>
+where
+	C: CeremonyTrait,
+	Chain: ChainSigning<CryptoScheme = C::Crypto>,
+{
 	let (outgoing_p2p_message_sender, outgoing_p2p_message_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
 
@@ -219,7 +227,11 @@ pub struct KeygenCeremonyDetails {
 	pub participants: BTreeSet<AccountId>,
 }
 
-impl<C: CeremonyTrait, Chain: ChainSigning> Node<C, Chain> {
+impl<C, Chain> Node<C, Chain>
+where
+	C: CeremonyTrait,
+	Chain: ChainSigning<CryptoScheme = C::Crypto>,
+{
 	fn on_ceremony_outcome(&mut self, outcome: CeremonyOutcome<C>) {
 		let span = debug_span!("Node", account_id = self.own_account_id.to_string());
 		let _entered = span.enter();
@@ -251,12 +263,15 @@ impl<C: CeremonyTrait, Chain: ChainSigning> Node<C, Chain> {
 	}
 }
 
-impl<C: CryptoScheme, Chain: ChainSigning> Node<SigningCeremony<C>, Chain> {
-	async fn request_signing(&mut self, signing_ceremony_details: SigningCeremonyDetails<C>) {
+impl<Chain: ChainSigning> Node<SigningCeremony<Chain::CryptoScheme>, Chain> {
+	async fn request_signing(
+		&mut self,
+		signing_ceremony_details: SigningCeremonyDetails<Chain::CryptoScheme>,
+	) {
 		let SigningCeremonyDetails { rng, ceremony_id, signers, payloads } =
 			signing_ceremony_details;
 
-		let request = prepare_signing_request::<C>(
+		let request = prepare_signing_request::<Chain::CryptoScheme>(
 			ceremony_id,
 			&self.own_account_id,
 			signers,
@@ -277,11 +292,11 @@ impl<C: CryptoScheme, Chain: ChainSigning> Node<SigningCeremony<C>, Chain> {
 	}
 }
 
-impl<C: CryptoScheme, Chain: ChainSigning> Node<KeygenCeremony<C>, Chain> {
+impl<Chain: ChainSigning> Node<KeygenCeremony<Chain::CryptoScheme>, Chain> {
 	pub async fn request_key_handover(
 		&mut self,
 		keygen_ceremony_details: KeygenCeremonyDetails,
-		resharing_context: ResharingContext<C>,
+		resharing_context: ResharingContext<Chain::CryptoScheme>,
 	) {
 		let KeygenCeremonyDetails { ceremony_id, rng, participants } = keygen_ceremony_details;
 
@@ -308,7 +323,7 @@ impl<C: CryptoScheme, Chain: ChainSigning> Node<KeygenCeremony<C>, Chain> {
 	pub async fn request_keygen(&mut self, keygen_ceremony_details: KeygenCeremonyDetails) {
 		let KeygenCeremonyDetails { ceremony_id, rng, participants } = keygen_ceremony_details;
 
-		let request = prepare_keygen_request::<C>(
+		let request = prepare_keygen_request::<Chain::CryptoScheme>(
 			ceremony_id,
 			&self.own_account_id,
 			participants,
@@ -328,13 +343,14 @@ impl<C: CryptoScheme, Chain: ChainSigning> Node<KeygenCeremony<C>, Chain> {
 	}
 }
 
-pub fn new_nodes<
+pub fn new_nodes<AccountIds, C, Chain>(
+	account_ids: AccountIds,
+) -> HashMap<AccountId, Node<C, Chain>>
+where
 	AccountIds: IntoIterator<Item = AccountId>,
 	C: CeremonyTrait,
-	Chain: ChainSigning,
->(
-	account_ids: AccountIds,
-) -> HashMap<AccountId, Node<C, Chain>> {
+	Chain: ChainSigning<CryptoScheme = C::Crypto>,
+{
 	account_ids
 		.into_iter()
 		.map(|account_id| (account_id.clone(), new_node(account_id)))
@@ -359,17 +375,22 @@ pub trait CeremonyRunnerStrategy {
 	async fn request_ceremony(&mut self, node_id: &AccountId);
 }
 
-pub struct CeremonyTestRunner<CeremonyRunnerData, C: CeremonyTrait, Chain: ChainSigning> {
+pub struct CeremonyTestRunner<CeremonyRunnerData, C, Chain>
+where
+	C: CeremonyTrait,
+	Chain: ChainSigning<CryptoScheme = C::Crypto>,
+{
 	pub nodes: HashMap<AccountId, Node<C, Chain>>,
 	pub ceremony_id: CeremonyId,
 	pub ceremony_runner_data: CeremonyRunnerData,
 	pub rng: Rng,
 }
 
-impl<CeremonyRunnerData, C: CeremonyTrait, Chain: ChainSigning>
-	CeremonyTestRunner<CeremonyRunnerData, C, Chain>
+impl<CeremonyRunnerData, C, Chain> CeremonyTestRunner<CeremonyRunnerData, C, Chain>
 where
 	Self: CeremonyRunnerStrategy<CeremonyType = C>,
+	C: CeremonyTrait,
+	Chain: ChainSigning<CryptoScheme = C::Crypto>,
 {
 	fn inner_new(
 		nodes: HashMap<AccountId, Node<C, Chain>>,
