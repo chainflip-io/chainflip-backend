@@ -87,7 +87,7 @@ fn blacklisted_asset_will_not_egress_via_batch_all() {
 fn blacklisted_asset_will_not_egress_via_ccm() {
 	new_test_ext().execute_with(|| {
 		let asset = ETH_ETH;
-		let ccm = CcmDepositMetadata {
+		let ccm = CcmChannelMetadata {
 			message: vec![0x00, 0x01, 0x02],
 			gas_budget: 1_000,
 			cf_parameters: vec![],
@@ -420,7 +420,7 @@ fn can_process_ccm_deposit() {
 		let from_asset = eth::Asset::Flip;
 		let to_asset = Asset::Eth;
 		let destination_address = ForeignChainAddress::Eth(Default::default());
-		let ccm = CcmDepositMetadata {
+		let ccm = CcmChannelMetadata {
 			message: vec![0x00, 0x01, 0x02],
 			gas_budget: 1_000,
 			cf_parameters: vec![],
@@ -474,7 +474,7 @@ fn can_egress_ccm() {
 	new_test_ext().execute_with(|| {
 		let destination_address: H160 = [0x01; 20].into();
 		let destination_asset = eth::Asset::Eth;
-		let ccm = CcmDepositMetadata {
+		let ccm = CcmChannelMetadata {
 			message: vec![0x00, 0x01, 0x02],
 			gas_budget: 1_000,
 			cf_parameters: vec![],

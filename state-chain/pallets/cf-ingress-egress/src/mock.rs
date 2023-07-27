@@ -3,7 +3,7 @@ pub use crate::{self as pallet_cf_ingress_egress};
 pub use cf_chains::{
 	address::{AddressDerivationApi, ForeignChainAddress},
 	eth::api::{EthereumApi, EthereumReplayProtection},
-	CcmDepositMetadata, Chain, ChainAbi, ChainEnvironment, DepositChannel,
+	CcmChannelMetadata, Chain, ChainAbi, ChainEnvironment, DepositChannel,
 };
 use cf_primitives::ChannelId;
 pub use cf_primitives::{

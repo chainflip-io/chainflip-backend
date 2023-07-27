@@ -20,7 +20,7 @@ use super::{
 };
 
 use anyhow::{anyhow, Result};
-use cf_chains::{address::EncodedAddress, CcmDepositMetadata, ChainOrAddress};
+use cf_chains::{address::EncodedAddress, CcmChannelMetadata, ChainOrAddress};
 use cf_primitives::{Asset, EthereumAddress, ForeignChain};
 use ethers::prelude::*;
 
@@ -168,7 +168,7 @@ where
 				try_into_primitive(dst_chain)?,
 				dst_address.to_vec(),
 			)?,
-			message_metadata: CcmDepositMetadata {
+			message_metadata: CcmChannelMetadata {
 				message: message.to_vec(),
 				gas_budget: try_into_primitive(gas_amount)?,
 				cf_parameters: cf_parameters.0.to_vec(),
@@ -202,7 +202,7 @@ where
 				try_into_primitive(dst_chain)?,
 				dst_address.to_vec(),
 			)?,
-			message_metadata: CcmDepositMetadata {
+			message_metadata: CcmChannelMetadata {
 				message: message.to_vec(),
 				gas_budget: try_into_primitive(gas_amount)?,
 				cf_parameters: cf_parameters.0.to_vec(),

@@ -14,8 +14,8 @@ use core::fmt::Debug;
 pub use async_result::AsyncResult;
 
 use cf_chains::{
-	address::ForeignChainAddress, ApiCall, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto,
-	Ethereum, Polkadot, SwapOrigin,
+	address::ForeignChainAddress, ApiCall, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi,
+	ChainCrypto, Ethereum, Polkadot, SwapOrigin,
 };
 use cf_primitives::{
 	chains::assets, AccountRole, Asset, AssetAmount, AuthorityCount, BasisPoints, BroadcastId,
@@ -668,7 +668,7 @@ pub trait DepositApi<C: Chain> {
 		destination_address: ForeignChainAddress,
 		broker_commission_bps: BasisPoints,
 		broker_id: Self::AccountId,
-		message_metadata: Option<CcmDepositMetadata>,
+		message_metadata: Option<CcmChannelMetadata>,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError>;
 
 	/// Expires a channel.
@@ -725,27 +725,27 @@ pub trait EgressApi<C: Chain> {
 	) -> EgressId;
 }
 
-impl<T: frame_system::Config> EgressApi<Ethereum> for T {
-	fn schedule_egress(
-		_asset: assets::eth::Asset,
-		_amount: <Ethereum as Chain>::ChainAmount,
-		_destination_address: <Ethereum as Chain>::ChainAccount,
-		_maybe_message: Option<CcmDepositMetadata>,
-	) -> EgressId {
-		(ForeignChain::Ethereum, 0)
-	}
-}
+// impl<T: frame_system::Config> EgressApi<Ethereum> for T {
+// 	fn schedule_egress(
+// 		_asset: assets::eth::Asset,
+// 		_amount: <Ethereum as Chain>::ChainAmount,
+// 		_destination_address: <Ethereum as Chain>::ChainAccount,
+// 		_maybe_message: Option<CcmDepositMetadata>,
+// 	) -> EgressId {
+// 		(ForeignChain::Ethereum, 0)
+// 	}
+// }
 
-impl<T: frame_system::Config> EgressApi<Polkadot> for T {
-	fn schedule_egress(
-		_asset: assets::dot::Asset,
-		_amount: <Polkadot as Chain>::ChainAmount,
-		_destination_address: <Polkadot as Chain>::ChainAccount,
-		_maybe_message: Option<CcmDepositMetadata>,
-	) -> EgressId {
-		(ForeignChain::Polkadot, 0)
-	}
-}
+// impl<T: frame_system::Config> EgressApi<Polkadot> for T {
+// 	fn schedule_egress(
+// 		_asset: assets::dot::Asset,
+// 		_amount: <Polkadot as Chain>::ChainAmount,
+// 		_destination_address: <Polkadot as Chain>::ChainAccount,
+// 		_maybe_message: Option<CcmDepositMetadata>,
+// 	) -> EgressId {
+// 		(ForeignChain::Polkadot, 0)
+// 	}
+// }
 
 pub trait VaultTransitionHandler<C: ChainCrypto> {
 	fn on_new_vault() {}
@@ -800,22 +800,22 @@ pub trait CcmHandler {
 		deposit_amount: AssetAmount,
 		destination_asset: Asset,
 		destination_address: ForeignChainAddress,
-		message_metadata: CcmDepositMetadata,
+		deposit_metadata: CcmDepositMetadata,
 		origin: SwapOrigin,
 	);
 }
 
-impl CcmHandler for () {
-	fn on_ccm_deposit(
-		_source_asset: Asset,
-		_deposit_amount: AssetAmount,
-		_destination_asset: Asset,
-		_destination_address: ForeignChainAddress,
-		_message_metadata: CcmDepositMetadata,
-		_origin: SwapOrigin,
-	) {
-	}
-}
+// impl CcmHandler for () {
+// 	fn on_ccm_deposit(
+// 		_source_asset: Asset,
+// 		_deposit_amount: AssetAmount,
+// 		_destination_asset: Asset,
+// 		_destination_address: ForeignChainAddress,
+// 		_message_metadata: CcmChannelMetadata,
+// 		_origin: SwapOrigin,
+// 	) {
+// 	}
+// }
 
 pub trait OnBroadcastReady<C: ChainAbi> {
 	type ApiCall: ApiCall<C>;

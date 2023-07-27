@@ -14,8 +14,8 @@ pub use weights::WeightInfo;
 
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi},
-	AllBatch, AllBatchError, CcmDepositMetadata, Chain, ChainAbi, ChainOrAddress,
-	ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FetchAssetParams,
+	AllBatch, AllBatchError, CcmChannelMetadata, CcmDepositMetadata, Chain, ChainAbi,
+	ChainOrAddress, ChannelLifecycleHooks, DepositChannel, ExecutexSwapAndCall, FetchAssetParams,
 	ForeignChainAddress, SwapOrigin, TransferAssetParams,
 };
 use cf_primitives::{
@@ -64,7 +64,8 @@ pub(crate) struct CrossChainMessage<C: Chain> {
 	pub destination_address: C::ChainAccount,
 	pub message: Vec<u8>,
 	// The sender of the deposit transaction. Can be a Chain or an Address.
-	pub source_address: ChainOrAddress,
+	pub source_chain: ForeignChain,
+	pub source_address: Option<ForeignChainAddress>,
 	// Where funds might be returned to if the message fails.
 	pub cf_parameters: Vec<u8>,
 }
@@ -126,7 +127,7 @@ pub mod pallet {
 		CcmTransfer {
 			destination_asset: Asset,
 			destination_address: ForeignChainAddress,
-			message_metadata: CcmDepositMetadata,
+			channel_metadata: CcmChannelMetadata,
 		},
 	}
 
@@ -545,7 +546,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 					amount: ccm.amount,
 					to: ccm.destination_address,
 				},
-				ccm.source_address,
+				ccm.source_address
+					.map_or(ChainOrAddress::Chain(ccm.source_chain), ChainOrAddress::Address),
 				ccm.message,
 			) {
 				Ok(api_call) => {
@@ -624,13 +626,14 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 			ChannelAction::CcmTransfer {
 				destination_asset,
 				destination_address,
-				message_metadata,
+				channel_metadata,
 			} => T::CcmHandler::on_ccm_deposit(
 				asset.into(),
 				amount.into(),
 				destination_asset,
 				destination_address,
-				message_metadata,
+				// TODO: the engine can fill in the address.
+				CcmDepositMetadata::without_address::<T::TargetChain>(channel_metadata),
 				SwapOrigin::DepositChannel {
 					deposit_address: T::AddressConverter::to_encoded_address(
 						deposit_address.clone().into(),
@@ -737,16 +740,20 @@ impl<T: Config<I>, I: 'static> EgressApi<T::TargetChain> for Pallet<T, I> {
 		});
 		let egress_id = (<T as Config<I>>::TargetChain::get(), egress_counter);
 		match maybe_message {
-			Some(CcmDepositMetadata { message, cf_parameters, source_address, .. }) =>
-				ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
-					egress_id,
-					asset,
-					amount,
-					destination_address: destination_address.clone(),
-					message,
-					cf_parameters,
-					source_address,
-				}),
+			Some(CcmDepositMetadata {
+				source_chain,
+				source_address,
+				channel_metadata: CcmChannelMetadata { message, cf_parameters, .. },
+			}) => ScheduledEgressCcm::<T, I>::append(CrossChainMessage {
+				egress_id,
+				asset,
+				amount,
+				destination_address: destination_address.clone(),
+				message,
+				cf_parameters,
+				source_chain,
+				source_address,
+			}),
 			None => ScheduledEgressFetchOrTransfer::<T, I>::append(FetchOrTransfer::<
 				T::TargetChain,
 			>::Transfer {
@@ -788,15 +795,15 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 		destination_address: ForeignChainAddress,
 		broker_commission_bps: BasisPoints,
 		broker_id: T::AccountId,
-		message_metadata: Option<CcmDepositMetadata>,
+		message_metadata: Option<CcmChannelMetadata>,
 	) -> Result<(ChannelId, ForeignChainAddress), DispatchError> {
 		let (channel_id, deposit_address) = Self::open_channel(
 			source_asset,
 			match message_metadata {
-				Some(msg) => ChannelAction::CcmTransfer {
+				Some(channel_metadata) => ChannelAction::CcmTransfer {
 					destination_asset,
 					destination_address,
-					message_metadata: msg,
+					channel_metadata,
 				},
 				None => ChannelAction::Swap {
 					destination_asset,

@@ -21,7 +21,7 @@ pub mod primitives {
 	pub type RedemptionAmount = pallet_cf_funding::RedemptionAmount<FlipBalance>;
 	pub use cf_chains::{
 		address::{EncodedAddress, ForeignChainAddress},
-		CcmDepositMetadata, ChainOrAddress, RequestDepositCcmMetadata,
+		CcmChannelMetadata, ChainOrAddress, RequestDepositCcmMetadata,
 	};
 }
 

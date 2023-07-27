@@ -86,18 +86,17 @@ benchmarks! {
 		call.dispatch_bypass_filter(gov_origin)?;
 
 		let origin = T::EnsureWitnessed::successful_origin();
-		let metadata = CcmDepositMetadata {
+		let metadata = CcmChannelMetadata {
 			message: vec![0x00],
 			gas_budget: 1,
 			cf_parameters: vec![],
-			source_address: ChainOrAddress::Address(ForeignChainAddress::benchmark_value()),
 		};
 		let call = Call::<T>::ccm_deposit{
 			source_asset: Asset::Usdc,
 			deposit_amount: 1_000,
 			destination_asset: Asset::Eth,
 			destination_address: EncodedAddress::benchmark_value(),
-			message_metadata: metadata,
+			deposit_metadata: CcmDepositMetadata::with_address(ForeignChainAddress::benchmark_value(), metadata),
 			tx_hash: Default::default(),
 		};
 	}: {

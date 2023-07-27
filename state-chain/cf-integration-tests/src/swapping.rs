@@ -5,7 +5,7 @@ use cf_amm::{
 };
 use cf_chains::{
 	address::{AddressConverter, AddressDerivationApi, EncodedAddress},
-	CcmDepositMetadata, Chain, ChainOrAddress, Ethereum, ForeignChain, ForeignChainAddress,
+	CcmChannelMetadata, Chain, ChainOrAddress, Ethereum, ForeignChain, ForeignChainAddress,
 	RequestDepositCcmMetadata, SwapOrigin,
 };
 use cf_primitives::{AccountId, AccountRole, Asset, AssetAmount, STABLE_ASSET};
@@ -417,7 +417,7 @@ fn can_process_ccm_via_direct_deposit() {
 
 		let gas_budget = 100;
 		let deposit_amount = 1_000;
-		let message = CcmDepositMetadata {
+		let message = CcmChannelMetadata {
 			message: vec![0u8, 1u8, 2u8, 3u8, 4u8],
 			gas_budget,
 			cf_parameters: vec![],

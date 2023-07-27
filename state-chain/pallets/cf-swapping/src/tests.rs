@@ -8,7 +8,7 @@ use cf_chains::{
 	address::{to_encoded_address, AddressConverter, EncodedAddress, ForeignChainAddress},
 	btc::{BitcoinNetwork, ScriptPubkey},
 	dot::PolkadotAccountId,
-	AnyChain, CcmDepositMetadata, ChainOrAddress, RequestDepositCcmMetadata,
+	AnyChain, CcmChannelMetadata, ChainOrAddress, RequestDepositCcmMetadata,
 };
 use cf_primitives::{Asset, AssetAmount, ForeignChain};
 use cf_test_utilities::{assert_event_sequence, assert_events_match};
@@ -68,7 +68,7 @@ fn assert_failed_ccm(
 	amount: AssetAmount,
 	output: Asset,
 	destination_address: ForeignChainAddress,
-	ccm: CcmDepositMetadata,
+	ccm: CcmChannelMetadata,
 	reason: CcmFailReason,
 ) {
 	Swapping::on_ccm_deposit(
@@ -82,7 +82,7 @@ fn assert_failed_ccm(
 	System::assert_last_event(RuntimeEvent::Swapping(Event::CcmFailed {
 		reason,
 		destination_address: MockAddressConverter::to_encoded_address(destination_address),
-		message_metadata: ccm,
+		deposit_metadata: ccm,
 	}));
 }
 
@@ -383,7 +383,7 @@ fn can_set_swap_ttl() {
 fn reject_invalid_ccm_deposit() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
-		let ccm = CcmDepositMetadata {
+		let ccm = CcmChannelMetadata {
 			message: vec![0x00],
 			gas_budget,
 			cf_parameters: vec![],
@@ -609,7 +609,7 @@ fn can_process_ccms_via_extrinsic() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 2_000;
 		let deposit_amount = 1_000_000;
-		let ccm = CcmDepositMetadata {
+		let ccm = CcmChannelMetadata {
 			message: vec![0x02],
 			gas_budget,
 			cf_parameters: vec![],
@@ -696,7 +696,7 @@ fn can_handle_ccms_with_non_native_gas_asset() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
 		let deposit_amount = 10_000;
-		let ccm = CcmDepositMetadata {
+		let ccm = CcmChannelMetadata {
 			message: vec![0x00],
 			gas_budget,
 			cf_parameters: vec![],
@@ -781,7 +781,7 @@ fn can_handle_ccms_with_native_gas_asset() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
 		let deposit_amount = 10_000;
-		let ccm = CcmDepositMetadata {
+		let ccm = CcmChannelMetadata {
 			message: vec![0x00],
 			gas_budget,
 			cf_parameters: vec![],
@@ -861,7 +861,7 @@ fn can_handle_ccms_with_no_swaps_needed() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
 		let deposit_amount = 10_000;
-		let ccm = CcmDepositMetadata {
+		let ccm = CcmChannelMetadata {
 			message: vec![0x00],
 			gas_budget,
 			cf_parameters: vec![],
@@ -1156,7 +1156,7 @@ fn ccm_via_exintrincs_below_minimum_gas_budget_are_rejected() {
 		let deposit_amount = 10_000;
 		let from: Asset = Asset::Eth;
 		let to: Asset = Asset::Flip;
-		let ccm = CcmDepositMetadata {
+		let ccm = CcmChannelMetadata {
 			message: vec![0x01],
 			gas_budget,
 			cf_parameters: vec![],
@@ -1301,7 +1301,7 @@ fn ccm_via_extrinsic_with_principal_below_minimum_are_rejected() {
 		let principal_amount = 2_000;
 		let from: Asset = Asset::Eth;
 		let to: Asset = Asset::Flip;
-		let ccm = CcmDepositMetadata {
+		let ccm = CcmChannelMetadata {
 			message: vec![0x01],
 			gas_budget,
 			cf_parameters: vec![],
@@ -1373,7 +1373,7 @@ fn ccm_without_principal_swaps_are_accepted() {
 		let principal_amount = 10_000;
 		let eth: Asset = Asset::Eth;
 		let flip: Asset = Asset::Flip;
-		let ccm = CcmDepositMetadata {
+		let ccm = CcmChannelMetadata {
 			message: vec![0x01],
 			gas_budget,
 			cf_parameters: vec![],
@@ -1461,7 +1461,7 @@ fn ccm_with_gas_below_minimum_swap_amount_allowed() {
 	new_test_ext().execute_with(|| {
 		let gas_budget = 1_000;
 		let flip: Asset = Asset::Flip;
-		let ccm = CcmDepositMetadata {
+		let ccm = CcmChannelMetadata {
 			message: vec![0x01],
 			gas_budget,
 			cf_parameters: vec![],
@@ -1654,7 +1654,7 @@ fn cannot_withdraw_in_safe_mode() {
 #[test]
 fn ccm_swaps_emits_events() {
 	new_test_ext().execute_with(|| {
-		let ccm = CcmDepositMetadata {
+		let ccm = CcmChannelMetadata {
 			message: vec![0x01],
 			gas_budget: 1_000,
 			cf_parameters: vec![],

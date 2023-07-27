@@ -33,7 +33,7 @@ use cf_chains::{
 		api::{EthEnvironmentProvider, EthereumApi, EthereumContract, EthereumReplayProtection},
 		Ethereum,
 	},
-	AnyChain, ApiCall, CcmDepositMetadata, Chain, ChainAbi, ChainCrypto, ChainEnvironment,
+	AnyChain, ApiCall, CcmChannelMetadata, Chain, ChainAbi, ChainCrypto, ChainEnvironment,
 	ForeignChain, ReplayProtectionProvider, SetCommKeyWithAggKey, SetGovKeyWithAggKey,
 	TransactionBuilder,
 };
