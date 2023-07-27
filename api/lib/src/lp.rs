@@ -235,7 +235,7 @@ pub async fn mint_range_order(
 	.await
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct BurnRageOrderReturn {
 	assets_credited: SideMap<AssetAmount>,
 	collected_fees: SideMap<AssetAmount>,
@@ -298,7 +298,7 @@ pub async fn burn_range_order(
 	.await
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct MintLimitOrderReturn {
 	assets_debited: AssetAmount,
 	collected_fees: AssetAmount,
@@ -361,7 +361,7 @@ pub async fn mint_limit_order(
 	.await
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct BurnLimitOrderReturn {
 	assets_credited: AssetAmount,
 	collected_fees: AssetAmount,
