@@ -122,15 +122,11 @@ async function testAll() {
   // otherwise in subsequent approvals the broker might not send the transaction confusing the eth nonce.
   await approveTokenVault(
     'USDC',
-    (
-      BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * BigInt(6)
-    ).toString(),
+    (BigInt(amountToFineAmount(defaultAssetAmounts('USDC'), assetDecimals.USDC)) * 6n).toString(),
   );
   await approveTokenVault(
     'FLIP',
-    (
-      BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * BigInt(6)
-    ).toString(),
+    (BigInt(amountToFineAmount(defaultAssetAmounts('FLIP'), assetDecimals.FLIP)) * 6n).toString(),
   );
 
   const ccmContractSwaps = Promise.all([
