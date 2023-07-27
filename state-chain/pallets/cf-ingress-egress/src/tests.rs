@@ -792,3 +792,48 @@ fn handle_pending_deployment_same_block() {
 		assert_eq!(ScheduledEgressFetchOrTransfer::<Test, _>::decode_len().unwrap_or_default(), 0);
 	});
 }
+
+#[test]
+fn channel_reuse_with_different_assets() {
+	const ASSET_1: eth::Asset = eth::Asset::Eth;
+	const ASSET_2: eth::Asset = eth::Asset::Flip;
+	new_test_ext()
+		// First, request a deposit address and use it, then close it so it gets recycled.
+		.request_address_and_deposit(&[(ALICE, ASSET_1, 100_000)])
+		.map_context(|mut result| result.pop().unwrap())
+		.then_execute_at_next_block(|ctx| {
+			// Dispatch callbacks to finalise the ingress.
+			MockEgressBroadcaster::dispatch_all_callbacks();
+			ctx
+		})
+		.inspect_storage(|(_, address, asset)| {
+			assert_eq!(*asset, ASSET_1);
+			assert!(
+				DepositChannelLookup::<Test, _>::get(address).unwrap().deposit_channel.asset ==
+					*asset
+			);
+		})
+		.then_execute_at_next_block(|(channel_id, channel_address, _)| {
+			// Close the channel.
+			IngressEgress::close_channel(channel_address);
+			channel_id
+		})
+		.inspect_storage(|channel_id| {
+			assert!(DepositChannelLookup::<Test, _>::get(H160(ALICE_ETH_ADDRESS)).is_none());
+			assert!(
+				DepositChannelPool::<Test, _>::iter_values().next().unwrap().channel_id ==
+					*channel_id
+			);
+		})
+		// Request a new address with a different asset.
+		.request_deposit_addresses(&[(ALICE, ASSET_2)])
+		.map_context(|mut result| result.pop().unwrap())
+		// Ensure that the deposit channel's asset is updated.
+		.inspect_storage(|(_, address, asset)| {
+			assert_eq!(*asset, ASSET_2);
+			assert!(
+				DepositChannelLookup::<Test, _>::get(address).unwrap().deposit_channel.asset ==
+					*asset
+			);
+		});
+}
