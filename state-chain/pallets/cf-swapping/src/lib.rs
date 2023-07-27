@@ -797,9 +797,9 @@ pub mod pallet {
 				)
 				.expect("bundle_input >= swap_amount ∴ result can't overflow");
 
-				if swap_output > 0 {
-					swap.update_swap_result(direction, swap_output);
-				} else {
+				swap.update_swap_result(direction, swap_output);
+
+				if swap_output > 0 && matches!(swap.swap_type, SwapType::Swap(_)) {
 					// This is unlikely but theoretically possible if, for example, the initial swap
 					// input is so small compared to the total bundle size that it rounds down to
 					// zero when we do the division.
@@ -868,8 +868,10 @@ pub mod pallet {
 			(ccm_output_principal, ccm_output_gas): (AssetAmount, AssetAmount),
 		) {
 			let gas_asset = ForeignChain::from(ccm_swap.destination_asset).gas_asset();
-			// Insert gas budget into storage.
-			CcmGasBudget::<T>::insert(ccm_id, (gas_asset, ccm_output_gas));
+			// If gas is non-zero, insert gas budget into storage.
+			if !ccm_output_gas.is_zero() {
+				CcmGasBudget::<T>::insert(ccm_id, (gas_asset, ccm_output_gas));
+			}
 
 			// Schedule the given ccm to be egressed and deposit a event.
 			let egress_id = T::EgressHandler::schedule_egress(
@@ -884,14 +886,6 @@ pub mod pallet {
 					egress_id,
 					asset: ccm_swap.destination_asset,
 					amount: ccm_output_principal,
-				});
-			}
-			if let Some(swap_id) = ccm_swap.gas_swap_id {
-				Self::deposit_event(Event::<T>::SwapEgressScheduled {
-					swap_id,
-					egress_id,
-					asset: gas_asset,
-					amount: ccm_output_gas,
 				});
 			}
 			Self::deposit_event(Event::<T>::CcmEgressScheduled { ccm_id, egress_id });

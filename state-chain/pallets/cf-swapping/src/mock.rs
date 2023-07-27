@@ -72,6 +72,7 @@ impl_mock_runtime_safe_mode! { swapping: PalletSafeMode }
 parameter_types! {
 	pub static NetworkFee: Percent = Percent::from_percent(0);
 	pub static Swaps: Vec<(Asset, Asset, AssetAmount)> = vec![];
+	pub static SwapRate: f64 = 1f64;
 }
 pub struct MockSwappingApi;
 impl SwappingApi for MockSwappingApi {
@@ -91,7 +92,7 @@ impl SwappingApi for MockSwappingApi {
 		};
 		swaps.push((from, to, input_amount));
 		Swaps::set(swaps);
-		Ok(input_amount)
+		Ok((input_amount as f64 * SwapRate::get()) as AssetAmount)
 	}
 }
 
