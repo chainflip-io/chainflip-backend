@@ -9,9 +9,9 @@ mod tests;
 pub mod weights;
 pub use weights::WeightInfo;
 
-use cf_chains::Chain;
+use cf_chains::{Chain, ChainState};
 use cf_traits::{Chainflip, GetBlockHeight};
-use frame_support::{dispatch::DispatchResultWithPostInfo};
+use frame_support::dispatch::DispatchResultWithPostInfo;
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::marker::PhantomData;
@@ -19,7 +19,7 @@ use sp_std::marker::PhantomData;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::{ *};
+	use frame_support::pallet_prelude::*;
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -35,26 +35,9 @@ pub mod pallet {
 		type WeightInfo: WeightInfo;
 	}
 
-
-
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
 	pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
-
-	#[derive(
-		PartialEqNoBound,
-		EqNoBound,
-		CloneNoBound,
-		Encode,
-		Decode,
-		TypeInfo,
-		MaxEncodedLen,
-		DebugNoBound,
-	)]
-	pub struct ChainState<C: Chain> {
-		pub block_height: C::ChainBlockNumber,
-		pub tracked_data: C::TrackedData,
-	}
 
 	/// The tracked state of the external chain.
 	/// It is safe to unwrap() this value. We set it at genesis and it is only ever updated
@@ -79,6 +62,31 @@ pub mod pallet {
 		StaleDataSubmitted,
 	}
 
+	#[pallet::genesis_config]
+	pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
+		pub init_chain_state: ChainState<T::TargetChain>,
+	}
+
+	#[pallet::genesis_build]
+	impl<T: Config<I>, I: 'static> GenesisBuild<T, I> for GenesisConfig<T, I> {
+		fn build(&self) {
+			CurrentChainState::<T, I>::put(self.init_chain_state.clone());
+		}
+	}
+
+	#[cfg(feature = "std")]
+	impl<T: Config<I>, I: 'static> Default for GenesisConfig<T, I> {
+		fn default() -> Self {
+			use sp_runtime::traits::Zero;
+			Self {
+				init_chain_state: ChainState {
+					block_height: <T::TargetChain as Chain>::ChainBlockNumber::zero(),
+					tracked_data: <T::TargetChain as Chain>::TrackedData::default(),
+				},
+			}
+		}
+	}
+
 	#[pallet::call]
 	impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		/// Logs the latest known state of the external chain defined by [Config::TargetChain].
@@ -99,7 +107,8 @@ pub mod pallet {
 
 			CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|previous_chain_state| {
 				ensure!(
-					new_chain_state.block_height > previous_chain_state.as_ref().unwrap().block_height,
+					new_chain_state.block_height >
+						previous_chain_state.as_ref().unwrap().block_height,
 					Error::<T, I>::StaleDataSubmitted
 				);
 				*previous_chain_state = Some(new_chain_state.clone());

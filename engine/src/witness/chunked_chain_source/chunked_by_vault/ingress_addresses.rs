@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::witness::chain_source::{ChainClient, ChainStream};
+use cf_chains::ChainState;
 use frame_support::CloneNoBound;
 use futures::FutureExt;
 use futures_core::FusedStream;
@@ -24,6 +25,8 @@ use crate::{
 
 use super::{builder::ChunkedByVaultBuilder, ChunkedByVault};
 
+type Addresses<Inner> = Vec<DepositChannelDetails<<Inner as ChunkedByVault>::Chain>>;
+
 /// This helps ensure the set of ingress addresses witnessed at each block are consistent across
 /// every validator
 #[allow(clippy::type_complexity)]
@@ -32,10 +35,7 @@ where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 {
 	inner: Inner,
-	receiver: tokio::sync::watch::Receiver<(
-		pallet_cf_chain_tracking::ChainState<Inner::Chain>,
-		Addresses<Inner>,
-	)>,
+	receiver: tokio::sync::watch::Receiver<(ChainState<Inner::Chain>, Addresses<Inner>)>,
 }
 impl<Inner: ChunkedByVault> IngressAddresses<Inner>
 where
@@ -44,10 +44,7 @@ where
 	// We wait for the chain_tracking to pass a blocks height before assessing the addresses that
 	// should be witnessed at that block to ensure, the set of addresses each engine attempts to
 	// witness at a given block is consistent
-	fn is_header_ready(
-		index: Inner::Index,
-		chain_state: &pallet_cf_chain_tracking::ChainState<Inner::Chain>,
-	) -> bool {
+	fn is_header_ready(index: Inner::Index, chain_state: &ChainState<Inner::Chain>) -> bool {
 		index < chain_state.block_height
 	}
 
@@ -60,7 +57,7 @@ where
 	async fn get_chain_state_and_addresses<StateChainClient: StorageApi + Send + Sync + 'static>(
 		state_chain_client: &StateChainClient,
 		block_hash: state_chain_runtime::Hash,
-	) -> (pallet_cf_chain_tracking::ChainState<Inner::Chain>, Addresses<Inner>)
+	) -> (ChainState<Inner::Chain>, Addresses<Inner>)
 	where
 		state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 	{
@@ -146,7 +143,7 @@ where
 				struct State<Inner: ChunkedByVault> where
 				state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain> {
 					receiver:
-						tokio::sync::watch::Receiver<(ChainState<Inner>, Addresses<Inner>)>,
+						tokio::sync::watch::Receiver<(ChainState<Inner::Chain>, Addresses<Inner>)>,
 					pending_headers: Vec<Header<Inner::Index, Inner::Hash, Inner::Data>>,
 					ready_headers:
 						Vec<Header<Inner::Index, Inner::Hash, (Inner::Data, Addresses<Inner>)>>,
@@ -216,20 +213,13 @@ where
 	}
 }
 
-type ChainState<Inner> = pallet_cf_chain_tracking::ChainState<<Inner as ChunkedByVault>::Chain>;
-
-type Addresses<Inner> = Vec<DepositChannelDetails<<Inner as ChunkedByVault>::Chain>>;
-
 #[derive(CloneNoBound)]
 pub struct IngressAddressesClient<Inner: ChunkedByVault>
 where
 	state_chain_runtime::Runtime: RuntimeHasChain<Inner::Chain>,
 {
 	inner_client: Inner::Client,
-	receiver: tokio::sync::watch::Receiver<(
-		pallet_cf_chain_tracking::ChainState<Inner::Chain>,
-		Addresses<Inner>,
-	)>,
+	receiver: tokio::sync::watch::Receiver<(ChainState<Inner::Chain>, Addresses<Inner>)>,
 }
 
 impl<Inner: ChunkedByVault> IngressAddressesClient<Inner>
@@ -238,10 +228,7 @@ where
 {
 	pub fn new(
 		inner_client: Inner::Client,
-		receiver: tokio::sync::watch::Receiver<(
-			pallet_cf_chain_tracking::ChainState<Inner::Chain>,
-			Addresses<Inner>,
-		)>,
+		receiver: tokio::sync::watch::Receiver<(ChainState<Inner::Chain>, Addresses<Inner>)>,
 	) -> Self {
 		Self { inner_client, receiver }
 	}

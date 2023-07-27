@@ -10,7 +10,8 @@ use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use frame_support::{
 	pallet_prelude::{MaybeSerializeDeserialize, Member},
 	traits::Get,
-	Blake2_256, Parameter, RuntimeDebug, StorageHasher,
+	Blake2_256, CloneNoBound, DebugNoBound, EqNoBound, Parameter, PartialEqNoBound, RuntimeDebug,
+	StorageHasher,
 };
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
@@ -83,7 +84,13 @@ pub trait Chain: Member + Parameter {
 
 	type TransactionFee: Member + Parameter + MaxEncodedLen + BenchmarkValue;
 
-	type TrackedData: Member + Parameter + MaxEncodedLen + Unpin + BenchmarkValue;
+	type TrackedData: Default
+		+ MaybeSerializeDeserialize
+		+ Member
+		+ Parameter
+		+ MaxEncodedLen
+		+ Unpin
+		+ BenchmarkValue;
 
 	type ChainAsset: Member
 		+ Parameter
@@ -323,4 +330,13 @@ pub struct CcmDepositMetadata {
 pub enum SwapOrigin {
 	DepositChannel { deposit_address: address::EncodedAddress, channel_id: ChannelId },
 	Vault { tx_hash: TransactionHash },
+}
+
+#[derive(
+	PartialEqNoBound, EqNoBound, CloneNoBound, Encode, Decode, TypeInfo, MaxEncodedLen, DebugNoBound,
+)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct ChainState<C: Chain> {
+	pub block_height: C::ChainBlockNumber,
+	pub tracked_data: C::TrackedData,
 }

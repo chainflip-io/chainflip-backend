@@ -211,10 +211,18 @@ pub struct EpochStartData {
 	pub vault_account: PolkadotAccountId,
 }
 
-#[derive(Default, Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
+#[derive(Clone, Encode, Decode, MaxEncodedLen, TypeInfo, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct PolkadotTrackedData {
 	pub median_tip: PolkadotBalance,
 	pub runtime_version: RuntimeVersion,
+}
+
+impl Default for PolkadotTrackedData {
+	#[track_caller]
+	fn default() -> Self {
+		unreachable!("You should not use the default chain tracking, as it's meaningless.")
+	}
 }
 
 impl Chain for Polkadot {

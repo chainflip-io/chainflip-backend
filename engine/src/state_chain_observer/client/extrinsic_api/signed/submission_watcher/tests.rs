@@ -1,6 +1,5 @@
-use cf_chains::dot;
+use cf_chains::{dot, ChainState};
 use jsonrpsee::types::ErrorObject;
-use pallet_cf_chain_tracking::ChainState;
 
 use crate::{
 	constants::SIGNED_EXTRINSIC_LIFETIME,

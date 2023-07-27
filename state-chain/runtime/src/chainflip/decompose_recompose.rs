@@ -103,12 +103,12 @@ mod tests {
 		btc::{BitcoinFeeInfo, BitcoinTrackedData},
 		dot::PolkadotTrackedData,
 		eth::EthereumTrackedData,
-		Bitcoin, Chain, Ethereum, Polkadot,
+		Bitcoin, Chain, ChainState, Ethereum, Polkadot,
 	};
 	use cf_primitives::{AccountRole, ForeignChain};
 	use cf_traits::EpochInfo;
 	use frame_support::{assert_ok, traits::Get, Hashable};
-	use pallet_cf_chain_tracking::ChainState;
+	use pallet_cf_chain_tracking::CurrentChainState;
 	use pallet_cf_witnesser::CallHash;
 	use sp_std::{collections::btree_set::BTreeSet, iter};
 
@@ -196,6 +196,12 @@ mod tests {
 	#[test]
 	fn test_priority_fee_witnessing() {
 		frame_support::sp_io::TestExternalities::new_empty().execute_with(|| {
+			// This would be set at genesis
+			CurrentChainState::<Runtime, EthereumInstance>::put(ChainState {
+				block_height: 0,
+				tracked_data: EthereumTrackedData { base_fee: BASE_FEE, priority_fee: 10 },
+			});
+
 			let calls = [1u32, 100, 12, 10, 9, 11].map(chain_tracking_call_with_fee::<Ethereum>);
 
 			let authorities =
@@ -225,7 +231,8 @@ mod tests {
 			}
 
 			assert_eq!(
-				pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get().unwrap(),
+				pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get()
+					.unwrap(),
 				ChainState {
 					block_height: BLOCK_HEIGHT,
 					tracked_data: EthereumTrackedData { base_fee: BASE_FEE, priority_fee: 10 }
