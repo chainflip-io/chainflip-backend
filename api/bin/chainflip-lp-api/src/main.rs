@@ -11,13 +11,13 @@ use chainflip_api::{
 };
 use clap::Parser;
 use jsonrpsee::{
-	core::{async_trait, Error, __reexports::serde_json},
+	core::{async_trait, Error},
 	proc_macros::rpc,
 	server::ServerBuilder,
 };
 use sp_core::H256;
 use sp_rpc::number::NumberOrHex;
-use std::{ops::Range, path::PathBuf};
+use std::{collections::HashMap, ops::Range, path::PathBuf};
 
 /// Contains RPC interface types that differ from internal types.
 pub mod rpc_types {
@@ -134,10 +134,10 @@ pub trait Rpc {
 	) -> Result<BurnLimitOrderReturn, Error>;
 
 	#[method(name = "assetBalances")]
-	async fn asset_balances(&self) -> Result<String, Error>;
+	async fn asset_balances(&self) -> Result<HashMap<Asset, u128>, Error>;
 
 	#[method(name = "getRangeOrders")]
-	async fn get_range_orders(&self) -> Result<String, Error>;
+	async fn get_range_orders(&self) -> Result<HashMap<Asset, Vec<(i32, i32, u128)>>, Error>;
 }
 pub struct RpcServerImpl {
 	state_chain_settings: StateChain,
@@ -195,22 +195,16 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	/// Returns a list of all assets and their free balance in json format
-	async fn asset_balances(&self) -> Result<String, Error> {
+	async fn asset_balances(&self) -> Result<HashMap<Asset, u128>, Error> {
 		lp::get_balances(&self.state_chain_settings)
 			.await
-			.map(|balances| {
-				serde_json::to_string(&balances).expect("Should output balances as json")
-			})
 			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
 	/// Returns a list of all assets and their range order positions in json format
-	async fn get_range_orders(&self) -> Result<String, Error> {
+	async fn get_range_orders(&self) -> Result<HashMap<Asset, Vec<(i32, i32, u128)>>, Error> {
 		lp::get_range_orders(&self.state_chain_settings)
 			.await
-			.map(|positions| {
-				serde_json::to_string(&positions).expect("Should output range orders as json")
-			})
 			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
