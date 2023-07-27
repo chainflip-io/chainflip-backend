@@ -45,8 +45,8 @@ impl<'a, 'env, StateChainClient, Info, HistoricInfo>
 	From<EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>>
 	for EpochSource<Info, HistoricInfo>
 {
-	fn from(value: EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>) -> Self {
-		Self { epochs: value.epochs, epoch_update_receiver: value.epoch_update_receiver }
+	fn from(builder: EpochSourceBuilder<'a, 'env, StateChainClient, Info, HistoricInfo>) -> Self {
+		Self { epochs: builder.epochs, epoch_update_receiver: builder.epoch_update_receiver }
 	}
 }
 
@@ -269,7 +269,7 @@ impl<
 		.await
 	}
 
-	async fn filter_map<
+	pub async fn filter_map<
 		FilterMapInfo,
 		InfoFut,
 		MappedInfo,
@@ -383,14 +383,14 @@ impl<
 	}
 }
 
-pub type Vault<TChain, Info, HistoricInfo> = Epoch<
-	(pallet_cf_vaults::Vault<TChain>, Info),
-	(<TChain as Chain>::ChainBlockNumber, HistoricInfo),
+pub type Vault<TChain, ExtraInfo, ExtraHistoricInfo> = Epoch<
+	(pallet_cf_vaults::Vault<TChain>, ExtraInfo),
+	(<TChain as Chain>::ChainBlockNumber, ExtraHistoricInfo),
 >;
 
-pub type VaultSource<TChain, Info, HistoricInfo> = EpochSource<
-	(pallet_cf_vaults::Vault<TChain>, Info),
-	(<TChain as Chain>::ChainBlockNumber, HistoricInfo),
+pub type VaultSource<TChain, ExtraInfo, ExtraHistoricInfo> = EpochSource<
+	(pallet_cf_vaults::Vault<TChain>, ExtraInfo),
+	(<TChain as Chain>::ChainBlockNumber, ExtraHistoricInfo),
 >;
 
 impl<

@@ -10,6 +10,7 @@ use crate::{
 	witness::{chain_source::BoxChainStream, common::ExternalChainSource},
 };
 
+#[derive(Clone)]
 pub struct BtcSource<C> {
 	client: C,
 }
