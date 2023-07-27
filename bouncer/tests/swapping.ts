@@ -76,7 +76,7 @@ export async function prepareSwap(
 
   // For swaps with a message force the address to be the CF Tester address.
   if (messageMetadata && chainFromAsset(destAsset) === chainFromAsset('ETH')) {
-    destAddress = getEthContractAddress('CFTester');
+    destAddress = getEthContractAddress('CFTESTER');
     console.log(`${tag} Using CF Tester address: ${destAddress}`);
   } else {
     destAddress = await getAddress(destAsset, seed, addressType);
