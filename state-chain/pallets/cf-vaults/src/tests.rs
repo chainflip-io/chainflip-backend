@@ -140,11 +140,7 @@ fn keygen_failure(bad_candidates: &[<MockRuntime as Chainflip>::ValidatorId]) {
 
 	let ceremony_id = current_ceremony_id();
 
-	VaultsPallet::terminate_rotation(
-		bad_candidates,
-		PalletOffence::FailedKeygen,
-		PalletEvent::KeygenFailure(ceremony_id),
-	);
+	VaultsPallet::terminate_rotation(bad_candidates, PalletEvent::KeygenFailure(ceremony_id));
 
 	assert_eq!(last_event::<MockRuntime>(), PalletEvent::KeygenFailure(ceremony_id).into());
 
