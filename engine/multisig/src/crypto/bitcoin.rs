@@ -38,7 +38,6 @@ impl SignatureToThresholdSignature<Bitcoin> for Vec<BtcSchnorrSignature> {
 	}
 }
 
-/// Bitcoin crypto scheme (as defined by BIP 340)
 #[derive(Clone, Debug, PartialEq)]
 pub struct BtcSigning {}
 
@@ -56,7 +55,9 @@ impl AsRef<[u8]> for SigningPayload {
 		&self.0
 	}
 }
+
 #[derive(Clone, Debug, PartialEq)]
+/// Bitcoin crypto scheme (as defined by BIP 340)
 pub struct BtcCryptoScheme;
 
 impl ChainSigning for BtcSigning {

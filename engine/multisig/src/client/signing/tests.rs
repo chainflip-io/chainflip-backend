@@ -4,25 +4,25 @@ use cf_primitives::AccountId;
 use rand::SeedableRng;
 
 use crate::{
-	bitcoin::{self, BtcCryptoScheme},
+	bitcoin::{self, BtcSigning},
 	client::{
 		common::{
 			BroadcastFailureReason, DelayDeserialization, SigningFailureReason, SigningStageName,
 		},
 		helpers::{
 			gen_dummy_local_sig, gen_dummy_signing_comm1, new_nodes, new_signing_ceremony,
-			run_stages, test_all_crypto_schemes_async, PayloadAndKeyData, SigningCeremonyRunner,
+			run_stages, test_all_crypto_chains_async, PayloadAndKeyData, SigningCeremonyRunner,
 			ACCOUNT_IDS, DEFAULT_SIGNING_CEREMONY_ID,
 		},
 		keygen::generate_key_data,
 		signing::signing_data,
 	},
-	eth::EvmCryptoScheme,
-	CryptoScheme, Rng,
+	ChainSigning, CryptoScheme, Rng,
 };
 
-// We choose (arbitrarily) to use eth crypto for unit tests.
-use crate::crypto::eth::Point;
+// We choose (arbitrarily) to use eth crypto for most unit tests.
+use crate::{crypto::eth::Point, eth::EthSigning};
+
 type VerifyComm2 = signing_data::VerifyComm2<Point>;
 type LocalSig3 = signing_data::LocalSig3<Point>;
 type VerifyLocalSig4 = signing_data::VerifyLocalSig4<Point>;
@@ -32,7 +32,7 @@ mod broadcast_commitments_stage {
 
 	#[tokio::test]
 	async fn should_report_on_inconsistent_broadcast() {
-		let (mut signing_ceremony, _) = new_signing_ceremony::<EvmCryptoScheme>().await;
+		let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 		let mut messages = signing_ceremony.request().await;
 
@@ -57,7 +57,7 @@ mod broadcast_commitments_stage {
 	async fn should_report_on_deserialization_failure() {
 		use crate::client::common::DelayDeserialization;
 
-		let (mut signing_ceremony, _) = new_signing_ceremony::<EvmCryptoScheme>().await;
+		let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 		let mut messages = signing_ceremony.request().await;
 
@@ -75,11 +75,13 @@ mod broadcast_commitments_stage {
 
 mod local_signatures_stage {
 
+	use crate::eth::EthSigning;
+
 	use super::*;
 
 	#[tokio::test]
 	async fn should_report_on_inconsistent_broadcast() {
-		let (mut signing_ceremony, _) = new_signing_ceremony::<EvmCryptoScheme>().await;
+		let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 		let messages = signing_ceremony.request().await;
 
@@ -104,7 +106,7 @@ mod local_signatures_stage {
 
 	#[tokio::test]
 	async fn should_report_on_invalid_local_signature() {
-		let (mut signing_ceremony, _) = new_signing_ceremony::<EvmCryptoScheme>().await;
+		let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 		let messages = signing_ceremony.request().await;
 		let mut messages = run_stages!(signing_ceremony, messages, VerifyComm2, LocalSig3);
@@ -124,7 +126,7 @@ mod local_signatures_stage {
 
 	#[tokio::test]
 	async fn should_report_on_deserialization_failure() {
-		let (mut signing_ceremony, _) = new_signing_ceremony::<EvmCryptoScheme>().await;
+		let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 		let messages = signing_ceremony.request().await;
 		let mut messages = run_stages!(signing_ceremony, messages, VerifyComm2, LocalSig3);
@@ -142,17 +144,21 @@ mod local_signatures_stage {
 	}
 }
 
-async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayload]) {
+async fn test_sign_multiple_payloads<Chain: ChainSigning>(
+	payloads: &[<Chain::CryptoScheme as CryptoScheme>::SigningPayload],
+) {
 	let mut rng = Rng::from_seed([0; 32]);
-	let (key, key_data) =
-		generate_key_data::<C>(BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()), &mut rng);
+	let (key, key_data) = generate_key_data::<Chain::CryptoScheme>(
+		BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned()),
+		&mut rng,
+	);
 
 	let payloads_and_key = payloads
 		.iter()
 		.map(|payload| PayloadAndKeyData::new(payload.clone(), key.clone(), key_data.clone()))
 		.collect();
 
-	let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
+	let mut signing_ceremony = SigningCeremonyRunner::<Chain>::new_with_all_signers(
 		new_nodes(ACCOUNT_IDS.clone()),
 		DEFAULT_SIGNING_CEREMONY_ID,
 		payloads_and_key,
@@ -163,9 +169,9 @@ async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayl
 	let messages = run_stages!(
 		signing_ceremony,
 		messages,
-		signing_data::VerifyComm2<C::Point>,
-		signing_data::LocalSig3<C::Point>,
-		signing_data::VerifyLocalSig4<C::Point>
+		signing_data::VerifyComm2<<Chain::CryptoScheme as CryptoScheme>::Point>,
+		signing_data::LocalSig3<<Chain::CryptoScheme as CryptoScheme>::Point>,
+		signing_data::VerifyLocalSig4<<Chain::CryptoScheme as CryptoScheme>::Point>
 	);
 	signing_ceremony.distribute_messages(messages).await;
 	let signature = signing_ceremony
@@ -173,7 +179,12 @@ async fn test_sign_multiple_payloads<C: CryptoScheme>(payloads: &[C::SigningPayl
 		.into_iter()
 		.next()
 		.expect("should have exactly one signature");
-	assert!(C::verify_signature(&signature, &key, &payloads[0]).is_ok());
+	assert!(<Chain::CryptoScheme as CryptoScheme>::verify_signature(
+		&signature,
+		&key,
+		&payloads[0]
+	)
+	.is_ok());
 }
 
 #[tokio::test]
@@ -183,25 +194,29 @@ async fn should_sign_multiple_payloads() {
 
 	let payloads = (1u8..=2).map(|i| bitcoin::SigningPayload([i; 32])).collect::<Vec<_>>();
 
-	test_sign_multiple_payloads::<BtcCryptoScheme>(&payloads).await;
+	test_sign_multiple_payloads::<BtcSigning>(&payloads).await;
 }
 
-async fn should_sign_with_all_parties<C: CryptoScheme>(participants: &BTreeSet<AccountId>) {
+async fn should_sign_with_all_parties<Chain: ChainSigning>(participants: &BTreeSet<AccountId>) {
 	// This seed ensures that the initially
 	// generated key is incompatible to increase
 	// test coverage
 	for i in 0..10 {
 		let key_seed = [i; 32];
 		let nonce_seed = [11 * i; 32];
-		let (key, key_data) = generate_key_data::<C>(
+		let (key, key_data) = generate_key_data::<Chain::CryptoScheme>(
 			BTreeSet::from_iter(participants.iter().cloned()),
 			&mut Rng::from_seed(key_seed),
 		);
 
-		let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
+		let mut signing_ceremony = SigningCeremonyRunner::<Chain>::new_with_all_signers(
 			new_nodes(participants.clone()),
 			DEFAULT_SIGNING_CEREMONY_ID,
-			vec![PayloadAndKeyData::new(C::signing_payload_for_test(), key.clone(), key_data)],
+			vec![PayloadAndKeyData::new(
+				<Chain::CryptoScheme as CryptoScheme>::signing_payload_for_test(),
+				key.clone(),
+				key_data,
+			)],
 			Rng::from_seed(nonce_seed),
 		);
 
@@ -209,9 +224,9 @@ async fn should_sign_with_all_parties<C: CryptoScheme>(participants: &BTreeSet<A
 		let messages = run_stages!(
 			signing_ceremony,
 			messages,
-			signing_data::VerifyComm2<C::Point>,
-			signing_data::LocalSig3<C::Point>,
-			signing_data::VerifyLocalSig4<C::Point>
+			signing_data::VerifyComm2<<Chain::CryptoScheme as CryptoScheme>::Point>,
+			signing_data::LocalSig3<<Chain::CryptoScheme as CryptoScheme>::Point>,
+			signing_data::VerifyLocalSig4<<Chain::CryptoScheme as CryptoScheme>::Point>
 		);
 		signing_ceremony.distribute_messages(messages).await;
 		let signature = signing_ceremony
@@ -219,45 +234,51 @@ async fn should_sign_with_all_parties<C: CryptoScheme>(participants: &BTreeSet<A
 			.into_iter()
 			.next()
 			.expect("should have exactly one signature");
-		assert!(C::verify_signature(&signature, &key, &C::signing_payload_for_test()).is_ok());
+		assert!(<Chain::CryptoScheme as CryptoScheme>::verify_signature(
+			&signature,
+			&key,
+			&<Chain::CryptoScheme as CryptoScheme>::signing_payload_for_test()
+		)
+		.is_ok());
 	}
 }
 
 #[tokio::test]
 async fn should_sign_with_single_party_on_all_schemes() {
 	let participants = &BTreeSet::from_iter(vec![ACCOUNT_IDS[0].clone()]);
-	test_all_crypto_schemes_async!(should_sign_with_all_parties(participants));
+	test_all_crypto_chains_async!(should_sign_with_all_parties(participants));
 }
 
 #[tokio::test]
 async fn should_sign_with_all_parties_on_all_schemes() {
 	let participants = &BTreeSet::from_iter(ACCOUNT_IDS.clone());
-	test_all_crypto_schemes_async!(should_sign_with_all_parties(participants));
+	test_all_crypto_chains_async!(should_sign_with_all_parties(participants));
 }
 
 #[tokio::test]
 async fn should_sign_with_different_keys() {
 	// For now, only bitcoin can have multiple payloads. The other chains will fail the message size
 	// check
-	type C = BtcCryptoScheme;
-	type Point = <C as CryptoScheme>::Point;
+	type Chain = BtcSigning;
+	type Scheme = <Chain as ChainSigning>::CryptoScheme;
+	type Point = <Scheme as CryptoScheme>::Point;
 
 	let mut rng = Rng::from_seed([1; 32]);
 	let account_ids = BTreeSet::from_iter(ACCOUNT_IDS.iter().cloned());
 
 	// 1. Generate two different keys for the same set of validators.
-	let (key_1, key_data_1) = generate_key_data::<C>(account_ids.clone(), &mut rng);
-	let (key_2, key_data_2) = generate_key_data::<C>(account_ids.clone(), &mut rng);
+	let (key_1, key_data_1) = generate_key_data::<Scheme>(account_ids.clone(), &mut rng);
+	let (key_2, key_data_2) = generate_key_data::<Scheme>(account_ids.clone(), &mut rng);
 
 	// Ensure we don't accidentally generate the same key (e.g. by using the same seed)
 	assert_ne!(key_1, key_2);
 
-	let mut signing_ceremony = SigningCeremonyRunner::<C>::new_with_all_signers(
+	let mut signing_ceremony = SigningCeremonyRunner::<Chain>::new_with_all_signers(
 		new_nodes(account_ids),
 		DEFAULT_SIGNING_CEREMONY_ID,
 		vec![
-			PayloadAndKeyData::new(C::signing_payload_for_test(), key_1, key_data_1),
-			PayloadAndKeyData::new(C::signing_payload_for_test(), key_2, key_data_2),
+			PayloadAndKeyData::new(Scheme::signing_payload_for_test(), key_1, key_data_1),
+			PayloadAndKeyData::new(Scheme::signing_payload_for_test(), key_2, key_data_2),
 		],
 		rng,
 	);
@@ -277,8 +298,10 @@ async fn should_sign_with_different_keys() {
 	assert_eq!(signatures.len(), 2);
 
 	// Signatures should be correct w.r.t. corresponding keys:
-	assert!(C::verify_signature(&signatures[0], &key_1, &C::signing_payload_for_test()).is_ok());
-	assert!(C::verify_signature(&signatures[1], &key_2, &C::signing_payload_for_test()).is_ok());
+	assert!(Scheme::verify_signature(&signatures[0], &key_1, &Scheme::signing_payload_for_test())
+		.is_ok());
+	assert!(Scheme::verify_signature(&signatures[1], &key_2, &Scheme::signing_payload_for_test())
+		.is_ok());
 }
 
 mod timeout {
@@ -303,7 +326,7 @@ mod timeout {
 
 			#[tokio::test]
 			async fn commitments_stage() {
-				let (mut signing_ceremony, _) = new_signing_ceremony::<EvmCryptoScheme>().await;
+				let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 				let mut messages = signing_ceremony.request().await;
 
@@ -332,7 +355,7 @@ mod timeout {
 
 			#[tokio::test]
 			async fn local_signatures_stage() {
-				let (mut signing_ceremony, _) = new_signing_ceremony::<EvmCryptoScheme>().await;
+				let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 				let messages = signing_ceremony.request().await;
 
@@ -377,7 +400,7 @@ mod timeout {
 
 			#[tokio::test]
 			async fn commitments_stage() {
-				let (mut ceremony, _) = new_signing_ceremony::<EvmCryptoScheme>().await;
+				let (mut ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 				let [bad_node_id] = &ceremony.select_account_ids();
 
@@ -395,7 +418,7 @@ mod timeout {
 
 			#[tokio::test]
 			async fn local_signatures_stage() {
-				let (mut ceremony, _) = new_signing_ceremony::<EvmCryptoScheme>().await;
+				let (mut ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 				let [bad_node_id] = &ceremony.select_account_ids();
 
@@ -421,7 +444,7 @@ mod timeout {
 
 			#[tokio::test]
 			async fn commitments_stage() {
-				let (mut signing_ceremony, _) = new_signing_ceremony::<EvmCryptoScheme>().await;
+				let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 				// bad party 1 will timeout during a broadcast stage. It should be reported
 				// bad party 2 will timeout during a broadcast verification stage. It won't get
@@ -455,7 +478,7 @@ mod timeout {
 
 			#[tokio::test]
 			async fn local_signatures_stage() {
-				let (mut signing_ceremony, _) = new_signing_ceremony::<EvmCryptoScheme>().await;
+				let (mut signing_ceremony, _) = new_signing_ceremony::<EthSigning>().await;
 
 				// bad party 1 will timeout during a broadcast stage. It should be reported
 				// bad party 2 will timeout during a broadcast verification stage. It won't get
