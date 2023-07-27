@@ -1,10 +1,6 @@
 extern crate alloc;
 
-use crate::{
-	btc::{BitcoinNetwork, ScriptPubkey},
-	dot::PolkadotAccountId,
-	Chain,
-};
+use crate::{btc::ScriptPubkey, dot::PolkadotAccountId, Chain};
 use cf_primitives::{ChannelId, EthereumAddress, ForeignChain, NetworkEnvironment};
 use codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
