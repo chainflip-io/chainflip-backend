@@ -19,7 +19,7 @@ use crate::{
 	state_chain_observer::client::{storage_api::StorageApi, StateChainStreamApi},
 	witness::{
 		chain_source::Header,
-		common::{RuntimeHasChain, STATE_CHAIN_CONNECTION},
+		common::{RuntimeHasChain, STATE_CHAIN_BEHAVIOUR, STATE_CHAIN_CONNECTION},
 	},
 };
 
@@ -69,7 +69,7 @@ where
 				>>(block_hash)
 				.await
 				.expect(STATE_CHAIN_CONNECTION)
-				.expect("Chain state should be set at genesis and never removed"),
+				.expect(STATE_CHAIN_BEHAVIOUR),
 			state_chain_client
 				.storage_map_values::<pallet_cf_ingress_egress::DepositChannelLookup<
 					state_chain_runtime::Runtime,
