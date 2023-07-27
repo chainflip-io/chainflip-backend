@@ -333,8 +333,8 @@ fn addresses_are_getting_reused() {
 		})
 		// Close the channels.
 		.then_execute_at_next_block(|channels| {
-			for (id, address, _asset) in &channels {
-				IngressEgress::close_channel(*id, *address);
+			for (_id, address, _asset) in &channels {
+				IngressEgress::close_channel(*address);
 			}
 			channels[0]
 		})
@@ -361,9 +361,9 @@ fn proof_address_pool_integrity() {
 		// All addresses in use
 		expect_size_of_address_pool(0);
 		IngressEgress::on_finalize(1);
-		for (id, address) in channel_details {
+		for (_id, address) in channel_details {
 			assert_ok!(IngressEgress::finalise_ingress(RuntimeOrigin::root(), vec![address]));
-			IngressEgress::close_channel(id, address);
+			IngressEgress::close_channel(address);
 		}
 		// Expect all addresses to be available
 		expect_size_of_address_pool(3);
@@ -380,9 +380,9 @@ fn create_new_address_while_pool_is_empty() {
 			.map(|id| request_address_and_deposit(id, eth::Asset::Eth))
 			.collect::<Vec<_>>();
 		IngressEgress::on_finalize(1);
-		for (id, address) in channel_details {
+		for (_id, address) in channel_details {
 			assert_ok!(IngressEgress::finalise_ingress(RuntimeOrigin::root(), vec![address]));
-			IngressEgress::close_channel(id, address);
+			IngressEgress::close_channel(address);
 		}
 		IngressEgress::on_initialize(EXPIRY_BLOCK);
 		assert_eq!(ChannelIdCounter::<Test>::get(), 2);
@@ -541,9 +541,9 @@ fn multi_use_deposit_address_different_blocks() {
 			assert_ok!(Pallet::<Test, _>::process_single_deposit(deposit_address, ETH, 1, ()));
 			channel
 		})
-		.then_execute_at_next_block(|(channel_id, deposit_address)| {
+		.then_execute_at_next_block(|(_, deposit_address)| {
 			// Closing the channel should invalidate the deposit address.
-			IngressEgress::close_channel(channel_id, deposit_address);
+			IngressEgress::close_channel(deposit_address);
 			assert_noop!(
 				IngressEgress::process_deposits(
 					RuntimeOrigin::root(),

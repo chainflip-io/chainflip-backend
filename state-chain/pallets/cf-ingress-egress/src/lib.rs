@@ -705,7 +705,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		Ok((channel_id, deposit_address))
 	}
 
-	fn close_channel(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
+	fn close_channel(address: TargetChainAccount<T, I>) {
 		ChannelActions::<T, I>::remove(&address);
 		if let Some(deposit_channel_details) = DepositChannelLookup::<T, I>::get(&address) {
 			Self::deposit_event(Event::<T, I>::StopWitnessing {
@@ -713,7 +713,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 				source_asset: deposit_channel_details.deposit_channel.asset,
 			});
 			if let Some(channel) = deposit_channel_details.deposit_channel.maybe_recycle() {
-				DepositChannelPool::<T, I>::insert(channel_id, channel);
+				DepositChannelPool::<T, I>::insert(channel.channel_id, channel);
 			}
 		} else {
 			#[cfg(test)]
@@ -812,7 +812,7 @@ impl<T: Config<I>, I: 'static> DepositApi<T::TargetChain> for Pallet<T, I> {
 
 	// Note: we expect that the mapping from any instantiable pallet to the instance of this pallet
 	// is matching to the right chain. Because of that we can ignore the chain parameter.
-	fn expire_channel(channel_id: ChannelId, address: TargetChainAccount<T, I>) {
-		Self::close_channel(channel_id, address);
+	fn expire_channel(address: TargetChainAccount<T, I>) {
+		Self::close_channel(address);
 	}
 }

@@ -402,7 +402,7 @@ pub mod pallet {
 			let expired = SwapChannelExpiries::<T>::take(n);
 			let expired_count = expired.len();
 			for (channel_id, address) in expired {
-				T::DepositHandler::expire_channel(channel_id, address.clone());
+				T::DepositHandler::expire_channel(address.clone());
 				Self::deposit_event(Event::<T>::SwapDepositAddressExpired {
 					deposit_address: T::AddressConverter::to_encoded_address(address),
 					channel_id,

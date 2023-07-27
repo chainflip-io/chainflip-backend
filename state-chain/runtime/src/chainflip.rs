@@ -446,7 +446,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				}
 			}
 
-			fn expire_channel(channel_id: ChannelId, address: ForeignChainAddress) {
+			fn expire_channel(address: ForeignChainAddress) {
 				if address.chain() == ForeignChain::Bitcoin {
 					Environment::cleanup_bitcoin_deposit_address_details(address.clone().try_into().expect("Checked for address compatibility"));
 				}
@@ -454,7 +454,6 @@ macro_rules! impl_deposit_api_for_anychain {
 					$(
 						ForeignChain::$chain => {
 							<$pallet as DepositApi<$chain>>::expire_channel(
-								channel_id,
 								address.try_into().expect("Checked for address compatibility")
 							);
 						},
