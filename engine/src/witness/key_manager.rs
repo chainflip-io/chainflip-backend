@@ -23,7 +23,7 @@ use crate::{
 };
 use num_traits::Zero;
 
-abigen!(KeyManager, "eth-contract-abis/perseverance-rc17/IKeyManager.json");
+abigen!(KeyManager, "eth-contract-abis/abis/IKeyManager.json");
 
 // This type is generated in the macro above.
 //`Key(uint256,uint8)`

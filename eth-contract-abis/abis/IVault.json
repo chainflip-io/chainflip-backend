@@ -539,6 +539,75 @@
       {
         "components": [
           {
+            "internalType": "address payable",
+            "name": "fetchContract",
+            "type": "address"
+          },
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.FetchParams[]",
+        "name": "fetchParamsArray",
+        "type": "tuple[]"
+      },
+      {
+        "components": [
+          {
+            "internalType": "address",
+            "name": "token",
+            "type": "address"
+          },
+          {
+            "internalType": "address payable",
+            "name": "recipient",
+            "type": "address"
+          },
+          {
+            "internalType": "uint256",
+            "name": "amount",
+            "type": "uint256"
+          }
+        ],
+        "internalType": "struct IShared.TransferParams[]",
+        "name": "transferParamsArray",
+        "type": "tuple[]"
+      }
+    ],
+    "name": "allBatchV2",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {
+            "internalType": "uint256",
+            "name": "sig",
+            "type": "uint256"
+          },
+          {
+            "internalType": "uint256",
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "internalType": "address",
+            "name": "kTimesGAddress",
+            "type": "address"
+          }
+        ],
+        "internalType": "struct IShared.SigData",
+        "name": "sigData",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {
             "internalType": "bytes32",
             "name": "swapID",
             "type": "bytes32"

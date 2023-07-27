@@ -12,7 +12,7 @@ use crate::{
 	state_chain_observer::client::extrinsic_api::signed::SignedExtrinsicApi, witnesser::ItemMonitor,
 };
 
-abigen!(Erc20, "eth-contract-abis/IERC20.json");
+abigen!(Erc20, "eth-contract-abis/abis/IERC20.json");
 
 use super::{event::Event, rpc::EthRpcApi, BlockWithItems, EthContractWitnesser};
 use pallet_cf_ingress_egress::DepositWitness;

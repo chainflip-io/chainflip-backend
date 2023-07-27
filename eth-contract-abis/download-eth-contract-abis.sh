@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 if ! which gh >/dev/null 2>&1; then
     echo "❌  Github CLI not installed, please install and authenticate (`gh auth login`)."
@@ -19,7 +20,7 @@ fi
 
 PROJECT_ROOT=$(git rev-parse --show-toplevel || exit 1)
 ZIP_FILE=$PROJECT_ROOT/eth-contract-abis/abis-${CONTRACT_RELEASE_TAG}.zip
-TARGET_DIR=$PROJECT_ROOT/eth-contract-abis/${CONTRACT_RELEASE_TAG}
+TARGET_DIR=$PROJECT_ROOT/eth-contract-abis/abis/
 
 gh release download \
     --clobber \
@@ -34,7 +35,10 @@ unzip -u ${ZIP_FILE} \
     'IKeyManager.json' \
     'Deposit_bytecode.json' \
     'IAddressChecker.json' \
-    'CFReceiverMock.json' \
+    'CFTester.json' \
     -d $TARGET_DIR
 
 rm ${ZIP_FILE}
+
+# Save the new tag to the file
+echo "$CONTRACT_RELEASE_TAG" > eth-contracts-tag
