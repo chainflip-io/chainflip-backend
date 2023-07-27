@@ -16,6 +16,7 @@ import {
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { performSwapViaContract, approveTokenVault } from '../shared/contract_swap';
+import { testLpDepositExpiry } from '../shared/lp_deposit_expiry';
 
 let swapCount = 1;
 
@@ -116,7 +117,7 @@ async function testSwapViaContract(
   await performSwapViaContract(sourceAsset, destAsset, destAddress, tag, messageMetadata);
 }
 
-async function testAll() {
+async function testAllSwaps() {
   // Single approval of all the assets swapped in contractsSwaps to avoid overlapping async approvals.
   // Make sure to to set the allowance to the same amount of total asset swapped in contractsSwaps,
   // otherwise in subsequent approvals the broker might not send the transaction confusing the eth nonce.
@@ -229,7 +230,11 @@ async function testAll() {
   await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps]);
 }
 
-runWithTimeout(testAll(), 1800000)
+async function runAllConcurrentTests() {
+  await Promise.all([testAllSwaps(), testLpDepositExpiry()]);
+}
+
+runWithTimeout(runAllConcurrentTests(), 1800000)
   .then(() => {
     // there are some dangling resources that prevent the process from exiting
     process.exit(0);
