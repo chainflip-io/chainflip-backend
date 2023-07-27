@@ -98,6 +98,8 @@ async fn main() -> anyhow::Result<()> {
 							cfe_status = CfeStatus::Active(handle);
 						},
 				}
+
+				tokio::time::sleep(std::time::Duration::from_secs(6)).await;
 			}
 		}
 		.boxed()
