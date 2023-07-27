@@ -80,6 +80,7 @@ impl_runtime_safe_mode! {
 	swapping: pallet_cf_swapping::PalletSafeMode,
 	liquidity_provider: pallet_cf_lp::PalletSafeMode,
 	validator: pallet_cf_validator::PalletSafeMode,
+	pools: pallet_cf_pools::PalletSafeMode,
 }
 struct BackupNodeEmissions;
 
@@ -516,7 +517,7 @@ impl DepositHandler<Polkadot> for DotDepositHandler {}
 pub struct BtcDepositHandler;
 impl DepositHandler<Bitcoin> for BtcDepositHandler {
 	fn on_deposit_made(
-		utxo_id: <Bitcoin as ChainCrypto>::TransactionInId,
+		utxo_id: <Bitcoin as Chain>::DepositDetails,
 		amount: <Bitcoin as Chain>::ChainAmount,
 		address: <Bitcoin as Chain>::ChainAccount,
 		_asset: <Bitcoin as Chain>::ChainAsset,

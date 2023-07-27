@@ -168,8 +168,9 @@ impl<Ctx: Clone> RequestAddressAndDeposit for TestRunner<Ctx> {
 									deposit_address,
 									asset,
 									amount,
-									tx_id: Default::default(),
+									deposit_details: Default::default(),
 								}],
+								block_height: Default::default(),
 							}),
 							Ok(()),
 						))

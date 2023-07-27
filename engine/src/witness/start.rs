@@ -47,13 +47,21 @@ where
 		scope,
 		&settings.btc,
 		state_chain_client.clone(),
-		state_chain_stream,
+		state_chain_stream.clone(),
 		epoch_source.clone(),
-		db,
+		db.clone(),
 	)
 	.await?;
 
-	super::dot::start(scope, &settings.dot, state_chain_client, epoch_source).await?;
+	super::dot::start(
+		scope,
+		&settings.dot,
+		state_chain_client,
+		state_chain_stream,
+		epoch_source,
+		db,
+	)
+	.await?;
 
 	Ok(())
 }

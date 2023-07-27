@@ -114,6 +114,9 @@ pub trait Chain: Member + Parameter {
 		+ for<'a> From<&'a DepositChannel<Self>>;
 
 	type DepositChannelState: Member + Parameter + Default + ChannelLifecycleHooks + Unpin;
+
+	/// Extra data associated with a deposit.
+	type DepositDetails: Member + Parameter + BenchmarkValue;
 }
 
 /// Common crypto-related types and operations for some external chain.
@@ -128,10 +131,9 @@ pub trait ChainCrypto: Chain {
 		+ BenchmarkValue;
 	type Payload: Member + Parameter + BenchmarkValue;
 	type ThresholdSignature: Member + Parameter + BenchmarkValue;
-	/// Must uniquely identify a transaction. On most chains this will be a transaction hash.
-	/// However, for example, in the case of Polkadot, the blocknumber-extrinsic-index is the unique
-	/// identifier.
-	type TransactionInId: Member + Parameter + BenchmarkValue;
+
+	/// Uniquely identifies a transaction on the incoming direction.
+	type TransactionInId: Member + Parameter + Unpin + BenchmarkValue;
 
 	/// Uniquely identifies a transaction on the outoing direction.
 	type TransactionOutId: Member + Parameter + Unpin + BenchmarkValue;
