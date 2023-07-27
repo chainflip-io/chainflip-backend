@@ -718,6 +718,13 @@ pub mod pallet {
 			Self::deposit_event(Event::<T>::MinimumCcmGasBudgetSet { asset, amount });
 			Ok(())
 		}
+
+		#[pallet::weight(Weight::from_ref_time(10_000))]
+		pub fn delete_swap_queue(origin: OriginFor<T>) -> DispatchResult {
+			T::EnsureGovernance::ensure_origin(origin)?;
+			let _ = SwapQueue::<T>::take();
+			Ok(())
+		}
 	}
 
 	impl<T: Config> Pallet<T> {
