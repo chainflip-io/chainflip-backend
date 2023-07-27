@@ -97,7 +97,7 @@ pub struct BitcoinTrackedData {
 impl Default for BitcoinTrackedData {
 	#[track_caller]
 	fn default() -> Self {
-		unreachable!("You should not use the default chain tracking, as it's meaningless.");
+		panic!("You should not use the default chain tracking, as it's meaningless.");
 	}
 }
 

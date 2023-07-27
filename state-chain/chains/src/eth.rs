@@ -89,7 +89,7 @@ pub struct EthereumTrackedData {
 impl Default for EthereumTrackedData {
 	#[track_caller]
 	fn default() -> Self {
-		unreachable!("You should not use the default chain tracking, as it's meaningless.")
+		panic!("You should not use the default chain tracking, as it's meaningless.")
 	}
 }
 
