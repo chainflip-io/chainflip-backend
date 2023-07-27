@@ -109,8 +109,8 @@ impl<C: CryptoScheme> CeremonyTrait for SigningCeremony<C> {
 pub struct CeremonyManager<Chain: ChainSigning> {
 	my_account_id: AccountId,
 	outgoing_p2p_message_sender: UnboundedSender<OutgoingMultisigStageMessages>,
-	signing_states: CeremonyStates<SigningCeremony<Chain::CryptoScheme>, Chain>,
-	keygen_states: CeremonyStates<KeygenCeremony<Chain::CryptoScheme>, Chain>,
+	signing_states: CeremonyStates<SigningCeremony<Chain::CryptoScheme>>,
+	keygen_states: CeremonyStates<KeygenCeremony<Chain::CryptoScheme>>,
 	latest_ceremony_id: CeremonyId,
 }
 
@@ -475,7 +475,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 			};
 
 		let ceremony_handle =
-			self.keygen_states.get_state_or_create_unauthorized(ceremony_id, scope);
+			self.keygen_states.get_state_or_create_unauthorized::<Chain>(ceremony_id, scope);
 
 		ceremony_handle
 			.on_request(request, result_sender)
@@ -528,7 +528,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 			};
 
 		let ceremony_handle =
-			self.keygen_states.get_state_or_create_unauthorized(ceremony_id, scope);
+			self.keygen_states.get_state_or_create_unauthorized::<Chain>(ceremony_id, scope);
 
 		ceremony_handle
 			.on_request(request, result_sender)
@@ -585,8 +585,9 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 		};
 
 		// We have the key and have received a request to sign
-		let ceremony_handle =
-			self.signing_states.get_state_or_create_unauthorized(ceremony_id, scope);
+		let ceremony_handle = self
+			.signing_states
+			.get_state_or_create_unauthorized::<Chain>(ceremony_id, scope);
 
 		ceremony_handle
 			.on_request(request, result_sender)
@@ -614,7 +615,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 				);
 				let _entered = span.enter();
 
-				self.keygen_states.process_data(
+				self.keygen_states.process_data::<Chain>(
 					sender_id,
 					ceremony_id,
 					data,
@@ -629,7 +630,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 				);
 				let _entered = span.enter();
 
-				self.signing_states.process_data(
+				self.signing_states.process_data::<Chain>(
 					sender_id,
 					ceremony_id,
 					data,
@@ -665,23 +666,23 @@ fn generate_keygen_context(ceremony_id: CeremonyId, signers: BTreeSet<AccountId>
 	HashContext(*hasher.finalize().as_ref())
 }
 
-struct CeremonyStates<Ceremony: CeremonyTrait, Chain: ChainSigning> {
+struct CeremonyStates<Ceremony: CeremonyTrait> {
 	// Collection of all ceremony handles used to send data to the ceremony tasks
-	ceremony_handles: HashMap<CeremonyId, CeremonyHandle<Ceremony, Chain>>,
+	ceremony_handles: HashMap<CeremonyId, CeremonyHandle<Ceremony>>,
 	// Given to each ceremony for it to send back the outcome
 	outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
 	/// All authorised ceremonies will send their outcome here
 	outcome_receiver: UnboundedReceiver<(CeremonyId, CeremonyOutcome<Ceremony>)>,
 }
 
-impl<Ceremony: CeremonyTrait, Chain: ChainSigning> CeremonyStates<Ceremony, Chain> {
+impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 	fn new() -> Self {
 		let (outcome_sender, outcome_receiver) = mpsc::unbounded_channel();
 		Self { ceremony_handles: HashMap::new(), outcome_sender, outcome_receiver }
 	}
 
 	/// Process ceremony data arriving from a peer,
-	fn process_data(
+	fn process_data<Chain: ChainSigning>(
 		&mut self,
 		sender_id: AccountId,
 		ceremony_id: CeremonyId,
@@ -714,7 +715,7 @@ impl<Ceremony: CeremonyTrait, Chain: ChainSigning> CeremonyStates<Ceremony, Chai
 				trace!("Creating unauthorised ceremony {ceremony_id_string} (Total: {total})",);
 				self.ceremony_handles.insert(
 					ceremony_id,
-					CeremonyHandle::spawn(ceremony_id, self.outcome_sender.clone(), scope),
+					CeremonyHandle::spawn::<Chain>(ceremony_id, self.outcome_sender.clone(), scope),
 				);
 			}
 		}
@@ -732,13 +733,13 @@ impl<Ceremony: CeremonyTrait, Chain: ChainSigning> CeremonyStates<Ceremony, Chai
 
 	/// Returns the state for the given ceremony id if it exists,
 	/// otherwise creates a new unauthorized one
-	fn get_state_or_create_unauthorized(
+	fn get_state_or_create_unauthorized<Chain: ChainSigning>(
 		&mut self,
 		ceremony_id: CeremonyId,
 		scope: &Scope<'_, anyhow::Error>,
-	) -> &mut CeremonyHandle<Ceremony, Chain> {
+	) -> &mut CeremonyHandle<Ceremony> {
 		self.ceremony_handles.entry(ceremony_id).or_insert_with(|| {
-			CeremonyHandle::spawn(ceremony_id, self.outcome_sender.clone(), scope)
+			CeremonyHandle::spawn::<Chain>(ceremony_id, self.outcome_sender.clone(), scope)
 		})
 	}
 
@@ -778,12 +779,11 @@ impl<Ceremony: CeremonyTrait, Chain: ChainSigning> CeremonyStates<Ceremony, Chai
 // ==================
 
 /// Contains the result sender and the channels used to send data to a running ceremony
-struct CeremonyHandle<Ceremony: CeremonyTrait, Chain: ChainSigning> {
+struct CeremonyHandle<Ceremony: CeremonyTrait> {
 	pub message_sender: UnboundedSender<(AccountId, Ceremony::Data)>,
 	pub request_state: CeremonyRequestState<Ceremony>,
 	// When the task handle is dropped, the task will be aborted.
 	pub _task_handle: ScopedJoinHandle<()>,
-	_phantom: PhantomData<Chain>,
 }
 
 /// Contains either the request sender or the result sender depending on the state of the ceremony
@@ -796,8 +796,8 @@ enum CeremonyRequestState<Ceremony: CeremonyTrait> {
 	Authorised(CeremonyResultSender<Ceremony>),
 }
 
-impl<Ceremony: CeremonyTrait, Chain: ChainSigning> CeremonyHandle<Ceremony, Chain> {
-	fn spawn(
+impl<Ceremony: CeremonyTrait> CeremonyHandle<Ceremony> {
+	fn spawn<Chain: ChainSigning>(
 		ceremony_id: CeremonyId,
 		outcome_sender: UnboundedSender<(CeremonyId, CeremonyOutcome<Ceremony>)>,
 		scope: &Scope<'_, anyhow::Error>,
@@ -816,7 +816,6 @@ impl<Ceremony: CeremonyTrait, Chain: ChainSigning> CeremonyHandle<Ceremony, Chai
 			message_sender,
 			request_state: CeremonyRequestState::Unauthorised(request_sender),
 			_task_handle: task_handle,
-			_phantom: Default::default(),
 		}
 	}
 

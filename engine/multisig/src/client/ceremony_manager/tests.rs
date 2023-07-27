@@ -362,7 +362,6 @@ async fn should_cleanup_unauthorised_ceremony_if_not_participating() {
 				message_sender: ceremony_runner_p2p_sender.clone(),
 				request_state: CeremonyRequestState::Unauthorised(oneshot::channel().0),
 				_task_handle: task_handle,
-				_phantom: Default::default(),
 			};
 			ceremony_manager
 				.signing_states
