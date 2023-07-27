@@ -11,7 +11,7 @@ pub use weights::WeightInfo;
 
 use cf_chains::Chain;
 use cf_traits::{Chainflip, GetBlockHeight};
-use frame_support::{dispatch::DispatchResultWithPostInfo, sp_runtime::traits::Zero};
+use frame_support::{dispatch::DispatchResultWithPostInfo};
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::marker::PhantomData;
@@ -19,7 +19,7 @@ use sp_std::marker::PhantomData;
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
-	use frame_support::pallet_prelude::{ValueQuery, *};
+	use frame_support::pallet_prelude::{ *};
 
 	#[pallet::config]
 	#[pallet::disable_frame_system_supertrait_check]
@@ -34,6 +34,8 @@ pub mod pallet {
 		/// The weights for the pallet
 		type WeightInfo: WeightInfo;
 	}
+
+
 
 	#[pallet::pallet]
 	#[pallet::generate_store(pub(super) trait Store)]
@@ -54,18 +56,15 @@ pub mod pallet {
 		pub tracked_data: C::TrackedData,
 	}
 
-	impl<C: Chain> Default for ChainState<C> {
-		fn default() -> Self {
-			Self { block_height: Zero::zero(), tracked_data: Default::default() }
-		}
-	}
-
 	/// The tracked state of the external chain.
+	/// It is safe to unwrap() this value. We set it at genesis and it is only ever updated
+	/// by chain tracking, never removed. We use OptionQuery here so we don't need to
+	/// impl Default for ChainState.
 	#[pallet::storage]
 	#[pallet::getter(fn chain_state)]
 	#[allow(clippy::type_complexity)]
 	pub type CurrentChainState<T: Config<I>, I: 'static = ()> =
-		StorageValue<_, ChainState<T::TargetChain>, ValueQuery>;
+		StorageValue<_, ChainState<T::TargetChain>>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -100,10 +99,10 @@ pub mod pallet {
 
 			CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|previous_chain_state| {
 				ensure!(
-					new_chain_state.block_height > previous_chain_state.block_height,
+					new_chain_state.block_height > previous_chain_state.as_ref().unwrap().block_height,
 					Error::<T, I>::StaleDataSubmitted
 				);
-				*previous_chain_state = new_chain_state.clone();
+				*previous_chain_state = Some(new_chain_state.clone());
 
 				Ok(())
 			})?;
@@ -116,6 +115,6 @@ pub mod pallet {
 
 impl<T: Config<I>, I: 'static> GetBlockHeight<T::TargetChain> for Pallet<T, I> {
 	fn get_block_height() -> <T::TargetChain as Chain>::ChainBlockNumber {
-		CurrentChainState::<T, I>::get().block_height
+		CurrentChainState::<T, I>::get().unwrap().block_height
 	}
 }

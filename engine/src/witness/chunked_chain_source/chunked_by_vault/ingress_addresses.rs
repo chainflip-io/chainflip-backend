@@ -71,7 +71,8 @@ where
 					<Inner::Chain as PalletInstanceAlias>::Instance,
 				>>(block_hash)
 				.await
-				.expect(STATE_CHAIN_CONNECTION),
+				.expect(STATE_CHAIN_CONNECTION)
+				.expect("Chain state should be set at genesis and never removed"),
 			state_chain_client
 				.storage_map_values::<pallet_cf_ingress_egress::DepositChannelLookup<
 					state_chain_runtime::Runtime,

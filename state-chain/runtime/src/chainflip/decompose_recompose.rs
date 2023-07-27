@@ -225,7 +225,7 @@ mod tests {
 			}
 
 			assert_eq!(
-				pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get(),
+				pallet_cf_chain_tracking::CurrentChainState::<Runtime, EthereumInstance>::get().unwrap(),
 				ChainState {
 					block_height: BLOCK_HEIGHT,
 					tracked_data: EthereumTrackedData { base_fee: BASE_FEE, priority_fee: 10 }

@@ -25,6 +25,6 @@ benchmarks_instance_pallet! {
 	}: {
 		let _ = call.dispatch_bypass_filter(origin);
 	} verify {
-		assert_eq!(CurrentChainState::<T,I>::get(), new_chain_state);
+		assert_eq!(CurrentChainState::<T,I>::get().unwrap(), new_chain_state);
 	}
 }

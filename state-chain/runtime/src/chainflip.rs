@@ -153,7 +153,7 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 	}
 
 	fn refresh_unsigned_data(unsigned_tx: &mut <Ethereum as ChainAbi>::Transaction) {
-		let tracked_data = EthereumChainTracking::chain_state().tracked_data;
+		let tracked_data = EthereumChainTracking::chain_state().unwrap().tracked_data;
 		// double the last block's base fee. This way we know it'll be selectable for at least 6
 		// blocks (12.5% increase on each block)
 		let max_fee_per_gas = tracked_data
@@ -291,7 +291,7 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 
 impl Get<RuntimeVersion> for DotEnvironment {
 	fn get() -> RuntimeVersion {
-		PolkadotChainTracking::chain_state().tracked_data.runtime_version
+		PolkadotChainTracking::chain_state().unwrap().tracked_data.runtime_version
 	}
 }
 
@@ -587,7 +587,7 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 pub struct BitcoinFeeGetter;
 impl cf_traits::GetBitcoinFeeInfo for BitcoinFeeGetter {
 	fn bitcoin_fee_info() -> BitcoinFeeInfo {
-		BitcoinChainTracking::chain_state().tracked_data.btc_fee_info
+		BitcoinChainTracking::chain_state().unwrap().tracked_data.btc_fee_info
 	}
 }
 
