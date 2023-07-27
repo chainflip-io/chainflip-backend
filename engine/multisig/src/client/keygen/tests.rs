@@ -29,7 +29,7 @@ type SecretShare5 = keygen::SecretShare5<Point>;
 type BlameResponse8 = keygen::BlameResponse8<Point>;
 type VerifyBlameResponses9 = keygen::VerifyBlameResponses9<Point>;
 type KeygenData = keygen::KeygenData<Point>;
-pub type KeygenCeremonyRunnerEth = KeygenCeremonyRunner<EthSigning>;
+type KeygenCeremonyRunnerEth = KeygenCeremonyRunner<EthSigning>;
 
 /// If all nodes are honest and behave as expected we should
 /// generate a key without entering a blaming stage
@@ -944,8 +944,6 @@ mod timeout {
 
 #[tokio::test]
 async fn genesis_keys_can_sign() {
-	use crate::crypto::eth::EvmCryptoScheme;
-
 	let account_ids: BTreeSet<_> = [1, 2, 3, 4].iter().map(|i| AccountId::new([*i; 32])).collect();
 
 	let mut rng = Rng::from_entropy();
@@ -971,8 +969,6 @@ async fn genesis_keys_can_sign() {
 // was correctly turned into a compatible one, which can be used for
 // multiparty signing.
 async fn initially_incompatible_keys_can_sign() {
-	use crate::crypto::eth::EvmCryptoScheme;
-
 	let account_ids: BTreeSet<_> = [1, 2, 3, 4].iter().map(|i| AccountId::new([*i; 32])).collect();
 
 	let mut rng = Rng::from_entropy();
@@ -998,6 +994,10 @@ mod key_handover {
 
 	use super::*;
 
+	type Chain = BtcSigning;
+	type Scheme = <Chain as ChainSigning>::CryptoScheme;
+	type Point = <Scheme as CryptoScheme>::Point;
+
 	fn to_account_id_set<T: AsRef<[u8]>>(ids: T) -> BTreeSet<AccountId> {
 		ids.as_ref().iter().map(|i| AccountId::new([*i; 32])).collect()
 	}
@@ -1007,18 +1007,18 @@ mod key_handover {
 		nodes_sharing_invalid_secret: BTreeSet<AccountId>,
 	}
 
-	async fn prepare_handover_test<Chain: ChainSigning>(
+	async fn prepare_handover_test(
 		original_set: BTreeSet<AccountId>,
 		sharing_subset: BTreeSet<AccountId>,
 		receiving_set: BTreeSet<AccountId>,
 		options: HandoverTestOptions,
-	) -> (KeygenCeremonyRunner<Chain>, <Chain::CryptoScheme as CryptoScheme>::PublicKey) {
+	) -> (KeygenCeremonyRunner<Chain>, <Scheme as CryptoScheme>::PublicKey) {
 		use crate::client::common::ParticipantStatus;
 
 		assert!(sharing_subset.is_subset(&original_set));
 
 		// Perform a regular keygen to generate initial keys:
-		let (initial_key, mut key_infos) = keygen::generate_key_data::<Chain::CryptoScheme>(
+		let (initial_key, mut key_infos) = keygen::generate_key_data::<Scheme>(
 			original_set.clone().into_iter().collect(),
 			&mut Rng::from_seed(DEFAULT_KEYGEN_SEED),
 		);
@@ -1041,8 +1041,7 @@ mod key_handover {
 
 		for (id, node) in &mut ceremony.nodes {
 			// Give the right context type depending on whether they have keys
-			let mut context: ResharingContext<Chain::CryptoScheme> = if sharing_subset.contains(id)
-			{
+			let mut context: ResharingContext<Scheme> = if sharing_subset.contains(id) {
 				let key_info = key_infos.remove(id).unwrap();
 				ResharingContext::from_key(&key_info, id, &sharing_subset, &receiving_set)
 			} else {
@@ -1054,8 +1053,7 @@ mod key_handover {
 				// Adding a small tweak to the share to make it incorrect
 				match &mut context.party_status {
 					ParticipantStatus::Sharing { secret_share, .. } => {
-						*secret_share =
-							secret_share.clone() + &<<Chain::CryptoScheme as CryptoScheme>::Point as ECPoint>::Scalar::from(1);
+						*secret_share = secret_share.clone() + &<Point as ECPoint>::Scalar::from(1);
 					},
 					_ => panic!("Unexpected status"),
 				}
@@ -1074,13 +1072,12 @@ mod key_handover {
 		sharing_subset: BTreeSet<AccountId>,
 		receiving_set: BTreeSet<AccountId>,
 	) {
-		type Chain = BtcSigning;
 		// The high level idea of this test is to generate some key with some
 		// nodes, then introduce new nodes who the key will be handed over to.
 		// The resulting aggregate keys should match, and the new nodes should
 		// be able to sign with their newly generated shares.
 
-		let (mut ceremony, initial_key) = prepare_handover_test::<Chain>(
+		let (mut ceremony, initial_key) = prepare_handover_test(
 			original_set,
 			sharing_subset,
 			receiving_set.clone(),
@@ -1112,7 +1109,7 @@ mod key_handover {
 			new_nodes(receiving_set),
 			DEFAULT_SIGNING_CEREMONY_ID,
 			vec![PayloadAndKeyData::new(
-				<Chain as ChainSigning>::CryptoScheme::signing_payload_for_test(),
+				<Scheme as CryptoScheme>::signing_payload_for_test(),
 				new_key,
 				new_shares,
 			)],
@@ -1202,10 +1199,6 @@ mod key_handover {
 
 	#[tokio::test]
 	async fn should_recover_if_agree_on_values_stage0() {
-		type Chain = BtcSigning;
-		type Scheme = <Chain as ChainSigning>::CryptoScheme;
-		type Point = <Scheme as CryptoScheme>::Point;
-
 		let original_set = to_account_id_set([1, 2, 3, 4]);
 
 		// NOTE: 3 sharing nodes is the smallest set that where
@@ -1217,7 +1210,7 @@ mod key_handover {
 		// This account id will fail to broadcast initial public keys
 		let bad_account_id = sharing_subset.iter().next().unwrap().clone();
 
-		let (mut ceremony, initial_key) = prepare_handover_test::<Chain>(
+		let (mut ceremony, initial_key) = prepare_handover_test(
 			original_set,
 			sharing_subset,
 			receiving_set.clone(),
@@ -1261,10 +1254,6 @@ mod key_handover {
 	// (commits to an unexpected secret) gets reported
 	#[tokio::test]
 	async fn key_handover_with_incorrect_commitment() {
-		type Chain = BtcSigning;
-		type Scheme = <Chain as ChainSigning>::CryptoScheme;
-		type Point = <Scheme as CryptoScheme>::Point;
-
 		// Accounts (1), (2) and (3) will hold the original key
 		let original_set = to_account_id_set([1, 2, 3]);
 
@@ -1278,7 +1267,7 @@ mod key_handover {
 		// This account id will commit to an unexpected secret
 		let bad_account_id = sharing_subset.iter().next().unwrap().clone();
 
-		let (mut ceremony, _initial_key) = prepare_handover_test::<Chain>(
+		let (mut ceremony, _initial_key) = prepare_handover_test(
 			original_set,
 			sharing_subset,
 			receiving_set.clone(),

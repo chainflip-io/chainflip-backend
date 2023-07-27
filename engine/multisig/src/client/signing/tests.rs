@@ -27,6 +27,8 @@ type VerifyComm2 = signing_data::VerifyComm2<Point>;
 type LocalSig3 = signing_data::LocalSig3<Point>;
 type VerifyLocalSig4 = signing_data::VerifyLocalSig4<Point>;
 
+type ChainPoint<Chain> = <<Chain as ChainSigning>::CryptoScheme as CryptoScheme>::Point;
+
 mod broadcast_commitments_stage {
 	use super::*;
 
@@ -169,9 +171,9 @@ async fn test_sign_multiple_payloads<Chain: ChainSigning>(
 	let messages = run_stages!(
 		signing_ceremony,
 		messages,
-		signing_data::VerifyComm2<<Chain::CryptoScheme as CryptoScheme>::Point>,
-		signing_data::LocalSig3<<Chain::CryptoScheme as CryptoScheme>::Point>,
-		signing_data::VerifyLocalSig4<<Chain::CryptoScheme as CryptoScheme>::Point>
+		signing_data::VerifyComm2<ChainPoint<Chain>>,
+		signing_data::LocalSig3<ChainPoint<Chain>>,
+		signing_data::VerifyLocalSig4<ChainPoint<Chain>>
 	);
 	signing_ceremony.distribute_messages(messages).await;
 	let signature = signing_ceremony
@@ -224,9 +226,9 @@ async fn should_sign_with_all_parties<Chain: ChainSigning>(participants: &BTreeS
 		let messages = run_stages!(
 			signing_ceremony,
 			messages,
-			signing_data::VerifyComm2<<Chain::CryptoScheme as CryptoScheme>::Point>,
-			signing_data::LocalSig3<<Chain::CryptoScheme as CryptoScheme>::Point>,
-			signing_data::VerifyLocalSig4<<Chain::CryptoScheme as CryptoScheme>::Point>
+			signing_data::VerifyComm2<ChainPoint<Chain>>,
+			signing_data::LocalSig3<ChainPoint<Chain>>,
+			signing_data::VerifyLocalSig4<ChainPoint<Chain>>
 		);
 		signing_ceremony.distribute_messages(messages).await;
 		let signature = signing_ceremony

@@ -1,18 +1,15 @@
+use anyhow::Result;
+use async_trait::async_trait;
+use cf_primitives::{AuthorityCount, CeremonyId};
+use futures::{stream, StreamExt};
+use itertools::{Either, Itertools};
+use lazy_static::lazy_static;
+use rand::{RngCore, SeedableRng};
 use std::{
 	collections::{BTreeSet, HashMap},
 	fmt::Display,
 	time::Duration,
 };
-
-use anyhow::Result;
-use cf_primitives::{AuthorityCount, CeremonyId};
-use futures::{stream, StreamExt};
-use itertools::{Either, Itertools};
-
-use async_trait::async_trait;
-
-use rand::{RngCore, SeedableRng};
-
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing::{debug, debug_span, Instrument};
 use utilities::{
@@ -39,17 +36,19 @@ use crate::{
 	client::{keygen, MultisigMessage},
 	// This determines which crypto scheme will be used in tests
 	// (we make arbitrary choice to use eth)
-	crypto::eth::Point,
 	p2p::{OutgoingMultisigStageMessages, VersionedCeremonyMessage, CURRENT_PROTOCOL_VERSION},
 };
-
-use signing::{LocalSig3, SigningCommitment};
-
 use keygen::{generate_shares_and_commitment, DKGUnverifiedCommitment};
-
+use signing::{LocalSig3, SigningCommitment};
 use state_chain_runtime::{constants::common::MAX_STAGE_DURATION_SECONDS, AccountId};
 
-use lazy_static::lazy_static;
+type StrategyFailureReason<Strategy> =
+	<<Strategy as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason;
+type StrategyData<Strategy> =
+	<<Strategy as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data;
+type StrategyOutput<Strategy> =
+	<<Strategy as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Output;
+type Point<Chain> = <<Chain as ChainSigning>::CryptoScheme as CryptoScheme>::Point;
 
 /// Default seeds
 pub const DEFAULT_KEYGEN_SEED: [u8; 32] = [8; 32];
@@ -172,7 +171,6 @@ lazy_static! {
 }
 
 pub type StageMessages<T> = HashMap<AccountId, HashMap<AccountId, T>>;
-type KeygenCeremonyEth = KeygenCeremony<EvmCryptoScheme>;
 
 pub struct Node<C, Chain>
 where
@@ -362,14 +360,11 @@ pub trait CeremonyRunnerStrategy {
 	type CeremonyType: CeremonyTrait;
 
 	type CheckedOutput: std::fmt::Debug;
-	type InitialStageData: TryFrom<
-			<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data,
-			Error = <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data,
-		> + Clone;
+	type InitialStageData: TryFrom<StrategyData<Self>, Error = StrategyData<Self>> + Clone;
 
 	fn post_successful_complete_check(
 		&self,
-		outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
+		outputs: HashMap<AccountId, StrategyOutput<Self>>,
 	) -> Self::CheckedOutput;
 
 	async fn request_ceremony(&mut self, node_id: &AccountId);
@@ -416,9 +411,7 @@ where
 			.unwrap()
 	}
 
-	pub async fn distribute_messages<
-		StageData: Into<<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data>,
-	>(
+	pub async fn distribute_messages<StageData: Into<StrategyData<Self>>>(
 		&mut self,
 		stage_data: StageMessages<StageData>,
 	) {
@@ -430,9 +423,7 @@ where
 	}
 
 	#[track_caller]
-	pub async fn distribute_message<
-		StageData: Into<<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data>,
-	>(
+	pub async fn distribute_message<StageData: Into<StrategyData<Self>>>(
 		&mut self,
 		sender_id: &AccountId,
 		receiver_id: &AccountId,
@@ -452,9 +443,7 @@ where
 	}
 
 	#[track_caller]
-	pub async fn distribute_messages_with_non_sender<
-		StageData: Into<<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data>,
-	>(
+	pub async fn distribute_messages_with_non_sender<StageData: Into<StrategyData<Self>>>(
 		&mut self,
 		mut stage_data: StageMessages<StageData>,
 		non_sender: &AccountId,
@@ -468,10 +457,7 @@ where
 
 	#[track_caller]
 	pub async fn gather_outgoing_messages<
-		NextStageData: TryFrom<
-				<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data,
-				Error = Error,
-			> + Clone,
+		NextStageData: TryFrom<StrategyData<Self>, Error = Error> + Clone,
 		Error: Display,
 	>(
 		&mut self,
@@ -492,9 +478,7 @@ where
 				.map_err(|err| {
 					format!(
 						"Expected outgoing ceremony data {}, got {:?}.",
-						std::any::type_name::<
-							<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data,
-						>(),
+						std::any::type_name::<StrategyData<Self>>(),
 						err
 					)
 				})
@@ -555,11 +539,8 @@ where
 
 	#[track_caller]
 	pub async fn run_stage<
-		NextStageData: TryFrom<
-				<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data,
-				Error = Error,
-			> + Clone,
-		StageData: Into<<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data>,
+		NextStageData: TryFrom<StrategyData<Self>, Error = Error> + Clone,
+		StageData: Into<StrategyData<Self>>,
 		Error: Display,
 	>(
 		&mut self,
@@ -571,11 +552,8 @@ where
 
 	#[track_caller]
 	pub async fn run_stage_with_non_sender<
-		NextStageData: TryFrom<
-				<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data,
-				Error = Error,
-			> + Clone,
-		StageData: Into<<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::Data>,
+		NextStageData: TryFrom<StrategyData<Self>, Error = Error> + Clone,
+		StageData: Into<StrategyData<Self>>,
 		Error: Display,
 	>(
 		&mut self,
@@ -592,10 +570,7 @@ where
 		&mut self,
 	) -> Result<
 		<Self as CeremonyRunnerStrategy>::CheckedOutput,
-		(
-			BTreeSet<AccountId>,
-			<<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
-		),
+		(BTreeSet<AccountId>, StrategyFailureReason<Self>),
 	> {
 		// Gather the outcomes from all the nodes
 		let results: HashMap<_, _> = self
@@ -656,7 +631,7 @@ where
 	fn try_complete_with_error(
 		&mut self,
 		bad_account_ids: &[AccountId],
-		expected_failure_reason: <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
+		expected_failure_reason: StrategyFailureReason<Self>,
 	) -> Option<()> {
 		let (reported, reason) = self.collect_and_check_outcomes().unwrap_err();
 		assert_eq!(BTreeSet::from_iter(bad_account_ids.iter()), reported.iter().collect());
@@ -670,7 +645,7 @@ where
 	pub fn complete_with_error(
 		&mut self,
 		bad_account_ids: &[AccountId],
-		expected_failure_reason: <<Self as CeremonyRunnerStrategy>::CeremonyType as CeremonyTrait>::FailureReason,
+		expected_failure_reason: StrategyFailureReason<Self>,
 	) {
 		self.try_complete_with_error(bad_account_ids, expected_failure_reason)
 			.expect("Failed to get all ceremony outcomes");
@@ -729,13 +704,13 @@ impl<Chain: ChainSigning> CeremonyRunnerStrategy for KeygenCeremonyRunner<Chain>
 	type CeremonyType = KeygenCeremony<Chain::CryptoScheme>;
 	type CheckedOutput = (
 		<Chain::CryptoScheme as CryptoScheme>::PublicKey,
-		HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
+		HashMap<AccountId, StrategyOutput<Self>>,
 	);
 	type InitialStageData = keygen::HashComm1;
 
 	fn post_successful_complete_check(
 		&self,
-		outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
+		outputs: HashMap<AccountId, StrategyOutput<Self>>,
 	) -> Self::CheckedOutput {
 		let (_, public_key_point) = all_same(outputs.values().map(|keygen_result_info| {
 			(keygen_result_info.params, keygen_result_info.key.get_agg_public_key_point())
@@ -813,11 +788,11 @@ pub type SigningCeremonyRunner<Chain> = CeremonyTestRunner<
 impl<Chain: ChainSigning> CeremonyRunnerStrategy for SigningCeremonyRunner<Chain> {
 	type CeremonyType = SigningCeremony<Chain::CryptoScheme>;
 	type CheckedOutput = <SigningCeremony<Chain::CryptoScheme> as CeremonyTrait>::Output;
-	type InitialStageData = signing::Comm1<<Chain::CryptoScheme as CryptoScheme>::Point>;
+	type InitialStageData = signing::Comm1<Point<Chain>>;
 
 	fn post_successful_complete_check(
 		&self,
-		outputs: HashMap<AccountId, <Self::CeremonyType as CeremonyTrait>::Output>,
+		outputs: HashMap<AccountId, StrategyOutput<Self>>,
 	) -> Self::CheckedOutput {
 		let signatures = all_same(outputs.into_values()).expect("Signatures don't match");
 
@@ -931,22 +906,24 @@ pub async fn standard_signing<Chain: ChainSigning>(
 	let messages = run_stages!(
 		signing_ceremony,
 		stage_1_messages,
-		signing::VerifyComm2<<Chain::CryptoScheme as CryptoScheme>::Point>,
-		signing::LocalSig3<<Chain::CryptoScheme as CryptoScheme>::Point>,
-		signing::VerifyLocalSig4<<Chain::CryptoScheme as CryptoScheme>::Point>
+		signing::VerifyComm2<Point<Chain>>,
+		signing::LocalSig3<Point<Chain>>,
+		signing::VerifyLocalSig4<Point<Chain>>
 	);
 	signing_ceremony.distribute_messages(messages).await;
 	signing_ceremony.complete()
 }
 
-/// Create and run a full Eth keygen ceremony
+/// Create and run a full Eth keygen ceremony, ensuring that all nodes get a successful outcome.
 pub async fn run_keygen(
-	nodes: HashMap<AccountId, Node<KeygenCeremonyEth, EthSigning>>,
+	nodes: HashMap<AccountId, Node<KeygenCeremony<EvmCryptoScheme>, EthSigning>>,
 	ceremony_id: CeremonyId,
 ) -> (
 	<EvmCryptoScheme as CryptoScheme>::PublicKey,
 	HashMap<AccountId, KeygenResultInfo<EvmCryptoScheme>>,
 ) {
+	use crate::crypto::eth::Point;
+
 	let mut keygen_ceremony = KeygenCeremonyRunner::<EthSigning>::new(
 		nodes,
 		ceremony_id,
