@@ -12,15 +12,14 @@ import {
   decodeDotAddressForContract,
   amountToFineAmount,
   defaultAssetAmounts,
+  observeEvent,
   getChainflipApi,
-  monitorEvent,
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
 import { performSwapViaContract, approveTokenVault } from '../shared/contract_swap';
 
 let swapCount = 1;
-let monitoring = true;
 
 function getAbiEncodedMessage(types?: string[]): string {
   const web3 = new Web3(process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545');
@@ -119,7 +118,19 @@ async function testSwapViaContract(
   await performSwapViaContract(sourceAsset, destAsset, destAddress, tag, messageMetadata);
 }
 
-async function testAllSwaps() {
+async function testAll() {
+  let observing = true;
+  const observingBroadcastAborted = observeEvent(
+    ':BroadcastAborted',
+    await getChainflipApi(),
+    (event) => {
+      throw new Error(
+        `Unexpected event emitted: ${event.method}, "broadcastId" ${event.data.broadcastId}`,
+      );
+    },
+    () => observing,
+  );
+
   // Single approval of all the assets swapped in contractsSwaps to avoid overlapping async approvals.
   // Make sure to to set the allowance to the same amount of total asset swapped in contractsSwaps,
   // otherwise in subsequent approvals the broker might not send the transaction confusing the eth nonce.
@@ -230,17 +241,10 @@ async function testAllSwaps() {
   ]);
 
   await Promise.all([contractSwaps, regularSwaps, ccmSwaps, ccmContractSwaps]);
-}
 
-async function testAll() {
-  const broadcastAborted = monitorEvent(
-    'Broadcaster::BroadcastAborted',
-    await getChainflipApi(),
-    () => monitoring,
-  );
-  await testAllSwaps();
-  monitoring = false;
-  await broadcastAborted;
+  // Gracefully exit the broadcast abort observer
+  observing = false;
+  await observingBroadcastAborted;
 }
 
 runWithTimeout(testAll(), 1800000)
