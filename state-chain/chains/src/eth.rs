@@ -603,11 +603,11 @@ impl ChannelLifecycleHooks for DeploymentStatus {
 			},
 			Self::Deployed => false,
 			Self::Undeployed => {
-				#[cfg(test)]
+				#[cfg(debug_assertions)]
 				{
 					panic!("Cannot finalize fetch to an undeployed address")
 				}
-				#[cfg(not(test))]
+				#[cfg(not(debug_assertions))]
 				{
 					log::error!("Cannot finalize fetch to an undeployed address");
 					*self = Self::Deployed;
