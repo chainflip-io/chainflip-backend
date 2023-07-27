@@ -125,7 +125,7 @@ async function testAll() {
     await getChainflipApi(),
     (event) => {
       throw new Error(
-        `Unexpected BroadcastAborted event emited with broadcastId ${event.data.broadcastId}`,
+        `Unexpected event emited ${event.name.section}:${event.name.method} with broadcastId ${event.data.broadcastId}`,
       );
     },
     () => observing,
