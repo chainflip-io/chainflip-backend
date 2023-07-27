@@ -5,9 +5,7 @@ mod tests;
 use anyhow::{anyhow, Context};
 use cf_chains::{
 	btc::{self, PreviousOrCurrent},
-	dot::{self},
 	eth::Ethereum,
-	Polkadot,
 };
 use cf_primitives::{BlockNumber, CeremonyId, EpochIndex};
 use crypto_compat::CryptoCompat;
@@ -249,7 +247,6 @@ pub async fn start<
 	peer_update_sender: UnboundedSender<PeerUpdate>,
 	eth_epoch_start_sender: async_broadcast::Sender<EpochStart<Ethereum>>,
 	eth_address_to_monitor_sender: EthAddressToMonitorSender,
-	dot_epoch_start_sender: async_broadcast::Sender<EpochStart<Polkadot>>,
 ) -> Result<(), anyhow::Error>
 where
 	BlockStream: StateChainStreamApi,
@@ -272,7 +269,6 @@ where
 
         let start_epoch = |block_hash: H256, index: u32, current: bool, participant: bool| {
             let eth_epoch_start_sender = &eth_epoch_start_sender;
-            let dot_epoch_start_sender = &dot_epoch_start_sender;
             let state_chain_client = &state_chain_client;
 
             async move {
@@ -291,27 +287,6 @@ where
                     participant,
                     data: (),
                 }).await.unwrap();
-
-                // It is possible for there not to be a Polkadot vault.
-                // At genesis there is no Polkadot vault, so we want to check that the vault exists
-                // before we start witnessing.
-                if let Some(vault) = state_chain_client
-                .storage_map_entry::<pallet_cf_vaults::Vaults<
-                    state_chain_runtime::Runtime,
-                    state_chain_runtime::PolkadotInstance,
-                >>(block_hash, &index)
-                .await
-                .unwrap() {
-                    dot_epoch_start_sender.broadcast(EpochStart::<Polkadot> {
-                        epoch_index: index,
-                        block_number: vault.active_from_block,
-                        current,
-                        participant,
-                        data: dot::EpochStartData {
-                            vault_account: state_chain_client.storage_value::<pallet_cf_environment::PolkadotVaultAccountId<state_chain_runtime::Runtime>>(block_hash).await.unwrap().unwrap()
-                        }
-                    }).await.unwrap();
-                }
             }
         };
 
