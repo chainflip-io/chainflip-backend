@@ -213,7 +213,7 @@ impl<Ceremony: CeremonyTrait, Chain: ChainSigning> CeremonyRunner<Ceremony, Chai
 					return None
 				}
 
-				if !data.is_initial_stage_data_size_valid::<Chain::CryptoScheme>() {
+				if !data.is_initial_stage_data_size_valid::<Chain>() {
 					debug!(
 						from_id = sender_id.to_string(),
 						"Ignoring data for unauthorised ceremony: incorrect number of elements"
@@ -235,7 +235,7 @@ impl<Ceremony: CeremonyTrait, Chain: ChainSigning> CeremonyRunner<Ceremony, Chai
 				};
 
 				// Check that the number of elements in the data is what we expect
-				if !data.is_data_size_valid::<Chain::CryptoScheme>(
+				if !data.is_data_size_valid::<Chain>(
 					stage.ceremony_common().all_idxs.len() as AuthorityCount,
 					stage.ceremony_common().number_of_signing_payloads,
 				) {

@@ -696,9 +696,7 @@ impl<Ceremony: CeremonyTrait, Chain: ChainSigning> CeremonyStates<Ceremony, Chai
 			// Only a ceremony id that is within the ceremony id window can create unauthorised
 			// ceremonies
 			let ceremony_id_string = ceremony_id_string::<Chain::CryptoScheme>(ceremony_id);
-			if ceremony_id >
-				latest_ceremony_id + <Chain::CryptoScheme as CryptoScheme>::CEREMONY_ID_WINDOW
-			{
+			if ceremony_id > latest_ceremony_id + Chain::CEREMONY_ID_WINDOW {
 				warn!("Ignoring data: unexpected future ceremony id {ceremony_id_string}",);
 				return
 			} else if ceremony_id <= latest_ceremony_id {

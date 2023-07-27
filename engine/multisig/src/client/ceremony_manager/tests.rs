@@ -238,8 +238,9 @@ async fn should_ignore_rts_with_unknown_signer_id() {
 async fn should_not_create_unauthorized_ceremony_with_invalid_ceremony_id() {
 	let latest_ceremony_id = 1; // Invalid, because the CeremonyManager starts with this value as the latest
 	let past_ceremony_id = latest_ceremony_id; // Invalid, because it was used already (<=latest_ceremony_id)
-	let future_ceremony_id = latest_ceremony_id + EvmCryptoScheme::CEREMONY_ID_WINDOW; // Valid, because its within the window
-	let future_ceremony_id_too_large = latest_ceremony_id + EvmCryptoScheme::CEREMONY_ID_WINDOW + 1; // Invalid, because its too far in the future
+	let future_ceremony_id = latest_ceremony_id + <EthSigning as ChainSigning>::CEREMONY_ID_WINDOW; // Valid, because its within the window
+	let future_ceremony_id_too_large =
+		latest_ceremony_id + <EthSigning as ChainSigning>::CEREMONY_ID_WINDOW + 1; // Invalid, because its too far in the future
 
 	// Dummy stage 1 data to use for the test
 	let stage_1_data = MultisigData::Keygen(gen_keygen_data_hash_comm1());

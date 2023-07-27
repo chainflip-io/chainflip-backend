@@ -95,6 +95,33 @@ macro_rules! test_all_crypto_schemes {
 }
 pub use test_all_crypto_schemes;
 
+/// Run the given function on all crypto chains.
+/// The function must be generic over the ChainSigning. eg: my_test<Chain: ChainSigning>().
+#[macro_export]
+macro_rules! test_all_crypto_chains {
+	($test_function:ident ($($lt:tt),*)) => {
+		({
+			use $crate::{
+				bitcoin::BtcSigning, ed25519::Ed25519Signing, eth::EthSigning,
+				polkadot::PolkadotSigning,
+			};
+
+			fn test<Chain: ChainSigning>() {
+				if let Err(err) = std::panic::catch_unwind(|| $test_function::<Chain>($($lt)*) ) {
+					println!("Test failed with {} Scheme", Chain::NAME);
+					std::panic::resume_unwind(err);
+				}
+			}
+			// Run the test on all Chains
+			test::<EthSigning>();
+			test::<PolkadotSigning>();
+			test::<BtcSigning>();
+			test::<Ed25519Signing>();
+		})
+	};
+}
+pub use test_all_crypto_chains;
+
 #[test]
 fn test_all_crypto_schemes_macro() {
 	// Run the macro using all 3 function that only panic on a single scheme to make sure the macro
