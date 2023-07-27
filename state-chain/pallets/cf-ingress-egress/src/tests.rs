@@ -562,9 +562,11 @@ fn multi_use_deposit_address_different_blocks() {
 
 #[test]
 fn multi_use_deposit_same_block() {
-	const ETH: eth::Asset = eth::Asset::Eth;
+	// Use FLIP because ETH doesn't trigger a second fetch.
+	const FLIP: eth::Asset = eth::Asset::Flip;
+	const DEPOSIT_AMOUNT: <Ethereum as Chain>::ChainAmount = 1_000;
 	new_test_ext()
-		.request_deposit_addresses(&[(ALICE, ETH)])
+		.request_deposit_addresses(&[(ALICE, FLIP)])
 		.map_context(|mut ctx| {
 			assert!(ctx.len() == 1);
 			ctx.pop().unwrap()
@@ -585,13 +587,13 @@ fn multi_use_deposit_same_block() {
 						DepositWitness {
 							deposit_address,
 							asset,
-							amount: MinimumDeposit::<Test>::get(asset),
+							amount: MinimumDeposit::<Test>::get(asset) + DEPOSIT_AMOUNT,
 							deposit_details: Default::default(),
 						},
 						DepositWitness {
 							deposit_address,
 							asset,
-							amount: MinimumDeposit::<Test>::get(asset),
+							amount: MinimumDeposit::<Test>::get(asset) + DEPOSIT_AMOUNT,
 							deposit_details: Default::default(),
 						},
 					],
@@ -606,7 +608,7 @@ fn multi_use_deposit_same_block() {
 					.unwrap()
 					.deposit_channel
 					.state,
-				cf_chains::eth::DeploymentStatus::Pending
+				cf_chains::eth::DeploymentStatus::Pending,
 			);
 			let scheduled_fetches = ScheduledEgressFetchOrTransfer::<Test, _>::get();
 			let pending_api_calls = MockEgressBroadcaster::get_pending_api_calls();
@@ -618,7 +620,7 @@ fn multi_use_deposit_same_block() {
 				matches!(
 					scheduled_fetches.last().unwrap(),
 					FetchOrTransfer::Fetch {
-						asset: ETH,
+						asset: FLIP,
 						..
 					}
 				),

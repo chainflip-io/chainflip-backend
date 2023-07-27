@@ -789,12 +789,31 @@ mod verification_tests {
 #[cfg(test)]
 mod lifecycle_tests {
 	use super::*;
+	const ETH: assets::eth::Asset = assets::eth::Asset::Eth;
+	const USDC: assets::eth::Asset = assets::eth::Asset::Usdc;
+
+	macro_rules! expect_deposit_state {
+		( $state:expr, $asset:expr, $pat:pat ) => {
+			assert!(matches!(
+				DepositChannel::<Ethereum> {
+					channel_id: Default::default(),
+					address: Default::default(),
+					asset: $asset,
+					state: $state,
+				}
+				.fetch_id(),
+				$pat
+			));
+		};
+	}
 	#[test]
 	fn eth_deposit_address_lifecycle() {
 		// Initial state is undeployed.
 		let mut state = DeploymentStatus::default();
 		assert_eq!(state, DeploymentStatus::Undeployed);
 		assert!(state.can_fetch());
+		expect_deposit_state!(state, ETH, EthereumFetchId::DeployAndFetch(..));
+		expect_deposit_state!(state, USDC, EthereumFetchId::DeployAndFetch(..));
 
 		// Pending channels can't be fetched from.
 		assert!(state.on_fetch_scheduled());
@@ -810,12 +829,17 @@ mod lifecycle_tests {
 		assert!(state.on_fetch_completed());
 		assert_eq!(state, DeploymentStatus::Deployed);
 		assert!(state.can_fetch());
+		expect_deposit_state!(state, ETH, EthereumFetchId::NotRequired);
+		expect_deposit_state!(state, USDC, EthereumFetchId::Fetch(..));
 
 		// Channel is now in its final deployed state and be fetched from at any time.
 		assert!(!state.on_fetch_scheduled());
 		assert!(state.can_fetch());
 		assert!(!state.on_fetch_completed());
 		assert!(state.can_fetch());
+		expect_deposit_state!(state, ETH, EthereumFetchId::NotRequired);
+		expect_deposit_state!(state, USDC, EthereumFetchId::Fetch(..));
+
 		assert_eq!(state, DeploymentStatus::Deployed);
 		assert!(!state.on_fetch_scheduled());
 	}
