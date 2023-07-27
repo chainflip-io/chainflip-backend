@@ -5,7 +5,7 @@ import { assetDecimals, fundStateChainAccount } from '@chainflip-io/cli';
 import { Wallet, ethers } from 'ethers';
 import { getNextEthNonce } from './send_eth';
 import { getEthContractAddress, hexPubkeyToFlipAddress } from './utils';
-import erc20abi from '../../eth-contract-abis/IERC20.json';
+import erc20abi from '../../eth-contract-abis/abis/IERC20.json';
 import { observeEvent, getChainflipApi, amountToFineAmount } from '../shared/utils';
 
 export async function fundFlip(pubkey: HexString, flipAmount: string) {

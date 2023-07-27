@@ -1,6 +1,6 @@
 import Web3 from 'web3';
 import { getEthContractAddress } from './utils';
-import erc20abi from '../../eth-contract-abis/IERC20.json';
+import erc20abi from '../../eth-contract-abis/abis/IERC20.json';
 
 export async function getUsdcBalance(ethereumAddress: string): Promise<string> {
   const ethEndpoint = process.env.ETH_ENDPOINT ?? 'http://127.0.0.1:8545';
