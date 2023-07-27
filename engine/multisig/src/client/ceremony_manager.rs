@@ -425,10 +425,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 					}
 				}
 			}
-			.instrument(info_span!(
-				"MultisigClient",
-				chain = <Chain::CryptoScheme as CryptoScheme>::NAME
-			))
+			.instrument(info_span!("MultisigClient", chain = Chain::NAME))
 			.boxed()
 		})
 		.await
@@ -447,7 +444,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 
 		let span = info_span!(
 			"Key Handover Ceremony",
-			ceremony_id = ceremony_id_string::<Chain::CryptoScheme>(ceremony_id)
+			ceremony_id = ceremony_id_string::<Chain>(ceremony_id)
 		);
 		let _entered = span.enter();
 
@@ -482,7 +479,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 			.with_context(|| {
 				format!(
 					"Invalid key handover request with ceremony id {}",
-					ceremony_id_string::<Chain::CryptoScheme>(ceremony_id)
+					ceremony_id_string::<Chain>(ceremony_id)
 				)
 			})
 			.unwrap();
@@ -499,10 +496,8 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 	) {
 		assert!(!participants.is_empty(), "Keygen request has no participants");
 
-		let span = info_span!(
-			"Keygen Ceremony",
-			ceremony_id = ceremony_id_string::<Chain::CryptoScheme>(ceremony_id)
-		);
+		let span =
+			info_span!("Keygen Ceremony", ceremony_id = ceremony_id_string::<Chain>(ceremony_id));
 		let _entered = span.enter();
 
 		debug!("Processing a keygen request");
@@ -535,7 +530,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 			.with_context(|| {
 				format!(
 					"Invalid keygen request with ceremony id {}",
-					ceremony_id_string::<Chain::CryptoScheme>(ceremony_id)
+					ceremony_id_string::<Chain>(ceremony_id)
 				)
 			})
 			.unwrap();
@@ -556,10 +551,8 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 	) {
 		assert!(!signers.is_empty(), "Request to sign has no signers");
 
-		let span = info_span!(
-			"Signing Ceremony",
-			ceremony_id = ceremony_id_string::<Chain::CryptoScheme>(ceremony_id)
-		);
+		let span =
+			info_span!("Signing Ceremony", ceremony_id = ceremony_id_string::<Chain>(ceremony_id));
 		let _entered = span.enter();
 
 		debug!("Processing a request to sign");
@@ -594,7 +587,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 			.with_context(|| {
 				format!(
 					"Invalid sign request with ceremony id {}",
-					ceremony_id_string::<Chain::CryptoScheme>(ceremony_id)
+					ceremony_id_string::<Chain>(ceremony_id)
 				)
 			})
 			.unwrap();
@@ -611,7 +604,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 			MultisigMessage { ceremony_id, data: MultisigData::Keygen(data) } => {
 				let span = info_span!(
 					"Keygen Ceremony",
-					ceremony_id = ceremony_id_string::<Chain::CryptoScheme>(ceremony_id)
+					ceremony_id = ceremony_id_string::<Chain>(ceremony_id)
 				);
 				let _entered = span.enter();
 
@@ -626,7 +619,7 @@ impl<Chain: ChainSigning> CeremonyManager<Chain> {
 			MultisigMessage { ceremony_id, data: MultisigData::Signing(data) } => {
 				let span = info_span!(
 					"Signing Ceremony",
-					ceremony_id = ceremony_id_string::<Chain::CryptoScheme>(ceremony_id)
+					ceremony_id = ceremony_id_string::<Chain>(ceremony_id)
 				);
 				let _entered = span.enter();
 
@@ -696,7 +689,7 @@ impl<Ceremony: CeremonyTrait> CeremonyStates<Ceremony> {
 		if !self.ceremony_handles.contains_key(&ceremony_id) {
 			// Only a ceremony id that is within the ceremony id window can create unauthorised
 			// ceremonies
-			let ceremony_id_string = ceremony_id_string::<Chain::CryptoScheme>(ceremony_id);
+			let ceremony_id_string = ceremony_id_string::<Chain>(ceremony_id);
 			if ceremony_id > latest_ceremony_id + Chain::CEREMONY_ID_WINDOW {
 				warn!("Ignoring data: unexpected future ceremony id {ceremony_id_string}",);
 				return

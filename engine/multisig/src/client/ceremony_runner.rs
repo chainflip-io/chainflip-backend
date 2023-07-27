@@ -64,7 +64,7 @@ impl<Ceremony: CeremonyTrait, Chain: ChainSigning> CeremonyRunner<Ceremony, Chai
 	) -> Result<()> {
 		let span = tracing::info_span!(
 			"CeremonyRunner",
-			ceremony_id = ceremony_id_string::<Chain::CryptoScheme>(ceremony_id)
+			ceremony_id = ceremony_id_string::<Chain>(ceremony_id)
 		);
 
 		// We always create unauthorised first, it can get promoted to
