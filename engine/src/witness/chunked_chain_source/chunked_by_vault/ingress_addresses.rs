@@ -43,7 +43,10 @@ where
 {
 	// We wait for the chain_tracking to pass a blocks height before assessing the addresses that
 	// should be witnessed at that block to ensure, the set of addresses each engine attempts to
-	// witness at a given block is consistent
+	// witness at a given block is consistent.
+	// We ensure the index is strictly less than the block height. This is because we need to ensure
+	// that for a particular chain state block height, no more deposit channels can be created with
+	// that opened_at block height.
 	fn is_header_ready(
 		index: Inner::Index,
 		chain_state: &pallet_cf_chain_tracking::ChainState<Inner::Chain>,
