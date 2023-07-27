@@ -16,6 +16,8 @@ use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use sp_std::marker::PhantomData;
 
+const NO_CHAIN_STATE: &str = "Chain state should be set at genesis and never removed.";
+
 #[frame_support::pallet]
 pub mod pallet {
 	use super::*;
@@ -108,7 +110,7 @@ pub mod pallet {
 			CurrentChainState::<T, I>::try_mutate::<_, Error<T, I>, _>(|previous_chain_state| {
 				ensure!(
 					new_chain_state.block_height >
-						previous_chain_state.as_ref().unwrap().block_height,
+						previous_chain_state.as_ref().expect(NO_CHAIN_STATE).block_height,
 					Error::<T, I>::StaleDataSubmitted
 				);
 				*previous_chain_state = Some(new_chain_state.clone());
@@ -124,6 +126,6 @@ pub mod pallet {
 
 impl<T: Config<I>, I: 'static> GetBlockHeight<T::TargetChain> for Pallet<T, I> {
 	fn get_block_height() -> <T::TargetChain as Chain>::ChainBlockNumber {
-		CurrentChainState::<T, I>::get().unwrap().block_height
+		CurrentChainState::<T, I>::get().expect(NO_CHAIN_STATE).block_height
 	}
 }
