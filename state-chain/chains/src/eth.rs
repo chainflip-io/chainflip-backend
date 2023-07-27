@@ -630,16 +630,24 @@ impl ChannelLifecycleHooks for DeploymentStatus {
 
 #[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Copy, Debug)]
 pub enum EthereumFetchId {
-	Deployed(Address),
-	Undeployed(ChannelId),
+	/// If the contract is not yet deployed, we need to deploy and fetch using the channel id.
+	DeployAndFetch(ChannelId),
+	/// Once the contract is deployed, we can fetch from the address.
+	Fetch(Address),
+	/// Fetching is not required for Ethereum deposits into a deployed contract.
+	NotRequired,
 }
 
 impl From<&DepositChannel<Ethereum>> for EthereumFetchId {
 	fn from(channel: &DepositChannel<Ethereum>) -> Self {
 		match channel.state {
-			DeploymentStatus::Undeployed => EthereumFetchId::Undeployed(channel.channel_id),
-			DeploymentStatus::Pending => EthereumFetchId::Deployed(channel.address),
-			DeploymentStatus::Deployed => EthereumFetchId::Deployed(channel.address),
+			DeploymentStatus::Undeployed => EthereumFetchId::DeployAndFetch(channel.channel_id),
+			DeploymentStatus::Pending | DeploymentStatus::Deployed =>
+				if channel.asset == assets::eth::Asset::Eth {
+					EthereumFetchId::NotRequired
+				} else {
+					EthereumFetchId::Fetch(channel.address)
+				},
 		}
 	}
 }
