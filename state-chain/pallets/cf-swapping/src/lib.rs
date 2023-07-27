@@ -799,7 +799,7 @@ pub mod pallet {
 
 				swap.update_swap_result(direction, swap_output);
 
-				if swap_output > 0 && matches!(swap.swap_type, SwapType::Swap(_)) {
+				if swap_output == 0 && matches!(swap.swap_type, SwapType::Swap(_)) {
 					// This is unlikely but theoretically possible if, for example, the initial swap
 					// input is so small compared to the total bundle size that it rounds down to
 					// zero when we do the division.
