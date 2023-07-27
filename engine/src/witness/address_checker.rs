@@ -2,7 +2,7 @@ use anyhow::Result;
 use ethers::prelude::*;
 use std::sync::Arc;
 
-abigen!(AddressChecker, "eth-contract-abis/perseverance-rc17/IAddressChecker.json");
+abigen!(AddressChecker, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IAddressChecker.json");
 
 pub struct AddressCheckerRpc<T> {
 	inner_address_checker: AddressChecker<Provider<T>>,

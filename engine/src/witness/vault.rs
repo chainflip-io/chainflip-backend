@@ -24,7 +24,7 @@ use cf_chains::{address::EncodedAddress, CcmDepositMetadata};
 use cf_primitives::{Asset, EthereumAddress, ForeignChain};
 use ethers::prelude::*;
 
-abigen!(Vault, "eth-contract-abis/perseverance-rc17/IVault.json");
+abigen!(Vault, "$CF_ETH_CONTRACT_ABI_ROOT/$CF_ETH_CONTRACT_ABI_TAG/IVault.json");
 
 #[async_trait::async_trait]
 pub trait EthAssetApi {
