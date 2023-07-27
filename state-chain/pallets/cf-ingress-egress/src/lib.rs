@@ -664,25 +664,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 		source_asset: TargetChainAsset<T, I>,
 		channel_action: ChannelAction<T::AccountId>,
 	) -> Result<(ChannelId, TargetChainAccount<T, I>), DispatchError> {
-		// We have an address available, so we can just use it.
-
-		let (deposit_channel, channel_id) =
-			if let Some((channel_id, address)) = DepositChannelPool::<T, I>::drain().next() {
-				(address, channel_id)
-			} else {
-				let next_channel_id =
-					ChannelIdCounter::<T, I>::try_mutate::<_, Error<T, I>, _>(|id| {
-						*id = id.checked_add(1).ok_or(Error::<T, I>::ChannelIdsExhausted)?;
-						Ok(*id)
-					})?;
-				(
-					DepositChannel::generate_new::<T::AddressDerivation>(
-						next_channel_id,
-						source_asset,
-					)?,
+		let (deposit_channel, channel_id) = if let Some((channel_id, mut deposit_channel)) =
+			DepositChannelPool::<T, I>::drain().next()
+		{
+			deposit_channel.asset = source_asset;
+			(deposit_channel, channel_id)
+		} else {
+			let next_channel_id =
+				ChannelIdCounter::<T, I>::try_mutate::<_, Error<T, I>, _>(|id| {
+					*id = id.checked_add(1).ok_or(Error::<T, I>::ChannelIdsExhausted)?;
+					Ok(*id)
+				})?;
+			(
+				DepositChannel::generate_new::<T::AddressDerivation>(
 					next_channel_id,
-				)
-			};
+					source_asset,
+				)?,
+				next_channel_id,
+			)
+		};
 
 		let deposit_address = deposit_channel.address.clone();
 
