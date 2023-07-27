@@ -6,7 +6,6 @@ import { Mutex } from 'async-mutex';
 import { Chain, Asset, assetChains, chainContractIds } from '@chainflip-io/cli';
 import Web3 from 'web3';
 import { u8aToHex } from '@polkadot/util';
-import { BigNumber } from 'bignumber.js';
 import { newDotAddress } from './new_dot_address';
 import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
@@ -55,11 +54,25 @@ export function assetToChain(asset: Asset): string {
 }
 
 export function amountToFineAmount(amount: string, decimals: number): string {
-  return new BigNumber(amount).shiftedBy(decimals).toFixed();
+  let fineAmount = '';
+  if (amount.indexOf('.') === -1) {
+    fineAmount = amount + '0'.repeat(decimals);
+  } else {
+    const amountParts = amount.split('.');
+    fineAmount = amountParts[0] + amountParts[1].padEnd(decimals, '0').substr(0, decimals);
+  }
+  return fineAmount;
 }
 
 export function fineAmountToAmount(fineAmount: string, decimals: number): string {
-  return new BigNumber(fineAmount).shiftedBy(-decimals).toFixed();
+  let balance = '';
+  if (fineAmount.length > decimals) {
+    const decimalLocation = fineAmount.length - decimals;
+    balance = fineAmount.slice(0, decimalLocation) + '.' + fineAmount.slice(decimalLocation);
+  } else {
+    balance = '0.' + fineAmount.padStart(decimals, '0');
+  }
+  return balance;
 }
 
 export function defaultAssetAmounts(asset: Asset): string {

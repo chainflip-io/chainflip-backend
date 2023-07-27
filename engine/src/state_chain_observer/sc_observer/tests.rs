@@ -81,17 +81,6 @@ async fn start_sc_observer_and_get_epoch_start_events<
 
 	let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) = async_broadcast::broadcast(10);
 
-	let (dot_monitor_command_sender, _dot_monitor_command_receiver) =
-		tokio::sync::mpsc::unbounded_channel();
-
-	let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
-		tokio::sync::mpsc::unbounded_channel();
-
-	let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) = async_broadcast::broadcast(10);
-
-	let (btc_tx_hash_monitor_sender, _btc_tx_hash_monitor_receiver) =
-		tokio::sync::mpsc::unbounded_channel();
-
 	sc_observer::start(
 		Arc::new(state_chain_client),
 		sc_block_stream,
@@ -109,10 +98,6 @@ async fn start_sc_observer_and_get_epoch_start_events<
 			usdc: eth_monitor_usdc_command_sender,
 		},
 		dot_epoch_start_sender,
-		dot_monitor_command_sender,
-		dot_monitor_signature_sender,
-		btc_epoch_start_sender,
-		btc_tx_hash_monitor_sender,
 	)
 	.await
 	.unwrap_err();
@@ -164,14 +149,6 @@ async fn starts_witnessing_when_current_authority() {
 		});
 
 	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
-		.with(eq(initial_block_hash), eq(initial_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 98 }))
-		});
-
-	state_chain_client
 		.expect_storage_value::<PolkadotVaultAccountId<Runtime>>()
 		.with(eq(initial_block_hash))
 		.once()
@@ -212,8 +189,6 @@ async fn starts_witnessing_when_historic_on_startup() {
 	let current_epoch_from_block_eth = 40;
 
 	let current_epoch_from_block_dot = 80;
-
-	let current_epoch_from_block_btc = 100;
 
 	let initial_block_hash = H256::default();
 	let account_id = AccountId::new([0; 32]);
@@ -264,14 +239,6 @@ async fn starts_witnessing_when_historic_on_startup() {
 		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
 	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
-		.with(eq(initial_block_hash), eq(active_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 98 }))
-		});
-
-	state_chain_client
 		.expect_storage_map_entry::<Vaults<Runtime, EthereumInstance>>()
 		.with(eq(initial_block_hash), eq(current_epoch))
 		.once()
@@ -290,17 +257,6 @@ async fn starts_witnessing_when_historic_on_startup() {
 			Ok(Some(Vault {
 				public_key: Default::default(),
 				active_from_block: current_epoch_from_block_dot,
-			}))
-		});
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
-		.with(eq(initial_block_hash), eq(current_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault {
-				public_key: Default::default(),
-				active_from_block: current_epoch_from_block_btc,
 			}))
 		});
 
@@ -395,14 +351,6 @@ async fn does_not_start_witnessing_when_not_historic_or_current_authority() {
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
-		.with(eq(initial_block_hash), eq(initial_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 98 }))
-		});
-
 	let sc_block_stream = tokio_stream::iter(vec![]).make_cached(
 		StreamCache { block_hash: initial_block_hash, block_number: 20 },
 		|(block_hash, block_header): &(state_chain_runtime::Hash, state_chain_runtime::Header)| {
@@ -435,8 +383,6 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 	let initial_epoch_from_block_eth = 40;
 
 	let initial_epoch_from_block_dot = 72;
-
-	let initial_epoch_from_block_btc = 98;
 
 	let new_epoch = 5;
 	let new_epoch_from_block = 50;
@@ -488,17 +434,6 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
-		.with(eq(initial_block_hash), eq(initial_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault {
-				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block_btc,
-			}))
-		});
-
 	let empty_block_header = test_header(20);
 	let new_epoch_block_header = test_header(21);
 	let new_epoch_block_header_hash = new_epoch_block_header.hash();
@@ -548,17 +483,6 @@ async fn current_authority_to_current_authority_on_new_epoch_event() {
 			Ok(Some(Vault {
 				public_key: Default::default(),
 				active_from_block: initial_epoch_from_block_dot,
-			}))
-		});
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
-		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault {
-				public_key: Default::default(),
-				active_from_block: initial_epoch_from_block_btc,
 			}))
 		});
 
@@ -653,14 +577,6 @@ async fn not_historical_to_authority_on_new_epoch() {
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
-		.with(eq(initial_block_hash), eq(initial_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 89 }))
-		});
-
 	let empty_block_header = test_header(20);
 	let new_epoch_block_header = test_header(21);
 	let new_epoch_block_header_hash = new_epoch_block_header.hash();
@@ -715,14 +631,6 @@ async fn not_historical_to_authority_on_new_epoch() {
 		.with(eq(new_epoch_block_header_hash))
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
-		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 120 }))
-		});
 
 	state_chain_client
 		.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<Runtime>>()
@@ -809,14 +717,6 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
 
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
-		.with(eq(initial_block_hash), eq(initial_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 120 }))
-		});
-
 	let empty_block_header = test_header(20);
 	let new_epoch_block_header = test_header(21);
 	let new_epoch_block_header_hash = new_epoch_block_header.hash();
@@ -872,14 +772,6 @@ async fn current_authority_to_historical_on_new_epoch_event() {
 		.with(eq(new_epoch_block_header_hash))
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
-		.with(eq(new_epoch_block_header_hash), eq(new_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 120 }))
-		});
 
 	state_chain_client
 		.expect_storage_double_map_entry::<pallet_cf_validator::AuthorityIndex<Runtime>>()
@@ -966,14 +858,6 @@ async fn only_encodes_and_signs_when_specified() {
 		.with(eq(initial_block_hash))
 		.once()
 		.return_once(|_| Ok(Some(PolkadotAccountId::from_aliased([3u8; 32]))));
-
-	state_chain_client
-		.expect_storage_map_entry::<Vaults<Runtime, BitcoinInstance>>()
-		.with(eq(initial_block_hash), eq(initial_epoch))
-		.once()
-		.return_once(move |_, _| {
-			Ok(Some(Vault { public_key: Default::default(), active_from_block: 98 }))
-		});
 
 	let block_header = test_header(21);
 	let sc_block_stream = tokio_stream::iter([block_header.clone()])
@@ -1415,18 +1299,6 @@ async fn run_the_sc_observer() {
 			let (dot_epoch_start_sender, _dot_epoch_start_receiver_1) =
 				async_broadcast::broadcast(10);
 
-			let (dot_monitor_command_sender, _dot_monitor_command_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
-			let (dot_monitor_signature_sender, _dot_monitor_signature_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
-			let (btc_epoch_start_sender, _btc_epoch_start_receiver_1) =
-				async_broadcast::broadcast(10);
-
-			let (btc_tx_hash_monitor_sender, _btc_tx_hash_monitor_receiver) =
-				tokio::sync::mpsc::unbounded_channel();
-
 			sc_observer::start(
 				state_chain_client,
 				sc_block_stream,
@@ -1444,10 +1316,6 @@ async fn run_the_sc_observer() {
 					usdc: eth_monitor_usdc_command_sender,
 				},
 				dot_epoch_start_sender,
-				dot_monitor_command_sender,
-				dot_monitor_signature_sender,
-				btc_epoch_start_sender,
-				btc_tx_hash_monitor_sender,
 			)
 			.await
 			.unwrap_err();

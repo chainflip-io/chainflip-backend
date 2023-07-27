@@ -49,6 +49,7 @@ impl Chain for Ethereum {
 	type EpochStartData = ();
 	type DepositFetchId = EthereumFetchId;
 	type DepositChannelState = DeploymentStatus;
+	type DepositDetails = ();
 }
 
 impl ChainCrypto for Ethereum {

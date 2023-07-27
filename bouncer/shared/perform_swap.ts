@@ -22,17 +22,22 @@ function encodeDestinationAddress(address: string, destAsset: Asset): string {
   return destAddress;
 }
 
-export async function performSwap(
+type SwapParams = {
+  sourceAsset: Asset;
+  destAsset: Asset;
+  depositAddress: string;
+  destAddress: string;
+  channelId: number;
+};
+
+export async function requestNewSwap(
   sourceAsset: Asset,
   destAsset: Asset,
   destAddress: string,
-  swapTag?: string,
+  fee: number,
+  tag = '',
   messageMetadata?: CcmDepositMetadata,
-) {
-  const FEE = 100;
-
-  const tag = swapTag ?? '';
-
+): Promise<SwapParams> {
   const chainflipApi = await getChainflipApi();
 
   const addressPromise = observeEvent(
@@ -56,23 +61,32 @@ export async function performSwap(
       return destAddressMatches && destAssetMatches && sourceAssetMatches;
     },
   );
+  await newSwap(sourceAsset, destAsset, destAddress, fee, messageMetadata);
 
-  await newSwap(sourceAsset, destAsset, destAddress, FEE, messageMetadata);
+  const res = (await addressPromise).data;
 
-  console.log(
-    `${tag} The args are:  ${sourceAsset} ${destAsset} ${destAddress} ${FEE} ${
-      messageMetadata ? `someMessage` : ''
-    }`,
-  );
-
-  const swapInfo = (await addressPromise).data;
-  const depositAddress = swapInfo.depositAddress[assetToChain(sourceAsset)];
-  const channelDestAddress = swapInfo.destinationAddress[assetToChain(destAsset)];
-  const channelId = Number(swapInfo.channelId);
-
-  console.log(`${tag} Destination address is: ${channelDestAddress} Channel ID is: ${channelId}`);
+  const depositAddress = res.depositAddress[assetToChain(sourceAsset)];
+  const channelDestAddress = res.destinationAddress[assetToChain(destAsset)];
+  const channelId = Number(res.channelId);
 
   console.log(`${tag} Swap address: ${depositAddress}`);
+  console.log(`${tag} Destination address is: ${channelDestAddress} Channel ID is: ${channelId}`);
+
+  return {
+    sourceAsset,
+    destAsset,
+    depositAddress,
+    destAddress,
+    channelId,
+  };
+}
+
+export async function doPerformSwap(
+  { sourceAsset, destAsset, destAddress, depositAddress, channelId }: SwapParams,
+  tag = '',
+  messageMetadata?: CcmDepositMetadata,
+) {
+  const chainflipApi = await getChainflipApi();
 
   const oldBalance = await getBalance(destAsset, destAddress);
 
@@ -109,4 +123,33 @@ export async function performSwap(
   } catch (err) {
     throw new Error(`${tag} ${err}`);
   }
+}
+
+export async function performSwap(
+  sourceAsset: Asset,
+  destAsset: Asset,
+  destAddress: string,
+  swapTag?: string,
+  messageMetadata?: CcmDepositMetadata,
+) {
+  const fee = 100;
+
+  const tag = swapTag ?? '';
+
+  console.log(
+    `${tag} The args are:  ${sourceAsset} ${destAsset} ${destAddress} ${fee} ${
+      messageMetadata ? `someMessage` : ''
+    }`,
+  );
+
+  const swapParams = await requestNewSwap(
+    sourceAsset,
+    destAsset,
+    destAddress,
+    fee,
+    tag,
+    messageMetadata,
+  );
+
+  await doPerformSwap(swapParams, tag, messageMetadata);
 }

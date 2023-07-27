@@ -1,27 +1,10 @@
-use std::sync::Arc;
-
-use crate::{
-	eth::{
-		ethers_rpc::EthersRpcClient,
-		retry_rpc::{EthersRetryRpcApi, EthersRetryRpcClient},
-	},
-	settings::Settings,
-	state_chain_observer::client::{
-		extrinsic_api::signed::SignedExtrinsicApi, storage_api::StorageApi, StateChainStreamApi,
-	},
-	witness::chain_source::Header,
-};
+use crate::{eth::retry_rpc::EthersRetryRpcApi, witness::chain_source::Header};
 use cf_chains::eth::EthereumTrackedData;
 use ethers::types::Bloom;
-use futures_util::FutureExt;
 use sp_core::U256;
-use utilities::{context, task_scope};
+use utilities::context;
 
-use super::{
-	chain_source::{eth_source::EthSource, extension::ChainSourceExt},
-	chunked_chain_source::chunked_by_time::chain_tracking::GetTrackedData,
-	epoch_source::EpochSource,
-};
+use super::chunked_chain_source::chunked_by_time::chain_tracking::GetTrackedData;
 use ethers::types::H256;
 
 #[async_trait::async_trait]
@@ -50,43 +33,4 @@ impl<T: EthersRetryRpcApi + Send + Sync + Clone> GetTrackedData<cf_chains::Ether
 				.expect("Priority fee should fit u128"),
 		})
 	}
-}
-
-pub async fn test<StateChainClient, StateChainStream>(
-	settings: Settings,
-	state_chain_client: Arc<StateChainClient>,
-	state_chain_stream: StateChainStream,
-) where
-	StateChainStream: StateChainStreamApi,
-	StateChainClient: StorageApi + SignedExtrinsicApi + 'static + Send + Sync,
-{
-	let _ = task_scope::task_scope(|scope| {
-		async {
-			let eth_client = EthersRetryRpcClient::new(
-				scope,
-				EthersRpcClient::new(&settings.eth).await.unwrap(),
-				settings.eth.ws_node_endpoint,
-				web3::types::U256::from(1337),
-			);
-
-			let eth_source = EthSource::new(eth_client.clone());
-
-			let epoch_source =
-				EpochSource::builder(scope, state_chain_stream, state_chain_client.clone())
-					.await
-					.participating(state_chain_client.account_id())
-					.await;
-
-			eth_source
-				.shared(scope)
-				.chunk_by_time(epoch_source)
-				.chain_tracking(state_chain_client, eth_client)
-				.run()
-				.await;
-
-			Ok(())
-		}
-		.boxed()
-	})
-	.await;
 }

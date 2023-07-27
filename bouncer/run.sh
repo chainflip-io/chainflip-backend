@@ -4,4 +4,4 @@ set -e
 ./commands/setup_swaps.ts
 ./tests/swapping.sh
 ./tests/lp_deposit_expiry.ts
-./tests/rotates_through_btc_swap.sh
+./tests/rotates_through_btc_swap.ts
