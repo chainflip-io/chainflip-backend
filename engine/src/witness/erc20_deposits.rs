@@ -100,6 +100,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 					.data
 					.1
 					.into_iter()
+					.filter(|deposit_channel| deposit_channel.deposit_channel.asset == asset)
 					.map(|deposit_channel| deposit_channel.deposit_channel.address)
 					.collect::<HashSet<_>>();
 

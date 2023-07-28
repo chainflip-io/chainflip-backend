@@ -70,12 +70,17 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			async move {
 				let (bloom, deposit_channels) = header.data;
 
+				const NATIVE_ASSET: eth::Asset = eth::Asset::Eth;
+
 				// Genesis block cannot contain any transactions
 				if let Some(parent_hash) = header.parent_hash {
 					if !deposit_channels.is_empty() {
 						let addresses = deposit_channels
 							.into_iter()
-							.map(|address| address.deposit_channel.address)
+							.filter(|deposit_channel| {
+								deposit_channel.deposit_channel.asset == NATIVE_ASSET
+							})
+							.map(|deposit_channel| address.deposit_channel.address)
 							.collect::<Vec<_>>();
 
 						let previous_block_balances = eth_rpc
@@ -124,7 +129,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 														.map(|(to_addr, value)| {
 															pallet_cf_ingress_egress::DepositWitness {
 																deposit_address: to_addr,
-																asset: eth::Asset::Eth,
+																asset: NATIVE_ASSET,
 																amount:
 																	value
 																	.try_into()
