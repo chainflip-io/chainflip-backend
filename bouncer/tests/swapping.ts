@@ -12,8 +12,7 @@ import {
   decodeDotAddressForContract,
   amountToFineAmount,
   defaultAssetAmounts,
-  observeEvent,
-  getChainflipApi,
+  observeBadEvents,
 } from '../shared/utils';
 import { BtcAddressType } from '../shared/new_btc_address';
 import { CcmDepositMetadata } from '../shared/new_swap';
@@ -120,16 +119,7 @@ async function testSwapViaContract(
 
 async function testAll() {
   let stopObserving = false;
-  const observingBroadcastAborted = observeEvent(
-    ':BroadcastAborted',
-    await getChainflipApi(),
-    (event) => {
-      throw new Error(
-        `Unexpected event emited ${event.name.section}:${event.name.method} with broadcastId ${event.data.broadcastId}`,
-      );
-    },
-    () => stopObserving,
-  );
+  observeBadEvents(':BroadcastAborted', () => stopObserving);
 
   // Single approval of all the assets swapped in contractsSwaps to avoid overlapping async approvals.
   // Make sure to to set the allowance to the same amount of total asset swapped in contractsSwaps,
@@ -244,7 +234,6 @@ async function testAll() {
 
   // Gracefully exit the broadcast abort observer
   stopObserving = true;
-  await observingBroadcastAborted;
 }
 
 runWithTimeout(testAll(), 1800000)

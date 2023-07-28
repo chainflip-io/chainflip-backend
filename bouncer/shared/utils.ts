@@ -194,6 +194,23 @@ export async function observeEvent(
   return result as Event;
 }
 
+// Make sure the stopObserveEvent returns true before the end of the test
+export async function observeBadEvents(
+  eventName: string,
+  stopObserveEvent: () => boolean,
+  eventQuery?: EventQuery,
+) {
+  const event = await observeEvent(
+    eventName,
+    await getChainflipApi(),
+    eventQuery,
+    stopObserveEvent,
+  );
+  if (event) {
+    throw new Error(`Unexpected event emited ${event.name.section}:${event.name.method}`);
+  }
+}
+
 export async function getAddress(
   asset: Asset,
   seed: string,
