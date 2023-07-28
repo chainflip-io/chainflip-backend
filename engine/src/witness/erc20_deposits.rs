@@ -28,18 +28,21 @@ pub enum Erc20Events {
 }
 
 macro_rules! define_erc20 {
-	($mod_name:ident, $name:ident, $event_name:ident, $path:literal) => {
+	($mod_name:ident, $name:ident, $contract_events_type:ident, $abi_path:literal) => {
 		pub mod $mod_name {
 			use super::Erc20Events;
 			use ethers::prelude::abigen;
 
-			abigen!($name, $path);
+			abigen!($name, $abi_path);
 
-			impl From<$event_name> for Erc20Events {
-				fn from(event: $event_name) -> Self {
+			impl From<$contract_events_type> for Erc20Events {
+				fn from(event: $contract_events_type) -> Self {
 					match event {
-						$event_name::TransferFilter(TransferFilter { to, from, value }) =>
-							Self::TransferFilter { to, from, value },
+						$contract_events_type::TransferFilter(TransferFilter {
+							to,
+							from,
+							value,
+						}) => Self::TransferFilter { to, from, value },
 						_ => Self::Other,
 					}
 				}
