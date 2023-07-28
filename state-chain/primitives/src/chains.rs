@@ -50,12 +50,6 @@ macro_rules! chains {
 				}
 			}
 		}
-
-		pub const ALL_CHAINS: [ForeignChain; 3] = [
-			$(
-				ForeignChain::$chain,
-			)+
-		];
 	}
 }
 
