@@ -23,7 +23,7 @@ use tracing::{debug, error, info, info_span, trace, Instrument};
 use crate::{
 	btc::{rpc::BtcRpcApi, BtcBroadcaster},
 	dot::{rpc::DotRpcApi, DotBroadcaster},
-	eth::{broadcaster::EthBroadcaster, ethers_rpc::EthersRpcApi},
+	eth::{broadcaster::EthBroadcaster, rpc::EthRpcApi},
 	p2p::{PeerInfo, PeerUpdate},
 	state_chain_observer::client::{
 		extrinsic_api::{
@@ -235,7 +235,7 @@ pub async fn start<
 ) -> Result<(), anyhow::Error>
 where
 	BlockStream: StateChainStreamApi,
-	EthRpc: EthersRpcApi + Send + Sync + 'static,
+	EthRpc: EthRpcApi + Send + Sync + 'static,
 	DotRpc: DotRpcApi + Send + Sync + 'static,
 	BtcRpc: BtcRpcApi + Send + Sync + 'static,
 	EthMultisigClient: MultisigClientApi<EvmCryptoScheme> + Send + Sync + 'static,

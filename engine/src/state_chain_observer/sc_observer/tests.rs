@@ -16,7 +16,7 @@ use multisig::{eth::EvmCryptoScheme, ChainSigning, SignatureToThresholdSignature
 use pallet_cf_broadcast::BroadcastAttemptId;
 use sp_runtime::{AccountId32, Digest};
 
-use crate::eth::ethers_rpc::MockEthersRpcApi;
+use crate::eth::rpc::MockEthRpcApi;
 use sp_core::H256;
 use state_chain_runtime::{
 	AccountId, BitcoinInstance, EthereumInstance, Header, PolkadotInstance, Runtime, RuntimeCall,
@@ -58,7 +58,7 @@ async fn start_sc_observer<
 >(
 	state_chain_client: MockStateChainClient,
 	sc_block_stream: BlockStream,
-	eth_rpc: MockEthersRpcApi,
+	eth_rpc: MockEthRpcApi,
 ) {
 	let (account_peer_mapping_change_sender, _account_peer_mapping_change_receiver) =
 		tokio::sync::mpsc::unbounded_channel();
@@ -136,20 +136,20 @@ async fn only_encodes_and_signs_when_specified() {
 			])
 		});
 
-	let mut ethers_rpc_mock = MockEthersRpcApi::new();
+	let mut eth_rpc_mock = MockEthRpcApi::new();
 	// when we are selected to sign we must estimate gas and sign
 	// NB: We only do this once, since we are only selected to sign once
-	ethers_rpc_mock
+	eth_rpc_mock
 		.expect_estimate_gas()
 		.once()
 		.returning(|_| Ok(ethers::types::U256::from(100_000)));
 
-	ethers_rpc_mock.expect_send_transaction().once().return_once(|tx| {
+	eth_rpc_mock.expect_send_transaction().once().return_once(|tx| {
 		// return some hash
 		Ok(tx.sighash())
 	});
 
-	start_sc_observer(state_chain_client, sc_block_stream, ethers_rpc_mock).await;
+	start_sc_observer(state_chain_client, sc_block_stream, eth_rpc_mock).await;
 }
 
 // TODO: Test that when we return None for polkadot vault
@@ -516,7 +516,7 @@ async fn run_the_sc_observer() {
 			sc_observer::start(
 				state_chain_client,
 				sc_block_stream,
-				EthBroadcaster::new(MockEthersRpcApi::new()),
+				EthBroadcaster::new(MockEthRpcApi::new()),
 				DotBroadcaster::new(MockDotRpcApi::new()),
 				BtcBroadcaster::new(MockBtcRpcApi::new()),
 				MockMultisigClientApi::new(),

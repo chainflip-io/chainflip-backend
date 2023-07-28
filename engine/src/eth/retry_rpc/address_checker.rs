@@ -1,6 +1,6 @@
 use ethers::prelude::*;
 
-use crate::eth::ethers_rpc::address_checker::{AddressCheckerRpcApi, *};
+use crate::eth::rpc::address_checker::{AddressCheckerRpcApi, *};
 
 use super::EthersRetryRpcClient;
 

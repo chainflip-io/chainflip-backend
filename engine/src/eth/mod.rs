@@ -1,13 +1,13 @@
 pub mod broadcaster;
-pub mod ethers_rpc;
 pub mod event;
 pub mod retry_rpc;
+pub mod rpc;
 
 use anyhow::Result;
 
 use futures::FutureExt;
 
-use crate::eth::ethers_rpc::EthersRpcApi;
+use crate::eth::rpc::EthRpcApi;
 
 use std::pin::Pin;
 

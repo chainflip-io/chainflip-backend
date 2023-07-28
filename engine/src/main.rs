@@ -4,7 +4,7 @@ use chainflip_engine::{
 	btc::{rpc::BtcRpcClient, BtcBroadcaster},
 	db::{KeyStore, PersistentKeyDB},
 	dot::{http_rpc::DotHttpRpcClient, DotBroadcaster},
-	eth::{broadcaster::EthBroadcaster, ethers_rpc::EthersRpcClient},
+	eth::{broadcaster::EthBroadcaster, rpc::EthRpcClient},
 	health, p2p,
 	settings::{CommandLineOptions, Settings},
 	state_chain_observer::{
@@ -214,7 +214,7 @@ async fn start(
 	scope.spawn(state_chain_observer::start(
 		state_chain_client.clone(),
 		state_chain_stream.clone(),
-		EthBroadcaster::new(EthersRpcClient::new(&settings.eth).await?),
+		EthBroadcaster::new(EthRpcClient::new(&settings.eth).await?),
 		DotBroadcaster::new(DotHttpRpcClient::new(&settings.dot.http_node_endpoint).await?),
 		BtcBroadcaster::new(btc_rpc_client.clone()),
 		eth_multisig_client,

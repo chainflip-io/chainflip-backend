@@ -5,8 +5,8 @@ use utilities::task_scope::Scope;
 use crate::{
 	db::PersistentKeyDB,
 	eth::{
-		ethers_rpc::{EthersRpcClient, ReconnectSubscriptionClient},
 		retry_rpc::EthersRetryRpcClient,
+		rpc::{EthRpcClient, ReconnectSubscriptionClient},
 	},
 	settings,
 	state_chain_observer::client::{
@@ -75,7 +75,7 @@ where
 
 	let eth_client = EthersRetryRpcClient::new(
 		scope,
-		EthersRpcClient::new(settings).await?,
+		EthRpcClient::new(settings).await?,
 		ReconnectSubscriptionClient::new(settings.ws_node_endpoint.clone(), expected_chain_id),
 	);
 

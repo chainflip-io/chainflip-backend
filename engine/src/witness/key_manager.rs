@@ -187,8 +187,8 @@ mod tests {
 
 	use crate::{
 		eth::{
-			ethers_rpc::{EthersRpcApi, EthersRpcClient, ReconnectSubscriptionClient},
 			retry_rpc::EthersRetryRpcClient,
+			rpc::{EthRpcApi, EthRpcClient, ReconnectSubscriptionClient},
 		},
 		settings::{self},
 		state_chain_observer::client::StateChainClient,
@@ -212,7 +212,7 @@ mod tests {
 					.unwrap(),
 				};
 
-				let client = EthersRpcClient::new(&eth_settings).await.unwrap();
+				let client = EthRpcClient::new(&eth_settings).await.unwrap();
 
 				let chain_id = client.chain_id().await.unwrap();
 				println!("Here's the chain_id: {chain_id}");

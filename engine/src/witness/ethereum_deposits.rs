@@ -20,7 +20,7 @@ use ethers::prelude::*;
 use itertools::Itertools;
 use sp_core::U256;
 
-use crate::eth::ethers_rpc::address_checker::*;
+use crate::eth::rpc::address_checker::*;
 
 use crate::witness::{
 	chain_source::Header, contract_common::events_at_block, vault::FetchedNativeFilter,
@@ -199,8 +199,8 @@ pub fn eth_ingresses_at_block(
 mod tests {
 	use crate::{
 		eth::{
-			ethers_rpc::{EthersRpcClient, ReconnectSubscriptionClient},
 			retry_rpc::{EthersRetryRpcApi, EthersRetryRpcClient},
+			rpc::{EthRpcClient, ReconnectSubscriptionClient},
 		},
 		settings::Settings,
 		witness::{chain_source::Header, contract_common::events_at_block},
@@ -322,7 +322,7 @@ mod tests {
 
 				let client = EthersRetryRpcClient::new(
 					scope,
-					EthersRpcClient::new(&settings.eth).await.unwrap(),
+					EthRpcClient::new(&settings.eth).await.unwrap(),
 					ReconnectSubscriptionClient::new(
 						settings.eth.ws_node_endpoint,
 						web3::types::U256::from(1337),

@@ -19,12 +19,12 @@ struct NonceInfo {
 }
 
 #[derive(Clone)]
-pub struct EthersRpcClient {
+pub struct EthRpcClient {
 	signer: SignerMiddleware<Arc<Provider<Http>>, LocalWallet>,
 	nonce_info: Arc<Mutex<Option<NonceInfo>>>,
 }
 
-impl EthersRpcClient {
+impl EthRpcClient {
 	pub async fn new(eth_settings: &settings::Eth) -> Result<Self> {
 		let provider =
 			Arc::new(Provider::<Http>::try_from(eth_settings.http_node_endpoint.to_string())?);
@@ -73,7 +73,7 @@ impl EthersRpcClient {
 
 #[cfg_attr(test, automock)]
 #[async_trait::async_trait]
-pub trait EthersRpcApi: Send + Sync {
+pub trait EthRpcApi: Send + Sync {
 	fn address(&self) -> H160;
 
 	async fn estimate_gas(&self, req: &TypedTransaction) -> Result<U256>;
@@ -102,7 +102,7 @@ pub trait EthersRpcApi: Send + Sync {
 }
 
 #[async_trait::async_trait]
-impl EthersRpcApi for EthersRpcClient {
+impl EthRpcApi for EthRpcClient {
 	fn address(&self) -> H160 {
 		self.signer.address()
 	}
@@ -228,10 +228,10 @@ mod tests {
 
 	#[tokio::test]
 	#[ignore = "Requires correct settings"]
-	async fn ethers_rpc_test() {
+	async fn eth_rpc_test() {
 		let settings = Settings::new_test().unwrap();
 
-		let client = EthersRpcClient::new(&settings.eth).await.unwrap();
+		let client = EthRpcClient::new(&settings.eth).await.unwrap();
 		let chain_id = client.chain_id().await.unwrap();
 		println!("{:?}", chain_id);
 
