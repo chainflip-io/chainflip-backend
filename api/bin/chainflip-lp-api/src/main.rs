@@ -216,10 +216,10 @@ impl RpcServer for RpcServerImpl {
 							asset,
 							orders
 								.into_iter()
-								.map(|(t1, t2, l)| rpc_types::RangeOrder {
-									tick_1: t1.into(),
-									tick_2: t2.into(),
-									liquidity: l.into(),
+								.map(|(tick_1, tick_2, liquidity)| rpc_types::RangeOrder {
+									tick_1,
+									tick_2,
+									liquidity,
 								})
 								.collect::<Vec<rpc_types::RangeOrder>>(),
 						)
