@@ -280,10 +280,12 @@ pub trait RegisterRedemption<Abi: ChainAbi>: ApiCall<Abi> {
 	fn amount(&self) -> u128;
 }
 
+#[derive(Debug)]
 pub enum AllBatchError {
 	NotRequired,
 	Other,
 }
+
 #[allow(clippy::result_unit_err)]
 pub trait AllBatch<Abi: ChainAbi>: ApiCall<Abi> {
 	fn new_unsigned(
