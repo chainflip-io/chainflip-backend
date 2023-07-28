@@ -126,7 +126,7 @@ where
 
 	let usdc_deposit_witnesser = eth_safe_vault_source
 		.clone()
-		.ingress_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.erc20_deposits::<_, _, UsdcEvents>(
 			state_chain_client.clone(),
@@ -144,7 +144,7 @@ where
 
 	let flip_deposit_witnesser = eth_safe_vault_source
 		.clone()
-		.ingress_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.erc20_deposits::<_, _, FlipEvents>(
 			state_chain_client.clone(),
@@ -162,7 +162,7 @@ where
 
 	let ethereum_deposits_witnesser = eth_safe_vault_source
 		.clone()
-		.ingress_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
+		.deposit_addresses(scope, state_chain_stream.clone(), state_chain_client.clone())
 		.await
 		.ethereum_deposits(state_chain_client.clone(), eth_client.clone())
 		.await
