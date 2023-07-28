@@ -6,7 +6,7 @@ use chainflip_api::{
 		self, BurnLimitOrderReturn, BurnRageOrderReturn, BuyOrSellOrder, MintLimitOrderReturn,
 		MintRangeOrderReturn, Tick,
 	},
-	primitives::{AccountRole, Asset, EncodedAddress, ForeignChain},
+	primitives::{AccountRole, Asset, ForeignChain},
 	settings::StateChain,
 };
 use clap::Parser;
@@ -84,10 +84,7 @@ pub trait Rpc {
 	async fn register_account(&self) -> Result<H256, Error>;
 
 	#[method(name = "liquidityDeposit")]
-	async fn request_liquidity_deposit_address(
-		&self,
-		asset: Asset,
-	) -> Result<EncodedAddress, Error>;
+	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<String, Error>;
 
 	#[method(name = "registerEmergencyWithdrawalAddress")]
 	async fn register_emergency_withdrawal_address(
@@ -159,12 +156,10 @@ impl RpcServerImpl {
 #[async_trait]
 impl RpcServer for RpcServerImpl {
 	/// Returns a deposit address
-	async fn request_liquidity_deposit_address(
-		&self,
-		asset: Asset,
-	) -> Result<EncodedAddress, Error> {
+	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<String, Error> {
 		lp::request_liquidity_deposit_address(&self.state_chain_settings, asset)
 			.await
+			.map(|address| address.to_string())
 			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
