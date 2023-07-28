@@ -56,7 +56,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 		state_chain_client: Arc<StateChainClient>,
 		eth_rpc: EthRetryRpcClient,
 		asset: assets::eth::Asset,
-	) -> ChunkedByVaultBuilder<impl ChunkedByVault>
+	) -> Result<ChunkedByVaultBuilder<impl ChunkedByVault>, anyhow::Error>
 	where
 		Inner: ChunkedByVault<
 			Index = u64,
@@ -80,10 +80,10 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 			)
 			.await
 			.expect(STATE_CHAIN_CONNECTION)
-			.unwrap()
+			.with_context(|| format!("EthereumSupportedAssets does not include {asset:?}"))?
 			.into();
 
-		self.then(move |epoch, header| {
+		Ok(self.then(move |epoch, header| {
 			let state_chain_client = state_chain_client.clone();
 			let eth_rpc = eth_rpc.clone();
 			async move {
@@ -139,6 +139,6 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 
 				Ok::<(), anyhow::Error>(())
 			}
-		})
+		}))
 	}
 }

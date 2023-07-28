@@ -133,7 +133,7 @@ where
 			eth_client.clone(),
 			cf_primitives::chains::assets::eth::Asset::Usdc,
 		)
-		.await
+		.await?
 		.continuous("USDCDeposits".to_string(), db.clone())
 		.run();
 
@@ -151,7 +151,7 @@ where
 			eth_client.clone(),
 			cf_primitives::chains::assets::eth::Asset::Flip,
 		)
-		.await
+		.await?
 		.continuous("FlipDeposits".to_string(), db.clone())
 		.run();
 
