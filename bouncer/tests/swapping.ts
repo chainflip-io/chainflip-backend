@@ -119,7 +119,7 @@ async function testSwapViaContract(
 
 async function testAll() {
   let stopObserving = false;
-  observeBadEvents(':BroadcastAborted', () => stopObserving);
+  const observingBadEvents = observeBadEvents(':BroadcastAborted', () => stopObserving);
 
   // Single approval of all the assets swapped in contractsSwaps to avoid overlapping async approvals.
   // Make sure to to set the allowance to the same amount of total asset swapped in contractsSwaps,
@@ -234,6 +234,7 @@ async function testAll() {
 
   // Gracefully exit the broadcast abort observer
   stopObserving = true;
+  await observingBadEvents;
 }
 
 runWithTimeout(testAll(), 1800000)
