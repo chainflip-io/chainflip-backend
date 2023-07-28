@@ -1,6 +1,5 @@
 use std::pin::Pin;
 
-use crate::dot::safe_runtime_version_stream::safe_runtime_version_stream;
 use async_trait::async_trait;
 use cf_chains::dot::{PolkadotHash, RuntimeVersion};
 use cf_primitives::PolkadotBlockNumber;
@@ -76,10 +75,6 @@ pub trait DotSubscribeApi: Send + Sync {
 	async fn subscribe_finalized_heads(
 		&self,
 	) -> Result<Pin<Box<dyn Stream<Item = Result<PolkadotHeader>> + Send>>>;
-
-	async fn subscribe_runtime_version(
-		&self,
-	) -> Result<Pin<Box<dyn Stream<Item = RuntimeVersion> + Send>>>;
 }
 
 /// The trait that defines the stateless / non-subscription requests to Polkadot.
@@ -181,26 +176,6 @@ impl DotSubscribeApi for DotSubClient {
 				.map_err(|e| anyhow!("Error in finalised head stream: {e}")),
 		))
 	}
-
-	async fn subscribe_runtime_version(
-		&self,
-	) -> Result<Pin<Box<dyn Stream<Item = RuntimeVersion> + Send>>> {
-		let client = OnlineClient::<PolkadotConfig>::from_url(self.ws_endpoint.clone()).await?;
-		let subxt_v_to_sc_v = |v: subxt::rpc::types::RuntimeVersion| RuntimeVersion {
-			spec_version: v.spec_version,
-			transaction_version: v.transaction_version,
-		};
-		let current_runtime_version =
-			client.rpc().runtime_version(None).await.map(subxt_v_to_sc_v)?;
-		let raw_runtime_version_stream = client
-			.rpc()
-			.subscribe_runtime_version()
-			.await?
-			.map(move |item| item.map_err(anyhow::Error::new).map(subxt_v_to_sc_v));
-		safe_runtime_version_stream(current_runtime_version, raw_runtime_version_stream)
-			.await
-			.map_err(|e| anyhow!("Failed to subscribe to Polkadot runtime version with error: {e}"))
-	}
 }
 
 #[async_trait]
@@ -223,24 +198,5 @@ impl DotSubscribeApi for DotRpcClient {
 				.map(|block| block.map(|block| block.header().clone()))
 				.map_err(|e| anyhow!("Error in finalised head stream: {e}")),
 		))
-	}
-
-	async fn subscribe_runtime_version(
-		&self,
-	) -> Result<Pin<Box<dyn Stream<Item = RuntimeVersion> + Send>>> {
-		safe_runtime_version_stream(
-			self.current_runtime_version().await?,
-			refresh_connection_on_error!(self, rpc, subscribe_runtime_version)?.map(|item| {
-				item.map_err(anyhow::Error::new).map(
-					|subxt::rpc::types::RuntimeVersion {
-					     spec_version,
-					     transaction_version,
-					     ..
-					 }| RuntimeVersion { spec_version, transaction_version },
-				)
-			}),
-		)
-		.await
-		.map_err(|e| anyhow!("Failed to subscribe to Polkadot runtime version with error: {e}"))
 	}
 }

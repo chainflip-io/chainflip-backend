@@ -11,8 +11,8 @@ mod signer_nomination;
 use crate::{
 	AccountId, AccountRoles, Authorship, BitcoinChainTracking, BitcoinIngressEgress, BitcoinVault,
 	BlockNumber, Emissions, Environment, EthereumBroadcaster, EthereumChainTracking,
-	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotIngressEgress, Runtime,
-	RuntimeCall, System, Validator,
+	EthereumIngressEgress, Flip, FlipBalance, PolkadotBroadcaster, PolkadotChainTracking,
+	PolkadotIngressEgress, Runtime, RuntimeCall, System, Validator,
 };
 use backup_node_rewards::calculate_backup_rewards;
 use cf_chains::{
@@ -53,7 +53,6 @@ use frame_support::{
 };
 pub use missed_authorship_slots::MissedAuraSlots;
 pub use offences::*;
-use pallet_cf_chain_tracking::ChainState;
 use scale_info::TypeInfo;
 pub use signer_nomination::RandomSignerNomination;
 use sp_core::U256;
@@ -80,6 +79,7 @@ impl_runtime_safe_mode! {
 	swapping: pallet_cf_swapping::PalletSafeMode,
 	liquidity_provider: pallet_cf_lp::PalletSafeMode,
 	validator: pallet_cf_validator::PalletSafeMode,
+	pools: pallet_cf_pools::PalletSafeMode,
 }
 struct BackupNodeEmissions;
 
@@ -154,17 +154,15 @@ impl TransactionBuilder<Ethereum, EthereumApi<EthEnvironment>> for EthTransactio
 	}
 
 	fn refresh_unsigned_data(unsigned_tx: &mut <Ethereum as ChainAbi>::Transaction) {
-		if let Some(ChainState { tracked_data, .. }) = EthereumChainTracking::chain_state() {
-			// double the last block's base fee. This way we know it'll be selectable for at least 6
-			// blocks (12.5% increase on each block)
-			let max_fee_per_gas = tracked_data
-				.base_fee
-				.saturating_mul(2)
-				.saturating_add(tracked_data.priority_fee);
-			unsigned_tx.max_fee_per_gas = Some(U256::from(max_fee_per_gas));
-			unsigned_tx.max_priority_fee_per_gas = Some(U256::from(tracked_data.priority_fee));
-		}
-		// if we don't have CurrentChainState, we leave it unmodified
+		let tracked_data = EthereumChainTracking::chain_state().unwrap().tracked_data;
+		// double the last block's base fee. This way we know it'll be selectable for at least 6
+		// blocks (12.5% increase on each block)
+		let max_fee_per_gas = tracked_data
+			.base_fee
+			.saturating_mul(2)
+			.saturating_add(tracked_data.priority_fee);
+		unsigned_tx.max_fee_per_gas = Some(U256::from(max_fee_per_gas));
+		unsigned_tx.max_priority_fee_per_gas = Some(U256::from(tracked_data.priority_fee));
 	}
 
 	fn is_valid_for_rebroadcast(
@@ -294,7 +292,7 @@ impl ReplayProtectionProvider<Polkadot> for DotEnvironment {
 
 impl Get<RuntimeVersion> for DotEnvironment {
 	fn get() -> RuntimeVersion {
-		Environment::polkadot_runtime_version()
+		PolkadotChainTracking::chain_state().unwrap().tracked_data.runtime_version
 	}
 }
 
@@ -445,7 +443,7 @@ macro_rules! impl_deposit_api_for_anychain {
 				}
 			}
 
-			fn expire_channel(channel_id: ChannelId, address: ForeignChainAddress) {
+			fn expire_channel(address: ForeignChainAddress) {
 				if address.chain() == ForeignChain::Bitcoin {
 					Environment::cleanup_bitcoin_deposit_address_details(address.clone().try_into().expect("Checked for address compatibility"));
 				}
@@ -453,7 +451,6 @@ macro_rules! impl_deposit_api_for_anychain {
 					$(
 						ForeignChain::$chain => {
 							<$pallet as DepositApi<$chain>>::expire_channel(
-								channel_id,
 								address.try_into().expect("Checked for address compatibility")
 							);
 						},
@@ -590,9 +587,7 @@ impl OnBroadcastReady<Bitcoin> for BroadcastReadyProvider {
 pub struct BitcoinFeeGetter;
 impl cf_traits::GetBitcoinFeeInfo for BitcoinFeeGetter {
 	fn bitcoin_fee_info() -> BitcoinFeeInfo {
-		BitcoinChainTracking::chain_state()
-			.map(|chain_state| chain_state.tracked_data.btc_fee_info)
-			.unwrap_or(Default::default())
+		BitcoinChainTracking::chain_state().unwrap().tracked_data.btc_fee_info
 	}
 }
 
