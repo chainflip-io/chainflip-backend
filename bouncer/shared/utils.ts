@@ -11,8 +11,8 @@ import { BtcAddressType, newBtcAddress } from './new_btc_address';
 import { getBalance } from './get_balance';
 import { newEthAddress } from './new_eth_address';
 import { CcmDepositMetadata } from './new_swap';
-import cfReceiverMockAbi from '../../eth-contract-abis/perseverance-rc17/CFReceiverMock.json';
 import { newFlipAddress } from './new_flip_address';
+import cfTesterAbi from '../../eth-contract-abis/perseverance-0.9-rc3/CFTester.json';
 
 export const lpMutex = new Mutex();
 export const ethNonceMutex = new Mutex();
@@ -30,7 +30,7 @@ export function getEthContractAddress(contract: string): string {
       return process.env.ETH_FLIP_ADDRESS ?? '0x10C6E9530F1C1AF873a391030a1D9E8ed0630D26';
     case 'USDC':
       return process.env.ETH_USDC_ADDRESS ?? '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0';
-    case 'CFRECEIVER':
+    case 'CFTESTER':
       return '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0';
     case 'GATEWAY':
       return process.env.ETH_GATEWAY_ADDRESS ?? '0xeEBe00Ac0756308ac4AaBfD76c05c4F3088B8883';
@@ -254,9 +254,7 @@ export async function observeEVMEvent(
   let initBlockNumber = initialBlockNumber ?? (await web3.eth.getBlockNumber());
 
   // Gets all the event parameter as an array
-  const eventAbi = cfReceiverMockAbi.find(
-    (item) => item.type === 'event' && item.name === eventName,
-  )!;
+  const eventAbi = cfTesterAbi.find((item) => item.type === 'event' && item.name === eventName)!;
 
   // Get the parameter names of the event
   const parameterNames = eventAbi.inputs.map((input) => input.name);
@@ -301,7 +299,7 @@ export async function observeCcmReceived(
   address: string,
   messageMetadata: CcmDepositMetadata,
 ): Promise<void> {
-  await observeEVMEvent(cfReceiverMockAbi, address, 'ReceivedxSwapAndCall', [
+  await observeEVMEvent(cfTesterAbi, address, 'ReceivedxSwapAndCall', [
     chainContractIds[assetChains[sourceAsset]].toString(),
     '*',
     messageMetadata.message,

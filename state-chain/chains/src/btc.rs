@@ -87,15 +87,22 @@ impl FeeRefundCalculator<Bitcoin> for BitcoinTransactionData {
 	}
 }
 
-#[derive(
-	Copy, Clone, RuntimeDebug, Default, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo,
-)]
+#[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[codec(mel_bound())]
 pub struct BitcoinTrackedData {
 	pub btc_fee_info: BitcoinFeeInfo,
 }
 
+impl Default for BitcoinTrackedData {
+	#[track_caller]
+	fn default() -> Self {
+		panic!("You should not use the default chain tracking, as it's meaningless.");
+	}
+}
+
 #[derive(Copy, Clone, RuntimeDebug, PartialEq, Eq, Encode, Decode, MaxEncodedLen, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct BitcoinFeeInfo {
 	pub fee_per_input_utxo: BtcAmount,
 	pub fee_per_output_utxo: BtcAmount,

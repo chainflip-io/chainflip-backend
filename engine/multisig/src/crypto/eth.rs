@@ -38,7 +38,6 @@ impl SignatureToThresholdSignature<Ethereum> for Vec<EthSchnorrSignature> {
 	}
 }
 
-/// Ethereum crypto scheme (as defined by the Key Manager contract)
 #[derive(Clone, Debug, PartialEq)]
 pub struct EthSigning {}
 
@@ -56,6 +55,8 @@ impl AsRef<[u8]> for SigningPayload {
 		&self.0
 	}
 }
+
+/// Ethereum crypto scheme (as defined by the Key Manager contract)
 #[derive(Clone, Debug, PartialEq)]
 pub struct EvmCryptoScheme;
 

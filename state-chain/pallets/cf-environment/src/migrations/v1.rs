@@ -106,7 +106,6 @@ impl<T: Config> OnRuntimeUpgrade for Migration<T> {
 
 		//assert that the polkadot related storages do not exist
 		assert!(!PolkadotVaultAccountId::<T>::exists());
-		assert!(!PolkadotRuntimeVersion::<T>::exists());
 		assert!(!PolkadotProxyAccountNonce::<T>::exists());
 
 		Ok(sp_std::vec::Vec::new())
