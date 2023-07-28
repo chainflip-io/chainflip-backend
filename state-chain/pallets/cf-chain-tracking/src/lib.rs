@@ -13,8 +13,7 @@ pub use weights::WeightInfo;
 use cf_chains::{Chain, ChainState};
 use cf_traits::{Chainflip, GetBlockHeight};
 use frame_support::{
-	dispatch::DispatchResultWithPostInfo, pallet_prelude::*, sp_runtime::traits::Zero,
-	traits::OnRuntimeUpgrade,
+	dispatch::DispatchResultWithPostInfo, pallet_prelude::*, traits::OnRuntimeUpgrade,
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
