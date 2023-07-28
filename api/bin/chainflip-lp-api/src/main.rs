@@ -15,7 +15,7 @@ use jsonrpsee::{
 	proc_macros::rpc,
 	server::ServerBuilder,
 };
-use sp_core::H256;
+
 use sp_rpc::number::NumberOrHex;
 use std::{collections::HashMap, ops::Range, path::PathBuf};
 
@@ -81,7 +81,7 @@ pub mod rpc_types {
 #[rpc(server, client, namespace = "lp")]
 pub trait Rpc {
 	#[method(name = "registerAccount")]
-	async fn register_account(&self) -> Result<H256, Error>;
+	async fn register_account(&self) -> Result<String, Error>;
 
 	#[method(name = "liquidityDeposit")]
 	async fn request_liquidity_deposit_address(&self, asset: Asset) -> Result<String, Error>;
@@ -91,7 +91,7 @@ pub trait Rpc {
 		&self,
 		chain: ForeignChain,
 		address: &str,
-	) -> Result<H256, Error>;
+	) -> Result<String, Error>;
 
 	#[method(name = "withdrawAsset")]
 	async fn withdraw_asset(
@@ -167,11 +167,12 @@ impl RpcServer for RpcServerImpl {
 		&self,
 		chain: ForeignChain,
 		address: &str,
-	) -> Result<H256, Error> {
+	) -> Result<String, Error> {
 		let ewa_address = chainflip_api::clean_foreign_chain_address(chain, address)
 			.map_err(|e| Error::Custom(e.to_string()))?;
 		lp::register_emergency_withdrawal_address(&self.state_chain_settings, ewa_address)
 			.await
+			.map(|tx_hash| tx_hash.to_string())
 			.map_err(|e| Error::Custom(e.to_string()))
 	}
 
@@ -315,12 +316,13 @@ impl RpcServer for RpcServerImpl {
 	}
 
 	/// Returns the tx hash that the account role was set
-	async fn register_account(&self) -> Result<H256, Error> {
+	async fn register_account(&self) -> Result<String, Error> {
 		chainflip_api::register_account_role(
 			AccountRole::LiquidityProvider,
 			&self.state_chain_settings,
 		)
 		.await
+		.map(|tx_hash| tx_hash.to_string())
 		.map_err(|e| Error::Custom(e.to_string()))
 	}
 }

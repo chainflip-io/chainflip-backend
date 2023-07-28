@@ -1,4 +1,4 @@
-use cf_chains::{address::AddressConverter, eth::H256};
+use cf_chains::address::AddressConverter;
 use chainflip_api::{
 	self, clean_foreign_chain_address,
 	primitives::{
@@ -89,7 +89,7 @@ impl TryInto<CcmDepositMetadata> for BrokerCcmDepositMetadata {
 #[rpc(server, client, namespace = "broker")]
 pub trait Rpc {
 	#[method(name = "registerAccount")]
-	async fn register_account(&self) -> Result<H256, Error>;
+	async fn register_account(&self) -> Result<String, Error>;
 
 	#[method(name = "requestSwapDepositAddress")]
 	async fn request_swap_deposit_address(
@@ -114,9 +114,10 @@ impl RpcServerImpl {
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-	async fn register_account(&self) -> Result<H256, Error> {
+	async fn register_account(&self) -> Result<String, Error> {
 		chainflip_api::register_account_role(AccountRole::Broker, &self.state_chain_settings)
 			.await
+			.map(|tx_hash| format!("{tx_hash:#x}"))
 			.map_err(|e| Error::Custom(e.to_string()))
 	}
 	async fn request_swap_deposit_address(
