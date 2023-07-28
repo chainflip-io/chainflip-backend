@@ -1,5 +1,6 @@
 pub mod broadcaster;
 pub mod event;
+pub mod redact_endpoint_secret;
 pub mod retry_rpc;
 pub mod rpc;
 
