@@ -80,7 +80,7 @@ impl<Inner: ChunkedByVault> ChunkedByVaultBuilder<Inner> {
 							.filter(|deposit_channel| {
 								deposit_channel.deposit_channel.asset == NATIVE_ASSET
 							})
-							.map(|deposit_channel| address.deposit_channel.address)
+							.map(|deposit_channel| deposit_channel.deposit_channel.address)
 							.collect::<Vec<_>>();
 
 						let previous_block_balances = eth_rpc
